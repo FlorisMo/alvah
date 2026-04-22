@@ -1,13 +1,315 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+const chapters = [
+  { id: 'pku-cognitie', num: '01', titel: 'PKU en cognitie' },
+  { id: 'zorgketen', num: '02', titel: 'Nederlandse PKU-zorgketen' },
+  { id: 'sephience', num: '03', titel: 'Sephience (sepiapterine)' },
+  { id: 'lnaa-gmp', num: '04', titel: 'LNAA en GMP' },
+  { id: 'dyslexie', num: '05', titel: 'Dyslexie en comorbiditeit' },
+  { id: 'ef-training', num: '06', titel: 'Executieve functies — wat werkt' },
+  { id: 'werkhervatting', num: '07', titel: 'Werkhervatting-hypothese' },
+  { id: 'interventies-tijdelijk', num: '08', titel: 'Interventies werken tijdelijk' },
+];
 ---
 <BaseLayout
   title="Wetenschap — Alvah"
-  description="Dieper inzicht: PKU, dyslexie, executieve functies."
+  description="Dieper inzicht: PKU, dyslexie, executieve functies. Acht sub-secties met wetenschappelijke onderbouwing en bronvermelding."
+  wide={true}
 >
-  <section>
-    <h1>Wetenschap</h1>
-    <p class="lede">Dieper inzicht: PKU, dyslexie, executieve functies.</p>
-    <p class="muted">Deze pagina wordt later ingevuld.</p>
-  </section>
+  <div class="doc-layout">
+    <aside class="doc-toc" aria-label="Inhoudsopgave wetenschap">
+      <div class="doc-toc__sticky">
+        <div class="doc-toc__label">In deze pagina</div>
+        <ol>
+          {chapters.map((c) => (
+            <li><a href={`#${c.id}`}><span class="toc-num">{c.num}</span>{c.titel}</a></li>
+          ))}
+        </ol>
+      </div>
+    </aside>
+
+    <article class="doc-main">
+      <header class="doc-header">
+        <h1>Wetenschap</h1>
+        <p class="lede">
+          Dieper inzicht in wat de literatuur zegt over PKU, dyslexie en executieve functies —
+          en waarom "interventies werken tijdelijk" geen individueel falen is, maar een goed
+          beschreven patroon.
+        </p>
+
+        <details class="doc-mobile-toc">
+          <summary>In deze pagina — 8 sub-secties</summary>
+          <ol>
+            {chapters.map((c) => (
+              <li><a href={`#${c.id}`}><span class="toc-num">{c.num}</span>{c.titel}</a></li>
+            ))}
+          </ol>
+        </details>
+      </header>
+
+      <section id="pku-cognitie">
+        <h2 class="section-head"><span class="num">01</span>PKU en cognitie</h2>
+
+        <h3>Neurochemisch mechanisme</h3>
+        <p>Bij PKU kruist verhoogd fenylalanine de bloed-hersenbarrière en blokkeert via de LAT1-transporter het transport van tyrosine en tryptofaan naar de hersenen. Tyrosine is de precursor van dopamine en noradrenaline; tryptofaan van serotonine. Deze neurotransmitters zijn de brandstof voor de prefrontale cortex — aandacht, werkgeheugen, plannen, impulscontrole.</p>
+        <p>Ook bij goede dieetcontrole blijft er een verhoogde kans op aandachts- en concentratieproblemen. Dit is geen tekort aan inzet — het is biologie.</p>
+
+        <h3>Phe-variabiliteit &gt; Phe-gemiddelde</h3>
+        <p><a href="https://pubmed.ncbi.nlm.nih.gov/24568837/" target="_blank" rel="noopener">Hood et al. (2014)</a> toonden aan dat <em>Phe-variabiliteit</em> (de mate van schommeling) een sterkere voorspeller is van cognitieve uitkomsten dan het Phe-gemiddelde. Een kind kan een acceptabel gemiddeld Phe-niveau hebben, maar als de spiegels sterk fluctueren door wisselende dieettrouw, ziekte of stress, gaat de cognitie achteruit.</p>
+        <div class="callout">
+          <div class="callout__label">Kernimplicatie</div>
+          <p>Stabiliteit van Phe is net zo belangrijk als het gemiddelde. Vraag bij WKZ de spreiding, niet alleen het gemiddelde.</p>
+        </div>
+
+        <h3>EF-profiel vroeg-behandelde PKU</h3>
+        <p>Meta-analyses wijzen consistent op een EF-profiel bij vroeg-behandelde PKU-kinderen:</p>
+        <ul>
+          <li><a href="https://pubmed.ncbi.nlm.nih.gov/20123466/" target="_blank" rel="noopener">Christ e.a. (2010)</a>: EF-domeinen breed aangedaan bij vroeg-behandelde PKU, met variabiliteit afhankelijk van Phe-controle.</li>
+          <li>DeRoche &amp; Welsh (2008) meta-analyse: effectgroottes van <strong>d=0.59</strong> op planning tot <strong>d=1.15</strong> op cognitieve flexibiliteit ten opzichte van gezonde controles.</li>
+          <li>Jahja e.a. (2020): werkgeheugen komt als meest aangedaan domein naar voren.</li>
+        </ul>
+
+        <h3>Bidirectionele stress-Phe relatie</h3>
+        <p>Een review uit 2025 beschrijft dit als een <em>bidirectional relationship</em>: Phe-schommelingen verstoren de neurotransmittersynthese, wat chronische stressreacties triggert, wat op zijn beurt de executieve disfunctie versterkt — een vicieuze cyclus van metabole ontregeling en psychologisch lijden.</p>
+        <p>Bron: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12222274/" target="_blank" rel="noopener">Palermo (2025)</a>; zie ook <a href="/dossier#driehoek">Dossier — PKU-stress-leren driehoek</a>.</p>
+      </section>
+
+      <section id="zorgketen">
+        <h2 class="section-head"><span class="num">02</span>Nederlandse PKU-zorgketen</h2>
+
+        <h3>Zes UMC's verenigd in UMD</h3>
+        <p>In Nederland zijn zes UMC's betrokken bij zorg voor erfelijke metabole ziekten, verenigd in <a href="https://www.unitedformetabolicdiseases.nl/" target="_blank" rel="noopener">United for Metabolic Diseases (UMD)</a>. Voor PKU specifiek:</p>
+        <ul>
+          <li><strong><a href="https://www.umcg.nl/-/expertisecentrum/phenylketonurie-tyrosinemie" target="_blank" rel="noopener">UMC Groningen</a></strong> — PKU-referentiecentrum van Nederland, geleid door eerste auteur van de Europese PKU-richtlijnen (2017 en 2025-revisie). Onderdeel van het European Reference Network for Metabolic Diseases (MetabERN).</li>
+          <li><strong>Amsterdam UMC</strong> — tweede groot expertisecentrum, sterk in hielprikscreening-onderzoek.</li>
+          <li><strong><a href="https://www.umcutrecht.nl/nl/expertise-centrum/expertisecentrum-voor-erfelijke-metabole-ziekten" target="_blank" rel="noopener">UMC Utrecht — Wilhelmina Kinderziekenhuis (WKZ)</a></strong> — behandelcentrum van Alvah. Erkend Expertisecentrum Erfelijke Metabole Ziekten, onderdeel van MetabERN.</li>
+          <li><strong>Erasmus MC Rotterdam</strong>, <strong>Maastricht UMC+</strong>, <strong>Radboudumc Nijmegen</strong> — regionaal betrokken.</li>
+        </ul>
+
+        <h3>Samenstelling zorgteam</h3>
+        <p>Het metabool team bij een UMC bestaat typisch uit:</p>
+        <ul>
+          <li><strong>Kinderarts metabole ziekten</strong> — medisch eindverantwoordelijk, bewaakt Phe-spiegels, groei, farmacologische opties.</li>
+          <li><strong>Metabool diëtist</strong> — spil van dagelijkse behandeling. Berekent Phe-tolerantie, past dieet aan, kiest aminozuurmengsels of GMP-producten.</li>
+          <li><strong>Psycholoog</strong> — voert neuropsychologisch onderzoek uit (meestal elke 2–3 jaar), monitort EF-profiel, IQ, sociaal-emotioneel.</li>
+          <li><strong>Maatschappelijk werker</strong> — begeleidt gezin bij impact.</li>
+          <li><strong>Laboratoriumspecialisten</strong> — analyseren dried blood spots voor Phe/Tyr-monitoring.</li>
+        </ul>
+
+        <h3>Meetfrequentie en streefwaarden</h3>
+        <table>
+          <thead>
+            <tr><th>Leeftijdsgroep</th><th>Minimale prikfrequentie</th><th>Streefwaarde Phe (µmol/L)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Zuigeling (0–1 jaar)</td><td>Wekelijks</td><td>120–360</td></tr>
+            <tr><td>Kind 1–12 jaar</td><td><strong>Tweewekelijks</strong></td><td><strong>120–360</strong></td></tr>
+            <tr><td>&gt;12 jaar</td><td>Maandelijks</td><td>120–600</td></tr>
+            <tr><td>Zwangerschap (maternale PKU)</td><td>Tweemaal per week</td><td>&lt;360</td></tr>
+          </tbody>
+        </table>
+        <p class="small muted">Bron: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5639803/" target="_blank" rel="noopener">Van Wegberg e.a. (2017) Europese PKU-richtlijnen</a>; <a href="https://pubmed.ncbi.nlm.nih.gov/40378670/" target="_blank" rel="noopener">Revisie 2025</a>.</p>
+        <p><strong>Voor Alvah (7 jaar, klassieke PKU):</strong> streefwaarde 120–360 µmol/L, prikfrequentie minimaal tweewekelijks.</p>
+
+        <h3>Tien vragen voor het metabool team (school-gericht)</h3>
+        <p>Te stellen bij het volgende controlebezoek in het WKZ:</p>
+        <ol>
+          <li>Hoe zien de Phe-spiegels eruit over de afgelopen 6 maanden — niet alleen gemiddelde, maar ook <strong>variabiliteit</strong>?</li>
+          <li>Zijn er periodes geweest met Phe boven 360 µmol/L, en hoe lang duurden die?</li>
+          <li>Is er aanleiding om de prikfrequentie tijdelijk op te voeren naar wekelijks?</li>
+          <li>Wanneer is het laatste neuropsychologisch onderzoek gedaan, en wanneer staat het volgende gepland?</li>
+          <li>Kan de psycholoog van het metabool team communiceren met de gedragswetenschapper van het SWV?</li>
+          <li>Is er ooit een BH4-belastingstest (sapropterine-responstest) gedaan?</li>
+          <li>Is sepiapterine relevant voor het type mutatie dat Alvah heeft? (Zie sub-sectie 03.)</li>
+          <li>Is LNAA-supplementatie overwogen? (Zie sub-sectie 04.)</li>
+          <li>Zijn er signalen dat de dieettrouw verandert nu hij ouder wordt?</li>
+          <li>Zijn er GMP-producten die de dieettrouw zouden kunnen verbeteren?</li>
+        </ol>
+
+        <h3>Nederlandse patiëntenorganisaties</h3>
+        <ul>
+          <li><a href="https://www.pkuvereniging.nl" target="_blank" rel="noopener">PKU Vereniging Nederland</a> — lotgenotencontact, belangenbehartiging.</li>
+          <li><a href="https://www.stofwisselingsziekten.nl" target="_blank" rel="noopener">VKS (Volwassenen, Kinderen en Stofwisselingsziekten)</a> — overkoepelend patiëntenplatform.</li>
+          <li><a href="https://www.weetwatikheb.nl/pku" target="_blank" rel="noopener">Weetwatikheb.nl/pku</a> — kindgerichte uitleg, voor op school.</li>
+        </ul>
+      </section>
+
+      <section id="sephience">
+        <h2 class="section-head"><span class="num">03</span>Sephience (sepiapterine) — nieuwste behandeloptie</h2>
+
+        <p>Sepiapterine (merknaam Sephience, van PTC Therapeutics) is een precursor van BH4 — de cofactor die het PAH-enzym nodig heeft. <strong>Op 28 juli 2025</strong> door de <a href="https://www.fda.gov/drugs/drug-approvals-and-databases/drug-trials-snapshots-sephience" target="_blank" rel="noopener">FDA goedgekeurd</a>; kort daarvoor (juni 2025) in de EU geregistreerd.</p>
+
+        <h3>Kernfeiten</h3>
+        <ul>
+          <li>Goedgekeurd <strong>vanaf 1 maand</strong> leeftijd en volwassenen met sepiapterine-responsieve PKU</li>
+          <li><strong>66% van de PKU-patiënten</strong> in de fase-3 APHENITY-studie toonde biochemische respons (&gt;30% Phe-daling)</li>
+          <li><strong>43% van de sapropterine (Kuvan)-non-responders</strong> reageerde wél op sepiapterine</li>
+          <li>Dubbel werkingsmechanisme: BH4-precursor + onafhankelijk chaperonne-effect tegen PAH-misvouwing</li>
+          <li>&gt;97% van responders kon het dieet verruimen (gemiddeld 126% meer eiwitinname)</li>
+          <li>Moet worden gebruikt in combinatie met Phe-beperkt dieet</li>
+        </ul>
+
+        <h3>Bijwerkingen en risico's</h3>
+        <div class="callout callout--warn">
+          <div class="callout__label">Let op</div>
+          <p>Belangrijkste bijwerkingen: maagdarmklachten, risico op hypofenylalaninemie (te lage Phe, vooral bij kinderen), en mogelijk verhoogd bloedingsrisico.</p>
+        </div>
+
+        <h3>Relevantie voor Alvah</h3>
+        <p>Of sepiapterine werkt, hangt af van zijn specifieke PAH-mutatie en restactiviteit. De enige manier om dat vast te stellen is een therapeutische proefbehandeling — er is geen betrouwbare laboratoriumtest die respons voorspelt. Dit is een vraag voor het WKZ-team.</p>
+
+        <p class="small muted">Bronnen: <a href="https://ir.ptcbio.com/news-releases/news-release-details/ptc-therapeutics-announces-fda-approval-sephiencetm-sepiapterin" target="_blank" rel="noopener">PTC Therapeutics persbericht</a> · <a href="https://link.springer.com/article/10.1007/s40265-025-02247-0" target="_blank" rel="noopener">Sepiapterin First Approval (Drugs, 2025)</a>.</p>
+      </section>
+
+      <section id="lnaa-gmp">
+        <h2 class="section-head"><span class="num">04</span>LNAA en GMP — aanvullende dieetopties</h2>
+
+        <h3>LNAA (Large Neutral Amino Acids) — niet voor kinderen &lt;12 jaar</h3>
+        <p>LNAA-supplementen concurreren met Phe aan de bloed-hersenbarrière en in de darm, en kunnen als precursoren van dopamine/serotonine dienen. Werking: minder Phe naar het brein, meer neurotransmittersubstraat.</p>
+        <div class="callout callout--warn">
+          <div class="callout__label">Status Nederland</div>
+          <p>LNAA wordt in de Europese richtlijnen <strong>niet aanbevolen voor kinderen &lt;12 jaar</strong>. Veiligheid en effectiviteit zijn in deze leeftijdsgroep niet aangetoond; strikte Phe-controle via dieet blijft cruciaal. De Cochrane-review sluit kinderen onder 12 expliciet uit.</p>
+        </div>
+        <p>Voor Alvah (7 jaar) is LNAA dus <strong>niet relevant</strong> — kan later, na 12e levensjaar, besproken worden.</p>
+        <p class="small muted">Bronnen: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC6478180/" target="_blank" rel="noopener">Cochrane Protocol LNAA bij PKU</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/17368065/" target="_blank" rel="noopener">Schindeler e.a. (2007)</a>.</p>
+
+        <h3>GMP — Glycomacropeptide-dieetproducten</h3>
+        <p>GMP (uit κ-caseïne) bevat van nature <em>geen fenylalanine</em> en wordt aangevuld met ontbrekende aminozuren (histidine, leucine, methionine, tyrosine, tryptofaan). Beschikbaar als poeder, drankjes en repen.</p>
+        <table>
+          <thead>
+            <tr><th>Aspect</th><th>Traditionele L-AA</th><th>GMP-product</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Smaak</td><td>Bitter</td><td>Aanzienlijk beter</td></tr>
+            <tr><td>Phe-fluctuatie</td><td>Meer schommelingen</td><td>Stabielere spiegels</td></tr>
+            <tr><td>Maagdarmklachten</td><td>Relatief veel</td><td>Minder (prebiotisch)</td></tr>
+            <tr><td>Verzadiging</td><td>Lager</td><td>Hoger</td></tr>
+            <tr><td>Phe-gehalte</td><td>Nul</td><td>Laag maar niet nul</td></tr>
+          </tbody>
+        </table>
+        <div class="callout">
+          <div class="callout__label">Bevinding Daly e.a. (2024)</div>
+          <p>RCT bij 12 kinderen (4–9 jaar) — de meest relevante studie voor Alvah's leeftijdsgroep. GMP gaf significant <strong>minder GI-klachten</strong> dan traditionele L-AA. Nadeel: gemiddeld <strong>114 µmol/L hogere Phe</strong> met GMP, wat bij klassieke PKU met lage Phe-tolerantie een aandachtspunt is.</p>
+        </div>
+        <p>Besluit om over te stappen ligt bij de diëtist van het WKZ, met afweging tussen palatabiliteit-winst en Phe-belasting.</p>
+        <p class="small muted">Bronnen: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC4962165/" target="_blank" rel="noopener">Ney e.a. (2016)</a> · <a href="https://www.sciencedirect.com/science/article/pii/S1096719224004918" target="_blank" rel="noopener">Daly e.a. (2024)</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/35215457/" target="_blank" rel="noopener">Daly review (2022)</a>.</p>
+      </section>
+
+      <section id="dyslexie">
+        <h2 class="section-head"><span class="num">05</span>Dyslexie en comorbiditeit</h2>
+
+        <h3>Fonologisch verwerkingsdeficit</h3>
+        <p>Dyslexie is in de kern een fonologisch verwerkingsprobleem: het koppelen van klanken aan tekens verloopt moeizamer, waardoor lezen nooit echt automatiseert. Dat kost werkgeheugen dat andere kinderen voor begrip of rekenen kunnen inzetten. Letter- en cijferomkeringen passen in dit beeld.</p>
+
+        <h3>Protocol 3.0 (2022): comorbiditeit niet langer uitsluiting</h3>
+        <p>Tot 1 januari 2022 sprak men van <strong>EED</strong> (Ernstige Enkelvoudige Dyslexie). Kinderen met comorbide ADHD of metabole aandoening werden juridisch uitgesloten van vergoede zorg.</p>
+        <p>Onder het huidige <strong>Protocol 3.0</strong> (ED — Ernstige Dyslexie) geldt dit niet meer. Tijdens diagnostisch onderzoek wordt alleen beoordeeld of bijkomende problematiek een effectieve behandeling in de weg staat. PKU en een eventuele ADHD-diagnose sluiten Alvah <strong>niet</strong> uit van vergoede zorg.</p>
+        <p class="small muted">Bronnen: <a href="https://www.nkd.nl" target="_blank" rel="noopener">Nederlands Kwaliteitsinstituut Dyslexie (NKD)</a> · <a href="https://richtlijnenjeugdhulp.nl/dyslexie" target="_blank" rel="noopener">BVRD-richtlijn jeugdhulp dyslexie</a> · <a href="https://www.dyslexiecentraal.nl" target="_blank" rel="noopener">Dyslexie Centraal</a>.</p>
+
+        <h3>BOUW! — Nederlandse evidence</h3>
+        <p>BOUW! is een wetenschappelijk onderbouwd computerprogramma voor risicolezers (groep 2–4), met hulp van een tutor. Grootschalig UvA-onderzoek (Van der Weijden, 2023) toont dat optimale inzet — <strong>3–4× per week, 10–15 minuten per sessie</strong> — leidt tot substantiële winst op technisch lezen, spelling, begrijpend lezen, en minder zittenblijven.</p>
+        <p>Het effect spreidt zich uit over domeinen, in tegenstelling tot veel EF-training-interventies (zie sub-sectie 06).</p>
+      </section>
+
+      <section id="ef-training">
+        <h2 class="section-head"><span class="num">06</span>Executieve functies — wat werkt, wat niet</h2>
+        <p class="lede">De claims rond "hersenen trainen" zijn groter dan de evidence. Drie decennia onderzoek wijzen consistent dezelfde kant op: je wordt beter in wat je oefent, en zelden in iets anders.</p>
+
+        <h3>Transfer — near vs far</h3>
+        <ul>
+          <li><strong><a href="https://pubmed.ncbi.nlm.nih.gov/30652908/" target="_blank" rel="noopener">Kassai e.a. (2019)</a></strong>, meta-analyse van 90 experimenten: near-transfer g⁺=0.44 (getrainde taak verbetert), far-transfer <strong>g⁺=0.11, niet significant</strong>. Werkgeheugen-training verbetert geen inhibitie; inhibitie-training verbetert geen cognitieve flexibiliteit.</li>
+          <li><strong><a href="https://journals.sagepub.com/doi/10.1177/1529100616661983" target="_blank" rel="noopener">Simons e.a. (2016)</a></strong>, consensusstatement <em>Psychological Science in the Public Interest</em>: "little evidence of meaningful transfer" van brain-training naar echte schoolvaardigheden.</li>
+        </ul>
+        <p>Wat beter werkt: EF-vaardigheden ingebed oefenen in rijke contexten (sport, muziek, drama, metacognitieve strategieën). Zie <a href="https://pubmed.ncbi.nlm.nih.gov/26682925/" target="_blank" rel="noopener">Diamond &amp; Ling (2016)</a>.</p>
+
+        <h3>BBdL (Beter bij de Les) — NL-optie met strategie-component</h3>
+        <p><a href="https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2015.01081/full" target="_blank" rel="noopener">Van der Donk e.a. (2015)</a> in <em>Frontiers in Psychology</em> toonden effectiviteit van een training die werkgeheugenoefeningen combineert met metacognitieve strategie-instructie. Resultaten gelijkwaardig aan Cogmed maar met betere ecologische validiteit — en NJi-erkend. Beschikbaar via school of behandelaar.</p>
+
+        <h3>Mindfulness — kleine effecten, MYRIAD nuance</h3>
+        <ul>
+          <li><a href="https://onlinelibrary.wiley.com/doi/10.1111/jcpp.13057" target="_blank" rel="noopener">Dunning e.a. (2019)</a>: meta-analyse bij kinderen toont kleine effecten op aandacht en executieve functies.</li>
+          <li><a href="https://mentalhealth.bmj.com/content/25/3/99" target="_blank" rel="noopener">Kuyken e.a. MYRIAD-trial (2022)</a>: grootschalige RCT bij 8.376 tieners — <strong>geen significant effect</strong> op mentaal welbevinden. Mindfulness werkt niet automatisch voor elke leeftijd of doelgroep.</li>
+        </ul>
+
+        <h3>Beweging — de sterkste evidence</h3>
+        <p>Aerobe beweging is de interventie met de meest robuuste en consistente effecten op EF:</p>
+        <div class="callout">
+          <div class="callout__label">Cerrillo-Urbina e.a. (2015)</div>
+          <p>Effectgroottes <strong>g=0.4–0.6</strong> op ADHD-symptomen bij kinderen. Minimaal 3–5× per week, minstens 30 minuten. Diamond &amp; Ling benadrukken dat beweging die cognitieve betrokkenheid vereist (vechtsporten, complexe teamsporten) nog effectiever is dan "mindloos" hardlopen.</p>
+        </div>
+        <p class="small muted">Bron: <a href="https://onlinelibrary.wiley.com/doi/10.1111/cch.12255" target="_blank" rel="noopener">Cerrillo-Urbina e.a. (2015), Child: Care, Health &amp; Development</a>.</p>
+      </section>
+
+      <section id="werkhervatting">
+        <h2 class="section-head"><span class="num">07</span>Werkhervatting-hypothese</h2>
+        <p class="lede">Onze observatie dat Alvah's cito-val samenviel met de werkhervatting van zijn moeder is een <em>hypothese met onderbouwing</em>, geen bewezen feit. Hoe past ze in de literatuur?</p>
+
+        <div class="callout">
+          <div class="callout__label">Drie mechanismen uit de literatuur</div>
+          <ol>
+            <li><strong>Weekendwerk specifiek</strong> hangt samen met lagere thuisbetrokkenheid — niet het totaal aantal uren maar <em>wannéér</em> de ouder beschikbaar is (Hong Kong studie N=433, moeders 5–6-jarigen).</li>
+            <li><strong>Longitudinale data</strong>: Han (2006) en Han &amp; Fox (2011) volgden VS-kinderen 5–14 jaar. Moeders met onregelmatige schema's hadden kinderen met <em>dalende leestrajecten</em>.</li>
+            <li><strong>Ouderlijke stress versterkt het effect</strong> (Nature HSS 2025, N=627) — specifiek via verminderde huiswerkhulp op begrijpend lezen.</li>
+          </ol>
+        </div>
+
+        <h3>Wat dit is (en wat niet)</h3>
+        <p>Dit is een <strong>hypothese</strong> met drie converging data-streams. Het is geen schuld-toewijzing. De observatie "de cijfers vielen in januari–juni 2025, in dezelfde periode begon moeder met weekendwerk" is <em>correlatie</em>. De literatuur levert <em>mechanismen</em> die de correlatie plausibel maken. Het kritieke derde been — <em>kunnen we het uitsluiten door Phe-data en school-observaties te leggen naast deze periode?</em> — ligt bij het WKZ-team en De Mheen.</p>
+
+        <p class="small muted">Bronnen: <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3207253/" target="_blank" rel="noopener">Han &amp; Fox (2011)</a> · <a href="https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2022.905226/full" target="_blank" rel="noopener">Law e.a. (2022) Frontiers</a> · <a href="https://www.nature.com/articles/s41599-025-05802-y" target="_blank" rel="noopener">Nature HSS (2025)</a>.</p>
+      </section>
+
+      <section id="interventies-tijdelijk">
+        <h2 class="section-head"><span class="num">08</span>"Interventies werken tijdelijk" — een synthese voor ouders</h2>
+        <p class="lede">
+          De gedragswetenschapper van het SWV merkte op dat "interventies werken tijdelijk" bij Alvah.
+          Dit is geen individueel falen — het is een patroon dat in de literatuur uitgebreid beschreven
+          wordt, en dat bij PKU een extra laag van complexiteit heeft. Vijf mechanismen verklaren het.
+          Zes ontwerpprincipes wijzen een uitweg.
+        </p>
+
+        <h3>Vijf mechanismen</h3>
+
+        <h4>i. Het transferprobleem — trainen is niet toepassen</h4>
+        <p>De meest robuuste bevinding in de EF-interventie-literatuur: kinderen worden beter in wat ze oefenen, niet in wat ze niet oefenen. Een werkgeheugentraining in een geïsoleerde module vertaalt zich zelden naar beter plannen of spellen in de klas. Kernbronnen: Kassai (2019), Simons (2016), Diamond &amp; Ling (2016) — zie sub-sectie 06.</p>
+
+        <h4>ii. Het generalisatieprobleem — Dawson &amp; Guare</h4>
+        <p>Peg Dawson en Richard Guare beschrijven in hun Nederlandse standaardwerken <em>Slim maar…</em> en <em>Executieve functies bij kinderen en adolescenten</em> (Hogrefe) dat EF-vaardigheden contextueel zijn. Een kind kan thuis met ondersteuning zijn rugzak inpakken, maar dat lukt niet zonder steun op school. Het probleem is niet dat het kind de vaardigheid "verliest" — het is dat de vaardigheid nooit zelfstandig geautomatiseerd is geraakt. De volwassene fungeert als <em>externe executieve functie</em>.</p>
+        <p>Hun bepleit: niet het kind trainen, maar de <em>omgeving</em> aanpassen (scaffolding) en geleidelijk afbouwen.</p>
+
+        <h4>iii. Phe-fluctuatie als verstorende variabele (PKU-specifiek)</h4>
+        <p>Bij PKU speelt een factor die bij andere kinderen met leerproblemen niet voorkomt. <a href="https://pubmed.ncbi.nlm.nih.gov/24568837/" target="_blank" rel="noopener">Hood e.a. (2014)</a>: Phe-variabiliteit voorspelt cognitie sterker dan het Phe-gemiddelde. Een interventie die op maandag werkt kan op vrijdag falen — niet omdat de interventie "uitgewerkt" is, maar omdat de neurochemische context is veranderd door een Phe-piek.</p>
+        <div class="callout">
+          <div class="callout__label">Implicatie</div>
+          <p>Vraag het WKZ om de Phe-spiegels naast de schoolresultaten en gedragsobservaties te leggen. Dit is de enige manier om te bepalen of Phe-fluctuatie een rol speelt.</p>
+        </div>
+
+        <h4>iv. De bidirectionele stress-Phe relatie</h4>
+        <p>Stress verhoogt cortisol → eiwitafbraak → meer Phe → lagere dopamine/serotonine → verergerde stressrespons. Een zichzelf versterkende spiraal. Een interventie kan in een rustige periode (vakantie) goed werken en in een stressvolle periode (toetsweek, sociaal conflict) "ophouden" — niet omdat de interventie faalt, maar omdat het neurochemische substraat verandert.</p>
+
+        <h4>v. Motivatiedaling na het nieuwigheidseffect</h4>
+        <p>Het meest alledaagse maar onderschatte mechanisme. Elk nieuw systeem (beloningssticker, timer, stappenplan) werkt de eerste weken goed, deels omdat het nieuw is. Kinderen met EF-zwaktes zijn extra gevoelig voor nieuwigheid (ADHD-achtig dopamineprofiel). Zodra de nieuwigheid wegzakt, verdwijnt de motivatie. Dit is voorspelbaar gedrag, geen falen. Oplossing: <em>rotatie en variatie</em> in systemen, plus realistische verwachtingen.</p>
+
+        <h3>Zes ontwerpprincipes voor duurzame interventies</h3>
+
+        <ol>
+          <li><strong>Inbedden, niet isoleren.</strong> Geen losse "trainingssessies" maar structurele aanpassingen thuis en in de klas. Een visueel dagschema is effectiever dan een werkgeheugen-app — het is 8 uur per dag actief in plaats van 15 minuten.</li>
+          <li><strong>Scaffolding met geplande afbouw.</strong> Begin met maximale steun (samen), bouw af naar begeleiding, eindig met zelfstandigheid waar de volwassene achteraf checkt. Model van Dawson &amp; Guare. Verwacht maanden tot jaren — geen weken.</li>
+          <li><strong>Phe-stabiliteit als randvoorwaarde.</strong> Geen EF-interventie kan effectief zijn als Phe sterk schommelt. Eerste vraag is altijd: is het dieet op orde? Zijn de spiegels stabiel binnen streefwaarde?</li>
+          <li><strong>Beweging als basis.</strong> Aerobe beweging heeft de sterkste evidence voor EF-winst bij kinderen (Cerrillo-Urbina 2015, g=0.4–0.6). 3–5× per week, minstens 30 minuten. Cognitief betrokken beweging (vechtsport, teamsport) is extra effectief.</li>
+          <li><strong>Verwacht fluctuatie, niet lineaire vooruitgang.</strong> Goede en slechte weken zijn normaal. Meet voortgang over maanden, niet weken. Doel is "de ondergrens komt omhoog", niet "het werkt altijd".</li>
+          <li><strong>Coördinatie tussen domeinen.</strong> SWV ziet gedrag, leerkracht ziet schoolwerk, WKZ ziet Phe-data, ouders zien thuis. Geen enkele partij ziet het hele plaatje. Meest impactvolle interventie is niet een nieuwe methode maar betere informatiedeling.</li>
+        </ol>
+
+        <h3>Nederlandstalige bronnen voor ouders</h3>
+        <ul>
+          <li>Dawson &amp; Guare — <em>Slim maar… Help kinderen hun talenten benutten door hun executieve functies te versterken.</em> Hogrefe.</li>
+          <li>Dawson &amp; Guare — <em>Executieve functies bij kinderen en adolescenten</em>, 3e editie (2019). Hogrefe. ISBN 9789079729005.</li>
+          <li>Jolles, J. — <em>Leer je kind kennen</em> (2020) en <em>Het tienerbrein</em> (2016/2025). Amsterdam University Press. Over EF-ontwikkeling en wat ouders en leraren kunnen doen. <a href="https://www.jellejolles.nl/executieve-functies-belangrijk-onderwijs/" target="_blank" rel="noopener">Jolles over EF in onderwijs</a>.</li>
+          <li>Van der Donk e.a. — <a href="https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2015.01081/full" target="_blank" rel="noopener">Beter bij de Les (2015)</a>.</li>
+        </ul>
+      </section>
+    </article>
+  </div>
 </BaseLayout>
