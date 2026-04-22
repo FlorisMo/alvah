@@ -28,3 +28,20 @@ Push naar `main`. GitHub Actions bouwt en deployt automatisch naar GitHub Pages 
 - `src/content/vragen/` — openstaande vragen, gecategoriseerd naar wie ze beantwoordt
 
 Schema's staan in `src/content.config.ts`. Zie `CLAUDE.md` voor werkinstructies.
+
+## Oefenspelletjes (`/spelen`)
+
+Privé-subtree voor Alvah zelf: EF-oefenspelletjes (werkgeheugen, inhibitie, aandacht, flexibiliteit) met `localStorage`-voortgang en een admin-pagina voor ouder-inzicht. Alles client-side — geen server, geen tracking.
+
+- **Plan + fasering**: `docs/practice-games-plan.md` (begin met de hervat-gids bovenaan)
+- **Data-schema**: `docs/practice-games-schema.md`
+- **Wetenschappelijke onderbouwing**: `docs/source/Research-practice-tools.md`
+- **Referentie-repo's** in `reference/` (gitignored, read-only): uitsluitend leesbron — zie §4 van het plan voor clean-room-regels.
+
+## Plannen en documentatie
+
+- `docs/practice-games-plan.md` — /spelen-subtree, actieve bouwfase
+- `docs/next-steps-plan.md` — dossier-kant onderhoud (Fase 6–11, aparte track)
+- `docs/tone-of-voice-alvah-site-nl.md` — schrijfgids voor alle content
+- `docs/practice-games-schema.md` — localStorage-schema `alvah-ef-v1`
+- `docs/source/` — research-input

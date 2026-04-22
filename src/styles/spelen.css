@@ -1,0 +1,295 @@
+/* ============================================================
+   /spelen — speelvlak-specifieke stijlen.
+   Bovenop global.css; hergebruikt tokens (--green, --paper, --ink-*).
+   Eigen palet: --spel-*. Alleen geladen op /spelen-pagina's.
+   ============================================================ */
+
+:root {
+  --spel-blue: #2b5fb8;
+  --spel-blue-soft: #e7eefa;
+  --spel-orange: #ef7a1f;
+  --spel-orange-soft: #fdeedd;
+  --spel-magenta: #c94174;
+  --spel-magenta-soft: #fbe6ee;
+  --spel-sun: #f5c23b;
+  --spel-glow: rgba(245, 194, 59, 0.35);
+  --spel-radius: 14px;
+  --spel-radius-lg: 20px;
+}
+
+/* ---------- Landing-hero (vandaag) ---------- */
+
+.spel-hero {
+  position: relative;
+  padding: 36px 32px;
+  border-radius: var(--spel-radius-lg);
+  background: linear-gradient(135deg, var(--green-soft) 0%, var(--spel-blue-soft) 100%);
+  border: 1px solid var(--green-line);
+  margin-bottom: 36px;
+  overflow: hidden;
+}
+
+.spel-hero__eyebrow {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+  margin-bottom: 10px;
+}
+
+.spel-hero__title {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: clamp(1.8rem, 3.5vw, 2.4rem);
+  color: var(--ink);
+  margin-bottom: 8px;
+  line-height: 1.15;
+}
+
+.spel-hero__desc {
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  max-width: 40ch;
+  margin-bottom: 20px;
+}
+
+.spel-hero__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------- Tegel-grid ---------- */
+
+.spel-tegel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.spel-tegel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--spel-radius);
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.spel-tegel:hover {
+  background: var(--green-soft);
+  border-color: var(--green-line);
+  transform: translateY(-1px);
+}
+
+.spel-tegel__icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--green-soft);
+  font-size: 1.4rem;
+  margin-bottom: 6px;
+}
+
+.spel-tegel--simon   .spel-tegel__icon { background: var(--spel-blue-soft); color: var(--spel-blue); }
+.spel-tegel--zoeken  .spel-tegel__icon { background: var(--spel-orange-soft); color: var(--spel-orange); }
+.spel-tegel--corsi   .spel-tegel__icon { background: var(--spel-magenta-soft); color: var(--spel-magenta); }
+.spel-tegel--day-night .spel-tegel__icon { background: #fef5d6; color: #9a7b14; }
+.spel-tegel--wisselen .spel-tegel__icon { background: var(--green-soft); color: var(--green); }
+
+.spel-tegel__titel {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 1.15rem;
+  color: var(--ink);
+}
+
+.spel-tegel__kort {
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.spel-tegel__status {
+  margin-top: auto;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+.spel-tegel--binnenkort {
+  opacity: 0.6;
+  pointer-events: none;
+  cursor: default;
+}
+
+.spel-tegel--binnenkort:hover {
+  background: var(--paper);
+  border-color: var(--line);
+  transform: none;
+}
+
+/* ---------- Knoppen ---------- */
+
+.spel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 14px 28px;
+  border-radius: 999px;
+  border: 1px solid var(--green);
+  background: var(--green);
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 1.05rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.spel-btn:hover {
+  background: var(--green-deep);
+  border-color: var(--green-deep);
+}
+
+.spel-btn:active {
+  transform: scale(0.98);
+}
+
+.spel-btn:disabled,
+.spel-btn[aria-disabled="true"] {
+  background: var(--line);
+  border-color: var(--line);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+.spel-btn--ghost {
+  background: transparent;
+  color: var(--green);
+}
+
+.spel-btn--ghost:hover {
+  background: var(--green-soft);
+}
+
+.spel-btn--muted {
+  background: var(--line-soft);
+  border-color: var(--line);
+  color: var(--ink-soft);
+}
+
+.spel-btn--muted:hover {
+  background: var(--line);
+}
+
+/* ---------- Spel-shell (voor game-pagina's vanaf fase 1) ---------- */
+
+.spel-shell {
+  min-height: 70vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 24px;
+  padding: 24px 0 32px;
+}
+
+.spel-shell__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.spel-shell__titel {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 1.4rem;
+  color: var(--ink);
+  flex: 1;
+}
+
+.spel-shell__icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.spel-shell__icon-btn:hover {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: var(--green-line);
+}
+
+.spel-shell__main {
+  display: grid;
+  place-items: center;
+  min-height: 50vh;
+}
+
+.spel-shell__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* ---------- Feedback-gloed (voor later gebruik door spellen) ---------- */
+
+.spel-glow {
+  box-shadow: 0 0 0 4px var(--spel-glow);
+  transition: box-shadow 0.2s ease;
+}
+
+/* ---------- Kleine link-rij ---------- */
+
+.spel-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+
+.spel-extra a {
+  color: var(--ink-soft);
+  text-decoration-color: var(--line);
+}
+
+.spel-extra a:hover {
+  color: var(--green);
+  text-decoration-color: var(--green);
+}
+
+/* ---------- prefers-reduced-motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .spel-tegel,
+  .spel-btn,
+  .spel-glow {
+    transition: none !important;
+  }
+  .spel-tegel:hover {
+    transform: none;
+  }
+}

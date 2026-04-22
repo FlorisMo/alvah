@@ -1,0 +1,453 @@
+---
+// Paradigma-referentie: klassiek Simon-speelgoed (Milton Bradley 1978).
+// Geen jsPsych-equivalent; implementatie onafhankelijk geschreven.
+import SpelShell from '../../layouts/SpelShell.astro';
+import { NL } from '../../scripts/strings.nl.js';
+---
+<SpelShell
+  title="Simon — Spelen"
+  description="Simon-patroon voor Alvah."
+  spelTitel={NL.spel.simon.titel}
+  instructie={NL.spel.simon.uitleg}
+>
+  <div class="simon" data-simon>
+    <!-- Start-scherm -->
+    <section class="simon-scherm" data-scherm="start">
+      <h2 class="simon-scherm__titel">{NL.spel.simon.titel}</h2>
+      <p class="simon-scherm__lede">{NL.spel.simon.uitleg}</p>
+      <button type="button" class="spel-btn" data-actie="start">{NL.start}</button>
+    </section>
+
+    <!-- Spel-scherm -->
+    <section class="simon-scherm" data-scherm="spelen" hidden>
+      <div class="simon-meter">
+        <div class="simon-meter__label">Rij</div>
+        <div class="simon-meter__waarde" data-span>2</div>
+      </div>
+      <div class="simon-grid" role="group" aria-label="Simon-panelen">
+        <button type="button" class="simon-paneel simon-paneel--groen" data-paneel="0" aria-label="Groen, cirkel" disabled>
+          <span class="simon-paneel__icon" aria-hidden="true">●</span>
+        </button>
+        <button type="button" class="simon-paneel simon-paneel--blauw" data-paneel="1" aria-label="Blauw, vierkant" disabled>
+          <span class="simon-paneel__icon" aria-hidden="true">■</span>
+        </button>
+        <button type="button" class="simon-paneel simon-paneel--oranje" data-paneel="2" aria-label="Oranje, driehoek" disabled>
+          <span class="simon-paneel__icon" aria-hidden="true">▲</span>
+        </button>
+        <button type="button" class="simon-paneel simon-paneel--magenta" data-paneel="3" aria-label="Magenta, ruit" disabled>
+          <span class="simon-paneel__icon" aria-hidden="true">◆</span>
+        </button>
+      </div>
+      <p class="simon-status" data-status role="status" aria-live="polite">{NL.spel.simon.kijkGoed}</p>
+    </section>
+
+    <!-- Nog een keer? -->
+    <section class="simon-scherm" data-scherm="retry" hidden>
+      <h2 class="simon-scherm__titel">{NL.nogEenKeer}?</h2>
+      <p class="simon-scherm__lede">Vorige rij was <span data-retry-span>—</span>.</p>
+      <div class="simon-keuze">
+        <button type="button" class="spel-btn" data-actie="retry">{NL.nogEenKeer}</button>
+        <button type="button" class="spel-btn spel-btn--ghost" data-actie="stop">{NL.klaar}</button>
+      </div>
+    </section>
+
+    <!-- Einde-scherm -->
+    <section class="simon-scherm" data-scherm="einde" hidden>
+      <h2 class="simon-scherm__titel">{NL.goedBezig}</h2>
+      <p class="simon-scherm__lede" data-einde-bericht hidden></p>
+      <dl class="simon-einde">
+        <div>
+          <dt>{NL.spel.simon.hoogsteRij}</dt>
+          <dd data-einde-span>—</dd>
+        </div>
+        <div>
+          <dt>Correct</dt>
+          <dd><span data-einde-correct>—</span> / <span data-einde-total>—</span></dd>
+        </div>
+      </dl>
+      <div class="simon-sparkline" data-sparkline-wrap hidden>
+        <div class="simon-sparkline__label">Laatste tien keer</div>
+        <svg viewBox="0 0 120 30" class="simon-sparkline__svg" aria-hidden="true" data-sparkline></svg>
+      </div>
+      <a href="/spelen" class="spel-btn">{NL.klaar}</a>
+    </section>
+  </div>
+</SpelShell>
+
+<style>
+  .simon { width: 100%; max-width: 560px; }
+
+  .simon-scherm {
+    display: grid;
+    gap: 20px;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .simon-scherm[hidden] { display: none !important; }
+
+  .simon-scherm__titel {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: clamp(1.6rem, 3vw, 2rem);
+    margin: 0;
+  }
+
+  .simon-scherm__lede {
+    color: var(--ink-soft);
+    max-width: 40ch;
+    margin: 0;
+  }
+
+  .simon-meter {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .simon-meter__label {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+  }
+
+  .simon-meter__waarde {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 1.6rem;
+    color: var(--ink);
+  }
+
+  .simon-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    width: min(380px, 80vw);
+    aspect-ratio: 1/1;
+  }
+
+  .simon-paneel {
+    border: none;
+    border-radius: var(--spel-radius-lg);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: clamp(2.2rem, 8vw, 3.2rem);
+    color: rgba(255, 255, 255, 0.92);
+    transition: filter 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease;
+    opacity: 0.82;
+  }
+
+  .simon-paneel:not(:disabled):hover { filter: brightness(1.08); }
+  .simon-paneel:not(:disabled):active { transform: scale(0.98); }
+  .simon-paneel:disabled { cursor: default; }
+
+  .simon-paneel.is-aktief {
+    opacity: 1;
+    filter: brightness(1.5) saturate(1.15);
+    box-shadow: 0 0 0 4px var(--spel-glow);
+  }
+
+  .simon-paneel--groen { background: var(--green); }
+  .simon-paneel--blauw { background: var(--spel-blue); }
+  .simon-paneel--oranje { background: var(--spel-orange); }
+  .simon-paneel--magenta { background: var(--spel-magenta); }
+
+  .simon-status {
+    color: var(--ink-soft);
+    min-height: 1.5em;
+    margin: 0;
+  }
+
+  .simon-keuze {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .simon-einde {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 32px;
+    margin: 0;
+  }
+
+  .simon-einde div { display: grid; gap: 4px; }
+
+  .simon-einde dt {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-muted);
+  }
+
+  .simon-einde dd {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 1.5rem;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .simon-sparkline {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+  }
+
+  .simon-sparkline__label {
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .simon-sparkline__svg {
+    width: 120px;
+    height: 30px;
+    stroke: var(--green);
+    stroke-width: 1.5;
+    fill: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .simon-paneel, .simon-paneel.is-aktief {
+      transition: none;
+      filter: none !important;
+      box-shadow: none !important;
+    }
+    .simon-paneel.is-aktief {
+      outline: 4px solid var(--spel-sun);
+      outline-offset: 2px;
+    }
+  }
+</style>
+
+<script>
+  import { tone } from '../../scripts/audio.js';
+  import { now } from '../../scripts/timer.js';
+  import { summarize } from '../../scripts/scoring.js';
+  import { saveSession, load } from '../../scripts/storage.js';
+  import { NL } from '../../scripts/strings.nl.js';
+
+  // 4 panelen: groen 330Hz, blauw 392Hz, oranje 494Hz, magenta 587Hz.
+  // Toonhoogtes zijn E4, G4, B4, D5 — passen op een mineur-zevend akkoord,
+  // dissonantie-vrij bij elke combinatie.
+  const FREQS = [330, 392, 494, 587];
+  const FLASH_MS = 600;
+  const GAP_MS = 200;
+  const TAP_FLASH_MS = 220;
+  const MIN_SPAN = 2;
+  const MAX_SPAN = 9;
+  const MAX_SESSION_MS = 4 * 60 * 1000;
+
+  type SchermId = 'start' | 'spelen' | 'retry' | 'einde';
+  type Trial = { i: number; span: number; correct: boolean; rt: number };
+
+  const root = document.querySelector<HTMLElement>('[data-simon]');
+  if (root) initSimon(root);
+
+  function initSimon(root: HTMLElement) {
+    const schermen: Record<SchermId, HTMLElement> = {
+      start: root.querySelector<HTMLElement>('[data-scherm="start"]')!,
+      spelen: root.querySelector<HTMLElement>('[data-scherm="spelen"]')!,
+      retry: root.querySelector<HTMLElement>('[data-scherm="retry"]')!,
+      einde: root.querySelector<HTMLElement>('[data-scherm="einde"]')!,
+    };
+    const spanEl = root.querySelector<HTMLElement>('[data-span]')!;
+    const statusEl = root.querySelector<HTMLElement>('[data-status]')!;
+    const retrySpanEl = root.querySelector<HTMLElement>('[data-retry-span]')!;
+    const eindeBerichtEl = root.querySelector<HTMLElement>('[data-einde-bericht]')!;
+    const eindeSpanEl = root.querySelector<HTMLElement>('[data-einde-span]')!;
+    const eindeCorrectEl = root.querySelector<HTMLElement>('[data-einde-correct]')!;
+    const eindeTotalEl = root.querySelector<HTMLElement>('[data-einde-total]')!;
+    const sparklineWrap = root.querySelector<HTMLElement>('[data-sparkline-wrap]')!;
+    const sparklineSvg = root.querySelector<SVGElement>('[data-sparkline]')!;
+    const panelen = Array.from(root.querySelectorAll<HTMLButtonElement>('.simon-paneel'));
+
+    let span = MIN_SPAN;
+    let sequence: number[] = [];
+    let userPos = 0;
+    let trials: Trial[] = [];
+    let sessionStart = 0;
+    let rtStart = 0;
+    let trialRT = -1;
+    let gecaped = false;
+
+    root.querySelector<HTMLButtonElement>('[data-actie="start"]')!
+      .addEventListener('click', startSession);
+    root.querySelector<HTMLButtonElement>('[data-actie="retry"]')!
+      .addEventListener('click', onRetry);
+    root.querySelector<HTMLButtonElement>('[data-actie="stop"]')!
+      .addEventListener('click', () => endSession());
+    panelen.forEach((p) => {
+      p.addEventListener('click', () =>
+        onPaneelClick(parseInt(p.dataset.paneel || '0', 10)),
+      );
+    });
+
+    // SpelShell-events
+    document.addEventListener('spel:te-moeilijk', () => {
+      if (schermen.spelen.hidden) return;
+      disablePanelen();
+      span = Math.max(MIN_SPAN, span - 1);
+      statusEl.textContent = NL.spel.simon.ietsKorter;
+      setTimeout(newTrial, 400);
+    });
+    document.addEventListener('spel:pauze', () => {
+      if (trials.length > 0 && schermen.einde.hidden) {
+        endSession();
+      } else {
+        window.location.href = '/spelen';
+      }
+    });
+
+    function toon(id: SchermId) {
+      (Object.keys(schermen) as SchermId[]).forEach((k) => (schermen[k].hidden = k !== id));
+    }
+
+    function startSession() {
+      toon('spelen');
+      sessionStart = now();
+      span = MIN_SPAN;
+      trials = [];
+      gecaped = false;
+      newTrial();
+    }
+
+    function newTrial() {
+      if (now() - sessionStart > MAX_SESSION_MS) {
+        endSession();
+        return;
+      }
+      if (span > MAX_SPAN) {
+        gecaped = true;
+        endSession();
+        return;
+      }
+      spanEl.textContent = String(span);
+      statusEl.textContent = NL.spel.simon.kijkGoed;
+      sequence = Array.from({ length: span }, () => Math.floor(Math.random() * 4));
+      userPos = 0;
+      trialRT = -1;
+      disablePanelen();
+      void playSequence().then(() => {
+        enablePanelen();
+        rtStart = now();
+        statusEl.textContent = NL.spel.simon.jouwBeurt;
+      });
+    }
+
+    async function playSequence() {
+      for (const idx of sequence) {
+        await flash(idx, FLASH_MS);
+        await wait(GAP_MS);
+      }
+    }
+
+    function flash(idx: number, duration: number) {
+      return new Promise<void>((resolve) => {
+        const p = panelen[idx];
+        tone(FREQS[idx], duration, 0.22);
+        p.classList.add('is-aktief');
+        setTimeout(() => {
+          p.classList.remove('is-aktief');
+          resolve();
+        }, duration);
+      });
+    }
+
+    function wait(ms: number) {
+      return new Promise<void>((r) => setTimeout(r, ms));
+    }
+
+    function disablePanelen() { panelen.forEach((p) => (p.disabled = true)); }
+    function enablePanelen() { panelen.forEach((p) => (p.disabled = false)); }
+
+    function onPaneelClick(idx: number) {
+      if (trialRT === -1) trialRT = Math.round(now() - rtStart);
+      void flash(idx, TAP_FLASH_MS);
+      const expected = sequence[userPos];
+
+      if (idx === expected) {
+        userPos += 1;
+        if (userPos === sequence.length) {
+          disablePanelen();
+          trials.push({ i: trials.length + 1, span, correct: true, rt: trialRT });
+          statusEl.textContent = NL.spel.simon.goed;
+          span += 1;
+          setTimeout(newTrial, 600);
+        }
+      } else {
+        disablePanelen();
+        trials.push({ i: trials.length + 1, span, correct: false, rt: trialRT });
+        setTimeout(showRetry, 450);
+      }
+    }
+
+    function showRetry() {
+      retrySpanEl.textContent = String(span);
+      toon('retry');
+    }
+
+    function onRetry() {
+      span = Math.max(MIN_SPAN, span - 1);
+      toon('spelen');
+      newTrial();
+    }
+
+    function endSession() {
+      const duration = Math.round(now() - sessionStart);
+      const sum = summarize(trials);
+      const maxSpan = trials.filter((t) => t.correct).reduce((m, t) => Math.max(m, t.span), 0);
+      const sessionObj = {
+        id: 's_' + Math.random().toString(36).slice(2, 10),
+        date: new Date().toISOString(),
+        level: maxSpan || MIN_SPAN,
+        durationMs: duration,
+        trials: trials.slice(),
+        summary: { ...sum, maxSpan },
+      };
+      saveSession('simon', sessionObj);
+
+      toon('einde');
+      if (gecaped) {
+        eindeBerichtEl.textContent = NL.spel.simon.eindeCap;
+        eindeBerichtEl.hidden = false;
+      }
+      eindeSpanEl.textContent = maxSpan > 0 ? String(maxSpan) : '—';
+      eindeCorrectEl.textContent = String(trials.filter((t) => t.correct).length);
+      eindeTotalEl.textContent = String(trials.length);
+
+      renderSparkline();
+    }
+
+    function renderSparkline() {
+      let data;
+      try { data = load(); } catch { return; }
+      if (!data.preferences || data.preferences.sparklineInEinde === false) return;
+      const sessions = (data.exercises.simon.sessions || []).slice(-10);
+      if (sessions.length < 2) return;
+      const values = sessions.map((s: any) =>
+        (s.summary && typeof s.summary.maxSpan === 'number') ? s.summary.maxSpan : 0,
+      );
+      const max = Math.max(...values, 1);
+      const w = 120;
+      const h = 30;
+      const pts = values.map((v: number, i: number) => {
+        const x = (i / (values.length - 1)) * (w - 4) + 2;
+        const y = h - (v / max) * (h - 6) - 3;
+        return { x: +x.toFixed(1), y: +y.toFixed(1) };
+      });
+      const poly = pts.map((p: {x:number;y:number}) => `${p.x},${p.y}`).join(' ');
+      const circles = pts.map(
+        (p: {x:number;y:number}) => `<circle cx="${p.x}" cy="${p.y}" r="1.8" fill="var(--green)"/>`,
+      ).join('');
+      sparklineSvg.innerHTML =
+        `<polyline points="${poly}" fill="none" stroke="var(--green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${circles}`;
+      sparklineWrap.hidden = false;
+    }
+  }
+</script>

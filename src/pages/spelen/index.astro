@@ -1,0 +1,108 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/spelen.css';
+import { NL } from '../../scripts/strings.nl.js';
+
+type SpelId = 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen';
+
+const spellen: { id: SpelId; icon: string; fase: number }[] = [
+  { id: 'simon',     icon: '♪', fase: 1 },
+  { id: 'zoeken',    icon: '◎', fase: 4 },
+  { id: 'corsi',     icon: '✦', fase: 2 },
+  { id: 'day-night', icon: '☼', fase: 3 },
+  { id: 'wisselen',  icon: '◆', fase: 5 },
+];
+
+// Speelbare spellen — uitbreiden bij elke nieuwe fase.
+const SPEELBAAR = new Set<SpelId>(['simon']);
+
+const aanbevolenStub: SpelId = 'simon';
+const aanbevolen = spellen.find((s) => s.id === aanbevolenStub)!;
+const overig = spellen.filter((s) => s.id !== aanbevolenStub);
+---
+<BaseLayout
+  title="Spelen — Alvah"
+  description="Oefenspelletjes voor Alvah."
+>
+  <section>
+    <h1>{NL.spelen.titel}</h1>
+    <p class="lede">{NL.spelen.lede}</p>
+  </section>
+
+  <section>
+    <article class="spel-hero" data-spel-aanbevolen aria-labelledby="hero-titel">
+      <div class="spel-hero__eyebrow">{NL.spelen.vandaag}</div>
+      <h2 id="hero-titel" class="spel-hero__title" data-hero-titel>{NL.spel[aanbevolen.id].titel}</h2>
+      <p class="spel-hero__desc" data-hero-kort>{NL.spel[aanbevolen.id].kort}</p>
+      <div class="spel-hero__cta" data-hero-cta>
+        {SPEELBAAR.has(aanbevolen.id) ? (
+          <a class="spel-btn" href={`/spelen/${aanbevolen.id}`} data-hero-link>{NL.start}</a>
+        ) : (
+          <button type="button" class="spel-btn" aria-disabled="true" disabled data-hero-disabled>
+            {NL.spelen.binnenkort}
+          </button>
+        )}
+      </div>
+    </article>
+
+    <h2 class="section-head"><span class="num">A</span>{NL.spelen.andere}</h2>
+    <div class="spel-tegel-grid">
+      {overig.map((s) => {
+        const speelbaar = SPEELBAAR.has(s.id);
+        const klasse = `spel-tegel spel-tegel--${s.id}${speelbaar ? '' : ' spel-tegel--binnenkort'}`;
+        const statusTekst = speelbaar ? 'Beschikbaar' : NL.spelen.nogNietBeschikbaar;
+        if (speelbaar) {
+          return (
+            <a class={klasse} href={`/spelen/${s.id}`}>
+              <div class="spel-tegel__icon" aria-hidden="true">{s.icon}</div>
+              <div class="spel-tegel__titel">{NL.spel[s.id].titel}</div>
+              <div class="spel-tegel__kort">{NL.spel[s.id].kort}</div>
+              <div class="spel-tegel__status">{statusTekst}</div>
+            </a>
+          );
+        }
+        return (
+          <article class={klasse}>
+            <div class="spel-tegel__icon" aria-hidden="true">{s.icon}</div>
+            <div class="spel-tegel__titel">{NL.spel[s.id].titel}</div>
+            <div class="spel-tegel__kort">{NL.spel[s.id].kort}</div>
+            <div class="spel-tegel__status">{statusTekst}</div>
+          </article>
+        );
+      })}
+    </div>
+
+    <div class="spel-extra">
+      <a href="/spelen/reis">{NL.jouwReis}</a>
+      <a href="/spelen/admin">Admin</a>
+    </div>
+  </section>
+
+  <script>
+    import { load } from '../../scripts/storage.js';
+    import { pickNext } from '../../scripts/aanraden.js';
+    import { NL as NLS } from '../../scripts/strings.nl.js';
+
+    // Client-side aanrader. Valt terug op 'simon' als de aanbeveling nog niet
+    // speelbaar is in de huidige fase.
+    const SPEELBAAR = new Set(['simon']);
+
+    try {
+      const data = load();
+      const rawPick = pickNext(data);
+      const pick = SPEELBAAR.has(rawPick) ? rawPick : 'simon';
+
+      const titelEl = document.querySelector<HTMLElement>('[data-hero-titel]');
+      const kortEl = document.querySelector<HTMLElement>('[data-hero-kort]');
+      const copy = (NLS as any).spel[pick];
+      if (titelEl && copy) titelEl.textContent = copy.titel;
+      if (kortEl && copy) kortEl.textContent = copy.kort;
+
+      // Als er een actieve link is, pas de href aan
+      const link = document.querySelector<HTMLAnchorElement>('[data-hero-link]');
+      if (link) link.href = `/spelen/${pick}`;
+    } catch (_) {
+      // stil falen; default-kopij blijft staan
+    }
+  </script>
+</BaseLayout>

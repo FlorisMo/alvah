@@ -1,6 +1,39 @@
 # Plan — Oefenspelletjes voor Alvah
 
-Meta-plan dat `docs/source/Research-practice-tools.md` omzet naar een faseerbare bouw. Elke fase is klein genoeg voor één Claude Code-run met marge (<~90 min, <~500 regels nieuwe code, één à twee bestanden van betekenis). Onderstaande principes en open beslissingen moeten vóór fase 1 vastgezet worden.
+Meta-plan dat `docs/source/Research-practice-tools.md` omzet naar een faseerbare bouw. Elke fase is klein genoeg voor één Claude Code-run met marge (<~90 min, <~500 regels nieuwe code, één à twee bestanden van betekenis).
+
+---
+
+## Hervat-gids — lees dit eerst bij een nieuwe sessie
+
+**Status (22 apr 2026, einde dag):** Fase 0 en Fase 1 (Simon) zijn **klaar**. Zie §6 voor per-fase details. Alles draait lokaal via `npm run dev`; er is nog niet gedeployed en dat moet bewust gebeuren (gate + privacy-checks staan aan).
+
+**Volgende stap:** Fase 2 — Corsi Block Tapping. Scope staat beschreven in §6. Fase 2 past in één run.
+
+**Snelle verificatie bij hervatten:**
+
+```bash
+node --test src/scripts/*.test.js    # verwacht: 16 pass, 0 fail
+npx astro check                      # verwacht: 0 errors, 0 warnings, 0 hints
+npm run dev                          # → /spelen laadt, /spelen/simon speelbaar na inloggen op gate
+```
+
+**Wat er staat en wat niet:**
+
+- `/spelen` (landing) toont Simon als aanbevolen, 4 andere tegels als "Nog niet beschikbaar".
+- `/spelen/simon` is volledig speelbaar, logt naar `localStorage` sleutel `alvah-ef-v1`.
+- `/spelen/corsi`, `/day-night`, `/zoeken`, `/wisselen`, `/reis`, `/admin` bestaan **nog niet**. De landing heeft wel al links naar `/reis` en `/admin` — die geven nu 404.
+- Referentie-repo's zijn gekloond in `reference/` (gitignored, read-only via `chmod`). Beleid: uitsluitend leesbron, altijd zelf herschrijven. Zie §4.
+
+**Gotchas:**
+
+- BaseLayout heeft een client-side auth-gate (SHA-256 wachtwoord in sessionStorage). **Niet aanpassen** zonder expliciete opdracht van Floris.
+- Regel 6 in CLAUDE.md: `reference/` is read-only, nooit bewerken / importeren / bundelen.
+- `node --test` werkt met `.test.js` (niet `.test.mjs`) omdat `package.json` heeft `"type": "module"`.
+
+**Niet verwarren met `docs/next-steps-plan.md`.** Dat document beschrijft Fase 6–11 voor de **dossier-kant** van de site (CI-checks, DocPage-refactor, onderhoudsgids, ToV-review van alle content). Die fases gaan over de hoofdsite `/dossier`, `/wetenschap`, etc. Dit document — `practice-games-plan.md` — gaat over de `/spelen`-subtree voor Alvah zelf. De nummer-overlap is historisch (beide plannen startten onafhankelijk bij eigen Fase-reeksen). Bewust niet hernoemd; hier gemarkeerd.
+
+---
 
 ---
 
@@ -178,26 +211,68 @@ docs/
 
 Elke fase eindigt in een commit, werkende pagina, en geen wijzigingen buiten de genoemde bestanden. Fase 0 moet éérst af; fases 1–5 kunnen daarna in vrije volgorde (aanbevolen volgorde: engagement-first).
 
-### Fase 0 — Fundament + referentie-repo's (1 run, geen spel)
-**Doel:** CLAUDE.md-uitzondering + utilities + lege shell + docs/schema + referentie-repo's lokaal en read-only.
-**Stappen:**
-1. `mkdir reference && echo "reference/" >> .gitignore`
-2. Clone vier MIT-repo's (zie sectie 4) in `reference/`.
-3. `chmod -R a-w reference/` — alle referenties read-only.
-4. `CLAUDE.md` uitbreiden: `/spelen`-carve-out (localStorage ja, cookies nee, scripts alleen in `/spelen`-subtree en `src/scripts/`) + clean-room-regel voor `reference/`.
-5. `docs/practice-games-schema.md` (JSON-schema van localStorage).
-6. `src/scripts/{storage,timer,scoring,staircase,audio,strings.nl}.js` — minimale werkende implementaties, logica geschreven zonder naar `reference/` te copy-pasten. Voor `scoring.js` en `staircase.js` één pure unit-test per module (`node --test`).
-7. `src/styles/spelen.css` met speelvlak-palet + shell-tokens.
-8. `src/layouts/SpelShell.astro` + `src/pages/spelen/index.astro` (lege landing met 5 placeholder-tegels).
+### Fase 0 — Fundament + referentie-repo's — ✅ KLAAR (22 apr 2026)
 
-**Acceptatie:** `npm run dev` → `/spelen` laadt zonder errors, 5 tegels zichtbaar (disabled), `node --test src/scripts/*.test.mjs` groen, `ls reference/` toont vier read-only repo's, `git status` toont `reference/` niet (want gitignored).
-**Risico:** laag. Pure scaffolding.
+**Gebouwd en geverifieerd:**
 
-### Fase 1 — Simon-patroon (1 run, eerste echte spel)
-**Doel:** opstartspel, sluit storage-loop end-to-end. Per research: laagdrempelig, motiverend, turn-taking mogelijk.
-**Bestanden:** `src/pages/spelen/simon.astro` (nieuw), kleine tweaks in `strings.nl.js` als nodig.
-**Recept:** 4 panelen (groen/blauw/oranje/magenta + vorm-icoon), Web Audio tonen, sequentie +1 per ronde, cap 9, "nog een keer?" bij fout. Trial-log + summary → `saveSession("simon", …)`.
-**Acceptatie:** 1 volledige sessie speelbaar, data zichtbaar in DevTools → `localStorage["alvah-ef-v1"]`.
+| Onderdeel | Bestand(en) | Status |
+|---|---|---|
+| Referentie-repo's | `reference/{jsPsych,jspsych-contrib,GoNoGo_jsPsych,Nback_jsPsych}/` | ✓ gekloond, `chmod -R a-w`, `.gitignore`-d |
+| CLAUDE.md-regels | `CLAUDE.md` §6 + "Toegestaan binnen /spelen" | ✓ doorgevoerd |
+| localStorage-schema | `docs/practice-games-schema.md` | ✓ gedocumenteerd |
+| Timer | `src/scripts/timer.js` | ✓ `now()`, `rt()` |
+| Scoring | `src/scripts/scoring.js` + `scoring.test.js` | ✓ `mean`, `sd`, `iivCV`, `summarize` — 5/5 tests |
+| Staircase | `src/scripts/staircase.js` + `staircase.test.js` | ✓ 2-down/1-up — 6/6 tests |
+| Aanrader | `src/scripts/aanraden.js` + `aanraden.test.js` | ✓ niet-herhalen + staleness + succes-bias + fallback — 5/5 tests |
+| Mijlpalen | `src/scripts/mijlpalen.js` | ✓ stub (drempels leeg — vullen in fase 7) |
+| Storage | `src/scripts/storage.js` | ✓ load/save/migrate + saveSession + prune + export/import + clearAll |
+| Audio | `src/scripts/audio.js` | ✓ Web Audio `tone()` + `speechSynthesis` `say()`, respecteert `sound`-pref |
+| NL-strings | `src/scripts/strings.nl.js` | ✓ centrale copy, toon: feit-taal, geen hype |
+| Speelvlak-CSS | `src/styles/spelen.css` | ✓ `--spel-blue/orange/magenta/sun/glow` + hero-gradient + tegels + knoppen + shell |
+| Game-shell-layout | `src/layouts/SpelShell.astro` | ✓ wrapt BaseLayout, header (terug + titel + voorleesknop), pauze + te-moeilijk events |
+| Landing | `src/pages/spelen/index.astro` | ✓ hero ("Vandaag" — pickNext op load), 4 andere tegels (binnenkort), links naar reis/admin |
+
+**Verificatie:**
+- `node --test src/scripts/*.test.js` → **16 pass, 0 fail**
+- `npx astro check` → **0 errors, 0 warnings, 0 hints**
+- Dev-server HTTP 200 op `/`, `/spelen`, `/oefeningen`
+- Gerenderde HTML bevat: Simon, Zoeken, Corsi, Dag & Nacht, Wisselen, "Vandaag", "Andere spellen", "Binnenkort"
+
+**Keuzes tijdens uitvoering (afwijkingen t.o.v. oorspronkelijk plan, klein):**
+- Tests als `.test.js` (niet `.test.mjs`) — `package.json` heeft `"type": "module"`, dus ESM werkt al.
+- `SpelShell.astro` wrapt `BaseLayout.astro` (krijgt gate, nav, footer "gratis") in plaats van naast BaseLayout te staan.
+- Landing-pagina gebruikt `BaseLayout` direct (niet SpelShell), want de landing is geen spel — SpelShell is voor game-pagina's vanaf fase 1.
+- Pauze-knop en "te-moeilijk"-knop in SpelShell dispatchen `CustomEvent`s (`spel:pauze`, `spel:te-moeilijk`) zodat toekomstige game-scripts eenvoudig kunnen haken.
+- Alle 5 tegels staan nu als `.spel-tegel--binnenkort` (disabled). Zodra een spel speelbaar is, wordt de modifier verwijderd en wordt de `<article>` een `<a href="/spelen/<id>">`.
+
+### Fase 1 — Simon-patroon — ✅ KLAAR (22 apr 2026)
+
+**Gebouwd:**
+- `src/pages/spelen/simon.astro` — nieuw, compleet spel in één bestand (template + scoped CSS + TS-script).
+- `src/scripts/strings.nl.js` — Simon-subblok uitgebreid (`uitleg`, `kijkGoed`, `jouwBeurt`, `goed`, `ietsKorter`, `hoogsteRij`, `eindeCap`).
+- `src/pages/spelen/index.astro` — Simon nu speelbaar: hero-CTA is actieve link naar `/spelen/simon`. 4 andere tegels blijven `.spel-tegel--binnenkort`. `SPEELBAAR`-set makkelijk uitbreidbaar per volgende fase.
+
+**Spel-mechanica (clean-room implementatie):**
+- 4 panelen in 2×2 grid: groen (330 Hz, ●), blauw (392 Hz, ■), oranje (494 Hz, ▲), magenta (587 Hz, ◆). Toonhoogtes E4/G4/B4/D5 — geen dissonantie in elke combinatie.
+- Sequentie-weergave: 600 ms flash + 200 ms gap per item. Paneel krijgt `is-aktief` (brightness + box-shadow-gloed) + audio.tone().
+- Gebruiker tikt. Eerste-tik-RT gemeten via `timer.now()` vanaf einde sequentie. Per trial gelogd: `{ i, span, correct, rt }`.
+- Correct → `span++`, nieuwe sequentie. Fout → retry-scherm. "Nog een keer" → `span = max(2, span-1)`. Cap 9; sessie max 4 min.
+- Einde-scherm: `hoogsteRij`, `X / Y correct`, sparkline van laatste 10 sessies (SVG polyline, alleen bij ≥2 sessies, uit-zetbaar via `sparklineInEinde` preference).
+- SpelShell-events: `spel:te-moeilijk` → `span--` + nieuwe trial; `spel:pauze` → `endSession()` als er trials zijn, anders naar `/spelen`.
+
+**A11y / research-regels:**
+- `prefers-reduced-motion`: `filter` en `box-shadow` uit; in plaats daarvan `outline` in `--spel-sun` bij `is-aktief` — nog steeds goed zichtbaar, geen animatie.
+- Kleur + vorm samen (cirkel/vierkant/driehoek/ruit) — kleurenblind-safe.
+- Geen countdown, geen confetti, geen variabele beloning. "Nog een keer" is neutraal. Feedback is `NL.spel.simon.goed` / `.ietsKorter`, geen "KANJER!".
+- Elke paneel-knop heeft `aria-label` met kleur + vorm.
+
+**Verificatie:**
+- `node --test src/scripts/*.test.js` → 16 pass, 0 fail (Simon heeft geen eigen unit-test — logica zit in Astro-script, niet in een pure module; de gebruikte modules — scoring, staircase, storage, audio, timer — zijn wel gedekt).
+- `npx astro check` → 0 errors, 0 warnings, 0 hints.
+- Dev-server HTTP 200 op `/spelen` en `/spelen/simon`.
+- Gerenderde HTML bevat: 4 panelen met juiste kleuren + vormen, 4 schermen (start/spelen/retry/einde), instructie-tekst, data-simon-root.
+
+**Gebruikt paradigma-referentie:** klassiek Simon-speelgoed (Milton Bradley 1978). Geen jsPsych-plugin bestond hiervoor — implementatie volledig onafhankelijk.
 
 ### Fase 2 — Corsi Block Tapping (1 run)
 **Doel:** research-top-1 (visuospatieel WM, klassiek gevalideerd).

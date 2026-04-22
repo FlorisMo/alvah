@@ -1,0 +1,92 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import '../styles/spelen.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  spelTitel: string;
+  instructie?: string;
+  toonFooter?: boolean;
+}
+
+const {
+  title,
+  description = 'Oefenspel voor Alvah.',
+  spelTitel,
+  instructie = '',
+  toonFooter = true,
+} = Astro.props;
+---
+<BaseLayout title={title} description={description}>
+  <section class="spel-shell" data-spel-shell>
+    <header class="spel-shell__header">
+      <a
+        href="/spelen"
+        class="spel-shell__icon-btn"
+        aria-label="Terug naar spelen"
+        title="Terug"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      </a>
+      <h1 class="spel-shell__titel">{spelTitel}</h1>
+      {instructie && (
+        <button
+          type="button"
+          class="spel-shell__icon-btn"
+          data-spel-tts={instructie}
+          aria-label="Uitleg voorlezen"
+          title="Voorlezen"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M11 5L6 9H2v6h4l5 4V5z" />
+            <path d="M15.5 8.5a4 4 0 0 1 0 7" />
+            <path d="M18.5 5.5a8 8 0 0 1 0 13" />
+          </svg>
+        </button>
+      )}
+    </header>
+
+    <main class="spel-shell__main">
+      <slot />
+    </main>
+
+    {toonFooter && (
+      <footer class="spel-shell__footer">
+        <button type="button" class="spel-btn spel-btn--muted" data-spel-pauze>Pauze</button>
+        <button type="button" class="spel-btn spel-btn--ghost" data-spel-te-moeilijk>Dit is te moeilijk</button>
+      </footer>
+    )}
+  </section>
+
+  <script>
+    import { say, stopSpeech } from '../scripts/audio.js';
+
+    // TTS-knop
+    for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-spel-tts]')) {
+      btn.addEventListener('click', () => {
+        const txt = btn.getAttribute('data-spel-tts') || '';
+        if (txt) say(txt);
+      });
+    }
+
+    // Pauze-knop stuurt een event dat spellen kunnen opvangen
+    const pauzeBtn = document.querySelector<HTMLButtonElement>('[data-spel-pauze]');
+    if (pauzeBtn) {
+      pauzeBtn.addEventListener('click', () => {
+        stopSpeech();
+        document.dispatchEvent(new CustomEvent('spel:pauze'));
+      });
+    }
+
+    // "Te moeilijk"-knop dispatched ook een event; spellen kunnen level omlaag zetten
+    const teMoeilijkBtn = document.querySelector<HTMLButtonElement>('[data-spel-te-moeilijk]');
+    if (teMoeilijkBtn) {
+      teMoeilijkBtn.addEventListener('click', () => {
+        document.dispatchEvent(new CustomEvent('spel:te-moeilijk'));
+      });
+    }
+  </script>
+</BaseLayout>
