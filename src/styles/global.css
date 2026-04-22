@@ -654,6 +654,111 @@ section + section {
 
 .hidden { display: none !important; }
 
+/* ---------- Access gate ---------- */
+
+html.gate-locked body > :not(.gate) { display: none !important; }
+html:not(.gate-locked) .gate { display: none !important; }
+
+.gate {
+  position: fixed;
+  inset: 0;
+  background: var(--paper);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+  padding: 24px;
+}
+
+.gate__card {
+  max-width: 420px;
+  width: 100%;
+}
+
+.gate__eyebrow {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 1em;
+}
+
+.gate__title {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.5em;
+}
+
+.gate__lede {
+  color: var(--ink-soft);
+  margin-bottom: 1.8em;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.gate__form {
+  display: grid;
+  gap: 14px;
+}
+
+.gate__form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+
+.gate__form input {
+  font: inherit;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 1rem;
+  border-radius: 0;
+}
+
+.gate__form input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+
+.gate__form button {
+  margin-top: 8px;
+  padding: 11px 18px;
+  background: var(--green);
+  color: var(--paper);
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  font-family: var(--font-body);
+  transition: background 0.15s ease;
+}
+
+.gate__form button:hover {
+  background: var(--green-deep);
+}
+
+.gate__error {
+  color: var(--red-warn);
+  font-size: 0.88rem;
+  margin: 4px 0 0;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 /* ---------- Charts & data-panels (gedeeld: samenvatting, resultaten) ---------- */
 
 .chart-container {

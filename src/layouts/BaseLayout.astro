@@ -50,8 +50,35 @@ const wrapClass = wide ? 'wrap wrap--wide' : 'wrap';
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter+Tight:wght@300..600&display=swap"
     />
+    <script is:inline>
+      if (!sessionStorage.getItem('alvah-gate-v1')) {
+        document.documentElement.classList.add('gate-locked');
+      }
+    </script>
   </head>
   <body>
+    <div class="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+      <div class="gate__card">
+        <p class="gate__eyebrow">Alvah · dossier</p>
+        <h1 id="gate-title" class="gate__title">Niet openbaar</h1>
+        <p class="gate__lede">
+          Deze site is een werkdocument voor wie met Alvah werkt. Voer de gedeelde
+          inloggegevens in om verder te gaan.
+        </p>
+        <form id="gate-form" class="gate__form" novalidate>
+          <label>
+            <span>Gebruiker</span>
+            <input type="text" name="user" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required />
+          </label>
+          <label>
+            <span>Wachtwoord</span>
+            <input type="password" name="pass" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Inloggen</button>
+          <p id="gate-error" class="gate__error" hidden>Onjuiste gegevens.</p>
+        </form>
+      </div>
+    </div>
     <nav class="site-nav" aria-label="Hoofdnavigatie">
       <div class="site-nav__inner">
         <a
@@ -87,5 +114,43 @@ const wrapClass = wide ? 'wrap wrap--wide' : 'wrap';
         <p class="small muted">Laatst bijgewerkt: {buildDate}. Deze site is niet openbaar geïndexeerd. Deelbaar op verzoek.</p>
       </div>
     </footer>
+
+    <script is:inline>
+      (function () {
+        const KEY = 'alvah-gate-v1';
+        if (sessionStorage.getItem(KEY)) return;
+        const EXPECTED = 'd24025923a8cdb2745dd71ea507de532dc34dab134e58aa6cc82f6851e14daa0';
+        const form = document.getElementById('gate-form');
+        const err = document.getElementById('gate-error');
+        if (!form) return;
+
+        const firstInput = form.querySelector('input[name="user"]');
+        if (firstInput) firstInput.focus();
+
+        async function sha256Hex(s) {
+          const buf = new TextEncoder().encode(s);
+          const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+          return Array.from(new Uint8Array(hashBuf))
+            .map(function (b) { return b.toString(16).padStart(2, '0'); })
+            .join('');
+        }
+
+        form.addEventListener('submit', async function (e) {
+          e.preventDefault();
+          const fd = new FormData(form);
+          const user = String(fd.get('user') || '').trim().toLowerCase();
+          const pass = String(fd.get('pass') || '');
+          const hash = await sha256Hex(pass);
+          if (user === 'admin' && hash === EXPECTED) {
+            sessionStorage.setItem(KEY, '1');
+            document.documentElement.classList.remove('gate-locked');
+            const gate = document.querySelector('.gate');
+            if (gate) gate.remove();
+          } else {
+            err.hidden = false;
+          }
+        });
+      })();
+    </script>
   </body>
 </html>

@@ -41,3 +41,9 @@ Lees deze CLAUDE.md. Lees src/content.config.ts voor datamodel. Lees de te wijzi
 - `<script>`-blokken in `src/pages/spelen/**` en gedeelde modules in `src/scripts/**`
 - `localStorage` onder de vaste sleutel `alvah-ef-v1` (zie `docs/practice-games-schema.md`)
 - Web Audio API voor spel-tonen
+
+## Access gate (in BaseLayout)
+- Client-side wachtwoord-gate in `src/layouts/BaseLayout.astro`. Gebruiker `admin`, wachtwoord-hash (SHA-256) is ingebouwd.
+- `sessionStorage` onder de sleutel `alvah-gate-v1` om per tab-sessie eenmalig te vragen.
+- Bewust minimale beveiliging: doel is per-ongeluk-landers weren, niet bestand zijn tegen gerichte toegang. Alles is client-side, dus bypass-baar.
+- Niet verwijderen zonder expliciete opdracht. Wachtwoord wijzigen: bereken nieuwe SHA-256, vervang `EXPECTED` in BaseLayout.
