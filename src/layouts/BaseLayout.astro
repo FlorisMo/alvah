@@ -2,20 +2,12 @@
 import '../styles/global.css';
 
 interface Props {
-  title?: string;
-  description?: string;
+  title: string;
+  description: string;
   wide?: boolean;
-  frontmatter?: {
-    title?: string;
-    description?: string;
-    wide?: boolean;
-  };
 }
 
-const props = Astro.props as Props;
-const title = props.title ?? props.frontmatter?.title ?? 'Alvah';
-const description = props.description ?? props.frontmatter?.description ?? '';
-const wide = props.wide ?? props.frontmatter?.wide ?? false;
+const { title, description, wide = false } = Astro.props;
 
 const pathname = Astro.url.pathname.replace(/\/$/, '') || '/';
 const isCurrent = (path: string) => {
