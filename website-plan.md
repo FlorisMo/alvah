@@ -18,10 +18,10 @@
 
 | Token | Jouw waarde |
 |---|---|
-| `{{BRAND}}` | Werktitel van de site — bv. "Voor Alvah" |
-| `{{DOMAIN}}` | Het custom domein — bv. `voor-alvah.nl` |
-| `{{GITHUB_USER}}` | Je GitHub-gebruikersnaam |
-| `{{REPO}}` | De reponaam, aanbevolen: `voor-alvah` |
+| `{{BRAND}}` | **Alvah** |
+| `{{DOMAIN}}` | **alvah.nl** (registrar: Hostnet) |
+| `{{GITHUB_USER}}` | **FlorisMo** |
+| `{{REPO}}` | **alvah** |
 
 **Privacy**: nergens in de site komt een achternaam van Alvah, familie, school-medewerkers of behandelaars. Overal alleen voornamen of rollen ("de gedragswetenschapper van het SWV", "Alvah's leerkracht"). Deze regel is ingebakken in alle content-prompts hieronder.
 
@@ -424,14 +424,19 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
       - name: Build with Astro
-        uses: withastro/action@v6
+        uses: withastro/action@v3
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -443,6 +448,8 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 ```
+
+> **Afwijking van oorspronkelijk plan**: `actions/checkout@v4` en `withastro/action@v3` gebruikt (stabiele versies), niet `@v6` zoals eerder geschreven. Ook `concurrency`-block toegevoegd om gelijktijdige Pages-deploys te serialiseren (best practice).
 
 ## package.json
 
@@ -556,9 +563,16 @@ git push origin main
 ```
 
 ### Stap 3.2 — Enable GitHub Pages
-Op https://github.com/{{GITHUB_USER}}/{{REPO}}/settings/pages:
-- Source: **GitHub Actions**
-- Save
+Twee opties:
+
+**A. Via browser**: https://github.com/{{GITHUB_USER}}/{{REPO}}/settings/pages → Source: **GitHub Actions** → Save.
+
+**B. Via gh CLI (sneller)**:
+```bash
+gh api --method POST repos/{{GITHUB_USER}}/{{REPO}}/pages -f build_type=workflow
+```
+
+Doe dit **vóór** je voor het eerst pusht — anders faalt de eerste `actions/deploy-pages`-step met "Ensure GitHub Pages has been enabled". Als dat gebeurt: Pages alsnog enablen en dan `gh run rerun <RUN_ID> --failed`.
 
 ### Stap 3.3 — Wacht op deploy
 https://github.com/{{GITHUB_USER}}/{{REPO}}/actions — workflow moet groen eindigen (~2 min).
