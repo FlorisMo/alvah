@@ -499,6 +499,125 @@ Per sectie:
 
 ---
 
+## Fase 11 — Tone-of-voice review van alle content (4–6 uur)
+
+**Waarom**: `docs/tone-of-voice-alvah-site-nl.md` is de leidraad voor deze site. De content
+uit Fase 5 is geschreven voordat die gids bestond. Onvermijdelijk zitten er afwijkingen in:
+em-streepjes, verboden woorden, AI-default-patronen ("werkt als een tierelier", "goud waard"),
+hype-slotzinnen, sentiment. Deze fase doet een systematische pass langs alles.
+
+**Volgorde-advies**: kan op elk moment, maar zinnig *na* Fase 8 (refactor). Dan is de
+structuur stabiel en pas je puur op inhoudsniveau aan — één schone commit-reeks, géén
+structurele wijzigingen ertussen.
+
+**Scope**: alle pagina's in `src/pages/`, alle content in `src/content/`. Niet: `research/`
+(input-materiaal, blijft ongewijzigd) en niet: `docs/tone-of-voice-alvah-site-nl.md` zelf
+(de norm).
+
+### Stap 11.1 — ToV-check-script (30 min)
+
+Maak `scripts/check-tov.mjs` dat waarschuwingen rapporteert (niet-blokkerend):
+
+- **Em-streepjes** (`—`, U+2014) — per ToV §Verboden constructies: "Em-streepjes. Nooit."
+- **Verboden woorden** uit ToV §Vocabulaire, inclusief Nederlandse equivalenten:
+  `onvergetelijk`, `een mooie reis`, `prachtige ontwikkeling`, `held`, `dappere kleine vechter`,
+  `ons mannetje`, `ons zonnetje`, `laat zich door niets tegenhouden`, `is een inspiratie voor iedereen`,
+  `op reis gaan` (als metafoor), `volwaardig potentieel ontgrendelen`, `empoweren`,
+  `bloeien` (als metafoor), `bijzonder kind` (als vulling), `delve`, `unlock`, `game-changer`,
+  `journey`, `transformative`, `it's worth noting`, `move the needle`, `deep dive`,
+  `circle back`, `elevate`, `curate`.
+- **Uitroeptekens** buiten attribueerbare citaten.
+- **"hij of zij" / "hem of haar"** constructies.
+- **"eerlijk gezegd" / "letterlijk" / "eigenlijk"** als vulling.
+
+Output: regel-per-regel `file:line:match`, per categorie. Exit altijd 0 — ToV is sturing,
+geen harde test. Niet aan `verify` toevoegen.
+
+Script in `package.json`:
+```json
+"check:tov": "node scripts/check-tov.mjs"
+```
+
+### Stap 11.2 — Em-streepje auto-sweep (45 min)
+
+De ToV verbiedt em-streepjes zonder uitzondering. Ik gebruikte ze in Fase 5 voor drie
+patronen. Alle drie hebben een alternatief:
+
+| Patroon | Voorbeeld nu | Herschrijven naar |
+|---|---|---|
+| Bijstelling | "De Mheen — een Jenaplanschool" | "De Mheen, een Jenaplanschool" |
+| Inlassing | "Alvah — zoals bekend — heeft PKU" | "Alvah heeft PKU (zoals bekend)" |
+| Pauze / contrast | "Ja — nee" of "Het werkte — tijdelijk" | "Ja. Nee." of "Het werkte tijdelijk." |
+
+Werkwijze: `grep -rn "—" src/content/ src/pages/` (niet `research/`), langs de regels lopen,
+één-voor-één kiezen welke vorm past.
+
+**Commit apart** zodat de diff reviewable is: één commit `Fase 11.2: em-streepjes sweep`.
+
+### Stap 11.3 — Pagina-per-pagina review (3–4 uur)
+
+Per pagina de checklist uit ToV §Checklist voor publicatie doorlopen. Volgorde op
+zichtbaarheid:
+
+1. `/` (cockpit)
+2. `/samenvatting` — entry-pagina
+3. `/dossier` — langste, meest claims
+4. `/wetenschap` — risico: te abstract / te ambtenarenachtig
+5. `/doubleren` — bewaak neutrale framing
+6. `/onderwijs` — risico: ambtenarentaal
+7. `/resultaten` — meest cijfer-gedreven, minst tekst
+8. `/bronnen` — bijna alleen lijstwerk
+9. `/voortgang` — 5 losse milestone-bestanden
+10. `/vragen` — 19 losse bestanden
+11. `/oefeningen` — 40 losse bestanden
+
+**Checklist per stuk** (uit ToV):
+- [ ] Toon-scores (Formeel / Grappig / Oneerbiedig / Energie) binnen ±1 van doel per inhoudstype (zie ToV §Toon per inhoudstype)
+- [ ] Geen verboden woorden of clichés
+- [ ] Geen em-streepjes (Fase 11.2 al opgeruimd; double-check)
+- [ ] Geen uitroeptekens behalve in Alvah-citaat
+- [ ] Geen "hij of zij"
+- [ ] Geen inspiratie-porno-zinnen
+- [ ] Alvah wordt genoemd vóór zijn aandoening
+- [ ] Ten minste één kenmerkend patroon aanwezig: ja-en-nee, stil slot, droge onthulling, "wat zit erachter?"
+- [ ] Perspectief consistent (ik vs. we, niet door elkaar)
+- [ ] Geen clevere metafoor waar gewone versie klopt
+- [ ] Bron bij elke wetenschappelijke claim (auteur + jaar)
+- [ ] Datum bij observaties
+- [ ] Slot is wending of feit, geen samenvatting, geen sentiment
+- [ ] Geen van-bovenaf-moraliseren ("ouders zouden altijd…")
+- [ ] "Zou ik dit oké vinden als Alvah het op zijn 16e leest?"
+- [ ] "Zou dit voor generieke opvoedblog / AI-tekst kunnen doorgaan?" — zo ja: herschrijven
+
+Bij twijfel: inline `<!-- TOV: [korte notitie] -->` markeren en later bespreken in plaats
+van ter plekke wegschrijven.
+
+### Stap 11.4 — Content collections (45 min)
+
+- **40 oefeningen** (`src/content/oefeningen/*.md`): scan op hype-taal ("kerninterventie", "goud waard",
+  "onmisbaar", "ideaal"). Vervanging meestal: "werkt", "nuttig", "bruikbaar". Evidence-labeling
+  eerlijk houden — `sterk` / `matig` / `zwak` / `praktijkclaim` zijn al goed, niet oppoetsen.
+- **5 milestones** (`src/content/milestones/*.md`): stil-slot-patroon waar mogelijk. Geen
+  prestatiesticker-taal. Data, feiten, eventueel één droge observatie.
+- **19 vragen** (`src/content/vragen/*.md`): direct. "Waarom"-velden niet dramatiseren.
+  Ja-en-nee-framing waar van toepassing: wat we (denken te) weten, wat we nog niet weten.
+
+### Stap 11.5 — Validatie-gate Fase 11
+- [ ] `scripts/check-tov.mjs` rapporteert 0 em-streepjes, 0 uitroeptekens (buiten citaten), 0 "hij of zij"-constructies
+- [ ] Verboden-woorden-rapport: elke hit opgelost of bewust behouden met reden
+- [ ] Drie willekeurige pagina's handmatig tegen ToV-checklist gelegd
+- [ ] `npm run verify` slaagt
+- [ ] Git diff reviewable: alleen stijl-wijzigingen, geen structurele
+
+### Wat bewust blijft
+
+- `research/` (ex-`docs/source/`) — input-materiaal, niet authoritative. Onaangeroerd.
+- `docs/tone-of-voice-alvah-site-nl.md` — de norm, blijft zoals die is.
+- Zod-schema's en frontmatter-structuur — taal-level wijzigingen, geen structuur.
+- Italic-cijfer-koppen (01, 02, …) — visueel patroon, niet taal.
+
+---
+
 ## Wat bewust niet in scope
 
 - **Unit tests (Vitest)** — voor statische content met Zod-schema-validatie voegen ze
@@ -522,6 +641,11 @@ Per sectie:
 | 8 | 60–90 min | DocPage-component | 4 pagina's migreren, ~100 regels minder |
 | 9 | 30 min | Artifact-checks | `check-artifacts.mjs`, verify alle drie |
 | 10 | 20 min | Onderhoudsgids | `docs/onderhoudsgids.md` + verwijzingen |
+| 11 | 4–6 uur | Tone-of-voice review alle content | em-streepje sweep, pagina-per-pagina checklist, collections review |
 
-**Totaal**: 3 tot 4 uur, verdeeld over losse sessies. Elke fase heeft eigen commit en
-eigen validatie-gate. Niet doorgaan bij een rood vinkje.
+**Totaal**: 7 tot 10 uur, verdeeld over losse sessies. Fase 11 is het grootste blok
+en het meest content-gericht. Elke fase heeft eigen commit en eigen validatie-gate.
+Niet doorgaan bij een rood vinkje.
+
+**Aanbevolen volgorde**: 6 → 7 → 8 → 9 → 10 → 11. Fase 11 als laatste zodat structuur
+(6–10) eerst stabiel is en je puur op inhoud finetunet.
