@@ -77,7 +77,7 @@ Bron: https://cli.github.com
 
 ### Stap 0.5 — Domein gereed?
 Registrar-opties:
-- https://www.versio.nl
+- https://www.hostnet.nl
 - https://www.transip.nl
 - https://www.cloudflare.com/products/registrar
 
