@@ -4,10 +4,11 @@ Dit is Alvah's dossier-site. Lees dit voordat je wijzigingen maakt.
 
 ## Absolute regels
 1. Geen achternamen van personen in content of code. Alleen voornamen of rollen ("de gedragswetenschapper van het SWV", "Alvah's leerkracht").
-2. Geen tracking, analytics, cookies of externe scripts.
+2. Geen externe tracking, analytics of scripts van derden. Alle data blijft client-side; niets gaat naar een server.
 3. Geen Tailwind, geen CSS-in-JS, geen nieuwe frameworks.
 4. robots.txt blijft op Disallow.
 5. Elke wijziging raakt alleen bestanden die de opdracht noemt.
+6. `reference/` is read-only leesbron voor EF-oefeningen. Nooit bewerken, importeren of bundelen — altijd zelf herschrijven (zie `docs/practice-games-plan.md` §4).
 
 ## Stack
 - Astro v5 met content collections (Content Layer API)
@@ -32,7 +33,11 @@ Lees deze CLAUDE.md. Lees src/content.config.ts voor datamodel. Lees de te wijzi
 - Open-onderzoek markers: `--accent-warm` border + label "Open onderzoek" (.callout--open)
 
 ## Verboden
-- `<script>` buiten filters op /oefeningen en /vragen
-- Cookies, localStorage, sessionStorage
-- Externe trackers, pixels, embeds
+- Externe trackers, pixels, embeds, third-party scripts
 - Nieuwe dependencies zonder expliciete opdracht
+- Achternamen van personen
+
+## Toegestaan binnen /spelen
+- `<script>`-blokken in `src/pages/spelen/**` en gedeelde modules in `src/scripts/**`
+- `localStorage` onder de vaste sleutel `alvah-ef-v1` (zie `docs/practice-games-schema.md`)
+- Web Audio API voor spel-tonen
