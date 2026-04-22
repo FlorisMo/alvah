@@ -1,13 +1,248 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+
+const chapters = [
+  { id: 'intro', num: '01', titel: 'Intro' },
+  { id: 'basis', num: '02', titel: 'De basis' },
+  { id: 'swv', num: '03', titel: 'SWV Apeldoorn PO' },
+  { id: 'dyslexieroute', num: '04', titel: 'Dyslexieroute (ED)' },
+  { id: 'jenaplan', num: '05', titel: 'Jenaplan en passend onderwijs' },
+  { id: 'escalatie', num: '06', titel: 'Escalatie en rechten' },
+  { id: 'doubleren-wet', num: '07', titel: 'Wettelijk kader doubleren' },
+];
 ---
 <BaseLayout
   title="Onderwijs — Alvah"
-  description="Nederlandse schoolprocessen, rechten, escalatie."
+  description="Roadmap van het Nederlandse passend-onderwijs-systeem: zorgplicht, SWV Apeldoorn, dyslexieroute, Jenaplan, escalatie en wettelijk kader doubleren."
+  wide={true}
 >
-  <section>
-    <h1>Onderwijs</h1>
-    <p class="lede">Nederlandse schoolprocessen, rechten, escalatie.</p>
-    <p class="muted">Deze pagina wordt later ingevuld.</p>
-  </section>
+  <div class="doc-layout">
+    <aside class="doc-toc" aria-label="Inhoudsopgave onderwijs">
+      <div class="doc-toc__sticky">
+        <div class="doc-toc__label">In deze pagina</div>
+        <ol>
+          {chapters.map((c) => (
+            <li><a href={`#${c.id}`}><span class="toc-num">{c.num}</span>{c.titel}</a></li>
+          ))}
+        </ol>
+      </div>
+    </aside>
+
+    <article class="doc-main">
+      <header class="doc-header">
+        <h1>Onderwijs</h1>
+        <p class="lede">
+          Roadmap van het Nederlandse passend-onderwijs-systeem voor wie er net mee te maken krijgt.
+          Wetten, procedures, Apeldoorn-specifieke details en de rechten die je als ouder hebt.
+        </p>
+
+        <details class="doc-mobile-toc">
+          <summary>In deze pagina — 7 secties</summary>
+          <ol>
+            {chapters.map((c) => (
+              <li><a href={`#${c.id}`}><span class="toc-num">{c.num}</span>{c.titel}</a></li>
+            ))}
+          </ol>
+        </details>
+      </header>
+
+      <section id="intro">
+        <h2 class="section-head"><span class="num">01</span>Intro</h2>
+        <p>Het Nederlandse passend-onderwijs-systeem is ingewikkeld maar wel navigeerbaar. Deze pagina is opgebouwd rond de vraag: <em>waar loop je als ouder tegenaan, en welke routes zijn er?</em></p>
+        <p>De volgorde is pragmatisch: eerst de basis (zorgplicht, OPP), dan de Apeldoornse structuur, dan de specifieke routes (dyslexie, Jenaplan) en tenslotte wat je kunt doen als het vastloopt.</p>
+      </section>
+
+      <section id="basis">
+        <h2 class="section-head"><span class="num">02</span>De basis</h2>
+
+        <h3>Zorgplicht — Wet passend onderwijs (2014)</h3>
+        <p>Sinds 2014 geldt: elke school moet voor elke leerling die extra ondersteuning nodig heeft <em>zorgplicht</em> invullen. Dat betekent: passend onderwijs bieden, of (in overleg met ouders) hulp zoeken bij een andere school. De school mag een kind met ondersteuningsbehoefte niet zomaar afwijzen.</p>
+        <p class="small muted">Bron: <a href="https://www.rijksoverheid.nl/onderwerpen/passend-onderwijs" target="_blank" rel="noopener">Rijksoverheid — passend onderwijs</a>.</p>
+
+        <h3>Zorgniveaus 1–4</h3>
+        <table>
+          <thead>
+            <tr><th>Niveau</th><th>Wat het is</th><th>Wie voert uit</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>1</strong></td><td>Goede basisinstructie voor alle leerlingen</td><td>Klassenleerkracht</td></tr>
+            <tr><td><strong>2</strong></td><td>Extra instructie/oefening voor zwakste 25%</td><td>Leerkracht, in kleine groep</td></tr>
+            <tr><td><strong>3</strong></td><td>Intensieve, geïndividualiseerde aanpak voor zwakste 10%</td><td>Leerkracht + specialist</td></tr>
+            <tr><td><strong>4</strong></td><td>Gespecialiseerde zorg (bv. dyslexiebehandeling)</td><td>Externe zorgverlener</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Ontwikkelingsperspectiefplan (OPP)</h3>
+        <p>Geregeld in <strong>artikel 40a WPO</strong>. Wettelijk verplicht voor leerlingen die <em>niet langer op niveau van het reguliere curriculum meedoen</em>. Het OPP bevat:</p>
+        <ul>
+          <li>Verwachte uitstroom (type voortgezet onderwijs)</li>
+          <li>Welke aanpassingen en ondersteuning de school biedt</li>
+          <li>Welke leerlijnen gevolgd worden (kan per vak verschillen)</li>
+          <li>Evaluatiemomenten (minimaal 1× per jaar)</li>
+        </ul>
+        <div class="callout">
+          <div class="callout__label">Instemmingsrecht ouders</div>
+          <p>Het <strong>handelingsdeel</strong> van het OPP (wat er feitelijk gedaan gaat worden) is <strong>instemmingsplichtig</strong>. De school mag hier niet eenzijdig over beslissen. Als je het niet eens bent met het handelingsdeel, teken je niet — dan is er geen rechtsgeldig OPP.</p>
+        </div>
+
+        <h3>Schoolondersteuningsprofiel (SOP)</h3>
+        <p>Elke school heeft een SOP dat beschrijft welke basis- en extra ondersteuning ze bieden. Het SOP is openbaar en opvraagbaar. Gebruik het om te weten wat binnen De Mheen's mogelijkheden valt en waar ze doorverwijzen naar het SWV.</p>
+      </section>
+
+      <section id="swv">
+        <h2 class="section-head"><span class="num">03</span>SWV Apeldoorn PO</h2>
+        <p class="lede">Op basis van het Ondersteuningsplan 2023–2027 van <a href="https://www.swvapeldoornpo.nl/" target="_blank" rel="noopener">SWV Apeldoorn PO</a>.</p>
+
+        <h3>Structuur</h3>
+        <ul>
+          <li>Apeldoorn is verdeeld in <strong>4 wijken</strong>, elk met eigen wijkcoördinator</li>
+          <li><strong>6-wekelijks wijkoverleg</strong> van schoolbesturen en SWV</li>
+          <li>Elke school heeft een <strong>kernteam</strong>: intern begeleider of kindercoach (IB/KC) + gedragswetenschapper SWV + jeugdverpleegkundige CJG + brugfunctionaris</li>
+          <li>Complexere casussen gaan naar het <strong>MDO 1</strong> (multidisciplinair overleg op school), bij verwijzing naar het <strong>MDO 2</strong> van het SWV</li>
+          <li>Aanvragen voor extra ondersteuning lopen via het digitale systeem <strong>Kindkans</strong></li>
+        </ul>
+
+        <h3>Kernindicaties (KI's) — type ondersteuning</h3>
+        <p>Het SWV werkt met <em>kernindicaties</em> die schoolteams en zorgverleners helpen de juiste ondersteuning te kiezen.</p>
+        <ul>
+          <li><strong>Standaard KI</strong>: 8–10 uur per week onderwijsbegeleiding door een onderwijsondersteuner op school</li>
+          <li><strong>KI Kentalis</strong>: voor TOS (taalontwikkelingsstoornis) of spraak-taalproblemen</li>
+          <li><strong>KI Ergo</strong>: motorische ondersteuning (ergotherapeutische consultatie)</li>
+        </ul>
+
+        <h3>EO en EO+ — onderwijsondersteuning op maat</h3>
+        <p>Voor kinderen die meer nodig hebben dan het schoolbasisaanbod:</p>
+        <ul>
+          <li><strong>EO (Extra Ondersteuning)</strong>: arrangement met concrete uren per week, vaak in combinatie met een OPP</li>
+          <li><strong>EO+</strong>: intensievere variant voor complexere casussen</li>
+        </ul>
+
+        <h3>Ouder- en Jeugdsteunpunt</h3>
+        <p>SWV Apeldoorn heeft een eigen steunpunt voor ouders met vragen over passend onderwijs — onafhankelijke vraagbaak, bemiddeling bij ruzie met school, uitleg over procedures. Contact via <a href="https://www.swvapeldoornpo.nl/ouders" target="_blank" rel="noopener">swvapeldoornpo.nl/ouders</a>.</p>
+        <p class="small muted">Aanvullend: <a href="https://www.swvapeldoornpo.nl/scholen" target="_blank" rel="noopener">swvapeldoornpo.nl/scholen</a> · <a href="https://www.swvapeldoornpo.nl/hoe-werken-wij/informatie-extra-ondersteuning" target="_blank" rel="noopener">Informatie over extra ondersteuning</a>.</p>
+      </section>
+
+      <section id="dyslexieroute">
+        <h2 class="section-head"><span class="num">04</span>Dyslexieroute (ED, Protocol 3.0)</h2>
+        <p class="lede">De route naar vergoede dyslexiezorg loopt in Apeldoorn via de gemeente (Jeugdwet / CJG). Sinds 1 januari 2022 geldt Protocol 3.0.</p>
+
+        <h3>Criteria Protocol 3.0</h3>
+        <ul>
+          <li><strong>3× V-score op DMT</strong> (Drie-Minuten-Toets, technisch lezen) op drie opeenvolgende hoofdmeetmomenten — Alvah heeft er vier (M3, E3, B4, M4)</li>
+          <li><strong>Hardnekkigheidscriterium</strong>: achterstand blijft bestaan ondanks intensieve interventies op zorgniveau 2 en 3 — BOUW! en extra begeleiding zijn ingezet, resultaat blijft uit</li>
+          <li><strong>Comorbiditeit-update 2022</strong>: bijkomende problematiek (PKU, ADHD) is geen automatische uitsluitingsgrond meer. Tijdens diagnostiek wordt alleen beoordeeld of het behandeling in de weg staat</li>
+        </ul>
+
+        <h3>Aanvraag in Apeldoorn</h3>
+        <ol>
+          <li>School stelt <strong>leerlingdossier dyslexie</strong> samen (intakelijst, toetsresultaten, handelingsplannen, evaluaties)</li>
+          <li>Ouders + school ondertekenen de aanvraag</li>
+          <li>Aanvraag via Kindkans of direct bij gemeente (Apeldoorn: <a href="https://www.apeldoorn.nl/begeleiding-advies-over-onderwijs-en-jeugd" target="_blank" rel="noopener">CJG / Dyslexieteam</a>)</li>
+          <li><strong>Poortwachter</strong> beoordeelt binnen ~8 weken</li>
+          <li>Bij positief advies: <strong>beschikking door gemeente</strong>, keuze uit gecontracteerde zorgaanbieders</li>
+          <li>Zorgaanbieder voert diagnostisch onderzoek uit; bij positieve diagnose start behandeling</li>
+        </ol>
+
+        <h3>Compenserende en dispenserende maatregelen</h3>
+        <p>Niet alles vereist een formele dyslexieverklaring. Bij <em>vermoeden</em> van dyslexie mag de school al maatregelen inzetten:</p>
+        <ul>
+          <li><strong>Compenserend</strong>: voorleessoftware (Kurzweil, Claro Read, L2S, Google voorleesfunctie op Chromebook), spellingscontrole, extra tijd, mondelinge overhoring, vergrote tekst</li>
+          <li><strong>Dispenserend</strong>: spelling telt niet mee bij andere vakken, geen multiple choice met lookalike-antwoorden, beperkter dictee</li>
+        </ul>
+
+        <h3>Particulier testen — als alternatief</h3>
+        <p>Wordt een aanvraag afgewezen (bv. als de triade als te complex wordt gezien), dan kan particulier laten testen. Geen vergoede zorg, maar wel een officiële verklaring die bruikbaar is voor compenserende maatregelen op school, middelbare school en later bij examens.</p>
+
+        <p class="small muted">Bronnen: <a href="https://www.nkd.nl" target="_blank" rel="noopener">NKD (Nederlands Kwaliteitsinstituut Dyslexie)</a> · <a href="https://www.dyslexiecentraal.nl" target="_blank" rel="noopener">Dyslexie Centraal</a> · <a href="https://richtlijnenjeugdhulp.nl/dyslexie" target="_blank" rel="noopener">BVRD-richtlijn jeugdhulp dyslexie</a>.</p>
+      </section>
+
+      <section id="jenaplan">
+        <h2 class="section-head"><span class="num">05</span>Jenaplan en passend onderwijs</h2>
+
+        <h3>NJPV — stamgroepen en eigen tempo</h3>
+        <p>De <a href="https://www.jenaplan.nl/nl/vereniging" target="_blank" rel="noopener">Nederlandse Jenaplan Vereniging (NJPV)</a> beschrijft Jenaplanscholen als expliciet gericht op <em>kinderen met een ander ontwikkelingstempo</em>. Jenaplan is niet vrijgesteld van zorgplicht onder de Wet Passend Onderwijs — een Jenaplanschool mag niet weigeren omdat "ons didactisch model past niet" — maar het didactische model biedt wel structurele voordelen.</p>
+
+        <h3>Pedagogisch voordeel bij Alvah's profiel</h3>
+        <ul>
+          <li><strong>Stamgroepen mengen leerjaren</strong> (bv. groep 3-4-5). Een kind dat voor sommige vakken op groep 3-niveau werkt, werkt binnen zijn stamgroep op niveau — geen stigma.</li>
+          <li><strong>Rolverschuiving jongste → middelste → oudste</strong> in plaats van een harde overgang bij elk schooljaar</li>
+          <li><strong>Blokperiode</strong> (zelfstandig werken) is een natuurlijk moment voor werk op eigen niveau</li>
+          <li><strong>Stamgroepleiders zijn opgeleid in differentiatie</strong> — meer dan leerkrachten op reguliere scholen</li>
+        </ul>
+
+        <h3>"Verlengde middenbouw" — niet zittenblijven</h3>
+        <p>In Jenaplan-taal spreek je niet van "doubleren" maar van <em>langer doen over een bouw</em>. Een kind dat een extra jaar in de middenbouw (groep 3-4-5) blijft, verandert niet van sociale groep — hij blijft jongste/middelste/oudste met grotendeels dezelfde stamgroep. De sociale schaamte is aanzienlijk lager dan bij een klassieke doublure.</p>
+        <p>Voor de wetenschap en beslismatrix rond deze keuze: zie <a href="/doubleren">/doubleren</a>.</p>
+
+        <p class="small muted">Bron: <a href="https://www.jenaplan.nl/nl/voor-ouders/veelgestelde-vragen" target="_blank" rel="noopener">NJPV voor ouders — FAQ</a>.</p>
+      </section>
+
+      <section id="escalatie">
+        <h2 class="section-head"><span class="num">06</span>Escalatie en rechten</h2>
+        <p class="lede">Als er onenigheid is met school, SWV of gemeente — in volgorde van informeel naar formeel.</p>
+
+        <div class="callout">
+          <div class="callout__label">Volgorde van escalatie</div>
+          <ol>
+            <li><strong>Informeel gesprek</strong> met leerkracht of IB'er</li>
+            <li><strong>Gesprek met directie</strong> van de school</li>
+            <li><strong>Ouder- en jeugdsteunpunt SWV</strong> — bemiddelen, uitleggen, adviseren</li>
+            <li><strong>Onderwijsconsulenten</strong> — gratis, onafhankelijk, met beperkte beslissingsmacht</li>
+            <li><strong>Geschillencommissie Passend Onderwijs (GPO)</strong> — kosteloos, bindend advies</li>
+            <li><strong>Klachtcommissie (LKC)</strong> voor gedrags-gerelateerde klachten</li>
+            <li><strong>Inspectie van het Onderwijs</strong> — bij structurele tekortkomingen</li>
+            <li><strong>Rechter</strong> — in uitzonderlijke gevallen</li>
+          </ol>
+        </div>
+
+        <h3>GPO — Geschillencommissie Passend Onderwijs</h3>
+        <p>De <a href="https://onderwijsgeschillen.nl/commissie/geschillencommissie-passend-onderwijs-gpo" target="_blank" rel="noopener">GPO</a> is de eerste formele route bij onenigheid over plaatsing, OPP-inhoud, verwijdering of weigering van extra ondersteuning.</p>
+        <ul>
+          <li><strong>Binnen 6 weken</strong> na indiening moet de GPO een advies uitbrengen (10 weken bij complexe zaken)</li>
+          <li><strong>Kosteloos</strong> voor ouders</li>
+          <li>Het advies is <em>bindend</em> voor de school, tenzij er zwaarwegende redenen zijn om af te wijken</li>
+        </ul>
+
+        <h3>LKC — Landelijke Klachtencommissie Onderwijs</h3>
+        <p>Voor klachten die niet over een geschil over plaatsing/OPP gaan maar over <em>gedrag</em> van school, leerkracht of medewerker: <a href="https://onderwijsgeschillen.nl/commissie/landelijke-klachtencommissie-onderwijs-lkc" target="_blank" rel="noopener">LKC</a>.</p>
+
+        <h3>Onderwijsconsulenten</h3>
+        <p><a href="https://onderwijsconsulenten.nl" target="_blank" rel="noopener">Onderwijsconsulenten</a> zijn onafhankelijke adviseurs, bekostigd door het ministerie, gratis voor ouders. Ze bemiddelen bij complexe vraagstukken rond passend onderwijs, zijn vaak sneller dan de GPO, maar hebben geen bindende beslissingsmacht.</p>
+
+        <h3>Ouder- en Jeugdsteunpunt SWV</h3>
+        <p>Eerste stop bij algemene vragen: <a href="https://www.oudersenonderwijs.nl" target="_blank" rel="noopener">Ouders &amp; Onderwijs</a> voor landelijk advies, of het SWV Apeldoorn eigen steunpunt voor lokale vragen.</p>
+
+        <h3>Inspectie van het Onderwijs</h3>
+        <p>Bij structurele tekortkomingen in het onderwijs: <a href="https://www.onderwijsinspectie.nl/onderwerpen/klachten" target="_blank" rel="noopener">Onderwijsinspectie</a>. De inspectie bemiddelt niet in individuele geschillen maar houdt toezicht op kwaliteit.</p>
+
+        <h3>AVG-rechten</h3>
+        <p>Als ouder heb je <strong>inzage- en correctierecht</strong> op alles wat school over je kind registreert. Ook op toetsresultaten, gespreksverslagen, OPP-evaluaties. Zie <a href="https://autoriteitpersoonsgegevens.nl" target="_blank" rel="noopener">Autoriteit Persoonsgegevens</a>.</p>
+
+        <h3>OCO — Onderwijsconsument</h3>
+        <p><a href="https://www.onderwijsconsument.nl/een-geschil-over-passend-onderwijs/" target="_blank" rel="noopener">OCO</a> biedt praktische gidsen en stappenplannen voor geschillen in passend onderwijs.</p>
+      </section>
+
+      <section id="doubleren-wet">
+        <h2 class="section-head"><span class="num">07</span>Wettelijk kader doubleren</h2>
+        <p class="lede">Kort — voor de wetenschap en beslismatrix, zie <a href="/doubleren">/doubleren</a>.</p>
+
+        <h3>Geen expliciete wet</h3>
+        <p>Er is geen specifieke wet die zittenblijven regelt. Wel geldt:</p>
+        <ul>
+          <li><strong>Art. 8 lid 1 WPO</strong>: onderwijs moet <em>ononderbroken ontwikkelingsproces</em> zijn. Zittenblijven is een onderbreking; school moet motiveren waarom het in het belang van het kind is.</li>
+          <li><strong>Art. 13 WPO</strong>: school beschrijft het beleid rond overgang en zittenblijven in de schoolgids. Die schoolgids is opvraagbaar.</li>
+        </ul>
+
+        <h3>Bij passend onderwijs</h3>
+        <p>Als Alvah onder passend onderwijs valt (met OPP), wordt een doublure-beslissing onderdeel van het OPP. Het handelingsdeel van het OPP is <strong>instemmingsplichtig</strong> voor ouders — een doublure kan dus niet tegen de wil van de ouders worden opgelegd als die is vastgelegd in het OPP-handelingsdeel.</p>
+
+        <div class="callout callout--warn">
+          <div class="callout__label">Belangrijke nuance</div>
+          <p>Formeel heeft de school het laatste woord over <em>overgang naar de volgende groep</em> — dat valt onder de professionele autonomie van de school. Het OPP-instemmingsrecht geldt voor de ondersteuning die bij een eventuele doublure hoort, niet voor de doublure-beslissing zelf. In de praktijk betekent dit: bij onenigheid moet je <em>nu</em> je argumenten vastleggen, niet pas als het besluit rond is. Gebruik de GPO als ouders en school er samen niet uitkomen.</p>
+        </div>
+
+        <p class="small muted">Bronnen: <a href="https://www.onderwijskennis.nl/themas/zittenblijven-en-versnellen" target="_blank" rel="noopener">Onderwijskennis.nl — Zittenblijven &amp; versnellen</a> · <a href="https://www.nro.nl/kennisrotondevragenopeenrij/zittenblijven-basisonderwijs" target="_blank" rel="noopener">NRO Kennisrotonde</a>.</p>
+      </section>
+    </article>
+  </div>
 </BaseLayout>
