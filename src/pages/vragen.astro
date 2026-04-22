@@ -1,0 +1,162 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const vragen = await getCollection('vragen');
+
+const categorien = [
+  {
+    key: 'ons' as const,
+    num: '01',
+    titel: 'Voor ons',
+    subtitel: 'Wat wij zelf moeten uitzoeken of regelen.',
+    kader: 'Grotendeels onze eigen verantwoordelijkheid — plannen, bellen, opvragen.',
+  },
+  {
+    key: 'school' as const,
+    num: '02',
+    titel: 'Voor school',
+    subtitel: 'Wat we aan school en behandelaars willen vragen.',
+    kader: 'Partners in zijn ontwikkeling. Vragen die horen bij een transparant schoolpartnership.',
+  },
+  {
+    key: 'alvah' as const,
+    num: '03',
+    titel: 'Voor en met Alvah',
+    subtitel: 'Vragen die alleen hij kan beantwoorden, of die zijn eigen ervaring centraal zetten.',
+    kader: 'Niet over hem heen, maar met hem. Zijn perspectief is een bron, geen bijzaak.',
+  },
+];
+
+const urgentieOrde = { hoog: 0, gemiddeld: 1, laag: 2 } as const;
+
+const vragenPerCategorie = categorien.map((cat) => ({
+  ...cat,
+  items: vragen
+    .filter((v) => v.data.voor === cat.key)
+    .sort((a, b) => urgentieOrde[a.data.urgentie] - urgentieOrde[b.data.urgentie]),
+}));
+---
+<BaseLayout
+  title="Vragen — Alvah"
+  description="Openstaande vragen voor ons, school en met Alvah."
+  wide={true}
+>
+  <section>
+    <h1>Vragen</h1>
+    <p>
+      Een werkdocument leeft van wat we nog niet weten. Deze pagina verzamelt de openstaande vragen —
+      gegroepeerd naar wie ze kan beantwoorden. Sommige vragen zijn voor ons als ouders. Andere stellen
+      we aan school of behandelaars. En een deel is van en met Alvah zelf — hij kent zichzelf het
+      beste, en zijn antwoorden tellen zwaar.
+    </p>
+  </section>
+
+  <section>
+    <div class="filter-bar" id="vragen-filter">
+      <div class="filter-group">
+        <span class="filter-group__label">Voor</span>
+        <div class="filter-group__options">
+          <label><input type="radio" name="voor" value="alle" checked /> Alle</label>
+          <label><input type="radio" name="voor" value="ons" /> Ons</label>
+          <label><input type="radio" name="voor" value="school" /> School</label>
+          <label><input type="radio" name="voor" value="alvah" /> Alvah</label>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <span class="filter-group__label">Status</span>
+        <div class="filter-group__options">
+          <label><input type="radio" name="status" value="alle" checked /> Alle</label>
+          <label><input type="radio" name="status" value="open" /> Open</label>
+          <label><input type="radio" name="status" value="in-gesprek" /> In gesprek</label>
+          <label><input type="radio" name="status" value="beantwoord" /> Beantwoord</label>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <span class="filter-group__label">Urgentie</span>
+        <div class="filter-group__options">
+          <label><input type="checkbox" name="hoog-only" /> Alleen hoog</label>
+        </div>
+      </div>
+    </div>
+
+    {vragen.length === 0 ? (
+      <p class="empty-state">Nog geen vragen gelogd. Dat komt snel.</p>
+    ) : (
+      <div id="vragen-list">
+        {vragenPerCategorie.map((cat) => (
+          <div class="vragen-sectie" data-voor={cat.key}>
+            <h2 class="section-head"><span class="num">{cat.num}</span>{cat.titel}</h2>
+            <p class="muted">{cat.subtitel}</p>
+            <div class="callout">
+              <p>{cat.kader}</p>
+            </div>
+            {cat.items.length === 0 ? (
+              <p class="empty-state">Nog geen vragen in deze categorie.</p>
+            ) : (
+              cat.items.map((v) => (
+                <article
+                  class={`vraag-card${v.data.status === 'beantwoord' ? ' vraag-card--beantwoord' : ''}`}
+                  data-status={v.data.status}
+                  data-urgentie={v.data.urgentie}
+                >
+                  <div class="vraag-card__header">
+                    <h3 class="vraag-card__title">{v.data.titel}</h3>
+                    <span class={`vraag-card__status vraag-card__status--${v.data.status}`}>
+                      {v.data.status}
+                    </span>
+                    {v.data.urgentie === 'hoog' && (
+                      <span class="vraag-card__urgentie">hoge urgentie</span>
+                    )}
+                  </div>
+                  <p>{v.data.waarom}</p>
+                  {v.data.wie_beantwoordt && (
+                    <p class="vraag-card__meta">Wie beantwoordt: {v.data.wie_beantwoordt}</p>
+                  )}
+                </article>
+              ))
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+  </section>
+
+  <section>
+    <div class="callout">
+      <div class="callout__label">Hoe werkt deze pagina</div>
+      <ul>
+        <li>Vragen worden toegevoegd als we merken dat we iets niet weten.</li>
+        <li>Status wisselt van open → in-gesprek → beantwoord.</li>
+        <li>Een beantwoorde vraag blijft staan, met link naar waar het antwoord ligt — zo zie je ook terug wat opgelost is.</li>
+      </ul>
+    </div>
+  </section>
+
+  <script>
+    const bar = document.getElementById('vragen-filter');
+    const list = document.getElementById('vragen-list');
+    if (bar && list) {
+      const apply = () => {
+        const voor = bar.querySelector<HTMLInputElement>('input[name="voor"]:checked')?.value ?? 'alle';
+        const status = bar.querySelector<HTMLInputElement>('input[name="status"]:checked')?.value ?? 'alle';
+        const hoogOnly = bar.querySelector<HTMLInputElement>('input[name="hoog-only"]')?.checked ?? false;
+        for (const sectie of Array.from(list.querySelectorAll<HTMLElement>('.vragen-sectie'))) {
+          const sectieVoor = sectie.dataset.voor ?? '';
+          const sectieZichtbaar = voor === 'alle' || voor === sectieVoor;
+          sectie.classList.toggle('hidden', !sectieZichtbaar);
+          for (const card of Array.from(sectie.querySelectorAll<HTMLElement>('.vraag-card'))) {
+            const s = card.dataset.status ?? '';
+            const u = card.dataset.urgentie ?? '';
+            const matchStatus = status === 'alle' || status === s;
+            const matchUrg = !hoogOnly || u === 'hoog';
+            card.classList.toggle('hidden', !(matchStatus && matchUrg));
+          }
+        }
+      };
+      bar.addEventListener('change', apply);
+    }
+  </script>
+</BaseLayout>

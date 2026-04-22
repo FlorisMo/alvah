@@ -1,0 +1,91 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  wide?: boolean;
+}
+
+const { title, description, wide = false } = Astro.props;
+
+const pathname = Astro.url.pathname.replace(/\/$/, '') || '/';
+const isCurrent = (path: string) => {
+  if (path === '/') return pathname === '/';
+  return pathname === path;
+};
+
+const navItems: { num: string; title: string; path: string }[] = [
+  { num: '01', title: 'Samenvatting', path: '/samenvatting' },
+  { num: '02', title: 'Dossier', path: '/dossier' },
+  { num: '03', title: 'Resultaten', path: '/resultaten' },
+  { num: '04', title: 'Wetenschap', path: '/wetenschap' },
+  { num: '05', title: 'Onderwijs', path: '/onderwijs' },
+  { num: '06', title: 'Doubleren', path: '/doubleren' },
+  { num: '07', title: 'Oefeningen', path: '/oefeningen' },
+  { num: '08', title: 'Voortgang', path: '/voortgang' },
+  { num: '09', title: 'Vragen', path: '/vragen' },
+  { num: '10', title: 'Bronnen', path: '/bronnen' },
+];
+
+const buildDate = new Date().toLocaleDateString('nl-NL', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+const wrapClass = wide ? 'wrap wrap--wide' : 'wrap';
+---
+<!DOCTYPE html>
+<html lang="nl-NL">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter+Tight:wght@300..600&display=swap"
+    />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Hoofdnavigatie">
+      <div class="site-nav__inner">
+        <a
+          href="/"
+          class="site-nav__home"
+          aria-label="Home"
+          aria-current={isCurrent('/') ? 'page' : undefined}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 11.5 12 4l9 7.5" />
+            <path d="M5 10v10h14V10" />
+          </svg>
+        </a>
+        {navItems.map((item) => (
+          <a
+            href={item.path}
+            aria-current={isCurrent(item.path) ? 'page' : undefined}
+          >
+            <span class="nav-num">{item.num}</span>
+            <span>{item.title}</span>
+          </a>
+        ))}
+      </div>
+    </nav>
+
+    <main class={wrapClass}>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p class="tagline">Voor Alvah. Om gezien te worden om wie hij is — niet om wat hij nog niet kan.</p>
+        <p class="small muted">Laatst bijgewerkt: {buildDate}. Deze site is niet openbaar geïndexeerd. Deelbaar op verzoek.</p>
+      </div>
+    </footer>
+  </body>
+</html>

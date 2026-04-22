@@ -1,0 +1,115 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const milestones = await getCollection('milestones');
+const oefeningen = await getCollection('oefeningen');
+const vragen = await getCollection('vragen');
+
+const laatsteMilestone = milestones
+  .slice()
+  .sort((a, b) => b.data.datum.getTime() - a.data.datum.getTime())[0];
+
+const actieveInterventies = oefeningen.filter(
+  (o) => o.data.evidence === 'sterk' || o.data.evidence === 'matig',
+).length;
+
+const openVragen = vragen.filter(
+  (v) => v.data.status === 'open' || v.data.status === 'in-gesprek',
+).length;
+
+const formatDatum = (d: Date) =>
+  d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
+
+const navCards = [
+  { num: '01', titel: 'Samenvatting', pad: '/samenvatting', desc: 'Het verhaal in één pagina, voor wie net aansluit' },
+  { num: '02', titel: 'Dossier', pad: '/dossier', desc: 'Uitgebreid onderzoeksrapport met wetenschappelijke onderbouwing' },
+  { num: '03', titel: 'Resultaten', pad: '/resultaten', desc: 'Cito, Pluspunt en onderwijsbehoeften SWV' },
+  { num: '04', titel: 'Wetenschap', pad: '/wetenschap', desc: 'Dieper inzicht: PKU, dyslexie, executieve functies' },
+  { num: '05', titel: 'Onderwijs', pad: '/onderwijs', desc: 'Nederlandse schoolprocessen, rechten, escalatie' },
+  { num: '06', titel: 'Doubleren', pad: '/doubleren', desc: 'Wetenschap en beslismatrix bij overweging verlengde bouw' },
+  { num: '07', titel: 'Oefeningen', pad: '/oefeningen', desc: 'Filterbare catalogus van interventies en tools' },
+  { num: '08', titel: 'Voortgang', pad: '/voortgang', desc: 'Tijdlijn met milestones en lopend onderzoek' },
+  { num: '09', titel: 'Vragen', pad: '/vragen', desc: 'Openstaande vragen voor ons, school en met Alvah' },
+  { num: '10', titel: 'Bronnen', pad: '/bronnen', desc: 'Alle geraadpleegde literatuur en verwijzingen' },
+];
+---
+<BaseLayout
+  title="Alvah — dossier"
+  description="Alles op één plek voor wie met Alvah werkt — thuis, op school, bij behandelaars."
+  wide={true}
+>
+  <section>
+    <h1>Alvah</h1>
+    <p class="lede">Alles op één plek voor wie met Alvah werkt — thuis, op school, bij behandelaars.</p>
+
+    <dl class="meta-grid">
+      <div>
+        <dt>Leeftijd</dt>
+        <dd>Bijna 8</dd>
+      </div>
+      <div>
+        <dt>School</dt>
+        <dd>De Mheen, Apeldoorn</dd>
+      </div>
+      <div>
+        <dt>Stamgroep</dt>
+        <dd>Inktvissen (middenbouw)</dd>
+      </div>
+      <div>
+        <dt>Context</dt>
+        <dd>PKU · dyslexie-aanvraag · ADHD-achtig</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">A</span>Huidige stand</h2>
+    <div class="chip-row">
+      <a class="data-chip" href="/voortgang">
+        <div class="data-chip__label">Laatste milestone</div>
+        <div class="data-chip__value">
+          {laatsteMilestone ? laatsteMilestone.data.titel : 'Nog geen milestones gelogd'}
+        </div>
+        <div class="data-chip__meta">
+          {laatsteMilestone ? formatDatum(laatsteMilestone.data.datum) : 'Tijdlijn start zodra eerste milestone is vastgelegd'}
+        </div>
+      </a>
+
+      <a class="data-chip" href="/oefeningen">
+        <div class="data-chip__label">Actieve interventies</div>
+        <div class="data-chip__value">{actieveInterventies}</div>
+        <div class="data-chip__meta">met evidence sterk of matig</div>
+      </a>
+
+      <a class="data-chip" href="/vragen">
+        <div class="data-chip__label">Openstaande vragen</div>
+        <div class="data-chip__value">{openVragen}</div>
+        <div class="data-chip__meta">status open of in-gesprek</div>
+      </a>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">B</span>Navigatie</h2>
+    <div class="nav-grid">
+      {navCards.map((card) => (
+        <a class="nav-card" href={card.pad}>
+          <div class="nav-card__num">{card.num}</div>
+          <div class="nav-card__title">{card.titel}</div>
+          <div class="nav-card__desc">{card.desc}</div>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section>
+    <div class="callout">
+      <div class="callout__label">Voor wie met Alvah werkt</div>
+      <p>
+        Deze site is niet openbaar geïndexeerd maar wel deelbaar. Spreek ons gerust aan als iets niet klopt
+        of als je iets mist. Dit is een werkdocument, geen vast gegeven.
+      </p>
+    </div>
+  </section>
+</BaseLayout>

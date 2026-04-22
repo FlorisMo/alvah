@@ -1,0 +1,65 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const milestones = (await getCollection('milestones')).sort(
+  (a, b) => b.data.datum.getTime() - a.data.datum.getTime(),
+);
+
+const openOnderzoek = milestones.filter((m) => m.data.open_onderzoek);
+
+const formatDatum = (d: Date) =>
+  d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
+
+const jaarVan = (d: Date) => d.getFullYear();
+
+const milestonesPerJaar = milestones.reduce<Record<number, typeof milestones>>((acc, m) => {
+  const j = jaarVan(m.data.datum);
+  (acc[j] ??= []).push(m);
+  return acc;
+}, {});
+const jaren = Object.keys(milestonesPerJaar)
+  .map((j) => parseInt(j, 10))
+  .sort((a, b) => b - a);
+---
+<BaseLayout
+  title="Voortgang — Alvah"
+  description="Tijdlijn met milestones en lopend onderzoek."
+>
+  <section>
+    <h1>Voortgang</h1>
+    <p class="lede">Tijdlijn met milestones en lopend onderzoek. Nieuwste boven.</p>
+  </section>
+
+  <section>
+    {milestones.length === 0 ? (
+      <p class="empty-state">Tijdlijn start zodra eerste milestone is vastgelegd.</p>
+    ) : (
+      jaren.map((jaar) => (
+        <div>
+          <h2 class="section-head"><span class="num">{jaar}</span></h2>
+          <div class="timeline">
+            {milestonesPerJaar[jaar].map((m) => (
+              <div class={`timeline-item${m.data.open_onderzoek ? ' timeline-item--open' : ''}`}>
+                <div class="timeline-item__date">{formatDatum(m.data.datum)}</div>
+                <h3 class="timeline-item__title">{m.data.titel}</h3>
+                <p>{m.data.samenvatting}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))
+    )}
+  </section>
+
+  {openOnderzoek.length > 0 && (
+    <section id="onderzoek">
+      <h2 class="section-head"><span class="num">∴</span>Open onderzoek</h2>
+      <ul>
+        {openOnderzoek.map((m) => (
+          <li><strong>{m.data.titel}</strong> — {m.data.samenvatting}</li>
+        ))}
+      </ul>
+    </section>
+  )}
+</BaseLayout>

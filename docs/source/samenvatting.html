@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Over Alvah — een dossier voor wie hem helpt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter+Tight:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #1e4d32;
+    --green-deep: #123621;
+    --green-soft: #f0f5ec;
+    --green-line: #c8d6c0;
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-muted: #7a7a7a;
+    --paper: #fdfcf8;
+    --line: #e8e5dc;
+    --line-soft: #f0ede3;
+    --accent-warm: #d9b89a;
+    --red-warn: #9b3d2e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 16.5px;
+    line-height: 1.65;
+    color: var(--ink);
+    background: var(--paper);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 32px; }
+
+  /* HERO */
+  .hero {
+    padding: 96px 0 72px;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: 40px;
+    right: 32px;
+    width: 140px;
+    height: 140px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none' stroke='%231e4d32' stroke-width='0.8' opacity='0.35'><path d='M50 10 Q 35 30 50 50 Q 65 70 50 90'/><path d='M50 30 Q 35 35 30 25'/><path d='M50 35 Q 65 40 70 30'/><path d='M50 50 Q 32 55 25 42'/><path d='M50 55 Q 68 60 75 48'/><path d='M50 70 Q 35 75 30 65'/><path d='M50 75 Q 65 80 70 70'/></svg>");
+    background-size: contain;
+    background-repeat: no-repeat;
+    opacity: 0.8;
+  }
+  .eyebrow {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 28px;
+  }
+  h1.title {
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+    font-size: clamp(40px, 6vw, 64px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 32px;
+    font-variation-settings: "opsz" 144, "SOFT" 50;
+  }
+  h1.title em {
+    font-style: italic;
+    font-weight: 300;
+    color: var(--green);
+  }
+  .lede {
+    font-family: 'Fraunces', serif;
+    font-weight: 300;
+    font-size: 20px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 620px;
+    font-variation-settings: "opsz" 36;
+  }
+  .meta {
+    margin-top: 40px;
+    display: flex;
+    gap: 40px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+  .meta span strong { color: var(--ink); font-weight: 500; display: block; margin-bottom: 2px; letter-spacing: 0.02em; }
+
+  /* NAV */
+  nav.toc {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    position: sticky;
+    top: 0;
+    background: var(--paper);
+    z-index: 10;
+    backdrop-filter: blur(8px);
+  }
+  nav.toc ul { list-style: none; display: flex; gap: 4px 28px; flex-wrap: wrap; }
+  nav.toc a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    transition: color 0.2s;
+    font-weight: 400;
+  }
+  nav.toc a:hover { color: var(--green); }
+  nav.toc span.num {
+    color: var(--green);
+    font-family: 'Fraunces', serif;
+    font-size: 11px;
+    font-style: italic;
+    margin-right: 8px;
+  }
+
+  /* SECTION */
+  section { padding: 72px 0; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: none; }
+
+  h2.section-head {
+    font-family: 'Fraunces', serif;
+    font-weight: 400;
+    font-size: 34px;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    margin-bottom: 12px;
+    font-variation-settings: "opsz" 72;
+  }
+  h2.section-head .num {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 300;
+    color: var(--green);
+    font-size: 0.58em;
+    margin-right: 14px;
+    vertical-align: 8px;
+  }
+  .section-intro {
+    font-family: 'Fraunces', serif;
+    font-weight: 300;
+    font-size: 18px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    margin-bottom: 40px;
+    max-width: 640px;
+    font-variation-settings: "opsz" 36;
+  }
+
+  h3 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 20px;
+    letter-spacing: -0.01em;
+    margin: 36px 0 12px;
+  }
+  h4 {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    color: var(--green);
+    margin: 24px 0 10px;
+    text-transform: uppercase;
+    font-size: 11.5px;
+    letter-spacing: 0.15em;
+  }
+
+  p { margin-bottom: 16px; }
+  p + p { margin-top: 0; }
+
+  strong { font-weight: 600; color: var(--ink); }
+  em { font-style: italic; }
+
+  a {
+    color: var(--green);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    transition: color 0.15s;
+  }
+  a:hover { color: var(--green-deep); }
+
+  /* WIE IS ALVAH */
+  .portrait {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    margin-top: 24px;
+  }
+  .portrait .col h4 { margin-top: 0; }
+  .portrait ul { list-style: none; }
+  .portrait ul li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 15.5px;
+  }
+  .portrait ul li:last-child { border-bottom: none; }
+  .portrait ul li::before {
+    content: "—";
+    color: var(--green);
+    margin-right: 12px;
+    font-weight: 500;
+  }
+
+  .compassion {
+    margin-top: 56px;
+    padding: 36px 36px 32px;
+    background: var(--green-soft);
+    border-left: 3px solid var(--green);
+    position: relative;
+  }
+  .compassion h4 { color: var(--green-deep); margin-top: 0; }
+  .compassion p { font-family: 'Fraunces', serif; font-size: 17px; line-height: 1.6; color: var(--green-deep); font-weight: 400; font-variation-settings: "opsz" 36; }
+  .compassion p:last-child { margin-bottom: 0; }
+  .compassion .his-words {
+    font-style: italic;
+    font-weight: 300;
+  }
+
+  /* DATA TABLES */
+  .data-panel {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 32px 36px;
+    margin-top: 24px;
+  }
+  .data-panel h4 { margin-top: 0; }
+  table.data {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    font-family: 'Inter Tight', sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  table.data th {
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 500;
+    color: var(--ink-muted);
+    border-bottom: 1px solid var(--line);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  table.data td {
+    padding: 12px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  table.data tr:last-child td { border-bottom: none; }
+  table.data td.num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; text-align: right; }
+  .niveau-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  .niv-II { background: #d7e8d0; color: #1e4d32; }
+  .niv-IV { background: #f2e3c6; color: #7a5a1f; }
+  .niv-V { background: #f0d5cd; color: #8a3525; }
+  .niv-D { background: #f2e3c6; color: #7a5a1f; }
+
+  /* CHART */
+  .chart-container {
+    margin: 40px 0;
+    padding: 36px 36px 28px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+  }
+  .chart-title {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .chart-sub {
+    font-size: 13px;
+    color: var(--ink-muted);
+    margin-bottom: 28px;
+  }
+  .chart-note {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 12px;
+    font-style: italic;
+  }
+  .legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .legend span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legend i {
+    display: inline-block;
+    width: 20px;
+    height: 2px;
+  }
+
+  /* Callout */
+  .callout {
+    padding: 28px 32px;
+    margin: 32px 0;
+    border-left: 3px solid var(--green);
+    background: var(--green-soft);
+  }
+  .callout.warn { border-left-color: var(--red-warn); background: #fbf0ed; }
+  .callout h4 { margin-top: 0; color: var(--green-deep); }
+  .callout.warn h4 { color: var(--red-warn); }
+
+  /* observation list */
+  .obs {
+    display: grid;
+    gap: 24px;
+    margin-top: 32px;
+  }
+  .obs article {
+    padding: 28px 0;
+    border-top: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 28px;
+  }
+  .obs article .n {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 300;
+    color: var(--green);
+    font-size: 28px;
+    line-height: 1;
+  }
+  .obs article h3 { margin: 0 0 10px; font-size: 19px; }
+  .obs article p { font-size: 15.5px; color: var(--ink-soft); }
+  .obs article p:last-child { margin-bottom: 0; }
+
+  /* Triptych - the three layers */
+  .layers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin: 32px 0;
+  }
+  .layer {
+    padding: 28px 24px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    position: relative;
+  }
+  .layer::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px;
+    height: 100%;
+    background: var(--green);
+  }
+  .layer h4 { color: var(--green-deep); margin-top: 0; font-size: 13px; }
+  .layer h5 {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 12px;
+  }
+  .layer p { font-size: 14.5px; line-height: 1.55; color: var(--ink-soft); margin-bottom: 0; }
+
+  /* Intervention plan */
+  .plan {
+    margin-top: 24px;
+  }
+  .plan-block {
+    padding: 32px 0;
+    border-top: 1px solid var(--line);
+  }
+  .plan-block:last-child { padding-bottom: 0; }
+  .plan-block h3 {
+    margin: 0 0 18px;
+    font-size: 22px;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+  }
+  .plan-tag {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10.5px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    background: var(--green);
+    color: white;
+    border-radius: 2px;
+    font-weight: 500;
+  }
+  .plan-tag.secondary { background: var(--green-soft); color: var(--green-deep); border: 1px solid var(--green-line); }
+  .actions ol {
+    list-style: none;
+    counter-reset: step;
+  }
+  .actions ol li {
+    counter-increment: step;
+    padding: 16px 0 16px 48px;
+    border-bottom: 1px solid var(--line-soft);
+    position: relative;
+    font-size: 15px;
+  }
+  .actions ol li::before {
+    content: counter(step, decimal-leading-zero);
+    position: absolute;
+    left: 0;
+    top: 16px;
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 300;
+    color: var(--green);
+    font-size: 16px;
+  }
+  .actions ol li:last-child { border-bottom: none; }
+  .actions ol li strong { display: block; margin-bottom: 4px; }
+  .actions ol li em { color: var(--ink-muted); font-style: normal; font-size: 13px; }
+
+  /* Glossary */
+  .glossary {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    margin-top: 24px;
+    border-top: 1px solid var(--line);
+  }
+  .glossary dt {
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line-soft);
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--green-deep);
+  }
+  .glossary dd {
+    padding: 18px 0 18px 24px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 14.5px;
+    color: var(--ink-soft);
+    margin-left: 0;
+  }
+  .glossary dd span.alias {
+    display: block;
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 2px;
+    font-style: italic;
+  }
+
+  /* Sources */
+  .sources h4 { margin-top: 32px; }
+  .sources ul { list-style: none; margin-top: 10px; }
+  .sources li {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 14px;
+  }
+  .sources li:last-child { border-bottom: none; }
+  .sources li a { font-weight: 500; }
+  .sources li .bron-meta { color: var(--ink-muted); font-size: 12.5px; margin-top: 2px; display: block; }
+
+  /* Footer */
+  footer {
+    padding: 56px 0 64px;
+    border-top: 1px solid var(--line);
+    margin-top: 24px;
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+  footer p { margin-bottom: 8px; }
+  footer p.sig { font-family: 'Fraunces', serif; font-style: italic; font-size: 15px; color: var(--ink-soft); margin-top: 16px; }
+
+  /* Responsive */
+  @media (max-width: 720px) {
+    .wrap { padding: 0 24px; }
+    .hero { padding: 56px 0 48px; }
+    .hero::before { width: 80px; height: 80px; top: 20px; right: 16px; }
+    .portrait { grid-template-columns: 1fr; gap: 32px; }
+    .layers { grid-template-columns: 1fr; }
+    .glossary { grid-template-columns: 1fr; }
+    .glossary dt { padding-bottom: 6px; border-bottom: none; }
+    .glossary dd { padding: 0 0 18px 0; }
+    .obs article { grid-template-columns: 1fr; gap: 12px; }
+    .obs article .n { font-size: 22px; }
+    h2.section-head { font-size: 28px; }
+    .data-panel, .chart-container { padding: 24px 20px; }
+  }
+
+  /* Print */
+  @media print {
+    nav.toc { display: none; }
+    section { break-inside: avoid; page-break-inside: avoid; padding: 32px 0; }
+    .hero::before { display: none; }
+    body { font-size: 11pt; }
+    .callout, .data-panel, .chart-container, .compassion { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Dossier · april 2026</p>
+    <h1 class="title">Over Alvah —<br>een kind dat <em>gezien</em> moet worden,<br>geen probleem dat opgelost moet worden.</h1>
+    <p class="lede">Dit document brengt samen wat de toetsen laten zien, wat de wetenschap zegt, wat er opvalt, en wat hij nodig heeft. Het is bedoeld voor wie met hem werkt — thuis, op De Mheen, in het SWV, bij opa en oma.</p>
+    <div class="meta">
+      <span><strong>Onderwerp</strong>Alvah Moerkamp, bijna 8 jaar</span>
+      <span><strong>School</strong>Openbare Jenaplanschool De Mheen, Apeldoorn</span>
+      <span><strong>Stamgroep</strong>Inktvissen · groep 4</span>
+      <span><strong>Context</strong>PKU · dyslexie in onderzoek · ADHD vermoed</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="wrap">
+    <ul>
+      <li><a href="#wie"><span class="num">01</span>Wie is Alvah</a></li>
+      <li><a href="#data"><span class="num">02</span>De cijfers</a></li>
+      <li><a href="#patroon"><span class="num">03</span>Wat opvalt</a></li>
+      <li><a href="#context"><span class="num">04</span>Medische context</a></li>
+      <li><a href="#plan"><span class="num">05</span>Wat we doen</a></li>
+      <li><a href="#termen"><span class="num">06</span>Termen</a></li>
+      <li><a href="#bronnen"><span class="num">07</span>Bronnen</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- SECTION 1: WIE IS ALVAH -->
+<section id="wie">
+  <div class="wrap">
+    <h2 class="section-head"><span class="num">01</span>Wie is Alvah</h2>
+    <p class="section-intro">Voordat de toetsen en de termen: dit is een kind. Het gaat niet goed met sommige dingen, maar heel goed met veel andere. Allebei zijn waar.</p>
+
+    <div class="portrait">
+      <div class="col">
+        <h4>Wat hij meebrengt</h4>
+        <ul>
+          <li>Gaat met veel plezier naar school</li>
+          <li>Sociaal, doet met alles mee</li>
+          <li>Vrolijk, humoristisch, nieuwsgierig</li>
+          <li>Megagepassioneerd over natuur en dieren</li>
+          <li>Supergoede grote broer van Isaiah en Inana</li>
+          <li>Wil het graag goed doen, doet echt zijn best</li>
+          <li>Staat open voor feedback en bijsturing</li>
+          <li>Werkt graag samen met anderen</li>
+        </ul>
+      </div>
+      <div class="col">
+        <h4>Wat hem tegenwerkt</h4>
+        <ul>
+          <li>Korte spanningsboog, snel afgeleid</li>
+          <li>Is vaak (schrijf)materialen kwijt</li>
+          <li>Leesontwikkeling verloopt vertraagd</li>
+          <li>Draait letters en cijfers om</li>
+          <li>Moeite met zelfstandig werken en starten</li>
+          <li>Laag werktempo</li>
+          <li>Moeite met plannen en overzicht houden</li>
+          <li>Interventies werken tijdelijk, dan zakt het weg</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="compassion">
+      <h4>Wat we niet kunnen weten, maar wel benoemen</h4>
+      <p>Wij weten niet hoe het is om Alvah te zijn. Om elke dag naar een plek te gaan waar bijna iedereen dingen kan die voor jou bergen zijn. Om je handen te voelen trillen bij een toets. Om een letter vijf keer te bekijken voor hij stilstaat.</p>
+      <p>Wat hij ons zelf vertelt: <span class="his-words">bang om het niet goed te doen. Bang dom gevonden te worden. Bang om uitgelachen te worden.</span> Dat zijn geen kleine dingen. Dat zijn — op zijn 7e — al gevaarlijk dichtbij de overtuigingen die een kind voor de rest van zijn leven bij zich kan dragen.</p>
+      <p>We willen niet vragen om medelijden. We willen vragen om realisme. Iedereen die met hem werkt, kan in zijn hoofd houden: hij gaat naar school met een rugzak die voor anderen onzichtbaar is. Wat lijkt op friemelen, niet meedoen of afdwalen, is vaak geen onwil. Het is kracht die ergens anders nodig was.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 2: DE CIJFERS -->
+<section id="data">
+  <div class="wrap">
+    <h2 class="section-head"><span class="num">02</span>Wat de toetsen laten zien</h2>
+    <p class="section-intro">Cijfers vertellen geen hele verhaal, maar ze vertellen wel een deel. Hieronder de werkelijke Cito-resultaten van groep 3 en het eerste half jaar van groep 4 (januari 2025 tot januari 2026).</p>
+
+    <!-- Spelling & Rekenen leerrendement chart -->
+    <div class="chart-container">
+      <div class="chart-title">De val — en het gedeeltelijke herstel</div>
+      <div class="chart-sub">Leerrendement (%) per hoofdmeetmoment. 100% = op landelijk gemiddelde. De kantelpunt ligt tussen januari en juni 2025.</div>
+
+      <div class="legend">
+        <span><i style="background:#1e4d32;"></i> Spelling</span>
+        <span><i style="background:#9b3d2e;"></i> Rekenen</span>
+        <span><i style="background:#c8d6c0; height: 1px; border-top: 1px dashed #7a7a7a;"></i> Norm (100%)</span>
+      </div>
+
+      <svg viewBox="0 0 700 340" style="width: 100%; height: auto;" role="img" aria-label="Grafiek leerrendement Alvah over tijd">
+        <!-- y-axis -->
+        <line x1="60" y1="30" x2="60" y2="290" stroke="#c8d6c0" stroke-width="1"/>
+        <!-- x-axis -->
+        <line x1="60" y1="290" x2="670" y2="290" stroke="#c8d6c0" stroke-width="1"/>
+
+        <!-- 100% reference line -->
+        <line x1="60" y1="160" x2="670" y2="160" stroke="#7a7a7a" stroke-width="1" stroke-dasharray="3 4" opacity="0.6"/>
+        <text x="664" y="155" text-anchor="end" font-family="Inter Tight" font-size="11" fill="#7a7a7a" font-style="italic">norm 100%</text>
+
+        <!-- y-axis labels -->
+        <text x="50" y="34" text-anchor="end" font-family="Inter Tight" font-size="11" fill="#7a7a7a">200%</text>
+        <text x="50" y="96" text-anchor="end" font-family="Inter Tight" font-size="11" fill="#7a7a7a">150%</text>
+        <text x="50" y="164" text-anchor="end" font-family="Inter Tight" font-size="11" fill="#7a7a7a">100%</text>
+        <text x="50" y="227" text-anchor="end" font-family="Inter Tight" font-size="11" fill="#7a7a7a">50%</text>
+        <text x="50" y="294" text-anchor="end" font-family="Inter Tight" font-size="11" fill="#7a7a7a">0%</text>
+
+        <!-- x-axis labels -->
+        <text x="140" y="310" text-anchor="middle" font-family="Inter Tight" font-size="12" fill="#4a4a4a">M3</text>
+        <text x="140" y="325" text-anchor="middle" font-family="Inter Tight" font-size="10.5" fill="#7a7a7a">jan 2025</text>
+
+        <text x="370" y="310" text-anchor="middle" font-family="Inter Tight" font-size="12" fill="#4a4a4a">E3</text>
+        <text x="370" y="325" text-anchor="middle" font-family="Inter Tight" font-size="10.5" fill="#7a7a7a">juni 2025</text>
+
+        <text x="600" y="310" text-anchor="middle" font-family="Inter Tight" font-size="12" fill="#4a4a4a">M4</text>
+        <text x="600" y="325" text-anchor="middle" font-family="Inter Tight" font-size="10.5" fill="#7a7a7a">jan 2026</text>
+
+        <!-- Highlight jan-jun 2025 interval -->
+        <rect x="140" y="30" width="230" height="260" fill="#f0d5cd" opacity="0.25"/>
+        <text x="255" y="48" text-anchor="middle" font-family="Fraunces" font-size="11.5" fill="#9b3d2e" font-style="italic">periode werkhervatting moeder</text>
+
+        <!-- Spelling line: M3=160%, E3=<50% (use 45%), M4=67% -->
+        <!-- y = 290 - (value/200 * 260) -->
+        <!-- M3: 290 - (160/200*260) = 290 - 208 = 82 -->
+        <!-- E3: 290 - (45/200*260) = 290 - 58.5 = 231.5 -->
+        <!-- M4: 290 - (67/200*260) = 290 - 87.1 = 202.9 -->
+        <polyline points="140,82 370,231 600,203" fill="none" stroke="#1e4d32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="140" cy="82" r="5" fill="#1e4d32"/>
+        <circle cx="370" cy="231" r="5" fill="#1e4d32"/>
+        <circle cx="600" cy="203" r="5" fill="#1e4d32"/>
+
+        <!-- Data labels spelling -->
+        <text x="140" y="74" text-anchor="middle" font-family="Inter Tight" font-size="12" font-weight="600" fill="#1e4d32">160%</text>
+        <text x="370" y="247" text-anchor="middle" font-family="Inter Tight" font-size="12" font-weight="600" fill="#1e4d32">&lt;50%</text>
+        <text x="600" y="195" text-anchor="middle" font-family="Inter Tight" font-size="12" font-weight="600" fill="#1e4d32">67%</text>
+
+        <!-- Rekenen line: M3=<100% (95%), E3=<50% (45%), M4=40% -->
+        <!-- M3: 290 - (95/200*260) = 290 - 123.5 = 166.5 -->
+        <!-- E3: 290 - (45/200*260) = 290 - 58.5 = 231.5 -->
+        <!-- M4: 290 - (40/200*260) = 290 - 52 = 238 -->
+        <polyline points="140,167 370,232 600,238" fill="none" stroke="#9b3d2e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="140" cy="167" r="5" fill="#9b3d2e"/>
+        <circle cx="370" cy="232" r="5" fill="#9b3d2e"/>
+        <circle cx="600" cy="238" r="5" fill="#9b3d2e"/>
+
+        <!-- Data labels rekenen -->
+        <text x="140" y="185" text-anchor="middle" font-family="Inter Tight" font-size="12" font-weight="600" fill="#9b3d2e">&lt;100%</text>
+        <text x="372" y="222" text-anchor="start" font-family="Inter Tight" font-size="12" font-weight="600" fill="#9b3d2e">&lt;50%</text>
+        <text x="610" y="242" text-anchor="start" font-family="Inter Tight" font-size="12" font-weight="600" fill="#9b3d2e">40%</text>
+      </svg>
+      <p class="chart-note">Spelling ging van niveau II (ruim boven landelijk gemiddelde) naar niveau V (zwakste 20%) in een half jaar, met gedeeltelijk herstel naar D. Rekenen volgde een zwakker maar vergelijkbaar patroon. Dit is geen normale leercurve — er is iets gebeurd.</p>
+    </div>
+
+    <!-- Full data table -->
+    <div class="data-panel">
+      <h4>Volledig toetsoverzicht · Cito LIB &amp; DMT</h4>
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Toets</th>
+            <th>Moment</th>
+            <th>Niveau</th>
+            <th class="num">Vaardigheid</th>
+            <th class="num">DLE</th>
+            <th class="num">LR %</th>
+            <th>Functioneert op</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Spelling</td><td>M3 · jan '25</td>
+            <td><span class="niveau-badge niv-II">II / B</span></td>
+            <td class="num">179</td><td class="num">8</td><td class="num">160%</td><td>E3</td>
+          </tr>
+          <tr>
+            <td>Spelling</td><td>E3 · jun '25</td>
+            <td><span class="niveau-badge niv-V">V / E</span></td>
+            <td class="num">110</td><td class="num">&lt;5</td><td class="num">&lt;50%</td><td>&lt; M3</td>
+          </tr>
+          <tr>
+            <td>Spelling</td><td>M4 · jan '26</td>
+            <td><span class="niveau-badge niv-D">V / D</span></td>
+            <td class="num">203</td><td class="num">10</td><td class="num">67%</td><td>E3</td>
+          </tr>
+          <tr>
+            <td>Rekenen</td><td>M3 · jan '25</td>
+            <td><span class="niveau-badge niv-IV">IV / C</span></td>
+            <td class="num">105</td><td class="num">&lt;5</td><td class="num">&lt;100%</td><td>&lt; M3</td>
+          </tr>
+          <tr>
+            <td>Rekenen</td><td>E3 · jun '25</td>
+            <td><span class="niveau-badge niv-V">V / E</span></td>
+            <td class="num">77</td><td class="num">&lt;5</td><td class="num">&lt;50%</td><td>&lt; M3</td>
+          </tr>
+          <tr>
+            <td>Rekenen</td><td>M4 · jan '26</td>
+            <td><span class="niveau-badge niv-V">V / E</span></td>
+            <td class="num">120</td><td class="num">6</td><td class="num">40%</td><td>M3</td>
+          </tr>
+          <tr>
+            <td>DMT (tech. lezen)</td><td>M3 · jan '25</td>
+            <td><span class="niveau-badge niv-V">V / E</span></td>
+            <td class="num">3</td><td class="num">&lt;5</td><td class="num">&lt;100%</td><td>&lt; M3</td>
+          </tr>
+          <tr>
+            <td>DMT</td><td>E3 · jun '25</td>
+            <td><span class="niveau-badge niv-V">V / E</span></td>
+            <td class="num">2</td><td class="num">&lt;5</td><td class="num">&lt;50%</td><td>&lt; M3</td>
+          </tr>
+          <tr>
+            <td>DMT</td><td>B4 · nov '25</td>
+            <td><span class="niveau-badge niv-V">V / E</span></td>
+            <td class="num">7</td><td class="num">&lt;5</td><td class="num">&lt;38%</td><td>&lt; M3</td>
+          </tr>
+          <tr>
+            <td>DMT</td><td>M4 · jan '26</td>
+            <td><span class="niveau-badge niv-V">V / E</span></td>
+            <td class="num">6</td><td class="num">&lt;5</td><td class="num">&lt;33%</td><td>&lt; M3</td>
+          </tr>
+          <tr>
+            <td>Begrijpend lezen</td><td>M4 · jan '26</td>
+            <td><span class="niveau-badge niv-V">V / E</span></td>
+            <td class="num">78</td><td class="num">&lt;10</td><td class="num">&lt;67%</td><td>&lt; E3</td>
+          </tr>
+          <tr>
+            <td>AVI</td><td>M4 · jan '26</td>
+            <td><span class="niveau-badge niv-V">V</span></td>
+            <td class="num">—</td><td class="num">—</td><td class="num">—</td><td>VI-Start</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="chart-note" style="margin-top:16px;">Methodegebonden Pluspunt-toetsen (rekenen): alle 7 afgenomen bloktoetsen in groep 4 onvoldoende (O) · tempo-toetsen eveneens O.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 3: WAT OPVALT -->
+<section id="patroon">
+  <div class="wrap">
+    <h2 class="section-head"><span class="num">03</span>Wat opvalt</h2>
+    <p class="section-intro">Drie patronen springen eruit als we de cijfers naast de thuissituatie, de medische context en wat we van school horen leggen.</p>
+
+    <div class="obs">
+      <article>
+        <div class="n">i.</div>
+        <div>
+          <h3>De spelling-instorting was geen geleidelijke daling</h3>
+          <p>In januari 2025 scoorde Alvah op spelling niveau II met een leerrendement van 160% — ruim <em>boven</em> landelijk gemiddelde. Vijf maanden later was dat ingestort naar niveau V. Dat patroon is atypisch voor een kind met structurele leerproblemen. Kinderen die "gewoon zwak" zijn, scoren niet eerst een II.</p>
+          <p>In diezelfde periode (januari 2025) begon Alvah's moeder weer te werken, ook in weekenden. Alvah werd in die periode bozer en gemener; nu zijn moeder weer thuis is, wordt hij aanhankelijker. Dat is geen toeval.</p>
+        </div>
+      </article>
+
+      <article>
+        <div class="n">ii.</div>
+        <div>
+          <h3>Weekendwerk van een ouder is wetenschappelijk gelinkt aan lagere leesprestaties</h3>
+          <p>Longitudinale studies in de VS (Han &amp; Fox, 2011) vonden dalende leestrajecten bij kinderen van moeders met onregelmatige werkschema's. Weekendwerk specifiek hangt samen met <em>lagere</em> thuisbetrokkenheid (Hong Kong studie N=433), en ouderlijke stress versterkt dit effect bij begrijpend lezen (Nature HSS 2025, N=627).</p>
+          <p>Voor Alvah komt daar iets extra's bij: bij PKU verstoort emotionele stress de fenylalanine-huishouding, wat op zijn beurt dopamine- en serotonineproductie in de hersenen raakt. <em>Variatie</em> in Phe-spiegels is net zo schadelijk voor cognitie als een hoog gemiddelde.</p>
+        </div>
+      </article>
+
+      <article>
+        <div class="n">iii.</div>
+        <div>
+          <h3>Op technisch lezen voldoet hij ruimschoots aan het criterium voor vergoede dyslexiezorg</h3>
+          <p>Voor Ernstige Dyslexie (ED) is drie opeenvolgende V-scores op de DMT vereist. Alvah heeft er <em>vier</em>: M3, E3, B4 en M4. Daarnaast heeft hij een E-score op begrijpend lezen. Hij is de afgelopen jaar niet vooruitgegaan ondanks BOUW! en intensieve begeleiding — dit voldoet ook aan het <em>hardnekkigheidscriterium</em>.</p>
+          <p>Sinds 1 januari 2022 (Protocol 3.0) is comorbiditeit geen uitsluiting meer. PKU en een eventuele ADHD-diagnose sluiten Alvah dus <strong>niet</strong> uit van vergoede zorg.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 4: DRIE LAGEN -->
+<section id="context">
+  <div class="wrap">
+    <h2 class="section-head"><span class="num">04</span>Drie lagen die tegelijk drukken</h2>
+    <p class="section-intro">Een deel van waarom Alvah zo snel uitgeput raakt: zijn profiel drukt drievoudig op dezelfde hersensystemen. Alle drie verstoren aandacht, werkgeheugen en automatisering.</p>
+
+    <div class="layers">
+      <div class="layer">
+        <h4>Laag 01 · metabool</h4>
+        <h5>PKU</h5>
+        <p>Verhoogd fenylalanine blokkeert transport van tyrosine en tryptofaan naar de hersenen. Dat verlaagt dopamine, noradrenaline en serotonine — de brandstof voor de prefrontale cortex (aandacht, plannen, werkgeheugen). Ook bij goede dieetcontrole ligt IQ gemiddeld 5 punten lager dan leeftijdsgenoten en is er een hogere kans op aandachts- en concentratieproblemen.</p>
+      </div>
+      <div class="layer">
+        <h4>Laag 02 · neurocognitief</h4>
+        <h5>Vermoeden dyslexie</h5>
+        <p>De fonologische verwerking — het koppelen van klanken aan tekens — verloopt moeizamer. Daardoor is lezen nooit "automatisch" maar elke keer werk. Dat kost werkgeheugen dat andere kinderen voor begrip of rekenen kunnen gebruiken. Letter- en cijferomkeringen passen in dit beeld.</p>
+      </div>
+      <div class="layer">
+        <h4>Laag 03 · aandacht</h4>
+        <h5>ADHD-achtig profiel</h5>
+        <p>Of het klinisch ADHD is of PKU-gerelateerde aandachtsproblematiek is bij deze leeftijd lastig te scheiden — de symptomen zijn bijna identiek. Praktisch betekent dit: korte spanningsboog, moeite met starten en doorgaan, friemelen, materialen kwijtraken. De interventies zijn grotendeels hetzelfde, of het nu ADHD heet of niet.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <h4>Waarom dit belangrijk is om te snappen</h4>
+      <p>De drie lagen overlappen in hun effect op <em>executieve functies</em> — de "regelaars" van het brein. Wat bij andere kinderen automatisch gaat (pen pakken, opdracht lezen, beginnen, door blijven gaan), vraagt bij Alvah elke keer bewuste inspanning. Dat verklaart waarom hij vaak uitgeput aan het eind van de dag thuiskomt, waarom interventies tijdelijk werken (zolang hij energie heeft), en waarom emotionele stress (zoals de afwezigheid van moeder) extra hard binnenkomt: er is simpelweg minder reserve.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 5: PLAN -->
+<section id="plan">
+  <div class="wrap">
+    <h2 class="section-head"><span class="num">05</span>Wat we doen — een werkend plan</h2>
+    <p class="section-intro">Geen revolutie. Geen extra psychologen. Wel: gerichter, met meer ademruimte, en met wetenschappelijk onderbouwde keuzes in plaats van intuïtief steeds méér oefenen.</p>
+
+    <div class="plan">
+
+      <div class="plan-block">
+        <h3>Thuis <span class="plan-tag">ouders</span></h3>
+        <div class="actions">
+          <ol>
+            <li>
+              <strong>Lees 10–15 minuten, niet meer</strong>
+              <em>Van der Weijden (UvA 2023): korte sessies zijn efficiënter dan lange. Meer tijd verhoogt stress zonder meeropbrengst.</em>
+            </li>
+            <li>
+              <strong>Toneellezen: om de beurt een zin</strong>
+              <em>Verlaagt drempel. Hij leest het makkelijkere stuk, jij het spannende.</em>
+            </li>
+            <li>
+              <strong>Herhaal wat goed ging, niet wat fout ging</strong>
+              <em>Steenbeek-Planting (2012): voor zwakke lezers werkt herhaling van succeservaring beter dan drillen op fouten.</em>
+            </li>
+            <li>
+              <strong>Luisterboek + meelezen tegelijk</strong>
+              <em>Meta-analyse Singh &amp; Alexander (2022): effectgroottes 0.28–0.9. Yoleo (gratis via bibliotheek) en Passend Lezen (passendlezen.nl) zijn hier perfect voor.</em>
+            </li>
+            <li>
+              <strong>Eén gegarandeerde succeshobby per week</strong>
+              <em>Sport, natuur-activiteit, dieren verzorgen, bouwen. Emotioneel reservoir dat hij op moeilijke schoolmomenten aanspreekt.</em>
+            </li>
+            <li>
+              <strong>Geen globale oordelen, wel gedifferentieerd zelfbeeld</strong>
+              <em>"Jouw hoofd werkt anders" in plaats van "Je bent slim hoor" — concreet en waar is krachtiger dan algemene geruststelling.</em>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="plan-block">
+        <h3>School · De Mheen <span class="plan-tag">jenaplan</span></h3>
+        <div class="actions">
+          <ol>
+            <li>
+              <strong>BOUW!-ritme bevestigen: 3–4× per week, 10–15 min</strong>
+              <em>Uit UvA-onderzoek: dit is de optimale frequentie. Effect spreidt zich uit naar tekstlezen, begrijpend lezen, spelling én minder zittenblijven.</em>
+            </li>
+            <li>
+              <strong>Ontwikkelingsperspectiefplan (OPP) opstellen of actualiseren</strong>
+              <em>Wettelijke basis voor Alvah's eigen leerlijn. Handelingsgedeelte vereist instemming ouders.</em>
+            </li>
+            <li>
+              <strong>Dyslexie-aanvraag afronden (ED, Protocol 3.0)</strong>
+              <em>Criteria ruimschoots voldaan. Via CJG Apeldoorn / SWV poortwachter. Beslissing binnen ~8 weken na compleet dossier.</em>
+            </li>
+            <li>
+              <strong>Voorleessoftware op Chromebook (compenserende maatregel)</strong>
+              <em>Kurzweil, Claro Read, of ingebouwde voorleesfunctie. Recht op gebruik bij vermoeden dyslexie; geen formele verklaring vereist.</em>
+            </li>
+            <li>
+              <strong>Stamgroep-logica inzetten voor differentiatie</strong>
+              <em>Alvah kan instructie op leerjaar 3-niveau volgen binnen zijn eigen stamgroep — dat is geen "terug", dat is ingebakken Jenaplan-didactiek.</em>
+            </li>
+            <li>
+              <strong>Bij doublure-overweging: framing als "verlengde middenbouw", niet zittenblijven</strong>
+              <em>En alleen zinvol mét nieuwe, intensievere interventies die hij anders niet zou krijgen. Hattie meta-analyse: doubleren alléén heeft negatief effect.</em>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="plan-block">
+        <h3>Specialistisch <span class="plan-tag secondary">alleen wat nodig is</span></h3>
+        <div class="actions">
+          <ol>
+            <li>
+              <strong>Metabool centrum: check Phe-spiegels januari–juni 2025</strong>
+              <em>Is er een biochemische verklaring voor de spelling-instorting? Relevant voor toekomstige beslissingen.</em>
+            </li>
+            <li>
+              <strong>Gedragspsycholoog SWV (Marijke Poel) informeren over werkhervatting-observatie</strong>
+              <em>Dit is belangrijke context voor het ondersteuningsplan — geen extra intake nodig, gewoon de informatie delen.</em>
+            </li>
+            <li>
+              <strong>Na dyslexiediagnose: eventueel Wegwijs-traject</strong>
+              <em>Specifieke training (Van Luit, UU) voor kinderen met leerstoornis + faalangst. Pas inzetten als die faalangst niet afneemt door verbeterde leessituatie.</em>
+            </li>
+            <li>
+              <strong>Geen IQ-test voor nu</strong>
+              <em>Geen aanleiding. Een IQ-test zou in deze fase meer stress dan informatie geven. Kan later altijd nog.</em>
+            </li>
+            <li>
+              <strong>Geen aparte ADHD-diagnostiek voor nu</strong>
+              <em>Klinisch niet te onderscheiden van PKU-gerelateerde aandachtsproblemen bij deze leeftijd. Interventies zijn identiek.</em>
+            </li>
+          </ol>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 6: TERMEN -->
+<section id="termen">
+  <div class="wrap">
+    <h2 class="section-head"><span class="num">06</span>Termen, in gewone taal</h2>
+    <p class="section-intro">Het onderwijssysteem gebruikt veel afkortingen. Hier de belangrijkste, in begrijpelijk Nederlands.</p>
+
+    <dl class="glossary">
+      <dt>PKU</dt>
+      <dd>Fenylketonurie. Stofwisselingsziekte waarbij het lichaam het aminozuur fenylalanine niet goed kan afbreken. Bij niet-behandelen hoopt dit op en beschadigt hersenen. Met streng dieet goed beheersbaar, maar ook bij goede controle blijft er een verhoogde kans op aandachts- en leerproblemen.</dd>
+
+      <dt>ED</dt>
+      <dd>Ernstige Dyslexie. Sinds 1 januari 2022 de officiële term voor de diagnose die recht geeft op vergoede dyslexiezorg door de gemeente. <span class="alias">Oude naam: EED (Ernstige Enkelvoudige Dyslexie)</span></dd>
+
+      <dt>DMT</dt>
+      <dd>Drie-Minuten-Toets. Test technisch lezen: hoeveel losse woorden lees je correct in drie minuten. Basis voor dyslexie-signalering.</dd>
+
+      <dt>Cito-niveau I t/m V</dt>
+      <dd>Vergelijking met andere kinderen van dezelfde leeftijd. I = beste 20%, III = gemiddeld, V = zwakste 20%. <span class="alias">Oude letter-indeling A–E wordt ook nog gebruikt.</span></dd>
+
+      <dt>DLE</dt>
+      <dd>Didactisch Leeftijd Equivalent. Op welk niveau Alvah feitelijk functioneert, in "maanden onderwijs" sinds start groep 3. DLE 10 = niveau eind groep 3.</dd>
+
+      <dt>Leerrendement (LR%)</dt>
+      <dd>DLE gedeeld door verwachte DLE × 100. 100% = op niveau. 50% = Alvah beheerst de helft van wat verwacht wordt.</dd>
+
+      <dt>Functioneringsniveau</dt>
+      <dd>Op welk groepsniveau Alvah feitelijk werkt. Bv. "FN M3" = midden groep 3 niveau.</dd>
+
+      <dt>OPP</dt>
+      <dd>Ontwikkelingsperspectiefplan. Wettelijk document voor leerlingen met extra ondersteuningsbehoefte. Beschrijft Alvah's eigen leerlijn, verwachte uitstroom, aanpassingen. Moet minimaal 1× per jaar met ouders geëvalueerd worden.</dd>
+
+      <dt>SWV</dt>
+      <dd>Samenwerkingsverband. Alle scholen in een regio samen, verantwoordelijk voor passend onderwijs. Voor Alvah: SWV Apeldoorn PO. Loket voor extra ondersteuning, arrangementen, en doorverwijzingen.</dd>
+
+      <dt>Zorgniveau 1–4</dt>
+      <dd>Hoe intensief ondersteuning is. Niveau 1 = gewone lessen. Niveau 2 = extra oefening in kleine groep. Niveau 3 = intensieve individuele begeleiding. Niveau 4 = gespecialiseerde zorg (bv. dyslexiebehandeling). <em>Alvah zit nu op niveau 3.</em></dd>
+
+      <dt>BOUW!</dt>
+      <dd>Wetenschappelijk onderbouwd computerprogramma voor risicolezers (groep 2–4), met hulp van een tutor. Bij correcte inzet: 60% minder leesproblemen. Alvah doet hier nu aan mee.</dd>
+
+      <dt>Stamgroep</dt>
+      <dd>Jenaplan-term voor een groep met meerdere leerjaren gemengd (bv. groep 3-4-5). Hierdoor kan Alvah op eigen tempo werken zonder te worden afgezet tegen een strak leeftijdscohort.</dd>
+
+      <dt>MDO / Kernteam</dt>
+      <dd>Overleg waarin school, ouders, intern begeleider en SWV-experts samen over een leerling spreken. <span class="alias">MDO = Multidisciplinair Overleg</span></dd>
+
+      <dt>Executieve functies</dt>
+      <dd>De "regelaars" in de hersenen: aandacht, werkgeheugen, plannen, impulscontrole, starten en volhouden. Alle drie Alvah's uitdagingen (PKU, dyslexie, ADHD-achtig) drukken hierop.</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- SECTION 7: BRONNEN -->
+<section id="bronnen" class="sources">
+  <div class="wrap">
+    <h2 class="section-head"><span class="num">07</span>Bronnen om verder te lezen</h2>
+    <p class="section-intro">Voor wie dieper wil graven. Alle links openen in een nieuw tabblad.</p>
+
+    <h4>Wetenschappelijke studies — werkhervatting &amp; prestaties</h4>
+    <ul>
+      <li>
+        <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3207253/" target="_blank" rel="noopener">Parental Work Schedules and Children's Cognitive Trajectories</a>
+        <span class="bron-meta">Han &amp; Fox — longitudinale studie, dalende leestrajecten bij onregelmatige werkschema's van moeders</span>
+      </li>
+      <li>
+        <a href="https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2022.905226/full" target="_blank" rel="noopener">Mothers' Non-standard Work Schedules and Involvement in Children's Education</a>
+        <span class="bron-meta">Frontiers in Psychology — weekendwerk specifiek gelinkt aan lagere thuisbetrokkenheid</span>
+      </li>
+      <li>
+        <a href="https://www.nature.com/articles/s41599-025-05802-y" target="_blank" rel="noopener">Family work schedules, parental stress and children's reading comprehension</a>
+        <span class="bron-meta">Nature Humanities &amp; Social Sciences 2025 — ouderlijke stress versterkt effect op begrijpend lezen</span>
+      </li>
+    </ul>
+
+    <h4>Wetenschappelijke studies — PKU, cognitie, stress</h4>
+    <ul>
+      <li>
+        <a href="https://www.frontiersin.org/journals/psychiatry/articles/10.3389/fpsyt.2019.00561/full" target="_blank" rel="noopener">Psychiatric and Cognitive Aspects of Phenylketonuria</a>
+        <span class="bron-meta">Frontiers in Psychiatry — uitgebreid review over neurochemische mechanismen</span>
+      </li>
+      <li>
+        <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5331922/" target="_blank" rel="noopener">Phenylalanine Levels and Cognitive Outcomes in PKU</a>
+        <span class="bron-meta">Palermo e.a. — Phe-<em>variatie</em> is net zo bepalend als gemiddelde</span>
+      </li>
+      <li>
+        <a href="https://www.kinderneurologie.eu/ziektebeelden/stofwisselingsziekten/pku" target="_blank" rel="noopener">Kinderneurologie.eu — PKU</a>
+        <span class="bron-meta">Nederlandse klinische uitleg voor ouders</span>
+      </li>
+    </ul>
+
+    <h4>Leesontwikkeling &amp; dyslexie — Nederlandse bronnen</h4>
+    <ul>
+      <li>
+        <a href="https://dyslexiecentraal.nl/" target="_blank" rel="noopener">Dyslexie Centraal</a>
+        <span class="bron-meta">Officieel kennisplatform, actuele protocollen, hulpmiddelen en FAQ's</span>
+      </li>
+      <li>
+        <a href="https://www.nkd.nl/" target="_blank" rel="noopener">Nederlands Kwaliteitsinstituut Dyslexie (NKD)</a>
+        <span class="bron-meta">Kwaliteitscriteria en lijst gecontracteerde zorgaanbieders</span>
+      </li>
+      <li>
+        <a href="https://www.lexima.nl/artikelen/wat-zegt-onderzoek-over-gebruik-en-effectiviteit-van-bouw" target="_blank" rel="noopener">Wat zegt onderzoek over BOUW!? — Lexima</a>
+        <span class="bron-meta">Wetenschappelijke onderbouwing van het BOUW!-programma</span>
+      </li>
+      <li>
+        <a href="https://www.passendlezen.nl/" target="_blank" rel="noopener">Passend Lezen</a>
+        <span class="bron-meta">Gratis luisterboeken voor kinderen met leesbeperking onder de 18</span>
+      </li>
+      <li>
+        <a href="https://www.jeugdbibliotheek.nl/6-12-jaar/jeugd-en-jongeren/6-12/lezen-met-dyslexie.html" target="_blank" rel="noopener">Jeugdbibliotheek · lezen met dyslexie + Yoleo</a>
+        <span class="bron-meta">Yoleo: lezen + luisteren tegelijk met gamification</span>
+      </li>
+    </ul>
+
+    <h4>Passend onderwijs, SWV Apeldoorn, rechten van ouders</h4>
+    <ul>
+      <li>
+        <a href="https://www.swvapeldoornpo.nl/" target="_blank" rel="noopener">SWV Apeldoorn PO</a>
+        <span class="bron-meta">Samenwerkingsverband; Oudersteunpunt bereikbaar via site</span>
+      </li>
+      <li>
+        <a href="https://www.apeldoorn.nl/begeleiding-advies-over-onderwijs-en-jeugd" target="_blank" rel="noopener">Gemeente Apeldoorn · onderwijs &amp; jeugd</a>
+        <span class="bron-meta">Dyslexie-aanvraag via CJG, jeugdhulp</span>
+      </li>
+      <li>
+        <a href="https://www.onderwijskennis.nl/themas/zittenblijven-en-versnellen" target="_blank" rel="noopener">Onderwijskennis.nl — Zittenblijven &amp; versnellen</a>
+        <span class="bron-meta">NRO samenvatting van wetenschappelijk onderzoek</span>
+      </li>
+    </ul>
+
+    <h4>Steun en lotgenoten</h4>
+    <ul>
+      <li>
+        <a href="https://balansdigitaal.nl/" target="_blank" rel="noopener">Balans — oudervereniging voor leer- en ontwikkelingsproblemen</a>
+        <span class="bron-meta">Advieslijn 030 22 55 05, werkdagen 10–13u · artikelen over ADHD, dyslexie, comorbiditeit</span>
+      </li>
+      <li>
+        <a href="https://www.pkugezin.nl/" target="_blank" rel="noopener">Nederlandse PKU Vereniging — PKU-gezin</a>
+        <span class="bron-meta">Lotgenotencontact, belangenbehartiging, voorlichting</span>
+      </li>
+      <li>
+        <a href="https://www.jenaplan.nl/" target="_blank" rel="noopener">Nederlandse Jenaplan Vereniging (NJPV)</a>
+        <span class="bron-meta">Didactische uitgangspunten en FAQ voor ouders</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>Dit document is samengesteld als onderzoekssamenvatting en gesprekbasis. Het vervangt geen medisch of orthopedagogisch advies. Bespreek relevante onderdelen met de behandelaars, school en SWV.</p>
+    <p>Alle data uit de Niet-methodetoetsen (ParnasSys), Pluspunt 4 Resultatenmonitor en het Overzicht onderwijsbehoeften (Krista van Beusichem, SWV Apeldoorn PO, maart 2026). Wetenschappelijke bronnen zoals aangegeven.</p>
+    <p class="sig">Voor Alvah. Omdat hij gezien mag worden om wie hij is — niet om wat hij nog niet kan.</p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,65 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const nu = new Date();
+const jaar = nu.getFullYear();
+const maand = nu.toLocaleDateString('nl-NL', { month: 'long' });
+const eyebrow = `Dossier · ${maand} ${jaar}`;
+---
+<BaseLayout
+  title="Samenvatting — Alvah"
+  description="Het verhaal in één pagina: wie Alvah is, wat de toetsen laten zien, en wat we doen."
+>
+  <section>
+    <p class="small muted" style="letter-spacing:0.08em;text-transform:uppercase;">{eyebrow}</p>
+    <h1>Het verhaal in één pagina</h1>
+    <p class="lede">Voor wie net aansluit — familie, school, behandelaars. Deze pagina wordt later ingevuld.</p>
+
+    <dl class="meta-grid">
+      <div><dt>Leeftijd</dt><dd>Bijna 8</dd></div>
+      <div><dt>School</dt><dd>De Mheen, Apeldoorn</dd></div>
+      <div><dt>Stamgroep</dt><dd>Inktvissen (middenbouw)</dd></div>
+      <div><dt>Context</dt><dd>PKU · dyslexie-aanvraag · ADHD-achtig</dd></div>
+    </dl>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">01</span>Wie is Alvah</h2>
+    <p class="muted">Wordt later geladen.</p>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">02</span>Wat de toetsen laten zien</h2>
+    <p class="muted">Wordt later geladen.</p>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">03</span>Wat opvalt</h2>
+    <p class="muted">Wordt later geladen.</p>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">04</span>Drie lagen</h2>
+    <p class="muted">Wordt later geladen.</p>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">05</span>Wat we doen</h2>
+    <p class="muted">Wordt later geladen.</p>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">06</span>Recent</h2>
+    <p class="muted">Wordt later geladen.</p>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">07</span>Termen in gewone taal</h2>
+    <p class="muted">Wordt later geladen.</p>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">08</span>Voor wie verder wil lezen</h2>
+    <p class="muted">Wordt later geladen.</p>
+  </section>
+</BaseLayout>

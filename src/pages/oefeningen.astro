@@ -1,0 +1,126 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const oefeningen = await getCollection('oefeningen');
+
+const domeinen = [
+  'technisch-lezen',
+  'begrijpend-lezen',
+  'spelling',
+  'rekenen',
+  'werkgeheugen',
+  'aandacht-focus',
+  'planning',
+  'zelfbeeld-faalangst',
+  'motoriek',
+  'beweging',
+  'emotieregulatie',
+  'compenserend',
+];
+
+const contexten = ['thuis', 'school', 'specialist'];
+---
+<BaseLayout
+  title="Oefeningen — Alvah"
+  description="Filterbare catalogus van interventies en tools."
+>
+  <section>
+    <h1>Oefeningen</h1>
+    <p class="lede">Catalogus van interventies en tools — filterbaar op domein, context, evidence en kosten.</p>
+  </section>
+
+  <section>
+    <div class="filter-bar" id="oefeningen-filter">
+      <div class="filter-group">
+        <span class="filter-group__label">Domein</span>
+        <div class="filter-group__options">
+          {domeinen.map((d) => (
+            <label><input type="checkbox" name="domein" value={d} /> {d.replace(/-/g, ' ')}</label>
+          ))}
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <span class="filter-group__label">Context</span>
+        <div class="filter-group__options">
+          {contexten.map((c) => (
+            <label><input type="checkbox" name="context" value={c} /> {c}</label>
+          ))}
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <span class="filter-group__label">Evidence</span>
+        <div class="filter-group__options">
+          <label><input type="radio" name="evidence" value="alle" checked /> Alle</label>
+          <label><input type="radio" name="evidence" value="matig-plus" /> Matig+</label>
+          <label><input type="radio" name="evidence" value="sterk" /> Sterk</label>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <span class="filter-group__label">Kosten</span>
+        <div class="filter-group__options">
+          <label><input type="checkbox" name="gratis" /> Alleen gratis</label>
+        </div>
+      </div>
+    </div>
+
+    {oefeningen.length === 0 ? (
+      <p class="empty-state">Nog geen oefeningen in de catalogus.</p>
+    ) : (
+      <div class="oefening-grid" id="oefeningen-grid">
+        {oefeningen.map((o) => (
+          <article
+            class="oefening-card"
+            data-domein={o.data.domein.join(',')}
+            data-context={o.data.context.join(',')}
+            data-evidence={o.data.evidence}
+            data-kosten={o.data.kosten}
+          >
+            <h3 class="oefening-card__title">{o.data.titel}</h3>
+            <div>
+              <span class={`evidence-badge evidence-badge--${o.data.evidence}`}>
+                {o.data.evidence}
+              </span>
+            </div>
+            <div class="oefening-card__tags">
+              {o.data.domein.map((d) => <span class="tag">{d.replace(/-/g, ' ')}</span>)}
+              {o.data.context.map((c) => <span class="tag">{c}</span>)}
+            </div>
+            <p class="small">{o.data.korte_omschrijving}</p>
+            <p class="small muted">{o.data.duur.replace(/-/g, ' ')} · {o.data.kosten.replace(/-/g, ' ')}</p>
+          </article>
+        ))}
+      </div>
+    )}
+  </section>
+
+  <script>
+    const bar = document.getElementById('oefeningen-filter');
+    const grid = document.getElementById('oefeningen-grid');
+    if (bar && grid) {
+      const apply = () => {
+        const checkedDomeinen = Array.from(bar.querySelectorAll<HTMLInputElement>('input[name="domein"]:checked')).map(i => i.value);
+        const checkedContexten = Array.from(bar.querySelectorAll<HTMLInputElement>('input[name="context"]:checked')).map(i => i.value);
+        const evidenceRaw = bar.querySelector<HTMLInputElement>('input[name="evidence"]:checked')?.value ?? 'alle';
+        const gratisOnly = bar.querySelector<HTMLInputElement>('input[name="gratis"]')?.checked ?? false;
+        for (const card of Array.from(grid.children) as HTMLElement[]) {
+          const d = (card.dataset.domein ?? '').split(',');
+          const c = (card.dataset.context ?? '').split(',');
+          const e = card.dataset.evidence ?? '';
+          const k = card.dataset.kosten ?? '';
+          const matchDomein = checkedDomeinen.length === 0 || checkedDomeinen.some(v => d.includes(v));
+          const matchContext = checkedContexten.length === 0 || checkedContexten.some(v => c.includes(v));
+          const matchEvidence = evidenceRaw === 'alle'
+            || (evidenceRaw === 'matig-plus' && (e === 'matig' || e === 'sterk'))
+            || (evidenceRaw === 'sterk' && e === 'sterk');
+          const matchKosten = !gratisOnly || k === 'gratis';
+          card.classList.toggle('hidden', !(matchDomein && matchContext && matchEvidence && matchKosten));
+        }
+      };
+      bar.addEventListener('change', apply);
+    }
+  </script>
+</BaseLayout>
