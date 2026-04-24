@@ -12,7 +12,7 @@ bronnen:
 
 ## Wat het is
 
-Prentenboek over Beatrice Ditten, een meisje dat beroemd is omdat ze <em>nooit</em> een fout maakt. Tot ze er één maakt — en ontdekt dat het leven niet voorbij is, en eigenlijk leuker wordt. Van Mark Pett &amp; Gary Rubinstein.
+Prentenboek over Beatrice Ditten, een meisje dat beroemd is omdat ze <em>nooit</em> een fout maakt. Tot ze er één maakt — en ontdekt dat het leven niet voorbij is, en leuker wordt. Van Mark Pett &amp; Gary Rubinstein.
 
 ## Waarom het werkt
 

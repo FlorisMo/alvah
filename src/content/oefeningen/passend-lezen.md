@@ -17,7 +17,7 @@ Stichting Passend Lezen biedt gratis luisterboeken voor kinderen en volwassenen 
 
 ## Waarom het werkt
 
-Voor plezierlezen en toegang tot leeftijdsadequate verhalen is Passend Lezen onmisbaar. Alvah kan zo dezelfde boeken "lezen" als zijn leeftijdsgenoten — Geronimo Stilton, Harry Potter, Kruimeltje — zonder de decodeerlast. Dat is een zelfbeeldding zo veel als een leesding.
+Voor plezierlezen en toegang tot leeftijdsadequate verhalen is Passend Lezen de belangrijkste bron. Alvah kan zo dezelfde boeken "lezen" als zijn leeftijdsgenoten — Geronimo Stilton, Harry Potter, Kruimeltje — zonder de decodeerlast. Dat is een zelfbeeldding zo veel als een leesding.
 
 Let op: dit is <em>geen</em> decodeer-training. Voor dat doel is luisterboek + meelezen de juiste vorm (zie [luisterboek-meelezen](/oefeningen/#luisterboek-meelezen)). Passend Lezen als alleen-luisteren is voor plezier en leeftijdsniveau, niet voor technisch-lees-vooruitgang.
 

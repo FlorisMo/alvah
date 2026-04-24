@@ -24,7 +24,7 @@ Plus: perfect samen-doen-activiteit op de bank.
 
 - Bibliotheek heeft meerdere delen; bol.com 5–15 euro per deel.
 - Samen of alleen. Geen druk wie het eerst Wally vindt.
-- Ook op lange autoritten of vakantie goud waard.
+- Werkt ook op lange autoritten en vakanties.
 
 ## Bronnen &amp; verdere lezing
 

@@ -18,7 +18,7 @@ Een rijtje pictogrammen, foto's of geschreven stappen die in volgorde laten zien
 
 ## Waarom het werkt
 
-De prefrontale cortex van een 7-jarige is fysiologisch nog niet volgroeid. "Wat komt er zo meteen" vasthouden is letterlijk moeilijker voor hem dan voor een volwassene. Een extern visueel schema is een <strong>externe executieve functie</strong> — precies wat Dawson &amp; Guare aanraden.
+De prefrontale cortex van een 7-jarige is fysiologisch nog niet volgroeid. "Wat komt er zo meteen" vasthouden is moeilijker voor hem dan voor een volwassene. Een extern visueel schema is een <strong>externe executieve functie</strong> — precies wat Dawson &amp; Guare aanraden.
 
 Diamond &amp; Ling (2016) benadrukken dat ingebedde EF-ondersteuning effectiever is dan geïsoleerde trainingen. Een dagschema dat 8 uur per dag zichtbaar is, heeft meer impact dan 15 minuten werkgeheugen-app.
 
