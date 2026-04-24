@@ -47,6 +47,7 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
             <h3 class="admin-spel__titel">{s.titel}</h3>
             <div class="admin-spel__meta" data-meta>—</div>
           </header>
+          <div class="admin-spel__plateau" data-plateau hidden></div>
           <svg viewBox="0 0 240 60" class="admin-sparkline" aria-hidden="true" data-sparkline></svg>
           <div class="admin-spel__tabel-wrap">
             <table class="admin-spel__tabel">
@@ -191,6 +192,16 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
       font-style: italic;
     }
 
+    .admin-spel__plateau {
+      margin: 6px 0 12px;
+      padding: 10px 14px;
+      border-left: 3px solid var(--spel-orange);
+      background: var(--spel-orange-soft);
+      border-radius: 6px;
+      font-size: 0.88rem;
+      color: var(--ink);
+    }
+
     .admin-knoppen {
       display: flex;
       flex-wrap: wrap;
@@ -233,6 +244,7 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
 
   <script>
     import { load, exportJSON, importJSON, clearAll } from '../../scripts/storage.js';
+    import { detectPlateau } from '../../scripts/progressie.js';
 
     type SpelId = 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen';
 
@@ -287,10 +299,12 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
         const metaEl = art.querySelector<HTMLElement>('[data-meta]')!;
         const sparkEl = art.querySelector<SVGElement>('[data-sparkline]')!;
         const bodyEl = art.querySelector<HTMLElement>('[data-tabel-body]')!;
+        const plateauEl = art.querySelector<HTMLElement>('[data-plateau]')!;
 
         if (!sessions.length) {
           metaEl.textContent = '—';
           sparkEl.innerHTML = '';
+          plateauEl.hidden = true;
           bodyEl.innerHTML = `<tr><td colspan="5" class="admin-spel__leeg">${escapeHtml('Nog geen sessies gespeeld.')}</td></tr>`;
           continue;
         }
@@ -298,6 +312,17 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
         const huidig = ex.currentLevel ?? '—';
         const hoogst = ex.highestLevel ?? '—';
         metaEl.textContent = `niveau ${huidig} · hoogst ${hoogst} · ${sessions.length} sessies`;
+
+        // Plateau-banner: 14 dagen / 3 sessies (progressie.js E1).
+        const plateau = detectPlateau(sessions, 14, 3);
+        if (plateau) {
+          plateauEl.textContent =
+            `Hangt op niveau ${plateau.level}, al ${plateau.days} dagen (${plateau.sessions} sessies). Overweeg variant of korte pauze.`;
+          plateauEl.hidden = false;
+        } else {
+          plateauEl.hidden = true;
+          plateauEl.textContent = '';
+        }
 
         renderSparkline(sparkEl, id, sessions);
         renderTabel(bodyEl, sessions);

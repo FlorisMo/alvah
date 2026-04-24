@@ -1,6 +1,12 @@
 // localStorage-wrapper voor het speelvlak.
 // Één sleutel, één JSON-object. Zie docs/practice-games-schema.md.
 // Alles client-side; verlaat nooit de browser.
+//
+// Progressie-regels (zie progressie.js + plan §6 Fase 6.5):
+//  - A2 "alleen omhoog": currentLevel daalt nooit automatisch.
+//  - D1 "hard": alleen geldige sessies updaten currentLevel/highestLevel.
+
+import { isReliableSession } from './progressie.js';
 
 const KEY = 'alvah-ef-v1';
 const SCHEMA_VERSION = 1;
@@ -78,11 +84,21 @@ export function saveSession(exerciseId, session) {
   if (!EXERCISE_IDS.includes(exerciseId)) return false;
   const data = load();
   const ex = data.exercises[exerciseId];
+  const isFirstEver = !Array.isArray(ex.sessions) || ex.sessions.length === 0;
   ex.sessions.push(session);
-  if (typeof session.level === 'number') {
-    ex.currentLevel = session.level;
+
+  const reliable = isReliableSession(
+    session.summary,
+    session.summary?.trialsN,
+    isFirstEver,
+    exerciseId,
+  );
+  if (reliable && typeof session.level === 'number') {
+    // A2: alleen omhoog. Slechte dag verlaagt niet.
+    if (session.level > (ex.currentLevel || 0)) ex.currentLevel = session.level;
     if (session.level > (ex.highestLevel || 0)) ex.highestLevel = session.level;
   }
+
   prune(ex);
   return save(data);
 }

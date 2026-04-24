@@ -6,11 +6,13 @@ Meta-plan dat `docs/source/Research-practice-tools.md` omzet naar een faseerbare
 
 ## Hervat-gids — lees dit eerst bij een nieuwe sessie
 
-**Status (24 apr 2026, latere run):** Fases 0, 1 (Simon), 2 (Corsi), 3 (Day-Night), 4 (Zoeken), 5 (Wisselen) en 6 (Admin) zijn **klaar**. Alle vijf spellen speelbaar; admin toont alle data. Alleen Fase 7 (mijlpalen + `/spelen/reis`) en Fase 8 (polish) staan nog open. Alles draait lokaal via `npm run dev`; er is nog niet gedeployed en dat moet bewust gebeuren (gate + privacy-checks staan aan).
+**Status (24 apr 2026, derde run):** Fases 0–6 + 6.5 **klaar**. Alle vijf spellen speelbaar; admin toont alle data + plateau-banner; progressie-regels actief (seed warm-up, alleen-omhoog-currentLevel, harde geldigheid, level-systeem voor DN/Wisselen). Fase 7 (mijlpalen + `/spelen/reis`) en Fase 8 (polish) staan nog open.
 
-**Volgende stap:** Fase 7 — Mijlpalen + visuele collectie + `/spelen/reis`. Scope in §6. Raakt meerdere bestanden: `src/scripts/mijlpalen.js` (vul de stub met drempels per spel), `src/pages/spelen/reis.astro` (nieuw), korte groei-fragment per spel-einde-scherm, admin-banner voor behaalde mijlpalen. Één run haalbaar als we de 5 spel-bestanden alleen minimaal patchen.
+**Volgende stap:** Fase 7 — Mijlpalen + visuele collectie + `/spelen/reis`. Bouwt op `progressie.js::countRecentAtOrAbove` voor "2 van laatste 3 geldige sessies"-drempels. Raakt 5 spel-bestanden (groei-fragment na summary), `mijlpalen.js` (stub → drempels), `reis.astro` (nieuw), admin-banner voor behaalde mijlpalen + cadeau-lijst.
 
-**Daarna:** Fase 8 (polish — homepage-haak, onboarding, "te-moeilijk"-tweaks).
+**Daarna:** Fase 8 (polish — homepage-haak, onboarding, `pickNext()` echt aanzetten).
+
+**Beslissingen vastgelegd in Fase 6.5:** A1=`cL-1`, A2=alleen-omhoog, B1=3 reversals, C1=hybride (2 in eerste 2min, anders 3), C2=alleen span-spellen, D1=hard, D2=2 van laatste 3, E1=14d/3s, F1=level-schema nu, F2=80%+trialsN≥24, F3=geen mid-sessie demotie. Zie `src/scripts/progressie.js`-header-comment.
 
 **Snelle verificatie bij hervatten:**
 
@@ -413,6 +415,165 @@ Elke fase eindigt in een commit, werkende pagina, en geen wijzigingen buiten de 
 
 **Plan zei:** "Admin-pagina (fase 6) tussen fase 2 en fase 3: zodra er data van twee spellen is, is het nuttig om te kunnen lezen." In de praktijk meegenomen in dezelfde run als Fase 2 én 3 — admin werkt nu voor alle 3 de speelbare spellen + toont lege kaarten voor Zoeken/Wisselen.
 
+### Fase 6.5 — Progressie & adaptatie aan niveau — ✅ KLAAR (24 apr 2026)
+
+**Antwoorden op de 11 open vragen, gerealiseerd:** A1=`currentLevel-1` warm-up, A2=alleen-omhoog, B1=3 reversals (minder = "verkennend"), C1=3 op rij / 2 in eerste 2 min, C2=alleen span-spellen, D1=hard, D2=2 van laatste 3, E1=14d/3s, F1=level-schema nu vastgelegd, F2=80% + trialsN≥24, F3=geen mid-sessie demotie.
+
+**Gebouwd:**
+- `src/scripts/progressie.js` (nieuw, 170 regels pure module): `seedLevel`, `computeSessionLevel`, `shouldAutoLower`, `isReliableSession`, `detectPlateau`, `dnConfig`/`nextLevelDayNight`, `wisConfig`/`nextLevelWisselen`, `countRecentAtOrAbove` (Fase 7-bouwsteen).
+- `src/scripts/progressie.test.js` (nieuw, 22 tests pass): dekt alle 7 functies met fixture-sessies.
+- `src/scripts/staircase.js` (patch): exposet `reversals[]` en `direction`, volledig backward-compatible (bestaande 6 tests blijven pass).
+- `src/scripts/storage.js` (patch): `saveSession` past currentLevel/highestLevel nu alleen aan bij geldige sessies én alleen omhoog. Niet-geldige sessies worden opgeslagen voor admin-zicht, maar updaten geen level.
+- `src/pages/spelen/simon.astro` (patch): `startSession` gebruikt `seedLevel()` in plaats van `MIN_SPAN`. Geen shouldAutoLower (retry-flow dekt dit al).
+- `src/pages/spelen/corsi.astro` (patch): seedLevel bij start, shouldAutoLower na foute trial, computeSessionLevel(reversals) voor `session.level` bij endSession.
+- `src/pages/spelen/zoeken.astro` (patch): idem — seed, auto-lower na elke trial, reversal-based session-level.
+- `src/pages/spelen/day-night.astro` (patch): BLOKKEN en TRIALS_PER_BLOK dynamisch uit `dnConfig(nextLevelDayNight(sessions))`; `session.level` = cross-session speelLevel.
+- `src/pages/spelen/wisselen.astro` (patch): BLOKKEN + switchPatroon (AABB vs ABAB) dynamisch uit `wisConfig(nextLevelWisselen(sessions))`; ABAB-patroon toegevoegd aan trial-taak-bepaling.
+- `src/pages/spelen/admin.astro` (patch): plateau-banner per spel met `detectPlateau()` (14d / 3 sessies). Oranje border-left, rustige tekst "Hangt op niveau X, al Y dagen".
+
+**Day-Night niveaus:**
+- L1: 2 mixed (32 trials)
+- L2: 2 mixed + 1 incongruent (48 trials) — wat eerst vast was
+- L3: 1 mixed + 2 incongruent (48 trials)
+- L4: gereserveerd (afleiders), `nextLevelDayNight` capt op 3 totdat Fase 7 dit activeert.
+
+**Wisselen niveaus:**
+- L1: pure-kleur (12 trials)
+- L2: pure-kleur + pure-vorm (24 trials)
+- L3: pure-kleur + pure-vorm + switch-AABB (36 trials) — wat eerst vast was
+- L4: pure-kleur + pure-vorm + switch-ABAB (36 trials, elke trial wisselt)
+
+**Migratie bestaande data:** Alvah's eventueel al gespeelde DN/Wisselen-sessies worden opnieuw geëvalueerd bij elke sessie-start: `nextLevelDayNight(sessions)` loopt door alle sessies en bouwt level van 1 af op. Oude sessies met `level = blokIdx + 1` (oud schema) worden geïnterpreteerd als lagere levels; de nieuwe promotie-detectie trekt het opnieuw op.
+
+**Verificatie:** `node --test` 38/38 (16 oud + 22 nieuw), `npx astro check` 0 errors/warnings/hints, HTTP 200 op alle 7 /spelen-routes, ToV-strict 0 blokkers.
+
+<details>
+<summary>Oorspronkelijke scope-beschrijving (Fase 6.5 pre-implementatie)</summary>
+
+**Waarom nu, vóór Fase 7:** mijlpalen (Fase 7) hangen af van "wat telt als geldige sessie" en hoe `currentLevel` over sessies stabiliseert. Zonder expliciete progressie-regels worden mijlpaal-drempels willekeurig — Alvah haalt ze op een goede dag, verliest ze nooit (terecht), maar het systeem leert niet of dit "echte" groei is.
+
+**Doel:** kruis-snijdende beslissingen over hoe niveau zich tussen sessies verplaatst, vastgelegd in één pure module + kleine patches in de 5 spel-bestanden + admin.
+
+**Diagnose huidige stand:**
+
+- `currentLevel` wordt opgeslagen in [storage.js:83](../src/scripts/storage.js#L83) maar nergens teruggelezen. Elke sessie start hardcoded laag (Simon `MIN_SPAN`, Corsi staircase-init, Zoeken set-size 6).
+- "Te-moeilijk"-knop is manueel. Geen auto-detectie van frustratie; een 7-jarige drukt zo'n knop zelden uit zichzelf.
+- Day-Night en Wisselen hebben vaste blok-design — geen pad waar `currentLevel` betekenis heeft.
+- IIV-CV wordt gemeten in `summarize()`, nergens gebruikt voor beslissingen.
+- Eindspan van een sessie kan ruis zijn (laatste trial toevallig fout) en bepaalt nu blijvend `currentLevel`.
+
+**Zes onderdelen:**
+
+#### A. Seed-regel voor start-niveau (per spel)
+
+Default: bij sessie-start `start = max(MIN, currentLevel - 1)` voor adaptieve spellen (Simon, Corsi, Zoeken). Eén warm-up-stap onder current geeft Alvah een succes-trial bij binnenkomst, daarna stijgt de staircase snel terug.
+
+| Spel | MIN | Default-start zonder data |
+|---|---|---|
+| Simon | 2 | 2 |
+| Corsi | 2 | 2 |
+| Zoeken | 4 (set-size) | 6 |
+
+**Open vraag A1:** start op `currentLevel` (geen warm-up, sneller bij niveau) of `currentLevel - 1` (warm-up, één trial verlies)? Voorkeur Claude: `-1`, omdat eerste trial bij koude start vaak ruis is.
+
+**Open vraag A2:** moet `currentLevel` dalen als hij een sessie slecht speelt, of alleen stijgen? Nu daalt hij ([storage.js:83](../src/scripts/storage.js#L83) zet `currentLevel = session.level`). Risico: één slechte dag verlaagt zijn start blijvend. Alternatieven: (a) `currentLevel = max(currentLevel, session.level)` — alleen omhoog, (b) glijdend gemiddelde over laatste 3 geldige sessies, (c) huidige logica behouden. Voorkeur Claude: (b), maar dat is kind-pedagogisch niet kortweg te beargumenteren.
+
+#### B. Stop-criterium per sessie
+
+Nu: max trials of max tijd. Geen reversal-criterium → de eindspan kan ruis zijn.
+
+Voorstel: registreer reversals expliciet in de staircase-output, en bereken `session.level` als **mediaan-span van de laatste 3 reversals**, niet als eind-span van de laatste trial. De staircase-logica kent reversals al intern; we exposen ze.
+
+**Open vraag B1:** hoeveel reversals voor een betrouwbare schatting? Klassieke psychofysica zegt 6–8; voor een kind van 7 binnen 4 min is dat te lang. Voorkeur Claude: minimaal 3 reversals — anders geldt de sessie als "verkennend" (telt niet voor `currentLevel`-update, wordt wel opgeslagen voor admin-zicht).
+
+#### C. Auto "te-moeilijk"-trigger
+
+Nu: alleen manuele knop. Een 7-jarige drukt die zelden — frustratie uit zich eerder in stoppen of slordig klikken.
+
+Voorstel: bij **3 fouten op rij** automatisch span-1 + korte rustige cue ("Even iets makkelijker, gaat goed"). Geen knop-druk nodig. De staircase doet dit nu al stap voor stap (1 fout = stap omlaag); deze trigger zit *bovenop* en daalt sneller bij echte stress.
+
+**Open vraag C1:** 3 fouten op rij, of 2? 3 voorkomt onnodig zachtzinnig zijn; 2 reageert sneller op echt overvraag. Voorkeur Claude: 3, behalve in eerste 2 minuten van sessie waar 2 al genoeg is (warming-up vs. echte uitputting).
+
+**Open vraag C2:** ook voor Day-Night en Wisselen, of alleen voor span-spellen? Daar zijn "fouten op rij" minder informatief (bivalent design — incongruente trials zijn inherent moeilijker).
+
+#### D. Welke sessies tellen voor `currentLevel`-update én mijlpaal-progressie
+
+Een sessie van 2 trials zou geen mijlpaal mogen unlocken. Een sessie met IIV-CV van 0.9 (gokkend tikken) ook niet.
+
+Voorstel: een sessie is "geldig" als:
+
+- `trialsN >= 6` (Simon/Corsi/Zoeken: minimaal 6 trials gespeeld)
+- `iivCV <= 0.6` (uitsluiten van puur-gokken-sessies; klassiek geldt 0.5 als bovengrens voor "consistent kind", 0.6 geeft kind-marge)
+- Niet de eerste sessie ooit voor dat spel (kalibratie-vrije zone)
+
+Niet-geldige sessies blijven opgeslagen voor admin-zicht, maar updaten `currentLevel`/`highestLevel` niet en tellen niet voor mijlpaal-drempels.
+
+**Open vraag D1:** hard of zacht? Hard = sessie telt of telt niet. Zacht = sessie krijgt gewicht (1.0 schoon, 0.5 matig, 0.0 onbruikbaar) in glijdend gemiddelde. Voorkeur Claude: hard, want mijlpaal moet eenduidig zijn ("3× span 5 gehaald" is helder; "3 sessies à gewicht 0.7 = 2.1, dus net niet" is ondoorgrondelijk voor papa én kind).
+
+**Open vraag D2:** drempel voor mijlpaal-unlock: "1× gehaald", "2 van laatste 3", "3× ooit"? §6 Fase 7 zegt nu "Corsi span 5 drie keer gehaald → LEGO-set" — dus impliciet "3× ooit". Vastleggen voordat de drempels in `mijlpalen.js` komen. Voorkeur Claude: **2 van laatste 3 geldige sessies** — herhaalbaarheid bewijst stabiliteit, "3× ooit" zou kunnen sluiten op drie goede dagen verspreid over maanden.
+
+#### E. Plateau-detectie
+
+Als `highestLevel` 14 dagen niet stijgt voor een spel waar Alvah wel actief in is (≥3 sessies in die periode): admin-banner "Alvah hangt op Corsi span 4 — overweeg variant of pauze".
+
+Geen actie naar Alvah zelf — plateau-feedback hoort bij papa, niet bij kind. Het is signaal voor menselijk overleg, geen automatische game-aanpassing.
+
+**Open vraag E1:** drempel 14 dagen + 3 sessies, of strenger? Bij Alvah's tempo (2-3× per week) is 14d ≈ 6 sessies. Strenger (7d / 3 sessies) geeft meer false positives; ruimer (21d) is laat. Voorkeur Claude: 14d / 3 sessies als startpunt, herzien na eerste twee echte plateau-banner-momenten in de praktijk.
+
+#### F. Day-Night & Wisselen cross-session progressie
+
+Deze paradigma's hebben nu **geen** `currentLevel` met betekenis (alleen accuracy). Voorstel: introduceer 4 niveaus per spel als blok-configuratie, parallel aan de 4 mijlpaal-unlocks (Fase 7).
+
+| Spel | Level 1 | Level 2 | Level 3 | Level 4 |
+|---|---|---|---|---|
+| Day-Night | 2 blokken mixed | 3 blokken (1 incongruent) | 3 blokken (2 incongruent) | 3 blokken + intermitterende afleider-stimuli |
+| Wisselen | Pure kleur óf vorm | Pure + AABB switch | AABB switch full | ABAB switch (snellere wissel) |
+
+Promotie naar volgend level: na 2 geldige sessies met accuracy ≥80% op huidig level. Demotie: nooit automatisch — alleen manuele admin-actie.
+
+**Open vraag F1:** moeten deze 4 levels nu uitgewerkt worden, of in Fase 7 samen met mijlpaal-drempels? Voorkeur Claude: nu het *level-schema* vastleggen (kolom-inhoud van bovenstaande tabel), in Fase 7 de visuals + mijlpaal-drempels koppelen. Zo bouwt Fase 7 op een stabiel level-systeem.
+
+**Open vraag F2:** 80% accuracy als promotie-drempel — te streng of te soepel voor een 7-jarige met cognitieve uitdagingen? EF-research gebruikt vaak 75–85%. Voorkeur Claude: 80% met `trialsN >= 24` als ondergrens.
+
+**Open vraag F3:** wil je dat Day-Night/Wisselen óók een "te-moeilijk"-knop respecteren met betekenis? Bv. binnen één sessie van level 3 naar level 2 zakken? Voorkeur Claude: nee — de blok-design is te kort om midden-sessie te herconfigureren; manueel uit de spel-tegel klikken en opnieuw starten op lager level is netter.
+
+#### Bestanden
+
+- `src/scripts/progressie.js` (nieuw, pure module): `seedLevel(ex, spelId)`, `shouldAutoLower(recentTrials, sessieMs)`, `isReliableSession(summary, trialsN, isFirstEver)`, `detectPlateau(sessions, days)`, `nextLevelDayNight(sessions)`, `nextLevelWisselen(sessions)`, `computeSessionLevel(reversals)`.
+- `src/scripts/progressie.test.js` (nieuw): unit-tests voor elk van bovenstaande met fixture-data (≥10 asserts).
+- `src/scripts/staircase.js` (patch): expose `reversals[]` in output.
+- `src/scripts/storage.js` (patch): `saveSession()` past `currentLevel`-update aan volgens beslissingen A2 + D1 (alleen bij geldige sessies).
+- `src/pages/spelen/{simon,corsi,zoeken}.astro` (patch): bij init `seedLevel()` aanroepen i.p.v. hardcoded MIN; eindspan via `computeSessionLevel()`.
+- `src/pages/spelen/{day-night,wisselen}.astro` (patch): blok-config laden uit `nextLevel*()` + level-promotie checken na sessie.
+- `src/pages/spelen/admin.astro` (patch): plateau-banner per spel met `detectPlateau()`-resultaat.
+
+#### Acceptatie
+
+- `node --test` toont nieuwe progressie-tests pass.
+- Speel Simon, eindig op span 4 → start volgende sessie op span 3 (default A1 = `-1` warm-up).
+- Speel Day-Night 2× achter elkaar met accuracy 90% op level 1 → 3e sessie start op level 2 (3 blokken).
+- Speel Corsi met 3 fouten op rij in eerste minuut → automatische zachte verlaging zonder knop.
+- Admin toont plateau-banner als Corsi `highestLevel` 14d niet stijgt bij ≥3 sessies in dat venster.
+- Sessie van 3 trials wordt opgeslagen, maar updatet `currentLevel`/`highestLevel` niet.
+
+#### Antwoord-template voor de open vragen (vul in vóór de implementatie-run)
+
+```
+A1: [currentLevel | currentLevel - 1]
+A2: [a alleen omhoog | b glijdend gemiddelde | c huidige (eindspan)]
+B1: [3 reversals | 4 reversals | anders: __]
+C1: [3 op rij | 2 op rij | hybride zoals voorgesteld]
+C2: [alleen span-spellen | ook Day-Night/Wisselen]
+D1: [hard | zacht]
+D2: [1× gehaald | 2 van laatste 3 | 3× ooit | anders: __]
+E1: [14d/3s | 7d/3s | 21d/3s]
+F1: [nu vastleggen | naar Fase 7]
+F2: [75% | 80% | 85%]
+F3: [geen mid-sessie demotie | wel mid-sessie demotie]
+```
+
+</details>
+
 ### Fase 7 — Mijlpalen & visuele collectie (1 run)
 **Doel:** duidelijke doelen waar Alvah naartoe werkt, rustig in-software én extrinsiek via papa — binnen de research-regels (geen variabele beloning, geen streaks, geen loss-aversion).
 
@@ -464,6 +625,8 @@ Overkoepelend thema: **dieren**. Elk spel heeft zijn eigen dierenwereldje dat gr
 **Admin-pagina (fase 6) tussen fase 2 en fase 3:** zodra er data van twee spellen is, is het nuttig om te kunnen lezen. Ontkoppelt test-effort van elke nieuwe game.
 
 **Mijlpalen & visuele collectie (fase 7) ná fase 5:** systeem kent dan alle vijf de datavormen → unlocks consistent in één pass. Wel vanaf fase 1 kleine hook-stubs: `saveSession` roept `onSessionComplete` aan die in fase 7 mijlpalen evalueert.
+
+**Progressie-ontwerp (fase 6.5) tussen fase 6 en fase 7:** mijlpaal-drempels in fase 7 hebben vaste regels nodig over wat een "geldige sessie" is en hoe `currentLevel` zich tussen sessies verplaatst. Fase 6.5 legt die regels vast in één pure module (`progressie.js`) + patches in alle 5 spel-bestanden. Bevat open vragen die in die run beantwoord moeten worden — zie antwoord-template aan het eind van blok 6.5.
 
 **Aanrader op de landing (`/spelen`):** in plaats van Alvah elke keer zelf laten kiezen uit vijf, toont de landing **één aanbevolen spel voor vandaag** (grote tegel) + de andere vier kleiner eronder. De aanbeveling volgt drie eenvoudige regels (pure functie `src/scripts/aanraden.js`, unit-test verplicht):
 

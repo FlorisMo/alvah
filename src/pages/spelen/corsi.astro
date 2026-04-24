@@ -224,6 +224,7 @@ import { NL } from '../../scripts/strings.nl.js';
   import { summarize } from '../../scripts/scoring.js';
   import { saveSession, load } from '../../scripts/storage.js';
   import { create as makeStaircase, onTrial as stepStaircase } from '../../scripts/staircase.js';
+  import { seedLevel, shouldAutoLower, computeSessionLevel } from '../../scripts/progressie.js';
   import { tone } from '../../scripts/audio.js';
   import { NL } from '../../scripts/strings.nl.js';
 
@@ -343,7 +344,10 @@ import { NL } from '../../scripts/strings.nl.js';
     function startSession() {
       toon('spelen');
       sessionStart = now();
-      staircase = makeStaircase({ level: MIN_SPAN, min: MIN_SPAN, max: MAX_SPAN });
+      // Seed: warm-up één onder currentLevel.
+      let seed = MIN_SPAN;
+      try { seed = seedLevel(load().exercises.corsi, 'corsi'); } catch { /* default */ }
+      staircase = makeStaircase({ level: Math.max(MIN_SPAN, seed), min: MIN_SPAN, max: MAX_SPAN });
       trials = [];
       gecaped = false;
       newTrial();
@@ -447,6 +451,16 @@ import { NL } from '../../scripts/strings.nl.js';
         setTimeout(newTrial, 650);
       } else {
         staircase = stepStaircase(staircase, false);
+        // Auto-lower: 3 fouten op rij (of 2 in eerste 2 min) → extra span omlaag.
+        const recentResults = trials.map((t) => t.correct);
+        if (shouldAutoLower(recentResults, now() - sessionStart)) {
+          staircase = {
+            ...staircase,
+            level: Math.max(MIN_SPAN, staircase.level - 1),
+            consecCorrect: 0,
+            consecWrong: 0,
+          };
+        }
         setTimeout(showRetry, 650);
       }
     }
@@ -465,13 +479,21 @@ import { NL } from '../../scripts/strings.nl.js';
       const duration = Math.round(now() - sessionStart);
       const sum = summarize(trials);
       const maxSpan = trials.filter((t) => t.correct).reduce((m, t) => Math.max(m, t.span), 0);
+      // Session-level via reversals (mediaan laatste 3). Als <3 reversals:
+      // val terug op maxSpan zodat sessie nog bruikbare level heeft voor admin.
+      const reversalLevel = computeSessionLevel(staircase.reversals || []);
+      const sessionLevel = reversalLevel !== null ? Math.round(reversalLevel) : (maxSpan || MIN_SPAN);
       const sessionObj = {
         id: 's_' + Math.random().toString(36).slice(2, 10),
         date: new Date().toISOString(),
-        level: maxSpan || MIN_SPAN,
+        level: sessionLevel,
         durationMs: duration,
         trials: trials.slice(),
-        summary: { ...sum, maxSpan },
+        summary: {
+          ...sum,
+          maxSpan,
+          reversalsN: (staircase.reversals || []).length,
+        },
       };
       saveSession('corsi', sessionObj);
 

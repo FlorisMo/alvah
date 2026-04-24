@@ -283,6 +283,7 @@ import { NL } from '../../scripts/strings.nl.js';
   import { now } from '../../scripts/timer.js';
   import { summarize, mean } from '../../scripts/scoring.js';
   import { saveSession, load } from '../../scripts/storage.js';
+  import { nextLevelWisselen, wisConfig } from '../../scripts/progressie.js';
   import { NL } from '../../scripts/strings.nl.js';
 
   // Stimuli: combinatie van kleur (rood/blauw) en vorm (vierkant/cirkel).
@@ -298,8 +299,16 @@ import { NL } from '../../scripts/strings.nl.js';
   type Resp = 'left' | 'right';
 
   type BlokKey = 'pure-kleur' | 'pure-vorm' | 'switch';
-  const BLOKKEN: BlokKey[] = ['pure-kleur', 'pure-vorm', 'switch'];
-  const TRIALS_PER_BLOK = 12;
+  // Level-systeem (zie progressie.js::wisConfig):
+  //  L1: ['pure-kleur']                         (12 trials)
+  //  L2: ['pure-kleur', 'pure-vorm']            (24 trials)
+  //  L3: ['pure-kleur', 'pure-vorm', 'switch']  (36 trials, AABB-switch)
+  //  L4: zelfde 3 blokken, maar switch-blok ABAB (elke trial wisselt)
+  // Dynamisch geladen uit progressie.js bij sessie-start.
+  let BLOKKEN: BlokKey[] = ['pure-kleur'];
+  let TRIALS_PER_BLOK = 12;
+  let switchPatroon: 'aabb' | 'abab' = 'aabb';
+  let currentSessionLevel = 1;
   const FEEDBACK_MS = 450;
   const CUE_MS = 400;
   const ITI_MS = 250;
@@ -394,6 +403,18 @@ import { NL } from '../../scripts/strings.nl.js';
       if (blokIdx === 0) {
         trials = [];
         sessionStart = now();
+        // Load level uit progressie bij start-van-eerste-blok.
+        try {
+          const data = load();
+          const sessions = data.exercises.wisselen.sessions || [];
+          currentSessionLevel = nextLevelWisselen(sessions);
+        } catch {
+          currentSessionLevel = 1;
+        }
+        const cfg = wisConfig(currentSessionLevel);
+        BLOKKEN = cfg.blokken as BlokKey[];
+        TRIALS_PER_BLOK = cfg.trialsPerBlok;
+        switchPatroon = cfg.switchPatroon === 'abab' ? 'abab' : 'aabb';
       }
       const bk = BLOKKEN[blokIdx];
       blokTitelEl.textContent = NL.spel.wisselen.blokTitel[bk];
@@ -419,9 +440,15 @@ import { NL } from '../../scripts/strings.nl.js';
       if (blok === 'pure-kleur') currentTaak = 'kleur';
       else if (blok === 'pure-vorm') currentTaak = 'vorm';
       else {
-        // AABB-switch: patroon K,K,V,V,K,K,V,V...
-        const pair = Math.floor(trialIdxInBlok / 2);
-        currentTaak = pair % 2 === 0 ? 'kleur' : 'vorm';
+        // Switch-patroon:
+        //  aabb: K,K,V,V,K,K,V,V... (standaard in L3)
+        //  abab: K,V,K,V,K,V...      (elke trial wisselt, L4)
+        if (switchPatroon === 'abab') {
+          currentTaak = trialIdxInBlok % 2 === 0 ? 'kleur' : 'vorm';
+        } else {
+          const pair = Math.floor(trialIdxInBlok / 2);
+          currentTaak = pair % 2 === 0 ? 'kleur' : 'vorm';
+        }
       }
 
       currentKleur = Math.random() < 0.5 ? 'rood' : 'blauw';
@@ -511,13 +538,14 @@ import { NL } from '../../scripts/strings.nl.js';
       const sessionObj = {
         id: 's_' + Math.random().toString(36).slice(2, 10),
         date: new Date().toISOString(),
-        level: blokIdx,
+        level: currentSessionLevel,
         durationMs: duration,
         trials: trials.slice(),
         summary: {
           ...sum,
           switchCost,
           blokkenAf: Math.min(blokIdx, BLOKKEN.length),
+          speelLevel: currentSessionLevel,
         },
       };
       saveSession('wisselen', sessionObj);

@@ -278,15 +278,23 @@ import { NL } from '../../scripts/strings.nl.js';
   import { now } from '../../scripts/timer.js';
   import { summarize } from '../../scripts/scoring.js';
   import { saveSession, load } from '../../scripts/storage.js';
+  import { nextLevelDayNight, dnConfig } from '../../scripts/progressie.js';
   import { NL } from '../../scripts/strings.nl.js';
 
-  // Drie blokken. Blok 1-2 = mixed (50/50 congruent of incongruent).
-  // Blok 3 = puur incongruent (klassieke Gerstadt-opzet).
-  // Elk blok 16 trials. Totaal 48.
-  const TRIALS_PER_BLOK = 16;
-  const BLOKKEN: Array<'mixed' | 'incongruent'> = ['mixed', 'mixed', 'incongruent'];
+  // Level-systeem (zie progressie.js::dnConfig):
+  //  L1: 2 blokken mixed (32 trials)
+  //  L2: 2 mixed + 1 incongruent (48 trials)  — equivalent aan vorige vaste config
+  //  L3: 1 mixed + 2 incongruent (48 trials)
+  //  L4: als L3 + afleiders (niet actief tot Fase 7)
+  // Promotie: 2 geldige sessies op rij met accuracy >= 80% en trialsN >= 24.
+  // Zie plan §6 Fase 6.5 F.
   const FEEDBACK_MS = 500;
   const ITI_MS = 300;
+
+  // Dynamisch geladen uit progressie.js bij sessie-start.
+  let TRIALS_PER_BLOK = 16;
+  let BLOKKEN: Array<'mixed' | 'incongruent'> = ['mixed', 'mixed'];
+  let currentSessionLevel = 1;
 
   type Stim = 'sun' | 'moon';
   type Resp = 'day' | 'night';
@@ -379,6 +387,17 @@ import { NL } from '../../scripts/strings.nl.js';
       trials = [];
       currentBlok = 0;
       trialIdxInBlok = 0;
+      // Load level uit progressie op basis van eerdere sessies.
+      try {
+        const data = load();
+        const sessions = data.exercises['day-night'].sessions || [];
+        currentSessionLevel = nextLevelDayNight(sessions);
+      } catch {
+        currentSessionLevel = 1;
+      }
+      const cfg = dnConfig(currentSessionLevel);
+      BLOKKEN = cfg.blokken as Array<'mixed' | 'incongruent'>;
+      TRIALS_PER_BLOK = cfg.trialsPerBlok;
       sessionStart = now();
       toon('spelen');
       nextTrial();
@@ -460,13 +479,20 @@ import { NL } from '../../scripts/strings.nl.js';
       accepting = false;
       const duration = Math.round(now() - sessionStart);
       const sum = summarize(trials);
+      // Session-level is het cross-session level (niet aantal blokken gespeeld).
+      // Zo kan progressie.js::nextLevelDayNight op hetzelfde veld matchen voor
+      // promotie-detectie.
       const sessionObj = {
         id: 's_' + Math.random().toString(36).slice(2, 10),
         date: new Date().toISOString(),
-        level: currentBlok + 1,
+        level: currentSessionLevel,
         durationMs: duration,
         trials: trials.slice(),
-        summary: { ...sum, blokkenAf: currentBlok },
+        summary: {
+          ...sum,
+          blokkenAf: currentBlok,
+          speelLevel: currentSessionLevel,
+        },
       };
       saveSession('day-night', sessionObj);
 

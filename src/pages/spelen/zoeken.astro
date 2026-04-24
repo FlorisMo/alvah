@@ -242,6 +242,7 @@ import { NL } from '../../scripts/strings.nl.js';
   import { summarize } from '../../scripts/scoring.js';
   import { saveSession, load } from '../../scripts/storage.js';
   import { create as makeStaircase, onTrial as stepStaircase } from '../../scripts/staircase.js';
+  import { seedLevel, shouldAutoLower, computeSessionLevel } from '../../scripts/progressie.js';
   import { NL } from '../../scripts/strings.nl.js';
 
   const MIN_SIZE = 4;
@@ -320,7 +321,14 @@ import { NL } from '../../scripts/strings.nl.js';
 
     function startSession() {
       trials = [];
-      staircase = makeStaircase({ level: START_SIZE, min: MIN_SIZE, max: MAX_SIZE });
+      // Seed: warm-up één onder currentLevel.
+      let seed = START_SIZE;
+      try { seed = seedLevel(load().exercises.zoeken, 'zoeken'); } catch { /* default */ }
+      staircase = makeStaircase({
+        level: Math.max(MIN_SIZE, Math.min(MAX_SIZE, seed)),
+        min: MIN_SIZE,
+        max: MAX_SIZE,
+      });
       sessionStart = now();
       toon('spelen');
       nextTrial();
@@ -411,6 +419,8 @@ import { NL } from '../../scripts/strings.nl.js';
         veldEl.classList.add('is-correct');
         statusEl.textContent = NL.spel.zoeken.goed;
         staircase = stepStaircase(staircase, true);
+        // Auto-lower check na elke trial (zowel correct als incorrect).
+        applyAutoLowerIfNeeded();
         setTimeout(() => {
           veldEl.classList.remove('is-correct');
           setTimeout(nextTrial, ITI_MS);
@@ -442,8 +452,21 @@ import { NL } from '../../scripts/strings.nl.js';
             targetIdx: currentTarget,
           });
           staircase = stepStaircase(staircase, false);
+          applyAutoLowerIfNeeded();
           setTimeout(nextTrial, FEEDBACK_MS + ITI_MS);
         }
+      }
+    }
+
+    function applyAutoLowerIfNeeded() {
+      const recentResults = trials.map((t) => t.correct);
+      if (shouldAutoLower(recentResults, now() - sessionStart)) {
+        staircase = {
+          ...staircase,
+          level: Math.max(MIN_SIZE, staircase.level - 2),
+          consecCorrect: 0,
+          consecWrong: 0,
+        };
       }
     }
 
@@ -453,13 +476,20 @@ import { NL } from '../../scripts/strings.nl.js';
       const sum = summarize(trials);
       const maxSet = trials.filter((t) => t.correct).reduce((m, t) => Math.max(m, t.setSize), 0);
       const totalFA = trials.reduce((s, t) => s + (t.falseAlarms || 0), 0);
+      const reversalLevel = computeSessionLevel(staircase.reversals || []);
+      const sessionLevel = reversalLevel !== null ? Math.round(reversalLevel) : (maxSet || staircase.level);
       const sessionObj = {
         id: 's_' + Math.random().toString(36).slice(2, 10),
         date: new Date().toISOString(),
-        level: maxSet || staircase.level,
+        level: sessionLevel,
         durationMs: duration,
         trials: trials.slice(),
-        summary: { ...sum, maxSetSize: maxSet, falseAlarmsTotal: totalFA },
+        summary: {
+          ...sum,
+          maxSetSize: maxSet,
+          falseAlarmsTotal: totalFA,
+          reversalsN: (staircase.reversals || []).length,
+        },
       };
       saveSession('zoeken', sessionObj);
 

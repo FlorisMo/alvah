@@ -230,6 +230,7 @@ import { NL } from '../../scripts/strings.nl.js';
   import { now } from '../../scripts/timer.js';
   import { summarize } from '../../scripts/scoring.js';
   import { saveSession, load } from '../../scripts/storage.js';
+  import { seedLevel } from '../../scripts/progressie.js';
   import { NL } from '../../scripts/strings.nl.js';
 
   // 4 panelen: groen 330Hz, blauw 392Hz, oranje 494Hz, magenta 587Hz.
@@ -311,7 +312,13 @@ import { NL } from '../../scripts/strings.nl.js';
     function startSession() {
       toon('spelen');
       sessionStart = now();
-      span = MIN_SPAN;
+      // Seed: start één onder currentLevel als Alvah al eerder speelde (A1 warm-up).
+      let seed = MIN_SPAN;
+      try {
+        const data = load();
+        seed = seedLevel(data.exercises.simon, 'simon');
+      } catch (_) { /* stil falen */ }
+      span = Math.max(MIN_SPAN, seed);
       trials = [];
       gecaped = false;
       newTrial();
