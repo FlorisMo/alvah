@@ -43,5 +43,15 @@ Privé-subtree voor Alvah zelf: EF-oefenspelletjes (werkgeheugen, inhibitie, aan
 - `docs/practice-games-plan.md` — /spelen-subtree, actieve bouwfase
 - `docs/next-steps-plan.md` — dossier-kant onderhoud (Fase 6–11, aparte track)
 - `docs/tone-of-voice-alvah-site-nl.md` — schrijfgids voor alle content
+- `docs/tov-check.md` — automatische ToV-check bij commit + bewust-behouden-lijst
 - `docs/practice-games-schema.md` — localStorage-schema `alvah-ef-v1`
 - `docs/source/` — research-input
+
+## Content-wijzigingen
+
+De pre-commit hook (`.githooks/pre-commit`) draait `npm run check:tov:strict`
+op gestaged content. Em-streepjes, "hij of zij" en retorische tags
+blokkeren de commit. Zie `docs/tov-check.md`.
+
+Hook-pad wordt automatisch ingesteld door `npm install`. Handmatig:
+`git config core.hooksPath .githooks`.

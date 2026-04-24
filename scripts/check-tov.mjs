@@ -183,7 +183,15 @@ for (const dir of SCAN_DIRS) {
 
 const argv = process.argv.slice(2);
 const asJson = argv.includes('--json');
+const strict = argv.includes('--strict');
 const filterCat = argv.find((a) => a.startsWith('--only='))?.slice('--only='.length);
+
+// Categorieën die in --strict mode een commit blokkeren.
+// Deze drie hebben zero-tolerance in de ToV: geen enkele hit is legitiem.
+// Andere categorieën (verboden-woord, uitroepteken, vuller, aandoening-eerst,
+// ai-cliche) kunnen legitieme hits bevatten (boektitels, counter-examples,
+// verbatim-citaten) en blijven informatief, ook in strict mode.
+const STRICT_CATEGORIES = new Set(['em-streepje', 'gender', 'retorische-tag']);
 
 if (asJson) {
   console.log(JSON.stringify({ filesScanned, results }, null, 2));
@@ -191,17 +199,29 @@ if (asJson) {
 }
 
 let totalHits = 0;
+let strictHits = 0;
 for (const cat of CATEGORIES) {
   if (filterCat && cat.name !== filterCat) continue;
   const hits = results[cat.name];
   totalHits += hits.length;
-  console.log(`\n=== ${cat.name} — ${hits.length} hits ===`);
+  if (STRICT_CATEGORIES.has(cat.name)) strictHits += hits.length;
+  const prefix = STRICT_CATEGORIES.has(cat.name) ? 'BLOK' : 'info';
+  console.log(`\n=== ${cat.name} — ${hits.length} hits [${prefix}] ===`);
   for (const h of hits) {
     console.log(`  ${h.file}:${h.line}  [${h.match}]  ${h.text}`);
   }
 }
 
 console.log(`\n---\nFiles gescand: ${filesScanned}`);
-console.log(`Totaal hits: ${totalHits}`);
-console.log('(Informatief — exit 0.)');
+console.log(`Totaal hits: ${totalHits} (waarvan ${strictHits} in blokkerende categorieën)`);
+
+if (strict && strictHits > 0) {
+  console.error('\nToV-check FAAL: blokkerende hits in em-streepje, gender of retorische-tag.');
+  console.error('Zie docs/tov-check.md voor context. Fix of --no-verify als je echt moet.');
+  process.exit(1);
+}
+
+if (strict) {
+  console.log('ToV-check OK (strict mode).');
+}
 process.exit(0);

@@ -8,7 +8,8 @@ Dit is Alvah's dossier-site. Lees dit voordat je wijzigingen maakt.
 3. Geen Tailwind, geen CSS-in-JS, geen nieuwe frameworks.
 4. robots.txt blijft op Disallow.
 5. Elke wijziging raakt alleen bestanden die de opdracht noemt.
-6. `reference/` is read-only leesbron voor EF-oefeningen. Nooit bewerken, importeren of bundelen — altijd zelf herschrijven (zie `docs/practice-games-plan.md` §4).
+6. `reference/` is read-only leesbron voor EF-oefeningen. Nooit bewerken, importeren of bundelen, altijd zelf herschrijven (zie `docs/practice-games-plan.md` §4).
+7. Content in `src/pages/` en `src/content/` volgt `docs/tone-of-voice-alvah-site-nl.md`. De pre-commit hook (`.githooks/pre-commit`) draait `check:tov:strict` en blokkeert commits met em-streepjes, "hij of zij" of retorische tags. Zie `docs/tov-check.md`.
 
 ## Stack
 - Astro v5 met content collections (Content Layer API)
@@ -23,7 +24,7 @@ Dit is Alvah's dossier-site. Lees dit voordat je wijzigingen maakt.
 - src/pages/ — 11 pagina's plus 404
 
 ## Voor elke sessie
-Lees deze CLAUDE.md. Lees src/content.config.ts voor datamodel. Lees de te wijzigen pagina helemaal.
+Lees deze CLAUDE.md. Lees src/content.config.ts voor datamodel. Lees de te wijzigen pagina helemaal. Voor content-wijzigingen: lees ook `docs/tone-of-voice-alvah-site-nl.md` en `docs/tov-check.md`.
 
 ## Design
 - Alleen bestaande `--custom-properties` uit global.css

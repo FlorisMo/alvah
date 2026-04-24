@@ -9,7 +9,9 @@
     "build": "astro check && astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "check:tov": "node scripts/check-tov.mjs"
+    "check:tov": "node scripts/check-tov.mjs",
+    "check:tov:strict": "node scripts/check-tov.mjs --strict",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "dependencies": {
     "astro": "^5.0.0"

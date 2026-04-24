@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# ToV-check voor commits. Draait alleen als er content/page-bestanden in
+# de stage staan. Blokkeert alleen op zero-tolerance-categorieën
+# (em-streepje, gender, retorische-tag). Zie docs/tov-check.md.
+#
+# Bypass met --no-verify als het écht moet (bv. een WIP-commit). Doe dat
+# bewust — de blokkerende categorieën zijn door de ToV absoluut verboden.
+
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^src/(pages|content)/.+\.(astro|md|mdx)$' || true)
+
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
+node scripts/check-tov.mjs --strict
