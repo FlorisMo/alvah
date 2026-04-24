@@ -9,13 +9,13 @@ const chapters = [
   { id: 'de-mheen', num: '05', titel: 'Wat De Mheen kan en moet doen' },
   { id: 'interventies', num: '06', titel: 'Evidence-based interventieplan thuis' },
   { id: 'zelfbeeld', num: '07', titel: 'Zelfbeeld en faalangst' },
-  { id: 'doubleren', num: '08', titel: 'Doubleren — wetenschap en Jenaplan' },
+  { id: 'doubleren', num: '08', titel: 'Doubleren: wetenschap en Jenaplan' },
   { id: 'checklist', num: '09', titel: 'Checklist komende weken' },
   { id: 'organisaties', num: '10', titel: 'Organisaties en bronnen' },
 ];
 ---
 <BaseLayout
-  title="Dossier — Alvah"
+  title="Dossier, Alvah"
   description="Uitgebreid onderzoeksrapport met wetenschappelijke onderbouwing. Opgebouwd uit tien hoofdstukken, van de januari-juni 2025 observatie tot concrete checklist en bronnen."
   wide={true}
 >
@@ -41,7 +41,7 @@ const chapters = [
         </p>
 
         <details class="doc-mobile-toc">
-          <summary>In dit dossier — 10 hoofdstukken</summary>
+          <summary>In dit dossier, 10 hoofdstukken</summary>
           <ol>
             {chapters.map((c) => (
               <li><a href={`#${c.id}`}><span class="toc-num">{c.num}</span>{c.titel}</a></li>
@@ -65,11 +65,11 @@ const chapters = [
         <h3>Wat onderzoek hierover zegt</h3>
         <p><strong>De werkhervatting-dimensie is geen speculatie, maar een gedocumenteerd fenomeen.</strong> Onderzoek wijst consequent drie mechanismen aan:</p>
         <ol>
-          <li><strong>Weekendwerk specifiek gedraagt zich anders dan avondwerk.</strong> Een grote studie uit Hongkong (N=433, moeders van 5-6-jarigen) vond dat weekendwerk van moeders specifiek samenhing met <em>lagere</em> thuisbetrokkenheid bij kinderen, terwijl werken op niet-standaard uren juist een hógere schoolbetrokkenheid kon geven. Het gaat dus niet om totaal aantal uren, maar om <em>wannéér</em> de moeder beschikbaar is — en weekenden zijn bij jonge kinderen een "psychologisch anker".</li>
-          <li><strong>De longitudinale data zijn eenduidig over lezen/taal.</strong> Han (2006) en Han &amp; Fox (2011) volgden Amerikaanse kinderen van 5 tot 14 jaar: moeders met onregelmatige of niet-standaard werkschema's hadden kinderen met <em>dalende leestrajecten</em> in vergelijking met leeftijdsgenoten van moeders met regelmatige schema's. Het effect was het sterkst op lees-gerelateerde vakken — precies waar Alvah de grootste val heeft gemaakt.</li>
-          <li><strong>Ouderlijke stress versterkt het effect en zwakt thuisondersteuning af.</strong> Een recente Chinese studie (Nature HSS, 2025, N=627) vond dat ouderlijke stress de negatieve effecten van werkschema's op begrijpend lezen significant versterkt — specifiek via verminderde huiswerkhulp.</li>
+          <li><strong>Weekendwerk specifiek gedraagt zich anders dan avondwerk.</strong> Een grote studie uit Hongkong (N=433, moeders van 5-6-jarigen) vond dat weekendwerk van moeders specifiek samenhing met <em>lagere</em> thuisbetrokkenheid bij kinderen, terwijl werken op niet-standaard uren juist een hógere schoolbetrokkenheid kon geven. Het gaat dus niet om totaal aantal uren, maar om <em>wannéér</em> de moeder beschikbaar is. En weekenden zijn bij jonge kinderen een "psychologisch anker".</li>
+          <li><strong>De longitudinale data zijn eenduidig over lezen/taal.</strong> Han (2006) en Han &amp; Fox (2011) volgden Amerikaanse kinderen van 5 tot 14 jaar: moeders met onregelmatige of niet-standaard werkschema's hadden kinderen met <em>dalende leestrajecten</em> in vergelijking met leeftijdsgenoten van moeders met regelmatige schema's. Het effect was het sterkst op lees-gerelateerde vakken: precies waar Alvah de grootste val heeft gemaakt.</li>
+          <li><strong>Ouderlijke stress versterkt het effect en zwakt thuisondersteuning af.</strong> Een recente Chinese studie (Nature HSS, 2025, N=627) vond dat ouderlijke stress de negatieve effecten van werkschema's op begrijpend lezen significant versterkt, specifiek via verminderde huiswerkhulp.</li>
         </ol>
-        <p><strong>Samengevat:</strong> de kans dat de spelling-knik van Alvah toeval was, is klein. Het patroon klopt met een aantal goed-gedocumenteerde mechanismen tegelijk. Dit wil <em>niet</em> zeggen dat dit de schuld is van zijn moeder — integendeel. Het wil zeggen dat dit gezin waardevolle data heeft waar ook toekomstige beslissingen op gebaseerd kunnen worden.</p>
+        <p><strong>Samengevat:</strong> de kans dat de spelling-knik van Alvah toeval was, is klein. Het patroon klopt met een aantal goed-gedocumenteerde mechanismen tegelijk. Dit wil <em>niet</em> zeggen dat dit de schuld is van zijn moeder. Integendeel: het wil zeggen dat dit gezin waardevolle data heeft waar ook toekomstige beslissingen op gebaseerd kunnen worden.</p>
 
         <h3>Wat dit waarschijnlijk maakt</h3>
         <p>Als deze observatie klopt:</p>
@@ -93,26 +93,26 @@ const chapters = [
         <h2 class="section-head"><span class="num">02</span>De PKU-stress-leren driehoek</h2>
         <p class="lede">Technisch, maar essentieel. Als dit duidelijk is, is ook duidelijk waarom Alvah's situatie <em>extra</em> gevoelig is voor dingen als werkhervatting van een ouder.</p>
 
-        <h3>Mechanisme 1 — PKU verstoort dopamine en serotonine</h3>
-        <p>Bij PKU kruist verhoogd fenylalanine de bloed-hersenbarrière en blokkeert het transport van tyrosine en tryptofaan naar de hersenen. Tyrosine is de bouwsteen voor dopamine en noradrenaline; tryptofaan voor serotonine. Dopamine is cruciaal voor de prefrontale cortex — het gebied voor aandacht, werkgeheugen, planning en impulscontrole.</p>
+        <h3>Mechanisme 1: PKU verstoort dopamine en serotonine</h3>
+        <p>Bij PKU kruist verhoogd fenylalanine de bloed-hersenbarrière en blokkeert het transport van tyrosine en tryptofaan naar de hersenen. Tyrosine is de bouwsteen voor dopamine en noradrenaline; tryptofaan voor serotonine. Dopamine is cruciaal voor de prefrontale cortex, het gebied voor aandacht, werkgeheugen, planning en impulscontrole.</p>
         <p><strong>Dit betekent:</strong> Alvah heeft, ook bij goede dieetcontrole, een neurochemisch profiel dat dicht tegen dat van ADHD aan zit. Kinderneurologie.eu schrijft letterlijk: <em>kinderen met PKU hebben een grotere kans om problemen te hebben met het vasthouden van de aandacht en concentratie, en zijn vaak beweeglijk.</em></p>
 
-        <h3>Mechanisme 2 — Emotionele stress verhoogt fenylalanine</h3>
-        <p>Een wetenschappelijke review uit 2025 (PMC12153110) beschrijft dit als een <em>bidirectional relationship</em>: fenylalanine-schommelingen verstoren de neurotransmittersynthese, wat chronische stressreacties triggert, wat op zijn beurt de executieve disfunctie versterkt — <strong>een vicieuze cyclus van metabole ontregeling en psychologisch lijden</strong>.</p>
+        <h3>Mechanisme 2: Emotionele stress verhoogt fenylalanine</h3>
+        <p>Een wetenschappelijke review uit 2025 (PMC12153110) beschrijft dit als een <em>bidirectional relationship</em>: fenylalanine-schommelingen verstoren de neurotransmittersynthese, wat chronische stressreacties triggert, wat op zijn beurt de executieve disfunctie versterkt. <strong>Een vicieuze cyclus van metabole ontregeling en psychologisch lijden.</strong></p>
 
-        <h3>Mechanisme 3 — Niet alleen gemiddelde Phe telt, maar ook <em>stabiliteit</em></h3>
+        <h3>Mechanisme 3: Niet alleen gemiddelde Phe telt, maar ook <em>stabiliteit</em></h3>
         <p>Uit een studie bij 37 volwassenen met PKU (PMC5331922) bleek: <em>Phe-variatie was net zo bepalend voor cognitieve prestaties als het Phe-gemiddelde.</em> Stabiele dieetcontrole is net zo belangrijk als strikte controle. Schommelingen zijn schadelijk, zelfs als het gemiddelde goed is.</p>
 
         <h3>Wat dit concreet betekent voor Alvah</h3>
         <ol>
-          <li><strong>Stress en onregelmatigheid kunnen zijn Phe-spiegels doen schommelen</strong>, ook als hij het dieet volgt. Het is het waard om zijn metabool centrum (vermoedelijk UMC Groningen of Amsterdam UMC) te vragen of er in januari–juni 2025 afwijkingen zichtbaar waren in de bloedspiegelmetingen.</li>
-          <li><strong>ADHD-achtige symptomen en PKU-gerelateerde aandachtsproblemen zijn klinisch soms niet goed te onderscheiden.</strong> Het is mogelijk dat er geen "aparte ADHD" is, maar dat PKU zich ADHD-achtig gedraagt. Dat is een argument om <em>voorlopig geen afzonderlijke ADHD-diagnostiek door te zetten</em> — de interventies zijn grotendeels hetzelfde, en een aparte diagnose voegt weinig toe aan het behandelplan.</li>
+          <li><strong>Stress en onregelmatigheid kunnen zijn Phe-spiegels doen schommelen</strong>, ook als hij het dieet volgt. Het is het waard om zijn metabool centrum (vermoedelijk UMC Groningen of Amsterdam UMC) te vragen of er in januari-juni 2025 afwijkingen zichtbaar waren in de bloedspiegelmetingen.</li>
+          <li><strong>ADHD-achtige symptomen en PKU-gerelateerde aandachtsproblemen zijn klinisch soms niet goed te onderscheiden.</strong> Het is mogelijk dat er geen "aparte ADHD" is, maar dat PKU zich ADHD-achtig gedraagt. Dat is een argument om <em>voorlopig geen afzonderlijke ADHD-diagnostiek door te zetten</em>. De interventies zijn grotendeels hetzelfde, en een aparte diagnose voegt weinig toe aan het behandelplan.</li>
           <li><strong>De combinatie PKU + mogelijke dyslexie + ADHD-achtig profiel is een triade die drukt op dezelfde hersensystemen.</strong> Alle drie verstoren executieve functies, werkgeheugen en automatiseringssnelheid. Dit is waarom Alvah zo snel uitgeput raakt: hij loopt de hele dag op drievoudige belasting.</li>
         </ol>
       </section>
 
       <section id="systeem">
-        <h2 class="section-head"><span class="num">03</span>Het Nederlandse systeem — zorgniveaus, OPP, SWV Apeldoorn</h2>
+        <h2 class="section-head"><span class="num">03</span>Het Nederlandse systeem: zorgniveaus, OPP, SWV Apeldoorn</h2>
 
         <h3>Zorgniveaus binnen passend onderwijs</h3>
         <p>Het Nederlandse onderwijs kent een zorgniveausysteem dat je als ouder moet kennen om te weten of de school doet wat hoort:</p>
@@ -147,7 +147,7 @@ const chapters = [
           </ul>
         </div>
 
-        <h3>SWV Apeldoorn PO — de structuur</h3>
+        <h3>SWV Apeldoorn PO: de structuur</h3>
         <p>Op basis van het Ondersteuningsplan 2023-2027 van <a href="https://www.swvapeldoornpo.nl/" target="_blank" rel="noopener">SWV Apeldoorn PO</a>:</p>
         <ul>
           <li>Apeldoorn is verdeeld in <strong>4 wijken</strong>, elk met eigen wijkcoördinator</li>
@@ -162,14 +162,14 @@ const chapters = [
         <p>In volgorde van minder naar meer gespecialiseerd:</p>
         <ol>
           <li><strong>Reguliere basisschool</strong> (huidige situatie) met arrangement/OPP en niveau 3-4 ondersteuning</li>
-          <li><strong>SBO (Speciaal Basisonderwijs)</strong> — voor kinderen die blijvend onvoldoende profiteren van het reguliere onderwijs. Kleinere klassen (meestal 12-16), hogere leerkracht-tot-kind-verhouding, meer individuele aandacht, dezelfde kerndoelen. In Apeldoorn zijn meerdere SBO-scholen.</li>
+          <li><strong>SBO (Speciaal Basisonderwijs)</strong>: voor kinderen die blijvend onvoldoende profiteren van het reguliere onderwijs. Kleinere klassen (meestal 12-16), hogere leerkracht-tot-kind-verhouding, meer individuele aandacht, dezelfde kerndoelen. In Apeldoorn zijn meerdere SBO-scholen.</li>
           <li><strong>SO (Speciaal Onderwijs)</strong> cluster 3 (lichamelijk/verstandelijk) of cluster 4 (gedrag/psychiatrisch). Vereist een <strong>TLV</strong> (Toelaatbaarheidsverklaring) van het SWV.</li>
         </ol>
-        <p><strong>Wat realistisch is voor Alvah:</strong> op basis van de documenten is er geen indicatie dat hij direct naar SO moet. SBO kan op termijn een optie worden als hij binnen reguliere setting structureel onvoldoende groeit, maar dat is nu geen urgent scenario. De primaire vraag is of De Mheen hem — met de juiste aanpassingen — kan houden op reguliere basis.</p>
+        <p><strong>Wat realistisch is voor Alvah:</strong> op basis van de documenten is er geen indicatie dat hij direct naar SO moet. SBO kan op termijn een optie worden als hij binnen reguliere setting structureel onvoldoende groeit, maar dat is nu geen urgent scenario. De primaire vraag is of De Mheen hem (met de juiste aanpassingen) kan houden op reguliere basis.</p>
       </section>
 
       <section id="dyslexieroute">
-        <h2 class="section-head"><span class="num">04</span>De dyslexieroute (ED) — wat sinds 2022 is veranderd</h2>
+        <h2 class="section-head"><span class="num">04</span>De dyslexieroute (ED): wat sinds 2022 is veranderd</h2>
         <p class="lede">Een van de belangrijkste punten van dit rapport.</p>
 
         <h3>De grote wijziging van 1 januari 2022</h3>
@@ -200,7 +200,7 @@ const chapters = [
         <p><strong>Alvah voldoet ruimschoots aan het achterstandscriterium.</strong> Hij heeft niet drie maar <em>vier</em> opeenvolgende V-scores op DMT, en ook nog E-scores op begrijpend lezen.</p>
 
         <h3>Het criterium van hardnekkigheid</h3>
-        <p>Naast achterstand moet er sprake zijn van <em>hardnekkigheid</em>: de achterstand moet blijven bestaan ondanks intensieve interventies op zorgniveau 2 en 3. Alvah's dossier laat dit zien — hij krijgt BOUW! en extra leesbegeleiding in klein groepje, maar de achterstand blijft. Dit voldoet aan het hardnekkigheidscriterium.</p>
+        <p>Naast achterstand moet er sprake zijn van <em>hardnekkigheid</em>: de achterstand moet blijven bestaan ondanks intensieve interventies op zorgniveau 2 en 3. Alvah's dossier laat dit zien: hij krijgt BOUW! en extra leesbegeleiding in klein groepje, maar de achterstand blijft. Dit voldoet aan het hardnekkigheidscriterium.</p>
 
         <h3>De procedure in Apeldoorn</h3>
         <ol>
@@ -220,7 +220,7 @@ const chapters = [
           <li><em>Welke zorgaanbieders hebben contract met gemeente Apeldoorn?</em></li>
           <li><em>Wanneer verwachten jullie een beschikking?</em></li>
         </ul>
-        <p>In Apeldoorn is de gemeente verantwoordelijk voor de dyslexiezorg vanuit de Jeugdwet. De kosten zijn 100% vergoed als de aanvraag wordt goedgekeurd. Als de aanvraag wordt afgewezen (bv. omdat de triade te complex is), kun je ook particulier laten testen — dan is er geen dyslexieverklaring voor vergoede zorg, maar wel een officiële verklaring die bruikbaar is voor compenserende maatregelen op school, middelbare school en later examens.</p>
+        <p>In Apeldoorn is de gemeente verantwoordelijk voor de dyslexiezorg vanuit de Jeugdwet. De kosten zijn 100% vergoed als de aanvraag wordt goedgekeurd. Als de aanvraag wordt afgewezen (bv. omdat de triade te complex is), kun je ook particulier laten testen. Dan is er geen dyslexieverklaring voor vergoede zorg, maar wel een officiële verklaring die bruikbaar is voor compenserende maatregelen op school, middelbare school en later examens.</p>
       </section>
 
       <section id="de-mheen">
@@ -231,17 +231,17 @@ const chapters = [
         <p>Concrete voordelen voor Alvah:</p>
         <ol>
           <li><strong>Stamgroepen mengen leeftijden</strong> (groep 3, 4, 5 bijvoorbeeld). Iemand die op groep 3-niveau werkt voor sommige vakken werkt <em>binnen zijn stamgroep</em> op niveau, zonder gestigmatiseerd te worden.</li>
-          <li><strong>Kinderen nemen de rol van jongste-middelste-oudste aan.</strong> Zelfs als Alvah "blijft zitten" of extra tijd krijgt voor een bouw, verandert zijn sociale rol natuurlijk met hem mee — heel anders dan in een klassieke klas waar zittenblijven stigmatiserend werkt.</li>
+          <li><strong>Kinderen nemen de rol van jongste-middelste-oudste aan.</strong> Zelfs als Alvah "blijft zitten" of extra tijd krijgt voor een bouw, verandert zijn sociale rol natuurlijk met hem mee, heel anders dan in een klassieke klas waar zittenblijven stigmatiserend werkt.</li>
           <li><strong>Stamgroepwerk op eigen tempo is ingebakken.</strong> Een kind in leerjaar 4 dat nog leerlijn 3-aanbod nodig heeft, kan <em>binnen Jenaplan-didactiek</em> instructie uit leerjaar 3 volgen zonder dat dit als "terug in niveau" geldt.</li>
-          <li><strong>Stamgroepleiders zijn opgeleid in differentiatie</strong> — meer dan leerkrachten op reguliere scholen.</li>
+          <li><strong>Stamgroepleiders zijn opgeleid in differentiatie</strong>: meer dan leerkrachten op reguliere scholen.</li>
           <li><strong>Blokperiode</strong> (zelfstandig werken) is een natuurlijk moment voor Alvah om op zijn eigen niveau te werken met tutor-ondersteuning.</li>
         </ol>
-        <p><strong>De Mheen heeft structureel een betere uitgangspositie dan een regulier klassikale school</strong> om Alvah te bedienen — <em>mits</em> de school die sterke punten bewust inzet voor hem.</p>
+        <p><strong>De Mheen heeft structureel een betere uitgangspositie dan een regulier klassikale school</strong> om Alvah te bedienen, <em>mits</em> de school die sterke punten bewust inzet voor hem.</p>
 
         <h3>Wat de school wettelijk <em>moet</em> doen (zorgplicht)</h3>
         <p>Onder de Wet Passend Onderwijs geldt:</p>
         <ul>
-          <li>De school moet voor elke leerling die extra ondersteuning nodig heeft <em>zorgplicht</em> invullen — passend onderwijs bieden of (in overleg met ouders) hulp zoeken bij een andere school.</li>
+          <li>De school moet voor elke leerling die extra ondersteuning nodig heeft <em>zorgplicht</em> invullen: passend onderwijs bieden of (in overleg met ouders) hulp zoeken bij een andere school.</li>
           <li>Ze moeten een <strong>schoolondersteuningsprofiel (SOP)</strong> hebben dat beschrijft welke basis- en extra ondersteuning ze bieden. Vraag dat SOP op van De Mheen.</li>
           <li>Bij leerachterstand van &gt;10 maanden moeten ze een OPP opstellen.</li>
           <li>Voor dyslexie moet het <em>leerlingdossier dyslexie</em> op orde zijn (NKD-richtlijnen).</li>
@@ -249,17 +249,17 @@ const chapters = [
 
         <h3>Compenserende en dispenserende maatregelen</h3>
         <p>Zodra er een (vermoeden van) dyslexie speelt, heeft Alvah recht op een aantal compenserende en dispenserende maatregelen. Niet al deze vereisen een formele dyslexieverklaring.</p>
-        <h4>Compenserend — hulpmiddelen zodat Alvah hetzelfde kan doen</h4>
+        <h4>Compenserend: hulpmiddelen zodat Alvah hetzelfde kan doen</h4>
         <ul>
           <li><strong>Voorleessoftware</strong> zoals Kurzweil 3000, Claro Read of L2S. Op Chromebook werkt Google's geïntegreerde voorleesfunctie ook. Vraag de school welk systeem ze ondersteunen.</li>
           <li><strong>Spellingscontrole / woordvoorspelling</strong> bij schrijfopdrachten</li>
           <li><strong>Vergrote tekst</strong> of aangepaste lettertypes (al is "dyslexie-font" niet bewezen effectief; meer witruimte tussen letters wel)</li>
-          <li><strong>Ingesproken boeken</strong> (<a href="https://www.passendlezen.nl/" target="_blank" rel="noopener">Passend Lezen</a> — gratis voor kinderen met leesbeperking onder de 18)</li>
+          <li><strong>Ingesproken boeken</strong> (<a href="https://www.passendlezen.nl/" target="_blank" rel="noopener">Passend Lezen</a>: gratis voor kinderen met leesbeperking onder de 18)</li>
           <li><strong>Extra tijd bij toetsen</strong></li>
           <li><strong>Mondelinge overhoring in plaats van schriftelijke</strong></li>
           <li><strong>Geen hardop voorlezen in de klas</strong> tenzij hij het zelf wil</li>
         </ul>
-        <h4>Dispenserend — dingen die hij <em>niet</em> hoeft te doen</h4>
+        <h4>Dispenserend: dingen die hij <em>niet</em> hoeft te doen</h4>
         <ul>
           <li><strong>Spelling telt niet mee</strong> bij andere vakken (aardrijkskunde, geschiedenis)</li>
           <li><strong>Geen multiple choice met lookalike-antwoorden</strong> (bij dyslexie heel verwarrend)</li>
@@ -285,10 +285,10 @@ const chapters = [
         <ul>
           <li><strong>Arrangement</strong> aanvragen bij SWV (extra middelen of expertise naar de school halen)</li>
           <li><strong>Consultatie</strong> door SWV-specialisten</li>
-          <li>Op termijn mogelijk <strong>SBO-overstap</strong> — een serieuze stap die pas overwogen wordt als het reguliere aanbod aantoonbaar vastloopt</li>
+          <li>Op termijn mogelijk <strong>SBO-overstap</strong>: een serieuze stap die pas overwogen wordt als het reguliere aanbod aantoonbaar vastloopt</li>
         </ul>
         <div class="callout callout--warn">
-          <div class="callout__label">Bij blijvende onenigheid: GPO — 6 weken advies-termijn</div>
+          <div class="callout__label">Bij blijvende onenigheid: GPO, 6 weken advies-termijn</div>
           <p>Ouders hebben bij onenigheid recht op een onafhankelijk deskundigenadvies van de <a href="https://onderwijsgeschillen.nl/commissie/geschillencommissie-passend-onderwijs-gpo" target="_blank" rel="noopener">Geschillencommissie Passend Onderwijs (GPO)</a>. Zij moet binnen <strong>6 weken</strong> na indiening een advies uitbrengen (10 weken bij complexe zaken). De procedure is kosteloos voor ouders. Deze route is relevant bij een geschil over plaatsing, OPP-inhoud of verwijdering.</p>
         </div>
       </section>
@@ -302,60 +302,60 @@ const chapters = [
           <ul>
             <li><strong>Intrinsieke motivatie &gt; extrinsieke motivatie.</strong> Becker &amp; McElvany (2010) toonden aan dat extrinsieke leesmotivatie <em>negatief</em> effect heeft op leesprestaties; intrinsieke juist positief.</li>
             <li><strong>Leeskilometers &gt; perfecte uitvoering.</strong> Van Bergen e.a. (2020): meer lezen = hogere leesvaardigheid, wederkerig.</li>
-            <li><strong>Succeservaringen &gt; foutenfocus.</strong> Steenbeek-Planting (2012): bij zwakke lezers onder E3-niveau vooral oefenen door <em>herhaald te lezen wat goed ging</em> — NIET door te drillen op wat fout ging.</li>
+            <li><strong>Succeservaringen &gt; foutenfocus.</strong> Steenbeek-Planting (2012): bij zwakke lezers onder E3-niveau vooral oefenen door <em>herhaald te lezen wat goed ging</em>. NIET door te drillen op wat fout ging.</li>
           </ul>
         </div>
 
         <h3>6.1 Het leesritueel herzien</h3>
         <p>Het huidige ritueel (elke avond 2 bladzijden op zijn niveau) is goed bedoeld en niet fout, maar kan gerichter. Aanbevelingen:</p>
-        <h4>Principe A — Uitwisseling van rollen</h4>
+        <h4>Principe A: Uitwisseling van rollen</h4>
         <p>In plaats van alleen Alvah laten lezen: om de beurt. Eén zin hij, één zin jij. Of: hij leest het makkelijkere stuk, jij leest het spannende. Dit heet <em>toneellezen</em> en verlaagt de drempel aanzienlijk.</p>
-        <h4>Principe B — Herhaal lezen wat goed ging</h4>
+        <h4>Principe B: Herhaal lezen wat goed ging</h4>
         <p>Als hij een tekst heeft gelezen en iets gaat goed, lees diezelfde tekst de volgende dag nog eens. Hij ervaart vlotheid, opbouw, competentie. Dit is niet "achterblijven" maar evidence-based praktijk voor zwakke lezers.</p>
-        <h4>Principe C — Luisterboek + meelezen tegelijk</h4>
-        <p>Meta-analyse van 7 studies (Singh &amp; Alexander, 2022) vond effectgroottes van 0.28 tot 0.9. Knoop-Van Campen e.a. (2017) toonden aan dat dyslectische kinderen tekst sneller verwerken als ze tegelijkertijd lezen en luisteren.</p>
+        <h4>Principe C: Luisterboek + meelezen tegelijk</h4>
+        <p>Meta-analyse van 7 studies (Singh &amp; Alexander, 2022) vond effectgroottes van 0.28 tot 0.9. Knoop-Van Campen e.a. (2017) toonden aan dat kinderen met dyslexie tekst sneller verwerken als ze tegelijkertijd lezen en luisteren.</p>
         <div class="callout callout--warn">
           <div class="callout__label">Belangrijke nuance</div>
           <p>Luisterboeken <em>alleen</em> (zonder meelezen) trainen niet de decodeer-vaardigheid waar Alvah juist moeite mee heeft. Voor een 7-jarige in leesontwikkeling is het dus: luisterboek ÉN meelezen, niet in plaats van. Voor plezierlezen tussendoor (in de auto, voor het slapen) is alleen luisteren prima.</p>
         </div>
         <p><strong>Concrete services:</strong></p>
         <ul>
-          <li><a href="https://www.jeugdbibliotheek.nl/6-12-jaar/jeugd-en-jongeren/6-12/lezen-met-dyslexie.html" target="_blank" rel="noopener">Yoleo</a> — lezen en luisteren tegelijk, met beloningssysteem. Gratis met bibliotheekpas.</li>
-          <li><a href="https://www.passendlezen.nl/" target="_blank" rel="noopener">Passend Lezen</a> — gratis voor kinderen met leesbeperking onder de 18, Daisy-luisterboeken.</li>
-          <li>Anderslezen-app (Luisterpunt) — voorleesboeken met synchroon tekst.</li>
-          <li><a href="https://www.makkelijklezenplein.nl/" target="_blank" rel="noopener">Makkelijk Lezen Plein</a> — boekentips op niveau.</li>
+          <li><a href="https://www.jeugdbibliotheek.nl/6-12-jaar/jeugd-en-jongeren/6-12/lezen-met-dyslexie.html" target="_blank" rel="noopener">Yoleo</a>: lezen en luisteren tegelijk, met beloningssysteem. Gratis met bibliotheekpas.</li>
+          <li><a href="https://www.passendlezen.nl/" target="_blank" rel="noopener">Passend Lezen</a>: gratis voor kinderen met leesbeperking onder de 18, Daisy-luisterboeken.</li>
+          <li>Anderslezen-app (Luisterpunt): voorleesboeken met synchroon tekst.</li>
+          <li><a href="https://www.makkelijklezenplein.nl/" target="_blank" rel="noopener">Makkelijk Lezen Plein</a>: boekentips op niveau.</li>
         </ul>
-        <h4>Principe D — Moppenboeken, graphic novels, strips</h4>
+        <h4>Principe D: Moppenboeken, graphic novels, strips</h4>
         <p>Voor een kind met dyslexie werken deze goed. Korte teksten, hoge beloning, motivatie om tot aan de punchline te komen.</p>
 
-        <h3>6.2 Duur — hoelang per keer?</h3>
-        <p>Uit de Van der Weijden-studie (UvA 2023) naar BOUW!: optimaal zijn sessies van <strong>10-15 minuten</strong>, 3-4x per week. Méér oefenen loont, maar de meeropbrengst neemt <em>sterk af</em> naarmate sessies langer zijn. Meer dan 15 minuten per sessie is voor een 7-jarige met aandachtsproblemen niet efficiënt — de aandacht zakt in, de stress stijgt, het effect neemt niet toe.</p>
+        <h3>6.2 Duur: hoelang per keer?</h3>
+        <p>Uit de Van der Weijden-studie (UvA 2023) naar BOUW!: optimaal zijn sessies van <strong>10-15 minuten</strong>, 3-4x per week. Méér oefenen loont, maar de meeropbrengst neemt <em>sterk af</em> naarmate sessies langer zijn. Meer dan 15 minuten per sessie is voor een 7-jarige met aandachtsproblemen niet efficiënt. De aandacht zakt in, de stress stijgt, het effect neemt niet toe.</p>
         <p><strong>Aanbeveling:</strong> maak van het avondlezen een ritueel van 10-15 minuten maximaal. Niet meer. Beter 10 minuten geconcentreerd dan 30 minuten met weerstand. Dat is geen toegeving, dat is evidence-based praktijk.</p>
 
-        <h3>6.3 Voor niet-lees-tijd — dingen die wel werken</h3>
-        <p><strong>Beweging.</strong> Fysieke activiteit — zowel aeroob als coördinatief — versterkt executieve functies, en bij ADHD-profielen zijn de effectgroottes significant (Cerrillo-Urbina 2015, g=0.4-0.6). Sporten 3x per week, ook gewoon lang buiten spelen, klimmen, fietsen, helpt direct.</p>
+        <h3>6.3 Voor niet-lees-tijd: dingen die wel werken</h3>
+        <p><strong>Beweging.</strong> Fysieke activiteit (zowel aeroob als coördinatief) versterkt executieve functies, en bij ADHD-profielen zijn de effectgroottes significant (Cerrillo-Urbina 2015, g=0.4-0.6). Sporten 3x per week, ook gewoon lang buiten spelen, klimmen, fietsen, helpt direct.</p>
         <p><strong>Slaap.</strong> Logan &amp; Schneider (2025) toonden expliciet verbanden tussen slaapkwaliteit en cognitieve/academische prestaties bij kinderen. Vaste slaaptijden zijn bij ADHD-profielen geen luxe maar medicatie. Voor een 7-jarige: 10-11 uur slaap per nacht is reëel nodig.</p>
         <p><strong>Voorspelbaarheid en routines.</strong> Externe structuur compenseert interne executieve functie-tekorten. Vaste volgorde 's ochtends, voorspelbare avondrituelen, visuele dagplanner, alles helpt.</p>
         <p><strong>Samen-activiteiten zonder schoolse inslag.</strong> Koken, puzzelen, LEGO, fietsen, bordspellen. Bij een kind met faalangst is elk moment dat jullie <em>samen iets doen dat niet over prestatie gaat</em> een investering in zijn zelfbeeld.</p>
 
-        <h3>6.4 Executieve-functie-training — wat werkt, wat niet</h3>
+        <h3>6.4 Executieve-functie-training: wat werkt, wat niet</h3>
         <p>Er is veel aanbod dat claimt executieve functies te trainen. De wetenschap is hier strenger dan de marketing.</p>
 
-        <h4>Wat wél werkt — gerichte strategie + werkgeheugen: "Beter bij de les" (BBdL)</h4>
+        <h4>Wat wél werkt, gerichte strategie + werkgeheugen: "Beter bij de les" (BBdL)</h4>
         <p>De <strong>Beter bij de les</strong>-methode combineert executieve-strategie-instructie met werkgeheugen-oefeningen. Van der Donk e.a. (2015, <a href="https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2015.01081/full" target="_blank" rel="noopener">Frontiers in Psychology</a>) toonden effecten gelijkwaardig aan Cogmed voor getrainde taken, maar met meer generalisatie naar lezen en rekenen door de strategie-component. NJi-erkend, beschikbaar via school of behandelaar.</p>
 
-        <h4>Wat met grote reserves komt — brain-training apps zoals Cogmed</h4>
+        <h4>Wat met grote reserves komt: brain-training apps zoals Cogmed</h4>
         <p>Cogmed claimt ADHD-symptomen te verminderen via werkgeheugen-training op de computer. Twee grote meta-analyses temperen dit flink:</p>
         <ul>
           <li><a href="https://pubmed.ncbi.nlm.nih.gov/30652908/" target="_blank" rel="noopener">Kassai e.a. (2019)</a>: near-transfer g=0.44 (training verbetert de getrainde taak), far-transfer g=0.11 (niet significant, geen meetbaar effect op echte schoolvaardigheden).</li>
-          <li><a href="https://journals.sagepub.com/doi/10.1177/1529100616661983" target="_blank" rel="noopener">Simons e.a. (2016)</a>: "little evidence of meaningful transfer" — de winst blijft beperkt tot de app zelf.</li>
+          <li><a href="https://journals.sagepub.com/doi/10.1177/1529100616661983" target="_blank" rel="noopener">Simons e.a. (2016)</a>: "little evidence of meaningful transfer". De winst blijft beperkt tot de app zelf.</li>
         </ul>
-        <p>Vertaling: een kind wordt beter in de specifieke Cogmed-oefening, maar dat rendeert nauwelijks in lezen, rekenen of gedrag in de klas. Niet schadelijk, maar als keuze tussen Cogmed en buitenspelen — buitenspelen heeft sterker bewijs.</p>
+        <p>Vertaling: een kind wordt beter in de specifieke Cogmed-oefening, maar dat rendeert nauwelijks in lezen, rekenen of gedrag in de klas. Niet schadelijk, maar als keuze tussen Cogmed en buitenspelen: buitenspelen heeft sterker bewijs.</p>
 
-        <h4>Mindfulness — kleine effecten, niet voor tieners bewezen</h4>
+        <h4>Mindfulness: kleine effecten, niet voor tieners bewezen</h4>
         <p>Mindfulness-programma's voor kinderen worden soms breed aangeprezen, maar de evidence is gemixt:</p>
         <ul>
-          <li><a href="https://onlinelibrary.wiley.com/doi/10.1111/jcpp.13057" target="_blank" rel="noopener">Dunning e.a. (2019)</a>: meta-analyse toonde <em>kleine</em> effecten op aandacht en executieve functies bij kinderen — niet verwaarloosbaar, maar ook geen wondermiddel.</li>
+          <li><a href="https://onlinelibrary.wiley.com/doi/10.1111/jcpp.13057" target="_blank" rel="noopener">Dunning e.a. (2019)</a>: meta-analyse toonde <em>kleine</em> effecten op aandacht en executieve functies bij kinderen. Niet verwaarloosbaar, maar ook geen wondermiddel.</li>
           <li><a href="https://mentalhealth.bmj.com/content/25/3/99" target="_blank" rel="noopener">Kuyken MYRIAD-trial (2022)</a>, een grootschalige RCT bij 8.376 tieners: <em>geen</em> significant effect op mentaal welbevinden. Mindfulness werkt niet automatisch voor elke leeftijd of doelgroep.</li>
         </ul>
         <p>Voor een 7-jarige: niet fout om te proberen, maar niet prioriteren boven beweging en succeservaringen.</p>
@@ -370,7 +370,7 @@ const chapters = [
       </section>
 
       <section id="zelfbeeld">
-        <h2 class="section-head"><span class="num">07</span>Zelfbeeld en faalangst — "ze vinden mij dom"</h2>
+        <h2 class="section-head"><span class="num">07</span>Zelfbeeld en faalangst: "ze vinden mij dom"</h2>
 
         <h3>Wat er onder de oppervlakte zit</h3>
         <p>Een kind van 7 dat al tegen zichzelf zegt "ik ben dom" en denkt dat anderen hem ook zo zien, heeft de aangeleerde hulpeloosheid-cyclus in gang gezet. Het mechanisme:</p>
@@ -381,37 +381,37 @@ const chapters = [
         </ol>
         <div class="callout">
           <div class="callout__label">Waarom zelfbeeld werkelijke academische impact heeft</div>
-          <p>Uit onderzoek naar faalangst blijkt iets opvallends: <em>een kind dat slecht is in rekenen maar positief over zichzelf denkt, scoort vaak hoger dan een kind dat goed is in rekenen maar negatief over zichzelf denkt</em> (Balansdigitaal). De interventie op zelfbeeld is dus niet zachtaardige decoratie — het is werkelijke academische impact.</p>
+          <p>Uit onderzoek naar faalangst blijkt iets opvallends: <em>een kind dat slecht is in rekenen maar positief over zichzelf denkt, scoort vaak hoger dan een kind dat goed is in rekenen maar negatief over zichzelf denkt</em> (Balansdigitaal). De interventie op zelfbeeld is dus niet zachtaardige decoratie, het is werkelijke academische impact.</p>
         </div>
 
-        <h3>Principe 1 — Geen globaal oordeel, maar gedifferentieerd zelfbeeld</h3>
+        <h3>Principe 1: Geen globaal oordeel, maar gedifferentieerd zelfbeeld</h3>
         <p>Faalangst komt mede omdat kinderen in <em>globale termen</em> over zichzelf denken: "Ik ben dom." Dat is niet waar, maar het is te onspecifiek om te weerleggen. Help Alvah concreet verschil maken.</p>
         <p>Voorbeelden van wat je zou kunnen zeggen:</p>
         <ul>
-          <li>"Je vindt lezen nog lastig. Maar ik zag gisteren dat je die LEGO-set in één middag uit je hoofd bouwde — dat is iets wat veel kinderen van jouw leeftijd niet kunnen."</li>
+          <li>"Je vindt lezen nog lastig. Maar ik zag gisteren dat je die LEGO-set in één middag uit je hoofd bouwde. Dat is iets wat veel kinderen van jouw leeftijd niet kunnen."</li>
           <li>"Het hoofd van ieder mens werkt anders. Jouw hoofd is goed in [concreet iets]. Het heeft meer tijd nodig met letters, omdat jouw hersenen zo zijn. Dat is iets anders dan dom."</li>
-          <li>"Weet je, papa en mama hebben ook ADHD. Dat betekent niet dat we niets kunnen — het betekent dat ons hoofd op zijn eigen manier werkt. Jij en wij hebben iets gemeen."</li>
+          <li>"Weet je, papa en mama hebben ook ADHD. Dat betekent niet dat we niets kunnen, het betekent dat ons hoofd op zijn eigen manier werkt. Jij en wij hebben iets gemeen."</li>
         </ul>
 
-        <h3>Principe 2 — Succeservaringen <em>opzettelijk</em> inbouwen</h3>
-        <p>Dit is geen manipulatie — het is compenseren voor een omgeving die hem per definitie meer mislukkingen dan de gemiddelde 7-jarige biedt. Zoek naar activiteiten waar hij <em>gegarandeerd</em> goed in is of kan worden:</p>
+        <h3>Principe 2: Succeservaringen <em>opzettelijk</em> inbouwen</h3>
+        <p>Dit is geen manipulatie. Het is compenseren voor een omgeving die hem per definitie meer mislukkingen dan de gemiddelde 7-jarige biedt. Zoek naar activiteiten waar hij <em>gegarandeerd</em> goed in is of kan worden:</p>
         <ul>
           <li>Sport waar hij talent in heeft (alle ballen? motorische sport? vechtsport? zwemmen?)</li>
-          <li>Muziek (dyslectische kinderen doen het vaak verrassend goed in muziek)</li>
+          <li>Muziek (kinderen met dyslexie doen het vaak verrassend goed in muziek)</li>
           <li>Bouwen, tekenen, technisch iets</li>
           <li>Een verzameling (Pokémon, steentjes, dino's)</li>
-          <li>Koken of bakken (recepten zijn korte, concrete stappen — winbaar)</li>
+          <li>Koken of bakken (recepten zijn korte, concrete stappen, winbaar)</li>
         </ul>
         <p>Het doel is niet "hij moet een superster worden", maar: hij heeft <em>elke week</em> momenten waarin hij zich competent voelt. Dat emotionele reservoir gebruikt hij op de moeilijke schoolmomenten.</p>
 
-        <h3>Principe 3 — Taalkundig herkaderen</h3>
+        <h3>Principe 3: Taalkundig herkaderen</h3>
         <p>Je taal wordt zijn innerlijke stem. Kleine verschuivingen met groot effect:</p>
         <table>
           <thead>
             <tr><th>Wat niet helpt</th><th>Alternatief</th></tr>
           </thead>
           <tbody>
-            <tr><td>"Dat was fout."</td><td>"Dat is een goede poging — waar zit de moeilijkheid?"</td></tr>
+            <tr><td>"Dat was fout."</td><td>"Dat is een goede poging. Waar zit de moeilijkheid?"</td></tr>
             <tr><td>"Kom op, je weet dit wel."</td><td>"Neem je tijd. We hebben tijd."</td></tr>
             <tr><td>"Je hebt zo je best gedaan!" (bij mislukking)</td><td>"Ik zag dat je bleef proberen. Dat is wat telt."</td></tr>
             <tr><td>"Je bent slim, dit kan je wel."</td><td>"Je hoofd werkt anders dan van andere kinderen. We vinden wel een manier."</td></tr>
@@ -419,29 +419,29 @@ const chapters = [
           </tbody>
         </table>
 
-        <h3>Principe 4 — "Ze vinden mij dom" — wat zeg je?</h3>
+        <h3>Principe 4: "Ze vinden mij dom", wat zeg je?</h3>
         <p>Als hij dit zegt, is de valkuil om meteen "Nee joh, natuurlijk vinden ze dat niet!" te zeggen. Dat negeert zijn gevoel. Alternatief:</p>
         <ul>
           <li>"Dat is een heftige gedachte. Wat heeft iemand gezegd of gedaan waardoor je dat denkt?"</li>
-          <li>Luister echt. Mogelijk heeft iemand écht iets gezegd — dan is dat een serieus gesprek met school waard.</li>
-          <li>"Weet je wat dom is? Dom is als je niet snapt waarom iets moeilijk is. Jij snapt heel goed waarom lezen voor jou moeilijk is — en dat is niet omdat je dom bent, dat is omdat jouw hersenen PKU hebben. Dat is iets anders."</li>
+          <li>Luister echt. Mogelijk heeft iemand écht iets gezegd. Dan is dat een serieus gesprek met school waard.</li>
+          <li>"Weet je wat dom is? Dom is als je niet snapt waarom iets moeilijk is. Jij snapt heel goed waarom lezen voor jou moeilijk is, en dat is niet omdat je dom bent. Dat is omdat jouw hersenen PKU hebben. Dat is iets anders."</li>
           <li>Vermijd overspoelen met positieve uitspraken. Eén waar, eerlijk compliment &gt; vijf hijgend enthousiaste.</li>
         </ul>
 
-        <h3>Principe 5 — Boeken die echt helpen</h3>
+        <h3>Principe 5: Boeken die echt helpen</h3>
         <p><strong>Voor ouders:</strong></p>
         <ul>
-          <li><em>Dyslexie als kans</em> — Brock &amp; Fernette Eide (ook als luisterboek). Toont wetenschappelijk aan dat dyslexie veel positieve cognitieve verbanden heeft (ruimtelijk inzicht, verbanden leggen, narratief denken).</li>
-          <li><em>Faalangst in de klas</em> — Anton Horeweg (2025) — praktisch en didactisch sterk.</li>
+          <li><em>Dyslexie als kans</em> (Brock &amp; Fernette Eide, ook als luisterboek). Toont wetenschappelijk aan dat dyslexie veel positieve cognitieve verbanden heeft (ruimtelijk inzicht, verbanden leggen, narratief denken).</li>
+          <li><em>Faalangst in de klas</em> (Anton Horeweg, 2025): praktisch en didactisch sterk.</li>
         </ul>
         <p><strong>Voor Alvah (om samen te lezen of voor te lezen):</strong></p>
         <ul>
           <li><em>Het meisje dat nooit fouten maakte</em></li>
-          <li><em>Je fantastische elastische brein</em> — speciaal geschreven om kinderen groei-mindset te leren.</li>
-          <li><em>Ik kan het niet</em> — over weerstand tegen nieuwe dingen.</li>
+          <li><em>Je fantastische elastische brein</em>: speciaal geschreven om kinderen groei-mindset te leren.</li>
+          <li><em>Ik kan het niet</em>: over weerstand tegen nieuwe dingen.</li>
         </ul>
 
-        <h3>Principe 6 — Wanneer externe hulp wel nuttig kan zijn</h3>
+        <h3>Principe 6: Wanneer externe hulp wel nuttig kan zijn</h3>
         <p>Voor het emotionele stuk is er iets specifieks dat mogelijk past zonder dat het "weer een psycholoog" voelt:</p>
         <ul>
           <li><strong>Het Wegwijs-programma</strong> (Van Luit e.a., ontwikkeld aan de UU) is specifiek een gedragsdeskundige-interventie voor kinderen met dyslexie/dyscalculie die psychosociale problemen ontwikkelen. Het duurt 6-8 sessies, is concreet, en heeft wetenschappelijke onderbouwing. Dit zou je <em>na</em> de dyslexiediagnose kunnen overwegen als de faalangst aanhoudt.</li>
@@ -451,7 +451,7 @@ const chapters = [
       </section>
 
       <section id="doubleren">
-        <h2 class="section-head"><span class="num">08</span>Doubleren — wat de wetenschap zegt, en hoe Jenaplan het anders kan</h2>
+        <h2 class="section-head"><span class="num">08</span>Doubleren: wat de wetenschap zegt, en hoe Jenaplan het anders kan</h2>
 
         <h3>Wat het onderzoek laat zien</h3>
         <p>Dit is oncomfortabel stevig. Volgens de <a href="https://www.nro.nl/kennisrotondevragenopeenrij/zittenblijven-basisonderwijs" target="_blank" rel="noopener">Kennisrotonde NRO</a>: <em>"Zittenblijven in het primair onderwijs heeft in het algemeen geen positief effect op de (cognitieve) leerprestaties, ook niet op langere termijn."</em></p>
@@ -462,10 +462,10 @@ const chapters = [
           <li><strong>Nederland kent relatief veel zittenblijvers</strong> in Europa. In 2019 bleef 10% van de basisschoolleerlingen een keer zitten.</li>
         </ul>
 
-        <h3>De uitzonderingen — wanneer het wél kan werken</h3>
+        <h3>De uitzonderingen: wanneer het wél kan werken</h3>
         <p>De onderzoekers zijn niet absolutistisch. Zittenblijven kan zinvol zijn bij:</p>
         <ol>
-          <li><strong>Langdurige ziekte of complexe thuissituatie</strong> — de situatie van PKU + gezinsontwikkeling komt in de buurt.</li>
+          <li><strong>Langdurige ziekte of complexe thuissituatie</strong>: de situatie van PKU + gezinsontwikkeling komt in de buurt.</li>
           <li><strong>Als er een ruim pakket aan extra ondersteuning volgt dat doorstromers <em>niet</em> krijgen.</strong> Dit is de sleutel: als doubleren <em>alleen maar</em> hetzelfde jaar nog eens doen is, is het zinloos. Mét intensieve interventie is het kansrijker.</li>
           <li><strong>Jongere leeftijd is minder schadelijk</strong> dan doubleren in het voortgezet onderwijs. Alvah is jong.</li>
           <li><strong>De sociaal-emotionele impact is lager</strong> als het kind <em>zelf</em> redelijk gemotiveerd is en het niet ervaart als straf.</li>
@@ -477,19 +477,19 @@ const chapters = [
           <li>Op een traditionele school gaat Alvah na een doublure met 30 nieuwe gezichten zijn oude jaar overdoen. Sociale schaamte.</li>
           <li>Op een Jenaplanschool met stamgroepen (bv. 3-4-5 gemengd) betekent "langer doen over een bouw" dat hij in <em>grotendeels dezelfde stamgroep</em> blijft, langer jongere-middelste blijft, en minder jongere-middelste-oudste transitie maakt. <strong>De sociale schaamte is aanzienlijk lager.</strong></li>
         </ul>
-        <p>Sommige Jenaplanscholen zeggen expliciet: <em>"kinderen blijven niet zitten, ze doen langer over een bouw."</em> Niet alleen semantiek — een andere pedagogische benadering.</p>
+        <p>Sommige Jenaplanscholen zeggen expliciet: <em>"kinderen blijven niet zitten, ze doen langer over een bouw."</em> Niet alleen semantiek, een andere pedagogische benadering.</p>
 
         <h3>Zes vragen om aan school te stellen als doubleren ter sprake komt</h3>
         <ol>
           <li><em>"Welke nieuwe of intensievere interventies krijgt Alvah in zijn doublure-jaar die hij in de reguliere doorstroming niet zou krijgen?"</em></li>
           <li><em>"Hoe wordt de impact op zijn sociaal-emotionele ontwikkeling gemonitord?"</em></li>
-          <li><em>"Hoe ziet het eruit als het na dit extra jaar nog niet genoeg is — wat is plan B?"</em></li>
+          <li><em>"Hoe ziet het eruit als het na dit extra jaar nog niet genoeg is, wat is plan B?"</em></li>
           <li><em>"Kunnen we de dyslexiezorg eerst afwachten voordat we deze beslissing nemen? Als hij tijdens de zomer ED-behandeling krijgt, kan dat komend najaar het beeld flink veranderen."</em></li>
           <li><em>"Wordt zijn PKU-metabole situatie in deze afweging meegenomen?"</em></li>
           <li><em>"Gaan we dit als 'zittenblijven' framen of als 'verlengd in de middenbouw'? Hoe komen we als gezin en school op één lijn qua taal?"</em></li>
         </ol>
 
-        <h3>Zie ook — dedicated pagina</h3>
+        <h3>Zie ook: dedicated pagina</h3>
         <p>Voor de volledige beslismatrix, effectgroottes-tabel (Wanzek, Denton, Tamm) en de criteria "niet verdedigbaar vs. kan verdedigbaar zijn": zie <a href="/doubleren">/doubleren</a>.</p>
       </section>
 
@@ -501,7 +501,7 @@ const chapters = [
           <li>Vraag aan de ib'er: <em>Waar in het dyslexie-aanvraagproces zitten we nu? Wat ontbreekt nog?</em></li>
           <li>Vraag of er een <strong>OPP</strong> voor Alvah is; zo nee, vraag om opstelling</li>
           <li>Vraag aan het metabool centrum of er een correlatie was tussen Alvah's fenylalaninespiegels en de periode jan–juni 2025</li>
-          <li>Informeer de gedragswetenschapper van het SWV over de werkhervatting-observatie — dit is relevante context</li>
+          <li>Informeer de gedragswetenschapper van het SWV over de werkhervatting-observatie: dit is relevante context</li>
           <li>Vraag school welke <strong>voorleessoftware</strong> Alvah mag gebruiken</li>
         </ul>
 
@@ -521,7 +521,7 @@ const chapters = [
           <li>Als dyslexie bevestigd: begin een dyslexiebehandeltraject, liefst ná de zomer als dat nodig is voor zijn energie</li>
           <li>Plan evaluatie met school over hoe het met het werkhervatting-herstel gaat (zijn emotionele basis)</li>
           <li>Als faalangst niet afneemt: overweeg een Wegwijs-traject bij dyslexiebehandelaar</li>
-          <li>Lees <em>Dyslexie als kans</em> (Eide &amp; Eide) — als luisterboek kan prima</li>
+          <li>Lees <em>Dyslexie als kans</em> (Eide &amp; Eide). Als luisterboek kan prima</li>
         </ul>
 
         <h3>Langere termijn</h3>
@@ -555,10 +555,10 @@ const chapters = [
 
         <h3>Belangrijke documenten om op te vragen</h3>
         <ul>
-          <li><strong>Schoolondersteuningsprofiel (SOP) van De Mheen</strong> — wat de school standaard biedt</li>
-          <li><strong>Leerlingdossier dyslexie van Alvah</strong> — zelf kopie vragen</li>
-          <li><strong>Eventueel OPP</strong> — handelingsgedeelte vereist ouderinstemming</li>
-          <li><strong>Ondersteuningsplan SWV Apeldoorn PO 2023-2027</strong> — openbaar op hun site</li>
+          <li><strong>Schoolondersteuningsprofiel (SOP) van De Mheen</strong>: wat de school standaard biedt</li>
+          <li><strong>Leerlingdossier dyslexie van Alvah</strong>: zelf kopie vragen</li>
+          <li><strong>Eventueel OPP</strong>: handelingsgedeelte vereist ouderinstemming</li>
+          <li><strong>Ondersteuningsplan SWV Apeldoorn PO 2023-2027</strong>: openbaar op hun site</li>
         </ul>
 
         <h3>Geraadpleegde wetenschappelijke bronnen (selectie)</h3>
@@ -589,16 +589,16 @@ const chapters = [
           <li>Kassai e.a. (2019). <a href="https://pubmed.ncbi.nlm.nih.gov/30652908/" target="_blank" rel="noopener">Meta-analyse EF-training: near vs far transfer</a></li>
           <li>Simons e.a. (2016). <a href="https://journals.sagepub.com/doi/10.1177/1529100616661983" target="_blank" rel="noopener">Do "Brain-Training" Programs Work?</a></li>
           <li>Dunning e.a. (2019). <a href="https://onlinelibrary.wiley.com/doi/10.1111/jcpp.13057" target="_blank" rel="noopener">Mindfulness meta-analyse kinderen</a></li>
-          <li>Kuyken e.a. (2022). <a href="https://mentalhealth.bmj.com/content/25/3/99" target="_blank" rel="noopener">MYRIAD — mindfulness RCT adolescenten</a></li>
+          <li>Kuyken e.a. (2022). <a href="https://mentalhealth.bmj.com/content/25/3/99" target="_blank" rel="noopener">MYRIAD: mindfulness RCT adolescenten</a></li>
         </ul>
         <h4>Zittenblijven</h4>
         <ul>
-          <li>Hattie, J. (2013). <em>Visible Learning</em> meta-analyse — retention effect −0.151</li>
+          <li>Hattie, J. (2013). <em>Visible Learning</em> meta-analyse: retention effect −0.151</li>
           <li>Goos, M. e.a. (2013). Systematisch review van 37 studies</li>
         </ul>
         <h4>Faalangst en zelfbeeld</h4>
         <ul>
-          <li>Van Luit, J., Van der Beek, J., Mönch, M. &amp; Toll, S. <em>Wegwijs — Training in het leren omgaan met een leerstoornis</em> (UU)</li>
+          <li>Van Luit, J., Van der Beek, J., Mönch, M. &amp; Toll, S. <em>Wegwijs: Training in het leren omgaan met een leerstoornis</em> (UU)</li>
           <li>Horeweg, A. (2025). <em>Faalangst in de klas</em>. Leuven: LannooCampus</li>
         </ul>
       </section>
@@ -606,14 +606,14 @@ const chapters = [
       <section class="doc-closing">
         <h2 class="section-head"><span class="num">∎</span>Slotwoord</h2>
         <p class="lede">
-          Alvah zit in een structureel zware situatie — PKU, vermoedelijk dyslexie, mogelijk ADHD-achtig profiel —
+          Alvah zit in een structureel zware situatie (PKU, vermoedelijk dyslexie, mogelijk ADHD-achtig profiel),
           en er is zojuist een belangrijke bijdragende factor ontdekt die mogelijk deels ombuigbaar is:
-          de emotionele instabiliteit van de periode januari–juni 2025. De Nederlandse systemen zijn ingewikkeld
+          de emotionele instabiliteit van de periode januari-juni 2025. De Nederlandse systemen zijn ingewikkeld
           maar er is een route naar gespecialiseerde hulp (vergoede dyslexiezorg onder Protocol 3.0, waar
           comorbiditeit geen blokkade meer is). Jenaplanonderwijs is voor zijn profiel eerder een voordeel
           dan nadeel, mits de school het bewust inzet. Interventies werken best in kleine, consequente doses
-          zonder méér druk — 10–15 minuten lezen per dag, met herhaling van wat goed ging, en luisterboeken
-          plus meelezen. Maar de meest impactvolle interventie is niet methodisch — het is het herstel van
+          zonder méér druk: 10-15 minuten lezen per dag, met herhaling van wat goed ging, en luisterboeken
+          plus meelezen. Maar de meest impactvolle interventie is niet methodisch, het is het herstel van
           zijn emotionele basis en zijn zelfbeeld. Een jongen die weet dat zijn hoofd "gewoon anders werkt"
           en thuis onvoorwaardelijk gezien wordt, is beter toegerust voor een leven met deze uitdagingen dan
           een jongen die alle technieken leert maar gelooft dat hij dom is.
