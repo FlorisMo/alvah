@@ -29,12 +29,12 @@ function* walk(dir) {
   }
 }
 
-// Verwijder .astro code-blokken (frontmatter + <script>/<style>) voor schonere matches.
+// Verwijder .astro code-blokken (<script>/<style>) en HTML-comments.
+// Frontmatter blijft nu behouden — daarin staan vaak string-inhouden (bv. categorie-
+// kader-teksten) die in de UI renderen en dus onder ToV vallen.
 function stripCode(content, isAstro) {
   if (!isAstro) return content;
   let s = content;
-  // frontmatter (--- ... ---) bovenaan
-  s = s.replace(/^---[\s\S]*?\n---\n/, (m) => '\n'.repeat(m.split('\n').length - 1));
   // <script>...</script>
   s = s.replace(/<script[\s\S]*?<\/script>/g, (m) => m.replace(/[^\n]/g, ' '));
   // <style>...</style>
