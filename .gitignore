@@ -11,3 +11,7 @@ yarn-error.log*
 
 # EF-oefeningen: referentie-repo's, read-only leesbron, nooit bundelen
 reference/
+
+# ToV-review: lokale baseline-artefacten (niet committen, zie docs/tov-review-plan.md)
+docs/tov-baseline.txt
+docs/tov-*-rapport.txt

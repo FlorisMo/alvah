@@ -8,7 +8,8 @@
     "start": "astro dev",
     "build": "astro check && astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "check:tov": "node scripts/check-tov.mjs"
   },
   "dependencies": {
     "astro": "^5.0.0"
