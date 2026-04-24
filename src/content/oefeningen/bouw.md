@@ -7,10 +7,10 @@ kosten: "abonnement"
 evidence: "sterk"
 korte_omschrijving: "Wetenschappelijk onderbouwd tutor-programma voor risicolezers groep 2-4. Bij correcte inzet: 60% minder leesproblemen."
 bronnen:
-  - tekst: "Van der Weijden (2024) — grootschalige promotie-studie Bouw!, UvA"
-  - tekst: "Regtvoort, Zijlstra & Van der Leij (2013) — RCT Effectiveness Bouw!"
+  - tekst: "Van der Weijden (2024): grootschalige promotie-studie Bouw!, UvA"
+  - tekst: "Regtvoort, Zijlstra & Van der Leij (2013): RCT Effectiveness Bouw!"
     url: "https://onlinelibrary.wiley.com/doi/10.1002/dys.1476"
-  - tekst: "Lexima — onderzoeksoverzicht Bouw!"
+  - tekst: "Lexima: onderzoeksoverzicht Bouw!"
     url: "https://www.lexima.nl/artikelen/wat-zegt-onderzoek-over-gebruik-en-effectiviteit-van-bouw"
 ---
 
@@ -24,7 +24,7 @@ De meest robuuste Nederlandse evidence voor een leesinterventie. Van der Weijden
 
 - substantiële verbetering op technisch lezen, spelling én begrijpend lezen (ver weg van de startmeting)
 - minder zittenblijven in groep 3
-- transfer-effecten naar bredere leesvaardigheid — uitzonderlijk voor een digitale interventie
+- transfer-effecten naar bredere leesvaardigheid, wat uitzonderlijk is voor een digitale interventie
 
 Optimale inzet volgens het onderzoek: <strong>3–4 sessies per week, elk 10–15 minuten</strong>. Minder frequent helpt minder. Langer per sessie helpt niet.
 
@@ -33,8 +33,8 @@ Optimale inzet volgens het onderzoek: <strong>3–4 sessies per week, elk 10–1
 - School moet ingeschreven zijn als BOUW!-school. Alvah doet dit al via De Mheen.
 - Frequentie: 3–4× per week. Thuis kan een tutor (ouder/oma) meedoen; op school doet een leerkrachtondersteuner dit.
 - Sessie duurt 10–15 minuten. Niet langer, al vraagt hij zelf om meer.
-- Programma werkt als Alvah tot halverwege groep 4 — daarna is hij "uitgeleerd" binnen BOUW! en moeten interventies veranderen (Tier-3 bij ED-behandelaar, of andere aanpak).
+- Programma werkt tot halverwege groep 4. Daarna is Alvah "uitgeleerd" binnen BOUW! en moeten interventies veranderen (Tier-3 bij ED-behandelaar, of andere aanpak).
 
 ## Bronnen &amp; verdere lezing
 
-[Regtvoort e.a. (2013) RCT](https://onlinelibrary.wiley.com/doi/10.1002/dys.1476). [Lexima — onderzoek naar BOUW!](https://www.lexima.nl/artikelen/wat-zegt-onderzoek-over-gebruik-en-effectiviteit-van-bouw).
+[Regtvoort e.a. (2013) RCT](https://onlinelibrary.wiley.com/doi/10.1002/dys.1476). [Lexima: onderzoek naar BOUW!](https://www.lexima.nl/artikelen/wat-zegt-onderzoek-over-gebruik-en-effectiviteit-van-bouw).
