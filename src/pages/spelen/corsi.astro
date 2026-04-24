@@ -137,14 +137,18 @@ import { NL } from '../../scripts/strings.nl.js';
 
   .corsi-ster {
     cursor: pointer;
-    transition: fill 0.15s ease, transform 0.12s ease, filter 0.15s ease;
+    transition: fill 0.12s ease, transform 0.14s ease, filter 0.15s ease;
     transform-box: fill-box;
     transform-origin: center;
   }
-  .corsi-ster.is-clickable:hover { fill: var(--corsi-ster-hover); }
+  .corsi-ster.is-clickable:hover {
+    fill: var(--corsi-ster-hover);
+    transform: scale(1.08);
+  }
   .corsi-ster.is-aktief {
     fill: var(--corsi-aktief);
-    filter: drop-shadow(0 0 6px var(--corsi-aktief));
+    filter: drop-shadow(0 0 10px var(--corsi-aktief)) drop-shadow(0 0 20px var(--corsi-aktief));
+    transform: scale(1.22);
   }
   .corsi-ster.is-goed { fill: var(--corsi-goed); }
   .corsi-ster.is-fout { fill: var(--corsi-fout); }
@@ -203,13 +207,14 @@ import { NL } from '../../scripts/strings.nl.js';
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .corsi-ster, .corsi-ster.is-aktief {
+    .corsi-ster, .corsi-ster.is-aktief, .corsi-ster.is-clickable:hover {
       transition: none;
+      transform: none !important;
       filter: none !important;
     }
     .corsi-ster.is-aktief {
       stroke: var(--spel-sun);
-      stroke-width: 3;
+      stroke-width: 4;
     }
   }
 </style>
@@ -280,7 +285,7 @@ import { NL } from '../../scripts/strings.nl.js';
     // Render sterren als SVG-polygonen.
     const sterren: SVGElement[] = POSITIES.map((p, idx) => {
       const el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-      el.setAttribute('points', sterPunten(p.x, p.y, 20, 8));
+      el.setAttribute('points', sterPunten(p.x, p.y, 28, 12));
       el.setAttribute('fill', 'var(--corsi-ster)');
       el.setAttribute('class', 'corsi-ster');
       el.setAttribute('data-ster', String(idx));

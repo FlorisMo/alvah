@@ -52,11 +52,13 @@ export const NL = {
     },
     zoeken: {
       titel: 'Zoeken',
-      kort: 'Zoek de rode kikker tussen de groene.',
-      uitleg: 'Tik de rode kikker zo snel als je kunt. Let op: de andere kikkers zijn groen.',
-      jouwBeurt: 'Zoek de rode',
+      kort: 'Zoek de rode kikker met de kroon.',
+      uitleg: 'Zoek de rode kikker met de gouden kroon. Let op: er zijn ook rode kikkers zonder kroon en groene kikkers met kroon. Alleen de rode met kroon is goed.',
+      uitlegWarmup: 'We beginnen rustig: tik de rode kikker.',
+      jouwBeurtWarmup: 'Zoek de rode',
+      jouwBeurt: 'Zoek de rode met kroon',
       goed: 'Gevonden',
-      fout: 'Dat was een groene',
+      fout: 'Die was het niet',
       setSize: 'Aantal kikkers',
     },
     corsi: {

@@ -18,9 +18,11 @@ import { NL } from '../../scripts/strings.nl.js';
       <h2 class="zoek-scherm__titel">{NL.spel.zoeken.titel}</h2>
       <p class="zoek-scherm__lede">{NL.spel.zoeken.uitleg}</p>
       <div class="zoek-voorbeeld" aria-hidden="true">
-        <svg viewBox="0 0 60 60" class="zoek-kikker zoek-kikker--doel"><use href="#kikker-icon"/></svg>
+        <svg viewBox="0 0 60 60" class="zoek-voorbeeld__kikker">
+          <use href="#kikker-kroon" color="var(--zoek-target)"/>
+        </svg>
         <span class="zoek-voorbeeld__pijl">←</span>
-        <span class="zoek-voorbeeld__tekst">Tik deze</span>
+        <span class="zoek-voorbeeld__tekst">Rode kikker met kroon</span>
       </div>
       <button type="button" class="spel-btn" data-actie="start">{NL.start}</button>
     </section>
@@ -33,8 +35,7 @@ import { NL } from '../../scripts/strings.nl.js';
       <div class="zoek-veld" data-veld>
         <svg viewBox="0 0 400 400" class="zoek-svg" data-svg xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Zoekveld">
           <defs>
-            <symbol id="kikker-icon" viewBox="0 0 60 60">
-              <!-- Kikker: lichaam + 2 ogen + 2 pootjes -->
+            <symbol id="kikker-plain" viewBox="0 0 60 60">
               <ellipse cx="30" cy="36" rx="20" ry="15" fill="currentColor"/>
               <circle cx="20" cy="20" r="8" fill="currentColor"/>
               <circle cx="40" cy="20" r="8" fill="currentColor"/>
@@ -42,6 +43,16 @@ import { NL } from '../../scripts/strings.nl.js';
               <circle cx="40" cy="20" r="3" fill="#1a1a1a"/>
               <ellipse cx="10" cy="48" rx="6" ry="3" fill="currentColor"/>
               <ellipse cx="50" cy="48" rx="6" ry="3" fill="currentColor"/>
+            </symbol>
+            <symbol id="kikker-kroon" viewBox="0 0 60 60">
+              <ellipse cx="30" cy="36" rx="20" ry="15" fill="currentColor"/>
+              <circle cx="20" cy="20" r="8" fill="currentColor"/>
+              <circle cx="40" cy="20" r="8" fill="currentColor"/>
+              <circle cx="20" cy="20" r="3" fill="#1a1a1a"/>
+              <circle cx="40" cy="20" r="3" fill="#1a1a1a"/>
+              <ellipse cx="10" cy="48" rx="6" ry="3" fill="currentColor"/>
+              <ellipse cx="50" cy="48" rx="6" ry="3" fill="currentColor"/>
+              <path d="M16 11 L21 3 L26 9 L30 1 L34 9 L39 3 L44 11 L44 14 L16 14 Z" fill="#f5c23b" stroke="#b68d18" stroke-width="1.2" stroke-linejoin="round"/>
             </symbol>
           </defs>
           <rect x="0" y="0" width="400" height="400" fill="var(--zoek-bg)" rx="18"/>
@@ -116,10 +127,10 @@ import { NL } from '../../scripts/strings.nl.js';
     font-size: 0.92rem;
   }
   .zoek-voorbeeld__pijl { color: var(--ink-muted); }
-  .zoek-kikker--doel {
-    width: 44px;
-    height: 44px;
-    color: var(--zoek-target);
+  .zoek-voorbeeld__kikker {
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
   }
 
   .zoek-meter {
@@ -242,9 +253,16 @@ import { NL } from '../../scripts/strings.nl.js';
   const ITI_MS = 350;
   const KIKKER_W = 36;
 
+  type Mode = 'feature' | 'conjunction';
+  // feature-mode: alleen kleur-verschil (pop-out). Als warmup in eerste 2 trials.
+  // conjunction-mode: rode-met-kroon zoeken tussen {rood-zonder, groen-met,
+  // groen-zonder}. Echte visual search, geen pop-out meer.
+  const WARMUP_TRIALS = 2;
+
   type Trial = {
     i: number;
     setSize: number;
+    mode: Mode;
     correct: boolean;
     rt: number;
     falseAlarms: number;
@@ -277,6 +295,7 @@ import { NL } from '../../scripts/strings.nl.js';
     let trialStart = 0;
     let currentTarget = -1;
     let currentFalseAlarms = 0;
+    let currentMode: Mode = 'feature';
     let accepting = false;
 
     root.querySelector<HTMLButtonElement>('[data-actie="start"]')!
@@ -316,14 +335,17 @@ import { NL } from '../../scripts/strings.nl.js';
       setSizeEl.textContent = String(setSize);
       currentFalseAlarms = 0;
       currentTarget = Math.floor(Math.random() * setSize);
-      renderVeld(setSize, currentTarget);
+      currentMode = trials.length < WARMUP_TRIALS ? 'feature' : 'conjunction';
+      renderVeld(setSize, currentTarget, currentMode);
       veldEl.classList.remove('is-correct', 'is-fout');
-      statusEl.textContent = NL.spel.zoeken.jouwBeurt;
+      statusEl.textContent = currentMode === 'feature'
+        ? NL.spel.zoeken.jouwBeurtWarmup
+        : NL.spel.zoeken.jouwBeurt;
       accepting = true;
       trialStart = now();
     }
 
-    function renderVeld(setSize: number, targetIdx: number) {
+    function renderVeld(setSize: number, targetIdx: number, mode: Mode) {
       // Wis oude kikkers (alles behalve de background rect en defs).
       for (const el of Array.from(svg.querySelectorAll('.zoek-kikker'))) {
         el.remove();
@@ -331,22 +353,45 @@ import { NL } from '../../scripts/strings.nl.js';
 
       const posities = jitteredGrid(setSize);
       posities.forEach((p, idx) => {
+        const isTarget = idx === targetIdx;
+        const kind = kikkerKind(isTarget, mode);
         const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-        use.setAttribute('href', '#kikker-icon');
+        use.setAttribute('href', kind.hasKroon ? '#kikker-kroon' : '#kikker-plain');
         use.setAttribute('x', String(p.x - KIKKER_W / 2));
         use.setAttribute('y', String(p.y - KIKKER_W / 2));
         use.setAttribute('width', String(KIKKER_W));
         use.setAttribute('height', String(KIKKER_W));
-        const isTarget = idx === targetIdx;
         use.setAttribute('class', 'zoek-kikker');
-        use.setAttribute('color', isTarget ? 'var(--zoek-target)' : 'var(--zoek-distractor)');
+        use.setAttribute('color', kind.isRood ? 'var(--zoek-target)' : 'var(--zoek-distractor)');
         use.setAttribute('data-target', isTarget ? '1' : '0');
         use.setAttribute('tabindex', '-1');
         use.setAttribute('role', 'button');
-        use.setAttribute('aria-label', isTarget ? 'Rode kikker' : 'Groene kikker');
+        use.setAttribute('aria-label', kikkerLabel(kind));
         use.addEventListener('click', () => onKikkerClick(isTarget));
         svg.appendChild(use);
       });
+    }
+
+    // Bepaal hoe deze kikker eruit ziet.
+    // - feature-mode: target = rood-plain, rest = groen-plain
+    // - conjunction-mode: target = rood-met-kroon, distractors = random uit
+    //   {rood-plain, groen-kroon, groen-plain} (alle drie delen max 1 feature
+    //   met de target)
+    function kikkerKind(isTarget: boolean, mode: Mode): { isRood: boolean; hasKroon: boolean } {
+      if (mode === 'feature') {
+        return isTarget ? { isRood: true, hasKroon: false } : { isRood: false, hasKroon: false };
+      }
+      if (isTarget) return { isRood: true, hasKroon: true };
+      const pick = Math.floor(Math.random() * 3);
+      if (pick === 0) return { isRood: true, hasKroon: false };
+      if (pick === 1) return { isRood: false, hasKroon: true };
+      return { isRood: false, hasKroon: false };
+    }
+
+    function kikkerLabel(k: { isRood: boolean; hasKroon: boolean }): string {
+      const kleur = k.isRood ? 'Rode' : 'Groene';
+      const extra = k.hasKroon ? ' met kroon' : '';
+      return kleur + ' kikker' + extra;
     }
 
     function onKikkerClick(isTarget: boolean) {
@@ -357,6 +402,7 @@ import { NL } from '../../scripts/strings.nl.js';
         trials.push({
           i: trials.length + 1,
           setSize: staircase.level,
+          mode: currentMode,
           correct: true,
           rt,
           falseAlarms: currentFalseAlarms,
@@ -371,23 +417,25 @@ import { NL } from '../../scripts/strings.nl.js';
         }, FEEDBACK_MS);
       } else {
         // False alarm: blijft binnen trial, staircase nog niet geraakt.
-        // Pas als gebruiker de target wél vindt sluit de trial; als de sessie
-        // aan tijd/trials-limiet komt zonder target, registreer als fout.
+        // Pas bij 3 false-alarms of een correcte tik sluit de trial.
         currentFalseAlarms += 1;
         veldEl.classList.add('is-fout');
         statusEl.textContent = NL.spel.zoeken.fout;
+        const herstelTekst = currentMode === 'feature'
+          ? NL.spel.zoeken.jouwBeurtWarmup
+          : NL.spel.zoeken.jouwBeurt;
         setTimeout(() => {
           veldEl.classList.remove('is-fout');
-          statusEl.textContent = NL.spel.zoeken.jouwBeurt;
+          statusEl.textContent = herstelTekst;
         }, 350);
 
         if (currentFalseAlarms >= 3) {
-          // Te veel fouten op één trial: registreer als incorrect en ga door.
           accepting = false;
           const rt = Math.round(now() - trialStart);
           trials.push({
             i: trials.length + 1,
             setSize: staircase.level,
+            mode: currentMode,
             correct: false,
             rt,
             falseAlarms: currentFalseAlarms,
