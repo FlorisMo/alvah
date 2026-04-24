@@ -1,0 +1,540 @@
+---
+// Paradigma-referentie: Corsi Block Tapping (Corsi 1972; Kessels et al. 2000).
+// @jspsych-contrib/plugin-corsi-blocks (MIT) als informatiebron over timing en
+// interactie-volgorde. Implementatie onafhankelijk geschreven.
+import SpelShell from '../../layouts/SpelShell.astro';
+import { NL } from '../../scripts/strings.nl.js';
+---
+<SpelShell
+  title="Corsi — Spelen"
+  description="Corsi-blokkenspel voor Alvah."
+  spelTitel={NL.spel.corsi.titel}
+  instructie={NL.spel.corsi.uitleg}
+>
+  <div class="corsi" data-corsi>
+    <!-- Start-scherm -->
+    <section class="corsi-scherm" data-scherm="start">
+      <h2 class="corsi-scherm__titel">{NL.spel.corsi.titel}</h2>
+      <p class="corsi-scherm__lede">{NL.spel.corsi.uitleg}</p>
+      <button type="button" class="spel-btn" data-actie="start">{NL.start}</button>
+    </section>
+
+    <!-- Spel-scherm -->
+    <section class="corsi-scherm" data-scherm="spelen" hidden>
+      <div class="corsi-meter">
+        <div class="corsi-meter__label">Rij</div>
+        <div class="corsi-meter__waarde" data-span>2</div>
+      </div>
+      <div class="corsi-veld" aria-label="Sterrenveld">
+        <svg viewBox="0 0 400 400" class="corsi-svg" data-corsi-svg xmlns="http://www.w3.org/2000/svg" role="group">
+          <rect x="0" y="0" width="400" height="400" fill="var(--corsi-bg)" rx="18" />
+        </svg>
+      </div>
+      <p class="corsi-status" data-status role="status" aria-live="polite">{NL.spel.corsi.kijkGoed}</p>
+    </section>
+
+    <!-- Nog een keer? -->
+    <section class="corsi-scherm" data-scherm="retry" hidden>
+      <h2 class="corsi-scherm__titel">{NL.nogEenKeer}?</h2>
+      <p class="corsi-scherm__lede">Vorige rij was <span data-retry-span>—</span>.</p>
+      <div class="corsi-keuze">
+        <button type="button" class="spel-btn" data-actie="retry">{NL.nogEenKeer}</button>
+        <button type="button" class="spel-btn spel-btn--ghost" data-actie="stop">{NL.klaar}</button>
+      </div>
+    </section>
+
+    <!-- Einde-scherm -->
+    <section class="corsi-scherm" data-scherm="einde" hidden>
+      <h2 class="corsi-scherm__titel">{NL.goedBezig}</h2>
+      <p class="corsi-scherm__lede" data-einde-bericht hidden></p>
+      <dl class="corsi-einde">
+        <div>
+          <dt>{NL.spel.corsi.hoogsteRij}</dt>
+          <dd data-einde-span>—</dd>
+        </div>
+        <div>
+          <dt>Correct</dt>
+          <dd><span data-einde-correct>—</span> / <span data-einde-total>—</span></dd>
+        </div>
+      </dl>
+      <div class="corsi-sparkline" data-sparkline-wrap hidden>
+        <div class="corsi-sparkline__label">Laatste tien keer</div>
+        <svg viewBox="0 0 120 30" class="corsi-sparkline__svg" aria-hidden="true" data-sparkline></svg>
+      </div>
+      <a href="/spelen" class="spel-btn">{NL.klaar}</a>
+    </section>
+  </div>
+</SpelShell>
+
+<style>
+  .corsi { width: 100%; max-width: 560px; }
+
+  :root {
+    --corsi-bg: #111c2c;
+    --corsi-ster: #9ba9c4;
+    --corsi-ster-hover: #c5cee0;
+    --corsi-aktief: var(--spel-sun);
+    --corsi-goed: #7fd17f;
+    --corsi-fout: #e07b7b;
+  }
+
+  .corsi-scherm {
+    display: grid;
+    gap: 20px;
+    justify-items: center;
+    text-align: center;
+  }
+  .corsi-scherm[hidden] { display: none !important; }
+
+  .corsi-scherm__titel {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: clamp(1.6rem, 3vw, 2rem);
+    margin: 0;
+  }
+
+  .corsi-scherm__lede {
+    color: var(--ink-soft);
+    max-width: 40ch;
+    margin: 0;
+  }
+
+  .corsi-meter {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .corsi-meter__label {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+  }
+
+  .corsi-meter__waarde {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 1.6rem;
+    color: var(--ink);
+  }
+
+  .corsi-veld {
+    width: min(420px, 86vw);
+    aspect-ratio: 1/1;
+    border-radius: 20px;
+    overflow: hidden;
+    background: var(--corsi-bg);
+    border: 1px solid var(--line);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .corsi-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .corsi-ster {
+    cursor: pointer;
+    transition: fill 0.15s ease, transform 0.12s ease, filter 0.15s ease;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .corsi-ster.is-clickable:hover { fill: var(--corsi-ster-hover); }
+  .corsi-ster.is-aktief {
+    fill: var(--corsi-aktief);
+    filter: drop-shadow(0 0 6px var(--corsi-aktief));
+  }
+  .corsi-ster.is-goed { fill: var(--corsi-goed); }
+  .corsi-ster.is-fout { fill: var(--corsi-fout); }
+
+  .corsi-status {
+    color: var(--ink-soft);
+    min-height: 1.5em;
+    margin: 0;
+  }
+
+  .corsi-keuze {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .corsi-einde {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 32px;
+    margin: 0;
+  }
+  .corsi-einde div { display: grid; gap: 4px; }
+  .corsi-einde dt {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-muted);
+  }
+  .corsi-einde dd {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 1.5rem;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .corsi-sparkline {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+  }
+  .corsi-sparkline__label {
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .corsi-sparkline__svg {
+    width: 120px;
+    height: 30px;
+    stroke: var(--spel-magenta);
+    stroke-width: 1.5;
+    fill: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .corsi-ster, .corsi-ster.is-aktief {
+      transition: none;
+      filter: none !important;
+    }
+    .corsi-ster.is-aktief {
+      stroke: var(--spel-sun);
+      stroke-width: 3;
+    }
+  }
+</style>
+
+<script>
+  import { now } from '../../scripts/timer.js';
+  import { summarize } from '../../scripts/scoring.js';
+  import { saveSession, load } from '../../scripts/storage.js';
+  import { create as makeStaircase, onTrial as stepStaircase } from '../../scripts/staircase.js';
+  import { tone } from '../../scripts/audio.js';
+  import { NL } from '../../scripts/strings.nl.js';
+
+  // Negen sterren op vaste, onregelmatige posities in 400x400.
+  // Posities zijn bewust asymmetrisch (Corsi-traditie: voorkomt ruimtelijke patronen).
+  const POSITIES = [
+    { x:  80, y:  70 },
+    { x: 260, y:  55 },
+    { x: 350, y: 150 },
+    { x: 140, y: 180 },
+    { x: 310, y: 260 },
+    { x:  70, y: 240 },
+    { x: 230, y: 330 },
+    { x: 330, y: 360 },
+    { x: 170, y:  50 },
+  ];
+
+  const FLASH_MS = 900;
+  const GAP_MS = 250;
+  const TAP_FLASH_MS = 250;
+  const MIN_SPAN = 2;
+  const MAX_SPAN = 9;
+  const MAX_TRIALS = 12;
+  const MAX_SESSION_MS = 4 * 60 * 1000;
+  // Tonen per positie — zachte pentatoniek zodat elke volgorde prettig klinkt.
+  const FREQS = [262, 294, 330, 349, 392, 440, 494, 523, 587];
+
+  type SchermId = 'start' | 'spelen' | 'retry' | 'einde';
+  type Trial = {
+    i: number;
+    span: number;
+    correct: boolean;
+    rt: number;
+    sequence: number[];
+    response: number[];
+  };
+
+  const root = document.querySelector<HTMLElement>('[data-corsi]');
+  if (root) initCorsi(root);
+
+  function initCorsi(root: HTMLElement) {
+    const schermen: Record<SchermId, HTMLElement> = {
+      start: root.querySelector<HTMLElement>('[data-scherm="start"]')!,
+      spelen: root.querySelector<HTMLElement>('[data-scherm="spelen"]')!,
+      retry: root.querySelector<HTMLElement>('[data-scherm="retry"]')!,
+      einde: root.querySelector<HTMLElement>('[data-scherm="einde"]')!,
+    };
+    const spanEl = root.querySelector<HTMLElement>('[data-span]')!;
+    const statusEl = root.querySelector<HTMLElement>('[data-status]')!;
+    const svg = root.querySelector<SVGElement>('[data-corsi-svg]')!;
+    const retrySpanEl = root.querySelector<HTMLElement>('[data-retry-span]')!;
+    const eindeBerichtEl = root.querySelector<HTMLElement>('[data-einde-bericht]')!;
+    const eindeSpanEl = root.querySelector<HTMLElement>('[data-einde-span]')!;
+    const eindeCorrectEl = root.querySelector<HTMLElement>('[data-einde-correct]')!;
+    const eindeTotalEl = root.querySelector<HTMLElement>('[data-einde-total]')!;
+    const sparklineWrap = root.querySelector<HTMLElement>('[data-sparkline-wrap]')!;
+    const sparklineSvg = root.querySelector<SVGElement>('[data-sparkline]')!;
+
+    // Render sterren als SVG-polygonen.
+    const sterren: SVGElement[] = POSITIES.map((p, idx) => {
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      el.setAttribute('points', sterPunten(p.x, p.y, 20, 8));
+      el.setAttribute('fill', 'var(--corsi-ster)');
+      el.setAttribute('class', 'corsi-ster');
+      el.setAttribute('data-ster', String(idx));
+      el.setAttribute('tabindex', '-1');
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', `Ster ${idx + 1}`);
+      svg.appendChild(el);
+      return el;
+    });
+
+    let staircase = makeStaircase({ level: MIN_SPAN, min: MIN_SPAN, max: MAX_SPAN });
+    let sequence: number[] = [];
+    let userSeq: number[] = [];
+    let userPos = 0;
+    let trials: Trial[] = [];
+    let sessionStart = 0;
+    let rtStart = 0;
+    let trialRT = -1;
+    let clickable = false;
+    let gecaped = false;
+
+    root.querySelector<HTMLButtonElement>('[data-actie="start"]')!
+      .addEventListener('click', startSession);
+    root.querySelector<HTMLButtonElement>('[data-actie="retry"]')!
+      .addEventListener('click', onRetry);
+    root.querySelector<HTMLButtonElement>('[data-actie="stop"]')!
+      .addEventListener('click', () => endSession());
+
+    for (const s of sterren) {
+      s.addEventListener('click', () => {
+        if (!clickable) return;
+        onSterClick(parseInt(s.getAttribute('data-ster') || '0', 10));
+      });
+    }
+
+    document.addEventListener('spel:te-moeilijk', () => {
+      if (schermen.spelen.hidden) return;
+      disableClicks();
+      staircase = { ...staircase, level: Math.max(MIN_SPAN, staircase.level - 1), consecCorrect: 0, consecWrong: 0 };
+      statusEl.textContent = NL.spel.corsi.ietsKorter;
+      setTimeout(newTrial, 400);
+    });
+    document.addEventListener('spel:pauze', () => {
+      if (trials.length > 0 && schermen.einde.hidden) {
+        endSession();
+      } else {
+        window.location.href = '/spelen';
+      }
+    });
+
+    function toon(id: SchermId) {
+      (Object.keys(schermen) as SchermId[]).forEach((k) => (schermen[k].hidden = k !== id));
+    }
+
+    function startSession() {
+      toon('spelen');
+      sessionStart = now();
+      staircase = makeStaircase({ level: MIN_SPAN, min: MIN_SPAN, max: MAX_SPAN });
+      trials = [];
+      gecaped = false;
+      newTrial();
+    }
+
+    function newTrial() {
+      if (now() - sessionStart > MAX_SESSION_MS || trials.length >= MAX_TRIALS) {
+        endSession();
+        return;
+      }
+      const span = staircase.level;
+      if (span >= MAX_SPAN && staircase.consecCorrect > 0) {
+        gecaped = true;
+      }
+      spanEl.textContent = String(span);
+      statusEl.textContent = NL.spel.corsi.kijkGoed;
+      sequence = trekSequentie(span);
+      userSeq = [];
+      userPos = 0;
+      trialRT = -1;
+      resetSterren();
+      disableClicks();
+      void playSequence().then(() => {
+        enableClicks();
+        rtStart = now();
+        statusEl.textContent = NL.spel.corsi.jouwBeurt;
+      });
+    }
+
+    async function playSequence() {
+      await wait(500);
+      for (const idx of sequence) {
+        await flash(idx, FLASH_MS);
+        await wait(GAP_MS);
+      }
+    }
+
+    function flash(idx: number, duration: number) {
+      return new Promise<void>((resolve) => {
+        const s = sterren[idx];
+        tone(FREQS[idx] || 440, Math.min(duration, 600), 0.18);
+        s.classList.add('is-aktief');
+        setTimeout(() => {
+          s.classList.remove('is-aktief');
+          resolve();
+        }, duration);
+      });
+    }
+
+    function wait(ms: number) {
+      return new Promise<void>((r) => setTimeout(r, ms));
+    }
+
+    function resetSterren() {
+      for (const s of sterren) {
+        s.classList.remove('is-aktief', 'is-goed', 'is-fout', 'is-clickable');
+      }
+    }
+    function enableClicks() {
+      clickable = true;
+      for (const s of sterren) s.classList.add('is-clickable');
+    }
+    function disableClicks() {
+      clickable = false;
+      for (const s of sterren) s.classList.remove('is-clickable');
+    }
+
+    function onSterClick(idx: number) {
+      if (trialRT === -1) trialRT = Math.round(now() - rtStart);
+      void flash(idx, TAP_FLASH_MS);
+      const expected = sequence[userPos];
+      userSeq.push(idx);
+
+      if (idx === expected) {
+        userPos += 1;
+        if (userPos === sequence.length) {
+          disableClicks();
+          registerTrial(true);
+        }
+      } else {
+        disableClicks();
+        sterren[idx].classList.add('is-fout');
+        registerTrial(false);
+      }
+    }
+
+    function registerTrial(correct: boolean) {
+      const span = staircase.level;
+      trials.push({
+        i: trials.length + 1,
+        span,
+        correct,
+        rt: trialRT,
+        sequence: sequence.slice(),
+        response: userSeq.slice(),
+      });
+
+      if (correct) {
+        statusEl.textContent = NL.spel.corsi.goed;
+        staircase = stepStaircase(staircase, true);
+        setTimeout(newTrial, 650);
+      } else {
+        staircase = stepStaircase(staircase, false);
+        setTimeout(showRetry, 650);
+      }
+    }
+
+    function showRetry() {
+      retrySpanEl.textContent = String(trials[trials.length - 1]?.span ?? staircase.level);
+      toon('retry');
+    }
+
+    function onRetry() {
+      toon('spelen');
+      newTrial();
+    }
+
+    function endSession() {
+      const duration = Math.round(now() - sessionStart);
+      const sum = summarize(trials);
+      const maxSpan = trials.filter((t) => t.correct).reduce((m, t) => Math.max(m, t.span), 0);
+      const sessionObj = {
+        id: 's_' + Math.random().toString(36).slice(2, 10),
+        date: new Date().toISOString(),
+        level: maxSpan || MIN_SPAN,
+        durationMs: duration,
+        trials: trials.slice(),
+        summary: { ...sum, maxSpan },
+      };
+      saveSession('corsi', sessionObj);
+
+      toon('einde');
+      if (gecaped) {
+        eindeBerichtEl.textContent = NL.spel.corsi.eindeCap;
+        eindeBerichtEl.hidden = false;
+      }
+      eindeSpanEl.textContent = maxSpan > 0 ? String(maxSpan) : '—';
+      eindeCorrectEl.textContent = String(trials.filter((t) => t.correct).length);
+      eindeTotalEl.textContent = String(trials.length);
+
+      renderSparkline();
+    }
+
+    function renderSparkline() {
+      let data;
+      try { data = load(); } catch { return; }
+      if (!data.preferences || data.preferences.sparklineInEinde === false) return;
+      const sessions = (data.exercises.corsi.sessions || []).slice(-10);
+      if (sessions.length < 2) return;
+      const values = sessions.map((s: any) =>
+        (s.summary && typeof s.summary.maxSpan === 'number') ? s.summary.maxSpan : 0,
+      );
+      const max = Math.max(...values, 1);
+      const w = 120;
+      const h = 30;
+      const pts = values.map((v: number, i: number) => {
+        const x = (i / (values.length - 1)) * (w - 4) + 2;
+        const y = h - (v / max) * (h - 6) - 3;
+        return { x: +x.toFixed(1), y: +y.toFixed(1) };
+      });
+      const poly = pts.map((p: {x:number;y:number}) => `${p.x},${p.y}`).join(' ');
+      const circles = pts.map(
+        (p: {x:number;y:number}) => `<circle cx="${p.x}" cy="${p.y}" r="1.8" fill="var(--spel-magenta)"/>`,
+      ).join('');
+      sparklineSvg.innerHTML =
+        `<polyline points="${poly}" fill="none" stroke="var(--spel-magenta)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${circles}`;
+      sparklineWrap.hidden = false;
+    }
+  }
+
+  // Trek een sequentie van lengte `span` waarin geen twee opeenvolgende
+  // posities dezelfde zijn. Binnen één trial mogen posities herhaald worden
+  // (klassieke Corsi), maar nooit direct achter elkaar.
+  function trekSequentie(span: number): number[] {
+    const n = 9;
+    const out: number[] = [];
+    let vorige = -1;
+    for (let i = 0; i < span; i++) {
+      let k = Math.floor(Math.random() * n);
+      if (k === vorige) k = (k + 1) % n;
+      out.push(k);
+      vorige = k;
+    }
+    return out;
+  }
+
+  // Vijfpuntige ster als SVG-polygon.
+  function sterPunten(cx: number, cy: number, rOuter: number, rInner: number): string {
+    const pts: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? rOuter : rInner;
+      const a = (Math.PI / 5) * i - Math.PI / 2;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    }
+    return pts.join(' ');
+  }
+</script>

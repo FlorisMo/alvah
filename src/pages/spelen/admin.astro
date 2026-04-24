@@ -1,0 +1,441 @@
+---
+// Admin-overzicht. Toont per spel sparkline + laatste sessies, plus knoppen
+// om de volledige JSON te kopiëren/downloaden/importeren/wissen.
+// Alles client-side; geen endpoint, geen netwerk.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/spelen.css';
+import { NL } from '../../scripts/strings.nl.js';
+
+const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; titel: string }[] = [
+  { id: 'simon',     titel: NL.spel.simon.titel },
+  { id: 'corsi',     titel: NL.spel.corsi.titel },
+  { id: 'day-night', titel: NL.spel['day-night'].titel },
+  { id: 'zoeken',    titel: NL.spel.zoeken.titel },
+  { id: 'wisselen',  titel: NL.spel.wisselen.titel },
+];
+---
+<BaseLayout
+  title="Admin — Spelen"
+  description="Overzicht van spel-sessies. Alles lokaal in deze browser."
+>
+  <section>
+    <a href="/spelen" class="admin-terug">← {NL.terugNaarSpelen}</a>
+    <h1>{NL.admin.titel}</h1>
+    <p class="lede">{NL.admin.lede}</p>
+  </section>
+
+  <section class="admin-overzicht">
+    <h2 class="section-head"><span class="num">1</span>{NL.admin.dezeWeek}</h2>
+    <div class="admin-kpi">
+      <div class="admin-kpi__blok">
+        <div class="admin-kpi__label">{NL.admin.minutenGespeeld}</div>
+        <div class="admin-kpi__waarde" data-kpi-minuten>—</div>
+      </div>
+      <div class="admin-kpi__blok">
+        <div class="admin-kpi__label">{NL.admin.sessiesTotaal}</div>
+        <div class="admin-kpi__waarde" data-kpi-sessies>—</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">2</span>Per spel</h2>
+    <div class="admin-spel-grid">
+      {spellen.map((s) => (
+        <article class="admin-spel" data-admin-spel={s.id}>
+          <header class="admin-spel__header">
+            <h3 class="admin-spel__titel">{s.titel}</h3>
+            <div class="admin-spel__meta" data-meta>—</div>
+          </header>
+          <svg viewBox="0 0 240 60" class="admin-sparkline" aria-hidden="true" data-sparkline></svg>
+          <div class="admin-spel__tabel-wrap">
+            <table class="admin-spel__tabel">
+              <thead>
+                <tr>
+                  <th>{NL.admin.datum}</th>
+                  <th>{NL.admin.niveau}</th>
+                  <th>{NL.admin.duur}</th>
+                  <th>{NL.admin.accuracy}</th>
+                  <th>{NL.admin.meanRT}</th>
+                </tr>
+              </thead>
+              <tbody data-tabel-body>
+                <tr><td colspan="5" class="admin-spel__leeg">{NL.admin.geenData}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">3</span>Data</h2>
+    <div class="admin-knoppen">
+      <button type="button" class="spel-btn" data-actie="kopieer">{NL.admin.kopieer}</button>
+      <button type="button" class="spel-btn spel-btn--ghost" data-actie="download">{NL.admin.download}</button>
+      <button type="button" class="spel-btn spel-btn--ghost" data-actie="importeer">{NL.admin.importeer}</button>
+      <button type="button" class="spel-btn spel-btn--muted admin-wis" data-actie="wis">{NL.admin.wisAlles}</button>
+    </div>
+    <p class="admin-feedback" data-feedback role="status" aria-live="polite"></p>
+    <details class="admin-json">
+      <summary>JSON (lees-only)</summary>
+      <pre class="admin-json__pre" data-json-pre></pre>
+    </details>
+    <input type="file" accept="application/json" data-import-input hidden />
+  </section>
+
+  <style>
+    .admin-terug {
+      display: inline-block;
+      color: var(--ink-soft);
+      text-decoration-color: var(--line);
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+    }
+    .admin-terug:hover {
+      color: var(--green);
+      text-decoration-color: var(--green);
+    }
+
+    .admin-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 36px;
+    }
+    .admin-kpi__blok {
+      padding: 18px 20px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--spel-radius);
+    }
+    .admin-kpi__label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ink-muted);
+      margin-bottom: 4px;
+    }
+    .admin-kpi__waarde {
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 1.8rem;
+      color: var(--ink);
+    }
+
+    .admin-spel-grid {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 36px;
+    }
+    .admin-spel {
+      padding: 20px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--spel-radius);
+    }
+    .admin-spel__header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .admin-spel__titel {
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 1.15rem;
+      color: var(--ink);
+      margin: 0;
+    }
+    .admin-spel__meta {
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+    }
+
+    .admin-sparkline {
+      width: 100%;
+      max-width: 360px;
+      height: 60px;
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    .admin-spel__tabel-wrap {
+      overflow-x: auto;
+    }
+    .admin-spel__tabel {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    .admin-spel__tabel th,
+    .admin-spel__tabel td {
+      text-align: left;
+      padding: 6px 10px 6px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .admin-spel__tabel th {
+      font-weight: 500;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.75rem;
+    }
+    .admin-spel__tabel td {
+      color: var(--ink);
+    }
+    .admin-spel__leeg {
+      color: var(--ink-muted);
+      font-style: italic;
+    }
+
+    .admin-knoppen {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .admin-feedback {
+      min-height: 1.4em;
+      color: var(--green);
+      font-size: 0.9rem;
+      margin: 0 0 14px;
+    }
+    .admin-feedback.is-fout { color: #a33; }
+
+    .admin-wis {
+      margin-left: auto;
+    }
+
+    .admin-json {
+      margin-top: 8px;
+    }
+    .admin-json summary {
+      cursor: pointer;
+      color: var(--ink-soft);
+      font-size: 0.9rem;
+    }
+    .admin-json__pre {
+      background: var(--line-soft);
+      border: 1px solid var(--line);
+      border-radius: var(--spel-radius);
+      padding: 14px 16px;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      max-height: 360px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+
+  <script>
+    import { load, exportJSON, importJSON, clearAll } from '../../scripts/storage.js';
+
+    type SpelId = 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen';
+
+    const DAG_MS = 24 * 60 * 60 * 1000;
+    const WEEK_MS = 7 * DAG_MS;
+
+    init();
+
+    function init() {
+      render();
+
+      const kopieerBtn = document.querySelector<HTMLButtonElement>('[data-actie="kopieer"]')!;
+      const downloadBtn = document.querySelector<HTMLButtonElement>('[data-actie="download"]')!;
+      const importeerBtn = document.querySelector<HTMLButtonElement>('[data-actie="importeer"]')!;
+      const wisBtn = document.querySelector<HTMLButtonElement>('[data-actie="wis"]')!;
+      const importInput = document.querySelector<HTMLInputElement>('[data-import-input]')!;
+
+      kopieerBtn.addEventListener('click', onKopieer);
+      downloadBtn.addEventListener('click', onDownload);
+      importeerBtn.addEventListener('click', () => importInput.click());
+      importInput.addEventListener('change', onImportFile);
+      wisBtn.addEventListener('click', onWis);
+    }
+
+    function render() {
+      const data = load();
+
+      // KPI — deze week
+      const nu = Date.now();
+      let minuten = 0;
+      let sessiesN = 0;
+      for (const id of Object.keys(data.exercises) as SpelId[]) {
+        const sess = (data.exercises[id].sessions || []) as any[];
+        for (const s of sess) {
+          const tt = s.date ? new Date(s.date).getTime() : 0;
+          if (nu - tt <= WEEK_MS) {
+            sessiesN += 1;
+            if (typeof s.durationMs === 'number') minuten += s.durationMs / 60000;
+          }
+        }
+      }
+      document.querySelector<HTMLElement>('[data-kpi-minuten]')!.textContent =
+        minuten >= 10 ? Math.round(minuten) + '' : minuten.toFixed(1);
+      document.querySelector<HTMLElement>('[data-kpi-sessies]')!.textContent = String(sessiesN);
+
+      // Per spel
+      const artikelen = Array.from(document.querySelectorAll<HTMLElement>('[data-admin-spel]'));
+      for (const art of artikelen) {
+        const id = art.getAttribute('data-admin-spel') as SpelId;
+        const ex = data.exercises[id];
+        const sessions = (ex?.sessions || []) as any[];
+        const metaEl = art.querySelector<HTMLElement>('[data-meta]')!;
+        const sparkEl = art.querySelector<SVGElement>('[data-sparkline]')!;
+        const bodyEl = art.querySelector<HTMLElement>('[data-tabel-body]')!;
+
+        if (!sessions.length) {
+          metaEl.textContent = '—';
+          sparkEl.innerHTML = '';
+          bodyEl.innerHTML = `<tr><td colspan="5" class="admin-spel__leeg">${escapeHtml('Nog geen sessies gespeeld.')}</td></tr>`;
+          continue;
+        }
+
+        const huidig = ex.currentLevel ?? '—';
+        const hoogst = ex.highestLevel ?? '—';
+        metaEl.textContent = `niveau ${huidig} · hoogst ${hoogst} · ${sessions.length} sessies`;
+
+        renderSparkline(sparkEl, id, sessions);
+        renderTabel(bodyEl, sessions);
+      }
+
+      // JSON-preview
+      const pre = document.querySelector<HTMLPreElement>('[data-json-pre]')!;
+      pre.textContent = exportJSON();
+    }
+
+    function renderSparkline(svg: SVGElement, spelId: SpelId, sessions: any[]) {
+      const last = sessions.slice(-20);
+      if (last.length < 2) {
+        svg.innerHTML = '';
+        return;
+      }
+      // Corsi/Simon: maxSpan; Day-Night/Zoeken/Wisselen: accuracy.
+      const useSpan = spelId === 'simon' || spelId === 'corsi';
+      const values = last.map((s) => {
+        if (useSpan) return (s.summary && typeof s.summary.maxSpan === 'number') ? s.summary.maxSpan : 0;
+        return (s.summary && typeof s.summary.accuracy === 'number') ? s.summary.accuracy : 0;
+      });
+      const max = Math.max(...values, useSpan ? 1 : 0.01);
+      const w = 240;
+      const h = 60;
+      const pts = values.map((v, i) => {
+        const x = (i / (values.length - 1)) * (w - 8) + 4;
+        const y = h - (v / max) * (h - 12) - 6;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      });
+      const color = colorFor(spelId);
+      svg.innerHTML =
+        `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>` +
+        values.map((v, i) => {
+          const x = (i / (values.length - 1)) * (w - 8) + 4;
+          const y = h - (v / max) * (h - 12) - 6;
+          return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" fill="${color}"/>`;
+        }).join('');
+    }
+
+    function renderTabel(body: HTMLElement, sessions: any[]) {
+      const last = sessions.slice(-10).reverse();
+      const rows = last.map((s) => {
+        const date = s.date ? new Date(s.date) : null;
+        const dateStr = date ? date.toLocaleString('nl-NL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+        const niveau = s.summary && typeof s.summary.maxSpan === 'number' ? s.summary.maxSpan : (s.level ?? '—');
+        const duur = typeof s.durationMs === 'number' ? Math.round(s.durationMs / 1000) + ' s' : '—';
+        const acc = s.summary && typeof s.summary.accuracy === 'number' ? Math.round(s.summary.accuracy * 100) + '%' : '—';
+        const rt = s.summary && typeof s.summary.meanRT === 'number' && s.summary.meanRT > 0 ? s.summary.meanRT + ' ms' : '—';
+        return `<tr><td>${escapeHtml(dateStr)}</td><td>${escapeHtml(String(niveau))}</td><td>${escapeHtml(duur)}</td><td>${escapeHtml(acc)}</td><td>${escapeHtml(rt)}</td></tr>`;
+      });
+      body.innerHTML = rows.join('');
+    }
+
+    function colorFor(id: SpelId): string {
+      switch (id) {
+        case 'simon': return '#2b5fb8';
+        case 'corsi': return '#c94174';
+        case 'day-night': return '#b68d18';
+        case 'zoeken': return '#ef7a1f';
+        case 'wisselen': return '#1e4d32';
+      }
+    }
+
+    async function onKopieer() {
+      const json = exportJSON();
+      try {
+        await navigator.clipboard.writeText(json);
+        feedback('Gekopieerd', false);
+      } catch {
+        feedback('Kopiëren niet gelukt — download in plaats daarvan', true);
+      }
+    }
+
+    function onDownload() {
+      const json = exportJSON();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const d = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `alvah-ef-v1-${d}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      feedback('Download gestart', false);
+    }
+
+    async function onImportFile(e: Event) {
+      const input = e.target as HTMLInputElement;
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const txt = await file.text();
+        const ok = importJSON(txt);
+        if (!ok) {
+          feedback('Ongeldige JSON', true);
+          return;
+        }
+        feedback('Geïmporteerd', false);
+        render();
+      } catch {
+        feedback('Ongeldige JSON', true);
+      } finally {
+        input.value = '';
+      }
+    }
+
+    function onWis() {
+      const ok1 = confirm('Zeker weten? Alle sessies worden gewist.');
+      if (!ok1) return;
+      const ok2 = confirm('Dit kan niet ongedaan worden. Doorgaan?');
+      if (!ok2) return;
+      clearAll();
+      feedback('Gewist', false);
+      render();
+    }
+
+    function feedback(msg: string, isFout: boolean) {
+      const el = document.querySelector<HTMLElement>('[data-feedback]')!;
+      el.textContent = msg;
+      el.classList.toggle('is-fout', isFout);
+      setTimeout(() => {
+        if (el.textContent === msg) el.textContent = '';
+      }, 4000);
+    }
+
+    function escapeHtml(s: string): string {
+      return s.replace(/[&<>"']/g, (c) => {
+        switch (c) {
+          case '&': return '&amp;';
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '"': return '&quot;';
+          default: return '&#39;';
+        }
+      });
+    }
+  </script>
+</BaseLayout>

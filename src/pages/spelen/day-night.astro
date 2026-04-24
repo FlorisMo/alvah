@@ -1,0 +1,508 @@
+---
+// Paradigma-referentie: Day-Night Stroop (Gerstadt, Hong & Diamond 1994).
+// Regel: zon → zeg NACHT, maan → zeg DAG. Meet inhibitie van een prepotent antwoord.
+// Onafhankelijk geschreven; geen jsPsych-plugin-referentie gebruikt.
+import SpelShell from '../../layouts/SpelShell.astro';
+import { NL } from '../../scripts/strings.nl.js';
+---
+<SpelShell
+  title="Dag & Nacht — Spelen"
+  description="Dag-Nacht Stroop voor Alvah."
+  spelTitel={NL.spel['day-night'].titel}
+  instructie={NL.spel['day-night'].uitleg}
+>
+  <div class="dn" data-dn>
+    <!-- Start-scherm -->
+    <section class="dn-scherm" data-scherm="start">
+      <h2 class="dn-scherm__titel">{NL.spel['day-night'].titel}</h2>
+      <p class="dn-scherm__lede">{NL.spel['day-night'].uitleg}</p>
+      <div class="dn-voorbeeld" aria-hidden="true">
+        <div class="dn-voorbeeld__item">
+          <svg viewBox="0 0 80 80" class="dn-stim dn-stim--zon"><circle cx="40" cy="40" r="18" /></svg>
+          <div class="dn-voorbeeld__arrow">→</div>
+          <div class="dn-voorbeeld__label">{NL.spel['day-night'].nacht}</div>
+        </div>
+        <div class="dn-voorbeeld__item">
+          <svg viewBox="0 0 80 80" class="dn-stim dn-stim--maan"><path d="M54 40 a18 18 0 1 1 -18 -18 a14 14 0 0 0 18 18z" /></svg>
+          <div class="dn-voorbeeld__arrow">→</div>
+          <div class="dn-voorbeeld__label">{NL.spel['day-night'].dag}</div>
+        </div>
+      </div>
+      <button type="button" class="spel-btn" data-actie="start">{NL.start}</button>
+    </section>
+
+    <!-- Spel-scherm -->
+    <section class="dn-scherm" data-scherm="spelen" hidden>
+      <div class="dn-ronde">
+        <span data-ronde-label>{NL.spel['day-night'].rondeVan(1, 3)}</span>
+        <span class="dn-progress">
+          <span class="dn-progress__bar" data-progress></span>
+        </span>
+      </div>
+
+      <div class="dn-stim-wrap" data-stim-wrap>
+        <svg viewBox="0 0 200 200" class="dn-stim dn-stim--groot" data-stim aria-label="stimulus">
+          <!-- dynamisch gevuld -->
+        </svg>
+      </div>
+
+      <div class="dn-keuze">
+        <button type="button" class="spel-btn spel-btn--dn spel-btn--dn-dag" data-resp="day">
+          {NL.spel['day-night'].dag}
+        </button>
+        <button type="button" class="spel-btn spel-btn--dn spel-btn--dn-nacht" data-resp="night">
+          {NL.spel['day-night'].nacht}
+        </button>
+      </div>
+
+      <p class="dn-status" data-status role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- Einde-scherm -->
+    <section class="dn-scherm" data-scherm="einde" hidden>
+      <h2 class="dn-scherm__titel">{NL.goedBezig}</h2>
+      <dl class="dn-einde">
+        <div>
+          <dt>Correct</dt>
+          <dd><span data-einde-correct>—</span> / <span data-einde-total>—</span></dd>
+        </div>
+        <div>
+          <dt>Accuracy</dt>
+          <dd data-einde-acc>—</dd>
+        </div>
+        <div>
+          <dt>Gem. reactie</dt>
+          <dd data-einde-rt>—</dd>
+        </div>
+      </dl>
+      <div class="dn-sparkline" data-sparkline-wrap hidden>
+        <div class="dn-sparkline__label">Laatste tien keer</div>
+        <svg viewBox="0 0 120 30" class="dn-sparkline__svg" aria-hidden="true" data-sparkline></svg>
+      </div>
+      <a href="/spelen" class="spel-btn">{NL.klaar}</a>
+    </section>
+  </div>
+</SpelShell>
+
+<style>
+  .dn { width: 100%; max-width: 560px; }
+
+  .dn-scherm {
+    display: grid;
+    gap: 20px;
+    justify-items: center;
+    text-align: center;
+  }
+  .dn-scherm[hidden] { display: none !important; }
+
+  .dn-scherm__titel {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: clamp(1.6rem, 3vw, 2rem);
+    margin: 0;
+  }
+  .dn-scherm__lede {
+    color: var(--ink-soft);
+    max-width: 44ch;
+    margin: 0;
+  }
+
+  .dn-voorbeeld {
+    display: flex;
+    gap: 28px;
+    margin: 6px 0 4px;
+  }
+  .dn-voorbeeld__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+  }
+  .dn-voorbeeld__arrow { color: var(--ink-muted); }
+  .dn-voorbeeld__label {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .dn-stim {
+    width: 80px;
+    height: 80px;
+    display: block;
+  }
+  .dn-stim--zon circle,
+  .dn-stim--zon path {
+    fill: var(--spel-sun);
+    stroke: #b68d18;
+    stroke-width: 2;
+  }
+  .dn-stim--maan path {
+    fill: #e9e9ef;
+    stroke: #7d7e89;
+    stroke-width: 2;
+  }
+  .dn-stim--groot { width: clamp(160px, 50vw, 220px); height: clamp(160px, 50vw, 220px); }
+
+  .dn-stim-wrap {
+    display: grid;
+    place-items: center;
+    min-height: 240px;
+    width: 100%;
+    border-radius: 20px;
+    padding: 24px;
+    transition: background 0.25s ease;
+    background: linear-gradient(180deg, #fef7e0 0%, #fdeecf 100%);
+  }
+  .dn-stim-wrap.is-nacht {
+    background: linear-gradient(180deg, #2a3554 0%, #111c2c 100%);
+  }
+  .dn-stim-wrap.is-correct {
+    box-shadow: 0 0 0 4px var(--spel-glow);
+  }
+  .dn-stim-wrap.is-fout {
+    box-shadow: 0 0 0 4px rgba(224, 123, 123, 0.35);
+  }
+
+  .dn-ronde {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: min(300px, 80vw);
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .dn-progress {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--line-soft);
+    overflow: hidden;
+  }
+  .dn-progress__bar {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--green);
+    transition: width 0.2s ease;
+  }
+
+  .dn-keuze {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .spel-btn--dn {
+    min-width: 140px;
+  }
+  .spel-btn--dn-dag {
+    background: var(--spel-sun);
+    border-color: var(--spel-sun);
+    color: #4a3a00;
+  }
+  .spel-btn--dn-dag:hover {
+    background: #e4ad25;
+    border-color: #e4ad25;
+  }
+  .spel-btn--dn-nacht {
+    background: #2a3554;
+    border-color: #2a3554;
+    color: #eef1f8;
+  }
+  .spel-btn--dn-nacht:hover {
+    background: #1b2440;
+    border-color: #1b2440;
+  }
+
+  .dn-status {
+    color: var(--ink-soft);
+    min-height: 1.5em;
+    margin: 0;
+  }
+
+  .dn-einde {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px 24px;
+    margin: 0;
+  }
+  .dn-einde div { display: grid; gap: 4px; }
+  .dn-einde dt {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-muted);
+  }
+  .dn-einde dd {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 1.3rem;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .dn-sparkline {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+  }
+  .dn-sparkline__label {
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .dn-sparkline__svg {
+    width: 120px;
+    height: 30px;
+    stroke: var(--spel-sun);
+    stroke-width: 1.5;
+    fill: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dn-stim-wrap,
+    .dn-progress__bar {
+      transition: none !important;
+    }
+  }
+</style>
+
+<script>
+  import { now } from '../../scripts/timer.js';
+  import { summarize } from '../../scripts/scoring.js';
+  import { saveSession, load } from '../../scripts/storage.js';
+  import { NL } from '../../scripts/strings.nl.js';
+
+  // Drie blokken. Blok 1-2 = mixed (50/50 congruent of incongruent).
+  // Blok 3 = puur incongruent (klassieke Gerstadt-opzet).
+  // Elk blok 16 trials. Totaal 48.
+  const TRIALS_PER_BLOK = 16;
+  const BLOKKEN: Array<'mixed' | 'incongruent'> = ['mixed', 'mixed', 'incongruent'];
+  const FEEDBACK_MS = 500;
+  const ITI_MS = 300;
+
+  type Stim = 'sun' | 'moon';
+  type Resp = 'day' | 'night';
+  type Mode = 'mixed' | 'incongruent';
+  type Trial = {
+    i: number;
+    blok: number;
+    mode: Mode;
+    stimulus: Stim;
+    expected: Resp;
+    response: Resp | null;
+    correct: boolean;
+    rt: number;
+  };
+
+  const ZON_SVG = `
+    <circle cx="100" cy="100" r="44"/>
+    <g stroke="#b68d18" stroke-width="5" stroke-linecap="round">
+      <line x1="100" y1="20" x2="100" y2="44"/>
+      <line x1="100" y1="156" x2="100" y2="180"/>
+      <line x1="20" y1="100" x2="44" y2="100"/>
+      <line x1="156" y1="100" x2="180" y2="100"/>
+      <line x1="40" y1="40" x2="60" y2="60"/>
+      <line x1="140" y1="140" x2="160" y2="160"/>
+      <line x1="40" y1="160" x2="60" y2="140"/>
+      <line x1="140" y1="60" x2="160" y2="40"/>
+    </g>`;
+  const MAAN_SVG = `
+    <path d="M140 100 a44 44 0 1 1 -44 -44 a34 34 0 0 0 44 44z"/>`;
+
+  const root = document.querySelector<HTMLElement>('[data-dn]');
+  if (root) initDN(root);
+
+  function initDN(root: HTMLElement) {
+    const schermen = {
+      start: root.querySelector<HTMLElement>('[data-scherm="start"]')!,
+      spelen: root.querySelector<HTMLElement>('[data-scherm="spelen"]')!,
+      einde: root.querySelector<HTMLElement>('[data-scherm="einde"]')!,
+    };
+    const stimSvg = root.querySelector<SVGElement>('[data-stim]')!;
+    const stimWrap = root.querySelector<HTMLElement>('[data-stim-wrap]')!;
+    const statusEl = root.querySelector<HTMLElement>('[data-status]')!;
+    const rondeLabel = root.querySelector<HTMLElement>('[data-ronde-label]')!;
+    const progressEl = root.querySelector<HTMLElement>('[data-progress]')!;
+    const eindeCorrectEl = root.querySelector<HTMLElement>('[data-einde-correct]')!;
+    const eindeTotalEl = root.querySelector<HTMLElement>('[data-einde-total]')!;
+    const eindeAccEl = root.querySelector<HTMLElement>('[data-einde-acc]')!;
+    const eindeRtEl = root.querySelector<HTMLElement>('[data-einde-rt]')!;
+    const respButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-resp]'));
+    const sparklineWrap = root.querySelector<HTMLElement>('[data-sparkline-wrap]')!;
+    const sparklineSvg = root.querySelector<SVGElement>('[data-sparkline]')!;
+
+    let trials: Trial[] = [];
+    let currentBlok = 0;
+    let trialIdxInBlok = 0;
+    let sessionStart = 0;
+    let stimOnset = 0;
+    let currentStim: Stim = 'sun';
+    let currentMode: Mode = 'mixed';
+    let accepting = false;
+
+    root.querySelector<HTMLButtonElement>('[data-actie="start"]')!
+      .addEventListener('click', startSession);
+    for (const btn of respButtons) {
+      btn.addEventListener('click', () => {
+        if (!accepting) return;
+        onResponse(btn.getAttribute('data-resp') as Resp);
+      });
+    }
+
+    document.addEventListener('spel:te-moeilijk', () => {
+      // Dag-Nacht heeft geen span; "te-moeilijk" betekent: sla restant van dit
+      // blok over, ga naar einde.
+      if (schermen.spelen.hidden) return;
+      endSession();
+    });
+    document.addEventListener('spel:pauze', () => {
+      if (trials.length > 0 && schermen.einde.hidden) {
+        endSession();
+      } else {
+        window.location.href = '/spelen';
+      }
+    });
+
+    function toon(id: 'start' | 'spelen' | 'einde') {
+      (['start', 'spelen', 'einde'] as const).forEach((k) => (schermen[k].hidden = k !== id));
+    }
+
+    function startSession() {
+      trials = [];
+      currentBlok = 0;
+      trialIdxInBlok = 0;
+      sessionStart = now();
+      toon('spelen');
+      nextTrial();
+    }
+
+    function nextTrial() {
+      if (currentBlok >= BLOKKEN.length) {
+        endSession();
+        return;
+      }
+      currentMode = BLOKKEN[currentBlok];
+      rondeLabel.textContent = NL.spel['day-night'].rondeVan(currentBlok + 1, BLOKKEN.length);
+
+      // In 'incongruent' alles incongruent; in 'mixed' 50/50 met randomisatie.
+      // Stimulus-balans: 50/50 zon/maan per blok.
+      currentStim = Math.random() < 0.5 ? 'sun' : 'moon';
+      renderStim(currentStim);
+      updateProgress();
+      statusEl.textContent = '';
+      stimWrap.classList.remove('is-correct', 'is-fout');
+
+      accepting = true;
+      stimOnset = now();
+    }
+
+    function renderStim(stim: Stim) {
+      if (stim === 'sun') {
+        stimSvg.innerHTML = ZON_SVG;
+        stimWrap.classList.remove('is-nacht');
+      } else {
+        stimSvg.innerHTML = MAAN_SVG;
+        stimWrap.classList.add('is-nacht');
+      }
+    }
+
+    function updateProgress() {
+      const totaal = BLOKKEN.length * TRIALS_PER_BLOK;
+      const gedaan = currentBlok * TRIALS_PER_BLOK + trialIdxInBlok;
+      const pct = (gedaan / totaal) * 100;
+      progressEl.style.width = pct + '%';
+    }
+
+    function onResponse(resp: Resp) {
+      accepting = false;
+      const rt = Math.round(now() - stimOnset);
+      // Expected volgt de Stroop-regel: zon → zeg NACHT; maan → zeg DAG.
+      // In 'mixed'-blok is elk item nog steeds incongruent qua regel — alleen
+      // de stimulus-ratio verschilt. Geen congruent-variant hier (klassiek
+      // Gerstadt-Hong-Diamond 1994).
+      const expected: Resp = currentStim === 'sun' ? 'night' : 'day';
+      const correct = resp === expected;
+
+      trials.push({
+        i: trials.length + 1,
+        blok: currentBlok + 1,
+        mode: currentMode,
+        stimulus: currentStim,
+        expected,
+        response: resp,
+        correct,
+        rt,
+      });
+
+      stimWrap.classList.add(correct ? 'is-correct' : 'is-fout');
+      statusEl.textContent = correct ? NL.spel['day-night'].goed : NL.spel['day-night'].bijnaGoed;
+
+      trialIdxInBlok += 1;
+      if (trialIdxInBlok >= TRIALS_PER_BLOK) {
+        currentBlok += 1;
+        trialIdxInBlok = 0;
+      }
+      setTimeout(() => {
+        stimWrap.classList.remove('is-correct', 'is-fout');
+        setTimeout(nextTrial, ITI_MS);
+      }, FEEDBACK_MS);
+    }
+
+    function endSession() {
+      accepting = false;
+      const duration = Math.round(now() - sessionStart);
+      const sum = summarize(trials);
+      const sessionObj = {
+        id: 's_' + Math.random().toString(36).slice(2, 10),
+        date: new Date().toISOString(),
+        level: currentBlok + 1,
+        durationMs: duration,
+        trials: trials.slice(),
+        summary: { ...sum, blokkenAf: currentBlok },
+      };
+      saveSession('day-night', sessionObj);
+
+      toon('einde');
+      const correctN = trials.filter((t) => t.correct).length;
+      eindeCorrectEl.textContent = String(correctN);
+      eindeTotalEl.textContent = String(trials.length);
+      eindeAccEl.textContent = trials.length ? Math.round((correctN / trials.length) * 100) + '%' : '—';
+      eindeRtEl.textContent = sum.meanRT ? sum.meanRT + ' ms' : '—';
+      renderSparkline();
+    }
+
+    function renderSparkline() {
+      let data;
+      try { data = load(); } catch { return; }
+      if (!data.preferences || data.preferences.sparklineInEinde === false) return;
+      const sessions = (data.exercises['day-night'].sessions || []).slice(-10);
+      if (sessions.length < 2) return;
+      const values = sessions.map((s: any) =>
+        (s.summary && typeof s.summary.accuracy === 'number') ? s.summary.accuracy : 0,
+      );
+      const max = Math.max(...values, 0.01);
+      const w = 120;
+      const h = 30;
+      const pts = values.map((v: number, i: number) => {
+        const x = (i / (values.length - 1)) * (w - 4) + 2;
+        const y = h - (v / max) * (h - 6) - 3;
+        return { x: +x.toFixed(1), y: +y.toFixed(1) };
+      });
+      const poly = pts.map((p: {x:number;y:number}) => `${p.x},${p.y}`).join(' ');
+      const circles = pts.map(
+        (p: {x:number;y:number}) => `<circle cx="${p.x}" cy="${p.y}" r="1.8" fill="var(--spel-sun)"/>`,
+      ).join('');
+      sparklineSvg.innerHTML =
+        `<polyline points="${poly}" fill="none" stroke="var(--spel-sun)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${circles}`;
+      sparklineWrap.hidden = false;
+    }
+  }
+</script>

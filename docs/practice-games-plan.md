@@ -6,23 +6,24 @@ Meta-plan dat `docs/source/Research-practice-tools.md` omzet naar een faseerbare
 
 ## Hervat-gids — lees dit eerst bij een nieuwe sessie
 
-**Status (22 apr 2026, einde dag):** Fase 0 en Fase 1 (Simon) zijn **klaar**. Zie §6 voor per-fase details. Alles draait lokaal via `npm run dev`; er is nog niet gedeployed en dat moet bewust gebeuren (gate + privacy-checks staan aan).
+**Status (24 apr 2026):** Fase 0, 1 (Simon), 2 (Corsi), 3 (Day-Night) en 6 (Admin) zijn **klaar**. Zie §6 voor per-fase details. Alles draait lokaal via `npm run dev`; er is nog niet gedeployed en dat moet bewust gebeuren (gate + privacy-checks staan aan).
 
-**Volgende stap:** Fase 2 — Corsi Block Tapping. Scope staat beschreven in §6. Fase 2 past in één run.
+**Volgende stap:** Fase 4 — Visual Search / Zoek de kikker. Scope staat beschreven in §6. Fase 4 past in één run. Daarna Fase 5 (Wisselen), dan Fase 7 (mijlpalen) + Fase 8 (polish).
 
 **Snelle verificatie bij hervatten:**
 
 ```bash
 node --test src/scripts/*.test.js    # verwacht: 16 pass, 0 fail
 npx astro check                      # verwacht: 0 errors, 0 warnings, 0 hints
-npm run dev                          # → /spelen laadt, /spelen/simon speelbaar na inloggen op gate
+npm run dev                          # → /spelen laadt, Simon/Corsi/Day-Night speelbaar, /spelen/admin toont overzicht
 ```
 
 **Wat er staat en wat niet:**
 
-- `/spelen` (landing) toont Simon als aanbevolen, 4 andere tegels als "Nog niet beschikbaar".
-- `/spelen/simon` is volledig speelbaar, logt naar `localStorage` sleutel `alvah-ef-v1`.
-- `/spelen/corsi`, `/day-night`, `/zoeken`, `/wisselen`, `/reis`, `/admin` bestaan **nog niet**. De landing heeft wel al links naar `/reis` en `/admin` — die geven nu 404.
+- `/spelen` (landing) toont Simon als aanbevolen-stub, 2 andere speelbare tegels (Corsi + Day-Night), 2 tegels als "Nog niet beschikbaar" (Zoeken + Wisselen).
+- `/spelen/simon`, `/spelen/corsi`, `/spelen/day-night` zijn volledig speelbaar, loggen naar `localStorage` sleutel `alvah-ef-v1`.
+- `/spelen/admin` toont per spel sparkline + tabel laatste 10 sessies, "deze week" KPI, JSON-copy/download/import, wis-alles met dubbele bevestiging.
+- `/spelen/zoeken`, `/wisselen`, `/reis` bestaan **nog niet**. De landing heeft nog steeds een link naar `/reis` — die geeft 404 tot Fase 7.
 - Referentie-repo's zijn gekloond in `reference/` (gitignored, read-only via `chmod`). Beleid: uitsluitend leesbron, altijd zelf herschrijven. Zie §4.
 
 **Gotchas:**
@@ -274,17 +275,56 @@ Elke fase eindigt in een commit, werkende pagina, en geen wijzigingen buiten de 
 
 **Gebruikt paradigma-referentie:** klassiek Simon-speelgoed (Milton Bradley 1978). Geen jsPsych-plugin bestond hiervoor — implementatie volledig onafhankelijk.
 
-### Fase 2 — Corsi Block Tapping (1 run)
-**Doel:** research-top-1 (visuospatieel WM, klassiek gevalideerd).
-**Bestanden:** `src/pages/spelen/corsi.astro` (nieuw).
-**Recept:** 9 SVG-sterren op vaste posities in 400×400 grid, staircase 2-down/1-up, start span 2, max span 9. Trial-log + summary.
-**Acceptatie:** sessie van 12 trials of 4 min, summary-scherm met sparkline van vorige sessies.
+### Fase 2 — Corsi Block Tapping — ✅ KLAAR (24 apr 2026)
 
-### Fase 3 — Day-Night Stroop (1 run)
-**Doel:** inhibitie-kern (Gerstadt/Hong/Diamond 1994), volledig non-verbaal.
-**Bestanden:** `src/pages/spelen/day-night.astro` (nieuw).
-**Recept:** zon/maan stimulus (SVG), twee grote knoppen DAG/NACHT, 3 blokken × 16 trials, progressie mixed → incongruent.
-**Acceptatie:** sessie speelbaar, accuracy + mean RT in localStorage.
+**Gebouwd:**
+- `src/pages/spelen/corsi.astro` — nieuw, compleet spel in één bestand (template + scoped CSS + TS-script).
+- `src/scripts/strings.nl.js` — Corsi-subblok uitgebreid (`uitleg`, `kijkGoed`, `jouwBeurt`, `goed`, `ietsKorter`, `hoogsteRij`, `eindeCap`).
+- `src/pages/spelen/index.astro` — Corsi toegevoegd aan SPEELBAAR-set (zowel server-side als client-side).
+
+**Spel-mechanica (clean-room implementatie):**
+- 9 SVG-polygon-sterren op vaste, onregelmatige posities in 400×400 viewBox (asymmetrisch — voorkomt ruimtelijke patronen, Corsi-traditie).
+- Staircase 2-down/1-up via `src/scripts/staircase.js` (reeds aanwezig). Start span 2, cap 9.
+- Sequentie-weergave: 500 ms pre-stim, 900 ms flash + 250 ms gap per item. Fill switcht naar `--spel-sun` + `drop-shadow`-gloed. Pentatoniek-tonen 262..587 Hz per positie.
+- Gebruiker klikt; eerste tik start RT-meting. Correct → staircase.stepTrial(true), volgende trial. Fout → retry-scherm + staircase naar beneden.
+- Sessie: max 12 trials of 4 min. Trial-log: `{ i, span, correct, rt, sequence, response }`.
+- Einde-scherm: `maxSpan`, X/Y correct, sparkline in `--spel-magenta`.
+- Geen twee opeenvolgende posities gelijk (realistische Corsi-sequentie; positie-herhaling binnen één sequentie wél toegestaan, niet direct na elkaar).
+
+**A11y / research-regels:**
+- `prefers-reduced-motion`: `filter` en `drop-shadow` uit, in plaats daarvan SVG `stroke` in `--spel-sun` bij `is-aktief`.
+- Sterren hebben `role="button"` + `aria-label="Ster N"`.
+- Geen countdown, geen confetti. Feedback "Juist" / "Oké, iets korter" — feit-taal.
+
+**Verificatie:** `node --test` → 16/16 pass, `npx astro check` → 0 errors/warnings/hints, HTTP 200 op `/spelen/corsi`, paradigma-referentie-comment in bestand-header.
+
+**Gebruikt paradigma-referentie:** Corsi 1972 + Kessels et al. 2000. `@jspsych-contrib/plugin-corsi-blocks` (MIT) als informatiebron over timing en interactie-volgorde — alleen `docs/jspsych-corsi-blocks.md` gelezen, niet `src/index.ts`.
+
+### Fase 3 — Day-Night Stroop — ✅ KLAAR (24 apr 2026)
+
+**Gebouwd:**
+- `src/pages/spelen/day-night.astro` — nieuw, compleet spel in één bestand.
+- `src/scripts/strings.nl.js` — `day-night`-subblok uitgebreid (`uitleg`, `dag`, `nacht`, `klaarVoor`, `goed`, `bijnaGoed`, `rondeVan`).
+- `src/pages/spelen/index.astro` — Day-Night toegevoegd aan SPEELBAAR-set.
+
+**Spel-mechanica (clean-room implementatie, volledig onafhankelijk):**
+- Stimulus: zon (gele cirkel + stralen, SVG) of maan (SVG-path). Fill via `--spel-sun` en `#e9e9ef`.
+- Twee grote knoppen: "Dag" (zon-kleurig) en "Nacht" (nachtblauw). Stroop-regel: zon → zeg NACHT, maan → zeg DAG.
+- 3 blokken × 16 trials = 48 totaal. Blok 1–2 = mixed stimulus-ratio, blok 3 = puur incongruent (afwijking t.o.v. klassieke 16-trial Gerstadt: we geven meer data per sessie, met lichte mode-escalatie).
+- Stimulus-achtergrond switcht "day-mode" (warm geel) ↔ "night-mode" (nachtblauw gradient) om de Stroop-conflict visueel te versterken.
+- Feedback: 500 ms `is-correct` / `is-fout` ring (gloed vs rood), daarna 300 ms ITI.
+- Trial-log: `{ i, blok, mode, stimulus, expected, response, correct, rt }`.
+- Einde-scherm: correct/total, accuracy %, gem. RT, sparkline in `--spel-sun`.
+
+**A11y / research-regels:**
+- Kleur + label + positie (knoppen staan links/rechts en zijn grafisch geplaatst) — kleurenblind-safe.
+- `aria-live="polite"` op statusregel voor "Juist"/"Andersom".
+- Geen countdown, geen tijdsdruk per trial.
+- Feedback is rustig ("Juist" / "Andersom"), geen hypetaal.
+
+**Verificatie:** `node --test` → 16/16, `npx astro check` → 0 errors, HTTP 200 op `/spelen/day-night`.
+
+**Gebruikt paradigma-referentie:** Gerstadt, Hong & Diamond 1994. Geen jsPsych-plugin-equivalent gebruikt — implementatie volledig onafhankelijk geschreven.
 
 ### Fase 4 — Visual Search / Zoek de kikker (1 run)
 **Doel:** aandacht, hoog engagement, niet-verbale taak.
@@ -298,11 +338,30 @@ Elke fase eindigt in een commit, werkende pagina, en geen wijzigingen buiten de 
 **Recept:** cue-symbool + kleur/vorm-stimulus, 3 blokken (pure-kleur, pure-vorm, AABB-switch), verbal self-instruction prompt.
 **Acceptatie:** switch-cost zichtbaar in summary (meanRT_switch − meanRT_repeat).
 
-### Fase 6 — Admin-pagina (1 run, kan parallel aan 2–5)
-**Doel:** papa kan data lezen en naar LLM kopiëren.
-**Bestanden:** `src/pages/spelen/admin.astro` (nieuw).
-**Recept:** per spel een sparkline (inline SVG `<polyline>`), tabel laatste 10 sessies, totaal minuten deze week, "Kopieer JSON naar klembord"-knop, "Download JSON"-knop, "Importeer JSON", "Wis alles" (dubbele bevestiging).
-**Acceptatie:** lege-staat + gevulde-staat werken; copy-to-clipboard getest.
+### Fase 6 — Admin-pagina — ✅ KLAAR (24 apr 2026)
+
+**Gebouwd:**
+- `src/pages/spelen/admin.astro` — nieuw, gebruikt `BaseLayout` direct (geen SpelShell — geen spel, maar een lees-pagina).
+- `src/scripts/strings.nl.js` — `admin`-subblok toegevoegd (alle UI-copy).
+
+**Mechanica:**
+- **KPI "Deze week":** loopt door alle sessies binnen 7 dagen, telt totaal minuten (0.1-precisie onder 10 min, afgerond boven) en aantal sessies.
+- **Per spel-kaart** (5 kaarten: Simon, Corsi, Day-Night, Zoeken, Wisselen):
+  - Header-meta: `niveau X · hoogst Y · N sessies`.
+  - Sparkline: laatste 20 sessies. X-as = sessie-index, Y-as = `maxSpan` (Simon/Corsi) of `accuracy` (Day-Night/Zoeken/Wisselen). Kleur per spel: Simon blauw, Corsi magenta, Day-Night zonne-geel, Zoeken oranje, Wisselen groen.
+  - Tabel laatste 10 sessies: datum (NL-format), niveau, duur (s), accuracy %, gem. RT.
+  - Lege-staat: "Nog geen sessies gespeeld.".
+- **Data-knoppen:**
+  - "Kopieer JSON" → `navigator.clipboard.writeText`. Fallback bij permission-fout → hint om te downloaden.
+  - "Download JSON" → Blob + anchor-click, bestandsnaam `alvah-ef-v1-YYYY-MM-DD.json`.
+  - "Importeer JSON" → file-input → `importJSON()` in storage.js → re-render. Foutafhandeling voor ongeldige JSON.
+  - "Wis alles" → dubbele `confirm()` voor Floris-proof, dan `clearAll()` + re-render.
+- **JSON-preview:** collapsed `<details>` met volledige `<pre>` van `exportJSON()`. Lees-only, refresht bij elke re-render.
+- Feedback-regel ("Gekopieerd", "Geïmporteerd", "Gewist", "Ongeldige JSON") verdwijnt na 4s.
+
+**Verificatie:** HTTP 200 op `/spelen/admin`, 4 data-actie-knoppen (kopieer/download/importeer/wis), `BaseLayout` geeft gate + footer.
+
+**Plan zei:** "Admin-pagina (fase 6) tussen fase 2 en fase 3: zodra er data van twee spellen is, is het nuttig om te kunnen lezen." In de praktijk meegenomen in dezelfde run als Fase 2 én 3 — admin werkt nu voor alle 3 de speelbare spellen + toont lege kaarten voor Zoeken/Wisselen.
 
 ### Fase 7 — Mijlpalen & visuele collectie (1 run)
 **Doel:** duidelijke doelen waar Alvah naartoe werkt, rustig in-software én extrinsiek via papa — binnen de research-regels (geen variabele beloning, geen streaks, geen loss-aversion).
