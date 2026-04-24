@@ -14,4 +14,4 @@ aangemaakt: 2026-04-22
 - "Wie is je beste vriend in je groep?"
 - "Als iemand anders in je groep zou zitten volgend jaar, wie zou je dan willen meenemen?"
 
-Niet: "wat als je blijft zitten" — dat is de volwassen-frame, niet zijn frame.
+Niet: "wat als je blijft zitten". Dat is de volwassen-frame, niet zijn frame.

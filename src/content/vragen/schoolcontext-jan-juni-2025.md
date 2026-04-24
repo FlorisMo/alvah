@@ -16,7 +16,7 @@ aangemaakt: 2026-04-22
 2. Was er in jan-juni 2025 een andere klassensamenstelling dan eerder?
 3. Wat viel u op aan Alvah? Werkhouding, concentratie, energie, stemming, relaties met klasgenoten?
 4. Was er een moment of gebeurtenis waarna u iets zag veranderen?
-5. Hoe ging hij met lees- en schrijfopdrachten om — meer frustratie, vermijding, anders?
+5. Hoe ging hij met lees- en schrijfopdrachten om? Meer frustratie, vermijding, anders?
 6. Waren er sociale dingen in de stamgroep die u opviel?
 7. Welke ondersteuning had Alvah, hoe vaak, door wie? Veranderde er iets?
 8. Was er een methode- of werkwijze-verandering in de klas?

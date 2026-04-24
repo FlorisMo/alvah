@@ -13,5 +13,5 @@ aangemaakt: 2026-04-22
 
 - Niet één gesprek maar een thema over maanden.
 - Lees <em>Het fantastische elastische brein</em> samen, vraag daarna: "zou dat ook voor jou kunnen gelden?"
-- Als hij zegt "ik ben dom": "Weet je wat er echt aan de hand is met jouw hoofd?" — dan uitleggen op zijn niveau.
+- Als hij zegt "ik ben dom": "Weet je wat er echt aan de hand is met jouw hoofd?" Daarna uitleggen op zijn niveau.
 - Vermijd labels die hem vastzetten. "Jouw hoofd werkt anders" is sterker dan "jij bent dyslectisch".

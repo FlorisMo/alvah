@@ -1,6 +1,6 @@
 ---
 datum: 2025-06-18
-titel: "Inzakking zichtbaar — meerdere open vragen"
+titel: "Inzakking zichtbaar, meerdere open vragen"
 samenvatting: "Spelling en rekenen vallen terug naar niveau V in een half jaar. Het patroon wijkt af van een structurele leerstoornis. Er zijn open vragen over de thuiscontext, de schoolcontext én de metabole situatie in deze periode."
 tags: ["observatie", "open-onderzoek"]
 open_onderzoek: true
@@ -8,7 +8,7 @@ open_onderzoek: true
 
 ## De observatie
 
-Cito E3 (juni 2025) toont een scherpe val. Spelling gaat van II naar V in 5 maanden. Rekenen van IV naar V. DMT blijft V. Geen normale leercurve — een kind dat eerst II scoort valt niet "gewoon" terug naar V.
+Cito E3 (juni 2025) toont een scherpe val. Spelling gaat van II naar V in 5 maanden. Rekenen van IV naar V. DMT blijft V. Geen normale leercurve. Een kind dat eerst II scoort valt niet "gewoon" terug naar V.
 
 ## Wat het waarschijnlijk niet is
 

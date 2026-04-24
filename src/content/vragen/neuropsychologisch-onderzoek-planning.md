@@ -3,7 +3,7 @@ titel: "Wanneer staat het volgende neuropsychologisch onderzoek gepland en wat w
 voor: "ons"
 status: "open"
 urgentie: "gemiddeld"
-waarom: "DeRoche & Welsh (2008) meta-analyse toont bij vroeg behandelde PKU substantiële effectgroottes op executieve functies (d=0.59 planning tot d=1.15 cognitieve flexibiliteit). Jahja et al. (2020) wijzen werkgeheugen aan als meest aangedaan. Deze domeinen horen standaard in een NPO — maar dat is niet vanzelfsprekend."
+waarom: "DeRoche & Welsh (2008) meta-analyse toont bij vroeg behandelde PKU substantiële effectgroottes op executieve functies (d=0.59 planning tot d=1.15 cognitieve flexibiliteit). Jahja et al. (2020) wijzen werkgeheugen aan als meest aangedaan. Deze domeinen horen standaard in een NPO. Maar dat is niet vanzelfsprekend."
 wie_beantwoordt: "Psycholoog metabool team WKZ"
 aangemaakt: 2026-04-22
 ---

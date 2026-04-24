@@ -1,9 +1,9 @@
 ---
-titel: "Bij grote beslissingen (doubleren, groep veranderen) — hoe luisteren we goed naar wat hij ervaart?"
+titel: "Bij grote beslissingen (doubleren, groep veranderen): hoe luisteren we goed naar wat hij ervaart?"
 voor: "alvah"
 status: "open"
 urgentie: "hoog"
-waarom: "Een kind van 7 is geen volwaardige onderhandelingspartner in alle opzichten, maar heeft wel recht op gehoord worden in beslissingen die zijn leven ingrijpend veranderen (Kinderrechtenverdrag art. 12). Zijn stem meenemen betekent niet dat hij beslist, wel dat zijn perspectief weegt. Dat vereist oefening — en een plek waar we vastleggen wat hij heeft gezegd zodat het niet wegvalt in volwassenenoverleg."
+waarom: "Een kind van 7 is geen volwaardige onderhandelingspartner in alle opzichten, maar heeft wel recht op gehoord worden in beslissingen die zijn leven ingrijpend veranderen (Kinderrechtenverdrag art. 12). Zijn stem meenemen betekent niet dat hij beslist, wel dat zijn perspectief weegt. Dat vereist oefening, en een plek waar we vastleggen wat hij heeft gezegd zodat het niet wegvalt in volwassenenoverleg."
 wie_beantwoordt: "Principe voor ons bij élk keuzemoment"
 aangemaakt: 2026-04-22
 ---

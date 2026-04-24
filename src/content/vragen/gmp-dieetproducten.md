@@ -3,7 +3,7 @@ titel: "Zou een overstap naar GMP-producten dieettrouw en welzijn helpen?"
 voor: "ons"
 status: "open"
 urgentie: "laag"
-waarom: "Daly et al. (2024) toonden in een RCT met 12 kinderen van 4-9 jaar dat GMP-producten significant minder maagdarmklachten gaven dan traditionele aminozuurmengsels. Nadeel: gemiddeld 114 µmol/L hogere Phe, wat bij klassieke PKU relevant is. Smaak en palatabiliteit zijn vaak veel beter — dat verbetert op lange termijn de dieettrouw."
+waarom: "Daly et al. (2024) toonden in een RCT met 12 kinderen van 4-9 jaar dat GMP-producten significant minder maagdarmklachten gaven dan traditionele aminozuurmengsels. Nadeel: gemiddeld 114 µmol/L hogere Phe, wat bij klassieke PKU relevant is. Smaak en palatabiliteit zijn vaak veel beter, wat op lange termijn de dieettrouw verbetert."
 wie_beantwoordt: "Diëtist metabool team WKZ"
 aangemaakt: 2026-04-22
 ---

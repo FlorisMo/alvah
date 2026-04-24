@@ -3,7 +3,7 @@ titel: "Welke zorgniveau-3 interventies lopen nu, hoe vaak, en met welke voortga
 voor: "school"
 status: "open"
 urgentie: "hoog"
-waarom: "Zorgniveau 3 is de basis onder zowel de dyslexie-aanvraag als een eventuele doublure-discussie. Zonder aantoonbaar minimaal een schooljaar ON3 is doublure volgens de literatuur niet verdedigbaar (zie /doubleren). We willen weten wat exact loopt — frequentie, wie het uitvoert, hoe voortgang gemeten wordt."
+waarom: "Zorgniveau 3 is de basis onder zowel de dyslexie-aanvraag als een eventuele doublure-discussie. Zonder aantoonbaar minimaal een schooljaar ON3 is doublure volgens de literatuur niet verdedigbaar (zie /doubleren). We willen weten wat exact loopt: frequentie, wie het uitvoert, hoe voortgang gemeten wordt."
 wie_beantwoordt: "IB'er De Mheen"
 gerelateerde_oefeningen: ["bouw"]
 aangemaakt: 2026-04-22

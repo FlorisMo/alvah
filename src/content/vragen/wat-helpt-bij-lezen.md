@@ -1,5 +1,5 @@
 ---
-titel: "Wat helpt hém bij het lezen — waar merkt hij zelf verschil?"
+titel: "Wat helpt hém bij het lezen? Waar merkt hij zelf verschil?"
 voor: "alvah"
 status: "open"
 urgentie: "gemiddeld"
