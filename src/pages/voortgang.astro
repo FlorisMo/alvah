@@ -23,7 +23,7 @@ const jaren = Object.keys(milestonesPerJaar)
   .sort((a, b) => b - a);
 ---
 <BaseLayout
-  title="Voortgang — Alvah"
+  title="Voortgang, Alvah"
   description="Tijdlijn met milestones en lopend onderzoek."
 >
   <section>
@@ -57,7 +57,7 @@ const jaren = Object.keys(milestonesPerJaar)
       <h2 class="section-head"><span class="num">∴</span>Open onderzoek</h2>
       <ul>
         {openOnderzoek.map((m) => (
-          <li><strong>{m.data.titel}</strong> — {m.data.samenvatting}</li>
+          <li><strong>{m.data.titel}</strong>: {m.data.samenvatting}</li>
         ))}
       </ul>
     </section>
