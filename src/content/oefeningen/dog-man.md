@@ -16,7 +16,7 @@ Graphic novel-reeks van Dav Pilkey (auteur van Captain Underpants). De hoofdpers
 
 ## Waarom het werkt
 
-Dav Pilkey is zélf dyslectisch en heeft zijn stripboeken bewust ontworpen met dyslectische lezers in gedachten. Korte dialoog, sterke visuele verhaalvertelling, veel humor. Kinderen met leesproblemen lezen Dog Man uren achter elkaar. Vaak hun eerste "ik kies uit mezelf om te lezen"-ervaring.
+Dav Pilkey is zélf dyslectisch en heeft zijn stripboeken bewust ontworpen met lezers met dyslexie in gedachten. Korte dialoog, sterke visuele verhaalvertelling, veel humor. Kinderen met leesproblemen lezen Dog Man uren achter elkaar. Vaak hun eerste "ik kies uit mezelf om te lezen"-ervaring.
 
 Voor Alvah: succes-ervaring met iets wat hij zélf wil. Motivatie &gt; kwantiteit.
 

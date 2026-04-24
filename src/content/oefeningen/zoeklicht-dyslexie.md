@@ -5,7 +5,7 @@ context: ["thuis", "school"]
 duur: "kort-5min"
 kosten: "onder-50"
 evidence: "praktijkclaim"
-korte_omschrijving: "Boekenreeks van Zwijsen specifiek voor dyslectische lezers. Aangepaste typografie en verhaalopbouw."
+korte_omschrijving: "Boekenreeks van Zwijsen specifiek voor lezers met dyslexie. Aangepaste typografie en verhaalopbouw."
 bronnen:
   - tekst: "Zwijsen Zoeklicht Dyslexie"
     url: "https://www.zwijsen.nl/"
@@ -13,7 +13,7 @@ bronnen:
 
 ## Wat het is
 
-Boekenreeks van uitgever Zwijsen, specifiek ontwikkeld voor dyslectische lezers. Zoeklicht Dyslexie heeft aangepaste typografie (groter lettertype, meer ruimte tussen regels), kortere hoofdstukken en verhalen die boven de leeftijd uitstijgen qua interesse maar op eigen leesniveau uitgevoerd.
+Boekenreeks van uitgever Zwijsen, specifiek ontwikkeld voor lezers met dyslexie. Zoeklicht Dyslexie heeft aangepaste typografie (groter lettertype, meer ruimte tussen regels), kortere hoofdstukken en verhalen die boven de leeftijd uitstijgen qua interesse maar op eigen leesniveau uitgevoerd.
 
 ## Waarom het werkt
 

@@ -152,7 +152,7 @@ const CATEGORIES = [
   {
     name: 'aandoening-eerst',
     test: (line) => {
-      const m = line.match(/\b(dyslexie-?(kinderen|leerling|leerlingen|patiënt|kind)|PKU-kind(eren)?|dyslectische?\s+(kinderen|leerling))/i);
+      const m = line.match(/\b(dyslexie-?(kinderen|leerling|leerlingen|patiënt|kind)|PKU-kind(eren)?|dyslectische?\s+(kinderen|leerling|lezer))/i);
       return m ? m[0] : null;
     },
   },

@@ -509,12 +509,9 @@ Schaal 0-10. Afwijking > ±1 flaggen, > ±2 herschrijven.
 - [ ] 2.11 `/oefeningen` (catalogus-pagina)
 
 ### Fase 3 — Collections
-- [ ] 3.1a Oefeningen 1–10
-- [ ] 3.1b Oefeningen 11–20
-- [ ] 3.1c Oefeningen 21–30
-- [ ] 3.1d Oefeningen 31–40
-- [ ] 3.2 Milestones (5)
-- [ ] 3.3 Vragen (19)
+- [x] 3.1 Oefeningen (40) — 2 aandoening-eerst-fixes; rest was al op-brand na Fase 1
+- [x] 3.2 Milestones (5) — no-op, al op toon (feitelijke observaties, stille slots)
+- [x] 3.3 Vragen (19) — no-op, al direct en functioneel
 
 ### Fase 4 — Cross-cutting
 - [ ] 4.1 Inspiratie-porno
