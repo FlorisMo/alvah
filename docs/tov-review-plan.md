@@ -489,10 +489,17 @@ Schaal 0-10. Afwijking > ±1 flaggen, > ±2 herschrijven.
 - [x] 1.5 Gender + retorische tags (0 hits)
 
 ### Fase 2 — Pagina's
-- [ ] 2.1 `/` (index)
-- [ ] 2.2 `/samenvatting`
-- [ ] 2.3 `/dossier`
-- [ ] 2.4 `/resultaten`
+- [x] 2.1 `/` (index)
+- [x] 2.2 `/samenvatting`
+- [x] 2.3 `/dossier`
+- [x] 2.4 `/resultaten` (geen aanpassingen, was al op toon)
+- [x] 2.5 `/wetenschap`
+- [x] 2.6 `/doubleren` (geen aanpassingen, bewust-neutraal frame staat)
+- [x] 2.7 `/onderwijs` (geen aanpassingen, systeem-beschrijvend)
+- [x] 2.8 `/bronnen` (geen aanpassingen, bibliografie + over-dossier goed)
+- [x] 2.9 `/voortgang` (no-op, alleen milestone-loop)
+- [x] 2.10 `/vragen` (em-streepje in frontmatter-kader gefixt)
+- [x] 2.11 `/oefeningen` (no-op, catalogus-functionaliteit)
 - [ ] 2.5 `/wetenschap`
 - [ ] 2.6 `/doubleren`
 - [ ] 2.7 `/onderwijs`
