@@ -5,7 +5,7 @@ context: ["thuis"]
 duur: "kort-5min"
 kosten: "onder-50"
 evidence: "praktijkclaim"
-korte_omschrijving: "Korte leesboeken met groot lettertype, veel illustraties. Ideaal voor dyslectische lezers om succes op te bouwen."
+korte_omschrijving: "Korte leesboeken met groot lettertype, veel illustraties. Ideaal voor lezers met dyslexie om succes op te bouwen."
 bronnen:
   - tekst: "Tijger-reeks, diverse uitgevers"
 ---
@@ -22,10 +22,10 @@ De Tijgerlezen-reeks is een Nederlandse standaard in deze categorie. Andere verg
 
 ## Hoe doen we dit
 
-- Start met AVI-niveau iets onder zijn huidige leesniveau — bouw succes.
+- Start met AVI-niveau iets onder zijn huidige leesniveau: bouw succes op.
 - Bibliotheek of boekhandel heeft meestal meerdere titels in voorraad.
 - Laat hem kiezen welk onderwerp.
 
 ## Bronnen &amp; verdere lezing
 
-Te vinden op <a href="https://www.makkelijklezenplein.nl/" target="_blank" rel="noopener">Makkelijk Lezen Plein</a> — boekentips op niveau.
+Te vinden op <a href="https://www.makkelijklezenplein.nl/" target="_blank" rel="noopener">Makkelijk Lezen Plein</a>: boekentips op niveau.

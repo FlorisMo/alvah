@@ -1,5 +1,5 @@
 ---
-titel: "Read&Write (Texthelp) — Chrome-extensie"
+titel: "Read&Write (Texthelp): Chrome-extensie"
 domein: ["compenserend"]
 context: ["school", "thuis"]
 duur: "nvt"
@@ -13,7 +13,7 @@ bronnen:
 
 ## Wat het is
 
-Read&amp;Write van Texthelp is een Chrome-browser-extensie die tekst voorleest, spelling controleert, woorden voorspelt tijdens typen, en woordenschat-uitleg geeft. Werkt in Google Docs, Gmail, webbrowser — overal waar Chromebook wordt gebruikt.
+Read&amp;Write van Texthelp is een Chrome-browser-extensie die tekst voorleest, spelling controleert, woorden voorspelt tijdens typen, en woordenschat-uitleg geeft. Werkt in Google Docs, Gmail, webbrowser: overal waar Chromebook wordt gebruikt.
 
 ## Waarom het werkt
 

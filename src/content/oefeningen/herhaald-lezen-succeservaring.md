@@ -7,8 +7,8 @@ kosten: "gratis"
 evidence: "matig"
 korte_omschrijving: "Een stuk dat goed ging morgen nog eens lezen. Het tegenovergestelde van drillen op fouten."
 bronnen:
-  - tekst: "Steenbeek-Planting (2012) — bij zwakke lezers werkt herhaling van succes beter dan drillen"
-  - tekst: "Therrien (2004) — meta-analyse repeated reading, effectgroottes op vlotheid en begrip"
+  - tekst: "Steenbeek-Planting (2012): bij zwakke lezers werkt herhaling van succes beter dan drillen"
+  - tekst: "Therrien (2004): meta-analyse repeated reading, effectgroottes op vlotheid en begrip"
 ---
 
 ## Wat het is
@@ -17,7 +17,7 @@ Als Alvah een tekst heeft gelezen en er gingen een paar alinea's soepel: lees di
 
 ## Waarom het werkt
 
-Voor kinderen onder E3-niveau werkt drillen op fouten averechts — ze worden niet beter, ze worden onzekerder. Steenbeek-Planting (2012) toonde aan dat <em>herhaling van succeservaring</em> bij deze groep een groter effect heeft: op vlotheid (tekstsnelheid), op begrip, en op zelfvertrouwen.
+Voor kinderen onder E3-niveau werkt drillen op fouten averechts. Ze worden niet beter, ze worden onzekerder. Steenbeek-Planting (2012) toonde aan dat <em>herhaling van succeservaring</em> bij deze groep een groter effect heeft: op vlotheid (tekstsnelheid), op begrip, en op zelfvertrouwen.
 
 Het werkt omdat Alvah leert hoe het voelt als lezen <em>automatisch</em> gaat. Die ervaring heeft hij normaal zelden. Eén bladzijde die morgen moeiteloos lukt, is meer waard dan vijf bladzijden die moeizaam gaan.
 

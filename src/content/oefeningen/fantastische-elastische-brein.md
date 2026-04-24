@@ -16,7 +16,7 @@ Prentenboek van JoAnn Deak en Sarah Ackerley, Nederlandstalige uitgave (Lemnisca
 
 ## Waarom het werkt
 
-Het onderliggende principe — growth-mindset en neuroplasticiteit — heeft sterke evidence bij kinderen (Dweck-literatuur). Dit specifieke boek is een van de meest-genoemde en meest-gebruikte kinderboeken voor het thema, in Nederland door veel IB'ers en dyslexiebehandelaars aanbevolen.
+Het onderliggende principe (growth-mindset en neuroplasticiteit) heeft sterke evidence bij kinderen (Dweck-literatuur). Dit specifieke boek is een van de meest-genoemde en meest-gebruikte kinderboeken voor het thema, in Nederland door veel IB'ers en dyslexiebehandelaars aanbevolen.
 
 Voor Alvah specifiek: een handvat om "mijn hoofd werkt anders" niet als tekortkoming maar als feit te begrijpen.
 

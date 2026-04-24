@@ -23,8 +23,8 @@ Kanttekening: als De Mheen met Chromebooks (Google Workspace) werkt, is dit mind
 
 ## Hoe doen we dit
 
-- Beschikbaar in Edge-browser — installeer als alternatief voor Chrome.
-- In Word online: bekijken-menu → Immersive Reader.
+- Beschikbaar in Edge-browser. Installeer als alternatief voor Chrome.
+- In Word online: bekijken-menu, daarna Immersive Reader.
 - Gratis; geen account of licentie nodig.
 
 ## Bronnen &amp; verdere lezing

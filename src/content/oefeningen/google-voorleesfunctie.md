@@ -7,7 +7,7 @@ kosten: "gratis"
 evidence: "praktijkclaim"
 korte_omschrijving: "Ingebouwde voorleesfunctie van ChromeOS. Basis-werking, leuk om mee te beginnen, niet vergelijkbaar met Kurzweil."
 bronnen:
-  - tekst: "Google Chromebook — toegankelijkheid"
+  - tekst: "Google Chromebook: toegankelijkheid"
     url: "https://support.google.com/chromebook/answer/9032490"
 ---
 

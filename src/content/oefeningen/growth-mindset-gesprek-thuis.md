@@ -7,8 +7,8 @@ kosten: "gratis"
 evidence: "sterk"
 korte_omschrijving: "Taal bewust inzetten: 'jouw hoofd werkt anders' in plaats van 'je bent slim hoor'. Kleine verschuivingen, groot cumulatief effect."
 bronnen:
-  - tekst: "Dweck — growth mindset literatuur"
-  - tekst: "Mueller & Dweck (1998) — Praise for intelligence"
+  - tekst: "Dweck: growth mindset literatuur"
+  - tekst: "Mueller & Dweck (1998): Praise for intelligence"
 ---
 
 ## Wat het is
@@ -19,19 +19,19 @@ Niet één gesprek, maar een <em>manier van praten</em> over leren, fouten en ve
 
 Carol Dweck en collega's lieten in talrijke studies zien dat kinderen met een "growth mindset" (ik kan leren, mijn hersenen veranderen) beter presteren en minder opgeven dan kinderen met "fixed mindset" (ik ben slim of dom, dat ligt vast). Voor Alvah, die al "ik ben dom" zegt, is de switch naar growth-mindset beschermend.
 
-Gedifferentieerd zelfbeeld is krachtiger dan algemeen positief zelfbeeld: "je bent slim hoor" werkt niet bij een kind dat merkt dat lezen moeilijk is — hij weet dat het niet klopt. "Je hoofd werkt anders" wél: concreet, waar, niet ontkennend.
+Gedifferentieerd zelfbeeld is krachtiger dan algemeen positief zelfbeeld: "je bent slim hoor" werkt niet bij een kind dat merkt dat lezen moeilijk is. Hij weet dat het niet klopt. "Je hoofd werkt anders" wél: concreet, waar, niet ontkennend.
 
 ## Hoe doen we dit
 
 <strong>Kleine taalverschuivingen:</strong>
 - In plaats van "dat was fout" → "goede poging, waar zat de moeilijkheid?"
 - "Kom op, je weet dit wel" → "neem je tijd, we hebben tijd"
-- "Je hebt zo je best gedaan" (bij mislukking) → "ik zag dat je bleef proberen — dat telt"
+- "Je hebt zo je best gedaan" (bij mislukking) → "ik zag dat je bleef proberen, dat telt"
 - "Je bent slim" → "je hoofd werkt anders; we vinden wel een manier"
 - "Doorzetten!" (bij moe) → "als je moe bent stoppen we. Dat is niet opgeven."
 
 <strong>Concrete verbindingen maken:</strong>
-- "Papa en mama hebben ook ADHD — ons hoofd werkt anders, niet slechter"
+- "Papa en mama hebben ook ADHD, ons hoofd werkt anders, niet slechter"
 - "Dyslexie betekent niet dom, het betekent een ander type brein"
 - Pak af en toe boek <em>Je fantastische elastische brein</em> erbij en verwijs ernaar
 

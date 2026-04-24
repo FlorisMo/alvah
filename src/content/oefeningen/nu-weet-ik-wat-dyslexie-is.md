@@ -7,7 +7,7 @@ kosten: "onder-50"
 evidence: "praktijkclaim"
 korte_omschrijving: "Informatief kinderboek over dyslexie, geschreven voor kinderen zelf. Directe uitleg zonder medicaliseren."
 bronnen:
-  - tekst: "Engbers — Nu weet ik wat dyslexie is"
+  - tekst: "Engbers: Nu weet ik wat dyslexie is"
 ---
 
 ## Wat het is
@@ -23,8 +23,8 @@ Gebruik afhankelijk van zijn interesse: sommige kinderen willen alles weten, and
 ## Hoe doen we dit
 
 - Na (of naast) de dyslexie-aanvraag / eerste V-scores bespreken.
-- Samen lezen — niet als schoolopdracht, als ontdekking.
-- Laat hem bepalen wat hij erover wil weten; beantwoord vragen maar dwing niets.
+- Samen lezen, niet als schoolopdracht, als ontdekking.
+- Laat hem bepalen wat hij erover wil weten. Beantwoord vragen maar dwing niets.
 
 ## Bronnen &amp; verdere lezing
 

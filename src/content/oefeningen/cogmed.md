@@ -7,20 +7,20 @@ kosten: "meer-dan-200"
 evidence: "zwak"
 korte_omschrijving: "Gecomputeriseerde werkgeheugentraining. Near-transfer ja, far-transfer naar schoolwerk niet bewezen."
 bronnen:
-  - tekst: "Kassai e.a. (2019) — meta-analyse EF-training"
+  - tekst: "Kassai e.a. (2019): meta-analyse EF-training"
     url: "https://pubmed.ncbi.nlm.nih.gov/30652908/"
-  - tekst: "Simons e.a. (2016) — Brain-training programs: evidence review"
+  - tekst: "Simons e.a. (2016): Brain-training programs, evidence review"
     url: "https://journals.sagepub.com/doi/10.1177/1529100616661983"
-  - tekst: "Melby-Lervåg & Hulme (2013) — meta-analyse WM-training"
+  - tekst: "Melby-Lervåg & Hulme (2013): meta-analyse WM-training"
 ---
 
 ## Wat het is
 
 Cogmed is een gecomputeriseerd werkgeheugentrainings-programma: 25 dagelijkse sessies van 30–45 minuten over 5 weken. Adaptieve moeilijkheid, oefeningen zoals digit span, n-back, visueel-ruimtelijk werkgeheugen.
 
-## Waarom het werkt — met belangrijke reserves
+## Waarom het werkt, met belangrijke reserves
 
-Cogmed maakt kinderen beter in Cogmed-oefeningen. Dat heet <em>near transfer</em> en is robuust gevonden (g ≈ 0.4). De vraag is of dat vertaalt naar schoolwerk — <em>far transfer</em>. Meta-analyses spreken elkaar bijna niet tegen op dit punt:
+Cogmed maakt kinderen beter in Cogmed-oefeningen. Dat heet <em>near transfer</em> en is robuust gevonden (g ≈ 0.4). De vraag is of dat vertaalt naar schoolwerk (<em>far transfer</em>). Meta-analyses spreken elkaar bijna niet tegen op dit punt:
 
 - <a href="https://pubmed.ncbi.nlm.nih.gov/30652908/" target="_blank" rel="noopener">Kassai e.a. (2019)</a>: far-transfer g=0.11, <strong>niet significant</strong>
 - <a href="https://journals.sagepub.com/doi/10.1177/1529100616661983" target="_blank" rel="noopener">Simons e.a. (2016)</a>: "little evidence of meaningful transfer"
@@ -40,4 +40,4 @@ Alternatief met betere evidence: <strong>Beweging</strong> (Cerrillo-Urbina 2015
 
 ## Bronnen &amp; verdere lezing
 
-[Kassai e.a. (2019)](https://pubmed.ncbi.nlm.nih.gov/30652908/) · [Simons e.a. (2016)](https://journals.sagepub.com/doi/10.1177/1529100616661983) · zie ook <a href="/wetenschap#ef-training">Wetenschap — EF-training</a>.
+[Kassai e.a. (2019)](https://pubmed.ncbi.nlm.nih.gov/30652908/) · [Simons e.a. (2016)](https://journals.sagepub.com/doi/10.1177/1529100616661983) · zie ook <a href="/wetenschap#ef-training">Wetenschap, EF-training</a>.

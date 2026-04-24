@@ -7,7 +7,7 @@ kosten: "onder-50"
 evidence: "praktijkclaim"
 korte_omschrijving: "Korte stripboek-achtige verhalen met zeer weinig tekst per bladzijde. Drempel-verlagend."
 bronnen:
-  - tekst: "Kijk-en-lees Joep — Nederlandse AVI-stripboeken"
+  - tekst: "Kijk-en-lees Joep: Nederlandse AVI-stripboeken"
 ---
 
 ## Wat het is
@@ -16,7 +16,7 @@ Stripvorm met één of twee zinnen per plaatje. Het beeld vertelt het verhaal; d
 
 ## Waarom het werkt
 
-Voor Alvah: de bladzijde ziet er anders uit dan een "echt boek" en voelt daarom laagdrempeliger. Toch leest hij actief — per plaatje een paar woorden verwerkt. Veel succeservaringen in korte tijd.
+Voor Alvah: de bladzijde ziet er anders uit dan een "echt boek" en voelt daarom laagdrempeliger. Toch leest hij actief: per plaatje een paar woorden verwerkt. Veel succeservaringen in korte tijd.
 
 ## Hoe doen we dit
 
