@@ -482,7 +482,7 @@ Schaal 0-10. Afwijking > ±1 flaggen, > ±2 herschrijven.
 ## Bijlage D — Progress-tracker (vink af tijdens het werk)
 
 ### Fase 1 — Mechanische sweeps
-- [~] 1.1 Em-streepjes (milestones + vragen + 40 oefeningen klaar; pagina's open, 326 hits resterend)
+- [x] 1.1 Em-streepjes (milestones + vragen + 40 oefeningen + 11 pagina's: 0 hits over)
 - [x] 1.2 Verboden woorden (5 gefixt, 3 bewust behouden — zie Bijlage E)
 - [x] 1.3 Uitroeptekens (BOUW!-filter in script; 4 bewust behouden)
 - [x] 1.4 Vullers (3 gefixt, 2 bewust behouden)
