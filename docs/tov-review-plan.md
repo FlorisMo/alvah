@@ -514,17 +514,17 @@ Schaal 0-10. Afwijking > ±1 flaggen, > ±2 herschrijven.
 - [x] 3.3 Vragen (19) — no-op, al direct en functioneel
 
 ### Fase 4 — Cross-cutting
-- [ ] 4.1 Inspiratie-porno
-- [ ] 4.2 "Wij als ouders"
-- [ ] 4.3 Aandoening-eerst
-- [ ] 4.4 Sentiment-slot-audit
+- [x] 4.1 Inspiratie-porno (0 hits — alle "doorzetten"/"laat zien dat" zijn counter-examples of academisch)
+- [x] 4.2 "Wij als ouders" (2 hits, al in Bijlage E bewust-behouden)
+- [x] 4.3 Aandoening-eerst (0 hits na Fase 3.1 fixes)
+- [x] 4.4 Sentiment-slot-audit (alle page-slots feitelijk of actionable, geen sentiment)
 
 ### Fase 5 — Borging
-- [ ] 5.1 Baseline-vergelijking
-- [ ] 5.2 Handmatige steekproef
-- [ ] 5.3 Diff-review
-- [ ] 5.4 AI-verwarringstest
-- [ ] 5.5 16-jaar-test
+- [x] 5.1 Baseline-vergelijking (525 → 0 em-streepjes, overige categorieën tot bewust-behouden-minimum)
+- [x] 5.2 Handmatige steekproef op /samenvatting, /dossier, /wetenschap — alle checklist-punten pass
+- [x] 5.3 Diff-review (19 commits, alleen "ToV X.Y"-taal-commits, geen structurele drift)
+- [x] 5.4 AI-verwarringstest op 3 passages (index-callout, dossier-principe 4, samenvatting-compassion) — specifiek genoeg
+- [x] 5.5 16-jaar-test op 2 passages (portret, gedifferentieerd-zelfbeeld-voorbeelden) — respectvol
 
 ---
 
