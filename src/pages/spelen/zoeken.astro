@@ -1,0 +1,493 @@
+---
+// Paradigma-referentie: Visual Search (Treisman & Gelade 1980 —
+// feature-integration theory). Pop-out search met kleur als onderscheidende
+// feature. @jspsych-contrib/plugin-visual-search-circle (MIT) als informatie-
+// bron; implementatie onafhankelijk. Posities zijn vrij over het veld
+// (rooster met jitter) in plaats van op een cirkel.
+import SpelShell from '../../layouts/SpelShell.astro';
+import { NL } from '../../scripts/strings.nl.js';
+---
+<SpelShell
+  title="Zoeken — Spelen"
+  description="Zoek de rode kikker, oefening voor Alvah."
+  spelTitel={NL.spel.zoeken.titel}
+  instructie={NL.spel.zoeken.uitleg}
+>
+  <div class="zoek" data-zoek>
+    <section class="zoek-scherm" data-scherm="start">
+      <h2 class="zoek-scherm__titel">{NL.spel.zoeken.titel}</h2>
+      <p class="zoek-scherm__lede">{NL.spel.zoeken.uitleg}</p>
+      <div class="zoek-voorbeeld" aria-hidden="true">
+        <svg viewBox="0 0 60 60" class="zoek-kikker zoek-kikker--doel"><use href="#kikker-icon"/></svg>
+        <span class="zoek-voorbeeld__pijl">←</span>
+        <span class="zoek-voorbeeld__tekst">Tik deze</span>
+      </div>
+      <button type="button" class="spel-btn" data-actie="start">{NL.start}</button>
+    </section>
+
+    <section class="zoek-scherm" data-scherm="spelen" hidden>
+      <div class="zoek-meter">
+        <div class="zoek-meter__label">{NL.spel.zoeken.setSize}</div>
+        <div class="zoek-meter__waarde" data-set-size>6</div>
+      </div>
+      <div class="zoek-veld" data-veld>
+        <svg viewBox="0 0 400 400" class="zoek-svg" data-svg xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Zoekveld">
+          <defs>
+            <symbol id="kikker-icon" viewBox="0 0 60 60">
+              <!-- Kikker: lichaam + 2 ogen + 2 pootjes -->
+              <ellipse cx="30" cy="36" rx="20" ry="15" fill="currentColor"/>
+              <circle cx="20" cy="20" r="8" fill="currentColor"/>
+              <circle cx="40" cy="20" r="8" fill="currentColor"/>
+              <circle cx="20" cy="20" r="3" fill="#1a1a1a"/>
+              <circle cx="40" cy="20" r="3" fill="#1a1a1a"/>
+              <ellipse cx="10" cy="48" rx="6" ry="3" fill="currentColor"/>
+              <ellipse cx="50" cy="48" rx="6" ry="3" fill="currentColor"/>
+            </symbol>
+          </defs>
+          <rect x="0" y="0" width="400" height="400" fill="var(--zoek-bg)" rx="18"/>
+        </svg>
+      </div>
+      <p class="zoek-status" data-status role="status" aria-live="polite">{NL.spel.zoeken.jouwBeurt}</p>
+    </section>
+
+    <section class="zoek-scherm" data-scherm="einde" hidden>
+      <h2 class="zoek-scherm__titel">{NL.goedBezig}</h2>
+      <dl class="zoek-einde">
+        <div>
+          <dt>Gevonden</dt>
+          <dd><span data-einde-correct>—</span> / <span data-einde-total>—</span></dd>
+        </div>
+        <div>
+          <dt>Hoogste</dt>
+          <dd data-einde-max>—</dd>
+        </div>
+        <div>
+          <dt>Gem. reactie</dt>
+          <dd data-einde-rt>—</dd>
+        </div>
+      </dl>
+      <div class="zoek-sparkline" data-sparkline-wrap hidden>
+        <div class="zoek-sparkline__label">Laatste tien keer</div>
+        <svg viewBox="0 0 120 30" class="zoek-sparkline__svg" aria-hidden="true" data-sparkline></svg>
+      </div>
+      <a href="/spelen" class="spel-btn">{NL.klaar}</a>
+    </section>
+  </div>
+</SpelShell>
+
+<style>
+  .zoek { width: 100%; max-width: 560px; }
+
+  :root {
+    --zoek-bg: #eaf5e6;
+    --zoek-distractor: #4a8f3f;
+    --zoek-distractor-dim: #3c7534;
+    --zoek-target: #d83636;
+    --zoek-target-hover: #e14d4d;
+    --zoek-goed-ring: rgba(128, 209, 128, 0.45);
+    --zoek-fout-ring: rgba(224, 123, 123, 0.45);
+  }
+
+  .zoek-scherm {
+    display: grid;
+    gap: 20px;
+    justify-items: center;
+    text-align: center;
+  }
+  .zoek-scherm[hidden] { display: none !important; }
+
+  .zoek-scherm__titel {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: clamp(1.6rem, 3vw, 2rem);
+    margin: 0;
+  }
+  .zoek-scherm__lede {
+    color: var(--ink-soft);
+    max-width: 44ch;
+    margin: 0;
+  }
+
+  .zoek-voorbeeld {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink-soft);
+    font-size: 0.92rem;
+  }
+  .zoek-voorbeeld__pijl { color: var(--ink-muted); }
+  .zoek-kikker--doel {
+    width: 44px;
+    height: 44px;
+    color: var(--zoek-target);
+  }
+
+  .zoek-meter {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .zoek-meter__label {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+  }
+  .zoek-meter__waarde {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 1.6rem;
+    color: var(--ink);
+  }
+
+  .zoek-veld {
+    width: min(420px, 86vw);
+    aspect-ratio: 1/1;
+    border-radius: 20px;
+    overflow: hidden;
+    background: var(--zoek-bg);
+    border: 1px solid var(--line);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    position: relative;
+  }
+
+  .zoek-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .zoek-kikker {
+    cursor: pointer;
+    transition: transform 0.1s ease;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .zoek-kikker:hover { transform: scale(1.08); }
+
+  .zoek-veld.is-correct {
+    box-shadow: 0 0 0 4px var(--zoek-goed-ring);
+  }
+  .zoek-veld.is-fout {
+    box-shadow: 0 0 0 4px var(--zoek-fout-ring);
+  }
+
+  .zoek-status {
+    color: var(--ink-soft);
+    min-height: 1.5em;
+    margin: 0;
+  }
+
+  .zoek-einde {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px 24px;
+    margin: 0;
+  }
+  .zoek-einde div { display: grid; gap: 4px; }
+  .zoek-einde dt {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-muted);
+  }
+  .zoek-einde dd {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 1.3rem;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .zoek-sparkline {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+  }
+  .zoek-sparkline__label {
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .zoek-sparkline__svg {
+    width: 120px;
+    height: 30px;
+    stroke: var(--spel-orange);
+    stroke-width: 1.5;
+    fill: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .zoek-kikker {
+      transition: none;
+    }
+    .zoek-kikker:hover { transform: none; }
+  }
+</style>
+
+<script>
+  import { now } from '../../scripts/timer.js';
+  import { summarize } from '../../scripts/scoring.js';
+  import { saveSession, load } from '../../scripts/storage.js';
+  import { create as makeStaircase, onTrial as stepStaircase } from '../../scripts/staircase.js';
+  import { NL } from '../../scripts/strings.nl.js';
+
+  const MIN_SIZE = 4;
+  const MAX_SIZE = 16;
+  const START_SIZE = 6;
+  const MAX_TRIALS = 16;
+  const MAX_SESSION_MS = 3 * 60 * 1000;
+  const FEEDBACK_MS = 400;
+  const ITI_MS = 350;
+  const KIKKER_W = 36;
+
+  type Trial = {
+    i: number;
+    setSize: number;
+    correct: boolean;
+    rt: number;
+    falseAlarms: number;
+    targetIdx: number;
+  };
+
+  const root = document.querySelector<HTMLElement>('[data-zoek]');
+  if (root) initZoek(root);
+
+  function initZoek(root: HTMLElement) {
+    const schermen = {
+      start: root.querySelector<HTMLElement>('[data-scherm="start"]')!,
+      spelen: root.querySelector<HTMLElement>('[data-scherm="spelen"]')!,
+      einde: root.querySelector<HTMLElement>('[data-scherm="einde"]')!,
+    };
+    const veldEl = root.querySelector<HTMLElement>('[data-veld]')!;
+    const svg = root.querySelector<SVGElement>('[data-svg]')!;
+    const statusEl = root.querySelector<HTMLElement>('[data-status]')!;
+    const setSizeEl = root.querySelector<HTMLElement>('[data-set-size]')!;
+    const eindeCorrectEl = root.querySelector<HTMLElement>('[data-einde-correct]')!;
+    const eindeTotalEl = root.querySelector<HTMLElement>('[data-einde-total]')!;
+    const eindeMaxEl = root.querySelector<HTMLElement>('[data-einde-max]')!;
+    const eindeRtEl = root.querySelector<HTMLElement>('[data-einde-rt]')!;
+    const sparklineWrap = root.querySelector<HTMLElement>('[data-sparkline-wrap]')!;
+    const sparklineSvg = root.querySelector<SVGElement>('[data-sparkline]')!;
+
+    let staircase = makeStaircase({ level: START_SIZE, min: MIN_SIZE, max: MAX_SIZE });
+    let trials: Trial[] = [];
+    let sessionStart = 0;
+    let trialStart = 0;
+    let currentTarget = -1;
+    let currentFalseAlarms = 0;
+    let accepting = false;
+
+    root.querySelector<HTMLButtonElement>('[data-actie="start"]')!
+      .addEventListener('click', startSession);
+
+    document.addEventListener('spel:te-moeilijk', () => {
+      if (schermen.spelen.hidden) return;
+      staircase = { ...staircase, level: Math.max(MIN_SIZE, staircase.level - 2), consecCorrect: 0, consecWrong: 0 };
+      setTimeout(nextTrial, 300);
+    });
+    document.addEventListener('spel:pauze', () => {
+      if (trials.length > 0 && schermen.einde.hidden) {
+        endSession();
+      } else {
+        window.location.href = '/spelen';
+      }
+    });
+
+    function toon(id: 'start' | 'spelen' | 'einde') {
+      (['start', 'spelen', 'einde'] as const).forEach((k) => (schermen[k].hidden = k !== id));
+    }
+
+    function startSession() {
+      trials = [];
+      staircase = makeStaircase({ level: START_SIZE, min: MIN_SIZE, max: MAX_SIZE });
+      sessionStart = now();
+      toon('spelen');
+      nextTrial();
+    }
+
+    function nextTrial() {
+      if (now() - sessionStart > MAX_SESSION_MS || trials.length >= MAX_TRIALS) {
+        endSession();
+        return;
+      }
+      const setSize = staircase.level;
+      setSizeEl.textContent = String(setSize);
+      currentFalseAlarms = 0;
+      currentTarget = Math.floor(Math.random() * setSize);
+      renderVeld(setSize, currentTarget);
+      veldEl.classList.remove('is-correct', 'is-fout');
+      statusEl.textContent = NL.spel.zoeken.jouwBeurt;
+      accepting = true;
+      trialStart = now();
+    }
+
+    function renderVeld(setSize: number, targetIdx: number) {
+      // Wis oude kikkers (alles behalve de background rect en defs).
+      for (const el of Array.from(svg.querySelectorAll('.zoek-kikker'))) {
+        el.remove();
+      }
+
+      const posities = jitteredGrid(setSize);
+      posities.forEach((p, idx) => {
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', '#kikker-icon');
+        use.setAttribute('x', String(p.x - KIKKER_W / 2));
+        use.setAttribute('y', String(p.y - KIKKER_W / 2));
+        use.setAttribute('width', String(KIKKER_W));
+        use.setAttribute('height', String(KIKKER_W));
+        const isTarget = idx === targetIdx;
+        use.setAttribute('class', 'zoek-kikker');
+        use.setAttribute('color', isTarget ? 'var(--zoek-target)' : 'var(--zoek-distractor)');
+        use.setAttribute('data-target', isTarget ? '1' : '0');
+        use.setAttribute('tabindex', '-1');
+        use.setAttribute('role', 'button');
+        use.setAttribute('aria-label', isTarget ? 'Rode kikker' : 'Groene kikker');
+        use.addEventListener('click', () => onKikkerClick(isTarget));
+        svg.appendChild(use);
+      });
+    }
+
+    function onKikkerClick(isTarget: boolean) {
+      if (!accepting) return;
+      if (isTarget) {
+        accepting = false;
+        const rt = Math.round(now() - trialStart);
+        trials.push({
+          i: trials.length + 1,
+          setSize: staircase.level,
+          correct: true,
+          rt,
+          falseAlarms: currentFalseAlarms,
+          targetIdx: currentTarget,
+        });
+        veldEl.classList.add('is-correct');
+        statusEl.textContent = NL.spel.zoeken.goed;
+        staircase = stepStaircase(staircase, true);
+        setTimeout(() => {
+          veldEl.classList.remove('is-correct');
+          setTimeout(nextTrial, ITI_MS);
+        }, FEEDBACK_MS);
+      } else {
+        // False alarm: blijft binnen trial, staircase nog niet geraakt.
+        // Pas als gebruiker de target wél vindt sluit de trial; als de sessie
+        // aan tijd/trials-limiet komt zonder target, registreer als fout.
+        currentFalseAlarms += 1;
+        veldEl.classList.add('is-fout');
+        statusEl.textContent = NL.spel.zoeken.fout;
+        setTimeout(() => {
+          veldEl.classList.remove('is-fout');
+          statusEl.textContent = NL.spel.zoeken.jouwBeurt;
+        }, 350);
+
+        if (currentFalseAlarms >= 3) {
+          // Te veel fouten op één trial: registreer als incorrect en ga door.
+          accepting = false;
+          const rt = Math.round(now() - trialStart);
+          trials.push({
+            i: trials.length + 1,
+            setSize: staircase.level,
+            correct: false,
+            rt,
+            falseAlarms: currentFalseAlarms,
+            targetIdx: currentTarget,
+          });
+          staircase = stepStaircase(staircase, false);
+          setTimeout(nextTrial, FEEDBACK_MS + ITI_MS);
+        }
+      }
+    }
+
+    function endSession() {
+      accepting = false;
+      const duration = Math.round(now() - sessionStart);
+      const sum = summarize(trials);
+      const maxSet = trials.filter((t) => t.correct).reduce((m, t) => Math.max(m, t.setSize), 0);
+      const totalFA = trials.reduce((s, t) => s + (t.falseAlarms || 0), 0);
+      const sessionObj = {
+        id: 's_' + Math.random().toString(36).slice(2, 10),
+        date: new Date().toISOString(),
+        level: maxSet || staircase.level,
+        durationMs: duration,
+        trials: trials.slice(),
+        summary: { ...sum, maxSetSize: maxSet, falseAlarmsTotal: totalFA },
+      };
+      saveSession('zoeken', sessionObj);
+
+      toon('einde');
+      const correctN = trials.filter((t) => t.correct).length;
+      eindeCorrectEl.textContent = String(correctN);
+      eindeTotalEl.textContent = String(trials.length);
+      eindeMaxEl.textContent = maxSet ? String(maxSet) : '—';
+      eindeRtEl.textContent = sum.meanRT ? sum.meanRT + ' ms' : '—';
+      renderSparkline();
+    }
+
+    function renderSparkline() {
+      let data;
+      try { data = load(); } catch { return; }
+      if (!data.preferences || data.preferences.sparklineInEinde === false) return;
+      const sessions = (data.exercises.zoeken.sessions || []).slice(-10);
+      if (sessions.length < 2) return;
+      const values = sessions.map((s: any) =>
+        (s.summary && typeof s.summary.maxSetSize === 'number') ? s.summary.maxSetSize : 0,
+      );
+      const max = Math.max(...values, 1);
+      const w = 120;
+      const h = 30;
+      const pts = values.map((v: number, i: number) => {
+        const x = (i / (values.length - 1)) * (w - 4) + 2;
+        const y = h - (v / max) * (h - 6) - 3;
+        return { x: +x.toFixed(1), y: +y.toFixed(1) };
+      });
+      const poly = pts.map((p: {x:number;y:number}) => `${p.x},${p.y}`).join(' ');
+      const circles = pts.map(
+        (p: {x:number;y:number}) => `<circle cx="${p.x}" cy="${p.y}" r="1.8" fill="var(--spel-orange)"/>`,
+      ).join('');
+      sparklineSvg.innerHTML =
+        `<polyline points="${poly}" fill="none" stroke="var(--spel-orange)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${circles}`;
+      sparklineWrap.hidden = false;
+    }
+  }
+
+  // Jittered grid: verdeelt `n` posities in een veldruimte met rasters,
+  // dan random jitter per cel. Voorkomt clustering en overlap bij kleine
+  // set-sizes.
+  function jitteredGrid(n: number): Array<{ x: number; y: number }> {
+    const W = 400;
+    const H = 400;
+    const margin = 30;
+    const cols = Math.ceil(Math.sqrt(n));
+    const rows = Math.ceil(n / cols);
+    const cellW = (W - 2 * margin) / cols;
+    const cellH = (H - 2 * margin) / rows;
+    const points: Array<{ x: number; y: number }> = [];
+    const order = shuffle(range(cols * rows));
+    for (let i = 0; i < n; i++) {
+      const idx = order[i];
+      const c = idx % cols;
+      const r = Math.floor(idx / cols);
+      const jx = (Math.random() - 0.5) * (cellW * 0.4);
+      const jy = (Math.random() - 0.5) * (cellH * 0.4);
+      points.push({
+        x: margin + c * cellW + cellW / 2 + jx,
+        y: margin + r * cellH + cellH / 2 + jy,
+      });
+    }
+    return points;
+  }
+
+  function range(n: number): number[] {
+    return Array.from({ length: n }, (_, i) => i);
+  }
+
+  function shuffle<T>(arr: T[]): T[] {
+    const out = arr.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+</script>

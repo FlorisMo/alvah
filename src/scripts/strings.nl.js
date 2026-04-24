@@ -50,7 +50,15 @@ export const NL = {
       hoogsteRij: 'Hoogste rij',
       eindeCap: 'Je hebt de hoogste rij gehaald',
     },
-    zoeken:    { titel: 'Zoeken',    kort: 'Zoek de rode kikker tussen de groene.' },
+    zoeken: {
+      titel: 'Zoeken',
+      kort: 'Zoek de rode kikker tussen de groene.',
+      uitleg: 'Tik de rode kikker zo snel als je kunt. Let op: de andere kikkers zijn groen.',
+      jouwBeurt: 'Zoek de rode',
+      goed: 'Gevonden',
+      fout: 'Dat was een groene',
+      setSize: 'Aantal kikkers',
+    },
     corsi: {
       titel: 'Corsi',
       kort: 'Onthoud welke sterren oplichtten en in welke volgorde.',
@@ -73,7 +81,30 @@ export const NL = {
       bijnaGoed: 'Andersom',
       rondeVan: (i, n) => `Ronde ${i} van ${n}`,
     },
-    wisselen:  { titel: 'Wisselen',  kort: 'Soms kijk je naar de kleur, soms naar de vorm.' },
+    wisselen: {
+      titel: 'Wisselen',
+      kort: 'Soms kijk je naar de kleur, soms naar de vorm.',
+      uitleg: 'Lees eerst de hint. "Kleur" betekent: kijk naar de kleur. "Vorm" betekent: kijk naar de vorm. Tik dan links of rechts.',
+      cueKleur: 'Kleur',
+      cueVorm: 'Vorm',
+      instructieKleur: 'Rood links, blauw rechts',
+      instructieVorm: 'Vierkant links, cirkel rechts',
+      links: 'Links',
+      rechts: 'Rechts',
+      blokTitel: {
+        'pure-kleur': 'Alleen kleur',
+        'pure-vorm': 'Alleen vorm',
+        'switch': 'Afwisselen',
+      },
+      blokUitleg: {
+        'pure-kleur': 'Let alleen op de kleur.',
+        'pure-vorm': 'Let alleen op de vorm.',
+        'switch': 'De hint wisselt. Lees hem elke keer.',
+      },
+      goed: 'Juist',
+      fout: 'Andersom',
+      switchCost: 'Wisselkost',
+    },
   },
 
   // Admin-pagina

@@ -14,7 +14,7 @@ const spellen: { id: SpelId; icon: string; fase: number }[] = [
 ];
 
 // Speelbare spellen — uitbreiden bij elke nieuwe fase.
-const SPEELBAAR = new Set<SpelId>(['simon', 'corsi', 'day-night']);
+const SPEELBAAR = new Set<SpelId>(['simon', 'corsi', 'day-night', 'zoeken', 'wisselen']);
 
 const aanbevolenStub: SpelId = 'simon';
 const aanbevolen = spellen.find((s) => s.id === aanbevolenStub)!;
@@ -85,7 +85,7 @@ const overig = spellen.filter((s) => s.id !== aanbevolenStub);
 
     // Client-side aanrader. Valt terug op 'simon' als de aanbeveling nog niet
     // speelbaar is in de huidige fase.
-    const SPEELBAAR = new Set(['simon', 'corsi', 'day-night']);
+    const SPEELBAAR = new Set(['simon', 'corsi', 'day-night', 'zoeken', 'wisselen']);
 
     try {
       const data = load();

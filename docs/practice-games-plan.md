@@ -6,24 +6,28 @@ Meta-plan dat `docs/source/Research-practice-tools.md` omzet naar een faseerbare
 
 ## Hervat-gids — lees dit eerst bij een nieuwe sessie
 
-**Status (24 apr 2026):** Fase 0, 1 (Simon), 2 (Corsi), 3 (Day-Night) en 6 (Admin) zijn **klaar**. Zie §6 voor per-fase details. Alles draait lokaal via `npm run dev`; er is nog niet gedeployed en dat moet bewust gebeuren (gate + privacy-checks staan aan).
+**Status (24 apr 2026, latere run):** Fases 0, 1 (Simon), 2 (Corsi), 3 (Day-Night), 4 (Zoeken), 5 (Wisselen) en 6 (Admin) zijn **klaar**. Alle vijf spellen speelbaar; admin toont alle data. Alleen Fase 7 (mijlpalen + `/spelen/reis`) en Fase 8 (polish) staan nog open. Alles draait lokaal via `npm run dev`; er is nog niet gedeployed en dat moet bewust gebeuren (gate + privacy-checks staan aan).
 
-**Volgende stap:** Fase 4 — Visual Search / Zoek de kikker. Scope staat beschreven in §6. Fase 4 past in één run. Daarna Fase 5 (Wisselen), dan Fase 7 (mijlpalen) + Fase 8 (polish).
+**Volgende stap:** Fase 7 — Mijlpalen + visuele collectie + `/spelen/reis`. Scope in §6. Raakt meerdere bestanden: `src/scripts/mijlpalen.js` (vul de stub met drempels per spel), `src/pages/spelen/reis.astro` (nieuw), korte groei-fragment per spel-einde-scherm, admin-banner voor behaalde mijlpalen. Één run haalbaar als we de 5 spel-bestanden alleen minimaal patchen.
+
+**Daarna:** Fase 8 (polish — homepage-haak, onboarding, "te-moeilijk"-tweaks).
 
 **Snelle verificatie bij hervatten:**
 
 ```bash
 node --test src/scripts/*.test.js    # verwacht: 16 pass, 0 fail
 npx astro check                      # verwacht: 0 errors, 0 warnings, 0 hints
-npm run dev                          # → /spelen laadt, Simon/Corsi/Day-Night speelbaar, /spelen/admin toont overzicht
+npm run dev                          # → /spelen laadt, alle 5 spellen speelbaar, /spelen/admin werkt
 ```
 
 **Wat er staat en wat niet:**
 
-- `/spelen` (landing) toont Simon als aanbevolen-stub, 2 andere speelbare tegels (Corsi + Day-Night), 2 tegels als "Nog niet beschikbaar" (Zoeken + Wisselen).
-- `/spelen/simon`, `/spelen/corsi`, `/spelen/day-night` zijn volledig speelbaar, loggen naar `localStorage` sleutel `alvah-ef-v1`.
+- `/spelen` (landing) toont Simon als aanbevolen-stub, 4 andere speelbare tegels (Zoeken, Corsi, Day-Night, Wisselen). Geen "binnenkort"-tegels meer.
+- Alle 5 spel-routes zijn volledig speelbaar en loggen naar `localStorage` sleutel `alvah-ef-v1`:
+  `/spelen/simon`, `/spelen/corsi`, `/spelen/day-night`, `/spelen/zoeken`, `/spelen/wisselen`.
 - `/spelen/admin` toont per spel sparkline + tabel laatste 10 sessies, "deze week" KPI, JSON-copy/download/import, wis-alles met dubbele bevestiging.
-- `/spelen/zoeken`, `/wisselen`, `/reis` bestaan **nog niet**. De landing heeft nog steeds een link naar `/reis` — die geeft 404 tot Fase 7.
+- `/spelen/reis` bestaat **nog niet** (Fase 7). De landing heeft nog steeds een link naar `/reis` — die geeft 404 tot Fase 7.
+- `src/scripts/mijlpalen.js` bestaat als stub — drempels per spel moeten in Fase 7 gevuld worden. `src/scripts/aanraden.js` heeft echte logica maar landing gebruikt nog de stub (default-volgorde). In Fase 8 kan de landing `pickNext()` écht gebruiken.
 - Referentie-repo's zijn gekloond in `reference/` (gitignored, read-only via `chmod`). Beleid: uitsluitend leesbron, altijd zelf herschrijven. Zie §4.
 
 **Gotchas:**
@@ -326,17 +330,63 @@ Elke fase eindigt in een commit, werkende pagina, en geen wijzigingen buiten de 
 
 **Gebruikt paradigma-referentie:** Gerstadt, Hong & Diamond 1994. Geen jsPsych-plugin-equivalent gebruikt — implementatie volledig onafhankelijk geschreven.
 
-### Fase 4 — Visual Search / Zoek de kikker (1 run)
-**Doel:** aandacht, hoog engagement, niet-verbale taak.
-**Bestanden:** `src/pages/spelen/zoeken.astro` (nieuw).
-**Recept:** SVG-veld met N kikkers, staircase op set-size 4→16, 3 unlock-niveaus (feature → conjunction → bewegend).
-**Acceptatie:** sessie speelbaar, false-alarms gelogd.
+### Fase 4 — Visual Search / Zoek de kikker — ✅ KLAAR (24 apr 2026)
 
-### Fase 5 — Cued Task-Switching (1 run, zwaarste)
-**Doel:** flexibiliteit, beste evidence-transfer bij kinderen (Karbach & Kray 2009).
-**Bestanden:** `src/pages/spelen/wisselen.astro` (nieuw).
-**Recept:** cue-symbool + kleur/vorm-stimulus, 3 blokken (pure-kleur, pure-vorm, AABB-switch), verbal self-instruction prompt.
-**Acceptatie:** switch-cost zichtbaar in summary (meanRT_switch − meanRT_repeat).
+**Gebouwd:**
+- `src/pages/spelen/zoeken.astro` — nieuw, compleet spel in één bestand.
+- `src/scripts/strings.nl.js` — `zoeken`-subblok uitgebreid (`uitleg`, `jouwBeurt`, `goed`, `fout`, `setSize`).
+- `src/pages/spelen/index.astro` — Zoeken toegevoegd aan SPEELBAAR-set.
+
+**Spel-mechanica (clean-room implementatie):**
+- SVG-veld 400×400, `<symbol id="kikker-icon">` met ogen + pootjes, vullen via `color`-attribuut op `<use>` elementen — één doel-kikker in `--zoek-target` (rood), distractors in `--zoek-distractor` (groen).
+- Jittered-grid-layout: verdeelt N posities over √N × ceil(N/√N) rasters met random jitter per cel, geshuffled. Voorkomt clustering en overlap.
+- Staircase 2-down/1-up via `src/scripts/staircase.js`. Set-size range 4..16, start 6.
+- Sessie: max 16 trials of 3 min. Trial-log: `{ i, setSize, correct, rt, falseAlarms, targetIdx }`.
+- False-alarm-logica: klik op distractor = fout-feedback (rode ring 350 ms) maar trial blijft open. Na 3 false-alarms sluit trial als incorrect. Klik target = correct, staircase stapt.
+- Einde-scherm: correct/total, `maxSetSize`, gem. RT, sparkline in `--spel-orange`. Summary bevat `maxSetSize` + `falseAlarmsTotal`.
+
+**A11y / research-regels:**
+- Kleur + positie (rode kikker heeft pop-out kleur-verschil met groene — Treisman feature-search). Kleurenblind-safe? Rood/groen is klassiek lastig voor deuteranopie. Voor nu acceptabel: Alvah heeft geen kleurenblindheid volgens dossier; bij latere uitbreiding naar conjunction-search (Fase 7/8) vorm-verschil toevoegen.
+- `aria-label` per kikker ("Rode kikker"/"Groene kikker"), `role="button"`.
+- Geen countdown; sessie-limiet op tijd.
+- Hover-scale 1.08 disabled onder `prefers-reduced-motion`.
+
+**Afwijkend t.o.v. plan:** het plan noemt 3 unlock-niveaus (feature → conjunction → bewegend). Voor nu alleen niveau 1 (feature) gebouwd — de staircase loopt over set-size binnen één mode. Conjunction + bewegend komen bij Fase 7 (mijlpalen) waar unlocks thuishoren. `highestLevel` in storage tracked `maxSetSize` als proxy.
+
+**Verificatie:** `node --test` 16/16, `npx astro check` 0 errors, HTTP 200 op `/spelen/zoeken`.
+
+**Paradigma-referentie:** Treisman & Gelade 1980 (feature-integration theory). `@jspsych/plugin-visual-search-circle` (MIT, core jsPsych) als informatiebron — alleen plugin-docs geraadpleegd. Posities hier op jittered-grid i.p.v. cirkel.
+
+### Fase 5 — Cued Task-Switching — ✅ KLAAR (24 apr 2026)
+
+**Gebouwd:**
+- `src/pages/spelen/wisselen.astro` — nieuw, compleet spel in één bestand met 4 schermen (start, blok-intro, spelen, einde).
+- `src/scripts/strings.nl.js` — `wisselen`-subblok uitgebreid (cue-labels, blok-titels/uitleg, instructies, feedback).
+- `src/pages/spelen/index.astro` — Wisselen toegevoegd aan SPEELBAAR-set.
+
+**Spel-mechanica (clean-room implementatie):**
+- Bivalente stimuli: 2 kleuren (rood/blauw) × 2 vormen (vierkant/cirkel) = 4 stimulus-combinaties. SVG rect of circle, gevuld met stimulus-kleur.
+- Vaste mapping: kleur-taak → rood=links, blauw=rechts. Vorm-taak → vierkant=links, cirkel=rechts. Bivalent betekent: sommige trials (bv. rood vierkant) hebben dezelfde correcte response ongeacht taak; andere (rood cirkel, blauw vierkant) zijn incongruent.
+- Cue ("Kleur" / "Vorm") verschijnt eerst; stimulus 400 ms later (standaard cue-stimulus-interval). Response: 2 grote knoppen "← Links" / "Rechts →".
+- 3 blokken × 12 trials = 36 totaal:
+  - Blok 1 "Alleen kleur" (pure-kleur)
+  - Blok 2 "Alleen vorm" (pure-vorm)
+  - Blok 3 "Afwisselen" — AABB-patroon (K,K,V,V,K,K,...) zodat switch- en repeat-trials ongeveer 50/50 zijn en voorspelbaar.
+- Blok-intro-scherm tussen blokken zodat Alvah pauze krijgt + nieuwe regel ziet.
+- Feedback 450 ms (gloed-ring correct of rode ring fout) + 250 ms ITI.
+- Trial-log: `{ i, blok, taak, kleur, vorm, expected, response, correct, rt, isSwitch }`.
+- **Switch-cost** in summary: `mean(RT van correcte switch-trials in blok 3) − mean(RT van correcte repeat-trials in blok 3)`, afgerond in ms. Zichtbaar op einde-scherm en gelogd in `summary.switchCost`.
+
+**A11y / research-regels:**
+- Kleur + vorm gecombineerd — kleurenblind-safe.
+- Cue + uitleg in duidelijke talen; cue-paneel in `--green-soft` met `--green` tekst.
+- `aria-live="polite"` op status voor "Juist"/"Andersom".
+- Geen countdown, geen tijdsdruk.
+- Rustige feedback-kleuren, geen hype.
+
+**Verificatie:** `node --test` 16/16, `npx astro check` 0 errors, HTTP 200 op `/spelen/wisselen`.
+
+**Paradigma-referentie:** Rogers & Monsell 1995 (task-switching paradigm); Karbach & Kray 2009 (kindertraining evidence). Geen jsPsych-plugin gebruikt — implementatie volledig onafhankelijk.
 
 ### Fase 6 — Admin-pagina — ✅ KLAAR (24 apr 2026)
 

@@ -1,0 +1,565 @@
+---
+// Paradigma-referentie: Cued Task-Switching (Rogers & Monsell 1995;
+// Karbach & Kray 2009 voor kindertraining). Twee taken (kleur, vorm) op
+// bivalente stimuli; cue bepaalt welke taak relevant is. Blokken:
+// pure-kleur, pure-vorm, AABB-switch. Onafhankelijk geschreven.
+import SpelShell from '../../layouts/SpelShell.astro';
+import { NL } from '../../scripts/strings.nl.js';
+---
+<SpelShell
+  title="Wisselen — Spelen"
+  description="Cued task-switching voor Alvah."
+  spelTitel={NL.spel.wisselen.titel}
+  instructie={NL.spel.wisselen.uitleg}
+>
+  <div class="wis" data-wis>
+    <section class="wis-scherm" data-scherm="start">
+      <h2 class="wis-scherm__titel">{NL.spel.wisselen.titel}</h2>
+      <p class="wis-scherm__lede">{NL.spel.wisselen.uitleg}</p>
+      <div class="wis-regels" aria-hidden="false">
+        <div class="wis-regel">
+          <div class="wis-regel__cue">{NL.spel.wisselen.cueKleur}</div>
+          <div class="wis-regel__uitleg">{NL.spel.wisselen.instructieKleur}</div>
+        </div>
+        <div class="wis-regel">
+          <div class="wis-regel__cue">{NL.spel.wisselen.cueVorm}</div>
+          <div class="wis-regel__uitleg">{NL.spel.wisselen.instructieVorm}</div>
+        </div>
+      </div>
+      <button type="button" class="spel-btn" data-actie="start">{NL.start}</button>
+    </section>
+
+    <section class="wis-scherm wis-scherm--blok" data-scherm="blok-intro" hidden>
+      <h2 class="wis-scherm__titel" data-blok-titel>—</h2>
+      <p class="wis-scherm__lede" data-blok-uitleg>—</p>
+      <button type="button" class="spel-btn" data-actie="blok-start">{NL.start}</button>
+    </section>
+
+    <section class="wis-scherm" data-scherm="spelen" hidden>
+      <div class="wis-progress-wrap">
+        <span class="wis-progress-label" data-progress-label>—</span>
+        <span class="wis-progress">
+          <span class="wis-progress__bar" data-progress></span>
+        </span>
+      </div>
+
+      <div class="wis-cue" data-cue-wrap>
+        <span class="wis-cue__label">Hint</span>
+        <span class="wis-cue__waarde" data-cue>—</span>
+      </div>
+
+      <div class="wis-stim-wrap" data-stim-wrap>
+        <svg viewBox="0 0 160 160" class="wis-stim" data-stim aria-label="stimulus"></svg>
+      </div>
+
+      <div class="wis-keuze">
+        <button type="button" class="spel-btn spel-btn--wis" data-resp="left">
+          ← {NL.spel.wisselen.links}
+        </button>
+        <button type="button" class="spel-btn spel-btn--wis" data-resp="right">
+          {NL.spel.wisselen.rechts} →
+        </button>
+      </div>
+
+      <p class="wis-status" data-status role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="wis-scherm" data-scherm="einde" hidden>
+      <h2 class="wis-scherm__titel">{NL.goedBezig}</h2>
+      <dl class="wis-einde">
+        <div>
+          <dt>Correct</dt>
+          <dd><span data-einde-correct>—</span> / <span data-einde-total>—</span></dd>
+        </div>
+        <div>
+          <dt>Accuracy</dt>
+          <dd data-einde-acc>—</dd>
+        </div>
+        <div>
+          <dt>{NL.spel.wisselen.switchCost}</dt>
+          <dd data-einde-sc>—</dd>
+        </div>
+      </dl>
+      <div class="wis-sparkline" data-sparkline-wrap hidden>
+        <div class="wis-sparkline__label">Laatste tien keer</div>
+        <svg viewBox="0 0 120 30" class="wis-sparkline__svg" aria-hidden="true" data-sparkline></svg>
+      </div>
+      <a href="/spelen" class="spel-btn">{NL.klaar}</a>
+    </section>
+  </div>
+</SpelShell>
+
+<style>
+  .wis { width: 100%; max-width: 560px; }
+
+  .wis-scherm {
+    display: grid;
+    gap: 18px;
+    justify-items: center;
+    text-align: center;
+  }
+  .wis-scherm[hidden] { display: none !important; }
+
+  .wis-scherm__titel {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: clamp(1.6rem, 3vw, 2rem);
+    margin: 0;
+  }
+  .wis-scherm__lede {
+    color: var(--ink-soft);
+    max-width: 44ch;
+    margin: 0;
+  }
+
+  .wis-regels {
+    display: grid;
+    gap: 10px;
+    max-width: 360px;
+    width: 100%;
+  }
+  .wis-regel {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--spel-radius);
+    text-align: left;
+  }
+  .wis-regel__cue {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--green-soft);
+    color: var(--green);
+    font-family: var(--font-heading);
+    font-weight: 500;
+    min-width: 70px;
+    text-align: center;
+  }
+  .wis-regel__uitleg {
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+
+  .wis-progress-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: min(300px, 80vw);
+  }
+  .wis-progress-label {
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .wis-progress {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--line-soft);
+    overflow: hidden;
+  }
+  .wis-progress__bar {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--green);
+    transition: width 0.2s ease;
+  }
+
+  .wis-cue {
+    display: grid;
+    gap: 4px;
+    padding: 14px 32px;
+    border-radius: 16px;
+    background: var(--green-soft);
+    border: 1px solid var(--green-line);
+    min-width: 160px;
+  }
+  .wis-cue__label {
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .wis-cue__waarde {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 1.6rem;
+    color: var(--green);
+  }
+
+  .wis-stim-wrap {
+    display: grid;
+    place-items: center;
+    min-height: 170px;
+    padding: 12px;
+    border-radius: 20px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    transition: box-shadow 0.2s ease;
+  }
+  .wis-stim-wrap.is-correct {
+    box-shadow: 0 0 0 4px var(--spel-glow);
+  }
+  .wis-stim-wrap.is-fout {
+    box-shadow: 0 0 0 4px rgba(224, 123, 123, 0.35);
+  }
+  .wis-stim {
+    width: 140px;
+    height: 140px;
+    display: block;
+  }
+
+  .wis-keuze {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+  }
+  .spel-btn--wis { min-width: 140px; }
+
+  .wis-status {
+    color: var(--ink-soft);
+    min-height: 1.5em;
+    margin: 0;
+  }
+
+  .wis-einde {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px 24px;
+    margin: 0;
+  }
+  .wis-einde div { display: grid; gap: 4px; }
+  .wis-einde dt {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-muted);
+  }
+  .wis-einde dd {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    font-size: 1.3rem;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .wis-sparkline {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+  }
+  .wis-sparkline__label {
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .wis-sparkline__svg {
+    width: 120px;
+    height: 30px;
+    stroke: var(--green);
+    stroke-width: 1.5;
+    fill: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wis-stim-wrap,
+    .wis-progress__bar {
+      transition: none !important;
+    }
+  }
+</style>
+
+<script>
+  import { now } from '../../scripts/timer.js';
+  import { summarize, mean } from '../../scripts/scoring.js';
+  import { saveSession, load } from '../../scripts/storage.js';
+  import { NL } from '../../scripts/strings.nl.js';
+
+  // Stimuli: combinatie van kleur (rood/blauw) en vorm (vierkant/cirkel).
+  // Bivalent: de kleur-taak en vorm-taak kunnen dezelfde of verschillende
+  // response oproepen.
+  //
+  // Taak-regels (vaste mapping):
+  //   kleur: rood  → links, blauw  → rechts
+  //   vorm:  vierkant → links, cirkel → rechts
+  type Kleur = 'rood' | 'blauw';
+  type Vorm = 'vierkant' | 'cirkel';
+  type Taak = 'kleur' | 'vorm';
+  type Resp = 'left' | 'right';
+
+  type BlokKey = 'pure-kleur' | 'pure-vorm' | 'switch';
+  const BLOKKEN: BlokKey[] = ['pure-kleur', 'pure-vorm', 'switch'];
+  const TRIALS_PER_BLOK = 12;
+  const FEEDBACK_MS = 450;
+  const CUE_MS = 400;
+  const ITI_MS = 250;
+
+  type Trial = {
+    i: number;
+    blok: BlokKey;
+    taak: Taak;
+    kleur: Kleur;
+    vorm: Vorm;
+    expected: Resp;
+    response: Resp | null;
+    correct: boolean;
+    rt: number;
+    isSwitch: boolean; // in switch-blok: wisselt taak t.o.v. vorige trial?
+  };
+
+  const COLOR_HEX = { rood: '#d83636', blauw: '#2b5fb8' } as const;
+
+  const root = document.querySelector<HTMLElement>('[data-wis]');
+  if (root) initWis(root);
+
+  function initWis(root: HTMLElement) {
+    const schermen = {
+      start: root.querySelector<HTMLElement>('[data-scherm="start"]')!,
+      'blok-intro': root.querySelector<HTMLElement>('[data-scherm="blok-intro"]')!,
+      spelen: root.querySelector<HTMLElement>('[data-scherm="spelen"]')!,
+      einde: root.querySelector<HTMLElement>('[data-scherm="einde"]')!,
+    };
+    const blokTitelEl = root.querySelector<HTMLElement>('[data-blok-titel]')!;
+    const blokUitlegEl = root.querySelector<HTMLElement>('[data-blok-uitleg]')!;
+    const cueEl = root.querySelector<HTMLElement>('[data-cue]')!;
+    const stimSvg = root.querySelector<SVGElement>('[data-stim]')!;
+    const stimWrap = root.querySelector<HTMLElement>('[data-stim-wrap]')!;
+    const progressEl = root.querySelector<HTMLElement>('[data-progress]')!;
+    const progressLabelEl = root.querySelector<HTMLElement>('[data-progress-label]')!;
+    const statusEl = root.querySelector<HTMLElement>('[data-status]')!;
+    const eindeCorrectEl = root.querySelector<HTMLElement>('[data-einde-correct]')!;
+    const eindeTotalEl = root.querySelector<HTMLElement>('[data-einde-total]')!;
+    const eindeAccEl = root.querySelector<HTMLElement>('[data-einde-acc]')!;
+    const eindeScEl = root.querySelector<HTMLElement>('[data-einde-sc]')!;
+    const respButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-resp]'));
+    const sparklineWrap = root.querySelector<HTMLElement>('[data-sparkline-wrap]')!;
+    const sparklineSvg = root.querySelector<SVGElement>('[data-sparkline]')!;
+
+    let trials: Trial[] = [];
+    let blokIdx = 0;
+    let trialIdxInBlok = 0;
+    let sessionStart = 0;
+    let stimOnset = 0;
+    let currentTaak: Taak = 'kleur';
+    let currentKleur: Kleur = 'rood';
+    let currentVorm: Vorm = 'vierkant';
+    let prevTaak: Taak | null = null;
+    let accepting = false;
+
+    root.querySelector<HTMLButtonElement>('[data-actie="start"]')!
+      .addEventListener('click', () => showBlokIntro());
+    root.querySelector<HTMLButtonElement>('[data-actie="blok-start"]')!
+      .addEventListener('click', startBlok);
+
+    for (const btn of respButtons) {
+      btn.addEventListener('click', () => {
+        if (!accepting) return;
+        onResponse(btn.getAttribute('data-resp') as Resp);
+      });
+    }
+
+    document.addEventListener('spel:te-moeilijk', () => {
+      if (schermen.spelen.hidden) return;
+      endSession();
+    });
+    document.addEventListener('spel:pauze', () => {
+      if (trials.length > 0 && schermen.einde.hidden) {
+        endSession();
+      } else {
+        window.location.href = '/spelen';
+      }
+    });
+
+    function toon(id: 'start' | 'blok-intro' | 'spelen' | 'einde') {
+      (['start', 'blok-intro', 'spelen', 'einde'] as const).forEach(
+        (k) => (schermen[k].hidden = k !== id),
+      );
+    }
+
+    function showBlokIntro() {
+      if (blokIdx >= BLOKKEN.length) {
+        endSession();
+        return;
+      }
+      if (blokIdx === 0) {
+        trials = [];
+        sessionStart = now();
+      }
+      const bk = BLOKKEN[blokIdx];
+      blokTitelEl.textContent = NL.spel.wisselen.blokTitel[bk];
+      blokUitlegEl.textContent = NL.spel.wisselen.blokUitleg[bk];
+      toon('blok-intro');
+    }
+
+    function startBlok() {
+      trialIdxInBlok = 0;
+      prevTaak = null;
+      toon('spelen');
+      nextTrial();
+    }
+
+    function nextTrial() {
+      if (trialIdxInBlok >= TRIALS_PER_BLOK) {
+        blokIdx += 1;
+        showBlokIntro();
+        return;
+      }
+
+      const blok = BLOKKEN[blokIdx];
+      if (blok === 'pure-kleur') currentTaak = 'kleur';
+      else if (blok === 'pure-vorm') currentTaak = 'vorm';
+      else {
+        // AABB-switch: patroon K,K,V,V,K,K,V,V...
+        const pair = Math.floor(trialIdxInBlok / 2);
+        currentTaak = pair % 2 === 0 ? 'kleur' : 'vorm';
+      }
+
+      currentKleur = Math.random() < 0.5 ? 'rood' : 'blauw';
+      currentVorm = Math.random() < 0.5 ? 'vierkant' : 'cirkel';
+      renderStim(currentKleur, currentVorm);
+      cueEl.textContent = currentTaak === 'kleur' ? NL.spel.wisselen.cueKleur : NL.spel.wisselen.cueVorm;
+      progressLabelEl.textContent = NL.spel.wisselen.blokTitel[blok];
+      updateProgress();
+      stimWrap.classList.remove('is-correct', 'is-fout');
+      statusEl.textContent = '';
+
+      // Cue verschijnt eerst, stimulus 400ms later — geeft tijd om de cue te
+      // lezen (standaard cue-stimulus interval in CTS-paradigma's).
+      accepting = false;
+      setTimeout(() => {
+        accepting = true;
+        stimOnset = now();
+      }, CUE_MS);
+    }
+
+    function renderStim(kleur: Kleur, vorm: Vorm) {
+      const hex = COLOR_HEX[kleur];
+      if (vorm === 'vierkant') {
+        stimSvg.innerHTML =
+          `<rect x="30" y="30" width="100" height="100" fill="${hex}" rx="6"/>`;
+      } else {
+        stimSvg.innerHTML =
+          `<circle cx="80" cy="80" r="52" fill="${hex}"/>`;
+      }
+    }
+
+    function updateProgress() {
+      const totaal = BLOKKEN.length * TRIALS_PER_BLOK;
+      const gedaan = blokIdx * TRIALS_PER_BLOK + trialIdxInBlok;
+      progressEl.style.width = ((gedaan / totaal) * 100) + '%';
+    }
+
+    function onResponse(resp: Resp) {
+      accepting = false;
+      const rt = Math.round(now() - stimOnset);
+      const expected: Resp = expectedResp(currentTaak, currentKleur, currentVorm);
+      const correct = resp === expected;
+      const blok = BLOKKEN[blokIdx];
+      const isSwitch = blok === 'switch' && prevTaak !== null && prevTaak !== currentTaak;
+
+      trials.push({
+        i: trials.length + 1,
+        blok,
+        taak: currentTaak,
+        kleur: currentKleur,
+        vorm: currentVorm,
+        expected,
+        response: resp,
+        correct,
+        rt,
+        isSwitch,
+      });
+
+      stimWrap.classList.add(correct ? 'is-correct' : 'is-fout');
+      statusEl.textContent = correct ? NL.spel.wisselen.goed : NL.spel.wisselen.fout;
+
+      prevTaak = currentTaak;
+      trialIdxInBlok += 1;
+      setTimeout(() => {
+        stimWrap.classList.remove('is-correct', 'is-fout');
+        setTimeout(nextTrial, ITI_MS);
+      }, FEEDBACK_MS);
+    }
+
+    function endSession() {
+      accepting = false;
+      const duration = Math.round(now() - sessionStart);
+      const sum = summarize(trials);
+
+      // Switch-cost: alleen betekenisvol in switch-blok. Gemeten op correcte
+      // trials: mean RT van switch-trials minus repeat-trials.
+      const switchRTs = trials
+        .filter((t) => t.blok === 'switch' && t.correct && t.isSwitch)
+        .map((t) => t.rt);
+      const repeatRTs = trials
+        .filter((t) => t.blok === 'switch' && t.correct && !t.isSwitch)
+        .map((t) => t.rt);
+      const switchCost = (switchRTs.length && repeatRTs.length)
+        ? Math.round(mean(switchRTs) - mean(repeatRTs))
+        : 0;
+
+      const sessionObj = {
+        id: 's_' + Math.random().toString(36).slice(2, 10),
+        date: new Date().toISOString(),
+        level: blokIdx,
+        durationMs: duration,
+        trials: trials.slice(),
+        summary: {
+          ...sum,
+          switchCost,
+          blokkenAf: Math.min(blokIdx, BLOKKEN.length),
+        },
+      };
+      saveSession('wisselen', sessionObj);
+
+      toon('einde');
+      const correctN = trials.filter((t) => t.correct).length;
+      eindeCorrectEl.textContent = String(correctN);
+      eindeTotalEl.textContent = String(trials.length);
+      eindeAccEl.textContent = trials.length ? Math.round((correctN / trials.length) * 100) + '%' : '—';
+      eindeScEl.textContent = switchCost ? `${switchCost} ms` : '—';
+      renderSparkline();
+    }
+
+    function renderSparkline() {
+      let data;
+      try { data = load(); } catch { return; }
+      if (!data.preferences || data.preferences.sparklineInEinde === false) return;
+      const sessions = (data.exercises.wisselen.sessions || []).slice(-10);
+      if (sessions.length < 2) return;
+      const values = sessions.map((s: any) =>
+        (s.summary && typeof s.summary.accuracy === 'number') ? s.summary.accuracy : 0,
+      );
+      const max = Math.max(...values, 0.01);
+      const w = 120;
+      const h = 30;
+      const pts = values.map((v: number, i: number) => {
+        const x = (i / (values.length - 1)) * (w - 4) + 2;
+        const y = h - (v / max) * (h - 6) - 3;
+        return { x: +x.toFixed(1), y: +y.toFixed(1) };
+      });
+      const poly = pts.map((p: {x:number;y:number}) => `${p.x},${p.y}`).join(' ');
+      const circles = pts.map(
+        (p: {x:number;y:number}) => `<circle cx="${p.x}" cy="${p.y}" r="1.8" fill="var(--green)"/>`,
+      ).join('');
+      sparklineSvg.innerHTML =
+        `<polyline points="${poly}" fill="none" stroke="var(--green)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>${circles}`;
+      sparklineWrap.hidden = false;
+    }
+  }
+
+  function expectedResp(taak: Taak, kleur: Kleur, vorm: Vorm): Resp {
+    if (taak === 'kleur') return kleur === 'rood' ? 'left' : 'right';
+    return vorm === 'vierkant' ? 'left' : 'right';
+  }
+</script>
