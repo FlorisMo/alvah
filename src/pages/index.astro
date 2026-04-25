@@ -91,7 +91,17 @@ const navCards = [
   </section>
 
   <section>
-    <h2 class="section-head"><span class="num">B</span>Navigatie</h2>
+    <h2 class="section-head"><span class="num">B</span>Voor Alvah zelf</h2>
+    <a class="alvah-spelen-haak" href="/spelen">
+      <div class="alvah-spelen-haak__label">Spelen</div>
+      <div class="alvah-spelen-haak__titel">Oefenspelletjes</div>
+      <p class="alvah-spelen-haak__desc">Vijf korte spellen voor onthouden, zoeken en wisselen. Zelf spelen vanaf de Chromebook.</p>
+      <span class="alvah-spelen-haak__cta">Naar de spelen →</span>
+    </a>
+  </section>
+
+  <section>
+    <h2 class="section-head"><span class="num">C</span>Navigatie</h2>
     <div class="nav-grid">
       {navCards.map((card) => (
         <a class="nav-card" href={card.pad}>
@@ -112,4 +122,48 @@ const navCards = [
       </p>
     </div>
   </section>
+
+  <style>
+    .alvah-spelen-haak {
+      display: block;
+      padding: 24px 28px;
+      border-radius: 14px;
+      background: var(--green-soft);
+      border-left: 4px solid var(--green);
+      text-decoration: none;
+      color: var(--ink);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .alvah-spelen-haak:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    }
+    .alvah-spelen-haak__label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--green);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .alvah-spelen-haak__titel {
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 1.6rem;
+      margin-bottom: 6px;
+    }
+    .alvah-spelen-haak__desc {
+      color: var(--ink-soft);
+      max-width: 50ch;
+      margin: 0 0 10px;
+    }
+    .alvah-spelen-haak__cta {
+      color: var(--green);
+      font-weight: 500;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .alvah-spelen-haak { transition: none; }
+      .alvah-spelen-haak:hover { transform: none; }
+    }
+  </style>
 </BaseLayout>

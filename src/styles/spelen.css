@@ -218,6 +218,11 @@
   flex: 1;
 }
 
+.spel-shell__acties {
+  display: flex;
+  gap: 8px;
+}
+
 .spel-shell__icon-btn {
   display: inline-grid;
   place-items: center;
@@ -229,6 +234,11 @@
   color: var(--ink-soft);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.spel-shell__icon-btn[aria-pressed="false"] {
+  color: var(--ink-muted);
+  background: var(--line-soft);
 }
 
 .spel-shell__icon-btn:hover {
@@ -279,6 +289,160 @@
 .spel-extra a:hover {
   color: var(--green);
   text-decoration-color: var(--green);
+}
+
+/* ---------- Trofeeën-strip per spel (Fase 11 — variatie-systeem) ----------
+   Boven elk spel-veld een rij kleine cirkels die de bereikte dieren tonen.
+   Vorm consistent met /spelen/reis (initiaal in cirkel + spel-kleur). Telt
+   tegelijk als visuele evolutie ("het spel ziet er voller uit naarmate je
+   verder komt") én als persistent reminder van wat je hebt ontgrendeld.
+*/
+
+.spel-trofeeen {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 0 auto 14px;
+  min-height: 36px;
+}
+
+.spel-trofee {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 0.85rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  position: relative;
+}
+
+.spel-trofee--simon { background: color-mix(in srgb, var(--spel-blue) 18%, var(--paper)); color: var(--spel-blue); border-color: color-mix(in srgb, var(--spel-blue) 40%, var(--line)); }
+.spel-trofee--corsi { background: color-mix(in srgb, var(--spel-magenta) 18%, var(--paper)); color: var(--spel-magenta); border-color: color-mix(in srgb, var(--spel-magenta) 40%, var(--line)); }
+.spel-trofee--day-night { background: color-mix(in srgb, var(--spel-sun) 28%, var(--paper)); color: #8a6914; border-color: color-mix(in srgb, var(--spel-sun) 60%, var(--line)); }
+.spel-trofee--zoeken { background: color-mix(in srgb, var(--spel-orange) 18%, var(--paper)); color: var(--spel-orange); border-color: color-mix(in srgb, var(--spel-orange) 40%, var(--line)); }
+.spel-trofee--wisselen { background: color-mix(in srgb, var(--green) 14%, var(--paper)); color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, var(--line)); }
+
+.spel-trofee__naam {
+  position: absolute;
+  bottom: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  font-family: var(--font-body);
+  font-weight: 400;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.spel-trofeeen:has(.spel-trofee) { padding-bottom: 14px; }
+
+/* Skin-niveau achtergrond-tint: oploopt met mijlpaal-progressie. */
+[data-skin] { transition: background 600ms ease; }
+[data-skin="0"] { background: transparent; }
+[data-skin="1"] { background: color-mix(in srgb, var(--spel-sun) 4%, transparent); }
+[data-skin="2"] { background: color-mix(in srgb, var(--spel-sun) 7%, transparent); }
+[data-skin="3"] { background: color-mix(in srgb, var(--spel-sun) 10%, transparent); }
+[data-skin="4"] { background: color-mix(in srgb, var(--spel-sun) 13%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-skin] { transition: none; }
+}
+
+/* ---------- Bloeiende plant op einde-scherm (alle spellen) ---------- */
+/* Research §C.3 staat één rustige eindanimatie expliciet toe.
+   1.5s scale-in van zaadje naar bloem. Per spel krijgt SVG eigen kleur via
+   currentColor. Toggleable via reduced-motion: gewoon zichtbaar zonder
+   animatie.
+*/
+
+.spel-bloei {
+  display: inline-block;
+  margin: 8px 0 4px;
+  color: var(--green);
+  animation: spel-bloei 1500ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  transform-origin: 50% 90%;
+}
+
+.spel-bloei--simon { color: var(--spel-blue); }
+.spel-bloei--corsi { color: var(--spel-magenta); }
+.spel-bloei--day-night { color: var(--spel-sun); }
+.spel-bloei--zoeken { color: var(--spel-orange); }
+.spel-bloei--wisselen { color: var(--green); }
+
+@keyframes spel-bloei {
+  0%   { transform: scale(0) rotate(-18deg); opacity: 0; }
+  40%  { transform: scale(0.4) rotate(-6deg); opacity: 0.7; }
+  72%  { transform: scale(1.08) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spel-bloei {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* ---------- Groei-fragment na sessie (alle spellen) ---------- */
+
+.spel-mijlpaal-melding {
+  display: grid;
+  gap: 4px;
+  padding: 14px 18px;
+  border-radius: var(--spel-radius);
+  background: color-mix(in srgb, var(--spel-sun) 14%, var(--paper));
+  border: 1px solid color-mix(in srgb, var(--spel-sun) 30%, var(--line));
+  text-decoration: none;
+  color: var(--ink);
+  max-width: 380px;
+  margin: 12px auto 0;
+  text-align: center;
+  animation: spel-mijlpaal-pop 1200ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+.spel-mijlpaal-melding[hidden] { display: none; }
+
+.spel-mijlpaal-melding__label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+
+.spel-mijlpaal-melding__waarde {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 1.2rem;
+}
+
+.spel-mijlpaal-melding__cta {
+  font-size: 0.9rem;
+  color: var(--green);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+.spel-mijlpaal-melding:hover .spel-mijlpaal-melding__cta {
+  text-decoration-color: var(--green);
+}
+
+@keyframes spel-mijlpaal-pop {
+  0%   { transform: translateX(24px) scale(0.85); opacity: 0; }
+  35%  { transform: translateX(-6px) scale(1.02); opacity: 1; }
+  60%  { transform: translateX(0) scale(1.06); opacity: 1; }
+  100% { transform: translateX(0) scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spel-mijlpaal-melding { animation: none; }
 }
 
 /* ---------- prefers-reduced-motion ---------- */

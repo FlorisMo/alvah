@@ -109,6 +109,18 @@ export const NL = {
     },
   },
 
+  // Mijlpalen + Reis
+  reis: {
+    titel: 'Jouw reis',
+    lede: 'Hier zie je wat je al ontgrendeld hebt en wat er nog komt.',
+    bereikt: 'Ontgrendeld',
+    wachtend: 'Nog te ontgrendelen',
+    volgende: 'Volgende',
+    nogTeGaan: 'nog te gaan',
+    nieuw: 'Nieuw ontgrendeld',
+    nieuwBereikt: (dier) => `Nieuw: ${dier}`,
+  },
+
   // Admin-pagina
   admin: {
     titel: 'Admin',
@@ -132,6 +144,54 @@ export const NL = {
     duur: 'Duur',
     accuracy: 'Accuracy',
     meanRT: 'Gem. RT',
+    mijlpalen: 'Mijlpalen',
+    mijlpalenBereikt: 'Behaald',
+    mijlpalenOpen: 'Nog open',
+    cadeaus: 'Fysieke cadeaus',
+    cadeauKoppel: 'Koppel een mijlpaal aan een cadeau',
+    cadeauKies: 'Kies mijlpaal',
+    cadeauOmschrijving: 'Beschrijving (bv. LEGO-set)',
+    cadeauToevoegen: 'Toevoegen',
+    cadeauVerwijder: 'Verwijder',
+    cadeauStatus: 'Status',
+    cadeauOpen: 'Nog regelen',
+    cadeauUitgereikt: 'Uitgereikt',
+    cadeauMarkeer: 'Markeer als uitgereikt',
+    cadeauOpenstaand: 'Openstaand',
+    geenCadeaus: 'Nog geen cadeaus gekoppeld.',
+    lenzen: {
+      titel: 'Wat zegt iets',
+      lede: 'Vier lenzen op basis van EF-onderzoek. Geen samengestelde score, geen leeftijdsoordeel — alleen Alvah-vs-Alvah trends.',
+      toggleAan: 'Toon onderzoek-referenties',
+      toggleUit: 'Verberg onderzoek-referenties',
+      stabiliteit: {
+        titel: 'Stabiliteit',
+        uitleg: 'Hoe ligt deze week t.o.v. zijn eigen 30-dagen-gemiddelde.',
+        op: 'op zijn niveau',
+        boven: 'iets boven',
+        onder: 'iets onder',
+        teWeinig: 'te weinig data',
+      },
+      iivcv: {
+        titel: 'Aandacht-consistency',
+        uitleg: 'Spreiding in reactietijd binnen een sessie. Lager = consistenter qua aandacht. Sterker signaal dan accuracy.',
+      },
+      inhibition: {
+        titel: 'Remmen (inhibition)',
+        uitlegDN: 'Accuracy specifiek op incongruent-trials in Dag & Nacht. Hoger = beter remmen van het automatische antwoord.',
+        uitlegZoeken: 'Hoe vaak Alvah op een verkeerde kikker tikt. Lager = beter response-controle.',
+      },
+      flexibility: {
+        titel: 'Wisselen (flexibility)',
+        uitleg: 'Verschil tussen wissel- en herhaal-trials in ms. Lager = soepeler schakelen tussen taken.',
+      },
+      engagement: {
+        titel: 'Wanneer hij speelt',
+        uitleg: 'Geen prestatie — context. Wanneer is hij aan, hoe vaak komt hij vrijwillig terug.',
+        sessiesPerWeek: 'Sessies per week',
+        tijdVanDag: 'Tijd van dag',
+      },
+    },
   },
 
   // Navigatie

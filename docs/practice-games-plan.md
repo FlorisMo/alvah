@@ -6,20 +6,24 @@ Meta-plan dat `docs/source/Research-practice-tools.md` omzet naar een faseerbare
 
 ## Hervat-gids — lees dit eerst bij een nieuwe sessie
 
-**Status (24 apr 2026, derde run):** Fases 0–6 + 6.5 **klaar**. Alle vijf spellen speelbaar; admin toont alle data + plateau-banner; progressie-regels actief (seed warm-up, alleen-omhoog-currentLevel, harde geldigheid, level-systeem voor DN/Wisselen). Fase 7 (mijlpalen + `/spelen/reis`) en Fase 8 (polish) staan nog open.
+**Status (25 apr 2026, zevende run):** Fases 0–8 + 11 + 12 **klaar**. Hoofdpagina `/` heeft haak naar `/spelen`. Landing draait `pickNext()` echt. SpelShell heeft persistent geluid-toggle. Span-spellen loggen `teMoeilijkN` + `autoLowerN`. Alle 5 spellen speelbaar met:
+- Bloeiende plant + audio-chord op einde-scherm (Fase 12 — predictable celebration binnen research-rules §C.3)
+- Trofeeën-strip met bereikte-dieren-cirkels + skin-niveau-tint (0-4) op root (Fase 11 — variatie mastery-getriggerd)
+- Mijlpaal-pop 1.2s met character-entry-animatie
 
-**Volgende stap:** Fase 7 — Mijlpalen + visuele collectie + `/spelen/reis`. Bouwt op `progressie.js::countRecentAtOrAbove` voor "2 van laatste 3 geldige sessies"-drempels. Raakt 5 spel-bestanden (groei-fragment na summary), `mijlpalen.js` (stub → drempels), `reis.astro` (nieuw), admin-banner voor behaalde mijlpalen + cadeau-lijst.
+Admin toont KPI + 5 research-lenzen + per-spel detail + mijlpalen + cadeaus + JSON-tools. Fase 9 (pre-live QA + demo) en Fase 10 (5 nieuwe paradigma's) staan nog open.
 
-**Daarna:** Fase 8 (polish — homepage-haak, onboarding, `pickNext()` echt aanzetten).
+**Volgende stap:** Fase 9 — pre-live QA + product-demo. Daarna optioneel Fase 10 als Alvah vrijwillig blijft komen (Go/No-Go, Tower of London, Posner, Flanker, DCCS — alle research-backed, plus skip-lijst voor zwakke evidence).
 
 **Beslissingen vastgelegd in Fase 6.5:** A1=`cL-1`, A2=alleen-omhoog, B1=3 reversals, C1=hybride (2 in eerste 2min, anders 3), C2=alleen span-spellen, D1=hard, D2=2 van laatste 3, E1=14d/3s, F1=level-schema nu, F2=80%+trialsN≥24, F3=geen mid-sessie demotie. Zie `src/scripts/progressie.js`-header-comment.
 
 **Snelle verificatie bij hervatten:**
 
 ```bash
-node --test src/scripts/*.test.js    # verwacht: 16 pass, 0 fail
+node --test src/scripts/*.test.js    # verwacht: 80 pass, 0 fail
 npx astro check                      # verwacht: 0 errors, 0 warnings, 0 hints
-npm run dev                          # → /spelen laadt, alle 5 spellen speelbaar, /spelen/admin werkt
+npm run check:tov:strict             # verwacht: 0 blokkerende hits
+npm run dev                          # → /, /spelen, /spelen/reis, /spelen/admin + alle 5 spellen werken
 ```
 
 **Wat er staat en wat niet:**
@@ -28,8 +32,8 @@ npm run dev                          # → /spelen laadt, alle 5 spellen speelba
 - Alle 5 spel-routes zijn volledig speelbaar en loggen naar `localStorage` sleutel `alvah-ef-v1`:
   `/spelen/simon`, `/spelen/corsi`, `/spelen/day-night`, `/spelen/zoeken`, `/spelen/wisselen`.
 - `/spelen/admin` toont per spel sparkline + tabel laatste 10 sessies, "deze week" KPI, JSON-copy/download/import, wis-alles met dubbele bevestiging.
-- `/spelen/reis` bestaat **nog niet** (Fase 7). De landing heeft nog steeds een link naar `/reis` — die geeft 404 tot Fase 7.
-- `src/scripts/mijlpalen.js` bestaat als stub — drempels per spel moeten in Fase 7 gevuld worden. `src/scripts/aanraden.js` heeft echte logica maar landing gebruikt nog de stub (default-volgorde). In Fase 8 kan de landing `pickNext()` écht gebruiken.
+- `/spelen/reis` toont 5 spellen × 4 mijlpalen-badges. Bereikte mijlpalen krijgen kleur + cirkel; nog-te-ontgrendelen blijven gestreept. Animatie-pop bij nieuw bereikt.
+- `src/scripts/mijlpalen.js` bevat 20 mijlpalen (4 per spel) + `computeMilestones`/`isMilestoneReached`/`evalueerNieuwBereikt`. Drempel-types: `maxSpan`, `maxSetSize`, `accuracy`, `accuracy-at-level`, `level-min`, `switchCost-max`. `src/scripts/aanraden.js` heeft echte logica maar landing gebruikt nog de stub (default-volgorde). In Fase 8 kan de landing `pickNext()` écht gebruiken.
 - Referentie-repo's zijn gekloond in `reference/` (gitignored, read-only via `chmod`). Beleid: uitsluitend leesbron, altijd zelf herschrijven. Zie §4.
 
 **Gotchas:**
@@ -108,7 +112,11 @@ Kleur **altijd combineren met vorm** (cirkel/vierkant/driehoek/ruit) — kleuren
 - Typografie in spellen: Fraunces voor cijfers/score, Inter Tight voor knoplabels. Body ≥20px.
 - Eén rustig einde-animatie per sessie (groene vink + bloem die opengroeit, 600ms). Toggle-baar.
 
-**Dingen die we bewust NIET doen:** confetti bij elk goed antwoord, variabele beloning, streaks met verliesaversie, leaderboard, levens, countdown-timers die alles verliezen bij missen.
+**Dingen die we bewust NIET doen:** confetti bij elk goed antwoord, variabele beloning (random surprise-drops), streaks met verliesaversie, leaderboard, levens, countdown-timers die alles verliezen bij missen.
+
+**Onderbouwing:** Research §C.3 — Barkley toont versterkte dopamine-respons op onvoorspelbare beloning bij ADHD; Zendle & Cairns 2018 koppelt variabele-ratio-schema's aan gok-vatbaarheid; Deci & Ryan SDT laat zien dat externe surprise-beloning intrinsieke motivatie ondergraaft. Voor Alvah's ADHD-profiel is de evidence sterker dan voor neurotypisch.
+
+**Wat wél mag (binnen research-rules):** voorspelbare celebration tied aan mastery — eindanimatie per sessie (vinkje + bloeiende plant, 1.5s), single audio-chord bij mijlpaal-unlock (zelfde elke keer per dier), character-animatie wanneer een nieuw dier verschijnt, subtiele growth-animaties op `/spelen/reis`. De regel: *predictable + mastery-anchored = OK; variable + per-trial = niet*.
 
 ---
 
@@ -574,7 +582,31 @@ F3: [geen mid-sessie demotie | wel mid-sessie demotie]
 
 </details>
 
-### Fase 7 — Mijlpalen & visuele collectie (1 run)
+### Fase 7 — Mijlpalen & visuele collectie — ✅ KLAAR (25 apr 2026)
+
+**Gebouwd:**
+- `src/scripts/mijlpalen.js` — 20 mijlpalen (4 per spel, vast en mastery-anchored) + `computeMilestones`, `isMilestoneReached`, `evalueerNieuwBereikt`. Drempel-typen: `maxSpan`, `maxSetSize`, `accuracy`, `accuracy-at-level`, `level-min`, `switchCost-max`.
+- `src/scripts/mijlpalen.test.js` — 15 tests pass: schema-checks, span-mijlpalen, accuracy, level-min, switchCost, computeMilestones, evalueerNieuwBereikt.
+- `src/pages/spelen/reis.astro` — nieuw. Laat 5 spel-secties zien met 4 badges per spel; bereikt = volle cirkel + naam; wachtend = gestreepte rand. "Volgende: [dier] — [drempel]" per spel. Pop-animatie 700ms bij nieuw bereikt; reduced-motion-veilig.
+- `src/pages/spelen/{simon,corsi,day-night,zoeken,wisselen}.astro` — groei-fragment in einde-scherm: anchor `.spel-mijlpaal-melding` met "Nieuw ontgrendeld: [dieren]" + link naar `/spelen/reis`. Verschijnt alleen als een mijlpaal nieuw bereikt is in deze sessie.
+- `src/styles/spelen.css` — `.spel-mijlpaal-melding`-stijl (sun-tinted card + pop-animatie, reduced-motion-veilig). Hergebruikt door alle 5 spellen.
+- `src/pages/spelen/admin.astro` — nieuwe sectie "Mijlpalen": stats-pillen (behaald + openstaand), 5 spel-kaarten met 4 mijlpalen-rijen (status `Behaald`/`Open`), cadeau-form (dropdown met alle 20 mijlpalen + omschrijving + toevoegen), tabel met cadeau-koppelingen + `Markeer uitgereikt`/`Verwijder`-knoppen. Bestaande secties hernummerd.
+- `src/scripts/strings.nl.js` — nieuwe blokken `reis` en `admin.{mijlpalen,cadeaus,...}`.
+- Storage gebruikt al `data.mijlpalen.{bereikt[], cadeaus[]}` (sinds Fase 0); Fase 7 vult cadeaus-shape aan: `{ id, milestoneId, omschrijving, status: 'open'|'uitgereikt', toegevoegd }`.
+
+**Mijlpalen-thema's:** dierenbandje (Simon: trom-aap → gitaar-flamingo → zang-vos → piano-uil), nachtbos (Corsi: vuurvliegjes → uil → vos → sterren-pad), dag-nacht-cyclus (DN: egel → vos → uil → vleermuis), vijver (Zoeken: libel → reiger → ijsvogel → otter), dierentuin (Wisselen: papegaai → giraffe → leeuw → olifant).
+
+**Drempel-strategie:** span-/setSize-/accuracy-mijlpalen vereisen "2 van laatste 3 geldige sessies" boven de drempel (D2-regel uit Fase 6.5, herhaalbaarheid-bewijs). `level-min` kijkt naar `currentLevel` (alleen-omhoog dankzij Fase 6.5 A2). `switchCost-max` kijkt naar laatste geldige Wisselen-sessie. `accuracy-at-level` filtert op sessies op of boven het vereiste level voordat de 2-van-3-check loopt.
+
+**Niet bereikt zonder verdere bouw:**
+- `zoeken-4` (otter, "Combineer-zoeken"): vereist `currentLevel >= 3`, maar zoeken kent nog geen niveau-2/3-modi. Wacht op uitbreiding (conjunction → bewegend, plan §4 fase 4 noot).
+- `day-night-4` (vleermuis, "Niveau 4 met afleiders"): vereist `currentLevel >= 4`, maar `nextLevelDayNight` capt op 3 tot afleider-stimuli geïmplementeerd zijn (Fase 6.5 F-tabel level 4). Voor nu zichtbaar in outline-staat op `/spelen/reis`.
+
+**Verificatie:** `node --test` 53/53 (38 oud + 15 nieuw), `npx astro check` 0 errors/warnings/hints, ToV-check 0 blokkers, HTTP 200 op `/spelen`, `/spelen/reis`, `/spelen/admin` + alle 5 spel-routes.
+
+<details>
+<summary>Oorspronkelijke scope-beschrijving (Fase 7 pre-implementatie)</summary>
+
 **Doel:** duidelijke doelen waar Alvah naartoe werkt, rustig in-software én extrinsiek via papa — binnen de research-regels (geen variabele beloning, geen streaks, geen loss-aversion).
 
 **Drie lagen:**
@@ -610,10 +642,411 @@ Overkoepelend thema: **dieren**. Elk spel heeft zijn eigen dierenwereldje dat gr
 
 **Acceptatie:** speel één spel voorbij een unlock-drempel → wereldje groeit op `/spelen/reis`, admin-banner meldt mijlpaal, spel-scherm zelf blijft rustig (alleen summary, geen confetti).
 
-### Fase 8 — Polish (1 run)
-**Doel:** homepage-haak voor Alvah, frustratie-opvang, geluid-toggle persistent, onboarding "kies je avatar-vorm" voor autonomie-gevoel.
-**Bestanden:** kleine tweaks in `src/pages/index.astro`, `SpelShell.astro`, `spelen.css`.
-**Acceptatie:** vanaf `/` één-klik naar `/spelen`, "te moeilijk"-knop schakelt spel naar lager niveau zonder commentaar.
+</details>
+
+### Fase 7.5 — Admin-analytics: vijf lenzen op basis van research — ✅ KLAAR (25 apr 2026)
+
+**Gebouwd:**
+- `src/scripts/analytics.js` (nieuw, pure module): `rollingMean`, `huidigStatus`, `iivTrend`, `incongruentAccuracyTrend`, `falseAlarmRate`, `switchCostTrend`, `weekFrequency`, `timeOfDayHeatmap`, `platteSessies`, `teMoeilijkPerWeek`. Geen DOM-koppeling.
+- `src/scripts/analytics.test.js` (nieuw): 15 tests pass — rollingMean (3), huidigStatus (3), iivTrend (2), incongruent-accuracy (2), falseAlarmRate (1), switchCost (1), weekFrequency (1), heatmap (1), platteSessies (1).
+- `src/scripts/referenties.js` (nieuw): config met 4 defensibele banden (Corsi-span, IIV-CV, DN-incongruent-accuracy, Wisselen-switchCost) + bron + disclaimer-tekst. Geen band voor Simon-span en Zoeken-set-size — bron te zwak.
+- `src/scripts/storage.js` (patch): `toonReferenties: false` als default + idempotente migratie.
+- `src/scripts/strings.nl.js` (patch): `admin.lenzen.*`-blok met titels, uitlegjes, toggle-labels.
+- `src/pages/spelen/admin.astro` (patch): nieuwe sectie "Wat zegt iets" tussen "Deze week" en "Per spel"; bestaande sectie wordt detail-laag (renumber 2 → 3, 3 → 4, 4 → 5). Toggle "Toon onderzoek-referenties" persistent in storage. Vijf lens-articles met sparklines + bands + bar-chart sessies/week + 5×24-heatmap voor tijd-van-dag.
+
+**Beslissingen tijdens build:**
+- Lens 5 (referentie-banden) als toggle, niet als aparte lens — anders krijg je dubbele visuals. Toggle off-by-default zodat samen-met-Alvah-kijken safe is.
+- Heatmap-cellen kleur-per-spel met opacity = relatief aandeel. Geen absolute schaal — alleen relatieve "wanneer is hij aan".
+- Te-moeilijk-frequentie (Lens 4 sub) als ruwe placeholder: telt `summary.autoLowerN` als dat veld bestaat. Spel-bestanden loggen dit nu nog niet expliciet — toekomstige uitbreiding (in Fase 8 of later).
+- Geen samengestelde EF-score (Diamond 2013 — componenten zijn separabel).
+- Incongruent-accuracy gebruikt `trials[]` waar beschikbaar (laatste 10 sessies dankzij prune); valt terug op summary.accuracy met `exact: false` voor oudere sessies.
+
+**Verificatie:** `node --test` 68/68 (53 oud + 15 nieuw), `npx astro check` 0 errors/warnings/hints, ToV-strict 0 blokkers, HTTP 200 op `/spelen/admin`, 7 lens-data-attributen aanwezig in markup.
+
+<details>
+<summary>Oorspronkelijke scope-beschrijving (Fase 7.5 pre-implementatie)</summary>
+
+**Doel oorspronkelijk:** vier lenzen — gegroeid naar vijf met de toggle-laag voor referentie-banden.
+
+**Doel:** admin laten zien wat *écht iets zegt* over Alvah, op basis van EF-research. Geen samengestelde score, geen leeftijdsnorm, geen "verbetering-percentage". Wel: Alvah-vs-Alvah trends, IIV-CV als aandacht-consistency-marker, EF-componenten apart, engagement als context.
+
+**Research-fundering:**
+- Diamond 2013 — EF heeft drie separabele componenten (WM, inhibition, flexibility). Niet optellen.
+- Kofler e.a. 2013 — intra-individual variability (IIV-CV) is sterk geassocieerd met aandacht-regulatie in kinderen met ADHD.
+- Melby-Lervåg 2016, Sala & Gobet 2020, Gobet & Sala 2023 — far-transfer naar school is niet bewezen. Geen academische claims.
+- Alvah-vs-Alvah trends zijn de enige valide vergelijking.
+
+**Lens 1 — Stabiliteit (uitbreiding bestaande sparkline):**
+- Per spel: sparkline-band met 30-dagen-rolling-gemiddelde als grijze achtergrond, individuele sessies als punten.
+- Heden-marker: laatste sessie t.o.v. de band.
+- Tekst-label: "ligt op zijn niveau" / "iets boven" / "iets onder" (niet als oordeel — als feit).
+
+**Lens 2 — Aandacht-consistency (NIEUW):**
+- Per spel een tweede sparkline: IIV-CV per sessie, lager-is-beter.
+- Aparte sectie "Aandacht-consistency" in admin met korte uitleg: "Lager = consistenter qua reactietijd. Onderzoek koppelt dit aan aandacht-regulatie, sterker signaal dan accuracy."
+- Y-as 0–0.5 (waarden boven 0.6 zijn "verkennend", al uitgefilterd).
+
+**Lens 3 — EF-componenten apart (NIEUW + bestaand):**
+- **Working memory** (Simon + Corsi): span-trend (al zichtbaar, blijft).
+- **Inhibition** (Day-Night): aparte lijn voor incongruent-blok-accuracy, naast de bestaande totale accuracy. Toont de échte Stroop-cost. Computed: `mean(accuracy van incongruent-trials in laatste 10 sessies)`.
+- **Inhibition** (Zoeken): false-alarm-rate per sessie als sparkline. Computed: `summary.falseAlarmsTotal / summary.trialsN`.
+- **Cognitive flexibility** (Wisselen): switch-cost trend over alle sessies (al gemeten in `summary.switchCost`, alleen op einde-scherm zichtbaar — nu in admin als sparkline).
+
+**Lens 4 — Engagement-context (NIEUW):**
+- Sessie-frequentie per week (kleine bar-chart, laatste 8 weken).
+- Tijd-van-dag-heatmap per spel: 24 uur-cellen × 5 spellen, opacity = sessie-aantal. Toont *wanneer* Alvah speelt. Ruw signaal voor "wanneer is hij aan" — relevant voor PKU-context (eiwit-load varieert per dagdeel).
+- Te-moeilijk + auto-lower frequentie per week (een teller).
+- **Niet** een prestatie-metric — context voor de LLM-analyse die papa elders doet.
+
+**Lens 5 — Referentie-banden (optioneel, toggle):**
+School kijkt naar leeftijdsgemiddelden, dus we tonen ze *als ze defensibel zijn*, met een toggle in admin. Default uit (zodat als je samen met Alvah kijkt, het Alvah-vs-Alvah blijft); toggle aan voor papa-analyse-momenten. Persistent in `data.preferences.toonReferenties`.
+
+Bands die we tonen (alleen waar literatuur defensibel is voor 7-jarigen):
+
+| Lens | Spel | Band | Bron |
+|---|---|---|---|
+| 1 stabiliteit | Corsi span | 4–5 | ontwikkelings-literatuur Kessels e.a. + replicaties |
+| 2 IIV-CV | alle | 0.20–0.35 | Kofler 2013 + ranges in attention-research voor 6-9j |
+| 3 inhibition | Day-Night incongruent-accuracy | 80–90% | Gerstadt 1994 + replicaties leeftijd 7 |
+| 3 flexibiliteit | Wisselen switch-cost | 200–400 ms | Cepeda 2001 e.a. leeftijd 7-8 |
+
+Bands die we **niet** tonen omdat de bron te zwak of niet-vergelijkbaar is:
+- Simon span (geen leeftijd-norm voor dit specifieke paradigma)
+- Zoeken set-size (te parameter-afhankelijk; onze jittered-grid is geen klassieke set-up)
+- Day-Night totale-accuracy (alleen incongruent is paradigma-relevant)
+
+Visualisatie: lichte horizontale band over de sparkline, label "ongeveer leeftijd 7" + tooltip met bron + disclaimer "parameters wijken af van origineel onderzoek; nooit als diagnose gebruiken". Toggle in admin-header naast bestaande knoppen: "Toon onderzoek-referenties [aan/uit]".
+
+**Bestanden:**
+- `src/scripts/analytics.js` (nieuw, pure module): `rollingMean(values, days)`, `iivTrend(sessions)`, `incongruentAccuracy(sessions)`, `falseAlarmRate(sessions)`, `weekFrequency(sessions, weeks)`, `timeOfDayHeatmap(sessions)`. Unit-tests verplicht.
+- `src/scripts/analytics.test.js` (nieuw): fixture-gedreven tests voor elke functie.
+- `src/scripts/referenties.js` (nieuw, pure config): `REFERENTIE_BANDS` per lens-spel-combinatie + bronnaam + disclaimer-tekst.
+- `src/scripts/storage.js` (patch): default `toonReferenties: false` in preferences (migratie idempotent).
+- `src/pages/spelen/admin.astro` (patch): nieuwe sectie "Wat zegt iets" met de vijf lenzen vóór de bestaande "Per spel"-sectie. Toggle "Toon onderzoek-referenties" in admin-header. Bestaande sectie wordt detail-laag.
+- `src/scripts/strings.nl.js` (patch): nieuwe `admin.lenzen.*`-blok met korte research-zinnen.
+
+**Bewust niet:**
+- Geen samengestelde EF-score.
+- Geen leeftijds-norm-vergelijking.
+- Geen "verbetering-percentage" als headline.
+- Geen scoring.js raken — we voegen nieuwe analytics toe, breken de bestaande summary niet.
+
+**Acceptatie:**
+- Alle nieuwe functies in `analytics.js` hebben unit-tests die pass.
+- Admin toont vijf lenzen, elk met korte uitleg-zin (1 regel) waarom het iets zegt.
+- Bij lege state (geen sessies): elke lens toont "—" of "te weinig data", geen JS-errors.
+- Toggle "Toon onderzoek-referenties" persistent in storage; default uit; flippen toont/verbergt bands op alle relevante sparklines tegelijk.
+- ToV-strict 0 blokkers; astro check 0 errors.
+
+</details>
+
+### Fase 8 — Polish — ✅ KLAAR (25 apr 2026)
+
+**Gebouwd:**
+- `src/pages/index.astro` (patch): nieuwe sectie "B. Voor Alvah zelf" met `.alvah-spelen-haak`-callout naar `/spelen`. Sectie "Navigatie" verschoof naar "C". Scoped style met green-soft achtergrond, hover-lift respecteert `prefers-reduced-motion`.
+- `src/pages/spelen/index.astro` (patch): `pickNext()` echt aangezet — fallback verwijderd (alle 5 spellen speelbaar). Server-rendert nu alle 5 tegels in de "Andere spellen"-grid; CSS `.spel-tegel[data-is-hero="true"] { display: none }` verbergt de hero-tile zodat er geen duplicaat met de hero ontstaat. JS draait `pickNext()` op load en wisselt `data-is-hero` op de tegels zodat de gepickte tile verbergt en de server-default (Simon) zichtbaar wordt.
+- `src/layouts/SpelShell.astro` (patch): nieuwe geluid-toggle-knop in header naast de voorlees-knop. Twee SVG-iconen (luidspreker / luidspreker-met-kruis); klik wisselt `data-preferences.sound` via `setPreference('sound', ...)`. `aria-pressed` reflecteert state, `audio.js::soundOn()` respecteert dit al. `stopSpeech()` wordt aangeroepen bij uitschakelen.
+- `src/styles/spelen.css` (patch): `.spel-shell__acties` flex-container voor de actie-knoppen + `.spel-shell__icon-btn[aria-pressed="false"]` muted-styling voor geluid-uit-state.
+- `src/pages/spelen/{simon,corsi,zoeken}.astro` (patch): tellen `teMoeilijkN` (alle 3) + `autoLowerN` (Corsi en Zoeken; Simon heeft geen auto-lower) en schrijven dit naar `summary.teMoeilijkN` / `summary.autoLowerN`. Lens 4 in admin (`teMoeilijkPerWeek`) gaat nu echte data tonen.
+
+**Bewust niet gedaan in Fase 8:**
+- Avatar-keuze (beslissing #6 in §8 = "Overslaan").
+- Onboarding-flow (alle uitleg zit al in spel-start-schermen; verdere onboarding voelt overdreven).
+- Frustratie-knop "verzachten": de bestaande knop + feedback-zinnen ("Oké, iets korter" / "Even iets makkelijker") zijn al rustig. Geen nieuwe layer nodig.
+
+**Verificatie:** `node --test` 68/68, `npx astro check` 0 errors/warnings/hints, ToV-strict 0 blokkers, HTTP 200 op alle 9 routes (`/`, `/spelen`, `/spelen/{reis,admin,simon,corsi,zoeken,wisselen,day-night}`).
+
+### Fase 9 — Pre-live QA + product-demo (1 run)
+
+**Doel:** voor we `/spelen` aan Alvah geven, doorlopen we systematisch wat we niet uit de unit-tests kunnen lezen — feel, flow, edge-cases, A11y, en opslag-gedrag over sessies heen. Eén keer voor de eerste vrijgave; herhaalbaar bij elke significante toevoeging daarna.
+
+**Test-laag-overzicht (waar staan we nu):**
+
+| Laag | Wat | Hoe | Wanneer |
+|---|---|---|---|
+| Unit | Pure modules: `scoring`, `staircase`, `storage`, `aanraden`, `progressie`, `mijlpalen` | `node --test src/scripts/*.test.js` | Bij elke commit (lokaal) + per fase |
+| Type | Astro + TypeScript-types | `npx astro check` | Bij elke commit |
+| Tone | NL-content tegen `tone-of-voice-alvah-site-nl.md` | `npm run check:tov:strict` (pre-commit hook) | Bij elke commit |
+| Smoke | HTTP 200 op alle `/spelen`-routes | curl tijdens dev | Per fase-afronding |
+| Manueel scenario | Spel-flows, opslag-gedrag, A11y | Checklist hieronder | Pre-live + bij elke significante release |
+| Product-demo | Floris als PM, Claude doorloopt frontend | Runbook hieronder | Pre-live |
+
+**Bewust geen E2E-framework (Playwright/Cypress).** Eén gebruiker (Alvah), één Chromebook, geen continuous deployment-druk. De manuele checklist + scenario-doorloop is goedkoper dan een E2E-setup onderhouden — én CLAUDE.md-regel "geen nieuwe dependencies zonder expliciete opdracht" blijft kloppen. Bij de eerste echte regressie die een unit-test miste maar een E2E zou vangen, heroverwegen.
+
+**Browser-/device-matrix (minimum):**
+
+| Device | Browser | Reden |
+|---|---|---|
+| Chromebook (Alvah's) | Chrome | Primair gebruiks-target |
+| Mac (papa's) | Safari | Admin-doorloop, JSON-export |
+| iPad (papa's) | Safari | Spelen op groter touchscreen, admin op de bank |
+| iPhone (papa's) | Safari | Snelle plateau-check onderweg |
+
+Niet: Firefox, oude Chrome-versies, Windows. Daar gaat dit niet draaien.
+
+**Manuele scenario-checklist (zelf afvinken voor live gang):**
+
+*A. Eerste run / kalibratie-vrije zone:*
+- [ ] Verse browser (incognito): `/spelen/admin` toont overal "Nog geen sessies gespeeld."
+- [ ] Speel Simon één korte sessie (3 trials) → admin toont 1 sessie, `currentLevel` nog `1` (eerste-ooit telt niet mee, D1-regel).
+- [ ] Speel Simon tweede sessie (≥6 trials, ≥3 reversals) → `currentLevel` updatet, admin toont 2 sessies.
+
+*B. Storage + progressie:*
+- [ ] Speel Corsi tot span 5 → start van volgende sessie begint op span 4 (warm-up A1).
+- [ ] Speel een "slechte" Corsi (vooral fout) → `currentLevel` daalt **niet** (A2 alleen omhoog).
+- [ ] Speel 3 Day-Night-sessies met 80%+ accuracy → vierde sessie start op level 2 (3 blokken).
+- [ ] Vul localStorage met 21+ sessies van één spel → admin toont nog steeds 20 (prune werkt), oudste sessies hebben geen `trials`-array meer (lichte snapshot).
+
+*C. Te-moeilijk / frustratie-opvang:*
+- [ ] In Simon: druk "Dit is te moeilijk" tijdens spelen → span zakt 1 stap, geen commentaar.
+- [ ] In Corsi: maak 3 fouten op rij na 3 minuten → automatische zachte verlaging (shouldAutoLower).
+
+*D. Mijlpalen + groei-fragment:*
+- [ ] Speel Simon tot span 3 in 2 van laatste 3 sessies → groei-fragment "Nieuw ontgrendeld: trom-aap" verschijnt op einde-scherm + linkt naar `/spelen/reis`.
+- [ ] Open `/spelen/reis`: trom-aap-badge heeft volle cirkel + naam, andere drie Simon-mijlpalen blijven gestreept.
+- [ ] Sluit en open opnieuw → groei-animatie speelt **niet** opnieuw af (snapshot bewaard).
+- [ ] Open admin: stats tonen "1 behaald · 0 openstaand", mijlpaal-overzicht toont trom-aap als "Behaald".
+
+*E. Cadeau-koppeling (admin-flow):*
+- [ ] In admin: koppel cadeau "LEGO-set" aan "Corsi: vos (Rij van 6)" → tabel-rij verschijnt met status "Wacht".
+- [ ] Speel Corsi voorbij span 6 (twee keer) → admin toont status "Openstaand" (oranje pill).
+- [ ] Klik "Markeer uitgereikt" → status wordt grijs "Uitgereikt", knop verdwijnt.
+- [ ] Klik "Verwijder" op een cadeau → bevestig-dialoog → rij verdwijnt.
+
+*F. Data-management:*
+- [ ] Admin → "Kopieer JSON" → plak in tekst-editor, geldige JSON met alle sessies.
+- [ ] Admin → "Download JSON" → bestandsnaam `alvah-ef-v1-YYYY-MM-DD.json`, leesbaar.
+- [ ] Admin → "Importeer JSON" met geldig bestand → re-render, sparklines + tabellen kloppen.
+- [ ] Admin → "Importeer JSON" met onzin-tekstbestand → "Ongeldige JSON"-feedback, geen data-corruptie.
+- [ ] Admin → "Wis alles" → twee bevestigingen → alles leeg, terug naar pristine state.
+
+*G. A11y / reduced motion:*
+- [ ] Systeem-instelling "reduce motion" aan → Simon-panelen flashen via `outline` i.p.v. brightness, geen scale-bouncing op `/spelen/reis`.
+- [ ] Schermlezer-tab door alle 4 Simon-panelen → leest "Groen, cirkel" / "Blauw, vierkant" etc.
+- [ ] Tab door admin-knoppen → focus-ring zichtbaar.
+
+*H. Cross-spel + edge:*
+- [ ] Speel alle 5 spellen kort → `/spelen` (landing) toont nog steeds correcte aanbeveling-stub (Simon).
+- [ ] Open een spel-URL direct (`/spelen/wisselen`) zonder eerst landing → werkt, gate vraagt eenmalig wachtwoord.
+- [ ] BaseLayout-gate: log uit (sessionStorage clear), refresh → wachtwoord-prompt, foute → blokkeert; juiste → laadt.
+- [ ] Mobiel: tap-targets ≥56px (Simon-panelen, paneel-knoppen Day-Night, Wisselen-richtingsknoppen).
+
+**Product-demo runbook (Claude doorloopt, Floris als PM):**
+
+Volgorde is belangrijk — bouwt op cumulatieve state.
+
+*Demo-stap 1 — Pristine first-run als Alvah:*
+- Open `/spelen` in incognito. **PM checkt:** voelt het als "vandaag spelen" of als spreadsheet?
+- Hero toont één aanbevolen spel (Simon). **PM checkt:** is de keuze duidelijk, snap je waar je heen kan?
+- Klik door naar Simon, doorloop start-uitleg → speel één rij (span 2). **PM checkt:** weet een 7-jarige wat 'ie moet doen zonder uitleg van papa?
+- Eindscherm: hoogste rij, sparkline (verschijnt pas vanaf 2 sessies, dus eerste keer leeg). **PM checkt:** voelt einde rustig of teleurstellend?
+
+*Demo-stap 2 — Tweede sessie + groei:*
+- Speel Simon nogmaals, push tot span 4-5. **PM checkt:** stijgt het natuurlijk mee, of voelt het of de sprongen groot zijn?
+- Bij span 3 reached: groei-fragment verschijnt → klik door naar `/spelen/reis`. **PM checkt:** klopt de pop-animatie of voelt 'ie opdringerig?
+- Reis-pagina: 5 spel-secties zichtbaar. **PM checkt:** snap je in één blik welke dieren je hebt en welke nog komen?
+
+*Demo-stap 3 — Andere spellen + variatie:*
+- Vanuit `/spelen/reis` terug → kies Corsi, speel kort. Daarna Day-Night, kort. **PM checkt:** is "uitstapje" naar ander spel makkelijk, of moet je terug naar landing en opnieuw kiezen?
+- Forceer een fout-streak in Corsi (klik random) → check of zachte-verlaging triggert. **PM checkt:** voelt de verlaging als help of als straf?
+
+*Demo-stap 4 — Frustratie-uitstap:*
+- In Day-Night midden in een blok: druk SpelShell "Pauze" → terug naar `/spelen`. **PM checkt:** dataset blijft heel? Niets gaat verloren?
+
+*Demo-stap 5 — Admin als papa:*
+- Open `/spelen/admin`. **PM checkt:** zie je in 5 seconden waar Alvah staat, of moet je scrollen/zoeken?
+- Sparklines per spel — kloppen ze met wat je zojuist gespeeld hebt? Plateau-banner zichtbaar bij correcte conditie?
+- Mijlpaal-sectie: koppel een cadeau aan trom-aap. **PM checkt:** form duidelijk? "Markeer uitgereikt" intuïtief?
+- "Kopieer JSON" → plak in chat-window van keuze. **PM checkt:** is dit format wat je in een LLM zou plakken voor analyse?
+
+*Demo-stap 6 — Stress-test:*
+- Wis alles (dubbele bevestiging). **PM checkt:** voelt het wis-pad veilig genoeg dat je het niet per ongeluk doet?
+- Re-import van vorige download. **PM checkt:** state komt terug zoals het was?
+
+*Demo-stap 7 — Mobiel:*
+- iPhone Safari: open `/spelen` met dezelfde gate. **PM checkt:** layout staat netjes? Tap-targets groot genoeg? Tonen worden afgespeeld?
+
+**Acceptatie Fase 9:**
+- Manuele checklist (A–H) volledig groen op Chromebook + Mac Safari (mobile = nice-to-have).
+- Product-demo doorlopen met Floris; alle 7 demo-stappen op groen of expliciet als "later" gelabeld.
+- Eventuele bevindingen → kleine PR's vóór live gang, of verplaatst naar Fase 10 (post-live polish) als acceptabel.
+- "Live gang" = Floris geeft Alvah's Chromebook URL + wachtwoord. Niets meer.
+
+**Bestanden:** dit fase-blok is uitvoerend, geen nieuwe code-bestanden. Eventuele bug-fixes uit de checklist → kleine commits in bestaande bestanden, met commit-prefix `Fase 9: <korte fix>`.
+
+### Fase 10 — Paradigma-uitbreiding (research-backed)
+
+**Doel:** alle paradigma's bouwen die research §B als sterk evidence-onderbouwd aanmerkt voor 7-jarige met ADHD-profiel + PKU. Niet "diminishing returns" als drempel — wat in de research-top staat, hoort er in. Wat zwak of leeftijds-ongeschikt is, blijft eruit.
+
+**Coverage-status na Fase 0–8:**
+
+| EF-component | Bestaande spellen | Evidence | Top-research nog niet gebouwd |
+|---|---|---|---|
+| WM | Simon + Corsi | sterk | — (Corsi en Simon zijn top-2) |
+| Inhibition | Day-Night | sterk | **Go/No-Go** (top-2), **Flanker** (top-3) |
+| Flexibility | Wisselen | sterk | **DCCS** (top-2 naast Wisselen) |
+| Attention | Zoeken | matig-praktijk | **Posner cueing** (top-2, PKU-relevant) |
+| Planning | — | n.v.t. | **Tower of London** (top-1) |
+
+**Vijf paradigma's te bouwen, in evidence + impact-volgorde:**
+
+**10a. Go/No-Go (~1 run).** Wessel 2018 review + Simmonds 2008 meta bij ADHD. Onze top-2 inhibitie. Implementatie: frequente Go (80% — bv. 🐶) → zeldzame No-Go (20% — 🐱), stimulus 800 ms, adaptieve No-Go-ratio op basis van false-alarm-rate. Geen countdown. Reference-repo `reference/GoNoGo_jsPsych` als leesbron (clean-room). Mijlpaal-thema: dieren-vrienden (hond, kat, vogel, eekhoorn — 4 unlocks). Sessie-summary toegevoegd: `commission` (No-Go fout-rate), `omission` (Go-mis-rate), `meanGoRT`. Lens 3 (inhibition) krijgt extra commission-rate-trend.
+
+**10b. Tower of London (~1.5 run).** Diamond 2013, Shallice 1982. Vult lege planning-categorie. Implementatie: 3 stokken, 3 gekleurde ballen, doel-patroon zichtbaar, tap-tap-bewegingen (geen drag — eenvoudiger op touchscreen Chromebook). Tellen aantal-zetten vs. minimum-zetten + plantijd (tijd voor eerste zet). Hardop plannen mag. Reference-repo `reference/jspsych-contrib/plugin-tower-of-london`. Mijlpaal-thema: bouw-dieren (bever-architect, mier-bouwer, eekhoorn-stapelaar, vogel-nestbouwer). Levels: 3-zet → 4-zet → 5-zet → 7-zet patronen. Lens nieuw: planning (excess-moves trend).
+
+**10c. Flanker / vissen-versie (~1 run).** Eriksen-paradigma à la Rueda 2004 ANT-child. Visualer dan Day-Night, ander paradigma. Rij van 5 visjes, kind reageert op middelste richting (links/rechts), congruent vs incongruent 50/50, stimulus 170 ms, ISI 1500 ms. Mijlpaal-thema: zee-dieren (zeepaardje, zeester, krab, dolfijn). Skinable: vissen → pijltjes → autootjes als variatie-laag (Fase 11). Lens 3 (inhibition) krijgt flanker-effect-trend (incongruent RT − congruent RT).
+
+**10d. DCCS (Dimensional Change Card Sort) (~1 run).** Zelazo 2006 *Nature Protocols*. Tweede flexibility-paradigma naast Wisselen, andere mechaniek. Kaartjes met kleur+vorm; ronde 1 sorteer op kleur, ronde 2 op vorm, ronde 3 gemengd met cue. Verschilt van Wisselen omdat sorteer-actie i.p.v. links/rechts-respons. Mijlpaal-thema: sorteer-dieren (das, mol, hamster, eekhoorn — verzamelaars). Levels: pre-switch → post-switch → mixed-cue. Lens 4 (flexibility) krijgt DCCS-mixed-accuracy-trend.
+
+**10e. Posner cueing / Sterren-vangen (~0.75 run).** Posner & Petersen 1990, Rueda 2004 ANT-children. PKU-relevant per Huijbregts 2002 (orienting/vigilantie-tekort). Korte taak (~3 min). Kruisje midden, pijl wijst (cue), ster verschijnt links of rechts (target), kind tikt zijde. Cue-validity 100% → 80/20 → 50/50 als levels. Mijlpaal-thema: nacht-dieren (vleermuis, uil, kat, vos — geluiden in donker). Lens nieuw: aandacht-orienting (validity-effect trend).
+
+**Bewust NIET bouwen (research-vlag):**
+- **Klassieke woord-Stroop** (INH-1): dyslexie-killer per Adams 2013, van Mourik 2005.
+- **N-back** (WM-3 verbal Kirchner): research-evidence is mixed voor far-transfer; voor 7-jarige WM-zwaar; verbal aspect is dyslexie-onvriendelijk. Dual-n-back als default = expliciet niet doen.
+- **Stop-signal task** (INH-6): "minder geschikt <8j", SSRT instabiel bij kleuters met ADHD (Lu 2016). Pas overwegen als Alvah 8 is.
+- **CPT als training** (AAN-1): Cortese 2015 + Rapport 2013 = geen klinische transfer. Saai voor ADHD. Mogelijk wel als 3-min baseline-meting (out of scope nu).
+- **Trail Making B** origineel (FLEX-4): letters confounden bij dyslexie.
+- **WCST** (FLEX-3): te WM-zwaar voor 7j, faalervaring bij ADHD.
+- **Tower of Hanoi** (PLAN-2): wachten tot Tower of London beheerst is + recursief denken te zwaar.
+
+**Volgorde-bouw-aanbeveling:** 10a → 10b → 10e → 10c → 10d. Reden: Go/No-Go heeft hoogste ADHD-impact; Tower of London vult een lege categorie; Posner is kort en PKU-relevant; Flanker en DCCS overlappen deels met bestaande spellen dus minder urgent.
+
+**Architectuur-hergebruik:** elk nieuw spel volgt bestaande SpelShell + scoring/staircase/storage. Mijlpalen-systeem (`mijlpalen.js`) breidt uit met 4 nieuwe spel-blokken, 16 nieuwe dieren totaal. Analytics-laag (`analytics.js`) krijgt nieuwe metric-helpers per paradigma. Per spel: ~5–8 nieuwe bestanden incl. tests.
+
+**Triggers om te bouwen:** Floris vraagt erom; of Alvah speelt ≥2× per week 4 weken op rij + plateau-dichtheid op huidige spellen.
+
+### Fase 11 — Variatie-systeem per spel — ✅ KLAAR (25 apr 2026)
+
+**Gebouwd (minimale werkende versie):**
+- `src/scripts/skin.js` (nieuw, pure module): `skinNiveau(spelId, data)` → 0-4 = aantal bereikte mijlpalen voor dat spel; `bereikteDieren(spelId, data)` → array van MIJLPALEN-objecten in mijlpaal-volgorde.
+- `src/scripts/skin.test.js` (nieuw): 5 tests pass — lege data, count-per-spel, volgorde, onbekend spel.
+- `src/styles/spelen.css` (patch): `.spel-trofeeen` flex-row, `.spel-trofee` cirkel-styling per spel-kleur (5 varianten: simon-blauw, corsi-magenta, day-night-zon, zoeken-oranje, wisselen-groen), `[data-skin="N"]` selectors voor progresief opbouwende sun-tint achtergrond.
+- 5 spel-bestanden patches: trofeeën-strip-div in template, `applySkin(host, spelId)` functie op outer scope die data-skin-attr zet + cirkels rendert met dier-initialen, applySkin-call op init én na nieuwe-mijlpaal in `toonNieuweMijlpaal`.
+
+**Wat dit oplevert:** persistent reminder van bereikte dieren bovenaan elk spel, achtergrond wordt warmer naarmate Alvah verder komt. Cirkels gebruiken eerste-letter-conventie (consistent met `/spelen/reis`-badges). Geen paradigma-aanpassing — volledig op visuele laag.
+
+**Bewust niet (afgeschaald van plan):** geen pictografische SVG-silhouettes per dier (20 unieke SVGs is te veel werk voor V1) — initialen-cirkels zijn consistent met reis-pagina en functioneel. Geen scene-evolutie met silhouettes verspreid in spel-veld; alleen header-strip. Beide kunnen iteratief later, dit is V1.
+
+**Verificatie:** `node --test` 80/80 (75 oud + 5 skin), `npx astro check` 0 errors, ToV-strict 0 blokkers, HTTP 200 op alle 9 routes, `data-trofeeen` en `data-bloei` aanwezig in alle 5 spel-pagina's.
+
+<details>
+<summary>Oorspronkelijke scope-beschrijving (Fase 11 pre-implementatie)</summary>
+
+**Doel:** elk spel ziet er anders uit op verschillende mastery-momenten zonder dat het paradigma verandert. Trigger = mijlpaal-unlock of level-up, niet kalender. Geen surprise-drops, wel zichtbare evolutie van het wereldje.
+
+**Per-spel variatie-tabel** (paradigma-parameters identiek; alleen visueel-thematische laag wijzigt):
+
+**Simon — dierenbandje:**
+| Trigger | Skin |
+|---|---|
+| Default (span 2) | 4 panelen basis-kleur, basis-tonen |
+| span 3 (trom-aap) | Trom-aap-silhouet boven panelen, panelen zelfde |
+| span 5 (gitaar-flamingo) | + flamingo-silhouet, panelen krijgen subtiele textuur (linnen-achtig) |
+| span 7 (zang-vos) | + vos-silhouet, schemer-achtergrond (donkerder paper) |
+| span 9 (piano-uil) | Volledig dierenbandje (4 dieren), nacht-thema |
+
+**Corsi — nachtbos:**
+| Trigger | Skin |
+|---|---|
+| Default | Donker-blauw veld, 9 grijze sterren |
+| span 4 (vuurvliegjes) | + 5 gele puntjes als ambient vuurvliegjes (NIET op de ster-posities — paradigma intact) |
+| span 5 (uil) | + uil-silhouet op tak rechtsboven |
+| span 6 (vos) | + vos tussen varens linksonder |
+| span 7 (sterren-pad) | + lijn van piepkleine sterren in achtergrond, geen invloed op klikbare sterren |
+
+**Day-Night — dag-nacht-cyclus:**
+| Trigger | Skin |
+|---|---|
+| Default (L1) | Zon/maan basis-iconen op crème-achtergrond |
+| 80% acc (egel) | + egel-silhouet onderaan, schemer-band achter stimulus |
+| 85%+L2 (vos) | + vos in struiken, avond-gradient |
+| 90%+L3 (uil) | + uil in lucht, nacht-thema (achtergrond donkerder) |
+| L4 (vleermuis) | + vleermuizen in lucht, dageraad-gradient |
+
+**Zoeken — vijver:**
+| Trigger | Skin |
+|---|---|
+| Default | Crème veld, kikkers basis |
+| 8 (libel) | + libel zwemt boven veld (decoratief), waterlelies onderaan |
+| 12 (reiger) | + reiger-silhouet aan rand, water-textuur |
+| 16 (ijsvogel) | + ijsvogel op tak, oever-detail |
+| L3 (otter) | + otter zwemt door, volle pond-scene |
+
+**Wisselen — dierentuin:**
+| Trigger | Skin |
+|---|---|
+| Default | Stimuli basis, cue-paneel basis-kleur |
+| L1 (papegaai) | Papegaai in hoek, jungle-rand-textuur |
+| L2 (giraffe) | + giraffe-silhouet, savanne-band |
+| L3 (leeuw) | + leeuw-silhouet, savanne-thema volledig |
+| <200ms (olifant) | + olifant, complete dierentuin-scene |
+
+**Implementatie:**
+- `src/scripts/skin.js` (nieuw, pure module): mapt `(spelId, computedMilestones, currentLevel)` → `skinConfig` object met thema-strings + asset-keys + CSS-class-namen.
+- `src/scripts/skin.test.js` (nieuw): per spel fixture-driven tests dat de juiste skin retourneert per state.
+- 5 spel-bestanden patch: bij sessie-start `getSkin(spelId)` aanroepen, root-element krijgt `data-skin="<config>"`. CSS in `spelen.css` heeft `[data-skin*="..."]`-selectors voor de visual swaps.
+- `src/styles/spelen.css` (patch): per spel een blok met skin-varianten (extra SVG-overlays, achtergrond-gradients, character-silhouets).
+
+**Bestaande mijlpaal-pop blijft** — de skin-shift gebeurt op de volgende sessie (rustig: geen mid-sessie-aanpassing). Geen variabele beloning, alles voorspelbaar.
+
+Geschat: ~1.5 run.
+
+</details>
+
+### Fase 12 — Celebration-upgrade — ✅ KLAAR (25 apr 2026)
+
+**Gebouwd:**
+- `src/scripts/celebration.js` (nieuw, pure module): `chordVoor(milestoneId)` mapt mijlpaal-volgnummer (1-4) → akkoord-array (4 voorgedefinieerde akkoorden, hetzelfde per volgnummer over spellen — Alvah leert "dit klinkt als de eerste mijlpaal"). `bloemSvg(spelId)` retourneert SVG-string per spel: muziek-noot (Simon), ster (Corsi), zon-bloem (Day-Night), waterlelie (Zoeken), regenboog-bloem (Wisselen).
+- `src/scripts/celebration.test.js` (nieuw): 7 tests pass — chord-progressie consistent + per-spel SVG.
+- `src/scripts/audio.js` (patch): `playChord(freqs, durationMs, gain)` helper — multi-oscillator met per-stem gain-correctie tegen clipping. Respecteert `preferences.sound`.
+- `src/styles/spelen.css` (patch): `.spel-bloei`-class met 1.5s scale + rotate keyframe, per spel een variant met spel-kleur via `currentColor`. `spel-mijlpaal-pop` keyframe verlengd 700ms → 1.2s met character-entry (translateX van rechts + scale-overshoot). Reduced-motion-veilig.
+- `src/pages/spelen/reis.astro` (patch): `reis-groei` keyframe verlengd 700ms → 1.2s met rotate-overshoot voor character-feel.
+- 5 spel-bestanden patches: `<div class="spel-bloei spel-bloei--<spelId>" data-bloei></div>` in einde-scherm. Op endSession: `bloeiEl.innerHTML = bloemSvg(spelId)` na toon('einde'). In `toonNieuweMijlpaal`: 200ms delay daarna `playChord(chordVoor(top.id), 1100)` voor de hoogste nieuwe mijlpaal.
+
+**Research-anchoring:** §C.3 "Niet-verslavend ontwerp" expliciet — voorspelbare + mastery-anchored celebration. Geen confetti per correct, geen variable reward, geen streaks. Bloeiende plant + akkoord per mijlpaal-unlock = letterlijk wat research-doc als toegestaan noemt.
+
+**Verificatie:** `node --test` 75/75 (68 oud + 7 celebration), `npx astro check` 0 errors, ToV-strict 0 blokkers, HTTP 200 op alle 9 routes.
+
+<details>
+<summary>Oorspronkelijke scope-beschrijving (Fase 12 pre-implementatie)</summary>
+
+**Doel:** de rek tussen onze huidige (austeere) celebration en wat research §C.3 toestaat benutten. Predictable + mastery-anchored, geen variable + per-trial.
+
+**Wat we nu hebben:**
+- Feedback-ring 350-500 ms tijdens trial (correct: gloed; fout: rode ring)
+- "Juist" / "Andersom" status-tekst
+- Sparkline op einde-scherm
+- Mijlpaal: 700ms pop-animatie + groei-fragment-anchor
+
+**Wat we toevoegen (allemaal voorspelbaar, niet random):**
+
+1. **Bloeiende plant op einde-scherm (research §C.3 noemt dit letterlijk):** SVG-zaadje → bloem in 1.5s, single keyframe. Per-spel een eigen variant: muziek-noot voor Simon, ster voor Corsi, zon-bloem voor Day-Night, waterlelie voor Zoeken, regenboog-bloem voor Wisselen. Toggle-baar via bestaande `preferences.sparklineInEinde` of nieuwe `preferences.eindeAnimatie`. Reduced-motion-veilig (statische bloei).
+
+2. **Single audio-chord bij mijlpaal-unlock:** één akkoord, hetzelfde elke keer per dier (predictable). Voorbeelden: trom-aap = lage rommel-toon; gitaar-flamingo = G-majeur akkoord; zang-vos = dorian melodie 3-note; piano-uil = vol Cmaj9-akkoord. Audio.js krijgt `playChord(notes[], duration)` helper. Respecteert `preferences.sound`.
+
+3. **Mijlpaal-pop-animatie uitbreiden 700ms → 1.2s met character-entry:** dier-silhouet zweeft 200ms in van rechts, vergroot 600ms in mid-stap, settle 400ms. Eén keer per nieuwe mijlpaal, niet per trial.
+
+4. **Reis-pagina micro-detail:** bij scroll-in-view van bereikte badge een subtiele "ademing"-puls (1.5s opacity 0.85 → 1.0 → 0.85, eenmaal). Reduced-motion: geen puls.
+
+5. **Sessie-end "Goed bezig"-uitspraak (optioneel):** als `preferences.tts === true`, audio-uitspraak "Goed bezig" via speechSynthesis bij einde-scherm. Default uit (kan irriterend worden), opt-in.
+
+**Wat we NIET toevoegen:**
+- Confetti (research-vlag)
+- Per-correct-trial-pop (variable reward)
+- Streak-counter ("X dagen op rij!")
+- Surprise-drops ("je hebt een nieuwe vaardigheid ontgrendeld!")
+- Speed-rounds met countdown
+
+**Bestanden:**
+- `src/styles/spelen.css` (patch): nieuwe keyframes voor bloei + mijlpaal-uitbreiding + reis-puls.
+- `src/scripts/audio.js` (patch): `playChord(notes, durationMs, gain)` helper.
+- `src/scripts/celebration.js` (nieuw, pure config): per-mijlpaal chord-config + plant-variant per spel.
+- 5 spel-bestanden (patch): bloei-SVG + chord-call op einde-scherm.
+- `src/pages/spelen/reis.astro` (patch): in-view-puls via IntersectionObserver.
+
+Geschat: ~1 run.
+
+</details>
 
 ---
 

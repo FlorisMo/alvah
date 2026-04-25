@@ -16,9 +16,9 @@ const spellen: { id: SpelId; icon: string; fase: number }[] = [
 // Speelbare spellen — uitbreiden bij elke nieuwe fase.
 const SPEELBAAR = new Set<SpelId>(['simon', 'corsi', 'day-night', 'zoeken', 'wisselen']);
 
+// Server-default: Simon. JS voert pickNext() uit en past hero + tile-zichtbaarheid aan.
 const aanbevolenStub: SpelId = 'simon';
 const aanbevolen = spellen.find((s) => s.id === aanbevolenStub)!;
-const overig = spellen.filter((s) => s.id !== aanbevolenStub);
 ---
 <BaseLayout
   title="Spelen — Alvah"
@@ -47,13 +47,15 @@ const overig = spellen.filter((s) => s.id !== aanbevolenStub);
 
     <h2 class="section-head"><span class="num">A</span>{NL.spelen.andere}</h2>
     <div class="spel-tegel-grid">
-      {overig.map((s) => {
+      {spellen.map((s) => {
         const speelbaar = SPEELBAAR.has(s.id);
         const klasse = `spel-tegel spel-tegel--${s.id}${speelbaar ? '' : ' spel-tegel--binnenkort'}`;
         const statusTekst = speelbaar ? 'Beschikbaar' : NL.spelen.nogNietBeschikbaar;
+        const isHero = s.id === aanbevolenStub;
+        const heroAttr = isHero ? 'true' : 'false';
         if (speelbaar) {
           return (
-            <a class={klasse} href={`/spelen/${s.id}`}>
+            <a class={klasse} href={`/spelen/${s.id}`} data-spel-id={s.id} data-is-hero={heroAttr}>
               <div class="spel-tegel__icon" aria-hidden="true">{s.icon}</div>
               <div class="spel-tegel__titel">{NL.spel[s.id].titel}</div>
               <div class="spel-tegel__kort">{NL.spel[s.id].kort}</div>
@@ -62,7 +64,7 @@ const overig = spellen.filter((s) => s.id !== aanbevolenStub);
           );
         }
         return (
-          <article class={klasse}>
+          <article class={klasse} data-spel-id={s.id} data-is-hero={heroAttr}>
             <div class="spel-tegel__icon" aria-hidden="true">{s.icon}</div>
             <div class="spel-tegel__titel">{NL.spel[s.id].titel}</div>
             <div class="spel-tegel__kort">{NL.spel[s.id].kort}</div>
@@ -78,19 +80,21 @@ const overig = spellen.filter((s) => s.id !== aanbevolenStub);
     </div>
   </section>
 
+  <style>
+    /* Hero-tile (server-default of door JS gekozen) is verborgen in de andere-spellen-grid. */
+    .spel-tegel[data-is-hero="true"] {
+      display: none;
+    }
+  </style>
+
   <script>
     import { load } from '../../scripts/storage.js';
     import { pickNext } from '../../scripts/aanraden.js';
     import { NL as NLS } from '../../scripts/strings.nl.js';
 
-    // Client-side aanrader. Valt terug op 'simon' als de aanbeveling nog niet
-    // speelbaar is in de huidige fase.
-    const SPEELBAAR = new Set(['simon', 'corsi', 'day-night', 'zoeken', 'wisselen']);
-
     try {
       const data = load();
-      const rawPick = pickNext(data);
-      const pick = SPEELBAAR.has(rawPick) ? rawPick : 'simon';
+      const pick = pickNext(data);
 
       const titelEl = document.querySelector<HTMLElement>('[data-hero-titel]');
       const kortEl = document.querySelector<HTMLElement>('[data-hero-kort]');
@@ -98,11 +102,18 @@ const overig = spellen.filter((s) => s.id !== aanbevolenStub);
       if (titelEl && copy) titelEl.textContent = copy.titel;
       if (kortEl && copy) kortEl.textContent = copy.kort;
 
-      // Als er een actieve link is, pas de href aan
       const link = document.querySelector<HTMLAnchorElement>('[data-hero-link]');
       if (link) link.href = `/spelen/${pick}`;
+
+      // Wissel data-is-hero zodat de hero-tile verborgen blijft en de
+      // server-default tile weer zichtbaar wordt.
+      const tegels = document.querySelectorAll<HTMLElement>('[data-spel-id]');
+      for (const t of tegels) {
+        const id = t.getAttribute('data-spel-id');
+        t.setAttribute('data-is-hero', id === pick ? 'true' : 'false');
+      }
     } catch (_) {
-      // stil falen; default-kopij blijft staan
+      // stil falen; server-default blijft staan
     }
   </script>
 </BaseLayout>

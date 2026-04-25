@@ -38,8 +38,70 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
     </div>
   </section>
 
+  <section class="admin-lenzen">
+    <h2 class="section-head"><span class="num">2</span>{NL.admin.lenzen.titel}</h2>
+    <p class="lede">{NL.admin.lenzen.lede}</p>
+    <label class="admin-lens-toggle">
+      <input type="checkbox" data-toggle-referenties />
+      <span data-toggle-label>{NL.admin.lenzen.toggleAan}</span>
+    </label>
+
+    <article class="admin-lens">
+      <header class="admin-lens__header">
+        <h3 class="admin-lens__titel">{NL.admin.lenzen.stabiliteit.titel}</h3>
+        <p class="admin-lens__uitleg">{NL.admin.lenzen.stabiliteit.uitleg}</p>
+      </header>
+      <div class="admin-lens-grid" data-lens-stabiliteit></div>
+    </article>
+
+    <article class="admin-lens">
+      <header class="admin-lens__header">
+        <h3 class="admin-lens__titel">{NL.admin.lenzen.iivcv.titel}</h3>
+        <p class="admin-lens__uitleg">{NL.admin.lenzen.iivcv.uitleg}</p>
+      </header>
+      <div class="admin-lens-grid" data-lens-iivcv></div>
+    </article>
+
+    <article class="admin-lens">
+      <header class="admin-lens__header">
+        <h3 class="admin-lens__titel">{NL.admin.lenzen.inhibition.titel}</h3>
+      </header>
+      <div class="admin-lens-twin">
+        <div class="admin-lens-twin__blok">
+          <div class="admin-lens__sub">{NL.spel['day-night'].titel}</div>
+          <p class="admin-lens__uitleg">{NL.admin.lenzen.inhibition.uitlegDN}</p>
+          <div data-lens-inhibition-dn></div>
+        </div>
+        <div class="admin-lens-twin__blok">
+          <div class="admin-lens__sub">{NL.spel.zoeken.titel}</div>
+          <p class="admin-lens__uitleg">{NL.admin.lenzen.inhibition.uitlegZoeken}</p>
+          <div data-lens-inhibition-zoeken></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="admin-lens">
+      <header class="admin-lens__header">
+        <h3 class="admin-lens__titel">{NL.admin.lenzen.flexibility.titel}</h3>
+        <p class="admin-lens__uitleg">{NL.admin.lenzen.flexibility.uitleg}</p>
+      </header>
+      <div data-lens-flexibility></div>
+    </article>
+
+    <article class="admin-lens">
+      <header class="admin-lens__header">
+        <h3 class="admin-lens__titel">{NL.admin.lenzen.engagement.titel}</h3>
+        <p class="admin-lens__uitleg">{NL.admin.lenzen.engagement.uitleg}</p>
+      </header>
+      <div class="admin-lens__sub">{NL.admin.lenzen.engagement.sessiesPerWeek}</div>
+      <div data-lens-engagement-week></div>
+      <div class="admin-lens__sub">{NL.admin.lenzen.engagement.tijdVanDag}</div>
+      <div data-lens-engagement-heatmap></div>
+    </article>
+  </section>
+
   <section>
-    <h2 class="section-head"><span class="num">2</span>Per spel</h2>
+    <h2 class="section-head"><span class="num">3</span>Per spel</h2>
     <div class="admin-spel-grid">
       {spellen.map((s) => (
         <article class="admin-spel" data-admin-spel={s.id}>
@@ -70,8 +132,44 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
     </div>
   </section>
 
+  <section class="admin-mijlpalen">
+    <h2 class="section-head"><span class="num">4</span>{NL.admin.mijlpalen}</h2>
+    <div class="admin-mijl-stats" data-mijl-stats>
+      <span class="admin-mijl-stat"><span data-bereikt-n>0</span> {NL.admin.mijlpalenBereikt}</span>
+      <span class="admin-mijl-stat"><span data-open-n>0</span> {NL.admin.cadeauOpenstaand}</span>
+    </div>
+    <div class="admin-mijl-lijst" data-mijl-lijst></div>
+
+    <h3 class="admin-mijl-subkop">{NL.admin.cadeaus}</h3>
+    <p class="admin-mijl-cadeau-uitleg">{NL.admin.cadeauKoppel}.</p>
+    <form class="admin-mijl-form" data-cadeau-form>
+      <label class="admin-mijl-form__veld">
+        <span class="admin-mijl-form__label">{NL.admin.cadeauKies}</span>
+        <select data-cadeau-mijlpaal required></select>
+      </label>
+      <label class="admin-mijl-form__veld">
+        <span class="admin-mijl-form__label">{NL.admin.cadeauOmschrijving}</span>
+        <input type="text" data-cadeau-tekst required maxlength="80" />
+      </label>
+      <button type="submit" class="spel-btn">{NL.admin.cadeauToevoegen}</button>
+    </form>
+    <table class="admin-cadeaus" data-cadeau-tabel>
+      <thead>
+        <tr>
+          <th>Mijlpaal</th>
+          <th>Cadeau</th>
+          <th>{NL.admin.cadeauStatus}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody data-cadeau-body>
+        <tr><td colspan="4" class="admin-spel__leeg">{NL.admin.geenCadeaus}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
   <section>
-    <h2 class="section-head"><span class="num">3</span>Data</h2>
+    <h2 class="section-head"><span class="num">5</span>Data</h2>
     <div class="admin-knoppen">
       <button type="button" class="spel-btn" data-actie="kopieer">{NL.admin.kopieer}</button>
       <button type="button" class="spel-btn spel-btn--ghost" data-actie="download">{NL.admin.download}</button>
@@ -228,6 +326,283 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
       color: var(--ink-soft);
       font-size: 0.9rem;
     }
+    .admin-lenzen { margin-bottom: 40px; }
+
+    .admin-lens-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--line-soft);
+      font-size: 0.88rem;
+      color: var(--ink-soft);
+      cursor: pointer;
+      margin-bottom: 22px;
+    }
+    .admin-lens-toggle input[type="checkbox"] {
+      accent-color: var(--green);
+      cursor: pointer;
+    }
+
+    .admin-lens {
+      padding: 18px 20px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--spel-radius);
+      margin-bottom: 16px;
+    }
+    .admin-lens__header { margin-bottom: 12px; }
+    .admin-lens__titel {
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 1.1rem;
+      margin: 0 0 4px;
+    }
+    .admin-lens__uitleg {
+      font-size: 0.88rem;
+      color: var(--ink-soft);
+      margin: 0;
+      max-width: 60ch;
+    }
+    .admin-lens__sub {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ink-muted);
+      margin: 12px 0 6px;
+    }
+    .admin-lens-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .admin-lens-card {
+      padding: 12px 14px;
+      background: var(--line-soft);
+      border-radius: 6px;
+      display: grid;
+      gap: 6px;
+    }
+    .admin-lens-card__titel {
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+    .admin-lens-card__status {
+      font-size: 0.82rem;
+      color: var(--ink-soft);
+    }
+    .admin-lens-card__status.is-boven { color: var(--green); }
+    .admin-lens-card__status.is-onder { color: #a33; }
+    .admin-lens-card__svg {
+      width: 100%;
+      height: 36px;
+      display: block;
+    }
+    .admin-lens-twin {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .admin-lens-twin__blok { padding: 0; }
+
+    .admin-lens-svg {
+      width: 100%;
+      max-width: 360px;
+      display: block;
+    }
+    .admin-lens-band {
+      fill: color-mix(in srgb, var(--green) 14%, var(--paper));
+      stroke: none;
+      opacity: 0.55;
+    }
+    .admin-lens-band.is-hidden { display: none; }
+    .admin-lens-band-label {
+      font-size: 9px;
+      fill: var(--ink-muted);
+    }
+    .admin-lens-leeg {
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+      font-style: italic;
+    }
+
+    .admin-heat {
+      display: grid;
+      grid-template-columns: 80px repeat(24, 1fr);
+      gap: 1px;
+      font-size: 0.72rem;
+      color: var(--ink-muted);
+      max-width: 600px;
+    }
+    .admin-heat__label { padding: 2px 6px 2px 0; align-self: center; }
+    .admin-heat__cel {
+      aspect-ratio: 1/1;
+      background: var(--line-soft);
+      border-radius: 2px;
+    }
+    .admin-heat__uur {
+      font-size: 0.65rem;
+      text-align: center;
+      color: var(--ink-muted);
+      grid-column: span 1;
+    }
+
+    .admin-mijlpalen { margin-bottom: 36px; }
+
+    .admin-mijl-stats {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin: 0 0 16px;
+      font-size: 0.9rem;
+    }
+    .admin-mijl-stat {
+      padding: 4px 10px;
+      background: var(--line-soft);
+      border-radius: 999px;
+      color: var(--ink-soft);
+    }
+    .admin-mijl-stat span {
+      font-family: var(--font-heading);
+      font-weight: 500;
+      color: var(--ink);
+      margin-right: 4px;
+    }
+
+    .admin-mijl-lijst {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .admin-mijl-spel {
+      padding: 12px 14px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--spel-radius);
+    }
+    .admin-mijl-spel__titel {
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 1rem;
+      margin: 0 0 6px;
+    }
+    .admin-mijl-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 0.9rem;
+      color: var(--ink-soft);
+      border-bottom: 1px dashed var(--line-soft);
+    }
+    .admin-mijl-row:last-child { border-bottom: none; }
+    .admin-mijl-row.is-bereikt { color: var(--ink); font-weight: 500; }
+    .admin-mijl-row__status {
+      font-size: 0.8rem;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .admin-mijl-row.is-bereikt .admin-mijl-row__status { color: var(--green); }
+
+    .admin-mijl-subkop {
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 1.05rem;
+      margin: 18px 0 4px;
+    }
+    .admin-mijl-cadeau-uitleg {
+      color: var(--ink-soft);
+      font-size: 0.9rem;
+      margin: 0 0 12px;
+    }
+
+    .admin-mijl-form {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr 1fr auto;
+      align-items: end;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 640px) {
+      .admin-mijl-form { grid-template-columns: 1fr; }
+    }
+    .admin-mijl-form__veld { display: grid; gap: 4px; }
+    .admin-mijl-form__label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ink-muted);
+    }
+    .admin-mijl-form select,
+    .admin-mijl-form input[type="text"] {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--paper);
+      font: inherit;
+      color: var(--ink);
+    }
+
+    .admin-cadeaus {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    .admin-cadeaus th, .admin-cadeaus td {
+      text-align: left;
+      padding: 8px 10px 8px 0;
+      border-bottom: 1px solid var(--line-soft);
+      vertical-align: top;
+    }
+    .admin-cadeaus th {
+      font-weight: 500;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.75rem;
+    }
+    .admin-cadeau-status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      background: var(--line-soft);
+      color: var(--ink-muted);
+    }
+    .admin-cadeau-status--open {
+      background: color-mix(in srgb, var(--spel-orange) 18%, var(--paper));
+      color: var(--ink);
+    }
+    .admin-cadeau-status--klaar {
+      background: color-mix(in srgb, var(--green) 14%, var(--paper));
+      color: var(--green);
+    }
+    .admin-cadeau-status--uitgereikt {
+      background: var(--line-soft);
+      color: var(--ink-muted);
+    }
+    .admin-cadeau-acties {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .admin-cadeau-acties button {
+      padding: 4px 10px;
+      font-size: 0.82rem;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--ink-soft);
+    }
+    .admin-cadeau-acties button:hover {
+      color: var(--green);
+      border-color: var(--green);
+    }
+
     .admin-json__pre {
       background: var(--line-soft);
       border: 1px solid var(--line);
@@ -243,8 +618,30 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
   </style>
 
   <script>
-    import { load, exportJSON, importJSON, clearAll } from '../../scripts/storage.js';
+    import { load, save, exportJSON, importJSON, clearAll } from '../../scripts/storage.js';
     import { detectPlateau } from '../../scripts/progressie.js';
+    import { computeMilestones, MIJLPALEN } from '../../scripts/mijlpalen.js';
+    import {
+      rollingMean,
+      huidigStatus,
+      iivTrend,
+      incongruentAccuracyTrend,
+      falseAlarmRate,
+      switchCostTrend,
+      weekFrequency,
+      timeOfDayHeatmap,
+      platteSessies,
+    } from '../../scripts/analytics.js';
+    import { REFERENTIE_BANDS } from '../../scripts/referenties.js';
+    import { NL as NLS } from '../../scripts/strings.nl.js';
+
+    type Cadeau = {
+      id: string;
+      milestoneId: string;
+      omschrijving: string;
+      status: 'open' | 'uitgereikt';
+      toegevoegd: string;
+    };
 
     type SpelId = 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen';
 
@@ -267,6 +664,29 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
       importeerBtn.addEventListener('click', () => importInput.click());
       importInput.addEventListener('change', onImportFile);
       wisBtn.addEventListener('click', onWis);
+
+      // Cadeau-form
+      const form = document.querySelector<HTMLFormElement>('[data-cadeau-form]')!;
+      form.addEventListener('submit', onCadeauToevoegen);
+
+      // Toggle: toon onderzoek-referenties
+      const toggle = document.querySelector<HTMLInputElement>('[data-toggle-referenties]')!;
+      const data0 = load();
+      toggle.checked = !!(data0.preferences && data0.preferences.toonReferenties);
+      updateToggleLabel(toggle.checked);
+      toggle.addEventListener('change', () => {
+        const data = load();
+        if (!data.preferences) (data as any).preferences = {};
+        data.preferences.toonReferenties = toggle.checked;
+        save(data);
+        updateToggleLabel(toggle.checked);
+        render();
+      });
+    }
+
+    function updateToggleLabel(aan: boolean) {
+      const lbl = document.querySelector<HTMLElement>('[data-toggle-label]')!;
+      lbl.textContent = aan ? NLS.admin.lenzen.toggleUit : NLS.admin.lenzen.toggleAan;
     }
 
     function render() {
@@ -328,9 +748,350 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
         renderTabel(bodyEl, sessions);
       }
 
+      // Lenzen
+      renderLenzen(data);
+
+      // Mijlpalen + cadeaus
+      renderMijlpalen(data);
+
       // JSON-preview
       const pre = document.querySelector<HTMLPreElement>('[data-json-pre]')!;
       pre.textContent = exportJSON();
+    }
+
+    function renderLenzen(data: any) {
+      const toonRef = !!(data.preferences && data.preferences.toonReferenties);
+      const exercises = data.exercises || {};
+      const spelTitels: Record<string, string> = {
+        simon: NLS.spel.simon.titel,
+        corsi: NLS.spel.corsi.titel,
+        'day-night': NLS.spel['day-night'].titel,
+        zoeken: NLS.spel.zoeken.titel,
+        wisselen: NLS.spel.wisselen.titel,
+      };
+      const primaryMetric: Record<string, string> = {
+        simon: 'maxSpan',
+        corsi: 'maxSpan',
+        'day-night': 'accuracy',
+        zoeken: 'maxSetSize',
+        wisselen: 'accuracy',
+      };
+
+      // Lens 1 — Stabiliteit
+      const stab = document.querySelector<HTMLElement>('[data-lens-stabiliteit]')!;
+      stab.innerHTML = '';
+      for (const spelId of Object.keys(spelTitels)) {
+        const sessions = (exercises[spelId] && exercises[spelId].sessions) || [];
+        const status = huidigStatus(sessions, primaryMetric[spelId]);
+        const statusClass = status === 'boven' ? 'is-boven' : (status === 'onder' ? 'is-onder' : '');
+        const statusText = status
+          ? NLS.admin.lenzen.stabiliteit[status]
+          : NLS.admin.lenzen.stabiliteit.teWeinig;
+        const sparkSvg = stabSparkline(sessions, primaryMetric[spelId], spelId, toonRef);
+        const card = document.createElement('div');
+        card.className = 'admin-lens-card';
+        card.innerHTML =
+          `<div class="admin-lens-card__titel">${escapeHtml(spelTitels[spelId])}</div>
+           <div class="admin-lens-card__status ${statusClass}">${escapeHtml(statusText)}</div>
+           ${sparkSvg}`;
+        stab.appendChild(card);
+      }
+
+      // Lens 2 — IIV-CV
+      const ivc = document.querySelector<HTMLElement>('[data-lens-iivcv]')!;
+      ivc.innerHTML = '';
+      for (const spelId of Object.keys(spelTitels)) {
+        const sessions = (exercises[spelId] && exercises[spelId].sessions) || [];
+        const trend = iivTrend(sessions, spelId);
+        const card = document.createElement('div');
+        card.className = 'admin-lens-card';
+        const sparkSvg = trend.length >= 2
+          ? simpleSparkline(trend.map((p: any) => p.iivCV), { yMin: 0, yMax: 0.5, color: '#2b5fb8', toonBand: toonRef ? REFERENTIE_BANDS.iivCV.band : null, yInvert: false })
+          : `<div class="admin-lens-leeg">${escapeHtml('Te weinig data')}</div>`;
+        card.innerHTML =
+          `<div class="admin-lens-card__titel">${escapeHtml(spelTitels[spelId])}</div>
+           ${sparkSvg}`;
+        ivc.appendChild(card);
+      }
+
+      // Lens 3 — Inhibition (DN incongruent)
+      const dnHost = document.querySelector<HTMLElement>('[data-lens-inhibition-dn]')!;
+      const dnSessions = (exercises['day-night'] && exercises['day-night'].sessions) || [];
+      const dnTrend = incongruentAccuracyTrend(dnSessions);
+      dnHost.innerHTML = dnTrend.length >= 2
+        ? simpleSparkline(
+            dnTrend.map((p: any) => p.accuracy),
+            { yMin: 0, yMax: 1, color: '#b68d18', toonBand: toonRef ? REFERENTIE_BANDS['day-night-incongruent'].band : null, yInvert: false },
+          )
+        : `<div class="admin-lens-leeg">${escapeHtml('Te weinig data')}</div>`;
+
+      // Lens 3 — Inhibition (Zoeken false-alarm)
+      const zHost = document.querySelector<HTMLElement>('[data-lens-inhibition-zoeken]')!;
+      const zSessions = (exercises.zoeken && exercises.zoeken.sessions) || [];
+      const fa = falseAlarmRate(zSessions);
+      // Zoeken: lagere FA-rate is beter; geen referentie-band (te parameter-afhankelijk).
+      zHost.innerHTML = fa.length >= 2
+        ? simpleSparkline(fa.map((p: any) => p.rate), { yMin: 0, yMax: 0.5, color: '#ef7a1f', toonBand: null, yInvert: false })
+        : `<div class="admin-lens-leeg">${escapeHtml('Te weinig data')}</div>`;
+
+      // Lens 4 — Flexibility (switch-cost)
+      const flexHost = document.querySelector<HTMLElement>('[data-lens-flexibility]')!;
+      const wisSessions = (exercises.wisselen && exercises.wisselen.sessions) || [];
+      const sct = switchCostTrend(wisSessions);
+      const yMaxSc = Math.max(500, ...sct.map((p: any) => p.switchCost));
+      flexHost.innerHTML = sct.length >= 2
+        ? simpleSparkline(sct.map((p: any) => p.switchCost), { yMin: 0, yMax: yMaxSc, color: '#1e4d32', toonBand: toonRef ? REFERENTIE_BANDS['wisselen-switchcost'].band : null, yInvert: false })
+        : `<div class="admin-lens-leeg">${escapeHtml('Te weinig data')}</div>`;
+
+      // Lens 5 — Engagement
+      const flat = platteSessies(exercises);
+      const wf = weekFrequency(flat, 8);
+      const weekHost = document.querySelector<HTMLElement>('[data-lens-engagement-week]')!;
+      const wfMax = Math.max(1, ...wf.map((w: any) => w.count));
+      weekHost.innerHTML = `
+        <svg viewBox="0 0 240 60" class="admin-lens-svg" aria-hidden="true">
+          ${wf.map((w: any, i: number) => {
+            const x = (i / wf.length) * 240 + 4;
+            const w2 = (240 / wf.length) - 4;
+            const h = (w.count / wfMax) * 50;
+            const y = 56 - h;
+            return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w2.toFixed(1)}" height="${h.toFixed(1)}" fill="#2b5fb8" opacity="0.7" rx="2"/>`;
+          }).join('')}
+        </svg>
+      `;
+
+      const heatHost = document.querySelector<HTMLElement>('[data-lens-engagement-heatmap]')!;
+      const heat = timeOfDayHeatmap(exercises) as Record<string, number[]>;
+      const heatMax = Math.max(1, ...Object.values(heat).flatMap((arr: any) => arr));
+      const colors: Record<string, string> = {
+        simon: '#2b5fb8',
+        corsi: '#c94174',
+        'day-night': '#b68d18',
+        zoeken: '#ef7a1f',
+        wisselen: '#1e4d32',
+      };
+      const uurHeader =
+        '<div></div>' +
+        Array.from({ length: 24 }, (_, h) => `<div class="admin-heat__uur">${h}</div>`).join('');
+      const rijen = Object.keys(spelTitels).map((spelId) => {
+        const cellen = (heat[spelId] || []).map((n: number) => {
+          const op = heatMax ? (n / heatMax) : 0;
+          return `<div class="admin-heat__cel" style="background:${colors[spelId]};opacity:${(0.05 + op * 0.85).toFixed(2)}"></div>`;
+        }).join('');
+        return `<div class="admin-heat__label">${escapeHtml(spelTitels[spelId])}</div>${cellen}`;
+      }).join('');
+      heatHost.innerHTML = `<div class="admin-heat">${uurHeader}${rijen}</div>`;
+    }
+
+    // Helper: stabiliteit-sparkline met optionele referentie-band.
+    function stabSparkline(sessions: any[], metric: string, spelId: string, toonRef: boolean): string {
+      const reeks = rollingMean(sessions, metric, 30);
+      const values = sessions.map((s: any) => Number(s.summary && s.summary[metric])).filter((v) => Number.isFinite(v));
+      if (values.length < 2) return `<div class="admin-lens-leeg">${escapeHtml('Te weinig data')}</div>`;
+
+      const yMin = 0;
+      const yMax = Math.max(...values, ...reeks.filter((v: any) => Number.isFinite(v)) as number[]) * 1.1 || 1;
+      let band: { min: number; max: number } | null = null;
+      if (toonRef && spelId === 'corsi') band = REFERENTIE_BANDS.corsi.band;
+      const colors: Record<string, string> = {
+        simon: '#2b5fb8',
+        corsi: '#c94174',
+        'day-night': '#b68d18',
+        zoeken: '#ef7a1f',
+        wisselen: '#1e4d32',
+      };
+      return simpleSparkline(values, { yMin, yMax, color: colors[spelId] || '#1e4d32', toonBand: band, yInvert: false });
+    }
+
+    type SparkOpts = {
+      yMin: number;
+      yMax: number;
+      color: string;
+      toonBand: { min: number; max: number } | null;
+      yInvert: boolean;
+    };
+
+    function simpleSparkline(values: number[], opts: SparkOpts): string {
+      if (!values.length) return `<div class="admin-lens-leeg">${escapeHtml('Te weinig data')}</div>`;
+      const w = 240;
+      const h = 56;
+      const pad = 4;
+      const range = (opts.yMax - opts.yMin) || 1;
+      const yToPx = (v: number) => {
+        const norm = (v - opts.yMin) / range;
+        return opts.yInvert ? pad + norm * (h - 2 * pad) : (h - pad) - norm * (h - 2 * pad);
+      };
+
+      const bandRect = opts.toonBand
+        ? `<rect class="admin-lens-band" x="0" y="${yToPx(opts.toonBand.max).toFixed(1)}" width="${w}" height="${(yToPx(opts.toonBand.min) - yToPx(opts.toonBand.max)).toFixed(1)}"/>`
+        : '';
+
+      const pts = values.map((v, i) => {
+        const x = (i / Math.max(1, values.length - 1)) * (w - 2 * pad) + pad;
+        return `${x.toFixed(1)},${yToPx(v).toFixed(1)}`;
+      });
+      const dots = values.map((v, i) => {
+        const x = (i / Math.max(1, values.length - 1)) * (w - 2 * pad) + pad;
+        return `<circle cx="${x.toFixed(1)}" cy="${yToPx(v).toFixed(1)}" r="2" fill="${opts.color}"/>`;
+      }).join('');
+
+      return `<svg viewBox="0 0 ${w} ${h}" class="admin-lens-svg" aria-hidden="true">
+        ${bandRect}
+        <polyline points="${pts.join(' ')}" fill="none" stroke="${opts.color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        ${dots}
+      </svg>`;
+    }
+
+    function renderMijlpalen(data: any) {
+      const result = computeMilestones(data) as { perSpel: Record<string, any[]>; bereikt: any[]; volgende: any[] };
+
+      // Stats
+      const bereiktN = result.bereikt.length;
+      const cadeaus: Cadeau[] = (data?.mijlpalen?.cadeaus || []) as Cadeau[];
+      const openN = cadeaus.filter((c) =>
+        c.status === 'open' && result.bereikt.some((m: any) => m.id === c.milestoneId),
+      ).length;
+      document.querySelector<HTMLElement>('[data-bereikt-n]')!.textContent = String(bereiktN);
+      document.querySelector<HTMLElement>('[data-open-n]')!.textContent = String(openN);
+
+      // Per spel: lijst van 4 mijlpalen
+      const lijstEl = document.querySelector<HTMLElement>('[data-mijl-lijst]')!;
+      const spelTitels: Record<string, string> = {
+        simon: NLS.spel.simon.titel,
+        corsi: NLS.spel.corsi.titel,
+        'day-night': NLS.spel['day-night'].titel,
+        zoeken: NLS.spel.zoeken.titel,
+        wisselen: NLS.spel.wisselen.titel,
+      };
+      lijstEl.innerHTML = Object.keys(result.perSpel).map((spelId) => {
+        const lijst = result.perSpel[spelId];
+        const rows = lijst.map((m: any) => `
+          <div class="admin-mijl-row${m.bereikt ? ' is-bereikt' : ''}">
+            <span>${escapeHtml(m.dier)} — ${escapeHtml(m.drempel)}</span>
+            <span class="admin-mijl-row__status">${m.bereikt ? 'Behaald' : 'Open'}</span>
+          </div>
+        `).join('');
+        return `
+          <div class="admin-mijl-spel">
+            <h4 class="admin-mijl-spel__titel">${escapeHtml(spelTitels[spelId] || spelId)}</h4>
+            ${rows}
+          </div>
+        `;
+      }).join('');
+
+      // Dropdown opties
+      const select = document.querySelector<HTMLSelectElement>('[data-cadeau-mijlpaal]')!;
+      const opts: string[] = [`<option value="">— ${NLS.admin.cadeauKies} —</option>`];
+      const mijlpalenAny = MIJLPALEN as Record<string, any[]>;
+      for (const spelId of Object.keys(mijlpalenAny)) {
+        const titel = spelTitels[spelId] || spelId;
+        for (const m of mijlpalenAny[spelId]) {
+          opts.push(
+            `<option value="${escapeHtml(m.id)}">${escapeHtml(titel)}: ${escapeHtml(m.dier)} (${escapeHtml(m.drempel)})</option>`,
+          );
+        }
+      }
+      select.innerHTML = opts.join('');
+
+      // Cadeau-tabel
+      const body = document.querySelector<HTMLElement>('[data-cadeau-body]')!;
+      if (!cadeaus.length) {
+        body.innerHTML = `<tr><td colspan="4" class="admin-spel__leeg">${escapeHtml(NLS.admin.geenCadeaus)}</td></tr>`;
+        return;
+      }
+      const milestoneById = new Map<string, any>();
+      for (const m of result.bereikt) milestoneById.set(m.id, m);
+      for (const lijst of Object.values(result.perSpel)) {
+        for (const m of lijst as any[]) if (!milestoneById.has(m.id)) milestoneById.set(m.id, m);
+      }
+
+      body.innerHTML = cadeaus.map((c) => {
+        const m = milestoneById.get(c.milestoneId);
+        const bereikt = !!(m && m.bereikt);
+        let statusKlasse = 'admin-cadeau-status';
+        let statusLabel = 'Wacht';
+        if (c.status === 'uitgereikt') {
+          statusKlasse += ' admin-cadeau-status--uitgereikt';
+          statusLabel = NLS.admin.cadeauUitgereikt;
+        } else if (bereikt) {
+          statusKlasse += ' admin-cadeau-status--klaar';
+          statusLabel = NLS.admin.cadeauOpenstaand;
+        }
+        const mijlpaalLabel = m
+          ? `${spelTitels[m.spelId]}: ${m.dier} (${m.drempel})`
+          : c.milestoneId;
+        const acties = [];
+        if (c.status === 'open' && bereikt) {
+          acties.push(`<button type="button" data-actie-uitreiken="${escapeHtml(c.id)}">${escapeHtml(NLS.admin.cadeauMarkeer)}</button>`);
+        }
+        acties.push(`<button type="button" data-actie-verwijder="${escapeHtml(c.id)}">${escapeHtml(NLS.admin.cadeauVerwijder)}</button>`);
+        return `
+          <tr>
+            <td>${escapeHtml(mijlpaalLabel)}</td>
+            <td>${escapeHtml(c.omschrijving)}</td>
+            <td><span class="${statusKlasse}">${escapeHtml(statusLabel)}</span></td>
+            <td><div class="admin-cadeau-acties">${acties.join('')}</div></td>
+          </tr>
+        `;
+      }).join('');
+
+      // Click-handlers voor de actie-knoppen
+      body.querySelectorAll<HTMLButtonElement>('[data-actie-uitreiken]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-actie-uitreiken');
+          if (id) markeerUitgereikt(id);
+        });
+      });
+      body.querySelectorAll<HTMLButtonElement>('[data-actie-verwijder]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-actie-verwijder');
+          if (id) verwijderCadeau(id);
+        });
+      });
+    }
+
+    function onCadeauToevoegen(e: Event) {
+      e.preventDefault();
+      const select = document.querySelector<HTMLSelectElement>('[data-cadeau-mijlpaal]')!;
+      const input = document.querySelector<HTMLInputElement>('[data-cadeau-tekst]')!;
+      const milestoneId = select.value;
+      const omschrijving = input.value.trim();
+      if (!milestoneId || !omschrijving) return;
+
+      const data = load();
+      if (!data.mijlpalen) (data as any).mijlpalen = { bereikt: [], cadeaus: [] };
+      if (!Array.isArray(data.mijlpalen.cadeaus)) data.mijlpalen.cadeaus = [];
+      const nieuw: Cadeau = {
+        id: 'c_' + Math.random().toString(36).slice(2, 10),
+        milestoneId,
+        omschrijving,
+        status: 'open',
+        toegevoegd: new Date().toISOString(),
+      };
+      data.mijlpalen.cadeaus.push(nieuw);
+      save(data);
+      input.value = '';
+      select.value = '';
+      render();
+    }
+
+    function markeerUitgereikt(id: string) {
+      const data = load();
+      const cadeaus = (data?.mijlpalen?.cadeaus || []) as Cadeau[];
+      const c = cadeaus.find((x) => x.id === id);
+      if (!c) return;
+      c.status = 'uitgereikt';
+      save(data);
+      render();
+    }
+
+    function verwijderCadeau(id: string) {
+      if (!confirm('Cadeau-koppeling verwijderen?')) return;
+      const data = load();
+      if (!data.mijlpalen) return;
+      data.mijlpalen.cadeaus = ((data.mijlpalen.cadeaus || []) as Cadeau[]).filter((c) => c.id !== id);
+      save(data);
+      render();
     }
 
     function renderSparkline(svg: SVGElement, spelId: SpelId, sessions: any[]) {

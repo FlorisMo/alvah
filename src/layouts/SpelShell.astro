@@ -32,21 +32,41 @@ const {
         </svg>
       </a>
       <h1 class="spel-shell__titel">{spelTitel}</h1>
-      {instructie && (
+      <div class="spel-shell__acties">
         <button
           type="button"
           class="spel-shell__icon-btn"
-          data-spel-tts={instructie}
-          aria-label="Uitleg voorlezen"
-          title="Voorlezen"
+          data-spel-geluid
+          aria-label="Geluid aan of uit"
+          aria-pressed="true"
+          title="Geluid"
         >
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg class="spel-shell__icon-aan" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M11 5L6 9H2v6h4l5 4V5z" />
             <path d="M15.5 8.5a4 4 0 0 1 0 7" />
-            <path d="M18.5 5.5a8 8 0 0 1 0 13" />
+          </svg>
+          <svg class="spel-shell__icon-uit" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none">
+            <path d="M11 5L6 9H2v6h4l5 4V5z" />
+            <line x1="22" y1="9" x2="16" y2="15" />
+            <line x1="16" y1="9" x2="22" y2="15" />
           </svg>
         </button>
-      )}
+        {instructie && (
+          <button
+            type="button"
+            class="spel-shell__icon-btn"
+            data-spel-tts={instructie}
+            aria-label="Uitleg voorlezen"
+            title="Voorlezen"
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M11 5L6 9H2v6h4l5 4V5z" />
+              <path d="M15.5 8.5a4 4 0 0 1 0 7" />
+              <path d="M18.5 5.5a8 8 0 0 1 0 13" />
+            </svg>
+          </button>
+        )}
+      </div>
     </header>
 
     <main class="spel-shell__main">
@@ -63,12 +83,40 @@ const {
 
   <script>
     import { say, stopSpeech } from '../scripts/audio.js';
+    import { getPreferences, setPreference } from '../scripts/storage.js';
 
     // TTS-knop
     for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-spel-tts]')) {
       btn.addEventListener('click', () => {
         const txt = btn.getAttribute('data-spel-tts') || '';
         if (txt) say(txt);
+      });
+    }
+
+    // Geluid-toggle, persistent in preferences.sound.
+    const geluidBtn = document.querySelector<HTMLButtonElement>('[data-spel-geluid]');
+    if (geluidBtn) {
+      const aanIcon = geluidBtn.querySelector<SVGSVGElement>('.spel-shell__icon-aan')!;
+      const uitIcon = geluidBtn.querySelector<SVGSVGElement>('.spel-shell__icon-uit')!;
+      const sync = (aan: boolean) => {
+        geluidBtn.setAttribute('aria-pressed', aan ? 'true' : 'false');
+        geluidBtn.setAttribute('title', aan ? 'Geluid aan' : 'Geluid uit');
+        aanIcon.style.display = aan ? '' : 'none';
+        uitIcon.style.display = aan ? 'none' : '';
+      };
+      try {
+        const p = getPreferences();
+        sync(p && p.sound !== false);
+      } catch (_) { sync(true); }
+      geluidBtn.addEventListener('click', () => {
+        let aan = true;
+        try {
+          const p = getPreferences();
+          aan = !(p && p.sound !== false);
+          setPreference('sound', aan);
+        } catch (_) {}
+        sync(aan);
+        if (!aan) stopSpeech();
       });
     }
 

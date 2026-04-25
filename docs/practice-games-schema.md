@@ -18,7 +18,8 @@ localStorage.getItem('alvah-ef-v1')
     "sound": true,
     "reducedMotion": false,
     "textSize": "large",
-    "sparklineInEinde": true
+    "sparklineInEinde": true,
+    "toonReferenties": false
   },
   "exercises": {
     "simon":    { "currentLevel": 2, "highestLevel": 3, "sessions": [] },
@@ -65,17 +66,37 @@ Elk element van `exercises[id].sessions`:
 ```json
 {
   "mijlpalen": {
-    "bereikt": [
-      { "spel": "corsi", "id": "span-5-x3", "datum": "2026-05-03T18:00:00Z" }
-    ],
+    "bereikt": ["simon-1", "corsi-2"],
     "cadeaus": [
-      { "id": "c_1", "spel": "corsi", "mijlpaalId": "span-5-x3", "beschrijving": "LEGO-set", "status": "open" }
+      {
+        "id": "c_2026...",
+        "milestoneId": "corsi-3",
+        "omschrijving": "LEGO-set",
+        "status": "open",
+        "toegevoegd": "2026-05-03T18:00:00Z"
+      }
     ]
   }
 }
 ```
 
-`bereikt` wordt gevuld door `src/scripts/mijlpalen.js` zodra een drempel is gehaald. `cadeaus` vult papa via `/spelen/admin`.
+`bereikt` is een vlakke lijst van mijlpaal-ids (zoals `simon-1`, `corsi-2`, `day-night-3`, `zoeken-1`, `wisselen-4`). De id-conventie is `<spelId>-<volgnummer>`. Ids zijn gedefinieerd in `src/scripts/mijlpalen.js::MIJLPALEN`. Eenmaal toegevoegd blijven ze staan — re-evaluatie gebeurt door `evalueerNieuwBereikt()` na elke sessie.
+
+`cadeaus` vult papa via `/spelen/admin`. Status is `"open"` (mijlpaal eventueel behaald, cadeau nog niet uitgereikt) of `"uitgereikt"` (papa heeft 'm afgerekend in admin). `milestoneId` verwijst naar een entry in `MIJLPALEN`.
+
+## Sessie-summary — per spel extra velden
+
+Boven op de gemeenschappelijke `accuracy / meanRT / sdRT / iivCV / trialsN`-laag voegt elk spel zijn eigen velden toe:
+
+| Spel | Extra summary-velden |
+|---|---|
+| Simon | `maxSpan` |
+| Corsi | `maxSpan`, `reversalsN` |
+| Day-Night | `blokkenAf`, `speelLevel` |
+| Zoeken | `maxSetSize`, `falseAlarmsTotal`, `reversalsN` |
+| Wisselen | `switchCost` (ms; verschil tussen switch- en repeat-trials), `blokkenAf`, `speelLevel` |
+
+`session.level` is het cross-session-level (bepaalt seed van volgende sessie) en is altijd aanwezig.
 
 ## Auto-prune (voorkomt overflow)
 
@@ -96,6 +117,7 @@ Elk element van `exercises[id].sessions`:
 | `reducedMotion` | boolean | `false` | Manual override; systeem `prefers-reduced-motion` heeft voorrang |
 | `textSize` | `"normal" \| "large"` | `"large"` | Body-font schaalt van 18 naar 20 px |
 | `sparklineInEinde` | boolean | `true` | Sparkline tonen in Alvah's einde-scherm |
+| `toonReferenties` | boolean | `false` | Toggle in `/spelen/admin` voor research-leeftijd-7-bands op Lens-sparklines |
 
 ## Geen tracking
 

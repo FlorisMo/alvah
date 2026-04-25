@@ -1,0 +1,235 @@
+---
+// Alvah's reis-overzicht: 5 spellen × 4 mijlpalen, bereikt of wachtend.
+// Vast schema, mastery-anchored, previewable. Geen variabele beloning.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/spelen.css';
+import { NL } from '../../scripts/strings.nl.js';
+import { MIJLPALEN } from '../../scripts/mijlpalen.js';
+
+type SpelId = 'simon' | 'corsi' | 'day-night' | 'zoeken' | 'wisselen';
+
+const spellen: { id: SpelId; thema: string }[] = [
+  { id: 'simon',     thema: 'dierenbandje' },
+  { id: 'corsi',     thema: 'nachtbos' },
+  { id: 'day-night', thema: 'dag-en-nacht' },
+  { id: 'zoeken',    thema: 'vijver' },
+  { id: 'wisselen',  thema: 'dierentuin' },
+];
+---
+<BaseLayout
+  title="Jouw reis — Spelen"
+  description="Wat je al ontgrendeld hebt, en wat er nog komt."
+>
+  <section>
+    <a href="/spelen" class="reis-terug">← {NL.terugNaarSpelen}</a>
+    <h1>{NL.reis.titel}</h1>
+    <p class="lede">{NL.reis.lede}</p>
+  </section>
+
+  <section class="reis-grid">
+    {spellen.map((s) => (
+      <article class={`reis-spel reis-spel--${s.thema}`} data-reis-spel={s.id}>
+        <header class="reis-spel__header">
+          <h2 class="reis-spel__titel">{NL.spel[s.id].titel}</h2>
+          <p class="reis-spel__volgende" data-volgende>—</p>
+        </header>
+        <div class="reis-mijlpalen" data-mijlpalen>
+          {MIJLPALEN[s.id].map((m) => (
+            <div class="reis-badge" data-mijlpaal-id={m.id}>
+              <div class="reis-badge__cirkel" aria-hidden="true">
+                <span class="reis-badge__icoon">{m.dier.charAt(0).toUpperCase()}</span>
+              </div>
+              <div class="reis-badge__naam">{m.dier}</div>
+              <div class="reis-badge__drempel">{m.drempel}</div>
+            </div>
+          ))}
+        </div>
+      </article>
+    ))}
+  </section>
+
+  <style>
+    .reis-terug {
+      display: inline-block;
+      color: var(--ink-soft);
+      text-decoration-color: var(--line);
+      font-size: 0.95rem;
+      margin-bottom: 12px;
+    }
+    .reis-terug:hover { color: var(--green); text-decoration-color: var(--green); }
+
+    .reis-grid {
+      display: grid;
+      gap: 22px;
+      margin-top: 24px;
+    }
+
+    .reis-spel {
+      padding: 22px 22px 26px;
+      border-radius: var(--spel-radius-lg);
+      border: 1px solid var(--line);
+      background: var(--paper);
+    }
+    .reis-spel--dierenbandje {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--spel-blue) 8%, var(--paper)), var(--paper));
+    }
+    .reis-spel--nachtbos {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--spel-magenta) 8%, var(--paper)), var(--paper));
+    }
+    .reis-spel--dag-en-nacht {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--spel-sun) 14%, var(--paper)), var(--paper));
+    }
+    .reis-spel--vijver {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--spel-orange) 8%, var(--paper)), var(--paper));
+    }
+    .reis-spel--dierentuin {
+      background: linear-gradient(180deg, color-mix(in srgb, var(--green) 8%, var(--paper)), var(--paper));
+    }
+
+    .reis-spel__header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .reis-spel__titel {
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 1.5rem;
+      color: var(--ink);
+      margin: 0;
+    }
+    .reis-spel__volgende {
+      font-size: 0.9rem;
+      color: var(--ink-soft);
+      margin: 0;
+    }
+    .reis-spel__volgende.is-klaar {
+      color: var(--green);
+    }
+
+    .reis-mijlpalen {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 14px;
+    }
+
+    .reis-badge {
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+      text-align: center;
+      padding: 12px 10px;
+      border-radius: var(--spel-radius);
+      background: var(--paper);
+      border: 1px dashed var(--line);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .reis-badge.is-bereikt {
+      border-style: solid;
+      border-color: transparent;
+      box-shadow: 0 2px 0 var(--line-soft);
+      background: color-mix(in srgb, var(--spel-sun) 14%, var(--paper));
+    }
+    .reis-badge.is-nieuw {
+      animation: reis-groei 1200ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+    }
+
+    .reis-badge__cirkel {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--line-soft);
+      color: var(--ink-muted);
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 1.4rem;
+    }
+    .reis-badge.is-bereikt .reis-badge__cirkel {
+      background: var(--spel-sun);
+      color: var(--ink);
+      box-shadow: 0 0 0 4px var(--spel-glow);
+    }
+
+    .reis-badge__naam {
+      font-family: var(--font-heading);
+      font-size: 1rem;
+      color: var(--ink);
+      font-weight: 500;
+    }
+    .reis-badge:not(.is-bereikt) .reis-badge__naam {
+      color: var(--ink-soft);
+    }
+
+    .reis-badge__drempel {
+      font-size: 0.8rem;
+      color: var(--ink-muted);
+    }
+
+    @keyframes reis-groei {
+      0%   { transform: scale(0.7) rotate(-12deg); opacity: 0; }
+      30%  { transform: scale(1.1) rotate(4deg); opacity: 1; }
+      55%  { transform: scale(0.96) rotate(-2deg); }
+      80%  { transform: scale(1.04) rotate(1deg); }
+      100% { transform: scale(1) rotate(0); opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .reis-badge.is-nieuw { animation: none; }
+      .reis-badge { transition: none; }
+    }
+  </style>
+
+  <script>
+    import { load, save } from '../../scripts/storage.js';
+    import { computeMilestones } from '../../scripts/mijlpalen.js';
+
+    type SpelId = 'simon' | 'corsi' | 'day-night' | 'zoeken' | 'wisselen';
+
+    init();
+
+    function init() {
+      let data;
+      try { data = load(); } catch (_) { return; }
+      const result = computeMilestones(data) as { perSpel: Record<string, any[]>; bereikt: any[]; volgende: any[] };
+      const opgeslagen: string[] = (data?.mijlpalen?.bereikt || []).slice();
+      const huidig = result.bereikt.map((m: any) => m.id as string);
+      const nieuw = huidig.filter((id) => !opgeslagen.includes(id));
+
+      // Render badges per spel
+      const artikelen = Array.from(document.querySelectorAll<HTMLElement>('[data-reis-spel]'));
+      for (const art of artikelen) {
+        const spelId = art.getAttribute('data-reis-spel') as SpelId;
+        const lijst = result.perSpel[spelId] || [];
+        const volgendeEl = art.querySelector<HTMLElement>('[data-volgende]')!;
+        const volgende = lijst.find((m: any) => !m.bereikt);
+        if (!volgende) {
+          volgendeEl.textContent = 'Alle dieren ontgrendeld';
+          volgendeEl.classList.add('is-klaar');
+        } else {
+          volgendeEl.textContent = `${'Volgende'}: ${volgende.dier} — ${volgende.drempel}`;
+        }
+
+        const badges = Array.from(art.querySelectorAll<HTMLElement>('[data-mijlpaal-id]'));
+        for (const b of badges) {
+          const id = b.getAttribute('data-mijlpaal-id');
+          const m = lijst.find((x: any) => x.id === id);
+          if (!m) continue;
+          if (m.bereikt) b.classList.add('is-bereikt');
+          if (nieuw.includes(m.id)) b.classList.add('is-nieuw');
+        }
+      }
+
+      // Sla bereikt-snapshot op zodat groei-animatie niet bij elke load opnieuw afspeelt.
+      if (nieuw.length > 0) {
+        if (!data.mijlpalen) (data as any).mijlpalen = { bereikt: [], cadeaus: [] };
+        data.mijlpalen.bereikt = huidig;
+        try { save(data); } catch (_) { /* stil falen */ }
+      }
+    }
+  </script>
+</BaseLayout>

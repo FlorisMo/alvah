@@ -28,6 +28,7 @@ function emptyData() {
       reducedMotion: false,
       textSize: 'large',
       sparklineInEinde: true,
+      toonReferenties: false,
     },
     exercises,
     mijlpalen: { bereikt: [], cadeaus: [] },
@@ -74,7 +75,10 @@ export function migrate(data) {
     }
   }
   if (!data.preferences) {
-    data.preferences = { sound: true, reducedMotion: false, textSize: 'large', sparklineInEinde: true };
+    data.preferences = { sound: true, reducedMotion: false, textSize: 'large', sparklineInEinde: true, toonReferenties: false };
+  }
+  if (typeof data.preferences.toonReferenties !== 'boolean') {
+    data.preferences.toonReferenties = false;
   }
   if (!data.mijlpalen) data.mijlpalen = { bereikt: [], cadeaus: [] };
   return data;

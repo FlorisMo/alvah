@@ -52,6 +52,36 @@ export function tone(freq, durationMs = 300, gain = 0.2) {
   osc.stop(t0 + dur + 0.02);
 }
 
+// Speelt meerdere oscillators tegelijk af als één akkoord. Gebruikt voor
+// mijlpaal-celebratie (predictable, hetzelfde elke keer per dier).
+export function playChord(freqs, durationMs = 900, gain = 0.16) {
+  if (!soundOn()) return;
+  if (!Array.isArray(freqs) || freqs.length === 0) return;
+  const audio = getCtx();
+  if (!audio) return;
+  if (audio.state === 'suspended') audio.resume();
+  const t0 = audio.currentTime;
+  const dur = durationMs / 1000;
+  const attack = 0.04;
+  const release = 0.30;
+  // Per-stem gain iets lager bij dichte akkoorden om clipping te voorkomen.
+  const perVoice = gain / Math.sqrt(freqs.length);
+  for (const freq of freqs) {
+    const osc = audio.createOscillator();
+    const g = audio.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    g.gain.value = 0;
+    osc.connect(g).connect(audio.destination);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(perVoice, t0 + attack);
+    g.gain.setValueAtTime(perVoice, t0 + Math.max(attack, dur - release));
+    g.gain.linearRampToValueAtTime(0, t0 + dur);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.05);
+  }
+}
+
 // Nederlandse TTS via speechSynthesis. Fallback stil als unsupported.
 export function say(text) {
   if (!soundOn()) return;

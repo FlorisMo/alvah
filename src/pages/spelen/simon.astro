@@ -10,7 +10,8 @@ import { NL } from '../../scripts/strings.nl.js';
   spelTitel={NL.spel.simon.titel}
   instructie={NL.spel.simon.uitleg}
 >
-  <div class="simon" data-simon>
+  <div class="simon" data-simon data-skin="0">
+    <div class="spel-trofeeen" data-trofeeen aria-label="Ontgrendelde dieren"></div>
     <!-- Start-scherm -->
     <section class="simon-scherm" data-scherm="start">
       <h2 class="simon-scherm__titel">{NL.spel.simon.titel}</h2>
@@ -69,6 +70,12 @@ import { NL } from '../../scripts/strings.nl.js';
         <div class="simon-sparkline__label">Laatste tien keer</div>
         <svg viewBox="0 0 120 30" class="simon-sparkline__svg" aria-hidden="true" data-sparkline></svg>
       </div>
+      <div class="spel-bloei spel-bloei--simon" data-bloei aria-hidden="true"></div>
+      <a class="spel-mijlpaal-melding" href="/spelen/reis" data-mijlpaal-melding hidden>
+        <span class="spel-mijlpaal-melding__label">{NL.reis.nieuw}</span>
+        <span class="spel-mijlpaal-melding__waarde" data-mijlpaal-tekst>—</span>
+        <span class="spel-mijlpaal-melding__cta">{NL.jouwReis} →</span>
+      </a>
       <a href="/spelen" class="spel-btn">{NL.klaar}</a>
     </section>
   </div>
@@ -226,11 +233,14 @@ import { NL } from '../../scripts/strings.nl.js';
 </style>
 
 <script>
-  import { tone } from '../../scripts/audio.js';
+  import { tone, playChord } from '../../scripts/audio.js';
   import { now } from '../../scripts/timer.js';
   import { summarize } from '../../scripts/scoring.js';
-  import { saveSession, load } from '../../scripts/storage.js';
+  import { saveSession, load, save } from '../../scripts/storage.js';
   import { seedLevel } from '../../scripts/progressie.js';
+  import { evalueerNieuwBereikt } from '../../scripts/mijlpalen.js';
+  import { bloemSvg, chordVoor } from '../../scripts/celebration.js';
+  import { skinNiveau, bereikteDieren } from '../../scripts/skin.js';
   import { NL } from '../../scripts/strings.nl.js';
 
   // 4 panelen: groen 330Hz, blauw 392Hz, oranje 494Hz, magenta 587Hz.
@@ -248,7 +258,26 @@ import { NL } from '../../scripts/strings.nl.js';
   type Trial = { i: number; span: number; correct: boolean; rt: number };
 
   const root = document.querySelector<HTMLElement>('[data-simon]');
-  if (root) initSimon(root);
+  if (root) {
+    applySkin(root, 'simon');
+    initSimon(root);
+  }
+
+  function applySkin(host: HTMLElement, spelId: 'simon' | 'corsi' | 'day-night' | 'zoeken' | 'wisselen') {
+    try {
+      const data = load();
+      const niveau = skinNiveau(spelId, data);
+      const dieren = bereikteDieren(spelId, data);
+      host.setAttribute('data-skin', String(niveau));
+      const trofeeen = host.querySelector<HTMLElement>('[data-trofeeen]');
+      if (trofeeen) {
+        trofeeen.innerHTML = dieren.map((d: any) => {
+          const initiaal = String(d.dier).charAt(0).toUpperCase();
+          return `<div class="spel-trofee spel-trofee--${spelId}" title="${d.dier}"><span aria-hidden="true">${initiaal}</span><span class="spel-trofee__naam">${d.dier}</span></div>`;
+        }).join('');
+      }
+    } catch (_) { /* stil falen */ }
+  }
 
   function initSimon(root: HTMLElement) {
     const schermen: Record<SchermId, HTMLElement> = {
@@ -266,6 +295,9 @@ import { NL } from '../../scripts/strings.nl.js';
     const eindeTotalEl = root.querySelector<HTMLElement>('[data-einde-total]')!;
     const sparklineWrap = root.querySelector<HTMLElement>('[data-sparkline-wrap]')!;
     const sparklineSvg = root.querySelector<SVGElement>('[data-sparkline]')!;
+    const mijlpaalEl = root.querySelector<HTMLElement>('[data-mijlpaal-melding]')!;
+    const mijlpaalTekst = root.querySelector<HTMLElement>('[data-mijlpaal-tekst]')!;
+    const bloeiEl = root.querySelector<HTMLElement>('[data-bloei]')!;
     const panelen = Array.from(root.querySelectorAll<HTMLButtonElement>('.simon-paneel'));
 
     let span = MIN_SPAN;
@@ -276,6 +308,7 @@ import { NL } from '../../scripts/strings.nl.js';
     let rtStart = 0;
     let trialRT = -1;
     let gecaped = false;
+    let teMoeilijkN = 0;
 
     root.querySelector<HTMLButtonElement>('[data-actie="start"]')!
       .addEventListener('click', startSession);
@@ -294,6 +327,7 @@ import { NL } from '../../scripts/strings.nl.js';
       if (schermen.spelen.hidden) return;
       disablePanelen();
       span = Math.max(MIN_SPAN, span - 1);
+      teMoeilijkN += 1;
       statusEl.textContent = NL.spel.simon.ietsKorter;
       setTimeout(newTrial, 400);
     });
@@ -415,11 +449,14 @@ import { NL } from '../../scripts/strings.nl.js';
         level: maxSpan || MIN_SPAN,
         durationMs: duration,
         trials: trials.slice(),
-        summary: { ...sum, maxSpan },
+        summary: { ...sum, maxSpan, teMoeilijkN },
       };
       saveSession('simon', sessionObj);
+      toonNieuweMijlpaal('simon');
 
       toon('einde');
+      // Bloei-SVG op einde-scherm; CSS-keyframe doet de rest.
+      bloeiEl.innerHTML = bloemSvg('simon') || '';
       if (gecaped) {
         eindeBerichtEl.textContent = NL.spel.simon.eindeCap;
         eindeBerichtEl.hidden = false;
@@ -429,6 +466,26 @@ import { NL } from '../../scripts/strings.nl.js';
       eindeTotalEl.textContent = String(trials.length);
 
       renderSparkline();
+    }
+
+    function toonNieuweMijlpaal(spelId: 'simon' | 'corsi' | 'day-night' | 'zoeken' | 'wisselen') {
+      try {
+        const data = load();
+        const { nieuw, alleBereiktIds } = evalueerNieuwBereikt(data, spelId);
+        if (nieuw.length === 0) return;
+        if (!data.mijlpalen) (data as any).mijlpalen = { bereikt: [], cadeaus: [] };
+        data.mijlpalen.bereikt = alleBereiktIds;
+        save(data);
+        mijlpaalTekst.textContent = nieuw.map((m: any) => m.dier).join(', ');
+        mijlpaalEl.hidden = false;
+        // Audio-chord voor de hoogste nieuwe mijlpaal — predictable, één per
+        // sessie. Komt 200ms na pop zodat ze niet overlappen.
+        const top = nieuw[nieuw.length - 1];
+        const chord = chordVoor(top.id);
+        if (chord) setTimeout(() => playChord(chord, 1100), 200);
+        // Trofee-strip + skin-niveau verversen — bereikteDieren is uitgebreid.
+        applySkin(root, spelId);
+      } catch (_) { /* stil falen */ }
     }
 
     function renderSparkline() {

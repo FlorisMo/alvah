@@ -11,7 +11,8 @@ import { NL } from '../../scripts/strings.nl.js';
   spelTitel={NL.spel['day-night'].titel}
   instructie={NL.spel['day-night'].uitleg}
 >
-  <div class="dn" data-dn>
+  <div class="dn" data-dn data-skin="0">
+    <div class="spel-trofeeen" data-trofeeen aria-label="Ontgrendelde dieren"></div>
     <!-- Start-scherm -->
     <section class="dn-scherm" data-scherm="start">
       <h2 class="dn-scherm__titel">{NL.spel['day-night'].titel}</h2>
@@ -79,6 +80,12 @@ import { NL } from '../../scripts/strings.nl.js';
         <div class="dn-sparkline__label">Laatste tien keer</div>
         <svg viewBox="0 0 120 30" class="dn-sparkline__svg" aria-hidden="true" data-sparkline></svg>
       </div>
+      <div class="spel-bloei spel-bloei--day-night" data-bloei aria-hidden="true"></div>
+      <a class="spel-mijlpaal-melding" href="/spelen/reis" data-mijlpaal-melding hidden>
+        <span class="spel-mijlpaal-melding__label">{NL.reis.nieuw}</span>
+        <span class="spel-mijlpaal-melding__waarde" data-mijlpaal-tekst>—</span>
+        <span class="spel-mijlpaal-melding__cta">{NL.jouwReis} →</span>
+      </a>
       <a href="/spelen" class="spel-btn">{NL.klaar}</a>
     </section>
   </div>
@@ -277,8 +284,12 @@ import { NL } from '../../scripts/strings.nl.js';
 <script>
   import { now } from '../../scripts/timer.js';
   import { summarize } from '../../scripts/scoring.js';
-  import { saveSession, load } from '../../scripts/storage.js';
+  import { saveSession, load, save } from '../../scripts/storage.js';
   import { nextLevelDayNight, dnConfig } from '../../scripts/progressie.js';
+  import { evalueerNieuwBereikt } from '../../scripts/mijlpalen.js';
+  import { playChord } from '../../scripts/audio.js';
+  import { bloemSvg, chordVoor } from '../../scripts/celebration.js';
+  import { skinNiveau, bereikteDieren } from '../../scripts/skin.js';
   import { NL } from '../../scripts/strings.nl.js';
 
   // Level-systeem (zie progressie.js::dnConfig):
@@ -326,7 +337,26 @@ import { NL } from '../../scripts/strings.nl.js';
     <path d="M140 100 a44 44 0 1 1 -44 -44 a34 34 0 0 0 44 44z"/>`;
 
   const root = document.querySelector<HTMLElement>('[data-dn]');
-  if (root) initDN(root);
+  if (root) {
+    applySkin(root, 'day-night');
+    initDN(root);
+  }
+
+  function applySkin(host: HTMLElement, spelId: 'simon' | 'corsi' | 'day-night' | 'zoeken' | 'wisselen') {
+    try {
+      const data = load();
+      const niveau = skinNiveau(spelId, data);
+      const dieren = bereikteDieren(spelId, data);
+      host.setAttribute('data-skin', String(niveau));
+      const trofeeen = host.querySelector<HTMLElement>('[data-trofeeen]');
+      if (trofeeen) {
+        trofeeen.innerHTML = dieren.map((d: any) => {
+          const initiaal = String(d.dier).charAt(0).toUpperCase();
+          return `<div class="spel-trofee spel-trofee--${spelId}" title="${d.dier}"><span aria-hidden="true">${initiaal}</span><span class="spel-trofee__naam">${d.dier}</span></div>`;
+        }).join('');
+      }
+    } catch (_) { /* stil falen */ }
+  }
 
   function initDN(root: HTMLElement) {
     const schermen = {
@@ -346,6 +376,9 @@ import { NL } from '../../scripts/strings.nl.js';
     const respButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-resp]'));
     const sparklineWrap = root.querySelector<HTMLElement>('[data-sparkline-wrap]')!;
     const sparklineSvg = root.querySelector<SVGElement>('[data-sparkline]')!;
+    const mijlpaalEl = root.querySelector<HTMLElement>('[data-mijlpaal-melding]')!;
+    const mijlpaalTekst = root.querySelector<HTMLElement>('[data-mijlpaal-tekst]')!;
+    const bloeiEl = root.querySelector<HTMLElement>('[data-bloei]')!;
 
     let trials: Trial[] = [];
     let currentBlok = 0;
@@ -495,14 +528,33 @@ import { NL } from '../../scripts/strings.nl.js';
         },
       };
       saveSession('day-night', sessionObj);
+      toonNieuweMijlpaal();
 
       toon('einde');
+      bloeiEl.innerHTML = bloemSvg('day-night') || '';
       const correctN = trials.filter((t) => t.correct).length;
       eindeCorrectEl.textContent = String(correctN);
       eindeTotalEl.textContent = String(trials.length);
       eindeAccEl.textContent = trials.length ? Math.round((correctN / trials.length) * 100) + '%' : '—';
       eindeRtEl.textContent = sum.meanRT ? sum.meanRT + ' ms' : '—';
       renderSparkline();
+    }
+
+    function toonNieuweMijlpaal() {
+      try {
+        const data = load();
+        const { nieuw, alleBereiktIds } = evalueerNieuwBereikt(data, 'day-night');
+        if (nieuw.length === 0) return;
+        if (!data.mijlpalen) (data as any).mijlpalen = { bereikt: [], cadeaus: [] };
+        data.mijlpalen.bereikt = alleBereiktIds;
+        save(data);
+        mijlpaalTekst.textContent = nieuw.map((m: any) => m.dier).join(', ');
+        mijlpaalEl.hidden = false;
+        const top = nieuw[nieuw.length - 1];
+        const chord = chordVoor(top.id);
+        if (chord) setTimeout(() => playChord(chord, 1100), 200);
+        applySkin(root, 'day-night');
+      } catch (_) { /* stil falen */ }
     }
 
     function renderSparkline() {

@@ -11,7 +11,8 @@ import { NL } from '../../scripts/strings.nl.js';
   spelTitel={NL.spel.corsi.titel}
   instructie={NL.spel.corsi.uitleg}
 >
-  <div class="corsi" data-corsi>
+  <div class="corsi" data-corsi data-skin="0">
+    <div class="spel-trofeeen" data-trofeeen aria-label="Ontgrendelde dieren"></div>
     <!-- Start-scherm -->
     <section class="corsi-scherm" data-scherm="start">
       <h2 class="corsi-scherm__titel">{NL.spel.corsi.titel}</h2>
@@ -61,6 +62,12 @@ import { NL } from '../../scripts/strings.nl.js';
         <div class="corsi-sparkline__label">Laatste tien keer</div>
         <svg viewBox="0 0 120 30" class="corsi-sparkline__svg" aria-hidden="true" data-sparkline></svg>
       </div>
+      <div class="spel-bloei spel-bloei--corsi" data-bloei aria-hidden="true"></div>
+      <a class="spel-mijlpaal-melding" href="/spelen/reis" data-mijlpaal-melding hidden>
+        <span class="spel-mijlpaal-melding__label">{NL.reis.nieuw}</span>
+        <span class="spel-mijlpaal-melding__waarde" data-mijlpaal-tekst>—</span>
+        <span class="spel-mijlpaal-melding__cta">{NL.jouwReis} →</span>
+      </a>
       <a href="/spelen" class="spel-btn">{NL.klaar}</a>
     </section>
   </div>
@@ -222,10 +229,13 @@ import { NL } from '../../scripts/strings.nl.js';
 <script>
   import { now } from '../../scripts/timer.js';
   import { summarize } from '../../scripts/scoring.js';
-  import { saveSession, load } from '../../scripts/storage.js';
+  import { saveSession, load, save } from '../../scripts/storage.js';
   import { create as makeStaircase, onTrial as stepStaircase } from '../../scripts/staircase.js';
   import { seedLevel, shouldAutoLower, computeSessionLevel } from '../../scripts/progressie.js';
-  import { tone } from '../../scripts/audio.js';
+  import { evalueerNieuwBereikt } from '../../scripts/mijlpalen.js';
+  import { tone, playChord } from '../../scripts/audio.js';
+  import { bloemSvg, chordVoor } from '../../scripts/celebration.js';
+  import { skinNiveau, bereikteDieren } from '../../scripts/skin.js';
   import { NL } from '../../scripts/strings.nl.js';
 
   // Negen sterren op vaste, onregelmatige posities in 400x400.
@@ -263,7 +273,26 @@ import { NL } from '../../scripts/strings.nl.js';
   };
 
   const root = document.querySelector<HTMLElement>('[data-corsi]');
-  if (root) initCorsi(root);
+  if (root) {
+    applySkin(root, 'corsi');
+    initCorsi(root);
+  }
+
+  function applySkin(host: HTMLElement, spelId: 'simon' | 'corsi' | 'day-night' | 'zoeken' | 'wisselen') {
+    try {
+      const data = load();
+      const niveau = skinNiveau(spelId, data);
+      const dieren = bereikteDieren(spelId, data);
+      host.setAttribute('data-skin', String(niveau));
+      const trofeeen = host.querySelector<HTMLElement>('[data-trofeeen]');
+      if (trofeeen) {
+        trofeeen.innerHTML = dieren.map((d: any) => {
+          const initiaal = String(d.dier).charAt(0).toUpperCase();
+          return `<div class="spel-trofee spel-trofee--${spelId}" title="${d.dier}"><span aria-hidden="true">${initiaal}</span><span class="spel-trofee__naam">${d.dier}</span></div>`;
+        }).join('');
+      }
+    } catch (_) { /* stil falen */ }
+  }
 
   function initCorsi(root: HTMLElement) {
     const schermen: Record<SchermId, HTMLElement> = {
@@ -282,6 +311,9 @@ import { NL } from '../../scripts/strings.nl.js';
     const eindeTotalEl = root.querySelector<HTMLElement>('[data-einde-total]')!;
     const sparklineWrap = root.querySelector<HTMLElement>('[data-sparkline-wrap]')!;
     const sparklineSvg = root.querySelector<SVGElement>('[data-sparkline]')!;
+    const mijlpaalEl = root.querySelector<HTMLElement>('[data-mijlpaal-melding]')!;
+    const mijlpaalTekst = root.querySelector<HTMLElement>('[data-mijlpaal-tekst]')!;
+    const bloeiEl = root.querySelector<HTMLElement>('[data-bloei]')!;
 
     // Render sterren als SVG-polygonen.
     const sterren: SVGElement[] = POSITIES.map((p, idx) => {
@@ -307,6 +339,8 @@ import { NL } from '../../scripts/strings.nl.js';
     let trialRT = -1;
     let clickable = false;
     let gecaped = false;
+    let autoLowerN = 0;
+    let teMoeilijkN = 0;
 
     root.querySelector<HTMLButtonElement>('[data-actie="start"]')!
       .addEventListener('click', startSession);
@@ -326,6 +360,7 @@ import { NL } from '../../scripts/strings.nl.js';
       if (schermen.spelen.hidden) return;
       disableClicks();
       staircase = { ...staircase, level: Math.max(MIN_SPAN, staircase.level - 1), consecCorrect: 0, consecWrong: 0 };
+      teMoeilijkN += 1;
       statusEl.textContent = NL.spel.corsi.ietsKorter;
       setTimeout(newTrial, 400);
     });
@@ -460,6 +495,7 @@ import { NL } from '../../scripts/strings.nl.js';
             consecCorrect: 0,
             consecWrong: 0,
           };
+          autoLowerN += 1;
         }
         setTimeout(showRetry, 650);
       }
@@ -493,11 +529,15 @@ import { NL } from '../../scripts/strings.nl.js';
           ...sum,
           maxSpan,
           reversalsN: (staircase.reversals || []).length,
+          autoLowerN,
+          teMoeilijkN,
         },
       };
       saveSession('corsi', sessionObj);
+      toonNieuweMijlpaal();
 
       toon('einde');
+      bloeiEl.innerHTML = bloemSvg('corsi') || '';
       if (gecaped) {
         eindeBerichtEl.textContent = NL.spel.corsi.eindeCap;
         eindeBerichtEl.hidden = false;
@@ -507,6 +547,23 @@ import { NL } from '../../scripts/strings.nl.js';
       eindeTotalEl.textContent = String(trials.length);
 
       renderSparkline();
+    }
+
+    function toonNieuweMijlpaal() {
+      try {
+        const data = load();
+        const { nieuw, alleBereiktIds } = evalueerNieuwBereikt(data, 'corsi');
+        if (nieuw.length === 0) return;
+        if (!data.mijlpalen) (data as any).mijlpalen = { bereikt: [], cadeaus: [] };
+        data.mijlpalen.bereikt = alleBereiktIds;
+        save(data);
+        mijlpaalTekst.textContent = nieuw.map((m: any) => m.dier).join(', ');
+        mijlpaalEl.hidden = false;
+        const top = nieuw[nieuw.length - 1];
+        const chord = chordVoor(top.id);
+        if (chord) setTimeout(() => playChord(chord, 1100), 200);
+        applySkin(root, 'corsi');
+      } catch (_) { /* stil falen */ }
     }
 
     function renderSparkline() {

@@ -12,7 +12,8 @@ import { NL } from '../../scripts/strings.nl.js';
   spelTitel={NL.spel.wisselen.titel}
   instructie={NL.spel.wisselen.uitleg}
 >
-  <div class="wis" data-wis>
+  <div class="wis" data-wis data-skin="0">
+    <div class="spel-trofeeen" data-trofeeen aria-label="Ontgrendelde dieren"></div>
     <section class="wis-scherm" data-scherm="start">
       <h2 class="wis-scherm__titel">{NL.spel.wisselen.titel}</h2>
       <p class="wis-scherm__lede">{NL.spel.wisselen.uitleg}</p>
@@ -84,6 +85,12 @@ import { NL } from '../../scripts/strings.nl.js';
         <div class="wis-sparkline__label">Laatste tien keer</div>
         <svg viewBox="0 0 120 30" class="wis-sparkline__svg" aria-hidden="true" data-sparkline></svg>
       </div>
+      <div class="spel-bloei spel-bloei--wisselen" data-bloei aria-hidden="true"></div>
+      <a class="spel-mijlpaal-melding" href="/spelen/reis" data-mijlpaal-melding hidden>
+        <span class="spel-mijlpaal-melding__label">{NL.reis.nieuw}</span>
+        <span class="spel-mijlpaal-melding__waarde" data-mijlpaal-tekst>—</span>
+        <span class="spel-mijlpaal-melding__cta">{NL.jouwReis} →</span>
+      </a>
       <a href="/spelen" class="spel-btn">{NL.klaar}</a>
     </section>
   </div>
@@ -282,8 +289,12 @@ import { NL } from '../../scripts/strings.nl.js';
 <script>
   import { now } from '../../scripts/timer.js';
   import { summarize, mean } from '../../scripts/scoring.js';
-  import { saveSession, load } from '../../scripts/storage.js';
+  import { saveSession, load, save } from '../../scripts/storage.js';
   import { nextLevelWisselen, wisConfig } from '../../scripts/progressie.js';
+  import { evalueerNieuwBereikt } from '../../scripts/mijlpalen.js';
+  import { playChord } from '../../scripts/audio.js';
+  import { bloemSvg, chordVoor } from '../../scripts/celebration.js';
+  import { skinNiveau, bereikteDieren } from '../../scripts/skin.js';
   import { NL } from '../../scripts/strings.nl.js';
 
   // Stimuli: combinatie van kleur (rood/blauw) en vorm (vierkant/cirkel).
@@ -329,7 +340,26 @@ import { NL } from '../../scripts/strings.nl.js';
   const COLOR_HEX = { rood: '#d83636', blauw: '#2b5fb8' } as const;
 
   const root = document.querySelector<HTMLElement>('[data-wis]');
-  if (root) initWis(root);
+  if (root) {
+    applySkin(root, 'wisselen');
+    initWis(root);
+  }
+
+  function applySkin(host: HTMLElement, spelId: 'simon' | 'corsi' | 'day-night' | 'zoeken' | 'wisselen') {
+    try {
+      const data = load();
+      const niveau = skinNiveau(spelId, data);
+      const dieren = bereikteDieren(spelId, data);
+      host.setAttribute('data-skin', String(niveau));
+      const trofeeen = host.querySelector<HTMLElement>('[data-trofeeen]');
+      if (trofeeen) {
+        trofeeen.innerHTML = dieren.map((d: any) => {
+          const initiaal = String(d.dier).charAt(0).toUpperCase();
+          return `<div class="spel-trofee spel-trofee--${spelId}" title="${d.dier}"><span aria-hidden="true">${initiaal}</span><span class="spel-trofee__naam">${d.dier}</span></div>`;
+        }).join('');
+      }
+    } catch (_) { /* stil falen */ }
+  }
 
   function initWis(root: HTMLElement) {
     const schermen = {
@@ -353,6 +383,9 @@ import { NL } from '../../scripts/strings.nl.js';
     const respButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-resp]'));
     const sparklineWrap = root.querySelector<HTMLElement>('[data-sparkline-wrap]')!;
     const sparklineSvg = root.querySelector<SVGElement>('[data-sparkline]')!;
+    const mijlpaalEl = root.querySelector<HTMLElement>('[data-mijlpaal-melding]')!;
+    const mijlpaalTekst = root.querySelector<HTMLElement>('[data-mijlpaal-tekst]')!;
+    const bloeiEl = root.querySelector<HTMLElement>('[data-bloei]')!;
 
     let trials: Trial[] = [];
     let blokIdx = 0;
@@ -549,14 +582,33 @@ import { NL } from '../../scripts/strings.nl.js';
         },
       };
       saveSession('wisselen', sessionObj);
+      toonNieuweMijlpaal();
 
       toon('einde');
+      bloeiEl.innerHTML = bloemSvg('wisselen') || '';
       const correctN = trials.filter((t) => t.correct).length;
       eindeCorrectEl.textContent = String(correctN);
       eindeTotalEl.textContent = String(trials.length);
       eindeAccEl.textContent = trials.length ? Math.round((correctN / trials.length) * 100) + '%' : '—';
       eindeScEl.textContent = switchCost ? `${switchCost} ms` : '—';
       renderSparkline();
+    }
+
+    function toonNieuweMijlpaal() {
+      try {
+        const data = load();
+        const { nieuw, alleBereiktIds } = evalueerNieuwBereikt(data, 'wisselen');
+        if (nieuw.length === 0) return;
+        if (!data.mijlpalen) (data as any).mijlpalen = { bereikt: [], cadeaus: [] };
+        data.mijlpalen.bereikt = alleBereiktIds;
+        save(data);
+        mijlpaalTekst.textContent = nieuw.map((m: any) => m.dier).join(', ');
+        mijlpaalEl.hidden = false;
+        const top = nieuw[nieuw.length - 1];
+        const chord = chordVoor(top.id);
+        if (chord) setTimeout(() => playChord(chord, 1100), 200);
+        applySkin(root, 'wisselen');
+      } catch (_) { /* stil falen */ }
     }
 
     function renderSparkline() {
