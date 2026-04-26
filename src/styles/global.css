@@ -215,11 +215,17 @@ section + section {
   backdrop-filter: saturate(180%) blur(8px);
   -webkit-backdrop-filter: saturate(180%) blur(8px);
   border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: var(--side-padding);
+  max-width: var(--content-width-wide);
+  margin: 0 auto;
 }
 
 .site-nav__inner {
-  max-width: var(--content-width-wide);
-  margin: 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 0 var(--side-padding);
   display: flex;
   align-items: center;
@@ -281,7 +287,7 @@ section + section {
 }
 
 .site-nav__menu-btn {
-  margin-left: auto;
+  flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
   width: 40px;
@@ -292,7 +298,6 @@ section + section {
   color: var(--ink-soft);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-  flex: 0 0 auto;
 }
 .site-nav__menu-btn:hover {
   background: var(--green-soft);

@@ -144,7 +144,10 @@ import { NL } from '../../scripts/strings.nl.js';
 
   .corsi-ster {
     cursor: pointer;
-    transition: fill 0.12s ease, transform 0.14s ease, filter 0.15s ease;
+    fill: var(--corsi-ster);
+    stroke: transparent;
+    stroke-width: 0;
+    transition: fill 0.12s ease, transform 0.14s ease, filter 0.15s ease, stroke 0.12s ease;
     transform-box: fill-box;
     transform-origin: center;
   }
@@ -155,15 +158,22 @@ import { NL } from '../../scripts/strings.nl.js';
   .corsi-ster.is-aktief {
     fill: var(--corsi-aktief);
     stroke: #fff7d6;
-    stroke-width: 3;
+    stroke-width: 4;
     filter:
       drop-shadow(0 0 14px var(--corsi-aktief))
       drop-shadow(0 0 28px var(--corsi-aktief))
       drop-shadow(0 0 42px var(--corsi-aktief));
     transform: scale(1.42);
+    animation: corsi-puls 850ms ease-out;
   }
   .corsi-ster.is-goed { fill: var(--corsi-goed); }
   .corsi-ster.is-fout { fill: var(--corsi-fout); }
+
+  @keyframes corsi-puls {
+    0%   { stroke-width: 0; }
+    20%  { stroke-width: 10; }
+    100% { stroke-width: 4; }
+  }
 
   .corsi-status {
     color: var(--ink-soft);
@@ -223,10 +233,11 @@ import { NL } from '../../scripts/strings.nl.js';
       transition: none;
       transform: none !important;
       filter: none !important;
+      animation: none !important;
     }
     .corsi-ster.is-aktief {
       stroke: var(--spel-sun);
-      stroke-width: 4;
+      stroke-width: 8;
     }
   }
 </style>
@@ -324,7 +335,7 @@ import { NL } from '../../scripts/strings.nl.js';
     const sterren: SVGElement[] = POSITIES.map((p, idx) => {
       const el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       el.setAttribute('points', sterPunten(p.x, p.y, 28, 12));
-      el.setAttribute('fill', 'var(--corsi-ster)');
+      // fill via CSS — `var()` werkt onbetrouwbaar in SVG presentation-attrs.
       el.setAttribute('class', 'corsi-ster');
       el.setAttribute('data-ster', String(idx));
       el.setAttribute('tabindex', '-1');
