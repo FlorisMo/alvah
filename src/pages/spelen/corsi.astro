@@ -142,38 +142,8 @@ import { NL } from '../../scripts/strings.nl.js';
     display: block;
   }
 
-  .corsi-ster {
-    cursor: pointer;
-    fill: var(--corsi-ster);
-    stroke: transparent;
-    stroke-width: 0;
-    transition: fill 0.12s ease, transform 0.14s ease, filter 0.15s ease, stroke 0.12s ease;
-    transform-box: fill-box;
-    transform-origin: center;
-  }
-  .corsi-ster.is-clickable:hover {
-    fill: var(--corsi-ster-hover);
-    transform: scale(1.08);
-  }
-  .corsi-ster.is-aktief {
-    fill: var(--corsi-aktief);
-    stroke: #fff7d6;
-    stroke-width: 4;
-    filter:
-      drop-shadow(0 0 14px var(--corsi-aktief))
-      drop-shadow(0 0 28px var(--corsi-aktief))
-      drop-shadow(0 0 42px var(--corsi-aktief));
-    transform: scale(1.42);
-    animation: corsi-puls 850ms ease-out;
-  }
-  .corsi-ster.is-goed { fill: var(--corsi-goed); }
-  .corsi-ster.is-fout { fill: var(--corsi-fout); }
-
-  @keyframes corsi-puls {
-    0%   { stroke-width: 0; }
-    20%  { stroke-width: 10; }
-    100% { stroke-width: 4; }
-  }
+  /* corsi-ster regels staan als is:global hieronder — JS-gecreëerde SVG-elementen
+     krijgen geen Astro-scope-marker en zouden anders niet gestyled worden. */
 
   .corsi-status {
     color: var(--ink-soft);
@@ -228,16 +198,54 @@ import { NL } from '../../scripts/strings.nl.js';
     fill: none;
   }
 
+</style>
+
+<style is:global>
+  /* Globaal omdat de SVG-polygoonen via JS worden gerenderd; Astro-scoping mist
+     dan op de class-selector. */
+  .corsi-ster {
+    cursor: pointer;
+    fill: #9ba9c4;
+    stroke: transparent;
+    stroke-width: 0;
+    transition: fill 0.12s ease, transform 0.14s ease, filter 0.15s ease, stroke 0.12s ease, stroke-width 0.12s ease;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .corsi-ster.is-clickable:hover {
+    fill: #c5cee0;
+    transform: scale(1.08);
+  }
+  .corsi-ster.is-aktief {
+    fill: #f5c23b;
+    stroke: #fff7d6;
+    stroke-width: 4;
+    filter:
+      drop-shadow(0 0 14px #f5c23b)
+      drop-shadow(0 0 28px #f5c23b)
+      drop-shadow(0 0 42px rgba(245, 194, 59, 0.6));
+    transform: scale(1.42);
+    animation: corsi-puls 850ms ease-out;
+  }
+  .corsi-ster.is-goed { fill: #7fd17f; }
+  .corsi-ster.is-fout { fill: #e07b7b; }
+
+  @keyframes corsi-puls {
+    0%   { stroke-width: 0; transform: scale(1); }
+    25%  { stroke-width: 12; transform: scale(1.5); }
+    100% { stroke-width: 4; transform: scale(1.42); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .corsi-ster, .corsi-ster.is-aktief, .corsi-ster.is-clickable:hover {
       transition: none;
-      transform: none !important;
-      filter: none !important;
       animation: none !important;
     }
     .corsi-ster.is-aktief {
-      stroke: var(--spel-sun);
-      stroke-width: 8;
+      stroke: #f5c23b;
+      stroke-width: 10;
+      filter: none;
+      transform: none;
     }
   }
 </style>

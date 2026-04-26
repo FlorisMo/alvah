@@ -80,28 +80,17 @@ const wrapClass = wide ? 'wrap wrap--wide' : 'wrap';
       </div>
     </div>
     <nav class="site-nav" aria-label="Hoofdnavigatie">
-      <div class="site-nav__inner">
-        <a
-          href="/"
-          class="site-nav__home"
-          aria-label="Home"
-          aria-current={isCurrent('/') ? 'page' : undefined}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 11.5 12 4l9 7.5" />
-            <path d="M5 10v10h14V10" />
-          </svg>
-        </a>
-        {navItems.map((item) => (
-          <a
-            href={item.path}
-            aria-current={isCurrent(item.path) ? 'page' : undefined}
-          >
-            <span class="nav-num">{item.num}</span>
-            <span>{item.title}</span>
-          </a>
-        ))}
-      </div>
+      <a
+        href="/"
+        class="site-nav__home"
+        aria-label="Home"
+        aria-current={isCurrent('/') ? 'page' : undefined}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 11.5 12 4l9 7.5" />
+          <path d="M5 10v10h14V10" />
+        </svg>
+      </a>
       <button
         type="button"
         class="site-nav__menu-btn"
