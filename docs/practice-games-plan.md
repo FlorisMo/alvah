@@ -6,7 +6,12 @@ Meta-plan dat `docs/source/Research-practice-tools.md` omzet naar een faseerbare
 
 ## Hervat-gids — lees dit eerst bij een nieuwe sessie
 
-**Status (25 apr 2026, zevende run):** Fases 0–8 + 8.5 + 11 + 12 **klaar**. Fase 8.5 = QA-iteratie boven Fase 8 (zijmenu rechts in BaseLayout + Simon tap-toon match + is-aktief-visibility versterkt voor Simon/Corsi + admin-heatmap geaggregeerd naar dagdelen + mijlpalen-badges). Hoofdpagina `/` heeft haak naar `/spelen`. Landing draait `pickNext()` echt. SpelShell heeft persistent geluid-toggle. Span-spellen loggen `teMoeilijkN` + `autoLowerN`. Alle 5 spellen speelbaar met:
+**Status (25 apr 2026, zevende run + 8.5 iteratie):** Fases 0–8 + 8.5 + 11 + 12 **klaar**. Eindstand:
+- Top-nav is een minimale flex-rij (home-icoon links, hamburger rechts). Geen horizontale linklijst meer.
+- Alle dossier-navigatie loopt via het rechts uitschuivend zijmenu — grote groen-gradient "Spelen"-CTA bovenaan, 11 items eronder (Home + 10 dossier-pagina's). ESC of overlay-click sluit.
+- Alle 5 spellen speelbaar met groei-fragment + bloei + chord. Corsi-sterren effect via `<style is:global>` blok (Astro-scoping omzeilen voor JS-SVG).
+- Admin: KPI + 5 research-lenzen + heatmap in 4 dagdelen + mijlpalen-badge-grid + cadeau-koppeling + JSON-tools.
+- 4 commits in deze sessie: `e0bef68` (Fase 7-12) → `3f21633` (Fase 8.5 eerste pass) → `e5b8059` (zijmenu fix) → `284ec79` (top-nav weg + Corsi globaal) → `7d88a5c` (Corsi subtieler). HEAD = `7d88a5c`. Hoofdpagina `/` heeft haak naar `/spelen`. Landing draait `pickNext()` echt. SpelShell heeft persistent geluid-toggle. Span-spellen loggen `teMoeilijkN` + `autoLowerN`. Alle 5 spellen speelbaar met:
 - Bloeiende plant + audio-chord op einde-scherm (Fase 12 — predictable celebration binnen research-rules §C.3)
 - Trofeeën-strip met bereikte-dieren-cirkels + skin-niveau-tint (0-4) op root (Fase 11 — variatie mastery-getriggerd)
 - Mijlpaal-pop 1.2s met character-entry-animatie
@@ -742,17 +747,32 @@ Visualisatie: lichte horizontale band over de sparkline, label "ongeveer leeftij
 
 ### Fase 8.5 — QA-feedback verwerkt — ✅ KLAAR (25 apr 2026)
 
-Na korte QA-doorloop met Floris (zelf klikkend) zijn de volgende punten direct gefixt — geen nieuwe fase, maar polishing-iteratie boven Fase 8:
+Iteratie boven Fase 8 op basis van korte QA-doorloop met Floris. Vier commits: `3f21633` (eerste pass), `e5b8059` (zijmenu zichtbaar maken), `284ec79` (top-nav-rij weg), `7d88a5c` (Corsi subtieler). Eindstand:
 
-- **`src/pages/index.astro`**: "vanaf de Chromebook" verwijderd uit haak-tekst (device-irrelevant; Alvah speelt waar 't uitkomt).
-- **`src/layouts/BaseLayout.astro` + `src/styles/global.css`**: rechts uitschuivend zijmenu (~92vw / max 380px) met grote groen-gradient "Spelen"-CTA bovenaan en de overige nav-items eronder. Hamburger-knop rechts in de bestaande horizontale `.site-nav`. Slide-in 280ms cubic-bezier, overlay-fade 220ms, ESC + overlay-click sluiten, `prefers-reduced-motion`-veilig.
-- **`src/pages/spelen/simon.astro`**: tap-toon matcht nu sequence-toon-duur (was: tap-tone 220ms vs sequence 600ms — voelde droger). `flash(idx, visualMs, toneMs)` accepteert aparte tone-duur; visueel blijft 220ms voor responsive taps, audio is 600ms voor consistente klank-karakter.
-- **`src/pages/spelen/simon.astro`**: is-aktief versterkt — brightness 1.5 → 1.7, ring 4px → 6px + 24px glow-halo, scale 1.04 toegevoegd.
-- **`src/pages/spelen/corsi.astro`**: is-aktief versterkt — scale 1.22 → 1.42, witte stroke 3px, triple drop-shadow (14/28/42px). Tijdens sequence-flash is een lichtende ster nu duidelijk leesbaar.
-- **`src/pages/spelen/admin.astro` heatmap**: 24 uur-cellen geaggregeerd naar 4 dagdelen (ochtend 6-12 / middag 12-18 / avond 18-22 / nacht 22-6). Grid `110px + 4 cellen`, leesbare 2/1 aspect-ratio met sessie-aantal in elke cel.
-- **`src/pages/spelen/admin.astro` mijlpalen**: lijst-stijl vervangen door badge-grid (4 per spel, consistent met `/spelen/reis`-look). Cirkel met initiaal + dier-naam + drempel; bereikt = sun-tinted achtergrond + glow-ring; niet-bereikt = dashed outline. Responsive 4-kol → 2-kol op mobiel.
+**Navigatie compleet anders:**
+- **Top-bar minimaal:** alleen home-icoon links + hamburger-knop rechts. Horizontale linklijst is helemaal verdwenen — alle 10 dossier-pagina's lopen nu via het zijmenu. Bestanden: `src/layouts/BaseLayout.astro`, `src/styles/global.css` (`.site-nav` is nu een simpele flex-rij `space-between`, geen scroll-container meer).
+- **Rechts uitschuivend zijmenu:** ~92vw / max 380px paneel met grote groen-gradient "Spelen"-CTA bovenaan en de 11 nav-items (Home + 10 pagina's) eronder. Slide-in 280ms cubic-bezier, overlay-fade 220ms, ESC of overlay-click sluit, `prefers-reduced-motion`-veilig. Bestanden: `BaseLayout.astro` template + `global.css` (`.side-menu`, `.side-menu__cta`, `.side-menu__lijst`, `.side-menu-overlay`).
 
-**Verificatie:** `node --test` 80/80, `npx astro check` 0 errors, ToV-strict 0 blokkers, alle 9 routes 200 + side-menu-elementen aanwezig.
+**Spel-feedback verbeterd:**
+- **`src/pages/spelen/simon.astro`** — tap-toon matcht sequence-toon-duur. `flash(idx, visualMs, toneMs)` accepteert aparte tone-duur; visueel blijft 220ms voor responsive taps, audio is 600ms voor consistente klank-karakter.
+- **`src/pages/spelen/simon.astro`** — is-aktief versterkt: brightness 1.5 → 1.7, dubbele box-shadow ring (6px solid + 24px glow), scale 1.04.
+- **`src/pages/spelen/corsi.astro`** — `.corsi-ster*` regels in een `<style is:global>` blok verplaatst (kritisch — zie gotcha hieronder) en is-aktief eindstand: stroke 1.5px warm-wit, single drop-shadow 10px, scale 1.22 settle (puls-peak 1.32), animation `corsi-puls` 700ms (stroke-width 0 → 5 → 1.5 + scale 1 → 1.32 → 1.22).
+
+**Admin verbeterd:**
+- **Heatmap** in `admin.astro` (Lens "Wanneer hij speelt") — 24 uur-cellen geaggregeerd naar 4 dagdelen (ochtend 6-12 / middag 12-18 / avond 18-22 / nacht 22-6). Grid `110px + 4 cellen` (2:1 aspect-ratio), sessie-aantal in elke cel.
+- **Mijlpalen-lijst** in `admin.astro` — vervangen door 4-badge-grid per spel (consistent met `/spelen/reis`). Cirkel met initiaal + dier-naam + drempel; bereikt = sun-tinted + glow-ring; niet-bereikt = dashed outline. Responsive 4-kol → 2-kol op mobiel.
+
+**Gotcha — Astro `<style>` scoping vs JS-gemaakte SVG-elementen:**
+
+Astro scope CSS standaard: `.corsi-ster { ... }` wordt onder de motorkap `.corsi-ster[data-astro-cid-XYZ]`. Elementen in de Astro-template krijgen die `data-astro-cid` automatisch, maar elementen die je via `document.createElementNS('http://www.w3.org/2000/svg', 'polygon')` aanmaakt **niet**. Resultaat: scoped CSS gaat niet matchen, je polygon defaultet naar `fill: black`.
+
+In Corsi werd dit zichtbaar omdat we `el.setAttribute('fill', 'var(--corsi-ster)')` weghaalden zonder de CSS uit te scopen. Sterren werden zwart op donkerblauw veld.
+
+**Oplossing:** voor JS-gerenderde SVG-children, plaats de class-rules in `<style is:global>` met literal kleuren (geen `var()` — die zouden ook problematisch zijn als je ze later in scoped scope wilt definiëren). Of geef zelf de scope-attribute mee bij `createElement`. De eerste route is gekozen voor Corsi.
+
+Geldt potentieel voor toekomstige spellen die ook SVG dynamisch renderen (bv. Tower of London bij Fase 10b — drag-and-drop ballen).
+
+**Verificatie:** `node --test` 80/80, `npx astro check` 0 errors, ToV-strict 0 blokkers, alle 9 routes 200, hamburger zichtbaar in markup, Corsi-puls keyframe geladen.
 
 ### Fase 8 — Polish — ✅ KLAAR (25 apr 2026)
 
