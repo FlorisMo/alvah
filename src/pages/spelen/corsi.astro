@@ -218,22 +218,19 @@ import { NL } from '../../scripts/strings.nl.js';
   }
   .corsi-ster.is-aktief {
     fill: #f5c23b;
-    stroke: #fff7d6;
-    stroke-width: 4;
-    filter:
-      drop-shadow(0 0 14px #f5c23b)
-      drop-shadow(0 0 28px #f5c23b)
-      drop-shadow(0 0 42px rgba(245, 194, 59, 0.6));
-    transform: scale(1.42);
-    animation: corsi-puls 850ms ease-out;
+    stroke: rgba(255, 247, 214, 0.7);
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 10px rgba(245, 194, 59, 0.7));
+    transform: scale(1.22);
+    animation: corsi-puls 700ms ease-out;
   }
   .corsi-ster.is-goed { fill: #7fd17f; }
   .corsi-ster.is-fout { fill: #e07b7b; }
 
   @keyframes corsi-puls {
     0%   { stroke-width: 0; transform: scale(1); }
-    25%  { stroke-width: 12; transform: scale(1.5); }
-    100% { stroke-width: 4; transform: scale(1.42); }
+    30%  { stroke-width: 5; transform: scale(1.32); }
+    100% { stroke-width: 1.5; transform: scale(1.22); }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -243,7 +240,7 @@ import { NL } from '../../scripts/strings.nl.js';
     }
     .corsi-ster.is-aktief {
       stroke: #f5c23b;
-      stroke-width: 10;
+      stroke-width: 4;
       filter: none;
       transform: none;
     }
