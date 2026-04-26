@@ -101,8 +101,79 @@ const wrapClass = wide ? 'wrap wrap--wide' : 'wrap';
             <span>{item.title}</span>
           </a>
         ))}
+        <button
+          type="button"
+          class="site-nav__menu-btn"
+          aria-label="Menu openen"
+          aria-controls="site-side-menu"
+          aria-expanded="false"
+          data-menu-toggle
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 6h16" />
+            <path d="M4 12h16" />
+            <path d="M4 18h16" />
+          </svg>
+        </button>
       </div>
     </nav>
+
+    <div class="side-menu-overlay" data-menu-overlay hidden></div>
+    <aside
+      class="side-menu"
+      id="site-side-menu"
+      aria-label="Snelmenu"
+      aria-hidden="true"
+      data-side-menu
+    >
+      <div class="side-menu__header">
+        <span class="side-menu__eyebrow">Snelmenu</span>
+        <button
+          type="button"
+          class="side-menu__close"
+          aria-label="Menu sluiten"
+          data-menu-close
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 6 18 18" />
+            <path d="M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+      <a
+        href="/spelen"
+        class="side-menu__cta"
+        aria-current={pathname.startsWith('/spelen') ? 'page' : undefined}
+      >
+        <span class="side-menu__cta-eyebrow">Voor Alvah</span>
+        <span class="side-menu__cta-titel">Spelen</span>
+        <span class="side-menu__cta-arrow" aria-hidden="true">→</span>
+      </a>
+      <ol class="side-menu__lijst">
+        <li>
+          <a
+            href="/"
+            aria-current={isCurrent('/') ? 'page' : undefined}
+            class="side-menu__item"
+          >
+            <span class="side-menu__num">00</span>
+            <span class="side-menu__titel">Home</span>
+          </a>
+        </li>
+        {navItems.map((item) => (
+          <li>
+            <a
+              href={item.path}
+              aria-current={isCurrent(item.path) ? 'page' : undefined}
+              class="side-menu__item"
+            >
+              <span class="side-menu__num">{item.num}</span>
+              <span class="side-menu__titel">{item.title}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    </aside>
 
     <main class={wrapClass}>
       <slot />
@@ -114,6 +185,38 @@ const wrapClass = wide ? 'wrap wrap--wide' : 'wrap';
         <p class="small muted">Laatst bijgewerkt: {buildDate}. Deze site is niet openbaar geïndexeerd. Deelbaar op verzoek.</p>
       </div>
     </footer>
+
+    <script is:inline>
+      (function () {
+        const overlay = document.querySelector('[data-menu-overlay]');
+        const menu = document.querySelector('[data-side-menu]');
+        const toggle = document.querySelector('[data-menu-toggle]');
+        const closeBtn = document.querySelector('[data-menu-close]');
+        if (!menu || !toggle || !overlay) return;
+        function open() {
+          menu.classList.add('is-open');
+          overlay.hidden = false;
+          requestAnimationFrame(function () { overlay.classList.add('is-open'); });
+          menu.setAttribute('aria-hidden', 'false');
+          toggle.setAttribute('aria-expanded', 'true');
+          document.body.classList.add('side-menu-open');
+        }
+        function close() {
+          menu.classList.remove('is-open');
+          overlay.classList.remove('is-open');
+          setTimeout(function () { overlay.hidden = true; }, 220);
+          menu.setAttribute('aria-hidden', 'true');
+          toggle.setAttribute('aria-expanded', 'false');
+          document.body.classList.remove('side-menu-open');
+        }
+        toggle.addEventListener('click', open);
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', close);
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && menu.classList.contains('is-open')) close();
+        });
+      })();
+    </script>
 
     <script is:inline>
       (function () {

@@ -154,8 +154,13 @@ import { NL } from '../../scripts/strings.nl.js';
   }
   .corsi-ster.is-aktief {
     fill: var(--corsi-aktief);
-    filter: drop-shadow(0 0 10px var(--corsi-aktief)) drop-shadow(0 0 20px var(--corsi-aktief));
-    transform: scale(1.22);
+    stroke: #fff7d6;
+    stroke-width: 3;
+    filter:
+      drop-shadow(0 0 14px var(--corsi-aktief))
+      drop-shadow(0 0 28px var(--corsi-aktief))
+      drop-shadow(0 0 42px var(--corsi-aktief));
+    transform: scale(1.42);
   }
   .corsi-ster.is-goed { fill: var(--corsi-goed); }
   .corsi-ster.is-fout { fill: var(--corsi-fout); }

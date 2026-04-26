@@ -430,23 +430,38 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
 
     .admin-heat {
       display: grid;
-      grid-template-columns: 80px repeat(24, 1fr);
-      gap: 1px;
-      font-size: 0.72rem;
+      grid-template-columns: 110px repeat(4, 1fr);
+      gap: 4px;
+      font-size: 0.85rem;
       color: var(--ink-muted);
-      max-width: 600px;
+      max-width: 540px;
+      margin-bottom: 8px;
     }
-    .admin-heat__label { padding: 2px 6px 2px 0; align-self: center; }
+    .admin-heat__label {
+      padding: 6px 8px 6px 0;
+      align-self: center;
+      font-size: 0.88rem;
+      color: var(--ink);
+    }
     .admin-heat__cel {
-      aspect-ratio: 1/1;
+      aspect-ratio: 2/1;
       background: var(--line-soft);
-      border-radius: 2px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 0.85rem;
+      color: var(--ink);
+      min-height: 32px;
     }
     .admin-heat__uur {
-      font-size: 0.65rem;
+      font-size: 0.72rem;
       text-align: center;
       color: var(--ink-muted);
-      grid-column: span 1;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding-bottom: 4px;
     }
 
     .admin-mijlpalen { margin-bottom: 36px; }
@@ -477,7 +492,7 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
       margin-bottom: 22px;
     }
     .admin-mijl-spel {
-      padding: 12px 14px;
+      padding: 14px 16px;
       background: var(--paper);
       border: 1px solid var(--line);
       border-radius: var(--spel-radius);
@@ -485,27 +500,66 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
     .admin-mijl-spel__titel {
       font-family: var(--font-heading);
       font-weight: 500;
-      font-size: 1rem;
-      margin: 0 0 6px;
+      font-size: 1.05rem;
+      margin: 0 0 12px;
     }
-    .admin-mijl-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 4px 0;
-      font-size: 0.9rem;
-      color: var(--ink-soft);
-      border-bottom: 1px dashed var(--line-soft);
+    .admin-mijl-badges {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
     }
-    .admin-mijl-row:last-child { border-bottom: none; }
-    .admin-mijl-row.is-bereikt { color: var(--ink); font-weight: 500; }
-    .admin-mijl-row__status {
-      font-size: 0.8rem;
+    .admin-mijl-badge {
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+      text-align: center;
+      padding: 10px 6px;
+      border-radius: 10px;
+      background: var(--line-soft);
+      border: 1px dashed var(--line);
+      transition: transform 0.15s ease;
+    }
+    .admin-mijl-badge.is-bereikt {
+      background: color-mix(in srgb, var(--spel-sun) 18%, var(--paper));
+      border: 1px solid color-mix(in srgb, var(--spel-sun) 50%, var(--line));
+    }
+    .admin-mijl-badge__cirkel {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--paper);
       color: var(--ink-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
+      font-family: var(--font-heading);
+      font-weight: 500;
+      font-size: 0.95rem;
+      border: 1px solid var(--line);
     }
-    .admin-mijl-row.is-bereikt .admin-mijl-row__status { color: var(--green); }
+    .admin-mijl-badge.is-bereikt .admin-mijl-badge__cirkel {
+      background: var(--spel-sun);
+      color: var(--ink);
+      border-color: transparent;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--spel-sun) 40%, transparent);
+    }
+    .admin-mijl-badge__naam {
+      font-family: var(--font-heading);
+      font-size: 0.82rem;
+      color: var(--ink);
+      font-weight: 500;
+      line-height: 1.15;
+    }
+    .admin-mijl-badge:not(.is-bereikt) .admin-mijl-badge__naam {
+      color: var(--ink-soft);
+    }
+    .admin-mijl-badge__drempel {
+      font-size: 0.7rem;
+      color: var(--ink-muted);
+      line-height: 1.15;
+    }
+    @media (max-width: 540px) {
+      .admin-mijl-badges { grid-template-columns: repeat(2, 1fr); }
+    }
 
     .admin-mijl-subkop {
       font-family: var(--font-heading);
@@ -862,7 +916,6 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
 
       const heatHost = document.querySelector<HTMLElement>('[data-lens-engagement-heatmap]')!;
       const heat = timeOfDayHeatmap(exercises) as Record<string, number[]>;
-      const heatMax = Math.max(1, ...Object.values(heat).flatMap((arr: any) => arr));
       const colors: Record<string, string> = {
         simon: '#2b5fb8',
         corsi: '#c94174',
@@ -870,13 +923,33 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
         zoeken: '#ef7a1f',
         wisselen: '#1e4d32',
       };
+
+      // 4 dagdelen voor leesbaarheid: ochtend 6-12, middag 12-18,
+      // avond 18-22, nacht 22-6.
+      function bucket(arr: number[]) {
+        const ochtend = arr.slice(6, 12).reduce((a, b) => a + b, 0);
+        const middag  = arr.slice(12, 18).reduce((a, b) => a + b, 0);
+        const avond   = arr.slice(18, 22).reduce((a, b) => a + b, 0);
+        const nacht   = (arr.slice(22, 24).reduce((a, b) => a + b, 0)) +
+                        (arr.slice(0, 6).reduce((a, b) => a + b, 0));
+        return [ochtend, middag, avond, nacht];
+      }
+      const buckets: Record<string, number[]> = {};
+      let heatMax = 1;
+      for (const spelId of Object.keys(spelTitels)) {
+        buckets[spelId] = bucket(heat[spelId] || new Array(24).fill(0));
+        for (const v of buckets[spelId]) if (v > heatMax) heatMax = v;
+      }
+
+      const dagdelen = ['Ochtend', 'Middag', 'Avond', 'Nacht'];
       const uurHeader =
         '<div></div>' +
-        Array.from({ length: 24 }, (_, h) => `<div class="admin-heat__uur">${h}</div>`).join('');
+        dagdelen.map((d) => `<div class="admin-heat__uur">${escapeHtml(d)}</div>`).join('');
       const rijen = Object.keys(spelTitels).map((spelId) => {
-        const cellen = (heat[spelId] || []).map((n: number) => {
+        const cellen = buckets[spelId].map((n: number) => {
           const op = heatMax ? (n / heatMax) : 0;
-          return `<div class="admin-heat__cel" style="background:${colors[spelId]};opacity:${(0.05 + op * 0.85).toFixed(2)}"></div>`;
+          const tekst = n > 0 ? String(n) : '';
+          return `<div class="admin-heat__cel" style="background:${colors[spelId]};opacity:${(0.10 + op * 0.80).toFixed(2)};color:${op > 0.4 ? '#fdfcf8' : 'var(--ink)'}">${escapeHtml(tekst)}</div>`;
         }).join('');
         return `<div class="admin-heat__label">${escapeHtml(spelTitels[spelId])}</div>${cellen}`;
       }).join('');
@@ -965,16 +1038,20 @@ const spellen: { id: 'simon' | 'zoeken' | 'corsi' | 'day-night' | 'wisselen'; ti
       };
       lijstEl.innerHTML = Object.keys(result.perSpel).map((spelId) => {
         const lijst = result.perSpel[spelId];
-        const rows = lijst.map((m: any) => `
-          <div class="admin-mijl-row${m.bereikt ? ' is-bereikt' : ''}">
-            <span>${escapeHtml(m.dier)} — ${escapeHtml(m.drempel)}</span>
-            <span class="admin-mijl-row__status">${m.bereikt ? 'Behaald' : 'Open'}</span>
-          </div>
-        `).join('');
+        const badges = lijst.map((m: any) => {
+          const initiaal = String(m.dier).charAt(0).toUpperCase();
+          return `
+            <div class="admin-mijl-badge${m.bereikt ? ' is-bereikt' : ''}" title="${escapeHtml(m.dier)} — ${escapeHtml(m.drempel)}">
+              <div class="admin-mijl-badge__cirkel" aria-hidden="true">${escapeHtml(initiaal)}</div>
+              <div class="admin-mijl-badge__naam">${escapeHtml(m.dier)}</div>
+              <div class="admin-mijl-badge__drempel">${escapeHtml(m.drempel)}</div>
+            </div>
+          `;
+        }).join('');
         return `
           <div class="admin-mijl-spel">
             <h4 class="admin-mijl-spel__titel">${escapeHtml(spelTitels[spelId] || spelId)}</h4>
-            ${rows}
+            <div class="admin-mijl-badges">${badges}</div>
           </div>
         `;
       }).join('');

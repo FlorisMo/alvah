@@ -142,7 +142,7 @@ import { NL } from '../../scripts/strings.nl.js';
     place-items: center;
     font-size: clamp(2.2rem, 8vw, 3.2rem);
     color: rgba(255, 255, 255, 0.92);
-    transition: filter 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease;
+    transition: filter 0.12s ease, transform 0.16s ease, box-shadow 0.18s ease;
     opacity: 0.82;
   }
 
@@ -152,8 +152,9 @@ import { NL } from '../../scripts/strings.nl.js';
 
   .simon-paneel.is-aktief {
     opacity: 1;
-    filter: brightness(1.5) saturate(1.15);
-    box-shadow: 0 0 0 4px var(--spel-glow);
+    filter: brightness(1.7) saturate(1.25);
+    box-shadow: 0 0 0 6px var(--spel-glow), 0 0 24px 4px var(--spel-glow);
+    transform: scale(1.04);
   }
 
   .simon-paneel--groen { background: var(--green); }
@@ -388,15 +389,19 @@ import { NL } from '../../scripts/strings.nl.js';
       }
     }
 
-    function flash(idx: number, duration: number) {
+    // Visual-flash en tone-duur worden gescheiden: bij user-tap willen we
+    // dat de toon hetzelfde lang doorklinkt als bij sequence-playback (vol,
+    // melodisch), maar dat de panelen-opgloed kort is zodat snelle taps
+    // direct registreren.
+    function flash(idx: number, visualMs: number, toneMs: number = visualMs) {
       return new Promise<void>((resolve) => {
         const p = panelen[idx];
-        tone(FREQS[idx], duration, 0.22);
+        tone(FREQS[idx], toneMs, 0.22);
         p.classList.add('is-aktief');
         setTimeout(() => {
           p.classList.remove('is-aktief');
           resolve();
-        }, duration);
+        }, visualMs);
       });
     }
 
@@ -409,7 +414,9 @@ import { NL } from '../../scripts/strings.nl.js';
 
     function onPaneelClick(idx: number) {
       if (trialRT === -1) trialRT = Math.round(now() - rtStart);
-      void flash(idx, TAP_FLASH_MS);
+      // Visueel kort (TAP_FLASH_MS) zodat snelle taps responsive voelen, maar
+      // de toon-duur matcht de sequence-flash zodat de klanken consistent zijn.
+      void flash(idx, TAP_FLASH_MS, FLASH_MS);
       const expected = sequence[userPos];
 
       if (idx === expected) {

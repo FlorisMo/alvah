@@ -280,6 +280,182 @@ section + section {
   .site-nav a { padding: 12px 10px; font-size: 0.82rem; }
 }
 
+.site-nav__menu-btn {
+  margin-left: auto;
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  flex: 0 0 auto;
+}
+.site-nav__menu-btn:hover {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: var(--green-line);
+}
+
+/* ---------- Side menu (rechts uitschuivend) ---------- */
+
+.side-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 20, 0.32);
+  opacity: 0;
+  transition: opacity 220ms ease;
+  z-index: 200;
+}
+.side-menu-overlay.is-open { opacity: 1; }
+
+.side-menu {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, 92vw);
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.08);
+  transform: translateX(100%);
+  transition: transform 280ms cubic-bezier(0.32, 0.72, 0.27, 1);
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 22px 28px;
+  overflow-y: auto;
+}
+.side-menu.is-open { transform: translateX(0); }
+
+.side-menu__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.side-menu__eyebrow {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+}
+.side-menu__close {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.side-menu__close:hover {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.side-menu__cta {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 22px 24px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
+  color: #fdfcf8;
+  text-decoration: none;
+  margin-bottom: 18px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.side-menu__cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+.side-menu__cta::before {
+  content: "";
+  position: absolute;
+  inset: -40% -30% auto auto;
+  width: 60%;
+  aspect-ratio: 1/1;
+  background: radial-gradient(circle, rgba(245, 194, 59, 0.32), transparent 65%);
+  pointer-events: none;
+}
+.side-menu__cta-eyebrow {
+  grid-column: 1;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.78;
+}
+.side-menu__cta-titel {
+  grid-column: 1;
+  grid-row: 2;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 2rem;
+  line-height: 1;
+}
+.side-menu__cta-arrow {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  font-size: 1.6rem;
+  align-self: center;
+}
+.side-menu__cta[aria-current="page"] {
+  outline: 2px solid color-mix(in srgb, #f5c23b 60%, transparent);
+  outline-offset: -4px;
+}
+
+.side-menu__lijst {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.side-menu__item {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.side-menu__item:hover {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.side-menu__item[aria-current="page"] {
+  background: var(--green-soft);
+  color: var(--green-deep);
+  font-weight: 500;
+}
+.side-menu__num {
+  font-family: var(--font-heading);
+  font-style: italic;
+  font-weight: 300;
+  color: var(--green);
+  text-align: center;
+}
+
+body.side-menu-open { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .side-menu, .side-menu-overlay, .side-menu__cta { transition: none; }
+}
+
 /* ---------- Footer ---------- */
 
 .site-footer {

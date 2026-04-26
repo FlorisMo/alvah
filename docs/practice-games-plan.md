@@ -6,7 +6,7 @@ Meta-plan dat `docs/source/Research-practice-tools.md` omzet naar een faseerbare
 
 ## Hervat-gids — lees dit eerst bij een nieuwe sessie
 
-**Status (25 apr 2026, zevende run):** Fases 0–8 + 11 + 12 **klaar**. Hoofdpagina `/` heeft haak naar `/spelen`. Landing draait `pickNext()` echt. SpelShell heeft persistent geluid-toggle. Span-spellen loggen `teMoeilijkN` + `autoLowerN`. Alle 5 spellen speelbaar met:
+**Status (25 apr 2026, zevende run):** Fases 0–8 + 8.5 + 11 + 12 **klaar**. Fase 8.5 = QA-iteratie boven Fase 8 (zijmenu rechts in BaseLayout + Simon tap-toon match + is-aktief-visibility versterkt voor Simon/Corsi + admin-heatmap geaggregeerd naar dagdelen + mijlpalen-badges). Hoofdpagina `/` heeft haak naar `/spelen`. Landing draait `pickNext()` echt. SpelShell heeft persistent geluid-toggle. Span-spellen loggen `teMoeilijkN` + `autoLowerN`. Alle 5 spellen speelbaar met:
 - Bloeiende plant + audio-chord op einde-scherm (Fase 12 — predictable celebration binnen research-rules §C.3)
 - Trofeeën-strip met bereikte-dieren-cirkels + skin-niveau-tint (0-4) op root (Fase 11 — variatie mastery-getriggerd)
 - Mijlpaal-pop 1.2s met character-entry-animatie
@@ -739,6 +739,20 @@ Visualisatie: lichte horizontale band over de sparkline, label "ongeveer leeftij
 - ToV-strict 0 blokkers; astro check 0 errors.
 
 </details>
+
+### Fase 8.5 — QA-feedback verwerkt — ✅ KLAAR (25 apr 2026)
+
+Na korte QA-doorloop met Floris (zelf klikkend) zijn de volgende punten direct gefixt — geen nieuwe fase, maar polishing-iteratie boven Fase 8:
+
+- **`src/pages/index.astro`**: "vanaf de Chromebook" verwijderd uit haak-tekst (device-irrelevant; Alvah speelt waar 't uitkomt).
+- **`src/layouts/BaseLayout.astro` + `src/styles/global.css`**: rechts uitschuivend zijmenu (~92vw / max 380px) met grote groen-gradient "Spelen"-CTA bovenaan en de overige nav-items eronder. Hamburger-knop rechts in de bestaande horizontale `.site-nav`. Slide-in 280ms cubic-bezier, overlay-fade 220ms, ESC + overlay-click sluiten, `prefers-reduced-motion`-veilig.
+- **`src/pages/spelen/simon.astro`**: tap-toon matcht nu sequence-toon-duur (was: tap-tone 220ms vs sequence 600ms — voelde droger). `flash(idx, visualMs, toneMs)` accepteert aparte tone-duur; visueel blijft 220ms voor responsive taps, audio is 600ms voor consistente klank-karakter.
+- **`src/pages/spelen/simon.astro`**: is-aktief versterkt — brightness 1.5 → 1.7, ring 4px → 6px + 24px glow-halo, scale 1.04 toegevoegd.
+- **`src/pages/spelen/corsi.astro`**: is-aktief versterkt — scale 1.22 → 1.42, witte stroke 3px, triple drop-shadow (14/28/42px). Tijdens sequence-flash is een lichtende ster nu duidelijk leesbaar.
+- **`src/pages/spelen/admin.astro` heatmap**: 24 uur-cellen geaggregeerd naar 4 dagdelen (ochtend 6-12 / middag 12-18 / avond 18-22 / nacht 22-6). Grid `110px + 4 cellen`, leesbare 2/1 aspect-ratio met sessie-aantal in elke cel.
+- **`src/pages/spelen/admin.astro` mijlpalen**: lijst-stijl vervangen door badge-grid (4 per spel, consistent met `/spelen/reis`-look). Cirkel met initiaal + dier-naam + drempel; bereikt = sun-tinted achtergrond + glow-ring; niet-bereikt = dashed outline. Responsive 4-kol → 2-kol op mobiel.
+
+**Verificatie:** `node --test` 80/80, `npx astro check` 0 errors, ToV-strict 0 blokkers, alle 9 routes 200 + side-menu-elementen aanwezig.
 
 ### Fase 8 — Polish — ✅ KLAAR (25 apr 2026)
 
