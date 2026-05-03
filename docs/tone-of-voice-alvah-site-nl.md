@@ -208,7 +208,7 @@ Elk kwartaal herzien.
 
 **Perspectief:** eerste persoon enkelvoud ("ik") als standaard. "We" als het echt een gezamenlijke blik is, niet als beleefdheidsmeervoud. Tweede persoon ("je") alleen als je een specifieke lezer aanspreekt, bijvoorbeeld in een bericht aan een leraar.
 
-**Alvah noemen:** alleen voornaam op de site. Geen achternaam. Geen geboortedatum in URL-slugs of metadata. Geen gezichtsherkenbare foto's zonder een expliciet publicatiebesluit (huidige stand: nee).
+**Alvah noemen:** alleen voornaam op de site. Geen achternaam. Geen geboortedatum in URL-slugs of metadata. Foto's zijn standaard niet toegestaan; uitzondering: één portret op de homepage, geplaatst na expliciet publicatiebesluit en alleen zichtbaar achter de wachtwoord-gate. Verdere foto's vereisen opnieuw toestemming.
 
 **Opbouw van een stuk:**
 Open met iets concreets: een score, een datum, iets dat gebeurde. Geen inleiding. Geen "in dit stuk wil ik...". Bouw de gedachte op. Eindig op iets specifieks (een feit, een vraag, een stille zin). Geen samenvatting en geen gevoelsslot.
@@ -337,10 +337,10 @@ ON-BRAND:
 
 ## Privacy en waardigheid (basislaag)
 
-De site is vandaag openbaar en gaat misschien later op slot. Schrijf elk stuk alsof beide waar zijn. Openbaar genoeg om door een vreemde gelezen te worden, intiem genoeg dat Alvah er als een echt kind in staat.
+De site zit achter een wachtwoord-gate, maar is bewust deelbaar met wie meeleest of meewerkt. Schrijf elk stuk alsof het gate-loos zou kunnen zijn: deelbaar genoeg voor een buitenstaander, intiem genoeg dat Alvah er als een echt kind in staat.
 
 * Alleen voornaam. Geen achternaam, geen geboortedatum, geen schoolnaam, geen straat.
-* Geen gezichtsherkenbare foto's van Alvah zonder een expliciet publicatiebesluit.
+* Geen gezichtsherkenbare foto's van Alvah zonder een expliciet publicatiebesluit. Eén portret op de homepage staat per huidig besluit, achter de gate.
 * Geen geciteerde privéberichten met leraren zonder toestemming.
 * Geen medische data die verder gaat dan wat klinisch relevant is voor de observatie die je maakt.
 * Als je twijfelt of een detail erbij moet, laat het weg. Je kunt altijd later toevoegen. Terugtrekken is lastig.

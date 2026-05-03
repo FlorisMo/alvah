@@ -36,13 +36,39 @@ const navCards = [
 ---
 <BaseLayout
   title="Alvah, dossier"
-  description="Alles op één plek voor wie met Alvah werkt: thuis, op school, bij behandelaars."
+  description="Werkdocument voor wie met Alvah werkt: thuis, op school, bij behandelaars."
   wide={true}
 >
-  <section>
-    <h1>Alvah</h1>
-    <p class="lede">Alles op één plek voor wie met Alvah werkt: thuis, op school, bij behandelaars.</p>
+  <section class="hero">
+    <div class="hero__intro">
+      <p class="hero__eyebrow">Werkdocument</p>
+      <h1 class="hero__title">Alvah</h1>
+      <p class="hero__lede">
+        Voor wie met hem werkt: thuis, op De Mheen, in het SWV, bij opa en oma.
+      </p>
+      <p class="hero__story">
+        Hier verzamelen we wat de toetsen laten zien, wat wetenschappelijk onderbouwd is, wat we
+        zelf zien werken, en welke vragen open staan. Geen rapport over hem. Een gedeelde kaart
+        van hetzelfde terrein, waar iedereen die met hem werkt aan bijdraagt.
+      </p>
+      <p class="hero__story">
+        Begin bij de <a href="/samenvatting">samenvatting</a> als je net aansluit. Voor het
+        volledige beeld: het <a href="/dossier">dossier</a>.
+      </p>
+    </div>
+    <figure class="hero__portrait">
+      <img
+        src="/img/Alvah.jpg"
+        alt="Alvah met een van zijn kippen"
+        width="1079"
+        height="1079"
+        loading="eager"
+        decoding="async"
+      />
+    </figure>
+  </section>
 
+  <section class="quick-facts">
     <dl class="meta-grid">
       <div>
         <dt>Leeftijd</dt>
@@ -64,7 +90,7 @@ const navCards = [
   </section>
 
   <section>
-    <h2 class="section-head"><span class="num">A</span>Huidige stand</h2>
+    <h2 class="section-head"><span class="num">A</span>Hoe het nu staat</h2>
     <div class="chip-row">
       <a class="data-chip" href="/voortgang">
         <div class="data-chip__label">Laatste milestone</div>
@@ -101,7 +127,7 @@ const navCards = [
   </section>
 
   <section>
-    <h2 class="section-head"><span class="num">C</span>Navigatie</h2>
+    <h2 class="section-head"><span class="num">C</span>Het volledige dossier</h2>
     <div class="nav-grid">
       {navCards.map((card) => (
         <a class="nav-card" href={card.pad}>
@@ -124,6 +150,103 @@ const navCards = [
   </section>
 
   <style>
+    /* ---------- Hero ---------- */
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+      align-items: center;
+      gap: 56px;
+      padding-top: var(--section-padding-y);
+      padding-bottom: calc(var(--section-padding-y) / 2);
+    }
+    .hero__eyebrow {
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 1.2em;
+    }
+    .hero__title {
+      font-family: var(--font-heading);
+      font-weight: 400;
+      font-size: clamp(2.6rem, 6vw, 4.4rem);
+      line-height: 1;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.4em;
+    }
+    .hero__lede {
+      font-family: var(--font-heading);
+      font-weight: 300;
+      font-style: italic;
+      font-size: clamp(1.15rem, 2vw, 1.4rem);
+      line-height: 1.4;
+      color: var(--green-deep);
+      max-width: 28ch;
+      margin-bottom: 1.6em;
+    }
+    .hero__story {
+      color: var(--ink-soft);
+      font-size: 1rem;
+      line-height: 1.65;
+      max-width: 42ch;
+      margin-bottom: 1em;
+    }
+    .hero__story:last-child { margin-bottom: 0; }
+    .hero__story a {
+      color: var(--green);
+      text-decoration-color: var(--green-line);
+    }
+    .hero__story a:hover { text-decoration-color: var(--green); }
+
+    .hero__portrait {
+      margin: 0;
+      position: relative;
+      aspect-ratio: 1 / 1;
+      overflow: hidden;
+      border-radius: 4px;
+      background: var(--green-soft);
+    }
+    .hero__portrait img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .hero__portrait::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.06);
+      pointer-events: none;
+      border-radius: inherit;
+    }
+
+    @media (max-width: 860px) {
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 32px;
+        padding-top: var(--section-padding-y-mobile);
+        padding-bottom: calc(var(--section-padding-y-mobile) / 1.5);
+      }
+      .hero__intro { order: 2; }
+      .hero__portrait { order: 1; max-width: 360px; margin: 0 auto; width: 100%; }
+    }
+
+    /* ---------- Quick facts band ---------- */
+    .quick-facts {
+      padding-top: 0;
+      padding-bottom: calc(var(--section-padding-y) / 1.5);
+    }
+    .quick-facts .meta-grid {
+      margin: 0;
+      padding-top: 1.5em;
+    }
+    @media (max-width: 720px) {
+      .quick-facts { padding-bottom: var(--section-padding-y-mobile); }
+    }
+
+    /* ---------- Spelen-haak ---------- */
     .alvah-spelen-haak {
       display: block;
       padding: 24px 28px;

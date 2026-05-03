@@ -437,9 +437,10 @@ const formatDatum = (d: Date) =>
   }
   .portrait__list li:last-child { border-bottom: none; }
   .portrait__list li::before {
-    content: "— ";
+    content: "·\00a0";
     color: var(--green);
     margin-right: 6px;
+    font-weight: 600;
   }
 
   .compassion { margin-top: 3em; }
