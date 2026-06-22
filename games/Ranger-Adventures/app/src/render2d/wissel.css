@@ -1,0 +1,169 @@
+/* ============================================================
+   wissel.css — the 2D "day/night sorting" (wisselen/set-shifting) view.
+   ============================================================ */
+
+.wissel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 14px;
+  padding: max(16px, env(safe-area-inset-top)) 16px 20px;
+  background: rgba(20, 22, 36, 0.3);
+  backdrop-filter: blur(2px);
+}
+
+.wissel-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(92vw, 900px);
+  margin: 0 auto;
+  padding: 12px 16px;
+  background: rgba(253, 252, 248, 0.92);
+  border-radius: var(--spel-radius);
+  box-shadow: var(--shadow-md);
+}
+.wissel-instr { margin: 0; flex: 1; font: 500 var(--read-size)/1.3 var(--font-read); color: var(--ink); }
+.wissel-speak {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 24px;
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-standard), background var(--dur-quick);
+}
+.wissel-speak:hover { transform: translateY(-2px); background: var(--green-line); }
+
+.wissel-field {
+  position: relative;
+  width: min(92vw, 900px);
+  height: 100%;
+  max-height: min(70vh, 600px);
+  margin: 0 auto;
+  border-radius: var(--spel-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  background: radial-gradient(120% 90% at 50% 0%, #4a517a 0%, #2f3552 55%, #20243b 100%);
+  transition: background 0.5s var(--ease-standard);
+}
+.wissel-field.inverted { background: radial-gradient(120% 90% at 50% 0%, #6a6a4a 0%, #4a4a33 55%, #333322 100%); }
+.wissel-sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(2px 2px at 24% 16%, rgba(255, 255, 255, 0.8) 50%, transparent 50%),
+    radial-gradient(2px 2px at 56% 12%, rgba(255, 255, 255, 0.7) 50%, transparent 50%),
+    radial-gradient(2px 2px at 82% 20%, rgba(255, 255, 255, 0.8) 50%, transparent 50%);
+  opacity: 0.6;
+}
+
+.wissel-sign {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  max-width: 84%;
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  background: rgba(20, 16, 12, 0.6);
+  color: var(--paper);
+  text-align: center;
+  transition: transform var(--dur-quick) var(--ease-standard);
+}
+.wissel-sign.flipping { animation: sign-flip 0.6s var(--ease-overshoot); }
+@keyframes sign-flip { 0%, 100% { transform: translateX(-50%) rotateX(0); } 50% { transform: translateX(-50%) rotateX(80deg); } }
+.ws-flag:not(:empty) {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--spel-sun);
+  color: #3a2c10;
+  font: 700 13px/1 var(--font-body);
+}
+.ws-rule { font: 600 18px/1.25 var(--font-body); }
+
+.wissel-stage {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 52%;
+  transform: translateY(-50%);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+}
+.wissel-bin {
+  justify-self: center;
+  min-width: 120px;
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 16px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--paper);
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-overshoot), background var(--dur-quick), border-color var(--dur-quick);
+}
+.wissel-bin:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.6); }
+.bin-ico { font-size: 40px; }
+.bin-label { font: 600 16px/1 var(--font-body); }
+.wissel-bin.catch, .wissel-bin:active { transform: scale(0.95); background: rgba(122, 184, 90, 0.3); }
+
+.wissel-center {
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  transition: transform 0.5s var(--ease-standard), opacity 0.5s;
+}
+.wc-token {
+  width: 86px;
+  height: 86px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+  font: 700 30px/1 var(--font-body);
+  text-transform: uppercase;
+}
+.wc-name { color: var(--paper); font: 600 16px/1 var(--font-body); }
+.wissel-center.wrong { animation: wc-wrong 0.46s var(--ease-standard); }
+@keyframes wc-wrong { 0%, 100% { transform: none; } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+.wissel-center.fly-open { transform: translate(-180px, -40px) scale(0.4); opacity: 0; }
+.wissel-center.fly-hol { transform: translate(180px, -40px) scale(0.4); opacity: 0; }
+
+.wissel-progress {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 7px;
+}
+.wp-dot { width: 11px; height: 11px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); transition: background var(--dur-quick), transform var(--dur-quick); }
+.wp-dot.done { background: var(--green-bright); }
+.wp-dot.current { background: var(--spel-sun); transform: scale(1.3); }
+
+.feedback-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 50px;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: var(--radius-pill);
+  font: 600 17px/1.2 var(--font-body);
+}
+.feedback-toast.ok { background: var(--green-soft); color: var(--green); }

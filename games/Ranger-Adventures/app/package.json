@@ -6,10 +6,22 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "assets:gen": "node scripts/meshy-gen.mjs",
+    "assets:opt": "node scripts/gltf-optimize.mjs",
+    "assets:audio": "node scripts/audio-fetch.mjs",
+    "assets:all": "node scripts/meshy-gen.mjs && node scripts/gltf-optimize.mjs && node scripts/audio-fetch.mjs",
+    "finish": "node scripts/ranger-run.mjs",
+    "run:status": "node scripts/ranger-run.mjs status"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.4.0",
+    "@gltf-transform/extensions": "^4.4.0",
+    "@gltf-transform/functions": "^4.4.0",
     "@types/three": "^0.184.1",
+    "draco3dgltf": "^1.5.7",
+    "meshoptimizer": "^1.1.1",
+    "sharp": "^0.35.2",
     "typescript": "~6.0.2",
     "vite": "^8.0.12"
   },

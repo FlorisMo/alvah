@@ -44,6 +44,14 @@
   { "tier": 3, "id": "prop-wildlife-camera", "category": "prop", "art_style": "realistic", "prompt": "a small camouflaged wildlife trail camera strapped to a wooden post, stylized-realistic game asset, plain background" },
   { "tier": 3, "id": "prop-reeds", "category": "prop", "art_style": "realistic", "prompt": "a cluster of tall marsh reeds and cattails, stylized-realistic game asset, plain background" },
 
+  "_comment_immersion: props added for the 3D-immersion plan (case-board connective tissue, wisselen 'hol' destination, spoor/tracking clues for zoeken, nature variety)",
+  { "tier": 3, "id": "prop-case-board", "category": "prop", "art_style": "realistic", "prompt": "a wooden cork pin-board on a stand with blank paper notes and red string, a detective case board, stylized-realistic game asset, plain background" },
+  { "tier": 3, "id": "prop-badger-sett", "category": "prop", "art_style": "realistic", "prompt": "a badger sett den entrance, a dark round burrow hole in an earth mound under tree roots, stylized-realistic game asset, plain background" },
+  { "tier": 3, "id": "prop-feather", "category": "prop", "art_style": "realistic", "prompt": "a single bird feather lying on the ground, stylized-realistic game asset, plain background" },
+  { "tier": 3, "id": "prop-broken-twig", "category": "prop", "art_style": "realistic", "prompt": "a small freshly broken twig with bright pale wood at the break, stylized-realistic game asset, plain background" },
+  { "tier": 3, "id": "prop-dead-snag", "category": "prop", "art_style": "realistic", "prompt": "a weathered dead standing tree snag with bare broken branches, stylized-realistic game asset, plain background" },
+  { "tier": 3, "id": "prop-bramble", "category": "prop", "art_style": "realistic", "prompt": "a wild blackberry bramble shrub with thorny arching stems, stylized-realistic game asset, plain background" },
+
   { "tier": 4, "id": "bird-merel", "category": "bird", "art_style": "realistic", "prompt": "a Eurasian blackbird (merel), stylized-realistic game bird, glossy black male with orange beak, perched, single bird, plain background" },
   { "tier": 4, "id": "bird-koolmees", "category": "bird", "art_style": "realistic", "prompt": "a great tit (koolmees), stylized-realistic game bird, yellow breast with black stripe, black head, white cheeks, perched, single bird, plain background" },
   { "tier": 4, "id": "bird-pimpelmees", "category": "bird", "art_style": "realistic", "prompt": "a blue tit (pimpelmees), stylized-realistic game bird, blue cap and wings, yellow breast, perched, single bird, plain background" },
@@ -61,5 +69,39 @@
   { "tier": 4, "id": "bird-roodborsttapuit", "category": "bird", "art_style": "realistic", "prompt": "a European stonechat (roodborsttapuit), stylized-realistic game bird, black head, orange breast, perched on a heather sprig, single bird, plain background" },
   { "tier": 4, "id": "bird-goudhaantje", "category": "bird", "art_style": "realistic", "prompt": "a goldcrest (goudhaantje), stylized-realistic game bird, tiny olive bird with a yellow-orange crown stripe, perched, single bird, plain background" },
   { "tier": 4, "id": "bird-zanglijster", "category": "bird", "art_style": "realistic", "prompt": "a song thrush (zanglijster), stylized-realistic game bird, brown back, cream breast with dark spots, perched, single bird, plain background" },
-  { "tier": 4, "id": "bird-houtduif", "category": "bird", "art_style": "realistic", "prompt": "a common wood pigeon (houtduif), stylized-realistic game bird, grey with a white neck patch, perched, single bird, plain background" }
+  { "tier": 4, "id": "bird-houtduif", "category": "bird", "art_style": "realistic", "prompt": "a common wood pigeon (houtduif), stylized-realistic game bird, grey with a white neck patch, perched, single bird, plain background" },
+
+  "_comment_tier5: cast cohesion — generate our-own-style fox/ree/edelhert to MATCH the Meshy cast (instead of mixing free Quaternius art style) + the butterfly distractor used by zoeken",
+  { "tier": 5, "id": "animal-vos-fox", "category": "animal", "art_style": "realistic", "prompt": "a red fox, stylized-realistic game animal, standing alert on four legs, bushy tail, warm orange fur, calm friendly pose, mouth closed, single animal, plain background" },
+  { "tier": 5, "id": "animal-ree-roedeer", "category": "animal", "art_style": "realistic", "prompt": "a European roe deer, stylized-realistic game animal, standing on four legs, reddish-brown coat, gentle alert pose, single animal, plain background" },
+  { "tier": 5, "id": "animal-edelhert-reddeer", "category": "animal", "art_style": "realistic", "prompt": "a red deer stag with antlers, stylized-realistic game animal, standing proud and calm on four legs, not aggressive, single animal, plain background" },
+  { "tier": 5, "id": "animal-heideblauwtje-butterfly", "category": "animal", "art_style": "realistic", "prompt": "a small blue heath butterfly (silver-studded blue), stylized-realistic game insect, wings open, single butterfly, plain background" },
+
+  "_comment_tier6: story + diegetic props — mission centerpieces (ecoduct), the poacher arc (BOA post, empty snare evidence), the companion (raven nest), and immersion (bird hide, nest box)",
+  { "tier": 6, "id": "prop-ecoduct", "category": "prop", "art_style": "realistic", "prompt": "a wildlife ecoduct overpass, a green vegetated bridge crossing over a road for animals, stylized-realistic game asset, grass and shrubs on top, plain background" },
+  { "tier": 6, "id": "prop-boa-post", "category": "prop", "art_style": "realistic", "prompt": "a small forest ranger field post, a wooden hut with a green BOA enforcement sign and a barrier, stylized-realistic game asset, plain background" },
+  { "tier": 6, "id": "prop-bird-hide", "category": "prop", "art_style": "realistic", "prompt": "a wooden bird-watching hide (vogelkijkhut), a small camouflaged wooden screen hut with viewing slots, stylized-realistic game asset, plain background" },
+  { "tier": 6, "id": "prop-nest-box", "category": "prop", "art_style": "realistic", "prompt": "a wooden bird nest box mounted on a post, stylized-realistic game asset, plain background" },
+  { "tier": 6, "id": "prop-snare-empty", "category": "prop", "art_style": "realistic", "prompt": "an empty loop of thin wire snare lying harmlessly on the forest floor as evidence, no animal, stylized-realistic game asset, non-threatening, plain background" },
+  { "tier": 6, "id": "prop-raven-nest", "category": "prop", "art_style": "realistic", "prompt": "a large twig bird nest with soft lining, empty, stylized-realistic game asset, plain background" },
+
+  "_comment_tier7: vehicles — the travel/transport mini-game ground vehicle + the helicopter (also available pre-rigged in the Anything World library; generated here too for art-style cohesion)",
+  { "tier": 7, "id": "vehicle-ranger-jeep", "category": "prop", "art_style": "realistic", "prompt": "a green forest ranger 4x4 off-road jeep, stylized-realistic game vehicle, friendly rounded shapes, single vehicle, plain background" },
+  { "tier": 7, "id": "vehicle-helicopter", "category": "prop", "art_style": "realistic", "prompt": "a small friendly ranger survey helicopter, stylized-realistic game vehicle, rounded cockpit, single vehicle, plain background" },
+
+  "_comment_tier8: 4-SEASON variants of key plants (the locked seasons pillar) — same world, new feel each chapter; lente/zomer = base assets, herfst/winter added here",
+  { "tier": 8, "id": "prop-oak-autumn", "category": "prop", "art_style": "realistic", "prompt": "a single broad oak tree in autumn, stylized-realistic game asset, golden orange and brown leaves, sturdy trunk, plain background" },
+  { "tier": 8, "id": "prop-oak-winter", "category": "prop", "art_style": "realistic", "prompt": "a single bare broad oak tree in winter, stylized-realistic game asset, no leaves, bare branches, sturdy trunk, plain background" },
+  { "tier": 8, "id": "prop-birch-autumn", "category": "prop", "art_style": "realistic", "prompt": "a single silver birch tree in autumn, stylized-realistic game asset, yellow golden leaves, white bark, plain background" },
+  { "tier": 8, "id": "prop-birch-winter", "category": "prop", "art_style": "realistic", "prompt": "a single bare silver birch tree in winter, stylized-realistic game asset, no leaves, white bark, bare twigs, plain background" },
+  { "tier": 8, "id": "prop-heather-winter", "category": "prop", "art_style": "realistic", "prompt": "a clump of dormant winter heather shrub, stylized-realistic game asset, muted brown low ground cover, plain background" },
+  { "tier": 8, "id": "prop-snow-mound", "category": "prop", "art_style": "realistic", "prompt": "a low patch of snowy heath ground with a small snow mound and tufts of grass poking through, stylized-realistic game asset, plain background" },
+
+  "_comment_tier9: companion start + nature richness (Veluwe-iconic ant nest, heath flower, the acorn reward currency, two iconic extra birds)",
+  { "tier": 9, "id": "animal-raaf-fledgling", "category": "bird", "art_style": "realistic", "prompt": "a young raven fledgling, stylized-realistic game bird, fluffy black down, slightly oversized head, cute and small, single bird, plain background" },
+  { "tier": 9, "id": "prop-anthill", "category": "prop", "art_style": "realistic", "prompt": "a red wood ant nest mound made of pine needles in the forest, stylized-realistic game asset, plain background" },
+  { "tier": 9, "id": "prop-foxglove", "category": "prop", "art_style": "realistic", "prompt": "a tall purple foxglove wildflower stalk, stylized-realistic game asset, plain background" },
+  { "tier": 9, "id": "prop-acorn-cluster", "category": "prop", "art_style": "realistic", "prompt": "a small cluster of acorns with caps and a few oak leaves, stylized-realistic game asset, plain background" },
+  { "tier": 9, "id": "bird-buizerd", "category": "bird", "art_style": "realistic", "prompt": "a common buzzard (buizerd), stylized-realistic game bird, brown raptor with broad wings, perched calmly, mouth closed, single bird, plain background" },
+  { "tier": 9, "id": "bird-wilde-eend", "category": "bird", "art_style": "realistic", "prompt": "a mallard duck (wilde eend), stylized-realistic game bird, green-headed male, single bird, plain background" }
 ]

@@ -78,6 +78,30 @@ Bake these as **engine-level constants + data-driven JSON** (artists tune withou
   hover-only). A real **3D reduced-motion mode** (camera moves → cuts/fades, secondary motion off, keep
   expression/gaze/walk), in-game toggle mirroring OS, no restart. Ship the §C.5 QA checklist.
 
+### 1f. 3D immersion + construct fidelity — LOCKED (from `3D-IMMERSION-PLAN.md`)
+The five EF mini-games become **diegetic 3D activities played inside the living world** — no hard cut to a
+2D card screen — per [3D-IMMERSION-PLAN.md](3D-IMMERSION-PLAN.md). This is the Phase 4–5 core (§5, §8d). Two
+non-negotiables govern every 3D variant:
+- **Construct parity (frozen).** Making an exercise 3D may NOT change *what it measures*, or the DDA
+  (`core/skill.ts`) silently rescores a different task. The trial builders stay untouched
+  (`buildZoekenTrial`, the Corsi `PRINT_SPOTS` route, `buildSimonTrial`, the dagnacht encounter set + the
+  single rule-flip, `buildWisselTrial`); a 3D view may change **only** spatial layout of the *same* elements,
+  input modality (raycast/proximity), and sensory dressing — and must emit the **same `BeatSummary`**. No
+  cross-construct contamination (no navigation during a WM recall; wisselen destinations stay
+  visible+labelled = rule-application not spatial memory; zoeken's decoy set unchanged — the trail sets the
+  *region* only). **Every 3D view ships a seeded parity test** (same trial + same beat as its 2D twin) — the
+  run's self-audit gate for "same exercise."
+- **2D floor + motion-comfort.** The `render2d/*` views stay the always-available fallback
+  (reduced-motion / low-end / fast-iteration); 3D is **additive, never the only path** — a `ViewMode`
+  resolver picks. Camera obeys §1e; activities prefer **reframes over locomotion** and **cuts/fades** under
+  reduced-motion; ≥56px raycast hit-spheres, dual-channel cue (emissive colour glow + scale pulse),
+  text+read-aloud always present, never-scary calm-pose gate, never game-over.
+
+Architecture: add **`render3d/engines/`** as a sibling of `render2d/`, same `PlayFn` contract, consuming the
+same frozen trial builders; a shared interaction kit (`pick3d` / `highlight3d` / `anchoredPrompt` /
+`spoorTrail` / `reframe`) built once and reused by all five. Per-engine 3D designs + the I–V build
+sub-phases live in the immersion plan; the run executes them.
+
 ---
 
 ## 2. What the autonomous run can build — and the asset bottleneck, busted
@@ -232,14 +256,16 @@ Each phase is shippable and render-agnostic-first. Human/asset tracks (§2) run 
 | 1 | **Spine + 5 engines (2D)** | Content registry, 5 EF engines, `staircase/scoring/progressie`, difficulty/skill, persistence | 3 existing missions playable end-to-end; skill record persists; DDA verifiable |
 | 2 | **Content to launch set** | Author ~10 missions + facts + knap-woord as data from seeds/research | All 5 engines & 4 seasons covered; reskin-axis discipline holds; tone/safety gate passes |
 | 3 | **Meta systems** | Story/antagonist + case-board; companion + rehab; badges; avatar creator UI + state | Arc advances by data gates; companion arc completes; badges render from `skill.best`; name threads through |
-| 4 | **3D world (tier 1+2 assets)** | Procedural Veluwe terrain/vegetation + CC0 + procedural cast; Three.js world, camera rig (§1e), in-place mini-games, diegetic HUD, wayfinding | Free-roam + walk-up-to-play works; 3D matches 2D content; <150 draw calls on a mid device |
-| 5 | **Expression + eyes + reduced-motion** | Eye shader, ARKit-subset face system (data recipes), animal calm-pose set, full 3D reduced-motion mode | §C.5 QA checklist green; faces/animals read warm; reduced-motion swaps moves→cuts |
+| 4 | **3D world + in-world play** (tier 1+2 assets) | Procedural Veluwe terrain/vegetation + generated cast; camera rig (§1e); the **5 EF games as diegetic in-world activities** (`render3d/engines/`, the I–V sub-phases of `3D-IMMERSION-PLAN.md`) with the 2D floor retained; diegetic HUD, wayfinding | Free-roam + walk-up-to-play; **each 3D engine passes its construct-parity test** (§1f); 2D fallback intact; <150 draw calls on a mid device |
+| 5 | **Expression + eyes + reduced-motion** | Eye shader, ARKit-subset face system (data recipes), animal calm-pose set, full 3D reduced-motion mode (per-view cuts-not-moves) | §C.5 QA checklist green; faces/animals read warm; reduced-motion swaps moves→cuts; immersion comfort+a11y audit passes |
 | 6 | **Accessibility + audio hooks + Tweaks** | M3/E3 copy pass, read-aloud+karaoke, ≥56px/dual-channel audit, placeholder audio, Tweaks panel | Whole plot followable with text hidden; every Tweak wired; a11y audit passes |
 | 7 | **Asset swap-in** (human-gated) | Replace stand-ins with rigged models/likeness/audio as the art track delivers | Per-asset: drops into existing spec slot, no engine change, budgets hold |
 | 8 | **Astro integration** (later) | Re-wrap into the site; real `alvah-ef-v1` schema; `src/scripts/` reuse | Lives under the site shell; no trackers; robots Disallow; migration clean |
 
-Suggested autonomous target: **Phases 0–6 + the realism reach (§2a) + the Deep Demo below.** Phases 7–8
-are the human-polish (the 4 topology-morph creatures, the true Alvah-face likeness) + Astro-integration tail.
+Autonomous target (UPDATED, §9g done-definition): **Phases 0–6 + the realism reach (§2a) + Phase 8
+(Astro integration → live at `alvah.nl/ranger`) + the Deep Demo below, with demo-skip options.** Only
+**Phase 7 human-polish** stays human (the 4 topology-morph creatures, the true Alvah-face likeness) — it
+swaps into existing spec slots after the demo, no rebuild.
 
 **Deep Demo — the long-run capstone (Floris, 22 Jun 2026).** The unattended run ends by producing one
 explorable **deep demo**: boot → avatar → free-roam the 3D Veluwe → meet the realistic ranger + animals →
@@ -308,8 +334,10 @@ objective budgets (<150 draw calls, a11y, persistence, tone word-lint) before Fl
    Quaternius: wildzwijn, frisling, das, eekhoorn, raaf, nachtzwaluw, adder, heikikker) → **(2) the wolf** (via
    Meshy, per Floris) + story humans (warden, poacher) → **(3) crucial landscape props** → **(4) the birds** —
    Floris wants birds **~70% of the cast** (NL wildlife is bird-dominated); a curated batch of recognisable
-   Veluwe birds for ambient life + sound-echo variety. fox/ree/edelhert stay **free Quaternius** (skip Meshy
-   there). **Method:** preview→**refine** (colour/texture; raw preview is grey) + neutral A-pose for humans;
+   Veluwe birds for ambient life + sound-echo variety. ~~fox/ree/edelhert stay free Quaternius~~ **SUPERSEDED
+   (Ultra era, §8e): fox/ree/edelhert are now generated on Meshy too for art-style cohesion** (Quaternius
+   remains the free fallback only if credits run short). **Method:** preview→**refine** (colour/texture; raw
+   preview is grey) + neutral A-pose for humans;
    then a **gltf-transform optimize** pass (DRACO + KTX2 + poly target) — raw GLBs are far over budget (a pine
    came out 25 MB). **Audio:** clean-licensed calls per species — **xeno-canto** for birds (**exclude
    NoDerivatives/ND**; ShareAlike ok for a private game; log each) + **Freesound** for mammals. **Credit
@@ -323,15 +351,13 @@ expression/eyes/motion-comfort, and autonomous-sourcing/physics/world. No furthe
 start the build.
 
 ### 6a. Parallel human/asset checklist (start now; gates *realism*, not the build — all free)
-- [ ] **REALISM PREREQUISITES — the ambitious run (§6 item 9) needs these; an agent CANNOT create accounts:**
-  - [ ] **Meshy** free account + API key (output CC BY — credit Meshy) **or** a **GPU** for self-hosted MIT
-        mesh-gen (TRELLIS.2 / TripoSG) — the realistic ranger + scarce animals.
-  - [ ] **Anything World** free account + API key — auto-rig+animate generated quadrupeds/birds (**verify the
-        output licence in writing before shipping**).
-  - [ ] **Mixamo** (free Adobe account) — humanoid ranger rig + idle/walk/run clips.
-  - [ ] **xeno-canto v3 key + Freesound key** — real animal calls + ambience (else placeholder tones).
-  - [ ] **Piper** (no account) — agent downloads + pre-bakes static lines; **a human listens** to pick the
-        Dutch voice (avoid `nl_NL-mls`; audition `nl_NL-pim` / `ronnie` / `nl_BE-nathalie`).
+- [x] **REALISM PREREQUISITES — status (Jun 2026):**
+  - [x] **Meshy** — **Pro key active** in `app/.env.local` (`MESHY_API_KEY`). Pipeline built + generating.
+  - [x] **Anything World** — key in `.env.local` (`ANYTHING_WORLD_API`), **authenticates ✓** (Jun 2026).
+        $50 Micro = 300 cr/mo animates the ~9 animals + ~23 birds (~2 runs each); procedural stays the floor.
+  - [ ] **Mixamo** — humanoid rig is manual-in-browser; Meshy auto-rig covers humanoids for the autonomous run.
+  - [x] **xeno-canto v3 key + Freesound key** — **both in `.env.local`**; `assets:audio` fetching real calls.
+  - [ ] **Piper** — not yet; ship iPad "Xander" now (a human picks the Piper voice later, non-blocking).
 - [ ] **Four free-Blender jobs** (§2c): adder slither, moor-frog hop, frog metamorphosis morph, antler
       morph — **Blender + Rigify** (free). Or stylize them away to skip even this.
 - [ ] **Alvah likeness**: optional human polish for a true Alvah face (the AI-gen ranger covers *realism*;
@@ -353,8 +379,214 @@ not unknowns.
 
 ---
 
-## 7. References
+## 7. Build status — what's already built (Jun 2026 pass; DON'T rebuild)
+
+A real autonomous pass implemented much of Phases 0–4. The finish run (§8) **continues from here** — it
+must read this section first so it extends, not duplicates. Everything below is build-green
+(`npm --prefix app run build`) and lives in `app/`.
+
+- **Phase 0 scaffold — ✓** boot, golden-hour `render3d/Stage.ts`, live draw-call budget overlay.
+- **Phase 1 spine + all 5 EF engines — ✓** render-agnostic logic (`core/skill.ts` DDA staircase,
+  `core/state.ts` observable store + localStorage `ranger-mvp-state`) + 2D views for
+  zoeken/corsi/simon/dagnacht/wisselen (`render2d/*`, `engines/*`), dispatched via `ENGINE_VIEWS`.
+  Per-animal call audio (`core/calls.ts` loads real recordings, `core/sound.ts` synth fallback).
+  A11y baked: ≥56px, dual-channel, reduced-motion.
+- **Phase 2 content — ✓** `content/veluwe.ts` now has **10 missions** (added ven/stuifzand/winter-herstel)
+  covering all 5 engines + all 4 landschappen + the season/poacher arc + clues, as data.
+- **Phase 3 meta — ✓ core only** mission wrapper `ui/Missions.ts`: lodge → briefing → play → wist-je-dat
+  → reward (breinkracht badges by tier from `skill.best` + knap-woord). **STILL TODO:** companion/rehab
+  loop, avatar creator UI + avatar state, the case-board screen.
+- **Phase 4 3D world — ✓ first pass** `render3d/World.ts`: procedural Veluwe (instanced pines/heather),
+  the **real generated ranger + animals** from `/models/` (`render3d/Models.ts` = GLTFLoader+DRACOLoader +
+  scale-normalize), **§1e camera** (fixed FOV, exp-damped follow, roll=0, no shake; cuts under
+  reduced-motion), tap-to-walk + walk-up-to-play, one renderer via `Stage.enterWorld()`. **STILL TODO:**
+  THREE.Terrain biomes, character controller (three-mesh-bvh), more props, helicopter/vehicle frames.
+- **Asset pipeline — ✓** `app/scripts/` + npm `assets:gen|opt|audio|all`: Meshy **preview→refine** + poly
+  target → `gltf-transform` meshopt-simplify + WebP + DRACO (8–25 MB → 150–500 kB) → xeno-canto + Freesound
+  audio (ND excluded, per-clip licence log). `finalize-assets.sh` auto-runs opt+audio after a long gen.
+  Staged into git-ignored `public/{models,audio,draco}/`. **GOTCHA:** gltf-transform `io.read/write` needs
+  string fs paths, not `file://` URL objects.
+
+**Not yet built — the finish run's job:** Phase 5 (expression/eye shader, ARKit-subset faces, animal
+calm-poses, full 3D reduced-motion), Phase 6 (M3/E3 copy pass, karaoke read-aloud, Tweaks panel, a11y
+audit), **animation of the generated animals**, the character controller, companion + avatar creator,
+the 4 morph-creatures, the Alvah likeness, Astro integration (Phase 8), and the **Deep Demo capstone**.
+
+---
+
+## 8. The multi-day autonomous "finish the game" run (Floris, Jun 2026)
+
+**Goal (Floris):** one long unattended terminal run (days OK) that takes the game from "playable spine +
+first 3D pass" to **the whole game, finished in 3D** — world, controls, gameplay feel, story/progress,
+difficulty — with EF training **deeply but tastefully** woven in. The agent makes technical judgment calls
+itself, upholds the research, and **audits its own work**.
+
+### 8a. Does this plan actually get there? (honest audit)
+**Yes for the software, with three real ceilings to accept up front:**
+- **Reachable autonomously (the bulk):** Phases 3–6 + world build-out + difficulty/skill (already a working
+  DDA) + story gates + the Deep Demo. All code/data/asset-wiring the agent can build and self-verify
+  (build-green, budget overlay, tone lint, screenshots).
+- **Ceiling 1 — animation realism.** Meshy auto-rigs *humanoids*; the generated **animals arrive static**.
+  No free, scriptable tool does license-clean realistic animal locomotion (§2/§2c). The agent CAN deliver
+  *charming procedural motion* (idle breathing, simple bob/hop/walk via lightweight transform/skeletal
+  animation) — **photoreal animal movement stays a manual Blender / paid-tool job.** Baked decision: ship
+  procedural/stylized motion, flag the few creatures worth hand-animation.
+- **Ceiling 2 — the 4 morph-creatures + Alvah's exact face** (§2c) stay human-Blender jobs (or stylized
+  away). Not blockers; they swap into existing spec slots later.
+- **Ceiling 3 — on-device + child tuning.** Motion-comfort thresholds, real-word feel, difficulty
+  calibration, final iPad profiling **need a human with the iPad and ~10 min with Alvah** (§6a). The run
+  tunes to *spec defaults* and produces the Deep Demo as the review gate; the last 10% is Floris + Alvah.
+
+→ The plan reaches a **complete, explorable, research-true game at charming-not-photoreal realism**, with a
+short, well-defined human tail. That IS "finish the whole game" for an autonomous run — *if* we accept the
+animal-motion ceiling (8c #2).
+
+### 8b. Operating contract for the autonomous agent
+- **Make technical judgment calls** without asking; record non-obvious ones in this plan + the memory note.
+- **Uphold the research** (`research/` + `design/` frozen decisions) on every asset/pose/copy choice:
+  never-scary (the §1e AVOID lists + a calm-pose gate on every animal), never-game-over, mild consequences,
+  M3/E3 reading, ≥56px, dual-channel feedback, the motion-comfort camera spec.
+- **EF-integration principle (Floris):** weave executive-function demand into world activities **where it
+  fits, without overdoing it** — daily companion-care (planning/working memory), wayfinding (spatial WM),
+  resisting impulses in the open world (inhibition), rule-flip beats (flexibility). But it's a **game
+  first**; EF is the hidden skeleton, never framed as "brain-training," kept joyful (far-transfer is
+  unproven, §6a). The 5 named mini-games stay the explicit core; world-EF is light seasoning.
+- **Audit discipline (Floris):** after each phase, self-audit — `npm run build` green, draw-calls < 150
+  (overlay), a11y checks, tone/word lint, a captured screenshot + QA note per screen, and an adversarial
+  "what's wrong / what's missing / what breaks never-scary or motion-comfort" review before moving on. The
+  Deep Demo (§5) + auto-QA is the final gate.
+- **Free/clean only** (+ the approved Meshy). Never commit `.env.local` or git-ignored binaries. Keep the
+  build green at every checkpoint.
+
+### 8c. What the run needs from Floris — RESOLVED (Floris, Jun 2026)
+1. **Meshy credits — stay within the monthly grant.** The run prioritizes carefully and stops cleanly at the
+   limit. It **maintains a wishlist of cut/extra assets + credit estimates** (§8e) so Floris can top up and
+   re-run later. No blocking spend.
+2. **Animal motion — TESTED (Jun 2026).** Live API tests settled it:
+   - **Humanoids via Meshy API: ✅ 5 credits each, animations INCLUDED.** Rigged our ranger
+     (`POST /openapi/v1/rigging` + `input_task_id`) → SUCCEEDED, outputs `rigged_character_glb_url` +
+     `basic_animations`, exactly 5 cr. ranger/warden/poacher = **~15 Meshy cr, fully autonomous, idle/walk
+     included** (extra clips 3 cr each from a 500+ library).
+   - **Animals via Meshy API: ❌ impossible at any price.** Rigging the wild boar → **HTTP 422 "Pose
+     estimation failed", 0 credits charged.** Meshy's rig API runs *human* pose-estimation and hard-rejects
+     quadrupeds/birds. Two rounds can't fix a capability gap. (Meshy's *web app* rigs quadrupeds, but manual.)
+   - **Only API auto-rigger for ANIMALS = Anything World:** 5 AW-cr/model ≈ **$1.25** ($25/100, $50/250,
+     $125/750; free 20/mo). Quadrupeds + birds yes; **snakes + amphibians NO** (adder + heikikker excluded).
+     Friction (Jun 2026 re-check): the key works **immediately** — no mandatory auth email (that's only a soft
+     "critical production" suggestion); API is **experimental** (may change); a **visible credit line** is
+     required (fine here). Endpoints: `POST /rig`, `POST /animate`, `POST /animate-processed`.
+   - **Decision (UPDATED — Anything World now provisioned):** `ANYTHING_WORLD_API` is set + **authenticates ✓**
+     ($50 Micro, 300 cr/mo). So the run **rigs+animates the ~9 animals + ~23 birds through Anything World**
+     (~2 runs each), with **procedural whole-body motion** (bob/hop/sway/glide-walk) as the always-on fallback
+     and `core/sound.ts`-style graceful degradation; the loader **prefers a real animated GLB at
+     `assets-gen/animated/<id>.glb`**. Humanoids rig via the **Meshy API** (5 cr, anims included). snake +
+     frog stay procedural/Blender (AW can't rig them; 2 of the 4 morph-creatures, §2c).
+3. **Voice — default "Xander"** (iPad Enhanced Dutch, zero setup). Piper pre-bake = optional human step later.
+4. **(Optional, deferrable) human tail:** the 4 morph-creatures, Alvah's exact face, the 10-min iPad/Alvah
+   playtest, and any extra hand-animation polish. None block the run.
+
+Everything else (keys, pipeline, engines, content, first 3D world) is already in place. **The run can start.**
+
+### 8d. Suggested run shape (each phase self-audited, build-green)
+1. Finish the generated cast (the 76-item `app/scripts/asset-shotlist.json`) + **Meshy-API humanoid rigs** +
+   **Anything World animal/bird rigs** (~2 runs) with the **procedural fallback** + the optimize/stage
+   pipeline at scale.
+2. World build-out: THREE.Terrain biomes (heide/bos/stuifzand/ven), instanced vegetation, props, character
+   controller (three-mesh-bvh), wayfinding + diegetic HUD, all 10 missions reachable in-world.
+2b. **3D immersion (follows `3D-IMMERSION-PLAN.md`, §1f construct parity):** the 3D play harness
+   (`render3d/engines/`, `WorldCtx`, `ViewMode` resolver, shared kit) → the **five diegetic engine variants**
+   (dagnacht → corsi → simon → zoeken → wisselen), each shipping its **seeded parity test** + reduced-motion
+   path → the **zoeken tracking enrichment** (spoor trail → kijker → wildcamera → case-board) → the
+   **immersion layer** (veldnotitie entry not a briefing screen, continuous in-world patrol, case-board
+   wiring, light world-EF seasoning). The 2D `render2d/*` views stay the floor; a variant ships only when its
+   parity test is green, else the resolver keeps serving 2D.
+3. Phase 5: expression/eye shader + ARKit-subset faces (data recipes) + animal calm-pose set + full 3D
+   reduced-motion (per-view cuts-not-moves) + the immersion comfort/a11y audit.
+4. Meta: companion + rehab loop, avatar creator + avatar state threaded through copy/voice, case-board +
+   season-arc gates, badges.
+5. Phase 6: M3/E3 copy pass, karaoke read-aloud word-clock, Tweaks panel, a11y + tone audit.
+6. World-EF seasoning (8b) + difficulty calibration to spec defaults.
+7. The **Deep Demo** capstone + an auto-QA report → Floris review → the human tail (8c #4).
+
+### 8e. Asset budget — CONFIRMED (Jun 2026, Meshy Ultra + Anything World)
+Render ≈ **~30 cr** each; **retries are FREE on Ultra** (40/task), so the budget goes to *unique* assets.
+- **Meshy Ultra (~9,000 cr available):** the full **76-item shotlist** has **~43 renders left ≈ 1,300 cr** +
+  2 humanoid rigs (~20 cr) → **~7,500 cr spare.** fox/ree/edelhert are now generated **on Meshy for art-style
+  cohesion** (not Quaternius); seasonal variants, the birds-heavy cast, and the story/vehicle props are all
+  in-budget. The surplus de-risks re-rolls + a future second area.
+- **Anything World ($50 Micro = 300 cr/mo):** animates the ~9 animals + ~23 birds (~2 runs each). snake +
+  frog stay procedural.
+- **No further purchase needed for the run.** The Ultra surplus + free retries cover ambition and mistakes.
+
+---
+
+## 9. Running the autonomous run — operations contract (Floris, Jun 2026)
+
+How the multi-day run behaves so it's resumable, observable, resilient, and self-tested.
+
+### 9a. One command + two living files (resumability — req: tick-off for a fresh thread)
+The run is **one terminal command** (`npm --prefix app run finish` → `scripts/ranger-run.mjs` orchestrator).
+It maintains, at `games/Ranger-Adventures/`:
+- **`RUN-LEDGER.md`** — the master checklist: every phase → sub-steps as `[ ]`/`[x]`, ticked the moment a
+  step is done + targeted-tested. **A new thread resumes by reading this and doing the first unchecked box.**
+- **`RUN-STATUS.md`** — the live snapshot, rewritten each step: current phase, **~% of the whole plan**
+  (weighted by ledger items), what just landed, what's next, last heartbeat time, any blocker.
+- **Git cadence (Floris-approved):** **commit + push after every completed phase** (nothing else depends on
+  the live site as-is; it auto-deploys via the Astro GitHub Action once Phase 8 lands). Progress is durable
+  and a fresh thread `git pull`s the latest ledger + code. **Never** commit `.env.local` or git-ignored
+  binaries (`assets-gen/`, `public/{models,audio,draco}/`, `node_modules`).
+
+### 9b. Observability — a status block per run, capped (req: a new terminal line per run)
+Each discrete run (a phase, or a background job like asset-gen) **prints a summary block** at start + finish:
+`✔ landed: … | ▶ phase: … | next: … | progress: ~NN%`. Parallel/long jobs run as background processes,
+each with its own `logs/<phase>.log`; **concurrency capped at 3** — the wise cap: real parallelism (gen +
+optimize + a build phase) without a terminal swarm. The orchestrator stdout is the always-on dashboard; every
+run also appends its block to `RUN-LOG.md`.
+
+### 9c. Resilience — never silently die (req: ping every ~10 min on token-out)
+On credit exhaustion (Meshy 402 / Anything World out-of-credits) or a transient API/network error, the run
+**does not abort**: it records the blocker in `RUN-STATUS.md`, **retries every ~10 min** (gentle backoff),
+and **auto-continues** the moment the service responds (credits topped up, rate-limit cleared). After a hard
+ceiling (~24 h of retries) it pauses with a clear `NEEDS-FLORIS` flag. Everything is idempotent — re-running
+resumes from the ledger, never regenerates a finished asset.
+
+### 9d. Right-sized steps (req: split when larger than expected)
+If a step proves bigger than its ledger estimate (touches many files / can't be targeted-tested in one go),
+the run **splits it into sub-steps in the ledger first** — each independently buildable, testable, and
+tickable — then proceeds. No mega-steps that a fresh thread can't pick up mid-way.
+
+### 9e. Testing — targeted + continuous; full E2E only at the very end (req)
+Every step ships its **targeted test**: the relevant unit/parity test + `npm run build` green + the specific
+screen/feature exercised. **Not** a full unit-sweep or end-to-end on every step. The **complete unit run +
+full end-to-end pass happens once, at the very end** (the Deep Demo + auto-QA). Each 3D engine variant's
+**construct-parity test** (§1f) is its targeted gate.
+
+### 9f. Audit after every larger stage (req)
+After each major stage (asset cast · world · each immersion-variant batch · meta · a11y), run the adversarial
+self-audit (§8b): correctness, what's-missing, and the never-scary / motion-comfort / tone / <150-draw-call
+gates + a captured screenshot. Pass/fail is logged in the ledger; **the run does not advance on a fail.**
+
+### 9g. Definition of done (req: the end state)
+Done = the game is **playable end-to-end at `alvah.nl/ranger`** — Astro-integrated (this pulls **Phase 8 into
+the run**), behind the **existing client-side access gate** (`alvah-gate-v1`), robots **Disallow**, no
+trackers, localStorage migrated `ranger-mvp-state` → `alvah-ef-v1` — delivering:
+- a **full 3D experience** with **biologically-accurate, research-true animals** (veluwe-research terminology
+  + the §1e calm-pose/never-scary gate),
+- **real recorded sounds** (xeno-canto + Freesound, per-clip licence-logged),
+- **save + progress** (skill/DDA, badges, season/poacher arc, companion),
+- **full controls** (move, look, the §1e camera, the 5 in-world activities), and
+- **demo-skip options** — jump to any area/mission/engine, skip briefings, fast-forward the arc — so Floris +
+  Alvah can test any part without grinding.
+The **Deep Demo (§5) IS this build**; the auto-QA report fronts it for review.
+
+---
+
+## 10. References
 - Orientation: [GAMEPLAN.md](GAMEPLAN.md) · build narrative + v2 spine: [design/HANDOFF.md](design/HANDOFF.md)
+- **3D immersion (mini-games → in-world activities):** [3D-IMMERSION-PLAN.md](3D-IMMERSION-PLAN.md) — expands
+  Phase 4–5; the run follows it for the diegetic 3D engine variants + the construct-parity self-audit gate.
+- **Asset cast + credit spend:** the full render list is `app/scripts/asset-shotlist.json` (76 items, tiered);
+  animation via Meshy API (humanoids) + Anything World (animals/birds, key `ANYTHING_WORLD_API`).
 - Design rationale: [design/plan.md](design/plan.md) · craft: [design/design-spec.md](design/design-spec.md)
   · 3D Design↔Code bridge + frozen decisions: [design/3d-animals-build-plan.md](design/3d-animals-build-plan.md)
 - Knowledge base: [research/](research/) — biology, EF/accessibility, and the two 3D build references

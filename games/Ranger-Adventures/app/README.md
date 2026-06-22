@@ -58,9 +58,43 @@ src/
 All data stays client-side (localStorage, key `ranger-mvp-state` → later
 `alvah-ef-v1`). No trackers, no third-party scripts, no external requests.
 
+## Asset pipeline (BUILD-PLAN §6 item 11)
+Three scripts under `scripts/`, run via npm. Keys live in `.env.local` (git-ignored,
+NEVER commit). Outputs land in `assets-gen/` (git-ignored) and are staged into
+`public/` (also git-ignored) for the running game.
+- `npm run assets:gen` — Meshy **preview→refine** text-to-3D from
+  `scripts/asset-shotlist.json` (priority order; per-category poly target;
+  stops cleanly at the credit limit). → `assets-gen/*.glb` + `manifest.json`.
+- `npm run assets:opt` — `gltf-transform` optimize: dedup/weld/**meshopt simplify**
+  to a per-category poly target + **WebP** textures + **DRACO** geometry. Cuts the
+  raw 8–25 MB GLBs to ~150–500 kB. Stages → `public/models/` + manifest.
+  (KTX2 auto-enables if a `toktx` encoder is on PATH; `brew install ktx` for the
+  iPad pass — otherwise WebP, which iPad Safari + three.js handle natively.)
+- `npm run assets:audio` — clean-licensed calls + ambience: **xeno-canto** (birds,
+  ND excluded) + **Freesound** (mammals + ambience, CC-filtered). Per-clip licence
+  log in `assets-gen/audio/manifest.json`; stages → `public/audio/`.
+- `npm run assets:all` — gen → opt → audio in sequence.
+- `scripts/finalize-assets.sh` — waits for a background `assets:gen` to finish,
+  then runs opt + audio (for long unattended generation runs).
+The DRACO decoder is staged into `public/draco/` by `assets:opt` so the browser
+can decode the compressed GLBs offline (no CDN).
+
 ## Status
-- **Phase 0 (scaffold) — done:** app boots; the golden-hour 3D stage renders;
-  the draw-call/FPS budget overlay is live.
-- **Phase 1 (next):** port the 5 EF engines + content registry + state/skill
-  from `../prototype/` into clean TS modules; one engine playable end-to-end
-  with localStorage persistence. See BUILD-PLAN §5.
+- **Phase 0 (scaffold) — done:** boots; golden-hour stage; live budget overlay.
+- **Phase 1 (spine + engines) — done:** all 5 EF engines ported as render-agnostic
+  logic + 2D views (zoeken/corsi/simon/dagnacht/wisselen), wired through
+  `ENGINE_VIEWS`; skill/DDA + localStorage persistence; per-animal call audio
+  (real recordings via `core/calls.ts`, synth fallback in `core/sound.ts`).
+- **Phase 2 (content) — done:** 10 missions in `content/veluwe.ts` covering all 5
+  engines + all 4 landscapes (heide/bos/ven/stuifzand) + the winter finale; the
+  season/poacher arc + clues as data.
+- **Phase 3 (meta) — done (core):** mission wrapper (`ui/Missions.ts`): lodge →
+  briefing → play → "wist-je-dat" → reward with breinkracht badges (tier from
+  `skill.best`) + knap-woord. (Companion/rehab + avatar creator: still to build.)
+- **Phase 4 (3D world) — first pass done:** `render3d/World.ts` — procedural
+  Veluwe (instanced pines/heather), the **real generated ranger + animals**
+  loaded from `/models/`, §1e damped-follow camera (roll=0, no shake), tap-to-walk
+  + walk-up-to-play. Reuses the one renderer via `Stage.enterWorld()`.
+- **Next:** expand the world (more props/biomes, the §1e helicopter/vehicle
+  frames, reduced-motion cuts polish), companion + avatar creator, then the Deep
+  Demo capstone. See BUILD-PLAN §5.

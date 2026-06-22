@@ -25,3 +25,8 @@ assets-gen/
 *.njsproj
 *.sln
 *.sw?
+
+# staged runtime audio (regenerable; out of git)
+public/audio/
+public/models/
+public/draco/

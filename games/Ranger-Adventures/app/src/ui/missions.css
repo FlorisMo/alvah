@@ -1,0 +1,194 @@
+/* ============================================================
+   missions.css — lodge picker, briefing/fact/reward cards, badges.
+   Sits over the 3D stage; reuses boot-card tokens.
+   ============================================================ */
+
+.ra-overlay { position: absolute; inset: 0; pointer-events: none; }
+.ra-overlay > * { pointer-events: auto; }
+
+/* shared card look (briefing / fact / reward), centered */
+.boot-card-ish {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(92vw, 560px);
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 28px 30px;
+  text-align: center;
+  background: rgba(253, 252, 248, 0.92);
+  backdrop-filter: blur(10px);
+  border-radius: var(--spel-radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.ra-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.ra-speak {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 24px;
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-standard), background var(--dur-quick);
+}
+.ra-speak:hover { transform: translateY(-2px); background: var(--green-line); }
+.ra-text-btn {
+  border: none;
+  background: none;
+  color: var(--green-mid);
+  font: 600 16px/1.2 var(--font-body);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 8px;
+  min-height: 44px;
+}
+
+/* ---- lodge ---- */
+.lodge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: max(24px, env(safe-area-inset-top)) 18px 24px;
+  overflow-y: auto;
+  background: rgba(28, 36, 24, 0.32);
+  backdrop-filter: blur(3px);
+}
+.lodge .boot-title { color: var(--paper); }
+.lodge .boot-kicker { color: var(--spel-sun); }
+
+.mission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  width: min(94vw, 880px);
+}
+.mission-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+  padding: 16px 18px;
+  text-align: left;
+  border: none;
+  border-radius: var(--spel-radius);
+  background: rgba(253, 252, 248, 0.94);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-overshoot), box-shadow var(--dur-quick);
+}
+.mission-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.mission-card:active { transform: scale(0.98); }
+.mc-land {
+  font: 600 12px/1 var(--font-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--green-mid);
+}
+.mc-title { font: 600 22px/1.1 var(--font-head); color: var(--green-deep); }
+.mc-eng { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.mc-chip {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font: 600 12px/1.3 var(--font-body);
+}
+.mc-done {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green-bright);
+  color: #fff;
+  font: 700 15px/1 var(--font-body);
+}
+
+/* ---- briefing / fact ---- */
+.briefing-lines { display: grid; gap: 6px; }
+.briefing-line { margin: 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
+.fact-text { margin: 4px 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
+
+/* ---- badges (reward + wall) ---- */
+.badge-row { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin: 6px 0; }
+.badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 96px;
+}
+.badge-disc {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 3px solid var(--ring);
+  box-shadow: 0 0 14px var(--glow);
+  color: #fff;
+  font: 700 26px/1 var(--font-head);
+}
+.badge-name { font: 600 14px/1.1 var(--font-body); color: var(--ink); text-align: center; }
+.badge-tier { font: 600 12px/1 var(--font-body); color: var(--ink-soft); }
+.badge-bar { width: 72px; height: 6px; border-radius: var(--radius-pill); background: rgba(0, 0, 0, 0.12); overflow: hidden; }
+.badge-bar > span { display: block; height: 100%; background: var(--bk); border-radius: var(--radius-pill); }
+
+.reward-knap { margin: 2px 0; font: 400 18px/1.3 var(--font-read); color: var(--ink); }
+.reward-knap b { color: var(--green-deep); }
+.reward-note { font-size: 16px; }
+
+/* ---- 3D explore HUD (overlays the world; pointer-events only on controls) ---- */
+.explore-hud { position: absolute; inset: 0; pointer-events: none; }
+.explore-hud > * { pointer-events: auto; }
+.ra-pill {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 16px;
+  min-height: 48px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: rgba(253, 252, 248, 0.92);
+  color: var(--green-deep);
+  font: 600 16px/1 var(--font-body);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+.explore-hint {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: 70vw;
+  padding: 10px 16px;
+  text-align: center;
+  border-radius: var(--radius-pill);
+  background: rgba(20, 16, 12, 0.5);
+  color: var(--paper);
+  font: 500 15px/1.3 var(--font-body);
+}
+.explore-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+}
+.explore-prompt[hidden] { display: none; }

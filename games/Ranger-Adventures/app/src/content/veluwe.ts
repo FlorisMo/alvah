@@ -85,6 +85,9 @@ const ANIMALS = {
   adder: { id: 'adder', naam: 'adder', simpelWoord: 'slang', toonVeilig: true,
     feiten: ['De adder is heel schuw. Hij glijdt vanzelf weg.'],
     veiligheid: ['Een slang? Niet aanraken. Hou rustig afstand.'] },
+  heikikker: { id: 'heikikker', naam: 'heikikker', simpelWoord: 'kikker', geluid: 'blubbert zacht', toonVeilig: true,
+    feiten: ['In het voorjaar wordt het mannetje even helemaal blauw.',
+      'De heikikker houdt van natte heide bij het ven.'] },
 };
 
 /* ============================================================
@@ -653,9 +656,9 @@ const VERHAALBOOG_VELUWE = {
   // hoofdstukken (content gate; season tint per chapter)
   hoofdstukken: [
     { n: 1, seizoen: 'lente',  naam: 'Kraamtijd', clue: 'spoor',  missies: ['frisling', 'ree-niet-aanraken'] },
-    { n: 2, seizoen: 'zomer',  naam: 'Zomer',     clue: 'camera', missies: ['wildcamera', 'eekhoorn'] },
-    { n: 3, seizoen: 'herfst', naam: 'Bronst',    clue: 'band',   missies: ['ecoduct', 'nachtronde'] },
-    { n: 4, seizoen: 'winter', naam: 'Herstel',   clue: null,     missies: [] },
+    { n: 2, seizoen: 'zomer',  naam: 'Zomer',     clue: 'camera', missies: ['wildcamera', 'ven', 'eekhoorn'] },
+    { n: 3, seizoen: 'herfst', naam: 'Bronst',    clue: 'band',   missies: ['ecoduct', 'stuifzand', 'nachtronde'] },
+    { n: 4, seizoen: 'winter', naam: 'Herstel',   clue: null,     missies: ['herstel'] },
   ],
   // hopeful resolution once all three clues are found (diegetic, on the case-board)
   ontknoping: [
@@ -721,6 +724,242 @@ const MISSIE_VOS = {
   ],
 };
 
+/* ============================================================
+   MISSIE VEN — De kikker in het ven  (ven · heikikker)
+   Engines: zoeken (vind de kikker tussen het riet) → dagnacht (blijf
+   rustig bij de adder aan de waterkant). Vult het VEN-landschap.
+   ============================================================ */
+const MISSIE_VEN = {
+  id: 'ven',
+  titel: 'De kikker in het ven',
+  landschap: 'ven',
+  dier: 'heikikker',
+  status: 'actief',
+  kort: 'Een heikikker zit verstopt bij het ven. Vind hem en blijf rustig.',
+  briefing: {
+    simpel: [
+      'Hoi ranger!',
+      'Bij het ven zit een kleine kikker.',
+      'Hij is goed verstopt in het riet.',
+      'Zoek hem eerst.',
+      'En blijf rustig bij het water.',
+    ],
+    knap: [
+      'Hoi ranger!',
+      'In het ven zit een heikikker.',
+      'Hij verstopt zich tussen het riet.',
+      'Zoek hem en blijf rustig.',
+      'Soms ligt er een adder in de zon.',
+    ],
+  },
+  beloning: {
+    badgeId: 'ven-wachter', badgeNaam: 'Ven-wachter',
+    vaktermBadge: { id: 'knap-ven', naam: 'Knap woord: ven' },
+  },
+  reunion: { sprite: 'heikikker', tekst: 'De kikker plonst veilig terug het ven in.' },
+  stappen: [
+    {
+      ef: 'zoeken',
+      skin: {
+        dier: 'heikikker',
+        copy: {
+          instructie: 'Zoek de kikker bij het water.',
+          goed: 'Daar is hij! Hij zit doodstil.',
+        },
+        doel: { x: 48, y: 60 },
+        distractors: [
+          { id: 'r1', x: 22, y: 46, k: 'bush', animal: 'riet' },
+          { id: 'r2', x: 74, y: 42, k: 'bush', animal: 'riet' },
+          { id: 'r3', x: 38, y: 72, k: 'bush', animal: 'riet' },
+          { id: 'v1', x: 30, y: 32, k: 'butterfly', animal: 'heideblauwtje' },
+          { id: 'b1', x: 70, y: 64, k: 'bird', animal: 'roodborsttapuit' },
+          { id: 'r4', x: 84, y: 60, k: 'bush', animal: 'riet' },
+          { id: 'r5', x: 60, y: 34, k: 'bush', animal: 'riet' },
+        ],
+        feit: 'De heikikker zit graag stil bij het water. Zo zien roofvogels hem niet.',
+        feitDier: 'heikikker',
+      },
+      moeilijkheid: { afleiders: 'settings', lens: 'settings' },
+    },
+    {
+      ef: 'dagnacht',
+      skin: {
+        copy: { instructie: 'Blijf rustig bij het ven.' },
+        regels: ['Slang? Hou afstand.', 'Water? Loop er omheen.'],
+        metgezel: 'geen',
+        encounters: [
+          { id: 'adder-ven', subject: 'adder', dier: 'adder', vraag: 'Een adder ligt in de zon.',
+            opties: [{ label: 'Aaien', goed: false }, { label: 'Hou afstand', goed: true }],
+            uitleg: 'Rustig zo. Je laat hem met rust.', gevolg: 'De adder schrikt en glijdt weg. Hou afstand.', reactie: 'rear' },
+          { id: 'modder-ven', subject: 'modderpoel', vraag: 'De rand van het ven is heel zacht.',
+            opties: [{ label: 'Erdoor', goed: false }, { label: 'Eromheen', goed: true }],
+            uitleg: 'Goed. Je loopt om het natte stuk heen.', gevolg: 'Je zakt weg in de modder. Loop eromheen.', reactie: 'mud' },
+          { id: 'pad-ven', subject: 'pad-veilig', flip: true, vraag: 'Het droge pad is vrij.',
+            opties: [{ label: 'Wachten', goed: false }, { label: 'Loop door', goed: true }],
+            uitleg: 'Precies. Hier mag je gewoon doorlopen.', gevolg: 'Dit pad is veilig. Loop maar door.', reactie: 'recede' },
+        ],
+        feit: 'Een ven is een plas op de heide. Heel veel kleine dieren wonen erbij.',
+        feitDier: 'heikikker',
+      },
+      moeilijkheid: { slowmo: 'settings' },
+    },
+  ],
+};
+
+/* ============================================================
+   MISSIE STUIFZAND — Het zandhol  (stuifzand · nachtzwaluw)
+   Engines: zoeken (spot de gecamoufleerde nachtzwaluw op het zand)
+   → wisselen (sorteer dag- en nachtdieren). Vult het STUIFZAND-landschap.
+   ============================================================ */
+const MISSIE_STUIFZAND = {
+  id: 'stuifzand',
+  titel: 'Het stille zand',
+  landschap: 'stuifzand',
+  dier: 'nachtzwaluw',
+  status: 'actief',
+  verhaalHaak: 'band',     // tyre tracks lead out of the drifting sand
+  kort: 'Een nachtzwaluw broedt op het kale zand. Vind hem en sorteer de dieren.',
+  briefing: {
+    simpel: [
+      'Hoi ranger!',
+      'Op het kale zand zit een vogel.',
+      'Hij lijkt precies op het zand.',
+      'Zoek hem heel goed.',
+      'Daarna sorteer je de dieren.',
+    ],
+    knap: [
+      'Hoi ranger!',
+      'Op het stuifzand broedt een nachtzwaluw.',
+      'Hij is bijna niet te zien.',
+      'Zoek hem en sorteer dan de dieren.',
+      'Welk dier hoort bij de dag of de nacht?',
+    ],
+  },
+  beloning: {
+    badgeId: 'zand-speurder', badgeNaam: 'Zand-speurder',
+    vaktermBadge: { id: 'knap-stuifzand', naam: 'Knap woord: stuifzand' },
+  },
+  reunion: { sprite: 'nachtzwaluw', tekst: 'De nachtzwaluw blijft rustig op haar nest zitten.' },
+  stappen: [
+    {
+      ef: 'zoeken',
+      skin: {
+        dier: 'nachtzwaluw',
+        copy: {
+          instructie: 'Zoek de vogel op het zand.',
+          goed: 'Knap! Hij was bijna onzichtbaar.',
+        },
+        doel: { x: 56, y: 54 },
+        distractors: [
+          { id: 's1', x: 22, y: 44, k: 'bush', animal: 'pol gras' },
+          { id: 's2', x: 76, y: 40, k: 'bush', animal: 'pol gras' },
+          { id: 's3', x: 40, y: 70, k: 'bush', animal: 'pol gras' },
+          { id: 's4', x: 60, y: 34, k: 'bush', animal: 'pol gras' },
+          { id: 'v1', x: 30, y: 30, k: 'butterfly', animal: 'heideblauwtje' },
+          { id: 'b1', x: 16, y: 64, k: 'bird', animal: 'roodborsttapuit' },
+          { id: 's5', x: 86, y: 62, k: 'bush', animal: 'pol gras' },
+        ],
+        feit: 'De nachtzwaluw legt haar eieren zomaar op het zand. Haar veren lijken op dorre blaadjes.',
+        feitDier: 'nachtzwaluw',
+      },
+      moeilijkheid: { afleiders: 'settings', lens: 'settings' },
+    },
+    {
+      ef: 'wisselen',
+      skin: {
+        dier: 'nachtzwaluw',
+        dagDieren: ['ree', 'eekhoorn'],
+        nachtDieren: ['nachtzwaluw', 'das', 'wildzwijn'],
+        trials: 8,
+        copy: {
+          instructie: 'Breng elk dier naar de goede plek.',
+          regel: 'Dag-dier → open zand. Nacht-dier → het hol.',
+          regelOm: 'Nu andersom! Volg het bordje.',
+          goed: 'Alle dieren op de goede plek!',
+        },
+        feit: 'Op het warme zand komen overdag andere dieren dan ’s nachts.',
+        feitDier: 'nachtzwaluw',
+      },
+      moeilijkheid: { wissel: 'settings', trials: 8 },
+    },
+  ],
+};
+
+/* ============================================================
+   MISSIE HERSTEL — De winterronde  (winter · heide · edelhert)
+   Engines: corsi (leid de kudde langs de veilige winterroute) →
+   dagnacht (de "niet voeren"-regel; seed #19). De seizoensfinale:
+   de stroper is gemeld, de heide en het ven groeien terug.
+   ============================================================ */
+const MISSIE_HERSTEL = {
+  id: 'herstel',
+  titel: 'De winterronde',
+  landschap: 'heide',
+  dier: 'edelhert',
+  status: 'actief',
+  payoff: 'De heide en het ven groeien terug. De dieren zijn veilig.',
+  kort: 'Het is winter. Leid de kudde veilig en hou je aan de regels.',
+  briefing: {
+    simpel: [
+      'Hoi ranger!',
+      'Het is koud en stil op de heide.',
+      'De stroper is gemeld bij de boswachter.',
+      'Nu mag alles weer rustig groeien.',
+      'Leid de kudde langs de veilige weg.',
+    ],
+    knap: [
+      'Hoi ranger!',
+      'Het is winter op de Veluwe.',
+      'De stroper is gemeld bij de BOA.',
+      'De heide en het ven herstellen zich.',
+      'Leid de kudde langs de veilige route.',
+    ],
+  },
+  beloning: {
+    badgeId: 'winter-ranger', badgeNaam: 'Winter-ranger',
+    vaktermBadge: { id: 'knap-herstel', naam: 'Knap woord: herstel' },
+  },
+  reunion: { sprite: 'edelhert', tekst: 'De kudde trekt rustig verder. Het is weer veilig op de Veluwe.' },
+  stappen: [
+    {
+      ef: 'corsi',
+      skin: {
+        copy: {
+          instructie: 'Onthoud de veilige winterweg.',
+          toon: 'Kijk goed welke weg veilig is…',
+          terug: 'Wijs de weg terug.',
+          goed: 'Precies! De kudde loopt veilig.',
+        },
+        feit: 'In de winter eten herten samen. Ze blijven dicht bij elkaar voor de warmte.',
+        feitDier: 'edelhert',
+      },
+      moeilijkheid: { lengte: 'settings' },
+    },
+    {
+      ef: 'dagnacht',
+      skin: {
+        copy: { instructie: 'Blijf rustig. Hou je aan de regels.' },
+        regels: ['Niet voeren.', 'Hou afstand.'],
+        metgezel: 'geen',
+        encounters: [
+          { id: 'voer-winter', subject: 'zwijn-honger', dier: 'wildzwijn', vraag: 'De dieren hebben honger in de winter.',
+            opties: [{ label: 'Brood geven', goed: false }, { label: 'Niet voeren', goed: true }],
+            uitleg: 'Goed. Wilde dieren zoeken zelf hun eten.', gevolg: 'De hele rotte rent op je af. Niet voeren.', reactie: 'swarm', eikelKost: 2 },
+          { id: 'hert-winter', subject: 'reekalf', dier: 'edelhert', vraag: 'Een hert kijkt je rustig aan.',
+            opties: [{ label: 'Aaien', goed: false }, { label: 'Rustig kijken', goed: true }],
+            uitleg: 'Mooi rustig. Je laat hem met rust.', gevolg: 'Het hert schrikt en draaft weg. Blijf rustig.', reactie: 'flee' },
+          { id: 'pad-winter', subject: 'pad-veilig', flip: true, vraag: 'De kudde mag verder.',
+            opties: [{ label: 'Wachten', goed: false }, { label: 'Loop door', goed: true }],
+            uitleg: 'Precies. Nu mag de kudde rustig verder.', gevolg: 'De weg is vrij. Loop maar door.', reactie: 'recede' },
+        ],
+        feit: 'Wilde dieren voeren is niet goed voor ze. Ze worden ziek van ons eten.',
+        feitDier: 'edelhert',
+      },
+      moeilijkheid: { slowmo: 'settings' },
+    },
+  ],
+};
+
 /* ---- The Area record (art direction + missions live here) ---- */
 const AREA_VELUWE = {
   id: 'veluwe',
@@ -732,11 +971,15 @@ const AREA_VELUWE = {
   landschappen: ['heide', 'bos', 'stuifzand', 'ven'],
   vlaggenschipDieren: ['wildzwijn', 'ree', 'edelhert', 'eekhoorn', 'das'],
   verhaalboog: VERHAALBOOG_VELUWE,
-  missies: [MISSIE_FRISLING, MISSIE_REE, MISSIE_WILDCAMERA, MISSIE_ECODUCT, MISSIE_EEKHOORN, MISSIE_NACHTRONDE, MISSIE_VOS],
+  missies: [
+    MISSIE_FRISLING, MISSIE_REE, MISSIE_WILDCAMERA, MISSIE_VEN, MISSIE_ECODUCT,
+    MISSIE_STUIFZAND, MISSIE_NACHTRONDE, MISSIE_EEKHOORN, MISSIE_VOS, MISSIE_HERSTEL,
+  ],
 };
 
 export {
   ANIMALS, AREA_VELUWE, VERHAALBOOG_VELUWE,
   MISSIE_FRISLING, MISSIE_REE, MISSIE_NACHTRONDE,
   MISSIE_WILDCAMERA, MISSIE_ECODUCT, MISSIE_EEKHOORN, MISSIE_VOS,
+  MISSIE_VEN, MISSIE_STUIFZAND, MISSIE_HERSTEL,
 };

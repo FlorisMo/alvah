@@ -27,6 +27,8 @@ export class Stage {
   private readonly camTarget = new THREE.Vector3(0, 1.1, 0);
   private running = false;
   private rafId = 0;
+  /** when set, the loop renders this scene/camera instead of the title backdrop */
+  private world: { scene: THREE.Scene; camera: THREE.PerspectiveCamera; update: (dt: number, t: number) => void } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -108,6 +110,18 @@ export class Stage {
     this.frameCbs.push(cb);
   }
 
+  /** Hand rendering to an explorable world (keeps the one renderer + budget overlay). */
+  enterWorld(world: { scene: THREE.Scene; camera: THREE.PerspectiveCamera; update: (dt: number, t: number) => void }): void {
+    this.world = world;
+    this.resize();
+  }
+
+  /** Return to the title backdrop. */
+  exitWorld(): void {
+    this.world = null;
+    this.resize();
+  }
+
   start(): void {
     if (this.running) return;
     this.running = true;
@@ -117,8 +131,13 @@ export class Stage {
       this.rafId = requestAnimationFrame(loop);
       const dt = this.clock.getDelta();
       const t = this.clock.elapsedTime;
-      this.updateCamera(t);
-      this.renderer.render(this.scene, this.camera);
+      if (this.world) {
+        this.world.update(dt, t);
+        this.renderer.render(this.world.scene, this.world.camera);
+      } else {
+        this.updateCamera(t);
+        this.renderer.render(this.scene, this.camera);
+      }
       for (const cb of this.frameCbs) cb(dt, t);
     };
     this.rafId = requestAnimationFrame(loop);
@@ -146,5 +165,9 @@ export class Stage {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.world) {
+      this.world.camera.aspect = w / h;
+      this.world.camera.updateProjectionMatrix();
+    }
   };
 }

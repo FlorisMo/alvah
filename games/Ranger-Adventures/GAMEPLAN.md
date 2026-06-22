@@ -4,8 +4,12 @@
 > handed over from Claude Design, how we've structured it, what we keep, and how it will be
 > integrated into the Alvah site later. Read this first; then the per-folder READMEs.
 >
-> **Status:** structuring the hand-off (June 2026). Nothing is integrated into the Astro site
-> yet — that is deliberate (`games/` lives outside `src/`, see root `README.md`).
+> **Status (updated Jun 2026):** the executable build is now live in **[app/](app/)** (Vite + TS + Three) —
+> Phases 0–4 of [BUILD-PLAN.md](BUILD-PLAN.md) are done: all 5 EF engines, 10 missions, the mission wrapper,
+> a first 3D world, and the asset pipeline (Meshy generate→optimize + xeno-canto/Freesound audio). The five
+> mini-games are being turned into **diegetic in-world activities** ([3D-IMMERSION-PLAN.md](3D-IMMERSION-PLAN.md),
+> folded into BUILD-PLAN §1f/§5/§8d). Still **not** integrated into the Astro site — deliberate (`games/`
+> lives outside `src/`); that is the Phase 8 tail (route `alvah.nl/ranger`, behind the existing access gate).
 
 ---
 
