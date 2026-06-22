@@ -1,0 +1,251 @@
+/* ============================================================
+   travel.css — [C] Reis-cutscene (parallax, golden hour)
+   ============================================================ */
+
+.travel-screen { background: #f3cf9a; overflow: hidden; transition: opacity var(--dur-slow) var(--ease-in); }
+.travel-screen.travel-out { opacity: 0; }
+
+.tv-sky {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 46%, var(--sky-low) 72%, #d9a877 86%);
+}
+.tv-sun {
+  position: absolute; left: 16%; top: 14%; width: 200px; height: 200px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255,247,220,.95), rgba(255,236,180,.5) 45%, transparent 72%);
+  filter: blur(2px);
+}
+
+.tv-layer { position: absolute; left: 0; right: 0; will-change: background-position; }
+.tv-layer.static { animation: none !important; }
+
+/* far hills */
+.tv-hills {
+  bottom: 150px; height: 200px;
+  background:
+    radial-gradient(120px 90px at 90px 100%, #cdab73 0 99%, transparent 100%),
+    radial-gradient(160px 120px at 320px 100%, #c2a169 0 99%, transparent 100%),
+    radial-gradient(130px 100px at 520px 100%, #cdab73 0 99%, transparent 100%);
+  background-repeat: repeat-x; background-size: 600px 100%;
+  animation: scrollHills 44s linear infinite;
+}
+@keyframes scrollHills { from { background-position-x: 0; } to { background-position-x: -600px; } }
+
+/* pine silhouette (simple triangles, allowed geometry) */
+.tv-pines {
+  bottom: 150px; height: 150px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='150'%3E%3Cg fill='%23355f3b'%3E%3Cpolygon points='30,30 8,120 52,120'/%3E%3Cpolygon points='80,55 60,120 100,120'/%3E%3Cpolygon points='140,20 112,120 168,120'/%3E%3Cpolygon points='200,50 178,120 222,120'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat-x; background-size: 240px 150px;
+  animation: scrollPines 24s linear infinite;
+}
+@keyframes scrollPines { from { background-position-x: 0; } to { background-position-x: -240px; } }
+
+/* near grass verge */
+.tv-verge {
+  bottom: 84px; height: 80px;
+  background: linear-gradient(180deg,#7ba34e,#5f8540);
+  border-radius: 60% 40% 0 0 / 30px 24px 0 0;
+}
+
+/* road */
+.tv-road {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 100px;
+  background: linear-gradient(180deg,#5a5247,#403a31);
+}
+.tv-road::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 44px; height: 8px;
+  background: repeating-linear-gradient(90deg, #f0e2b8 0 44px, transparent 44px 88px);
+  background-size: 88px 100%;
+  animation: scrollRoad 1.1s linear infinite;
+}
+@keyframes scrollRoad { from { background-position-x: 0; } to { background-position-x: -88px; } }
+
+/* foreground km-posts */
+.tv-posts {
+  bottom: 86px; height: 60px;
+  background-image:
+    linear-gradient(#caa15e,#caa15e);
+  background-repeat: repeat-x;
+  background-size: 6px 46px;
+  background-position-y: bottom;
+  animation: scrollPosts 2.4s linear infinite;
+  opacity: .9;
+}
+.tv-posts { background-size: 6px 46px; }
+@keyframes scrollPosts { from { background-position-x: 40px; } to { background-position-x: -320px; } }
+
+/* vehicle */
+.tv-vehicle {
+  position: absolute; left: 46%; bottom: 86px; transform: translateX(-50%);
+  width: 220px; height: 160px; z-index: 6;
+}
+.tv-vehicle-inner { position: absolute; inset: 0; }
+.tv-vehicle .veh { bottom: 8px; transform: translateX(-50%) scale(1.25); }
+
+.ground-bob { animation: groundBob 0.5s ease-in-out infinite alternate; }
+@keyframes groundBob { from { transform: translateX(-50%) translateY(0) rotate(-.5deg); } to { transform: translateX(-50%) translateY(-5px) rotate(.5deg); } }
+
+/* heli */
+.heli-descend { animation: heliDesc 4.2s var(--ease-soft) forwards, heliHover 1.6s ease-in-out 1.2s infinite; bottom: 120px; }
+@keyframes heliDesc { from { transform: translateX(-50%) translateY(-300px); } to { transform: translateX(-50%) translateY(0); } }
+@keyframes heliHover { 0%,100%{ margin-top:0 } 50%{ margin-top:-6px } }
+.heli-land-static { bottom: 120px; }
+.heli-ground-shadow {
+  position: absolute; left: 50%; bottom: -110px; transform: translateX(-50%);
+  width: 150px; height: 30px; border-radius: 50%;
+  background: rgba(30,30,15,.28); filter: blur(6px);
+  animation: shadowGrow 4.2s var(--ease-soft) forwards;
+}
+@keyframes shadowGrow { from { transform: translateX(-50%) scale(.3); opacity:.1; } to { transform: translateX(-50%) scale(1); opacity:.4; } }
+
+.tv-caption {
+  position: absolute; left: 0; right: 0; top: 56px; text-align: center; z-index: 8;
+  font: 600 26px/1 'Fraunces', serif; color: #5a3d12;
+  text-shadow: 0 1px 0 rgba(255,255,255,.4);
+}
+
+/* ============================================================
+   Mini-game layer
+   ============================================================ */
+.travel-screen.game, .travel-screen.rm-travel { background: #f3cf9a; overflow: hidden; }
+.tv-field { position: absolute; inset: 0; z-index: 5; cursor: pointer; touch-action: none; }
+
+/* vehicle in play-mode: JS controls left/top */
+.tv-vehicle.playing {
+  bottom: auto; transform: translate(-50%, -50%);
+  animation: none !important; z-index: 6; will-change: top;
+}
+.tv-vehicle.playing .veh { bottom: auto; top: 50%; transform: translate(-50%,-50%) scale(1.2); }
+.tv-vehicle.tv-bonk { animation: vehBonk .5s ease !important; }
+@keyframes vehBonk {
+  0%,100% { transform: translate(-50%,-50%) rotate(0); }
+  20% { transform: translate(-50%,-46%) rotate(-7deg); }
+  55% { transform: translate(-50%,-52%) rotate(6deg); }
+  80% { transform: translate(-50%,-49%) rotate(-2deg); }
+}
+.play-shadow { bottom: -56px; animation: none; opacity: .32; }
+
+/* entities */
+.tv-entity { position: absolute; transform: translate(-50%,-50%); will-change: left, top; z-index: 5; }
+
+/* acorn / eikel */
+.acorn { position: relative; display: inline-block; width: 30px; height: 34px; transform-origin: center; }
+.acorn-nut { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 24px; height: 24px;
+  border-radius: 46% 46% 50% 50% / 40% 40% 60% 60%; background: linear-gradient(150deg,#bd854a,#8a5a28);
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.22), inset 0 2px 3px rgba(255,255,255,.25); }
+.acorn-cap { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 26px; height: 13px;
+  border-radius: 50% 50% 28% 28%; background: linear-gradient(#6f4d27,#4f3417);
+  box-shadow: inset 0 2px 2px rgba(255,255,255,.18); }
+.acorn::after { content: ""; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 3px; height: 5px; border-radius: 2px; background: #4f3417; }
+.eikel .acorn { animation: acornFloat 2.4s ease-in-out infinite; filter: drop-shadow(0 4px 6px rgba(0,0,0,.18)); }
+@keyframes acornFloat { 0%,100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-5px) rotate(6deg); } }
+.eikel.pop { animation: eikelPop .26s ease-out forwards; }
+@keyframes eikelPop { 0% { transform: translate(-50%,-50%) scale(1); opacity: 1; } 100% { transform: translate(-50%,-90%) scale(1.7); opacity: 0; } }
+.acorn.sm { transform: scale(.6); } .acorn.big { transform: scale(2.1); }
+
+/* obstacles — soft + on-theme */
+.ob-shape { display: block; }
+.ob-shape.tak { width: 60px; height: 14px; border-radius: 8px; background: linear-gradient(#73502c,#4f3819);
+  transform: rotate(-15deg); box-shadow: inset 0 -2px 3px rgba(0,0,0,.3); position: relative; }
+.ob-shape.tak::after { content: ""; position: absolute; left: 38px; top: -10px; width: 8px; height: 18px; border-radius: 6px; background: #5e4222; transform: rotate(28deg); }
+.ob-shape.steen { width: 46px; height: 36px; border-radius: 48% 52% 44% 56% / 60% 58% 42% 40%;
+  background: linear-gradient(155deg,#9b958a,#6f6a61); box-shadow: inset 0 -4px 6px rgba(0,0,0,.28), inset 0 3px 4px rgba(255,255,255,.25); }
+.ob-shape.plas { width: 64px; height: 26px; border-radius: 50%; background: radial-gradient(closest-side,#7fa6c4,#5a7e9c);
+  box-shadow: inset 0 3px 6px rgba(0,0,0,.3); opacity: .92; }
+.ob-dier { position: relative; display: block; width: 40px; height: 40px; border-radius: 50% 50% 46% 46%;
+  background: linear-gradient(160deg,#b89a78,#8f7252); box-shadow: inset 0 -3px 6px rgba(0,0,0,.22); animation: dierHop .6s ease-in-out infinite; }
+.ob-dier .od-ear { position: absolute; top: -12px; width: 9px; height: 18px; border-radius: 50% 50% 40% 40%; background: #9f8160; }
+.ob-dier .od-ear { left: 9px; transform: rotate(-12deg); } .ob-dier .od-ear.r { left: auto; right: 9px; transform: rotate(12deg); }
+.ob-dier::after { content: ""; position: absolute; top: 18px; left: 9px; width: 5px; height: 6px; border-radius: 50%; background: #2a1d10; box-shadow: 17px 0 0 #2a1d10; }
+@keyframes dierHop { 0%,100% { transform: translateY(0); } 45% { transform: translateY(-8px); } }
+.ob.bonked { animation: obBonk .45s ease; }
+@keyframes obBonk { 0%,100% { transform: translate(-50%,-50%) rotate(0); } 30% { transform: translate(-50%,-50%) rotate(-12deg) scale(1.08); } }
+
+/* HUD */
+.travel-hud { position: absolute; top: 18px; left: 0; right: 0; z-index: 20; display: flex; align-items: center; gap: 16px; padding: 0 22px; pointer-events: none; }
+.tally-pill { display: flex; align-items: center; gap: 8px; padding: 8px 16px 8px 12px; border-radius: 999px;
+  background: rgba(253,252,248,.94); box-shadow: var(--shadow-md); }
+.tally-pill .acorn { width: 22px; height: 24px; }
+.tally-num { font: 700 22px/1 'Inter Tight', sans-serif; color: #6a4a24; min-width: 18px; }
+.reis-progress { flex: 1; display: flex; align-items: center; gap: 8px; max-width: 520px; margin-left: auto; }
+.rp-track { flex: 1; height: 11px; border-radius: 999px; background: rgba(90,61,18,.25); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,.2); }
+.rp-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#f5c23b,#ef9a1f); transition: width .12s linear; }
+.rp-flag { font: 700 22px/1 'Inter Tight', sans-serif; color: #5a3d12; }
+
+.tv-hint { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center; z-index: 18;
+  font: 600 17px/1 'Inter Tight', sans-serif; color: #5a3d12; text-shadow: 0 1px 0 rgba(255,255,255,.45); pointer-events: none; }
+
+/* finish */
+.finish-overlay { position: absolute; inset: 0; z-index: 50; display: grid; place-items: center;
+  background: rgba(60,40,15,.42); backdrop-filter: blur(2px); animation: fadeIn .3s ease; }
+.finish-card { width: 340px; padding: 28px 30px 30px; text-align: center; background: var(--paper);
+  border-radius: var(--spel-radius-lg); box-shadow: var(--shadow-lg); animation: cardPop var(--dur-base) var(--ease-overshoot); }
+.finish-eyebrow { font: 600 13px/1 'Inter Tight', sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--spel-orange); }
+.finish-art { display: grid; place-items: center; height: 74px; margin: 10px 0 4px; }
+.finish-count { font: 700 64px/1 'Fraunces', serif; color: #6a4a24; }
+.finish-text { margin: 2px 0 22px; font: 600 22px/1.2 'Fraunces', serif; color: var(--green-deep); }
+
+/* reduced-motion arrival */
+.rm-arrival { position: absolute; left: 0; right: 0; bottom: 64px; z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.rm-tally { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 999px;
+  background: rgba(253,252,248,.94); box-shadow: var(--shadow-md); font: 600 18px/1 'Inter Tight', sans-serif; color: #6a4a24; }
+
+/* ============================================================
+   Consequence / damage layer (HANDOFF §6.3 / plan §12.5)
+   Real, fixable stakes on equipment — never shaming, never a game-over.
+   ============================================================ */
+
+/* soft vehicle-status: durability bar + repair-parts count */
+.veh-pill { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px;
+  background: rgba(253,252,248,.94); box-shadow: var(--shadow-md); color: #6a4a24; }
+.veh-pill-ico { width: 20px; height: 20px; display: block; flex: none; }
+.veh-bar { width: 64px; height: 9px; border-radius: 999px; background: rgba(90,61,18,.22); overflow: hidden; }
+.veh-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#6fae5d,#4f9a52); transition: width .25s var(--ease-out); }
+.veh-bar-fill[data-low="1"] { background: linear-gradient(90deg,#e8a23a,#c96f2c); }
+.part-pill { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 999px;
+  background: rgba(253,252,248,.94); box-shadow: var(--shadow-md); font: 700 18px/1 'Inter Tight', sans-serif; color: #6a4a24; }
+/* a little cog = "onderdeel" (repair part) */
+.part-ico { width: 16px; height: 16px; border-radius: 50%; flex: none;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 3px, #8a6a3e 3px 4.5px, transparent 4.5px),
+    conic-gradient(#8a6a3e 0 12%, transparent 0 13%, #8a6a3e 0 25%, transparent 0 26%, #8a6a3e 0 38%, transparent 0 39%, #8a6a3e 0 50%, transparent 0 51%, #8a6a3e 0 63%, transparent 0 64%, #8a6a3e 0 75%, transparent 0 76%, #8a6a3e 0 88%, transparent 0 89%, #8a6a3e 0 100%);
+  box-shadow: inset 0 0 0 3.5px #d9c39a; }
+
+/* cosmetic damage on the vehicle — visible mud, persists until repair */
+.tv-vehicle .veh-mud { position: absolute; left: 50%; top: 56%; transform: translate(-50%,-50%);
+  width: 70px; height: 40px; pointer-events: none; z-index: 7; opacity: .9; }
+.tv-vehicle.schade-1 { filter: saturate(.94); }
+.tv-vehicle.schade-2 { filter: saturate(.82) brightness(.97); }
+.tv-vehicle.schade-3 { filter: saturate(.7) brightness(.93); }
+.tv-vehicle.schade-2 .tv-vehicle-inner, .tv-vehicle.schade-3 .tv-vehicle-inner { transform: rotate(-1.5deg); }
+.tv-vehicle .veh-mud::before, .tv-vehicle .veh-mud::after {
+  content: ""; position: absolute; border-radius: 50% 60% 55% 45% / 60% 50% 60% 50%;
+  background: radial-gradient(circle at 40% 35%, #7a5a36, #4c3618); opacity: .0; transition: opacity .2s; }
+.tv-vehicle .veh-mud::before { left: 6px; top: 8px; width: 20px; height: 14px; }
+.tv-vehicle .veh-mud::after { right: 8px; top: 16px; width: 16px; height: 12px; }
+.tv-vehicle.schade-1 .veh-mud::before { opacity: .55; }
+.tv-vehicle.schade-2 .veh-mud::before, .tv-vehicle.schade-2 .veh-mud::after { opacity: .7; }
+.tv-vehicle.schade-3 .veh-mud::before, .tv-vehicle.schade-3 .veh-mud::after { opacity: .9; }
+
+/* clean-run bonus note on the finish card */
+.finish-bonus { display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+  margin: -10px 0 18px; font: 600 15px/1.3 'Inter Tight', sans-serif; color: #5e7e3a; }
+
+/* wrecked: the sober ranger-radio card */
+.radio-card { width: 380px; padding: 24px 28px 26px; text-align: center; background: var(--paper);
+  border-radius: var(--spel-radius-lg); box-shadow: var(--shadow-lg);
+  animation: cardPop var(--dur-base) var(--ease-overshoot); }
+.rm .radio-card { animation: none; }
+.radio-head { display: inline-flex; align-items: center; gap: 9px;
+  font: 600 12px/1 ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-muted); }
+.radio-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red-warn); box-shadow: 0 0 0 4px rgba(155,61,46,.18); animation: radioPulse 1.6s ease-in-out infinite; }
+.rm .radio-dot { animation: none; }
+@keyframes radioPulse { 0%,100% { box-shadow: 0 0 0 4px rgba(155,61,46,.18); } 50% { box-shadow: 0 0 0 7px rgba(155,61,46,.05); } }
+.radio-veh { display: grid; place-items: center; height: 92px; margin: 8px 0 2px; }
+.radio-veh-art { position: relative; display: block; width: 150px; height: 90px; filter: saturate(.7) brightness(.93); }
+.radio-veh-art .veh { transform: translateX(-50%) scale(1.05); bottom: 6px; }
+.radio-line { margin: 6px 0 18px; font: 600 21px/1.35 'Fraunces', serif; color: var(--green-deep); }
+.radio-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.radio-actions .btn { min-height: 50px; font-size: 18px; padding: 0 22px; }
+.radio-actions .btn .part-ico { box-shadow: inset 0 0 0 3.5px rgba(255,255,255,.5); }
+.btn.veh-off { opacity: .45; cursor: not-allowed; box-shadow: none; filter: grayscale(.4); }
+.radio-foot { margin: 16px 0 0; font: 400 14px/1.5 var(--read-font); color: var(--ink-soft); }

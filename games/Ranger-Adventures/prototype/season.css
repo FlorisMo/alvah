@@ -1,0 +1,35 @@
+/* ============================================================
+   season.css — the season visibly changes the world (HANDOFF §7.3)
+   The story season is reflected as a class on #canvas (state.jsx).
+   Gentle tints on the SCENIC background layers only — never on text
+   or UI overlays. Lente = the warm default (no filter).
+   ============================================================ */
+
+/* zomer — a touch brighter & greener */
+#canvas.seizoen-zomer .map-sky,
+#canvas.seizoen-zomer .terrain,
+#canvas.seizoen-zomer .grass-base,
+#canvas.seizoen-zomer .ru-sky,
+#canvas.seizoen-zomer .ru-hills,
+#canvas.seizoen-zomer .ru-ground { filter: saturate(1.1) brightness(1.03); }
+
+/* herfst — amber / golden, the bronst */
+#canvas.seizoen-herfst .map-sky,
+#canvas.seizoen-herfst .terrain,
+#canvas.seizoen-herfst .grass-base,
+#canvas.seizoen-herfst .ru-sky,
+#canvas.seizoen-herfst .ru-hills,
+#canvas.seizoen-herfst .ru-ground { filter: sepia(.2) saturate(1.12) hue-rotate(-12deg) brightness(1.01); }
+
+/* winter — cool, quiet, restorative */
+#canvas.seizoen-winter .map-sky,
+#canvas.seizoen-winter .terrain,
+#canvas.seizoen-winter .grass-base,
+#canvas.seizoen-winter .ru-sky,
+#canvas.seizoen-winter .ru-hills,
+#canvas.seizoen-winter .ru-ground { filter: saturate(.72) brightness(1.07) hue-rotate(8deg); }
+
+/* a small season chip the map header can show (optional hook) */
+.season-chip { display: inline-flex; align-items: center; gap: 6px;
+  font: 600 12px/1 ui-monospace, monospace; letter-spacing: .04em; color: var(--green-deep);
+  background: rgba(253,252,248,.85); border-radius: 999px; padding: 5px 10px; }

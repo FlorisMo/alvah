@@ -1,0 +1,244 @@
+/* ============================================================
+   cabin.css — Het huisje (hub) + metgezel + verzorg-routine
+   ============================================================ */
+
+.cabin-screen {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(120% 80% at 70% 0%, #fbe9c8 0%, #f1dcb4 40%, #e6cda0 100%);
+  overflow: hidden;
+}
+.cabin-room {
+  position: absolute; inset: 64px 0 0 0;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 26px;
+  padding: 26px 30px 30px;
+}
+/* warm wooden floor wash */
+.cabin-room::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 38%;
+  background: linear-gradient(180deg, transparent, rgba(120,80,40,.18));
+  pointer-events: none;
+}
+.cabin-window {
+  position: absolute; right: 360px; top: 6px; width: 150px; height: 120px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #bfe0f3, #e9f6ef 70%);
+  box-shadow: 0 0 0 8px #8a6a44, 0 0 0 11px #6f5236, var(--shadow-md);
+  overflow: hidden; z-index: 0;
+}
+.cabin-window .cw-sun { position: absolute; right: 16px; top: 14px; width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(circle, #ffe9a8, #f5c23b); box-shadow: 0 0 26px 8px rgba(245,194,59,.5); }
+.cabin-beam { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.cabin-beam.b1 { background: linear-gradient(118deg, transparent 40%, rgba(255,231,170,.35) 52%, transparent 64%); }
+.cabin-shelf { position: absolute; left: 0; right: 0; top: 0; height: 0; }
+
+/* ---- main column ---- */
+.cabin-main {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column; gap: 22px;
+  align-items: center; justify-content: center;
+  background: rgba(255,252,246,.66);
+  border: 1px solid rgba(140,110,70,.2);
+  border-radius: var(--spel-radius-lg);
+  padding: 24px;
+}
+.perch-area { display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; }
+.perch {
+  position: absolute; bottom: 86px; left: 50%; transform: translateX(-50%);
+  width: 180px; height: 12px; border-radius: 8px;
+  background: linear-gradient(#9a7044, #6f4f2c);
+  box-shadow: var(--shadow-sm);
+}
+.comp-card {
+  text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--spel-radius);
+  padding: 14px 20px; box-shadow: var(--shadow-sm); min-width: 250px;
+}
+.comp-naam { font: 600 24px/1 'Fraunces', serif; color: var(--green-deep); }
+.comp-fase { font: 500 14px/1 var(--read-font); color: var(--ink-muted); }
+
+/* bond meter */
+.bond-meter { display: flex; align-items: center; gap: 8px; width: 220px; }
+.bm-heart { display: grid; place-items: center; }
+.bm-track { flex: 1; height: 10px; border-radius: 6px; background: var(--spel-magenta-soft); overflow: hidden; }
+.bm-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #e07aa3, #c94174); transition: width var(--dur-slow) var(--ease-out); }
+
+.comp-kunstjes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.kunstje-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: 600 13px/1 'Inter Tight', sans-serif; color: var(--green-deep);
+  background: var(--green-soft); border-radius: var(--radius-pill); padding: 6px 11px;
+}
+
+/* ---- companion sprite states ---- */
+.companion-sprite { z-index: 2; }
+.comp-figure { position: relative; }
+.companion-sprite .comp-nest {
+  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+  width: 96px; height: 34px; border-radius: 0 0 50% 50% / 0 0 100% 100%;
+  background: repeating-radial-gradient(circle at 50% 0, #9a7a4a 0 3px, #856843 3px 6px);
+  box-shadow: var(--shadow-sm); z-index: 1;
+}
+.comp-figure.blij { animation: comp-hop 1.8s var(--ease-soft) infinite; }
+.comp-figure.koud { animation: comp-shiver .22s linear infinite; }
+.rm .comp-figure.blij, .rm .comp-figure.koud { animation: none; }
+@keyframes comp-hop { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes comp-shiver { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-1.5px); } 75% { transform: translateX(1.5px); } }
+.comp-hearts { position: absolute; top: 4px; right: 30px; }
+.comp-hearts i { position: absolute; width: 10px; height: 10px; background: #e07aa3; border-radius: 50% 50% 50% 0; transform: rotate(45deg);
+  animation: heart-float 2.4s var(--ease-out) infinite; opacity: 0; }
+.comp-hearts i:nth-child(2) { animation-delay: .8s; left: 12px; }
+.comp-hearts i:nth-child(3) { animation-delay: 1.6s; left: -10px; }
+.rm .comp-hearts i { display: none; }
+@keyframes heart-float { 0% { transform: rotate(45deg) translateY(0) scale(.6); opacity: 0; } 30% { opacity: .9; } 100% { transform: rotate(45deg) translateY(-30px) scale(1); opacity: 0; } }
+
+/* ---- actions ---- */
+.cabin-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 460px; }
+.big-care { font-size: 19px; padding: 15px 28px; min-height: 52px; }
+.care-hint { font: 400 14px/1.5 var(--read-font); color: var(--ink-soft); text-align: center; margin: 0; max-width: 360px; }
+.mee-toggle {
+  display: inline-flex; align-items: center; gap: 9px;
+  font: 600 14px/1 'Inter Tight', sans-serif; color: var(--ink-soft);
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-pill);
+  padding: 10px 15px; min-height: 44px; cursor: pointer; transition: all var(--dur-quick);
+}
+.mee-toggle .mt-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--green-line); transition: background var(--dur-quick); }
+.mee-toggle.aan { color: var(--green-deep); border-color: var(--green-bright); }
+.mee-toggle.aan .mt-dot { background: var(--green-bright); }
+
+/* ---- care routine ---- */
+.care-routine { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.care-progress { display: flex; gap: 8px; }
+.care-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green-line); transition: all var(--dur-quick); }
+.care-dot.next { background: var(--spel-sun); transform: scale(1.25); }
+.care-dot.done { background: var(--green-bright); }
+.care-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.care-step {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  width: 104px; min-height: 96px; padding: 14px 10px;
+  border-radius: var(--spel-radius); cursor: pointer;
+  border: 2px solid transparent;
+  background: var(--green-mid); color: #fff;
+  transition: transform var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick);
+}
+.care-step:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.care-step .cs-ico { display: grid; place-items: center; }
+.care-step .cs-label { font: 600 14px/1.2 'Inter Tight', sans-serif; text-align: center; }
+.care-step.next { border-color: var(--spel-sun); box-shadow: 0 0 0 4px var(--spel-sun-glow); }
+.care-step.done { background: var(--green-soft); color: var(--green-deep); cursor: default; }
+.care-step.done:hover { transform: none; box-shadow: none; }
+.care-step .cs-tick { position: absolute; top: 6px; right: 6px; }
+.care-step.knuffel { background: var(--spel-magenta-soft); color: var(--spel-magenta); border: 2px dashed rgba(201,65,116,.45); }
+.care-step.knuffel:hover { background: #f7d8e4; }
+.care-msg {
+  font: 500 16px/1.4 var(--read-font); text-align: center;
+  min-height: 24px; padding: 8px 16px; border-radius: var(--radius-pill);
+}
+.care-msg.ok { color: var(--green-deep); background: var(--green-soft); }
+.care-msg.wait { color: var(--red-warn); background: #f6e6df; }
+.care-msg.tip { color: var(--ink-soft); }
+
+/* ---- rescue flow ---- */
+.cabin-main:has(.rescue-flow), .rescue-flow { width: 100%; }
+.rescue-flow { display: flex; flex-direction: column; align-items: center; gap: 18px; justify-content: center; }
+.rescue-art { display: grid; place-items: center; }
+.rescue-panel {
+  text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--spel-radius-lg);
+  padding: 24px 28px; box-shadow: var(--shadow-md); max-width: 440px;
+}
+.rescue-eyebrow { font: 600 12px/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-muted); }
+.rescue-title { font: 600 30px/1.1 'Fraunces', serif; color: var(--green-deep); margin: 2px 0 0; }
+.rescue-text { font: 400 var(--read-size)/1.5 var(--read-font); color: var(--ink-soft); margin: 0; }
+.naam-rij { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.naam-knop {
+  font: 600 18px/1 'Inter Tight', sans-serif; color: var(--green-deep);
+  background: var(--green-soft); border: 2px solid transparent; border-radius: var(--radius-pill);
+  padding: 12px 20px; min-height: 48px; cursor: pointer; transition: all var(--dur-quick);
+}
+.naam-knop:hover { background: var(--green-line); }
+.naam-knop.gekozen { border-color: var(--green-bright); background: #fff; }
+
+/* ---- side column (opvang + logboek) ---- */
+.cabin-side { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 16px; }
+.opvang-kaart {
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--spel-radius-lg);
+  padding: 18px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px;
+}
+.ok-head { display: flex; align-items: baseline; justify-content: space-between; }
+.ok-title { font: 600 18px/1 'Fraunces', serif; color: var(--green-deep); }
+.ok-count { font: 600 12px/1 ui-monospace, monospace; color: var(--green-bright); }
+.ok-text { font: 400 15px/1.5 var(--read-font); color: var(--ink-soft); margin: 0; }
+.ok-text.big { font-size: 17px; color: var(--green-deep); text-align: center; }
+.ok-leeg { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.ok-gast { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.ok-gast-art { display: grid; place-items: center; min-height: 92px; }
+.ok-gast-art.beter { animation: gast-perk .6s var(--ease-overshoot); }
+.rm .ok-gast-art.beter { animation: none; }
+@keyframes gast-perk { 0% { transform: scale(.9); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+.ok-gast-naam { font: 600 16px/1 'Inter Tight', sans-serif; color: var(--ink); }
+.ok-gast-body { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ok-care { display: flex; flex-direction: column; gap: 10px; }
+.ok-vrij { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0; }
+.ok-vrij-art { animation: vrij-fly 1.6s var(--ease-out) forwards; }
+.rm .ok-vrij-art { animation: none; }
+@keyframes vrij-fly { 0% { transform: translate(0,0); } 100% { transform: translate(40px,-50px) scale(.7); opacity: .2; } }
+
+.cabin-logboek {
+  display: inline-flex; align-items: center; gap: 10px;
+  font: 600 15px/1 'Inter Tight', sans-serif; color: var(--green-deep);
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--spel-radius);
+  padding: 14px 16px; min-height: 48px; cursor: pointer; box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-quick) var(--ease-out);
+}
+.cabin-logboek:hover { transform: translateY(-1px); }
+.cabin-logboek .cl-medal { width: 26px; height: 26px; border-radius: 50%; background: conic-gradient(var(--spel-sun) 270deg, rgba(0,0,0,.1) 270deg); display: grid; place-items: center; }
+.cabin-logboek .cl-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--green-mid); }
+
+/* ---- fase-growth celebration ---- */
+.feest-overlay { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(18,28,18,.42); backdrop-filter: blur(3px); }
+.feest-card {
+  text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--spel-radius-lg);
+  padding: 28px 32px; box-shadow: var(--shadow-lg); max-width: 440px;
+  animation: feest-pop var(--dur-base) var(--ease-overshoot);
+}
+.rm .feest-card { animation: none; }
+@keyframes feest-pop { from { transform: scale(.92); } to { transform: scale(1); } }
+.feest-eyebrow { font: 600 12px/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-muted); }
+.feest-title { font: 600 30px/1.1 'Fraunces', serif; color: var(--green-deep); margin: 0; }
+.feest-text { font: 400 17px/1.5 var(--read-font); color: var(--ink-soft); margin: 0; }
+
+/* ---- map: huisje entry button ---- */
+.huisje-knop {
+  position: absolute; top: 20px; right: 168px; z-index: 18;
+  display: inline-flex; align-items: center; gap: 9px;
+  font: 600 15px/1 'Inter Tight', sans-serif; color: var(--green-deep);
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-pill);
+  padding: 11px 16px; min-height: 44px; cursor: pointer; box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick);
+}
+.huisje-knop:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.huisje-knop .hk-ico { width: 22px; height: 22px; display: grid; place-items: center; }
+
+/* world: companion along on the mission */
+.world-metgezel {
+  position: absolute; right: 16px; bottom: 84px; z-index: 28;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: transparent; border: none; cursor: pointer; padding: 4px;
+}
+.world-metgezel .wm-sprite { animation: wm-bob 2.6s var(--ease-soft) infinite; }
+.rm .world-metgezel .wm-sprite { animation: none; }
+@keyframes wm-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.world-metgezel .wm-tip {
+  font: 600 12px/1 'Inter Tight', sans-serif; color: var(--green-deep);
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-pill);
+  padding: 5px 10px; box-shadow: var(--shadow-sm); white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .cabin-room { grid-template-columns: 1fr; }
+  .cabin-window { display: none; }
+}

@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Alvah Likeness · procedureel (§13d)</title>
+<!-- ext-resource-dependency: three.js (jsDelivr r160), CC0 RobotExpressive rig+clips, CC0 Poly Haven HDRI — loaded at runtime -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --green:#1e4d32; --green-soft:#eef4ea; --ink:#191a17; --ink-soft:#55564e; --ink-faint:#8a8b80;
+    --paper:#fdfcf8; --line:#e7e4da; --sun:#f5c23b; --r:13px; }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#11140e;
+    font-family:"Inter Tight",system-ui,sans-serif;color:var(--ink);}
+  #scene{position:fixed;inset:0;}
+  canvas{display:block;}
+  .hud{position:absolute;}
+  .card{background:rgba(253,252,248,.94);backdrop-filter:blur(9px);
+    border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 32px rgba(18,28,12,.30);}
+  button{font:inherit;cursor:pointer;}
+
+  .title{top:16px;left:16px;padding:12px 16px;max-width:330px;}
+  .title h1{margin:0;font-family:"Fraunces",serif;font-size:17px;font-weight:600;letter-spacing:-.01em;}
+  .title p{margin:6px 0 0;font-size:12px;line-height:1.5;color:var(--ink-soft);}
+  .title .tag{display:inline-block;margin-top:8px;font-size:10px;font-weight:600;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--green);background:var(--green-soft);border:1px solid #cad9c2;padding:3px 9px;border-radius:999px;}
+
+  /* reference photos */
+  .refs{top:140px;left:16px;width:236px;padding:11px 12px;display:flex;flex-direction:column;gap:8px;}
+  .refs .h{font-family:"Fraunces",serif;font-weight:600;font-size:13px;}
+  .refgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .refgrid figure{margin:0;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:#eceadf;position:relative;}
+  .refgrid img{display:block;width:100%;height:90px;object-fit:cover;object-position:center 20%;}
+  .refgrid figcaption{position:absolute;left:0;right:0;bottom:0;font-size:9px;font-weight:600;color:#fff;
+    background:linear-gradient(transparent,rgba(0,0,0,.6));padding:9px 6px 3px;}
+  .refs .cue{font-size:10.5px;line-height:1.5;color:var(--ink-soft);}
+  .refs .cue b{color:var(--green);}
+
+  /* dock */
+  .dock{left:50%;bottom:16px;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;align-items:center;max-width:calc(100vw - 32px);}
+  .dock .row{display:flex;gap:6px;padding:7px;align-items:center;flex-wrap:wrap;justify-content:center;}
+  .dock .lbl{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);padding:0 6px 0 4px;}
+  .dock button{font-size:12.5px;font-weight:600;color:var(--ink-soft);background:transparent;
+    border:1.5px solid var(--line);border-radius:9px;padding:7px 12px;min-height:38px;transition:all .14s ease;}
+  .dock button:hover{background:var(--green-soft);}
+  .dock button.active{color:#7a5a12;background:var(--sun);border-color:#e2a81f;}
+
+  .perf{right:16px;bottom:16px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.5;
+    color:#d7ecca;background:rgba(10,14,8,.66);border:1px solid rgba(255,255,255,.12);border-radius:9px;
+    padding:8px 11px;white-space:pre;text-align:right;min-width:96px;}
+
+  .loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;
+    gap:13px;background:#11160e;color:#e8e3d6;z-index:60;font-size:13.5px;transition:opacity .5s ease;}
+  .loader .ring{width:32px;height:32px;border:3px solid rgba(245,194,59,.25);border-top-color:var(--sun);
+    border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loader.hide{opacity:0;pointer-events:none;}
+
+  @media (max-width:980px){ .refs{display:none;} }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<div class="hud title card">
+  <h1>Alvah Likeness</h1>
+  <p>De <b>procedurele</b> junior-boswachter (humanoid.js) onder de golden-hour-rig, getoetst
+     tegen de §13d-likeness. Sleep om te draaien.</p>
+  <span class="tag">design-fase · procedureel · §13d</span>
+</div>
+
+<aside class="hud refs card">
+  <div class="h">Doel — Alvah (~8 jr)</div>
+  <div class="refgrid">
+    <figure><img src="1000152319.jpg" alt="front neutraal"><figcaption>front</figcaption></figure>
+    <figure><img src="1000152315.jpg" alt="front lach"><figcaption>lach</figcaption></figure>
+    <figure><img src="1000152316.jpg" alt="driekwart"><figcaption>driekwart</figcaption></figure>
+    <figure><img src="1000152317.jpg" alt="profiel"><figcaption>profiel</figcaption></figure>
+  </div>
+  <div class="cue"><b>Shaggy dark-blond</b>, golvend, zon-getipte punten · pony schuin over 't voorhoofd ·
+    <b>groen-hazel</b> ogen + lange donkere wimpers · kleine opwippende neus · volle lippen + 2 voortanden.</div>
+</aside>
+
+<div class="hud dock">
+  <div class="card row cams">
+    <span class="lbl">Camera</span>
+    <button data-cam="hero" class="active">Hero</button>
+    <button data-cam="front">Front</button>
+    <button data-cam="tq">¾</button>
+    <button data-cam="side">Profiel</button>
+    <button data-cam="full">Heel figuur</button>
+  </div>
+  <div class="card row opts">
+    <span class="lbl">Toon</span>
+    <button data-opt="hat">Hoed</button>
+    <button data-opt="emotion">Alert</button>
+    <span class="lbl">Tijd</span>
+    <button data-time="sunrise" class="active">Ochtend</button>
+    <button data-time="day">Dag</button>
+  </div>
+</div>
+
+<div class="hud perf" id="perf">– fps</div>
+<div class="loader" id="loader"><div class="ring"></div><div id="loadtext">Alvah laden…</div></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { Stage } from './stage.js';
+import { loadCharacter } from './character.js';
+import { SPECS } from './specs.js';
+
+const sceneEl = document.getElementById('scene');
+const perfEl = document.getElementById('perf');
+const loaderEl = document.getElementById('loader');
+
+const stage = new Stage(sceneEl, { perfEl, preserveDrawingBuffer: true });
+stage.setFlag('autoRotate', false);
+stage.flags.follow = false;                  // we frame the camera by hand
+stage.controls.minDistance = 0.25;
+stage.controls.maxDistance = 14;
+
+let alvah = null, headBone = null, hatOn = true, alert = false;
+let activeCam = 'hero';
+
+function findBone(model, name){ let b=null; model.traverse(o=>{ if(o.name===name) b=o; }); return b; }
+
+(async function(){
+  await stage.whenReady;
+  alvah = await loadCharacter(stage, SPECS.ranger);
+  alvah.setGait('rust');
+  alvah.setEmotion('kalm');
+  alvah.setHat(true);
+  // face the camera: turn the figure so its front looks toward +Z (where the front/hero cams sit)
+  alvah.model.rotation.y = 0;
+  alvah.model.updateMatrixWorld(true);
+  headBone = findBone(alvah.model, 'Head');
+  applyCam('hero');
+  loaderEl.classList.add('hide'); setTimeout(()=>loaderEl.style.display='none', 520);
+  window.__A = {
+    headY: ()=>headInfo().y,
+    info: ()=>({ calls: stage.renderer.info.render.calls, tris: stage.renderer.info.render.triangles,
+      camPos: stage.camera.position.toArray().map(n=>+n.toFixed(2)), target: stage.controls.target.toArray().map(n=>+n.toFixed(2)) }),
+    cam: applyCam, rotate:(r)=>{ alvah.model.rotation.y = r; alvah.model.updateMatrixWorld(true); },
+    // force a synchronous fresh frame (rAF may be paused while the tool captures)
+    render: ()=>{ if (alvah) alvah.update(0.016); stage.controls.update(); stage.renderer.info.reset(); stage.fx.render(); },
+  };
+})();
+
+function headInfo(){
+  if (headBone){ headBone.updateWorldMatrix(true,false); const v = new THREE.Vector3().setFromMatrixPosition(headBone.matrixWorld); return v; }
+  return new THREE.Vector3(0, 1.4, 0);
+}
+
+// camera presets, framed on the head (azimuth measured around +Z front)
+function applyCam(which){
+  activeCam = which;
+  const head = headInfo();
+  const eyeY = head.y - 0.07;            // ~eye height (head bone sits at the crown)
+  let target, az, el, dist, fov;
+  if (which==='hero'){ target=new THREE.Vector3(0,eyeY,0); az=0.16; el=0.04; dist=1.5; fov=22; }
+  else if (which==='front'){ target=new THREE.Vector3(0,eyeY,0); az=0.0; el=0.03; dist=1.95; fov=24; }
+  else if (which==='tq'){ target=new THREE.Vector3(0,eyeY,0); az=0.62; el=0.10; dist=2.05; fov=25; }
+  else if (which==='side'){ target=new THREE.Vector3(0,eyeY,0); az=Math.PI/2*0.97; el=0.02; dist=1.95; fov=24; }
+  else { target=new THREE.Vector3(0,0.82,0); az=0.5; el=0.14; dist=4.4; fov=30; }   // full figure
+  stage.camera.fov = fov; stage.camera.updateProjectionMatrix();
+  const pos = new THREE.Vector3(Math.sin(az)*Math.cos(el), Math.sin(el), Math.cos(az)*Math.cos(el)).multiplyScalar(dist).add(target);
+  stage.camera.position.copy(pos); stage.controls.target.copy(target); stage.controls.update();
+}
+
+document.querySelectorAll('.cams button').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('.cams button').forEach(x=>x.classList.toggle('active', x===b));
+  applyCam(b.dataset.cam);
+}));
+document.querySelectorAll('.opts [data-opt]').forEach(b=>b.addEventListener('click', ()=>{
+  if (!alvah) return;
+  if (b.dataset.opt==='hat'){ hatOn=!hatOn; alvah.setHat(hatOn); b.classList.toggle('active', hatOn); }
+  if (b.dataset.opt==='emotion'){ alert=!alert; alvah.setEmotion(alert?'alert':'kalm'); b.classList.toggle('active', alert); b.textContent = alert?'Kalm':'Alert'; }
+}));
+document.querySelectorAll('.opts [data-time]').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('.opts [data-time]').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  stage.setTime(b.dataset.time, false);
+}));
+
+// init hat button state
+document.querySelector('[data-opt="hat"]').classList.add('active');
+
+// loop
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (alvah) alvah.update(dt);
+  stage.update(dt);
+}
+animate();
+</script>
+
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" fill="#1e4d32"/>
+  <circle cx="50" cy="42" r="17" fill="#e9b489"/>
+  <path d="M30 38 Q50 14 70 38 Q66 26 50 24 Q34 26 30 38Z" fill="#5e4527"/>
+</svg>
+</template>
+</body>
+</html>

@@ -1,0 +1,64 @@
+/* ============================================================
+   briefing.css — [D] Ranger-briefing
+   ============================================================ */
+
+.briefing-screen {
+  background: linear-gradient(180deg,#e8efd9 0%,#dfe9cd 100%);
+  display: grid; place-items: center;
+}
+
+.bf-card {
+  position: relative;
+  width: 924px; height: 540px; margin-top: 12px;
+  display: grid; grid-template-columns: 280px 1fr;
+  background: var(--paper);
+  border-radius: var(--spel-radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.bf-card::after { content:""; position:absolute; inset:0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(0,0,0,.04); pointer-events:none; }
+
+/* left column: portrait + scared frisling in grass */
+.bf-left { position: relative; padding: 22px; display: flex; flex-direction: column; gap: 14px; background: var(--paper-tint); }
+.bf-portrait { width: 100%; height: 100%; display: grid; place-items: center; }
+.bf-grass-frisling { position: relative; height: 116px; border-radius: 14px; overflow: hidden;
+  background: linear-gradient(180deg,#cfe0a8,#9fc06a); flex: 0 0 auto; }
+.bf-grass { position: absolute; left: 0; right: 0; bottom: 0; height: 56px;
+  background:
+    radial-gradient(14px 36px at 12px 100%, #6f9442 0 99%, transparent 100%),
+    radial-gradient(14px 44px at 40px 100%, #5f8536 0 99%, transparent 100%),
+    radial-gradient(14px 38px at 70px 100%, #6f9442 0 99%, transparent 100%),
+    radial-gradient(14px 46px at 104px 100%, #5f8536 0 99%, transparent 100%),
+    radial-gradient(14px 40px at 140px 100%, #6f9442 0 99%, transparent 100%),
+    radial-gradient(14px 44px at 180px 100%, #5f8536 0 99%, transparent 100%),
+    radial-gradient(14px 38px at 220px 100%, #6f9442 0 99%, transparent 100%);
+  background-repeat: no-repeat;
+}
+.bf-grass-front { height: 30px; filter: brightness(.92); z-index: 3; }
+.bf-frisling-wrap { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 2; }
+
+/* right column: reading */
+.bf-right { padding: 30px 34px; display: flex; flex-direction: column; }
+.bf-eyebrow { font: 600 13px/1 'Inter Tight', sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--spel-orange); margin-bottom: 14px; }
+.bf-lines { flex: 1; display: flex; flex-direction: column; gap: 2px; justify-content: center; }
+
+.bf-line {
+  position: relative; margin: 0; padding: 5px 12px; border-radius: 10px;
+  font-family: var(--read-font); font-weight: 500;
+  font-size: var(--read-size); line-height: var(--read-leading);
+  color: var(--ink); letter-spacing: .01em;
+  transition: background var(--dur-base) var(--ease-soft), color var(--dur-base);
+}
+.bf-line.reading { background: rgba(217,184,154,.42); color: var(--green-deep); }
+.bf-line.reading .bf-line-text { background-image: linear-gradient(var(--green), var(--green)); background-repeat: no-repeat; background-position: 0 92%; background-size: 100% 3px; animation: sweepUnderline 1.1s linear; }
+.bf-line.read-done { color: var(--ink-soft); }
+@keyframes sweepUnderline { from { background-size: 0% 3px; } to { background-size: 100% 3px; } }
+
+.bf-actions { display: flex; gap: 12px; align-items: center; margin-top: 14px; }
+.bf-read { gap: 12px; }
+.bf-read.active { box-shadow: var(--shadow-md), 0 0 0 2px var(--spel-blue); color: var(--spel-blue); }
+.bf-wave { display: inline-flex; align-items: flex-end; gap: 3px; height: 18px; }
+.bf-wave i { width: 3px; height: 6px; border-radius: 2px; background: currentColor; opacity: .55; }
+.bf-read.active .bf-wave i { animation: wave .8s ease-in-out infinite; }
+.bf-read.active .bf-wave i:nth-child(2){ animation-delay:.15s } .bf-read.active .bf-wave i:nth-child(3){ animation-delay:.3s } .bf-read.active .bf-wave i:nth-child(4){ animation-delay:.45s }
+@keyframes wave { 0%,100%{ height:6px } 50%{ height:17px } }

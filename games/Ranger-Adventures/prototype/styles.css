@@ -1,0 +1,258 @@
+/* ============================================================
+   Ranger van de Veluwe — design tokens + global
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600;700&family=Lexend:wght@400;500;600;700&display=swap');
+
+:root {
+  /* — world / nature base — */
+  --green:        #1e4d32;
+  --green-deep:   #123621;
+  --green-soft:   #f0f5ec;
+  --green-line:   #c8d6c0;
+  --green-mid:    #2f6b46;
+  --green-bright: #5a9d6b;
+
+  /* — ink — */
+  --ink:        #1a1a1a;
+  --ink-soft:   #4a4a4a;
+  --ink-muted:  #7a7a7a;
+
+  /* — paper / warmth — */
+  --paper:       #fdfcf8;
+  --paper-tint:  #f7f2e7;
+  --line:        #e8e5dc;
+  --accent-warm: #d9b89a;
+  --red-warn:    #9b3d2e;
+
+  /* — playful spel palette (UI accents) — */
+  --spel-blue:    #2b5fb8;  --spel-blue-soft:    #e7eefa;
+  --spel-orange:  #ef7a1f;  --spel-orange-soft:  #fdeedd;
+  --spel-magenta: #c94174;  --spel-magenta-soft: #fbe6ee;
+  --spel-sun:     #f5c23b;  --spel-sun-glow:     rgba(245,194,59,0.35);
+
+  /* — sky / golden hour — */
+  --sky-top:    #fde8c8;
+  --sky-mid:    #f6cf9e;
+  --sky-low:    #e9b27f;
+  --heath-far:  #b9a86a;
+  --heath-mid:  #8a9a55;
+  --heath-near: #6d8a45;
+
+  /* — radii — */
+  --spel-radius:    14px;
+  --spel-radius-lg: 20px;
+  --radius-pill:    999px;
+
+  /* — motion tokens — */
+  --dur-instant: 120ms;
+  --dur-quick:   200ms;
+  --dur-base:    320ms;
+  --dur-slow:    520ms;
+  --dur-cine:    900ms;
+  --ease-standard:  cubic-bezier(.2,0,0,1);
+  --ease-out:       cubic-bezier(0,0,.2,1);
+  --ease-in:        cubic-bezier(.4,0,1,1);
+  --ease-soft:      cubic-bezier(.4,0,.2,1);
+  --ease-overshoot: cubic-bezier(.34,1.56,.64,1);
+
+  /* — shadow — */
+  --shadow-sm:  0 1px 3px rgba(30,40,25,.12);
+  --shadow-md:  0 6px 18px rgba(30,40,25,.16);
+  --shadow-lg:  0 18px 48px rgba(30,40,25,.22);
+  --shadow-post: 0 10px 22px rgba(40,30,15,.28);
+
+  /* — reading — */
+  --read-size: 28px;
+  --read-leading: 1.7;
+  --read-font: 'Lexend', system-ui, sans-serif;
+
+  /* — design canvas — */
+  --canvas-w: 1080px;
+  --canvas-h: 720px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  height: 100%;
+  background: #2a241c;
+  font-family: 'Inter Tight', system-ui, sans-serif;
+  color: var(--ink);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- stage + scaled canvas ---- */
+#stage {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  background:
+    radial-gradient(120% 120% at 50% 0%, #3a3326 0%, #221d16 60%, #181410 100%);
+  overflow: hidden;
+}
+#canvas {
+  position: relative;
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  transform-origin: center center;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 40px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04);
+  background: var(--green-soft);
+}
+
+/* every screen fills the canvas */
+.screen {
+  position: absolute; inset: 0;
+  overflow: hidden;
+}
+
+/* screen base is always VISIBLE. No opacity-gated entrance (would hide content
+   if animations are throttled / reduced-motion). Per-element polish is added
+   with transforms that resolve to a visible resting state. */
+.screen { opacity: 1; }
+.screen-enter { animation: none; }
+@keyframes screenIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ============================================================
+   Shell chrome (SpelShell-like)
+   ============================================================ */
+.chrome {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 64px;
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 20px;
+  z-index: 40;
+  pointer-events: none;
+}
+.chrome > * { pointer-events: auto; }
+.chrome-spacer { flex: 1; }
+
+.chrome-btn {
+  display: inline-flex; align-items: center; gap: 9px;
+  height: 44px; padding: 0 16px;
+  border: none; border-radius: var(--radius-pill);
+  background: rgba(253,252,248,.86);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink-soft);
+  font: 600 16px/1 'Inter Tight', sans-serif;
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-standard),
+              background var(--dur-quick), box-shadow var(--dur-quick);
+}
+.chrome-btn:hover { transform: translateY(-2px); background: var(--paper); box-shadow: var(--shadow-md); }
+.chrome-btn:active { transform: translateY(0); }
+.chrome-btn.icon-only { width: 44px; padding: 0; justify-content: center; }
+.chrome-btn .ico { width: 20px; height: 20px; display: block; }
+.chrome-btn[aria-pressed="false"] { opacity: .62; }
+
+.chrome-title {
+  font: 600 17px/1 'Fraunces', serif;
+  letter-spacing: .01em;
+  color: var(--paper);
+  text-shadow: 0 1px 8px rgba(0,0,0,.35);
+  padding: 0 4px;
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 56px; padding: 0 28px;
+  border: none; border-radius: var(--spel-radius);
+  font: 700 21px/1 'Inter Tight', sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-standard),
+              box-shadow var(--dur-quick), filter var(--dur-quick);
+  user-select: none;
+}
+.btn:active { transform: translateY(2px); }
+.btn-primary {
+  background: var(--spel-sun);
+  color: #5a3d09;
+  box-shadow: 0 6px 0 #d59f1d, 0 14px 26px var(--spel-sun-glow);
+}
+.btn-primary:hover { filter: brightness(1.04); transform: translateY(-2px); box-shadow: 0 8px 0 #d59f1d, 0 18px 32px var(--spel-sun-glow); }
+.btn-primary:active { box-shadow: 0 2px 0 #d59f1d, 0 8px 16px var(--spel-sun-glow); }
+.btn-ghost {
+  background: rgba(253,252,248,.9);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow-sm);
+}
+.btn-ghost:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.btn-green {
+  background: var(--green);
+  color: var(--paper);
+  box-shadow: 0 6px 0 var(--green-deep), 0 14px 26px rgba(18,54,33,.3);
+}
+.btn-green:hover { transform: translateY(-2px); filter: brightness(1.06); }
+
+/* skip link */
+.skip {
+  position: absolute; right: 22px; bottom: 22px;
+  z-index: 30;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 42px; padding: 0 18px;
+  border: none; border-radius: var(--radius-pill);
+  background: rgba(20,16,12,.5);
+  backdrop-filter: blur(6px);
+  color: rgba(255,255,255,.9);
+  font: 600 15px/1 'Inter Tight', sans-serif;
+  cursor: pointer;
+  transition: background var(--dur-quick), transform var(--dur-quick);
+}
+.skip:hover { background: rgba(20,16,12,.72); transform: translateX(2px); }
+
+/* ============================================================
+   Placeholder art system (refined, not ugly stripes)
+   ============================================================ */
+.art-slot {
+  position: relative;
+  display: grid; place-items: center;
+  border-radius: var(--spel-radius);
+  background:
+    repeating-linear-gradient(135deg,
+      rgba(0,0,0,.035) 0 10px, transparent 10px 20px),
+    var(--paper-tint);
+  border: 1.5px dashed var(--accent-warm);
+  overflow: hidden;
+}
+.art-slot .art-label {
+  font: 500 12px/1.3 ui-monospace, 'SF Mono', Menlo, monospace;
+  letter-spacing: .04em;
+  color: var(--ink-muted);
+  text-transform: lowercase;
+  background: rgba(253,252,248,.7);
+  padding: 4px 9px; border-radius: 6px;
+}
+
+/* ============================================================
+   Misc helpers
+   ============================================================ */
+.vignette::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 120px 30px rgba(20,30,15,.28);
+}
+.grain::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  opacity: .5; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* reduced motion: handled per-component via .rm class on #canvas */
+.rm * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+.rm .ambient { display: none !important; }

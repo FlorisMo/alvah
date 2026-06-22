@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Veluwe 3D · dierframework</title>
+<!-- ext-resource-dependency: three.js (jsDelivr), CC0 Fox glTF (Khronos), CC0 RobotExpressive (three.js), CC0 Poly Haven HDRI — loaded at runtime -->
+<style>
+  :root{
+    --green:#1e4d32; --green-deep:#123621; --green-soft:#f0f5ec;
+    --ink:#1a1a1a; --ink-soft:#4a4a4a; --paper:#fdfcf8; --line:#e8e5dc;
+    --accent-warm:#d9b89a; --spel-sun:#f5c23b;
+    --spel-radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0f130d;
+    font-family:"Inter Tight",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;}
+
+  .hud{position:absolute;pointer-events:none;}
+  .card{pointer-events:auto;background:rgba(253,252,248,.92);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:var(--spel-radius);box-shadow:0 8px 28px rgba(20,30,15,.28);}
+
+  .title{top:18px;left:18px;padding:14px 18px;max-width:360px;}
+  .title h1{margin:0;font-family:"Fraunces",Georgia,serif;font-size:19px;font-weight:600;letter-spacing:-.01em;}
+  .title p{margin:6px 0 0;font-size:13px;line-height:1.5;color:var(--ink-soft);}
+  .title .tag{display:inline-block;margin-top:9px;font-size:11px;font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--green);background:var(--green-soft);
+    border:1px solid #c8d6c0;padding:3px 8px;border-radius:999px;}
+
+  .bottombar{left:50%;bottom:22px;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;align-items:center;}
+  .row{display:flex;gap:8px;}
+  .controls{padding:8px;}
+  .controls button{pointer-events:auto;font:inherit;font-size:15px;font-weight:600;color:var(--ink);
+    background:transparent;border:1.5px solid transparent;border-radius:10px;padding:10px 18px;cursor:pointer;
+    transition:background .18s ease,border-color .18s ease,transform .12s ease;min-height:44px;}
+  .controls button:hover{background:var(--green-soft);}
+  .controls button.active{background:var(--spel-sun);border-color:#e2a81f;}
+  .controls button:active{transform:translateY(1px);}
+
+  .emotes{padding:7px;}
+  .emotes .lbl{align-self:center;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--ink-soft);padding:0 8px 0 6px;}
+  .emotes button{pointer-events:auto;font:inherit;font-size:14px;font-weight:600;color:var(--ink-soft);
+    background:transparent;border:1.5px solid var(--line);border-radius:9px;padding:8px 14px;cursor:pointer;
+    transition:all .16s ease;min-height:40px;}
+  .emotes button.active{color:var(--green-deep);background:var(--green-soft);border-color:#c8d6c0;}
+
+  .toggles{top:18px;right:18px;display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+  .toggles .card{display:flex;gap:6px;padding:7px;}
+  .toggles button{pointer-events:auto;font:inherit;font-size:13px;font-weight:600;color:var(--ink-soft);
+    background:transparent;border:1.5px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer;
+    transition:all .16s ease;min-height:38px;}
+  .toggles button.on{color:var(--green-deep);background:var(--green-soft);border-color:#c8d6c0;}
+  .toggles button.picker.active{color:#7a5a12;background:var(--spel-sun);border-color:#e2a81f;}
+  .toggles .times{flex-wrap:wrap;max-width:312px;justify-content:flex-end;}
+
+  .hint{left:18px;bottom:22px;font-size:12px;color:#e9e0cf;text-shadow:0 1px 4px rgba(0,0,0,.6);
+    pointer-events:none;max-width:240px;line-height:1.5;}
+
+  .perf{right:18px;bottom:22px;font-family:ui-monospace,"SFMono-Regular",Menlo,monospace;font-size:11px;line-height:1.55;
+    color:#cfe8c4;background:rgba(10,14,8,.62);border:1px solid rgba(255,255,255,.12);border-radius:8px;
+    padding:7px 10px;pointer-events:auto;cursor:pointer;white-space:pre;text-align:right;backdrop-filter:blur(4px);}
+  .perf.off{opacity:.3;}
+
+  .loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;background:#11160e;color:#e8e3d6;z-index:50;font-size:14px;transition:opacity .6s ease;}
+  .loader .ring{width:34px;height:34px;border:3px solid rgba(245,194,59,.25);border-top-color:var(--spel-sun);
+    border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loader.hide{opacity:0;pointer-events:none;}
+
+  @media (max-width:620px){ .title{max-width:60vw;} .title p{display:none;} .emotes .lbl{display:none;} .ranger-panel{display:none!important;} }
+
+  /* ranger-uitrusting (alleen zichtbaar als de Ranger actief is) */
+  .ranger-panel{top:150px;left:18px;width:252px;flex-direction:column;gap:9px;padding:13px 14px;}
+  .ranger-panel .rp-head{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:15px;letter-spacing:-.01em;}
+  .ranger-panel .rp-sub{font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-top:-4px;}
+  .rp-badges{display:flex;flex-wrap:wrap;gap:6px;}
+  .rp-badges button{pointer-events:auto;font:inherit;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;
+    color:var(--ink-soft);background:transparent;border:1.5px solid var(--line);border-radius:999px;padding:5px 11px 5px 9px;cursor:pointer;min-height:32px;transition:all .15s ease;}
+  .rp-badges button .dot{width:11px;height:11px;border-radius:50%;background:currentColor;opacity:.3;transition:opacity .15s ease;}
+  .rp-badges button.earned{color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(20,30,15,.25);}
+  .rp-badges button.earned .dot{opacity:1;background:rgba(255,255,255,.95);}
+  .rp-row{display:flex;gap:6px;}
+  .rp-row button{pointer-events:auto;font:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);background:transparent;
+    border:1.5px solid var(--line);border-radius:9px;padding:6px 10px;cursor:pointer;min-height:34px;flex:1;transition:all .15s ease;}
+  .rp-row button:hover{background:var(--green-soft);}
+  .rp-row button.on{color:var(--green-deep);background:var(--green-soft);border-color:#c8d6c0;}
+  .rp-hint{font-size:11px;color:var(--ink-soft);line-height:1.45;}
+  .rp-hint b{color:var(--green);}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="hud title card">
+  <h1 id="ti-naam">De Veluwe in 3D — dierframework</h1>
+  <p>Eén gedeelde Stage, per dier een spec. Kies rechtsboven het dier en het dagdeel,
+     stuur de gang onderaan, of geef een uitdrukking (Kalm / Alert / Bang). Sleep om te draaien.</p>
+  <span class="tag" id="ti-tag">stage · spec · emotie-laag · CC0</span>
+</div>
+
+<div class="hud toggles">
+  <div class="card">
+    <button id="t-follow" class="on">Volg dier</button>
+    <button id="t-rotate" class="on">Auto-draai</button>
+    <button id="t-shadow" class="on">Schaduw</button>
+    <button id="t-motion" class="on">Beweging</button>
+  </div>
+  <div class="card picker-row" id="picker">
+    <button class="picker" data-char="vos">Vos</button>
+    <button class="picker active" data-char="ranger" title="Alvah — junior-boswachter (procedureel mens-figuur op CC0-rig)">Ranger</button>
+    <button class="picker" data-char="robot" title="Framework-test (CC0): ándere bot-/clipnamen + morph-emoties">Robot</button>
+  </div>
+  <div class="card times">
+    <button data-time="sunrise" class="on">Zonsopkomst</button>
+    <button data-time="day">Dag</button>
+    <button data-time="sunset">Zonsondergang</button>
+    <button data-time="night">Nacht</button>
+  </div>
+</div>
+
+<div class="hud ranger-panel card" id="rangerPanel" style="display:none;">
+  <div class="rp-head">Ranger-uitrusting</div>
+  <div class="rp-sub">Badges — klik om te verdienen</div>
+  <div class="rp-badges" id="rpBadges"></div>
+  <div class="rp-row">
+    <button id="rpHat" class="on">Hoed</button>
+    <button id="rpAll">Alle</button>
+    <button id="rpNone">Wis</button>
+  </div>
+  <div class="rp-hint">Kies <b>Bestuurbaar</b> en stuur met de <b>pijltjes</b> · Shift = rennen.</div>
+</div>
+
+<div class="hud bottombar">
+  <div class="card emotes row" id="emotes">
+    <span class="lbl">Uitdrukking</span>
+    <button data-emotion="kalm" class="active">Kalm</button>
+    <button data-emotion="alert">Alert</button>
+    <button data-emotion="bang">Bang</button>
+  </div>
+  <div class="card controls row" id="controls">
+    <button data-gait="rust">Rust</button>
+    <button data-gait="walk">Lopen</button>
+    <button data-gait="run">Rennen</button>
+    <button data-gait="auto" class="active">Zwerven</button>
+    <button data-gait="manual">Bestuurbaar</button>
+  </div>
+</div>
+
+<div class="hint hud">Sleep om te draaien · dier &amp; dagdeel rechtsboven · uitdrukking onderaan</div>
+<div class="perf hud" id="perf" title="renderer.info per frame — klik om te dimmen">– fps</div>
+
+<div class="loader" id="loader"><div class="ring"></div><div id="loadtext">Wereld laden…</div></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import { Stage } from './stage.js';
+import { loadCharacter } from './character.js';
+import { SPECS } from './specs.js';
+
+const appEl = document.getElementById('app');
+const loaderEl = document.getElementById('loader');
+const loadText = document.getElementById('loadtext');
+const perfEl = document.getElementById('perf');
+
+const stage = new Stage(appEl, { perfEl, onStatus: (pct) => { loadText.textContent = `Wereld laden… ${pct}%`; } });
+
+let active = null;       // huidige character-handle
+let switching = false;
+
+function setLoader(text, show) {
+  loadText.textContent = text;
+  if (show) {
+    loaderEl.style.display = 'flex';
+    loaderEl.style.opacity = '1';
+    loaderEl.classList.remove('hide');
+  } else {
+    loaderEl.classList.add('hide');        // 0.6s fade indien de transition draait
+    loaderEl.style.opacity = '0';
+    // display:none ná de fade — kan NIET door een (vastlopende) transition worden overruled
+    setTimeout(() => { if (loaderEl.classList.contains('hide')) loaderEl.style.display = 'none'; }, 650);
+  }
+}
+
+async function swapCharacter(id) {
+  if (switching) return; switching = true;
+  setLoader(`${SPECS[id].naam} laden…`, true);
+  document.querySelectorAll('#picker .picker').forEach(b => b.classList.toggle('active', b.dataset.char === id));
+  try {
+    const next = await loadCharacter(stage, SPECS[id]);
+    if (active) active.dispose();
+    active = next;
+    stage.followTarget(active.model);
+    stage.applyTimeState();                       // nieuw dier meteen op juist dagdeel-env
+    // herstel huidige UI-keuzes op het nieuwe dier
+    const g = document.querySelector('#controls button.active')?.dataset.gait || 'auto';
+    const e = document.querySelector('#emotes button.active')?.dataset.emotion || 'kalm';
+    active.setGait(g); active.setEmotion(e);
+    // titel
+    const naam = SPECS[id].naam;
+    document.getElementById('ti-naam').textContent = id === 'ranger'
+      ? 'Alvah — Ranger van de Veluwe'
+      : (SPECS[id].note ? `${naam} — framework-test` : `${naam} in 3D`);
+    updateRangerPanel(id);
+  } catch (e) {
+    setLoader('Kon het model niet laden (netwerk). Ververs om opnieuw te proberen.', true);
+    switching = false; return;
+  }
+  setLoader('', false);
+  switching = false;
+}
+
+stage.whenReady.then(async () => {
+  await swapCharacter('ranger');
+  if (stage.reduceMotion) { document.getElementById('t-motion').click(); }   // reduced-motion: alles bevriezen
+  // ---- loop ----
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(stage.clock.getDelta(), 0.05);
+    if (active) active.update(dt);
+    stage.update(dt);
+  }
+  animate();
+});
+
+// ---- UI: gangen ----
+document.querySelectorAll('#controls button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#controls button').forEach(x => x.classList.toggle('active', x === b));
+  if (active) active.setGait(b.dataset.gait);
+  if (b.dataset.gait === 'manual' && stage.flags.autoRotate) {   // besturen + auto-draai vechten -> draai uit
+    stage.setFlag('autoRotate', false); document.getElementById('t-rotate').classList.remove('on');
+  }
+}));
+// ---- UI: emoties ----
+document.querySelectorAll('#emotes button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#emotes button').forEach(x => x.classList.toggle('active', x === b));
+  if (active) active.setEmotion(b.dataset.emotion);
+}));
+// ---- UI: character-kiezer ----
+document.querySelectorAll('#picker .picker').forEach(b => b.addEventListener('click', () => {
+  if (!switching && (!active || active.spec.id !== b.dataset.char)) swapCharacter(b.dataset.char);
+}));
+// ---- UI: dagdeel ----
+document.querySelectorAll('.times button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.times button').forEach(x => x.classList.toggle('on', x === b));
+  stage.setTime(b.dataset.time, false);
+}));
+// ---- UI: toggles ----
+const bind = (id, flag, label) => { const el = document.getElementById(id);
+  el.addEventListener('click', () => { const on = !stage.flags[flag]; stage.setFlag(flag, on); el.classList.toggle('on', on); }); };
+bind('t-follow', 'follow'); bind('t-rotate', 'autoRotate'); bind('t-shadow', 'shadow'); bind('t-motion', 'motion');
+
+// ---- Ranger: badges + hoed + pijltjesbesturing ----
+const rangerPanel = document.getElementById('rangerPanel');
+const rpBadges = document.getElementById('rpBadges');
+let earned = new Set();
+function paintChip(b, on) {
+  const d = active && active.badgeDefs ? active.badgeDefs.find(x => x.id === b.dataset.id) : null; if (!d) return;
+  b.classList.toggle('earned', on);
+  b.style.background = on ? d.color : 'transparent';
+  b.style.color = on ? '#fff' : d.color;
+}
+function updateRangerPanel(id) {
+  const isRanger = id === 'ranger';
+  rangerPanel.style.display = isRanger ? 'flex' : 'none';
+  if (!isRanger) return;
+  earned = new Set(); rpBadges.innerHTML = '';
+  const defs = (active && active.badgeDefs) || [];
+  for (const d of defs) {
+    const b = document.createElement('button');
+    b.dataset.id = d.id; b.style.color = d.color;
+    b.innerHTML = '<span class="dot"></span>' + d.naam;
+    b.addEventListener('click', () => {
+      if (earned.has(d.id)) earned.delete(d.id); else earned.add(d.id);
+      paintChip(b, earned.has(d.id));
+      if (active && active.setBadges) active.setBadges([...earned]);
+    });
+    rpBadges.appendChild(b);
+  }
+  document.getElementById('rpHat').classList.add('on');
+  if (active) { active.setBadges([]); active.setHat(true); }
+}
+document.getElementById('rpHat').addEventListener('click', () => {
+  const el = document.getElementById('rpHat'); const on = !el.classList.contains('on');
+  el.classList.toggle('on', on); if (active && active.setHat) active.setHat(on);
+});
+document.getElementById('rpAll').addEventListener('click', () => {
+  if (!active || !active.badgeDefs) return;
+  earned = new Set(active.badgeDefs.map(d => d.id));
+  rpBadges.querySelectorAll('button').forEach(b => paintChip(b, true));
+  active.setBadges([...earned]);
+});
+document.getElementById('rpNone').addEventListener('click', () => {
+  if (!active) return; earned = new Set();
+  rpBadges.querySelectorAll('button').forEach(b => paintChip(b, false));
+  active.setBadges([]);
+});
+
+// pijltjes -> manual/bestuurbaar gang
+const driveInput = { f: 0, b: 0, l: 0, r: 0, run: false };
+const KEYMAP = { ArrowUp: 'f', ArrowDown: 'b', ArrowLeft: 'l', ArrowRight: 'r' };
+function selectManual() { const mb = document.querySelector('#controls button[data-gait="manual"]'); if (mb && !mb.classList.contains('active')) mb.click(); }
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Shift') driveInput.run = true;
+  const k = KEYMAP[e.key];
+  if (k) { e.preventDefault(); driveInput[k] = 1; if (active && active.gait !== 'manual') selectManual(); }
+  if (active && active.setInput) active.setInput(driveInput);
+});
+window.addEventListener('keyup', (e) => {
+  if (e.key === 'Shift') driveInput.run = false;
+  const k = KEYMAP[e.key]; if (k) { e.preventDefault(); driveInput[k] = 0; }
+  if (active && active.setInput) active.setInput(driveInput);
+});
+</script>
+</body>
+</html>

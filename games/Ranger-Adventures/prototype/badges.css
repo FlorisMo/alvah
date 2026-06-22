@@ -1,0 +1,192 @@
+/* ============================================================
+   badges.css — logboek + breinkracht-badges + helper bar
+   ============================================================ */
+
+/* ---- child-regie helper bar (world step) ---- */
+.hulp-balk {
+  position: absolute;
+  left: 50%; bottom: 18px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-md);
+  z-index: 30;
+  animation: hulp-rise var(--dur-base) var(--ease-out) both;
+}
+.canvas.rm .hulp-balk, .rm .hulp-balk { animation: none; }
+@keyframes hulp-rise { from { transform: translate(-50%, 10px); } to { transform: translate(-50%, 0); } }
+.hulp-tekst {
+  font: 500 15px/1.2 var(--read-font);
+  color: var(--ink-soft);
+  padding-left: 6px;
+}
+.hulp-btn {
+  font: 600 15px/1 'Inter Tight', sans-serif;
+  padding: 11px 16px; min-height: 44px;
+  border-radius: var(--radius-pill);
+  border: none; cursor: pointer;
+  background: var(--green-mid); color: #fff;
+  transition: transform var(--dur-quick) var(--ease-out), background var(--dur-quick);
+}
+.hulp-btn:hover { transform: translateY(-1px); background: var(--green); }
+.hulp-btn.ghost { background: var(--green-soft); color: var(--green-deep); }
+.hulp-btn.ghost:hover { background: var(--green-line); }
+
+/* engine hint highlights */
+.wissel-bin.hint, .choice-opt.hint {
+  animation: hint-pulse 1.1s var(--ease-soft) infinite;
+  outline: 3px solid var(--spel-sun);
+  outline-offset: 2px;
+}
+.rm .wissel-bin.hint, .rm .choice-opt.hint { animation: none; }
+@keyframes hint-pulse { 0%,100% { box-shadow: 0 0 0 0 var(--spel-sun-glow); } 50% { box-shadow: 0 0 0 10px transparent; } }
+
+/* ============================================================
+   Logboek overlay
+   ============================================================ */
+.logboek-overlay {
+  position: absolute; inset: 0; z-index: 60;
+  display: grid; place-items: center;
+  background: rgba(18, 28, 18, .42);
+  backdrop-filter: blur(3px);
+  padding: 26px;
+}
+.logboek {
+  width: min(760px, 94%); max-height: 92%;
+  overflow-y: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--spel-radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 26px 28px 22px;
+}
+.lb-head { margin-bottom: 18px; }
+.lb-eyebrow {
+  font: 600 12px/1 ui-monospace, monospace;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.lb-title {
+  font: 600 30px/1.1 'Fraunces', serif;
+  color: var(--green-deep);
+  margin: 6px 0 0;
+}
+.lb-section { margin-top: 22px; }
+.lb-label {
+  font: 600 13px/1 ui-monospace, monospace;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 14px;
+}
+.lb-foot { font: 400 14px/1.5 var(--read-font); color: var(--ink-soft); margin: 14px 2px 0; }
+.lb-empty { font: 400 15px/1.5 var(--read-font); color: var(--ink-muted); margin: 0; }
+
+/* breinkracht grid */
+.brein-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+.brein-cell { position: relative; display: flex; flex-direction: column; align-items: center; }
+.brein-badge { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.bb-ring {
+  border-radius: 50%;
+  display: grid; place-items: center;
+  padding: 6px;
+}
+.bb-core {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  box-shadow: inset 0 -3px 8px rgba(0,0,0,.18), inset 0 2px 6px rgba(255,255,255,.25);
+}
+.bb-name { font: 600 14px/1.2 'Inter Tight', sans-serif; color: var(--ink); margin-top: 9px; }
+.bb-tier { font: 600 12px/1 ui-monospace, monospace; letter-spacing: .06em; margin-top: 3px; }
+
+.brein-cell.grew .bb-ring { animation: badge-pop 700ms var(--ease-overshoot) both; }
+.rm .brein-cell.grew .bb-ring { animation: none; }
+@keyframes badge-pop { 0% { transform: scale(.8); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.grew-tag {
+  margin-top: 6px;
+  font: 700 11px/1 ui-monospace, monospace;
+  letter-spacing: .06em; text-transform: uppercase;
+  color: #fff; background: var(--green-bright);
+  padding: 4px 8px; border-radius: var(--radius-pill);
+}
+
+/* mission medals */
+.medal-row, .knap-row { display: flex; flex-wrap: wrap; gap: 16px; }
+.medal-item { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 92px; text-align: center; }
+.missie-medal {
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 35%, var(--paper-tint), var(--accent-warm));
+  border: 3px solid var(--spel-sun);
+  box-shadow: var(--shadow-sm);
+}
+.mm-inner { display: grid; place-items: center; }
+.medal-name { font: 500 13px/1.25 var(--read-font); color: var(--ink-soft); }
+
+/* knap-woord chips */
+.knap-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  font: 600 15px/1 'Inter Tight', sans-serif; color: var(--spel-magenta);
+  background: var(--spel-magenta-soft);
+  border-radius: var(--radius-pill);
+  padding: 10px 15px;
+}
+.knap-star { font-size: 13px; }
+
+.lb-close { margin-top: 22px; }
+
+/* logboek entry button on map */
+.logboek-knop {
+  position: absolute; top: 20px; right: 20px; z-index: 18;
+  display: inline-flex; align-items: center; gap: 9px;
+  font: 600 15px/1 'Inter Tight', sans-serif;
+  color: var(--green-deep);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 11px 16px; min-height: 44px; cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-quick) var(--ease-out), box-shadow var(--dur-quick);
+}
+.logboek-knop:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.logboek-knop .lk-medal {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: conic-gradient(var(--spel-sun) 270deg, rgba(0,0,0,.1) 270deg);
+  display: grid; place-items: center;
+}
+.logboek-knop .lk-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--green-mid); }
+
+/* growth banner on the complete screen */
+.groei-banner {
+  margin: 18px auto 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  background: var(--green-soft);
+  border: 1px solid var(--green-line);
+  border-radius: var(--spel-radius);
+  max-width: 440px;
+}
+.groei-mini { display: flex; gap: -6px; }
+.groei-text { font: 500 15px/1.4 var(--read-font); color: var(--green-deep); text-align: left; }
+
+.cp-lastiger { margin-top: 14px; }
+.cp-lastiger-ok { margin-top: 14px; font: 500 15px/1.4 var(--read-font); color: var(--green-mid); }
+
+/* logboek: metgezel row */
+.lb-metgezel { display: flex; align-items: center; gap: 16px; }
+.lbm-art { display: grid; place-items: center; width: 90px; }
+.lbm-naam { font: 600 18px/1 'Fraunces', serif; color: var(--green-deep); }
+.lbm-fases { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.lbm-fase { font: 600 12px/1 'Inter Tight', sans-serif; color: var(--ink-muted); background: var(--paper-tint); border-radius: var(--radius-pill); padding: 6px 11px; }
+.lbm-fase.reached { color: #fff; background: var(--green-mid); }
+.lbm-rehab { margin-top: 8px; font: 500 13px/1.4 var(--read-font); color: var(--green-bright); }
+
+@media (max-width: 540px) {
+  .brein-grid { grid-template-columns: repeat(3, 1fr); }
+}

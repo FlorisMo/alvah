@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ranger van de Veluwe</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="map.css" />
+<link rel="stylesheet" href="transport.css" />
+<link rel="stylesheet" href="travel.css" />
+<link rel="stylesheet" href="briefing.css" />
+<link rel="stylesheet" href="world.css" />
+<link rel="stylesheet" href="world-night.css" />
+<link rel="stylesheet" href="reunion.css" />
+<link rel="stylesheet" href="cabin.css" />
+<link rel="stylesheet" href="caseboard.css" />
+<link rel="stylesheet" href="season.css" />
+<link rel="stylesheet" href="badges.css" />
+<link rel="stylesheet" href="tweaks.css" />
+</head>
+<body>
+<div id="stage">
+  <div id="canvas"></div>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- stage scaling: letterbox the fixed canvas to fit the viewport -->
+<script>
+(function () {
+  var W = 1080, H = 720, MARGIN = 0;
+  function fit() {
+    var canvas = document.getElementById('canvas');
+    if (!canvas) return;
+    var sw = window.innerWidth - MARGIN, sh = window.innerHeight - MARGIN;
+    var scale = Math.min(sw / W, sh / H);
+    canvas.style.transform = 'scale(' + scale + ')';
+  }
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', fit);
+  document.addEventListener('DOMContentLoaded', fit);
+  fit();
+  window.__fitCanvas = fit;
+})();
+</script>
+
+<script type="text/babel" src="sound.jsx"></script>
+<script type="text/babel" src="sprites.jsx"></script>
+<script type="text/babel" src="content-veluwe.jsx"></script>
+<script type="text/babel" src="content.jsx"></script>
+<script type="text/babel" src="skill.jsx"></script>
+<script type="text/babel" src="companion.jsx"></script>
+<script type="text/babel" src="state.jsx"></script>
+<script type="text/babel" src="badges.jsx"></script>
+<script type="text/babel" src="screen-map.jsx"></script>
+<script type="text/babel" src="screen-cabin.jsx"></script>
+<script type="text/babel" src="screen-transport.jsx"></script>
+<script type="text/babel" src="screen-travel.jsx"></script>
+<script type="text/babel" src="screen-briefing.jsx"></script>
+<script type="text/babel" src="step-spot.jsx"></script>
+<script type="text/babel" src="step-route.jsx"></script>
+<script type="text/babel" src="step-danger.jsx"></script>
+<script type="text/babel" src="step-simon.jsx"></script>
+<script type="text/babel" src="step-wissel.jsx"></script>
+<script type="text/babel" src="screen-world.jsx"></script>
+<script type="text/babel" src="screen-reunion.jsx"></script>
+<script type="text/babel" src="screen-complete.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Ranger Audition · CC0 mesh-kandidaten vs. Alvah</title>
+<!-- ext-resource-dependency: three.js (jsDelivr), CC0 glTF kandidaten (Khronos Sample-Assets + three.js examples, GitHub raw) — geladen at runtime -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --green:#1e4d32; --green-deep:#123621; --green-soft:#eef4ea;
+    --ink:#191a17; --ink-soft:#55564e; --ink-faint:#8a8b80;
+    --paper:#fdfcf8; --line:#e7e4da;
+    --sun:#f5c23b; --warm:#d9b89a;
+    --ok:#2f8a4e; --no:#c0492f; --meh:#c79019;
+    --r:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#11140e;
+    font-family:"Inter Tight",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;}
+  .hud{position:absolute;}
+  .card{background:rgba(253,252,248,.94);backdrop-filter:blur(9px);
+    border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 32px rgba(18,28,12,.30);}
+  button{font:inherit;cursor:pointer;}
+
+  /* ── title ── */
+  .title{top:16px;left:16px;padding:13px 17px;max-width:340px;}
+  .title h1{margin:0;font-family:"Fraunces",Georgia,serif;font-size:18px;font-weight:600;letter-spacing:-.01em;}
+  .title p{margin:6px 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-soft);}
+  .title .tag{display:inline-block;margin-top:9px;font-size:10.5px;font-weight:600;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--green);background:var(--green-soft);
+    border:1px solid #cad9c2;padding:3px 9px;border-radius:999px;}
+
+  /* ── reference photos (left, below title) ── */
+  .refs{top:150px;left:16px;width:248px;padding:12px 13px;display:flex;flex-direction:column;gap:9px;}
+  .refs .h{font-family:"Fraunces",serif;font-weight:600;font-size:14px;}
+  .refs .sub{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint);font-weight:600;margin-top:-5px;}
+  .refgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+  .refgrid figure{margin:0;border-radius:9px;overflow:hidden;border:1px solid var(--line);background:#eceadf;position:relative;}
+  .refgrid img{display:block;width:100%;height:96px;object-fit:cover;object-position:center 22%;}
+  .refgrid figcaption{position:absolute;left:0;right:0;bottom:0;font-size:9.5px;font-weight:600;color:#fff;
+    background:linear-gradient(transparent,rgba(0,0,0,.6));padding:10px 6px 4px;letter-spacing:.02em;}
+  .refs .cue{font-size:11px;line-height:1.5;color:var(--ink-soft);}
+  .refs .cue b{color:var(--green-deep);}
+
+  /* ── candidate tabs + verdict (right) ── */
+  .panel{top:16px;right:16px;width:362px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+    gap:0;overflow:hidden;}
+  .tabs{display:flex;gap:5px;padding:9px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .tabs button{font-size:12.5px;font-weight:600;color:var(--ink-soft);background:transparent;
+    border:1.5px solid var(--line);border-radius:9px;padding:7px 11px;min-height:38px;transition:all .15s ease;}
+  .tabs button:hover{background:var(--green-soft);}
+  .tabs button.active{color:#7a5a12;background:var(--sun);border-color:#e2a81f;}
+  .vbody{overflow-y:auto;padding:13px 15px 15px;}
+  .vbody::-webkit-scrollbar{width:8px;} .vbody::-webkit-scrollbar-thumb{background:#d8d4c8;border-radius:4px;}
+  .vhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+  .vhead .nm{font-family:"Fraunces",serif;font-weight:600;font-size:17px;}
+  .vhead .sc{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;color:#fff;}
+  .vmeta{font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin:7px 0 11px;}
+  .vmeta .lic{font-weight:600;}
+  .rows{display:flex;flex-direction:column;gap:0;}
+  .vrow{display:grid;grid-template-columns:18px 1fr;gap:9px;padding:7px 0;border-top:1px solid #f0ede4;align-items:start;}
+  .vrow:first-child{border-top:0;}
+  .vrow .mk{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:800;color:#fff;margin-top:1px;}
+  .mk.ok{background:var(--ok);} .mk.no{background:var(--no);} .mk.meh{background:var(--meh);}
+  .vrow .tx b{font-size:12.5px;font-weight:700;color:var(--ink);}
+  .vrow .tx span{display:block;font-size:11.5px;color:var(--ink-soft);line-height:1.45;margin-top:1px;}
+  .verdict{margin-top:12px;padding:11px 12px;border-radius:10px;background:var(--green-soft);
+    border:1px solid #cad9c2;font-size:12px;line-height:1.55;color:var(--green-deep);}
+  .verdict b{font-weight:700;}
+
+  /* ── recommendation (bottom-left, collapsible) ── */
+  .rec{left:16px;bottom:16px;width:362px;max-width:calc(100vw - 32px);padding:0;overflow:hidden;}
+  .rec .rh{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;cursor:pointer;}
+  .rec .rh b{font-family:"Fraunces",serif;font-weight:600;font-size:14px;}
+  .rec .rh .chev{font-size:13px;color:var(--ink-faint);transition:transform .2s ease;}
+  .rec.open .rh .chev{transform:rotate(180deg);}
+  .rec .rbody{display:none;padding:0 14px 14px;font-size:12px;line-height:1.6;color:var(--ink-soft);}
+  .rec.open .rbody{display:block;}
+  .rec .rbody ol{margin:2px 0 0;padding-left:18px;} .rec .rbody li{margin:0 0 7px;}
+  .rec .rbody b{color:var(--green-deep);} .rec .rbody code{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:#efece2;padding:1px 5px;border-radius:5px;}
+
+  /* ── camera + animation (bottom-center) ── */
+  .dock{left:50%;bottom:16px;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;align-items:center;max-width:calc(100vw - 32px);}
+  .dock .row{display:flex;gap:6px;padding:7px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:680px;}
+  .dock .lbl{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);padding:0 7px 0 5px;}
+  .dock button{font-size:13px;font-weight:600;color:var(--ink-soft);background:transparent;
+    border:1.5px solid var(--line);border-radius:9px;padding:8px 13px;min-height:40px;transition:all .15s ease;}
+  .dock button:hover{background:var(--green-soft);}
+  .dock button.active{color:var(--green-deep);background:var(--green-soft);border-color:#c8d6c0;}
+  .dock .anim button.active{color:#7a5a12;background:var(--sun);border-color:#e2a81f;}
+  .dock .anim:empty{display:none;}
+
+  /* ── budget HUD ── */
+  .perf{right:16px;bottom:16px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.5;
+    color:#d7ecca;background:rgba(10,14,8,.66);border:1px solid rgba(255,255,255,.12);border-radius:9px;
+    padding:8px 11px;white-space:pre;text-align:right;backdrop-filter:blur(4px);min-width:128px;}
+  .perf .bad{color:#ff9b7a;} .perf .warn{color:#f3cd6b;}
+  .perf .ttl{color:#9fb893;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:2px;}
+
+  .loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;
+    gap:13px;background:#11160e;color:#e8e3d6;z-index:60;font-size:13.5px;transition:opacity .5s ease;}
+  .loader .ring{width:32px;height:32px;border:3px solid rgba(245,194,59,.25);border-top-color:var(--sun);
+    border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loader.hide{opacity:0;pointer-events:none;}
+
+  @media (max-width:1080px){ .refs{display:none;} }
+  @media (max-width:760px){ .panel{width:calc(100vw - 32px);max-height:46vh;} .rec,.dock{display:none;} .title p{display:none;} }
+
+  <!-- @dsCard group="Brand" -->
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="hud title card">
+  <h1>Ranger Audition</h1>
+  <p>CC0 mesh-kandidaten getoetst tegen de Alvah-likeness (§13d) onder de golden-hour-rig
+     en de overworld- + hero-camera's. Sleep om te draaien. Kies een kandidaat rechts.</p>
+  <span class="tag">design-fase · mesh-bridge · CC0</span>
+</div>
+
+<aside class="hud refs card">
+  <div class="h">Doel-likeness — Alvah</div>
+  <div class="sub">referentie · ~8 jr · 6 koppen</div>
+  <div class="refgrid">
+    <figure><img src="1000152319.jpg" alt="front neutraal"><figcaption>front · neutraal</figcaption></figure>
+    <figure><img src="1000152315.jpg" alt="front lach"><figcaption>front · lach</figcaption></figure>
+    <figure><img src="1000152316.jpg" alt="driekwart"><figcaption>driekwart</figcaption></figure>
+    <figure><img src="1000152317.jpg" alt="profiel"><figcaption>profiel</figcaption></figure>
+  </div>
+  <div class="cue">Cues: <b>shaggy dark-blond</b> met zon-punten · <b>groen-hazel</b> ogen + lange wimpers ·
+    kleine opwippende neus · volle lippen + 2 voortanden · slank, groot hoofd.</div>
+</aside>
+
+<section class="hud panel card">
+  <div class="tabs" id="tabs"></div>
+  <div class="vbody" id="vbody"></div>
+</section>
+
+<div class="hud rec card" id="rec">
+  <div class="rh" id="recHead"><b>Aanbeveling voor de Code-fase</b><span class="chev">▾</span></div>
+  <div class="rbody">
+    <p>Géén raw-host-bare CC0-mens hier is een <b>8-jarig kind</b> met Alvah's trekken — ze valideren
+       de pijplijn, niet de likeness. Authoring-routes, op volgorde:</p>
+    <ol>
+      <li><b>MakeHuman / MPFB (CC0)</b> → ~6-koppen kind-base, §13d-trekken sculpten → glTF →
+        <b>Mixamo</b> auto-rig + idle/walk/run/point/wave (gedeeld humanoïd skelet → retarget gratis) →
+        ARKit-subset blendshapes voor de <code>MORPH</code>-emotie-backend. Volledig CC0.</li>
+      <li><b>Ready Player Me</b> — avatar afgesteld op de foto's (CORS-GLB, ARKit-morphs, ≤30k tris).
+        De demo-URL gaf hier <code>Failed to fetch</code> → je moet er één <b>genereren</b>; geen clips
+        → retarget de gedeelde set.</li>
+      <li>Op de winnaar: <b>mesh-coupe haar</b> (vorm + normalmap) + <b>PBR-stylized SSS-huid</b> (§13e);
+        gestileerde catchlight-ogen overworld, refractief alleen voor hero-platen.</li>
+    </ol>
+    <p>Deze harness is de <b>doel-rig</b>: golden-hour-key, overworld- + hero-camera's, hoogte-ijk (131 cm),
+       budget-poort en de <code>clip</code>/<code>morph</code>-haken. Drop de gerigde GLB erin → erft alles.</p>
+  </div>
+</div>
+
+<div class="hud dock">
+  <div class="card row anim" id="anim"></div>
+  <div class="card row cams">
+    <span class="lbl">Camera</span>
+    <button data-cam="tq" class="active">¾ overworld</button>
+    <button data-cam="front">Front</button>
+    <button data-cam="side">Profiel</button>
+    <button data-cam="hero">Hero close-up</button>
+  </div>
+</div>
+
+<div class="hud perf" id="perf"><span class="ttl">budget · §13h</span>– fps</div>
+
+<div class="loader" id="loader"><div class="ring"></div><div id="loadtext">Wereld laden…</div></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+// ── reële doelhoogte: Alvah ~131 cm → 1.31 scene-units ──
+const REF_H = 1.31;
+
+// ── kandidaten (alleen wat in-browser laadt; bevestigd via probe) ──
+const RAW_T = 'https://raw.githubusercontent.com/mrdoob/three.js/r160/examples/models/gltf/';
+const RAW_K = 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/';
+const CANDIDATES = [
+  {
+    id:'cesium', label:'CesiumMan', name:'CesiumMan',
+    url: RAW_K + 'CesiumMan/glTF-Binary/CesiumMan.glb',
+    lic:'CC0 1.0', licOk:true, src:'Khronos glTF-Sample-Assets',
+    score:34, meta:'~4.7k tris · 1 mesh · 19 botten · 1 clip · 0 morphs · CC0',
+    rows:[
+      ['no','Leeftijd / proporties','Volwassen man, ~7,5 koppen. Doel = 8-jarig kind, ~6 koppen, groot hoofd. Mist.'],
+      ['no','Haar','In de textuur geschilderd (kale schedelvorm). Niet de shaggy, zon-getipte coupe; niet bewerkbaar.'],
+      ['no','Ogen / wimpers','Vlakke textuur-ogen, geen geometrie, geen catchlight, geen wimpers.'],
+      ['no','Neus / mond / tanden','Lage-resolutie textuur — geen opwippende neus, volle lippen of voortanden afleesbaar.'],
+      ['ok','Rig & clip','Skelet (19 botten) + 1 loop-clip. Bewijst dat de mixer-mapping werkt.'],
+      ['no','Emotie-morphs','Geen morph-targets → geen MORPH-emotie-backend.'],
+      ['ok','Budget (§13h)','~4,7k tris → ruim binnen overworld/mid. Schoon klein bestand.'],
+      ['ok','Licentie','CC0 1.0, raw-host-baar → productie-veilig als asset (maar verkeerde leeftijd).'],
+    ],
+    verdict:'<b>Pijplijn-validator, geen likeness-base.</b> Schone CC0-mens die laadt, schaalt en loopt onder de rig — maar volwassen en laag-detail. Bruikbaar als referentie dat de loader/camera/budget-poort werkt; niet als Alvah.'
+  },
+  {
+    id:'soldier', label:'Soldier', name:'Soldier (three.js)',
+    url: RAW_T + 'Soldier.glb',
+    lic:'onduidelijk ⚠', licOk:false, src:'three.js examples',
+    score:30, meta:'~11k tris · 2 mesh · 49 botten · Idle/Walk/Run · 0 morphs',
+    rows:[
+      ['no','Leeftijd / proporties','Volwassen vrouw-soldaat, ~7,5 koppen, gepantserd. Niet kind, niet ranger.'],
+      ['no','Haar','Gemodelleerd helm/haar van een volwassene; niet de coupe, niet swappable.'],
+      ['no','Ogen / wimpers','Kleine textuur-ogen; geen catchlight-geometrie of wimpers.'],
+      ['meh','Shading-referentie','Beste realistische mens-shading van de set — nuttig om de golden-hour-rig op huid te ijken.'],
+      ['ok','Rig & clip','49 botten + Idle/Walk/Run — nette gedeelde-skelet-locomotie (retarget-bron).'],
+      ['no','Emotie-morphs','Geen morph-targets.'],
+      ['ok','Budget (§13h)','~11k tris → binnen mid-LOD.'],
+      ['no','Licentie','three.js merkt zelf op dat veel example-assets ongelicentieerd zijn → <b>niet</b> in het product.'],
+    ],
+    verdict:'<b>Alleen referentie — niet shippen.</b> Goede realistische volwassen-shading + nette loop-clips om de rig/lichting tegen te ijken, maar licentie is onduidelijk en het is een volwassene. Houden als shading-benchmark, niet als asset.'
+  },
+  {
+    id:'robot', label:'RobotExpressive', name:'RobotExpressive',
+    url: RAW_T + 'RobotExpressive/RobotExpressive.glb',
+    lic:'CC0 1.0', licOk:true, src:'three.js · Tomás Laulhé / Don McCurdy',
+    score:26, meta:'~3.2k tris · 19 mesh · 43 botten · 14 clips · 3 morphs (Angry/Surprised/Sad)',
+    rows:[
+      ['no','Leeftijd / proporties','Robot, geen mens. Geen likeness mogelijk.'],
+      ['no','Haar / gezicht','N.v.t. — geen mensgezicht.'],
+      ['ok','Rig & clip-bibliotheek','43 botten + 14 clips (idle/walk/run/wave/point…). Dit is de <b>huidige donor</b> voor de procedurele Alvah.'],
+      ['ok','Emotie-morphs','Surprised / Sad / Angry → bewijst de <code>MORPH</code>-emotie-backend (de Code-fase-haak).'],
+      ['ok','Budget (§13h)','~3,2k tris. Verwaarloosbaar.'],
+      ['ok','Licentie','Hard CC0 1.0 — daarom de veilige rig/clip-bron tot een echte mens-asset bestaat.'],
+      ['meh','Rol nu','Levert skelet + clips waar <code>humanoid.js</code> de procedurele boswachter op bouwt.'],
+    ],
+    verdict:'<b>Framework-baseline & rig/clip-donor — geen mesh-kandidaat.</b> Het is precies waarom de huidige stand-in bestaat: hard-CC0 rig, volledige clip-set en de morph-emotie-haak. De echte mesh komt erbovenop, niet hiervan.'
+  },
+  {
+    id:'rigged', label:'RiggedFigure', name:'RiggedFigure',
+    url: RAW_K + 'RiggedFigure/glTF-Binary/RiggedFigure.glb',
+    lic:'CC0 1.0', licOk:true, src:'Khronos glTF-Sample-Assets',
+    score:14, meta:'~260 tris · 1 mesh · 19 botten · 1 clip · 0 morphs',
+    rows:[
+      ['no','Leeftijd / proporties','Naadloze grijze blockout, volwassen verhoudingen. Alleen schaal/koppen-ijk.'],
+      ['no','Haar / ogen / gezicht','Geen — kaal blockout-figuur.'],
+      ['ok','Rig & clip','Minimaal skelet + 1 clip. Goed om de hoogte-ijk (131 cm) tegen te checken.'],
+      ['no','Emotie-morphs','Geen.'],
+      ['ok','Budget (§13h)','~260 tris — letterlijk niets.'],
+      ['ok','Licentie','CC0 1.0.'],
+    ],
+    verdict:'<b>Blockout-ijkpunt.</b> Nuttig om schaal/koppen-hoogte en de rig-mapping te verifiëren; geen enkele likeness-waarde.'
+  },
+];
+
+// ── scene / renderer ──
+const appEl = document.getElementById('app');
+const loaderEl = document.getElementById('loader');
+const loadText = document.getElementById('loadtext');
+const perfEl = document.getElementById('perf');
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.04;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+appEl.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+
+// golden-hour gradient achtergrond (warm horizon → koel-diep)
+{
+  const c = document.createElement('canvas'); c.width = 16; c.height = 256; const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0,0,0,256);
+  grd.addColorStop(0,'#26323a'); grd.addColorStop(0.46,'#5d6657');
+  grd.addColorStop(0.74,'#b79a6e'); grd.addColorStop(1,'#e7c889');
+  g.fillStyle = grd; g.fillRect(0,0,16,256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  scene.background = t;
+}
+
+const camera = new THREE.PerspectiveCamera(30, innerWidth/innerHeight, 0.05, 120);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 0.4; controls.maxDistance = 9;
+controls.maxPolarAngle = Math.PI * 0.52;
+
+// IBL voor nette PBR-reflecties (geen fetch)
+{
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+}
+
+// ── golden-hour licht-rig (research §C2): warme key laag-links + koele hemi-fill ──
+const key = new THREE.DirectionalLight(0xffd6a0, 2.5);
+key.position.set(-3.0, 2.4, 2.2);
+key.castShadow = true;
+key.shadow.mapSize.set(2048,2048);
+key.shadow.camera.near = 0.5; key.shadow.camera.far = 14;
+key.shadow.camera.left = -2.6; key.shadow.camera.right = 2.6;
+key.shadow.camera.top = 2.6; key.shadow.camera.bottom = -2.6;
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02;
+scene.add(key); scene.add(key.target);
+const hemi = new THREE.HemisphereLight(0xbcd2ec, 0x4a3a26, 0.75); scene.add(hemi);
+const rim = new THREE.DirectionalLight(0xfff0d8, 0.55); rim.position.set(2.4,1.6,-2.8); scene.add(rim);
+const fill = new THREE.AmbientLight(0xffffff, 0.12); scene.add(fill);
+
+// ── grond (schaduw-vanger, warme heide-tint) ──
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(7, 48),
+  new THREE.MeshStandardMaterial({ color:0x8a7a55, roughness:0.96, metalness:0 })
+);
+ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+// subtiele grid-ring
+{
+  const grid = new THREE.PolarGridHelper(6, 8, 6, 64, 0x6f6244, 0x6f6244);
+  grid.material.opacity = 0.16; grid.material.transparent = true; grid.position.y = 0.001; scene.add(grid);
+}
+
+// ── hoogte-ijk: 131 cm paal naast het model ──
+const guideMat = new THREE.MeshBasicMaterial({ color:0xf5c23b, transparent:true, opacity:0.55 });
+const guide = new THREE.Group();
+{
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.006,0.006,REF_H,8), guideMat);
+  pole.position.set(0, REF_H/2, 0); guide.add(pole);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.006,20), guideMat);
+  cap.position.set(0, REF_H, 0); guide.add(cap);
+  for (let cm=20; cm<131; cm+=20){
+    const tick = new THREE.Mesh(new THREE.BoxGeometry(0.035,0.004,0.004), guideMat);
+    tick.position.set(0, cm/100, 0); guide.add(tick);
+  }
+  guide.position.set(-0.62, 0, 0.1);
+}
+scene.add(guide);
+
+// ── loader / model state ──
+const loader = new GLTFLoader();
+let cur = null;             // { model, mixer, actions, current, morphMeshes, bbox }
+let curIdx = -1;
+
+function disposeCur(){
+  if (!cur) return;
+  if (cur.mixer) cur.mixer.stopAllAction();
+  scene.remove(cur.model);
+  cur.model.traverse(o=>{ if(o.isMesh){ if(o.geometry)o.geometry.dispose();
+    const mm = Array.isArray(o.material)?o.material:[o.material];
+    mm.forEach(m=>{ if(m){ for(const k in m){ const v=m[k]; if(v&&v.isTexture)v.dispose(); } m.dispose(); } }); } });
+  cur = null;
+}
+
+function setLoader(text, show){
+  if (text!=null) loadText.textContent = text;
+  if (show){ loaderEl.style.display='flex'; loaderEl.style.opacity='1'; loaderEl.classList.remove('hide'); }
+  else { loaderEl.classList.add('hide'); loaderEl.style.opacity='0';
+    setTimeout(()=>{ if(loaderEl.classList.contains('hide')) loaderEl.style.display='none'; }, 520); }
+}
+
+function loadCandidate(idx){
+  const C = CANDIDATES[idx];
+  setLoader(`${C.name} laden…`, true);
+  loader.load(C.url, (gltf)=>{
+    disposeCur();
+    const model = gltf.scene;
+    model.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true;
+      const mm = Array.isArray(o.material)?o.material:[o.material];
+      mm.forEach(m=>{ if(m && 'envMapIntensity' in m) m.envMapIntensity = 0.85; }); } });
+    // sommige glTF-mensen zijn Z-up/zijwaarts geauthored → zet rechtop.
+    // Betrouwbaar signaal: 'plat liggend' = Y is de KLEINSTE as (niet 'langste as', want
+    // een staande T-pose heeft armspanwijdte ≈ lichaamshoogte).
+    model.updateMatrixWorld(true);
+    let pre = new THREE.Box3().setFromObject(model); const preSz = new THREE.Vector3(); pre.getSize(preSz);
+    const minA = Math.min(preSz.x, preSz.y, preSz.z);
+    if (preSz.y === minA) {                                     // ligt plat → langste horizontale as omhoog
+      if (preSz.x >= preSz.z) model.rotation.z = -Math.PI/2;    // X → omhoog
+      else model.rotation.x = -Math.PI/2;                       // Z → omhoog
+    }
+    model.updateMatrixWorld(true);
+    // schaal → REF_H, voeten op 0, gecentreerd in x/z
+    let box = new THREE.Box3().setFromObject(model); const sz = new THREE.Vector3(); box.getSize(sz);
+    const s = REF_H / Math.max(1e-3, sz.y); model.scale.setScalar(s);
+    box = new THREE.Box3().setFromObject(model); const ctr = new THREE.Vector3(); box.getCenter(ctr);
+    model.position.x -= ctr.x; model.position.z -= ctr.z; model.position.y -= box.min.y;
+    scene.add(model);
+    model.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(model);
+
+    // mixer + clips
+    const mixer = new THREE.AnimationMixer(model);
+    const actions = {}; (gltf.animations||[]).forEach(c=>{ actions[c.name] = mixer.clipAction(c); });
+    const clipNames = Object.keys(actions);
+    let current = null;
+    if (clipNames.length){ current = clipNames.find(n=>/idle|survey|stand/i.test(n)) || clipNames[0]; actions[current].play(); }
+
+    // morphs
+    const morphMeshes = []; model.traverse(o=>{ if(o.isMesh && o.morphTargetDictionary) morphMeshes.push(o); });
+    const morphNames = []; morphMeshes.forEach(m=>Object.keys(m.morphTargetDictionary).forEach(n=>{ if(!morphNames.includes(n)) morphNames.push(n); }));
+
+    cur = { model, mixer, actions, current, clipNames, morphMeshes, morphNames, morphTarget:{}, bbox:box, C };
+    buildAnimDock();
+    applyCam(activeCam);
+    renderVerdict(idx);
+    document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('active', +b.dataset.i===idx));
+    curIdx = idx;
+    renderer.render(scene, camera);     // garandeer één frame meteen (ook als rAF getthrottled is)
+    setLoader('', false);
+  }, (e)=>{ if(e&&e.total) setLoader(`${C.name} laden… ${Math.round(e.loaded/e.total*100)}%`, true); },
+  (err)=>{ console.error('load failed', C.id, err); setLoader(`Kon ${C.name} niet laden (netwerk/CORS). Kies een andere kandidaat.`, true); });
+}
+
+// ── animatie-dock (clips + morph-emoties van het huidige model) ──
+function buildAnimDock(){
+  const el = document.getElementById('anim'); el.innerHTML = '';
+  if (!cur) return;
+  if (cur.clipNames.length){
+    const lbl = document.createElement('span'); lbl.className='lbl'; lbl.textContent='Clip'; el.appendChild(lbl);
+    const pick = (re)=>cur.clipNames.find(n=>re.test(n));
+    const slots = [
+      ['Idle',  pick(/^idle$/i) || pick(/survey/i) || pick(/^standing?$/i) || pick(/idle/i)],
+      ['Lopen', pick(/^walk(ing)?$/i) || pick(/walk/i)],
+      ['Rennen',pick(/^run(ning)?$/i) || pick(/run/i)],
+    ].filter(s=>s[1]);
+    let show = slots;
+    if (!show.length) show = [['Loop', cur.clipNames[0]]];
+    show.forEach(([label,n])=>{
+      const b = document.createElement('button');
+      b.textContent = label;
+      if(n===cur.current) b.classList.add('active');
+      b.addEventListener('click', ()=>{ playClip(n); el.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b)); });
+      el.appendChild(b);
+    });
+  }
+  if (cur.morphNames.length){
+    const lbl = document.createElement('span'); lbl.className='lbl'; lbl.textContent='Morph'; el.appendChild(lbl);
+    const mk = (name, label)=>{ const b=document.createElement('button'); b.textContent=label;
+      b.addEventListener('click', ()=>{ const on = !b.classList.contains('active');
+        el.querySelectorAll('[data-morph]').forEach(x=>x.classList.remove('active'));
+        cur.morphTarget = {}; if(on && name){ b.classList.add('active'); cur.morphTarget[name]=name==='Sad'?0.9:0.7; } });
+      b.dataset.morph = name||'_'; return b; };
+    el.appendChild(mk(null,'Kalm'));
+    cur.morphNames.slice(0,4).forEach(n=>el.appendChild(mk(n,n)));
+  }
+}
+function playClip(name){
+  if (!cur || !cur.actions[name]) return;
+  const from = cur.actions[cur.current], to = cur.actions[name];
+  to.reset().play(); to.enabled=true; to.setEffectiveWeight(1);
+  if (from && from!==to) from.crossFadeTo(to, 0.3, false);
+  cur.current = name;
+}
+
+// ── camera-presets (relatief aan model-bbox) ──
+let activeCam = 'tq';
+function applyCam(which){
+  activeCam = which;
+  if (!cur){ return; }
+  const b = cur.bbox; const h = b.max.y - b.min.y;
+  const headY = b.max.y - h*0.085;          // ~ooghoogte vlak onder de kruin
+  const midY = b.min.y + h*0.52;
+  let target, az, el, dist, fov;
+  if (which==='tq'){ target=new THREE.Vector3(0,midY,0); az=0.62; el=0.28; dist=h*2.45; fov=28; }
+  else if (which==='front'){ target=new THREE.Vector3(0,midY,0); az=0.0; el=0.06; dist=h*2.25; fov=30; }
+  else if (which==='side'){ target=new THREE.Vector3(0,midY,0); az=Math.PI/2*0.96; el=0.05; dist=h*2.2; fov=30; }
+  else { target=new THREE.Vector3(0,headY,0); az=0.34; el=0.05; dist=h*0.62; fov=22; }   // hero
+  camera.fov = fov; camera.updateProjectionMatrix();
+  const pos = new THREE.Vector3(
+    Math.sin(az)*Math.cos(el), Math.sin(el), Math.cos(az)*Math.cos(el)
+  ).multiplyScalar(dist).add(target);
+  camera.position.copy(pos); controls.target.copy(target); controls.update();
+}
+document.querySelectorAll('.cams button').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('.cams button').forEach(x=>x.classList.toggle('active', x===b));
+  applyCam(b.dataset.cam);
+}));
+
+// ── verdict-render ──
+function scoreColor(s){ return s>=66?'var(--ok)':s>=40?'var(--meh)':'var(--no)'; }
+function renderVerdict(idx){
+  const C = CANDIDATES[idx]; const v = document.getElementById('vbody');
+  const rows = C.rows.map(([mk,t,d])=>`
+    <div class="vrow"><span class="mk ${mk}">${mk==='ok'?'✓':mk==='no'?'✕':'~'}</span>
+      <span class="tx"><b>${t}</b><span>${d}</span></span></div>`).join('');
+  v.innerHTML = `
+    <div class="vhead"><span class="nm">${C.name}</span>
+      <span class="sc" style="background:${scoreColor(C.score)}">likeness ${C.score}/100</span></div>
+    <div class="vmeta">${C.meta}<br><span class="lic" style="color:${C.licOk?'var(--ok)':'var(--no)'}">Licentie: ${C.lic}</span> · ${C.src}</div>
+    <div class="rows">${rows}</div>
+    <div class="verdict">${C.verdict}</div>`;
+  v.scrollTop = 0;
+}
+
+// ── tabs ──
+const tabsEl = document.getElementById('tabs');
+CANDIDATES.forEach((C,i)=>{ const b=document.createElement('button'); b.textContent=C.label; b.dataset.i=i;
+  b.addEventListener('click', ()=>{ if(i!==curIdx) loadCandidate(i); }); tabsEl.appendChild(b); });
+
+// ── recommendation toggle ──
+document.getElementById('recHead').addEventListener('click', ()=>document.getElementById('rec').classList.toggle('open'));
+
+// ── budget HUD ──
+let frames=0, fps=0, lastT=performance.now();
+function updatePerf(){
+  const calls = renderer.info.render.calls, tris = renderer.info.render.triangles;
+  const cCls = calls>100?'bad':calls>70?'warn':'';
+  const tCls = tris>50000?'bad':tris>30000?'warn':'';
+  perfEl.innerHTML = `<span class="ttl">budget · §13h</span>`+
+    `${fps} fps\n<span class="${cCls}">${calls} calls</span>\n<span class="${tCls}">${(tris/1000).toFixed(1)}k tris</span>`;
+}
+
+// ── loop ──
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (cur && cur.mixer) cur.mixer.update(dt);
+  if (cur && cur.morphMeshes.length){
+    for (const mesh of cur.morphMeshes){ const dict=mesh.morphTargetDictionary, infl=mesh.morphTargetInfluences;
+      for (const n in dict){ const tgt = cur.morphTarget[n]||0; infl[dict[n]] += (tgt-infl[dict[n]])*Math.min(1,dt*6); } }
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  frames++; const now=performance.now(); if(now-lastT>=500){ fps=Math.round(frames*1000/(now-lastT)); frames=0; lastT=now; updatePerf(); }
+}
+addEventListener('resize', ()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+
+window.__A = { info:()=>({ cur:!!cur, curIdx, sceneN:scene.children.length, modelInScene: cur?scene.children.includes(cur.model):false, calls:renderer.info.render.calls, tris:renderer.info.render.triangles, bbox: cur?cur.bbox.getSize(new THREE.Vector3()).toArray():null, camPos:camera.position.toArray() }), render:()=>renderer.render(scene,camera) };
+loadCandidate(0);
+animate();
+</script>
+
+<template id="__bundler_thumbnail">
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" fill="#1e4d32"/>
+  <circle cx="50" cy="40" r="16" fill="#f5c23b"/>
+  <rect x="34" y="56" width="32" height="26" rx="6" fill="#e7c889"/>
+</svg>
+</template>
+</body>
+</html>

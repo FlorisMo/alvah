@@ -1,0 +1,182 @@
+/* ============================================================================
+   world3d.css — diegetic HUD + in-situ "viewfinder" for the 3D world
+   Minimal HUD (HANDOFF §6.5): corner map+pin, the one interact prompt, soft
+   status. The in-situ moment frames the REAL EF-engine as a viewfinder so it
+   reads as "a moment in the world", not a separate puzzle screen.
+   ============================================================================ */
+
+:root {
+  --read-size: 28px; --read-leading: 1.6; --read-font: 'Inter Tight', system-ui, sans-serif;
+  --spel-sun: #f5c23b; --ambient-op: 0.85;
+}
+
+#scene { position: fixed; inset: 0; z-index: 0; }
+#scene canvas { display: block; }
+
+.v3d-hud {
+  position: fixed; inset: 0; z-index: 10; pointer-events: none;
+  font-family: 'Inter Tight', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: #1a1a1a;
+}
+.v3d-hud > * { pointer-events: auto; }
+
+/* warm glass card base */
+.v3d-topbar, .v3d-map, .v3d-settings .vs-btn, .v3d-prompt, .v3d-moment .vm-frame, .vf-card, .vc-card {
+  background: rgba(253, 252, 248, .93);
+  border: 1px solid #e8e5dc;
+  box-shadow: 0 10px 30px rgba(20, 30, 15, .26);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+
+/* ── top-left: place + current objective + notches ── */
+.v3d-topbar { position: absolute; top: 16px; left: 16px; max-width: 320px; padding: 13px 16px; border-radius: 14px; }
+.vt-title { font-family: 'Fraunces', Georgia, serif; font-weight: 600; font-size: 17px; letter-spacing: -.01em; color: #123621; }
+.vt-objective { font-size: 13.5px; line-height: 1.5; color: #4a4a4a; margin-top: 5px; }
+.vt-objective b { color: #1e4d32; }
+.vt-notches { display: flex; gap: 6px; margin-top: 10px; }
+.vt-notches .notch { width: 26px; height: 7px; border-radius: 99px; background: #e2ddd0; transition: background .3s ease; }
+.vt-notches .notch.on { background: var(--spel-sun); }
+
+/* ── mini-map (single corner map) ── */
+.v3d-map { position: absolute; top: 16px; right: 16px; width: 132px; height: 132px; border-radius: 14px; overflow: hidden; }
+.v3d-map::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, #cdd6b6 0%, #aebd8c 70%, #94a677 100%); }
+.mp-pin, .mp-land, .mp-alvah, .mp-fox { position: absolute; left: 0; top: 0; }
+.mp-pin { width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--c, #f5c23b); box-shadow: 0 0 0 3px rgba(255, 255, 255, .65); }
+.mp-pin.done { opacity: .4; background: #8a8a7a; }
+.mp-land { width: 0; height: 0; margin: -5px 0 0 -5px; }
+.mp-land.cabin { width: 10px; height: 10px; border-radius: 2px; background: #7a5a3a; box-shadow: 0 0 0 2px rgba(255,255,255,.55); }
+.mp-land.tower { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 10px solid #33603b; }
+.mp-land.den { width: 9px; height: 9px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: #9c7a4e; box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
+.mp-alvah { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 12px solid #2a6fdb; filter: drop-shadow(0 0 2px rgba(255,255,255,.9)); }
+.mp-fox { width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: #d2823c; box-shadow: 0 0 0 2px rgba(255,255,255,.85); transition: opacity .3s ease; }
+
+/* ── settings (comfort + sound) ── */
+.v3d-settings { position: absolute; top: 158px; right: 16px; display: flex; flex-direction: column; gap: 7px; align-items: flex-end; }
+.v3d-settings .vs-btn { display: flex; align-items: center; gap: 7px; font: 600 13px/1 'Inter Tight', sans-serif; color: #4a4a4a; border-radius: 10px; padding: 9px 12px; cursor: pointer; min-height: 40px; transition: all .15s ease; }
+.v3d-settings .vs-btn.on { color: #123621; border-color: #c8d6c0; background: rgba(240, 245, 236, .95); }
+.v3d-settings .vs-ico { font-size: 14px; }
+
+/* ── objective marker (floats over the active objective in 3D) ── */
+.v3d-objective { position: fixed; left: 0; top: 0; opacity: 0; transition: opacity .25s ease; display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
+.obj-pin { width: 16px; height: 16px; border-radius: 50% 50% 50% 0; background: var(--spel-sun); transform: rotate(-45deg); box-shadow: 0 3px 10px rgba(20,30,15,.4), inset 0 0 0 3px rgba(255,255,255,.6); }
+.obj-dist { font: 600 11px/1 ui-monospace, monospace; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.7); letter-spacing: .03em; }
+
+/* ── the ONE consistent interact prompt ── */
+.v3d-prompt { position: fixed; left: 0; top: 0; opacity: 0; transition: opacity .2s ease, transform .08s ease; display: flex; align-items: center; gap: 9px; border-radius: 99px; padding: 9px 16px 9px 9px; cursor: pointer; font: 600 15px/1 'Inter Tight', sans-serif; color: #1e4d32; min-height: 44px; }
+.v3d-prompt:active { transform-origin: center; }
+.v3d-prompt .ip-key { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: #1e4d32; color: #fff; font: 700 14px/1 ui-monospace, monospace; }
+.v3d-prompt .ip-label { padding-right: 4px; }
+
+/* ── touch d-pad (only on coarse/touch pointers) ── */
+.v3d-dpad { position: absolute; left: 22px; bottom: 22px; display: none; flex-direction: column; align-items: center; gap: 6px; }
+@media (pointer: coarse) { .v3d-dpad { display: flex; } }
+.dp-mid { display: flex; gap: 56px; }
+.dp-btn { width: 56px; height: 56px; border-radius: 14px; border: 1px solid rgba(255,255,255,.3); background: rgba(20,30,15,.45); color: #fff; font-size: 18px; cursor: pointer; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.dp-btn:active { background: rgba(245,194,59,.5); }
+
+/* ── booting ── */
+.v3d-booting { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: #e8e3d6; font-size: 15px; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+
+/* ── zoom curtain (camera easing in) ── */
+.v3d-zoom { position: fixed; inset: 0; z-index: 14; display: grid; place-items: center; pointer-events: none; background: radial-gradient(circle at 50% 55%, transparent 30%, rgba(18,24,12,.28) 100%); }
+.v3d-zoom span { color: rgba(255,255,255,.5); font-size: 28px; letter-spacing: .3em; }
+
+/* ── the IN-SITU moment: viewfinder framing the real engine ── */
+.v3d-moment { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; pointer-events: auto;
+  background: radial-gradient(circle at 50% 45%, rgba(18,24,12,.35) 0%, rgba(12,16,8,.72) 100%); }
+.vm-frame { width: min(92vw, 980px); border-radius: 18px; overflow: hidden; display: flex; flex-direction: column; }
+.vm-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #1e4d32; color: #fff; }
+.vm-head .vm-step { font: 700 11px/1 ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; background: rgba(255,255,255,.16); padding: 5px 9px; border-radius: 99px; }
+.vm-head .vm-titel { flex: 1; font: 600 17px/1.2 'Fraunces', Georgia, serif; }
+.vm-head .vm-leave { font: 600 13px/1 'Inter Tight', sans-serif; color: rgba(255,255,255,.85); background: rgba(255,255,255,.12); border: none; border-radius: 9px; padding: 9px 14px; cursor: pointer; min-height: 40px; }
+.vm-head .vm-leave:hover { background: rgba(255,255,255,.22); }
+.vm-stage { position: relative; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; background: #6d8a45; }
+.vm-stage > * { position: absolute; inset: 0; }
+
+.vm-hulp { display: flex; align-items: center; gap: 10px; padding: 11px 16px; background: rgba(253,252,248,.96); font-size: 13.5px; color: #4a4a4a; }
+.vm-hulp button { font: 600 13px/1 'Inter Tight', sans-serif; color: #123621; background: #f0f5ec; border: 1.5px solid #c8d6c0; border-radius: 10px; padding: 9px 14px; cursor: pointer; min-height: 40px; }
+.vm-hulp button.ghost { background: transparent; border-color: #e2ddd0; color: #4a4a4a; }
+
+/* in-situ success flourish */
+.vm-celebrate { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.vc-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 34px; border-radius: 16px; animation: vcPop .4s cubic-bezier(.2,.9,.3,1.2) both; }
+.vc-mark { width: 56px; height: 56px; border-radius: 50%; background: var(--spel-sun); color: #1e4d32; display: grid; place-items: center; font-size: 30px; font-weight: 700; }
+.vc-card p { margin: 0; font: 600 18px/1.3 'Fraunces', Georgia, serif; color: #123621; }
+@keyframes vcPop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* ── finale ── */
+.v3d-finale { position: fixed; inset: 0; z-index: 24; display: grid; place-items: center; background: radial-gradient(circle at 50% 40%, rgba(40,60,25,.4), rgba(12,16,8,.8)); }
+.vf-card { max-width: 460px; text-align: center; padding: 34px 40px 30px; border-radius: 20px; }
+.vf-art { display: grid; place-items: center; margin-bottom: 8px; }
+.vf-art.vf-duo { display: flex; flex-direction: row; align-items: flex-end; justify-content: center; gap: 18px; }
+.vf-card h2 { margin: 6px 0 8px; font: 600 27px/1.15 'Fraunces', Georgia, serif; color: #123621; }
+.vf-card p { margin: 0 0 22px; font-size: 15px; line-height: 1.55; color: #4a4a4a; }
+
+/* reduced-motion: calm everything that pulses/pops */
+.v3d-hud.rm .vc-card { animation: none; }
+.v3d-hud.rm .v3d-prompt, .v3d-hud.rm .v3d-objective { transition: opacity .45s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .vc-card { animation: none; }
+}
+
+/* ============================================================================
+   SEASON-ARC layer (HANDOFF §6.4 / §7.3) — story made visible in the 3D world
+   ============================================================================ */
+
+/* ── gentle season color-grade washed over the whole 3D view ──
+   Alpha-composited (not mix-blend) so it tints the canvas reliably across
+   stacking contexts and stays screenshot-safe. Lente = the warm default. */
+.v3d-season { position: fixed; inset: 0; z-index: 0; pointer-events: none !important;
+  opacity: 1; transition: opacity .9s ease; }
+.seizoen-lente  .v3d-season { background:
+  radial-gradient(120% 100% at 50% 0%, rgba(120,170,120,.06) 0%, transparent 55%),
+  radial-gradient(140% 120% at 50% 100%, rgba(40,60,30,.12) 30%, transparent 70%); }
+.seizoen-zomer  .v3d-season { background:
+  radial-gradient(120% 100% at 50% 0%, rgba(245,205,110,.16) 0%, transparent 60%),
+  radial-gradient(140% 120% at 50% 100%, rgba(60,55,20,.16) 30%, transparent 72%); }
+.seizoen-herfst .v3d-season { background:
+  linear-gradient(180deg, rgba(196,120,48,.18) 0%, rgba(150,80,30,.10) 100%),
+  radial-gradient(140% 120% at 50% 105%, rgba(70,40,15,.22) 25%, transparent 70%); }
+.seizoen-winter .v3d-season { background:
+  linear-gradient(180deg, rgba(190,210,230,.22) 0%, rgba(150,175,200,.12) 100%),
+  radial-gradient(140% 120% at 50% 100%, rgba(40,55,75,.18) 30%, transparent 72%); }
+
+/* ── season chip in the top bar ── */
+.vt-titlerow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.vt-season { font: 600 11px/1 ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase;
+  padding: 4px 9px; border-radius: 999px; color: #4a3415; background: rgba(245,225,180,.85); white-space: nowrap; }
+.vt-season.z-zomer  { background: rgba(245,210,120,.9);  color: #5a4310; }
+.vt-season.z-herfst { background: rgba(224,150,80,.9);   color: #4a2710; }
+.vt-season.z-winter { background: rgba(206,224,238,.95); color: #244258; }
+
+/* the case-board pin on the mini-map */
+.mp-land.board { width: 11px; height: 8px; margin: -4px 0 0 -5.5px; border-radius: 2px;
+  background: #c89f6c; box-shadow: 0 0 0 2px rgba(255,255,255,.6); }
+
+/* ── a clue just dropped: one calm story beat ── */
+.v3d-clue { position: fixed; inset: 0; z-index: 22; display: grid; place-items: center; pointer-events: auto;
+  background: radial-gradient(circle at 50% 45%, rgba(18,24,12,.4) 0%, rgba(10,14,8,.78) 100%); }
+/* entrance: animate transform only (base state stays visible) — HANDOFF §1 rule 1:
+   never gate visible content behind an opacity:0 entrance (backgrounded tabs
+   don't advance it). */
+@keyframes v3dPop { from { transform: scale(.95); } to { transform: scale(1); } }
+
+.vcl-card { width: min(88vw, 420px); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: rgba(253,252,248,.97); border: 1px solid #e8e5dc; border-radius: 18px; padding: 26px 30px 24px;
+  box-shadow: 0 18px 50px rgba(20,30,15,.4); animation: v3dPop .42s cubic-bezier(.2,.9,.3,1.2) both; }
+.v3d-hud.rm .vcl-card { animation: none; }
+.vcl-ico { width: 52px; height: 52px; border-radius: 13px; display: grid; place-items: center; margin-bottom: 2px;
+  background: #f6efe0; box-shadow: inset 0 0 0 1px rgba(120,90,50,.25); }
+.vcl-eyebrow { font: 600 11px/1 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: #6f5026; }
+.vcl-title { font: 600 21px/1.2 'Fraunces', Georgia, serif; color: #4a3415; }
+.vcl-text { margin: 2px 0 0; font-size: 15px; line-height: 1.5; color: #4a4a4a; }
+.vcl-season { margin: 4px 0 10px; font: 600 13.5px/1.4 'Inter Tight', sans-serif; color: #1e4d32; }
+
+/* ── case-board panel (diegetic prikbord, opened in-world) ── */
+.v3d-board-overlay { position: fixed; inset: 0; z-index: 22; display: grid; place-items: center; pointer-events: auto;
+  background: radial-gradient(circle at 50% 45%, rgba(18,24,12,.38) 0%, rgba(10,14,8,.74) 100%); }
+.v3d-board { width: min(90vw, 440px); animation: v3dPop .42s cubic-bezier(.2,.9,.3,1.2) both; }
+.v3d-hud.rm .v3d-board { animation: none; }
+.v3d-board-close { align-self: stretch; margin-top: 2px; font: 600 14px/1 'Inter Tight', sans-serif; color: #6f5026;
+  background: rgba(255,250,240,.6); border: 1px solid rgba(120,90,50,.25); border-radius: 10px; padding: 11px; cursor: pointer; min-height: 44px; }
+.v3d-board-close:hover { background: rgba(255,250,240,.9); }

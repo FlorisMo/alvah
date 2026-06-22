@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Ranger van de Veluwe — Wereld 3D</title>
+<!-- ext-resource-dependency: three.js (jsDelivr r160), CC0 RobotExpressive rig+clips (three.js), CC0 Poly Haven HDRI — loaded at runtime -->
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="world.css" />
+<link rel="stylesheet" href="world-night.css" />
+<link rel="stylesheet" href="world3d.css" />
+<link rel="stylesheet" href="caseboard.css" />
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0f130d; }
+  #loader { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; gap: 14px;
+    align-items: center; justify-content: center; background: #11160e; color: #e8e3d6; font: 14px 'Inter Tight', system-ui, sans-serif; }
+  #loader .ring { width: 34px; height: 34px; border: 3px solid rgba(245,194,59,.25); border-top-color: #f5c23b;
+    border-radius: 50%; animation: ldspin 1s linear infinite; }
+  @keyframes ldspin { to { transform: rotate(360deg); } }
+  .perf { position: fixed; right: 14px; bottom: 14px; z-index: 12; font: 11px/1.5 ui-monospace, monospace;
+    color: #cfe8c4; background: rgba(10,14,8,.62); border: 1px solid rgba(255,255,255,.12); border-radius: 8px;
+    padding: 6px 9px; white-space: pre; text-align: right; cursor: pointer; }
+  .perf.off { opacity: .3; }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<div id="hud"></div>
+<div class="perf" id="perf" title="renderer.info — klik om te dimmen">– fps</div>
+<div id="loader"><div class="ring"></div><div>De Veluwe laden…</div></div>
+
+<!-- three.js (ESM) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="world3d-bridge.js"></script>
+
+<!-- React + Babel (pinned) -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- reused game stack (engines/content/skill/state — unchanged, render-agnostic) -->
+<script type="text/babel" src="sound.jsx"></script>
+<script type="text/babel" src="sprites.jsx"></script>
+<script type="text/babel" src="content-veluwe.jsx"></script>
+<script type="text/babel" src="content.jsx"></script>
+<script type="text/babel" src="skill.jsx"></script>
+<script type="text/babel" src="companion.jsx"></script>
+<script type="text/babel" src="state.jsx"></script>
+<script type="text/babel" src="step-spot.jsx"></script>
+<script type="text/babel" src="step-route.jsx"></script>
+<script type="text/babel" src="step-danger.jsx"></script>
+<script type="text/babel" src="step-simon.jsx"></script>
+<script type="text/babel" src="step-wissel.jsx"></script>
+
+<!-- the 3D-integration React layer (mounts last) -->
+<script type="text/babel" src="world3d.jsx"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Alvah's likeness reference photos (a child's face) — kept LOCAL only by default.
+# Two prototypes ("Alvah Likeness.html", "Ranger Audition.html") load these as siblings,
+# so they must stay in this folder to run locally — but they should not enter git history
+# of a repo that might ever be shared/public. If this repo is private and you accept the
+# risk, delete these lines to commit them. See ../GAMEPLAN.md §"Privacy".
+1000152315.jpg
+1000152316.jpg
+1000152317.jpg
+1000152318.jpg
+1000152319.jpg
+1000152320.jpg

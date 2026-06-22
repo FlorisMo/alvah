@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Vos · 3D realisme-pass</title>
+<!-- ext-resource-dependency: three.js, CC0 Fox glTF, CC0 Poly Haven HDRI — loaded at runtime -->
+<style>
+  :root{
+    --green:#1e4d32; --green-deep:#123621; --green-soft:#f0f5ec;
+    --ink:#1a1a1a; --ink-soft:#4a4a4a; --paper:#fdfcf8; --line:#e8e5dc;
+    --accent-warm:#d9b89a; --spel-sun:#f5c23b;
+    --spel-radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0f130d;
+    font-family:"Inter Tight",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);}
+  #app{position:fixed;inset:0;}
+  canvas{display:block;}
+
+  .hud{position:absolute;pointer-events:none;}
+  .card{pointer-events:auto;background:rgba(253,252,248,.92);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:var(--spel-radius);box-shadow:0 8px 28px rgba(20,30,15,.28);}
+
+  .title{top:18px;left:18px;padding:14px 18px;max-width:350px;}
+  .title h1{margin:0;font-family:"Fraunces",Georgia,serif;font-size:19px;font-weight:600;letter-spacing:-.01em;}
+  .title p{margin:6px 0 0;font-size:13px;line-height:1.5;color:var(--ink-soft);}
+  .title .tag{display:inline-block;margin-top:9px;font-size:11px;font-weight:600;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--green);background:var(--green-soft);
+    border:1px solid #c8d6c0;padding:3px 8px;border-radius:999px;}
+
+  .controls{left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:8px;padding:8px;}
+  .controls button{pointer-events:auto;font:inherit;font-size:15px;font-weight:600;color:var(--ink);
+    background:transparent;border:1.5px solid transparent;border-radius:10px;padding:10px 18px;cursor:pointer;
+    transition:background .18s ease,border-color .18s ease,transform .12s ease;min-height:44px;}
+  .controls button:hover{background:var(--green-soft);}
+  .controls button.active{background:var(--spel-sun);border-color:#e2a81f;}
+  .controls button:active{transform:translateY(1px);}
+
+  .toggles{top:18px;right:18px;display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+  .toggles .card{display:flex;gap:6px;padding:7px;}
+  .toggles button{pointer-events:auto;font:inherit;font-size:13px;font-weight:600;color:var(--ink-soft);
+    background:transparent;border:1.5px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer;
+    transition:all .16s ease;min-height:38px;}
+  .toggles button.on{color:var(--green-deep);background:var(--green-soft);border-color:#c8d6c0;}
+  .toggles .times{flex-wrap:wrap;max-width:312px;justify-content:flex-end;}
+
+  .hint{left:18px;bottom:22px;font-size:12px;color:#e9e0cf;text-shadow:0 1px 4px rgba(0,0,0,.6);
+    pointer-events:none;max-width:220px;line-height:1.5;}
+
+  .perf{right:18px;bottom:22px;font-family:ui-monospace,"SFMono-Regular",Menlo,monospace;font-size:11px;line-height:1.55;
+    color:#cfe8c4;background:rgba(10,14,8,.62);border:1px solid rgba(255,255,255,.12);border-radius:8px;
+    padding:7px 10px;pointer-events:auto;cursor:pointer;white-space:pre;text-align:right;backdrop-filter:blur(4px);}
+  .perf.off{opacity:.3;}
+
+  .loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:14px;background:#11160e;color:#e8e3d6;z-index:50;font-size:14px;transition:opacity .6s ease;}
+  .loader .ring{width:34px;height:34px;border:3px solid rgba(245,194,59,.25);border-top-color:var(--spel-sun);
+    border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loader.hide{opacity:0;pointer-events:none;}
+
+  @media (max-width:560px){ .title{max-width:62vw;} .title p{display:none;} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="hud title card">
+  <h1>De vos in 3D — levende wereld</h1>
+  <p>Stuur de vos onderaan (Rust / Lopen / Rennen) of laat 'm zwerven. Kies rechtsboven
+     het dagdeel. Sleep om te draaien.</p>
+  <span class="tag">smooth-shaded · vacht-PBR · sheen · CC0</span>
+</div>
+
+<div class="hud toggles">
+  <div class="card">
+    <button id="t-follow" class="on">Volg vos</button>
+    <button id="t-rotate" class="on">Auto-draai</button>
+    <button id="t-shadow" class="on">Schaduw</button>
+    <button id="t-motion" class="on">Beweging</button>
+  </div>
+  <div class="card times">
+    <button data-time="sunrise" class="on">Zonsopkomst</button>
+    <button data-time="day">Dag</button>
+    <button data-time="sunset">Zonsondergang</button>
+    <button data-time="night">Nacht</button>
+  </div>
+</div>
+
+<div class="hud controls card">
+  <button data-mode="manual" data-clip="0">Rust</button>
+  <button data-mode="manual" data-clip="1">Lopen</button>
+  <button data-mode="manual" data-clip="2">Rennen</button>
+  <button data-mode="auto" class="active">Zwerven</button>
+</div>
+
+<div class="hint hud">Sleep om te draaien · dagdeel rechtsboven</div>
+<div class="perf hud" id="perf" title="renderer.info per frame — klik om te dimmen">– fps</div>
+
+<div class="loader" id="loader"><div class="ring"></div><div id="loadtext">Wereld laden…</div></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+
+const app = document.getElementById('app');
+const loaderEl = document.getElementById('loader');
+const loadText = document.getElementById('loadtext');
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---- renderer ----
+const renderer = new THREE.WebGLRenderer({ antialias:false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));   // perf: cap 2->1.5 (~44% minder fragment-werk over alle passes)
+renderer.info.autoReset=false;                                    // perf: zelf resetten zodat de overlay calls/tris over de HELE frame leest
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog('#d8c49c', 16, 40);
+
+const camera = new THREE.PerspectiveCamera(36, window.innerWidth/window.innerHeight, 0.1, 200);
+camera.position.set(3.6, 2.6, 5.0);
+const target = new THREE.Vector3(0, 0.65, 0);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(target);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 2.6;
+controls.maxDistance = 12;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.enablePan = false;
+controls.update();
+
+// ---- lights (HDRI does most fill; directional gives the warm sun + crisp shadow) ----
+const key = new THREE.DirectionalLight('#ffc488', 2.1);
+key.position.set(-6, 5, 3);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);                 // perf: 2048->1024 = 1/4 shadow-fragmentwerk; strakke frustum houdt 'm scherp
+key.shadow.autoUpdate=false;                         // perf: shadowmap NIET elke frame; alleen als zon/vos echt bewogen (zie loop)
+key.shadow.camera.near = 1; key.shadow.camera.far = 24;
+const sd = 7;
+key.shadow.camera.left=-sd; key.shadow.camera.right=sd; key.shadow.camera.top=sd; key.shadow.camera.bottom=-sd;
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.025;
+scene.add(key); scene.add(key.target);
+const hemi = new THREE.HemisphereLight('#cfe0f5', '#6b5638', 0.25);
+scene.add(hemi);
+// warm back rim — lights the fur edge for golden-hour silhouette (research C2)
+const rim = new THREE.DirectionalLight('#ffd6a0', 1.15);
+rim.position.set(6,3,-5); rim.castShadow=false;
+scene.add(rim); scene.add(rim.target);
+const _shadowPrev=new THREE.Vector3(1e9,0,0);       // perf: vorige zon-positie -> shadow.needsUpdate alleen bij verandering
+
+// ================= WORLD =================
+// ground with a procedural heath texture (no external fetch)
+function heathTexture(){
+  const c=document.createElement('canvas'); c.width=c.height=512; const g=c.getContext('2d');
+  g.fillStyle='#6b7a48'; g.fillRect(0,0,512,512);
+  const blobs=[['#7d8a52',260],['#5a6a3e',240],['#49562f',200],['#a99a6b',120],['#7a5d7e',70]];
+  for(const [col,n] of blobs){ g.fillStyle=col;
+    for(let i=0;i<n;i++){ const x=Math.random()*512,y=Math.random()*512,r=6+Math.random()*34;
+      g.globalAlpha=0.25+Math.random()*0.4; g.beginPath(); g.ellipse(x,y,r,r*(0.5+Math.random()),Math.random()*6,0,7); g.fill(); } }
+  g.globalAlpha=1;
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace;
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(7,7); t.anisotropy=4; return t;
+}
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(60, 72),
+  new THREE.MeshStandardMaterial({ map:heathTexture(), roughness:1, metalness:0 })
+);
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; scene.add(ground);
+
+// soft contact shadow under the fox
+function radialTex(){ const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
+  const grd=g.createRadialGradient(64,64,4,64,64,62); grd.addColorStop(0,'rgba(20,28,14,.55)'); grd.addColorStop(1,'rgba(20,28,14,0)');
+  g.fillStyle=grd; g.fillRect(0,0,128,128); const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; }
+const contact=new THREE.Mesh(new THREE.PlaneGeometry(2.6,2.6),
+  new THREE.MeshBasicMaterial({map:radialTex(),transparent:true,depthWrite:false,opacity:.5}));
+contact.rotation.x=-Math.PI/2; contact.position.y=.012; scene.add(contact);
+
+// ---- wind-swaying grass (instanced) ----
+const windMats=[];
+function makeGrassMat(){
+  const m=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,metalness:0,side:THREE.DoubleSide});
+  m.onBeforeCompile=(sh)=>{ sh.uniforms.uTime={value:0}; windMats.push(sh.uniforms);
+    sh.vertexShader='uniform float uTime;\n'+sh.vertexShader.replace('#include <begin_vertex>',
+      `#include <begin_vertex>
+       float h01=clamp(position.y/0.3,0.0,1.0);
+       float ph=instanceMatrix[3].x*0.6+instanceMatrix[3].z*0.6;
+       transformed.x+=sin(uTime*1.6+ph)*0.06*h01*h01;
+       transformed.z+=cos(uTime*1.2+ph)*0.04*h01*h01;`); };
+  return m;
+}
+const blade=new THREE.PlaneGeometry(0.022,0.3,1,2); blade.translate(0,0.15,0);   // perf: 3->2 hoogte-segmenten
+{ const p=blade.attributes.position; for(let i=0;i<p.count;i++){ const y=p.getY(i); const f=1.0-(y/0.3)*0.78; p.setX(i,p.getX(i)*f);} p.needsUpdate=true; }
+const GRASS=3000; const grass=new THREE.InstancedMesh(blade, makeGrassMat(), GRASS);   // perf: 6000->3000 blades
+grass.material.envMapIntensity=0.65;
+grass.castShadow=false; grass.receiveShadow=false;
+const dummy=new THREE.Object3D(); const gcol=new THREE.Color();
+let gi=0; const clumps=Math.ceil(GRASS/18);
+for(let c=0;c<clumps;c++){
+  let ang=Math.random()*Math.PI*2, rad=1.6+Math.random()*7.0;   // perf: cull buiten r~9 (vos blijft binnen r~11)
+  const cx=Math.cos(ang)*rad, cz=Math.sin(ang)*rad;
+  for(let b=0;b<18 && gi<GRASS;b++,gi++){
+    const x=cx+(Math.random()-.5)*0.55, z=cz+(Math.random()-.5)*0.55;
+    dummy.position.set(x,0,z); dummy.rotation.y=Math.random()*Math.PI;
+    const w=0.7+Math.random()*0.6, hf=0.7+Math.random()*0.6; dummy.scale.set(w,hf,w);
+    dummy.updateMatrix(); grass.setMatrixAt(gi,dummy.matrix);
+    const t=Math.random(); const dry=Math.random()<0.18;
+    if(dry) gcol.setRGB(0.55+0.12*t,0.50+0.10*t,0.24+0.08*t);
+    else gcol.setRGB(0.26+0.16*t,0.36+0.16*t,0.15+0.08*t);
+    grass.setColorAt(gi,gcol);
+  }
+}
+grass.instanceMatrix.needsUpdate=true; if(grass.instanceColor) grass.instanceColor.needsUpdate=true;
+scene.add(grass);
+
+// ---- heather clumps ----
+const heather=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.13,1),
+  new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,metalness:0,flatShading:true}),150);
+heather.material.envMapIntensity=0.6;
+const hcol=new THREE.Color();
+for(let i=0;i<150;i++){ const ang=Math.random()*Math.PI*2, rad=1.8+Math.random()*13;
+  dummy.position.set(Math.cos(ang)*rad,0.05,Math.sin(ang)*rad); dummy.rotation.y=Math.random()*Math.PI;
+  const s=0.55+Math.random()*0.9; dummy.scale.set(s,0.62*s,s); dummy.updateMatrix(); heather.setMatrixAt(i,dummy.matrix);
+  const t=Math.random(); hcol.setRGB(0.30+0.14*t,0.19+0.09*t,0.33+0.10*t); heather.setColorAt(i,hcol); }
+heather.instanceMatrix.needsUpdate=true; if(heather.instanceColor) heather.instanceColor.needsUpdate=true;
+heather.castShadow=true; scene.add(heather);
+
+// ---- distant pines (silhouette into fog) - INSTANCED (perf: 40 losse meshes -> 4 draw calls) ----
+const PINES=10;
+const trunkGeo=new THREE.CylinderGeometry(0.12,0.18,1.2,6); trunkGeo.translate(0,0.6,0);
+const coneGeos=[0,1,2].map(k=>{ const g=new THREE.ConeGeometry(1.1-k*0.28,1.4,7); g.translate(0,1.4+k*0.9,0); return g; });
+const trunkInst=new THREE.InstancedMesh(trunkGeo,new THREE.MeshStandardMaterial({color:'#4a3a28',roughness:1}),PINES);
+const foliageMat=new THREE.MeshStandardMaterial({color:'#2f3e26',roughness:1});
+const coneInsts=coneGeos.map(g=>{ const m=new THREE.InstancedMesh(g,foliageMat,PINES); m.castShadow=true; return m; });
+for(let i=0;i<PINES;i++){ const ang=Math.random()*Math.PI*2, rad=15+Math.random()*16;
+  dummy.position.set(Math.cos(ang)*rad,0,Math.sin(ang)*rad); dummy.rotation.set(0,Math.random()*Math.PI,0);
+  const s=1.4+Math.random()*1.6; dummy.scale.setScalar(s); dummy.updateMatrix();
+  trunkInst.setMatrixAt(i,dummy.matrix); coneInsts.forEach(ci=>ci.setMatrixAt(i,dummy.matrix)); }
+trunkInst.instanceMatrix.needsUpdate=true; coneInsts.forEach(ci=>ci.instanceMatrix.needsUpdate=true);
+scene.add(trunkInst); coneInsts.forEach(ci=>scene.add(ci));
+
+// ---- rocks - INSTANCED (perf: 9 losse meshes -> 1 draw call) ----
+const rockMat=new THREE.MeshStandardMaterial({color:'#8a8377',roughness:1,metalness:0,flatShading:true});
+const ROCKS=9; const rockGeo=new THREE.IcosahedronGeometry(0.3,0);
+const rocks=new THREE.InstancedMesh(rockGeo,rockMat,ROCKS); rocks.castShadow=true; rocks.receiveShadow=true;
+for(let i=0;i<ROCKS;i++){ const ang=Math.random()*Math.PI*2, rad=2.5+Math.random()*12;
+  const sc=(0.18+Math.random()*0.3)/0.3;
+  dummy.position.set(Math.cos(ang)*rad,0.05,Math.sin(ang)*rad);
+  dummy.rotation.set(Math.random(),Math.random(),Math.random()); dummy.scale.set(sc,sc*(0.6+Math.random()*0.4),sc);
+  dummy.updateMatrix(); rocks.setMatrixAt(i,dummy.matrix); }
+rocks.instanceMatrix.needsUpdate=true; scene.add(rocks);
+
+// ---- floating pollen / dust motes (golden-hour atmosphere) ----
+const MOTES=260; const moteGeo=new THREE.BufferGeometry(); const mpos=new Float32Array(MOTES*3);
+for(let i=0;i<MOTES;i++){ mpos[i*3]=(Math.random()-.5)*24; mpos[i*3+1]=0.2+Math.random()*3.0; mpos[i*3+2]=(Math.random()-.5)*24; }
+moteGeo.setAttribute('position',new THREE.BufferAttribute(mpos,3));
+const motes=new THREE.Points(moteGeo,new THREE.PointsMaterial({color:'#ffe7b0',size:0.045,transparent:true,opacity:0.55,depthWrite:false,blending:THREE.AdditiveBlending}));
+scene.add(motes);
+
+// ---- procedural fur PBR maps (canvas, no fetch) — gives the flat CC0 fox surface detail ----
+function _furHeightCanvas(size){
+  const c=document.createElement('canvas'); c.width=c.height=size; const g=c.getContext('2d');
+  g.fillStyle='#808080'; g.fillRect(0,0,size,size);
+  g.filter='blur(0.7px)';                          // zacht → geen harde pixel-strepen
+  const n=size*15;                                 // veel meer, kortere haartjes
+  for(let i=0;i<n;i++){
+    const x=Math.random()*size, y=Math.random()*size;
+    const len=size*(0.005+Math.random()*0.020);
+    const ang=Math.random()*Math.PI*2;             // multidirectioneel → leest niet als lijnen van bovenaf
+    const dx=Math.cos(ang)*len, dy=Math.sin(ang)*len;
+    const a=0.05+Math.random()*0.13;               // veel lager contrast
+    g.strokeStyle=(Math.random()<0.5?`rgba(255,255,255,${a})`:`rgba(0,0,0,${a})`);
+    g.lineWidth=0.6+Math.random()*0.7; g.lineCap='round';
+    g.beginPath(); g.moveTo(x,y); g.lineTo(x+dx,y+dy); g.stroke();
+  }
+  g.filter='none';
+  return c;
+}
+const _furSize=512; const _furH=_furHeightCanvas(_furSize);
+function furNormalTex(strength){
+  const size=_furSize; const src=_furH.getContext('2d').getImageData(0,0,size,size).data;
+  const out=document.createElement('canvas'); out.width=out.height=size; const og=out.getContext('2d');
+  const img=og.createImageData(size,size); const d=img.data;
+  const H=(x,y)=>src[(((y+size)%size)*size+((x+size)%size))*4]/255;
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const nx=-(H(x+1,y)-H(x-1,y))*strength, ny=-(H(x,y+1)-H(x,y-1))*strength, nz=1;
+    const l=Math.hypot(nx,ny,nz); const o=(y*size+x)*4;
+    d[o]=(nx/l*0.5+0.5)*255; d[o+1]=(ny/l*0.5+0.5)*255; d[o+2]=(nz/l*0.5+0.5)*255; d[o+3]=255;
+  }
+  og.putImageData(img,0,0);
+  const t=new THREE.CanvasTexture(out); t.colorSpace=THREE.NoColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=4; return t;
+}
+function furRoughTex(){
+  const size=_furSize; const src=_furH.getContext('2d').getImageData(0,0,size,size).data;
+  const out=document.createElement('canvas'); out.width=out.height=size; const og=out.getContext('2d');
+  const img=og.createImageData(size,size); const d=img.data;
+  for(let i=0;i<size*size;i++){ const h=src[i*4]/255; const v=(0.74+(1-h)*0.2)*255; d[i*4]=d[i*4+1]=d[i*4+2]=v; d[i*4+3]=255; }
+  og.putImageData(img,0,0);
+  const t=new THREE.CanvasTexture(out); t.colorSpace=THREE.NoColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+}
+const FUR_NORMAL=furNormalTex(1.5); const FUR_ROUGH=furRoughTex();
+FUR_NORMAL.repeat.set(8,8); FUR_ROUGH.repeat.set(8,8);
+
+// ================= ENV (HDRI) + FOX =================
+const pmrem=new THREE.PMREMGenerator(renderer); pmrem.compileEquirectangularShader();
+const HDR='https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/spruit_sunrise_1k.hdr';
+
+function gradientSky(){ const c=document.createElement('canvas'); c.width=16; c.height=256; const g=c.getContext('2d');
+  const grd=g.createLinearGradient(0,0,0,256); grd.addColorStop(0,'#bcd2ee'); grd.addColorStop(0.5,'#e9d6ac'); grd.addColorStop(1,'#e7c891');
+  g.fillStyle=grd; g.fillRect(0,0,16,256); const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t; }
+
+new RGBELoader().load(HDR,(hdr)=>{
+  const envMap=pmrem.fromEquirectangular(hdr).texture;
+  scene.environment=envMap;
+  hdr.mapping=THREE.EquirectangularReflectionMapping; scene.background=hdr;
+  scene.backgroundBlurriness=0.45; scene.backgroundIntensity=1.0;
+  loadFox();
+}, (xhr)=>{ if(xhr.total) loadText.textContent=`Wereld laden… ${Math.round(xhr.loaded/xhr.total*55)}%`; },
+()=>{ // fallback: no external HDRI
+  scene.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
+  scene.background=gradientSky();
+  loadFox();
+});
+
+let mixer, actions=[], current=0; const clock=new THREE.Clock();
+let fox=null;
+let tailBones=[], chestBone=null, chestBase=null;        // secundaire beweging: pluimstaart-lag + ademhaling in rust
+let tSwingX=0,tVelX=0,tSwingZ=0,tPhase=0,breathT=0,foxSpeed=0,_prevHeading=0; const _prevFoxPos=new THREE.Vector3();
+let eyeL=null, eyeR=null, glintL=null, glintR=null;      // oog-amandel + catchlight (geparenteerd aan kop-bot)
+const EYE={fwd:18.8,up:8.0,sep:3.4,r:1.15,             // lokaal t.o.v. b_Head_05: +X=snuit-vooruit, +Y=omhoog, +Z=zijwaarts
+  sx:0.72,sy:0.82,sz:1.22};                            // amandelvorm: dun in diepte (X), breder zijwaarts (Z)
+function placeEyes(){ if(!eyeL||!eyeR) return; const r=EYE.r;
+  eyeL.position.set(EYE.fwd,EYE.up, EYE.sep); eyeR.position.set(EYE.fwd,EYE.up,-EYE.sep);
+  eyeL.scale.set(r*EYE.sx,r*EYE.sy,r*EYE.sz); eyeR.scale.set(r*EYE.sx,r*EYE.sy,r*EYE.sz);
+  if(glintL&&glintR){ const gf=EYE.fwd+r*EYE.sx*0.95, gu=EYE.up+r*0.42;
+    glintL.position.set(gf,gu, EYE.sep+r*0.22); glintR.position.set(gf,gu,-(EYE.sep+r*0.22));
+    glintL.scale.setScalar(r*0.26); glintR.scale.setScalar(r*0.26); } }
+const wander={ state:'idle', timer:1.2, target:new THREE.Vector3(), speed:0, mode:'walk', heading:0 };
+// control mode: 'auto' = wander-machine bestuurt; 'manual' = knop forceert een clip
+let controlMode='auto', manualClip=0;
+let pathAngle=0, pathRadius=5; const PATH_R=5;
+function lerpAngle(a,b,t){ let d=b-a; while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
+function pickTarget(){ const ang=Math.random()*Math.PI*2, rad=2+Math.random()*7;
+  wander.target.set(Math.cos(ang)*rad,0,Math.sin(ang)*rad);
+  const run=Math.random()<0.22; wander.mode=run?'run':'walk';
+  wander.speed=run?(2.8+Math.random()*1.1):(0.9+Math.random()*0.6);
+  setClip(run?2:1); wander.state='moving'; }
+function loadFox(){
+  const FOX='https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Fox/glTF-Binary/Fox.glb';
+  new GLTFLoader().load(FOX,(gltf)=>{
+    const model=gltf.scene;
+    model.traverse(o=>{ if(o.isMesh){
+      o.castShadow=true; o.receiveShadow=true;
+      // smooth-shade: drop facet normals, weld coincident verts, recompute smooth normals
+      try{ const g=o.geometry; g.deleteAttribute('normal');
+        const merged=BufferGeometryUtils.mergeVertices(g); merged.computeVertexNormals();
+        merged.computeBoundingBox(); merged.computeBoundingSphere();
+        o.geometry=merged; if(g!==merged) g.dispose(); }catch(e){ console.warn('smooth-shade skipped',e); }
+      const old=o.material;
+      const mat=new THREE.MeshPhysicalMaterial({
+        map: old&&old.map?old.map:null, color: old&&old.color?old.color.clone():new THREE.Color(0xffffff),
+        roughness:0.85, metalness:0.0,
+        normalMap:FUR_NORMAL, normalScale:new THREE.Vector2(0.26,0.26),
+        roughnessMap:FUR_ROUGH,
+        sheen:0.7, sheenRoughness:0.85, sheenColor:new THREE.Color('#ffc184'),
+        envMapIntensity:0.95,
+      });
+      // ---- gezicht: natte glans op ogen + neus, afgeleid uit de diffuse (donker én ongekleurd) ----
+      if(old && old.map && old.map.image){
+        try{
+          const im=old.map.image; const S=im.width||256;
+          const mc=document.createElement('canvas'); mc.width=mc.height=S; const mg=mc.getContext('2d',{willReadFrequently:true});
+          mg.drawImage(im,0,0,S,S); const px=mg.getImageData(0,0,S,S).data;
+          const out=mg.createImageData(S,S); const od=out.data;
+          for(let i=0;i<S*S;i++){ const r=px[i*4],gg=px[i*4+1],b=px[i*4+2];
+            const mx=Math.max(r,gg,b), mn=Math.min(r,gg,b); const sat=mx===0?0:(mx-mn)/mx; const lum=(r+gg+b)/3;
+            const m=(lum<80 && sat<0.40)?255:0;       // donker+grijs = oog/neus (bruine sokken/oren = verzadigd → uit)
+            od[i*4]=od[i*4+1]=od[i*4+2]=m; od[i*4+3]=255; }
+          mg.putImageData(out,0,0);
+          mg.filter='blur(1.2px)'; mg.drawImage(mc,0,0); mg.filter='none';   // glans iets verbreden
+          const ccTex=new THREE.CanvasTexture(mc); ccTex.colorSpace=THREE.NoColorSpace;
+          ccTex.flipY = (old.map.flipY!==undefined)?old.map.flipY:false;
+          mat.clearcoat=1.0; mat.clearcoatRoughness=0.06; mat.clearcoatMap=ccTex; mat.needsUpdate=true;
+        }catch(e){ console.warn('gezicht-glans overgeslagen',e); }
+      }
+      trackEnv(mat);
+      o.material=mat;   // oude diffuse-texture blijft in gebruik via mat.map — niet disposen
+    } });
+    const box=new THREE.Box3().setFromObject(model); const size=new THREE.Vector3(); box.getSize(size);
+    const ctr=new THREE.Vector3(); box.getCenter(ctr); const s=1.4/size.y;
+    model.scale.setScalar(s);
+    model.position.x-=ctr.x*s; model.position.z-=ctr.z*s; model.position.y-=box.min.y*s;
+    model.rotation.y=Math.PI*0.16; scene.add(model); fox=model; wander.heading=model.rotation.y;
+    // secundaire-beweging-rig: staartketen base->tip + borstbot voor ademhaling (Fox heeft GEEN oorbotten)
+    const findBone=(n)=>{ let b=null; model.traverse(o=>{ if(o.name===n) b=o; }); return b; };
+    tailBones=['b_Tail01_012','b_Tail02_013','b_Tail03_014'].map(findBone).filter(Boolean);
+    chestBone=findBone('b_Spine01_02'); chestBase=chestBone?chestBone.scale.clone():null;   // bewaar bind-scale: NIET overschrijven
+    _prevFoxPos.copy(model.position); _prevHeading=model.rotation.y;
+    // ---- ogen: de CC0-vacht-mesh heeft GEEN oog-geometrie; twee glossy bollen aan de kop-bot ----
+    const headBone=findBone('b_Head_05');
+    if(headBone){
+      // warm-donkere amandelogen (matchen de low-poly stijl) + kleine catchlight = de "natte glans" uit research C2/B5
+      const eyeMat=new THREE.MeshPhysicalMaterial({color:0x201509,roughness:0.34,metalness:0,
+        clearcoat:0.55,clearcoatRoughness:0.2,envMapIntensity:0.45});   // lage env -> geen bloom-flare
+      const eyeGeo=new THREE.SphereGeometry(1,16,12);
+      eyeL=new THREE.Mesh(eyeGeo,eyeMat); eyeR=new THREE.Mesh(eyeGeo,eyeMat);
+      const glintMat=new THREE.MeshBasicMaterial({color:0xfff4e2});      // klein wit lichtpuntje
+      const glintGeo=new THREE.SphereGeometry(1,8,6);
+      glintL=new THREE.Mesh(glintGeo,glintMat); glintR=new THREE.Mesh(glintGeo,glintMat);
+      glintL.renderOrder=2; glintR.renderOrder=2;
+      headBone.add(eyeL); headBone.add(eyeR); headBone.add(glintL); headBone.add(glintR); placeEyes();
+      trackEnv(eyeMat);
+    }
+    mixer=new THREE.AnimationMixer(model);
+    actions=gltf.animations.map(c=>mixer.clipAction(c));
+    if(actions[0]){ actions[0].play(); }
+    // ---- rig-inspectie: bot-namen loggen (secundaire beweging) ----
+    let _bones=[]; model.traverse(o=>{ if(o.isBone) _bones.push(o.name); });
+    console.log('FOX clips:', gltf.animations.map(c=>c.name));
+    console.log('FOX bones ('+_bones.length+'):', _bones.join(', '));
+    wander.state='idle'; wander.timer=0.8;
+    if(reduceMotion){ document.getElementById('t-motion').click(); }
+    loaderEl.classList.add('hide'); setTimeout(()=>loaderEl.remove(),600);
+  },(xhr)=>{ if(xhr.total) loadText.textContent=`Vos laden… ${55+Math.round(xhr.loaded/xhr.total*45)}%`; },
+  (err)=>{ loaderEl.innerHTML='<div style="max-width:340px;text-align:center;line-height:1.6">Kon het vos-model niet laden (netwerk). De wereld zelf werkt wel — ververs om opnieuw te proberen.</div>'; console.error(err); });
+}
+
+// ---- post-processing ----
+const fx=new EffectComposer(renderer);
+fx.setPixelRatio(Math.min(window.devicePixelRatio,1.5));   // perf: composer cap 2->1.5
+fx.addPass(new RenderPass(scene,camera));
+// perf: bloom op halve resolutie (bloom hoeft niet scherp) -> ~4x minder bloom-fragmentwerk
+const bloom=new UnrealBloomPass(new THREE.Vector2(window.innerWidth/2,window.innerHeight/2),0.14,0.5,0.92);
+fx.addPass(bloom);
+fx.addPass(new OutputPass());
+const smaa=new SMAAPass(window.innerWidth,window.innerHeight); fx.addPass(smaa);
+
+// ---- clip switching ----
+function setClip(i){ if(!actions.length||i===current) return; const from=actions[current], to=actions[i];
+  if(to){ to.reset().play(); to.enabled=true; to.setEffectiveWeight(1); if(from) from.crossFadeTo(to,0.3,false); }
+  current=i; }
+function updateControlUI(){ document.querySelectorAll('.controls button').forEach(b=>{
+  let on=false;
+  if(b.dataset.mode==='auto') on=(controlMode==='auto');
+  else on=(controlMode==='manual' && parseInt(b.dataset.clip,10)===manualClip);
+  b.classList.toggle('active',on); }); }
+function enterAuto(){ controlMode='auto'; wander.state='idle'; wander.timer=0.4; updateControlUI(); }
+function enterManual(clip){ controlMode='manual'; manualClip=clip;
+  if(clip!==0 && fox){ pathAngle=Math.atan2(fox.position.z,fox.position.x); pathRadius=Math.max(1.5,Math.hypot(fox.position.x,fox.position.z)); }
+  setClip(clip); updateControlUI(); }
+document.querySelectorAll('.controls button').forEach(b=>b.addEventListener('click',()=>{
+  if(b.dataset.mode==='auto'){ enterAuto(); }
+  else{ const clip=parseInt(b.dataset.clip,10);
+    if(controlMode==='manual' && manualClip===clip){ enterAuto(); } // nogmaals klikken op de actieve knop → terug naar zwerven
+    else{ enterManual(clip); } }
+}));
+
+// ---- toggles ----
+let autoRotate=true, motionOn=true, followCam=true;
+const tRotate=document.getElementById('t-rotate'), tShadow=document.getElementById('t-shadow'), tMotion=document.getElementById('t-motion'), tFollow=document.getElementById('t-follow');
+tRotate.addEventListener('click',()=>{autoRotate=!autoRotate; controls.autoRotate=autoRotate; tRotate.classList.toggle('on',autoRotate);});
+tShadow.addEventListener('click',()=>{const on=!renderer.shadowMap.enabled; renderer.shadowMap.enabled=on; contact.visible=on;
+  if(on){ key.shadow.needsUpdate=true; _shadowPrev.set(1e9,0,0); }   // perf: forceer 1 shadow-pass bij inschakelen
+  tShadow.classList.toggle('on',on); scene.traverse(o=>{if(o.isMesh&&o.material)o.material.needsUpdate=true;});});
+tMotion.addEventListener('click',()=>{motionOn=!motionOn; tMotion.classList.toggle('on',motionOn);});
+tFollow.addEventListener('click',()=>{followCam=!followCam; tFollow.classList.toggle('on',followCam);});
+controls.autoRotate=true; controls.autoRotateSpeed=0.4;
+const prevTarget=controls.target.clone();
+
+// ================= TIME OF DAY =================
+// materialen waarvan de environment-bijdrage met het dagdeel meeschaalt (zo voelt de vos ook 's nachts koeler)
+const ENV_MATS=[];
+function trackEnv(m){ if(!m||m.userData._envT||!('envMapIntensity' in m)) return;
+  m.userData._envT=true; m.userData.baseEnv=(m.envMapIntensity!==undefined?m.envMapIntensity:1); ENV_MATS.push(m); }
+function collectWorldEnv(){ scene.traverse(o=>{ if(o.isMesh){ const mm=Array.isArray(o.material)?o.material:[o.material]; mm.forEach(trackEnv); } }); }
+// per dagdeel: key-kleur/intensiteit/hoek, hemi-fill, fog, exposure, achtergrond + env, motes, bloom, contact
+const TIMES={
+  sunrise:{ keyColor:'#ffc488', keyInt:2.1,  keyPos:[-6,4.6,3], hemiSky:'#cfe0f5', hemiGround:'#6b5638', hemiInt:0.25, rimColor:'#ffd6a0', rimInt:1.15, rimPos:[6,3,-5],   fog:'#d8c49c', fogNear:16, fogFar:40, exposure:1.0,  bgInt:1.0,  envMul:1.0,  mote:'#ffe7b0', moteOp:0.55, bloom:0.14, contactOp:0.50 },
+  day:{     keyColor:'#fff3df', keyInt:2.7,  keyPos:[-3,8.5,2], hemiSky:'#bcd8ff', hemiGround:'#8a7a55', hemiInt:0.50, rimColor:'#ffffff', rimInt:0.50, rimPos:[5,5,-4],   fog:'#cdd6c2', fogNear:22, fogFar:58, exposure:1.05, bgInt:1.15, envMul:1.2,  mote:'#fff3d0', moteOp:0.28, bloom:0.08, contactOp:0.55 },
+  sunset:{  keyColor:'#ff8a47', keyInt:2.25, keyPos:[-7,3.2,2], hemiSky:'#aebfe0', hemiGround:'#7a4630', hemiInt:0.22, rimColor:'#ffb070', rimInt:1.30, rimPos:[7,2.6,-5], fog:'#c6975f', fogNear:14, fogFar:38, exposure:0.95, bgInt:0.95, envMul:0.92, mote:'#ffcf9a', moteOp:0.55, bloom:0.17, contactOp:0.50 },
+  night:{   keyColor:'#aac4ff', keyInt:0.55, keyPos:[-5,6,3],   hemiSky:'#2c3e63', hemiGround:'#171f2e', hemiInt:0.40, rimColor:'#9fc0ff', rimInt:0.80, rimPos:[6,3.5,-5], fog:'#1b2540', fogNear:10, fogFar:30, exposure:0.60, bgInt:0.22, envMul:0.30, mote:'#bcd4ff', moteOp:0.42, bloom:0.22, contactOp:0.28 },
+};
+const timeState={ keyColor:new THREE.Color(), keyInt:0, keyX:0,keyY:0,keyZ:0,
+  hemiSky:new THREE.Color(), hemiGround:new THREE.Color(), hemiInt:0,
+  rimColor:new THREE.Color(), rimInt:0, rimX:0,rimY:0,rimZ:0,
+  fog:new THREE.Color(), fogNear:0, fogFar:0, exposure:0, bgInt:0, envMul:1,
+  moteColor:new THREE.Color(), moteOp:0, bloom:0, contactOp:0 };
+let timeTarget=null;
+function timeFrom(p){ return { keyColor:new THREE.Color(p.keyColor), keyInt:p.keyInt, keyX:p.keyPos[0],keyY:p.keyPos[1],keyZ:p.keyPos[2],
+  hemiSky:new THREE.Color(p.hemiSky), hemiGround:new THREE.Color(p.hemiGround), hemiInt:p.hemiInt,
+  rimColor:new THREE.Color(p.rimColor), rimInt:p.rimInt, rimX:p.rimPos[0],rimY:p.rimPos[1],rimZ:p.rimPos[2],
+  fog:new THREE.Color(p.fog), fogNear:p.fogNear, fogFar:p.fogFar, exposure:p.exposure, bgInt:p.bgInt, envMul:p.envMul,
+  moteColor:new THREE.Color(p.mote), moteOp:p.moteOp, bloom:p.bloom, contactOp:p.contactOp }; }
+function applyTimeState(){ const s=timeState;
+  key.color.copy(s.keyColor); key.intensity=s.keyInt;
+  hemi.color.copy(s.hemiSky); hemi.groundColor.copy(s.hemiGround); hemi.intensity=s.hemiInt;
+  rim.color.copy(s.rimColor); rim.intensity=s.rimInt;
+  scene.fog.color.copy(s.fog); scene.fog.near=s.fogNear; scene.fog.far=s.fogFar;
+  renderer.toneMappingExposure=s.exposure; scene.backgroundIntensity=s.bgInt;
+  for(let i=0;i<ENV_MATS.length;i++){ const m=ENV_MATS[i]; m.envMapIntensity=(m.userData.baseEnv||1)*s.envMul; }
+  motes.material.color.copy(s.moteColor); motes.material.opacity=s.moteOp;
+  bloom.strength=s.bloom; if(renderer.shadowMap.enabled) contact.material.opacity=s.contactOp; }
+function applyTimeLerp(k){ const s=timeState,t=timeTarget;
+  s.keyColor.lerp(t.keyColor,k); s.hemiSky.lerp(t.hemiSky,k); s.hemiGround.lerp(t.hemiGround,k); s.rimColor.lerp(t.rimColor,k); s.fog.lerp(t.fog,k); s.moteColor.lerp(t.moteColor,k);
+  s.keyInt+=(t.keyInt-s.keyInt)*k; s.keyX+=(t.keyX-s.keyX)*k; s.keyY+=(t.keyY-s.keyY)*k; s.keyZ+=(t.keyZ-s.keyZ)*k;
+  s.hemiInt+=(t.hemiInt-s.hemiInt)*k; s.rimInt+=(t.rimInt-s.rimInt)*k; s.rimX+=(t.rimX-s.rimX)*k; s.rimY+=(t.rimY-s.rimY)*k; s.rimZ+=(t.rimZ-s.rimZ)*k;
+  s.fogNear+=(t.fogNear-s.fogNear)*k; s.fogFar+=(t.fogFar-s.fogFar)*k; s.exposure+=(t.exposure-s.exposure)*k; s.bgInt+=(t.bgInt-s.bgInt)*k; s.envMul+=(t.envMul-s.envMul)*k;
+  s.moteOp+=(t.moteOp-s.moteOp)*k; s.bloom+=(t.bloom-s.bloom)*k; s.contactOp+=(t.contactOp-s.contactOp)*k;
+  applyTimeState(); }
+function setTime(name, instant){ const t=timeFrom(TIMES[name]); timeTarget=t;
+  document.querySelectorAll('.times button').forEach(b=>b.classList.toggle('on',b.dataset.time===name));
+  if(instant){ const s=timeState;
+    s.keyColor.copy(t.keyColor); s.hemiSky.copy(t.hemiSky); s.hemiGround.copy(t.hemiGround); s.rimColor.copy(t.rimColor); s.fog.copy(t.fog); s.moteColor.copy(t.moteColor);
+    s.keyInt=t.keyInt; s.keyX=t.keyX; s.keyY=t.keyY; s.keyZ=t.keyZ; s.hemiInt=t.hemiInt; s.rimInt=t.rimInt; s.rimX=t.rimX; s.rimY=t.rimY; s.rimZ=t.rimZ;
+    s.fogNear=t.fogNear; s.fogFar=t.fogFar; s.exposure=t.exposure; s.bgInt=t.bgInt; s.envMul=t.envMul; s.moteOp=t.moteOp; s.bloom=t.bloom; s.contactOp=t.contactOp;
+    applyTimeState(); } }
+document.querySelectorAll('.times button').forEach(b=>b.addEventListener('click',()=>setTime(b.dataset.time,false)));
+collectWorldEnv();
+setTime('sunrise', true);
+
+// ---- perf overlay (renderer.info per frame) ----
+const perfEl=document.getElementById('perf');
+let _fpsAcc=0,_fpsN=0,_fpsT=0,_fps=60,_perfShow=true;
+perfEl.addEventListener('click',()=>{ _perfShow=!_perfShow; perfEl.classList.toggle('off',!_perfShow); });
+function updatePerf(dt,calls,tris){
+  _fpsAcc+=dt; _fpsN++; _fpsT+=dt;
+  if(_fpsT>=0.5){ _fps=_fpsN/_fpsAcc; _fpsAcc=0; _fpsN=0; _fpsT=0; }
+  perfEl.textContent=_perfShow ? `${_fps.toFixed(0)} fps\n${calls} calls\n${(tris/1000).toFixed(1)}k tris` : `${_fps.toFixed(0)} fps`;
+}
+
+// ---- secundaire beweging: staart-lag (na-zwaai) + ademhaling, additief NA mixer.update ----
+function applySecondaryMotion(dt){
+  if(!fox||!tailBones.length) return;
+  const inst=_prevFoxPos.distanceTo(fox.position)/Math.max(dt,1e-3);          // gemeten loopsnelheid
+  foxSpeed+=(inst-foxSpeed)*Math.min(1,dt*7); _prevFoxPos.copy(fox.position);
+  let dh=fox.rotation.y-_prevHeading; while(dh>Math.PI)dh-=Math.PI*2; while(dh<-Math.PI)dh+=Math.PI*2;
+  _prevHeading=fox.rotation.y; const turn=Math.max(-2.5,Math.min(2.5,dh/Math.max(dt,1e-3)));   // draai-impuls (lag)
+  // horizontale wag (local X): trage idle-sinus + snelheids-sinus + draai-lag, via gedempte veer -> natuurlijke na-zwaai
+  tPhase+=dt*(1.5+foxSpeed*0.7);
+  const driveX=Math.sin(tPhase)*(0.05+foxSpeed*0.035) + turn*0.10;
+  const k=22, c=2*Math.sqrt(22)*0.65;
+  tVelX+=(k*(driveX-tSwingX)-c*tVelX)*dt; tSwingX+=tVelX*dt;
+  // verticale lift (local Z): pluimstaart stroomt omhoog bij rennen + minieme idle-lift
+  const liftTarget=foxSpeed*0.06 + Math.sin(tPhase*0.8)*0.015;
+  tSwingZ+=(liftTarget-tSwingZ)*Math.min(1,dt*6);
+  for(let i=0;i<tailBones.length;i++){ const b=tailBones[i], f=(i+1)/tailBones.length;
+    b.rotation.x += tSwingX*(0.55+f) + Math.sin(tPhase-i*0.7)*0.02*f*(0.4+foxSpeed);   // wag + per-segment whip naar de tip
+    b.rotation.z += tSwingZ*(0.4+f);                                                    // lift
+  }
+  // ademhaling in rust (borstkas-scale), uitgefade zodra de vos beweegt
+  if(chestBone&&chestBase){ const idleF=Math.max(0,1-foxSpeed*2.5); breathT+=dt*1.7;
+    const br=Math.sin(breathT)*0.013*idleF;                 // multipliceer de bind-scale (br=0 tijdens lopen -> exacte rustscale, geen vervorming)
+    chestBone.scale.set(chestBase.x*(1+br), chestBase.y*(1+br*0.6), chestBase.z*(1+br)); }
+}
+
+// ---- loop ----
+function animate(){ requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),0.05), t=clock.elapsedTime;
+  if(mixer&&motionOn) mixer.update(dt);
+  if(motionOn) for(const u of windMats) u.uTime.value=t;
+
+  // dagdeel-overgang (reduced-motion → direct)
+  if(timeTarget){ applyTimeLerp(reduceMotion?1:(1-Math.pow(0.0015,dt))); }
+
+  if(fox){
+    key.position.set(fox.position.x+timeState.keyX, timeState.keyY, fox.position.z+timeState.keyZ); key.target.position.copy(fox.position);
+    rim.position.set(fox.position.x+timeState.rimX, timeState.rimY, fox.position.z+timeState.rimZ); rim.target.position.copy(fox.position);
+    contact.position.set(fox.position.x,0.012,fox.position.z);
+  }
+  // perf: shadowmap alleen opnieuw renderen als de zon-positie (volgt vos + dagdeel) echt veranderde
+  if(renderer.shadowMap.enabled){ const sm=key.position.distanceToSquared(_shadowPrev);
+    if(sm>1e-6){ key.shadow.needsUpdate=true; _shadowPrev.copy(key.position); } }
+  if(fox && actions.length){
+    if(controlMode==='auto' && motionOn){
+      if(wander.state==='idle'){ const a=actions[current]; if(a)a.timeScale=1; wander.timer-=dt; if(wander.timer<=0) pickTarget(); }
+      else{ const d=wander.target.clone().sub(fox.position); d.y=0; const dist=d.length();
+        if(dist<0.4){ wander.state='idle'; wander.timer=1.0+Math.random()*2.4; setClip(0); }
+        else{ d.normalize(); fox.position.addScaledVector(d,wander.speed*dt);
+          const rr=Math.hypot(fox.position.x,fox.position.z); if(rr>11) fox.position.multiplyScalar(11/rr);
+          const th=Math.atan2(d.x,d.z); wander.heading=lerpAngle(wander.heading,th,1-Math.pow(0.0001,dt)); fox.rotation.y=wander.heading;
+          const ref=wander.mode==='run'?3.2:1.4; const a=actions[current]; if(a)a.timeScale=Math.max(0.7,Math.min(1.7,wander.speed/ref)); }
+      }
+    } else if(controlMode==='manual'){
+      if(manualClip===0){ const a=actions[current]; if(a)a.timeScale=1; } // Rust: vos staat stil
+      else if(motionOn){ // Lopen/Rennen: langs vast cirkelpad, clip-snelheid gekoppeld (geen ice-skating)
+        const speed=manualClip===2?3.0:1.1;
+        pathAngle+=(speed/PATH_R)*dt;
+        pathRadius+=(PATH_R-pathRadius)*(1-Math.pow(0.05,dt));
+        fox.position.set(Math.cos(pathAngle)*pathRadius,0,Math.sin(pathAngle)*pathRadius);
+        const th=Math.atan2(-Math.sin(pathAngle),Math.cos(pathAngle)); // raaklijn = looprichting
+        wander.heading=lerpAngle(wander.heading,th,1-Math.pow(0.0001,dt)); fox.rotation.y=wander.heading;
+        const ref=manualClip===2?3.2:1.4; const a=actions[current]; if(a)a.timeScale=Math.max(0.7,Math.min(1.7,speed/ref));
+      }
+    }
+  }
+
+  // bone-werk NA de positie/heading-update (zodat voet-wereldposities de huidige frame gebruiken):
+  if(fox && mixer && motionOn && !reduceMotion) applySecondaryMotion(dt);   // staart-na-zwaai + ademhaling
+
+  if(followCam && fox){ const goal=fox.position.clone().setY(0.55);
+    const newT=prevTarget.clone().lerp(goal,1-Math.pow(0.0005,dt));
+    const delta=newT.clone().sub(prevTarget); controls.target.add(delta); camera.position.add(delta); prevTarget.copy(newT); }
+
+  if(motionOn){ const p=motes.geometry.attributes.position, arr=p.array;
+    for(let i=0;i<MOTES;i++){ arr[i*3+1]+=dt*0.06; arr[i*3]+=Math.sin(t*0.5+i)*dt*0.02; if(arr[i*3+1]>3.3) arr[i*3+1]=0.2; }
+    p.needsUpdate=true; }
+
+  controls.update();
+  renderer.info.reset();        // perf: tel calls/tris over de hele frame (alle composer-passes)
+  fx.render();
+  updatePerf(dt, renderer.info.render.calls, renderer.info.render.triangles);
+}
+animate();
+
+window.addEventListener('resize',()=>{ camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight); fx.setSize(window.innerWidth,window.innerHeight);
+  bloom.setSize(Math.max(2,window.innerWidth/2),Math.max(2,window.innerHeight/2)); });   // perf: bloom halve-res herstellen
+</script>
+</body>
+</html>
