@@ -111,7 +111,7 @@ for (const item of shotlist) {
       prompt: item.prompt, category: item.category, art_style: item.art_style || 'realistic',
       target_polycount: polycount, previewId, refineId, refined,
       glb: `${item.id}.glb`, glbBytes, thumb: `${item.id}.png`,
-      license: 'Meshy Pro — full private ownership (generated under paid plan)',
+      license: 'Meshy Ultra — full private ownership (generated under paid plan)',
     };
     fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2));
     console.log(`  ✓ ${refined ? 'refined' : 'preview'} glb ${(glbBytes / 1024 / 1024).toFixed(1)} MB + thumbnail`);

@@ -314,12 +314,13 @@ objective budgets (<150 draw calls, a11y, persistence, tone word-lint) before Fl
    run reaches realism via CC0 rigged+animated assets (Quaternius) + procedural + Piper voice +
    xeno-canto/Freesound audio (free keys)**; **photoreal AI characters/animals are a MANUAL or PAID asset
    track**, decided after the deep demo. The truly free+autonomous result is *charming & animated*, not photoreal.
-   **DECISION (Floris, 22 Jun 2026): approved one month of Meshy Pro (~$20, cancel after).** So the agent can
-   auto-generate + **auto-rig the realistic ranger** (Meshy API rigs humanoids) and generate realistic
-   **animal meshes**. Flagship animals (vos/ree/edelhert/wolf) stay **free Quaternius CC0** (already animated);
-   the residual manual/gated bit is **animating the generated scarce animals** (Meshy web-app / Anything World
-   / procedural fallback). Free **Freesound + xeno-canto** keys still needed for real animal sounds; Piper voice
-   stays free. Net: a realistic ranger + realistic meshes for ~$20 one-off, polished from the deep demo.
+   **DECISION (Floris, 22 Jun 2026 — UPDATED to Meshy Ultra, see §8e):** on **Meshy Ultra (~9,000 cr
+   available, retries FREE)**. So the agent can auto-generate + **auto-rig the realistic ranger** (Meshy API
+   rigs humanoids) and generate realistic **animal meshes**. Flagship animals (vos/ree/edelhert) are now
+   **generated on Meshy too** for art-style cohesion (Quaternius CC0 is the free fallback only if credits run
+   short); the residual manual/gated bit is **animating the generated scarce animals** (Anything World /
+   procedural fallback). Free **Freesound + xeno-canto** keys still needed for real animal sounds; Piper voice
+   stays free. Net: a realistic ranger + realistic meshes well within the Ultra grant, polished from the deep demo.
 10. **Ranger realism / the "army character"** — the figure Floris liked is the **three.js *Soldier***, which
    the design audition marks **do-NOT-ship**: licence *"onduidelijk"* (three.js itself flags many example
    assets as unlicensed → fails our clean-licence rule) **and** it's an *adult armored soldier*, not a kid
@@ -327,8 +328,8 @@ objective budgets (<150 draw calls, a11y, persistence, tone word-lint) before Fl
    junior-ranger mesh (Meshy free-tier CC BY / self-host MIT) → **Mixamo** rig (idle/walk/run) → the existing
    `ranger` spec slot; the customizable creator sits on top; a true Alvah-face likeness stays an optional
    human-polish pass (§2c). Needs the §6a mesh-gen prerequisite (else the procedural figure remains).
-11. **Asset-generation order + birds-heavy cast** (Floris, 22 Jun 2026) — **Meshy Pro purchased** (1000 cr/mo,
-   ~100 models; cancel after one month — generated assets are kept forever). Pipeline lives in
+11. **Asset-generation order + birds-heavy cast** (Floris, 22 Jun 2026) — **Meshy Ultra** (~9,000 cr
+   available, retries FREE; generated assets are kept forever — see §8e). Pipeline lives in
    `app/scripts/meshy-gen.mjs` + `asset-shotlist.json` (validated: ranger + pine generated OK). Generate the
    cast **in priority order**: **(1) characters we already need** (ranger + mission animals not covered by free
    Quaternius: wildzwijn, frisling, das, eekhoorn, raaf, nachtzwaluw, adder, heikikker) → **(2) the wolf** (via
@@ -341,8 +342,9 @@ objective budgets (<150 draw calls, a11y, persistence, tone word-lint) before Fl
    then a **gltf-transform optimize** pass (DRACO + KTX2 + poly target) — raw GLBs are far over budget (a pine
    came out 25 MB). **Audio:** clean-licensed calls per species — **xeno-canto** for birds (**exclude
    NoDerivatives/ND**; ShareAlike ok for a private game; log each) + **Freesound** for mammals. **Credit
-   reality:** the full ~50-asset list with refine ≈ the month's 1000 credits, so finish tiers 1–3 then do as
-   many birds as credits allow. After the asset pipeline: continue the game build (remaining engines + 3D). ✅
+   reality (Ultra):** the full 76-item shotlist (~43 renders left ≈ 1,300 cr) + 2 humanoid rigs fits the
+   ~9,000-cr grant with ~7,500 cr spare and free retries — so all tiers incl. the full bird batch are in
+   budget. After the asset pipeline: continue the game build (remaining engines + 3D). ✅
 
 7. **Free-only toolchain** (§2) — DECIDED: CC0/CC BY/NC/MIT only; no paid tools. ✅
 
@@ -352,7 +354,7 @@ start the build.
 
 ### 6a. Parallel human/asset checklist (start now; gates *realism*, not the build — all free)
 - [x] **REALISM PREREQUISITES — status (Jun 2026):**
-  - [x] **Meshy** — **Pro key active** in `app/.env.local` (`MESHY_API_KEY`). Pipeline built + generating.
+  - [x] **Meshy** — **Ultra key active** in `app/.env.local` (`MESHY_API_KEY`; ~9,000 cr, free retries). Pipeline built + generating.
   - [x] **Anything World** — key in `.env.local` (`ANYTHING_WORLD_API`), **authenticates ✓** (Jun 2026).
         $50 Micro = 300 cr/mo animates the ~9 animals + ~23 birds (~2 runs each); procedural stays the floor.
   - [ ] **Mixamo** — humanoid rig is manual-in-browser; Meshy auto-rig covers humanoids for the autonomous run.
