@@ -1,0 +1,106 @@
+# Ranger van de Veluwe — Can the Coding Agent Self-Source the 3D Cast & World? (Research Report, 22 June 2026)
+
+## TL;DR
+- **The agent can autonomously generate static, game-ready GLB meshes for nearly every scarce species, and can autonomously rig + animate the "easy" quadrupeds and birds (boar, badger, squirrel, raven, nightjar) — but a human is still required for the adder (snake), the frog (and its metamorphosis), the antler-growth morph, and the polished Alvah likeness.** AI mesh generation is essentially solved and license-clean; rigging+animation of non-humanoid body plans is the residual human bottleneck.
+- **Recommended stacks:** mesh = **Meshy (Pro, $20/mo, full private commercial ownership)** as primary + **TRELLIS.2 / TripoSG (MIT, self-host)** as license-clean fallback; auto-rig+animate quadrupeds/birds = **Anything World REST API**; humanoid (Alvah) = **MakeHuman/MPFB2 base → Mixamo or Meshy rig**; physics = **Rapier + ecctrl** (or the physics-free **three-mesh-bvh + BVHEcctrl** for the gentlest comfort spec); world = procedural Three.js (THREE.Terrain + instanced scatter + procedural-grass); audio = **xeno-canto API (birds) + Freesound API filtered to CC0**.
+- **Hype flag:** generative "world models" (Meta WorldGen, Google Project Genie) are *not* yet license-clean or mature for a shippable web nature world — procedural generation is the pragmatic path today.
+
+## Key Findings
+
+### A. AI 3D-asset generation is game-ready and (with care) license-clean — but it outputs *static meshes*, not animated characters
+The decisive distinction across the entire field: **mesh generation is mature; rigging+animation of non-humanoid creatures is not.** Every tool surveyed produces clean, UV'd, PBR, GLB-exportable meshes within poly budgets in ~1 minute. Auto-rig features exist but are reliable mainly for humanoids and (in the web UI) generic quadrupeds; snakes, frogs, and birds with wings remain failure-prone or unsupported.
+
+**License landscape (load-bearing):**
+- **Meshy** — free tier = CC BY 4.0 (attribution required: "we kindly ask that you credit Meshy… in the description of your commercial page"); **Pro ($20/mo, 1,000 credits/mo, API access) grants full private ownership** — verbatim from meshy.ai/pricing: *"As a premium subscriber, the models you create using Meshy are exclusively yours, and you have full rights to distribute and sell them."* Has REST API + MCP server (scriptable by an agent). *zeker.*
+- **Tripo** — free tier = CC BY 4.0 (public, no commercial use); paid (Pro $19.90/mo) = private commercial. Has REST API. *zeker.*
+- **Hunyuan3D 2.1** — fully open weights + code, BUT the community license **excludes the EU, UK, and South Korea from its territory** — a red flag for a Dutch project. *zeker.*
+- **TRELLIS / TRELLIS.2 (Microsoft)** — **MIT license**, weights + code free for commercial use; needs an NVIDIA GPU (24GB for TRELLIS.2-4B). Image-to-3D, exports GLB with PBR. *zeker.*
+- **TripoSG & TripoSR (VAST-AI)** — **MIT license**, open weights, self-hostable (~6GB+ GPU). *zeker.*
+- **Stable Fast 3D / SF3D (Stability)** — Stability AI Community License: free for non-commercial and for orgs under $1M revenue. Fine for a private kids' app. *zeker.*
+- **Rodin / Hyper3D** — API on fal.ai (~$0.40/generation); native quad-mesh topology; vendor claims full commercial rights on all tiers. *waarschijnlijk* (verify ToS).
+- **Sloyd** — procedural+AI, game-ready, API/SDK, but as of late 2025 was **not accepting new API clients**; parametric props rather than organic animals. *waarschijnlijk.*
+
+**Quality for stylized child-friendly animals:** Independent testing by SimInsights (~40 trials across Rodin, Meshy, and Tripo, cited in Dupple's 2026 Rodin review) found only **~1 in 10 generations is "client-ready" without rework** — with Rodin winning on textures, Tripo on editability/clean quads, and Meshy on iteration speed. But for a *stylized, warm, non-photoreal* target the bar is lower and iteration is cheap (~20 credits/gen, ~1 min). The agent can realistically hit all scarce species *as static meshes* by generating, inspecting, and regenerating.
+
+#### Verdict table — AI 3D generation tools
+
+| Tool | Stylized-animal mesh quality | Rigged + animated? | glTF/GLB web-ready? | Programmatic? | License (kids/non-commercial) | Cost | Source + date |
+|---|---|---|---|---|---|---|---|
+| **Meshy 6** | High; low-poly mode; quad/tri control | Auto-rig + 500+ clips (humanoid+quadruped) **in web app; API rig is humanoid-only** | Yes (GLB, embedded textures) | REST API + MCP server | Free=CC BY 4.0; Pro=full private ownership | Free / $20–100/mo | meshy.ai pricing & docs, 2026 |
+| **Tripo v3.1** | High; Smart low-poly | Auto-rig (humanoid + "quadruped/stylized"); preset clips | Yes (GLB/FBX) | REST API | Free=CC BY 4.0 (NC); paid=commercial | $19.90+/mo | tripo3d.ai, 2026 |
+| **Hunyuan3D 2.1** | High; PBR | No (mesh only) | Yes (GLB/OBJ) | Self-host (diffusers-like API) | Open weights **but EU/UK/KR excluded** | Free (self-host) | github.com/Tencent-Hunyuan, 2025 |
+| **TRELLIS.2 (MS)** | Very high; complex topology | No (mesh only) | Yes (GLB, PBR) | Self-host (Python) | **MIT** | Free (needs 24GB GPU) | github.com/microsoft/TRELLIS.2, Dec 2025 |
+| **TripoSG / TripoSR** | Good–high | No (mesh only) | Yes (GLB) | Self-host | **MIT** | Free (6GB+ GPU) | github.com/VAST-AI-Research, 2024–25 |
+| **SF3D (Stability)** | Good; fast UV unwrap | No (mesh only) | Yes (GLB) | Self-host / API | Community License (free <$1M rev) | Free | stability.ai, 2024 |
+| **Rodin/Hyper3D** | Very high textures; quad mesh | No (mesh only) | Yes (GLB/FBX/OBJ) | API (fal.ai) | Commercial rights claimed all tiers | ~$0.40/gen; $30+/mo | hyper3d.ai / fal.ai, 2025–26 |
+| **Luma Genie / Kaedim / Sloyd** | Varies; Sloyd=parametric props | No | Yes | Sloyd API (gated late-2025) | Plus plan = commercial | varies | sloyd.ai, 2025 |
+
+#### Auto-rig / auto-animate chain (the crux)
+- **Mixamo (Adobe)** — free, royalty-free for commercial/non-commercial; **humanoid/biped ONLY**; cannot rig quadrupeds, birds, snakes. *zeker.* Best fit: the Alvah humanoid likeness.
+- **Anything World "Animate Anything"** — **REST API + open-source Python CLI**; rigs AND animates from a library of preset clips. Officially supports bipeds, **quadrupeds** (canines, felines, bears, hooved, tortoises), and **birds** (flying/walking/hopping). **No snake/legless category and no frog/amphibian category.** Rigs have bones + skin weights (finger bones added 2024) but no facial blendshapes; meshes >20k verts auto-decimated. ~5 credits/rigged model; free tier has a monthly credit/API-call cap. *zeker* on categories; **output license for user-uploaded meshes is not clearly documented publicly — verify directly.**
+- **AccuRig 2 (Reallusion)** — free; rigs humanoid + (per vendor) non-humanoid; desktop app (not headless API); ActorCore motions are the animation path. Useful as human-assisted fallback.
+- **UniRig (VAST-AI, SIGGRAPH 2025, MIT)** — topology-agnostic auto-rig; **but as of mid-2026 only the Articulation-XL2.0 skeleton+skinning checkpoint is public — the full Rig-XL/VRoid checkpoints replicating the paper's headline results remain "Coming Soon."** Critically, **UniRig outputs only a rig (skeleton + weights), NOT motion** — you still supply animation. Independent reports note inconsistent quality on animals/wings/tails and ≥60GB GPU for some tasks. *zeker* it produces no motion; *waarschijnlijk* unreliable autonomously for snake/bird/frog.
+- **Text-to-motion for animal gaits** — There is **no mature, API-accessible text-to-motion service for quadruped/bird/snake/frog gaits as of mid-2026**; the field (X-MoGen, OmniMotionGPT, AniMo, T2QRM) is research code only. Turnkey animal motion = **preset libraries** (Anything World, Meshy web, the open-source Mesh2Motion which has quadruped + bird-with-wing-bone rigs). *zeker.*
+
+### B. Per-scarce-species decision
+
+| Species/Asset | Verdict | Why | Confidence |
+|---|---|---|---|
+| **Wild zwijn (wild boar)** | **Agent self-sources** | Generate mesh (Meshy/TRELLIS) → Anything World "quadruped" (boar≈hooved mammal) rig+walk/run. AW quadruped presets fit. | waarschijnlijk |
+| **Das (badger)** | **Agent self-sources** | Mesh + Anything World quadruped rig+presets. Low-slung gait acceptable for a stylized game. | waarschijnlijk |
+| **Eekhoorn (red squirrel)** | **Agent self-sources (light tweak)** | Mesh + AW quadruped rig; bushy tail / upright sitting pose may need a tweak but is achievable. | waarschijnlijk |
+| **Raaf (raven)** | **Agent self-sources** | AW "Walking/Hopping Bird" presets (idle/walk/hop) via API; Mesh2Motion bird rigs as backup. | waarschijnlijk |
+| **Nachtzwaluw (nightjar)** | **Agent self-sources (generic flight)** | AW "Flying Bird" (fly/glide). No species-specific aerial-hawking behaviour, but a believable flight loop is reachable. | waarschijnlijk |
+| **Adder (European adder, snake)** | **HUMAN REQUIRED** | No turnkey tool supports legless rig + slither: AW has no snake category; Meshy API is humanoid-only; no off-the-shelf slither motion. UniRig might place a spine but quality is inconsistent and it makes no motion. | zeker |
+| **Heikikker (moor frog) — adult** | **HUMAN likely required** | No frog/amphibian category or hop/swim preset anywhere; frog isn't a clean quadruped. UniRig skeleton + custom keyframed hop = effectively manual animation. | waarschijnlijk |
+| **Frog metamorphosis (egg→tadpole→froglet→adult + morph)** | **HUMAN REQUIRED** | No tool auto-generates 4 topologically consistent life-stage meshes + morph; stages are morphologically decoupled (tail resorbs, limbs appear); morph targets need matching vertex order generative tools don't provide. | zeker |
+| **Edelhert antler-growth cycle** | **Mesh self-sourced; HUMAN for the morph** | Quaternius covers deer/stag rigged CC0 (base animation solved). A continuous antler-growth morph (velvet→hard→cast) needs matching topology across stages — same vertex-order morph problem as the frog. Agent generates the separate antler meshes; blending them is a human/Blender task. | waarschijnlijk |
+| **Alvah likeness (child character)** | **Agent self-sources base; human polish recommended** | MakeHuman/MPFB2 child base (CC0) → Mixamo auto-rig (humanoid, free, commercial-ok) → Mixamo walk/idle clips. ARKit ~16-blendshape subset still needs the planned Blender step. A *recognisable* likeness from a photo (image-to-3D) is the weakest link — generative face quality is inconsistent and a child's likeness warrants a human pass. | waarschijnlijk |
+
+### C. Physics & character controller — recommend Rapier + ecctrl (or three-mesh-bvh + BVHEcctrl for the strictest comfort)
+- **Rapier (@dimforge, Rust/WASM)** — the most performant, actively maintained web physics engine in 2025–26; per Dimforge's Jan 2026 review, 2025's main focus was **WASM/browser performance improvements** (a new BVH with SIMD-accelerated traversal). Ships a built-in kinematic **character controller** with a tunable offset, up-vector, slope handling, and snap-to-ground. License: Apache-2.0. *zeker* it's maintained & performant.
+- **three-mesh-bvh** — collision/raycast acceleration, physics-engine-free; MIT. Ideal for a kinematic capsule that follows ground/slopes with zero ragdoll jitter.
+- **cannon-es / Ammo.js** — both effectively unmaintained per the Three.js community; avoid for a long-lived project.
+- **Jolt-wasm** — modern, maintained, feature-rich (the engine behind Horizon Forbidden West); heavier than needed for a gentle follow-cam game.
+- **pmndrs/ecctrl** — floating-capsule controller on react-three-fiber + react-three-rapier; out-of-the-box follow-cam (incl. FixedCamera mode), moving platforms, joystick, animation hooks (idle/walk/run/jump). MIT. Mature (~660★).
+- **pmndrs/BVHEcctrl** — **physics-engine-free** controller using three-mesh-bvh for triangle-accurate collision; explicitly built for "gentle web 3D experiences." Newer/smaller (~114★) but the best match for a strict **motion-comfort spec** because there is no rigid-body solver to fight (no jitter, no bounce). Supports Static/Kinematic/Instanced colliders + virtual joystick/buttons.
+
+**Recommendation:** Default to **Rapier + ecctrl** (proven, batteries-included follow-cam). If comfort testing on iPad shows *any* capsule jitter/bounce that fights the motion spec, switch to **three-mesh-bvh + BVHEcctrl** — it removes the rigid-body solver entirely, giving deterministic, kinematic ground-follow with soft obstacle bonks. **Comfort caveat:** do not couple the camera/player to dynamic rigid bodies; drive the capsule kinematically, clamp velocities, and add spring/damping smoothing — ragdoll/jitter is the enemy of the comfort spec.
+
+### D. Procedural world / terrain / vegetation
+A charming, performant Veluwe (heath, mixed forest, drifting sand, fen/pond) is fully buildable in code:
+- **Terrain:** **THREE.Terrain** (IceCreamYou; maintained forks mattes3/@repcomm) — procedural heightmaps (Diamond-Square, Perlin), `ScatterMeshes` for foliage, `generateBlendedMaterial` for elevation/slope-based biome texture splatting. Plus `threex.terrain` for simple Perlin, and the displacement-map approach (heightmap on a subdivided plane; three.js vertex shader handles displacement).
+- **Biome blending:** texture splatting (splat map → blend grass/sand/heath/rock by elevation & slope) prevents the "Minecraft look"; fractal noise (octaves/persistence/lacunarity) + seeded generation for reproducibility.
+- **Vegetation/grass:** **CK42BB/procedural-grass-threejs** — WebGPU compute placement with **automatic WebGL2 fallback**, instanced (hundreds of thousands of blades per draw call), multi-layer wind, distance LOD density fade, 8 presets (incl. meadow/tundra/reeds), terrain-aware slope rejection. The Codrops "Fluffiest Grass" technique (instanced alpha-textured blades + chunked InstancedMesh + frustum culling + fog distance-cull) is the proven performance pattern for iPad.
+- **Scatter/instancing:** InstancedMesh per chunk for heather/pines/grass keeps draw calls within the <150 budget; combine with fog + distance LOD.
+- **Repos:** `IceCreamYou/THREE.Terrain`, `@repcomm/three.terrain`, `jeromeetienne/threex.terrain`, `CK42BB/procedural-grass-threejs`, plus `three-landscape` (npm) for splat/texture-array terrain materials.
+
+### E. CC0 / clean audio acquisition
+For the sound-echo engine (burlen/blaf/knor/kroa/nachtzwaluw-ratel) + ambience, two scriptable sources cover almost everything:
+- **xeno-canto** (birds: raven *Corvus corax*, nightjar *Caprimulgus europaeus*) — REST JSON API (v2 keyless legacy; **v3 requires a free API key**). Query by species (`gen:`, `sp:`, `en:`), get download URLs. Python wrappers (`xeno-canto-py`, PyPI `xeno-canto`) and a Node client exist. **License caveat: recordings are individually CC-licensed — a *mix* of CC0, CC BY, CC BY-NC, CC BY-NC-SA, and various versions, NOT uniform.** Filter to CC0/CC BY only for a clean log; record the `lic` field per file. Avoid mass/indiscriminate automated downloads (server policy). *zeker.*
+- **Freesound** (deer bellow, fox bark, boar grunt, ambience) — APIv2 (OAuth2), filterable by license; **filter `license:"Creative Commons 0"`** to get attribution-free CC0 clips. Official Python/JS clients. CC0 = no attribution legally required (credit optional). *zeker.*
+- **License-log discipline:** for each clip store ID, author, source URL, license + version, date downloaded. CC0 → no attribution; CC BY → must credit author + link + note changes; **avoid CC BY-NC ambiguity** (German case law treats public broadcasters' NC use as infringing — for a private non-commercial kids' app NC is likely fine, but CC0/CC BY keep the log cleanest).
+
+### F. "World models" / generative environments — hype, not yet usable here
+Generative 3D-world tech advanced fast in 2025–26 — **Meta WorldGen** (text→traversable 3D world with navmesh, Unity/Unreal export; the full pipeline from prompt to a navigable scene completes in **~5 minutes**, scenes ~50×50 m) and **Google Project Genie** (text/image→explorable worlds), alongside research (HunyuanWorld 1.0, WonderTurbo, SynCity). **But:** Meta states WorldGen is *"still in the research phase and not available to developers"*; Project Genie is an experimental prototype; their licensing for a shipped product is unestablished; output is tuned for game-engine import (not a lean Three.js/WebGL2 web build); and quality/control for a *specific stylized Veluwe* is unproven. **Verdict: procedural (Section D) is the pragmatic, license-clean path today.** Revisit world models only if Meta/Google ship a documented, commercially-licensed, web-exportable product.
+
+## Recommendations (staged, with thresholds)
+1. **Lock the mesh pipeline now:** Use **Meshy Pro ($20/mo)** as the primary generator (REST API + MCP, full private ownership, low-poly mode, quad topology) and keep **TRELLIS.2 or TripoSG (MIT, self-host)** as the license-clean fallback/insurance. *Threshold to switch to self-host:* if Meshy ToS or pricing changes, or if you need >1,000 assets/month, move to MIT self-hosted models.
+2. **Auto-rig+animate the easy cast via Anything World API** (boar, badger, squirrel, raven, nightjar). *Before committing,* run a 5-credit test per body type and visually QA the walk/fly loop. **Get Anything World's output license for your uploaded meshes confirmed in writing** (undocumented publicly).
+3. **Alvah:** MPFB2 child base → Mixamo humanoid rig + clips; do the ARKit-blendshape Blender step already planned. Treat a photo-accurate likeness as a *human-polish* item, not autonomous.
+4. **Reserve the human 3D artist for exactly four jobs:** (a) the **adder** (rig + slither), (b) the **moor frog** adult rig + hop, (c) the **frog metamorphosis** morph sequence, (d) the **edelhert antler-growth** morph — all are topology/vertex-order or legless-locomotion problems that no turnkey tool solves. Everything else collapses into the agent.
+5. **Physics:** ship **Rapier + ecctrl**; A/B test on a real iPad. *Threshold:* if you observe capsule jitter/bounce or it fights the motion-comfort spec, switch to **three-mesh-bvh + BVHEcctrl** (physics-free, deterministic).
+6. **World:** build procedurally with THREE.Terrain + chunked InstancedMesh scatter + procedural-grass-threejs (WebGPU→WebGL2 fallback); enforce <150 draw calls via per-chunk instancing, fog, and distance LOD. Do **not** wait on generative world models.
+7. **Audio:** script xeno-canto (v3 key) for raven + nightjar and Freesound (CC0 filter) for mammals + ambience; auto-write a per-clip license log; prefer CC0/CC BY.
+
+## Bottom line (one paragraph)
+If these recommendations are adopted, the human-residual 3D work collapses from "most of a realistic animal cast and world" down to **four narrowly-scoped specialist jobs** — the adder's slither rig, the moor-frog adult hop, the frog egg→adult metamorphosis morph, and the edelhert antler-growth morph — plus an optional human polish pass on the Alvah likeness. Everything else is now within the autonomous agent's reach: it can generate every static mesh (Meshy Pro for speed, MIT self-hosted TRELLIS.2/TripoSG for a guaranteed-clean license), auto-rig-and-animate the boar/badger/squirrel/raven/nightjar through the Anything World REST API, rig Alvah through Mixamo, build the entire Veluwe world procedurally in Three.js, and fetch all animal calls and ambience via the xeno-canto and Freesound APIs with an auto-generated CC0/CC-BY license log. The structural reason the residual is exactly those four jobs is a single fact this report keeps surfacing: **rigging ≠ animation, and "non-humanoid + topology-changing morph" is the one combination no scriptable tool reliably solves in mid-2026** — so legless locomotion and life-stage morphs are where a human still earns their keep.
+
+## Caveats
+- **Rigging ≠ animation, and API ≠ web-app.** Meshy's *quadruped* rigging is web-UI-only; its **API is humanoid-only**. UniRig gives a rig but no motion. The only tool that combines auto-rig + animal motion + a real API is **Anything World** — hence its central role for the easy cast.
+- **Generative quality is iterative, not one-shot:** budget for regeneration; ~1 in 10 raw generations is "client-ready" per SimInsights' ~40-trial test. For a stylized look this is acceptable; for a recognisable child likeness it is not.
+- **Hunyuan3D's EU exclusion** makes it unsuitable despite being open — note for any Dutch deployment.
+- **Anything World preset animations are prototype-grade**, "not on par with handcrafted keyframe animation" (independent review) — fine for a warm children's game, but set expectations.
+- **License versions vary on xeno-canto** per recording; never assume uniform CC0 — filter and log.
+- **Rapier's exact speed multiplier** over its 2024 build was not pinned to a single figure in Dimforge's own writeup — the certain claim is "actively maintained, with 2025 dedicated to WASM/browser performance," not a precise "Nx."
+- This space moves monthly; re-verify licenses (Meshy, Tripo, Rodin) and UniRig's full-checkpoint release before launch.

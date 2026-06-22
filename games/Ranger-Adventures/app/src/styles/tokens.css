@@ -1,0 +1,76 @@
+/* ============================================================
+   Ranger van de Veluwe — design tokens
+   Ported from prototype/styles.css (the craft bible's palette).
+   NOTE: Google Fonts @import intentionally dropped — the game must
+   stay client-side / offline-clean (no third-party request). The
+   font names are kept first in each stack so self-hosted Fraunces /
+   Lexend / Atkinson Hyperlegible activate the warm look once added
+   (TODO: self-host fonts in /public/fonts + @font-face).
+   ============================================================ */
+
+:root {
+  /* — world / nature base — */
+  --green:        #1e4d32;
+  --green-deep:   #123621;
+  --green-soft:   #f0f5ec;
+  --green-line:   #c8d6c0;
+  --green-mid:    #2f6b46;
+  --green-bright: #5a9d6b;
+
+  /* — ink — */
+  --ink:        #1a1a1a;
+  --ink-soft:   #4a4a4a;
+  --ink-muted:  #7a7a7a;
+
+  /* — paper / warmth — */
+  --paper:       #fdfcf8;
+  --paper-tint:  #f7f2e7;
+  --line:        #e8e5dc;
+  --accent-warm: #d9b89a;
+  --red-warn:    #9b3d2e;
+
+  /* — playful spel palette (UI accents) — */
+  --spel-blue:    #2b5fb8;  --spel-blue-soft:    #e7eefa;
+  --spel-orange:  #ef7a1f;  --spel-orange-soft:  #fdeedd;
+  --spel-magenta: #c94174;  --spel-magenta-soft: #fbe6ee;
+  --spel-sun:     #f5c23b;  --spel-sun-glow:     rgba(245, 194, 59, 0.35);
+
+  /* — sky / golden hour — */
+  --sky-top:    #fde8c8;
+  --sky-mid:    #f6cf9e;
+  --sky-low:    #e9b27f;
+  --heath-far:  #b9a86a;
+  --heath-mid:  #8a9a55;
+  --heath-near: #6d8a45;
+
+  /* — radii — */
+  --spel-radius:    14px;
+  --spel-radius-lg: 20px;
+  --radius-pill:    999px;
+
+  /* — motion tokens — */
+  --dur-instant: 120ms;
+  --dur-quick:   200ms;
+  --dur-base:    320ms;
+  --dur-slow:    520ms;
+  --dur-cine:    900ms;
+  --ease-standard:  cubic-bezier(.2, 0, 0, 1);
+  --ease-out:       cubic-bezier(0, 0, .2, 1);
+  --ease-in:        cubic-bezier(.4, 0, 1, 1);
+  --ease-soft:      cubic-bezier(.4, 0, .2, 1);
+  --ease-overshoot: cubic-bezier(.34, 1.56, .64, 1);
+
+  /* — shadow — */
+  --shadow-sm:  0 1px 3px rgba(30, 40, 25, .12);
+  --shadow-md:  0 6px 18px rgba(30, 40, 25, .16);
+  --shadow-lg:  0 18px 48px rgba(30, 40, 25, .22);
+
+  /* — reading (dyslexia-aware: large, generous leading, clean sans) — */
+  --read-size:    28px;
+  --read-leading: 1.7;
+
+  /* — font stacks (self-host later; system fallbacks for now) — */
+  --font-head: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-read: 'Lexend', 'Atkinson Hyperlegible', system-ui, sans-serif;
+}

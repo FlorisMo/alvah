@@ -1,0 +1,126 @@
+/* ============================================================
+   Base shell — layout, the dev budget overlay, the boot card,
+   and accessibility / reduced-motion defaults.
+   ============================================================ */
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; height: 100%; }
+
+body {
+  background: var(--sky-low);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app { position: fixed; inset: 0; }
+
+#scene {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* the 3D world owns gestures; UI re-enables per element */
+}
+
+#ui { position: absolute; inset: 0; pointer-events: none; }
+#ui > * { pointer-events: auto; }
+
+/* ---- dev-only performance/budget overlay (aria-hidden: not for the child) ---- */
+.budgets {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(20, 16, 12, .55);
+  backdrop-filter: blur(6px);
+  font: 600 12px/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
+  color: rgba(255, 255, 255, .85);
+  user-select: none;
+}
+.budgets .b-row { white-space: nowrap; }
+.budgets .b-ok   { color: #9be29b; }
+.budgets .b-over { color: #ff9b8a; }
+
+/* ---- boot / title card (Phase 0 placeholder for the real start flow) ---- */
+.boot-card {
+  position: absolute;
+  left: 50%;
+  bottom: 8%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: min(90vw, 560px);
+  padding: 28px 32px;
+  text-align: center;
+  background: rgba(253, 252, 248, .88);
+  backdrop-filter: blur(10px);
+  border-radius: var(--spel-radius-lg);
+  box-shadow: var(--shadow-lg);
+  transition: opacity var(--dur-base) var(--ease-out),
+              transform var(--dur-base) var(--ease-out);
+}
+.boot-card--hidden {
+  opacity: 0;
+  transform: translate(-50%, 16px);
+  pointer-events: none;
+}
+.boot-kicker {
+  margin: 0;
+  font: 600 13px/1 var(--font-body);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--green-mid);
+}
+.boot-title {
+  margin: 0;
+  font: 600 clamp(30px, 6vw, 44px)/1.05 var(--font-head);
+  color: var(--green-deep);
+}
+.boot-sub {
+  margin: 0;
+  font: 400 var(--read-size)/var(--read-leading) var(--font-read);
+  color: var(--ink-soft);
+}
+
+/* one consistent primary button — ≥56px tap target (Alvah profile, BUILD-PLAN §3) */
+.btn-start {
+  margin-top: 6px;
+  min-height: 56px;
+  padding: 0 30px;
+  border: none;
+  border-radius: var(--spel-radius);
+  background: var(--spel-sun);
+  color: #5a3d09;
+  font: 700 21px/1 var(--font-body);
+  cursor: pointer;
+  box-shadow: 0 6px 0 #d59f1d, 0 14px 26px var(--spel-sun-glow);
+  transition: transform var(--dur-quick) var(--ease-standard), filter var(--dur-quick);
+}
+.btn-start:hover  { transform: translateY(-2px); filter: brightness(1.04); }
+.btn-start:active { transform: translateY(2px); box-shadow: 0 2px 0 #d59f1d, 0 8px 16px var(--spel-sun-glow); }
+
+/* ---- reduced motion: dual-gated (OS query + the .rm body class for the in-game toggle) ---- */
+.rm *, .rm *::before, .rm *::after {
+  animation-duration: .001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .001ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

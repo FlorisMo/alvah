@@ -23,10 +23,11 @@ These reconcile points where the docs disagreed or were silent. **Confirm §6 be
   MakeHuman ships **no** blendshapes.
 - **Decision:** **MakeHuman/MPFB2 is the base** (child proportions + CC0 win for an 8-yo hero), and we
   **author the ~16-shape ARKit subset in Blender** (the `ARKitBlendshapeHelper` addon) — we need 16,
-  not 52, so it's bounded work. One CC0 pipeline: MakeHuman → Blender (rig + expression shapes) →
-  glTF/DRACO/KTX2. The "Alvah" likeness = a saved MPFB preset + a light sculpt pass; the in-game creator
-  exposes a curated slice (skin tone / hair / outfit / iris). RPM stays a contingency for the adult
-  cast or a selfie-likeness path only.
+  not 52, so it's bounded work. Free skeleton+walk/idle rig via **Mixamo** (free, royalty-free,
+  humanoid). One free pipeline: MakeHuman/MPFB2 → Mixamo rig → Blender (ARKit subset) → glTF/DRACO/KTX2.
+  The "Alvah" likeness = a saved MPFB preset + optional light sculpt; the in-game creator exposes a
+  curated slice (skin tone / hair / outfit / iris). (RPM is free but CC-BY-NC-SA + weak child body — not
+  needed; the MakeHuman+Mixamo path is free and child-correct.)
 
 ### 1b. Render strategy — DECIDED (Floris: "3D-first, make sure you can")
 - Brief's MVP = Pokémon-style top-down 2D + zoom-in 2D plates. Your pillar = **"realistic and 3D"**.
@@ -81,27 +82,44 @@ Bake these as **engine-level constants + data-driven JSON** (artists tune withou
 
 ## 2. What the autonomous run can build — and the asset bottleneck, busted
 
-The naive constraint is "a code agent can't make 3D art." That's only half-true, and Floris's directive
-is **"figure out what you can't do and make sure you can."** Here's the honest breakdown and the plan to
-maximize autonomy.
+Brief-3 settled this (research/3d-autonomous-sourcing-physics-world.md). The decisive fact: **mesh
+generation is solved; rigging ≠ animation, and the one combo no free, scriptable tool reliably handles
+is "non-humanoid body plan + topology-changing morph"** (legless slither, frog hop, life-stage/antler
+morphs). Everything else collapses into the agent.
 
-### 2a. Asset acquisition in tiers (how the cast/world get made *without* a human artist)
-A coding agent (given **network + npm access** in the build run) can get far past stand-ins:
-1. **Download CC0, pre-rigged + animated** — fetch and wire directly. Covers **fox, red deer, stag,
-   wolf** (Quaternius, CC0) and HDRIs/Khronos sample assets. Real assets, zero human work. ✅ agent.
-2. **Generate in code (procedural)** — Three.js geometry built from primitives, like the existing
-   `humanoid.js`. Good for the player figure, low-poly animals, vehicles, props, and the **Veluwe
-   landscapes** (heath/forest/drifting-sand/fen terrain + instanced vegetation). Stylized-but-charming,
-   fully playable, infinitely tweakable. ✅ agent.
-3. **AI-generated assets (VERIFY — this is the new research, §6/brief-3)** — text/image→3D tools could
-   produce the **scarce species** (das, eekhoorn, adder, zandhagedis, raaf, nachtzwaluw, frog stages).
-   Open question: do they output *rigged, animated, game-ready* glTF at an acceptable license/quality?
-   That's exactly what brief-3 settles. If yes → most of the "human-only" list collapses.
-4. **CC0 audio** — fetch animal calls + ambience from CC0 libraries (xeno-canto for birds; Freesound
-   CC0) for the `simon` sound-echo engine + world ambience, with a license log. ✅ agent (verify each).
+> **FREE-ONLY (Floris): use only free libraries/tools.** This project is **private & non-commercial**,
+> so **CC0, CC BY (just credit), NC, MIT/Apache/GPL** are all fine — which makes "free" very
+> achievable. The shifts from the report's paid recommendations: **no Meshy Pro / Tripo Pro / Rodin** →
+> use **free-tier or MIT-self-host mesh gen**; **no Auto-Rig Pro ($40)** → use **Blender Rigify (free)**
+> for the human-residual jobs; **avoid Hunyuan3D** (its open licence excludes the EU). See §2a.
 
-**So the autonomous run targets tiers 1+2 for a complete, charming, fully-playable 3D game on day one,
-and folds in tier 3 (AI assets) + the human polish track as they land — realism rises over time.**
+### 2a. Free asset acquisition, in tiers (how the cast/world get made *without* paid tools)
+1. **CC0, pre-rigged + animated — download & wire.** **Quaternius (CC0)** = fox, deer, stag, wolf;
+   Poly Haven HDRIs; Khronos samples. Zero work, zero cost, zero licence doubt. ✅ agent.
+2. **Procedural-in-code — the free backbone.** Three.js geometry from primitives (like `humanoid.js`):
+   the player, low-poly animals, vehicles, props, and the **whole Veluwe world** (terrain + vegetation,
+   §2d). No external service, no licence, fully tweakable. **This alone yields a complete, charming,
+   playable 3D game for €0.** ✅ agent.
+3. **AI mesh-gen — free routes (optional upgrade, not a blocker).** For nicer scarce-species meshes:
+   either **Meshy free tier** (outputs CC BY 4.0 — fine, just credit "Meshy"; monthly credit cap, ample
+   for our ~10-animal fixed cast) **or self-host MIT models** **TRELLIS.2 / TripoSG / SF3D** (truly
+   unrestricted, free — but need a GPU; run on a free HF Space or a GPU box). All output **static
+   meshes only**. ✅ agent (with the GPU/credit nuance — see advice).
+4. **Auto-rig + animate the easy cast — free.** **Mesh2Motion** (open-source) and **Anything World**
+   (free tier, credit cap) rig+animate **quadrupeds + birds**: zwijn, das, eekhoorn, raaf, nachtzwaluw.
+   **Mixamo** (free, humanoid-only) rigs **Alvah**. ✅ agent.
+5. **Audio — free.** **xeno-canto** (raven/nightjar calls; v3 free API key) + **Freesound** (mammal
+   calls + ambience; filter `license:"Creative Commons 0"`). Keep a per-clip licence log; prefer
+   CC0/CC BY. ✅ agent.
+
+**Strategy — UPDATED (Floris, 22 Jun 2026): one ambitious realism run.** Floris wants the long autonomous
+run to reach for **maximum realism up front** (a realistic, license-clean ranger + animals + real voice),
+then **fine-tune from a deep demo** (§5) rather than from bare stand-ins. So the run targets **tiers 1–5 in
+one pass — contingent on the §6a realism prerequisites** (a few free API keys / a GPU — the one thing an
+agent cannot self-provision). Where a prerequisite is missing, that asset **falls back** to tier 1/2 (CC0
+Quaternius or procedural) so the build never blocks. Tier-1 CC0 + procedural stay the floor; tiers 3–5 are
+the reach, validated against the deep demo. **The realistic ranger does NOT come from the three.js Soldier**
+(see §6 item 10: do-not-ship — unclear licence + adult soldier); it is AI-generated clean + Mixamo-rigged.
 
 ### 2b. ✅ Autonomous-buildable now (the whole codebase + most content/assets)
 - Vite + TS + Three.js app scaffold; ported logic/content/specs.
@@ -111,20 +129,36 @@ and folds in tier 3 (AI assets) + the human polish track as they land — realis
   research + the 19 seeds).
 - **Story/antagonist** + **case-board**; **companion + rehab**; **badges**; **knap-woord** vocab layer.
 - **Avatar creator UI + `avatar` state**; name/likeness threaded through copy + TTS.
-- **3D world**: procedural Veluwe terrain + vegetation, tier-1 CC0 animals + procedural cast, camera rig
+- **3D world**: procedural Veluwe terrain + vegetation (§2d), tier-1 CC0 + procedural cast, camera rig
   (§1e), reduced-motion mode, expression system, eye shader, diegetic HUD, in-place mini-games, wayfinding.
-- **Accessibility** (M3/E3 copy, read-aloud + karaoke, ≥56px targets, dual-channel feedback), **Tweaks**.
-- **CC0 audio** fetched + wired; localStorage persistence (`ranger-mvp-state` → `alvah-ef-v1`).
+- **Physics/controller** (§2c-stack), **accessibility** (M3/E3, read-aloud+karaoke, ≥56px, dual-channel),
+  **Tweaks**, fetched **audio**; localStorage persistence (`ranger-mvp-state` → `alvah-ef-v1`).
 
-### 2c. 🙋 Genuinely still human-in-loop (a *small* residual after §2a)
-- **Photoreal *rigged* realism** for the hard species **only if tier-3 AI 3D-gen proves inadequate**
-  (brief-3 decides) — then Blender + Auto-Rig Pro: zwijn, das, eekhoorn, raaf/nachtzwaluw, adder
-  (spline-IK), zandhagedis; **frog metamorphosis** + **antler cycle** are the novel hard builds.
-- **Alvah's precise likeness** — a parametric/photo→avatar path may get close autonomously (brief-3);
-  a faithful sculpt is human (MakeHuman/MPFB + polish).
-- **On-device iPad profiling** — approximate via throttled desktop; final tuning needs the device.
-- **Playtests with Alvah** — irreducibly human: 10-min motion-comfort test, jargon feel, fear/sadness
-  check, difficulty calibration. These are *validation gates*, not build blockers.
+### 2c. 🙋 The exact human residual — FOUR small jobs (all doable in free Blender + Rigify)
+The only things no free scriptable tool solves (legless locomotion + topology-changing morphs):
+1. **Adder** — legless rig + slither (no auto-tool has a snake category).
+2. **Moor frog (adult)** — rig + hop (no amphibian preset anywhere).
+3. **Frog metamorphosis** — egg→tadpole→froglet→adult morph (stages are topologically decoupled).
+4. **Edelhert antler-growth morph** — velvet→hard→cast (matching-topology morph).
+Plus an **optional human polish pass on Alvah's likeness** (a recognisable child face from a photo is the
+weakest link for generators). **Tools: free — Blender + Rigify** (not Auto-Rig Pro). And these can be
+**stylized down** to avoid even that (see advice): a gently-sliding stylized snake, a simple frog
+cross-fade, discrete seasonal antler swaps. *Not build blockers — they swap into existing spec slots.*
+
+- **On-device iPad profiling** — approximate via throttled desktop; final tuning needs the device (human).
+- **Playtests with Alvah** — irreducibly human: motion-comfort, real-word feel, fear/sadness, difficulty.
+
+### 2c-stack. Engine libraries — all free/open (sourcing report §C)
+- **Physics/controller:** **Rapier** (Apache-2.0) + **pmndrs/ecctrl** (MIT) default; switch to the
+  physics-free **three-mesh-bvh** (MIT) + **pmndrs/BVHEcctrl** (MIT) if any capsule jitter fights the
+  motion-comfort spec (it's deterministic/kinematic — the gentlest option). Avoid cannon-es/Ammo
+  (unmaintained), Jolt (heavier than needed).
+
+### 2d. Procedural world — all free/open (sourcing report §D)
+**THREE.Terrain** (heightmaps + slope/elevation biome splatting) + **three-landscape** (splat materials)
++ chunked **InstancedMesh** scatter (heather/pines) + **procedural-grass-threejs** (WebGPU→WebGL2
+fallback, instanced). Keeps <150 draw calls via per-chunk instancing + fog + distance LOD. Generative
+"world models" (Meta WorldGen / Google Genie) are **not yet usable/licence-clean** — procedural wins today.
 
 ---
 
@@ -168,10 +202,14 @@ satisfying launch (all authorable as data by the agent from the seeds + `veluwe-
   + optional `verhaalHaak`. 3 are already built (frisling, reekalf, nachtronde); draw the rest from the
   19 seeds (track-reading, wildcamera/Snapshot, ecoduct, eekhoorn-memory, broedstoof, ven/heide-herstel,
   snare-removal #17 non-graphic, "niet voeren" #19).
-- **4-chapter season arc** (lente→zomer→herfst→winter) with the bumbling-poacher mystery: nuisance →
-  mystery → evidence → outsmart → catch-on-camera → report-to-BOA → **restore** (heath regrows / animal
-  released). Clues drop per mission onto the cabin **case-board**. Every tense beat resolves hopefully
-  in-session.
+- **4-chapter season arc** (lente→zomer→herfst→winter) with the recurring poacher mystery: nuisance →
+  mystery → evidence → outsmart → **catch** → **Alvah brings him in to the BOA** → **restore** (heath
+  regrows / animal released). **Floris (22 Jun 2026): a bit more stakes — the ranger *actively catches*
+  the poacher and escorts him to the ranger-police.** Keep it kid-safe the way good kids' shows do: the
+  catch is via the wildlife camera + outsmarting (no violence, no weapons-in-use), the poacher is a
+  bumbler who is *reformable*, comes quietly and is sorry — but the **capture is the satisfying,
+  higher-stakes beat**. Clues drop per mission onto the cabin **case-board**. Every tense beat resolves
+  hopefully in-session.
 - **Companion** (default `raaf`): rescue → daily care routine (EF-in-disguise) → grows → accompanies;
   plus the recurring **rehab** loop (care + **release**, never sad).
 - **Badges:** 5 brainpower (per engine, brons→zilver→goud on `skill.best`) + mission + knap-woord +
@@ -200,8 +238,16 @@ Each phase is shippable and render-agnostic-first. Human/asset tracks (§2) run 
 | 7 | **Asset swap-in** (human-gated) | Replace stand-ins with rigged models/likeness/audio as the art track delivers | Per-asset: drops into existing spec slot, no engine change, budgets hold |
 | 8 | **Astro integration** (later) | Re-wrap into the site; real `alvah-ef-v1` schema; `src/scripts/` reuse | Lives under the site shell; no trackers; robots Disallow; migration clean |
 
-Suggested first autonomous target: **Phases 0–6** (a complete game, tier-1+2 assets). Phases 7–8 are the
-human-polish + integration tail.
+Suggested autonomous target: **Phases 0–6 + the realism reach (§2a) + the Deep Demo below.** Phases 7–8
+are the human-polish (the 4 topology-morph creatures, the true Alvah-face likeness) + Astro-integration tail.
+
+**Deep Demo — the long-run capstone (Floris, 22 Jun 2026).** The unattended run ends by producing one
+explorable **deep demo**: boot → avatar → free-roam the 3D Veluwe → meet the realistic ranger + animals →
+hear the (Piper) voice → play each of the 5 engines in-world → follow the season/poacher arc + companion +
+badges — the whole game end-to-end at its best-available realism, as a SINGLE artifact Floris reviews and
+fine-tunes from. The demo IS the review gate an unattended run otherwise lacks (visual warmth, never-scary,
+motion-comfort, voice, tone). Pair it with an auto-captured screenshot + QA pass so the build self-flags the
+objective budgets (<150 draw calls, a11y, persistence, tone word-lint) before Floris looks.
 
 ---
 
@@ -210,28 +256,89 @@ human-polish + integration tail.
 **Gating decisions — DECIDED (Floris, Jun 2026):**
 1. **Build tooling** (§1c) — standalone **Vite + TS + Three.js** app under `games/.../app/`. ✅
 2. **Render strategy** (§1b) — **3D-first**, art acquired in tiers (§2a), 2D fallback retained. ✅
-3. **Asset approach** (§2a) — **maximize autonomy**: download CC0 + generate-in-code now; AI-generate
-   the scarce species pending brief-3; human polish is the tail, not the gate. ✅
+3. **Asset approach** (§2a) — **maximize autonomy**: CC0 (Quaternius) + generate-in-code backbone now;
+   optional free AI mesh-gen + auto-rig for scarce species; the human residual is just 4 jobs (§2c). ✅
 4. **Alvah defaults** (§3) — consequence **mild**, helicopter **hover-stabilized**, **clean-sans** font;
    **real words used judiciously** (not jargon-off). ✅
-5. **Launch content** (§4) — ~10 missions / 4-chapter arc / companion / rehab. (Default target; adjust
-   freely as content is authored.)
-6. **Parallel human tracks** (§2c) — **start now**: see §6a checklist.
+5. **Launch content** (§4) — **CONFIRMED (Floris, 22 Jun 2026): all ~10 missions** — keep the 7 already
+   authored in `prototype/content-veluwe.jsx` + write **3 new** to fill the empty **winter** season and
+   the **stuifzand** + **ven** landscapes; play in season order (lente→winter), winter = the restoration
+   finale. Story arc tuned for **more stakes + an active catch** (see §4 arc bullet). ✅
+6. **Avatar** (§3, §8) — **CONFIRMED (Floris, 22 Jun 2026): customizable ranger-kid NOW** (fully
+   autonomous creator) **+ a hand-made Alvah likeness preset LATER** (human-polish item, §2c). ✅
+7. **Voice / read-aloud** — **RESEARCHED (22 Jun 2026):** `research/voice-tts-readaloud-research.md`.
+   **Ship now:** Web Speech API preferring the iPad's free **Enhanced Dutch voice "Xander"** (download
+   via iOS Settings → Accessibility → Spoken Content; fixes the weak default; offline). `speak()` must
+   fire from a tap (iOS gesture rule). **Karaoke timing:** build our own word clock — iOS Safari
+   `onboundary` is unreliable (promote the prototype's timed highlight to primary). **Free upgrades
+   (later, non-blocking):** Piper (MIT) build-time pre-bake of static lines, or — now proven feasible &
+   license-clean for a private project — **clone Floris's own voice** (XTTS-v2, build-time pre-bake;
+   Coqui CPML = NC-only, no EU exclusion → fine here). Built behind a **swappable `Narrator` interface**;
+   **Floris chose Piper (22 Jun 2026)** as the warm-upgrade target (not voice-cloning) — bake Piper
+   static lines at audio-polish time; ship "Xander" until then. ✅
+8. **Parallel human tracks** (§2c) — **start now**: see §6a checklist.
+9. **Ambitious realism scope** (§1b/§2a) — **Floris (22 Jun 2026): take the big jump.** The long run reaches
+   for max realism (realistic clean ranger + AI-generated, auto-rigged scarce animals + Quaternius CC0 big
+   four + real animal audio + Piper voice), **gated on the §6a prerequisites**, falling back to CC0/procedural
+   where one is missing — then a **Deep Demo** (§5) to fine-tune from. ✅
+   **CORRECTION (verified 22 Jun 2026 — see `SETUP-realism-keys.md`):** the free tiers of the AI mesh/rig
+   tools are **web-UI/manual or paid**, NOT free-autonomous — Meshy API = **Pro $20/mo** (free tier is
+   hand-export only), Anything World rig-API = **email-gated + forced visible credit**, Mixamo = **no API
+   (manual browser rig)**, self-host = **needs a 16GB+ NVIDIA GPU** (not a Mac). So the **free unattended
+   run reaches realism via CC0 rigged+animated assets (Quaternius) + procedural + Piper voice +
+   xeno-canto/Freesound audio (free keys)**; **photoreal AI characters/animals are a MANUAL or PAID asset
+   track**, decided after the deep demo. The truly free+autonomous result is *charming & animated*, not photoreal.
+   **DECISION (Floris, 22 Jun 2026): approved one month of Meshy Pro (~$20, cancel after).** So the agent can
+   auto-generate + **auto-rig the realistic ranger** (Meshy API rigs humanoids) and generate realistic
+   **animal meshes**. Flagship animals (vos/ree/edelhert/wolf) stay **free Quaternius CC0** (already animated);
+   the residual manual/gated bit is **animating the generated scarce animals** (Meshy web-app / Anything World
+   / procedural fallback). Free **Freesound + xeno-canto** keys still needed for real animal sounds; Piper voice
+   stays free. Net: a realistic ranger + realistic meshes for ~$20 one-off, polished from the deep demo.
+10. **Ranger realism / the "army character"** — the figure Floris liked is the **three.js *Soldier***, which
+   the design audition marks **do-NOT-ship**: licence *"onduidelijk"* (three.js itself flags many example
+   assets as unlicensed → fails our clean-licence rule) **and** it's an *adult armored soldier*, not a kid
+   ranger. So we hit that *realism* via a **license-clean, age-correct route**: AI-generate a realistic
+   junior-ranger mesh (Meshy free-tier CC BY / self-host MIT) → **Mixamo** rig (idle/walk/run) → the existing
+   `ranger` spec slot; the customizable creator sits on top; a true Alvah-face likeness stays an optional
+   human-polish pass (§2c). Needs the §6a mesh-gen prerequisite (else the procedural figure remains).
+11. **Asset-generation order + birds-heavy cast** (Floris, 22 Jun 2026) — **Meshy Pro purchased** (1000 cr/mo,
+   ~100 models; cancel after one month — generated assets are kept forever). Pipeline lives in
+   `app/scripts/meshy-gen.mjs` + `asset-shotlist.json` (validated: ranger + pine generated OK). Generate the
+   cast **in priority order**: **(1) characters we already need** (ranger + mission animals not covered by free
+   Quaternius: wildzwijn, frisling, das, eekhoorn, raaf, nachtzwaluw, adder, heikikker) → **(2) the wolf** (via
+   Meshy, per Floris) + story humans (warden, poacher) → **(3) crucial landscape props** → **(4) the birds** —
+   Floris wants birds **~70% of the cast** (NL wildlife is bird-dominated); a curated batch of recognisable
+   Veluwe birds for ambient life + sound-echo variety. fox/ree/edelhert stay **free Quaternius** (skip Meshy
+   there). **Method:** preview→**refine** (colour/texture; raw preview is grey) + neutral A-pose for humans;
+   then a **gltf-transform optimize** pass (DRACO + KTX2 + poly target) — raw GLBs are far over budget (a pine
+   came out 25 MB). **Audio:** clean-licensed calls per species — **xeno-canto** for birds (**exclude
+   NoDerivatives/ND**; ShareAlike ok for a private game; log each) + **Freesound** for mammals. **Credit
+   reality:** the full ~50-asset list with refine ≈ the month's 1000 credits, so finish tiers 1–3 then do as
+   many birds as credits allow. After the asset pipeline: continue the game build (remaining engines + 3D). ✅
 
-**One research run still worth doing before/alongside the build (answers "make sure you can"):**
-- **brief-3 — autonomous asset, world & physics acquisition** ([research/briefs/](research/briefs/)):
-  can AI 3D-generation produce rigged, game-ready, license-clean models of the scarce species + Alvah's
-  likeness? best open-source **physics / character-controller** for a gentle web game (Rapier vs
-  three-mesh-bvh vs cannon-es)? procedural **terrain/world** generation libs? programmatic **CC0 audio**.
-  This is the single highest-leverage unknown: a "yes" on AI-gen collapses most of §2c into the agent.
+7. **Free-only toolchain** (§2) — DECIDED: CC0/CC BY/NC/MIT only; no paid tools. ✅
 
-### 6a. Parallel human/asset checklist (start now; gates *realism*, not the build)
-- [ ] Run **brief-3** (above) — decides how much of the cast/world the agent can self-source.
-- [ ] If AI-gen falls short: buy **Auto-Rig Pro**, stand up the Blender family-rig library, custom-rig
-      the scarce species; build **frog metamorphosis** (morph targets) + **antler cycle** (mesh-swap).
-- [ ] **Alvah likeness**: try a photo→avatar/MPFB path; sculpt-polish if needed.
-- [ ] **CC0 audio**: confirm xeno-canto/Freesound licenses for the calls we use; keep a license log.
-- [ ] **Early iPad check**: load tier-1 assets through the DRACO+KTX2 pipeline on a real iPad (Safari 26).
+**Research is COMPLETE** — three build references in `research/` cover assets/rigging/runtime,
+expression/eyes/motion-comfort, and autonomous-sourcing/physics/world. No further research is needed to
+start the build.
+
+### 6a. Parallel human/asset checklist (start now; gates *realism*, not the build — all free)
+- [ ] **REALISM PREREQUISITES — the ambitious run (§6 item 9) needs these; an agent CANNOT create accounts:**
+  - [ ] **Meshy** free account + API key (output CC BY — credit Meshy) **or** a **GPU** for self-hosted MIT
+        mesh-gen (TRELLIS.2 / TripoSG) — the realistic ranger + scarce animals.
+  - [ ] **Anything World** free account + API key — auto-rig+animate generated quadrupeds/birds (**verify the
+        output licence in writing before shipping**).
+  - [ ] **Mixamo** (free Adobe account) — humanoid ranger rig + idle/walk/run clips.
+  - [ ] **xeno-canto v3 key + Freesound key** — real animal calls + ambience (else placeholder tones).
+  - [ ] **Piper** (no account) — agent downloads + pre-bakes static lines; **a human listens** to pick the
+        Dutch voice (avoid `nl_NL-mls`; audition `nl_NL-pim` / `ronnie` / `nl_BE-nathalie`).
+- [ ] **Four free-Blender jobs** (§2c): adder slither, moor-frog hop, frog metamorphosis morph, antler
+      morph — **Blender + Rigify** (free). Or stylize them away to skip even this.
+- [ ] **Alvah likeness**: optional human polish for a true Alvah face (the AI-gen ranger covers *realism*;
+      the *exact likeness* is the human-polish item).
+- [ ] **Early iPad check**: load assets through the DRACO+KTX2 pipeline on a real iPad (Safari 26+).
+- [ ] **Deep Demo review (§5)**: Floris explores the demo → produces the fine-tune list (look, voice,
+      comfort, tone, difficulty). This is the main human gate of the ambitious run.
 - [ ] **Playtests with Alvah**: 10-min motion-comfort test, real-word feel, fear/sadness check,
       difficulty calibration — re-run per build.
 

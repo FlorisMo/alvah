@@ -1,0 +1,245 @@
+/**
+ * state.ts — render-agnostic game state, persistence, and the difficulty
+ * resolver (ported from prototype/state.jsx + the skill hook). The prototype's
+ * React Context/useState shell is replaced by a tiny framework-free observable
+ * store: render layers `subscribe()` and call mutators. Same localStorage key
+ * (`ranger-mvp-state`) and same mutation semantics.
+ *
+ * Scope note: companion / rehab / vehicle-damage / season-arc state land in
+ * Phase 3 (their mutators are deferred). This file is the engine-loop + skill
+ * spine Phase 1 needs; load() tolerates extra persisted fields.
+ */
+
+import {
+  EF_ENGINES,
+  blankSkill,
+  blankSkillSet,
+  mergeSkill,
+  updateSkill,
+  knobsForLevel,
+  SKILL_MIN,
+  type Engine,
+  type SkillSet,
+  type SkillRecord,
+  type BeatSummary,
+} from './skill';
+
+export type Screen =
+  | 'map' | 'cabin' | 'transport' | 'travel' | 'briefing' | 'world' | 'reunion' | 'complete';
+
+export interface Settings {
+  geluid: boolean;
+  voorlezen: boolean;
+  reducedMotion: boolean;            // in-game toggle (OS query handled in reduced-motion.ts)
+  gevolgErnst: 'stevig' | 'mild' | 'assist';
+  autoMoeilijk: boolean;             // adaptive staircase on vs. raw manual sliders
+  jargon: boolean;                   // "knappe woorden" (frisling/rotte) vs simple (big/groep)
+  leesFont: boolean;                 // dyslexia-friendly reading font
+  readSize: number;
+  leading: number;
+  ambient: number;
+  accent: string;
+  // difficulty knobs (the staircase turns these; also the manual Tweak sliders)
+  lensSterkte: number;
+  afleiders: number;
+  routeLengte: number;
+  regelWissel: number;
+  slowmo: boolean;
+  simonLengte: number;
+  wisselFreq: number;
+  // travel mini-game (sfeer + agency, never a test)
+  reisSnelheid: number;
+  reisDichtheid: number;
+  reisMagneet: boolean;
+}
+
+export interface GameState {
+  screen: Screen;
+  gebied: string;                    // active area id (content registry)
+  missie: string;                    // active mission id within the area
+  worldStep: number;                 // 1-indexed step within the mission
+  eikels: number;                    // acorns collected (cosmetic reward)
+  voltooid: Record<string, boolean>; // per-mission completion map
+  recentGroei: Engine[];             // engines that grew this mission (for the celebration)
+  skill: SkillSet;                   // per-engine skill record — drives difficulty + badges
+  knapWoorden: Record<string, { naam: string }>; // earned "knap-woord" badges
+  settings: Settings;
+}
+
+const STORAGE_KEY = 'ranger-mvp-state';
+
+/** Alvah profile (BUILD-PLAN §3): consequences default MILD, adaptive difficulty on,
+ *  simple words by default, dyslexia-friendly reading. */
+const DEFAULT_SETTINGS: Settings = {
+  geluid: true,
+  voorlezen: true,
+  reducedMotion: false,
+  gevolgErnst: 'mild',
+  autoMoeilijk: true,
+  jargon: false,
+  leesFont: true,
+  readSize: 28,
+  leading: 1.7,
+  ambient: 0.85,
+  accent: '#f5c23b',
+  lensSterkte: 0.6,
+  afleiders: 4,
+  routeLengte: 4,
+  regelWissel: 0.4,
+  slowmo: true,
+  simonLengte: 3,
+  wisselFreq: 0.4,
+  reisSnelheid: 1,
+  reisDichtheid: 1,
+  reisMagneet: false,
+};
+
+function freshState(): GameState {
+  return {
+    screen: 'map',
+    gebied: 'veluwe',
+    missie: 'frisling',
+    worldStep: 1,
+    eikels: 0,
+    voltooid: {},
+    recentGroei: [],
+    skill: blankSkillSet(),
+    knapWoorden: {},
+    settings: { ...DEFAULT_SETTINGS },
+  };
+}
+
+export const DEFAULT_STATE: GameState = freshState();
+
+function load(): GameState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return freshState();
+    const parsed = JSON.parse(raw) as Partial<GameState>;
+    return {
+      ...freshState(),
+      ...parsed,
+      skill: mergeSkill(parsed.skill),
+      voltooid: parsed.voltooid ?? {},
+      recentGroei: parsed.recentGroei ?? [],
+      knapWoorden: parsed.knapWoorden ?? {},
+      settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
+    };
+  } catch {
+    return freshState();
+  }
+}
+
+function save(state: GameState): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* storage full / unavailable — game stays playable, just unsaved */
+  }
+}
+
+type Listener = (state: GameState) => void;
+
+/** Tiny framework-free observable store. One instance, exported as `store`. */
+class Store {
+  private state: GameState = load();
+  private readonly listeners = new Set<Listener>();
+
+  get(): GameState {
+    return this.state;
+  }
+
+  subscribe(fn: Listener): () => void {
+    this.listeners.add(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
+  }
+
+  private commit(next: GameState): void {
+    this.state = next;
+    save(next);
+    for (const fn of this.listeners) fn(next);
+  }
+
+  set(patch: Partial<GameState>): void {
+    this.commit({ ...this.state, ...patch });
+  }
+
+  setSetting(patch: Partial<Settings>): void {
+    this.commit({ ...this.state, settings: { ...this.state.settings, ...patch } });
+  }
+
+  go(screen: Screen): void {
+    this.set({ screen });
+  }
+
+  setStep(worldStep: number): void {
+    this.set({ worldStep });
+  }
+
+  markMissionDone(missieId: string): void {
+    this.commit({ ...this.state, voltooid: { ...this.state.voltooid, [missieId]: true } });
+  }
+
+  /** An engine finished a beat → feed its skill record (drives staircase + badges). */
+  logSession(engine: Engine, summary: BeatSummary): void {
+    const skill: SkillSet = { ...this.state.skill };
+    const before = (skill[engine] ?? blankSkill()).level;
+    const updated = updateSkill(skill[engine], summary);
+    skill[engine] = updated;
+    const grew = updated.level > before + 1e-3;
+    const recentGroei = grew
+      ? Array.from(new Set<Engine>([...this.state.recentGroei, engine]))
+      : this.state.recentGroei;
+    this.commit({ ...this.state, skill, recentGroei });
+  }
+
+  /** Child-/frustration-driven ease: lower the live level a touch (silent, never the best). */
+  easeEngine(engine: Engine): void {
+    const skill: SkillSet = { ...this.state.skill };
+    const rec: SkillRecord = { ...(skill[engine] ?? blankSkill()) };
+    rec.level = Math.max(1, rec.level - 0.5);
+    skill[engine] = rec;
+    this.commit({ ...this.state, skill });
+  }
+
+  /** Visible opt-in step-up ("Klaar voor een lastiger spoor?") — raises every engine a notch. */
+  bumpSkill(delta = 0.6): void {
+    const skill: SkillSet = { ...this.state.skill };
+    for (const e of EF_ENGINES) {
+      const rec: SkillRecord = { ...(skill[e] ?? blankSkill()) };
+      rec.level = Math.min(6, rec.level + delta);
+      rec.best = Math.max(rec.best, rec.level);
+      skill[e] = rec;
+    }
+    this.commit({ ...this.state, skill });
+  }
+
+  clearGroei(): void {
+    this.set({ recentGroei: [] });
+  }
+
+  resetSkill(): void {
+    this.commit({ ...this.state, skill: blankSkillSet(), recentGroei: [] });
+  }
+
+  reset(): void {
+    this.commit({ ...freshState(), settings: this.state.settings });
+  }
+
+  /**
+   * Resolved difficulty for an engine (replaces the prototype's useEngineDifficulty).
+   * Adaptive ON → the live skill level drives the knobs; OFF → raw manual sliders.
+   * `ease` softens THIS attempt only (never persisted as a drop).
+   */
+  difficulty(engine: Engine, ease = 0): Settings {
+    const s = this.state;
+    if (!s.settings.autoMoeilijk) return s.settings;
+    const rec = s.skill[engine] ?? blankSkill();
+    const eff = Math.max(SKILL_MIN, rec.level - ease * 0.8);
+    return { ...s.settings, ...knobsForLevel(engine, eff) };
+  }
+}
+
+export const store = new Store();

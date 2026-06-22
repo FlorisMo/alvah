@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#e9b27f" />
+    <!-- iPad: allow add-to-homescreen fullscreen -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Ranger van de Veluwe" />
+    <title>Ranger van de Veluwe</title>
+  </head>
+  <body>
+    <div id="app">
+      <!-- The 3D world renders here (Phase 4 fills it; Phase 0 = a golden-hour stage). -->
+      <canvas id="scene"></canvas>
+      <!-- All 2D UI / read-aloud / HUD overlays mount here. -->
+      <div id="ui"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

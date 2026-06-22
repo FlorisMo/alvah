@@ -160,12 +160,13 @@ New, structural:
 
 ## 8. Deep research — DONE; now an executable plan
 
-The two deep-research runs are back and folded into [research/](research/) as the build references
+All **three** deep-research runs are back and folded into [research/](research/) as build references:
 [3d-assets-avatar-rigging-runtime.md](research/3d-assets-avatar-rigging-runtime.md) (assets, avatar,
-rigging/retargeting, runtime/perf) and
-[3d-expression-eyes-motion-comfort.md](research/3d-expression-eyes-motion-comfort.md) (faces, eyes,
-animal emoting, camera/motion-comfort, reading-light storytelling). The original briefs have been
-removed (consumed).
+rigging, runtime/perf), [3d-expression-eyes-motion-comfort.md](research/3d-expression-eyes-motion-comfort.md)
+(faces, eyes, animal emoting, camera/motion-comfort, storytelling), and
+[3d-autonomous-sourcing-physics-world.md](research/3d-autonomous-sourcing-physics-world.md) (what the
+agent can self-source for free: AI mesh-gen + auto-rig + physics + procedural world + audio). Briefs
+removed (consumed). **Research is complete.** Build choices are **free-only** (CC0/CC BY/NC/MIT).
 
 **The plan is now consolidated into [BUILD-PLAN.md](BUILD-PLAN.md)** — the executable roadmap toward an
 autonomous build run: resolved technical decisions (the avatar-pipeline conflict, render strategy, build

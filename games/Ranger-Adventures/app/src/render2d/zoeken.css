@@ -1,0 +1,176 @@
+/* ============================================================
+   zoeken.css — the 2D "spot the animal" view (Phase 1 fallback /
+   fast-iteration render; the 3D in-world version is Phase 4).
+   ============================================================ */
+
+.zoeken {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 14px;
+  padding: max(16px, env(safe-area-inset-top)) 16px 20px;
+  background: rgba(30, 40, 25, 0.28);
+  backdrop-filter: blur(2px);
+}
+
+/* instruction bar + read-aloud */
+.zoeken-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 900px;
+  width: min(92vw, 900px);
+  margin: 0 auto;
+  padding: 12px 16px;
+  background: rgba(253, 252, 248, 0.92);
+  border-radius: var(--spel-radius);
+  box-shadow: var(--shadow-md);
+}
+.zoeken-instr {
+  margin: 0;
+  flex: 1;
+  font: 500 var(--read-size)/1.3 var(--font-read);
+  color: var(--ink);
+}
+.zoeken-speak {
+  flex: none;
+  width: 56px;
+  height: 56px;          /* ≥56px tap target (Alvah profile) */
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 24px;
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-standard), background var(--dur-quick);
+}
+.zoeken-speak:hover { transform: translateY(-2px); background: var(--green-line); }
+.zoeken-speak:active { transform: translateY(0); }
+
+/* the play field — % positions map within this box */
+.zoeken-field {
+  position: relative;
+  width: min(92vw, 900px);
+  height: 100%;
+  max-height: min(70vh, 600px);
+  margin: 0 auto;
+  border-radius: var(--spel-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  background:
+    radial-gradient(120% 80% at 50% 0%, #b9cf7e 0%, #8a9a55 55%, #6d8a45 100%);
+}
+.zoeken-grass {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(92deg, rgba(60, 80, 35, 0.18) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(86deg, rgba(40, 60, 25, 0.14) 0 2px, transparent 2px 9px);
+  opacity: 0.7;
+}
+
+/* decoys + target: generous ≥56px hit area; the shape sits centred inside */
+.zoeken-decoy,
+.zoeken-target {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 56px;
+  min-height: 56px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* decoy shapes */
+.k-bush::before {
+  content: '';
+  width: 34px; height: 28px;
+  border-radius: 50% 50% 46% 46%;
+  background: radial-gradient(circle at 40% 35%, #4f7a3a, #355426);
+  box-shadow: var(--shadow-sm);
+}
+.k-bird::before {
+  content: '';
+  width: 22px; height: 16px;
+  border-radius: 60% 40% 50% 50%;
+  background: #6b5238;
+  box-shadow: 8px 2px 0 -3px #6b5238;
+}
+.k-butterfly::before {
+  content: '';
+  width: 22px; height: 18px;
+  background: radial-gradient(circle at 25% 50%, #6f8fd0 0 6px, transparent 6px),
+              radial-gradient(circle at 75% 50%, #6f8fd0 0 6px, transparent 6px);
+}
+
+/* the target animal — a small striped frisling that "drukt zich" */
+.zoeken-target .body {
+  width: 44px; height: 30px;
+  border-radius: 52% 52% 48% 48%;
+  background:
+    repeating-linear-gradient(74deg, #7a5a36 0 5px, #9b7748 5px 9px);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-base) var(--ease-overshoot);
+}
+.zoeken-target .tell {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 64px; height: 64px;
+  transform: translate(-50%, -50%) scale(0.6);
+  border-radius: 50%;
+  border: 3px solid var(--spel-sun);
+  opacity: 0;
+  transition: opacity var(--dur-base), transform var(--dur-base) var(--ease-overshoot);
+  pointer-events: none;
+}
+.zoeken-target.found .tell { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.zoeken-target.found .body { transform: scale(1.18); }
+
+/* miss feedback — dual channel: colour (red) + motion (shake). Under
+   reduced-motion the shake is removed but the colour still reads. */
+.zoeken-decoy.miss::before { background: var(--red-warn); }
+.zoeken-decoy.miss { animation: zoeken-shake 0.42s var(--ease-standard); }
+@keyframes zoeken-shake {
+  0%, 100% { transform: translate(-50%, -50%); }
+  25% { transform: translate(calc(-50% - 5px), -50%); }
+  75% { transform: translate(calc(-50% + 5px), -50%); }
+}
+.zoeken-decoy .decoy-name {
+  position: absolute;
+  top: -26px; left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font: 600 14px/1 var(--font-body);
+  color: var(--paper);
+  background: rgba(20, 16, 12, 0.7);
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+/* found close-up card */
+.zoeken-closeup {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(20, 30, 15, 0.4);
+  backdrop-filter: blur(3px);
+}
+.zoeken-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: min(86vw, 460px);
+  padding: 28px 30px;
+  text-align: center;
+  background: var(--paper);
+  border-radius: var(--spel-radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+.zoeken-goed { margin: 0; font: 600 26px/1.2 var(--font-head); color: var(--green-deep); }
+.zoeken-feit { margin: 0; font: 400 20px/1.5 var(--font-read); color: var(--ink-soft); }
