@@ -12,19 +12,17 @@ const BASE = 'https://api.meshy.ai/openapi/v2/text-to-3d';
 const OUT = new URL('../assets-gen/', import.meta.url);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Floris's likeness description (23 Jun) + the strong A-pose fix (arms CLEARLY away).
+// Floris's likeness description (23 Jun) + the strong A-pose fix — kept under Meshy's 800-char cap.
 const PROMPT =
-  'full body 3D game character of a slender 8 year old Dutch forest ranger boy, ' +
-  'dark ash-blond wavy messy medium-length hair with soft bangs falling over the forehead and slightly over one eye, ' +
-  'large expressive round blue-green hazel eyes with long dark lashes, soft rounded youthful face with full rosy cheeks, ' +
-  'small straight button nose, full pink lips with a friendly warm smile, fair smooth skin with a natural healthy glow, ' +
-  'soft jawline and chin, narrow shoulders and slender child build, realistic child proportions, ' +
-  'symmetrical neutral A-pose, both arms straight and held clearly away from the body, ' +
-  'a wide gap between each arm and the torso, hands open with fingers together, ' +
-  'palms facing the thighs but not touching them, legs straight and slightly apart, ' +
-  'feet flat on the ground, head up looking straight ahead, ' +
-  'green ranger jacket over a yellow shirt, khaki shorts, brown hiking boots, small ranger hat, ' +
-  'stylized realistic, clean topology, rig ready, single character centered, plain neutral background';
+  'full body 3D game character of a slender 8 year old boy forest ranger, child proportions, ' +
+  'dark ash-blond wavy messy hair with soft bangs over the forehead, ' +
+  'large expressive blue-green eyes with long dark lashes, soft round youthful face, ' +
+  'full rosy cheeks, small straight button nose, friendly warm smile, fair skin with a natural glow, ' +
+  'narrow shoulders, neutral A-pose with both arms held clearly away from the body, ' +
+  'a wide gap between arms and torso, hands open, palms facing the thighs, legs slightly apart, ' +
+  'feet flat, head up looking ahead, green ranger jacket over a yellow shirt, khaki shorts, ' +
+  'brown hiking boots, small ranger hat, stylized realistic, clean topology, rig ready, ' +
+  'single character centered, plain neutral background';
 
 async function poll(id, label) {
   for (let i = 0; i < 120; i++) {
