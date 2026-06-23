@@ -9,8 +9,9 @@
     "preview": "vite preview",
     "assets:gen": "node scripts/meshy-gen.mjs",
     "assets:opt": "node scripts/gltf-optimize.mjs",
+    "assets:opt:anim": "node scripts/optimize-animated.mjs",
     "assets:audio": "node scripts/audio-fetch.mjs",
-    "assets:all": "node scripts/meshy-gen.mjs && node scripts/gltf-optimize.mjs && node scripts/audio-fetch.mjs",
+    "assets:all": "node scripts/meshy-gen.mjs && node scripts/gltf-optimize.mjs && node scripts/optimize-animated.mjs && node scripts/audio-fetch.mjs",
     "finish": "node scripts/ranger-run.mjs",
     "run:status": "node scripts/ranger-run.mjs status"
   },

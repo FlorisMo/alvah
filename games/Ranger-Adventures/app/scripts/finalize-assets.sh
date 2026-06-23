@@ -10,6 +10,7 @@ while pgrep -f meshy-gen.mjs >/dev/null 2>&1; do sleep 60; done
 echo "[finalize] generation done — optimizing + staging."
 
 node scripts/gltf-optimize.mjs
+node scripts/optimize-animated.mjs
 node scripts/audio-fetch.mjs
 
-echo "[finalize] complete. Models → public/models/, audio → public/audio/."
+echo "[finalize] complete. Models → public/models/ (static + animated rigs), audio → public/audio/."

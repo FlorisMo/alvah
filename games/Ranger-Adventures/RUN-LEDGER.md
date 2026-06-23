@@ -31,7 +31,7 @@
   - [x] 29b · wire into `World.ts` (replace ad-hoc idle bob with per-marker recipe by modelId; off under reduced-motion) + `Models.ts` "prefer animated GLB" hook (return clips; AnimationMixer when a rig exists, else procedural) (1)
   - [x] 29c · snake (adder) slither + frog (heikikker) hop + butterfly flutter verified against the §B AVOID lists; reduced-motion path checked (1)
     - **§9f AUDIT PASS** (build-green, 9/9 unit): adder = flat lateral weave, dy/rotZ/scaleY all 0 (no S-coil rear-up / no puff); frog = arc completes + rests each cycle, dy≥0 (never frozen mid-leap, never sinks), apex ≤0.16 m, airborne <50% of cycle (calm); squirrel/quadrupeds = slow breathe hz≤0.5 (no rapid tail-flick); raven/buizerd/nightjar = calm-perched breathe (no hackles/bill-up/gape modelled); butterfly flutter + duck paddle clamped by `calmGate()`. Reduced-motion freezes all secondary motion to REST (mixer `update(0)`); transform-only → zero draw-call impact. Never-scary + motion-comfort gates: PASS.
-- [ ] Optimize + stage every animated GLB; re-run finalize (1)
+- [x] Optimize + stage every animated GLB; re-run finalize (1)
 
 ## Phase 4 — 3D world + in-world play  ◑ FIRST PASS done; immersion next
 - [x] World first pass: procedural Veluwe, generated cast loaded, §1e damped-follow camera, tap-to-walk/walk-up-to-play
