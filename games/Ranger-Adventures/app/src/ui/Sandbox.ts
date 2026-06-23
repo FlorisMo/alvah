@@ -4,9 +4,10 @@
  *
  * The jump-menu is the §9g demo-skip entry point: every cast member + every
  * interaction in one flat, scrollable list of ≥56px, dual-channel (colour pip +
- * word) buttons that §1e-reframe the camera onto any target (and play a cast call).
- * 75b-i ships the camera tour; the EF/meta triggers behind the inner-ring posts land
- * in 75b-ii / 75c — the menu already lists them so the wiring is purely additive.
+ * word) buttons. A cast/ranger target §1e-reframes the camera onto it (and plays its
+ * call); an EF target launches the live diegetic engine in-place (75b-ii); a meta
+ * target opens its live screen (75c — companion · prikbord · avatar · badge ·
+ * wist-je-dat · arc-resolve). The same routing backs the in-world post taps.
  */
 
 import './sandbox.css';
@@ -26,6 +27,7 @@ import { playRoute } from '../render2d/RouteView';
 import { playSimon } from '../render2d/SimonView';
 import { playDanger } from '../render2d/DangerView';
 import { playWissel } from '../render2d/WisselView';
+import { showMetaDemo } from './Missions';
 
 /** The 2D floor view per EF engine — served under reduced-motion / no-WebGL, exactly
  *  like Missions.runMission's else branch (the always-available render-agnostic floor). */
@@ -112,10 +114,29 @@ export function startSandbox(ui: HTMLElement, stage: Stage, onExit: () => void):
   }
 
   /** A post was tapped in-world: an EF post drives the live diegetic engine; a meta
-   *  post just frames the camera for now (its screen lands in 75c). */
+   *  post opens its live screen (demo-skip, no briefings/grind). */
   function onTrigger(id: string, kind: SandboxKind): void {
     if (kind === 'ef') void launchEf(id as Engine);
-    else scene.jumpTo(id);
+    else launchMeta(id);
+  }
+
+  /** Open one live meta screen over the sandbox (companion · prikbord · avatar ·
+   *  badge · wist-je-dat · arc-resolve), reusing `Missions.showMetaDemo`. The scene
+   *  is frozen (begin/endActivity) so the still-rendering canvas behind the overlay
+   *  takes no free-roam taps (`.ra-overlay` is pointer-transparent), and the showroom
+   *  chrome hides while the accessible card owns the screen. */
+  function launchMeta(id: string): void {
+    showChrome(false);
+    scene.beginActivity();
+    showMetaDemo(ui, id, backFromMeta);
+  }
+
+  /** Close a meta screen: drop its overlay, §1e-glide the camera back to the overview,
+   *  and restore the showroom chrome. */
+  function backFromMeta(): void {
+    ui.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
+    scene.endActivity();
+    showChrome(true);
   }
 
   /** Play one EF activity in the sandbox, reusing the exact §1f branch the mission
@@ -177,9 +198,10 @@ export function startSandbox(ui: HTMLElement, stage: Stage, onExit: () => void):
         const kind = b.dataset.kind as SandboxKind;
         menu.querySelectorAll('.sbx-jump').forEach((x) => x.removeAttribute('aria-current'));
         b.setAttribute('aria-current', 'true');
-        // an EF post launches the live diegetic activity (the §9g demo-skip path);
-        // every other target just frames the camera onto it.
+        // an EF post launches the live diegetic activity, a meta post opens its live
+        // screen (both the §9g demo-skip path); a cast/ranger target frames the camera.
         if (kind === 'ef') void launchEf(id as Engine);
+        else if (kind === 'meta') launchMeta(id);
         else scene.jumpTo(id);
       });
     });

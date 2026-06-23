@@ -250,8 +250,8 @@ export class SandboxScene {
   }
 
   /** An inner-ring interaction trigger — a small diegetic post (a station signpost).
-   *  75b-i renders it so the jump-menu can frame it; the tap behaviour lands in
-   *  75b-ii (EF → live diegetic engine) / 75c (meta screens). */
+   *  Tapping it routes through the UI: an EF post → the live diegetic engine (75b-ii),
+   *  a meta post → its live screen (75c). */
   private placeTrigger(p: SandboxPlacement): void {
     const group = new THREE.Group();
     group.position.set(p.x, 0, p.z);

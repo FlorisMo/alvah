@@ -153,7 +153,7 @@ function showLodge(): void {
     void loadGameAudio();
     startExplore();
   });
-  el.querySelector('.lodge-badges')?.addEventListener('click', showBadges);
+  el.querySelector('.lodge-badges')?.addEventListener('click', () => showBadges());
   el.querySelector('.lodge-cabin')?.addEventListener('click', () => showCabin(host, showLodge));
   el.querySelector('.lodge-prikbord')?.addEventListener('click', () => showCaseBoard());
   el.querySelector('.lodge-ranger')?.addEventListener('click', () => showAvatarCreator(host, showLodge));
@@ -185,7 +185,7 @@ function cluesBadge(): string {
 /** The prikbord. From the world (`fromWorld`) the back + resolve buttons stay in
  *  the patrol flow (the world stays loaded behind the overlay); from the lodge
  *  they return to the hut. */
-function showCaseBoard(fromWorld = false): void {
+function showCaseBoard(fromWorld = false, demoBack?: () => void): void {
   narrator.stop();
   const area = Content.activeArea();
   const voltooid = store.get().voltooid;
@@ -230,24 +230,27 @@ function showCaseBoard(fromWorld = false): void {
     note +
     `<div class="ra-row">` +
     resolveBtn +
-    `<button class="ra-text-btn cb-back" type="button">${fromWorld ? 'Verder op patrouille' : 'Terug naar de hut'}</button>` +
+    `<button class="ra-text-btn cb-back" type="button">${demoBack ? 'Terug naar de demo' : fromWorld ? 'Verder op patrouille' : 'Terug naar de hut'}</button>` +
     `</div>` +
     `</div>`,
   );
   if (store.get().settings.voorlezen && laatste && !gemeld) narrator.speak(laatste.tekst);
-  el.querySelector('.cb-back')?.addEventListener('click', () => { if (fromWorld) resumePatrol(); else showLodge(); });
+  el.querySelector('.cb-back')?.addEventListener('click', () => {
+    if (demoBack) demoBack(); else if (fromWorld) resumePatrol(); else showLodge();
+  });
   el.querySelector('.cb-resolve')?.addEventListener('click', () => {
     Sound.unlock();
-    showOntknoping(0, fromWorld);
+    showOntknoping(0, fromWorld, demoBack);
   });
 }
 
 /** The hopeful resolution: step through the ontknoping beats, then report → resolved. */
-function showOntknoping(idx: number, fromWorld = false): void {
+function showOntknoping(idx: number, fromWorld = false, demoBack?: () => void): void {
   const area = Content.activeArea();
   const beats = Content.verhaalboog(area.id)?.ontknoping ?? [];
   const beat = beats[idx];
-  if (!beat) { store.reportArc(); showCaseBoard(fromWorld); return; }
+  // demo mode (showroom): show the resolve beats but never commit the real arc-report.
+  if (!beat) { if (demoBack) { demoBack(); return; } store.reportArc(); showCaseBoard(fromWorld); return; }
   const last = idx === beats.length - 1;
   const el = card(
     `<div class="ontknoping boot-card-ish">` +
@@ -262,8 +265,8 @@ function showOntknoping(idx: number, fromWorld = false): void {
   el.querySelector('.ra-speak')?.addEventListener('click', () => narrator.speak(beat.tekst));
   el.querySelector('.btn-start')?.addEventListener('click', () => {
     narrator.stop();
-    if (last) { store.reportArc(); if (store.get().settings.geluid) Sound.found(); }
-    showOntknoping(idx + 1, fromWorld);
+    if (last) { if (!demoBack) store.reportArc(); if (store.get().settings.geluid) Sound.found(); }
+    showOntknoping(idx + 1, fromWorld, demoBack);
   });
 }
 
@@ -622,7 +625,7 @@ function showWildcamCapture(clue: Clue): void {
 }
 
 /* -------------------------------------------------------- badge wall ---- */
-function showBadges(): void {
+function showBadges(demoBack?: () => void): void {
   const skill = store.get().skill;
   const wall = (Object.keys(SKILL_META) as Engine[])
     .map((e) => {
@@ -645,8 +648,39 @@ function showBadges(): void {
     `<p class="boot-kicker">Jouw breinkracht</p>` +
     `<h1 class="boot-title">Badges</h1>` +
     `<div class="badge-row">${wall}</div>` +
-    `<button class="btn-start" type="button">Terug naar de hut</button>` +
+    `<button class="btn-start" type="button">${demoBack ? 'Terug naar de demo' : 'Terug naar de hut'}</button>` +
     `</div>`,
   );
-  el.querySelector('.btn-start')?.addEventListener('click', showLodge);
+  el.querySelector('.btn-start')?.addEventListener('click', demoBack ?? showLodge);
+}
+
+/* --------------------------------------------------- demo-sandbox meta entry ---- */
+/**
+ * Open one live meta screen for the Demo Sandbox (DEMO-SANDBOX.md Tier 2; ledger 75c).
+ * Reuses the exact live screens — no demo re-implementation — with a demo-skip back
+ * (`onBack`) instead of the lodge/patrol navigation, and never committing real arc
+ * progression. `host` is pointed at the sandbox `ui` so the overlays mount there.
+ * companion/avatar reuse their already-parameterised entry points; caseboard/badge/
+ * fact/arc reuse the internal renderers via their optional demo-back param.
+ */
+export function showMetaDemo(ui: HTMLElement, id: string, onBack: () => void): void {
+  host = ui;
+  switch (id) {
+    case 'companion': showCabin(ui, onBack); break;
+    case 'avatar': showAvatarCreator(ui, onBack); break;
+    case 'caseboard': showCaseBoard(false, onBack); break;
+    case 'badge': showBadges(onBack); break;
+    case 'arc': showOntknoping(0, false, onBack); break;
+    case 'fact': void showFact(demoFactStep(), 1, 1).then(onBack); break;
+    default: onBack();
+  }
+}
+
+/** A representative content step that carries a "wist-je-dat" feit, for the demo fact card. */
+function demoFactStep(): Step {
+  for (const m of Content.activeArea().missies) {
+    const s = m.stappen.find((st) => st.skin?.feit);
+    if (s) return s;
+  }
+  return Content.activeArea().missies[0].stappen[0];
 }
