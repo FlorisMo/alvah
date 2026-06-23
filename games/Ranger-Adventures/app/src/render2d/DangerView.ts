@@ -12,7 +12,7 @@ import './danger.css';
 import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
-import { buildDagnachtTrial, type Encounter } from '../engines/dagnacht';
+import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../engines/dagnacht';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -31,11 +31,12 @@ export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> 
     const instructie = copy.instructie ?? 'Blijf rustig. Kies veilig.';
     const total = trial.encounters.length;
 
-    let idx = 0;
+    // Shared pure core (parity with the 3D twin, §1f): it owns the encounter
+    // index + the wrong-set + the final BeatSummary; this view only renders.
+    const run = new DagnachtRun(total);
     let phase: 'walk' | 'choose' | 'feedback' | 'done' = 'walk';
     let terugSlag = 0;
     let eikels = store.get().eikels;
-    const wrongSet = new Set<number>();
     const timers: number[] = [];
     const after = (ms: number, fn: () => void): void => { timers.push(window.setTimeout(fn, ms)); };
     const clearTimers = (): void => { for (const t of timers) window.clearTimeout(t); timers.length = 0; };
@@ -72,14 +73,14 @@ export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> 
     panel.querySelector('.danger-speak')?.addEventListener('click', () => narrator.speak(instructie));
 
     function progress(): void {
-      const eff = Math.max(0, idx - terugSlag);
+      const eff = Math.max(0, run.index - terugSlag);
       const p = phase === 'done' ? 1 : Math.min(1, eff / total);
       fill.style.width = `${Math.round(p * 100)}%`;
       walker.style.left = `${10 + p * 72}%`;
     }
 
     function renderEncounter(): void {
-      const enc = trial.encounters[idx];
+      const enc = trial.encounters[run.index];
       ruleBanner.innerHTML =
         (enc.flip ? `<span class="flip-cue">Nu mag het wél</span>` : '') + esc(enc.vraag);
       ruleBanner.classList.toggle('flip', !!enc.flip);
@@ -97,7 +98,7 @@ export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> 
 
     function advance(): void {
       clearTimers();
-      if (idx >= total) return finish();
+      if (run.finished) return finish();
       phase = 'walk';
       progress();
       after(reduced ? 350 : 800, () => {
@@ -113,13 +114,14 @@ export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> 
       const opt = enc.opties[optIndex];
       if (opt.goed) {
         phase = 'feedback';
+        run.choose(true);
         if (settings.geluid) Sound.correct();
         subject.classList.remove('react');
         flash('ok', enc.uitleg ?? 'Rustig zo.');
-        after(1500, () => { idx += 1; advance(); });
+        after(1500, () => { advance(); });
       } else {
         phase = 'feedback';
-        wrongSet.add(idx);
+        run.choose(false);
         if (settings.geluid) Sound.tryAgain();
         subject.classList.add('react');
         walker.classList.add('knock');
@@ -159,8 +161,8 @@ export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> 
       phase = 'done';
       progress();
       if (settings.geluid) Sound.found();
-      const correct = Math.max(0, total - wrongSet.size);
-      after(1400, () => { clearTimers(); narrator.stop(); panel.remove(); resolve({ trials: total, correct }); });
+      const summary = run.summary();
+      after(1400, () => { clearTimers(); narrator.stop(); panel.remove(); resolve(summary); });
     }
 
     advance();

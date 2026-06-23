@@ -10,6 +10,7 @@
 
 import type { Skin } from '../content/types';
 import type { Settings } from '../core/state';
+import type { BeatSummary } from '../core/skill';
 
 export interface EncounterOption {
   label: string;
@@ -53,4 +54,46 @@ export function buildDagnachtTrial(skin: Skin, diff: Settings): DagnachtTrial {
     metgezel: skin.metgezel ?? 'frisling',
     slowmo: (diff.slowmo ?? false) && !diff.reducedMotion,
   };
+}
+
+/**
+ * DagnachtRun — the pure sequencing + scoring core shared by BOTH the 2D
+ * (`render2d/DangerView`) and the diegetic 3D (`render3d/engines/dagnacht3d`)
+ * views, so the two emit an IDENTICAL `BeatSummary` for the same trial + the same
+ * choice sequence (construct parity, BUILD-PLAN §1f). It models exactly the frozen
+ * inhibition task: walk the encounters in order; a correct choice advances to the
+ * next encounter; a wrong choice is RECOVERABLE — it marks the encounter and
+ * re-presents it (never a game-over). The score is the count of encounters that
+ * were never answered wrong; `trials` is always the encounter total. No THREE, no
+ * DOM, no timing — pure, so the seeded parity test runs under `node --test`.
+ */
+export class DagnachtRun {
+  private idx = 0;
+  private readonly wrong = new Set<number>();
+  private readonly total: number;
+
+  constructor(total: number) { this.total = total; }
+
+  /** the encounter currently being presented (0..total) */
+  get index(): number { return this.idx; }
+
+  /** every encounter has been passed */
+  get finished(): boolean { return this.idx >= this.total; }
+
+  /**
+   * Record a choice on the current encounter. A good choice advances to the next
+   * encounter (`'advance'`); a wrong choice marks this encounter once and keeps it
+   * up for another try (`'retry'`) — recoverable, never game-over.
+   */
+  choose(goed: boolean): 'advance' | 'retry' {
+    if (this.finished) return 'advance';
+    if (goed) { this.idx += 1; return 'advance'; }
+    this.wrong.add(this.idx);
+    return 'retry';
+  }
+
+  /** the parity-frozen summary: trials = total, correct = encounters never-wronged. */
+  summary(): BeatSummary {
+    return { trials: this.total, correct: Math.max(0, this.total - this.wrong.size) };
+  }
 }

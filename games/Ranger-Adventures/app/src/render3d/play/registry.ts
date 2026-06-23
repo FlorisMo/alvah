@@ -11,7 +11,9 @@
 
 import type { Play3dEngine } from './types';
 import { zoeken3dEngine } from '../engines/zoeken3d';
+import { dagnacht3dEngine } from '../engines/dagnacht3d';
 
 export const REGISTRY_3D: readonly Play3dEngine[] = [
   zoeken3dEngine,
+  dagnacht3dEngine,
 ];
