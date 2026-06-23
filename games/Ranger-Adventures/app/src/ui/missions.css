@@ -263,3 +263,36 @@
   transform: translateX(-50%);
 }
 .explore-prompt[hidden] { display: none; }
+
+/* veldnotitie wayfinding strip — calm direction + distance to the active mission,
+   no minimap chrome. Dual-channel: arrow glyph (shape) + words + the mission colour. */
+.explore-wayfind {
+  position: absolute;
+  left: 16px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  max-width: 64vw;
+  padding: 8px 18px 8px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(40, 30, 18, 0.82);
+  color: var(--paper);
+  box-shadow: var(--shadow-md);
+}
+.explore-wayfind[hidden] { display: none; }
+.explore-wayfind .wf-glyph {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(253, 246, 232, 0.16);
+  font: 600 24px/1 var(--font-body);
+}
+.explore-wayfind .wf-text { display: flex; flex-direction: column; line-height: 1.25; }
+.explore-wayfind .wf-doel { font: 600 16px/1.25 var(--font-body); }
+.explore-wayfind .wf-cue { font: 500 14px/1.25 var(--font-body); opacity: 0.85; }
+.explore-wayfind.wf-arrived { background: rgba(63, 122, 58, 0.9); } /* second channel on arrival */

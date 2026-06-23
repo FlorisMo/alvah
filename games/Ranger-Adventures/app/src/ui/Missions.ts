@@ -20,6 +20,7 @@ import { Sound } from '../core/sound';
 import { loadGameAudio } from '../core/calls';
 import type { Stage } from '../render3d/Stage';
 import { World, type WorldMarker } from '../render3d/World';
+import { type WayCue } from '../render3d/Wayfinding';
 import { playZoeken } from '../render2d/ZoekenView';
 import { playRoute } from '../render2d/RouteView';
 import { playSimon } from '../render2d/SimonView';
@@ -255,20 +256,47 @@ function startExplore(): void {
     };
   });
 
-  world = new World(stage.renderer.domElement as HTMLCanvasElement, markers, onApproach);
+  // the active mission the wayfinding cue points to = the first not-yet-done one
+  const done = store.get().voltooid;
+  const active = area.missies.find((m) => !done[m.id])?.id ?? area.missies[0]?.id ?? null;
+
+  world = new World(
+    stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, active,
+  );
   stage.enterWorld(world);
-  showExploreHud();
+  showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }
 
-function showExploreHud(): void {
+function showExploreHud(activeTitel: string | null): void {
+  const veld = activeTitel
+    ? `<div class="explore-wayfind" role="status" aria-live="polite">` +
+      `<span class="wf-glyph" aria-hidden="true">·</span>` +
+      `<span class="wf-text"><b class="wf-doel">${esc(activeTitel)}</b><span class="wf-cue">zoek het spoor…</span></span>` +
+      `</div>`
+    : '';
   const el = card(
     `<div class="explore-hud">` +
     `<button class="ra-pill explore-back" type="button">‹ Terug naar de hut</button>` +
     `<p class="explore-hint">Tik op een dier om mee te spelen — of tik op de grond om te lopen.</p>` +
+    veld +
     `<div class="explore-prompt" hidden></div>` +
     `</div>`,
   );
   el.querySelector('.explore-back')?.addEventListener('click', showLodge);
+}
+
+/** Render the calm wayfinding cue into the veldnotitie strip (dual-channel: glyph +
+ *  words + colour; no minimap chrome). Reduced-motion-safe — only text swaps. */
+function onWayfind(cue: WayCue | null): void {
+  const strip = host.querySelector<HTMLDivElement>('.explore-wayfind');
+  if (!strip) return;
+  if (!cue) { strip.hidden = true; return; }
+  strip.hidden = false;
+  const glyph = strip.querySelector<HTMLSpanElement>('.wf-glyph');
+  const cueEl = strip.querySelector<HTMLSpanElement>('.wf-cue');
+  if (glyph) glyph.textContent = cue.glyph;
+  if (cueEl) cueEl.textContent = cue.arrived ? 'je bent er' : `${cue.richting} · ${cue.afstand}`;
+  strip.classList.toggle('wf-arrived', cue.arrived);
 }
 
 let approachId: string | null = null;

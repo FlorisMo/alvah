@@ -19,6 +19,8 @@ import {
 } from './Biomes';
 import { loadManifest, loadModel, loadRig, prepModel } from './Models';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
+import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
+import { wayfind, type WayCue } from './Wayfinding';
 
 export interface WorldMarker {
   missionId: string;
@@ -45,6 +47,9 @@ export class World {
     anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
     mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
   }[] = [];
+  private activeId: string | null = null;     // the mission the wayfinding cue points to
+  private readonly onWayfind: (cue: WayCue | null) => void;
+  private lastWayKey = '';                     // debounce identical cues (no DOM churn)
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground: THREE.Mesh;
   private readonly canvas: HTMLCanvasElement;
@@ -52,9 +57,30 @@ export class World {
   private nearId: string | null = null;
   private speed = 2.4;
 
-  constructor(canvas: HTMLCanvasElement, markers: WorldMarker[], onApproach: (missionId: string | null) => void) {
+  // soft-collision blockers (pine trunks) + the kinematic move limits — the
+  // ranger slides around trees, can't wade into the ven, can't leave the world.
+  private readonly obstacles: Obstacle[] = [];
+  private readonly limits: MoveLimits = {
+    bound: 116,                                  // ground plane is 240² → rim ~120
+    // off-limits = the submerged ven only (inside the water disc AND below the
+    // surface) — NOT a global height test, so dry relief troughs stay walkable.
+    blocked: (x, z) => {
+      const dx = x - VEN_CENTER.x, dz = z - VEN_CENTER.z;
+      return dx * dx + dz * dz < 18 * 18 && heightAt(x, z) < WATER_LEVEL + 0.15;
+    },
+  };
+
+  constructor(
+    canvas: HTMLCanvasElement,
+    markers: WorldMarker[],
+    onApproach: (missionId: string | null) => void,
+    onWayfind: (cue: WayCue | null) => void = () => {},
+    activeId: string | null = null,
+  ) {
     this.canvas = canvas;
     this.onApproach = onApproach;
+    this.onWayfind = onWayfind;
+    this.activeId = activeId;
 
     this.scene.background = this.skyTexture();
     this.scene.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 22, 90);
@@ -177,6 +203,8 @@ export class World {
       const y = this.groundY(x, z);
       m.makeScale(s, s, s); m.setPosition(x, y + 0.6 * s, z); trunks.setMatrixAt(k, m);
       m.makeScale(s, s, s); m.setPosition(x, y + 1.9 * s, z); crowns.setMatrixAt(k, m);
+      // a soft collision circle around each trunk (the ranger slides around it)
+      this.obstacles.push({ x, z, r: 0.6 * s });
     });
     trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
     this.scene.add(trunks, crowns);
@@ -280,6 +308,12 @@ export class World {
       ring.position.y = 0.05;
       group.add(ring);
 
+      // a small diegetic name-tag floating above the marker (in-world label, no
+      // minimap chrome) — a camera-facing sprite so it stays readable from any angle
+      const label = this.makeLabel(mk.titel, mk.color);
+      label.position.y = 1.9;
+      group.add(label);
+
       group.add(this.proceduralTotem(mk.color)); // instant stand-in
       this.scene.add(group);
       const entry = {
@@ -310,6 +344,44 @@ export class World {
         });
       }
     });
+  }
+
+  /** A camera-facing sprite name-tag (rounded warm card + the mission title). */
+  private makeLabel(text: string, color: string): THREE.Sprite {
+    const pad = 24, fontPx = 44;
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d')!;
+    ctx.font = `600 ${fontPx}px Inter, system-ui, sans-serif`;
+    const w = Math.ceil(ctx.measureText(text).width) + pad * 2;
+    const h = fontPx + pad * 2;
+    c.width = w; c.height = h;
+    // rounded warm card
+    const r = 22;
+    ctx.fillStyle = 'rgba(40, 30, 18, 0.78)';
+    ctx.beginPath();
+    ctx.moveTo(r, 0); ctx.arcTo(w, 0, w, h, r); ctx.arcTo(w, h, 0, h, r);
+    ctx.arcTo(0, h, 0, 0, r); ctx.arcTo(0, 0, w, 0, r); ctx.closePath(); ctx.fill();
+    // a colour pip + the title (dual-channel: colour + word)
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(pad + 10, h / 2, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fdf6e8';
+    ctx.font = `600 ${fontPx}px Inter, system-ui, sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, pad + 34, h / 2 + 2);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(mat);
+    const scale = 0.0042; // world units per px → ~legible without dominating
+    sprite.scale.set(w * scale, h * scale, 1);
+    return sprite;
+  }
+
+  /** Re-point the wayfinding cue at another mission (e.g. after one is completed). */
+  setActiveMission(id: string | null): void {
+    this.activeId = id;
+    this.lastWayKey = '';
   }
 
   private proceduralTotem(color: string): THREE.Group {
@@ -354,15 +426,22 @@ export class World {
   update(dt: number, t: number): void {
     const reduced = prefersReducedMotion();
 
-    // move the ranger toward the walk target
+    // move the ranger toward the walk target — the desired straight step is then
+    // resolved by the kinematic controller (slide around pines, stay out of the
+    // ven, stay inside the world). Facing follows the ACTUAL motion so the ranger
+    // turns naturally when a collision slides them sideways.
     const rp = this.ranger.position;
     const dx = this.target.x - rp.x, dz = this.target.z - rp.z;
     const dist = Math.hypot(dx, dz);
     if (dist > 0.06) {
       const step = Math.min(this.speed * dt, dist);
-      rp.x += (dx / dist) * step;
-      rp.z += (dz / dist) * step;
-      this.ranger.rotation.y = Math.atan2(dx, dz);
+      const wantX = rp.x + (dx / dist) * step;
+      const wantZ = rp.z + (dz / dist) * step;
+      const next = resolveMove(rp.x, rp.z, wantX, wantZ, this.obstacles, this.limits);
+      const mx = next.x - rp.x, mz = next.z - rp.z;
+      if (mx * mx + mz * mz > 1e-7) this.ranger.rotation.y = Math.atan2(mx, mz);
+      rp.x = next.x;
+      rp.z = next.z;
     }
     rp.y = this.groundY(rp.x, rp.z);
 
@@ -386,6 +465,17 @@ export class World {
       if (Math.hypot(mk.pos.x - rp.x, mk.pos.z - rp.z) < 2.4) { near = mk.missionId; break; }
     }
     if (near !== this.nearId) { this.nearId = near; this.onApproach(near); }
+
+    // wayfinding cue to the active mission — calm direction + distance, no minimap.
+    // Debounced so the diegetic HUD only re-renders when the words actually change.
+    const goal = this.activeId ? this.markers.find((m) => m.missionId === this.activeId) : null;
+    if (goal) {
+      const cue = wayfind(rp.x, rp.z, this.ranger.rotation.y, goal.pos.x, goal.pos.z);
+      const key = `${cue.glyph}|${cue.richting}|${cue.afstand}`;
+      if (key !== this.lastWayKey) { this.lastWayKey = key; this.onWayfind(cue); }
+    } else if (this.lastWayKey !== '') {
+      this.lastWayKey = ''; this.onWayfind(null);
+    }
 
     this.placeCamera(reduced);
   }
