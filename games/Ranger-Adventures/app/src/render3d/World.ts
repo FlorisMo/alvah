@@ -21,6 +21,7 @@ import { loadManifest, loadModel, loadRig, prepModel } from './Models';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { wayfind, type WayCue } from './Wayfinding';
+import type { WorldCtx } from './play/types';
 
 export interface WorldMarker {
   missionId: string;
@@ -56,6 +57,10 @@ export class World {
   private readonly onApproach: (missionId: string | null) => void;
   private nearId: string | null = null;
   private speed = 2.4;
+  // while a diegetic mini-game plays IN-PLACE, the world stays loaded but freezes:
+  // movement, walk-taps, proximity, wayfinding and the §1e follow all pause so the
+  // activity's reframe owns the camera (it restores on endActivity).
+  private activityActive = false;
 
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
@@ -397,6 +402,7 @@ export class World {
 
   // ---- input ----
   private onPointer = (e: PointerEvent): void => {
+    if (this.activityActive) return; // the activity's own pick3d owns taps in-place
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -429,21 +435,24 @@ export class World {
     // move the ranger toward the walk target — the desired straight step is then
     // resolved by the kinematic controller (slide around pines, stay out of the
     // ven, stay inside the world). Facing follows the ACTUAL motion so the ranger
-    // turns naturally when a collision slides them sideways.
+    // turns naturally when a collision slides them sideways. Frozen during an
+    // in-place activity (the mini-game holds the scene + drives the camera itself).
     const rp = this.ranger.position;
-    const dx = this.target.x - rp.x, dz = this.target.z - rp.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist > 0.06) {
-      const step = Math.min(this.speed * dt, dist);
-      const wantX = rp.x + (dx / dist) * step;
-      const wantZ = rp.z + (dz / dist) * step;
-      const next = resolveMove(rp.x, rp.z, wantX, wantZ, this.obstacles, this.limits);
-      const mx = next.x - rp.x, mz = next.z - rp.z;
-      if (mx * mx + mz * mz > 1e-7) this.ranger.rotation.y = Math.atan2(mx, mz);
-      rp.x = next.x;
-      rp.z = next.z;
+    if (!this.activityActive) {
+      const dx = this.target.x - rp.x, dz = this.target.z - rp.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 0.06) {
+        const step = Math.min(this.speed * dt, dist);
+        const wantX = rp.x + (dx / dist) * step;
+        const wantZ = rp.z + (dz / dist) * step;
+        const next = resolveMove(rp.x, rp.z, wantX, wantZ, this.obstacles, this.limits);
+        const mx = next.x - rp.x, mz = next.z - rp.z;
+        if (mx * mx + mz * mz > 1e-7) this.ranger.rotation.y = Math.atan2(mx, mz);
+        rp.x = next.x;
+        rp.z = next.z;
+      }
+      rp.y = this.groundY(rp.x, rp.z);
     }
-    rp.y = this.groundY(rp.x, rp.z);
 
     // per-animal motion: a real baked rig wins (mixer); else the always-on
     // procedural fallback (gentle, never-scary, calm-pose gated). Both are
@@ -458,6 +467,8 @@ export class World {
         mk.anim.scale.set(1, d.scaleY, 1);
       }
     }
+
+    if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
 
     // proximity → surface the "play" affordance (debounced by id)
     let near: string | null = null;
@@ -478,6 +489,39 @@ export class World {
     }
 
     this.placeCamera(reduced);
+  }
+
+  /**
+   * Build the live `WorldCtx` an in-place 3D mini-game renders into (3D-IMMERSION
+   * §2). The activity anchors on the marker the ranger walked up to (`nearId`), or
+   * the ranger's own spot if free-standing. The view reframes + restores the camera
+   * and raycasts against this scene — it never tears the world down.
+   */
+  ctx(prompt: HTMLElement): WorldCtx {
+    const near = this.nearId ? this.markers.find((m) => m.missionId === this.nearId) : null;
+    const spot = near ? near.pos : this.ranger.position;
+    return {
+      scene: this.scene,
+      camera: this.camera,
+      cameraRig: this.camera, // the §1e follow drives the camera directly (no separate rig)
+      approachedModel: near ? near.group : null,
+      activitySpot: { x: spot.x, y: spot.y, z: spot.z },
+      raycaster: this.raycaster,
+      canvas: this.canvas,
+      prompt,
+      reducedMotion: prefersReducedMotion(),
+    };
+  }
+
+  /** Freeze the world for an in-place activity (the mini-game owns input + camera). */
+  beginActivity(): void { this.activityActive = true; }
+
+  /** Resume free-roam after an in-place activity; re-emit the wayfinding cue. */
+  endActivity(): void {
+    this.activityActive = false;
+    this.nearId = null;
+    this.lastWayKey = '';
+    this.placeCamera(true); // snap the §1e follow back behind the ranger
   }
 
   private placeCamera(snap: boolean): void {

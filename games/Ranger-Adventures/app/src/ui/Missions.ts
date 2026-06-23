@@ -21,6 +21,9 @@ import { loadGameAudio } from '../core/calls';
 import type { Stage } from '../render3d/Stage';
 import { World, type WorldMarker } from '../render3d/World';
 import { type WayCue } from '../render3d/Wayfinding';
+import { prefersReducedMotion } from '../core/reduced-motion';
+import { resolveViewMode, variantFor } from '../render3d/play/ViewMode';
+import { REGISTRY_3D } from '../render3d/play/registry';
 import { playZoeken } from '../render2d/ZoekenView';
 import { playRoute } from '../render2d/RouteView';
 import { playSimon } from '../render2d/SimonView';
@@ -48,6 +51,16 @@ type PlayFn = (host: HTMLElement, step: Step) => Promise<BeatSummary>;
 const ENGINE_VIEWS: Partial<Record<string, PlayFn>> = {
   zoeken: playZoeken, corsi: playRoute, simon: playSimon, dagnacht: playDanger, wisselen: playWissel,
 };
+
+/** WebGL support, probed once — a gate for the in-place 3D view (else the 2D floor). */
+const WEBGL_OK: boolean = (() => {
+  try {
+    const c = document.createElement('canvas');
+    return !!(c.getContext('webgl2') || c.getContext('webgl'));
+  } catch {
+    return false;
+  }
+})();
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -311,7 +324,9 @@ function onApproach(missionId: string | null): void {
   prompt.innerHTML = `<button class="btn-start explore-play" type="button">Speel mee: ${esc(m.titel)}</button>`;
   prompt.querySelector('.explore-play')?.addEventListener('click', () => {
     if (approachId !== missionId) return;
-    leaveWorld();
+    // keep the world loaded — the mission may play in-place (3D). runMission's
+    // ViewMode branch picks 3D-in-world or the 2D floor per step; returning to the
+    // lodge (showLodge) is the only place the world is torn down.
     showBriefing(m);
   });
 }
@@ -349,7 +364,29 @@ async function runMission(mission: Mission): Promise<void> {
     const play = ENGINE_VIEWS[step.ef];
     if (!play) { skipped = step.ef; break; }
     clearOverlays();
-    const result = await play(host, step);
+    // The ONE branch (§1f): play the step diegetically in-place when the world is
+    // live AND a parity-green 3D variant ships for this engine; otherwise the 2D
+    // floor. The world (if loaded) stays loaded across both paths.
+    const mode = resolveViewMode({
+      engine: step.ef as Engine,
+      sceneLive: !!world,
+      webglCapable: WEBGL_OK,
+      reducedMotion: prefersReducedMotion(),
+      force2d: false, // Tweaks "altijd 2D" feeds this in Phase 6
+      registry: REGISTRY_3D,
+    });
+    let result: BeatSummary;
+    if (mode === '3d' && world) {
+      const variant = variantFor(REGISTRY_3D, step.ef as Engine)!;
+      world.beginActivity();
+      try {
+        result = await variant.play(world.ctx(host), step);
+      } finally {
+        world.endActivity();
+      }
+    } else {
+      result = await play(host, step);
+    }
     store.logSession(step.ef as Engine, result);
     played.push(step.ef as Engine);
     if (step.skin.feit) await showFact(step, i + 1, mission.stappen.length);
