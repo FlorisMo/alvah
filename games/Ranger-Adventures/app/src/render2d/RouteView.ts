@@ -9,7 +9,7 @@ import './route.css';
 import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
-import { buildCorsiTrial, PRINT_SPOTS } from '../engines/corsi';
+import { buildCorsiTrial, CorsiRun, PRINT_SPOTS } from '../engines/corsi';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -28,8 +28,9 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
     const goed = copy.goed ?? 'Precies de goede weg!';
     const instructie = copy.instructie ?? 'Onthoud de weg.';
 
-    let recallIdx = 0;
-    let wrong = 0;
+    // Shared pure core (parity with the 3D twin, §1f): it owns the recall index +
+    // the wrong count + the final BeatSummary; this view only renders + shows.
+    const run = new CorsiRun(trial.sequence);
     let done = false;
     const timers: number[] = [];
     const after = (ms: number, fn: () => void): void => {
@@ -105,21 +106,14 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
         b.textContent = '';
         b.disabled = false;
       }
-      recallIdx = 0;
       banner.textContent = terug;
     }
 
     function onTap(id: number): void {
       if (done) return;
-      const expected = trial.sequence[recallIdx];
       const b = spotEls.get(id);
-      if (id === expected) {
-        if (settings.geluid) Sound.step();
-        b?.classList.add('correct');
-        recallIdx += 1;
-        if (recallIdx >= trial.sequence.length) finish();
-      } else {
-        wrong += 1;
+      const res = run.tap(id);
+      if (res === 'reshow') {
         if (settings.geluid) Sound.tryAgain();
         if (b) {
           b.classList.remove('wrong');
@@ -127,6 +121,10 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
         }
         for (const bb of spotEls.values()) bb.disabled = true;
         after(750, showSequence);
+      } else {
+        if (settings.geluid) Sound.step();
+        b?.classList.add('correct');
+        if (res === 'complete') finish();
       }
     }
 
@@ -136,12 +134,12 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
       if (settings.geluid) Sound.found();
       banner.textContent = goed;
       if (settings.voorlezen) narrator.speak(goed);
-      const correct = wrong === 0 ? 1 : 0;
+      const summary = run.summary();
       after(1500, () => {
         clearTimers();
         narrator.stop();
         panel.remove();
-        resolve({ trials: 1, correct });
+        resolve(summary);
       });
     }
   });
