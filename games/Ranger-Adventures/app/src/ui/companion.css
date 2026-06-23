@@ -1,0 +1,194 @@
+/* ============================================================
+   companion.css — cabin/perch screen, bond meter, CareRoutine.
+   Sits over the 3D stage; reuses the boot-card + missions tokens.
+   Dual-channel everywhere (glyph + colour + text); ≥56px targets.
+   ============================================================ */
+
+.cabin { gap: 14px; }
+.cabin-sections { display: grid; gap: 16px; width: 100%; }
+
+/* ---- companion card (the perch) ---- */
+.comp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--spel-radius);
+  background: var(--green-soft);
+  box-shadow: var(--shadow-md);
+}
+.comp-head { display: flex; align-items: center; gap: 14px; }
+.comp-perch {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: rgba(120, 86, 54, 0.16);
+  box-shadow: inset 0 -4px 10px rgba(0, 0, 0, 0.08);
+}
+.comp-sprite { font-size: 44px; line-height: 1; display: block; }
+.comp-sprite.fase-baby { font-size: 34px; }
+.comp-sprite.fase-jong { font-size: 44px; }
+.comp-sprite.fase-zelfstandig { font-size: 52px; }
+.comp-sprite.big { font-size: 72px; }
+
+.comp-meta { display: flex; flex-direction: column; gap: 4px; flex: 1; text-align: left; }
+.comp-name { font: 600 22px/1.1 var(--font-head); color: var(--green-deep); }
+.comp-fase { font: 600 13px/1.2 var(--font-body); color: var(--green-mid); }
+
+.bond-meter { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.bm-heart { font-size: 16px; line-height: 1; }
+.bm-track {
+  flex: 1;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+.bm-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--green-bright);
+  transition: width var(--dur-base) var(--ease-out);
+}
+
+.comp-kunstjes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.comp-kunstje {
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--spel-sun);
+  color: var(--green-deep);
+  font: 600 12px/1.3 var(--font-body);
+}
+.comp-mee { margin: 0; font: 500 15px/1.3 var(--font-read); color: var(--green-deep); text-align: center; }
+
+.comp-title { margin: 2px 0 0; font: 600 18px/1.25 var(--font-head); color: var(--green-deep); text-align: center; }
+.comp-text { margin: 0; font: 400 16px/1.4 var(--font-read); color: var(--ink); text-align: center; }
+.comp-rescue { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.comp-rescue .comp-perch { width: 96px; height: 96px; }
+
+/* ---- name picker (rescue) ---- */
+.naam-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.naam-knop {
+  min-height: 56px;
+  padding: 0 20px;
+  border: 2px solid var(--green-line);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+  color: var(--green-deep);
+  font: 600 18px/1 var(--font-body);
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-overshoot), background var(--dur-quick), border-color var(--dur-quick);
+}
+.naam-knop:hover { transform: translateY(-2px); }
+.naam-knop.gekozen {
+  background: var(--green-bright);
+  border-color: var(--green-bright);
+  color: #fff;
+  transform: scale(1.04);
+}
+
+/* ---- fase-up celebration ---- */
+.comp-groei { gap: 12px; }
+.comp-kunstje-new { margin: 0; font: 400 16px/1.4 var(--font-read); color: var(--ink); }
+.comp-kunstje-new b { color: var(--green-deep); }
+
+/* ---- opvang (rehab) ---- */
+.opvang-kaart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--spel-radius);
+  background: rgba(120, 86, 54, 0.12);
+  border: 2px dashed rgba(120, 86, 54, 0.3);
+}
+.ok-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.ok-title { font: 600 17px/1.1 var(--font-head); color: var(--green-deep); }
+.ok-count {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--green-bright);
+  color: #fff;
+  font: 700 12px/1.5 var(--font-body);
+}
+.ok-text { margin: 0; font: 400 16px/1.4 var(--font-read); color: var(--ink); text-align: center; }
+.ok-gast { display: flex; flex-direction: column; gap: 8px; }
+.ok-vrij { gap: 12px; }
+.ok-vrij-art { font-size: 64px; line-height: 1; }
+
+/* ---- CareRoutine (the EF care skin) ---- */
+.care-routine { gap: 12px; }
+.care-progress { display: flex; gap: 8px; justify-content: center; }
+.care-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.16);
+  transition: background var(--dur-quick), transform var(--dur-quick) var(--ease-overshoot);
+}
+.care-dot.done { background: var(--green-bright); }
+.care-dot.next { background: var(--spel-sun); transform: scale(1.3); }
+
+.care-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+.care-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px 10px;
+  border: 2px solid var(--green-line);
+  border-radius: var(--spel-radius);
+  background: var(--paper);
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-overshoot), box-shadow var(--dur-quick), border-color var(--dur-quick);
+}
+.care-step:hover { transform: translateY(-2px); }
+.care-step .cs-ico { font-size: 30px; line-height: 1; }
+.care-step .cs-label { font: 600 15px/1.15 var(--font-body); color: var(--green-deep); text-align: center; }
+.care-step.next {
+  border-color: var(--spel-sun);
+  box-shadow: 0 0 0 3px var(--spel-sun-glow);
+  transform: scale(1.03);
+}
+.care-step.done {
+  border-color: var(--green-bright);
+  background: var(--green-soft);
+  cursor: default;
+}
+.care-step.done .cs-ico { opacity: 0.5; }
+.care-step .cs-tick {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  color: var(--green);
+  font: 700 15px/1 var(--font-body);
+}
+.care-step.knuffel { border-style: dashed; border-color: rgba(201, 65, 116, 0.5); }
+.care-step.knuffel .cs-label { color: #b03a66; }
+
+.care-msg {
+  min-height: 24px;
+  margin: 0;
+  font: 500 16px/1.35 var(--font-read);
+  text-align: center;
+}
+.care-msg.tip { color: var(--ink-soft); }
+.care-msg.ok { color: var(--green-deep); font-weight: 600; }
+.care-msg.wait { color: #b03a66; }
+
+/* reduced motion: no overshoot/scale, instant state change */
+@media (prefers-reduced-motion: reduce) {
+  .naam-knop, .care-step, .care-dot, .bm-fill { transition: none; }
+  .naam-knop.gekozen, .care-step.next, .care-dot.next { transform: none; }
+}

@@ -24,6 +24,7 @@ import { playRoute } from '../render2d/RouteView';
 import { playSimon } from '../render2d/SimonView';
 import { playDanger } from '../render2d/DangerView';
 import { playWissel } from '../render2d/WisselView';
+import { showCabin } from './Companion';
 
 /** animal id (content) → generated GLB id (asset pipeline). Others → procedural. */
 const MODEL_OF: Record<string, string> = {
@@ -102,6 +103,7 @@ function showLodge(): void {
     `</div>` +
     `<div class="lodge-links">` +
     `<button class="ra-text-btn lodge-badges" type="button">Bekijk je breinkracht-badges</button>` +
+    `<button class="ra-text-btn lodge-cabin" type="button">${esc(cabinLabel())}</button>` +
     `<button class="ra-text-btn lodge-prikbord" type="button">Open het prikbord${cluesBadge()}</button>` +
     `</div>` +
     `</div>`,
@@ -121,7 +123,15 @@ function showLodge(): void {
     startExplore();
   });
   el.querySelector('.lodge-badges')?.addEventListener('click', showBadges);
+  el.querySelector('.lodge-cabin')?.addEventListener('click', () => showCabin(host, showLodge));
   el.querySelector('.lodge-prikbord')?.addEventListener('click', showCaseBoard);
+}
+
+/** Lodge link label reflects the companion: rescue prompt → friend's name. */
+function cabinLabel(): string {
+  const c = store.get().companion;
+  if (!c.rescued) return 'Vang je raaf op';
+  return `Verzorg ${c.naam || 'je raaf'}`;
 }
 
 /* ------------------------------------------------- case-board (prikbord) ---- */

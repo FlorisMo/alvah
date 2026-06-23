@@ -5,9 +5,9 @@
  * store: render layers `subscribe()` and call mutators. Same localStorage key
  * (`ranger-mvp-state`) and same mutation semantics.
  *
- * Scope note: companion / rehab / vehicle-damage / season-arc state land in
- * Phase 3 (their mutators are deferred). This file is the engine-loop + skill
- * spine Phase 1 needs; load() tolerates extra persisted fields.
+ * Scope note: season-arc (`arc`) and companion/rehab (`companion`/`rehab`) state
+ * are now wired (Phase 3); the pure companion model lives in companion.ts. Vehicle-
+ * damage state stays deferred. load() tolerates extra persisted fields.
  */
 
 import {
@@ -23,6 +23,20 @@ import {
   type SkillRecord,
   type BeatSummary,
 } from './skill';
+import {
+  blankCompanion,
+  blankRehab,
+  mergeCompanion,
+  mergeRehab,
+  applyRescue,
+  applyBond,
+  applyStartRehab,
+  applyReleaseRehab,
+  type Companion,
+  type Rehab,
+  type Fase,
+  type OpvangGast,
+} from './companion';
 
 export type Screen =
   | 'map' | 'cabin' | 'transport' | 'travel' | 'briefing' | 'world' | 'reunion' | 'complete';
@@ -64,6 +78,9 @@ export interface GameState {
   skill: SkillSet;                   // per-engine skill record — drives difficulty + badges
   knapWoorden: Record<string, { naam: string }>; // earned "knap-woord" badges
   arc: ArcState;                     // season/poacher arc — found clues are DERIVED from voltooid
+  companion: Companion;              // metgezel: rescue → care → grow → mee (HANDOFF §7.2)
+  rehab: Rehab;                      // recurring opvang-and-release loop
+  companionGroei: Fase | null;      // fase the companion just reached (for the cabin celebration)
   settings: Settings;
 }
 
@@ -114,6 +131,9 @@ function freshState(): GameState {
     skill: blankSkillSet(),
     knapWoorden: {},
     arc: { gemeld: false },
+    companion: blankCompanion(),
+    rehab: blankRehab(),
+    companionGroei: null,
     settings: { ...DEFAULT_SETTINGS },
   };
 }
@@ -133,6 +153,9 @@ function load(): GameState {
       recentGroei: parsed.recentGroei ?? [],
       knapWoorden: parsed.knapWoorden ?? {},
       arc: { gemeld: false, ...(parsed.arc ?? {}) },
+      companion: mergeCompanion(parsed.companion),
+      rehab: mergeRehab(parsed.rehab),
+      companionGroei: parsed.companionGroei ?? null,
       settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
     };
   } catch {
@@ -195,6 +218,38 @@ class Store {
   /** Player reported the poacher to the BOA on the case-board → hopeful resolution. */
   reportArc(): void {
     this.commit({ ...this.state, arc: { ...this.state.arc, gemeld: true } });
+  }
+
+  /* ---- companion / metgezel (HANDOFF §7.2) — thin wrappers over companion.ts pure logic ---- */
+
+  /** Rescue the companion (baby, starting bond), optionally naming it. */
+  rescueCompanion(naam?: string): void {
+    this.commit({ ...this.state, companion: applyRescue(this.state.companion, naam) });
+  }
+
+  /** Raise/lower the bond; fase never regresses; a new fase flags the celebration. */
+  bondDelta(n: number): void {
+    const { companion, grew } = applyBond(this.state.companion, n);
+    this.commit({
+      ...this.state,
+      companion,
+      companionGroei: grew ? companion.fase : this.state.companionGroei,
+    });
+  }
+
+  clearCompanionGroei(): void {
+    this.set({ companionGroei: null });
+  }
+
+  /* ---- rehab (opvang & loslaten) ---- */
+
+  startRehab(gast: OpvangGast): void {
+    this.commit({ ...this.state, rehab: applyStartRehab(this.state.rehab, gast) });
+  }
+
+  /** Help AND let go — clears the guest, counts the release (emotional-positive). */
+  releaseRehab(): void {
+    this.commit({ ...this.state, rehab: applyReleaseRehab(this.state.rehab) });
   }
 
   /** An engine finished a beat → feed its skill record (drives staircase + badges). */
