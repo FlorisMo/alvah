@@ -22,7 +22,11 @@ A dev/demo page that loads **every staged model** and lets you inspect the real 
 - **Anything World:** automatic — the moment AW-animated GLBs are staged into `/models`
   (manifest `animated: true`), the showroom plays them instead of the idle. No code change.
 
-## Tier 2 — Full Demo Sandbox  ⏳ capstone (built by the run)
+## Tier 2 — Full Demo Sandbox  ⏳ built by the run, right after the cast + interactions
+> **Placement (Floris, 23 Jun):** its own **"Demo surroundings"** phase right after Phase 4 (the
+> cast + the 5 in-world interactions = its real prerequisites), **new Alvah likeness first** so the
+> demo shows the improved figure. It reuses the live engines, so it still reflects the later
+> Phase 5/6 polish whenever it's opened.
 One **compact in-world scene** (a single clearing / "ranger-station showroom", not the full
 Veluwe) containing **every element and every interaction**, each reachable in a few seconds:
 - **Cast:** every animal/bird/companion present and calm-posed (never-scary gate), each with
