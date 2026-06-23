@@ -10,14 +10,19 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 const draco = new DRACOLoader().setDecoderPath('/draco/');
 const loader = new GLTFLoader().setDRACOLoader(draco);
 
-export interface ModelEntry { file: string; category: string; bytes?: number; tris?: number }
+export interface ModelEntry { file: string; category: string; bytes?: number; tris?: number; animated?: boolean }
+
+/** A loaded model plus any baked animation clips (empty array = static mesh). */
+export interface LoadedRig { group: THREE.Group; clips: THREE.AnimationClip[] }
 
 let manifest: Record<string, ModelEntry> | null = null;
-const cache = new Map<string, THREE.Group>();
+const cache = new Map<string, GLTF>();
 
 export async function loadManifest(): Promise<Record<string, ModelEntry>> {
   if (manifest) return manifest;
@@ -34,20 +39,39 @@ export function hasModel(id: string): boolean {
   return !!manifest && !!manifest[id];
 }
 
-/** Load (and cache) a model by id, returning a fresh clone. null if absent. */
-export async function loadModel(id: string): Promise<THREE.Group | null> {
+/** Load (and cache) the full GLTF for an id. null if absent or it fails to parse. */
+async function loadGLTF(id: string): Promise<GLTF | null> {
   const m = await loadManifest();
   const e = m[id];
   if (!e) return null;
   if (!cache.has(id)) {
     try {
-      const gltf = await loader.loadAsync(`/models/${e.file}`);
-      cache.set(id, gltf.scene);
+      cache.set(id, await loader.loadAsync(`/models/${e.file}`));
     } catch {
       return null;
     }
   }
-  return cache.get(id)!.clone(true);
+  return cache.get(id)!;
+}
+
+/** Load (and cache) a model by id, returning a fresh clone. null if absent. */
+export async function loadModel(id: string): Promise<THREE.Group | null> {
+  const gltf = await loadGLTF(id);
+  return gltf ? (cloneSkinned(gltf.scene) as THREE.Group) : null;
+}
+
+/**
+ * Load a model with its animation clips — the "prefer animated GLB over
+ * procedural" hook (BUILD-PLAN §8c #2). When an Anything World rig has been
+ * staged for this id the GLB carries baked clips, and the caller drives an
+ * AnimationMixer; otherwise `clips` is empty and the caller falls back to the
+ * always-on ProceduralMotion. Uses SkeletonUtils.clone so skinned meshes keep a
+ * working skeleton in the clone. null if the model is absent.
+ */
+export async function loadRig(id: string): Promise<LoadedRig | null> {
+  const gltf = await loadGLTF(id);
+  if (!gltf) return null;
+  return { group: cloneSkinned(gltf.scene) as THREE.Group, clips: gltf.animations ?? [] };
 }
 
 /**

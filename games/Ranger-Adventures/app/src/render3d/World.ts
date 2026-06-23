@@ -13,7 +13,8 @@
 
 import * as THREE from 'three';
 import { prefersReducedMotion } from '../core/reduced-motion';
-import { loadManifest, loadModel, prepModel } from './Models';
+import { loadManifest, loadModel, loadRig, prepModel } from './Models';
+import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 
 export interface WorldMarker {
   missionId: string;
@@ -35,7 +36,12 @@ export class World {
   private readonly target = new THREE.Vector3(0, 0, 0);
   private readonly camDesired = new THREE.Vector3();
   private readonly camOffset = new THREE.Vector3(0, 3.4, 6.2); // gentle behind-above
-  private readonly markers: { group: THREE.Group; pos: THREE.Vector3; missionId: string }[] = [];
+  private readonly markers: {
+    group: THREE.Group; pos: THREE.Vector3; missionId: string;
+    recipe: MotionRecipe; phase: number;
+    anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
+    mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
+  }[] = [];
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground: THREE.Mesh;
   private readonly canvas: HTMLCanvasElement;
@@ -200,16 +206,31 @@ export class World {
 
       group.add(this.proceduralTotem(mk.color)); // instant stand-in
       this.scene.add(group);
-      this.markers.push({ group, pos: group.position.clone(), missionId: mk.missionId });
+      const entry = {
+        group, pos: group.position.clone(), missionId: mk.missionId,
+        recipe: gaitFor(mk.modelId), phase: i * 1.7,
+        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
+      };
+      this.markers.push(entry);
 
       if (mk.modelId) {
-        void loadModel(mk.modelId).then((m) => {
-          if (!m) return;
-          const prepped = prepModel(m, mk.height);
+        void loadRig(mk.modelId).then((rig) => {
+          if (!rig) return;
+          const prepped = prepModel(rig.group, mk.height);
           // drop the totem (keep the ring), add the real animal
           const totem = group.children.find((c) => c.userData.totem);
           if (totem) group.remove(totem);
           group.add(prepped);
+          if (rig.clips.length) {
+            // prefer the real baked rig: play a calm idle (or the first clip)
+            const mixer = new THREE.AnimationMixer(prepped);
+            const idle = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
+            mixer.clipAction(idle).play();
+            entry.mixer = mixer;
+          } else {
+            // no rig → the always-on procedural fallback drives this wrapper
+            entry.anim = prepped;
+          }
         });
       }
     });
@@ -269,11 +290,17 @@ export class World {
     }
     rp.y = this.groundY(rp.x, rp.z);
 
-    // gentle idle bob on the animals (off under reduced motion)
-    if (!reduced) {
-      for (let i = 0; i < this.markers.length; i++) {
-        const child = this.markers[i].group.children.find((c) => (c as THREE.Group).children?.length && !c.userData.totem && !(c as THREE.Mesh).isMesh);
-        if (child) child.position.y = Math.sin(t * 1.4 + i) * 0.05;
+    // per-animal motion: a real baked rig wins (mixer); else the always-on
+    // procedural fallback (gentle, never-scary, calm-pose gated). Both are
+    // secondary motion, so reduced-motion freezes them at the rest pose.
+    for (const mk of this.markers) {
+      if (mk.mixer) {
+        mk.mixer.update(reduced ? 0 : dt);
+      } else if (mk.anim) {
+        const d = reduced ? REST : motionAt(mk.recipe, t, mk.phase);
+        mk.anim.position.set(d.dx, d.dy, 0);
+        mk.anim.rotation.set(0, d.rotY, d.rotZ);
+        mk.anim.scale.set(1, d.scaleY, 1);
       }
     }
 
