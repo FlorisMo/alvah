@@ -20,6 +20,7 @@ import {
   ARKIT_SUBSET, FACE_TIMING, expressionWeights, fadeWeights, blinkWeightAt,
   nextBlinkDelay, microsaccadeAt, type Emotion, type ArkitShape,
 } from './Face';
+import { liveReducedMotion } from './MotionMode';
 
 const SUBSET = new Set<string>(ARKIT_SUBSET as readonly string[]);
 const GAZE_MORPHS = ['eyeLookInLeft', 'eyeLookInRight', 'eyeLookOutLeft', 'eyeLookOutRight',
@@ -47,7 +48,7 @@ export class FaceController {
   private lastBlinkStart = -999;
   private nextBlinkAt: number;
   private readonly perMin: number;
-  private readonly reducedMotion: boolean;
+  private readonly forceReduced?: boolean; // undefined ⇒ read the live policy each frame
   private readonly meshes: MorphMesh[];
 
   constructor(
@@ -56,7 +57,7 @@ export class FaceController {
   ) {
     this.meshes = meshes;
     this.emotion = opts.emotion ?? 'neutral';
-    this.reducedMotion = !!opts.reducedMotion;
+    this.forceReduced = opts.reducedMotion;
     const rate = opts.child ? FACE_TIMING.childBlinkPerMin.attentive : FACE_TIMING.adultBlinkPerMin.attentive;
     this.perMin = (rate[0] + rate[1]) / 2;
     this.to = expressionWeights(this.emotion);
@@ -91,8 +92,10 @@ export class FaceController {
     }
     const blink = blinkWeightAt(t, this.lastBlinkStart, FACE_TIMING.blinkDurationSec);
 
-    // microsaccade gaze (secondary → dropped under reduced-motion)
-    const sac = this.reducedMotion ? { yawDeg: 0, pitchDeg: 0 } : microsaccadeAt(t);
+    // microsaccade gaze (secondary → dropped under reduced-motion, read LIVE so an
+    // in-game toggle takes effect with no restart; blink + the emotion fade stay = §1e KEEP)
+    const reduced = this.forceReduced ?? liveReducedMotion();
+    const sac = reduced ? { yawDeg: 0, pitchDeg: 0 } : microsaccadeAt(t);
 
     for (const m of this.meshes) {
       // expression

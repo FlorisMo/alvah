@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { prefersReducedMotion } from '../core/reduced-motion';
+import { livePolicy } from './MotionMode';
 
 /** Called once per rendered frame, AFTER the render (so renderer.info is fresh). */
 export type FrameCallback = (dtSeconds: number, elapsedSeconds: number) => void;
@@ -149,7 +149,8 @@ export class Stage {
   }
 
   private updateCamera(t: number): void {
-    if (prefersReducedMotion()) {
+    // idle title/lodge sway is SECONDARY motion → off under the live policy (no restart)
+    if (!livePolicy().secondaryMotion) {
       this.camera.position.copy(this.camBase);
     } else {
       const sway = Math.sin(t * 0.18) * 0.25; // barely-there breathing motion

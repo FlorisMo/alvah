@@ -8,6 +8,7 @@
 
 import * as THREE from 'three';
 import { eyeSpecFor, eyeshineAt, irisParallax, pupilRadii, type EyeSpec } from './Eyes';
+import { liveReducedMotion } from './MotionMode';
 
 /**
  * Draw iris+pupil+catchlight to a small canvas texture. Robust + identical on every
@@ -104,7 +105,9 @@ export function applyEyes(
     // (frozen flat under reduced-motion). Cheap — a texture-offset write only.
     const tmp = new THREE.Vector3();
     mesh.onBeforeRender = (_r, _s, camera) => {
-      const depth = opts.reducedMotion ? 0 : spec.parallaxDepth;
+      // read the policy LIVE each frame (no restart) — an explicit opt forces it (tests/showroom)
+      const reduced = opts.reducedMotion ?? liveReducedMotion();
+      const depth = reduced ? 0 : spec.parallaxDepth;
       mesh.getWorldPosition(tmp);
       tmp.subVectors((camera as THREE.Camera).position, tmp).normalize();
       const off = irisParallax({ x: tmp.x, y: tmp.y }, depth);

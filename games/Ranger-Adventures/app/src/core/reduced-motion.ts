@@ -25,6 +25,7 @@ export function setReducedMotionOverride(value: boolean | null): void {
 
 /** Mirror the current state onto <body class="rm"> so CSS transitions calm down too. */
 export function applyReducedMotionClass(): void {
+  if (typeof document === 'undefined' || !document.body) return; // node/SSR-safe
   document.body.classList.toggle('rm', prefersReducedMotion());
 }
 

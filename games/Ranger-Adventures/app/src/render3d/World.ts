@@ -13,6 +13,7 @@
 
 import * as THREE from 'three';
 import { prefersReducedMotion } from '../core/reduced-motion';
+import { livePolicy } from './MotionMode';
 import {
   BIOME_PALETTE, VEN_CENTER, WATER_LEVEL,
   anchorInBiome, biomeAt, heightAt, type Biome,
@@ -25,6 +26,7 @@ import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { wayfind, type WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
+import { dampFactor } from './play/kit-math';
 
 export interface WorldMarker {
   missionId: string;
@@ -287,12 +289,12 @@ export class World {
     const prepped = prepModel(model, 1.25);
     // §1e eye system: bright, alive eyes (the golden-hour world is not dusk, so
     // eyeshine stays off; parallax freezes under reduced-motion).
-    applyEyes(prepped, 'ranger-alvah', { dusk: false, reducedMotion: prefersReducedMotion() });
+    applyEyes(prepped, 'ranger-alvah', { dusk: false }); // parallax reads the live policy (no restart)
     // §A ARKit face: data-driven emotion + always-alive blink/microsaccade. The
     // child ranger blinks at the lower child rate. Best-effort — a humanoid GLB with
     // no ARKit blendshape rig (the Meshy mesh today) is left untouched, never throws.
     // Expression + blink are essential motion, so they stay on under reduced-motion.
-    applyFace(prepped, { emotion: 'neutral', child: true, reducedMotion: prefersReducedMotion() });
+    applyFace(prepped, { emotion: 'neutral', child: true }); // microsaccade reads the live policy (no restart)
     this.ranger.clear();
     this.ranger.add(prepped);
   }
@@ -345,7 +347,7 @@ export class World {
           const prepped = prepModel(rig.group, mk.height);
           // §1e eye system per species (catchlight + clearcoat cornea + pupil +
           // iris parallax); golden-hour world ⇒ dusk off (eyeshine stays calm).
-          applyEyes(prepped, mk.modelId, { dusk: false, reducedMotion: prefersReducedMotion() });
+          applyEyes(prepped, mk.modelId, { dusk: false }); // parallax reads the live policy (no restart)
           // §B never-scary calm-pose: a static rest-pose bias (ears/tail/head into the
           // calm shape). Best-effort — a single-mesh Meshy animal with no named bones is
           // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
@@ -459,7 +461,9 @@ export class World {
 
   // ---- per-frame ----
   update(dt: number, t: number): void {
-    const reduced = prefersReducedMotion();
+    // the §1e mode, read LIVE each frame from the single policy authority (no restart):
+    // camera follow stops lagging (cuts), secondary animal motion freezes to rest.
+    const reduced = livePolicy().reduced;
 
     // move the ranger toward the walk target — the desired straight step is then
     // resolved by the kinematic controller (slide around pines, stay out of the
@@ -517,7 +521,7 @@ export class World {
       this.lastWayKey = ''; this.onWayfind(null);
     }
 
-    this.placeCamera(reduced);
+    this.placeCamera(reduced, dt);
   }
 
   /**
@@ -553,15 +557,15 @@ export class World {
     this.placeCamera(true); // snap the §1e follow back behind the ranger
   }
 
-  private placeCamera(snap: boolean): void {
+  private placeCamera(snap: boolean, dt = 0): void {
     const rp = this.ranger.position;
     this.camDesired.set(rp.x + this.camOffset.x, rp.y + this.camOffset.y, rp.z + this.camOffset.z);
     if (snap) {
       this.camera.position.copy(this.camDesired);
     } else {
-      // exponential damping (~0.3s) — frame-rate independent, no shake
-      const a = 1 - Math.exp(-1 / 0.3 * (1 / 60));
-      this.camera.position.lerp(this.camDesired, a);
+      // exp-damping (~0.3 s) off the REAL frame dt → genuinely frame-rate independent
+      // (§C.5 item 2: identical feel at 30/60/120 fps), no shake. Shared dampFactor.
+      this.camera.position.lerp(this.camDesired, dampFactor(dt, 0.3));
     }
     this.camera.up.set(0, 1, 0); // roll = 0 always
     this.camera.lookAt(rp.x, rp.y + 1.0, rp.z);

@@ -195,7 +195,7 @@ export class SandboxScene {
     void loadRig(p.id).then((rig) => {
       if (!rig) return;
       const prepped = prepModel(rig.group, 1.25);
-      applyEyes(prepped, p.id, { dusk: false, reducedMotion: prefersReducedMotion() });
+      applyEyes(prepped, p.id, { dusk: false }); // parallax reads the live policy (no restart)
       applyCalmPose(prepped, p.id);
       group.children.find((c) => c.userData.stand)?.removeFromParent();
       group.add(prepped);
@@ -225,7 +225,7 @@ export class SandboxScene {
       // birds read smaller than mammals — a gentle height heuristic from the id.
       const isBird = /raven|nightjar|fledgling|^bird-|merel|mees|specht|vink|gaai|ekster|koekoek|tjiftjaf|lijster|duif|eend|buizerd|haantje|tapuit|leeuwerik|klever|koning|borst/.test(p.id);
       const prepped = prepModel(rig.group, isBird ? 0.5 : 0.9);
-      applyEyes(prepped, p.id, { dusk: false, reducedMotion: prefersReducedMotion() });
+      applyEyes(prepped, p.id, { dusk: false }); // parallax reads the live policy (no restart)
       applyCalmPose(prepped, p.id);
       group.children.find((c) => c.userData.stand)?.removeFromParent();
       group.add(prepped);
