@@ -12,17 +12,17 @@ const BASE = 'https://api.meshy.ai/openapi/v2/text-to-3d';
 const OUT = new URL('../assets-gen/', import.meta.url);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Floris's likeness description (23 Jun) + the strong A-pose fix — kept under Meshy's 800-char cap.
+// Floris's likeness (23 Jun) — v3: NO hat (show the hair) + hands OUT of pockets. Under 800 chars.
 const PROMPT =
   'full body 3D game character of a slender 8 year old boy forest ranger, child proportions, ' +
-  'dark ash-blond wavy messy hair with soft bangs over the forehead, ' +
-  'large expressive blue-green eyes with long dark lashes, soft round youthful face, ' +
+  'bare head with no hat, dark ash-blond wavy messy hair with soft bangs over the forehead, ' +
+  'large expressive blue-green eyes, soft round youthful face, ' +
   'full rosy cheeks, small straight button nose, friendly warm smile, fair skin with a natural glow, ' +
-  'narrow shoulders, neutral A-pose with both arms held clearly away from the body, ' +
-  'a wide gap between arms and torso, hands open, palms facing the thighs, legs slightly apart, ' +
-  'feet flat, head up looking ahead, green ranger jacket over a yellow shirt, khaki shorts, ' +
-  'brown hiking boots, small ranger hat, stylized realistic, clean topology, rig ready, ' +
-  'single character centered, plain neutral background';
+  'narrow shoulders, both arms hanging straight down at the sides held clearly away from the body, ' +
+  'a wide gap between arms and torso, hands open and visible, hands not in pockets, ' +
+  'palms facing the thighs, legs slightly apart, feet flat, head up looking ahead, ' +
+  'green ranger jacket over a yellow shirt, plain khaki shorts with no pockets, brown hiking boots, ' +
+  'stylized realistic, clean topology, rig ready, single character centered, plain neutral background';
 
 async function poll(id, label) {
   for (let i = 0; i < 120; i++) {
