@@ -24,6 +24,8 @@ import { type WayCue } from '../render3d/Wayfinding';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { resolveViewMode, variantFor } from '../render3d/play/ViewMode';
 import { REGISTRY_3D } from '../render3d/play/registry';
+import { nextPatrolTarget, capturedClue } from '../core/patrol';
+import type { Clue } from '../content/types';
 import { playZoeken } from '../render2d/ZoekenView';
 import { playRoute } from '../render2d/RouteView';
 import { playSimon } from '../render2d/SimonView';
@@ -144,7 +146,7 @@ function showLodge(): void {
   });
   el.querySelector('.lodge-badges')?.addEventListener('click', showBadges);
   el.querySelector('.lodge-cabin')?.addEventListener('click', () => showCabin(host, showLodge));
-  el.querySelector('.lodge-prikbord')?.addEventListener('click', showCaseBoard);
+  el.querySelector('.lodge-prikbord')?.addEventListener('click', () => showCaseBoard());
   el.querySelector('.lodge-ranger')?.addEventListener('click', () => showAvatarCreator(host, showLodge));
 }
 
@@ -167,7 +169,10 @@ function cluesBadge(): string {
   return ` <span class="lodge-clue-count">${found}/${total}</span>`;
 }
 
-function showCaseBoard(): void {
+/** The prikbord. From the world (`fromWorld`) the back + resolve buttons stay in
+ *  the patrol flow (the world stays loaded behind the overlay); from the lodge
+ *  they return to the hut. */
+function showCaseBoard(fromWorld = false): void {
   narrator.stop();
   const area = Content.activeArea();
   const voltooid = store.get().voltooid;
@@ -212,24 +217,24 @@ function showCaseBoard(): void {
     note +
     `<div class="ra-row">` +
     resolveBtn +
-    `<button class="ra-text-btn cb-back" type="button">Terug naar de hut</button>` +
+    `<button class="ra-text-btn cb-back" type="button">${fromWorld ? 'Verder op patrouille' : 'Terug naar de hut'}</button>` +
     `</div>` +
     `</div>`,
   );
   if (store.get().settings.voorlezen && laatste && !gemeld) narrator.speak(laatste.tekst);
-  el.querySelector('.cb-back')?.addEventListener('click', showLodge);
+  el.querySelector('.cb-back')?.addEventListener('click', () => { if (fromWorld) resumePatrol(); else showLodge(); });
   el.querySelector('.cb-resolve')?.addEventListener('click', () => {
     Sound.unlock();
-    showOntknoping(0);
+    showOntknoping(0, fromWorld);
   });
 }
 
 /** The hopeful resolution: step through the ontknoping beats, then report → resolved. */
-function showOntknoping(idx: number): void {
+function showOntknoping(idx: number, fromWorld = false): void {
   const area = Content.activeArea();
   const beats = Content.verhaalboog(area.id)?.ontknoping ?? [];
   const beat = beats[idx];
-  if (!beat) { store.reportArc(); showCaseBoard(); return; }
+  if (!beat) { store.reportArc(); showCaseBoard(fromWorld); return; }
   const last = idx === beats.length - 1;
   const el = card(
     `<div class="ontknoping boot-card-ish">` +
@@ -245,7 +250,7 @@ function showOntknoping(idx: number): void {
   el.querySelector('.btn-start')?.addEventListener('click', () => {
     narrator.stop();
     if (last) { store.reportArc(); if (store.get().settings.geluid) Sound.found(); }
-    showOntknoping(idx + 1);
+    showOntknoping(idx + 1, fromWorld);
   });
 }
 
@@ -280,6 +285,18 @@ function startExplore(): void {
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }
 
+/** Resume free-roam after an in-world mission instead of dropping to the lodge:
+ *  keep the world loaded, re-point the wayfinding cue at the next thing to do
+ *  (the continuous-patrol §8d 2b loop), and restore the explore HUD. Falls back
+ *  to the lodge only if the world is somehow gone. */
+function resumePatrol(): void {
+  if (!world) { showLodge(); return; }
+  const area = Content.activeArea();
+  const next = nextPatrolTarget(area.missies, store.get().voltooid);
+  world.setActiveMission(next);
+  showExploreHud(area.missies.find((m) => m.id === next)?.titel ?? null);
+}
+
 function showExploreHud(activeTitel: string | null): void {
   const veld = activeTitel
     ? `<div class="explore-wayfind" role="status" aria-live="polite">` +
@@ -290,12 +307,15 @@ function showExploreHud(activeTitel: string | null): void {
   const el = card(
     `<div class="explore-hud">` +
     `<button class="ra-pill explore-back" type="button">‹ Terug naar de hut</button>` +
+    `<button class="ra-pill explore-board" type="button">📌 Prikbord${cluesBadge()}</button>` +
     `<p class="explore-hint">Tik op een dier om mee te spelen — of tik op de grond om te lopen.</p>` +
     veld +
     `<div class="explore-prompt" hidden></div>` +
     `</div>`,
   );
   el.querySelector('.explore-back')?.addEventListener('click', showLodge);
+  // reach the prikbord over the LIVE world — no teardown; back returns to patrol.
+  el.querySelector('.explore-board')?.addEventListener('click', () => showCaseBoard(true));
 }
 
 /** Render the calm wayfinding cue into the veldnotitie strip (dual-channel: glyph +
@@ -325,38 +345,48 @@ function onApproach(missionId: string | null): void {
   prompt.querySelector('.explore-play')?.addEventListener('click', () => {
     if (approachId !== missionId) return;
     // keep the world loaded — the mission may play in-place (3D). runMission's
-    // ViewMode branch picks 3D-in-world or the 2D floor per step; returning to the
-    // lodge (showLodge) is the only place the world is torn down.
-    showBriefing(m);
+    // ViewMode branch picks 3D-in-world or the 2D floor per step. Launched from
+    // the world → the diegetic veldnotitie entry + return-to-patrol flow (the
+    // world is only torn down by showLodge).
+    showBriefing(m, true);
   });
 }
 
 /* ------------------------------------------------------------ briefing ---- */
-function showBriefing(mission: Mission): void {
+/** The mission entry card. From the lodge it's a "Missie"-briefing; from the
+ *  world (`fromWorld`) it reads as a lighter diegetic *veldnotitie* (field note)
+ *  so launching a mission never feels like leaving the world, and its back +
+ *  start buttons stay in the patrol flow rather than returning to the lodge. */
+function showBriefing(mission: Mission, fromWorld = false): void {
   const jargon = store.get().settings.jargon;
   const lines = (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
   const spoken = `Ranger ${naam()}. ${mission.titel}. ${lines.join(' ')}`;
 
+  const kicker = fromWorld ? `Veldnotitie · ${esc(mission.landschap)}` : `Missie · ${esc(mission.landschap)}`;
+  const startLabel = fromWorld ? 'Ga op pad' : 'Start de missie';
+  const backLabel = fromWorld ? 'Nog even rondkijken' : 'Terug naar de hut';
+  const wrapClass = fromWorld ? 'briefing veldnotitie boot-card-ish' : 'briefing boot-card-ish';
+
   const el = card(
-    `<div class="briefing boot-card-ish">` +
-    `<p class="boot-kicker">Missie · ${esc(mission.landschap)}</p>` +
+    `<div class="${wrapClass}">` +
+    `<p class="boot-kicker">${kicker}</p>` +
     `<h1 class="boot-title">${esc(mission.titel)}</h1>` +
     `<div class="briefing-lines">${lines.map((l) => `<p class="briefing-line">${esc(l)}</p>`).join('')}</div>` +
     `<div class="ra-row">` +
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
-    `<button class="btn-start" type="button">Start de missie</button>` +
+    `<button class="btn-start" type="button">${startLabel}</button>` +
     `</div>` +
-    `<button class="ra-text-btn briefing-back" type="button">Terug naar de hut</button>` +
+    `<button class="ra-text-btn briefing-back" type="button">${backLabel}</button>` +
     `</div>`,
   );
   if (store.get().settings.voorlezen) narrator.speak(spoken);
   el.querySelector('.ra-speak')?.addEventListener('click', () => narrator.speak(spoken));
-  el.querySelector('.briefing-back')?.addEventListener('click', showLodge);
-  el.querySelector('.btn-start')?.addEventListener('click', () => void runMission(mission));
+  el.querySelector('.briefing-back')?.addEventListener('click', () => { if (fromWorld) resumePatrol(); else showLodge(); });
+  el.querySelector('.btn-start')?.addEventListener('click', () => void runMission(mission, fromWorld));
 }
 
 /* ---------------------------------------------------------- play loop ---- */
-async function runMission(mission: Mission): Promise<void> {
+async function runMission(mission: Mission, fromWorld = false): Promise<void> {
   const played: Engine[] = [];
   let skipped: string | null = null;
   for (let i = 0; i < mission.stappen.length; i++) {
@@ -391,8 +421,15 @@ async function runMission(mission: Mission): Promise<void> {
     played.push(step.ef as Engine);
     if (step.skin.feit) await showFact(step, i + 1, mission.stappen.length);
   }
+  // The case-board data gate (Content.cluesFound) keys off voltooid, so snapshot
+  // the found-set BEFORE marking this mission done. The diegetic clue beat fires
+  // only when this completion makes the hook NEWLY appear on the board (so a
+  // replay, or a second mission sharing the same hook, never re-announces it).
+  const areaId = Content.activeArea().id;
+  const before = Content.cluesFound(areaId, store.get().voltooid);
   store.markMissionDone(mission.id);
-  showReward(mission, played, skipped);
+  const clueId = capturedClue(mission, fromWorld, before);
+  showReward(mission, played, skipped, fromWorld, clueId);
 }
 
 function showFact(step: Step, n: number, total: number): Promise<void> {
@@ -414,7 +451,10 @@ function showFact(step: Step, n: number, total: number): Promise<void> {
 }
 
 /* ------------------------------------------------------------- reward ---- */
-function showReward(mission: Mission, played: Engine[], skipped: string | null): void {
+function showReward(
+  mission: Mission, played: Engine[], skipped: string | null,
+  fromWorld = false, clueId: string | null = null,
+): void {
   const skill = store.get().skill;
   const badges = Array.from(new Set(played))
     .map((e) => {
@@ -441,7 +481,16 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null):
     : '';
   const reunion = mission.reunion?.tekst ? `<p class="boot-sub">${esc(mission.reunion.tekst)}</p>` : '';
 
+  // a verhaalHaak mission finished in-world pins a clue → the diegetic
+  // "vastgelegd op de wildcamera → prikbord" beat sits between reward + patrol.
+  const clue = clueId
+    ? Content.clues(Content.activeArea().id).find((c) => c.id === clueId) ?? null
+    : null;
+
   const lof = `Knap gedaan, ${naam()}!`;
+  // from the world → return to patrol (world stays loaded); from the lodge → hut.
+  // a captured clue routes through the wildcamera snapshot first.
+  const backLabel = clue ? 'Bekijk de wildcamera' : fromWorld ? 'Verder op patrouille' : 'Terug naar de hut';
   const el = card(
     `<div class="reward boot-card-ish">` +
     `<p class="boot-kicker">Missie klaar · ${esc(mission.titel)}</p>` +
@@ -450,12 +499,51 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null):
     `<div class="badge-row">${badges}</div>` +
     knap +
     note +
-    `<button class="btn-start" type="button">Terug naar de hut</button>` +
+    `<button class="btn-start" type="button">${backLabel}</button>` +
     `</div>`,
   );
   if (store.get().settings.geluid) Sound.found();
   if (store.get().settings.voorlezen) narrator.speak(lof);
-  el.querySelector('.btn-start')?.addEventListener('click', showLodge);
+  el.querySelector('.btn-start')?.addEventListener('click', () => {
+    narrator.stop();
+    if (clue) showWildcamCapture(clue);
+    else if (fromWorld) resumePatrol();
+    else showLodge();
+  });
+}
+
+/* ------------------------------------------------- wildcamera → prikbord ---- */
+/** The diegetic clue beat: a verhaalHaak mission completed on patrol is
+ *  "vastgelegd op de wildcamera" — a calm snapshot card showing the new
+ *  aanwijzing now hanging on the prikbord. Two ways on: peek at the board
+ *  (returns to patrol), or walk straight on. Never-scary: a still snapshot,
+ *  no startle, dual-channel (glyph + colour + words + read-aloud). */
+function showWildcamCapture(clue: Clue): void {
+  narrator.stop();
+  const line = 'Vastgelegd op de wildcamera.';
+  const glyph = CLUE_GLYPH[clue.soort] ?? '📌';
+  const el = card(
+    `<div class="wildcam boot-card-ish">` +
+    `<p class="boot-kicker">📷 ${line}</p>` +
+    `<h1 class="boot-title">Een nieuwe aanwijzing</h1>` +
+    `<div class="cb-clue found wildcam-shot">` +
+    `<span class="cb-photo">${glyph}</span>` +
+    `<span class="cb-clue-title">${esc(clue.titel)}</span>` +
+    `<span class="cb-clue-text">${esc(clue.tekst)}</span>` +
+    `</div>` +
+    `<p class="boot-sub">Hij hangt nu op het prikbord.</p>` +
+    `<div class="ra-row">` +
+    `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
+    `<button class="btn-start wc-board" type="button">Bekijk het prikbord</button>` +
+    `</div>` +
+    `<button class="ra-text-btn wc-patrol" type="button">Verder op patrouille</button>` +
+    `</div>`,
+  );
+  const spoken = `${line} ${clue.titel}. ${clue.tekst}`;
+  if (store.get().settings.voorlezen) narrator.speak(spoken);
+  el.querySelector('.ra-speak')?.addEventListener('click', () => narrator.speak(spoken));
+  el.querySelector('.wc-board')?.addEventListener('click', () => { narrator.stop(); showCaseBoard(true); });
+  el.querySelector('.wc-patrol')?.addEventListener('click', () => { narrator.stop(); resumePatrol(); });
 }
 
 /* -------------------------------------------------------- badge wall ---- */

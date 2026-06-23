@@ -121,6 +121,15 @@
 }
 
 /* ---- briefing / fact ---- */
+/* the from-the-world entry reads as the ranger's own field note (warm paper +
+ * a left margin rule), not a mission-control screen — so a mission never feels
+ * like leaving the world. Purely a re-skin; the briefing content is unchanged. */
+.briefing.veldnotitie {
+  background: var(--paper-tint);
+  border-left: 3px solid var(--accent-warm);
+  text-align: left;
+}
+.briefing.veldnotitie .boot-kicker { color: var(--green-mid); }
 .briefing-lines { display: grid; gap: 6px; }
 .briefing-line { margin: 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
 .fact-text { margin: 4px 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
@@ -222,6 +231,15 @@
 .cb-note.muted { color: var(--ink-soft); }
 .cb-resolve { margin-top: 2px; }
 
+/* ---- wildcamera capture (diegetic clue beat → prikbord) ---- */
+.wildcam-shot {
+  align-self: center;
+  max-width: 260px;
+  margin: 8px auto;
+  opacity: 1; /* always the freshly-captured, found state */
+}
+.wildcam .cb-photo { font-size: 34px; }
+
 /* ---- ontknoping (hopeful resolution beats) ---- */
 .ont-text { margin: 8px 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
 
@@ -232,7 +250,10 @@
   position: absolute;
   top: max(16px, env(safe-area-inset-top));
   left: 16px;
-  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 56px;
   padding: 0 18px;
   border: none;
   border-radius: var(--radius-pill);
@@ -241,6 +262,16 @@
   font: 600 16px/1 var(--font-body);
   box-shadow: var(--shadow-md);
   cursor: pointer;
+}
+/* the prikbord pill sits opposite the back pill, same top line */
+.ra-pill.explore-board { left: auto; right: 16px; }
+.ra-pill .lodge-clue-count {
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  color: var(--green-deep);
+  font: 600 13px/1 var(--font-body);
 }
 .explore-hint {
   position: absolute;
