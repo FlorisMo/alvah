@@ -34,6 +34,7 @@ import { playDanger } from '../render2d/DangerView';
 import { playWissel } from '../render2d/WisselView';
 import { showCabin } from './Companion';
 import { showAvatarCreator } from './AvatarCreator';
+import { startSandbox } from './Sandbox';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
 const naam = (): string => rangerNaam(store.get().avatar);
@@ -134,6 +135,7 @@ function showLodge(): void {
     `<button class="ra-text-btn lodge-cabin" type="button">${esc(cabinLabel())}</button>` +
     `<button class="ra-text-btn lodge-prikbord" type="button">Open het prikbord${cluesBadge()}</button>` +
     `<button class="ra-text-btn lodge-ranger" type="button">Pas ${esc(naam())} aan</button>` +
+    `<button class="ra-text-btn lodge-sandbox" type="button">Demo: de hele Veluwe in het klein</button>` +
     `</div>` +
     `</div>`,
   );
@@ -155,6 +157,10 @@ function showLodge(): void {
   el.querySelector('.lodge-cabin')?.addEventListener('click', () => showCabin(host, showLodge));
   el.querySelector('.lodge-prikbord')?.addEventListener('click', () => showCaseBoard());
   el.querySelector('.lodge-ranger')?.addEventListener('click', () => showAvatarCreator(host, showLodge));
+  el.querySelector('.lodge-sandbox')?.addEventListener('click', () => {
+    clearOverlays();
+    startSandbox(host, stage, showLodge);
+  });
 }
 
 /** Lodge link label reflects the companion: rescue prompt → friend's name. */

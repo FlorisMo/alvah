@@ -4,6 +4,7 @@ import { Stage } from './render3d/Stage';
 import { Budgets } from './ui/Budgets';
 import { applyReducedMotionClass, watchReducedMotion } from './core/reduced-motion';
 import { startLodge } from './ui/Missions';
+import { startSandbox } from './ui/Sandbox';
 import { showAvatarCreator } from './ui/AvatarCreator';
 import { store } from './core/state';
 
@@ -29,9 +30,13 @@ card.innerHTML =
   `<button class="btn-start" type="button">Begin</button>`;
 ui.appendChild(card);
 
+// `?sandbox` jumps straight into the compact Demo Sandbox (the §9g demo-skip entry).
+const sandboxStart = new URLSearchParams(location.search).has('sandbox');
+
 card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', () => {
   card.classList.add('boot-card--hidden');
   window.setTimeout(() => card.remove(), 360);
+  if (sandboxStart) { startSandbox(ui, stage, () => startLodge(ui, stage)); return; }
   // first boot → make your ranger; afterwards go straight to the lodge
   if (store.get().avatarGemaakt) startLodge(ui, stage);
   else showAvatarCreator(ui, () => startLodge(ui, stage));

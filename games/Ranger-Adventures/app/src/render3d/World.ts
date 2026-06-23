@@ -19,6 +19,8 @@ import {
 } from './Biomes';
 import { loadManifest, loadModel, loadRig, prepModel } from './Models';
 import { applyEyes } from './EyeMaterial';
+import { applyFace } from './FaceRig';
+import { applyCalmPose } from './CalmPoseRig';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { wayfind, type WayCue } from './Wayfinding';
@@ -286,6 +288,11 @@ export class World {
     // §1e eye system: bright, alive eyes (the golden-hour world is not dusk, so
     // eyeshine stays off; parallax freezes under reduced-motion).
     applyEyes(prepped, 'ranger-alvah', { dusk: false, reducedMotion: prefersReducedMotion() });
+    // §A ARKit face: data-driven emotion + always-alive blink/microsaccade. The
+    // child ranger blinks at the lower child rate. Best-effort — a humanoid GLB with
+    // no ARKit blendshape rig (the Meshy mesh today) is left untouched, never throws.
+    // Expression + blink are essential motion, so they stay on under reduced-motion.
+    applyFace(prepped, { emotion: 'neutral', child: true, reducedMotion: prefersReducedMotion() });
     this.ranger.clear();
     this.ranger.add(prepped);
   }
@@ -339,6 +346,10 @@ export class World {
           // §1e eye system per species (catchlight + clearcoat cornea + pupil +
           // iris parallax); golden-hour world ⇒ dusk off (eyeshine stays calm).
           applyEyes(prepped, mk.modelId, { dusk: false, reducedMotion: prefersReducedMotion() });
+          // §B never-scary calm-pose: a static rest-pose bias (ears/tail/head into the
+          // calm shape). Best-effort — a single-mesh Meshy animal with no named bones is
+          // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
+          applyCalmPose(prepped, mk.modelId);
           // drop the totem (keep the ring), add the real animal
           const totem = group.children.find((c) => c.userData.totem);
           if (totem) group.remove(totem);
