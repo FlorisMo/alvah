@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:site": "tsc && vite build --mode site && rm -f ../../../public/ranger/index.html",
     "preview": "vite preview",
     "assets:gen": "node scripts/meshy-gen.mjs",
     "assets:opt": "node scripts/gltf-optimize.mjs",

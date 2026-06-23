@@ -12,6 +12,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+// Pure, dependency-free base-path helper (no game modules) — keeps the showroom
+// asset URLs portable under both `/` and `/ranger/` without coupling to the spine.
+import { assetUrl } from './core/assets.ts';
 
 type ModelEntry = { file: string; category: string; animated?: boolean; clips?: number };
 type AudioEntry = { file: string; kind?: string };
@@ -69,7 +72,7 @@ ground.position.y = -0.01;
 scene.add(ground);
 
 const draco = new DRACOLoader();
-draco.setDecoderPath('/draco/');
+draco.setDecoderPath(assetUrl('/draco/'));
 const loader = new GLTFLoader();
 loader.setDRACOLoader(draco);
 
@@ -96,7 +99,7 @@ function normalize(obj: THREE.Object3D): { top: number } {
 
 function audioFor(id: string, audio: Record<string, AudioEntry>): string | null {
   for (const [keyName, entry] of Object.entries(audio)) {
-    if (entry.kind === 'call' && id.includes(keyName)) return `/audio/${entry.file}`;
+    if (entry.kind === 'call' && id.includes(keyName)) return assetUrl(`/audio/${entry.file}`);
   }
   return null;
 }
@@ -117,8 +120,8 @@ function makeLabel(id: string, category: string): HTMLDivElement {
 }
 
 async function build(): Promise<void> {
-  const manifest = (await fetch('/models/manifest.json').then((r) => r.json())) as Record<string, ModelEntry>;
-  const audio = (await fetch('/audio/manifest.json').then((r) => r.json()).catch(() => ({}))) as Record<string, AudioEntry>;
+  const manifest = (await fetch(assetUrl('/models/manifest.json')).then((r) => r.json())) as Record<string, ModelEntry>;
+  const audio = (await fetch(assetUrl('/audio/manifest.json')).then((r) => r.json()).catch(() => ({}))) as Record<string, AudioEntry>;
 
   const ids = Object.keys(manifest).sort((a, b) => {
     const ca = CAT_ORDER.indexOf(manifest[a].category);
@@ -156,7 +159,7 @@ async function build(): Promise<void> {
     tiles.push(tile);
 
     loader.load(
-      `/models/${entry.file}`,
+      assetUrl(`/models/${entry.file}`),
       (gltf: GLTF) => {
         const root = gltf.scene;
         const { top } = normalize(root);

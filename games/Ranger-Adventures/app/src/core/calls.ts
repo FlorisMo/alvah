@@ -12,6 +12,7 @@
 import { store } from './state';
 import { Sound } from './sound';
 import { pickAmbientBed, type AmbientBiome } from './ambient';
+import { assetUrl } from './assets';
 
 interface AudioEntry { file: string; kind: 'call' | 'ambient'; license: string; attribution: string }
 
@@ -37,7 +38,7 @@ export async function loadGameAudio(): Promise<void> {
   loaded = true;
   let manifest: Record<string, AudioEntry>;
   try {
-    const res = await fetch('/audio/manifest.json');
+    const res = await fetch(assetUrl('/audio/manifest.json'));
     if (!res.ok) return;
     manifest = await res.json();
   } catch {
@@ -46,7 +47,7 @@ export async function loadGameAudio(): Promise<void> {
 
   await Promise.all(
     Object.entries(manifest).map(async ([id, e]) => {
-      const buf = await Sound.decode(`/audio/${e.file}`);
+      const buf = await Sound.decode(assetUrl(`/audio/${e.file}`));
       if (!buf) return;
       if (e.kind === 'ambient') ambientBuffers.set(id, buf);
       else Sound.registerCall(id, buf);

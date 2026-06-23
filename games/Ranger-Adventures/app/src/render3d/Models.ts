@@ -12,8 +12,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { assetUrl } from '../core/assets.ts';
 
-const draco = new DRACOLoader().setDecoderPath('/draco/');
+const draco = new DRACOLoader().setDecoderPath(assetUrl('/draco/'));
 const loader = new GLTFLoader().setDRACOLoader(draco);
 
 export interface ModelEntry { file: string; category: string; bytes?: number; tris?: number; animated?: boolean }
@@ -27,7 +28,7 @@ const cache = new Map<string, GLTF>();
 export async function loadManifest(): Promise<Record<string, ModelEntry>> {
   if (manifest) return manifest;
   try {
-    const res = await fetch('/models/manifest.json');
+    const res = await fetch(assetUrl('/models/manifest.json'));
     manifest = res.ok ? await res.json() : {};
   } catch {
     manifest = {};
@@ -46,7 +47,7 @@ async function loadGLTF(id: string): Promise<GLTF | null> {
   if (!e) return null;
   if (!cache.has(id)) {
     try {
-      cache.set(id, await loader.loadAsync(`/models/${e.file}`));
+      cache.set(id, await loader.loadAsync(assetUrl(`/models/${e.file}`)));
     } catch {
       return null;
     }

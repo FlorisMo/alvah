@@ -1,0 +1,132 @@
+/* demo.css — the demo-skip panel (ui/DemoSkip.ts, BUILD-PLAN §9g).
+   View-only chrome; reuses boot-card-ish + the tweaks toggle. Every tap target
+   is ≥56px and dual-channel (colour + word/glyph + a select/confirm sound).
+   Reduced-motion-safe — the global `.rm *` rule zeroes the transitions below. */
+
+.demo-skip { gap: 14px; }
+
+.dm-status {
+  min-height: 22px;
+  margin: 0;
+  color: var(--green-mid);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.dm-status:empty { display: none; }
+
+.dm-sect { width: 100%; }
+.dm-head {
+  margin: 6px 0 8px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+/* ---- area chips ---- */
+.dm-areas { display: flex; flex-wrap: wrap; gap: 10px; }
+.dm-area {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 56px;
+  padding: 8px 16px;
+  border: 2px solid var(--green-line);
+  border-radius: var(--spel-radius);
+  background: var(--paper);
+  cursor: pointer;
+  transition: border-color var(--dur-quick), background var(--dur-quick);
+}
+.dm-area[aria-current="true"] { border-color: var(--green); background: var(--green-soft); }
+.dm-area.locked { opacity: 0.5; cursor: not-allowed; }
+.dm-area-name { font-weight: 700; color: var(--ink); }
+.dm-area-tag { font-size: 0.78rem; color: var(--ink-muted); }
+
+/* ---- engine shortcuts ---- */
+.dm-engines { display: flex; flex-wrap: wrap; gap: 10px; }
+.dm-eng {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 18px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform var(--dur-quick), border-color var(--dur-quick);
+}
+.dm-eng:hover { transform: translateY(-1px); border-color: var(--pip, var(--spel-sun)); }
+.dm-pip {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--pip, var(--spel-sun));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pip, var(--spel-sun)) 25%, transparent);
+}
+
+/* ---- mission list ---- */
+.dm-missions { display: flex; flex-direction: column; gap: 8px; }
+.dm-mission {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--spel-radius);
+  background: var(--paper-tint);
+}
+.dm-mis-info { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.dm-mis-title { font-weight: 700; color: var(--ink); text-align: left; }
+.dm-mis-sub { font-size: 0.82rem; color: var(--ink-muted); }
+.dm-check { color: var(--green-mid); font-weight: 800; }
+.dm-mis-actions { display: flex; gap: 8px; flex: none; }
+.dm-go {
+  min-width: 56px;
+  min-height: 56px;
+  padding: 0 14px;
+  border: 2px solid var(--green-line);
+  border-radius: var(--spel-radius);
+  background: var(--paper);
+  font-weight: 800;
+  color: var(--green);
+  cursor: pointer;
+  transition: transform var(--dur-quick), background var(--dur-quick);
+}
+.dm-go:hover { transform: translateY(-1px); }
+.dm-go-3d { background: var(--green); color: var(--paper); border-color: var(--green); }
+
+/* ---- arc fast-forward ---- */
+.dm-arc { display: flex; flex-direction: column; gap: 10px; }
+.dm-arc-btn {
+  min-height: 56px;
+  padding: 8px 18px;
+  border: 2px solid var(--accent-warm);
+  border-radius: var(--spel-radius);
+  background: var(--paper);
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--dur-quick), transform var(--dur-quick);
+}
+.dm-arc-btn:hover { transform: translateY(-1px); background: var(--paper-tint); }
+.dm-arc-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.dm-arc-reset { border-color: var(--red-warn); color: var(--red-warn); }
+
+/* ---- Deep Demo guided tour (ui/DeepDemo.ts, Capstone 132a) ----
+   The narration card per beat; reuses boot-card-ish. ≥56px controls,
+   dual-channel (step word + select sound + the read-aloud line).
+   Reduced-motion-safe — the global `.rm *` rule zeroes the transitions. */
+.deep-demo { gap: 14px; max-width: 30rem; }
+.dd-note {
+  margin: 4px 0 2px;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+.dd-nav { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.dd-nav .ra-text-btn { min-width: 9rem; }
+.dd-next { font-weight: 700; color: var(--green-mid); }
+.dd-prev[disabled] { opacity: 0.45; cursor: not-allowed; }

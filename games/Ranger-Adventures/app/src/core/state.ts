@@ -2,8 +2,10 @@
  * state.ts — render-agnostic game state, persistence, and the difficulty
  * resolver (ported from prototype/state.jsx + the skill hook). The prototype's
  * React Context/useState shell is replaced by a tiny framework-free observable
- * store: render layers `subscribe()` and call mutators. Same localStorage key
- * (`ranger-mvp-state`) and same mutation semantics.
+ * store: render layers `subscribe()` and call mutators. Persistence now
+ * co-tenants the site-wide `alvah-ef-v1` key under a `ranger` namespace (see
+ * persist.ts) — migrated from the legacy standalone `ranger-mvp-state` key —
+ * with the same mutation semantics.
  *
  * Scope note: season-arc (`arc`) and companion/rehab (`companion`/`rehab`) state
  * are now wired (Phase 3); the pure companion model lives in companion.ts. Vehicle-
@@ -43,6 +45,12 @@ import {
   applyAvatar,
   type Avatar,
 } from './avatar';
+import {
+  STORAGE_KEY,
+  LEGACY_KEY,
+  readRangerPartial,
+  writeRangerRoot,
+} from './persist';
 
 export type Screen =
   | 'map' | 'cabin' | 'transport' | 'travel' | 'briefing' | 'world' | 'reunion' | 'complete';
@@ -56,6 +64,7 @@ export interface Settings {
   jargon: boolean;                   // "knappe woorden" (frisling/rotte) vs simple (big/groep)
   leesFont: boolean;                 // Atkinson Hyperlegible leesletter (alternate, not the default)
   force2d: boolean;                  // Tweak "altijd 2D" — force the 2D floor for every activity
+  skipBriefings: boolean;            // demo-skip (§9g): jump straight into play, no briefing card
   readSize: number;
   leading: number;
   ambient: number;
@@ -102,8 +111,6 @@ export interface ArcState {
   gemeld: boolean;                   // the poacher was reported → hopeful resolution shown
 }
 
-const STORAGE_KEY = 'ranger-mvp-state';
-
 /** Alvah profile (BUILD-PLAN §3): consequences default MILD, adaptive difficulty on,
  *  simple words by default, dyslexia-friendly reading. */
 const DEFAULT_SETTINGS: Settings = {
@@ -115,6 +122,7 @@ const DEFAULT_SETTINGS: Settings = {
   jargon: false,
   leesFont: true,
   force2d: false,
+  skipBriefings: false,
   readSize: 28,
   leading: 1.7,
   ambient: 0.85,
@@ -158,9 +166,11 @@ export const DEFAULT_STATE: GameState = freshState();
 
 function load(): GameState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return freshState();
-    const parsed = JSON.parse(raw) as Partial<GameState>;
+    const parsed = readRangerPartial(
+      localStorage.getItem(STORAGE_KEY),
+      localStorage.getItem(LEGACY_KEY),
+    ) as Partial<GameState> | null;
+    if (!parsed) return freshState();
     return {
       ...freshState(),
       ...parsed,
@@ -183,7 +193,10 @@ function load(): GameState {
 
 function save(state: GameState): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    // Read-modify-write the shared blob so the /spelen namespace survives, then
+    // drop the legacy standalone key now that it's migrated into `ranger`.
+    localStorage.setItem(STORAGE_KEY, writeRangerRoot(localStorage.getItem(STORAGE_KEY), state));
+    localStorage.removeItem(LEGACY_KEY);
   } catch {
     /* storage full / unavailable — game stays playable, just unsaved */
   }

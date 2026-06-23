@@ -38,6 +38,8 @@ import { showCabin } from './Companion';
 import { showAvatarCreator } from './AvatarCreator';
 import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
+import { showDemoSkip } from './DemoSkip';
+import { startDeepDemoTour } from './DeepDemo';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
 const naam = (): string => rangerNaam(store.get().avatar);
@@ -76,6 +78,11 @@ let host: HTMLElement;
 let stage: Stage;
 let world: World | null = null;
 
+// When set (by the Deep Demo tour), the explore HUD's "Terug" tears down the
+// world and returns HERE instead of the lodge — so a free-roam / in-world engine
+// beat hands control back to the guided tour. Cleared on every lodge entry.
+let worldExit: (() => void) | null = null;
+
 // Light world-EF seasoning: count in-world mission completions this session so the
 // pure `pickWorldBeat` cadence (every Nth return) stays rare. `lastBeatTick` dedups
 // the one beat per completion across the several `resumePatrol` hops in a cycle.
@@ -88,8 +95,61 @@ export function startLodge(ui: HTMLElement, st: Stage): void {
   showLodge();
 }
 
+/** The first mission whose step list features this engine (for the demo engine beat). */
+function firstMissionForEngine(engine: Engine): string | null {
+  for (const m of Content.activeArea().missies) {
+    if (m.stappen.some((s) => s.ef === engine)) return m.id;
+  }
+  return null;
+}
+
+/**
+ * Launch the Deep Demo guided tour (Capstone 132a): a narrated walk that opens
+ * each LIVE surface in turn. The world beats (free-roam + in-world engine) set
+ * `worldExit` so the explore HUD's "Terug" returns to the tour, not the lodge.
+ * The DOM-overlay beats reuse `showMetaDemo`'s demo-back wiring + the live
+ * avatar/sandbox entries. No import cycle — DeepDemo gets the flows via `api`.
+ */
+export function startDeepDemo(ui: HTMLElement, st: Stage): void {
+  host = ui;
+  stage = st;
+  worldExit = null;
+  Sound.unlock();
+  void loadGameAudio();   // the tour shows the cast + plays calls/ambience
+  startDeepDemoTour(host, {
+    openAvatar: (back) => showAvatarCreator(host, back),
+    openSandbox: (back) => { leaveWorld(); startSandbox(host, stage, back); },
+    openArc: (back) => showMetaDemo(host, 'arc', back),
+    openCompanion: (back) => showMetaDemo(host, 'companion', back),
+    openBadges: (back) => showMetaDemo(host, 'badge', back),
+    openFreeroam: (back) => { worldExit = back; if (!world) startExplore(); else showExploreHud(activeExploreTitel()); },
+    openEngine: (engine, back) => {
+      const mid = firstMissionForEngine(engine);
+      if (!mid) { back(); return; }
+      worldExit = back;
+      demoJump(mid, true);   // loads/keeps the world, plays the engine in-place
+    },
+    backToLodge: () => { worldExit = null; showLodge(); },
+  });
+}
+
+/** The title the wayfinding cue points at = the first not-yet-done mission. */
+function activeExploreTitel(): string | null {
+  const area = Content.activeArea();
+  const done = store.get().voltooid;
+  const id = area.missies.find((m) => !done[m.id])?.id ?? area.missies[0]?.id ?? null;
+  return area.missies.find((m) => m.id === id)?.titel ?? null;
+}
+
 function leaveWorld(): void {
   if (world) { world.dispose(); world = null; stage.exitWorld(); }
+}
+
+/** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
+ *  world session (tears the world down first), else return to the lodge. */
+function exitWorld(): void {
+  if (worldExit) { const back = worldExit; worldExit = null; leaveWorld(); back(); }
+  else showLodge();
 }
 
 function clearOverlays(): void {
@@ -108,6 +168,7 @@ function card(html: string): HTMLDivElement {
 /* ---------------------------------------------------------------- lodge ---- */
 function showLodge(): void {
   narrator.stop();
+  worldExit = null;   // a normal lodge visit clears any Deep Demo world-return
   leaveWorld();
   const area = Content.activeArea();
   const done = store.get().voltooid;
@@ -138,7 +199,9 @@ function showLodge(): void {
     `<button class="ra-text-btn lodge-cabin" type="button">${esc(cabinLabel())}</button>` +
     `<button class="ra-text-btn lodge-prikbord" type="button">Open het prikbord${cluesBadge()}</button>` +
     `<button class="ra-text-btn lodge-ranger" type="button">Pas ${esc(naam())} aan</button>` +
+    `<button class="ra-text-btn lodge-deepdemo" type="button">Diepe demo: de hele rondleiding</button>` +
     `<button class="ra-text-btn lodge-sandbox" type="button">Demo: de hele Veluwe in het klein</button>` +
+    `<button class="ra-text-btn lodge-demo" type="button">Demo: spring &amp; test</button>` +
     `<button class="ra-text-btn lodge-tweaks" type="button">Instellingen</button>` +
     `</div>` +
     `</div>`,
@@ -165,7 +228,29 @@ function showLodge(): void {
     clearOverlays();
     startSandbox(host, stage, showLodge);
   });
+  el.querySelector('.lodge-demo')?.addEventListener('click', () =>
+    showDemoSkip(host, { jumpMission: demoJump, back: showLodge }));
+  el.querySelector('.lodge-deepdemo')?.addEventListener('click', () => startDeepDemo(host, stage));
   el.querySelector('.lodge-tweaks')?.addEventListener('click', () => showTweaks(host, showLodge));
+}
+
+/** Demo-skip jump (§9g, driven by DemoSkip.ts): play any mission without
+ *  grinding. `in3d` loads (or keeps) the free-roam world so the mission plays
+ *  in-place via runMission's §1f ViewMode branch; otherwise the 2D floor from
+ *  the lodge. The briefing is shown unless the skip-briefings Tweak is on
+ *  (handled in showBriefing). */
+function demoJump(missionId: string, in3d: boolean): void {
+  const m = Content.activeArea().missies.find((mm) => mm.id === missionId);
+  if (!m) { showLodge(); return; }
+  Sound.unlock();
+  void loadGameAudio();
+  if (in3d) {
+    if (!world) startExplore();   // load the world (sets `world` + the explore HUD)
+    showBriefing(m, true);        // veldnotitie entry → plays 3D in-place; returns to patrol
+  } else {
+    leaveWorld();
+    showBriefing(m, false);       // 2D floor → returns to the lodge
+  }
 }
 
 /** Lodge link label reflects the companion: rescue prompt → friend's name. */
@@ -418,7 +503,7 @@ function showExploreHud(activeTitel: string | null): void {
     `<div class="explore-prompt" hidden></div>` +
     `</div>`,
   );
-  el.querySelector('.explore-back')?.addEventListener('click', showLodge);
+  el.querySelector('.explore-back')?.addEventListener('click', exitWorld);
   // reach the prikbord over the LIVE world — no teardown; back returns to patrol.
   el.querySelector('.explore-board')?.addEventListener('click', () => showCaseBoard(true));
 }
@@ -463,6 +548,9 @@ function onApproach(missionId: string | null): void {
  *  so launching a mission never feels like leaving the world, and its back +
  *  start buttons stay in the patrol flow rather than returning to the lodge. */
 function showBriefing(mission: Mission, fromWorld = false): void {
+  // Demo-skip (§9g): the "skip briefings" Tweak jumps straight into play, no
+  // uitleg-scherm. The world (if loaded) stays loaded across the §1f branch.
+  if (store.get().settings.skipBriefings) { clearOverlays(); void runMission(mission, fromWorld); return; }
   const jargon = store.get().settings.jargon;
   const lines = (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
 

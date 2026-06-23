@@ -4,7 +4,7 @@ import { Stage } from './render3d/Stage';
 import { Budgets } from './ui/Budgets';
 import { applyReducedMotionClass, watchReducedMotion, setReducedMotionOverride } from './core/reduced-motion';
 import { applyReadingPrefs } from './core/reading-prefs';
-import { startLodge } from './ui/Missions';
+import { startLodge, startDeepDemo } from './ui/Missions';
 import { startSandbox } from './ui/Sandbox';
 import { showAvatarCreator } from './ui/AvatarCreator';
 import { store } from './core/state';
@@ -36,12 +36,16 @@ card.innerHTML =
   `<button class="btn-start" type="button">Begin</button>`;
 ui.appendChild(card);
 
-// `?sandbox` jumps straight into the compact Demo Sandbox (the §9g demo-skip entry).
-const sandboxStart = new URLSearchParams(location.search).has('sandbox');
+// `?sandbox` jumps straight into the compact Demo Sandbox; `?demo` launches the
+// Deep Demo guided tour (the Capstone review surface). Both are demo entries.
+const params = new URLSearchParams(location.search);
+const sandboxStart = params.has('sandbox');
+const deepDemoStart = params.has('demo');
 
 card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', () => {
   card.classList.add('boot-card--hidden');
   window.setTimeout(() => card.remove(), 360);
+  if (deepDemoStart) { startDeepDemo(ui, stage); return; }
   if (sandboxStart) { startSandbox(ui, stage, () => startLodge(ui, stage)); return; }
   // first boot → make your ranger; afterwards go straight to the lodge
   if (store.get().avatarGemaakt) startLodge(ui, stage);
