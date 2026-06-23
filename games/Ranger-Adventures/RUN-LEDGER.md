@@ -24,7 +24,8 @@
 - [x] Generate remaining renders · batch B — story + vehicles + seasonal variants (shotlist items 24–37: ecoduct/boa-post/bird-hide/nest-box/snare/raven-nest, jeep/helicopter, oak/birch/heather autumn+winter, snow-mound) (2)
 - [x] Generate remaining renders · batch C — finishing props + last birds (shotlist items 38–43: raaf-fledgling, anthill/foxglove/acorn-cluster, buizerd, wilde-eend) (1)
 - [x] Rig the 2 remaining humanoids via Meshy API (warden, poacher) (1)
-- [ ] **Anything World pipeline** — wire `ANYTHING_WORLD_API`; pre-flight the processing API; rig+animate ~9 animals + ~23 birds (~2 runs); prefer `assets-gen/animated/<id>.glb` over procedural (4)
+- [x] **Anything World pipeline · script** — `scripts/anything-world.mjs`: wire `ANYTHING_WORLD_API` (app/.env.local), preflight `/credits`, rig→animate→download to `assets-gen/animated/<id>.glb`, idempotent + manifest-recorded; AW-eligible cast = 8 quadrupeds + 23 birds; adder/heikikker/butterfly stay procedural; defensive field-probing for the experimental API (2)
+- [ ] **Anything World pipeline · generation** — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2)
 - [ ] Procedural motion fallback for all animals; snake+frog procedural (slither/hop) (3)
 - [ ] Optimize + stage every animated GLB; re-run finalize (1)
 
