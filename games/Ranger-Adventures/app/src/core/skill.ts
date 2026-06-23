@@ -145,6 +145,8 @@ export function updateSkill(prev: SkillRecord | undefined, summary: BeatSummary)
 export interface DifficultyKnobs {
   afleiders?: number;
   lensSterkte?: number;
+  spoorLengte?: number;
+  spoorHelderheid?: number;
   routeLengte?: number;
   simonLengte?: number;
   slowmo?: boolean;
@@ -156,7 +158,14 @@ export function knobsForLevel(engine: Engine, level: number): DifficultyKnobs {
   const d = clamp(level, SKILL_MIN, SKILL_MAX);
   switch (engine) {
     case 'zoeken':
-      return { afleiders: clampInt(2 + d, 2, 8), lensSterkte: clamp(0.95 - d * 0.16, 0, 0.95) };
+      // search leg (afleiders + lensSterkte) and tracking leg (spoor*) scale off the
+      // same zoeken level but stay SEPARATE knobs — the trail never trims the decoys.
+      return {
+        afleiders: clampInt(2 + d, 2, 8),
+        lensSterkte: clamp(0.95 - d * 0.16, 0, 0.95),
+        spoorLengte: clampInt(2 + d * 0.6, 2, 5),
+        spoorHelderheid: clamp(0.95 - d * 0.14, 0.25, 0.95),
+      };
     case 'corsi':
       return { routeLengte: clampInt(2 + d, 3, 6) };
     case 'simon':

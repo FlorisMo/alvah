@@ -20,12 +20,13 @@ import * as THREE from 'three';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
 import type { WorldCtx, Play3dEngine } from '../play/types';
-import { buildZoekenTrial } from '../../engines/zoeken';
+import { buildZoekenTrial, buildSpoor, scoreZoeken } from '../../engines/zoeken';
 import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { Highlight3d, anchoredPrompt, makeReframe, pick3d } from '../play/kit';
+import { Highlight3d, anchoredPrompt, makeReframe, pick3d, spoorTrail } from '../play/kit';
+import { heightAt } from '../Biomes';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -33,6 +34,27 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 /** Map the trial's 0..100 field coords to a calm ~4×3 m patch in front of the spot. */
 function placeLocal(x: number, y: number): { dx: number; dz: number } {
   return { dx: ((x - 50) / 100) * 4, dz: ((y - 50) / 100) * 3 };
+}
+
+/**
+ * The kijker (verrekijker) vignette: a soft binocular frame over the 3D view while
+ * the child picks the still target. The search haze (`lensSterkte`) IS the lens edge
+ * — no new visual axis (§3d). pointer-events:none so it never blocks `pick3d`; it
+ * sits over the canvas, not the accessible card, so all words stay legible. Returns
+ * a remover. A plain DOM overlay → zero draw-call cost.
+ */
+function makeKijker(canvas: HTMLElement, lensSterkte: number): () => void {
+  const parent = canvas.parentElement;
+  if (!parent) return () => {};
+  const edge = (0.55 + Math.max(0, Math.min(1, lensSterkte)) * 0.3).toFixed(2); // 0.55..0.85 opacity
+  const v = document.createElement('div');
+  v.className = 'kijker-vignette';
+  v.setAttribute('aria-hidden', 'true');
+  v.style.cssText =
+    'position:absolute;inset:0;pointer-events:none;z-index:1;' +
+    `background:radial-gradient(ellipse 60% 64% at 50% 46%, transparent 52%, rgba(14,18,11,${edge}) 82%);`;
+  parent.appendChild(v);
+  return () => v.remove();
 }
 
 export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
@@ -83,11 +105,27 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     patch.add(targetGroup);
     scene.add(patch);
 
+    // ---- the spoor: a tracking leg of clue legs leading INTO the hide zone ----
+    // (§3d) a SEPARATE difficulty axis (legs/faintness from buildSpoor) — it sets
+    // the region the eye follows but never touches the decoy set. Static instanced
+    // markers (one draw call) → already reduced-motion-safe (no walking, no animation).
+    const spoor = buildSpoor(diff);
+    const trail = spoorTrail(sx, sz + 5, sx, sz + 0.5, spoor.legs, heightAt, '#d8c6a0');
+    trail.group.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (m && 'opacity' in m) { m.transparent = true; m.opacity = spoor.helderheid; } // fainter trail = harder to follow
+    });
+    scene.add(trail.group);
+
+    // ---- the kijker (verrekijker) vignette over the view (the haze = the lens) ----
+    const removeKijker = makeKijker(ctx.canvas, trial.lensSterkte);
+
     // ---- accessible prompt (all words + read-aloud here) ----
     const promptEl = anchoredPrompt(
       ctx.prompt,
       `<div class="zoeken-bar">` +
         `<p class="zoeken-instr">${esc(instructie)}</p>` +
+        `<p class="zoeken-spoor">Volg het spoor naar de schuilplek.</p>` +
         `<button class="zoeken-speak" type="button" aria-label="Lees voor">🔊</button>` +
         `</div>`,
     );
@@ -124,36 +162,53 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       onPick: (id) => {
         if (done) return;
         if (id === 'target') onFound();
-        else onMiss();
+        else onMiss(id);
       },
     });
 
-    function onMiss(): void {
+    function onMiss(id: string): void {
       misses += 1;
       if (settings.geluid) Sound.tryAgain();
+      // dual-channel like the 2D twin: the gentle "probeer nog eens" tone (AUDIO) +
+      // a soft scale nudge on the tapped tuft (SCALE), never a startle. Never-game-
+      // over: a miss only costs the perfect score. (3D runs non-reduced-motion only.)
+      const tuft = spawned.find((m) => (m.userData.id as string) === id);
+      if (tuft && !reduced) {
+        tuft.scale.setScalar(1.18);
+        window.setTimeout(() => tuft.scale.setScalar(1), 220);
+      }
     }
 
     function onFound(): void {
       done = true;
       if (settings.geluid) Sound.found();
-      const correct = misses === 0 ? 1 : 0; // identical scoring to playZoeken
+      const correct = scoreZoeken(misses); // identical scoring to playZoeken (shared rule)
 
+      // win beat: the find is "vastgelegd op de wildcamera" — a snapshot card that
+      // feeds the case-board (via the existing mission-completion data gate, §3d).
       const feit = skin.feit ? `<p class="zoeken-feit">${esc(String(skin.feit))}</p>` : '';
+      const wildcamLine = 'Vastgelegd op de wildcamera.';
       const card = anchoredPrompt(
         ctx.prompt,
-        `<div class="zoeken-card">` +
+        `<div class="zoeken-card wildcam-card">` +
+          `<p class="wildcam-kicker">📷 ${wildcamLine}</p>` +
           `<p class="zoeken-goed">${esc(goedTxt)}</p>` +
           feit +
           `<button class="btn-start" type="button">Verder</button>` +
           `</div>`,
       );
-      if (settings.voorlezen) narrator.speak(skin.feit ? `${goedTxt}. ${skin.feit}` : goedTxt);
+      if (settings.voorlezen) {
+        narrator.speak(skin.feit ? `${wildcamLine} ${goedTxt}. ${skin.feit}` : `${wildcamLine} ${goedTxt}`);
+      }
 
       card.querySelector('.btn-start')?.addEventListener('click', () => {
         narrator.stop();
         cancelAnimationFrame(raf);
         teardown();
         highlight.clear();
+        removeKijker();
+        trail.dispose();
+        scene.remove(trail.group);
         scene.remove(patch);
         patch.traverse((o) => {
           const m = o as THREE.Mesh;

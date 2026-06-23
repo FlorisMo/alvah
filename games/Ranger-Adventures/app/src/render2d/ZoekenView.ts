@@ -11,7 +11,7 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
-import { buildZoekenTrial } from '../engines/zoeken';
+import { buildZoekenTrial, scoreZoeken } from '../engines/zoeken';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -103,7 +103,7 @@ export function playZoeken(host: HTMLElement, step: Step): Promise<BeatSummary> 
       done = true;
       if (settings.geluid) Sound.found();
       target.classList.add('found');
-      const correct = misses === 0 ? 1 : 0;
+      const correct = scoreZoeken(misses);
 
       const closeup = document.createElement('div');
       closeup.className = 'zoeken-closeup';

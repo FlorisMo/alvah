@@ -12,7 +12,7 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
-import { buildWisselTrial } from '../engines/wisselen';
+import { buildWisselTrial, WisselRun } from '../engines/wisselen';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -25,6 +25,7 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
     const diff = store.difficulty('wisselen');
     const copy = step.skin.copy ?? {};
     const trial = buildWisselTrial(step.skin, diff);
+    const run = new WisselRun(trial);
     const reduced = settings.reducedMotion;
 
     const instructie = copy.instructie ?? 'Breng elk dier naar de goede plek.';
@@ -32,10 +33,6 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
     const regelDag = copy.regel ?? 'Dag-dier → open plek. Nacht-dier → het hol.';
     const regelOm = copy.regelOm ?? 'Nu andersom!';
 
-    let idx = 0;
-    let andersom = false;
-    let sinceFlip = 0;
-    let wrong = 0;
     let busy = false;
     const timers: number[] = [];
     const after = (ms: number, fn: () => void): void => { timers.push(window.setTimeout(fn, ms)); };
@@ -75,57 +72,47 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
 
     function renderDots(): void {
       dotsBox.innerHTML = trial.queue
-        .map((_, i) => `<span class="wp-dot${i < idx ? ' done' : i === idx ? ' current' : ''}"></span>`)
+        .map((_, i) => `<span class="wp-dot${i < run.index ? ' done' : i === run.index ? ' current' : ''}"></span>`)
         .join('');
     }
 
     function renderAnimal(): void {
-      const cur = trial.queue[idx];
+      const cur = run.current;
       if (!cur) return;
       const a = Content.animal(cur.id);
       center.classList.remove('wrong', 'fly-open', 'fly-hol');
       center.innerHTML =
         `<span class="wc-token">${esc((a?.naam ?? cur.id).slice(0, 2))}</span>` +
         `<span class="wc-name">${esc(a?.naam ?? cur.id)}</span>`;
-      rule.textContent = andersom ? regelOm : regelDag;
-      field.classList.toggle('inverted', andersom);
+      rule.textContent = run.inverted ? regelOm : regelDag;
+      field.classList.toggle('inverted', run.inverted);
       renderDots();
     }
 
-    function correctBin(): 'open' | 'hol' {
-      const cur = trial.queue[idx];
-      const natural = cur.dag ? 'open' : 'hol';
-      return andersom ? (natural === 'open' ? 'hol' : 'open') : natural;
-    }
-
     function choose(bin: 'open' | 'hol'): void {
-      if (busy || idx >= trial.queue.length) return;
-      if (bin === correctBin()) {
-        busy = true;
-        if (settings.geluid) Sound.correct();
-        center.classList.add(`fly-${bin}`);
-        after(reduced ? 240 : 540, () => {
-          idx += 1;
-          if (idx >= trial.queue.length) return finish();
-          sinceFlip += 1;
-          if (sinceFlip >= trial.flipEvery) {
-            andersom = !andersom;
-            sinceFlip = 0;
-            flag.textContent = 'Bordje draait!';
-            sign.classList.add('flipping');
-            if (settings.geluid) Sound.select();
-            after(reduced ? 700 : 1400, () => { flag.textContent = ''; sign.classList.remove('flipping'); });
-          }
-          renderAnimal();
-          busy = false;
-        });
-      } else {
-        wrong += 1;
+      if (busy || run.finished) return;
+      const res = run.choose(bin);
+      if (res === 'retry') {
         if (settings.geluid) Sound.tryAgain();
         center.classList.remove('wrong');
         requestAnimationFrame(() => center.classList.add('wrong'));
         after(480, () => center.classList.remove('wrong'));
+        return;
       }
+      busy = true;
+      if (settings.geluid) Sound.correct();
+      center.classList.add(`fly-${bin}`);
+      after(reduced ? 240 : 540, () => {
+        if (res === 'complete') return finish();
+        if (res === 'flip') {
+          flag.textContent = 'Bordje draait!';
+          sign.classList.add('flipping');
+          if (settings.geluid) Sound.select();
+          after(reduced ? 700 : 1400, () => { flag.textContent = ''; sign.classList.remove('flipping'); });
+        }
+        renderAnimal();
+        busy = false;
+      });
     }
 
     function finish(): void {
@@ -135,8 +122,7 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
       toast.textContent = goed;
       field.appendChild(toast);
       if (settings.voorlezen) narrator.speak(goed);
-      const correct = wrong === 0 ? 1 : 0;
-      after(1500, () => { clearTimers(); narrator.stop(); panel.remove(); resolve({ trials: 1, correct }); });
+      after(1500, () => { clearTimers(); narrator.stop(); panel.remove(); resolve(run.summary()); });
     }
 
     renderAnimal();

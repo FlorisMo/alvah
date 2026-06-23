@@ -62,6 +62,8 @@ export interface Settings {
   // difficulty knobs (the staircase turns these; also the manual Tweak sliders)
   lensSterkte: number;
   afleiders: number;
+  spoorLengte: number;               // zoeken tracking leg: clue-count (separate axis, never trims decoys)
+  spoorHelderheid: number;           // zoeken tracking leg: trail clarity 0..1 (separate axis)
   routeLengte: number;
   regelWissel: number;
   slowmo: boolean;
@@ -117,6 +119,8 @@ const DEFAULT_SETTINGS: Settings = {
   accent: '#f5c23b',
   lensSterkte: 0.6,
   afleiders: 4,
+  spoorLengte: 3,
+  spoorHelderheid: 0.7,
   routeLengte: 4,
   regelWissel: 0.4,
   slowmo: true,
