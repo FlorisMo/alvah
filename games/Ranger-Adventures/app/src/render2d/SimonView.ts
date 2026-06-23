@@ -12,7 +12,7 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
-import { buildSimonTrial, randomCaller } from '../engines/simon';
+import { buildSimonTrial, randomCaller, SimonRun } from '../engines/simon';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -32,10 +32,11 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
     const echoTxt = copy.echo ?? 'Doe ze na. Tik de dieren.';
     const goed = copy.goed ?? 'Knap onthouden!';
 
-    let seq: string[] = [];
+    // Shared pure core (parity with the 3D twin, §1f): it owns the growing
+    // sequence, the echo index, the wrong count + the final BeatSummary; this
+    // view only renders + plays the calls + paces the listen/echo loop.
+    const run = new SimonRun(trial.target, () => randomCaller(trial.dieren));
     let phase: 'intro' | 'listen' | 'echo' | 'pause' | 'done' = 'intro';
-    let pos = 0;
-    let wrong = 0;
     const timers: number[] = [];
     const after = (ms: number, fn: () => void): void => { timers.push(window.setTimeout(fn, ms)); };
     const clearTimers = (): void => { for (const t of timers) window.clearTimeout(t); timers.length = 0; };
@@ -76,7 +77,8 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
     });
 
     function renderDots(): void {
-      dots.innerHTML = seq
+      const pos = run.echoIndex;
+      dots.innerHTML = run.sequence
         .map((_, i) => `<span class="sp-dot${i < pos ? ' done' : ''}${phase === 'echo' && i === pos ? ' next' : ''}"></span>`)
         .join('');
     }
@@ -84,20 +86,19 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
     intro.querySelector('.btn-start')?.addEventListener('click', () => {
       intro.style.display = 'none';
       Sound.unlock();
-      seq = [randomCaller(trial.dieren), randomCaller(trial.dieren)];
+      run.begin();
       listen();
     });
 
     function listen(): void {
       clearTimers();
       phase = 'listen';
-      pos = 0;
       banner.textContent = luister;
       for (const b of btns.values()) { b.disabled = true; b.classList.remove('calling'); }
       renderDots();
       const gap = reduced ? 380 : 250;
       let t = 480;
-      seq.forEach((id) => {
+      run.sequence.forEach((id) => {
         after(t, () => {
           for (const [bid, b] of btns) b.classList.toggle('calling', bid === id);
           if (settings.geluid) Sound.call(id);
@@ -111,7 +112,6 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
 
     function startEcho(): void {
       phase = 'echo';
-      pos = 0;
       banner.textContent = echoTxt;
       for (const b of btns.values()) { b.disabled = false; b.classList.remove('calling'); }
       renderDots();
@@ -125,20 +125,17 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
       if (settings.geluid) Sound.call(id);
       after(240, () => b?.classList.remove('tapped'));
 
-      if (id === seq[pos]) {
-        pos += 1;
-        renderDots();
-        if (pos < seq.length) return;
-        if (seq.length >= trial.target) finish();
-        else {
-          phase = 'pause';
-          for (const bb of btns.values()) bb.disabled = true;
-          if (settings.geluid) Sound.correct();
-          banner.textContent = 'Goed onthouden!';
-          after(1100, () => { seq = [...seq, randomCaller(trial.dieren)]; listen(); });
-        }
-      } else {
-        wrong += 1;
+      const res = run.tap(id);
+      renderDots();
+      if (res === 'advance') return;
+      if (res === 'complete') { finish(); return; }
+      if (res === 'grow') {
+        phase = 'pause';
+        for (const bb of btns.values()) bb.disabled = true;
+        if (settings.geluid) Sound.correct();
+        banner.textContent = 'Goed onthouden!';
+        after(1100, listen);
+      } else { // 'replay' — wrong tap, recoverable: replay the SAME sequence
         phase = 'pause';
         for (const bb of btns.values()) bb.disabled = true;
         if (settings.geluid) Sound.tryAgain();
@@ -153,8 +150,8 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
       if (settings.geluid) Sound.found();
       banner.textContent = goed;
       if (settings.voorlezen) narrator.speak(goed);
-      const correct = wrong === 0 ? 1 : 0;
-      after(1600, () => { clearTimers(); narrator.stop(); panel.remove(); resolve({ trials: 1, correct }); });
+      const summary = run.summary();
+      after(1600, () => { clearTimers(); narrator.stop(); panel.remove(); resolve(summary); });
     }
   });
 }
