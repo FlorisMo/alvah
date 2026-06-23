@@ -18,6 +18,7 @@ import {
   anchorInBiome, biomeAt, heightAt, type Biome,
 } from './Biomes';
 import { loadManifest, loadModel, loadRig, prepModel } from './Models';
+import { applyEyes } from './EyeMaterial';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { wayfind, type WayCue } from './Wayfinding';
@@ -282,6 +283,9 @@ export class World {
     const model = await loadModel('ranger-alvah');
     if (!model) return;
     const prepped = prepModel(model, 1.25);
+    // §1e eye system: bright, alive eyes (the golden-hour world is not dusk, so
+    // eyeshine stays off; parallax freezes under reduced-motion).
+    applyEyes(prepped, 'ranger-alvah', { dusk: false, reducedMotion: prefersReducedMotion() });
     this.ranger.clear();
     this.ranger.add(prepped);
   }
@@ -332,6 +336,9 @@ export class World {
         void loadRig(mk.modelId).then((rig) => {
           if (!rig) return;
           const prepped = prepModel(rig.group, mk.height);
+          // §1e eye system per species (catchlight + clearcoat cornea + pupil +
+          // iris parallax); golden-hour world ⇒ dusk off (eyeshine stays calm).
+          applyEyes(prepped, mk.modelId, { dusk: false, reducedMotion: prefersReducedMotion() });
           // drop the totem (keep the ring), add the real animal
           const totem = group.children.find((c) => c.userData.totem);
           if (totem) group.remove(totem);
