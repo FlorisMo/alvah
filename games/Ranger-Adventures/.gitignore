@@ -1,0 +1,2 @@
+# transient run-loop launcher logs (RUN-LOG.md is the tracked, append-only ledger)
+*.log

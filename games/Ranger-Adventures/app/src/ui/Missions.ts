@@ -100,7 +100,10 @@ function showLodge(): void {
     `<div class="ra-row">` +
     `<button class="btn-start lodge-explore" type="button">Verken de Veluwe (3D)</button>` +
     `</div>` +
+    `<div class="lodge-links">` +
     `<button class="ra-text-btn lodge-badges" type="button">Bekijk je breinkracht-badges</button>` +
+    `<button class="ra-text-btn lodge-prikbord" type="button">Open het prikbord${cluesBadge()}</button>` +
+    `</div>` +
     `</div>`,
   );
 
@@ -118,6 +121,101 @@ function showLodge(): void {
     startExplore();
   });
   el.querySelector('.lodge-badges')?.addEventListener('click', showBadges);
+  el.querySelector('.lodge-prikbord')?.addEventListener('click', showCaseBoard);
+}
+
+/* ------------------------------------------------- case-board (prikbord) ---- */
+/** Simple per-soort glyph (dual-channel: glyph + the found colour). */
+const CLUE_GLYPH: Record<string, string> = { spoor: '🐾', camera: '📷', band: '🛞' };
+
+function cluesBadge(): string {
+  const area = Content.activeArea();
+  const found = Content.cluesFound(area.id, store.get().voltooid).size;
+  const total = Content.clues(area.id).length;
+  if (!total) return '';
+  return ` <span class="lodge-clue-count">${found}/${total}</span>`;
+}
+
+function showCaseBoard(): void {
+  narrator.stop();
+  const area = Content.activeArea();
+  const voltooid = store.get().voltooid;
+  const clues = Content.clues(area.id);
+  const found = Content.cluesFound(area.id, voltooid);
+  const chapter = Content.currentChapter(area.id, voltooid);
+  const gemeld = store.get().arc.gemeld;
+  const allFound = clues.length > 0 && clues.every((c) => found.has(c.id));
+  const laatste = [...clues].reverse().find((c) => found.has(c.id)) ?? null;
+
+  const board = clues
+    .map((c) => {
+      const isF = found.has(c.id);
+      const glyph = isF ? (CLUE_GLYPH[c.soort] ?? '📌') : '?';
+      return (
+        `<div class="cb-clue${isF ? ' found' : ''}">` +
+        `<span class="cb-pin" aria-hidden="true"></span>` +
+        `<span class="cb-photo">${glyph}</span>` +
+        `<span class="cb-clue-title">${esc(isF ? c.titel : '???')}</span>` +
+        (isF ? `<span class="cb-clue-text">${esc(c.tekst)}</span>` : '') +
+        `</div>`
+      );
+    })
+    .join('');
+
+  const count = gemeld ? 'opgelost' : `${found.size}/${clues.length}`;
+  const note = gemeld
+    ? `<p class="cb-note ok">De stroper is gestopt. De heide en het ven groeien weer terug.</p>`
+    : laatste
+      ? `<p class="cb-note">${esc(laatste.tekst)}</p>`
+      : `<p class="cb-note muted">Los missies op. Aanwijzingen komen hier te hangen.</p>`;
+  const resolveBtn =
+    allFound && !gemeld
+      ? `<button class="btn-start cb-resolve" type="button">Volg het spoor</button>`
+      : '';
+
+  const el = card(
+    `<div class="case-board boot-card-ish">` +
+    `<p class="boot-kicker">Het prikbord · ${esc(chapter?.naam ?? '')} · ${count}</p>` +
+    `<h1 class="boot-title">Wat is hier aan de hand?</h1>` +
+    `<div class="cb-cork">${board}</div>` +
+    note +
+    `<div class="ra-row">` +
+    resolveBtn +
+    `<button class="ra-text-btn cb-back" type="button">Terug naar de hut</button>` +
+    `</div>` +
+    `</div>`,
+  );
+  if (store.get().settings.voorlezen && laatste && !gemeld) narrator.speak(laatste.tekst);
+  el.querySelector('.cb-back')?.addEventListener('click', showLodge);
+  el.querySelector('.cb-resolve')?.addEventListener('click', () => {
+    Sound.unlock();
+    showOntknoping(0);
+  });
+}
+
+/** The hopeful resolution: step through the ontknoping beats, then report → resolved. */
+function showOntknoping(idx: number): void {
+  const area = Content.activeArea();
+  const beats = Content.verhaalboog(area.id)?.ontknoping ?? [];
+  const beat = beats[idx];
+  if (!beat) { store.reportArc(); showCaseBoard(); return; }
+  const last = idx === beats.length - 1;
+  const el = card(
+    `<div class="ontknoping boot-card-ish">` +
+    `<p class="boot-kicker">Op het spoor · ${idx + 1}/${beats.length}</p>` +
+    `<p class="ont-text">${esc(beat.tekst)}</p>` +
+    `<div class="ra-row">` +
+    `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
+    `<button class="btn-start" type="button">${last ? 'Klaar' : 'Verder'}</button>` +
+    `</div></div>`,
+  );
+  if (store.get().settings.voorlezen) narrator.speak(beat.tekst);
+  el.querySelector('.ra-speak')?.addEventListener('click', () => narrator.speak(beat.tekst));
+  el.querySelector('.btn-start')?.addEventListener('click', () => {
+    narrator.stop();
+    if (last) { store.reportArc(); if (store.get().settings.geluid) Sound.found(); }
+    showOntknoping(idx + 1);
+  });
 }
 
 /* ----------------------------------------------------- 3D free-roam ---- */

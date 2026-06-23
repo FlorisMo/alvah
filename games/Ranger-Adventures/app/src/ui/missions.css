@@ -154,6 +154,77 @@
 .reward-knap b { color: var(--green-deep); }
 .reward-note { font-size: 16px; }
 
+/* ---- lodge footer links ---- */
+.lodge-links { display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: center; align-items: center; }
+.lodge-clue-count {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--spel-sun);
+  color: var(--green-deep);
+  font: 700 13px/1.4 var(--font-body);
+  text-decoration: none;
+}
+
+/* ---- case-board (prikbord) ---- */
+.cb-cork {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin: 6px 0;
+  padding: 16px;
+  border-radius: var(--spel-radius);
+  background: rgba(120, 86, 54, 0.14);
+  border: 2px dashed rgba(120, 86, 54, 0.3);
+}
+.cb-clue {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 14px 12px 12px;
+  border-radius: var(--spel-radius);
+  background: rgba(253, 252, 248, 0.7);
+  box-shadow: var(--shadow-md);
+  opacity: 0.6;
+  transition: transform var(--dur-quick) var(--ease-overshoot), opacity var(--dur-quick);
+}
+.cb-clue.found {
+  opacity: 1;
+  background: var(--green-soft);
+  box-shadow: 0 0 0 3px var(--green-line), var(--shadow-md);
+}
+.cb-pin {
+  position: absolute;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--red-warn, #c94174);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.cb-photo {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--spel-radius);
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 28px;
+}
+.cb-clue-title { font: 600 15px/1.15 var(--font-body); color: var(--green-deep); text-align: center; }
+.cb-clue-text { font: 400 13px/1.35 var(--font-read); color: var(--ink-soft); text-align: center; }
+.cb-note { margin: 4px 0; font: 400 17px/1.4 var(--font-read); color: var(--ink); text-align: center; }
+.cb-note.ok { color: var(--green-deep); font-weight: 600; }
+.cb-note.muted { color: var(--ink-soft); }
+.cb-resolve { margin-top: 2px; }
+
+/* ---- ontknoping (hopeful resolution beats) ---- */
+.ont-text { margin: 8px 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
+
 /* ---- 3D explore HUD (overlays the world; pointer-events only on controls) ---- */
 .explore-hud { position: absolute; inset: 0; pointer-events: none; }
 .explore-hud > * { pointer-events: auto; }

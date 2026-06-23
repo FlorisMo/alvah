@@ -63,7 +63,15 @@ export interface GameState {
   recentGroei: Engine[];             // engines that grew this mission (for the celebration)
   skill: SkillSet;                   // per-engine skill record — drives difficulty + badges
   knapWoorden: Record<string, { naam: string }>; // earned "knap-woord" badges
+  arc: ArcState;                     // season/poacher arc — found clues are DERIVED from voltooid
   settings: Settings;
+}
+
+/** Season-arc state. Which clues are found is derived from completed verhaalHaak
+ *  missions (a pure data gate, BUILD-PLAN §5) — only the player's "report to the
+ *  BOA" act is persisted here, so the resolution stays sticky. */
+export interface ArcState {
+  gemeld: boolean;                   // the poacher was reported → hopeful resolution shown
 }
 
 const STORAGE_KEY = 'ranger-mvp-state';
@@ -105,6 +113,7 @@ function freshState(): GameState {
     recentGroei: [],
     skill: blankSkillSet(),
     knapWoorden: {},
+    arc: { gemeld: false },
     settings: { ...DEFAULT_SETTINGS },
   };
 }
@@ -123,6 +132,7 @@ function load(): GameState {
       voltooid: parsed.voltooid ?? {},
       recentGroei: parsed.recentGroei ?? [],
       knapWoorden: parsed.knapWoorden ?? {},
+      arc: { gemeld: false, ...(parsed.arc ?? {}) },
       settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
     };
   } catch {
@@ -180,6 +190,11 @@ class Store {
 
   markMissionDone(missieId: string): void {
     this.commit({ ...this.state, voltooid: { ...this.state.voltooid, [missieId]: true } });
+  }
+
+  /** Player reported the poacher to the BOA on the case-board → hopeful resolution. */
+  reportArc(): void {
+    this.commit({ ...this.state, arc: { ...this.state.arc, gemeld: true } });
   }
 
   /** An engine finished a beat → feed its skill record (drives staircase + badges). */

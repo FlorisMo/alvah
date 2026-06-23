@@ -11,7 +11,9 @@
 - [x] Phase 1 spine + all 5 EF engines (2D views, ENGINE_VIEWS, skill/DDA, localStorage)
 - [x] Phase 2 content — 10 missions, 5 engines × 4 landscapes, season/poacher arc as data
 - [x] Phase 3 meta CORE — mission wrapper (lodge→briefing→play→fact→reward), breinkracht badges, knap-woord
-- [ ] Phase 3 remainder — companion + rehab loop; avatar creator UI + avatar state threaded through copy/voice; case-board screen (5)
+- [x] Phase 3 remainder · case-board screen — verhaalboog clues derived from completed verhaalHaak-missions (data gate) + hopeful ontknoping; prikbord overlay reachable from the lodge (2)
+- [ ] Phase 3 remainder · companion + rehab loop — companion state (rescue→care→grow→mee) + opvang release; CareRoutine care-skin feeds simon/dagnacht skill records; cabin/perch from the lodge (2)
+- [ ] Phase 3 remainder · avatar creator UI + avatar state threaded through copy/voice (naam/huid/haar/outfit/iris; "Alvah" default injected into briefing/fact/reward + narrator) (1)
 
 ## Asset pipeline  ◑ IN PROGRESS
 - [x] meshy-gen preview→refine + poly target; gltf-optimize (meshopt+WebP+DRACO); audio-fetch (xeno/Freesound, licence log); finalize watcher
