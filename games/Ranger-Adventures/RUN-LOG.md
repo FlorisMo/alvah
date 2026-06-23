@@ -91,3 +91,23 @@ One status block per run/step (BUILD-PLAN §9b).
 → next:   Generate remaining renders · batch C — finishing props + last birds (shotlist items 38–43: raaf-fledgling, anthill/foxglove/acorn-cluster, buizerd, wilde-eend)
 ▷ progress: ~23%
 ```
+
+---
+**2026-06-23 08:53:23Z** · assets pass
+
+```
+✔ landed: Generate remaining renders · batch B — story + vehicles + seasonal variants (shotlist items 24–37: ecoduct/boa-post/bird-hide/nest-box/snare/raven-nest, jeep/helicopter, oak/birch/heather autumn+winter, snow-mound)
+▶ phase:  Asset pipeline
+→ next:   Generate remaining renders · batch C — finishing props + last birds (shotlist items 38–43: raaf-fledgling, anthill/foxglove/acorn-cluster, buizerd, wilde-eend)
+▷ progress: ~23%
+```
+
+---
+**2026-06-23 08:55:20Z** · ticked: - [x] Generate remaining renders · batch C — finishing props + last birds (shotlist items 38–43: raaf-fledgling, anthill/foxglove/acorn-cluster, buizerd, wilde-eend)
+
+```
+✔ landed: Generate remaining renders · batch C — finishing props + last birds (shotlist items 38–43: raaf-fledgling, anthill/foxglove/acorn-cluster, buizerd, wilde-eend)
+▶ phase:  Asset pipeline
+→ next:   Rig the 2 remaining humanoids via Meshy API (warden, poacher)
+▷ progress: ~24%
+```
