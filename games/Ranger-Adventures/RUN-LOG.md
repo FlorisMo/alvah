@@ -51,3 +51,43 @@ One status block per run/step (BUILD-PLAN §9b).
 → next:   Generate remaining ~43 shotlist renders (props incl. immersion + seasonal + story/vehicle; fox/ree/edelhert; remaining birds)
 ▷ progress: ~16%
 ```
+
+---
+**2026-06-23 01:10:51Z** · status
+
+```
+✔ landed: Ranger rigged via Meshy API (proof); rigged GLB saved to assets-gen/animated/
+▶ phase:  Asset pipeline
+→ next:   Generate remaining renders · batch A — gameplay-critical cast: immersion/tracking props + core birds + fox/ree/edelhert/heideblauwtje (shotlist items 1–23)
+▷ progress: ~16%
+```
+
+---
+**2026-06-23 08:39:01Z** · assets pass
+
+```
+✔ landed: Ranger rigged via Meshy API (proof); rigged GLB saved to assets-gen/animated/
+▶ phase:  Asset pipeline
+→ next:   Generate remaining renders · batch A — gameplay-critical cast: immersion/tracking props + core birds + fox/ree/edelhert/heideblauwtje (shotlist items 1–23)
+▷ progress: ~16%
+```
+
+---
+**2026-06-23 08:41:19Z** · ticked: - [x] Generate remaining renders · batch A — gameplay-critical cast: immersion/tracking props + core birds + fox/ree/edelhert/heideblauwtje (shotlist items 1–23)
+
+```
+✔ landed: Generate remaining renders · batch A — gameplay-critical cast: immersion/tracking props + core birds + fox/ree/edelhert/heideblauwtje (shotlist items 1–23)
+▶ phase:  Asset pipeline
+→ next:   Generate remaining renders · batch B — story + vehicles + seasonal variants (shotlist items 24–37: ecoduct/boa-post/bird-hide/nest-box/snare/raven-nest, jeep/helicopter, oak/birch/heather autumn+winter, snow-mound)
+▷ progress: ~20%
+```
+
+---
+**2026-06-23 08:41:35Z** · ticked: - [x] Generate remaining renders · batch B — story + vehicles + seasonal variants (shotlist items 24–37: ecoduct/boa-post/bird-hide/nest-box/snare/raven-nest, jeep/helicopter, oak/birch/heather autumn+winter, snow-mound)
+
+```
+✔ landed: Generate remaining renders · batch B — story + vehicles + seasonal variants (shotlist items 24–37: ecoduct/boa-post/bird-hide/nest-box/snare/raven-nest, jeep/helicopter, oak/birch/heather autumn+winter, snow-mound)
+▶ phase:  Asset pipeline
+→ next:   Generate remaining renders · batch C — finishing props + last birds (shotlist items 38–43: raaf-fledgling, anthill/foxglove/acorn-cluster, buizerd, wilde-eend)
+▷ progress: ~23%
+```
