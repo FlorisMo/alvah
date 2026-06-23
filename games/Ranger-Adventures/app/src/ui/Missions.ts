@@ -242,12 +242,16 @@ function startExplore(): void {
     const ef = m.stappen[0]?.ef as Engine | undefined;
     const animal = m.dier ?? '';
     const isBird = MODEL_OF[animal]?.includes('raven') || MODEL_OF[animal]?.includes('nightjar');
+    const BIOMES = ['heide', 'bos', 'stuifzand', 'ven'] as const;
+    const biome = (BIOMES as readonly string[]).includes(m.landschap)
+      ? (m.landschap as typeof BIOMES[number]) : undefined;
     return {
       missionId: m.id,
       titel: m.titel,
       modelId: MODEL_OF[animal] ?? null,
       height: isBird ? 0.5 : 0.9,
       color: (ef && SKILL_META[ef]?.kleur) || '#f5c23b',
+      biome,
     };
   });
 

@@ -13,6 +13,10 @@
 
 import * as THREE from 'three';
 import { prefersReducedMotion } from '../core/reduced-motion';
+import {
+  BIOME_PALETTE, VEN_CENTER, WATER_LEVEL,
+  anchorInBiome, biomeAt, heightAt, type Biome,
+} from './Biomes';
 import { loadManifest, loadModel, loadRig, prepModel } from './Models';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 
@@ -22,11 +26,10 @@ export interface WorldMarker {
   modelId: string | null;   // generated GLB id, or null → procedural totem
   height: number;           // target world height for the model
   color: string;            // totem / accent colour
+  biome?: Biome;            // the mission's landschap → anchor the marker in it
 }
 
 const SKY_TOP = '#fde8c8', SKY_MID = '#f6cf9e', SKY_LOW = '#e9b27f';
-const HEATH = new THREE.Color('#8a9a55');
-const FOREST = new THREE.Color('#5d7340');
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -63,8 +66,11 @@ export class World {
 
     this.ground = this.buildGround();
     this.scene.add(this.ground);
-    this.scatterPines(90);
-    this.scatterHeather(220);
+    this.scene.add(this.buildVenWater());
+    this.scatterPines(80);
+    this.scatterHeather(150);
+    this.scatterMarram(110);
+    this.scatterReeds(90);
 
     // ranger: procedural stand-in first (instant), real model swaps in when loaded
     this.ranger.add(this.proceduralRanger());
@@ -101,69 +107,130 @@ export class World {
   }
 
   private buildGround(): THREE.Mesh {
-    // gently rolling heath via a low-frequency vertex displacement
-    const geo = new THREE.PlaneGeometry(240, 240, 64, 64);
+    // continuous biome relief (Biomes.heightAt) + per-vertex biome tint so heide
+    // fades into bos / stuifzand / ven with no seam. One draw call (vertexColors).
+    const geo = new THREE.PlaneGeometry(240, 240, 96, 96);
     const pos = geo.attributes.position as THREE.BufferAttribute;
+    const colors = new Float32Array(pos.count * 3);
+    const c = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), y = pos.getY(i);
-      const h = Math.sin(x * 0.06) * Math.cos(y * 0.05) * 0.8 + Math.sin(x * 0.013 + y * 0.02) * 1.4;
-      pos.setZ(i, h);
+      const x = pos.getX(i), y = pos.getY(i); // plane is XY before the -90° tilt → world z = y
+      pos.setZ(i, this.groundY(x, y));
+      c.set(BIOME_PALETTE[biomeAt(x, y)].ground);
+      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
     }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({ color: HEATH, roughness: 1, metalness: 0 });
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
     return mesh;
   }
 
-  /** sample ground height at world x,z (matches buildGround's displacement). */
-  private groundY(x: number, z: number): number {
-    return Math.sin(x * 0.06) * Math.cos(z * 0.05) * 0.8 + Math.sin(x * 0.013 + z * 0.02) * 1.4;
+  /** A calm still-water plane filling the ven basin (no waves — motion-comfort §1e). */
+  private buildVenWater(): THREE.Mesh {
+    const geo = new THREE.CircleGeometry(20, 40);
+    const mat = new THREE.MeshStandardMaterial({
+      color: '#4a6b78', roughness: 0.35, metalness: 0.1, transparent: true, opacity: 0.82,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(VEN_CENTER.x, WATER_LEVEL, VEN_CENTER.z);
+    return mesh;
   }
 
-  private scatterPines(n: number): void {
+  /** sample ground height at world x,z (delegates to the pure biome field). */
+  private groundY(x: number, z: number): number {
+    return heightAt(x, z);
+  }
+
+  /**
+   * Deterministic golden-angle candidate positions over the world, kept only where
+   * they fall in the wanted biome (so each landschap grows its own vegetation) and
+   * outside the lodge clearing. Returns the surviving (x,z) — fully reproducible.
+   */
+  private candidates(count: number, want: Biome): { x: number; z: number; i: number }[] {
+    const out: { x: number; z: number; i: number }[] = [];
+    for (let i = 0; i < count; i++) {
+      const ang = i * 2.39996; // golden angle
+      const rad = 12 + (i / count) * 100;
+      const x = Math.cos(ang) * rad + Math.sin(i * 12.9) * 6;
+      const z = Math.sin(ang) * rad + Math.cos(i * 7.3) * 6;
+      if (Math.hypot(x, z) < 12) continue;        // clearing
+      if (biomeAt(x, z) !== want) continue;        // wrong landschap
+      out.push({ x, z, i });
+    }
+    return out;
+  }
+
+  private scatterPines(budget: number): void {
+    const spots = this.candidates(budget * 4, 'bos');
     const trunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 1.2, 6);
     const crownGeo = new THREE.ConeGeometry(0.95, 2.4, 7);
     const trunkMat = new THREE.MeshStandardMaterial({ color: '#5b4327', roughness: 1 });
-    const crownMat = new THREE.MeshStandardMaterial({ color: FOREST, roughness: 1 });
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, n);
-    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, n);
+    const crownMat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.bos.ground, roughness: 1 });
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, spots.length);
+    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, spots.length);
     const m = new THREE.Matrix4();
-    let placed = 0;
-    for (let i = 0; i < n; i++) {
-      const ang = (i * 2.39996); // golden-angle spread
-      const rad = 16 + (i / n) * 96;
-      const x = Math.cos(ang) * rad + (Math.sin(i * 12.9) * 6);
-      const z = Math.sin(ang) * rad + (Math.cos(i * 7.3) * 6);
-      if (Math.hypot(x, z) < 12) continue; // keep the clearing around the ranger
+    spots.forEach(({ x, z, i }, k) => {
       const s = 0.8 + (i % 5) * 0.12;
       const y = this.groundY(x, z);
-      m.makeScale(s, s, s); m.setPosition(x, y + 0.6 * s, z);
-      trunks.setMatrixAt(placed, m);
-      m.makeScale(s, s, s); m.setPosition(x, y + 1.9 * s, z);
-      crowns.setMatrixAt(placed, m);
-      placed++;
-    }
-    trunks.count = placed; crowns.count = placed;
+      m.makeScale(s, s, s); m.setPosition(x, y + 0.6 * s, z); trunks.setMatrixAt(k, m);
+      m.makeScale(s, s, s); m.setPosition(x, y + 1.9 * s, z); crowns.setMatrixAt(k, m);
+    });
     trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
     this.scene.add(trunks, crowns);
   }
 
-  private scatterHeather(n: number): void {
+  private scatterHeather(budget: number): void {
+    const spots = this.candidates(budget * 3, 'heide');
     const geo = new THREE.IcosahedronGeometry(0.32, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: '#9a6aa8', roughness: 1, flatShading: true });
-    const tufts = new THREE.InstancedMesh(geo, mat, n);
+    const mat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.heide.accent, roughness: 1, flatShading: true });
+    const tufts = new THREE.InstancedMesh(geo, mat, spots.length);
     const m = new THREE.Matrix4();
-    for (let i = 0; i < n; i++) {
-      const ang = i * 1.7, rad = 6 + (i / n) * 90;
-      const x = Math.cos(ang) * rad + Math.sin(i * 3.1) * 5;
-      const z = Math.sin(ang) * rad + Math.cos(i * 4.7) * 5;
+    spots.forEach(({ x, z, i }, k) => {
       const s = 0.5 + (i % 4) * 0.22;
       m.makeScale(s, s * 0.6, s); m.setPosition(x, this.groundY(x, z) + 0.12, z);
-      tufts.setMatrixAt(i, m);
-    }
+      tufts.setMatrixAt(k, m);
+    });
     tufts.instanceMatrix.needsUpdate = true;
     this.scene.add(tufts);
+  }
+
+  /** Drift-sand marram tussocks — upright pale grass blades on the stuifzand. */
+  private scatterMarram(budget: number): void {
+    const spots = this.candidates(budget * 4, 'stuifzand');
+    const geo = new THREE.ConeGeometry(0.16, 0.9, 5);
+    const mat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.stuifzand.accent, roughness: 1, flatShading: true });
+    const grass = new THREE.InstancedMesh(geo, mat, spots.length);
+    const m = new THREE.Matrix4();
+    spots.forEach(({ x, z, i }, k) => {
+      const s = 0.6 + (i % 3) * 0.25;
+      m.makeScale(s, s, s); m.setPosition(x, this.groundY(x, z) + 0.4 * s, z);
+      grass.setMatrixAt(k, m);
+    });
+    grass.instanceMatrix.needsUpdate = true;
+    this.scene.add(grass);
+  }
+
+  /** Reed clumps fringing the ven — only on land just above the waterline. */
+  private scatterReeds(budget: number): void {
+    const spots = this.candidates(budget * 6, 'ven').filter(({ x, z }) => {
+      const y = this.groundY(x, z);
+      return y > WATER_LEVEL - 0.1 && y < WATER_LEVEL + 1.1; // a reed belt at the shore
+    });
+    const geo = new THREE.CylinderGeometry(0.04, 0.06, 1.1, 5);
+    const mat = new THREE.MeshStandardMaterial({ color: '#8f8a4a', roughness: 1 });
+    const reeds = new THREE.InstancedMesh(geo, mat, Math.max(1, spots.length));
+    const m = new THREE.Matrix4();
+    spots.forEach(({ x, z, i }, k) => {
+      const s = 0.7 + (i % 4) * 0.2;
+      m.makeScale(s, s, s); m.setPosition(x, this.groundY(x, z) + 0.55 * s, z);
+      reeds.setMatrixAt(k, m);
+    });
+    reeds.count = spots.length;
+    reeds.instanceMatrix.needsUpdate = true;
+    this.scene.add(reeds);
   }
 
   private proceduralRanger(): THREE.Group {
@@ -188,10 +255,19 @@ export class World {
 
   private placeMarkers(markers: WorldMarker[]): void {
     const N = Math.max(1, markers.length);
+    const perBiome = new Map<Biome, number>();
     markers.forEach((mk, i) => {
-      const ang = (i / N) * Math.PI * 2;
-      const rad = 9;
-      const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+      let x: number, z: number;
+      if (mk.biome) {
+        // anchor each mission in the heart of its own landschap; fan repeats outward
+        const n = perBiome.get(mk.biome) ?? 0;
+        perBiome.set(mk.biome, n + 1);
+        const a = anchorInBiome(mk.biome, 22 + n * 9);
+        x = a.x; z = a.z;
+      } else {
+        const ang = (i / N) * Math.PI * 2;
+        x = Math.cos(ang) * 9; z = Math.sin(ang) * 9;
+      }
       const group = new THREE.Group();
       group.position.set(x, this.groundY(x, z), z);
 
