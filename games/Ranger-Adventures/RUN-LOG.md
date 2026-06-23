@@ -561,3 +561,73 @@ One status block per run/step (BUILD-PLAN §9b).
 → next:   Anything World pipeline · generation — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2) — ⏸ BLOCKER (sandbox): external paid AW job, not runnable in a sandboxed thread (only the 3 Meshy humanoid rigs exist in `assets-gen/animated/`). Loop/Floris owns this (§9c). The procedural-fallback box below makes the whole cast move + the game fully playable meanwhile; the mixer path is wired + dormant, ready to prefer the animated GLBs the moment they're staged.
 ▷ progress: ~82%
 ```
+
+---
+**2026-06-23 13:19:50Z** · ticked: - [x] 97a · Pure karaoke word-clock core `core/wordclock.ts` (THREE/DOM/timing-free) — `buildWordClock(text,{rate,totalMs})` → contiguous non-overlapping `WordSpan[]` (length + punctuation-pause weighted, iOS-safe estimate since Safari `onboundary` is unreliable; optional measured `totalMs` scales the whole clock for the later Piper path) + `activeWordAt(clock, elapsedMs)`; seeded unit test (determinism · contiguous/monotonic spans · punctuation lengthens · longer word longer span · rate scales inversely · empty→0 · active-word lookup)
+
+```
+✔ landed: Anything World pipeline · script — `scripts/anything-world.mjs`: wire `ANYTHING_WORLD_API` (app/.env.local), preflight `/credits`, rig→animate→download to `assets-gen/animated/<id>.glb`, idempotent + manifest-recorded; AW-eligible cast = 8 quadrupeds + 23 birds; adder/heikikker/butterfly stay procedural; defensive field-probing for the experimental API
+▶ phase:  Asset pipeline
+→ next:   Anything World pipeline · generation — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2) — ⏸ BLOCKER (sandbox): external paid AW job, not runnable in a sandboxed thread (only the 3 Meshy humanoid rigs exist in `assets-gen/animated/`). Loop/Floris owns this (§9c). The procedural-fallback box below makes the whole cast move + the game fully playable meanwhile; the mixer path is wired + dormant, ready to prefer the animated GLBs the moment they're staged.
+▷ progress: ~81%
+```
+
+---
+**2026-06-23 13:31:08Z** · ticked: - [x] 97b · Wire the word-clock into a shared read-aloud helper — `ui/ReadAloud.ts` drives `narrator.speak` + a rAF karaoke highlight in the accessible DOM card (per-word `.ra-word.is-spoken`, reduced-motion = colour swap only, stops cleanly), reused across the Missions read-aloud screens; build gate
+
+```
+✔ landed: Anything World pipeline · script — `scripts/anything-world.mjs`: wire `ANYTHING_WORLD_API` (app/.env.local), preflight `/credits`, rig→animate→download to `assets-gen/animated/<id>.glb`, idempotent + manifest-recorded; AW-eligible cast = 8 quadrupeds + 23 birds; adder/heikikker/butterfly stay procedural; defensive field-probing for the experimental API
+▶ phase:  Asset pipeline
+→ next:   Anything World pipeline · generation — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2) — ⏸ BLOCKER (sandbox): external paid AW job, not runnable in a sandboxed thread (only the 3 Meshy humanoid rigs exist in `assets-gen/animated/`). Loop/Floris owns this (§9c). The procedural-fallback box below makes the whole cast move + the game fully playable meanwhile; the mixer path is wired + dormant, ready to prefer the animated GLBs the moment they're staged.
+▷ progress: ~82%
+```
+
+---
+**2026-06-23 13:42:27Z** · ticked: - [x] 97c · M3/E3 copy pass — pure `core/readlevel.ts` word/sentence-length lint (3–7 words/sentence, one idea per line) + a test over the live mission/UI copy; tighten the few offenders; build gate + §9f audit
+
+```
+✔ landed: Anything World pipeline · script — `scripts/anything-world.mjs`: wire `ANYTHING_WORLD_API` (app/.env.local), preflight `/credits`, rig→animate→download to `assets-gen/animated/<id>.glb`, idempotent + manifest-recorded; AW-eligible cast = 8 quadrupeds + 23 birds; adder/heikikker/butterfly stay procedural; defensive field-probing for the experimental API
+▶ phase:  Asset pipeline
+→ next:   Anything World pipeline · generation — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2) — ⏸ BLOCKER (sandbox): external paid AW job, not runnable in a sandboxed thread (only the 3 Meshy humanoid rigs exist in `assets-gen/animated/`). Loop/Floris owns this (§9c). The procedural-fallback box below makes the whole cast move + the game fully playable meanwhile; the mixer path is wired + dormant, ready to prefer the animated GLBs the moment they're staged.
+▷ progress: ~82%
+```
+
+---
+**2026-06-23 13:47:49Z** · ticked: - [x] 102a · ≥56px / dual-channel audit — sweep every UI tap target + feedback channel against the Alvah profile (BUILD-PLAN §3): all interactive elements ≥56px, feedback always on ≥2 channels (colour + scale + glyph/sound + words), reduced-motion-safe; fix the gaps; build gate
+
+```
+✔ landed: Anything World pipeline · script — `scripts/anything-world.mjs`: wire `ANYTHING_WORLD_API` (app/.env.local), preflight `/credits`, rig→animate→download to `assets-gen/animated/<id>.glb`, idempotent + manifest-recorded; AW-eligible cast = 8 quadrupeds + 23 birds; adder/heikikker/butterfly stay procedural; defensive field-probing for the experimental API
+▶ phase:  Asset pipeline
+→ next:   Anything World pipeline · generation — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2) — ⏸ BLOCKER (sandbox): external paid AW job, not runnable in a sandboxed thread (only the 3 Meshy humanoid rigs exist in `assets-gen/animated/`). Loop/Floris owns this (§9c). The procedural-fallback box below makes the whole cast move + the game fully playable meanwhile; the mixer path is wired + dormant, ready to prefer the animated GLBs the moment they're staged.
+▷ progress: ~84%
+```
+
+---
+**2026-06-23 13:54:00Z** · ticked: - [x] 102b · Tweaks panel wired — `ui/Tweaks.ts` + `tweaks.css` reachable from the lodge: every `Settings` field exposed + wired (geluid/voorlezen/reducedMotion→`setReducedMotionOverride`, leesFont/readSize/leading/accent→a new `applyReadingPrefs` on the document root, jargon, gevolgErnst, ambient volume→`applyAmbient`, autoMoeilijk, force2d→`Settings`+resolver); pure `applyReadingPrefs`/clamp helper + seeded test; build gate
+
+```
+✔ landed: Anything World pipeline · script — `scripts/anything-world.mjs`: wire `ANYTHING_WORLD_API` (app/.env.local), preflight `/credits`, rig→animate→download to `assets-gen/animated/<id>.glb`, idempotent + manifest-recorded; AW-eligible cast = 8 quadrupeds + 23 birds; adder/heikikker/butterfly stay procedural; defensive field-probing for the experimental API
+▶ phase:  Asset pipeline
+→ next:   Anything World pipeline · generation — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2) — ⏸ BLOCKER (sandbox): external paid AW job, not runnable in a sandboxed thread (only the 3 Meshy humanoid rigs exist in `assets-gen/animated/`). Loop/Floris owns this (§9c). The procedural-fallback box below makes the whole cast move + the game fully playable meanwhile; the mixer path is wired + dormant, ready to prefer the animated GLBs the moment they're staged.
+▷ progress: ~85%
+```
+
+---
+**2026-06-23 14:02:07Z** · ticked: - [x] ≥56px / dual-channel audit; Tweaks panel wired; ambient audio layer
+
+```
+✔ landed: Anything World pipeline · script — `scripts/anything-world.mjs`: wire `ANYTHING_WORLD_API` (app/.env.local), preflight `/credits`, rig→animate→download to `assets-gen/animated/<id>.glb`, idempotent + manifest-recorded; AW-eligible cast = 8 quadrupeds + 23 birds; adder/heikikker/butterfly stay procedural; defensive field-probing for the experimental API
+▶ phase:  Asset pipeline
+→ next:   Anything World pipeline · generation — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2) — ⏸ BLOCKER (sandbox): external paid AW job, not runnable in a sandboxed thread (only the 3 Meshy humanoid rigs exist in `assets-gen/animated/`). Loop/Floris owns this (§9c). The procedural-fallback box below makes the whole cast move + the game fully playable meanwhile; the mixer path is wired + dormant, ready to prefer the animated GLBs the moment they're staged.
+▷ progress: ~86%
+```
+
+---
+**2026-06-23 14:03:51Z** · status
+
+```
+✔ landed: Anything World pipeline · script — `scripts/anything-world.mjs`: wire `ANYTHING_WORLD_API` (app/.env.local), preflight `/credits`, rig→animate→download to `assets-gen/animated/<id>.glb`, idempotent + manifest-recorded; AW-eligible cast = 8 quadrupeds + 23 birds; adder/heikikker/butterfly stay procedural; defensive field-probing for the experimental API
+▶ phase:  Asset pipeline
+→ next:   Anything World pipeline · generation — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2) — ⏸ BLOCKER (sandbox): external paid AW job, not runnable in a sandboxed thread (only the 3 Meshy humanoid rigs exist in `assets-gen/animated/`). Loop/Floris owns this (§9c). The procedural-fallback box below makes the whole cast move + the game fully playable meanwhile; the mixer path is wired + dormant, ready to prefer the animated GLBs the moment they're staged.
+▷ progress: ~88%
+```

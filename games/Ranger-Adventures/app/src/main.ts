@@ -2,12 +2,18 @@ import './styles/tokens.css';
 import './styles/base.css';
 import { Stage } from './render3d/Stage';
 import { Budgets } from './ui/Budgets';
-import { applyReducedMotionClass, watchReducedMotion } from './core/reduced-motion';
+import { applyReducedMotionClass, watchReducedMotion, setReducedMotionOverride } from './core/reduced-motion';
+import { applyReadingPrefs } from './core/reading-prefs';
 import { startLodge } from './ui/Missions';
 import { startSandbox } from './ui/Sandbox';
 import { showAvatarCreator } from './ui/AvatarCreator';
 import { store } from './core/state';
 
+// Apply the saved Tweaks before first paint: a persisted reduced-motion toggle
+// wins over the OS (off = defer to OS), and the reading/accent prefs re-flow :root.
+const saved = store.get().settings;
+if (saved.reducedMotion) setReducedMotionOverride(true);
+applyReadingPrefs(saved);
 applyReducedMotionClass();
 watchReducedMotion();
 

@@ -60,6 +60,8 @@ export class World {
   private readonly ground: THREE.Mesh;
   private readonly canvas: HTMLCanvasElement;
   private readonly onApproach: (missionId: string | null) => void;
+  private readonly onBiome: (biome: Biome) => void;
+  private lastBiome: Biome | null = null;       // re-pick the ambience bed on a crossing
   private nearId: string | null = null;
   private speed = 2.4;
   // while a diegetic mini-game plays IN-PLACE, the world stays loaded but freezes:
@@ -86,10 +88,12 @@ export class World {
     onApproach: (missionId: string | null) => void,
     onWayfind: (cue: WayCue | null) => void = () => {},
     activeId: string | null = null,
+    onBiome: (biome: Biome) => void = () => {},
   ) {
     this.canvas = canvas;
     this.onApproach = onApproach;
     this.onWayfind = onWayfind;
+    this.onBiome = onBiome;
     this.activeId = activeId;
 
     this.scene.background = this.skyTexture();
@@ -485,6 +489,10 @@ export class World {
         rp.z = next.z;
       }
       rp.y = this.groundY(rp.x, rp.z);
+
+      // ambience follows the ranger across biomes — re-pick the bed on a crossing
+      const here = biomeAt(rp.x, rp.z);
+      if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
     }
 
     // per-animal motion: a real baked rig wins (mixer); else the always-on

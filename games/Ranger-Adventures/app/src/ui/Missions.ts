@@ -15,9 +15,11 @@ import { SKILL_META, tierFor, badgeProgress } from '../core/skill';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
 import { narrator } from '../core/narrator';
+import { mountReadAloud } from './ReadAloud';
 import { rangerNaam } from '../core/avatar';
 import { Sound } from '../core/sound';
-import { loadGameAudio } from '../core/calls';
+import { loadGameAudio, setAmbientScene } from '../core/calls';
+import type { Biome } from '../render3d/Biomes';
 import type { Stage } from '../render3d/Stage';
 import { World, type WorldMarker } from '../render3d/World';
 import { type WayCue } from '../render3d/Wayfinding';
@@ -35,6 +37,7 @@ import { playWissel } from '../render2d/WisselView';
 import { showCabin } from './Companion';
 import { showAvatarCreator } from './AvatarCreator';
 import { startSandbox } from './Sandbox';
+import { showTweaks } from './Tweaks';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
 const naam = (): string => rangerNaam(store.get().avatar);
@@ -136,6 +139,7 @@ function showLodge(): void {
     `<button class="ra-text-btn lodge-prikbord" type="button">Open het prikbord${cluesBadge()}</button>` +
     `<button class="ra-text-btn lodge-ranger" type="button">Pas ${esc(naam())} aan</button>` +
     `<button class="ra-text-btn lodge-sandbox" type="button">Demo: de hele Veluwe in het klein</button>` +
+    `<button class="ra-text-btn lodge-tweaks" type="button">Instellingen</button>` +
     `</div>` +
     `</div>`,
   );
@@ -161,6 +165,7 @@ function showLodge(): void {
     clearOverlays();
     startSandbox(host, stage, showLodge);
   });
+  el.querySelector('.lodge-tweaks')?.addEventListener('click', () => showTweaks(host, showLodge));
 }
 
 /** Lodge link label reflects the companion: rescue prompt → friend's name. */
@@ -234,11 +239,18 @@ function showCaseBoard(fromWorld = false, demoBack?: () => void): void {
     `</div>` +
     `</div>`,
   );
-  if (store.get().settings.voorlezen && laatste && !gemeld) narrator.speak(laatste.tekst);
+  // Only the latest-clue note is read aloud (and karaoke-highlighted); the
+  // "opgelost" / "muted placeholder" notes carry no live clue text to speak.
+  const noteEl = !gemeld && laatste ? el.querySelector<HTMLElement>('.cb-note') : null;
+  const ra = noteEl
+    ? mountReadAloud({ textEl: noteEl, text: laatste!.tekst, autoStart: store.get().settings.voorlezen })
+    : null;
   el.querySelector('.cb-back')?.addEventListener('click', () => {
+    ra?.stop();
     if (demoBack) demoBack(); else if (fromWorld) resumePatrol(); else showLodge();
   });
   el.querySelector('.cb-resolve')?.addEventListener('click', () => {
+    ra?.stop();
     Sound.unlock();
     showOntknoping(0, fromWorld, demoBack);
   });
@@ -255,16 +267,20 @@ function showOntknoping(idx: number, fromWorld = false, demoBack?: () => void): 
   const el = card(
     `<div class="ontknoping boot-card-ish">` +
     `<p class="boot-kicker">Op het spoor · ${idx + 1}/${beats.length}</p>` +
-    `<p class="ont-text">${esc(beat.tekst)}</p>` +
+    `<p class="ont-text"></p>` +
     `<div class="ra-row">` +
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
     `<button class="btn-start" type="button">${last ? 'Klaar' : 'Verder'}</button>` +
     `</div></div>`,
   );
-  if (store.get().settings.voorlezen) narrator.speak(beat.tekst);
-  el.querySelector('.ra-speak')?.addEventListener('click', () => narrator.speak(beat.tekst));
+  const ra = mountReadAloud({
+    textEl: el.querySelector('.ont-text')!,
+    text: beat.tekst,
+    speakBtn: el.querySelector('.ra-speak'),
+    autoStart: store.get().settings.voorlezen,
+  });
   el.querySelector('.btn-start')?.addEventListener('click', () => {
-    narrator.stop();
+    ra.stop();
     if (last) { if (!demoBack) store.reportArc(); if (store.get().settings.geluid) Sound.found(); }
     showOntknoping(idx + 1, fromWorld, demoBack);
   });
@@ -294,9 +310,17 @@ function startExplore(): void {
   const done = store.get().voltooid;
   const active = area.missies.find((m) => !done[m.id])?.id ?? area.missies[0]?.id ?? null;
 
+  // the season tints the ambience bed (forward-compatible with seasonal beds);
+  // take it from the story's current chapter so the world matches the arc moment.
+  const seizoen = Content.currentChapter(area.id, done)?.seizoen;
+  const onBiome = (b: Biome) => setAmbientScene(b, seizoen);
+
   world = new World(
     stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, active,
+    onBiome,
   );
+  // start the bed on the lodge clearing (heide) before the first crossing fires
+  setAmbientScene('heide', seizoen);
   stage.enterWorld(world);
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }
@@ -340,17 +364,22 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
   const el = card(
     `<div class="worldbeat boot-card-ish">` +
     `<p class="boot-kicker">${kicker}</p>` +
-    `<p class="wb-prompt">${esc(beat.prompt)}</p>` +
+    `<p class="wb-prompt"></p>` +
     `<div class="wb-opts">${opts}</div>` +
     `<p class="wb-feedback" role="status" aria-live="polite" hidden></p>` +
     `<button class="ra-text-btn wb-skip" type="button">Even verder lopen</button>` +
     `</div>`,
   );
-  if (store.get().settings.voorlezen) narrator.speak(beat.prompt);
+  const ra = mountReadAloud({
+    textEl: el.querySelector('.wb-prompt')!,
+    text: beat.prompt,
+    autoStart: store.get().settings.voorlezen,
+  });
   const fb = el.querySelector<HTMLParagraphElement>('.wb-feedback');
-  const finish = (): void => { narrator.stop(); done(); };
+  const finish = (): void => { ra.stop(); done(); };
   el.querySelectorAll<HTMLButtonElement>('.wb-opt').forEach((btn) => {
     btn.addEventListener('click', () => {
+      ra.stop();
       const i = Number(btn.dataset.i);
       if (optionCorrect(beat, i)) {
         // success sings — colour + scale + sound + word, then resume patrol
@@ -436,7 +465,6 @@ function onApproach(missionId: string | null): void {
 function showBriefing(mission: Mission, fromWorld = false): void {
   const jargon = store.get().settings.jargon;
   const lines = (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
-  const spoken = `Ranger ${naam()}. ${mission.titel}. ${lines.join(' ')}`;
 
   const kicker = fromWorld ? `Veldnotitie · ${esc(mission.landschap)}` : `Missie · ${esc(mission.landschap)}`;
   const startLabel = fromWorld ? 'Ga op pad' : 'Start de missie';
@@ -447,7 +475,7 @@ function showBriefing(mission: Mission, fromWorld = false): void {
     `<div class="${wrapClass}">` +
     `<p class="boot-kicker">${kicker}</p>` +
     `<h1 class="boot-title">${esc(mission.titel)}</h1>` +
-    `<div class="briefing-lines">${lines.map((l) => `<p class="briefing-line">${esc(l)}</p>`).join('')}</div>` +
+    `<div class="briefing-lines">${lines.map((_, i) => `<p class="briefing-line" data-line="${i}"></p>`).join('')}</div>` +
     `<div class="ra-row">` +
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
     `<button class="btn-start" type="button">${startLabel}</button>` +
@@ -455,10 +483,15 @@ function showBriefing(mission: Mission, fromWorld = false): void {
     `<button class="ra-text-btn briefing-back" type="button">${backLabel}</button>` +
     `</div>`,
   );
-  if (store.get().settings.voorlezen) narrator.speak(spoken);
-  el.querySelector('.ra-speak')?.addEventListener('click', () => narrator.speak(spoken));
-  el.querySelector('.briefing-back')?.addEventListener('click', () => { if (fromWorld) resumePatrol(); else showLodge(); });
-  el.querySelector('.btn-start')?.addEventListener('click', () => void runMission(mission, fromWorld));
+  const lineEls = Array.from(el.querySelectorAll<HTMLElement>('.briefing-line'));
+  const ra = mountReadAloud({
+    lead: `Ranger ${naam()}. ${mission.titel}.`,
+    segments: lines.map((l, i) => ({ el: lineEls[i], text: l })),
+    speakBtn: el.querySelector('.ra-speak'),
+    autoStart: store.get().settings.voorlezen,
+  });
+  el.querySelector('.briefing-back')?.addEventListener('click', () => { ra.stop(); if (fromWorld) resumePatrol(); else showLodge(); });
+  el.querySelector('.btn-start')?.addEventListener('click', () => { ra.stop(); void runMission(mission, fromWorld); });
 }
 
 /* ---------------------------------------------------------- play loop ---- */
@@ -478,7 +511,7 @@ async function runMission(mission: Mission, fromWorld = false): Promise<void> {
       sceneLive: !!world,
       webglCapable: WEBGL_OK,
       reducedMotion: prefersReducedMotion(),
-      force2d: false, // Tweaks "altijd 2D" feeds this in Phase 6
+      force2d: store.get().settings.force2d, // Tweaks "altijd 2D" → always the 2D floor
       registry: REGISTRY_3D,
     });
     let result: BeatSummary;
@@ -516,15 +549,19 @@ function showFact(step: Step, n: number, total: number): Promise<void> {
     const el = card(
       `<div class="fact boot-card-ish">` +
       `<p class="boot-kicker">Wist je dat, ${esc(naam())}? · ${n}/${total}</p>` +
-      `<p class="fact-text">${esc(feit)}</p>` +
+      `<p class="fact-text"></p>` +
       `<div class="ra-row">` +
       `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
       `<button class="btn-start" type="button">Verder</button>` +
       `</div></div>`,
     );
-    if (store.get().settings.voorlezen) narrator.speak(feit);
-    el.querySelector('.ra-speak')?.addEventListener('click', () => narrator.speak(feit));
-    el.querySelector('.btn-start')?.addEventListener('click', () => { narrator.stop(); resolve(); });
+    const ra = mountReadAloud({
+      textEl: el.querySelector('.fact-text')!,
+      text: feit,
+      speakBtn: el.querySelector('.ra-speak'),
+      autoStart: store.get().settings.voorlezen,
+    });
+    el.querySelector('.btn-start')?.addEventListener('click', () => { ra.stop(); resolve(); });
   });
 }
 
@@ -572,7 +609,7 @@ function showReward(
   const el = card(
     `<div class="reward boot-card-ish">` +
     `<p class="boot-kicker">Missie klaar · ${esc(mission.titel)}</p>` +
-    `<h1 class="boot-title">${esc(lof)}</h1>` +
+    `<h1 class="boot-title reward-lof"></h1>` +
     reunion +
     `<div class="badge-row">${badges}</div>` +
     knap +
@@ -581,9 +618,13 @@ function showReward(
     `</div>`,
   );
   if (store.get().settings.geluid) Sound.found();
-  if (store.get().settings.voorlezen) narrator.speak(lof);
+  const ra = mountReadAloud({
+    textEl: el.querySelector('.reward-lof')!,
+    text: lof,
+    autoStart: store.get().settings.voorlezen,
+  });
   el.querySelector('.btn-start')?.addEventListener('click', () => {
-    narrator.stop();
+    ra.stop();
     if (clue) showWildcamCapture(clue);
     else if (fromWorld) resumePatrol();
     else showLodge();
@@ -606,8 +647,8 @@ function showWildcamCapture(clue: Clue): void {
     `<h1 class="boot-title">Een nieuwe aanwijzing</h1>` +
     `<div class="cb-clue found wildcam-shot">` +
     `<span class="cb-photo">${glyph}</span>` +
-    `<span class="cb-clue-title">${esc(clue.titel)}</span>` +
-    `<span class="cb-clue-text">${esc(clue.tekst)}</span>` +
+    `<span class="cb-clue-title"></span>` +
+    `<span class="cb-clue-text"></span>` +
     `</div>` +
     `<p class="boot-sub">Hij hangt nu op het prikbord.</p>` +
     `<div class="ra-row">` +
@@ -617,11 +658,17 @@ function showWildcamCapture(clue: Clue): void {
     `<button class="ra-text-btn wc-patrol" type="button">Verder op patrouille</button>` +
     `</div>`,
   );
-  const spoken = `${line} ${clue.titel}. ${clue.tekst}`;
-  if (store.get().settings.voorlezen) narrator.speak(spoken);
-  el.querySelector('.ra-speak')?.addEventListener('click', () => narrator.speak(spoken));
-  el.querySelector('.wc-board')?.addEventListener('click', () => { narrator.stop(); showCaseBoard(true); });
-  el.querySelector('.wc-patrol')?.addEventListener('click', () => { narrator.stop(); resumePatrol(); });
+  const ra = mountReadAloud({
+    lead: line,
+    segments: [
+      { el: el.querySelector('.cb-clue-title')!, text: clue.titel },
+      { el: el.querySelector('.cb-clue-text')!, text: clue.tekst },
+    ],
+    speakBtn: el.querySelector('.ra-speak'),
+    autoStart: store.get().settings.voorlezen,
+  });
+  el.querySelector('.wc-board')?.addEventListener('click', () => { ra.stop(); showCaseBoard(true); });
+  el.querySelector('.wc-patrol')?.addEventListener('click', () => { ra.stop(); resumePatrol(); });
 }
 
 /* -------------------------------------------------------- badge wall ---- */

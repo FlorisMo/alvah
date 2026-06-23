@@ -54,7 +54,8 @@ export interface Settings {
   gevolgErnst: 'stevig' | 'mild' | 'assist';
   autoMoeilijk: boolean;             // adaptive staircase on vs. raw manual sliders
   jargon: boolean;                   // "knappe woorden" (frisling/rotte) vs simple (big/groep)
-  leesFont: boolean;                 // dyslexia-friendly reading font
+  leesFont: boolean;                 // Atkinson Hyperlegible leesletter (alternate, not the default)
+  force2d: boolean;                  // Tweak "altijd 2D" — force the 2D floor for every activity
   readSize: number;
   leading: number;
   ambient: number;
@@ -113,6 +114,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoMoeilijk: true,
   jargon: false,
   leesFont: true,
+  force2d: false,
   readSize: 28,
   leading: 1.7,
   ambient: 0.85,

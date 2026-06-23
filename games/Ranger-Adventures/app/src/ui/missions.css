@@ -27,6 +27,20 @@
   box-shadow: var(--shadow-lg);
 }
 
+/* Karaoke read-aloud (ui/ReadAloud.ts): the word being spoken gets a calm,
+   non-flashing highlight — a soft tint + colour swap. Only one word at a time.
+   Under reduced-motion base.css `.rm *` zeroes the transition → an instant
+   colour swap only (no fade), which is exactly the calmer channel we want. */
+.ra-word {
+  border-radius: 5px;
+  transition: background var(--dur-quick) var(--ease-standard), color var(--dur-quick);
+}
+.ra-word.is-spoken {
+  background: var(--green-soft);
+  color: var(--green);
+  box-shadow: 0 0 0 2px var(--green-soft);
+}
+
 .ra-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 .ra-speak {
   flex: none;
@@ -48,8 +62,8 @@
   font: 600 16px/1.2 var(--font-body);
   text-decoration: underline;
   cursor: pointer;
-  padding: 8px;
-  min-height: 44px;
+  padding: 8px 12px;
+  min-height: 56px; /* Alvah profile §3: ≥56px tap targets (stricter than the 44–48px general rule) */
 }
 
 /* ---- lodge ---- */
