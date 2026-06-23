@@ -23,7 +23,7 @@
 - [x] Generate remaining renders · batch A — gameplay-critical cast: immersion/tracking props + core birds + fox/ree/edelhert/heideblauwtje (shotlist items 1–23) (3)
 - [x] Generate remaining renders · batch B — story + vehicles + seasonal variants (shotlist items 24–37: ecoduct/boa-post/bird-hide/nest-box/snare/raven-nest, jeep/helicopter, oak/birch/heather autumn+winter, snow-mound) (2)
 - [x] Generate remaining renders · batch C — finishing props + last birds (shotlist items 38–43: raaf-fledgling, anthill/foxglove/acorn-cluster, buizerd, wilde-eend) (1)
-- [ ] Rig the 2 remaining humanoids via Meshy API (warden, poacher) (1)
+- [x] Rig the 2 remaining humanoids via Meshy API (warden, poacher) (1)
 - [ ] **Anything World pipeline** — wire `ANYTHING_WORLD_API`; pre-flight the processing API; rig+animate ~9 animals + ~23 birds (~2 runs); prefer `assets-gen/animated/<id>.glb` over procedural (4)
 - [ ] Procedural motion fallback for all animals; snake+frog procedural (slither/hop) (3)
 - [ ] Optimize + stage every animated GLB; re-run finalize (1)

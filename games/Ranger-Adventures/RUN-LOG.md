@@ -111,3 +111,13 @@ One status block per run/step (BUILD-PLAN §9b).
 → next:   Rig the 2 remaining humanoids via Meshy API (warden, poacher)
 ▷ progress: ~24%
 ```
+
+---
+**2026-06-23 08:59:36Z** · ticked: - [x] Rig the 2 remaining humanoids via Meshy API (warden, poacher)
+
+```
+✔ landed: Rig the 2 remaining humanoids via Meshy API (warden, poacher)
+▶ phase:  Asset pipeline
+→ next:   Anything World pipeline — wire `ANYTHING_WORLD_API`; pre-flight the processing API; rig+animate ~9 animals + ~23 birds (~2 runs); prefer `assets-gen/animated/<id>.glb` over procedural
+▷ progress: ~25%
+```
