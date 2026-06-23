@@ -4,6 +4,8 @@ import { Stage } from './render3d/Stage';
 import { Budgets } from './ui/Budgets';
 import { applyReducedMotionClass, watchReducedMotion } from './core/reduced-motion';
 import { startLodge } from './ui/Missions';
+import { showAvatarCreator } from './ui/AvatarCreator';
+import { store } from './core/state';
 
 applyReducedMotionClass();
 watchReducedMotion();
@@ -30,5 +32,7 @@ ui.appendChild(card);
 card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', () => {
   card.classList.add('boot-card--hidden');
   window.setTimeout(() => card.remove(), 360);
-  startLodge(ui, stage);
+  // first boot → make your ranger; afterwards go straight to the lodge
+  if (store.get().avatarGemaakt) startLodge(ui, stage);
+  else showAvatarCreator(ui, () => startLodge(ui, stage));
 });

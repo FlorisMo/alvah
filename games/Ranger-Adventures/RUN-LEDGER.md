@@ -14,7 +14,7 @@
 - [x] Phase 3 remainder · case-board screen — verhaalboog clues derived from completed verhaalHaak-missions (data gate) + hopeful ontknoping; prikbord overlay reachable from the lodge (2)
 - [x] Phase 3 remainder · companion+rehab STATE — `core/companion.ts` pure model (soort/fase/bond/kunstjes/meeOpMissie + rehab) + state.ts mutators (rescue→bondDelta→grow→mee, startRehab/releaseRehab) + persistence/migration; seeded unit test (1)
 - [x] Phase 3 remainder · companion+rehab UI — CareRoutine care-skin feeds simon/dagnacht skill records (order=simon, over-handle=dagnacht); cabin/perch screen (rescue + daily care + opvang release) reachable from the lodge (1)
-- [ ] Phase 3 remainder · avatar creator UI + avatar state threaded through copy/voice (naam/huid/haar/outfit/iris; "Alvah" default injected into briefing/fact/reward + narrator) (1)
+- [x] Phase 3 remainder · avatar creator UI + avatar state threaded through copy/voice (naam/huid/haar/outfit/iris; "Alvah" default injected into briefing/fact/reward + narrator) (1)
 
 ## Asset pipeline  ◑ IN PROGRESS
 - [x] meshy-gen preview→refine + poly target; gltf-optimize (meshopt+WebP+DRACO); audio-fetch (xeno/Freesound, licence log); finalize watcher

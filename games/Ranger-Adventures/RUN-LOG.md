@@ -41,3 +41,13 @@ One status block per run/step (BUILD-PLAN §9b).
 → next:   Phase 3 remainder · avatar creator UI + avatar state threaded through copy/voice (naam/huid/haar/outfit/iris; "Alvah" default injected into briefing/fact/reward + narrator)
 ▷ progress: ~15%
 ```
+
+---
+**2026-06-23 01:07:05Z** · ticked: - [x] Phase 3 remainder · avatar creator UI + avatar state threaded through copy/voice (naam/huid/haar/outfit/iris; "Alvah" default injected into briefing/fact/reward + narrator)
+
+```
+✔ landed: Ranger rigged via Meshy API (proof); rigged GLB saved to assets-gen/animated/
+▶ phase:  Asset pipeline
+→ next:   Generate remaining ~43 shotlist renders (props incl. immersion + seasonal + story/vehicle; fox/ree/edelhert; remaining birds)
+▷ progress: ~16%
+```

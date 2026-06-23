@@ -1,0 +1,120 @@
+/* ============================================================
+   avatar.css — "maak je ranger" creator. Sits over the 3D stage;
+   reuses the boot-card + missions tokens. Dual-channel everywhere
+   (colour + label + ✓ ring); ≥56px tap targets.
+   ============================================================ */
+
+.avatar-creator { gap: 14px; max-width: 460px; }
+
+/* ---- live preview ---- */
+.av-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.av-art {
+  width: 132px;
+  height: 142px;
+  filter: drop-shadow(0 6px 14px rgba(30, 40, 25, 0.22));
+}
+.av-greet {
+  margin: 0;
+  font: 600 18px/1.2 var(--font-head);
+  color: var(--green-deep);
+}
+
+/* ---- name ---- */
+.av-naam-veld {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+}
+.av-naam-cap { font: 600 13px/1.2 var(--font-body); color: var(--green-mid); }
+.av-naam-input {
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 16px;
+  border: 2px solid var(--green-line);
+  border-radius: var(--spel-radius);
+  background: var(--paper);
+  font: 600 22px/1.2 var(--font-head);
+  color: var(--ink);
+}
+.av-naam-input:focus-visible {
+  outline: 3px solid var(--spel-sun);
+  outline-offset: 2px;
+  border-color: var(--green-mid);
+}
+
+.av-naam-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.av-naam-chip {
+  min-height: 56px;
+  padding: 8px 18px;
+  border: 2px solid var(--green-line);
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  font: 600 16px/1 var(--font-body);
+  color: var(--green-deep);
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-overshoot), background var(--dur-quick);
+}
+.av-naam-chip:active { transform: scale(0.94); background: var(--spel-sun-glow); }
+
+/* ---- kenmerk groups ---- */
+.av-groups { display: grid; gap: 14px; width: 100%; }
+.av-group { border: 0; margin: 0; padding: 0; }
+.av-legend {
+  padding: 0 0 8px;
+  font: 600 14px/1.2 var(--font-body);
+  color: var(--green-mid);
+}
+.av-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+
+.av-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 56px;
+  min-height: 56px;
+  padding: 6px 8px 8px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.av-chip {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-quick) var(--ease-overshoot),
+    border-color var(--dur-quick), box-shadow var(--dur-quick);
+}
+.av-tick {
+  color: #fff;
+  font: 700 22px/1 var(--font-body);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity var(--dur-quick), transform var(--dur-quick) var(--ease-overshoot);
+}
+.av-swatch-label { font: 600 13px/1 var(--font-body); color: var(--ink-soft); }
+
+.av-swatch.sel .av-chip {
+  border-color: var(--green-deep);
+  transform: scale(1.12);
+  box-shadow: 0 0 0 3px var(--spel-sun), var(--shadow-md);
+}
+.av-swatch.sel .av-tick { opacity: 1; transform: scale(1); }
+.av-swatch.sel .av-swatch-label { color: var(--green-deep); }
+.av-swatch:active .av-chip { transform: scale(0.96); }
+
+/* reduced-motion (.rm body class): drop the scale pop, keep the ✓ + ring channels.
+   (Transition *durations* are already neutralised globally by base.css `.rm *`.) */
+.rm .av-swatch.sel .av-chip { transform: none; }

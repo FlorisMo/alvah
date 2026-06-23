@@ -37,6 +37,12 @@ import {
   type Fase,
   type OpvangGast,
 } from './companion';
+import {
+  blankAvatar,
+  mergeAvatar,
+  applyAvatar,
+  type Avatar,
+} from './avatar';
 
 export type Screen =
   | 'map' | 'cabin' | 'transport' | 'travel' | 'briefing' | 'world' | 'reunion' | 'complete';
@@ -81,6 +87,8 @@ export interface GameState {
   companion: Companion;              // metgezel: rescue → care → grow → mee (HANDOFF §7.2)
   rehab: Rehab;                      // recurring opvang-and-release loop
   companionGroei: Fase | null;      // fase the companion just reached (for the cabin celebration)
+  avatar: Avatar;                    // the player-ranger identity (naam threads into copy/voice)
+  avatarGemaakt: boolean;            // has the ranger been made? (gates the boot creator)
   settings: Settings;
 }
 
@@ -134,6 +142,8 @@ function freshState(): GameState {
     companion: blankCompanion(),
     rehab: blankRehab(),
     companionGroei: null,
+    avatar: blankAvatar(),
+    avatarGemaakt: false,
     settings: { ...DEFAULT_SETTINGS },
   };
 }
@@ -156,6 +166,8 @@ function load(): GameState {
       companion: mergeCompanion(parsed.companion),
       rehab: mergeRehab(parsed.rehab),
       companionGroei: parsed.companionGroei ?? null,
+      avatar: mergeAvatar(parsed.avatar),
+      avatarGemaakt: parsed.avatarGemaakt ?? false,
       settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
     };
   } catch {
@@ -239,6 +251,18 @@ class Store {
 
   clearCompanionGroei(): void {
     this.set({ companionGroei: null });
+  }
+
+  /* ---- avatar / ranger-identiteit (BUILD-PLAN §3) ---- */
+
+  /** Apply a partial avatar change (each field validated by the pure model). */
+  setAvatar(patch: Partial<Avatar>): void {
+    this.commit({ ...this.state, avatar: applyAvatar(this.state.avatar, patch) });
+  }
+
+  /** The ranger is made → the boot creator won't show again (re-openable from the lodge). */
+  markAvatarGemaakt(): void {
+    this.set({ avatarGemaakt: true });
   }
 
   /* ---- rehab (opvang & loslaten) ---- */

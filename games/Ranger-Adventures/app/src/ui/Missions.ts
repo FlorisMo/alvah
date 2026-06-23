@@ -15,6 +15,7 @@ import { SKILL_META, tierFor, badgeProgress } from '../core/skill';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
 import { narrator } from '../core/narrator';
+import { rangerNaam } from '../core/avatar';
 import { Sound } from '../core/sound';
 import { loadGameAudio } from '../core/calls';
 import type { Stage } from '../render3d/Stage';
@@ -25,6 +26,10 @@ import { playSimon } from '../render2d/SimonView';
 import { playDanger } from '../render2d/DangerView';
 import { playWissel } from '../render2d/WisselView';
 import { showCabin } from './Companion';
+import { showAvatarCreator } from './AvatarCreator';
+
+/** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
+const naam = (): string => rangerNaam(store.get().avatar);
 
 /** animal id (content) → generated GLB id (asset pipeline). Others → procedural. */
 const MODEL_OF: Record<string, string> = {
@@ -105,6 +110,7 @@ function showLodge(): void {
     `<button class="ra-text-btn lodge-badges" type="button">Bekijk je breinkracht-badges</button>` +
     `<button class="ra-text-btn lodge-cabin" type="button">${esc(cabinLabel())}</button>` +
     `<button class="ra-text-btn lodge-prikbord" type="button">Open het prikbord${cluesBadge()}</button>` +
+    `<button class="ra-text-btn lodge-ranger" type="button">Pas ${esc(naam())} aan</button>` +
     `</div>` +
     `</div>`,
   );
@@ -125,6 +131,7 @@ function showLodge(): void {
   el.querySelector('.lodge-badges')?.addEventListener('click', showBadges);
   el.querySelector('.lodge-cabin')?.addEventListener('click', () => showCabin(host, showLodge));
   el.querySelector('.lodge-prikbord')?.addEventListener('click', showCaseBoard);
+  el.querySelector('.lodge-ranger')?.addEventListener('click', () => showAvatarCreator(host, showLodge));
 }
 
 /** Lodge link label reflects the companion: rescue prompt → friend's name. */
@@ -281,7 +288,7 @@ function onApproach(missionId: string | null): void {
 function showBriefing(mission: Mission): void {
   const jargon = store.get().settings.jargon;
   const lines = (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
-  const spoken = `${mission.titel}. ${lines.join(' ')}`;
+  const spoken = `Ranger ${naam()}. ${mission.titel}. ${lines.join(' ')}`;
 
   const el = card(
     `<div class="briefing boot-card-ish">` +
@@ -324,7 +331,7 @@ function showFact(step: Step, n: number, total: number): Promise<void> {
     const feit = String(step.skin.feit ?? '');
     const el = card(
       `<div class="fact boot-card-ish">` +
-      `<p class="boot-kicker">Wist je dat? · ${n}/${total}</p>` +
+      `<p class="boot-kicker">Wist je dat, ${esc(naam())}? · ${n}/${total}</p>` +
       `<p class="fact-text">${esc(feit)}</p>` +
       `<div class="ra-row">` +
       `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
@@ -365,10 +372,11 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null):
     : '';
   const reunion = mission.reunion?.tekst ? `<p class="boot-sub">${esc(mission.reunion.tekst)}</p>` : '';
 
+  const lof = `Knap gedaan, ${naam()}!`;
   const el = card(
     `<div class="reward boot-card-ish">` +
     `<p class="boot-kicker">Missie klaar · ${esc(mission.titel)}</p>` +
-    `<h1 class="boot-title">Knap gedaan!</h1>` +
+    `<h1 class="boot-title">${esc(lof)}</h1>` +
     reunion +
     `<div class="badge-row">${badges}</div>` +
     knap +
@@ -377,7 +385,7 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null):
     `</div>`,
   );
   if (store.get().settings.geluid) Sound.found();
-  if (store.get().settings.voorlezen) narrator.speak('Knap gedaan!');
+  if (store.get().settings.voorlezen) narrator.speak(lof);
   el.querySelector('.btn-start')?.addEventListener('click', showLodge);
 }
 
