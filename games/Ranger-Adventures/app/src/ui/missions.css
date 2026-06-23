@@ -327,3 +327,42 @@
 .explore-wayfind .wf-doel { font: 600 16px/1.25 var(--font-body); }
 .explore-wayfind .wf-cue { font: 500 14px/1.25 var(--font-body); opacity: 0.85; }
 .explore-wayfind.wf-arrived { background: rgba(63, 122, 58, 0.9); } /* second channel on arrival */
+
+/* ---- world-EF micro-beat (light open-world seasoning between missions) ---- */
+.worldbeat { text-align: center; }
+.wb-prompt {
+  margin: 6px 0 14px;
+  font: 400 var(--read-size)/var(--read-leading) var(--font-read);
+  color: var(--ink);
+}
+.wb-opts { display: flex; flex-direction: column; gap: 12px; }
+.wb-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 0 18px;
+  border: 2px solid var(--green-soft);
+  border-radius: var(--radius-md, 16px);
+  background: var(--paper);
+  color: var(--ink);
+  font: 600 17px/1.2 var(--font-body);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.wb-opt:disabled { opacity: 0.6; cursor: default; }
+.wb-glyph { flex: none; font-size: 26px; line-height: 1; width: 34px; text-align: center; }
+.wb-label { text-align: left; }
+/* dual-channel feedback: colour + scale + the glyph/words + sound */
+.wb-opt.wb-goed { border-color: var(--green); background: var(--green-soft); transform: scale(1.04); }
+.wb-opt.wb-bijna { border-color: var(--accent-warm); transform: scale(0.97); }
+.wb-feedback { margin: 12px 0 2px; font: 600 16px/1.3 var(--font-body); }
+.wb-feedback[hidden] { display: none; }
+.wb-fb-goed { color: var(--green); }
+.wb-fb-bijna { color: var(--accent-warm); }
+.wb-skip { margin-top: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-opt { transition: none; }
+  .wb-opt.wb-goed, .wb-opt.wb-bijna { transform: none; } /* colour channel still carries it */
+}

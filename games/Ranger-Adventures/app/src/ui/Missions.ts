@@ -25,6 +25,7 @@ import { prefersReducedMotion } from '../core/reduced-motion';
 import { resolveViewMode, variantFor } from '../render3d/play/ViewMode';
 import { REGISTRY_3D } from '../render3d/play/registry';
 import { nextPatrolTarget, capturedClue } from '../core/patrol';
+import { pickWorldBeat, optionCorrect, coarseHeading, type WorldBeat } from '../core/worldbeat';
 import type { Clue } from '../content/types';
 import { playZoeken } from '../render2d/ZoekenView';
 import { playRoute } from '../render2d/RouteView';
@@ -70,6 +71,12 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 let host: HTMLElement;
 let stage: Stage;
 let world: World | null = null;
+
+// Light world-EF seasoning: count in-world mission completions this session so the
+// pure `pickWorldBeat` cadence (every Nth return) stays rare. `lastBeatTick` dedups
+// the one beat per completion across the several `resumePatrol` hops in a cycle.
+let patrolTick = 0;
+let lastBeatTick = -1;
 
 export function startLodge(ui: HTMLElement, st: Stage): void {
   host = ui;
@@ -294,7 +301,67 @@ function resumePatrol(): void {
   const area = Content.activeArea();
   const next = nextPatrolTarget(area.missies, store.get().voltooid);
   world.setActiveMission(next);
-  showExploreHud(area.missies.find((m) => m.id === next)?.titel ?? null);
+  const titel = area.missies.find((m) => m.id === next)?.titel ?? null;
+  // Light world-EF seasoning (BUILD-PLAN §8b): once per completed patrol cycle,
+  // on the rare cadence, dust a calm skippable micro-beat before resuming. The
+  // wayfinding flavour scores against the live bearing to the next marker.
+  if (patrolTick !== lastBeatTick) {
+    const beat = pickWorldBeat({ patrolTick, heading: coarseHeading(world.headingTo(next)) });
+    if (beat) { lastBeatTick = patrolTick; showWorldBeat(beat, () => showExploreHud(titel)); return; }
+  }
+  showExploreHud(titel);
+}
+
+/* --------------------------------------------------- world-EF micro-beat ---- */
+/** A calm, skippable open-world EF beat between missions (impulse-resist or
+ *  wayfinding-recall). Never-scary, never game-over: a wrong tap gives a soft
+ *  "probeer nog eens" and re-presents the SAME beat; "Even verder" always lets
+ *  the child walk on. Dual-channel (colour + glyph + words + read-aloud), ≥56px. */
+function showWorldBeat(beat: WorldBeat, done: () => void): void {
+  narrator.stop();
+  const kicker = beat.kind === 'blijf-op-pad' ? '🌿 Onderweg' : '🧭 Onderweg';
+  const opts = beat.options
+    .map((o, i) =>
+      `<button class="wb-opt" type="button" data-i="${i}">` +
+      `<span class="wb-glyph" aria-hidden="true">${esc(o.glyph)}</span>` +
+      `<span class="wb-label">${esc(o.label)}</span>` +
+      `</button>`,
+    )
+    .join('');
+  const el = card(
+    `<div class="worldbeat boot-card-ish">` +
+    `<p class="boot-kicker">${kicker}</p>` +
+    `<p class="wb-prompt">${esc(beat.prompt)}</p>` +
+    `<div class="wb-opts">${opts}</div>` +
+    `<p class="wb-feedback" role="status" aria-live="polite" hidden></p>` +
+    `<button class="ra-text-btn wb-skip" type="button">Even verder lopen</button>` +
+    `</div>`,
+  );
+  if (store.get().settings.voorlezen) narrator.speak(beat.prompt);
+  const fb = el.querySelector<HTMLParagraphElement>('.wb-feedback');
+  const finish = (): void => { narrator.stop(); done(); };
+  el.querySelectorAll<HTMLButtonElement>('.wb-opt').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const i = Number(btn.dataset.i);
+      if (optionCorrect(beat, i)) {
+        // success sings — colour + scale + sound + word, then resume patrol
+        btn.classList.add('wb-goed');
+        if (store.get().settings.geluid) Sound.found();
+        if (fb) { fb.hidden = false; fb.textContent = 'Goed onthouden, ranger!'; fb.className = 'wb-feedback wb-fb-goed'; }
+        if (store.get().settings.voorlezen) narrator.speak('Goed onthouden, ranger!');
+        el.querySelectorAll<HTMLButtonElement>('.wb-opt').forEach((b) => (b.disabled = true));
+        window.setTimeout(finish, 900);
+      } else {
+        // soft, recoverable — quiet note, same beat stays up (never game-over)
+        btn.classList.add('wb-bijna');
+        if (store.get().settings.geluid) Sound.tryAgain();
+        if (fb) { fb.hidden = false; fb.textContent = 'Bijna! Blijf rustig — probeer nog eens.'; fb.className = 'wb-feedback wb-fb-bijna'; }
+        if (store.get().settings.voorlezen) narrator.speak('Bijna. Probeer nog eens.');
+        window.setTimeout(() => btn.classList.remove('wb-bijna'), 500);
+      }
+    });
+  });
+  el.querySelector('.wb-skip')?.addEventListener('click', finish);
 }
 
 function showExploreHud(activeTitel: string | null): void {
@@ -428,6 +495,8 @@ async function runMission(mission: Mission, fromWorld = false): Promise<void> {
   const areaId = Content.activeArea().id;
   const before = Content.cluesFound(areaId, store.get().voltooid);
   store.markMissionDone(mission.id);
+  // a genuine in-world completion advances patrol → the world-EF beat cadence
+  if (fromWorld) patrolTick++;
   const clueId = capturedClue(mission, fromWorld, before);
   showReward(mission, played, skipped, fromWorld, clueId);
 }

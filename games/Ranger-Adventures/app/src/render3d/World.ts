@@ -389,6 +389,17 @@ export class World {
     this.lastWayKey = '';
   }
 
+  /** The live `richting` phrase (relative to facing) toward a mission marker, for
+   *  the world-EF "welke kant?" recall beat — `null` if the marker is unknown.
+   *  Synchronous so the beat can score against the true bearing at fire time. */
+  headingTo(id: string | null): string | null {
+    if (!id) return null;
+    const goal = this.markers.find((m) => m.missionId === id);
+    if (!goal) return null;
+    const rp = this.ranger.position;
+    return wayfind(rp.x, rp.z, this.ranger.rotation.y, goal.pos.x, goal.pos.z).richting;
+  }
+
   private proceduralTotem(color: string): THREE.Group {
     const g = new THREE.Group();
     g.userData.totem = true;

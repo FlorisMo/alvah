@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light" />
+    <title>Ranger — Charactershowroom</title>
+    <style>
+      :root { --cream: #f4ecdd; --ink: #3a3026; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: var(--cream);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
+      #scene { display: block; width: 100vw; height: 100vh; touch-action: none; }
+      #bar { position: fixed; top: 0; left: 0; right: 0; padding: 10px 12px; display: flex;
+        flex-wrap: wrap; gap: 8px; align-items: center; background: rgba(244,236,221,.85);
+        backdrop-filter: blur(6px); border-bottom: 1px solid rgba(58,48,38,.12); z-index: 5; }
+      #bar .title { font-weight: 700; margin-right: 8px; }
+      #bar .count { opacity: .6; font-size: .85em; }
+      .chip { border: 1px solid rgba(58,48,38,.25); background: #fff8; border-radius: 999px;
+        padding: 8px 14px; font-size: .9em; cursor: pointer; min-height: 40px; }
+      .chip[aria-pressed="true"] { background: #6b8e5a; color: #fff; border-color: #6b8e5a; }
+      #labels { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
+      .label { position: absolute; transform: translate(-50%, -100%); white-space: nowrap;
+        font-size: 12px; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,.82);
+        border: 1px solid rgba(58,48,38,.15); color: var(--ink); }
+      .label.focus { background: #6b8e5a; color: #fff; font-weight: 600; }
+      #hint { position: fixed; bottom: 10px; left: 12px; font-size: .8em; opacity: .6; z-index: 5; }
+    </style>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="bar"></div>
+    <div id="labels"></div>
+    <div id="hint">Sleep om te draaien · tik een dier om in te zoomen + geluid te horen</div>
+    <script type="module" src="/src/showroom.ts"></script>
+  </body>
+</html>
