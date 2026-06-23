@@ -26,7 +26,6 @@ assets-gen/
 *.sln
 *.sw?
 
-# staged runtime audio (regenerable; out of git)
-public/audio/
-public/models/
-public/draco/
+# public/{audio,models,draco}: now TRACKED — the optimized ~25MB cast is the deploy
+# payload; CI's build:site reads them to emit /ranger. (Raw 790MB intermediates in
+# assets-gen/ stay ignored.)

@@ -12,6 +12,10 @@ yarn-error.log*
 # EF-oefeningen: referentie-repo's, read-only leesbron, nooit bundelen
 reference/
 
+# Ranger van de Veluwe: gegenereerde game-bundle voor de /ranger route
+# (regenereert via `app run build:site`; geketend in de root-build + deploy)
+public/ranger/
+
 # ToV-check: lokale baseline-artefacten (niet committen, zie docs/tov-check.md)
 docs/tov-baseline.txt
 docs/tov-*-rapport.txt

@@ -1,0 +1,43 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+// "Ranger van de Veluwe" folded into the site as a full-bleed game surface.
+// BaseLayout carries everything this route needs for free:
+//  - the client-side access gate (`alvah-gate-v1`); the game stays hidden
+//    behind `html.gate-locked body > :not(.gate)` until the shared login,
+//  - `<meta name="robots" content="noindex, nofollow">` + the global
+//    robots.txt Disallow,
+//  - zero third-party scripts / trackers.
+// The game itself is the standalone Vite bundle staged by `app run build:site`
+// into `public/ranger/` (→ `dist/ranger/`) under base `/ranger/`; we only mount
+// its shell DOM (`#app` > `#scene` + `#ui`, exactly as the app's index.html) and
+// reference the fixed-name `app.js` + `app.css`. The bundle resolves its own
+// models/audio/draco fetches under `/ranger/` via `core/assets.ts#assetUrl`.
+---
+
+<BaseLayout
+  title="Ranger van de Veluwe"
+  description="Word boswachter van de Veluwe. Alvah's breinkracht-spel."
+>
+  <link rel="stylesheet" href="/ranger/app.css" />
+  <div id="app">
+    <canvas id="scene"></canvas>
+    <div id="ui"></div>
+  </div>
+  <script is:inline type="module" src="/ranger/app.js"></script>
+</BaseLayout>
+
+<style is:global>
+  /* `/ranger` is a full-bleed game surface: hide the dossier chrome so the
+     bundled game shell (`#app`, fixed inset:0 from the app's own base.css) owns
+     the whole viewport. Page-scoped: only this route bundles this rule. */
+  .site-nav,
+  .site-footer {
+    display: none !important;
+  }
+  main.wrap {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+</style>

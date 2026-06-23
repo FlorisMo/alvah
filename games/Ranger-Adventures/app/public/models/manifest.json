@@ -1,0 +1,458 @@
+{
+  "ranger-alvah": {
+    "file": "ranger-alvah.glb",
+    "category": "human",
+    "bytes": 286688,
+    "tris": 17998,
+    "animated": false,
+    "clips": 0
+  },
+  "prop-pine-scots": {
+    "file": "prop-pine-scots.glb",
+    "category": "prop",
+    "bytes": 113764,
+    "tris": 12046
+  },
+  "animal-wildzwijn-boar": {
+    "file": "animal-wildzwijn-boar.glb",
+    "category": "animal",
+    "bytes": 315208,
+    "tris": 13999
+  },
+  "animal-frisling-piglet": {
+    "file": "animal-frisling-piglet.glb",
+    "category": "animal",
+    "bytes": 321396,
+    "tris": 14000
+  },
+  "animal-das-badger": {
+    "file": "animal-das-badger.glb",
+    "category": "animal",
+    "bytes": 303148,
+    "tris": 14000
+  },
+  "animal-eekhoorn-squirrel": {
+    "file": "animal-eekhoorn-squirrel.glb",
+    "category": "animal",
+    "bytes": 398512,
+    "tris": 20878
+  },
+  "animal-raaf-raven": {
+    "file": "animal-raaf-raven.glb",
+    "category": "bird",
+    "bytes": 152724,
+    "tris": 13579
+  },
+  "animal-nachtzwaluw-nightjar": {
+    "file": "animal-nachtzwaluw-nightjar.glb",
+    "category": "bird",
+    "bytes": 190296,
+    "tris": 12586
+  },
+  "animal-adder-snake": {
+    "file": "animal-adder-snake.glb",
+    "category": "animal",
+    "bytes": 519004,
+    "tris": 16591
+  },
+  "animal-heikikker-frog": {
+    "file": "animal-heikikker-frog.glb",
+    "category": "animal",
+    "bytes": 302648,
+    "tris": 16305
+  },
+  "animal-wolf": {
+    "file": "animal-wolf.glb",
+    "category": "animal",
+    "bytes": 356128,
+    "tris": 13999
+  },
+  "ranger-warden-boa": {
+    "file": "ranger-warden-boa.glb",
+    "category": "human",
+    "bytes": 337740,
+    "tris": 31142,
+    "animated": true,
+    "clips": 1
+  },
+  "figure-poacher": {
+    "file": "figure-poacher.glb",
+    "category": "human",
+    "bytes": 321304,
+    "tris": 31155,
+    "animated": true,
+    "clips": 1
+  },
+  "prop-oak-tree": {
+    "file": "prop-oak-tree.glb",
+    "category": "prop",
+    "bytes": 142544,
+    "tris": 11774
+  },
+  "prop-birch-tree": {
+    "file": "prop-birch-tree.glb",
+    "category": "prop",
+    "bytes": 167268,
+    "tris": 9435
+  },
+  "prop-boulder": {
+    "file": "prop-boulder.glb",
+    "category": "prop",
+    "bytes": 109584,
+    "tris": 11093
+  },
+  "prop-tree-stump": {
+    "file": "prop-tree-stump.glb",
+    "category": "prop",
+    "bytes": 121736,
+    "tris": 11069
+  },
+  "prop-fallen-log": {
+    "file": "prop-fallen-log.glb",
+    "category": "prop",
+    "bytes": 107636,
+    "tris": 11007
+  },
+  "prop-fern": {
+    "file": "prop-fern.glb",
+    "category": "prop",
+    "bytes": 175020,
+    "tris": 8530
+  },
+  "prop-mushrooms": {
+    "file": "prop-mushrooms.glb",
+    "category": "prop",
+    "bytes": 160252,
+    "tris": 12156
+  },
+  "prop-signpost": {
+    "file": "prop-signpost.glb",
+    "category": "prop",
+    "bytes": 123688,
+    "tris": 10807
+  },
+  "prop-ranger-cabin": {
+    "file": "prop-ranger-cabin.glb",
+    "category": "prop",
+    "bytes": 146440,
+    "tris": 11338
+  },
+  "prop-fire-watchtower": {
+    "file": "prop-fire-watchtower.glb",
+    "category": "prop",
+    "bytes": 191456,
+    "tris": 11479
+  },
+  "prop-wooden-fence": {
+    "file": "prop-wooden-fence.glb",
+    "category": "prop",
+    "bytes": 94396,
+    "tris": 8097
+  },
+  "prop-wildlife-camera": {
+    "file": "prop-wildlife-camera.glb",
+    "category": "prop",
+    "bytes": 137032,
+    "tris": 11025
+  },
+  "prop-reeds": {
+    "file": "prop-reeds.glb",
+    "category": "prop",
+    "bytes": 139576,
+    "tris": 10561
+  },
+  "bird-merel": {
+    "file": "bird-merel.glb",
+    "category": "bird",
+    "bytes": 106336,
+    "tris": 9637
+  },
+  "bird-koolmees": {
+    "file": "bird-koolmees.glb",
+    "category": "bird",
+    "bytes": 135920,
+    "tris": 9138
+  },
+  "bird-pimpelmees": {
+    "file": "bird-pimpelmees.glb",
+    "category": "bird",
+    "bytes": 151524,
+    "tris": 9785
+  },
+  "bird-roodborst": {
+    "file": "bird-roodborst.glb",
+    "category": "bird",
+    "bytes": 129640,
+    "tris": 9719
+  },
+  "bird-vink": {
+    "file": "bird-vink.glb",
+    "category": "bird",
+    "bytes": 152696,
+    "tris": 13214
+  },
+  "bird-winterkoning": {
+    "file": "bird-winterkoning.glb",
+    "category": "bird",
+    "bytes": 149480,
+    "tris": 11136
+  },
+  "bird-grote-bonte-specht": {
+    "file": "bird-grote-bonte-specht.glb",
+    "category": "bird",
+    "bytes": 156044,
+    "tris": 11519
+  },
+  "prop-juniper-bush": {
+    "file": "prop-juniper-bush.glb",
+    "category": "prop",
+    "bytes": 187664,
+    "tris": 12432
+  },
+  "prop-case-board": {
+    "file": "prop-case-board.glb",
+    "category": "prop",
+    "bytes": 129224,
+    "tris": 5999
+  },
+  "prop-badger-sett": {
+    "file": "prop-badger-sett.glb",
+    "category": "prop",
+    "bytes": 130860,
+    "tris": 11266
+  },
+  "prop-feather": {
+    "file": "prop-feather.glb",
+    "category": "prop",
+    "bytes": 185540,
+    "tris": 9078
+  },
+  "prop-broken-twig": {
+    "file": "prop-broken-twig.glb",
+    "category": "prop",
+    "bytes": 74076,
+    "tris": 6944
+  },
+  "prop-dead-snag": {
+    "file": "prop-dead-snag.glb",
+    "category": "prop",
+    "bytes": 136812,
+    "tris": 11074
+  },
+  "prop-bramble": {
+    "file": "prop-bramble.glb",
+    "category": "prop",
+    "bytes": 153940,
+    "tris": 10734
+  },
+  "bird-groene-specht": {
+    "file": "bird-groene-specht.glb",
+    "category": "bird",
+    "bytes": 183780,
+    "tris": 14544
+  },
+  "bird-boomklever": {
+    "file": "bird-boomklever.glb",
+    "category": "bird",
+    "bytes": 134740,
+    "tris": 10042
+  },
+  "bird-gaai": {
+    "file": "bird-gaai.glb",
+    "category": "bird",
+    "bytes": 144620,
+    "tris": 10905
+  },
+  "bird-ekster": {
+    "file": "bird-ekster.glb",
+    "category": "bird",
+    "bytes": 142888,
+    "tris": 12809
+  },
+  "bird-koekoek": {
+    "file": "bird-koekoek.glb",
+    "category": "bird",
+    "bytes": 129528,
+    "tris": 9954
+  },
+  "bird-tjiftjaf": {
+    "file": "bird-tjiftjaf.glb",
+    "category": "bird",
+    "bytes": 133596,
+    "tris": 9559
+  },
+  "bird-boomleeuwerik": {
+    "file": "bird-boomleeuwerik.glb",
+    "category": "bird",
+    "bytes": 131724,
+    "tris": 8871
+  },
+  "bird-roodborsttapuit": {
+    "file": "bird-roodborsttapuit.glb",
+    "category": "bird",
+    "bytes": 140684,
+    "tris": 9145
+  },
+  "bird-goudhaantje": {
+    "file": "bird-goudhaantje.glb",
+    "category": "bird",
+    "bytes": 127900,
+    "tris": 8331
+  },
+  "bird-zanglijster": {
+    "file": "bird-zanglijster.glb",
+    "category": "bird",
+    "bytes": 157016,
+    "tris": 11678
+  },
+  "bird-houtduif": {
+    "file": "bird-houtduif.glb",
+    "category": "bird",
+    "bytes": 132896,
+    "tris": 11969
+  },
+  "animal-vos-fox": {
+    "file": "animal-vos-fox.glb",
+    "category": "animal",
+    "bytes": 349124,
+    "tris": 13999
+  },
+  "animal-ree-roedeer": {
+    "file": "animal-ree-roedeer.glb",
+    "category": "animal",
+    "bytes": 235780,
+    "tris": 13999
+  },
+  "animal-edelhert-reddeer": {
+    "file": "animal-edelhert-reddeer.glb",
+    "category": "animal",
+    "bytes": 293904,
+    "tris": 14000
+  },
+  "animal-heideblauwtje-butterfly": {
+    "file": "animal-heideblauwtje-butterfly.glb",
+    "category": "animal",
+    "bytes": 508776,
+    "tris": 13999
+  },
+  "prop-ecoduct": {
+    "file": "prop-ecoduct.glb",
+    "category": "prop",
+    "bytes": 132240,
+    "tris": 11950
+  },
+  "prop-boa-post": {
+    "file": "prop-boa-post.glb",
+    "category": "prop",
+    "bytes": 132684,
+    "tris": 10842
+  },
+  "prop-bird-hide": {
+    "file": "prop-bird-hide.glb",
+    "category": "prop",
+    "bytes": 143608,
+    "tris": 10518
+  },
+  "prop-nest-box": {
+    "file": "prop-nest-box.glb",
+    "category": "prop",
+    "bytes": 103400,
+    "tris": 5999
+  },
+  "prop-snare-empty": {
+    "file": "prop-snare-empty.glb",
+    "category": "prop",
+    "bytes": 193228,
+    "tris": 10662
+  },
+  "prop-raven-nest": {
+    "file": "prop-raven-nest.glb",
+    "category": "prop",
+    "bytes": 209188,
+    "tris": 9765
+  },
+  "vehicle-ranger-jeep": {
+    "file": "vehicle-ranger-jeep.glb",
+    "category": "prop",
+    "bytes": 185748,
+    "tris": 11886
+  },
+  "vehicle-helicopter": {
+    "file": "vehicle-helicopter.glb",
+    "category": "prop",
+    "bytes": 130640,
+    "tris": 8367
+  },
+  "prop-oak-autumn": {
+    "file": "prop-oak-autumn.glb",
+    "category": "prop",
+    "bytes": 158008,
+    "tris": 11929
+  },
+  "prop-oak-winter": {
+    "file": "prop-oak-winter.glb",
+    "category": "prop",
+    "bytes": 172948,
+    "tris": 10349
+  },
+  "prop-birch-autumn": {
+    "file": "prop-birch-autumn.glb",
+    "category": "prop",
+    "bytes": 167700,
+    "tris": 11665
+  },
+  "prop-birch-winter": {
+    "file": "prop-birch-winter.glb",
+    "category": "prop",
+    "bytes": 185044,
+    "tris": 10143
+  },
+  "prop-heather-winter": {
+    "file": "prop-heather-winter.glb",
+    "category": "prop",
+    "bytes": 192868,
+    "tris": 11455
+  },
+  "prop-snow-mound": {
+    "file": "prop-snow-mound.glb",
+    "category": "prop",
+    "bytes": 106512,
+    "tris": 9847
+  },
+  "animal-raaf-fledgling": {
+    "file": "animal-raaf-fledgling.glb",
+    "category": "bird",
+    "bytes": 124748,
+    "tris": 13262
+  },
+  "prop-anthill": {
+    "file": "prop-anthill.glb",
+    "category": "prop",
+    "bytes": 167652,
+    "tris": 11049
+  },
+  "prop-foxglove": {
+    "file": "prop-foxglove.glb",
+    "category": "prop",
+    "bytes": 163692,
+    "tris": 10851
+  },
+  "prop-acorn-cluster": {
+    "file": "prop-acorn-cluster.glb",
+    "category": "prop",
+    "bytes": 124924,
+    "tris": 11724
+  },
+  "bird-buizerd": {
+    "file": "bird-buizerd.glb",
+    "category": "bird",
+    "bytes": 143952,
+    "tris": 13181
+  },
+  "bird-wilde-eend": {
+    "file": "bird-wilde-eend.glb",
+    "category": "bird",
+    "bytes": 135020,
+    "tris": 8033
+  }
+}

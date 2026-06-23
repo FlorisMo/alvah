@@ -1,0 +1,50 @@
+{
+  "wildzwijn": {
+    "file": "wildzwijn.mp3",
+    "kind": "call",
+    "license": "http://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "\"Swine - Pig; Dinosaur-like Grunt\" by TheKingOfGeeks360 — freesound.org (http://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  "ambient-bos": {
+    "file": "ambient-bos.mp3",
+    "kind": "ambient",
+    "license": "https://creativecommons.org/licenses/by/4.0/",
+    "attribution": "\"edge forest 0738AM 210221_0257.wav\" by klankbeeld — freesound.org (https://creativecommons.org/licenses/by/4.0/)"
+  },
+  "ambient-heide": {
+    "file": "ambient-heide.mp3",
+    "kind": "ambient",
+    "license": "https://creativecommons.org/licenses/by/4.0/",
+    "attribution": "\"marsh and woods March NL Kampina 02 190327_1323.wav\" by klankbeeld — freesound.org (https://creativecommons.org/licenses/by/4.0/)"
+  },
+  "edelhert": {
+    "file": "edelhert.mp3",
+    "kind": "call",
+    "license": "http://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "\"Bellowing deer - Animal - Nature - Hirsch - Röhren - Tiere - Wald\" by IchBinChrist — freesound.org (http://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  "ree": {
+    "file": "ree.mp3",
+    "kind": "call",
+    "license": "http://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "\"Deer_Bark_5_s\" by ferventtorpor — freesound.org (http://creativecommons.org/publicdomain/zero/1.0/)"
+  },
+  "eekhoorn": {
+    "file": "eekhoorn.mp3",
+    "kind": "call",
+    "license": "https://creativecommons.org/licenses/by/4.0/",
+    "attribution": "\"What Mouse Squirrel Cartoon\" by dersuperanton — freesound.org (https://creativecommons.org/licenses/by/4.0/)"
+  },
+  "raaf": {
+    "file": "raaf.mp3",
+    "kind": "call",
+    "license": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "attribution": "Northern Raven — Frank A. Roos / xeno-canto.org/374532 (https://creativecommons.org/licenses/by-nc-sa/4.0/)"
+  },
+  "nachtzwaluw": {
+    "file": "nachtzwaluw.mp3",
+    "kind": "call",
+    "license": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "attribution": "European Nightjar — Hans van Loon / xeno-canto.org/1148615 (https://creativecommons.org/licenses/by-nc-sa/4.0/)"
+  }
+}

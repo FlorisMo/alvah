@@ -20,6 +20,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # The root `npm run build` chains `app run build:site`, which needs the
+      # game app's own deps (vite/three/tsc). withastro/action only `npm ci`s the
+      # root package, so install the app deps first — they persist in the
+      # workspace and the chained site build picks them up.
+      - name: Install game-app dependencies
+        run: npm ci --prefix games/Ranger-Adventures/app
       - name: Build with Astro
         uses: withastro/action@v3
 
