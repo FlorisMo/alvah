@@ -125,6 +125,56 @@ life-area data never get blended into a single misleading "score."
 
 ---
 
+## 4b. AI-driven simulation — the "true reactions" layer (new pillar)
+
+The open-ended capacities cannot be taught with scripted dialogue trees. A farmer who only says one
+of three canned lines, an ethics dilemma reduced to three buttons, a maker-critique that is a lookup
+table — none of these give the *true reaction* that makes practice real. To teach Communication,
+Ethics, Internal work, and the feedback half of Work and Creativity, the game needs **generative
+simulation**: an LLM-driven character or coach that responds to what Alvah *actually* said, did, or
+made.
+
+**This stays one engine, reused everywhere — so the architecture thesis holds.** A single
+**simulation/dialogue engine** is built once; each scenario is *data*: a persona (the worried
+farmer, the curious visitor), a situation, and a rubric for what good looks like. New scenario =
+data record, not code — the same "data skin" logic as the five EF engines. It powers NVC practice
+with a person who reacts (Communication), dilemmas that push back (Ethics), a coach that reflects
+parts without leading (Internal work, most carefully), critique of a finished thing (Creativity,
+Work), and dynamic "what if" situations (Logic, Finance).
+
+**The privacy fork — this collides with our client-side rule and must be decided.** CLAUDE.md rule 2:
+*"alle data blijft client-side; niets gaat naar een server."* True AI reactions, done the easy way,
+send a child's words — including inner-work content — to someone's server. Three viable shapes:
+
+| Shape | True-reaction quality | Privacy | Feasibility |
+|---|---|---|---|
+| **Cloud LLM** (latest Claude via API) | Highest | Data leaves device → breaks the client-side rule as written | API cost; needs no-retention / no-train / no-PII + safety rails |
+| **On-device LLM** (WebLLM/WebGPU, small open model) | Lower, improving fast | Fully client-side; nothing leaves the iPad | Large model download; tablet performance unproven |
+| **Parent-mediated** (AI helps Floris, who roleplays) | High, plus human warmth | No child↔server link | Needs Floris present; does not scale to solo play |
+
+**Recommendation: tier by sensitivity, do not pick one shape for everything.**
+- **Inner work, and anything about Alvah's own feelings → never to the cloud.** On-device or
+  parent-mediated only. This is the tov hard line plus a child's most private data; not negotiable
+  to a server.
+- **Lower-sensitivity roleplay** (farmer negotiation, maker critique, a dilemma that is not about
+  Alvah's own psyche) → cloud Claude acceptable *if* Floris opts in, with no transcript retention
+  beyond the device, no names, and child-safety system rails. Try on-device first where quality allows.
+- **Provider-agnostic seam.** If cloud, use the latest Claude models, but keep the integration
+  swappable so on-device can take over as small models improve.
+
+**Child-safety rails (mandatory in any shape).** A generative character talking to an 8-year-old
+needs hard constraints baked into the *engine*, not the scenario data: stay in role,
+age-appropriate, never frightening (the [../research/veluwe-research.md](../research/veluwe-research.md)
+safety chart applies), never give advice that should come from a parent or professional, and hand
+off gracefully when a topic gets too real (the same "never cross this line" boundary as brief 4).
+
+**AI for tracking — careful.** It is tempting to let the model *score* a conversation or reflection.
+Allowed only as a *formative, private* signal feeding Model B (mastery rungs) — never a number that
+rates who Alvah is (§8). An AI grading a child's emotional expression is exactly the line we do not
+cross.
+
+---
+
 ## 5. The ten areas in detail
 
 Each entry: **what it is · why (AI-era) · framework menu · diegetic fit · spiral rungs · tracking.**
@@ -344,6 +394,11 @@ block *building*.
    an area is ready to hand off to a real tool. Decide per area when those signals show.
 5. **Tracking namespace.** Confirm a separate `alvah-life-v1` store (recommended) vs extending
    `alvah-ef-v1`. Keeping them separate prevents a misleading blended "score."
+6. **AI-simulation privacy shape [the big one].** §4b needs a ruling: cloud / on-device /
+   parent-mediated, and the sensitivity tiering. This is the only decision that touches a *founding*
+   site rule (client-side only, CLAUDE.md rule 2), so it is yours alone. My recommendation: tier by
+   sensitivity, inner-work never to the cloud. Resolving this gates any area whose practice depends
+   on true reactions (Communication, Ethics, the feedback half of Work/Creativity).
 
 ---
 
@@ -352,8 +407,13 @@ block *building*.
 - **Never reduce the child to a number.** Model B is evidence and reflection, not rating. Internal
   work and Ethics are *never* scored as a judgement of who Alvah is (tov doc; CLAUDE.md ethos).
 - **No CBT** in Internal work. IFS + NVC + interoception/Focusing instead.
-- **Privacy-first, client-side only.** Same as the site and the EF games: no server, no tracking,
-  one local store. Reflection artefacts stay on-device.
+- **Privacy-first, client-side only — by default.** Same as the site and the EF games: no server,
+  no tracking, one local store; reflection artefacts stay on-device. The *only* candidate exception
+  is the §4b AI-simulation layer, and only by an explicit §7 decision — never silently. Inner-work
+  content never leaves the device under any shape.
+- **AI characters are safety-railed.** Any generative character facing Alvah obeys the §4b rails
+  (in-role, age-appropriate, never frightening, hands off when too real). AI may inform Model B but
+  never scores who he is.
 - **No surnames of real people** in any content or framework attribution-as-content (CLAUDE.md
   rule 1). Citing public framework authors in *planning docs* is fine; in-game content uses roles.
 - **Accessibility stays non-negotiable** — AVI-level copy, read-aloud, ≥56px targets,
@@ -372,5 +432,8 @@ block *building*.
   fiction was carrying these areas all along.
 - **Same pipeline, second store.** Reuse `staircase.js` / `scoring.js` / `mijlpalen.js` /
   `celebration.js`; add `alvah-life-v1` for Model B so the two tracking models never blur.
+- **One major new engine.** The §4b simulation/dialogue engine is the one genuinely new piece of
+  machinery these areas add; everything else is scenarios-as-data on top of it. Building it well
+  once (with its safety rails) unlocks Communication, Ethics, and the feedback half of Work/Creativity.
 - **Research-first, as always.** Nothing gets built from vibes. Each area waits for its
   confidence-flagged research, distilled into engines and data — the exact path the EF work took.

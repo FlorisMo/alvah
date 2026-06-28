@@ -64,17 +64,32 @@ a parent. No grades, no classroom, no server.
    you adapt difficulty for a competency with no clean score — learner self-rating, parent input,
    complexity ladders, mastery rubrics? What is robust vs easily-gamed by a kid who just wants the
    reward?
+9. **AI-driven simulation for the open-ended skills — architecture & child safety.** Several
+   competencies (communication, ethics, the feedback half of work/creativity) need *true reactions*:
+   an LLM-driven character or coach that responds to what the child actually says or makes, not a
+   scripted tree. Research, concretely: **(a) Local vs cloud** — what is the current realistic
+   quality and feasibility of *on-device* / in-browser LLMs (WebLLM, WebGPU, small open models) on a
+   tablet, vs a cloud API, for child-facing roleplay? What is the privacy-vs-quality trade-off today
+   and its near-term trajectory? **(b) Child-safety for generative characters** — best practices and
+   evidence for LLMs talking to children (guardrails, age-appropriateness, refusal/hand-off design,
+   avoiding parasocial over-attachment, avoiding a model giving guidance that should come from a
+   parent/professional). **(c) AI as evaluator** — risks and best practice of using an LLM to assess
+   a child's open-ended response or reflection *formatively* without it becoming a judgement of the
+   child. **(d) Privacy architecture** — patterns for keeping a child's most sensitive input (inner
+   work) strictly on-device while allowing lower-sensitivity simulation to use more capable models.
 
 **Honesty constraints:**
-- Tag **zeker** / **waarschijnlijk**. Be especially blunt on **transfer** (Q5) and on **gamification
-  burnout** (Q4) — these fields overclaim and I want the real picture.
-- Surface the **risks** of tracking children's inner/social development, not just the methods.
+- Tag **zeker** / **waarschijnlijk**. Be especially blunt on **transfer** (Q5), on **gamification
+  burnout** (Q4), and on **on-device-LLM quality** (Q9a) — these all overclaim and I want the real
+  picture, including the near-term trajectory, not just today's snapshot.
+- Surface the **risks** of tracking children's inner/social development, and of children talking to
+  generative AI, not just the methods.
 
 **Required output format (this one is architectural, so be concrete):**
 - A **recommended dual-track tracking architecture**: exactly when to use Model A (psychometric) vs
   Model B (mastery/portfolio), with a decision rule I can apply per skill, and concrete data shapes
   for Model B (what an "evidence of demonstration" record should contain).
-- A **spiral-design template**: a reusable structure for laying out any one of my nine areas as a
+- A **spiral-design template**: a reusable structure for laying out any one of my ten areas as a
   7→21 spiral with mastery rungs.
 - A **spaced-rehearsal scheduling model** for skills/practices (when to resurface what).
 - A **motivation-design rulebook**: do / don't for points, badges, streaks, rewards over a multi-year
@@ -84,6 +99,9 @@ a parent. No grades, no classroom, no server.
 - A **graduation decision framework**: the readiness signals + a sim→real hand-off playbook.
 - A **"measure without harming" charter**: concrete rules for formative, private, non-judgemental
   tracking of a child, with the bright lines never to cross.
+- An **AI-simulation architecture recommendation** (from Q9): a local-vs-cloud-vs-parent-mediated
+  decision matrix tiered by data sensitivity, a child-safety rail checklist for any generative
+  character facing the child, and the bright lines for AI-as-evaluator.
 - **Open-gaps / caveats** and **sources** (cite; flag CC0/open material for clean-room rewrite).
 
 ---
@@ -95,3 +113,6 @@ a parent. No grades, no classroom, no server.
   *every* area uses rewards and what we're allowed to claim. Treat as binding once it returns.
 - The "measure without harming" charter operationalises the tov hard line; it should be quoted into
   PLAN §8 once we have it.
+- Q9's output feeds **PLAN §4b** (the AI-simulation pillar) and **§7 decision 6** (the privacy
+  shape). If Q9 comes back large enough to deserve its own treatment, spin it into a standalone
+  brief 8; otherwise this brief carries it.
