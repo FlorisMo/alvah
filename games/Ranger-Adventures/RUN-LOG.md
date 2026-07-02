@@ -1497,3 +1497,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~91%
 ```
+
+---
+**2026-07-02 21:18:13Z** · ticked: - [x] W6.4b2 Wereld-entree: zitplek-prop bij vogelkijkhut + nabijheids/interact-entree + wayfinding + Missions-flow speelt playRoep3d met missionView 3d; E2E één volledige beat vanaf de zitplek
+
+```
+✔ landed: W6.4b2 Wereld-entree: zitplek-prop bij vogelkijkhut + nabijheids/interact-entree + wayfinding + Missions-flow speelt playRoep3d met missionView 3d; E2E één volledige beat vanaf de zitplek
+▶ phase:  Fase W6 — Diegetische missies + biologie
+→ next:   W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~92%
+```

@@ -94,7 +94,7 @@ W6.3 Biologie diegetisch — gesplitst (raaf vertelt op locatie / veldnotitie op
 - [x] W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus (2)
 W6.4b Ken je roep, wereld-helft — gesplitst (3D-twin+audio / wereld-entree+E2E):
 - [x] W6.4b1 RoepView 3D-twin: `roep3d.ts` rendert de beat in de WorldCtx en drijft dezelfde `RoepRun` (pariteit by construction) + onmiskenbare synth-roepmotieven per vogel in sound.ts; build+parity (1)
-- [ ] W6.4b2 Wereld-entree: zitplek-prop bij vogelkijkhut + nabijheids/interact-entree + wayfinding + Missions-flow speelt playRoep3d met missionView 3d; E2E één volledige beat vanaf de zitplek (1)
+- [x] W6.4b2 Wereld-entree: zitplek-prop bij vogelkijkhut + nabijheids/interact-entree + wayfinding + Missions-flow speelt playRoep3d met missionView 3d; E2E één volledige beat vanaf de zitplek (1)
 - [ ] W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert (1)
 
 ## Fase W7 — Prestatie + oplevering

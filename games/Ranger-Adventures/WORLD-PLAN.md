@@ -1759,3 +1759,29 @@ with the full sub-id (e.g. `W2.4a`).
   typechecks it) until W6.4b2 wires the sit-spot. No E2E named/possible yet — nothing is
   player-visible until the bench entry renders it. 172 core+parity+readlevel unit green,
   build green, frozen smoke 4/4 untouched; ticked WITHOUT `--force`.
+- 2026-07-02 (W6.4b2, sit-spot world entry — closes W6.4b): the "Ken je roep" slice
+  now has its diegetic front door. A calm procedural bench (`placeSitSpot`, no GLB
+  dependency) sits at (22,-6.5) a couple metres out from the vogelkijkhut landmark
+  (26,-11), facing the open heath so roep3d's perched bird forms have room in front;
+  it carries the same halo-ring + floating "Zitplek · luister" label the case-board
+  uses, so it reads as a wayfinding "go here" cue (no minimap chrome). KEY DECISION
+  (recorded because it diverges from every other in-world mission entry): roep is NOT
+  one of the five EF `Engine`s, so it has no mission card, no `REGISTRY_3D` entry, and
+  does NOT go through `runMission`/`resolveViewMode`. Instead the sit-spot mirrors the
+  W2.2 case-board's DEDICATED proximity/tap/interact path (`sitSpotPos`/`nearSitSpot`/
+  `setSitSpot`/`sitSpotState`, kept OUT of `markers` so it never pollutes wayfinding or
+  the "nearest mission" the E2E steers to), and a new `playRoepAtSitSpot()` calls
+  `playRoep3d(world.ctx(host))` directly inside the same `beginActivity()`→try→
+  `finally endActivity()` frame the mission runner uses — with `setMissionView('3d')`
+  before and `setMissionView(null)` after, and `clearActivityWin()` in the finally so no
+  win closure outlives the beat. The world is never torn down (`screen` stays 'world'
+  behind the activity), reduced-motion is honored inside roep3d (cuts-not-moves, still
+  fully playable). New `sitspot.spec.ts` walks the ~23 m to the bench (camera-relative
+  arrow steering, same helper shape as board.spec), asserts the affordance + the 3D
+  banner, then drives ONE FULL genuine beat via the `winStep()` hook and asserts the
+  slice resolves back to free-roam in-place (missionView null, screen 'world', pos()
+  still live, HUD + affordance re-surfaced). NOTE for W6.5: the two new player-facing
+  strings ("Luister naar de vogels", "Zitplek · luister") are already M3/E3-short but
+  are NOT yet in the readlevel corpus and the button has no read-aloud/≥56px assert —
+  that is exactly W6.5's tone-gate scope, left for that box. 359 unit green, build green,
+  sitspot.spec green (52 s), frozen smoke 4/4 untouched; ticked WITHOUT `--force`.

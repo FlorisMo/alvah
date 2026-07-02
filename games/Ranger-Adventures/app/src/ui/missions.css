@@ -326,6 +326,7 @@
 }
 .explore-prompt,
 .explore-hub-prompt,
+.explore-sit-prompt,
 .explore-vehicle-prompt,
 .explore-heli-prompt {
   position: absolute;
@@ -335,6 +336,7 @@
 }
 .explore-prompt[hidden],
 .explore-hub-prompt[hidden],
+.explore-sit-prompt[hidden],
 .explore-vehicle-prompt[hidden] { display: none; }
 
 /* ---- W5.3b helicopter: the "aan de grond" / "vlieg naar een helipad" note is a

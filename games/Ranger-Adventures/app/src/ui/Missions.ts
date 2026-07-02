@@ -29,6 +29,7 @@ import { type WayCue } from '../render3d/Wayfinding';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { resolveViewMode, variantFor } from '../render3d/play/ViewMode';
 import { REGISTRY_3D } from '../render3d/play/registry';
+import { playRoep3d } from '../render3d/engines/roep3d';
 import { nextPatrolTarget, capturedClue } from '../core/patrol';
 import { pickWorldBeat, optionCorrect, coarseHeading, type WorldBeat } from '../core/worldbeat';
 import type { Clue } from '../content/types';
@@ -43,7 +44,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -176,6 +177,7 @@ function leaveWorld(): void {
   provideNearId(null);
   provideMarkers(null);
   provideBoard(null);
+  provideSitSpot(null);
   provideClip(null);
   provideActors(null);
   provideAmbient(null);
@@ -491,6 +493,9 @@ function startExplore(): void {
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
   // mission board overlay in-place (no leaveWorld). Wire its proximity + interact.
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });
+  // W6.4b2: the "Ken je roep" sit-spot by the vogelkijkhut — walking up surfaces
+  // "Luister naar de vogels", acting on it plays the roep3d slice in-place.
+  world.setSitSpot({ onNear: onSitSpotApproach, onActivate: tryPlayRoep });
   // W5.1: the drivable jeep — walking up surfaces "Stap in", driving surfaces
   // "Stap uit". A single render reads the live vehicle state so both proximity
   // and enter/exit refresh the same slot (no leaveWorld, world stays live).
@@ -518,6 +523,7 @@ function startExplore(): void {
   provideNearId(() => world!.nearMission());
   provideMarkers(() => world!.markerPositions());
   provideBoard(() => world!.boardState());
+  provideSitSpot(() => world!.sitSpotState()); // W6.4b2: "Ken je roep" sit-spot proximity
   provideClip(() => world!.playerClip()); // W3.2: the ranger's active locomotion clip
   provideActors(() => world!.actorClips()); // W3.3: warden + poacher baked clips
   provideAmbient(() => world!.ambientState()); // W3.6: roaming animals + gliding birds
@@ -637,6 +643,7 @@ function showExploreHud(activeTitel: string | null): void {
     veld +
     `<div class="explore-prompt" hidden></div>` +
     `<div class="explore-hub-prompt" hidden></div>` +
+    `<div class="explore-sit-prompt" hidden></div>` +
     `<div class="explore-vehicle-prompt" hidden></div>` +
     `<div class="explore-heli-prompt" hidden></div>` +
     // W5.3b: the cockpit frame overlay shown while flying (pointer-events:none so
@@ -660,6 +667,9 @@ function showExploreHud(activeTitel: string | null): void {
   // — e.g. after closing the mission board — re-surface the hub affordance. The World
   // only re-fires onBoardNear on a proximity CHANGE, so a fresh HUD would miss it.
   if (world?.boardState()?.near) onBoardApproach(true);
+  // W6.4b2: same for the sit-spot affordance (re-surface if the ranger stands at
+  // the bench when the HUD remounts, e.g. right after a roep beat finishes).
+  if (world?.sitSpotState()?.near) onSitSpotApproach(true);
   // W5.1: restore the jeep affordance if the ranger stands beside it (or is driving)
   // when the HUD (re)mounts — the World only re-fires onNear on a proximity CHANGE.
   renderVehiclePrompt();
@@ -866,6 +876,57 @@ function tryOpenBoard(): void {
   const prompt = host.querySelector<HTMLDivElement>('.explore-hub-prompt');
   if (!prompt || prompt.hidden) return;
   showMissionBoard();
+}
+
+/* -------------------------------------------------- sit-spot (Ken je roep) ---- */
+/** The "Ken je roep" sit-spot affordance (W6.4b2): when the ranger sits at the
+ *  bench by the vogelkijkhut, surface a button to listen to the birds; hide it
+ *  when he walks off. Its own prompt slot (`.explore-sit-prompt`) so a mission
+ *  marker's "Speel mee" and the hub board never fight over one element. */
+function onSitSpotApproach(near: boolean): void {
+  const prompt = host.querySelector<HTMLDivElement>('.explore-sit-prompt');
+  if (!prompt) return;
+  if (!near) { prompt.hidden = true; prompt.innerHTML = ''; return; }
+  prompt.hidden = false;
+  prompt.innerHTML = `<button class="btn-start explore-sit-play" type="button">Luister naar de vogels</button>`;
+  prompt.querySelector('.explore-sit-play')?.addEventListener('click', tryPlayRoep);
+}
+
+/** Guarded entry to the roep slice (button tap OR the interact key via
+ *  World.tryInteract): plays only when the sit-spot affordance is actually on
+ *  screen — the ranger is at the bench and no overlay has replaced the HUD. */
+function tryPlayRoep(): void {
+  const prompt = host.querySelector<HTMLDivElement>('.explore-sit-prompt');
+  if (!prompt || prompt.hidden) return;
+  void playRoepAtSitSpot();
+}
+
+/**
+ * Play "Ken je roep" (roep3d) in-place at the sit-spot (W6.4b2). Mirrors
+ * runMission's §1f 3D branch but for the standalone perception slice (roep is not
+ * one of the five EF mission engines, so it has no mission card / registry entry):
+ * freeze the world, resolve the view as 3D for the dev-state hook, play the beat
+ * into the live `WorldCtx`, then resume free-roam in-place. The world is never
+ * torn down (`screen` stays 'world' behind the activity); reduced-motion is honored
+ * inside `playRoep3d` (cuts-not-moves, the slice stays fully playable).
+ */
+async function playRoepAtSitSpot(): Promise<void> {
+  if (!world) return;
+  Sound.unlock();
+  void loadGameAudio();
+  clearOverlays();
+  setMissionView('3d'); // dev-state hook: the slice resolves diegetically in-world
+  world.beginActivity();
+  try {
+    await playRoep3d(world.ctx(host));
+  } finally {
+    clearActivityWin();
+    world.endActivity();
+    setMissionView(null);
+  }
+  // resume free-roam in-place (the ranger is still at the bench → the HUD
+  // re-surfaces the sit-spot affordance so a second listen is one tap away).
+  showExploreHud(activeExploreTitel());
 }
 
 /**

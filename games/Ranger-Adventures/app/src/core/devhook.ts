@@ -33,6 +33,9 @@ export interface RangerDevHook {
   markers(): { x: number; z: number; missionId: string }[] | null;
   /** The spawn case-board hub: world position + live proximity, for E2E (W2.2). */
   board(): { x: number; z: number; near: boolean } | null;
+  /** The "Ken je roep" sit-spot bench: world position + live proximity, for E2E
+   *  (W6.4b2). */
+  sitSpot(): { x: number; z: number; near: boolean } | null;
   /** Win the active 3D mission step via its genuine resolve path; true if one
    *  was pending. Drives the two-mission-chain E2E deterministically (W2.3). */
   winStep(): boolean;
@@ -124,6 +127,7 @@ const state = {
   nearId: null as null | (() => string | null),
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
   board: null as null | (() => { x: number; z: number; near: boolean } | null),
+  sitSpot: null as null | (() => { x: number; z: number; near: boolean } | null),
   winStep: null as null | (() => boolean),
   actors: null as null | (() => { id: string; clip: { name: string; time: number } | null }[]),
   ambient: null as null | (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]),
@@ -206,6 +210,13 @@ export function provideBoard(
   fn: (() => { x: number; z: number; near: boolean } | null) | null,
 ): void {
   state.board = fn;
+}
+
+/** Register the live sit-spot source (the World). Pass null to clear (W6.4b2). */
+export function provideSitSpot(
+  fn: (() => { x: number; z: number; near: boolean } | null) | null,
+): void {
+  state.sitSpot = fn;
 }
 
 /** Register the "win the active 3D step" driver (the mission runner). W2.3. */
@@ -337,6 +348,7 @@ export function installDevHook(): boolean {
     nearId: () => (state.nearId ? state.nearId() : null),
     markers: () => (state.markers ? state.markers() : null),
     board: () => (state.board ? state.board() : null),
+    sitSpot: () => (state.sitSpot ? state.sitSpot() : null),
     winStep: () => (state.winStep ? state.winStep() : false),
     actors: () => (state.actors ? state.actors() : null),
     ambient: () => (state.ambient ? state.ambient() : null),

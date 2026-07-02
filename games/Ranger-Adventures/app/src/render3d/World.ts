@@ -230,6 +230,17 @@ export class World {
   private onBoardNear: (near: boolean) => void = () => {};
   private onBoardOpen: () => void = () => {};
 
+  // W6.4b2 "Ken je roep" sit-spot: a bench by the vogelkijkhut. Its own
+  // proximity/tap/interact path (like the case-board) — walking up surfaces
+  // "Luister naar de vogels", and acting on it plays the roep3d perception slice
+  // in-place. Kept OUT of `markers` so it never pollutes wayfinding or the
+  // "nearest mission" proximity the E2E steers to.
+  private sitSpotGroup: THREE.Group | null = null;
+  private sitSpotPos: THREE.Vector3 | null = null;
+  private nearSitSpot = false;
+  private onSitSpotNear: (near: boolean) => void = () => {};
+  private onSitSpotActivate: () => void = () => {};
+
   // W5.1 drivable jeep: a solid parked prop the ranger walks up to ("Stap in"),
   // then drives arcade-kinematic (heading-based, rate-clamped, terrain-stuck)
   // with a WIDER follow-cam; "Stap uit" drops him beside it. Kept OUT of
@@ -362,6 +373,7 @@ export class World {
     this.placeMarkers(markers);
     this.placeHub();
     this.placeLandmarks();
+    this.placeSitSpot();
     this.placeNatureDressing();
     this.placeScenicActors();
     this.placeAmbientLife();
@@ -394,6 +406,8 @@ export class World {
     // the spawn case-board hub wins when the ranger stands at it (W2.2) — its
     // "open the mission board" affordance is what the interact key fires there.
     if (this.nearBoard) { this.onBoardOpen(); return; }
+    // W6.4b2: standing at the sit-spot → play the "Ken je roep" slice.
+    if (this.nearSitSpot) { this.onSitSpotActivate(); return; }
     if (this.nearId) this.onInteract(this.nearId);
   }
 
@@ -417,6 +431,23 @@ export class World {
   setBoard(cbs: { onNear: (near: boolean) => void; onOpen: () => void }): void {
     this.onBoardNear = cbs.onNear;
     this.onBoardOpen = cbs.onOpen;
+  }
+
+  /** Dev-hook accessor (W6.4b2): the sit-spot's world position + whether the ranger
+   *  stands in its radius — lets the E2E steer to the bench and know it has arrived.
+   *  `null` before the sit-spot is placed. */
+  sitSpotState(): { x: number; z: number; near: boolean } | null {
+    if (!this.sitSpotPos) return null;
+    return { x: this.sitSpotPos.x, z: this.sitSpotPos.z, near: this.nearSitSpot };
+  }
+
+  /** Register the sit-spot callbacks (W6.4b2): `onNear(true|false)` as the ranger
+   *  enters/leaves the bench's radius, and `onActivate()` when he acts on it (tap
+   *  the prompt or press the interact key). The roep3d slice plays in-place — the
+   *  world is never torn down. */
+  setSitSpot(cbs: { onNear: (near: boolean) => void; onActivate: () => void }): void {
+    this.onSitSpotNear = cbs.onNear;
+    this.onSitSpotActivate = cbs.onActivate;
   }
 
   /** Register the drivable-jeep HUD callbacks (W5.1): `onNear(true|false)` as the
@@ -1382,6 +1413,58 @@ export class World {
   }
 
   /**
+   * W6.4b2: the "Ken je roep" sit-spot — a calm wooden bench a couple of metres
+   * out from the vogelkijkhut (landmark at 26,-11), facing the open heath so the
+   * perched bird forms of the perception slice have room to sit in front. Like the
+   * case-board hub it carries a halo ring + a floating "Zitplek · luister" label so
+   * it reads as "go here" (the diegetic wayfinding cue — no minimap chrome), and it
+   * has its own proximity/tap/interact path OUTSIDE `markers`. Acting on it plays
+   * `roep3d` in-place (Missions wires `onActivate`). The bench is a small procedural
+   * prop (no GLB dependency); its collision circle is tiny so the ranger can stand
+   * right at it.
+   */
+  private placeSitSpot(): void {
+    const at = new THREE.Vector3(22, 0, -6.5);
+    at.y = this.groundY(at.x, at.z);
+    const group = new THREE.Group();
+    group.position.copy(at);
+    // turn the seat to look out over the heath (away from the clearing/hide)
+    group.rotation.y = Math.atan2(at.x, at.z);
+    group.add(this.proceduralBench());
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.9, 1.15, 24),
+      new THREE.MeshBasicMaterial({ color: '#8ab6d6', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.05;
+    group.add(ring);
+    const label = this.makeLabel('Zitplek · luister', '#cfe6f2');
+    label.position.y = 1.7;
+    group.add(label);
+    this.scene.add(group);
+    this.obstacles.push({ x: at.x, z: at.z, r: 0.5 });
+    this.sitSpotGroup = group;
+    this.sitSpotPos = at.clone();
+  }
+
+  /** A small calm wooden bench (two legs + a seat + a low backrest) — an instant
+   *  procedural prop so the sit-spot needs no GLB. Warm heath-wood tones. */
+  private proceduralBench(): THREE.Group {
+    const g = new THREE.Group();
+    const wood = new THREE.MeshStandardMaterial({ color: '#7a5f3e', roughness: 1 });
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.09, 0.42), wood);
+    seat.position.y = 0.46;
+    const back = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.34, 0.07), wood);
+    back.position.set(0, 0.7, -0.18);
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.46, 0.42), wood);
+    legL.position.set(-0.6, 0.23, 0);
+    const legR = legL.clone();
+    legR.position.x = 0.6;
+    g.add(seat, back, legL, legR);
+    return g;
+  }
+
+  /**
    * W4.1: place the fixed landmark props per the §4 world map — the
    * fire-watchtower (bos beacon), the vogelkijkhut overlooking the ven, the
    * ecoduct + BOA post on the west rim, and two wegwijzer signposts along the
@@ -2082,6 +2165,18 @@ export class World {
         return;
       }
     }
+    // 1b') a tapped sit-spot bench → walk up to it (proximity then offers the roep slice)
+    if (this.sitSpotGroup && this.sitSpotPos) {
+      const hit = this.raycaster.intersectObject(this.sitSpotGroup, true);
+      if (hit.length) {
+        const dir = new THREE.Vector3(this.sitSpotPos.x, 0, this.sitSpotPos.z).sub(
+          new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
+        );
+        if (dir.lengthSq() > 0.001) dir.normalize();
+        this.target.set(this.sitSpotPos.x - dir.x * 1.4, 0, this.sitSpotPos.z - dir.z * 1.4);
+        return;
+      }
+    }
     // 1c) a tapped parked jeep → walk up to it (proximity then offers "Stap in")
     if (this.jeep && this.jeepPos) {
       const hit = this.raycaster.intersectObject(this.jeep, true);
@@ -2320,6 +2415,13 @@ export class World {
         const nb = Math.hypot(this.boardPos.x - rp.x, this.boardPos.z - rp.z) < 2.4;
         if (nb !== this.nearBoard) { this.nearBoard = nb; this.onBoardNear(nb); }
       }
+
+      // sit-spot proximity (W6.4b2) — surface / hide the "Luister naar de vogels"
+      // affordance. Its own flag so it never fights a mission marker or the board.
+      if (this.sitSpotPos) {
+        const ns = Math.hypot(this.sitSpotPos.x - rp.x, this.sitSpotPos.z - rp.z) < 2.4;
+        if (ns !== this.nearSitSpot) { this.nearSitSpot = ns; this.onSitSpotNear(ns); }
+      }
     }
 
     // wayfinding cue to the active mission — calm direction + distance, no minimap.
@@ -2380,6 +2482,7 @@ export class World {
     for (const m of this.markers) m.label.visible = true; // W6.1: restore the name-tags on resume
     this.nearId = null;
     this.nearBoard = false; // force a fresh proximity re-fire (re-surfaces the hub prompt)
+    this.nearSitSpot = false; // W6.4b2: same — re-surface the sit-spot prompt on resume
     this.lastWayKey = '';
     this.followTargetYaw = this.ranger.rotation.y;
     if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut back
