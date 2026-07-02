@@ -1299,3 +1299,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~69%
 ```
+
+---
+**2026-07-02 18:13:23Z** · ticked: - [x] W4.7a Ambient-heide her-encoderen <1 MB (afconvert mono AAC, licentie ongewijzigd) + biome-crossfade tune (geen blip: equal-power fade tussen beds via pure curve-helper + unit test); ambient-bos-follow-up in §10
+
+```
+✔ landed: W4.7a Ambient-heide her-encoderen <1 MB (afconvert mono AAC, licentie ongewijzigd) + biome-crossfade tune (geen blip: equal-power fade tussen beds via pure curve-helper + unit test); ambient-bos-follow-up in §10
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.7b Voetstappen per ondergrond (zand/gras, gated op geluid+snelheid+biome, pure cadans-core + unit test + dev-hook/E2E) + extra vogelzang bij sleutels (4-6 calls met license-log als keys aanwezig, anders schoon skippen)
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~70%
+```

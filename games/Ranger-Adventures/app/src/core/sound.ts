@@ -6,6 +6,8 @@
  * triggering tap satisfies the autoplay-unlock rule).
  */
 
+import { fadeInCurve, fadeOutCurve } from './audiofade';
+
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
 let ctx: AudioContext | null = null;
@@ -152,31 +154,71 @@ export const Sound = {
     }
   },
 
-  /** start a looping ambience bed at a low gain (replaces any current bed) */
-  startAmbient(buffer: AudioBuffer, gain = 0.25): void {
+  /**
+   * Start a looping ambience bed, CROSSFADING out any current bed (W4.7a). A
+   * biome crossing used to hard-cut (stop old + start new same instant → an
+   * audible blip); now the outgoing bed fades out while the new one fades in
+   * over `fade` s with equal power (no loudness dip). The first bed just fades
+   * in from silence. Rapid re-crossings stop a still-fading bed immediately so
+   * at most two sources ever run.
+   */
+  startAmbient(buffer: AudioBuffer, gain = 0.25, fade = AMBIENT_FADE): void {
     const a = ac();
     if (!a) return;
-    this.stopAmbient();
+    const now = a.currentTime;
+
+    // a bed still mid-fade from a previous rapid switch: retire it at once
+    if (fading) { try { fading.src.stop(); } catch { /* already stopped */ } fading = null; }
+
+    const prev = ambient;
     const src = a.createBufferSource();
     const g = a.createGain();
     src.buffer = buffer;
     src.loop = true;
-    g.gain.value = gain;
     src.connect(g);
     g.connect(a.destination);
-    src.start();
+
+    const steps = 32;
+    if (a.state !== 'running' || fade <= 0) {
+      // suspended context / no fade: set directly (a scheduled curve wouldn't run)
+      g.gain.value = gain;
+    } else {
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.setValueCurveAtTime(fadeInCurve(gain, steps), now, fade);
+    }
+    src.start(now);
     ambient = { src, gain: g };
+
+    if (prev) {
+      if (a.state !== 'running' || fade <= 0) {
+        try { prev.src.stop(); } catch { /* already stopped */ }
+      } else {
+        const from = Math.max(prev.gain.gain.value, 0.0001);
+        prev.gain.gain.cancelScheduledValues(now);
+        prev.gain.gain.setValueCurveAtTime(fadeOutCurve(from, steps), now, fade);
+        try { prev.src.stop(now + fade + 0.05); } catch { /* already stopped */ }
+        fading = prev;
+      }
+    }
   },
 
   setAmbientGain(gain: number): void {
-    if (ambient) ambient.gain.gain.value = gain;
+    const a = ac();
+    if (!ambient) return;
+    // a crossfade may have a value-curve scheduled; cancel it so the tweak sticks
+    if (a) { ambient.gain.gain.cancelScheduledValues(a.currentTime); }
+    ambient.gain.gain.value = gain;
   },
 
   stopAmbient(): void {
+    if (fading) { try { fading.src.stop(); } catch { /* already stopped */ } fading = null; }
     if (!ambient) return;
     try { ambient.src.stop(); } catch { /* already stopped */ }
     ambient = null;
   },
 };
 
+/** Crossfade window (s) between ambience beds on a biome crossing. */
+const AMBIENT_FADE = 1.5;
 let ambient: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+let fading: { src: AudioBufferSourceNode; gain: GainNode } | null = null;

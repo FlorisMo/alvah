@@ -1351,3 +1351,37 @@ with the full sub-id (e.g. `W2.4a`).
   every value is byte-identical between two polls (frozen), all under budget. Not
   a smoke upgrade (own assert); frozen smoke 4/4 untouched. 306 unit (+8) + build
   green; sky + frozen smoke 4/4 green.
+- 2026-07-02 (W4.7 SPLIT): the audio-pass box is four independent concerns with
+  separate verification, so it was split in the ledger into W4.7a (ambience bed:
+  re-encode + biome crossfade) and W4.7b (surface-aware footsteps + extra bird
+  calls). Parent checkbox replaced with plain text; weights 1+1 (the parent was
+  2).
+- 2026-07-02 (W4.7a, ambience bed re-encode + biome crossfade): the heide bed
+  was a **6.7 MB** stereo 48 kHz 185 kbps MP3 — a heavy iPad download for a
+  background loop at 0.22 gain. TOOLING SURPRISE: this machine has NO mp3
+  encoder (no ffmpeg/lame; `ffmpeg not found`), only macOS `afconvert`, which
+  can DECODE mp3 but only ENCODE AAC/ALAC/etc — not mp3. So the re-encode target
+  is **AAC (.m4a)**, which Web Audio `decodeAudioData` handles on both the iPad
+  Safari/WebKit target and chromium, and the loader (`calls.ts`) keys off the
+  manifest `file` field so only the extension changed (id `ambient-heide`
+  unchanged, licence/attribution CC-BY untouched). Pipeline: mp3 → mono 22050 Hz
+  PCM caf (`afconvert -f caff -d LEI16 --mix -c 1`) → AAC-LC @ 24 kbps
+  (`-d aac@22050 -b 24000`); the sample rate is FORCED because AAC-LC at 24 kbps
+  auto-drops to a muffled 8 kHz otherwise. Result **937 KB** (< 1,000,000 bytes,
+  decimal-MB-safe), full 305 s length kept so the existing loop seam behaviour is
+  unchanged; the old 6.7 MB mp3 is deleted. CROSSFADE: a biome crossing used to
+  HARD-CUT the bed (`applyAmbient` → `startAmbient` stop-old-start-new same
+  instant → an audible blip, flagged in the old comment). New pure THREE-free
+  `core/audiofade.ts` (`fadeInCurve`/`fadeOutCurve`, equal-power cos/sin so
+  out²+in² is constant → no loudness dip) feeds `GainNode.setValueCurveAtTime`;
+  `Sound.startAmbient(buffer, gain, fade=1.5)` now fades the new bed in while the
+  previous fades out, stops the outgoing after the window, and retires a
+  still-fading bed on a rapid re-crossing (≤2 sources ever). Suspended-context /
+  fade≤0 paths set gain directly (a scheduled curve wouldn't run). No audio has
+  a pixel surface, so — like the W3.0 audio precedent — there is no E2E assert;
+  verification is the pure crossfade unit test (5 tests: endpoints, monotonic,
+  equal-power invariant, degenerate steps) + a durable `audio-assets.test.ts`
+  size gate (heide < 1 MB + every manifest file exists on disk) + build + frozen
+  smoke. FOLLOW-UP for a later box: `ambient-bos.mp3` is still 1.2 MB (also > 1
+  MB) — out of W4.7a's named scope (the box scopes to ambient-heide only), noted
+  here so it is not lost. 313 unit (+7) + build green; frozen smoke 4/4 green.
