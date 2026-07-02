@@ -1785,3 +1785,21 @@ with the full sub-id (e.g. `W2.4a`).
   are NOT yet in the readlevel corpus and the button has no read-aloud/≥56px assert —
   that is exactly W6.5's tone-gate scope, left for that box. 359 unit green, build green,
   sitspot.spec green (52 s), frozen smoke 4/4 untouched; ticked WITHOUT `--force`.
+- 2026-07-02 (W6.5, tone gate — CLOSES the roep slice): the three stray
+  player-facing roep strings the W6.4b2 note flagged now live in `ROEP_COPY`
+  (`engines/roep.ts`), the ONE source of truth the readlevel corpus already
+  iterates — so `zit` ("Luister naar de vogels", the sit-spot entry button),
+  `start` ("Luister", the 2D intro button) and `wayfinding` ("Zitplek · luister",
+  the diegetic 3D bench label) all pass the M3/E3 ≤7-word gate automatically
+  (2 keys were literals in `Missions.ts`/`RoepView.ts`, one a `makeLabel` literal
+  in `World.ts`; each now reads `ROEP_COPY.*`). DECISION on read-aloud: the slice
+  CONTENT (instructie + roep + goed/mis/klaar feedback) is already narrator-spoken
+  on entry and per round in both views; the entry-affordance labels are visible-only
+  by design — they MIRROR the existing "Speel mee" mission prompt, which never
+  auto-speaks on proximity, so adding TTS only to the sit-spot button would be
+  inconsistent chrome, not a tone win. E2E ≥56px: `sitspot.spec` now takes a
+  `boundingBox()` on the NEW `.explore-sit-play` button (≥56px min-dimension) AND on
+  the in-world roep controls (`.roep-speak` 56×56, `.roep-call` ≥64px tall) once the
+  3D card is up — `min(w,h) ≥ 56` on all three. Corpus non-triviality guard still
+  >100 strings. 359 unit + build green; sitspot.spec green (52 s); frozen smoke 4/4
+  untouched (own assert, not a smoke upgrade). Ticked WITHOUT `--force`.

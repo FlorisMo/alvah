@@ -30,6 +30,7 @@ import { prefersReducedMotion } from '../core/reduced-motion';
 import { resolveViewMode, variantFor } from '../render3d/play/ViewMode';
 import { REGISTRY_3D } from '../render3d/play/registry';
 import { playRoep3d } from '../render3d/engines/roep3d';
+import { ROEP_COPY } from '../engines/roep';
 import { nextPatrolTarget, capturedClue } from '../core/patrol';
 import { pickWorldBeat, optionCorrect, coarseHeading, type WorldBeat } from '../core/worldbeat';
 import type { Clue } from '../content/types';
@@ -888,7 +889,7 @@ function onSitSpotApproach(near: boolean): void {
   if (!prompt) return;
   if (!near) { prompt.hidden = true; prompt.innerHTML = ''; return; }
   prompt.hidden = false;
-  prompt.innerHTML = `<button class="btn-start explore-sit-play" type="button">Luister naar de vogels</button>`;
+  prompt.innerHTML = `<button class="btn-start explore-sit-play" type="button">${esc(ROEP_COPY.zit)}</button>`;
   prompt.querySelector('.explore-sit-play')?.addEventListener('click', tryPlayRoep);
 }
 

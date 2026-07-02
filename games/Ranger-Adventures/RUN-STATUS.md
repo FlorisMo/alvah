@@ -4,17 +4,17 @@
 > [WORLD-LEDGER.md](WORLD-LEDGER.md); this is the at-a-glance view.
 
 - **Ledger:** WORLD-LEDGER.md
-- **Phase:** Fase W6 — Diegetische missies + biologie
-- **Progress:** ~92% (weighted by ledger items)
-- **Just landed:** W6.4b2 Wereld-entree: zitplek-prop bij vogelkijkhut + nabijheids/interact-entree + wayfinding + Missions-flow speelt playRoep3d met missionView 3d; E2E één volledige beat vanaf de zitplek
-- **Next up:** W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert
-- **Last heartbeat:** 2026-07-02 21:18:13Z
+- **Phase:** Fase W7 — Prestatie + oplevering
+- **Progress:** ~93% (weighted by ledger items)
+- **Just landed:** W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert
+- **Next up:** W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
+- **Last heartbeat:** 2026-07-02 21:27:05Z
 - **Blocker:** none
 
 ```
-✔ landed: W6.4b2 Wereld-entree: zitplek-prop bij vogelkijkhut + nabijheids/interact-entree + wayfinding + Missions-flow speelt playRoep3d met missionView 3d; E2E één volledige beat vanaf de zitplek
-▶ phase:  Fase W6 — Diegetische missies + biologie
-→ next:   W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert
+✔ landed: W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert
+▶ phase:  Fase W7 — Prestatie + oplevering
+→ next:   W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~92%
+▷ progress: ~93%
 ```

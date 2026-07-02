@@ -46,6 +46,7 @@ import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
 import { PlayerRig } from './PlayerRig';
+import { ROEP_COPY } from '../engines/roep';
 import {
   SKY_STOPS, cloudOffset, windSway, flyoverAt, type Flyover,
 } from './Atmosphere';
@@ -1438,7 +1439,7 @@ export class World {
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.05;
     group.add(ring);
-    const label = this.makeLabel('Zitplek · luister', '#cfe6f2');
+    const label = this.makeLabel(ROEP_COPY.wayfinding, '#cfe6f2');
     label.position.y = 1.7;
     group.add(label);
     this.scene.add(group);

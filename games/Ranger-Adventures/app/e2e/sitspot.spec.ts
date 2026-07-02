@@ -91,6 +91,10 @@ test('sitspot: bench by the vogelkijkhut plays a full "Ken je roep" beat in-worl
   await walkToSitSpot(page);
   const playBtn = page.locator('.explore-sit-play');
   await expect(playBtn, 'the sit-spot affordance shows at the bench').toBeVisible();
+  // W6.5 tone-gate: the NEW sit-spot entry button is a ≥56px tap target.
+  const sitBox = await playBtn.boundingBox();
+  expect(sitBox, 'sit-spot button has a bounding box').not.toBeNull();
+  expect(Math.min(sitBox!.width, sitBox!.height), 'sit-spot button ≥56px').toBeGreaterThanOrEqual(56);
   await shot(page, 'sitspot-at-bench');
 
   // 2) act on it → the roep slice plays IN-PLACE, so the resolved view is 3D and the
@@ -103,6 +107,14 @@ test('sitspot: bench by the vogelkijkhut plays a full "Ken je roep" beat in-worl
   expect(await hook(page, (r) => r.pos()), 'world scene still live during the slice').not.toBeNull();
   // the roep call banner + at least one calm bird form are staged in-world.
   await expect(page.locator('.roep3d-card'), 'the accessible roep banner is up').toBeVisible();
+  // W6.5 tone-gate: the roep-slice controls (read-aloud + play-the-call) are ≥56px too.
+  for (const sel of ['.roep3d-card .roep-speak', '.roep3d-card .roep-call']) {
+    const loc = page.locator(sel);
+    await expect(loc, `${sel} visible`).toBeVisible();
+    const b = await loc.boundingBox();
+    expect(b, `${sel} has a bounding box`).not.toBeNull();
+    expect(Math.min(b!.width, b!.height), `${sel} ≥56px`).toBeGreaterThanOrEqual(56);
+  }
   await shot(page, 'sitspot-roep-3d');
 
   // 3) play ONE FULL beat from the bench — drive the genuine resolve (answer every

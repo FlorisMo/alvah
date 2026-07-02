@@ -1508,3 +1508,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~92%
 ```
+
+---
+**2026-07-02 21:27:05Z** · ticked: - [x] W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert
+
+```
+✔ landed: W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert
+▶ phase:  Fase W7 — Prestatie + oplevering
+→ next:   W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~93%
+```

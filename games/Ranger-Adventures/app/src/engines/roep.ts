@@ -39,7 +39,9 @@ export const ROEP_VOGELS: readonly RoepVogel[] = [
   { id: 'koolmees',        naam: 'koolmees',        roep: 'Ti ta ti ta. Als een pompje.' },
 ];
 
-/** Player-facing UI-tekst — één bron van waarheid, meegenomen in de readlevel-corpus. */
+/** Player-facing UI-tekst — één bron van waarheid, meegenomen in de readlevel-corpus.
+ *  Elke nieuwe zin loopt zo automatisch door de M3/E3-toon-gate (`readlevel.test`),
+ *  inclusief de wereld-entree (`zit`) en de 2D-startknop (`start`) van W6.4/W6.5. */
 export const ROEP_COPY = {
   instructie: 'Welke vogel roept zo?',
   luister: 'Luister goed.',
@@ -47,6 +49,9 @@ export const ROEP_COPY = {
   goed: 'Goed geluisterd!',
   mis: 'Luister nog eens.',
   klaar: 'Knap gedaan!',
+  zit: 'Luister naar de vogels',
+  start: 'Luister',
+  wayfinding: 'Zitplek · luister',
 } as const;
 
 export interface RoepDiff {

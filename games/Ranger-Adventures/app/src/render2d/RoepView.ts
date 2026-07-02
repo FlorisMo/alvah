@@ -50,7 +50,7 @@ export function playRoep(host: HTMLElement): Promise<BeatSummary> {
       `<span class="rc-ico">🔊</span><span class="rc-text"></span></button>` +
       `<p class="roep-banner">${esc(ROEP_COPY.luister)}</p>` +
       `<div class="roep-row"></div>` +
-      `<div class="roep-intro"><button class="btn-start" type="button">Luister</button></div>` +
+      `<div class="roep-intro"><button class="btn-start" type="button">${esc(ROEP_COPY.start)}</button></div>` +
       `</div>`;
     host.appendChild(panel);
 
