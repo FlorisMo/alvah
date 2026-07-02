@@ -1090,3 +1090,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~34%
 ```
+
+---
+**2026-07-02 14:51:53Z** · ticked: - [x] W2.4b Prikbord + raaf in hub-overlay; dode hut-flows opruimen; MILESTONE: commit + push (eerste coherente wereld-eerst build live)
+
+```
+✔ landed: W2.4b Prikbord + raaf in hub-overlay; dode hut-flows opruimen; MILESTONE: commit + push (eerste coherente wereld-eerst build live)
+▶ phase:  Fase W3 — Levend (animaties)
+→ next:   W3.0 Sleutels verifiëren (test-meshy + test-xeno, gemaskeerd) en balans loggen; bij ontbreken status --blocker en dóór; --force toegestaan
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~36%
+```

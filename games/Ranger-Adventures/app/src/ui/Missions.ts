@@ -547,10 +547,17 @@ function showExploreHud(activeTitel: string | null): void {
       `<span class="wf-text"><b class="wf-doel">${esc(activeTitel)}</b><span class="wf-cue">zoek het spoor…</span></span>` +
       `</div>`
     : '';
+  // W2.4b: the interim "Terug naar de hut" pill is gone (the world is the front
+  // door). The one place a world session still needs an explicit exit is a Deep
+  // Demo tour that owns the world (`worldExit` set) — then a "Terug naar de
+  // rondleiding" pill hands back to the tour. The prikbord folded into the pause
+  // hub, so the HUD keeps a single menu entry: the Pauze pill.
+  const demoBackPill = worldExit
+    ? `<button class="ra-pill explore-back" type="button">‹ Terug naar de rondleiding</button>`
+    : '';
   const el = card(
     `<div class="explore-hud">` +
-    `<button class="ra-pill explore-back" type="button">‹ Terug naar de hut</button>` +
-    `<button class="ra-pill explore-board" type="button">📌 Prikbord${cluesBadge()}</button>` +
+    demoBackPill +
     `<button class="ra-pill explore-pause" type="button">⏸ Pauze</button>` +
     `<p class="explore-hint">Tik op een dier om mee te spelen — of tik op de grond om te lopen.</p>` +
     veld +
@@ -564,9 +571,8 @@ function showExploreHud(activeTitel: string | null): void {
   // reclaims transparency (controls below stay tappable).
   el.classList.add('explore-overlay');
   el.querySelector('.explore-back')?.addEventListener('click', exitWorld);
-  // reach the prikbord over the LIVE world — no teardown; back returns to patrol.
-  el.querySelector('.explore-board')?.addEventListener('click', () => showCaseBoard(true));
-  // W2.4a: the pause/hub shell — instellingen + badges over the LIVE world, no leaveWorld.
+  // W2.4a/b: the pause/hub shell — prikbord + raaf + instellingen + badges over
+  // the LIVE world, no leaveWorld.
   el.querySelector('.explore-pause')?.addEventListener('click', () => showPauseHub());
   const hud = el.querySelector<HTMLElement>('.explore-hud');
   mountJoystick(hud);
@@ -748,32 +754,40 @@ function showMissionBoard(): void {
 }
 
 /**
- * The in-world pause / hub shell (W2.4a): a light menu the player can open over
- * the LIVE world — instellingen (Tweaks) + badges — WITHOUT `leaveWorld`, so the
- * THREE scene stays live behind the card and `screen` stays 'world'. Both leaves
- * hand their "terug" back to this hub (not the lodge); the hub's own back is
- * "Terug naar de open plek", returning to the explore HUD in-place. This is the
- * world-first replacement for the lodge's Instellingen/badges links; W2.4b folds
- * in the prikbord + raaf and removes the dead "Terug naar de hut" pill.
+ * The in-world pause / hub shell (W2.4a, completed W2.4b): the light menu the
+ * player opens over the LIVE world — prikbord + raaf-companion + instellingen +
+ * badges — WITHOUT `leaveWorld`, so the THREE scene stays live behind the card
+ * and `screen` stays 'world'. Instellingen + badges hand their "terug" back to
+ * this hub; the prikbord + raaf return to the open plek (their own flows resolve
+ * the arc / grow the raaf, so a straight return to the world reads cleaner than
+ * bouncing back into a menu). The hub's own back is "Terug naar de open plek",
+ * returning to the explore HUD in-place. This is the world-first replacement for
+ * the lodge's prikbord/cabin/instellingen/badges links.
  */
 function showPauseHub(): void {
   narrator.stop();
+  const toWorld = (): void => showExploreHud(activeExploreTitel());
   const el = card(
     `<div class="reward boot-card-ish">` +
     `<p class="boot-kicker">Pauze</p>` +
     `<h1 class="boot-title">Wat wil je doen?</h1>` +
     `<div class="lodge-links">` +
+    `<button class="ra-text-btn ph-prikbord" type="button">Open het prikbord${cluesBadge()}</button>` +
+    `<button class="ra-text-btn ph-companion" type="button">${esc(cabinLabel())}</button>` +
     `<button class="ra-text-btn ph-badges" type="button">Bekijk je breinkracht-badges</button>` +
     `<button class="ra-text-btn ph-tweaks" type="button">Instellingen</button>` +
     `</div>` +
     `<button class="btn-start ph-back" type="button">Terug naar de open plek</button>` +
     `</div>`,
   );
-  // Both leaves stay in the world (card()-only, no leaveWorld/setScreen) and
-  // return to THIS hub, not the lodge.
+  // Every leaf stays in the world (card()-only, no leaveWorld/setScreen). The
+  // prikbord + raaf return to the open plek; instellingen + badges return here.
+  el.querySelector('.ph-prikbord')?.addEventListener('click', () => showCaseBoard(true));
+  el.querySelector('.ph-companion')?.addEventListener('click', () =>
+    showCabin(host, toWorld, 'Terug naar de open plek'));
   el.querySelector('.ph-badges')?.addEventListener('click', () => showBadges(showPauseHub, 'Terug'));
   el.querySelector('.ph-tweaks')?.addEventListener('click', () => showTweaks(host, showPauseHub));
-  el.querySelector('.ph-back')?.addEventListener('click', () => showExploreHud(activeExploreTitel()));
+  el.querySelector('.ph-back')?.addEventListener('click', toWorld);
 }
 
 /* ------------------------------------------------------------ briefing ---- */

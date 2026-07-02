@@ -11,8 +11,9 @@ import { shot, collectPageErrors, reportPageErrors } from './helpers';
  *
  * Tagged `@smoke`: this folds world-reach into smoke v1 (§3.1). It is still
  * smoke v1 — NO movement assert here (movement.spec.ts owns the frozen ≥2 m
- * assert). The lodge stays reachable from the explore HUD's "Terug naar de hut"
- * pill (covered by other specs), so nothing is lost.
+ * assert). W2.4b removed the interim "Terug naar de hut" pill; the in-world menu
+ * is now the "Pauze" pill (prikbord + raaf + instellingen + badges), asserted
+ * present here so the front door still lands on a coherent HUD.
  */
 
 /** Read the dev-hook `screen` (present because the dev server runs under DEV). */
@@ -45,8 +46,10 @@ test('journey: Begin → avatar → world (≤2 clicks), screen reaches "world" 
   await expect.poll(() => screen(page), { timeout: 30_000 }).toBe('world');
   await shot(page, 'journey-3-world');
 
-  // The lodge is no longer on the front-door path; it lives behind the HUD pill.
-  await expect(page.getByRole('button', { name: 'Terug naar de hut' })).toBeVisible();
+  // The lodge is no longer reachable in normal play (W2.4b). The world HUD's
+  // single menu entry is the Pauze pill (opens the in-world hub).
+  await expect(page.locator('.explore-pause')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Terug naar de hut' })).toHaveCount(0);
 
   await reportPageErrors(testInfo, errors);
   expect(errors, 'no uncaught errors across the journey').toEqual([]);

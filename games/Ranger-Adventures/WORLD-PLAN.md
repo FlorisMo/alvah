@@ -875,3 +875,27 @@ with the full sub-id (e.g. `W2.4a`).
   lodge-only flows. New `pause.spec.ts` opens the hub, reaches Instellingen + badges,
   asserts `screen==='world'` and `pos()!=null` at each step, and closes back to the HUD.
   17 E2E + 261 unit green; frozen smoke untouched (own assert, not a smoke upgrade).
+- 2026-07-02 (W2.4b, prikbord + raaf folded in — CLOSES W2): the pause hub now
+  carries the prikbord (`showCaseBoard(true)`) and the raaf-companion
+  (`showCabin`) on top of instellingen + badges, so every lodge-only menu the
+  world-first player could still want is reachable in-world with no `leaveWorld`
+  (scene live, `screen` stays 'world'). DECISION on return targets: instellingen
+  + badges bounce back to the hub (short, modal), but prikbord + raaf return to
+  the open plek — their own flows commit real state (the arc `reportArc`, the
+  raaf's bond growth) and reading cleaner as "back to playing" than back into a
+  menu; reusing the untouched `fromWorld` prikbord path also keeps arc-commit
+  intact (I deliberately did NOT route it through the demo-suppress `demoBack`
+  arg). `showCabin` grew an optional third `label` arg (default "Terug naar de
+  hut" → lodge unchanged; hub passes "Terug naar de open plek") so the raaf's
+  back button reads right over the world. DEAD-FLOW cleanup: the interim
+  "‹ Terug naar de hut" HUD pill is gone AND the standalone "📌 Prikbord" HUD
+  pill is gone (folded into the hub) — so in normal play the lodge is no longer
+  reachable at all (it survives only for `?sandbox` back + Deep Demo
+  `backToLodge`, unchanged). GOTCHA: Deep Demo's `openFreeroam` still needs an
+  in-world exit back to the tour (`worldExit` set), so the back pill is now
+  CONDITIONAL — shown only when `worldExit` is set, relabelled "‹ Terug naar de
+  rondleiding"; `exitWorld` is untouched. `journey.spec` swapped its old
+  "Terug naar de hut" assertion for "Pauze pill present + no hut pill";
+  `pause.spec` grew prikbord + raaf steps (open over the live world, world
+  survives, return to the HUD). 16 E2E (chromium) + 261 unit green; frozen smoke
+  untouched. Milestone: first coherent world-first build — committed + pushed.

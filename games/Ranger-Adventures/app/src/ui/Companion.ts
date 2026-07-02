@@ -34,10 +34,15 @@ const SOORT_GLYPH: Record<string, string> = { raaf: '🐦‍⬛', hond: '🐕', 
 
 let host: HTMLElement;
 let onBack: () => void;
+// The back-button label. Default "Terug naar de hut" (the lodge caller); the
+// world pause-hub (W2.4b) passes "Terug naar de open plek" so the raaf screen
+// reads right when it overlays the LIVE world instead of the lodge.
+let backLabel = 'Terug naar de hut';
 
-export function showCabin(ui: HTMLElement, back: () => void): void {
+export function showCabin(ui: HTMLElement, back: () => void, label = 'Terug naar de hut'): void {
   host = ui;
   onBack = back;
+  backLabel = label;
   render();
 }
 
@@ -60,7 +65,7 @@ function render(): void {
     `<p class="boot-kicker">De ranger-hut</p>` +
     `<h1 class="boot-title">Jouw plekje</h1>` +
     `<div class="cabin-sections"></div>` +
-    `<button class="ra-text-btn cabin-back" type="button">Terug naar de hut</button>` +
+    `<button class="ra-text-btn cabin-back" type="button">${esc(backLabel)}</button>` +
     `</div>`;
   host.appendChild(el);
 
