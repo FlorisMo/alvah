@@ -43,7 +43,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard } from '../core/devhook';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
 const naam = (): string => rangerNaam(store.get().avatar);
@@ -174,6 +174,7 @@ function leaveWorld(): void {
   provideCameraYaw(null);
   provideNearId(null);
   provideMarkers(null);
+  provideBoard(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -440,6 +441,9 @@ function startExplore(): void {
   // W1.5: the rotating follow-cam reads the "Camera draait mee" setting live each
   // frame (no restart), so flipping it in Instellingen takes effect immediately.
   world.setCameraFollow(() => store.get().settings.cameraDraaitMee);
+  // W2.2: the spawn case-board is the mission hub — walking up to it opens the
+  // mission board overlay in-place (no leaveWorld). Wire its proximity + interact.
+  world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });
   // start the bed on the lodge clearing (heide) before the first crossing fires
   setAmbientScene('heide', seizoen);
   stage.enterWorld(world);
@@ -451,6 +455,7 @@ function startExplore(): void {
   provideCameraYaw(() => world!.cameraYaw());
   provideNearId(() => world!.nearMission());
   provideMarkers(() => world!.markerPositions());
+  provideBoard(() => world!.boardState());
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }
 
@@ -547,6 +552,7 @@ function showExploreHud(activeTitel: string | null): void {
     `<p class="explore-hint">Tik op een dier om mee te spelen — of tik op de grond om te lopen.</p>` +
     veld +
     `<div class="explore-prompt" hidden></div>` +
+    `<div class="explore-hub-prompt" hidden></div>` +
     `</div>`,
   );
   // The HUD overlays the LIVE world: its `.ra-overlay` wrapper must let taps
@@ -560,6 +566,10 @@ function showExploreHud(activeTitel: string | null): void {
   const hud = el.querySelector<HTMLElement>('.explore-hud');
   mountJoystick(hud);
   mountOnboardHint(hud);
+  // W2.2: if the ranger is already standing at the case-board when the HUD (re)mounts
+  // — e.g. after closing the mission board — re-surface the hub affordance. The World
+  // only re-fires onBoardNear on a proximity CHANGE, so a fresh HUD would miss it.
+  if (world?.boardState()?.near) onBoardApproach(true);
 }
 
 /** Build the W1.6 first-world-entry onboarding hint into the freshly-rendered
@@ -662,6 +672,74 @@ function onInteract(missionId: string): void {
   const m = Content.activeArea().missies.find((mm) => mm.id === missionId);
   if (!m) return;
   showBriefing(m, true);
+}
+
+/* ------------------------------------------------ case-board (mission hub) ---- */
+/** The spawn case-board hub proximity affordance (W2.2): when the ranger stands at
+ *  the board, surface a button to open the mission board; hide it when he walks off.
+ *  Its own prompt slot (`.explore-hub-prompt`) so a mission marker's "Speel mee" and
+ *  the hub never fight over one element. */
+function onBoardApproach(near: boolean): void {
+  const prompt = host.querySelector<HTMLDivElement>('.explore-hub-prompt');
+  if (!prompt) return;
+  if (!near) { prompt.hidden = true; prompt.innerHTML = ''; return; }
+  prompt.hidden = false;
+  prompt.innerHTML = `<button class="btn-start explore-board-open" type="button">Bekijk het missiebord</button>`;
+  prompt.querySelector('.explore-board-open')?.addEventListener('click', tryOpenBoard);
+}
+
+/** Guarded entry to the mission board (button tap OR the interact key via
+ *  World.tryInteract): opens only when the hub affordance is actually on screen —
+ *  the ranger is at the board and no overlay has replaced the HUD. */
+function tryOpenBoard(): void {
+  const prompt = host.querySelector<HTMLDivElement>('.explore-hub-prompt');
+  if (!prompt || prompt.hidden) return;
+  showMissionBoard();
+}
+
+/**
+ * The in-world mission board (W2.2): the case-board opens a mission-pick overlay
+ * WITHOUT tearing the world down — `card()` swaps the HUD DOM but `leaveWorld` is
+ * never called, so the THREE scene stays live behind the card (screen stays
+ * 'world'). Picking a mission launches it in-place as a veldnotitie (fromWorld →
+ * runMission's §1f branch resolves 3D); "Terug naar de open plek" returns to the
+ * world via the explore HUD. This is the world-first replacement for the lodge grid.
+ */
+function showMissionBoard(): void {
+  narrator.stop();
+  const area = Content.activeArea();
+  const done = store.get().voltooid;
+  const cards = area.missies
+    .map((m) => {
+      const engines = Array.from(new Set(m.stappen.map((s) => SKILL_META[s.ef as Engine]?.naam ?? s.ef)));
+      const klaar = done[m.id] ? `<span class="mc-done" aria-label="voltooid">✓</span>` : '';
+      return (
+        `<button class="mission-card" type="button" data-id="${esc(m.id)}">` +
+        `<span class="mc-land">${esc(m.landschap)}</span>${klaar}` +
+        `<span class="mc-title">${esc(m.titel)}</span>` +
+        `<span class="mc-eng">${engines.map((e) => `<span class="mc-chip">${esc(e)}</span>`).join('')}</span>` +
+        `</button>`
+      );
+    })
+    .join('');
+
+  const el = card(
+    `<div class="mission-board">` +
+    `<p class="boot-kicker">Het missiebord · ${esc(area.naam)}</p>` +
+    `<h1 class="boot-title">Kies een missie</h1>` +
+    `<div class="mission-grid">${cards}</div>` +
+    `<button class="ra-text-btn mb-back" type="button">Terug naar de open plek</button>` +
+    `</div>`,
+  );
+  el.querySelectorAll<HTMLButtonElement>('.mission-card').forEach((b) => {
+    b.addEventListener('click', () => {
+      Sound.unlock();
+      void loadGameAudio();
+      const m = area.missies.find((mm) => mm.id === b.dataset.id);
+      if (m) showBriefing(m, true); // veldnotitie → 3D in-place, returns to patrol
+    });
+  });
+  el.querySelector('.mb-back')?.addEventListener('click', () => showExploreHud(activeExploreTitel()));
 }
 
 /* ------------------------------------------------------------ briefing ---- */

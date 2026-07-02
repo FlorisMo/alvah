@@ -814,3 +814,27 @@ with the full sub-id (e.g. `W2.4a`).
   user toggle, so no Instellingen row. New `onboarding.test.ts` (device branch +
   ≤7-word lint) + `onboarding.spec.ts` (hint shows → dismisses on the first step →
   flag persisted in the shared blob). Frozen smoke untouched (own assert).
+- 2026-07-02 (W2.2, cabin hub / mission board): the spawn clearing now carries a
+  ranger-cabin (solid prop, collision circle, walk-around) and a case-board hub.
+  TWO nuances worth recording. (1) "Mission board" ≠ the existing prikbord: §4 calls
+  the case-board the *mission hub*, and the acceptance is "start a mission → 3d", so
+  I built a NEW `showMissionBoard()` overlay (the lodge's mission grid, world-first)
+  rather than reusing `showCaseBoard` (which is the clue/prikbord board). Picking a
+  card → `showBriefing(m, true)` → runMission's §1f branch resolves 3D in-place. (2)
+  The case-board is kept OUT of the `markers` array on purpose: `interact.spec` walks
+  to the NEAREST marker, and a sentinel board 4 m from spawn would become that
+  nearest one and break the marker walk. Instead the World owns a dedicated hub path
+  — `boardPos`/`nearBoard` proximity, a `setBoard({onNear,onOpen})` registration, a
+  tap-to-walk raycast branch, and `tryInteract` firing the board before any mission
+  `nearId`. The overlay opens via `card()` (swaps HUD DOM) but never calls
+  `leaveWorld`, so the THREE scene stays live and `screen` stays 'world'; "Terug naar
+  de open plek" rebuilds the explore HUD in-place. GOTCHA: the World only re-fires
+  `onBoardNear` on a proximity CHANGE, so after closing the board while still standing
+  at it the fresh HUD would miss the affordance — `showExploreHud` re-surfaces it by
+  reading `world.boardState().near`, and `endActivity` resets `nearBoard` for the same
+  reason. Props sit +x/+z of spawn so the movement smoke's forward (−z) corridor stays
+  clear. New dev hook `board()` ({x,z,near}) lets the E2E steer to the hub; new
+  `board.spec.ts` walks there, opens the board (asserts screen stays 'world'), closes
+  it (HUD back, still 'world'), reopens and starts a mission (asserts
+  `missionView === '3d'`, world still live). No unit test named for this box (pure UI
+  wiring). 15 E2E + 261 unit green; frozen smoke untouched.

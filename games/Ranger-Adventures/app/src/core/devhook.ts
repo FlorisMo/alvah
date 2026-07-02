@@ -31,6 +31,8 @@ export interface RangerDevHook {
   nearId(): string | null;
   /** Every mission marker's world position, for E2E navigation (W1.4). */
   markers(): { x: number; z: number; missionId: string }[] | null;
+  /** The spawn case-board hub: world position + live proximity, for E2E (W2.2). */
+  board(): { x: number; z: number; near: boolean } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -44,6 +46,7 @@ const state = {
   clip: null as null | (() => { name: string; time: number } | null),
   nearId: null as null | (() => string | null),
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
+  board: null as null | (() => { x: number; z: number; near: boolean } | null),
 };
 
 /** Current screen the player is on. */
@@ -88,6 +91,13 @@ export function provideMarkers(
   state.markers = fn;
 }
 
+/** Register the live case-board hub source (the World). Pass null to clear (W2.2). */
+export function provideBoard(
+  fn: (() => { x: number; z: number; near: boolean } | null) | null,
+): void {
+  state.board = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -107,6 +117,7 @@ export function installDevHook(): boolean {
     clip: () => (state.clip ? state.clip() : null),
     nearId: () => (state.nearId ? state.nearId() : null),
     markers: () => (state.markers ? state.markers() : null),
+    board: () => (state.board ? state.board() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

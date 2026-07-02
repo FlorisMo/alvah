@@ -88,6 +88,17 @@ export class World {
   // activity's reframe owns the camera (it restores on endActivity).
   private activityActive = false;
 
+  // W2.2 spawn-clearing hub: the ranger-cabin (a solid prop the ranger walks
+  // around) + the case-board (the MISSION hub — proximity opens the mission board
+  // overlay WITHOUT tearing the world down). The board has its own proximity/tap/
+  // interact path kept OUT of `markers` so it never pollutes wayfinding or the
+  // "nearest mission marker" the E2E steers to.
+  private boardGroup: THREE.Group | null = null;
+  private boardPos: THREE.Vector3 | null = null;
+  private nearBoard = false;
+  private onBoardNear: (near: boolean) => void = () => {};
+  private onBoardOpen: () => void = () => {};
+
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
   private readonly obstacles: Obstacle[] = [];
@@ -141,6 +152,7 @@ export class World {
     this.placeCamera(true);
 
     this.placeMarkers(markers);
+    this.placeHub();
     void this.loadRealRanger();
 
     canvas.addEventListener('pointerdown', this.onPointer);
@@ -154,13 +166,33 @@ export class World {
    * what the action is (open the mission briefing).
    */
   private tryInteract(): void {
-    if (this.activityActive || !this.nearId) return;
-    this.onInteract(this.nearId);
+    if (this.activityActive) return;
+    // the spawn case-board hub wins when the ranger stands at it (W2.2) — its
+    // "open the mission board" affordance is what the interact key fires there.
+    if (this.nearBoard) { this.onBoardOpen(); return; }
+    if (this.nearId) this.onInteract(this.nearId);
   }
 
   /** Dev-hook accessor (W1.4): the mission the ranger is standing at, or null. */
   nearMission(): string | null {
     return this.nearId;
+  }
+
+  /** Dev-hook accessor (W2.2): the spawn case-board's world position + whether the
+   *  ranger currently stands in its radius — lets the E2E steer to the hub and know
+   *  it has arrived. `null` before the hub is placed. */
+  boardState(): { x: number; z: number; near: boolean } | null {
+    if (!this.boardPos) return null;
+    return { x: this.boardPos.x, z: this.boardPos.z, near: this.nearBoard };
+  }
+
+  /** Register the spawn case-board hub callbacks (W2.2): `onNear(true|false)` as the
+   *  ranger enters/leaves the board's radius, and `onOpen()` when he acts on it (tap
+   *  the prompt or press the interact key). The mission board opens as an overlay —
+   *  the world is never torn down. */
+  setBoard(cbs: { onNear: (near: boolean) => void; onOpen: () => void }): void {
+    this.onBoardNear = cbs.onNear;
+    this.onBoardOpen = cbs.onOpen;
   }
 
   /** Dev-hook accessor (W1.4): every marker's world position, for E2E navigation. */
@@ -481,6 +513,97 @@ export class World {
     return sprite;
   }
 
+  /**
+   * Place the spawn-clearing hub (§4, W2.2): the ranger-cabin (a solid building the
+   * ranger walks around) and the case-board (the mission hub — walking up to it
+   * opens the mission board). Both are best-effort GLBs over a procedural stand-in.
+   * The props sit to the +x/+z side of spawn so the forward (−z) corridor the
+   * movement smoke walks stays clear, and both push a collision circle.
+   */
+  private placeHub(): void {
+    // ranger-cabin: off to one side of spawn, its door turned toward the clearing;
+    // a solid blocker (bigger collision circle) the ranger can't walk through.
+    const cabinAt = new THREE.Vector3(-4.6, 0, 3.6);
+    cabinAt.y = this.groundY(cabinAt.x, cabinAt.z);
+    const cabin = new THREE.Group();
+    cabin.position.copy(cabinAt);
+    cabin.rotation.y = Math.atan2(-cabinAt.x, -cabinAt.z); // face the spawn point
+    cabin.add(this.proceduralCabin());
+    this.scene.add(cabin);
+    this.obstacles.push({ x: cabinAt.x, z: cabinAt.z, r: 2.0 });
+    void loadModel('prop-ranger-cabin').then((m) => {
+      if (!m) return;
+      const prepped = prepModel(m, 3.0);
+      cabin.remove(...cabin.children);
+      cabin.add(prepped);
+    });
+
+    // case-board: to the other side of spawn, ~4.4 m out — the mission hub. A halo
+    // ring + a floating "Missiebord" tag read as "go here", like a mission marker.
+    const boardAt = new THREE.Vector3(3.6, 0, 2.6);
+    boardAt.y = this.groundY(boardAt.x, boardAt.z);
+    const board = new THREE.Group();
+    board.position.copy(boardAt);
+    board.rotation.y = Math.atan2(-boardAt.x, -boardAt.z); // face the spawn point
+    board.add(this.proceduralBoard());
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.9, 1.15, 24),
+      new THREE.MeshBasicMaterial({ color: '#f5c23b', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.05;
+    board.add(ring);
+    const label = this.makeLabel('Missiebord', '#f5c23b');
+    label.position.y = 2.0;
+    board.add(label);
+    this.scene.add(board);
+    this.obstacles.push({ x: boardAt.x, z: boardAt.z, r: 0.7 });
+    this.boardGroup = board;
+    this.boardPos = boardAt.clone();
+    void loadModel('prop-case-board').then((m) => {
+      if (!m) return;
+      const prepped = prepModel(m, 1.8);
+      const totem = board.children.find((c) => c.userData.totem);
+      if (totem) board.remove(totem);
+      board.add(prepped); // keep the ring + label
+    });
+  }
+
+  /** Procedural stand-in for the ranger-cabin (instant, before the GLB loads). */
+  private proceduralCabin(): THREE.Group {
+    const g = new THREE.Group();
+    g.userData.totem = true;
+    const wall = new THREE.Mesh(
+      new THREE.BoxGeometry(2.4, 1.8, 2.0),
+      new THREE.MeshStandardMaterial({ color: '#7a5a3a', roughness: 1 }),
+    );
+    wall.position.y = 0.9;
+    const roof = new THREE.Mesh(
+      new THREE.ConeGeometry(1.9, 1.0, 4),
+      new THREE.MeshStandardMaterial({ color: '#5b4327', roughness: 1 }),
+    );
+    roof.position.y = 2.3; roof.rotation.y = Math.PI / 4;
+    g.add(wall, roof);
+    return g;
+  }
+
+  /** Procedural stand-in for the case-board (two posts + a cork panel). */
+  private proceduralBoard(): THREE.Group {
+    const g = new THREE.Group();
+    g.userData.totem = true;
+    const postMat = new THREE.MeshStandardMaterial({ color: '#6b513a', roughness: 1 });
+    const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 6), postMat);
+    post1.position.set(-0.5, 0.7, 0);
+    const post2 = post1.clone(); post2.position.x = 0.5;
+    const cork = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 0.9, 0.08),
+      new THREE.MeshStandardMaterial({ color: '#c8a36a', roughness: 1 }),
+    );
+    cork.position.set(0, 1.3, 0);
+    g.add(post1, post2, cork);
+    return g;
+  }
+
   /** Re-point the wayfinding cue at another mission (e.g. after one is completed). */
   setActiveMission(id: string | null): void {
     this.activeId = id;
@@ -526,6 +649,18 @@ export class World {
         const dir = new THREE.Vector3(mk.pos.x, 0, mk.pos.z).sub(new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z));
         if (dir.lengthSq() > 0.001) dir.normalize();
         this.target.set(mk.pos.x - dir.x * 1.6, 0, mk.pos.z - dir.z * 1.6); // stop just in front
+        return;
+      }
+    }
+    // 1b) a tapped case-board hub → walk up to it (proximity then opens the board)
+    if (this.boardGroup && this.boardPos) {
+      const hit = this.raycaster.intersectObject(this.boardGroup, true);
+      if (hit.length) {
+        const dir = new THREE.Vector3(this.boardPos.x, 0, this.boardPos.z).sub(
+          new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
+        );
+        if (dir.lengthSq() > 0.001) dir.normalize();
+        this.target.set(this.boardPos.x - dir.x * 1.6, 0, this.boardPos.z - dir.z * 1.6);
         return;
       }
     }
@@ -614,6 +749,13 @@ export class World {
     }
     if (near !== this.nearId) { this.nearId = near; this.onApproach(near); }
 
+    // case-board hub proximity (W2.2) — surface / hide the "open the mission board"
+    // affordance. Its own flag so a mission marker and the board never fight.
+    if (this.boardPos) {
+      const nb = Math.hypot(this.boardPos.x - rp.x, this.boardPos.z - rp.z) < 2.4;
+      if (nb !== this.nearBoard) { this.nearBoard = nb; this.onBoardNear(nb); }
+    }
+
     // wayfinding cue to the active mission — calm direction + distance, no minimap.
     // Debounced so the diegetic HUD only re-renders when the words actually change.
     const goal = this.activeId ? this.markers.find((m) => m.missionId === this.activeId) : null;
@@ -659,6 +801,7 @@ export class World {
   endActivity(): void {
     this.activityActive = false;
     this.nearId = null;
+    this.nearBoard = false; // force a fresh proximity re-fire (re-surfaces the hub prompt)
     this.lastWayKey = '';
     this.followTargetYaw = this.ranger.rotation.y;
     if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut back

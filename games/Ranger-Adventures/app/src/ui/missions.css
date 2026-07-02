@@ -307,13 +307,33 @@
   color: var(--paper);
   font: 500 15px/1.3 var(--font-body);
 }
-.explore-prompt {
+.explore-prompt,
+.explore-hub-prompt {
   position: absolute;
   left: 50%;
   bottom: max(28px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
 }
-.explore-prompt[hidden] { display: none; }
+.explore-prompt[hidden],
+.explore-hub-prompt[hidden] { display: none; }
+
+/* ---- in-world mission board (W2.2): the case-board's mission-pick overlay.
+   A full-screen scrollable grid like the lodge (the grid is wider than a
+   boot-card), reached from the world without tearing it down. ---- */
+.mission-board {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: max(24px, env(safe-area-inset-top)) 18px 24px;
+  overflow-y: auto;
+  background: rgba(28, 36, 24, 0.32);
+  backdrop-filter: blur(3px);
+}
+.mission-board .boot-title { color: var(--paper); }
+.mission-board .boot-kicker { color: var(--spel-sun); }
 
 /* ---- first-world-entry onboarding hint (W1.6): shows once, dismissed on the
    ranger's first step. Centered so it reads as a welcome, dual-channel icon + words. ---- */

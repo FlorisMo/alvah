@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W2 — Wereld als voordeur
-- **Progress:** ~28% (weighted by ledger items)
-- **Just landed:** W2.1 Boot direct de wereld in na titel/avatar; interim Naar-de-hut knop; ?demo en ?sandbox blijven werken; journey-E2E aangepast
-- **Next up:** W2.2 Cabin-hub op de open plek: cabin + case-board props, missiebord-overlay zonder leaveWorld; E2E assert missionView === 3d
-- **Last heartbeat:** 2026-07-02 14:05:55Z
+- **Progress:** ~31% (weighted by ledger items)
+- **Just landed:** W2.2 Cabin-hub op de open plek: cabin + case-board props, missiebord-overlay zonder leaveWorld; E2E assert missionView === 3d
+- **Next up:** W2.3 Twee-missies-ketting E2E vanuit de wereld zonder hutbezoek; BeatSummary persist + missionView 3d voor beide
+- **Last heartbeat:** 2026-07-02 14:18:29Z
 - **Blocker:** none
 
 ```
-✔ landed: W2.1 Boot direct de wereld in na titel/avatar; interim Naar-de-hut knop; ?demo en ?sandbox blijven werken; journey-E2E aangepast
+✔ landed: W2.2 Cabin-hub op de open plek: cabin + case-board props, missiebord-overlay zonder leaveWorld; E2E assert missionView === 3d
 ▶ phase:  Fase W2 — Wereld als voordeur
-→ next:   W2.2 Cabin-hub op de open plek: cabin + case-board props, missiebord-overlay zonder leaveWorld; E2E assert missionView === 3d
+→ next:   W2.3 Twee-missies-ketting E2E vanuit de wereld zonder hutbezoek; BeatSummary persist + missionView 3d voor beide
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~28%
+▷ progress: ~31%
 ```
