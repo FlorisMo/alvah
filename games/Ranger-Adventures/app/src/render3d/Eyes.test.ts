@@ -71,6 +71,24 @@ test('cornea roughness stays in the §1e wet band [0.05, 0.15]', () => {
   }
 });
 
+test('W3.7b eye recipe: wolf/wildzwijn/frisling/adder irises match the dossier', () => {
+  // wolf — geel/goudgeel tot amber (golden-amber, NOT the generic default brown)
+  const wolf = eyeSpecFor('animal-wolf').irisColor;
+  assert.notEqual(wolf, '#5a3a22', 'wolf must not fall back to the default brown');
+  assert.equal(wolf, '#c9a13a');
+  // wild zwijn + frisling — small dark chestnut, frisling inherits the adult
+  assert.equal(eyeSpecFor('animal-wildzwijn-boar').irisColor, '#43261a');
+  assert.equal(eyeSpecFor('animal-frisling-piglet').irisColor,
+    eyeSpecFor('animal-wildzwijn-boar').irisColor, 'frisling reads as the adult');
+  // adder — a RED iris (dossier: rood oog), the one non-brown/amber eye in the cast
+  const adder = eyeSpecFor('animal-adder-snake');
+  const red = new (class { r = parseInt(adder.irisColor.slice(1, 3), 16);
+    g = parseInt(adder.irisColor.slice(3, 5), 16);
+    b = parseInt(adder.irisColor.slice(5, 7), 16); })();
+  assert.ok(red.r > red.g && red.r > red.b, `adder iris ${adder.irisColor} must read red (r dominant)`);
+  assert.equal(adder.pupilShape, 'vertical-slit', 'adder keeps its slit pupil');
+});
+
 test('per-species pupil shape: fox/adder slit, deer bar, default round', () => {
   assert.equal(eyeSpecFor('animal-vos-fox').pupilShape, 'vertical-slit');
   assert.equal(eyeSpecFor('animal-adder-snake').pupilShape, 'vertical-slit');

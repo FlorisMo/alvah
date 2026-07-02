@@ -18,6 +18,10 @@ import { assetUrl } from './core/assets.ts';
 // Pure, THREE-free canonical stand-height table (W3.7a) — the SAME source of
 // truth the live world reads, so `?scale=true` shows real relative sizes.
 import { standHeightFor } from './render3d/AnimalScale.ts';
+// W3.7b dossier look: the SAME coat-tint / eye-recipe / posture the live world
+// applies, so `?dress=true` shows the corrected cast (before = the raw pack look).
+import { applyEyes } from './render3d/EyeMaterial.ts';
+import { applyCoat, applyPosture } from './render3d/AnimalDress.ts';
 
 type ModelEntry = { file: string; category: string; animated?: boolean; clips?: number };
 type AudioEntry = { file: string; kind?: string };
@@ -42,6 +46,10 @@ const CAT_ORDER = ['human', 'animal', 'bird', 'prop', 'vehicle'];
 // over the vos and both are dwarfed by the ranger (the default auto-scale hides
 // all of this). The "before" is the default page; the "after" is ?scale=true.
 const TRUE_SCALE = new URLSearchParams(location.search).get('scale') === 'true';
+// W3.7b: `?dress=true` applies the dossier coat tint + eye recipe + posture to each
+// animal (the same calls the live world makes), so before/after shots show the
+// corrected cast (e.g. the vos going rufous, the boar/das nose-lowered).
+const DRESS = new URLSearchParams(location.search).get('dress') === 'true';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 const bar = document.getElementById('bar') as HTMLDivElement;
@@ -179,6 +187,14 @@ async function build(): Promise<void> {
         const { top } = normalize(root, id);
         tile.top = top + 0.12;
         holder.add(root);
+        if (DRESS) {
+          // the same dossier look the live world applies (reducedMotion → frozen
+          // iris parallax, so the screenshot is deterministic); posture pivots on
+          // `holder` (root sits feet-at-origin inside it, like prepModel's wrapper).
+          applyEyes(root, id, { dusk: false, reducedMotion: true });
+          applyCoat(root, id);
+          applyPosture(holder, id);
+        }
         if (gltf.animations.length > 0) {
           tile.mixer = new THREE.AnimationMixer(root);
           tile.mixer.clipAction(gltf.animations[0]).play();

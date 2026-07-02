@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W3 — Levend (animaties)
-- **Progress:** ~53% (weighted by ledger items)
-- **Just landed:** W3.7a Relatieve schaal per dier t.o.v. de ranger: canonieke stand-hoogte-tabel (dossier-afgeleid, ranger-relatief) door de plaatsings/showroom height-path; unit test op ordening + ranger-ratio; showroom true-scale modus + before/after screenshots in qa-evidence-2; E2E leest de toegepaste schaal-ordening live
-- **Next up:** W3.7b Vacht-tinten + oogkleur-recept + houding: vos rufous-retint (+ andere dossier-strijdige vachten) via tint-util; eye-recipe uitbreiden (wolf/wildzwijn/frisling iris, adder rood) per dossier; houding-flags; unit test eyeSpecFor; before/after showroom in qa-evidence-2; §10-notitie
-- **Last heartbeat:** 2026-07-02 16:46:20Z
+- **Progress:** ~54% (weighted by ledger items)
+- **Just landed:** W3.7b Vacht-tinten + oogkleur-recept + houding: vos rufous-retint (+ andere dossier-strijdige vachten) via tint-util; eye-recipe uitbreiden (wolf/wildzwijn/frisling iris, adder rood) per dossier; houding-flags; unit test eyeSpecFor; before/after showroom in qa-evidence-2; §10-notitie
+- **Next up:** W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
+- **Last heartbeat:** 2026-07-02 16:55:42Z
 - **Blocker:** none
 
 ```
-✔ landed: W3.7a Relatieve schaal per dier t.o.v. de ranger: canonieke stand-hoogte-tabel (dossier-afgeleid, ranger-relatief) door de plaatsings/showroom height-path; unit test op ordening + ranger-ratio; showroom true-scale modus + before/after screenshots in qa-evidence-2; E2E leest de toegepaste schaal-ordening live
+✔ landed: W3.7b Vacht-tinten + oogkleur-recept + houding: vos rufous-retint (+ andere dossier-strijdige vachten) via tint-util; eye-recipe uitbreiden (wolf/wildzwijn/frisling iris, adder rood) per dossier; houding-flags; unit test eyeSpecFor; before/after showroom in qa-evidence-2; §10-notitie
 ▶ phase:  Fase W3 — Levend (animaties)
-→ next:   W3.7b Vacht-tinten + oogkleur-recept + houding: vos rufous-retint (+ andere dossier-strijdige vachten) via tint-util; eye-recipe uitbreiden (wolf/wildzwijn/frisling iris, adder rood) per dossier; houding-flags; unit test eyeSpecFor; before/after showroom in qa-evidence-2; §10-notitie
+→ next:   W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~53%
+▷ progress: ~54%
 ```

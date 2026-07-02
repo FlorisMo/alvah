@@ -27,3 +27,15 @@ test('showroom: before/after relative scale (W3.7a)', async ({ page }) => {
   await shootRow(page, '/showroom.html', 'w37-scale-before-autoscale.png');
   await shootRow(page, '/showroom.html?scale=true', 'w37-scale-after-truescale.png');
 });
+
+/**
+ * W3.7b dossier-look evidence: `?dress=true` applies the coat tint (vos rufous),
+ * eye recipe and posture (boar/das nose-lowered) the live world now applies. The
+ * before is the raw pack look; the after is the corrected cast — shot at true
+ * scale so the vos is legible next to the ree.
+ */
+test('showroom: before/after coat + eyes + posture (W3.7b)', async ({ page }) => {
+  test.setTimeout(90_000);
+  await shootRow(page, '/showroom.html?scale=true', 'w37b-look-before.png');
+  await shootRow(page, '/showroom.html?scale=true&dress=true', 'w37b-look-after.png');
+});

@@ -1119,3 +1119,33 @@ with the full sub-id (e.g. `W2.4a`).
   applied `h`, all animals < 1.7) + `showroom-w37.spec.ts` (before/after shots).
   279 unit (+6) + build green; scale + frozen smoke green (frozen smoke
   untouched — this is the box's own assert, not a smoke upgrade).
+- 2026-07-02 (W3.7b, coat tints + eye recipe + posture): applied the dossier's
+  colour/stance claims. EYE RECIPE closed in `Eyes.ts` (the four missing irises,
+  all W3.4a-sourced): wolf golden-amber `#c9a13a` (was the generic default brown),
+  wild zwijn + frisling small dark chestnut `#43261a` (frisling inherits the adult
+  — no frisling-specific bron), and the adder's iris flipped from coppery to a
+  muted brick-RED `#8f2318` (dossier "rood oog") kept calm, not a glowing predator
+  eye. COAT TINT via a NEW pure `Coat.ts` (`coatTintFor`) + THREE `AnimalDress.ts`
+  (`applyCoat` lerps body-material colour toward the target, skipping eye meshes).
+  HONEST SCOPE: the tint map is deliberately SPARSE — the ONLY confirmed dossier
+  contradiction is the CC0 vos (reads dark-brown, dossier says oranjebruin/rufous —
+  the W3.5 §10 observation), retinted 60% toward rufous `#c0561f` (partial lerp
+  keeps the pack's flat-shaded shading). No other coat was observed as wrong, so
+  none was speculatively repainted (no-unsourced-claims rule); if W6.3/W3.7c
+  surfaces another, add an entry then. POSTURE flags (`postureFor` + `applyPosture`):
+  a small clamped forward pitch for the head-low snuffling species (wild zwijn
+  "kop laag, wroet" 0.10 rad, frisling 0.09, das "laag bij de grond, waggelend"
+  0.07), pivoted on `prepModel`'s feet-at-origin wrapper; alert browsers
+  (ree/edelhert/eekhoorn) and level-backed canids (vos/wolf) keep pitch 0 — their
+  staged stance already matches, and tipping them reads worse. `POSTURE_MAX_PITCH`
+  0.11 (~6°) ceiling keeps every tilt a stance cue, never a topple. Both live-world
+  placement paths (marker + ambient) now call `applyCoat`/`applyPosture` beside the
+  existing `applyEyes`/`applyCalmPose`. SHOWROOM gained `?dress=true` (same three
+  calls, reducedMotion → frozen iris for a deterministic shot): `qa-evidence-2/`
+  w37b-look-before.png vs -after.png show the vos going clearly rufous at true
+  scale. Eye recipe verified by `Eyes.test.ts` (+1 test pinning the four irises,
+  adder r-dominant) and coat/posture by new `Coat.test.ts` (5 tests: sparse map,
+  vos rufous r>g>b + strength<1, head-low vs upright, pitch ceiling, purity). No
+  "Wist je dat" string touched here — text contradictions are W3.7c. 285 unit (+6)
+  + build green; showroom-w37 (2 before/after specs) + frozen smoke 4/4 green
+  (frozen smoke untouched — the box's own assert is the showroom evidence).

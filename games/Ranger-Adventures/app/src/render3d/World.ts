@@ -21,6 +21,7 @@ import {
 import { loadManifest, loadModel, loadRig, prepModel } from './Models';
 import { standHeightFor } from './AnimalScale';
 import { applyEyes } from './EyeMaterial';
+import { applyCoat, applyPosture } from './AnimalDress';
 import { applyFace } from './FaceRig';
 import { applyCalmPose } from './CalmPoseRig';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
@@ -506,6 +507,10 @@ export class World {
           // §1e eye system per species (catchlight + clearcoat cornea + pupil +
           // iris parallax); golden-hour world ⇒ dusk off (eyeshine stays calm).
           applyEyes(prepped, mk.modelId, { dusk: false }); // parallax reads the live policy (no restart)
+          // W3.7b dossier: coat-tint correction (only for a confirmed contradiction,
+          // e.g. the CC0 vos) + a subtle head-low posture for snuffling species.
+          applyCoat(prepped, mk.modelId);
+          applyPosture(prepped, mk.modelId);
           // §B never-scary calm-pose: a static rest-pose bias (ears/tail/head into the
           // calm shape). Best-effort — a single-mesh Meshy animal with no named bones is
           // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
@@ -708,6 +713,8 @@ export class World {
         if (!rig) return;
         const prepped = prepModel(rig.group, h);
         applyEyes(prepped, a.id, { dusk: false });
+        applyCoat(prepped, a.id);     // W3.7b: dossier coat-tint correction (vos rufous)
+        applyPosture(prepped, a.id);  // W3.7b: head-low stance for snuffling species
         applyCalmPose(prepped, a.id); // §B never-scary rest-pose bias
         group.add(prepped);
         if (a.baked && rig.clips.length) {

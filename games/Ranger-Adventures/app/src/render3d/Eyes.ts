@@ -67,16 +67,24 @@ const EYESHINE_OFF = new Set([
   'animal-eekhoorn-squirrel', 'animal-adder-snake', // squirrel/adder/lizard
 ]);
 
-/** Per-species iris colour (warm, research-true). Default = warm brown. */
+/**
+ * Per-species iris colour (warm, research-true). Default = warm brown. Every
+ * entry is grounded in `research/animal-visual-accuracy.md` (W3.4a); the W3.7b
+ * additions (wolf/wildzwijn/frisling/adder) close the dossier's oogkleur recipe.
+ */
 const IRIS: Record<string, string> = {
-  'animal-vos-fox': '#b8862f',          // amber
-  'animal-edelhert-reddeer': '#4a2f17', // deep brown
-  'animal-ree-roedeer': '#3f2a16',
-  'animal-das-badger': '#2a1d12',       // near-black, small eye
+  'animal-vos-fox': '#b8862f',          // amber (dossier: helder amber/geel)
+  'animal-edelhert-reddeer': '#4a2f17', // deep brown (dossier: donkerbruin)
+  'animal-ree-roedeer': '#3f2a16',      // donkerbruin
+  'animal-das-badger': '#2a1d12',       // near-black, small eye (dossier: klein en zwart)
   'animal-eekhoorn-squirrel': '#1f150d',
   'animal-heikikker-frog': '#9a7321',   // copper-gold
   'animal-nachtzwaluw-nightjar': '#241a12',
-  'animal-adder-snake': '#7a5a1e',      // coppery with the slit
+  'animal-adder-snake': '#8f2318',      // RED iris + slit (dossier: rood oog) — a
+                                        // muted brick-red, not a glowing predator eye
+  'animal-wolf': '#c9a13a',             // golden-amber (dossier: geel/goudgeel tot amber)
+  'animal-wildzwijn-boar': '#43261a',   // small dark chestnut (dossier: kastanje-/roodbruin)
+  'animal-frisling-piglet': '#43261a',  // as the adult (no frisling-specific bron; dossier note)
 };
 
 /**
