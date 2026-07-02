@@ -910,3 +910,22 @@ with the full sub-id (e.g. `W2.4a`).
   `pause.spec` grew prikbord + raaf steps (open over the live world, world
   survives, return to the HUD). 16 E2E (chromium) + 261 unit green; frozen smoke
   untouched. Milestone: first coherent world-first build — committed + pushed.
+- 2026-07-02 (W3.1, ranger regen + rig): the shotlist `ranger-alvah` prompt was
+  ALREADY the rig-ready v3 pose (bare head, hands clear of the body, wide arm
+  gap — the fix `regen-ranger.mjs` documented), so the plan's
+  `meshy-gen.mjs --only=ranger-alvah` needed no prompt edit. Gen (preview→refine,
+  ~6 min backgrounded) cost 30 cr; rig cost 5 cr (7525 → 7490, masked key
+  `msy_…`). SURPRISE worth recording: the Meshy humanoid rig API returns the
+  base rigged GLB (`model_urls.glb`) with only ONE short rest clip
+  (`clip0|baselayer`, 0.30 s) — the walk/run animations live in SEPARATE per-clip
+  GLBs under `basic_animations.{walking,running}_glb_url`, which `meshy-rig.mjs`
+  records the KEY NAMES of but never downloads. So the raw rig staged alone would
+  have 1 clip and fail W3.1's ≥2-clip bar. Fix: re-queried the rig task for the
+  walk/run GLB urls, downloaded them (identical 26-node armature — verified 0
+  node-name mismatches), and wrote `scripts/merge-ranger-clips.mjs` to transplant
+  the walk + run clips onto the base rig (renaming the three to idle/walk/run for
+  W3.2's state machine). `optimize-animated.mjs` then staged it rig-safe:
+  8.9 MB → 414 kB, **1 skin + 3 clips**, tris 30703. The player still loads via
+  `loadModel` (bind pose, no mixer) until W3.2, so smoke is unaffected — 4/4
+  frozen green, build green. No E2E assert named for this box (its acceptance is
+  the static gltf-inspect); W3.2 lands the `clip()` mixer assert.

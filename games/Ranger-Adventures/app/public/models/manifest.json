@@ -2,10 +2,10 @@
   "ranger-alvah": {
     "file": "ranger-alvah.glb",
     "category": "human",
-    "bytes": 286688,
-    "tris": 17998,
-    "animated": false,
-    "clips": 0
+    "bytes": 424040,
+    "tris": 30703,
+    "animated": true,
+    "clips": 3
   },
   "prop-pine-scots": {
     "file": "prop-pine-scots.glb",
