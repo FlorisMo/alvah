@@ -1064,3 +1064,28 @@ with the full sub-id (e.g. `W2.4a`).
   Placement into the live world is W3.6. Docs/asset box, no runtime wiring yet →
   no player-visible change and no new smoke assert (frozen smoke 4/4 + build
   green); ticked with `--force` (the §5 W3.5 timebox allowance).
+- 2026-07-02 (W3.6, ambient wildlife): the world now BREATHES — four animals roam
+  gentle loops and two birds glide overhead. New pure THREE-free `AmbientPaths.ts`
+  (unit-tested, 6 tests): `wanderAt` traces a 4-leg loop around a home point with a
+  PAUSE-AND-GRAZE beat per waypoint (walk a leg → stop → graze → next), returning
+  `{x,z,facing,moving}`; `glideAt` sails a slow horizontal circle with a small
+  vertical undulation. Both are functions of absolute `t` + a per-instance phase, so
+  a herd desyncs with zero per-frame state. `World.placeAmbientLife()` stages the
+  cast OUT of `markers` (no collision, no wayfinding pollution) at homes well clear
+  of the −z movement-smoke corridor and the submerged ven: ree + vos (W3.5-staged)
+  crossfade their baked walk↔graze actions by the `moving` flag (eased via the
+  SHARED `dampFactor`, so the feel matches the camera/player easing); eekhoorn + wild
+  zwijn (no honest CC0 match, per the W3.5 verdict) get the improved procedural bob
+  PLUS the roam/turn/graze the wander loop supplies — the loop IS the gait
+  improvement over the old in-place-only breathe. DESIGN CALL: ambient motion is
+  SECONDARY, so reduced-motion FREEZES it (loop halts, mixer holds pose) — the
+  locomotion-exempt rule (§3.4) is the PLAYER's alone, unlike the player rig which
+  animates in both modes. Birds are static GLBs (buizerd soars wide, houtduif circles
+  lower) → the glide is the whole motion; calm-pose gate holds (the W3.5 preprocess
+  already stripped every scary clip, so no dive/panic pose can play). New dev hook
+  `ambient()` (id + live x/z + dominant baked clip) mirrors `actors()`; new
+  `ambient.spec.ts` asserts ≥2 roaming animals present, a baked mixer clock actually
+  advances (walk/graze `clip().time` grows, not a frozen pose), AND `drawCalls()` <
+  150 (measured comfortably under with the full cast). `faceOffset` per entry is 0
+  for now — per-GLB forward correction + relative scale + coat tints are W3.7. 273
+  unit (+6) + build green; ambient spec + frozen smoke 4/4 green.

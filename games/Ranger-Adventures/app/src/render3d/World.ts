@@ -23,6 +23,7 @@ import { applyEyes } from './EyeMaterial';
 import { applyFace } from './FaceRig';
 import { applyCalmPose } from './CalmPoseRig';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
+import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from './AmbientPaths';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { resolveInput, type StickVector } from '../core/input';
 import { attachInput, type InputHandle } from '../core/attach-input';
@@ -74,6 +75,23 @@ export class World {
   private readonly scenicActors: {
     id: string; group: THREE.Group;
     mixer: THREE.AnimationMixer | null; action: THREE.AnimationAction | null;
+  }[] = [];
+  // W3.6 ambient wildlife: a few animals roam gentle wander loops (baked walk↔graze
+  // clips via the mixer for the W3.5-staged cast, improved procedural bob elsewhere)
+  // and two birds glide overhead on spline loops. All are pure set-dressing — no
+  // markers, no collision, kept out of `markers`. Their motion is SECONDARY, so it
+  // freezes at the rest pose under reduced-motion (like the animals + scenic actors).
+  private readonly ambient: {
+    id: string; group: THREE.Group; phase: number;
+    wander: WanderConfig | null;   // ground animals roam this loop
+    glide: GlideConfig | null;     // birds sail this overhead orbit
+    faceOffset: number;            // per-GLB forward correction (tuned in W3.7)
+    recipe: MotionRecipe;          // procedural idle bob (procedural cast only)
+    anim: THREE.Group | null;      // the prepped wrapper to drive procedurally
+    mixer: THREE.AnimationMixer | null;
+    walk: THREE.AnimationAction | null;   // baked stride clip
+    graze: THREE.AnimationAction | null;  // baked rest/graze clip
+    walkW: number; grazeW: number;        // eased crossfade weights
   }[] = [];
   private activeId: string | null = null;     // the mission the wayfinding cue points to
   private readonly onWayfind: (cue: WayCue | null) => void;
@@ -169,6 +187,7 @@ export class World {
     this.placeMarkers(markers);
     this.placeHub();
     this.placeScenicActors();
+    this.placeAmbientLife();
     void this.loadRealRanger();
 
     canvas.addEventListener('pointerdown', this.onPointer);
@@ -643,6 +662,110 @@ export class World {
     }));
   }
 
+  /**
+   * W3.6: place the ambient wildlife. Four animals roam gentle wander loops in
+   * the biomes (the W3.5-staged ree + vos crossfade their baked walk↔graze clips;
+   * the eekhoorn + wild zwijn — no honest CC0 match — get the improved procedural
+   * bob PLUS the roam/turn/graze the wander loop provides), and two birds glide
+   * overhead on spline orbits. None are markers, none push collision — pure life.
+   * Homes sit well clear of the spawn corridor (the −z movement-smoke lane) and
+   * the submerged ven (46,-19), so nothing wanders into water or across the demo.
+   */
+  private placeAmbientLife(): void {
+    // ground roamers: [id, target height (m, dossier-ballpark — W3.7 refines),
+    // home x/z, loop radius, whether the GLB carries baked walk/graze clips]
+    const GROUND: { id: string; h: number; hx: number; hz: number; r: number; baked: boolean }[] = [
+      { id: 'animal-ree-roedeer', h: 0.95, hx: 26, hz: 26, r: 6, baked: true },   // bos/heide edge
+      { id: 'animal-vos-fox', h: 0.48, hx: -30, hz: -10, r: 7, baked: true },     // heide, west
+      { id: 'animal-eekhoorn-squirrel', h: 0.26, hx: -24, hz: -24, r: 3, baked: false }, // near trees
+      { id: 'animal-wildzwijn-boar', h: 0.85, hx: 10, hz: 36, r: 6, baked: false },     // heide, south
+    ];
+    GROUND.forEach((a, i) => {
+      const wander: WanderConfig = {
+        homeX: a.hx, homeZ: a.hz, radius: a.r,
+        period: 22 + i * 4,          // each roams at a slightly different pace
+        phase: (i * 0.27) % 1,       // desync the loops
+        angle: i * 1.1,              // rotate each loop differently
+      };
+      const group = new THREE.Group();
+      group.position.set(a.hx, this.groundY(a.hx, a.hz), a.hz);
+      this.scene.add(group);
+      const entry = {
+        id: a.id, group, phase: i * 1.7,
+        wander, glide: null as GlideConfig | null, faceOffset: 0,
+        recipe: gaitFor(a.id),
+        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
+        walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
+        walkW: 0, grazeW: 1,
+      };
+      this.ambient.push(entry);
+      void loadRig(a.id).then((rig) => {
+        if (!rig) return;
+        const prepped = prepModel(rig.group, a.h);
+        applyEyes(prepped, a.id, { dusk: false });
+        applyCalmPose(prepped, a.id); // §B never-scary rest-pose bias
+        group.add(prepped);
+        if (a.baked && rig.clips.length) {
+          // crossfade the baked walk (striding) against graze (paused) by `moving`;
+          // both play from frame one, weights eased each frame in update().
+          const mixer = new THREE.AnimationMixer(prepped);
+          const walkClip = rig.clips.find((c) => /walk/i.test(c.name)) ?? rig.clips[0];
+          const grazeClip = rig.clips.find((c) => /graze|eat|idle|rest/i.test(c.name)) ?? rig.clips[0];
+          entry.walk = mixer.clipAction(walkClip); entry.walk.play(); entry.walk.setEffectiveWeight(0);
+          entry.graze = mixer.clipAction(grazeClip); entry.graze.play(); entry.graze.setEffectiveWeight(1);
+          entry.mixer = mixer;
+        } else {
+          // no baked clips → the improved procedural bob drives this wrapper (the
+          // wander loop already supplies roam / turn-in-place / pause-and-graze).
+          entry.anim = prepped;
+        }
+      });
+    });
+
+    // two birds gliding overhead on slow spline orbits (the buizerd soars wide,
+    // the houtduif circles lower + tighter). Birds are static GLBs → the glide IS
+    // the motion; they hold the calm-pose gate (no diving, no flapping panic).
+    const BIRDS: { id: string; h: number; cx: number; cz: number; r: number; height: number; period: number; phase: number; bob: number }[] = [
+      { id: 'bird-buizerd', h: 0.9, cx: 4, cz: 0, r: 44, height: 24, period: 30, phase: 0, bob: 1.6 },
+      { id: 'bird-houtduif', h: 0.5, cx: -18, cz: 8, r: 26, height: 16, period: 22, phase: 0.5, bob: 1.1 },
+    ];
+    BIRDS.forEach((b, i) => {
+      const glide: GlideConfig = { cx: b.cx, cz: b.cz, radius: b.r, height: b.height, bob: b.bob, period: b.period, phase: b.phase };
+      const group = new THREE.Group();
+      const g0 = glideAt(glide, 0);
+      group.position.set(g0.x, g0.y, g0.z);
+      this.scene.add(group);
+      const entry = {
+        id: b.id, group, phase: i * 2.1,
+        wander: null as WanderConfig | null, glide, faceOffset: 0,
+        recipe: gaitFor(b.id),
+        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
+        walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
+        walkW: 0, grazeW: 0,
+      };
+      this.ambient.push(entry);
+      void loadModel(b.id).then((m) => {
+        if (!m) return;
+        const prepped = prepModel(m, b.h);
+        applyCalmPose(prepped, b.id);
+        group.add(prepped);
+      });
+    });
+  }
+
+  /** Dev-hook accessor (W3.6): each ambient creature's id + live world x/z + its
+   *  dominant baked clip {name, time} (null for the procedural + bird cast). Lets
+   *  the E2E assert ≥2 animals are present AND a baked mixer clock advances. */
+  ambientState(): { id: string; x: number; z: number; clip: { name: string; time: number } | null }[] {
+    return this.ambient.map((a) => {
+      const dom = a.mixer ? (a.walkW >= a.grazeW ? a.walk : a.graze) : null;
+      return {
+        id: a.id, x: a.group.position.x, z: a.group.position.z,
+        clip: dom ? { name: dom.getClip().name, time: dom.time } : null,
+      };
+    });
+  }
+
   /** Procedural stand-in for the ranger-cabin (instant, before the GLB loads). */
   private proceduralCabin(): THREE.Group {
     const g = new THREE.Group();
@@ -821,6 +944,37 @@ export class World {
     // W3.3: the warden + poacher play their baked clips. Secondary motion, so the
     // clip freezes at the rest pose under reduced-motion (same rule as the animals).
     for (const a of this.scenicActors) a.mixer?.update(reduced ? 0 : dt);
+
+    // W3.6: ambient wildlife. Ground animals roam a gentle wander loop (baked
+    // walk↔graze crossfade for the W3.5 cast, procedural bob elsewhere); birds
+    // glide overhead. All SECONDARY motion → frozen at home/rest under reduced-
+    // motion (the loop halts, the mixer holds its pose — locomotion-exempt rule
+    // applies only to the PLAYER, §3.4).
+    for (const a of this.ambient) {
+      if (a.wander) {
+        if (reduced) { a.mixer?.update(0); continue; }
+        const st = wanderAt(a.wander, t);
+        a.group.position.set(st.x, this.groundY(st.x, st.z), st.z);
+        a.group.rotation.y = st.facing + a.faceOffset;
+        if (a.mixer) {
+          const k = dampFactor(dt, 0.25); // ease the walk↔graze crossfade (shared factor)
+          a.walkW += ((st.moving ? 1 : 0) - a.walkW) * k;
+          a.grazeW += ((st.moving ? 0 : 1) - a.grazeW) * k;
+          a.walk?.setEffectiveWeight(a.walkW);
+          a.graze?.setEffectiveWeight(a.grazeW);
+          a.mixer.update(dt);
+        } else if (a.anim) {
+          const d = motionAt(a.recipe, t, a.phase);
+          a.anim.position.set(d.dx, d.dy, 0);
+          a.anim.rotation.set(0, d.rotY, d.rotZ);
+          a.anim.scale.set(1, d.scaleY, 1);
+        }
+      } else if (a.glide && !reduced) {
+        const st = glideAt(a.glide, t);
+        a.group.position.set(st.x, st.y, st.z);
+        a.group.rotation.y = st.facing + a.faceOffset;
+      }
+    }
 
     // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
     // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger

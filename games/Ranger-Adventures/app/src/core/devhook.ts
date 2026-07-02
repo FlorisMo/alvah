@@ -39,6 +39,10 @@ export interface RangerDevHook {
   /** The scenic story-arc actors (warden + poacher) with their live baked-clip
    *  {name, time}, or null before the hook/world is ready (W3.3). */
   actors(): { id: string; clip: { name: string; time: number } | null }[] | null;
+  /** The ambient wildlife (roaming animals + gliding birds): id + live world x/z
+   *  + dominant baked clip {name, time} (null for the procedural/bird cast), or
+   *  null before the hook/world is ready (W3.6). */
+  ambient(): { id: string; x: number; z: number; clip: { name: string; time: number } | null }[] | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -55,6 +59,7 @@ const state = {
   board: null as null | (() => { x: number; z: number; near: boolean } | null),
   winStep: null as null | (() => boolean),
   actors: null as null | (() => { id: string; clip: { name: string; time: number } | null }[]),
+  ambient: null as null | (() => { id: string; x: number; z: number; clip: { name: string; time: number } | null }[]),
 };
 
 /** Current screen the player is on. */
@@ -118,6 +123,13 @@ export function provideActors(
   state.actors = fn;
 }
 
+/** Register the ambient-wildlife source (the World's roaming animals + birds). W3.6. */
+export function provideAmbient(
+  fn: (() => { id: string; x: number; z: number; clip: { name: string; time: number } | null }[]) | null,
+): void {
+  state.ambient = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -140,6 +152,7 @@ export function installDevHook(): boolean {
     board: () => (state.board ? state.board() : null),
     winStep: () => (state.winStep ? state.winStep() : false),
     actors: () => (state.actors ? state.actors() : null),
+    ambient: () => (state.ambient ? state.ambient() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;
