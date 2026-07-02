@@ -781,3 +781,48 @@ One status block per run/step (BUILD-PLAN §9b).
 → next:   Anything World pipeline · generation — loop/Floris-owned external paid job (~31 models, ~2 AW runs). Needs source GLBs in `assets-gen/<id>.glb` (Meshy gen) + AW credits; NOT runnable in a sandboxed thread. Run: `node app/scripts/anything-world.mjs`. The loader "prefer animated GLB over procedural" lands in the procedural-fallback + optimize/stage boxes below (2) — ⏸ BLOCKER (sandbox): external paid AW job, not runnable in a sandboxed thread (only the 3 Meshy humanoid rigs exist in `assets-gen/animated/`). Loop/Floris owns this (§9c). The procedural-fallback box below makes the whole cast move + the game fully playable meanwhile; the mixer path is wired + dormant, ready to prefer the animated GLBs the moment they're staged.
 ▷ progress: ~95%
 ```
+
+---
+**2026-07-02 10:50:17Z** · status
+
+```
+✔ landed: —
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.1 Playwright scaffold: devDep, config, boot smoke spec, npm scripts e2e + e2e:smoke, install chromium
+▷ progress: ~0%
+```
+
+---
+**2026-07-02 11:21:54Z** · status
+
+```
+✔ landed: —
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.1 Playwright scaffold: devDep, config (poort ~4199, reuseExistingServer, CI-retries), boot smoke spec, npm scripts e2e + e2e:smoke, chromium install, gitignore-regels (test-results/, playwright-report/, e2e/__shots__/, incoming/), git hooksPath .githooks
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~0%
+⚠ blocker: test-blocker: verifying persistence
+```
+
+---
+**2026-07-02 11:21:54Z** · status
+
+```
+✔ landed: —
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.1 Playwright scaffold: devDep, config (poort ~4199, reuseExistingServer, CI-retries), boot smoke spec, npm scripts e2e + e2e:smoke, chromium install, gitignore-regels (test-results/, playwright-report/, e2e/__shots__/, incoming/), git hooksPath .githooks
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~0%
+⚠ blocker: test-blocker: verifying persistence
+```
+
+---
+**2026-07-02 11:21:54Z** · status
+
+```
+✔ landed: —
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.1 Playwright scaffold: devDep, config (poort ~4199, reuseExistingServer, CI-retries), boot smoke spec, npm scripts e2e + e2e:smoke, chromium install, gitignore-regels (test-results/, playwright-report/, e2e/__shots__/, incoming/), git hooksPath .githooks
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~0%
+```

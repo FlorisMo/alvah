@@ -30,7 +30,9 @@ import { fileURLToPath } from 'node:url';
 
 const APP = path.resolve(fileURLToPath(new URL('..', import.meta.url)));      // .../app
 const ROOT = path.resolve(APP, '..');                                         // .../Ranger-Adventures
-const LEDGER = path.join(ROOT, 'RUN-LEDGER.md');
+// RUN_LEDGER env selects the active run's checklist (run 2+ use their own
+// ledger file, e.g. WORLD-LEDGER.md via world-run-loop.sh); default = run 1.
+const LEDGER = path.join(ROOT, process.env.RUN_LEDGER || 'RUN-LEDGER.md');
 const STATUS = path.join(ROOT, 'RUN-STATUS.md');
 const LOG = path.join(ROOT, 'RUN-LOG.md');
 const LOGDIR = path.join(APP, 'logs');                                        // git-ignored per-job logs
@@ -90,6 +92,7 @@ function statusBlock(s, blocker) {
     `✔ landed: ${landed}\n` +
     `▶ phase:  ${s.phase}\n` +
     `→ next:   ${next}\n` +
+    `▤ ledger: ${path.basename(LEDGER)}\n` +
     `▷ progress: ~${s.pct}%${blocker ? `\n⚠ blocker: ${blocker}` : ''}`;
   return block;
 }
@@ -100,8 +103,9 @@ function writeStatus(s, blocker) {
 `# Ranger van de Veluwe — Run Status (live snapshot)
 
 > Rewritten every step by \`scripts/ranger-run.mjs\`. The durable checklist is
-> [RUN-LEDGER.md](RUN-LEDGER.md); this is the at-a-glance view.
+> [${path.basename(LEDGER)}](${path.basename(LEDGER)}); this is the at-a-glance view.
 
+- **Ledger:** ${path.basename(LEDGER)}
 - **Phase:** ${s.phase}
 - **Progress:** ~${s.pct}% (weighted by ledger items)
 - **Just landed:** ${s.landed ? clean(s.landed.body) : '—'}
@@ -123,11 +127,26 @@ function appendLog(s, note, blocker) {
   fs.appendFileSync(LOG, header + entry);
 }
 
+// NEEDS-FLORIS blockers persist in a side file (app/logs/, gitignored) so the
+// next heartbeat/tick refresh does not silently erase them. Clear with
+// `status --blocker=none`; an explicit --blocker="..." sets a new one.
+const BLOCKFILE = path.join(LOGDIR, 'run-blocker.txt');
+function loadBlocker() {
+  try { const t = fs.readFileSync(BLOCKFILE, 'utf8').trim(); return t && t !== 'none' ? t : ''; }
+  catch { return ''; }
+}
+function saveBlocker(b) {
+  fs.mkdirSync(LOGDIR, { recursive: true });
+  fs.writeFileSync(BLOCKFILE, b || 'none');
+}
+
 function refresh(note, blocker) {
+  if (blocker !== undefined) saveBlocker(blocker === 'none' ? '' : blocker);
+  const eff = (blocker !== undefined && blocker !== 'none' ? blocker : loadBlocker()) || undefined;
   const s = summary();
-  writeStatus(s, blocker);
-  appendLog(s, note, blocker);
-  console.log(statusBlock(s, blocker));
+  writeStatus(s, eff);
+  appendLog(s, note, eff);
+  console.log(statusBlock(s, eff));
   return s;
 }
 
@@ -227,34 +246,64 @@ async function commit(msg) {
   await runJob('git', ['add', '-A'], { label: 'git-add' });
   const c = await runJob('git', ['commit', '-m', msg], { label: 'git-commit' });
   if (c.code !== 0) { console.log('• nothing to commit.'); return; }
-  await runJob('git', ['push'], { label: 'git-push' });
+  // Push honestly: verify the exit code (run 1 reported "pushed" even when the
+  // remote rejected). -u origin HEAD works on main and on the run-2 branch.
+  let p = await runJob('git', ['push', '-u', 'origin', 'HEAD'], { label: 'git-push', logFile: 'git-push.log' });
+  if (p.code !== 0) {
+    console.log('• push rejected — trying git pull --rebase + one retry…');
+    await runJob('git', ['pull', '--rebase'], { label: 'git-pull-rebase', logFile: 'git-push.log' });
+    p = await runJob('git', ['push', '-u', 'origin', 'HEAD'], { label: 'git-push-retry', logFile: 'git-push.log' });
+  }
+  if (p.code !== 0) {
+    refresh('push failed', 'git push failed twice — resolve divergence/auth, then push manually (app/logs/git-push.log).');
+    console.error('✗ committed but PUSH FAILED (see app/logs/git-push.log).');
+    process.exit(1);
+  }
   console.log('✓ committed + pushed.');
 }
 
 // ──────────────────────────────────────────────────────────────────────────
 // tick — mark a ledger box done
 // ──────────────────────────────────────────────────────────────────────────
-function tick(needle) {
+async function tick(needle) {
   if (!needle) { console.error('tick needs a substring of the step text'); process.exit(1); }
   const { lines } = parseLedger();
   const low = needle.toLowerCase();
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s*-\s*\[ \]/.test(lines[i]) && lines[i].toLowerCase().includes(low)) {
-      lines[i] = lines[i].replace(/\[ \]/, '[x]');
-      fs.writeFileSync(LEDGER, lines.join('\n'));
-      console.log(`✓ ticked: ${clean(lines[i])}`);
-      refresh(`ticked: ${clean(lines[i])}`);
-      return;
+  const idx = lines.findIndex((l) => /^\s*-\s*\[ \]/.test(l) && l.toLowerCase().includes(low));
+  if (idx === -1) { console.error(`✗ no unchecked step matching "${needle}"`); process.exit(1); }
+  // Run-2 hardening (WORLD-PLAN §3.1): ticking is gated MECHANICALLY, not on
+  // the honor system — build must be green, and once the e2e harness exists
+  // (post-W0.1) e2e:smoke must be green too. --force is reserved for the
+  // graceful-degrade boxes the plan names (W0.7 / W3.0 / W3.5).
+  if (!process.argv.includes('--force')) {
+    const okBuild = await gate();
+    if (!okBuild) { console.error('✗ tick refused — build gate RED.'); process.exit(1); }
+    const pkg = JSON.parse(fs.readFileSync(path.join(APP, 'package.json'), 'utf8'));
+    if (pkg.scripts?.['e2e:smoke'] && fs.existsSync(path.join(APP, 'e2e'))) {
+      console.log('▶ gate: npm run e2e:smoke');
+      const t = await runJob('npm', ['run', 'e2e:smoke'], { label: 'e2e-smoke', logFile: 'e2e-smoke.log' });
+      if (t.code !== 0) { console.error('✗ tick refused — e2e:smoke RED (see app/logs/e2e-smoke.log).'); process.exit(1); }
+      console.log('✓ e2e:smoke green.');
     }
   }
-  console.error(`✗ no unchecked step matching "${needle}"`);
-  process.exit(1);
+  lines[idx] = lines[idx].replace(/\[ \]/, '[x]');
+  fs.writeFileSync(LEDGER, lines.join('\n'));
+  console.log(`✓ ticked: ${clean(lines[idx])}`);
+  refresh(`ticked: ${clean(lines[idx])}`);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
 // run — the heartbeat loop (`npm run finish`)
 // ──────────────────────────────────────────────────────────────────────────
 async function run() {
+  // Run-2 guard: `run`/`npm run finish` is the RUN-1 heartbeat (it never
+  // returns and fires the unfiltered asset pipeline). Run 2 is driven by
+  // world-run-loop.sh + status|tick|gate|commit only.
+  if (process.env.RUN_LEDGER && process.env.RUN_LEDGER !== 'RUN-LEDGER.md') {
+    console.error(`✗ 'run' is a run-1 command; ${process.env.RUN_LEDGER} is driven by world-run-loop.sh.`);
+    console.error('  Use: status | tick "<needle>" | gate | commit "<msg>".');
+    process.exit(1);
+  }
   console.log('╔══════════════════════════════════════════════════════════╗');
   console.log('║  Ranger van de Veluwe — autonomous finish run            ║');
   console.log('╚══════════════════════════════════════════════════════════╝');
@@ -268,7 +317,7 @@ async function run() {
   // 3) Hand off the next code-step to the agent and heartbeat.
   refresh('asset+gate pass done');
   console.log('\n────────────────────────────────────────────────────────────');
-  console.log('AGENT: resume here → first unchecked box in RUN-LEDGER.md:');
+  console.log(`AGENT: resume here → first unchecked box in ${path.basename(LEDGER)}:`);
   console.log(`   ${clean(s.next.body)}   [phase: ${s.phase}]`);
   console.log('Build the step, `node scripts/ranger-run.mjs tick "<needle>"`,');
   console.log('then commit+push at each phase boundary. Heartbeat continues.');
@@ -285,8 +334,8 @@ const cmd = process.argv[2] || 'run';
 const rest = process.argv.slice(3).filter((a) => !a.startsWith('--'));
 
 switch (cmd) {
-  case 'status': refresh('status'); break;
-  case 'tick': tick(rest.join(' ')); break;
+  case 'status': refresh('status', arg('blocker')); break;
+  case 'tick': await tick(rest.join(' ')); break;
   case 'assets': await runAssets({ limit: arg('limit') ? parseInt(arg('limit'), 10) : undefined }); refresh('assets pass'); break;
   case 'gate': { const ok = await gate(arg('test')); process.exit(ok ? 0 : 1); }
   case 'commit': await commit(rest.join(' ')); break;

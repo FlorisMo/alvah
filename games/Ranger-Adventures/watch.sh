@@ -10,6 +10,12 @@ set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 DIR="games/Ranger-Adventures"
+# Run 2 (world-run-loop.sh) uses its own ledger + loop log; RUN_LEDGER env
+# picks the run to watch (default: run 2 if its ledger exists, else run 1).
+if [ -z "${RUN_LEDGER:-}" ] && [ -f "$DIR/WORLD-LEDGER.md" ]; then RUN_LEDGER="WORLD-LEDGER.md"; fi
+LEDGER_FILE="$DIR/${RUN_LEDGER:-RUN-LEDGER.md}"
+LOOP_LOG="$DIR/RUN-LOOP.log"
+[ "${RUN_LEDGER:-}" = "WORLD-LEDGER.md" ] && LOOP_LOG="$DIR/WORLD-RUN-LOOP.log"
 
 while true; do
   clear
@@ -21,13 +27,13 @@ while true; do
     echo "(no RUN-STATUS.md yet — the run hasn't written one)"
   fi
   echo
-  echo "── ledger ──────────────────────────────────────────────────────────"
-  done=$(grep -cE '^[[:space:]]*-[[:space:]]*\[x\]' "$DIR/RUN-LEDGER.md" 2>/dev/null || echo 0)
-  open=$(grep -cE '^[[:space:]]*-[[:space:]]*\[ \]' "$DIR/RUN-LEDGER.md" 2>/dev/null || echo 0)
+  echo "── ledger ($(basename "$LEDGER_FILE")) ─────────────────────────────"
+  done=$(grep -cE '^[[:space:]]*-[[:space:]]*\[x\]' "$LEDGER_FILE" 2>/dev/null || echo 0)
+  open=$(grep -cE '^[[:space:]]*-[[:space:]]*\[ \]' "$LEDGER_FILE" 2>/dev/null || echo 0)
   echo "checked: $done    open: $open"
   echo
   echo "── loop log (last 12 lines) ────────────────────────────────────────"
-  tail -n 12 "$DIR/RUN-LOOP.log" 2>/dev/null || echo "(no loop log yet)"
+  tail -n 12 "$LOOP_LOG" 2>/dev/null || echo "(no loop log yet)"
   echo
   echo "(refreshing every 5s · Ctrl-C to stop)"
   sleep 5

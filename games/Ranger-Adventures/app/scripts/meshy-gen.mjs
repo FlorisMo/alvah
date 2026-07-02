@@ -79,6 +79,15 @@ for (const item of shotlist) {
   if (done >= LIMIT) break;
   if (ONLY && !ONLY.has(item.id)) continue;
   if (manifest[item.id]?.glb && manifest[item.id]?.refined) { console.log(`• skip (already refined): ${item.id}`); continue; }
+  // Credit guard (run 2): assets-gen/manifest.json is machine-local and can be
+  // lost (it was, 2026-07-02), but the optimized cast staged in public/models/
+  // is the durable truth. Never regenerate an already-staged model unless it
+  // is explicitly named via --only or --force — an unfiltered pass over the
+  // 76-item shotlist would burn ~2,300 credits re-making models we ship.
+  if (!ONLY && !has('force') && fs.existsSync(new URL(`../public/models/${item.id}.glb`, import.meta.url))) {
+    console.log(`• skip (already staged in public/models): ${item.id}`);
+    continue;
+  }
 
   console.log(`\n▶ ${item.id}  [${item.category}]${REFINE ? '  preview→refine' : '  preview only'}`);
   const polycount = item.target_polycount || POLY[item.category] || 20000;
