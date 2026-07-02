@@ -1398,3 +1398,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~82%
 ```
+
+---
+**2026-07-02 20:11:03Z** · ticked: - [x] W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
+
+```
+✔ landed: W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
+▶ phase:  Fase W6 — Diegetische missies + biologie
+→ next:   W6.2a rmSafe-audit corsi3d: cuts-niet-moves waar eerlijk kan; flip vereist reduced-motion E2E (nul camera-beweging) + §10-notitie; bij twijfel rmSafe:false HOUDEN
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~84%
+```

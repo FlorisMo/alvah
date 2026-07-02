@@ -1569,3 +1569,24 @@ with the full sub-id (e.g. `W2.4a`).
   player-visible change, no new E2E assert; build + frozen smoke 4/4 green, tick
   passes the real gate WITHOUT `--force` (nothing is red — this is an honest
   skip, not a graceful-degrade). CLOSES Fase W5.
+- 2026-07-02 (W6.1, in-world mission friction audit — opens W6): a new
+  `friction.spec.ts` walks the ranger to a real world MARKER, opens the
+  veldnotitie with Space (the interact key), and plays the mission through EVERY
+  beat in place, screenshotting each. Two missions cover the EF five from a
+  marker entry — `frisling` (zoeken→corsi→dagnacht) + `nachtronde`
+  (simon→wisselen); each is its own test so a full walk + multi-beat play fits
+  one Playwright timeout on slow SwiftShader (a single combined test overran
+  210 s; split, budget scales `90 s + beats·45 s`). ONE real rough edge found and
+  fixed: a marker's floating world-space name-tag ("De verdwaalde frisling") that
+  the activity reframe happened to keep in frame OVERLAPPED the play prompt on all
+  three frisling beats (the nachtronde reframe faced away, so it was hidden there
+  — inconsistent clutter). Fix: `beginActivity()` now hides every mission
+  name-tag (`label.visible=false`) and `endActivity()` restores them, so no
+  marker label ever competes with a mini-game prompt; re-run screenshots confirm
+  the play area is clean. Everything else was already smooth: marker→briefing
+  transition (Space opens "Ga op pad", play prompt gone — no overlap), every beat
+  resolves `missionView==='3d'`, the world is never torn down, return-to-patrol
+  lands back on 'world', and the page-error sink stayed empty across both
+  missions. No parity/trial builders touched (winStep drives each variant's own
+  genuine resolve). Frozen smoke untouched (own assert). 2/2 friction tests green
+  under `--workers=1`.

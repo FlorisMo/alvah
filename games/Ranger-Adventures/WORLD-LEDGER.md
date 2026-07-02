@@ -83,7 +83,7 @@ W5.3 Helikopter opt-in — gesplitst (pure vluchtcore+toggle / wereld-integratie
 
 ## Fase W6 — Diegetische missies + biologie
 
-- [ ] W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt (2)
+- [x] W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt (2)
 - [ ] W6.2a rmSafe-audit corsi3d: cuts-niet-moves waar eerlijk kan; flip vereist reduced-motion E2E (nul camera-beweging) + §10-notitie; bij twijfel rmSafe:false HOUDEN (1)
 - [ ] W6.2b rmSafe-audit simon3d: zelfde eisen als W6.2a (1)
 - [ ] W6.2c rmSafe-audit zoeken3d: zelfde eisen als W6.2a (1)

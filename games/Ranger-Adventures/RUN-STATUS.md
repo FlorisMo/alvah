@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W6 — Diegetische missies + biologie
-- **Progress:** ~82% (weighted by ledger items)
-- **Just landed:** W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop
-- **Next up:** W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
-- **Last heartbeat:** 2026-07-02 19:51:43Z
+- **Progress:** ~84% (weighted by ledger items)
+- **Just landed:** W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
+- **Next up:** W6.2a rmSafe-audit corsi3d: cuts-niet-moves waar eerlijk kan; flip vereist reduced-motion E2E (nul camera-beweging) + §10-notitie; bij twijfel rmSafe:false HOUDEN
+- **Last heartbeat:** 2026-07-02 20:11:03Z
 - **Blocker:** none
 
 ```
-✔ landed: W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop
+✔ landed: W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
 ▶ phase:  Fase W6 — Diegetische missies + biologie
-→ next:   W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
+→ next:   W6.2a rmSafe-audit corsi3d: cuts-niet-moves waar eerlijk kan; flip vereist reduced-motion E2E (nul camera-beweging) + §10-notitie; bij twijfel rmSafe:false HOUDEN
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~82%
+▷ progress: ~84%
 ```

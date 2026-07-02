@@ -101,6 +101,7 @@ export class World {
   private readonly markers: {
     group: THREE.Group; pos: THREE.Vector3; missionId: string;
     recipe: MotionRecipe; phase: number;
+    label: THREE.Sprite;               // the floating diegetic name-tag (hidden during an activity)
     anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
     mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
   }[] = [];
@@ -1252,7 +1253,7 @@ export class World {
       this.scene.add(group);
       const entry = {
         group, pos: group.position.clone(), missionId: mk.missionId,
-        recipe: gaitFor(mk.modelId), phase: i * 1.7,
+        recipe: gaitFor(mk.modelId), phase: i * 1.7, label,
         anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
       };
       this.markers.push(entry);
@@ -2363,14 +2364,20 @@ export class World {
     };
   }
 
-  /** Freeze the world for an in-place activity (the mini-game owns input + camera). */
-  beginActivity(): void { this.activityActive = true; }
+  /** Freeze the world for an in-place activity (the mini-game owns input + camera).
+   *  W6.1 friction fix: hide the floating mission name-tags so a marker label the
+   *  activity reframe happens to keep in view never overlaps the play prompt. */
+  beginActivity(): void {
+    this.activityActive = true;
+    for (const m of this.markers) m.label.visible = false;
+  }
 
   /** Resume free-roam after an in-place activity; re-emit the wayfinding cue.
    *  The activity reframe owned the camera; on resume the follow-yaw eases back
    *  to behind the ranger (a cut under reduced-motion, per §3.2). */
   endActivity(): void {
     this.activityActive = false;
+    for (const m of this.markers) m.label.visible = true; // W6.1: restore the name-tags on resume
     this.nearId = null;
     this.nearBoard = false; // force a fresh proximity re-fire (re-surfaces the hub prompt)
     this.lastWayKey = '';
