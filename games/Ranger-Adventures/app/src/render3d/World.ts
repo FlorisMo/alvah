@@ -27,7 +27,8 @@ import { applyCalmPose } from './CalmPoseRig';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from './AmbientPaths';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
-import { resolveInput, type StickVector } from '../core/input';
+import { resolveInput, screenVector, type StickVector } from '../core/input';
+import { driveStep, driveCaps } from '../core/vehicle';
 import { attachInput, type InputHandle } from '../core/attach-input';
 import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../core/footstep';
 import { Sound } from '../core/sound';
@@ -58,6 +59,12 @@ export interface WorldMarker {
 }
 
 const SKY_LOW = '#e9b27f'; // horizon band + fog colour (matches SKY_STOPS' last stop)
+
+// W5.1 jeep: its collision radius while parked, and the proximity radius that
+// surfaces the "Stap in" affordance (a touch wider than the 2.4 m marker radius —
+// the jeep is a bigger object the ranger walks up to).
+const JEEP_COLLIDE = 1.6;
+const JEEP_NEAR_R = 3.6;
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -207,6 +214,24 @@ export class World {
   private onBoardNear: (near: boolean) => void = () => {};
   private onBoardOpen: () => void = () => {};
 
+  // W5.1 drivable jeep: a solid parked prop the ranger walks up to ("Stap in"),
+  // then drives arcade-kinematic (heading-based, rate-clamped, terrain-stuck)
+  // with a WIDER follow-cam; "Stap uit" drops him beside it. Kept OUT of
+  // `markers` so it never pollutes wayfinding or the "nearest mission" proximity
+  // the E2E steers to (same reasoning as the case-board + scenic actors).
+  private jeep: THREE.Group | null = null;
+  private jeepPos: THREE.Vector3 | null = null;   // === jeep.position (x/z the controller drives)
+  private jeepHeading = 0;                         // yaw the arcade controller steers
+  private jeepObstacle: Obstacle | null = null;    // its collision circle while parked
+  private inVehicle = false;
+  private nearJeep = false;
+  private vehicleSpeed = 0;                         // live signed speed (m/s), for the dev hook
+  private onJeepNear: (near: boolean) => void = () => {};
+  private onVehicleChange: (inVehicle: boolean) => void = () => {};
+  // the wider vehicle follow-cam offset (§5 W5.1: distance 9, height 4.5) — the
+  // walking offset stays (0, 3.4, 6.2). placeCamera picks by `inVehicle`.
+  private readonly camOffsetVehicle = new THREE.Vector3(0, 4.5, 9);
+
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
   private readonly obstacles: Obstacle[] = [];
@@ -285,6 +310,7 @@ export class World {
     this.placeNatureDressing();
     this.placeScenicActors();
     this.placeAmbientLife();
+    this.placeJeep();
     void this.loadRealRanger();
 
     canvas.addEventListener('pointerdown', this.onPointer);
@@ -299,6 +325,11 @@ export class World {
    */
   private tryInteract(): void {
     if (this.activityActive) return;
+    // W5.1: the jeep owns the interact key when driving (Space = "Stap uit") or
+    // when standing beside the parked jeep (Space = "Stap in") — it wins over the
+    // hub/marker affordances (they never overlap the jeep's spot in practice).
+    if (this.inVehicle) { this.exitVehicle(); return; }
+    if (this.nearJeep) { this.enterVehicle(); return; }
     // the spawn case-board hub wins when the ranger stands at it (W2.2) — its
     // "open the mission board" affordance is what the interact key fires there.
     if (this.nearBoard) { this.onBoardOpen(); return; }
@@ -325,6 +356,93 @@ export class World {
   setBoard(cbs: { onNear: (near: boolean) => void; onOpen: () => void }): void {
     this.onBoardNear = cbs.onNear;
     this.onBoardOpen = cbs.onOpen;
+  }
+
+  /** Register the drivable-jeep HUD callbacks (W5.1): `onNear(true|false)` as the
+   *  ranger enters/leaves the parked jeep's radius (while walking), and
+   *  `onChange(inVehicle)` when he climbs in / steps out. The HUD swaps its
+   *  "Stap in" / "Stap uit" affordance from the live `vehicleState()`. */
+  setVehicle(cbs: { onNear: (near: boolean) => void; onChange: (inVehicle: boolean) => void }): void {
+    this.onJeepNear = cbs.onNear;
+    this.onVehicleChange = cbs.onChange;
+  }
+
+  /** Dev-hook accessor (W5.1): the drivable jeep's live state — placement,
+   *  proximity, whether the ranger is driving, world position + heading, the
+   *  active arcade caps (reduced-motion halves them), the wider camera offset and
+   *  the comfort invariants (fixed FOV, roll 0) the E2E asserts. Null before the
+   *  jeep is placed. */
+  vehicleState(): {
+    placed: boolean; near: boolean; inVehicle: boolean;
+    x: number; z: number; heading: number;
+    speed: number; maxSpeed: number; turnRate: number;
+    camDist: number; camHeight: number; fov: number; roll: number;
+  } | null {
+    if (!this.jeep || !this.jeepPos) return null;
+    const caps = driveCaps(livePolicy().reduced);
+    const off = this.inVehicle ? this.camOffsetVehicle : this.camOffset;
+    // TRUE roll = tilt of the camera's right vector off horizontal. `camera.up` is
+    // pinned to world-up and lookAt derives the basis from it, so right lies in the
+    // xz-plane → right.y ≈ 0 at ANY yaw/pitch. (camera.rotation.z is NOT roll here —
+    // the pitched+yawed Euler couples the axes, the same trap cameraYaw() avoids.)
+    this.camera.updateMatrixWorld();
+    const rightY = this.camera.matrixWorld.elements[1]; // column 0, row 1 = right.y
+    return {
+      placed: true, near: this.nearJeep, inVehicle: this.inVehicle,
+      x: this.jeepPos.x, z: this.jeepPos.z, heading: this.jeepHeading,
+      speed: this.vehicleSpeed, maxSpeed: caps.maxSpeed, turnRate: caps.turnRate,
+      camDist: off.z, camHeight: off.y, fov: this.camera.fov, roll: rightY,
+    };
+  }
+
+  /** W5.1: climb into the parked jeep — arcade drive mode takes over movement and
+   *  the wider follow-cam eases in; the ranger rides hidden. The parked collision
+   *  circle is lifted so the jeep can move. No-op unless standing beside it. */
+  enterVehicle(): void {
+    if (this.inVehicle || !this.jeep || !this.jeepPos) return;
+    this.inVehicle = true;
+    this.jeepHeading = this.jeep.rotation.y;
+    this.vehicleSpeed = 0;
+    if (this.jeepObstacle) {
+      const i = this.obstacles.indexOf(this.jeepObstacle);
+      if (i >= 0) this.obstacles.splice(i, 1);
+      this.jeepObstacle = null;
+    }
+    this.ranger.visible = false;                       // he rides inside
+    // clear any walk-time affordances so nothing lingers behind the "Stap uit" pill
+    if (this.nearId) { this.nearId = null; this.onApproach(null); }
+    if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
+    this.followTargetYaw = this.jeepHeading;
+    this.onVehicleChange(true);
+    if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut to the wider cam
+  }
+
+  /** W5.1: step out of the jeep beside it, back to walking; re-park the jeep as a
+   *  solid prop at its resting spot so it blocks + can be re-entered. No-op unless
+   *  currently driving. */
+  exitVehicle(): void {
+    if (!this.inVehicle || !this.jeep || !this.jeepPos) return;
+    this.inVehicle = false;
+    const h = this.jeepHeading;
+    const jx = this.jeepPos.x, jz = this.jeepPos.z;
+    // step out to the jeep's LEFT — the left-of-forward vector is (cos h, −sin h)
+    // (see vehicle.ts steer derivation). resolveMove keeps him on solid ground
+    // and inside the rim; the jeep obstacle isn't back yet, so he clears it fully.
+    const side = 2.4;
+    const next = resolveMove(jx, jz, jx + Math.cos(h) * side, jz - Math.sin(h) * side, this.obstacles, this.limits);
+    this.ranger.position.set(next.x, this.groundY(next.x, next.z), next.z);
+    this.ranger.rotation.y = h;
+    this.ranger.visible = true;
+    this.target.set(next.x, 0, next.z);   // no stale walk target
+    this.followTargetYaw = h;
+    this.vehicleSpeed = 0;
+    this.playerSpeed = 0;
+    // re-park the jeep as a solid obstacle at its new resting spot
+    this.jeepObstacle = { x: jx, z: jz, r: JEEP_COLLIDE };
+    this.obstacles.push(this.jeepObstacle);
+    this.nearJeep = true;                  // standing right beside it → "Stap in" again
+    this.onVehicleChange(false);
+    if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut back to walk cam
   }
 
   /** Dev-hook accessor (W1.4): every marker's world position, for E2E navigation. */
@@ -1384,6 +1502,64 @@ export class World {
     });
   }
 
+  /**
+   * W5.1: place the drivable jeep at a sand-track head in the stuifzand sector
+   * (§4, NE), parked facing the clearing. It pushes a solid collision circle
+   * while parked (the ranger walks up to it), kept OUT of `markers`. The spot is
+   * off the frozen −z movement-smoke corridor and clear of the spawn clearing.
+   */
+  private placeJeep(): void {
+    const x = 16, z = 14, height = 1.9; // stuifzand NE; ~21 m from spawn, +z off the smoke corridor
+    const group = new THREE.Group();
+    group.position.set(x, this.groundY(x, z), z);
+    this.jeepHeading = Math.atan2(-x, -z); // parked facing the clearing (like the landmarks)
+    group.rotation.y = this.jeepHeading;
+    group.add(this.proceduralTotem('#6a7b4a')); // instant stand-in until the GLB streams in
+    this.scene.add(group);
+    this.jeepObstacle = { x, z, r: JEEP_COLLIDE };
+    this.obstacles.push(this.jeepObstacle);
+    this.jeep = group;
+    this.jeepPos = group.position;
+    void loadModel('vehicle-ranger-jeep').then((m) => {
+      if (!m) return;
+      const prepped = prepModel(m, height);
+      World.enableCast(prepped); // W4.5: a solid hero prop near the player casts a shadow
+      const totem = group.children.find((c) => c.userData.totem);
+      if (totem) group.remove(totem);
+      group.add(prepped);
+    });
+  }
+
+  /**
+   * W5.1: advance the jeep one frame in arcade-kinematic drive mode. The SAME
+   * `screenVector` the walker reads becomes throttle (y) + steer (x); the pure
+   * `driveStep` core turns them into a heading + move delta (rate-clamped, caps
+   * halved under reduced-motion), which the SAME `resolveMove` resolves for
+   * collision/rim/water. The jeep sticks to the terrain and the ranger rides
+   * hidden at its spot so the follow-cam + step-out anchor track it.
+   */
+  private driveJeep(dt: number): void {
+    if (!this.jeep || !this.jeepPos) return;
+    const stick = this.joystickSource ? this.joystickSource() : null;
+    const intent = this.input ? screenVector(this.input.held, stick) : { x: 0, y: 0 };
+    const caps = driveCaps(livePolicy().reduced);
+    const step = driveStep(this.jeepHeading, { throttle: intent.y, steer: intent.x }, dt, caps);
+    this.jeepHeading = step.heading;
+    this.vehicleSpeed = step.speed;
+    const jp = this.jeepPos;
+    const next = resolveMove(jp.x, jp.z, jp.x + step.dx, jp.z + step.dz, this.obstacles, this.limits);
+    jp.x = next.x; jp.z = next.z;
+    jp.y = this.groundY(next.x, next.z);       // terrain stick
+    this.jeep.rotation.y = this.jeepHeading;
+    // the ranger rides along (hidden) so placeCamera + exitVehicle anchor track it
+    this.ranger.position.set(jp.x, jp.y, jp.z);
+    this.ranger.rotation.y = this.jeepHeading;
+    this.followTargetYaw = this.jeepHeading;
+    // ambience still follows across biomes while driving
+    const here = biomeAt(jp.x, jp.z);
+    if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
+  }
+
   /** Procedural stand-in for the ranger-cabin (instant, before the GLB loads). */
   private proceduralCabin(): THREE.Group {
     const g = new THREE.Group();
@@ -1449,7 +1625,7 @@ export class World {
 
   // ---- input ----
   private onPointer = (e: PointerEvent): void => {
-    if (this.activityActive) return; // the activity's own pick3d owns taps in-place
+    if (this.activityActive || this.inVehicle) return; // in-place pick / arcade drive own input
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -1476,6 +1652,18 @@ export class World {
         );
         if (dir.lengthSq() > 0.001) dir.normalize();
         this.target.set(this.boardPos.x - dir.x * 1.6, 0, this.boardPos.z - dir.z * 1.6);
+        return;
+      }
+    }
+    // 1c) a tapped parked jeep → walk up to it (proximity then offers "Stap in")
+    if (this.jeep && this.jeepPos) {
+      const hit = this.raycaster.intersectObject(this.jeep, true);
+      if (hit.length) {
+        const dir = new THREE.Vector3(this.jeepPos.x, 0, this.jeepPos.z).sub(
+          new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
+        );
+        if (dir.lengthSq() > 0.001) dir.normalize();
+        this.target.set(this.jeepPos.x - dir.x * 2.2, 0, this.jeepPos.z - dir.z * 2.2); // stop beside it
         return;
       }
     }
@@ -1509,7 +1697,10 @@ export class World {
       this.sun.target.updateMatrixWorld();
     }
     this.playerSpeed = 0; // 0 while standing or during an in-place activity → mixer eases to idle
-    if (!this.activityActive) {
+    if (!this.activityActive && this.inVehicle) {
+      // W5.1: arcade drive mode owns movement while the ranger is in the jeep.
+      this.driveJeep(dt);
+    } else if (!this.activityActive) {
       // W1.2 velocity branch: while a movement key is held (camera-relative via
       // resolveInput), it OVERRIDES tap-to-walk — the desired step is the input
       // vector · speed · dt, resolved by the same kinematic controller. When no
@@ -1651,18 +1842,29 @@ export class World {
 
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
 
-    // proximity → surface the "play" affordance (debounced by id)
-    let near: string | null = null;
-    for (const mk of this.markers) {
-      if (Math.hypot(mk.pos.x - rp.x, mk.pos.z - rp.z) < 2.4) { near = mk.missionId; break; }
+    // W5.1 jeep proximity — surface "Stap in" while walking near the parked jeep.
+    // Suppressed while driving (the HUD then shows "Stap uit" via onVehicleChange).
+    if (this.jeep && this.jeepPos && !this.inVehicle) {
+      const nj = Math.hypot(this.jeepPos.x - rp.x, this.jeepPos.z - rp.z) < JEEP_NEAR_R;
+      if (nj !== this.nearJeep) { this.nearJeep = nj; this.onJeepNear(nj); }
     }
-    if (near !== this.nearId) { this.nearId = near; this.onApproach(near); }
 
-    // case-board hub proximity (W2.2) — surface / hide the "open the mission board"
-    // affordance. Its own flag so a mission marker and the board never fight.
-    if (this.boardPos) {
-      const nb = Math.hypot(this.boardPos.x - rp.x, this.boardPos.z - rp.z) < 2.4;
-      if (nb !== this.nearBoard) { this.nearBoard = nb; this.onBoardNear(nb); }
+    // proximity → surface the "play" affordance (debounced by id). Marker + hub
+    // proximity are suppressed while driving so no stale prompt sits behind the
+    // "Stap uit" pill (rp is the jeep's spot while the ranger rides hidden).
+    if (!this.inVehicle) {
+      let near: string | null = null;
+      for (const mk of this.markers) {
+        if (Math.hypot(mk.pos.x - rp.x, mk.pos.z - rp.z) < 2.4) { near = mk.missionId; break; }
+      }
+      if (near !== this.nearId) { this.nearId = near; this.onApproach(near); }
+
+      // case-board hub proximity (W2.2) — surface / hide the "open the mission board"
+      // affordance. Its own flag so a mission marker and the board never fight.
+      if (this.boardPos) {
+        const nb = Math.hypot(this.boardPos.x - rp.x, this.boardPos.z - rp.z) < 2.4;
+        if (nb !== this.nearBoard) { this.nearBoard = nb; this.onBoardNear(nb); }
+      }
     }
 
     // wayfinding cue to the active mission — calm direction + distance, no minimap.
@@ -1747,8 +1949,11 @@ export class World {
       this.followTargetYaw = FIXED_FOLLOW_YAW;
     }
     const s = Math.sin(this.followYaw), c = Math.cos(this.followYaw);
-    const dist = this.camOffset.z;
-    this.camDesired.set(rp.x - s * dist, rp.y + this.camOffset.y, rp.z - c * dist);
+    // W5.1: the jeep uses the wider offset (distance 9, height 4.5); walking keeps
+    // (6.2, 3.4). Same damping — the pull-back eases in when he climbs in.
+    const off = this.inVehicle ? this.camOffsetVehicle : this.camOffset;
+    const dist = off.z;
+    this.camDesired.set(rp.x - s * dist, rp.y + off.y, rp.z - c * dist);
     if (snap) {
       this.camera.position.copy(this.camDesired);
     } else {

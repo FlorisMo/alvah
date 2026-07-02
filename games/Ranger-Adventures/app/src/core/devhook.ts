@@ -85,6 +85,17 @@ export interface RangerDevHook {
    *  lets the E2E assert the disc ripples with motion on and holds still under
    *  reduced-motion. Null before the hook/world is ready. */
   water(): { shader: boolean; amp: number; time: number } | null;
+  /** The W5.1 drivable-jeep state: placement, proximity, whether the ranger is
+   *  driving, the jeep's world position + heading, the active arcade caps
+   *  (reduced-motion halves them), the wider camera offset, and the comfort
+   *  invariants (fixed FOV, roll 0) — lets the E2E enter, drive ≥10 m, exit, and
+   *  assert the caps + comfort. Null before the jeep is placed. */
+  vehicle(): {
+    placed: boolean; near: boolean; inVehicle: boolean;
+    x: number; z: number; heading: number;
+    speed: number; maxSpeed: number; turnRate: number;
+    camDist: number; camHeight: number; fov: number; roll: number;
+  } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -118,6 +129,12 @@ const state = {
   }),
   footsteps: null as null | (() => { count: number; surface: 'zand' | 'gras' | null }),
   water: null as null | (() => { shader: boolean; amp: number; time: number }),
+  vehicle: null as null | (() => {
+    placed: boolean; near: boolean; inVehicle: boolean;
+    x: number; z: number; heading: number;
+    speed: number; maxSpeed: number; turnRate: number;
+    camDist: number; camHeight: number; fov: number; roll: number;
+  } | null),
 };
 
 /** Current screen the player is on. */
@@ -252,6 +269,18 @@ export function provideWater(
   state.water = fn;
 }
 
+/** Register the W5.1 drivable-jeep-state source (the World). Pass null to clear. */
+export function provideVehicle(
+  fn: (() => {
+    placed: boolean; near: boolean; inVehicle: boolean;
+    x: number; z: number; heading: number;
+    speed: number; maxSpeed: number; turnRate: number;
+    camDist: number; camHeight: number; fov: number; roll: number;
+  } | null) | null,
+): void {
+  state.vehicle = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -283,6 +312,7 @@ export function installDevHook(): boolean {
     sky: () => (state.sky ? state.sky() : null),
     footsteps: () => (state.footsteps ? state.footsteps() : null),
     water: () => (state.water ? state.water() : null),
+    vehicle: () => (state.vehicle ? state.vehicle() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

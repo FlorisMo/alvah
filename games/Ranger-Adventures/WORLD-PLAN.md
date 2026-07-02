@@ -1441,3 +1441,38 @@ with the full sub-id (e.g. `W2.4a`).
   (shader present, amp>0 & clock advances with motion on; amp===0 & clock frozen
   under reduced-motion; drawCalls<150). New dev hook `water()` + `provideWater`.
   325 unit (+5) + build green; water 2/2 + frozen smoke 4/4 green.
+- 2026-07-02 (W5.1, drivable jeep — opens W5): the jeep is a NEW control MODE, not
+  a strafe like walking. A pure THREE-free `core/vehicle.ts` (`driveStep` + caps,
+  9 unit tests) is arcade-KINEMATIC (§3.3, no physics): the SAME `screenVector` the
+  walker reads becomes throttle (y) + steer (x), `driveStep` turns them into a
+  heading + move delta (rate-clamped to 1.2 rad/s, forward along `(sin h, cos h)`),
+  and `World.driveJeep` feeds that straight into the SAME `resolveMove` — so
+  collision/rim/water/terrain-stick are shared with walking for free. STEER SIGN
+  DERIVATION (documented in-file): with forward `(sin θ, cos θ)`, increasing θ swings
+  the nose toward the driver's LEFT, so a right-steer DECREASES yaw — universal
+  across headings, so "press right → curve right" always holds. The jeep is placed
+  in stuifzand NE (16, 14, ~21 m off the −z smoke corridor), a solid parked
+  collision circle the ranger walks up to; enter LIFTS that circle (so it can move),
+  exit RE-PARKS it and drops the ranger to its LEFT via `resolveMove`. The ranger
+  rides HIDDEN at the jeep's spot so the follow-cam + step-out anchor track it; the
+  camera uses a WIDER offset (dist 9, height 4.5 vs 6.2/3.4) with the SAME damping.
+  Reduced-motion halves BOTH caps (3 m/s, 0.6 rad/s — the §3.2 vehicle comfort
+  clause) via `driveCaps(reduced)`; it also keeps the existing fixed-bearing cut cam,
+  so the drive is calm. CONTRACT-NUANCE TRAP worth recording: the E2E first asserted
+  roll via `camera.rotation.z` and it read 0.355 rad under a ROTATING follow-yaw —
+  the SAME Euler-coupling trap `cameraYaw()` documents (a pitched+yawed camera's
+  Euler smears roll into z). TRUE roll = the camera's right-vector world-y
+  (`matrixWorld.elements[1]`), which lookAt pins to ~0 at any yaw/pitch because
+  `camera.up` is world-up; the hook now reports that. New dev hook `vehicle()` +
+  `provideVehicle`; jeep HUD prompt (`renderVehiclePrompt`: "Stap in de jeep" /
+  "Stap uit", own `.explore-vehicle-prompt` slot). Interact precedence: driving →
+  Stap uit, else near-jeep → Stap in, else the hub/marker affordances. `onPointer`
+  early-returns while driving and gains a tap-to-approach-jeep branch (iPad).
+  `vehicle.spec.ts` walks to the jeep (camera-relative steering, interact.spec
+  pattern), enters via the real Space path, drives ≥10 m, asserts wider cam +
+  caps + fixed FOV + roll 0, steps out; a reduced-motion twin asserts the halved
+  caps + comfort. Frozen smoke 4/4 untouched (own assert). 333 unit (+8) + build
+  green; vehicle 2/2 + frozen smoke 4/4 green. Local NOTE: camera/keyboard/board/
+  interact specs flaked with `Test timeout` under parallel SwiftShader load (the
+  pre-existing W3.3 §10 flake — real-time walks on a GPU-less renderer); each
+  passes in isolation and the walk path is unchanged when not driving.

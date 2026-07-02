@@ -43,7 +43,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -187,6 +187,7 @@ function leaveWorld(): void {
   provideSky(null);
   provideFootsteps(null);
   provideWater(null);
+  provideVehicle(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -458,6 +459,10 @@ function startExplore(): void {
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
   // mission board overlay in-place (no leaveWorld). Wire its proximity + interact.
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });
+  // W5.1: the drivable jeep — walking up surfaces "Stap in", driving surfaces
+  // "Stap uit". A single render reads the live vehicle state so both proximity
+  // and enter/exit refresh the same slot (no leaveWorld, world stays live).
+  world.setVehicle({ onNear: () => renderVehiclePrompt(), onChange: () => renderVehiclePrompt() });
   // start the bed on the lodge clearing (heide) before the first crossing fires
   setAmbientScene('heide', seizoen);
   stage.enterWorld(world);
@@ -481,6 +486,7 @@ function startExplore(): void {
   provideSky(() => world!.skyState()); // W4.6: sky gradient + cloud drift + wind + flyover
   provideFootsteps(() => world!.footstepState()); // W4.7b: surface-aware footsteps
   provideWater(() => world!.waterState()); // W4.8: fresnel ven-water + reduced-motion ripple gate
+  provideVehicle(() => world!.vehicleState()); // W5.1: drivable jeep (enter/drive/exit + caps)
   provideWinStep(() => triggerActivityWin()); // W2.3: drive a 3D step's real resolve from E2E
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }
@@ -587,6 +593,7 @@ function showExploreHud(activeTitel: string | null): void {
     veld +
     `<div class="explore-prompt" hidden></div>` +
     `<div class="explore-hub-prompt" hidden></div>` +
+    `<div class="explore-vehicle-prompt" hidden></div>` +
     `</div>`,
   );
   // The HUD overlays the LIVE world: its `.ra-overlay` wrapper must let taps
@@ -605,6 +612,28 @@ function showExploreHud(activeTitel: string | null): void {
   // — e.g. after closing the mission board — re-surface the hub affordance. The World
   // only re-fires onBoardNear on a proximity CHANGE, so a fresh HUD would miss it.
   if (world?.boardState()?.near) onBoardApproach(true);
+  // W5.1: restore the jeep affordance if the ranger stands beside it (or is driving)
+  // when the HUD (re)mounts — the World only re-fires onNear on a proximity CHANGE.
+  renderVehiclePrompt();
+}
+
+/** W5.1: the jeep affordance — "Stap in de jeep" when the ranger stands beside the
+ *  parked jeep, "Stap uit" while driving. Reads the live `vehicleState()` so a HUD
+ *  re-render (patrol resume) restores the right button. Its own slot so it never
+ *  fights the mission "Speel mee" or the hub board prompt. */
+function renderVehiclePrompt(): void {
+  const prompt = host.querySelector<HTMLDivElement>('.explore-vehicle-prompt');
+  if (!prompt) return;
+  const v = world?.vehicleState() ?? null;
+  if (!v || (!v.near && !v.inVehicle)) { prompt.hidden = true; prompt.innerHTML = ''; return; }
+  prompt.hidden = false;
+  if (v.inVehicle) {
+    prompt.innerHTML = `<button class="btn-start explore-vehicle-exit" type="button">🚙 Stap uit</button>`;
+    prompt.querySelector('.explore-vehicle-exit')?.addEventListener('click', () => world?.exitVehicle());
+  } else {
+    prompt.innerHTML = `<button class="btn-start explore-vehicle-enter" type="button">🚙 Stap in de jeep</button>`;
+    prompt.querySelector('.explore-vehicle-enter')?.addEventListener('click', () => world?.enterVehicle());
+  }
 }
 
 /** Build the W1.6 first-world-entry onboarding hint into the freshly-rendered

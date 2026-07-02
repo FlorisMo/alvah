@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W5 — Voertuigen
-- **Progress:** ~72% (weighted by ledger items)
-- **Just landed:** W4.8 Ven-water: fresnel-tint, golfloos default, subtiele rimpel zonder reduced-motion
-- **Next up:** W5.1 Jeep bestuurbaar: Stap in/uit, arcade-kinematisch, ruimere camera; reduced-motion: snelheid ~3 m/s en halve draaisnelheid; E2E rijdt ≥10 m + caps gelden
-- **Last heartbeat:** 2026-07-02 18:37:00Z
+- **Progress:** ~75% (weighted by ledger items)
+- **Just landed:** W5.1 Jeep bestuurbaar: Stap in/uit, arcade-kinematisch, ruimere camera; reduced-motion: snelheid ~3 m/s en halve draaisnelheid; E2E rijdt ≥10 m + caps gelden
+- **Next up:** W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren
+- **Last heartbeat:** 2026-07-02 19:06:16Z
 - **Blocker:** none
 
 ```
-✔ landed: W4.8 Ven-water: fresnel-tint, golfloos default, subtiele rimpel zonder reduced-motion
+✔ landed: W5.1 Jeep bestuurbaar: Stap in/uit, arcade-kinematisch, ruimere camera; reduced-motion: snelheid ~3 m/s en halve draaisnelheid; E2E rijdt ≥10 m + caps gelden
 ▶ phase:  Fase W5 — Voertuigen
-→ next:   W5.1 Jeep bestuurbaar: Stap in/uit, arcade-kinematisch, ruimere camera; reduced-motion: snelheid ~3 m/s en halve draaisnelheid; E2E rijdt ≥10 m + caps gelden
+→ next:   W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~72%
+▷ progress: ~75%
 ```
