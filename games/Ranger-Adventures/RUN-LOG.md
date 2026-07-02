@@ -1101,3 +1101,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~36%
 ```
+
+---
+**2026-07-02 14:54:08Z** · ticked: - [x] W3.0 Sleutels verifiëren (test-meshy + test-xeno, gemaskeerd) en balans loggen; bij ontbreken status --blocker en dóór; --force toegestaan
+
+```
+✔ landed: W3.0 Sleutels verifiëren (test-meshy + test-xeno, gemaskeerd) en balans loggen; bij ontbreken status --blocker en dóór; --force toegestaan
+▶ phase:  Fase W3 — Levend (animaties)
+→ next:   W3.1 Ranger regen + rig via Meshy (~35 cr, eerst balans checken, gen BACKGROUNDED met log-polling) of ingest app/incoming/ranger-alvah-rigged.glb; staged GLB ≥1 skin ≥2 clips
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~37%
+```

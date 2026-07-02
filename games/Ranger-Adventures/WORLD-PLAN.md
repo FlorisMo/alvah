@@ -622,7 +622,7 @@ with the full sub-id (e.g. `W2.4a`).
 
 | Item | Cost | Status |
 |---|---|---|
-| Meshy Ultra grant (run 1) | **7,595 cr — W0.7 re-log 2026-07-02** (was 7,615 at prep; live API `openapi/v1/balance`, HTTP 200, key `msy_…`) | active; ~35 cr needed for W3.1 |
+| Meshy Ultra grant (run 1) | **7,575 cr — W3.0 re-log 2026-07-02** (7,615 prep → 7,595 W0.7 → 7,575 after W3.0's `test-meshy` preview generate; live API `openapi/v1/balance`, HTTP 200, key `msy_…`) | active; ~35 cr needed for W3.1 |
 | Ranger regen + rig (W3.1) | ~30 + ~5 cr | keys restored — ready |
 | Extra env props (only if needed in W4) | ~30 cr each | none planned — 38 props already staged |
 | CC0/CC-BY animated animal packs (W3.5) | free (license log; CC-BY gets a credit line) | PRIMARY animal-animation path |
@@ -875,6 +875,17 @@ with the full sub-id (e.g. `W2.4a`).
   lodge-only flows. New `pause.spec.ts` opens the hub, reaches Instellingen + badges,
   asserts `screen==='world'` and `pos()!=null` at each step, and closes back to the HUD.
   17 E2E + 261 unit green; frozen smoke untouched (own assert, not a smoke upgrade).
+- 2026-07-02 (W3.0, keys verified — opens W3): both content keys live. Meshy
+  `openapi/v1/balance` HTTP 200 → **7595 cr** (masked key `msy_…`, 40 chars);
+  `test-meshy.mjs` AUTH/list HTTP 200 + a preview GENERATE HTTP 202 (result id
+  returned) prove free/paid generation still works, so W3.1's ~35 cr regen+rig
+  is de-risked. The preview generate cost **20 cr** (7595 → 7575, matching the
+  W0.7 prep-session spend) — still far above W3.1's need, no blocker.
+  `test-xeno.mjs` HTTP 200 → 21,183 NL bird recordings / 381 species (page-1
+  licence spread mostly CC BY-NC-SA/ND — noted for the W4.7 audio pass, which
+  must respect NC/ND). Freesound + Anything World keys are also present in
+  `.env.local` (names only, never logged) but out of W3.0 scope. Graceful-degrade
+  box, no player-visible change → no new E2E assert; ticked with `--force`.
 - 2026-07-02 (W2.4b, prikbord + raaf folded in — CLOSES W2): the pause hub now
   carries the prikbord (`showCaseBoard(true)`) and the raaf-companion
   (`showCabin`) on top of instellingen + badges, so every lodge-only menu the
