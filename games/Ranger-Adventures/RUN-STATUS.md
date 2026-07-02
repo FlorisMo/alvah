@@ -4,17 +4,17 @@
 > [WORLD-LEDGER.md](WORLD-LEDGER.md); this is the at-a-glance view.
 
 - **Ledger:** WORLD-LEDGER.md
-- **Phase:** Fase W3 — Levend (animaties)
-- **Progress:** ~54% (weighted by ledger items)
-- **Just landed:** W3.7b Vacht-tinten + oogkleur-recept + houding: vos rufous-retint (+ andere dossier-strijdige vachten) via tint-util; eye-recipe uitbreiden (wolf/wildzwijn/frisling iris, adder rood) per dossier; houding-flags; unit test eyeSpecFor; before/after showroom in qa-evidence-2; §10-notitie
-- **Next up:** W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
-- **Last heartbeat:** 2026-07-02 16:55:42Z
+- **Phase:** Fase W4 — Rijke wereld
+- **Progress:** ~55% (weighted by ledger items)
+- **Just landed:** W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
+- **Next up:** W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls
+- **Last heartbeat:** 2026-07-02 17:01:54Z
 - **Blocker:** none
 
 ```
-✔ landed: W3.7b Vacht-tinten + oogkleur-recept + houding: vos rufous-retint (+ andere dossier-strijdige vachten) via tint-util; eye-recipe uitbreiden (wolf/wildzwijn/frisling iris, adder rood) per dossier; houding-flags; unit test eyeSpecFor; before/after showroom in qa-evidence-2; §10-notitie
-▶ phase:  Fase W3 — Levend (animaties)
-→ next:   W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
+✔ landed: W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~54%
+▷ progress: ~55%
 ```

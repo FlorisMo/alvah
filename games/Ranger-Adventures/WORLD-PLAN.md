@@ -1149,3 +1149,35 @@ with the full sub-id (e.g. `W2.4a`).
   "Wist je dat" string touched here — text contradictions are W3.7c. 285 unit (+6)
   + build green; showroom-w37 (2 before/after specs) + frozen smoke 4/4 green
   (frozen smoke untouched — the box's own assert is the showroom evidence).
+- 2026-07-02 (W3.7c, dossier vs "Wist je dat" text — CLOSES W3): audited EVERY
+  child-facing biology string against the W3.4a mammal + W3.4b bird dossiers.
+  The single source of "Wist je dat" content is `content/veluwe.ts` — both the
+  per-species `ANIMALS[].feiten` intros (21 lines) AND the inline mission
+  `step.skin.feit` beats (23 lines); the "Wist je dat" hits in `SandboxScene.ts`
+  / `Sandbox.test.ts` are just the UI panel LABEL, not fact content, and the
+  W6.3 raaf-companion speech is not built yet. VERDICT: **zero dossier
+  contradictions.** The content header calls itself "verified content ...
+  Distilled from veluwe-research.md", and the newer W3.4a/b web-research pass
+  re-confirms it rather than overturning it — several facts match the dossier
+  kindfeiten near-verbatim (eekhoorn cache-and-forget → boom; das nocturnal in
+  the burcht; edelhert herfst-burlen; frisling "gestreepte pyjama" camouflage;
+  raaf "hele leven bij hetzelfde partnertje"; nachtzwaluw eggs on bare
+  ground/zand + dorre-blad schutkleur; eekhoorn "slaapt niet de hele winter",
+  matching red-squirrel non-hibernation). The heikikker fact CORRECTLY scopes
+  the blue to "het mannetje" in "het voorjaar" (dossier: males blauw only at the
+  paartijd-piek). ONE near-case examined + deliberately KEPT: the step-1
+  distractor blurb `heideblauwtje.feiten[0]` = "Een klein blauw vlindertje van
+  de heide" — the dossier notes only males are blue (females brown), but the
+  species is literally named "blauwtje", its model + male form ARE blue, and the
+  terse single-line distractor (sibling: "Een klein vogeltje van de heide")
+  should key off the signature colour exactly as a field guide does; adding a
+  male/female caveat would over-weight a distractor and reduce the name↔colour
+  link. Recorded as a considered NON-contradiction, not silently ignored. No
+  text claims a size or coat colour that contradicts the W3.7a scale table or
+  the W3.7b tint pass either (the vos rufous issue was model-only, already
+  fixed). So NO string was changed — the honest "fix" is a documented
+  zero-contradiction verdict. The readlevel-corpus gate the box names is already
+  a DYNAMIC sweep (`readlevel.test.ts` walks `ANIMALS[].feiten` +
+  `step.skin.feit` live), so any future fact edit stays M3/E3-linted with no new
+  wiring. Docs-only (a §10 note) → no player-visible change, no code touched, no
+  new E2E assert; readlevel corpus 9/9 + build + frozen smoke 4/4 green.

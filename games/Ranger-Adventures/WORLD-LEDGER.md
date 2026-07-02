@@ -57,7 +57,7 @@ W0.6 CI-gate in deploy.yml — gesplitst (vereist een groene ubuntu-run vóór h
 W3.7 Dossier toepassen — gesplitst (schaal / tinten+ogen+houding / teksten, elk eigen verificatie):
 - [x] W3.7a Relatieve schaal per dier t.o.v. de ranger: canonieke stand-hoogte-tabel (dossier-afgeleid, ranger-relatief) door de plaatsings/showroom height-path; unit test op ordening + ranger-ratio; showroom true-scale modus + before/after screenshots in qa-evidence-2; E2E leest de toegepaste schaal-ordening live (1)
 - [x] W3.7b Vacht-tinten + oogkleur-recept + houding: vos rufous-retint (+ andere dossier-strijdige vachten) via tint-util; eye-recipe uitbreiden (wolf/wildzwijn/frisling iris, adder rood) per dossier; houding-flags; unit test eyeSpecFor; before/after showroom in qa-evidence-2; §10-notitie (1)
-- [ ] W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak (1)
+- [x] W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak (1)
 
 ## Fase W4 — Rijke wereld
 

@@ -1222,3 +1222,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~54%
 ```
+
+---
+**2026-07-02 17:01:54Z** · ticked: - [x] W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
+
+```
+✔ landed: W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~55%
+```
