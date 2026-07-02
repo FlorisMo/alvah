@@ -15,6 +15,7 @@
     "assets:all": "node scripts/meshy-gen.mjs && node scripts/gltf-optimize.mjs && node scripts/optimize-animated.mjs && node scripts/audio-fetch.mjs",
     "finish": "node scripts/ranger-run.mjs",
     "run:status": "node scripts/ranger-run.mjs status",
+    "test": "node --experimental-strip-types --test 'src/**/*.test.ts'",
     "e2e": "playwright test",
     "e2e:smoke": "playwright test --grep @smoke"
   },

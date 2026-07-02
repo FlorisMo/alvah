@@ -6,15 +6,15 @@
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W0 — Waarheidsharnas (browser proof)
 - **Progress:** ~9% (weighted by ledger items)
-- **Just landed:** W0.4 Movement red-first E2E: tap-to-walk ≥2 m via expect.poll; diagnose + fix waarom taps de ranger niet bewegen; e2e:smoke upgraden en BEVRIEZEN; root-cause in plan §10
-- **Next up:** W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
-- **Last heartbeat:** 2026-07-02 12:16:24Z
+- **Just landed:** W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
+- **Next up:** W0.6 CI-gate in deploy.yml: apart test-job (unit + e2e:smoke, --with-deps, swiftshader-args, cache, paths-filter); eerst continue-on-error, blocking na één groene ubuntu-run
+- **Last heartbeat:** 2026-07-02 12:19:05Z
 - **Blocker:** none
 
 ```
-✔ landed: W0.4 Movement red-first E2E: tap-to-walk ≥2 m via expect.poll; diagnose + fix waarom taps de ranger niet bewegen; e2e:smoke upgraden en BEVRIEZEN; root-cause in plan §10
+✔ landed: W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
 ▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
-→ next:   W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
+→ next:   W0.6 CI-gate in deploy.yml: apart test-job (unit + e2e:smoke, --with-deps, swiftshader-args, cache, paths-filter); eerst continue-on-error, blocking na één groene ubuntu-run
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~9%
 ```

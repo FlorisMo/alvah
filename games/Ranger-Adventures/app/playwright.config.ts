@@ -35,7 +35,17 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // CI runners have no GPU; three.js WebGL needs software rendering.
+        // SwiftShader via ANGLE keeps the world drawing headlessly (W0.6).
+        // Locally we have a real GPU, so these args stay off.
+        launchOptions: {
+          args: process.env.CI
+            ? ['--enable-unsafe-swiftshader', '--use-angle=swiftshader']
+            : [],
+        },
+      },
     },
   ],
   webServer: {

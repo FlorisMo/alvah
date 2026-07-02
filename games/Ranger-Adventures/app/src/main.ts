@@ -23,8 +23,17 @@ const ui = document.getElementById('ui') as HTMLDivElement;
 
 // --- 3D render layer + live budget overlay (Phase 0) ---
 const stage = new Stage(canvas);
-const budgets = new Budgets(ui);
-stage.onFrame((dt) => budgets.update(stage.renderer, dt));
+
+// The draw-call/fps overlay is a dev instrument, not player UI. Gate it on the
+// `?dev=1` query param ONLY (WORLD-PLAN W0.5) — NOT `import.meta.env.DEV`: the
+// E2E suite runs against the dev server, so a DEV gate would make the
+// "overlay absent" assertion impossible. `drawCalls()` stays available to E2E
+// through the dev hook (provideDrawCalls below) regardless of the overlay.
+const showBudgets = new URLSearchParams(location.search).has('dev');
+if (showBudgets) {
+  const budgets = new Budgets(ui);
+  stage.onFrame((dt) => budgets.update(stage.renderer, dt));
+}
 stage.start();
 
 // Dev-state hook for the browser-proof E2E suite (WORLD-PLAN §3.1). Gated

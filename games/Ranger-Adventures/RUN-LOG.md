@@ -881,3 +881,14 @@ One status block per run/step (BUILD-PLAN §9b).
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~9%
 ```
+
+---
+**2026-07-02 12:19:05Z** · ticked: - [x] W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
+
+```
+✔ landed: W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.6 CI-gate in deploy.yml: apart test-job (unit + e2e:smoke, --with-deps, swiftshader-args, cache, paths-filter); eerst continue-on-error, blocking na één groene ubuntu-run
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~9%
+```

@@ -15,7 +15,77 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Decide whether this push touched the Ranger game (or its /ranger page or
+  # this workflow). Dossier-content-only pushes skip the browser e2e step so
+  # they deploy ungated; the unit tests below still block unconditionally.
+  # Uses a plain git diff (no third-party action) to stay within CLAUDE.md.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ranger: ${{ steps.filter.outputs.ranger }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Detect ranger-related changes
+        id: filter
+        shell: bash
+        run: |
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            changed="$(git diff --name-only HEAD^ HEAD)"
+          else
+            changed=""   # first commit / shallow root — run everything
+          fi
+          if [ -z "$changed" ] || printf '%s\n' "$changed" | grep -qE '^(games/|src/pages/ranger/|\.github/workflows/deploy\.yml)'; then
+            ranger=true
+          else
+            ranger=false
+          fi
+          echo "ranger=$ranger" >> "$GITHUB_OUTPUT"
+          echo "ranger-related changes: $ranger"
+
+  # Browser-proof gate (WORLD-PLAN §3.1). Unit tests block every push; the
+  # e2e:smoke step only runs for ranger changes and is currently
+  # continue-on-error (W0.6a) — it flips to blocking after one green ubuntu run
+  # (W0.6b).
+  test:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: games/Ranger-Adventures/app/package-lock.json
+      - name: Install game-app dependencies
+        run: npm ci --prefix games/Ranger-Adventures/app
+      - name: Unit tests (block unconditionally)
+        run: npm --prefix games/Ranger-Adventures/app test
+      - name: Cache Playwright browsers
+        if: needs.changes.outputs.ranger == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('games/Ranger-Adventures/app/package-lock.json') }}
+      - name: Install Playwright chromium
+        if: needs.changes.outputs.ranger == 'true'
+        working-directory: games/Ranger-Adventures/app
+        run: npx playwright install --with-deps chromium
+      - name: E2E smoke (browser-proof, WORLD-PLAN §3.1)
+        if: needs.changes.outputs.ranger == 'true'
+        working-directory: games/Ranger-Adventures/app
+        # W0.6a lands this as continue-on-error; W0.6b flips it to blocking
+        # after one observed green ubuntu run. SwiftShader args come from
+        # playwright.config.ts (gated on the CI env var).
+        continue-on-error: true
+        run: npm run e2e:smoke
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
