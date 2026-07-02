@@ -4,17 +4,17 @@
 > [WORLD-LEDGER.md](WORLD-LEDGER.md); this is the at-a-glance view.
 
 - **Ledger:** WORLD-LEDGER.md
-- **Phase:** Fase W5 — Voertuigen
-- **Progress:** ~79% (weighted by ledger items)
-- **Just landed:** W5.3b Helikopter wereld-integratie: helipads bij BOA-post + stuifzand, in/uit op pads, cockpitkader-overlay + bewegings-vignette (uit bij hover), HUD-prompt, dev-hook heli(); reduced-motion toont kalme niet-beschikbaar-melding; E2E toggle aan → pad-naar-pad vlucht + FOV constant + roll 0 + gedempte yaw, en reduced-motion niet-beschikbaar
-- **Next up:** W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop
-- **Last heartbeat:** 2026-07-02 19:48:27Z
+- **Phase:** Fase W6 — Diegetische missies + biologie
+- **Progress:** ~82% (weighted by ledger items)
+- **Just landed:** W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop
+- **Next up:** W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
+- **Last heartbeat:** 2026-07-02 19:51:43Z
 - **Blocker:** none
 
 ```
-✔ landed: W5.3b Helikopter wereld-integratie: helipads bij BOA-post + stuifzand, in/uit op pads, cockpitkader-overlay + bewegings-vignette (uit bij hover), HUD-prompt, dev-hook heli(); reduced-motion toont kalme niet-beschikbaar-melding; E2E toggle aan → pad-naar-pad vlucht + FOV constant + roll 0 + gedempte yaw, en reduced-motion niet-beschikbaar
-▶ phase:  Fase W5 — Voertuigen
-→ next:   W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop
+✔ landed: W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop
+▶ phase:  Fase W6 — Diegetische missies + biologie
+→ next:   W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~79%
+▷ progress: ~82%
 ```

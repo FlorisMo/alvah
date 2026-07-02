@@ -1387,3 +1387,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~79%
 ```
+
+---
+**2026-07-02 19:51:43Z** · ticked: - [x] W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop
+
+```
+✔ landed: W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop
+▶ phase:  Fase W6 — Diegetische missies + biologie
+→ next:   W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~82%
+```

@@ -79,7 +79,7 @@ W4.7 Audio-pas — gesplitst (ambience-bed her-encode+crossfade / voetstappen+vo
 W5.3 Helikopter opt-in — gesplitst (pure vluchtcore+toggle / wereld-integratie+overlay+E2E):
 - [x] W5.3a Pure heli-vluchtcore + opt-in toggle: core/heli.ts (exp-gedempte klim/daal ≤2 m/s naar vaste kruishoogte, horizon altijd recht/roll 0, gedempte yaw, translate-detectie voor vignette) + unit tests; settings.helikopter (default false) via state.ts + reduced-motion→niet-beschikbaar predicaat + unit test (1)
 - [x] W5.3b Helikopter wereld-integratie: helipads bij BOA-post + stuifzand, in/uit op pads, cockpitkader-overlay + bewegings-vignette (uit bij hover), HUD-prompt, dev-hook heli(); reduced-motion toont kalme niet-beschikbaar-melding; E2E toggle aan → pad-naar-pad vlucht + FOV constant + roll 0 + gedempte yaw, en reduced-motion niet-beschikbaar (2)
-- [ ] W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop (3)
+- [x] W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop (3)
 
 ## Fase W6 — Diegetische missies + biologie
 

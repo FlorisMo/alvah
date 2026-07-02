@@ -1539,3 +1539,33 @@ with the full sub-id (e.g. `W2.4a`).
   corpus, so per the W5.1/W5.2 precedent they are deferred to the W6.5 tone gate;
   all were authored ≤ 7 words (M3/E3) so they will pass it. 346 unit + build +
   frozen smoke 4/4 + heli 2/2 green.
+- 2026-07-02 (W5.4, Rapier spike — SKIP-TICK with verdict, CLOSES W5): the spike
+  is GATED (§3.3 / §5 W5.4) — "run ONLY if §10 recorded a real feel/determinism
+  problem with the bespoke controller during W1–W5; otherwise skip-tick with a
+  verdict note." VERDICT: **skip — no such problem was ever recorded.** A full
+  re-read of §10 across W1–W5 shows the bespoke `resolveMove` controller worked
+  cleanly at every step it drives: keyboard walking (W1.2), joystick (W1.3),
+  interact-proximity (W1.4), rotating follow-cam (W1.5), jeep arcade-kinematics
+  (W5.1/W5.2) and the helicopter flight core (W5.3a/b) all share that ONE
+  collision/rim/water/terrain-stick resolver and none surfaced a feel or
+  determinism complaint. On the contrary, **determinism is demonstrably solid**:
+  the dt-independent exponential-damping law (`1−exp(−dt/τ)`, the SHARED
+  `dampFactor`) is unit-pinned identical at 30/60/120 fps across FollowCam
+  (W1.5), PlayerAnim (W3.2), footstep cadence (W4.7b) and AmbientPaths (W3.6),
+  and the vehicle/heli caps are pure rate-clamped cores with their own tests. The
+  only recurring §10 pain points are NOT controller problems: (a) SwiftShader
+  headless **test-runner** flakiness under parallel load (W3.3/W5.1/W5.2/W5.3b) —
+  a GPU-less CI-renderer timing artifact that passes cleanly with `--workers=1`,
+  not a runtime feel issue; and (b) Euler-coupling **measurement** traps when
+  reading camera roll/yaw back through the dev hook (W1.5/W5.1), fixed by reading
+  `matrixWorld` basis vectors — a hook-instrumentation issue, not controller
+  behaviour. Adopting Rapier would add a ~1.5 MB wasm payload (a real iPad
+  download + bundle-budget cost against W7.1's <120 kB entry target) and a new
+  determinism surface to validate, for zero recorded problem to solve — the plan
+  itself notes "The bespoke `resolveMove` already works; walking does not need
+  physics" (§3.3). So NO prototype was built, NO dependency added, tree stays
+  clean on `main`. Rapier remains APPROVED-but-unused; revisit only if a future
+  box records a concrete controller problem. Docs-only verdict → no code, no
+  player-visible change, no new E2E assert; build + frozen smoke 4/4 green, tick
+  passes the real gate WITHOUT `--force` (nothing is red — this is an honest
+  skip, not a graceful-degrade). CLOSES Fase W5.
