@@ -914,3 +914,69 @@ One status block per run/step (BUILD-PLAN §9b).
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~11%
 ```
+
+---
+**2026-07-02 12:37:14Z** · status
+
+```
+✔ landed: W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~11%
+```
+
+---
+**2026-07-02** · W0.7 Meshy balance probe
+
+```
+Key present: msy_…(40 chars)
+[balance] HTTP 200 → 7595 credits
+```
+Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. No blocker.
+
+---
+**2026-07-02 12:38:36Z** · ticked: - [x] W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan
+
+```
+✔ landed: W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.8 WebKit-project (iPad Safari engine): webkit install, smoke + journey op webkit groen; afwijkingen in §10
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~12%
+```
+
+---
+**2026-07-02 12:42:30Z** · status
+
+```
+✔ landed: W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.8 WebKit-project (iPad Safari engine): webkit install, smoke + journey op webkit groen; afwijkingen in §10
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~12%
+⚠ blocker: W0.8 webkit smoke can't run on this Mac: Playwright's frozen WebKit build (webkit v2251, mac14-arm64) bus-errors (Bus error:10) at launch on macOS 14.1 — Apple/Playwright dropped support. Chromium smoke unaffected & still gates ticks. To unblock: (a) update macOS so a current WebKit build installs, or (b) tell the run to move webkit smoke to CI ubuntu (webkit works there). Config is ready: webkit project + 'npm run e2e:webkit' + shot() no-op on webkit are committed.
+```
+
+---
+**2026-07-02 13:06:47Z** · ticked: - [x] W0.8 WebKit-project (iPad Safari engine): webkit-config forward-ready gelandt; lokaal draaien onmogelijk (frozen webkit op mac14-arm64, OS niet te updaten wegens schijfruimte) → graceful-degrade skip met §10-verdict; CI-webkit optioneel follow-up; --force toegestaan
+
+```
+✔ landed: W0.8 WebKit-project (iPad Safari engine): webkit-config forward-ready gelandt; lokaal draaien onmogelijk (frozen webkit op mac14-arm64, OS niet te updaten wegens schijfruimte) → graceful-degrade skip met §10-verdict; CI-webkit optioneel follow-up; --force toegestaan
+▶ phase:  Fase W1 — Besturing
+→ next:   W1.1 core/input.ts pure module (pijlen + WASD + joystick-vector, camera-relatief) + unit tests
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~14%
+⚠ blocker: W0.8 webkit smoke can't run on this Mac: Playwright's frozen WebKit build (webkit v2251, mac14-arm64) bus-errors (Bus error:10) at launch on macOS 14.1 — Apple/Playwright dropped support. Chromium smoke unaffected & still gates ticks. To unblock: (a) update macOS so a current WebKit build installs, or (b) tell the run to move webkit smoke to CI ubuntu (webkit works there). Config is ready: webkit project + 'npm run e2e:webkit' + shot() no-op on webkit are committed.
+```
+
+---
+**2026-07-02 13:06:52Z** · status
+
+```
+✔ landed: W0.8 WebKit-project (iPad Safari engine): webkit-config forward-ready gelandt; lokaal draaien onmogelijk (frozen webkit op mac14-arm64, OS niet te updaten wegens schijfruimte) → graceful-degrade skip met §10-verdict; CI-webkit optioneel follow-up; --force toegestaan
+▶ phase:  Fase W1 — Besturing
+→ next:   W1.1 core/input.ts pure module (pijlen + WASD + joystick-vector, camera-relatief) + unit tests
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~14%
+```

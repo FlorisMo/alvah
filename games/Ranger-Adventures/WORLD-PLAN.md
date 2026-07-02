@@ -330,7 +330,12 @@ with the full sub-id (e.g. `W2.4a`).
 - **W0.8** WebKit project (iPad Safari engine): `npx playwright install
   webkit`; run smoke + journey specs on webkit (skip artifact screenshots
   there); document any WebKit-only failure in §10 and fix if in scope.
-  Accept: webkit smoke green locally.
+  Accept: webkit smoke green locally, OR — when local WebKit is a frozen
+  build the OS cannot update (mac14-arm64, see §10) — graceful-degrade:
+  webkit config landed forward-ready + `e2e:smoke` scoped to chromium
+  (contract intact) + §10 verdict, tick with `--force`. CI-webkit on the
+  Ubuntu runner is the optional follow-up when someone wants iPad-engine
+  coverage in CI.
 
 ### W1 — Controls (the demo-critical phase)
 
@@ -617,7 +622,7 @@ with the full sub-id (e.g. `W2.4a`).
 
 | Item | Cost | Status |
 |---|---|---|
-| Meshy Ultra grant (run 1) | **7,615 cr VERIFIED 2026-07-02** (live API) | active; W0.7 re-logs at run start |
+| Meshy Ultra grant (run 1) | **7,595 cr — W0.7 re-log 2026-07-02** (was 7,615 at prep; live API `openapi/v1/balance`, HTTP 200, key `msy_…`) | active; ~35 cr needed for W3.1 |
 | Ranger regen + rig (W3.1) | ~30 + ~5 cr | keys restored — ready |
 | Extra env props (only if needed in W4) | ~30 cr each | none planned — 38 props already staged |
 | CC0/CC-BY animated animal packs (W3.5) | free (license log; CC-BY gets a credit line) | PRIMARY animal-animation path |
@@ -678,6 +683,34 @@ with the full sub-id (e.g. `W2.4a`).
   playwright.config.ts gated on `process.env.CI` — three.js WebGL renders
   headlessly on the GPU-less runner. First ubuntu run (28589759505): test job
   green, e2e:smoke 4 passed in 54.5 s. W0.6b then removed continue-on-error.
+- 2026-07-02 (W0.8, WebKit — BLOCKED, box left OPEN): `npx playwright install
+  webkit` downloaded the FROZEN build (webkit v2251, mac14-arm64) with the
+  warning that this OS no longer receives WebKit updates. It **bus-errors
+  (Bus error:10) at launch** — confirmed both via the suite and a bare
+  `webkit.launch()`, so it is the browser/OS, not our config. The Mac runs
+  macOS 14.1 (Darwin 23.1.0). W0.8 is not a `--force`/graceful-degrade box, so
+  it stays unticked with a persistent `--blocker`. Config landed anyway
+  (forward-ready): a `webkit` project scoped `grep:/@smoke/` on
+  `devices['iPad (gen 7) landscape']`, an `e2e:webkit` npm script, and
+  `shot()` no-ops on webkit. To keep CI (chromium-only) and the tick gate
+  safe, `e2e:smoke` is now scoped `--project=chromium` — this removes NO
+  assertion (only chromium existed before), so the frozen smoke is intact.
+- 2026-07-02 (W0.8 RESOLVED — operator decision, Floris): the OS update that
+  would unfreeze local WebKit is blocked by disk space and is unrelated to the
+  run, so W0.8 is reclassified as a **graceful-degrade** box (like W0.7). The
+  config is landed forward-ready and the chromium smoke/tick gate is intact,
+  so W0.8 is ticked with `--force` and the run proceeds to W1. iPad-Safari
+  engine coverage in CI (add the webkit project to the Ubuntu job) is an
+  OPTIONAL follow-up, not a blocker for the demo path.
+  Chromium smoke still 4/4 green. Unblock path: update macOS, or move webkit
+  smoke to CI ubuntu (webkit runs there). Proceeded to W1.1.
+- 2026-07-02 (W0.7, Meshy balance probe): key valid, `openapi/v1/balance`
+  HTTP 200 → **7,595 credits** (masked key `msy_…`, 40 chars). Down 20 cr
+  from the 7,615 prep baseline — consistent with the prep-session
+  `test-meshy.mjs` preview generate. Well above the ~35 cr W3.1 needs, so no
+  blocker. Added a reusable `scripts/meshy-balance.mjs` (masked prefix +
+  balance only, never the key value). Ticked with `--force` (graceful-degrade
+  box, no player-visible change → no new E2E assert).
 - 2026-07-02 (prep session, later): Floris decisions folded in — no branch
   isolation (run works on main; site not in use); CC0/CC-BY animated packs
   become the primary animal-animation path after the Anything World key was

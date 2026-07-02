@@ -14,8 +14,13 @@ import { defineConfig, devices } from '@playwright/test';
  * - `retries: 2` in CI only (SwiftShader is ~10× slower; movement asserts use
  *   `expect.poll`, never fixed sleeps).
  * - Screenshots on failure + explicit artifact shots go to `e2e/__shots__/`
- *   (gitignored). WebKit (W0.8) and the CI swiftshader launch args (W0.6) land
- *   in their own boxes.
+ *   (gitignored). The CI swiftshader launch args (W0.6) live on chromium.
+ * - WebKit (W0.8) is the iPad Safari engine — the primary device. It runs the
+ *   smoke set only (`grep: /@smoke/` = boot + journey + movement) so it stays
+ *   fast; `shot()` no-ops on webkit (helpers.ts). CI installs chromium only,
+ *   so `e2e:smoke` is scoped to `--project=chromium` (package.json) and the
+ *   webkit run is `e2e:webkit`, local-only. Frozen smoke assertions (§3.1)
+ *   are unchanged — webkit adds a second engine, it removes nothing.
  */
 const PORT = 4199;
 
@@ -46,6 +51,14 @@ export default defineConfig({
             : [],
         },
       },
+    },
+    {
+      // iPad Safari engine (the primary device). Smoke set only — boot,
+      // journey, movement — so the second-engine pass stays quick. Not part
+      // of CI's chromium-only `e2e:smoke`; run it locally via `e2e:webkit`.
+      name: 'webkit',
+      grep: /@smoke/,
+      use: { ...devices['iPad (gen 7) landscape'] },
     },
   ],
   webServer: {

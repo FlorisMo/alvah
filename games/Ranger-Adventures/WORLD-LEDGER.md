@@ -5,7 +5,7 @@
 > ID. Weights `(N)` drive the progress %. Tick via:
 > `RUN_LEDGER=WORLD-LEDGER.md node games/Ranger-Adventures/app/scripts/ranger-run.mjs tick "W0.1"`
 > — tick enforces build + e2e:smoke mechanically and refuses on red
-> (`--force` only for W0.7 / W3.0 / W3.4a / W3.4b / W3.5).
+> (`--force` only for W0.7 / W0.8 / W3.0 / W3.4a / W3.4b / W3.5).
 >
 > Definition of done for EVERY box: targeted unit test green where the plan
 > names one + build green + `e2e:smoke` green (STAGED definition, plan §3.1:
@@ -24,8 +24,8 @@
 W0.6 CI-gate in deploy.yml — gesplitst (vereist een groene ubuntu-run vóór het blocking-flippen):
 - [x] W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren (1)
 - [x] W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen (1)
-- [ ] W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan (1)
-- [ ] W0.8 WebKit-project (iPad Safari engine): webkit install, smoke + journey op webkit groen; afwijkingen in §10 (2)
+- [x] W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan (1)
+- [x] W0.8 WebKit-project (iPad Safari engine): webkit-config forward-ready gelandt; lokaal draaien onmogelijk (frozen webkit op mac14-arm64, OS niet te updaten wegens schijfruimte) → graceful-degrade skip met §10-verdict; CI-webkit optioneel follow-up; --force toegestaan (2)
 
 ## Fase W1 — Besturing
 

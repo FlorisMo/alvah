@@ -1,3 +1,4 @@
+import { test } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 
 /**
@@ -10,8 +11,11 @@ export const SHOTS_DIR = 'e2e/__shots__';
 /**
  * Save a named artifact screenshot for human review. Screenshots are proof for
  * a person, never an assertion target (SwiftShader pixels are not stable).
+ * No-op on webkit (W0.8): the iPad-Safari pass exists for engine coverage, not
+ * curated shots — chromium already captures the same steps.
  */
 export async function shot(page: Page, name: string): Promise<void> {
+  if (test.info().project.name === 'webkit') return;
   await page.screenshot({ path: `${SHOTS_DIR}/${name}.png` });
 }
 
