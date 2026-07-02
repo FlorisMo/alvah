@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W3 — Levend (animaties)
-- **Progress:** ~42% (weighted by ledger items)
-- **Just landed:** W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt
-- **Next up:** W3.3 Warden + poacher spelen hun bestaande baked clips op hun plek
-- **Last heartbeat:** 2026-07-02 15:38:40Z
+- **Progress:** ~43% (weighted by ledger items)
+- **Just landed:** W3.3 Warden + poacher spelen hun bestaande baked clips op hun plek
+- **Next up:** W3.4a Accuracy-dossier zoogdieren: webresearch per dier (maten, vacht/seizoen, oogkleur, kenmerken, gang, 1-2 kindfeiten) naar research/animal-visual-accuracy.md met bron-URL + datum per claim; geen web → --blocker, nooit verzinnen; --force toegestaan
+- **Last heartbeat:** 2026-07-02 15:46:20Z
 - **Blocker:** none
 
 ```
-✔ landed: W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt
+✔ landed: W3.3 Warden + poacher spelen hun bestaande baked clips op hun plek
 ▶ phase:  Fase W3 — Levend (animaties)
-→ next:   W3.3 Warden + poacher spelen hun bestaande baked clips op hun plek
+→ next:   W3.4a Accuracy-dossier zoogdieren: webresearch per dier (maten, vacht/seizoen, oogkleur, kenmerken, gang, 1-2 kindfeiten) naar research/animal-visual-accuracy.md met bron-URL + datum per claim; geen web → --blocker, nooit verzinnen; --force toegestaan
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~42%
+▷ progress: ~43%
 ```

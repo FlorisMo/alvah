@@ -36,6 +36,9 @@ export interface RangerDevHook {
   /** Win the active 3D mission step via its genuine resolve path; true if one
    *  was pending. Drives the two-mission-chain E2E deterministically (W2.3). */
   winStep(): boolean;
+  /** The scenic story-arc actors (warden + poacher) with their live baked-clip
+   *  {name, time}, or null before the hook/world is ready (W3.3). */
+  actors(): { id: string; clip: { name: string; time: number } | null }[] | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -51,6 +54,7 @@ const state = {
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
   board: null as null | (() => { x: number; z: number; near: boolean } | null),
   winStep: null as null | (() => boolean),
+  actors: null as null | (() => { id: string; clip: { name: string; time: number } | null }[]),
 };
 
 /** Current screen the player is on. */
@@ -107,6 +111,13 @@ export function provideWinStep(fn: (() => boolean) | null): void {
   state.winStep = fn;
 }
 
+/** Register the scenic-actors source (the World's warden + poacher clips). W3.3. */
+export function provideActors(
+  fn: (() => { id: string; clip: { name: string; time: number } | null }[]) | null,
+): void {
+  state.actors = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -128,6 +139,7 @@ export function installDevHook(): boolean {
     markers: () => (state.markers ? state.markers() : null),
     board: () => (state.board ? state.board() : null),
     winStep: () => (state.winStep ? state.winStep() : false),
+    actors: () => (state.actors ? state.actors() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

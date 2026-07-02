@@ -949,6 +949,23 @@ with the full sub-id (e.g. `W2.4a`).
   `clip().time` advances between two polls (proves the mixer clock runs, not a
   frozen pose), then eases back to idle on release. Frozen smoke untouched (own
   assert). 267 unit (+6) + build green; anim + full smoke green.
+- 2026-07-02 (W3.3, warden + poacher baked clips): the two story-arc humans now
+  stand in the LIVE explore world playing their single baked clip. Both were
+  infrastructure-ready (`animated:true`, 1 clip each in the manifest) but placed
+  NOWHERE outside the Sandbox showroom — the arc only referenced them via case-board
+  state, never as world characters. New `placeScenicActors()` in World.ts drops the
+  warden (`ranger-warden-boa`) next to the case-board hub (the BOA you report to) and
+  the poacher (`figure-poacher`) as a distant, calm figure off in the bos edge; each
+  `loadRig` → `prepModel(1.7, adult height)` → `applyCalmPose` (never-scary bias) →
+  a mixer playing the first idle/rest clip. DECISION: they are NOT markers and push NO
+  collision — pure diegetic dressing, kept out of `markers` so they never pollute
+  wayfinding or the "nearest mission" the E2E steers to (same reasoning as the W2.2
+  case-board). Their clip is SECONDARY motion → advanced `reduced ? 0 : dt` in the same
+  loop as the animal mixers (unlike the player's rm-EXEMPT locomotion). Both sit +z of
+  spawn so the frozen movement smoke's −z corridor stays clear. New dev hook
+  `actors()` ({id, clip}) mirrors `clip()`; `actors.spec.ts` asserts both humans are
+  placed AND the warden's mixer clock advances with no input. 267 unit + build green;
+  new spec + frozen smoke 4/4 green.
   FLAKINESS NOTE (not a regression): the two longest specs `pause.spec` +
   `chain.spec` fail intermittently in local serial back-to-back runs — VERIFIED to
   fail identically on the committed W3.1 baseline with W3.2 stashed, so it is a

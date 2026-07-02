@@ -43,7 +43,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -177,6 +177,7 @@ function leaveWorld(): void {
   provideMarkers(null);
   provideBoard(null);
   provideClip(null);
+  provideActors(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -459,6 +460,7 @@ function startExplore(): void {
   provideMarkers(() => world!.markerPositions());
   provideBoard(() => world!.boardState());
   provideClip(() => world!.playerClip()); // W3.2: the ranger's active locomotion clip
+  provideActors(() => world!.actorClips()); // W3.3: warden + poacher baked clips
   provideWinStep(() => triggerActivityWin()); // W2.3: drive a 3D step's real resolve from E2E
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }

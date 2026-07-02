@@ -66,6 +66,15 @@ export class World {
     anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
     mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
   }[] = [];
+  // W3.3 scenic actors: the warden (BOA) + poacher stand at fixed world spots and
+  // play their single baked clip via a mixer. They are NOT missions (kept out of
+  // `markers`), carry no proximity/collision — purely diegetic set-dressing that
+  // brings the story arc into the world. Their clip is SECONDARY motion, so it
+  // freezes at the rest pose under reduced-motion (unlike the player's locomotion).
+  private readonly scenicActors: {
+    id: string; group: THREE.Group;
+    mixer: THREE.AnimationMixer | null; action: THREE.AnimationAction | null;
+  }[] = [];
   private activeId: string | null = null;     // the mission the wayfinding cue points to
   private readonly onWayfind: (cue: WayCue | null) => void;
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
@@ -159,6 +168,7 @@ export class World {
 
     this.placeMarkers(markers);
     this.placeHub();
+    this.placeScenicActors();
     void this.loadRealRanger();
 
     canvas.addEventListener('pointerdown', this.onPointer);
@@ -586,6 +596,53 @@ export class World {
     });
   }
 
+  /**
+   * W3.3: place the two story-arc humans — the warden (BOA) near the case-board
+   * hub where the player reports, and the poacher as a distant, calm figure off
+   * in the bos edge. Each loads via `loadRig` and plays its single baked clip
+   * through a mixer (advanced in `update`, frozen under reduced-motion). Both sit
+   * to the +z side of spawn so the movement smoke's forward (−z) corridor stays
+   * clear; neither pushes a collision circle or joins `markers` (pure dressing).
+   */
+  private placeScenicActors(): void {
+    const ACTORS: { id: string; x: number; z: number; height: number }[] = [
+      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: 1.7 }, // the BOA by the report board
+      { id: 'figure-poacher', x: -11.5, z: 8.5, height: 1.7 },  // a distant figure in the trees
+    ];
+    for (const a of ACTORS) {
+      const group = new THREE.Group();
+      group.position.set(a.x, this.groundY(a.x, a.z), a.z);
+      group.rotation.y = Math.atan2(-a.x, -a.z); // face the spawn clearing
+      this.scene.add(group);
+      const entry = { id: a.id, group, mixer: null as THREE.AnimationMixer | null, action: null as THREE.AnimationAction | null };
+      this.scenicActors.push(entry);
+      void loadRig(a.id).then((rig) => {
+        if (!rig) return;
+        const prepped = prepModel(rig.group, a.height);
+        applyEyes(prepped, a.id, { dusk: false });
+        applyCalmPose(prepped, a.id); // §B never-scary: bias the poacher into a calm rest shape
+        group.add(prepped);
+        if (rig.clips.length) {
+          const mixer = new THREE.AnimationMixer(prepped);
+          const clip = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
+          const action = mixer.clipAction(clip).play();
+          entry.mixer = mixer;
+          entry.action = action;
+        }
+      });
+    }
+  }
+
+  /** Dev-hook accessor (W3.3): each scenic actor's id + its live baked-clip
+   *  {name, time} (null until the rig loads / when it carries no clip). Lets the
+   *  E2E assert the warden + poacher are present AND their mixers actually run. */
+  actorClips(): { id: string; clip: { name: string; time: number } | null }[] {
+    return this.scenicActors.map((a) => ({
+      id: a.id,
+      clip: a.action ? { name: a.action.getClip().name, time: a.action.time } : null,
+    }));
+  }
+
   /** Procedural stand-in for the ranger-cabin (instant, before the GLB loads). */
   private proceduralCabin(): THREE.Group {
     const g = new THREE.Group();
@@ -760,6 +817,10 @@ export class World {
         mk.anim.scale.set(1, d.scaleY, 1);
       }
     }
+
+    // W3.3: the warden + poacher play their baked clips. Secondary motion, so the
+    // clip freezes at the rest pose under reduced-motion (same rule as the animals).
+    for (const a of this.scenicActors) a.mixer?.update(reduced ? 0 : dt);
 
     // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
     // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
