@@ -23,7 +23,7 @@
 - [x] W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig (1)
 W0.6 CI-gate in deploy.yml — gesplitst (vereist een groene ubuntu-run vóór het blocking-flippen):
 - [x] W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren (1)
-- [ ] W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen (1)
+- [x] W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen (1)
 - [ ] W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan (1)
 - [ ] W0.8 WebKit-project (iPad Safari engine): webkit install, smoke + journey op webkit groen; afwijkingen in §10 (2)
 

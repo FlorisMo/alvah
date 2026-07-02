@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W0 — Waarheidsharnas (browser proof)
-- **Progress:** ~10% (weighted by ledger items)
-- **Just landed:** W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren
-- **Next up:** W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
-- **Last heartbeat:** 2026-07-02 12:30:06Z
+- **Progress:** ~11% (weighted by ledger items)
+- **Just landed:** W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
+- **Next up:** W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan
+- **Last heartbeat:** 2026-07-02 12:36:07Z
 - **Blocker:** none
 
 ```
-✔ landed: W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren
+✔ landed: W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
 ▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
-→ next:   W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
+→ next:   W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~10%
+▷ progress: ~11%
 ```

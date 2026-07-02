@@ -903,3 +903,14 @@ One status block per run/step (BUILD-PLAN §9b).
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~10%
 ```
+
+---
+**2026-07-02 12:36:07Z** · ticked: - [x] W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
+
+```
+✔ landed: W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~11%
+```
