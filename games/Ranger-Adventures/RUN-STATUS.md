@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W4 — Rijke wereld
-- **Progress:** ~65% (weighted by ledger items)
-- **Just landed:** W4.4 Grond-detail: procedurele albedo per bioom, gouache-gevoel behouden; before/after screenshots + één paar in qa-evidence-2/
-- **Next up:** W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget
-- **Last heartbeat:** 2026-07-02 17:39:38Z
+- **Progress:** ~67% (weighted by ledger items)
+- **Just landed:** W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget
+- **Next up:** W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion
+- **Last heartbeat:** 2026-07-02 17:51:41Z
 - **Blocker:** none
 
 ```
-✔ landed: W4.4 Grond-detail: procedurele albedo per bioom, gouache-gevoel behouden; before/after screenshots + één paar in qa-evidence-2/
+✔ landed: W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget
 ▶ phase:  Fase W4 — Rijke wereld
-→ next:   W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget
+→ next:   W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~65%
+▷ progress: ~67%
 ```

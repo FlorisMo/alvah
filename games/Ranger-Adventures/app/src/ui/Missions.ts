@@ -43,7 +43,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -183,6 +183,7 @@ function leaveWorld(): void {
   provideDressing(null);
   providePaths(null);
   provideGroundDetail(null);
+  provideLighting(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -446,6 +447,8 @@ function startExplore(): void {
     stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, active,
     onBiome, onInteract,
   );
+  // W4.5: hand the world the shared renderer so it can turn on the hero shadow map.
+  world.setRenderer(stage.renderer);
   // W1.5: the rotating follow-cam reads the "Camera draait mee" setting live each
   // frame (no restart), so flipping it in Instellingen takes effect immediately.
   world.setCameraFollow(() => store.get().settings.cameraDraaitMee);
@@ -471,6 +474,7 @@ function startExplore(): void {
   provideDressing(() => world!.dressingPositions()); // W4.2: nature dressing props
   providePaths(() => world!.pathNetwork()); // W4.3: sand-path network
   provideGroundDetail(() => world!.groundDetailState()); // W4.4: procedural ground albedo
+  provideLighting(() => world!.lightingState()); // W4.5: golden-hour light + shadows
   provideWinStep(() => triggerActivityWin()); // W2.3: drive a 3D step's real resolve from E2E
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }

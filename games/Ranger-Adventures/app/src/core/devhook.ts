@@ -58,6 +58,11 @@ export interface RangerDevHook {
    *  whether the repeating mottle map is bound, and its tile repeat — lets the
    *  E2E assert the before/after toggle actually flips the floor. */
   groundDetail(): { on: boolean; textured: boolean; tileRepeat: number } | null;
+  /** The W4.5 lighting state: whether the renderer shadow map is on, whether the
+   *  golden-hour sun casts the hero shadow, whether the ranger casts it, and how
+   *  many animal blob shadows are placed — lets the E2E assert selective shadows
+   *  exist and the budget still holds. */
+  lighting(): { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -79,6 +84,7 @@ const state = {
   dressing: null as null | (() => { id: string; x: number; z: number }[]),
   paths: null as null | (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }),
   groundDetail: null as null | (() => { on: boolean; textured: boolean; tileRepeat: number }),
+  lighting: null as null | (() => { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number }),
 };
 
 /** Current screen the player is on. */
@@ -177,6 +183,13 @@ export function provideGroundDetail(
   state.groundDetail = fn;
 }
 
+/** Register the W4.5 lighting/shadow state source (the World). Pass null to clear. */
+export function provideLighting(
+  fn: (() => { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number }) | null,
+): void {
+  state.lighting = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -204,6 +217,7 @@ export function installDevHook(): boolean {
     dressing: () => (state.dressing ? state.dressing() : null),
     paths: () => (state.paths ? state.paths() : null),
     groundDetail: () => (state.groundDetail ? state.groundDetail() : null),
+    lighting: () => (state.lighting ? state.lighting() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

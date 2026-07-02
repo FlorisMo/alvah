@@ -120,6 +120,17 @@ export class World {
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground: THREE.Mesh;
+  // W4.5 golden-hour light + selective hero shadow map. The warm sun casts a soft
+  // shadow only for the ranger + solid props (castShadow=true); its tight ortho
+  // frustum FOLLOWS the ranger via a fixed offset (`sunOffset`) so the covered set
+  // stays the CLOSEST props and the light DIRECTION never changes (static, no day
+  // cycle). Moving animals get cheap blob shadows instead (no shadow-map cost).
+  private sun: THREE.DirectionalLight | null = null;
+  private readonly sunOffset = new THREE.Vector3(-9, 7, 4);
+  private rangerCastsShadow = false;
+  private blobCount = 0;
+  private renderer: THREE.WebGLRenderer | null = null;
+  private static blobTex: THREE.Texture | null = null;
   private readonly canvas: HTMLCanvasElement;
   private readonly onApproach: (missionId: string | null) => void;
   private readonly onInteract: (missionId: string) => void;
@@ -187,9 +198,25 @@ export class World {
     this.scene.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 22, 90);
 
     this.scene.add(new THREE.HemisphereLight(0xfde8c8, 0x6d8a45, 0.95));
-    const sun = new THREE.DirectionalLight(0xffe6b0, 1.5);
-    sun.position.set(-8, 7, 5);
+    // W4.5: a warm, low golden-hour sun raking in from screen-left (the camera
+    // looks down −z, so −x is the left of frame). Static direction — no day cycle.
+    const sun = new THREE.DirectionalLight(0xffe6b0, 1.6);
+    sun.position.copy(this.sunOffset);
+    // Selective HERO shadow map: only meshes with castShadow=true (the ranger +
+    // solid props, opted in on load) drop a soft shadow. The ortho frustum is
+    // kept tight (±16 m) and FOLLOWS the ranger each frame (see update()), so the
+    // covered set is always the CLOSEST props — high-res + budget-safe.
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 60;
+    const R = 16;
+    sun.shadow.camera.left = -R; sun.shadow.camera.right = R;
+    sun.shadow.camera.top = R; sun.shadow.camera.bottom = -R;
+    sun.shadow.bias = -0.0006; // kill shadow acne on the low-poly ground
     this.scene.add(sun);
+    this.scene.add(sun.target); // the shadow camera aims here; moved with the ranger
+    this.sun = sun;
 
     this.ground = this.buildGround();
     this.scene.add(this.ground);
@@ -341,7 +368,51 @@ export class World {
     if (detail) mat.map = this.groundMottleTexture();
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
+    mesh.receiveShadow = true; // W4.5: the hero shadow lands on the ground
     return mesh;
+  }
+
+  /** W4.5: opt a loaded prop/ranger into the hero shadow map (Models.ts clears
+   *  castShadow on every mesh at load, so this re-enables it on the hero set only).
+   *  The sun's tight ranger-following frustum still culls to the closest props. */
+  private static enableCast(obj: THREE.Object3D): void {
+    obj.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+  }
+
+  /** W4.5: a soft radial blob texture (dark centre → transparent rim), baked once
+   *  and shared by every animal blob shadow — cheap grounding with no shadow-map
+   *  cost, the plan's choice for the moving cast. */
+  private static getBlobTexture(): THREE.Texture {
+    if (World.blobTex) return World.blobTex;
+    const N = 64;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = N;
+    const ctx = cv.getContext('2d')!;
+    const g = ctx.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+    g.addColorStop(0, 'rgba(30,24,12,0.55)');
+    g.addColorStop(0.6, 'rgba(30,24,12,0.28)');
+    g.addColorStop(1, 'rgba(30,24,12,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, N, N);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    World.blobTex = tex;
+    return tex;
+  }
+
+  /** W4.5: add a flat blob shadow disc under an animal/actor group. A child of the
+   *  group, so it rides the wander loop for free and freezes with the animal under
+   *  reduced-motion. Radially symmetric → the group's yaw never shows. */
+  private addBlobShadow(group: THREE.Group, radius: number): void {
+    const mat = new THREE.MeshBasicMaterial({
+      map: World.getBlobTexture(), transparent: true, depthWrite: false,
+    });
+    const disc = new THREE.Mesh(new THREE.PlaneGeometry(radius * 2, radius * 2), mat);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.y = 0.03; // just above the ground to avoid z-fighting
+    disc.renderOrder = 1;
+    group.add(disc);
+    this.blobCount++;
   }
 
   /**
@@ -564,6 +635,8 @@ export class World {
     // no ARKit blendshape rig (the Meshy mesh today) is left untouched, never throws.
     // Expression + blink are essential motion, so they stay on under reduced-motion.
     applyFace(prepped, { emotion: 'neutral', child: true }); // microsaccade reads the live policy (no restart)
+    World.enableCast(prepped); // W4.5: the ranger is the primary hero shadow caster
+    this.rangerCastsShadow = true;
     this.ranger.clear();
     this.ranger.add(prepped);
     // wire the locomotion mixer: idle/walk crossfade by speed, or a procedural
@@ -575,6 +648,27 @@ export class World {
   /** The ranger's active locomotion clip for the dev hook (null when procedural). */
   playerClip(): { name: string; time: number } | null {
     return this.playerRig.clip();
+  }
+
+  /** W4.5: hand the World the shared renderer so it can enable the shadow map (a
+   *  renderer-wide flag) and report it. The title backdrop stays shadowless — no
+   *  scene there carries a casting light. Called once after construction. */
+  setRenderer(renderer: THREE.WebGLRenderer): void {
+    this.renderer = renderer;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoft is deprecated in this three build
+  }
+
+  /** Dev-hook accessor (W4.5): the lighting/shadow state — renderer shadow map on,
+   *  sun casting the hero shadow, ranger opted in, and the animal blob count — so
+   *  the E2E can assert selective shadows exist. */
+  lightingState(): { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number } {
+    return {
+      shadowMap: this.renderer ? this.renderer.shadowMap.enabled : false,
+      sunCastsShadow: this.sun ? this.sun.castShadow : false,
+      rangerCastsShadow: this.rangerCastsShadow,
+      blobShadows: this.blobCount,
+    };
   }
 
   private placeMarkers(markers: WorldMarker[]): void {
@@ -706,6 +800,7 @@ export class World {
     void loadModel('prop-ranger-cabin').then((m) => {
       if (!m) return;
       const prepped = prepModel(m, 3.0);
+      World.enableCast(prepped); // W4.5: the spawn cabin is a hero prop near the player
       cabin.remove(...cabin.children);
       cabin.add(prepped);
     });
@@ -785,6 +880,7 @@ export class World {
       void loadModel(lm.model).then((m) => {
         if (!m) return;
         const prepped = prepModel(m, lm.height);
+        World.enableCast(prepped); // W4.5: solid landmarks cast when near the player
         const totem = group.children.find((c) => c.userData.totem);
         if (totem) group.remove(totem); // keep the label
         group.add(prepped);
@@ -860,6 +956,10 @@ export class World {
       void loadModel(model).then((m) => {
         if (!m) return;
         const prepped = prepModel(m, spec.h);
+        // W4.5: only the SOLID dressing (trees/boulders/logs/snags/juniper/stumps)
+        // casts a hero shadow; low ground detail (mushrooms/fern/foxglove/reeds)
+        // does not. The tight ranger-following frustum still culls to the closest.
+        if (spec.collide > 0) World.enableCast(prepped);
         const totem = group.children.find((c) => c.userData.totem);
         if (totem) group.remove(totem);
         group.add(prepped);
@@ -913,6 +1013,7 @@ export class World {
       group.position.set(a.x, this.groundY(a.x, a.z), a.z);
       group.rotation.y = Math.atan2(-a.x, -a.z); // face the spawn clearing
       this.scene.add(group);
+      this.addBlobShadow(group, 0.55); // W4.5: soft grounding under the figure
       const entry = { id: a.id, group, mixer: null as THREE.AnimationMixer | null, action: null as THREE.AnimationAction | null };
       this.scenicActors.push(entry);
       void loadRig(a.id).then((rig) => {
@@ -973,6 +1074,7 @@ export class World {
       const group = new THREE.Group();
       group.position.set(a.hx, this.groundY(a.hx, a.hz), a.hz);
       this.scene.add(group);
+      this.addBlobShadow(group, Math.max(0.35, h * 0.7)); // W4.5: blob under each roamer
       const entry = {
         id: a.id, group, phase: i * 1.7,
         wander, glide: null as GlideConfig | null, faceOffset: 0,
@@ -1167,6 +1269,15 @@ export class World {
     // turns naturally when a collision slides them sideways. Frozen during an
     // in-place activity (the mini-game holds the scene + drives the camera itself).
     const rp = this.ranger.position;
+    // W4.5: the hero shadow camera follows the ranger — the tight ortho frustum
+    // tracks him via a FIXED offset so the light DIRECTION never changes (static
+    // golden-hour sun), only the covered set (the closest props) moves with him.
+    if (this.sun) {
+      const o = this.sunOffset;
+      this.sun.position.set(rp.x + o.x, o.y, rp.z + o.z);
+      this.sun.target.position.set(rp.x, 0, rp.z);
+      this.sun.target.updateMatrixWorld();
+    }
     this.playerSpeed = 0; // 0 while standing or during an in-place activity → mixer eases to idle
     if (!this.activityActive) {
       // W1.2 velocity branch: while a movement key is held (camera-relative via

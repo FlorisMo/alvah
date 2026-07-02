@@ -1277,3 +1277,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~65%
 ```
+
+---
+**2026-07-02 17:51:41Z** · ticked: - [x] W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget
+
+```
+✔ landed: W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~67%
+```

@@ -1290,3 +1290,33 @@ with the full sub-id (e.g. `W2.4a`).
   floor (map bound + tiling on; absent off). Not a smoke upgrade (own assert);
   frozen smoke 4/4 untouched. 298 unit (+6) + build green; ground + frozen smoke
   green.
+- 2026-07-02 (W4.5, golden-hour light + selective shadows): the world had ONLY a
+  hemisphere + a shadowless directional light, so nothing was grounded. W4.5 adds
+  a warm low sun raking from screen-left (camera looks down −z → −x is frame-left)
+  and a SELECTIVE hero shadow map. KEY BUDGET DESIGN: `renderer.info.render.calls`
+  counts the shadow depth pass, so an all-casters shadow would blow the <150
+  budget — instead the sun's ortho frustum is kept TIGHT (±16 m) and FOLLOWS the
+  ranger each frame via a FIXED offset (`sunOffset`), so (a) the light DIRECTION
+  never changes → static golden-hour feel, no day cycle, and (b) three's shadow
+  frustum-culling means only the CLOSEST props render in the depth pass — the
+  plan's "ranger + closest props" falls out for free. Only the ranger, spawn
+  cabin, solid landmarks and solid dressing (trees/boulders/logs/snags/juniper/
+  stumps — spec.collide>0) opt into `castShadow` (Models.ts clears it on every
+  loaded mesh, so a post-`prepModel` `enableCast` traversal re-enables the hero
+  set); low ground detail (mushrooms/fern/foxglove/reeds) never casts. Ground
+  `receiveShadow=true`. The MOVING cast gets cheap BLOB shadows instead (a shared
+  radial-gradient disc, `depthWrite:false`, child of each animal/actor group so it
+  rides the wander loop and freezes with the animal under reduced-motion): 4
+  ambient roamers + 2 scenic actors = 6 blobs. Birds (overhead) get none — a
+  ground blob under a flier reads detached. DECISION: `shadowMap.enabled` is a
+  renderer-wide flag turned on in a new `World.setRenderer(stage.renderer)` (NOT
+  in Stage) so the change stays localized to the world — the title backdrop has no
+  casting light, so it stays shadowless. `PCFSoftShadowMap` is DEPRECATED in this
+  three build (warns + silently falls back), so `PCFShadowMap` is set explicitly.
+  New dev hook `lighting()` ({shadowMap, sunCastsShadow, rangerCastsShadow,
+  blobShadows}) + `provideLighting` wiring; new `lighting.spec.ts` asserts the
+  shadow map + sun cast, polls the ranger opting in once its rig streams, blobs
+  ≥6, and `drawCalls() < 150` BOTH at spawn AND after walking into the watchtower
+  grove (solid props in the shadow frustum → depth pass renders them). Not a smoke
+  upgrade (own assert); frozen smoke 4/4 untouched. 298 unit + build green;
+  lighting + frozen smoke 4/4 green.
