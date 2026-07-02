@@ -45,6 +45,7 @@ import {
   applyAvatar,
   type Avatar,
 } from './avatar';
+import { addVeldnotitie } from './veldnotitie';
 import {
   STORAGE_KEY,
   LEGACY_KEY,
@@ -96,6 +97,7 @@ export interface GameState {
   worldStep: number;                 // 1-indexed step within the mission
   eikels: number;                    // acorns collected (cosmetic reward)
   voltooid: Record<string, boolean>; // per-mission completion map
+  veldnotities: Record<string, boolean>; // W6.3b: collected "Wist je dat" veldnotitie ids (content-derived)
   recentGroei: Engine[];             // engines that grew this mission (for the celebration)
   skill: SkillSet;                   // per-engine skill record — drives difficulty + badges
   knapWoorden: Record<string, { naam: string }>; // earned "knap-woord" badges
@@ -157,6 +159,7 @@ function freshState(): GameState {
     worldStep: 1,
     eikels: 0,
     voltooid: {},
+    veldnotities: {},
     recentGroei: [],
     skill: blankSkillSet(),
     knapWoorden: {},
@@ -184,6 +187,7 @@ function load(): GameState {
       ...parsed,
       skill: mergeSkill(parsed.skill),
       voltooid: parsed.voltooid ?? {},
+      veldnotities: parsed.veldnotities ?? {},
       recentGroei: parsed.recentGroei ?? [],
       knapWoorden: parsed.knapWoorden ?? {},
       arc: { gemeld: false, ...(parsed.arc ?? {}) },
@@ -252,6 +256,15 @@ class Store {
 
   markMissionDone(missieId: string): void {
     this.commit({ ...this.state, voltooid: { ...this.state.voltooid, [missieId]: true } });
+  }
+
+  /** W6.3b: pin a "Wist je dat"-veldnotitie to the case-board. Idempotent (a
+   *  replay never re-pins) — the pure model returns the same ref on a no-op, so
+   *  the commit (and its listeners) is skipped and the board stays quiet. */
+  collectVeldnotitie(id: string): void {
+    const next = addVeldnotitie(this.state.veldnotities, id);
+    if (next === this.state.veldnotities) return;
+    this.commit({ ...this.state, veldnotities: next });
   }
 
   /** Player reported the poacher to the BOA on the case-board → hopeful resolution. */

@@ -349,6 +349,28 @@ function showCaseBoard(fromWorld = false, demoBack?: () => void): void {
     })
     .join('');
 
+  // W6.3b: the collected "Wist je dat"-veldnotities pinned to the board. The set
+  // is content-derived (stable ids), so the strip never drifts from progress.
+  const notities = Content.veldnotities(area.id);
+  const collected = store.get().veldnotities;
+  const gotN = notities.filter((n) => collected[n.id]);
+  const veldStrip = notities.length
+    ? `<div class="cb-veld">` +
+      `<p class="cb-veld-head">Veldnotities · ${gotN.length}/${notities.length}</p>` +
+      (gotN.length
+        ? gotN
+            .map((n, i) =>
+              `<div class="cb-veld-note" data-i="${i}">` +
+              (n.dier ? `<span class="cb-veld-dier">${esc(n.dier)}</span>` : '') +
+              `<span class="cb-veld-text">${esc(n.tekst)}</span>` +
+              `<button class="ra-speak cb-veld-speak" type="button" aria-label="Lees voor">🔊</button>` +
+              `</div>`,
+            )
+            .join('')
+        : `<p class="cb-note muted">Speel een missie in de wereld. Wist-je-datjes komen hier.</p>`) +
+      `</div>`
+    : '';
+
   const count = gemeld ? 'opgelost' : `${found.size}/${clues.length}`;
   const note = gemeld
     ? `<p class="cb-note ok">De stroper is gestopt. De heide en het ven groeien weer terug.</p>`
@@ -366,6 +388,7 @@ function showCaseBoard(fromWorld = false, demoBack?: () => void): void {
     `<h1 class="boot-title">Wat is hier aan de hand?</h1>` +
     `<div class="cb-cork">${board}</div>` +
     note +
+    veldStrip +
     `<div class="ra-row">` +
     resolveBtn +
     `<button class="ra-text-btn cb-back" type="button">${demoBack ? 'Terug naar de demo' : fromWorld ? 'Verder op patrouille' : 'Terug naar de hut'}</button>` +
@@ -386,6 +409,14 @@ function showCaseBoard(fromWorld = false, demoBack?: () => void): void {
     ra?.stop();
     Sound.unlock();
     showOntknoping(0, fromWorld, demoBack);
+  });
+  // W6.3b: each collected veldnotitie reads aloud on demand (dual-channel: text +
+  // 🔊). One narrator at a time — a new tap interrupts the previous note.
+  el.querySelectorAll<HTMLElement>('.cb-veld-note').forEach((row, i) => {
+    row.querySelector('.cb-veld-speak')?.addEventListener('click', () => {
+      ra?.stop();
+      narrator.speak(gotN[i]?.tekst ?? '');
+    });
   });
 }
 
@@ -996,7 +1027,12 @@ async function runMission(mission: Mission, fromWorld = false): Promise<void> {
     }
     store.logSession(step.ef as Engine, result);
     played.push(step.ef as Engine);
-    if (step.skin.feit) await showFact(step, i + 1, mission.stappen.length);
+    if (step.skin.feit) {
+      // W6.3b: playing in the world pins the fact as a collectible veldnotitie on
+      // the case-board (idempotent). The lodge 2D path stays a passing card.
+      if (fromWorld) store.collectVeldnotitie(Content.veldnotitieId(mission.id, i));
+      await showFact(step, i + 1, mission.stappen.length, fromWorld);
+    }
   }
   // The case-board data gate (Content.cluesFound) keys off voltooid, so snapshot
   // the found-set BEFORE marking this mission done. The diegetic clue beat fires
@@ -1011,12 +1047,26 @@ async function runMission(mission: Mission, fromWorld = false): Promise<void> {
   showReward(mission, played, skipped, fromWorld, clueId);
 }
 
-function showFact(step: Step, n: number, total: number): Promise<void> {
+/** The companion raaf's spoken name for the diegetic fact beat: the rescued-and-
+ *  named raaf if the player has one, else the neutral "de raaf". */
+function raafNaam(): string {
+  return store.get().companion.naam?.trim() || 'de raaf';
+}
+
+/** W6.3a: in the world (`fromWorld`) the "Wist je dat" beat is delivered
+ *  diegetically — the companion raaf tells you the fact on location. The lodge
+ *  (2D) path keeps the neutral narrator kicker. Reading + read-aloud unchanged. */
+function showFact(step: Step, n: number, total: number, fromWorld = false): Promise<void> {
   return new Promise((resolve) => {
     const feit = String(step.skin.feit ?? '');
+    const raaf = fromWorld ? raafNaam() : '';
+    const kicker = raaf
+      ? `${esc(raaf)} vertelt · ${n}/${total}`
+      : `Wist je dat, ${esc(naam())}? · ${n}/${total}`;
     const el = card(
-      `<div class="fact boot-card-ish">` +
-      `<p class="boot-kicker">Wist je dat, ${esc(naam())}? · ${n}/${total}</p>` +
+      `<div class="fact boot-card-ish${raaf ? ' fact--raaf' : ''}">` +
+      (raaf ? `<span class="fact-raaf" aria-hidden="true">🐦‍⬛</span>` : '') +
+      `<p class="boot-kicker">${kicker}</p>` +
       `<p class="fact-text"></p>` +
       `<div class="ra-row">` +
       `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +

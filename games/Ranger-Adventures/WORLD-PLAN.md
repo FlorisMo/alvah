@@ -1681,3 +1681,27 @@ with the full sub-id (e.g. `W2.4a`).
   equal availability of the search field) — none was a motion-avoidance decision, and
   dagnacht's rmSafe:true (perspective-immune binary choice) remains the sole flip.
   Build + frozen smoke 4/4 green; ticked WITHOUT `--force` (honest audit, nothing red).
+- 2026-07-02 (W6.3, split a+b): the diegetic biology beat. W6.3a — the in-world
+  (fromWorld) "Wist je dat" fact is now delivered as the companion raaf speaking on
+  location: `showFact` gained a `fromWorld` branch that swaps the neutral "Wist je
+  dat, <naam>?" kicker for "<raaf> vertelt" (raaf name from `companion.naam`, else
+  "de raaf") + a corvid mark + a soft green frame (`.fact--raaf`); the lodge 2D path
+  is byte-for-byte unchanged. W6.3b — playing in the world also PINS each fact as a
+  collectible veldnotitie on the case-board. Design: a pure collection model
+  (`core/veldnotitie.ts`, `addVeldnotitie`/`collectedCount` — idempotent, empty-id
+  safe, same-ref on a no-op so the store skips a dead commit) that state.ts wraps
+  (`collectVeldnotitie`), a new persisted `veldnotities` id-map inside the SAME
+  `alvah-ef-v1` ranger blob (no new key), and content-derived stable ids
+  `<missionId>:<step>` via `Content.veldnotities`/`veldnotitieId` (same derive-from-
+  content shape as the clue board, so a stale save can never desync). The prikbord
+  grew a "Veldnotities · n/total" strip listing collected notes with a per-note 🔊
+  read-aloud (≥56px). SURPRISE: the E2E board-walk (`walkToBoard` → `.explore-board-
+  open`) is flakier on SwiftShader than the marker-walk — the chain.spec's second
+  walk failed the same session — so both new specs steer to the frisling MARKER and
+  open with Space (the proven W6.1 friction path) instead of the case-board hub.
+  Also: registry.ts + state.ts use extensionless imports vite resolves but node's
+  --experimental-strip-types does not, so the unit test targets the pure
+  `veldnotitie.ts` model + the raw veluwe.ts fact-id invariant (uniqueness), and the
+  content derive is proven end-to-end in the two E2Es (real fact text on the card and
+  on the board). 349 unit (+3), build, frozen smoke, raaf-fact + veldnotitie E2E all
+  green; ticked WITHOUT `--force`.

@@ -90,6 +90,33 @@ export const Content = {
     return cur;
   },
 
+  // ---- veldnotities (W6.3b: collectible "Wist je dat" facts) --------------
+  /**
+   * Every "Wist je dat"-fact in the area as a collectible veldnotitie, in
+   * mission-then-step declaration order. The id is stable (`<missionId>:<step>`)
+   * so the persisted collected-set (a plain id map in the ranger namespace)
+   * never drifts from the content — the same pure derive-from-content shape as
+   * the clue board. `dier` labels the note (feitDier → skin.dier → '').
+   */
+  veldnotities: (areaId: string): { id: string; dier: string; tekst: string }[] => {
+    const a = Content.area(areaId);
+    if (!a) return [];
+    const out: { id: string; dier: string; tekst: string }[] = [];
+    for (const m of a.missies) {
+      m.stappen.forEach((s, i) => {
+        const feit = s.skin.feit;
+        if (!feit) return;
+        const dierId = String(s.skin.feitDier ?? s.skin.dier ?? '');
+        const dier = Content.animal(dierId)?.naam ?? dierId;
+        out.push({ id: `${m.id}:${i}`, dier, tekst: String(feit) });
+      });
+    }
+    return out;
+  },
+
+  /** Stable veldnotitie id for a mission step (mirrors `veldnotities`' ids). */
+  veldnotitieId: (missionId: string, stepIndex: number): string => `${missionId}:${stepIndex}`,
+
   // jargon helper: simple word vs "knap woord"
   pick: (simpel: string, knap: string | undefined, jargon: boolean): string =>
     jargon && knap ? knap : simpel,
