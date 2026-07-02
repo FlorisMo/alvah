@@ -24,6 +24,7 @@ import type { Stage } from '../render3d/Stage';
 import { World, type WorldMarker } from '../render3d/World';
 import { Joystick } from './Joystick';
 import { joystickVisible } from '../core/input';
+import { onboardHint } from '../core/onboarding';
 import { type WayCue } from '../render3d/Wayfinding';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { resolveViewMode, variantFor } from '../render3d/play/ViewMode';
@@ -83,6 +84,9 @@ let world: World | null = null;
 // the on-screen joystick (W1.3) lives inside the explore HUD; re-created each
 // time the HUD renders, disposed here so its listeners never outlive the world.
 let joystick: Joystick | null = null;
+// rAF handle for the W1.6 onboarding-hint movement watcher (dismiss-on-first-step);
+// 0 when idle. Cancelled on re-render and on leaveWorld so no loop outlives the world.
+let onboardRaf = 0;
 
 // When set (by the Deep Demo tour), the explore HUD's "Terug" tears down the
 // world and returns HERE instead of the lodge — so a free-roam / in-world engine
@@ -148,6 +152,7 @@ function activeExploreTitel(): string | null {
 }
 
 function leaveWorld(): void {
+  if (onboardRaf) { cancelAnimationFrame(onboardRaf); onboardRaf = 0; }
   if (joystick) { joystick.dispose(); joystick = null; }
   if (world) { world.dispose(); world = null; stage.exitWorld(); }
   providePos(null);
@@ -537,7 +542,47 @@ function showExploreHud(activeTitel: string | null): void {
   el.querySelector('.explore-back')?.addEventListener('click', exitWorld);
   // reach the prikbord over the LIVE world — no teardown; back returns to patrol.
   el.querySelector('.explore-board')?.addEventListener('click', () => showCaseBoard(true));
-  mountJoystick(el.querySelector<HTMLElement>('.explore-hud'));
+  const hud = el.querySelector<HTMLElement>('.explore-hud');
+  mountJoystick(hud);
+  mountOnboardHint(hud);
+}
+
+/** Build the W1.6 first-world-entry onboarding hint into the freshly-rendered
+ *  explore HUD. Shows ONCE (seen-flag `wereldHintGezien` in settings), with
+ *  device-aware copy (drag-the-stick on a coarse pointer, arrow keys otherwise),
+ *  read-aloud when voorlezen is on, and it dismisses itself the moment the ranger
+ *  takes his first step — a movement watcher polls `world.pos()` and seals the
+ *  flag once he has moved. The HUD re-renders on every patrol resume, so any prior
+ *  watcher is cancelled first (no double loop, no listener on a detached node). */
+function mountOnboardHint(hud: HTMLElement | null): void {
+  if (onboardRaf) { cancelAnimationFrame(onboardRaf); onboardRaf = 0; }
+  if (!hud || !world || store.get().settings.wereldHintGezien) return;
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const stick = joystickVisible(store.get().settings.joystick, coarse);
+  const text = onboardHint(stick);
+  const el = document.createElement('div');
+  el.className = 'explore-onboard';
+  el.setAttribute('role', 'status');
+  el.innerHTML =
+    `<span class="ob-icon" aria-hidden="true">${stick ? '🕹️' : '⌨️'}</span>` +
+    `<span class="ob-text">${esc(text)}</span>`;
+  hud.appendChild(el);
+  if (store.get().settings.voorlezen) narrator.speak(text);
+
+  const start = world.pos();
+  const seal = (): void => {
+    if (onboardRaf) { cancelAnimationFrame(onboardRaf); onboardRaf = 0; }
+    el.remove();
+    if (!store.get().settings.wereldHintGezien) store.setSetting({ wereldHintGezien: true });
+  };
+  const watch = (): void => {
+    onboardRaf = 0;
+    if (!world || !el.isConnected) return; // world gone or HUD re-rendered → stop
+    const p = world.pos();
+    if (start && p && Math.hypot(p.x - start.x, p.z - start.z) >= 0.6) { seal(); return; }
+    onboardRaf = requestAnimationFrame(watch);
+  };
+  onboardRaf = requestAnimationFrame(watch);
 }
 
 /** Build + wire the virtual joystick (W1.3) into the freshly-rendered explore

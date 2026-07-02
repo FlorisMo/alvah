@@ -66,6 +66,7 @@ export interface Settings {
   force2d: boolean;                  // Tweak "altijd 2D" — force the 2D floor for every activity
   joystick: 'auto' | 'aan' | 'uit';  // on-screen joystick visibility (W1.3): auto = coarse pointer
   cameraDraaitMee: boolean;          // W1.5 rotating follow-cam: camera eases behind as you turn
+  wereldHintGezien: boolean;         // W1.6 first-world-entry onboarding hint has been dismissed
   skipBriefings: boolean;            // demo-skip (§9g): jump straight into play, no briefing card
   readSize: number;
   leading: number;
@@ -126,6 +127,7 @@ const DEFAULT_SETTINGS: Settings = {
   force2d: false,
   joystick: 'auto',
   cameraDraaitMee: true,
+  wereldHintGezien: false,
   skipBriefings: false,
   readSize: 28,
   leading: 1.7,

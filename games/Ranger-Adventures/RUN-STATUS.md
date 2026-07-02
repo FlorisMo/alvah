@@ -4,17 +4,17 @@
 > [WORLD-LEDGER.md](WORLD-LEDGER.md); this is the at-a-glance view.
 
 - **Ledger:** WORLD-LEDGER.md
-- **Phase:** Fase W1 — Besturing
-- **Progress:** ~25% (weighted by ledger items)
-- **Just landed:** W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion
-- **Next up:** W1.6 Onboarding-hint eerste wereld-entree (Loop met de pijltjes / Sleep de stick, voorleesbaar, seen-flag via state.ts)
-- **Last heartbeat:** 2026-07-02 13:53:31Z
+- **Phase:** Fase W2 — Wereld als voordeur
+- **Progress:** ~26% (weighted by ledger items)
+- **Just landed:** W1.6 Onboarding-hint eerste wereld-entree (Loop met de pijltjes / Sleep de stick, voorleesbaar, seen-flag via state.ts)
+- **Next up:** W2.1 Boot direct de wereld in na titel/avatar; interim Naar-de-hut knop; ?demo en ?sandbox blijven werken; journey-E2E aangepast
+- **Last heartbeat:** 2026-07-02 13:59:53Z
 - **Blocker:** none
 
 ```
-✔ landed: W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion
-▶ phase:  Fase W1 — Besturing
-→ next:   W1.6 Onboarding-hint eerste wereld-entree (Loop met de pijltjes / Sleep de stick, voorleesbaar, seen-flag via state.ts)
+✔ landed: W1.6 Onboarding-hint eerste wereld-entree (Loop met de pijltjes / Sleep de stick, voorleesbaar, seen-flag via state.ts)
+▶ phase:  Fase W2 — Wereld als voordeur
+→ next:   W2.1 Boot direct de wereld in na titel/avatar; interim Naar-de-hut knop; ?demo en ?sandbox blijven werken; journey-E2E aangepast
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~25%
+▷ progress: ~26%
 ```

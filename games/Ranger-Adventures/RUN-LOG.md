@@ -1035,3 +1035,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~25%
 ```
+
+---
+**2026-07-02 13:59:53Z** · ticked: - [x] W1.6 Onboarding-hint eerste wereld-entree (Loop met de pijltjes / Sleep de stick, voorleesbaar, seen-flag via state.ts)
+
+```
+✔ landed: W1.6 Onboarding-hint eerste wereld-entree (Loop met de pijltjes / Sleep de stick, voorleesbaar, seen-flag via state.ts)
+▶ phase:  Fase W2 — Wereld als voordeur
+→ next:   W2.1 Boot direct de wereld in na titel/avatar; interim Naar-de-hut knop; ?demo en ?sandbox blijven werken; journey-E2E aangepast
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~26%
+```

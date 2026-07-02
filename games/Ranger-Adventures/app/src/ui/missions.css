@@ -315,6 +315,26 @@
 }
 .explore-prompt[hidden] { display: none; }
 
+/* ---- first-world-entry onboarding hint (W1.6): shows once, dismissed on the
+   ranger's first step. Centered so it reads as a welcome, dual-channel icon + words. ---- */
+.explore-onboard {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 80vw;
+  padding: 14px 22px;
+  border-radius: var(--radius-pill);
+  background: rgba(20, 16, 12, 0.62);
+  color: var(--paper);
+  font: 600 20px/1.25 var(--font-body);
+  text-align: left;
+}
+.explore-onboard .ob-icon { font-size: 26px; line-height: 1; }
+
 /* ---- virtual joystick (W1.3): bottom-left, thumb ≥56 px, coarse-pointer default ---- */
 .rj-base {
   position: absolute;

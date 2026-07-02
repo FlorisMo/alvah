@@ -785,3 +785,16 @@ with the full sub-id (e.g. `W2.4a`).
   inverts `resolveInput`'s rotation each tick (the map is its own inverse). New
   `camera.spec.ts`: quarter-circle → yaw ≥45°; reduced-motion → yaw stays put while
   the ranger still walks ≥2 m. Frozen smoke untouched (own assert). All 12 E2E green.
+- 2026-07-02 (W1.6, onboarding hint — closes W1): first-world-entry hint copy
+  lives in a pure `core/onboarding.ts` (device-aware `onboardHint`) so the HUD and
+  the readlevel corpus test share ONE source of truth — Missions.ts is DOM/THREE-y
+  and can't be imported by node:test, so the strings had to sit in a pure core. The
+  hint text keys off `joystickVisible(pref, coarse)` (NOT bare coarse-pointer), so a
+  player who forced the stick on/off gets the matching line. Dismiss-on-first-step is
+  a small rAF watcher on `world.pos()` (≥0.6 m from the entry point) that seals the
+  `wereldHintGezien` settings flag; the watcher is cancelled on HUD re-render (patrol
+  resume) and on `leaveWorld`, so no loop outlives the world. Seen-flag is a new
+  settings boolean (no new localStorage key — rides the `ranger` namespace). Not a
+  user toggle, so no Instellingen row. New `onboarding.test.ts` (device branch +
+  ≤7-word lint) + `onboarding.spec.ts` (hint shows → dismisses on the first step →
+  flag persisted in the shared blob). Frozen smoke untouched (own assert).

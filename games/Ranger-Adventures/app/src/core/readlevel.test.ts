@@ -19,6 +19,7 @@ import {
   MAX_WORDS_PER_SENTENCE, type LabeledText,
 } from './readlevel.ts';
 import { AREA_VELUWE, ANIMALS } from '../content/veluwe.ts';
+import { ONBOARD_HINT } from './onboarding.ts';
 
 // ---- 1. pure lint maths --------------------------------------------------
 
@@ -115,6 +116,8 @@ function readingCorpus(): LabeledText[] {
     (an.feiten ?? []).forEach((f: string, i: number) => push(`animal.${id}.feit[${i}]`, f));
     (an.veiligheid ?? []).forEach((f: string, i: number) => push(`animal.${id}.veilig[${i}]`, f));
   }
+  // W1.6 onboarding-hint copy (UI literals, one source of truth in onboarding.ts).
+  for (const k of Object.keys(ONBOARD_HINT)) push(`onboard.${k}`, (ONBOARD_HINT as any)[k]);
   return E;
 }
 
