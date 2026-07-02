@@ -1310,3 +1310,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~70%
 ```
+
+---
+**2026-07-02 18:28:12Z** · ticked: - [x] W4.7b Voetstappen per ondergrond (zand/gras, gated op geluid+snelheid+biome, pure cadans-core + unit test + dev-hook/E2E) + extra vogelzang bij sleutels (4-6 calls met license-log als keys aanwezig, anders schoon skippen)
+
+```
+✔ landed: W4.7b Voetstappen per ondergrond (zand/gras, gated op geluid+snelheid+biome, pure cadans-core + unit test + dev-hook/E2E) + extra vogelzang bij sleutels (4-6 calls met license-log als keys aanwezig, anders schoon skippen)
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.8 Ven-water: fresnel-tint, golfloos default, subtiele rimpel zonder reduced-motion
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~71%
+```

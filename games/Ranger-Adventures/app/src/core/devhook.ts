@@ -76,6 +76,10 @@ export interface RangerDevHook {
     windSample: number;
     flyover: { x: number; y: number; z: number; visible: boolean } | null;
   } | null;
+  /** The W4.7b footstep state: the running count of footsteps planted and the
+   *  last surface ('zand'|'gras'), or null before the hook/world is ready — lets
+   *  the E2E assert footsteps fire while walking and the sound gate holds. */
+  footsteps(): { count: number; surface: 'zand' | 'gras' | null } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -107,6 +111,7 @@ const state = {
     windSample: number;
     flyover: { x: number; y: number; z: number; visible: boolean } | null;
   }),
+  footsteps: null as null | (() => { count: number; surface: 'zand' | 'gras' | null }),
 };
 
 /** Current screen the player is on. */
@@ -227,6 +232,13 @@ export function provideSky(
   state.sky = fn;
 }
 
+/** Register the W4.7b footstep-state source (the World). Pass null to clear. */
+export function provideFootsteps(
+  fn: (() => { count: number; surface: 'zand' | 'gras' | null }) | null,
+): void {
+  state.footsteps = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -256,6 +268,7 @@ export function installDevHook(): boolean {
     groundDetail: () => (state.groundDetail ? state.groundDetail() : null),
     lighting: () => (state.lighting ? state.lighting() : null),
     sky: () => (state.sky ? state.sky() : null),
+    footsteps: () => (state.footsteps ? state.footsteps() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

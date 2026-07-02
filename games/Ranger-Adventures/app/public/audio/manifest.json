@@ -46,5 +46,41 @@
     "kind": "call",
     "license": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
     "attribution": "European Nightjar — Hans van Loon / xeno-canto.org/1148615 (https://creativecommons.org/licenses/by-nc-sa/4.0/)"
+  },
+  "merel": {
+    "file": "merel.m4a",
+    "kind": "call",
+    "license": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "attribution": "Common Blackbird — Susanne Kuijpers / xeno-canto.org/708850 (https://creativecommons.org/licenses/by-nc-sa/4.0/)"
+  },
+  "koekoek": {
+    "file": "koekoek.m4a",
+    "kind": "call",
+    "license": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "attribution": "Common Cuckoo — Albert de Jong / xeno-canto.org/324545 (https://creativecommons.org/licenses/by-nc-sa/4.0/)"
+  },
+  "roodborst": {
+    "file": "roodborst.m4a",
+    "kind": "call",
+    "license": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "attribution": "European Robin — Evan van Wezel / xeno-canto.org/965086 (https://creativecommons.org/licenses/by-nc-sa/4.0/)"
+  },
+  "gaai": {
+    "file": "gaai.m4a",
+    "kind": "call",
+    "license": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "attribution": "Eurasian Jay — Jorge Leitão / xeno-canto.org/783170 (https://creativecommons.org/licenses/by-nc-sa/4.0/)"
+  },
+  "groene-specht": {
+    "file": "groene-specht.m4a",
+    "kind": "call",
+    "license": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "attribution": "European Green Woodpecker — Timo Roeke / xeno-canto.org/631059 (https://creativecommons.org/licenses/by-nc-sa/4.0/)"
+  },
+  "winterkoning": {
+    "file": "winterkoning.m4a",
+    "kind": "call",
+    "license": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+    "attribution": "Eurasian Wren — Susanne Kuijpers / xeno-canto.org/634855 (https://creativecommons.org/licenses/by-nc-sa/4.0/)"
   }
 }

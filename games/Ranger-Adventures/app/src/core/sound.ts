@@ -27,6 +27,38 @@ function ac(): AudioContext | null {
   }
 }
 
+/**
+ * A short decaying filtered-noise burst — the body of a footstep (W4.7b). The
+ * noise is generated with a tiny deterministic LCG (stable across frames, no
+ * `Math.random`) and shaped by a biquad so sand reads muffled (lowpass) and
+ * grass reads as a soft brighter swish (bandpass).
+ */
+function noiseBurst(dur: number, filter: BiquadFilterType, cutoff: number, q: number, peak: number): void {
+  const a = ac();
+  if (!a) return;
+  const t0 = a.currentTime;
+  const n = Math.max(1, Math.floor(a.sampleRate * dur));
+  const buf = a.createBuffer(1, n, a.sampleRate);
+  const d = buf.getChannelData(0);
+  let seed = 0x2545f491;
+  for (let i = 0; i < n; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    d[i] = ((seed / 0x7fffffff) * 2 - 1) * (1 - i / n); // white noise with a linear decay
+  }
+  const src = a.createBufferSource();
+  src.buffer = buf;
+  const filt = a.createBiquadFilter();
+  filt.type = filter;
+  filt.frequency.value = cutoff;
+  filt.Q.value = q;
+  const gain = a.createGain();
+  gain.gain.value = peak;
+  src.connect(filt);
+  filt.connect(gain);
+  gain.connect(a.destination);
+  src.start(t0);
+}
+
 function tone(freq: number, start: number, dur: number, type: OscillatorType, peak: number): void {
   const a = ac();
   if (!a) return;
@@ -123,6 +155,20 @@ export const Sound = {
   /** small tick for taps */
   step(): void {
     tone(520, 0, 0.06, 'triangle', 0.1);
+  },
+  /**
+   * A soft surface-aware footstep (W4.7b). Sand is a muffled low thud (lowpass
+   * noise + a low body tone); grass is a lighter, slightly brighter swish. Kept
+   * quiet on purpose — ambient locomotion feedback, never a foreground cue.
+   */
+  footstep(surface: 'zand' | 'gras'): void {
+    if (surface === 'zand') {
+      noiseBurst(0.14, 'lowpass', 900, 0.7, 0.06);
+      tone(76, 0, 0.09, 'sine', 0.05);
+    } else {
+      noiseBurst(0.09, 'bandpass', 2600, 0.8, 0.05);
+      tone(120, 0, 0.05, 'sine', 0.035);
+    }
   },
   /** play an animal's call; returns its duration (s) so the caller can time the sequence */
   call(id: string): number {

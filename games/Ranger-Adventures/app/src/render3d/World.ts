@@ -29,6 +29,9 @@ import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from './Ambien
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { resolveInput, type StickVector } from '../core/input';
 import { attachInput, type InputHandle } from '../core/attach-input';
+import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../core/footstep';
+import { Sound } from '../core/sound';
+import { store } from '../core/state';
 import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from './Wayfinding';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, routeVia } from './Paths';
 import {
@@ -169,6 +172,12 @@ export class World {
   // post-collision ground speed (m/s), fed to the crossfade each frame.
   private readonly playerRig = new PlayerRig();
   private playerSpeed = 0;
+  // W4.7b surface-aware footsteps: a distance-carry cadence (fires every stride
+  // of ground actually covered), gated on sound + speed + biome surface.
+  // Locomotion feedback, so NOT reduced-motion gated (§3.4 exempts locomotion).
+  private footAccum: FootAccum = newFootAccum();
+  private footstepCount = 0;
+  private lastFootSurface: FootSurface | null = null;
   // keyboard (+ joystick) movement: the held-keys set feeds resolveInput →
   // resolveMove each frame, overriding tap-to-walk while any key is down (§3.2).
   private input: InputHandle | null = null;
@@ -818,6 +827,13 @@ export class World {
     };
   }
 
+  /** Dev-hook accessor (W4.7b): the running footstep count + the last surface
+   *  the ranger planted a foot on, so the E2E can prove footsteps fire while
+   *  walking (and the sound gate holds them when `geluid` is off). */
+  footstepState(): { count: number; surface: FootSurface | null } {
+    return { count: this.footstepCount, surface: this.lastFootSurface };
+  }
+
   private placeMarkers(markers: WorldMarker[]): void {
     const N = Math.max(1, markers.length);
     const perBiome = new Map<Biome, number>();
@@ -1435,6 +1451,7 @@ export class World {
       const stick = this.joystickSource ? this.joystickSource() : null;
       const move = this.input ? resolveInput(this.input.held, stick, this.cameraYaw()) : { x: 0, z: 0 };
       let wantX: number, wantZ: number, moving: boolean;
+      let moved = 0; // post-collision ground distance this frame (drives footsteps)
       if (move.x !== 0 || move.z !== 0) {
         const step = this.speed * dt;
         wantX = rp.x + move.x * step;
@@ -1460,7 +1477,8 @@ export class World {
         }
         // W3.2: the actual post-collision ground speed drives the idle↔walk
         // crossfade (slide-around-pine slows him, so the gait reads honestly).
-        this.playerSpeed = Math.hypot(mx, mz) / Math.max(dt, 1e-4);
+        moved = Math.hypot(mx, mz);
+        this.playerSpeed = moved / Math.max(dt, 1e-4);
         rp.x = next.x;
         rp.z = next.z;
       }
@@ -1469,6 +1487,17 @@ export class World {
       // ambience follows the ranger across biomes — re-pick the bed on a crossing
       const here = biomeAt(rp.x, rp.z);
       if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
+
+      // W4.7b: surface-aware footsteps. The distance-carry cadence advances every
+      // frame (so a stop re-arms cleanly); when a stride is crossed we plant a
+      // foot with the timbre of the biome underfoot — gated on the sound setting.
+      const fs = stepFrame(this.footAccum, this.playerSpeed, moved);
+      this.footAccum = fs.accum;
+      if (fs.steps > 0 && store.get().settings.geluid) {
+        this.footstepCount += fs.steps;
+        this.lastFootSurface = footSurface(here);
+        Sound.footstep(this.lastFootSurface);
+      }
     }
 
     // per-animal motion: a real baked rig wins (mixer); else the always-on

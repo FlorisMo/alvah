@@ -31,3 +31,15 @@ test('every manifest file exists on disk', () => {
     assert.ok(statSync(audioDir + e.file).size > 0, `${id} → ${e.file} present`);
   }
 });
+
+test('every re-encoded (.m4a) call clip stays iPad-light (< 1 MB) (W4.7b)', () => {
+  // the extra bird calls (W4.7b) are fetched + re-encoded to small mono AAC so
+  // the iPad download stays light; pin it so a future fetch can never ship a
+  // heavy clip. Scoped to the re-encoded .m4a format — the legacy .mp3 calls
+  // (e.g. nachtzwaluw.mp3, 2.3 MB) predate this pass and are a §10 follow-up.
+  for (const [id, e] of Object.entries(manifest)) {
+    if (e.kind !== 'call' || !e.file.endsWith('.m4a')) continue;
+    const bytes = statSync(audioDir + e.file).size;
+    assert.ok(bytes < 1_000_000, `${id} → ${e.file} ${bytes} bytes must be < 1 MB`);
+  }
+});

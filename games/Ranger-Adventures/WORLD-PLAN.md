@@ -1385,3 +1385,42 @@ with the full sub-id (e.g. `W2.4a`).
   smoke. FOLLOW-UP for a later box: `ambient-bos.mp3` is still 1.2 MB (also > 1
   MB) — out of W4.7a's named scope (the box scopes to ambient-heide only), noted
   here so it is not lost. 313 unit (+7) + build green; frozen smoke 4/4 green.
+- 2026-07-02 (W4.7b, surface footsteps + extra birdsong — CLOSES W4.7):
+  TWO halves. (1) FOOTSTEPS: a new pure THREE-free `core/footstep.ts` (6 unit
+  tests) carries a DISTANCE-carry cadence — `stepFrame(accum, speed, dist)` fires
+  a footstep every `STRIDE_M` (0.85 m) of ground ACTUALLY covered, so a faster
+  walk steps quicker and a slide-around-a-pine steps slower for free, and the
+  total steps over a stretch of ground is frame-rate INDEPENDENT (the carry keeps
+  its remainder — pinned by a 30/60/120 fps test). The accumulator seeds at a full
+  stride so starting to walk plants a foot at once, and a stop (speed <
+  `MIN_STEP_SPEED` 0.6 m/s) re-arms it so it never fires while still. `footSurface`
+  maps stuifzand→'zand', heide/bos/ven→'gras' (the plan's two timbres). `World.update`
+  feeds the post-collision ground distance/speed into it INSIDE the `!activityActive`
+  branch, right after the biome-crossing check, and — gated on `settings.geluid` —
+  plays a new `Sound.footstep(surface)` (a soft filtered-noise burst + low body tone;
+  sand muffled/lowpass, grass a lighter bandpass swish; deterministic LCG noise, no
+  `Math.random`). KEY CONTRACT CALL: footsteps are locomotion FEEDBACK, so they are
+  NOT reduced-motion gated (§3.4 exempts locomotion) — only geluid+speed+surface gate
+  them, exactly as the box names. New dev hook `footsteps()` ({count, surface}) +
+  `provideFootsteps` wiring; new `footsteps.spec.ts` asserts walking the spawn
+  clearing plants footsteps AND the surface reads 'gras', PLUS a sound-gate assert
+  (pre-seed `geluid:false` → walk ≥2 m → count stays 0). Frozen smoke untouched (own
+  assert). (2) EXTRA BIRDSONG: keys present, so fetched 6 extra bird calls (merel,
+  koekoek, roodborst, gaai, groene-specht, winterkoning — mission/decoy birds from
+  the W3.4b dossier that had only synth motifs, ready for W6.4 "Ken je roep") from
+  xeno-canto v3. SAFE-BY-DESIGN: the shared `audio-fetch.mjs` would CLOBBER the
+  tracked manifest (its assets-gen manifest base is GONE, so its end-of-run rebuild
+  would drop the 8 existing entries incl. the W4.7a ambient-heide.m4a) — so a new
+  `scripts/audio-fetch-birds.mjs` reads the EXISTING tracked manifest as base and
+  only ADDS ids (idempotent, never rewrites). Licences all CC BY-NC-SA/4.0 (ND
+  EXCLUDED per policy, NL-preferred, SA/NC allowed + LOGGED for this private
+  non-commercial game); re-encoded to small mono AAC .m4a (14–157 kB each) via
+  afconvert (W4.7a's no-ffmpeg pipeline). The tracked `public/audio/manifest.json`
+  carries the per-clip licence+attribution (the committed licence log); a fuller
+  record sits in the gitignored `assets-gen/audio/bird-license-log.json`. GOTCHA
+  fixed: afconvert rejects `file://` URLs → paths via `fileURLToPath`. New durable
+  gate in `audio-assets.test.ts`: every re-encoded (.m4a) call clip < 1 MB (scoped
+  to .m4a — the legacy `nachtzwaluw.mp3` 2.3 MB predates this pass). FOLLOW-UP:
+  `nachtzwaluw.mp3` (2.3 MB) + `ambient-bos.mp3` (1.2 MB) are still heavy .mp3s —
+  re-encode in a later pass. 320 unit (+7) + build green; footsteps + frozen smoke
+  4/4 green. CLOSES the W4.7 audio split (W4.8 ven-water is the last open W4 box).
