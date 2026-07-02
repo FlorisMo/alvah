@@ -96,6 +96,12 @@ export class World {
     walkW: number; grazeW: number;        // eased crossfade weights
     h: number;                            // applied canonical stand height (W3.7a)
   }[] = [];
+  // W4.1 landmark props: the fixed wayfinding beacons (watchtower, ecoduct,
+  // bird-hide, BOA post, signposts) placed per §4. Each is set-dressing with a
+  // solid collision circle; the named ones carry a floating diegetic label so
+  // they read as "over there" beacons. Kept out of `markers` (no proximity /
+  // mission). Their world x/z is exposed through the dev hook for E2E navigation.
+  private readonly landmarks: { id: string; x: number; z: number }[] = [];
   private activeId: string | null = null;     // the mission the wayfinding cue points to
   private readonly onWayfind: (cue: WayCue | null) => void;
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
@@ -189,6 +195,7 @@ export class World {
 
     this.placeMarkers(markers);
     this.placeHub();
+    this.placeLandmarks();
     this.placeScenicActors();
     this.placeAmbientLife();
     void this.loadRealRanger();
@@ -620,6 +627,63 @@ export class World {
       if (totem) board.remove(totem);
       board.add(prepped); // keep the ring + label
     });
+  }
+
+  /**
+   * W4.1: place the fixed landmark props per the §4 world map — the
+   * fire-watchtower (bos beacon), the vogelkijkhut overlooking the ven, the
+   * ecoduct + BOA post on the west rim, and two wegwijzer signposts along the
+   * routes out of the spawn clearing. Each is a best-effort GLB over an instant
+   * procedural totem stand-in; every one pushes a solid collision circle (the
+   * ranger slides around it), and the four named beacons float a diegetic label
+   * so they read as wayfinding cues from a distance (no minimap chrome — same
+   * camera-facing sprite the mission markers + case-board use). None join
+   * `markers`: they are set-dressing, not missions, so they never pollute the
+   * "nearest mission" proximity/wayfinding path. Positions sit clear of the
+   * −z movement-smoke corridor and off the mission-marker anchors (radius 22+).
+   */
+  private placeLandmarks(): void {
+    // [dev-hook id, GLB model, world x/z, target Y-height (m), collision radius,
+    //  optional beacon label]. The watchtower is deliberately the farthest —
+    //  the W4.1 E2E walks spawn→watchtower.
+    const LANDMARKS: {
+      id: string; model: string; x: number; z: number; height: number; collide: number; label?: string;
+    }[] = [
+      { id: 'prop-fire-watchtower', model: 'prop-fire-watchtower', x: 37, z: -37, height: 9, collide: 1.8, label: 'Uitkijktoren' },
+      { id: 'prop-bird-hide', model: 'prop-bird-hide', x: 26, z: -11, height: 2.8, collide: 1.4, label: 'Vogelkijkhut' },
+      { id: 'prop-ecoduct', model: 'prop-ecoduct', x: -70, z: 6, height: 6, collide: 2.6, label: 'Ecoduct' },
+      { id: 'prop-boa-post', model: 'prop-boa-post', x: -56, z: -20, height: 3, collide: 1.0, label: 'BOA-post' },
+      { id: 'prop-signpost', model: 'prop-signpost', x: 9, z: -8, height: 1.7, collide: 0.5 },
+      { id: 'prop-signpost-west', model: 'prop-signpost', x: -16, z: 10, height: 1.7, collide: 0.5 },
+    ];
+    for (const lm of LANDMARKS) {
+      const at = new THREE.Vector3(lm.x, this.groundY(lm.x, lm.z), lm.z);
+      const group = new THREE.Group();
+      group.position.copy(at);
+      group.rotation.y = Math.atan2(-lm.x, -lm.z); // turn its face toward the clearing
+      group.add(this.proceduralTotem(lm.label ? '#c8a36a' : '#8a7a5a')); // instant stand-in
+      if (lm.label) {
+        const label = this.makeLabel(lm.label, '#e8d6a8');
+        label.position.y = lm.height * 0.55 + 1.4;
+        group.add(label);
+      }
+      this.scene.add(group);
+      this.obstacles.push({ x: lm.x, z: lm.z, r: lm.collide });
+      this.landmarks.push({ id: lm.id, x: lm.x, z: lm.z });
+      void loadModel(lm.model).then((m) => {
+        if (!m) return;
+        const prepped = prepModel(m, lm.height);
+        const totem = group.children.find((c) => c.userData.totem);
+        if (totem) group.remove(totem); // keep the label
+        group.add(prepped);
+      });
+    }
+  }
+
+  /** Dev-hook accessor (W4.1): every landmark's id + world x/z, so the E2E can
+   *  steer the ranger from spawn to the watchtower and back. */
+  landmarkPositions(): { id: string; x: number; z: number }[] {
+    return this.landmarks.map((l) => ({ id: l.id, x: l.x, z: l.z }));
   }
 
   /**

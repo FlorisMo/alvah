@@ -44,6 +44,9 @@ export interface RangerDevHook {
    *  {name, time} (null for the procedural/bird cast), or null before the
    *  hook/world is ready (W3.6). */
   ambient(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] | null;
+  /** The fixed landmark props (watchtower, ecoduct, bird-hide, BOA post,
+   *  signposts): id + world x/z, for E2E spawn→watchtower navigation (W4.1). */
+  landmarks(): { id: string; x: number; z: number }[] | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -61,6 +64,7 @@ const state = {
   winStep: null as null | (() => boolean),
   actors: null as null | (() => { id: string; clip: { name: string; time: number } | null }[]),
   ambient: null as null | (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]),
+  landmarks: null as null | (() => { id: string; x: number; z: number }[]),
 };
 
 /** Current screen the player is on. */
@@ -131,6 +135,13 @@ export function provideAmbient(
   state.ambient = fn;
 }
 
+/** Register the landmark-props source (the World's fixed beacons). W4.1. */
+export function provideLandmarks(
+  fn: (() => { id: string; x: number; z: number }[]) | null,
+): void {
+  state.landmarks = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -154,6 +165,7 @@ export function installDevHook(): boolean {
     winStep: () => (state.winStep ? state.winStep() : false),
     actors: () => (state.actors ? state.actors() : null),
     ambient: () => (state.ambient ? state.ambient() : null),
+    landmarks: () => (state.landmarks ? state.landmarks() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

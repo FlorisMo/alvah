@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W4 — Rijke wereld
-- **Progress:** ~55% (weighted by ledger items)
-- **Just landed:** W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
-- **Next up:** W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls
-- **Last heartbeat:** 2026-07-02 17:01:54Z
+- **Progress:** ~58% (weighted by ledger items)
+- **Just landed:** W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls
+- **Next up:** W4.2 Natuur-aankleding: echte boom-GLB's bij paden/POI's, stronken, keien, paddenstoelen, riet per bioom
+- **Last heartbeat:** 2026-07-02 17:10:44Z
 - **Blocker:** none
 
 ```
-✔ landed: W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak
+✔ landed: W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls
 ▶ phase:  Fase W4 — Rijke wereld
-→ next:   W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls
+→ next:   W4.2 Natuur-aankleding: echte boom-GLB's bij paden/POI's, stronken, keien, paddenstoelen, riet per bioom
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~55%
+▷ progress: ~58%
 ```

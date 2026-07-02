@@ -1233,3 +1233,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~55%
 ```
+
+---
+**2026-07-02 17:10:44Z** · ticked: - [x] W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls
+
+```
+✔ landed: W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.2 Natuur-aankleding: echte boom-GLB's bij paden/POI's, stronken, keien, paddenstoelen, riet per bioom
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~58%
+```

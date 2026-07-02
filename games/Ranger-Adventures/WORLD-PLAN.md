@@ -1181,3 +1181,28 @@ with the full sub-id (e.g. `W2.4a`).
   `step.skin.feit` live), so any future fact edit stays M3/E3-linted with no new
   wiring. Docs-only (a §10 note) → no player-visible change, no code touched, no
   new E2E assert; readlevel corpus 9/9 + build + frozen smoke 4/4 green.
+- 2026-07-02 (W4.1, landmark props — opens W4): the five §4 landmark kinds now
+  stand in the world as fixed wayfinding beacons. New `World.placeLandmarks()`
+  stages six GLBs over instant procedural totem stand-ins: the fire-watchtower
+  (bos beacon, far SE at r≈52 — the E2E's walk target), the vogelkijkhut on the
+  dry rim overlooking the actual ven water plane (22 m from the basin centre, so
+  clear of the submerged `blocked` disc), the ecoduct + BOA post on the west rim,
+  and TWO wegwijzer signposts on the routes out of spawn. DESIGN CALLS: (1) each
+  pushes a solid collision circle (watchtower 1.8 / ecoduct 2.6 / hide 1.4 / boa
+  1.0 / signpost 0.5 m) but NONE joins `markers` — they are set-dressing, so they
+  never pollute the "nearest mission" proximity/wayfinding path the interact/chain
+  specs steer by (same reasoning as the W2.2 case-board + W3.3 scenic actors).
+  (2) The four named beacons float the same camera-facing diegetic label the
+  mission markers use ("Uitkijktoren" / "Vogelkijkhut" / "Ecoduct" / "BOA-post"),
+  so they read as "over there" cues with no minimap chrome; the two signposts are
+  themselves wegwijzers so they carry no extra label. (3) Positions were chosen
+  off the mission-marker anchors (radius 22/31/40 on the biome centre-angles) and
+  clear of the −z movement-smoke corridor, so no collision circle blocks a marker
+  approach or the frozen tap-walk. New dev hook `landmarks()` (id + world x/z) +
+  `provideLandmarks` wiring. New `landmarks.spec.ts` (not @smoke): asserts all
+  five landmark kinds are placed, WALKS the ranger spawn→watchtower with the
+  camera-relative arrow steering (reused from interact.spec) — arriving within
+  4 m after closing ≥8 m of a >20 m gap, proving the landmark is reachable and
+  its collision circle doesn't trap the player short — AND asserts the full
+  landmark cast keeps `drawCalls()` < 150. Frozen smoke untouched (own assert,
+  not a smoke upgrade). 285 unit + build green; landmarks + frozen smoke 4/4 green.
