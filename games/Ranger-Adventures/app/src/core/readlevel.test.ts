@@ -20,6 +20,7 @@ import {
 } from './readlevel.ts';
 import { AREA_VELUWE, ANIMALS } from '../content/veluwe.ts';
 import { ONBOARD_HINT } from './onboarding.ts';
+import { ROEP_COPY, ROEP_VOGELS } from '../engines/roep.ts';
 
 // ---- 1. pure lint maths --------------------------------------------------
 
@@ -118,6 +119,9 @@ function readingCorpus(): LabeledText[] {
   }
   // W1.6 onboarding-hint copy (UI literals, one source of truth in onboarding.ts).
   for (const k of Object.keys(ONBOARD_HINT)) push(`onboard.${k}`, (ONBOARD_HINT as any)[k]);
+  // W6.4a "Ken je roep" — UI-copy + de roep-omschrijvingen van elke vogel.
+  for (const k of Object.keys(ROEP_COPY)) push(`roep.${k}`, (ROEP_COPY as any)[k]);
+  for (const v of ROEP_VOGELS) { push(`roep.vogel.${v.id}.naam`, v.naam); push(`roep.vogel.${v.id}.roep`, v.roep); }
   return E;
 }
 

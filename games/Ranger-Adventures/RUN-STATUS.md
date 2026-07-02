@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W6 — Diegetische missies + biologie
-- **Progress:** ~89% (weighted by ledger items)
-- **Just landed:** W6.3b Collectible veldnotitie op het prikbord: feit-beat legt een veldnotitie vast (ranger-namespace via state.ts/persist, geen nieuwe key) + pure collectie-model + unit test; prikbord toont verzamelde veldnotities met voorlezen; E2E verzamelde veldnotitie verschijnt op het prikbord
-- **Next up:** W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus
-- **Last heartbeat:** 2026-07-02 20:42:18Z
+- **Progress:** ~91% (weighted by ledger items)
+- **Just landed:** W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus
+- **Next up:** W6.4b Ken je roep, wereld-helft: zitplek bij vogelkijkhut, 3D-entree, audio, wayfinding; E2E één beat + missionView 3d
+- **Last heartbeat:** 2026-07-02 20:53:27Z
 - **Blocker:** none
 
 ```
-✔ landed: W6.3b Collectible veldnotitie op het prikbord: feit-beat legt een veldnotitie vast (ranger-namespace via state.ts/persist, geen nieuwe key) + pure collectie-model + unit test; prikbord toont verzamelde veldnotities met voorlezen; E2E verzamelde veldnotitie verschijnt op het prikbord
+✔ landed: W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus
 ▶ phase:  Fase W6 — Diegetische missies + biologie
-→ next:   W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus
+→ next:   W6.4b Ken je roep, wereld-helft: zitplek bij vogelkijkhut, 3D-entree, audio, wayfinding; E2E één beat + missionView 3d
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~89%
+▷ progress: ~91%
 ```

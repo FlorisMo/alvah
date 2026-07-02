@@ -1475,3 +1475,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~89%
 ```
+
+---
+**2026-07-02 20:53:27Z** · ticked: - [x] W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus
+
+```
+✔ landed: W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus
+▶ phase:  Fase W6 — Diegetische missies + biologie
+→ next:   W6.4b Ken je roep, wereld-helft: zitplek bij vogelkijkhut, 3D-entree, audio, wayfinding; E2E één beat + missionView 3d
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~91%
+```

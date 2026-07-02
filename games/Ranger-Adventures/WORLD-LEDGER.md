@@ -91,7 +91,7 @@ W5.3 Helikopter opt-in — gesplitst (pure vluchtcore+toggle / wereld-integratie
 W6.3 Biologie diegetisch — gesplitst (raaf vertelt op locatie / veldnotitie op het prikbord, elk eigen E2E):
 - [x] W6.3a Wist-je-dat wordt raaf-companion speech op locatie: de in-world (fromWorld) feit-beat verschijnt als de raaf die het vertelt (naam uit companion, voorleesbaar, ≥56px), 2D/hut-pad ongewijzigd; E2E in-world missie → raaf-feitkaart met feittekst zichtbaar (1)
 - [x] W6.3b Collectible veldnotitie op het prikbord: feit-beat legt een veldnotitie vast (ranger-namespace via state.ts/persist, geen nieuwe key) + pure collectie-model + unit test; prikbord toont verzamelde veldnotities met voorlezen; E2E verzamelde veldnotitie verschijnt op het prikbord (1)
-- [ ] W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus (2)
+- [x] W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus (2)
 - [ ] W6.4b Ken je roep, wereld-helft: zitplek bij vogelkijkhut, 3D-entree, audio, wayfinding; E2E één beat + missionView 3d (2)
 - [ ] W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert (1)
 

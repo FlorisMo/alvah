@@ -1705,3 +1705,31 @@ with the full sub-id (e.g. `W2.4a`).
   content derive is proven end-to-end in the two E2Es (real fact text on the card and
   on the board). 349 unit (+3), build, frozen smoke, raaf-fact + veldnotitie E2E all
   green; ticked WITHOUT `--force`.
+- 2026-07-02 (W6.4a, "Ken je roep" engine-helft — opent W6.4): the perception
+  slice ships its render-agnostic core BEFORE its world entry (W6.4b), exactly like
+  the EF five shipped a pure core + parity test ahead of their views. New pure
+  THREE/DOM-free `engines/roep.ts`: a self-contained six-bird pool (raaf, koekoek,
+  merel, roodborsttapuit, groene specht, koolmees) with kid-short roep-descriptions
+  taken VERBATIM-in-spirit from the W3.4b dossier's Roep/zang field, plus `RoepRun` —
+  a reversal STAIRCASE over the DECOY count (the `skill.ts` pattern: goed → +1
+  afleider, mis → −1, clamped [1, pool-1]), one graded response per round, `trials =
+  ronden / correct = aantal juist`. KEY DECISION: roep is NOT folded into
+  `EF_ENGINES`/`SKILL_META` — it's a distinct perception track, so touching the frozen
+  5-engine SkillSet/badge machinery (and its persistence shape) was avoided; the core
+  takes a lightweight `RoepDiff`, not `Settings`, so W6.4a stays inside the boxes it
+  names (roep.ts, RoepView, parity test, readlevel.test.ts). DUAL-CHANNEL by design:
+  every bird carries its roep as TEXT next to the audio, so the floor is playable with
+  sound muted and never audio-only (accessibility law) — this also sidesteps touching
+  `sound.ts` (Sound.call gives a placeholder tone now; distinct real calls are W6.4b/
+  W4.7b audio, zero-rework via the sample-override). 2D floor `render2d/RoepView.ts` +
+  `roep.css` mirrors SimonView (≥56px bird buttons, read-aloud, dual-channel feedback,
+  reduced-motion tempo, never game-over — a mis just shows which bird it was and moves
+  on). Parity is BY CONSTRUCTION (both the 2D floor and the future 3D twin drive the
+  one `RoepRun`); `roep.parity.test.ts` pins that frozen contract against an
+  INDEPENDENT reference scorer over seeded runs (perfect/all-wrong/mixed) + staircase
+  clamp/reversal + option-composition (target present, exact decoy count, unique, in
+  pool) — 10 tests. New strings swept live by `readlevel.test.ts` (ROEP_COPY + every
+  vogel naam/roep), all inside M3/E3. The view is UNIMPORTED so vite tree-shakes it
+  (dormant until W6.4b wires the sit-spot entry), but tsc typechecks it. No E2E named
+  or needed — nothing is player-visible until W6.4b renders the slice in-world. 359
+  unit (+10) + build green; frozen smoke 4/4 untouched; ticked WITHOUT `--force`.
