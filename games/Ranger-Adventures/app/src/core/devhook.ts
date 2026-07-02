@@ -54,6 +54,10 @@ export interface RangerDevHook {
   /** The sand-path network: route nodes (id + world x/z) + segment index pairs,
    *  or null before the hook/world is ready (W4.3). */
   paths(): { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] } | null;
+  /** The W4.4 ground-detail state: whether the procedural albedo layers are on,
+   *  whether the repeating mottle map is bound, and its tile repeat — lets the
+   *  E2E assert the before/after toggle actually flips the floor. */
+  groundDetail(): { on: boolean; textured: boolean; tileRepeat: number } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -74,6 +78,7 @@ const state = {
   landmarks: null as null | (() => { id: string; x: number; z: number }[]),
   dressing: null as null | (() => { id: string; x: number; z: number }[]),
   paths: null as null | (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }),
+  groundDetail: null as null | (() => { on: boolean; textured: boolean; tileRepeat: number }),
 };
 
 /** Current screen the player is on. */
@@ -165,6 +170,13 @@ export function providePaths(
   state.paths = fn;
 }
 
+/** Register the W4.4 ground-detail state source (the World's ground material). */
+export function provideGroundDetail(
+  fn: (() => { on: boolean; textured: boolean; tileRepeat: number }) | null,
+): void {
+  state.groundDetail = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -191,6 +203,7 @@ export function installDevHook(): boolean {
     landmarks: () => (state.landmarks ? state.landmarks() : null),
     dressing: () => (state.dressing ? state.dressing() : null),
     paths: () => (state.paths ? state.paths() : null),
+    groundDetail: () => (state.groundDetail ? state.groundDetail() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

@@ -1261,3 +1261,32 @@ with the full sub-id (e.g. `W2.4a`).
   every POI, nodes sit on the landmark anchors, and drawCalls < 150 at spawn AND
   along a spoke. Frozen smoke untouched (own assert). 292 unit (+7) + build green;
   paths + frozen smoke 4/4 green.
+- 2026-07-02 (W4.4, ground detail — procedural gouache albedo): the world floor
+  was a flat per-vertex biome slab (one solid colour per biome), so each
+  landschap read as a single poster-paint fill. W4.4 adds painterly ground detail
+  with NO external texture and NO extra draw calls, via a new pure THREE-free
+  `GroundDetail.ts` (6 unit tests) feeding two deterministic layers: (1)
+  `mottleRGB(u,v)` — a SEAMLESSLY-TILEABLE fractal value-noise grain baked onto ONE
+  256² canvas (`document.createElement('canvas')`, like `skyTexture`) bound as the
+  ground material's `map` with `RepeatWrapping` ×12 (~20 m/tile); near-white
+  (mean ≈0.9) with soft darker pools and a faint golden warmth in the highlights,
+  so multiplied against the biome vertex colour it reads as brushed tonal
+  variation, never a flat fill. (2) `vertexTint(x,z)` — a low-frequency open
+  world-space brightness wash (~[0.92,1.08], mean ≈1) added per ground vertex for
+  large soft light/dark blotches. KEY DECISION: the map darkens on average, so a
+  `GROUND_BRIGHTEN=1.12` factor lifts the biome vertex colour to keep daylight
+  brightness at parity with the old flat ground (the golden-hour feel is
+  preserved — detail is added TONE, not a dimmer world). Tileability is pinned by
+  the unit test (`mottleRGB(0,v)===mottleRGB(1,v)` and the v-axis), so no repeat
+  seams show. The whole thing rides the EXISTING single ground draw call (one
+  shared texture) — E2E measured `drawCalls() < 150` unchanged. Reproducible
+  before/after: `?groundDetail=off` bakes the old flat slab (World reads
+  `location.search` once at construction, defaults on), so `ground.spec.ts` shoots
+  the curated pair `qa-evidence-2/w44-ground-{before-flat,after-detailed}.png` from
+  the SAME vantage (walk forward into open heath → follow-cam over a clear ground
+  swath; the two were byte-identical at the fogged spawn-close framing, so the
+  shot walks out first). New dev hook `groundDetail()` ({on, textured, tileRepeat})
+  + `provideGroundDetail` wiring lets the spec assert the toggle actually flips the
+  floor (map bound + tiling on; absent off). Not a smoke upgrade (own assert);
+  frozen smoke 4/4 untouched. 298 unit (+6) + build green; ground + frozen smoke
+  green.

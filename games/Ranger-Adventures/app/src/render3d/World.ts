@@ -31,6 +31,9 @@ import { resolveInput, type StickVector } from '../core/input';
 import { attachInput, type InputHandle } from '../core/attach-input';
 import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from './Wayfinding';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, routeVia } from './Paths';
+import {
+  mottleRGB, vertexTint, GROUND_TILE_PX, GROUND_TILE_REPEAT, GROUND_BRIGHTEN,
+} from './GroundDetail';
 import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
@@ -107,6 +110,11 @@ export class World {
   // POIs and biome cores, on top of the instanced-primitive background filler.
   // Their world x/z is exposed through the dev hook so the E2E can assert them.
   private readonly dressing: { id: string; x: number; z: number }[] = [];
+  // W4.4 ground detail: on by default; `?groundDetail=off` bakes the old flat
+  // per-biome slab so the before/after evidence pair is one reproducible toggle.
+  private readonly groundDetailOn: boolean =
+    typeof location === 'undefined' ||
+    new URLSearchParams(location.search).get('groundDetail') !== 'off';
   private activeId: string | null = null;     // the mission the wayfinding cue points to
   private readonly onWayfind: (cue: WayCue | null) => void;
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
@@ -307,6 +315,10 @@ export class World {
   private buildGround(): THREE.Mesh {
     // continuous biome relief (Biomes.heightAt) + per-vertex biome tint so heide
     // fades into bos / stuifzand / ven with no seam. One draw call (vertexColors).
+    // W4.4: on top of the flat slab, each vertex gets a low-frequency brightness
+    // wash (vertexTint) and the material carries a repeating procedural mottle
+    // canvas (mottleRGB) for hand-brushed grain — both add detail, no draw calls.
+    const detail = this.groundDetailOn;
     const geo = new THREE.PlaneGeometry(240, 240, 96, 96);
     const pos = geo.attributes.position as THREE.BufferAttribute;
     const colors = new Float32Array(pos.count * 3);
@@ -315,14 +327,53 @@ export class World {
       const x = pos.getX(i), y = pos.getY(i); // plane is XY before the -90° tilt → world z = y
       pos.setZ(i, this.groundY(x, y));
       c.set(BIOME_PALETTE[biomeAt(x, y)].ground);
+      if (detail) {
+        // brighten to offset the mottle map's average shade (parity), then a soft
+        // per-vertex wash blotch; clamp so no channel blows past 1.
+        const m = GROUND_BRIGHTEN * vertexTint(x, y);
+        c.setRGB(Math.min(1, c.r * m), Math.min(1, c.g * m), Math.min(1, c.b * m));
+      }
       colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+    if (detail) mat.map = this.groundMottleTexture();
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
     return mesh;
+  }
+
+  /**
+   * W4.4: bake the fine painterly grain (GroundDetail.mottleRGB) onto ONE small
+   * canvas that repeats over the terrain. Grayscale-ish + faintly warm, so
+   * multiplied against the biome vertex colour it reads as brushed tonal
+   * variation. No external texture fetch, one texture shared by the single ground
+   * draw call. Seamlessly tileable (the pure fn wraps), so no repeat seams show.
+   */
+  private groundMottleTexture(): THREE.CanvasTexture {
+    const N = GROUND_TILE_PX;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = N;
+    const ctx = cv.getContext('2d')!;
+    const img = ctx.createImageData(N, N);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const [r, g, b] = mottleRGB(i / N, j / N);
+        const o = (j * N + i) * 4;
+        img.data[o] = Math.round(r * 255);
+        img.data[o + 1] = Math.round(g * 255);
+        img.data[o + 2] = Math.round(b * 255);
+        img.data[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(GROUND_TILE_REPEAT, GROUND_TILE_REPEAT);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    return tex;
   }
 
   /** A calm still-water plane filling the ven basin (no waves — motion-comfort §1e). */
@@ -829,6 +880,18 @@ export class World {
     return {
       nodes: PATH_NODES.map((n) => ({ id: n.id, x: n.x, z: n.z })),
       segments: PATH_SEGMENTS.map(([i, j]) => [i, j] as [number, number]),
+    };
+  }
+
+  /** Dev-hook accessor (W4.4): the ground-detail state — whether the procedural
+   *  albedo layers are on and whether the repeating mottle map is actually bound
+   *  to the ground material — so the E2E asserts the before/after toggle flips. */
+  groundDetailState(): { on: boolean; textured: boolean; tileRepeat: number } {
+    const mat = this.ground.material as THREE.MeshStandardMaterial;
+    return {
+      on: this.groundDetailOn,
+      textured: mat.map != null,
+      tileRepeat: mat.map ? mat.map.repeat.x : 0,
     };
   }
 

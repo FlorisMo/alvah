@@ -1266,3 +1266,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~62%
 ```
+
+---
+**2026-07-02 17:39:38Z** · ticked: - [x] W4.4 Grond-detail: procedurele albedo per bioom, gouache-gevoel behouden; before/after screenshots + één paar in qa-evidence-2/
+
+```
+✔ landed: W4.4 Grond-detail: procedurele albedo per bioom, gouache-gevoel behouden; before/after screenshots + één paar in qa-evidence-2/
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~65%
+```
