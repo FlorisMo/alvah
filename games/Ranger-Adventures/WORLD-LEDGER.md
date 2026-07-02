@@ -5,7 +5,7 @@
 > ID. Weights `(N)` drive the progress %. Tick via:
 > `RUN_LEDGER=WORLD-LEDGER.md node games/Ranger-Adventures/app/scripts/ranger-run.mjs tick "W0.1"`
 > — tick enforces build + e2e:smoke mechanically and refuses on red
-> (`--force` only for W0.7 / W3.0 / W3.5).
+> (`--force` only for W0.7 / W3.0 / W3.4a / W3.4b / W3.5).
 >
 > Definition of done for EVERY box: targeted unit test green where the plan
 > names one + build green + `e2e:smoke` green (STAGED definition, plan §3.1:
@@ -21,7 +21,7 @@
 - [ ] W0.3 Journey E2E: Begin → avatar → hut → Verken de Veluwe → screen world, met screenshots; world-reach in e2e:smoke v1 (2)
 - [ ] W0.4 Movement red-first E2E: tap-to-walk ≥2 m via expect.poll; diagnose + fix waarom taps de ranger niet bewegen; e2e:smoke upgraden en BEVRIEZEN; root-cause in plan §10 (3)
 - [ ] W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig (1)
-- [ ] W0.6 CI-gate in deploy.yml: apart test-job (unit + e2e:smoke, --with-deps, swiftshader-args, cache, paths-filter, ook op run2-world); eerst continue-on-error, blocking na één groene ubuntu-run (2)
+- [ ] W0.6 CI-gate in deploy.yml: apart test-job (unit + e2e:smoke, --with-deps, swiftshader-args, cache, paths-filter); eerst continue-on-error, blocking na één groene ubuntu-run (2)
 - [ ] W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan (1)
 - [ ] W0.8 WebKit-project (iPad Safari engine): webkit install, smoke + journey op webkit groen; afwijkingen in §10 (2)
 
@@ -40,7 +40,7 @@
 - [ ] W2.2 Cabin-hub op de open plek: cabin + case-board props, missiebord-overlay zonder leaveWorld; E2E assert missionView === 3d (3)
 - [ ] W2.3 Twee-missies-ketting E2E vanuit de wereld zonder hutbezoek; BeatSummary persist + missionView 3d voor beide (2)
 - [ ] W2.4a Pauze/hub-overlay shell: instellingen + badges bereikbaar zonder leaveWorld (2)
-- [ ] W2.4b Prikbord + raaf in hub-overlay; dode hut-flows opruimen; MILESTONE: merge run2-world → main bij alles groen (2)
+- [ ] W2.4b Prikbord + raaf in hub-overlay; dode hut-flows opruimen; MILESTONE: commit + push (eerste coherente wereld-eerst build live) (2)
 
 ## Fase W3 — Levend (animaties)
 
@@ -48,8 +48,11 @@
 - [ ] W3.1 Ranger regen + rig via Meshy (~35 cr, eerst balans checken, gen BACKGROUNDED met log-polling) of ingest app/incoming/ranger-alvah-rigged.glb; staged GLB ≥1 skin ≥2 clips (3)
 - [ ] W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt (3)
 - [ ] W3.3 Warden + poacher spelen hun bestaande baked clips op hun plek (1)
-- [ ] W3.4 Ambient dierenleven: ree/eekhoorn/zwijn zwerf-loops met verbeterde gaits, 2 zwevende vogels; calm-pose gate; E2E ≥2 dieren + drawCalls <150 (3)
-- [ ] W3.5 Anything World batch ALLEEN bij AUTHORIZED in plan §8 (sleutel ≠ autorisatie); anders skip-tick met §10-notitie; creditregel in app-UI, nooit index.astro; --force toegestaan (3)
+- [ ] W3.4a Accuracy-dossier zoogdieren: webresearch per dier (maten, vacht/seizoen, oogkleur, kenmerken, gang, 1-2 kindfeiten) naar research/animal-visual-accuracy.md met bron-URL + datum per claim; geen web → --blocker, nooit verzinnen; --force toegestaan (3)
+- [ ] W3.4b Accuracy-dossier vogels: zelfde behandeling voor de ~10 missie/audio-relevante vogels; zelfde bronregels; --force toegestaan (2)
+- [ ] W3.5 Dieren-animatie via CC0/CC-BY packs (Quaternius, poly.pizza, Kenney): match per boegbeeld-dier, license-log, schaal per dossier, optimize-animated, staged animated:true; stijl-check screenshot in qa-evidence-2; geen match → §10-verdict; Anything World NIET gebruiken; --force toegestaan (3)
+- [ ] W3.6 Ambient dierenleven: zwerf-loops met baked clips waar W3.5 ze stageerde en verbeterde procedurele gaits elders, 2 zwevende vogels; calm-pose gate; E2E ≥2 dieren + drawCalls <150 (3)
+- [ ] W3.7 Dossier toepassen: relatieve schaal per dier t.o.v. de ranger, vacht-tinten en oogkleuren (eye-recipe), houding; before/after showroom-screenshots, top-correcties in qa-evidence-2; strijdige Wist-je-dat teksten fixen via readlevel-corpus (3)
 
 ## Fase W4 — Rijke wereld
 
@@ -67,7 +70,7 @@
 - [ ] W5.1 Jeep bestuurbaar: Stap in/uit, arcade-kinematisch, ruimere camera; reduced-motion: snelheid ~3 m/s en halve draaisnelheid; E2E rijdt ≥10 m + caps gelden (3)
 - [ ] W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren (2)
 - [ ] W5.3 Helikopter opt-in (default UIT, via state.ts): helipads, klim/daal gedempt ≤2 m/s, vaste kruishoogte, horizon altijd recht, cockpitkader, vignette bij verplaatsing; reduced-motion → niet beschikbaar; E2E pad-naar-pad + FOV/roll/yaw-asserts (3)
-- [ ] W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status na afloop (3)
+- [ ] W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop (3)
 
 ## Fase W6 — Diegetische missies + biologie
 
@@ -86,5 +89,5 @@
 - [ ] W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB (2)
 - [ ] W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts (2)
 - [ ] W7.3 Alles groen: unit + parity + volledige E2E (chromium én webkit) + build:site + astro build; AUTO-QA-REPORT-2.md met screenshots uit qa-evidence-2/ (2)
-- [ ] W7.4 Ship: merge run2-world → main, push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd (1)
+- [ ] W7.4 Ship: commit + push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd (1)
 - [ ] W7.5 NEEDS-FLORIS iPad-acceptatie: lopen (stick + tap), jeep, missie vanaf marker, Deep Demo, Reduce-Motion beide standen (1)

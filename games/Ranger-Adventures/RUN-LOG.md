@@ -826,3 +826,14 @@ One status block per run/step (BUILD-PLAN §9b).
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~0%
 ```
+
+---
+**2026-07-02 11:34:18Z** · status
+
+```
+✔ landed: —
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.1 Playwright scaffold: devDep, config (poort ~4199, reuseExistingServer, CI-retries), boot smoke spec, npm scripts e2e + e2e:smoke, chromium install, gitignore-regels (test-results/, playwright-report/, e2e/__shots__/, incoming/), git hooksPath .githooks
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~0%
+```

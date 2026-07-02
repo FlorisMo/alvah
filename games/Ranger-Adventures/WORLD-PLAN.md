@@ -32,11 +32,22 @@ Product decisions taken by Floris this session (do NOT re-litigate):
    (damped, roll 0, fixed FOV). Reduced-motion falls back to the current
    fixed-bearing cam. A toggle in Instellingen keeps both testable on device.
 3. **Animations:** keys restored; the run re-generates and rigs the ranger via
-   Meshy (walk/idle clips). Anything World for animals stays a separately
-   gated decision (§7.3/§8) — **key presence is NOT authorization**.
+   Meshy (walk/idle clips). **Animals: CC0/CC-BY pre-animated packs
+   (Quaternius e.a.) are the PRIMARY path** (Floris, 2026-07-02: don't wait
+   on Anything World — whose key is in .env.local but was REJECTED with HTTP
+   403 at preflight on 2026-07-02; their processing API needs an
+   authorization email first). Improved procedural motion stays the fallback
+   for animals without a credible pack match.
 4. **New dependencies approved:** `@playwright/test` (dev-only browser test
    harness — mandatory) and Rapier (`@dimforge/rapier3d-compat`) — the latter
    only via the W5.4 spike gate, see §3.3. Nothing else without asking.
+   CC0/CC-BY *assets* (models/animations/audio) are fine with a license log.
+5. **Branch policy:** the run works directly on `main` — the live site is not
+   in use, so branch isolation would only clutter. Every phase-boundary push
+   deploys to alvah.nl behind the gate; that is intended.
+6. **Accuracy:** a dedicated web-research pass per animal (W3.4a/b) grounds
+   the visualization (sizes, coats, eye color, posture, gait character) and
+   the biology facts in sourced reality — no invented facts.
 
 ## 1. Verified current state (2026-07-02, this session)
 
@@ -200,7 +211,9 @@ only; no rendered frame or input event was ever checked. Result: "97% done,
 | `@playwright/test` | APPROVED, mandatory, devDependency only. |
 | `@dimforge/rapier3d-compat` | APPROVED but spike-gated (W5.4, moved late deliberately): run the spike ONLY if §10 records a real feel/determinism problem with the bespoke controller during W1–W5; otherwise skip-tick with a verdict note. The bespoke `resolveMove` already works; walking does not need physics. |
 | `ecctrl` / `BVHEcctrl` (pmndrs) | REJECTED despite research recommendation: they require React Three Fiber; this app is vanilla TS + three.js and CLAUDE.md forbids new frameworks. The follow-cam + joystick they provide are re-implemented natively (small). |
-| `ai4animationpy` (Floris's suggestion, checked 2026-07-02) | NOT for this run's runtime: Python 3.12 + PyTorch desktop framework (ECS renderer, mocap import, neural locomotion controllers), CC BY-NC 4.0, no web/JS runtime. Possible FUTURE offline use: synthesize quadruped gait clips and export BVH/GLB for the animals Meshy cannot rig — revisit only if W3.4's improved procedural gaits disappoint and Anything World stays unauthorized. |
+| `ai4animationpy` (Floris's suggestion, checked 2026-07-02) | NOT for this run's runtime: Python 3.12 + PyTorch desktop framework (ECS renderer, mocap import, neural locomotion controllers), CC BY-NC 4.0, no web/JS runtime. Possible FUTURE offline use: synthesize quadruped gait clips and export BVH/GLB — revisit only if the CC0 pack route (W3.5) and improved procedural gaits both disappoint. |
+| CC0/CC-BY animated asset packs (Quaternius, poly.pizza, Kenney) | APPROVED as assets, not dependencies. Primary path for animal animation (W3.5). Prefer CC0; CC-BY allowed with a visible credit line (same policy as the audio manifest). Every file gets a license-log entry. |
+| Anything World | NOT scheduled. Key present in .env.local but REJECTED (HTTP 403, `anything-world.mjs --preflight`, 2026-07-02) — their processing API needs a prior authorization email to hello@anything.world. Revisit only if Floris gets the account enabled AND the CC0 route leaves gaps. |
 | Anything else | Ask Floris first (CLAUDE.md). |
 
 ### 3.4 Frozen contracts that bind every box
@@ -304,7 +317,7 @@ with the full sub-id (e.g. `W2.4a`).
   '--use-angle=swiftshader']`; cache `~/.cache/ms-playwright` keyed on the
   @playwright/test version; the e2e job is skipped (paths filter) when a push
   touches neither `games/**` nor ranger-related files, so dossier-content
-  pushes deploy ungated; the job also runs on pushes to `run2-world`.
+  pushes deploy ungated.
   **Land the e2e job as `continue-on-error: true` first; flip it to blocking
   only after ONE observed green run on ubuntu** (unit tests block
   unconditionally from the start). Accept: workflow updated + a push shows
@@ -364,9 +377,9 @@ with the full sub-id (e.g. `W2.4a`).
   world without leaveWorld; "Terug naar de open plek" wording. Accept: E2E
   opens/closes overlay, world survives.
 - **W2.4b** Prikbord + raaf-companion folded into the hub overlay; delete
-  now-dead lodge-only flows; all unit tests green. **End-of-W2 milestone:
-  with everything green, merge `run2-world` into `main`** (first coherent
-  world-first build goes live).
+  now-dead lodge-only flows; all unit tests green. End-of-W2 milestone:
+  commit + push (the first coherent world-first build deploys live behind
+  the gate).
 
 ### W3 — Alive (animations)
 
@@ -389,18 +402,50 @@ with the full sub-id (e.g. `W2.4a`).
   artifact screenshots while moving.
 - **W3.3** Warden + poacher play their existing baked clips at their world
   spots.
-- **W3.4** Ambient animal life: ree, eekhoorn, wild zwijn wander gentle loops
-  (existing ProceduralMotion gaits improved: ground-hug, turn-in-place,
+- **W3.4a** Accuracy dossier, mammals (graceful-degrade; `--force` allowed if
+  web tools are unavailable — never invent facts). Web-research each of the
+  11 staged mammals (ree, edelhert if present, vos, das, eekhoorn, wild
+  zwijn + frisling, adder, etc. per `public/models/manifest.json`): shoulder
+  height/body length (numbers!), coat colors incl. seasonal variation, eye
+  color, 2-3 unmistakable visual features, characteristic gait/posture, and
+  1-2 kid-appropriate facts to feed W6.3. Write
+  `research/animal-visual-accuracy.md` with per-claim source URLs + access
+  dates. Accept: dossier committed, every mammal covered, zero unsourced
+  claims.
+- **W3.4b** Accuracy dossier, birds: same treatment for the ~10
+  mission/audio-relevant birds of the 23 staged (raaf, nachtzwaluw, merel,
+  roodborst, gaai, groene specht, koekoek, pimpelmees, winterkoning,
+  zanglijster — adjust to actual mission usage). Same sourcing rules and
+  acceptance.
+- **W3.5** Animal animation via CC0/CC-BY packs (timeboxed; skip-tick with a
+  §10 note for animals without a credible match). Source pre-animated
+  quadruped GLBs from Quaternius / poly.pizza / Kenney for the flagship
+  animals where a visual match exists (ree/edelhert → Deer/Stag, vos → Fox,
+  wolf → Wolf; judge zwijn candidates honestly); prefer CC0, CC-BY with a
+  visible credit line is allowed. Per model: license-log entry (like
+  `public/audio/manifest.json`), scale per the W3.4a dossier, run
+  `optimize-animated.mjs`, stage with `animated:true`. **Style-coherence
+  check:** showroom screenshot of pack model next to the Meshy cast into
+  `qa-evidence-2/`; if the style clash is jarring, prefer material/tint
+  matching or keep the Meshy static + procedural motion for close-up roles —
+  record the judgement in §10. Anything World is NOT used (see §3.3).
+  Accept: ≥2 flagship animals staged with real walk/idle clips OR a §10
+  verdict explaining why fewer.
+- **W3.6** Ambient animal life: ree, eekhoorn, wild zwijn wander gentle loops
+  — baked clips via the mixer where W3.5 staged them, improved
+  ProceduralMotion gaits elsewhere (ground-hug, turn-in-place,
   pause-and-graze beats); 2 birds glide on spline loops overhead; calm-pose
   gate respected. Accept: E2E asserts ≥2 animals present in world scene +
-  `drawCalls()` < 150.
-- **W3.5** (Gated; `--force` allowed for the skip path) Anything World batch.
-  **Key presence in .env.local is NOT authorization** — proceed ONLY if the
-  §8 table row says AUTHORIZED (Floris flips it himself after the
-  hello@anything.world email is answered). If authorized: batch-rig via
-  `anything-world.mjs`, optimize, stage, add the mandatory visible credit
-  line in the in-app Instellingen/colofon (`app/src/ui/**` — NEVER in
-  `src/pages/ranger/index.astro`). If not: skip-tick with a §10 note.
+  `drawCalls()` < 150; at least one animal's `clip()`-equivalent mixer runs
+  if W3.5 staged clips.
+- **W3.7** Apply the accuracy dossier: correct relative scale of every
+  animal against the ranger (dossier numbers through the manifest/prepModel
+  height path), coat tints and eye colors (eye recipe in
+  `EyeMaterial.ts`/`Eyes.ts`), posture flags. Accept: per-animal
+  before/after showroom screenshots; the 3-4 most-visible corrections
+  curated into `qa-evidence-2/`; §10 notes anything the dossier contradicts
+  in existing "Wist je dat" content (fix the strings via the readlevel
+  corpus).
 
 ### W4 — Rich world
 
@@ -452,7 +497,7 @@ with the full sub-id (e.g. `W2.4a`).
   recorded a real feel/determinism problem with the bespoke controller during
   W1–W5; otherwise skip-tick with a verdict note. If run: prototype
   in-tree WITHOUT committing (revert with `git checkout -- .` after
-  measuring; NO side branch — the run must end every sitting on `run2-world`
+  measuring; NO side branch — the run must end every sitting on `main`
   with a clean status); compare slope feel, seeded-replay determinism,
   bundle cost (~1.5 MB wasm), test ergonomics; verdict in §10 is the only
   durable artifact. Adopt only on a clear win.
@@ -498,7 +543,7 @@ with the full sub-id (e.g. `W2.4a`).
   `build:site` + root astro build; write AUTO-QA-REPORT-2.md embedding ~15
   curated screenshots from `games/Ranger-Adventures/qa-evidence-2/` (tracked;
   raw artifacts stay ignored).
-- **W7.4** Deploy + live check: **merge `run2-world` into `main`**, push;
+- **W7.4** Deploy + live check: commit + push;
   E2E against the real site build via root `astro build` + `astro preview`
   with a Playwright `context.addInitScript` that pre-seeds
   `sessionStorage.setItem('alvah-gate-v1','1')` (the gate only checks
@@ -512,19 +557,20 @@ with the full sub-id (e.g. `W2.4a`).
 
 - Supervisor: `bash games/Ranger-Adventures/world-run-loop.sh` (defaults:
   cap 120 sittings, model opus). It exports `RUN_LEDGER=WORLD-LEDGER.md` so
-  `ranger-run.mjs status|tick|commit` operate on the new ledger, and works on
-  the **`run2-world` branch**: deploys to alvah.nl happen only from `main`,
-  so Alvah's live game stays playable mid-run. Merges to main happen at two
-  named milestones only: end of W2 (W2.4b, first coherent world-first build)
-  and W7.4 (ship). Floris can merge earlier by hand any time, or opt out
-  entirely with `BRANCH=main`.
+  `ranger-run.mjs status|tick|commit` operate on the new ledger. The run
+  works **directly on `main`** (Floris, 2026-07-02: the site is not in use;
+  branch isolation would only clutter) — every phase-boundary push deploys
+  live behind the gate, and that is intended.
 - Each sitting: read WORLD-PLAN.md (this file) + WORLD-LEDGER.md + BUILD-PLAN
   §7 + root CLAUDE.md; do the FIRST unchecked box; tick with
   `RUN_LEDGER=WORLD-LEDGER.md node games/Ranger-Adventures/app/scripts/
   ranger-run.mjs tick "W1.2"` — tick itself enforces build + e2e:smoke and
-  refuses on red (`--force` only for W0.7/W3.0/W3.5); commit at phase
-  boundaries and after W0.4/W1.2/W1.5/W2.1 with `... commit "<msg>"`; STOP
-  after 1-2 boxes.
+  refuses on red (`--force` only for W0.7/W3.0/W3.4a/W3.4b/W3.5); commit at
+  phase boundaries and after W0.4/W1.2/W1.5/W2.1 with `... commit "<msg>"`;
+  STOP after 1-2 boxes.
+- Research boxes (W3.4a/b) use real web search/fetch and cite source URLs +
+  access dates in the dossier. If web tools are unavailable in a sitting:
+  `status --blocker=...` and move on — never invent facts.
 - **Never** invoke `ranger-run.mjs run`, `npm run finish`, `npm run
   assets:all`, or unfiltered `assets`/`meshy-gen` — the assets-gen manifest
   is lost and an unfiltered pass would regenerate the shipped cast
@@ -552,19 +598,19 @@ with the full sub-id (e.g. `W2.4a`).
    credits** (live API query). The run needs ~35. W0.7 re-logs the balance at
    run start. Free Mixamo fallback stays documented: rig on mixamo.com and
    drop the result at `app/incoming/ranger-alvah-rigged.glb`.
-3. **Anything World decision** (W3.5): an `ANYTHING_WORLD_API` key EXISTS in
-   .env.local, but their Terms also require a one-time authorization email to
-   hello@anything.world for the processing API, plus a visible credit line in
-   the game. **Key presence is NOT authorization** — if you want the animal
-   batch, send/confirm that email and flip the §8 row to AUTHORIZED yourself.
-   Default if silent: W3.5 skip-ticks and animals stay procedural.
+3. ~~Anything World decision~~ **RESOLVED 2026-07-02**: the stored key is
+   REJECTED (HTTP 403 at `anything-world.mjs --preflight`) — their processing
+   API needs a prior authorization email. Per Floris's decision the run does
+   not wait: animals animate via CC0/CC-BY packs (W3.5) + improved
+   procedural motion. Only if you ever get the AW account enabled AND the
+   pack route left gaps, tell the run to revisit.
 4. **Check Reduce Motion / Verminder beweging** on BOTH your Mac (System
    Settings → Accessibility → Display) and the iPad (Instellingen →
    Toegankelijkheid → Beweging) before judging demos — it silently flattens
    the whole experience by design.
-5. **Live-site policy**: the run works on branch `run2-world`; alvah.nl keeps
-   serving the current game until the end-of-W2 merge. If you would rather
-   see every increment live immediately, start the loop with `BRANCH=main`.
+5. **Live-site policy**: the run pushes to `main`; every phase boundary
+   deploys to alvah.nl behind the gate (your call, 2026-07-02: site not in
+   use, no branch clutter).
 6. **iPad acceptance** at W7.5.
 
 ## 8. Credits ledger (update as the run learns more)
@@ -574,7 +620,8 @@ with the full sub-id (e.g. `W2.4a`).
 | Meshy Ultra grant (run 1) | **7,615 cr VERIFIED 2026-07-02** (live API) | active; W0.7 re-logs at run start |
 | Ranger regen + rig (W3.1) | ~30 + ~5 cr | keys restored — ready |
 | Extra env props (only if needed in W4) | ~30 cr each | none planned — 38 props already staged |
-| Anything World 31 animals (W3.5) | ~155 AW cr / $50 Micro | key present; **NOT AUTHORIZED** (email unconfirmed — Floris flips this row himself) |
+| CC0/CC-BY animated animal packs (W3.5) | free (license log; CC-BY gets a credit line) | PRIMARY animal-animation path |
+| Anything World | ~155 AW cr / $50 Micro | **key REJECTED (HTTP 403, preflight 2026-07-02)** — not scheduled |
 | xeno-canto / Freesound | free keys | restored (verify in W3.0) |
 | Playwright / Rapier | free (MIT/Apache) | approved |
 
@@ -597,7 +644,9 @@ with the full sub-id (e.g. `W2.4a`).
   only). AI-Simulation (Engine 04) stays build-blocked on privacy ruling.
 - Do not "fix" reduced-motion by ignoring it. It is law; make 3D comfortable
   instead (W6.2), and keep `rmSafe:false` when in doubt.
-- Do not end a sitting off the `run2-world` branch or with a dirty tree.
+- Do not end a sitting off `main` or with a dirty tree.
+- Do not write a single unsourced claim into the accuracy dossier or the
+  biology content — web research with URLs + dates, or a blocker.
 
 ## 10. Run findings log (append-only, one short entry per surprise)
 
@@ -607,3 +656,9 @@ with the full sub-id (e.g. `W2.4a`).
   --blocker channel, honest push, helicopter/jeep comfort clauses, rmSafe
   flip guard, WebKit coverage, qa-evidence-2 policy. Meshy balance verified
   7,615 cr; .env.local recovered from VS Code local history.
+- 2026-07-02 (prep session, later): Floris decisions folded in — no branch
+  isolation (run works on main; site not in use); CC0/CC-BY animated packs
+  become the primary animal-animation path after the Anything World key was
+  probed and REJECTED (HTTP 403 preflight); new per-animal web-accuracy
+  dossier boxes (W3.4a/b) + apply box (W3.7) added, feeding both the
+  visualization and the W6.3 biology facts.
