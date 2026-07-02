@@ -972,3 +972,27 @@ with the full sub-id (e.g. `W2.4a`).
   pre-existing local-env timing issue (world-HUD visibility timeout under load),
   NOT introduced here. Board + joystick specs also flaked under the parallel run
   but recovered serially. The tick gate (build + 4-spec frozen smoke) is green.
+- 2026-07-02 (W3.4a, mammals accuracy dossier): web-researched all ELEVEN
+  non-bird `animal`-category models (ree, edelhert, vos, wolf, das, eekhoorn,
+  wild zwijn, frisling, adder, heikikker, heideblauwtje — the box title says
+  "zoogdieren" but §5 explicitly scopes it to the manifest's animal category,
+  which includes the reptile/amphibian/insect) into
+  `research/animal-visual-accuracy.md`. Every numeric/factual claim carries a
+  real source URL + access date 2026-07-02; primary sources are
+  Zoogdiervereniging/`zodion.nl` (NL, Veluwe-relevant), Natuurmonumenten,
+  Wolven in Nederland, Hoge Veluwe, Wikipedia (EN+NL), Woodland Trust, Wildlife
+  Trusts, Mammal Society, Animal Diversity Web, NCBI/PMC. Web tools WERE
+  available, so no facts were invented; the five honest bron-gaten (eekhoorn
+  eye colour; frisling shoulder height / body length / eye colour; heikikker
+  weight + eye colour; heideblauwtje weight + eye colour; plus ree/edelhert eye
+  colour flagged lower-confidence as it rests on a general-deer source) are
+  marked "geen bron gevonden" rather than filled. Two intentional practices:
+  (1) where a NL source and the species-wide Wikipedia range disagreed on a
+  measurement, BOTH ranges are listed with the NL one noted as locally
+  representative; (2) the file opens with a schaal-referentie table so W3.7 can
+  set relative scale directly. Feeds W3.5 (gait/posture match), W3.7 (scale,
+  coat tints, eye recipe) and W6.3 (kid-facts). Research fan-out ran as 5
+  parallel subagents (deer / canids / das+eekhoorn / boar+frisling /
+  adder+heikikker+heideblauwtje). Docs-only, no code touched → no player-visible
+  change and no E2E assert; ticked with `--force` (the §5 W3.4a allowance, same
+  as W3.0). Build + frozen smoke unaffected.

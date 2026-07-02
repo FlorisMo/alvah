@@ -1145,3 +1145,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~43%
 ```
+
+---
+**2026-07-02 15:54:01Z** · ticked: - [x] W3.4a Accuracy-dossier zoogdieren: webresearch per dier (maten, vacht/seizoen, oogkleur, kenmerken, gang, 1-2 kindfeiten) naar research/animal-visual-accuracy.md met bron-URL + datum per claim; geen web → --blocker, nooit verzinnen; --force toegestaan
+
+```
+✔ landed: W3.4a Accuracy-dossier zoogdieren: webresearch per dier (maten, vacht/seizoen, oogkleur, kenmerken, gang, 1-2 kindfeiten) naar research/animal-visual-accuracy.md met bron-URL + datum per claim; geen web → --blocker, nooit verzinnen; --force toegestaan
+▶ phase:  Fase W3 — Levend (animaties)
+→ next:   W3.4b Accuracy-dossier vogels: zelfde behandeling voor de ~10 missie/audio-relevante vogels; zelfde bronregels; --force toegestaan
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~46%
+```
