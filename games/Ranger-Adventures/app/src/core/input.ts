@@ -76,6 +76,16 @@ export function keyToMove(code: string): MoveKey | null {
   }
 }
 
+/**
+ * The interact / confirm keys (W1.4): `Space` or `Enter` fire the current
+ * proximity action — the "Speel mee" affordance the ranger is standing at. The
+ * laptop counterpart of tapping the button; `NumpadEnter` is folded in for full
+ * keyboards. Pure predicate so `attach-input.ts` (and its unit test) share it.
+ */
+export function isInteractKey(code: string): boolean {
+  return code === 'Space' || code === 'Enter' || code === 'NumpadEnter';
+}
+
 /** Clamp a 2-vector to a maximum magnitude, preserving direction. */
 function clampMagnitude(x: number, y: number, max: number): StickVector {
   const m = Math.hypot(x, y);

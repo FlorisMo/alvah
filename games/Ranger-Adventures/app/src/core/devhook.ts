@@ -27,6 +27,10 @@ export interface RangerDevHook {
   cameraYaw(): number | null;
   drawCalls(): number | null;
   clip(): { name: string; time: number } | null;
+  /** The mission id the ranger is standing at (proximity), or null (W1.4). */
+  nearId(): string | null;
+  /** Every mission marker's world position, for E2E navigation (W1.4). */
+  markers(): { x: number; z: number; missionId: string }[] | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -38,6 +42,8 @@ const state = {
   cameraYaw: null as null | (() => number),
   drawCalls: null as null | (() => number),
   clip: null as null | (() => { name: string; time: number } | null),
+  nearId: null as null | (() => string | null),
+  markers: null as null | (() => { x: number; z: number; missionId: string }[]),
 };
 
 /** Current screen the player is on. */
@@ -70,6 +76,18 @@ export function provideClip(fn: (() => { name: string; time: number } | null) | 
   state.clip = fn;
 }
 
+/** Register the live proximity source (the World's `nearId`). Pass null to clear. */
+export function provideNearId(fn: (() => string | null) | null): void {
+  state.nearId = fn;
+}
+
+/** Register the live marker-positions source (the World). Pass null to clear. */
+export function provideMarkers(
+  fn: (() => { x: number; z: number; missionId: string }[]) | null,
+): void {
+  state.markers = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -87,6 +105,8 @@ export function installDevHook(): boolean {
     cameraYaw: () => (state.cameraYaw ? state.cameraYaw() : null),
     drawCalls: () => (state.drawCalls ? state.drawCalls() : null),
     clip: () => (state.clip ? state.clip() : null),
+    nearId: () => (state.nearId ? state.nearId() : null),
+    markers: () => (state.markers ? state.markers() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

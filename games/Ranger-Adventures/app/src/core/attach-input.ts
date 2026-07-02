@@ -15,7 +15,7 @@
  * page under the full-screen canvas.
  */
 
-import { keyToMove, type MoveKey } from './input';
+import { keyToMove, isInteractKey, type MoveKey } from './input';
 
 export interface InputHandle {
   /** The live set of held movement directions — read each frame, never mutated by callers. */
@@ -24,14 +24,28 @@ export interface InputHandle {
   dispose(): void;
 }
 
+export interface AttachInputOptions {
+  /**
+   * Fired once per physical press of an interact key (Space/Enter, W1.4) — the
+   * laptop trigger for the current proximity action. Autorepeat is filtered so a
+   * held key fires exactly once. `World` routes this to its `nearId` action.
+   */
+  onInteract?: () => void;
+}
+
 /**
  * Wire keyboard movement onto `target` (default `window`). Returns the live held
  * set plus a `dispose` that removes all three listeners.
  */
-export function attachInput(target: Window = window): InputHandle {
+export function attachInput(target: Window = window, opts: AttachInputOptions = {}): InputHandle {
   const held = new Set<MoveKey>();
 
   const onDown = (e: KeyboardEvent): void => {
+    if (isInteractKey(e.code)) {
+      e.preventDefault(); // Space would scroll / re-activate a focused button
+      if (!e.repeat) opts.onInteract?.(); // one action per press, never autorepeat
+      return;
+    }
     const m = keyToMove(e.code);
     if (!m) return;
     held.add(m);

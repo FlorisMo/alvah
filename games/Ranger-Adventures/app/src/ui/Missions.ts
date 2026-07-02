@@ -42,7 +42,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers } from '../core/devhook';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
 const naam = (): string => rangerNaam(store.get().avatar);
@@ -152,6 +152,8 @@ function leaveWorld(): void {
   if (world) { world.dispose(); world = null; stage.exitWorld(); }
   providePos(null);
   provideCameraYaw(null);
+  provideNearId(null);
+  provideMarkers(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -413,7 +415,7 @@ function startExplore(): void {
 
   world = new World(
     stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, active,
-    onBiome,
+    onBiome, onInteract,
   );
   // start the bed on the lodge clearing (heide) before the first crossing fires
   setAmbientScene('heide', seizoen);
@@ -424,6 +426,8 @@ function startExplore(): void {
   setMissionView(null);
   providePos(() => world!.pos());
   provideCameraYaw(() => world!.cameraYaw());
+  provideNearId(() => world!.nearMission());
+  provideMarkers(() => world!.markerPositions());
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }
 
@@ -581,6 +585,20 @@ function onApproach(missionId: string | null): void {
     // world is only torn down by showLodge).
     showBriefing(m, true);
   });
+}
+
+/** The Space/Enter interact key (W1.4) — the laptop twin of tapping the
+ *  "Speel mee" prompt. The World only fires this while the ranger stands at a
+ *  marker; we still guard that the play affordance is actually on screen (the
+ *  briefing card replaces the explore HUD, so its prompt is gone once open) and
+ *  that the proximity id still matches, then open the same briefing the tap does. */
+function onInteract(missionId: string): void {
+  const prompt = host.querySelector<HTMLDivElement>('.explore-prompt');
+  if (!prompt || prompt.hidden) return; // no affordance showing → nothing to trigger
+  if (approachId !== missionId) return;
+  const m = Content.activeArea().missies.find((mm) => mm.id === missionId);
+  if (!m) return;
+  showBriefing(m, true);
 }
 
 /* ------------------------------------------------------------ briefing ---- */

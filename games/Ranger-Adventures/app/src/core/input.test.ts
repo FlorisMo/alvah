@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   keyToMove,
+  isInteractKey,
   screenVector,
   toWorld,
   resolveInput,
@@ -44,6 +45,25 @@ test('non-movement keys map to null (no accidental capture)', () => {
   assert.equal(keyToMove('Enter'), null);
   assert.equal(keyToMove('KeyQ'), null);
   assert.equal(keyToMove(''), null);
+});
+
+/* ---- isInteractKey: Space/Enter fire the proximity action (W1.4) ---- */
+
+test('Space and Enter are interact keys; movement keys are not', () => {
+  assert.equal(isInteractKey('Space'), true);
+  assert.equal(isInteractKey('Enter'), true);
+  assert.equal(isInteractKey('NumpadEnter'), true);
+  // movement + arbitrary keys must never trigger the interact action
+  assert.equal(isInteractKey('ArrowUp'), false);
+  assert.equal(isInteractKey('KeyW'), false);
+  assert.equal(isInteractKey('KeyE'), false);
+  assert.equal(isInteractKey(''), false);
+});
+
+test('interact keys and movement keys are disjoint', () => {
+  for (const code of ['Space', 'Enter', 'NumpadEnter']) {
+    assert.equal(keyToMove(code), null, `${code} must not also be a movement key`);
+  }
 });
 
 /* ---- screenVector: axis math, cancellation, normalization, deadzone ---- */

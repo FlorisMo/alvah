@@ -743,6 +743,21 @@ with the full sub-id (e.g. `W2.4a`).
   the shared `alvah-ef-v1` blob (no new key) to show the stick on the desktop
   test pointer, drags the thumb forward → `pos()` delta ≥2 m, asserts thumb
   ≥56 px + rim/finite + stop-on-release. Frozen smoke untouched (own assert).
+- 2026-07-02 (W1.4, interact key): Space/Enter now fire the current proximity
+  action — the laptop twin of tapping the "Speel mee" prompt. A pure
+  `isInteractKey(code)` (Space/Enter/NumpadEnter) joins `input.ts`; `attach-input.ts`
+  gained an `onInteract` option that fires once per press (`e.repeat` filtered) and
+  `preventDefault`s so Space never scrolls or re-activates a focused button. `World`
+  routes it through a guarded `tryInteract()` (no-op unless `nearId` is set and no
+  activity owns the world), calling a new `onInteract(missionId)` callback. The HUD
+  handler mirrors the button click exactly — same `showBriefing(m, true)` — and adds
+  a guard that the `.explore-prompt` is still on screen (the briefing card replaces
+  the explore HUD via `card()`→`clearOverlays()`, so a second Space after it opens is
+  a no-op) and that `approachId` still matches. Two new read-only dev-hook accessors
+  (`nearId()`, `markers()`) let the E2E steer to the nearest marker with arrow keys
+  (fixed bearing → world −z = ArrowUp) until proximity fires, then assert Space opens
+  the "Ga op pad" briefing and the play prompt is gone. Frozen smoke untouched (own
+  assert). Unit: `isInteractKey` disjoint-from-movement test. All 10 E2E green.
 - 2026-07-02 (prep session, later): Floris decisions folded in — no branch
   isolation (run works on main; site not in use); CC0/CC-BY animated packs
   become the primary animal-animation path after the Anything World key was

@@ -1013,3 +1013,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~21%
 ```
+
+---
+**2026-07-02 13:35:29Z** · ticked: - [x] W1.4 Interactie-toets Space/Enter voor nabijheids-actie; E2E opent missie-briefing
+
+```
+✔ landed: W1.4 Interactie-toets Space/Enter voor nabijheids-actie; E2E opent missie-briefing
+▶ phase:  Fase W1 — Besturing
+→ next:   W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~22%
+```

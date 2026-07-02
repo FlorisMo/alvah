@@ -62,6 +62,7 @@ export class World {
   private readonly ground: THREE.Mesh;
   private readonly canvas: HTMLCanvasElement;
   private readonly onApproach: (missionId: string | null) => void;
+  private readonly onInteract: (missionId: string) => void;
   private readonly onBiome: (biome: Biome) => void;
   private lastBiome: Biome | null = null;       // re-pick the ambience bed on a crossing
   private nearId: string | null = null;
@@ -97,9 +98,11 @@ export class World {
     onWayfind: (cue: WayCue | null) => void = () => {},
     activeId: string | null = null,
     onBiome: (biome: Biome) => void = () => {},
+    onInteract: (missionId: string) => void = () => {},
   ) {
     this.canvas = canvas;
     this.onApproach = onApproach;
+    this.onInteract = onInteract;
     this.onWayfind = onWayfind;
     this.onBiome = onBiome;
     this.activeId = activeId;
@@ -131,7 +134,28 @@ export class World {
     void this.loadRealRanger();
 
     canvas.addEventListener('pointerdown', this.onPointer);
-    this.input = attachInput();
+    this.input = attachInput(window, { onInteract: () => this.tryInteract() });
+  }
+
+  /**
+   * Fire the current proximity action from the interact key (W1.4) — the laptop
+   * twin of tapping the "Speel mee" prompt. Only when the ranger stands at a
+   * marker (`nearId`) and no in-place activity owns the world; the HUD decides
+   * what the action is (open the mission briefing).
+   */
+  private tryInteract(): void {
+    if (this.activityActive || !this.nearId) return;
+    this.onInteract(this.nearId);
+  }
+
+  /** Dev-hook accessor (W1.4): the mission the ranger is standing at, or null. */
+  nearMission(): string | null {
+    return this.nearId;
+  }
+
+  /** Dev-hook accessor (W1.4): every marker's world position, for E2E navigation. */
+  markerPositions(): { x: number; z: number; missionId: string }[] {
+    return this.markers.map((m) => ({ x: m.pos.x, z: m.pos.z, missionId: m.missionId }));
   }
 
   /** Register the on-screen joystick's live-vector source (W1.3). The HUD wires
