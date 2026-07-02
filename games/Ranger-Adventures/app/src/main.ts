@@ -4,7 +4,7 @@ import { Stage } from './render3d/Stage';
 import { Budgets } from './ui/Budgets';
 import { applyReducedMotionClass, watchReducedMotion, setReducedMotionOverride } from './core/reduced-motion';
 import { applyReadingPrefs } from './core/reading-prefs';
-import { startLodge, startDeepDemo } from './ui/Missions';
+import { startLodge, startWorld, startDeepDemo } from './ui/Missions';
 import { startSandbox } from './ui/Sandbox';
 import { showAvatarCreator } from './ui/AvatarCreator';
 import { store } from './core/state';
@@ -63,7 +63,10 @@ card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', (
   window.setTimeout(() => card.remove(), 360);
   if (deepDemoStart) { startDeepDemo(ui, stage); return; }
   if (sandboxStart) { startSandbox(ui, stage, () => startLodge(ui, stage)); return; }
-  // first boot → make your ranger; afterwards go straight to the lodge
-  if (store.get().avatarGemaakt) startLodge(ui, stage);
-  else showAvatarCreator(ui, () => startLodge(ui, stage));
+  // W2.1: the walkable world is now the front door. First boot still makes your
+  // ranger first; afterwards (and on every later boot) drop STRAIGHT into the
+  // Veluwe. The lodge stays reachable from the explore HUD's "Terug naar de hut"
+  // pill until the in-world cabin hub (W2.2/W2.4) replaces it.
+  if (store.get().avatarGemaakt) startWorld(ui, stage);
+  else showAvatarCreator(ui, () => startWorld(ui, stage));
 });

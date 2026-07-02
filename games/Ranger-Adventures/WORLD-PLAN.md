@@ -785,6 +785,22 @@ with the full sub-id (e.g. `W2.4a`).
   inverts `resolveInput`'s rotation each tick (the map is its own inverse). New
   `camera.spec.ts`: quarter-circle → yaw ≥45°; reduced-motion → yaw stays put while
   the ranger still walks ≥2 m. Frozen smoke untouched (own assert). All 12 E2E green.
+- 2026-07-02 (W2.1, world as the front door): boot now drops straight into the
+  walkable world after title→avatar instead of the lodge. A new exported
+  `startWorld(ui, stage)` in Missions.ts mirrors `startLodge` (sets the module
+  host/stage, unlocks audio inside the boot gesture) then calls the existing
+  `startExplore` — no world rebuild, the whole free-roam path is reused. `main.ts`
+  swaps the post-avatar target: returning players boot to world in 1 click from
+  title, first-boot players still meet the avatar creator first (2 clicks, meets
+  the ≤2 acceptance). `?demo`/`?sandbox` untouched (sandbox still returns to the
+  lodge). The lodge is NOT deleted — it stays reachable via the explore HUD's
+  existing "Terug naar de hut" pill (the interim affordance §W2.1 names; the
+  in-world cabin hub replaces it in W2.2/W2.4). E2E: journey.spec rewritten to
+  the ≤2-click front door and asserts the "Terug naar de hut" pill is present;
+  the six world-reaching specs (movement/keyboard/interact/camera/joystick/
+  onboarding) dropped their now-dead "Verken de Veluwe (3D)" click. Frozen smoke
+  intact — movement.spec still owns the ≥2 m assert, only its navigation lost one
+  click. 13/13 E2E + 261 unit green.
 - 2026-07-02 (W1.6, onboarding hint — closes W1): first-world-entry hint copy
   lives in a pure `core/onboarding.ts` (device-aware `onboardHint`) so the HUD and
   the readlevel corpus test share ONE source of truth — Missions.ts is DOM/THREE-y

@@ -105,6 +105,21 @@ export function startLodge(ui: HTMLElement, st: Stage): void {
   showLodge();
 }
 
+/**
+ * W2.1: boot straight into the walkable world — the world is the front door now,
+ * not a button on the lodge. Wires the module host/stage (like `startLodge`),
+ * unlocks audio inside the boot gesture, then loads the free-roam world + explore
+ * HUD. The HUD's "Terug naar de hut" pill keeps the lodge reachable as an interim
+ * affordance until the in-world cabin hub (W2.2/W2.4) lands.
+ */
+export function startWorld(ui: HTMLElement, st: Stage): void {
+  host = ui;
+  stage = st;
+  Sound.unlock();
+  void loadGameAudio();
+  startExplore();
+}
+
 /** The first mission whose step list features this engine (for the demo engine beat). */
 function firstMissionForEngine(engine: Engine): string | null {
   for (const m of Content.activeArea().missies) {

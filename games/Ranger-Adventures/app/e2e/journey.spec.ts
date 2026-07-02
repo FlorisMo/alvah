@@ -2,15 +2,17 @@ import { test, expect } from '@playwright/test';
 import { shot, collectPageErrors, reportPageErrors } from './helpers';
 
 /**
- * Journey E2E (WORLD-PLAN W0.3). The full front-door path a first-time player
- * walks: title "Begin" → avatar creator "Dit is mijn ranger" → lodge → "Verken
- * de Veluwe (3D)" → the walkable world. Asserts the dev-state hook `screen`
- * transitions at each step and lands on `world`, with an artifact screenshot
- * per step for human review.
+ * Journey E2E (WORLD-PLAN W0.3, updated for W2.1). The world is now the FRONT
+ * DOOR: title "Begin" → avatar creator "Dit is mijn ranger" → straight into the
+ * walkable world. No lodge stop, no "Verken de Veluwe (3D)" button — that is
+ * W2.1's acceptance: `screen === 'world'` within ≤ 2 clicks of the title. Asserts
+ * the dev-state hook `screen` transitions at each step, with an artifact
+ * screenshot per step for human review.
  *
  * Tagged `@smoke`: this folds world-reach into smoke v1 (§3.1). It is still
- * smoke v1 — NO movement assert yet. W0.4 adds tap-to-walk ≥2 m and freezes the
- * stronger smoke.
+ * smoke v1 — NO movement assert here (movement.spec.ts owns the frozen ≥2 m
+ * assert). The lodge stays reachable from the explore HUD's "Terug naar de hut"
+ * pill (covered by other specs), so nothing is lost.
  */
 
 /** Read the dev-hook `screen` (present because the dev server runs under DEV). */
@@ -21,7 +23,7 @@ function screen(page: import('@playwright/test').Page): Promise<string | null> {
   });
 }
 
-test('journey: Begin → avatar → lodge → world, screen reaches "world" @smoke', async ({ page }, testInfo) => {
+test('journey: Begin → avatar → world (≤2 clicks), screen reaches "world" @smoke', async ({ page }, testInfo) => {
   const errors: string[] = [];
   collectPageErrors(page, errors);
 
@@ -32,22 +34,19 @@ test('journey: Begin → avatar → lodge → world, screen reaches "world" @smo
   expect(await screen(page)).toBe('title');
   await shot(page, 'journey-1-title');
 
-  // title → avatar creator
+  // click 1: title → avatar creator
   await page.getByRole('button', { name: 'Begin' }).click();
   await expect(page.getByRole('button', { name: 'Dit is mijn ranger' })).toBeVisible();
   await expect.poll(() => screen(page)).toBe('avatar');
   await shot(page, 'journey-2-avatar');
 
-  // avatar → lodge (mission picker)
+  // click 2: avatar → STRAIGHT into the walkable world (W2.1: no lodge stop).
   await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
-  await expect(page.getByRole('button', { name: 'Verken de Veluwe (3D)' })).toBeVisible();
-  await expect.poll(() => screen(page)).toBe('lodge');
-  await shot(page, 'journey-3-lodge');
-
-  // lodge → the walkable world
-  await page.getByRole('button', { name: 'Verken de Veluwe (3D)' }).click();
   await expect.poll(() => screen(page), { timeout: 30_000 }).toBe('world');
-  await shot(page, 'journey-4-world');
+  await shot(page, 'journey-3-world');
+
+  // The lodge is no longer on the front-door path; it lives behind the HUD pill.
+  await expect(page.getByRole('button', { name: 'Terug naar de hut' })).toBeVisible();
 
   await reportPageErrors(testInfo, errors);
   expect(errors, 'no uncaught errors across the journey').toEqual([]);

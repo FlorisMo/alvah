@@ -27,7 +27,6 @@ async function enterWorld(page: Page): Promise<void> {
   await page.goto('/');
   await page.getByRole('button', { name: 'Begin' }).click();
   await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
-  await page.getByRole('button', { name: 'Verken de Veluwe (3D)' }).click();
   await expect.poll(() => hook(page, (r) => r.screen), { timeout: 30_000 }).toBe('world');
 }
 
