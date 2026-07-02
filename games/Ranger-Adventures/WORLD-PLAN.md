@@ -1424,3 +1424,20 @@ with the full sub-id (e.g. `W2.4a`).
   `nachtzwaluw.mp3` (2.3 MB) + `ambient-bos.mp3` (1.2 MB) are still heavy .mp3s —
   re-encode in a later pass. 320 unit (+7) + build green; footsteps + frozen smoke
   4/4 green. CLOSES the W4.7 audio split (W4.8 ven-water is the last open W4 box).
+- 2026-07-02 (W4.8, ven-water — CLOSES W4): the ven basin's flat
+  MeshStandardMaterial circle became a FRESNEL-tinted disc (custom `ShaderMaterial`,
+  pure maths mirrored in `Water.ts`): deep forest-teal head-on, a lighter warm
+  sky-glow at grazing angles via a Schlick `(1-viewY)^power` mix, so it reads as
+  water not a painted circle. CONTRACT NUANCE worth recording: the ripple is a
+  GENTLE FRAGMENT-TINT shimmer (two slow world-space sines modulating the
+  tint mix), NOT a vertex displacement — the silhouette never moves, so it can
+  never break the motion-comfort law even at full amplitude. And unlike the sky's
+  freeze-the-clock pattern (W4.6), water is "waveless DEFAULT": `rippleAmp(reduced)`
+  drives `uAmp` to EXACTLY 0 under reduced-motion, so the disc is a dead-still
+  mirror (not a frozen mid-wave) while the fresnel tint stays. The clock rides the
+  shared `skyTime` (already frozen under reduced-motion), so with amp 0 the shimmer
+  is doubly off. One mesh → one draw call, budget untouched. New pure
+  `Water.test.ts` (fresnel endpoints/monotonicity/clamp + amp gate) + `water.spec.ts`
+  (shader present, amp>0 & clock advances with motion on; amp===0 & clock frozen
+  under reduced-motion; drawCalls<150). New dev hook `water()` + `provideWater`.
+  325 unit (+5) + build green; water 2/2 + frozen smoke 4/4 green.

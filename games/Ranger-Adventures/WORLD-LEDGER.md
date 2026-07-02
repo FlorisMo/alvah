@@ -70,7 +70,7 @@ W3.7 Dossier toepassen — gesplitst (schaal / tinten+ogen+houding / teksten, el
 W4.7 Audio-pas — gesplitst (ambience-bed her-encode+crossfade / voetstappen+vogelzang, elk eigen verificatie):
 - [x] W4.7a Ambient-heide her-encoderen <1 MB (afconvert mono AAC, licentie ongewijzigd) + biome-crossfade tune (geen blip: equal-power fade tussen beds via pure curve-helper + unit test); ambient-bos-follow-up in §10 (1)
 - [x] W4.7b Voetstappen per ondergrond (zand/gras, gated op geluid+snelheid+biome, pure cadans-core + unit test + dev-hook/E2E) + extra vogelzang bij sleutels (4-6 calls met license-log als keys aanwezig, anders schoon skippen) (1)
-- [ ] W4.8 Ven-water: fresnel-tint, golfloos default, subtiele rimpel zonder reduced-motion (2)
+- [x] W4.8 Ven-water: fresnel-tint, golfloos default, subtiele rimpel zonder reduced-motion (2)
 
 ## Fase W5 — Voertuigen
 

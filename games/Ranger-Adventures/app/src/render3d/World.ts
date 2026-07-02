@@ -44,6 +44,9 @@ import { PlayerRig } from './PlayerRig';
 import {
   SKY_STOPS, cloudOffset, windSway, flyoverAt, type Flyover,
 } from './Atmosphere';
+import {
+  WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp,
+} from './Water';
 
 export interface WorldMarker {
   missionId: string;
@@ -149,6 +152,10 @@ export class World {
   // off, so every effect freezes together under reduced-motion (comfort §C). The
   // effects are driven from the pure Atmosphere math.
   private skyTime = 0;
+  // W4.8 ven-water: the fresnel disc's shader material — the World drives its
+  // `uTime` (from `skyTime`, so it freezes with the rest of the ambient motion)
+  // and `uAmp` (0 under reduced-motion → waveless) each frame.
+  private waterMat: THREE.ShaderMaterial | null = null;
   private lastWindT = NaN;                       // skip redundant wind re-uploads
   private cloudLayer: THREE.Mesh | null = null;  // multiply-blended cloud-shadow plane
   private flyBird: THREE.Group | null = null;    // the ~12 s sky crossing bird
@@ -578,12 +585,59 @@ export class World {
     return tex;
   }
 
-  /** A calm still-water plane filling the ven basin (no waves — motion-comfort §1e). */
+  /**
+   * W4.8: the ven-water disc — a FRESNEL-tinted still plane. A custom shader
+   * mixes a deep forest-teal (seen head-on) with a lighter warm sky-glow (at
+   * grazing angles) by the Schlick view-angle factor (`Water.ts` mirrors the
+   * maths), so the disc reads as water instead of a flat painted circle. The
+   * ripple is a GENTLE FRAGMENT-TINT shimmer only — never a vertex displacement —
+   * so the silhouette never moves (motion-comfort §1e/§C); it is WAVELESS by
+   * default and its amplitude (`uAmp`) is driven to exactly 0 under reduced-motion
+   * from `update()`. One mesh → one draw call, budget untouched (§3.4).
+   */
   private buildVenWater(): THREE.Mesh {
-    const geo = new THREE.CircleGeometry(20, 40);
-    const mat = new THREE.MeshStandardMaterial({
-      color: '#4a6b78', roughness: 0.35, metalness: 0.1, transparent: true, opacity: 0.82,
+    const geo = new THREE.CircleGeometry(20, 48);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      uniforms: {
+        uTime: { value: 0 },
+        uAmp: { value: 0 },
+        uDeep: { value: new THREE.Color(WATER_DEEP) },
+        uShallow: { value: new THREE.Color(WATER_SHALLOW) },
+        uOpacity: { value: WATER_OPACITY },
+        uFresnelPower: { value: FRESNEL_POWER },
+      },
+      vertexShader: `
+        varying vec3 vWorld;
+        void main() {
+          vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform float uAmp;
+        uniform vec3 uDeep;
+        uniform vec3 uShallow;
+        uniform float uOpacity;
+        uniform float uFresnelPower;
+        varying vec3 vWorld;
+        void main() {
+          // flat, up-facing plane → normal is world-up; fresnel from the view's
+          // vertical component (straight-down = deep, grazing = sky-glow).
+          vec3 viewDir = normalize(cameraPosition - vWorld);
+          float fres = pow(clamp(1.0 - max(viewDir.y, 0.0), 0.0, 1.0), uFresnelPower);
+          // subtle crossing shimmer — two slow sines over world position; uAmp is
+          // 0 under reduced-motion so this term vanishes (dead-still mirror).
+          float ripple = sin(vWorld.x * 1.15 + uTime * 0.8)
+                       * sin(vWorld.z * 1.07 - uTime * 0.55);
+          float mixv = clamp(fres + ripple * uAmp, 0.0, 1.0);
+          vec3 col = mix(uDeep, uShallow, mixv);
+          gl_FragColor = vec4(col, uOpacity);
+        }
+      `,
     });
+    this.waterMat = mat;
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.set(VEN_CENTER.x, WATER_LEVEL, VEN_CENTER.z);
@@ -832,6 +886,19 @@ export class World {
    *  walking (and the sound gate holds them when `geluid` is off). */
   footstepState(): { count: number; surface: FootSurface | null } {
     return { count: this.footstepCount, surface: this.lastFootSurface };
+  }
+
+  /** Dev-hook accessor (W4.8): the live ven-water state — whether the fresnel
+   *  shader disc exists, the ripple amplitude in force (0 under reduced-motion →
+   *  waveless), and the live clock, so the E2E can prove the disc ripples with
+   *  motion on and holds dead-still under reduced-motion. */
+  waterState(): { shader: boolean; amp: number; time: number } {
+    const mat = this.waterMat;
+    return {
+      shader: mat !== null,
+      amp: mat ? (mat.uniforms.uAmp.value as number) : 0,
+      time: mat ? (mat.uniforms.uTime.value as number) : 0,
+    };
   }
 
   private placeMarkers(markers: WorldMarker[]): void {
@@ -1572,6 +1639,14 @@ export class World {
       this.flyBird.visible = f.visible;
       this.flyBird.position.set(f.x, f.y, f.z);
       this.flyBird.rotation.y = f.facing;
+    }
+
+    // W4.8 ven-water: share the ambient clock (`skyTime` froze above under
+    // reduced-motion) and gate the ripple amplitude to 0 when reduced → the disc
+    // holds waveless-still (fresnel tint stays; only the shimmer stops).
+    if (this.waterMat) {
+      this.waterMat.uniforms.uTime.value = st;
+      this.waterMat.uniforms.uAmp.value = rippleAmp(reduced);
     }
 
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera

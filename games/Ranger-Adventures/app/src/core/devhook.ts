@@ -80,6 +80,11 @@ export interface RangerDevHook {
    *  last surface ('zand'|'gras'), or null before the hook/world is ready — lets
    *  the E2E assert footsteps fire while walking and the sound gate holds. */
   footsteps(): { count: number; surface: 'zand' | 'gras' | null } | null;
+  /** The W4.8 ven-water state: whether the fresnel disc shader exists, the ripple
+   *  amplitude in force (0 under reduced-motion → waveless), and the live clock —
+   *  lets the E2E assert the disc ripples with motion on and holds still under
+   *  reduced-motion. Null before the hook/world is ready. */
+  water(): { shader: boolean; amp: number; time: number } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -112,6 +117,7 @@ const state = {
     flyover: { x: number; y: number; z: number; visible: boolean } | null;
   }),
   footsteps: null as null | (() => { count: number; surface: 'zand' | 'gras' | null }),
+  water: null as null | (() => { shader: boolean; amp: number; time: number }),
 };
 
 /** Current screen the player is on. */
@@ -239,6 +245,13 @@ export function provideFootsteps(
   state.footsteps = fn;
 }
 
+/** Register the W4.8 ven-water-state source (the World). Pass null to clear. */
+export function provideWater(
+  fn: (() => { shader: boolean; amp: number; time: number }) | null,
+): void {
+  state.water = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -269,6 +282,7 @@ export function installDevHook(): boolean {
     lighting: () => (state.lighting ? state.lighting() : null),
     sky: () => (state.sky ? state.sky() : null),
     footsteps: () => (state.footsteps ? state.footsteps() : null),
+    water: () => (state.water ? state.water() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;
