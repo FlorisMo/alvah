@@ -22,6 +22,8 @@ import { loadGameAudio, setAmbientScene } from '../core/calls';
 import type { Biome } from '../render3d/Biomes';
 import type { Stage } from '../render3d/Stage';
 import { World, type WorldMarker } from '../render3d/World';
+import { Joystick } from './Joystick';
+import { joystickVisible } from '../core/input';
 import { type WayCue } from '../render3d/Wayfinding';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { resolveViewMode, variantFor } from '../render3d/play/ViewMode';
@@ -78,6 +80,9 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 let host: HTMLElement;
 let stage: Stage;
 let world: World | null = null;
+// the on-screen joystick (W1.3) lives inside the explore HUD; re-created each
+// time the HUD renders, disposed here so its listeners never outlive the world.
+let joystick: Joystick | null = null;
 
 // When set (by the Deep Demo tour), the explore HUD's "Terug" tears down the
 // world and returns HERE instead of the lodge — so a free-roam / in-world engine
@@ -143,6 +148,7 @@ function activeExploreTitel(): string | null {
 }
 
 function leaveWorld(): void {
+  if (joystick) { joystick.dispose(); joystick = null; }
   if (world) { world.dispose(); world = null; stage.exitWorld(); }
   providePos(null);
   provideCameraYaw(null);
@@ -524,6 +530,23 @@ function showExploreHud(activeTitel: string | null): void {
   el.querySelector('.explore-back')?.addEventListener('click', exitWorld);
   // reach the prikbord over the LIVE world — no teardown; back returns to patrol.
   el.querySelector('.explore-board')?.addEventListener('click', () => showCaseBoard(true));
+  mountJoystick(el.querySelector<HTMLElement>('.explore-hud'));
+}
+
+/** Build + wire the virtual joystick (W1.3) into the freshly-rendered explore
+ *  HUD: its vector fuses with the keyboard at the World.update call site, and
+ *  its visibility follows the Instellingen setting (auto = coarse pointer). The
+ *  HUD is re-rendered on every patrol resume, so the old instance is disposed
+ *  first — no listeners on detached nodes, no double stick. */
+function mountJoystick(hud: HTMLElement | null): void {
+  if (joystick) { joystick.dispose(); joystick = null; }
+  if (!hud || !world) return;
+  const js = new Joystick();
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  js.setVisible(joystickVisible(store.get().settings.joystick, coarse));
+  hud.appendChild(js.el);
+  world.setJoystick(() => js.vector());
+  joystick = js;
 }
 
 /** Render the calm wayfinding cue into the veldnotitie strip (dual-channel: glyph +

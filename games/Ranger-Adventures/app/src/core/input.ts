@@ -129,3 +129,32 @@ export function resolveInput(
 ): WorldMove {
   return toWorld(screenVector(held, joystick), cameraYaw);
 }
+
+/* -------------------------------------------------------- virtual joystick -- */
+
+/** How the on-screen joystick's visibility is decided (W1.3 Instellingen). */
+export type JoystickPref = 'auto' | 'aan' | 'uit';
+
+/**
+ * Turn a thumb drag (pixels from the stick centre) into the screen-space
+ * `StickVector` `screenVector` expects: `x` right (+), `y` forward (+). The drag
+ * is clamped to the stick `radius` so a shove past the ring saturates at full
+ * speed (never faster), then divided by the radius → magnitude in [0, 1]. Screen
+ * "up" is `dy < 0`, which must read as forward, so the y axis is flipped. Pure;
+ * the DOM plumbing lives in `ui/Joystick.ts`.
+ */
+export function joystickVector(dx: number, dy: number, radius: number): StickVector {
+  if (!(radius > 0)) return { x: 0, y: 0 };
+  const clamped = clampMagnitude(dx, dy, radius);
+  return { x: clamped.x / radius, y: -clamped.y / radius };
+}
+
+/**
+ * Decide whether the joystick shows. `aan`/`uit` are the explicit Instellingen
+ * overrides; `auto` (default) follows the pointer — visible on a coarse pointer
+ * (touch, the iPad primary device), hidden on a fine pointer (laptop, where the
+ * keyboard drives). Pure so the default logic tests without a DOM.
+ */
+export function joystickVisible(pref: JoystickPref, coarsePointer: boolean): boolean {
+  return pref === 'aan' ? true : pref === 'uit' ? false : coarsePointer;
+}

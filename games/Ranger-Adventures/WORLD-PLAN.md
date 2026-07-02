@@ -725,6 +725,24 @@ with the full sub-id (e.g. `W2.4a`).
   plus a KeyW walk. Frozen `e2e:smoke` (tap-to-walk) untouched — the override is
   key-gated, so taps still work when no key is held. Not folded into smoke (it
   is the box's own assert, not a smoke upgrade).
+- 2026-07-02 (W1.3, virtual joystick): the on-screen stick (`ui/Joystick.ts`,
+  bottom-left, 132 px ring / 64 px thumb ≥56) emits the same `StickVector` the
+  keyboard does — a new pure `joystickVector(dx,dy,radius)` in `input.ts` clamps
+  the drag to the ring (saturate, never overshoot) and flips y (screen-up =
+  forward). `World.setJoystick(() => js.vector())` fuses it with held keys at the
+  one `resolveInput` call site (null while the thumb rests, so it never overrides
+  the keyboard). Pointer-capture on the base means NO window listeners to leak;
+  the HUD re-render disposes the old instance. Visibility = pure
+  `joystickVisible(pref, coarsePointer)`: new `joystick: 'auto'|'aan'|'uit'`
+  setting (default `auto` → shown on a coarse pointer), plus an Instellingen
+  segmented control. GOTCHA fixed: the new Tweaks segmented group reused the
+  `.tw-seg-opt` class, so the gevolgErnst click handler (`querySelectorAll(
+  '.tw-seg-opt')`) would have cross-fired and written `gevolgErnst: undefined` on
+  a joystick tap — both handlers are now scoped by their `[data-ernst]` /
+  `[data-joy]` attribute. E2E `joystick.spec.ts` pre-seeds `joystick:'aan'` into
+  the shared `alvah-ef-v1` blob (no new key) to show the stick on the desktop
+  test pointer, drags the thumb forward → `pos()` delta ≥2 m, asserts thumb
+  ≥56 px + rim/finite + stop-on-release. Frozen smoke untouched (own assert).
 - 2026-07-02 (prep session, later): Floris decisions folded in — no branch
   isolation (run works on main; site not in use); CC0/CC-BY animated packs
   become the primary animal-animation path after the Anything World key was

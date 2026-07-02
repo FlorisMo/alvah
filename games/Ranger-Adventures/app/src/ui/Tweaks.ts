@@ -58,6 +58,13 @@ const ERNST: { id: Settings['gevolgErnst']; label: string }[] = [
   { id: 'stevig', label: 'Spannender' },
 ];
 
+// on-screen joystick (W1.3): default follows the pointer (touch → aan, laptop → uit)
+const JOYSTICK: { id: Settings['joystick']; label: string }[] = [
+  { id: 'auto', label: 'Vanzelf' },
+  { id: 'aan', label: 'Altijd' },
+  { id: 'uit', label: 'Nooit' },
+];
+
 // a small calm accent palette (the gold default + heath/forest/water/warm)
 const ACCENTEN = ['#f5c23b', '#9a6aa8', '#5d7340', '#4a6b78', '#d9b89a'];
 
@@ -112,6 +119,18 @@ function segHtml(): string {
   );
 }
 
+function joystickHtml(): string {
+  const cur = store.get().settings.joystick;
+  const btns = JOYSTICK.map(
+    (o) => `<button class="tw-seg-opt${o.id === cur ? ' sel' : ''}" type="button" role="radio" ` +
+      `aria-checked="${o.id === cur}" data-joy="${o.id}">${esc(o.label)}</button>`,
+  ).join('');
+  return (
+    `<div class="tw-field"><span class="tw-field-label">Loopstick op het scherm</span>` +
+    `<div class="tw-seg" role="radiogroup" aria-label="Loopstick op het scherm">${btns}</div></div>`
+  );
+}
+
 function accentHtml(): string {
   const cur = store.get().settings.accent;
   const sw = ACCENTEN.map(
@@ -145,6 +164,7 @@ function render(): void {
     sliderHtml('ambient', 'Omgevingsgeluid', 0, 1, 0.05, s.ambient,
       (n) => `${Math.round(n * 100)}%`) +
     segHtml() +
+    joystickHtml() +
     accentHtml() +
     `</div>` +
     `<div class="ra-row">` +
@@ -184,12 +204,27 @@ function render(): void {
     r.addEventListener('change', () => select());     // one soft confirm on release
   });
 
-  // ---- gevolgErnst segmented ----
-  el.querySelectorAll<HTMLButtonElement>('.tw-seg-opt').forEach((b) => {
+  // ---- gevolgErnst segmented (scoped to [data-ernst]: the joystick group
+  //      shares the .tw-seg-opt look but must not cross-fire) ----
+  el.querySelectorAll<HTMLButtonElement>('[data-ernst]').forEach((b) => {
     b.addEventListener('click', () => {
       const ernst = b.dataset.ernst as Settings['gevolgErnst'];
       store.setSetting({ gevolgErnst: ernst });
-      el.querySelectorAll('.tw-seg-opt').forEach((o) => {
+      el.querySelectorAll('[data-ernst]').forEach((o) => {
+        const sel = o === b;
+        o.classList.toggle('sel', sel);
+        o.setAttribute('aria-checked', String(sel));
+      });
+      select();
+    });
+  });
+
+  // ---- joystick visibility segmented ----
+  el.querySelectorAll<HTMLButtonElement>('[data-joy]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const joy = b.dataset.joy as Settings['joystick'];
+      store.setSetting({ joystick: joy });
+      el.querySelectorAll('[data-joy]').forEach((o) => {
         const sel = o === b;
         o.classList.toggle('sel', sel);
         o.setAttribute('aria-checked', String(sel));

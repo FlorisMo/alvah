@@ -1002,3 +1002,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~18%
 ```
+
+---
+**2026-07-02 13:26:05Z** · ticked: - [x] W1.3 Virtuele joystick ui/Joystick.ts (≥56 px, coarse-pointer default, Instellingen-toggle via state.ts); E2E touch-drag beweegt
+
+```
+✔ landed: W1.3 Virtuele joystick ui/Joystick.ts (≥56 px, coarse-pointer default, Instellingen-toggle via state.ts); E2E touch-drag beweegt
+▶ phase:  Fase W1 — Besturing
+→ next:   W1.4 Interactie-toets Space/Enter voor nabijheids-actie; E2E opent missie-briefing
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~21%
+```

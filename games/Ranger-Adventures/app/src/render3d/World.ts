@@ -24,7 +24,7 @@ import { applyFace } from './FaceRig';
 import { applyCalmPose } from './CalmPoseRig';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
-import { resolveInput } from '../core/input';
+import { resolveInput, type StickVector } from '../core/input';
 import { attachInput, type InputHandle } from '../core/attach-input';
 import { wayfind, type WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
@@ -66,9 +66,12 @@ export class World {
   private lastBiome: Biome | null = null;       // re-pick the ambience bed on a crossing
   private nearId: string | null = null;
   private speed = 2.4;
-  // keyboard (+ later joystick) movement: the held-keys set feeds resolveInput →
+  // keyboard (+ joystick) movement: the held-keys set feeds resolveInput →
   // resolveMove each frame, overriding tap-to-walk while any key is down (§3.2).
   private input: InputHandle | null = null;
+  // the on-screen joystick's live vector (W1.3), fused with the keys at the
+  // resolveInput call site. Set by the HUD via setJoystick; null when absent.
+  private joystickSource: (() => StickVector | null) | null = null;
   // while a diegetic mini-game plays IN-PLACE, the world stays loaded but freezes:
   // movement, walk-taps, proximity, wayfinding and the §1e follow all pause so the
   // activity's reframe owns the camera (it restores on endActivity).
@@ -129,6 +132,12 @@ export class World {
 
     canvas.addEventListener('pointerdown', this.onPointer);
     this.input = attachInput();
+  }
+
+  /** Register the on-screen joystick's live-vector source (W1.3). The HUD wires
+   *  it on world entry; pass null to clear. Fused with held keys each frame. */
+  setJoystick(source: (() => StickVector | null) | null): void {
+    this.joystickSource = source;
   }
 
   /** Dev-hook accessor (WORLD-PLAN §3.1): the ranger's world position {x,z}. */
@@ -501,7 +510,8 @@ export class World {
       // vector · speed · dt, resolved by the same kinematic controller. When no
       // key is held we fall back to seeking the tapped target. Either way the
       // ACTUAL post-collision delta drives facing (slide-around-pine still turns).
-      const move = this.input ? resolveInput(this.input.held, null, this.cameraYaw()) : { x: 0, z: 0 };
+      const stick = this.joystickSource ? this.joystickSource() : null;
+      const move = this.input ? resolveInput(this.input.held, stick, this.cameraYaw()) : { x: 0, z: 0 };
       let wantX: number, wantZ: number, moving: boolean;
       if (move.x !== 0 || move.z !== 0) {
         const step = this.speed * dt;

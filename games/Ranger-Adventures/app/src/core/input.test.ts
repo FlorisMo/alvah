@@ -14,6 +14,8 @@ import {
   screenVector,
   toWorld,
   resolveInput,
+  joystickVector,
+  joystickVisible,
   JOYSTICK_DEADZONE,
   type MoveKey,
 } from './input.ts';
@@ -144,4 +146,52 @@ test('resolveInput never mutates its inputs (pure)', () => {
   assert.equal(keys.size, before.size);
   assert.equal(joystick.x, before.jx);
   assert.equal(joystick.y, before.jy);
+});
+
+/* ---- joystickVector: drag pixels → clamped screen-space intent ---- */
+
+test('joystickVector maps a straight-up drag to full forward', () => {
+  // screen-up is dy < 0; forward is +y. A drag to the ring edge saturates at 1.
+  const v = joystickVector(0, -40, 40);
+  near(v.x, 0, 'x');
+  near(v.y, 1, 'y forward');
+});
+
+test('joystickVector clamps a shove past the ring to unit magnitude', () => {
+  const v = joystickVector(120, 0, 40);           // 3× the radius, straight right
+  near(Math.hypot(v.x, v.y), 1, 'saturated magnitude');
+  near(v.x, 1, 'x right');
+  near(v.y, 0, 'y');
+});
+
+test('joystickVector keeps partial drags proportional (no snapping)', () => {
+  const v = joystickVector(20, 0, 40);            // half a radius right
+  near(v.x, 0.5, 'half deflection');
+  near(v.y, 0, 'y');
+});
+
+test('joystickVector is safe at the centre and with a zero radius', () => {
+  const c = joystickVector(0, 0, 40);
+  near(c.x, 0, 'centre x'); near(c.y, 0, 'centre y');
+  const z = joystickVector(10, 10, 0);            // degenerate radius → no intent
+  near(z.x, 0, 'zero-radius x'); near(z.y, 0, 'zero-radius y');
+});
+
+test('joystickVector feeds screenVector: a rested-ish thumb stays under the deadzone', () => {
+  const tiny = joystickVector(2, 0, 40);          // magnitude 0.05 < JOYSTICK_DEADZONE
+  assert.ok(Math.hypot(tiny.x, tiny.y) < JOYSTICK_DEADZONE, 'tiny drag below deadzone');
+  const out = screenVector(new Set<MoveKey>(), tiny);
+  near(out.x, 0, 'deadzone drops x'); near(out.y, 0, 'deadzone drops y');
+});
+
+/* ---- joystickVisible: auto follows the pointer, aan/uit override ---- */
+
+test('joystickVisible: auto follows the coarse-pointer flag', () => {
+  assert.equal(joystickVisible('auto', true), true, 'touch → shown');
+  assert.equal(joystickVisible('auto', false), false, 'laptop → hidden');
+});
+
+test('joystickVisible: aan/uit override the pointer either way', () => {
+  assert.equal(joystickVisible('aan', false), true, 'aan on a fine pointer');
+  assert.equal(joystickVisible('uit', true), false, 'uit on a coarse pointer');
 });

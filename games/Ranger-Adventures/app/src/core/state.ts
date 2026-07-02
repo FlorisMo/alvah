@@ -64,6 +64,7 @@ export interface Settings {
   jargon: boolean;                   // "knappe woorden" (frisling/rotte) vs simple (big/groep)
   leesFont: boolean;                 // Atkinson Hyperlegible leesletter (alternate, not the default)
   force2d: boolean;                  // Tweak "altijd 2D" — force the 2D floor for every activity
+  joystick: 'auto' | 'aan' | 'uit';  // on-screen joystick visibility (W1.3): auto = coarse pointer
   skipBriefings: boolean;            // demo-skip (§9g): jump straight into play, no briefing card
   readSize: number;
   leading: number;
@@ -122,6 +123,7 @@ const DEFAULT_SETTINGS: Settings = {
   jargon: false,
   leesFont: true,
   force2d: false,
+  joystick: 'auto',
   skipBriefings: false,
   readSize: 28,
   leading: 1.7,
