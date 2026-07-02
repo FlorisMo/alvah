@@ -83,17 +83,28 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType, pe
  * calls via registerCall(); when a real sample is present it wins, so wiring in
  * real audio is zero-rework. dur ≈ how long the call rings (seconds).
  */
-interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number }
+// `notes` (when present) plays that pitch SEQUENCE instead of `rep` copies of
+// `freq` — the way to synth a call with distinct successive pitches (koekoek's
+// hoog→laag, koolmees' ti-ta-ti-ta) so "Ken je roep" (W6.4) is learnable by ear.
+interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[] }
 const CALLS: Record<string, CallSpec> = {
   edelhert:   { freq: 150, dur: 0.7,  type: 'sawtooth', vibrato: 6 },   // burlen — deep bellow
   ree:        { freq: 420, dur: 0.22, type: 'square',   rep: 2 },        // blaf — short bark
   wildzwijn:  { freq: 190, dur: 0.3,  type: 'sawtooth', rep: 2 },        // knor — grunt
   frisling:   { freq: 520, dur: 0.18, type: 'square',   rep: 3 },        // piglet squeak
-  raaf:       { freq: 280, dur: 0.34, type: 'sawtooth', rep: 2 },        // kroa — croak
+  raaf:       { freq: 280, dur: 0.34, type: 'sawtooth', rep: 2 },        // kroa — diep en laag
   das:        { freq: 240, dur: 0.28, type: 'triangle', rep: 2 },        // churr
   nachtzwaluw:{ freq: 600, dur: 0.6,  type: 'triangle', vibrato: 22 },   // ratel — churring trill
   eekhoorn:   { freq: 760, dur: 0.16, type: 'square',   rep: 3 },        // chatter
   wolf:       { freq: 330, dur: 0.8,  type: 'sine',     vibrato: 3 },     // howl
+  // W6.4b1 "Ken je roep" vogelroepen — onmiskenbaar uit elkaar te houden motieven,
+  // per dossier-omschrijving (research/bird-visual-accuracy.md). Echte opnamen
+  // winnen straks via registerCall (zero-rework).
+  koekoek:       { freq: 540, dur: 0.26, type: 'sine',     notes: [560, 420] },              // koe-koek: hoog dan laag
+  merel:         { freq: 900, dur: 0.46, type: 'sine',     vibrato: 10 },                     // mooi fluitliedje
+  roodborsttapuit:{ freq: 1650, dur: 0.05, type: 'square', notes: [1650, 1650] },             // tik tik — twee steentjes
+  'groene-specht':{ freq: 760, dur: 0.12, type: 'triangle', notes: [820, 760, 700, 650] },    // kju-kju — een lachje
+  koolmees:      { freq: 1150, dur: 0.11, type: 'square',  notes: [1150, 820, 1150, 820] },    // ti-ta ti-ta — een pompje
 };
 const DEFAULT_CALL: CallSpec = { freq: 440, dur: 0.3, type: 'sine', rep: 2 };
 
@@ -115,19 +126,21 @@ function playCall(id: string): number {
     return Math.min(buf.duration, 1.4);
   }
   const spec = CALLS[id] ?? DEFAULT_CALL;
-  const rep = spec.rep ?? 1;
   const gap = spec.dur * 0.45;
-  for (let i = 0; i < rep; i++) {
+  // a pitch SEQUENCE (koekoek/koolmees/…) plays each note in turn; otherwise `rep`
+  // copies of the one pitch (with a small warble when `vibrato` is set).
+  const notes = spec.notes ?? Array.from({ length: spec.rep ?? 1 }, () => spec.freq);
+  notes.forEach((freq, i) => {
     const start = i * (spec.dur + gap);
     if (spec.vibrato) {
-      // a small warble for the trilling/bellowing calls
-      tone(spec.freq, start, spec.dur, spec.type, 0.16);
-      tone(spec.freq * 1.04, start + 0.03, spec.dur, spec.type, 0.08);
+      // a small warble for the trilling/bellowing/singing calls
+      tone(freq, start, spec.dur, spec.type, 0.16);
+      tone(freq * 1.04, start + 0.03, spec.dur, spec.type, 0.08);
     } else {
-      tone(spec.freq, start, spec.dur, spec.type, 0.16);
+      tone(freq, start, spec.dur, spec.type, 0.16);
     }
-  }
-  return rep * (spec.dur + gap);
+  });
+  return notes.length * (spec.dur + gap);
 }
 
 export const Sound = {
@@ -223,8 +236,8 @@ export const Sound = {
     const buf = sampleBuffers.get(id);
     if (buf) return Math.min(buf.duration, 1.4);
     const spec = CALLS[id] ?? DEFAULT_CALL;
-    const rep = spec.rep ?? 1;
-    return rep * (spec.dur + spec.dur * 0.45);
+    const count = spec.notes?.length ?? spec.rep ?? 1;
+    return count * (spec.dur + spec.dur * 0.45);
   },
   /** the audio pipeline calls this to swap a synth motif for a real recording */
   registerCall(id: string, buffer: AudioBuffer): void {

@@ -1486,3 +1486,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~91%
 ```
+
+---
+**2026-07-02 21:03:16Z** · ticked: - [x] W6.4b1 RoepView 3D-twin: `roep3d.ts` rendert de beat in de WorldCtx en drijft dezelfde `RoepRun` (pariteit by construction) + onmiskenbare synth-roepmotieven per vogel in sound.ts; build+parity
+
+```
+✔ landed: W6.4b1 RoepView 3D-twin: `roep3d.ts` rendert de beat in de WorldCtx en drijft dezelfde `RoepRun` (pariteit by construction) + onmiskenbare synth-roepmotieven per vogel in sound.ts; build+parity
+▶ phase:  Fase W6 — Diegetische missies + biologie
+→ next:   W6.4b2 Wereld-entree: zitplek-prop bij vogelkijkhut + nabijheids/interact-entree + wayfinding + Missions-flow speelt playRoep3d met missionView 3d; E2E één volledige beat vanaf de zitplek
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~91%
+```

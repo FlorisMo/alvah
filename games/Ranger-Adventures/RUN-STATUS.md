@@ -6,15 +6,15 @@
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W6 — Diegetische missies + biologie
 - **Progress:** ~91% (weighted by ledger items)
-- **Just landed:** W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus
-- **Next up:** W6.4b Ken je roep, wereld-helft: zitplek bij vogelkijkhut, 3D-entree, audio, wayfinding; E2E één beat + missionView 3d
-- **Last heartbeat:** 2026-07-02 20:53:27Z
+- **Just landed:** W6.4b1 RoepView 3D-twin: `roep3d.ts` rendert de beat in de WorldCtx en drijft dezelfde `RoepRun` (pariteit by construction) + onmiskenbare synth-roepmotieven per vogel in sound.ts; build+parity
+- **Next up:** W6.4b2 Wereld-entree: zitplek-prop bij vogelkijkhut + nabijheids/interact-entree + wayfinding + Missions-flow speelt playRoep3d met missionView 3d; E2E één volledige beat vanaf de zitplek
+- **Last heartbeat:** 2026-07-02 21:03:16Z
 - **Blocker:** none
 
 ```
-✔ landed: W6.4a Ken je roep, engine-helft: staircase-core over vogelzang met decoys, 2D-vloer + parity test, strings in readlevel-corpus
+✔ landed: W6.4b1 RoepView 3D-twin: `roep3d.ts` rendert de beat in de WorldCtx en drijft dezelfde `RoepRun` (pariteit by construction) + onmiskenbare synth-roepmotieven per vogel in sound.ts; build+parity
 ▶ phase:  Fase W6 — Diegetische missies + biologie
-→ next:   W6.4b Ken je roep, wereld-helft: zitplek bij vogelkijkhut, 3D-entree, audio, wayfinding; E2E één beat + missionView 3d
+→ next:   W6.4b2 Wereld-entree: zitplek-prop bij vogelkijkhut + nabijheids/interact-entree + wayfinding + Missions-flow speelt playRoep3d met missionView 3d; E2E één volledige beat vanaf de zitplek
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~91%
 ```

@@ -1733,3 +1733,29 @@ with the full sub-id (e.g. `W2.4a`).
   (dormant until W6.4b wires the sit-spot entry), but tsc typechecks it. No E2E named
   or needed — nothing is player-visible until W6.4b renders the slice in-world. 359
   unit (+10) + build green; frozen smoke 4/4 untouched; ticked WITHOUT `--force`.
+- 2026-07-02 (W6.4b split → W6.4b1 3D-twin + audio): W6.4b (wereld-helft, weight 2)
+  was split a/b-style into W6.4b1 (render+audio, 1) + W6.4b2 (world entry+E2E, 1) so
+  each sitting stays cleanly verifiable and the slow-SwiftShader E2E lands on its own.
+  W6.4b1 ships `render3d/engines/roep3d.ts` — the diegetic twin of `RoepView`, staging
+  the full six-bird pool as calm perched forms in a gentle arc around `ctx.activitySpot`
+  and driving the SAME `RoepRun` as the 2D floor (parity BY CONSTRUCTION, already pinned
+  by `roep.parity.test.ts`). It mirrors `simon3d`'s shape: `makeReframe` calm raised look
+  (cut under reduced-motion), per-round only the round's `opties` birds light + answer
+  (the rest dim to 0.38 opacity so the row never jumps), `pick3d` ≥56px hit-spheres,
+  dual-channel `anchoredPrompt` banner (roep as TEXT + a "speel de roep" replay + read-
+  aloud), a mis reveals which bird it really was, never game-over, `registerActivityWin`
+  drives the genuine full resolve (answer every remaining round's target → real
+  BeatSummary → real teardown). roep3d is NOT added to `REGISTRY_3D` (that registry is
+  keyed on the frozen EF-5 `Engine`; roep is a separate perception track) — W6.4b2's
+  bench flow calls `playRoep3d` directly. SURPRISE worth recording: the audio channel
+  was NOT free. Five of the six roep birds (koekoek/merel/roodborsttapuit/groene-specht/
+  koolmees) had no motif in `sound.ts#CALLS`, so every one fell to the SAME `DEFAULT_CALL`
+  — for a task literally called "Ken je roep" the calls must be distinguishable BY EAR.
+  Fix: extended `CallSpec` with an optional `notes: number[]` pitch-SEQUENCE (koekoek
+  hoog→laag, koolmees ti-ta-ti-ta, roodborsttapuit twee tikken, groene-specht dalend
+  lachje) — `playCall` plays each note in turn, `callDur` counts them; the single-pitch
+  `rep`/`vibrato` path is unchanged and real recordings still win via `registerCall`
+  (zero-rework, per W6.4a). The view stays UNIMPORTED (vite tree-shakes it; tsc
+  typechecks it) until W6.4b2 wires the sit-spot. No E2E named/possible yet — nothing is
+  player-visible until the bench entry renders it. 172 core+parity+readlevel unit green,
+  build green, frozen smoke 4/4 untouched; ticked WITHOUT `--force`.
