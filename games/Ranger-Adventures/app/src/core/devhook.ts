@@ -97,6 +97,19 @@ export interface RangerDevHook {
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean;
   } | null;
+  /** The W5.3b helicopter state: placement + the two helipads, opt-in +
+   *  availability (false under reduced-motion — flight is withheld, not calmed),
+   *  proximity, whether the ranger is flying, world x/z + heading + altitude, the
+   *  flight caps + fixed cruise height, whether it is over a pad (can land), the
+   *  live motion vignette, and the comfort invariants (fixed FOV, roll 0) — lets
+   *  the E2E fly pad-to-pad and assert the comfort law. Null before it is placed. */
+  heli(): {
+    placed: boolean; available: boolean; optIn: boolean; near: boolean; inHeli: boolean; onPad: boolean;
+    x: number; z: number; heading: number; altitude: number;
+    speed: number; climbRate: number; cruiseHeight: number; maxSpeed: number; turnRate: number;
+    camDist: number; camHeight: number; fov: number; roll: number; vignette: number;
+    pads: { x: number; z: number }[];
+  } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -136,6 +149,13 @@ const state = {
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean;
+  } | null),
+  heli: null as null | (() => {
+    placed: boolean; available: boolean; optIn: boolean; near: boolean; inHeli: boolean; onPad: boolean;
+    x: number; z: number; heading: number; altitude: number;
+    speed: number; climbRate: number; cruiseHeight: number; maxSpeed: number; turnRate: number;
+    camDist: number; camHeight: number; fov: number; roll: number; vignette: number;
+    pads: { x: number; z: number }[];
   } | null),
 };
 
@@ -284,6 +304,19 @@ export function provideVehicle(
   state.vehicle = fn;
 }
 
+/** Register the W5.3b helicopter-state source (the World). Pass null to clear. */
+export function provideHeli(
+  fn: (() => {
+    placed: boolean; available: boolean; optIn: boolean; near: boolean; inHeli: boolean; onPad: boolean;
+    x: number; z: number; heading: number; altitude: number;
+    speed: number; climbRate: number; cruiseHeight: number; maxSpeed: number; turnRate: number;
+    camDist: number; camHeight: number; fov: number; roll: number; vignette: number;
+    pads: { x: number; z: number }[];
+  } | null) | null,
+): void {
+  state.heli = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -316,6 +349,7 @@ export function installDevHook(): boolean {
     footsteps: () => (state.footsteps ? state.footsteps() : null),
     water: () => (state.water ? state.water() : null),
     vehicle: () => (state.vehicle ? state.vehicle() : null),
+    heli: () => (state.heli ? state.heli() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

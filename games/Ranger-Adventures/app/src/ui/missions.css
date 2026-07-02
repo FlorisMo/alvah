@@ -309,7 +309,8 @@
 }
 .explore-prompt,
 .explore-hub-prompt,
-.explore-vehicle-prompt {
+.explore-vehicle-prompt,
+.explore-heli-prompt {
   position: absolute;
   left: 50%;
   bottom: max(28px, env(safe-area-inset-bottom));
@@ -318,6 +319,43 @@
 .explore-prompt[hidden],
 .explore-hub-prompt[hidden],
 .explore-vehicle-prompt[hidden] { display: none; }
+
+/* ---- W5.3b helicopter: the "aan de grond" / "vlieg naar een helipad" note is a
+   calm pill (matches the .explore-hint wording style); the cockpit frame is a
+   fixed, always-level reference border that never moves (the horizon anchor), and
+   the motion vignette fades in with flight speed and is OFF at hover. All
+   pointer-events:none so they never block the world or the controls. ---- */
+.explore-heli-prompt[hidden] { display: none; }
+.explore-heli-hint {
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(20, 16, 12, 0.62);
+  color: var(--paper);
+  font: 500 15px/1.3 var(--font-body);
+  text-align: center;
+}
+.explore-heli-cockpit {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* a soft always-level frame: a thick inset border reads as the cockpit surround
+     and, because it is screen-fixed, is the steady horizon reference the comfort
+     clause asks for (it never tilts — roll is 0 in the world too). */
+  border: 18px solid rgba(24, 20, 14, 0.42);
+  border-radius: 26px;
+  box-shadow: inset 0 0 60px rgba(24, 20, 14, 0.28);
+}
+.explore-heli-cockpit[hidden] { display: none; }
+.explore-heli-vignette {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms linear;
+  background: radial-gradient(ellipse at center,
+    rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.55) 100%);
+}
 
 /* ---- in-world mission board (W2.2): the case-board's mission-pick overlay.
    A full-screen scrollable grid like the lodge (the grid is wider than a

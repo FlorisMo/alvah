@@ -29,6 +29,10 @@ import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from './Ambien
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { resolveInput, screenVector, type StickVector } from '../core/input';
 import { driveStep, driveCaps, calmSpeed, ANIMAL_SLOW_RADIUS } from '../core/vehicle';
+import {
+  flyStep, heliVignette, heliAvailable,
+  HELI_CRUISE_HEIGHT, HELI_PAD_HEIGHT, HELI_CAPS, HELI_ROLL,
+} from '../core/heli';
 import { attachInput, type InputHandle } from '../core/attach-input';
 import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../core/footstep';
 import { Sound } from '../core/sound';
@@ -65,6 +69,17 @@ const SKY_LOW = '#e9b27f'; // horizon band + fog colour (matches SKY_STOPS' last
 // the jeep is a bigger object the ranger walks up to).
 const JEEP_COLLIDE = 1.6;
 const JEEP_NEAR_R = 3.6;
+
+// W5.3b helicopter: its parked collision radius, the pad-proximity radius that
+// surfaces "Stap in de helikopter", and how close (horizontally) the aircraft
+// must be to a helipad to land on it.
+const HELI_COLLIDE = 1.8;
+const HELI_NEAR_R = 4.0;
+const PAD_LAND_R = 6.0;
+// Above this altitude (m) the flying helicopter ignores ground obstacles (it is
+// over the treetops) — only the world rim still bounds it; below it, on descent,
+// the normal resolver applies again (pads are walk-through, so touchdown is clean).
+const HELI_AIRBORNE_Y = 2.5;
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -233,6 +248,31 @@ export class World {
   // walking offset stays (0, 3.4, 6.2). placeCamera picks by `inVehicle`.
   private readonly camOffsetVehicle = new THREE.Vector3(0, 4.5, 9);
 
+  // W5.3b helicopter (opt-in, unavailable under reduced-motion): a parked prop the
+  // ranger walks up to on a helipad, "Stap in" lifts off to a fixed cruise height
+  // (exp-damped ≤ 2 m/s climb, always-level horizon, damped yaw only), and landing
+  // at either pad steps back out. The pure flight maths live in core/heli.ts; World
+  // owns placement, collision (shared resolveMove), the follow-cam and the overlay.
+  private heli: THREE.Group | null = null;
+  private heliPos: THREE.Vector3 | null = null;     // === heli.position (x/z driven; y = ground + altitude)
+  private heliHeading = 0;                           // yaw (the only rotation)
+  private heliAltitude = 0;                          // metres above the ground plane
+  private heliObstacle: Obstacle | null = null;      // its collision circle while parked on a pad
+  private inHeli = false;
+  private nearHeli = false;
+  private heliLanding = false;                        // descend-to-pad in progress → exit on touchdown
+  private heliSpeed = 0;                              // live signed horizontal speed (m/s)
+  private heliClimbRate = 0;                          // live signed vertical speed (m/s)
+  private heliVignetteVal = 0;                        // live motion-vignette opacity (0 at hover)
+  private readonly helipads: { x: number; z: number }[] = [];
+  private onHeliNear: (near: boolean) => void = () => {};
+  private onHeliChange: (inHeli: boolean) => void = () => {};
+  private onHeliFrame: (vignette: number) => void = () => {};
+  private heliOptInSource: () => boolean = () => false; // Instellingen "Helikopter" toggle, read live
+  // an aerial follow offset (higher + further back than the jeep) — the ranger
+  // rides at the heli's world position (y = altitude), so the camera rises with it.
+  private readonly camOffsetHeli = new THREE.Vector3(0, 6, 13);
+
   // W5.2 jeep dust: a single Points cloud (1 draw call, hidden while idle) that
   // kicks up sand behind the driving jeep. Per-particle age/life drives a
   // shader-side fade; emission is OFF under reduced-motion (secondary motion).
@@ -325,6 +365,7 @@ export class World {
     this.placeScenicActors();
     this.placeAmbientLife();
     this.placeJeep();
+    this.placeHelipads();
     void this.loadRealRanger();
 
     canvas.addEventListener('pointerdown', this.onPointer);
@@ -343,7 +384,12 @@ export class World {
     // when standing beside the parked jeep (Space = "Stap in") — it wins over the
     // hub/marker affordances (they never overlap the jeep's spot in practice).
     if (this.inVehicle) { this.exitVehicle(); return; }
+    if (this.inHeli) { this.landHeli(); return; } // W5.3b: Space while flying → land at a pad
     if (this.nearJeep) { this.enterVehicle(); return; }
+    // W5.3b: standing beside the parked helicopter → lift off (no-op + a calm
+    // "aan de grond" message under reduced-motion / when the toggle is UIT; the
+    // HUD reads `heliState().available` to decide what it shows).
+    if (this.nearHeli) { this.enterHeli(); return; }
     // the spawn case-board hub wins when the ranger stands at it (W2.2) — its
     // "open the mission board" affordance is what the interact key fires there.
     if (this.nearBoard) { this.onBoardOpen(); return; }
@@ -379,6 +425,133 @@ export class World {
   setVehicle(cbs: { onNear: (near: boolean) => void; onChange: (inVehicle: boolean) => void }): void {
     this.onJeepNear = cbs.onNear;
     this.onVehicleChange = cbs.onChange;
+  }
+
+  /** Register the helicopter HUD callbacks (W5.3b): `onNear` as the ranger enters/
+   *  leaves a parked heli's pad radius, `onChange(inHeli)` on lift-off/touchdown
+   *  (the HUD toggles the cockpit frame), `onFrame(vignette)` each flight frame (the
+   *  HUD drives the motion-vignette opacity — off at hover), and `optIn` = the live
+   *  Instellingen "Helikopter" toggle (read each frame, so the availability updates
+   *  with no restart). */
+  setHeli(cbs: {
+    onNear: (near: boolean) => void;
+    onChange: (inHeli: boolean) => void;
+    onFrame: (vignette: number) => void;
+    optIn: () => boolean;
+  }): void {
+    this.onHeliNear = cbs.onNear;
+    this.onHeliChange = cbs.onChange;
+    this.onHeliFrame = cbs.onFrame;
+    this.heliOptInSource = cbs.optIn;
+  }
+
+  /** Dev-hook accessor (W5.3b): the helicopter's live state — placement, the two
+   *  helipads, opt-in + availability (withheld under reduced-motion), proximity,
+   *  whether the ranger is flying, world position + heading + altitude, the flight
+   *  caps + fixed cruise height, whether it is over a pad (can land), the live
+   *  vignette, and the comfort invariants (fixed FOV, roll 0) the E2E asserts. Null
+   *  before the helicopter is placed. */
+  heliState(): {
+    placed: boolean; available: boolean; optIn: boolean; near: boolean; inHeli: boolean; onPad: boolean;
+    x: number; z: number; heading: number; altitude: number;
+    speed: number; climbRate: number; cruiseHeight: number; maxSpeed: number; turnRate: number;
+    camDist: number; camHeight: number; fov: number; roll: number; vignette: number;
+    pads: { x: number; z: number }[];
+  } | null {
+    if (!this.heli || !this.heliPos) return null;
+    const optIn = this.heliOptInSource();
+    // TRUE roll = the camera right-vector's world-y (== 0 at any yaw/pitch because
+    // camera.up is world-up), NOT the Euler z — the same trap vehicleState() documents.
+    this.camera.updateMatrixWorld();
+    const rightY = this.camera.matrixWorld.elements[1];
+    return {
+      placed: true, available: heliAvailable(optIn, livePolicy().reduced), optIn,
+      near: this.nearHeli, inHeli: this.inHeli, onPad: this.overPad(),
+      x: this.heliPos.x, z: this.heliPos.z, heading: this.heliHeading, altitude: this.heliAltitude,
+      speed: this.heliSpeed, climbRate: this.heliClimbRate,
+      cruiseHeight: HELI_CRUISE_HEIGHT, maxSpeed: HELI_CAPS.maxSpeed, turnRate: HELI_CAPS.turnRate,
+      camDist: this.camOffsetHeli.z, camHeight: this.camOffsetHeli.y,
+      fov: this.camera.fov, roll: rightY, vignette: this.heliVignetteVal,
+      pads: this.helipads.map((p) => ({ x: p.x, z: p.z })),
+    };
+  }
+
+  /** Horizontal distance from the helicopter to the nearest helipad (m). */
+  private nearestPadDist(x: number, z: number): number {
+    let best = Infinity;
+    for (const p of this.helipads) {
+      const d = Math.hypot(p.x - x, p.z - z);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  /** Whether the flying helicopter is over a pad (so the interact key can land it). */
+  private overPad(): boolean {
+    return this.heliPos ? this.nearestPadDist(this.heliPos.x, this.heliPos.z) <= PAD_LAND_R : false;
+  }
+
+  /** W5.3b: lift off from the pad into damped flight. No-op unless standing beside
+   *  the parked heli AND the mode is available (opt-in + NOT reduced-motion — flight
+   *  is the one mode withheld entirely rather than merely calmed). The parked
+   *  collision circle is lifted so the aircraft can move; the ranger rides hidden. */
+  enterHeli(): void {
+    if (this.inHeli || !this.heli || !this.heliPos) return;
+    if (!heliAvailable(this.heliOptInSource(), livePolicy().reduced)) return; // withheld
+    this.inHeli = true;
+    this.heliHeading = this.heli.rotation.y;
+    this.heliAltitude = HELI_PAD_HEIGHT;
+    this.heliLanding = false;
+    this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
+    if (this.heliObstacle) {
+      const i = this.obstacles.indexOf(this.heliObstacle);
+      if (i >= 0) this.obstacles.splice(i, 1);
+      this.heliObstacle = null;
+    }
+    this.ranger.visible = false;                       // he rides inside
+    if (this.nearId) { this.nearId = null; this.onApproach(null); }
+    if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
+    this.followTargetYaw = this.heliHeading;
+    this.onHeliChange(true);
+  }
+
+  /** W5.3b: begin the descent when the interact key is pressed while flying — but
+   *  ONLY over a helipad (§5 W5.3 "descend at pads only"). Off a pad it is a no-op
+   *  (the HUD then shows a calm "vlieg naar een helipad" hint). The exp-damped
+   *  ≤ 2 m/s descent + touchdown-triggered step-out happen in `flyHeli`. */
+  landHeli(): void {
+    if (!this.inHeli) return;
+    if (this.overPad()) this.heliLanding = true;
+  }
+
+  /** W5.3b: touchdown — set the helicopter down on the pad, step the ranger out
+   *  beside it (its LEFT, like the jeep), and re-park it as a solid prop so it
+   *  blocks + can be re-entered. Called from `flyHeli` at ground contact. */
+  private exitHeli(): void {
+    if (!this.inHeli || !this.heli || !this.heliPos) return;
+    this.inHeli = false;
+    this.heliLanding = false;
+    const h = this.heliHeading;
+    const hx = this.heliPos.x, hz = this.heliPos.z;
+    this.heliAltitude = HELI_PAD_HEIGHT;
+    this.heliPos.y = this.groundY(hx, hz);   // rest on the pad
+    this.heli.rotation.set(0, h, HELI_ROLL);
+    // step out to the heli's LEFT — (cos h, −sin h); resolveMove keeps him on solid
+    // ground and inside the rim, and the heli obstacle isn't back yet so he clears it.
+    const side = 2.6;
+    const next = resolveMove(hx, hz, hx + Math.cos(h) * side, hz - Math.sin(h) * side, this.obstacles, this.limits);
+    this.ranger.position.set(next.x, this.groundY(next.x, next.z), next.z);
+    this.ranger.rotation.y = h;
+    this.ranger.visible = true;
+    this.target.set(next.x, 0, next.z);      // no stale walk target
+    this.followTargetYaw = h;
+    this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
+    this.playerSpeed = 0;
+    this.heliObstacle = { x: hx, z: hz, r: HELI_COLLIDE };
+    this.obstacles.push(this.heliObstacle);
+    this.nearHeli = true;                     // standing right beside it → "Stap in" again
+    this.onHeliChange(false);
+    this.onHeliFrame(0);                       // clear the motion vignette
   }
 
   /** Dev-hook accessor (W5.1): the drivable jeep's live state — placement,
@@ -1555,6 +1728,105 @@ export class World {
   }
 
   /**
+   * W5.3b: place the two helipads (§4 — one on the stuifzand apron by the sand
+   * track, one by the BOA-post on the western rim) as flat walk-through discs, and
+   * park the helicopter on the stuifzand pad. The pads never push a collision
+   * circle (you land ON them); the parked aircraft does (the ranger walks up to
+   * it). Its PRESENCE is unconditional — the opt-in + reduced-motion gate governs
+   * only whether it can be ENTERED (`enterHeli`/`heliAvailable`).
+   */
+  private placeHelipads(): void {
+    const PADS = [
+      { x: 24, z: 22 },    // stuifzand NE apron — the aviation area, heli parked here
+      { x: -46, z: -22 },  // by the BOA-post on the western rim
+    ];
+    for (const p of PADS) {
+      const disc = World.makeHelipad();
+      disc.position.set(p.x, this.groundY(p.x, p.z) + 0.02, p.z);
+      this.scene.add(disc);
+      this.helipads.push({ x: p.x, z: p.z });
+    }
+    const pad = PADS[0];
+    const group = new THREE.Group();
+    group.position.set(pad.x, this.groundY(pad.x, pad.z), pad.z);
+    this.heliHeading = Math.atan2(-pad.x, -pad.z); // parked facing the clearing
+    group.rotation.y = this.heliHeading;
+    group.add(this.proceduralTotem('#8a8f98')); // instant stand-in until the GLB streams in
+    this.scene.add(group);
+    this.heliObstacle = { x: pad.x, z: pad.z, r: HELI_COLLIDE };
+    this.obstacles.push(this.heliObstacle);
+    this.heli = group;
+    this.heliPos = group.position;
+    this.heliAltitude = HELI_PAD_HEIGHT;
+    void loadModel('vehicle-helicopter').then((m) => {
+      if (!m) return;
+      const prepped = prepModel(m, 2.6);
+      World.enableCast(prepped);
+      const totem = group.children.find((c) => c.userData.totem);
+      if (totem) group.remove(totem);
+      group.add(prepped);
+    });
+  }
+
+  /** W5.3b: a flat helipad disc (1 draw call) — dark asphalt circle laid on the
+   *  ground, the visual landing target. Walk-through (no collision). */
+  private static makeHelipad(): THREE.Mesh {
+    const geo = new THREE.CircleGeometry(3.2, 24);
+    const mat = new THREE.MeshStandardMaterial({ color: '#454b52', roughness: 1, metalness: 0 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2; // lay the XY disc flat, normal up
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  /**
+   * W5.3b: advance the helicopter one frame. The SAME `screenVector` becomes
+   * throttle (y) + steer (x); the pure `flyStep` core (core/heli.ts) turns them
+   * into a rate-clamped heading + horizontal delta AND an exp-damped ≤ 2 m/s
+   * vertical ease toward the target altitude (cruise while flying, 0 while
+   * landing). Horizontal motion resolves through the SAME `resolveMove` — but
+   * ABOVE the treetops (`HELI_AIRBORNE_Y`) it ignores ground obstacles (only the
+   * world rim bounds it), so it never snags on a pine at altitude. The horizon is
+   * a hard level (roll 0); the ranger rides hidden at the aircraft's spot so the
+   * follow-cam + step-out anchor track it. The motion vignette fades in with
+   * translation and is OFF at hover.
+   */
+  private flyHeli(dt: number): void {
+    if (!this.heli || !this.heliPos) return;
+    const stick = this.joystickSource ? this.joystickSource() : null;
+    const intent = this.input ? screenVector(this.input.held, stick) : { x: 0, y: 0 };
+    const targetAlt = this.heliLanding ? HELI_PAD_HEIGHT : HELI_CRUISE_HEIGHT;
+    const step = flyStep(
+      { heading: this.heliHeading, altitude: this.heliAltitude },
+      { throttle: intent.y, steer: intent.x },
+      targetAlt, dt, HELI_CAPS,
+    );
+    this.heliHeading = step.heading;
+    const hp = this.heliPos;
+    const obs = this.heliAltitude > HELI_AIRBORNE_Y ? [] : this.obstacles; // over the treetops → free
+    const next = resolveMove(hp.x, hp.z, hp.x + step.dx, hp.z + step.dz, obs, this.limits);
+    hp.x = next.x; hp.z = next.z;
+    this.heliAltitude = step.altitude;
+    hp.y = this.groundY(next.x, next.z) + this.heliAltitude; // fly ABOVE the ground
+    this.heli.rotation.set(0, this.heliHeading, HELI_ROLL);  // yaw only; horizon level (roll 0)
+    this.heliSpeed = step.speed;
+    this.heliClimbRate = step.climbRate;
+    this.ranger.position.set(hp.x, hp.y, hp.z);
+    this.ranger.rotation.y = this.heliHeading;
+    this.followTargetYaw = this.heliHeading;
+    this.heliVignetteVal = heliVignette(step.speed, step.climbRate);
+    this.onHeliFrame(this.heliVignetteVal);
+    // touchdown: the landing descent has reached the pad → step out
+    if (this.heliLanding && this.heliAltitude <= HELI_PAD_HEIGHT + 0.2) {
+      this.exitHeli();
+      return;
+    }
+    // ambience still follows across biomes while flying
+    const here = biomeAt(hp.x, hp.z);
+    if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
+  }
+
+  /**
    * W5.1: advance the jeep one frame in arcade-kinematic drive mode. The SAME
    * `screenVector` the walker reads becomes throttle (y) + steer (x); the pure
    * `driveStep` core turns them into a heading + move delta (rate-clamped, caps
@@ -1779,7 +2051,7 @@ export class World {
 
   // ---- input ----
   private onPointer = (e: PointerEvent): void => {
-    if (this.activityActive || this.inVehicle) return; // in-place pick / arcade drive own input
+    if (this.activityActive || this.inVehicle || this.inHeli) return; // in-place pick / drive / flight own input
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -1821,6 +2093,18 @@ export class World {
         return;
       }
     }
+    // 1d) a tapped parked helicopter → walk up to it (proximity then offers "Stap in")
+    if (this.heli && this.heliPos) {
+      const hit = this.raycaster.intersectObject(this.heli, true);
+      if (hit.length) {
+        const dir = new THREE.Vector3(this.heliPos.x, 0, this.heliPos.z).sub(
+          new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
+        );
+        if (dir.lengthSq() > 0.001) dir.normalize();
+        this.target.set(this.heliPos.x - dir.x * 2.4, 0, this.heliPos.z - dir.z * 2.4); // stop beside it
+        return;
+      }
+    }
     // 2) otherwise walk to the tapped ground point
     const g = this.raycaster.intersectObject(this.ground, false);
     if (g.length) {
@@ -1852,7 +2136,10 @@ export class World {
     }
     this.playerSpeed = 0; // 0 while standing or during an in-place activity → mixer eases to idle
     this.dustEmitting = false; // driveJeep re-arms it while the jeep is moving (W5.2)
-    if (!this.activityActive && this.inVehicle) {
+    if (!this.activityActive && this.inHeli) {
+      // W5.3b: damped flight mode owns movement while the ranger is in the heli.
+      this.flyHeli(dt);
+    } else if (!this.activityActive && this.inVehicle) {
       // W5.1: arcade drive mode owns movement while the ranger is in the jeep.
       this.driveJeep(dt);
     } else if (!this.activityActive) {
@@ -2004,15 +2291,22 @@ export class World {
 
     // W5.1 jeep proximity — surface "Stap in" while walking near the parked jeep.
     // Suppressed while driving (the HUD then shows "Stap uit" via onVehicleChange).
-    if (this.jeep && this.jeepPos && !this.inVehicle) {
+    if (this.jeep && this.jeepPos && !this.inVehicle && !this.inHeli) {
       const nj = Math.hypot(this.jeepPos.x - rp.x, this.jeepPos.z - rp.z) < JEEP_NEAR_R;
       if (nj !== this.nearJeep) { this.nearJeep = nj; this.onJeepNear(nj); }
     }
 
+    // W5.3b helicopter proximity — surface "Stap in de helikopter" while walking
+    // near the parked heli. Suppressed while flying (rp is the aircraft's spot).
+    if (this.heli && this.heliPos && !this.inHeli && !this.inVehicle) {
+      const nh = Math.hypot(this.heliPos.x - rp.x, this.heliPos.z - rp.z) < HELI_NEAR_R;
+      if (nh !== this.nearHeli) { this.nearHeli = nh; this.onHeliNear(nh); }
+    }
+
     // proximity → surface the "play" affordance (debounced by id). Marker + hub
-    // proximity are suppressed while driving so no stale prompt sits behind the
-    // "Stap uit" pill (rp is the jeep's spot while the ranger rides hidden).
-    if (!this.inVehicle) {
+    // proximity are suppressed while driving/flying so no stale prompt sits behind
+    // the vehicle pill (rp is the vehicle's spot while the ranger rides hidden).
+    if (!this.inVehicle && !this.inHeli) {
       let near: string | null = null;
       for (const mk of this.markers) {
         if (Math.hypot(mk.pos.x - rp.x, mk.pos.z - rp.z) < 2.4) { near = mk.missionId; break; }
@@ -2109,9 +2403,10 @@ export class World {
       this.followTargetYaw = FIXED_FOLLOW_YAW;
     }
     const s = Math.sin(this.followYaw), c = Math.cos(this.followYaw);
-    // W5.1: the jeep uses the wider offset (distance 9, height 4.5); walking keeps
-    // (6.2, 3.4). Same damping — the pull-back eases in when he climbs in.
-    const off = this.inVehicle ? this.camOffsetVehicle : this.camOffset;
+    // W5.1/W5.3b: the jeep uses the wider offset (distance 9, height 4.5) and the
+    // helicopter a higher aerial one (13, 6); walking keeps (6.2, 3.4). Same
+    // damping — the pull-back (and climb) eases in when he boards.
+    const off = this.inHeli ? this.camOffsetHeli : this.inVehicle ? this.camOffsetVehicle : this.camOffset;
     const dist = off.z;
     this.camDesired.set(rp.x - s * dist, rp.y + off.y, rp.z - c * dist);
     if (snap) {

@@ -43,7 +43,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -188,6 +188,7 @@ function leaveWorld(): void {
   provideFootsteps(null);
   provideWater(null);
   provideVehicle(null);
+  provideHeli(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -463,6 +464,17 @@ function startExplore(): void {
   // "Stap uit". A single render reads the live vehicle state so both proximity
   // and enter/exit refresh the same slot (no leaveWorld, world stays live).
   world.setVehicle({ onNear: () => renderVehiclePrompt(), onChange: () => renderVehiclePrompt() });
+  // W5.3b: the opt-in helicopter — walking up to a pad surfaces "Stap in de
+  // helikopter" (a calm "aan de grond" note under reduced-motion), lift-off shows
+  // the cockpit frame, and each flight frame drives the motion-vignette opacity
+  // (off at hover). The optIn source is read live so the Instellingen toggle takes
+  // effect with no restart.
+  world.setHeli({
+    onNear: () => renderHeliPrompt(),
+    onChange: (inHeli) => { renderHeliPrompt(); setHeliCockpit(inHeli); },
+    onFrame: (v) => setHeliVignette(v),
+    optIn: () => store.get().settings.helikopter,
+  });
   // start the bed on the lodge clearing (heide) before the first crossing fires
   setAmbientScene('heide', seizoen);
   stage.enterWorld(world);
@@ -487,6 +499,7 @@ function startExplore(): void {
   provideFootsteps(() => world!.footstepState()); // W4.7b: surface-aware footsteps
   provideWater(() => world!.waterState()); // W4.8: fresnel ven-water + reduced-motion ripple gate
   provideVehicle(() => world!.vehicleState()); // W5.1: drivable jeep (enter/drive/exit + caps)
+  provideHeli(() => world!.heliState()); // W5.3b: opt-in helicopter (fly pad-to-pad + comfort)
   provideWinStep(() => triggerActivityWin()); // W2.3: drive a 3D step's real resolve from E2E
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }
@@ -594,6 +607,10 @@ function showExploreHud(activeTitel: string | null): void {
     `<div class="explore-prompt" hidden></div>` +
     `<div class="explore-hub-prompt" hidden></div>` +
     `<div class="explore-vehicle-prompt" hidden></div>` +
+    `<div class="explore-heli-prompt" hidden></div>` +
+    // W5.3b: the cockpit frame overlay shown while flying (pointer-events:none so
+    // it never blocks the world); the inner vignette's opacity is set per frame.
+    `<div class="explore-heli-cockpit" hidden aria-hidden="true"><div class="explore-heli-vignette"></div></div>` +
     `</div>`,
   );
   // The HUD overlays the LIVE world: its `.ra-overlay` wrapper must let taps
@@ -615,6 +632,11 @@ function showExploreHud(activeTitel: string | null): void {
   // W5.1: restore the jeep affordance if the ranger stands beside it (or is driving)
   // when the HUD (re)mounts — the World only re-fires onNear on a proximity CHANGE.
   renderVehiclePrompt();
+  // W5.3b: same for the helicopter affordance + cockpit frame (restore on remount).
+  // Reset the debounce key so the fresh (empty) prompt DOM is always populated.
+  heliPromptKey = '';
+  renderHeliPrompt();
+  setHeliCockpit(world?.heliState()?.inHeli ?? false);
 }
 
 /** W5.1: the jeep affordance — "Stap in de jeep" when the ranger stands beside the
@@ -634,6 +656,60 @@ function renderVehiclePrompt(): void {
     prompt.innerHTML = `<button class="btn-start explore-vehicle-enter" type="button">🚙 Stap in de jeep</button>`;
     prompt.querySelector('.explore-vehicle-enter')?.addEventListener('click', () => world?.enterVehicle());
   }
+}
+
+/** W5.3b: the helicopter affordance — "Stap in de helikopter" beside a parked heli
+ *  when it is available, a calm "aan de grond" note when it is withheld (reduced-
+ *  motion or the toggle is UIT), "Land hier" while flying over a pad, and a "vlieg
+ *  naar een helipad" hint while flying off a pad. Its own slot so it never fights
+ *  the mission / hub / jeep prompts. Reads the live `heliState()`. */
+let heliPromptKey = '';
+function renderHeliPrompt(): void {
+  const prompt = host.querySelector<HTMLDivElement>('.explore-heli-prompt');
+  if (!prompt) return;
+  const h = world?.heliState() ?? null;
+  // Debounce: this runs every flight frame (via setHeliVignette). Only rebuild the
+  // DOM when the affordance actually changes — a 60 fps innerHTML churn would drop
+  // taps on the Land button and thrash the layout.
+  const key = !h ? 'none'
+    : h.inHeli ? (h.onPad ? 'land' : 'flyhint')
+    : h.near ? (h.available ? 'enter' : h.optIn ? 'reduced' : 'off')
+    : 'none';
+  if (key === heliPromptKey) return;
+  heliPromptKey = key;
+  if (!h || (!h.near && !h.inHeli)) { prompt.hidden = true; prompt.innerHTML = ''; return; }
+  prompt.hidden = false;
+  if (h.inHeli) {
+    if (h.onPad) {
+      prompt.innerHTML = `<button class="btn-start explore-heli-land" type="button">🚁 Land hier</button>`;
+      prompt.querySelector('.explore-heli-land')?.addEventListener('click', () => world?.landHeli());
+    } else {
+      prompt.innerHTML = `<p class="explore-heli-hint">Vlieg naar een helipad om te landen.</p>`;
+    }
+  } else if (h.available) {
+    prompt.innerHTML = `<button class="btn-start explore-heli-enter" type="button">🚁 Stap in de helikopter</button>`;
+    prompt.querySelector('.explore-heli-enter')?.addEventListener('click', () => world?.enterHeli());
+  } else {
+    // near, but withheld. optIn true → reduced-motion; optIn false → toggle is UIT.
+    const msg = h.optIn
+      ? 'De helikopter blijft nu aan de grond.'
+      : 'Zet de helikopter aan bij Instellingen.';
+    prompt.innerHTML = `<p class="explore-heli-hint">${msg}</p>`;
+  }
+}
+
+/** W5.3b: show/hide the cockpit frame overlay on lift-off/touchdown. */
+function setHeliCockpit(inHeli: boolean): void {
+  const frame = host.querySelector<HTMLDivElement>('.explore-heli-cockpit');
+  if (frame) frame.hidden = !inHeli;
+}
+
+/** W5.3b: drive the motion-vignette opacity each flight frame (0 at hover). Also
+ *  refreshes the flying land/hint prompt as the heli crosses a pad boundary. */
+function setHeliVignette(v: number): void {
+  const vig = host.querySelector<HTMLDivElement>('.explore-heli-vignette');
+  if (vig) vig.style.opacity = String(v);
+  renderHeliPrompt(); // onPad may have flipped → swap "Land hier" ⇄ hint
 }
 
 /** Build the W1.6 first-world-entry onboarding hint into the freshly-rendered

@@ -1497,3 +1497,45 @@ with the full sub-id (e.g. `W2.4a`).
   once `nearAnimal`). NOTE: the 3 heavy WebGL vehicle specs TIME OUT when run in
   parallel (SwiftShader CPU contention, the pre-existing W3.3/W5.1 flake) — all 3
   pass with `--workers=1`; the tick gate runs only the frozen `@smoke` set.
+- 2026-07-02 (W5.3b, helicopter world-integration — OPENS the last W5 box, W5.4
+  remains): the opt-in aircraft is now flyable in-world, reusing the pure
+  `core/heli.ts` (W5.3a) unchanged. Two flat walk-through helipad discs (1 draw
+  call each) sit on the stuifzand apron (24, 22 — the aviation area by the jeep
+  track) and by the BOA-post on the western rim (-46, -22); the helicopter parks
+  on the stuifzand pad with a solid collision circle (like the jeep). ENTRY is
+  gated by `heliAvailable(optIn, reduced)` — the aircraft is ALWAYS present, but
+  `enterHeli` no-ops unless the Instellingen "Helikopter" toggle is ON and motion
+  is full; under reduced-motion the HUD shows a calm "De helikopter blijft nu aan
+  de grond." note instead of a lift-off button (flight is the one mode WITHHELD
+  entirely, never merely calmed). `flyHeli` feeds `flyStep`'s horizontal delta
+  through the SAME `resolveMove` as the walker/jeep, but ABOVE `HELI_AIRBORNE_Y`
+  (2.5 m) it passes an EMPTY obstacle list so the aircraft never snags on a pine
+  at altitude — only the world rim still bounds it; on descent below that the
+  resolver re-engages (pads are walk-through, so touchdown is clean). Landing is
+  pad-gated: Space while flying calls `landHeli`, a no-op unless `overPad()`
+  (within 6 m of a pad); it flips `heliLanding` so the vertical ease targets 0,
+  and `flyHeli` steps the ranger out at touchdown (altitude ≤ 0.2 m). The
+  follow-cam gets a third, higher aerial offset (0, 6, 13); the ranger rides
+  hidden at the aircraft's world position (y = ground + altitude) so the cam rises
+  with the climb for free. A DOM cockpit-frame overlay (`.explore-heli-cockpit`,
+  a fixed always-level inset border = the horizon reference) shows while flying,
+  and an inner `.explore-heli-vignette` opacity is driven each frame by
+  `heliVignette` (0 at hover). CONTRACT NUANCE: the per-frame `onFrame` callback
+  would churn the prompt DOM 60×/s, so `renderHeliPrompt` is DEBOUNCED on a cached
+  state-key (only rebuilds when the affordance actually changes — else it drops
+  taps on the Land button). Dev hook `heli()` (placement, pads, available/optIn,
+  onPad, altitude, climbRate, vignette, fixed FOV + true roll via
+  `matrixWorld.elements[1]` — the same Euler-trap avoidance as `vehicleState`).
+  New `heli.spec.ts`: (1) opt-in seeded via `localStorage` addInitScript, walk to
+  the heli, lift off, an in-place YAW PROBE (hover + steer → cameraYaw swings ≥ 45°
+  while FOV=55, roll=0, climbRate ≤ 2 hold), then a throttle flight to the BOA pad
+  (≥ 40 m, comfort asserted every tick, vignette fades in) and a Space-landing
+  that steps out beside the pad; (2) reduced-motion → `available:false`, the calm
+  message shows, no lift-off button, Space cannot fly. Both pass with `--workers=1`
+  (the pre-existing SwiftShader WebGL flake); the tick gate runs only the frozen
+  `@smoke` set (untouched, 4/4). TOV: the heli HUD literals ("Stap in de
+  helikopter", "Land hier", the two hints) are transient UI-button copy — like the
+  jeep's "Stap in de jeep" they are NOT pulled by the data-sourced `readlevel`
+  corpus, so per the W5.1/W5.2 precedent they are deferred to the W6.5 tone gate;
+  all were authored ≤ 7 words (M3/E3) so they will pass it. 346 unit + build +
+  frozen smoke 4/4 + heli 2/2 green.

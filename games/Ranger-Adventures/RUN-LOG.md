@@ -1376,3 +1376,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~78%
 ```
+
+---
+**2026-07-02 19:48:27Z** · ticked: - [x] W5.3b Helikopter wereld-integratie: helipads bij BOA-post + stuifzand, in/uit op pads, cockpitkader-overlay + bewegings-vignette (uit bij hover), HUD-prompt, dev-hook heli(); reduced-motion toont kalme niet-beschikbaar-melding; E2E toggle aan → pad-naar-pad vlucht + FOV constant + roll 0 + gedempte yaw, en reduced-motion niet-beschikbaar
+
+```
+✔ landed: W5.3b Helikopter wereld-integratie: helipads bij BOA-post + stuifzand, in/uit op pads, cockpitkader-overlay + bewegings-vignette (uit bij hover), HUD-prompt, dev-hook heli(); reduced-motion toont kalme niet-beschikbaar-melding; E2E toggle aan → pad-naar-pad vlucht + FOV constant + roll 0 + gedempte yaw, en reduced-motion niet-beschikbaar
+▶ phase:  Fase W5 — Voertuigen
+→ next:   W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~79%
+```
