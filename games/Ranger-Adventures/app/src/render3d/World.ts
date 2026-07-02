@@ -24,6 +24,8 @@ import { applyFace } from './FaceRig';
 import { applyCalmPose } from './CalmPoseRig';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
+import { resolveInput } from '../core/input';
+import { attachInput, type InputHandle } from '../core/attach-input';
 import { wayfind, type WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
@@ -64,6 +66,9 @@ export class World {
   private lastBiome: Biome | null = null;       // re-pick the ambience bed on a crossing
   private nearId: string | null = null;
   private speed = 2.4;
+  // keyboard (+ later joystick) movement: the held-keys set feeds resolveInput →
+  // resolveMove each frame, overriding tap-to-walk while any key is down (§3.2).
+  private input: InputHandle | null = null;
   // while a diegetic mini-game plays IN-PLACE, the world stays loaded but freezes:
   // movement, walk-taps, proximity, wayfinding and the §1e follow all pause so the
   // activity's reframe owns the camera (it restores on endActivity).
@@ -123,6 +128,7 @@ export class World {
     void this.loadRealRanger();
 
     canvas.addEventListener('pointerdown', this.onPointer);
+    this.input = attachInput();
   }
 
   /** Dev-hook accessor (WORLD-PLAN §3.1): the ranger's world position {x,z}. */
@@ -139,6 +145,8 @@ export class World {
 
   dispose(): void {
     this.canvas.removeEventListener('pointerdown', this.onPointer);
+    this.input?.dispose();
+    this.input = null;
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.geometry) m.geometry.dispose();
@@ -488,12 +496,28 @@ export class World {
     // in-place activity (the mini-game holds the scene + drives the camera itself).
     const rp = this.ranger.position;
     if (!this.activityActive) {
-      const dx = this.target.x - rp.x, dz = this.target.z - rp.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist > 0.06) {
-        const step = Math.min(this.speed * dt, dist);
-        const wantX = rp.x + (dx / dist) * step;
-        const wantZ = rp.z + (dz / dist) * step;
+      // W1.2 velocity branch: while a movement key is held (camera-relative via
+      // resolveInput), it OVERRIDES tap-to-walk — the desired step is the input
+      // vector · speed · dt, resolved by the same kinematic controller. When no
+      // key is held we fall back to seeking the tapped target. Either way the
+      // ACTUAL post-collision delta drives facing (slide-around-pine still turns).
+      const move = this.input ? resolveInput(this.input.held, null, this.cameraYaw()) : { x: 0, z: 0 };
+      let wantX: number, wantZ: number, moving: boolean;
+      if (move.x !== 0 || move.z !== 0) {
+        const step = this.speed * dt;
+        wantX = rp.x + move.x * step;
+        wantZ = rp.z + move.z * step;
+        this.target.set(rp.x, 0, rp.z); // drop any stale walk target so it can't resume on key-release
+        moving = true;
+      } else {
+        const dx = this.target.x - rp.x, dz = this.target.z - rp.z;
+        const dist = Math.hypot(dx, dz);
+        moving = dist > 0.06;
+        const step = moving ? Math.min(this.speed * dt, dist) : 0;
+        wantX = rp.x + (moving ? (dx / dist) * step : 0);
+        wantZ = rp.z + (moving ? (dz / dist) * step : 0);
+      }
+      if (moving) {
         const next = resolveMove(rp.x, rp.z, wantX, wantZ, this.obstacles, this.limits);
         const mx = next.x - rp.x, mz = next.z - rp.z;
         if (mx * mx + mz * mz > 1e-7) this.ranger.rotation.y = Math.atan2(mx, mz);

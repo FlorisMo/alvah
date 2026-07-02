@@ -711,6 +711,20 @@ with the full sub-id (e.g. `W2.4a`).
   blocker. Added a reusable `scripts/meshy-balance.mjs` (masked prefix +
   balance only, never the key value). Ticked with `--force` (graceful-degrade
   box, no player-visible change → no new E2E assert).
+- 2026-07-02 (W1.2, keyboard walking): arrows + WASD now drive a velocity
+  branch in `World.update`. The pure `input.ts` core (W1.1) stays DOM-free; the
+  new thin `core/attach-input.ts` layer keeps a live held-key `Set` (window
+  keydown/keyup, `preventDefault` on movement keys so arrows don't scroll,
+  clears on blur so no stuck keys). Each frame `resolveInput(held, null,
+  cameraYaw())` → world move; when non-zero it OVERRIDES tap-to-walk and drops
+  the stale tap target so nothing resumes on key-release, then feeds the same
+  `resolveMove` (collision/rim/water unchanged). Camera is still fixed-bearing
+  (yaw ≈ 0), so ArrowUp = world −z = "into the screen" — the camera-relative
+  transform already lines up for W1.5's rotating cam. New `keyboard.spec.ts`:
+  hold ArrowUp → `pos()` delta ≥ 2 m + finite + inside rim (collision holds),
+  plus a KeyW walk. Frozen `e2e:smoke` (tap-to-walk) untouched — the override is
+  key-gated, so taps still work when no key is held. Not folded into smoke (it
+  is the box's own assert, not a smoke upgrade).
 - 2026-07-02 (prep session, later): Floris decisions folded in — no branch
   isolation (run works on main; site not in use); CC0/CC-BY animated packs
   become the primary animal-animation path after the Anything World key was

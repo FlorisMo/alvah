@@ -29,8 +29,8 @@ W0.6 CI-gate in deploy.yml — gesplitst (vereist een groene ubuntu-run vóór h
 
 ## Fase W1 — Besturing
 
-- [ ] W1.1 core/input.ts pure module (pijlen + WASD + joystick-vector, camera-relatief) + unit tests (2)
-- [ ] W1.2 Toetsenbord lopen door resolveMove; E2E ArrowUp poll ≥2 m + collision houdt (3)
+- [x] W1.1 core/input.ts pure module (pijlen + WASD + joystick-vector, camera-relatief) + unit tests (2)
+- [x] W1.2 Toetsenbord lopen door resolveMove; E2E ArrowUp poll ≥2 m + collision houdt (3)
 - [ ] W1.3 Virtuele joystick ui/Joystick.ts (≥56 px, coarse-pointer default, Instellingen-toggle via state.ts); E2E touch-drag beweegt (3)
 - [ ] W1.4 Interactie-toets Space/Enter voor nabijheids-actie; E2E opent missie-briefing (2)
 - [ ] W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion (3)

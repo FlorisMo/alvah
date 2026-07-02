@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W1 — Besturing
-- **Progress:** ~14% (weighted by ledger items)
-- **Just landed:** W0.8 WebKit-project (iPad Safari engine): webkit-config forward-ready gelandt; lokaal draaien onmogelijk (frozen webkit op mac14-arm64, OS niet te updaten wegens schijfruimte) → graceful-degrade skip met §10-verdict; CI-webkit optioneel follow-up; --force toegestaan
-- **Next up:** W1.1 core/input.ts pure module (pijlen + WASD + joystick-vector, camera-relatief) + unit tests
-- **Last heartbeat:** 2026-07-02 13:06:52Z
+- **Progress:** ~18% (weighted by ledger items)
+- **Just landed:** W1.2 Toetsenbord lopen door resolveMove; E2E ArrowUp poll ≥2 m + collision houdt
+- **Next up:** W1.3 Virtuele joystick ui/Joystick.ts (≥56 px, coarse-pointer default, Instellingen-toggle via state.ts); E2E touch-drag beweegt
+- **Last heartbeat:** 2026-07-02 13:16:08Z
 - **Blocker:** none
 
 ```
-✔ landed: W0.8 WebKit-project (iPad Safari engine): webkit-config forward-ready gelandt; lokaal draaien onmogelijk (frozen webkit op mac14-arm64, OS niet te updaten wegens schijfruimte) → graceful-degrade skip met §10-verdict; CI-webkit optioneel follow-up; --force toegestaan
+✔ landed: W1.2 Toetsenbord lopen door resolveMove; E2E ArrowUp poll ≥2 m + collision houdt
 ▶ phase:  Fase W1 — Besturing
-→ next:   W1.1 core/input.ts pure module (pijlen + WASD + joystick-vector, camera-relatief) + unit tests
+→ next:   W1.3 Virtuele joystick ui/Joystick.ts (≥56 px, coarse-pointer default, Instellingen-toggle via state.ts); E2E touch-drag beweegt
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~14%
+▷ progress: ~18%
 ```
