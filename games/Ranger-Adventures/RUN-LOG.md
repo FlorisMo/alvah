@@ -1244,3 +1244,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~58%
 ```
+
+---
+**2026-07-02 17:19:21Z** · ticked: - [x] W4.2 Natuur-aankleding: echte boom-GLB's bij paden/POI's, stronken, keien, paddenstoelen, riet per bioom
+
+```
+✔ landed: W4.2 Natuur-aankleding: echte boom-GLB's bij paden/POI's, stronken, keien, paddenstoelen, riet per bioom
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.3 Zandpaden-netwerk verbindt spawn en POI's; wayfinding volgt paden
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~60%
+```

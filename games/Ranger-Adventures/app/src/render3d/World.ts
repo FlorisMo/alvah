@@ -102,6 +102,10 @@ export class World {
   // they read as "over there" beacons. Kept out of `markers` (no proximity /
   // mission). Their world x/z is exposed through the dev hook for E2E navigation.
   private readonly landmarks: { id: string; x: number; z: number }[] = [];
+  // W4.2 nature dressing: real tree/rock/mushroom/reed GLBs clustered near the
+  // POIs and biome cores, on top of the instanced-primitive background filler.
+  // Their world x/z is exposed through the dev hook so the E2E can assert them.
+  private readonly dressing: { id: string; x: number; z: number }[] = [];
   private activeId: string | null = null;     // the mission the wayfinding cue points to
   private readonly onWayfind: (cue: WayCue | null) => void;
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
@@ -196,6 +200,7 @@ export class World {
     this.placeMarkers(markers);
     this.placeHub();
     this.placeLandmarks();
+    this.placeNatureDressing();
     this.placeScenicActors();
     this.placeAmbientLife();
     void this.loadRealRanger();
@@ -684,6 +689,81 @@ export class World {
    *  steer the ranger from spawn to the watchtower and back. */
   landmarkPositions(): { id: string; x: number; z: number }[] {
     return this.landmarks.map((l) => ({ id: l.id, x: l.x, z: l.z }));
+  }
+
+  /**
+   * W4.2: nature dressing. Real GLB trees, stumps, snags, logs, boulders,
+   * mushrooms, ferns, foxgloves and reeds clustered at the POIs (watchtower
+   * grove, ecoduct + BOA approaches, ven shore by the bird-hide) and scattered
+   * through the biome cores — layered ON TOP of the instanced-primitive filler
+   * (scatterPines/Heather/Marram/Reeds), which stays the cheap background. Only
+   * the solid props (trees, boulders, logs, snags, juniper, stumps) push a
+   * collision circle; low ground detail (mushrooms/fern/foxglove/reeds) is
+   * walk-through. Every position was pre-validated (a helper script) to sit off
+   * the −z movement-smoke corridor, out of the spawn clearing, and clear of the
+   * submerged ven disc — the reeds ring the water's DRY shore. Fully
+   * deterministic; a procedural totem stands in until each GLB streams in.
+   */
+  private placeNatureDressing(): void {
+    // per-model stand height (m, prepModel target) + collision radius (0 = none)
+    const SPEC: Record<string, { h: number; collide: number }> = {
+      'prop-pine-scots': { h: 5.5, collide: 0.7 },
+      'prop-oak-tree': { h: 5.0, collide: 0.7 },
+      'prop-birch-tree': { h: 5.5, collide: 0.7 },
+      'prop-tree-stump': { h: 0.7, collide: 0.5 },
+      'prop-fallen-log': { h: 0.7, collide: 0.7 },
+      'prop-dead-snag': { h: 3.5, collide: 0.6 },
+      'prop-boulder': { h: 1.1, collide: 0.9 },
+      'prop-juniper-bush': { h: 1.1, collide: 0.7 },
+      'prop-mushrooms': { h: 0.35, collide: 0 },
+      'prop-fern': { h: 0.6, collide: 0 },
+      'prop-foxglove': { h: 0.8, collide: 0 },
+      'prop-reeds': { h: 1.1, collide: 0 },
+    };
+    // [model, x, z] — curated + validated placements per §4.
+    const PLACES: [string, number, number][] = [
+      // Watchtower bos grove (POI 37,-37): trees + a real forest floor
+      ['prop-pine-scots', 33, -40], ['prop-oak-tree', 41, -40], ['prop-birch-tree', 34, -33],
+      ['prop-tree-stump', 31, -37], ['prop-mushrooms', 46, -42], ['prop-fern', 30, -42],
+      ['prop-dead-snag', 44, -42], ['prop-fallen-log', 35, -43],
+      // Ecoduct approach grove (POI -70,6)
+      ['prop-pine-scots', -64, 10], ['prop-birch-tree', -66, 1], ['prop-pine-scots', -73, 12], ['prop-fern', -61, 4],
+      // BOA-post trees (POI -56,-20)
+      ['prop-oak-tree', -51, -24], ['prop-birch-tree', -60, -15],
+      // Bird-hide + ven shore reeds (POI 26,-11, basin 46,-19 dry shore)
+      ['prop-fern', 23, -14], ['prop-reeds', 33, -8], ['prop-reeds', 38, -4], ['prop-reeds', 43, -2],
+      ['prop-reeds', 30, -13], ['prop-reeds', 49, -2], ['prop-reeds', 56, -35],
+      // Heide scatter (SW)
+      ['prop-foxglove', -10, -22], ['prop-boulder', -20, -28], ['prop-foxglove', -6, -30],
+      // Stuifzand junipers + boulders (NE)
+      ['prop-juniper-bush', 24, 20], ['prop-boulder', 30, 26], ['prop-juniper-bush', 16, 30],
+      // Signpost path dressing
+      ['prop-boulder', 13, -13], ['prop-mushrooms', -19, 14],
+    ];
+    PLACES.forEach(([model, x, z], i) => {
+      const spec = SPEC[model];
+      const at = new THREE.Vector3(x, this.groundY(x, z), z);
+      const group = new THREE.Group();
+      group.position.copy(at);
+      group.rotation.y = (i * 2.39996) % (Math.PI * 2); // golden-angle spin for variety
+      group.add(this.proceduralTotem(spec.collide > 0 ? '#6b5a3a' : '#7d8a4a')); // instant stand-in
+      this.scene.add(group);
+      if (spec.collide > 0) this.obstacles.push({ x, z, r: spec.collide });
+      this.dressing.push({ id: model, x, z });
+      void loadModel(model).then((m) => {
+        if (!m) return;
+        const prepped = prepModel(m, spec.h);
+        const totem = group.children.find((c) => c.userData.totem);
+        if (totem) group.remove(totem);
+        group.add(prepped);
+      });
+    });
+  }
+
+  /** Dev-hook accessor (W4.2): every nature-dressing prop's id + world x/z, so
+   *  the E2E can assert the biomes are dressed with real GLBs. */
+  dressingPositions(): { id: string; x: number; z: number }[] {
+    return this.dressing.map((d) => ({ id: d.id, x: d.x, z: d.z }));
   }
 
   /**

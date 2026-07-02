@@ -62,7 +62,7 @@ W3.7 Dossier toepassen — gesplitst (schaal / tinten+ogen+houding / teksten, el
 ## Fase W4 — Rijke wereld
 
 - [x] W4.1 Landmark-props geplaatst (uitkijktoren, ecoduct, vogelkijkhut, BOA-post, wegwijzers) + collision + wayfinding; E2E wandeling spawn→toren; <150 draw calls (3)
-- [ ] W4.2 Natuur-aankleding: echte boom-GLB's bij paden/POI's, stronken, keien, paddenstoelen, riet per bioom (3)
+- [x] W4.2 Natuur-aankleding: echte boom-GLB's bij paden/POI's, stronken, keien, paddenstoelen, riet per bioom (3)
 - [ ] W4.3 Zandpaden-netwerk verbindt spawn en POI's; wayfinding volgt paden (2)
 - [ ] W4.4 Grond-detail: procedurele albedo per bioom, gouache-gevoel behouden; before/after screenshots + één paar in qa-evidence-2/ (3)
 - [ ] W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget (3)

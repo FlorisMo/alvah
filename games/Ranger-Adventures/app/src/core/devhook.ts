@@ -47,6 +47,10 @@ export interface RangerDevHook {
   /** The fixed landmark props (watchtower, ecoduct, bird-hide, BOA post,
    *  signposts): id + world x/z, for E2E spawn→watchtower navigation (W4.1). */
   landmarks(): { id: string; x: number; z: number }[] | null;
+  /** The nature-dressing props (real tree/rock/mushroom/reed GLBs clustered at
+   *  POIs + biome cores): id + world x/z, or null before the hook/world is
+   *  ready (W4.2). */
+  dressing(): { id: string; x: number; z: number }[] | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -65,6 +69,7 @@ const state = {
   actors: null as null | (() => { id: string; clip: { name: string; time: number } | null }[]),
   ambient: null as null | (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]),
   landmarks: null as null | (() => { id: string; x: number; z: number }[]),
+  dressing: null as null | (() => { id: string; x: number; z: number }[]),
 };
 
 /** Current screen the player is on. */
@@ -142,6 +147,13 @@ export function provideLandmarks(
   state.landmarks = fn;
 }
 
+/** Register the nature-dressing source (the World's clustered GLB props). W4.2. */
+export function provideDressing(
+  fn: (() => { id: string; x: number; z: number }[]) | null,
+): void {
+  state.dressing = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -166,6 +178,7 @@ export function installDevHook(): boolean {
     actors: () => (state.actors ? state.actors() : null),
     ambient: () => (state.ambient ? state.ambient() : null),
     landmarks: () => (state.landmarks ? state.landmarks() : null),
+    dressing: () => (state.dressing ? state.dressing() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

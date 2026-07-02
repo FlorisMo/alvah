@@ -1206,3 +1206,28 @@ with the full sub-id (e.g. `W2.4a`).
   its collision circle doesn't trap the player short — AND asserts the full
   landmark cast keeps `drawCalls()` < 150. Frozen smoke untouched (own assert,
   not a smoke upgrade). 285 unit + build green; landmarks + frozen smoke 4/4 green.
+- 2026-07-02 (W4.2, nature dressing): the biomes now carry 29 real GLB props
+  clustered at the POIs on TOP of the existing instanced-primitive filler
+  (`scatterPines/Heather/Marram/Reeds` stay the cheap background — untouched).
+  New `World.placeNatureDressing()` stages a curated, fully-deterministic list:
+  a watchtower bos grove (pine/oak/birch + tree-stump/fallen-log/dead-snag/
+  mushrooms/fern for a real forest floor), ecoduct + BOA-post approach trees,
+  a fern + six reed clumps on the ven's DRY shore by the bird-hide, heide
+  foxgloves + boulders, stuifzand junipers + boulders, and boulder/mushroom
+  path dressing by the two signposts. KEY DECISION: only solid props (trees,
+  boulders, logs, snags, juniper, stumps) push a collision circle; low ground
+  detail (mushrooms/fern/foxglove/reeds) is walk-through, so the world reads
+  lush without a maze of invisible walls. EVERY position was pre-validated by a
+  throwaway node script against `biomeAt`/`heightAt`: none sits in the spawn
+  clearing (r<12), none in the frozen −z movement-smoke corridor, and none in
+  the submerged ven disc — the "ven biome" is an angular compass sector on the
+  WEST, but the actual water basin is at (46,-19), so the reeds ring THAT
+  basin's dry shore (h just above WATER_LEVEL), not the biome-label sector.
+  BUDGET: `renderer.info.render.calls` counts only frustum-visible meshes, so
+  off-screen dressing is free; the new `dressing.spec.ts` asserts every kind is
+  placed, ≥2 real trees hug the watchtower (grove, not random scatter), AND
+  `drawCalls()` < 150 both at spawn AND after walking INTO the densest grove
+  (measured comfortably under both times). Each prop shows an instant procedural
+  totem stand-in until its GLB streams in (same pattern as landmarks). New dev
+  hook `dressing()` + `provideDressing` wiring. Frozen smoke untouched (own
+  assert). 285 unit + build green; dressing + frozen smoke 4/4 green.
