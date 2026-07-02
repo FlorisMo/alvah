@@ -14,6 +14,12 @@ Read in this order:
    - [research/research-conclusions/](research/research-conclusions/) — the **source-of-truth** docs
      distilled from the results; vetted, confidence-flagged, added to over time. The build reads
      from here (the life-areas equivalent of [../research/](../research/) for the EF game).
+3. [research-game-set-up/](research-game-set-up/) — the five reusable engines beneath the areas
+   (staircase · predict-&-reveal · mastery/portfolio · AI-simulation · taste/critique): what to
+   build once and reskin as data.
+4. [game-designs/](game-designs/) — the playable catalogue: per-area game cards (loop, 8→18 growth
+   ladder, variation axes), the shared growth model, and the cross-area expeditions layer that
+   weaves ten areas into one game.
 
 ## The ten areas
 Logic & math · Epistemics · Finance & value · Work & agency · Communication · Internal work ·
@@ -32,5 +38,7 @@ these, and which are subjects vs capacities.)*
   IFS, distributed authority, and the hard line on never reducing the child to a number.
 
 ## Status
-Plan draft, June 2026. Nothing built. Research not yet run. Open decisions in PLAN §7 gate building,
-not the research.
+Plan June 2026. Research run and distilled (7/7 conclusions are source-of-truth), five engines
+specified (28 Jun), game-design catalogue + expeditions layer added (2 Jul). **Nothing built yet.**
+Open decisions in PLAN §7 gate building — §7.6 (AI-simulation privacy) blocks Engine 04 and every
+game card marked with it.

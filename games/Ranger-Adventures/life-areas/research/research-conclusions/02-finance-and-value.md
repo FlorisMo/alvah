@@ -71,6 +71,11 @@ classroom economy (waarschijnlijk — RCT for knowledge) · real account + paren
 
 ## 4. Game mechanics to build (15 seeds)
 
+> **Worked game cards** — the full unlock ladder, 8→18 growth per seed, variation axes, and three
+> new seeds (earning, allocating, negotiating) — live in
+> [../../game-designs/area-03-finance-and-value.md](../../game-designs/area-03-finance-and-value.md).
+> This section remains the research-derived seed list (the provenance layer).
+
 **⚠ Build dependency:** **Percent Forge (#7) is a gate** — must be cleared before Compounding Garden,
 Transparent-Odds Choice, and Fee Leak unlock. Encode this in the unlock graph.
 

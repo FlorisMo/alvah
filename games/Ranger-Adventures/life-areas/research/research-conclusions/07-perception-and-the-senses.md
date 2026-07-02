@@ -154,6 +154,11 @@ meter** (8+).
 
 ## 5. Game mechanics to build
 
+> **Worked game cards** — the shared discrimination-family growth ladder, per-game notes, seasonal
+> variation system, and two new engine-composing seeds (Read the Sky, The Map in Your Head) — live in
+> [../../game-designs/area-10-perception-and-the-senses.md](../../game-designs/area-10-perception-and-the-senses.md).
+> This section remains the research-derived seed list (the provenance layer).
+
 **Cleanly split: A = psychophysics staircase (acuity/discrimination) · B = portfolio (observation/
 awareness, never threshold-scored).**
 

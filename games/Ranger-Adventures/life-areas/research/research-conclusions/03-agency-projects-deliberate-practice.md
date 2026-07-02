@@ -104,6 +104,11 @@ Veto column is Floris's (PLAN §7.1); blank = not yet ruled. ⭐ = spine centrep
 
 ## 5. Game mechanics to build
 
+> **Worked game cards** — 8→18 growth ladders, variation axes, and three new seeds (prioritisation,
+> specify→delegate→verify, learning-to-learn) — live in
+> [../../game-designs/area-04-work-and-agency.md](../../game-designs/area-04-work-and-agency.md).
+> This section remains the research-derived seed list (the provenance layer).
+
 Almost entirely **Model B** (portfolio of finished projects + mastery rungs for planning moves). The
 few Model-A-shaped pieces are the deliberate-practice ladder and calibration, which can plug the EF
 staircase.

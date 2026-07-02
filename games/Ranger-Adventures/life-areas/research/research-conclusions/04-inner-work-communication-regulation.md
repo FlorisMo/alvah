@@ -132,6 +132,14 @@ meditation the spine** · **? Zones of Regulation — "not evidence-based practi
 
 ## 5. Game mechanics to build (light, mostly private/diegetic)
 
+> **Worked game cards** split per area:
+> [../../game-designs/area-05-communication.md](../../game-designs/area-05-communication.md) (the
+> thinnest seed set, half new), [../../game-designs/area-06-internal-work.md](../../game-designs/area-06-internal-work.md)
+> (deliberately the lightest — grows by subtracting), and
+> [../../game-designs/area-09-health-and-attention.md](../../game-designs/area-09-health-and-attention.md)
+> (the §6 gap filled via the avatar-carries-the-consequences principle; provisional until the
+> standalone health brief). This section remains the research-derived seed list (the provenance layer).
+
 **Tracking is Model B at its lightest — almost everything here is presence/streak only. There is no
 Model A in this brief: nothing about Alvah's inner life is ever scored.** The few "scored"-looking
 loops (attention single-tasking) score the *fire*, not the child.

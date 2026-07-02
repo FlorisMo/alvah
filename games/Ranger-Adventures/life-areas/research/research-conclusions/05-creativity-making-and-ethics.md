@@ -116,6 +116,12 @@ several*, never "the answer").
 
 ## 5. Game mechanics to build
 
+> **Worked game cards** — 8→18 growth ladders (incl. the §8 gate ladder made explicit), variation
+> axes, and new seeds (young-band fairness, rules-vs-judgement, AI-direction, attribution) — live in
+> [../../game-designs/area-07-creativity-and-making.md](../../game-designs/area-07-creativity-and-making.md)
+> and [../../game-designs/area-08-ethics.md](../../game-designs/area-08-ethics.md). This section
+> remains the research-derived seed list (the provenance layer).
+
 **Both areas are Model B. Maker seeds use a PORTFOLIO model; ranger seeds use a REFLECTION-ARTEFACT
 model. No morality score anywhere.**
 

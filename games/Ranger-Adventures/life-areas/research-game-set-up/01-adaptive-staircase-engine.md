@@ -233,6 +233,4 @@ training ground" meta screen, consistent with the EF games' existing presentatio
 ---
 
 *Next engine: `02-predict-and-reveal-engine.md` — calibration (Brier-scored Sure-O-Meter) + expected-
-value / transparent-odds decisions, with the anti-gambling bright line baked in. Stop here for review.*
-</content>
-</invoke>
+value / transparent-odds decisions, with the anti-gambling bright line baked in.*

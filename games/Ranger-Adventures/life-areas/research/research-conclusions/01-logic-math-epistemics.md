@@ -104,6 +104,11 @@ UNESCO AI Competency / AI4K12 (practitioner frameworks, **no efficacy data**).
 
 ## 5. Game mechanics to build
 
+> **Worked game cards** — 8→18 growth ladders, variation axes, and gap-filling new seeds — live in
+> [../../game-designs/area-01-logic-math.md](../../game-designs/area-01-logic-math.md) and
+> [../../game-designs/area-02-epistemics.md](../../game-designs/area-02-epistemics.md). This section
+> remains the research-derived seed list (the provenance layer).
+
 **Model A — scored/psychometric** (plug into the existing staircase + `scoring.js`):
 - **Sure-O-Meter** — answer, set confidence, watch your personal calibration curve build. Brier-scored. *The flagship — see §6.*
 - **Prediction Diary** — dated real-world predictions, resolved later, Brier over time.

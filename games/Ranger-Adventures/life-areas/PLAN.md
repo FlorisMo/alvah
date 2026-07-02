@@ -8,6 +8,12 @@
 >
 > **Status:** plan draft, June 2026. Nothing here is built yet. Several decisions are still
 > Floris's to make — they are flagged **[needs veto]** and collected in §7.
+>
+> **Since drafted (Jul 2026):** the research pipeline has run and is distilled
+> ([research/research-conclusions/](research/research-conclusions/)); the five engines are specified
+> ([research-game-set-up/](research-game-set-up/)); and the worked per-area game catalogue — 8→18
+> growth ladders, variation axes, gap-filling seeds, cross-area expeditions — lives in
+> [game-designs/](game-designs/).
 
 ---
 
