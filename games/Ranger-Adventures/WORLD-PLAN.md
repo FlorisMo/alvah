@@ -996,3 +996,33 @@ with the full sub-id (e.g. `W2.4a`).
   adder+heikikker+heideblauwtje). Docs-only, no code touched → no player-visible
   change and no E2E assert; ticked with `--force` (the §5 W3.4a allowance, same
   as W3.0). Build + frozen smoke unaffected.
+- 2026-07-02 (W3.4b, birds accuracy dossier): web-researched SIXTEEN
+  mission-/audio-relevant birds into a NEW sister file
+  `research/bird-visual-accuracy.md` (W3.4a's mammal file said "Vogels staan
+  apart in W3.4b", so birds got their own dossier rather than bloating the
+  mammal one). Coverage was scoped from ACTUAL code usage, not the plan's
+  illustrative list: grep of `src/**` ranked raaf (61 refs — companion + audio
+  + missions), nachtzwaluw (36 — own stuifzand mission + audio + synth call),
+  roodborsttapuit (7 — decoy bird in three missions) and buizerd (5) as the
+  real mission birds; merel/gaai/koekoek/ekster/vink/tjiftjaf/koolmees appear
+  in content; the rest come from the plan's named list + staged distinctive
+  species (groene + grote bonte specht, pimpelmees, winterkoning, zanglijster,
+  roodborst). Added a dedicated **Roep/zang** field to every bird because W6.4a
+  ("Ken je roep") builds a vogelzang-staircase with decoys — the call
+  descriptions are that box's raw material. Primary source is Vogelbescherming
+  Nederland (`vogelbescherming.nl`), backed by Natuurpunt, Ravenwerkgroep NL,
+  vogelskijken.nl, Natuurfotografie.nl and Wikipedia NL+EN for the fields the
+  NL page omitted (gewicht, oogkleur, spanwijdte-uitschieters); NL-vs-species
+  ranges both listed. Web tools WERE available so nothing was invented — three
+  honest "geen bron gevonden" gaps (koolmees adult iris, winterkoning iris,
+  zanglijster iris) plus lower-confidence eye-colour flags stay marked, not
+  filled. The 5 staged birds with no mission/audio role yet
+  (boomklever, goudhaantje, boomleeuwerik, houtduif, wilde-eend) are listed as
+  explicitly out-of-scope rather than guessed at. Opens with a spanwijdte
+  schaal-referentie table (largest→smallest) for W3.7. Feeds W3.6 (ambient
+  bird life / gliding birds), W3.7 (scale + eye recipe), W6.3 (raaf kid-facts)
+  and W6.4a/b (bird-call slice). Research fan-out ran as 5 parallel subagents
+  (corvidae / nachtzwaluw+tapuit+buizerd / lijsters+roodborst /
+  spechten+koekoek / mezen+winterkoning+vink). Docs-only, no code touched → no
+  player-visible change and no E2E assert; ticked with `--force` (the §5 W3.4b
+  allowance). Build + frozen smoke unaffected.
