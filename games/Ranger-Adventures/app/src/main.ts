@@ -4,11 +4,17 @@ import { Stage } from './render3d/Stage';
 import { Budgets } from './ui/Budgets';
 import { applyReducedMotionClass, watchReducedMotion, setReducedMotionOverride } from './core/reduced-motion';
 import { applyReadingPrefs } from './core/reading-prefs';
-import { startLodge, startWorld, startDeepDemo } from './ui/Missions';
-import { startSandbox } from './ui/Sandbox';
-import { showAvatarCreator } from './ui/AvatarCreator';
 import { store } from './core/state';
+import { Sound } from './core/sound';
 import { installDevHook, setScreen, provideDrawCalls } from './core/devhook';
+
+// W7.1 code-splitting: the mission/world/demo graph (World, the five engines,
+// the 3D mini-game views, render2d) is the bulk of the bundle but is only
+// reachable AFTER "Begin". It is loaded via dynamic `import()` in the click
+// handler below so the entry `app.js` stays a light boot shell (three.js lives
+// in the `vendor` chunk, see vite.config.ts). `Sound.unlock()` is imported
+// eagerly and fired synchronously in the gesture — the iOS AudioContext must be
+// created/resumed inside the user tap, before any `await`.
 
 // Apply the saved Tweaks before first paint: a persisted reduced-motion toggle
 // wins over the OS (off = defer to OS), and the reading/accent prefs re-flow :root.
@@ -58,15 +64,37 @@ const params = new URLSearchParams(location.search);
 const sandboxStart = params.has('sandbox');
 const deepDemoStart = params.has('demo');
 
-card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', () => {
+card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', async () => {
+  // Unlock audio FIRST, synchronously in the tap (iOS gesture rule) — before
+  // the awaited dynamic import breaks the user-activation chain.
+  Sound.unlock();
   card.classList.add('boot-card--hidden');
   window.setTimeout(() => card.remove(), 360);
-  if (deepDemoStart) { startDeepDemo(ui, stage); return; }
-  if (sandboxStart) { startSandbox(ui, stage, () => startLodge(ui, stage)); return; }
+  if (deepDemoStart) {
+    const { startDeepDemo } = await import('./ui/Missions');
+    startDeepDemo(ui, stage);
+    return;
+  }
+  if (sandboxStart) {
+    const [{ startSandbox }, { startLodge }] = await Promise.all([
+      import('./ui/Sandbox'),
+      import('./ui/Missions'),
+    ]);
+    startSandbox(ui, stage, () => startLodge(ui, stage));
+    return;
+  }
   // W2.1: the walkable world is now the front door. First boot still makes your
   // ranger first; afterwards (and on every later boot) drop STRAIGHT into the
   // Veluwe. The lodge stays reachable from the explore HUD's "Terug naar de hut"
   // pill until the in-world cabin hub (W2.2/W2.4) replaces it.
-  if (store.get().avatarGemaakt) startWorld(ui, stage);
-  else showAvatarCreator(ui, () => startWorld(ui, stage));
+  if (store.get().avatarGemaakt) {
+    const { startWorld } = await import('./ui/Missions');
+    startWorld(ui, stage);
+  } else {
+    const [{ showAvatarCreator }, { startWorld }] = await Promise.all([
+      import('./ui/AvatarCreator'),
+      import('./ui/Missions'),
+    ]);
+    showAvatarCreator(ui, () => startWorld(ui, stage));
+  }
 });

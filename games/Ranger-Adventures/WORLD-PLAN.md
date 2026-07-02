@@ -1803,3 +1803,28 @@ with the full sub-id (e.g. `W2.4a`).
   3D card is up — `min(w,h) ≥ 56` on all three. Corpus non-triviality guard still
   >100 strings. 359 unit + build green; sitspot.spec green (52 s); frozen smoke 4/4
   untouched (own assert, not a smoke upgrade). Ticked WITHOUT `--force`.
+- 2026-07-02 (W7.1, code-splitting — opens W7): the entry `app.js` went from ONE
+  850 kB / 230 kB-gzip blob to a light boot shell. Two moves: (1) a `manualChunks`
+  in `vite.config.ts` forces everything under `node_modules/three/` (core + the
+  examples GLTF/DRACO/Skeleton/OrbitControls loaders) into a single `vendor`
+  chunk; (2) `main.ts` now lazy-`import()`s the mission/world/demo graph
+  (`ui/Missions` → World + the five engines + the 3D mini-game views + render2d,
+  plus `ui/Sandbox` and `ui/AvatarCreator`) inside the "Begin" handler instead of
+  importing them statically. Result (site build): `app.js` **10.26 kB gzip**
+  (contract < 120 kB, huge margin), `vendor.js` 159 kB gzip, `Missions.js` 61 kB
+  gzip lazy. GOTCHA #1 (iOS audio): `Sound.unlock()` creates+resumes the
+  AudioContext and MUST run inside the user tap — an `await import()` first would
+  break the gesture chain on Safari, so `Sound` is imported eagerly and
+  `Sound.unlock()` fires synchronously at the top of the handler, before any
+  await. GOTCHA #2 (Astro CSS contract): per-chunk CSS splitting produced
+  `app2.css`/`app3.css`, but the Astro wrapper hardcodes ONE
+  `<link href="/ranger/app.css">` — the mission/HUD styles would be unlinked (only
+  auto-injected in the standalone index.html) → set `build.cssCodeSplit:false` so
+  all styles stay in one `app.css` (52 kB, unchanged), while JS still splits. The
+  entry name `app.js` and `app.css` are byte-for-byte the same contract the Astro
+  page expects. New `codesplit.spec.ts` (NOT @smoke): seeds the returning-player
+  path, taps Begin, polls to `screen==='world'` (proves the lazy Missions chunk
+  loads + runs + `Sound.unlock` still fires), asserts zero pageerrors, and logs
+  world-interactive time (~2.6 s headless SwiftShader) as an artifact. Full E2E
+  suite re-run because every spec traverses the now-async boot handler. Frozen
+  smoke 4/4 untouched (own assert, not a smoke upgrade).

@@ -1519,3 +1519,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~93%
 ```
+
+---
+**2026-07-02 22:13:51Z** · ticked: - [x] W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
+
+```
+✔ landed: W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
+▶ phase:  Fase W7 — Prestatie + oplevering
+→ next:   W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~95%
+```

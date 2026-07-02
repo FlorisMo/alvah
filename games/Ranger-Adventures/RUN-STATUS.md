@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W7 — Prestatie + oplevering
-- **Progress:** ~93% (weighted by ledger items)
-- **Just landed:** W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert
-- **Next up:** W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
-- **Last heartbeat:** 2026-07-02 21:27:05Z
+- **Progress:** ~95% (weighted by ledger items)
+- **Just landed:** W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
+- **Next up:** W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts
+- **Last heartbeat:** 2026-07-02 22:13:51Z
 - **Blocker:** none
 
 ```
-✔ landed: W6.5 Toon-gate: nieuwe strings in readlevel-corpus, voorlezen gekoppeld, ≥56 px E2E-assert
+✔ landed: W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
 ▶ phase:  Fase W7 — Prestatie + oplevering
-→ next:   W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
+→ next:   W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~93%
+▷ progress: ~95%
 ```
