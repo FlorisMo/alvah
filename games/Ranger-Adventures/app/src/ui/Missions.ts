@@ -45,7 +45,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -192,6 +192,7 @@ function leaveWorld(): void {
   provideWater(null);
   provideVehicle(null);
   provideHeli(null);
+  provideQuality(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -538,6 +539,7 @@ function startExplore(): void {
   provideWater(() => world!.waterState()); // W4.8: fresnel ven-water + reduced-motion ripple gate
   provideVehicle(() => world!.vehicleState()); // W5.1: drivable jeep (enter/drive/exit + caps)
   provideHeli(() => world!.heliState()); // W5.3b: opt-in helicopter (fly pad-to-pad + comfort)
+  provideQuality(() => world!.qualityState()); // W7.2: adaptive quality tier (fps probe + hysteresis)
   provideWinStep(() => triggerActivityWin()); // W2.3: drive a 3D step's real resolve from E2E
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }

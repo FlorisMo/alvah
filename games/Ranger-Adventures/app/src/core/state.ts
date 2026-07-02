@@ -69,6 +69,7 @@ export interface Settings {
   cameraDraaitMee: boolean;          // W1.5 rotating follow-cam: camera eases behind as you turn
   helikopter: boolean;               // W5.3 opt-in helicopter mode (default UIT; unavailable under reduced-motion)
   wereldHintGezien: boolean;         // W1.6 first-world-entry onboarding hint has been dismissed
+  kwaliteitTier: 'hoog' | 'laag';    // W7.2 adaptive quality tier — the last fps-probe verdict, persisted so a slow device boots light
   skipBriefings: boolean;            // demo-skip (§9g): jump straight into play, no briefing card
   readSize: number;
   leading: number;
@@ -132,6 +133,7 @@ const DEFAULT_SETTINGS: Settings = {
   cameraDraaitMee: true,
   helikopter: false,
   wereldHintGezien: false,
+  kwaliteitTier: 'hoog',
   skipBriefings: false,
   readSize: 28,
   leading: 1.7,

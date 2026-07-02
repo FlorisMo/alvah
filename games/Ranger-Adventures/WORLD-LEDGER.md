@@ -100,7 +100,7 @@ W6.4b Ken je roep, wereld-helft — gesplitst (3D-twin+audio / wereld-entree+E2E
 ## Fase W7 — Prestatie + oplevering
 
 - [x] W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB (2)
-- [ ] W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts (2)
+- [x] W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts (2)
 - [ ] W7.3 Alles groen: unit + parity + volledige E2E (chromium én webkit) + build:site + astro build; AUTO-QA-REPORT-2.md met screenshots uit qa-evidence-2/ (2)
 - [ ] W7.4 Ship: commit + push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd (1)
 - [ ] W7.5 NEEDS-FLORIS iPad-acceptatie: lopen (stick + tap), jeep, missie vanaf marker, Deep Demo, Reduce-Motion beide standen (1)

@@ -1828,3 +1828,29 @@ with the full sub-id (e.g. `W2.4a`).
   world-interactive time (~2.6 s headless SwiftShader) as an artifact. Full E2E
   suite re-run because every spec traverses the now-async boot handler. Frozen
   smoke 4/4 untouched (own assert, not a smoke upgrade).
+- 2026-07-03 (W7.2, adaptive quality tiers): the world now measures its own fps
+  and steps a two-level quality tier down (or back up) with hysteresis. A pure
+  THREE-free `core/quality.ts` owns the decision: `FpsProbe` accumulates frame dt
+  over 5 s windows and emits an average fps (dropping absurd stall/tab-switch dt
+  so one spike cannot poison a window), and `nextTier` maps it through a
+  HYSTERESIS BAND — step DOWN to `laag` below 40 fps, back UP to `hoog` above
+  55 fps, the 40–55 dead zone keeping a borderline device from oscillating.
+  Two knobs ride the tier (both plan-named): the renderer pixelRatio cap (2 → 1.25)
+  and the vegetation-scatter density (× 1 → × 0.55). DECISION on what applies
+  live vs. next-build: a tier change re-applies the pixelRatio cap IMMEDIATELY
+  (cheap `setPixelRatio`, the big iPad fill-rate win) but vegetation density is
+  read only at World construction — a live re-scatter would POP hundreds of
+  instanced meshes in view (a motion-comfort violation), so the thinner planting
+  lands on the next world entry. The resolved tier is PERSISTED as a new
+  `settings.kwaliteitTier` field (rides the `ranger` namespace — NO new
+  localStorage key, like W1.6 `wereldHintGezien`), so a slow device boots
+  straight into `laag` next session instead of re-probing the jank; the World
+  seeds `this.tier` from it before the first scatter. The measured step-down is
+  device-dependent (a GPU dev machine stays `hoog`, a SwiftShader CI runner drops
+  to `laag` — both correct), so the E2E asserts the INVARIANT not the verdict:
+  new dev hook `quality()` ({tier, pixelRatio, vegetationScale}); `quality.spec.ts`
+  proves the knobs stay consistent with the tier before AND after a probe window
+  fires, and that a seeded `laag` blob boots the world light (pixelRatio ≤ 1.25 ×
+  dpr + vegetationScale 0.55) — the slow-device contract, machine-independent.
+  New `quality.test.ts` (9 tests) pins the hysteresis band + probe windowing.
+  368 unit (+9) + build + quality spec (2) + frozen smoke 4/4 green.

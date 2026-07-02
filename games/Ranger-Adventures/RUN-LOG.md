@@ -1530,3 +1530,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~95%
 ```
+
+---
+**2026-07-02 22:23:28Z** · ticked: - [x] W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts
+
+```
+✔ landed: W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts
+▶ phase:  Fase W7 — Prestatie + oplevering
+→ next:   W7.3 Alles groen: unit + parity + volledige E2E (chromium én webkit) + build:site + astro build; AUTO-QA-REPORT-2.md met screenshots uit qa-evidence-2/
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~97%
+```

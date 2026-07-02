@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W7 — Prestatie + oplevering
-- **Progress:** ~95% (weighted by ledger items)
-- **Just landed:** W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
-- **Next up:** W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts
-- **Last heartbeat:** 2026-07-02 22:13:51Z
+- **Progress:** ~97% (weighted by ledger items)
+- **Just landed:** W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts
+- **Next up:** W7.3 Alles groen: unit + parity + volledige E2E (chromium én webkit) + build:site + astro build; AUTO-QA-REPORT-2.md met screenshots uit qa-evidence-2/
+- **Last heartbeat:** 2026-07-02 22:23:28Z
 - **Blocker:** none
 
 ```
-✔ landed: W7.1 Code-splitting: vendor chunk + lazy chunks; /ranger/app.js entrynaam ongewijzigd; entry gzip <120 kB
+✔ landed: W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts
 ▶ phase:  Fase W7 — Prestatie + oplevering
-→ next:   W7.2 Kwaliteits-tiers via fps-probe (pixelRatio, vegetatiedichtheid) met hysterese; persist via state.ts
+→ next:   W7.3 Alles groen: unit + parity + volledige E2E (chromium én webkit) + build:site + astro build; AUTO-QA-REPORT-2.md met screenshots uit qa-evidence-2/
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~95%
+▷ progress: ~97%
 ```

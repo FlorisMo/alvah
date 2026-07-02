@@ -113,6 +113,11 @@ export interface RangerDevHook {
     camDist: number; camHeight: number; fov: number; roll: number; vignette: number;
     pads: { x: number; z: number }[];
   } | null;
+  /** The W7.2 adaptive-quality state: the resolved tier ('hoog'|'laag'), the
+   *  live renderer pixelRatio, and the vegetation-density scale in force — lets
+   *  the E2E assert the fps probe exposes a tier and its knobs are consistent.
+   *  Null before the world is live. */
+  quality(): { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -161,6 +166,7 @@ const state = {
     camDist: number; camHeight: number; fov: number; roll: number; vignette: number;
     pads: { x: number; z: number }[];
   } | null),
+  quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
 };
 
 /** Current screen the player is on. */
@@ -328,6 +334,13 @@ export function provideHeli(
   state.heli = fn;
 }
 
+/** Register the W7.2 adaptive-quality state source (the World). Pass null to clear. */
+export function provideQuality(
+  fn: (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null) | null,
+): void {
+  state.quality = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -362,6 +375,7 @@ export function installDevHook(): boolean {
     water: () => (state.water ? state.water() : null),
     vehicle: () => (state.vehicle ? state.vehicle() : null),
     heli: () => (state.heli ? state.heli() : null),
+    quality: () => (state.quality ? state.quality() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

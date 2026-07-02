@@ -37,6 +37,7 @@ import { attachInput, type InputHandle } from '../core/attach-input';
 import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../core/footstep';
 import { Sound } from '../core/sound';
 import { store } from '../core/state';
+import { FpsProbe, nextTier, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from './Wayfinding';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, routeVia } from './Paths';
 import {
@@ -163,6 +164,11 @@ export class World {
   private rangerCastsShadow = false;
   private blobCount = 0;
   private renderer: THREE.WebGLRenderer | null = null;
+  // W7.2 adaptive quality: the live tier drives the pixelRatio cap + vegetation
+  // density. Seeded from the persisted verdict so a slow device boots light; the
+  // per-frame fps probe re-decides with hysteresis (see update()).
+  private tier: QualityTier = store.get().settings.kwaliteitTier;
+  private readonly fpsProbe = new FpsProbe();
   private static blobTex: THREE.Texture | null = null;
   // W4.6: reusable scratch for the per-frame wind matrix recompose (no per-frame
   // allocation while re-tilting a few hundred grass blades).
@@ -358,10 +364,12 @@ export class World {
     this.scene.add(this.buildVenWater());
     this.buildCloudShadows(); // W4.6: drifting cloud shadows over the ground
     this.buildFlyover();      // W4.6: the ~12 s bird flyover
-    this.scatterPines(80);
-    this.scatterHeather(150);
-    this.scatterMarram(110);
-    this.scatterReeds(90);
+    // W7.2: vegetation density scales with the persisted quality tier (laag ≈ half).
+    const veg = QUALITY_TIERS[this.tier].vegetationScale;
+    this.scatterPines(Math.round(80 * veg));
+    this.scatterHeather(Math.round(150 * veg));
+    this.scatterMarram(Math.round(110 * veg));
+    this.scatterReeds(Math.round(90 * veg));
     this.applyWind(0); // W4.6: initial wind pose for both grass meshes
 
     // ranger: procedural stand-in first (instant), real model swaps in when loaded
@@ -1189,6 +1197,41 @@ export class World {
     this.renderer = renderer;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoft is deprecated in this three build
+    this.applyPixelRatio(); // W7.2: seed the fill-rate cap from the persisted tier
+  }
+
+  /** W7.2: cap the renderer pixelRatio at the live tier's ceiling (× the device
+   *  ratio). Cheap and safe to call live on a tier change — no re-render needed. */
+  private applyPixelRatio(): void {
+    if (!this.renderer) return;
+    const cap = QUALITY_TIERS[this.tier].pixelRatioCap;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
+  }
+
+  /** Dev-hook accessor (W7.2): the resolved quality tier + the live pixelRatio and
+   *  vegetation-density scale in force — lets the E2E assert the probe exposes a
+   *  tier and its knobs stay consistent. */
+  qualityState(): { tier: QualityTier; pixelRatio: number; vegetationScale: number } {
+    return {
+      tier: this.tier,
+      pixelRatio: this.renderer ? this.renderer.getPixelRatio() : 0,
+      vegetationScale: QUALITY_TIERS[this.tier].vegetationScale,
+    };
+  }
+
+  /** W7.2: feed one frame into the fps probe; when a window closes, step the tier
+   *  with hysteresis. A change is PERSISTED (so a slow device boots light next
+   *  time) and the pixelRatio cap is re-applied live. Vegetation density can only
+   *  change on the next world build (re-scatter would pop meshes), so a mid-session
+   *  step-down lightens fill-rate now and geometry next entry. */
+  private probeQuality(dt: number): void {
+    const avgFps = this.fpsProbe.sample(dt);
+    if (avgFps === null) return;
+    const next = nextTier(this.tier, avgFps);
+    if (next === this.tier) return;
+    this.tier = next;
+    store.setSetting({ kwaliteitTier: next });
+    this.applyPixelRatio();
   }
 
   /** Dev-hook accessor (W4.5): the lighting/shadow state — renderer shadow map on,
@@ -2350,6 +2393,9 @@ export class World {
     // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
     // animates in both motion modes; only the procedural-bob fallback holds still.
     this.playerRig.update(dt, this.playerSpeed, reduced);
+
+    // W7.2: measure fps and step the quality tier down/up with hysteresis.
+    this.probeQuality(dt);
 
     // W5.2: age the jeep's dust cloud every frame (so puffs keep fading after a
     // stop or step-out). Emission itself happens in driveJeep, gated on motion +
