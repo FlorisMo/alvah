@@ -29,7 +29,8 @@ import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from './Ambien
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { resolveInput, type StickVector } from '../core/input';
 import { attachInput, type InputHandle } from '../core/attach-input';
-import { wayfind, type WayCue } from './Wayfinding';
+import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from './Wayfinding';
+import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, routeVia } from './Paths';
 import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
@@ -184,6 +185,7 @@ export class World {
 
     this.ground = this.buildGround();
     this.scene.add(this.ground);
+    this.scene.add(this.buildPaths()); // W4.3: sand-path ribbons over the ground
     this.scene.add(this.buildVenWater());
     this.scatterPines(80);
     this.scatterHeather(150);
@@ -338,6 +340,60 @@ export class World {
   /** sample ground height at world x,z (delegates to the pure biome field). */
   private groundY(x: number, z: number): number {
     return heightAt(x, z);
+  }
+
+  /**
+   * W4.3: the sand-path network (Paths.ts / §4) as ONE terrain-hugging ribbon
+   * mesh — a warm sand strip laid a hair above the ground along every §4 edge so
+   * the routes read visually (spawn ↔ the POIs). The whole network is a single
+   * merged geometry → one draw call, so the budget (§3.4, <150) is untouched. Each
+   * rib samples `groundY` at BOTH edge vertices so the strip hugs the rolling
+   * relief instead of poking through it; a small +y lift + polygonOffset keeps it
+   * off the ground plane without z-fighting. Sand vertex colour, no texture fetch.
+   */
+  private buildPaths(): THREE.Mesh {
+    const HALF = LANE_HALF;
+    const STEP = 1.6;        // rib spacing along a segment (m)
+    const LIFT = 0.05;       // sit just above the terrain
+    const sand = new THREE.Color('#cdb887');
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+    for (const [i, j] of PATH_SEGMENTS) {
+      const a = PATH_NODES[i], b = PATH_NODES[j];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len = Math.hypot(dx, dz) || 1;
+      // unit perpendicular in XZ for the ribbon width
+      const px = -dz / len, pz = dx / len;
+      const ribs = Math.max(2, Math.ceil(len / STEP) + 1);
+      const base = positions.length / 3;
+      for (let r = 0; r < ribs; r++) {
+        const t = r / (ribs - 1);
+        const cx = a.x + dx * t, cz = a.z + dz * t;
+        const lx = cx + px * HALF, lz = cz + pz * HALF;
+        const rx = cx - px * HALF, rz = cz - pz * HALF;
+        positions.push(lx, this.groundY(lx, lz) + LIFT, lz);
+        positions.push(rx, this.groundY(rx, rz) + LIFT, rz);
+        colors.push(sand.r, sand.g, sand.b, sand.r, sand.g, sand.b);
+        if (r > 0) {
+          const p = base + (r - 1) * 2, q = base + r * 2;
+          // two triangles between rib r-1 and r
+          indices.push(p, p + 1, q, q, p + 1, q + 1);
+        }
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 1, metalness: 0,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.renderOrder = 1; // draw over the ground plane
+    return mesh;
   }
 
   /**
@@ -766,6 +822,16 @@ export class World {
     return this.dressing.map((d) => ({ id: d.id, x: d.x, z: d.z }));
   }
 
+  /** Dev-hook accessor (W4.3): the sand-path network — route nodes (id + world
+   *  x/z) and the segment index pairs — so the E2E can assert the trails connect
+   *  spawn to every POI. Static (the network is deterministic). */
+  pathNetwork(): { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] } {
+    return {
+      nodes: PATH_NODES.map((n) => ({ id: n.id, x: n.x, z: n.z })),
+      segments: PATH_SEGMENTS.map(([i, j]) => [i, j] as [number, number]),
+    };
+  }
+
   /**
    * W3.3: place the two story-arc humans — the warden (BOA) near the case-board
    * hub where the player reports, and the poacher as a distant, calm figure off
@@ -1158,7 +1224,13 @@ export class World {
     // Debounced so the diegetic HUD only re-renders when the words actually change.
     const goal = this.activeId ? this.markers.find((m) => m.missionId === this.activeId) : null;
     if (goal) {
-      const cue = wayfind(rp.x, rp.z, this.ranger.rotation.y, goal.pos.x, goal.pos.z);
+      // W4.3: the cue FOLLOWS the sand paths — the ARROW aims at the next path
+      // waypoint (routeVia), while the distance + "je bent er" stay measured to
+      // the real marker, so the child walks the trail then peels off at the end.
+      const wp = routeVia(rp.x, rp.z, goal.pos.x, goal.pos.z);
+      const angle = bearing(rp.x, rp.z, this.ranger.rotation.y, wp.x, wp.z);
+      const dist = distanceTo(rp.x, rp.z, goal.pos.x, goal.pos.z);
+      const cue = makeCue(angle, dist);
       const key = `${cue.glyph}|${cue.richting}|${cue.afstand}`;
       if (key !== this.lastWayKey) { this.lastWayKey = key; this.onWayfind(cue); }
     } else if (this.lastWayKey !== '') {

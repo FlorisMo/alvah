@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W4 — Rijke wereld
-- **Progress:** ~60% (weighted by ledger items)
-- **Just landed:** W4.2 Natuur-aankleding: echte boom-GLB's bij paden/POI's, stronken, keien, paddenstoelen, riet per bioom
-- **Next up:** W4.3 Zandpaden-netwerk verbindt spawn en POI's; wayfinding volgt paden
-- **Last heartbeat:** 2026-07-02 17:19:21Z
+- **Progress:** ~62% (weighted by ledger items)
+- **Just landed:** W4.3 Zandpaden-netwerk verbindt spawn en POI's; wayfinding volgt paden
+- **Next up:** W4.4 Grond-detail: procedurele albedo per bioom, gouache-gevoel behouden; before/after screenshots + één paar in qa-evidence-2/
+- **Last heartbeat:** 2026-07-02 17:29:21Z
 - **Blocker:** none
 
 ```
-✔ landed: W4.2 Natuur-aankleding: echte boom-GLB's bij paden/POI's, stronken, keien, paddenstoelen, riet per bioom
+✔ landed: W4.3 Zandpaden-netwerk verbindt spawn en POI's; wayfinding volgt paden
 ▶ phase:  Fase W4 — Rijke wereld
-→ next:   W4.3 Zandpaden-netwerk verbindt spawn en POI's; wayfinding volgt paden
+→ next:   W4.4 Grond-detail: procedurele albedo per bioom, gouache-gevoel behouden; before/after screenshots + één paar in qa-evidence-2/
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~60%
+▷ progress: ~62%
 ```

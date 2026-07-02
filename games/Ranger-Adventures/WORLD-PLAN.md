@@ -1231,3 +1231,33 @@ with the full sub-id (e.g. `W2.4a`).
   totem stand-in until its GLB streams in (same pattern as landmarks). New dev
   hook `dressing()` + `provideDressing` wiring. Frozen smoke untouched (own
   assert). 285 unit + build green; dressing + frozen smoke 4/4 green.
+- 2026-07-02 (W4.3, sand-path network + path-following wayfinding): a new pure
+  THREE-free `Paths.ts` describes the §4 route network as a tiny named-node graph
+  — spawn plus the five POI nodes ON the W4.1 landmark anchors (watchtower,
+  birdhide/ven, stuifzand, boa, ecoduct) — with four spokes from spawn, the
+  boa→ecoduct leg, and a watchtower↔birdhide edge closing a SE loop. DEVIATION
+  from §4's literal chain "spawn ↔ watchtower ↔ ecoduct ↔ ven ↔ stuifzand ↔
+  spawn": that order crosses the whole map awkwardly (watchtower SE straight to
+  ecoduct far W passes back through spawn), so I built a spoke+loop network with
+  the SAME property — spawn connects to every POI as ONE graph — which reads as
+  continuous trails, not a single winding string; the unit test pins that every
+  POI is reachable from spawn. RENDER: `World.buildPaths()` merges every segment
+  into ONE terrain-hugging ribbon mesh (samples `groundY` at BOTH edge vertices so
+  it hugs the relief, small +y lift + polygonOffset over the ground, sand vertex
+  colour, no texture) → a single draw call, so the <150 budget is untouched (E2E
+  measured comfortably under both at spawn and walking a spoke). WAYFINDING FOLLOWS
+  PATHS: the calm direction cue now bends onto the network — `routeVia(P,G)` returns
+  the next path waypoint (nearest node to P → shortest node path → nearest node to
+  G), and World aims the ARROW at that waypoint while measuring DISTANCE + "je bent
+  er" to the true marker, so the child walks the sand trail then peels off to the
+  marker on the final leg (goal within `DIRECT_R` = straight, no detour). Only the
+  continuous cue routes; `headingTo` (the recall-beat coarse heading) stays
+  straight-line on purpose — "which way is it" wants the true bearing, not the trail
+  bearing. No E2E reads the cue text (all specs steer by pos/cameraYaw), so the
+  routing change is regression-safe; its correctness is pinned by `Paths.test.ts`
+  (7 tests: connectivity, on-path geometry, nearest-node, route-bends-onto-path,
+  final-leg-straight, mid-route-advance). New dev hook `paths()` + `providePaths`
+  wiring; new `paths.spec.ts` asserts the network is one connected graph reaching
+  every POI, nodes sit on the landmark anchors, and drawCalls < 150 at spawn AND
+  along a spoke. Frozen smoke untouched (own assert). 292 unit (+7) + build green;
+  paths + frozen smoke 4/4 green.

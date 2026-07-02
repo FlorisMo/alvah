@@ -43,7 +43,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -181,6 +181,7 @@ function leaveWorld(): void {
   provideAmbient(null);
   provideLandmarks(null);
   provideDressing(null);
+  providePaths(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -467,6 +468,7 @@ function startExplore(): void {
   provideAmbient(() => world!.ambientState()); // W3.6: roaming animals + gliding birds
   provideLandmarks(() => world!.landmarkPositions()); // W4.1: fixed landmark beacons
   provideDressing(() => world!.dressingPositions()); // W4.2: nature dressing props
+  providePaths(() => world!.pathNetwork()); // W4.3: sand-path network
   provideWinStep(() => triggerActivityWin()); // W2.3: drive a 3D step's real resolve from E2E
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }

@@ -51,6 +51,9 @@ export interface RangerDevHook {
    *  POIs + biome cores): id + world x/z, or null before the hook/world is
    *  ready (W4.2). */
   dressing(): { id: string; x: number; z: number }[] | null;
+  /** The sand-path network: route nodes (id + world x/z) + segment index pairs,
+   *  or null before the hook/world is ready (W4.3). */
+  paths(): { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -70,6 +73,7 @@ const state = {
   ambient: null as null | (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]),
   landmarks: null as null | (() => { id: string; x: number; z: number }[]),
   dressing: null as null | (() => { id: string; x: number; z: number }[]),
+  paths: null as null | (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }),
 };
 
 /** Current screen the player is on. */
@@ -154,6 +158,13 @@ export function provideDressing(
   state.dressing = fn;
 }
 
+/** Register the sand-path network source (the World's route graph). W4.3. */
+export function providePaths(
+  fn: (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }) | null,
+): void {
+  state.paths = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -179,6 +190,7 @@ export function installDevHook(): boolean {
     ambient: () => (state.ambient ? state.ambient() : null),
     landmarks: () => (state.landmarks ? state.landmarks() : null),
     dressing: () => (state.dressing ? state.dressing() : null),
+    paths: () => (state.paths ? state.paths() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

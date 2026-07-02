@@ -1255,3 +1255,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~60%
 ```
+
+---
+**2026-07-02 17:29:21Z** · ticked: - [x] W4.3 Zandpaden-netwerk verbindt spawn en POI's; wayfinding volgt paden
+
+```
+✔ landed: W4.3 Zandpaden-netwerk verbindt spawn en POI's; wayfinding volgt paden
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.4 Grond-detail: procedurele albedo per bioom, gouache-gevoel behouden; before/after screenshots + één paar in qa-evidence-2/
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~62%
+```
