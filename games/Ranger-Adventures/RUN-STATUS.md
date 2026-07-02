@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W6 — Diegetische missies + biologie
-- **Progress:** ~84% (weighted by ledger items)
-- **Just landed:** W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
-- **Next up:** W6.2a rmSafe-audit corsi3d: cuts-niet-moves waar eerlijk kan; flip vereist reduced-motion E2E (nul camera-beweging) + §10-notitie; bij twijfel rmSafe:false HOUDEN
-- **Last heartbeat:** 2026-07-02 20:11:03Z
+- **Progress:** ~85% (weighted by ledger items)
+- **Just landed:** W6.2b rmSafe-audit simon3d: zelfde eisen als W6.2a
+- **Next up:** W6.2c rmSafe-audit zoeken3d: zelfde eisen als W6.2a
+- **Last heartbeat:** 2026-07-02 20:16:14Z
 - **Blocker:** none
 
 ```
-✔ landed: W6.1 Frictie-audit alle 5 missies vanaf wereld-markers onder E2E met screenshots; ruwe randen gefixt
+✔ landed: W6.2b rmSafe-audit simon3d: zelfde eisen als W6.2a
 ▶ phase:  Fase W6 — Diegetische missies + biologie
-→ next:   W6.2a rmSafe-audit corsi3d: cuts-niet-moves waar eerlijk kan; flip vereist reduced-motion E2E (nul camera-beweging) + §10-notitie; bij twijfel rmSafe:false HOUDEN
+→ next:   W6.2c rmSafe-audit zoeken3d: zelfde eisen als W6.2a
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~84%
+▷ progress: ~85%
 ```

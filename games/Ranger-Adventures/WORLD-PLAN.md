@@ -1590,3 +1590,46 @@ with the full sub-id (e.g. `W2.4a`).
   missions. No parity/trial builders touched (winStep drives each variant's own
   genuine resolve). Frozen smoke untouched (own assert). 2/2 friction tests green
   under `--workers=1`.
+- 2026-07-02 (W6.2a, rmSafe audit corsi3d — KEEP verdict): audited whether the
+  3D corsi variant should serve reduced-motion players instead of the 2D floor.
+  MOTION FINDING: the reduced path is ALREADY cuts-not-moves — `makeReframe(...,
+  reduced=true)` snaps the camera (roll 0, no ease), and the per-spot lift/scale
+  snap instantly under reduced (`f.cur` eases at factor 1, `applyFx` reads
+  `f.lift` directly), so there is no eased secondary motion, no pulse; the glow is
+  dual-channel feedback (emissive colour + scale + step sound), which is allowed.
+  So nothing eased needed removing. BLOCKER TO FLIPPING IS LEGIBILITY, NOT MOTION:
+  corsi is visuospatial sequence memory — the child must encode the exact spatial
+  POSITIONS + ORDER of spots. A 3D perspective foreshortens them (near spots
+  larger/farther apart, distant ones compressed), distorting the very spatial
+  encoding the construct measures; the flat top-down 2D grid preserves true
+  positions. This is exactly the "legibility judgment, not motion-avoidance" the
+  plan flags for KEEP — and it is construct-specific: dagnacht earned rmSafe:true
+  because a binary day/night CHOICE is perspective-immune, whereas memory-of-place
+  is not. Per "bij twijfel rmSafe:false HOUDEN", rmSafe stays FALSE; the 2D floor
+  is a feature here, not a failure. Recorded the audit in the corsi3d export
+  comment (rationale sharpened from "reads cleaner" to the perspective-distortion
+  argument). No rmSafe flip → no reduced-motion flip-gate E2E required, no
+  player-visible change, parity/trial builders untouched. Build + frozen smoke
+  4/4 green; tick passes the real gate WITHOUT `--force` (honest audit, nothing
+  red).
+- 2026-07-02 (W6.2b, rmSafe audit simon3d — KEEP verdict, closer call than corsi):
+  MOTION FINDING: identical to corsi — the reduced path is already cuts-not-moves
+  (`makeReframe(reduced)` snaps the camera every frame → zero translation/yaw after
+  the initial cut; caller lift/scale snap instantly, `f.cur` eases at factor 1 and
+  applyFx reads `f.lift`; the echo-tap/grow/replay feedback lifts are snaps under
+  reduced; glow is dual-channel emissive+scale+call sound). So a reduced-motion
+  "zero camera movement" E2E WOULD pass — nothing eased needs removing. CONSTRUCT
+  ANGLE: unlike corsi, simon's memory cue is IDENTITY (name label + hue + real
+  animal call), not spatial position, so perspective does NOT distort what is
+  measured — this is the same reason dagnacht (also identity-based) earned
+  rmSafe:true. So the flip is TECHNICALLY available. IT IS NOT TAKEN because of the
+  READING channel: the callers are NAMED, and for a dyslexic AVI-M3/E3 player the
+  name is a real memory/reading cue; the camera-facing name sprites on side/back
+  callers shrink and foreshorten under the raised 3D angle, degrading readability,
+  whereas the flat 2D named row shows every name at uniform size. That reading cost
+  is a genuine (construct-relevant) legibility judgment, and per "bij twijfel
+  rmSafe:false HOUDEN" it tips the closer call to KEEP. Recorded the reasoning in
+  the simon3d export comment (distinguishing the reading-channel cost from corsi's
+  spatial-position distortion). No rmSafe flip → no flip-gate E2E required, no
+  player-visible change, parity/trial builders untouched. Build + frozen smoke 4/4
+  green; ticked WITHOUT `--force` (honest audit, nothing red).

@@ -287,7 +287,20 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
 
 /** The registered 3D simon variant. rmSafe:false — a flat, named row is the clearer
  *  surface for an audio-visual sequence-memory task under reduced-motion, so the
- *  resolver serves the 2D floor there (3D-IMMERSION-PLAN §4). */
+ *  resolver serves the 2D floor there (3D-IMMERSION-PLAN §4).
+ *
+ *  W6.2b rmSafe audit (KEEP verdict, closer call than corsi): the reduced path is
+ *  ALREADY cuts-not-moves (makeReframe(reduced) snaps the camera; caller lift/scale
+ *  snap instantly because `f.cur` eases at factor 1 and applyFx reads `f.lift`;
+ *  glow is dual-channel feedback). And unlike corsi, simon's memory cue is IDENTITY
+ *  (name + hue + call sound), not spatial position, so 3D perspective does NOT
+ *  distort the construct (this is why dagnacht — also identity-based — could flip).
+ *  KEEP rests instead on the READING channel: the callers are NAMED, and for a
+ *  dyslexic player (AVI M3/E3) the name is a genuine memory/reading cue. The
+ *  camera-facing name sprites on side/back callers shrink and foreshorten under the
+ *  raised 3D angle, degrading that reading channel, whereas the flat 2D row shows
+ *  every name at uniform size. Per "bij twijfel rmSafe:false HOUDEN" that reading
+ *  cost tips it to false; the proven 2D floor stays the reduced-motion surface. */
 export const simon3dEngine: Play3dEngine = {
   engine: 'simon',
   play: playSimon3d,

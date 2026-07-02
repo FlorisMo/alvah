@@ -249,7 +249,19 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
 /** The registered 3D corsi variant. rmSafe:false — a flat, labelled grid is the
  *  clearer surface for a visuospatial sequence task under reduced-motion, so the
- *  resolver serves the 2D floor there (3D-IMMERSION-PLAN §4). */
+ *  resolver serves the 2D floor there (3D-IMMERSION-PLAN §4).
+ *
+ *  W6.2a rmSafe audit (KEEP verdict): the reduced-motion path here is ALREADY
+ *  cuts-not-moves (reframe snaps via makeReframe(reduced), spot lift/scale snap
+ *  instantly because `f.cur` eases at factor 1 and applyFx reads `f.lift` under
+ *  reduced — no eased secondary motion, no pulse; glow is dual-channel feedback).
+ *  So the flag is a LEGIBILITY judgment, not motion-avoidance: corsi measures
+ *  spatial position + order, and a 3D perspective foreshortens the spots
+ *  (near larger/farther apart, distant compressed), distorting the exact spatial
+ *  encoding that IS the construct. A flat top-down grid preserves true positions.
+ *  Unlike dagnacht (a binary day/night choice where perspective is harmless →
+ *  rmSafe:true), the perspective distortion is a real cost for a memory-of-place
+ *  task, so the proven 2D floor stays the reduced-motion surface. */
 export const corsi3dEngine: Play3dEngine = {
   engine: 'corsi',
   play: playCorsi3d,
