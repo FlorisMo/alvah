@@ -551,6 +551,7 @@ function showExploreHud(activeTitel: string | null): void {
     `<div class="explore-hud">` +
     `<button class="ra-pill explore-back" type="button">‹ Terug naar de hut</button>` +
     `<button class="ra-pill explore-board" type="button">📌 Prikbord${cluesBadge()}</button>` +
+    `<button class="ra-pill explore-pause" type="button">⏸ Pauze</button>` +
     `<p class="explore-hint">Tik op een dier om mee te spelen — of tik op de grond om te lopen.</p>` +
     veld +
     `<div class="explore-prompt" hidden></div>` +
@@ -565,6 +566,8 @@ function showExploreHud(activeTitel: string | null): void {
   el.querySelector('.explore-back')?.addEventListener('click', exitWorld);
   // reach the prikbord over the LIVE world — no teardown; back returns to patrol.
   el.querySelector('.explore-board')?.addEventListener('click', () => showCaseBoard(true));
+  // W2.4a: the pause/hub shell — instellingen + badges over the LIVE world, no leaveWorld.
+  el.querySelector('.explore-pause')?.addEventListener('click', () => showPauseHub());
   const hud = el.querySelector<HTMLElement>('.explore-hud');
   mountJoystick(hud);
   mountOnboardHint(hud);
@@ -742,6 +745,35 @@ function showMissionBoard(): void {
     });
   });
   el.querySelector('.mb-back')?.addEventListener('click', () => showExploreHud(activeExploreTitel()));
+}
+
+/**
+ * The in-world pause / hub shell (W2.4a): a light menu the player can open over
+ * the LIVE world — instellingen (Tweaks) + badges — WITHOUT `leaveWorld`, so the
+ * THREE scene stays live behind the card and `screen` stays 'world'. Both leaves
+ * hand their "terug" back to this hub (not the lodge); the hub's own back is
+ * "Terug naar de open plek", returning to the explore HUD in-place. This is the
+ * world-first replacement for the lodge's Instellingen/badges links; W2.4b folds
+ * in the prikbord + raaf and removes the dead "Terug naar de hut" pill.
+ */
+function showPauseHub(): void {
+  narrator.stop();
+  const el = card(
+    `<div class="reward boot-card-ish">` +
+    `<p class="boot-kicker">Pauze</p>` +
+    `<h1 class="boot-title">Wat wil je doen?</h1>` +
+    `<div class="lodge-links">` +
+    `<button class="ra-text-btn ph-badges" type="button">Bekijk je breinkracht-badges</button>` +
+    `<button class="ra-text-btn ph-tweaks" type="button">Instellingen</button>` +
+    `</div>` +
+    `<button class="btn-start ph-back" type="button">Terug naar de open plek</button>` +
+    `</div>`,
+  );
+  // Both leaves stay in the world (card()-only, no leaveWorld/setScreen) and
+  // return to THIS hub, not the lodge.
+  el.querySelector('.ph-badges')?.addEventListener('click', () => showBadges(showPauseHub, 'Terug'));
+  el.querySelector('.ph-tweaks')?.addEventListener('click', () => showTweaks(host, showPauseHub));
+  el.querySelector('.ph-back')?.addEventListener('click', () => showExploreHud(activeExploreTitel()));
 }
 
 /* ------------------------------------------------------------ briefing ---- */
@@ -965,7 +997,7 @@ function showWildcamCapture(clue: Clue): void {
 }
 
 /* -------------------------------------------------------- badge wall ---- */
-function showBadges(demoBack?: () => void): void {
+function showBadges(back?: () => void, backLabel?: string): void {
   const skill = store.get().skill;
   const wall = (Object.keys(SKILL_META) as Engine[])
     .map((e) => {
@@ -988,10 +1020,10 @@ function showBadges(demoBack?: () => void): void {
     `<p class="boot-kicker">Jouw breinkracht</p>` +
     `<h1 class="boot-title">Badges</h1>` +
     `<div class="badge-row">${wall}</div>` +
-    `<button class="btn-start" type="button">${demoBack ? 'Terug naar de demo' : 'Terug naar de hut'}</button>` +
+    `<button class="btn-start" type="button">${esc(backLabel ?? (back ? 'Terug naar de demo' : 'Terug naar de hut'))}</button>` +
     `</div>`,
   );
-  el.querySelector('.btn-start')?.addEventListener('click', demoBack ?? showLodge);
+  el.querySelector('.btn-start')?.addEventListener('click', back ?? showLodge);
 }
 
 /* --------------------------------------------------- demo-sandbox meta entry ---- */

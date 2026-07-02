@@ -861,3 +861,17 @@ with the full sub-id (e.g. `W2.4a`).
   OR "Verder op patrouille", and an occasional world-beat ("Even verder lopen") sits
   between reward and patrol — the return-to-patrol helper handles all three. 16 E2E +
   261 unit green; frozen smoke untouched (own assert, not a smoke upgrade).
+- 2026-07-02 (W2.4a, pause/hub shell): a "⏸ Pauze" pill on the explore HUD opens a
+  light in-world menu (`showPauseHub`) over the LIVE world — instellingen + badges —
+  built with `card()` only (no `leaveWorld`, no `setScreen`), so the THREE scene stays
+  live and `screen` stays 'world' throughout. Both leaves return to THIS hub, not the
+  lodge: `showTweaks(host, showPauseHub)` already takes a back callback, and `showBadges`
+  grew an optional `(back, backLabel)` — the lodge caller (`showBadges()` → showLodge)
+  and the demo caller (`showBadges(onBack)` → "Terug naar de demo") are unchanged; the
+  hub passes `(showPauseHub, 'Terug')`. The hub's own back is the plan's "Terug naar de
+  open plek" wording → `showExploreHud(activeExploreTitel())`, in-place. No new CSS
+  (reuses `.reward .boot-card-ish .lodge-links .ra-pill .btn-start`); no new localStorage.
+  The interim "‹ Terug naar de hut" pill still stands — W2.4b removes it with the dead
+  lodge-only flows. New `pause.spec.ts` opens the hub, reaches Instellingen + badges,
+  asserts `screen==='world'` and `pos()!=null` at each step, and closes back to the HUD.
+  17 E2E + 261 unit green; frozen smoke untouched (own assert, not a smoke upgrade).
