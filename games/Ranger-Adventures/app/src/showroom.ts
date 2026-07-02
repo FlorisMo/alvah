@@ -15,6 +15,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 // Pure, dependency-free base-path helper (no game modules) — keeps the showroom
 // asset URLs portable under both `/` and `/ranger/` without coupling to the spine.
 import { assetUrl } from './core/assets.ts';
+// Pure, THREE-free canonical stand-height table (W3.7a) — the SAME source of
+// truth the live world reads, so `?scale=true` shows real relative sizes.
+import { standHeightFor } from './render3d/AnimalScale.ts';
 
 type ModelEntry = { file: string; category: string; animated?: boolean; clips?: number };
 type AudioEntry = { file: string; kind?: string };
@@ -34,6 +37,11 @@ interface Tile {
 const TILE = 3;            // grid spacing (world units)
 const NORM = 1.7;          // every model normalized to this max dimension
 const CAT_ORDER = ['human', 'animal', 'bird', 'prop', 'vehicle'];
+// W3.7a: `?scale=true` shows TRUE relative scale — each model is sized to its
+// canonical dossier stand height instead of the flat NORM, so the ree towers
+// over the vos and both are dwarfed by the ranger (the default auto-scale hides
+// all of this). The "before" is the default page; the "after" is ?scale=true.
+const TRUE_SCALE = new URLSearchParams(location.search).get('scale') === 'true';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 const bar = document.getElementById('bar') as HTMLDivElement;
@@ -85,12 +93,18 @@ const camTarget = new THREE.Vector3();
 const camWant = new THREE.Vector3();
 let focusing = false;
 
-function normalize(obj: THREE.Object3D): { top: number } {
+function normalize(obj: THREE.Object3D, id: string): { top: number } {
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const s = NORM / maxDim;
+  // Default: fit the tallest DIMENSION to NORM (every tile the same size).
+  // True-scale: fit the model's HEIGHT to its canonical dossier stand height,
+  // matching `prepModel` in the live world; models with no dossier size
+  // (props/vehicles/birds) fall back to NORM auto-scale.
+  const stand = TRUE_SCALE ? standHeightFor(id) : null;
+  const s = stand !== null
+    ? stand / (size.y || 1)
+    : NORM / (Math.max(size.x, size.y, size.z) || 1);
   obj.scale.setScalar(s);
   // recenter on origin, sit on the ground
   obj.position.set(-center.x * s, -box.min.y * s, -center.z * s);
@@ -162,7 +176,7 @@ async function build(): Promise<void> {
       assetUrl(`/models/${entry.file}`),
       (gltf: GLTF) => {
         const root = gltf.scene;
-        const { top } = normalize(root);
+        const { top } = normalize(root, id);
         tile.top = top + 0.12;
         holder.add(root);
         if (gltf.animations.length > 0) {

@@ -19,6 +19,7 @@ import {
   anchorInBiome, biomeAt, heightAt, type Biome,
 } from './Biomes';
 import { loadManifest, loadModel, loadRig, prepModel } from './Models';
+import { standHeightFor } from './AnimalScale';
 import { applyEyes } from './EyeMaterial';
 import { applyFace } from './FaceRig';
 import { applyCalmPose } from './CalmPoseRig';
@@ -92,6 +93,7 @@ export class World {
     walk: THREE.AnimationAction | null;   // baked stride clip
     graze: THREE.AnimationAction | null;  // baked rest/graze clip
     walkW: number; grazeW: number;        // eased crossfade weights
+    h: number;                            // applied canonical stand height (W3.7a)
   }[] = [];
   private activeId: string | null = null;     // the mission the wayfinding cue points to
   private readonly onWayfind: (cue: WayCue | null) => void;
@@ -672,15 +674,18 @@ export class World {
    * the submerged ven (46,-19), so nothing wanders into water or across the demo.
    */
   private placeAmbientLife(): void {
-    // ground roamers: [id, target height (m, dossier-ballpark — W3.7 refines),
-    // home x/z, loop radius, whether the GLB carries baked walk/graze clips]
-    const GROUND: { id: string; h: number; hx: number; hz: number; r: number; baked: boolean }[] = [
-      { id: 'animal-ree-roedeer', h: 0.95, hx: 26, hz: 26, r: 6, baked: true },   // bos/heide edge
-      { id: 'animal-vos-fox', h: 0.48, hx: -30, hz: -10, r: 7, baked: true },     // heide, west
-      { id: 'animal-eekhoorn-squirrel', h: 0.26, hx: -24, hz: -24, r: 3, baked: false }, // near trees
-      { id: 'animal-wildzwijn-boar', h: 0.85, hx: 10, hz: 36, r: 6, baked: false },     // heide, south
+    // ground roamers: [id, home x/z, loop radius, whether the GLB carries baked
+    // walk/graze clips]. Target height now comes from the canonical dossier
+    // stand-height table (W3.7a, `AnimalScale.ts`) — one source of truth so the
+    // world and the showroom true-scale mode read the SAME relative sizes.
+    const GROUND: { id: string; hx: number; hz: number; r: number; baked: boolean }[] = [
+      { id: 'animal-ree-roedeer', hx: 26, hz: 26, r: 6, baked: true },   // bos/heide edge
+      { id: 'animal-vos-fox', hx: -30, hz: -10, r: 7, baked: true },     // heide, west
+      { id: 'animal-eekhoorn-squirrel', hx: -24, hz: -24, r: 3, baked: false }, // near trees
+      { id: 'animal-wildzwijn-boar', hx: 10, hz: 36, r: 6, baked: false },     // heide, south
     ];
     GROUND.forEach((a, i) => {
+      const h = standHeightFor(a.id) ?? 0.9; // dossier canonical (W3.7a)
       const wander: WanderConfig = {
         homeX: a.hx, homeZ: a.hz, radius: a.r,
         period: 22 + i * 4,          // each roams at a slightly different pace
@@ -696,12 +701,12 @@ export class World {
         recipe: gaitFor(a.id),
         anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
         walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 1,
+        walkW: 0, grazeW: 1, h,
       };
       this.ambient.push(entry);
       void loadRig(a.id).then((rig) => {
         if (!rig) return;
-        const prepped = prepModel(rig.group, a.h);
+        const prepped = prepModel(rig.group, h);
         applyEyes(prepped, a.id, { dusk: false });
         applyCalmPose(prepped, a.id); // §B never-scary rest-pose bias
         group.add(prepped);
@@ -741,7 +746,7 @@ export class World {
         recipe: gaitFor(b.id),
         anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
         walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 0,
+        walkW: 0, grazeW: 0, h: b.h,
       };
       this.ambient.push(entry);
       void loadModel(b.id).then((m) => {
@@ -756,11 +761,12 @@ export class World {
   /** Dev-hook accessor (W3.6): each ambient creature's id + live world x/z + its
    *  dominant baked clip {name, time} (null for the procedural + bird cast). Lets
    *  the E2E assert ≥2 animals are present AND a baked mixer clock advances. */
-  ambientState(): { id: string; x: number; z: number; clip: { name: string; time: number } | null }[] {
+  ambientState(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] {
     return this.ambient.map((a) => {
       const dom = a.mixer ? (a.walkW >= a.grazeW ? a.walk : a.graze) : null;
       return {
         id: a.id, x: a.group.position.x, z: a.group.position.z,
+        h: a.h, // applied canonical stand height (W3.7a) — E2E asserts the live ordering
         clip: dom ? { name: dom.getClip().name, time: dom.time } : null,
       };
     });

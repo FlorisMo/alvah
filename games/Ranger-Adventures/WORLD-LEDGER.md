@@ -54,7 +54,10 @@ W0.6 CI-gate in deploy.yml — gesplitst (vereist een groene ubuntu-run vóór h
 - [x] W3.4b Accuracy-dossier vogels: zelfde behandeling voor de ~10 missie/audio-relevante vogels; zelfde bronregels; --force toegestaan (2)
 - [x] W3.5 Dieren-animatie via CC0/CC-BY packs (Quaternius, poly.pizza, Kenney): match per boegbeeld-dier, license-log, schaal per dossier, optimize-animated, staged animated:true; stijl-check screenshot in qa-evidence-2; geen match → §10-verdict; Anything World NIET gebruiken; --force toegestaan (3)
 - [x] W3.6 Ambient dierenleven: zwerf-loops met baked clips waar W3.5 ze stageerde en verbeterde procedurele gaits elders, 2 zwevende vogels; calm-pose gate; E2E ≥2 dieren + drawCalls <150 (3)
-- [ ] W3.7 Dossier toepassen: relatieve schaal per dier t.o.v. de ranger, vacht-tinten en oogkleuren (eye-recipe), houding; before/after showroom-screenshots, top-correcties in qa-evidence-2; strijdige Wist-je-dat teksten fixen via readlevel-corpus (3)
+W3.7 Dossier toepassen — gesplitst (schaal / tinten+ogen+houding / teksten, elk eigen verificatie):
+- [x] W3.7a Relatieve schaal per dier t.o.v. de ranger: canonieke stand-hoogte-tabel (dossier-afgeleid, ranger-relatief) door de plaatsings/showroom height-path; unit test op ordening + ranger-ratio; showroom true-scale modus + before/after screenshots in qa-evidence-2; E2E leest de toegepaste schaal-ordening live (1)
+- [ ] W3.7b Vacht-tinten + oogkleur-recept + houding: vos rufous-retint (+ andere dossier-strijdige vachten) via tint-util; eye-recipe uitbreiden (wolf/wildzwijn/frisling iris, adder rood) per dossier; houding-flags; unit test eyeSpecFor; before/after showroom in qa-evidence-2; §10-notitie (1)
+- [ ] W3.7c Strijdige Wist-je-dat teksten fixen via readlevel-corpus; §10 noteert elke dossier-tegenspraak (1)
 
 ## Fase W4 — Rijke wereld
 

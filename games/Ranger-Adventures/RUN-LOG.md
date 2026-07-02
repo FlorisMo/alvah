@@ -1200,3 +1200,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~53%
 ```
+
+---
+**2026-07-02 16:46:20Z** · ticked: - [x] W3.7a Relatieve schaal per dier t.o.v. de ranger: canonieke stand-hoogte-tabel (dossier-afgeleid, ranger-relatief) door de plaatsings/showroom height-path; unit test op ordening + ranger-ratio; showroom true-scale modus + before/after screenshots in qa-evidence-2; E2E leest de toegepaste schaal-ordening live
+
+```
+✔ landed: W3.7a Relatieve schaal per dier t.o.v. de ranger: canonieke stand-hoogte-tabel (dossier-afgeleid, ranger-relatief) door de plaatsings/showroom height-path; unit test op ordening + ranger-ratio; showroom true-scale modus + before/after screenshots in qa-evidence-2; E2E leest de toegepaste schaal-ordening live
+▶ phase:  Fase W3 — Levend (animaties)
+→ next:   W3.7b Vacht-tinten + oogkleur-recept + houding: vos rufous-retint (+ andere dossier-strijdige vachten) via tint-util; eye-recipe uitbreiden (wolf/wildzwijn/frisling iris, adder rood) per dossier; houding-flags; unit test eyeSpecFor; before/after showroom in qa-evidence-2; §10-notitie
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~53%
+```

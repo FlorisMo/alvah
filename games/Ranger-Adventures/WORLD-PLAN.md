@@ -1089,3 +1089,33 @@ with the full sub-id (e.g. `W2.4a`).
   150 (measured comfortably under with the full cast). `faceOffset` per entry is 0
   for now — per-GLB forward correction + relative scale + coat tints are W3.7. 273
   unit (+6) + build green; ambient spec + frozen smoke 4/4 green.
+- 2026-07-02 (W3.7 SPLIT): the apply-the-dossier box is three independent
+  concerns, each with its own verification, so it was split in the ledger into
+  W3.7a (relative scale), W3.7b (coat tints + eye recipe + posture) and W3.7c
+  (contradicted "Wist je dat" strings). Parent checkbox replaced with plain
+  text; weights 1+1+1 = the parent's 3.
+- 2026-07-02 (W3.7a, relative scale): every animal now reads at its TRUE size
+  relative to the ranger and to each other. New pure THREE-free `AnimalScale.ts`
+  turns the W3.4a dossier shoulder heights into ONE canonical stand-height table
+  (`STAND_HEIGHT` per manifest id + `standHeightFor`/`ratioToRanger`), the target
+  `prepModel` normalizes each GLB to. DERIVATION recorded in-file + honest: the
+  table target is STANDING height (prepModel fits the tallest DIM), so it is the
+  sourced shoulder height × a documented posture factor (~1.4 long-necked
+  browsers, ~1.15 canids, ~1.05 head-low boar); small mammals use upright body
+  size, snake/frog/butterfly a nominal height. Numbers are honest estimates —
+  the unit test pins the ORDERING + ranger ratios (robust to the factor), not a
+  false precision. The dossier's 1.7 m adult is the reference; the in-world
+  PLAYER mesh stays deliberately child-scaled (1.25 m — Alvah is 8), so the true
+  animal heights read correctly next to a child. `World.placeAmbientLife` now
+  pulls each roamer's height from the table (ree 0.95 / vos 0.48 / eekhoorn 0.25
+  / wildzwijn 0.88 — small shifts from the W3.6 ballparks) and reports the
+  applied `h` through the `ambient()` dev hook. The SHOWROOM auto-scaled every
+  model to 1.7 (hiding all relative scale — the W3.5 §10 note); a new
+  `?scale=true` mode sizes by the same table, so `qa-evidence-2/`
+  w37-scale-before-autoscale.png vs w37-scale-after-truescale.png show the ree
+  towering over the vos with the frog/butterfly as specks. New
+  `AnimalScale.test.ts` (6 tests: ordering, ranger ratios, every id resolves,
+  non-animals → null) + `scale.spec.ts` (live world asserts ree > vos > eekhoorn
+  applied `h`, all animals < 1.7) + `showroom-w37.spec.ts` (before/after shots).
+  279 unit (+6) + build green; scale + frozen smoke green (frozen smoke
+  untouched — this is the box's own assert, not a smoke upgrade).
