@@ -1365,3 +1365,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~77%
 ```
+
+---
+**2026-07-02 19:29:01Z** · ticked: - [x] W5.3a Pure heli-vluchtcore + opt-in toggle: core/heli.ts (exp-gedempte klim/daal ≤2 m/s naar vaste kruishoogte, horizon altijd recht/roll 0, gedempte yaw, translate-detectie voor vignette) + unit tests; settings.helikopter (default false) via state.ts + reduced-motion→niet-beschikbaar predicaat + unit test
+
+```
+✔ landed: W5.3a Pure heli-vluchtcore + opt-in toggle: core/heli.ts (exp-gedempte klim/daal ≤2 m/s naar vaste kruishoogte, horizon altijd recht/roll 0, gedempte yaw, translate-detectie voor vignette) + unit tests; settings.helikopter (default false) via state.ts + reduced-motion→niet-beschikbaar predicaat + unit test
+▶ phase:  Fase W5 — Voertuigen
+→ next:   W5.3b Helikopter wereld-integratie: helipads bij BOA-post + stuifzand, in/uit op pads, cockpitkader-overlay + bewegings-vignette (uit bij hover), HUD-prompt, dev-hook heli(); reduced-motion toont kalme niet-beschikbaar-melding; E2E toggle aan → pad-naar-pad vlucht + FOV constant + roll 0 + gedempte yaw, en reduced-motion niet-beschikbaar
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~78%
+```
