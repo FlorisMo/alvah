@@ -66,7 +66,7 @@ W3.7 Dossier toepassen — gesplitst (schaal / tinten+ogen+houding / teksten, el
 - [x] W4.3 Zandpaden-netwerk verbindt spawn en POI's; wayfinding volgt paden (2)
 - [x] W4.4 Grond-detail: procedurele albedo per bioom, gouache-gevoel behouden; before/after screenshots + één paar in qa-evidence-2/ (3)
 - [x] W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget (3)
-- [ ] W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion (2)
+- [x] W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion (2)
 - [ ] W4.7 Audio-pas: ambient-heide her-encoderen <1 MB, voetstappen per ondergrond, biome-crossfade; extra vogelzang bij sleutels (2)
 - [ ] W4.8 Ven-water: fresnel-tint, golfloos default, subtiele rimpel zonder reduced-motion (2)
 

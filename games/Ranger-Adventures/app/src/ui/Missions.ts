@@ -43,7 +43,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -184,6 +184,7 @@ function leaveWorld(): void {
   providePaths(null);
   provideGroundDetail(null);
   provideLighting(null);
+  provideSky(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -475,6 +476,7 @@ function startExplore(): void {
   providePaths(() => world!.pathNetwork()); // W4.3: sand-path network
   provideGroundDetail(() => world!.groundDetailState()); // W4.4: procedural ground albedo
   provideLighting(() => world!.lightingState()); // W4.5: golden-hour light + shadows
+  provideSky(() => world!.skyState()); // W4.6: sky gradient + cloud drift + wind + flyover
   provideWinStep(() => triggerActivityWin()); // W2.3: drive a 3D step's real resolve from E2E
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }

@@ -63,6 +63,19 @@ export interface RangerDevHook {
    *  many animal blob shadows are placed — lets the E2E assert selective shadows
    *  exist and the budget still holds. */
   lighting(): { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number } | null;
+  /** The W4.6 "Lucht + adem" state: richer-gradient stop count, whether the
+   *  cloud-shadow layer + wind grasses exist, and the LIVE cloud offset / wind
+   *  sample / bird flyover — lets the E2E assert the ambient motion advances when
+   *  moving and FREEZES under reduced-motion. */
+  sky(): {
+    gradientStops: number;
+    cloudDrift: boolean;
+    windMeshes: number;
+    skyTime: number;
+    cloudOffset: { x: number; y: number };
+    windSample: number;
+    flyover: { x: number; y: number; z: number; visible: boolean } | null;
+  } | null;
 }
 
 const VERSION = '2.0.0-world';
@@ -85,6 +98,15 @@ const state = {
   paths: null as null | (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }),
   groundDetail: null as null | (() => { on: boolean; textured: boolean; tileRepeat: number }),
   lighting: null as null | (() => { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number }),
+  sky: null as null | (() => {
+    gradientStops: number;
+    cloudDrift: boolean;
+    windMeshes: number;
+    skyTime: number;
+    cloudOffset: { x: number; y: number };
+    windSample: number;
+    flyover: { x: number; y: number; z: number; visible: boolean } | null;
+  }),
 };
 
 /** Current screen the player is on. */
@@ -190,6 +212,21 @@ export function provideLighting(
   state.lighting = fn;
 }
 
+/** Register the W4.6 "Lucht + adem" atmosphere state source (the World). */
+export function provideSky(
+  fn: (() => {
+    gradientStops: number;
+    cloudDrift: boolean;
+    windMeshes: number;
+    skyTime: number;
+    cloudOffset: { x: number; y: number };
+    windSample: number;
+    flyover: { x: number; y: number; z: number; visible: boolean } | null;
+  }) | null,
+): void {
+  state.sky = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -218,6 +255,7 @@ export function installDevHook(): boolean {
     paths: () => (state.paths ? state.paths() : null),
     groundDetail: () => (state.groundDetail ? state.groundDetail() : null),
     lighting: () => (state.lighting ? state.lighting() : null),
+    sky: () => (state.sky ? state.sky() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

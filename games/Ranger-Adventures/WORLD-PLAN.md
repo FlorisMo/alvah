@@ -1320,3 +1320,34 @@ with the full sub-id (e.g. `W2.4a`).
   grove (solid props in the shadow frustum → depth pass renders them). Not a smoke
   upgrade (own assert); frozen smoke 4/4 untouched. 298 unit + build green;
   lighting + frozen smoke 4/4 green.
+- 2026-07-02 (W4.6, Lucht + adem — sky + breath): the sky now breathes with four
+  ambient touches, all SECONDARY motion driven by a NEW pure THREE-free
+  `Atmosphere.ts` (8 unit tests): (1) a RICHER golden-hour gradient — `SKY_STOPS`
+  replaces the old 3-stop ramp with 6 warm bands zenith→horizon; (2) DRIFTING
+  cloud shadows — one large MULTIPLY-blended plane (`buildCloudShadows`) whose
+  soft grey blobs darken the ground pixels behind it, its texture offset scrolled
+  by `cloudOffset(skyTime)`; (3) a gentle WIND wave — the marram (110) + reed (90)
+  instanced grasses re-tilt each frame by `windSway(t, phase)` about their base
+  transform (marram full strength, reeds ×0.7), a cheap ~200-matrix recompose;
+  (4) a BIRD FLYOVER — a small dark V crossing the sky west→east on a ~12 s period
+  (`flyoverAt`) with a calm off-view gap between passes. KEY CONTRACT DESIGN: a
+  single `skyTime` clock advances ONLY when reduced-motion is off, so a frozen
+  clock stills EVERY effect together (clouds stop, grass holds, bird parks) — the
+  comfort §C secondary-motion rule, unlike the player's rm-exempt locomotion. Two
+  gotchas fixed: the two scatter functions each pre-called `applyWind(0)` but its
+  `lastWindT` de-dup guard made the second a no-op (reeds would render at the
+  identity matrix) → the initial pose is now set ONCE after both scatters; and
+  three's `MultiplyBlending` warns unless `premultipliedAlpha:true`, now set. The
+  cloud plane sits low (y=3.2) over the gentle relief and only darkens (white
+  texture base = no change under multiply), so it never reads as a floating plane
+  — recorded as the pragmatic choice over true ground-projected cloud shadows
+  (which need a custom shader, a headless-SwiftShader risk the contract avoids).
+  Budget safe: cloud layer + bird are one draw call each, the wind rides the
+  EXISTING grass instances → `drawCalls()` still < 150. New dev hook `sky()`
+  (gradientStops, cloudDrift, windMeshes, live skyTime/cloudOffset/windSample/
+  flyover) + `provideSky` wiring; new `sky.spec.ts` asserts the richer gradient +
+  cloud layer + ≥2 wind meshes exist, the clock + cloud offset + wind sample
+  advance over 2.2 s of normal motion, and under `emulateMedia({reducedMotion})`
+  every value is byte-identical between two polls (frozen), all under budget. Not
+  a smoke upgrade (own assert); frozen smoke 4/4 untouched. 306 unit (+8) + build
+  green; sky + frozen smoke 4/4 green.

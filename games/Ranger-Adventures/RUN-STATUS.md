@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W4 — Rijke wereld
-- **Progress:** ~67% (weighted by ledger items)
-- **Just landed:** W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget
-- **Next up:** W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion
-- **Last heartbeat:** 2026-07-02 17:51:41Z
+- **Progress:** ~69% (weighted by ledger items)
+- **Just landed:** W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion
+- **Next up:** W4.7 Audio-pas: ambient-heide her-encoderen <1 MB, voetstappen per ondergrond, biome-crossfade; extra vogelzang bij sleutels
+- **Last heartbeat:** 2026-07-02 18:04:22Z
 - **Blocker:** none
 
 ```
-✔ landed: W4.5 Gouden-uur licht + selectieve schaduwen (hero shadow map + blob shadows); statisch licht; budget
+✔ landed: W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion
 ▶ phase:  Fase W4 — Rijke wereld
-→ next:   W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion
+→ next:   W4.7 Audio-pas: ambient-heide her-encoderen <1 MB, voetstappen per ondergrond, biome-crossfade; extra vogelzang bij sleutels
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~67%
+▷ progress: ~69%
 ```

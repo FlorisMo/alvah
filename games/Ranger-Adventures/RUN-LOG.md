@@ -1288,3 +1288,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~67%
 ```
+
+---
+**2026-07-02 18:04:22Z** · ticked: - [x] W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion
+
+```
+✔ landed: W4.6 Lucht + adem: rijkere gradient, wolkschaduwen, windgolf, vogel-overvlucht ~12 s; stil onder reduced-motion
+▶ phase:  Fase W4 — Rijke wereld
+→ next:   W4.7 Audio-pas: ambient-heide her-encoderen <1 MB, voetstappen per ondergrond, biome-crossfade; extra vogelzang bij sleutels
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~69%
+```

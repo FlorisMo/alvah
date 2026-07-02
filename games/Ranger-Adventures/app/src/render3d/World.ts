@@ -38,6 +38,9 @@ import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
 import { PlayerRig } from './PlayerRig';
+import {
+  SKY_STOPS, cloudOffset, windSway, flyoverAt, type Flyover,
+} from './Atmosphere';
 
 export interface WorldMarker {
   missionId: string;
@@ -48,7 +51,7 @@ export interface WorldMarker {
   biome?: Biome;            // the mission's landschap → anchor the marker in it
 }
 
-const SKY_TOP = '#fde8c8', SKY_MID = '#f6cf9e', SKY_LOW = '#e9b27f';
+const SKY_LOW = '#e9b27f'; // horizon band + fog colour (matches SKY_STOPS' last stop)
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -131,6 +134,29 @@ export class World {
   private blobCount = 0;
   private renderer: THREE.WebGLRenderer | null = null;
   private static blobTex: THREE.Texture | null = null;
+  // W4.6: reusable scratch for the per-frame wind matrix recompose (no per-frame
+  // allocation while re-tilting a few hundred grass blades).
+  private static readonly _m = new THREE.Matrix4();
+  private static readonly _q = new THREE.Quaternion();
+  private static readonly _e = new THREE.Euler();
+  private static readonly _p = new THREE.Vector3();
+  private static readonly _s = new THREE.Vector3();
+  // W4.6 "Lucht + adem": all SECONDARY ambient motion (drifting cloud shadows,
+  // grass wind wave, bird flyover). `skyTime` advances ONLY when reduced-motion is
+  // off, so every effect freezes together under reduced-motion (comfort §C). The
+  // effects are driven from the pure Atmosphere math.
+  private skyTime = 0;
+  private lastWindT = NaN;                       // skip redundant wind re-uploads
+  private cloudLayer: THREE.Mesh | null = null;  // multiply-blended cloud-shadow plane
+  private flyBird: THREE.Group | null = null;    // the ~12 s sky crossing bird
+  private lastFlyover: Flyover | null = null;
+  // tall grasses that catch the wind (marram + reed): their instanced mesh + the
+  // per-blade base transform, re-tilted each frame by windSway.
+  private readonly windMeshes: {
+    mesh: THREE.InstancedMesh;
+    items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[];
+    strength: number;
+  }[] = [];
   private readonly canvas: HTMLCanvasElement;
   private readonly onApproach: (missionId: string | null) => void;
   private readonly onInteract: (missionId: string) => void;
@@ -222,10 +248,13 @@ export class World {
     this.scene.add(this.ground);
     this.scene.add(this.buildPaths()); // W4.3: sand-path ribbons over the ground
     this.scene.add(this.buildVenWater());
+    this.buildCloudShadows(); // W4.6: drifting cloud shadows over the ground
+    this.buildFlyover();      // W4.6: the ~12 s bird flyover
     this.scatterPines(80);
     this.scatterHeather(150);
     this.scatterMarram(110);
     this.scatterReeds(90);
+    this.applyWind(0); // W4.6: initial wind pose for both grass meshes
 
     // ranger: procedural stand-in first (instant), real model swaps in when loaded
     this.ranger.add(this.proceduralRanger());
@@ -332,7 +361,9 @@ export class World {
     c.width = 2; c.height = 256;
     const ctx = c.getContext('2d')!;
     const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0, SKY_TOP); g.addColorStop(0.55, SKY_MID); g.addColorStop(1, SKY_LOW);
+    // W4.6: a richer, multi-band golden-hour ramp (Atmosphere.SKY_STOPS) instead
+    // of the old three-stop wash — soft warm bands from zenith to horizon.
+    for (const [at, col] of SKY_STOPS) g.addColorStop(at, col);
     ctx.fillStyle = g; ctx.fillRect(0, 0, 2, 256);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -413,6 +444,97 @@ export class World {
     disc.renderOrder = 1;
     group.add(disc);
     this.blobCount++;
+  }
+
+  /**
+   * W4.6: drifting cloud shadows. ONE large flat plane over the play area,
+   * MULTIPLY-blended so its soft grey blobs darken the ground pixels behind it —
+   * a real cheap cloud shadow (one draw call, no shadow-map cost). The texture
+   * repeats and its offset is scrolled by `cloudOffset(skyTime)` each frame, so
+   * the patches drift; a frozen clock (reduced-motion) stops them. Sits low over
+   * the terrain and only DARKENS (multiply against white = no change), so it
+   * never adds a visible plane — just soft moving shade.
+   */
+  private buildCloudShadows(): void {
+    const N = 256;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = N;
+    const ctx = cv.getContext('2d')!;
+    ctx.fillStyle = '#ffffff'; // white = "no darkening" under multiply
+    ctx.fillRect(0, 0, N, N);
+    // a few soft grey blobs = the cloud undersides that darken the ground. Drawn
+    // with wrap-around copies so the tile stays seamless when it repeats.
+    const blobs: [number, number, number, number][] = [
+      [0.22, 0.30, 0.26, 0.30], [0.66, 0.20, 0.20, 0.24],
+      [0.48, 0.62, 0.30, 0.26], [0.83, 0.74, 0.22, 0.22],
+      [0.12, 0.82, 0.18, 0.20],
+    ];
+    for (const [bx, by, br, a] of blobs) {
+      for (const ox of [-1, 0, 1]) for (const oy of [-1, 0, 1]) {
+        const cx = (bx + ox) * N, cy = (by + oy) * N, r = br * N;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, `rgba(120,116,110,${a})`); // soft warm-grey shade
+        g.addColorStop(1, 'rgba(120,116,110,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(2.2, 2.2); // ~110 m per tile over the 240 m ground — big soft clouds
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, depthWrite: false,
+      blending: THREE.MultiplyBlending, premultipliedAlpha: true, // three wants this for multiply
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 3.2;   // low over the gentle relief so shade reads on the ground
+    mesh.renderOrder = 2;    // after the ground + props so the multiply lands on them
+    mesh.frustumCulled = false;
+    this.scene.add(mesh);
+    this.cloudLayer = mesh;
+  }
+
+  /**
+   * W4.6: the bird flyover. A small dark silhouette (a shallow V of two wings)
+   * high in the sky; `flyoverAt(skyTime)` sails it west→east on the ~12 s period
+   * with a calm gap between passes. Parked off-view / frozen under reduced-motion.
+   */
+  private buildFlyover(): void {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color: '#3b3630' });
+    const wing = new THREE.BoxGeometry(1.6, 0.06, 0.34);
+    const left = new THREE.Mesh(wing, mat);
+    const right = new THREE.Mesh(wing, mat);
+    left.position.set(-0.75, 0, 0); left.rotation.z = 0.28;
+    right.position.set(0.75, 0, 0); right.rotation.z = -0.28;
+    g.add(left, right);
+    g.visible = false;
+    this.flyBird = g;
+    this.scene.add(g);
+  }
+
+  /**
+   * W4.6: re-tilt every wind-blade to `windSway(skyTime, phase)` about its base
+   * transform. Cheap (a few hundred instance matrices), skipped when the clock is
+   * unchanged (reduced-motion → one still pose, no redundant GPU uploads).
+   */
+  private applyWind(t: number): void {
+    if (t === this.lastWindT) return;
+    this.lastWindT = t;
+    for (const wm of this.windMeshes) {
+      for (let k = 0; k < wm.items.length; k++) {
+        const it = wm.items[k];
+        World._e.set(0, 0, windSway(t, it.phase) * wm.strength);
+        World._q.setFromEuler(World._e);
+        World._p.set(it.x, it.y, it.z);
+        World._s.set(it.sx, it.sy, it.sx);
+        World._m.compose(World._p, World._q, World._s);
+        wm.mesh.setMatrixAt(k, World._m);
+      }
+      wm.mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   /**
@@ -573,23 +695,24 @@ export class World {
     this.scene.add(tufts);
   }
 
-  /** Drift-sand marram tussocks — upright pale grass blades on the stuifzand. */
+  /** Drift-sand marram tussocks — upright pale grass blades on the stuifzand.
+   *  W4.6: registered as a wind mesh so the blades lean in the breeze. */
   private scatterMarram(budget: number): void {
     const spots = this.candidates(budget * 4, 'stuifzand');
     const geo = new THREE.ConeGeometry(0.16, 0.9, 5);
     const mat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.stuifzand.accent, roughness: 1, flatShading: true });
     const grass = new THREE.InstancedMesh(geo, mat, spots.length);
-    const m = new THREE.Matrix4();
-    spots.forEach(({ x, z, i }, k) => {
+    const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
+    spots.forEach(({ x, z, i }) => {
       const s = 0.6 + (i % 3) * 0.25;
-      m.makeScale(s, s, s); m.setPosition(x, this.groundY(x, z) + 0.4 * s, z);
-      grass.setMatrixAt(k, m);
+      items.push({ x, y: this.groundY(x, z) + 0.4 * s, z, sx: s, sy: s, phase: (i % 7) * 0.9 });
     });
-    grass.instanceMatrix.needsUpdate = true;
+    this.windMeshes.push({ mesh: grass, items, strength: 1 }); // full sway — exposed dune grass
     this.scene.add(grass);
   }
 
-  /** Reed clumps fringing the ven — only on land just above the waterline. */
+  /** Reed clumps fringing the ven — only on land just above the waterline.
+   *  W4.6: registered as a wind mesh (softer sway than the exposed marram). */
   private scatterReeds(budget: number): void {
     const spots = this.candidates(budget * 6, 'ven').filter(({ x, z }) => {
       const y = this.groundY(x, z);
@@ -598,14 +721,13 @@ export class World {
     const geo = new THREE.CylinderGeometry(0.04, 0.06, 1.1, 5);
     const mat = new THREE.MeshStandardMaterial({ color: '#8f8a4a', roughness: 1 });
     const reeds = new THREE.InstancedMesh(geo, mat, Math.max(1, spots.length));
-    const m = new THREE.Matrix4();
-    spots.forEach(({ x, z, i }, k) => {
+    const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
+    spots.forEach(({ x, z, i }) => {
       const s = 0.7 + (i % 4) * 0.2;
-      m.makeScale(s, s, s); m.setPosition(x, this.groundY(x, z) + 0.55 * s, z);
-      reeds.setMatrixAt(k, m);
+      items.push({ x, y: this.groundY(x, z) + 0.55 * s, z, sx: s, sy: s, phase: (i % 5) * 1.3 });
     });
-    reeds.count = spots.length;
-    reeds.instanceMatrix.needsUpdate = true;
+    reeds.count = items.length;
+    this.windMeshes.push({ mesh: reeds, items, strength: 0.7 }); // reeds sway gentler
     this.scene.add(reeds);
   }
 
@@ -668,6 +790,31 @@ export class World {
       sunCastsShadow: this.sun ? this.sun.castShadow : false,
       rangerCastsShadow: this.rangerCastsShadow,
       blobShadows: this.blobCount,
+    };
+  }
+
+  /** Dev-hook accessor (W4.6): the live "Lucht + adem" state — richer-gradient
+   *  stop count, whether the cloud-shadow layer + wind grasses are present, and
+   *  the LIVE cloud offset / wind phase / bird position so the E2E can prove the
+   *  ambient motion advances when moving AND freezes under reduced-motion. */
+  skyState(): {
+    gradientStops: number;
+    cloudDrift: boolean;
+    windMeshes: number;
+    skyTime: number;
+    cloudOffset: { x: number; y: number };
+    windSample: number;
+    flyover: { x: number; y: number; z: number; visible: boolean } | null;
+  } {
+    const f = this.lastFlyover;
+    return {
+      gradientStops: SKY_STOPS.length,
+      cloudDrift: this.cloudLayer !== null,
+      windMeshes: this.windMeshes.length,
+      skyTime: this.skyTime,
+      cloudOffset: cloudOffset(this.skyTime),
+      windSample: windSway(this.skyTime, 0),
+      flyover: f ? { x: f.x, y: f.y, z: f.z, visible: f.visible } : null,
     };
   }
 
@@ -1377,6 +1524,26 @@ export class World {
     // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
     // animates in both motion modes; only the procedural-bob fallback holds still.
     this.playerRig.update(dt, this.playerSpeed, reduced);
+
+    // W4.6 "Lucht + adem": drifting cloud shadows + grass wind wave + bird flyover.
+    // All SECONDARY motion → the atmosphere clock advances ONLY when reduced-motion
+    // is off, so a frozen clock stills every effect together (comfort §C). Runs
+    // every frame (even during an in-place activity) so the sky keeps breathing.
+    if (!reduced) this.skyTime += dt;
+    const st = this.skyTime;
+    if (this.cloudLayer) {
+      const off = cloudOffset(st);
+      const map = (this.cloudLayer.material as THREE.MeshBasicMaterial).map;
+      if (map) map.offset.set(off.x, off.y);
+    }
+    this.applyWind(st);
+    if (this.flyBird) {
+      const f = flyoverAt(st);
+      this.lastFlyover = f;
+      this.flyBird.visible = f.visible;
+      this.flyBird.position.set(f.x, f.y, f.z);
+      this.flyBird.rotation.y = f.facing;
+    }
 
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
 
