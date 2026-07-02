@@ -19,6 +19,41 @@
 import * as THREE from 'three';
 import { dampFactor, highlightPulse, tapHitRadius, trailPoints } from './kit-math';
 
+/* ------------------------------------------------------ test win channel ---- */
+
+/**
+ * A dev-only "win the current step" channel (W2.3). The mission-chain E2E can't
+ * pixel-accurately raycast the 3D pick surfaces in headless SwiftShader (that
+ * correctness is covered by the per-engine parity tests), so each running 3D
+ * variant registers a `win` closure that drives its OWN genuine success path —
+ * real scoring, real `BeatSummary`, real teardown, real persistence. The devhook
+ * exposes it as `__ranger.winStep()`; nothing in production reads it (the hook
+ * object only exists under DEV / `?dev=1`). Registration is a single closure
+ * assignment, so it costs nothing when unused; `Missions` clears it after every
+ * step so no closure outlives its activity.
+ */
+let activeWin: (() => void) | null = null;
+
+/** A running 3D variant registers its genuine success path. Returns an unregister. */
+export function registerActivityWin(fn: () => void): () => void {
+  activeWin = fn;
+  return () => { if (activeWin === fn) activeWin = null; };
+}
+
+/** Drop any registered win (called by the mission runner after each step). */
+export function clearActivityWin(): void {
+  activeWin = null;
+}
+
+/** Fire the registered win, if any. Returns whether one was pending. */
+export function triggerActivityWin(): boolean {
+  const fn = activeWin;
+  if (!fn) return false;
+  activeWin = null; // one-shot: the step resolves and the next activity re-registers
+  fn();
+  return true;
+}
+
 /* ----------------------------------------------------------------- pick3d ---- */
 
 export interface Pick3dTarget {

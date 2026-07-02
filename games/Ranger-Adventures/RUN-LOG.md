@@ -1068,3 +1068,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~31%
 ```
+
+---
+**2026-07-02 14:35:08Z** · ticked: - [x] W2.3 Twee-missies-ketting E2E vanuit de wereld zonder hutbezoek; BeatSummary persist + missionView 3d voor beide
+
+```
+✔ landed: W2.3 Twee-missies-ketting E2E vanuit de wereld zonder hutbezoek; BeatSummary persist + missionView 3d voor beide
+▶ phase:  Fase W2 — Wereld als voordeur
+→ next:   W2.4a Pauze/hub-overlay shell: instellingen + badges bereikbaar zonder leaveWorld
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~33%
+```

@@ -30,7 +30,7 @@ import { buildCorsiTrial, CorsiRun, type CorsiSpot } from '../../engines/corsi';
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, makeReframe, pick3d } from '../play/kit';
+import { anchoredPrompt, makeReframe, pick3d, registerActivityWin } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -241,6 +241,7 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       });
     }
 
+    registerActivityWin(() => finish()); // W2.3: dev-only win → genuine resolve + teardown
     speak(instructie);
     showSequence();
   });

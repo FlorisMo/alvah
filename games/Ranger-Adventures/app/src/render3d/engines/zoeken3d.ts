@@ -25,7 +25,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { Highlight3d, anchoredPrompt, makeReframe, pick3d, spoorTrail } from '../play/kit';
+import { Highlight3d, anchoredPrompt, makeReframe, pick3d, spoorTrail, registerActivityWin } from '../play/kit';
 import { heightAt } from '../Biomes';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -164,6 +164,12 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         if (id === 'target') onFound();
         else onMiss(id);
       },
+    });
+
+    // W2.3: dev-only win — a clean first-tap hit + advance past the win card.
+    registerActivityWin(() => {
+      if (!done) onFound();
+      ctx.prompt.querySelector<HTMLButtonElement>('.wildcam-card .btn-start')?.click();
     });
 
     function onMiss(id: string): void {

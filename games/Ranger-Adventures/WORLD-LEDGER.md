@@ -40,7 +40,7 @@ W0.6 CI-gate in deploy.yml — gesplitst (vereist een groene ubuntu-run vóór h
 
 - [x] W2.1 Boot direct de wereld in na titel/avatar; interim Naar-de-hut knop; ?demo en ?sandbox blijven werken; journey-E2E aangepast (3)
 - [x] W2.2 Cabin-hub op de open plek: cabin + case-board props, missiebord-overlay zonder leaveWorld; E2E assert missionView === 3d (3)
-- [ ] W2.3 Twee-missies-ketting E2E vanuit de wereld zonder hutbezoek; BeatSummary persist + missionView 3d voor beide (2)
+- [x] W2.3 Twee-missies-ketting E2E vanuit de wereld zonder hutbezoek; BeatSummary persist + missionView 3d voor beide (2)
 - [ ] W2.4a Pauze/hub-overlay shell: instellingen + badges bereikbaar zonder leaveWorld (2)
 - [ ] W2.4b Prikbord + raaf in hub-overlay; dode hut-flows opruimen; MILESTONE: commit + push (eerste coherente wereld-eerst build live) (2)
 

@@ -28,7 +28,7 @@ import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/d
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { Highlight3d, anchoredPrompt, makeReframe } from '../play/kit';
+import { Highlight3d, anchoredPrompt, makeReframe, registerActivityWin } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -170,6 +170,12 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
       ctx.prompt.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
       resolve(summary);
     }
+
+    // W2.3: dev-only win — take the calm (goed) choice on every encounter, then finish.
+    registerActivityWin(() => {
+      while (!run.finished) run.choose(true);
+      finish();
+    });
 
     if (settings.voorlezen) narrator.speak(instructie);
     present();

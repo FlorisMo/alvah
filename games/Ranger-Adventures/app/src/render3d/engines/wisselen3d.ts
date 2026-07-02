@@ -39,7 +39,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, makeReframe, pick3d } from '../play/kit';
+import { anchoredPrompt, makeReframe, pick3d, registerActivityWin } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -308,6 +308,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     }
 
     // boot
+    registerActivityWin(() => finish()); // W2.3: dev-only win → genuine resolve + teardown
     paintSign();
     stageAnimal();
     speak(instructie);

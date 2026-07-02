@@ -33,6 +33,9 @@ export interface RangerDevHook {
   markers(): { x: number; z: number; missionId: string }[] | null;
   /** The spawn case-board hub: world position + live proximity, for E2E (W2.2). */
   board(): { x: number; z: number; near: boolean } | null;
+  /** Win the active 3D mission step via its genuine resolve path; true if one
+   *  was pending. Drives the two-mission-chain E2E deterministically (W2.3). */
+  winStep(): boolean;
 }
 
 const VERSION = '2.0.0-world';
@@ -47,6 +50,7 @@ const state = {
   nearId: null as null | (() => string | null),
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
   board: null as null | (() => { x: number; z: number; near: boolean } | null),
+  winStep: null as null | (() => boolean),
 };
 
 /** Current screen the player is on. */
@@ -98,6 +102,11 @@ export function provideBoard(
   state.board = fn;
 }
 
+/** Register the "win the active 3D step" driver (the mission runner). W2.3. */
+export function provideWinStep(fn: (() => boolean) | null): void {
+  state.winStep = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -118,6 +127,7 @@ export function installDevHook(): boolean {
     nearId: () => (state.nearId ? state.nearId() : null),
     markers: () => (state.markers ? state.markers() : null),
     board: () => (state.board ? state.board() : null),
+    winStep: () => (state.winStep ? state.winStep() : false),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

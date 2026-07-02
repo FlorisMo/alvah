@@ -838,3 +838,26 @@ with the full sub-id (e.g. `W2.4a`).
   it (HUD back, still 'world'), reopens and starts a mission (asserts
   `missionView === '3d'`, world still live). No unit test named for this box (pure UI
   wiring). 15 E2E + 261 unit green; frozen smoke untouched.
+- 2026-07-02 (W2.3, two-mission chain): `chain.spec.ts` plays a FULL zoeken-mission
+  (`ree-niet-aanraken` = zoeken + dagnacht) from the case-board, returns to patrol,
+  then walks back and starts a SECOND mission (`frisling`) — all in-place, no
+  `leaveWorld`, and (asserted) `screen` never becomes 'lodge'. Both resolve
+  `missionView === '3d'` and both persist a `BeatSummary`, verified by reading the
+  cumulative skill `trials` back out of the shared `alvah-ef-v1` blob (zoeken climbs
+  once per mission, dagnacht once for mission 1). KEY DECISION: headless SwiftShader
+  can't pixel-accurately raycast the 3D pick surfaces, so completion drives a NEW
+  dev-only `__ranger.winStep()` hook instead of faking clicks. It is an INPUT-modality
+  shortcut, not a state one: each running variant registers (via kit
+  `registerActivityWin`) a closure that runs its OWN genuine success path — zoeken taps
+  the target + advances past the wildcam card, dagnacht takes the calm choice on every
+  encounter then `finish()`, corsi/simon/wisselen call their real `finish()` — so every
+  asserted value (BeatSummary, screen flow, teardown, persistence) is real runtime
+  state; pick-accuracy stays covered by the per-engine parity tests. The hook is gated
+  with the rest of `__ranger` (DEV / `?dev=1`) and `Missions` calls kit
+  `clearActivityWin()` in the step `finally` so no win closure outlives its activity.
+  The chain only exercises zoeken + dagnacht (both robust, prompt-resolving); the other
+  three wins are registered for the future W6.1 friction audit but not driven here.
+  GOTCHA handled: the reward's back button is "Bekijk de wildcamera" (verhaalHaak clue)
+  OR "Verder op patrouille", and an occasional world-beat ("Even verder lopen") sits
+  between reward and patrol — the return-to-patrol helper handles all three. 16 E2E +
+  261 unit green; frozen smoke untouched (own assert, not a smoke upgrade).
