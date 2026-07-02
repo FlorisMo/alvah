@@ -348,9 +348,27 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
   g.closePath();
 }
 
-/** The registered 3D wisselen variant. rmSafe:false — two clearly-labelled bins on
- *  the flat 2D floor read cleaner than a 3D perspective for a rule-switch task under
- *  reduced-motion, so the resolver serves the 2D floor there (3D-IMMERSION-PLAN §4). */
+/** The registered 3D wisselen variant. rmSafe:false — the resolver serves the flat
+ *  2D floor under reduced-motion (3D-IMMERSION-PLAN §4).
+ *
+ *  W6.2d rmSafe audit (KEEP verdict): the reduced-motion path here is ALREADY
+ *  cuts-not-moves — the reframe snaps (`makeReframe(reduced)`), the sort GLIDE
+ *  collapses to an instant settle (`glide.t += reduced ? 1 : dt/0.5`, hop arc
+ *  `* (reduced ? 0 : 0.18)` → 0), the wrong-sort wiggle is gated `!reduced`
+ *  (wisselen3d.ts:233), and the flip re-paints/turns the signpost with an instant
+ *  set (a cut, not a tween). So a reduced-motion "zero camera movement" E2E WOULD
+ *  pass; nothing eased needs removing and the flip is TECHNICALLY available (like
+ *  simon). IT IS NOT TAKEN for the same READING-channel reason as simon, sharpened by
+ *  the construct: set-shifting is a speeded rule-application task, and every trial the
+ *  child must re-read the (possibly flipped) rule AND the two destination NAMES
+ *  ("open plek" / "het hol") AND the animal's name to apply the mapping. Those
+ *  destination + animal names are camera-facing in-world sprites that shrink and
+ *  foreshorten under the raised 3D angle, whereas the flat 2D named bins show every
+ *  name at uniform size. For a dyslexic AVI-M3/E3 player any added reading friction
+ *  directly taxes the shift cost the construct measures — a perceptual-legibility
+ *  confound on an executive measure. Per "bij twijfel rmSafe:false HOUDEN" the clean
+ *  2D floor stays the reduced-motion surface. No flip → no flip-gate E2E, no
+ *  player-visible change, parity/trial builders untouched. */
 export const wisselen3dEngine: Play3dEngine = {
   engine: 'wisselen',
   play: playWissel3d,

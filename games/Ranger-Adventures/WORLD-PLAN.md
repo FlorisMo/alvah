@@ -1633,3 +1633,51 @@ with the full sub-id (e.g. `W2.4a`).
   spatial-position distortion). No rmSafe flip → no flip-gate E2E required, no
   player-visible change, parity/trial builders untouched. Build + frozen smoke 4/4
   green; ticked WITHOUT `--force` (honest audit, nothing red).
+- 2026-07-02 (W6.2c, rmSafe audit zoeken3d — KEEP verdict): MOTION FINDING: same
+  as corsi/simon — the reduced path is already cuts-not-moves. The reframe snaps
+  (`makeReframe(reduced)`), the target highlight freezes to a steady lifted glow
+  (`highlightPulse(reduced)` returns a constant {scale:1.06, emissive:0.5}, zero
+  oscillation), the miss scale-nudge is explicitly gated `!reduced` (zoeken3d.ts:182),
+  and the kijker vignette + spoor trail are static DOM/instanced props with no
+  animation. So a reduced-motion "zero camera movement" E2E WOULD pass — nothing
+  eased needs removing and the flip is TECHNICALLY available (as with simon).
+  CONSTRUCT ANGLE (its own legibility reason, distinct from corsi's spatial-position
+  encoding and simon's name-reading): visual search / sustained attention measures
+  systematically scanning a field in which every item is SIMULTANEOUSLY and EQUALLY
+  available to inspection. A 3D perspective breaks exactly that property three ways —
+  a near decoy can OCCLUDE the target (turning an attention task into camera-angle
+  luck), foreshortening shrinks far items and biases the scan toward near ones, and
+  the kijker (binocular) vignette darkens the periphery — whereas the flat 2D grid
+  presents the whole search field at uniform scale, unoccluded, all at once. For a
+  motion-sensitive player who has already chosen reduced-motion, the clean grid is the
+  fairer and calmer surface, so per "bij twijfel rmSafe:false HOUDEN" the 2D floor
+  stays. Recorded the reasoning in the zoeken3d export comment. No rmSafe flip → no
+  flip-gate E2E required, no player-visible change, parity/trial builders untouched.
+  Build + frozen smoke 4/4 green; ticked WITHOUT `--force` (honest audit, nothing red).
+- 2026-07-02 (W6.2d, rmSafe audit wisselen3d — KEEP verdict, CLOSES the W6.2 rmSafe
+  sweep): MOTION FINDING: same as the other three — the reduced path is already
+  cuts-not-moves. The reframe snaps (`makeReframe(reduced)`), the correct-sort GLIDE
+  collapses to an instant settle (`glide.t += reduced ? 1 : dt/0.5`, and the hop-arc
+  amplitude `* (reduced ? 0 : 0.18)` → 0), the wrong-sort wiggle is gated `!reduced`
+  (wisselen3d.ts:233), and the flip re-paints + turns the signpost via an instant set
+  (`paintSign()` — a cut, not a tween). So a reduced-motion "zero camera movement" E2E
+  WOULD pass — nothing eased needs removing and the flip is TECHNICALLY available (as
+  with simon). IT IS NOT TAKEN for simon's READING-channel reason, sharpened by this
+  construct: cognitive flexibility / set-shifting is a SPEEDED rule-application task,
+  so on every trial the child re-reads the (possibly flipped) rule AND the two
+  destination NAMES ("open plek" / "het hol") AND the animal name to apply the mapping.
+  Those destination + animal names are camera-facing in-world name sprites (makeLabel)
+  that shrink and foreshorten under the raised 3D angle, whereas the flat 2D named bins
+  show every name at uniform size. For a dyslexic AVI-M3/E3 player any added reading
+  friction directly taxes the shift cost the measure is trying to isolate — a
+  perceptual-legibility confound on an executive measure. Per "bij twijfel rmSafe:false
+  HOUDEN" the clean 2D floor stays. (Note: the two bins are placed symmetrically at
+  equal depth, so zoeken's unequal-scale/occlusion argument is weaker here — the
+  reading channel is the honest reason.) Recorded in the wisselen3d export comment.
+  No rmSafe flip → no flip-gate E2E, no player-visible change, parity/trial builders
+  untouched. VERDICT for the whole W6.2 sweep: all four EF 3D variants KEEP
+  rmSafe:false, each on a distinct construct-specific legibility reason (corsi:
+  spatial-position encoding; simon + wisselen: name reading; zoeken: simultaneous
+  equal availability of the search field) — none was a motion-avoidance decision, and
+  dagnacht's rmSafe:true (perspective-immune binary choice) remains the sole flip.
+  Build + frozen smoke 4/4 green; ticked WITHOUT `--force` (honest audit, nothing red).

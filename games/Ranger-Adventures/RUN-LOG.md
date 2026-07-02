@@ -1431,3 +1431,25 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~85%
 ```
+
+---
+**2026-07-02 20:19:39Z** · ticked: - [x] W6.2c rmSafe-audit zoeken3d: zelfde eisen als W6.2a
+
+```
+✔ landed: W6.2c rmSafe-audit zoeken3d: zelfde eisen als W6.2a
+▶ phase:  Fase W6 — Diegetische missies + biologie
+→ next:   W6.2d rmSafe-audit wisselen3d: zelfde eisen als W6.2a
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~86%
+```
+
+---
+**2026-07-02 20:21:08Z** · ticked: - [x] W6.2d rmSafe-audit wisselen3d: zelfde eisen als W6.2a
+
+```
+✔ landed: W6.2d rmSafe-audit wisselen3d: zelfde eisen als W6.2a
+▶ phase:  Fase W6 — Diegetische missies + biologie
+→ next:   W6.3 Biologie diegetisch: Wist-je-dat via raaf-companion op locatie + veldnotitie op het prikbord
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~87%
+```

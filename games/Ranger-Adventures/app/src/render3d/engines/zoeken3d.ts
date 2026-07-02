@@ -229,9 +229,27 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
   });
 }
 
-/** The registered 3D zoeken variant. rmSafe:false → the resolver serves 2D under
- *  reduced-motion (this variant reframes/pulses; its cuts-not-moves path is the
- *  2D floor for now — a dedicated rm path can flip this in the Phase-II box). */
+/** The registered 3D zoeken variant. rmSafe:false → the resolver serves the 2D
+ *  floor under reduced-motion (3D-IMMERSION-PLAN §4).
+ *
+ *  W6.2c rmSafe audit (KEEP verdict): the reduced-motion path here is ALREADY
+ *  cuts-not-moves — the reframe snaps via makeReframe(reduced), the target
+ *  highlight FREEZES to a steady lifted glow (highlightPulse(reduced) returns a
+ *  constant {scale,emissive}, no oscillation), the miss scale-nudge is gated
+ *  `!reduced`, and the kijker vignette + spoor trail are static DOM/instanced
+ *  props. So a reduced-motion "zero camera movement" E2E WOULD pass; nothing eased
+ *  needs removing and the flip is TECHNICALLY available (like simon). IT IS NOT
+ *  TAKEN for a construct-specific LEGIBILITY reason distinct from corsi (spatial
+ *  position encoding) and simon (reading the names): visual search / sustained
+ *  attention measures systematically scanning a field where every item is
+ *  SIMULTANEOUSLY and EQUALLY available to inspection. A 3D perspective breaks that
+ *  — near decoys can occlude the target (turning attention into camera-angle luck),
+ *  foreshortening shrinks far items and biases the scan toward near ones, and the
+ *  kijker (binocular) vignette darkens the periphery — whereas the flat 2D grid
+ *  shows the whole search field at uniform scale, unoccluded. For a motion-sensitive
+ *  reduced-motion player the clean grid is the fairer, calmer surface, so per
+ *  "bij twijfel rmSafe:false HOUDEN" the 2D floor stays. No flip → no flip-gate
+ *  E2E, no player-visible change, parity/trial builders untouched. */
 export const zoeken3dEngine: Play3dEngine = {
   engine: 'zoeken',
   play: playZoeken3d,

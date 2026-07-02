@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W6 — Diegetische missies + biologie
-- **Progress:** ~85% (weighted by ledger items)
-- **Just landed:** W6.2b rmSafe-audit simon3d: zelfde eisen als W6.2a
-- **Next up:** W6.2c rmSafe-audit zoeken3d: zelfde eisen als W6.2a
-- **Last heartbeat:** 2026-07-02 20:16:14Z
+- **Progress:** ~87% (weighted by ledger items)
+- **Just landed:** W6.2d rmSafe-audit wisselen3d: zelfde eisen als W6.2a
+- **Next up:** W6.3 Biologie diegetisch: Wist-je-dat via raaf-companion op locatie + veldnotitie op het prikbord
+- **Last heartbeat:** 2026-07-02 20:21:08Z
 - **Blocker:** none
 
 ```
-✔ landed: W6.2b rmSafe-audit simon3d: zelfde eisen als W6.2a
+✔ landed: W6.2d rmSafe-audit wisselen3d: zelfde eisen als W6.2a
 ▶ phase:  Fase W6 — Diegetische missies + biologie
-→ next:   W6.2c rmSafe-audit zoeken3d: zelfde eisen als W6.2a
+→ next:   W6.3 Biologie diegetisch: Wist-je-dat via raaf-companion op locatie + veldnotitie op het prikbord
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~85%
+▷ progress: ~87%
 ```
