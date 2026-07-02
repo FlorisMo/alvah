@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W3 — Levend (animaties)
-- **Progress:** ~40% (weighted by ledger items)
-- **Just landed:** W3.1 Ranger regen + rig via Meshy (~35 cr, eerst balans checken, gen BACKGROUNDED met log-polling) of ingest app/incoming/ranger-alvah-rigged.glb; staged GLB ≥1 skin ≥2 clips
-- **Next up:** W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt
-- **Last heartbeat:** 2026-07-02 15:15:05Z
+- **Progress:** ~42% (weighted by ledger items)
+- **Just landed:** W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt
+- **Next up:** W3.3 Warden + poacher spelen hun bestaande baked clips op hun plek
+- **Last heartbeat:** 2026-07-02 15:38:40Z
 - **Blocker:** none
 
 ```
-✔ landed: W3.1 Ranger regen + rig via Meshy (~35 cr, eerst balans checken, gen BACKGROUNDED met log-polling) of ingest app/incoming/ranger-alvah-rigged.glb; staged GLB ≥1 skin ≥2 clips
+✔ landed: W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt
 ▶ phase:  Fase W3 — Levend (animaties)
-→ next:   W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt
+→ next:   W3.3 Warden + poacher spelen hun bestaande baked clips op hun plek
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~40%
+▷ progress: ~42%
 ```

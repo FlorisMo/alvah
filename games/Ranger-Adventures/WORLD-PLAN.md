@@ -929,3 +929,29 @@ with the full sub-id (e.g. `W2.4a`).
   `loadModel` (bind pose, no mixer) until W3.2, so smoke is unaffected — 4/4
   frozen green, build green. No E2E assert named for this box (its acceptance is
   the static gltf-inspect); W3.2 lands the `clip()` mixer assert.
+- 2026-07-02 (W3.2, player animation state machine): the ranger now breathes
+  standing and steps while walking. `loadRealRanger` swapped `loadModel` →
+  `loadRig('ranger-alvah')` (same GLB, now WITH its baked idle/walk/run clips);
+  a new `PlayerRig.ts` builds an AnimationMixer, keeps the idle + walk actions
+  BOTH playing from frame one, and crossfades their `setEffectiveWeight` from the
+  ranger's post-collision ground speed (`this.playerSpeed`, computed each frame in
+  `World.update`). The blend maths is a pure THREE-free `PlayerAnim.ts`
+  (`stepWalkWeight` — the SAME `dampFactor` the camera/position follow use, so the
+  whole feel shares one dt-independence guarantee; `dominantGait` for the hook),
+  unit-tested (6 tests: rest→idle, move→walk, <0.2 s to walk, sub-threshold stays
+  idle, 30/60/120 fps identical, clamp). KEY CONTRACT CALL: locomotion is
+  reduced-motion EXEMPT (§3.4), so the player mixer always advances with real dt —
+  UNLIKE the per-marker ANIMAL mixers (`reduced ? 0 : dt`). Only the procedural-bob
+  fallback (clips missing) holds still under reduced-motion. `clip()` wired through
+  the existing `provideClip` hook → `world.playerClip()` (dominant gait name + its
+  action time; null when procedural). New `anim.spec.ts`: waits for the rig to
+  attach, asserts idle at rest, holds ArrowUp → `clip().name === 'walk'` AND
+  `clip().time` advances between two polls (proves the mixer clock runs, not a
+  frozen pose), then eases back to idle on release. Frozen smoke untouched (own
+  assert). 267 unit (+6) + build green; anim + full smoke green.
+  FLAKINESS NOTE (not a regression): the two longest specs `pause.spec` +
+  `chain.spec` fail intermittently in local serial back-to-back runs — VERIFIED to
+  fail identically on the committed W3.1 baseline with W3.2 stashed, so it is a
+  pre-existing local-env timing issue (world-HUD visibility timeout under load),
+  NOT introduced here. Board + joystick specs also flaked under the parallel run
+  but recovered serially. The tick gate (build + 4-spec frozen smoke) is green.

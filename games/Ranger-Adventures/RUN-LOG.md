@@ -1123,3 +1123,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~40%
 ```
+
+---
+**2026-07-02 15:38:40Z** · ticked: - [x] W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt
+
+```
+✔ landed: W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt
+▶ phase:  Fase W3 — Levend (animaties)
+→ next:   W3.3 Warden + poacher spelen hun bestaande baked clips op hun plek
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~42%
+```

@@ -48,7 +48,7 @@ W0.6 CI-gate in deploy.yml — gesplitst (vereist een groene ubuntu-run vóór h
 
 - [x] W3.0 Sleutels verifiëren (test-meshy + test-xeno, gemaskeerd) en balans loggen; bij ontbreken status --blocker en dóór; --force toegestaan (1)
 - [x] W3.1 Ranger regen + rig via Meshy (~35 cr, eerst balans checken, gen BACKGROUNDED met log-polling) of ingest app/incoming/ranger-alvah-rigged.glb; staged GLB ≥1 skin ≥2 clips (3)
-- [ ] W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt (3)
+- [x] W3.2 Speler-animatie state machine: idle/walk crossfade op snelheid, procedurele fallback; unit test + E2E clip().name walk én clip().time loopt (3)
 - [ ] W3.3 Warden + poacher spelen hun bestaande baked clips op hun plek (1)
 - [ ] W3.4a Accuracy-dossier zoogdieren: webresearch per dier (maten, vacht/seizoen, oogkleur, kenmerken, gang, 1-2 kindfeiten) naar research/animal-visual-accuracy.md met bron-URL + datum per claim; geen web → --blocker, nooit verzinnen; --force toegestaan (3)
 - [ ] W3.4b Accuracy-dossier vogels: zelfde behandeling voor de ~10 missie/audio-relevante vogels; zelfde bronregels; --force toegestaan (2)

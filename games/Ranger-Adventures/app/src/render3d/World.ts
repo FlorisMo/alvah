@@ -30,6 +30,7 @@ import { wayfind, type WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
+import { PlayerRig } from './PlayerRig';
 
 export interface WorldMarker {
   missionId: string;
@@ -77,6 +78,11 @@ export class World {
   private lastBiome: Biome | null = null;       // re-pick the ambience bed on a crossing
   private nearId: string | null = null;
   private speed = 2.4;
+  // W3.2 player animation: the mixer wrapper (idle/walk crossfade by speed, or a
+  // procedural bob when the rigged GLB lacks clips). `playerSpeed` is the ranger's
+  // post-collision ground speed (m/s), fed to the crossfade each frame.
+  private readonly playerRig = new PlayerRig();
+  private playerSpeed = 0;
   // keyboard (+ joystick) movement: the held-keys set feeds resolveInput →
   // resolveMove each frame, overriding tap-to-walk while any key is down (§3.2).
   private input: InputHandle | null = null;
@@ -394,9 +400,11 @@ export class World {
 
   private async loadRealRanger(): Promise<void> {
     await loadManifest();
-    const model = await loadModel('ranger-alvah');
-    if (!model) return;
-    const prepped = prepModel(model, 1.25);
+    // W3.2: load WITH clips (the W3.1-staged rig carries idle/walk/run) so the
+    // player animates. loadRig falls back to a static group when no clips exist.
+    const rig = await loadRig('ranger-alvah');
+    if (!rig) return;
+    const prepped = prepModel(rig.group, 1.25);
     // §1e eye system: bright, alive eyes (the golden-hour world is not dusk, so
     // eyeshine stays off; parallax freezes under reduced-motion).
     applyEyes(prepped, 'ranger-alvah', { dusk: false }); // parallax reads the live policy (no restart)
@@ -407,6 +415,15 @@ export class World {
     applyFace(prepped, { emotion: 'neutral', child: true }); // microsaccade reads the live policy (no restart)
     this.ranger.clear();
     this.ranger.add(prepped);
+    // wire the locomotion mixer: idle/walk crossfade by speed, or a procedural
+    // bob when the clips are missing (loadRig returned an empty clip list).
+    if (rig.clips.length) this.playerRig.attach(prepped, rig.clips);
+    else this.playerRig.attachProcedural(prepped);
+  }
+
+  /** The ranger's active locomotion clip for the dev hook (null when procedural). */
+  playerClip(): { name: string; time: number } | null {
+    return this.playerRig.clip();
   }
 
   private placeMarkers(markers: WorldMarker[]): void {
@@ -684,6 +701,7 @@ export class World {
     // turns naturally when a collision slides them sideways. Frozen during an
     // in-place activity (the mini-game holds the scene + drives the camera itself).
     const rp = this.ranger.position;
+    this.playerSpeed = 0; // 0 while standing or during an in-place activity → mixer eases to idle
     if (!this.activityActive) {
       // W1.2 velocity branch: while a movement key is held (camera-relative via
       // resolveInput), it OVERRIDES tap-to-walk — the desired step is the input
@@ -716,6 +734,9 @@ export class World {
           // so a standing ranger (or a mini-game reframe) never swings the view.
           this.followTargetYaw = this.ranger.rotation.y;
         }
+        // W3.2: the actual post-collision ground speed drives the idle↔walk
+        // crossfade (slide-around-pine slows him, so the gait reads honestly).
+        this.playerSpeed = Math.hypot(mx, mz) / Math.max(dt, 1e-4);
         rp.x = next.x;
         rp.z = next.z;
       }
@@ -739,6 +760,11 @@ export class World {
         mk.anim.scale.set(1, d.scaleY, 1);
       }
     }
+
+    // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
+    // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
+    // animates in both motion modes; only the procedural-bob fallback holds still.
+    this.playerRig.update(dt, this.playerSpeed, reduced);
 
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
 
