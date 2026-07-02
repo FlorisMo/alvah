@@ -1026,3 +1026,41 @@ with the full sub-id (e.g. `W2.4a`).
   spechten+koekoek / mezen+winterkoning+vink). Docs-only, no code touched → no
   player-visible change and no E2E assert; ticked with `--force` (the §5 W3.4b
   allowance). Build + frozen smoke unaffected.
+- 2026-07-02 (W3.5, CC0 animal animation — 4 flagship animals staged, exceeds
+  the ≥2 bar): sourced FOUR pre-animated quadrupeds from Quaternius's *Ultimate
+  Animated Animal Pack* (all **CC0 1.0**, via poly.pizza's individual-GLB
+  downloads — Deer→`animal-ree-roedeer`, Stag→`animal-edelhert-reddeer`,
+  Fox→`animal-vos-fox`, Wolf→`animal-wolf`). Each raw GLB carried 1 skin + 24-26
+  clips (the bare + `AnimalArmature|`-prefixed sets are Blender-export
+  duplicates). PREPROCESS (new inline gltf-transform pass): kept only Idle/Walk/
+  Eating, renamed to `idle`/`walk`/`graze`, and **dropped every scary clip
+  (Attack/Death/HitReact/Gallop/Jump)** to honour the never-scary / calm-pose
+  gate (§3.4) — the game must never be able to play a predation/death pose.
+  Staged via the existing `optimize-animated.mjs` (WebP+DRACO, rig-safe, no
+  flatten/join): 4 models, **1 skin + 3 clips each, 1848-3667 tris, 125-184 kB**
+  — actually SMALLER than the static Meshy stand-ins they replaced. GOTCHA:
+  `optimize-animated.mjs` defaults an id's category to `human` when it is absent
+  from the gen manifest, which would have re-categorised the animals and mis-set
+  their texture tier / loader path — fixed by adding `{category:'animal'}` stubs
+  (+ license/source) to `assets-gen/manifest.json` before the pass, so the public
+  manifest keeps `category:'animal'`, `animated:true`, `clips:3`. LICENSE LOG:
+  new `public/models/licenses.json` (mirrors the audio manifest) records source
+  URL + CC0 per model (CC0 needs no attribution, logged for provenance).
+  **BOAR/ZWIJN VERDICT:** the pack has NO wild-boar/pig model (12 animals: deer,
+  stag, fox, wolf, bull, alpaca, 2 horses, husky, shiba + 2 others — none a
+  credible boar), so `animal-wildzwijn-boar` + `animal-frisling-piglet` stay
+  Meshy-static + improved procedural gait (W3.6) — no forced bad match. Same for
+  das/eekhoorn/adder/heikikker/heideblauwtje (no honest pack match; procedural).
+  **STYLE-COHERENCE CHECK** (`qa-evidence-2/w35-showroom-animals.png`, shot via a
+  new non-`@smoke` `showroom-w35.spec.ts` against the `showroom.html` gallery
+  filtered to `animal`): the 4 CC0 animals render animated (grazing/striding, not
+  bind-pose) beside the Meshy cast and read as the SAME low-poly storybook family
+  — mildly flatter/less-textured than the Meshy eekhoorn/frisling, but MORE
+  coherent with the low-poly flat-shaded world vegetation than the higher-detail
+  Meshy animals were, so NO jarring clash and no re-tint needed for coherence.
+  One accuracy note for W3.7: the CC0 fox reads dark-brown, not rufous-orange —
+  W3.7's coat-tint pass (per the W3.4a dossier) will correct it; relative scale
+  is also W3.7 (the gallery auto-scales, so its sizes are not the game sizes).
+  Placement into the live world is W3.6. Docs/asset box, no runtime wiring yet →
+  no player-visible change and no new smoke assert (frozen smoke 4/4 + build
+  green); ticked with `--force` (the §5 W3.5 timebox allowance).

@@ -1,0 +1,35 @@
+{
+  "_note": "License log for third-party (CC0/CC-BY) staged models. Meshy-generated models (the rest of the cast) are owned outright under the paid plan and are not listed here. Mirrors public/audio/manifest.json. Added W3.5 (2026-07-02).",
+  "animal-ree-roedeer": {
+    "file": "animal-ree-roedeer.glb",
+    "role": "ree (roe deer) — animated walk/idle/graze",
+    "source": "Deer, Ultimate Animated Animal Pack by Quaternius",
+    "sourceUrl": "https://poly.pizza/m/T6Cs7tmMHJ",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "\"Deer\" by Quaternius — quaternius.com / poly.pizza (CC0 1.0, no attribution required; logged for provenance)"
+  },
+  "animal-edelhert-reddeer": {
+    "file": "animal-edelhert-reddeer.glb",
+    "role": "edelhert (red deer) — animated walk/idle/graze",
+    "source": "Stag, Ultimate Animated Animal Pack by Quaternius",
+    "sourceUrl": "https://poly.pizza/m/tQdzbZ1Cmw",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "\"Stag\" by Quaternius — quaternius.com / poly.pizza (CC0 1.0, no attribution required; logged for provenance)"
+  },
+  "animal-vos-fox": {
+    "file": "animal-vos-fox.glb",
+    "role": "vos (fox) — animated walk/idle/graze",
+    "source": "Fox, Ultimate Animated Animal Pack by Quaternius",
+    "sourceUrl": "https://poly.pizza/m/Bc97C66HKi",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "\"Fox\" by Quaternius — quaternius.com / poly.pizza (CC0 1.0, no attribution required; logged for provenance)"
+  },
+  "animal-wolf": {
+    "file": "animal-wolf.glb",
+    "role": "wolf — animated walk/idle/graze",
+    "source": "Wolf, Ultimate Animated Animal Pack by Quaternius",
+    "sourceUrl": "https://poly.pizza/m/P1gU3Qkr9r",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "attribution": "\"Wolf\" by Quaternius — quaternius.com / poly.pizza (CC0 1.0, no attribution required; logged for provenance)"
+  }
+}

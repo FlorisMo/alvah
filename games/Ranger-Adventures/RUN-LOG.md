@@ -1178,3 +1178,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~47%
 ```
+
+---
+**2026-07-02 16:24:09Z** · ticked: - [x] W3.5 Dieren-animatie via CC0/CC-BY packs (Quaternius, poly.pizza, Kenney): match per boegbeeld-dier, license-log, schaal per dossier, optimize-animated, staged animated:true; stijl-check screenshot in qa-evidence-2; geen match → §10-verdict; Anything World NIET gebruiken; --force toegestaan
+
+```
+✔ landed: W3.5 Dieren-animatie via CC0/CC-BY packs (Quaternius, poly.pizza, Kenney): match per boegbeeld-dier, license-log, schaal per dossier, optimize-animated, staged animated:true; stijl-check screenshot in qa-evidence-2; geen match → §10-verdict; Anything World NIET gebruiken; --force toegestaan
+▶ phase:  Fase W3 — Levend (animaties)
+→ next:   W3.6 Ambient dierenleven: zwerf-loops met baked clips waar W3.5 ze stageerde en verbeterde procedurele gaits elders, 2 zwevende vogels; calm-pose gate; E2E ≥2 dieren + drawCalls <150
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~50%
+```

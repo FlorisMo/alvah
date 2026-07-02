@@ -64,8 +64,10 @@
   "animal-wolf": {
     "file": "animal-wolf.glb",
     "category": "animal",
-    "bytes": 356128,
-    "tris": 13999
+    "bytes": 130608,
+    "tris": 1962,
+    "animated": true,
+    "clips": 3
   },
   "ranger-warden-boa": {
     "file": "ranger-warden-boa.glb",
@@ -314,20 +316,26 @@
   "animal-vos-fox": {
     "file": "animal-vos-fox.glb",
     "category": "animal",
-    "bytes": 349124,
-    "tris": 13999
+    "bytes": 128220,
+    "tris": 1848,
+    "animated": true,
+    "clips": 3
   },
   "animal-ree-roedeer": {
     "file": "animal-ree-roedeer.glb",
     "category": "animal",
-    "bytes": 235780,
-    "tris": 13999
+    "bytes": 151780,
+    "tris": 2096,
+    "animated": true,
+    "clips": 3
   },
   "animal-edelhert-reddeer": {
     "file": "animal-edelhert-reddeer.glb",
     "category": "animal",
-    "bytes": 293904,
-    "tris": 14000
+    "bytes": 184040,
+    "tris": 3667,
+    "animated": true,
+    "clips": 3
   },
   "animal-heideblauwtje-butterfly": {
     "file": "animal-heideblauwtje-butterfly.glb",
