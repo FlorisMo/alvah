@@ -258,6 +258,12 @@
 .ont-text { margin: 8px 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
 
 /* ---- 3D explore HUD (overlays the world; pointer-events only on controls) ---- */
+/* The `.ra-overlay` wrapper must stay pointer-transparent so world taps fall
+ * through to the canvas for tap-to-walk. `#ui > *` (base.css) would otherwise
+ * force it back to `auto` — an ID beats the `.ra-overlay` class — swallowing
+ * every tap (WORLD-PLAN W0.4 root cause). `#ui .explore-overlay` matches the
+ * ID's specificity and adds a class, so it wins; controls stay `auto` below. */
+#ui .explore-overlay { pointer-events: none; }
 .explore-hud { position: absolute; inset: 0; pointer-events: none; }
 .explore-hud > * { pointer-events: auto; }
 .ra-pill {

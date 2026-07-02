@@ -656,6 +656,19 @@ with the full sub-id (e.g. `W2.4a`).
   --blocker channel, honest push, helicopter/jeep comfort clauses, rmSafe
   flip guard, WebKit coverage, qa-evidence-2 policy. Meshy balance verified
   7,615 cr; .env.local recovered from VS Code local history.
+- 2026-07-02 (W0.4, root cause): tap-to-walk was dead because the full-screen
+  explore HUD swallowed every tap — the canvas received ZERO `pointerdown`
+  events. The `.ra-overlay` HUD wrapper is styled `pointer-events:none`
+  (missions.css) so taps fall through to the canvas, but it is a DIRECT child
+  of `#ui`, and `#ui > * { pointer-events:auto }` (base.css) has higher
+  specificity (an ID beats the `.ra-overlay` class), forcing the wrapper back
+  to `auto`. So the raycast/`resolveMove` path was correct all along; the input
+  never reached `World.onPointer`. NOT an rAF pause / activity guard / raycast
+  miss (the prep session's candidates). Fix: an `.explore-overlay` class on the
+  HUD wrapper + `#ui .explore-overlay { pointer-events:none }` (matches the ID
+  specificity, adds a class → wins); controls stay `auto`. Red-first E2E
+  `movement.spec.ts` (tap ground → `pos()` delta ≥ 2 m) now green and folded
+  into `e2e:smoke` — the stronger smoke is FROZEN from here.
 - 2026-07-02 (prep session, later): Floris decisions folded in — no branch
   isolation (run works on main; site not in use); CC0/CC-BY animated packs
   become the primary animal-animation path after the Anything World key was

@@ -837,3 +837,47 @@ One status block per run/step (BUILD-PLAN §9b).
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~0%
 ```
+
+---
+**2026-07-02 12:03:31Z** · ticked: - [x] W0.1 Playwright scaffold: devDep, config (poort ~4199, reuseExistingServer, CI-retries), boot smoke spec, npm scripts e2e + e2e:smoke, chromium install, gitignore-regels (test-results/, playwright-report/, e2e/__shots__/, incoming/), git hooksPath .githooks
+
+```
+✔ landed: W0.1 Playwright scaffold: devDep, config (poort ~4199, reuseExistingServer, CI-retries), boot smoke spec, npm scripts e2e + e2e:smoke, chromium install, gitignore-regels (test-results/, playwright-report/, e2e/__shots__/, incoming/), git hooksPath .githooks
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.2 Dev-state hook window.__ranger (screen, pos, cameraYaw, drawCalls, missionView, clip) achter DEV of ?dev=1
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~3%
+```
+
+---
+**2026-07-02 12:08:14Z** · ticked: - [x] W0.2 Dev-state hook window.__ranger (screen, pos, cameraYaw, drawCalls, missionView, clip) achter DEV of ?dev=1
+
+```
+✔ landed: W0.2 Dev-state hook window.__ranger (screen, pos, cameraYaw, drawCalls, missionView, clip) achter DEV of ?dev=1
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.3 Journey E2E: Begin → avatar → hut → Verken de Veluwe → screen world, met screenshots; world-reach in e2e:smoke v1
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~4%
+```
+
+---
+**2026-07-02 12:10:28Z** · ticked: - [x] W0.3 Journey E2E: Begin → avatar → hut → Verken de Veluwe → screen world, met screenshots; world-reach in e2e:smoke v1
+
+```
+✔ landed: W0.3 Journey E2E: Begin → avatar → hut → Verken de Veluwe → screen world, met screenshots; world-reach in e2e:smoke v1
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.4 Movement red-first E2E: tap-to-walk ≥2 m via expect.poll; diagnose + fix waarom taps de ranger niet bewegen; e2e:smoke upgraden en BEVRIEZEN; root-cause in plan §10
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~6%
+```
+
+---
+**2026-07-02 12:16:24Z** · ticked: - [x] W0.4 Movement red-first E2E: tap-to-walk ≥2 m via expect.poll; diagnose + fix waarom taps de ranger niet bewegen; e2e:smoke upgraden en BEVRIEZEN; root-cause in plan §10
+
+```
+✔ landed: W0.4 Movement red-first E2E: tap-to-walk ≥2 m via expect.poll; diagnose + fix waarom taps de ranger niet bewegen; e2e:smoke upgraden en BEVRIEZEN; root-cause in plan §10
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~9%
+```

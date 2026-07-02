@@ -18,6 +18,7 @@ import {
   AVATAR_KENMERKEN, KENMERK_LABEL, NAAM_SUGGESTIES, MAX_NAAM, rangerNaam, kleurVan,
   type Avatar, type AvatarKenmerk,
 } from '../core/avatar';
+import { setScreen } from '../core/devhook';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -28,6 +29,7 @@ let onDone: () => void;
 export function showAvatarCreator(ui: HTMLElement, done: () => void): void {
   host = ui;
   onDone = done;
+  setScreen('avatar');
   render();
 }
 

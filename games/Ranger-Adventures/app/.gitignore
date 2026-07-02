@@ -29,3 +29,11 @@ assets-gen/
 # public/{audio,models,draco}: now TRACKED — the optimized ~25MB cast is the deploy
 # payload; CI's build:site reads them to emit /ranger. (Raw 790MB intermediates in
 # assets-gen/ stay ignored.)
+
+# Playwright browser-proof harness (WORLD-PLAN §3.1): bulk artifacts stay out of
+# git; curated proof screenshots live in games/Ranger-Adventures/qa-evidence-2/.
+test-results/
+playwright-report/
+e2e/__shots__/
+# Optional Meshy/Mixamo ingest drop (W3.1) — raw GLBs never committed here.
+incoming/

@@ -125,6 +125,18 @@ export class World {
     canvas.addEventListener('pointerdown', this.onPointer);
   }
 
+  /** Dev-hook accessor (WORLD-PLAN §3.1): the ranger's world position {x,z}. */
+  pos(): { x: number; z: number } {
+    return { x: this.ranger.position.x, z: this.ranger.position.z };
+  }
+
+  /** Dev-hook accessor: the follow-camera yaw in radians. Fixed-bearing today
+   *  (reads ~0); W1.5's rotating follow-cam makes this track input-driven
+   *  facing so the E2E yaw-change assert has a real signal. */
+  cameraYaw(): number {
+    return this.camera.rotation.y;
+  }
+
   dispose(): void {
     this.canvas.removeEventListener('pointerdown', this.onPointer);
     this.scene.traverse((o) => {

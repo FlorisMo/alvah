@@ -40,6 +40,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
+import { setScreen, setMissionView, providePos, provideCameraYaw } from '../core/devhook';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
 const naam = (): string => rangerNaam(store.get().avatar);
@@ -143,6 +144,8 @@ function activeExploreTitel(): string | null {
 
 function leaveWorld(): void {
   if (world) { world.dispose(); world = null; stage.exitWorld(); }
+  providePos(null);
+  provideCameraYaw(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -168,6 +171,8 @@ function card(html: string): HTMLDivElement {
 /* ---------------------------------------------------------------- lodge ---- */
 function showLodge(): void {
   narrator.stop();
+  setScreen('lodge');
+  setMissionView(null);
   worldExit = null;   // a normal lodge visit clears any Deep Demo world-return
   leaveWorld();
   const area = Content.activeArea();
@@ -407,6 +412,12 @@ function startExplore(): void {
   // start the bed on the lodge clearing (heide) before the first crossing fires
   setAmbientScene('heide', seizoen);
   stage.enterWorld(world);
+  // dev-state hook: the world is now the live screen; expose ranger pos + camera
+  // yaw for the movement/camera E2E asserts (W0.4, W1.2, W1.5).
+  setScreen('world');
+  setMissionView(null);
+  providePos(() => world!.pos());
+  provideCameraYaw(() => world!.cameraYaw());
   showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
 }
 
@@ -416,6 +427,8 @@ function startExplore(): void {
  *  to the lodge only if the world is somehow gone. */
 function resumePatrol(): void {
   if (!world) { showLodge(); return; }
+  setScreen('world');
+  setMissionView(null);
   const area = Content.activeArea();
   const next = nextPatrolTarget(area.missies, store.get().voltooid);
   world.setActiveMission(next);
@@ -503,6 +516,11 @@ function showExploreHud(activeTitel: string | null): void {
     `<div class="explore-prompt" hidden></div>` +
     `</div>`,
   );
+  // The HUD overlays the LIVE world: its `.ra-overlay` wrapper must let taps
+  // fall through to the canvas for tap-to-walk (W0.4). `#ui > *` would force the
+  // wrapper to `pointer-events:auto`; the `.explore-overlay` class + CSS rule
+  // reclaims transparency (controls below stay tappable).
+  el.classList.add('explore-overlay');
   el.querySelector('.explore-back')?.addEventListener('click', exitWorld);
   // reach the prikbord over the LIVE world — no teardown; back returns to patrol.
   el.querySelector('.explore-board')?.addEventListener('click', () => showCaseBoard(true));
@@ -586,6 +604,7 @@ function showBriefing(mission: Mission, fromWorld = false): void {
 async function runMission(mission: Mission, fromWorld = false): Promise<void> {
   const played: Engine[] = [];
   let skipped: string | null = null;
+  setScreen('mission');
   for (let i = 0; i < mission.stappen.length; i++) {
     const step = mission.stappen[i];
     const play = ENGINE_VIEWS[step.ef];
@@ -602,6 +621,7 @@ async function runMission(mission: Mission, fromWorld = false): Promise<void> {
       force2d: store.get().settings.force2d, // Tweaks "altijd 2D" → always the 2D floor
       registry: REGISTRY_3D,
     });
+    setMissionView(mode); // dev-state hook: resolved view of the active step
     let result: BeatSummary;
     if (mode === '3d' && world) {
       const variant = variantFor(REGISTRY_3D, step.ef as Engine)!;

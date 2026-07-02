@@ -8,6 +8,7 @@ import { startLodge, startDeepDemo } from './ui/Missions';
 import { startSandbox } from './ui/Sandbox';
 import { showAvatarCreator } from './ui/AvatarCreator';
 import { store } from './core/state';
+import { installDevHook, setScreen, provideDrawCalls } from './core/devhook';
 
 // Apply the saved Tweaks before first paint: a persisted reduced-motion toggle
 // wins over the OS (off = defer to OS), and the reading/accent prefs re-flow :root.
@@ -25,6 +26,12 @@ const stage = new Stage(canvas);
 const budgets = new Budgets(ui);
 stage.onFrame((dt) => budgets.update(stage.renderer, dt));
 stage.start();
+
+// Dev-state hook for the browser-proof E2E suite (WORLD-PLAN §3.1). Gated
+// behind DEV or ?dev=1; draw calls come straight from renderer.info.
+installDevHook();
+setScreen('title');
+provideDrawCalls(() => stage.renderer.info.render.calls);
 
 // --- title card → the lodge (mission picker) ---
 const card = document.createElement('div');

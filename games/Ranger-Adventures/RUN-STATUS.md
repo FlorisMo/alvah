@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W0 — Waarheidsharnas (browser proof)
-- **Progress:** ~0% (weighted by ledger items)
-- **Just landed:** —
-- **Next up:** W0.1 Playwright scaffold: devDep, config (poort ~4199, reuseExistingServer, CI-retries), boot smoke spec, npm scripts e2e + e2e:smoke, chromium install, gitignore-regels (test-results/, playwright-report/, e2e/__shots__/, incoming/), git hooksPath .githooks
-- **Last heartbeat:** 2026-07-02 11:34:18Z
+- **Progress:** ~9% (weighted by ledger items)
+- **Just landed:** W0.4 Movement red-first E2E: tap-to-walk ≥2 m via expect.poll; diagnose + fix waarom taps de ranger niet bewegen; e2e:smoke upgraden en BEVRIEZEN; root-cause in plan §10
+- **Next up:** W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
+- **Last heartbeat:** 2026-07-02 12:16:24Z
 - **Blocker:** none
 
 ```
-✔ landed: —
+✔ landed: W0.4 Movement red-first E2E: tap-to-walk ≥2 m via expect.poll; diagnose + fix waarom taps de ranger niet bewegen; e2e:smoke upgraden en BEVRIEZEN; root-cause in plan §10
 ▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
-→ next:   W0.1 Playwright scaffold: devDep, config (poort ~4199, reuseExistingServer, CI-retries), boot smoke spec, npm scripts e2e + e2e:smoke, chromium install, gitignore-regels (test-results/, playwright-report/, e2e/__shots__/, incoming/), git hooksPath .githooks
+→ next:   W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~0%
+▷ progress: ~9%
 ```
