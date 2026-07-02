@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W5 — Voertuigen
-- **Progress:** ~75% (weighted by ledger items)
-- **Just landed:** W5.1 Jeep bestuurbaar: Stap in/uit, arcade-kinematisch, ruimere camera; reduced-motion: snelheid ~3 m/s en halve draaisnelheid; E2E rijdt ≥10 m + caps gelden
-- **Next up:** W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren
-- **Last heartbeat:** 2026-07-02 19:06:16Z
+- **Progress:** ~77% (weighted by ledger items)
+- **Just landed:** W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren
+- **Next up:** W5.3 Helikopter opt-in (default UIT, via state.ts): helipads, klim/daal gedempt ≤2 m/s, vaste kruishoogte, horizon altijd recht, cockpitkader, vignette bij verplaatsing; reduced-motion → niet beschikbaar; E2E pad-naar-pad + FOV/roll/yaw-asserts
+- **Last heartbeat:** 2026-07-02 19:23:32Z
 - **Blocker:** none
 
 ```
-✔ landed: W5.1 Jeep bestuurbaar: Stap in/uit, arcade-kinematisch, ruimere camera; reduced-motion: snelheid ~3 m/s en halve draaisnelheid; E2E rijdt ≥10 m + caps gelden
+✔ landed: W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren
 ▶ phase:  Fase W5 — Voertuigen
-→ next:   W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren
+→ next:   W5.3 Helikopter opt-in (default UIT, via state.ts): helipads, klim/daal gedempt ≤2 m/s, vaste kruishoogte, horizon altijd recht, cockpitkader, vignette bij verplaatsing; reduced-motion → niet beschikbaar; E2E pad-naar-pad + FOV/roll/yaw-asserts
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~75%
+▷ progress: ~77%
 ```

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  driveStep, driveCaps, JEEP_CAPS, JEEP_CAPS_REDUCED,
+  driveStep, driveCaps, calmSpeed, JEEP_CAPS, JEEP_CAPS_REDUCED,
+  ANIMAL_SLOW_SPEED, ANIMAL_SLOW_RADIUS,
 } from './vehicle.ts';
 
 const near = (a: number, b: number, eps = 1e-9): boolean => Math.abs(a - b) < eps;
@@ -65,6 +66,22 @@ test('driveStep: straight-line driving is frame-rate independent', () => {
   }
   assert.ok(near(x, oneBig.dx, 1e-9) && near(z, oneBig.dz, 1e-9),
     'summed sub-steps equal the single step (30/60/120 fps parity)');
+});
+
+test('calmSpeed: caps to the crawl within the slow radius, untouched beyond it (W5.2)', () => {
+  // full-speed jeep close to an animal → held to the 2 m/s crawl
+  assert.ok(near(calmSpeed(6, ANIMAL_SLOW_RADIUS - 0.1), ANIMAL_SLOW_SPEED), 'inside radius caps to crawl');
+  assert.ok(near(calmSpeed(6, ANIMAL_SLOW_RADIUS), ANIMAL_SLOW_SPEED), 'exactly at the radius still slows');
+  // far away → the drive is untouched
+  assert.ok(near(calmSpeed(6, ANIMAL_SLOW_RADIUS + 0.1), 6), 'beyond the radius is untouched');
+  assert.ok(near(calmSpeed(6, Infinity), 6), 'no animal in range → full speed');
+});
+
+test('calmSpeed: preserves sign (reverse still reverses) and never speeds up', () => {
+  assert.ok(near(calmSpeed(-6, 2), -ANIMAL_SLOW_SPEED), 'reverse near an animal crawls backward');
+  // already gentle → passes straight through, even close
+  assert.ok(near(calmSpeed(1.5, 0), 1.5), 'a speed under the crawl is not raised to the crawl');
+  assert.ok(near(calmSpeed(-1, 0), -1), 'gentle reverse untouched');
 });
 
 test('driveStep: is pure — heading arg is never mutated, output wraps to (−π, π]', () => {

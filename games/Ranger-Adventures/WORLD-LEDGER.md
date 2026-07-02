@@ -75,7 +75,7 @@ W4.7 Audio-pas — gesplitst (ambience-bed her-encode+crossfade / voetstappen+vo
 ## Fase W5 — Voertuigen
 
 - [x] W5.1 Jeep bestuurbaar: Stap in/uit, arcade-kinematisch, ruimere camera; reduced-motion: snelheid ~3 m/s en halve draaisnelheid; E2E rijdt ≥10 m + caps gelden (3)
-- [ ] W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren (2)
+- [x] W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren (2)
 - [ ] W5.3 Helikopter opt-in (default UIT, via state.ts): helipads, klim/daal gedempt ≤2 m/s, vaste kruishoogte, horizon altijd recht, cockpitkader, vignette bij verplaatsing; reduced-motion → niet beschikbaar; E2E pad-naar-pad + FOV/roll/yaw-asserts (3)
 - [ ] W5.4 Rapier-spike ALLEEN bij een in §10 vastgelegd controller-probleem, anders skip-tick met verdict; in-tree zonder commit, geen zijtak, schone status op main na afloop (3)
 

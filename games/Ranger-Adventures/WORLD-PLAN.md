@@ -1476,3 +1476,24 @@ with the full sub-id (e.g. `W2.4a`).
   interact specs flaked with `Test timeout` under parallel SwiftShader load (the
   pre-existing W3.3 §10 flake — real-time walks on a GPU-less renderer); each
   passes in isolation and the walk path is unchanged when not driving.
+
+- 2026-07-02 (W5.2, jeep feel): three additions, all gated. (1) Soft ENGINE
+  loop — two detuned sawtooths through a lowpass in `sound.ts`
+  (`engineStart/engineSet/engineStop`), started on step-in ONLY when
+  `settings.geluid`, revved each frame by |speed|/maxSpeed, faded out on
+  step-out + `World.dispose`. It is AUDIO, so it plays in both motion modes
+  (reduced-motion gates secondary MOTION, not sound). (2) DUST — a single
+  `THREE.Points` cloud (1 draw call, `visible=false` while idle so an idle jeep
+  costs nothing) with a per-particle age/life ShaderMaterial fade; a 40-particle
+  pool recycled round-robin, deterministic LCG scatter (no `Math.random`). Emit
+  is gated `!reduced && |speed|>1.2` → dust is OFF under reduced-motion; the pool
+  still ages so puffs fade after a stop. (3) AUTO-SLOW — pure `calmSpeed(speed,
+  dist)` in `vehicle.ts` (crawl 2 m/s within 8 m of the nearest WANDERING animal;
+  birds excluded) scales the `driveStep` delta by the cap ratio so heading +
+  terrain-stick stay intact, upholding the frozen never-scary rule (animals never
+  panic-flee). Dev hook `vehicle()` gains `nearAnimal` + `dust`; three E2E asserts
+  landed in `vehicle.spec.ts` (dust-on while driving clear of animals, dust-off
+  under reduced-motion, and a steer-to-the-ree drive that asserts speed ≤ 2.05
+  once `nearAnimal`). NOTE: the 3 heavy WebGL vehicle specs TIME OUT when run in
+  parallel (SwiftShader CPU contention, the pre-existing W3.3/W5.1 flake) — all 3
+  pass with `--workers=1`; the tick gate runs only the frozen `@smoke` set.

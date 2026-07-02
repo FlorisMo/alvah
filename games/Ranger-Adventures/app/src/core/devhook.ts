@@ -95,6 +95,7 @@ export interface RangerDevHook {
     x: number; z: number; heading: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
+    nearAnimal: boolean; dust: boolean;
   } | null;
 }
 
@@ -134,6 +135,7 @@ const state = {
     x: number; z: number; heading: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
+    nearAnimal: boolean; dust: boolean;
   } | null),
 };
 
@@ -276,6 +278,7 @@ export function provideVehicle(
     x: number; z: number; heading: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
+    nearAnimal: boolean; dust: boolean;
   } | null) | null,
 ): void {
   state.vehicle = fn;

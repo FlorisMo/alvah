@@ -1354,3 +1354,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~75%
 ```
+
+---
+**2026-07-02 19:23:32Z** · ticked: - [x] W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren
+
+```
+✔ landed: W5.2 Jeep-gevoel: zachte motorloop, stof (uit onder reduced-motion), auto-langzaam bij dieren
+▶ phase:  Fase W5 — Voertuigen
+→ next:   W5.3 Helikopter opt-in (default UIT, via state.ts): helipads, klim/daal gedempt ≤2 m/s, vaste kruishoogte, horizon altijd recht, cockpitkader, vignette bij verplaatsing; reduced-motion → niet beschikbaar; E2E pad-naar-pad + FOV/roll/yaw-asserts
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~77%
+```

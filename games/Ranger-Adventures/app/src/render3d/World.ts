@@ -28,7 +28,7 @@ import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from './AmbientPaths';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { resolveInput, screenVector, type StickVector } from '../core/input';
-import { driveStep, driveCaps } from '../core/vehicle';
+import { driveStep, driveCaps, calmSpeed, ANIMAL_SLOW_RADIUS } from '../core/vehicle';
 import { attachInput, type InputHandle } from '../core/attach-input';
 import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../core/footstep';
 import { Sound } from '../core/sound';
@@ -226,11 +226,25 @@ export class World {
   private inVehicle = false;
   private nearJeep = false;
   private vehicleSpeed = 0;                         // live signed speed (m/s), for the dev hook
+  private vehicleNearAnimal = false;                // W5.2: within the auto-slow radius of an animal
   private onJeepNear: (near: boolean) => void = () => {};
   private onVehicleChange: (inVehicle: boolean) => void = () => {};
   // the wider vehicle follow-cam offset (§5 W5.1: distance 9, height 4.5) — the
   // walking offset stays (0, 3.4, 6.2). placeCamera picks by `inVehicle`.
   private readonly camOffsetVehicle = new THREE.Vector3(0, 4.5, 9);
+
+  // W5.2 jeep dust: a single Points cloud (1 draw call, hidden while idle) that
+  // kicks up sand behind the driving jeep. Per-particle age/life drives a
+  // shader-side fade; emission is OFF under reduced-motion (secondary motion).
+  private dust: THREE.Points | null = null;
+  private dustPos: Float32Array | null = null;      // N·3 world positions
+  private dustVel: Float32Array | null = null;      // N·3 drift velocities
+  private dustAge: Float32Array | null = null;      // N ages (s)
+  private dustLife: Float32Array | null = null;     // N lifespans (s); ≤0 → dead slot
+  private dustNext = 0;                              // round-robin emit cursor
+  private dustSeed = 0x9e3779b1;                     // LCG state for deterministic scatter
+  private dustEmitting = false;                      // emitted this frame (dev hook: off under reduced-motion)
+  private static readonly DUST_N = 40;
 
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
@@ -377,6 +391,7 @@ export class World {
     x: number; z: number; heading: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
+    nearAnimal: boolean; dust: boolean;
   } | null {
     if (!this.jeep || !this.jeepPos) return null;
     const caps = driveCaps(livePolicy().reduced);
@@ -392,6 +407,7 @@ export class World {
       x: this.jeepPos.x, z: this.jeepPos.z, heading: this.jeepHeading,
       speed: this.vehicleSpeed, maxSpeed: caps.maxSpeed, turnRate: caps.turnRate,
       camDist: off.z, camHeight: off.y, fov: this.camera.fov, roll: rightY,
+      nearAnimal: this.vehicleNearAnimal, dust: this.dustEmitting,
     };
   }
 
@@ -414,6 +430,9 @@ export class World {
     if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
     this.followTargetYaw = this.jeepHeading;
     this.onVehicleChange(true);
+    // W5.2: soft engine loop while driving (gated on the sound setting; the
+    // Space-to-enter gesture already unlocked the AudioContext).
+    if (store.get().settings.geluid) Sound.engineStart();
     if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut to the wider cam
   }
 
@@ -441,6 +460,9 @@ export class World {
     this.jeepObstacle = { x: jx, z: jz, r: JEEP_COLLIDE };
     this.obstacles.push(this.jeepObstacle);
     this.nearJeep = true;                  // standing right beside it → "Stap in" again
+    this.vehicleNearAnimal = false;
+    this.dustEmitting = false;
+    Sound.engineStop();                    // W5.2: engine falls silent on step-out
     this.onVehicleChange(false);
     if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut back to walk cam
   }
@@ -481,6 +503,7 @@ export class World {
 
   dispose(): void {
     this.canvas.removeEventListener('pointerdown', this.onPointer);
+    Sound.engineStop(); // W5.2: never leak the engine loop past teardown
     this.input?.dispose();
     this.input = null;
     this.scene.traverse((o) => {
@@ -1528,6 +1551,7 @@ export class World {
       if (totem) group.remove(totem);
       group.add(prepped);
     });
+    this.initDust(); // W5.2: the jeep's dust cloud (hidden until it drives)
   }
 
   /**
@@ -1540,14 +1564,22 @@ export class World {
    */
   private driveJeep(dt: number): void {
     if (!this.jeep || !this.jeepPos) return;
+    const reduced = livePolicy().reduced;
     const stick = this.joystickSource ? this.joystickSource() : null;
     const intent = this.input ? screenVector(this.input.held, stick) : { x: 0, y: 0 };
-    const caps = driveCaps(livePolicy().reduced);
+    const caps = driveCaps(reduced);
     const step = driveStep(this.jeepHeading, { throttle: intent.y, steer: intent.x }, dt, caps);
     this.jeepHeading = step.heading;
-    this.vehicleSpeed = step.speed;
     const jp = this.jeepPos;
-    const next = resolveMove(jp.x, jp.z, jp.x + step.dx, jp.z + step.dz, this.obstacles, this.limits);
+    // W5.2 calm rule: auto-slow to a crawl within reach of any wandering animal so
+    // it never panic-flees. The pure `calmSpeed` caps the signed speed; scaling the
+    // move delta by the same factor keeps the heading + terrain stick intact.
+    const animalDist = this.nearestAnimalDist(jp.x, jp.z);
+    this.vehicleNearAnimal = animalDist <= ANIMAL_SLOW_RADIUS;
+    const capped = calmSpeed(step.speed, animalDist);
+    const k = step.speed !== 0 ? capped / step.speed : 1;
+    this.vehicleSpeed = capped;
+    const next = resolveMove(jp.x, jp.z, jp.x + step.dx * k, jp.z + step.dz * k, this.obstacles, this.limits);
     jp.x = next.x; jp.z = next.z;
     jp.y = this.groundY(next.x, next.z);       // terrain stick
     this.jeep.rotation.y = this.jeepHeading;
@@ -1555,9 +1587,131 @@ export class World {
     this.ranger.position.set(jp.x, jp.y, jp.z);
     this.ranger.rotation.y = this.jeepHeading;
     this.followTargetYaw = this.jeepHeading;
+    // W5.2: rev the engine loop by drive fraction (gated on the sound setting) and
+    // kick up dust behind the jeep when it is moving with any pace — off under
+    // reduced-motion (dust is secondary motion; the engine hum stays, it is audio).
+    if (store.get().settings.geluid) Sound.engineSet(Math.abs(capped) / caps.maxSpeed);
+    this.dustEmitting = !reduced && Math.abs(capped) > 1.2;
+    if (this.dustEmitting) this.emitDust(jp.x, jp.y, jp.z, this.jeepHeading);
     // ambience still follows across biomes while driving
     const here = biomeAt(jp.x, jp.z);
     if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
+  }
+
+  /** W5.2: distance to the nearest wandering ground animal from a world point
+   *  (birds glide overhead → excluded). `Infinity` when none roam. */
+  private nearestAnimalDist(x: number, z: number): number {
+    let best = Infinity;
+    for (const a of this.ambient) {
+      if (!a.wander) continue;
+      const d = Math.hypot(a.group.position.x - x, a.group.position.z - z);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  /** W5.2: build the single dust Points cloud (1 draw call, hidden while idle). A
+   *  small fixed pool of particles is recycled round-robin; per-particle age/life
+   *  attributes drive a shader-side fade so one buffer covers every puff. */
+  private initDust(): void {
+    const N = World.DUST_N;
+    this.dustPos = new Float32Array(N * 3);
+    this.dustVel = new Float32Array(N * 3);
+    this.dustAge = new Float32Array(N);
+    this.dustLife = new Float32Array(N); // all 0 → every slot starts dead
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(this.dustPos, 3));
+    geo.setAttribute('aAge', new THREE.BufferAttribute(this.dustAge, 1));
+    geo.setAttribute('aLife', new THREE.BufferAttribute(this.dustLife, 1));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: new THREE.Color('#d8c49a') } }, // warm sandy haze
+      transparent: true,
+      depthWrite: false,
+      vertexShader: `
+        attribute float aAge;
+        attribute float aLife;
+        varying float vAlpha;
+        void main() {
+          float lifeSafe = max(aLife, 0.0001);
+          float f = clamp(aAge / lifeSafe, 0.0, 1.0);
+          float alive = step(0.0001, aLife);
+          float within = 1.0 - step(aLife, aAge);
+          vAlpha = (1.0 - f) * alive * within;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          float sz = mix(7.0, 30.0, f);       // puffs expand as they rise + thin out
+          gl_PointSize = sz * (260.0 / max(-mv.z, 1.0));
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: `
+        precision mediump float;
+        uniform vec3 uColor;
+        varying float vAlpha;
+        void main() {
+          vec2 d = gl_PointCoord - vec2(0.5);
+          float soft = smoothstep(0.5, 0.12, length(d));
+          float a = soft * vAlpha * 0.45;      // deliberately faint — a light haze
+          if (a <= 0.002) discard;
+          gl_FragColor = vec4(uColor, a);
+        }
+      `,
+    });
+    const pts = new THREE.Points(geo, mat);
+    pts.frustumCulled = false; // particles live in world space, not around the origin
+    pts.visible = false;
+    this.scene.add(pts);
+    this.dust = pts;
+  }
+
+  /** A deterministic 0..1 (LCG) for dust scatter — no `Math.random`, stable frames. */
+  private dustRand(): number {
+    this.dustSeed = (this.dustSeed * 1103515245 + 12345) & 0x7fffffff;
+    return this.dustSeed / 0x7fffffff;
+  }
+
+  /** W5.2: kick two dust puffs off the jeep's rear wheels. Rear = −forward; the
+   *  left-of-forward vector (cos h, −sin h) scatters them across the track. */
+  private emitDust(x: number, y: number, z: number, heading: number): void {
+    if (!this.dustPos || !this.dustVel || !this.dustAge || !this.dustLife) return;
+    const fx = Math.sin(heading), fz = Math.cos(heading); // forward
+    const lx = fz, lz = -fx;                              // left-of-forward
+    for (let s = 0; s < 2; s++) {
+      const i = this.dustNext;
+      this.dustNext = (this.dustNext + 1) % World.DUST_N;
+      const lat = (this.dustRand() - 0.5) * 1.1;
+      const back = 1.3 + this.dustRand() * 0.5;
+      this.dustPos[i * 3] = x - fx * back + lx * lat;
+      this.dustPos[i * 3 + 1] = y + 0.12;
+      this.dustPos[i * 3 + 2] = z - fz * back + lz * lat;
+      this.dustVel[i * 3] = lx * lat * 0.3 - fx * 0.2;
+      this.dustVel[i * 3 + 1] = 0.5 + this.dustRand() * 0.4; // rise
+      this.dustVel[i * 3 + 2] = lz * lat * 0.3 - fz * 0.2;
+      this.dustAge[i] = 0;
+      this.dustLife[i] = 0.7 + this.dustRand() * 0.4;
+    }
+  }
+
+  /** W5.2: age every live dust particle, drift it up + settle, and hide the whole
+   *  cloud once none survive (so an idle jeep costs no draw call). */
+  private updateDust(dt: number): void {
+    if (!this.dust || !this.dustPos || !this.dustVel || !this.dustAge || !this.dustLife) return;
+    let anyAlive = false;
+    for (let i = 0; i < World.DUST_N; i++) {
+      if (this.dustLife[i] <= 0) continue;
+      const age = this.dustAge[i] + dt;
+      if (age >= this.dustLife[i]) { this.dustLife[i] = 0; this.dustAge[i] = age; continue; }
+      this.dustAge[i] = age;
+      this.dustPos[i * 3] += this.dustVel[i * 3] * dt;
+      this.dustPos[i * 3 + 1] += this.dustVel[i * 3 + 1] * dt;
+      this.dustPos[i * 3 + 2] += this.dustVel[i * 3 + 2] * dt;
+      this.dustVel[i * 3 + 1] *= (1 - Math.min(dt * 1.2, 1)); // the rise eases off
+      anyAlive = true;
+    }
+    const g = this.dust.geometry;
+    (g.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    (g.getAttribute('aAge') as THREE.BufferAttribute).needsUpdate = true;
+    (g.getAttribute('aLife') as THREE.BufferAttribute).needsUpdate = true;
+    this.dust.visible = anyAlive;
   }
 
   /** Procedural stand-in for the ranger-cabin (instant, before the GLB loads). */
@@ -1697,6 +1851,7 @@ export class World {
       this.sun.target.updateMatrixWorld();
     }
     this.playerSpeed = 0; // 0 while standing or during an in-place activity → mixer eases to idle
+    this.dustEmitting = false; // driveJeep re-arms it while the jeep is moving (W5.2)
     if (!this.activityActive && this.inVehicle) {
       // W5.1: arcade drive mode owns movement while the ranger is in the jeep.
       this.driveJeep(dt);
@@ -1811,6 +1966,11 @@ export class World {
     // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
     // animates in both motion modes; only the procedural-bob fallback holds still.
     this.playerRig.update(dt, this.playerSpeed, reduced);
+
+    // W5.2: age the jeep's dust cloud every frame (so puffs keep fading after a
+    // stop or step-out). Emission itself happens in driveJeep, gated on motion +
+    // reduced-motion; this only advances what is already alive.
+    this.updateDust(dt);
 
     // W4.6 "Lucht + adem": drifting cloud shadows + grass wind wave + bird flyover.
     // All SECONDARY motion → the atmosphere clock advances ONLY when reduced-motion

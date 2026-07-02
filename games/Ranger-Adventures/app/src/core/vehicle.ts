@@ -49,6 +49,28 @@ export function driveCaps(reduced: boolean): DriveCaps {
   return reduced ? JEEP_CAPS_REDUCED : JEEP_CAPS;
 }
 
+/**
+ * W5.2 calm rule: the jeep auto-slows near wildlife so animals never panic-flee
+ * (§5 W5.2, frozen never-scary contract §3.4). Within `ANIMAL_SLOW_RADIUS` of the
+ * nearest animal the top speed is held to `ANIMAL_SLOW_SPEED` — gentle enough to
+ * drift past a grazing ree. Below the cap the drive is untouched.
+ */
+export const ANIMAL_SLOW_SPEED = 2; // m/s — the crawl the jeep keeps near animals
+export const ANIMAL_SLOW_RADIUS = 8; // m — how close counts as "near an animal"
+
+/**
+ * Cap a signed drive speed to the near-animal crawl when the nearest animal sits
+ * within `ANIMAL_SLOW_RADIUS`. Preserves the sign (reverse still reverses) and
+ * only ever slows — a speed already under the crawl passes through untouched.
+ * Pure + deterministic (the World feeds it the live nearest-animal distance).
+ */
+export function calmSpeed(speed: number, distToNearestAnimal: number): number {
+  if (distToNearestAnimal <= ANIMAL_SLOW_RADIUS && Math.abs(speed) > ANIMAL_SLOW_SPEED) {
+    return Math.sign(speed) * ANIMAL_SLOW_SPEED;
+  }
+  return speed;
+}
+
 /** Driver intent this frame: `throttle` forward (+) / reverse (−), `steer`
  *  right (+) / left (−). Both are read from the SAME `screenVector` the walker
  *  uses (y → throttle, x → steer), so keys and the joystick agree. */

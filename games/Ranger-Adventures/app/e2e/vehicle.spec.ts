@@ -21,12 +21,15 @@ interface Vehicle {
   x: number; z: number; heading: number;
   speed: number; maxSpeed: number; turnRate: number;
   camDist: number; camHeight: number; fov: number; roll: number;
+  nearAnimal: boolean; dust: boolean;
 }
+interface Animal { id: string; x: number; z: number; h: number }
 interface Hook {
   screen: string;
   pos(): { x: number; z: number } | null;
   cameraYaw(): number | null;
   vehicle(): Vehicle | null;
+  ambient(): Animal[] | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -141,6 +144,16 @@ test('vehicle: enter the jeep, drive ≥10 m, step out — FOV + roll comfort ho
   expect(vin.fov, 'FOV stays fixed at 55 (motion-comfort law)').toBeCloseTo(55, 3);
   expect(Math.abs(vin.roll), 'roll stays 0 (motion-comfort law)').toBeLessThan(1e-3);
 
+  // W5.2: dust kicks up while driving. The jeep is parked clear of any animal
+  // (nearest ~15 m), so it drives at full pace here → dust emits (motion on).
+  await page.keyboard.down('ArrowUp');
+  await expect
+    .poll(() => hook(page, (r) => r.vehicle()?.dust ?? false), {
+      timeout: 20_000, message: 'W5.2: dust kicks up behind the driving jeep',
+    })
+    .toBe(true);
+  await page.keyboard.up('ArrowUp');
+
   const start = { x: vin.x, z: vin.z };
   await driveForward(page, start);
   await shot(page, 'vehicle-driving');
@@ -185,9 +198,83 @@ test('vehicle: reduced-motion caps speed ~3 m/s and halves the turn-rate', async
   expect(vin.fov, 'FOV fixed under reduced-motion').toBeCloseTo(55, 3);
   expect(Math.abs(vin.roll), 'roll 0 under reduced-motion').toBeLessThan(1e-3);
 
+  // W5.2: dust is secondary motion → OFF under reduced-motion. Hold the throttle
+  // and confirm the jeep drives (moves) while dust never emits across the drive.
+  await page.keyboard.down('ArrowUp');
+  try {
+    await expect
+      .poll(async () => {
+        const v = await hook(page, (r) => r.vehicle());
+        return v ? Math.hypot(v.x - vin.x, v.z - vin.z) : 0;
+      }, { timeout: 20_000, message: 'the jeep still drives under reduced-motion' })
+      .toBeGreaterThanOrEqual(3);
+    const v = await hook(page, (r) => r.vehicle());
+    expect(v!.dust, 'W5.2: no dust under reduced-motion (secondary motion off)').toBe(false);
+  } finally {
+    await page.keyboard.up('ArrowUp');
+  }
+
   // still drivable ≥ 10 m under the caps
   await driveForward(page, { x: vin.x, z: vin.z });
   await shot(page, 'vehicle-reduced-motion-driving');
+
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+test('vehicle: auto-slows to a crawl near a wandering animal (calm rule)', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+
+  // full-motion (animals wander) so the ree is a real, reachable target.
+  await enterWorld(page);
+  await walkToJeep(page);
+  await enterJeep(page);
+
+  // Steer the jeep toward the roaming ree with the throttle held; the arcade
+  // controller turns the nose (right-steer decreases heading) while it drives.
+  const down = new Set<string>();
+  const setKey = async (k: string, on: boolean): Promise<void> => {
+    if (on && !down.has(k)) { await page.keyboard.down(k); down.add(k); }
+    else if (!on && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
+  };
+  await setKey('ArrowUp', true);
+  let reached = false;
+  try {
+    for (let i = 0; i < 300; i++) {
+      const v = await hook(page, (r) => r.vehicle());
+      const animals = await hook(page, (r) => r.ambient());
+      if (!v || !animals) { await page.waitForTimeout(100); continue; }
+      if (v.nearAnimal) { reached = true; break; }
+      const ree = animals.find((a) => a.id === 'animal-ree-roedeer') ?? animals[0];
+      // desired world heading toward the ree; steer to close the yaw error. Right
+      // (+) DECREASES heading (vehicle.ts), so a positive error → steer left.
+      const desired = Math.atan2(ree.x - v.x, ree.z - v.z);
+      const e = Math.atan2(Math.sin(desired - v.heading), Math.cos(desired - v.heading));
+      await setKey('ArrowLeft', e > 0.12);
+      await setKey('ArrowRight', e < -0.12);
+      await page.waitForTimeout(100);
+    }
+    expect(reached, 'the jeep drives up to the ree within the step budget').toBe(true);
+
+    // Stop steering, keep the throttle floored → the auto-slow holds the crawl.
+    await setKey('ArrowLeft', false);
+    await setKey('ArrowRight', false);
+    await expect
+      .poll(() => hook(page, (r) => r.vehicle()?.speed ?? 0), {
+        timeout: 10_000, message: 'W5.2: auto-slow holds the jeep to ≤ 2 m/s near the animal',
+      })
+      .toBeLessThanOrEqual(2.05);
+
+    const v = (await hook(page, (r) => r.vehicle()))!;
+    expect(v.nearAnimal, 'still within the auto-slow radius of the animal').toBe(true);
+    expect(v.speed, 'the jeep is still creeping forward, not stopped').toBeGreaterThan(0.2);
+    expect(v.maxSpeed, 'the arcade cap stays 6 — the crawl is the auto-slow, not the cap').toBeCloseTo(6, 5);
+  } finally {
+    for (const k of [...down]) await page.keyboard.up(k);
+  }
+  await shot(page, 'vehicle-auto-slow-near-animal');
 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);

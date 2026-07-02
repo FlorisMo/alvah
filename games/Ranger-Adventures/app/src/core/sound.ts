@@ -170,6 +170,50 @@ export const Sound = {
       tone(120, 0, 0.05, 'sine', 0.035);
     }
   },
+  /**
+   * Start the jeep's soft engine loop (W5.2). Two detuned sawtooths through a
+   * lowpass make a low, warm idle — deliberately quiet (ambient feel, never a
+   * foreground drone). Idempotent; the caller gates on `settings.geluid` and the
+   * AudioContext is unlocked by the Space-to-enter gesture. `engineSet` revs it
+   * with speed; `engineStop` fades it out on step-out.
+   */
+  engineStart(): void {
+    const a = ac();
+    if (!a || engine) return;
+    const osc = a.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 58;
+    const osc2 = a.createOscillator(); osc2.type = 'sawtooth'; osc2.frequency.value = 87;
+    const filt = a.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 300; filt.Q.value = 0.6;
+    const gain = a.createGain(); gain.gain.value = 0.0001;
+    osc.connect(filt); osc2.connect(filt); filt.connect(gain); gain.connect(a.destination);
+    osc.start(); osc2.start();
+    engine = { osc, osc2, filt, gain };
+  },
+  /** Rev the engine loop by the drive fraction (|speed|/maxSpeed, 0..1): a touch
+   *  louder + higher + brighter with throttle. Smooth ramps so it never clicks.
+   *  No-op if the loop is not running (e.g. sound was off at step-in). */
+  engineSet(speedFrac: number): void {
+    const a = ac();
+    if (!a || !engine) return;
+    const f = speedFrac < 0 ? 0 : speedFrac > 1 ? 1 : speedFrac;
+    const now = a.currentTime;
+    engine.gain.gain.setTargetAtTime(0.03 + 0.05 * f, now, 0.08);
+    engine.osc.frequency.setTargetAtTime(58 + 26 * f, now, 0.12);
+    engine.osc2.frequency.setTargetAtTime(87 + 39 * f, now, 0.12);
+    engine.filt.frequency.setTargetAtTime(300 + 500 * f, now, 0.12);
+  },
+  /** Fade out + stop the engine loop (step-out / dispose). Safe if not running. */
+  engineStop(): void {
+    if (!engine) return;
+    const a = ac();
+    try {
+      const now = a ? a.currentTime : 0;
+      if (a) { engine.gain.gain.cancelScheduledValues(now); engine.gain.gain.setTargetAtTime(0.0001, now, 0.05); }
+      engine.osc.stop(now + 0.2);
+      engine.osc2.stop(now + 0.2);
+    } catch { /* already stopped */ }
+    engine = null;
+  },
+
   /** play an animal's call; returns its duration (s) so the caller can time the sequence */
   call(id: string): number {
     return playCall(id);
@@ -268,3 +312,5 @@ export const Sound = {
 const AMBIENT_FADE = 1.5;
 let ambient: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
 let fading: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+/** The W5.2 jeep engine loop while driving — at most one runs. */
+let engine: { osc: OscillatorNode; osc2: OscillatorNode; filt: BiquadFilterNode; gain: GainNode } | null = null;
