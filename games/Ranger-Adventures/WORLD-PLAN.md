@@ -669,6 +669,15 @@ with the full sub-id (e.g. `W2.4a`).
   specificity, adds a class → wins); controls stay `auto`. Red-first E2E
   `movement.spec.ts` (tap ground → `pos()` delta ≥ 2 m) now green and folded
   into `e2e:smoke` — the stronger smoke is FROZEN from here.
+- 2026-07-02 (W0.6, CI gate): split into W0.6a (land) + W0.6b (flip to
+  blocking) because the flip is gated on observing a real green ubuntu run.
+  Paths-filter uses a plain `git diff HEAD^ HEAD` step (no third-party action,
+  per CLAUDE.md) matching `games/`, `src/pages/ranger/`, `deploy.yml`; unit
+  tests block every push, e2e:smoke runs only on ranger changes. SwiftShader
+  args (`--enable-unsafe-swiftshader --use-angle=swiftshader`) live in
+  playwright.config.ts gated on `process.env.CI` — three.js WebGL renders
+  headlessly on the GPU-less runner. First ubuntu run (28589759505): test job
+  green, e2e:smoke 4 passed in 54.5 s. W0.6b then removed continue-on-error.
 - 2026-07-02 (prep session, later): Floris decisions folded in — no branch
   isolation (run works on main; site not in use); CC0/CC-BY animated packs
   become the primary animal-animation path after the Anything World key was

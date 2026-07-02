@@ -22,7 +22,7 @@
 - [x] W0.4 Movement red-first E2E: tap-to-walk ≥2 m via expect.poll; diagnose + fix waarom taps de ranger niet bewegen; e2e:smoke upgraden en BEVRIEZEN; root-cause in plan §10 (3)
 - [x] W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig (1)
 W0.6 CI-gate in deploy.yml — gesplitst (vereist een groene ubuntu-run vóór het blocking-flippen):
-- [ ] W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren (1)
+- [x] W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren (1)
 - [ ] W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen (1)
 - [ ] W0.7 Meshy balance probe: credits loggen (gemaskeerd) of status --blocker; --force toegestaan (1)
 - [ ] W0.8 WebKit-project (iPad Safari engine): webkit install, smoke + journey op webkit groen; afwijkingen in §10 (2)

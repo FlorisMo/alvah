@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W0 — Waarheidsharnas (browser proof)
-- **Progress:** ~9% (weighted by ledger items)
-- **Just landed:** W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
-- **Next up:** W0.6 CI-gate in deploy.yml: apart test-job (unit + e2e:smoke, --with-deps, swiftshader-args, cache, paths-filter); eerst continue-on-error, blocking na één groene ubuntu-run
-- **Last heartbeat:** 2026-07-02 12:19:05Z
+- **Progress:** ~10% (weighted by ledger items)
+- **Just landed:** W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren
+- **Next up:** W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
+- **Last heartbeat:** 2026-07-02 12:30:06Z
 - **Blocker:** none
 
 ```
-✔ landed: W0.5 Budgets overlay ALLEEN achter ?dev=1 (niet DEV); E2E assert aanwezig/afwezig
+✔ landed: W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren
 ▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
-→ next:   W0.6 CI-gate in deploy.yml: apart test-job (unit + e2e:smoke, --with-deps, swiftshader-args, cache, paths-filter); eerst continue-on-error, blocking na één groene ubuntu-run
+→ next:   W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~9%
+▷ progress: ~10%
 ```

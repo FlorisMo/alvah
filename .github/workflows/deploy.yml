@@ -78,10 +78,10 @@ jobs:
       - name: E2E smoke (browser-proof, WORLD-PLAN §3.1)
         if: needs.changes.outputs.ranger == 'true'
         working-directory: games/Ranger-Adventures/app
-        # W0.6a lands this as continue-on-error; W0.6b flips it to blocking
-        # after one observed green ubuntu run. SwiftShader args come from
+        # BLOCKING (W0.6b): flipped from continue-on-error after one observed
+        # green ubuntu run (run 28589759505). A red browser smoke now fails the
+        # test job and gates the deploy. SwiftShader args come from
         # playwright.config.ts (gated on the CI env var).
-        continue-on-error: true
         run: npm run e2e:smoke
 
   build:

@@ -892,3 +892,14 @@ One status block per run/step (BUILD-PLAN §9b).
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~9%
 ```
+
+---
+**2026-07-02 12:30:06Z** · ticked: - [x] W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren
+
+```
+✔ landed: W0.6a Test-job landen: unit-tests (blokkerend) + e2e:smoke (continue-on-error, paths-gated op ranger-wijzigingen, --with-deps chromium, swiftshader launch-args, playwright-cache); build needs test; push + één groene ubuntu-run observeren
+▶ phase:  Fase W0 — Waarheidsharnas (browser proof)
+→ next:   W0.6b e2e:smoke naar blocking flippen (continue-on-error weg); nog één groene ubuntu-run bevestigen
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~10%
+```
