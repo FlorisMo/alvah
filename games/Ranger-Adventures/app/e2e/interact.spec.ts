@@ -15,6 +15,7 @@ import { shot, collectPageErrors, reportPageErrors } from './helpers';
 interface Hook {
   screen: string;
   pos(): { x: number; z: number } | null;
+  cameraYaw(): number | null;
   nearId(): string | null;
   markers(): { x: number; z: number; missionId: string }[] | null;
 }
@@ -39,9 +40,13 @@ const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
 
 /**
  * Steer the ranger to the nearest marker with arrow keys until proximity fires.
- * Camera bearing is fixed (yaw ≈ 0, W1.4 predates the rotating cam), so world
- * −z = ArrowUp, +x = ArrowRight. Re-evaluates the desired keys each tick so the
- * ranger sliding around a pine still converges. Returns the arrived `missionId`.
+ * The follow-cam ROTATES now (W1.5, default on), so world −z is no longer a
+ * fixed "ArrowUp": the arrow keys are camera-relative. Each tick we read the
+ * live `cameraYaw()` and map the desired WORLD direction back into screen keys
+ * with the inverse of `resolveInput`'s rotation (which is its own inverse — a
+ * length-preserving rotation+reflection): for camera yaw ψ,
+ *   screenX =  dx·cosψ − dz·sinψ,   screenY = −dx·sinψ − dz·cosψ.
+ * Re-evaluating every tick keeps the closed loop convergent as the camera eases.
  */
 async function walkToNearestMarker(page: Page): Promise<string> {
   const markers = await hook(page, (r) => r.markers());
@@ -67,16 +72,22 @@ async function walkToNearestMarker(page: Page): Promise<string> {
   const releaseAll = async (): Promise<void> => { await sync(new Set()); };
 
   try {
-    for (let i = 0; i < 150; i++) {
+    for (let i = 0; i < 200; i++) {
       const near = await hook(page, (r) => r.nearId());
       if (near) return near;
       const p = await hook(page, (r) => r.pos());
-      if (!p) { await page.waitForTimeout(100); continue; }
+      const yaw = await hook(page, (r) => r.cameraYaw());
+      if (!p || yaw == null) { await page.waitForTimeout(100); continue; }
+      // desired world direction → camera-relative screen intent (see doc above)
+      const dx = target.x - p.x, dz = target.z - p.z;
+      const cy = Math.cos(yaw), sy = Math.sin(yaw);
+      const sx = dx * cy - dz * sy;
+      const sYf = -dx * sy - dz * cy;
       const want = new Set<string>();
-      if (target.x - p.x > 0.4) want.add('ArrowRight');
-      else if (p.x - target.x > 0.4) want.add('ArrowLeft');
-      if (target.z - p.z < -0.4) want.add('ArrowUp');
-      else if (target.z - p.z > 0.4) want.add('ArrowDown');
+      if (sx > 0.4) want.add('ArrowRight');
+      else if (sx < -0.4) want.add('ArrowLeft');
+      if (sYf > 0.4) want.add('ArrowUp');
+      else if (sYf < -0.4) want.add('ArrowDown');
       await sync(want);
       await page.waitForTimeout(120);
     }
@@ -87,6 +98,11 @@ async function walkToNearestMarker(page: Page): Promise<string> {
 }
 
 test('interact: Space at a marker opens the mission briefing', async ({ page }, testInfo) => {
+  // A real-time walk to a marker (up to ~24 s of stepping) on SwiftShader, which
+  // is ~10× slower and, run locally alongside the other specs, contends for the
+  // GPU. The default 30 s is too tight under that parallel load; give headroom
+  // (CI runs workers:1, so this only bites the local full-suite run).
+  test.setTimeout(90_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
 

@@ -42,6 +42,7 @@ const TOGGLES: ToggleDef[] = [
     key: 'reducedMotion', label: 'Rustige beweging', hint: 'De camera springt zacht, niet zwierend',
     effect: (on) => setReducedMotionOverride(on ? true : null),
   },
+  { key: 'cameraDraaitMee', label: 'Camera draait mee', hint: 'De camera draait met je mee' },
   {
     key: 'leesFont', label: 'Leesletter', hint: 'Extra duidelijke letters',
     effect: () => applyReadingPrefs(store.get().settings),

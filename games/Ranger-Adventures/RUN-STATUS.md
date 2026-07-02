@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W1 — Besturing
-- **Progress:** ~22% (weighted by ledger items)
-- **Just landed:** W1.4 Interactie-toets Space/Enter voor nabijheids-actie; E2E opent missie-briefing
-- **Next up:** W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion
-- **Last heartbeat:** 2026-07-02 13:35:29Z
+- **Progress:** ~25% (weighted by ledger items)
+- **Just landed:** W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion
+- **Next up:** W1.6 Onboarding-hint eerste wereld-entree (Loop met de pijltjes / Sleep de stick, voorleesbaar, seen-flag via state.ts)
+- **Last heartbeat:** 2026-07-02 13:53:31Z
 - **Blocker:** none
 
 ```
-✔ landed: W1.4 Interactie-toets Space/Enter voor nabijheids-actie; E2E opent missie-briefing
+✔ landed: W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion
 ▶ phase:  Fase W1 — Besturing
-→ next:   W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion
+→ next:   W1.6 Onboarding-hint eerste wereld-entree (Loop met de pijltjes / Sleep de stick, voorleesbaar, seen-flag via state.ts)
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~22%
+▷ progress: ~25%
 ```

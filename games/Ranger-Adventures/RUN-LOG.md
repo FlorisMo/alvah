@@ -1024,3 +1024,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~22%
 ```
+
+---
+**2026-07-02 13:53:31Z** · ticked: - [x] W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion
+
+```
+✔ landed: W1.5 Meedraaiende volgcamera (dt-onafhankelijke demping, yaw-clamp ~120°/s, reframe-precedentie, reduced-motion → vaste richting, toggle); unit tests demping/wrap/clamp + E2E yaw ≥45° én yaw-stil onder reduced-motion
+▶ phase:  Fase W1 — Besturing
+→ next:   W1.6 Onboarding-hint eerste wereld-entree (Loop met de pijltjes / Sleep de stick, voorleesbaar, seen-flag via state.ts)
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~25%
+```

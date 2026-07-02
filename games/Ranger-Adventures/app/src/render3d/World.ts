@@ -29,6 +29,7 @@ import { attachInput, type InputHandle } from '../core/attach-input';
 import { wayfind, type WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
+import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
 
 export interface WorldMarker {
   missionId: string;
@@ -49,6 +50,15 @@ export class World {
   private readonly target = new THREE.Vector3(0, 0, 0);
   private readonly camDesired = new THREE.Vector3();
   private readonly camOffset = new THREE.Vector3(0, 3.4, 6.2); // gentle behind-above
+  // W1.5 rotating follow-cam: `followYaw` is the eased camera bearing; it chases
+  // `followTargetYaw` (the ranger's facing, updated ONLY while he is moving — a
+  // standing ranger never swings the camera). Both start at π = straight behind
+  // on +z (the pre-W1.5 diorama bearing). Damped + rate-clamped in FollowCam.ts.
+  private followYaw = FIXED_FOLLOW_YAW;
+  private followTargetYaw = FIXED_FOLLOW_YAW;
+  // "Camera draait mee" toggle (Instellingen, default aan), read LIVE each frame
+  // so flipping it needs no restart; reduced-motion also forces the fixed bearing.
+  private cameraFollowSource: (() => boolean) | null = null;
   private readonly markers: {
     group: THREE.Group; pos: THREE.Vector3; missionId: string;
     recipe: MotionRecipe; phase: number;
@@ -164,16 +174,27 @@ export class World {
     this.joystickSource = source;
   }
 
+  /** Register the "Camera draait mee" setting source (W1.5). Read live each frame
+   *  so the toggle takes effect with no restart; null → default aan. */
+  setCameraFollow(source: (() => boolean) | null): void {
+    this.cameraFollowSource = source;
+  }
+
   /** Dev-hook accessor (WORLD-PLAN §3.1): the ranger's world position {x,z}. */
   pos(): { x: number; z: number } {
     return { x: this.ranger.position.x, z: this.ranger.position.z };
   }
 
-  /** Dev-hook accessor: the follow-camera yaw in radians. Fixed-bearing today
-   *  (reads ~0); W1.5's rotating follow-cam makes this track input-driven
-   *  facing so the E2E yaw-change assert has a real signal. */
+  /** Dev-hook accessor: the follow-camera yaw in radians — the world direction
+   *  "into the screen" that camera-relative input (`resolveInput`) rotates by.
+   *  Derived DIRECTLY from the follow bearing (not read back from the pitched
+   *  camera's Euler, which couples yaw with pitch): the camera looks along
+   *  `(sin followYaw, cos followYaw)`, and `resolveInput`'s forward at yaw ψ is
+   *  `(−sin ψ, −cos ψ)`, so ψ = followYaw + π. Fixed-bearing (followYaw = π)
+   *  reads exactly 0, matching the W1.2–W1.4 baseline; the rotating follow makes
+   *  it track input-driven facing so the W1.5 yaw-change assert has a real signal. */
   cameraYaw(): number {
-    return this.camera.rotation.y;
+    return wrapAngle(this.followYaw + Math.PI);
   }
 
   dispose(): void {
@@ -554,7 +575,12 @@ export class World {
       if (moving) {
         const next = resolveMove(rp.x, rp.z, wantX, wantZ, this.obstacles, this.limits);
         const mx = next.x - rp.x, mz = next.z - rp.z;
-        if (mx * mx + mz * mz > 1e-7) this.ranger.rotation.y = Math.atan2(mx, mz);
+        if (mx * mx + mz * mz > 1e-7) {
+          this.ranger.rotation.y = Math.atan2(mx, mz);
+          // W1.5: the follow-cam chases the ranger's facing ONLY while he moves,
+          // so a standing ranger (or a mini-game reframe) never swings the view.
+          this.followTargetYaw = this.ranger.rotation.y;
+        }
         rp.x = next.x;
         rp.z = next.z;
       }
@@ -599,7 +625,7 @@ export class World {
       this.lastWayKey = ''; this.onWayfind(null);
     }
 
-    this.placeCamera(reduced, dt);
+    this.placeCamera(reduced, dt, reduced);
   }
 
   /**
@@ -627,17 +653,44 @@ export class World {
   /** Freeze the world for an in-place activity (the mini-game owns input + camera). */
   beginActivity(): void { this.activityActive = true; }
 
-  /** Resume free-roam after an in-place activity; re-emit the wayfinding cue. */
+  /** Resume free-roam after an in-place activity; re-emit the wayfinding cue.
+   *  The activity reframe owned the camera; on resume the follow-yaw eases back
+   *  to behind the ranger (a cut under reduced-motion, per §3.2). */
   endActivity(): void {
     this.activityActive = false;
     this.nearId = null;
     this.lastWayKey = '';
-    this.placeCamera(true); // snap the §1e follow back behind the ranger
+    this.followTargetYaw = this.ranger.rotation.y;
+    if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut back
+    // otherwise the next update() frame damps position + yaw back into place.
   }
 
-  private placeCamera(snap: boolean, dt = 0): void {
+  /**
+   * Place the follow-camera (§1e position follow + W1.5 rotating bearing).
+   *
+   * The horizontal offset is the fixed distance/height rotated by `followYaw`:
+   * `-(sin yaw, cos yaw)·distance` sits the camera behind the ranger's facing.
+   * When the follow rotates (toggle on AND not reduced-motion) `followYaw` eases
+   * toward the ranger's facing with the damped, rate-clamped `dampedYaw`; else it
+   * is pinned to π — the pre-W1.5 straight-behind bearing (reduced-motion falls
+   * back to the fixed bearing per §3.2). Position exp-damps (~0.3 s) unless
+   * `snap` (reduced-motion cut, activity resume, or first placement). Roll is
+   * always 0 and the FOV is fixed at construction — the motion-comfort law.
+   */
+  private placeCamera(snap: boolean, dt = 0, reduced = false): void {
     const rp = this.ranger.position;
-    this.camDesired.set(rp.x + this.camOffset.x, rp.y + this.camOffset.y, rp.z + this.camOffset.z);
+    const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
+    if (follow && !reduced) {
+      this.followYaw = dampedYaw(this.followYaw, this.followTargetYaw, dt);
+    } else {
+      // fixed bearing: straight behind on +z, no rotation — and reset the target
+      // so re-enabling the follow doesn't whip-pan from a stale facing.
+      this.followYaw = FIXED_FOLLOW_YAW;
+      this.followTargetYaw = FIXED_FOLLOW_YAW;
+    }
+    const s = Math.sin(this.followYaw), c = Math.cos(this.followYaw);
+    const dist = this.camOffset.z;
+    this.camDesired.set(rp.x - s * dist, rp.y + this.camOffset.y, rp.z - c * dist);
     if (snap) {
       this.camera.position.copy(this.camDesired);
     } else {

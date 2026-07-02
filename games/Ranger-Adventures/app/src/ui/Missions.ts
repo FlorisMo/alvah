@@ -417,6 +417,9 @@ function startExplore(): void {
     stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, active,
     onBiome, onInteract,
   );
+  // W1.5: the rotating follow-cam reads the "Camera draait mee" setting live each
+  // frame (no restart), so flipping it in Instellingen takes effect immediately.
+  world.setCameraFollow(() => store.get().settings.cameraDraaitMee);
   // start the bed on the lodge clearing (heide) before the first crossing fires
   setAmbientScene('heide', seizoen);
   stage.enterWorld(world);

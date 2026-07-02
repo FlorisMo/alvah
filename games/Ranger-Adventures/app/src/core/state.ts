@@ -65,6 +65,7 @@ export interface Settings {
   leesFont: boolean;                 // Atkinson Hyperlegible leesletter (alternate, not the default)
   force2d: boolean;                  // Tweak "altijd 2D" — force the 2D floor for every activity
   joystick: 'auto' | 'aan' | 'uit';  // on-screen joystick visibility (W1.3): auto = coarse pointer
+  cameraDraaitMee: boolean;          // W1.5 rotating follow-cam: camera eases behind as you turn
   skipBriefings: boolean;            // demo-skip (§9g): jump straight into play, no briefing card
   readSize: number;
   leading: number;
@@ -124,6 +125,7 @@ const DEFAULT_SETTINGS: Settings = {
   leesFont: true,
   force2d: false,
   joystick: 'auto',
+  cameraDraaitMee: true,
   skipBriefings: false,
   readSize: 28,
   leading: 1.7,

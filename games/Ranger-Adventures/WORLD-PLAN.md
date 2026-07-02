@@ -764,3 +764,24 @@ with the full sub-id (e.g. `W2.4a`).
   probed and REJECTED (HTTP 403 preflight); new per-animal web-accuracy
   dossier boxes (W3.4a/b) + apply box (W3.7) added, feeding both the
   visualization and the W6.3 biology facts.
+- 2026-07-02 (W1.5, rotating follow-cam): the camera now eases behind the ranger
+  as he turns. The yaw maths lives in a pure THREE-free `FollowCam.ts` (`dampedYaw`
+  = shortest-arc ease by the SHARED `dampFactor` `1−exp(−dt/τ)`, τ=0.25 s, then a
+  ±`maxRate·dt` clamp at ~120°/s) so the unit test pins wrap/dt-independence/clamp
+  without a browser. `World` keeps a `followYaw` that chases `followTargetYaw` —
+  the ranger's facing, updated ONLY on a moving frame, so a STANDING ranger never
+  swings the view (the startup gotcha: init both to π = straight-behind, not to the
+  idle `rotation.y=0`, or the cam whips 180° on boot). `placeCamera` rotates the
+  fixed offset by `followYaw`: `cam = rp − (sin,cos)·dist`. KEY DECISION: `cameraYaw()`
+  now returns `followYaw + π` DIRECTLY, not `camera.rotation.y` — the pitched
+  camera's Euler couples yaw with pitch, so reading it back is unreliable off yaw 0;
+  the derived value is exact and still reads 0 at the fixed bearing, so W1.2–W1.4
+  are untouched. Reduced-motion OR the "Camera draait mee" toggle (Instellingen,
+  default aan, read live via `setCameraFollow`) pins `followYaw=π` (the pre-W1.5
+  fixed bearing) and cuts position; activity reframes already own the camera (update
+  early-returns), and `endActivity` eases back (cut under reduced). GOTCHA fixed:
+  `interact.spec` steered by mapping world-delta→fixed keys assuming a fixed bearing;
+  with the rotating cam that spirals, so its steering now reads `cameraYaw()` and
+  inverts `resolveInput`'s rotation each tick (the map is its own inverse). New
+  `camera.spec.ts`: quarter-circle → yaw ≥45°; reduced-motion → yaw stays put while
+  the ranger still walks ≥2 m. Frozen smoke untouched (own assert). All 12 E2E green.
