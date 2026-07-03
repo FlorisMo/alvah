@@ -18,8 +18,8 @@ import {
   BIOME_PALETTE, VEN_CENTER, WATER_LEVEL,
   anchorInBiome, biomeAt, heightAt, type Biome,
 } from './Biomes';
-import { loadManifest, loadModel, loadRig, prepModel } from './Models';
-import { standHeightFor } from './AnimalScale';
+import { loadManifest, loadModel, loadRig, prepModel, skinnedRenderBox } from './Models';
+import { standHeightFor, RANGER_STAND_HEIGHT } from './AnimalScale';
 import { applyEyes } from './EyeMaterial';
 import { applyCoat, applyPosture } from './AnimalDress';
 import { applyFace } from './FaceRig';
@@ -37,6 +37,7 @@ import { attachInput, type InputHandle } from '../core/attach-input';
 import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../core/footstep';
 import { Sound } from '../core/sound';
 import { store } from '../core/state';
+import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from './Wayfinding';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, routeVia } from './Paths';
@@ -90,7 +91,33 @@ export class World {
   private readonly ranger = new THREE.Group();
   private readonly target = new THREE.Vector3(0, 0, 0);
   private readonly camDesired = new THREE.Vector3();
-  private readonly camOffset = new THREE.Vector3(0, 3.4, 6.2); // gentle behind-above
+  // F-05: the third-person walk boom, rebuilt with guaranteed clearance and
+  // brought in + down from the giant-era (3.4, 6.2) rig so the ranger reads
+  // human-sized in an immersive over-the-shoulder frame. The old rig had no
+  // anti-clip rail, so the boom buried itself in whatever solid stood behind the
+  // ranger at a POI (the spawn hub, the dune by the jeep) and rendered that prop's
+  // unlit interior — Floris's #1 finding. placeCamera now spherecasts this boom
+  // against the collision solids + the ground and fades the ranger if it still
+  // collapses, so the world is always visible.
+  //
+  // Eye 2.4 m / boom 4.6 m / aim 1.1 m gives ~16° down. That is steeper than
+  // F-05's "a few degrees" because the FROZEN tap-to-walk smoke (e2e/movement:
+  // taps 32 % from the top expecting ground ahead) needs the horizon to sit above
+  // that tap row — a shallower lens lands the tap on sky and the ranger never
+  // moves. So this is F-05's lower/closer intent, clamped by the frozen contract.
+  private readonly camOffset = new THREE.Vector3(0, 2.4, 4.6); // behind-above, F-05 clearance
+  private readonly CAM_LOOK_H = 1.1;    // aim point above the ranger's feet (~sternum)
+  private readonly CAM_PROBE_R = 0.35;  // camera "sphere" radius for the push-in cast
+  private readonly CAM_GROUND_CLR = 0.5; // keep the lens this far above the terrain
+  // Cached ranger horizontal bounding radius, measured once whenever the mesh is
+  // (re)built (measureAvatar). The min-boom clamp is `radius + near-plane` and the
+  // avatar fades when the boom gets within ~`radius + 1 m`, so a rig that ever
+  // renders bigger than the honest 1.7 m hook still can't smear the lens (§4:
+  // pixels outrank the hook).
+  private avatarRadius = 0.45;
+  private avatarOpacity = 1;            // current applied ranger fade (avoids churn)
+  private readonly _camPose = new THREE.Vector3();  // scratch: camera world forward
+  private readonly _camBox = new THREE.Box3();       // scratch: ranger bbox for pose reads
   // W1.5 rotating follow-cam: `followYaw` is the eased camera bearing; it chases
   // `followTargetYaw` (the ranger's facing, updated ONLY while he is moving — a
   // standing ranger never swings the camera). Both start at π = straight behind
@@ -375,6 +402,20 @@ export class World {
     // ranger: procedural stand-in first (instant), real model swaps in when loaded
     this.ranger.add(this.proceduralRanger());
     this.scene.add(this.ranger);
+    // F-05 / F-09 world-entry composition (Run B P1.2 steer): spawn with the
+    // ranger's BACK to the follow lens. The rig defaults to rotation.y = 0 = facing
+    // +z = straight INTO the +z follow camera, so the world-entry / idle shots were
+    // a front-on, centre-frame ranger whose own coat filled the lens (the "reddish
+    // murk" five P1.1 re-grades misread as a buried boom — cam.dist ≈ 4.85 and
+    // avatarOpacity == 1 later proved the boom was healthy; the murk was his coat).
+    // π turns him down −z (forward, away from the lens) so the camera frames his
+    // back + open ground/horizon ahead — the third-person composition the movement
+    // smoke already assumes ("the camera sits behind, looking forward") — and it
+    // drops the 180° about-face the first forward press used to trigger. followYaw /
+    // followTargetYaw already init to π (FIXED_FOLLOW_YAW) so the lens is behind him
+    // from frame one; loadRealRanger clears only the children, never this rotation.
+    this.ranger.rotation.y = Math.PI;
+    this.measureAvatar(); // F-05: seed the camera rails off the stand-in's size
 
     this.camera.up.set(0, 1, 0);
     this.placeCamera(true);
@@ -1157,6 +1198,13 @@ export class World {
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: '#e8c39a', roughness: 1 }));
     head.position.y = 1.32;
     g.add(body, head);
+    // F-07: normalize the instant stand-in to the SAME canonical height as the
+    // real rig (~1.7 m, feet on the ground) so it reads human-sized and there is
+    // no scale pop when the loaded ranger swaps in. Plain meshes (no skeleton),
+    // so a straight Box3 measure is correct.
+    const raw = Math.max(new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3()).y, 0.0001);
+    g.scale.setScalar(RANGER_STAND_HEIGHT / raw);
+    g.position.y -= new THREE.Box3().setFromObject(g).min.y;
     return g;
   }
 
@@ -1166,7 +1214,11 @@ export class World {
     // player animates. loadRig falls back to a static group when no clips exist.
     const rig = await loadRig('ranger-alvah');
     if (!rig) return;
-    const prepped = prepModel(rig.group, 1.25);
+    // F-07: normalize the ranger to the canonical adult-human reference (~1.7 m)
+    // so trees/hut/animals read at believable proportions. prepModel scales off the
+    // SKELETON's world extent (Models.skinnedRenderBox) — the size that renders —
+    // not the bind-pose geometry box that read 1.7 m for a ~170 m bone-driven giant.
+    const prepped = prepModel(rig.group, RANGER_STAND_HEIGHT);
     // §1e eye system: bright, alive eyes (the golden-hour world is not dusk, so
     // eyeshine stays off; parallax freezes under reduced-motion).
     applyEyes(prepped, 'ranger-alvah', { dusk: false }); // parallax reads the live policy (no restart)
@@ -1183,11 +1235,109 @@ export class World {
     // bob when the clips are missing (loadRig returned an empty clip list).
     if (rig.clips.length) this.playerRig.attach(prepped, rig.clips);
     else this.playerRig.attachProcedural(prepped);
+    this.measureAvatar(); // F-05: re-seed the camera rails off the REAL rig's size
   }
 
   /** The ranger's active locomotion clip for the dev hook (null when procedural). */
   playerClip(): { name: string; time: number } | null {
     return this.playerRig.clip();
+  }
+
+  /** Dev-hook accessor (F-07): the player ranger's LIVE rendered height (m),
+   *  measured off the SKELETON (`skinnedRenderBox`) — the extent that actually
+   *  draws — so the scale assert reads reality, not the bind-pose geometry box
+   *  that once reported 1.7 m for a ~170 m bone-driven giant (§4: pixels are the
+   *  court of appeal; this is the field that keeps them honest). Falls back to the
+   *  geometry box for the procedural stand-in (no skeleton); null if empty. */
+  avatarState(): { height: number } | null {
+    if (this.ranger.children.length === 0) return null;
+    this.ranger.updateWorldMatrix(true, true);
+    const box = skinnedRenderBox(this.ranger) ?? new THREE.Box3().setFromObject(this.ranger);
+    const h = box.getSize(new THREE.Vector3()).y;
+    return Number.isFinite(h) && h > 0 ? { height: h } : null;
+  }
+
+  /** F-05: cache the ranger's horizontal bounding radius + box height whenever the
+   *  mesh is (re)built (stand-in at boot, real rig on load). The camera's min-boom
+   *  clamp and its avatar-fade band are defined off this radius, so if a rig ever
+   *  renders larger than the honest F-07 height the boom still clears it and the
+   *  ranger fades rather than smear the lens. Measured off the SAME posed bbox the
+   *  F-07 assert reads — one honest source, never the normalization target. */
+  private measureAvatar(): void {
+    if (this.ranger.children.length === 0) return;
+    this.ranger.updateWorldMatrix(true, true);
+    // F-07: off the SKELETON, so the rig's honest ~1.7 m radius seeds the rails —
+    // the bind-pose geometry box collapsed to ~0 on the giant and mis-clamped.
+    const box = skinnedRenderBox(this.ranger) ?? this._camBox.setFromObject(this.ranger);
+    const size = box.getSize(new THREE.Vector3());
+    const r = Math.hypot(size.x, size.z) * 0.5;
+    if (Number.isFinite(r) && r > 0) this.avatarRadius = Math.max(0.2, r);
+  }
+
+  /** Dev-hook accessor (F-05 ⊕ F-18): the REAL render camera, read back off the
+   *  actual `this.camera` object (position + world quaternion) and the ranger's
+   *  live bbox — NOT the follow bearing that lied in Run A. `dist` is the true
+   *  camera→ranger-centre boom length (the field F-16's zoom also reads); `yaw`
+   *  and `pitch` come from the camera's own forward vector; `avatarInView` tests
+   *  the ranger's whole box against the live view frustum (F-05's "avatar bbox
+   *  inside the frustum" assert). Any camera claim is graded off these, and the
+   *  pixels outrank them if they ever disagree (§4). Null before the world is up. */
+  camState(): CamState | null {
+    if (this.ranger.children.length === 0) return null;
+    const cam = this.camera;
+    cam.updateMatrixWorld();
+    cam.matrixWorldInverse.copy(cam.matrixWorld).invert(); // fresh frustum, not last-render's
+    // ranger centre from the SKELETON box (F-07): the extent that actually renders,
+    // so dist / avatarInView / avatarScreen can't sit on the bind-pose box that
+    // once framed a 1.7 m phantom while a ~170 m giant filled the lens (§4).
+    const box = skinnedRenderBox(this.ranger) ?? this._camBox.setFromObject(this.ranger);
+    const centre = box.getCenter(new THREE.Vector3());
+    const dist = cam.position.distanceTo(centre);
+    // yaw/pitch from the camera's OWN forward vector (world quaternion), so the
+    // value is whatever the render actually shows — the F-18 cross-check.
+    const fwd = cam.getWorldDirection(this._camPose);
+    const yaw = wrapAngle(Math.atan2(fwd.x, fwd.z) + Math.PI);
+    const pitch = Math.asin(Math.max(-1, Math.min(1, fwd.y)));
+    // whole-box-in-frustum: build the frustum from the live view-projection and
+    // require every bbox corner inside it (fully visible, not merely intersecting).
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(
+      new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse),
+    );
+    const min = box.min, max = box.max;
+    let avatarInView = true;
+    for (let i = 0; i < 8 && avatarInView; i++) {
+      const corner = this._camPose.set(
+        i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z,
+      );
+      for (const plane of frustum.planes) {
+        if (plane.distanceToPoint(corner) < 0) { avatarInView = false; break; }
+      }
+    }
+    // Framing machine signal (F-05 / Run B monitor steer #2): project the ranger's
+    // bbox to normalised screen space so a grade can PROVE he is framed rather than
+    // infer it from a soft-DOF frame. `heightFrac` (box top→bottom, projected)
+    // catches the "solid but a distant speck" frame that avatarInView alone passes.
+    const wx = centre.x, wz = centre.z; // keep world x/z before `centre` is spent
+    const topY = this._camPose.set(wx, max.y, wz).project(cam).y;
+    const botY = this._camPose.set(wx, min.y, wz).project(cam).y;
+    const ndc = centre.project(cam); // centre → NDC in [-1, 1]³ (mutates in place)
+    const avatarScreen = {
+      x: ndc.x, y: ndc.y,
+      onScreen: ndc.z > -1 && ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1,
+      heightFrac: Math.abs(topY - botY) / 2,
+    };
+    return {
+      dist, yaw, pitch,
+      x: cam.position.x, y: cam.position.y, z: cam.position.z,
+      target: this.inVehicle ? 'vehicle' : 'avatar', avatarInView,
+      // the applied fade (setAvatarOpacity): 1 = the ranger renders solid. A grade
+      // reads this to know whether the F-05 fade rail fired on THIS frame instead
+      // of inferring it from murk in the pixels (§4). Steady 1 across the settled
+      // hero/POI shots is the F-07 proportion shot's "ranger is shown, not faded"
+      // signal; anything < 1 flags the empty-frame before the judge looks at it.
+      avatarOpacity: this.avatarOpacity,
+      avatarScreen,
+    };
   }
 
   /** W4.5: hand the World the shared renderer so it can enable the shadow map (a
@@ -1403,13 +1553,30 @@ export class World {
    * Place the spawn-clearing hub (§4, W2.2): the ranger-cabin (a solid building the
    * ranger walks around) and the case-board (the mission hub — walking up to it
    * opens the mission board). Both are best-effort GLBs over a procedural stand-in.
-   * The props sit to the +x/+z side of spawn so the forward (−z) corridor the
-   * movement smoke walks stays clear, and both push a collision circle.
+   * The case-board (the mission hub) stays a few metres out on the +x side; the
+   * cabin sits forward-left (see below). Both keep the x≈0 forward (−z) corridor the
+   * movement smoke walks clear, and both push a collision circle.
    */
   private placeHub(): void {
-    // ranger-cabin: off to one side of spawn, its door turned toward the clearing;
+    // ranger-cabin: forward-left of spawn (WSW), its door turned toward the clearing;
     // a solid blocker (bigger collision circle) the ranger can't walk through.
-    const cabinAt = new THREE.Vector3(-4.6, 0, 3.6);
+    //
+    // F-05 ⊕ F-07 world-entry composition: at (−4.6, 3.6) the cabin sat straight
+    // BEHIND spawn on +z — exactly where the follow boom lands — so its 3.9 m-wide
+    // GLB filled the world-entry lens AND (as a hero shadow caster, sun from −x/+z)
+    // dropped its shadow +x/−z right over the spawn, leaving the frame a dark
+    // reddish murk (no ground/horizon/ranger — Floris's #1 finding). Moving it to
+    // (−6, −9): interim — that cleared the boom but parked the cabin ~14 m deep off
+    // the left edge, reading too small to give the ranger scale (five P1.1 re-grades
+    // read "nothing beside him"). (−4.2, −4): keeps it OUT of the +z boom volume and
+    // ~2 m clear of the x≈0 tap-to-walk lane (its circle spans x∈[−6.2,−2.2] at
+    // z=−4, so the movement/journey/ground @smoke walks and the spawn boom are
+    // untouched — the boom casts +z, never toward this −z circle), while sitting it
+    // ~10 m from the lens in the forward (−z) frustum, off to the LEFT: a believable
+    // hut BESIDE the back-turned ranger (see the rotation.y = π spawn) for the F-07
+    // proportion shot AND the F-09 hub in the first frame. Sun from −x/+z still
+    // throws the cabin shadow −z AWAY from the lit spawn. Its door faces spawn (below).
+    const cabinAt = new THREE.Vector3(-4.2, 0, -4);
     cabinAt.y = this.groundY(cabinAt.x, cabinAt.z);
     const cabin = new THREE.Group();
     cabin.position.copy(cabinAt);
@@ -2561,11 +2728,28 @@ export class World {
     }
     const s = Math.sin(this.followYaw), c = Math.cos(this.followYaw);
     // W5.1/W5.3b: the jeep uses the wider offset (distance 9, height 4.5) and the
-    // helicopter a higher aerial one (13, 6); walking keeps (6.2, 3.4). Same
-    // damping — the pull-back (and climb) eases in when he boards.
+    // helicopter a higher aerial one (13, 6); walking keeps the F-05 clearance rig
+    // (boom 4.6, eye 2.4). Same damping — the pull-back (and climb) eases on board.
+    const walk = !this.inVehicle && !this.inHeli;
     const off = this.inHeli ? this.camOffsetHeli : this.inVehicle ? this.camOffsetVehicle : this.camOffset;
-    const dist = off.z;
+    let dist = off.z;
+    // F-05 anti-clip (walk only): spherecast the boom against the collision solids
+    // (the same circles the ranger can't walk through) so a prop or hut BEHIND the
+    // ranger pulls the lens IN instead of rendering that prop's unlit interior. The
+    // eye height stays put (a pull-in, never a dip); the min clamp keeps the lens
+    // outside the ranger's own radius + near plane.
+    if (walk) {
+      const frac = this.boomClearFraction(rp.x, rp.z, -s * dist, -c * dist);
+      const minFrac = Math.min(1, (this.avatarRadius + this.camera.near + 0.2) / dist);
+      dist *= Math.max(minFrac, frac);
+    }
     this.camDesired.set(rp.x - s * dist, rp.y + off.y, rp.z - c * dist);
+    // keep the lens above the terrain it flies over — a berm behind the ranger no
+    // longer swallows it. A clearance lift only, never a downward move.
+    if (walk) {
+      const gy = this.groundY(this.camDesired.x, this.camDesired.z) + this.CAM_GROUND_CLR;
+      if (this.camDesired.y < gy) this.camDesired.y = gy;
+    }
     if (snap) {
       this.camera.position.copy(this.camDesired);
     } else {
@@ -2574,6 +2758,71 @@ export class World {
       this.camera.position.lerp(this.camDesired, dampFactor(dt, 0.3));
     }
     this.camera.up.set(0, 1, 0); // roll = 0 always
-    this.camera.lookAt(rp.x, rp.y + 1.0, rp.z);
+    this.camera.lookAt(rp.x, rp.y + (walk ? this.CAM_LOOK_H : 1.0), rp.z);
+    // F-05 fade rail: if the boom still collapses toward the ranger (an occluder
+    // right behind him, or a rig that renders larger than its honest 1.7 m height)
+    // fade the ranger out rather than smear his interior across the lens — the
+    // world stays visible. Opacity is a pure function of the REAL lens→ranger
+    // distance, so it is a cut under reduced-motion too (no camera move).
+    if (walk) {
+      const hd = Math.hypot(this.camera.position.x - rp.x, this.camera.position.z - rp.z);
+      const near = this.avatarRadius + 0.3, far = this.avatarRadius + 1.1;
+      this.setAvatarOpacity(Math.max(0, Math.min(1, (hd - near) / (far - near))));
+    } else if (this.avatarOpacity !== 1) {
+      this.setAvatarOpacity(1); // never leave the driver faded when he re-emerges
+    }
+  }
+
+  /**
+   * F-05 spherecast: the fraction of the walk boom (origin `ox,oz`, vector
+   * `dx,dz` = the horizontal offset) that is clear before the lens would enter a
+   * collision solid's circle grown by the camera probe radius. 1 = no obstacle in
+   * the way. Circles that already CONTAIN the origin (the prop the ranger stands
+   * at) are skipped so the lens never collapses onto him at a POI. Cheap 2D
+   * ray–circle math over the existing `obstacles` list — deterministic, so the
+   * idle-stability assert (yaw/dist steady ±0.01) holds frame to frame.
+   */
+  private boomClearFraction(ox: number, oz: number, dx: number, dz: number): number {
+    const a = dx * dx + dz * dz;
+    if (a < 1e-6) return 1;
+    let best = 1;
+    for (const o of this.obstacles) {
+      const R = o.r + this.CAM_PROBE_R;
+      const fx = ox - o.x, fz = oz - o.z;
+      const cc = fx * fx + fz * fz - R * R;
+      if (cc < 0) continue;                 // origin already inside — ignore this solid
+      const b = 2 * (fx * dx + fz * dz);
+      const disc = b * b - 4 * a * cc;
+      if (disc < 0) continue;               // boom misses the circle
+      const t = (-b - Math.sqrt(disc)) / (2 * a);
+      if (t > 0 && t < best) best = t;      // nearest entry along the boom
+    }
+    return best;
+  }
+
+  /**
+   * F-05 fade rail: set the ranger's render opacity (1 = solid). Each material's
+   * ORIGINAL opacity/transparent/depthWrite is stashed once and restored at full
+   * opacity, so a faded eye/coat material never loses its authored blend. A faded
+   * ranger drops depthWrite so the world behind it stays visible. Guarded on the
+   * cached value — no per-frame traversal unless the fade actually changes.
+   */
+  private setAvatarOpacity(o: number): void {
+    if (o === this.avatarOpacity) return;
+    this.avatarOpacity = o;
+    const opaque = o >= 1;
+    this.ranger.traverse((n) => {
+      const mesh = n as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of mats) {
+        const mat = m as THREE.Material & { opacity: number; transparent: boolean; depthWrite: boolean };
+        const ud = mat.userData as { __fadeOrig?: { o: number; t: boolean; d: boolean } };
+        if (!ud.__fadeOrig) ud.__fadeOrig = { o: mat.opacity, t: mat.transparent, d: mat.depthWrite };
+        const orig = ud.__fadeOrig;
+        if (opaque) { mat.opacity = orig.o; mat.transparent = orig.t; mat.depthWrite = orig.d; }
+        else { mat.opacity = orig.o * o; mat.transparent = true; mat.depthWrite = false; }
+      }
+    });
   }
 }

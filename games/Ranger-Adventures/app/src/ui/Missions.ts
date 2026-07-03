@@ -45,7 +45,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideAvatar, provideCam, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -180,6 +180,8 @@ function leaveWorld(): void {
   provideBoard(null);
   provideSitSpot(null);
   provideClip(null);
+  provideAvatar(null);
+  provideCam(null);
   provideActors(null);
   provideAmbient(null);
   provideLandmarks(null);
@@ -527,6 +529,8 @@ function startExplore(): void {
   provideBoard(() => world!.boardState());
   provideSitSpot(() => world!.sitSpotState()); // W6.4b2: "Ken je roep" sit-spot proximity
   provideClip(() => world!.playerClip()); // W3.2: the ranger's active locomotion clip
+  provideAvatar(() => world!.avatarState()); // F-07: live ranger scale (measured bbox height)
+  provideCam(() => world!.camState()); // F-05 ⊕ F-18: the REAL render camera read-back
   provideActors(() => world!.actorClips()); // W3.3: warden + poacher baked clips
   provideAmbient(() => world!.ambientState()); // W3.6: roaming animals + gliding birds
   provideLandmarks(() => world!.landmarkPositions()); // W4.1: fixed landmark beacons

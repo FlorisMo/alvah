@@ -63,6 +63,36 @@ next_work_box() { grep -E '^[[:space:]]*-[[:space:]]*\[ \]' "$LEDGER" 2>/dev/nul
 any_unchecked()  { grep -m1 -E '^[[:space:]]*-[[:space:]]*\[ \]' "$LEDGER" 2>/dev/null; }
 # Count of ticked GATE boxes — a rise means a phase just closed → commit.
 gates_done() { grep -c -E '^[[:space:]]*-[[:space:]]*\[[xX]\].*GATE-' "$LEDGER" 2>/dev/null; }
+# Count of ALL ticked boxes — a rise means a box got done this sitting → commit
+# (overnight-safety: save every completed box, not just whole phases).
+ticks_done() { grep -c -E '^[[:space:]]*-[[:space:]]*\[[xX]\]' "$LEDGER" 2>/dev/null; }
+
+# DEFER-AND-CONTINUE (Floris, 2026-07-04): a box that fails its own grade for
+# STALL_LIMIT sittings is PARKED — marked DEFERRED in the ledger (so next_work_box
+# skips it) and logged to DEFERRED.md — and the loop moves to the next box instead
+# of halting the whole run. Floris triages the deferred list (hands-on fixes) later.
+DEFERRED_LIST="$DIR/DEFERRED.md"
+defer_first_work_box() {
+  local why="$1"
+  # insert a DEFERRED marker into the FIRST unchecked non-DEMO/non-DEFERRED box
+  # (the same box next_work_box just served + the loop just failed).
+  awk '
+    BEGIN { done = 0 }
+    done == 0 && /^[[:space:]]*-[[:space:]]*\[ \]/ && $0 !~ /DEMO ·/ && $0 !~ /DEFERRED/ {
+      sub(/\[ \][[:space:]]*/, "[ ] DEFERRED · ")
+      done = 1
+    }
+    { print }
+  ' "$LEDGER" > "$LEDGER.tmp" && mv "$LEDGER.tmp" "$LEDGER"
+  if [ ! -f "$DEFERRED_LIST" ]; then
+    printf '# Run B — deferred boxes (auto-parked after %s failed sittings)\n\nBoxes the autonomous loop could not pass on its own. Each needs a hands-on look (usually a live-in-browser fix). The scale/camera/spawn ones are the known hard nut.\n\n' "$STALL_LIMIT" > "$DEFERRED_LIST"
+  fi
+  {
+    printf -- '- **%s**\n' "$clean_box"
+    printf -- '  - parked %s · %s\n' "$(date '+%F %T')" "$why"
+    printf -- '  - evidence: BUILD-RUN-LOOP.log around this time + audit-evidence/laptop/\n'
+  } >> "$DEFERRED_LIST"
+}
 
 if [ ! -f "$LEDGER" ]; then
   echo "✗ no BUILD-LEDGER.md at $LEDGER." | tee -a "$LOG"; exit 1
@@ -123,6 +153,7 @@ run_fable() {
 }
 
 echo "=== BUILD run loop started $(date '+%F %T') · cap ${MAX_RUNS} · build=${MODEL_OPUS} judge=${MODEL_FABLE} · effort ${EFFORT} ===" | tee -a "$LOG"
+echo "    mode: DEFER-AND-CONTINUE — a box stuck ${STALL_LIMIT} sittings is parked to ${DEFERRED_LIST} and the loop moves on; every ticked box is committed+pushed immediately." | tee -a "$LOG"
 
 for i in $(seq 1 "$MAX_RUNS"); do
   echo "──────── sitting $i/$MAX_RUNS  $(date '+%F %T') ────────" | tee -a "$LOG"
@@ -140,6 +171,7 @@ for i in $(seq 1 "$MAX_RUNS"); do
 
   clean_box="$(printf '%s' "$box" | sed 's/^[[:space:]]*-[[:space:]]*\[ \][[:space:]]*//')"
   gates_before="$(gates_done)"
+  ticks_before="$(ticks_done)"
   before="$(md5 -q "$LEDGER")"
 
   case "$box" in
@@ -156,19 +188,30 @@ for i in $(seq 1 "$MAX_RUNS"); do
 
   after="$(md5 -q "$LEDGER")"
   gates_after="$(gates_done)"
+  ticks_after="$(ticks_done)"
 
-  # A phase just closed (a GATE box got ticked) → commit + push that phase.
+  # Save progress. A phase gate closing keeps its own message; any other box that
+  # got ticked this sitting is committed too (overnight-safety — a box done is a
+  # box saved, so a crash/interrupt never loses a night's work). `ranger-run.mjs
+  # commit` does the git add -A + commit + push.
   if [ "$gates_after" -gt "$gates_before" ]; then
     echo "  ✔ a phase gate closed — committing + pushing the phase." | tee -a "$LOG"
     (cd "$APP" && node scripts/ranger-run.mjs commit "Run B: phase gate passed (Fable-agreed) — $(date '+%F %T')") >> "$LOG" 2>&1 \
       || echo "  ⚠ per-phase commit/push reported a problem — check app/logs/git-push.log" | tee -a "$LOG"
+  elif [ "$ticks_after" -gt "$ticks_before" ]; then
+    echo "  ✔ a box got ticked — committing + pushing progress." | tee -a "$LOG"
+    (cd "$APP" && node scripts/ranger-run.mjs commit "Run B: box done — ${clean_box} — $(date '+%F %T')") >> "$LOG" 2>&1 \
+      || echo "  ⚠ per-box commit/push reported a problem — check app/logs/git-push.log" | tee -a "$LOG"
   fi
 
   if [ "$before" = "$after" ]; then stall=$((stall + 1)); else stall=0; fi
+  # DEFER-AND-CONTINUE: a box stuck for STALL_LIMIT sittings is PARKED, not a halt.
   if [ "$stall" -ge "$STALL_LIMIT" ]; then
-    echo "⛔ Ledger unchanged for $STALL_LIMIT sittings — pausing (NEEDS-FLORIS). A box is stuck; check $LOG and the fresh screenshots in $DIR/audit-evidence/." | tee -a "$LOG"
-    (cd "$APP" && node scripts/ranger-run.mjs status --blocker="Run B stalled on: ${clean_box}. Check BUILD-RUN-LOOP.log + audit-evidence/.") >> "$LOG" 2>&1
-    break
+    echo "⏭  '${clean_box}' unpassed for $STALL_LIMIT sittings — DEFERRING it and moving on (not a halt)." | tee -a "$LOG"
+    defer_first_work_box "failed its own screenshot grade $STALL_LIMIT sittings running"
+    (cd "$APP" && node scripts/ranger-run.mjs commit "Run B: deferred stuck box — ${clean_box} — $(date '+%F %T')") >> "$LOG" 2>&1 \
+      || echo "  ⚠ deferred-box commit/push problem (continuing)" | tee -a "$LOG"
+    stall=0
   fi
   sleep 5
 done

@@ -27,6 +27,11 @@ export class Stage {
   private readonly camTarget = new THREE.Vector3(0, 1.1, 0);
   private running = false;
   private rafId = 0;
+  // F-18: the draw-call count sampled the instant AFTER each render, when
+  // renderer.info is fresh. The dev hook returns THIS (not a poll of
+  // renderer.info at an arbitrary later moment), so a <150-budget assert reads a
+  // stable same-frame number instead of the ±18 noise Run A saw between frames.
+  private lastDrawCalls = 0;
   /** when set, the loop renders this scene/camera instead of the title backdrop */
   private world: { scene: THREE.Scene; camera: THREE.PerspectiveCamera; update: (dt: number, t: number) => void } | null = null;
 
@@ -110,6 +115,12 @@ export class Stage {
     this.frameCbs.push(cb);
   }
 
+  /** F-18: the draw calls of the most recently rendered frame, captured the
+   *  instant after render (renderer.info fresh). The dev hook reads this. */
+  get drawCalls(): number {
+    return this.lastDrawCalls;
+  }
+
   /** Hand rendering to an explorable world (keeps the one renderer + budget overlay). */
   enterWorld(world: { scene: THREE.Scene; camera: THREE.PerspectiveCamera; update: (dt: number, t: number) => void }): void {
     this.world = world;
@@ -138,6 +149,7 @@ export class Stage {
         this.updateCamera(t);
         this.renderer.render(this.scene, this.camera);
       }
+      this.lastDrawCalls = this.renderer.info.render.calls; // F-18: same-frame sample
       for (const cb of this.frameCbs) cb(dt, t);
     };
     this.rafId = requestAnimationFrame(loop);

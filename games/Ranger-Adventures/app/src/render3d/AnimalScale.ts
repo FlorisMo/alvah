@@ -25,10 +25,10 @@
  * test pins the ORDERING and the ranger ratio, which are robust to the exact
  * factor — the numbers are honest estimates, not a false precision claim.
  *
- * Reference: the dossier's schaal-referentie uses an adult human ≈ 1.7 m. The
- * in-world PLAYER mesh is deliberately child-scaled (Alvah is 8; World preps
- * the ranger GLB to 1.25 m) — that is intentional and out of scope here; these
- * are the animals' TRUE biological heights, correct next to a child or adult.
+ * Reference: the dossier's schaal-referentie uses an adult human ≈ 1.7 m, and
+ * the in-world PLAYER mesh is normalized to that same reference (F-07: World
+ * preps the ranger GLB to RANGER_STAND_HEIGHT); these are the animals' TRUE
+ * biological heights, so every creature reads correctly next to the ranger.
  */
 
 /** Adult-human reference height (m) — the dossier's schaal-referentie anchor. */

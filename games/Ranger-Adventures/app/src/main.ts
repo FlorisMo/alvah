@@ -29,6 +29,11 @@ const ui = document.getElementById('ui') as HTMLDivElement;
 
 // --- 3D render layer + live budget overlay (Phase 0) ---
 const stage = new Stage(canvas);
+// TEMP-PROBE (revert): expose the stage so a throwaway probe can traverse the
+// world scene for the ranger rig. Dev-gated; removed before this box is done.
+if (new URLSearchParams(location.search).has('dev')) {
+  (window as unknown as { __stage: unknown }).__stage = stage;
+}
 
 // The draw-call/fps overlay is a dev instrument, not player UI. Gate it on the
 // `?dev=1` query param ONLY (WORLD-PLAN W0.5) — NOT `import.meta.env.DEV`: the
@@ -43,10 +48,11 @@ if (showBudgets) {
 stage.start();
 
 // Dev-state hook for the browser-proof E2E suite (WORLD-PLAN §3.1). Gated
-// behind DEV or ?dev=1; draw calls come straight from renderer.info.
+// behind DEV or ?dev=1; draw calls are the same-frame sample captured right
+// after each render (F-18 — a stable count, not an arbitrarily-timed poll).
 installDevHook();
 setScreen('title');
-provideDrawCalls(() => stage.renderer.info.render.calls);
+provideDrawCalls(() => stage.drawCalls);
 
 // --- title card → the lodge (mission picker) ---
 const card = document.createElement('div');

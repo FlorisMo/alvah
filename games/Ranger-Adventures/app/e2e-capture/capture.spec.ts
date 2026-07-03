@@ -46,6 +46,23 @@ type Annotation = {
   name: string; platform: string; group: string; note: string; ok: boolean;
   screen: string | null; pos: { x: number; z: number } | null; cameraYaw: number | null;
   drawCalls: number | null; missionView: string | null; clip: { name: string; time: number } | null;
+  // F-07: the ranger's LIVE measured world bounding-box height (m). The scale
+  // assert reads avatar.height ∈ [1.5, 2.0] off any world/walk shot. null before
+  // the hook/world is ready (title/avatar screens, GAPs).
+  avatar: { height: number } | null;
+  // F-05 ⊕ F-18: the REAL render camera read back after the frame update. `dist`
+  // is the boom length (assert: ≥ 3 = the world is visible, not the lens buried
+  // in the avatar); `avatarInView` = the ranger's whole bbox sits in the frustum;
+  // `yaw`/`dist` steady across the world-idle pair proves the pose telemetry is
+  // read off the settled camera (§4: pixels still outrank it). `avatarOpacity` = the
+  // applied fade (1 = solid): the F-07 machine signal — opacity == 1 on a settled
+  // hero/POI shot means a hard-to-see ranger is small, NOT faded, so the grade
+  // stops blaming the boom. `avatarScreen` = his bbox projected to screen space
+  // (steer #2): {x,y} in [-1,1], onScreen, and heightFrac (viewport-height fraction)
+  // — a framed ranger reads |x|,|y| ≲ 0.6 with a non-tiny heightFrac; a speck or an
+  // off-frame ranger fails it, so a soft-DOF frame can't be misgraded as "murk".
+  // null on GAPs/boot.
+  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number } } | null;
   // vehicle heading/speed when driving — the DATA signal for the #3 steering
   // finding (heading unchanged across the drive burst while a turn key is held
   // → dead steering). null when not in a vehicle.
@@ -57,6 +74,8 @@ interface Hook {
   screen: string; missionView: '2d' | '3d' | null; version: string;
   pos(): { x: number; z: number } | null; cameraYaw(): number | null; drawCalls(): number | null;
   clip(): { name: string; time: number } | null;
+  avatar(): { height: number } | null;
+  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number } } | null;
   board(): { x: number; z: number; near: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; speed: number } | null;
 }
@@ -89,14 +108,14 @@ test('audit capture flow', async ({ context }, testInfo) => {
     const file = `${String(n).padStart(2, '0')}-${name}.png`;
     const a: Annotation = {
       name, platform, group, note, ok: true, file: `${platform}/${file}`,
-      screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, veh: null,
+      screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, cam: null, veh: null,
     };
     try {
       const s = await hook(page, (r) => {
         const v = r.vehicle();
         return {
           screen: r.screen, missionView: r.missionView, pos: r.pos(),
-          cameraYaw: r.cameraYaw(), drawCalls: r.drawCalls(), clip: r.clip(), version: r.version,
+          cameraYaw: r.cameraYaw(), drawCalls: r.drawCalls(), clip: r.clip(), avatar: r.avatar(), cam: r.cam(), version: r.version,
           veh: v && v.inVehicle ? { heading: v.heading, speed: v.speed, inVehicle: v.inVehicle } : null,
         };
       });
@@ -115,7 +134,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
       shots.push({
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
-        screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, veh: null,
+        screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, cam: null, veh: null,
       });
       flush();
     }
@@ -165,7 +184,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         shots.push({
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
-          screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, veh: null,
+          screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, cam: null, veh: null,
         });
         flush();
         return;
@@ -191,6 +210,15 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await waitForWorld(page);
       await settle(page, 1500);
       await snap(page, 'world-entry', 'Wereld', 'Eerste frame in de wereld — camera-kader + avatarschaal (punch-list #1).');
+    });
+    // F-18 idle-stability pair (P1.2 assert): two frames 3 s apart with NO input,
+    // both AFTER the real rig has swapped in — cam.yaw/cam.dist must hold ±0.01,
+    // proving the pose is read off the settled render camera, not a drifting boom.
+    await scene(page, 'world-idle', async () => {
+      await settle(page, 1500); // rig loaded + camera settled (~3 s post-enter)
+      await snap(page, 'world-idle', 'Wereld', 'Stil, geen input — camera-pose ijkpunt (F-18 idle-check).');
+      await settle(page, 3000); // 3 s idle
+      await snap(page, 'world-idle-hold', 'Wereld', 'Zelfde plek, 3 s later — pose stabiel? yaw/dist ±0.01.');
     });
     // WALK BURST — gliding evidence: drive forward, snap 5 frames ~250 ms apart.
     await scene(page, 'walk-burst', async () => {

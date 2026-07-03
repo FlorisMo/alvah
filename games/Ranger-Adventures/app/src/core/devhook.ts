@@ -19,6 +19,33 @@
 export type Screen = 'title' | 'avatar' | 'lodge' | 'world' | 'mission';
 export type MissionView = '2d' | '3d' | null;
 
+/** The REAL render-camera read-back (F-05 ⊕ F-18). See `RangerDevHook.cam`. */
+export type CamState = {
+  dist: number; yaw: number; pitch: number;
+  x: number; y: number; z: number;
+  target: 'avatar' | 'vehicle'; avatarInView: boolean;
+  /** The applied ranger render opacity this frame (1 = solid). The F-05 fade rail
+   *  drops it below 1 ONLY when the boom collapses toward the ranger; a settled
+   *  hero/POI frame must read 1. Exposed as the machine signal that ends the F-07
+   *  proportion-shot's blind retries: a genuinely faded ranger (opacity < 1)
+   *  predicts an empty frame BEFORE the judge looks, and opacity == 1 proves the
+   *  fade is NOT why the ranger is hard to see — so a hard-to-see-but-solid ranger
+   *  redirects the fix to framing, not to the boom (AUDIT-FINDINGS §4: pixels are
+   *  the court of appeal; this is the field that keeps them honest). */
+  avatarOpacity: number;
+  /** The ranger's world centre projected to normalised screen space (F-05 framing,
+   *  Run B monitor steer #2): `x`/`y` in [-1, 1] (0 = frame centre, +y up), `onScreen`
+   *  true when he is inside the frustum AND in front of the lens. The framing machine
+   *  signal — a settled world-entry / walk / hub frame must keep the WHOLE ranger in
+   *  the central band (|x|, |y| ≲ 0.6), so a ranger who projects to the horizon edge
+   *  or off-frame FAILS the assert BEFORE a judge misreads a soft-DOF frame as "murk"
+   *  or "a distant speck". `avatarInView` only tests the frustum; this tests that he
+   *  is actually FRAMED — the field that ends the F-07 proportion shot's blind loop.
+   *  `heightFrac` is his bbox's projected vertical extent as a fraction of the
+   *  viewport, so "solid but a 10 px speck" is detectable, not just off-screen. */
+  avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number };
+};
+
 export interface RangerDevHook {
   readonly version: string;
   readonly screen: Screen;
@@ -27,6 +54,23 @@ export interface RangerDevHook {
   cameraYaw(): number | null;
   drawCalls(): number | null;
   clip(): { name: string; time: number } | null;
+  /** The player ranger's LIVE world bounding-box height (m), measured from the
+   *  real posed mesh — the honest scale signal the F-07 assert reads
+   *  (avatar.height ∈ [1.5, 2.0]). It is the measured render size, NOT the
+   *  normalization target, so the telemetry can never mask a mis-scaled rig
+   *  (AUDIT-FINDINGS §4: pixels are the court of appeal). Null before the
+   *  hook/world is ready. */
+  avatar(): { height: number } | null;
+  /** The REAL render camera read back AFTER the frame update (F-05 ⊕ F-18): the
+   *  live camera-to-subject boom length (`dist`), the yaw/pitch derived from the
+   *  camera's own world quaternion (NOT the follow bearing), the camera's world
+   *  position, what the boom anchors on (`avatar` on foot, `vehicle` when driving)
+   *  and whether the ranger's whole bounding box sits inside the view frustum.
+   *  F-18 proved the old telemetry could contradict the pixels (yaw moved between
+   *  pixel-identical frames); these fields are measured off the actual camera, so
+   *  a camera assert can never sit on a value the render never had. Null before
+   *  the world/hook is ready. */
+  cam(): CamState | null;
   /** The mission id the ranger is standing at (proximity), or null (W1.4). */
   nearId(): string | null;
   /** Every mission marker's world position, for E2E navigation (W1.4). */
@@ -132,6 +176,8 @@ const state = {
   cameraYaw: null as null | (() => number),
   drawCalls: null as null | (() => number),
   clip: null as null | (() => { name: string; time: number } | null),
+  avatar: null as null | (() => { height: number } | null),
+  cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
   board: null as null | (() => { x: number; z: number; near: boolean } | null),
@@ -200,6 +246,19 @@ export function provideDrawCalls(fn: (() => number) | null): void {
 /** Register the live player-animation clip source (the mixer, W3.2). */
 export function provideClip(fn: (() => { name: string; time: number } | null) | null): void {
   state.clip = fn;
+}
+
+/** Register the live avatar-scale source (the World's measured ranger bbox
+ *  height). Pass null to clear (F-07). */
+export function provideAvatar(fn: (() => { height: number } | null) | null): void {
+  state.avatar = fn;
+}
+
+/** Register the live real-camera read-back source (the World's `camState`, read
+ *  off the actual render camera after the frame update). Pass null to clear
+ *  (F-05 ⊕ F-18). */
+export function provideCam(fn: (() => CamState | null) | null): void {
+  state.cam = fn;
 }
 
 /** Register the live proximity source (the World's `nearId`). Pass null to clear. */
@@ -361,6 +420,8 @@ export function installDevHook(): boolean {
     cameraYaw: () => (state.cameraYaw ? state.cameraYaw() : null),
     drawCalls: () => (state.drawCalls ? state.drawCalls() : null),
     clip: () => (state.clip ? state.clip() : null),
+    avatar: () => (state.avatar ? state.avatar() : null),
+    cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),
     markers: () => (state.markers ? state.markers() : null),
     board: () => (state.board ? state.board() : null),

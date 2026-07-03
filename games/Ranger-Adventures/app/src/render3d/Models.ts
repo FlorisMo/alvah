@@ -76,18 +76,55 @@ export async function loadRig(id: string): Promise<LoadedRig | null> {
 }
 
 /**
+ * F-07: the world-space extent of a rig's SKELETON — the size that actually
+ * renders. A skinned mesh is drawn by its bones, and on the ranger GLB the bones
+ * are ~94× the mesh's own geometry units (mesh geometry ≈ 0.9, skeleton ≈ 85 in
+ * armature-local space). `Box3.setFromObject` measures the bind-pose GEOMETRY
+ * box, so it read 1.7 m for a skeleton that drove a ~170 m rendered giant — the
+ * F-07 murk that filled the follow lens and was mis-graded "fixed" six times
+ * (`avatar.height` = 1.7 was an F-18-class telemetry lie). Bone world positions
+ * are pose-independent (they carry the scale, not the animation), so this reveals
+ * the true render size at bind pose, on a detached clone, or live. Returns null
+ * when `root` has no skinned mesh, so static props fall back to the geometry box.
+ */
+export function skinnedRenderBox(root: THREE.Object3D): THREE.Box3 | null {
+  root.updateWorldMatrix(true, true);
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  let found = false;
+  root.traverse((o) => {
+    const mesh = o as THREE.SkinnedMesh;
+    if (!mesh.isSkinnedMesh || !mesh.skeleton) return;
+    for (const bone of mesh.skeleton.bones) {
+      box.expandByPoint(bone.getWorldPosition(v));
+      found = true;
+    }
+  });
+  return found && !box.isEmpty() ? box : null;
+}
+
+/**
  * Normalize a loaded group: scale so its tallest dimension ≈ targetHeight, and
  * drop it so its feet sit at y=0, centered on x/z. Returns the wrapper to place.
  */
 export function prepModel(group: THREE.Group, targetHeight: number): THREE.Group {
-  const box = new THREE.Box3().setFromObject(group);
+  // F-07: a RIGGED GLB renders at the extent of its SKELETON, not its mesh
+  // geometry — so measure the bones (`skinnedRenderBox`), never the bind-pose
+  // `Box3.setFromObject` box, which read 1.7 m for a bone-driven ~170 m giant.
+  // Static props have no skeleton → null → the plain geometry box (correct AND
+  // pose-independent for them) keeps every non-rigged call site byte-identical.
+  group.updateWorldMatrix(true, true);
+  const skel = skinnedRenderBox(group);
+  const box = skel ?? new THREE.Box3().setFromObject(group);
   const size = box.getSize(new THREE.Vector3());
   const tallest = Math.max(size.y, 0.0001);
   const scale = targetHeight / tallest;
   group.scale.setScalar(scale);
 
-  // recompute after scaling, then recenter feet-on-ground
-  const box2 = new THREE.Box3().setFromObject(group);
+  // recompute after scaling (skeleton for a rig, geometry for a prop), then drop
+  // the feet to y=0 and centre x/z off the SAME measure.
+  group.updateWorldMatrix(true, true);
+  const box2 = (skel && skinnedRenderBox(group)) || new THREE.Box3().setFromObject(group);
   const center = box2.getCenter(new THREE.Vector3());
   group.position.x -= center.x;
   group.position.z -= center.z;
