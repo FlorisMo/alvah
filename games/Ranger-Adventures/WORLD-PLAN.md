@@ -1854,3 +1854,25 @@ with the full sub-id (e.g. `W2.4a`).
   dpr + vegetationScale 0.55) — the slow-device contract, machine-independent.
   New `quality.test.ts` (9 tests) pins the hysteresis band + probe windowing.
   368 unit (+9) + build + quality spec (2) + frozen smoke 4/4 green.
+- 2026-07-03 (W7.3, alles groen + AUTO-QA-REPORT-2): the full green gate. 368/368
+  unit+parity, `build:site` (entry `app.js` 10.30 kB gzip, < 120 kB contract),
+  root `astro build` (21 pages, `astro check` clean — this fresh checkout had no
+  root `node_modules`; `npm install` restored the existing lockfile, no new deps),
+  frozen `e2e:smoke` 4/4 clean, AUTO-QA-REPORT-2.md written with 16 curated stills
+  in `qa-evidence-2/` (1.7 MB). SURPRISE worth recording: the full 48-test E2E
+  cannot complete in ONE invocation on this GPU-less Mac. Headless Chromium has no
+  real GPU locally (the SwiftShader launch args are CI-gated off), so three.js
+  renders in software; booting a 240×240 m world per spec is CPU-bound. Parallel
+  (default workers) starves the renderer — 31/48 fail. Serial `--workers=1`
+  recovers all but the heaviest, which hit their OWN internal `test.setTimeout`
+  budgets (calibrated on faster hardware) even at `--timeout=180000`. Fix (weakens
+  NO assertion — a timeout bump only gives the slow renderer room, every assert
+  still runs): raised `chain` 120→240 s, `pause` 60→150 s, `sitspot` 120→240 s,
+  `veldnotitie` 180→300 s, and `journey`'s avatar-button `toBeVisible` 5→15 s.
+  Each affected spec re-verified GREEN in isolation (journey 21.9 s, sitspot 1.5 m,
+  veldnotitie 2.8 m, chain 2.9 m, pause 1.8 m); a per-spec sweep proved the other
+  28 green individually. NET: all 48 tests pass, but on hardware without a real GPU
+  the suite must be BATCHED, not run as one 48-test parallel invocation — the
+  authoritative always-on surface stays CI's frozen smoke. WebKit half remains the
+  W0.8 graceful-degrade (frozen OS build bus-errors locally). Two boxes left after
+  this: W7.4 (deploy + live curl) and W7.5 (NEEDS-FLORIS iPad acceptance).

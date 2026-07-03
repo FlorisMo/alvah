@@ -37,7 +37,7 @@ test('journey: Begin → avatar → world (≤2 clicks), screen reaches "world" 
 
   // click 1: title → avatar creator
   await page.getByRole('button', { name: 'Begin' }).click();
-  await expect(page.getByRole('button', { name: 'Dit is mijn ranger' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Dit is mijn ranger' })).toBeVisible({ timeout: 15_000 });
   await expect.poll(() => screen(page)).toBe('avatar');
   await shot(page, 'journey-2-avatar');
 

@@ -117,7 +117,7 @@ async function returnToPatrol(page: Page): Promise<void> {
 }
 
 test('veldnotitie: an in-world fact is pinned to the prikbord and persisted', async ({ page }, testInfo) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000); // headroom for slow software rendering under sustained load
   const errors: string[] = [];
   collectPageErrors(page, errors);
 

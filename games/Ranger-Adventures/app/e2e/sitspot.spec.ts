@@ -80,8 +80,8 @@ async function walkToSitSpot(page: Page): Promise<void> {
 }
 
 test('sitspot: bench by the vogelkijkhut plays a full "Ken je roep" beat in-world (3D)', async ({ page }, testInfo) => {
-  // Real-time stepping to the far sit-spot on SwiftShader (~10× slower under load).
-  test.setTimeout(120_000);
+  // Real-time stepping to the far sit-spot on software rendering (~10× slower under load).
+  test.setTimeout(240_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
 

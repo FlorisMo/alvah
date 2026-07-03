@@ -31,7 +31,7 @@ async function enterWorld(page: Page): Promise<void> {
 }
 
 test('pause: hub shell reaches prikbord + raaf + instellingen + badges over the live world', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(150_000); // four sub-menu flows over the live world; headroom for slow headless GPUs
   const errors: string[] = [];
   collectPageErrors(page, errors);
 

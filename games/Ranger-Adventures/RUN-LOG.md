@@ -1541,3 +1541,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~97%
 ```
+
+---
+**2026-07-03 00:39:59Z** · ticked: - [x] W7.3 Alles groen: unit + parity + volledige E2E (chromium én webkit) + build:site + astro build; AUTO-QA-REPORT-2.md met screenshots uit qa-evidence-2/
+
+```
+✔ landed: W7.3 Alles groen: unit + parity + volledige E2E (chromium én webkit) + build:site + astro build; AUTO-QA-REPORT-2.md met screenshots uit qa-evidence-2/
+▶ phase:  Fase W7 — Prestatie + oplevering
+→ next:   W7.4 Ship: commit + push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~98%
+```

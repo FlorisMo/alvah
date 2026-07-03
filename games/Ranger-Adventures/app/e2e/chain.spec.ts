@@ -142,7 +142,7 @@ async function returnToPatrol(page: Page): Promise<void> {
 }
 
 test('chain: two world-first missions back to back, no lodge visit, both 3D + persisted', async ({ page }, testInfo) => {
-  test.setTimeout(120_000); // two full walk-to-board + play cycles on SwiftShader
+  test.setTimeout(240_000); // two full walk-to-board + play cycles; headroom for slow headless GPUs
   const errors: string[] = [];
   collectPageErrors(page, errors);
 
