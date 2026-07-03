@@ -44,6 +44,13 @@ export type CamState = {
    *  `heightFrac` is his bbox's projected vertical extent as a fraction of the
    *  viewport, so "solid but a 10 px speck" is detectable, not just off-screen. */
   avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number };
+  /** F-09 (spawn faces the void, the hub sits behind the player): true when at least
+   *  one hub landmark — the cabin, the mission board, or a fixed beacon — is inside
+   *  the live view frustum. The world-entry assert reads this to PROVE the spawn
+   *  faces the hub (≥1 landmark in the first frame) rather than infer it from a
+   *  soft-DOF pixel; a spawn that looked at empty heath would read false. The
+   *  screenshot stays the court of appeal (AUDIT-FINDINGS §4). */
+  landmarkInView: boolean;
 };
 
 export interface RangerDevHook {

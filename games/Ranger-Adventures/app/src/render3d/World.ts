@@ -260,6 +260,10 @@ export class World {
   // "nearest mission marker" the E2E steers to.
   private boardGroup: THREE.Group | null = null;
   private boardPos: THREE.Vector3 | null = null;
+  // F-09: the cabin's world position, kept so camState's landmark-in-frustum test
+  // can prove a hub landmark is in the world-entry frame (the board + cabin are the
+  // only hub markers inside the forward frustum; the beacons sit off to the sides).
+  private cabinPos: THREE.Vector3 | null = null;
   private nearBoard = false;
   private onBoardNear: (near: boolean) => void = () => {};
   private onBoardOpen: () => void = () => {};
@@ -1326,6 +1330,24 @@ export class World {
       onScreen: ndc.z > -1 && ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1,
       heightFrac: Math.abs(topY - botY) / 2,
     };
+    // F-09 hub-in-frustum: is at least one hub landmark actually in this frame? The
+    // world-entry assert reads it to PROVE the spawn faces the hub, not the void —
+    // `landmarkInView` == true means the cabin, the mission board, or a fixed beacon
+    // sits inside the live view frustum (the pixels stay the court of appeal, §4).
+    // Same plane-distance idiom as avatarInView above (no new three API); the point
+    // is lifted a metre so a prop whose base grazes the bottom plane still counts.
+    const hub = new THREE.Vector3();
+    const ptInFrustum = (px: number, pz: number): boolean => {
+      hub.set(px, this.groundY(px, pz) + 1.0, pz);
+      for (const plane of frustum.planes) if (plane.distanceToPoint(hub) < 0) return false;
+      return true;
+    };
+    let landmarkInView =
+      (this.cabinPos != null && ptInFrustum(this.cabinPos.x, this.cabinPos.z)) ||
+      (this.boardPos != null && ptInFrustum(this.boardPos.x, this.boardPos.z));
+    for (let i = 0; !landmarkInView && i < this.landmarks.length; i++) {
+      landmarkInView = ptInFrustum(this.landmarks[i].x, this.landmarks[i].z);
+    }
     return {
       dist, yaw, pitch,
       x: cam.position.x, y: cam.position.y, z: cam.position.z,
@@ -1337,6 +1359,7 @@ export class World {
       // signal; anything < 1 flags the empty-frame before the judge looks at it.
       avatarOpacity: this.avatarOpacity,
       avatarScreen,
+      landmarkInView,
     };
   }
 
@@ -1578,6 +1601,7 @@ export class World {
     // throws the cabin shadow −z AWAY from the lit spawn. Its door faces spawn (below).
     const cabinAt = new THREE.Vector3(-4.2, 0, -4);
     cabinAt.y = this.groundY(cabinAt.x, cabinAt.z);
+    this.cabinPos = cabinAt.clone(); // F-09: hub-in-frustum test reads this
     const cabin = new THREE.Group();
     cabin.position.copy(cabinAt);
     cabin.rotation.y = Math.atan2(-cabinAt.x, -cabinAt.z); // face the spawn point
@@ -1592,9 +1616,21 @@ export class World {
       cabin.add(prepped);
     });
 
-    // case-board: to the other side of spawn, ~4.4 m out — the mission hub. A halo
-    // ring + a floating "Missiebord" tag read as "go here", like a mission marker.
-    const boardAt = new THREE.Vector3(3.6, 0, 2.6);
+    // case-board: the mission hub. A halo ring + a floating "Missiebord" tag read
+    // as "go here", like a mission marker.
+    //
+    // F-09 (spawn faces the void, the hub sits BEHIND the player): it used to sit at
+    // (3.6, 2.6) — the +z side, i.e. straight BEHIND the back-turned ranger and off
+    // the world-entry frame, so the very content the player should walk toward was
+    // never in the first frame and holding forward (−z) walked AWAY from it into the
+    // heath. Moving it to (2.2, −5) puts the mission hub in the forward (−z) frustum,
+    // off to the RIGHT — a mirror of the cabin's forward-LEFT — so world-entry now
+    // composes cabin (left) + Missiebord (right) + the bos tree line ahead, and the
+    // first stride heads TOWARD content. It stays off the x≈0 tap-to-walk lane (its
+    // r=0.7 circle spans x∈[1.5,2.9]), ~1.3 m clear of the spawn→watchtower diagonal
+    // the paths @smoke walks, and 5.5 m out (> the 2.4 m board proximity, so the hub
+    // prompt does NOT fire at spawn). The board faces the spawn point (below).
+    const boardAt = new THREE.Vector3(2.2, 0, -5);
     boardAt.y = this.groundY(boardAt.x, boardAt.z);
     const board = new THREE.Group();
     board.position.copy(boardAt);

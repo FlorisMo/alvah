@@ -62,8 +62,11 @@ type Annotation = {
   // (steer #2): {x,y} in [-1,1], onScreen, and heightFrac (viewport-height fraction)
   // — a framed ranger reads |x|,|y| ≲ 0.6 with a non-tiny heightFrac; a speck or an
   // off-frame ranger fails it, so a soft-DOF frame can't be misgraded as "murk".
+  // `landmarkInView` (F-09) = a hub landmark (cabin / mission board / beacon) sits in
+  // the live frustum: the world-entry assert that the spawn faces the hub, not the
+  // void (true on the world-entry / walk shots once F-09 turns the hub into frame).
   // null on GAPs/boot.
-  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number } } | null;
+  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean } | null;
   // vehicle heading/speed when driving — the DATA signal for the #3 steering
   // finding (heading unchanged across the drive burst while a turn key is held
   // → dead steering). null when not in a vehicle.
@@ -84,7 +87,7 @@ interface Hook {
   pos(): { x: number; z: number } | null; cameraYaw(): number | null; drawCalls(): number | null;
   clip(): { name: string; time: number } | null;
   avatar(): { height: number } | null;
-  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number } } | null;
+  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean } | null;
   board(): { x: number; z: number; near: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; speed: number } | null;
 }
