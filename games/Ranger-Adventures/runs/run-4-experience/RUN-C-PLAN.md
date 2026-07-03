@@ -42,6 +42,13 @@ superbly (VISION §2/§3).
   are the baseline the direction doc measures cohesion against).
 - **You never touch or weaken the frozen `app/e2e/**` specs, the `@smoke`
   suite, or `playwright.config.ts`.** They are the regression guard.
+- **Ground the work in the in-repo research.** `games/Ranger-Adventures/research/`
+  holds the dossiers the run already gathered — `animal-visual-accuracy.md` +
+  `bird-visual-accuracy.md` (species realism reference for the Meshy prompts),
+  `veluwe-research.md` (biome/light ground truth), `3d-animal-animation-research.md`
+  + `humans-full-animals-eyes-research.md` (rig/gait/gaze), `voice-tts-readaloud-
+  research.md`, `mini-game-research.md`. The direction doc + asset prompts **cite**
+  these so realism is *sourced, never invented*.
 
 ## 1. The per-box gate (screenshot-in-the-loop)
 
@@ -96,6 +103,12 @@ The builder does NOT certify its own excellence, and the director does not build
 - **No re-litigating done work.** Once a screen passes a gate it is frozen unless
   a *later* screen forces a change — this prevents change-then-revert thrash
   (VISION §10).
+- **Model fallback (Floris, 2026-07-03).** The art-director role prefers **Fable**
+  (taste + multimodal). If Fable tokens run out mid-run, the supervisor
+  **automatically falls back to Opus** (opus 4.8, `--effort xhigh`) for the
+  director role and **continues** — it does *not* pause for that. (Launch with
+  `MODEL_FABLE=opus` to run the director on Opus from the start.) A usage limit
+  that then persists on Opus is the real account-wide stop and pauses the run.
 
 ## 3. Asset-generation discipline (spending real money autonomously needs rigor)
 
@@ -153,8 +166,16 @@ Excellence is pursued WITHIN these, never by trading them away:
 - **Construct-parity + a 2D floor per mini-game** — the EF science stays intact.
 - **Sound = real animal calls only (xeno-canto)**; calm/never-startle (no sudden
   loud cues); no ambient/music pass yet; assets via `assetUrl`.
-- **No new dependencies** without Floris. No surnames, no third-party runtime
-  scripts. **Never print `.env.local` values.**
+- **New dependencies ARE authorized for Run C** (Floris, 2026-07-03) — the models
+  may web-research open-source repos and `npm install` a well-licensed
+  (MIT/Apache/CC0/BSD), self-contained library when it clearly raises
+  realism/cohesion. **The perf/comfort contracts still bind every dep:** it must
+  hold <150 draw calls · pixelRatio ≤2 · iPad-first, keep build + e2e:smoke
+  green, add **no runtime network/telemetry/CDN/tracker calls** (client-side-only,
+  no third-party runtime scripts — the site's privacy stance stays intact), and
+  never trade away motion-comfort/never-scary. The `package.json` + lockfile
+  change is committed with the step. No surnames. **Never print `.env.local`
+  values.**
 
 ## 5. The verification substrate (what the asserts read)
 

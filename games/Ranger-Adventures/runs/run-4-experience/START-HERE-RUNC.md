@@ -10,6 +10,14 @@ then pauses cleanly** (re-launch after it resets to continue), and it pauses new
 animal-making when Meshy credits run low — so nothing is lost or overspent.
 Nothing is "done" on feel/comfort/sound until **you** accept it on the iPad.
 
+> **On the two AIs:** the "art director" uses **Fable** for visual taste. If your
+> **Fable tokens run out**, Run C automatically **keeps going on Opus** (the strong
+> builder model, at its highest setting) for the art-director role too — it will
+> *not* pause just because Fable is out. Only your **overall weekly Claude limit**
+> pauses the run. The builder (Opus) may also use the internet and add trusted
+> open-source building blocks when they clearly make the game better (kept
+> client-side, no trackers, and only if the tests + speed limits stay green).
+
 > **START THIS ONLY AFTER RUN B HAS FINISHED.** Run C reuses the same screenshot
 > folder as Run B, so let Run B fully complete (its log prints `BUILD-COMPLETE`)
 > before launching this. If Run B is still going, wait.
