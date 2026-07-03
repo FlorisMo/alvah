@@ -315,13 +315,33 @@ function isCrash(e: unknown): boolean {
 async function press(page: Page, isPad: boolean, locator: ReturnType<Page['locator']>): Promise<void> {
   if (isPad) await locator.tap(); else await locator.click();
 }
-/** Silent boot into the world (groups 2–4 don't re-snap title/avatar). First-run
- *  because the group cleared the save, so click through the avatar-maker. */
+/** Silent boot into the world (groups 2–4 don't re-snap title/avatar). Mirrors
+ *  main.ts:90 (F-34a): after "Begin" a true first run mounts the avatar-maker,
+ *  but a RETURNING player (persisted `avatarGemaakt`) drops STRAIGHT into the
+ *  world — the "Dit is mijn ranger" button never renders. Blocking on that
+ *  button unconditionally is the stall that ate Run A's reduce-motion capture
+ *  (~30 min waiting for a control that can't exist). `passAvatarMaker` branches
+ *  on which boot this actually is, so boot() is correct for BOTH paths — not
+ *  merely side-stepped by the per-group save-clear. */
 async function bootWorld(page: Page, isPad: boolean): Promise<void> {
   await page.goto('/');
   await press(page, isPad, page.getByRole('button', { name: 'Begin' }));
-  await press(page, isPad, page.getByRole('button', { name: 'Dit is mijn ranger' }));
+  await passAvatarMaker(page, isPad);
   await waitForWorld(page);
+}
+/** Click through the avatar-maker on a first run; skip it for a returning player
+ *  who boots straight to the world (main.ts:90). Polls for whichever outcome
+ *  this boot produces, so neither path can block for the whole test timeout on
+ *  the other path's UI (F-34a). */
+async function passAvatarMaker(page: Page, isPad: boolean): Promise<void> {
+  const confirm = page.getByRole('button', { name: 'Dit is mijn ranger' });
+  const start = Date.now();
+  for (;;) {
+    if (await confirm.isVisible()) { await press(page, isPad, confirm); return; }
+    if (await hook(page, (r) => r.screen === 'world')) return; // returning player
+    if (Date.now() - start > 40_000) { await press(page, isPad, confirm); return; }
+    await page.waitForTimeout(150);
+  }
 }
 async function waitForWorld(page: Page): Promise<void> {
   await waitFor(page, (r) => r.screen === 'world', 40_000);

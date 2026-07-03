@@ -68,28 +68,54 @@ if [ ! -f "$LEDGER" ]; then
   echo "✗ no BUILD-LEDGER.md at $LEDGER." | tee -a "$LOG"; exit 1
 fi
 
-# ── the OPUS builder sitting (does ONE work box) ────────────────────────────
-OPUS_PROMPT='You are one sitting of the Ranger van de Veluwe RUN-3 BUILD (Run B). You are the HANDS: you FIX the game and prove each fix with a fresh screenshot. Work ONE box, then STOP.
-1) Read games/Ranger-Adventures/runs/run-3-ux-polish/BUILD-PLAN.md (your brief: per-box gate §1, phase order + coupling §3, frozen contracts §5, prohibitions §6), then BUILD-LEDGER.md, then the specific finding in AUDIT-FINDINGS.md. Reference: runs/run-3-ux-polish/FINDINGS.md and root CLAUDE.md.
-2) Do the FIRST unchecked WORK box (`- [ ] Pn.m …`, NOT a GATE or DEMO box) in BUILD-LEDGER.md. Make the fix under app/src/** exactly as the finding’s "Concrete fix" says, honoring the coupling/order in BUILD-PLAN §3 (scale F-07 before any camera work; F-05 ⊕ F-18 together; F-33/F-12/F-10 are re-checks not fixes). Expose any dev-hook field the finding’s assert needs, and extend the capture harness (app/e2e-capture/**) if the assert needs a new scene/input/idle-pair.
-3) VERIFY (screenshot-in-the-loop): from games/Ranger-Adventures/app run `npm run capture`, then LOOK at your OWN fresh PNG(s) under runs/run-3-ux-polish/audit-evidence/<laptop|ipad>/ with the Read tool — on BOTH platforms if the finding says "both" — and check the finding’s named field in annotations-<platform>.json. Both must pass the finding’s criterion. Pixels outrank the hook (F-18): if they disagree, trust the pixels.
-4) TICK ONLY ON GREEN. If your own screenshot + the annotation assert BOTH pass, tick via: cd games/Ranger-Adventures/app && node scripts/ranger-run.mjs tick "<unique substring of the box text>" (this refuses unless `npm run build` AND the frozen `npm run e2e:smoke` are green — the mechanical regression gate). If a box is a +demo finding, tick it but EDIT the box text to append " — implemented, awaiting Floris demo (NOT fixed)"; a +demo item is NEVER "fixed" by you. If your grade FAILS, do NOT tick: leave the box open, append one line to BUILD-PLAN §8 saying what still fails, and stop.
-5) FROZEN CONTRACTS (a fix that breaks one is not a fix): motion-comfort camera law (fixed FOV, roll 0, no shake/snap; reduced-motion = cuts; locomotion always allowed), never-scary/never game-over, >=56 px targets, <150 draw calls, pixelRatio <=2, persistence ONLY via state.ts/persist.ts in the alvah-ef-v1 ranger namespace (NO new localStorage keys), M3/E3 Dutch <=7 words + read-aloud on new strings, assets via assetUrl, no new deps without Floris, no surnames, never print .env.local.
-6) HARD PROHIBITIONS: never touch/weaken app/e2e/**, the @smoke suite, or playwright.config.ts (those are the regression guard). Do NOT commit — the supervisor commits per phase. Do NOT skip ahead or resequence phases.
-Do exactly ONE work box, then STOP so the loop re-invokes you fresh with clean context. If every WORK box is checked, reply exactly: BUILD-COMPLETE.'
+# ── CAPTURE OWNERSHIP (the run-2 stall fix) ─────────────────────────────────
+# The supervisor — NOT the model sittings — runs `npm run capture`. A `claude -p`
+# sitting can't block for the whole capture, so it used to background it and
+# yield, and the box never got graded → the loop stalled. Here the loop blocks on
+# capture itself (it has no time limit), then hands the finished shots to a grade
+# sitting. Model sittings NEVER run capture.
+capture_now() {
+  echo "  📸 supervisor runs capture (${CAPTURE_PROJECTS}) — $(date '+%T')" | tee -a "$LOG"
+  if ( cd "$APP" && npm run capture ) >> "$LOG" 2>&1; then
+    echo "  ✓ capture complete $(date '+%T')" | tee -a "$LOG"
+  else
+    echo "  ⚠ capture exited non-zero — grader may see partial/stale shots (will not tick)" | tee -a "$LOG"
+  fi
+}
 
-# ── the FABLE phase-gate sitting (re-judges a phase, may re-open boxes) ──────
-FABLE_PROMPT='You are the INDEPENDENT phase RE-JUDGE of the Ranger van de Veluwe RUN-3 BUILD (Run B, HYBRID gate — BUILD-PLAN §2). You did NOT make these fixes; do not trust the builder’s self-grade. You LOOK and rule.
-1) Read runs/run-3-ux-polish/BUILD-PLAN.md §2 (the hybrid gate) and BUILD-LEDGER.md. The FIRST unchecked box is a GATE-Pn box — it names the phase you are judging.
-2) Re-capture a FRESH set reflecting the whole phase: from games/Ranger-Adventures/app run `npm run capture`. Then LOOK at every screenshot for that phase’s findings on BOTH platforms (Read the PNGs under runs/run-3-ux-polish/audit-evidence/<laptop|ipad>/) and read annotations-<platform>.json. Judge each phase finding against its criterion in AUDIT-FINDINGS.md — framing, avatar scale, camera clearance, >=56 px targets, legibility, back-paths, hint sequencing, etc.
-3) RULE: for each phase WORK box that is genuinely fixed in the pixels, leave it ticked. For any that still FAILS, RE-OPEN it by editing its `- [x]` back to `- [ ]` in BUILD-LEDGER.md and append one line to BUILD-PLAN §8 saying what you still see wrong. A +demo box may stay "implemented, awaiting Floris demo" but must NOT be called "fixed" — never upgrade it. Only when you AGREE every non-demo box in the phase is truly fixed, tick the GATE box itself (cd games/Ranger-Adventures/app && node scripts/ranger-run.mjs tick "<GATE-Pn substring>").
+# ── OPUS · the FIX half (code change only — no capture, no tick) ─────────────
+OPUS_FIX_PROMPT='You are the FIX half of one Ranger van de Veluwe RUN-3 BUILD sitting (Run B). You make the CODE CHANGE for ONE box. You do NOT screenshot and you do NOT tick — the supervisor runs the capture right after you, and a separate grade sitting judges it. Make the fix, then STOP.
+1) Read runs/run-3-ux-polish/BUILD-PLAN.md (per-box gate §1, the LAPTOP-ONLY scope banner, phase order + coupling §3, frozen contracts §5, prohibitions §6), then BUILD-LEDGER.md, then the finding for the FIRST unchecked WORK box in AUDIT-FINDINGS.md. Reference: FINDINGS.md + root CLAUDE.md.
+2) Take the FIRST unchecked WORK box (`- [ ] Pn.m …`, NOT a GATE/DEMO/DEFERRED box). Make the fix under app/src/** exactly as the finding’s Concrete fix says, honoring coupling/order in BUILD-PLAN §3 (scale F-07 before any camera work; F-05 ⊕ F-18 together; F-33/F-12/F-10 are re-checks not fixes). Expose any dev-hook field the finding’s assert needs; if the assert needs a new scene/input/idle-pair, extend the capture harness (app/e2e-capture/**). SCOPE IS LAPTOP-ONLY — make shared-code fixes for "both"/"iPad" findings but do not chase iPad pixels (iPad is demo-gated).
+3) Do NOT run `npm run capture`. Do NOT tick any box. Do NOT commit. The supervisor captures next; a grade sitting decides the tick.
+4) FROZEN CONTRACTS (a fix that breaks one is not a fix): motion-comfort camera law (fixed FOV, roll 0, no shake/snap; reduced-motion = cuts; locomotion always allowed), never-scary/never game-over, >=56 px targets, <150 draw calls, pixelRatio <=2, persistence ONLY via state.ts/persist.ts in the alvah-ef-v1 ranger namespace (NO new localStorage keys), M3/E3 Dutch <=7 words + read-aloud on new strings, assets via assetUrl, no new deps without Floris, no surnames, never print .env.local.
+5) NEVER touch/weaken app/e2e/**, the @smoke suite, or playwright.config.ts.
+Make the code change for exactly ONE box, then STOP. If every WORK box is already checked, reply exactly: BUILD-COMPLETE.'
+
+# ── OPUS · the GRADE half (judge the supervisor’s fresh shots, tick on green) ─
+OPUS_GRADE_PROMPT='You are the GRADE half of one Ranger van de Veluwe RUN-3 BUILD sitting (Run B). The fix for the FIRST unchecked WORK box was just made, and the supervisor has ALREADY run a fresh LAPTOP `npm run capture` — the new PNGs + annotations are on disk. Judge them and tick ONLY on green. Do NOT run capture yourself.
+1) Read BUILD-PLAN.md §1 + the LAPTOP-ONLY scope banner, BUILD-LEDGER.md, and the finding for the FIRST unchecked WORK box in AUDIT-FINDINGS.md.
+2) LOOK with the Read tool at the fresh laptop PNG(s) for that finding under runs/run-3-ux-polish/audit-evidence/laptop/, and read annotations-laptop.json for the finding’s named field. Grade against the finding’s criterion. Pixels outrank the hook (F-18): if they disagree, trust the pixels. (iPad is demo-gated — do not expect iPad pixels.)
+3) TICK ONLY ON GREEN. If the laptop screenshot AND the annotation assert both pass, tick: cd games/Ranger-Adventures/app && node scripts/ranger-run.mjs tick "<unique substring of the box text>" (this also refuses unless `npm run build` + the frozen `npm run e2e:smoke` are green). If the box is a +demo finding, tick it but EDIT the box text to append " — implemented, awaiting Floris demo (NOT fixed)". If the grade FAILS, do NOT tick: leave the box open, append one line to BUILD-PLAN §8 saying what still fails, and STOP (the loop retries the fix next iteration).
+4) Do NOT commit (the supervisor commits per phase). NEVER touch app/e2e/**, the @smoke suite, or playwright.config.ts.
+Grade this ONE box, then STOP.'
+
+# ── FABLE · the phase-gate re-judge (may re-open boxes) ──────────────────────
+FABLE_PROMPT='You are the INDEPENDENT phase RE-JUDGE of the Ranger van de Veluwe RUN-3 BUILD (Run B, HYBRID gate — BUILD-PLAN §2). You did NOT make these fixes; do not trust the builder’s self-grade. The supervisor has ALREADY run a fresh LAPTOP capture — the new PNGs + annotations are on disk. Do NOT run capture yourself. You LOOK and rule.
+1) Read runs/run-3-ux-polish/BUILD-PLAN.md §2 (the hybrid gate) + the LAPTOP-ONLY scope banner, and BUILD-LEDGER.md. The FIRST unchecked box is a GATE-Pn box — it names the phase you are judging.
+2) LOOK at every laptop screenshot for that phase’s findings (Read the PNGs under runs/run-3-ux-polish/audit-evidence/laptop/) and read annotations-laptop.json. Judge each phase finding against its criterion in AUDIT-FINDINGS.md — framing, avatar scale, camera clearance, >=56 px targets, legibility, back-paths, hint sequencing, etc. iPad is demo-gated — judge laptop pixels only.
+3) RULE: for each phase WORK box genuinely fixed in the pixels, leave it ticked. For any that still FAILS, RE-OPEN it by editing its `- [x]` back to `- [ ]` in BUILD-LEDGER.md and append one line to BUILD-PLAN §8 saying what you still see wrong. A +demo box may stay "implemented, awaiting Floris demo" but must NOT be called "fixed" — never upgrade it. Only when you AGREE every non-demo box in the phase is truly fixed, tick the GATE box: cd games/Ranger-Adventures/app && node scripts/ranger-run.mjs tick "<GATE-Pn substring>".
 4) On GATE-P1 additionally: this is the first real look at the composed world (Run A judged it through the giant-avatar keyhole). TRIAGE any new world-look defects you now see (biome density, prop placement, animal/piglet models, lighting) by adding new `- [ ]` boxes to Phase 1 before the GATE, and do NOT tick the GATE until they are addressed. On GATE-P5: re-judge the WHOLE game, every screenshot-closable box.
-5) You change NO game code and never touch app/e2e/**, the @smoke suite, or playwright.config.ts. You only re-capture, look, and edit BUILD-LEDGER.md ticks + BUILD-PLAN §8.
+5) You change NO game code and never touch app/e2e/**, the @smoke suite, or playwright.config.ts. You only look, and edit BUILD-LEDGER.md ticks + BUILD-PLAN §8.
 Do this ONE gate, then STOP. If the gate now passes you tick it; if you re-open boxes you leave the gate unticked so the builder redoes them.'
 
-run_opus() {
-  claude -p "$OPUS_PROMPT" --model "$MODEL_OPUS" --effort "$EFFORT" --dangerously-skip-permissions >> "$LOG" 2>&1 \
-    || echo "  ⚠ opus sitting exited non-zero (continuing)" | tee -a "$LOG"
+run_opus_fix() {
+  claude -p "$OPUS_FIX_PROMPT" --model "$MODEL_OPUS" --effort "$EFFORT" --dangerously-skip-permissions >> "$LOG" 2>&1 \
+    || echo "  ⚠ opus FIX sitting exited non-zero (continuing)" | tee -a "$LOG"
+}
+run_opus_grade() {
+  claude -p "$OPUS_GRADE_PROMPT" --model "$MODEL_OPUS" --effort "$EFFORT" --dangerously-skip-permissions >> "$LOG" 2>&1 \
+    || echo "  ⚠ opus GRADE sitting exited non-zero (continuing)" | tee -a "$LOG"
 }
 run_fable() {
   claude -p "$FABLE_PROMPT" --model "$MODEL_FABLE" --effort "$EFFORT" --dangerously-skip-permissions >> "$LOG" 2>&1 \
@@ -118,11 +144,14 @@ for i in $(seq 1 "$MAX_RUNS"); do
 
   case "$box" in
     *GATE-*)
-      echo "  ▷ PHASE GATE (Fable re-judge): $clean_box" | tee -a "$LOG"
+      echo "  ▷ PHASE GATE (capture → Fable re-judge): $clean_box" | tee -a "$LOG"
+      capture_now
       run_fable ;;
     *)
-      echo "  ▶ build box (Opus): $clean_box" | tee -a "$LOG"
-      run_opus ;;
+      echo "  ▶ build box (fix → capture → grade): $clean_box" | tee -a "$LOG"
+      run_opus_fix
+      capture_now
+      run_opus_grade ;;
   esac
 
   after="$(md5 -q "$LEDGER")"
