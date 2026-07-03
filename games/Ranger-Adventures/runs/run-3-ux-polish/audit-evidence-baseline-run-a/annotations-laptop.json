@@ -47,12 +47,9 @@
         "z": 0
       },
       "cameraYaw": 0,
-      "drawCalls": 60,
+      "drawCalls": 69,
       "missionView": null,
-      "clip": {
-        "name": "idle",
-        "time": 0.29910000002384185
-      },
+      "clip": null,
       "veh": null,
       "version": "2.1.0-ship"
     },
@@ -66,14 +63,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -0.5920799999713897
+        "z": -1.3329599999427797
       },
       "cameraYaw": 0,
-      "drawCalls": 58,
+      "drawCalls": 51,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.09953311079740557
+        "time": 0.2768663884997369
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -88,14 +85,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -4.7844
+        "z": -10.88615999994278
       },
       "cameraYaw": 0,
-      "drawCalls": 29,
+      "drawCalls": 16,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.7796663885116581
+        "time": 1.0573662216067312
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -110,14 +107,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -8.01647999997139
+        "z": -15.8496
       },
       "cameraYaw": 0,
-      "drawCalls": 18,
+      "drawCalls": 14,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 1.0596996662020688
+        "time": 0.9921327770352362
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -132,14 +129,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -10.75344000005722
+        "z": -19.60704000005722
       },
       "cameraYaw": 0,
-      "drawCalls": 17,
+      "drawCalls": 13,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.06676622164249446
+        "time": 0.4243993324637413
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -154,14 +151,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -13.411920000028609
+        "z": -22.509840000057217
       },
       "cameraYaw": 0,
-      "drawCalls": 14,
+      "drawCalls": 13,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.107799499332905
+        "time": 0.567232610166073
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -176,14 +173,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -15.06095999994278
+        "z": -24.62352000002861
       },
-      "cameraYaw": 1.0754718850789065,
-      "drawCalls": 33,
+      "cameraYaw": 1.2235456187931373,
+      "drawCalls": 29,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.22689957082271606
+        "time": 0.14649936819076548
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -198,14 +195,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -15.06095999994278
+        "z": -24.62352000002861
       },
-      "cameraYaw": 3.141592652894598,
-      "drawCalls": 46,
+      "cameraYaw": 3.141592653589793,
+      "drawCalls": 47,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.2413993443250658
+        "time": 0.24789899867773058
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -220,14 +217,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -15.06095999994278
+        "z": -24.62352000002861
       },
-      "cameraYaw": 3.1415926535896936,
-      "drawCalls": 46,
+      "cameraYaw": 3.141592653589793,
+      "drawCalls": 47,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.056599249005317986
+        "time": 0.016898807942867133
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -241,15 +238,15 @@
       "file": "laptop/12-camera-orbit.png",
       "screen": "world",
       "pos": {
-        "x": -6.758493418221958e-14,
-        "z": -14.629619285701807
+        "x": 5.8962505849236456e-24,
+        "z": -25.55524816510125
       },
-      "cameraYaw": 3.141592653589637,
-      "drawCalls": 46,
+      "cameraYaw": -1.5212719972623745e-11,
+      "drawCalls": 13,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.09499885559082066
+        "time": 0.2229984264373779
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -263,15 +260,15 @@
       "file": "laptop/13-pause-hub.png",
       "screen": "world",
       "pos": {
-        "x": -6.758493418221958e-14,
-        "z": -14.629619285701807
+        "x": 5.8962505849236456e-24,
+        "z": -25.55524816510125
       },
-      "cameraYaw": 3.141592653589637,
-      "drawCalls": 46,
+      "cameraYaw": 0,
+      "drawCalls": 13,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.13349868869781523
+        "time": 0.06579829531908021
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -285,33 +282,148 @@
       "file": "laptop/14-jeep-near.png",
       "screen": "world",
       "pos": {
-        "x": 12.721129643865336,
-        "z": 12.283468779600003
+        "x": 14.40004109195338,
+        "z": 14.011467020636019
       },
-      "cameraYaw": 2.9268007425907854,
-      "drawCalls": 29,
+      "cameraYaw": -1.2533856774777306,
+      "drawCalls": 43,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.9591974966526033
+        "time": 0.49376088106632254
       },
       "veh": null,
       "version": "2.1.0-ship"
     },
     {
-      "name": "jeep",
+      "name": "jeep-in",
       "platform": "laptop",
-      "group": "GAP",
-      "ok": false,
-      "file": "",
-      "note": "Scene \"jeep\" kon niet worden vastgelegd: Error: waitFor timed out after 15000 ms — dit is zelf een audit-bevinding.",
-      "screen": null,
-      "pos": null,
-      "cameraYaw": null,
-      "drawCalls": null,
+      "group": "Jeep",
+      "note": "In de jeep — camerakader, blur/DOF, is het model helder? (#3)",
+      "ok": true,
+      "file": "laptop/15-jeep-in.png",
+      "screen": "world",
+      "pos": {
+        "x": 16,
+        "z": 14
+      },
+      "cameraYaw": 0.8432241172801795,
+      "drawCalls": 71,
       "missionView": null,
-      "clip": null,
-      "veh": null
+      "clip": {
+        "name": "idle",
+        "time": 0.234695374667644
+      },
+      "veh": {
+        "heading": -2.289626326416521,
+        "speed": 0,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-drive-1",
+      "platform": "laptop",
+      "group": "Jeep (burst)",
+      "note": "Rijframe 1/4 met stuur-input — verandert de heading? (stuur-bug #3)",
+      "ok": true,
+      "file": "laptop/16-jeep-drive-1.png",
+      "screen": "world",
+      "pos": {
+        "x": 8.75601004336131,
+        "z": 12.255028813667247
+      },
+      "cameraYaw": 1.7284043803174853,
+      "drawCalls": 45,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.11009512436389857
+      },
+      "veh": {
+        "heading": -1.3997748687102378,
+        "speed": 4.242640687119285,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-drive-2",
+      "platform": "laptop",
+      "group": "Jeep (burst)",
+      "note": "Rijframe 2/4 met stuur-input — verandert de heading? (stuur-bug #3)",
+      "ok": true,
+      "file": "laptop/17-jeep-drive-2.png",
+      "screen": "world",
+      "pos": {
+        "x": 10.125414702791804,
+        "z": 22.129633668950383
+      },
+      "cameraYaw": -1.9007086297106532,
+      "drawCalls": 29,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.02959499323368009
+      },
+      "veh": {
+        "heading": 1.3320614697258701,
+        "speed": 4.242640687119285,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-drive-3",
+      "platform": "laptop",
+      "group": "Jeep (burst)",
+      "note": "Rijframe 3/4 met stuur-input — verandert de heading? (stuur-bug #3)",
+      "ok": true,
+      "file": "laptop/18-jeep-drive-3.png",
+      "screen": "world",
+      "pos": {
+        "x": 0.7138059529696554,
+        "z": 16.243937388894228
+      },
+      "cameraYaw": 2.216584383792295,
+      "drawCalls": 26,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.05789480251073775
+      },
+      "veh": {
+        "heading": -0.8541754315199901,
+        "speed": 4.242640687119285,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-drive-4",
+      "platform": "laptop",
+      "group": "Jeep (burst)",
+      "note": "Rijframe 4/4 met stuur-input — verandert de heading? (stuur-bug #3)",
+      "ok": true,
+      "file": "laptop/19-jeep-drive-4.png",
+      "screen": "world",
+      "pos": {
+        "x": 9.473000124378755,
+        "z": 20.933599564940295
+      },
+      "cameraYaw": -0.7804205332476215,
+      "drawCalls": 82,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.015694647490977487
+      },
+      "veh": {
+        "heading": 2.4192764169933056,
+        "speed": 4.242640687119285,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
     },
     {
       "name": "board-affordance",
@@ -319,18 +431,18 @@
       "group": "Missiebord",
       "note": "Bij het bord — is de \"open\"-affordance leesbaar/groot genoeg?",
       "ok": true,
-      "file": "laptop/15-board-affordance.png",
+      "file": "laptop/20-board-affordance.png",
       "screen": "world",
       "pos": {
-        "x": 3.1398670351338,
-        "z": 1.1120373562798727
+        "x": 4.702748547266051,
+        "z": 3.3532309372069298
       },
-      "cameraYaw": 3.0578944929747216,
-      "drawCalls": 28,
+      "cameraYaw": -2.55214649726536,
+      "drawCalls": 37,
       "missionView": null,
       "clip": {
-        "name": "idle",
-        "time": 0.09429886752367017
+        "name": "walk",
+        "time": 0.8689874830245976
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -341,18 +453,18 @@
       "group": "Missiebord",
       "note": "Missiebord open — layout, leesbaarheid, tap-doelen.",
       "ok": true,
-      "file": "laptop/16-board-open.png",
+      "file": "laptop/21-board-open.png",
       "screen": "world",
       "pos": {
-        "x": 3.1398670351338,
-        "z": 1.1120373562798727
+        "x": 4.702748547266051,
+        "z": 3.3532309372069298
       },
-      "cameraYaw": -1.226819007528329,
-      "drawCalls": 70,
+      "cameraYaw": -0.9526569575926427,
+      "drawCalls": 69,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.1349985814094542
+        "time": 0.2601899387240407
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -363,40 +475,36 @@
       "group": "Missie",
       "note": "Missie speelt 3D in-place — hoe ziet een echte opdracht eruit?",
       "ok": true,
-      "file": "laptop/17-mission-3d.png",
+      "file": "laptop/22-mission-3d.png",
       "screen": "mission",
       "pos": {
-        "x": 3.1398670351338,
-        "z": 1.1120373562798727
+        "x": 4.702748547266051,
+        "z": 3.3532309372069298
       },
-      "cameraYaw": -1.2268190075262435,
+      "cameraYaw": -0.9526569575926427,
       "drawCalls": 71,
       "missionView": "3d",
       "clip": {
         "name": "idle",
-        "time": 0.03379803305864304
+        "time": 0.041989068508147875
       },
       "veh": null,
       "version": "2.1.0-ship"
     },
     {
-      "name": "reduce-motion-world",
+      "name": "reduce-motion",
       "platform": "laptop",
-      "group": "Reduce-Motion",
-      "note": "Verminder-beweging AAN — ziet de wereld er nog goed uit of plat/kapot?",
-      "ok": true,
-      "file": "laptop/18-reduce-motion-world.png",
-      "screen": "world",
-      "pos": {
-        "x": 0,
-        "z": 0
-      },
-      "cameraYaw": 0,
-      "drawCalls": 69,
+      "group": "GAP",
+      "ok": false,
+      "file": "",
+      "note": "Scene \"reduce-motion\" kon niet worden vastgelegd: Error: locator.click: Test timeout of 1800000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Dit is mijn ranger' })\u001b[22m\n — dit is zelf een audit-bevinding.",
+      "screen": null,
+      "pos": null,
+      "cameraYaw": null,
+      "drawCalls": null,
       "missionView": null,
       "clip": null,
-      "veh": null,
-      "version": "2.1.0-ship"
+      "veh": null
     }
   ]
 }

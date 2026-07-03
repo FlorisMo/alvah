@@ -1,4 +1,4 @@
-import { test, type Page, type TestInfo } from '@playwright/test';
+import { test, type Page, type TestInfo, type CDPSession } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -8,16 +8,30 @@ import path from 'node:path';
  * ONE test per project (laptop | ipad) walks the REAL player flow and drops a
  * screenshot + a state annotation at every screen/state the audit needs to see:
  *   title · avatar · world-entry · WALK BURST (≥3 frames, gliding evidence) ·
- *   controls HUD · (laptop) trackpad-zoom + orbit ATTEMPTS · mission board ·
- *   a 3D mission · pause hub · jeep near/in/drive burst · reduce-motion world.
+ *   controls HUD · (laptop) trackpad-zoom + orbit ATTEMPTS · pause hub ·
+ *   jeep near/in/drive burst · mission board · a 3D mission · reduce-motion world.
+ *
+ * ── Run B / P0.2 (F-21) hardening ────────────────────────────────────────────
+ * Run A booted the WHOLE flow in ONE long-lived page. On the iPad project the
+ * renderer died mid-walk toward the board ("Target … has been closed"), and
+ * every scene AFTER it — board, mission AND reduce-motion — got nothing (the
+ * three most content-critical iPad surfaces). Two fixes make the substrate
+ * survivable and touch-honest:
+ *   1. SCENE-ISOLATED PAGES. The flow is split into scene GROUPS; each group
+ *      runs in its OWN fresh page (`context.newPage()`) seeded per-group (clear
+ *      the ranger save so every boot is a clean first-run, re-seed the presence
+ *      gate). One renderer death can no longer erase later groups, and each
+ *      group gets ONE crash-retry (a fresh page + re-boot).
+ *   2. TOUCH on the iPad project. Locomotion (walk bursts + walk-to-jeep/board)
+ *      and the in-jeep drive burst are driven through the on-screen JOYSTICK via
+ *      genuine CDP touch events — never `page.keyboard`; the `laptop` project
+ *      keeps keyboard + mouse. Buttons are tapped (`locator.tap`) on the iPad.
  *
  * It asserts almost nothing — a failed capture is itself an audit finding, so
- * every scene is wrapped: on error it records a GAP and the flow continues.
+ * every scene is wrapped: a NON-crash scene error records a GAP and the flow
+ * continues; a page-crash bubbles up so the group's one retry can re-boot.
  * Annotations are written to disk after EVERY shot, so even a mid-flow timeout
- * still leaves a usable partial contact sheet. Several verdicts are DATA-backed,
- * not just eyeballed:
- *   - gliding: per-burst-frame `pos` moved while `clip` stayed null / frozen.
- *   - no laptop camera: `cameraYaw` unchanged after a wheel-zoom / drag-orbit.
+ * still leaves a usable partial contact sheet.
  *
  * Engine caveat (honesty contract): the `ipad` project is the iPad VIEWPORT +
  * TOUCH on the Chromium engine, not Safari (local WebKit bus-errors, §10). Every
@@ -54,8 +68,9 @@ function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   }, fn.toString()) as Promise<T | null>;
 }
 
-test('audit capture flow', async ({ page }, testInfo) => {
+test('audit capture flow', async ({ context }, testInfo) => {
   const platform = testInfo.project.name; // 'laptop' | 'ipad'
+  const isPad = platform === 'ipad';
   const dir = path.join(EVID, platform);
   fs.mkdirSync(dir, { recursive: true });
   const shots: Annotation[] = [];
@@ -69,7 +84,7 @@ test('audit capture flow', async ({ page }, testInfo) => {
     );
 
   /** Screenshot the viewport + record the live hook state; persist immediately. */
-  async function snap(name: string, group: string, note: string): Promise<void> {
+  async function snap(page: Page, name: string, group: string, note: string): Promise<void> {
     n += 1;
     const file = `${String(n).padStart(2, '0')}-${name}.png`;
     const a: Annotation = {
@@ -91,10 +106,12 @@ test('audit capture flow', async ({ page }, testInfo) => {
     shots.push(a);
     flush();
   }
-  /** Run one scene; a thrown scene records a GAP and never kills the flow. */
-  async function scene(label: string, fn: () => Promise<void>): Promise<void> {
+  /** Run one scene. A non-crash throw records a GAP and never kills the flow; a
+   *  page-crash re-throws so the enclosing group can spend its one retry. */
+  async function scene(page: Page, label: string, fn: () => Promise<void>): Promise<void> {
     try { await fn(); }
     catch (e) {
+      if (isCrash(e) || page.isClosed()) throw e; // → group re-boot
       shots.push({
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
@@ -104,119 +121,181 @@ test('audit capture flow', async ({ page }, testInfo) => {
     }
   }
 
-  // ══ BOOT 1 (normal motion): title → avatar → world → walk → controls →
-  //    (laptop camera) → board → 3D mission (mission is terminal, ends boot 1) ══
-  await scene('title', async () => {
-    await page.goto('/');
-    await page.locator('.boot-title').waitFor({ timeout: 30_000 });
-    await snap('title', 'Boot', 'Titelscherm "Word boswachter" — eerste indruk.');
-  });
-  await scene('avatar', async () => {
-    await page.getByRole('button', { name: 'Begin' }).click();
-    await page.getByRole('button', { name: 'Dit is mijn ranger' }).waitFor({ timeout: 30_000 });
-    await snap('avatar', 'Boot', 'Avatar-maker — de ranger die je speelt.');
-  });
-  await scene('world-entry', async () => {
-    await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
-    await waitForWorld(page);
-    await settle(page, 1500);
-    await snap('world-entry', 'Wereld', 'Eerste frame in de wereld — camera-kader + avatarschaal (punch-list #1).');
-  });
-  // WALK BURST — gliding evidence: hold ArrowUp, snap 5 frames ~250 ms apart.
-  await scene('walk-burst', async () => {
-    await page.keyboard.down('ArrowUp');
-    try {
-      for (let i = 1; i <= 5; i++) {
-        await page.waitForTimeout(250);
-        await snap(`walk-${i}`, 'Lopen (burst)', `Loopframe ${i}/5 — benen + pos/clip tussen frames (glijdt vs loopt, #2).`);
-      }
-    } finally { await page.keyboard.up('ArrowUp'); }
-  });
-  await scene('controls-hud', async () => {
-    await settle(page, 400);
-    await snap('controls-hud', 'Besturing', platform === 'ipad'
-      ? 'iPad-kader: staat de joystick er, ≥56 px, tap-to-walk zichtbaar?'
-      : 'Laptop-kader: joystick hoort weg te zijn (fijne pointer) — welke besturing zie je?');
-  });
-  if (platform === 'laptop') {
-    await scene('camera-attempts', async () => {
-      const box = await page.locator('canvas#scene').boundingBox();
-      if (!box) throw new Error('no canvas');
-      const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
-      await page.mouse.move(cx, cy);
-      await page.mouse.wheel(0, -800); await settle(page, 400);
-      await snap('camera-zoom-in', 'Laptop-camera', 'Trackpad/scroll "inzoomen" geprobeerd — komt het beeld dichterbij? (feature afwezig, #4)');
-      await page.mouse.wheel(0, 1400); await settle(page, 400);
-      await snap('camera-zoom-out', 'Laptop-camera', 'Trackpad/scroll "uitzoomen" geprobeerd — verandert de afstand?');
-      await page.mouse.move(cx, cy); await page.mouse.down();
-      for (let i = 1; i <= 12; i++) { await page.mouse.move(cx + i * 18, cy); await page.waitForTimeout(20); }
-      await page.mouse.up(); await settle(page, 400);
-      await snap('camera-orbit', 'Laptop-camera', 'Slepen om te draaien (orbit) — draait het beeld? cameraYaw in de annotatie zegt het (#4).');
-    });
-  }
-  // pause hub — opened over the LIVE world (no re-boot), then closed back to the
-  // explore HUD so the following scenes keep foot controls.
-  await scene('pause-hub', async () => {
-    await page.locator('.explore-pause').click();
-    await settle(page, 400);
-    await snap('pause-hub', 'Pauze/menu', 'Pauze-menu — is er een duidelijke "terug/hoofdmenu"? (punch-list #5)');
-    await page.locator('.ph-back').click(); // "Terug naar de open plek" → explore HUD
-    await page.locator('.explore-hud').waitFor({ timeout: 10_000 });
-  });
-
-  // jeep — walk to it, climb in, drive burst (steering test #3), climb back out.
-  await scene('jeep', async () => {
-    const placed = await hook(page, (r) => r.vehicle()?.placed ?? false);
-    if (!placed) throw new Error('vehicle not placed in world');
-    await walkToJeep(page);
-    await snap('jeep-near', 'Jeep', 'Bij de jeep — model + "Stap in"-affordance.');
-    await page.keyboard.press('Space'); // "Stap in"
-    await waitFor(page, (r) => r.vehicle()?.inVehicle ?? false, 15_000);
-    await settle(page, 700);
-    await snap('jeep-in', 'Jeep', 'In de jeep — camerakader, blur/DOF, is het model helder? (#3)');
-    try {
-      await page.keyboard.down('ArrowUp');
-      await page.keyboard.down('ArrowLeft'); // STEER — #3 says heading stays fixed
+  /**
+   * Run a scene GROUP in its own fresh page (F-21 isolation). Seeds a clean
+   * first-run save + the presence gate before any app script, then runs `body`.
+   * One crash-retry: on a page-crash the partial shots are rolled back and the
+   * group re-boots once in a brand-new page; a second crash (or a non-crash
+   * failure that escaped `scene`) records a single GAP and the flow moves on.
+   */
+  async function runGroup(
+    label: string,
+    opts: { reduce?: boolean },
+    body: (page: Page, stick: TouchStick | null) => Promise<void>,
+  ): Promise<void> {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const nAtStart = n, shotsAtStart = shots.length;
+      const page = await context.newPage();
+      let stick: TouchStick | null = null;
       try {
-        for (let i = 1; i <= 4; i++) {
-          await page.waitForTimeout(350);
-          await snap(`jeep-drive-${i}`, 'Jeep (burst)', `Rijframe ${i}/4 met stuur-input — verandert de heading? (stuur-bug #3)`);
+        if (opts.reduce) await page.emulateMedia({ reducedMotion: 'reduce' });
+        // Clear the ranger save (first-run every group) + pre-seed the presence
+        // gate, BEFORE any page script — persist.ts co-tenants `alvah-ef-v1`, and
+        // the BaseLayout gate reads sessionStorage `alvah-gate-v1` (never the pw).
+        await page.addInitScript(() => {
+          try {
+            localStorage.removeItem('alvah-ef-v1');
+            localStorage.removeItem('ranger-mvp-state');
+            sessionStorage.setItem('alvah-gate-v1', '1');
+          } catch { /* storage unavailable — boot still fine */ }
+        });
+        if (isPad) stick = new TouchStick(await context.newCDPSession(page));
+        await body(page, stick);
+        await page.close();
+        return; // group done
+      } catch (e) {
+        await page.close().catch(() => {});
+        // discard this attempt's partial shots so the retry (or the GAP) is clean
+        n = nAtStart; shots.length = shotsAtStart; flush();
+        if (attempt === 1 && isCrash(e)) {
+          // eslint-disable-next-line no-console
+          console.log(`[capture] group "${label}" lost the renderer — retrying once: ${String(e).slice(0, 100)}`);
+          continue;
         }
-      } finally { await page.keyboard.up('ArrowUp'); await page.keyboard.up('ArrowLeft'); }
-    } finally {
-      // always climb back out so the board walk below uses foot controls.
-      if (await hook(page, (r) => r.vehicle()?.inVehicle ?? false)) {
-        await page.keyboard.press('Space');
-        await waitFor(page, (r) => !(r.vehicle()?.inVehicle ?? false), 10_000).catch(() => {});
+        shots.push({
+          name: label, platform, group: 'GAP', ok: false, file: '',
+          note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
+          screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, veh: null,
+        });
+        flush();
+        return;
       }
     }
+  }
+
+  // ══ GROUP 1 — intro: title → avatar → world → walk burst → controls →
+  //    (laptop camera attempts) → pause hub. Own fresh page. ══
+  await runGroup('intro', {}, async (page, stick) => {
+    await scene(page, 'title', async () => {
+      await page.goto('/');
+      await page.locator('.boot-title').waitFor({ timeout: 30_000 });
+      await snap(page, 'title', 'Boot', 'Titelscherm "Word boswachter" — eerste indruk.');
+    });
+    await scene(page, 'avatar', async () => {
+      await press(page, isPad, page.getByRole('button', { name: 'Begin' }));
+      await page.getByRole('button', { name: 'Dit is mijn ranger' }).waitFor({ timeout: 30_000 });
+      await snap(page, 'avatar', 'Boot', 'Avatar-maker — de ranger die je speelt.');
+    });
+    await scene(page, 'world-entry', async () => {
+      await press(page, isPad, page.getByRole('button', { name: 'Dit is mijn ranger' }));
+      await waitForWorld(page);
+      await settle(page, 1500);
+      await snap(page, 'world-entry', 'Wereld', 'Eerste frame in de wereld — camera-kader + avatarschaal (punch-list #1).');
+    });
+    // WALK BURST — gliding evidence: drive forward, snap 5 frames ~250 ms apart.
+    await scene(page, 'walk-burst', async () => {
+      await holdForward(page, isPad, stick);
+      try {
+        for (let i = 1; i <= 5; i++) {
+          await settle(page, 250);
+          await snap(page, `walk-${i}`, 'Lopen (burst)', `Loopframe ${i}/5 — benen + pos/clip tussen frames (glijdt vs loopt, #2).`);
+        }
+      } finally { await releaseForward(page, isPad, stick); }
+    });
+    await scene(page, 'controls-hud', async () => {
+      await settle(page, 400);
+      await snap(page, 'controls-hud', 'Besturing', isPad
+        ? 'iPad-kader: staat de joystick er, ≥56 px, tap-to-walk zichtbaar?'
+        : 'Laptop-kader: joystick hoort weg te zijn (fijne pointer) — welke besturing zie je?');
+    });
+    if (!isPad) {
+      await scene(page, 'camera-attempts', async () => {
+        const box = await page.locator('canvas#scene').boundingBox();
+        if (!box) throw new Error('no canvas');
+        const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+        await page.mouse.move(cx, cy);
+        await page.mouse.wheel(0, -800); await settle(page, 400);
+        await snap(page, 'camera-zoom-in', 'Laptop-camera', 'Trackpad/scroll "inzoomen" geprobeerd — komt het beeld dichterbij? (feature afwezig, #4)');
+        await page.mouse.wheel(0, 1400); await settle(page, 400);
+        await snap(page, 'camera-zoom-out', 'Laptop-camera', 'Trackpad/scroll "uitzoomen" geprobeerd — verandert de afstand?');
+        await page.mouse.move(cx, cy); await page.mouse.down();
+        for (let i = 1; i <= 12; i++) { await page.mouse.move(cx + i * 18, cy); await page.waitForTimeout(20); }
+        await page.mouse.up(); await settle(page, 400);
+        await snap(page, 'camera-orbit', 'Laptop-camera', 'Slepen om te draaien (orbit) — draait het beeld? cameraYaw in de annotatie zegt het (#4).');
+      });
+    }
+    // pause hub — opened over the LIVE world (last scene of the group).
+    await scene(page, 'pause-hub', async () => {
+      await press(page, isPad, page.locator('.explore-pause'));
+      await settle(page, 400);
+      await snap(page, 'pause-hub', 'Pauze/menu', 'Pauze-menu — is er een duidelijke "terug/hoofdmenu"? (punch-list #5)');
+    });
   });
 
-  // mission board → start a 3D mission in-place (TERMINAL — enters an activity,
-  // so it ends boot 1).
-  await scene('mission-board', async () => {
-    await walkToBoard(page);
-    await settle(page, 300);
-    await snap('board-affordance', 'Missiebord', 'Bij het bord — is de "open"-affordance leesbaar/groot genoeg?');
-    await page.locator('.explore-board-open').click();
-    await page.locator('.mission-board').waitFor({ timeout: 10_000 });
-    await snap('board-open', 'Missiebord', 'Missiebord open — layout, leesbaarheid, tap-doelen.');
-  });
-  await scene('mission-3d', async () => {
-    await page.locator('.mission-card').first().click();
-    await page.getByRole('button', { name: 'Ga op pad' }).click();
-    await waitFor(page, (r) => r.missionView === '3d', 25_000);
-    await settle(page, 1000);
-    await snap('mission-3d', 'Missie', 'Missie speelt 3D in-place — hoe ziet een echte opdracht eruit?');
+  // ══ GROUP 2 — jeep: boot → walk to it (touch on iPad), climb in, drive burst
+  //    (steering test #3), climb back out. Own fresh page. ══
+  await runGroup('jeep', {}, async (page, stick) => {
+    await bootWorld(page, isPad);
+    await scene(page, 'jeep', async () => {
+      const placed = await hook(page, (r) => r.vehicle()?.placed ?? false);
+      if (!placed) throw new Error('vehicle not placed in world');
+      await walkToJeep(page, isPad, stick);
+      await snap(page, 'jeep-near', 'Jeep', 'Bij de jeep — model + "Stap in"-affordance.');
+      await enterJeep(page, isPad);
+      await waitFor(page, (r) => r.vehicle()?.inVehicle ?? false, 15_000);
+      await settle(page, 700);
+      await snap(page, 'jeep-in', 'Jeep', 'In de jeep — camerakader, blur/DOF, is het model helder? (#3)');
+      // STEER — #3 says heading stays fixed. Forward + one turn direction:
+      // laptop ArrowUp+ArrowLeft; iPad joystick up-left (throttle y=1, steer x=−1).
+      await holdDriveTurn(page, isPad, stick);
+      try {
+        for (let i = 1; i <= 4; i++) {
+          await settle(page, 350);
+          await snap(page, `jeep-drive-${i}`, 'Jeep (burst)', `Rijframe ${i}/4 met stuur-input — verandert de heading? (stuur-bug #3)`);
+        }
+      } finally {
+        await releaseDriveTurn(page, isPad, stick);
+        // always climb back out (defensive — the group's page is closed after,
+        // but keep the exit path exercised + the state clean).
+        if (await hook(page, (r) => r.vehicle()?.inVehicle ?? false)) {
+          await exitJeep(page, isPad).catch(() => {});
+          await waitFor(page, (r) => !(r.vehicle()?.inVehicle ?? false), 10_000).catch(() => {});
+        }
+      }
+    });
   });
 
-  // ══ BOOT 2: reduce-motion world (set before entering) ══
-  await scene('reduce-motion', async () => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await boot(page);
-    await settle(page, 1200);
-    await snap('reduce-motion-world', 'Reduce-Motion', 'Verminder-beweging AAN — ziet de wereld er nog goed uit of plat/kapot?');
-    await page.emulateMedia({ reducedMotion: 'no-preference' });
+  // ══ GROUP 3 — board → a 3D mission in-place. Own fresh page (this is exactly
+  //    the leg that killed the iPad run in Run A — now isolated + touch-walked). ══
+  await runGroup('board', {}, async (page, stick) => {
+    await bootWorld(page, isPad);
+    await scene(page, 'mission-board', async () => {
+      await walkToBoard(page, isPad, stick);
+      await settle(page, 300);
+      await snap(page, 'board-affordance', 'Missiebord', 'Bij het bord — is de "open"-affordance leesbaar/groot genoeg?');
+      const open = page.locator('.explore-board-open');
+      await open.waitFor({ timeout: 10_000 });
+      await press(page, isPad, open);
+      await page.locator('.mission-board').waitFor({ timeout: 10_000 });
+      await snap(page, 'board-open', 'Missiebord', 'Missiebord open — layout, leesbaarheid, tap-doelen.');
+    });
+    await scene(page, 'mission-3d', async () => {
+      await press(page, isPad, page.locator('.mission-card').first());
+      await press(page, isPad, page.getByRole('button', { name: 'Ga op pad' }));
+      await waitFor(page, (r) => r.missionView === '3d', 25_000);
+      await settle(page, 1000);
+      await snap(page, 'mission-3d', 'Missie', 'Missie speelt 3D in-place — hoe ziet een echte opdracht eruit?');
+    });
+  });
+
+  // ══ GROUP 4 — reduce-motion world (OS media set before boot). Own fresh page:
+  //    a clean first-run boot, so the F-34a returning-player stall cannot bite. ══
+  await runGroup('reduce-motion', { reduce: true }, async (page) => {
+    await scene(page, 'reduce-motion', async () => {
+      await bootWorld(page, isPad);
+      await settle(page, 1200);
+      await snap(page, 'reduce-motion-world', 'Reduce-Motion', 'Verminder-beweging AAN — ziet de wereld er nog goed uit of plat/kapot?');
+    });
   });
 
   flush();
@@ -228,10 +307,20 @@ function attachSummary(testInfo: TestInfo, shots: Annotation[]): void {
   const gaps = shots.filter((s) => !s.ok).length;
   testInfo.annotations.push({ type: 'capture', description: `${shots.length} shots, ${gaps} gaps` });
 }
-async function boot(page: Page): Promise<void> {
+/** A page/renderer death — bubble it so a group can spend its one crash-retry. */
+function isCrash(e: unknown): boolean {
+  return /been closed|is closed|has crashed|Target crashed|Target page|Target closed/i.test(String(e));
+}
+/** Tap on the iPad (genuine touch), click on the laptop. */
+async function press(page: Page, isPad: boolean, locator: ReturnType<Page['locator']>): Promise<void> {
+  if (isPad) await locator.tap(); else await locator.click();
+}
+/** Silent boot into the world (groups 2–4 don't re-snap title/avatar). First-run
+ *  because the group cleared the save, so click through the avatar-maker. */
+async function bootWorld(page: Page, isPad: boolean): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Begin' }).click();
-  await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
+  await press(page, isPad, page.getByRole('button', { name: 'Begin' }));
+  await press(page, isPad, page.getByRole('button', { name: 'Dit is mijn ranger' }));
   await waitForWorld(page);
 }
 async function waitForWorld(page: Page): Promise<void> {
@@ -247,12 +336,73 @@ async function waitFor(page: Page, pred: (r: Hook) => boolean, timeout: number):
 }
 async function settle(page: Page, ms: number): Promise<void> { await page.waitForTimeout(ms); }
 
+// ── locomotion: keyboard on laptop, JOYSTICK-via-touch on the iPad ────────────
+
+/**
+ * The on-screen joystick driven by GENUINE touch (CDP `Input.dispatchTouchEvent`).
+ * `ux` = screen-right (+), `uy` = screen-forward (+, = up), matching `input.ts`'s
+ * `joystickVector` convention (thumb offset `(ux·r, −uy·r)` from the ring centre).
+ * The touchStart lands at the ring centre (so `onDown` fires + captures), then the
+ * thumb slides to the steer offset — held down until `release`.
+ */
+class TouchStick {
+  private down = false;
+  private cx = 0; private cy = 0; private r = 1;
+  constructor(private readonly cdp: CDPSession) {}
+  private async acquire(page: Page): Promise<void> {
+    const box = await page.locator('.rj-base').boundingBox();
+    if (!box) throw new Error('joystick (.rj-base) not visible for touch drive');
+    this.cx = box.x + box.width / 2;
+    this.cy = box.y + box.height / 2;
+    this.r = box.width / 2;
+  }
+  async hold(page: Page, ux: number, uy: number): Promise<void> {
+    await this.acquire(page);
+    await this.cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: this.cx, y: this.cy }] });
+    this.down = true;
+    await this.steer(ux, uy);
+  }
+  async steer(ux: number, uy: number): Promise<void> {
+    if (!this.down) return;
+    await this.cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: this.cx + ux * this.r, y: this.cy - uy * this.r }],
+    });
+  }
+  async release(): Promise<void> {
+    if (!this.down) return;
+    this.down = false;
+    try { await this.cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); } catch { /* page gone */ }
+  }
+}
+
 const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
-/** Camera-relative arrow walk toward a world target (board.spec / interact.spec idiom). */
+/** Project a world delta onto the camera-relative screen axes (the inverse of
+ *  `toWorld`): `sx` = screen-right, `sYf` = screen-forward. Shared by both the
+ *  keyboard walk (→ arrow keys) and the joystick walk (→ thumb offset). */
+function screenDir(dx: number, dz: number, yaw: number): { sx: number; sYf: number } {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  return { sx: dx * c - dz * s, sYf: -dx * s - dz * c };
+}
+
+/** Camera-relative walk toward a world target. Keyboard (laptop) or joystick
+ *  touch (iPad) — same geometry, so the iPad reaches the board/jeep as reliably
+ *  as the laptop did (F-21: iPad locomotion must be touch, never `page.keyboard`). */
 async function walkTo(
   page: Page,
+  isPad: boolean,
+  stick: TouchStick | null,
   target: () => Promise<{ x: number; z: number; near: boolean } | null>,
   budget = 200,
+): Promise<void> {
+  if (isPad) return joystickWalkTo(page, stick!, target, Math.min(budget, 160));
+  return keyboardWalkTo(page, target, budget);
+}
+
+async function keyboardWalkTo(
+  page: Page,
+  target: () => Promise<{ x: number; z: number; near: boolean } | null>,
+  budget: number,
 ): Promise<void> {
   const down = new Set<string>();
   const sync = async (want: Set<string>) => {
@@ -268,10 +418,7 @@ async function walkTo(
       const p = await hook(page, (r) => r.pos());
       const yaw = await hook(page, (r) => r.cameraYaw());
       if (!p || !t || yaw == null) { await page.waitForTimeout(100); continue; }
-      const dx = t.x - p.x, dz = t.z - p.z;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const sx = dx * cy - dz * sy;
-      const sYf = -dx * sy - dz * cy;
+      const { sx, sYf } = screenDir(t.x - p.x, t.z - p.z, yaw);
       const want = new Set<string>();
       if (sx > 0.4) want.add('ArrowRight'); else if (sx < -0.4) want.add('ArrowLeft');
       if (sYf > 0.4) want.add('ArrowUp'); else if (sYf < -0.4) want.add('ArrowDown');
@@ -279,14 +426,79 @@ async function walkTo(
       await page.waitForTimeout(120);
     }
     throw new Error('never reached target within step budget');
-  } finally { await sync(new Set()); }
+  } finally { await sync(new Set()).catch(() => {}); }
 }
-async function walkToBoard(page: Page): Promise<void> {
-  await walkTo(page, () => hook(page, (r) => r.board()));
+
+async function joystickWalkTo(
+  page: Page,
+  stick: TouchStick,
+  target: () => Promise<{ x: number; z: number; near: boolean } | null>,
+  budget: number,
+): Promise<void> {
+  await stick.hold(page, 0, 1); // start moving; re-steered immediately below
+  try {
+    for (let i = 0; i < budget; i++) {
+      const t = await target();
+      if (t?.near) return;
+      const p = await hook(page, (r) => r.pos());
+      const yaw = await hook(page, (r) => r.cameraYaw());
+      if (!p || !t || yaw == null) { await page.waitForTimeout(120); continue; }
+      const { sx, sYf } = screenDir(t.x - p.x, t.z - p.z, yaw);
+      const mag = Math.hypot(sx, sYf) || 1;
+      await stick.steer(sx / mag, sYf / mag);
+      await page.waitForTimeout(140);
+    }
+    throw new Error('joystick walk never reached target within step budget');
+  } finally { await stick.release(); }
 }
-async function walkToJeep(page: Page): Promise<void> {
-  await walkTo(page, () => hook(page, (r) => {
+
+async function walkToBoard(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
+  await walkTo(page, isPad, stick, () => hook(page, (r) => r.board()));
+}
+async function walkToJeep(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
+  await walkTo(page, isPad, stick, () => hook(page, (r) => {
     const v = r.vehicle();
     return v ? { x: v.x, z: v.z, near: v.near } : null;
   }));
+}
+
+/** Hold "forward" for a walk burst: laptop ArrowUp, iPad joystick straight up. */
+async function holdForward(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
+  if (isPad) await stick!.hold(page, 0, 1); else await page.keyboard.down('ArrowUp');
+}
+async function releaseForward(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
+  if (isPad) await stick!.release(); else await page.keyboard.up('ArrowUp').catch(() => {});
+}
+
+/** Hold "throttle forward + steer one way" for the drive burst: laptop
+ *  ArrowUp+ArrowLeft, iPad joystick up-left (throttle y=1, steer x=−1). */
+async function holdDriveTurn(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
+  if (isPad) { await stick!.hold(page, -1, 1); return; }
+  await page.keyboard.down('ArrowUp');
+  await page.keyboard.down('ArrowLeft');
+}
+async function releaseDriveTurn(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
+  if (isPad) { await stick!.release(); return; }
+  await page.keyboard.up('ArrowUp').catch(() => {});
+  await page.keyboard.up('ArrowLeft').catch(() => {});
+}
+
+/** Board / leave the jeep: iPad taps the affordance, laptop presses Space. */
+async function enterJeep(page: Page, isPad: boolean): Promise<void> {
+  if (isPad) {
+    const enter = page.locator('.explore-vehicle-enter');
+    await enter.waitFor({ timeout: 10_000 });
+    await enter.tap();
+  } else {
+    await page.keyboard.press('Space');
+  }
+}
+async function exitJeep(page: Page, isPad: boolean): Promise<void> {
+  if (isPad) {
+    const exit = page.locator('.explore-vehicle-exit');
+    await exit.waitFor({ timeout: 10_000 });
+    await exit.tap();
+  } else {
+    await page.keyboard.press('Space');
+  }
 }

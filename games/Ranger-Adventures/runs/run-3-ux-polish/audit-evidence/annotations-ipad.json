@@ -63,14 +63,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -0.8536799999713897
+        "z": -0.6890400000572204
       },
       "cameraYaw": 0,
       "drawCalls": 30,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.42049983310699474
+        "time": 0.019532943904399858
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -85,14 +85,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -6.729359999942779
+        "z": -6.73344000005722
       },
       "cameraYaw": 0,
       "drawCalls": 15,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.7353663884997371
+        "time": 0.4046994993090628
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -107,14 +107,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -11.323439999914168
+        "z": -11.086079999971387
       },
       "cameraYaw": 0,
       "drawCalls": 14,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.5162329438924792
+        "time": 0.08496605467796292
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -129,14 +129,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -15.63432000002861
+        "z": -14.909279999971385
       },
       "cameraYaw": 0,
-      "drawCalls": 13,
+      "drawCalls": 14,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.17909949934482597
+        "time": 0.6112993323802947
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -151,14 +151,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -19.896720000028612
+        "z": -18.880320000028604
       },
       "cameraYaw": 0,
       "drawCalls": 13,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.8884327770471576
+        "time": 0.13256588780879963
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -173,14 +173,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -22.875120000028613
+        "z": -22.25016000008582
       },
-      "cameraYaw": 0.8861385678724956,
+      "cameraYaw": 0.9330530181161674,
       "drawCalls": 14,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.20249947547912603
+        "time": 0.25949933242797874
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -195,207 +195,25 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -22.875120000028613
+        "z": -22.25016000008582
       },
-      "cameraYaw": 3.1415926535890044,
+      "cameraYaw": 3.141592653588635,
       "drawCalls": 46,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.22589917743206067
+        "time": 0.17559903436899205
       },
       "veh": null,
       "version": "2.1.0-ship"
     },
     {
-      "name": "jeep-near",
-      "platform": "ipad",
-      "group": "Jeep",
-      "note": "Bij de jeep — model + \"Stap in\"-affordance.",
-      "ok": true,
-      "file": "ipad/11-jeep-near.png",
-      "screen": "world",
-      "pos": {
-        "x": 15.24722530227531,
-        "z": 11.618069823655
-      },
-      "cameraYaw": -0.8130901802730861,
-      "drawCalls": 50,
-      "missionView": null,
-      "clip": {
-        "name": "walk",
-        "time": 0.36895937901735354
-      },
-      "veh": null,
-      "version": "2.1.0-ship"
-    },
-    {
-      "name": "jeep-in",
-      "platform": "ipad",
-      "group": "Jeep",
-      "note": "In de jeep — camerakader, blur/DOF, is het model helder? (#3)",
-      "ok": true,
-      "file": "ipad/12-jeep-in.png",
-      "screen": "world",
-      "pos": {
-        "x": 16,
-        "z": 14
-      },
-      "cameraYaw": 0.8523568306131644,
-      "drawCalls": 66,
-      "missionView": null,
-      "clip": {
-        "name": "idle",
-        "time": 0.0933941825628285
-      },
-      "veh": {
-        "heading": -2.289626326416521,
-        "speed": 0,
-        "inVehicle": true
-      },
-      "version": "2.1.0-ship"
-    },
-    {
-      "name": "jeep-drive-1",
-      "platform": "ipad",
-      "group": "Jeep (burst)",
-      "note": "Rijframe 1/4 met stuur-input — verandert de heading? (stuur-bug #3)",
-      "ok": true,
-      "file": "ipad/13-jeep-drive-1.png",
-      "screen": "world",
-      "pos": {
-        "x": 11.13779164059564,
-        "z": 11.97727688293614
-      },
-      "cameraYaw": 1.4134869167329205,
-      "drawCalls": 64,
-      "missionView": null,
-      "clip": {
-        "name": "idle",
-        "time": 0.28929397994279893
-      },
-      "veh": {
-        "heading": -1.692347370453522,
-        "speed": 4.242640687119285,
-        "inVehicle": true
-      },
-      "version": "2.1.0-ship"
-    },
-    {
-      "name": "jeep-drive-2",
-      "platform": "ipad",
-      "group": "Jeep (burst)",
-      "note": "Rijframe 2/4 met stuur-input — verandert de heading? (stuur-bug #3)",
-      "ok": true,
-      "file": "ipad/14-jeep-drive-2.png",
-      "screen": "world",
-      "pos": {
-        "x": 8.181358907033164,
-        "z": 21.139749850882577
-      },
-      "cameraYaw": -2.466073327986564,
-      "drawCalls": 27,
-      "missionView": null,
-      "clip": {
-        "name": "idle",
-        "time": 0.21489386069774663
-      },
-      "veh": {
-        "heading": 0.7901065483633678,
-        "speed": 4.242640687119285,
-        "inVehicle": true
-      },
-      "version": "2.1.0-ship"
-    },
-    {
-      "name": "jeep-drive-3",
-      "platform": "ipad",
-      "group": "Jeep (burst)",
-      "note": "Rijframe 3/4 met stuur-input — verandert de heading? (stuur-bug #3)",
-      "ok": true,
-      "file": "ipad/15-jeep-drive-3.png",
-      "screen": "world",
-      "pos": {
-        "x": 15.744645866345724,
-        "z": 15.634862813937673
-      },
-      "cameraYaw": 0.1100992602040769,
-      "drawCalls": 74,
-      "missionView": null,
-      "clip": {
-        "name": "idle",
-        "time": 0.19829374152421986
-      },
-      "veh": {
-        "heading": -2.961579913595539,
-        "speed": 4.242640687119285,
-        "inVehicle": true
-      },
-      "version": "2.1.0-ship"
-    },
-    {
-      "name": "jeep-drive-4",
-      "platform": "ipad",
-      "group": "Jeep (burst)",
-      "note": "Rijframe 4/4 met stuur-input — verandert de heading? (stuur-bug #3)",
-      "ok": true,
-      "file": "ipad/16-jeep-drive-4.png",
-      "screen": "world",
-      "pos": {
-        "x": 6.41466550568816,
-        "z": 19.871632352940505
-      },
-      "cameraYaw": -2.9145952875252057,
-      "drawCalls": 16,
-      "missionView": null,
-      "clip": {
-        "name": "idle",
-        "time": 0.18049358654022257
-      },
-      "veh": {
-        "heading": 0.3325760215012421,
-        "speed": 4.242640687119285,
-        "inVehicle": true
-      },
-      "version": "2.1.0-ship"
-    },
-    {
-      "name": "mission-board",
+      "name": "jeep",
       "platform": "ipad",
       "group": "GAP",
       "ok": false,
       "file": "",
-      "note": "Scene \"mission-board\" kon niet worden vastgelegd: Error: keyboard.up: Target page, context or browser has been closed — dit is zelf een audit-bevinding.",
-      "screen": null,
-      "pos": null,
-      "cameraYaw": null,
-      "drawCalls": null,
-      "missionView": null,
-      "clip": null,
-      "veh": null
-    },
-    {
-      "name": "mission-3d",
-      "platform": "ipad",
-      "group": "GAP",
-      "ok": false,
-      "file": "",
-      "note": "Scene \"mission-3d\" kon niet worden vastgelegd: Error: locator.click: Target page, context or browser has been closed — dit is zelf een audit-bevinding.",
-      "screen": null,
-      "pos": null,
-      "cameraYaw": null,
-      "drawCalls": null,
-      "missionView": null,
-      "clip": null,
-      "veh": null
-    },
-    {
-      "name": "reduce-motion",
-      "platform": "ipad",
-      "group": "GAP",
-      "ok": false,
-      "file": "",
-      "note": "Scene \"reduce-motion\" kon niet worden vastgelegd: Error: page.emulateMedia: Target page, context or browser has been closed — dit is zelf een audit-bevinding.",
+      "note": "Scene \"jeep\" kon niet worden vastgelegd: Error: joystick walk never reached target within step budget — dit is zelf een audit-bevinding.",
       "screen": null,
       "pos": null,
       "cameraYaw": null,

@@ -25,3 +25,10 @@ docs/tov-*-rapport.txt
 # so the audit is reproducible; the pixels do not bloat git.
 games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence/*/
 games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence/index.html
+
+# Run B (P0.1) froze the Run A frames to audit-evidence-baseline-run-a/ BEFORE the
+# first re-capture overwrites audit-evidence/. Same rule mirrored: the heavy PNGs +
+# contact sheet stay on disk only; the annotations-*.json + README stay TRACKED so
+# the frames F-01..F-34 cite remain reproducible without bloating git.
+games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence-baseline-run-a/*/
+games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence-baseline-run-a/index.html

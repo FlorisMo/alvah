@@ -20,15 +20,28 @@
 > Legend on each box: **shot** = own-screenshot gate · **assert** =
 > annotation/E2E field · **+demo** = has a demo-only component no gate may
 > self-certify · **[iPad]/[laptop]/[both]** = platform.
+>
+> **SCOPE — LAPTOP-ONLY automated verification (Floris, 2026-07-03).** The
+> Run B loop captures the **laptop** project only (`CAPTURE_PROJECTS=laptop`) —
+> the iPad leg hangs the software renderer before the jeep/board/mission/RM
+> scenes (F-21) and would re-stall the loop. **Every box is verified on laptop
+> pixels + asserts. All iPad-specific and iPad-pixel verification** (F-13
+> joystick-vs-tracker, iPad tap-target sizes, touch steering, the
+> board-button-vs-joystick corner, real-Safari rendering) **is folded into the
+> Floris on-device demo** — see the DEMO section. Where a box says "both" or
+> "iPad", make the shared-code fix and verify it on laptop; the iPad verdict is
+> Floris's. Boxes tagged **DEFERRED (iPad)** are skipped by the loop. Re-enable
+> iPad auto-capture with `CAPTURE_PROJECTS=laptop,ipad` once the render hang is
+> solved.
 
 ---
 
 ## Phase 0 · protect + see  (NO game code — `app/e2e-capture/**` + copies only)
 
-- [ ] P0.1 · **Archive the Run A evidence BEFORE any new capture.** `audit-evidence/{laptop,ipad,crops}/*.png` + `annotations-*.json` are git-IGNORED and the first `npm run capture` overwrites them (§3 substrate rule; §9 A6). Copy the whole current `audit-evidence/` to `audit-evidence-baseline-run-a/` and git-add the annotations + a README so the frames F-01..F-34 cite survive. **Verify by:** the baseline folder holds the Run A PNGs + both annotations; nothing captured yet.
-- [ ] P0.2 · **F-21 · harden the capture harness [both].** In `app/e2e-capture/**` only: scene-isolated pages/contexts (re-seed the sessionStorage gate + ranger game state per scene group so one renderer death can't erase later scenes); drive the **iPad** board/jeep/steer approach with **touch** (tap-to-walk / joystick), keeping keyboard for the `laptop` project only; one crash-retry per scene. **Verify by:** shot — a capture run completes with board + mission + reduce-motion PNGs present on BOTH projects, iPad locomotion touch-driven (not `page.keyboard`).
-- [ ] P0.3 · **F-34a · fix `boot()` for the returning player [both].** In `app/e2e-capture/**`: after "Begin", branch on persisted `avatarGemaakt` exactly like `main.ts:90` — wait for `screen==='world'` when an avatar is persisted, only wait for the avatar-maker on a true first run (or clear the ranger namespace for a first-run RM boot). **Verify by:** shot — the reduce-motion scene captures a PNG on both projects with no multi-minute stall.
-- [ ] GATE-P0 · **Fable re-judge — Phase 0 (does a full evidence set now EXIST).** Re-capture, confirm the complete both-platform set exists (title→avatar→world→walk→controls→board→mission→pause→jeep→RM), iPad driven by touch, and the P0.1 baseline is intact. May re-open P0.x. **Exit of Phase 0.**
+- [x] P0.1 · **Archive the Run A evidence BEFORE any new capture.** `audit-evidence/{laptop,ipad,crops}/*.png` + `annotations-*.json` are git-IGNORED and the first `npm run capture` overwrites them (§3 substrate rule; §9 A6). Copy the whole current `audit-evidence/` to `audit-evidence-baseline-run-a/` and git-add the annotations + a README so the frames F-01..F-34 cite survive. **Verify by:** the baseline folder holds the Run A PNGs + both annotations; nothing captured yet.
+- [ ] P0.2 · **DEFERRED (iPad) · F-21 · harden the capture harness.** Parked while Run B is laptop-only (the iPad software-render hang is exactly F-21's own suspected cause). The scene-isolation + crash-retry parts already landed in `app/e2e-capture/capture.spec.ts` and help the laptop run too; the iPad touch-driving + a real fix for the render hang wait until `CAPTURE_PROJECTS=laptop,ipad` is re-enabled. Until then iPad is verified in the Floris demo. **Loop skips this box.**
+- [ ] P0.3 · **F-34a · fix `boot()` for the returning player [laptop].** In `app/e2e-capture/**`: after "Begin", branch on persisted `avatarGemaakt` exactly like `main.ts:90` — wait for `screen==='world'` when an avatar is persisted, only wait for the avatar-maker on a true first run (or clear the ranger namespace for a first-run RM boot). This is what killed the laptop reduce-motion capture in Run A. **Verify by:** shot — the laptop reduce-motion scene captures a PNG with no multi-minute stall.
+- [ ] GATE-P0 · **Fable re-judge — Phase 0 (does a full LAPTOP evidence set now EXIST).** Re-capture (laptop), confirm the complete set exists (title→avatar→world→walk→controls→board→mission→pause→jeep→RM), and the P0.1 baseline is intact. iPad is demo-gated (P0.2 deferred). May re-open P0.x. **Exit of Phase 0.**
 
 ## Phase 1 · the core — area A  (order: F-07 → F-05⊕F-18 → F-09 → F-08)
 
@@ -87,6 +100,7 @@
 - [ ] DEMO · **Input feel** — trackpad zoom/orbit damping (F-16/F-17); joystick, tap-to-walk and touch steering on real glass (zero touch evidence exists in Run A). Floris accepts on-device.
 - [ ] DEMO · **Audio** — read-aloud firing on new/changed strings (F-06/F-15/F-25). Floris confirms audio on-device.
 - [ ] DEMO · **Real Safari** — every iPad conclusion carries the Chromium engine caveat; the on-device WebKit pass is the only real-Safari evidence. Floris accepts on iPad.
+- [ ] DEMO · **iPad platform (whole)** — because Run B auto-verifies on laptop only, ALL iPad pixels are Floris's on-device sign-off: layout/scale at 1080×810, ≥56 px tap targets, the joystick-vs-tracker corner (F-13), tap-to-walk + touch steering, and that board/mission/reduce-motion look right on the real device. Shared-code fixes are laptop-proven; this box confirms them on glass.
 
 ## Notes
 - Re-run the capture anytime from `app/`: `npm run capture` (rebuilds `audit-evidence/`; the Run A baseline lives in `audit-evidence-baseline-run-a/`).

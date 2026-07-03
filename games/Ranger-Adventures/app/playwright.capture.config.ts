@@ -29,6 +29,17 @@ import { defineConfig, devices } from '@playwright/test';
  */
 const PORT = 4197;
 
+// Select capture projects by name from CAPTURE_PROJECTS (comma-separated).
+// Unset/empty → keep all (both form factors). Unknown names are ignored; if the
+// filter would leave nothing, fall back to all so a typo never yields 0 tests.
+function filterProjects<T extends { name: string }>(all: T[]): T[] {
+  const want = (process.env.CAPTURE_PROJECTS || '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  if (want.length === 0) return all;
+  const kept = all.filter((p) => want.includes(p.name));
+  return kept.length ? kept : all;
+}
+
 export default defineConfig({
   testDir: './e2e-capture',
   fullyParallel: false,
@@ -45,7 +56,14 @@ export default defineConfig({
     // headless by default (add `--headed` to watch). No SwiftShader args needed
     // locally (they are a CI-only concern in the main config).
   },
-  projects: [
+  // Run B SCOPE (Floris, 2026-07-03): CAPTURE_PROJECTS picks which form factors
+  // to capture. Empty/unset = BOTH (the Run A default — keeps the archived
+  // contact sheet reproducible). The Run B loop sets CAPTURE_PROJECTS=laptop
+  // because the iPad leg (2160×1620, software-rendered headless) HANGS the
+  // renderer before the jeep/board/mission/RM scenes (F-21). iPad verification
+  // is meanwhile folded into Floris's on-device demo; iPad auto-capture returns
+  // with CAPTURE_PROJECTS=laptop,ipad once the render hang is solved.
+  projects: filterProjects([
     {
       name: 'laptop',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
@@ -60,7 +78,7 @@ export default defineConfig({
         defaultBrowserType: 'chromium',
       },
     },
-  ],
+  ]),
   webServer: {
     command: `npm run dev -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,

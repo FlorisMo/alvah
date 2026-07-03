@@ -8,6 +8,17 @@
 > §5 (phase order) + §3 (coupling), then [FINDINGS.md](FINDINGS.md) (why run 3
 > exists). This is the **hands** run — Run A was the eyes.
 
+> **SCOPE — LAPTOP-ONLY automated verification (Floris, 2026-07-03).** The loop
+> captures the **laptop** project only (`CAPTURE_PROJECTS=laptop`, set by
+> `build-run-loop.sh`); the iPad leg hangs the software renderer before the
+> jeep/board/mission/RM scenes (F-21) and re-stalls the loop. So: grade every
+> finding on **laptop** pixels + asserts; make the shared-code fix for "both"
+> findings; and treat **all iPad-specific / iPad-pixel verification** (F-13,
+> iPad tap targets, touch steering, board-vs-joystick corner, real-Safari) as
+> **demo-gated — Floris on the real device** (BUILD-LEDGER DEMO section).
+> iPad auto-capture returns with `CAPTURE_PROJECTS=laptop,ipad` once the render
+> hang is solved. This does not change any fix — only where it is *verified*.
+
 ## 0. What this run is (and is NOT)
 
 Run A looked at the game and produced 34 findings. Run B **fixes them**, and —
@@ -182,3 +193,4 @@ touching anything else.
 ## 8. Run B log (append-only, one line per surprise)
 
 - (add entries here as the build learns things about the harness, the engine, or a finding that turned out different once the murk cleared)
+- **P0.1** — deliberately ran NO `npm run capture` (its verify-by is "nothing captured yet"; the first capture would overwrite the very frames F-01..F-34 cite — §3 substrate rule). Graded by folder-contents instead: baseline holds 22 laptop + 16 ipad + 18 crop PNGs + both annotations (byte-identical, `diff -rq` clean); source mtimes unchanged. Mirrored the existing `audit-evidence/*/` .gitignore rule onto `audit-evidence-baseline-run-a/*/` + its `index.html` so the supervisor's `git add -A` tracks only the annotations + README, not the ~56 heavy PNGs (honours the box's "git-add the annotations + a README").

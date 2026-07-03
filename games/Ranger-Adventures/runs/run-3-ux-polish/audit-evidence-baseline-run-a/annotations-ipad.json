@@ -1,0 +1,408 @@
+{
+  "platform": "ipad",
+  "version": "2.1.0-ship",
+  "shots": [
+    {
+      "name": "title",
+      "platform": "ipad",
+      "group": "Boot",
+      "note": "Titelscherm \"Word boswachter\" — eerste indruk.",
+      "ok": true,
+      "file": "ipad/01-title.png",
+      "screen": "title",
+      "pos": null,
+      "cameraYaw": null,
+      "drawCalls": 16,
+      "missionView": null,
+      "clip": null,
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "avatar",
+      "platform": "ipad",
+      "group": "Boot",
+      "note": "Avatar-maker — de ranger die je speelt.",
+      "ok": true,
+      "file": "ipad/02-avatar.png",
+      "screen": "avatar",
+      "pos": null,
+      "cameraYaw": null,
+      "drawCalls": 16,
+      "missionView": null,
+      "clip": null,
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "world-entry",
+      "platform": "ipad",
+      "group": "Wereld",
+      "note": "Eerste frame in de wereld — camera-kader + avatarschaal (punch-list #1).",
+      "ok": true,
+      "file": "ipad/03-world-entry.png",
+      "screen": "world",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "cameraYaw": 0,
+      "drawCalls": 35,
+      "missionView": null,
+      "clip": null,
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "walk-1",
+      "platform": "ipad",
+      "group": "Lopen (burst)",
+      "note": "Loopframe 1/5 — benen + pos/clip tussen frames (glijdt vs loopt, #2).",
+      "ok": true,
+      "file": "ipad/04-walk-1.png",
+      "screen": "world",
+      "pos": {
+        "x": 0,
+        "z": -0.8536799999713897
+      },
+      "cameraYaw": 0,
+      "drawCalls": 30,
+      "missionView": null,
+      "clip": {
+        "name": "walk",
+        "time": 0.42049983310699474
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "walk-2",
+      "platform": "ipad",
+      "group": "Lopen (burst)",
+      "note": "Loopframe 2/5 — benen + pos/clip tussen frames (glijdt vs loopt, #2).",
+      "ok": true,
+      "file": "ipad/05-walk-2.png",
+      "screen": "world",
+      "pos": {
+        "x": 0,
+        "z": -6.729359999942779
+      },
+      "cameraYaw": 0,
+      "drawCalls": 15,
+      "missionView": null,
+      "clip": {
+        "name": "walk",
+        "time": 0.7353663884997371
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "walk-3",
+      "platform": "ipad",
+      "group": "Lopen (burst)",
+      "note": "Loopframe 3/5 — benen + pos/clip tussen frames (glijdt vs loopt, #2).",
+      "ok": true,
+      "file": "ipad/06-walk-3.png",
+      "screen": "world",
+      "pos": {
+        "x": 0,
+        "z": -11.323439999914168
+      },
+      "cameraYaw": 0,
+      "drawCalls": 14,
+      "missionView": null,
+      "clip": {
+        "name": "walk",
+        "time": 0.5162329438924792
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "walk-4",
+      "platform": "ipad",
+      "group": "Lopen (burst)",
+      "note": "Loopframe 4/5 — benen + pos/clip tussen frames (glijdt vs loopt, #2).",
+      "ok": true,
+      "file": "ipad/07-walk-4.png",
+      "screen": "world",
+      "pos": {
+        "x": 0,
+        "z": -15.63432000002861
+      },
+      "cameraYaw": 0,
+      "drawCalls": 13,
+      "missionView": null,
+      "clip": {
+        "name": "walk",
+        "time": 0.17909949934482597
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "walk-5",
+      "platform": "ipad",
+      "group": "Lopen (burst)",
+      "note": "Loopframe 5/5 — benen + pos/clip tussen frames (glijdt vs loopt, #2).",
+      "ok": true,
+      "file": "ipad/08-walk-5.png",
+      "screen": "world",
+      "pos": {
+        "x": 0,
+        "z": -19.896720000028612
+      },
+      "cameraYaw": 0,
+      "drawCalls": 13,
+      "missionView": null,
+      "clip": {
+        "name": "walk",
+        "time": 0.8884327770471576
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "controls-hud",
+      "platform": "ipad",
+      "group": "Besturing",
+      "note": "iPad-kader: staat de joystick er, ≥56 px, tap-to-walk zichtbaar?",
+      "ok": true,
+      "file": "ipad/09-controls-hud.png",
+      "screen": "world",
+      "pos": {
+        "x": 0,
+        "z": -22.875120000028613
+      },
+      "cameraYaw": 0.8861385678724956,
+      "drawCalls": 14,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.20249947547912603
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "pause-hub",
+      "platform": "ipad",
+      "group": "Pauze/menu",
+      "note": "Pauze-menu — is er een duidelijke \"terug/hoofdmenu\"? (punch-list #5)",
+      "ok": true,
+      "file": "ipad/10-pause-hub.png",
+      "screen": "world",
+      "pos": {
+        "x": 0,
+        "z": -22.875120000028613
+      },
+      "cameraYaw": 3.1415926535890044,
+      "drawCalls": 46,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.22589917743206067
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-near",
+      "platform": "ipad",
+      "group": "Jeep",
+      "note": "Bij de jeep — model + \"Stap in\"-affordance.",
+      "ok": true,
+      "file": "ipad/11-jeep-near.png",
+      "screen": "world",
+      "pos": {
+        "x": 15.24722530227531,
+        "z": 11.618069823655
+      },
+      "cameraYaw": -0.8130901802730861,
+      "drawCalls": 50,
+      "missionView": null,
+      "clip": {
+        "name": "walk",
+        "time": 0.36895937901735354
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-in",
+      "platform": "ipad",
+      "group": "Jeep",
+      "note": "In de jeep — camerakader, blur/DOF, is het model helder? (#3)",
+      "ok": true,
+      "file": "ipad/12-jeep-in.png",
+      "screen": "world",
+      "pos": {
+        "x": 16,
+        "z": 14
+      },
+      "cameraYaw": 0.8523568306131644,
+      "drawCalls": 66,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.0933941825628285
+      },
+      "veh": {
+        "heading": -2.289626326416521,
+        "speed": 0,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-drive-1",
+      "platform": "ipad",
+      "group": "Jeep (burst)",
+      "note": "Rijframe 1/4 met stuur-input — verandert de heading? (stuur-bug #3)",
+      "ok": true,
+      "file": "ipad/13-jeep-drive-1.png",
+      "screen": "world",
+      "pos": {
+        "x": 11.13779164059564,
+        "z": 11.97727688293614
+      },
+      "cameraYaw": 1.4134869167329205,
+      "drawCalls": 64,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.28929397994279893
+      },
+      "veh": {
+        "heading": -1.692347370453522,
+        "speed": 4.242640687119285,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-drive-2",
+      "platform": "ipad",
+      "group": "Jeep (burst)",
+      "note": "Rijframe 2/4 met stuur-input — verandert de heading? (stuur-bug #3)",
+      "ok": true,
+      "file": "ipad/14-jeep-drive-2.png",
+      "screen": "world",
+      "pos": {
+        "x": 8.181358907033164,
+        "z": 21.139749850882577
+      },
+      "cameraYaw": -2.466073327986564,
+      "drawCalls": 27,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.21489386069774663
+      },
+      "veh": {
+        "heading": 0.7901065483633678,
+        "speed": 4.242640687119285,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-drive-3",
+      "platform": "ipad",
+      "group": "Jeep (burst)",
+      "note": "Rijframe 3/4 met stuur-input — verandert de heading? (stuur-bug #3)",
+      "ok": true,
+      "file": "ipad/15-jeep-drive-3.png",
+      "screen": "world",
+      "pos": {
+        "x": 15.744645866345724,
+        "z": 15.634862813937673
+      },
+      "cameraYaw": 0.1100992602040769,
+      "drawCalls": 74,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.19829374152421986
+      },
+      "veh": {
+        "heading": -2.961579913595539,
+        "speed": 4.242640687119285,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "jeep-drive-4",
+      "platform": "ipad",
+      "group": "Jeep (burst)",
+      "note": "Rijframe 4/4 met stuur-input — verandert de heading? (stuur-bug #3)",
+      "ok": true,
+      "file": "ipad/16-jeep-drive-4.png",
+      "screen": "world",
+      "pos": {
+        "x": 6.41466550568816,
+        "z": 19.871632352940505
+      },
+      "cameraYaw": -2.9145952875252057,
+      "drawCalls": 16,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.18049358654022257
+      },
+      "veh": {
+        "heading": 0.3325760215012421,
+        "speed": 4.242640687119285,
+        "inVehicle": true
+      },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "mission-board",
+      "platform": "ipad",
+      "group": "GAP",
+      "ok": false,
+      "file": "",
+      "note": "Scene \"mission-board\" kon niet worden vastgelegd: Error: keyboard.up: Target page, context or browser has been closed — dit is zelf een audit-bevinding.",
+      "screen": null,
+      "pos": null,
+      "cameraYaw": null,
+      "drawCalls": null,
+      "missionView": null,
+      "clip": null,
+      "veh": null
+    },
+    {
+      "name": "mission-3d",
+      "platform": "ipad",
+      "group": "GAP",
+      "ok": false,
+      "file": "",
+      "note": "Scene \"mission-3d\" kon niet worden vastgelegd: Error: locator.click: Target page, context or browser has been closed — dit is zelf een audit-bevinding.",
+      "screen": null,
+      "pos": null,
+      "cameraYaw": null,
+      "drawCalls": null,
+      "missionView": null,
+      "clip": null,
+      "veh": null
+    },
+    {
+      "name": "reduce-motion",
+      "platform": "ipad",
+      "group": "GAP",
+      "ok": false,
+      "file": "",
+      "note": "Scene \"reduce-motion\" kon niet worden vastgelegd: Error: page.emulateMedia: Target page, context or browser has been closed — dit is zelf een audit-bevinding.",
+      "screen": null,
+      "pos": null,
+      "cameraYaw": null,
+      "drawCalls": null,
+      "missionView": null,
+      "clip": null,
+      "veh": null
+    }
+  ]
+}

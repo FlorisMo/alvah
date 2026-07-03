@@ -49,8 +49,16 @@ stall=0
 # dir, .../Ranger-Adventures). Exported so tick/commit/status target BUILD-LEDGER.
 export RUN_LEDGER="runs/run-3-ux-polish/BUILD-LEDGER.md"
 
-# First unchecked WORK box (skips Floris-only DEMO boxes). Empty when none remain.
-next_work_box() { grep -m1 -E '^[[:space:]]*-[[:space:]]*\[ \]' "$LEDGER" 2>/dev/null | grep -v 'DEMO ·'; }
+# Run B SCOPE (Floris, 2026-07-03): automated verification is LAPTOP-ONLY —
+# `npm run capture` only captures the laptop project (the iPad leg hangs the
+# software renderer, F-21). iPad is verified on Floris's real device in the demo.
+# Re-enable iPad auto-capture by setting CAPTURE_PROJECTS="laptop,ipad" here.
+export CAPTURE_PROJECTS="${CAPTURE_PROJECTS:-laptop}"
+
+# First unchecked WORK box. Skips Floris-only DEMO boxes AND DEFERRED boxes
+# (e.g. iPad-only work parked until iPad capture is re-enabled) — filter FIRST,
+# then take the first survivor, so a skipped box mid-list can't read as "done".
+next_work_box() { grep -E '^[[:space:]]*-[[:space:]]*\[ \]' "$LEDGER" 2>/dev/null | grep -vE 'DEMO ·|DEFERRED' | head -1; }
 # Any unchecked box at all (incl. DEMO) — to tell "all done" from "demo pending".
 any_unchecked()  { grep -m1 -E '^[[:space:]]*-[[:space:]]*\[ \]' "$LEDGER" 2>/dev/null; }
 # Count of ticked GATE boxes — a rise means a phase just closed → commit.
@@ -96,8 +104,8 @@ for i in $(seq 1 "$MAX_RUNS"); do
   box="$(next_work_box)"
   if [ -z "$box" ]; then
     if [ -n "$(any_unchecked)" ]; then
-      echo "✅ BUILD-COMPLETE — all build/gate boxes done. Only Floris-only DEMO boxes remain (on-device acceptance)." | tee -a "$LOG"
-      (cd "$APP" && node scripts/ranger-run.mjs status --blocker="Build phases complete — awaiting Floris on-device demo (DEMO boxes in BUILD-LEDGER.md).") >> "$LOG" 2>&1
+      echo "✅ BUILD-COMPLETE — all active build/gate boxes done. Only Floris-only DEMO + parked DEFERRED (iPad) boxes remain." | tee -a "$LOG"
+      (cd "$APP" && node scripts/ranger-run.mjs status --blocker="Build phases complete (laptop) — awaiting Floris on-device demo + iPad re-enable (DEMO/DEFERRED boxes in BUILD-LEDGER.md).") >> "$LOG" 2>&1
     else
       echo "🎉 BUILD-COMPLETE — every box in BUILD-LEDGER.md is checked (after $((i-1)) sittings)." | tee -a "$LOG"
     fi
