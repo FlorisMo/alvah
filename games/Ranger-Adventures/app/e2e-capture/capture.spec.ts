@@ -1,6 +1,7 @@
 import { test, type Page, type TestInfo, type CDPSession } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 
 /**
  * RUN-3 AUDIT capture flow (WORLD-PLAN §3.1 lesson; FINDINGS.md "agreed shape").
@@ -67,6 +68,14 @@ type Annotation = {
   // finding (heading unchanged across the drive burst while a turn key is held
   // → dead steering). null when not in a vehicle.
   veh: { heading: number; speed: number; inVehicle: boolean } | null;
+  // F-18 court of appeal (P1.2): the md5 of THIS shot's PNG bytes. "Pixels outrank
+  // the hook" (§4) becomes machine-checkable — the world-idle / world-idle-hold pair
+  // reads an IDENTICAL hash when the pose is genuinely still, so the P1.2 idle assert
+  // (cam.yaw / cam.dist steady ±0.01) is confirmed by the RENDER, not by a hook that
+  // moved yaw between pixel-identical frames in Run A. It also flags the inverse: a
+  // camera claim that "changed" while the hash holds is a telemetry lie to distrust.
+  // Emits what the §8 grades were computing by hand. null on GAPs / failed captures.
+  pixelHash: string | null;
   file: string;
 };
 
@@ -109,6 +118,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
     const a: Annotation = {
       name, platform, group, note, ok: true, file: `${platform}/${file}`,
       screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, cam: null, veh: null,
+      pixelHash: null,
     };
     try {
       const s = await hook(page, (r) => {
@@ -120,7 +130,11 @@ test('audit capture flow', async ({ context }, testInfo) => {
         };
       });
       if (s) { Object.assign(a, s); version = s.version; }
-      await page.screenshot({ path: path.join(dir, file) });
+      // F-18 pixel court of appeal: `screenshot({path})` writes the PNG AND returns
+      // its bytes — hash them so the grade can prove pose stability from the RENDER
+      // (idle pair hashes equal) instead of trusting the hook that lied in Run A (§4).
+      const png = await page.screenshot({ path: path.join(dir, file) });
+      a.pixelHash = createHash('md5').update(png).digest('hex');
     } catch (e) { a.ok = false; a.note = `${note}  [CAPTURE FAILED: ${String(e).slice(0, 140)}]`; }
     shots.push(a);
     flush();
@@ -135,6 +149,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
         screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, cam: null, veh: null,
+        pixelHash: null,
       });
       flush();
     }
@@ -185,6 +200,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
           screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, cam: null, veh: null,
+          pixelHash: null,
         });
         flush();
         return;
