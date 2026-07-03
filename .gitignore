@@ -19,3 +19,9 @@ public/ranger/
 # ToV-check: lokale baseline-artefacten (niet committen, zie docs/tov-check.md)
 docs/tov-baseline.txt
 docs/tov-*-rapport.txt
+
+# Run 3 audit: raw capture PNGs + the generated contact sheet are bulky and
+# regenerable (via `app run capture`). The small annotations-*.json stay TRACKED
+# so the audit is reproducible; the pixels do not bloat git.
+games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence/*/
+games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence/index.html
