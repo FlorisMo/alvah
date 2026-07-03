@@ -23,7 +23,7 @@ test('devhook: window.__ranger present on boot, screen === "title" @smoke', asyn
   });
 
   expect(hook, 'window.__ranger installed under DEV').not.toBeNull();
-  expect(hook!.version).toBe('2.0.0-world');
+  expect(hook!.version).toBe('2.1.0-ship');
   expect(hook!.screen).toBe('title');
   expect(hook!.missionView).toBeNull();
   // draw calls come from renderer.info — a number once the title backdrop renders.

@@ -5,16 +5,16 @@
 
 - **Ledger:** WORLD-LEDGER.md
 - **Phase:** Fase W7 — Prestatie + oplevering
-- **Progress:** ~98% (weighted by ledger items)
-- **Just landed:** W7.3 Alles groen: unit + parity + volledige E2E (chromium én webkit) + build:site + astro build; AUTO-QA-REPORT-2.md met screenshots uit qa-evidence-2/
-- **Next up:** W7.4 Ship: commit + push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd
-- **Last heartbeat:** 2026-07-03 00:39:59Z
+- **Progress:** ~99% (weighted by ledger items)
+- **Just landed:** W7.4 Ship: commit + push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd
+- **Next up:** W7.5 NEEDS-FLORIS iPad-acceptatie: lopen (stick + tap), jeep, missie vanaf marker, Deep Demo, Reduce-Motion beide standen
+- **Last heartbeat:** 2026-07-03 00:48:25Z
 - **Blocker:** none
 
 ```
-✔ landed: W7.3 Alles groen: unit + parity + volledige E2E (chromium én webkit) + build:site + astro build; AUTO-QA-REPORT-2.md met screenshots uit qa-evidence-2/
+✔ landed: W7.4 Ship: commit + push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd
 ▶ phase:  Fase W7 — Prestatie + oplevering
-→ next:   W7.4 Ship: commit + push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd
+→ next:   W7.5 NEEDS-FLORIS iPad-acceptatie: lopen (stick + tap), jeep, missie vanaf marker, Deep Demo, Reduce-Motion beide standen
 ▤ ledger: WORLD-LEDGER.md
-▷ progress: ~98%
+▷ progress: ~99%
 ```

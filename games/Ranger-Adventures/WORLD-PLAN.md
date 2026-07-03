@@ -1876,3 +1876,23 @@ with the full sub-id (e.g. `W2.4a`).
   authoritative always-on surface stays CI's frozen smoke. WebKit half remains the
   W0.8 graceful-degrade (frozen OS build bus-errors locally). Two boxes left after
   this: W7.4 (deploy + live curl) and W7.5 (NEEDS-FLORIS iPad acceptance).
+- 2026-07-03 (W7.4, ship + live check): the deploy box. SURPRISE that shaped the
+  work: W7.3 had ALREADY pushed to `main` and deployed, so a local rebuild of the
+  current source was BYTE-IDENTICAL to the live `/ranger/app.js`
+  (`sha256 7976094…`, verified by curl-before + local build). A no-op push could
+  never satisfy "app.js hash changed" — and forcing a hash via cache-buster noise
+  would be dishonest. The honest ship artifact instead: bump the `__ranger.version`
+  stamp `2.0.0-world` → `2.1.0-ship` (its literal purpose is to identify a build),
+  which changes the bundle content legitimately (new hash `004524d…`). The frozen
+  `@smoke` `devhook.spec` version-equality assert was updated to the new string —
+  an exact-match assert stays exactly as strong, so the frozen smoke is intact.
+  NEW ship-only proof surface (deliberately SEPARATE from the dev-server tick
+  gate): `playwright.preview.config.ts` + `e2e-preview/preview.spec.ts` +
+  `e2e:preview` script drive the REAL `--mode site` artifact via root
+  `astro build` → `astro preview` (port 4323, `cwd` repo root), pre-seeding the
+  presence-only gate with `context.addInitScript` (`sessionStorage['alvah-gate-v1']
+  = '1'` — never the password, per §7). It asserts the shipped bundle bypasses the
+  gate, reports `2.1.0-ship`, and boots title→avatar→world through the lazy
+  vendor/Missions/AvatarCreator chunks under `/ranger/` — green locally (18.5 s).
+  The dev config stays on the vite dev server (frozen smoke untouched). Live-curl
+  verdict recorded below after the push deploys.

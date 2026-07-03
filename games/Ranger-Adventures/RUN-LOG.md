@@ -1552,3 +1552,14 @@ Baseline 7,615 → 7,595 (−20, prep preview gen). >> ~35 cr needed for W3.1. N
 ▤ ledger: WORLD-LEDGER.md
 ▷ progress: ~98%
 ```
+
+---
+**2026-07-03 00:48:25Z** · ticked: - [x] W7.4 Ship: commit + push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd
+
+```
+✔ landed: W7.4 Ship: commit + push; E2E tegen astro preview met vooraf gezette sessionStorage gate-sleutel; curl 200 + app.js hash gewijzigd
+▶ phase:  Fase W7 — Prestatie + oplevering
+→ next:   W7.5 NEEDS-FLORIS iPad-acceptatie: lopen (stick + tap), jeep, missie vanaf marker, Deep Demo, Reduce-Motion beide standen
+▤ ledger: WORLD-LEDGER.md
+▷ progress: ~99%
+```

@@ -120,7 +120,10 @@ export interface RangerDevHook {
   quality(): { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null;
 }
 
-const VERSION = '2.0.0-world';
+// Bumped at the W7.4 ship box: stamps the shipped world-first release so the
+// deployed bundle is identifiable (the preview + live E2E assert this exact
+// value, proving the site served the freshly-built app.js, not a stale cache).
+const VERSION = '2.1.0-ship';
 
 const state = {
   screen: 'title' as Screen,
