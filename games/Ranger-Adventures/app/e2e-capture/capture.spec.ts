@@ -280,8 +280,20 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await snap(page, 'board-open', 'Missiebord', 'Missiebord open — layout, leesbaarheid, tap-doelen.');
     });
     await scene(page, 'mission-3d', async () => {
-      await press(page, isPad, page.locator('.mission-card').first());
-      await press(page, isPad, page.getByRole('button', { name: 'Ga op pad' }));
+      // BOUNDED waits (P0.3/F-34a). `showMissionBoard` renders `.mission-board`
+      // and its `.mission-card`s together in one node, so a card that is not
+      // actionable within a short window is itself a finding — NOT a reason to
+      // spend the whole 30-min test budget on one unbounded click and starve
+      // the reduce-motion group that runs after this one. Run A's stall was
+      // exactly this: an unbounded `.mission-card` click hung 1_800_000 ms and
+      // RM captured nothing. A bounded wait turns that into a quick GAP (caught
+      // by `scene`), and the flow reaches reduce-motion.
+      const firstCard = page.locator('.mission-card').first();
+      await firstCard.waitFor({ state: 'visible', timeout: 15_000 });
+      await press(page, isPad, firstCard, 15_000);
+      const go = page.getByRole('button', { name: 'Ga op pad' });
+      await go.waitFor({ state: 'visible', timeout: 15_000 });
+      await press(page, isPad, go, 15_000);
       await waitFor(page, (r) => r.missionView === '3d', 25_000);
       await settle(page, 1000);
       await snap(page, 'mission-3d', 'Missie', 'Missie speelt 3D in-place — hoe ziet een echte opdracht eruit?');
@@ -311,9 +323,16 @@ function attachSummary(testInfo: TestInfo, shots: Annotation[]): void {
 function isCrash(e: unknown): boolean {
   return /been closed|is closed|has crashed|Target crashed|Target page|Target closed/i.test(String(e));
 }
-/** Tap on the iPad (genuine touch), click on the laptop. */
-async function press(page: Page, isPad: boolean, locator: ReturnType<Page['locator']>): Promise<void> {
-  if (isPad) await locator.tap(); else await locator.click();
+/** Tap on the iPad (genuine touch), click on the laptop. Pass `timeout` to BOUND
+ *  the action: an unbounded press auto-waits for actionability up to the WHOLE
+ *  30-min test timeout if its target never becomes actionable — which is exactly
+ *  what ate Run A's reduce-motion capture (P0.3/F-34a: the `.mission-card` click
+ *  hung 30 min and every group after it, incl. reduce-motion, got nothing). */
+async function press(
+  page: Page, isPad: boolean, locator: ReturnType<Page['locator']>, timeout?: number,
+): Promise<void> {
+  const opts = timeout != null ? { timeout } : undefined;
+  if (isPad) await locator.tap(opts); else await locator.click(opts);
 }
 /** Silent boot into the world (groups 2–4 don't re-snap title/avatar). Mirrors
  *  main.ts:90 (F-34a): after "Begin" a true first run mounts the avatar-maker,

@@ -51,7 +51,7 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.22790000003576277
+        "time": 0.2943999999761581
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -66,14 +66,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -1.1731200000286104
+        "z": -0.6146399999141693
       },
       "cameraYaw": 0,
-      "drawCalls": 55,
+      "drawCalls": 58,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.21063311082124758
+        "time": 0.8613998330831529
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -88,14 +88,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -5.220480000114441
+        "z": -5.5668
       },
       "cameraYaw": 0,
-      "drawCalls": 29,
+      "drawCalls": 24,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.8303663885593421
+        "time": 0.7914663885235789
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -110,14 +110,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -8.405280000114441
+        "z": -8.751359999942778
       },
       "cameraYaw": 0,
-      "drawCalls": 18,
+      "drawCalls": 17,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.024032943964005016
+        "time": 1.0516996662020686
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -132,14 +132,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -11.10096000008583
+        "z": -11.282879999971387
       },
       "cameraYaw": 0,
       "drawCalls": 16,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.08056622165441563
+        "time": 1.039832943916321
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -154,14 +154,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -13.83912000002861
+        "z": -13.933679999971385
       },
       "cameraYaw": 0,
       "drawCalls": 14,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.15479949933290527
+        "time": 0.010999499320984096
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -176,14 +176,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -15.639119999885557
+        "z": -15.653519999885553
       },
-      "cameraYaw": 0.8978671804958314,
-      "drawCalls": 27,
+      "cameraYaw": 0.8519999276785191,
+      "drawCalls": 25,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.2776995708942417
+        "time": 0.053299570858478584
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -198,14 +198,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -15.639119999885557
+        "z": -15.653519999885553
       },
-      "cameraYaw": 3.141592653377838,
+      "cameraYaw": 3.141592648944247,
       "drawCalls": 46,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.06439932054281255
+        "time": 0.12909935623407337
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -220,14 +220,14 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -15.639119999885557
+        "z": -15.653519999885553
       },
-      "cameraYaw": 3.1415926535897682,
+      "cameraYaw": 3.141592653589054,
       "drawCalls": 46,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.23989923709630984
+        "time": 0.21579927283525435
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -241,15 +241,15 @@
       "file": "laptop/12-camera-orbit.png",
       "screen": "world",
       "pos": {
-        "x": -1.453634823226724e-14,
-        "z": -15.2942560536841
+        "x": -2.7831918386409036e-13,
+        "z": -15.310795160942025
       },
-      "cameraYaw": 3.1415926535897505,
+      "cameraYaw": 3.1415926535889813,
       "drawCalls": 46,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.05709883177280445
+        "time": 0.01579885560274097
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -263,15 +263,15 @@
       "file": "laptop/13-pause-hub.png",
       "screen": "world",
       "pos": {
-        "x": -1.453634823226724e-14,
-        "z": -15.2942560536841
+        "x": -2.7831918386409036e-13,
+        "z": -15.310795160942025
       },
-      "cameraYaw": 3.1415926535897505,
+      "cameraYaw": 3.1415926535889813,
       "drawCalls": 46,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.05409866487979886
+        "time": 0.2440987005829808
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -285,15 +285,15 @@
       "file": "laptop/14-jeep-near.png",
       "screen": "world",
       "pos": {
-        "x": 16.17189867600577,
-        "z": 11.63624972694835
+        "x": 15.460148146953646,
+        "z": 11.97842922177295
       },
-      "cameraYaw": -1.6315521256435872,
-      "drawCalls": 33,
+      "cameraYaw": -2.151518804109836,
+      "drawCalls": 30,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.3993978304266928
+        "time": 0.8384322763681407
       },
       "veh": null,
       "version": "2.1.0-ship"
@@ -310,12 +310,12 @@
         "x": 16,
         "z": 14
       },
-      "cameraYaw": 0.9782935430345656,
-      "drawCalls": 66,
+      "cameraYaw": 0.8490922699080947,
+      "drawCalls": 71,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.04319821190834072
+        "time": 0.2256990106105803
       },
       "veh": {
         "heading": -2.289626326416521,
@@ -333,18 +333,18 @@
       "file": "laptop/16-jeep-drive-1.png",
       "screen": "world",
       "pos": {
-        "x": 11.930124819028197,
-        "z": 12.011568205087105
+        "x": 10.953818963329232,
+        "z": 12.123813755568186
       },
-      "cameraYaw": 1.300922612022755,
+      "cameraYaw": 1.491732814699466,
       "drawCalls": 65,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.28919808077812215
+        "time": 0.18209886753559112
       },
       "veh": {
-        "heading": -1.7928979547382493,
+        "heading": -1.5603163923007157,
         "speed": 4.242640687119285,
         "inVehicle": true
       },
@@ -359,18 +359,18 @@
       "file": "laptop/17-jeep-drive-2.png",
       "screen": "world",
       "pos": {
-        "x": 6.3696381723084645,
-        "z": 17.75081381386643
+        "x": 6.677314589183938,
+        "z": 18.44038725714715
       },
-      "cameraYaw": 3.0239778755753015,
-      "drawCalls": 15,
+      "cameraYaw": -3.12006495088629,
+      "drawCalls": 17,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.022297985374927776
+        "time": 0.10039878410100933
       },
       "veh": {
-        "heading": 0.017097415170233887,
+        "heading": 0.15226794747196948,
         "speed": 4.242640687119285,
         "inVehicle": true
       },
@@ -385,18 +385,18 @@
       "file": "laptop/18-jeep-drive-3.png",
       "screen": "world",
       "pos": {
-        "x": 11.5860725525834,
-        "z": 22.19666076992664
+        "x": 12.238275522344997,
+        "z": 22.191978428884177
       },
-      "cameraYaw": -1.7525637428039467,
+      "cameraYaw": -1.6657672041495992,
       "drawCalls": 31,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.295297925770283
+        "time": 0.022698712587356562
       },
       "veh": {
-        "heading": 1.5215378028227322,
+        "heading": 1.613687958567195,
         "speed": 4.242640687119285,
         "inVehicle": true
       },
@@ -411,21 +411,106 @@
       "file": "laptop/19-jeep-drive-4.png",
       "screen": "world",
       "pos": {
-        "x": 14.349259912616425,
-        "z": 16.22070510650018
+        "x": 15.554673058548891,
+        "z": 14.704025822760244
       },
-      "cameraYaw": 0.2351127266448536,
-      "drawCalls": 90,
+      "cameraYaw": 0.33116731657946463,
+      "drawCalls": 96,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.19409783041477208
+        "time": 0.22729862910509113
       },
       "veh": {
-        "heading": -2.811051022036777,
+        "heading": -2.7139794031357143,
         "speed": 4.242640687119285,
         "inVehicle": true
       },
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "board-affordance",
+      "platform": "laptop",
+      "group": "Missiebord",
+      "note": "Bij het bord — is de \"open\"-affordance leesbaar/groot genoeg?",
+      "ok": true,
+      "file": "laptop/20-board-affordance.png",
+      "screen": "world",
+      "pos": {
+        "x": 2.4601442054078126,
+        "z": 1.3288781469206534
+      },
+      "cameraYaw": -2.4307956652889935,
+      "drawCalls": 38,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.2128981760740276
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "board-open",
+      "platform": "laptop",
+      "group": "Missiebord",
+      "note": "Missiebord open — layout, leesbaarheid, tap-doelen.",
+      "ok": true,
+      "file": "laptop/21-board-open.png",
+      "screen": "world",
+      "pos": {
+        "x": 2.4601442054078126,
+        "z": 1.3288781469206534
+      },
+      "cameraYaw": -1.5015125583823767,
+      "drawCalls": 72,
+      "missionView": null,
+      "clip": {
+        "name": "idle",
+        "time": 0.2402978899478907
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "mission-3d",
+      "platform": "laptop",
+      "group": "Missie",
+      "note": "Missie speelt 3D in-place — hoe ziet een echte opdracht eruit?",
+      "ok": true,
+      "file": "laptop/22-mission-3d.png",
+      "screen": "mission",
+      "pos": {
+        "x": 2.4601442054078126,
+        "z": 1.3288781469206534
+      },
+      "cameraYaw": -1.5015125583821014,
+      "drawCalls": 57,
+      "missionView": "3d",
+      "clip": {
+        "name": "idle",
+        "time": 0.11469736546277981
+      },
+      "veh": null,
+      "version": "2.1.0-ship"
+    },
+    {
+      "name": "reduce-motion-world",
+      "platform": "laptop",
+      "group": "Reduce-Motion",
+      "note": "Verminder-beweging AAN — ziet de wereld er nog goed uit of plat/kapot?",
+      "ok": true,
+      "file": "laptop/23-reduce-motion-world.png",
+      "screen": "world",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "cameraYaw": 0,
+      "drawCalls": 69,
+      "missionView": null,
+      "clip": null,
+      "veh": null,
       "version": "2.1.0-ship"
     }
   ]
