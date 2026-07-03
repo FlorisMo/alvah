@@ -23,12 +23,14 @@
 #   • DEMO boxes (`- [ ] DEMO · …`)    → Floris-only (feel / audio / real-device /
 #     iPad); the loop never spends a sitting on them.
 #
-# USAGE / CREDIT STOP GATE (VISION §12, run-C delta 5): before EVERY iteration the
-# supervisor runs `node app/scripts/usage-guard.mjs`. It prints GO / STOP and gates
-# on (a) a weekly-Claude-usage PROXY (weekly % is not programmatically readable) +
-# a live usage-limit signal in this log + a wall-clock backstop, and (b) — for
-# asset-gen boxes — the live Meshy credit balance vs a reserve. On STOP the loop
-# pauses cleanly with a NEEDS-FLORIS status; re-launching resumes.
+# USAGE / CREDIT STOP (honest — Floris 2026-07-03): the weekly Claude usage % is
+# NOT programmatically measurable, so Run C does NOT fake a "3% weekly" number. It
+# RUNS UNTIL IT ACTUALLY HITS THE LIMIT and stops gracefully: after each sitting
+# the supervisor scans THAT sitting's own output for a real usage-limit break and
+# pauses cleanly (re-launch after the weekly window resets to continue). The
+# pre-flight `node app/scripts/usage-guard.mjs` now enforces only what is REAL —
+# the live Meshy credit balance vs a reserve (asset boxes) and an optional
+# per-session wall-clock. Every stop is a clean NEEDS-FLORIS pause; nothing lost.
 #
 # COMMIT CADENCE (run-C delta, VISION §10): commit + push EVERY step (finer than
 # Run B's per-phase) so any drift is bisectable — the supervisor commits whenever
@@ -71,11 +73,10 @@ export RUN_LEDGER="runs/run-4-experience/RUN-C-LEDGER.md"
 # Re-enable iPad auto-capture with CAPTURE_PROJECTS="laptop,ipad" once F-21 is fixed.
 export CAPTURE_PROJECTS="${CAPTURE_PROJECTS:-laptop}"
 
-# usage-guard inputs: the per-launch wall-clock start + this log to scan for a
-# live Claude usage-limit signal. (State + audit files default under app/logs and
-# this run dir; see usage-guard.mjs for every knob.)
+# usage-guard input: the per-launch wall-clock start (for the optional session
+# cap). The weekly-limit stop is the supervisor's per-sitting break-detection
+# below, not the guard. See usage-guard.mjs for every knob.
 export RUNC_LOOP_START_EPOCH="$(date +%s)"
-export RUNC_LOOP_LOG="$ROOT/$LOG"
 
 # First unchecked WORK/DIRECTION/GATE box. Skips Floris-only DEMO + parked
 # DEFERRED boxes FIRST, then takes the first survivor, so a skipped box mid-list
@@ -89,6 +90,25 @@ ticks_done() { grep -c -E '^[[:space:]]*-[[:space:]]*\[[xX]\]' "$LEDGER" 2>/dev/
 if [ ! -f "$LEDGER" ]; then
   echo "✗ no RUN-C-LEDGER.md at $LEDGER." | tee -a "$LOG"; exit 1
 fi
+
+# ── PREFLIGHT: only after Run B is finished, and only one Run C at a time ─────
+# Run B and Run C share the audit-evidence screenshot dir + the git repo, so they
+# must never run at once. (Override with RUNC_SKIP_PREFLIGHT=1 if you know better.)
+if [ -z "${RUNC_SKIP_PREFLIGHT:-}" ]; then
+  if pgrep -f 'build-run-loop\.sh' >/dev/null 2>&1; then
+    echo "✗ Run B (build-run-loop.sh) is STILL RUNNING — Run C must not start until it finishes (shared screenshots + git). Wait for BUILD-COMPLETE, or set RUNC_SKIP_PREFLIGHT=1 to override." | tee -a "$LOG"; exit 1
+  fi
+  BLEDGER="games/Ranger-Adventures/runs/run-3-ux-polish/BUILD-LEDGER.md"
+  if [ -f "$BLEDGER" ] && grep -E '^[[:space:]]*-[[:space:]]*\[ \]' "$BLEDGER" | grep -vqE 'DEMO ·|DEFERRED'; then
+    echo "✗ Run B still has unchecked build boxes ($BLEDGER) — Run C waits until Run B is done (or RUNC_SKIP_PREFLIGHT=1)." | tee -a "$LOG"; exit 1
+  fi
+fi
+# Single-instance lock (atomic mkdir; auto-released on exit) — no double Run C.
+LOCK="$DIR/.run-c.lock"
+if ! mkdir "$LOCK" 2>/dev/null; then
+  echo "✗ another Run C appears to be running (lock exists: $LOCK). If it is not, remove it: rmdir $LOCK" | tee -a "$LOG"; exit 1
+fi
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 # ── CAPTURE OWNERSHIP (the run-2 stall fix — carried verbatim) ───────────────
 # The supervisor — NOT the model sittings — runs `npm run capture`. A `claude -p`
@@ -196,6 +216,7 @@ for i in $(seq 1 "$MAX_RUNS"); do
 
   ticks_before="$(ticks_done)"
   before="$(md5 -q "$LEDGER")"
+  log_off="$(wc -c < "$LOG" 2>/dev/null | tr -d ' ' || echo 0)"; [ -z "$log_off" ] && log_off=0
 
   case "$box" in
     *DIRECTION*)
@@ -214,6 +235,17 @@ for i in $(seq 1 "$MAX_RUNS"); do
 
   after="$(md5 -q "$LEDGER")"
   ticks_after="$(ticks_done)"
+
+  # ── "ACCEPT THE BREAK": stop cleanly on a REAL Claude usage-limit hit ────────
+  # We cannot predict the weekly limit, so we detect it in THIS sitting's own
+  # output and pause gracefully. Nothing is lost; re-launch after the weekly
+  # window resets and it continues from the next box.
+  sitting_out="$(tail -c "+$((log_off + 1))" "$LOG" 2>/dev/null)"
+  if printf '%s' "$sitting_out" | grep -qiE 'usage limit reached|weekly limit|claude usage limit|limit will reset|resets? (at|on)|rate.?limit(ed|ing)?|429 too many|too many requests'; then
+    echo "⛔ Hit the Claude usage limit — pausing (NEEDS-FLORIS). Nothing lost; re-launch after your weekly window resets to continue from the next box." | tee -a "$LOG"
+    (cd "$APP" && node scripts/ranger-run.mjs status --blocker="Run C paused: hit the Claude usage limit. Re-launch after the weekly window resets to continue.") >> "$LOG" 2>&1
+    break
+  fi
 
   # COMMIT EVERY STEP (VISION §10): the ledger advanced (a box ticked, re-opened,
   # or a new cohesion box appended) → commit + push that step so drift is bisectable.

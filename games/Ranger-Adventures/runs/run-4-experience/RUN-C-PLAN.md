@@ -123,14 +123,17 @@ upgraded model clears the SAME bar as any other change before it is accepted:
 6. **Log the credit spend** per model so "wisely spread" is auditable after the
    run.
 
-**Usage / credit STOP gate.** Before every iteration the supervisor runs
-`node app/scripts/usage-guard.mjs`. It stops the run gracefully (a NEEDS-FLORIS
-pause, never a hard crash) when it detects the weekly Claude usage limit
-approaching (an honest proxy — the real weekly % is not programmatically
-readable — plus a live usage-limit signal in the loop log and a wall-clock
-backstop), and it stops **new-asset** work when the live Meshy balance drops
-below the reserve. This layers on top of `meshy-gen`'s reactive 402 catch and
-`ranger-run.mjs`'s retry-then-pause — defence in depth. Re-launching resumes.
+**Usage / credit STOP (honest — Floris 2026-07-03).** The weekly Claude usage %
+is **not** programmatically measurable, so Run C does **not** fake a "3% weekly"
+number. Instead it **runs until it actually hits the limit**: after each sitting
+the supervisor scans that sitting's own output for a real usage-limit break and
+pauses gracefully (a NEEDS-FLORIS note; re-launch after the weekly window resets
+and it continues from the next box — nothing lost). The pre-flight
+`node app/scripts/usage-guard.mjs` enforces only what is **real**: the live Meshy
+credit balance vs a reserve for **asset** boxes (layered on `meshy-gen`'s
+reactive 402), and an optional per-session wall-clock. A pre-flight **interlock**
+also refuses to start Run C while Run B is still running (shared screenshots +
+git), and a single-instance lock blocks a double launch.
 
 ## 4. Frozen contracts — STILL inviolable (carried verbatim from Run A/B, VISION §11)
 

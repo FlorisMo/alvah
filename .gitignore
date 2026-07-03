@@ -32,3 +32,8 @@ games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence/index.html
 # the frames F-01..F-34 cite remain reproducible without bloating git.
 games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence-baseline-run-a/*/
 games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence-baseline-run-a/index.html
+
+# Run C (run-4-experience) runtime artifacts — logs + single-instance lock
+games/Ranger-Adventures/runs/run-4-experience/RUN-C-LOOP.log
+games/Ranger-Adventures/runs/run-4-experience/RUN-C-USAGE-GUARD.log
+games/Ranger-Adventures/runs/run-4-experience/.run-c.lock

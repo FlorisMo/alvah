@@ -5,9 +5,10 @@ director" AI writes the look-and-feel plan first, then an Opus "builder" AI work
 down the list — unifying the art, making the animals realistic, making progress
 *felt*, and weaving the loose pieces into one story. It checks its own screenshot
 every step, and pauses at every phase so the art director re-checks the pictures
-before anything counts as done. It **stops itself** near your weekly Claude limit
-and when Meshy credits run low, so it never hard-blocks or overspends. Nothing is
-"done" on feel/comfort/sound until **you** accept it on the iPad.
+before anything counts as done. It **runs until it hits your weekly Claude limit,
+then pauses cleanly** (re-launch after it resets to continue), and it pauses new
+animal-making when Meshy credits run low — so nothing is lost or overspent.
+Nothing is "done" on feel/comfort/sound until **you** accept it on the iPad.
 
 > **START THIS ONLY AFTER RUN B HAS FINISHED.** Run C reuses the same screenshot
 > folder as Run B, so let Run B fully complete (its log prints `BUILD-COMPLETE`)
@@ -89,10 +90,12 @@ that moves the checklist is committed and pushed, so nothing is ever lost.
 **It also pauses itself, on purpose, in three cases** (each writes a
 "NEEDS-FLORIS" note in `RUN-STATUS.md`):
 
-1. **Near your weekly Claude limit.** It can't read your exact remaining %
-   (Anthropic doesn't expose that), so it uses an honest safety estimate plus a
-   live "limit reached" signal and an ~8-hour clock. It stops *before* hitting a
-   wall. Re-launch after your weekly window resets and it continues.
+1. **You hit your weekly Claude limit.** Nobody can read your exact remaining %
+   (Anthropic doesn't expose it), so instead of guessing, Run C simply **runs
+   until it hits the limit and then stops cleanly** the moment it does — nothing
+   is lost. Re-launch after your weekly window resets and it continues from the
+   next item. (There's also an optional ~8-hour "one session" cap you can change
+   or switch off.)
 2. **Low Meshy credits.** Before making a new 3D animal it checks your Meshy
    balance; if it's below a small reserve it pauses the animal work (the other
    work can still continue on a re-launch). Top up credits, then re-launch.

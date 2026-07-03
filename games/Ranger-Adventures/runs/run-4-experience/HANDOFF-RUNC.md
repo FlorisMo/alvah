@@ -10,7 +10,7 @@ You are a fresh thread with **no prior context**. Read this whole message first 
 
 ## The one line on Run C
 
-> **Run C = the Fable-directed "make it beautiful and whole" run.** Fable is the **art director** (proposes the look/story and judges it); Opus is the **builder** (writes the code); reasoning effort **xhigh**; **screenshot-in-the-loop** (every change is judged on a fresh rendered picture, not just "it compiles"); the mandate is **deepen & unify the existing game toward the locked VISION** (no new mini-games, no rebuild); animals are made **realistic** using the full **~7,600 Meshy credits spread wisely** (flagships + raven + player ranger first); there are **NO live checkpoints** — the written direction doc + hard gates carry the weight; and it **stops itself near ~3% of the weekly Claude limit and when Meshy credits run low**, pausing cleanly rather than hard-blocking or overspending.
+> **Run C = the Fable-directed "make it beautiful and whole" run.** Fable is the **art director** (proposes the look/story and judges it); Opus is the **builder** (writes the code); reasoning effort **xhigh**; **screenshot-in-the-loop** (every change is judged on a fresh rendered picture, not just "it compiles"); the mandate is **deepen & unify the existing game toward the locked VISION** (no new mini-games, no rebuild); animals are made **realistic** using the full **~7,600 Meshy credits spread wisely** (flagships + raven + player ranger first); there are **NO live checkpoints** — the written direction doc + hard gates carry the weight; and it **runs until it actually hits the weekly Claude limit, then pauses cleanly** (re-launch after the window resets), plus it pauses new-asset work when Meshy credits run low — never a hard block or overspend.
 
 It is a deliberate mirror of the **proven** Run B machinery: `games/Ranger-Adventures/runs/run-3-ux-polish/build-run-loop.sh` (the supervisor pattern) and `games/Ranger-Adventures/app/scripts/ranger-run.mjs` (tick/commit/status, mechanically gated on build + e2e:smoke). Run C swaps the roles (Fable directs, Opus builds), adds a direction-doc-first phase, commits every step, and adds the usage/credit stop gate.
 
@@ -23,7 +23,7 @@ It is a deliberate mirror of the **proven** Run B machinery: `games/Ranger-Adven
 - `games/Ranger-Adventures/runs/run-4-experience/RUN-C-LEDGER.md` — the open-ended cohesion checklist (39 boxes, VISION §13 priority order: P0 direction → P1 art → P2 realistic animals → P3 felt progress → P4 weave orphan systems → P5 deepen + final gate → DEMO section that only Floris can sign off).
 - `games/Ranger-Adventures/runs/run-4-experience/run-c-loop.sh` — the supervisor loop you will (eventually) launch.
 - `games/Ranger-Adventures/runs/run-4-experience/START-HERE-RUNC.md` — the plain-language card written for Floris. When he asks how something works, this is your reference to paraphrase from.
-- `games/Ranger-Adventures/app/scripts/usage-guard.mjs` — the STOP/GO gate the loop runs before every iteration (weekly-usage proxy + live signal + wall-clock, and the real Meshy balance for asset boxes).
+- `games/Ranger-Adventures/app/scripts/usage-guard.mjs` — the pre-flight STOP/GO gate: enforces only what's REAL (the live Meshy balance vs a reserve for asset boxes + an optional session wall-clock). The weekly-limit stop is NOT here — the loop detects a real usage-limit break in each sitting's output and pauses (see the honesty section).
 - Reference (the proven originals Run C mirrors): `games/Ranger-Adventures/runs/run-3-ux-polish/build-run-loop.sh` and `games/Ranger-Adventures/app/scripts/ranger-run.mjs`.
 
 ---
@@ -40,7 +40,7 @@ At handoff time, Run B (the previous run) is still running headless in the backg
 - **Do NOT touch** anything under `games/Ranger-Adventures/app/src/**` or `app/e2e/**`, and never weaken `app/e2e/**`, the `@smoke` suite, or `playwright.config.ts` (the frozen regression guard).
 - **Do NOT git commit or push.** Run B has uncommitted work in the tree; a `git add -A` would sweep it up. The orchestrating thread commits at the end.
 - **NEVER print, cat, or echo any `.env.local`.** It holds the Meshy API key. You may say the key "lives in `app/.env.local`" and reference the masked 4-char prefix the guard prints — never the value.
-- Read-only shell only (`ls`, `grep`, `cat` of non-secret files, `bash -n`, `node --check`, `pgrep`). One safe exception: `node scripts/usage-guard.mjs --status` from `app/` is read-only (it prints a masked balance and always GOes, never counts a sitting) — you may run it to sanity-check the guard, but do not run a bare `usage-guard.mjs` (that counts a sitting) or `--reset` (that mutates state).
+- Read-only shell only (`ls`, `grep`, `cat` of non-secret files, `bash -n`, `node --check`, `pgrep`). Safe to run: `node scripts/usage-guard.mjs --status` from `app/` (read-only — prints a masked Meshy balance + `GO`, changes nothing). The guard no longer counts sittings and has no `--reset`.
 - **You MAY edit only Run C's own files** if a fix is needed and Floris approves: `run-c-loop.sh`, `usage-guard.mjs`, `RUN-C-LEDGER.md`, `RUN-C-PLAN.md`, `START-HERE-RUNC.md`, and other files under `runs/run-4-experience/`. These are Run C-only and are **not** read by the live Run B, so editing them is safe. Everything else is off-limits while Run B runs.
 
 ---
@@ -62,9 +62,9 @@ Run these to confirm the setup. Group A is the load-bearing part — the audit f
 
 These fail **safe** (they over-stop or leave WIP, they don't overspend or crash), but each one bites the "run long, unattended, overnight" goal. Re-check each; if still present, either fix it in the Run C-only file (with Floris's OK) or tell Floris plainly and treat it as a launch caveat. **Do not launch with an unaddressed blocker.**
 
-1. **BLOCKER — No code interlock against Run B running.** `run-c-loop.sh` has only a prose "PRE-REQ: Run B is finished" comment (near line 37); there is no preflight that actually checks Run B's process is gone / `BUILD-LEDGER` is clear, and no pidfile/flock to stop a double-launch of Run C. **Check:** `grep -n 'pgrep\|build-run-loop\|BUILD-COMPLETE\|flock\|pidfile' games/Ranger-Adventures/runs/run-4-experience/run-c-loop.sh`. If nothing guards it, **you are the interlock** — you must manually confirm Run B is finished (recipe below) before launch, or add a preflight to `run-c-loop.sh` first. This is the single most important thing to get right.
+1. **RESOLVED (2026-07-03) — Run B interlock now enforced in code.** `run-c-loop.sh` has a PREFLIGHT that refuses to start if `build-run-loop.sh` is running OR `BUILD-LEDGER.md` still has unchecked non-DEMO/DEFERRED boxes, plus a single-instance `mkdir` lock (`.run-c.lock`) against a double launch. **Confirm:** `grep -n 'PREFLIGHT\|pgrep\|RUNC_SKIP_PREFLIGHT\|run-c.lock' games/Ranger-Adventures/runs/run-4-experience/run-c-loop.sh` shows the guard. Still confirm Run B is done yourself before saying go (belt and suspenders; recipe below). Override exists (`RUNC_SKIP_PREFLIGHT=1`) but you should never need it.
 
-2. **MAJOR — Resume after a weekly-limit pause is fragile.** The guard's log-scan (`usage-guard.mjs`, `loopSignal()`, ~lines 156–169) reads the last ~4000 bytes of the append-only loop log with **no launch-boundary awareness**. A stale "usage limit reached" phrase from the paused session can sit in that tail and re-fire the STOP on the next relaunch — so after the weekly window resets, the run may refuse to auto-resume. **Check:** does `loopSignal()` slice from a launch marker/offset, or just `buf.slice(-4000)`? If it's the naive tail: **workaround** when relaunching after a weekly pause — first clear the log (`: > games/Ranger-Adventures/runs/run-4-experience/RUN-C-LOOP.log`) or set `RUNC_DISABLE_LOGSCAN=1` for that first relaunch. Real fix: scan only bytes written since the current `=== RUN C ... started ===` marker, or rotate the log per launch. Tell Floris this so a "stuck on restart" reads as expected, not broken.
+2. **RESOLVED (2026-07-03) — the fragile log-scan is gone.** The old proxy's guard-side log-scan was removed. The weekly stop is now **per-sitting break-detection in the loop**: after each sitting the supervisor scans only *that sitting's own fresh output* (from a byte offset captured before the sitting) for a real usage-limit phrase, so a stale phrase from a paused session can NOT re-fire on relaunch. No `RUNC_DISABLE_LOGSCAN` needed. **Confirm:** `grep -n 'ACCEPT THE BREAK\|log_off\|usage limit' games/Ranger-Adventures/runs/run-4-experience/run-c-loop.sh`.
 
 3. **MAJOR — A low-Meshy STOP strands the credit-free back half.** In `run-c-loop.sh` (~lines 189–195) **any** guard STOP `break`s the whole loop. So if credits run low on the first P2 asset box, the loop stops and P3/P4/P5 (felt-progress, cohesion, reading — mostly credit-free) never run on relaunch. **Check:** does an `--asset` STOP defer/skip the asset box and continue, or break everything? If it breaks: **mitigation without code** — when it pauses on low Meshy, top up credits then relaunch; or Floris can temporarily mark the P2 asset boxes `DEFERRED` so the loop proceeds to P3+. Real fix: on an `--asset` STOP, defer that box and continue; only a Claude/weekly/wall STOP should halt the whole run.
 
@@ -85,15 +85,33 @@ These fail **safe** (they over-stop or leave WIP, they don't overspend or crash)
 
 ---
 
-## Honesty: is the "stops itself at ~3% weekly" a real measurement?
+## Honesty: how the weekly-limit stop actually works (no fake number)
 
-**No — it is a documented PROXY, not a real reading of your weekly Claude usage.** Be straight with Floris about this. Research (Claude Code docs, the API, `claude --help`) confirms there is **no** programmatic way to read your weekly remaining %: the rate-limit headers are minute-level only, a `claude usage` command does not exist, and the Admin usage API needs a key a personal Max plan doesn't have. So the weekly gate is an honest **three-layer estimate**:
+**Run C does NOT predict your weekly usage — because it's not measurable.**
+Research (Claude Code docs, the API, `claude --help`) confirms there is no
+programmatic way to read your weekly remaining %: rate-limit headers are
+minute-level only, `claude usage` doesn't exist, and the Admin usage API needs a
+key a personal Max plan lacks. An earlier draft faked a "3% weekly" number from a
+sittings count; **that was removed (2026-07-03, Floris's call) in favour of
+honesty.** Now it works like this — three layers, all real:
 
-1. **Live signal (real, reactive):** if a sitting actually prints a "usage limit reached"-type phrase into the log, the guard STOPs. This is the truest layer.
-2. **Wall-clock backstop (real):** stops after ~8 hours per launch (`RUNC_TIME_BUDGET_SEC`).
-3. **Sittings budget (proxy, coarse):** counts sittings in a rolling 7-day window (default 400) and stops when ~3% of that budget is left (≈ at 389/400). **The 400 is an arbitrary safety cap, not 3% of measured usage**, and because of the 2× undercount above it is looser than it reads.
+1. **Per-sitting break-detection (the weekly stop):** after each sitting the loop
+   scans *that sitting's own fresh output* for a real usage-limit phrase ("usage
+   limit reached", "limit will reset", rate-limit / 429…). On a hit it pauses
+   cleanly with a NEEDS-FLORIS note. Everything ticked before it is already
+   committed; re-launch after the weekly window resets and it continues from the
+   next box.
+2. **Session wall-clock (real, optional):** an ~8h per-launch cap
+   (`RUNC_TIME_BUDGET_SEC`; set 0 to disable) so an unattended run doesn't go
+   forever if you have huge headroom. Re-launch to continue.
+3. **Meshy credits (real):** the guard queries your live balance and holds a
+   reserve before an asset box spends.
 
-So: "stops near 3% weekly" describes the **intent and margin**, not a precise fraction of your real limit. The load-bearing weekly protection is really the live signal + the 8-hour clock, with the sittings count as a rough cushion. The **Meshy credit** stop, by contrast, **is real** — it queries the live balance and holds a reserve before spending on an asset box. All stops are graceful pauses (a "NEEDS-FLORIS" note), never a hard crash. Tune the proxy to Floris's actual headroom via the `RUNC_*` env vars (lower `RUNC_WEEKLY_SITTINGS_BUDGET` if his Max plan is also used for claude.ai).
+Be straight with Floris about the trade-off: this stops **cleanly when it
+reaches** the limit, not *before* it. So the one in-flight sitting at the moment
+the limit hits can fail and lose its un-ticked work — but that's at most a single
+sitting, and the pause message says exactly what happened. All stops are graceful
+pauses, never a hard crash.
 
 ---
 
