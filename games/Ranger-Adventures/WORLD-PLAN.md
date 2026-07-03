@@ -1894,5 +1894,20 @@ with the full sub-id (e.g. `W2.4a`).
   = '1'` — never the password, per §7). It asserts the shipped bundle bypasses the
   gate, reports `2.1.0-ship`, and boots title→avatar→world through the lazy
   vendor/Missions/AvatarCreator chunks under `/ranger/` — green locally (18.5 s).
-  The dev config stays on the vite dev server (frozen smoke untouched). Live-curl
-  verdict recorded below after the push deploys.
+  The dev config stays on the vite dev server (frozen smoke untouched).
+- 2026-07-03 (W7.4, live-curl verdict): deploy landed after a GitHub Pages
+  INFRA hiccup worth logging. The push's Actions run (28631016474) went
+  changes✓/test✓/build✓ but the `actions/deploy-pages@v4` step failed THREE
+  times in a row with "Deployment failed, try again later." — the deployment
+  artifact uploads and a deployment ID is created, then the Pages backend
+  rejects the status within ~200 ms. NOT our code (build artifact identical each
+  attempt; the prior W7.3 run hit the exact same step). githubstatus.com read
+  "Pages operational" (it lags). A 4th `gh run rerun --failed` (deploy job only,
+  same artifact) SUCCEEDED — a transient Pages incident, ~15 min window. Live
+  proof after CDN propagation: `curl https://alvah.nl/ranger/` → HTTP 200;
+  `/ranger/app.js` → HTTP 200, sha256 `7976094…` (pre-deploy) → `004524d…`
+  (post-deploy), byte-matching the locally built ship bundle; the live JS
+  contains `2.1.0-ship`. All W7.4 acceptance met. LESSON for W7.5/any reship:
+  the Pages deploy step is intermittently flaky right now — `gh run rerun
+  <id> --failed` re-runs just the deploy job against the already-built artifact
+  and clears it, no rebuild needed.
