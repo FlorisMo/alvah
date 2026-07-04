@@ -109,6 +109,16 @@ export class World {
   private readonly CAM_LOOK_H = 1.1;    // aim point above the ranger's feet (~sternum)
   private readonly CAM_PROBE_R = 0.35;  // camera "sphere" radius for the push-in cast
   private readonly CAM_GROUND_CLR = 0.5; // keep the lens this far above the terrain
+  // F-16 laptop dolly zoom: the player-set WALK boom distance (m, horizontal). Starts
+  // at the F-05 default (camOffset.z = 4.6); wheel/trackpad scroll dollies it in/out,
+  // clamped [zoomMinBoom() … CAM_ZOOM_MAX]. placeCamera reads it for the walk boom, so
+  // the existing position-damp gives the damped feel (and a CUT under reduced-motion,
+  // where placeCamera already snaps). The FOV is NEVER touched — a dolly, not a lens
+  // zoom (motion-comfort law). Vehicle/heli/activity own the camera, so a scroll there
+  // is ignored (onWheel returns early).
+  private readonly CAM_ZOOM_MAX = 9.5;   // dolly ceiling (~8–10 m boom, F-16)
+  private readonly CAM_ZOOM_STEP = 0.01; // wheel deltaY → metres of boom change per notch
+  private zoomDist = this.camOffset.z;   // current player-set walk boom (default = F-05 rig)
   // Cached ranger horizontal bounding radius, measured once whenever the mesh is
   // (re)built (measureAvatar). The min-boom clamp is `radius + near-plane` and the
   // avatar fades when the boom gets within ~`radius + 1 m`, so a rig that ever
@@ -441,6 +451,7 @@ export class World {
     void this.loadRealRanger();
 
     canvas.addEventListener('pointerdown', this.onPointer);
+    canvas.addEventListener('wheel', this.onWheel, { passive: false }); // F-16 dolly zoom
     this.input = attachInput(window, { onInteract: () => this.tryInteract() });
   }
 
@@ -767,6 +778,7 @@ export class World {
 
   dispose(): void {
     this.canvas.removeEventListener('pointerdown', this.onPointer);
+    this.canvas.removeEventListener('wheel', this.onWheel); // F-16 dolly zoom
     Sound.engineStop(); // W5.2: never leak the engine loop past teardown
     this.input?.dispose();
     this.input = null;
@@ -1362,10 +1374,20 @@ export class World {
     for (let i = 0; !landmarkInView && i < this.landmarks.length; i++) {
       landmarkInView = ptInFrustum(this.landmarks[i].x, this.landmarks[i].z);
     }
+    // F-16 dolly-zoom read-back: the player-set walk boom clamped to its live bounds,
+    // so a grade proves the wheel respects BOTH clamps straight off the annotation
+    // (`zoom.dist` ∈ [min, max] as an invariant; wheel-in saturates to min, wheel-out
+    // to max). `fov` is the fixed lens — a dolly must never change it, so the assert
+    // reads it constant across the zoom pair. `dist` above (the real 3D boom) still
+    // outranks these if the pixels ever disagree (§4).
+    const zoomMin = this.zoomMinBoom();
+    const zoomDist = Math.max(zoomMin, Math.min(this.CAM_ZOOM_MAX, this.zoomDist));
     return {
       dist, yaw, pitch,
       x: cam.position.x, y: cam.position.y, z: cam.position.z,
       target: this.inVehicle ? 'vehicle' : 'avatar', avatarInView,
+      fov: this.camera.fov,
+      zoom: { dist: zoomDist, min: zoomMin, max: this.CAM_ZOOM_MAX },
       // the applied fade (setAvatarOpacity): 1 = the ranger renders solid. A grade
       // reads this to know whether the F-05 fade rail fired on THIS frame instead
       // of inferring it from murk in the pixels (§4). Steady 1 across the settled
@@ -2470,6 +2492,35 @@ export class World {
     }
   };
 
+  /**
+   * F-16 dolly floor: outside the avatar's own radius + the near plane (the F-05
+   * min-clamp intent — a full zoom-in never buries the lens inside the ranger), and
+   * set just PAST the F-05 fade rail's `far` threshold (`avatarRadius + 1.1`) so the
+   * closest zoom keeps the ranger SOLID (opacity 1) rather than fading him translucent
+   * — a faded ranger at max zoom-in reads as the exact "murk" the F-05 saga chased.
+   * Kept a metre below the ceiling so min < max even if a mis-scaled rig inflates
+   * `avatarRadius`.
+   */
+  private zoomMinBoom(): number {
+    return Math.min(this.avatarRadius + 1.3, this.CAM_ZOOM_MAX - 1);
+  }
+
+  /**
+   * F-16 laptop wheel / trackpad-pinch DOLLY zoom on the walk follow-boom.
+   * Player-initiated + clamped [zoomMinBoom() … CAM_ZOOM_MAX]; NEVER a FOV zoom
+   * (fixed lens is the motion-comfort law). The boom TARGET moves instantly here;
+   * placeCamera then eases the camera toward it (damped ~0.3 s) — or CUTS to it under
+   * reduced-motion (placeCamera snaps then), exactly the "zoom applies as an instant
+   * step" the finding asks for. Ignored while driving/flying/in an activity (those own
+   * the camera). preventDefault stops the page scrolling under the canvas.
+   */
+  private onWheel = (e: WheelEvent): void => {
+    if (this.activityActive || this.inVehicle || this.inHeli) return;
+    e.preventDefault();
+    const next = this.zoomDist + e.deltaY * this.CAM_ZOOM_STEP;
+    this.zoomDist = Math.max(this.zoomMinBoom(), Math.min(this.CAM_ZOOM_MAX, next));
+  };
+
   // ---- per-frame ----
   update(dt: number, t: number): void {
     // the §1e mode, read LIVE each frame from the single policy authority (no restart):
@@ -2789,6 +2840,7 @@ export class World {
     // eye height stays put (a pull-in, never a dip); the min clamp keeps the lens
     // outside the ranger's own radius + near plane.
     if (walk) {
+      dist = this.zoomDist; // F-16: the player-set dolly distance replaces the fixed 4.6 boom
       const frac = this.boomClearFraction(rp.x, rp.z, -s * dist, -c * dist);
       const minFrac = Math.min(1, (this.avatarRadius + this.camera.near + 0.2) / dist);
       dist *= Math.max(minFrac, frac);

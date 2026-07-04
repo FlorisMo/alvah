@@ -51,6 +51,19 @@ export type CamState = {
    *  soft-DOF pixel; a spawn that looked at empty heath would read false. The
    *  screenshot stays the court of appeal (AUDIT-FINDINGS §4). */
   landmarkInView: boolean;
+  /** F-16 laptop dolly zoom: the fixed camera FOV (never changes — a dolly moves the
+   *  boom, never the lens; the motion-comfort law). The zoom assert reads it constant
+   *  across the zoom-in/zoom-out pair to prove no FOV kick. */
+  fov: number;
+  /** F-16 laptop dolly zoom read-back: the player-set WALK boom distance (`dist`, m,
+   *  horizontal) clamped to its live bounds — `min` sits outside the avatar radius +
+   *  near plane AND past the F-05 fade threshold (so a full zoom-in keeps the ranger
+   *  solid, never translucent-murk), `max` the ~9.5 m ceiling. `dist` ∈ [min, max] is
+   *  an invariant, so the wheel assert proves "respects both clamps" straight off the
+   *  annotation: a scroll-in saturates `dist` to `min`, a scroll-out to `max`, while
+   *  the fixed `fov` above stays put. The real 3D boom (`dist` at the top) is what the
+   *  pixels show and outranks this if they ever disagree (§4). */
+  zoom: { dist: number; min: number; max: number };
 };
 
 export interface RangerDevHook {

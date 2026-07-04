@@ -71,7 +71,12 @@ type Annotation = {
   // the live frustum: the world-entry assert that the spawn faces the hub, not the
   // void (true on the world-entry / walk shots once F-09 turns the hub into frame).
   // null on GAPs/boot.
-  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean } | null;
+  // F-16 laptop dolly zoom: `fov` is the fixed lens (constant across the zoom pair — a
+  // dolly never zooms the lens); `zoom` is the player-set walk boom clamped to its live
+  // bounds — `zoom.dist` ∈ [min, max] proves the wheel respects BOTH clamps, saturating
+  // to `min` on scroll-in and `max` on scroll-out, while `cam.dist` (the real 3D boom)
+  // shows the framing visibly differ.
+  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number } } | null;
   // vehicle heading/speed when driving — the DATA signal for the #3 steering
   // finding (heading unchanged across the drive burst while a turn key is held
   // → dead steering). null when not in a vehicle.
@@ -93,7 +98,7 @@ interface Hook {
   clip(): { name: string; time: number } | null;
   avatar(): { height: number } | null;
   groundSpeed(): number | null;
-  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean } | null;
+  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number } } | null;
   board(): { x: number; z: number; near: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; speed: number } | null;
 }
@@ -267,10 +272,14 @@ test('audit capture flow', async ({ context }, testInfo) => {
         if (!box) throw new Error('no canvas');
         const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
         await page.mouse.move(cx, cy);
-        await page.mouse.wheel(0, -800); await settle(page, 400);
-        await snap(page, 'camera-zoom-in', 'Laptop-camera', 'Trackpad/scroll "inzoomen" geprobeerd — komt het beeld dichterbij? (feature afwezig, #4)');
-        await page.mouse.wheel(0, 1400); await settle(page, 400);
-        await snap(page, 'camera-zoom-out', 'Laptop-camera', 'Trackpad/scroll "uitzoomen" geprobeerd — verandert de afstand?');
+        // F-16: a real wheel-in DOLLIES the walk boom toward its floor. −800 · 0.01 =
+        // −8 m from the 4.6 m default → clamps to zoom.min; the frame comes in close.
+        // 700 ms lets the ~0.3 s position-damp all but settle so cam.dist reads clean.
+        await page.mouse.wheel(0, -800); await settle(page, 700);
+        await snap(page, 'camera-zoom-in', 'Laptop-camera', 'Scroll inzoomen — de dolly haalt het beeld dichterbij; cam.zoom.dist op de min-clamp, FOV onveranderd (F-16).');
+        // wheel-out the other way: +1400 · 0.01 = +14 m → clamps to zoom.max, pull-back.
+        await page.mouse.wheel(0, 1400); await settle(page, 700);
+        await snap(page, 'camera-zoom-out', 'Laptop-camera', 'Scroll uitzoomen — de dolly trekt terug naar de max-clamp; cam.dist duidelijk groter, FOV nog steeds vast (F-16).');
         await page.mouse.move(cx, cy); await page.mouse.down();
         for (let i = 1; i <= 12; i++) { await page.mouse.move(cx + i * 18, cy); await page.waitForTimeout(20); }
         await page.mouse.up(); await settle(page, 400);
