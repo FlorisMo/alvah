@@ -695,6 +695,24 @@ test('audit capture flow', async ({ context }, testInfo) => {
     });
   });
 
+  // ══ GROUP 6 — the ven (P1.2). Boot, walk out to the ven-water shore and snap the
+  //    fen. The prior P1.2 grade (2026-07-05) found the ven in ZERO frames — §2.2's
+  //    most distinctive biome (dark still water + reed fringe + moss/peat bank) was
+  //    never on camera, so "each biome reads as real Veluwe ground" was unverifiable.
+  //    The straight line spawn→VEN_CENTER crosses bos, then enters the forced-ven
+  //    shore blob (Biomes.VEN_SHORE_R) around the water, so the walk lands the ranger
+  //    on the reed-fringed bank with the water in frame ahead — the ONE ven frame,
+  //    with the annotation `pos` reading as the ven biome. Own fresh page. ══
+  await runGroup('ven', {}, async (page, stick) => {
+    await bootWorld(page, isPad);
+    await scene(page, 'ven-shore', async () => {
+      await walkToVen(page, isPad, stick);
+      await settle(page, 500);
+      await snap(page, 'ven-shore', 'Ven',
+        'Aan de venrand (P1.2) — donker stil water, rietkraag en mos/veen-oever: leest de ven als echte Veluwegrond? De ranger stopt aan de waterlijn (de ven is onbewaadbaar).');
+    });
+  });
+
   flush();
   attachSummary(testInfo, shots);
 });
@@ -1002,6 +1020,22 @@ async function walkToBoundary(page: Page, isPad: boolean, stick: TouchStick | nu
   const target = async (): Promise<{ x: number; z: number; near: boolean } | null> => {
     const b = await hook(page, (r) => r.boundary());
     return b ? { x: 0, z: -(b.bound + 50), near: b.atRim } : null;
+  };
+  if (isPad) { await joystickWalkTo(page, stick!, target, 400); return; }
+  await keyboardWalkTo(page, target, 400);
+}
+/** P1.2: walk out to the ven-water shore. Steers toward VEN_CENTER (the water basin
+ *  at 46,-19; Biomes.VEN_CENTER) and latches on the reed-fringed bank as the ranger
+ *  nears the waterline — the ven is un-wadeable (World.limits.blocked), so he stops
+ *  on the moss bank with the water ahead. The near-latch (< 22 m from centre) trips
+ *  INSIDE the forced-ven shore blob (VEN_SHORE_R 26), so the annotation `pos` reads
+ *  as the ven biome. Bounded like walkToBoundary — never the 30-min stall (P0.3). */
+async function walkToVen(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
+  const VEN = { x: 46, z: -19 }; // Biomes.VEN_CENTER — the water basin
+  const target = async (): Promise<{ x: number; z: number; near: boolean } | null> => {
+    const p = await hook(page, (r) => r.pos());
+    if (!p) return null;
+    return { x: VEN.x, z: VEN.z, near: Math.hypot(p.x - VEN.x, p.z - VEN.z) < 22 };
   };
   if (isPad) { await joystickWalkTo(page, stick!, target, 400); return; }
   await keyboardWalkTo(page, target, 400);

@@ -50,6 +50,18 @@ const BASIN_SIGMA = 14;
 /** Still-water surface height for the ven plane (sits inside the basin dip). */
 export const WATER_LEVEL = -1.4;
 
+/**
+ * How far the wet ven reaches out from `VEN_CENTER`: the water disc (radius 20) plus
+ * a moss/reed shore ring. `biomeAt` forces `'ven'` inside this radius so the ground
+ * tone, the reed fringe (`scatterReeds` → `candidates('ven')`) and the footstep
+ * surface all AGREE with the water that physically sits here. Without it the compass
+ * warp lands the basin in the stuifzand sector, so the fen renders as pale drift sand
+ * with its reeds scattered off in the dry western ven sector — no frame reads as a
+ * real ven (P1.2 / RUN-C-DIRECTION §2.2: "dark still water, moss-soft banks, reed
+ * clusters"). Kept just past the 20 m water disc so a moss bank rings the water.
+ */
+export const VEN_SHORE_R = 26;
+
 const TWO_PI = Math.PI * 2;
 
 /**
@@ -75,6 +87,11 @@ export function heightAt(x: number, z: number): number {
  */
 export function biomeAt(x: number, z: number): Biome {
   if (x * x + z * z < CLEARING_R * CLEARING_R) return 'heide';
+  // The wet ven is wherever the water basin actually is (VEN_CENTER), not merely where
+  // the compass sector would warp it — force 'ven' over the basin + its shore so the
+  // ground tone, reeds and footstep surface cohere with the water (P1.2, VEN_SHORE_R).
+  const vdx = x - VEN_CENTER.x, vdz = z - VEN_CENTER.z;
+  if (vdx * vdx + vdz * vdz < VEN_SHORE_R * VEN_SHORE_R) return 'ven';
   const warp = 0.6 * Math.sin(x * 0.02) * Math.cos(z * 0.018);
   let u = Math.atan2(z, x) + Math.PI + warp; // → roughly [0, 2π)
   u = ((u % TWO_PI) + TWO_PI) % TWO_PI;      // wrap into [0, 2π)

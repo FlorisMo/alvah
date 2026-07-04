@@ -271,3 +271,26 @@ catch it early at no cost to the run.
   "reads as a different game" (doc §2.1: one shared IBL across all 5 games). Extend
   the unified rig INTO the mission/zoeken scene (this overlaps P1.14's de-vignette)
   before P1.1 can go green.
+- 2026-07-05 · grade (P1.2) FAIL, left open: the per-biome two-tone ground landed
+  (bos reads darker litter/moss, stuifzand paler sand; drawCalls 12–73 <150,
+  pixelRatio ≤2) — but "each biome reads as real Veluwe ground" is NOT demonstrated.
+  Computing `biomeAt` over every captured pos: the fresh set covers heide/bos/
+  stuifzand only — the ven is in ZERO frames (player never reaches VEN_CENTER 46,-19;
+  farthest frame `26-jeep-straight-2` 39,8 = stuifzand), so §2.2's most distinctive
+  biome (dark still water + reeds + golden reflections) is unverifiable. And the
+  heide hub (`03-world-entry`/`04-world-idle`/`29-mission-3d`) still reads as a flat
+  warm-brown slab with no heath signature (two-tone barely visible up close). Extend
+  the capture harness to frame the ven (and deepen the heide read) before P1.2 can
+  go green.
+- 2026-07-05 · grade (P1.2) FAIL again, left open: the harness now reaches the ven —
+  `VEN_SHORE_R=26` forces `biomeAt`→`ven` at `43-ven-shore` (27,-10) and `26-jeep-
+  straight-2` (27.8,-7.6), drawCalls 38/42 (<150) — but the PIXELS still show no ven:
+  both frames render flat warm-brown/tan sand with the Vogelkijkhut prop + a
+  watchtower and ZERO dark water / reeds / moss banks / golden reflections. The player
+  stands ~21 m from VEN_CENTER, just past the 20 m water disc, and the camera faces the
+  hide, not the water — so §2.2's water/reeds/reflection read is STILL undemonstrated
+  (pixels outrank the hook: biome=ven, frame is not a ven). Heide hub `03-world-entry`
+  also still a flat warm-brown slab with no purple-heather signature; bos floor shows no
+  needle/leaf litter. Fixes (builder, not Floris): steer the ven capture camera onto the
+  water disc AND render visible still-water + reed fringe + moss bank there; make the
+  heather mats read on the heide hub before P1.2 can go green.

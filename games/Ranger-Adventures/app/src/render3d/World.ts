@@ -43,6 +43,7 @@ import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from './Way
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, routeVia } from './Paths';
 import {
   mottleRGB, vertexTint, GROUND_TILE_PX, GROUND_TILE_REPEAT, GROUND_BRIGHTEN,
+  BIOME_GROUND_TONES, groundPatch,
 } from './GroundDetail';
 import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
@@ -1001,15 +1002,29 @@ export class World {
     const pos = geo.attributes.position as THREE.BufferAttribute;
     const colors = new Float32Array(pos.count * 3);
     const c = new THREE.Color();
+    const cA = new THREE.Color(), cB = new THREE.Color(); // P1.2 two-tone scratch
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i); // plane is XY before the -90° tilt → world z = y
       pos.setZ(i, this.groundY(x, y));
-      c.set(BIOME_PALETTE[biomeAt(x, y)].ground);
+      const biome = biomeAt(x, y);
       if (detail) {
-        // brighten to offset the mottle map's average shade (parity), then a soft
-        // per-vertex wash blotch; clamp so no channel blows past 1.
+        // P1.2: mix the biome's two naturalistic ground tones by the patch field
+        // so each landschap reads as real Veluwe ground (heather-over-sand heide,
+        // litter+moss bos, pale drift stuifzand, mossy-peat ven) — never a flat
+        // hue. Then brighten to offset the mottle map's average shade (parity) and
+        // add the soft per-vertex wash blotch; clamp so no channel blows past 1.
+        const [hexA, hexB] = BIOME_GROUND_TONES[biome];
+        cA.set(hexA); cB.set(hexB);
+        const t = groundPatch(x, y);
         const m = GROUND_BRIGHTEN * vertexTint(x, y);
-        c.setRGB(Math.min(1, c.r * m), Math.min(1, c.g * m), Math.min(1, c.b * m));
+        c.setRGB(
+          Math.min(1, (cA.r + (cB.r - cA.r) * t) * m),
+          Math.min(1, (cA.g + (cB.g - cA.g) * t) * m),
+          Math.min(1, (cA.b + (cB.b - cA.b) * t) * m),
+        );
+      } else {
+        // `?groundDetail=off` keeps the old flat per-biome slab (the before baseline).
+        c.set(BIOME_PALETTE[biome].ground);
       }
       colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
     }

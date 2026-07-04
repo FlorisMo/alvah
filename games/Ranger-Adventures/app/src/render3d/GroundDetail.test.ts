@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import {
   mottleRGB,
   vertexTint,
+  groundPatch,
+  BIOME_GROUND_TONES,
   GROUND_TILE_PX,
   GROUND_TILE_REPEAT,
   GROUND_BRIGHTEN,
 } from './GroundDetail.ts';
+import { BIOME_ORDER } from './Biomes.ts';
 
 // W4.4 — the pure ground-albedo layers. The world paints from these, so the
 // invariants that keep it gouache-not-garish (deterministic, tileable, in-range,
@@ -82,4 +85,42 @@ test('tile constants are sane for a single repeating draw call', () => {
   assert.ok(GROUND_TILE_PX >= 128 && GROUND_TILE_PX <= 512, 'tile px reasonable');
   assert.ok(GROUND_TILE_REPEAT >= 4 && GROUND_TILE_REPEAT <= 32, 'repeat reasonable');
   assert.ok(GROUND_BRIGHTEN > 1 && GROUND_BRIGHTEN < 1.3, 'brighten compensates, mildly');
+});
+
+// P1.2 — the per-biome two-tone ground. Each landschap must carry two distinct,
+// valid ground tones, and the mixing field must stay a calm, in-range, seamless
+// blend so the floor reads as real Veluwe ground, never a flat slab.
+
+test('BIOME_GROUND_TONES covers every biome with two distinct valid hexes', () => {
+  for (const biome of BIOME_ORDER) {
+    const tones = BIOME_GROUND_TONES[biome];
+    assert.ok(Array.isArray(tones) && tones.length === 2, `${biome} has two tones`);
+    for (const hex of tones) {
+      assert.match(hex, /^#[0-9a-f]{6}$/i, `${biome} tone ${hex} is a hex colour`);
+    }
+    assert.notEqual(tones[0], tones[1], `${biome} tones differ (real breakup, not a slab)`);
+  }
+});
+
+test('groundPatch is deterministic and bounded in [0,1]', () => {
+  assert.equal(groundPatch(12, -7), groundPatch(12, -7), 'same input → same mix');
+  let min = Infinity, max = -Infinity;
+  for (let x = -110; x <= 110; x += 7) {
+    for (let z = -110; z <= 110; z += 7) {
+      const t = groundPatch(x, z);
+      assert.ok(t >= 0 && t <= 1, `patch ${t} in [0,1]`);
+      min = Math.min(min, t); max = Math.max(max, t);
+    }
+  }
+  // both tones actually surface across the world (neither tone is dead)
+  assert.ok(min < 0.35 && max > 0.65, `range [${min.toFixed(2)},${max.toFixed(2)}] spans both tones`);
+});
+
+test('groundPatch varies over distance (clumps, not a flat constant)', () => {
+  // sampling two well-separated points should generally differ — the ground is
+  // not one uniform mix everywhere (which would reproduce the old flat slab).
+  const a = groundPatch(0, 0);
+  const b = groundPatch(40, -30);
+  const c = groundPatch(-25, 55);
+  assert.ok(Math.abs(a - b) > 0.02 || Math.abs(a - c) > 0.02, 'the mix field actually varies');
 });

@@ -72,7 +72,7 @@
   games so no screen reads as a different game. **Verify by:** shot (title,
   world-entry and a mission frame share the same light/palette) + assert
   (`drawCalls` < 150, pixelRatio ≤ 2 unchanged).
-- [ ] P1.2 · **Naturalistic terrain + ground materials [both].** Replace flat/
+- [ ] DEFERRED · P1.2 · **Naturalistic terrain + ground materials [both].** Replace flat/
   stylized ground with believable heide · bos · stuifzand · ven materials + soft
   blob shadows so realistic animals will belong. **Verify by:** shot (each biome
   reads as real Veluwe ground) + assert (`drawCalls` < 150).
