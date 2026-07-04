@@ -542,6 +542,21 @@
 .wb-fb-bijna { color: var(--accent-warm); }
 .wb-skip { margin-top: 8px; }
 
+/* ---- in-mission Pauze + "Stop de missie" (RUN-3 P3.2 · F-26) --------------
+   A mission is no longer a one-way door. The Pauze chip reuses the shared ≥56 px
+   `.ra-pill`; a z-index lifts it ABOVE the engine's live prompt so a tap always
+   lands on it. The pause card is its own full-screen catcher — a calm static
+   scrim (plain rgba, no backdrop-filter, applied instantly = reduced-motion-safe)
+   so a tap never leaks through to the canvas, and it never clears the engine's
+   `.ra-overlay` prompt underneath (which "Ga verder" resumes seamlessly). ---- */
+.mission-pause { z-index: 6; }
+.mission-pause-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(20, 24, 16, 0.42);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wb-opt { transition: none; }
   .wb-opt.wb-goed, .wb-opt.wb-bijna { transform: none; } /* colour channel still carries it */

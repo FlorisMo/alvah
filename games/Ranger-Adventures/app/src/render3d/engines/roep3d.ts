@@ -29,7 +29,7 @@ import { buildRoepTrial, RoepRun, ROEP_COPY, type RoepDiff, type RoepVogel } fro
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, makeReframe, pick3d, registerActivityWin } from '../play/kit';
+import { anchoredPrompt, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -129,6 +129,7 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
+      if (activityScopeSignal()?.aborted) return; // F-26: "Stop de missie" tears the step down
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       reframe.update(dt);

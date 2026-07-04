@@ -46,7 +46,7 @@ import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
 import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideCam, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality } from '../core/devhook';
-import { triggerActivityWin, clearActivityWin } from '../render3d/play/kit';
+import { triggerActivityWin, clearActivityWin, beginActivityScope, abortActivityScope } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
 const naam = (): string => rangerNaam(store.get().avatar);
@@ -101,6 +101,16 @@ let worldExit: (() => void) | null = null;
 // the one beat per completion across the several `resumePatrol` hops in a cycle.
 let patrolTick = 0;
 let lastBeatTick = -1;
+
+// F-26 (P3.2 · one navigation model): the in-world mission gets a persistent
+// Pauze with a calm "Stop de missie". `missionStop` resolves the run loop's stop
+// race (set for the mission's duration); `stopRequested` latches so a stop is
+// idempotent and every await in `runMission` bails after it. `missionPauseEl` is
+// the chip — deliberately NOT a `.ra-overlay`, so it survives the engine's own
+// `anchoredPrompt`/`clearOverlays` DOM swaps between steps.
+let missionStop: (() => void) | null = null;
+let stopRequested = false;
+let missionPauseEl: HTMLElement | null = null;
 
 export function startLodge(ui: HTMLElement, st: Stage): void {
   host = ui;
@@ -216,6 +226,40 @@ function card(html: string): HTMLDivElement {
   el.innerHTML = html;
   host.appendChild(el);
   return el;
+}
+
+/* ---------------------------------------------------------------- title ---- */
+/**
+ * F-27 (P3.2 · one navigation model): the pause hub's "Naar het hoofdmenu" leaf
+ * lands here — the one exit back to the title screen, reachable from below the
+ * title for the first time. It mirrors `main.ts`'s boot card (same "Word
+ * boswachter" title so the surface reads identically), but as an in-app screen
+ * swap — NO page reload — so the sessionStorage presence gate is never re-asked.
+ * Progress is already write-through in `state.ts`, so "Begin" drops the returning
+ * player straight back into the world (avatar + progress intact), exactly like a
+ * normal returning boot (`main.ts:96`). Leaving reads as calm navigation: no
+ * "weet je het zeker?" confirmation, no loss.
+ */
+function showTitle(): void {
+  narrator.stop();
+  unmountMissionPause();
+  worldExit = null;
+  leaveWorld();
+  setScreen('title');
+  setMissionView(null);
+  const el = card(
+    `<div class="boot-card-ish ra-title-card">` +
+    `<p class="boot-kicker">Ranger van de Veluwe</p>` +
+    `<h1 class="boot-title">Word boswachter</h1>` +
+    `<p class="boot-sub">Help de dieren van de Veluwe.<br>Kies een missie en train je breinkracht.</p>` +
+    `<button class="btn-start ra-title-begin" type="button">Begin</button>` +
+    `</div>`,
+  );
+  el.querySelector('.ra-title-begin')?.addEventListener('click', () => {
+    Sound.unlock();
+    void loadGameAudio();
+    startExplore(); // returning player: avatar + progress persisted → straight into the world
+  });
 }
 
 /* ---------------------------------------------------------------- lodge ---- */
@@ -1012,6 +1056,8 @@ function showPauseHub(): void {
     `<span class="ra-chip-tx">Bekijk je breinkracht-badges</span></button>` +
     `<button class="ra-chip ph-tweaks" type="button"><span class="ra-chip-ic" aria-hidden="true">⚙️</span>` +
     `<span class="ra-chip-tx">Instellingen</span></button>` +
+    `<button class="ra-chip ph-hoofdmenu" type="button"><span class="ra-chip-ic" aria-hidden="true">🏠</span>` +
+    `<span class="ra-chip-tx">Naar het hoofdmenu</span></button>` +
     `</div>` +
     `<button class="btn-start ph-back" type="button">Terug naar de open plek</button>` +
     `</div>`,
@@ -1023,7 +1069,77 @@ function showPauseHub(): void {
     showCabin(host, toWorld, 'Terug naar de open plek'));
   el.querySelector('.ph-badges')?.addEventListener('click', () => showBadges(showPauseHub, 'Terug'));
   el.querySelector('.ph-tweaks')?.addEventListener('click', () => showTweaks(host, showPauseHub));
+  // F-27: the one exit below the title. Calm, no confirmation maze; progress is
+  // already persisted (state.ts write-through), so re-entry restores everything.
+  el.querySelector('.ph-hoofdmenu')?.addEventListener('click', () => showTitle());
   el.querySelector('.ph-back')?.addEventListener('click', toWorld);
+}
+
+/* ------------------------------------------------ in-mission pause (F-26) ---- */
+/**
+ * F-26 (P3.2 · one navigation model): a mission is no longer a one-way door. A
+ * persistent Pauze chip (top-left, the shared ≥56 px `.ra-pill`) stays visible
+ * for the whole in-world mission; tapping it opens a calm two-choice card — "Ga
+ * verder" (resume) or "Stop de missie" (return to the open plek, progress kept).
+ * The chip + card are deliberately NOT `.ra-overlay`, so the engine's own
+ * `anchoredPrompt`/`clearOverlays` DOM swaps between steps never remove them;
+ * `unmountMissionPause` clears both on mission end or stop.
+ */
+function mountMissionPause(): void {
+  unmountMissionPause();
+  const el = document.createElement('button');
+  el.className = 'ra-pill mission-pause';
+  el.type = 'button';
+  el.textContent = '⏸ Pauze';
+  el.addEventListener('click', showMissionPause);
+  host.appendChild(el);
+  missionPauseEl = el;
+}
+
+function unmountMissionPause(): void {
+  missionPauseEl?.remove();
+  missionPauseEl = null;
+  host.querySelector('.mission-pause-menu')?.remove();
+}
+
+/** The calm pause card over a running mission. Its own container (not `card()`):
+ *  it must block the canvas so a tap never leaks to the engine's pick3d, and it
+ *  must NOT clear the engine's live `.ra-overlay` prompt (which "Ga verder" leaves
+ *  intact for a seamless resume). */
+function showMissionPause(): void {
+  narrator.stop();
+  host.querySelector('.mission-pause-menu')?.remove();
+  const el = document.createElement('div');
+  el.className = 'mission-pause-menu';
+  el.innerHTML =
+    `<div class="reward boot-card-ish">` +
+    `<p class="boot-kicker">Pauze</p>` +
+    `<h1 class="boot-title">Wat wil je doen?</h1>` +
+    `<div class="lodge-links">` +
+    `<button class="ra-chip mp-stop" type="button"><span class="ra-chip-ic" aria-hidden="true">🚩</span>` +
+    `<span class="ra-chip-tx">Stop de missie</span></button>` +
+    `</div>` +
+    `<button class="btn-start mp-resume" type="button">Ga verder</button>` +
+    `</div>`;
+  host.appendChild(el);
+  el.querySelector('.mp-resume')?.addEventListener('click', () => el.remove());
+  el.querySelector('.mp-stop')?.addEventListener('click', stopMission);
+}
+
+/** "Stop de missie": abort the running step cleanly (the kit scope removes the
+ *  pick3d listener + halts the engine's animation loop — no leaks), drop the
+ *  mission world and rebuild the open plek at the hub. Never punitive — progress
+ *  is already persisted and `screen` returns to 'world'. Idempotent via
+ *  `stopRequested`, which also bails the `runMission` loop after any await. */
+function stopMission(): void {
+  if (stopRequested) return;
+  stopRequested = true;
+  narrator.stop();
+  abortActivityScope();
+  unmountMissionPause();
+  missionStop?.();     // resolve an in-flight step/fact race so runMission returns
+  leaveWorld();        // dispose the mission scene (World.dispose frees its geometry)
+  startExplore();      // fresh world at the hub → setScreen('world')
 }
 
 /* ------------------------------------------------------------ briefing ---- */
@@ -1071,6 +1187,18 @@ async function runMission(mission: Mission, fromWorld = false): Promise<void> {
   const played: Engine[] = [];
   let skipped: string | null = null;
   setScreen('mission');
+  // F-26 (P3.2): the in-world mission gets a persistent Pauze + "Stop de missie".
+  // ONE stop promise for the whole mission — every await below races it, so a stop
+  // from any point (a running step OR a between-steps fact) bails at the next
+  // checkpoint. `stopMission()` owns the world teardown + return; here we only
+  // stop advancing. Non-world (lodge 2D) missions keep their existing flow.
+  stopRequested = false;
+  missionStop = null;
+  const stopped = fromWorld
+    ? new Promise<'STOP'>((res) => { missionStop = () => res('STOP'); })
+    : null;
+  const raceStop = <T>(p: Promise<T>): Promise<T | 'STOP'> => (stopped ? Promise.race([p, stopped]) : p);
+  if (fromWorld) mountMissionPause();
   for (let i = 0; i < mission.stappen.length; i++) {
     const step = mission.stappen[i];
     const play = ENGINE_VIEWS[step.ef];
@@ -1088,28 +1216,34 @@ async function runMission(mission: Mission, fromWorld = false): Promise<void> {
       registry: REGISTRY_3D,
     });
     setMissionView(mode); // dev-state hook: resolved view of the active step
-    let result: BeatSummary;
+    beginActivityScope(); // F-26: fresh abort scope — pick3d + the engine loop bind to it
+    let result: BeatSummary | 'STOP';
     if (mode === '3d' && world) {
       const variant = variantFor(REGISTRY_3D, step.ef as Engine)!;
       world.beginActivity();
       try {
-        result = await variant.play(world.ctx(host), step);
+        result = await raceStop(variant.play(world.ctx(host), step));
       } finally {
-        clearActivityWin(); // W2.3: no win closure outlives its step
-        world.endActivity();
+        // On a stop, stopMission() has already disposed this world and rebuilt a
+        // fresh one — never touch it here. Otherwise clear the step's win + hand
+        // the camera back to free-roam as usual.
+        if (!stopRequested) { clearActivityWin(); world?.endActivity(); } // W2.3: no win closure outlives its step
       }
     } else {
-      result = await play(host, step);
+      result = await raceStop(play(host, step));
     }
+    if (result === 'STOP' || stopRequested) return; // stopMission() owns the world return
     store.logSession(step.ef as Engine, result);
     played.push(step.ef as Engine);
     if (step.skin.feit) {
       // W6.3b: playing in the world pins the fact as a collectible veldnotitie on
       // the case-board (idempotent). The lodge 2D path stays a passing card.
       if (fromWorld) store.collectVeldnotitie(Content.veldnotitieId(mission.id, i));
-      await showFact(step, i + 1, mission.stappen.length, fromWorld);
+      const fact = await raceStop(showFact(step, i + 1, mission.stappen.length, fromWorld));
+      if (fact === 'STOP' || stopRequested) return;
     }
   }
+  if (fromWorld) { unmountMissionPause(); missionStop = null; }
   // The case-board data gate (Content.cluesFound) keys off voltooid, so snapshot
   // the found-set BEFORE marking this mission done. The diegetic clue beat fires
   // only when this completion makes the hook NEWLY appear on the board (so a

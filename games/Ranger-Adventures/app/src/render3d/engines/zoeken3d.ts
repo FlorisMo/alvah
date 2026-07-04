@@ -25,7 +25,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { Highlight3d, anchoredPrompt, makeReframe, pick3d, spoorTrail, registerActivityWin } from '../play/kit';
+import { Highlight3d, anchoredPrompt, makeReframe, pick3d, spoorTrail, registerActivityWin, activityScopeSignal } from '../play/kit';
 import { heightAt } from '../Biomes';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -143,6 +143,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
+      if (activityScopeSignal()?.aborted) return; // F-26: "Stop de missie" tears the step down
       const dt = Math.min((now - last) / 1000, 0.05); // clamp long frames (no camera jump)
       last = now;
       reframe.update(dt);

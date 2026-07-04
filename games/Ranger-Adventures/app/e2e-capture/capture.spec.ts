@@ -345,7 +345,20 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await press(page, isPad, page.locator('.explore-pause'));
       await settle(page, 400);
       await snap(page, 'pause-hub', 'Pauze/menu', 'Pauze-menu — is er een duidelijke "terug/hoofdmenu"? (punch-list #5)',
-        ['.lodge-links .ra-chip', '.ph-back']);
+        ['.lodge-links .ra-chip', '.ph-hoofdmenu', '.ph-back']);
+    });
+    // F-27 (P3.2): the pause hub's "Naar het hoofdmenu" is the ONE exit below the
+    // title — screen→'title' with NO password re-ask (in-app swap, not a reload),
+    // and "Begin" restores the same avatar + progress (state.ts write-through).
+    await scene(page, 'title-return', async () => {
+      await press(page, isPad, page.locator('.ph-hoofdmenu'));
+      await waitFor(page, (r) => r.screen === 'title', 15_000);
+      await snap(page, 'title-return', 'Pauze/menu', 'Hoofdmenu vanuit de pauze — screen=title, geen wachtwoord opnieuw (F-27).',
+        ['.ra-title-begin']);
+      await press(page, isPad, page.locator('.ra-title-begin'));
+      await waitFor(page, (r) => r.screen === 'world', 40_000);
+      await settle(page, 600);
+      await snap(page, 'title-return-world', 'Pauze/menu', 'Terug in de wereld na hoofdmenu — avatar + voortgang bewaard (F-27).');
     });
   });
 
@@ -429,7 +442,16 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await waitFor(page, (r) => r.missionView === '3d', 25_000);
       await settle(page, 1000);
       await snap(page, 'mission-3d', 'Missie', 'Missie speelt 3D in-place — hoe ziet een echte opdracht eruit?',
-        ['.zoeken-speak', '.ra-speak']);
+        ['.zoeken-speak', '.ra-speak', '.mission-pause']);
+    });
+    // F-26 (P3.2): a mission is no longer a one-way door — the persistent Pauze
+    // opens a calm "Stop de missie" that returns to the open plek (screen→'world').
+    await scene(page, 'mission-stopped', async () => {
+      await press(page, isPad, page.locator('.mission-pause'));
+      await press(page, isPad, page.locator('.mp-stop'));
+      await waitFor(page, (r) => r.screen === 'world', 30_000);
+      await settle(page, 600);
+      await snap(page, 'mission-stopped', 'Missie', 'Na "Stop de missie" — terug op de open plek, screen=world (F-26).');
     });
   });
 

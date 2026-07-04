@@ -54,6 +54,37 @@ export function triggerActivityWin(): boolean {
   return true;
 }
 
+/* --------------------------------------------------- activity abort scope ---- */
+
+/**
+ * Cancellation for one in-flight mission step (RUN-3 P3.2 · F-26 "Stop de
+ * missie"). The mission runner opens a fresh scope before each step; `pick3d`
+ * binds its canvas listener to the scope's signal and every engine frame loop
+ * early-returns once it aborts — so a mid-mission "Stop" tears the running step
+ * down with no leaked pointer handler and no orphaned `requestAnimationFrame`,
+ * and the world is then rebuilt clean (Missions.ts). The controller is NOT
+ * nulled on abort: the already-scheduled loop frame must still read `aborted`
+ * and return instead of rescheduling. A fresh `beginActivityScope()` replaces it
+ * for the next step.
+ */
+let activityAbort: AbortController | null = null;
+
+/** Open a fresh abort scope for the next activity step; returns its signal. */
+export function beginActivityScope(): AbortSignal {
+  activityAbort = new AbortController();
+  return activityAbort.signal;
+}
+
+/** Fire the current activity's abort (the "Stop de missie" action). Idempotent. */
+export function abortActivityScope(): void {
+  activityAbort?.abort();
+}
+
+/** The live activity-abort signal (engine loops read `?.aborted`); null when idle. */
+export function activityScopeSignal(): AbortSignal | null {
+  return activityAbort?.signal ?? null;
+}
+
 /* ----------------------------------------------------------------- pick3d ---- */
 
 export interface Pick3dTarget {
@@ -113,7 +144,12 @@ export function pick3d(opts: Pick3dOptions): () => void {
       if (raycaster.intersectObject(t.object, true).length) { onPick(t.id); return; }
     }
   };
-  canvas.addEventListener('pointerdown', onDown);
+  // F-26: bind to the live activity-abort scope so "Stop de missie" removes this
+  // canvas listener even when the engine's own teardown never runs (aborted
+  // mid-step). The explicit removeEventListener below stays correct on the normal
+  // (non-aborted) path — removing twice is a no-op.
+  const abortSig = activityScopeSignal();
+  canvas.addEventListener('pointerdown', onDown, abortSig ? { signal: abortSig } : undefined);
 
   return () => {
     canvas.removeEventListener('pointerdown', onDown);
