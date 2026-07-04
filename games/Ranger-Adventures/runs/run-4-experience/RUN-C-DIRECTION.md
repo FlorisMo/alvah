@@ -216,7 +216,12 @@ Every screen shares: the §2.1 light rig + palette, Fraunces/Inter-warm UI
 panels in the site's warm-paper language, ≥56 px targets, ≤7-word lines with
 read-aloud, and one clear action. Panel/overlay style is ONE language: warm
 cream panel (`--paper`-achtig, dyslexie-vriendelijk — mini-game-research E1:
-never stark white), soft static scrim, green/gold accents.
+never stark white), soft static scrim, green/gold accents. Floating world
+labels (POI/mission markers) and HUD hint chips COUNT as UI and bind to the
+same language: warm-paper styling, a legibility floor at gameplay distance
+(hide or grow a label rather than render it unreadably small), a visible
+anchor to the spot they mark, and ≥56 px whenever tappable — a tiny charcoal
+chip floating mid-air is a style break (GATE-P0 refinement, 2026-07-04).
 
 1. **Title.** A real golden-hour Veluwe vista (heide + bosrand at dawn light)
    with the grounded ranger avatar; subtitle lines per-sentence ≤7 words. The

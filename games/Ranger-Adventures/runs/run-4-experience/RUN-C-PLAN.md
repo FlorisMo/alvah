@@ -243,3 +243,22 @@ catch it early at no cost to the run.
   off-fold exit). Note: Run B's avatar-scale core (F-07) was already cracked
   (avatar 1.7 m per HANDOFF-MONITOR); only the F-19 camera-framing piece survived
   to DEFERRED, so P1.0 re-proves proportion in the same gated frame.
+- 2026-07-04 · art director (GATE-P0, fresh 22:2x laptop set): P0.1 stands (the
+  doc is committed and complete). Seeded 9 pixel-anchored cohesion boxes across
+  phases 1–5 — P1.10 (capture blind spot: 4 of 5 games + all 2D floors never
+  shot; stale orphan PNGs from older numbering runs sit beside fresh frames and
+  can mislead a judge), P1.11 (POI markers are tiny charcoal chips floating
+  mid-air in `14-camera-orbit` — unreadable for a dyslexic reader, off the §3
+  one-overlay-language), P1.12 (hub reads as a prop-drop, not the doc's cosy
+  heart: no path links cabin/board/jeep, orphan fences), P1.13 (`12-camera-
+  zoom-in` + `39-reduce-motion-reframe-before` cut the ranger at the waist —
+  half-buried read), P1.14 (mission vignette near-black vs §2.1 "tint, never
+  darkness"), P2.10 (world animals are featureless dark blobs at follow
+  distance in `19`/`23` — flagships must read at gameplay range, not only
+  close-up), P3.4 (no before/after pair exists for GATE-P3 to judge felt
+  progress), P4.5 (heli dumped on the hub lawn behind the missiebord / loose in
+  the stuifzand — vehicles without homes), P5.5 (no briefing/task/reunion beat
+  frames for mission-dressing judgment). Also noted on P1.9: still live in the
+  fresh set (`.tw-back` at y=1404). Direction doc §3 refined: world labels +
+  HUD chips count as UI and bind to the one warm language + a legibility floor.
+  GATE-P0 ticked — every downstream phase now carries concrete boxes.
