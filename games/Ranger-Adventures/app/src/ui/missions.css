@@ -445,8 +445,9 @@
 }
 
 /* ---- in-world mission board (W2.2): the case-board's mission-pick overlay.
-   A full-screen scrollable grid like the lodge (the grid is wider than a
-   boot-card), reached from the world without tearing it down. ---- */
+   A full-screen grid like the lodge (the grid is wider than a boot-card),
+   reached from the world without tearing it down. The card GRID scrolls
+   internally (below) so the header + exit stay on-screen. ---- */
 .mission-board {
   position: absolute;
   inset: 0;
@@ -455,13 +456,30 @@
   align-items: center;
   gap: 14px;
   padding: max(24px, env(safe-area-inset-top)) 18px 24px;
-  overflow-y: auto;
+  /* RUN-3 P3.2 re-open (F-20/F-27 · board-exit visibility): the F-23 pictogram
+     cards grew the 10-mission grid past the fold, so scrolling the WHOLE board
+     carried `.mb-back` off-screen (y≈882 in an 800px viewport — a child saw no
+     way back). The board is now a fixed full-screen frame: header + exit stay
+     put and ONLY the card grid scrolls inside it (rule below). Mirrors F-01's
+     sticky-footer intent, applied as an internal-scroll region. */
+  overflow: hidden;
   /* F-29 (P4.7): the ONE shared modal scrim — same token as pause + lodge, no
      backdrop-filter, so the board overlay reads as the same dimmed backdrop. */
   background: var(--modal-scrim);
 }
 .mission-board .boot-title { color: var(--paper); }
 .mission-board .boot-kicker { color: var(--spel-sun); }
+/* Header + exit are pinned (flex-shrink 0 → never squeezed below their size);
+   the grid is the ONE scroll region, so the ≥56px `.mb-back` exit is always
+   on-screen no matter how many missions the area holds. */
+.mission-board .boot-kicker,
+.mission-board .boot-title,
+.mission-board .mb-back { flex: 0 0 auto; }
+.mission-board .mission-grid {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
 
 /* ---- first-world-entry onboarding hint (W1.6): shows once, dismissed on the
    ranger's first step. Centered so it reads as a welcome, dual-channel icon + words. ---- */
