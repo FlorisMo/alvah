@@ -262,3 +262,12 @@ catch it early at no cost to the run.
   fresh set (`.tw-back` at y=1404). Direction doc §3 refined: world labels +
   HUD chips count as UI and bind to the one warm language + a legibility floor.
   GATE-P0 ticked — every downstream phase now carries concrete boxes.
+- 2026-07-04 · grade (P1.1) FAIL, left open: the shared golden-hour rig landed on
+  title/world/board/jeep (all sky = 253,229,205, lum≈233; drawCalls 12–66 <150;
+  pixelRatio capped ≤2) — but the verify-by's THIRD leg, "a mission frame shares
+  the same light/palette," fails: fresh `29-mission-3d` (and `30-mission-stopped`)
+  have a desaturated grey sky (185,185,179 — no warm tint) and near-black
+  vignetted corners (lum 27–47) over a muddy-green scene, so the mission still
+  "reads as a different game" (doc §2.1: one shared IBL across all 5 games). Extend
+  the unified rig INTO the mission/zoeken scene (this overlaps P1.14's de-vignette)
+  before P1.1 can go green.

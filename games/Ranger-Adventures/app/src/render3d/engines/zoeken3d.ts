@@ -42,19 +42,34 @@ function placeLocal(x: number, y: number): { dx: number; dz: number } {
  * — no new visual axis (§3d). pointer-events:none so it never blocks `pick3d`; it
  * sits over the canvas, not the accessible card, so all words stay legible. Returns
  * a remover. A plain DOM overlay → zero draw-call cost.
+ *
+ * P1.1 (RUN-C-DIRECTION §2.1): the lens edge is a WARM golden-hour tone at a low
+ * opacity with a wide clear core — NOT the old cold near-black frame, which greyed
+ * the mission out of the shared palette and blackened the corners so it "read as a
+ * different game" (the P1.1 grade-fail, overlapping P1.14's "tint, never darkness").
+ * Warm umber from the §2.1 ground-bounce family keeps the golden light + ground
+ * detail readable inside the kijker, so the mission belongs to one world with the
+ * title/hub.
  */
 function makeKijker(canvas: HTMLElement, lensSterkte: number): () => void {
   const parent = canvas.parentElement;
   if (!parent) return () => {};
-  const edge = (0.55 + Math.max(0, Math.min(1, lensSterkte)) * 0.3).toFixed(2); // 0.55..0.85 opacity
+  const edge = (0.28 + Math.max(0, Math.min(1, lensSterkte)) * 0.2).toFixed(2); // 0.28..0.48 opacity
   const v = document.createElement('div');
   v.className = 'kijker-vignette';
   v.setAttribute('aria-hidden', 'true');
   v.style.cssText =
     'position:absolute;inset:0;pointer-events:none;z-index:1;' +
-    `background:radial-gradient(ellipse 60% 64% at 50% 46%, transparent 52%, rgba(14,18,11,${edge}) 82%);`;
+    `background:radial-gradient(ellipse 76% 80% at 50% 48%, transparent 58%, rgba(62,40,20,${edge}) 90%);`;
   parent.appendChild(v);
-  return () => v.remove();
+  // P1.1 / F-26: bind removal to the live activity-abort scope so "Stop de missie"
+  // tears the vignette down even when the engine's own remover never runs (aborted
+  // mid-step, before onFound) — otherwise the frame leaked onto the warm hub and
+  // greyed it out (30-mission-stopped). The normal onFound() path still calls the
+  // returned remover; removing twice is a harmless no-op.
+  const remove = (): void => v.remove();
+  activityScopeSignal()?.addEventListener('abort', remove, { once: true });
+  return remove;
 }
 
 export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {

@@ -35,8 +35,7 @@ import {
   sandboxLayout, castCallKey,
   type SandboxInteraction, type SandboxPlacement, type SandboxLayout, type SandboxKind,
 } from './Sandbox';
-
-const SKY_TOP = '#fde8c8', SKY_MID = '#f6cf9e', SKY_LOW = '#e9b27f';
+import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky } from './Lighting';
 
 /** the resting "showroom" camera pose the demo returns to after an activity. */
 const OVERVIEW_POS = new THREE.Vector3(0, 7.5, 15);
@@ -112,10 +111,11 @@ export class SandboxScene {
     });
 
     this.scene.background = this.skyTexture();
-    this.scene.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 26, 80);
-    this.scene.add(new THREE.HemisphereLight(0xfde8c8, 0x6d8a45, 1.0));
-    const sun = new THREE.DirectionalLight(0xffe6b0, 1.4);
-    sun.position.set(-7, 9, 6);
+    this.scene.fog = new THREE.Fog(new THREE.Color(GOLDEN_HOUR.fogColor), 26, 80);
+    // P1.1: the ONE shared golden-hour rig (§2.1) — identical to title + world.
+    addGoldenHourHemi(this.scene);
+    const sun = makeGoldenHourSun();
+    sun.position.copy(GOLDEN_HOUR.keyDir);
     this.scene.add(sun);
     this.scene.add(this.buildGround());
 
@@ -137,15 +137,8 @@ export class SandboxScene {
 
   // ---- build ----
   private skyTexture(): THREE.Texture {
-    const c = document.createElement('canvas');
-    c.width = 2; c.height = 256;
-    const ctx = c.getContext('2d')!;
-    const g = ctx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0, SKY_TOP); g.addColorStop(0.55, SKY_MID); g.addColorStop(1, SKY_LOW);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, 2, 256);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+    // P1.1: the SHARED golden-hour ramp — one sky across title, world, sandbox.
+    return bakeGoldenHourSky();
   }
 
   private buildGround(): THREE.Mesh {

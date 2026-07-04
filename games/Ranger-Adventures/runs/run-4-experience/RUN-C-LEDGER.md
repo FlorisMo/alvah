@@ -67,7 +67,7 @@
 ## Phase 1 · one naturalistic art direction across all screens  (VISION §13.1 — the cohesion + realism unifier; the single highest-impact lever)
 
 - [x] P1.0 · Frame the board face on approach + re-prove the proportion baseline [both] — F-19's follow-camera work: when the player enters the board's near-radius, gently damp-turn the follow camera (player-initiated by walking in; a CUT under reduced-motion) and/or angle the board face toward the natural hub approach, so the board FACE + papers and the whole ranger are in shot at believable scale; expose a board-in-frustum boolean on the dev hook (retry from Run B DEFERRED) · verify-by: fresh `22-board-affordance` shows the board face with papers readable AND the ranger fully in frame at believable proportion (assert: board-in-frustum true while `board.near`; `avatar.height` ∈ [1.5,2.0]; drawCalls <150)
-- [ ] P1.1 · **Unify the lighting + sky to the golden-hour touchstone [both].**
+- [x] P1.1 · **Unify the lighting + sky to the golden-hour touchstone [both].**
   One warm naturalistic light/sky/fog model shared by title → world → board →
   games so no screen reads as a different game. **Verify by:** shot (title,
   world-entry and a mission frame share the same light/palette) + assert

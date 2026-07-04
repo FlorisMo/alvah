@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { livePolicy } from './MotionMode';
+import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky } from './Lighting';
 
 /** Called once per rendered frame, AFTER the render (so renderer.info is fresh). */
 export type FrameCallback = (dtSeconds: number, elapsedSeconds: number) => void;
 
 const HEATH = new THREE.Color('#8a9a55');
-const FOG = new THREE.Color('#e9b27f');
+const FOG = new THREE.Color(GOLDEN_HOUR.fogColor); // shared golden-hour horizon (P1.1)
 // Echoes of the Veluwe biome palette (Biomes.ts) so the title reads like the
 // world beyond the Begin button: heather bloom, pine + birch greens, sand path.
 const HEATHER = new THREE.Color('#9a6aa8');
@@ -70,29 +71,18 @@ export class Stage {
     window.addEventListener('resize', this.resize);
   }
 
-  /** Vertical golden-hour gradient as the sky background. */
+  /** Vertical golden-hour gradient as the sky background — the SHARED world ramp
+   *  (P1.1), so the title sky is literally the same gradient as world-entry. */
   private makeSkyTexture(): THREE.Texture {
-    const c = document.createElement('canvas');
-    c.width = 2;
-    c.height = 256;
-    const ctx = c.getContext('2d');
-    if (ctx) {
-      const g = ctx.createLinearGradient(0, 0, 0, 256);
-      g.addColorStop(0, '#fde8c8');
-      g.addColorStop(0.55, '#f6cf9e');
-      g.addColorStop(1, '#e9b27f');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, 2, 256);
-    }
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+    return bakeGoldenHourSky();
   }
 
+  /** The shared golden-hour rig (P1.1): warm low key + cool-sky / warm-ground
+   *  hemisphere fill, identical to the World and Sandbox scenes. */
   private addLights(): void {
-    this.scene.add(new THREE.HemisphereLight(0xfde8c8, 0x6d8a45, 0.9));
-    const sun = new THREE.DirectionalLight(0xffe6b0, 1.6);
-    sun.position.set(-6, 5, 4); // low, warm, raking light
+    addGoldenHourHemi(this.scene);
+    const sun = makeGoldenHourSun();
+    sun.position.copy(GOLDEN_HOUR.keyDir); // low, warm, raking key
     this.scene.add(sun);
   }
 

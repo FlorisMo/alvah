@@ -53,6 +53,9 @@ import {
   SKY_STOPS, cloudOffset, windSway, flyoverAt, type Flyover,
 } from './Atmosphere';
 import {
+  GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky,
+} from './Lighting';
+import {
   WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp,
 } from './Water';
 
@@ -65,7 +68,7 @@ export interface WorldMarker {
   biome?: Biome;            // the mission's landschap → anchor the marker in it
 }
 
-const SKY_LOW = '#e9b27f'; // horizon band + fog colour (matches SKY_STOPS' last stop)
+const SKY_LOW = GOLDEN_HOUR.fogColor; // shared golden-hour horizon + fog colour (P1.1)
 
 // W5.1 jeep: its collision radius while parked, and the proximity radius that
 // surfaces the "Stap in" affordance (a touch wider than the 2.4 m marker radius —
@@ -490,10 +493,13 @@ export class World {
     this.scene.background = this.skyTexture();
     this.scene.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 22, 90);
 
-    this.scene.add(new THREE.HemisphereLight(0xfde8c8, 0x6d8a45, 0.95));
+    // P1.1: the ONE shared golden-hour rig (Lighting.GOLDEN_HOUR, §2.1) — the same
+    // cool-sky / warm-ground hemisphere fill + warm low key the title + sandbox use,
+    // so no screen reads as a different game.
+    addGoldenHourHemi(this.scene);
     // W4.5: a warm, low golden-hour sun raking in from screen-left (the camera
     // looks down −z, so −x is the left of frame). Static direction — no day cycle.
-    const sun = new THREE.DirectionalLight(0xffe6b0, 1.6);
+    const sun = makeGoldenHourSun();
     sun.position.copy(this.sunOffset);
     // Selective HERO shadow map: only meshes with castShadow=true (the ranger +
     // solid props, opted in on load) drop a soft shadow. The ortho frustum is
@@ -979,17 +985,9 @@ export class World {
 
   // ---- build ----
   private skyTexture(): THREE.Texture {
-    const c = document.createElement('canvas');
-    c.width = 2; c.height = 256;
-    const ctx = c.getContext('2d')!;
-    const g = ctx.createLinearGradient(0, 0, 0, 256);
-    // W4.6: a richer, multi-band golden-hour ramp (Atmosphere.SKY_STOPS) instead
-    // of the old three-stop wash — soft warm bands from zenith to horizon.
-    for (const [at, col] of SKY_STOPS) g.addColorStop(at, col);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, 2, 256);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+    // P1.1: the SHARED golden-hour ramp (Atmosphere.SKY_STOPS via Lighting), the
+    // same soft warm zenith→horizon bands the title + sandbox bake — one sky.
+    return bakeGoldenHourSky();
   }
 
   private buildGround(): THREE.Mesh {
