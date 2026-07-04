@@ -24,7 +24,7 @@ import type { Stage } from '../render3d/Stage';
 import { World, type WorldMarker } from '../render3d/World';
 import { Joystick } from './Joystick';
 import { joystickVisible } from '../core/input';
-import { onboardHint } from '../core/onboarding';
+import { onboardHint, ONBOARD_TAP, ONBOARD_BOUNDARY } from '../core/onboarding';
 import { type WayCue } from '../render3d/Wayfinding';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { resolveViewMode, variantFor } from '../render3d/play/ViewMode';
@@ -45,7 +45,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideCam, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideCam, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality, provideHint } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin, beginActivityScope, abortActivityScope } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -90,6 +90,26 @@ let joystick: Joystick | null = null;
 // rAF handle for the W1.6 onboarding-hint movement watcher (dismiss-on-first-step);
 // 0 when idle. Cancelled on re-render and on leaveWorld so no loop outlives the world.
 let onboardRaf = 0;
+
+// RUN-3 P3.3 · the ONE sequenced onboarding-hint system (F-06 + F-15 + F-11 + F-13).
+// At the first world entry exactly ONE hint is on screen — the control line — and
+// both the wayfinding tracker and the "tik op een dier" tip wait until it seals on
+// the first step (F-06: never three competing messages for the EF player). After
+// the seal the tip shows once as a short transient (replacing the old permanent
+// 16-word toast), and the tracker surfaces. `active` is the single hint currently
+// visible; mirrored on the dev hook (`provideHint`) so the capture assert can read
+// the live sequence. `helpChip` tracks the laptop "?" re-show chip (F-15).
+const hintState: { active: 'walk' | 'tap' | 'boundary' | null; helpChip: boolean } = {
+  active: null,
+  helpChip: false,
+};
+// timeout handle for the single transient tip (tap / boundary / help re-show); one
+// at a time — a new tip clears the running one so hints never stack.
+let tipTimer = 0;
+function hintSnapshot(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } {
+  const s = store.get().settings;
+  return { active: hintState.active, walkSeen: s.wereldHintGezien, tapSeen: s.tikHintGezien, helpChip: hintState.helpChip };
+}
 
 // When set (by the Deep Demo tour), the explore HUD's "Terug" tears down the
 // world and returns HERE instead of the lodge — so a free-roam / in-world engine
@@ -181,6 +201,8 @@ function activeExploreTitel(): string | null {
 
 function leaveWorld(): void {
   if (onboardRaf) { cancelAnimationFrame(onboardRaf); onboardRaf = 0; }
+  if (tipTimer) { clearTimeout(tipTimer); tipTimer = 0; }
+  hintState.active = null; hintState.helpChip = false;
   if (joystick) { joystick.dispose(); joystick = null; }
   if (world) { world.dispose(); world = null; stage.exitWorld(); }
   providePos(null);
@@ -206,6 +228,7 @@ function leaveWorld(): void {
   provideVehicle(null);
   provideHeli(null);
   provideQuality(null);
+  provideHint(null);
 }
 
 /** The explore HUD "Terug" target: hand back to the Deep Demo tour if it owns the
@@ -674,8 +697,14 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
 }
 
 function showExploreHud(activeTitel: string | null): void {
+  // F-06 sequencing: hold the wayfinding tracker back while the entry control hint
+  // is still on screen (the first-ever entry, before the first step), so the world
+  // opens with ONE hint, not three. `mountOnboardHint` shows the control hint iff
+  // `wereldHintGezien` is false, so that same flag gates the tracker; the seal (or a
+  // returning player who already has the flag) surfaces it.
+  const trackerGated = !!world && !store.get().settings.wereldHintGezien;
   const veld = activeTitel
-    ? `<div class="explore-wayfind" role="status" aria-live="polite">` +
+    ? `<div class="explore-wayfind" role="status" aria-live="polite"${trackerGated ? ' hidden' : ''}>` +
       `<span class="wf-glyph" aria-hidden="true">·</span>` +
       `<span class="wf-text"><b class="wf-doel">${esc(activeTitel)}</b><span class="wf-cue">zoek het spoor…</span></span>` +
       `</div>`
@@ -692,7 +721,9 @@ function showExploreHud(activeTitel: string | null): void {
     `<div class="explore-hud">` +
     demoBackPill +
     `<button class="ra-pill explore-pause" type="button">⏸ Pauze</button>` +
-    `<p class="explore-hint">Tik op een dier om mee te spelen — of tik op de grond om te lopen.</p>` +
+    // F-06: the old always-on 16-word toast is gone. Onboarding is now sequenced —
+    // the control hint (mountOnboardHint) first, then a short transient tap tip
+    // after the first step (showTip). The tracker (veld) is gated above.
     veld +
     `<div class="explore-prompt" hidden></div>` +
     `<div class="explore-hub-prompt" hidden></div>` +
@@ -716,6 +747,8 @@ function showExploreHud(activeTitel: string | null): void {
   const hud = el.querySelector<HTMLElement>('.explore-hud');
   mountJoystick(hud);
   mountOnboardHint(hud);
+  mountHelpChip(hud); // F-15: laptop "?" chip re-shows the control hint on demand
+  provideHint(hintSnapshot); // P3.3: expose the live hint sequence for the capture assert
   // W2.2: if the ranger is already standing at the case-board when the HUD (re)mounts
   // — e.g. after closing the mission board — re-surface the hub affordance. The World
   // only re-fires onBoardNear on a proximity CHANGE, so a fresh HUD would miss it.
@@ -806,13 +839,14 @@ function setHeliVignette(v: number): void {
   renderHeliPrompt(); // onPad may have flipped → swap "Land hier" ⇄ hint
 }
 
-/** Build the W1.6 first-world-entry onboarding hint into the freshly-rendered
- *  explore HUD. Shows ONCE (seen-flag `wereldHintGezien` in settings), with
- *  device-aware copy (drag-the-stick on a coarse pointer, arrow keys otherwise),
- *  read-aloud when voorlezen is on, and it dismisses itself the moment the ranger
- *  takes his first step — a movement watcher polls `world.pos()` and seals the
- *  flag once he has moved. The HUD re-renders on every patrol resume, so any prior
- *  watcher is cancelled first (no double loop, no listener on a detached node). */
+/** Build the first-world-entry CONTROL hint — step 1 of the P3.3 sequence (F-06).
+ *  Shows ONCE (seen-flag `wereldHintGezien`), with device-aware copy (drag-the-stick
+ *  on a coarse pointer, arrow keys otherwise), read-aloud when voorlezen is on, and
+ *  it dismisses itself the moment the ranger takes his first step — a movement watcher
+ *  polls `world.pos()` and seals the flag once he has moved. Sealing then advances the
+ *  sequence: it surfaces the held-back wayfinding tracker and shows the short "tik op
+ *  een dier" transient (step 2). The HUD re-renders on every patrol resume, so any
+ *  prior watcher is cancelled first (no double loop, no listener on a detached node). */
 function mountOnboardHint(hud: HTMLElement | null): void {
   if (onboardRaf) { cancelAnimationFrame(onboardRaf); onboardRaf = 0; }
   if (!hud || !world || store.get().settings.wereldHintGezien) return;
@@ -826,13 +860,22 @@ function mountOnboardHint(hud: HTMLElement | null): void {
     `<span class="ob-icon" aria-hidden="true">${stick ? '🕹️' : '⌨️'}</span>` +
     `<span class="ob-text">${esc(text)}</span>`;
   hud.appendChild(el);
+  hintState.active = 'walk';
   if (store.get().settings.voorlezen) narrator.speak(text);
 
   const start = world.pos();
   const seal = (): void => {
     if (onboardRaf) { cancelAnimationFrame(onboardRaf); onboardRaf = 0; }
     el.remove();
+    hintState.active = null;
     if (!store.get().settings.wereldHintGezien) store.setSetting({ wereldHintGezien: true });
+    revealTracker(); // F-06: the wayfinding tracker was held back — surface it now
+    // step 2: the "tik op een dier" tip, once, as a short transient (F-06 — this
+    // replaces the old permanent 16-word toast).
+    if (!store.get().settings.tikHintGezien) {
+      store.setSetting({ tikHintGezien: true });
+      showTip('tap', ONBOARD_TAP);
+    }
   };
   const watch = (): void => {
     onboardRaf = 0;
@@ -842,6 +885,65 @@ function mountOnboardHint(hud: HTMLElement | null): void {
     onboardRaf = requestAnimationFrame(watch);
   };
   onboardRaf = requestAnimationFrame(watch);
+}
+
+/** F-06: surface the wayfinding tracker once the entry control hint has sealed (it
+ *  is rendered `hidden` while that hint is on screen, so hints never stack). */
+function revealTracker(): void {
+  const strip = host.querySelector<HTMLDivElement>('.explore-wayfind');
+  if (strip) strip.hidden = false;
+}
+
+/** RUN-3 P3.3 · the ONE transient-tip channel (F-06 tap tip · F-11 boundary cue ·
+ *  F-15 help re-show). A short (≤7-word) hint that fades on its own after `ms`; only
+ *  one is ever on screen (a new tip clears the running one), so onboarding stays
+ *  one-hint-at-a-time. Read-aloud fires when voorlezen is on (the actual voice is
+ *  Floris-demo-gated). `pointer-events:none` in CSS keeps tap-to-walk alive beneath it. */
+function showTip(id: 'walk' | 'tap' | 'boundary', text: string, ms = 5200): void {
+  const hud = host.querySelector<HTMLElement>('.explore-hud');
+  if (!hud) return;
+  host.querySelectorAll('.explore-tip').forEach((n) => n.remove());
+  if (tipTimer) { clearTimeout(tipTimer); tipTimer = 0; }
+  const el = document.createElement('p');
+  el.className = 'explore-tip';
+  el.setAttribute('role', 'status');
+  el.textContent = text;
+  hud.appendChild(el);
+  hintState.active = id;
+  if (store.get().settings.voorlezen) narrator.speak(text);
+  tipTimer = window.setTimeout(() => {
+    el.remove();
+    tipTimer = 0;
+    if (hintState.active === id) hintState.active = null;
+  }, ms);
+}
+
+/** F-11 (P4.6 wires the trigger): the calm world-boundary cue flows through the
+ *  SAME one-tip channel as the tap tip — this is the "F-11 boundary hint joins the
+ *  hint system" coupling. P4.6 calls it when the ranger heads past the last content
+ *  (rim + gentle stop there); here it just proves the channel carries it. */
+export function showBoundaryHint(): void {
+  showTip('boundary', ONBOARD_BOUNDARY);
+}
+
+/** F-15: a small persistent LAPTOP help chip ("?") that re-shows the control hint on
+ *  demand — laptop steady-state HUD was otherwise bare (no key legend). Skipped on a
+ *  coarse pointer, where the on-screen joystick is already self-evident and screen
+ *  space is precious. ≥56 px via the shared `.ra-pill` sizing. */
+function mountHelpChip(hud: HTMLElement | null): void {
+  hintState.helpChip = false;
+  if (!hud || !world) return;
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const stick = joystickVisible(store.get().settings.joystick, coarse);
+  if (stick) return; // iPad/coarse: the joystick shows the controls; no help chip
+  const btn = document.createElement('button');
+  btn.className = 'ra-pill explore-help';
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'Toon de besturing');
+  btn.textContent = '?';
+  hud.appendChild(btn);
+  hintState.helpChip = true;
+  btn.addEventListener('click', () => showTip('walk', onboardHint(false)));
 }
 
 /** Build + wire the virtual joystick (W1.3) into the freshly-rendered explore
@@ -866,7 +968,9 @@ function onWayfind(cue: WayCue | null): void {
   const strip = host.querySelector<HTMLDivElement>('.explore-wayfind');
   if (!strip) return;
   if (!cue) { strip.hidden = true; return; }
-  strip.hidden = false;
+  // F-06 sequencing: keep the text fresh, but stay hidden while the entry control
+  // hint still owns the screen — the seal (revealTracker) surfaces it on first step.
+  if (store.get().settings.wereldHintGezien) strip.hidden = false;
   const glyph = strip.querySelector<HTMLSpanElement>('.wf-glyph');
   const cueEl = strip.querySelector<HTMLSpanElement>('.wf-cue');
   if (glyph) glyph.textContent = cue.glyph;

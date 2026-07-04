@@ -205,6 +205,14 @@ export interface RangerDevHook {
    *  the E2E assert the fps probe exposes a tier and its knobs are consistent.
    *  Null before the world is live. */
   quality(): { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null;
+  /** RUN-3 P3.3 (F-06/F-15/F-11): the ONE sequenced onboarding-hint state. `active`
+   *  is the SINGLE hint on screen now — 'walk' (the entry control line), 'tap' (the
+   *  post-walk "tik op een dier" transient), 'boundary' (the P4.6 rim cue), or null.
+   *  `walkSeen`/`tapSeen` are the persisted one-time flags (state.ts, no new key);
+   *  `helpChip` is whether the laptop "?" re-show chip is mounted. The capture assert
+   *  reads `active` = 'walk' with the tracker held back to prove ONE hint at entry,
+   *  and that it advances on the first step. Null before the world/hook is ready. */
+  hint(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
 }
 
 // Bumped at the W7.4 ship box: stamps the shipped world-first release so the
@@ -260,6 +268,7 @@ const state = {
     pads: { x: number; z: number }[];
   } | null),
   quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
+  hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
 };
 
 /** Current screen the player is on. */
@@ -453,6 +462,14 @@ export function provideQuality(
   state.quality = fn;
 }
 
+/** Register the RUN-3 P3.3 onboarding-hint state source (the explore HUD). Pass
+ *  null to clear (F-06/F-15). */
+export function provideHint(
+  fn: (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null) | null,
+): void {
+  state.hint = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -491,6 +508,7 @@ export function installDevHook(): boolean {
     vehicle: () => (state.vehicle ? state.vehicle() : null),
     heli: () => (state.heli ? state.heli() : null),
     quality: () => (state.quality ? state.quality() : null),
+    hint: () => (state.hint ? state.hint() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

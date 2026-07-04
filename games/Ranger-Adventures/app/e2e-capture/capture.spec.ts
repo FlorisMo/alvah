@@ -107,6 +107,13 @@ type Annotation = {
   // prove the confirm CTA sits fully inside the frame (no scroll). null off-scene.
   taps: Record<string, TapBox> | null;
   viewport: { width: number; height: number } | null;
+  // P3.3 (F-06/F-15): the live onboarding-hint sequence. `active` is the SINGLE hint
+  // on screen — 'walk' (entry control line), 'tap' (post-walk transient), 'boundary'
+  // (P4.6 rim cue), or null. The world-entry shot reads active='walk' with the tracker
+  // held back to prove ONE hint at entry (F-06); `helpChip` = the laptop "?" re-show
+  // chip is mounted (F-15). `walkSeen`/`tapSeen` are the persisted one-time flags. null
+  // before the world/hook is ready.
+  hint: { active: string | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
   file: string;
 };
 /** The smallest visible box of a selector's matches (the worst case for a ≥56px
@@ -123,6 +130,7 @@ interface Hook {
   cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   board(): { x: number; z: number; near: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; headingUnwrapped: number; speed: number; driverHidden: boolean } | null;
+  hint(): { active: string | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -156,7 +164,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
     const a: Annotation = {
       name, platform, group, note, ok: true, file: `${platform}/${file}`,
       screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-      pixelHash: null, taps: null, viewport: null,
+      pixelHash: null, taps: null, viewport: null, hint: null,
     };
     try {
       const s = await hook(page, (r) => {
@@ -165,6 +173,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           screen: r.screen, missionView: r.missionView, pos: r.pos(),
           cameraYaw: r.cameraYaw(), drawCalls: r.drawCalls(), clip: r.clip(), avatar: r.avatar(), groundSpeed: r.groundSpeed(), cam: r.cam(), version: r.version,
           veh: v && v.inVehicle ? { heading: v.heading, headingUnwrapped: v.headingUnwrapped, speed: v.speed, inVehicle: v.inVehicle, driverHidden: v.driverHidden } : null,
+          hint: r.hint(),
         };
       });
       if (s) { Object.assign(a, s); version = s.version; }
@@ -193,7 +202,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
         screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-        pixelHash: null, taps: null, viewport: null,
+        pixelHash: null, taps: null, viewport: null, hint: null,
       });
       flush();
     }
@@ -244,7 +253,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
           screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-          pixelHash: null, taps: null, viewport: null,
+          pixelHash: null, taps: null, viewport: null, hint: null,
         });
         flush();
         return;
@@ -270,7 +279,11 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await press(page, isPad, page.getByRole('button', { name: 'Dit is mijn ranger' }));
       await waitForWorld(page);
       await settle(page, 1500);
-      await snap(page, 'world-entry', 'Wereld', 'Eerste frame in de wereld — camera-kader + avatarschaal (punch-list #1).');
+      // P3.3 (F-06): the world opens with ONE hint. `.explore-onboard` is visible
+      // (count 1), while the tap tip and the wayfinding tracker are held back
+      // (count 0) until the first step — the hook's `hint.active` reads 'walk'.
+      await snap(page, 'world-entry', 'Wereld', 'Eerste frame in de wereld — camera-kader + avatarschaal (punch-list #1); één hint (F-06).',
+        ['.explore-onboard', '.explore-tip', '.explore-wayfind']);
     });
     // F-18 idle-stability pair (P1.2 assert): two frames 3 s apart with NO input,
     // both AFTER the real rig has swapped in — cam.yaw/cam.dist must hold ±0.01,
@@ -295,8 +308,8 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await settle(page, 400);
       await snap(page, 'controls-hud', 'Besturing', isPad
         ? 'iPad-kader: staat de joystick er, ≥56 px, tap-to-walk zichtbaar?'
-        : 'Laptop-kader: joystick hoort weg te zijn (fijne pointer) — welke besturing zie je?',
-        ['.explore-pause']);
+        : 'Laptop-kader: joystick weg (fijne pointer) — de ≥56 px "?"-hulpchip toont de besturing (F-15).',
+        ['.explore-pause', '.explore-help']);
     });
     if (!isPad) {
       await scene(page, 'camera-attempts', async () => {

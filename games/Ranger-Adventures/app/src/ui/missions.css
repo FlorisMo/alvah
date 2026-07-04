@@ -338,7 +338,12 @@
   color: var(--green-deep);
   font: 600 13px/1 var(--font-body);
 }
-.explore-hint {
+/* P3.3 (F-06/F-11/F-15): the ONE transient tip — the post-walk "tik op een dier"
+   line, the laptop help re-show, and the P4.6 boundary cue all flow through it. Top-
+   centre, calm dark pill, ≤7 words. `pointer-events:none` so a tap still reaches the
+   world (tap-to-walk) beneath it — the old always-on `.explore-hint` toast it replaces
+   sat here permanently and swallowed the region; this one fades on its own. */
+.explore-tip {
   position: absolute;
   top: max(18px, env(safe-area-inset-top));
   left: 50%;
@@ -348,9 +353,10 @@
   padding: 10px 16px;
   text-align: center;
   border-radius: var(--radius-pill);
-  background: rgba(20, 16, 12, 0.5);
+  background: rgba(20, 16, 12, 0.62);
   color: var(--paper);
   font: 500 15px/1.3 var(--font-body);
+  pointer-events: none;
 }
 .explore-prompt,
 .explore-hub-prompt,
@@ -368,7 +374,7 @@
 .explore-vehicle-prompt[hidden] { display: none; }
 
 /* ---- W5.3b helicopter: the "aan de grond" / "vlieg naar een helipad" note is a
-   calm pill (matches the .explore-hint wording style); the cockpit frame is a
+   calm pill (matches the .explore-tip wording style); the cockpit frame is a
    fixed, always-level reference border that never moves (the horizon anchor), and
    the motion vignette fades in with flight speed and is OFF at hover. All
    pointer-events:none so they never block the world or the controls. ---- */
@@ -476,11 +482,14 @@
 .rj-base.rj-active .rj-thumb { transition: none; }
 
 /* veldnotitie wayfinding strip — calm direction + distance to the active mission,
-   no minimap chrome. Dual-channel: arrow glyph (shape) + words + the mission colour. */
+   no minimap chrome. Dual-channel: arrow glyph (shape) + words + the mission colour.
+   F-13: sits TOP-LEFT under the Pauze pill — OUT of the bottom-left joystick quadrant
+   it used to share on iPad (the thumb disc covered the mission text). Away from the
+   joystick (bottom-left), the board pill (top-right) and the prompts (bottom-centre). */
 .explore-wayfind {
   position: absolute;
   left: 16px;
-  bottom: max(20px, env(safe-area-inset-bottom));
+  top: calc(max(16px, env(safe-area-inset-top)) + 68px);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -507,6 +516,21 @@
 .explore-wayfind .wf-doel { font: 600 16px/1.25 var(--font-body); }
 .explore-wayfind .wf-cue { font: 500 14px/1.25 var(--font-body); opacity: 0.85; }
 .explore-wayfind.wf-arrived { background: rgba(63, 122, 58, 0.9); } /* second channel on arrival */
+
+/* F-15: laptop help chip — re-shows the control hint on demand (laptop steady-state
+   HUD was otherwise bare). Shared ≥56 px `.ra-pill` sizing; overridden to sit in the
+   bottom-right corner (clear of the top-left Pauze, top-right board pill, and the
+   bottom-centre prompts). Only mounted on a fine pointer, so it never crowds the iPad. */
+.explore-help {
+  top: auto;
+  left: auto;
+  right: 16px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  justify-content: center;
+  min-width: var(--tap-min);
+  padding: 0 16px;
+  font: 700 22px/1 var(--font-body);
+}
 
 /* ---- world-EF micro-beat (light open-world seasoning between missions) ---- */
 .worldbeat { text-align: center; }

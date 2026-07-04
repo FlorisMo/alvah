@@ -68,7 +68,8 @@ export interface Settings {
   joystick: 'auto' | 'aan' | 'uit';  // on-screen joystick visibility (W1.3): auto = coarse pointer
   cameraDraaitMee: boolean;          // W1.5 rotating follow-cam: camera eases behind as you turn
   helikopter: boolean;               // W5.3 opt-in helicopter mode (default UIT; unavailable under reduced-motion)
-  wereldHintGezien: boolean;         // W1.6 first-world-entry onboarding hint has been dismissed
+  wereldHintGezien: boolean;         // W1.6 first-world-entry control hint has been dismissed (step 1 of the P3.3 sequence)
+  tikHintGezien: boolean;            // P3.3 (F-06): the post-walk "tik op een dier" transient tip has shown once
   kwaliteitTier: 'hoog' | 'laag';    // W7.2 adaptive quality tier — the last fps-probe verdict, persisted so a slow device boots light
   skipBriefings: boolean;            // demo-skip (§9g): jump straight into play, no briefing card
   readSize: number;
@@ -133,6 +134,7 @@ const DEFAULT_SETTINGS: Settings = {
   cameraDraaitMee: true,
   helikopter: false,
   wereldHintGezien: false,
+  tikHintGezien: false,
   kwaliteitTier: 'hoog',
   skipBriefings: false,
   readSize: 28,
