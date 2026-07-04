@@ -170,10 +170,14 @@ export interface RangerDevHook {
    *  driving, the jeep's world position + heading, the active arcade caps
    *  (reduced-motion halves them), the wider camera offset, and the comfort
    *  invariants (fixed FOV, roll 0) — lets the E2E enter, drive ≥10 m, exit, and
-   *  assert the caps + comfort. Null before the jeep is placed. */
+   *  assert the caps + comfort. `headingUnwrapped` (F-32) is the CUMULATIVE steered
+   *  yaw (rad, never wrapped, reset to 0 on boarding): the control-condition assert
+   *  reads it so a held turn shows a monotonic change and no-steer driving shows
+   *  ~zero drift — a whole turn can never alias away between samples the way the
+   *  wrapped `heading` did in Run A (F-18). Null before the jeep is placed. */
   vehicle(): {
     placed: boolean; near: boolean; inVehicle: boolean;
-    x: number; z: number; heading: number;
+    x: number; z: number; heading: number; headingUnwrapped: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean;
@@ -243,7 +247,7 @@ const state = {
   water: null as null | (() => { shader: boolean; amp: number; time: number }),
   vehicle: null as null | (() => {
     placed: boolean; near: boolean; inVehicle: boolean;
-    x: number; z: number; heading: number;
+    x: number; z: number; heading: number; headingUnwrapped: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean; driverHidden: boolean;
@@ -420,7 +424,7 @@ export function provideWater(
 export function provideVehicle(
   fn: (() => {
     placed: boolean; near: boolean; inVehicle: boolean;
-    x: number; z: number; heading: number;
+    x: number; z: number; heading: number; headingUnwrapped: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean; driverHidden: boolean;

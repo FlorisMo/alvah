@@ -81,12 +81,15 @@ type Annotation = {
   // the court of appeal. The camera-orbit shot proves a drag swings `cam.yaw` while `pos`
   // holds; the camera-click-walk shot proves a clean click still moves `pos` (tap-to-walk).
   cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
-  // vehicle heading/speed when driving — the DATA signal for the #3 steering
-  // finding (heading unchanged across the drive burst while a turn key is held
-  // → dead steering). `driverHidden` (F-31): true while he rides the jeep with his
-  // mesh hidden (the sanctioned fallback) — the assert reads it true + clip='sit'
-  // to prove he boards, never stands planted + idle. null when not in a vehicle.
-  veh: { heading: number; speed: number; inVehicle: boolean; driverHidden: boolean } | null;
+  // vehicle heading/speed when driving — the DATA signal for the F-32 steering
+  // control conditions. `headingUnwrapped` is the CUMULATIVE steered yaw (never
+  // wrapped): across the no-turn straight pair it barely moves (drift ≈ 0), across
+  // the held-turn drive burst it changes MONOTONICALLY — the wrapped `heading` could
+  // alias a whole turn away between samples (F-18), the unwrapped one cannot.
+  // `driverHidden` (F-31): true while he rides the jeep with his mesh hidden (the
+  // sanctioned fallback) — the assert reads it true + clip='sit' to prove he boards,
+  // never stands planted + idle. null when not in a vehicle.
+  veh: { heading: number; headingUnwrapped: number; speed: number; inVehicle: boolean; driverHidden: boolean } | null;
   // F-18 court of appeal (P1.2): the md5 of THIS shot's PNG bytes. "Pixels outrank
   // the hook" (§4) becomes machine-checkable — the world-idle / world-idle-hold pair
   // reads an IDENTICAL hash when the pose is genuinely still, so the P1.2 idle assert
@@ -106,7 +109,7 @@ interface Hook {
   groundSpeed(): number | null;
   cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   board(): { x: number; z: number; near: boolean } | null;
-  vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; speed: number; driverHidden: boolean } | null;
+  vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; headingUnwrapped: number; speed: number; driverHidden: boolean } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -146,7 +149,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         return {
           screen: r.screen, missionView: r.missionView, pos: r.pos(),
           cameraYaw: r.cameraYaw(), drawCalls: r.drawCalls(), clip: r.clip(), avatar: r.avatar(), groundSpeed: r.groundSpeed(), cam: r.cam(), version: r.version,
-          veh: v && v.inVehicle ? { heading: v.heading, speed: v.speed, inVehicle: v.inVehicle, driverHidden: v.driverHidden } : null,
+          veh: v && v.inVehicle ? { heading: v.heading, headingUnwrapped: v.headingUnwrapped, speed: v.speed, inVehicle: v.inVehicle, driverHidden: v.driverHidden } : null,
         };
       });
       if (s) { Object.assign(a, s); version = s.version; }
@@ -335,16 +338,31 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await waitFor(page, (r) => r.vehicle()?.inVehicle ?? false, 15_000);
       await settle(page, 700);
       await snap(page, 'jeep-in', 'Jeep', 'In de jeep — camerakader, blur/DOF, is het model helder? (#3)');
-      // STEER — #3 says heading stays fixed. Forward + one turn direction:
-      // laptop ArrowUp+ArrowLeft; iPad joystick up-left (throttle y=1, steer x=−1).
-      await holdDriveTurn(page, isPad, stick);
       try {
-        for (let i = 1; i <= 4; i++) {
-          await settle(page, 350);
-          await snap(page, `jeep-drive-${i}`, 'Jeep (burst)', `Rijframe ${i}/4 met stuur-input — verandert de heading? (stuur-bug #3)`);
-        }
+        // F-32 TURN control condition — throttle + ONE steer held (laptop
+        // ArrowUp+ArrowLeft; iPad joystick up-left, throttle y=1 steer x=−1). With the
+        // speed-scaled steering the jeep now turns AS it drives: veh.headingUnwrapped
+        // must change MONOTONICALLY across the burst (a real, comfortable ~0.6 rad/s
+        // turn) and consecutive frames differ in pixels — no more doughnut-in-place.
+        await holdDriveTurn(page, isPad, stick);
+        try {
+          for (let i = 1; i <= 4; i++) {
+            await settle(page, 350);
+            await snap(page, `jeep-drive-${i}`, 'Jeep (burst)', `Rijframe ${i}/4, gas + stuur — draait de heading gestaag mee? (F-32 stuur)`);
+          }
+        } finally { await releaseDriveTurn(page, isPad, stick); }
+        // F-32 NO-TURN control condition — throttle ONLY, no steer, ~3 s. The contrast
+        // that makes the turn burst meaningful: veh.headingUnwrapped must stay ~flat
+        // (drift ≈ 0) while driving straight — steering only turns on real steer input,
+        // never on its own (the audit's "always-circling jeep" is refuted by the pair).
+        await holdForward(page, isPad, stick);
+        try {
+          await settle(page, 400);
+          await snap(page, 'jeep-straight-1', 'Jeep (recht)', 'Gas, geen stuur — start; heading mag NIET vanzelf driften (F-32 controle).');
+          await settle(page, 2600);
+          await snap(page, 'jeep-straight-2', 'Jeep (recht)', 'Gas, geen stuur, 3 s later — unwrapped heading ~gelijk: recht vooruit, geen doughnut.');
+        } finally { await releaseForward(page, isPad, stick); }
       } finally {
-        await releaseDriveTurn(page, isPad, stick);
         // always climb back out (defensive — the group's page is closed after,
         // but keep the exit path exercised + the state clean).
         if (await hook(page, (r) => r.vehicle()?.inVehicle ?? false)) {

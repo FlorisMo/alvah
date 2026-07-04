@@ -25,7 +25,13 @@
  *
  * The comfort clause (§3.2 / research C.3): reduced-motion caps top speed ~3 m/s
  * and HALVES the turn-rate, so the whole drive stays gentle — `driveCaps(reduced)`
- * is the single place that lives.
+ * is the single place that lives. F-32 adds two more comfort shapers, applied by
+ * the World to the JEEP ONLY (the heli reuses the raw `driveStep`): `rampSpeed`
+ * eases the speed toward the throttle over ~1 s instead of snapping to the cap on
+ * frame one, and `comfortSteer` scales the steer by how fast the jeep is actually
+ * moving so it can never pivot in place (the audit's spin-top / doughnut). The two
+ * keep the reachable turn rate ~0.6 rad/s WITHOUT touching the frozen caps the
+ * `vehicle` E2E pins (turnRate 1.2 / maxSpeed 6, halved under reduced-motion).
  */
 
 /** The active arcade caps: top speed (m/s) and the yaw rate-clamp (rad/s). */
@@ -129,4 +135,42 @@ export function driveStep(
     dz: Math.cos(nextHeading) * dist,
     speed,
   };
+}
+
+/**
+ * F-32 comfort — seconds for the jeep to build from rest to its top speed (and the
+ * same to brake to a stop or reverse). ~1 s is a calm arcade ramp for a young
+ * driver; the reduced-motion cap reaches its lower top in the same time, so a
+ * gentler build-up falls out for free.
+ */
+export const JEEP_RAMP_TIME = 1;
+
+/**
+ * F-32 acceleration ramp (JEEP only; applied by the World before `driveStep`). Move
+ * the live drive speed toward the throttle's target `throttle · maxSpeed` at a
+ * bounded rate `maxSpeed / JEEP_RAMP_TIME`, instead of snapping to full speed on the
+ * first frame — the audit measured max speed (√18) from drive-sample one, no ramp.
+ * The clamp is symmetric, so lifting off or reversing eases down at the same rate.
+ * Pure + deterministic (the World threads the live speed across frames).
+ */
+export function rampSpeed(current: number, throttle: number, dt: number, caps: DriveCaps): number {
+  const target = clampUnit(throttle) * caps.maxSpeed;
+  const maxDv = (caps.maxSpeed / JEEP_RAMP_TIME) * dt;
+  const dv = target - current;
+  return Math.abs(dv) <= maxDv ? target : current + Math.sign(dv) * maxDv;
+}
+
+/**
+ * F-32 speed-scaled steering (JEEP only; applied by the World before `driveStep`).
+ * Scale the raw steer by how fast the jeep is ACTUALLY moving (`|speed| / maxSpeed`)
+ * so it can never pivot in place — the spin-top / doughnut the audit caught, where a
+ * held turn key spun the nose while the jeep went nowhere. Fed to `driveStep` as its
+ * `steer`, the reachable yaw rate then peaks at `turnRate / 2` (≈ 0.6 rad/s at full
+ * caps — the shared unit-magnitude stick cannot hold full steer AND full throttle at
+ * once), which lands inside the F-32 comfort band, and the turn radius
+ * `maxSpeed / turnRate` stays roughly constant across speeds (one calm arc). Pure.
+ */
+export function comfortSteer(steer: number, speed: number, caps: DriveCaps): number {
+  const speedFrac = Math.min(1, Math.abs(speed) / caps.maxSpeed);
+  return clampUnit(steer) * speedFrac;
 }

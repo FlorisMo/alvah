@@ -28,7 +28,7 @@ import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from './AmbientPaths';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { resolveInput, screenVector, type StickVector } from '../core/input';
-import { driveStep, driveCaps, calmSpeed, ANIMAL_SLOW_RADIUS } from '../core/vehicle';
+import { driveStep, driveCaps, calmSpeed, rampSpeed, comfortSteer, ANIMAL_SLOW_RADIUS } from '../core/vehicle';
 import {
   flyStep, heliVignette, heliAvailable,
   HELI_CRUISE_HEIGHT, HELI_PAD_HEIGHT, HELI_CAPS, HELI_ROLL,
@@ -331,6 +331,9 @@ export class World {
   private jeep: THREE.Group | null = null;
   private jeepPos: THREE.Vector3 | null = null;   // === jeep.position (x/z the controller drives)
   private jeepHeading = 0;                         // yaw the arcade controller steers
+  private jeepHeadingUnwrapped = 0;                // F-32: cumulative (never wrapped) yaw the
+                                                   //   steering assert reads — a whole turn can
+                                                   //   never alias away between samples (F-18)
   private jeepObstacle: Obstacle | null = null;    // its collision circle while parked
   private inVehicle = false;
   private nearJeep = false;
@@ -696,7 +699,7 @@ export class World {
    *  jeep is placed. */
   vehicleState(): {
     placed: boolean; near: boolean; inVehicle: boolean;
-    x: number; z: number; heading: number;
+    x: number; z: number; heading: number; headingUnwrapped: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean; driverHidden: boolean;
@@ -713,6 +716,7 @@ export class World {
     return {
       placed: true, near: this.nearJeep, inVehicle: this.inVehicle,
       x: this.jeepPos.x, z: this.jeepPos.z, heading: this.jeepHeading,
+      headingUnwrapped: this.jeepHeadingUnwrapped,
       speed: this.vehicleSpeed, maxSpeed: caps.maxSpeed, turnRate: caps.turnRate,
       camDist: off.z, camHeight: off.y, fov: this.camera.fov, roll: rightY,
       nearAnimal: this.vehicleNearAnimal, dust: this.dustEmitting,
@@ -730,6 +734,7 @@ export class World {
     if (this.inVehicle || !this.jeep || !this.jeepPos) return;
     this.inVehicle = true;
     this.jeepHeading = this.jeep.rotation.y;
+    this.jeepHeadingUnwrapped = 0;   // F-32: fresh drive → measure steering drift from entry
     this.vehicleSpeed = 0;
     if (this.jeepObstacle) {
       const i = this.obstacles.indexOf(this.jeepObstacle);
@@ -2274,8 +2279,24 @@ export class World {
     const stick = this.joystickSource ? this.joystickSource() : null;
     const intent = this.input ? screenVector(this.input.held, stick) : { x: 0, y: 0 };
     const caps = driveCaps(reduced);
-    const step = driveStep(this.jeepHeading, { throttle: intent.y, steer: intent.x }, dt, caps);
+    // F-32 comfort tuning (jeep only — the shared driveStep core + the heli stay
+    // untouched, and the frozen turnRate/maxSpeed caps are unchanged):
+    //  (1) ACCEL RAMP: ease the live speed toward the throttle's target over ~1 s
+    //      instead of snapping to the cap on frame one. Feed the ramped speed back
+    //      in as an effective throttle so the pure core drives at the built-up pace.
+    //  (2) SPEED-SCALED STEER: scale the steer by how fast the jeep is really moving
+    //      so a held turn key can never pivot it in place (the audit's spin-top).
+    // `this.vehicleSpeed` (the calm-capped live speed) is the ramp's carried state,
+    // so leaving an animal's slow-radius re-accelerates smoothly from the crawl.
+    const ramped = rampSpeed(this.vehicleSpeed, intent.y, dt, caps);
+    const effThrottle = caps.maxSpeed !== 0 ? ramped / caps.maxSpeed : 0;
+    const effSteer = comfortSteer(intent.x, ramped, caps);
+    const step = driveStep(this.jeepHeading, { throttle: effThrottle, steer: effSteer }, dt, caps);
     this.jeepHeading = step.heading;
+    // F-32: accumulate the UNWRAPPED heading from the exact yaw delta driveStep applied
+    // (heading -= steer·turnRate·dt), the honest steering signal the control-condition
+    // assert reads — no turn key ⇒ drift 0, a held turn ⇒ a monotonic change.
+    this.jeepHeadingUnwrapped += -effSteer * caps.turnRate * dt;
     const jp = this.jeepPos;
     // W5.2 calm rule: auto-slow to a crawl within reach of any wandering animal so
     // it never panic-flees. The pure `calmSpeed` caps the signed speed; scaling the
