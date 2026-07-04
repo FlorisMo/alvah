@@ -1735,10 +1735,15 @@ export class World {
   /** A camera-facing sprite name-tag (rounded warm card + the mission title). */
   private makeLabel(text: string, color: string): THREE.Sprite {
     const pad = 24, fontPx = 44;
+    const pipGap = 34; // left pad → colour pip → text: the title baseline starts pad+pipGap in
     const c = document.createElement('canvas');
     const ctx = c.getContext('2d')!;
     ctx.font = `600 ${fontPx}px Inter, system-ui, sans-serif`;
-    const w = Math.ceil(ctx.measureText(text).width) + pad * 2;
+    // F-22 re-open: the width MUST cover the whole run — left pad + pip + text + an
+    // EQUAL right pad. The old `textW + pad*2` ignored the pipGap the title is drawn
+    // at, so the last glyph overflowed the canvas' right edge and clipped
+    // ("Missiebord" → "Missieborc"). Deriving both from pipGap keeps them in lockstep.
+    const w = pad + pipGap + Math.ceil(ctx.measureText(text).width) + pad;
     const h = fontPx + pad * 2;
     c.width = w; c.height = h;
     // rounded warm card
@@ -1753,7 +1758,7 @@ export class World {
     ctx.fillStyle = '#fdf6e8';
     ctx.font = `600 ${fontPx}px Inter, system-ui, sans-serif`;
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, pad + 34, h / 2 + 2);
+    ctx.fillText(text, pad + pipGap, h / 2 + 2);
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
