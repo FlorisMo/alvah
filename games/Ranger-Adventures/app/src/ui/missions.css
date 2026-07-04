@@ -133,6 +133,20 @@
 }
 .mission-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
 .mission-card:active { transform: scale(0.98); }
+/* F-23: one flat pictogram per card on a biome-tinted disc — a dyslexic player
+ * recognises "the frog one" at a glance instead of reading ten cards. The disc
+ * colour (--disc) + silhouette ink (--ink) come from MissionIcon.ts per biome. */
+.mc-icon {
+  align-self: flex-start;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--disc, #eef1e9);
+  color: var(--ink, var(--green-mid));
+}
+.mc-icon svg { width: 34px; height: 34px; display: block; }
 .mc-land {
   font: 600 12px/1 var(--font-body);
   letter-spacing: 0.06em;

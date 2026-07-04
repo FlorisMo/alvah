@@ -16,6 +16,7 @@ import { store } from '../core/state';
 import { Content } from '../content/registry';
 import { narrator } from '../core/narrator';
 import { mountReadAloud } from './ReadAloud';
+import { missionIcon } from './MissionIcon';
 import { rangerNaam } from '../core/avatar';
 import { Sound } from '../core/sound';
 import { loadGameAudio, setAmbientScene } from '../core/calls';
@@ -300,6 +301,7 @@ function showLodge(): void {
       const klaar = done[m.id] ? `<span class="mc-done" aria-label="voltooid">✓</span>` : '';
       return (
         `<button class="mission-card" type="button" data-id="${esc(m.id)}">` +
+        missionIcon(m) +
         `<span class="mc-land">${esc(m.landschap)}</span>${klaar}` +
         `<span class="mc-title">${esc(m.titel)}</span>` +
         `<span class="mc-eng">${engines.map((e) => `<span class="mc-chip">${esc(e)}</span>`).join('')}</span>` +
@@ -1104,6 +1106,7 @@ function showMissionBoard(): void {
       const klaar = done[m.id] ? `<span class="mc-done" aria-label="voltooid">✓</span>` : '';
       return (
         `<button class="mission-card" type="button" data-id="${esc(m.id)}">` +
+        missionIcon(m) +
         `<span class="mc-land">${esc(m.landschap)}</span>${klaar}` +
         `<span class="mc-title">${esc(m.titel)}</span>` +
         `<span class="mc-eng">${engines.map((e) => `<span class="mc-chip">${esc(e)}</span>`).join('')}</span>` +
