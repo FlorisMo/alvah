@@ -10,7 +10,8 @@ import { createHash } from 'node:crypto';
  * screenshot + a state annotation at every screen/state the audit needs to see:
  *   title · avatar · world-entry · WALK BURST (≥3 frames, gliding evidence) ·
  *   controls HUD · (laptop) trackpad-zoom + orbit ATTEMPTS · pause hub ·
- *   jeep near/in/drive burst · mission board · a 3D mission · reduce-motion world.
+ *   jeep near/in/drive burst · mission board · a 3D mission · reduce-motion world
+ *   through BOTH gates (OS media AND the in-game "Rustige beweging" toggle, F-34b).
  *
  * ── Run B / P0.2 (F-21) hardening ────────────────────────────────────────────
  * Run A booted the WHOLE flow in ONE long-lived page. On the iPad project the
@@ -490,13 +491,59 @@ test('audit capture flow', async ({ context }, testInfo) => {
     });
   });
 
-  // ══ GROUP 4 — reduce-motion world (OS media set before boot). Own fresh page:
+  // ══ GROUP 4 — reduce-motion via GATE 1: the OS media query (F-34b). `reduce:true`
+  //    sets `emulateMedia({reducedMotion:'reduce'})` before boot. Own fresh page:
   //    a clean first-run boot, so the F-34a returning-player stall cannot bite. ══
   await runGroup('reduce-motion', { reduce: true }, async (page) => {
     await scene(page, 'reduce-motion', async () => {
       await bootWorld(page, isPad);
       await settle(page, 1200);
-      await snap(page, 'reduce-motion-world', 'Reduce-Motion', 'Verminder-beweging AAN — ziet de wereld er nog goed uit of plat/kapot?');
+      await snap(page, 'reduce-motion-world', 'Reduce-Motion', 'Verminder-beweging AAN via de OS-gate — ziet de wereld er nog goed uit of plat/kapot?');
+    });
+  });
+
+  // ══ GROUP 4b — reduce-motion via GATE 2: the IN-GAME toggle (F-34b). NO OS media
+  //    this time (`{}`, not `{reduce:true}`) — boot a normal world, open Pauze →
+  //    Instellingen and flip "Rustige beweging" (Tweaks.ts:42 →
+  //    setReducedMotionOverride(true) → `body.rm`), then return to the open plek and
+  //    snap the RM world. This is the gate Floris actually uses on the iPad, and the
+  //    set's ONLY capture of the Instellingen/Tweaks UI. Own fresh page (clean
+  //    first-run → the toggle starts at its default OFF, so the flip genuinely arms
+  //    RM instead of riding an OS setting). ══
+  await runGroup('reduce-motion-toggle', {}, async (page) => {
+    await scene(page, 'reduce-motion-toggle', async () => {
+      await bootWorld(page, isPad);
+      await settle(page, 600);
+      // Pauze → Instellingen. Every press is BOUNDED (P0.3/F-34a: an unbounded wait
+      // on a control that never appears is what ate Run A's reduce-motion capture).
+      await press(page, isPad, page.locator('.explore-pause'), 10_000);
+      await press(page, isPad, page.locator('.ph-tweaks'), 10_000);
+      const rm = page.locator('.tw-toggle[data-key="reducedMotion"]');
+      await rm.waitFor({ state: 'visible', timeout: 10_000 });
+      // Flip it ON (default OFF on a clean first-run boot; defensive if already on).
+      if ((await rm.getAttribute('aria-checked')) !== 'true') await press(page, isPad, rm, 10_000);
+      // Prove the in-game gate ENGAGED before shooting: setReducedMotionOverride(true)
+      // adds `body.rm` (reduced-motion.ts) — the same class F-34d (P5.3) will assert.
+      // Bounded poll (file idiom, cf. passAvatarMaker); a toggle that never arms RM
+      // throws → `scene` records it as a GAP, never a mislabeled "RM" shot.
+      let rmOn = false;
+      for (let i = 0; i < 20; i++) {
+        if (await page.evaluate(() => document.body.classList.contains('rm'))) { rmOn = true; break; }
+        await page.waitForTimeout(150);
+      }
+      if (!rmOn) throw new Error('in-game "Rustige beweging" toggle did not engage body.rm');
+      // Snap the Instellingen panel with the toggle now ON — the set's only view of
+      // the Tweaks/settings UI (F-34 note) and evidence the in-game gate is armed.
+      await snap(page, 'instellingen-rm', 'Reduce-Motion',
+        'Instellingen — "Rustige beweging" AAN (de in-game gate die Floris op de iPad gebruikt).',
+        ['.tw-toggle', '.tw-back']);
+      // Klaar → pause hub → Terug naar de open plek → the RM world via the toggle gate.
+      await press(page, isPad, page.locator('.tw-back'), 10_000);
+      await press(page, isPad, page.locator('.ph-back'), 10_000);
+      await waitForWorld(page);
+      await settle(page, 1200);
+      await snap(page, 'reduce-motion-toggle-world', 'Reduce-Motion',
+        'Verminder-beweging AAN via de in-game toggle — zelfde wereld, camera snijdt i.p.v. zwiert; ziet het er goed uit of plat/kapot?');
     });
   });
 
