@@ -84,6 +84,15 @@ const PAD_LAND_R = 6.0;
 // the normal resolver applies again (pads are walk-through, so touchdown is clean).
 const HELI_AIRBORNE_Y = 2.5;
 
+// F-11 world rim: a calm pine tree-line rings the playable area at the move bound
+// (`limits.bound`, 116 m) so walking outward meets a visible forest edge, never the
+// Run A silent void. RIM_EASE is the band (m) over which the ranger's OUTWARD step
+// eases to zero — a gentle stop, no invisible-wall jolt (the tangential slide ALONG
+// the rim keeps full speed). RIM_HINT is how close to the bound the calm "Hier stopt
+// het bos" cue fires (once per approach, re-armed inward). All in metres.
+const RIM_EASE = 8;
+const RIM_HINT = 3.5;
+
 // F-22 occlusion-proof labels: the diegetic name-tags draw with depthTest off so
 // no nearer mesh can clip them mid-glyph (see makeLabel). The cost of drawing them
 // on top of everything is that a far tag would otherwise punch through hills from
@@ -324,6 +333,11 @@ export class World {
   private nearBoard = false;
   private onBoardNear: (near: boolean) => void = () => {};
   private onBoardOpen: () => void = () => {};
+  // F-11: latched true while the ranger is pressed against the world rim heading
+  // outward (the calm "Hier stopt het bos" cue has fired); re-armed once he walks
+  // back inward. `onBoundary` fires on the rising edge — once per approach.
+  private atBoundary = false;
+  private onBoundary: () => void = () => {};
 
   // W6.4b2 "Ken je roep" sit-spot: a bench by the vogelkijkhut. Its own
   // proximity/tap/interact path (like the case-board) — walking up surfaces
@@ -461,6 +475,7 @@ export class World {
     this.scatterHeather(Math.round(150 * veg));
     this.scatterMarram(Math.round(110 * veg));
     this.scatterReeds(Math.round(90 * veg));
+    this.buildRim(); // F-11: the pine tree-line marking the world edge
     this.applyWind(0); // W4.6: initial wind pose for both grass meshes
 
     // ranger: procedural stand-in first (instant), real model swaps in when loaded
@@ -550,6 +565,24 @@ export class World {
   setBoard(cbs: { onNear: (near: boolean) => void; onOpen: () => void }): void {
     this.onBoardNear = cbs.onNear;
     this.onBoardOpen = cbs.onOpen;
+  }
+
+  /** Register the F-11 world-rim cue: fired ONCE each time the walking ranger reaches
+   *  the rim heading outward (re-armed when he walks back inward). The explore HUD
+   *  wires it to the calm "Hier stopt het bos" one-tip channel (`showBoundaryHint`) —
+   *  the boundary hint joining the one sequenced hint system (BUILD-PLAN §3). */
+  setBoundaryHint(cb: () => void): void {
+    this.onBoundary = cb;
+  }
+
+  /** Dev-hook accessor (F-11): the world-rim state — `bound` (the move-limit radius,
+   *  m), the ranger's live `dist` from world centre, and `atRim` (he is pressed
+   *  against the rim heading outward, so the "Hier stopt het bos" cue has fired). The
+   *  P4.6 assert reads `dist` ≤ `bound` (clamped, never beyond) with `atRim` true
+   *  after an outward walk — the gentle stop, not an invisible wall. */
+  boundaryState(): { bound: number; dist: number; atRim: boolean } {
+    const p = this.ranger.position;
+    return { bound: this.limits.bound, dist: Math.hypot(p.x, p.z), atRim: this.atBoundary };
   }
 
   /** Dev-hook accessor (W6.4b2): the sit-spot's world position + whether the ranger
@@ -1254,6 +1287,44 @@ export class World {
     });
     tufts.instanceMatrix.needsUpdate = true;
     this.scene.add(tufts);
+  }
+
+  /**
+   * F-11: a calm pine tree-line ringing the playable area at the move bound, so
+   * walking outward meets a visible forest edge ("Hier stopt het bos") instead of
+   * the Run A silent void. The ring sits JUST BEYOND the bound (the ranger clamps at
+   * `limits.bound`; the trees start a touch past it), so it needs no collision — it
+   * is a backdrop wall, hidden by the fog and only revealed as the player nears the
+   * edge (so hub/spawn shots are untouched). Two instanced meshes → +2 draw calls
+   * regardless of count, keeping the <150 budget intact. Deterministic (index-driven
+   * jitter, no Math.random), uniform all the way round so every heading ends at the
+   * same tidy edge. Shadows off — a distant backdrop needs none.
+   */
+  private buildRim(): void {
+    const bound = this.limits.bound;
+    const N = 180;
+    const trunkGeo = new THREE.CylinderGeometry(0.14, 0.2, 1.4, 6);
+    const crownGeo = new THREE.ConeGeometry(1.05, 2.8, 7);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: '#5b4327', roughness: 1 });
+    const crownMat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.bos.ground, roughness: 1 });
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, N);
+    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, N);
+    const m = new THREE.Matrix4();
+    for (let k = 0; k < N; k++) {
+      const ang = (k / N) * Math.PI * 2;
+      // two staggered rows just past the bound (≈117.2–120) → a wall with depth, not
+      // a single-file fence; stays ≤120 so it lands on the 240² ground plane on-axis.
+      const rad = bound + 1.2 + (k % 2) * 1.8 + Math.sin(k * 12.9) * 0.6;
+      const x = Math.cos(ang) * rad;
+      const z = Math.sin(ang) * rad;
+      const s = 1.0 + (k % 5) * 0.18; // varied heights so the line reads as a natural edge
+      const y = this.groundY(x, z);
+      m.makeScale(s, s, s); m.setPosition(x, y + 0.7 * s, z); trunks.setMatrixAt(k, m);
+      m.makeScale(s, s, s); m.setPosition(x, y + 2.2 * s, z); crowns.setMatrixAt(k, m);
+    }
+    trunks.instanceMatrix.needsUpdate = true;
+    crowns.instanceMatrix.needsUpdate = true;
+    this.scene.add(trunks, crowns);
   }
 
   /** Drift-sand marram tussocks — upright pale grass blades on the stuifzand.
@@ -2751,6 +2822,29 @@ export class World {
         wantZ = rp.z + (moving ? (dz / dist) * step : 0);
       }
       if (moving) {
+        // F-11: the world rim is a calm stop, never an invisible wall. Ease the
+        // OUTWARD part of the intended step to zero across the last RIM_EASE metres
+        // (the tangential slide ALONG the rim keeps full speed); resolveMove's radial
+        // clamp stays the hard backstop. And fire the calm "Hier stopt het bos" cue
+        // once each time the ranger reaches the rim heading out — re-armed when he
+        // walks back inward. Foot travel only (the jeep is clamped by resolveMove).
+        const rNow = Math.hypot(rp.x, rp.z);
+        const bound = this.limits.bound;
+        let outward = 0;
+        if (rNow > bound - RIM_EASE) {
+          const nx = rp.x / (rNow || 1), nz = rp.z / (rNow || 1);
+          outward = (wantX - rp.x) * nx + (wantZ - rp.z) * nz; // >0 ⇒ the step heads outward
+          if (outward > 0) {
+            const ease = Math.max(0, (bound - rNow) / RIM_EASE); // 1 at the band's inner edge → 0 at the bound
+            wantX -= outward * nx * (1 - ease);
+            wantZ -= outward * nz * (1 - ease);
+          }
+        }
+        if (rNow > bound - RIM_HINT && outward > 0) {
+          if (!this.atBoundary) { this.atBoundary = true; this.onBoundary(); }
+        } else if (rNow < bound - RIM_HINT - 6) {
+          this.atBoundary = false; // hysteresis: re-arm once well back inside the rim
+        }
         const next = resolveMove(rp.x, rp.z, wantX, wantZ, this.obstacles, this.limits);
         const mx = next.x - rp.x, mz = next.z - rp.z;
         if (mx * mx + mz * mz > 1e-7) {

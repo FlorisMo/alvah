@@ -213,6 +213,13 @@ export interface RangerDevHook {
    *  reads `active` = 'walk' with the tracker held back to prove ONE hint at entry,
    *  and that it advances on the first step. Null before the world/hook is ready. */
   hint(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
+  /** RUN-3 P4.6 (F-11): the world-rim state — `bound` (the move-limit radius, m),
+   *  the ranger's live `dist` from world centre, and `atRim` (he is pressed against
+   *  the rim heading outward, so the calm "Hier stopt het bos" cue has fired). The
+   *  boundary assert reads `dist` ≤ `bound` (clamped, never beyond) with `atRim`
+   *  true after an outward walk — a gentle stop, not an invisible wall. Null before
+   *  the world/hook is ready. */
+  boundary(): { bound: number; dist: number; atRim: boolean } | null;
 }
 
 // Bumped at the W7.4 ship box: stamps the shipped world-first release so the
@@ -269,6 +276,7 @@ const state = {
   } | null),
   quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
   hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
+  boundary: null as null | (() => { bound: number; dist: number; atRim: boolean } | null),
 };
 
 /** Current screen the player is on. */
@@ -470,6 +478,13 @@ export function provideHint(
   state.hint = fn;
 }
 
+/** Register the RUN-3 P4.6 world-rim state source (the World). Pass null to clear (F-11). */
+export function provideBoundary(
+  fn: (() => { bound: number; dist: number; atRim: boolean } | null) | null,
+): void {
+  state.boundary = fn;
+}
+
 /**
  * Attach `window.__ranger` when DEV or `?dev=1`. Idempotent. Returns whether
  * the hook was installed (for logging/tests).
@@ -509,6 +524,7 @@ export function installDevHook(): boolean {
     heli: () => (state.heli ? state.heli() : null),
     quality: () => (state.quality ? state.quality() : null),
     hint: () => (state.hint ? state.hint() : null),
+    boundary: () => (state.boundary ? state.boundary() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

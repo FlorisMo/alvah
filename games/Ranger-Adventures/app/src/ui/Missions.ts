@@ -46,7 +46,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideCam, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality, provideHint } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideCam, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality, provideHint, provideBoundary } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin, beginActivityScope, abortActivityScope } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -211,6 +211,7 @@ function leaveWorld(): void {
   provideNearId(null);
   provideMarkers(null);
   provideBoard(null);
+  provideBoundary(null);
   provideSitSpot(null);
   provideClip(null);
   provideAvatar(null);
@@ -567,6 +568,10 @@ function startExplore(): void {
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
   // mission board overlay in-place (no leaveWorld). Wire its proximity + interact.
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });
+  // F-11: the calm world-rim cue — when the walking ranger reaches the edge heading
+  // outward, show the "Hier stopt het bos" hint through the ONE sequenced hint
+  // channel (the boundary hint joining the hint system, BUILD-PLAN §3).
+  world.setBoundaryHint(showBoundaryHint);
   // W6.4b2: the "Ken je roep" sit-spot by the vogelkijkhut — walking up surfaces
   // "Luister naar de vogels", acting on it plays the roep3d slice in-place.
   world.setSitSpot({ onNear: onSitSpotApproach, onActivate: tryPlayRoep });
@@ -597,6 +602,7 @@ function startExplore(): void {
   provideNearId(() => world!.nearMission());
   provideMarkers(() => world!.markerPositions());
   provideBoard(() => world!.boardState());
+  provideBoundary(() => world!.boundaryState()); // F-11: world-rim clamp + "Hier stopt het bos" cue
   provideSitSpot(() => world!.sitSpotState()); // W6.4b2: "Ken je roep" sit-spot proximity
   provideClip(() => world!.playerClip()); // W3.2: the ranger's active locomotion clip
   provideAvatar(() => world!.avatarState()); // F-07: live ranger scale (measured bbox height)
@@ -920,10 +926,12 @@ function showTip(id: 'walk' | 'tap' | 'boundary', text: string, ms = 5200): void
   }, ms);
 }
 
-/** F-11 (P4.6 wires the trigger): the calm world-boundary cue flows through the
- *  SAME one-tip channel as the tap tip — this is the "F-11 boundary hint joins the
- *  hint system" coupling. P4.6 calls it when the ranger heads past the last content
- *  (rim + gentle stop there); here it just proves the channel carries it. */
+/** F-11: the calm world-boundary cue flows through the SAME one-tip channel as the
+ *  tap tip — the "F-11 boundary hint joins the hint system" coupling (BUILD-PLAN §3).
+ *  Wired to `World.setBoundaryHint` (P4.6): the World fires it once each time the
+ *  walking ranger reaches the rim heading outward, alongside the visible tree-line +
+ *  the gentle ease-to-zero stop there. Read-aloud fires with voorlezen on (via
+ *  showTip); the actual voice stays Floris-demo-gated. */
 export function showBoundaryHint(): void {
   showTip('boundary', ONBOARD_BOUNDARY);
 }

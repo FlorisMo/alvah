@@ -114,6 +114,12 @@ type Annotation = {
   // chip is mounted (F-15). `walkSeen`/`tapSeen` are the persisted one-time flags. null
   // before the world/hook is ready.
   hint: { active: string | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
+  // P4.6 (F-11): the world-rim state — `bound` (move-limit radius, m), the ranger's
+  // live `dist` from world centre, and `atRim` (pressed against the rim heading out,
+  // the "Hier stopt het bos" cue fired). The boundary shot asserts `dist` ≤ `bound`
+  // (clamped, never beyond) with `atRim` true after an outward walk — a gentle stop,
+  // not an invisible wall. null off-world / before the hook is ready.
+  boundary: { bound: number; dist: number; atRim: boolean } | null;
   file: string;
 };
 /** The smallest visible box of a selector's matches (the worst case for a ≥56px
@@ -131,6 +137,7 @@ interface Hook {
   board(): { x: number; z: number; near: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; headingUnwrapped: number; speed: number; driverHidden: boolean } | null;
   hint(): { active: string | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
+  boundary(): { bound: number; dist: number; atRim: boolean } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -164,7 +171,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
     const a: Annotation = {
       name, platform, group, note, ok: true, file: `${platform}/${file}`,
       screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-      pixelHash: null, taps: null, viewport: null, hint: null,
+      pixelHash: null, taps: null, viewport: null, hint: null, boundary: null,
     };
     try {
       const s = await hook(page, (r) => {
@@ -174,6 +181,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           cameraYaw: r.cameraYaw(), drawCalls: r.drawCalls(), clip: r.clip(), avatar: r.avatar(), groundSpeed: r.groundSpeed(), cam: r.cam(), version: r.version,
           veh: v && v.inVehicle ? { heading: v.heading, headingUnwrapped: v.headingUnwrapped, speed: v.speed, inVehicle: v.inVehicle, driverHidden: v.driverHidden } : null,
           hint: r.hint(),
+          boundary: r.boundary(),
         };
       });
       if (s) { Object.assign(a, s); version = s.version; }
@@ -202,7 +210,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
         screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-        pixelHash: null, taps: null, viewport: null, hint: null,
+        pixelHash: null, taps: null, viewport: null, hint: null, boundary: null,
       });
       flush();
     }
@@ -253,7 +261,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
           screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-          pixelHash: null, taps: null, viewport: null, hint: null,
+          pixelHash: null, taps: null, viewport: null, hint: null, boundary: null,
         });
         flush();
         return;
@@ -478,6 +486,18 @@ test('audit capture flow', async ({ context }, testInfo) => {
     });
   });
 
+  // ══ GROUP 5 — world boundary (F-11). Boot, walk straight out to the rim, and
+  //    snap the calm forest-edge stop. Own fresh page (isolation like the rest). ══
+  await runGroup('boundary', {}, async (page, stick) => {
+    await bootWorld(page, isPad);
+    await scene(page, 'boundary', async () => {
+      await walkToBoundary(page, isPad, stick);
+      await settle(page, 500);
+      await snap(page, 'boundary-rim', 'Wereldrand',
+        'Aan de wereldrand (F-11) — de ranger stopt kalm bij de bomenrij: pos geklemd op de bound, geen onzichtbare muur, "Hier stopt het bos".');
+    });
+  });
+
   flush();
   attachSummary(testInfo, shots);
 });
@@ -694,6 +714,23 @@ async function joystickWalkTo(
 
 async function walkToBoard(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
   await walkTo(page, isPad, stick, () => hook(page, (r) => r.board()));
+}
+/** F-11: walk OUT to the world rim and stop when the gentle-stop latch trips
+ *  (`boundary.atRim` — the ease-to-zero stop + "Hier stopt het bos" cue engaged).
+ *  Steers toward a far point on the −z axis (into the 'bos' sector, well clear of
+ *  the ven) rather than holding forward blindly: the follow-cam rotates to match
+ *  facing, so a pine-slide would swing "forward" tangential and a blind walk would
+ *  drift along the rim forever — re-aiming radially outward each step corrects that
+ *  and lands on the rim by the shortest path. Reuses the stepped walkers directly
+ *  (a generous budget, past `walkTo`'s nearby-target iPad cap); bounded, so it can
+ *  never become the 30-min stall P0.3 warns of, and it exits the instant it arrives. */
+async function walkToBoundary(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
+  const target = async (): Promise<{ x: number; z: number; near: boolean } | null> => {
+    const b = await hook(page, (r) => r.boundary());
+    return b ? { x: 0, z: -(b.bound + 50), near: b.atRim } : null;
+  };
+  if (isPad) { await joystickWalkTo(page, stick!, target, 400); return; }
+  await keyboardWalkTo(page, target, 400);
 }
 async function walkToJeep(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
   await walkTo(page, isPad, stick, () => hook(page, (r) => {
