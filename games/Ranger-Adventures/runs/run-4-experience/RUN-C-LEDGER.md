@@ -48,7 +48,7 @@
 
 ## Phase 0 · direction-first  (write the plan before any build — VISION §10)
 
-- [ ] P0.1 · **DIRECTION · write & commit RUN-C-DIRECTION.md** (2) — the Fable art
+- [x] P0.1 · **DIRECTION · write & commit RUN-C-DIRECTION.md** (2) — the Fable art
   director authors the single source of truth: the art-direction bible (one
   naturalistic Veluwe at golden hour + screen-by-screen look targets: title →
   world → case-board → each of the 5 games → pause), the felt-progress plan (how
@@ -66,6 +66,7 @@
 
 ## Phase 1 · one naturalistic art direction across all screens  (VISION §13.1 — the cohesion + realism unifier; the single highest-impact lever)
 
+- [ ] P1.0 · Frame the board face on approach + re-prove the proportion baseline [both] — F-19's follow-camera work: when the player enters the board's near-radius, gently damp-turn the follow camera (player-initiated by walking in; a CUT under reduced-motion) and/or angle the board face toward the natural hub approach, so the board FACE + papers and the whole ranger are in shot at believable scale; expose a board-in-frustum boolean on the dev hook (retry from Run B DEFERRED) · verify-by: fresh `22-board-affordance` shows the board face with papers readable AND the ranger fully in frame at believable proportion (assert: board-in-frustum true while `board.near`; `avatar.height` ∈ [1.5,2.0]; drawCalls <150)
 - [ ] P1.1 · **Unify the lighting + sky to the golden-hour touchstone [both].**
   One warm naturalistic light/sky/fog model shared by title → world → board →
   games so no screen reads as a different game. **Verify by:** shot (title,
@@ -91,6 +92,9 @@
   Veluwe (their diegetic ranger framings, VISION §5), 2D floor included; no
   bolted-on-puzzle look. **Verify by:** shot (all five, 3D + 2D floor, on-style)
   + assert (construct-parity intact, draw-call budget held).
+- [ ] P1.7 · Piglet + gras props must read as what the prompt names [both] — F-24 residue: give the frisling a readable young-boar silhouette (ears + snout + legs + the goudgele "pyjama"-strepen per RUN-C-DIRECTION §2.4; CALM pose per never-scary) and make "het gras" props read as grass tufts, not rock lumps; add F-24's mission-target-in-frustum boolean at mission start (retry from Run B DEFERRED) · verify-by: fresh `24-mission-3d` shows the piglet recognizably a striped young boar beside props that read as gras (assert: mission-target-in-frustum at mission start; drawCalls <150)
+- [ ] P1.8 · Soften the drifting cloud-shadow layer [both] — reduce cloud-shadow opacity and/or feather the edge so terrain stays readable inside a passing shadow; keep the calm drift (its reduce-motion freeze stays a Phase 5 concern) (retry from Run B DEFERRED) · verify-by: fresh walk + drive bursts (`09-walk-4`/`10-walk-5`/`21-jeep-drive-4`) show dark masses as soft passing clouds with ground detail still visible inside them
+- [ ] P1.9 · Instellingen exit on-screen without scrolling [both] — the last off-fold trap of Run B's navigation law (P3.2 residue): keep `.tw-back` (≥56 px) visible without scrolling (sticky footer like `.av-klaar`/the board fix, or scroll the toggle list INSIDE the panel); no toggle row cut mid-row; no tap target below 56 px (retry from Run B DEFERRED) · verify-by: fresh `33-instellingen-rm` shows `.tw-back` fully on-screen in the 800 px viewport with all toggle rows whole (assert: `.tw-back` ≥56 px and its bounding box inside the viewport)
 - [ ] GATE-P1 · **Fable re-judge — does it read as ONE naturalistic world?** (2)
   Capture; judge cohesion across title → world → board → 5 games → pause against
   the doc. Re-open or append. May append new dressing boxes. **Exit of Phase 1.**

@@ -236,3 +236,10 @@ catch it early at no cost to the run.
 - (grade sittings append a line here when a box falls short of the direction doc;
   the art director appends a line when it re-opens a box or appends a new cohesion
   box — so the reasoning behind every re-open is traceable.)
+- 2026-07-04 · art director (P0.1): RUN-C-DIRECTION.md authored; Run B DEFERRED
+  triaged into 4 Phase-1 retry boxes — P1.0 (F-19 board-face framing + proportion
+  baseline, placed FIRST: proportion must read before any look box), P1.7 (F-24
+  frisling/gras readability), P1.8 (cloud-shadow softening), P1.9 (Instellingen
+  off-fold exit). Note: Run B's avatar-scale core (F-07) was already cracked
+  (avatar 1.7 m per HANDOFF-MONITOR); only the F-19 camera-framing piece survived
+  to DEFERRED, so P1.0 re-proves proportion in the same gated frame.
