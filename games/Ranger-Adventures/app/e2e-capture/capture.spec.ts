@@ -104,6 +104,15 @@ type Annotation = {
   // camera claim that "changed" while the hash holds is a telemetry lie to distrust.
   // Emits what the §8 grades were computing by hand. null on GAPs / failed captures.
   pixelHash: string | null;
+  // RUN-3 P5.2 (F-34c): the RM-judgeability pixel-diff. `ratio` is the fraction of
+  // pixels (0..1) that DIFFER from a named reference frame `vs`, measured in-browser
+  // on a coarse grid (blink/AA-noise-tolerant; no image-lib dep — pngjs/pixelmatch
+  // are absent). The reduce-motion group reads it two ways: ≈0 across the RM IDLE PAIR
+  // (secondary motion frozen — skyTime stops, so clouds/grass/water/bird hold) and vs
+  // the pre-toggle normal still (nothing STRUCTURAL differs, only the invisible-in-a-
+  // still temporal policy), and ≫0 across the RM WALK BURST (§1e keepLocomotion — the
+  // ranger still walks, so consecutive frames move). null when no reference was given.
+  pixelDiff: { vs: string; ratio: number } | null;
   // RUN-3 P3.1 (F-01/F-02/F-14/F-20/F-25/F-28): live DOM tap-target measurements.
   // Per named-control selector, the SMALLEST visible box (`minW`/`minH`) across all
   // matches + that worst element's `box`. The ≥56px assert reads `minW`/`minH` ≥ 56
@@ -170,15 +179,24 @@ test('audit capture flow', async ({ context }, testInfo) => {
 
   /** Screenshot the viewport + record the live hook state; persist immediately.
    *  `tapSelectors` (P3.1) additionally measures those controls' live boxes into
-   *  `a.taps` so the ≥56px / inside-viewport asserts grade off real DOM geometry. */
-  async function snap(page: Page, name: string, group: string, note: string, tapSelectors?: string[]): Promise<void> {
+   *  `a.taps` so the ≥56px / inside-viewport asserts grade off real DOM geometry.
+   *  `diffAgainst` (P5.2/F-34c) diffs THIS shot against a reference frame's PNG and
+   *  records the fraction of changed pixels into `a.pixelDiff` — the RM-judgeability
+   *  signal (≈0 for the frozen idle pair, ≫0 for the kept-locomotion walk burst).
+   *  Returns the captured PNG buffer (null on a failed capture) so the caller can
+   *  chain it as the next shot's `diffAgainst`. */
+  async function snap(
+    page: Page, name: string, group: string, note: string,
+    tapSelectors?: string[], diffAgainst?: { buf: Buffer; label: string },
+  ): Promise<Buffer | null> {
     n += 1;
     const file = `${String(n).padStart(2, '0')}-${name}.png`;
     const a: Annotation = {
       name, platform, group, note, ok: true, file: `${platform}/${file}`,
       screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-      pixelHash: null, taps: null, viewport: null, hint: null, boundary: null,
+      pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null,
     };
+    let png: Buffer | null = null;
     try {
       const s = await hook(page, (r) => {
         const v = r.vehicle();
@@ -194,8 +212,16 @@ test('audit capture flow', async ({ context }, testInfo) => {
       // F-18 pixel court of appeal: `screenshot({path})` writes the PNG AND returns
       // its bytes — hash them so the grade can prove pose stability from the RENDER
       // (idle pair hashes equal) instead of trusting the hook that lied in Run A (§4).
-      const png = await page.screenshot({ path: path.join(dir, file) });
+      png = await page.screenshot({ path: path.join(dir, file) });
       a.pixelHash = createHash('md5').update(png).digest('hex');
+      // P5.2 (F-34c): the RM-judgeability pixel-diff vs a caller-supplied reference.
+      // Non-fatal (like the tap probe): a diff failure leaves pixelDiff null but keeps
+      // the screenshot + hash, so a graphics quirk in the in-browser decode can never
+      // downgrade a valid shot to a GAP.
+      if (diffAgainst) {
+        try { a.pixelDiff = { vs: diffAgainst.label, ratio: await pixelDiffRatio(page, diffAgainst.buf, png) }; }
+        catch { /* keep the shot even if the canvas diff throws */ }
+      }
     } catch (e) { a.ok = false; a.note = `${note}  [CAPTURE FAILED: ${String(e).slice(0, 140)}]`; }
     // P3.1 tap-target geometry — supplementary; a measurement miss is its own
     // signal (a control absent when it should be present) and never fails the shot.
@@ -205,6 +231,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
     }
     shots.push(a);
     flush();
+    return png;
   }
   /** Run one scene. A non-crash throw records a GAP and never kills the flow; a
    *  page-crash re-throws so the enclosing group can spend its one retry. */
@@ -216,7 +243,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
         screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-        pixelHash: null, taps: null, viewport: null, hint: null, boundary: null,
+        pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null,
       });
       flush();
     }
@@ -276,7 +303,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
           screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-          pixelHash: null, taps: null, viewport: null, hint: null, boundary: null,
+          pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null,
         });
         flush();
         return;
@@ -502,18 +529,35 @@ test('audit capture flow', async ({ context }, testInfo) => {
     });
   });
 
-  // ══ GROUP 4b — reduce-motion via GATE 2: the IN-GAME toggle (F-34b). NO OS media
-  //    this time (`{}`, not `{reduce:true}`) — boot a normal world, open Pauze →
-  //    Instellingen and flip "Rustige beweging" (Tweaks.ts:42 →
-  //    setReducedMotionOverride(true) → `body.rm`), then return to the open plek and
-  //    snap the RM world. This is the gate Floris actually uses on the iPad, and the
-  //    set's ONLY capture of the Instellingen/Tweaks UI. Own fresh page (clean
-  //    first-run → the toggle starts at its default OFF, so the flip genuinely arms
-  //    RM instead of riding an OS setting). ══
-  await runGroup('reduce-motion-toggle', {}, async (page) => {
+  // ══ GROUP 4b — reduce-motion via GATE 2: the IN-GAME toggle (F-34b), MADE
+  //    JUDGEABLE (F-34c / P5.2). NO OS media (`{}`, not `{reduce:true}`) — boot a
+  //    NORMAL world, snap a normal idle REFERENCE, then open Pauze → Instellingen and
+  //    flip "Rustige beweging" (Tweaks.ts:42 → setReducedMotionOverride(true) →
+  //    `body.rm`), return to the open plek and prove the RM world is JUDGEABLE, not
+  //    merely present — the whole F-34 point (a lone RM still can only catch gross
+  //    breakage; the policy is TEMPORAL). Three graded captures, all on the gate
+  //    Floris actually uses on the iPad:
+  //      • RM STILL vs the pre-toggle normal reference — nothing STRUCTURAL differs
+  //        (pixelDiff ≈ 0: same world, only the invisible-in-a-still temporal policy
+  //        changed; a flat/black/broken RM world would read large);
+  //      • an IDLE PAIR — two frames ~2.5 s apart with NO input: secondary motion is
+  //        frozen (World.ts `if (!reduced) skyTime += dt` stops the clock → clouds/
+  //        grass/water/bird hold), so pixelDiff ≈ 0 (a normal-mode idle pair drifts);
+  //      • a short WALK BURST — §1e keepLocomotion means the ranger STILL walks, so
+  //        consecutive frames differ (pixelDiff ≫ 0, clip=walk): RM calms the world
+  //        WITHOUT freezing the child's own movement.
+  //    Also the set's ONLY capture of the Instellingen/Tweaks UI. Own fresh page
+  //    (clean first-run → the toggle starts at its default OFF, so the flip genuinely
+  //    arms RM instead of riding an OS setting). ══
+  await runGroup('reduce-motion-toggle', {}, async (page, stick) => {
     await scene(page, 'reduce-motion-toggle', async () => {
       await bootWorld(page, isPad);
-      await settle(page, 600);
+      // Settle to a clean idle, then snap the NORMAL-mode reference the RM still is
+      // graded against — SAME page, spawn and pose, so the only thing the toggle can
+      // change is temporal (invisible in a still) ⇒ the RM still must ≈ this frame.
+      await settle(page, 1500);
+      const normalRef = await snap(page, 'rm-ref-normal', 'Reduce-Motion',
+        'Normale modus, stil — ijkbeeld. De RM-wereld hierna mag hier structureel NIET van afwijken (alleen beweging verandert, en dat zie je niet in een stilstaand beeld).');
       // Pauze → Instellingen. Every press is BOUNDED (P0.3/F-34a: an unbounded wait
       // on a control that never appears is what ate Run A's reduce-motion capture).
       await press(page, isPad, page.locator('.explore-pause'), 10_000);
@@ -541,9 +585,38 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await press(page, isPad, page.locator('.tw-back'), 10_000);
       await press(page, isPad, page.locator('.ph-back'), 10_000);
       await waitForWorld(page);
-      await settle(page, 1200);
-      await snap(page, 'reduce-motion-toggle-world', 'Reduce-Motion',
-        'Verminder-beweging AAN via de in-game toggle — zelfde wereld, camera snijdt i.p.v. zwiert; ziet het er goed uit of plat/kapot?');
+      // (1) RM STILL — settle to idle, then diff against the normal reference. A near-
+      // zero ratio proves nothing structural differs (world intact, not flat/black);
+      // this frame also anchors the idle pair below.
+      await settle(page, 1500);
+      const rmIdle = await snap(page, 'reduce-motion-toggle-world', 'Reduce-Motion',
+        'Verminder-beweging AAN via de in-game toggle — zelfde wereld, camera snijdt i.p.v. zwiert. Structureel gelijk aan het ijkbeeld (pixelDiff ≈ 0), niet plat/kapot.',
+        undefined, normalRef ? { buf: normalRef, label: 'rm-ref-normal' } : undefined);
+      // (2) IDLE PAIR (F-34c) — ~2.5 s later, still NO input. skyTime is frozen under
+      // RM so clouds/grass/water/bird all hold and a settled camera does not drift ⇒
+      // pixelDiff ≈ 0 vs the frame above. THE machine proof RM actually stills the
+      // world (a normal-mode idle pair, with the atmosphere clock running, would not).
+      await settle(page, 2500);
+      const idleHold = await snap(page, 'reduce-motion-idle-hold', 'Reduce-Motion',
+        'Zelfde plek, 2,5 s later, RM AAN — secundaire beweging bevroren (wolken/gras/water stil): pixelDiff ≈ 0 t.o.v. het vorige frame.',
+        undefined, rmIdle ? { buf: rmIdle, label: 'reduce-motion-toggle-world' } : undefined);
+      // (3) WALK BURST (F-34c) — hold forward under RM. §1e keepLocomotion keeps the
+      // ranger walking (walk clip + real translation), so consecutive frames DIFFER:
+      // pixelDiff ≫ 0 and clip=walk. Frame 1 diffs vs the idle-hold to show motion
+      // STARTED; 2–3 vs the previous walk frame. The contrast with the frozen idle
+      // pair is the whole judgement: RM calms the world, never the child's movement.
+      await holdForward(page, isPad, stick);
+      try {
+        let prev = idleHold;
+        let prevLabel = 'reduce-motion-idle-hold';
+        for (let i = 1; i <= 3; i++) {
+          await settle(page, 320);
+          const b = await snap(page, `reduce-motion-walk-${i}`, 'Reduce-Motion (burst)',
+            `RM-loopframe ${i}/3 — de ranger loopt door (keepLocomotion): het beeld verandert zichtbaar, clip=walk, pixelDiff ≫ 0 t.o.v. ${prevLabel}.`,
+            undefined, prev ? { buf: prev, label: prevLabel } : undefined);
+          prev = b; prevLabel = `reduce-motion-walk-${i}`;
+        }
+      } finally { await releaseForward(page, isPad, stick); }
     });
   });
 
@@ -599,6 +672,49 @@ async function measureTaps(page: Page, selectors: string[]): Promise<Record<stri
     };
   }
   return out;
+}
+/**
+ * P5.2 (F-34c): fraction of pixels (0..1) that DIFFER between two viewport PNGs,
+ * computed IN-BROWSER via canvas — no image-lib dependency (pngjs/pixelmatch are
+ * absent and a new dep needs Floris). Both frames are drawn to a coarse 160×120
+ * grid and compared with a small per-pixel channel-sum threshold, so sub-pixel AA
+ * fringe and a single blinked eyelid stay ≈0 while a walked stride (moving legs +
+ * a translating frame) reads clearly large. This is the "pixel-diff" the RM judge
+ * reads: ≈0 across the RM idle pair (secondary motion frozen) and vs the pre-toggle
+ * normal still (nothing structural differs), ≫0 across the RM walk burst (locomotion
+ * kept — §1e keepLocomotion). Runs on the live capture page; the caller treats a
+ * throw as non-fatal (the shot keeps its screenshot + hash, pixelDiff stays null).
+ */
+async function pixelDiffRatio(page: Page, a: Buffer, b: Buffer): Promise<number> {
+  const urls: [string, string] = [
+    `data:image/png;base64,${a.toString('base64')}`,
+    `data:image/png;base64,${b.toString('base64')}`,
+  ];
+  return page.evaluate(async ([ua, ub]) => {
+    const load = (d: string): Promise<HTMLImageElement> =>
+      new Promise((res, rej) => {
+        const img = new Image();
+        img.onload = () => res(img);
+        img.onerror = () => rej(new Error('img decode failed'));
+        img.src = d;
+      });
+    const W = 160, H = 120;
+    const grid = (img: HTMLImageElement): Uint8ClampedArray => {
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const g = c.getContext('2d');
+      if (!g) throw new Error('no 2d context for pixel-diff');
+      g.drawImage(img, 0, 0, W, H);
+      return g.getImageData(0, 0, W, H).data;
+    };
+    const [ia, ib] = await Promise.all([load(ua), load(ub)]);
+    const pa = grid(ia), pb = grid(ib);
+    let diff = 0;
+    for (let i = 0; i < pa.length; i += 4) {
+      if (Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2]) > 24) diff += 1;
+    }
+    return diff / (W * H);
+  }, urls);
 }
 function attachSummary(testInfo: TestInfo, shots: Annotation[]): void {
   const gaps = shots.filter((s) => !s.ok).length;

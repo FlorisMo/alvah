@@ -28,7 +28,7 @@ const platforms = runs.map((r) => r.platform);
 const version = runs.find((r) => r.version)?.version ?? '(unknown)';
 
 // group order follows the capture flow; anything else lands after.
-const ORDER = ['Boot', 'Wereld', 'Lopen (burst)', 'Besturing', 'Laptop-camera', 'Missiebord', 'Missie', 'Pauze/menu', 'Jeep', 'Jeep (burst)', 'Reduce-Motion', 'GAP'];
+const ORDER = ['Boot', 'Wereld', 'Lopen (burst)', 'Besturing', 'Laptop-camera', 'Missiebord', 'Missie', 'Pauze/menu', 'Jeep', 'Jeep (burst)', 'Reduce-Motion', 'Reduce-Motion (burst)', 'GAP'];
 const groups = [...new Set(runs.flatMap((r) => r.shots.map((s) => s.group)))]
   .sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
 
@@ -84,6 +84,7 @@ function card(s, deltas) {
         <div class="cap-note">${esc(s.note)}</div>
         <div class="cap-state">${stateLine(s)}</div>
         ${glideNote ? `<div class="cap-delta">${glideNote}</div>` : ''}
+        ${s.pixelDiff ? `<div class="cap-delta">pixelDiff vs ${esc(s.pixelDiff.vs)}: <b>${(s.pixelDiff.ratio * 100).toFixed(2)}%</b> pixels anders ${s.pixelDiff.ratio < 0.01 ? '(bevroren/gelijk)' : s.pixelDiff.ratio > 0.03 ? '(beweegt)' : ''}</div>` : ''}
       </figcaption>
     </figure>`;
 }
