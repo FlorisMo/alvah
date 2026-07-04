@@ -733,15 +733,28 @@ export class World {
       this.jeepObstacle = null;
     }
     this.ranger.visible = false;                       // he rides inside
+    // F-30: re-anchor the (hidden) ranger AT the jeep now, so the boarding CUT frames
+    // the jeep itself, not the boarding spot ~2 m to its side (driveJeep keeps him
+    // pinned here every frame after, so the follow-cam + step-out anchor track the jeep).
+    this.ranger.position.copy(this.jeepPos);
+    this.ranger.rotation.y = this.jeepHeading;
     // clear any walk-time affordances so nothing lingers behind the "Stap uit" pill
     if (this.nearId) { this.nearId = null; this.onApproach(null); }
     if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
+    // snap the follow bearing behind the parked jeep so the boarding reframe is a clean
+    // CUT, never a swing from the old walk facing; the eased jeep-follow takes over next
+    // frame (damped toward jeepHeading — F-30 wants a lagged follow, not a hard lock).
     this.followTargetYaw = this.jeepHeading;
+    this.followYaw = this.jeepHeading;
     this.onVehicleChange(true);
     // W5.2: soft engine loop while driving (gated on the sound setting; the
     // Space-to-enter gesture already unlocked the AudioContext).
     if (store.get().settings.geluid) Sound.engineStart();
-    if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut to the wider cam
+    // F-30: boarding is a CUT for EVERYONE, not only under reduced-motion — the walk
+    // boom → wider jeep chase-cam reframe is exactly the kind of camera MOVE the
+    // motion-comfort law turns into a step. Snap straight to the jeep cam; pass the
+    // live reduced flag through so the fade/orbit handling stays correct.
+    this.placeCamera(true, 0, livePolicy().reduced);
   }
 
   /** W5.1: step out of the jeep beside it, back to walking; re-park the jeep as a
@@ -762,6 +775,7 @@ export class World {
     this.ranger.visible = true;
     this.target.set(next.x, 0, next.z);   // no stale walk target
     this.followTargetYaw = h;
+    this.followYaw = h; // snap the bearing behind the exit facing so the step-out is a CUT too
     this.vehicleSpeed = 0;
     this.playerSpeed = 0;
     // re-park the jeep as a solid obstacle at its new resting spot
@@ -772,7 +786,9 @@ export class World {
     this.dustEmitting = false;
     Sound.engineStop();                    // W5.2: engine falls silent on step-out
     this.onVehicleChange(false);
-    if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut back to walk cam
+    // F-30: stepping out hands straight back to the walk boom as a CUT for EVERYONE
+    // (symmetry with boarding; the motion-comfort law prefers cuts to reframe moves).
+    this.placeCamera(true, 0, livePolicy().reduced);
   }
 
   /** Dev-hook accessor (W1.4): every marker's world position, for E2E navigation. */
@@ -2940,6 +2956,15 @@ export class World {
       dist = this.zoomDist; // F-16: the player-set dolly distance replaces the fixed 4.6 boom
       const frac = this.boomClearFraction(rp.x, rp.z, -s * dist, -c * dist);
       const minFrac = Math.min(1, (this.avatarRadius + this.camera.near + 0.2) / dist);
+      dist *= Math.max(minFrac, frac);
+    } else if (this.inVehicle) {
+      // F-30: give the jeep boom F-05's clearance too — a tree / hut / prop BEHIND the
+      // jeep pulls the lens IN instead of burying it in that solid's unlit interior,
+      // the exact "driving is blind" murk the finding names. The jeep's own collision
+      // circle is lifted while driving (enterVehicle), so the cast can't hit itself;
+      // the min-clamp keeps the lens outside the JEEP's bounding radius + near plane.
+      const frac = this.boomClearFraction(rp.x, rp.z, -s * dist, -c * dist);
+      const minFrac = Math.min(1, (JEEP_COLLIDE + this.camera.near + 0.3) / dist);
       dist *= Math.max(minFrac, frac);
     }
     // F-17 pitch: the player's eye-lift tilts the WALK view. The horizontal boom is
