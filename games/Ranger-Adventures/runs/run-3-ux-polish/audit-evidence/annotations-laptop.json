@@ -19,7 +19,7 @@
       "groundSpeed": null,
       "cam": null,
       "veh": null,
-      "pixelHash": "d1a1ec47e22aa25f2505f794e563b5eb",
+      "pixelHash": "0177125418b76d9b180a124c244be0f8",
       "pixelDiff": null,
       "taps": {
         ".btn-start": {
@@ -62,7 +62,7 @@
       "groundSpeed": null,
       "cam": null,
       "veh": null,
-      "pixelHash": "2c9074cfbeaf8af09fdc6775cdeda25e",
+      "pixelHash": "42c92e0f6265c11100ae69cbd1700a11",
       "pixelDiff": null,
       "taps": {
         ".av-klaar": {
@@ -138,18 +138,18 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.201
+        "time": 0.1965
       },
       "avatar": {
         "height": 1.6999989950630152
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.854122483157207,
+        "dist": 4.854122477628807,
         "yaw": 0,
-        "pitch": -0.27542618122117113,
+        "pitch": -0.2754261777357931,
         "x": -5.633375276077824e-16,
-        "y": 2.3938737041477625,
+        "y": 2.393873686834526,
         "z": 4.6,
         "target": "avatar",
         "avatarInView": true,
@@ -165,16 +165,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 1.8809960972487303e-8,
-          "y": -0.09532391839270328,
+          "x": 1.8809960994008494e-8,
+          "y": -0.09532391859566157,
           "onScreen": true,
-          "heightFrac": 0.3202837827771979,
+          "heightFrac": 0.3202837834937644,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "9ab8a944942cde83fb8645b48bd7a797",
+      "pixelHash": "aae18b83fd0a45423bfd7f3730bfd524",
       "pixelDiff": null,
       "taps": {
         ".explore-onboard": {
@@ -239,7 +239,7 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.047599725842476015
+        "time": 0.04649972581863404
       },
       "avatar": {
         "height": 1.6999989950630152
@@ -275,7 +275,7 @@
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "6c8e8a90b9d72b5f6419dfc1e18be0bb",
+      "pixelHash": "c5829327225b4f694447772e0b4bb3ae",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -313,7 +313,7 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.14569954699277893
+        "time": 0.1664995470046997
       },
       "avatar": {
         "height": 1.6999989950630152
@@ -349,7 +349,7 @@
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "28d19dbd1a4d33ae5b8b7cab8e0a6efa",
+      "pixelHash": "e36058501b9009ee35781dc96e971714",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -380,26 +380,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -0.765
+        "z": -0.7714800000429154
       },
       "cameraYaw": 0,
       "drawCalls": 51,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.46230638852119527
+        "time": 0.49114638853073184
       },
       "avatar": {
-        "height": 1.7109828233317987
+        "height": 1.713336347469746
       },
-      "groundSpeed": 1.8,
+      "groundSpeed": 1.8000000000000003,
       "cam": {
-        "dist": 5.121432992658916,
+        "dist": 5.139462467710724,
         "yaw": 0,
-        "pitch": -0.2618639405677938,
+        "pitch": -0.2618935771951029,
         "x": -5.633375276077824e-16,
-        "y": 2.380010942063739,
-        "z": 4.115331539204871,
+        "y": 2.37980704738231,
+        "z": 4.1082041557587585,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -414,16 +414,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.010024260548863117,
-          "y": -0.10736284226468215,
+          "x": -0.008369480492432014,
+          "y": -0.1026774901830913,
           "onScreen": true,
-          "heightFrac": 0.30636339732865414,
+          "heightFrac": 0.30586214706450426,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "6fa69774b8f6e87e9e604ba8d36d397e",
+      "pixelHash": "f823388976380741fb345f352276d830",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -435,7 +435,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 0.765,
+        "dist": 0.7714800000429154,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -454,26 +454,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -4.1346
+        "z": -4.116780000042915
       },
       "cameraYaw": 0,
-      "drawCalls": 27,
+      "drawCalls": 28,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.5753729439258581
+        "time": 0.588012943935395
       },
       "avatar": {
-        "height": 1.7096996570960197
+        "height": 1.7080241826542752
       },
       "groundSpeed": 1.8000000000000014,
       "cam": {
-        "dist": 5.325042742547787,
+        "dist": 5.32257398579737,
         "yaw": 0,
-        "pitch": -0.2572578266615571,
+        "pitch": -0.25711136802523693,
         "x": -5.633375276077824e-16,
-        "y": 2.2865525427185767,
-        "z": 0.8483302713954544,
+        "y": 2.2871570132987387,
+        "z": 0.8694806128336756,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -488,16 +488,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.0011155895823349675,
-          "y": -0.08596109145893326,
+          "x": 0.000011227619692651329,
+          "y": -0.08616489619022334,
           "onScreen": true,
-          "heightFrac": 0.29551226193615365,
+          "heightFrac": 0.29536494925806034,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "ffd5d4739014456a7c354996c157748a",
+      "pixelHash": "56c868a2a2fa89367a6bfb4ddff310df",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -509,7 +509,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 4.1346,
+        "dist": 4.116780000042915,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -528,26 +528,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -6.807779999935626
+        "z": -6.712559999978543
       },
       "cameraYaw": 0,
       "drawCalls": 23,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.22415949928760556
+        "time": 0.18519949929714322
       },
       "avatar": {
-        "height": 1.6686232165952808
+        "height": 1.679787877466841
       },
-      "groundSpeed": 1.8000000000000005,
+      "groundSpeed": 1.8000000000000034,
       "cam": {
-        "dist": 5.293289497924384,
+        "dist": 5.305204359370603,
         "yaw": 0,
-        "pitch": -0.25599382022700307,
+        "pitch": -0.25575753812447405,
         "x": -5.633375276077824e-16,
-        "y": 2.2111429987595224,
-        "z": -1.7962346449411937,
+        "y": 2.2140052084470527,
+        "z": -1.6955721493157707,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -562,16 +562,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.009916423802358828,
-          "y": -0.09613104228606198,
+          "x": -0.007179072498255371,
+          "y": -0.09340949115702876,
           "onScreen": true,
-          "heightFrac": 0.28991019657237044,
+          "heightFrac": 0.29130373091397316,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "ebbf514a762e223a6d60345d05003e14",
+      "pixelHash": "b52992b32c13132881819494ee485067",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -583,7 +583,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 6.807779999935626,
+        "dist": 6.712559999978543,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -602,26 +602,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -9.130499999999998
+        "z": -9.013680000042916
       },
       "cameraYaw": 0,
       "drawCalls": 21,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.7059727770328517
+        "time": 0.6526127770423897
       },
       "avatar": {
-        "height": 1.6791641894243405
+        "height": 1.6954549141232014
       },
-      "groundSpeed": 1.800000000000005,
+      "groundSpeed": 1.8000000000000058,
       "cam": {
-        "dist": 5.321888507500942,
+        "dist": 5.335754098003165,
         "yaw": 0,
-        "pitch": -0.2547691171453164,
+        "pitch": -0.25474639581896086,
         "x": -5.633375276077824e-16,
-        "y": 2.1461544239715296,
-        "z": -4.091137941785191,
+        "y": 2.1494643789831893,
+        "z": -3.9737643928431,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -636,16 +636,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.007300701276830273,
-          "y": -0.09234137833633965,
+          "x": 0.004367749042112246,
+          "y": -0.08913892567741151,
           "onScreen": true,
-          "heightFrac": 0.2904008277046106,
+          "heightFrac": 0.2925668654251478,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": null,
-      "pixelHash": "1f92a646c172bd2a94afa77ac71c3bac",
+      "pixelHash": "7d92db0c4d8ba0d815984811cdec59f3",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -657,7 +657,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 9.130499999999998,
+        "dist": 9.013680000042916,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -676,26 +676,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -11.066940000021456
+        "z": -10.969559999978545
       },
       "cameraYaw": 0,
       "drawCalls": 15,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.9302660547494884
+        "time": 0.8898660547018074
       },
       "avatar": {
-        "height": 1.70238030431466
+        "height": 1.6985664017571653
       },
-      "groundSpeed": 1.7999999999999936,
+      "groundSpeed": 1.800000000000006,
       "cam": {
-        "dist": 5.283378203423951,
+        "dist": 5.268426648870619,
         "yaw": 0,
-        "pitch": -0.25422489897060374,
+        "pitch": -0.2543216482396805,
         "x": -5.633375276077824e-16,
-        "y": 2.0921552537837576,
-        "z": -6.015466711285079,
+        "y": 2.094812838947999,
+        "z": -5.920305306956516,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -710,16 +710,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.009808346129096082,
-          "y": -0.10771914844617733,
+          "x": 0.009600790488020898,
+          "y": -0.1112238480300416,
           "onScreen": true,
-          "heightFrac": 0.2961334634055075,
+          "heightFrac": 0.29618808249767803,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": null,
-      "pixelHash": "9c042c70481663e5fd103da355b999cf",
+      "pixelHash": "377830325ff45316e9504e2adc41db2f",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -731,7 +731,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 11.066940000021456,
+        "dist": 10.969559999978545,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -750,26 +750,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -12.388140000021457
+        "z": -12.208500000000003
       },
-      "cameraYaw": 0.8429940287132602,
+      "cameraYaw": 0.8984954989266818,
       "drawCalls": 31,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.19279918938875187
+        "time": 0.18429918932914718
       },
       "avatar": {
-        "height": 1.7054532614882265
+        "height": 1.7062677175237768
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.675612321191079,
-        "yaw": 0.44751953314743886,
-        "pitch": -0.28682493810343396,
-        "x": 1.9102366448998551,
-        "y": 2.044963255479448,
-        "z": -8.40847581411546,
+        "dist": 4.641587001406173,
+        "yaw": 0.49763560232648274,
+        "pitch": -0.28915618072639326,
+        "x": 2.088924328956424,
+        "y": 2.049730371163784,
+        "z": -8.363167975715971,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -784,16 +784,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.0013434697030203155,
-          "y": -0.10067405692674915,
+          "x": -0.0013627643702177144,
+          "y": -0.1016084275703059,
           "onScreen": true,
-          "heightFrac": 0.33217793723015765,
+          "heightFrac": 0.3344844079005501,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": null,
-      "pixelHash": "472cf90a5f07e021679f33c50beaeb1d",
+      "pixelHash": "3ae7162c9fc40ba4522e201923346784",
       "pixelDiff": null,
       "taps": {
         ".explore-pause": {
@@ -831,7 +831,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 12.388140000021457,
+        "dist": 12.208500000000003,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -850,26 +850,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -12.388140000021457
+        "z": -12.208500000000003
       },
       "cameraYaw": 3.141592653589793,
       "drawCalls": 16,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.22719881981611234
+        "time": 0.2773988078832623
       },
       "avatar": {
         "height": 1.69999899580483
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 2.3793347638503755,
-        "yaw": 3.14159265358769,
-        "pitch": -0.6241175606111049,
-        "x": 3.796357402796831e-12,
-        "y": 2.0429061307415535,
-        "z": -14.193335744568854,
+        "dist": 2.3781306753330553,
+        "yaw": 3.1415926535892886,
+        "pitch": -0.6245347868721285,
+        "x": 9.079960774489142e-13,
+        "y": 2.0478689427611623,
+        "z": -14.012108401942092,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -884,16 +884,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 3.856857233147226e-8,
-          "y": -0.1643878882403342,
+          "x": 3.848698666243362e-8,
+          "y": -0.16442193637270472,
           "onScreen": true,
-          "heightFrac": 0.5485570428948972,
+          "heightFrac": 0.5486863017026706,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": null,
-      "pixelHash": "afdc736c026ac51ae6331a2567155131",
+      "pixelHash": "5253b811b2446a0f0bf99cb4a2221059",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -905,7 +905,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 12.388140000021457,
+        "dist": 12.208500000000003,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -924,26 +924,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -12.388140000021457
+        "z": -12.208500000000003
       },
       "cameraYaw": 3.141592653589793,
       "drawCalls": 48,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.2439987483024595
+        "time": 0.009398724436759487
       },
       "avatar": {
-        "height": 1.69999899580483
+        "height": 1.6999989952561982
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 8.924010001499342,
+        "dist": 8.943348154176974,
         "yaw": 3.141592653589793,
-        "pitch": -0.1468578057128764,
-        "x": 9.327354955871449e-15,
-        "y": 2.0429061307415535,
-        "z": -21.17651005191903,
+        "pitch": -0.14653508275770263,
+        "x": 2.0229834797427013e-15,
+        "y": 2.0478689427611623,
+        "z": -21.01650601069449,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -958,16 +958,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 1.0222835333968185e-8,
-          "y": -0.053256241399793035,
+          "x": 1.0070915124770457e-8,
+          "y": -0.053143533649833374,
           "onScreen": true,
-          "heightFrac": 0.18036337457399987,
+          "heightFrac": 0.17998457978809823,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "cac8981540671c6f46679fcf7d5b704e",
+      "pixelHash": "f97257b4dc8cfad253109d16f986ced1",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -979,7 +979,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 12.388140000021457,
+        "dist": 12.208500000000003,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -998,26 +998,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -12.388140000021457
+        "z": -12.208500000000003
       },
       "cameraYaw": 3.141592653589793,
       "drawCalls": 66,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.011198319137096124
+        "time": 0.014298307180404368
       },
       "avatar": {
         "height": 1.69999899580483
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 9.624756247613991,
-        "yaw": -2.0641167063752235,
-        "pitch": -0.13600975077869945,
-        "x": -8.366502597591603,
-        "y": 2.0429061307415535,
-        "z": -16.886480200546405,
+        "dist": 9.624814326121149,
+        "yaw": -2.063928111622925,
+        "pitch": -0.13600891856222105,
+        "x": -8.367402647506282,
+        "y": 2.0478689427611623,
+        "z": -16.70529009928626,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -1027,21 +1027,21 @@
           "max": 9.5
         },
         "orbit": {
-          "yaw": 1.0799241260472234,
+          "yaw": 1.0799333751959308,
           "lift": 0
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 3.671646704082594e-8,
-          "y": -0.049452553612622914,
+          "x": 3.671793925737841e-8,
+          "y": -0.0494522606434208,
           "onScreen": true,
-          "heightFrac": 0.16757000832785637,
+          "heightFrac": 0.16756902219351996,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "52dd7ca22b2d46ecad6852d901cbe020",
+      "pixelHash": "94cf33963a25c47da601eeb326aa6bff",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1053,7 +1053,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 12.388140000021457,
+        "dist": 12.208500000000003,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -1071,27 +1071,27 @@
       "file": "laptop/15-camera-click-walk.png",
       "screen": "world",
       "pos": {
-        "x": -0.3164256350940633,
-        "z": -12.557241535108997
+        "x": -0.29593548057794017,
+        "z": -12.366651359290175
       },
-      "cameraYaw": 1.084023167716376,
+      "cameraYaw": 1.0843276484791335,
       "drawCalls": 39,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.04789811652898751
+        "time": 0.004698104560374672
       },
       "avatar": {
-        "height": 1.6999990053158067
+        "height": 1.6999990108939536
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.711027125718523,
-        "yaw": 2.190026993777204,
-        "pitch": -0.2835187083876311,
-        "x": 3.31695669271157,
-        "y": 2.0214021666885302,
-        "z": -15.146928278328907,
+        "dist": 4.708779496207087,
+        "yaw": 2.19174978473424,
+        "pitch": -0.2836597651781506,
+        "x": 3.3310743770981563,
+        "y": 2.0276656484340787,
+        "z": -14.961230650822102,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -1106,16 +1106,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.005499492629941745,
-          "y": -0.09950621324545018,
+          "x": 0.005496329355279261,
+          "y": -0.09955478031247052,
           "onScreen": true,
-          "heightFrac": 0.32902203270007835,
+          "heightFrac": 0.3291624903206116,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "f8de18ee78d7b8633f8ac59ecb32e412",
+      "pixelHash": "bdebf3f76d30d4ec58bea5c08a03de90",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1127,7 +1127,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 12.561227653124167,
+        "dist": 12.370191738647321,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -1145,27 +1145,27 @@
       "file": "laptop/16-pause-hub.png",
       "screen": "world",
       "pos": {
-        "x": -0.3164256350940633,
-        "z": -12.557241535108997
+        "x": -0.29593548057794017,
+        "z": -12.366651359290175
       },
-      "cameraYaw": 1.0799998833331506,
+      "cameraYaw": 1.0799998809740226,
       "drawCalls": 42,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.09859796154499023
+        "time": 0.23969794958829832
       },
       "avatar": {
         "height": 1.699998995063015
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.747693778586213,
-        "yaw": 2.1599999641139895,
-        "pitch": -0.2812322064776254,
-        "x": 3.424799964364578,
-        "y": 2.021367725345366,
-        "z": -15.057887516345914,
+        "dist": 4.74769381020038,
+        "yaw": 2.1599999274988555,
+        "pitch": -0.28123220454273873,
+        "x": 3.4452902375035395,
+        "y": 2.027631400474456,
+        "z": -14.8672972216295,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -1180,16 +1180,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.005554466940613043,
-          "y": -0.0987150470943091,
+          "x": 0.005554467014710454,
+          "y": -0.09871504637824312,
           "onScreen": true,
-          "heightFrac": 0.32674704194592863,
+          "heightFrac": 0.3267470399964163,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "39d6330d2ba1de63d2f6e60f9c571568",
+      "pixelHash": "6275b68b1f9fed1fecccb1e492e2e1c6",
       "pixelDiff": null,
       "taps": {
         ".lodge-links .ra-chip": {
@@ -1238,7 +1238,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 12.561227653124167,
+        "dist": 12.370191738647321,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -1264,7 +1264,7 @@
       "groundSpeed": null,
       "cam": null,
       "veh": null,
-      "pixelHash": "3d4adb846f32a4af16cd29838b1a4488",
+      "pixelHash": "7c3a53c34ecc3daaea007ba99eaedcd6",
       "pixelDiff": null,
       "taps": {
         ".ra-title-begin": {
@@ -1307,18 +1307,18 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.09539994043111788
+        "time": 0.24849994039535525
       },
       "avatar": {
         "height": 1.6999989950630152
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.8541319513699515,
+        "dist": 4.854128117711322,
         "yaw": 0,
-        "pitch": -0.27543215039148267,
+        "pitch": -0.27542973350226135,
         "x": -5.633375276077824e-16,
-        "y": 2.3939033554037814,
+        "y": 2.3938913497364487,
         "z": 4.6,
         "target": "avatar",
         "avatarInView": true,
@@ -1334,16 +1334,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 1.8809924114293818e-8,
-          "y": -0.09532357079727524,
+          "x": 1.880993903807826e-8,
+          "y": -0.09532371153775018,
           "onScreen": true,
-          "heightFrac": 0.32028255555318164,
+          "heightFrac": 0.3202830524526671,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "978d8af0c080e9c817186a2b7f73e0ab",
+      "pixelHash": "fca9e0b5e2c9939774fd7956e8f1c419",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1373,33 +1373,33 @@
       "file": "laptop/19-jeep-near.png",
       "screen": "world",
       "pos": {
-        "x": 13.329655161020638,
-        "z": 12.901514542113976
+        "x": 13.39017871768252,
+        "z": 12.223360145543555
       },
-      "cameraYaw": -2.116530812410632,
-      "drawCalls": 28,
+      "cameraYaw": -2.5342388399037894,
+      "drawCalls": 30,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.14866572093963315
+        "time": 0.3639452203035332
       },
       "avatar": {
-        "height": 1.6905567517618467
+        "height": 1.701356947778042
       },
-      "groundSpeed": 1.8000000000000016,
+      "groundSpeed": 1.8000000000000034,
       "cam": {
-        "dist": 4.782400848500512,
-        "yaw": -2.130274944345727,
-        "pitch": -0.28033300037951847,
-        "x": 9.513160006971445,
-        "y": 3.42360906218087,
-        "z": 10.511535771011385,
+        "dist": 4.719058500191438,
+        "yaw": -2.5667535986409895,
+        "pitch": -0.2837653480601085,
+        "x": 10.976077520631806,
+        "y": 3.4166907063269685,
+        "z": 8.496842838068593,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.6374260425193117,
+          "min": 1.6529245529772782,
           "max": 9.5
         },
         "orbit": {
@@ -1408,16 +1408,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.011759432827166742,
-          "y": -0.10364509415049099,
+          "x": -0.012761779846392193,
+          "y": -0.11947118605130999,
           "onScreen": true,
-          "heightFrac": 0.3224626948268267,
+          "heightFrac": 0.32789414715404014,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": null,
-      "pixelHash": "b40b04ac84bfccce7ee64d3bf144d827",
+      "pixelHash": "0ab99b45795884833fba12571a5e2675",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1429,7 +1429,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 18.550708455261283,
+        "dist": 18.130290106314916,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -1458,11 +1458,11 @@
         "time": 0
       },
       "avatar": {
-        "height": 1.699998979169472
+        "height": 1.699999048735458
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 9.729026879727579,
+        "dist": 9.729026624536472,
         "yaw": 0.8519663271732725,
         "pitch": -0.3708912888126623,
         "x": 22.7731902523619,
@@ -1473,7 +1473,7 @@
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.6374260425193117,
+          "min": 1.6529245529772782,
           "max": 9.5
         },
         "orbit": {
@@ -1482,10 +1482,10 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.000749366463956424,
-          "y": -0.026289688726485835,
+          "x": 0.0007494050171080794,
+          "y": -0.02628967556260337,
           "onScreen": true,
-          "heightFrac": 0.15575774549669827,
+          "heightFrac": 0.15575775638279593,
           "visible": true
         },
         "landmarkInView": true
@@ -1497,7 +1497,7 @@
         "inVehicle": true,
         "driverHidden": true
       },
-      "pixelHash": "16d061a396427f23df579f0f4d330f89",
+      "pixelHash": "21c5d01b8b79fc917420f5eb9b013fd9",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1527,10 +1527,10 @@
       "file": "laptop/21-jeep-drive-1.png",
       "screen": "world",
       "pos": {
-        "x": 12.552543582018782,
-        "z": 12.509284589501124
+        "x": 12.539546200810555,
+        "z": 12.510769541233064
       },
-      "cameraYaw": 1.2486818916544635,
+      "cameraYaw": 1.2515302972137263,
       "drawCalls": 69,
       "missionView": null,
       "clip": {
@@ -1538,22 +1538,22 @@
         "time": 0
       },
       "avatar": {
-        "height": 1.699998979169472
+        "height": 1.6999990487354575
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 10.262581183285466,
-        "yaw": 1.1805009272422815,
-        "pitch": -0.3527377806162184,
-        "x": 21.411293545135027,
-        "y": 5.5167913450296115,
-        "z": 16.15377670886138,
+        "dist": 10.25933778396092,
+        "yaw": 1.1831684099535549,
+        "pitch": -0.3528385918057744,
+        "x": 21.405007521562933,
+        "y": 5.516169881215904,
+        "z": 16.130401988730906,
         "target": "vehicle",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.6374260425193117,
+          "min": 1.6529245529772782,
           "max": 9.5
         },
         "orbit": {
@@ -1562,22 +1562,22 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.0027070282757200646,
-          "y": -0.02620185357760716,
+          "x": 0.0026895429440565483,
+          "y": -0.02622347887398862,
           "onScreen": true,
-          "heightFrac": 0.14869574157055115,
+          "heightFrac": 0.14873654439251827,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": {
-        "heading": -1.8246263264165217,
-        "headingUnwrapped": 0.46499999999999986,
+        "heading": -1.8221663264022165,
+        "headingUnwrapped": 0.467460000014305,
         "speed": 4.242640687119285,
         "inVehicle": true,
         "driverHidden": true
       },
-      "pixelHash": "f425b5e5441cf145f3a4ed74918e7b31",
+      "pixelHash": "6232ba9582a9f6d8503ac948569a2ce4",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1589,7 +1589,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 17.72141504845511,
+        "dist": 17.71325981958452,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -1607,33 +1607,33 @@
       "file": "laptop/22-jeep-drive-2.png",
       "screen": "world",
       "pos": {
-        "x": 4.839461313771136,
-        "z": 16.397172563985468
+        "x": 4.8093459293838166,
+        "z": 16.477027457564184
       },
-      "cameraYaw": 2.517137204543703,
-      "drawCalls": 17,
+      "cameraYaw": 2.5295274841493445,
+      "drawCalls": 19,
       "missionView": null,
       "clip": {
         "name": "sit",
         "time": 0
       },
       "avatar": {
-        "height": 1.699998979169472
+        "height": 1.699999048735458
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 10.483964884194066,
-        "yaw": 2.400018098344617,
-        "pitch": -0.34417490850199195,
-        "x": 11.461798247824246,
-        "y": 5.202085698999235,
-        "z": 9.167397173964796,
+        "dist": 10.477341431056697,
+        "yaw": 2.4125997193996653,
+        "pitch": -0.34432743497747753,
+        "x": 11.33581509241981,
+        "y": 5.201400371440547,
+        "z": 9.169415168301992,
         "target": "vehicle",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.6374260425193117,
+          "min": 1.6529245529772782,
           "max": 9.5
         },
         "orbit": {
@@ -1642,22 +1642,22 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.0018271381020353245,
-          "y": -0.024736694331061442,
+          "x": 0.0019209408049155083,
+          "y": -0.024765200242712976,
           "onScreen": true,
-          "heightFrac": 0.14605686773332388,
+          "heightFrac": 0.14614038528710516,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": {
-        "heading": -0.5189063264236751,
-        "headingUnwrapped": 1.770719999992847,
+        "heading": -0.5073863263950642,
+        "headingUnwrapped": 1.7822400000214573,
         "speed": 4.242640687119285,
         "inVehicle": true,
         "driverHidden": true
       },
-      "pixelHash": "54fa19041d361816e95d9c0a8dcc7d9f",
+      "pixelHash": "17e5ed6745ba5dbe7f75b39cccb369f4",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1669,7 +1669,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 17.096422254395954,
+        "dist": 17.16456355710231,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -1687,10 +1687,10 @@
       "file": "laptop/23-jeep-drive-3.png",
       "screen": "world",
       "pos": {
-        "x": 4.519913364481594,
-        "z": 22.171424771865777
+        "x": 4.612918831710612,
+        "z": 22.378630750544097
       },
-      "cameraYaw": -2.928077339206965,
+      "cameraYaw": -2.896935296220059,
       "drawCalls": 14,
       "missionView": null,
       "clip": {
@@ -1698,22 +1698,22 @@
         "time": 0
       },
       "avatar": {
-        "height": 1.699998979169472
+        "height": 1.699999048735458
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 10.470761242015655,
-        "yaw": -3.055284704489287,
-        "pitch": -0.34020218092331683,
-        "x": 3.672953483575607,
-        "y": 5.246741165479851,
-        "z": 12.382571882977622,
+        "dist": 10.468008795696932,
+        "yaw": -3.0235517348523153,
+        "pitch": -0.3402975171956167,
+        "x": 3.4563656472220474,
+        "y": 5.252575915582886,
+        "z": 12.626279379523016,
         "target": "vehicle",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.6374260425193117,
+          "min": 1.6529245529772782,
           "max": 9.5
         },
         "orbit": {
@@ -1722,22 +1722,22 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.003011758520724524,
-          "y": -0.026144458549684023,
+          "x": -0.0029180209889974242,
+          "y": -0.026025982801990966,
           "onScreen": true,
-          "heightFrac": 0.14641801946210956,
+          "heightFrac": 0.14645454367959787,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": {
-        "heading": 0.3236736735834773,
-        "headingUnwrapped": 2.6132999999999993,
+        "heading": 0.35409367361208766,
+        "headingUnwrapped": 2.64372000002861,
         "speed": 4.242640687119285,
         "inVehicle": true,
         "driverHidden": true
       },
-      "pixelHash": "90309c75e8ebf33302e34268dc96b5a0",
+      "pixelHash": "43f9d406d563600afd14b30c06437616",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1749,7 +1749,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 22.62745441354203,
+        "dist": 22.849116709780013,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -1767,33 +1767,33 @@
       "file": "laptop/24-jeep-drive-4.png",
       "screen": "world",
       "pos": {
-        "x": 10.301195923535424,
-        "z": 26.563653715344493
+        "x": 9.126823200535835,
+        "z": 26.373966886563625
       },
-      "cameraYaw": -1.850827829074623,
-      "drawCalls": 22,
+      "cameraYaw": -1.998924944748513,
+      "drawCalls": 24,
       "missionView": null,
       "clip": {
         "name": "sit",
         "time": 0
       },
       "avatar": {
-        "height": 1.699998979169472
+        "height": 1.699999048735458
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 10.445444410316847,
-        "yaw": -1.972806339136433,
-        "pitch": -0.34095858382439403,
-        "x": 1.2840366190777137,
-        "y": 5.451396544709321,
-        "z": 22.729877260528397,
+        "dist": 10.365156615925377,
+        "yaw": -2.118849340893675,
+        "pitch": -0.3442838994387233,
+        "x": 0.8493479692843677,
+        "y": 5.423566594785375,
+        "z": 21.321151407227912,
         "target": "vehicle",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.6374260425193117,
+          "min": 1.6529245529772782,
           "max": 9.5
         },
         "orbit": {
@@ -1802,22 +1802,22 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.002052816696130723,
-          "y": -0.02616441189430679,
+          "x": 0.0031071260687576185,
+          "y": -0.025426114971315184,
           "onScreen": true,
-          "heightFrac": 0.14673206440823167,
+          "heightFrac": 0.1477095491632284,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": {
-        "heading": 1.3964136735691728,
-        "headingUnwrapped": 3.6860399999856934,
+        "heading": 1.2366336735977823,
+        "headingUnwrapped": 3.5262600000143047,
         "speed": 4.242640687119285,
         "inVehicle": true,
         "driverHidden": true
       },
-      "pixelHash": "dec0a7d40789422612dc480ed0916177",
+      "pixelHash": "64c5f93e7fcb719e9d41d4a9272810a1",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1829,7 +1829,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 28.491092224830517,
+        "dist": 27.908511803164888,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -1847,33 +1847,33 @@
       "file": "laptop/25-jeep-straight-1.png",
       "screen": "world",
       "pos": {
-        "x": 15.13462357235206,
-        "z": 25.055994225941706
+        "x": 17.294289919611238,
+        "z": 23.87751257618949
       },
-      "cameraYaw": -0.9601236700396658,
-      "drawCalls": 72,
+      "cameraYaw": -0.9718981307335035,
+      "drawCalls": 68,
       "missionView": null,
       "clip": {
         "name": "sit",
         "time": 0
       },
       "avatar": {
-        "height": 1.699998979169472
+        "height": 1.699999048735458
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 10.005288925291637,
-        "yaw": -0.9684869833303811,
-        "pitch": -0.3591719773910359,
-        "x": 7.468777091756176,
-        "y": 5.587527957453303,
-        "z": 30.326512016407996,
+        "dist": 10.414579829759706,
+        "yaw": -0.9941641182194623,
+        "pitch": -0.3431173408939028,
+        "x": 9.12448702786442,
+        "y": 5.635823620767347,
+        "z": 29.19087155218591,
         "target": "vehicle",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.6374260425193117,
+          "min": 1.6529245529772782,
           "max": 9.5
         },
         "orbit": {
@@ -1882,22 +1882,22 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.0012928310365033298,
-          "y": -0.025906510085461555,
+          "x": -0.0013341678772579152,
+          "y": -0.025111506559151082,
           "onScreen": true,
-          "heightFrac": 0.15215917743781826,
+          "heightFrac": 0.14707867982080924,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": {
-        "heading": 2.182845779402138,
-        "headingUnwrapped": 4.472472105818658,
-        "speed": 2,
+        "heading": 2.1746966244498402,
+        "headingUnwrapped": 4.4643229508663635,
+        "speed": 4.888840687405386,
         "inVehicle": true,
         "driverHidden": true
       },
-      "pixelHash": "5f1c31eb68821ba3caa8c2cebc0d5c09",
+      "pixelHash": "6a7e36d2532ca5d9bca19a7bbade1004",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1909,7 +1909,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 29.27216557289909,
+        "dist": 29.4826740756271,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -1927,33 +1927,33 @@
       "file": "laptop/26-jeep-straight-2.png",
       "screen": "world",
       "pos": {
-        "x": 23.026005450135635,
-        "z": 19.51645068703449
+        "x": 39.85938488058287,
+        "z": 8.28053704734271
       },
-      "cameraYaw": -0.9587468741934657,
-      "drawCalls": 49,
+      "cameraYaw": -0.9668960291975299,
+      "drawCalls": 16,
       "missionView": null,
       "clip": {
         "name": "sit",
         "time": 0
       },
       "avatar": {
-        "height": 1.699998979169472
+        "height": 1.699999048735458
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 10.055757412915485,
-        "yaw": -0.9587468755913058,
-        "pitch": -0.35731702762431017,
-        "x": 15.367749449121332,
-        "y": 5.804362763488027,
-        "z": 24.892345945952332,
+        "dist": 11.05617544881404,
+        "yaw": -0.9668960168831973,
+        "pitch": -0.3320914451534644,
+        "x": 31.306138569628448,
+        "y": 5.504634883014295,
+        "z": 14.181233336679067,
         "target": "vehicle",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.6374260425193117,
+          "min": 1.6529245529772782,
           "max": 9.5
         },
         "orbit": {
@@ -1962,22 +1962,22 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.0012680525592572223,
-          "y": -0.02579334678952081,
+          "x": -0.0012111429446841353,
+          "y": -0.023759242715839193,
           "onScreen": true,
-          "heightFrac": 0.15150558497600236,
+          "heightFrac": 0.13911869526274787,
           "visible": true
         },
-        "landmarkInView": true
+        "landmarkInView": false
       },
       "veh": {
-        "heading": 2.182845779402138,
-        "headingUnwrapped": 4.472472105818658,
-        "speed": 2,
+        "heading": 2.1746966244498402,
+        "headingUnwrapped": 4.4643229508663635,
+        "speed": 6,
         "inVehicle": true,
         "driverHidden": true
       },
-      "pixelHash": "28b4b10b65cb7e2556375ebf6376f193",
+      "pixelHash": "385abddc84e6334533101745c4bc49c1",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -1989,7 +1989,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 30.184247123443793,
+        "dist": 40.71041459934858,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -2007,33 +2007,33 @@
       "file": "laptop/27-board-affordance.png",
       "screen": "world",
       "pos": {
-        "x": 2.5700971922736766,
-        "z": -2.971847070350015
+        "x": 2.762346275382717,
+        "z": -4.5831467085854
       },
-      "cameraYaw": 0.10060844167846739,
-      "drawCalls": 37,
+      "cameraYaw": -0.2383192917905923,
+      "drawCalls": 35,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.15079989272356037
+        "time": 0.16229986888170245
       },
       "avatar": {
-        "height": 1.7007021006695273
+        "height": 1.713105735730146
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.808426474966639,
-        "yaw": 0.012557506361100756,
-        "pitch": -0.27839791759966115,
-        "x": 2.627228273294948,
-        "y": 2.471119940020753,
-        "z": 1.577469993761839,
+        "dist": 4.713352006105722,
+        "yaw": -0.005140851303027105,
+        "pitch": -0.28645569057136955,
+        "x": 2.7396709612875356,
+        "y": 2.4327804718803323,
+        "z": -0.17237639036680513,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.659038521679316,
+          "min": 1.6326338561379783,
           "max": 9.5
         },
         "orbit": {
@@ -2042,16 +2042,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.005153592846777762,
-          "y": -0.0976901988270595,
+          "x": 0.006346835900910315,
+          "y": -0.10351683781217808,
           "onScreen": true,
-          "heightFrac": 0.3230741009499416,
+          "heightFrac": 0.3309153301476757,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "330a99f26926760d0c2167e503969302",
+      "pixelHash": "ff71e04bb24cb3df3a5d1467d9a6e774",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -2063,7 +2063,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 3.9290297259350178,
+        "dist": 5.351241977105685,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -2081,33 +2081,33 @@
       "file": "laptop/28-board-open.png",
       "screen": "world",
       "pos": {
-        "x": 2.5700971922736766,
-        "z": -2.971847070350015
+        "x": 2.762346275382717,
+        "z": -4.5831467085854
       },
-      "cameraYaw": 0.2247531746265956,
-      "drawCalls": 37,
+      "cameraYaw": -0.8638144746106562,
+      "drawCalls": 67,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.011999749660491887
+        "time": 0.26809967815876
       },
       "avatar": {
-        "height": 1.6999989952562033
+        "height": 1.69999899580483
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.849390765173929,
-        "yaw": 0.22474746406777868,
-        "pitch": -0.2754261953049812,
-        "x": 3.595253685047177,
-        "y": 2.4707290261244252,
-        "z": 1.5124632975494496,
+        "dist": 4.870968337247714,
+        "yaw": -0.8638142672603237,
+        "pitch": -0.27542611271406786,
+        "x": -0.735151432728358,
+        "y": 2.4335403934625233,
+        "z": -1.595253082380473,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.659038521679316,
+          "min": 1.6326338561379783,
           "max": 9.5
         },
         "orbit": {
@@ -2116,16 +2116,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.00531304031309194,
-          "y": -0.0959632578419662,
+          "x": -0.0010319135782215774,
+          "y": -0.09308059120912442,
           "onScreen": true,
-          "heightFrac": 0.3205756045323121,
+          "heightFrac": 0.31925972280496906,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "edc55800840ee71e8fa0aa7e840665f5",
+      "pixelHash": "d5e4b25d959e4f883119f2f13bd86d43",
       "pixelDiff": null,
       "taps": {
         ".mb-back": {
@@ -2152,7 +2152,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 3.9290297259350178,
+        "dist": 5.351241977105685,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -2170,33 +2170,33 @@
       "file": "laptop/29-mission-3d.png",
       "screen": "mission",
       "pos": {
-        "x": 2.5700971922736766,
-        "z": -2.971847070350015
+        "x": 2.762346275382717,
+        "z": -4.5831467085854
       },
-      "cameraYaw": 0.22475329518804799,
-      "drawCalls": 35,
+      "cameraYaw": -0.8638144764898694,
+      "drawCalls": 64,
       "missionView": "3d",
       "clip": {
         "name": "idle",
-        "time": 0.19409948736429208
+        "time": 0.11679924899339666
       },
       "avatar": {
-        "height": 1.6999989910009219
+        "height": 1.69999899580483
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.689825197720603,
-        "yaw": 0.05211792129335624,
-        "pitch": -0.4453248825110112,
-        "x": 2.868383855355802,
-        "y": 2.470729022309509,
-        "z": 1.4526825400188546,
+        "dist": 4.418022251004995,
+        "yaw": -0.5693274003829458,
+        "pitch": -0.46815437307549074,
+        "x": 0.7101611745976342,
+        "y": 2.4335403935226263,
+        "z": -1.0117117499595267,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
         "zoom": {
           "dist": 4.6,
-          "min": 1.659038521679316,
+          "min": 1.6326338561379783,
           "max": 9.5
         },
         "orbit": {
@@ -2205,16 +2205,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.022571921959270904,
-          "y": 0.20910730975606764,
+          "x": -0.05352681085299208,
+          "y": 0.21084845328334012,
           "onScreen": true,
-          "heightFrac": 0.3346090022015753,
+          "heightFrac": 0.3532577162795144,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "1a71fa7d4baee9228519b00e156af18a",
+      "pixelHash": "b0e465ef76dfe172e534ed8d1111e674",
       "pixelDiff": null,
       "taps": {
         ".zoeken-speak": {
@@ -2258,7 +2258,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 3.9290297259350178,
+        "dist": 5.351241977105685,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -2284,18 +2284,18 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.09639992851018908
+        "time": 0.20819992846250546
       },
       "avatar": {
         "height": 1.6999989950630152
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.854125876826303,
+        "dist": 4.85412478277991,
         "yaw": 0,
-        "pitch": -0.2754283207508715,
+        "pitch": -0.27542763101393936,
         "x": -5.633375276077824e-16,
-        "y": 2.3938843320358836,
+        "y": 2.393880905839019,
         "z": 4.6,
         "target": "avatar",
         "avatarInView": true,
@@ -2311,16 +2311,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 1.8809947761475526e-8,
-          "y": -0.09532379380474996,
+          "x": 1.880995202042137e-8,
+          "y": -0.09532383396922586,
           "onScreen": true,
-          "heightFrac": 0.32028334290540067,
+          "heightFrac": 0.3202834847105709,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "28e085acb7045d21d05a681f73d2b9f0",
+      "pixelHash": "51d00f1cfd5e20ac0f8fe459a886b6ab",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -2354,18 +2354,18 @@
         "z": 0
       },
       "cameraYaw": 0,
-      "drawCalls": 52,
+      "drawCalls": 64,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.2842000000476837
+        "time": 0
       },
       "avatar": {
-        "height": 1.6999989950630152
+        "height": 1.6999999999999995
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.854122360189224,
+        "dist": 4.854121959736899,
         "yaw": 0,
         "pitch": -0.2754261036960354,
         "x": -5.633375276077824e-16,
@@ -2385,10 +2385,10 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 1.880996145118237e-8,
-          "y": -0.09532392290709159,
+          "x": 6.8734842106176824e-18,
+          "y": -0.09532381644085632,
           "onScreen": true,
-          "heightFrac": 0.3202837987157597,
+          "heightFrac": 0.3202840196593443,
           "visible": true
         },
         "landmarkInView": true
@@ -2432,18 +2432,18 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.14669999998807906
+        "time": 0.15780000001192093
       },
       "avatar": {
         "height": 1.6999989950630152
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.854122443306895,
+        "dist": 4.8541225350967485,
         "yaw": 0,
-        "pitch": -0.27542615609755317,
+        "pitch": -0.2754262139664364,
         "x": -5.633375276077824e-16,
-        "y": 2.3938735793489165,
+        "y": 2.393873866806317,
         "z": 4.6,
         "target": "avatar",
         "avatarInView": true,
@@ -2459,16 +2459,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 1.8809961127618313e-8,
-          "y": -0.0953239198556838,
+          "x": 1.8809960770294824e-8,
+          "y": -0.09532391648590394,
           "onScreen": true,
-          "heightFrac": 0.32028378794241763,
+          "heightFrac": 0.3202837760450265,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "4f1ed1a49e3bcd4e2ffb6d0dacaf4063",
+      "pixelHash": "aea1b6d62752922e69a2366b8c04e677",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -2506,7 +2506,7 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.01399955892562843
+        "time": 0.27799954700469953
       },
       "avatar": {
         "height": 1.6999989950630152
@@ -2606,7 +2606,7 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.07439865297079107
+        "time": 0.09559866487979896
       },
       "avatar": {
         "height": 1.6999989950630152
@@ -2683,7 +2683,7 @@
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.030298462212085986
+        "time": 0.29799848604202284
       },
       "avatar": {
         "height": 1.6999989950630152
@@ -2753,26 +2753,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -0.8211599999785424
+        "z": -0.8017199999570848
       },
       "cameraYaw": 0,
       "drawCalls": 44,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.9587991655349746
+        "time": 0.8041591655254372
       },
       "avatar": {
-        "height": 1.7061613608035175
+        "height": 1.665426832141536
       },
       "groundSpeed": 1.8000000000000003,
       "cam": {
-        "dist": 4.872123239752882,
+        "dist": 4.862986134542281,
         "yaw": 0,
         "pitch": -0.2754261036960354,
         "x": -5.633375276077824e-16,
-        "y": 2.370385640988409,
-        "z": 3.7788400000214573,
+        "y": 2.370941826325436,
+        "z": 3.798280000042915,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -2787,19 +2787,19 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.010328788878074258,
-          "y": -0.11122789983224869,
+          "x": 0.010596639700793055,
+          "y": -0.11017527785143046,
           "onScreen": true,
-          "heightFrac": 0.31965138960739353,
+          "heightFrac": 0.31261484452357574,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "f205db6121305b2412b56b018ae8107d",
+      "pixelHash": "3e09bc251be90d64efea6c1fabd46b50",
       "pixelDiff": {
         "vs": "reduce-motion-idle-hold",
-        "ratio": 0.49083333333333334
+        "ratio": 0.4884375
       },
       "taps": null,
       "viewport": null,
@@ -2811,7 +2811,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 0.8211599999785424,
+        "dist": 0.8017199999570848,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -2830,26 +2830,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -5.01713999991417
+        "z": -5.126579999935626
       },
       "cameraYaw": 0,
-      "drawCalls": 24,
+      "drawCalls": 23,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.5561189985990542
+        "time": 0.4873989986181263
       },
       "avatar": {
-        "height": 1.7117194106656952
+        "height": 1.7127453041251508
       },
-      "groundSpeed": 1.8,
+      "groundSpeed": 1.7999999999999987,
       "cam": {
-        "dist": 4.957383131086251,
+        "dist": 4.867036385932206,
         "yaw": 0,
         "pitch": -0.2754261036960354,
         "x": -5.633375276077824e-16,
-        "y": 2.2504111359089256,
-        "z": -0.4171399999141707,
+        "y": 2.247289611981067,
+        "z": -0.5265799999356267,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -2864,19 +2864,19 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -0.0033732292459136256,
-          "y": -0.09208994221850748,
+          "x": -0.009349208971395085,
+          "y": -0.10921126472941071,
           "onScreen": true,
-          "heightFrac": 0.31588204586677965,
+          "heightFrac": 0.3213028437592321,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "99463c4facd938b27701a0c971250ba6",
+      "pixelHash": "48e78d243c1d6e5074656e7d07d40102",
       "pixelDiff": {
         "vs": "reduce-motion-walk-1",
-        "ratio": 0.6813541666666667
+        "ratio": 0.6854166666666667
       },
       "taps": null,
       "viewport": null,
@@ -2888,7 +2888,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 5.01713999991417,
+        "dist": 5.126579999935626,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -2907,26 +2907,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -8.468639999914172
+        "z": -8.508419999957084
       },
       "cameraYaw": 0,
       "drawCalls": 21,
       "missionView": null,
       "clip": {
         "name": "walk",
-        "time": 0.7237855540037186
+        "time": 0.6086255540370947
       },
       "avatar": {
-        "height": 1.6725917607522371
+        "height": 1.7046717240877052
       },
-      "groundSpeed": 1.800000000000006,
+      "groundSpeed": 1.8000000000000003,
       "cam": {
-        "dist": 4.898875619912017,
+        "dist": 4.940909415750682,
         "yaw": 0,
         "pitch": -0.2754261036960354,
         "x": -5.633375276077824e-16,
-        "y": 2.152414425861658,
-        "z": -3.8686399999141727,
+        "y": 2.1512918341708946,
+        "z": -3.9084199999570846,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -2941,19 +2941,19 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.008874314346631716,
-          "y": -0.10060225084490813,
+          "x": 0.00176149966590509,
+          "y": -0.0923405352368426,
           "onScreen": true,
-          "heightFrac": 0.31201262169153576,
+          "heightFrac": 0.3156184841306233,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": null,
-      "pixelHash": "40a7f76c30778e7fa78cd6a4add97c9c",
+      "pixelHash": "54c67bd0c5e2b125b500b5a297e07684",
       "pixelDiff": {
         "vs": "reduce-motion-walk-2",
-        "ratio": 0.56203125
+        "ratio": 0.5577604166666666
       },
       "taps": null,
       "viewport": null,
@@ -2965,7 +2965,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 8.468639999914172,
+        "dist": 8.508419999957084,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -2984,26 +2984,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -10.532520000064377
+        "z": -10.59785999997854
       },
       "cameraYaw": 0,
       "drawCalls": 15,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.07879806882143015
+        "time": 0.0003980807662010144
       },
       "avatar": {
-        "height": 1.6999991146522693
+        "height": 1.6999989843933907
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.854121799836429,
+        "dist": 4.854121812263342,
         "yaw": 0,
         "pitch": -0.2754261036960354,
         "x": -5.633375276077824e-16,
-        "y": 2.0944499855326533,
-        "z": -5.932520000064377,
+        "y": 2.092625070365739,
+        "z": -5.997859999978541,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -3018,16 +3018,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -2.7298899718991744e-8,
-          "y": -0.09532406938588535,
+          "x": -2.4073469593199193e-8,
+          "y": -0.09532405383124645,
           "onScreen": true,
-          "heightFrac": 0.3202838527052388,
+          "heightFrac": 0.32028382784301584,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": null,
-      "pixelHash": "2148822855922d828526f8ebf26a136b",
+      "pixelHash": "544c4bfedce122838858de300422dc0e",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -3039,7 +3039,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 10.532520000064377,
+        "dist": 10.59785999997854,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -3058,26 +3058,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -10.532520000064377
+        "z": -10.59785999997854
       },
       "cameraYaw": 0,
       "drawCalls": 23,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.26309802114963515
+        "time": 0.16589803308248513
       },
       "avatar": {
-        "height": 1.699998995257327
+        "height": 1.6999989958049746
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 9.625616637021022,
+        "dist": 9.625616635420212,
         "yaw": 0,
         "pitch": -0.13599741803738394,
         "x": -1.1634144591899855e-15,
-        "y": 2.0944499855326533,
-        "z": -1.0325200000643768,
+        "y": 2.092625070365739,
+        "z": -1.0978599999785406,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -3092,19 +3092,19 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -9.356534503555344e-9,
-          "y": -0.04944822376133426,
+          "x": -9.477182268937882e-9,
+          "y": -0.04944822375800996,
           "onScreen": true,
-          "heightFrac": 0.16755540064867835,
+          "heightFrac": 0.16755540073057718,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "de2c2326f9badb23611bc57abcac4b7a",
+      "pixelHash": "bd6ff6eb94333f68f0eee785adeb87bc",
       "pixelDiff": {
         "vs": "reduce-motion-reframe-before",
-        "ratio": 0.6725
+        "ratio": 0.6721875
       },
       "taps": null,
       "viewport": null,
@@ -3116,7 +3116,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 10.532520000064377,
+        "dist": 10.59785999997854,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -3135,26 +3135,26 @@
       "screen": "world",
       "pos": {
         "x": 0,
-        "z": -10.532520000064377
+        "z": -10.59785999997854
       },
       "cameraYaw": 0,
       "drawCalls": 23,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.03859791386127459
+        "time": 0.17109793770313256
       },
       "avatar": {
-        "height": 1.6999989957103652
+        "height": 1.6999989952561982
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 9.625616635416625,
+        "dist": 9.625616637022894,
         "yaw": 0,
         "pitch": -0.13599741803738394,
         "x": -1.1634144591899855e-15,
-        "y": 2.0944499855326533,
-        "z": -1.0325200000643768,
+        "y": 2.092625070365739,
+        "z": -1.0978599999785406,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -3169,16 +3169,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": -9.477195840948515e-9,
-          "y": -0.049448223748236944,
+          "x": -9.356603371366137e-9,
+          "y": -0.049448223760962855,
           "onScreen": true,
-          "heightFrac": 0.16755540072140715,
+          "heightFrac": 0.16755540064853808,
           "visible": true
         },
         "landmarkInView": true
       },
       "veh": null,
-      "pixelHash": "de2c2326f9badb23611bc57abcac4b7a",
+      "pixelHash": "bd6ff6eb94333f68f0eee785adeb87bc",
       "pixelDiff": {
         "vs": "reduce-motion-reframe-cut",
         "ratio": 0
@@ -3193,7 +3193,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 10.532520000064377,
+        "dist": 10.59785999997854,
         "atRim": false,
         "scatterMax": 61.552604922516736
       },
@@ -3211,27 +3211,27 @@
       "file": "laptop/42-boundary-rim.png",
       "screen": "world",
       "pos": {
-        "x": 0.8030467409498628,
-        "z": -71.69982556027227
+        "x": -0.32632803986438147,
+        "z": -71.596280579934
       },
-      "cameraYaw": -1.0612179301109634,
+      "cameraYaw": 0.6984353317191463,
       "drawCalls": 9,
       "missionView": null,
       "clip": {
         "name": "idle",
-        "time": 0.1060982833504669
+        "time": 0.07689828342199301
       },
       "avatar": {
-        "height": 1.7013979494538043
+        "height": 1.7002246107275096
       },
       "groundSpeed": 0,
       "cam": {
-        "dist": 4.598527460502114,
-        "yaw": -0.6252459669780563,
-        "pitch": -0.29146282439955784,
-        "x": -1.7334659881939911,
-        "y": 0.980472166652774,
-        "z": -68.18596142465015,
+        "dist": 4.625493972430101,
+        "yaw": 0.28928909400611946,
+        "pitch": -0.29069432258614464,
+        "x": 0.9141402697235019,
+        "y": 1.0277415875922806,
+        "z": -67.42858279802776,
         "target": "avatar",
         "avatarInView": true,
         "fov": 55,
@@ -3246,16 +3246,16 @@
         },
         "avatarOpacity": 1,
         "avatarScreen": {
-          "x": 0.00007279220117052522,
-          "y": -0.10109349669606697,
+          "x": 0.0032552878265803137,
+          "y": -0.09875654315700849,
           "onScreen": true,
-          "heightFrac": 0.33642476927903364,
+          "heightFrac": 0.3344111847754828,
           "visible": true
         },
         "landmarkInView": false
       },
       "veh": null,
-      "pixelHash": "f2a4dff19c04c27813bf2fab4c6afe78",
+      "pixelHash": "d4a996ecb351894c38f00f5add1c5c06",
       "pixelDiff": null,
       "taps": null,
       "viewport": null,
@@ -3267,7 +3267,7 @@
       },
       "boundary": {
         "bound": 75,
-        "dist": 71.70432252968871,
+        "dist": 71.59702425988273,
         "atRim": true,
         "scatterMax": 61.552604922516736
       },
