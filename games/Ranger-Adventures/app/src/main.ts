@@ -60,7 +60,7 @@ card.className = 'boot-card';
 card.innerHTML =
   `<p class="boot-kicker">Ranger van de Veluwe</p>` +
   `<h1 class="boot-title">Word boswachter</h1>` +
-  `<p class="boot-sub">Help de dieren van de Veluwe. Kies een missie en train je breinkracht.</p>` +
+  `<p class="boot-sub">Help de dieren van de Veluwe.<br>Kies een missie en train je breinkracht.</p>` +
   `<button class="btn-start" type="button">Begin</button>`;
 ui.appendChild(card);
 
