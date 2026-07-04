@@ -84,6 +84,14 @@ const PAD_LAND_R = 6.0;
 // the normal resolver applies again (pads are walk-through, so touchdown is clean).
 const HELI_AIRBORNE_Y = 2.5;
 
+// F-22 occlusion-proof labels: the diegetic name-tags draw with depthTest off so
+// no nearer mesh can clip them mid-glyph (see makeLabel). The cost of drawing them
+// on top of everything is that a far tag would otherwise punch through hills from
+// across the map, so each fades OUT with distance — full opacity within FULL m
+// (the hub / an open mission, i.e. the moment the label matters), gone by GONE m.
+const LABEL_FADE_FULL = 55;  // camera→label distance (m) below which a tag is fully opaque
+const LABEL_FADE_GONE = 85;  // …and above which it has faded to nothing
+
 export class World {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(55, 1, 0.1, 240);
@@ -128,6 +136,11 @@ export class World {
   private avatarOpacity = 1;            // current applied ranger fade (avoids churn)
   private readonly _camPose = new THREE.Vector3();  // scratch: camera world forward
   private readonly _camBox = new THREE.Box3();       // scratch: ranger bbox for pose reads
+  private readonly _labelFwd = new THREE.Vector3();  // scratch: camera forward for the label fade
+  private readonly _labelWP = new THREE.Vector3();   // scratch: a label's world position
+  // F-22: every diegetic world/vehicle/POI name-tag makeLabel() builds, so one
+  // per-frame pass (fadeWorldLabels) can keep them all occlusion-proof + distance-faded.
+  private readonly labels: THREE.Sprite[] = [];
   // W1.5 rotating follow-cam: `followYaw` is the eased camera bearing; it chases
   // `followTargetYaw` (the ranger's facing, updated ONLY while he is moving — a
   // standing ranger never swings the camera). Both start at π = straight behind
@@ -1673,11 +1686,44 @@ export class World {
 
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
-    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    // F-22: depthTest OFF + a high renderOrder → a nearer mesh (the giant avatar's
+    // leg in Run A, the board planks, a pine, the parked jeep) can no longer
+    // depth-occlude the tag and cut the one string that names the object mid-glyph.
+    // depthWrite stays off so the tag never pollutes the depth buffer for what draws
+    // after it. The always-on-top trade-off is bounded by the per-frame
+    // distance/behind-camera fade in fadeWorldLabels().
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
     const sprite = new THREE.Sprite(mat);
+    sprite.renderOrder = 12; // draw after the opaque world + props so it composites over them
     const scale = 0.0042; // world units per px → ~legible without dominating
     sprite.scale.set(w * scale, h * scale, 1);
+    this.labels.push(sprite); // registered for the F-22 occlusion-proof distance fade
     return sprite;
+  }
+
+  /**
+   * F-22: keep every diegetic world/vehicle/POI name-tag readable. makeLabel draws
+   * them with depthTest off + a high renderOrder, so a nearer mesh can never clip a
+   * tag mid-glyph again (the whole defect). The cost of drawing on top of everything
+   * is that a distant tag would otherwise punch through hills from across the map,
+   * so fade each one out behind the camera and with distance. Reading close-up (the
+   * hub, an open mission — the moment the label matters) stays full opacity, so the
+   * fade never touches the frame the finding grades. Cheap: one dot + one length per
+   * tag, no allocation (scratch vectors), no draw-call change.
+   */
+  private fadeWorldLabels(): void {
+    if (this.labels.length === 0) return;
+    const cp = this.camera.position;
+    const fwd = this.camera.getWorldDirection(this._labelFwd);
+    for (const label of this.labels) {
+      const mat = label.material as THREE.SpriteMaterial;
+      const wp = label.getWorldPosition(this._labelWP);
+      const dx = wp.x - cp.x, dy = wp.y - cp.y, dz = wp.z - cp.z;
+      if (dx * fwd.x + dy * fwd.y + dz * fwd.z <= 0.5) { mat.opacity = 0; continue; } // behind the camera
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      mat.opacity = Math.max(0, Math.min(1,
+        (LABEL_FADE_GONE - dist) / (LABEL_FADE_GONE - LABEL_FADE_FULL)));
+    }
   }
 
   /**
@@ -2827,6 +2873,11 @@ export class World {
       this.waterMat.uniforms.uTime.value = st;
       this.waterMat.uniforms.uAmp.value = rippleAmp(reduced);
     }
+
+    // F-22: keep the occlusion-proof world/vehicle/POI name-tags distance-faded.
+    // Runs before the activity early-return so an open mission's Missiebord tag
+    // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity too.
+    this.fadeWorldLabels();
 
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
 
