@@ -76,7 +76,7 @@
   stylized ground with believable heide · bos · stuifzand · ven materials + soft
   blob shadows so realistic animals will belong. **Verify by:** shot (each biome
   reads as real Veluwe ground) + assert (`drawCalls` < 150).
-- [ ] P1.3 · **Trees + world props to one fidelity [both].** Mixed species/sizes,
+- [x] P1.3 · **Trees + world props to one fidelity [both].** Mixed species/sizes,
   consistent material language with the staged prop cast; no low-poly outlier
   next to a realistic asset. **Verify by:** shot (tree line + props read as one
   world) + assert (draw-call budget held).

@@ -5,10 +5,10 @@
 
 - **Ledger:** RUN-C-LEDGER.md
 - **Phase:** Phase 1 · one naturalistic art direction across all screens  (VISION §13.1 — the cohesion + realism unifier; the single highest-impact lever)
-- **Progress:** ~7% (weighted by ledger items)
+- **Progress:** ~8% (weighted by ledger items)
 - **Just landed:** P1.1 · Unify the lighting + sky to the golden-hour touchstone [both].
-- **Next up:** P1.2 · Naturalistic terrain + ground materials [both]. Replace flat/
-- **Last heartbeat:** 2026-07-04 21:47:06Z
+- **Next up:** DEFERRED · P1.2 · Naturalistic terrain + ground materials [both]. Replace flat/
+- **Last heartbeat:** 2026-07-04 23:12:43Z
 - **Blocker:** Build phases complete (laptop) — awaiting Floris on-device demo + iPad re-enable (DEMO/DEFERRED boxes in BUILD-LEDGER.md).
 
 
@@ -17,8 +17,8 @@
 ```
 ✔ landed: P1.1 · Unify the lighting + sky to the golden-hour touchstone [both].
 ▶ phase:  Phase 1 · one naturalistic art direction across all screens  (VISION §13.1 — the cohesion + realism unifier; the single highest-impact lever)
-→ next:   P1.2 · Naturalistic terrain + ground materials [both]. Replace flat/
+→ next:   DEFERRED · P1.2 · Naturalistic terrain + ground materials [both]. Replace flat/
 ▤ ledger: RUN-C-LEDGER.md
-▷ progress: ~7%
+▷ progress: ~8%
 ⚠ blocker: Build phases complete (laptop) — awaiting Floris on-device demo + iPad re-enable (DEMO/DEFERRED boxes in BUILD-LEDGER.md).
 ```

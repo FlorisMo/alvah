@@ -1,7 +1,8 @@
 /**
- * World.ts — the explorable 3D Veluwe (BUILD-PLAN §4). A procedural heath/forest
- * (instanced pines + heather to stay well under the draw-call budget), the real
- * generated ranger you walk around, and one animal "marker" per mission. Tap the
+ * World.ts — the explorable 3D Veluwe (BUILD-PLAN §4). A naturalistic heath/forest
+ * (instanced real tree GLBs — pine·oak·birch — plus heather, all instanced to stay
+ * well under the draw-call budget; P1.3), the real generated ranger you walk around,
+ * and one animal "marker" per mission. Tap the
  * ground to walk; tap an animal (or walk up to it) to start that mission.
  *
  * Render layer only — it drives the spine through the onApproach callback and
@@ -111,6 +112,60 @@ const RIM_TUFT_CLEAR = 13;
 // (the hub / an open mission, i.e. the moment the label matters), gone by GONE m.
 const LABEL_FADE_FULL = 55;  // camera→label distance (m) below which a tag is fully opaque
 const LABEL_FADE_GONE = 85;  // …and above which it has faded to nothing
+
+// P1.3: the tree canopy is authored at ONE fidelity. Both the scattered bos trees and
+// the F-11 rim tree-line render an instant low-poly cone/cylinder stand-in, then the
+// real staged tree GLBs (Scots pine · oak · birch) stream in as InstancedMesh and
+// REPLACE them — so no low-poly tree ever stands beside a realistic prop or animal
+// (RUN-C-DIRECTION §2.3: "no low-poly outlier may stand next to a realistic asset").
+// InstancedMesh keeps the whole forest at a handful of draw calls regardless of tree
+// count (§A8). The species mix is grove den dominant with eik/berk woven in (§2.2). The
+// trees are static (no wind), so the reduced-motion freeze is a no-op on them.
+type TreeSpecies = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
+interface TreePlacement { x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies }
+// prepModel target height (m) per species — mixed sizes; a per-instance scale rides on top.
+const TREE_BASE_H: Record<TreeSpecies, number> = {
+  'prop-pine-scots': 6.6, 'prop-oak-tree': 5.4, 'prop-birch-tree': 6.0,
+};
+// deterministic species pattern woven along the scatter/rim index — pine dominant.
+const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree'];
+const TREE_RIM_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-pine-scots', 'prop-birch-tree'];
+
+/**
+ * Build one InstancedMesh per sub-mesh of a normalized (feet at y=0, x/z-centred)
+ * model, one instance per placement. Each sub-mesh's model-local matrix is baked into
+ * every instance so a clone renders identically to loadModel+prepModel — just shared
+ * across N spots at 1 draw call each. Shadows off + an instance-aware bounding sphere
+ * so the follow frustum culls the ring correctly (the trees never pop at the rim).
+ */
+function instancesFromPrepped(prepped: THREE.Object3D, placements: TreePlacement[]): THREE.InstancedMesh[] {
+  prepped.updateMatrixWorld(true); // wrapper sits at identity → mesh.matrixWorld IS model-local
+  const out: THREE.InstancedMesh[] = [];
+  const world = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const pos = new THREE.Vector3();
+  const scl = new THREE.Vector3();
+  const yAxis = new THREE.Vector3(0, 1, 0);
+  prepped.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const local = mesh.matrixWorld.clone(); // this sub-mesh's transform in model-local space
+    const inst = new THREE.InstancedMesh(mesh.geometry, mesh.material, placements.length);
+    inst.castShadow = false;
+    inst.receiveShadow = false;
+    placements.forEach((p, k) => {
+      q.setFromAxisAngle(yAxis, p.rotY);
+      pos.set(p.x, p.y, p.z);
+      scl.set(p.s, p.s, p.s);
+      world.compose(pos, q, scl).multiply(local);
+      inst.setMatrixAt(k, world);
+    });
+    inst.instanceMatrix.needsUpdate = true;
+    inst.computeBoundingSphere(); // cover all instances so the rim ring isn't wrongly culled
+    out.push(inst);
+  });
+  return out;
+}
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -446,6 +501,11 @@ export class World {
   // shot's assert can prove scatterMax ≤ bound−RIM_TUFT_CLEAR (the tall pines are exempt —
   // they merge into the buildRim tree-line and may fill to the bound).
   private scatterMax = 0;
+  // P1.3 tree canopy (see the module note above `instancesFromPrepped`): the instant
+  // cone/cylinder stand-ins to swap out, and the per-instance placements (scattered bos
+  // trees + the rim tree-line) to instance the real tree GLBs onto once they load.
+  private readonly treeFallbacks: THREE.Object3D[] = [];
+  private readonly treePlacements: TreePlacement[] = [];
   private readonly limits: MoveLimits = {
     // F-11 (P4.6 rim re-judge): the calm forest edge sits at 75 m, NOT the old 116 m.
     // The Meshy ranger rig is a ~85-unit SKELETON scaled ×0.02 (bind-pose mesh geometry
@@ -531,6 +591,7 @@ export class World {
     this.scatterMarram(Math.round(110 * veg));
     this.scatterReeds(Math.round(90 * veg));
     this.buildRim(); // F-11: the pine tree-line marking the world edge
+    void this.upgradeTreesToGLB(); // P1.3: swap the cone stand-ins for the real tree GLBs
     this.applyWind(0); // W4.6: initial wind pose for both grass meshes
 
     // ranger: procedural stand-in first (instant), real model swaps in when loaded
@@ -1360,25 +1421,21 @@ export class World {
     return out;
   }
 
+  /** The scattered bos trees. P1.3: record real-tree placements (mixed species) +
+   *  the soft trunk collisions, and drop the instant cone stand-in — the real GLBs
+   *  swap in via upgradeTreesToGLB. */
   private scatterPines(budget: number): void {
     const spots = this.candidates(budget * 4, 'bos');
-    const trunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 1.2, 6);
-    const crownGeo = new THREE.ConeGeometry(0.95, 2.4, 7);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: '#5b4327', roughness: 1 });
-    const crownMat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.bos.ground, roughness: 1 });
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, spots.length);
-    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, spots.length);
-    const m = new THREE.Matrix4();
-    spots.forEach(({ x, z, i }, k) => {
-      const s = 0.8 + (i % 5) * 0.12;
-      const y = this.groundY(x, z);
-      m.makeScale(s, s, s); m.setPosition(x, y + 0.6 * s, z); trunks.setMatrixAt(k, m);
-      m.makeScale(s, s, s); m.setPosition(x, y + 1.9 * s, z); crowns.setMatrixAt(k, m);
-      // a soft collision circle around each trunk (the ranger slides around it)
-      this.obstacles.push({ x, z, r: 0.6 * s });
-    });
-    trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
-    this.scene.add(trunks, crowns);
+    const placed: TreePlacement[] = spots.map(({ x, z, i }) => ({
+      x, y: this.groundY(x, z), z,
+      s: 0.85 + (i % 5) * 0.11,                     // 0.85–1.29 height variety
+      rotY: (i * 2.39996) % (Math.PI * 2),          // golden-angle spin, no two alike
+      species: TREE_SCATTER_MIX[i % TREE_SCATTER_MIX.length],
+    }));
+    // a soft collision circle around each trunk (the ranger slides around it)
+    for (const p of placed) this.obstacles.push({ x: p.x, z: p.z, r: 0.6 * p.s });
+    this.treePlacements.push(...placed);
+    this.addTreeFallback(placed);
   }
 
   private scatterHeather(budget: number): void {
@@ -1402,21 +1459,17 @@ export class World {
    * the Run A silent void. The ring sits JUST BEYOND the bound (the ranger clamps at
    * `limits.bound`; the trees start a touch past it), so it needs no collision — it
    * is a backdrop wall, hidden by the fog and only revealed as the player nears the
-   * edge (so hub/spawn shots are untouched). Two instanced meshes → +2 draw calls
-   * regardless of count, keeping the <150 budget intact. Deterministic (index-driven
-   * jitter, no Math.random), uniform all the way round so every heading ends at the
-   * same tidy edge. Shadows off — a distant backdrop needs none.
+   * edge (so hub/spawn shots are untouched). P1.3: the ring is now the real staged tree
+   * cast (pine·oak·birch), instanced → a handful of draw calls regardless of count, so
+   * the tree-line reads at the SAME fidelity as the animals/props it frames while the
+   * <150 budget holds. Deterministic (index-driven jitter, no Math.random), uniform all
+   * the way round so every heading ends at the same tidy edge. Shadows off — a distant
+   * backdrop needs none.
    */
   private buildRim(): void {
     const bound = this.limits.bound;
     const N = 180;
-    const trunkGeo = new THREE.CylinderGeometry(0.14, 0.2, 1.4, 6);
-    const crownGeo = new THREE.ConeGeometry(1.05, 2.8, 7);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: '#5b4327', roughness: 1 });
-    const crownMat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.bos.ground, roughness: 1 });
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, N);
-    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, N);
-    const m = new THREE.Matrix4();
+    const placed: TreePlacement[] = [];
     for (let k = 0; k < N; k++) {
       const ang = (k / N) * Math.PI * 2;
       // two staggered rows just past the bound (bound+1.2 → bound+3.6, ≈76–79 at the
@@ -1425,14 +1478,72 @@ export class World {
       const rad = bound + 1.2 + (k % 2) * 1.8 + Math.sin(k * 12.9) * 0.6;
       const x = Math.cos(ang) * rad;
       const z = Math.sin(ang) * rad;
-      const s = 1.0 + (k % 5) * 0.18; // varied heights so the line reads as a natural edge
-      const y = this.groundY(x, z);
-      m.makeScale(s, s, s); m.setPosition(x, y + 0.7 * s, z); trunks.setMatrixAt(k, m);
-      m.makeScale(s, s, s); m.setPosition(x, y + 2.2 * s, z); crowns.setMatrixAt(k, m);
+      placed.push({
+        x, y: this.groundY(x, z), z,
+        s: 1.0 + (k % 5) * 0.18,                    // varied heights so the line reads as a natural edge
+        rotY: (k * 1.71) % (Math.PI * 2),           // per-tree spin so the ring never repeats
+        species: TREE_RIM_MIX[k % TREE_RIM_MIX.length],
+      });
     }
-    trunks.instanceMatrix.needsUpdate = true;
-    crowns.instanceMatrix.needsUpdate = true;
+    this.treePlacements.push(...placed);
+    this.addTreeFallback(placed); // P1.3: cone stand-in until the real tree GLBs stream in
+  }
+
+  /** P1.3: the instant low-poly stand-in for a set of tree placements — an instanced
+   *  cone crown + cylinder trunk (2 draw calls) shown ONLY until the real staged tree
+   *  GLBs stream in and replace it (upgradeTreesToGLB). Tracked in `treeFallbacks`. */
+  private addTreeFallback(placed: TreePlacement[]): void {
+    if (!placed.length) return;
+    const trunkGeo = new THREE.CylinderGeometry(0.14, 0.2, 1.4, 6);
+    const crownGeo = new THREE.ConeGeometry(1.05, 2.8, 7);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: '#5b4327', roughness: 1 });
+    const crownMat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.bos.ground, roughness: 1 });
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, placed.length);
+    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, placed.length);
+    const m = new THREE.Matrix4();
+    placed.forEach((p, k) => {
+      m.makeScale(p.s, p.s, p.s); m.setPosition(p.x, p.y + 0.7 * p.s, p.z); trunks.setMatrixAt(k, m);
+      m.makeScale(p.s, p.s, p.s); m.setPosition(p.x, p.y + 2.2 * p.s, p.z); crowns.setMatrixAt(k, m);
+    });
+    trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
+    this.treeFallbacks.push(trunks, crowns);
     this.scene.add(trunks, crowns);
+  }
+
+  /**
+   * P1.3: replace the instant cone/cylinder tree stand-ins with the real staged tree
+   * GLBs (Scots pine · oak · birch), instanced so the whole canopy — the scattered bos
+   * trees AND the F-11 rim tree-line — reads at the SAME fidelity as every other prop
+   * and animal (RUN-C-DIRECTION §2.3). One InstancedMesh per species-mesh, so the
+   * entire forest costs only a handful of draw calls regardless of tree count (§A8),
+   * well under the <150 contract. Best-effort + all-or-nothing: only when EVERY needed
+   * species loads do we build the real canopy and drop the cones — a partial load keeps
+   * the whole cone stand-in (so a spot is never double-drawn, the world always playable).
+   */
+  private async upgradeTreesToGLB(): Promise<void> {
+    if (!this.treePlacements.length) return;
+    await loadManifest();
+    const species = [...new Set(this.treePlacements.map((p) => p.species))];
+    const prepped = new Map<TreeSpecies, THREE.Object3D>();
+    for (const id of species) {
+      const m = await loadModel(id);
+      if (m) prepped.set(id, prepModel(m, TREE_BASE_H[id]));
+    }
+    if (prepped.size !== species.length) return; // a species is missing → keep the cone canopy
+    const built: THREE.InstancedMesh[] = [];
+    for (const [id, model] of prepped) {
+      built.push(...instancesFromPrepped(model, this.treePlacements.filter((p) => p.species === id)));
+    }
+    for (const inst of built) this.scene.add(inst);
+    // swap: drop + dispose the now-hidden cone stand-ins so they leave no cost behind.
+    for (const f of this.treeFallbacks) {
+      this.scene.remove(f);
+      const im = f as THREE.InstancedMesh;
+      im.geometry?.dispose();
+      (im.material as THREE.Material)?.dispose?.();
+      im.dispose?.();
+    }
+    this.treeFallbacks.length = 0;
   }
 
   /** Drift-sand marram tussocks — upright pale grass blades on the stuifzand.
