@@ -36,16 +36,23 @@
 .zoeken-speak {
   flex: none;
   width: var(--tap-min);
-  height: var(--tap-min);          /* ≥56px tap target (Alvah profile) */
-  border: none;
+  height: var(--tap-min);          /* >=56px tap target (Alvah profile) */
+  /* RUN-3 P3.1 re-open (F-25 speaker / F-20 addendum): the hit box was already
+     56x56, but --green-soft (#f0f5ec) on the paper prompt bar (#fdfcf8) has
+     near-zero contrast, so the circle was invisible and the speaker read as a
+     bare ~20px glyph. Route it through the SAME visible-box recipe as the P3.1
+     chip token (.ra-chip): a 2px --green-line border turns the hit box into a
+     box the child can SEE -- LOOK >=56, not just hit >=56. */
+  border: 2px solid var(--green-line);
   border-radius: var(--radius-pill);
   background: var(--green-soft);
   color: var(--green);
   font-size: 24px;
   cursor: pointer;
-  transition: transform var(--dur-quick) var(--ease-standard), background var(--dur-quick);
+  transition: transform var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick), border-color var(--dur-quick);
 }
-.zoeken-speak:hover { transform: translateY(-2px); background: var(--green-line); }
+.zoeken-speak:hover { transform: translateY(-2px); background: var(--green-line); border-color: var(--green-mid); }
 .zoeken-speak:active { transform: translateY(0); }
 
 /* the play field — % positions map within this box */

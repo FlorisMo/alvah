@@ -263,3 +263,15 @@ One status block per run/step (BUILD-PLAN §9b).
 ▷ progress: ~44%
 ⚠ blocker: Run B stalled on: P1.1 · **F-07 · normalize the avatar to ~1.7 m [both]** (highest-leverage fix — lands FIRST; F-05's clamp + F-08's speed depend on final scale). Scale the loaded rig/wrapper, NOT the camera; expose `avatar.height` on the dev hook. **Verify by:** shot (ranger reads believable next to tree/hut) + assert (`avatar.height` ∈ [1.5, 2.0]).. Check BUILD-RUN-LOOP.log + audit-evidence/.
 ```
+
+---
+**2026-07-04 08:07:55Z** · ticked: - [x] P3.1 · ONE ≥56 px chip token: F-02 + F-14 + F-20 + F-25(speaker) + F-28, with F-01 card-fit in the SAME change [both]. One shared min-height-56 visible-box token (padding, not font-inflation) for Begin / swatches / name chips / Pauze / board-exit / prompt-speaker / hub links; F-01 compacts the avatar card so bigger targets don't push the CTA off-fold (sticky "Dit is mijn ranger" footer). Verify by: assert (boundingBox ≥ 56 for each named control on both projects) + shot (F-01 CTA on-screen without scrolling; F-28 links now LOOK tappable). — RE-OPENED by the Phase-3 re-judge (2026-07-04): the prompt-speaker is the ONE control that missed the visible-box token — `.zoeken-speak` hits 56×56 but LOOKS like a bare ~20 px glyph floating on the prompt bar (no visible circle/chip at all; Run A's visible circle was ~46 px, so the affordance shrank). The F-20 addendum standard applies: make it LOOK ≥56, not just hit ≥56. Everything else in this box passes on the 09:08 set — fix ONLY the speaker's visible chip.
+
+```
+✔ landed: P0.1 · Archive the Run A evidence BEFORE any new capture. `audit-evidence/{laptop,ipad,crops}/*.png` + `annotations-*.json` are git-IGNORED and the first `npm run capture` overwrites them (§3 substrate rule; §9 A6). Copy the whole current `audit-evidence/` to `audit-evidence-baseline-run-a/` and git-add the annotations + a README so the frames F-01..F-34 cite survive. Verify by: the baseline folder holds the Run A PNGs + both annotations; nothing captured yet.
+▶ phase:  Phase 0 · protect + see  (NO game code — `app/e2e-capture/**` + copies only)
+→ next:   P0.2 · DEFERRED (iPad) · F-21 · harden the capture harness. Parked while Run B is laptop-only (the iPad software-render hang is exactly F-21's own suspected cause). The scene-isolation + crash-retry parts already landed in `app/e2e-capture/capture.spec.ts` and help the laptop run too; the iPad touch-driving + a real fix for the render hang wait until `CAPTURE_PROJECTS=laptop,ipad` is re-enabled. Until then iPad is verified in the Floris demo. Loop skips this box.
+▤ ledger: BUILD-LEDGER.md
+▷ progress: ~44%
+⚠ blocker: Run B stalled on: P1.1 · **F-07 · normalize the avatar to ~1.7 m [both]** (highest-leverage fix — lands FIRST; F-05's clamp + F-08's speed depend on final scale). Scale the loaded rig/wrapper, NOT the camera; expose `avatar.height` on the dev hook. **Verify by:** shot (ranger reads believable next to tree/hut) + assert (`avatar.height` ∈ [1.5, 2.0]).. Check BUILD-RUN-LOOP.log + audit-evidence/.
+```
