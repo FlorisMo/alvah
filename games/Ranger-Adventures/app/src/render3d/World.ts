@@ -85,7 +85,7 @@ const PAD_LAND_R = 6.0;
 const HELI_AIRBORNE_Y = 2.5;
 
 // F-11 world rim: a calm pine tree-line rings the playable area at the move bound
-// (`limits.bound`, 116 m) so walking outward meets a visible forest edge, never the
+// (`limits.bound`, 75 m) so walking outward meets a visible forest edge, never the
 // Run A silent void. RIM_EASE is the band (m) over which the ranger's OUTWARD step
 // eases to zero — a gentle stop, no invisible-wall jolt (the tangential slide ALONG
 // the rim keeps full speed). RIM_HINT is how close to the bound the calm "Hier stopt
@@ -414,7 +414,26 @@ export class World {
   // ranger slides around trees, can't wade into the ven, can't leave the world.
   private readonly obstacles: Obstacle[] = [];
   private readonly limits: MoveLimits = {
-    bound: 116,                                  // ground plane is 240² → rim ~120
+    // F-11 (P4.6 rim re-judge): the calm forest edge sits at 75 m, NOT the old 116 m.
+    // The Meshy ranger rig is a ~85-unit SKELETON scaled ×0.02 (bind-pose mesh geometry
+    // is ~0.9 unit — the F-07 skeleton-drives-a-giant / tiny-geometry mismatch, see
+    // Models.prepModel + skinnedRenderBox). Far from the world origin the view-space
+    // skinning matrix (viewMatrix × modelMatrix) loses float32 precision, and that ~94×
+    // skeleton-to-geometry conditioning amplifies it catastrophically: past ~100 m the
+    // walked ranger deforms into shards, and by ~110 m he vanishes from the colour AND
+    // shadow passes entirely (the "ranger nowhere in frame" the rim shot showed — NOT
+    // frustum culling or terrain occlusion, both ruled out; the follow lens is rigidly
+    // eye+2.4/boom-4.6 off his feet so it can never sink below him either). He renders
+    // SOLID well within ~85 m — and the rim-ease parks him ~3 m short of the bound, so a
+    // 75 m bound stops him at ~72 m, WELL within that zone (a prior 85 m bound left him
+    // at ~82 m, right at the edge with no margin for the capture's software renderer,
+    // whose float precision the dev-browser check never exercised). This serves F-11's
+    // intent better too (the Run A "featureless void after 20 m" meets a forest edge much
+    // sooner). All content is inside ~50 m (the ven basin), COMPACT_RADIUS 22, so the
+    // playable world stays spacious. Everything downstream reads `limits.bound` (rim
+    // tree-line, resolveMove clamp, RIM_EASE/HINT bands, the camera rim clamp,
+    // boundaryState), so this one value moves the whole edge in together.
+    bound: 75,                                   // ground plane is 240² → trees at ~76 land on it
     // off-limits = the submerged ven only (inside the water disc AND below the
     // surface) — NOT a global height test, so dry relief troughs stay walkable.
     blocked: (x, z) => {
@@ -1312,8 +1331,9 @@ export class World {
     const m = new THREE.Matrix4();
     for (let k = 0; k < N; k++) {
       const ang = (k / N) * Math.PI * 2;
-      // two staggered rows just past the bound (≈117.2–120) → a wall with depth, not
-      // a single-file fence; stays ≤120 so it lands on the 240² ground plane on-axis.
+      // two staggered rows just past the bound (bound+1.2 → bound+3.6, ≈76–79 at the
+      // 75 m bound) → a wall with depth, not a single-file fence; stays well under 120
+      // so it always lands on the 240² ground plane on-axis.
       const rad = bound + 1.2 + (k % 2) * 1.8 + Math.sin(k * 12.9) * 0.6;
       const x = Math.cos(ang) * rad;
       const z = Math.sin(ang) * rad;
@@ -1404,6 +1424,18 @@ export class World {
     this.rangerCastsShadow = true;
     this.ranger.clear();
     this.ranger.add(prepped);
+    // F-11 (P4.6 rim re-judge): NEVER frustum-cull the ranger. He is a SkinnedMesh
+    // whose `geometry.boundingSphere` is the BIND-POSE extent — the very F-07
+    // giant-skeleton / small-geometry mismatch — and three's frustum test transforms
+    // THAT stale sphere by the mesh matrix, not the live skinned bones. So once he
+    // walks far from origin (the world rim, ~112 m out, camera facing OUTWARD) the
+    // sphere falls behind the frustum and three drops him from BOTH the colour and
+    // shadow passes: the "ranger nowhere in frame" the rim shot showed (mesh AND
+    // blob-shadow gone) while `skinnedRenderBox` (real bones) still read him
+    // in-frustum. He is one small model the follow-cam always frames, so skip his
+    // frustum test entirely — a couple of draw calls at most, far under the <150
+    // budget — and let the camera alone decide what is on screen.
+    prepped.traverse((o) => { o.frustumCulled = false; });
     // wire the locomotion mixer: idle/walk crossfade by speed, or a procedural
     // bob when the clips are missing (loadRig returned an empty clip list).
     if (rig.clips.length) this.playerRig.attach(prepped, rig.clips);
@@ -1502,11 +1534,28 @@ export class World {
     const wx = centre.x, wz = centre.z; // keep world x/z before `centre` is spent
     const topY = this._camPose.set(wx, max.y, wz).project(cam).y;
     const botY = this._camPose.set(wx, min.y, wz).project(cam).y;
+    // F-11 TERRAIN-occlusion-aware visibility: the frustum/projection tests above stay
+    // TRUE when something stands BETWEEN the lens and the ranger (projection cannot see
+    // an occluder in the way). Two occluders modelled: (1) TERRAIN — march the ground
+    // height field along the sightline lens→ranger, hidden if it climbs above the line
+    // (test his head AND chest so a crest that only clips his legs still reads visible);
+    // (2) the rim TREE-LINE — a lens at/beyond the pine ring (bound + ~1.2 m) has a
+    // trunk in the way, so require the lens inside the ring. Folded with onScreen + the
+    // fade into `visible`. NB this catches GEOMETRIC occlusion only — the actual P4.6
+    // rim "ranger nowhere" was a SkinnedMesh view-space precision collapse far from
+    // origin (BUILD-PLAN §8), invisible to any raycast; the 75 m `bound` fixes that by
+    // keeping the rim (and where the rim-ease parks the ranger, ~72 m) inside the
+    // precision-safe radius. Pixels remain the court (§4).
+    const headClear = this.terrainClearTo(cam.position, wx, max.y - 0.15, wz);
+    const chestClear = this.terrainClearTo(cam.position, wx, (min.y + max.y) * 0.5, wz);
+    const lensInRim = Math.hypot(cam.position.x, cam.position.z) < this.limits.bound + 0.6;
     const ndc = centre.project(cam); // centre → NDC in [-1, 1]³ (mutates in place)
+    const onScreen = ndc.z > -1 && ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;
     const avatarScreen = {
       x: ndc.x, y: ndc.y,
-      onScreen: ndc.z > -1 && ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1,
+      onScreen,
       heightFrac: Math.abs(topY - botY) / 2,
+      visible: onScreen && this.avatarOpacity > 0.5 && lensInRim && (headClear || chestClear),
     };
     // F-09 hub-in-frustum: is at least one hub landmark actually in this frame? The
     // world-entry assert reads it to PROVE the spawn faces the hub, not the void —
@@ -1553,6 +1602,25 @@ export class World {
       avatarScreen,
       landmarkInView,
     };
+  }
+
+  /** F-11 line-of-sight over the terrain: true when the ground height field never
+   *  climbs above the straight segment from `from` to the world point (`tx,ty,tz`).
+   *  Marches `heightAt` (the exact field the ground mesh is displaced by, so the test
+   *  matches the render) at ~1.5 m steps; a crest poking above the ray (a rim berm at
+   *  the world edge) returns false = the ranger is hidden. Numbers only, no allocation
+   *  and no THREE calls, so the idle-stability pose stays deterministic frame to frame. */
+  private terrainClearTo(from: THREE.Vector3, tx: number, ty: number, tz: number): boolean {
+    const dx = tx - from.x, dz = tz - from.z;
+    const horiz = Math.hypot(dx, dz);
+    if (horiz < 0.5) return true; // lens is right on top of him — nothing can be between
+    const steps = Math.min(48, Math.max(6, Math.ceil(horiz / 1.5)));
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const rayY = from.y + (ty - from.y) * t;
+      if (this.groundY(from.x + dx * t, from.z + dz * t) > rayY + 0.05) return false;
+    }
+    return true;
   }
 
   /** W4.5: hand the World the shared renderer so it can enable the shadow map (a
@@ -3154,10 +3222,35 @@ export class World {
     // the eye rises/drops, and the fixed lookAt at chest turns that into a down/up tilt.
     const eyeY = rp.y + off.y + (walk ? this.orbitLift : 0);
     this.camDesired.set(rp.x - s * dist, eyeY, rp.z - c * dist);
-    // keep the lens above the terrain it flies over — a berm behind the ranger no
-    // longer swallows it. A clearance lift only, never a downward move.
+    // F-11: never let the walk lens swing OUT through the world-rim tree-line. When the
+    // ranger stops at the edge and turns, the rim-ease cancels his outward step so his
+    // residual (tangential) facing can rotate the follow boom back into the NON-collision
+    // pine ring (bound + ~1.2 m out) — a trunk then buries the lens and the rim frame
+    // reads "ranger nowhere". Clamp the lens's distance-from-centre to just inside the
+    // ring so it stays in the open with the tree-line as a backdrop BEHIND the ranger.
+    // A pure no-op everywhere but the rim (the cap is only reachable near the edge).
     if (walk) {
-      const gy = this.groundY(this.camDesired.x, this.camDesired.z) + this.CAM_GROUND_CLR;
+      const camR = Math.hypot(this.camDesired.x, this.camDesired.z);
+      const capR = this.limits.bound - 0.8;
+      if (camR > capR) {
+        const k = capR / camR;
+        this.camDesired.x *= k;
+        this.camDesired.z *= k;
+      }
+    }
+    // keep the lens above the terrain along the WHOLE boom, not just under itself —
+    // a berm or world-rim crest standing BETWEEN the ranger and the lens (a low spot
+    // at the edge sinks the boom into the hollow, F-11) would otherwise swallow him
+    // even though his box stays in the frustum. Sample the ground from the ranger out
+    // to the lens and lift the eye above the highest crossing by CAM_GROUND_CLR. A
+    // clearance lift only, never a downward move — the idle pose stays deterministic.
+    if (walk) {
+      let gmax = this.groundY(this.camDesired.x, this.camDesired.z);
+      for (let t = 0.2; t < 1; t += 0.2) {
+        const g = this.groundY(rp.x + (this.camDesired.x - rp.x) * t, rp.z + (this.camDesired.z - rp.z) * t);
+        if (g > gmax) gmax = g;
+      }
+      const gy = gmax + this.CAM_GROUND_CLR;
       if (this.camDesired.y < gy) this.camDesired.y = gy;
     }
     if (snap) {

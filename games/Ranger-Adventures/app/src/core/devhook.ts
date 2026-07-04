@@ -42,8 +42,16 @@ export type CamState = {
    *  or "a distant speck". `avatarInView` only tests the frustum; this tests that he
    *  is actually FRAMED — the field that ends the F-07 proportion shot's blind loop.
    *  `heightFrac` is his bbox's projected vertical extent as a fraction of the
-   *  viewport, so "solid but a 10 px speck" is detectable, not just off-screen. */
-  avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number };
+   *  viewport, so "solid but a 10 px speck" is detectable, not just off-screen.
+   *  `visible` (F-11) is TERRAIN-occlusion-aware: onScreen AND the ranger is NOT
+   *  hidden behind terrain (a rim berm / hillcrest between the lens and the ranger)
+   *  AND not faded out. NB it does NOT prove he is drawn — the actual P4.6 rim
+   *  "ranger nowhere in frame" was a SkinnedMesh view-space precision collapse far
+   *  from origin (BUILD-PLAN §8), which no geometric signal can see; that is fixed by
+   *  pulling the rim inside the precision-safe radius (`limits.bound` = 75 m, so the
+   *  rim-ease parks him at ~72 m — well within the ~85 m the ranger renders solid), so
+   *  pixels stay the court of appeal for "is he really rendered". */
+  avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean };
   /** F-09 (spawn faces the void, the hub sits behind the player): true when at least
    *  one hub landmark — the cabin, the mission board, or a fixed beacon — is inside
    *  the live view frustum. The world-entry assert reads this to PROVE the spawn

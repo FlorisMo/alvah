@@ -67,6 +67,11 @@ type Annotation = {
   // (steer #2): {x,y} in [-1,1], onScreen, and heightFrac (viewport-height fraction)
   // — a framed ranger reads |x|,|y| ≲ 0.6 with a non-tiny heightFrac; a speck or an
   // off-frame ranger fails it, so a soft-DOF frame can't be misgraded as "murk".
+  // `avatarScreen.visible` (F-11) is occlusion-aware: onScreen AND he is NOT hidden
+  // behind terrain (a rim berm / crest standing between lens and ranger) AND not
+  // faded — the boundary-rim assert reads it, so an all-terrain "ranger nowhere in
+  // frame" edge shot fails the annotation the way onScreen/heightFrac (projection
+  // only) cannot.
   // `landmarkInView` (F-09) = a hub landmark (cabin / mission board / beacon) sits in
   // the live frustum: the world-entry assert that the spawn faces the hub, not the
   // void (true on the world-entry / walk shots once F-09 turns the hub into frame).
@@ -80,7 +85,7 @@ type Annotation = {
   // changes on a >6 px drag and NEVER on a clean tap; the real `cam.yaw` (quaternion) is
   // the court of appeal. The camera-orbit shot proves a drag swings `cam.yaw` while `pos`
   // holds; the camera-click-walk shot proves a clean click still moves `pos` (tap-to-walk).
-  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
+  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   // vehicle heading/speed when driving — the DATA signal for the F-32 steering
   // control conditions. `headingUnwrapped` is the CUMULATIVE steered yaw (never
   // wrapped): across the no-turn straight pair it barely moves (drift ≈ 0), across
@@ -133,7 +138,7 @@ interface Hook {
   clip(): { name: string; time: number } | null;
   avatar(): { height: number } | null;
   groundSpeed(): number | null;
-  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
+  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   board(): { x: number; z: number; near: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; headingUnwrapped: number; speed: number; driverHidden: boolean } | null;
   hint(): { active: string | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
@@ -496,14 +501,17 @@ test('audit capture flow', async ({ context }, testInfo) => {
   });
 
   // ══ GROUP 5 — world boundary (F-11). Boot, walk straight out to the rim, and
-  //    snap the calm forest-edge stop. Own fresh page (isolation like the rest). ══
+  //    snap the calm forest-edge stop. Own fresh page (isolation like the rest).
+  //    Assert BOTH: pos clamped (boundary.dist ≤ bound, atRim true) AND the ranger is
+  //    actually shown (cam.avatarScreen.visible true — the P4.6 re-judge caught the
+  //    boom sinking behind the rim berm so terrain occluded him while onScreen lied). ══
   await runGroup('boundary', {}, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'boundary', async () => {
       await walkToBoundary(page, isPad, stick);
       await settle(page, 500);
       await snap(page, 'boundary-rim', 'Wereldrand',
-        'Aan de wereldrand (F-11) — de ranger stopt kalm bij de bomenrij: pos geklemd op de bound, geen onzichtbare muur, "Hier stopt het bos".');
+        'Aan de wereldrand (F-11) — de ranger stopt kalm bij de bomenrij: pos geklemd op de bound, geen onzichtbare muur, "Hier stopt het bos". De ranger blijft zichtbaar boven de rand (cam.avatarScreen.visible=true, niet achter de berm weggezakt).');
     });
   });
 

@@ -67,13 +67,13 @@ test('no two placements overlap (≥ MIN_SPACING apart)', () => {
   }
 });
 
-test('the whole clearing is compact — within COMPACT_RADIUS and far inside the World bound (116 m)', () => {
+test('the whole clearing is compact — within COMPACT_RADIUS and far inside the World bound (75 m)', () => {
   const { placements, radius } = build();
   for (const p of placements) {
     assert.ok(Math.hypot(p.x, p.z) <= COMPACT_RADIUS + 1e-9, `${p.id} within compact radius`);
   }
   assert.ok(radius <= COMPACT_RADIUS + 1e-9);
-  assert.ok(radius < 116, 'far inside the World bound');
+  assert.ok(radius < 75, 'far inside the World bound');
 });
 
 test('interaction triggers ring the centre closer than the cast (do-something is a step away)', () => {

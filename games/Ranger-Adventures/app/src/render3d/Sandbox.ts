@@ -11,7 +11,7 @@
  *
  *   • every cast member and every interaction is placed (nothing dropped),
  *   • no two placements overlap (≥ MIN_SPACING apart — calm, readable, never a pile-up),
- *   • everything sits inside a COMPACT radius, well within the World bound (116 m), so
+ *   • everything sits inside a COMPACT radius, well within the World bound (75 m), so
  *     the whole demo is walkable in seconds,
  *   • interaction triggers ring the centre CLOSER than the cast, so "do something" is
  *     always a step or two away while the animals frame the clearing,
@@ -56,7 +56,7 @@ export interface SandboxLayout {
 }
 
 // --- tuning (calm, compact, readable) ---
-/** clearing stays tiny vs the World bound (116 m) so it's walkable in seconds. */
+/** clearing stays tiny vs the World bound (75 m) so it's walkable in seconds. */
 export const COMPACT_RADIUS = 22;
 /** the interaction triggers ring this close to the central station. */
 export const INNER_RING = 6.5;
