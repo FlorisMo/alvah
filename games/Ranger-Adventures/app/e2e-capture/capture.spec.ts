@@ -135,6 +135,14 @@ type Annotation = {
   // (clamped, never beyond) with `atRim` true after an outward walk — a gentle stop,
   // not an invisible wall. null off-world / before the hook is ready.
   boundary: { bound: number; dist: number; atRim: boolean } | null;
+  // RUN-3 P5.3 (F-34d): the live `.rm` <body> class (reduced-motion.ts mirrors
+  // prefersReducedMotion() onto it). Recorded on EVERY shot so the "`.rm` via BOTH
+  // gates" assert grades off the DOM truth: true on the OS-media group (`reduce-motion`,
+  // applyReducedMotionClass at boot) AND on the in-game-toggle group (`reduce-motion-
+  // toggle`, setReducedMotionOverride), false on every normal-mode shot. null when the
+  // DOM probe was skipped/failed (never fails the shot, cf. taps). Pairs with the RM
+  // reframe triple below (cam.dist + pixelDiff) that proves the camera CUTS, not eases.
+  rm: { bodyClass: boolean } | null;
   file: string;
 };
 /** The smallest visible box of a selector's matches (the worst case for a ≥56px
@@ -194,7 +202,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
     const a: Annotation = {
       name, platform, group, note, ok: true, file: `${platform}/${file}`,
       screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-      pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null,
+      pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, rm: null,
     };
     let png: Buffer | null = null;
     try {
@@ -229,6 +237,11 @@ test('audit capture flow', async ({ context }, testInfo) => {
       try { a.taps = await measureTaps(page, tapSelectors); a.viewport = page.viewportSize(); }
       catch { /* keep the screenshot + hook state even if the DOM probe throws */ }
     }
+    // P5.3 (F-34d): record the live `.rm` body class so the "`.rm` via both gates"
+    // assert reads the DOM truth (reduced-motion.ts owns the class), not a hook that
+    // could drift. Supplementary like taps — a probe miss leaves rm null, never a GAP.
+    try { a.rm = { bodyClass: await page.evaluate(() => document.body.classList.contains('rm')) }; }
+    catch { /* keep the screenshot + hook state even if the class probe throws */ }
     shots.push(a);
     flush();
     return png;
@@ -243,7 +256,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
         screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-        pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null,
+        pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, rm: null,
       });
       flush();
     }
@@ -303,7 +316,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
           screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-          pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null,
+          pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, rm: null,
         });
         flush();
         return;
@@ -617,6 +630,43 @@ test('audit capture flow', async ({ context }, testInfo) => {
           prev = b; prevLabel = `reduce-motion-walk-${i}`;
         }
       } finally { await releaseForward(page, isPad, stick); }
+      // (4) CUT-NOT-MOVE reframe (F-34d / P5.3) — LAPTOP wheel dolly (a player-initiated
+      //     reframe; scope is laptop-only). Under RM every placeCamera SNAPS (World.ts:
+      //     camera.position.copy, not the ~0.3 s lerp), so a wheel dolly RE-FRAMES the
+      //     boom in ONE frame — a step, never an ease. Proven off the REAL render camera
+      //     (cam.dist, an F-18 pose field) AND pixels (§4), with NO reliance on
+      //     frame-precise timing:
+      //       • cut-vs-before: pixelDiff ≫ 0 and cam.dist jumps a real ~5 m — the reframe
+      //         is ALREADY fully present ~1 frame after the wheel (the step landed);
+      //       • settled-vs-cut: pixelDiff ≈ 0 and cam.dist unchanged over the next ~0.8 s —
+      //         the camera did NOT keep moving after that frame, so it was a CUT, not an
+      //         interpolation. (A normal-mode dolly would still be easing through the 120 ms
+      //         'cut' sample, so settled-vs-cut would read ≫ 0 — that contrast is the proof.)
+      //     This is F-34d's durable cuts-not-moves assert on the settled RM camera.
+      if (!isPad) {
+        const cbox = await page.locator('canvas#scene').boundingBox();
+        if (cbox) {
+          const cx = cbox.x + cbox.width / 2, cy = cbox.y + cbox.height / 2;
+          await page.mouse.move(cx, cy);
+          await settle(page, 800); // land on a clean, fully-settled pre-reframe pose
+          const before = await snap(page, 'reduce-motion-reframe-before', 'Reduce-Motion',
+            'RM aan — camera-pose vóór de dolly (ijk cam.dist). De wielscroll hierna trekt de boom naar buiten; onder RM snijdt dat in één frame i.p.v. te zwieren.');
+          // dolly OUT hard → zoomDist saturates to the max clamp: a big, unambiguous reframe.
+          await page.mouse.wheel(0, 1400);
+          // ~a few frames only: under RM the snap already landed on frame 1, so this 'cut'
+          // sample is ALREADY the final pose (a damped dolly would read partway here).
+          await settle(page, 120);
+          const cut = await snap(page, 'reduce-motion-reframe-cut', 'Reduce-Motion',
+            'RM, ~1 frame ná de dolly — de camera staat al op de nieuwe, verdere boom (cut): pixelDiff ≫ 0 en cam.dist duidelijk groter dan het vóór-frame, de stap is al volledig aanwezig.',
+            undefined, before ? { buf: before, label: 'reduce-motion-reframe-before' } : undefined);
+          // full ease window: a DAMPED dolly would still be moving here, so an unchanged
+          // pose proves the reframe was a step, not an interpolation.
+          await settle(page, 800);
+          await snap(page, 'reduce-motion-reframe-settled', 'Reduce-Motion',
+            'RM, na de volledige demp-tijd — cam.dist én pixels ongewijzigd t.o.v. het cut-frame (pixelDiff ≈ 0): het was een harde snit, geen zwevende interpolatie (F-34d cuts-not-moves).',
+            undefined, cut ? { buf: cut, label: 'reduce-motion-reframe-cut' } : undefined);
+        }
+      }
     });
   });
 
