@@ -74,7 +74,7 @@
 ## Phase 4 · reading + dressing — areas G + H
 
 - [x] P4.1 · **F-03 · title subtitle per-sentence lines [both].** Each sentence its own line, ≤7 words. **Verify by:** shot.
-- [ ] P4.2 · **F-25 · mission prompt stacked, one type size [both] +demo.** Two ≤7-word lines, same size (or show only the current step); couples with P3.1's speaker size. **Verify by:** shot (two stacked ≤7-word lines). **Read-aloud on each step: needs Floris demo.**
+- [x] P4.2 · **F-25 · mission prompt stacked, one type size [both] +demo.** Two ≤7-word lines, same size (or show only the current step); couples with P3.1's speaker size. **Verify by:** shot (two stacked ≤7-word lines). **Read-aloud on each step: needs Floris demo.** — implemented, awaiting Floris demo (NOT fixed)
 - [ ] P4.3 · **F-22 · occlusion-proof world / vehicle / POI labels [both].** DOM-projected screen-space overlays, or depth-test-off sprites + distance/behind-camera fade — must cover world, jeep and POI labels alike. **Verify by:** shot (label fully readable, including from an angle where geometry passes in front).
 - [ ] P4.4 · **F-23 · one pictogram per mission card [both].** Flat in-repo vector (animal/biome silhouette), no new deps/pipeline; keep read-aloud on card focus. **Verify by:** shot (each card shows a distinct pictogram).
 - [ ] P4.5 · **F-04 · ground + vary the title backdrop [both].** Soft blob shadows, mixed tree species/sizes, optionally one landmark prop (board/jeep). Stay well under 150 draw calls. **Verify by:** shot.
