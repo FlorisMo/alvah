@@ -48,6 +48,13 @@
   --spel-radius-lg: 20px;
   --radius-pill:    999px;
 
+  /* — tap target (Alvah profile §3 / BUILD-PLAN §5): ONE source of truth for the
+       ≥56px contract. Every interactive chip/button/swatch routes its smallest
+       dimension through this so the floor is raised (padding, not font-inflation)
+       in a single place — Begin, swatches, name chips, Pauze, board-exit,
+       prompt-speaker, hub links (RUN-3 P3.1 · F-02/F-14/F-20/F-25/F-28). — */
+  --tap-min: 56px;
+
   /* — motion tokens — */
   --dur-instant: 120ms;
   --dur-quick:   200ms;

@@ -969,7 +969,9 @@ function showMissionBoard(): void {
     `<p class="boot-kicker">Het missiebord · ${esc(area.naam)}</p>` +
     `<h1 class="boot-title">Kies een missie</h1>` +
     `<div class="mission-grid">${cards}</div>` +
-    `<button class="ra-text-btn mb-back" type="button">Terug naar de open plek</button>` +
+    `<button class="ra-chip mb-back" type="button">` +
+    `<span class="ra-chip-ic" aria-hidden="true">‹</span>` +
+    `<span class="ra-chip-tx">Terug naar de open plek</span></button>` +
     `</div>`,
   );
   el.querySelectorAll<HTMLButtonElement>('.mission-card').forEach((b) => {
@@ -1002,10 +1004,14 @@ function showPauseHub(): void {
     `<p class="boot-kicker">Pauze</p>` +
     `<h1 class="boot-title">Wat wil je doen?</h1>` +
     `<div class="lodge-links">` +
-    `<button class="ra-text-btn ph-prikbord" type="button">Open het prikbord${cluesBadge()}</button>` +
-    `<button class="ra-text-btn ph-companion" type="button">${esc(cabinLabel())}</button>` +
-    `<button class="ra-text-btn ph-badges" type="button">Bekijk je breinkracht-badges</button>` +
-    `<button class="ra-text-btn ph-tweaks" type="button">Instellingen</button>` +
+    `<button class="ra-chip ph-prikbord" type="button"><span class="ra-chip-ic" aria-hidden="true">📌</span>` +
+    `<span class="ra-chip-tx">Open het prikbord${cluesBadge()}</span></button>` +
+    `<button class="ra-chip ph-companion" type="button"><span class="ra-chip-ic" aria-hidden="true">🐦‍⬛</span>` +
+    `<span class="ra-chip-tx">${esc(cabinLabel())}</span></button>` +
+    `<button class="ra-chip ph-badges" type="button"><span class="ra-chip-ic" aria-hidden="true">🏅</span>` +
+    `<span class="ra-chip-tx">Bekijk je breinkracht-badges</span></button>` +
+    `<button class="ra-chip ph-tweaks" type="button"><span class="ra-chip-ic" aria-hidden="true">⚙️</span>` +
+    `<span class="ra-chip-tx">Instellingen</span></button>` +
     `</div>` +
     `<button class="btn-start ph-back" type="button">Terug naar de open plek</button>` +
     `</div>`,

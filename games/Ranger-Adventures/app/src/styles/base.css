@@ -97,7 +97,7 @@ body {
 /* one consistent primary button — ≥56px tap target (Alvah profile, BUILD-PLAN §3) */
 .btn-start {
   margin-top: 6px;
-  min-height: 56px;
+  min-height: var(--tap-min);
   padding: 0 30px;
   border: none;
   border-radius: var(--spel-radius);

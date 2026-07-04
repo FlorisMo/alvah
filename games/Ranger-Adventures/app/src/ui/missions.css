@@ -44,8 +44,8 @@
 .ra-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
 .ra-speak {
   flex: none;
-  width: 56px;
-  height: 56px;
+  width: var(--tap-min);
+  height: var(--tap-min);
   border: none;
   border-radius: var(--radius-pill);
   background: var(--green-soft);
@@ -63,8 +63,36 @@
   text-decoration: underline;
   cursor: pointer;
   padding: 8px 12px;
-  min-height: 56px; /* Alvah profile §3: ≥56px tap targets (stricter than the 44–48px general rule) */
+  min-height: var(--tap-min); /* Alvah profile §3: ≥56px tap targets (stricter than the 44–48px general rule) */
 }
+
+/* ---- shared ≥56px VISIBLE-box chip token (RUN-3 P3.1 · F-20 board-exit, F-28
+   hub links). The `.ra-text-btn` hit area already met ≥56px, but it LOOKED like
+   an ~18px underlined link — an affordance failure for an 8-year-old. `.ra-chip`
+   is the one token that turns a navigation control into a button the child can
+   SEE: a pill whose visible box == its hit box (min-height routed through
+   --tap-min, height from padding not font-inflation), carrying an icon so
+   recognition doesn't need reading. Replaces `.ra-text-btn` on the nav links. ---- */
+.ra-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap-min);
+  padding: 8px 20px;
+  border: 2px solid var(--green-line);
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  color: var(--green-deep);
+  font: 600 16px/1.2 var(--font-body);
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-overshoot),
+    background var(--dur-quick), border-color var(--dur-quick);
+}
+.ra-chip:hover { background: var(--green-line); border-color: var(--green-mid); }
+.ra-chip:active { transform: scale(0.97); }
+.ra-chip-ic { flex: none; font-size: 22px; line-height: 1; }
+.ra-chip-tx { text-align: left; }
 
 /* ---- lodge ---- */
 .lodge {
@@ -290,7 +318,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 56px;
+  min-height: var(--tap-min);
   padding: 0 18px;
   border: none;
   border-radius: var(--radius-pill);

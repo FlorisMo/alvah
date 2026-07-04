@@ -116,7 +116,7 @@ function render(): void {
     `<div class="av-groups">` +
     (Object.keys(AVATAR_KENMERKEN) as AvatarKenmerk[]).map((k) => groupHtml(k, av)).join('') +
     `</div>` +
-    `<div class="ra-row"><button class="btn-start av-klaar" type="button">Dit is mijn ranger</button></div>` +
+    `<div class="ra-row av-klaar-row"><button class="btn-start av-klaar" type="button">Dit is mijn ranger</button></div>` +
     `</div>`;
   host.appendChild(el);
 

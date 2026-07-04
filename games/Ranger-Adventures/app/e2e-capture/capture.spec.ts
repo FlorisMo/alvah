@@ -98,8 +98,21 @@ type Annotation = {
   // camera claim that "changed" while the hash holds is a telemetry lie to distrust.
   // Emits what the §8 grades were computing by hand. null on GAPs / failed captures.
   pixelHash: string | null;
+  // RUN-3 P3.1 (F-01/F-02/F-14/F-20/F-25/F-28): live DOM tap-target measurements.
+  // Per named-control selector, the SMALLEST visible box (`minW`/`minH`) across all
+  // matches + that worst element's `box`. The ≥56px assert reads `minW`/`minH` ≥ 56
+  // for each control on the scene it lives on (Begin=title, swatches/chips/confirm=
+  // avatar, Pauze=controls-hud, hub links=pause-hub, board-exit=board-open,
+  // speaker=mission-3d). F-01 reads `taps['.av-klaar'].box` against `viewport` to
+  // prove the confirm CTA sits fully inside the frame (no scroll). null off-scene.
+  taps: Record<string, TapBox> | null;
+  viewport: { width: number; height: number } | null;
   file: string;
 };
+/** The smallest visible box of a selector's matches (the worst case for a ≥56px
+ *  floor), plus the count and the offending element's position (for F-01's
+ *  inside-the-viewport check). All dims are CSS px, rounded. */
+type TapBox = { count: number; minW: number; minH: number; box: { x: number; y: number; w: number; h: number } | null };
 
 interface Hook {
   screen: string; missionView: '2d' | '3d' | null; version: string;
@@ -134,14 +147,16 @@ test('audit capture flow', async ({ context }, testInfo) => {
       JSON.stringify({ platform, version, shots }, null, 2),
     );
 
-  /** Screenshot the viewport + record the live hook state; persist immediately. */
-  async function snap(page: Page, name: string, group: string, note: string): Promise<void> {
+  /** Screenshot the viewport + record the live hook state; persist immediately.
+   *  `tapSelectors` (P3.1) additionally measures those controls' live boxes into
+   *  `a.taps` so the ≥56px / inside-viewport asserts grade off real DOM geometry. */
+  async function snap(page: Page, name: string, group: string, note: string, tapSelectors?: string[]): Promise<void> {
     n += 1;
     const file = `${String(n).padStart(2, '0')}-${name}.png`;
     const a: Annotation = {
       name, platform, group, note, ok: true, file: `${platform}/${file}`,
       screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-      pixelHash: null,
+      pixelHash: null, taps: null, viewport: null,
     };
     try {
       const s = await hook(page, (r) => {
@@ -159,6 +174,12 @@ test('audit capture flow', async ({ context }, testInfo) => {
       const png = await page.screenshot({ path: path.join(dir, file) });
       a.pixelHash = createHash('md5').update(png).digest('hex');
     } catch (e) { a.ok = false; a.note = `${note}  [CAPTURE FAILED: ${String(e).slice(0, 140)}]`; }
+    // P3.1 tap-target geometry — supplementary; a measurement miss is its own
+    // signal (a control absent when it should be present) and never fails the shot.
+    if (tapSelectors && tapSelectors.length) {
+      try { a.taps = await measureTaps(page, tapSelectors); a.viewport = page.viewportSize(); }
+      catch { /* keep the screenshot + hook state even if the DOM probe throws */ }
+    }
     shots.push(a);
     flush();
   }
@@ -172,7 +193,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
         screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-        pixelHash: null,
+        pixelHash: null, taps: null, viewport: null,
       });
       flush();
     }
@@ -223,7 +244,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
           screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-          pixelHash: null,
+          pixelHash: null, taps: null, viewport: null,
         });
         flush();
         return;
@@ -237,12 +258,13 @@ test('audit capture flow', async ({ context }, testInfo) => {
     await scene(page, 'title', async () => {
       await page.goto('/');
       await page.locator('.boot-title').waitFor({ timeout: 30_000 });
-      await snap(page, 'title', 'Boot', 'Titelscherm "Word boswachter" — eerste indruk.');
+      await snap(page, 'title', 'Boot', 'Titelscherm "Word boswachter" — eerste indruk.', ['.btn-start']);
     });
     await scene(page, 'avatar', async () => {
       await press(page, isPad, page.getByRole('button', { name: 'Begin' }));
       await page.getByRole('button', { name: 'Dit is mijn ranger' }).waitFor({ timeout: 30_000 });
-      await snap(page, 'avatar', 'Boot', 'Avatar-maker — de ranger die je speelt.');
+      await snap(page, 'avatar', 'Boot', 'Avatar-maker — de ranger die je speelt.',
+        ['.av-klaar', '.av-swatch', '.av-chip', '.av-naam-chip']);
     });
     await scene(page, 'world-entry', async () => {
       await press(page, isPad, page.getByRole('button', { name: 'Dit is mijn ranger' }));
@@ -273,7 +295,8 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await settle(page, 400);
       await snap(page, 'controls-hud', 'Besturing', isPad
         ? 'iPad-kader: staat de joystick er, ≥56 px, tap-to-walk zichtbaar?'
-        : 'Laptop-kader: joystick hoort weg te zijn (fijne pointer) — welke besturing zie je?');
+        : 'Laptop-kader: joystick hoort weg te zijn (fijne pointer) — welke besturing zie je?',
+        ['.explore-pause']);
     });
     if (!isPad) {
       await scene(page, 'camera-attempts', async () => {
@@ -321,7 +344,8 @@ test('audit capture flow', async ({ context }, testInfo) => {
     await scene(page, 'pause-hub', async () => {
       await press(page, isPad, page.locator('.explore-pause'));
       await settle(page, 400);
-      await snap(page, 'pause-hub', 'Pauze/menu', 'Pauze-menu — is er een duidelijke "terug/hoofdmenu"? (punch-list #5)');
+      await snap(page, 'pause-hub', 'Pauze/menu', 'Pauze-menu — is er een duidelijke "terug/hoofdmenu"? (punch-list #5)',
+        ['.lodge-links .ra-chip', '.ph-back']);
     });
   });
 
@@ -385,7 +409,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await open.waitFor({ timeout: 10_000 });
       await press(page, isPad, open);
       await page.locator('.mission-board').waitFor({ timeout: 10_000 });
-      await snap(page, 'board-open', 'Missiebord', 'Missiebord open — layout, leesbaarheid, tap-doelen.');
+      await snap(page, 'board-open', 'Missiebord', 'Missiebord open — layout, leesbaarheid, tap-doelen.', ['.mb-back']);
     });
     await scene(page, 'mission-3d', async () => {
       // BOUNDED waits (P0.3/F-34a). `showMissionBoard` renders `.mission-board`
@@ -404,7 +428,8 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await press(page, isPad, go, 15_000);
       await waitFor(page, (r) => r.missionView === '3d', 25_000);
       await settle(page, 1000);
-      await snap(page, 'mission-3d', 'Missie', 'Missie speelt 3D in-place — hoe ziet een echte opdracht eruit?');
+      await snap(page, 'mission-3d', 'Missie', 'Missie speelt 3D in-place — hoe ziet een echte opdracht eruit?',
+        ['.zoeken-speak', '.ra-speak']);
     });
   });
 
@@ -423,6 +448,39 @@ test('audit capture flow', async ({ context }, testInfo) => {
 });
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+/**
+ * P3.1: measure each selector's live boxes and return the SMALLEST visible one
+ * (the worst case for the ≥56px floor). `minW`/`minH` grade "each ≥56"; `box`
+ * (the offending element's position + size) grades F-01's inside-the-viewport
+ * check. A selector with no visible match returns count 0 / box null — itself a
+ * finding (the control the assert expects was not on screen).
+ */
+async function measureTaps(page: Page, selectors: string[]): Promise<Record<string, TapBox>> {
+  const round = (v: number): number => Math.round(v * 10) / 10;
+  const out: Record<string, TapBox> = {};
+  for (const sel of selectors) {
+    const loc = page.locator(sel);
+    const count = await loc.count();
+    let minW = Infinity, minH = Infinity, visible = 0;
+    let worst: { x: number; y: number; w: number; h: number } | null = null;
+    for (let i = 0; i < count; i++) {
+      const el = loc.nth(i);
+      if (!(await el.isVisible())) continue;
+      const b = await el.boundingBox();
+      if (!b) continue;
+      visible += 1;
+      if (b.width < minW) minW = b.width;
+      if (b.height < minH) { minH = b.height; worst = { x: b.x, y: b.y, w: b.width, h: b.height }; }
+    }
+    out[sel] = {
+      count: visible,
+      minW: visible ? round(minW) : 0,
+      minH: visible ? round(minH) : 0,
+      box: worst ? { x: Math.round(worst.x), y: Math.round(worst.y), w: Math.round(worst.w), h: Math.round(worst.h) } : null,
+    };
+  }
+  return out;
+}
 function attachSummary(testInfo: TestInfo, shots: Annotation[]): void {
   const gaps = shots.filter((s) => !s.ok).length;
   testInfo.annotations.push({ type: 'capture', description: `${shots.length} shots, ${gaps} gaps` });

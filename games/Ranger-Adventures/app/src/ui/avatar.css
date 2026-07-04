@@ -4,18 +4,22 @@
    (colour + label + ✓ ring); ≥56px tap targets.
    ============================================================ */
 
-.avatar-creator { gap: 14px; max-width: 460px; }
+/* RUN-3 P3.1 · F-01: the card must FIT the viewport (1280×800 / 1080×810) with
+   the "Dit is mijn ranger" CTA always on-screen. Tighter gaps + a smaller
+   portrait shrink the natural height; a sticky footer (.av-klaar-row, below)
+   guarantees the CTA is visible even when the kenmerk groups still overflow. */
+.avatar-creator { gap: 10px; max-width: 460px; }
 
 /* ---- live preview ---- */
 .av-preview {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 .av-art {
-  width: 132px;
-  height: 142px;
+  width: 104px;
+  height: 112px;
   filter: drop-shadow(0 6px 14px rgba(30, 40, 25, 0.22));
 }
 .av-greet {
@@ -35,7 +39,7 @@
 .av-naam-cap { font: 600 13px/1.2 var(--font-body); color: var(--green-mid); }
 .av-naam-input {
   width: 100%;
-  min-height: 56px;
+  min-height: var(--tap-min);
   padding: 12px 16px;
   border: 2px solid var(--green-line);
   border-radius: var(--spel-radius);
@@ -51,7 +55,7 @@
 
 .av-naam-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .av-naam-chip {
-  min-height: 56px;
+  min-height: var(--tap-min);
   padding: 8px 18px;
   border: 2px solid var(--green-line);
   border-radius: var(--radius-pill);
@@ -64,7 +68,7 @@
 .av-naam-chip:active { transform: scale(0.94); background: var(--spel-sun-glow); }
 
 /* ---- kenmerk groups ---- */
-.av-groups { display: grid; gap: 14px; width: 100%; }
+.av-groups { display: grid; gap: 10px; width: 100%; }
 .av-group { border: 0; margin: 0; padding: 0; }
 .av-legend {
   padding: 0 0 8px;
@@ -78,18 +82,21 @@
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  min-width: 56px;
-  min-height: 56px;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
   padding: 6px 8px 8px;
   border: 0;
   background: none;
   cursor: pointer;
 }
+/* F-02: the VISIBLE swatch circle is the affordance — grow it to the ≥56px floor
+   (was 48px). The selection ring is a box-shadow drawn ON TOP, so it never adds
+   to the hit area / layout. */
 .av-chip {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: var(--tap-min);
+  height: var(--tap-min);
   border-radius: 50%;
   border: 3px solid rgba(0, 0, 0, 0.12);
   box-shadow: var(--shadow-sm);
@@ -114,6 +121,27 @@
 .av-swatch.sel .av-tick { opacity: 1; transform: scale(1); }
 .av-swatch.sel .av-swatch-label { color: var(--green-deep); }
 .av-swatch:active .av-chip { transform: scale(0.96); }
+
+/* ---- F-01: sticky "Dit is mijn ranger" footer ----
+   The card (.boot-card-ish) scrolls internally on a short viewport; the primary
+   CTA used to sit at the bottom of that scroll area, below the fold — a first-run
+   screen where a child sees no way to finish. Pinning the CTA row to the bottom
+   of the scroll port keeps it on-screen ALWAYS. The negative margins bleed the
+   solid bar to the card's rounded edges so scrolled content passes cleanly under
+   it; the upward shadow reads as "there is more above". */
+.av-klaar-row {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  align-self: stretch;
+  justify-content: center;
+  margin: 6px -30px -28px; /* cancel .boot-card-ish padding: 28px 30px → reach the card edges */
+  padding: 12px 30px 20px;
+  background: rgba(253, 252, 248, 0.98);
+  border-bottom-left-radius: var(--spel-radius-lg);
+  border-bottom-right-radius: var(--spel-radius-lg);
+  box-shadow: 0 -10px 16px rgba(253, 252, 248, 0.92);
+}
 
 /* reduced-motion (.rm body class): drop the scale pop, keep the ✓ + ring channels.
    (Transition *durations* are already neutralised globally by base.css `.rm *`.) */

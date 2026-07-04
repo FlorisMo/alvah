@@ -35,8 +35,8 @@
 }
 .zoeken-speak {
   flex: none;
-  width: 56px;
-  height: 56px;          /* ≥56px tap target (Alvah profile) */
+  width: var(--tap-min);
+  height: var(--tap-min);          /* ≥56px tap target (Alvah profile) */
   border: none;
   border-radius: var(--radius-pill);
   background: var(--green-soft);
