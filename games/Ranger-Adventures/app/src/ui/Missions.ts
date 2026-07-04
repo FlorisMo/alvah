@@ -244,13 +244,25 @@ function clearOverlays(): void {
   host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
 }
 
-function card(html: string): HTMLDivElement {
+function card(html: string, opts: { scrim?: boolean } = {}): HTMLDivElement {
   clearOverlays();
   const el = document.createElement('div');
   el.className = 'ra-overlay';
+  // F-29 (P4.7): every over-world modal card gets the ONE shared static scrim
+  // behind it (the `.ra-scrim::before` in missions.css). Opt out for the title
+  // hero, the live explore HUD, and the two full-screen menus (lodge /
+  // mission-board) that paint the same --modal-scrim as their own background.
+  if (opts.scrim !== false) el.classList.add('ra-scrim');
   el.innerHTML = html;
   host.appendChild(el);
   return el;
+}
+
+/** A `card()` with NO modal scrim (F-29 opt-out): the title hero, the live
+ *  explore HUD, and the full-screen lodge / mission-board menus — the last two
+ *  paint the shared --modal-scrim as their own background instead. */
+function plainCard(html: string): HTMLDivElement {
+  return card(html, { scrim: false });
 }
 
 /* ---------------------------------------------------------------- title ---- */
@@ -272,7 +284,7 @@ function showTitle(): void {
   leaveWorld();
   setScreen('title');
   setMissionView(null);
-  const el = card(
+  const el = plainCard(
     `<div class="boot-card-ish ra-title-card">` +
     `<p class="boot-kicker">Ranger van de Veluwe</p>` +
     `<h1 class="boot-title">Word boswachter</h1>` +
@@ -311,7 +323,7 @@ function showLodge(): void {
     })
     .join('');
 
-  const el = card(
+  const el = plainCard(
     `<div class="lodge">` +
     `<p class="boot-kicker">Ranger-hut · ${esc(area.naam)}</p>` +
     `<h1 class="boot-title">Kies een missie</h1>` +
@@ -725,7 +737,7 @@ function showExploreHud(activeTitel: string | null): void {
   const demoBackPill = worldExit
     ? `<button class="ra-pill explore-back" type="button">‹ Terug naar de rondleiding</button>`
     : '';
-  const el = card(
+  const el = plainCard(
     `<div class="explore-hud">` +
     demoBackPill +
     `<button class="ra-pill explore-pause" type="button">⏸ Pauze</button>` +
@@ -1123,7 +1135,7 @@ function showMissionBoard(): void {
     })
     .join('');
 
-  const el = card(
+  const el = plainCard(
     `<div class="mission-board">` +
     `<p class="boot-kicker">Het missiebord · ${esc(area.naam)}</p>` +
     `<h1 class="boot-title">Kies een missie</h1>` +

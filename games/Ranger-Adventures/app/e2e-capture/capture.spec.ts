@@ -1,4 +1,4 @@
-import { test, type Page, type TestInfo, type CDPSession } from '@playwright/test';
+import { test, type Page, type TestInfo, type CDPSession, type BrowserContext } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -230,9 +230,18 @@ test('audit capture flow', async ({ context }, testInfo) => {
   ): Promise<void> {
     for (let attempt = 1; attempt <= 2; attempt++) {
       const nAtStart = n, shotsAtStart = shots.length;
-      const page = await context.newPage();
+      let page: Page | null = null;
       let stick: TouchStick | null = null;
       try {
+        // F-21 (P4.7 unblock): `context.newPage()` itself can throw OR HANG with a
+        // `Target.createTarget` protocol error once the software renderer is under
+        // memory pressure from the earlier groups — Run B's P4.7 capture lost the
+        // whole board + mission scene set to exactly this at this line (a 30-min
+        // hang killed the run before `.mission-board` could be re-shot for F-29).
+        // Open the group's page through a bounded, backed-off retry, INSIDE the
+        // try, so a total failure degrades to this group's crash-retry / GAP and
+        // the later groups still run — never a fatal, uncaught newPage.
+        page = await openGroupPage(context);
         if (opts.reduce) await page.emulateMedia({ reducedMotion: 'reduce' });
         // Clear the ranger save (first-run every group) + pre-seed the presence
         // gate, BEFORE any page script — persist.ts co-tenants `alvah-ef-v1`, and
@@ -249,7 +258,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         await page.close();
         return; // group done
       } catch (e) {
-        await page.close().catch(() => {});
+        await page?.close().catch(() => {});
         // discard this attempt's partial shots so the retry (or the GAP) is clean
         n = nAtStart; shots.length = shotsAtStart; flush();
         if (attempt === 1 && isCrash(e)) {
@@ -540,9 +549,43 @@ function attachSummary(testInfo: TestInfo, shots: Annotation[]): void {
   const gaps = shots.filter((s) => !s.ok).length;
   testInfo.annotations.push({ type: 'capture', description: `${shots.length} shots, ${gaps} gaps` });
 }
-/** A page/renderer death — bubble it so a group can spend its one crash-retry. */
+/** A page/renderer death — bubble it so a group can spend its one crash-retry.
+ *  Includes the `Target.createTarget` / hung-`newPage` signature (F-21): once the
+ *  software renderer is wedged, even opening the next group's page fails, and that
+ *  must count as a crash so `runGroup` retries it rather than aborting the run. */
 function isCrash(e: unknown): boolean {
-  return /been closed|is closed|has crashed|Target crashed|Target page|Target closed/i.test(String(e));
+  return /been closed|is closed|has crashed|Target crashed|Target page|Target closed|Target\.createTarget|newPage/i.test(String(e));
+}
+/** Open a fresh page for a scene GROUP, resilient to the F-21 software-renderer
+ *  instability that recurs on the laptop project: after the earlier groups churn
+ *  the WebGL context, `context.newPage()` can throw a `Target.createTarget`
+ *  protocol error OR hang until the whole-test timeout (Run B's P4.7 capture lost
+ *  the board + mission scenes to exactly this). Each attempt is time-bounded so a
+ *  wedged target cannot eat the 30-min budget, and we back off between tries so the
+ *  browser can respawn its GPU process / release the prior page before retrying. */
+async function openGroupPage(context: BrowserContext): Promise<Page> {
+  let lastErr: unknown = new Error('newPage failed');
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const pagePromise = context.newPage();
+    pagePromise.catch(() => {}); // a late rejection after a timeout must not go unhandled
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        pagePromise,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('newPage timed out — Target.createTarget hang')), 20_000);
+        }),
+      ]);
+    } catch (e) {
+      lastErr = e;
+      // eslint-disable-next-line no-console
+      console.log(`[capture] newPage attempt ${attempt}/4 failed: ${String(e).slice(0, 90)}`);
+      if (attempt < 4) await new Promise((r) => setTimeout(r, 1_000 * (attempt + 1)));
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  throw lastErr;
 }
 /** Tap on the iPad (genuine touch), click on the laptop. Pass `timeout` to BOUND
  *  the action: an unbounded press auto-waits for actionability up to the WHOLE

@@ -67,6 +67,15 @@
   --ease-soft:      cubic-bezier(.4, 0, .2, 1);
   --ease-overshoot: cubic-bezier(.34, 1.56, .64, 1);
 
+  /* — one shared modal scrim (RUN-3 P4.7 · F-29): the SINGLE dark dim painted
+       behind every over-world modal — the pause hub, the mission board, and the
+       briefing / fact / reward / prikbord cards — so a modal never floats on
+       raw, murky world pixels. Plain rgba, NO backdrop-filter; applied as an
+       instant state change → reduced-motion-safe by construction. ~46% keeps
+       the world muted without going black. One source of truth so pause + board
+       read as the same backdrop. — */
+  --modal-scrim: rgba(20, 24, 16, 0.46);
+
   /* — shadow — */
   --shadow-sm:  0 1px 3px rgba(30, 40, 25, .12);
   --shadow-md:  0 6px 18px rgba(30, 40, 25, .16);
