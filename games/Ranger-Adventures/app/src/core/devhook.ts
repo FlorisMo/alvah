@@ -177,6 +177,11 @@ export interface RangerDevHook {
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean;
+    /** F-31: true while the ranger rides the jeep with his mesh hidden (the
+     *  sanctioned "verifiably hidden" fallback — the canopy occludes a driver
+     *  from the chase cam). The assert reads it true while `inVehicle`, alongside
+     *  `clip` = 'sit', to prove he boards instead of standing planted + idle. */
+    driverHidden: boolean;
   } | null;
   /** The W5.3b helicopter state: placement + the two helipads, opt-in +
    *  availability (false under reduced-motion — flight is withheld, not calmed),
@@ -241,7 +246,7 @@ const state = {
     x: number; z: number; heading: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean;
+    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
   } | null),
   heli: null as null | (() => {
     placed: boolean; available: boolean; optIn: boolean; near: boolean; inHeli: boolean; onPad: boolean;
@@ -418,7 +423,7 @@ export function provideVehicle(
     x: number; z: number; heading: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean;
+    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
   } | null) | null,
 ): void {
   state.vehicle = fn;

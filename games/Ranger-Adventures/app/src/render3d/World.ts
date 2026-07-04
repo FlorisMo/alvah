@@ -699,7 +699,7 @@ export class World {
     x: number; z: number; heading: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean;
+    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
   } | null {
     if (!this.jeep || !this.jeepPos) return null;
     const caps = driveCaps(livePolicy().reduced);
@@ -716,6 +716,10 @@ export class World {
       speed: this.vehicleSpeed, maxSpeed: caps.maxSpeed, turnRate: caps.turnRate,
       camDist: off.z, camHeight: off.y, fov: this.camera.fov, roll: rightY,
       nearAnimal: this.vehicleNearAnimal, dust: this.dustEmitting,
+      // F-31: true only while actually riding the jeep with the ranger mesh hidden
+      // (the sanctioned fallback). Read off the REAL `.visible`, so it can never
+      // claim a hidden driver the render did not hide (§4: telemetry stays honest).
+      driverHidden: this.inVehicle && !this.ranger.visible,
     };
   }
 
@@ -733,6 +737,12 @@ export class World {
       this.jeepObstacle = null;
     }
     this.ranger.visible = false;                       // he rides inside
+    // F-31: he is now SEATED, not idling — freeze locomotion so `clip` reports a
+    // still `sit` (never idle/walk) for every in-vehicle frame, killing the empty-
+    // jeep story-lie. He rides hidden under the jeep's canopy (the sanctioned
+    // "verifiably hidden" fallback — the cabin roof occludes a driver from the
+    // F-30 chase cam anyway); `vehicleState().driverHidden` proves it to the assert.
+    this.playerRig.setSeated(true);
     // F-30: re-anchor the (hidden) ranger AT the jeep now, so the boarding CUT frames
     // the jeep itself, not the boarding spot ~2 m to its side (driveJeep keeps him
     // pinned here every frame after, so the follow-cam + step-out anchor track the jeep).
@@ -773,6 +783,7 @@ export class World {
     this.ranger.position.set(next.x, this.groundY(next.x, next.z), next.z);
     this.ranger.rotation.y = h;
     this.ranger.visible = true;
+    this.playerRig.setSeated(false);       // F-31: back on foot — locomotion resumes (idle)
     this.target.set(next.x, 0, next.z);   // no stale walk target
     this.followTargetYaw = h;
     this.followYaw = h; // snap the bearing behind the exit facing so the step-out is a CUT too

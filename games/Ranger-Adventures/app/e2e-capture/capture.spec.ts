@@ -83,8 +83,10 @@ type Annotation = {
   cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   // vehicle heading/speed when driving — the DATA signal for the #3 steering
   // finding (heading unchanged across the drive burst while a turn key is held
-  // → dead steering). null when not in a vehicle.
-  veh: { heading: number; speed: number; inVehicle: boolean } | null;
+  // → dead steering). `driverHidden` (F-31): true while he rides the jeep with his
+  // mesh hidden (the sanctioned fallback) — the assert reads it true + clip='sit'
+  // to prove he boards, never stands planted + idle. null when not in a vehicle.
+  veh: { heading: number; speed: number; inVehicle: boolean; driverHidden: boolean } | null;
   // F-18 court of appeal (P1.2): the md5 of THIS shot's PNG bytes. "Pixels outrank
   // the hook" (§4) becomes machine-checkable — the world-idle / world-idle-hold pair
   // reads an IDENTICAL hash when the pose is genuinely still, so the P1.2 idle assert
@@ -104,7 +106,7 @@ interface Hook {
   groundSpeed(): number | null;
   cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   board(): { x: number; z: number; near: boolean } | null;
-  vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; speed: number } | null;
+  vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; speed: number; driverHidden: boolean } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -144,7 +146,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         return {
           screen: r.screen, missionView: r.missionView, pos: r.pos(),
           cameraYaw: r.cameraYaw(), drawCalls: r.drawCalls(), clip: r.clip(), avatar: r.avatar(), groundSpeed: r.groundSpeed(), cam: r.cam(), version: r.version,
-          veh: v && v.inVehicle ? { heading: v.heading, speed: v.speed, inVehicle: v.inVehicle } : null,
+          veh: v && v.inVehicle ? { heading: v.heading, speed: v.speed, inVehicle: v.inVehicle, driverHidden: v.driverHidden } : null,
         };
       });
       if (s) { Object.assign(a, s); version = s.version; }

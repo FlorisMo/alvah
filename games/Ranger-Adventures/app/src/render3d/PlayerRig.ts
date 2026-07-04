@@ -32,6 +32,10 @@ export class PlayerRig {
   // procedural fallback: the stand-in group to bob when no clips are staged.
   private proc: THREE.Object3D | null = null;
   private procPhase = 0;
+  // F-31: true while the ranger rides a vehicle seated — locomotion freezes and
+  // `clip()` reports a still `sit`, so the dev hook never reads idle/walk while
+  // driving (the boarding CUT the empty-jeep story hung on).
+  private seated = false;
 
   /**
    * Drive `model` from its baked clips. Needs both an idle-ish and a walk-ish
@@ -62,12 +66,32 @@ export class PlayerRig {
   }
 
   /**
+   * F-31: enter/leave the seated-rider state. While seated the ranger is parked in
+   * the vehicle (hidden under the jeep's canopy) so `update()` freezes — no idle or
+   * walk advances — and `clip()` reports a still `sit`. Applied instantly (a state
+   * cut, never an animated pose-blend), so it respects the motion-comfort law. On
+   * `false` the rig re-settles to idle (weight reset) and locomotion resumes.
+   */
+  setSeated(seated: boolean): void {
+    this.seated = seated;
+    if (seated && this.idle && this.walk) {
+      // hold at rest so a later stand resumes from idle, never mid-stride
+      this.walkWeight = 0;
+      this.idle.setEffectiveWeight(1);
+      this.walk.setEffectiveWeight(0);
+    }
+  }
+
+  /**
    * Advance one frame. `speed` is the ranger's post-collision ground speed
    * (m/s). Locomotion is reduced-motion-exempt, so the mixer always uses real
    * dt; the procedural fallback holds still under reduced-motion (a bob IS
    * secondary motion when there is no baked step to carry it).
    */
   update(dt: number, speed: number, reduced: boolean): void {
+    // F-31: seated in the vehicle → locomotion is frozen (he is neither idling nor
+    // walking, he is riding), so neither the mixer nor the procedural bob advances.
+    if (this.seated) return;
     if (this.mixer && this.idle && this.walk) {
       this.walkWeight = stepWalkWeight(this.walkWeight, speed, dt);
       this.idle.setEffectiveWeight(1 - this.walkWeight);
@@ -98,6 +122,10 @@ export class PlayerRig {
    * the E2E polls to prove the animation is actually playing (not a frozen pose).
    */
   clip(): { name: string; time: number } | null {
+    // F-31: a seated rider is neither idle nor walking — report a still `sit` (time
+    // frozen at 0) so the in-vehicle drive frames never read the old planted-idle
+    // lie, for the baked rig AND the procedural stand-in alike.
+    if (this.seated) return { name: 'sit', time: 0 };
     if (!this.mixer || !this.idle || !this.walk) return null;
     const gait = dominantGait(this.walkWeight);
     const action = gait === 'walk' ? this.walk : this.idle;
