@@ -138,6 +138,12 @@ type Annotation = {
   // class is cleared from the outer rim band and none floats at head height in the edge
   // frame. null off-world / before the hook is ready.
   boundary: { bound: number; dist: number; atRim: boolean; scatterMax: number } | null;
+  // P1.0 (F-19): the case-board hub — world x/z, live proximity (`near`), and whether
+  // the board FACE/papers point sits in the live view frustum (`inFrustum`). The
+  // board-affordance assert reads `inFrustum` TRUE while `near` to prove the approach
+  // framing swings the lens off the ranger's spine so the board is actually in shot at
+  // believable scale (with avatar.height ∈ [1.5,2.0]). null off-world / before boot.
+  board: { x: number; z: number; near: boolean; inFrustum: boolean } | null;
   // RUN-3 P5.3 (F-34d): the live `.rm` <body> class (reduced-motion.ts mirrors
   // prefersReducedMotion() onto it). Recorded on EVERY shot so the "`.rm` via BOTH
   // gates" assert grades off the DOM truth: true on the OS-media group (`reduce-motion`,
@@ -160,7 +166,7 @@ interface Hook {
   avatar(): { height: number } | null;
   groundSpeed(): number | null;
   cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
-  board(): { x: number; z: number; near: boolean } | null;
+  board(): { x: number; z: number; near: boolean; inFrustum: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; headingUnwrapped: number; speed: number; driverHidden: boolean } | null;
   hint(): { active: string | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
   boundary(): { bound: number; dist: number; atRim: boolean; scatterMax: number } | null;
@@ -205,7 +211,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
     const a: Annotation = {
       name, platform, group, note, ok: true, file: `${platform}/${file}`,
       screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-      pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, rm: null,
+      pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, board: null, rm: null,
     };
     let png: Buffer | null = null;
     try {
@@ -217,6 +223,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           veh: v && v.inVehicle ? { heading: v.heading, headingUnwrapped: v.headingUnwrapped, speed: v.speed, inVehicle: v.inVehicle, driverHidden: v.driverHidden } : null,
           hint: r.hint(),
           boundary: r.boundary(),
+          board: r.board(),
         };
       });
       if (s) { Object.assign(a, s); version = s.version; }
@@ -259,7 +266,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
         screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-        pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, rm: null,
+        pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, board: null, rm: null,
       });
       flush();
     }
@@ -319,7 +326,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
           screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
-          pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, rm: null,
+          pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, board: null, rm: null,
         });
         flush();
         return;

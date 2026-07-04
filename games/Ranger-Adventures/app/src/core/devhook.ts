@@ -117,8 +117,10 @@ export interface RangerDevHook {
   nearId(): string | null;
   /** Every mission marker's world position, for E2E navigation (W1.4). */
   markers(): { x: number; z: number; missionId: string }[] | null;
-  /** The spawn case-board hub: world position + live proximity, for E2E (W2.2). */
-  board(): { x: number; z: number; near: boolean } | null;
+  /** The spawn case-board hub: world position + live proximity + whether the board
+   *  FACE/papers point sits in the live view frustum (P1.0/F-19 board-approach
+   *  framing — the board-affordance assert reads `inFrustum` TRUE while `near`). */
+  board(): { x: number; z: number; near: boolean; inFrustum: boolean } | null;
   /** The "Ken je roep" sit-spot bench: world position + live proximity, for E2E
    *  (W6.4b2). */
   sitSpot(): { x: number; z: number; near: boolean } | null;
@@ -250,7 +252,7 @@ const state = {
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
-  board: null as null | (() => { x: number; z: number; near: boolean } | null),
+  board: null as null | (() => { x: number; z: number; near: boolean; inFrustum: boolean } | null),
   sitSpot: null as null | (() => { x: number; z: number; near: boolean } | null),
   winStep: null as null | (() => boolean),
   actors: null as null | (() => { id: string; clip: { name: string; time: number } | null }[]),
@@ -353,7 +355,7 @@ export function provideMarkers(
 
 /** Register the live case-board hub source (the World). Pass null to clear (W2.2). */
 export function provideBoard(
-  fn: (() => { x: number; z: number; near: boolean } | null) | null,
+  fn: (() => { x: number; z: number; near: boolean; inFrustum: boolean } | null) | null,
 ): void {
   state.board = fn;
 }

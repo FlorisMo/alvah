@@ -185,6 +185,20 @@ export class World {
   private readonly ORBIT_LIFT_MIN = -1.2;     // eye lower → flatter, toward the horizon (~pitch up)
   private readonly ORBIT_LIFT_MAX = 3.0;      // eye higher → more top-down (~pitch down)
   private readonly ORBIT_TAU = 0.18;          // orbit ease smooth-time (snappier than the follow)
+  // P1.0 (F-19) board-approach framing: when the walking ranger stands in the
+  // case-board's near-radius, `boardFrameYaw` eases onto the follow bearing so the
+  // lens swings to an over-the-shoulder three-quarter — the board FACE + its pinned
+  // papers clear the ranger's body instead of hiding directly behind his spine,
+  // while lookAt keeps the WHOLE ranger framed at believable scale. Player-initiated
+  // (walking INTO the radius), damped like the orbit, and a CUT under reduced-motion
+  // (the motion-comfort law: a reframe is a stepped cut, never a swoop). Eases back
+  // to 0 on leaving, so free-roam is untouched. The board is ALSO statically turned
+  // `BOARD_APPROACH_FACE_TURN` toward the +x swing side (placeHub) so its face + notes
+  // stay readable at that angle instead of going edge-on.
+  private boardFrameYaw = 0;
+  private readonly BOARD_FRAME_YAW = 0.9;      // over-the-shoulder swing (rad) when near the board
+  private readonly BOARD_FRAME_TAU = 0.16;     // board-reframe ease smooth-time (gentle, settles fast)
+  private readonly BOARD_APPROACH_FACE_TURN = 0.5; // static board face turn (rad) toward the +x approach view
   // click-vs-drag discriminator (F-17 §3 seam): a pointer that travels past DRAG_PX is a
   // camera drag (tap-to-walk suppressed); a cleaner press taps (walks to the release
   // point). ~6 px per the finding — precise on a mouse, forgiving of a small touch jitter.
@@ -587,9 +601,33 @@ export class World {
   /** Dev-hook accessor (W2.2): the spawn case-board's world position + whether the
    *  ranger currently stands in its radius — lets the E2E steer to the hub and know
    *  it has arrived. `null` before the hub is placed. */
-  boardState(): { x: number; z: number; near: boolean } | null {
+  boardState(): { x: number; z: number; near: boolean; inFrustum: boolean } | null {
     if (!this.boardPos) return null;
-    return { x: this.boardPos.x, z: this.boardPos.z, near: this.nearBoard };
+    // P1.0 (F-19): is the board FACE/papers point (~1.4 m up = the pinned-notes band)
+    // actually inside the live view frustum? The board-affordance assert reads this
+    // TRUE while `near` to prove the approach framing keeps the board (not just the
+    // ranger's back) in shot. Pixels stay the court of appeal (AUDIT-FINDINGS §4).
+    const inFrustum = this.pointInFrustum(
+      this.boardPos.x, this.groundY(this.boardPos.x, this.boardPos.z) + 1.4, this.boardPos.z,
+    );
+    return { x: this.boardPos.x, z: this.boardPos.z, near: this.nearBoard, inFrustum };
+  }
+
+  /** P1.0 dev-hook helper: is the world point (x,y,z) inside the live camera view
+   *  frustum? Same plane-distance idiom as camState's landmark test, built off the
+   *  ACTUAL render camera (fresh matrices) so a board-in-frustum claim can never sit
+   *  on a stale matrix. Dev-hook-only (read at capture time), so the per-call Frustum
+   *  build is fine. */
+  private pointInFrustum(x: number, y: number, z: number): boolean {
+    const cam = this.camera;
+    cam.updateMatrixWorld();
+    cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+    const fr = new THREE.Frustum().setFromProjectionMatrix(
+      new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse),
+    );
+    const p = new THREE.Vector3(x, y, z);
+    for (const plane of fr.planes) if (plane.distanceToPoint(p) < 0) return false;
+    return true;
   }
 
   /** Register the spawn case-board hub callbacks (W2.2): `onNear(true|false)` as the
@@ -1969,7 +2007,12 @@ export class World {
     boardAt.y = this.groundY(boardAt.x, boardAt.z);
     const board = new THREE.Group();
     board.position.copy(boardAt);
-    board.rotation.y = Math.atan2(-boardAt.x, -boardAt.z); // face the spawn point
+    // P1.0 (F-19): face the spawn point, then turn a little toward +x so the board
+    // face + its pinned papers point at the over-the-shoulder approach framing (the
+    // lens swings to the +x side while the ranger stands here — placeCamera), not
+    // straight back down the ranger's spine where his body hides them. A small turn:
+    // world-entry still reads the board face (its +z-facing component only grows).
+    board.rotation.y = Math.atan2(-boardAt.x, -boardAt.z) + this.BOARD_APPROACH_FACE_TURN;
     board.add(this.proceduralBoard());
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.9, 1.15, 24),
@@ -3228,9 +3271,21 @@ export class World {
     // helicopter a higher aerial one (13, 6); walking keeps the F-05 clearance rig
     // (boom 4.6, eye 2.4). Same damping — the pull-back (and climb) eases on board.
     const walk = !this.inVehicle && !this.inHeli;
-    // the walk boom's effective bearing = follow + the player's orbit (the vehicle/heli
-    // cams own their framing, so they ignore the orbit); s/c rotate the boom + spherecast.
-    const bearing = walk ? wrapAngle(this.followYaw + this.orbitYaw) : this.followYaw;
+    // P1.0 (F-19) board-approach framing: ease a fixed over-the-shoulder yaw offset
+    // onto the follow bearing whenever the walking ranger stands in the case-board's
+    // near-radius, so the lens swings off his spine and the board FACE + papers clear
+    // his body. A CUT under reduced-motion (stepped, never a swoop); eases to 0 on
+    // leaving. Walk cam only — the vehicle/heli cams own their framing (bearing below).
+    const boardFrameTarget = (walk && this.nearBoard) ? this.BOARD_FRAME_YAW : 0;
+    if (reduced) {
+      this.boardFrameYaw = boardFrameTarget;
+    } else if (dt > 0) {
+      this.boardFrameYaw += (boardFrameTarget - this.boardFrameYaw) * dampFactor(dt, this.BOARD_FRAME_TAU);
+    }
+    // the walk boom's effective bearing = follow + the player's orbit + the board
+    // reframe (the vehicle/heli cams own their framing, so they ignore both offsets);
+    // s/c rotate the boom + spherecast.
+    const bearing = walk ? wrapAngle(this.followYaw + this.orbitYaw + this.boardFrameYaw) : this.followYaw;
     const s = Math.sin(bearing), c = Math.cos(bearing);
     const off = this.inHeli ? this.camOffsetHeli : this.inVehicle ? this.camOffsetVehicle : this.camOffset;
     let dist = off.z;
