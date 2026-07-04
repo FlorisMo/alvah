@@ -133,8 +133,11 @@ type Annotation = {
   // live `dist` from world centre, and `atRim` (pressed against the rim heading out,
   // the "Hier stopt het bos" cue fired). The boundary shot asserts `dist` ≤ `bound`
   // (clamped, never beyond) with `atRim` true after an outward walk — a gentle stop,
-  // not an invisible wall. null off-world / before the hook is ready.
-  boundary: { bound: number; dist: number; atRim: boolean } | null;
+  // not an invisible wall. P5.5 adds `scatterMax` (furthest LOW ground-tuft radius —
+  // heather/marram/reed): the rim shot asserts it ≤ `bound − RIM_TUFT_CLEAR` so that
+  // class is cleared from the outer rim band and none floats at head height in the edge
+  // frame. null off-world / before the hook is ready.
+  boundary: { bound: number; dist: number; atRim: boolean; scatterMax: number } | null;
   // RUN-3 P5.3 (F-34d): the live `.rm` <body> class (reduced-motion.ts mirrors
   // prefersReducedMotion() onto it). Recorded on EVERY shot so the "`.rm` via BOTH
   // gates" assert grades off the DOM truth: true on the OS-media group (`reduce-motion`,
@@ -160,7 +163,7 @@ interface Hook {
   board(): { x: number; z: number; near: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; headingUnwrapped: number; speed: number; driverHidden: boolean } | null;
   hint(): { active: string | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
-  boundary(): { bound: number; dist: number; atRim: boolean } | null;
+  boundary(): { bound: number; dist: number; atRim: boolean; scatterMax: number } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {

@@ -92,6 +92,13 @@ const HELI_AIRBORNE_Y = 2.5;
 // het bos" cue fires (once per approach, re-armed inward). All in metres.
 const RIM_EASE = 8;
 const RIM_HINT = 3.5;
+// P5.5 (F-11 rim): low ground-tufts (heather/marram/reed) are kept at least this far (m)
+// inside the bound. Past here a short tuft falls in the parked ranger's OUTWARD rim frame
+// and — at mid-distance on the gently-rolling relief — detaches from its own ground line
+// (the foreground sweeps down past it to his boots), reading as a clump floating at head
+// height in the world-edge hero frame (GATE-P5). Sized to cover the rim-ease stop
+// (~bound−RIM_EASE) plus the ~4.6 m follow boom, so the whole class clears his view.
+const RIM_TUFT_CLEAR = 13;
 
 // F-22 occlusion-proof labels: the diegetic name-tags draw with depthTest off so
 // no nearer mesh can clip them mid-glyph (see makeLabel). The cost of drawing them
@@ -413,6 +420,14 @@ export class World {
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
   private readonly obstacles: Obstacle[] = [];
+  // P5.5 (F-11 rim): the furthest-out radius any LOW ground-tuft (heather/marram/reed)
+  // landed at. candidates() clears that class from the outer rim band (bound−RIM_TUFT_CLEAR)
+  // so none falls in the parked ranger's outward frame, where a mid-distance tuft on the
+  // rolling relief detaches from its ground line and reads as a clump floating at head
+  // height (the world-edge hero frame). The boundary annotation exposes this so the rim
+  // shot's assert can prove scatterMax ≤ bound−RIM_TUFT_CLEAR (the tall pines are exempt —
+  // they merge into the buildRim tree-line and may fill to the bound).
+  private scatterMax = 0;
   private readonly limits: MoveLimits = {
     // F-11 (P4.6 rim re-judge): the calm forest edge sits at 75 m, NOT the old 116 m.
     // The Meshy ranger rig is a ~85-unit SKELETON scaled ×0.02 (bind-pose mesh geometry
@@ -598,10 +613,13 @@ export class World {
    *  m), the ranger's live `dist` from world centre, and `atRim` (he is pressed
    *  against the rim heading outward, so the "Hier stopt het bos" cue has fired). The
    *  P4.6 assert reads `dist` ≤ `bound` (clamped, never beyond) with `atRim` true
-   *  after an outward walk — the gentle stop, not an invisible wall. */
-  boundaryState(): { bound: number; dist: number; atRim: boolean } {
+   *  after an outward walk — the gentle stop, not an invisible wall. P5.5 adds
+   *  `scatterMax` (the furthest LOW ground-tuft radius — heather/marram/reed): the rim
+   *  shot's assert reads `scatterMax` ≤ `bound − RIM_TUFT_CLEAR` to prove that class is
+   *  cleared from the outer rim band, so none floats at head height in the edge frame. */
+  boundaryState(): { bound: number; dist: number; atRim: boolean; scatterMax: number } {
     const p = this.ranger.position;
-    return { bound: this.limits.bound, dist: Math.hypot(p.x, p.z), atRim: this.atBoundary };
+    return { bound: this.limits.bound, dist: Math.hypot(p.x, p.z), atRim: this.atBoundary, scatterMax: this.scatterMax };
   }
 
   /** Dev-hook accessor (W6.4b2): the sit-spot's world position + whether the ranger
@@ -1255,8 +1273,10 @@ export class World {
 
   /**
    * Deterministic golden-angle candidate positions over the world, kept only where
-   * they fall in the wanted biome (so each landschap grows its own vegetation) and
-   * outside the lodge clearing. Returns the surviving (x,z) — fully reproducible.
+   * they fall in the wanted biome (so each landschap grows its own vegetation),
+   * outside the lodge clearing, and inside the playable bound (P5.5 — no vegetation
+   * out in the fog band past the tree-line). Returns the surviving (x,z) — fully
+   * reproducible.
    */
   private candidates(count: number, want: Biome): { x: number; z: number; i: number }[] {
     const out: { x: number; z: number; i: number }[] = [];
@@ -1265,8 +1285,25 @@ export class World {
       const rad = 12 + (i / count) * 100;
       const x = Math.cos(ang) * rad + Math.sin(i * 12.9) * 6;
       const z = Math.sin(ang) * rad + Math.cos(i * 7.3) * 6;
-      if (Math.hypot(x, z) < 12) continue;        // clearing
+      const r = Math.hypot(x, z);
+      if (r < 12) continue;                        // clearing
+      // P5.5 (F-11 rim): keep scatter out of the OUTER RIM BAND, not just past the bound.
+      // The low ground-tufts (heather/marram/reed) sit correctly on `groundY`, but at
+      // mid-distance on the rolling relief a tuft near the edge detaches from its own
+      // ground line — the foreground sweeps DOWN past it to the ranger's boots — so it
+      // reads as a purple clump floating at head height in the world-edge hero frame
+      // (GATE-P5). A radius-only cap at the bound left one at r≈74.9 (< 75) and did NOT
+      // fix it. When the ranger eases to his rim stop (~bound−RIM_EASE) the ~4.6 m follow
+      // boom sits ~bound−13 out, so any short tuft beyond there lands in his outward
+      // frame — clear the whole class from that band (every approach angle, deterministic).
+      // The tall pines (bos) may fill to the bound: they read as trees and merge into the
+      // buildRim tree-line, so they take the full radius (no bare ring inside the forest).
+      const outerLimit = want === 'bos' ? this.limits.bound : this.limits.bound - RIM_TUFT_CLEAR;
+      if (r > outerLimit) continue;
       if (biomeAt(x, z) !== want) continue;        // wrong landschap
+      // witness the furthest LOW-tuft radius (the floating-clump class) so the rim
+      // annotation can prove it is pulled inside the band; pines are exempt above.
+      if (want !== 'bos' && r > this.scatterMax) this.scatterMax = r;
       out.push({ x, z, i });
     }
     return out;

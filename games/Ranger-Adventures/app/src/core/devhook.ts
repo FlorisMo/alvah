@@ -225,9 +225,12 @@ export interface RangerDevHook {
    *  the ranger's live `dist` from world centre, and `atRim` (he is pressed against
    *  the rim heading outward, so the calm "Hier stopt het bos" cue has fired). The
    *  boundary assert reads `dist` ≤ `bound` (clamped, never beyond) with `atRim`
-   *  true after an outward walk — a gentle stop, not an invisible wall. Null before
-   *  the world/hook is ready. */
-  boundary(): { bound: number; dist: number; atRim: boolean } | null;
+   *  true after an outward walk — a gentle stop, not an invisible wall. P5.5 adds
+   *  `scatterMax` (furthest LOW ground-tuft radius — heather/marram/reed): the rim shot
+   *  asserts it ≤ `bound − RIM_TUFT_CLEAR` so that class is cleared from the outer rim
+   *  band and none floats at head height in the edge frame. Null before the hook is
+   *  ready. */
+  boundary(): { bound: number; dist: number; atRim: boolean; scatterMax: number } | null;
 }
 
 // Bumped at the W7.4 ship box: stamps the shipped world-first release so the
@@ -284,7 +287,7 @@ const state = {
   } | null),
   quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
   hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
-  boundary: null as null | (() => { bound: number; dist: number; atRim: boolean } | null),
+  boundary: null as null | (() => { bound: number; dist: number; atRim: boolean; scatterMax: number } | null),
 };
 
 /** Current screen the player is on. */
@@ -488,7 +491,7 @@ export function provideHint(
 
 /** Register the RUN-3 P4.6 world-rim state source (the World). Pass null to clear (F-11). */
 export function provideBoundary(
-  fn: (() => { bound: number; dist: number; atRim: boolean } | null) | null,
+  fn: (() => { bound: number; dist: number; atRim: boolean; scatterMax: number } | null) | null,
 ): void {
   state.boundary = fn;
 }
