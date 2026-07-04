@@ -230,7 +230,12 @@ export class World {
   private readonly onBiome: (biome: Biome) => void;
   private lastBiome: Biome | null = null;       // re-pick the ambience bed on a crossing
   private nearId: string | null = null;
-  private speed = 2.4;
+  // F-08: on-foot ground speed (m/s). Retuned down from the giant-tuned 2.4 (which
+  // measured ~2.7–3.5 m/s on the ground, 65–85 % of jeep speed) to a human ~1.8 m/s
+  // now that F-07 sizes the ranger honestly. The jeep (max 6 m/s) stays clearly
+  // faster — speed is its reason to exist. Drives BOTH the key-held and tap-to-walk
+  // seek below; the walk clip's cadence is tied to the resulting ground speed.
+  private speed = 1.8;
   // W3.2 player animation: the mixer wrapper (idle/walk crossfade by speed, or a
   // procedural bob when the rigged GLB lacks clips). `playerSpeed` is the ranger's
   // post-collision ground speed (m/s), fed to the crossfade each frame.
@@ -1245,6 +1250,15 @@ export class World {
   /** The ranger's active locomotion clip for the dev hook (null when procedural). */
   playerClip(): { name: string; time: number } | null {
     return this.playerRig.clip();
+  }
+
+  /** Dev-hook accessor (F-08): the ranger's LIVE post-collision ground speed
+   *  (m/s) — the honest walked speed AFTER slide/clamp, the value the walk clip's
+   *  cadence is tied to. The assert reads it ∈ [1.4, 2.2] while `clip` = walk to
+   *  prove the retuned foot speed is human-scaled, not the old near-jeep glide;
+   *  0 while standing or in an in-place activity. */
+  groundSpeed(): number {
+    return this.playerSpeed;
   }
 
   /** Dev-hook accessor (F-07): the player ranger's LIVE rendered height (m),

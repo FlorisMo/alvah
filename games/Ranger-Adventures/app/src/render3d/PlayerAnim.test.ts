@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   stepWalkWeight, dominantGait, WALK_ENTER_SPEED, BLEND_TAU,
+  strideRate, STRIDE_MATCH_SPEED, STRIDE_RATE_MIN, STRIDE_RATE_MAX,
 } from './PlayerAnim.ts';
 
 /**
@@ -56,4 +57,26 @@ test('the weight never leaves [0,1] even on a huge dt spike', () => {
   const lo = stepWalkWeight(0, 0, 100, BLEND_TAU);
   assert.ok(hi <= 1 && hi >= 0, `clamped high, got ${hi}`);
   assert.ok(lo <= 1 && lo >= 0, `clamped low, got ${lo}`);
+});
+
+// ── F-08: the walk clip's cadence is tied to ground speed (kills foot-slip) ──
+
+test('strideRate plays the clip at its authored rate (1) at the match speed', () => {
+  assert.equal(strideRate(STRIDE_MATCH_SPEED), 1);
+});
+
+test('strideRate scales linearly with ground speed (no slip at any speed)', () => {
+  // Half the match speed → half the cadence; the feet plant over the SAME ground
+  // distance per step, so a slide-around-a-pine slowdown never slips.
+  assert.ok(Math.abs(strideRate(STRIDE_MATCH_SPEED / 2) - 0.5) < 1e-9);
+  // The retuned foot speed (~1.8 m/s) runs a touch above the authored rate, never
+  // dragging the feet behind the ground.
+  assert.ok(strideRate(1.8) > 1);
+});
+
+test('strideRate stays in a comfortable band (never freezes/reverses or smears)', () => {
+  assert.equal(strideRate(0), STRIDE_RATE_MIN);      // dead stop → clamped floor, not 0
+  assert.equal(strideRate(-5), STRIDE_RATE_MIN);     // never negative (feet never moonwalk)
+  assert.equal(strideRate(100), STRIDE_RATE_MAX);    // runaway speed → clamped ceiling
+  assert.ok(STRIDE_RATE_MIN > 0, 'the floor keeps the walk clock advancing');
 });

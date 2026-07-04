@@ -68,6 +68,13 @@ export interface RangerDevHook {
    *  (AUDIT-FINDINGS §4: pixels are the court of appeal). Null before the
    *  hook/world is ready. */
   avatar(): { height: number } | null;
+  /** The player ranger's LIVE post-collision ground speed (m/s) — the honest
+   *  walked speed AFTER the kinematic slide/clamp, which the walk clip's cadence
+   *  is tied to (F-08). The assert reads it ∈ [1.4, 2.2] while `clip` = walk to
+   *  prove the retuned foot speed is human-scaled, not the old near-jeep glide
+   *  that slid the feet ~2.5× per stride. 0 while standing or in an in-place
+   *  activity; null before the hook/world is ready. */
+  groundSpeed(): number | null;
   /** The REAL render camera read back AFTER the frame update (F-05 ⊕ F-18): the
    *  live camera-to-subject boom length (`dist`), the yaw/pitch derived from the
    *  camera's own world quaternion (NOT the follow bearing), the camera's world
@@ -184,6 +191,7 @@ const state = {
   drawCalls: null as null | (() => number),
   clip: null as null | (() => { name: string; time: number } | null),
   avatar: null as null | (() => { height: number } | null),
+  groundSpeed: null as null | (() => number | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
@@ -259,6 +267,12 @@ export function provideClip(fn: (() => { name: string; time: number } | null) | 
  *  height). Pass null to clear (F-07). */
 export function provideAvatar(fn: (() => { height: number } | null) | null): void {
   state.avatar = fn;
+}
+
+/** Register the live ground-speed source (the World's post-collision `playerSpeed`
+ *  in m/s). Pass null to clear (F-08). */
+export function provideGroundSpeed(fn: (() => number | null) | null): void {
+  state.groundSpeed = fn;
 }
 
 /** Register the live real-camera read-back source (the World's `camState`, read
@@ -428,6 +442,7 @@ export function installDevHook(): boolean {
     drawCalls: () => (state.drawCalls ? state.drawCalls() : null),
     clip: () => (state.clip ? state.clip() : null),
     avatar: () => (state.avatar ? state.avatar() : null),
+    groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),
     markers: () => (state.markers ? state.markers() : null),

@@ -51,6 +51,11 @@ type Annotation = {
   // assert reads avatar.height ∈ [1.5, 2.0] off any world/walk shot. null before
   // the hook/world is ready (title/avatar screens, GAPs).
   avatar: { height: number } | null;
+  // F-08: the ranger's LIVE post-collision ground speed (m/s). The assert reads it
+  // ∈ [1.4, 2.2] on the walk-burst shots (while clip = walk) to prove the retuned
+  // foot speed is human-scaled, not the old ~2.7–3.5 m/s near-jeep glide that slid
+  // the feet ~2.5× per stride. 0 while standing; null before the hook is ready.
+  groundSpeed: number | null;
   // F-05 ⊕ F-18: the REAL render camera read back after the frame update. `dist`
   // is the boom length (assert: ≥ 3 = the world is visible, not the lens buried
   // in the avatar); `avatarInView` = the ranger's whole bbox sits in the frustum;
@@ -87,6 +92,7 @@ interface Hook {
   pos(): { x: number; z: number } | null; cameraYaw(): number | null; drawCalls(): number | null;
   clip(): { name: string; time: number } | null;
   avatar(): { height: number } | null;
+  groundSpeed(): number | null;
   cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean } | null;
   board(): { x: number; z: number; near: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; speed: number } | null;
@@ -120,7 +126,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
     const file = `${String(n).padStart(2, '0')}-${name}.png`;
     const a: Annotation = {
       name, platform, group, note, ok: true, file: `${platform}/${file}`,
-      screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, cam: null, veh: null,
+      screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
       pixelHash: null,
     };
     try {
@@ -128,7 +134,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         const v = r.vehicle();
         return {
           screen: r.screen, missionView: r.missionView, pos: r.pos(),
-          cameraYaw: r.cameraYaw(), drawCalls: r.drawCalls(), clip: r.clip(), avatar: r.avatar(), cam: r.cam(), version: r.version,
+          cameraYaw: r.cameraYaw(), drawCalls: r.drawCalls(), clip: r.clip(), avatar: r.avatar(), groundSpeed: r.groundSpeed(), cam: r.cam(), version: r.version,
           veh: v && v.inVehicle ? { heading: v.heading, speed: v.speed, inVehicle: v.inVehicle } : null,
         };
       });
@@ -151,7 +157,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
       shots.push({
         name: label, platform, group: 'GAP', ok: false, file: '',
         note: `Scene "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
-        screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, cam: null, veh: null,
+        screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
         pixelHash: null,
       });
       flush();
@@ -202,7 +208,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         shots.push({
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
-          screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, cam: null, veh: null,
+          screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
           pixelHash: null,
         });
         flush();

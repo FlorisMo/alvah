@@ -29,6 +29,36 @@ export const BLEND_TAU = 0.12;
 /** Weight is the walk share in [0,1]; idle share is `1 − walk`. */
 export type WalkWeight = number;
 
+/** Ground speed (m/s) at which the walk clip plays at its natural authored rate
+ *  (timeScale 1): its baked stride covers one authored step-length of ground per
+ *  loop at this speed, so the feet plant with zero slip. Pinned near a human-walk
+ *  cadence (~1.5 m/s) — just under the retuned foot speed (World `speed` ≈ 1.8),
+ *  so a normal stride runs a touch above the authored rate rather than dragging
+ *  the feet behind the ground (F-08). */
+export const STRIDE_MATCH_SPEED = 1.5;
+
+/** Clamp band for the stride playback rate: never freeze/reverse the feet at a
+ *  near-stop slide, never smear them on a transient over-speed (F-08 comfort). */
+export const STRIDE_RATE_MIN = 0.4;
+export const STRIDE_RATE_MAX = 2.0;
+
+/**
+ * The walk clip's playback rate (AnimationAction.timeScale) for a given ground
+ * speed — TIED to the real post-collision speed so distance-per-stride-cycle
+ * stays ≈ the clip's authored stride at ANY speed. This kills the foot-slip F-08
+ * measured (the ranger covered ≈3 m per ≈1.1 s cycle, sliding the feet ~2.5×):
+ * rate = speed / STRIDE_MATCH_SPEED, so a slide-around-a-pine slowdown eases the
+ * cadence in lockstep and a full-speed stride cycles a touch faster. Clamped to a
+ * comfortable band. Pure + deterministic, so it joins this module's unit spine.
+ */
+export function strideRate(
+  speed: number,
+  ref: number = STRIDE_MATCH_SPEED,
+): number {
+  const r = speed / ref;
+  return r < STRIDE_RATE_MIN ? STRIDE_RATE_MIN : r > STRIDE_RATE_MAX ? STRIDE_RATE_MAX : r;
+}
+
 /**
  * Ease the walk weight toward its speed-driven target (1 when moving, 0 when
  * still) with frame-rate-independent exponential damping. Clamped to [0,1].

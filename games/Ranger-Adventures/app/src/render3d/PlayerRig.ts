@@ -15,7 +15,7 @@
  */
 
 import * as THREE from 'three';
-import { stepWalkWeight, dominantGait } from './PlayerAnim.ts';
+import { stepWalkWeight, dominantGait, strideRate } from './PlayerAnim.ts';
 
 /** Match a baked clip by name, tolerating the rig's naming (idle/walk/rest). */
 function pick(clips: THREE.AnimationClip[], re: RegExp): THREE.AnimationClip | null {
@@ -72,6 +72,10 @@ export class PlayerRig {
       this.walkWeight = stepWalkWeight(this.walkWeight, speed, dt);
       this.idle.setEffectiveWeight(1 - this.walkWeight);
       this.walk.setEffectiveWeight(this.walkWeight);
+      // F-08: tie the walk clip's cadence to the REAL ground speed so the feet
+      // plant on the ground instead of sliding (distance-per-cycle ≈ the authored
+      // stride at any speed). Locomotion feedback, so it runs in both motion modes.
+      this.walk.timeScale = strideRate(speed);
       this.mixer.update(dt);
       return;
     }
