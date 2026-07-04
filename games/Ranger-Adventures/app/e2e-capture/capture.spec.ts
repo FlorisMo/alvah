@@ -76,7 +76,11 @@ type Annotation = {
   // bounds — `zoom.dist` ∈ [min, max] proves the wheel respects BOTH clamps, saturating
   // to `min` on scroll-in and `max` on scroll-out, while `cam.dist` (the real 3D boom)
   // shows the framing visibly differ.
-  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number } } | null;
+  // F-17 laptop drag-orbit: `orbit` is the player's look offset — `orbit.yaw` (rad, free)
+  // changes on a >6 px drag and NEVER on a clean tap; the real `cam.yaw` (quaternion) is
+  // the court of appeal. The camera-orbit shot proves a drag swings `cam.yaw` while `pos`
+  // holds; the camera-click-walk shot proves a clean click still moves `pos` (tap-to-walk).
+  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   // vehicle heading/speed when driving — the DATA signal for the #3 steering
   // finding (heading unchanged across the drive burst while a turn key is held
   // → dead steering). null when not in a vehicle.
@@ -98,7 +102,7 @@ interface Hook {
   clip(): { name: string; time: number } | null;
   avatar(): { height: number } | null;
   groundSpeed(): number | null;
-  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number } } | null;
+  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   board(): { x: number; z: number; near: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; speed: number } | null;
 }
@@ -280,10 +284,32 @@ test('audit capture flow', async ({ context }, testInfo) => {
         // wheel-out the other way: +1400 · 0.01 = +14 m → clamps to zoom.max, pull-back.
         await page.mouse.wheel(0, 1400); await settle(page, 700);
         await snap(page, 'camera-zoom-out', 'Laptop-camera', 'Scroll uitzoomen — de dolly trekt terug naar de max-clamp; cam.dist duidelijk groter, FOV nog steeds vast (F-16).');
+        // F-17: a >6 px drag ORBITS the lens (yaw + eye-lift) and must NOT move the ranger
+        // — the Run A defect was this same drag relocating `pos` 0.93 m and flipping the
+        // view 180°. down at centre, 12×18 px = 216 px right, up: cam.yaw swings ~1 rad and
+        // cam.orbit.yaw ≠ 0 while `pos` holds (compare the camera-zoom-out shot's pos). 700
+        // ms lets the ~0.18 s orbit ease settle so cam.yaw reads clean.
         await page.mouse.move(cx, cy); await page.mouse.down();
         for (let i = 1; i <= 12; i++) { await page.mouse.move(cx + i * 18, cy); await page.waitForTimeout(20); }
-        await page.mouse.up(); await settle(page, 400);
-        await snap(page, 'camera-orbit', 'Laptop-camera', 'Slepen om te draaien (orbit) — draait het beeld? cameraYaw in de annotatie zegt het (#4).');
+        await page.mouse.up(); await settle(page, 700);
+        await snap(page, 'camera-orbit', 'Laptop-camera', 'Slepen om te draaien (orbit) — cam.yaw draait ~1 rad, cam.orbit.yaw ≠ 0, en pos blijft gelijk: geen teleport meer (F-17, #4).');
+        // F-17 seam, other half: a CLEAN click (no drag) still walks. The +1400 zoom-out
+        // above left the walk boom at its ~9.5 m max, which flattens the follow cam toward
+        // level (eye 2.4 m, lookAt 1.1 m → pitch ~7.8° down, horizon ~36% from the top): a
+        // 32%-from-top ray then cleared the horizon into SKY and hit no ground, so the click
+        // set no walk target and `pos` never moved — the P2.2 grade's harness-aim bug, NOT
+        // the (correct) World.ts click-vs-drag seam. Fix, harness-only: dolly the boom back
+        // toward the F-05 default (~4.6 m) to restore the downward walk-cam pitch, then click
+        // LOW (60% down — well below the horizon at EITHER zoom) so walkToPointer's ground
+        // raycast lands and `pos` shifts vs the camera-orbit shot: the clean click still
+        // walks while the drag only orbited (§3 tap-to-walk seam, both sides asserted). The
+        // held orbit yaw is harmless here — it rotates WHICH ground point is hit, not whether
+        // one is; and any prop the low ray happens to catch (board/jeep) also sets a walk
+        // target, so `pos` shifts either way.
+        await page.mouse.move(cx, cy);
+        await page.mouse.wheel(0, -500); await settle(page, 700); // dolly ~9.5 → ~4.5 m
+        await page.mouse.click(cx, box.y + box.height * 0.60); await settle(page, 1800);
+        await snap(page, 'camera-click-walk', 'Laptop-camera', 'Schone klik (geen sleep) — de ranger loopt naar het punt en pos verschuift, dus tik-om-te-lopen leeft nog (F-17).');
       });
     }
     // pause hub — opened over the LIVE world (last scene of the group).

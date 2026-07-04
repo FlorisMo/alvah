@@ -137,6 +137,35 @@ export class World {
   // "Camera draait mee" toggle (Instellingen, default aan), read LIVE each frame
   // so flipping it needs no restart; reduced-motion also forces the fixed bearing.
   private cameraFollowSource: (() => boolean) | null = null;
+  // F-17 laptop drag-orbit: a PLAYER look-around layered ON TOP of the follow bearing.
+  // `orbitYaw` (free, wraps) rotates the walk boom around the ranger; `orbitLift` (m,
+  // clamped) raises/lowers the eye to tilt the view (the camera's real pitch — shown on
+  // the hook — follows). Both EASE toward their drag-set targets with the boom's own
+  // exp-damp, or CUT to them under reduced-motion (the "orbit as stepped cuts" the
+  // finding asks for). placeCamera applies them to the WALK cam only, so the drag moves
+  // ONLY the lens — never `pos` (the F-17 defect was a drag relocating the ranger). The
+  // click-vs-drag seam (onPointerDown/Move/Up) routes a clean tap to tap-to-walk and a
+  // past-threshold drag to the orbit alone. Input forward stays on the base bearing
+  // (cameraYaw unchanged) so orbiting can never feed back into a heading spin.
+  private orbitYaw = 0;
+  private orbitTargetYaw = 0;
+  private orbitLift = 0;
+  private orbitTargetLift = 0;
+  private readonly ORBIT_YAW_PER_PX = 0.005;  // rad of yaw per CSS px dragged (feel: demo)
+  private readonly ORBIT_LIFT_PER_PX = 0.02;  // m of eye-lift per CSS px dragged (feel: demo)
+  private readonly ORBIT_LIFT_MIN = -1.2;     // eye lower → flatter, toward the horizon (~pitch up)
+  private readonly ORBIT_LIFT_MAX = 3.0;      // eye higher → more top-down (~pitch down)
+  private readonly ORBIT_TAU = 0.18;          // orbit ease smooth-time (snappier than the follow)
+  // click-vs-drag discriminator (F-17 §3 seam): a pointer that travels past DRAG_PX is a
+  // camera drag (tap-to-walk suppressed); a cleaner press taps (walks to the release
+  // point). ~6 px per the finding — precise on a mouse, forgiving of a small touch jitter.
+  private readonly DRAG_PX = 6;
+  private dragId: number | null = null;   // the active orbit pointer (null = no gesture)
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private dragLastX = 0;
+  private dragLastY = 0;
+  private dragMoved = false;               // crossed DRAG_PX → this gesture is an orbit, not a tap
   private readonly markers: {
     group: THREE.Group; pos: THREE.Vector3; missionId: string;
     recipe: MotionRecipe; phase: number;
@@ -450,7 +479,11 @@ export class World {
     this.placeHelipads();
     void this.loadRealRanger();
 
-    canvas.addEventListener('pointerdown', this.onPointer);
+    canvas.addEventListener('pointerdown', this.onPointerDown); // F-17 click-vs-drag seam
+    // move/up on the window so a drag that leaves the canvas still orbits + ends cleanly
+    window.addEventListener('pointermove', this.onPointerMove);
+    window.addEventListener('pointerup', this.onPointerUp);
+    window.addEventListener('pointercancel', this.onPointerUp);
     canvas.addEventListener('wheel', this.onWheel, { passive: false }); // F-16 dolly zoom
     this.input = attachInput(window, { onInteract: () => this.tryInteract() });
   }
@@ -777,7 +810,10 @@ export class World {
   }
 
   dispose(): void {
-    this.canvas.removeEventListener('pointerdown', this.onPointer);
+    this.canvas.removeEventListener('pointerdown', this.onPointerDown); // F-17
+    window.removeEventListener('pointermove', this.onPointerMove);
+    window.removeEventListener('pointerup', this.onPointerUp);
+    window.removeEventListener('pointercancel', this.onPointerUp);
     this.canvas.removeEventListener('wheel', this.onWheel); // F-16 dolly zoom
     Sound.engineStop(); // W5.2: never leak the engine loop past teardown
     this.input?.dispose();
@@ -1388,6 +1424,10 @@ export class World {
       target: this.inVehicle ? 'vehicle' : 'avatar', avatarInView,
       fov: this.camera.fov,
       zoom: { dist: zoomDist, min: zoomMin, max: this.CAM_ZOOM_MAX },
+      // F-17 drag-orbit read-back: the player's look offset on the follow bearing. A drag
+      // moves `yaw` (and `lift`) while `pos` holds; a clean click walks and never touches
+      // it. The real render `yaw` above (quaternion) stays the court of appeal (§4).
+      orbit: { yaw: this.orbitYaw, lift: this.orbitLift },
       // the applied fade (setAvatarOpacity): 1 = the ranger renders solid. A grade
       // reads this to know whether the F-05 fade rail fired on THIS frame instead
       // of inferring it from murk in the pixels (§4). Steady 1 across the settled
@@ -2416,9 +2456,51 @@ export class World {
     return g;
   }
 
-  // ---- input ----
-  private onPointer = (e: PointerEvent): void => {
-    if (this.activityActive || this.inVehicle || this.inHeli) return; // in-place pick / drive / flight own input
+  // ---- input (F-17 click-vs-drag seam) ----
+  /**
+   * A pointerdown on the canvas STARTS a gesture; it does not act yet. If the pointer
+   * then travels past DRAG_PX it is a camera orbit (yaw + eye-lift via orbitTarget*,
+   * tap-to-walk suppressed); a cleaner press walks to the release point on pointerup.
+   * The orbit feeds ONLY the lens (placeCamera), so a drag never moves `pos` — the exact
+   * F-17 defect (a look-around used to relocate the ranger and flip the view 180°).
+   */
+  private onPointerDown = (e: PointerEvent): void => {
+    if (this.activityActive || this.inVehicle || this.inHeli) return; // pick / drive / flight own input
+    this.dragId = e.pointerId;
+    this.dragStartX = this.dragLastX = e.clientX;
+    this.dragStartY = this.dragLastY = e.clientY;
+    this.dragMoved = false;
+    try { this.canvas.setPointerCapture(e.pointerId); } catch { /* a synthetic mouse may lack capture */ }
+  };
+
+  private onPointerMove = (e: PointerEvent): void => {
+    if (this.dragId !== e.pointerId) return;
+    const dx = e.clientX - this.dragLastX, dy = e.clientY - this.dragLastY;
+    this.dragLastX = e.clientX; this.dragLastY = e.clientY;
+    if (!this.dragMoved) {
+      // commit to "this is a drag" only once total travel from the press crosses DRAG_PX
+      if (Math.hypot(e.clientX - this.dragStartX, e.clientY - this.dragStartY) < this.DRAG_PX) return;
+      this.dragMoved = true;
+    }
+    // free yaw (drag right → the lens orbits right around the ranger); clamped eye-lift
+    // (drag up → look further down; drag down → flatten toward the horizon).
+    this.orbitTargetYaw += dx * this.ORBIT_YAW_PER_PX;
+    this.orbitTargetLift = Math.max(this.ORBIT_LIFT_MIN, Math.min(this.ORBIT_LIFT_MAX,
+      this.orbitTargetLift - dy * this.ORBIT_LIFT_PER_PX));
+  };
+
+  private onPointerUp = (e: PointerEvent): void => {
+    if (this.dragId !== e.pointerId) return;
+    this.dragId = null;
+    try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    if (this.activityActive || this.inVehicle || this.inHeli) return;
+    if (!this.dragMoved) this.walkToPointer(e); // a clean tap still walks — the seam's other half
+  };
+
+  /** Tap-to-walk: raycast the tapped marker / hub / vehicle / ground and set the walk
+   *  target. Called ONLY for a clean click (onPointerUp with no drag) so a look-around
+   *  never relocates the ranger (F-17). Pick order unchanged from the pre-seam handler. */
+  private walkToPointer(e: PointerEvent): void {
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -2490,7 +2572,7 @@ export class World {
       const p = g[0].point;
       this.target.set(p.x, 0, p.z);
     }
-  };
+  }
 
   /**
    * F-16 dolly floor: outside the avatar's own radius + the near plane (the F-05
@@ -2827,11 +2909,26 @@ export class World {
       this.followYaw = FIXED_FOLLOW_YAW;
       this.followTargetYaw = FIXED_FOLLOW_YAW;
     }
-    const s = Math.sin(this.followYaw), c = Math.cos(this.followYaw);
+    // F-17 player orbit: ease the drag-set look toward its target with the boom's own
+    // exp-damp, or CUT to it under reduced-motion (a step, never an interpolation — the
+    // motion-comfort law). Layered ON TOP of the follow bearing, so the auto-follow still
+    // re-centres behind the ranger as he walks with the player's offset held on top.
+    if (reduced) {
+      this.orbitYaw = this.orbitTargetYaw;
+      this.orbitLift = this.orbitTargetLift;
+    } else if (dt > 0) {
+      const k = dampFactor(dt, this.ORBIT_TAU);
+      this.orbitYaw += (this.orbitTargetYaw - this.orbitYaw) * k;
+      this.orbitLift += (this.orbitTargetLift - this.orbitLift) * k;
+    }
     // W5.1/W5.3b: the jeep uses the wider offset (distance 9, height 4.5) and the
     // helicopter a higher aerial one (13, 6); walking keeps the F-05 clearance rig
     // (boom 4.6, eye 2.4). Same damping — the pull-back (and climb) eases on board.
     const walk = !this.inVehicle && !this.inHeli;
+    // the walk boom's effective bearing = follow + the player's orbit (the vehicle/heli
+    // cams own their framing, so they ignore the orbit); s/c rotate the boom + spherecast.
+    const bearing = walk ? wrapAngle(this.followYaw + this.orbitYaw) : this.followYaw;
+    const s = Math.sin(bearing), c = Math.cos(bearing);
     const off = this.inHeli ? this.camOffsetHeli : this.inVehicle ? this.camOffsetVehicle : this.camOffset;
     let dist = off.z;
     // F-05 anti-clip (walk only): spherecast the boom against the collision solids
@@ -2845,7 +2942,11 @@ export class World {
       const minFrac = Math.min(1, (this.avatarRadius + this.camera.near + 0.2) / dist);
       dist *= Math.max(minFrac, frac);
     }
-    this.camDesired.set(rp.x - s * dist, rp.y + off.y, rp.z - c * dist);
+    // F-17 pitch: the player's eye-lift tilts the WALK view. The horizontal boom is
+    // unchanged, so the F-05 spherecast/min-clamp + fade rail stay exactly valid — only
+    // the eye rises/drops, and the fixed lookAt at chest turns that into a down/up tilt.
+    const eyeY = rp.y + off.y + (walk ? this.orbitLift : 0);
+    this.camDesired.set(rp.x - s * dist, eyeY, rp.z - c * dist);
     // keep the lens above the terrain it flies over — a berm behind the ranger no
     // longer swallows it. A clearance lift only, never a downward move.
     if (walk) {

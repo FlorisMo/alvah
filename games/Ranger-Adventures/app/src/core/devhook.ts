@@ -64,6 +64,13 @@ export type CamState = {
    *  the fixed `fov` above stays put. The real 3D boom (`dist` at the top) is what the
    *  pixels show and outranks this if they ever disagree (§4). */
   zoom: { dist: number; min: number; max: number };
+  /** F-17 laptop drag-orbit read-back: the PLAYER's look offset layered on the follow
+   *  bearing — `yaw` (rad, free/wraps: a drag changes it, tap-to-walk never does) and
+   *  `lift` (m of eye-lift, clamped, that tilts the pitch). A drag changing `yaw` while
+   *  `pos` holds is the finding's assert; the real render `yaw` at the top of this type
+   *  (from the camera quaternion) is what the pixels show and outranks this offset if the
+   *  two ever disagree (§4). Zero at spawn and whenever a clean click walks. */
+  orbit: { yaw: number; lift: number };
 };
 
 export interface RangerDevHook {
