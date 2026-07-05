@@ -1,0 +1,205 @@
+# Run 5 · Run D — COHESION LEDGER (reconciled, playability-first)
+
+> The supervisor (`run-d-loop.sh`) does the FIRST unchecked `- [ ]` box each
+> sitting. **OPUS BUILDS, FABLE VERIFIES** (Floris's role intent for Run D): a
+> **WORK** box is built by an Opus sitting, the supervisor re-captures, and an
+> **independent Fable sitting grades the fresh screenshot + annotations** (no
+> self-grading); a **GATE** box runs a fresh Fable art-director sitting that
+> re-judges the phase against [RUN-D-DIRECTION.md](RUN-D-DIRECTION.md) and may
+> **re-open** boxes (`[x]`→`[ ]`) **or APPEND new boxes**. Read
+> [RUN-D-PLAN.md](RUN-D-PLAN.md) first (the per-box gate, the two-judge gate,
+> asset discipline, frozen contracts). The locked spec is
+> [VISION.md](../../VISION.md).
+>
+> **PROVENANCE.** This ledger is the 2026-07-05 RECONCILIATION of Run C
+> (runs/run-4-experience/RUN-C-LEDGER.md, paused at ~9% on its 8h session cap)
+> against current code + a fresh laptop capture. Boxes Run C finished and the
+> Fable P1-gate confirmed (P1.0 · P1.1 · P1.4 · P1.5 — golden-hour rig, title,
+> board/pause overlay language, board framing) are CUT as done. Run C's P1.14
+> (mission near-black vignette) was verified FIXED in fresh pixels (29-mission-3d
+> is warm) and is cut. Everything else was verified STILL OPEN in fresh pixels
+> or current code before it was carried. New since Run C: Floris's real-device
+> demo (2026-07-05) found three playability bugs a screenshot gate cannot see —
+> they lead this run.
+>
+> **Tick rule (per box).** A WORK box is `[x]` ONLY when ALL hold: the fresh
+> laptop `npm run capture` evidence meets the box's verify-by AND the
+> RUN-D-DIRECTION.md bar for that screen, the named annotation/E2E assert passes,
+> `npm run build` + `npm run e2e:smoke` are green (enforced mechanically by
+> `ranger-run.mjs tick`), AND the independent Fable grade sitting agrees.
+> **`+demo` boxes may reach "implemented — awaiting Floris demo", NEVER
+> "accepted".**
+>
+> Legend: **shot** = screenshot gate · **assert** = annotation/E2E field ·
+> **drive-assert** = the capture harness DRIVES the action and asserts live
+> dev-hook state across the burst (physics/interaction boxes — a static shot is
+> NO evidence for these) · **+demo** = feel/audio/device component only Floris
+> may accept · **[laptop]/[both]** = platform.
+>
+> **SCOPE — LAPTOP-ONLY automated verification** (`CAPTURE_PROJECTS=laptop`;
+> the iPad leg hangs the software renderer, F-21). Make shared-code changes for
+> "both" boxes; verify on laptop; iPad/feel/audio/real-Safari is Floris's in the
+> DEMO section. Capture output stays in the shared
+> `../run-3-ux-polish/audit-evidence/` (hardcoded in `app/e2e-capture/**`).
+>
+> **WORDING RULE for box authors (Run C lesson, 2026-07-05).** The supervisor
+> dispatches on a box's FIRST physical line: a work box whose first line contains
+> `GATE-`, `DIRECTION` or the word `DEFERRED` is misrouted or invisibly skipped.
+> Write "poort-append", "direction doc", "parked list" instead. Only real gate
+> boxes start `GATE-Dn`; only the parked marker `[ ] DEFERRED ·` carries
+> DEFERRED; only Floris boxes carry `DEMO ·`. An asset box's first line must
+> name `meshy` so the usage-guard's credit check arms.
+
+---
+
+## Phase 0 · direction-first  (validate the reconciliation before any build)
+
+- [ ] D0.1 · **DIRECTION · validate + refine RUN-D-DIRECTION.md and this ledger** (2)
+  — the Fable art director re-reads VISION.md, RUN-D-DIRECTION.md (inherited
+  from Run C — the Alvah child-height + blonde/blue corrections are §2.4),
+  RUN-D-PLAN.md, and the freshest laptop capture, then: (a) confirms or refines
+  the direction doc (it may not weaken the frozen contracts or the Alvah
+  corrections); (b) checks this reconciled ledger against the pixels — for any
+  gap the reconciliation missed, APPEND a concrete `- [ ] Dn.m` box with a
+  verify-by to the right phase; (c) confirms the phase order serves
+  playability → Alvah's truth → cohesion → realism → felt progress. Change NO
+  game code. **Verify by:** the doc + ledger are committed as the run's first
+  act; every downstream phase carries real, specific boxes.
+
+## Phase 1 · PLAYABILITY FIRST — correctness before any more polish  (Floris demo 2026-07-05: sank through floor · jeep sticks-and-slides · cannot enter heli)
+
+> Floris hit these on the real device. They are PHYSICS/INTERACTION bugs a
+> screenshot gate cannot see (the Run-1 false-green trap) — so each is verified
+> by the capture harness DRIVING the action and asserting real dev-hook state,
+> NOT by a static shot, and each ALSO carries a +demo Floris must confirm on the
+> real iPad. READ FIRST: research/3d-autonomous-sourcing-physics-world.md §C
+> (character controller — three-mesh-bvh/BVHEcctrl or Rapier+ecctrl). Prefer an
+> in-repo fix; a NEW well-licensed (MIT/Apache/CC0/BSD) self-contained dep IS
+> authorized (Run C contract, carried) where it clearly fixes the controller and
+> holds the budget, and web-search/fetch for the current best fit is allowed.
+> Every fix still holds <150 draw calls, pixelRatio ≤2, iPad-first, build +
+> e2e:smoke green, motion-comfort + never-scary, no runtime network/telemetry/
+> CDN, no new localStorage keys. NB the current controller
+> (`render3d/CharacterController.ts`) resolves XZ only; the ranger's Y is set
+> from `groundY`/`heightAt` in World.ts:870/977 — the sink likely lives where
+> the VISUAL terrain and `heightAt` disagree (dunes/slopes) or in a scene that
+> bypasses that path. Find the real cause; don't guess.
+
+- [ ] P1.5a · **The ranger never sinks through the floor/terrain [both] +demo** — ground the character controller so the ranger stays ON the terrain + solid props everywhere he can walk (spawn, slopes, the dunes behind spawn, hub, every mission scene). Expose dev-hook `grounded` (boolean) + foot-clearance (ranger y minus terrain height). Extend the capture harness (app/e2e-capture/**, allowed) to walk a burst across spawn → slope → dune. **Verify by:** drive-assert (`grounded`=true every frame of the walk burst AND foot-clearance ≥0 — never below terrain — across spawn/slope/dune) + shot (feet on the ground, no half-buried frame); drawCalls <150. +demo: Floris walks the real iPad over the dunes without falling through.
+- [ ] P1.5b · **The jeep actually drives — it translates through the world, no stick-and-slide [both] +demo** — pressing drive moves the jeep's WORLD POSITION forward along its heading with believable ground contact; no sliding-in-place, no snap. Expose the jeep's per-frame world-position delta on the dev hook (`vehicle().position` already exists as x/z). Extend the harness to drive a forward + held-turn burst. **Verify by:** drive-assert (`vehicle()` x/z displacement ≫0 and monotonic along heading across the drive burst, jeep stays grounded, heading changes smoothly with no wrap-jump) + shot (jeep visibly further along the track between frames). +demo: Floris drives on the real device and it moves naturally, not stuck.
+- [ ] P1.5c · **The helicopter can be enabled in Instellingen AND entered [both] +demo** — wire the whole path end-to-end: the `helikopter` toggle in Instellingen is reachable + tappable (≥56 px, on-screen — COUPLE with the Instellingen sticky-exit fix D3.10 so it isn't below the fold), turning it on makes `heliAvailable` true, the "🚁 Stap in de helikopter" affordance appears at a pad, and tapping it enters. NB `heli().available` is false under reduced-motion BY DESIGN (flight withheld, not calmed) — the harness scene must run with reduced-motion OFF. Extend the harness to open Instellingen → toggle helikopter on → walk to a pad → enter. **Verify by:** drive-assert (the helikopter toggle bounding-box inside the viewport + ≥56 px; after toggling on `heli().available`=true; at the pad `heli().near`=true; after the enter tap `heli().inHeli`=true) + shot (the toggle on-screen in Instellingen; the enter affordance at the pad). +demo: Floris turns it on in Settings and flies pad-to-pad on the real iPad.
+- [ ] GATE-D1 · **Fable re-judge — is the game mechanically TRUE?** (2) Capture;
+  re-run the three drive-assert scenes; read the burst annotations frame by
+  frame; confirm no regression in walk/drive/board scenes. Re-open or append.
+  **Exit of Phase 1.**
+
+## Phase 2 · ALVAH IS ALVAH — child proportions + his real face  (Floris 2026-07-05: he's dwarfed by nothing — he IS the adult; and wrong-coloured)
+
+- [ ] P1.6a · **Alvah is a CHILD: fix his height + set adult humans to 1.8 m [both]** — Alvah is 8 and ≈ **1.2 m**, not the ~1.7 m adult the code currently uses (`RANGER_STAND_HEIGHT` / `STAND_HEIGHT['ranger-alvah']` = 1.7 in [AnimalScale.ts](../../app/src/render3d/AnimalScale.ts) — fix to ~1.2 m child). Any mature human (the mature ranger/boswachter NPC) stands ~**1.8 m**, so Alvah must read a clear head-and-shoulders shorter beside one. Expose the mature-human height on the dev hook alongside `avatar.height`. THIS SUPERSEDES Run B's ~1.7 m target and the inherited `avatar.height ∈ [1.5,2.0]` assert — Alvah's band is now child-scale; update every stale [1.5,2.0] assert in `app/e2e-capture/**` in the SAME change (the frozen `app/e2e/**` scale spec pins animals < 1.7 vs the ADULT reference — keep an adult-reference constant so that spec stays green untouched). Scale the rig, not the camera; keep animations + foot-on-ground intact. · verify-by: assert (`avatar.height` ∈ [1.1, 1.35]; the mature human ∈ [1.7, 1.9]; Alvah < 0.75 × the adult) + shot (Alvah beside the mature ranger reads unmistakably as a child next to an adult); drawCalls <150.
+- [ ] P1.6b · **Alvah's face is Alvah's: blonde hair + blue eyes [both] +demo** — the real Alvah is **blonde, wavy-haired, blue-eyed** (reference: `public/img/Alvah.jpg`); the current `ranger-alvah` model is dark-haired + green-eyed (`app/assets-gen/ranger-alvah.png`) — wrong. Make hair read blonde + wavy and eyes clear blue, keeping the calm never-scary stylized look + the green ranger jacket. If regenerating via Meshy: `node scripts/meshy-gen.mjs --only=ranger-alvah` with a prompt citing the reference (log the credit spend); else recolour the hair/iris materials in-repo (cheaper, no credits). Keep the avatar-creator + `alvah-ef-v1` persistence intact. · verify-by: shot (title + world ranger: hair reads blonde, eyes read blue, resembles public/img/Alvah.jpg) + assert (drawCalls <150; calm never-scary pose). +demo: Floris confirms it looks like Alvah on the real iPad.
+- [ ] GATE-D2 · **Fable re-judge — is he Alvah?** Capture; judge the child scale
+  beside the adult NPC + the blonde/blue read against `public/img/Alvah.jpg` and
+  direction doc §2.4. Re-open or append. **Exit of Phase 2.**
+
+## Phase 3 · one naturalistic world  (the still-open Run C Phase-1 boxes, each re-verified 2026-07-05 in fresh pixels/code)
+
+- [ ] D3.1 · **Capture truth: player-path game-3D frames + stale-frame hygiene [laptop]** (from Run C P1.10/P1.15 capture legs — verified: the `40–44 game3d-*` frames shoot `/?sandbox`, NOT the mission path the player reaches, and orphan PNGs from older shot-numbering runs still sit beside fresh ones under `laptop/`). Extend `app/e2e-capture/**` to shoot each of the 5 games' 3D surface **on the player-reachable mission path** (not the sandbox), keep the five 2D-floor frames, and make capture REMOVE orphan PNGs not present in the fresh annotations. **Verify by:** fresh set contains named player-path frames for all five games ×{3D, 2D floor} with per-frame `drawCalls` <150; every PNG under `laptop/` matches a shot in `annotations-laptop.json`.
+- [ ] D3.2 · **The ven is water; the heide reads as heide [both]** (from Run C P1.2, parked after 2 failed sittings — verified: fresh `45-ven-shore` shows a flat tan field, ZERO water/reeds/moss/reflection; the heide hub is a flat warm-brown slab). Render visible still water + reed fringe + moss bank at the ven (steer the ven capture camera onto the water disc — `render3d/Water.ts` already exists), and make the heather mats read on the heide hub (matte, per doc §2.2 — noise-based colour breakup; `simplex-noise` is the doc's recommended dep). **Verify by:** shot (fresh ven frame shows dark still water + reeds + golden reflection; heide hub shows a heather-mat read, not a flat slab) + assert (drawCalls <150).
+- [ ] D3.3 · **No purple crystals: heather props read as matte plants [both]** (from Run C P1.3, re-opened by the Fable P1 gate — verified: fresh `13-camera-zoom-out` scatters glossy faceted PURPLE CRYSTAL polyhedra through title/hub/orbit frames beside realistic GLBs). Replace/re-materialize the crystal "heather" props as matte heather mats per doc §2.2, or seat the staged `prop-heather-shrub` GLB; the tree cast itself is fine — fix the prop leg only. **Verify by:** shot (fresh title + zoom-out + orbit frames: zero crystal read, ground props read as plants) + assert (drawCalls <150).
+- [ ] D3.4 · **corsi-3D staged on real ground with the staged cast [both]** (from Run C P1.6/P1.15 — verified: fresh `41-game3d-corsi` is a bare tan void ringed with photo-sprite billboards incl. a WOLF sprite — story-gated, never-scary breach — a boulder-sized adder, a ghost-white human cutout, the ranger as a flat 2D sprite). Stage corsi's 3D per doc §3.5: footprints glowing softly on real dressed terrain between real clearings, only staged GLB models at canon scale (hide species the scene doesn't need — NO wolf, adder at ground-coil size), the real 3D ranger. **Verify by:** shot (fresh player-path corsi-3D frame: no billboards, staged ground, canon-scale cast) + assert (drawCalls <150; construct-parity intact).
+- [ ] D3.5 · **simon-3D staged on real ground with the staged cast [both]** (from Run C P1.6/P1.15 — same billboard/void breach as corsi). Stage simon's 3D per doc §3.6: dusk-tinted golden hour (schemer WITHOUT darkness), animals as staged GLBs in a calm clearing half-circle, each call pairing its xeno-canto sound with a soft light cue. **Verify by:** shot (fresh player-path simon-3D frame: staged GLB half-circle, warm dusk, no billboards, no wolf) + assert (drawCalls <150; construct-parity intact).
+- [ ] D3.6 · **dagnacht-3D staged on real ground with the staged cast [both]** (from Run C P1.6/P1.15 — same breach; "reekalf in het gras" currently a cream egg on bare dirt). Stage dagnacht's encounter vignettes per doc §3.7: one calm readable animal per plaat (staged GLB, calm pose), real ground dressing, the wrong choice a gentle recoverable consequence. **Verify by:** shot (fresh player-path dagnacht-3D frame: a real staged animal in a dressed vignette, calm, no billboards) + assert (drawCalls <150; construct-parity intact).
+- [ ] D3.7 · **wisselen-3D staged on real ground with the staged cast [both]** (from Run C P1.6/P1.15 — same breach; "open plek"/"het hol" currently disc + dome primitives). Stage wisselen's 3D per doc §3.8: the open plek a real sand/meadow clearing, het hol the badger-sett prop, the flip sign a diegetic wooden `prop-signpost`. **Verify by:** shot (fresh player-path wisselen-3D frame: real staged destinations + signpost, no billboards) + assert (drawCalls <150; construct-parity intact).
+- [ ] D3.8 · **The frisling reads as a striped piglet, het gras as grass [both]** (from Run C P1.7 / Run B F-24, never worked — verified: fresh `29-mission-3d` shows a featureless cream egg beside dark green blobs). Give the frisling a readable young-boar silhouette (ears + snout + legs + the goudgele "pyjama"-strepen per doc §2.4; CALM pose per never-scary) and make "het gras" props read as grass tufts; add the mission-target-in-frustum boolean at mission start. **Verify by:** shot (fresh mission-3d: the piglet recognizably a striped young boar beside props that read as gras) + assert (mission-target-in-frustum at mission start; drawCalls <150).
+- [ ] D3.9 · **Soften the drifting cloud-shadow layer [both]** (from Run C P1.8 / Run B parked, never worked — verified: fresh `09-walk-4` blacks out ~⅔ of the frame with unreadable murk). Reduce cloud-shadow opacity and/or feather the edge so terrain stays readable inside a passing shadow; keep the calm drift (its reduce-motion freeze already holds). **Verify by:** shot (fresh walk + drive bursts show dark masses as soft passing clouds with ground detail still visible inside them).
+- [ ] D3.10 · **Instellingen exit on-screen without scrolling + restore its capture scene [both]** (from Run C P1.9 / Run B P3.2 residue — verified in code: `.tw-back` sits in a plain bottom row after the full toggle+slider list, not sticky; AND the reduce-motion-toggle capture scene GAPs, so no fresh Instellingen frame exists at all). Keep `.tw-back` (≥56 px) visible without scrolling (sticky footer like `.av-klaar`, or scroll the toggle list INSIDE the panel); no toggle row cut mid-row; fix the capture scene's `.explore-pause` click timeout so the Instellingen frame captures again. COUPLES with P1.5c (the helikopter toggle must be reachable). **Verify by:** shot (fresh Instellingen frame shows `.tw-back` fully on-screen in the 800 px viewport with all toggle rows whole) + assert (`.tw-back` ≥56 px and its bounding box inside the viewport).
+- [ ] D3.11 · **ONE label language: world POI chips + HUD hints + game-scene labels legible and on-style [both]** (from Run C P1.11, never worked — verified: fresh `13-camera-zoom-out` shows mission POI markers as tiny charcoal chips floating mid-air, unreadable at gameplay distance for a dyslexic reader; the game scenes carry the same tiny dark chips). Restyle world markers + HUD chips + game-scene labels into the one warm-paper panel language with a legibility floor (hide labels beyond their readable range or grow them), give world markers a visible anchor to their spot, keep any tappable marker ≥56 px. **Verify by:** shot (fresh orbit + walk + game frames: every visible label legible + on-style, none floating unanchored) + assert (tappable markers ≥56 px; drawCalls <150).
+- [ ] D3.12 · **The hub clearing composed as the cosy heart [both]** (from Run C P1.12, never worked — verified: fresh `13-camera-zoom-out` shows props dropped on a flat lawn, no connecting ground language). Compose the clearing per doc §3.2: a dirt path linking cabin porch → prikbord → jeep track, props clustered purposefully, no orphan prop alone in the grass field. **Verify by:** shot (fresh `03-world-entry` + a zoom-out frame read as one composed place — a path visibly links cabin/board/jeep) + assert (drawCalls <150).
+- [ ] D3.13 · **Close framing keeps the ranger grounded in context [both]** (from Run C P1.13, residue — verified: fresh `12-camera-zoom-in` shows the whole ranger but floating on a featureless gradient, no ground contact/shadow in frame). The player-initiated zoom/reframe must land so the ranger keeps VISIBLE ground contact (feet + contact shadow + some ground texture in frame) — never swallowed by terrain, never floating in a void. **Verify by:** shot (fresh zoom-in + reframe frames show feet + contact shadow on readable ground) + assert (`avatar.height` in the Phase-2 child band; `cam.target`="avatar").
+- [ ] GATE-D3 · **Fable re-judge — does it read as ONE naturalistic world?** (2)
+  Capture; judge cohesion across title → world → board → 5 games (player-path
+  3D + 2D floors) → pause against the doc. Re-open or append. **Exit of Phase 3.**
+
+## Phase 4 · realistic animals  (from Run C Phase 2 — untouched by Run C; credits spread wisely, flagships + raven + ranger FIRST)
+
+- [ ] P2.1 · **Upgrade the player ranger (Alvah) — `meshy-gen.mjs --only=ranger-alvah`** (2) [both] +demo. Regenerate to higher realism per the doc, optimize (gltf→optimize-animated, <150 draw calls), never-scary, Fable-judged; keep the avatar-creator + `alvah-ef-v1` persistence intact. MUST PRESERVE the Phase-2 truth: child ≈1.2 m proportions + blonde wavy hair + blue eyes (doc §2.4 — if P1.6b already regenerated him, this box may be a no-op: verify + tick). Log credit spend. **Verify by:** shot (ranger reads as a believable child, belongs in the world) + assert (`avatar.height` ∈ [1.1,1.35], draw-call budget held). **Face/feel: demo.**
+- [ ] P2.2 · **Upgrade the raven companion — `meshy-gen.mjs --only=animal-raaf-raven` (+ `animal-raaf-fledgling`)** (2) [both]. Realistic + never-scary across the baby→jong→zelfstandig growth; the companion-care loop unchanged. **Verify by:** shot (raven reads as a real raven, calm) + assert (draw-call budget; companion state intact).
+- [ ] P2.3 · **Flagship via meshy: edelhert — `meshy-gen.mjs --only=animal-edelhert-reddeer`** (2) [both]. Believable proportions/texture, calm-posed. **Verify by:** shot (looks-real AND belongs; reject+regenerate otherwise) + assert (draw calls).
+- [ ] P2.4 · **Flagship via meshy: wildzwijn — `meshy-gen.mjs --only=animal-wildzwijn-boar`** (2) [both]. Realistic, never-scary (calm, not charging). **Verify by:** shot + assert.
+- [ ] P2.5 · **Flagship via meshy: ree — `meshy-gen.mjs --only=animal-ree-roedeer`** [both]. **Verify by:** shot (real roe deer, belongs) + assert (draw calls).
+- [ ] P2.6 · **Flagship via meshy: das — `meshy-gen.mjs --only=animal-das-badger`** [both]. **Verify by:** shot + assert.
+- [ ] P2.7 · **Flagship via meshy: eekhoorn — `meshy-gen.mjs --only=animal-eekhoorn-squirrel`** [both]. **Verify by:** shot + assert.
+- [ ] P2.8 · **Other story animals via meshy, wisely spread — batch `meshy-gen.mjs --only=<id>` per the doc's ranked list** (3) [both]. vos, adder (calm-posed), heikikker, nachtzwaluw, the story birds — regenerate ONLY those the doc ranks worth the credits, each Fable-judged; STOP on the usage/Meshy reserve. Log spend per model. **Verify by:** shot (each accepted model looks-real AND belongs, never-scary) + assert (draw-call budget held).
+- [ ] P2.9 · **World-naturalism assets via meshy ONLY if they buy real cohesion — per the doc, `meshy-gen.mjs --only=<id>`** [both]. Upgrade the few props whose fidelity breaks the world; skip the rest. **Verify by:** shot (the upgraded prop removes a cohesion break) + assert (draw calls).
+- [ ] P2.10 · **Species must read at gameplay distance, grounded [both]** (from Run C, poort-append 2026-07-04 — verified: world animals are featureless dark blobs at follow distance in the fresh set). For each upgraded animal: the §2.4 must-read silhouette + palette read AT the follow-camera distance under the golden key, the canon scale order held, and a soft blob shadow grounding it. **Verify by:** shot (an overworld frame per accepted animal at follow distance where the species is identifiable) + assert (drawCalls <150).
+- [ ] GATE-D4 · **Fable re-judge — do the animals look REAL and BELONG?** (2)
+  Capture; judge every regenerated model against the doc (realism + never-scary +
+  belongs) and the credit spend log (wisely spread). Reject+re-open any that look
+  wrong. **Exit of Phase 4.**
+
+## Phase 5 · make progress FELT  (from Run C Phase 3 — untouched; the single biggest "experience" lever, VISION §13.3)
+
+- [ ] P3.1 · **A completed mission visibly changes the world [both].** Wire at least one concrete, calm world reaction per mission completion (an animal returns to a spot, a path/area heals, the season light shifts) driven from the existing mission-completion state — the doc §4 table names one per mission — no new persistence keys. **Verify by:** shot (before/after a mission: the world frame visibly differs in the intended spot) + assert (reaction derives from mission state; no new `localStorage` keys).
+- [ ] P3.2 · **The season arc is felt on the case-board [both].** Kraamtijd → Zomer → Bronst → Herstel progress reads on the prikbord (clues `spoor→camera→band`, veldnotities, the hopeful ontknoping) — calm, ≤7 words, read-aloud on new strings. **Verify by:** shot (the board shows season/arc progress that tracks completed missions) + assert (derived from `VERHAALBOOG_VELUWE` state).
+- [ ] P3.3 · **Badges/breinkrachten feel earned, not bookkept [both].** The 5 breinkracht badges + knap-woord badges read as a felt reward at the moment of earning (calm, on-style), not a silent counter. **Verify by:** shot (earning a badge shows a calm on-style moment) + assert (no contract/persistence change).
+- [ ] P3.4 · **Before/after evidence pair in the capture [laptop]** (from Run C, poort-append) — extend `app/e2e-capture/**` to drive ONE mission to completion (or inject its completion state via the dev hook) and shoot the SAME world spot + the board before and after at the same camera pose, plus the badge-earn moment. **Verify by:** fresh set contains a paired before/after frame set + a badge-moment frame, with annotations showing the reaction derives from mission state (no new persistence keys).
+- [ ] GATE-D5 · **Fable re-judge — is progress FELT, not just badged?** (2)
+  Capture a before/after mission pair; judge that the world + board + badges
+  visibly react. Re-open or append. **Exit of Phase 5.**
+
+## Phase 6 · weave the orphan systems into the season arc  (from Run C Phase 4 — untouched; raven · jeep/heli · worldbeats · the `roep` game)
+
+- [ ] P4.1 · **The raven companion has a story role in the arc [both].** The rescue→care→friend loop threads INTO the season (it helps in a mission / marks a clue / reacts to progress), not parallel to it. **Verify by:** shot (the raven appears inside a story beat, calm) + assert (uses existing companion state).
+- [ ] P4.2 · **Jeep + helicopter earn a diegetic role [both].** The drivable jeep (and heli) serve the ranger work (reach a far mission / a winterronde leg) with the motion-comfort camera law intact — no story-less joyride. BUILDS ON Phase 1's P1.5b/c (they must move/enter correctly first). **Verify by:** shot (a drive frame reads as purposeful ranger travel) + assert (camera law: fixed FOV, roll 0, damped; `cam.target`="vehicle"). **Drive feel: demo.**
+- [ ] P4.3 · **Free-roam worldbeats point at the arc [both].** The calm free-roam beats nudge toward the next kindness rather than idling. **Verify by:** shot (a worldbeat gently surfaces the next mission/clue) + assert (no new keys).
+- [ ] P4.4 · **Wire the built-but-unused `roep` (bird-call) engine into `simon`/the arc [both] +demo.** Use the existing call engine + xeno-canto audio in the dusk call-and-response framing (VISION §5/§7); calm, never-startle. **Verify by:** shot (the roep/simon beat is present and on-style) + assert (audio via `assetUrl`, construct-parity intact). **Call audio firing: demo.**
+- [ ] P4.5 · **Vehicles parked diegetically — the heli has no home [both]** (from Run C, poort-append — verified: the heli sits dumped on the hub lawn behind the missiebord / loose in the stuifzand). Give each a believable home that serves P4.2's diegetic role — the jeep on a two-track by the cabin, the heli on a marked ranger helipad (hub edge or a far station) — both seated on terrain, neither crowding the board/cabin sightline. **Verify by:** shot (fresh hub + far frames: each vehicle at its home spot, grounded, board approach uncluttered) + assert (vehicle interactions unchanged; drawCalls <150).
+- [ ] GATE-D6 · **Fable re-judge — are the orphan systems now inside one story?**
+  (2) Capture; judge that raven/jeep/heli/worldbeats/roep read as part of the
+  season arc, not parallel toys. Re-open or append. **Exit of Phase 6.**
+
+## Phase 7 · deepen scene/mission + xeno-canto call polish + final re-judge  (from Run C Phase 5 — untouched)
+
+- [ ] P5.1 · **Deepen the 10 missions' scene dressing + beats [both].** Per the doc, add calm naturalistic dressing + clearer diegetic staging to the mission scenes (briefing → task → reunion), ≤7 words, read-aloud on new strings, no new mechanics. **Verify by:** shot (missions read richer + on-style; reading intact).
+- [ ] P5.2 · **Xeno-canto call polish across the animals [both] +demo.** Deepen + balance the per-animal `geluid` (real CC recordings via the existing `audio-fetch` pipeline); calm levels, never a sudden loud cue; assets via `assetUrl`. **Verify by:** assert (each targeted animal has a mapped call; levels within the calm ceiling). **Audio quality on-device: demo.**
+- [ ] P5.3 · **Reduce-motion sweep across the new work [both] +demo.** Everything Run D added respects the motion-comfort law under both RM gates (OS media + the in-game "Rustige beweging" toggle): camera moves become cuts, secondary motion freezes at idle, locomotion still animates. **Verify by:** shot set + pixel-diff (idle near-zero) + assert (`.rm` via both gates). **On-device: demo.**
+- [ ] P5.4 · **Full re-capture + triage.** One clean `npm run capture`; sweep the WHOLE flow for anything the phase gates missed; append boxes for survivors. **Verify by:** shot (complete fresh laptop set).
+- [ ] P5.5 · **Mission-beat frames in the capture: briefing → task → reunion [laptop]** (from Run C, poort-append) — extend `app/e2e-capture/**` to walk missie 1 (frisling) through its briefing, task and reunion beats and shoot each. **Verify by:** fresh set contains the three beat frames with annotations (`screen`/`missionView` correct per beat; drawCalls <150).
+- [ ] GATE-D7 · **FINAL Fable re-judge — the whole game against the direction doc.**
+  (3) Capture; re-judge every screenshot-closable box across all phases —
+  mechanical truth (Phase 1 drive-asserts re-run), Alvah's truth, cohesion across
+  all screens, realism + never-scary of all animals, felt progress, the woven
+  systems, reading + calls. May re-open anything. This is the last gate before
+  the Floris demo. **RUN-D-COMPLETE when this ticks and every non-DEMO box above
+  is `[x]`.**
+
+---
+
+## Demo acceptance  (Floris ONLY — no screenshot/E2E gate may tick these)
+
+> These are the `+demo` components. Their build boxes above may reach
+> "implemented — awaiting Floris demo"; the FEEL/AUDIO/real-device verdicts live
+> only here. The supervisor pauses at these with NEEDS-FLORIS — it never spends a
+> sitting on them.
+
+- [ ] DEMO · **Playability on the real iPad** — walk the dunes without sinking, drive the jeep and it MOVES, enable + enter + fly the helicopter pad-to-pad. Floris accepts on-device. (Phase 1's three bugs are only truly closed here.)
+- [ ] DEMO · **Alvah recognizes himself** — child-scale + blonde/blue on real glass; does it feel like HIM? Floris (and Alvah) accept on-device.
+- [ ] DEMO · **Realism + never-scary on the real iPad** — do the regenerated animals + ranger look real, belong, and never scary on real glass? Floris accepts on-device.
+- [ ] DEMO · **Felt progress feels good** — does a completed mission changing the world land as rewarding + calm (not busy/startling)? Floris accepts on-device.
+- [ ] DEMO · **Motion comfort** — the woven jeep/heli travel, any new camera moves, and reduce-motion on the real iPad. Floris accepts on-device.
+- [ ] DEMO · **Audio** — xeno-canto calls + read-aloud on new/changed strings fire, calm and never-startle. Floris confirms audio on-device.
+- [ ] DEMO · **Real Safari + iPad platform (whole)** — every iPad conclusion carries the Chromium engine caveat; the on-device WebKit pass is the only real-Safari evidence. Layout/scale, ≥56 px targets, touch controls on real glass. Floris accepts on iPad.
+
+## Notes
+- Re-run the capture anytime from `app/`: `npm run capture` (rebuilds the shared
+  `runs/run-3-ux-polish/audit-evidence/`; takes ~25–30 min).
+- Phase order = playability → Alvah's truth → VISION §13 priority order, so an
+  early stop (usage/credits) still ships the highest-impact work first. Do not
+  resequence phases.
+- The ledger is OPEN-ENDED — the Fable art director appends concrete boxes at
+  D0.1 and re-opens/extends at every gate. Convergence target = the direction
+  doc's "excellent per screen" bar.
+- Cut as ALREADY DONE at reconciliation (2026-07-05, verified in fresh pixels):
+  Run C P1.0 (board framing), P1.1 (golden-hour rig), P1.4 (title real world),
+  P1.5 (board/pause overlay language), P1.14 (mission near-black gone). The five
+  2D floors (35–39) are on-style and stay frozen unless a gate re-opens them.

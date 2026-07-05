@@ -16,9 +16,18 @@ alvah.nl/ranger behind the client-side gate.
     one immersive 3D open world, W0–W7.4 built + deployed (`2.1.0-ship`). Verified
     mechanically (Playwright), which is exactly why the visuals/controls need run 3.
     Contains WORLD-PLAN, WORLD-LEDGER, the supervisor scripts, and `qa-evidence-2/`.
-  - **[runs/run-3-ux-polish/](runs/run-3-ux-polish/)** — ACTIVE. The UX / look-and-feel
-    / controls pass. **Start at [FINDINGS.md](runs/run-3-ux-polish/FINDINGS.md)**;
-    the setup prompt for the next thread is [HANDOFF.md](runs/run-3-ux-polish/HANDOFF.md).
+  - **[runs/run-3-ux-polish/](runs/run-3-ux-polish/)** — ARCHIVE. Run A (audit) +
+    Run B (UX/controls build): 32 boxes fixed, 4 parked. Its `audit-evidence/` dir
+    stays the SHARED capture-output path for all later runs (hardcoded in
+    `app/e2e-capture/`).
+  - **[runs/run-4-experience/](runs/run-4-experience/)** — ARCHIVE. Run C
+    (Fable-directed experience/polish): paused at ~9% on its 8h session cap;
+    reconciled into Run D on 2026-07-05. The ledger/plan/direction/log stay as
+    provenance.
+  - **[runs/run-5-cohesion/](runs/run-5-cohesion/)** — ACTIVE. Run D: the
+    reconciled, playability-first cohesion run (Opus builds, Fable verifies).
+    **Start at [RUN-D-LEDGER.md](runs/run-5-cohesion/RUN-D-LEDGER.md)**; the
+    supervisor is `run-d-loop.sh`.
 - **[docs/](docs/)** — cross-run reference: [GAMEPLAN.md](docs/GAMEPLAN.md) (master
   orientation), [DEMO-SANDBOX.md](docs/DEMO-SANDBOX.md), [SETUP-realism-keys.md](docs/SETUP-realism-keys.md).
 - **[research/](research/)** — verified knowledge base (biology, EF science, 3D specs,

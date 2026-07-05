@@ -1,5 +1,11 @@
 # Run 4 · Run C — EXPERIENCE LEDGER (open-ended cohesion ledger)
 
+> **⛔ SUPERSEDED (2026-07-05).** Run C paused at ~9% on its 8h session cap and
+> was reconciled box-by-box against fresh pixels + current code into
+> **[runs/run-5-cohesion/RUN-D-LEDGER.md](../run-5-cohesion/RUN-D-LEDGER.md)**.
+> Do NOT resume this ledger or `run-c-loop.sh` — launch `run-d-loop.sh` instead.
+> This file stays as provenance of what Run C ticked, deferred and appended.
+
 > The supervisor (`run-c-loop.sh`) does the FIRST unchecked `- [ ]` box each
 > sitting. A **DIRECTION** box is authored by the Fable art director; a **WORK**
 > box (`- [ ] Pn.m …`) is built by Opus (`--effort xhigh`), the supervisor

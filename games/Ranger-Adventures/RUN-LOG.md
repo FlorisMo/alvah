@@ -611,3 +611,27 @@ One status block per run/step (BUILD-PLAN §9b).
 ▷ progress: ~13%
 ⚠ blocker: Build phases complete (laptop) — awaiting Floris on-device demo + iPad re-enable (DEMO/DEFERRED boxes in BUILD-LEDGER.md).
 ```
+
+---
+**2026-07-05 04:43:13Z** · status
+
+```
+✔ landed: P1.1 · Unify the lighting + sky to the golden-hour touchstone [both].
+▶ phase:  Phase 1 · one naturalistic art direction across all screens  (VISION §13.1 — the cohesion + realism unifier; the single highest-impact lever)
+→ next:   DEFERRED · P1.2 · Naturalistic terrain + ground materials [both]. Replace flat/
+▤ ledger: RUN-C-LEDGER.md
+▷ progress: ~9%
+⚠ blocker: Run C paused by usage-guard: session wall-clock budget reached (513m ≥ 480m) — clean stop; re-launch to continue
+```
+
+---
+**2026-07-05 09:13:56Z** · status
+
+```
+✔ landed: —
+▶ phase:  Phase 0 · direction-first  (validate the reconciliation before any build)
+→ next:   D0.1 · DIRECTION · validate + refine RUN-D-DIRECTION.md and this ledger
+▤ ledger: RUN-D-LEDGER.md
+▷ progress: ~0%
+⚠ blocker: Run C gereconcilieerd naar Run D (2026-07-05). Launch: run-d-loop.sh — zie runs/run-5-cohesion/.
+```
