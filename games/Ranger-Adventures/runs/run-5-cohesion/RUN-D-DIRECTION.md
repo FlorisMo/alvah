@@ -467,8 +467,9 @@ story-gated wolf sprite (→D3.4–D3.7), the frisling-as-egg + gras-as-blobs
 (→D3.8), the cloud-shadow murk (→D3.9), the Instellingen off-fold exit + its
 GAPped capture scene (→D3.10), the unreadable floating label chips (→D3.11),
 the prop-drop hub (→D3.12), the zoom-in-on-a-void framing (→D3.13), the
-sandbox-not-player-path capture hole + orphan PNGs (→D3.1), and all of Run C's
-untouched Phases 2–5 (→Run D Phases 4–7).
+sandbox-not-player-path capture hole + orphan PNGs + the capture's own 30-min
+budget overrun (→D1.0, harness-only, lands before the Phase-1 drive-bursts),
+and all of Run C's untouched Phases 2–5 (→Run D Phases 4–7).
 
 **New at the top (Floris's real-device demo, 2026-07-05 — bugs no screenshot
 gate can see):** Run D Phase 1 = P1.5a (sinks through the floor), P1.5b (jeep
