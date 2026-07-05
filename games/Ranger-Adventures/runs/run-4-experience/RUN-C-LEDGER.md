@@ -104,6 +104,29 @@
   Capture; judge cohesion across title → world → board → 5 games → pause against
   the doc. Re-open or append. May append new dressing boxes. **Exit of Phase 1.**
 
+## Phase 1.5 · playability first — correctness before more polish  (Floris demo 2026-07-05: sank through floor · jeep sticks-and-slides · cannot enter heli)
+
+> Floris hit these in a real-device demo. They are PHYSICS/INTERACTION bugs a
+> screenshot gate cannot see (the Run-1 false-green trap) — so each is verified by
+> the capture harness DRIVING the action and asserting real dev-hook state, NOT by
+> a static shot, and each ALSO carries a +demo Floris must confirm on the real iPad.
+> READ FIRST: research/3d-autonomous-sourcing-physics-world.md §C (character
+> controller — three-mesh-bvh/BVHEcctrl or Rapier+ecctrl). Prefer an in-repo fix;
+> a NEW well-licensed (MIT/Apache/CC0/BSD) self-contained dep IS authorized (Run C
+> contract) where it clearly fixes the controller and holds the budget, and
+> web-search/fetch for the current best fit is allowed. Every fix still holds <150
+> draw calls, pixelRatio ≤2, iPad-first, build + e2e:smoke green, motion-comfort +
+> never-scary, no runtime network/telemetry/CDN, no new localStorage keys.
+
+- [ ] P1.5a · **The ranger never sinks through the floor/terrain [both] +demo** — ground the character controller so the ranger stays ON the terrain + solid props everywhere he can walk (spawn, slopes, the dunes behind spawn, hub, every mission scene). Expose dev-hook `grounded` (boolean) + foot-clearance (ranger y minus terrain height). Extend the capture harness (app/e2e-capture/**, allowed) to walk a burst across spawn → slope → dune. **Verify by:** assert (`grounded`=true every frame of the walk burst AND foot-clearance ≥0 — never below terrain — across spawn/slope/dune) + shot (feet on the ground, no half-buried frame); drawCalls <150. +demo: Floris walks the real iPad over the dunes without falling through.
+- [ ] P1.5b · **The jeep actually drives — it translates through the world, no stick-and-slide [both] +demo** — pressing drive moves the jeep's WORLD POSITION forward along its heading with believable ground contact; no sliding-in-place, no snap. Expose the jeep's per-frame world-position delta on the dev hook (`vehicle().position` already exists). Extend the harness to drive a forward + held-turn burst. **Verify by:** assert (`vehicle().position` displacement ≫0 and monotonic along heading across the drive burst, jeep stays grounded, heading changes smoothly with no wrap-jump) + shot (jeep visibly further along the track between frames). +demo: Floris drives on the real device and it moves naturally, not stuck.
+- [ ] P1.5c · **The helicopter can be enabled in Instellingen AND entered [both] +demo** — wire the whole path end-to-end: the `helikopter` toggle in Instellingen is reachable + tappable (≥56 px, on-screen — COUPLE with P1.9's off-fold fix so it isn't below the fold), turning it on makes `heliAvailable` true, the "🚁 Stap in de helikopter" affordance appears at a pad, and tapping it enters. Extend the harness to open Instellingen → toggle helikopter on → walk to a pad → enter. **Verify by:** assert (the helikopter toggle bounding-box inside the viewport + ≥56 px; after toggling on `heli().available`=true; at the pad `heli().near`=true; after the enter tap `heli().inHeli`=true) + shot (the toggle on-screen in Instellingen; the enter affordance at the pad). +demo: Floris turns it on in Settings and flies pad-to-pad on the real iPad.
+
+## Phase 1.6 · Alvah is Alvah — child proportions + his real face  (Floris 2026-07-05: he's dwarfed by the mature ranger, and wrong-coloured)
+
+- [ ] P1.6a · **Alvah is a CHILD: fix his height + set adult humans to 1.8 m [both]** — Alvah is 8 and ≈ **1.2 m**, not the ~1.7 m adult the code currently uses (`RANGER_STAND_HEIGHT` / `STAND_HEIGHT['ranger-alvah']` = 1.7 in [AnimalScale.ts](../../app/src/render3d/AnimalScale.ts) — fix to ~1.2 m child). Any mature human (the mature ranger/boswachter NPC) stands ~**1.8 m**, so Alvah must read a clear head-and-shoulders shorter beside one. Expose the mature-human height on the dev hook alongside `avatar.height`. THIS SUPERSEDES Run B's ~1.7 m target and the inherited `avatar.height ∈ [1.5,2.0]` assert — Alvah's band is now child-scale. Scale the rig, not the camera; keep animations + foot-on-ground intact. · verify-by: assert (`avatar.height` ∈ [1.1, 1.35]; the mature human ∈ [1.7, 1.9]; Alvah < 0.75 × the adult) + shot (Alvah beside the mature ranger reads unmistakably as a child next to an adult); drawCalls <150.
+- [ ] P1.6b · **Alvah's face is Alvah's: blonde hair + blue eyes [both] +demo** — the real Alvah is **blonde, wavy-haired, blue-eyed** (reference: `public/img/Alvah.jpg`); the current `ranger-alvah` model is dark-haired + green-eyed (`app/assets-gen/ranger-alvah.png`) — wrong. Make hair read blonde + wavy and eyes clear blue, keeping the calm never-scary stylized look + the green ranger jacket. If regenerating via Meshy: `node scripts/meshy-gen.mjs --only=ranger-alvah` with a prompt citing the reference (log the credit spend); else recolour the hair/iris materials in-repo (cheaper, no credits). Keep the avatar-creator + `alvah-ef-v1` persistence intact. · verify-by: shot (title + world ranger: hair reads blonde, eyes read blue, resembles public/img/Alvah.jpg) + assert (drawCalls <150; calm never-scary pose). +demo: Floris confirms it looks like Alvah on the real iPad.
+
 ## Phase 2 · realistic animals  (VISION §13.2 — credits spread wisely, flagships + raven + ranger FIRST)
 
 - [ ] P2.1 · **Upgrade the player ranger (Alvah) — `meshy-gen.mjs --only=ranger-alvah`** (2)

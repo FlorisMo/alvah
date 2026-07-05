@@ -294,3 +294,33 @@ catch it early at no cost to the run.
   needle/leaf litter. Fixes (builder, not Floris): steer the ven capture camera onto the
   water disc AND render visible still-water + reed fringe + moss bank there; make the
   heather mats read on the heide hub before P1.2 can go green.
+- 2026-07-05 · grade (P1.4) FAIL, left open: the title's async "dress with the real world"
+  swap never lands in the captured frame — `01-title.png` still shows the PRIMITIVE backdrop
+  (low-poly cone trees, a bare brown box where the log cabin should be, purple crystal rocks)
+  at drawCalls 12 and NO ranger, with `avatar: null`. So `dressTitleReal()`'s GLB swap
+  (prop-pine/oak/birch + prop-case-board + prop-ranger-cabin + the ranger-alvah rig) did not
+  complete before snap: `whenIdle` + the heavy decode don't finish inside the capture's
+  15 s `waitForFunction(avatar>1)`, which is `.catch`-swallowed so the snap fires ranger-less.
+  The change's OWN new assert (main.ts `provideAvatar(titleAvatar())` → title `avatar.height`
+  ∈ [1.5,2.0]) is therefore unmet (null). By contrast `03-world-entry` is drawCalls 57 with
+  the real log cabin + missiebord + grounded ranger (avatar 1.7), so the title does NOT
+  "belong to the same world as world-entry" and misses §3.1 ("the world seen calmly, same
+  terrain materials, with the grounded ranger avatar"). Only the ≤7-word subtitle leg passes
+  (6 / 7 words). Fix (builder, not Floris): make the title actually render the real props +
+  grounded ranger before the snap — force/await the dress instead of parking it behind
+  `whenIdle`, and gate the capture snap on `titleAvatar()>1` (raise geometry/drawCall parity
+  toward world-entry) rather than swallowing the wait — before P1.4 can go green.
+- 2026-07-05 · grade (P1.4) VISUAL PASS but tick REFUSED (e2e:smoke RED), left open: the
+  dress now lands in the pixels — fresh `01-title.png` shows the real log cabin + prikbord +
+  mixed realistic trees + a grounded ranger under the warm golden sky (avatar.height 1.70 ∈
+  [1.5,2.0], drawCalls 24, subtitle ≤7 words: 6/7), belonging to the same world as
+  `03-world-entry`; the §3.1 bar is met. BUT the frozen `npm run e2e:smoke` is deterministically
+  RED (confirmed on a clean re-run): `journey` (Begin→avatar→world) and `movement` (tap-to-walk)
+  both time out at 30 s, while the two boot-only tests pass — an earlier run in the same log
+  passed all 4 in 19.8 s. Cause: the title dress is no longer parked behind `whenIdle`; it kicks
+  off concurrent cabin/board/tree/ranger GLB decodes at EVERY boot, starving the main thread
+  through the Begin→world→movement path. Fix (builder, not Floris — no device/decision/asset
+  needed): keep the dressed title for capture but stop the title decodes from competing with the
+  real Begin→world flow — gate the eager `dressTitleReal()` on a capture/dev flag, or
+  cancel/deprioritize the title loads the moment the player navigates away — before P1.4 can go
+  green. Do NOT touch `app/e2e/**` (frozen regression guard).

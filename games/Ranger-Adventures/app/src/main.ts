@@ -6,7 +6,7 @@ import { applyReducedMotionClass, watchReducedMotion, setReducedMotionOverride }
 import { applyReadingPrefs } from './core/reading-prefs';
 import { store } from './core/state';
 import { Sound } from './core/sound';
-import { installDevHook, setScreen, provideDrawCalls } from './core/devhook';
+import { installDevHook, setScreen, provideDrawCalls, provideAvatar } from './core/devhook';
 
 // W7.1 code-splitting: the mission/world/demo graph (World, the five engines,
 // the 3D mini-game views, render2d) is the bulk of the bundle but is only
@@ -53,6 +53,11 @@ stage.start();
 installDevHook();
 setScreen('title');
 provideDrawCalls(() => stage.drawCalls);
+// P1.4: the title now stands the GROUNDED ranger on the heath — expose his
+// measured height to the scale assert so the title frame proves avatar.height ∈
+// [1.5, 2.0], same as the world. `startWorld` overrides this with the live world
+// ranger on "Begin"; null until the title rig finishes loading.
+provideAvatar(() => stage.titleAvatar());
 
 // --- title card → the lodge (mission picker) ---
 const card = document.createElement('div');

@@ -134,8 +134,12 @@ Global rules (all from the research):
 
 - **Real proportions first.** The scale table is canon
   (animal-visual-accuracy.md "Schaal-referentie" +
-  humans-full-animals-eyes-research.md §C1, ranger 8 jaar ≈ **131 cm**, ~6
-  koppen): edelhert schoft ~95–130 cm ≈ ooghoogte van de ranger; wildzwijn
+  humans-full-animals-eyes-research.md §C1 — **CORRECTIE (Floris 2026-07-05):**
+  speler Alvah is een KIND van 8 jaar ≈ **120 cm**; volwassen mensen (de mature
+  boswachter/NPC) ≈ **180 cm**, dus Alvah leest een kop-en-schouder kleiner. De
+  dier-standhoogtes zijn absoluut/echt en ONgewijzigd; de maat-verhoudingen
+  hieronder zijn t.o.v. een VOLWASSENE (~1,7–1,8 m), naast Alvah (1,2 m) lezen
+  dieren navenant groter): edelhert schoft ~95–130 cm ≈ ooghoogte van een volwassene; wildzwijn
   65–95 cm ≈ tot zijn middel; ree 60–75 cm en wolf 70–90 cm ≈ tot zijn heup;
   vos 35–40 cm ≈ tot de knie; das 25–30 cm ≈ tot de scheen; eekhoorn
   (kop-romp 19–25 cm) bij de voeten; adder ~55–60 cm op de grond. Small
@@ -170,7 +174,7 @@ Per-animal signature targets for the Meshy prompts (each = the dossier's
 
 | Dier (asset id) | Must-read features (source: animal/bird-visual-accuracy.md) | Calm-pose note |
 |---|---|---|
-| Ranger Alvah (`ranger-alvah`) | ~131 cm, ~6 koppen, lage ooglijn, grote (niet té grote) ogen + warme catchlight; ranger-groen + accentkleur; iets meer gestileerd dan de dieren (uncanny-valley regel, humans §A1) | open, nieuwsgierige default |
+| Ranger Alvah (`ranger-alvah`) | KIND 8 jr ≈ **120 cm** (leest duidelijk kleiner dan een volwassene van ~180 cm); **blond, golvend haar + heldere blauwe ogen** — gelijkend op het echte kind in `public/img/Alvah.jpg` (NIET het donkerharige/groenogige huidige model); ~6 koppen, lage ooglijn, grote (niet té grote) ogen + warme catchlight; ranger-groen jasje + geel shirt + accentkleur; iets meer gestileerd dan de dieren (uncanny-valley regel, humans §A1) | open, nieuwsgierige default |
 | Raaf (`animal-raaf-raven`) | geheel zwart met groen/blauw/paarse glans; zware licht gekromde snavel, bevederd tot over de helft; ruige keelveren; wigstaart; donkerbruine iris | folded wings, kop-tilt slim |
 | Raaf-jong (`animal-raaf-fledgling`) | bruinig dof (nog geen glans), kleinere grijzige snavel, blauwgrijze iris, roze mondhoek (gape) | fluffy, groot-kopje, kwetsbaar-warm |
 | Edelhert (`animal-edelhert-reddeer`) | schoft ~120 cm (man), zomer roodbruin, crème spiegel, vertakt gewei (warm/afgerond), horizontale pupil donkerbruin | statig grazen/kop-hoog; burlen = trots-zingend, nooit agressief |

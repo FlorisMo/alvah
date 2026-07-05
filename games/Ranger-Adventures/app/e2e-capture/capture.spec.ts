@@ -340,6 +340,17 @@ test('audit capture flow', async ({ context }, testInfo) => {
     await scene(page, 'title', async () => {
       await page.goto('/');
       await page.locator('.boot-title').waitFor({ timeout: 30_000 });
+      // P1.4: the real world props (tree line, prikbord, cabin) + the grounded
+      // ranger swap in async over the primitive backdrop — GATE the snap on the
+      // ranger landing (avatar.height reads on the dev hook). The rig is the
+      // heaviest asset and loads concurrently with the props, so avatar>1 doubles
+      // as "the title is dressed". Generous 25 s (matches the world load budget);
+      // best-effort .catch so a zero-asset env still snaps rather than crashing.
+      await page.waitForFunction(() => {
+        const r = (window as unknown as { __ranger?: { avatar?: () => { height: number } | null } }).__ranger;
+        return !!(r && r.avatar && (r.avatar()?.height ?? 0) > 1);
+      }, undefined, { timeout: 25_000 }).catch(() => { /* zero-asset safe */ });
+      await settle(page, 900); // seat the idle pose + let any last tree pop in
       await snap(page, 'title', 'Boot', 'Titelscherm "Word boswachter" — eerste indruk.', ['.btn-start']);
     });
     await scene(page, 'avatar', async () => {

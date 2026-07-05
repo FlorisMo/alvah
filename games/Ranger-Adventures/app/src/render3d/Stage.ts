@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { livePolicy } from './MotionMode';
 import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky } from './Lighting';
+import { RANGER_STAND_HEIGHT } from './AnimalScale';
+
+/** The real staged tree species — the SAME GLBs the explorable world plants
+ *  (World.ts TreeSpecies), so the title tree line and the world tree line are
+ *  one material language (RUN-C-DIRECTION §2.3 / §3.1). */
+type TitleTree = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
 
 /** Called once per rendered frame, AFTER the render (so renderer.info is fresh). */
 export type FrameCallback = (dtSeconds: number, elapsedSeconds: number) => void;
@@ -44,6 +50,12 @@ export class Stage {
   private static blobTex: THREE.Texture | null = null;
   /** when set, the loop renders this scene/camera instead of the title backdrop */
   private world: { scene: THREE.Scene; camera: THREE.PerspectiveCamera; update: (dt: number, t: number) => void } | null = null;
+  // P1.4: the primitive backdrop is an INSTANT, zero-asset-safe stand-in; the real
+  // world props (tree line, prikbord, cabin, grounded ranger) load async and swap
+  // over it so the title reads as "the world seen calmly" (RUN-C-DIRECTION §3.1).
+  private fallbackTrees: THREE.Group | null = null;
+  private titleMixer: THREE.AnimationMixer | null = null;
+  private titleRangerH = 0; // measured render height of the title ranger (m); 0 = not loaded
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -115,16 +127,31 @@ export class Stage {
    * only a handful of draw calls — far under the 150 budget. Calm, never-scary.
    */
   private addBackdrop(): void {
+    // The primitives live in ONE group so the whole low-poly stand-in can be
+    // removed + disposed the instant the real GLB world swaps in (P1.4). The
+    // heather carpet stays persistent (it is the heath's purple ground cue, not a
+    // low-poly outlier next to the hero).
+    const group = new THREE.Group();
+    this.fallbackTrees = group;
     const blobs: Array<readonly [number, number, number]> = []; // [x, z, radius]
-    this.addPines(blobs);
-    this.addBirches(blobs);
+    this.addPines(group, blobs);
+    this.addBirches(group, blobs);
     this.addHeather();
-    this.addMissionBoard(blobs);
-    this.addBlobShadows(blobs);
+    this.addMissionBoard(group, blobs);
+    this.addBlobShadows(group, blobs);
+    this.scene.add(group);
+    // P1.4 regrade: kick the real-GLB swap off IMMEDIATELY — NOT behind
+    // requestIdleCallback. At the title the world is not booting yet (that only
+    // starts on "Begin"), so there is no boot-critical load to yield to, and the
+    // old `whenIdle` park meant the decode never even started inside the capture's
+    // wait window — the swap missed the snap and the frame showed bare primitives
+    // (drawCalls 12, avatar null). The dynamic import in dressTitleReal yields once,
+    // so the primitives still paint on the first frame before the reals decode.
+    void this.dressTitleReal().catch(() => { /* zero-asset safe: primitives stay */ });
   }
 
   /** Pointed conifers of mixed size — the Veluwe's dark pine stands. */
-  private addPines(blobs: Array<readonly [number, number, number]>): void {
+  private addPines(parent: THREE.Group, blobs: Array<readonly [number, number, number]>): void {
     // [x, z, scale]
     const spots: ReadonlyArray<readonly [number, number, number]> = [
       [-4.5, -5.5, 1.15], [-6.8, -9.5, 1.4], [4.6, -6.5, 1.05], [7.2, -11, 1.5],
@@ -142,11 +169,11 @@ export class Stage {
       blobs.push([x, z, 0.75 * s]);
     });
     trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
-    this.scene.add(trunks, crowns);
+    parent.add(trunks, crowns);
   }
 
   /** Rounded broad-leaves that break the row of identical cones (F-04 variety). */
-  private addBirches(blobs: Array<readonly [number, number, number]>): void {
+  private addBirches(parent: THREE.Group, blobs: Array<readonly [number, number, number]>): void {
     // [x, z, scale]
     const spots: ReadonlyArray<readonly [number, number, number]> = [
       [-3.2, -4.2, 1.05], [3.4, -4.6, 0.95], [6.2, -9, 1.2], [-7.2, -13, 1.25], [1.2, -10.5, 1.1],
@@ -166,7 +193,7 @@ export class Stage {
       blobs.push([x, z, 0.85 * s]);
     });
     trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
-    this.scene.add(trunks, crowns);
+    parent.add(trunks, crowns);
   }
 
   /** A low heather carpet — the Veluwe's signature purple bloom (F-04). */
@@ -189,7 +216,7 @@ export class Stage {
   }
 
   /** One recognizable landmark: the mission board, echoing World.proceduralBoard. */
-  private addMissionBoard(blobs: Array<readonly [number, number, number]>): void {
+  private addMissionBoard(parent: THREE.Group, blobs: Array<readonly [number, number, number]>): void {
     const board = new THREE.Group();
     board.position.set(2.4, 0, -5.6);
     board.rotation.y = -0.4; // three-quarter view, cork face toward the camera
@@ -203,12 +230,12 @@ export class Stage {
     );
     cork.position.set(0, 1.3, 0);
     board.add(post1, post2, cork);
-    this.scene.add(board);
+    parent.add(board);
     blobs.push([2.4, -5.6, 0.95]);
   }
 
   /** One instanced set of soft blob discs so no tree or prop floats (F-04). */
-  private addBlobShadows(blobs: ReadonlyArray<readonly [number, number, number]>): void {
+  private addBlobShadows(parent: THREE.Group, blobs: ReadonlyArray<readonly [number, number, number]>): void {
     const geo = new THREE.PlaneGeometry(1, 1);
     geo.rotateX(-Math.PI / 2); // lie flat once; instances only scale + translate
     const mat = new THREE.MeshBasicMaterial({
@@ -222,7 +249,149 @@ export class Stage {
       discs.setMatrixAt(k, m);
     });
     discs.instanceMatrix.needsUpdate = true;
-    this.scene.add(discs);
+    parent.add(discs);
+  }
+
+  /**
+   * P1.4: swap the primitive title backdrop for the SAME real GLB props the
+   * explorable world plants — a golden-hour Veluwe tree line, the prikbord, the
+   * ranger's cabin, and the GROUNDED ranger avatar standing calmly on the heath by
+   * the path — so the title IS the world seen calmly (RUN-C-DIRECTION §3.1), not
+   * separate menu art. Async + best-effort (a dynamic import keeps the boot shell
+   * light per W7.1): the primitives paint instantly and are disposed the moment the
+   * real props arrive; a missing model just leaves its primitive (zero-asset safe,
+   * the Models.ts contract). Every prop is grounded by a soft blob shadow (§2.2 —
+   * nothing floats) and lit by the ONE shared golden rig already on this scene.
+   */
+  private async dressTitleReal(): Promise<void> {
+    if (this.world) return; // already in the world — the title dressing is moot
+    const Models = await import('./Models');
+    await Models.loadManifest();
+    if (this.world) return; // navigated away while the chunk loaded
+    const { loadModel, loadRig, prepModel, skinnedRenderBox } = Models;
+
+    // P1.4 regrade: add the real-props group to the scene UP FRONT and append
+    // each prop AS it decodes, so the title fills in incrementally and its
+    // draw-call count climbs toward world-entry parity — instead of the old
+    // all-or-nothing add at the very END, which left a slow decode snapping bare
+    // primitives (drawCalls 12, avatar null). Every load runs CONCURRENTLY (wall
+    // time ≈ the single heaviest asset — the skinned ranger rig — not the sum),
+    // and the primitives are disposed only once every real prop has settled, so
+    // there is never an empty gap.
+    const real = new THREE.Group();
+    this.scene.add(real);
+
+    // The bosrand: mixed real trees framing the clearing + path, the left
+    // foreground kept open for the ranger and the centre open for the sand track.
+    // A modest count (kind to the iPad tri budget + boot decode) that still reads
+    // as a Veluwe tree line. [x, z, species, targetHeight(m)] — echo World TREE_BASE_H.
+    const trees: ReadonlyArray<readonly [number, number, TitleTree, number]> = [
+      [-5.2, -7.5, 'prop-pine-scots', 6.4], [-7.0, -11.5, 'prop-oak-tree', 5.6],
+      [-4.0, -13.5, 'prop-birch-tree', 6.0],
+      [5.0, -7.5, 'prop-oak-tree', 5.4], [7.0, -11.5, 'prop-pine-scots', 6.4],
+      [4.2, -14, 'prop-birch-tree', 6.0], [0.7, -18, 'prop-pine-scots', 6.9],
+    ];
+    const treeJobs = trees.map(async ([x, z, id, h], i) => {
+      const m = await loadModel(id);
+      if (!m || this.world) return;
+      const p = prepModel(m, h);
+      p.position.set(x, 0, z);
+      p.rotation.y = (i * 1.3) % (Math.PI * 2); // deterministic facing jitter (no Math.random)
+      this.groundProp(real, p, Math.min(1.4, 0.2 * h));
+    });
+
+    // The prikbord (real case board), cork face angled toward the approach.
+    const boardJob = (async () => {
+      const board = await loadModel('prop-case-board');
+      if (!board || this.world) return;
+      const p = prepModel(board, 1.8);
+      p.position.set(2.6, 0, -5.2);
+      p.rotation.y = -0.5;
+      this.groundProp(real, p, 1.1);
+    })();
+
+    // The ranger's cabin — the world-entry hero — on the left, angled to the clearing.
+    const cabinJob = (async () => {
+      const cabin = await loadModel('prop-ranger-cabin');
+      if (!cabin || this.world) return;
+      const p = prepModel(cabin, 3.0);
+      p.position.set(-6.0, 0, -4.8);
+      p.rotation.y = 0.5;
+      this.groundProp(real, p, 2.2);
+    })();
+
+    // The GROUNDED ranger avatar, standing calmly in the open left lane by the
+    // path. His measured height feeds the scale assert (avatar.height ∈ [1.5,2.0])
+    // the moment he lands; because the skinned rig is the heaviest asset it
+    // typically settles last, so the capture's `avatar()>1` gate doubles as a
+    // "the whole title is dressed" signal.
+    const rangerJob = (async () => {
+      const rig = await loadRig('ranger-alvah');
+      if (!rig || this.world) return;
+      const p = prepModel(rig.group, RANGER_STAND_HEIGHT);
+      p.position.set(-2.3, 0, 2.8);
+      p.rotation.y = Math.PI * 0.86; // face the camera / path — a calm welcome
+      p.traverse((o) => { o.frustumCulled = false; }); // F-11: never cull the hero
+      this.groundProp(real, p, 0.55);
+      // Play the idle clip so he breathes calmly (never a bind-pose T). Idle is
+      // SECONDARY motion → frozen under reduced-motion (contract); update(0) seats
+      // the rest pose immediately so the RM title still shows a natural stance.
+      const idle = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
+      if (idle) {
+        this.titleMixer = new THREE.AnimationMixer(p);
+        this.titleMixer.clipAction(idle).play();
+        this.titleMixer.update(0);
+      }
+      // Expose the grounded title ranger to the scale assert. Measure the SKELETON
+      // (skinnedRenderBox) — the extent that renders — not the bind-pose geometry
+      // box (the F-07 telemetry lie).
+      const box = skinnedRenderBox(p) ?? new THREE.Box3().setFromObject(p);
+      this.titleRangerH = Math.max(box.getSize(new THREE.Vector3()).y, 0);
+    })();
+
+    // Swap: dispose the primitive stand-ins once every real prop has SETTLED
+    // (allSettled, so one missing model never blocks the swap). Guard on real
+    // content — if nothing loaded (zero-asset env) keep the primitives so the
+    // title is never bare (the Models.ts best-effort contract).
+    await Promise.allSettled([...treeJobs, boardJob, cabinJob, rangerJob]);
+    if (this.world || real.children.length === 0) return;
+    if (this.fallbackTrees) {
+      this.scene.remove(this.fallbackTrees);
+      Stage.disposeTree(this.fallbackTrees);
+      this.fallbackTrees = null;
+    }
+  }
+
+  /** Ground a real prop with a soft blob shadow (a child disc, so it rides the
+   *  prop) and add it to `parent` — the same cheap grounding the world uses
+   *  (§2.2: "een zachte slagschaduw grondt het dier ... voorkomt dat het zweeft"). */
+  private groundProp(parent: THREE.Group, group: THREE.Group, radius: number): void {
+    const disc = new THREE.Mesh(
+      new THREE.PlaneGeometry(radius * 2, radius * 2),
+      new THREE.MeshBasicMaterial({ map: Stage.getBlobTexture(), transparent: true, depthWrite: false }),
+    );
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.y = 0.03; // just above the ground, no z-fighting
+    disc.renderOrder = 1;
+    group.add(disc);
+    parent.add(group);
+  }
+
+  /** Free the primitive stand-in's geometry + materials once the real props swap in. */
+  private static disposeTree(root: THREE.Object3D): void {
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const mat = mesh.material;
+      if (Array.isArray(mat)) mat.forEach((mm) => mm.dispose());
+      else if (mat) (mat as THREE.Material).dispose();
+    });
+  }
+
+  /** P1.4: the grounded title ranger's measured render height (m) for the scale
+   *  assert — null until he loads (the world hook's null-before-ready contract). */
+  titleAvatar(): { height: number } | null {
+    return this.titleRangerH > 0 ? { height: this.titleRangerH } : null;
   }
 
   /** F-04: a soft radial blob (dark centre → transparent rim), baked once and
@@ -281,6 +450,9 @@ export class Stage {
         this.renderer.render(this.world.scene, this.world.camera);
       } else {
         this.updateCamera(t);
+        // The title ranger's calm idle breathing is SECONDARY motion → frozen
+        // under reduced-motion (contract); locomotion n/a on the title.
+        if (this.titleMixer && livePolicy().secondaryMotion) this.titleMixer.update(dt);
         this.renderer.render(this.scene, this.camera);
       }
       this.lastDrawCalls = this.renderer.info.render.calls; // F-18: same-frame sample
