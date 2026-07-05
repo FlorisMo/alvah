@@ -706,14 +706,44 @@ test('audit capture flow', async ({ context }, testInfo) => {
     });
   });
 
-  // ══ GROUP 6 — the ven (P1.2). Boot, walk out to the ven-water shore and snap the
-  //    fen. The prior P1.2 grade (2026-07-05) found the ven in ZERO frames — §2.2's
-  //    most distinctive biome (dark still water + reed fringe + moss/peat bank) was
-  //    never on camera, so "each biome reads as real Veluwe ground" was unverifiable.
-  //    The straight line spawn→VEN_CENTER crosses bos, then enters the forced-ven
-  //    shore blob (Biomes.VEN_SHORE_R) around the water, so the walk lands the ranger
-  //    on the reed-fringed bank with the water in frame ahead — the ONE ven frame,
-  //    with the annotation `pos` reading as the ven biome. Own fresh page. ══
+  // ══ GROUP 6 — the prikbord / case-board (P1.5). Boot, open the pause hub, then
+  //    open the prikbord over the LIVE world (its clue + veldnotitie detective
+  //    board, DIRECTION §3.3 — the story's heartbeat). The prior capture only shot
+  //    the mission-PICK board (`board-open`) + the pause hub; the prikbord itself,
+  //    which the P1.5 box names, was a blind spot. Runs BEFORE the timeout-prone
+  //    `ven` group below: the prior P1.5 grade (2026-07-05) found this group appended
+  //    LAST, after `ven`, which exhausted the 30-min test timeout ("annotations end
+  //    on a `ven` GAP") — so `caseboard` never ran and the prikbord frame + the
+  //    `.cb-back` ≥56px assert were never captured. Ordering it ahead of `ven` lets
+  //    the prikbord render inside the test budget regardless of the ven walk. Frames
+  //    it so the grade can judge the prikbord reads as the SAME warm world as the
+  //    pause hub (shared warm scrim + warm cream card) with a legible ≥56px `.cb-back`
+  //    chip. Own fresh page. ══
+  await runGroup('caseboard', {}, async (page) => {
+    await bootWorld(page, isPad);
+    await scene(page, 'caseboard', async () => {
+      await press(page, isPad, page.locator('.explore-pause'));
+      await settle(page, 300);
+      await press(page, isPad, page.locator('.ph-prikbord'));
+      await page.locator('.case-board').waitFor({ timeout: 10_000 });
+      await settle(page, 300);
+      await snap(page, 'caseboard', 'Prikbord',
+        'Het prikbord (P1.5) — het clue/veldnotitie-detectivebord over de levende wereld: leest het als dezelfde warme wereld als de pauze (gedeeld scrim + warm papier-kaart), met een leesbare ≥56px terug-chip?',
+        ['.cb-back']);
+    });
+  });
+
+  // ══ GROUP 7 — the ven (P1.2, DEFERRED). Boot, walk out to the ven-water shore and
+  //    snap the fen. The prior P1.2 grade (2026-07-05) found the ven in ZERO frames —
+  //    §2.2's most distinctive biome (dark still water + reed fringe + moss/peat bank)
+  //    was never on camera, so "each biome reads as real Veluwe ground" was
+  //    unverifiable. The straight line spawn→VEN_CENTER crosses bos, then enters the
+  //    forced-ven shore blob (Biomes.VEN_SHORE_R) around the water, so the walk lands
+  //    the ranger on the reed-fringed bank with the water in frame ahead — the ONE ven
+  //    frame, with the annotation `pos` reading as the ven biome. Runs LAST because it
+  //    is timeout-prone (the long walk out to the far ven basin is what exhausted the
+  //    test budget above): kept after the P1.5 `caseboard` group so a slow ven walk can
+  //    never again starve the prikbord frame. Own fresh page. ══
   await runGroup('ven', {}, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'ven-shore', async () => {

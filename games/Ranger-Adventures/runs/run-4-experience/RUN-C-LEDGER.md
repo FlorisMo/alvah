@@ -83,7 +83,7 @@
 - [x] P1.4 · **Title screen on-style + grounded [both].** Golden-hour backdrop,
   grounded avatar/props, per-sentence ≤7-word subtitle lines. **Verify by:** shot
   (title belongs to the same world as world-entry; subtitle lines ≤7 words).
-- [ ] P1.5 · **Case-board (prikbord) + pause on-style [both].** The hub board and
+- [x] P1.5 · **Case-board (prikbord) + pause on-style [both].** The hub board and
   the pause overlay share the world's palette + one static scrim; legible,
   ≥56 px controls. **Verify by:** shot (board + pause read as the same world; no
   jarring UI skin) + assert (named controls ≥ 56 px).

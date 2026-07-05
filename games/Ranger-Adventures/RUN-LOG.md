@@ -587,3 +587,15 @@ One status block per run/step (BUILD-PLAN §9b).
 ▷ progress: ~9%
 ⚠ blocker: Build phases complete (laptop) — awaiting Floris on-device demo + iPad re-enable (DEMO/DEFERRED boxes in BUILD-LEDGER.md).
 ```
+
+---
+**2026-07-05 02:37:22Z** · ticked: - [x] P1.5 · Case-board (prikbord) + pause on-style [both]. The hub board and
+
+```
+✔ landed: P1.1 · Unify the lighting + sky to the golden-hour touchstone [both].
+▶ phase:  Phase 1 · one naturalistic art direction across all screens  (VISION §13.1 — the cohesion + realism unifier; the single highest-impact lever)
+→ next:   DEFERRED · P1.2 · Naturalistic terrain + ground materials [both]. Replace flat/
+▤ ledger: RUN-C-LEDGER.md
+▷ progress: ~11%
+⚠ blocker: Build phases complete (laptop) — awaiting Floris on-device demo + iPad re-enable (DEMO/DEFERRED boxes in BUILD-LEDGER.md).
+```

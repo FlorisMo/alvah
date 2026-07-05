@@ -480,7 +480,13 @@ function showCaseBoard(fromWorld = false, demoBack?: () => void): void {
     veldStrip +
     `<div class="ra-row">` +
     resolveBtn +
-    `<button class="ra-text-btn cb-back" type="button">${demoBack ? 'Terug naar de demo' : fromWorld ? 'Verder op patrouille' : 'Terug naar de hut'}</button>` +
+    // P1.5: the prikbord's "terug" is the ONE `.ra-chip` pill its siblings use
+    // (mission board `.mb-back`, the pause hub's `.ph-*` leaf chips) — a VISIBLE
+    // ≥56px button, not the old underlined `.ra-text-btn` link (the affordance the
+    // chip token replaced). The `‹` icon is aria-hidden so the accessible name
+    // stays the label text (the frozen pause/veldnotitie e2e click it by name).
+    `<button class="ra-chip cb-back" type="button"><span class="ra-chip-ic" aria-hidden="true">‹</span>` +
+    `<span class="ra-chip-tx">${demoBack ? 'Terug naar de demo' : fromWorld ? 'Verder op patrouille' : 'Terug naar de hut'}</span></button>` +
     `</div>` +
     `</div>`,
   );

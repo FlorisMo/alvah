@@ -67,14 +67,17 @@
   --ease-soft:      cubic-bezier(.4, 0, .2, 1);
   --ease-overshoot: cubic-bezier(.34, 1.56, .64, 1);
 
-  /* — one shared modal scrim (RUN-3 P4.7 · F-29): the SINGLE dark dim painted
-       behind every over-world modal — the pause hub, the mission board, and the
-       briefing / fact / reward / prikbord cards — so a modal never floats on
-       raw, murky world pixels. Plain rgba, NO backdrop-filter; applied as an
-       instant state change → reduced-motion-safe by construction. ~46% keeps
-       the world muted without going black. One source of truth so pause + board
-       read as the same backdrop. — */
-  --modal-scrim: rgba(20, 24, 16, 0.46);
+  /* — one shared modal scrim (RUN-3 P4.7 · F-29; warmed RUN-C P1.5): the SINGLE
+       dim painted behind every over-world modal — the pause hub, the mission
+       board, and the briefing / fact / reward / prikbord cards — so a modal
+       never floats on raw, murky world pixels. Plain rgba, NO backdrop-filter;
+       applied as an instant state change → reduced-motion-safe by construction.
+       P1.5 shifts the hue from the old cool green-black to a WARM golden-dusk
+       brown so every overlay dims the world with the SAME warm tint as the
+       golden-hour touchstone (DIRECTION §2.1/§3) — board + pause read as one
+       warm world, not a cool grey menu. ~50% keeps the world muted (a clear,
+       consistent dim on the pause hub AND the board) without going black. — */
+  --modal-scrim: rgba(28, 21, 11, 0.5);
 
   /* — shadow — */
   --shadow-sm:  0 1px 3px rgba(30, 40, 25, .12);

@@ -324,3 +324,19 @@ catch it early at no cost to the run.
   real Begin→world flow — gate the eager `dressTitleReal()` on a capture/dev flag, or
   cancel/deprioritize the title loads the moment the player navigates away — before P1.4 can go
   green. Do NOT touch `app/e2e/**` (frozen regression guard).
+- 2026-07-05 · grade (P1.5) FAIL, left open: the warm-world half landed — the shared
+  `--modal-scrim` warmed to `rgba(28,21,11,0.5)` reads as a warm golden-dusk dim on both fresh
+  frames (`16-pause-hub` = warm cream pause panel over a warm tint; `28-board-open` = the
+  mission-PICK board's warm cream cards + `mb-back` chip, same warm scrim), on-style per §2.1/§3.
+  BUT the box's OWN named subject is unverified: the prikbord (the clue/veldnotitie detective
+  board, DIRECTION §3.3) with the newly-restyled `.cb-back` ≥56px `.ra-chip` was NEVER captured.
+  The new `caseboard`/`Prikbord` group is appended LAST in `capture.spec.ts` (after the `ven`
+  group), and `ven` exhausts the 30-min test timeout (annotations end on a `ven` GAP:
+  "Test timeout of 1800000ms exceeded"), so `caseboard` never ran — no Prikbord PNG on disk and
+  ZERO `.cb-back` measurement in `annotations-laptop.json`. So the verify-by's shot leg (the
+  prikbord reads as the same warm world) AND its assert leg (named control ≥56 px) both have no
+  evidence; `28-board-open` is the mission-PICK board (`mb-back`), a different screen, not the
+  prikbord (`cb-back`). Fix (builder, not Floris — capture-ordering only): move the `caseboard`
+  group BEFORE the timeout-prone `ven` group (or bound `ven`'s per-group timeout / isolate it) in
+  `app/e2e-capture/**` so the prikbord frame actually renders inside the test budget and the
+  `.cb-back` ≥56px assert exists — before P1.5 can go green. Do NOT touch `app/e2e/**`.
