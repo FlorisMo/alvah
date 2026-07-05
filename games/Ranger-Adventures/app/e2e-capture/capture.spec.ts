@@ -170,6 +170,11 @@ interface Hook {
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; headingUnwrapped: number; speed: number; driverHidden: boolean } | null;
   hint(): { active: string | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
   boundary(): { bound: number; dist: number; atRim: boolean; scatterMax: number } | null;
+  // D1.0(b): win the active 3D mission step via its GENUINE resolve path; true if
+  // one was pending. Lets the player-path game-3d group advance past a first step
+  // to reach dagnacht/wisselen (never a first step) — the same dev hook the frozen
+  // chain.spec.ts drives. Dev-only (`?dev=1`/DEV), so present in the capture build.
+  winStep(): boolean;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -278,16 +283,29 @@ test('audit capture flow', async ({ context }, testInfo) => {
    * One crash-retry: on a page-crash the partial shots are rolled back and the
    * group re-boots once in a brand-new page; a second crash (or a non-crash
    * failure that escaped `scene`) records a single GAP and the flow moves on.
+   *
+   * D1.0(a): each group also runs under a WALL-CLOCK budget (`opts.budgetMs`, 5 min
+   * default). One slow/wedged group can no longer eat the whole test timeout and
+   * starve the groups after it — the Run C 11:27 timeout was the `ven` walk plus a
+   * newPage hang pushing the TOTAL past the cap, taking the later groups down with
+   * it. On a budget overrun the group's page is closed and it is recorded as a
+   * "deels vastgelegd" GAP — the frames it ALREADY flushed are KEPT (honest partial
+   * evidence) and the flow moves on. A budget overrun is NOT retried (a slow group
+   * would just overrun again); the crash-retry path below is unchanged.
    */
   async function runGroup(
     label: string,
-    opts: { reduce?: boolean },
+    opts: { reduce?: boolean; budgetMs?: number },
     body: (page: Page, stick: TouchStick | null) => Promise<void>,
   ): Promise<void> {
+    const budgetMs = opts.budgetMs ?? 300_000;
     for (let attempt = 1; attempt <= 2; attempt++) {
       const nAtStart = n, shotsAtStart = shots.length;
       let page: Page | null = null;
       let stick: TouchStick | null = null;
+      let run: Promise<void> | null = null;
+      let budgetHit = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         // F-21 (P4.7 unblock): `context.newPage()` itself can throw OR HANG with a
         // `Target.createTarget` protocol error once the software renderer is under
@@ -310,11 +328,42 @@ test('audit capture flow', async ({ context }, testInfo) => {
           } catch { /* storage unavailable — boot still fine */ }
         });
         if (isPad) stick = new TouchStick(await context.newCDPSession(page));
-        await body(page, stick);
+        // D1.0(a): race the group body against its wall-clock budget. The body's
+        // scenes flush to disk as they go, so a budget overrun still leaves the
+        // frames captured before it — the loser of the race is swallowed (`.catch`)
+        // so a late rejection after the timeout never goes unhandled.
+        run = body(page, stick);
+        run.catch(() => {});
+        await Promise.race([
+          run,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => {
+              budgetHit = true;
+              reject(new Error(`group "${label}" exceeded its ${Math.round(budgetMs / 1000)}s budget`));
+            }, budgetMs);
+          }),
+        ]);
+        clearTimeout(timer);
         await page.close();
         return; // group done
       } catch (e) {
+        clearTimeout(timer);
         await page?.close().catch(() => {});
+        if (budgetHit) {
+          // Budget overrun: KEEP the scenes already flushed (real evidence). Let the
+          // body fully unwind after the page closed (its in-flight ops reject) so no
+          // shot lands after the marker, then record ONE "deels vastgelegd" GAP and
+          // move on — no retry, and never a rollback of good frames.
+          await Promise.resolve(run).catch(() => {});
+          shots.push({
+            name: label, platform, group: 'GAP', ok: false, file: '',
+            note: `Groep "${label}" overschreed het tijdbudget (~${Math.round(budgetMs / 1000)}s) en is deels vastgelegd — dit is zelf een audit-bevinding; de latere groepen lopen door.`,
+            screen: null, pos: null, cameraYaw: null, drawCalls: null, missionView: null, clip: null, avatar: null, groundSpeed: null, cam: null, veh: null,
+            pixelHash: null, pixelDiff: null, taps: null, viewport: null, hint: null, boundary: null, board: null, rm: null,
+          });
+          flush();
+          return;
+        }
         // discard this attempt's partial shots so the retry (or the GAP) is clean
         n = nAtStart; shots.length = shotsAtStart; flush();
         if (attempt === 1 && isCrash(e)) {
@@ -336,7 +385,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
 
   // ══ GROUP 1 — intro: title → avatar → world → walk burst → controls →
   //    (laptop camera attempts) → pause hub. Own fresh page. ══
-  await runGroup('intro', {}, async (page, stick) => {
+  await runGroup('intro', { budgetMs: 540_000 }, async (page, stick) => {
     await scene(page, 'title', async () => {
       await page.goto('/');
       await page.locator('.boot-title').waitFor({ timeout: 30_000 });
@@ -696,7 +745,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
   //    Assert BOTH: pos clamped (boundary.dist ≤ bound, atRim true) AND the ranger is
   //    actually shown (cam.avatarScreen.visible true — the P4.6 re-judge caught the
   //    boom sinking behind the rim berm so terrain occluded him while onScreen lied). ══
-  await runGroup('boundary', {}, async (page, stick) => {
+  await runGroup('boundary', { budgetMs: 360_000 }, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'boundary', async () => {
       await walkToBoundary(page, isPad, stick);
@@ -745,7 +794,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
   //    can judge each 2D floor reads as the SAME warm golden-hour world (DIRECTION
   //    §2.1/§3: one palette, "tint never darkness" — simon/wisselen were a dark-blue
   //    night before), with drawCalls <150. Own fresh page. ══
-  await runGroup('game-floors', {}, async (page) => {
+  await runGroup('game-floors', { budgetMs: 420_000 }, async (page) => {
     const FLOORS: { ef: string; panel: string; label: string }[] = [
       { ef: 'zoeken',   panel: '.zoeken', label: 'Speurkracht' },
       { ef: 'corsi',    panel: '.route',  label: 'Geheugenkracht' },
@@ -775,48 +824,55 @@ test('audit capture flow', async ({ context }, testInfo) => {
     }
   });
 
-  // ══ GROUP 6c — the five mini-game 3D surfaces (P1.6). The prior P1.6 grade
-  //    (2026-07-05) found the set held ONE 3D mission frame (29-mission-3d, zoeken)
-  //    and NO 3D frame of corsi · simon · dagnacht · wisselen, so §3.5–3.8's distinct
-  //    3D stagings (footprints on terrain · dusk clearing-halfcircle · encounter-plaat
-  //    · open plek/hol) stayed undemonstrated and "all five read as one world" could
-  //    not be judged. The demo sandbox (?sandbox, NO ?flat) launches each EF engine's
-  //    in-place 3D variant (Sandbox.launchEf → resolveViewMode '3d' under WebGL, no
-  //    reduced motion), reframing the camera onto the staged forms — so each renders
-  //    deterministically without driving five separate missions (the ven walk already
-  //    strains the 30-min budget). Sandbox.launchEf now also sets the dev hook to
-  //    screen=mission + missionView=3d for the shot. A fresh goto per engine isolates
-  //    each surface. Frames them so the P1.6 grade can judge each 3D surface reads as
-  //    the SAME warm golden-hour world (DIRECTION §2.1/§2.2: one palette + grounded
-  //    forms with soft contact shadows), with drawCalls <150 and missionView=3d. Own
-  //    fresh page; ordered BEFORE the timeout-prone ven so a slow ven walk can never
-  //    starve these frames. ══
-  await runGroup('game-3d', {}, async (page) => {
-    const GAMES: { ef: string; card: string; speak: string; label: string }[] = [
-      { ef: 'zoeken',   card: '.zoeken-bar',    speak: '.zoeken-speak', label: 'Speurkracht' },
-      { ef: 'corsi',    card: '.route3d-card',  speak: '.route-speak',  label: 'Geheugenkracht' },
-      { ef: 'simon',    card: '.simon3d-card',  speak: '.simon-speak',  label: 'Echokracht' },
-      { ef: 'dagnacht', card: '.dag3d-card',    speak: '.danger-speak', label: 'Rustkracht' },
-      { ef: 'wisselen', card: '.wissel3d-card', speak: '.wissel-speak', label: 'Wisselkracht' },
+  // ══ GROUP 6c — the five mini-game 3D surfaces, on the PLAYER-REACHABLE MISSION
+  //    PATH (D1.0(b), 2026-07-05). The prior set shot each engine via `/?sandbox`,
+  //    which rings the demo scene with billboard sprites (incl. a story-gated WOLF)
+  //    the real mission path NEVER shows — so those frames were NO-evidence for the
+  //    game as played (D0.1; DIRECTION §8.7: "point the harness at the player's
+  //    path"). This group now drives the REAL flow the child walks: board → the
+  //    mission card whose step uses this engine (by `data-id`) → "Ga op pad" → the
+  //    step plays 3D IN-PLACE on the live free-roam world (Missions.runMission §1f —
+  //    the same path the frozen board/chain specs assert), so the frame is the
+  //    shipped screen, no sandbox billboards/wolf in shot.
+  //      • zoeken / corsi / simon are the FIRST step of a mission (frisling /
+  //        ecoduct / nachtronde) → reached directly.
+  //      • dagnacht / wisselen are NEVER a first step (veluwe.ts), so we complete the
+  //        first step through its GENUINE resolve (`__ranger.winStep()`, the dev hook
+  //        the frozen chain.spec.ts drives), clicking through any between-step "Wist
+  //        je dat" fact card, until the target engine's 3D card stages.
+  //    A fresh boot per engine keeps each surface isolated (a stuck mission can't
+  //    cascade). Frames them so the P1.6/GATE-D3 grade can judge each 3D surface
+  //    reads as the SAME warm golden-hour world (§2.1/§2.2: one light, grounded forms
+  //    with soft contact shadow), missionView=3d, drawCalls <150. Heavier than the
+  //    sandbox (a full world boot per engine) → a generous group budget (D1.0(a)); a
+  //    slow engine GAPs without starving the rest. Own fresh page; ordered BEFORE the
+  //    timeout-prone ven so a slow ven walk can never starve these frames. ══
+  await runGroup('game-3d', { budgetMs: 600_000 }, async (page, stick) => {
+    // Per engine: which mission surfaces it, whether it needs a step-advance to reach
+    // it, and the 3D card + read-aloud button its variant mounts. zoeken/corsi/simon
+    // are step 0; dagnacht/wisselen are step 1 (advance:true → winStep past step 0).
+    const GAMES: { ef: string; mission: string; advance: boolean; card: string; speak: string; label: string }[] = [
+      { ef: 'zoeken',   mission: 'frisling',          advance: false, card: '.zoeken-bar',    speak: '.zoeken-speak', label: 'Speurkracht' },
+      { ef: 'corsi',    mission: 'ecoduct',           advance: false, card: '.route3d-card',  speak: '.route-speak',  label: 'Geheugenkracht' },
+      { ef: 'simon',    mission: 'nachtronde',        advance: false, card: '.simon3d-card',  speak: '.simon-speak',  label: 'Echokracht' },
+      { ef: 'dagnacht', mission: 'ree-niet-aanraken', advance: true,  card: '.dag3d-card',    speak: '.danger-speak', label: 'Rustkracht' },
+      { ef: 'wisselen', mission: 'stuifzand',         advance: true,  card: '.wissel3d-card', speak: '.wissel-speak', label: 'Wisselkracht' },
     ];
     for (const g of GAMES) {
       await scene(page, `game3d-${g.ef}`, async () => {
-        // Fresh boot straight into the ?sandbox demo (NO ?flat → the in-place 3D
-        // variant). The presence gate + clean save were seeded in runGroup.
-        await page.goto('/?sandbox');
-        await page.locator('.boot-title').waitFor({ timeout: 30_000 });
-        await press(page, isPad, page.locator('.btn-start'));
-        await page.locator('.sbx-jump-toggle').waitFor({ timeout: 30_000 });
-        await press(page, isPad, page.locator('.sbx-jump-toggle'));
-        const post = page.locator(`.sbx-jump[data-id="${g.ef}"][data-kind="ef"]`);
-        await post.waitFor({ state: 'visible', timeout: 15_000 });
-        await press(page, isPad, post);
-        // The 3D variant mounts its accessible card as it stages the scene — a card
-        // that never appears is itself a finding (bounded → GAP, cf. the floors).
-        await page.locator(g.card).waitFor({ timeout: 20_000 });
+        // Fresh boot → walk to the case-board → open it → pick THIS engine's mission
+        // by data-id → "Ga op pad" (the real player path; runGroup seeded a clean save).
+        await bootWorld(page, isPad);
+        await walkToBoard(page, isPad, stick);
+        await startMissionFromBoard(page, isPad, g.mission);
+        await waitFor(page, (r) => r.missionView === '3d', 25_000);
+        // Land on THIS engine's 3D surface: a first-step engine is already staged; a
+        // second-step engine (dagnacht/wisselen) advances through the first step.
+        if (g.advance) await advanceToStepCard(page, isPad, g.card);
+        else await page.locator(g.card).waitFor({ state: 'visible', timeout: 20_000 });
         await settle(page, 1200); // let the §1e reframe land on the staged forms
         await snap(page, `game3d-${g.ef}`, 'Speelvlakken (3D)',
-          `3D-speelvlak ${g.label} (${g.ef}) — leest de diegetische 3D-staging als dezelfde warme gouden-uur-Veluwe (§2.1/§2.2: één licht, gegronde vormen met zachte slagschaduw), missionView=3d, drawCalls <150?`,
+          `3D-speelvlak ${g.label} (${g.ef}) op het ECHTE missiepad (bord → "${g.mission}" → Ga op pad) — leest de diegetische 3D-staging als dezelfde warme gouden-uur-Veluwe (§2.1/§2.2: één licht, gegronde vormen met zachte slagschaduw), ZONDER sandbox-billboards/wolf, missionView=3d, drawCalls <150?`,
           [g.speak]);
       });
     }
@@ -833,7 +889,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
   //    is timeout-prone (the long walk out to the far ven basin is what exhausted the
   //    test budget above): kept after the P1.5 `caseboard` group so a slow ven walk can
   //    never again starve the prikbord frame. Own fresh page. ══
-  await runGroup('ven', {}, async (page, stick) => {
+  await runGroup('ven', { budgetMs: 360_000 }, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'ven-shore', async () => {
       await walkToVen(page, isPad, stick);
@@ -845,6 +901,11 @@ test('audit capture flow', async ({ context }, testInfo) => {
 
   flush();
   attachSummary(testInfo, shots);
+  // D1.0(c): the fresh set on disk must EQUAL the fresh annotations — remove any PNG
+  // left by an earlier run with different shot numbering (shot indices shift as
+  // groups are added/reordered), so no stale frame sits beside a fresh one to
+  // mislead the judge (a `15-pause-hub` beside a fresh `16-pause-hub` — D1.0 / §8.7).
+  pruneOrphanPngs(dir, shots);
 });
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -927,6 +988,26 @@ async function pixelDiffRatio(page: Page, a: Buffer, b: Buffer): Promise<number>
 function attachSummary(testInfo: TestInfo, shots: Annotation[]): void {
   const gaps = shots.filter((s) => !s.ok).length;
   testInfo.annotations.push({ type: 'capture', description: `${shots.length} shots, ${gaps} gaps` });
+}
+/** D1.0(c): delete any PNG in the platform dir NOT referenced by a fresh shot's
+ *  `file`, so `<platform>/` on disk == the fresh annotations (GAP shots carry an
+ *  empty `file` and protect no PNG). Called once at the end of the flow, after the
+ *  final flush; a rm failure is logged-over, never fatal (evidence beats a crash). */
+function pruneOrphanPngs(dir: string, shots: Annotation[]): void {
+  const keep = new Set(
+    shots.map((s) => s.file).filter(Boolean).map((f) => path.basename(f)),
+  );
+  let removed = 0;
+  let entries: string[] = [];
+  try { entries = fs.readdirSync(dir); } catch { return; }
+  for (const f of entries) {
+    if (!f.toLowerCase().endsWith('.png') || keep.has(f)) continue;
+    try { fs.rmSync(path.join(dir, f)); removed += 1; } catch { /* leave it; a rm miss is not fatal */ }
+  }
+  if (removed) {
+    // eslint-disable-next-line no-console
+    console.log(`[capture] pruned ${removed} orphan PNG(s) not in the fresh ${path.basename(dir)} annotations`);
+  }
 }
 /** A page/renderer death — bubble it so a group can spend its one crash-retry.
  *  Includes the `Target.createTarget` / hung-`newPage` signature (F-21): once the
@@ -1136,6 +1217,50 @@ async function joystickWalkTo(
 
 async function walkToBoard(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
   await walkTo(page, isPad, stick, () => hook(page, (r) => r.board()));
+}
+
+/** D1.0(b): open the case-board and start the mission with the given id — the REAL
+ *  player path (mirrors the frozen chain.spec.ts `startMissionFromBoard`: pick the
+ *  card by `data-id`, then "Ga op pad"). Bounded presses so a control that never
+ *  becomes actionable degrades to this scene's GAP, never a 30-min stall (P0.3). */
+async function startMissionFromBoard(page: Page, isPad: boolean, missionId: string): Promise<void> {
+  const open = page.locator('.explore-board-open');
+  await open.waitFor({ state: 'visible', timeout: 15_000 });
+  await press(page, isPad, open, 15_000);
+  await page.locator('.mission-board').waitFor({ timeout: 10_000 });
+  const cardBtn = page.locator(`.mission-card[data-id="${missionId}"]`);
+  await cardBtn.waitFor({ state: 'visible', timeout: 15_000 });
+  await press(page, isPad, cardBtn, 15_000);
+  const go = page.getByRole('button', { name: 'Ga op pad' });
+  await go.waitFor({ state: 'visible', timeout: 15_000 });
+  await press(page, isPad, go, 15_000);
+}
+
+/** D1.0(b): advance a running mission by `winsNeeded` steps to reach the TARGET
+ *  engine's 3D card, then STOP — the deterministic advance the frozen chain.spec.ts
+ *  uses to reach a mission's later steps (dagnacht/wisselen are never a first step,
+ *  veluwe.ts). Each intermediate step is completed via its GENUINE resolve
+ *  (`__ranger.winStep()`), clicking through any between-step "Wist je dat" fact card.
+ *  CRUCIALLY it fires at most `winsNeeded` wins, so it never wins the TARGET step
+ *  itself (which would complete it before the shot) even if the target's card mounts
+ *  a beat after its win registers. Bails (→ this scene's GAP) if the mission reaches
+ *  its reward first, so a variant that never stages can't silently over-run the whole
+ *  mission; bounded loop → never the 30-min stall (P0.3). */
+async function advanceToStepCard(page: Page, isPad: boolean, targetCard: string, winsNeeded = 1): Promise<void> {
+  const target = page.locator(targetCard);
+  const fact = page.locator('.fact .btn-start');
+  const reward = page.locator('.reward');
+  let wins = 0;
+  for (let i = 0; i < 120; i++) {
+    if (await target.isVisible().catch(() => false)) return; // reached this engine's 3D surface
+    if (await reward.isVisible().catch(() => false)) throw new Error(`mission reached its reward before ${targetCard} staged`);
+    if (await fact.isVisible().catch(() => false)) { await press(page, isPad, fact, 8_000).catch(() => {}); await page.waitForTimeout(150); continue; }
+    // Only win the INTERMEDIATE steps; once winsNeeded are done, wait for the target
+    // step to stage on its own so we never resolve it out from under the shot.
+    if (wins < winsNeeded) { if (await hook(page, (r) => r.winStep())) wins += 1; }
+    await page.waitForTimeout(300);
+  }
+  throw new Error(`3D card ${targetCard} never staged while advancing the mission`);
 }
 /** F-11: walk OUT to the world rim and stop when the gentle-stop latch trips
  *  (`boundary.atRim` — the ease-to-zero stop + "Hier stopt het bos" cue engaged).

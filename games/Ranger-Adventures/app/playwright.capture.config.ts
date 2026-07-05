@@ -48,8 +48,15 @@ export default defineConfig({
   retries: 0,
   reporter: [['list']],
   outputDir: './test-results',
-  timeout: 1_800_000, // one project walks the whole flow; each world boot streams ~13 MB of GLBs (~3 min on
-                      // this machine), so 2 boots + the walk-to-jeep/board detours want generous headroom.
+  // One project walks the WHOLE flow (one test). The flow has grown well past the
+  // "2 boots" this cap was first sized for: ~10 scene groups, each booting a world
+  // (the first streams ~13 MB of GLBs, ~3 min; later boots hit the warm HTTP cache),
+  // and the game-3d group (D1.0(b)) now drives FIVE real missions instead of the
+  // cheap sandbox. So the ceiling is raised to 45 min — a backstop, not the expected
+  // ~25–30 min runtime. The real guard against a runaway is per-GROUP wall-clock
+  // budgets in capture.spec.ts (D1.0(a)): one slow/wedged group GAPs and the flow
+  // continues, so this whole-test cap only fires if MANY groups overrun at once.
+  timeout: 2_700_000,
   use: {
     baseURL: `http://localhost:${PORT}`,
     // A real GPU locally renders the world fine headed or headless; capture runs

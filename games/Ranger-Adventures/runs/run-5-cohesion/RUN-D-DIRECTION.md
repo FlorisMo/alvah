@@ -131,8 +131,16 @@ heideplas with reeds. Targets:
   F-07 float-precision family, even though the frustum follows in code).
   Grounding may never depend on the skinned shadow pass at range: blob
   fallback or recentring (→ RUN-D-LEDGER D3.14).
-- **Everything seated on `heightAt`** — Run B's P5.5 floating rim-prop is the
-  cautionary tale; a floating prop breaks the whole naturalism argument.
+- **One ground truth: the rendered terrain mesh** (D0.2, 2026-07-05 —
+  runs/animation-research.md §4). The ranger's and the vehicles' Y comes from
+  a raycast against the REAL rendered terrain (hit-point + foot offset,
+  velocity projected along the face-normal slope tangent, steep slopes
+  clamped; `three-mesh-bvh` keeps it cheap) — never from a parallel analytic
+  `heightAt` that can disagree with the pixels: the fresh `39-ven-shore`
+  buries the ranger to his hair exactly where the two diverge (ledger
+  D1.2/P1.5a). Props stay seated on `heightAt` only where it provably matches
+  the mesh — Run B's P5.5 floating rim-prop is the cautionary tale; a
+  floating OR sunken thing breaks the whole naturalism argument.
 
 ### 2.3 Trees & props — one fidelity
 
@@ -184,6 +192,17 @@ Global rules (all from the research):
   lateral undulation (3d-animal §A5). Secondary motion (ears/tail lag) and
   idle breathing ~0.2–0.4 Hz make the calm world feel alive; ALL of it
   freezes under reduced-motion except locomotion (contract).
+  **Clips outrank procedural bob (D0.2, 2026-07-05 — animation-research
+  §1–§3):** a rigged model playing a real idle/walk clip beats a static
+  photoreal mesh with a sine-bob, so the sourcing order is rigged-CC0 first
+  (Quaternius / poly.pizza) → zero-credit rigging of kept meshes (Meshy
+  in-app rig · Sketchfab CC0/CC-BY · Blender Rigify baked to keyframes) →
+  Meshy regen only where looks or coverage fail (§5 note). No NEW animal
+  ships static except as a logged deliberate choice. A sourced pack model
+  must still pass this section's must-reads AND §2.3's one-fidelity rule AT
+  FOLLOW DISTANCE — audition ONE in-world frame per species before any
+  cast-wide swap; flat-shaded low-poly beside the realistic prop cast is a
+  style break, not a shortcut.
 
 Per-animal signature targets for the Meshy prompts (each = the dossier's
 "onmiskenbare kenmerken", the judge's checklist when accepting a model):
@@ -221,7 +240,9 @@ push-in, never a swoop; reduced-motion turns every camera move into a cut
 (contract). Kop/gewei tilt slightly so species markers read from the game
 angle (§A6: "kantel kop/gewei licht zodat kenmerken van bovenaf leesbaar
 blijven"). Framing rule from Run B's hard lessons: the follow camera must
-always land OUTSIDE terrain/props, and hero subjects (board, mission target)
+always land OUTSIDE terrain/props — and never UNDER the terrain (D0.2: the
+fresh simon-3D player-path frame was shot from `cam.y` −1.29 below ground
+with an up-tilt; ledger D1.3) — and hero subjects (board, mission target)
 must be in-frustum at their beat — asserted via the dev-hook booleans
 (`cam.avatarInView`, `cam.landmarkInView`).
 
@@ -343,6 +364,11 @@ badge gets a calm on-style moment (bloei-achtig, per ontwerp-brief §2 stap 4)
 > D4.0b's zero-credit rig paths (Meshy in-app rig · Sketchfab CC0/CC-BY ·
 > Blender Rigify). The ranking, never-scary notes and acceptance gate below
 > stay in force for every model that DOES go through Meshy.
+> **D0.2 (2026-07-05) validated this order** and added the audition rule
+> (§2.4): one in-world follow-distance frame per sourced species, judged
+> against §2.4 must-reads + §2.3 one-fidelity, BEFORE it replaces the cast —
+> free never buys a style break. The story-gated wolf stays excluded even
+> though Quaternius ships one for free.
 
 **Budget basis:** ~7,600 credits authorized (VISION §6). The shotlist's own
 calibration (asset-shotlist.json header: 76 items fit in ~9,000 cr with
@@ -484,6 +510,12 @@ A screen/game is **done** when ALL hold — this ends "optimize until happy":
    provably differ (`pixelHash`) — RUN-D-LEDGER D1.1. And a Playwright-green
    exit is NOT evidence of coverage: the 12:19 run exited "passed" while a
    whole scene GAPped — "green" means green WITH all groups complete (D1.0).
+   Equally no-evidence (D0.2, 2026-07-05): a frame shot from a camera BELOW
+   the terrain (fresh simon-3D, `cam.y` −1.29, up-tilt — ledger D1.3), and a
+   dev-hook visibility boolean the pixels contradict — the fresh set has both
+   directions (`39-ven-shore` holds `avatarScreen.visible` true while the
+   ranger is buried to his hair; simon-3D holds it false while he is plainly
+   in frame). Hooks are asserts; pixels are the court.
 
 **No re-litigating:** once a screen passes a gate it is frozen unless a later
 box forces it (VISION §10).
@@ -547,6 +579,38 @@ pair → new D1.1. Doc refinements this sitting: §2.5 records the frozen 55°
 lens pin, §2.2 the grounding-at-range rule, §8.7 the settle + green-with-GAP
 lessons. Phase order confirmed: playability → Alvah's truth → cohesion →
 realism → felt progress. No frozen contract and no §2.4 Alvah correction was
+touched.
+
+**D0.2 validation (2026-07-05, Fable art director, against
+runs/animation-research.md IN FULL + the fresh 13:54–14:27 capture):** the
+research is adopted whole — no verdict overruled. Ranking of the
+research-derived boxes: **D1.2 KEPT** as the Phase-1 locomotion foundation
+(fresh `39-ven-shore` buries the ranger to his hair on the ven slope again —
+the `heightAt`/mesh divergence is current, not historic); **D4.0a KEPT**
+leading Phase 4, sharpened with the audition-at-follow-distance rule (§2.4/§5)
+so a stylized CC0 pack can never side-load a §2.3 style break; **D4.0b KEPT**
+(raaf/das/zwijn/frisling have no CC0 animated source — the zero-credit rig
+paths are their only non-spend route); **P5.6 KEPT** in Phase 7 (polish tier;
+needs Phase-4 rigs to exist first). The research's free Quaternius wolf stays
+excluded — the story-gate outranks free coverage; foot-IK and cannon-es stay
+shelf options exactly as written. New pixel facts folded in: the in-flight
+D1.0 re-point WORKS — the three captured game-3D frames are TRUE player-path
+frames showing NO billboard ring and NO wolf (that breach was sandbox-only);
+the REAL player-path staging is primitives on bare ground (zoeken: egg-frisling
++ blob-gras beside the board; corsi: no route field at all; simon: dark lumps
+with name-chips) — ledger D3.4–D3.8 evidence updated, fix targets unchanged.
+The 13:54 run still ran 32.7 min and GAPped board (~300s cap) + game-3d
+(~600s cap; dagnacht + wisselen 3D frames missing) + reduce-motion-toggle
+(same `.explore-pause` timeout) — D1.0 stays the first work box. The zoom
+pair now pixel-differs but still shoots pre-settle (`cam.dist` 4.07 vs
+`zoom.dist` 9.5) — D1.1 confirmed. NEW gap → ledger D1.3: simon-3D was shot
+from UNDER the terrain (the game's own §1e mission reframe) and corsi
+near-straight-down off its playfield — mission-entry camera above terrain +
+task-in-frustum. Doc refinements this sitting: §2.2 one-ground-truth (the
+rendered mesh), §2.4 clips-outrank-bob + the audition rule, §2.5 the
+never-under-terrain clause, §8.7 under-terrain/hook-vs-pixel no-evidence.
+Phase-1 preamble + Phase-4 sourcing order re-read coherently against the
+ledger and this doc. No frozen contract and no §2.4 Alvah correction was
 touched.
 
 ---
