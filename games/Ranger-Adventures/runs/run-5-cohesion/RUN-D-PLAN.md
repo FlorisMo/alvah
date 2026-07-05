@@ -47,9 +47,17 @@ world, realistic animals, felt progress, woven systems, polish.**
   legitimately changes, e.g. the Alvah child height.)
 - **Capture output path stays** `runs/run-3-ux-polish/audit-evidence/`
   (hardcoded in the harness; the shared evidence dir for all runs).
-- **Ground the work in the in-repo research** (`games/Ranger-Adventures/research/`):
+- **Ground the work in the in-repo research** (`games/Ranger-Adventures/research/`
+  plus `runs/animation-research.md`):
+  **`runs/animation-research.md` (Floris's 2026-07-05 deep-research — FIRST
+  READ for locomotion + animal animation; it SUPERSEDES older research where
+  they conflict: raycast ground-snap over any physics engine §4; rigged CC0
+  animated sources before Meshy regen §1; zero-credit rigging paths §2;
+  spring bones for secondary motion §3; KIMODO + AI4Animation assessed and
+  rejected as non-web/non-commercial)**,
   `3d-autonomous-sourcing-physics-world.md` §C for the Phase-1 character
-  controller (three-mesh-bvh/BVHEcctrl or Rapier+ecctrl options),
+  controller (three-mesh-bvh/BVHEcctrl or Rapier+ecctrl options — now the
+  FALLBACK lens, not the first move),
   `animal-visual-accuracy.md` + `bird-visual-accuracy.md` for species realism,
   `veluwe-research.md` for biome ground truth, `3d-animal-animation-research.md`
   + `humans-full-animals-eyes-research.md` for rig/gait/gaze/eyes,
@@ -218,3 +226,4 @@ everything feel/audio/device.
 - 2026-07-05 D0.1: `33-boundary-rim` shows the ranger shadowless at ~70 m while `06-walk-1` near spawn has the long soft shadow → appended D3.14 (grounding shadow across the walkable range; skinned shadow pass dies at range though the frustum follows, World.ts:3064).
 - 2026-07-05 D0.1: the frozen e2e pins `fov = 55` (vehicle.spec.ts:144, heli.spec.ts:132) — direction doc §2.5 refined to record the pin; the ~35–45° research lens is OUT of reach this run and no box may chase it (a builder chasing it would break the frozen suite).
 - 2026-07-05 D0.1: the story-gated WOLF sprite appears in ALL FIVE fresh game3d frames (sandbox ring, confirmed `/?sandbox` at capture.spec.ts:806) — D3.4–D3.7's "no wolf / staged GLBs" legs are never-scary-critical, and D1.0's player-path re-point is what makes those five frames judgeable at all.
+- 2026-07-05 (pause-window integration, Fable planner sitting with Floris): Floris's animation/physics deep-research landed as `runs/animation-research.md` and was folded into the run docs — D0.2 appended (Fable ranks the research-derived work), D1.2 (raycast ground-truth) + D4.0a/D4.0b (rigged-CC0-first sourcing + zero-credit rigging) + P5.6 (spring bones) appended, the Phase-1 preamble + Phase-4 sourcing order + P1.5a/b + P2.1 rewritten off the kinematic/Meshy-only assumption. Deps installed in app/: `three-mesh-bvh` (MIT) + `@pixiv/three-vrm-springbone` (MIT); cannon-es deliberately NOT installed (shelf option). KIMODO + AI4Animation assessed and rejected (not mobile-Safari-feasible; AI4Animation non-commercial). Mixamo (human re-rig path) needs a free Adobe ID = Floris login — boxes that hit it print NEEDS-FLORIS.

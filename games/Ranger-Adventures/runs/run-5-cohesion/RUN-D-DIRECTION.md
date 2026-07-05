@@ -332,6 +332,18 @@ badge gets a calm on-style moment (bloei-achtig, per ontwerp-brief §2 stap 4)
 
 ## 5. RANKED MESHY ASSET LIST (impact-per-credit, VISION §6/§6a)
 
+> **SOURCING-ORDER UPDATE (2026-07-05 — runs/animation-research.md; D0.2 may
+> refine this note).** Meshy meshes arrive STATIC; the research's core finding
+> is that a rigged low-poly model with a real walk cycle beats a static
+> photoreal mesh with a procedural bob. So this table is no longer the FIRST
+> move for animals: per ledger D4.0a, rigged CC0 animated packs (Quaternius /
+> poly.pizza, native glTF + baked clips) are tried first for the species they
+> cover; a table row below is spent only where sourcing fails looks (§2.4
+> must-reads) or coverage — and anything regenerated then gets clips via
+> D4.0b's zero-credit rig paths (Meshy in-app rig · Sketchfab CC0/CC-BY ·
+> Blender Rigify). The ranking, never-scary notes and acceptance gate below
+> stay in force for every model that DOES go through Meshy.
+
 **Budget basis:** ~7,600 credits authorized (VISION §6). The shotlist's own
 calibration (asset-shotlist.json header: 76 items fit in ~9,000 cr with
 ~7,500 spare) puts a text-to-3D generate+refine at roughly **~20 cr per
@@ -400,10 +412,28 @@ vertex colours). Recommendations, in order of confidence:
    colour/height breakup and calm procedural variation (heather patchiness,
    sand ripples). Pure math, no rendering cost beyond what we author, no
    network, trivially contract-safe.
-2. **`three-mesh-bvh` (MIT)** — RECOMMENDED IF prop-seating / camera
-   ground-probing raycasts get hot while seating hundreds of instanced props
-   on `heightAt` (§2.2) or hardening the follow-camera's terrain checks
-   (P1.0). Self-contained, widely used, no runtime network.
+2. **`three-mesh-bvh` (MIT — INSTALLED 2026-07-05)** — for the Phase-1
+   locomotion raycasts (the D1.2 ground-snap: character + jeep wheel rays,
+   runs/animation-research.md §4) and IF prop-seating / camera ground-probing
+   raycasts get hot while seating hundreds of instanced props on `heightAt`
+   (§2.2) or hardening the follow-camera's terrain checks. Self-contained,
+   widely used, no runtime network.
+2a. **`@pixiv/three-vrm-springbone` (MIT — INSTALLED 2026-07-05)** — Verlet
+   spring bones for gentle tail/ear/secondary sway on the hero animals
+   (ledger P5.6; research §3). Usable standalone on any bone chain (no VRM
+   avatar needed); a handful of joints is negligible on iPad; must freeze to
+   idle under both reduce-motion gates.
+2b. **Physics engines — deliberately NOT installed.** The research verdict
+   (§4): the sink/stick bugs are fixed by the no-engine raycast ground-snap.
+   If burst-assert evidence ever proves an engine is needed: **cannon-es
+   (MIT, ~33 kB) first**, rapier (Apache-2.0, ~1.4–1.9 MB WASM + async init)
+   a last resort. Never install one "to be safe".
+2c. **Rejected after assessment (research §2–§3):** NVIDIA KIMODO
+   (Apache-2.0 but Python/GPU, human-only — cannot run in mobile Safari),
+   AI4Animation (research-only / CC BY-NC — legally unshippable), Anything
+   World / DeepMotion / Rokoko (cloud, subscription or per-call). Do not
+   re-research these. Mixamo (free Adobe ID) IS sanctioned for human re-rigs
+   — offline output, but the login is Floris's (NEEDS-FLORIS when reached).
 3. **Build-time only, optional (does not touch the runtime bundle):** the
    read-aloud research (voice-tts-readaloud-research.md) recommends a
    **Piper TTS (MIT) pre-bake** of static Dutch lines + forced-aligned word

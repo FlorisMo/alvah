@@ -65,6 +65,30 @@
   playability → Alvah's truth → cohesion → realism → felt progress. Change NO
   game code. **Verify by:** the doc + ledger are committed as the run's first
   act; every downstream phase carries real, specific boxes.
+- [ ] D0.2 · **DIRECTION · validate + refine RUN-D-DIRECTION.md + this ledger against the animation/physics deep-research** (2)
+  — Floris's 2026-07-05 deep-research is
+  [runs/animation-research.md](../animation-research.md) — read it IN FULL.
+  Its verdicts, in brief: fix locomotion with a raycast ground-snap, NO
+  physics engine yet (cannon-es MIT is the sanctioned fallback, rapier a last
+  resort); source rigged CC0 ANIMATED animals (Quaternius / poly.pizza)
+  BEFORE spending Meshy credits on static regens; rig kept static meshes via
+  Meshy's free in-app rig (0 credits) or Blender Rigify offline; humans via
+  Mixamo (free Adobe ID — a Floris login); gentle spring bones
+  (`@pixiv/three-vrm-springbone`, MIT, already installed, as is
+  `three-mesh-bvh`) for tails/ears; NVIDIA KIMODO + AI4Animation were
+  assessed and REJECTED (not mobile-Safari-feasible; AI4Animation is
+  non-commercial-licensed). The Fable art director now: (a) folds what it
+  AGREES with into RUN-D-DIRECTION.md (§2.4 sourcing order, §5 credit plan,
+  §7 deps) — where fresh pixels or the frozen contracts argue otherwise it
+  may deviate from the research, recording why in RUN-D-PLAN.md §8; (b)
+  RANKS the research-derived boxes (D1.2 · D4.0a · D4.0b · P5.6) by impact
+  for THIS game — keep, sharpen, re-order within their phase, or park to
+  DEFERRED.md with a reason — deciding what is worth the next Opus sittings;
+  (c) checks that the revised Phase-1 preamble + Phase-4 sourcing order read
+  coherently against the rest of the ledger. Change NO game code.
+  **Verify by:** doc + ledger committed as one refinement; every
+  research-derived box is explicitly kept / sharpened / parked with a
+  RUN-D-PLAN.md §8 line.
 
 ## Phase 1 · PLAYABILITY FIRST — correctness before any more polish  (Floris demo 2026-07-05: sank through floor · jeep sticks-and-slides · cannot enter heli)
 
@@ -72,11 +96,18 @@
 > screenshot gate cannot see (the Run-1 false-green trap) — so each is verified
 > by the capture harness DRIVING the action and asserting real dev-hook state,
 > NOT by a static shot, and each ALSO carries a +demo Floris must confirm on the
-> real iPad. READ FIRST: research/3d-autonomous-sourcing-physics-world.md §C
-> (character controller — three-mesh-bvh/BVHEcctrl or Rapier+ecctrl). Prefer an
-> in-repo fix; a NEW well-licensed (MIT/Apache/CC0/BSD) self-contained dep IS
-> authorized (Run C contract, carried) where it clearly fixes the controller and
-> holds the budget, and web-search/fetch for the current best fit is allowed.
+> real iPad. READ FIRST: **runs/animation-research.md §4** (Floris's 2026-07-05
+> deep-research — it SUPERSEDES research/3d-autonomous-sourcing-physics-world.md
+> §C where they conflict): the recommended fix is **NO physics engine** — a
+> raycast-down ground-snap against the real rendered terrain (hit-point + foot
+> offset, velocity projected along the face-normal slope tangent, steep-slope
+> clamp), a 4-wheel-ray / damped hover for the jeep, `three-mesh-bvh` (MIT,
+> installed) to keep those raycasts cheap. An engine (cannon-es MIT first,
+> rapier WASM last) only if the burst-asserts prove the no-engine path cannot
+> pass — decide on evidence, not preference. Prefer an in-repo fix; a NEW
+> well-licensed (MIT/Apache/CC0/BSD) self-contained dep IS authorized (Run C
+> contract, carried) where it clearly fixes the controller and holds the
+> budget, and web-search/fetch for the current best fit is allowed.
 > Every fix still holds <150 draw calls, pixelRatio ≤2, iPad-first, build +
 > e2e:smoke green, motion-comfort + never-scary, no runtime network/telemetry/
 > CDN, no new localStorage keys. NB the current controller
@@ -87,8 +118,9 @@
 
 - [ ] D1.0 · **Capture harness fit for Run D: green inside its budget + honest evidence [laptop]** (from Run C P1.10/P1.15 capture legs; re-verified 2026-07-05: the "audit capture flow" test timed out at its 30-min cap at 11:27 — the `ven` group + a transient newPage protocol error — and the `40–44 game3d-*` frames shoot `/?sandbox`, NOT the mission path the player reaches, while orphan PNGs from older shot-numbering runs still sit beside fresh ones under `laptop/`). This box is harness-only (`app/e2e-capture/**`), no game code, and lands FIRST because every Phase-1 drive-burst box adds scenes to this harness: (a) bound/isolate the slow groups so the whole capture finishes green inside the budget, with a retry on the newPage protocol error; (b) shoot each of the 5 games' 3D surface on the player-reachable mission path (not the sandbox), keeping the five 2D-floor frames; (c) make capture REMOVE orphan PNGs not present in the fresh annotations. **Verify by:** `npm run capture` exits green with all groups complete; fresh set contains named player-path frames for all five games ×{3D, 2D floor} with per-frame `drawCalls` <150; every PNG under `laptop/` matches a shot in `annotations-laptop.json`.
 - [ ] D1.1 · **Capture frames wait for camera-settle; the zoom pair must provably differ [laptop]** (D0.1 append, 2026-07-05 — fresh `12-camera-zoom-in` and `13-camera-zoom-out` are two IDENTICAL pre-settle void frames: shot 13's annotation holds `cam.dist` 1.67 against `zoom.dist` 9.5, so the eased dolly never moved before the snap; a pre-settle frame is no-evidence, direction doc §8.7). Harness-only (`app/e2e-capture/**`), no game code: before every camera/zoom/orbit/reframe snap, wait until the eased `cam.dist` is within ~5% of its target (`zoom.dist` for the zoom pair) with a bounded timeout that GAPs honestly on failure; assert the zoom-in vs zoom-out `pixelHash` values differ. **Verify by:** fresh annotations show `cam.dist` ≈ `zoom.dist` on both zoom shots AND a differing `pixelHash` between them; no new GAP entries in the fresh set.
-- [ ] P1.5a · **The ranger never sinks through the floor/terrain [both] +demo** — ground the character controller so the ranger stays ON the terrain + solid props everywhere he can walk (spawn, slopes, the dunes behind spawn, hub, the ven shore, every mission scene). D0.1 pixel proof (2026-07-05): fresh `45-ven-shore` shows him sunk to the NECK in the ven-bowl slope — the visual-terrain/`heightAt` disagreement reproduces ON LAPTOP, not only on Floris's device. Expose dev-hook `grounded` (boolean) + foot-clearance (ranger y minus terrain height). Extend the capture harness (app/e2e-capture/**, allowed) to walk a burst across spawn → slope → dune → the ven-bowl shore. **Verify by:** drive-assert (`grounded`=true every frame of the walk burst AND foot-clearance ≥0 — never below terrain — across spawn/slope/dune/ven-shore) + shot (feet on the ground in the ven-shore frame too, no half-buried frame); drawCalls <150. +demo: Floris walks the real iPad over the dunes without falling through.
-- [ ] P1.5b · **The jeep actually drives — it translates through the world, no stick-and-slide [both] +demo** — pressing drive moves the jeep's WORLD POSITION forward along its heading with believable ground contact; no sliding-in-place, no snap. Expose the jeep's per-frame world-position delta on the dev hook (`vehicle().position` already exists as x/z). Extend the harness to drive a forward + held-turn burst. **Verify by:** drive-assert (`vehicle()` x/z displacement ≫0 and monotonic along heading across the drive burst, jeep stays grounded, heading changes smoothly with no wrap-jump) + shot (jeep visibly further along the track between frames). +demo: Floris drives on the real device and it moves naturally, not stuck.
+- [ ] D1.2 · **Locomotion foundation: one raycast ground-truth under every walkable surface [both]** (research-derived, 2026-07-05 — see the Phase-1 preamble; D0.2 may re-rank) — replace/underpin the `heightAt` Y-write in the controller path (`render3d/CharacterController.ts` + World.ts:870/977) with a raycast-down ground-snap against the REAL rendered terrain + solid-prop meshes: cast from above the head, place the body at hit-point + foot offset, project the desired velocity along the face-normal slope tangent, clamp steep slopes (~45°) as unwalkable; use the installed `three-mesh-bvh` (MIT) if the per-frame raycasts get hot. NO physics engine unless the burst-asserts prove this path cannot pass (then cannon-es MIT before rapier — record why in RUN-D-PLAN.md §8). Expose `grounded` (boolean) + foot-clearance on the dev hook here — P1.5a asserts them across the wider world. **Verify by:** drive-assert (a spawn → slope walk burst holds `grounded`=true AND foot-clearance ≥0 every frame) + assert (drawCalls <150; build + e2e:smoke green; motion-comfort law untouched).
+- [ ] P1.5a · **The ranger never sinks through the floor/terrain [both] +demo** (builds on D1.2's ground-truth) — ground the character controller so the ranger stays ON the terrain + solid props everywhere he can walk (spawn, slopes, the dunes behind spawn, hub, the ven shore, every mission scene). D0.1 pixel proof (2026-07-05): fresh `45-ven-shore` shows him sunk to the NECK in the ven-bowl slope — the visual-terrain/`heightAt` disagreement reproduces ON LAPTOP, not only on Floris's device. Expose dev-hook `grounded` (boolean) + foot-clearance (ranger y minus terrain height). Extend the capture harness (app/e2e-capture/**, allowed) to walk a burst across spawn → slope → dune → the ven-bowl shore. **Verify by:** drive-assert (`grounded`=true every frame of the walk burst AND foot-clearance ≥0 — never below terrain — across spawn/slope/dune/ven-shore) + shot (feet on the ground in the ven-shore frame too, no half-buried frame); drawCalls <150. +demo: Floris walks the real iPad over the dunes without falling through.
+- [ ] P1.5b · **The jeep actually drives — it translates through the world, no stick-and-slide [both] +demo** — pressing drive moves the jeep's WORLD POSITION forward along its heading with believable ground contact; no sliding-in-place, no snap. Ground contact per runs/animation-research.md §4.5: a 4-wheel-point raycast average (or a damped hover/spring toward target height), NEVER a hard per-frame Y-snap — that is the "magnetically welded" stick Floris felt. Expose the jeep's per-frame world-position delta on the dev hook (`vehicle().position` already exists as x/z). Extend the harness to drive a forward + held-turn burst. **Verify by:** drive-assert (`vehicle()` x/z displacement ≫0 and monotonic along heading across the drive burst, jeep stays grounded, heading changes smoothly with no wrap-jump) + shot (jeep visibly further along the track between frames). +demo: Floris drives on the real device and it moves naturally, not stuck.
 - [ ] P1.5c · **The helicopter can be enabled in Instellingen AND entered [both] +demo** — wire the whole path end-to-end: the `helikopter` toggle in Instellingen is reachable + tappable (≥56 px, on-screen — COUPLE with the Instellingen sticky-exit fix D3.10 so it isn't below the fold), turning it on makes `heliAvailable` true, the "🚁 Stap in de helikopter" affordance appears at a pad, and tapping it enters. NB `heli().available` is false under reduced-motion BY DESIGN (flight withheld, not calmed) — the harness scene must run with reduced-motion OFF. Extend the harness to open Instellingen → toggle helikopter on → walk to a pad → enter. **Verify by:** drive-assert (the helikopter toggle bounding-box inside the viewport + ≥56 px; after toggling on `heli().available`=true; at the pad `heli().near`=true; after the enter tap `heli().inHeli`=true) + shot (the toggle on-screen in Instellingen; the enter affordance at the pad). +demo: Floris turns it on in Settings and flies pad-to-pad on the real iPad.
 - [ ] GATE-D1 · **Fable re-judge — is the game mechanically TRUE?** (2) Capture;
   re-run the three drive-assert scenes; read the burst annotations frame by
@@ -124,7 +156,22 @@
 
 ## Phase 4 · realistic animals  (from Run C Phase 2 — untouched by Run C; credits spread wisely, flagships + raven + ranger FIRST)
 
-- [ ] P2.1 · **Upgrade the player ranger (Alvah) — `meshy-gen.mjs --only=ranger-alvah`** (2) [both] +demo. Regenerate to higher realism per the doc, optimize (gltf→optimize-animated, <150 draw calls), never-scary, Fable-judged; keep the avatar-creator + `alvah-ef-v1` persistence intact. MUST PRESERVE the Phase-2 truth: child ≈1.2 m proportions + blonde wavy hair + blue eyes (doc §2.4 — if P1.6b already regenerated him, this box may be a no-op: verify + tick). Log credit spend. **Verify by:** shot (ranger reads as a believable child, belongs in the world) + assert (`avatar.height` ∈ [1.1,1.35], draw-call budget held). **Face/feel: demo.**
+> **SOURCING ORDER — research-first (2026-07-05, runs/animation-research.md
+> §1–§3; supersedes the meshy-only assumption this phase was written under).**
+> Animals must MOVE, not only look real: a static photoreal mesh with a
+> procedural bob loses to a rigged model with a real walk cycle. So for every
+> ANIMAL box below: (1) FIRST try the D4.0a-sourced rigged CC0 model
+> (Quaternius / poly.pizza — baked clips through THREE.AnimationMixer); if it
+> meets the §2.4 must-reads + never-scary at gameplay distance, the meshy
+> regen is a NO-OP — verify + tick without spending. (2) Meshy regen stays the
+> path where sourcing fails looks or coverage — then rig the result via
+> D4.0b's zero-credit paths so nothing new ships static. NO wolf model enters
+> the world either way (story-gate). Fable's D0.2 ranking may re-order or
+> park anything here; the credit-spend log records source + license per model.
+
+- [ ] D4.0a · **Rigged CC0 animals sourced + walking in-game — before meshy regen spends a credit [both]** — per runs/animation-research.md §1: pull the Quaternius CC0 animated animal packs (native glTF, baked idle/walk/run clips) via quaternius.com / poly.pizza for the species they cover (deer/stag → ree + edelhert candidates, fox → vos; verify per model that clips are present and the look fits doc §2.4), run each through the existing `gltf-optimize`/`optimize-animated` pipeline, swap the static stand-in in the staged cast, and play real idle↔walk clips through THREE.AnimationMixer keyed to ground speed — `ProceduralMotion.ts` stays as the fallback for still-static species, and clips settle to a calm idle under both reduce-motion gates. Log source + CC0 license per model in the spend log (0 credits). **Verify by:** shot (each swapped species reads real AND belongs at follow distance, calm-posed) + assert (the walking animal's active clip name exposed on the dev hook and ≠ procedural during a walk burst; drawCalls <150; frozen e2e scale spec stays green).
+- [ ] D4.0b · **Every kept animal gets real clips — zero-credit rigging (meshy in-app rig or offline) [both]** — for the species D4.0a cannot cover (raaf + fledgling, das, wildzwijn + frisling, eekhoorn, adder, nachtzwaluw, heikikker — whichever D0.2's ranking keeps): give each baked idle/walk (or fly/coil) clips WITHOUT new generation spend, options per runs/animation-research.md §2, chosen per model on evidence: (a) Meshy's free in-app rig+animate (0 credits, humanoid + quadruped; its web-app step may need Floris at the browser — then print NEEDS-FLORIS naming the exact models and move on), (b) a Sketchfab / poly.pizza CC0 or CC-BY rigged replacement (log the attribution), (c) Blender Rigify offline (bake actions to plain deform-bone keyframes BEFORE glTF export or the rig is dead in three.js). A bird/reptile that resists rigging keeps ProceduralMotion deliberately — record that choice in the spend log. **Verify by:** assert (each kept species either plays a real clip on the dev hook or carries a logged deliberate-procedural line; drawCalls <150) + shot (moving animals read calm, never-scary).
+- [ ] P2.1 · **Upgrade the player ranger (Alvah) — `meshy-gen.mjs --only=ranger-alvah`** (2) [both] +demo. Regenerate to higher realism per the doc, optimize (gltf→optimize-animated, <150 draw calls), never-scary, Fable-judged; keep the avatar-creator + `alvah-ef-v1` persistence intact, and the regenerated GLB must keep (or regain — Mixamo re-rig is the sanctioned path, free Adobe ID = a Floris login, so NEEDS-FLORIS if it comes to that) the baked idle+walk blending of PlayerAnim.ts/PlayerRig.ts — a regen that ships him static is a regression, not an upgrade. MUST PRESERVE the Phase-2 truth: child ≈1.2 m proportions + blonde wavy hair + blue eyes (doc §2.4 — if P1.6b already regenerated him, this box may be a no-op: verify + tick). Log credit spend. **Verify by:** shot (ranger reads as a believable child, belongs in the world) + assert (`avatar.height` ∈ [1.1,1.35], draw-call budget held). **Face/feel: demo.**
 - [ ] P2.2 · **Upgrade the raven companion — `meshy-gen.mjs --only=animal-raaf-raven` (+ `animal-raaf-fledgling`)** (2) [both]. Realistic + never-scary across the baby→jong→zelfstandig growth; the companion-care loop unchanged. **Verify by:** shot (raven reads as a real raven, calm) + assert (draw-call budget; companion state intact).
 - [ ] P2.3 · **Flagship via meshy: edelhert — `meshy-gen.mjs --only=animal-edelhert-reddeer`** (2) [both]. Believable proportions/texture, calm-posed. **Verify by:** shot (looks-real AND belongs; reject+regenerate otherwise) + assert (draw calls).
 - [ ] P2.4 · **Flagship via meshy: wildzwijn — `meshy-gen.mjs --only=animal-wildzwijn-boar`** (2) [both]. Realistic, never-scary (calm, not charging). **Verify by:** shot + assert.
@@ -167,6 +214,7 @@
 - [ ] P5.3 · **Reduce-motion sweep across the new work [both] +demo.** Everything Run D added respects the motion-comfort law under both RM gates (OS media + the in-game "Rustige beweging" toggle): camera moves become cuts, secondary motion freezes at idle, locomotion still animates. **Verify by:** shot set + pixel-diff (idle near-zero) + assert (`.rm` via both gates). **On-device: demo.**
 - [ ] P5.4 · **Full re-capture + triage.** One clean `npm run capture`; sweep the WHOLE flow for anything the phase gates missed; append boxes for survivors. **Verify by:** shot (complete fresh laptop set).
 - [ ] P5.5 · **Mission-beat frames in the capture: briefing → task → reunion [laptop]** (from Run C, poort-append) — extend `app/e2e-capture/**` to walk missie 1 (frisling) through its briefing, task and reunion beats and shoot each. **Verify by:** fresh set contains the three beat frames with annotations (`screen`/`missionView` correct per beat; drawCalls <150).
+- [ ] P5.6 · **Gentle secondary motion: spring-bone sway on hero-animal tails/ears [both]** (research-derived, 2026-07-05 — see runs/animation-research.md §3; D0.2 may re-rank or park) — wire the installed `@pixiv/three-vrm-springbone` (MIT; usable standalone on any bone chain, no VRM avatar needed) onto the tail/ear chains of the 1–3 hero animals nearest the camera (raven, edelhert, vos — as ranked), tuned to a calm damped sway, frozen to idle under both reduce-motion gates; skip unrigged species. NO foot-IK this run unless a gate demands it for a camera-close hero (THREE.IK is lightly maintained — pin + test against r184 if ever adopted). **Verify by:** shot (the hero animal reads alive and calm — no jitter, no cartoon wobble) + assert (`.rm` freeze holds via both gates; drawCalls <150).
 - [ ] GATE-D7 · **FINAL Fable re-judge — the whole game against the direction doc.**
   (3) Capture; re-judge every screenshot-closable box across all phases —
   mechanical truth (Phase 1 drive-asserts re-run), Alvah's truth, cohesion across
