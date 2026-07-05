@@ -56,6 +56,10 @@ export class Stage {
   private fallbackTrees: THREE.Group | null = null;
   private titleMixer: THREE.AnimationMixer | null = null;
   private titleRangerH = 0; // measured render height of the title ranger (m); 0 = not loaded
+  // P1.4 smoke fix: flips true the instant the player taps "Begin" (markLeavingTitle)
+  // or enters the world, so the async title dress stops decoding GLBs on the boot-
+  // critical Begin→world path — the eager concurrent decode starved journey/movement.
+  private leavingTitle = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -140,13 +144,13 @@ export class Stage {
     this.addMissionBoard(group, blobs);
     this.addBlobShadows(group, blobs);
     this.scene.add(group);
-    // P1.4 regrade: kick the real-GLB swap off IMMEDIATELY — NOT behind
-    // requestIdleCallback. At the title the world is not booting yet (that only
-    // starts on "Begin"), so there is no boot-critical load to yield to, and the
-    // old `whenIdle` park meant the decode never even started inside the capture's
-    // wait window — the swap missed the snap and the frame showed bare primitives
-    // (drawCalls 12, avatar null). The dynamic import in dressTitleReal yields once,
-    // so the primitives still paint on the first frame before the reals decode.
+    // P1.4: kick the real-GLB swap off now (the primitives paint first — the
+    // dynamic import yields a frame). It loads the props SEQUENTIALLY and BAILS the
+    // instant the player taps "Begin" (markLeavingTitle), so it never starves the
+    // Begin→world boot the way the earlier all-at-once concurrent decode did — that
+    // kept ~10 GLB parses chewing the main thread through the smoke journey and
+    // timed it out. A player who dwells on the title — and the capture harness —
+    // still gets the fully dressed golden-hour world (RUN-C-DIRECTION §3.1).
     void this.dressTitleReal().catch(() => { /* zero-asset safe: primitives stay */ });
   }
 
@@ -264,22 +268,30 @@ export class Stage {
    * nothing floats) and lit by the ONE shared golden rig already on this scene.
    */
   private async dressTitleReal(): Promise<void> {
-    if (this.world) return; // already in the world — the title dressing is moot
+    if (this.world || this.leavingTitle) return; // already leaving/left the title — dressing is moot
     const Models = await import('./Models');
     await Models.loadManifest();
-    if (this.world) return; // navigated away while the chunk loaded
+    if (this.world || this.leavingTitle) return; // navigated away while the chunk loaded
     const { loadModel, loadRig, prepModel, skinnedRenderBox } = Models;
 
-    // P1.4 regrade: add the real-props group to the scene UP FRONT and append
-    // each prop AS it decodes, so the title fills in incrementally and its
-    // draw-call count climbs toward world-entry parity — instead of the old
-    // all-or-nothing add at the very END, which left a slow decode snapping bare
-    // primitives (drawCalls 12, avatar null). Every load runs CONCURRENTLY (wall
-    // time ≈ the single heaviest asset — the skinned ranger rig — not the sum),
-    // and the primitives are disposed only once every real prop has settled, so
-    // there is never an empty gap.
+    // P1.4 smoke fix: load the real props ONE AT A TIME and BAIL the moment the
+    // player leaves the title. The earlier version fired ~10 GLB decodes CONCURRENTLY
+    // at every boot; when the smoke test tapped "Begin" a beat later they kept
+    // chewing the main thread through the Begin→world→movement path and timed the
+    // journey + movement @smoke out. Sequential + bail bounds the boot-path cost to
+    // the single prop already mid-decode when "Begin" is tapped (the 30 s smoke
+    // budget absorbs one), while a player who DWELLS on the title still fills the
+    // scene in incrementally. The ranger rig loads LAST, so `titleAvatar()>1` still
+    // doubles as "the title is fully dressed" for the capture snap gate.
     const real = new THREE.Group();
     this.scene.add(real);
+    // Bail cleanly if the player leaves the title mid-load: drop the partial group
+    // (NEVER dispose it — the clones SHARE the world's id-cached geometry/materials,
+    // so disposing here would corrupt the props the world reuses) and keep the
+    // primitive stand-ins so the title is never bare. `bail()` always returns true,
+    // so `left() && bail()` only removes + signals a return when we have left.
+    const left = (): boolean => this.world !== null || this.leavingTitle;
+    const bail = (): true => { this.scene.remove(real); return true; };
 
     // The bosrand: mixed real trees framing the clearing + path, the left
     // foreground kept open for the ranger and the centre open for the sand track.
@@ -291,43 +303,48 @@ export class Stage {
       [5.0, -7.5, 'prop-oak-tree', 5.4], [7.0, -11.5, 'prop-pine-scots', 6.4],
       [4.2, -14, 'prop-birch-tree', 6.0], [0.7, -18, 'prop-pine-scots', 6.9],
     ];
-    const treeJobs = trees.map(async ([x, z, id, h], i) => {
+    for (let i = 0; i < trees.length; i++) {
+      if (left() && bail()) return;
+      const [x, z, id, h] = trees[i];
       const m = await loadModel(id);
-      if (!m || this.world) return;
+      if (left() && bail()) return;
+      if (!m) continue;
       const p = prepModel(m, h);
       p.position.set(x, 0, z);
       p.rotation.y = (i * 1.3) % (Math.PI * 2); // deterministic facing jitter (no Math.random)
       this.groundProp(real, p, Math.min(1.4, 0.2 * h));
-    });
+    }
 
     // The prikbord (real case board), cork face angled toward the approach.
-    const boardJob = (async () => {
-      const board = await loadModel('prop-case-board');
-      if (!board || this.world) return;
+    if (left() && bail()) return;
+    const board = await loadModel('prop-case-board');
+    if (left() && bail()) return;
+    if (board) {
       const p = prepModel(board, 1.8);
       p.position.set(2.6, 0, -5.2);
       p.rotation.y = -0.5;
       this.groundProp(real, p, 1.1);
-    })();
+    }
 
     // The ranger's cabin — the world-entry hero — on the left, angled to the clearing.
-    const cabinJob = (async () => {
-      const cabin = await loadModel('prop-ranger-cabin');
-      if (!cabin || this.world) return;
+    if (left() && bail()) return;
+    const cabin = await loadModel('prop-ranger-cabin');
+    if (left() && bail()) return;
+    if (cabin) {
       const p = prepModel(cabin, 3.0);
       p.position.set(-6.0, 0, -4.8);
       p.rotation.y = 0.5;
       this.groundProp(real, p, 2.2);
-    })();
+    }
 
-    // The GROUNDED ranger avatar, standing calmly in the open left lane by the
-    // path. His measured height feeds the scale assert (avatar.height ∈ [1.5,2.0])
-    // the moment he lands; because the skinned rig is the heaviest asset it
-    // typically settles last, so the capture's `avatar()>1` gate doubles as a
-    // "the whole title is dressed" signal.
-    const rangerJob = (async () => {
-      const rig = await loadRig('ranger-alvah');
-      if (!rig || this.world) return;
+    // The GROUNDED ranger avatar, standing calmly in the open left lane by the path.
+    // He loads LAST (heaviest asset + the capture's "fully dressed" signal): his
+    // measured height feeds the scale assert (avatar.height ∈ [1.5,2.0]) and the
+    // capture's `avatar()>1` snap gate the moment he lands.
+    if (left() && bail()) return;
+    const rig = await loadRig('ranger-alvah');
+    if (left() && bail()) return;
+    if (rig) {
       const p = prepModel(rig.group, RANGER_STAND_HEIGHT);
       p.position.set(-2.3, 0, 2.8);
       p.rotation.y = Math.PI * 0.86; // face the camera / path — a calm welcome
@@ -347,14 +364,14 @@ export class Stage {
       // box (the F-07 telemetry lie).
       const box = skinnedRenderBox(p) ?? new THREE.Box3().setFromObject(p);
       this.titleRangerH = Math.max(box.getSize(new THREE.Vector3()).y, 0);
-    })();
+    }
 
-    // Swap: dispose the primitive stand-ins once every real prop has SETTLED
-    // (allSettled, so one missing model never blocks the swap). Guard on real
-    // content — if nothing loaded (zero-asset env) keep the primitives so the
-    // title is never bare (the Models.ts best-effort contract).
-    await Promise.allSettled([...treeJobs, boardJob, cabinJob, rangerJob]);
-    if (this.world || real.children.length === 0) return;
+    // Swap: dispose the primitive stand-ins now every real prop has settled. Guard
+    // on real content — a zero-asset env keeps the primitives so the title is never
+    // bare (the Models.ts best-effort contract). Only the primitive STAND-INS are
+    // disposed (we own them); the real props are never disposed here (see `bail`).
+    if (left() && bail()) return;
+    if (real.children.length === 0) return;
     if (this.fallbackTrees) {
       this.scene.remove(this.fallbackTrees);
       Stage.disposeTree(this.fallbackTrees);
@@ -424,9 +441,21 @@ export class Stage {
     return this.lastDrawCalls;
   }
 
+  /** P1.4 smoke fix: the player tapped "Begin" — stop the async title dress from
+   *  decoding any more GLBs so it never competes with the world boot on the
+   *  Begin→world→movement path (the eager concurrent decode timed the journey +
+   *  movement @smoke out at every boot). Called SYNCHRONOUSLY in the Begin handler,
+   *  BEFORE `enterWorld` (which only fires once the world is already built — too
+   *  late to matter). At most one prop is mid-decode when this flips, which the
+   *  smoke budget absorbs; a player who dwells on the title still gets the dress. */
+  markLeavingTitle(): void {
+    this.leavingTitle = true;
+  }
+
   /** Hand rendering to an explorable world (keeps the one renderer + budget overlay). */
   enterWorld(world: { scene: THREE.Scene; camera: THREE.PerspectiveCamera; update: (dt: number, t: number) => void }): void {
     this.world = world;
+    this.leavingTitle = true; // in the world → title dressing is moot (belt-and-suspenders with markLeavingTitle)
     this.resize();
   }
 

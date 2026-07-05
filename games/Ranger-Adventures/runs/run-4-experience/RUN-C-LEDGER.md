@@ -80,7 +80,7 @@
   consistent material language with the staged prop cast; no low-poly outlier
   next to a realistic asset. **Verify by:** shot (tree line + props read as one
   world) + assert (draw-call budget held).
-- [ ] P1.4 · **Title screen on-style + grounded [both].** Golden-hour backdrop,
+- [x] P1.4 · **Title screen on-style + grounded [both].** Golden-hour backdrop,
   grounded avatar/props, per-sentence ≤7-word subtitle lines. **Verify by:** shot
   (title belongs to the same world as world-entry; subtitle lines ≤7 words).
 - [ ] P1.5 · **Case-board (prikbord) + pause on-style [both].** The hub board and

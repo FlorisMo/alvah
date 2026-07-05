@@ -79,6 +79,10 @@ card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', a
   // Unlock audio FIRST, synchronously in the tap (iOS gesture rule) — before
   // the awaited dynamic import breaks the user-activation chain.
   Sound.unlock();
+  // P1.4 smoke fix: the player is leaving the title — tell the stage NOW (before the
+  // awaited world/avatar import) so the async title dress stops decoding GLBs and
+  // never starves the Begin→world→movement boot (the eager decode timed smoke out).
+  stage.markLeavingTitle();
   card.classList.add('boot-card--hidden');
   window.setTimeout(() => card.remove(), 360);
   if (deepDemoStart) {
