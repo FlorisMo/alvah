@@ -355,3 +355,31 @@ catch it early at no cost to the run.
   Fix (builder, not Floris — no device/decision/asset): bring the other four games' 3D engines onto
   the golden-hour rig AND extend `app/e2e-capture/**` to shoot each game's 3D surface (overlaps P1.10)
   so all five 3D + 2D read as one world — before P1.6 can go green. Do NOT touch `app/e2e/**`.
+- 2026-07-05 · art director (P1-gate sitting, fresh 06:29 laptop set) — SUPERVISOR MISROUTE FOUND +
+  FIXED IN THE LEDGER TEXT: `run-c-loop.sh` picks and routes boxes by grepping a box's FIRST line, so
+  work boxes whose text contained "GATE-P0 append"/"retry from Run B DEFERRED"/"RUN-C-DIRECTION §2.4"
+  were being served as phase gates (this sitting was served P1.10 as a "gate") or invisibly skipped
+  (P1.7–P1.9 never ran). Reworded all poisoned box lines (no supervisor-script change — it is running)
+  and added a wording rule to the ledger Notes so future appends stay routable. Then the REAL phase-1
+  re-judge on the fresh pixels: P1.0 STANDS (27-board-affordance: board face + papers presented, ranger
+  whole in frame at believable scale; near+inFrustum true, avatar 1.70, dc 45). P1.1 STANDS (title/
+  world-entry/mission 29 share the warm key; dc 24/52/25). P1.4 STANDS (title = real cabin/board/trees/
+  grounded ranger, subtitles 5+7 words). P1.5 STANDS (pause + prikbord one warm overlay language;
+  `.ph-back`/`.mb-back`/`.cb-back` all ≥56 px on-screen — the previously-missing prikbord evidence now
+  exists as 34-caseboard). P1.3 RE-OPENED: the "heather" props are glossy faceted PURPLE CRYSTAL
+  polyhedra (unmistakable at close range in 13-camera-zoom-out, scattered through 01-title/14-orbit) —
+  they read as gemstones beside the realistic cabin/board GLBs; the tree cast itself (birch/oak/pine,
+  mixed sizes in 14/45) is fine — fix the prop leg (matte heather mats per doc §2.2, or seat the staged
+  `prop-heather-shrub`). P1.6 RE-OPENED: the four newly-shot 3D surfaces (41–44) are a bare tan void
+  ringed with flat PHOTO-SPRITE billboards — wolf sprites in corsi/simon/dagnacht/wisselen (story-gated
+  animal, never-scary breach), a boulder-sized coiled adder (canon ~55–60 cm), a ghost-white human
+  cutout, the ranger himself a 2D sprite — and the staging is primitives on a void ("reekalf in het
+  gras" = a cream egg on bare dirt, "open plek"/"het hol" = disc + dome), nothing like doc §3.4–3.8;
+  ALSO an evidence-validity hole: the game3d group shoots `/?sandbox`, not the mission path the player
+  reaches (29-mission-3d differs structurally), so the shipped 3D surfaces for corsi/simon/dagnacht/
+  wisselen remain unproven — appended P1.15 for the billboard cast + representative capture. Side
+  notes: the reduce-motion-toggle scene GAPs (`.explore-pause` resolves, click times out 10 s — no
+  instellingen frame in the fresh set at all; noted on P1.9); 45-ven-shore still shows ZERO water/reeds
+  (the parked P1.2 stays real for Floris's batch); P1.11's scope now names the game-scene label chips;
+  the fresh 2D floors (35–39) are genuinely on-style — good work, kept. GATE-P1 NOT ticked: open boxes
+  remain (P1.3, P1.6, P1.7–P1.15).

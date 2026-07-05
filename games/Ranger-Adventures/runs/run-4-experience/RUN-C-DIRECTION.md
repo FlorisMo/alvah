@@ -416,6 +416,13 @@ A screen/game is **done** when ALL hold — this ends "optimize until happy":
    the annotation; no contract regression.
 6. **Feel/audio/device claims stay open:** anything needing feel, audio, real
    Safari or the real iPad caps at "implemented — awaiting Floris demo".
+7. **The shot is the shipped screen (P1-gate lesson, 2026-07-05):** a capture
+   frame counts as evidence only when it shows the surface the player actually
+   reaches (the real mission path, the real overlays). A dev/sandbox route that
+   stages a screen differently proves nothing about the game — `/?sandbox`
+   ringed every mini-game with billboard sprites (incl. a story-gated wolf)
+   that the mission path may never show. Point the harness at the player's
+   path, or the judge must treat the frame as no-evidence.
 
 **No re-litigating:** once a screen passes a gate it is frozen unless a later
 box forces it (VISION §10).
