@@ -28,7 +28,7 @@ import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/d
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { Highlight3d, anchoredPrompt, makeReframe, registerActivityWin, activityScopeSignal } from '../play/kit';
+import { Highlight3d, anchoredPrompt, contactShadow, makeReframe, registerActivityWin, activityScopeSignal } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -37,7 +37,9 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
  *  activity — a low-poly blob keeps it never-scary + cheap). Returns the group. */
 function buildSubject(): THREE.Group {
   const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color: '#b98a5a', roughness: 0.9 });
+  // P1.6 (DIRECTION §2.1): a hair less matte so the low golden key gives the calm
+  // subject a warm rim, reading as a real animal in the encounter-plaat, not a puzzle blob.
+  const mat = new THREE.MeshStandardMaterial({ color: '#b98a5a', roughness: 0.85 });
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.34, 4, 8), mat);
   body.position.y = 0.36;
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), mat);
@@ -67,6 +69,11 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
     subject.position.set(sx, sy, sz + 0.4);
     const restZ = subject.position.z;
     scene.add(subject);
+    // P1.6 (DIRECTION §2.2): a soft contact shadow grounds the subject at its rest
+    // spot so it belongs on the golden-hour ground (a small away-lean never lifts it).
+    const shadow = contactShadow(0.42);
+    shadow.position.set(sx, sy + 0.02, restZ);
+    scene.add(shadow);
     const highlight = new Highlight3d(subject, '#ffe6a8');
 
     // ---- §1e reframe onto the subject (cuts under reduced-motion) ----
@@ -168,6 +175,9 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
         if (m) m.dispose();
       });
       (subject.userData.mat as THREE.Material).dispose();
+      scene.remove(shadow); // P1.6: free the contact shadow
+      shadow.geometry.dispose();
+      (shadow.material as THREE.Material).dispose();
       ctx.prompt.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
       resolve(summary);
     }

@@ -87,14 +87,18 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       const { x, z } = worldOf(s);
       const group = new THREE.Group();
       group.position.set(x, sy + 0.02, z);
+      // P1.6 (DIRECTION §2.1/§3.5: footprints on terrain under the golden key): a
+      // touch less matte than roughness 1 so the low warm sun gives the sand print a
+      // soft highlight and it reads as pressed warm sand, not a flat puzzle decal —
+      // the same "sit in the naturalistic world" pass zoeken's tufts got.
       const mat = new THREE.MeshStandardMaterial({
-        color: baseHue, emissive: showHue.clone(), emissiveIntensity: 0, roughness: 1,
+        color: baseHue, emissive: showHue.clone(), emissiveIntensity: 0, roughness: 0.9,
       });
       const disc = new THREE.Mesh(new THREE.CircleGeometry(0.34, 16), mat);
       disc.rotation.x = -Math.PI / 2;
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(0.34, 0.42, 18),
-        new THREE.MeshStandardMaterial({ color: '#9c8a64', roughness: 1 }),
+        new THREE.MeshStandardMaterial({ color: '#9c8a64', roughness: 0.9 }),
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.001;

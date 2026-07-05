@@ -43,6 +43,20 @@
   --heath-mid:  #8a9a55;
   --heath-near: #6d8a45;
 
+  /* — 2D-floor golden-hour ground (RUN-C P1.6): the ONE warm world the five
+       mini-game 2D floors share — the flat twin of Lighting.ts's single 3D rig
+       (DIRECTION §2.1/§3). Before this each floor hand-picked its own base: cold
+       green heath (zoeken/corsi), a DARK-BLUE NIGHT (simon/wisselen) that broke
+       §2.1's "tint, never darkness", warm tan (dagnacht) — so a 2D floor read as a
+       different game. Now every floor builds its ground + dusk + scrim from THESE,
+       so the palette can't diverge. All warm-keyed: sunlit tops, warm-earth cores,
+       schemer never black — golden hour everywhere, exactly like the 3D world. — */
+  --floor-scrim: rgba(28, 21, 11, 0.4);   /* warm golden-dusk dim framing a floor (modal-scrim family) */
+  --floor-heath: radial-gradient(125% 90% at 50% 0%, #c7c47e 0%, #8f9a55 52%, #6d8446 100%);  /* sunlit heide/bos (zoeken) */
+  --floor-sand:  radial-gradient(125% 92% at 50% 4%, #d9c088 0%, #b39a63 55%, #8a7043 100%);   /* warm zand/bosbodem (corsi · dagnacht) */
+  --floor-dawn:  radial-gradient(125% 92% at 50% 0%, #d8c07e 0%, #b0904f 55%, #856637 100%);   /* open-plek dag (wisselen) */
+  --floor-dusk:  radial-gradient(125% 95% at 50% 0%, #caa15e 0%, #9a6f42 55%, #6f4f30 100%);   /* gouden schemer (simon · het hol) */
+
   /* — radii — */
   --spel-radius:    14px;
   --spel-radius-lg: 20px;

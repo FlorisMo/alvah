@@ -9,7 +9,7 @@
   grid-template-rows: auto 1fr;
   gap: 14px;
   padding: max(16px, env(safe-area-inset-top)) 16px 20px;
-  background: rgba(30, 26, 20, 0.3);
+  background: var(--floor-scrim);            /* RUN-C P1.6: shared warm golden-hour scrim */
   backdrop-filter: blur(2px);
 }
 
@@ -48,7 +48,9 @@
   border-radius: var(--spel-radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
-  background: radial-gradient(120% 90% at 50% 0%, #b9a070 0%, #8c7a4e 55%, #6a5a38 100%);
+  /* RUN-C P1.6: the same warm zand/bosbodem as the other floors (tokens.css
+     --floor-sand) — the encounter "plaat" stays golden-hour, one world. */
+  background: var(--floor-sand);
 }
 .danger-field.slowmo { transition: filter 0.4s; filter: saturate(0.85) brightness(1.04); }
 

@@ -87,7 +87,7 @@
   the pause overlay share the world's palette + one static scrim; legible,
   ≥56 px controls. **Verify by:** shot (board + pause read as the same world; no
   jarring UI skin) + assert (named controls ≥ 56 px).
-- [ ] P1.6 · **Each of the 5 game surfaces on-style (3D + 2D floor) [both].**
+- [x] P1.6 · **Each of the 5 game surfaces on-style (3D + 2D floor) [both].**
   zoeken · corsi · simon · dagnacht · wisselen each read as the same naturalistic
   Veluwe (their diegetic ranger framings, VISION §5), 2D floor included; no
   bolted-on-puzzle look. **Verify by:** shot (all five, 3D + 2D floor, on-style)

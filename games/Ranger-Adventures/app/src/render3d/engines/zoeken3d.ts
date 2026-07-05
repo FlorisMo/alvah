@@ -98,10 +98,14 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     // decoys = neutral heath tufts; the target = a calm still animal blob in the
     // mission colour ("drukt zich" — it does not move, exactly like the 2D tell).
-    const decoyMat = new THREE.MeshStandardMaterial({ color: '#6f7d3f', roughness: 1, flatShading: true });
+    // P1.6: soft rounded heath tufts, NOT flat-shaded low-poly gems — a smooth-
+    // shaded clump (detail 1) picks up the golden key's warm highlight so the decoys
+    // sit in the naturalistic world instead of reading as a bolted-on puzzle prop
+    // (DIRECTION §2.3: no low-poly outlier beside the realistic world).
+    const decoyMat = new THREE.MeshStandardMaterial({ color: '#75823f', roughness: 0.95 });
     for (const d of trial.decoys) {
       const { dx, dz } = placeLocal(d.x, d.y);
-      const tuft = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 0), decoyMat);
+      const tuft = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 1), decoyMat);
       tuft.position.set(sx + dx, sy + 0.3, sz + dz);
       tuft.userData.id = `decoy:${d.id}`;
       patch.add(tuft);

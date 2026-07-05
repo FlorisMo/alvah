@@ -9,7 +9,7 @@
   grid-template-rows: auto 1fr;
   gap: 14px;
   padding: max(16px, env(safe-area-inset-top)) 16px 20px;
-  background: rgba(30, 40, 25, 0.28);
+  background: var(--floor-scrim);            /* RUN-C P1.6: shared warm golden-hour scrim */
   backdrop-filter: blur(2px);
 }
 
@@ -48,7 +48,9 @@
   border-radius: var(--spel-radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
-  background: radial-gradient(120% 90% at 50% 10%, #9aa86a 0%, #7c8c4c 60%, #5f7a3f 100%);
+  /* RUN-C P1.6: footprints read on warm zand/bosbodem (DIRECTION §3.5), not cold
+     green — the shared golden-hour ground (tokens.css --floor-sand). */
+  background: var(--floor-sand);
 }
 .route-grass {
   position: absolute;
@@ -112,5 +114,5 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(20, 30, 15, 0.25);
+  background: var(--floor-scrim);            /* RUN-C P1.6: warm dusk scrim, not cool green */
 }

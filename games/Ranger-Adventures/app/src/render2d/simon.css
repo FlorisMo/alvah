@@ -1,5 +1,8 @@
 /* ============================================================
-   simon.css — the 2D "sound-echo" (Simon) view. Dusk palette.
+   simon.css — the 2D "sound-echo" (Simon) view. Golden-dusk palette
+   (RUN-C P1.6): DIRECTION §3.6 asks for "dusk-tinted golden hour (schemer
+   without darkness)", not the old dark-blue NIGHT that broke §2.1's
+   "tint, never darkness" and read as a different game.
    ============================================================ */
 
 .simon {
@@ -9,7 +12,7 @@
   grid-template-rows: auto 1fr;
   gap: 14px;
   padding: max(16px, env(safe-area-inset-top)) 16px 20px;
-  background: rgba(18, 20, 34, 0.32);
+  background: var(--floor-scrim);            /* RUN-C P1.6: shared warm golden-hour scrim */
   backdrop-filter: blur(2px);
 }
 
@@ -52,17 +55,20 @@
   border-radius: var(--spel-radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-lg);
-  background: radial-gradient(120% 90% at 50% 0%, #3a3f63 0%, #272b46 55%, #1a1d30 100%);
+  /* RUN-C P1.6: golden schemer (tokens.css --floor-dusk) — a warm amber dusk,
+     NOT dark-blue night; the dieren gather in a calm golden-hour clearing (§3.6). */
+  background: var(--floor-dusk);
 }
 .simon-sky {
   position: absolute;
   inset: 0;
+  /* First faint warm evening stars (schemer sparkle), not cold white night dots. */
   background:
-    radial-gradient(2px 2px at 18% 18%, rgba(255, 255, 255, 0.8) 50%, transparent 50%),
-    radial-gradient(2px 2px at 42% 12%, rgba(255, 255, 255, 0.7) 50%, transparent 50%),
-    radial-gradient(2px 2px at 72% 22%, rgba(255, 255, 255, 0.8) 50%, transparent 50%),
-    radial-gradient(2px 2px at 88% 14%, rgba(255, 255, 255, 0.6) 50%, transparent 50%);
-  opacity: 0.7;
+    radial-gradient(2px 2px at 18% 18%, rgba(255, 240, 214, 0.55) 50%, transparent 50%),
+    radial-gradient(2px 2px at 42% 12%, rgba(255, 236, 206, 0.45) 50%, transparent 50%),
+    radial-gradient(2px 2px at 72% 22%, rgba(255, 240, 214, 0.5) 50%, transparent 50%),
+    radial-gradient(2px 2px at 88% 14%, rgba(255, 236, 206, 0.4) 50%, transparent 50%);
+  opacity: 0.5;
 }
 
 .simon-banner {
@@ -72,7 +78,7 @@
   padding: 8px 16px;
   justify-self: center;
   border-radius: var(--radius-pill);
-  background: rgba(10, 8, 16, 0.5);
+  background: var(--modal-scrim);            /* RUN-C P1.6: warm dusk chip, not near-black cool */
   color: var(--paper);
   font: 600 18px/1.2 var(--font-body);
 }
@@ -134,5 +140,5 @@
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(12, 14, 26, 0.4);
+  background: var(--floor-scrim);            /* RUN-C P1.6: warm dusk scrim, not cool blue-black */
 }

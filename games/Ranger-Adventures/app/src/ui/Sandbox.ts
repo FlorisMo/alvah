@@ -21,6 +21,7 @@ import type { Step } from '../content/types';
 import { Content } from '../content/registry';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { resolveViewMode, variantFor } from '../render3d/play/ViewMode';
+import { setScreen, setMissionView } from '../core/devhook';
 import { REGISTRY_3D } from '../render3d/play/registry';
 import { playZoeken } from '../render2d/ZoekenView';
 import { playRoute } from '../render2d/RouteView';
@@ -34,6 +35,13 @@ import { showMetaDemo } from './Missions';
 const PLAY_2D: Record<string, (host: HTMLElement, step: Step) => Promise<BeatSummary>> = {
   zoeken: playZoeken, corsi: playRoute, simon: playSimon, dagnacht: playDanger, wisselen: playWissel,
 };
+
+/** `?flat` (dev/capture only) forces every sandbox EF activity to its always-available
+ *  2D floor — the same `force2d` branch Missions uses for "Platte weergave". It lets
+ *  the capture harness (RUN-C P1.6) render each engine's 2D floor deterministically from
+ *  the `?sandbox` demo without driving five separate missions. Mirrors showroom's
+ *  `?scale`/`?dress` and main's `?sandbox`/`?demo` dev params; a no-op in normal play. */
+const FLAT_2D: boolean = new URLSearchParams(location.search).has('flat');
 
 /** WebGL support, probed once — gates the in-place 3D activity (else the 2D floor),
  *  matching Missions. The sandbox only renders because the Stage renderer is live, so
@@ -150,10 +158,16 @@ export function startSandbox(ui: HTMLElement, stage: Stage, onExit: () => void):
       sceneLive: true,
       webglCapable: WEBGL_OK,
       reducedMotion: prefersReducedMotion(),
-      force2d: false,
+      force2d: FLAT_2D, // ?flat (dev/capture) → the 2D floor, else the in-place 3D variant
       registry: REGISTRY_3D,
     });
     showChrome(false);
+    // P1.6: reflect the live surface on the dev hook while the activity owns the
+    // screen — so a capture of a sandbox game frame carries honest `screen=mission`
+    // + `missionView=2d|3d` (the prior floors read a stale `screen=title`). Mirrors
+    // the mission runner's setScreen/setMissionView pair; cleared in the finally.
+    setScreen('mission');
+    setMissionView(mode);
     try {
       if (mode === '3d') {
         const variant = variantFor(REGISTRY_3D, engine)!;
@@ -164,6 +178,8 @@ export function startSandbox(ui: HTMLElement, stage: Stage, onExit: () => void):
         await PLAY_2D[engine](ui, step); // the always-available 2D floor over the scene
       }
     } finally {
+      setMissionView(null);
+      setScreen('title'); // back to the sandbox's baseline screen
       showChrome(true);
     }
   }

@@ -39,7 +39,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
+import { anchoredPrompt, contactShadow, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -80,8 +80,11 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     // ---- stage the two destinations (always visible + labelled) ----
     // open plek = a warm sunny clearing disc; het hol = a calm dark den mound.
+    // P1.6 (DIRECTION §2.1): a sunny open-plek clearing + a calm warm-earth den, both
+    // in the golden-hour palette (the den warmed off cold grey so it belongs, still a
+    // clearly darker "hol" than the open plek for the dual-channel place cue).
     const sunHue = new THREE.Color('#d8b86a');
-    const denHue = new THREE.Color('#5a4f44');
+    const denHue = new THREE.Color('#5f5142');
     const okHue = new THREE.Color('#8fd6a0');
 
     const bins = new Map<WisselBin, BinFx>();
@@ -143,6 +146,12 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let animal: THREE.Group | null = null;
     let animalMat: THREE.MeshStandardMaterial | null = null;
     const centre = new THREE.Vector3(sx, sy, sz);
+    // P1.6 (DIRECTION §2.2): a soft contact shadow at the decision spot grounds the
+    // animal on the golden-hour ground (it stays put at centre while a sorted animal
+    // glides off to its place, so the next animal lands back onto the same pool).
+    const animalShadow = contactShadow(0.44);
+    animalShadow.position.set(sx, sy + 0.02, sz);
+    scene.add(animalShadow);
 
     function disposeAnimal(): void {
       if (!animal) return;
@@ -288,6 +297,9 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         teardownPick();
         cancelAnimationFrame(raf);
         disposeAnimal();
+        scene.remove(animalShadow); // P1.6: free the animal's contact shadow
+        animalShadow.geometry.dispose();
+        (animalShadow.material as THREE.Material).dispose();
         for (const b of bins.values()) {
           b.group.traverse((o) => {
             const mesh = o as THREE.Mesh;

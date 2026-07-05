@@ -340,3 +340,18 @@ catch it early at no cost to the run.
   group BEFORE the timeout-prone `ven` group (or bound `ven`'s per-group timeout / isolate it) in
   `app/e2e-capture/**` so the prikbord frame actually renders inside the test budget and the
   `.cb-back` ≥56px assert exists — before P1.5 can go green. Do NOT touch `app/e2e/**`.
+- 2026-07-05 · grade (P1.6) FAIL, left open: the five 2D floors landed on-style — fresh
+  `35-floor-zoeken`…`39-floor-wisselen` all read as ONE warm golden-hour Veluwe (warm terrain
+  surround + cream §3 instruction panel + read-aloud `.zoeken-speak` 56×56; drawCalls 61 <150;
+  simon/wisselen no longer the old dark-blue night), a real cohesion win over the bolted-on-puzzle
+  look. BUT the verify-by's "shot (all five, **3D** + 2D floor, on-style)" leg is met for only ONE
+  game: only zoeken's 3D is captured (`29-mission-3d`, screen=mission/3d, dc 33) and only
+  `zoeken3d.ts` was touched among the five 3D engines — `corsi3d`/`simon3d`/`dagnacht3d`/`wisselen3d`
+  were neither brought onto the §2.1 golden-hour rig nor captured (ZERO corsi/simon/dagnacht/wisselen
+  3D frames in `annotations-laptop.json`; the harness deliberately used `?flat` to shoot 2D-only), so
+  §3.5–3.8's distinct 3D stagings (footprints on terrain · clearing-halfcircle · encounter-plaat ·
+  open plek/hol) stay undemonstrated — the P1.10 3D blind spot persists. Minor: all five floor frames
+  report `screen=title` (dev-hook not updated to the 2D-floor scene) — pixels pass, hook is stale.
+  Fix (builder, not Floris — no device/decision/asset): bring the other four games' 3D engines onto
+  the golden-hour rig AND extend `app/e2e-capture/**` to shoot each game's 3D surface (overlaps P1.10)
+  so all five 3D + 2D read as one world — before P1.6 can go green. Do NOT touch `app/e2e/**`.

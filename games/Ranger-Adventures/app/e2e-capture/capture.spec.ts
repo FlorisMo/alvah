@@ -733,6 +733,95 @@ test('audit capture flow', async ({ context }, testInfo) => {
     });
   });
 
+  // ══ GROUP 6b — the five mini-game 2D floors (P1.6). GATE-P1/P1.6 need each of
+  //    zoeken · corsi · simon · dagnacht · wisselen shot as a 2D floor to judge
+  //    "each reads as the same naturalistic Veluwe, 2D floor included" — the prior
+  //    set held only ONE mission frame (29-mission-3d, zoeken 3D) and NO 2D floor
+  //    at all. The demo sandbox (?sandbox) can launch any EF engine; `?flat` forces
+  //    the always-available 2D floor (Sandbox.launchEf force2d) so all five render
+  //    deterministically without driving five separate missions (the ven walk
+  //    already strains the 30-min budget). A fresh goto per engine keeps each floor
+  //    isolated (no stacked panels / hidden chrome). Frames them so the P1.6 grade
+  //    can judge each 2D floor reads as the SAME warm golden-hour world (DIRECTION
+  //    §2.1/§3: one palette, "tint never darkness" — simon/wisselen were a dark-blue
+  //    night before), with drawCalls <150. Own fresh page. ══
+  await runGroup('game-floors', {}, async (page) => {
+    const FLOORS: { ef: string; panel: string; label: string }[] = [
+      { ef: 'zoeken',   panel: '.zoeken', label: 'Speurkracht' },
+      { ef: 'corsi',    panel: '.route',  label: 'Geheugenkracht' },
+      { ef: 'simon',    panel: '.simon',  label: 'Echokracht' },
+      { ef: 'dagnacht', panel: '.danger', label: 'Rustkracht' },
+      { ef: 'wisselen', panel: '.wissel', label: 'Wisselkracht' },
+    ];
+    for (const f of FLOORS) {
+      await scene(page, `floor-${f.ef}`, async () => {
+        // Fresh boot straight into the ?flat sandbox per engine — resets the DOM so
+        // no prior floor panel lingers, and the sandbox uses the ranger directly (no
+        // avatar step). The presence gate + clean save were seeded in runGroup.
+        await page.goto('/?sandbox&flat');
+        await page.locator('.boot-title').waitFor({ timeout: 30_000 });
+        await press(page, isPad, page.locator('.btn-start'));
+        await page.locator('.sbx-jump-toggle').waitFor({ timeout: 30_000 });
+        await press(page, isPad, page.locator('.sbx-jump-toggle'));
+        const post = page.locator(`.sbx-jump[data-id="${f.ef}"][data-kind="ef"]`);
+        await post.waitFor({ state: 'visible', timeout: 15_000 });
+        await press(page, isPad, post);
+        await page.locator(f.panel).waitFor({ timeout: 15_000 });
+        await settle(page, 700); // let the floor paint (and any intro overlay seat)
+        await snap(page, `floor-${f.ef}`, 'Speelvlakken (2D)',
+          `2D-speelvlak ${f.label} (${f.ef}) — leest het als dezelfde warme gouden-uur-Veluwe (§2.1/§3, "tint, nooit donker"), niet als een los spel?`,
+          [`${f.panel}-speak`]);
+      });
+    }
+  });
+
+  // ══ GROUP 6c — the five mini-game 3D surfaces (P1.6). The prior P1.6 grade
+  //    (2026-07-05) found the set held ONE 3D mission frame (29-mission-3d, zoeken)
+  //    and NO 3D frame of corsi · simon · dagnacht · wisselen, so §3.5–3.8's distinct
+  //    3D stagings (footprints on terrain · dusk clearing-halfcircle · encounter-plaat
+  //    · open plek/hol) stayed undemonstrated and "all five read as one world" could
+  //    not be judged. The demo sandbox (?sandbox, NO ?flat) launches each EF engine's
+  //    in-place 3D variant (Sandbox.launchEf → resolveViewMode '3d' under WebGL, no
+  //    reduced motion), reframing the camera onto the staged forms — so each renders
+  //    deterministically without driving five separate missions (the ven walk already
+  //    strains the 30-min budget). Sandbox.launchEf now also sets the dev hook to
+  //    screen=mission + missionView=3d for the shot. A fresh goto per engine isolates
+  //    each surface. Frames them so the P1.6 grade can judge each 3D surface reads as
+  //    the SAME warm golden-hour world (DIRECTION §2.1/§2.2: one palette + grounded
+  //    forms with soft contact shadows), with drawCalls <150 and missionView=3d. Own
+  //    fresh page; ordered BEFORE the timeout-prone ven so a slow ven walk can never
+  //    starve these frames. ══
+  await runGroup('game-3d', {}, async (page) => {
+    const GAMES: { ef: string; card: string; speak: string; label: string }[] = [
+      { ef: 'zoeken',   card: '.zoeken-bar',    speak: '.zoeken-speak', label: 'Speurkracht' },
+      { ef: 'corsi',    card: '.route3d-card',  speak: '.route-speak',  label: 'Geheugenkracht' },
+      { ef: 'simon',    card: '.simon3d-card',  speak: '.simon-speak',  label: 'Echokracht' },
+      { ef: 'dagnacht', card: '.dag3d-card',    speak: '.danger-speak', label: 'Rustkracht' },
+      { ef: 'wisselen', card: '.wissel3d-card', speak: '.wissel-speak', label: 'Wisselkracht' },
+    ];
+    for (const g of GAMES) {
+      await scene(page, `game3d-${g.ef}`, async () => {
+        // Fresh boot straight into the ?sandbox demo (NO ?flat → the in-place 3D
+        // variant). The presence gate + clean save were seeded in runGroup.
+        await page.goto('/?sandbox');
+        await page.locator('.boot-title').waitFor({ timeout: 30_000 });
+        await press(page, isPad, page.locator('.btn-start'));
+        await page.locator('.sbx-jump-toggle').waitFor({ timeout: 30_000 });
+        await press(page, isPad, page.locator('.sbx-jump-toggle'));
+        const post = page.locator(`.sbx-jump[data-id="${g.ef}"][data-kind="ef"]`);
+        await post.waitFor({ state: 'visible', timeout: 15_000 });
+        await press(page, isPad, post);
+        // The 3D variant mounts its accessible card as it stages the scene — a card
+        // that never appears is itself a finding (bounded → GAP, cf. the floors).
+        await page.locator(g.card).waitFor({ timeout: 20_000 });
+        await settle(page, 1200); // let the §1e reframe land on the staged forms
+        await snap(page, `game3d-${g.ef}`, 'Speelvlakken (3D)',
+          `3D-speelvlak ${g.label} (${g.ef}) — leest de diegetische 3D-staging als dezelfde warme gouden-uur-Veluwe (§2.1/§2.2: één licht, gegronde vormen met zachte slagschaduw), missionView=3d, drawCalls <150?`,
+          [g.speak]);
+      });
+    }
+  });
+
   // ══ GROUP 7 — the ven (P1.2, DEFERRED). Boot, walk out to the ven-water shore and
   //    snap the fen. The prior P1.2 grade (2026-07-05) found the ven in ZERO frames —
   //    §2.2's most distinctive biome (dark still water + reed fringe + moss/peat bank)

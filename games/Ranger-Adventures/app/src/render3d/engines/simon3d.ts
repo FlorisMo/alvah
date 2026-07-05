@@ -35,7 +35,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
+import { anchoredPrompt, contactShadow, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -44,8 +44,11 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 const SPREAD = 2.8;
 
 /** Calm earthy hues so each caller is a distinct, memorable form (never-scary;
- *  all muted heath/dusk tones). The glow on top is a warm "calling" light. */
-const CALLER_HUES = ['#b98a5a', '#8a9b6e', '#9a7b6a', '#7e8a9b', '#a9925e', '#6e8a7e'];
+ *  all muted heath/dusk tones). The glow on top is a warm "calling" light.
+ *  P1.6 (DIRECTION §2.1: warm key / cool fill, "één wereld"): the two coolest
+ *  tones are nudged off cold blue-plastic toward warm-grey / heath-green dusk so no
+ *  caller reads out of the golden-hour palette while the six stay clearly distinct. */
+const CALLER_HUES = ['#b98a5a', '#8a9b6e', '#9a7b6a', '#8b8676', '#a9925e', '#79826c'];
 
 /** A calm, still caller form. Its own material so it can glow (call + recall
  *  feedback) without touching any other mesh. */
@@ -84,6 +87,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     // ---- stage the callers in a gentle row on the heath ----
     const fx = new Map<string, CallerFx>();
+    const shadows: THREE.Mesh[] = []; // P1.6: a soft blob under each caller (§2.2 grounding)
     const n = trial.dieren.length;
     trial.dieren.forEach((id, i) => {
       const f = n > 1 ? i / (n - 1) : 0.5; // 0..1 across the row
@@ -91,7 +95,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       const z = sz - Math.abs(f - 0.5) * 0.8; // slight arc — ends sit a touch back
       const base = new THREE.Color(CALLER_HUES[i % CALLER_HUES.length]);
       const mat = new THREE.MeshStandardMaterial({
-        color: base, emissive: callHue.clone(), emissiveIntensity: 0, roughness: 0.9,
+        color: base, emissive: callHue.clone(), emissiveIntensity: 0, roughness: 0.85,
       });
       const group = new THREE.Group();
       const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.36, 4, 8), mat);
@@ -101,6 +105,13 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       group.add(body, head);
       group.position.set(x, sy, z);
       scene.add(group);
+      // P1.6 (DIRECTION §2.2): a static contact shadow grounds the caller under the
+      // low golden key so it belongs on the heath instead of floating (the shadow
+      // stays put on the ground while the caller does its small "calling" lift).
+      const shadow = contactShadow(0.44);
+      shadow.position.set(x, sy + 0.02, z);
+      scene.add(shadow);
+      shadows.push(shadow);
       fx.set(id, { id, group, mat, glow: 0, lift: 0, cur: 0, hue: callHue });
 
       // a camera-facing name tag (dual-channel with the form's hue), like the 2D names
@@ -241,6 +252,11 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
             if (m) m.dispose();
           });
           scene.remove(f.group);
+        }
+        for (const s of shadows) { // P1.6: free the per-caller blob shadows
+          s.geometry.dispose();
+          (s.material as THREE.Material).dispose();
+          scene.remove(s);
         }
         ctx.prompt.querySelectorAll('.ra-overlay').forEach((nn) => nn.remove());
         resolve(summary);

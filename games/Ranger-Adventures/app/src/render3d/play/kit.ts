@@ -281,3 +281,49 @@ export function makeReframe(
     },
   };
 }
+
+/* ------------------------------------------------------- contact shadow ---- */
+
+/** The soft radial-alpha blob every contact shadow shares — built once, kept warm
+ *  across activities (a 64² canvas texture is a trivial permanent cost, and one
+ *  shared texture means N shadows add N cheap transparent draw calls but only ONE
+ *  texture upload). Warm-umber tint from the §2.1 ground-bounce family so the pool
+ *  reads as a golden-hour shadow, not a flat grey decal. */
+let _shadowTex: THREE.Texture | null = null;
+function shadowTexture(): THREE.Texture {
+  if (_shadowTex) return _shadowTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 1, 32, 32, 31);
+  grad.addColorStop(0, 'rgba(28,20,10,0.5)');
+  grad.addColorStop(0.55, 'rgba(28,20,10,0.26)');
+  grad.addColorStop(1, 'rgba(28,20,10,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _shadowTex = tex;
+  return tex;
+}
+
+/**
+ * A soft round contact shadow that grounds a staged 3D form (RUN-C-DIRECTION §2.2:
+ * "een zachte slagschaduw 'grondt' het dier — cruciaal ... om te voorkomen dat het
+ * lijkt te zweven"). A single flat ground disc with the shared cached radial-alpha
+ * texture; `MeshBasicMaterial` so it takes no light and adds no shadow pass — free
+ * under the golden key and fully static (reduced-motion-safe). The caller sits it a
+ * hair above the ground at the form's rest spot and disposes its geometry+material on
+ * teardown (the shared texture is a module singleton, never disposed). Returns the
+ * mesh; `radius` ≈ the form's ground footprint.
+ */
+export function contactShadow(radius: number): THREE.Mesh {
+  const geo = new THREE.CircleGeometry(radius, 20);
+  const mat = new THREE.MeshBasicMaterial({
+    map: shadowTexture(), transparent: true, depthWrite: false, opacity: 0.9,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2; // lie flat on the ground, facing up
+  mesh.renderOrder = 2;           // over the terrain, under the forms
+  return mesh;
+}
