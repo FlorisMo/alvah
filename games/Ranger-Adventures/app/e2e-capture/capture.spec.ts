@@ -245,7 +245,19 @@ test('audit capture flow', async ({ context }, testInfo) => {
         try { a.pixelDiff = { vs: diffAgainst.label, ratio: await pixelDiffRatio(page, diffAgainst.buf, png) }; }
         catch { /* keep the shot even if the canvas diff throws */ }
       }
-    } catch (e) { a.ok = false; a.note = `${note}  [CAPTURE FAILED: ${String(e).slice(0, 140)}]`; }
+    } catch (e) {
+      // D1.0 (2026-07-05): a renderer/page death mid-shot must BUBBLE so the enclosing
+      // group can spend its one crash-retry in a fresh page — the box's (a) retry has to
+      // "absorb" the browser-closed protocol error that killed `game3d-zoeken` at 15:21.
+      // Swallowing it here (the old behaviour) both stranded that retry AND left `a.file`
+      // pointing at a `NN-<name>.png` the failed `screenshot()` never wrote (the D1.0 grade's
+      // "referenced but ABSENT on disk" finding). So: re-throw a crash; on a NON-crash
+      // capture failure keep the honest GAP shot but DROP its `file` claim so no annotation
+      // ever names a PNG that is not on disk (D1.0(c): the fresh set must equal the fresh
+      // annotations). `scene`/`runGroup` catch the re-thrown crash and roll back cleanly.
+      if (isCrash(e) || page.isClosed()) throw e;
+      a.ok = false; a.file = ''; a.note = `${note}  [CAPTURE FAILED: ${String(e).slice(0, 140)}]`;
+    }
     // P3.1 tap-target geometry — supplementary; a measurement miss is its own
     // signal (a control absent when it should be present) and never fails the shot.
     if (tapSelectors && tapSelectors.length) {
@@ -829,40 +841,51 @@ test('audit capture flow', async ({ context }, testInfo) => {
   //    which rings the demo scene with billboard sprites (incl. a story-gated WOLF)
   //    the real mission path NEVER shows — so those frames were NO-evidence for the
   //    game as played (D0.1; DIRECTION §8.7: "point the harness at the player's
-  //    path"). This group now drives the REAL flow the child walks: board → the
-  //    mission card whose step uses this engine (by `data-id`) → "Ga op pad" → the
-  //    step plays 3D IN-PLACE on the live free-roam world (Missions.runMission §1f —
-  //    the same path the frozen board/chain specs assert), so the frame is the
-  //    shipped screen, no sandbox billboards/wolf in shot.
+  //    path"). This drives the REAL flow the child walks: board → the mission card
+  //    whose step uses this engine (by `data-id`) → "Ga op pad" → the step plays 3D
+  //    IN-PLACE on the live free-roam world (Missions.runMission §1f — the same path
+  //    the frozen board/chain specs assert), so the frame is the shipped screen, no
+  //    sandbox billboards/wolf in shot.
   //      • zoeken / corsi / simon are the FIRST step of a mission (frisling /
   //        ecoduct / nachtronde) → reached directly.
   //      • dagnacht / wisselen are NEVER a first step (veluwe.ts), so we complete the
   //        first step through its GENUINE resolve (`__ranger.winStep()`, the dev hook
   //        the frozen chain.spec.ts drives), clicking through any between-step "Wist
   //        je dat" fact card, until the target engine's 3D card stages.
-  //    A fresh boot per engine keeps each surface isolated (a stuck mission can't
-  //    cascade). Frames them so the P1.6/GATE-D3 grade can judge each 3D surface
-  //    reads as the SAME warm golden-hour world (§2.1/§2.2: one light, grounded forms
-  //    with soft contact shadow), missionView=3d, drawCalls <150. Heavier than the
-  //    sandbox (a full world boot per engine) → a generous group budget (D1.0(a)); a
-  //    slow engine GAPs without starving the rest. Own fresh page; ordered BEFORE the
-  //    timeout-prone ven so a slow ven walk can never starve these frames. ══
-  await runGroup('game-3d', { budgetMs: 600_000 }, async (page, stick) => {
-    // Per engine: which mission surfaces it, whether it needs a step-advance to reach
-    // it, and the 3D card + read-aloud button its variant mounts. zoeken/corsi/simon
-    // are step 0; dagnacht/wisselen are step 1 (advance:true → winStep past step 0).
-    const GAMES: { ef: string; mission: string; advance: boolean; card: string; speak: string; label: string }[] = [
-      { ef: 'zoeken',   mission: 'frisling',          advance: false, card: '.zoeken-bar',    speak: '.zoeken-speak', label: 'Speurkracht' },
-      { ef: 'corsi',    mission: 'ecoduct',           advance: false, card: '.route3d-card',  speak: '.route-speak',  label: 'Geheugenkracht' },
-      { ef: 'simon',    mission: 'nachtronde',        advance: false, card: '.simon3d-card',  speak: '.simon-speak',  label: 'Echokracht' },
-      { ef: 'dagnacht', mission: 'ree-niet-aanraken', advance: true,  card: '.dag3d-card',    speak: '.danger-speak', label: 'Rustkracht' },
-      { ef: 'wisselen', mission: 'stuifzand',         advance: true,  card: '.wissel3d-card', speak: '.wissel-speak', label: 'Wisselkracht' },
-    ];
-    for (const g of GAMES) {
+  //    ISOLATION — one runGroup PER GAME (D1.0 retry, 2026-07-05). The prior single
+  //    `game-3d` group ran all five engines in ONE page under ONE 840 s budget, so
+  //    when `game3d-zoeken` lost the renderer mid-shot (the F-21 browser-closed
+  //    protocol error) the WHOLE group rolled back to its one retry, burned the budget
+  //    on a wedged re-boot, and the other four engines were never even attempted (the
+  //    15:21 D1.0 grade: "only 1 of 5 was attempted"). Giving EACH game its own
+  //    `runGroup` — own fresh page, own crash-retry, own budget — contains a renderer
+  //    death to THAT game: it spends ITS crash-retry in a fresh page (the software
+  //    renderer usually recovers once the wedged page closes — openGroupPage backs
+  //    off), or GAPs alone, while the remaining engines still capture. Each budget
+  //    covers ONE honest attempt: boot (warm HTTP cache) + the dominant, VARIABLE
+  //    walk-to-board (measured 45–67 s, occasionally longer when the ranger catches on
+  //    terrain — the P1.5a sink) + startMission + the 25 s 3d-wait (+ the winStep
+  //    advance for the two step-1 engines), with slow-walk margin — a wedged engine
+  //    GAPs at its own cap instead of starving the rest. The whole set is ordered
+  //    BEFORE the timeout-prone ven so a slow ven walk can never starve these frames. ══
+  // Per engine: which mission surfaces it, whether it needs a step-advance to reach
+  // it, and the 3D card + read-aloud button its variant mounts. zoeken/corsi/simon
+  // are step 0; dagnacht/wisselen are step 1 (advance:true → winStep past step 0).
+  const GAMES3D: { ef: string; mission: string; advance: boolean; card: string; speak: string; label: string }[] = [
+    { ef: 'zoeken',   mission: 'frisling',          advance: false, card: '.zoeken-bar',    speak: '.zoeken-speak', label: 'Speurkracht' },
+    { ef: 'corsi',    mission: 'ecoduct',           advance: false, card: '.route3d-card',  speak: '.route-speak',  label: 'Geheugenkracht' },
+    { ef: 'simon',    mission: 'nachtronde',        advance: false, card: '.simon3d-card',  speak: '.simon-speak',  label: 'Echokracht' },
+    { ef: 'dagnacht', mission: 'ree-niet-aanraken', advance: true,  card: '.dag3d-card',    speak: '.danger-speak', label: 'Rustkracht' },
+    { ef: 'wisselen', mission: 'stuifzand',         advance: true,  card: '.wissel3d-card', speak: '.wissel-speak', label: 'Wisselkracht' },
+  ];
+  for (const g of GAMES3D) {
+    // Own page + own crash-retry + own budget per engine (see the ISOLATION note above).
+    // Step-1 engines (dagnacht/wisselen) get a wider budget for the extra winStep advance.
+    await runGroup(`game3d-${g.ef}`, { budgetMs: g.advance ? 300_000 : 240_000 }, async (page, stick) => {
+      await bootWorld(page, isPad);
       await scene(page, `game3d-${g.ef}`, async () => {
-        // Fresh boot → walk to the case-board → open it → pick THIS engine's mission
-        // by data-id → "Ga op pad" (the real player path; runGroup seeded a clean save).
-        await bootWorld(page, isPad);
+        // Walk to the case-board → open it → pick THIS engine's mission by data-id →
+        // "Ga op pad" (the real player path; runGroup seeded a clean save).
         await walkToBoard(page, isPad, stick);
         await startMissionFromBoard(page, isPad, g.mission);
         await waitFor(page, (r) => r.missionView === '3d', 25_000);
@@ -875,8 +898,8 @@ test('audit capture flow', async ({ context }, testInfo) => {
           `3D-speelvlak ${g.label} (${g.ef}) op het ECHTE missiepad (bord → "${g.mission}" → Ga op pad) — leest de diegetische 3D-staging als dezelfde warme gouden-uur-Veluwe (§2.1/§2.2: één licht, gegronde vormen met zachte slagschaduw), ZONDER sandbox-billboards/wolf, missionView=3d, drawCalls <150?`,
           [g.speak]);
       });
-    }
-  });
+    });
+  }
 
   // ══ GROUP 7 — the ven (P1.2, DEFERRED). Boot, walk out to the ven-water shore and
   //    snap the fen. The prior P1.2 grade (2026-07-05) found the ven in ZERO frames —
@@ -1047,16 +1070,42 @@ async function openGroupPage(context: BrowserContext): Promise<Page> {
   }
   throw lastErr;
 }
-/** Tap on the iPad (genuine touch), click on the laptop. Pass `timeout` to BOUND
- *  the action: an unbounded press auto-waits for actionability up to the WHOLE
- *  30-min test timeout if its target never becomes actionable — which is exactly
- *  what ate Run A's reduce-motion capture (P0.3/F-34a: the `.mission-card` click
- *  hung 30 min and every group after it, incl. reduce-motion, got nothing). */
+/** Tap on the iPad (genuine touch), click on the laptop — then fall back to a
+ *  faithful DOM click if real input can't complete.
+ *
+ *  D1.0 (2026-07-05, diagnosed on the running dev server): the live-rendering world
+ *  DEFEATS Playwright's actionability gate for the HUD's `<button>`s. `.explore-pause`
+ *  is present, visible, `pointer-events:auto`, opacity 1, and hit-tests to ITSELF at
+ *  its centre — yet a real `.click()` (and even a `{force:true}` click, and a bare
+ *  `{trial:true}` actionability probe) TIMES OUT, while `dispatchEvent('click')` fires
+ *  the handler and opens the hub every time. The world's per-frame repaint keeps the
+ *  "stable" sub-check from ever passing on a button drawn over the canvas. This wedged
+ *  the whole `reduce-motion-toggle` group (its `.explore-pause` is pressed WITHOUT a
+ *  prior walk) and the `board` group (its unbounded `.explore-board-open` press hung
+ *  the entire 300 s budget); `game-3d`'s first three engines only captured because the
+ *  walk-to-board happens to leave the render quiet enough for that one press.
+ *
+ *  So: attempt REAL input first (fidelity — it works on the pre-world title/avatar
+ *  screens and wherever the render loop is briefly quiet), but BRIEFLY; on failure
+ *  fall back to a DOM `click` dispatch (every pressed control is click-driven — no
+ *  pressed selector binds pointerdown/mousedown). The fallback fires ONLY if the target
+ *  is still present, so a real click that fired then unmounted its control is never
+ *  double-fired (which would undo a toggle). A control that never appears still degrades
+ *  to the caller's next bounded wait → an honest GAP, never the 30-min stall (P0.3). A
+ *  renderer death still bubbles so the group can spend its one crash-retry. */
 async function press(
   page: Page, isPad: boolean, locator: ReturnType<Page['locator']>, timeout?: number,
 ): Promise<void> {
-  const opts = timeout != null ? { timeout } : undefined;
-  if (isPad) await locator.tap(opts); else await locator.click(opts);
+  const total = timeout ?? 15_000;
+  try {
+    if (isPad) await locator.tap({ timeout: Math.min(total, 1_500) });
+    else await locator.click({ timeout: Math.min(total, 1_500) });
+    return;
+  } catch (e) {
+    if (isCrash(e) || page.isClosed()) throw e; // renderer death → group crash-retry
+    if (!(await locator.isVisible().catch(() => false))) return; // fired-then-unmounted, or absent
+    await locator.dispatchEvent('click', {}, { timeout: Math.min(total, 4_000) });
+  }
 }
 /** Silent boot into the world (groups 2–4 don't re-snap title/avatar). Mirrors
  *  main.ts:90 (F-34a): after "Begin" a true first run mounts the avatar-maker,
