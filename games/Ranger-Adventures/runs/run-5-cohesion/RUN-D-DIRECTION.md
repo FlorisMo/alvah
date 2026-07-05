@@ -124,6 +124,13 @@ heideplas with reeds. Targets:
   `simplex-noise`) instead of flat fills; **soft blob/contact shadows under
   every animal and prop** — "een zachte slagschaduw 'grondt' het dier —
   cruciaal... om te voorkomen dat het lijkt te zweven" (3d-animal §A6).
+  **The ranger binds to the same rule across the WHOLE walkable range**
+  (D0.1 evidence, 2026-07-05): the fresh capture shows his hero-shadow-map
+  shadow present at spawn (`06-walk-1`) but GONE at the rim (`33-boundary-rim`,
+  ~70 m out — the skinned shadow pass degrades with distance from origin, the
+  F-07 float-precision family, even though the frustum follows in code).
+  Grounding may never depend on the skinned shadow pass at range: blob
+  fallback or recentring (→ RUN-D-LEDGER D3.14).
 - **Everything seated on `heightAt`** — Run B's P5.5 floating rim-prop is the
   cautionary tale; a floating prop breaks the whole naturalism argument.
 
@@ -201,15 +208,22 @@ Per-animal signature targets for the Meshy prompts (each = the dossier's
 
 ### 2.5 Camera & framing (comfort law as art direction)
 
-Perspective camera, **low FOV ~35–45°**, gentle high-ish follow angle — keeps
-depth while realistic models read (3d-animal §A6); third-person is the
-motion-safe choice (mini-game-research F3). Task moments use a stable eased
+Perspective camera, gentle high-ish follow angle; third-person is the
+motion-safe choice (mini-game-research F3). **The fixed lens is 55° and stays
+55° this run (D0.1 correction, 2026-07-05):** the research ideal (~35–45°,
+3d-animal §A6, "keeps depth while realistic models read") is pinned OUT of
+reach by the frozen comfort specs — `app/e2e/vehicle.spec.ts:144` and
+`app/e2e/heli.spec.ts:132` assert `fov ≈ 55`, and Run D may not touch
+`app/e2e/**`. No box may chase the narrower lens; get the tele-read from
+follow DISTANCE and framing instead (§2.6's rule: realism from light/texture/
+framing, never by trading a contract). Task moments use a stable eased
 push-in, never a swoop; reduced-motion turns every camera move into a cut
 (contract). Kop/gewei tilt slightly so species markers read from the game
 angle (§A6: "kantel kop/gewei licht zodat kenmerken van bovenaf leesbaar
 blijven"). Framing rule from Run B's hard lessons: the follow camera must
 always land OUTSIDE terrain/props, and hero subjects (board, mission target)
-must be in-frustum at their beat — asserted via dev-hook booleans (§9).
+must be in-frustum at their beat — asserted via the dev-hook booleans
+(`cam.avatarInView`, `cam.landmarkInView`).
 
 ### 2.6 Performance budget as an art constraint
 
@@ -431,7 +445,15 @@ A screen/game is **done** when ALL hold — this ends "optimize until happy":
    stages a screen differently proves nothing about the game — `/?sandbox`
    ringed every mini-game with billboard sprites (incl. a story-gated wolf)
    that the mission path may never show. Point the harness at the player's
-   path, or the judge must treat the frame as no-evidence.
+   path, or the judge must treat the frame as no-evidence. **Equally
+   no-evidence (D0.1 lesson, 2026-07-05): a frame shot before the camera's
+   easing has SETTLED** — the fresh zoom pair (`12-camera-zoom-in` /
+   `13-camera-zoom-out`) is two identical pre-settle frames (shot 13's
+   annotation holds `cam.dist` 1.67 against `zoom.dist` 9.5; the dolly never
+   moved before the snap). The harness waits for settle and the pair must
+   provably differ (`pixelHash`) — RUN-D-LEDGER D1.1. And a Playwright-green
+   exit is NOT evidence of coverage: the 12:19 run exited "passed" while a
+   whole scene GAPped — "green" means green WITH all groups complete (D1.0).
 
 **No re-litigating:** once a screen passes a gate it is frozen unless a later
 box forces it (VISION §10).
@@ -477,6 +499,25 @@ sticks-and-slides), P1.5c (helicopter cannot be enabled/entered); Phase 2 =
 P1.6a (Alvah is a child of ≈1.2 m, not a 1.7 m adult), P1.6b (blonde + blue,
 per `public/img/Alvah.jpg`). These are verified by the harness DRIVING the
 action and asserting dev-hook state, plus a Floris on-device demo each.
+
+**D0.1 validation (2026-07-05, Fable art director, against the fresh 12:19
+capture):** the reconciled ledger held — every open Phase-1/2/3 box
+re-confirmed in fresh pixels (crystal props on the title itself; billboard
+rings + a story-gated WOLF sprite in ALL FIVE game-3D frames; simon's
+"animals" as labeled cylinders; wisselen's disc + dome; the dry ven bowl;
+tiny dark label chips; `avatar.height` 1.70 + dark hair in every frame), and
+the five reconciliation cuts (P1.0 · P1.1 · P1.4 · P1.5 · P1.14 + the 2D
+floors) re-verified on-style — they stay cut. Three gaps the reconciliation
+missed, now in the ledger: (1) **the P1.5a sink is visible ON LAPTOP** —
+fresh `45-ven-shore` shows the ranger sunk to his NECK in the ven-bowl slope,
+so P1.5a's walk burst now includes the ven shore (the bug is not
+device-only); (2) the ranger loses his grounding shadow at range → new D3.14;
+(3) the capture exited "passed" with a GAPped scene and a pre-settle zoom
+pair → new D1.1. Doc refinements this sitting: §2.5 records the frozen 55°
+lens pin, §2.2 the grounding-at-range rule, §8.7 the settle + green-with-GAP
+lessons. Phase order confirmed: playability → Alvah's truth → cohesion →
+realism → felt progress. No frozen contract and no §2.4 Alvah correction was
+touched.
 
 ---
 
