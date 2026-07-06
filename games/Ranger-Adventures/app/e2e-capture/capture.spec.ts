@@ -458,26 +458,56 @@ test('audit capture flow', async ({ context }, testInfo) => {
     });
     if (!isPad) {
       await scene(page, 'camera-attempts', async () => {
+        // D1.1: the walk burst above drives the ranger ~60 m into the undressed −z void
+        // where he sinks (P1.5a — cam.y falls 2.4 → 1.1) and the follow boom collapses to
+        // its min-clamp, so a dolly there could not extend and the zoom pair was two
+        // identical clamped voids (12/13-camera-zoom, cam.dist 1.67 both, zoom.dist 1.6
+        // then 9.5). Walk him back to the dressed spawn clearing, where he is un-sunk and
+        // the boom provably reaches the full 9.5 m (cf. the RM-reframe cam.dist 9.63), so
+        // the dolly has room to move AND a solid ranger to reframe. Best-effort: even
+        // partway back is un-sunk enough, so a short-of-target walk never GAPs the scene.
+        try {
+          await walkTo(page, isPad, stick, async () => {
+            const p = await hook(page, (r) => r.pos());
+            return p ? { x: 0, z: 0, near: Math.hypot(p.x, p.z) < 5 } : null;
+          }, 300);
+        } catch { /* partway back is fine — the boom un-clamps once he leaves the sink */ }
+        await settleCam(page); // let the follow boom re-seat on the spawn framing
         const box = await page.locator('canvas#scene').boundingBox();
         if (!box) throw new Error('no canvas');
         const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
         await page.mouse.move(cx, cy);
         // F-16: a real wheel-in DOLLIES the walk boom toward its floor. −800 · 0.01 =
         // −8 m from the 4.6 m default → clamps to zoom.min; the frame comes in close.
-        // 700 ms lets the ~0.3 s position-damp all but settle so cam.dist reads clean.
-        await page.mouse.wheel(0, -800); await settle(page, 700);
-        await snap(page, 'camera-zoom-in', 'Laptop-camera', 'Scroll inzoomen — de dolly haalt het beeld dichterbij; cam.zoom.dist op de min-clamp, FOV onveranderd (F-16).');
+        // D1.1: settleCam (not a fixed wait) blocks until the eased boom has stopped
+        // moving, so cam.dist reads the DESTINATION near-clamp, not a mid-ease value.
+        await page.mouse.wheel(0, -800); await settle(page, 150); await settleCam(page);
+        await snap(page, 'camera-zoom-in', 'Laptop-camera', 'Scroll inzoomen (na camera-settle, geen pre-settle void) — de dolly staat op de min-clamp, FOV onveranderd (F-16). NB cam.dist leest ~1,5 m bóven zoom.dist door de vaste ooghoogte-offset (lens→bbox-midden); op de verre clamp valt dat weg en cam.dist ≈ zoom.dist.');
+        const zin = shots[shots.length - 1];
         // wheel-out the other way: +1400 · 0.01 = +14 m → clamps to zoom.max, pull-back.
-        await page.mouse.wheel(0, 1400); await settle(page, 700);
-        await snap(page, 'camera-zoom-out', 'Laptop-camera', 'Scroll uitzoomen — de dolly trekt terug naar de max-clamp; cam.dist duidelijk groter, FOV nog steeds vast (F-16).');
+        // settleCam waits out the full ~1.5 s ease so cam.dist reaches ~9.5 (was caught at
+        // 1.67 pre-settle) and the frame is the settled wide boom.
+        await page.mouse.wheel(0, 1400); await settle(page, 150); await settleCam(page);
+        await snap(page, 'camera-zoom-out', 'Laptop-camera', 'Scroll uitzoomen (na camera-settle) — de dolly trekt terug naar de max-clamp; cam.dist duidelijk groter, FOV nog steeds vast (F-16).');
+        const zout = shots[shots.length - 1];
+        // D1.1 assert: a settled dolly pair must render DIFFERENT frames. If the two share
+        // one pixelHash the boom did not move (a pre-settle / clamped void) — flag it as an
+        // honest ok:false finding rather than throwing (throwing would GAP the whole scene
+        // and lose the evidence); a healthy settled dolly always differs, so this is silent.
+        if (zin.pixelHash && zout.pixelHash && zin.pixelHash === zout.pixelHash) {
+          zout.ok = false;
+          zout.note += '  [D1.1: zoom-in en zoom-out delen één pixelHash — de dolly bewoog niet (pre-settle/geklemde boom); dit is zelf een audit-bevinding.]';
+          flush();
+        }
         // F-17: a >6 px drag ORBITS the lens (yaw + eye-lift) and must NOT move the ranger
         // — the Run A defect was this same drag relocating `pos` 0.93 m and flipping the
         // view 180°. down at centre, 12×18 px = 216 px right, up: cam.yaw swings ~1 rad and
         // cam.orbit.yaw ≠ 0 while `pos` holds (compare the camera-zoom-out shot's pos). 700
-        // ms lets the ~0.18 s orbit ease settle so cam.yaw reads clean.
+        // ms lets the ~0.18 s orbit ease settle so cam.yaw reads clean (the yaw ease, not the
+        // dolly — cam.dist barely moves, so settleCam below just confirms the boom is steady).
         await page.mouse.move(cx, cy); await page.mouse.down();
         for (let i = 1; i <= 12; i++) { await page.mouse.move(cx + i * 18, cy); await page.waitForTimeout(20); }
-        await page.mouse.up(); await settle(page, 700);
+        await page.mouse.up(); await settle(page, 700); await settleCam(page);
         await snap(page, 'camera-orbit', 'Laptop-camera', 'Slepen om te draaien (orbit) — cam.yaw draait ~1 rad, cam.orbit.yaw ≠ 0, en pos blijft gelijk: geen teleport meer (F-17, #4).');
         // F-17 seam, other half: a CLEAN click (no drag) still walks. The +1400 zoom-out
         // above left the walk boom at its ~9.5 m max, which flattens the follow cam toward
@@ -493,7 +523,7 @@ test('audit capture flow', async ({ context }, testInfo) => {
         // one is; and any prop the low ray happens to catch (board/jeep) also sets a walk
         // target, so `pos` shifts either way.
         await page.mouse.move(cx, cy);
-        await page.mouse.wheel(0, -500); await settle(page, 700); // dolly ~9.5 → ~4.5 m
+        await page.mouse.wheel(0, -500); await settle(page, 150); await settleCam(page); // dolly ~9.5 → ~4.5 m, settled
         await page.mouse.click(cx, box.y + box.height * 0.60); await settle(page, 1800);
         await snap(page, 'camera-click-walk', 'Laptop-camera', 'Schone klik (geen sleep) — de ranger loopt naar het punt en pos verschuift, dus tik-om-te-lopen leeft nog (F-17).');
       });
@@ -1147,6 +1177,39 @@ async function waitFor(page: Page, pred: (r: Hook) => boolean, timeout: number):
   }
 }
 async function settle(page: Page, ms: number): Promise<void> { await page.waitForTimeout(ms); }
+
+/** D1.1: block until the eased follow-boom has SETTLED before a camera/dolly snap, so
+ *  the frame is the destination framing — never a pre-settle void (direction doc §8.7:
+ *  the 12/13-camera-zoom pair were two IDENTICAL mid-transition frames, cam.dist 1.67
+ *  against zoom.dist 9.5, the dolly caught before it moved). The boom eases toward the
+ *  player-set zoom.dist with a ~0.3 s exp-damp (World.ts:3477); "settled" = the live
+ *  `cam.dist` has stopped changing (|Δ| ≤ max(0.03 m, 0.4 %) across two consecutive
+ *  ~80 ms polls), which converges to within ~2 % of the eased target. Steady-state,
+ *  NOT a strict "within 5 % of zoom.dist", is the criterion on purpose: cam.dist reads
+ *  the 3D lens→bbox-centre distance, so at the FAR clamp it equals zoom.dist (±~1.5 %)
+ *  but at the NEAR clamp it sits a fixed ~1.5 m eye-height offset ABOVE zoom.dist — a
+ *  5 %-of-zoom.dist gate could never fire on a genuine zoom-IN, steady-state catches
+ *  both. Bounded timeout THROWS so the enclosing scene() GAPs honestly if the boom
+ *  never settles (a dead hook / wedged loop); a converging ease returns well inside it,
+ *  so a healthy run adds no GAP. */
+async function settleCam(page: Page, timeoutMs = 6000): Promise<void> {
+  const start = Date.now();
+  let prev: number | null = null;
+  let stable = 0;
+  for (;;) {
+    const dist = await hook(page, (r) => r.cam()?.dist ?? null);
+    if (dist != null) {
+      if (prev != null && Math.abs(dist - prev) <= Math.max(0.03, 0.004 * dist)) {
+        if (++stable >= 2) return;
+      } else stable = 0;
+      prev = dist;
+    }
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`camera boom never settled within ${timeoutMs} ms (last cam.dist=${prev})`);
+    }
+    await page.waitForTimeout(80);
+  }
+}
 
 // ── locomotion: keyboard on laptop, JOYSTICK-via-touch on the iPad ────────────
 
