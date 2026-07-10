@@ -317,6 +317,13 @@ test('audit capture flow', async ({ context }, testInfo) => {
     body: (page: Page, stick: TouchStick | null) => Promise<void>,
   ): Promise<void> {
     const budgetMs = opts.budgetMs ?? 300_000;
+    // D1.4: MEASURE the headless runtime per group so budgets are balanced against
+    // reality, not guessed — the box's core lesson (throttled rAF makes walks/eases
+    // crawl, so a budget sized for a 60 fps device GAPs under capture load). The
+    // per-group elapsed is logged at every exit below (done / GAP / retry); the audit
+    // reads these from the capture stdout to see exactly which group is near its budget.
+    const groupStart = Date.now();
+    const elapsedS = (): number => Math.round((Date.now() - groupStart) / 1000);
     for (let attempt = 1; attempt <= 2; attempt++) {
       const nAtStart = n, shotsAtStart = shots.length;
       let page: Page | null = null;
@@ -363,6 +370,8 @@ test('audit capture flow', async ({ context }, testInfo) => {
         ]);
         clearTimeout(timer);
         await page.close();
+        // eslint-disable-next-line no-console
+        console.log(`[capture] group "${label}" done in ${elapsedS()}s (budget ${Math.round(budgetMs / 1000)}s)`);
         return; // group done
       } catch (e) {
         clearTimeout(timer);
@@ -373,6 +382,8 @@ test('audit capture flow', async ({ context }, testInfo) => {
           // shot lands after the marker, then record ONE "deels vastgelegd" GAP and
           // move on — no retry, and never a rollback of good frames.
           await Promise.resolve(run).catch(() => {});
+          // eslint-disable-next-line no-console
+          console.log(`[capture] group "${label}" GAP: budget overrun at ${elapsedS()}s (budget ${Math.round(budgetMs / 1000)}s) — RAISE this group's budget or make the scene cheaper`);
           shots.push({
             name: label, platform, group: 'GAP', ok: false, file: '',
             note: `Groep "${label}" overschreed het tijdbudget (~${Math.round(budgetMs / 1000)}s) en is deels vastgelegd — dit is zelf een audit-bevinding; de latere groepen lopen door.`,
@@ -386,9 +397,11 @@ test('audit capture flow', async ({ context }, testInfo) => {
         n = nAtStart; shots.length = shotsAtStart; flush();
         if (attempt === 1 && isCrash(e)) {
           // eslint-disable-next-line no-console
-          console.log(`[capture] group "${label}" lost the renderer — retrying once: ${String(e).slice(0, 100)}`);
+          console.log(`[capture] group "${label}" lost the renderer at ${elapsedS()}s — retrying once: ${String(e).slice(0, 100)}`);
           continue;
         }
+        // eslint-disable-next-line no-console
+        console.log(`[capture] group "${label}" GAP at ${elapsedS()}s: ${String(e).slice(0, 100)}`);
         shots.push({
           name: label, platform, group: 'GAP', ok: false, file: '',
           note: `Groep "${label}" kon niet worden vastgelegd: ${String(e).slice(0, 200)} — dit is zelf een audit-bevinding.`,
@@ -497,12 +510,14 @@ test('audit capture flow', async ({ context }, testInfo) => {
   // ══ GROUP 1b — laptop camera: dolly-zoom PAIR (D1.1) + orbit + click-walk, on a
   //    DEDICATED fresh boot so the ranger stands at the un-sunk spawn clearing (0,0)
   //    with the full boom range. Laptop-only (the iPad leg has no wheel/trackpad
-  //    dolly). Own page + a tight 180 s budget (the whole scene settles + shoots in
-  //    ~10 s once the world is up). Booting fresh is what makes the zoom pair reliable:
+  //    dolly). Own page + a 240 s budget: no walk, but each of the ~6 settleCam waits can
+  //    ride its 20 s best-effort backstop under the throttled-rAF capture load (D1.1/D1.4),
+  //    so the old 180 s was too tight and the scene GAPped ("boom never settled") — 240 s
+  //    covers the worst case with margin. Booting fresh is what makes the zoom pair reliable:
   //    the old placement (inside GROUP 1, after the walk-burst sink) needed a ~300-iter
   //    walk-BACK that blew the budget; here there is nothing to walk back from. ══
   if (!isPad) {
-    await runGroup('camera', { budgetMs: 180_000 }, async (page) => {
+    await runGroup('camera', { budgetMs: 240_000 }, async (page) => {
       await bootWorld(page, false);
       await settle(page, 1500); // rig swap-in + follow-boom settle at spawn (cf. world-idle)
       await scene(page, 'camera-attempts', async () => {
@@ -589,8 +604,10 @@ test('audit capture flow', async ({ context }, testInfo) => {
   }
 
   // ══ GROUP 2 — jeep: boot → walk to it (touch on iPad), climb in, drive burst
-  //    (steering test #3), climb back out. Own fresh page. ══
-  await runGroup('jeep', {}, async (page, stick) => {
+  //    (steering test #3), climb back out. Own fresh page. D1.4: explicit 420 s budget
+  //    (was the 300 s default, which the walk-to-jeep + two drive bursts overran under
+  //    full-capture load — a GATE-D1 GAP). ══
+  await runGroup('jeep', { budgetMs: 420_000 }, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'jeep', async () => {
       const placed = await hook(page, (r) => r.vehicle()?.placed ?? false);
@@ -637,8 +654,11 @@ test('audit capture flow', async ({ context }, testInfo) => {
   });
 
   // ══ GROUP 3 — board → a 3D mission in-place. Own fresh page (this is exactly
-  //    the leg that killed the iPad run in Run A — now isolated + touch-walked). ══
-  await runGroup('board', {}, async (page, stick) => {
+  //    the leg that killed the iPad run in Run A — now isolated + touch-walked). D1.4:
+  //    explicit 420 s budget (was the 300 s default) — this group chains the most work
+  //    behind one walk (walk-to-board + open + pick card + Ga op pad + 25 s 3d-wait +
+  //    settle + stop), which overran 300 s under load and GAPped at GATE-D1. ══
+  await runGroup('board', { budgetMs: 420_000 }, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'mission-board', async () => {
       await walkToBoard(page, isPad, stick);
@@ -825,7 +845,10 @@ test('audit capture flow', async ({ context }, testInfo) => {
   //    Assert BOTH: pos clamped (boundary.dist ≤ bound, atRim true) AND the ranger is
   //    actually shown (cam.avatarScreen.visible true — the P4.6 re-judge caught the
   //    boom sinking behind the rim berm so terrain occluded him while onScreen lied). ══
-  await runGroup('boundary', { budgetMs: 360_000 }, async (page, stick) => {
+  // D1.4: 510 s budget (was 360 s) — the walk out to the ~70 m rim is the single longest
+  // walk in the flow and crawls under full-capture load, so 360 s GAPped it at GATE-D1
+  // ("zero rim frames"). The walkToBoundary loop is already bounded (never a stall).
+  await runGroup('boundary', { budgetMs: 510_000 }, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'boundary', async () => {
       await walkToBoundary(page, isPad, stick);
@@ -949,7 +972,9 @@ test('audit capture flow', async ({ context }, testInfo) => {
   for (const g of GAMES3D) {
     // Own page + own crash-retry + own budget per engine (see the ISOLATION note above).
     // Step-1 engines (dagnacht/wisselen) get a wider budget for the extra winStep advance.
-    await runGroup(`game3d-${g.ef}`, { budgetMs: g.advance ? 300_000 : 240_000 }, async (page, stick) => {
+    // D1.4: 330 s (step-0) / 360 s (step-1), up from 240/300 — the shared walk-to-board +
+    // startMission + 25 s 3d-wait overran 240 s under load (game3d-simon GAPped at GATE-D1).
+    await runGroup(`game3d-${g.ef}`, { budgetMs: g.advance ? 360_000 : 330_000 }, async (page, stick) => {
       await bootWorld(page, isPad);
       await scene(page, `game3d-${g.ef}`, async () => {
         // Walk to the case-board → open it → pick THIS engine's mission by data-id →
@@ -1002,7 +1027,9 @@ test('audit capture flow', async ({ context }, testInfo) => {
   //    is timeout-prone (the long walk out to the far ven basin is what exhausted the
   //    test budget above): kept after the P1.5 `caseboard` group so a slow ven walk can
   //    never again starve the prikbord frame. Own fresh page. ══
-  await runGroup('ven', { budgetMs: 360_000 }, async (page, stick) => {
+  // D1.4: 510 s budget (was 360 s) — the walk out to the far ven basin (~50 m) is, with
+  // the boundary rim, the flow's longest walk and crawls under load; 360 s left no margin.
+  await runGroup('ven', { budgetMs: 510_000 }, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'ven-shore', async () => {
       await walkToVen(page, isPad, stick);
@@ -1371,7 +1398,13 @@ async function walkTo(
   isPad: boolean,
   stick: TouchStick | null,
   target: () => Promise<{ x: number; z: number; near: boolean } | null>,
-  budget = 200,
+  // D1.4: default 300 iters (was 200). A REACHING walk short-circuits on `t.near`, so a
+  // higher cap NEVER slows a fast walk — it only gives a slow-but-progressing walk room to
+  // ARRIVE instead of throwing "never reached target" mid-crawl. Walk-to-board measures
+  // 45–67 s under load (§ game3d note) ≈ 150–220 iters at the throttled poll rate, so 200
+  // was marginal; 300 clears it with margin while the per-group wall-clock budget still caps
+  // a genuinely wedged walk. iPad stays clamped to 160 (its walk is a Floris demo anyway).
+  budget = 300,
 ): Promise<void> {
   if (isPad) return joystickWalkTo(page, stick!, target, Math.min(budget, 160));
   return keyboardWalkTo(page, target, budget);
@@ -1393,10 +1426,13 @@ async function keyboardWalkTo(
     for (let i = 0; i < budget; i++) {
       const t = await target();
       if (t?.near) return;
-      const p = await hook(page, (r) => r.pos());
-      const yaw = await hook(page, (r) => r.cameraYaw());
-      if (!p || !t || yaw == null) { await page.waitForTimeout(100); continue; }
-      const { sx, sYf } = screenDir(t.x - p.x, t.z - p.z, yaw);
+      // D1.4: read pos + camera yaw in ONE evaluate (was two). Every page.evaluate stalls
+      // the very rAF the ranger walks on, so fewer round-trips per poll = less render-loop
+      // starvation = the walk crawls less under full-capture load (the GATE-D1 "walks crawl
+      // under load" diagnosis — the walk was three evaluates a poll, this makes it two).
+      const pv = await hook(page, (r) => { const q = r.pos(); const y = r.cameraYaw(); return q && y != null ? { x: q.x, z: q.z, yaw: y } : null; });
+      if (!pv || !t) { await page.waitForTimeout(100); continue; }
+      const { sx, sYf } = screenDir(t.x - pv.x, t.z - pv.z, pv.yaw);
       const want = new Set<string>();
       if (sx > 0.4) want.add('ArrowRight'); else if (sx < -0.4) want.add('ArrowLeft');
       if (sYf > 0.4) want.add('ArrowUp'); else if (sYf < -0.4) want.add('ArrowDown');
@@ -1418,10 +1454,10 @@ async function joystickWalkTo(
     for (let i = 0; i < budget; i++) {
       const t = await target();
       if (t?.near) return;
-      const p = await hook(page, (r) => r.pos());
-      const yaw = await hook(page, (r) => r.cameraYaw());
-      if (!p || !t || yaw == null) { await page.waitForTimeout(120); continue; }
-      const { sx, sYf } = screenDir(t.x - p.x, t.z - p.z, yaw);
+      // D1.4: pos + yaw in ONE evaluate (see keyboardWalkTo) — fewer render-loop stalls.
+      const pv = await hook(page, (r) => { const q = r.pos(); const y = r.cameraYaw(); return q && y != null ? { x: q.x, z: q.z, yaw: y } : null; });
+      if (!pv || !t) { await page.waitForTimeout(120); continue; }
+      const { sx, sYf } = screenDir(t.x - pv.x, t.z - pv.z, pv.yaw);
       const mag = Math.hypot(sx, sYf) || 1;
       await stick.steer(sx / mag, sYf / mag);
       await page.waitForTimeout(140);

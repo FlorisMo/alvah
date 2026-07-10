@@ -124,8 +124,14 @@ test('P1.5b jeep drive-burst — it translates along its heading, grounded, no s
   // ceiling only bites the cold isolated case — it never slows the warm audit run.
   test.setTimeout(600_000);
   const platform = testInfo.project.name;
-  const shotDir = path.join(EVID, platform, 'p15b-jeep-burst'); // subdir → never touched by the capture prune
+  const shotDir = path.join(EVID, platform, 'p15b-jeep-burst');
   fs.mkdirSync(shotDir, { recursive: true });
+  // D1.4: clear prior-run PNGs first — a shorter fresh drive would otherwise leave stale
+  // higher-index frames beside fresh ones (the top-level prune skips subdirs; GATE-D1).
+  // JSON record is in the parent dir, so only .png is cleared.
+  for (const f of fs.readdirSync(shotDir)) {
+    if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
+  }
 
   await bootToWorld(page);
 

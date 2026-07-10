@@ -225,8 +225,21 @@ for (const g of GAMES) {
     test.setTimeout(240_000); // cold boot streams ~13 MB of GLBs, then the walk + mission
 
     const platform = testInfo.project.name;
-    const shotDir = path.join(EVID, platform, 'd13-mission-cam'); // subdir → never touched by the capture prune
+    const shotDir = path.join(EVID, platform, 'd13-mission-cam');
     fs.mkdirSync(shotDir, { recursive: true });
+    // D1.4: the top-level capture prune skips subdirs. These are FIVE separate tests sharing
+    // ONE subdir, so a clear-ALL-at-start would delete a sibling ef's fresh frame — instead
+    // delete only THIS ef's own target (so a failed test leaves no stale frame for it) PLUS
+    // any PNG that is NOT one of the five canonical d13-<ef>-entry.png names (a historical
+    // orphan from an older naming). Siblings' valid fresh frames are preserved. Keeps the box's
+    // "every PNG under laptop/ incl. subdirs matches a fresh record" true for this subdir too.
+    const canonical = new Set(GAMES.map((x) => `d13-${x.ef}-entry.png`));
+    for (const f of fs.readdirSync(shotDir)) {
+      if (!f.endsWith('.png')) continue;
+      if (f === `d13-${g.ef}-entry.png` || !canonical.has(f)) {
+        try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ }
+      }
+    }
 
     await bootToWorld(page);
     await walkToBoard(page);

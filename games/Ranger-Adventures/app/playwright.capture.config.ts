@@ -49,14 +49,21 @@ export default defineConfig({
   reporter: [['list']],
   outputDir: './test-results',
   // One project walks the WHOLE flow (one test). The flow has grown well past the
-  // "2 boots" this cap was first sized for: ~10 scene groups, each booting a world
+  // "2 boots" this cap was first sized for: ~15 scene groups, each booting a world
   // (the first streams ~13 MB of GLBs, ~3 min; later boots hit the warm HTTP cache),
   // and the game-3d group (D1.0(b)) now drives FIVE real missions instead of the
-  // cheap sandbox. So the ceiling is raised to 45 min — a backstop, not the expected
-  // ~25–30 min runtime. The real guard against a runaway is per-GROUP wall-clock
-  // budgets in capture.spec.ts (D1.0(a)): one slow/wedged group GAPs and the flow
-  // continues, so this whole-test cap only fires if MANY groups overrun at once.
-  timeout: 2_700_000,
+  // cheap sandbox. D1.4 raised the ceiling to 66 min — a BACKSTOP, not the expected
+  // ~45–55 min runtime: the GATE-D1 audit ran the main flow 39.6 min with FIVE groups
+  // CUT at their budgets; once those budgets are widened so nothing GAPs, the same flow
+  // runs to COMPLETION and needs more wall-clock (ven runs LAST, so a too-tight whole-test
+  // cap kills exactly the group that must not GAP). This 66-min ceiling sits ABOVE the
+  // realistic total yet BELOW the ~94-min sum of all per-GROUP budgets, so the real guard
+  // against a runaway stays the per-GROUP wall-clock budgets in capture.spec.ts
+  // (D1.0(a)/D1.4): one slow/wedged group GAPs at its own cap and the flow continues, so
+  // this whole-test cap only fires if MANY groups overrun at once (itself a red flag the
+  // per-group timing logs surface). The runGroup elapsed-time logs (D1.4) measure the real
+  // headless runtime so this and the per-group budgets can be re-balanced against evidence.
+  timeout: 3_960_000,
   use: {
     baseURL: `http://localhost:${PORT}`,
     // A real GPU locally renders the world fine headed or headless; capture runs

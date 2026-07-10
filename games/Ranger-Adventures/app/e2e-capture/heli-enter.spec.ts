@@ -111,8 +111,14 @@ test('P1.5c heli enable+enter — the Instellingen toggle turns it on AND "Stap 
   test.skip(testInfo.project.name === 'ipad', 'laptop-only automated verification (real-device enable+fly = Floris demo, P1.5c +demo)');
   test.setTimeout(300_000); // the first cold boot streams ~13 MB of GLBs (~3 min, config note)
   const platform = testInfo.project.name;
-  const shotDir = path.join(EVID, platform, 'p15c-heli-enter'); // subdir → never touched by the capture prune
+  const shotDir = path.join(EVID, platform, 'p15c-heli-enter');
   fs.mkdirSync(shotDir, { recursive: true });
+  // D1.4: clear prior-run PNGs first — a fresh run with fewer phases/frames would otherwise
+  // leave stale ones beside fresh (the top-level prune skips subdirs; GATE-D1). JSON record
+  // is in the parent dir, so only .png is cleared.
+  for (const f of fs.readdirSync(shotDir)) {
+    if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
+  }
 
   await bootToWorld(page);
 

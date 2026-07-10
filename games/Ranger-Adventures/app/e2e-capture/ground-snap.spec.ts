@@ -100,8 +100,15 @@ test('D1.2 ground-snap drive-burst — the ranger stays on the rendered terrain'
   test.skip(testInfo.project.name === 'ipad', 'laptop-only automated verification (iPad walk = Floris demo, P1.5a +demo)');
   test.setTimeout(300_000); // the first cold boot streams ~13 MB of GLBs (~3 min, config note)
   const platform = testInfo.project.name;
-  const shotDir = path.join(EVID, platform, 'd12-ground-burst'); // subdir → never touched by the capture prune
+  const shotDir = path.join(EVID, platform, 'd12-ground-burst');
   fs.mkdirSync(shotDir, { recursive: true });
+  // D1.4: clear prior-run PNGs from this incremental-named burst subdir so the fresh set
+  // on disk EQUALS this run — the top-level capture prune skips subdirs, so a sparser fresh
+  // burst leaves stale higher-index frames beside fresh ones (GATE-D1 found mixed 17:0x +
+  // 23:5x frames here). The JSON burst record lives in the parent dir, so only .png is cleared.
+  for (const f of fs.readdirSync(shotDir)) {
+    if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
+  }
 
   await bootToWorld(page);
 
@@ -202,8 +209,14 @@ test('P1.5a ven-shore drive-burst — the ranger stays grounded from spawn to th
   test.skip(testInfo.project.name === 'ipad', 'laptop-only automated verification (iPad dune walk = Floris demo, P1.5a +demo)');
   test.setTimeout(300_000); // the first cold boot streams ~13 MB of GLBs (~3 min, config note)
   const platform = testInfo.project.name;
-  const shotDir = path.join(EVID, platform, 'p15a-ven-burst'); // subdir → never touched by the capture prune
+  const shotDir = path.join(EVID, platform, 'p15a-ven-burst');
   fs.mkdirSync(shotDir, { recursive: true });
+  // D1.4: clear prior-run PNGs first — a sparser fresh burst would otherwise leave stale
+  // higher-index frames beside fresh ones (the top-level prune skips subdirs; GATE-D1
+  // found mixed 17:0x + 23:5x frames here). JSON record is in the parent dir, so only .png.
+  for (const f of fs.readdirSync(shotDir)) {
+    if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
+  }
 
   await bootToWorld(page);
 

@@ -147,8 +147,15 @@ test('D1.1 laptop dolly-zoom pair — settles to target and the two frames prova
   test.setTimeout(150_000); // cold boot streams ~13 MB of GLBs, then two ~8 s eased settles
 
   const platform = testInfo.project.name;
-  const shotDir = path.join(EVID, platform, 'd11-camera-zoom'); // subdir → never touched by the capture prune
+  const shotDir = path.join(EVID, platform, 'd11-camera-zoom');
   fs.mkdirSync(shotDir, { recursive: true });
+  // D1.4: the top-level capture prune skips subdirs, so clear this burst subdir at start —
+  // this is a SINGLE test writing two FIXED names (d11-camera-zoom-in/out.png), so it can only
+  // ever hold this run's fresh pair; the clear guards against a historical orphan from an older
+  // naming so the box's "every PNG under laptop/ incl. subdirs matches a fresh record" holds here too.
+  for (const f of fs.readdirSync(shotDir)) {
+    if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
+  }
 
   await bootToWorld(page);
 
