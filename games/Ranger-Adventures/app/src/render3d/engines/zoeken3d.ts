@@ -25,7 +25,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { Highlight3d, anchoredPrompt, makeReframe, pick3d, spoorTrail, registerActivityWin, activityScopeSignal } from '../play/kit';
+import { Highlight3d, anchoredPrompt, liftReframeAboveGround, makeReframe, pick3d, spoorTrail, registerActivityWin, activityScopeSignal } from '../play/kit';
 import { heightAt } from '../Biomes';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -154,6 +154,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // ---- §1e reframe onto the patch + a calm dual-channel target highlight ----
     const lookAt = new THREE.Vector3(sx + tgtLocal.dx, sy + 0.4, sz + tgtLocal.dz);
     const to = new THREE.Vector3(sx, sy + 2.4, sz + 4.4);
+    liftReframeAboveGround(to, ctx.groundY); // D1.3: never land the lens under the terrain
     const reframe = makeReframe(camera, to, lookAt, reduced, 0.35);
     const highlight = new Highlight3d(targetGroup, '#ffe6a8');
 

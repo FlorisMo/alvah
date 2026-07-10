@@ -29,7 +29,7 @@ import { buildRoepTrial, RoepRun, ROEP_COPY, type RoepDiff, type RoepVogel } fro
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
+import { anchoredPrompt, liftReframeAboveGround, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -112,6 +112,7 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
     // ---- §1e reframe — a calm raised look over the whole row (cuts if reduced) ----
     const lookAt = new THREE.Vector3(sx, sy + 0.6, sz);
     const to = new THREE.Vector3(sx, sy + 3.2, sz + 5.2);
+    liftReframeAboveGround(to, ctx.groundY); // D1.3: never land the lens under the terrain
     const reframe = makeReframe(camera, to, lookAt, reduced, 0.35);
 
     function applyFx(fb: BirdFx): void {

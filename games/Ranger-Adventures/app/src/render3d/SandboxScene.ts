@@ -339,6 +339,7 @@ export class SandboxScene {
       cameraRig: this.camera,
       approachedModel: t ? t.group : null,
       activitySpot: this.spotOf(id),
+      groundY: () => 0, // D1.3: the showroom floor is a flat plane at y=0
       raycaster: this.raycaster,
       canvas: this.canvas,
       prompt,

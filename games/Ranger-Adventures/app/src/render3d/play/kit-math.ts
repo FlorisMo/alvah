@@ -86,3 +86,27 @@ export function dampFactor(dt: number, tau: number): number {
   if (tau <= 0) return 1;
   return 1 - Math.exp(-dt / tau);
 }
+
+/** D1.3: minimum clearance (m) a mission-entry lens keeps above the rendered
+ *  terrain directly under it — enough to clear the ground + a low form's height and
+ *  keep the near plane out of the dirt, small enough that the raised look barely
+ *  changes on flat ground. */
+export const CAM_GROUND_CLEAR = 1.5;
+
+/**
+ * D1.3: the safe Y for a §1e reframe camera target — never below the rendered
+ * terrain under the lens. `desiredY` is the engine's authored height (activity-spot
+ * Y + a raised-look offset), `groundY` the raycast ground-snap height at the
+ * camera's OWN XZ (which the mirrored analytic marker Y diverges from — the divergence
+ * that buried the mission camera below the visual ground, direction §2.2/§2.5). The
+ * lens sits at the authored height where that already clears the ground (flat spots
+ * are unchanged) and is lifted to `groundY + clearance` only where the terrain rises
+ * under it — so the camera is always above the surface the player sees.
+ */
+export function safeCamHeight(
+  desiredY: number,
+  groundY: number,
+  clearance = CAM_GROUND_CLEAR,
+): number {
+  return Math.max(desiredY, groundY + clearance);
+}

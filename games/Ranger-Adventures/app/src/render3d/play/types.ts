@@ -33,6 +33,11 @@ export interface WorldCtx {
   approachedModel: unknown | null;
   /** world-space anchor (x,y,z) the activity stages around */
   activitySpot: { x: number; y: number; z: number };
+  /** D1.3: the RENDERED-terrain ground height (m) at a world XZ — the raycast
+   *  ground-snap truth (D1.2), so a §1e reframe can lift the lens above the REAL
+   *  surface (`safeCamHeight`) and never land under the visual terrain the way the
+   *  mirrored analytic marker Y once buried the mission camera (direction §2.2/§2.5). */
+  groundY(x: number, z: number): number;
   /** a shared THREE.Raycaster for pick3d */
   raycaster: unknown;
   /** the live render canvas — pick3d maps pointer coords + sizes ≥56px hit-spheres against it */

@@ -39,7 +39,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, contactShadow, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
+import { anchoredPrompt, contactShadow, liftReframeAboveGround, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -191,6 +191,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // ---- §1e reframe — a calm raised look over the whole bench (cuts if reduced) ----
     const lookAt = new THREE.Vector3(sx, sy + 0.4, sz);
     const to = new THREE.Vector3(sx, sy + 3.4, sz + 5.4);
+    liftReframeAboveGround(to, ctx.groundY); // D1.3: never land the lens under the terrain
     const reframe = makeReframe(camera, to, lookAt, reduced, 0.35);
 
     // a one-shot glide of the animal to a destination (cut under reduced-motion)

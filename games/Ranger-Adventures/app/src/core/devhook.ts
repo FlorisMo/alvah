@@ -79,6 +79,22 @@ export type CamState = {
    *  (from the camera quaternion) is what the pixels show and outranks this offset if the
    *  two ever disagree (§4). Zero at spawn and whenever a clean click walks. */
   orbit: { yaw: number; lift: number };
+  /** D1.3 mission-entry camera truth: the RENDERED-terrain ground height (m) directly
+   *  under the lens (`groundSnapY(cam.x, cam.z)` — the raycast ground-snap, D1.2, which
+   *  matches the pixels, NOT the mirrored analytic `heightAt` that once buried the
+   *  mission lens below the visual ground). A camera-above-terrain assert reads
+   *  `y > groundAtCam` per game-3D entry — a below-ground reframe (fresh simon-3D at
+   *  `cam.y` −1.29 with an up-tilt) fails it, so an under-terrain frame is caught as
+   *  no-evidence (direction §2.2/§2.5/§8.7). Pixels stay the court of appeal (§4). */
+  groundAtCam: number;
+  /** D1.3 task-in-frustum: during an in-place mission activity, is the task staging
+   *  (the activity anchor the engine stages its zoek-target / route field / call
+   *  half-circle / encounter vignette / wissel-bestemmingen around) inside the live
+   *  view frustum? The game-3D entry assert reads it TRUE to prove the reframe lands
+   *  on the playfield — an off-field or backside frame (fresh corsi-3D framing bare
+   *  ground) reads false. `null` when no in-place activity owns the camera (free-roam,
+   *  title, board). The screenshot stays the court of appeal (§4). */
+  taskInView: boolean | null;
 };
 
 export interface RangerDevHook {

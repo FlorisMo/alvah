@@ -442,6 +442,11 @@ export class World {
   // movement, walk-taps, proximity, wayfinding and the §1e follow all pause so the
   // activity's reframe owns the camera (it restores on endActivity).
   private activityActive = false;
+  // D1.3: the world-space anchor the running in-place activity stages its task
+  // around (= the `ctx()` activitySpot). camState tests it against the live frustum
+  // for `taskInView`, so a game-3D reframe that lands off the playfield / on a
+  // backside is caught. Set in ctx(), cleared in endActivity(); null in free-roam.
+  private activityFocus: { x: number; y: number; z: number } | null = null;
 
   // W2.2 spawn-clearing hub: the ranger-cabin (a solid prop the ranger walks
   // around) + the case-board (the MISSION hub — proximity opens the mission board
@@ -1853,6 +1858,22 @@ export class World {
     for (let i = 0; !landmarkInView && i < this.landmarks.length; i++) {
       landmarkInView = ptInFrustum(this.landmarks[i].x, this.landmarks[i].z);
     }
+    // D1.3 mission-entry camera truth. `groundAtCam` = the RENDERED-terrain height
+    // under the lens off the raycast ground-snap (matches the pixels, unlike the
+    // mirrored `heightAt` the markers seat on); a game-3D reframe assert reads
+    // `y > groundAtCam` so a below-ground entry (fresh simon-3D, cam.y −1.29) is caught.
+    const groundAtCam = this.groundSnapY(cam.position.x, cam.position.z);
+    // `taskInView` = the running activity's task anchor (its staging centre, a hair
+    // above the ground so a form/footprint at the spot still counts) sits inside the
+    // live frustum — proving the reframe lands ON the playfield, not on a backside or
+    // bare ground off the field. null in free-roam (no in-place activity owns the cam).
+    let taskInView: boolean | null = null;
+    if (this.activityActive && this.activityFocus) {
+      const f = this.activityFocus;
+      hub.set(f.x, f.y + 0.4, f.z);
+      taskInView = true;
+      for (const plane of frustum.planes) if (plane.distanceToPoint(hub) < 0) { taskInView = false; break; }
+    }
     // F-16 dolly-zoom read-back: the player-set walk boom clamped to its live bounds,
     // so a grade proves the wheel respects BOTH clamps straight off the annotation
     // (`zoom.dist` ∈ [min, max] as an invariant; wheel-in saturates to min, wheel-out
@@ -1879,6 +1900,8 @@ export class World {
       avatarOpacity: this.avatarOpacity,
       avatarScreen,
       landmarkInView,
+      groundAtCam,
+      taskInView,
     };
   }
 
@@ -3440,12 +3463,19 @@ export class World {
   ctx(prompt: HTMLElement): WorldCtx {
     const near = this.nearId ? this.markers.find((m) => m.missionId === this.nearId) : null;
     const spot = near ? near.pos : this.ranger.position;
+    // D1.3: remember the task anchor so camState can prove the reframe frames it.
+    this.activityFocus = { x: spot.x, y: spot.y, z: spot.z };
     return {
       scene: this.scene,
       camera: this.camera,
       cameraRig: this.camera, // the §1e follow drives the camera directly (no separate rig)
       approachedModel: near ? near.group : null,
       activitySpot: { x: spot.x, y: spot.y, z: spot.z },
+      // D1.3: the rendered-terrain height (raycast ground-snap) so a mini-game reframe
+      // lifts the lens above the REAL surface, never the mirrored analytic marker Y
+      // that buried the mission camera (the markers seat on `heightAt`, which diverges
+      // from the pixels the way P1.5a's sink did — direction §2.2 one-ground-truth).
+      groundY: (x, z) => this.groundSnapY(x, z),
       raycaster: this.raycaster,
       canvas: this.canvas,
       prompt,
@@ -3466,6 +3496,7 @@ export class World {
    *  to behind the ranger (a cut under reduced-motion, per §3.2). */
   endActivity(): void {
     this.activityActive = false;
+    this.activityFocus = null; // D1.3: no task owns the camera in free-roam
     for (const m of this.markers) m.label.visible = true; // W6.1: restore the name-tags on resume
     this.nearId = null;
     this.nearBoard = false; // force a fresh proximity re-fire (re-surfaces the hub prompt)

@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MIN_TAP_PX, worldRadiusForPx, tapHitRadius, trailPoints, highlightPulse, dampFactor,
+  safeCamHeight, CAM_GROUND_CLEAR,
 } from './kit-math.ts';
 
 const FOV = (55 * Math.PI) / 180; // World's camera FOV
@@ -75,4 +76,18 @@ test('dampFactor is in [0,1] and rises with dt; tau<=0 → instant cut', () => {
   const small = dampFactor(0.016, 0.3);
   const big = dampFactor(0.2, 0.3);
   assert.ok(small > 0 && small < 1 && big > small && big < 1);
+});
+
+test('safeCamHeight keeps the authored look on flat ground, lifts it above a rising terrain', () => {
+  // D1.3: on flat ground the authored raised look already clears the surface → unchanged
+  assert.equal(safeCamHeight(3.4, 0), 3.4);
+  // a low authored Y under a dune that rises to 4 m at the lens XZ → lifted above it
+  assert.equal(safeCamHeight(3.2, 4), 4 + CAM_GROUND_CLEAR);
+  // the buried case that motivated the box (authored Y below the visual ground) → clears it
+  assert.ok(safeCamHeight(-1.29, 0) >= CAM_GROUND_CLEAR);
+  // the result is NEVER below groundY + clearance, whatever the authored height
+  for (const [d, g] of [[3.4, 0], [0, 2], [-4, 1.5], [10, 0]] as const) {
+    assert.ok(safeCamHeight(d, g) >= g + CAM_GROUND_CLEAR - 1e-9);
+    assert.ok(safeCamHeight(d, g) >= d - 1e-9);
+  }
 });

@@ -28,7 +28,7 @@ import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/d
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { Highlight3d, anchoredPrompt, contactShadow, makeReframe, registerActivityWin, activityScopeSignal } from '../play/kit';
+import { Highlight3d, anchoredPrompt, contactShadow, liftReframeAboveGround, makeReframe, registerActivityWin, activityScopeSignal } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -79,6 +79,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
     // ---- §1e reframe onto the subject (cuts under reduced-motion) ----
     const lookAt = new THREE.Vector3(sx, sy + 0.5, restZ);
     const to = new THREE.Vector3(sx, sy + 2.2, sz + 4.0);
+    liftReframeAboveGround(to, ctx.groundY); // D1.3: never land the lens under the terrain
     const reframe = makeReframe(camera, to, lookAt, reduced, 0.35);
 
     // a soft, recoverable lean-AWAY on a wrong choice (never toward the child)

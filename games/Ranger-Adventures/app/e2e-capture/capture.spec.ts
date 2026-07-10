@@ -86,7 +86,13 @@ type Annotation = {
   // changes on a >6 px drag and NEVER on a clean tap; the real `cam.yaw` (quaternion) is
   // the court of appeal. The camera-orbit shot proves a drag swings `cam.yaw` while `pos`
   // holds; the camera-click-walk shot proves a clean click still moves `pos` (tap-to-walk).
-  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
+  // D1.3 mission-entry camera truth: `groundAtCam` is the RENDERED-terrain height (raycast
+  // ground-snap) under the lens — the game-3d assert reads `cam.y > groundAtCam` so a
+  // below-terrain reframe (fresh simon-3D `cam.y` −1.29, up-tilt) is caught as no-evidence.
+  // `taskInView` = the running activity's task staging sits in the live frustum (true on a
+  // game-3d entry landed on its playfield; null in free-roam) — an off-field/backside frame
+  // reads false. Pixels stay the court of appeal (§4).
+  cam: { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean }; landmarkInView: boolean; groundAtCam: number; taskInView: boolean | null; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   // vehicle heading/speed when driving — the DATA signal for the F-32 steering
   // control conditions. `headingUnwrapped` is the CUMULATIVE steered yaw (never
   // wrapped): across the no-turn straight pair it barely moves (drift ≈ 0), across
@@ -165,7 +171,7 @@ interface Hook {
   clip(): { name: string; time: number } | null;
   avatar(): { height: number } | null;
   groundSpeed(): number | null;
-  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean }; landmarkInView: boolean; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
+  cam(): { dist: number; yaw: number; pitch: number; x: number; y: number; z: number; target: string; avatarInView: boolean; avatarOpacity: number; avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean }; landmarkInView: boolean; groundAtCam: number; taskInView: boolean | null; fov: number; zoom: { dist: number; min: number; max: number }; orbit: { yaw: number; lift: number } } | null;
   board(): { x: number; z: number; near: boolean; inFrustum: boolean } | null;
   vehicle(): { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; heading: number; headingUnwrapped: number; speed: number; driverHidden: boolean } | null;
   hint(): { active: string | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
@@ -951,10 +957,32 @@ test('audit capture flow', async ({ context }, testInfo) => {
         // second-step engine (dagnacht/wisselen) advances through the first step.
         if (g.advance) await advanceToStepCard(page, isPad, g.card);
         else await page.locator(g.card).waitFor({ state: 'visible', timeout: 20_000 });
-        await settle(page, 1200); // let the §1e reframe land on the staged forms
+        await settle(page, 500);        // let the staged forms mount + the §1e reframe kick off
+        await settleMissionCam(page);   // D1.3: wait out the reframe so the reads are the DESTINATION framing, not a pre-settle void (§8.7)
         await snap(page, `game3d-${g.ef}`, 'Speelvlakken (3D)',
           `3D-speelvlak ${g.label} (${g.ef}) op het ECHTE missiepad (bord → "${g.mission}" → Ga op pad) — leest de diegetische 3D-staging als dezelfde warme gouden-uur-Veluwe (§2.1/§2.2: één licht, gegronde vormen met zachte slagschaduw), ZONDER sandbox-billboards/wolf, missionView=3d, drawCalls <150?`,
           [g.speak]);
+        // D1.3: the SETTLED mission-entry camera must land ABOVE the rendered terrain
+        // (cam.y > groundAtCam — the raycast ground-snap under the lens, so a below-ground
+        // reframe like the fresh simon-3D at cam.y −1.29 is caught) AND frame the task
+        // staging (taskInView). Fold both into the shot's note as an honest ok:false finding
+        // — never throw (that GAPs the scene + loses the frame); the fixed reframe holds them,
+        // so a healthy run stays green (direction §2.2/§2.5/§8.7).
+        const shot = shots[shots.length - 1];
+        const c = shot.cam;
+        if (c) {
+          const clear = c.y - c.groundAtCam;
+          shot.note += `  [D1.3: cam.y ${c.y.toFixed(2)} m boven terrein ${c.groundAtCam.toFixed(2)} m → vrije hoogte ${clear.toFixed(2)} m; taskInView=${c.taskInView}.]`;
+          if (!(c.y > c.groundAtCam)) {
+            shot.ok = false;
+            shot.note += '  [D1.3: de camera staat ONDER het gerenderde terrein (cam.y ≤ grond) — een onder-terrein reframe is geen bewijs (§2.5/§8.7).]';
+          }
+          if (c.taskInView !== true) {
+            shot.ok = false;
+            shot.note += `  [D1.3: de taak-staging valt BUITEN het frustum (taskInView=${c.taskInView}) — het speelvlak is niet in beeld (§8.7).]`;
+          }
+          flush();
+        }
       });
     });
   }
@@ -1236,6 +1264,39 @@ async function settleCam(page: Page, timeoutMs = 6000): Promise<void> {
       throw new Error(`camera boom never settled within ${timeoutMs} ms (last cam.dist=${prev})`);
     }
     await page.waitForTimeout(80);
+  }
+}
+
+/** D1.3: block until the §1e MISSION reframe has SETTLED before a game-3D snap+assert, so
+ *  the camera-above-terrain + task-in-frustum reads are the DESTINATION framing, never a
+ *  pre-settle void (fresh corsi-3D read a steep pre-settle pitch mid-ease; direction §8.7).
+ *  Unlike `settleCam` (which polls the zoom-dolly `cam.dist`), the mission reframe MOVES the
+ *  whole camera POSITION toward its raised look, so "settled" = the live `cam` x/y/z has
+ *  stopped moving (‖Δpos‖ ≤ 0.03 m across two consecutive ~90 ms polls).
+ *
+ *  The reframe is an exp-damped push-in (tau 0.35 s → ~2 s on a 60 fps device). In THIS
+ *  headless capture the engine's own rAF is throttled, so the SAME ease converges far
+ *  slower (measured effective tau ≈ 4–5 s → ~10–15 s to arrive on the farther reframes),
+ *  hence the generous backstop. On backstop we RETURN best-effort rather than throw: the
+ *  ease is monotone-converging and the D1.3 asserts folded into the snap note below
+ *  (cam.y > groundAtCam, taskInView) hold across the WHOLE ease, so a slow-but-valid ease
+ *  reads a representative near-destination frame — it must NOT GAP the scene (the D1.0
+ *  budget/GAP lesson). A genuinely dead/void camera reads `cam=null` and the fold is
+ *  skipped; the shot is still kept. */
+async function settleMissionCam(page: Page, timeoutMs = 20000): Promise<void> {
+  const start = Date.now();
+  let prev: { x: number; y: number; z: number } | null = null;
+  let stable = 0;
+  for (;;) {
+    const p = await hook(page, (r) => { const c = r.cam(); return c ? { x: c.x, y: c.y, z: c.z } : null; });
+    if (p) {
+      if (prev && Math.hypot(p.x - prev.x, p.y - prev.y, p.z - prev.z) <= 0.03) {
+        if (++stable >= 2) return;
+      } else stable = 0;
+      prev = p;
+    }
+    if (Date.now() - start > timeoutMs) return; // best-effort near-destination frame; the folded asserts gate correctness
+    await page.waitForTimeout(90);
   }
 }
 

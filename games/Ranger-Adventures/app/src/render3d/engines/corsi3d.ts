@@ -30,7 +30,7 @@ import { buildCorsiTrial, CorsiRun, type CorsiSpot } from '../../engines/corsi';
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
+import { anchoredPrompt, liftReframeAboveGround, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -113,6 +113,7 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // ---- §1e reframe — a calm raised look over the whole patch (cuts if reduced) ----
     const lookAt = new THREE.Vector3(sx, sy, sz);
     const to = new THREE.Vector3(sx, sy + 3.4, sz + 4.4);
+    liftReframeAboveGround(to, ctx.groundY); // D1.3: never land the lens under the terrain
     const reframe = makeReframe(camera, to, lookAt, reduced, 0.35);
 
     function applyFx(f: SpotFx): void {

@@ -17,7 +17,7 @@
  */
 
 import * as THREE from 'three';
-import { dampFactor, highlightPulse, tapHitRadius, trailPoints } from './kit-math';
+import { dampFactor, highlightPulse, safeCamHeight, tapHitRadius, trailPoints } from './kit-math';
 
 /* ------------------------------------------------------ test win channel ---- */
 
@@ -251,6 +251,23 @@ export function spoorTrail(
 }
 
 /* ----------------------------------------------------------------- reframe ---- */
+
+/**
+ * D1.3: lift a reframe camera target above the RENDERED terrain under the lens.
+ * Mutates `to.y` up to `groundY(to.x, to.z) + clearance` where the ground rises under
+ * the camera's own XZ, and leaves flat-ground looks unchanged. A §1e mission reframe
+ * then never lands below the visual surface — the mirrored analytic marker Y once
+ * buried the mission camera (fresh simon-3D shot from `cam.y` −1.29, an up-tilt
+ * through the terrain; direction §2.2 one-ground-truth / §2.5 never-under-terrain).
+ * Call it on the `to` vector immediately before `makeReframe`, passing `ctx.groundY`
+ * (the raycast ground-snap, which matches the pixels).
+ */
+export function liftReframeAboveGround(
+  to: THREE.Vector3,
+  groundY: (x: number, z: number) => number,
+): void {
+  to.y = safeCamHeight(to.y, groundY(to.x, to.z));
+}
 
 /**
  * A §1e camera reframe: exp-damped move of the camera to `to` while looking at
