@@ -36,7 +36,9 @@
 #   bash games/Ranger-Adventures/runs/run-5-cohesion/run-d-loop.sh          # cap 200, effort xhigh
 #   bash games/Ranger-Adventures/runs/run-5-cohesion/run-d-loop.sh 120      # custom cap
 #   EFFORT=max caffeinate -dimsu nohup bash …/run-d-loop.sh &               # detached + Mac awake
-# Watch it live in a second terminal:
+# Watch the CLEAN per-session feed (session N/max + one line per session):
+#   tail -f games/Ranger-Adventures/runs/run-5-cohesion/RUN-D-PROGRESS.log
+# Watch the FULL debug log (verbose — model output, capture, git):
 #   tail -f games/Ranger-Adventures/runs/run-5-cohesion/RUN-D-LOOP.log
 # ───────────────────────────────────────────────────────────────────────────
 set -u
@@ -46,8 +48,17 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 cd "$ROOT"
 DIR="games/Ranger-Adventures/runs/run-5-cohesion"
 LEDGER="$DIR/RUN-D-LEDGER.md"
-LOG="$DIR/RUN-D-LOOP.log"
+LOG="$DIR/RUN-D-LOOP.log"                      # full verbose debug log
+PROGRESS="$DIR/RUN-D-PROGRESS.log"             # clean per-session feed for Floris
 APP="games/Ranger-Adventures/app"
+
+# progress() — one clean line to the terminal (stdout) AND the progress feed AND
+# the debug log. This is the human-readable "session N/max + short update" feed.
+progress() { printf '%s\n' "$*" | tee -a "$PROGRESS"; printf '%s\n' "$*" >> "$LOG"; }
+# short, human label for a box (strip markdown, first ~72 chars).
+box_label() { printf '%s' "$1" | sed -E 's/\*\*//g; s/`//g' | cut -c1-72; }
+# total real boxes (checked + unchecked) and just the checked ones — for "N/T".
+total_boxes() { grep -c -E '^[[:space:]]*-[[:space:]]*\[[ xX]\]' "$LEDGER" 2>/dev/null; }
 
 MAX_RUNS="${1:-200}"                          # safety cap — auto-stop after this many sittings
 MODEL_OPUS="${MODEL_OPUS:-opus}"              # the BUILDER (writes the TypeScript)
@@ -173,6 +184,8 @@ run_fable_gate() {
 
 echo "=== RUN D cohesion loop started $(date '+%F %T') · cap ${MAX_RUNS} · build=${MODEL_OPUS} plan/audit=${MODEL_FABLE} · effort ${EFFORT} ===" | tee -a "$LOG"
 echo "    mode: FABLE PLANS + AUDITS · OPUS EXECUTES A WHOLE PHASE (self-verifies + self-ticks per box; build + e2e:smoke gate the tick mechanically; NO per-box capture/grade). Fable audits at each phase GATE off one fresh capture: re-opens shortfalls + defines the next steps. DEFER-AND-CONTINUE — a WORK box stuck ${STALL_LIMIT} sittings OR one that prints NEEDS-FLORIS is parked to ${DEFERRED_LIST}; a stuck DIRECTION/GATE pauses. Every ledger advance is committed+pushed." | tee -a "$LOG"
+progress ""
+progress "═══════════ RUN D gestart $(date '+%F %T') · max ${MAX_RUNS} sessies ═══════════"
 
 for i in $(seq 1 "$MAX_RUNS"); do
   echo "──────── sitting $i/$MAX_RUNS  $(date '+%F %T') ────────" | tee -a "$LOG"
@@ -181,9 +194,11 @@ for i in $(seq 1 "$MAX_RUNS"); do
   if [ -z "$box" ]; then
     if [ -n "$(any_unchecked)" ]; then
       echo "✅ RUN-D-COMPLETE — all active boxes done. Only Floris-only DEMO + parked DEFERRED boxes remain." | tee -a "$LOG"
+      progress "🎉 KLAAR (sessie ${i}/${MAX_RUNS}) — alle actieve vakjes af. Alleen Floris-DEMO + geparkeerde vakjes resten."
       (cd "$APP" && node scripts/ranger-run.mjs status --blocker="Run D phases complete (laptop) — awaiting Floris on-device demo (playability/feel/audio/real-Safari/iPad) + the DEFERRED batch (see runs/run-5-cohesion/).") >> "$LOG" 2>&1
     else
       echo "🎉 RUN-D-COMPLETE — every box in RUN-D-LEDGER.md is checked (after $((i-1)) sittings)." | tee -a "$LOG"
+      progress "🎉 KLAAR — elk vakje in de lijst is afgevinkt (na $((i-1)) sessies)."
     fi
     break
   fi
@@ -208,21 +223,29 @@ for i in $(seq 1 "$MAX_RUNS"); do
   ticks_before="$(ticks_done)"
   before="$(md5 -q "$LEDGER")"
   log_off="$(wc -c < "$LOG" 2>/dev/null | tr -d ' ' || echo 0)"; [ -z "$log_off" ] && log_off=0
+  total_now="$(total_boxes)"
+
+  # ── CLEAN per-session banner (session N/max · boxes done · what runs now) ─────
+  progress ""
+  progress "┌── SESSIE ${i}/${MAX_RUNS} · $(date '+%H:%M') · vakjes af: ${ticks_before}/${total_now}"
 
   role="opus"
   case "$box" in
     *DIRECTION*)
       role="fable"
+      progress "│  ✍ Fable PLANT: $(box_label "$clean_box")"
       echo "  ✍ PLAN box (Fable captures → defines the next precise actions · model=${MODEL_FABLE}): $clean_box" | tee -a "$LOG"
       capture_now
       run_fable_direction ;;
     *GATE-*)
       role="fable"
+      progress "│  ▷ Fable AUDIT van de fase: $(box_label "$clean_box")"
       echo "  ▷ PHASE AUDIT (capture → Fable audits the phase, surfaces fixes/issues, defines next steps · model=${MODEL_FABLE}): $clean_box" | tee -a "$LOG"
       capture_now
       run_fable_gate ;;
     *)
       role="opus"    # Opus executes + self-ticks; the phase AUDIT is the checkpoint (no per-box capture/grade)
+      progress "│  ▶ Opus BOUWT: $(box_label "$clean_box")"
       echo "  ▶ build box (opus builds + self-verifies + self-ticks · build=${MODEL_OPUS}): $clean_box" | tee -a "$LOG"
       run_opus_build ;;
   esac
@@ -240,6 +263,7 @@ for i in $(seq 1 "$MAX_RUNS"); do
   # ── FABLE → OPUS FALLBACK (latched, once) ────────────────────────────────────
   if [ "$hit_limit" -eq 1 ] && [ "$role" = "fable" ] && [ "$FABLE_FELL_BACK" -eq 0 ] && [ "$MODEL_FABLE" != "$MODEL_OPUS" ]; then
     echo "⚠ Verifier/director (Fable, ${MODEL_FABLE}) hit a usage/model limit → falling back to Opus (${MODEL_OPUS}, effort ${EFFORT}) for that role and continuing. Retrying this box on Opus." | tee -a "$LOG"
+    progress "└── ⚠ Fable-limiet geraakt → rol overgeschakeld naar Opus; sessie wordt opnieuw geprobeerd."
     MODEL_FABLE="$MODEL_OPUS"; FABLE_FELL_BACK=1
     (cd "$APP" && node scripts/ranger-run.mjs status --blocker="Run D: Fable tokens exhausted — verifier/director role switched to Opus. Run continues; no pause.") >> "$LOG" 2>&1
     stall=0
@@ -250,6 +274,7 @@ for i in $(seq 1 "$MAX_RUNS"); do
   # ── "ACCEPT THE BREAK": stop cleanly on a REAL Claude usage-limit hit ────────
   if [ "$hit_limit" -eq 1 ]; then
     echo "⛔ Hit the Claude usage limit — pausing (NEEDS-FLORIS). Nothing lost; re-launch after your weekly window resets to continue from the next box." | tee -a "$LOG"
+    progress "└── ⛔ Claude-gebruikslimiet geraakt — GEPAUZEERD. Niets kwijt; herstart na reset van je venster."
     (cd "$APP" && node scripts/ranger-run.mjs status --blocker="Run D paused: hit the Claude usage limit. Re-launch after the weekly window resets to continue.") >> "$LOG" 2>&1
     break
   fi
@@ -264,12 +289,14 @@ for i in $(seq 1 "$MAX_RUNS"); do
   # Only WORK boxes are parked-and-continued; a stuck DIRECTION/GATE is a real halt.
   is_work_box=1
   case "$box" in *DIRECTION*|*GATE-*) is_work_box=0 ;; esac
+  parked=0
 
   # ── NEEDS-FLORIS PARK ────────────────────────────────────────────────────────
   if [ "$is_work_box" -eq 1 ] && printf '%s\n' "$sitting_out" | grep -qE '^NEEDS-FLORIS:'; then
     nf_reason="$(printf '%s\n' "$sitting_out" | grep -m1 -E '^NEEDS-FLORIS:' | sed 's/^NEEDS-FLORIS:[[:space:]]*//')"
     [ -z "$nf_reason" ] && nf_reason="a sitting flagged it needs Floris (no reason given)"
     echo "🙋 '${clean_box}' NEEDS FLORIS — parking to ${DEFERRED_LIST} and moving on (not a halt): ${nf_reason}" | tee -a "$LOG"
+    progress "└── 🙋 GEPARKEERD — heeft Floris nodig: ${nf_reason}"
     defer_first_work_box "NEEDS FLORIS · ${nf_reason}"
     (cd "$APP" && node scripts/ranger-run.mjs commit "Run D: parked (needs Floris) — ${clean_box} — $(date '+%F %T')") >> "$LOG" 2>&1 \
       || echo "  ⚠ needs-Floris park commit/push problem (continuing)" | tee -a "$LOG"
@@ -281,14 +308,31 @@ for i in $(seq 1 "$MAX_RUNS"); do
   if [ "$stall" -ge "$STALL_LIMIT" ]; then
     if [ "$is_work_box" -eq 1 ]; then
       echo "⏭  '${clean_box}' unpassed for $STALL_LIMIT sittings — DEFERRING it to ${DEFERRED_LIST} and moving on (not a halt)." | tee -a "$LOG"
+      progress "└── ⏭ GEPARKEERD — ${STALL_LIMIT}× niet gelukt; loop gaat door naar het volgende vakje."
       defer_first_work_box "failed the independent Fable grade $STALL_LIMIT sittings running"
       (cd "$APP" && node scripts/ranger-run.mjs commit "Run D: deferred stuck box — ${clean_box} — $(date '+%F %T')") >> "$LOG" 2>&1 \
         || echo "  ⚠ deferred-box commit/push problem (continuing)" | tee -a "$LOG"
-      stall=0
+      stall=0; parked=1
     else
       echo "⛔ Ledger unchanged for $STALL_LIMIT sittings on a DIRECTION/GATE box — pausing (NEEDS-FLORIS). Check $LOG and the fresh screenshots." | tee -a "$LOG"
+      progress "└── ⛔ GEPAUZEERD — een PLAN/AUDIT-sessie liep ${STALL_LIMIT}× vast. Check de logs + screenshots."
       (cd "$APP" && node scripts/ranger-run.mjs status --blocker="Run D stalled on: ${clean_box}. Check RUN-D-LOOP.log + runs/run-3-ux-polish/audit-evidence/.") >> "$LOG" 2>&1
       break
+    fi
+  fi
+
+  # ── CLEAN per-session result line (skip when a branch already printed one) ───
+  if [ "$parked" -eq 0 ]; then
+    ticks_after="$(ticks_done)"; total_now="$(total_boxes)"
+    next_box="$(next_work_box)"
+    next_short="$(box_label "$(printf '%s' "$next_box" | sed 's/^[[:space:]]*-[[:space:]]*\[ \][[:space:]]*//')")"
+    [ -z "$next_short" ] && next_short="— (geen open vakje meer)"
+    if [ "$before" != "$after" ] && [ "$ticks_after" -gt "$ticks_before" ]; then
+      progress "└── ✔ AF (+$((ticks_after - ticks_before))) · vakjes af: ${ticks_after}/${total_now} · volgende: ${next_short}"
+    elif [ "$before" != "$after" ]; then
+      progress "└── ↻ BIJGEWERKT (audit/plan: vakjes heropend of toegevoegd) · vakjes af: ${ticks_after}/${total_now} · volgende: ${next_short}"
+    else
+      progress "└── · nog niet af (poging ${stall}/${STALL_LIMIT}) · vakjes af: ${ticks_after}/${total_now} · volgende: ${next_short}"
     fi
   fi
   sleep 5
@@ -297,3 +341,4 @@ done
 echo "=== Run D cohesion loop ended $(date '+%F %T') ===" | tee -a "$LOG"
 echo "Ledger:    $LEDGER" | tee -a "$LOG"
 echo "Direction: $DIR/RUN-D-DIRECTION.md   ·   Fresh shots: games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence/" | tee -a "$LOG"
+progress "═══════════ RUN D gestopt $(date '+%F %T') · vakjes af: $(ticks_done)/$(total_boxes) ═══════════"

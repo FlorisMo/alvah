@@ -24,6 +24,16 @@
 > needs **feel / audio / real device / real Safari / iPad pixels** as
 > **demo-gated — Floris on the real device** (the DEMO section of the ledger).
 
+> **WATCHING THE RUN (Floris's terminal view).** The supervisor writes TWO logs:
+> `RUN-D-PROGRESS.log` is the **clean per-session feed** — one banner + one
+> result line per sitting, showing `SESSIE N/max`, `vakjes af: N/total`, what
+> ran (Opus bouwt / Fable plant / Fable audit), and the outcome
+> (✔ af / ↻ bijgewerkt / 🙋 geparkeerd / ⛔ gepauzeerd) + the next box. Watch it
+> with `tail -f runs/run-5-cohesion/RUN-D-PROGRESS.log`. `RUN-D-LOOP.log` is the
+> **full verbose debug log** (model output, capture, git) for when something
+> needs digging into. Every launch appends a "RUN D gestart … · max N sessies"
+> banner so a fresh tail is self-orienting.
+
 ## 0. What this run is (and is NOT)
 
 Run D **repairs, deepens + unifies** the game that already exists (VISION §8)
