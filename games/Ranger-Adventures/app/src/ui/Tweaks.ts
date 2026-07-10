@@ -43,6 +43,11 @@ const TOGGLES: ToggleDef[] = [
     effect: (on) => setReducedMotionOverride(on ? true : null),
   },
   { key: 'cameraDraaitMee', label: 'Camera draait mee', hint: 'De camera draait met je mee' },
+  // W5.3 opt-in helicopter (default UIT; withheld under "Rustige beweging"). No
+  // `effect`: World reads the toggle live each frame via `heliOptInSource`
+  // (Missions.setHeli), so flipping it here makes the aircraft enterable with no
+  // restart — the P1.5c "enable in Instellingen AND enter" path.
+  { key: 'helikopter', label: 'Helikopter', hint: 'Vlieg rustig over de Veluwe' },
   {
     key: 'leesFont', label: 'Leesletter', hint: 'Extra duidelijke letters',
     effect: () => applyReadingPrefs(store.get().settings),

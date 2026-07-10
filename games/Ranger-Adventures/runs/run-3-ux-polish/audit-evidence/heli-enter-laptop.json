@@ -1,0 +1,97 @@
+{
+  "box": "P1.5c",
+  "platform": "laptop",
+  "spec": "heli-enter.spec.ts",
+  "toggleRect": {
+    "top": 475.1875,
+    "bottom": 539.1875,
+    "left": 430,
+    "right": 850,
+    "width": 420,
+    "height": 64,
+    "vw": 1280,
+    "vh": 800
+  },
+  "steps": [
+    {
+      "i": 0,
+      "phase": "boot",
+      "available": false,
+      "optIn": false,
+      "near": false,
+      "inHeli": false,
+      "heliX": 24,
+      "heliZ": 22,
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "drawCalls": 46,
+      "file": ""
+    },
+    {
+      "i": 1,
+      "phase": "instellingen",
+      "available": false,
+      "optIn": false,
+      "near": false,
+      "inHeli": false,
+      "heliX": 24,
+      "heliZ": 22,
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "drawCalls": 45,
+      "file": "laptop/p15c-heli-enter/p15c-heli-00-instellingen.png"
+    },
+    {
+      "i": 2,
+      "phase": "enabled",
+      "available": true,
+      "optIn": true,
+      "near": false,
+      "inHeli": false,
+      "heliX": 24,
+      "heliZ": 22,
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "drawCalls": 45,
+      "file": ""
+    },
+    {
+      "i": 3,
+      "phase": "at-pad",
+      "available": true,
+      "optIn": true,
+      "near": true,
+      "inHeli": false,
+      "heliX": 24,
+      "heliZ": 22,
+      "pos": {
+        "x": 20.955641750255207,
+        "z": 19.75278182876404
+      },
+      "drawCalls": 24,
+      "file": "laptop/p15c-heli-enter/p15c-heli-01-at-pad.png"
+    },
+    {
+      "i": 4,
+      "phase": "in-heli",
+      "available": true,
+      "optIn": true,
+      "near": true,
+      "inHeli": true,
+      "heliX": 24,
+      "heliZ": 22,
+      "pos": {
+        "x": 24,
+        "z": 22
+      },
+      "drawCalls": 101,
+      "file": "laptop/p15c-heli-enter/p15c-heli-02-in-heli.png"
+    }
+  ]
+}

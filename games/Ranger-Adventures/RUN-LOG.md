@@ -707,3 +707,15 @@ One status block per run/step (BUILD-PLAN §9b).
 ▷ progress: ~11%
 ⚠ blocker: Run C gereconcilieerd naar Run D (2026-07-05). Launch: run-d-loop.sh — zie runs/run-5-cohesion/.
 ```
+
+---
+**2026-07-10 19:50:03Z** · ticked: - [x] P1.5c · The helicopter can be enabled in Instellingen AND entered [both] +demo — wire the whole path end-to-end: the `helikopter` toggle in Instellingen is reachable + tappable (≥56 px, on-screen — COUPLE with the Instellingen sticky-exit fix D3.10 so it isn't below the fold), turning it on makes `heliAvailable` true, the "🚁 Stap in de helikopter" affordance appears at a pad, and tapping it enters. NB `heli().available` is false under reduced-motion BY DESIGN (flight withheld, not calmed) — the harness scene must run with reduced-motion OFF. Extend the harness to open Instellingen → toggle helikopter on → walk to a pad → enter. Verify by: drive-assert (the helikopter toggle bounding-box inside the viewport + ≥56 px; after toggling on `heli().available`=true; at the pad `heli().near`=true; after the enter tap `heli().inHeli`=true) + shot (the toggle on-screen in Instellingen; the enter affordance at the pad). +demo: Floris turns it on in Settings and flies pad-to-pad on the real iPad.
+
+```
+✔ landed: D0.2 · DIRECTION · validate + refine RUN-D-DIRECTION.md + this ledger against the animation/physics deep-research
+▶ phase:  Phase 1 · PLAYABILITY FIRST — correctness before any more polish  (Floris demo 2026-07-05: sank through floor · jeep sticks-and-slides · cannot enter heli)
+→ next:   DEFERRED · D1.0 · Capture harness fit for Run D: green inside its budget + honest evidence [laptop] (from Run C P1.10/P1.15 capture legs; re-verified 2026-07-05: the "audit capture flow" test timed out at its 30-min cap at 11:27 — the `ven` group + a transient newPage protocol error — and the `40–44 game3d-*` frames shoot `/?sandbox`, NOT the mission path the player reaches, while orphan PNGs from older shot-numbering runs still sit beside fresh ones under `laptop/`). This box is harness-only (`app/e2e-capture/`), no game code, and lands FIRST because every Phase-1 drive-burst box adds scenes to this harness: (a) bound/isolate the slow groups so the whole capture finishes green inside the budget, with a retry on the newPage protocol error; (b) shoot each of the 5 games' 3D surface on the player-reachable mission path (not the sandbox), keeping the five 2D-floor frames; (c) make capture REMOVE orphan PNGs not present in the fresh annotations. Verify by: `npm run capture` exits green with all groups complete; fresh set contains named player-path frames for all five games ×{3D, 2D floor} with per-frame `drawCalls` <150; every PNG under `laptop/` matches a shot in `annotations-laptop.json`.
+▤ ledger: RUN-D-LEDGER.md
+▷ progress: ~13%
+⚠ blocker: Run C gereconcilieerd naar Run D (2026-07-05). Launch: run-d-loop.sh — zie runs/run-5-cohesion/.
+```
