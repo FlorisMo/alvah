@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
 # ───────────────────────────────────────────────────────────────────────────
 # Ranger van de Veluwe — Run 5 · Run D: the RECONCILED COHESION supervisor
-# (mirrors run-c-loop.sh; the role split TIGHTENS per Floris 2026-07-05:
-#  OPUS BUILDS — it writes the TypeScript for one box per sitting — and FABLE
-#  VERIFIES: an independent Fable sitting grades EVERY box's fresh capture
-#  evidence (not only the phase gates), and Fable art-directs the gates. No
-#  self-grading anywhere. Same supervisor-owns-capture split as Run B/C.)
+# (mirrors run-c-loop.sh; the rhythm CHANGED per Floris 2026-07-05 (rev 2):
+#  FABLE PLANS + AUDITS, OPUS EXECUTES A WHOLE PHASE. Fable defines the next
+#  precise actions; Opus then builds every WORK box of the phase across as many
+#  sittings as it takes, self-verifying + self-ticking (build + e2e:smoke are
+#  enforced MECHANICALLY by `ranger-run.mjs tick`, so a broken build cannot
+#  tick); at the phase GATE an independent Fable AUDIT re-checks the whole phase
+#  off ONE fresh capture, surfaces fixes/issues, RE-OPENS anything short, and
+#  precisely DEFINES the next steps. Quality control moved from per-box to
+#  per-phase. Same supervisor-owns-capture split as Run B/C.)
 #
 # The bash loop is the PERSISTENT supervisor; each sitting is one fresh headless
 # `claude -p` resuming from RUN-D-LEDGER.md.
-#   • a DIRECTION box (`- [ ] … DIRECTION · …`) → a FABLE sitting validates +
-#     refines RUN-D-DIRECTION.md + the reconciled ledger (the run's first act).
-#   • a WORK box (`- [ ] Pn.m / Dn.m …`)  → an OPUS sitting makes the code
-#     change, the supervisor re-captures, then an independent FABLE sitting
-#     grades the fresh evidence and ticks ONLY on green (build + e2e:smoke are
-#     enforced mechanically by `ranger-run.mjs tick`).
-#   • a GATE box (`- [ ] GATE-Dn · …`) → an independent FABLE art-director
-#     sitting re-judges the phase and ticks / re-opens / appends.
+#   • a DIRECTION box (`- [ ] … DIRECTION · …`) → a FABLE PLAN sitting captures,
+#     then defines/refines the next precise actions on RUN-D-DIRECTION.md + the
+#     ledger.
+#   • a WORK box (`- [ ] Pn.m / Dn.m …`)  → an OPUS BUILD sitting makes the code
+#     change, self-verifies (build + e2e:smoke, and the focused harness scene
+#     where it can), and TICKS it itself. NO per-box capture, NO per-box Fable
+#     grade — the phase AUDIT is the checkpoint.
+#   • a GATE box (`- [ ] GATE-Dn · …`) → the supervisor captures, then a fresh
+#     FABLE AUDIT sitting re-judges the whole phase, ticks / re-opens / appends,
+#     and defines the next phase's boxes precisely.
 #   • DEMO boxes (`- [ ] DEMO · …`)    → Floris-only; the loop never spends a
 #     sitting on them.
 #
@@ -132,31 +138,23 @@ FABLE_DIRECTION_PROMPT='You are the ART DIRECTOR of Ranger van de Veluwe RUN D (
 3) WORDING RULE for any box you append (supervisor dispatch): the FIRST line of a work box must not contain "GATE-", "DIRECTION" or "DEFERRED"; only real gate boxes start "GATE-Dn"; an asset box must name "meshy" in its first line.
 4) You change NO game code. When done, tick the direction box: cd games/Ranger-Adventures/app && node scripts/ranger-run.mjs tick "validate + refine RUN-D-DIRECTION" (build/e2e:smoke stay green for a docs-only change). Do NOT commit (the supervisor commits). Then STOP.'
 
-# ── OPUS · the FIX half (code change only — no capture, no tick) ─────────────
-OPUS_FIX_PROMPT='You are the FIX half of one Ranger van de Veluwe RUN D sitting. You are the BUILDER; an independent Fable sitting will grade your work off a fresh capture — you do NOT screenshot, do NOT grade, do NOT tick, do NOT commit. Make the change for ONE box, then STOP.
-1) Read runs/run-5-cohesion/RUN-D-DIRECTION.md (the art bible — §2.4 Alvah corrections are LAW), then RUN-D-PLAN.md (per-box gate §1, two-judge gate §2, asset discipline §3, frozen contracts §4), then RUN-D-LEDGER.md. Reference the live canon (app/src/content/veluwe.ts, core/companion.ts, the 5 engines) + root CLAUDE.md.
-2) Take the FIRST unchecked WORK box (NOT a DIRECTION/GATE/DEMO/DEFERRED box). Make the change under app/src/** so it converges to the direction doc. Expose any dev-hook field the verify-by needs; extend the capture harness (app/e2e-capture/**, allowed) when the assert needs a new scene or DRIVE-BURST — the Phase-1 playability boxes are verified by the harness DRIVING the action (walk the dune burst, drive the jeep, toggle+enter the heli) and asserting live dev-hook state ACROSS the burst; a static shot is NO evidence for a physics box. Never touch the frozen app/e2e/** tree. SCOPE IS LAPTOP-ONLY — make shared-code fixes for "both"/"iPad" boxes; iPad is demo-gated. For the Phase-1 controller work READ research/3d-autonomous-sourcing-physics-world.md §C first; NEW well-licensed (MIT/Apache/CC0/BSD) self-contained dependencies ARE authorized (web search + fetch allowed) when they clearly fix playability or raise realism/cohesion — every dep still holds <150 draw calls, pixelRatio ≤2, iPad-first, build + e2e:smoke green, ZERO runtime network/telemetry/CDN calls, and never trades away motion-comfort/never-scary. If a dep cannot meet those, solve it in-repo.
-3) ASSET boxes: generate ONLY the model(s) the box names, ONLY via `node scripts/meshy-gen.mjs --only=<id>`. NEVER an unfiltered assets / meshy-gen / assets:all / ranger-run.mjs run / npm run finish. Meshy jobs exceed the 10-min tool ceiling → run them BACKGROUNDED and poll the log; never print .env.local (use scripts/meshy-balance.mjs for the masked balance). Pipeline-optimize (meshy-gen → gltf-optimize → optimize-animated), never-scary/calm-pose, log the credit spend. The regenerated ranger must keep child ≈1.2 m proportions + blonde wavy hair + blue eyes.
-4) FROZEN CONTRACTS (a change that breaks one is not a fix): motion-comfort camera law (fixed FOV, roll 0, no shake/snap; reduced-motion = cuts; locomotion always allowed), never-scary/never game-over + calm-pose gate (the wolf is story-gated — never a casual distractor), ≥56 px targets, <150 draw calls, pixelRatio ≤2, persistence ONLY via state.ts/persist.ts in the alvah-ef-v1 ranger namespace (NO new localStorage keys), AVI M3/E3 Dutch ≤7 words + read-aloud on new strings, construct-parity + 2D floor per game, assets via assetUrl, no surnames, never print .env.local.
-5) NEVER touch/weaken app/e2e/**, the @smoke suite, or playwright.config.ts. (Unit tests in src/** are not frozen — update them honestly when a pinned value legitimately changes, e.g. the Alvah child height.) Do NOT re-litigate a screen a prior GATE passed unless THIS box forces it.
-6) NEEDS-FLORIS ESCAPE: if this box genuinely CANNOT be done autonomously (a human decision, a physical device, an asset only Floris can supply), print as your FINAL line exactly: NEEDS-FLORIS: <one concrete line> — then STOP without changing code.
-Make the change for exactly ONE box, then STOP. If every WORK box is already checked, reply exactly: RUN-D-COMPLETE.'
+# ── OPUS · the BUILD sitting (writes the code, self-verifies, TICKS its box) ──
+OPUS_BUILD_PROMPT='You are an Opus BUILD sitting for Ranger van de Veluwe RUN D. In this run FABLE PLANS + AUDITS and YOU EXECUTE: you build ONE box, self-verify it, TICK it, then STOP. There is NO per-box Fable grade — instead an independent Fable AUDIT at the end of each phase (the GATE box) re-checks your whole phase off a fresh capture and will RE-OPEN anything short. So build HONESTLY: a false tick just comes back to you at the audit and wastes a sitting. Honest red beats a false green.
+1) Read runs/run-5-cohesion/RUN-D-DIRECTION.md (the art bible — §2.4 Alvah corrections are LAW), then RUN-D-PLAN.md (§1 build-and-tick gate, §2 plan/audit rhythm, §3 asset discipline, §4 frozen contracts), then RUN-D-LEDGER.md. Reference the live canon (app/src/content/veluwe.ts, core/companion.ts, the 5 engines) + root CLAUDE.md.
+2) Take the FIRST unchecked WORK box (NOT a DIRECTION/GATE/DEMO/DEFERRED box). Make the change under app/src/** so it MEETS the box'"'"'s verify-by and converges to the direction doc. Expose any dev-hook field the verify-by names; extend the capture harness (app/e2e-capture/**, allowed) when the verify-by needs a new scene or DRIVE-BURST so the phase AUDIT can see it — the Phase-1 playability boxes are proven by the harness DRIVING the action (walk the dune burst, drive the jeep, toggle+enter the heli) and asserting live dev-hook state ACROSS the burst; a static shot is NO evidence for a physics box. Never touch the frozen app/e2e/** tree. SCOPE IS LAPTOP-ONLY — make shared-code fixes for "both"/"iPad" boxes; iPad is demo-gated. For the Phase-1 controller work READ runs/animation-research.md §4 FIRST (raycast ground-snap; NO physics engine unless burst evidence forces it, then cannon-es before rapier); NEW well-licensed (MIT/Apache/CC0/BSD) self-contained dependencies ARE authorized (web search + fetch allowed) when they clearly fix playability or raise realism/cohesion — every dep still holds <150 draw calls, pixelRatio ≤2, iPad-first, build + e2e:smoke green, ZERO runtime network/telemetry/CDN calls, and never trades away motion-comfort/never-scary. If a dep cannot meet those, solve it in-repo.
+3) ASSET boxes: generate ONLY the model(s) the box names, ONLY via `node scripts/meshy-gen.mjs --only=<id>`. NEVER an unfiltered assets / meshy-gen / assets:all / ranger-run.mjs run / npm run finish. Meshy jobs exceed the 10-min tool ceiling → run them BACKGROUNDED and poll the log; never print .env.local (use scripts/meshy-balance.mjs for the masked balance). Pipeline-optimize (meshy-gen → gltf-optimize → optimize-animated), never-scary/calm-pose, log the credit spend. Per runs/animation-research.md, TRY D4.0a'"'"'s rigged CC0 sources (Quaternius/poly.pizza) BEFORE spending credits. The regenerated ranger must keep child ≈1.2 m proportions + blonde wavy hair + blue eyes + its baked idle/walk clips.
+4) FROZEN CONTRACTS (a change that breaks one is not done): motion-comfort camera law (fixed FOV, roll 0, no shake/snap; reduced-motion = cuts; locomotion always allowed), never-scary/never game-over + calm-pose gate (the wolf is story-gated — never a casual distractor), ≥56 px targets, <150 draw calls, pixelRatio ≤2, persistence ONLY via state.ts/persist.ts in the alvah-ef-v1 ranger namespace (NO new localStorage keys), AVI M3/E3 Dutch ≤7 words + read-aloud on new strings, construct-parity + 2D floor per game, assets via assetUrl, no surnames, never print .env.local.
+5) SELF-VERIFY, then TICK. Verify as far as you can WITHOUT the full ~35-min capture: run `npm run build`; run `npm run e2e:smoke`; for a harness / drive-assert box you MAY run its focused Playwright scene to read the burst annotations before ticking. When the verify-by holds, TICK it yourself: cd games/Ranger-Adventures/app && node scripts/ranger-run.mjs tick "<unique substring of the box text>" — the tick MECHANICALLY refuses unless `npm run build` + the frozen `npm run e2e:smoke` are green, so a broken build cannot tick. If the box carries a +demo component, after ticking EDIT the box text to append " — implemented, awaiting Floris demo (NOT accepted)". Do NOT commit (the supervisor commits every step). If you genuinely cannot make the verify-by hold this sitting, leave the box unticked and STOP — the loop retries once, then parks it to DEFERRED.md.
+6) NEVER touch/weaken app/e2e/**, the @smoke suite, or playwright.config.ts. (Unit tests in src/** are not frozen — update them honestly when a pinned value legitimately changes, e.g. the Alvah child height.) Do NOT re-litigate a screen a prior AUDIT froze unless THIS box forces it.
+7) NEEDS-FLORIS ESCAPE: if this box genuinely CANNOT be done autonomously (a human decision, a physical device, a login/asset only Floris can supply — e.g. a Mixamo Adobe ID, or a Meshy in-app rig that needs a browser login), print as your FINAL line exactly: NEEDS-FLORIS: <one concrete line> — then STOP without ticking.
+Build + tick exactly ONE box, then STOP. If every WORK box is already checked, reply exactly: RUN-D-COMPLETE.'
 
-# ── FABLE · the per-box GRADE half (independent verifier — ticks on green) ────
-FABLE_GRADE_PROMPT='You are the INDEPENDENT VERIFIER of one Ranger van de Veluwe RUN D sitting (Fable — you did NOT build this change; do not trust the builder). The code change for the FIRST unchecked WORK box was just made and the supervisor has ALREADY run a fresh LAPTOP `npm run capture`. Judge the evidence and tick ONLY on green. Do NOT run capture yourself.
-1) Read runs/run-5-cohesion/RUN-D-DIRECTION.md, RUN-D-PLAN.md §1/§5, and RUN-D-LEDGER.md. Identify the FIRST unchecked WORK box and its verify-by.
-2) LOOK with the Read tool at the fresh laptop PNG(s) under games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence/laptop/ and read annotations-laptop.json for the box'"'"'s named fields. For a DRIVE-ASSERT box (the Phase-1 playability boxes) read the per-frame burst values — grounded/foot-clearance on every frame of the walk burst, the jeep'"'"'s x/z displacement monotonic along heading, the heli toggle→available→near→inHeli chain — a single pretty frame proves NOTHING for a physics box. Pixels outrank the hook for looks; burst annotations outrank a single frame for motion. A frame only counts if it shows the surface the player actually reaches (never a sandbox-only route). For an ASSET box, the model must look REAL and BELONG (reject + say regenerate if not) and pass never-scary/calm-pose.
-3) TICK ONLY ON GREEN — evidence + the direction-doc bar both met: cd games/Ranger-Adventures/app && node scripts/ranger-run.mjs tick "<unique substring of the box text>" (it refuses unless `npm run build` + the frozen `npm run e2e:smoke` are green). If the box has a +demo component, tick it but EDIT the box text to append " — implemented, awaiting Floris demo (NOT accepted)". If the grade FAILS: do NOT tick; append one line to RUN-D-PLAN.md §8 saying exactly what falls short, and STOP (the loop retries once, then parks the box).
-4) Do NOT commit. NEVER touch app/e2e/**, the @smoke suite, or playwright.config.ts. You change no game code.
-5) NEEDS-FLORIS ESCAPE: if this box keeps failing because it genuinely needs Floris, print as your FINAL line exactly: NEEDS-FLORIS: <one concrete line> — then STOP.
-Grade this ONE box, then STOP.'
-
-# ── FABLE · the phase-gate re-judge / director (may re-open OR append boxes) ──
-FABLE_GATE_PROMPT='You are the ART DIRECTOR and INDEPENDENT phase RE-JUDGE of Ranger van de Veluwe RUN D. The supervisor has ALREADY run a fresh LAPTOP capture. Do NOT run capture yourself. You LOOK, rule, and DIRECT.
-1) Read runs/run-5-cohesion/RUN-D-DIRECTION.md (you may refine it, never weakening the frozen contracts or the §2.4 Alvah corrections), RUN-D-PLAN.md §2, and RUN-D-LEDGER.md. The FIRST unchecked box is a GATE-Dn box — it names the phase you judge.
-2) LOOK at every laptop frame for that phase under games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence/laptop/ + annotations-laptop.json. Judge each phase box against its verify-by AND the direction doc: mechanical truth for Phase 1 (re-read the drive-burst annotations — grounded every frame, real jeep displacement, the heli chain), Alvah'"'"'s truth for Phase 2 (child scale beside the adult; blonde + blue vs public/img/Alvah.jpg), cohesion/realism/never-scary/felt-progress/legibility/motion-comfort elsewhere. A frame from a route the player cannot reach is NO evidence.
-3) RULE + DIRECT: leave genuinely-excellent boxes ticked; RE-OPEN any that fall short (`- [x]` → `- [ ]`) with one line in RUN-D-PLAN.md §8; APPEND new "- [ ] Dn.m · …" boxes (with verify-by, honouring the ledger wording rule: no GATE-/DIRECTION/DEFERRED in a work box'"'"'s first line; asset boxes name meshy) when the composed world reveals a gap. A +demo box may stay "implemented — awaiting Floris demo" but is NEVER "accepted". Only when every non-demo box in the phase meets the bar AND no open box remains, tick the GATE: cd games/Ranger-Adventures/app && node scripts/ranger-run.mjs tick "<GATE-Dn substring>".
-4) On the FINAL gate (GATE-D7): re-judge the WHOLE game — every screenshot-closable box across all phases + a re-run of the Phase-1 drive-asserts. This is the last gate before the Floris demo.
+# ── FABLE · the phase AUDIT / director (surfaces fixes, defines next steps) ───
+FABLE_GATE_PROMPT='You are the ART DIRECTOR and INDEPENDENT phase AUDITOR of Ranger van de Veluwe RUN D. Opus has just EXECUTED this whole phase across several sittings, self-ticking each box; you did NOT build any of it. The supervisor has ALREADY run a fresh LAPTOP capture. Do NOT run capture yourself. Your job: AUDIT the finished phase off the fresh pixels, surface the concrete fixes + issues Opus missed or self-passed too generously, and DEFINE the next steps precisely. You LOOK, rule, and DIRECT.
+1) Read runs/run-5-cohesion/RUN-D-DIRECTION.md (you may refine it, never weakening the frozen contracts or the §2.4 Alvah corrections), RUN-D-PLAN.md §2, and RUN-D-LEDGER.md. The FIRST unchecked box is a GATE-Dn box — it names the phase you audit.
+2) LOOK with the Read tool at EVERY laptop frame for that phase under games/Ranger-Adventures/runs/run-3-ux-polish/audit-evidence/laptop/ + annotations-laptop.json. Because Opus self-ticked WITHOUT an independent grade, audit each phase box SCEPTICALLY against its verify-by AND the direction doc — do not trust the tick: mechanical truth for Phase 1 (re-read the drive-burst annotations — grounded every frame, real jeep displacement, the heli toggle→available→near→inHeli chain), Alvah'"'"'s truth for Phase 2 (child scale beside the adult; blonde + blue vs public/img/Alvah.jpg), cohesion/realism/never-scary/felt-progress/legibility/motion-comfort elsewhere. A frame from a route the player cannot reach is NO evidence; a missing/GAP frame is NOT a pass.
+3) RULE + DIRECT (this is where Fable steers the run): leave genuinely-excellent boxes ticked; RE-OPEN any that fall short (`- [x]` → `- [ ]`) with one precise line in RUN-D-PLAN.md §8 naming the exact fix Opus must make; APPEND new "- [ ] Dn.m · …" boxes with a CONCRETE, testable verify-by for every fix/issue the composed phase reveals (honour the ledger wording rule: no GATE-/DIRECTION/DEFERRED in a work box'"'"'s first line; asset boxes name meshy). Then SHARPEN the NEXT phase: read its boxes against what the pixels now show and tighten any vague verify-by so Opus can execute it without guessing. A +demo box may stay "implemented — awaiting Floris demo" but is NEVER "accepted". Only when every non-demo box in THIS phase truly meets the bar AND no open box remains in it, tick the GATE: cd games/Ranger-Adventures/app && node scripts/ranger-run.mjs tick "<GATE-Dn substring>".
+4) On the FINAL gate (GATE-D7): audit the WHOLE game — every screenshot-closable box across all phases + a re-run of the Phase-1 drive-asserts. This is the last gate before the Floris demo.
 5) You change NO game code and never touch app/e2e/**, the @smoke suite, or playwright.config.ts.
 Do this ONE gate, then STOP.'
 
@@ -164,21 +162,17 @@ run_fable_direction() {
   claude -p "$FABLE_DIRECTION_PROMPT" --model "$MODEL_FABLE" --effort "$EFFORT" --dangerously-skip-permissions >> "$LOG" 2>&1 \
     || echo "  ⚠ fable DIRECTION sitting exited non-zero (continuing)" | tee -a "$LOG"
 }
-run_opus_fix() {
-  claude -p "$OPUS_FIX_PROMPT" --model "$MODEL_OPUS" --effort "$EFFORT" --dangerously-skip-permissions >> "$LOG" 2>&1 \
-    || echo "  ⚠ opus FIX sitting exited non-zero (continuing)" | tee -a "$LOG"
-}
-run_fable_grade() {
-  claude -p "$FABLE_GRADE_PROMPT" --model "$MODEL_FABLE" --effort "$EFFORT" --dangerously-skip-permissions >> "$LOG" 2>&1 \
-    || echo "  ⚠ fable GRADE sitting exited non-zero (continuing)" | tee -a "$LOG"
+run_opus_build() {
+  claude -p "$OPUS_BUILD_PROMPT" --model "$MODEL_OPUS" --effort "$EFFORT" --dangerously-skip-permissions >> "$LOG" 2>&1 \
+    || echo "  ⚠ opus BUILD sitting exited non-zero (continuing)" | tee -a "$LOG"
 }
 run_fable_gate() {
   claude -p "$FABLE_GATE_PROMPT" --model "$MODEL_FABLE" --effort "$EFFORT" --dangerously-skip-permissions >> "$LOG" 2>&1 \
     || echo "  ⚠ fable GATE sitting exited non-zero (continuing)" | tee -a "$LOG"
 }
 
-echo "=== RUN D cohesion loop started $(date '+%F %T') · cap ${MAX_RUNS} · build=${MODEL_OPUS} verify/direct=${MODEL_FABLE} · effort ${EFFORT} ===" | tee -a "$LOG"
-echo "    mode: OPUS BUILDS · FABLE VERIFIES EVERY BOX. DEFER-AND-CONTINUE — a WORK box stuck ${STALL_LIMIT} sittings OR one that prints NEEDS-FLORIS is parked to ${DEFERRED_LIST}; a stuck DIRECTION/GATE pauses. Every ledger advance is committed+pushed." | tee -a "$LOG"
+echo "=== RUN D cohesion loop started $(date '+%F %T') · cap ${MAX_RUNS} · build=${MODEL_OPUS} plan/audit=${MODEL_FABLE} · effort ${EFFORT} ===" | tee -a "$LOG"
+echo "    mode: FABLE PLANS + AUDITS · OPUS EXECUTES A WHOLE PHASE (self-verifies + self-ticks per box; build + e2e:smoke gate the tick mechanically; NO per-box capture/grade). Fable audits at each phase GATE off one fresh capture: re-opens shortfalls + defines the next steps. DEFER-AND-CONTINUE — a WORK box stuck ${STALL_LIMIT} sittings OR one that prints NEEDS-FLORIS is parked to ${DEFERRED_LIST}; a stuck DIRECTION/GATE pauses. Every ledger advance is committed+pushed." | tee -a "$LOG"
 
 for i in $(seq 1 "$MAX_RUNS"); do
   echo "──────── sitting $i/$MAX_RUNS  $(date '+%F %T') ────────" | tee -a "$LOG"
@@ -219,20 +213,18 @@ for i in $(seq 1 "$MAX_RUNS"); do
   case "$box" in
     *DIRECTION*)
       role="fable"
-      echo "  ✍ DIRECTION box (art director validates RUN-D-DIRECTION.md · model=${MODEL_FABLE}): $clean_box" | tee -a "$LOG"
+      echo "  ✍ PLAN box (Fable captures → defines the next precise actions · model=${MODEL_FABLE}): $clean_box" | tee -a "$LOG"
       capture_now
       run_fable_direction ;;
     *GATE-*)
       role="fable"
-      echo "  ▷ PHASE GATE (capture → art-director re-judge · model=${MODEL_FABLE}): $clean_box" | tee -a "$LOG"
+      echo "  ▷ PHASE AUDIT (capture → Fable audits the phase, surfaces fixes/issues, defines next steps · model=${MODEL_FABLE}): $clean_box" | tee -a "$LOG"
       capture_now
       run_fable_gate ;;
     *)
-      role="fable"   # the GRADE half runs on Fable — a limit there may fall back
-      echo "  ▶ work box (opus fix → capture → FABLE grade · build=${MODEL_OPUS} verify=${MODEL_FABLE}): $clean_box" | tee -a "$LOG"
-      run_opus_fix
-      capture_now
-      run_fable_grade ;;
+      role="opus"    # Opus executes + self-ticks; the phase AUDIT is the checkpoint (no per-box capture/grade)
+      echo "  ▶ build box (opus builds + self-verifies + self-ticks · build=${MODEL_OPUS}): $clean_box" | tee -a "$LOG"
+      run_opus_build ;;
   esac
 
   after="$(md5 -q "$LEDGER")"

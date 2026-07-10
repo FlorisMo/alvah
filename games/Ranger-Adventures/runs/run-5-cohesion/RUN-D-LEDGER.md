@@ -1,14 +1,19 @@
 # Run 5 · Run D — COHESION LEDGER (reconciled, playability-first)
 
 > The supervisor (`run-d-loop.sh`) does the FIRST unchecked `- [ ]` box each
-> sitting. **OPUS BUILDS, FABLE VERIFIES** (Floris's role intent for Run D): a
-> **WORK** box is built by an Opus sitting, the supervisor re-captures, and an
-> **independent Fable sitting grades the fresh screenshot + annotations** (no
-> self-grading); a **GATE** box runs a fresh Fable art-director sitting that
-> re-judges the phase against [RUN-D-DIRECTION.md](RUN-D-DIRECTION.md) and may
-> **re-open** boxes (`[x]`→`[ ]`) **or APPEND new boxes**. Read
-> [RUN-D-PLAN.md](RUN-D-PLAN.md) first (the per-box gate, the two-judge gate,
-> asset discipline, frozen contracts). The locked spec is
+> sitting. **FABLE PLANS + AUDITS, OPUS EXECUTES A WHOLE PHASE** (Floris's role
+> intent for Run D, rev 2 2026-07-05): a **WORK** box is built by an Opus
+> sitting that **self-verifies (build + e2e:smoke, and the focused harness
+> scene where it can) and TICKS its own box** — no per-box capture, no per-box
+> grade; Opus executes every WORK box of a phase across as many sittings as it
+> takes. At the phase **GATE** the supervisor captures once and a fresh
+> **independent Fable AUDIT sitting** re-checks the whole phase sceptically
+> against [RUN-D-DIRECTION.md](RUN-D-DIRECTION.md), **re-opens** shortfalls
+> (`[x]`→`[ ]`), **APPENDS** concrete fix boxes, and **defines the next steps
+> precisely**. A **DIRECTION** box is a Fable PLAN sitting. The tick is still
+> gated MECHANICALLY (build + e2e:smoke), so a broken build cannot tick. Read
+> [RUN-D-PLAN.md](RUN-D-PLAN.md) first (the build-and-tick gate, the plan/audit
+> rhythm, asset discipline, frozen contracts). The locked spec is
 > [VISION.md](../../VISION.md).
 >
 > **PROVENANCE.** This ledger is the 2026-07-05 RECONCILIATION of Run C
@@ -22,13 +27,15 @@
 > demo (2026-07-05) found three playability bugs a screenshot gate cannot see —
 > they lead this run.
 >
-> **Tick rule (per box).** A WORK box is `[x]` ONLY when ALL hold: the fresh
-> laptop `npm run capture` evidence meets the box's verify-by AND the
-> RUN-D-DIRECTION.md bar for that screen, the named annotation/E2E assert passes,
-> `npm run build` + `npm run e2e:smoke` are green (enforced mechanically by
-> `ranger-run.mjs tick`), AND the independent Fable grade sitting agrees.
-> **`+demo` boxes may reach "implemented — awaiting Floris demo", NEVER
-> "accepted".**
+> **Tick rule (per box).** In rev 2 Opus ticks its OWN box when it has built to
+> the verify-by and `npm run build` + `npm run e2e:smoke` are green (enforced
+> mechanically by `ranger-run.mjs tick`) — self-verifying against the box's
+> named assert as far as it can without the ~35-min capture. The independent
+> check is no longer per-box; it is the **phase AUDIT** at each `GATE-Dn`, which
+> re-opens any box whose fresh-capture evidence does not actually meet the
+> verify-by AND the RUN-D-DIRECTION.md bar. So a tick here means "Opus believes
+> it is done"; the GATE is where it is proven. **`+demo` boxes may reach
+> "implemented — awaiting Floris demo", NEVER "accepted".**
 >
 > Legend: **shot** = screenshot gate · **assert** = annotation/E2E field ·
 > **drive-assert** = the capture harness DRIVES the action and asserts live

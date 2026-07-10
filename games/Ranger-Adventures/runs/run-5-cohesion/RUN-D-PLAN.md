@@ -1,4 +1,4 @@
-# Run 5 · Run D — the COHESION run (playability first, Opus builds, Fable verifies)
+# Run 5 · Run D — the COHESION run (playability first, Fable plans + audits, Opus executes a phase)
 
 > Master brief for the Run D sittings. The tickable checklist is
 > [RUN-D-LEDGER.md](RUN-D-LEDGER.md); the single source of truth every sitting
@@ -11,8 +11,11 @@
 > Run D is the 2026-07-05 RECONCILIATION of Run C: same mandate ("make it
 > excellent toward the VISION"), but (1) the ledger was re-verified box-by-box
 > against fresh pixels + current code, (2) three real-device playability bugs and
-> Alvah's true proportions/colours lead the run, and (3) the ROLES tighten:
-> **Opus builds, Fable verifies — every box, not only the phase gates.**
+> Alvah's true proportions/colours lead the run, and (3) the ROLES (rev 2,
+> 2026-07-05): **Fable PLANS + AUDITS, Opus EXECUTES a whole phase** — Opus
+> self-verifies + self-ticks each WORK box (build + e2e:smoke gate the tick
+> mechanically); Fable audits at each phase gate, re-opens shortfalls, and
+> defines the next steps. Quality control is per-phase, not per-box.
 
 > **SCOPE — LAPTOP-ONLY automated verification (same as Run B/C).** The loop
 > captures the **laptop** project only (`CAPTURE_PROJECTS=laptop`); the iPad leg
@@ -63,54 +66,68 @@ world, realistic animals, felt progress, woven systems, polish.**
   + `humans-full-animals-eyes-research.md` for rig/gait/gaze/eyes,
   `mini-game-research.md` for the EF grounding.
 
-## 1. The per-box gate (evidence-in-the-loop)
+## 1. The build-and-tick gate (rev 2 — Fable plans, Opus executes a phase)
 
-For each WORK box, in order:
+**Rhythm change (Floris 2026-07-05, rev 2).** Quality control moved from
+per-box to per-phase. Fable defines the next precise actions; Opus then
+executes every WORK box of a phase across as many sittings as it takes,
+self-verifying and self-ticking; Fable AUDITS at the phase gate. There is no
+per-box capture and no per-box Fable grade — the mechanical build + e2e:smoke
+gate holds each tick honest between audits, and the phase AUDIT is where the
+work is really proven.
 
-1. **OPUS FIX sitting** reads the box's intent against RUN-D-DIRECTION.md + the
-   box's verify-by, and makes the change under `app/src/**`. It exposes any
-   dev-hook field the verify-by needs and extends the capture harness
-   (`app/e2e-capture/**`, allowed) when the assert needs a new scene/drive-burst.
-   It does NOT capture, does NOT tick, does NOT commit.
-2. **The SUPERVISOR runs `npm run capture`** (model sittings never do — the
-   capture takes ~25–30 min and would blow a sitting's tool ceiling).
-3. **FABLE GRADE sitting** (independent — it did not build) LOOKS at the fresh
-   PNGs with the Read tool, reads `annotations-laptop.json` for the box's named
-   fields (for drive-assert boxes: the per-frame burst values, not one sample),
-   and grades against BOTH the box's verify-by AND the direction doc's bar.
-   Pixels outrank the hook; for physics boxes the burst annotations outrank a
-   single pretty frame.
-4. **Tick ONLY on green:** `node scripts/ranger-run.mjs tick "<needle>"` — it
-   refuses unless `npm run build` AND the frozen `npm run e2e:smoke` are green
-   (`RUN_LEDGER=runs/run-5-cohesion/RUN-D-LEDGER.md` is exported by the
-   supervisor). A `+demo` box's text gets " — implemented, awaiting Floris demo
-   (NOT accepted)" appended at tick time.
-5. If the grade FAILS: leave the box open, append one line to §8 below saying
-   what falls short, and STOP (the loop retries once, then parks the box to
-   DEFERRED.md and continues — defer-and-continue).
+For each WORK box, in one Opus sitting:
+
+1. **OPUS BUILD sitting** reads the box's intent against RUN-D-DIRECTION.md +
+   the box's verify-by, and makes the change under `app/src/**`. It exposes any
+   dev-hook field the verify-by names and extends the capture harness
+   (`app/e2e-capture/**`, allowed) when the verify-by needs a new
+   scene/drive-burst — so the phase AUDIT can see it.
+2. **Self-verify** as far as possible WITHOUT the ~35-min capture: `npm run
+   build`, `npm run e2e:smoke`, and — for a harness / drive-assert box — the
+   box's focused Playwright scene to read its burst annotations.
+3. **Opus ticks its OWN box:** `node scripts/ranger-run.mjs tick "<needle>"` —
+   it refuses unless `npm run build` AND the frozen `npm run e2e:smoke` are
+   green (`RUN_LEDGER=runs/run-5-cohesion/RUN-D-LEDGER.md` is exported by the
+   supervisor), so a broken build cannot tick. A `+demo` box's text gets
+   " — implemented, awaiting Floris demo (NOT accepted)" appended at tick time.
+4. If Opus cannot make the verify-by hold this sitting: leave the box open and
+   STOP (the loop retries once, then parks the box to DEFERRED.md and continues
+   — defer-and-continue). A box that needs a human/login prints
+   `NEEDS-FLORIS: …` and is parked.
 
 The supervisor commits + pushes **every step** the ledger advances, so drift is
-bisectable commit-by-commit (VISION §10). Sittings never commit.
+bisectable commit-by-commit (VISION §10). Sittings never commit. The honesty
+contract still binds: **Opus must not tick a box it does not believe meets the
+verify-by** — a false tick just returns at the audit and wastes a sitting;
+honest red beats a false green.
 
-## 2. The two-judge gate (tightened for Run D)
+## 2. The plan → execute → audit rhythm (rev 2)
 
-- **Opus is the BUILDER.** It writes the TypeScript. It does not grade.
-- **Fable is the VERIFIER and ART DIRECTOR.** An independent Fable sitting
-  grades EVERY box's fresh evidence (per-box), and at each phase `GATE-Dn` a
-  fresh Fable sitting re-judges the whole phase against RUN-D-DIRECTION.md — it
-  ticks the gate, RE-OPENS boxes (`[x]`→`[ ]`), or APPENDS new `- [ ] Dn.m`
-  boxes (the ledger is open-ended, converging to the doc's "excellent per
-  screen" bar).
-- **A change counts only when the evidence AND Fable agree** — no
-  self-certification anywhere in the loop.
+- **Fable PLANS.** A `DIRECTION` box (and, in practice, every `GATE-Dn` audit)
+  is where Fable defines the next precise actions: it refines
+  RUN-D-DIRECTION.md (never weakening the frozen contracts or the §2.4 Alvah
+  corrections), sharpens vague verify-bys so Opus can execute without guessing,
+  and appends concrete boxes.
+- **Opus EXECUTES.** It writes the TypeScript for every WORK box of the phase,
+  self-verifies, and self-ticks. It builds honestly, knowing the audit checks
+  its work.
+- **Fable AUDITS at each phase `GATE-Dn`.** The supervisor captures once; a
+  fresh independent Fable sitting re-checks the whole phase SCEPTICALLY against
+  RUN-D-DIRECTION.md (it did not build it, and Opus self-ticked, so it does not
+  trust the tick): it ticks the gate, RE-OPENS boxes (`[x]`→`[ ]`) with a
+  precise fix line in §8, APPENDS new `- [ ] Dn.m` fix boxes, and defines the
+  next phase's steps. The ledger is open-ended, converging to the doc's
+  "excellent per screen" bar. A missing/GAP frame is not a pass; a
+  player-unreachable frame is no evidence.
 - **`+demo` items are never closed by any model.** Ceiling: "implemented —
   awaiting Floris demo". The verdict is Floris's on the real iPad (DEMO section).
-- **No re-litigating done work** — once a screen passes a gate it is frozen
+- **No re-litigating done work** — once a phase passes its audit it is frozen
   unless a later box forces it.
-- **Model fallback:** if Fable hits a usage/model limit, the supervisor falls
-  back to Opus for the verifier/director role ONCE and continues (launch with
-  `MODEL_FABLE=opus` to start that way). A limit that then persists on Opus is
-  the real account-wide stop and pauses the run.
+- **Model fallback:** if Fable hits a usage/model limit on a PLAN/AUDIT sitting,
+  the supervisor falls back to Opus for the planner/auditor role ONCE and
+  continues (launch with `MODEL_FABLE=opus` to start that way). A limit that
+  then persists on Opus is the real account-wide stop and pauses the run.
 
 ## 3. Asset-generation discipline (real money, autonomous — carried from Run C)
 
@@ -208,9 +225,9 @@ sitting (D0.1) is the Fable art director validating + refining it and the
 reconciled ledger against fresh pixels — committed as the first act, so drift
 is visible and reversible from commit 1. The guardrails together: the committed
 direction doc · hard mechanical gates on every tick (build + e2e:smoke) ·
-independent Fable verification of every box · commit + push every step ·
-usage/credit stop + stall guard (defer-and-continue) · the DEMO section for
-everything feel/audio/device.
+independent Fable AUDIT of every phase at its gate (re-opens shortfalls,
+defines the next steps) · commit + push every step · usage/credit stop + stall
+guard (defer-and-continue) · the DEMO section for everything feel/audio/device.
 
 ## 8. Run D log (append-only, one line per surprise / grade-fail / director note)
 
@@ -226,6 +243,7 @@ everything feel/audio/device.
 - 2026-07-05 D0.1: `33-boundary-rim` shows the ranger shadowless at ~70 m while `06-walk-1` near spawn has the long soft shadow → appended D3.14 (grounding shadow across the walkable range; skinned shadow pass dies at range though the frustum follows, World.ts:3064).
 - 2026-07-05 D0.1: the frozen e2e pins `fov = 55` (vehicle.spec.ts:144, heli.spec.ts:132) — direction doc §2.5 refined to record the pin; the ~35–45° research lens is OUT of reach this run and no box may chase it (a builder chasing it would break the frozen suite).
 - 2026-07-05 D0.1: the story-gated WOLF sprite appears in ALL FIVE fresh game3d frames (sandbox ring, confirmed `/?sandbox` at capture.spec.ts:806) — D3.4–D3.7's "no wolf / staged GLBs" legs are never-scary-critical, and D1.0's player-path re-point is what makes those five frames judgeable at all.
+- 2026-07-05 (rev 2 rhythm change, Floris): quality control moved from per-box to per-phase. The supervisor (run-d-loop.sh) now runs WORK boxes as OPUS BUILD sittings that self-verify (build + e2e:smoke, focused harness scene) and self-tick — no per-box capture, no per-box Fable grade. Fable PLANS at DIRECTION boxes and AUDITS the whole phase at each GATE-Dn off one fresh capture (re-opens shortfalls, appends concrete fix boxes, defines the next steps). §1/§2 here + the ledger header + direction §intro rewritten to match. The mechanical build+e2e:smoke tick gate is unchanged, so a broken build still cannot tick. Fable→Opus fallback now covers the plan/audit role.
 - 2026-07-05 (pause-window integration, Fable planner sitting with Floris): Floris's animation/physics deep-research landed as `runs/animation-research.md` and was folded into the run docs — D0.2 appended (Fable ranks the research-derived work), D1.2 (raycast ground-truth) + D4.0a/D4.0b (rigged-CC0-first sourcing + zero-credit rigging) + P5.6 (spring bones) appended, the Phase-1 preamble + Phase-4 sourcing order + P1.5a/b + P2.1 rewritten off the kinematic/Meshy-only assumption. Deps installed in app/: `three-mesh-bvh` (MIT) + `@pixiv/three-vrm-springbone` (MIT); cannon-es deliberately NOT installed (shelf option). KIMODO + AI4Animation assessed and rejected (not mobile-Safari-feasible; AI4Animation non-commercial). Mixamo (human re-rig path) needs a free Adobe ID = Floris login — boxes that hit it print NEEDS-FLORIS.
 - 2026-07-05 D0.2 (Fable art director): animation-research read in full and adopted whole — no verdict overruled. Ranking of the research-derived boxes: D1.2 KEPT as the Phase-1 locomotion foundation (fresh `39-ven-shore` buries the ranger to his hair on the ven slope again — the `heightAt`/mesh divergence is current); D4.0a KEPT leading Phase 4, SHARPENED with an audition-at-follow-distance rule (one in-world frame per sourced species judged against doc §2.4 must-reads + §2.3 one-fidelity BEFORE any cast swap — Quaternius covers deer/stag/fox but its flat-shaded style is a §2.3 risk to judge on pixels, not assume; the free wolf stays story-gated OUT); D4.0b KEPT (raaf/das/zwijn/frisling have no CC0 animated source — zero-credit rig paths are their only non-spend route); P5.6 KEPT in Phase 7 (needs Phase-4 rigs first). Nothing parked. Foot-IK + cannon-es stay shelf options exactly as the research says. Phase-1 preamble + Phase-4 sourcing order read coherently against the ledger and the doc. Doc refined: §2.2 one-ground-truth (rendered mesh), §2.4 clips-outrank-bob + audition rule, §2.5 never-under-terrain, §8.7 no-evidence extensions, §5 note validated, §9 D0.2 record.
 - 2026-07-05 D0.2: the 13:54–14:27 capture (in-flight D1.0 edits) proves the player-path re-point + 72-orphan prune WORK — and that the billboard/wolf ring was SANDBOX-ONLY: the three captured player-path game-3D frames show primitives on bare ground instead (zoeken: cream-egg frisling + blob-gras beside the board; corsi: no route field at all; simon: dark lumps with name-chips). D3.4–D3.8 evidence lines updated; fix targets unchanged.

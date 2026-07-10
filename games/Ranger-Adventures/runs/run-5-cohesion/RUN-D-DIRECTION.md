@@ -4,8 +4,9 @@
 > director 2026-07-04, refined at the Run C P1 gate 2026-07-05) at the
 > 2026-07-05 Run C→D reconciliation.** The Run C direction is good and stands;
 > Run D changes the LEDGER (reconciled, playability-first — see
-> RUN-D-LEDGER.md) and the ROLES (Opus builds, Fable verifies every box), not
-> the art direction. The Alvah corrections (child ≈1.2 m; blonde wavy hair +
+> RUN-D-LEDGER.md) and the ROLES (rev 2, 2026-07-05: Fable plans + audits, Opus
+> executes a whole phase and self-ticks; Fable audits per phase, not per box),
+> not the art direction. The Alvah corrections (child ≈1.2 m; blonde wavy hair +
 > blue eyes) are already in §2.4 and are LAW. Run D's D0.1 sitting may refine
 > this doc further but may not weaken the frozen contracts or the Alvah
 > corrections. §9 below is replaced by the Run D reconciliation record.
