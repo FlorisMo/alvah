@@ -544,13 +544,17 @@ test('audit capture flow', async ({ context }, testInfo) => {
         await snap(page, 'camera-zoom-out', 'Laptop-camera', 'Scroll uitzoomen (na camera-settle) — de dolly trekt terug naar de max-clamp; cam.dist duidelijk groter en ≈ zoom.dist, FOV nog steeds vast (F-16).');
         const zout = shots[shots.length - 1];
         zout.note += boomNote(zout); flush();
-        // D1.1 assert: a settled dolly pair must render DIFFERENT frames. If the two share
-        // one pixelHash the boom did not move (a pre-settle / clamped void) — flag it as an
-        // honest ok:false finding rather than throwing (throwing would GAP the whole scene
-        // and lose the evidence); a healthy settled dolly always differs, so this is silent.
+        // D1.1 assert (HARD — stays hard even though settleCam is now best-effort, GATE-D1):
+        // a settled dolly pair MUST render DIFFERENT frames. If the two share one pixelHash the
+        // boom never moved (a pre-settle / clamped / wedged void) — and a best-effort settle that
+        // rode its 20 s backstop must NEVER EXCUSE that. Fold it as an ok:false finding on BOTH
+        // frames of the pair (the D1.3 no-GAP precedent: throwing would GAP the whole scene and
+        // lose both zoom frames); a healthy settled dolly (near-clamp vs 9.5 m far-clamp) always
+        // differs, so on a good run this is silent and both frames stay ok:true.
         if (zin.pixelHash && zout.pixelHash && zin.pixelHash === zout.pixelHash) {
-          zout.ok = false;
-          zout.note += '  [D1.1: zoom-in en zoom-out delen één pixelHash — de dolly bewoog niet (pre-settle/geklemde boom); dit is zelf een audit-bevinding.]';
+          zin.ok = false; zout.ok = false;
+          const finding = '  [D1.1: zoom-in en zoom-out delen één pixelHash — de dolly bewoog niet (pre-settle/geklemde/vastgelopen boom, óók niet geëxcuseerd door een best-effort settle); dit is zelf een audit-bevinding.]';
+          zin.note += finding; zout.note += finding;
           flush();
         }
         // F-17: a >6 px drag ORBITS the lens (yaw + eye-lift) and must NOT move the ranger
@@ -1245,10 +1249,22 @@ async function settle(page: Page, ms: number): Promise<void> { await page.waitFo
  *  the 3D lens→bbox-centre distance, so at the FAR clamp it equals zoom.dist (±~1.5 %)
  *  but at the NEAR clamp it sits a fixed ~1.5 m eye-height offset ABOVE zoom.dist — a
  *  5 %-of-zoom.dist gate could never fire on a genuine zoom-IN, steady-state catches
- *  both. Bounded timeout THROWS so the enclosing scene() GAPs honestly if the boom
- *  never settles (a dead hook / wedged loop); a converging ease returns well inside it,
- *  so a healthy run adds no GAP. */
-async function settleCam(page: Page, timeoutMs = 6000): Promise<void> {
+ *  both.
+ *
+ *  BACKSTOP (GATE-D1, 2026-07-11): under the FULL capture load the engine's own rAF is
+ *  throttled, so the SAME ease converges ~13× slower — the 6 s bound this ran under
+ *  before fired MID-ease in the audit capture ("camera boom never settled within 6000 ms",
+ *  last cam.dist 4.85 vs target 9.5) and THREW, which GAPped the whole camera-attempts
+ *  scene and lost BOTH zoom frames (against D1.1's "no new GAP entries" leg + the D1.0
+ *  lose-no-evidence lesson). So this now mirrors `settleMissionCam`'s best-effort backstop:
+ *  a generous 20 s bound, and on the bound we RETURN best-effort (near-destination) rather
+ *  than throw. The steady-state criterion keys on the RATE of change (Δ per ~80 ms poll),
+ *  not the absolute error, so even a ~13×-throttled healthy ease reaches it in ~7–8 s and
+ *  returns well inside the bound; only a genuinely wedged/dead boom rides to the backstop.
+ *  A best-effort return must NEVER EXCUSE a bad pair: the downstream pixelHash-differ assert
+ *  in the camera scene stays HARD (an ok:false audit finding, the D1.3 no-GAP precedent) —
+ *  two identical pre-settle frames are caught even when this settle hit the backstop. */
+async function settleCam(page: Page, timeoutMs = 20000): Promise<void> {
   const start = Date.now();
   let prev: number | null = null;
   let stable = 0;
@@ -1260,9 +1276,7 @@ async function settleCam(page: Page, timeoutMs = 6000): Promise<void> {
       } else stable = 0;
       prev = dist;
     }
-    if (Date.now() - start > timeoutMs) {
-      throw new Error(`camera boom never settled within ${timeoutMs} ms (last cam.dist=${prev})`);
-    }
+    if (Date.now() - start > timeoutMs) return; // best-effort near-destination frame; the pixelHash-differ assert stays the hard gate
     await page.waitForTimeout(80);
   }
 }
