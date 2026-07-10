@@ -26,7 +26,7 @@
         "x": 0,
         "z": 0
       },
-      "drawCalls": 46,
+      "drawCalls": 47,
       "file": ""
     },
     {
@@ -71,10 +71,10 @@
       "heliX": 24,
       "heliZ": 22,
       "pos": {
-        "x": 20.955641750255207,
-        "z": 19.75278182876404
+        "x": 23.36544745767193,
+        "z": 19.46344315666991
       },
-      "drawCalls": 24,
+      "drawCalls": 18,
       "file": "laptop/p15c-heli-enter/p15c-heli-01-at-pad.png"
     },
     {
@@ -90,7 +90,7 @@
         "x": 24,
         "z": 22
       },
-      "drawCalls": 101,
+      "drawCalls": 99,
       "file": "laptop/p15c-heli-enter/p15c-heli-02-in-heli.png"
     }
   ]

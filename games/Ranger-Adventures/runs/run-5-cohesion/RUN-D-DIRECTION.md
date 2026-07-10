@@ -245,7 +245,15 @@ always land OUTSIDE terrain/props — and never UNDER the terrain (D0.2: the
 fresh simon-3D player-path frame was shot from `cam.y` −1.29 below ground
 with an up-tilt; ledger D1.3) — and hero subjects (board, mission target)
 must be in-frustum at their beat — asserted via the dev-hook booleans
-(`cam.avatarInView`, `cam.landmarkInView`).
+(`cam.avatarInView`, `cam.landmarkInView`). **The outside-props half binds the
+FREE-WALK follow camera too (GATE-D1, 2026-07-11):** the fresh `09-walk-4` is a
+full-frame foliage void — the camera inside a tree crown on the plain walk path
+while `avatarScreen.visible` claimed true. The sanctioned response is an
+OCCLUDER FADE (drop the intersecting canopy/prop's opacity — the `avatarOpacity`
+machinery is the precedent): a fade is not a camera move, so it cannot collide
+with the comfort law; an automatic pull-in/jump would (camera moves stay
+player-initiated). The visibility hook must be a real camera→avatar clear-line
+test, not a projection check (ledger D1.5).
 
 ### 2.6 Performance budget as an art constraint
 
@@ -613,6 +621,28 @@ never-under-terrain clause, §8.7 under-terrain/hook-vs-pixel no-evidence.
 Phase-1 preamble + Phase-4 sourcing order re-read coherently against the
 ledger and this doc. No frozen contract and no §2.4 Alvah correction was
 touched.
+
+**GATE-D1 audit (2026-07-11, Fable art director, against the fresh 23:10–00:01
+capture — 10/10 specs green):** Phase 1's mechanical core is PROVEN on burst
+annotations + pixels: the raycast ground-truth is live (grounded 21/21 and
+32/32 with clearance 0 while `analyticGap` grows to 2.71 m — the old `heightAt`
+world is measurably left behind), the ven-shore burial is gone (feet + shadow
+in every fresh ven frame), the jeep genuinely translates (~50 m monotonic
+straight leg, smooth unwrapped full-circle turn, visible at three world spots),
+the heli chain closes end-to-end (64 px toggle on-screen → available → near →
+inHeli, pad + in-flight frames), and all five mission-entry cameras land above
+terrain with the task in frustum — simon's under-terrain entry and corsi's
+straight-down framing are fixed. The gate did NOT tick: D1.1's zoom-pair
+evidence GAPped in this very capture (settle-throw at 6 s vs the ~13×-slower
+headless ease), and two new breaches surfaced — five GAP groups + stale
+burst-dir orphans (→ ledger D1.4), and the free-walk follow camera INSIDE a
+tree crown with the visibility hook lying (`09-walk-4`; → ledger D1.5, §2.5
+extended above). Motion-comfort re-verified in pixels: RM idle-holds
+pixel-identical, the RM reframe lands as a true instant cut; fov 55 and
+drawCalls <150 (max 99) everywhere. Alvah still reads adult-scale dark-haired
+in every frame — Phase 2 (P1.6a/b) sharpened with the `ratioToRanger` rescale
+trap, the staged `ranger-warden-boa.glb` as the comparison adult, and the
+judged surfaces. No frozen contract and no §2.4 Alvah correction was touched.
 
 ---
 
