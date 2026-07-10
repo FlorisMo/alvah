@@ -201,6 +201,13 @@ export interface RangerDevHook {
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean;
+    /** P1.5b: the jeep's live ground contact — its world Y and the clearance of that Y
+     *  above the RENDERED surface right under it (the D1.2 ray truth), with `grounded`
+     *  true when the ray hits AND the clearance sits in the jeep suspension band. The
+     *  drive-assert reads `grounded` every frame of the burst to prove the jeep drives ON
+     *  the terrain, and `y`/`clearance` to prove the ground contact is a damped hover, not
+     *  the old hard per-frame snap. Pixels stay the court of appeal (§8.7). */
+    y: number; grounded: boolean; clearance: number;
     /** F-31: true while the ranger rides the jeep with his mesh hidden (the
      *  sanctioned "verifiably hidden" fallback — the canopy occludes a driver
      *  from the chase cam). The assert reads it true while `inVehicle`, alongside
@@ -286,7 +293,8 @@ const state = {
   water: null as null | (() => { shader: boolean; amp: number; time: number }),
   vehicle: null as null | (() => {
     placed: boolean; near: boolean; inVehicle: boolean;
-    x: number; z: number; heading: number; headingUnwrapped: number;
+    x: number; z: number; y: number; heading: number; headingUnwrapped: number;
+    grounded: boolean; clearance: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean; driverHidden: boolean;
@@ -473,7 +481,8 @@ export function provideWater(
 export function provideVehicle(
   fn: (() => {
     placed: boolean; near: boolean; inVehicle: boolean;
-    x: number; z: number; heading: number; headingUnwrapped: number;
+    x: number; z: number; y: number; heading: number; headingUnwrapped: number;
+    grounded: boolean; clearance: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean; driverHidden: boolean;

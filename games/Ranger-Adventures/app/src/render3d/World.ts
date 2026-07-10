@@ -100,6 +100,20 @@ const GROUND_AIR_TOL = 0.60;  // and at most 60 cm above it (a step), else airbo
 // the jeep is a bigger object the ranger walks up to).
 const JEEP_COLLIDE = 1.6;
 const JEEP_NEAR_R = 3.6;
+// P1.5b jeep ground contact (RUN-D-DIRECTION §2.2: vehicles read the RENDERED mesh,
+// not the mirrored analytic `heightAt`; runs/animation-research.md §4.5: a damped
+// hover, NEVER a hard per-frame Y-snap). The jeep's Y EASES toward the raycast ground
+// target each frame instead of clamping exactly to it — the old snap welded it to every
+// undulation (the "magnetically welded" stick Floris felt). The rate converges in ~0.1 s:
+// small enough that the jeep visually hugs the ground, large enough that its Y is a
+// smoothed suspension glide, not a lockstep terrain trace. Frame-rate independent.
+const JEEP_HOVER_RATE = 10;   // 1/s exponential approach of the jeep Y toward the ground target
+// The jeep's grounded band is wider than the walker's tight feet band: the hover lets Y
+// lag the target a little (that lag IS the smoothing) and a suspension rides a touch into
+// or above the surface. Below −SINK it has dropped THROUGH the ground; above +AIR it has
+// launched off a crest — either bound failing means "not grounded" (the dev-hook court).
+const JEEP_SINK_TOL = 0.5;    // may ride up to 0.5 m below the surface (compress / uphill lag)
+const JEEP_AIR_TOL = 1.0;     // and up to 1.0 m above it (crest / downhill lag) before airborne
 
 // W5.3b helicopter: its parked collision radius, the pad-proximity radius that
 // surfaces "Stap in de helikopter", and how close (horizontally) the aircraft
@@ -918,7 +932,8 @@ export class World {
    *  jeep is placed. */
   vehicleState(): {
     placed: boolean; near: boolean; inVehicle: boolean;
-    x: number; z: number; heading: number; headingUnwrapped: number;
+    x: number; z: number; y: number; heading: number; headingUnwrapped: number;
+    grounded: boolean; clearance: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
     nearAnimal: boolean; dust: boolean; driverHidden: boolean;
@@ -926,6 +941,18 @@ export class World {
     if (!this.jeep || !this.jeepPos) return null;
     const caps = driveCaps(livePolicy().reduced);
     const off = this.inVehicle ? this.camOffsetVehicle : this.camOffset;
+    // P1.5b: the jeep's live ground contact — its world Y against the RENDERED surface
+    // directly under it (the D1.2 ray truth, never the mirrored analytic field). Sitting
+    // still, `clearance` ≈ 0; while driving relief the damped hover lets it lag a little
+    // (that lag IS the smoothing — never the old hard snap). `grounded` = the ray hit AND
+    // the clearance sits in the jeep suspension band. Pixels stay the court of appeal
+    // (§8.7): a shot that contradicts this outranks it.
+    this.groundRay.far = SNAP_RAY_FAR;
+    this.groundRay.set(this._snapOrigin.set(this.jeepPos.x, SNAP_ORIGIN_Y, this.jeepPos.z), World.DOWN);
+    const gh = this.groundRay.intersectObject(this.ground, false);
+    const jeepSurfaceY = gh.length ? gh[0].point.y : this.groundY(this.jeepPos.x, this.jeepPos.z);
+    const jeepClearance = this.jeepPos.y - jeepSurfaceY;
+    const jeepGrounded = gh.length > 0 && jeepClearance >= -JEEP_SINK_TOL && jeepClearance <= JEEP_AIR_TOL;
     // TRUE roll = tilt of the camera's right vector off horizontal. `camera.up` is
     // pinned to world-up and lookAt derives the basis from it, so right lies in the
     // xz-plane → right.y ≈ 0 at ANY yaw/pitch. (camera.rotation.z is NOT roll here —
@@ -934,8 +961,9 @@ export class World {
     const rightY = this.camera.matrixWorld.elements[1]; // column 0, row 1 = right.y
     return {
       placed: true, near: this.nearJeep, inVehicle: this.inVehicle,
-      x: this.jeepPos.x, z: this.jeepPos.z, heading: this.jeepHeading,
+      x: this.jeepPos.x, z: this.jeepPos.z, y: this.jeepPos.y, heading: this.jeepHeading,
       headingUnwrapped: this.jeepHeadingUnwrapped,
+      grounded: jeepGrounded, clearance: jeepClearance,
       speed: this.vehicleSpeed, maxSpeed: caps.maxSpeed, turnRate: caps.turnRate,
       camDist: off.z, camHeight: off.y, fov: this.camera.fov, roll: rightY,
       nearAnimal: this.vehicleNearAnimal, dust: this.dustEmitting,
@@ -2621,7 +2649,11 @@ export class World {
   private placeJeep(): void {
     const x = 16, z = 14, height = 1.9; // stuifzand NE; ~21 m from spawn, +z off the smoke corridor
     const group = new THREE.Group();
-    group.position.set(x, this.groundY(x, z), z);
+    // P1.5b: seat the parked jeep on the RENDERED surface (the D1.2 ray truth), not the
+    // mirrored analytic `heightAt` that reads a different height here — so the drive
+    // begins grounded and the hover has nothing to correct on frame one. (buildGround at
+    // construction precedes placeJeep, so `this.ground` + its BVH are already up.)
+    group.position.set(x, this.groundSnapY(x, z), z);
     this.jeepHeading = Math.atan2(-x, -z); // parked facing the clearing (like the landmarks)
     group.rotation.y = this.jeepHeading;
     group.add(this.proceduralTotem('#6a7b4a')); // instant stand-in until the GLB streams in
@@ -2783,7 +2815,14 @@ export class World {
     this.vehicleSpeed = capped;
     const next = resolveMove(jp.x, jp.z, jp.x + step.dx * k, jp.z + step.dz * k, this.obstacles, this.limits);
     jp.x = next.x; jp.z = next.z;
-    jp.y = this.groundY(next.x, next.z);       // terrain stick
+    // P1.5b ground contact: EASE the jeep's Y toward the rendered-surface target with a
+    // damped hover (research §4.5), NOT the old `jp.y = groundY(...)` hard per-frame snap.
+    // The snap welded the jeep to every undulation (the "magnetically welded" stick) AND
+    // read the mirrored analytic field (the same divergence D1.2 fixed for the walker at
+    // the ven). `groundSnapY` is the rendered-mesh truth; the exponential approach smooths
+    // it into a suspension-like glide that still hugs the ground. Frame-rate independent.
+    const targetY = this.groundSnapY(next.x, next.z);
+    jp.y += (targetY - jp.y) * (1 - Math.exp(-JEEP_HOVER_RATE * dt));
     this.jeep.rotation.y = this.jeepHeading;
     // the ranger rides along (hidden) so placeCamera + exitVehicle anchor track it
     this.ranger.position.set(jp.x, jp.y, jp.z);
