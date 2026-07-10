@@ -683,3 +683,15 @@ One status block per run/step (BUILD-PLAN §9b).
 ▷ progress: ~9%
 ⚠ blocker: Run C gereconcilieerd naar Run D (2026-07-05). Launch: run-d-loop.sh — zie runs/run-5-cohesion/.
 ```
+
+---
+**2026-07-10 15:51:00Z** · ticked: - [x] P1.5a · The ranger never sinks through the floor/terrain [both] +demo (builds on D1.2's ground-truth) — ground the character controller so the ranger stays ON the terrain + solid props everywhere he can walk (spawn, slopes, the dunes behind spawn, hub, the ven shore, every mission scene). D0.1 pixel proof (2026-07-05): fresh `45-ven-shore` shows him sunk to the NECK in the ven-bowl slope — the visual-terrain/`heightAt` disagreement reproduces ON LAPTOP, not only on Floris's device. Expose dev-hook `grounded` (boolean) + foot-clearance (ranger y minus terrain height). Extend the capture harness (app/e2e-capture/, allowed) to walk a burst across spawn → slope → dune → the ven-bowl shore. Verify by: drive-assert (`grounded`=true every frame of the walk burst AND foot-clearance ≥0 — never below terrain — across spawn/slope/dune/ven-shore) + shot (feet on the ground in the ven-shore frame too, no half-buried frame); drawCalls <150. +demo: Floris walks the real iPad over the dunes without falling through.
+
+```
+✔ landed: D0.2 · DIRECTION · validate + refine RUN-D-DIRECTION.md + this ledger against the animation/physics deep-research
+▶ phase:  Phase 1 · PLAYABILITY FIRST — correctness before any more polish  (Floris demo 2026-07-05: sank through floor · jeep sticks-and-slides · cannot enter heli)
+→ next:   DEFERRED · D1.0 · Capture harness fit for Run D: green inside its budget + honest evidence [laptop] (from Run C P1.10/P1.15 capture legs; re-verified 2026-07-05: the "audit capture flow" test timed out at its 30-min cap at 11:27 — the `ven` group + a transient newPage protocol error — and the `40–44 game3d-*` frames shoot `/?sandbox`, NOT the mission path the player reaches, while orphan PNGs from older shot-numbering runs still sit beside fresh ones under `laptop/`). This box is harness-only (`app/e2e-capture/`), no game code, and lands FIRST because every Phase-1 drive-burst box adds scenes to this harness: (a) bound/isolate the slow groups so the whole capture finishes green inside the budget, with a retry on the newPage protocol error; (b) shoot each of the 5 games' 3D surface on the player-reachable mission path (not the sandbox), keeping the five 2D-floor frames; (c) make capture REMOVE orphan PNGs not present in the fresh annotations. Verify by: `npm run capture` exits green with all groups complete; fresh set contains named player-path frames for all five games ×{3D, 2D floor} with per-frame `drawCalls` <150; every PNG under `laptop/` matches a shot in `annotations-laptop.json`.
+▤ ledger: RUN-D-LEDGER.md
+▷ progress: ~10%
+⚠ blocker: Run C gereconcilieerd naar Run D (2026-07-05). Launch: run-d-loop.sh — zie runs/run-5-cohesion/.
+```
