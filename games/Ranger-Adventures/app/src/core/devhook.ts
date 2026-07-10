@@ -103,6 +103,16 @@ export interface RangerDevHook {
    *  that slid the feet ~2.5× per stride. 0 while standing or in an in-place
    *  activity; null before the hook/world is ready. */
   groundSpeed(): number | null;
+  /** D1.2 locomotion ground-truth (P1.5a asserts it across the walkable world): is the
+   *  ranger's Y actually ON the RENDERED terrain surface, not through it? `grounded` is
+   *  true when a down-ray hits the terrain under him AND his feet sit in the on-foot
+   *  band; `clearance` (m) is his feet Y minus that raycast surface Y (≈ 0 after the
+   *  snap; the pre-fix analytic Y-write read ~ −4 m at the ven basin); `analyticGap` (m)
+   *  is how far the rendered surface disagrees with the old analytic `heightAt` here, so
+   *  a drive-burst can prove it crossed a real divergence zone (not a flat-spawn no-op).
+   *  Null before the rig is up or while seated in a vehicle. Pixels stay the court of
+   *  appeal (§8.7) — a shot that contradicts this assert outranks it. */
+  grounded(): { grounded: boolean; clearance: number; analyticGap: number } | null;
   /** The REAL render camera read back AFTER the frame update (F-05 ⊕ F-18): the
    *  live camera-to-subject boom length (`dist`), the yaw/pitch derived from the
    *  camera's own world quaternion (NOT the follow bearing), the camera's world
@@ -249,6 +259,7 @@ const state = {
   clip: null as null | (() => { name: string; time: number } | null),
   avatar: null as null | (() => { height: number } | null),
   groundSpeed: null as null | (() => number | null),
+  grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
@@ -339,6 +350,14 @@ export function provideGroundSpeed(fn: (() => number | null) | null): void {
  *  (F-05 ⊕ F-18). */
 export function provideCam(fn: (() => CamState | null) | null): void {
   state.cam = fn;
+}
+
+/** Register the live ground-truth source (the World's `groundedState` — the ranger's
+ *  feet against the rendered terrain surface). Pass null to clear (D1.2). */
+export function provideGrounded(
+  fn: (() => { grounded: boolean; clearance: number; analyticGap: number } | null) | null,
+): void {
+  state.grounded = fn;
 }
 
 /** Register the live proximity source (the World's `nearId`). Pass null to clear. */
@@ -517,6 +536,7 @@ export function installDevHook(): boolean {
     clip: () => (state.clip ? state.clip() : null),
     avatar: () => (state.avatar ? state.avatar() : null),
     groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
+    grounded: () => (state.grounded ? state.grounded() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),
     markers: () => (state.markers ? state.markers() : null),

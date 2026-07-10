@@ -60,6 +60,18 @@ import {
 import {
   WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp,
 } from './Water';
+import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+
+// D1.2 locomotion ground-truth: opt three.js raycasts into three-mesh-bvh's
+// accelerated path so the per-frame ground-snap ray (see `groundSnapY`) is O(log n)
+// against the ~18k-tri terrain instead of brute-force — cheap on iPad, and the
+// foundation the P1.5a/P1.5b bursts and prop-seating build on. MIT, zero runtime
+// network, already an installed dep (RUN-D-DIRECTION §7.2). One-time prototype patch;
+// a mesh without a boundsTree still falls back to the stock raycast, so this is safe
+// for every other `intersectObject` in the file.
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 export interface WorldMarker {
   missionId: string;
@@ -71,6 +83,17 @@ export interface WorldMarker {
 }
 
 const SKY_LOW = GOLDEN_HOUR.fogColor; // shared golden-hour horizon + fog colour (P1.1)
+
+// D1.2 ground-snap constants. The ranger's Y is read by a ray cast straight DOWN
+// from well above his head (clear of any relief) against the real terrain mesh.
+const SNAP_ORIGIN_Y = 60;   // ray origin height (m) — above the tallest relief
+const SNAP_RAY_FAR = 200;   // ray length (m) — reaches the deepest ven basin
+// `grounded` band for the dev-hook court check (P1.5a asserts it across the world):
+// after the snap the feet sit ON the rendered surface, so clearance ≈ 0. A few cm of
+// float tolerance absorbs numeric wobble; more than SINK below or AIR above is "not
+// grounded" (the pre-fix analytic Y-write buried him ~4 m at the ven — clearance ≪ 0).
+const GROUND_SINK_TOL = 0.06; // feet may sit at most 6 cm below the rendered surface
+const GROUND_AIR_TOL = 0.60;  // and at most 60 cm above it (a step), else airborne
 
 // W5.1 jeep: its collision radius while parked, and the proximity radius that
 // surfaces the "Stap in" affordance (a touch wider than the 2.4 m marker radius —
@@ -322,6 +345,13 @@ export class World {
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
   private readonly raycaster = new THREE.Raycaster();
   private readonly ground: THREE.Mesh;
+  // D1.2: a dedicated DOWN ray for the per-frame ground-snap, kept separate from the
+  // pointer `raycaster` so a tap-to-walk never disturbs the ground query (and vice
+  // versa). `firstHitOnly` (three-mesh-bvh) returns just the topmost terrain hit — all
+  // the ground-snap needs — so the accelerated cast can stop early.
+  private readonly groundRay = Object.assign(new THREE.Raycaster(), { firstHitOnly: true });
+  private readonly _snapOrigin = new THREE.Vector3();
+  private static readonly DOWN = new THREE.Vector3(0, -1, 0);
   // W4.5 golden-hour light + selective hero shadow map. The warm sun casts a soft
   // shadow only for the ranger + solid props (castShadow=true); its tight ortho
   // frustum FOLLOWS the ranger via a fixed offset (`sunOffset`) so the covered set
@@ -867,7 +897,7 @@ export class World {
     // ground and inside the rim, and the heli obstacle isn't back yet so he clears it.
     const side = 2.6;
     const next = resolveMove(hx, hz, hx + Math.cos(h) * side, hz - Math.sin(h) * side, this.obstacles, this.limits);
-    this.ranger.position.set(next.x, this.groundY(next.x, next.z), next.z);
+    this.ranger.position.set(next.x, this.groundSnapY(next.x, next.z), next.z); // D1.2: land on the rendered surface, never a sunk exit
     this.ranger.rotation.y = h;
     this.ranger.visible = true;
     this.target.set(next.x, 0, next.z);      // no stale walk target
@@ -974,7 +1004,7 @@ export class World {
     // and inside the rim; the jeep obstacle isn't back yet, so he clears it fully.
     const side = 2.4;
     const next = resolveMove(jx, jz, jx + Math.cos(h) * side, jz - Math.sin(h) * side, this.obstacles, this.limits);
-    this.ranger.position.set(next.x, this.groundY(next.x, next.z), next.z);
+    this.ranger.position.set(next.x, this.groundSnapY(next.x, next.z), next.z); // D1.2: land on the rendered surface, never a sunk exit
     this.ranger.rotation.y = h;
     this.ranger.visible = true;
     this.playerRig.setSeated(false);       // F-31: back on foot — locomotion resumes (idle)
@@ -1091,6 +1121,8 @@ export class World {
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
+    // D1.2: build the BVH so the per-frame ground-snap ray (groundSnapY) is cheap.
+    geo.computeBoundsTree();
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
     if (detail) mat.map = this.groundMottleTexture();
     const mesh = new THREE.Mesh(geo, mat);
@@ -1327,6 +1359,25 @@ export class World {
   /** sample ground height at world x,z (delegates to the pure biome field). */
   private groundY(x: number, z: number): number {
     return heightAt(x, z);
+  }
+
+  /**
+   * D1.2 locomotion ground-truth (RUN-D-DIRECTION §2.2): the Y of the RENDERED
+   * terrain surface directly under world (x,z), read by casting a ray straight down
+   * against the real ground mesh. This is the ONE ground truth for the character's
+   * feet — it can never disagree with the pixels the way the analytic `heightAt`
+   * does. (`buildGround` displaces the plane by `heightAt(x, y_plane)` then tilts it
+   * −90° about X, which maps y_plane → world −z; so the mesh surface at world (x,z)
+   * equals `heightAt(x, −z)`, while a `heightAt(x, z)` Y-write samples the MIRRORED
+   * field — up to ~4 m off at the ven basin, burying the ranger to his hair on the
+   * shore. The raycast reads the surface the eye sees, so grounding to it is correct
+   * regardless of that analytic divergence.) Falls back to `heightAt` only if the ray
+   * ever misses (defensive — the 240 m ground plane always covers the 75 m bound). */
+  private groundSnapY(x: number, z: number): number {
+    this.groundRay.far = SNAP_RAY_FAR;
+    this.groundRay.set(this._snapOrigin.set(x, SNAP_ORIGIN_Y, z), World.DOWN);
+    const hit = this.groundRay.intersectObject(this.ground, false);
+    return hit.length ? hit[0].point.y : this.groundY(x, z);
   }
 
   /**
@@ -1908,6 +1959,36 @@ export class World {
    *  walking (and the sound gate holds them when `geluid` is off). */
   footstepState(): { count: number; surface: FootSurface | null } {
     return { count: this.footstepCount, surface: this.lastFootSurface };
+  }
+
+  /** Dev-hook accessor (D1.2 locomotion ground-truth; P1.5a asserts it across the
+   *  walkable world). Reads the ranger's feet against the RENDERED terrain surface
+   *  right under him — the court check for "he is ON the ground, not through it":
+   *   - `clearance` = his feet Y minus the raycast surface Y. After the ground-snap
+   *     it is ≈ 0; the pre-fix analytic Y-write read ~ −4 m at the ven basin (buried).
+   *   - `analyticGap` = the rendered surface minus the OLD analytic `heightAt(x,z)`
+   *     value at the same spot — how far the mesh and the mirrored analytic field
+   *     disagree here. A burst that reaches |analyticGap| ≫ 0 proves it crossed a zone
+   *     where the old Y-write WOULD have sunk/floated him, so a still-grounded ranger
+   *     there is real evidence, not a flat-spawn no-op.
+   *   - `grounded` = the ray hit the terrain AND clearance sits in the on-foot band.
+   *  Null before the rig is up or while seated in a vehicle (his mesh is hidden then,
+   *  so a feet-on-ground check is meaningless). Pixels stay the court of appeal (§8.7):
+   *  this is an assert, and a shot that contradicts it outranks it. */
+  groundedState(): { grounded: boolean; clearance: number; analyticGap: number } | null {
+    if (this.ranger.children.length === 0 || this.inVehicle) return null;
+    const p = this.ranger.position;
+    this.groundRay.far = SNAP_RAY_FAR;
+    this.groundRay.set(this._snapOrigin.set(p.x, SNAP_ORIGIN_Y, p.z), World.DOWN);
+    const hit = this.groundRay.intersectObject(this.ground, false);
+    if (!hit.length) return { grounded: false, clearance: Number.NEGATIVE_INFINITY, analyticGap: 0 };
+    const surfaceY = hit[0].point.y;
+    const clearance = p.y - surfaceY;
+    return {
+      grounded: clearance >= -GROUND_SINK_TOL && clearance <= GROUND_AIR_TOL,
+      clearance,
+      analyticGap: surfaceY - this.groundY(p.x, p.z),
+    };
   }
 
   /** Dev-hook accessor (W4.8): the live ven-water state — whether the fresnel
@@ -3137,7 +3218,7 @@ export class World {
         rp.x = next.x;
         rp.z = next.z;
       }
-      rp.y = this.groundY(rp.x, rp.z);
+      rp.y = this.groundSnapY(rp.x, rp.z); // D1.2: feet follow the rendered terrain, never the mirrored analytic field
 
       // ambience follows the ranger across biomes — re-pick the bed on a crossing
       const here = biomeAt(rp.x, rp.z);

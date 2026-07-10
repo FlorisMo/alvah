@@ -671,3 +671,15 @@ One status block per run/step (BUILD-PLAN §9b).
 ▷ progress: ~7%
 ⚠ blocker: Run C gereconcilieerd naar Run D (2026-07-05). Launch: run-d-loop.sh — zie runs/run-5-cohesion/.
 ```
+
+---
+**2026-07-10 15:17:17Z** · ticked: - [x] D1.2 · Locomotion foundation: one raycast ground-truth under every walkable surface [both] (research-derived, 2026-07-05 — see the Phase-1 preamble; D0.2 may re-rank) — replace/underpin the `heightAt` Y-write in the controller path (`render3d/CharacterController.ts` + World.ts:870/977) with a raycast-down ground-snap against the REAL rendered terrain + solid-prop meshes: cast from above the head, place the body at hit-point + foot offset, project the desired velocity along the face-normal slope tangent, clamp steep slopes (~45°) as unwalkable; use the installed `three-mesh-bvh` (MIT) if the per-frame raycasts get hot. NO physics engine unless the burst-asserts prove this path cannot pass (then cannon-es MIT before rapier — record why in RUN-D-PLAN.md §8). Expose `grounded` (boolean) + foot-clearance on the dev hook here — P1.5a asserts them across the wider world. Verify by: drive-assert (a spawn → slope walk burst holds `grounded`=true AND foot-clearance ≥0 every frame) + assert (drawCalls <150; build + e2e:smoke green; motion-comfort law untouched).
+
+```
+✔ landed: D0.2 · DIRECTION · validate + refine RUN-D-DIRECTION.md + this ledger against the animation/physics deep-research
+▶ phase:  Phase 1 · PLAYABILITY FIRST — correctness before any more polish  (Floris demo 2026-07-05: sank through floor · jeep sticks-and-slides · cannot enter heli)
+→ next:   DEFERRED · D1.0 · Capture harness fit for Run D: green inside its budget + honest evidence [laptop] (from Run C P1.10/P1.15 capture legs; re-verified 2026-07-05: the "audit capture flow" test timed out at its 30-min cap at 11:27 — the `ven` group + a transient newPage protocol error — and the `40–44 game3d-*` frames shoot `/?sandbox`, NOT the mission path the player reaches, while orphan PNGs from older shot-numbering runs still sit beside fresh ones under `laptop/`). This box is harness-only (`app/e2e-capture/`), no game code, and lands FIRST because every Phase-1 drive-burst box adds scenes to this harness: (a) bound/isolate the slow groups so the whole capture finishes green inside the budget, with a retry on the newPage protocol error; (b) shoot each of the 5 games' 3D surface on the player-reachable mission path (not the sandbox), keeping the five 2D-floor frames; (c) make capture REMOVE orphan PNGs not present in the fresh annotations. Verify by: `npm run capture` exits green with all groups complete; fresh set contains named player-path frames for all five games ×{3D, 2D floor} with per-frame `drawCalls` <150; every PNG under `laptop/` matches a shot in `annotations-laptop.json`.
+▤ ledger: RUN-D-LEDGER.md
+▷ progress: ~9%
+⚠ blocker: Run C gereconcilieerd naar Run D (2026-07-05). Launch: run-d-loop.sh — zie runs/run-5-cohesion/.
+```
