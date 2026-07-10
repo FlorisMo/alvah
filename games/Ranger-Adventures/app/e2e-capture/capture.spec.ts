@@ -395,8 +395,9 @@ test('audit capture flow', async ({ context }, testInfo) => {
     }
   }
 
-  // ══ GROUP 1 — intro: title → avatar → world → walk burst → controls →
-  //    (laptop camera attempts) → pause hub. Own fresh page. ══
+  // ══ GROUP 1 — intro: title → avatar → world → walk burst → controls → pause hub
+  //    → title-return. Own fresh page. (The laptop dolly-zoom scene moved to its own
+  //    fresh-boot GROUP 1b below so it shoots from the un-sunk spawn, not the sink.) ══
   await runGroup('intro', { budgetMs: 540_000 }, async (page, stick) => {
     await scene(page, 'title', async () => {
       await page.goto('/');
@@ -456,40 +457,87 @@ test('audit capture flow', async ({ context }, testInfo) => {
         : 'Laptop-kader: joystick weg (fijne pointer) — de ≥56 px "?"-hulpchip toont de besturing (F-15).',
         ['.explore-pause', '.explore-help']);
     });
-    if (!isPad) {
+    // D1.1: the laptop dolly-zoom / orbit / click-walk scene MOVED OUT of the intro
+    // group into its OWN fresh-boot group ('camera', below). It used to run HERE, after
+    // the walk-burst drove the ranger ~48 m into the −z sink (P1.5a), then walked him
+    // ALL THE WAY BACK to origin (walkTo budget 300) before the dolly could extend — a
+    // ~300-iter, ~2 s/iter crawl under capture load that blew the intro group's 540 s
+    // budget and GAPped the zoom pair entirely (zero camera-zoom frames). Shooting it
+    // from a dedicated fresh spawn instead removes the walk-back: the ranger is at the
+    // un-sunk clearing (0,0) with the full 9.5 m boom, so the pair settles + differs in
+    // ~10 s (see GROUP 1b).
+    // pause hub — opened over the LIVE world (last scene of the group).
+    await scene(page, 'pause-hub', async () => {
+      await press(page, isPad, page.locator('.explore-pause'));
+      await settle(page, 400);
+      await snap(page, 'pause-hub', 'Pauze/menu', 'Pauze-menu — is er een duidelijke "terug/hoofdmenu"? (punch-list #5)',
+        ['.lodge-links .ra-chip', '.ph-hoofdmenu', '.ph-back']);
+    });
+    // F-27 (P3.2): the pause hub's "Naar het hoofdmenu" is the ONE exit below the
+    // title — screen→'title' with NO password re-ask (in-app swap, not a reload),
+    // and "Begin" restores the same avatar + progress (state.ts write-through).
+    await scene(page, 'title-return', async () => {
+      await press(page, isPad, page.locator('.ph-hoofdmenu'));
+      await waitFor(page, (r) => r.screen === 'title', 15_000);
+      await snap(page, 'title-return', 'Pauze/menu', 'Hoofdmenu vanuit de pauze — screen=title, geen wachtwoord opnieuw (F-27).',
+        ['.ra-title-begin']);
+      await press(page, isPad, page.locator('.ra-title-begin'));
+      await waitFor(page, (r) => r.screen === 'world', 40_000);
+      await settle(page, 600);
+      await snap(page, 'title-return-world', 'Pauze/menu', 'Terug in de wereld na hoofdmenu — avatar + voortgang bewaard (F-27).');
+    });
+  });
+
+  // ══ GROUP 1b — laptop camera: dolly-zoom PAIR (D1.1) + orbit + click-walk, on a
+  //    DEDICATED fresh boot so the ranger stands at the un-sunk spawn clearing (0,0)
+  //    with the full boom range. Laptop-only (the iPad leg has no wheel/trackpad
+  //    dolly). Own page + a tight 180 s budget (the whole scene settles + shoots in
+  //    ~10 s once the world is up). Booting fresh is what makes the zoom pair reliable:
+  //    the old placement (inside GROUP 1, after the walk-burst sink) needed a ~300-iter
+  //    walk-BACK that blew the budget; here there is nothing to walk back from. ══
+  if (!isPad) {
+    await runGroup('camera', { budgetMs: 180_000 }, async (page) => {
+      await bootWorld(page, false);
+      await settle(page, 1500); // rig swap-in + follow-boom settle at spawn (cf. world-idle)
       await scene(page, 'camera-attempts', async () => {
-        // D1.1: the walk burst above drives the ranger ~60 m into the undressed −z void
-        // where he sinks (P1.5a — cam.y falls 2.4 → 1.1) and the follow boom collapses to
-        // its min-clamp, so a dolly there could not extend and the zoom pair was two
-        // identical clamped voids (12/13-camera-zoom, cam.dist 1.67 both, zoom.dist 1.6
-        // then 9.5). Walk him back to the dressed spawn clearing, where he is un-sunk and
-        // the boom provably reaches the full 9.5 m (cf. the RM-reframe cam.dist 9.63), so
-        // the dolly has room to move AND a solid ranger to reframe. Best-effort: even
-        // partway back is un-sunk enough, so a short-of-target walk never GAPs the scene.
-        try {
-          await walkTo(page, isPad, stick, async () => {
-            const p = await hook(page, (r) => r.pos());
-            return p ? { x: 0, z: 0, near: Math.hypot(p.x, p.z) < 5 } : null;
-          }, 300);
-        } catch { /* partway back is fine — the boom un-clamps once he leaves the sink */ }
-        await settleCam(page); // let the follow boom re-seat on the spawn framing
+        // Shoot the dolly pair from the fresh un-sunk spawn: the boom reaches its full
+        // 9.5 m and the ranger is solid, so a SETTLED zoom-in vs zoom-out renders two
+        // genuinely different frames. The old pair were identical PRE-SETTLE voids
+        // (cam.dist 1.67 on BOTH while zoom.dist read 9.5 — the eased dolly caught before
+        // it moved, direction doc §8.7). settleCam gates each snap on the eased boom
+        // having STOPPED (steady-state |Δcam.dist| ≤ max(0.03 m, 0.4 %) ×2), so cam.dist
+        // reads the DESTINATION framing, never a mid-ease value.
+        await settleCam(page); // confirm the spawn follow-boom is steady before the first dolly
         const box = await page.locator('canvas#scene').boundingBox();
         if (!box) throw new Error('no canvas');
         const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
         await page.mouse.move(cx, cy);
+        // Record the HORIZONTAL boom (lens→ranger in XZ) next to the 3D cam.dist so the
+        // audit can read the settle-to-target directly: the player-set dolly `zoom.dist`
+        // IS a horizontal boom, and the 3D `cam.dist` = hypot(boom, ~1.5 m fixed eye
+        // height). At the far clamp the eye offset is negligible so cam.dist ≈ zoom.dist;
+        // at the near clamp cam.dist sits the fixed ~1.5 m ABOVE zoom.dist while the
+        // horizontal boom STILL ≈ zoom.dist — the true "dolly reached its destination"
+        // proof on BOTH clamps (a pre-settle void would read boom 1.6 while zoom.dist 9.5).
+        const boomNote = (a: Annotation): string => {
+          const c = a.cam, p = a.pos;
+          if (!c || !p) return '';
+          const boom = Math.hypot(c.x - p.x, c.z - p.z);
+          return `  [D1.1 settle: horizontale boom ${boom.toFixed(2)} m ≈ dolly ${c.zoom.dist.toFixed(2)} m; cam.dist ${c.dist.toFixed(2)} m = 3D lens→borst incl. vaste ~1,5 m ooghoogte.]`;
+        };
         // F-16: a real wheel-in DOLLIES the walk boom toward its floor. −800 · 0.01 =
         // −8 m from the 4.6 m default → clamps to zoom.min; the frame comes in close.
-        // D1.1: settleCam (not a fixed wait) blocks until the eased boom has stopped
-        // moving, so cam.dist reads the DESTINATION near-clamp, not a mid-ease value.
         await page.mouse.wheel(0, -800); await settle(page, 150); await settleCam(page);
         await snap(page, 'camera-zoom-in', 'Laptop-camera', 'Scroll inzoomen (na camera-settle, geen pre-settle void) — de dolly staat op de min-clamp, FOV onveranderd (F-16). NB cam.dist leest ~1,5 m bóven zoom.dist door de vaste ooghoogte-offset (lens→bbox-midden); op de verre clamp valt dat weg en cam.dist ≈ zoom.dist.');
         const zin = shots[shots.length - 1];
+        zin.note += boomNote(zin); flush();
         // wheel-out the other way: +1400 · 0.01 = +14 m → clamps to zoom.max, pull-back.
-        // settleCam waits out the full ~1.5 s ease so cam.dist reaches ~9.5 (was caught at
+        // settleCam waits out the full ~1.5 s ease so cam.dist reaches ~9.6 (was caught at
         // 1.67 pre-settle) and the frame is the settled wide boom.
         await page.mouse.wheel(0, 1400); await settle(page, 150); await settleCam(page);
-        await snap(page, 'camera-zoom-out', 'Laptop-camera', 'Scroll uitzoomen (na camera-settle) — de dolly trekt terug naar de max-clamp; cam.dist duidelijk groter, FOV nog steeds vast (F-16).');
+        await snap(page, 'camera-zoom-out', 'Laptop-camera', 'Scroll uitzoomen (na camera-settle) — de dolly trekt terug naar de max-clamp; cam.dist duidelijk groter en ≈ zoom.dist, FOV nog steeds vast (F-16).');
         const zout = shots[shots.length - 1];
+        zout.note += boomNote(zout); flush();
         // D1.1 assert: a settled dolly pair must render DIFFERENT frames. If the two share
         // one pixelHash the boom did not move (a pre-settle / clamped void) — flag it as an
         // honest ok:false finding rather than throwing (throwing would GAP the whole scene
@@ -527,28 +575,8 @@ test('audit capture flow', async ({ context }, testInfo) => {
         await page.mouse.click(cx, box.y + box.height * 0.60); await settle(page, 1800);
         await snap(page, 'camera-click-walk', 'Laptop-camera', 'Schone klik (geen sleep) — de ranger loopt naar het punt en pos verschuift, dus tik-om-te-lopen leeft nog (F-17).');
       });
-    }
-    // pause hub — opened over the LIVE world (last scene of the group).
-    await scene(page, 'pause-hub', async () => {
-      await press(page, isPad, page.locator('.explore-pause'));
-      await settle(page, 400);
-      await snap(page, 'pause-hub', 'Pauze/menu', 'Pauze-menu — is er een duidelijke "terug/hoofdmenu"? (punch-list #5)',
-        ['.lodge-links .ra-chip', '.ph-hoofdmenu', '.ph-back']);
     });
-    // F-27 (P3.2): the pause hub's "Naar het hoofdmenu" is the ONE exit below the
-    // title — screen→'title' with NO password re-ask (in-app swap, not a reload),
-    // and "Begin" restores the same avatar + progress (state.ts write-through).
-    await scene(page, 'title-return', async () => {
-      await press(page, isPad, page.locator('.ph-hoofdmenu'));
-      await waitFor(page, (r) => r.screen === 'title', 15_000);
-      await snap(page, 'title-return', 'Pauze/menu', 'Hoofdmenu vanuit de pauze — screen=title, geen wachtwoord opnieuw (F-27).',
-        ['.ra-title-begin']);
-      await press(page, isPad, page.locator('.ra-title-begin'));
-      await waitFor(page, (r) => r.screen === 'world', 40_000);
-      await settle(page, 600);
-      await snap(page, 'title-return-world', 'Pauze/menu', 'Terug in de wereld na hoofdmenu — avatar + voortgang bewaard (F-27).');
-    });
-  });
+  }
 
   // ══ GROUP 2 — jeep: boot → walk to it (touch on iPad), climb in, drive burst
   //    (steering test #3), climb back out. Own fresh page. ══
