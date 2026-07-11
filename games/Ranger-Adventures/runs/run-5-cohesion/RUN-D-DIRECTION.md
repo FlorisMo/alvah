@@ -253,7 +253,17 @@ OCCLUDER FADE (drop the intersecting canopy/prop's opacity — the `avatarOpacit
 machinery is the precedent): a fade is not a camera move, so it cannot collide
 with the comfort law; an automatic pull-in/jump would (camera moves stay
 player-initiated). The visibility hook must be a real camera→avatar clear-line
-test, not a projection check (ledger D1.5).
+test, not a projection check (ledger D1.5). **And the fade must be EFFECTIVE to
+count (GATE-D1 audit #2, 2026-07-11):** a fade whose ease is slower than the
+walk that crosses the crown is pixel-equivalent to no fade (the audit capture
+measured `minFade` 0.9621 on a real occlusion pass — invisible relief; the
+player sees seconds of murk, fresh `11-controls-hud`). The fade attacks
+near-instantly to see-through (≤~0.35 opacity) and may release slowly; the
+lens-INSIDE-a-crown case COUNTS as occluded (a frontface-only ray cast from
+inside a crown reports a lying all-clear); every crown on the near-lens
+sightline fades, not only the first hit; and the clear-view hook reports false
+while any sightline occluder still sits above ~0.5 opacity. Under
+reduced-motion the fade may snap — an opacity fade is not a camera move.
 
 ### 2.6 Performance budget as an art constraint
 
@@ -643,6 +653,39 @@ drawCalls <150 (max 99) everywhere. Alvah still reads adult-scale dark-haired
 in every frame — Phase 2 (P1.6a/b) sharpened with the `ratioToRanger` rescale
 trap, the staged `ranger-warden-boa.glb` as the comparison adult, and the
 judged surfaces. No frozen contract and no §2.4 Alvah correction was touched.
+
+**GATE-D1 audit #2 (2026-07-11, Fable art director, against the fresh
+02:53–03:34 capture — 11/12 specs green):** the phase's mechanical core
+RE-CONFIRMED with no regression, frame by frame: D1.2 21/21 and P1.5a 29/29
+grounded at clearance 0 (the ven walk `reached`=true at 13.7 m from ven-center,
+feet + shadow in every burst frame), P1.5b full-circle turn (unwrapped heading
+0→7.17 rad) + ~55 m monotonic straight leg with the jeep visibly at three
+world spots, P1.5c toggle 420×64 px on-screen → available → near → inHeli with
+pad + in-flight frames, D1.3 five-for-five mission entries above terrain with
+the task in frustum. D1.1 now PROVEN and stays closed: the zoom pair settles on
+both clamps (horizontal boom 1.61≈1.61 m / 9.50≈9.50 m; the fixed ~1.5 m
+eye-height offset in `cam.dist` is annotated honestly) and pixel-differs. The
+gate did NOT tick: D1.5 re-opened — its own view-clear spec FAILED in the audit
+capture (`minFade` 0.9621 against the ≤0.5 see-through assert; the fade fires
+but its ease is slower than the walk crossing the crown — load-fragile and
+player-visible as seconds of murk) and the pixels convict it (fresh
+`11-controls-hud`: full-frame murk at z≈−59 while the hook claims
+`viewClear`=true + `canopyFade`=1 — the lens-inside-crown blind spot;
+`12-pause-hub` still murk at fade 0.16). §2.5 above extended with the
+fade-effectiveness law. D1.6 appended: the `jeep` group GAPped at 421 s vs its
+420 s budget — the ONLY incomplete group; the rest of the parked D1.4's
+substance verifiably landed (9 orphans pruned, burst subdirs all-fresh, every
+other group well inside budget). Later-phase pixel notes: the boundary-rim
+frame now shows a soft grounding shadow at ~70 m (D3.14's rim leg), the ven
+water is still never in frame (D3.2), corsi's route discs now exist on the
+player path (D3.4), the zoom-in frame shows feet + contact shadow + readable
+ground (D3.13, pending the child band). Phase 2 re-sharpened: the warden BOA
+already stands in-world as a W3.3 scenic actor (the near-foreground adult in
+fresh `17-camera-orbit`) — P1.6a stages the pair shot there or at the hub; the
+avatar-creator's preset chips + swatch rows are live in fresh `02-avatar` —
+P1.6b turns the Alvah preset + shipped default blonde/blue at both judged
+ranges. Alvah still reads adult-scale dark-haired in every fresh frame. No
+frozen contract and no §2.4 Alvah correction was touched.
 
 ---
 

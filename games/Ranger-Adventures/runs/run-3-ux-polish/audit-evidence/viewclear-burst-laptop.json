@@ -11,9 +11,9 @@
     "x": 24.750193727818797,
     "z": -7.5966670673717145
   },
-  "minFade": 0.16,
-  "occludedFrames": 11,
-  "walked": 25.942696330788834,
+  "minFade": 0.9621370401927883,
+  "occludedFrames": 6,
+  "walked": 28.06662858800565,
   "samples": [
     {
       "i": 0,
@@ -35,106 +35,58 @@
       "i": 1,
       "file": "",
       "pos": {
-        "x": 0.26868643471241943,
-        "z": -0.6459664347151017
+        "x": 0.3403446359188124,
+        "z": -0.8213046359174713
       },
-      "yaw": -0.44212680611052235,
+      "yaw": -0.5158921229269282,
       "viewClear": true,
       "canopyFade": 1,
       "visible": true,
       "onScreen": true,
       "avatarOpacity": 1,
-      "drawCalls": 37,
+      "drawCalls": 39,
       "clip": "walk"
     },
     {
       "i": 2,
       "file": "",
       "pos": {
-        "x": 0.8626093894653648,
-        "z": -0.8582474800832787
+        "x": 1.1214526928230466,
+        "z": -1.0370673135241086
       },
-      "yaw": -1.034157802040557,
+      "yaw": -1.1715686619265604,
       "viewClear": true,
       "canopyFade": 1,
       "visible": true,
       "onScreen": true,
       "avatarOpacity": 1,
-      "drawCalls": 69,
+      "drawCalls": 68,
       "clip": "walk"
     },
     {
       "i": 3,
       "file": "",
       "pos": {
-        "x": 4.743108453258759,
-        "z": 0.12748118616095638
+        "x": 5.080800303090461,
+        "z": 0.5727455051196335
       },
-      "yaw": -1.8194485454704221,
+      "yaw": -1.9569079191396526,
       "viewClear": true,
       "canopyFade": 1,
       "visible": true,
       "onScreen": true,
       "avatarOpacity": 1,
-      "drawCalls": 61,
+      "drawCalls": 62,
       "clip": "walk"
     },
     {
       "i": 4,
       "file": "",
       "pos": {
-        "x": 8.466792322909049,
-        "z": 4.6302510831998
+        "x": 8.594744434056107,
+        "z": 6.026185058822975
       },
-      "yaw": -1.8640751847326946,
-      "viewClear": true,
-      "canopyFade": 1,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 51,
-      "clip": "walk"
-    },
-    {
-      "i": 5,
-      "file": "",
-      "pos": {
-        "x": 9.601227148948134,
-        "z": 4.022065274522404
-      },
-      "yaw": -1.1236378125536959,
-      "viewClear": true,
-      "canopyFade": 1,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 60,
-      "clip": "walk"
-    },
-    {
-      "i": 6,
-      "file": "laptop/d15-viewclear-burst/d15-viewclear-06.png",
-      "pos": {
-        "x": 10.085508741912037,
-        "z": 2.645316767234215
-      },
-      "yaw": -1.447867363665564,
-      "viewClear": true,
-      "canopyFade": 1,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 48,
-      "clip": "walk"
-    },
-    {
-      "i": 7,
-      "file": "",
-      "pos": {
-        "x": 12.41161978693479,
-        "z": 2.5937381046652654
-      },
-      "yaw": -1.2026741605727036,
+      "yaw": -1.9796252299447996,
       "viewClear": true,
       "canopyFade": 1,
       "visible": true,
@@ -144,207 +96,63 @@
       "clip": "walk"
     },
     {
+      "i": 5,
+      "file": "",
+      "pos": {
+        "x": 10.120650761142564,
+        "z": 5.422780505172342
+      },
+      "yaw": -1.2147140719776068,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 55,
+      "clip": "walk"
+    },
+    {
+      "i": 6,
+      "file": "laptop/d15-viewclear-burst/d15-viewclear-06.png",
+      "pos": {
+        "x": 10.855288425803908,
+        "z": 3.818043918794089
+      },
+      "yaw": -1.908730382415353,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 50,
+      "clip": "walk"
+    },
+    {
+      "i": 7,
+      "file": "",
+      "pos": {
+        "x": 13.733946816897525,
+        "z": 3.959458592646919
+      },
+      "yaw": -1.2541735623799344,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 51,
+      "clip": "walk"
+    },
+    {
       "i": 8,
       "file": "",
       "pos": {
-        "x": 12.972450957517195,
-        "z": 1.3286367080543529
+        "x": 14.487973149160117,
+        "z": 2.4705422847739253
       },
-      "yaw": -0.45354599174976684,
+      "yaw": -0.48802308417405627,
       "viewClear": true,
       "canopyFade": 1,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 45,
-      "clip": "walk"
-    },
-    {
-      "i": 9,
-      "file": "",
-      "pos": {
-        "x": 12.631969551138635,
-        "z": -3.4321702546377995
-      },
-      "yaw": -0.4537139013012297,
-      "viewClear": true,
-      "canopyFade": 1,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 40,
-      "clip": "walk"
-    },
-    {
-      "i": 10,
-      "file": "",
-      "pos": {
-        "x": 14.30543937597554,
-        "z": -4.008526350263658
-      },
-      "yaw": -1.2237332513793682,
-      "viewClear": true,
-      "canopyFade": 1,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 55,
-      "clip": "walk"
-    },
-    {
-      "i": 11,
-      "file": "",
-      "pos": {
-        "x": 16.84451693633063,
-        "z": -2.862071234832944
-      },
-      "yaw": -1.9790775638406792,
-      "viewClear": true,
-      "canopyFade": 1,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 45,
-      "clip": "walk"
-    },
-    {
-      "i": 12,
-      "file": "laptop/d15-viewclear-burst/d15-viewclear-12.png",
-      "pos": {
-        "x": 19.19257429426605,
-        "z": -2.8176268613569744
-      },
-      "yaw": -1.78592262958386,
-      "viewClear": true,
-      "canopyFade": 0.16,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 46,
-      "clip": "walk"
-    },
-    {
-      "i": 13,
-      "file": "",
-      "pos": {
-        "x": 21.71955997073977,
-        "z": 0.07265282556567199
-      },
-      "yaw": -2.0348477782081478,
-      "viewClear": true,
-      "canopyFade": 0.9689561136565741,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 43,
-      "clip": "walk"
-    },
-    {
-      "i": 14,
-      "file": "",
-      "pos": {
-        "x": 21.371552282754045,
-        "z": 0.6702296777656764
-      },
-      "yaw": 2.651591000054271,
-      "viewClear": true,
-      "canopyFade": 0.9999315463296752,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 38,
-      "clip": "walk"
-    },
-    {
-      "i": 15,
-      "file": "",
-      "pos": {
-        "x": 25.36099806877044,
-        "z": -0.2658181146865447
-      },
-      "yaw": -1.3530058545767645,
-      "viewClear": true,
-      "canopyFade": 0.999999883962612,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 38,
-      "clip": "walk"
-    },
-    {
-      "i": 16,
-      "file": "",
-      "pos": {
-        "x": 18.54578034137402,
-        "z": -6.021955555000839
-      },
-      "yaw": 1.0761097595772897,
-      "viewClear": true,
-      "canopyFade": 0.9999999999923186,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 68,
-      "clip": "walk"
-    },
-    {
-      "i": 17,
-      "file": "",
-      "pos": {
-        "x": 16.219670325426403,
-        "z": -4.161070231267565
-      },
-      "yaw": 0.8257285252711322,
-      "viewClear": true,
-      "canopyFade": 0.16,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 55,
-      "clip": "walk"
-    },
-    {
-      "i": 18,
-      "file": "laptop/d15-viewclear-burst/d15-viewclear-18.png",
-      "pos": {
-        "x": 18.83441141407523,
-        "z": -4.243162434885857
-      },
-      "yaw": -0.5737858202575321,
-      "viewClear": true,
-      "canopyFade": 0.8481812149294584,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 43,
-      "clip": "walk"
-    },
-    {
-      "i": 19,
-      "file": "",
-      "pos": {
-        "x": 20.577080408983434,
-        "z": -9.163506261915588
-      },
-      "yaw": -0.7364355663365885,
-      "viewClear": true,
-      "canopyFade": 0.16,
-      "visible": true,
-      "onScreen": true,
-      "avatarOpacity": 1,
-      "drawCalls": 38,
-      "clip": "walk"
-    },
-    {
-      "i": 20,
-      "file": "",
-      "pos": {
-        "x": 23.07374474517996,
-        "z": -9.285847211550774
-      },
-      "yaw": -1.5187951482065802,
-      "viewClear": true,
-      "canopyFade": 0.8844683233602855,
       "visible": true,
       "onScreen": true,
       "avatarOpacity": 1,
@@ -352,35 +160,211 @@
       "clip": "walk"
     },
     {
-      "i": 21,
+      "i": 9,
       "file": "",
       "pos": {
-        "x": 24.750094480765863,
-        "z": -7.775365978826189
+        "x": 14.27316746919011,
+        "z": -3.3875853285830084
       },
-      "yaw": -2.2989769987437576,
+      "yaw": -0.48848617903242797,
       "viewClear": true,
-      "canopyFade": 0.16,
+      "canopyFade": 1,
       "visible": true,
       "onScreen": true,
       "avatarOpacity": 1,
-      "drawCalls": 57,
+      "drawCalls": 41,
       "clip": "walk"
     },
     {
-      "i": 22,
-      "file": "laptop/d15-viewclear-burst/d15-viewclear-22.png",
+      "i": 10,
+      "file": "",
       "pos": {
-        "x": 24.88094583095945,
-        "z": -5.490950493467544
+        "x": 16.388743684346828,
+        "z": -4.034858487493037
       },
-      "yaw": -1.5147095150398933,
+      "yaw": -1.2681309434694281,
       "viewClear": true,
-      "canopyFade": 0.16,
+      "canopyFade": 1,
       "visible": true,
       "onScreen": true,
       "avatarOpacity": 1,
-      "drawCalls": 46,
+      "drawCalls": 53,
+      "clip": "walk"
+    },
+    {
+      "i": 11,
+      "file": "",
+      "pos": {
+        "x": 23.422584483914637,
+        "z": -2.3149238420488274
+      },
+      "yaw": -1.2579646477047248,
+      "viewClear": true,
+      "canopyFade": 0.9924790865039477,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 51,
+      "clip": "walk"
+    },
+    {
+      "i": 12,
+      "file": "laptop/d15-viewclear-burst/d15-viewclear-12.png",
+      "pos": {
+        "x": 24.57060358567174,
+        "z": -4.560662742187054
+      },
+      "yaw": -2.0457184983521817,
+      "viewClear": true,
+      "canopyFade": 0.9621370401927883,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 37,
+      "clip": "walk"
+    },
+    {
+      "i": 13,
+      "file": "",
+      "pos": {
+        "x": 21.04343563674301,
+        "z": -2.2294145791629445
+      },
+      "yaw": 2.649986746263913,
+      "viewClear": true,
+      "canopyFade": 0.9999999943582282,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 44,
+      "clip": "walk"
+    },
+    {
+      "i": 14,
+      "file": "",
+      "pos": {
+        "x": 24.924555362311704,
+        "z": -3.4036374265776486
+      },
+      "yaw": -1.2772917247240088,
+      "viewClear": true,
+      "canopyFade": 0.9999999997741637,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 47,
+      "clip": "walk"
+    },
+    {
+      "i": 15,
+      "file": "",
+      "pos": {
+        "x": 21.83491338613246,
+        "z": 0.7831108047081017
+      },
+      "yaw": -2.858674909732608,
+      "viewClear": true,
+      "canopyFade": 0.9999999999997372,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 31,
+      "clip": "walk"
+    },
+    {
+      "i": 16,
+      "file": "",
+      "pos": {
+        "x": 22.64937672903901,
+        "z": 0.7787014390084068
+      },
+      "yaw": 1.8397275201493564,
+      "viewClear": true,
+      "canopyFade": 0.9999999999999996,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 66,
+      "clip": "walk"
+    },
+    {
+      "i": 17,
+      "file": "",
+      "pos": {
+        "x": 24.998457560538178,
+        "z": 3.172716122148773
+      },
+      "yaw": -2.5401532868668735,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 21,
+      "clip": "walk"
+    },
+    {
+      "i": 18,
+      "file": "laptop/d15-viewclear-burst/d15-viewclear-18.png",
+      "pos": {
+        "x": 24.810557925076747,
+        "z": 0.6770216726114313
+      },
+      "yaw": -1.3593347571935865,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 35,
+      "clip": "walk"
+    },
+    {
+      "i": 19,
+      "file": "",
+      "pos": {
+        "x": 27.48291031396826,
+        "z": 0.5856759292940662
+      },
+      "yaw": -1.1744119514509972,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 35,
+      "clip": "walk"
+    },
+    {
+      "i": 20,
+      "file": "",
+      "pos": {
+        "x": 28.054942074323485,
+        "z": -0.809855236082334
+      },
+      "yaw": -0.4165249222806988,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 38,
+      "clip": "walk"
+    },
+    {
+      "i": 21,
+      "file": "laptop/d15-viewclear-burst/d15-viewclear-21.png",
+      "pos": {
+        "x": 27.14126449692157,
+        "z": -2.4191733901708172
+      },
+      "yaw": -0.35954069076902684,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 39,
       "clip": "walk"
     }
   ]
