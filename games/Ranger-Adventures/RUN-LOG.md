@@ -767,3 +767,15 @@ One status block per run/step (BUILD-PLAN §9b).
 ▷ progress: ~15%
 ⚠ blocker: Run C gereconcilieerd naar Run D (2026-07-05). Launch: run-d-loop.sh — zie runs/run-5-cohesion/.
 ```
+
+---
+**2026-07-11 02:20:59Z** · ticked: - [x] D1.6 · The jeep capture group lands inside its budget — the world jeep shots return, zero GAP entries [laptop] (poort-append 2026-07-11 audit #2 — the fresh 02:53 capture's main flow is otherwise COMPLETE: intro 269 s/540, camera 100 s/240, board 87 s/420, boundary 84 s/510, all five game3d 49–63 s each, ven 66 s/510, 9 orphans pruned, burst subdirs all-fresh — but the `jeep` group overran its budget by ONE second (421 s vs 420 s) and GAPped, so the fresh set holds zero world jeep frames: P1.5b's shot leg survives on the p15b burst frames, but the Phase-6 P4.2/P4.5 world-jeep evidence starves, and "zero GAP entries" — the parked D1.4's bar — is unmet by exactly this one group). Harness-only (`app/e2e-capture/`): raise the jeep group's budget to its MEASURED headless runtime with honest headroom (it ran 421 s — give it ≥600 s) or cheapen the scene the D1.4 way (fresh-boot to the jeep instead of long walk-backs), keeping the group's world shots (approach/enter/straight/turn) and their outside-props framing. Verify by: `npm run capture` exits green with ZERO GAP entries in the fresh annotations; the jeep world shots present with the jeep visibly in frame and per-frame drawCalls <150; every PNG under `laptop/` incl. subdirs is capture-fresh.
+
+```
+✔ landed: D0.2 · DIRECTION · validate + refine RUN-D-DIRECTION.md + this ledger against the animation/physics deep-research
+▶ phase:  Phase 1 · PLAYABILITY FIRST — correctness before any more polish  (Floris demo 2026-07-05: sank through floor · jeep sticks-and-slides · cannot enter heli)
+→ next:   DEFERRED · D1.0 · Capture harness fit for Run D: green inside its budget + honest evidence [laptop] (from Run C P1.10/P1.15 capture legs; re-verified 2026-07-05: the "audit capture flow" test timed out at its 30-min cap at 11:27 — the `ven` group + a transient newPage protocol error — and the `40–44 game3d-*` frames shoot `/?sandbox`, NOT the mission path the player reaches, while orphan PNGs from older shot-numbering runs still sit beside fresh ones under `laptop/`). This box is harness-only (`app/e2e-capture/`), no game code, and lands FIRST because every Phase-1 drive-burst box adds scenes to this harness: (a) bound/isolate the slow groups so the whole capture finishes green inside the budget, with a retry on the newPage protocol error; (b) shoot each of the 5 games' 3D surface on the player-reachable mission path (not the sandbox), keeping the five 2D-floor frames; (c) make capture REMOVE orphan PNGs not present in the fresh annotations. Verify by: `npm run capture` exits green with all groups complete; fresh set contains named player-path frames for all five games ×{3D, 2D floor} with per-frame `drawCalls` <150; every PNG under `laptop/` matches a shot in `annotations-laptop.json`.
+▤ ledger: RUN-D-LEDGER.md
+▷ progress: ~16%
+⚠ blocker: Run C gereconcilieerd naar Run D (2026-07-05). Launch: run-d-loop.sh — zie runs/run-5-cohesion/.
+```

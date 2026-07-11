@@ -604,10 +604,16 @@ test('audit capture flow', async ({ context }, testInfo) => {
   }
 
   // ══ GROUP 2 — jeep: boot → walk to it (touch on iPad), climb in, drive burst
-  //    (steering test #3), climb back out. Own fresh page. D1.4: explicit 420 s budget
-  //    (was the 300 s default, which the walk-to-jeep + two drive bursts overran under
-  //    full-capture load — a GATE-D1 GAP). ══
-  await runGroup('jeep', { budgetMs: 420_000 }, async (page, stick) => {
+  //    (steering test #3), climb back out. Own fresh page. D1.6: 720 s budget. This is
+  //    the flow's SLOWEST-completing group — the ~21 m walk-to-jeep PLUS enter + two
+  //    drive bursts (the second holds a ~3 s F-32 straight-heading contrast settle) + exit,
+  //    all crawling under throttled rAF. D1.4 sized it at 420 s off an earlier measure, but
+  //    the GATE-D1 audit #2 capture MEASURED 421 s — a 1 s overrun that GAPped the whole
+  //    group and dropped every world jeep shot. The body is fully bounded (walkTo caps at
+  //    300 iters, every waitFor/settle is bounded), so it returns at ~421 s well under this
+  //    ceiling; the raise only buys honest headroom for run-to-run headless variance, it
+  //    never lengthens a healthy run. ══
+  await runGroup('jeep', { budgetMs: 720_000 }, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'jeep', async () => {
       const placed = await hook(page, (r) => r.vehicle()?.placed ?? false);
