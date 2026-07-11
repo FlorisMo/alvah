@@ -1,0 +1,387 @@
+{
+  "box": "D1.5",
+  "platform": "laptop",
+  "spec": "view-clear.spec.ts",
+  "target": {
+    "x": 22.360237129141275,
+    "z": -6.863108987573149,
+    "s": 0.96
+  },
+  "aim": {
+    "x": 24.750193727818797,
+    "z": -7.5966670673717145
+  },
+  "minFade": 0.16,
+  "occludedFrames": 11,
+  "walked": 25.942696330788834,
+  "samples": [
+    {
+      "i": 0,
+      "file": "laptop/d15-viewclear-burst/d15-viewclear-00.png",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "yaw": 0,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 46,
+      "clip": "idle"
+    },
+    {
+      "i": 1,
+      "file": "",
+      "pos": {
+        "x": 0.26868643471241943,
+        "z": -0.6459664347151017
+      },
+      "yaw": -0.44212680611052235,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 37,
+      "clip": "walk"
+    },
+    {
+      "i": 2,
+      "file": "",
+      "pos": {
+        "x": 0.8626093894653648,
+        "z": -0.8582474800832787
+      },
+      "yaw": -1.034157802040557,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 69,
+      "clip": "walk"
+    },
+    {
+      "i": 3,
+      "file": "",
+      "pos": {
+        "x": 4.743108453258759,
+        "z": 0.12748118616095638
+      },
+      "yaw": -1.8194485454704221,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 61,
+      "clip": "walk"
+    },
+    {
+      "i": 4,
+      "file": "",
+      "pos": {
+        "x": 8.466792322909049,
+        "z": 4.6302510831998
+      },
+      "yaw": -1.8640751847326946,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 51,
+      "clip": "walk"
+    },
+    {
+      "i": 5,
+      "file": "",
+      "pos": {
+        "x": 9.601227148948134,
+        "z": 4.022065274522404
+      },
+      "yaw": -1.1236378125536959,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 60,
+      "clip": "walk"
+    },
+    {
+      "i": 6,
+      "file": "laptop/d15-viewclear-burst/d15-viewclear-06.png",
+      "pos": {
+        "x": 10.085508741912037,
+        "z": 2.645316767234215
+      },
+      "yaw": -1.447867363665564,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 48,
+      "clip": "walk"
+    },
+    {
+      "i": 7,
+      "file": "",
+      "pos": {
+        "x": 12.41161978693479,
+        "z": 2.5937381046652654
+      },
+      "yaw": -1.2026741605727036,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 52,
+      "clip": "walk"
+    },
+    {
+      "i": 8,
+      "file": "",
+      "pos": {
+        "x": 12.972450957517195,
+        "z": 1.3286367080543529
+      },
+      "yaw": -0.45354599174976684,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 45,
+      "clip": "walk"
+    },
+    {
+      "i": 9,
+      "file": "",
+      "pos": {
+        "x": 12.631969551138635,
+        "z": -3.4321702546377995
+      },
+      "yaw": -0.4537139013012297,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 40,
+      "clip": "walk"
+    },
+    {
+      "i": 10,
+      "file": "",
+      "pos": {
+        "x": 14.30543937597554,
+        "z": -4.008526350263658
+      },
+      "yaw": -1.2237332513793682,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 55,
+      "clip": "walk"
+    },
+    {
+      "i": 11,
+      "file": "",
+      "pos": {
+        "x": 16.84451693633063,
+        "z": -2.862071234832944
+      },
+      "yaw": -1.9790775638406792,
+      "viewClear": true,
+      "canopyFade": 1,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 45,
+      "clip": "walk"
+    },
+    {
+      "i": 12,
+      "file": "laptop/d15-viewclear-burst/d15-viewclear-12.png",
+      "pos": {
+        "x": 19.19257429426605,
+        "z": -2.8176268613569744
+      },
+      "yaw": -1.78592262958386,
+      "viewClear": true,
+      "canopyFade": 0.16,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 46,
+      "clip": "walk"
+    },
+    {
+      "i": 13,
+      "file": "",
+      "pos": {
+        "x": 21.71955997073977,
+        "z": 0.07265282556567199
+      },
+      "yaw": -2.0348477782081478,
+      "viewClear": true,
+      "canopyFade": 0.9689561136565741,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 43,
+      "clip": "walk"
+    },
+    {
+      "i": 14,
+      "file": "",
+      "pos": {
+        "x": 21.371552282754045,
+        "z": 0.6702296777656764
+      },
+      "yaw": 2.651591000054271,
+      "viewClear": true,
+      "canopyFade": 0.9999315463296752,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 38,
+      "clip": "walk"
+    },
+    {
+      "i": 15,
+      "file": "",
+      "pos": {
+        "x": 25.36099806877044,
+        "z": -0.2658181146865447
+      },
+      "yaw": -1.3530058545767645,
+      "viewClear": true,
+      "canopyFade": 0.999999883962612,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 38,
+      "clip": "walk"
+    },
+    {
+      "i": 16,
+      "file": "",
+      "pos": {
+        "x": 18.54578034137402,
+        "z": -6.021955555000839
+      },
+      "yaw": 1.0761097595772897,
+      "viewClear": true,
+      "canopyFade": 0.9999999999923186,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 68,
+      "clip": "walk"
+    },
+    {
+      "i": 17,
+      "file": "",
+      "pos": {
+        "x": 16.219670325426403,
+        "z": -4.161070231267565
+      },
+      "yaw": 0.8257285252711322,
+      "viewClear": true,
+      "canopyFade": 0.16,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 55,
+      "clip": "walk"
+    },
+    {
+      "i": 18,
+      "file": "laptop/d15-viewclear-burst/d15-viewclear-18.png",
+      "pos": {
+        "x": 18.83441141407523,
+        "z": -4.243162434885857
+      },
+      "yaw": -0.5737858202575321,
+      "viewClear": true,
+      "canopyFade": 0.8481812149294584,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 43,
+      "clip": "walk"
+    },
+    {
+      "i": 19,
+      "file": "",
+      "pos": {
+        "x": 20.577080408983434,
+        "z": -9.163506261915588
+      },
+      "yaw": -0.7364355663365885,
+      "viewClear": true,
+      "canopyFade": 0.16,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 38,
+      "clip": "walk"
+    },
+    {
+      "i": 20,
+      "file": "",
+      "pos": {
+        "x": 23.07374474517996,
+        "z": -9.285847211550774
+      },
+      "yaw": -1.5187951482065802,
+      "viewClear": true,
+      "canopyFade": 0.8844683233602855,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 49,
+      "clip": "walk"
+    },
+    {
+      "i": 21,
+      "file": "",
+      "pos": {
+        "x": 24.750094480765863,
+        "z": -7.775365978826189
+      },
+      "yaw": -2.2989769987437576,
+      "viewClear": true,
+      "canopyFade": 0.16,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 57,
+      "clip": "walk"
+    },
+    {
+      "i": 22,
+      "file": "laptop/d15-viewclear-burst/d15-viewclear-22.png",
+      "pos": {
+        "x": 24.88094583095945,
+        "z": -5.490950493467544
+      },
+      "yaw": -1.5147095150398933,
+      "viewClear": true,
+      "canopyFade": 0.16,
+      "visible": true,
+      "onScreen": true,
+      "avatarOpacity": 1,
+      "drawCalls": 46,
+      "clip": "walk"
+    }
+  ]
+}

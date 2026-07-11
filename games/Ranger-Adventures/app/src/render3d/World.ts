@@ -229,6 +229,19 @@ export class World {
   private readonly CAM_LOOK_H = 1.1;    // aim point above the ranger's feet (~sternum)
   private readonly CAM_PROBE_R = 0.35;  // camera "sphere" radius for the push-in cast
   private readonly CAM_GROUND_CLR = 0.5; // keep the lens this far above the terrain
+  // D1.5 free-walk occluder fade — the crown model for the cam→avatar sightline test.
+  // A tree's foliage is approximated as a sphere at CROWN_CENTER_FRAC of its GLB height
+  // (`TREE_BASE_H`×scale) with CROWN_RADIUS_FRAC radius. The trunk anti-clip
+  // (boomClearFraction) + the ranger fade already cover a trunk BEHIND him; the gap is
+  // the wide CROWN the lens lands INSIDE on a forest walk (`09-walk-4` full-frame void),
+  // which the projection-based avatarInView/onScreen cannot see. When a crown crosses the
+  // sightline the canopy is FADED (an opacity change, never a camera move → no
+  // comfort-law risk, §2.5) so the ranger is never lost behind leaves.
+  private readonly CROWN_CENTER_FRAC = 0.55; // crown centre height ÷ tree height (low enough to reach a head-height sightline)
+  private readonly CROWN_RADIUS_FRAC = 0.38; // crown radius ÷ tree height (the foliage volume, not the trunk)
+  private readonly CANOPY_FADE_MIN = 0.16;   // faded canopy opacity (the ranger reads through it)
+  private readonly CANOPY_SEE_THROUGH = 0.5; // canopy ≤ this ⇒ ranger reads through ⇒ viewClear true
+  private readonly CANOPY_RELEASE_TAU = 0.7; // gentle ease back to solid once the crown clears (calm, no pop)
   // F-16 laptop dolly zoom: the player-set WALK boom distance (m, horizontal). Starts
   // at the F-05 default (camOffset.z = 4.6); wheel/trackpad scroll dollies it in/out,
   // clamped [zoomMinBoom() … CAM_ZOOM_MAX]. placeCamera reads it for the walk boom, so
@@ -245,7 +258,10 @@ export class World {
   // renders bigger than the honest 1.7 m hook still can't smear the lens (§4:
   // pixels outrank the hook).
   private avatarRadius = 0.45;
+  private avatarTopY = 1.6;             // D1.5 measured head height (feet→top) — the occluder-fade sightline aim
   private avatarOpacity = 1;            // current applied ranger fade (avoids churn)
+  private canopyOpacity = 1;            // D1.5 current applied tree-canopy occluder fade (1 = solid)
+  private viewClearState = true;        // D1.5 last cam→avatar sightline-clear read (camState reports it)
   private readonly _camPose = new THREE.Vector3();  // scratch: camera world forward
   private readonly _camBox = new THREE.Box3();       // scratch: ranger bbox for pose reads
   private readonly _labelFwd = new THREE.Vector3();  // scratch: camera forward for the label fade
@@ -554,6 +570,9 @@ export class World {
   // cone/cylinder stand-ins to swap out, and the per-instance placements (scattered bos
   // trees + the rim tree-line) to instance the real tree GLBs onto once they load.
   private readonly treeFallbacks: THREE.Object3D[] = [];
+  // D1.5 occluder fade: the tree meshes the free-walk occluder fade currently dims — the
+  // cone fallback while the GLBs stream, then the instanced GLB canopy after the swap.
+  private readonly treeFadeMeshes: THREE.Object3D[] = [];
   private readonly treePlacements: TreePlacement[] = [];
   private readonly limits: MoveLimits = {
     // F-11 (P4.6 rim re-judge): the calm forest edge sits at 75 m, NOT the old 116 m.
@@ -1591,6 +1610,7 @@ export class World {
     });
     trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
     this.treeFallbacks.push(trunks, crowns);
+    this.treeFadeMeshes.push(trunks, crowns); // D1.5: the occluder fade dims the cones until the GLBs land
     this.scene.add(trunks, crowns);
   }
 
@@ -1619,6 +1639,13 @@ export class World {
       built.push(...instancesFromPrepped(model, this.treePlacements.filter((p) => p.species === id)));
     }
     for (const inst of built) this.scene.add(inst);
+    // D1.5: the occluder fade now dims the real GLB canopy — retire the cone entries and
+    // point it at the instanced tree meshes. Reset the fade cache to solid so the next
+    // setCanopyOpacity re-applies to these fresh materials (the guard would otherwise skip
+    // a mid-fade equal value on meshes that never had it stashed).
+    this.treeFadeMeshes.length = 0;
+    this.treeFadeMeshes.push(...built);
+    this.canopyOpacity = 1;
     // swap: drop + dispose the now-hidden cone stand-ins so they leave no cost behind.
     for (const f of this.treeFallbacks) {
       this.scene.remove(f);
@@ -1769,6 +1796,10 @@ export class World {
     const size = box.getSize(new THREE.Vector3());
     const r = Math.hypot(size.x, size.z) * 0.5;
     if (Number.isFinite(r) && r > 0) this.avatarRadius = Math.max(0.2, r);
+    // D1.5: cache his head height (feet→top) so the occluder-fade sightline can aim at the
+    // HEAD, the part low-hanging foliage swallows first (`10-walk-5`). Child-scale-safe: it
+    // reads the measured rig, so it shrinks with the Phase-2 ≈1.2 m child height, not a pin.
+    if (Number.isFinite(size.y) && size.y > 0) this.avatarTopY = Math.max(0.6, size.y);
   }
 
   /** Dev-hook accessor (F-05 ⊕ F-18): the REAL render camera, read back off the
@@ -1834,11 +1865,17 @@ export class World {
     const lensInRim = Math.hypot(cam.position.x, cam.position.z) < this.limits.bound + 0.6;
     const ndc = centre.project(cam); // centre → NDC in [-1, 1]³ (mutates in place)
     const onScreen = ndc.z > -1 && ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;
+    // D1.5 free-walk canopy clear-line: the REAL cam→avatar occluder test placeCamera
+    // computed this frame (a tree crown between lens and ranger fades, so this reads the
+    // "ranger is readable" truth the projection tests above can't — `09-walk-4` kept
+    // onScreen/avatarInView true while a crown swallowed him, §8.7). Only the free-walk
+    // follow cam can sit inside a crown; a vehicle/heli/mission-owned cam reads clear.
+    const viewClear = (this.inVehicle || this.inHeli || this.activityActive) ? true : this.viewClearState;
     const avatarScreen = {
       x: ndc.x, y: ndc.y,
       onScreen,
       heightFrac: Math.abs(topY - botY) / 2,
-      visible: onScreen && this.avatarOpacity > 0.5 && lensInRim && (headClear || chestClear),
+      visible: onScreen && this.avatarOpacity > 0.5 && lensInRim && (headClear || chestClear) && viewClear,
     };
     // F-09 hub-in-frustum: is at least one hub landmark actually in this frame? The
     // world-entry assert reads it to PROVE the spawn faces the hub, not the void —
@@ -1899,6 +1936,8 @@ export class World {
       // signal; anything < 1 flags the empty-frame before the judge looks at it.
       avatarOpacity: this.avatarOpacity,
       avatarScreen,
+      viewClear,
+      canopyFade: this.canopyOpacity,
       landmarkInView,
       groundAtCam,
       taskInView,
@@ -2474,6 +2513,13 @@ export class World {
         group.add(prepped);
       });
     });
+  }
+
+  /** Dev-hook accessor (D1.5): the scatter + rim tree placements (world x/z + scale), so the
+   *  view-clear E2E can steer a walk PAST a tree to reproduce a genuine cam→ranger crown
+   *  occlusion. Read-only snapshot; the placements are fixed after build. */
+  treeSpotList(): { x: number; z: number; s: number }[] {
+    return this.treePlacements.map((p) => ({ x: p.x, z: p.z, s: p.s }));
   }
 
   /** Dev-hook accessor (W4.2): every nature-dressing prop's id + world x/z, so
@@ -3638,9 +3684,70 @@ export class World {
       const hd = Math.hypot(this.camera.position.x - rp.x, this.camera.position.z - rp.z);
       const near = this.avatarRadius + 0.3, far = this.avatarRadius + 1.1;
       this.setAvatarOpacity(Math.max(0, Math.min(1, (hd - near) / (far - near))));
-    } else if (this.avatarOpacity !== 1) {
-      this.setAvatarOpacity(1); // never leave the driver faded when he re-emerges
+      // D1.5 occluder fade: when a tree CROWN stands between the lens and the ranger on the
+      // free walk, fade the canopy so he is never lost in a full-frame foliage void
+      // (`09-walk-4`). The trunk anti-clip + the ranger fade above already handle a trunk
+      // behind him; this is the wide crown the lens sits INSIDE. Attack fast (a cut to
+      // CANOPY_FADE_MIN the frame it is blocked, so `viewClear` flips true at once and the
+      // ranger reads through it), release slow (ease back to solid) to kill edge flicker;
+      // under reduced-motion / on a snap both are cuts, so an idle frame behind a tree stays
+      // pixel-frozen (constant block → constant opacity → no per-frame change). A fade is an
+      // opacity change, never a camera move, so orbit/zoom/reframe stays player-initiated
+      // (frozen comfort law, §2.5). Test the sightline to his HEAD (where low-hanging foliage
+      // swallows him first, `10-walk-5`) AND his chest — fade if EITHER is behind a crown, so a
+      // bush over his face never reads as "clear" just because his boots show.
+      const blocked =
+        this.canopyBlocksSightline(
+          this.camera.position.x, this.camera.position.y, this.camera.position.z,
+          rp.x, rp.y + this.avatarTopY, rp.z,
+        ) ||
+        this.canopyBlocksSightline(
+          this.camera.position.x, this.camera.position.y, this.camera.position.z,
+          rp.x, rp.y + this.CAM_LOOK_H, rp.z,
+        );
+      let co: number;
+      if (blocked) co = this.CANOPY_FADE_MIN;                       // attack: instant dim (never a hidden frame)
+      else if (reduced || snap) co = 1;                             // RM / cut: snap back solid
+      else co = this.canopyOpacity + (1 - this.canopyOpacity) * dampFactor(dt, this.CANOPY_RELEASE_TAU); // release: gentle ease up
+      this.setCanopyOpacity(co);
+      this.viewClearState = !blocked || this.canopyOpacity <= this.CANOPY_SEE_THROUGH;
+    } else {
+      if (this.avatarOpacity !== 1) this.setAvatarOpacity(1); // never leave the driver faded when he re-emerges
+      if (this.canopyOpacity !== 1) this.setCanopyOpacity(1); // never leave the canopy faded off-foot
+      this.viewClearState = true;
     }
+  }
+
+  /**
+   * D1.5 free-walk occluder test: does ANY tree crown intersect the straight cam→avatar
+   * segment? Each placement's foliage is modelled as a sphere at CROWN_CENTER_FRAC of its
+   * GLB height (`TREE_BASE_H`×scale) with CROWN_RADIUS_FRAC radius; the segment is tested
+   * by its closest approach to that centre (≤ R ⇒ the crown is in the way). This is the
+   * REAL occlusion the projection-based `avatarInView`/`onScreen` cannot see — they stay
+   * true with a crown between lens and ranger (the `09-walk-4` full-frame void, §8.7).
+   * Pure numeric math over `treePlacements` — no allocation, no THREE calls, deterministic
+   * so the idle-stability pose holds frame to frame; a few-hundred-sphere loop, on par with
+   * `boomClearFraction`'s obstacle loop (the tree trunks live in that same list).
+   */
+  private canopyBlocksSightline(cx: number, cy: number, cz: number, ax: number, ay: number, az: number): boolean {
+    const dx = ax - cx, dy = ay - cy, dz = az - cz;
+    const len2 = dx * dx + dy * dy + dz * dz;
+    if (len2 < 1e-6) return false; // lens on top of him — nothing between
+    for (const p of this.treePlacements) {
+      const H = TREE_BASE_H[p.species] * p.s;
+      const R = H * this.CROWN_RADIUS_FRAC;
+      const ccx = p.x, ccy = p.y + H * this.CROWN_CENTER_FRAC, ccz = p.z;
+      const t = ((ccx - cx) * dx + (ccy - cy) * dy + (ccz - cz) * dz) / len2; // foot param, unclamped
+      // Only a crown genuinely BETWEEN the lens and the ranger occludes him. A crown behind
+      // the lens (t ≤ 0) or BEYOND the ranger (t ≥ ~0.9) is a BACKDROP he stands in front of,
+      // not an occluder — fading it would needlessly ghost the tree-line (e.g. the F-11
+      // world-rim edge). The 0.9 upper bound also skips the tree he stands directly under
+      // (t ≈ 1), whose close-boom collapse the ranger-fade rail already handles.
+      if (t <= 0.02 || t >= 0.9) continue;
+      const gx = ccx - (cx + dx * t), gy = ccy - (cy + dy * t), gz = ccz - (cz + dz * t);
+      if (gx * gx + gy * gy + gz * gz <= R * R) return true;
+    }
+    return false;
   }
 
   /**
@@ -3694,5 +3801,36 @@ export class World {
         else { mat.opacity = orig.o * o; mat.transparent = true; mat.depthWrite = false; }
       }
     });
+  }
+
+  /**
+   * D1.5 occluder fade (sibling of setAvatarOpacity): set the tree-canopy render opacity
+   * (1 = solid) so a crown between the lens and the ranger on the free walk stops swallowing
+   * him (`09-walk-4`). Each material's ORIGINAL opacity/transparent/depthWrite is stashed
+   * once and restored at full, so a faded crown never loses its authored look; a faded
+   * canopy drops depthWrite so the ranger behind it stays visible. Guarded on the cached
+   * value — no traversal unless the fade actually changes. Fades the CURRENT tree meshes
+   * (`treeFadeMeshes`: the cone fallback while the GLBs stream, then the instanced GLB
+   * canopy). Draw-call count is untouched (same meshes, just transparent) so the <150
+   * contract holds. Materials are tree-only (each species GLB / the cones own theirs), so
+   * this never dims a non-tree prop.
+   */
+  private setCanopyOpacity(o: number): void {
+    if (o === this.canopyOpacity) return;
+    this.canopyOpacity = o;
+    const opaque = o >= 1;
+    for (const obj of this.treeFadeMeshes) {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) continue;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of mats) {
+        const mat = m as THREE.Material & { opacity: number; transparent: boolean; depthWrite: boolean };
+        const ud = mat.userData as { __canopyFadeOrig?: { o: number; t: boolean; d: boolean } };
+        if (!ud.__canopyFadeOrig) ud.__canopyFadeOrig = { o: mat.opacity, t: mat.transparent, d: mat.depthWrite };
+        const orig = ud.__canopyFadeOrig;
+        if (opaque) { mat.opacity = orig.o; mat.transparent = orig.t; mat.depthWrite = orig.d; }
+        else { mat.opacity = orig.o * o; mat.transparent = true; mat.depthWrite = false; }
+      }
+    }
   }
 }

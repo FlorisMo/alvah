@@ -46,7 +46,7 @@ import { startSandbox } from './Sandbox';
 import { showTweaks } from './Tweaks';
 import { showDemoSkip } from './DemoSkip';
 import { startDeepDemoTour } from './DeepDemo';
-import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideGrounded, provideCam, provideActors, provideAmbient, provideLandmarks, provideDressing, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality, provideHint, provideBoundary } from '../core/devhook';
+import { setScreen, setMissionView, providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideGrounded, provideCam, provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths, provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle, provideHeli, provideQuality, provideHint, provideBoundary } from '../core/devhook';
 import { triggerActivityWin, clearActivityWin, beginActivityScope, abortActivityScope } from '../render3d/play/kit';
 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
@@ -222,6 +222,7 @@ function leaveWorld(): void {
   provideAmbient(null);
   provideLandmarks(null);
   provideDressing(null);
+  provideTreeSpots(null);
   providePaths(null);
   provideGroundDetail(null);
   provideLighting(null);
@@ -632,6 +633,7 @@ function startExplore(): void {
   provideAmbient(() => world!.ambientState()); // W3.6: roaming animals + gliding birds
   provideLandmarks(() => world!.landmarkPositions()); // W4.1: fixed landmark beacons
   provideDressing(() => world!.dressingPositions()); // W4.2: nature dressing props
+  provideTreeSpots(() => world!.treeSpotList()); // D1.5: scatter+rim tree placements (steer past a tree)
   providePaths(() => world!.pathNetwork()); // W4.3: sand-path network
   provideGroundDetail(() => world!.groundDetailState()); // W4.4: procedural ground albedo
   provideLighting(() => world!.lightingState()); // W4.5: golden-hour light + shadows

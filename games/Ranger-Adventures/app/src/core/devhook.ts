@@ -52,6 +52,26 @@ export type CamState = {
    *  rim-ease parks him at ~72 m — well within the ~85 m the ranger renders solid), so
    *  pixels stay the court of appeal for "is he really rendered". */
   avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean };
+  /** D1.5 free-walk occluder clear-line: a REAL camera→avatar sightline test against the
+   *  tree canopy — NOT the projection check, which stays true when a crown stands between
+   *  the lens and the ranger (the `09-walk-4` full-frame foliage void, where onScreen and
+   *  avatarInView both read true while leaves swallowed him — the hook-vs-pixel lie, §8.7).
+   *  true when the ranger is READABLE from the lens: either no crown intersects the
+   *  cam→avatar segment, or an intersecting crown has been FADED below the see-through
+   *  threshold (the sanctioned occluder-fade response — a fade is not a camera move, so it
+   *  cannot collide with the comfort law; the `avatarOpacity` machinery is the precedent,
+   *  §2.5). Folded into `avatarScreen.visible` so that hook stops lying. The free-walk
+   *  drive-burst asserts it TRUE every frame (no fully-occluded frame). Always true when a
+   *  vehicle/heli/mission owns the camera. Pixels stay the court of appeal (§4). */
+  viewClear: boolean;
+  /** D1.5 the applied tree-canopy occluder-fade opacity this frame (1 = canopy solid;
+   *  < 1 = a crown on the cam→avatar sightline is being faded so the ranger reads through
+   *  it). The drive-burst reads it as the proof the walk actually REACHED a crown-occlusion
+   *  zone and the fade fired — the analog of the D1.2 ground burst's `analyticGap` (a burst
+   *  that never dropped below 1 never met an occluder, so a still-clear `viewClear` there is
+   *  a no-op, not evidence). Attack is instant (drops to CANOPY_FADE_MIN the frame a crown
+   *  blocks), release eases back to 1; a cut under reduced-motion. */
+  canopyFade: number;
   /** F-09 (spawn faces the void, the hub sits behind the player): true when at least
    *  one hub landmark — the cabin, the mission board, or a fixed beacon — is inside
    *  the live view frustum. The world-entry assert reads this to PROVE the spawn
@@ -168,6 +188,10 @@ export interface RangerDevHook {
    *  POIs + biome cores): id + world x/z, or null before the hook/world is
    *  ready (W4.2). */
   dressing(): { id: string; x: number; z: number }[] | null;
+  /** D1.5 the scatter + rim tree placements (world x/z + scale `s`), so the view-clear E2E can
+   *  steer a walk PAST a specific tree — putting it between the follow lens and the ranger — to
+   *  reproduce the genuine crown occlusion the occluder-fade must clear. Null before ready. */
+  treeSpots(): { x: number; z: number; s: number }[] | null;
   /** The sand-path network: route nodes (id + world x/z) + segment index pairs,
    *  or null before the hook/world is ready (W4.3). */
   paths(): { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] } | null;
@@ -293,6 +317,7 @@ const state = {
   ambient: null as null | (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]),
   landmarks: null as null | (() => { id: string; x: number; z: number }[]),
   dressing: null as null | (() => { id: string; x: number; z: number }[]),
+  treeSpots: null as null | (() => { x: number; z: number; s: number }[]),
   paths: null as null | (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }),
   groundDetail: null as null | (() => { on: boolean; textured: boolean; tileRepeat: number }),
   lighting: null as null | (() => { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number }),
@@ -443,6 +468,13 @@ export function provideDressing(
   state.dressing = fn;
 }
 
+/** Register the scatter+rim tree-placement source (the World's treePlacements). D1.5. */
+export function provideTreeSpots(
+  fn: (() => { x: number; z: number; s: number }[]) | null,
+): void {
+  state.treeSpots = fn;
+}
+
 /** Register the sand-path network source (the World's route graph). W4.3. */
 export function providePaths(
   fn: (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }) | null,
@@ -572,6 +604,7 @@ export function installDevHook(): boolean {
     ambient: () => (state.ambient ? state.ambient() : null),
     landmarks: () => (state.landmarks ? state.landmarks() : null),
     dressing: () => (state.dressing ? state.dressing() : null),
+    treeSpots: () => (state.treeSpots ? state.treeSpots() : null),
     paths: () => (state.paths ? state.paths() : null),
     groundDetail: () => (state.groundDetail ? state.groundDetail() : null),
     lighting: () => (state.lighting ? state.lighting() : null),
