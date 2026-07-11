@@ -26,6 +26,12 @@ import path from 'node:path';
  *                              whose min canopyFade never dropped below 1 never met one, so a
  *                              still-clear viewClear there is a no-op — the analog of D1.2's
  *                              `analyticGap`).
+ *   - terrainLift              (audit #4) the metres the follow boom rode UP to clear a TERRAIN
+ *                              dune between lens and ranger — terrain can't be faded, so viewClear
+ *                              now ALSO folds in a rendered-terrain sightline test and the boom
+ *                              rides the crest (the D1.3 above-terrain law over the whole segment).
+ *                              The pinned controls-hud/pause-hub frames in the full capture are the
+ *                              primary terrain evidence; this burst records lift where its walk meets one.
  * It also records `avatarScreen.visible` + `avatarOpacity`: `visible` now folds in `viewClear`
  * so the hook can no longer read true over a foliage void — but it ALSO legitimately drops when
  * the boom collapses close and the ranger himself fades (the pre-existing F-05 rail), so the
@@ -44,7 +50,7 @@ const EVID = path.resolve(process.cwd(), '../runs/run-3-ux-polish/audit-evidence
 type Sample = {
   i: number;
   pos: { x: number; z: number } | null; yaw: number | null;
-  viewClear: boolean | null; canopyFade: number | null;
+  viewClear: boolean | null; canopyFade: number | null; terrainLift: number | null;
   visible: boolean | null; onScreen: boolean | null; avatarOpacity: number | null;
   drawCalls: number | null; clip: string | null;
   file: string;
@@ -143,7 +149,7 @@ test('D1.5 view-clear drive-burst — the ranger is never lost in a foliage void
     const s = await page.evaluate(() => {
       const r = (window as unknown as { __ranger?: {
         pos(): { x: number; z: number } | null; cameraYaw(): number | null;
-        cam(): { viewClear: boolean; canopyFade: number; avatarOpacity: number; avatarScreen: { visible: boolean; onScreen: boolean } } | null;
+        cam(): { viewClear: boolean; canopyFade: number; terrainLift: number; avatarOpacity: number; avatarScreen: { visible: boolean; onScreen: boolean } } | null;
         drawCalls(): number | null; clip(): { name: string } | null;
       } }).__ranger;
       if (!r) return null;
@@ -152,6 +158,7 @@ test('D1.5 view-clear drive-burst — the ranger is never lost in a foliage void
         pos: r.pos(), yaw: r.cameraYaw(),
         viewClear: c ? c.viewClear : null,
         canopyFade: c ? c.canopyFade : null,
+        terrainLift: c ? c.terrainLift : null,
         visible: c ? c.avatarScreen.visible : null,
         onScreen: c ? c.avatarScreen.onScreen : null,
         avatarOpacity: c ? c.avatarOpacity : null,
@@ -168,7 +175,7 @@ test('D1.5 view-clear drive-burst — the ranger is never lost in a foliage void
     const sample: Sample = {
       i, file,
       pos: s?.pos ?? null, yaw: s?.yaw ?? null,
-      viewClear: s?.viewClear ?? null, canopyFade: s?.canopyFade ?? null,
+      viewClear: s?.viewClear ?? null, canopyFade: s?.canopyFade ?? null, terrainLift: s?.terrainLift ?? null,
       visible: s?.visible ?? null, onScreen: s?.onScreen ?? null, avatarOpacity: s?.avatarOpacity ?? null,
       drawCalls: s?.drawCalls ?? null, clip: s?.clip ?? null,
     };
@@ -217,13 +224,17 @@ test('D1.5 view-clear drive-burst — the ranger is never lost in a foliage void
 
   const minFade = Math.min(...samples.map((s) => s.canopyFade ?? 1));
   const occludedFrames = samples.filter((s) => (s.canopyFade ?? 1) < 1).length;
+  // D1.5 (audit #4) terrain evidence: the most the follow boom rode UP to clear a dune between
+  // the lens and the ranger over the burst (the terrain analog of `occludedFrames`/`minFade` — a
+  // burst that never lifted met no dune, so viewClear staying true there is a flat-ground no-op).
+  const maxTerrainLift = Math.max(0, ...samples.map((s) => s.terrainLift ?? 0));
   const start = samples[0]?.pos;
   const walked = start ? Math.max(...samples.map((s) => (s.pos ? Math.hypot(s.pos.x - start.x, s.pos.z - start.z) : 0))) : 0;
 
   // write the burst annotations so the phase audit reads the clear-line frame by frame
   fs.writeFileSync(
     path.join(EVID, `viewclear-burst-${platform}.json`),
-    JSON.stringify({ box: 'D1.5', platform, spec: 'view-clear.spec.ts', target, aim, minFade, occludedFrames, walked, samples }, null, 2),
+    JSON.stringify({ box: 'D1.5', platform, spec: 'view-clear.spec.ts', target, aim, minFade, occludedFrames, maxTerrainLift, walked, samples }, null, 2),
   );
 
   // ── assertions across the WHOLE burst (drive-assert, not one frame) ──

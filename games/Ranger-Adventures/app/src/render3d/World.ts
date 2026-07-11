@@ -229,6 +229,12 @@ export class World {
   private readonly CAM_LOOK_H = 1.1;    // aim point above the ranger's feet (~sternum)
   private readonly CAM_PROBE_R = 0.35;  // camera "sphere" radius for the push-in cast
   private readonly CAM_GROUND_CLR = 0.5; // keep the lens this far above the terrain
+  // D1.5 (audit #4) terrain sightline: cap how far the follow boom rides UP to clear a dune
+  // standing BETWEEN the lens and the ranger, so a pathological crest can't rocket the eye
+  // skyward. The Veluwe relief is gentle (~±2.2 m) plus the ~2.6 m mirrored-field divergence,
+  // so ~6 m clears every real dune; past it viewClear honestly reads not-clear (the fade rail
+  // then keeps the world visible rather than a smear).
+  private readonly MAX_TERRAIN_LIFT = 6;
   // D1.5 free-walk occluder fade — the crown model for the cam→avatar sightline test.
   // A tree's foliage is approximated as a sphere at CROWN_CENTER_FRAC of its GLB height
   // (`TREE_BASE_H`×scale) with CROWN_RADIUS_FRAC radius. The trunk anti-clip
@@ -264,6 +270,8 @@ export class World {
   private avatarOpacity = 1;            // current applied ranger fade (avoids churn)
   private canopyOpacity = 1;            // D1.5 current applied tree-canopy occluder fade (1 = solid)
   private viewClearState = true;        // D1.5 last cam→avatar sightline-clear read (camState reports it)
+  private terrainClearState = true;     // D1.5 (audit #4) last cam→avatar TERRAIN-clear read (folded into viewClear)
+  private terrainLiftState = 0;         // D1.5 (audit #4) metres the follow boom rode up to clear a dune this frame (0 = flat)
   private readonly _camPose = new THREE.Vector3();  // scratch: camera world forward
   private readonly _camBox = new THREE.Box3();       // scratch: ranger bbox for pose reads
   private readonly _labelFwd = new THREE.Vector3();  // scratch: camera forward for the label fade
@@ -1115,6 +1123,14 @@ export class World {
   }
 
   dispose(): void {
+    // D1.5 (audit #4): hand the shared id-cached tree + ranger materials back at FULL opacity
+    // before teardown. A canopy (or ranger) left faded LEAKS onto the Stage title backdrop, which
+    // CLONES the same cached GLBs and so SHARES their materials (Stage.ts: "the clones SHARE the
+    // world's id-cached geometry/materials") — the fresh `13-title-return` showed half-ghosted
+    // crowns on the title, the slow fade release carried into a composed hero screen (§2.5:
+    // occluder fades reset when a composed screen takes the camera). Cheap material writes only.
+    this.setCanopyOpacity(1);
+    this.setAvatarOpacity(1);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown); // F-17
     window.removeEventListener('pointermove', this.onPointerMove);
     window.removeEventListener('pointerup', this.onPointerUp);
@@ -1940,18 +1956,22 @@ export class World {
       avatarScreen,
       viewClear,
       canopyFade: this.canopyOpacity,
+      terrainLift: this.terrainLiftState,
       landmarkInView,
       groundAtCam,
       taskInView,
     };
   }
 
-  /** F-11 line-of-sight over the terrain: true when the ground height field never
-   *  climbs above the straight segment from `from` to the world point (`tx,ty,tz`).
-   *  Marches `heightAt` (the exact field the ground mesh is displaced by, so the test
-   *  matches the render) at ~1.5 m steps; a crest poking above the ray (a rim berm at
-   *  the world edge) returns false = the ranger is hidden. Numbers only, no allocation
-   *  and no THREE calls, so the idle-stability pose stays deterministic frame to frame. */
+  /** F-11 / D1.5 (audit #4) line-of-sight over the terrain: true when the RENDERED ground never
+   *  climbs above the straight segment from `from` to the world point (`tx,ty,tz`). Marches
+   *  `groundSnapY` (the raycast against the real ground mesh — the ONE ground truth, D1.2/§2.2);
+   *  the mirrored analytic `heightAt` it used to march reads a dune ~2.6 m too LOW and lied the
+   *  sightline clear over a full-frame terrain murk (fresh `11-controls-hud`: viewClear/visible
+   *  true, no ranger). A crest poking above the ray (a rim berm / dune face between lens and
+   *  ranger) returns false = the ranger is hidden, so `avatarScreen.visible` matches the pixels.
+   *  Deterministic (groundSnapY is), so the idle pose holds frame to frame; a per-SHOT hook read
+   *  (camState), not a per-frame cost, and the BVH keeps each ground ray O(log n). */
   private terrainClearTo(from: THREE.Vector3, tx: number, ty: number, tz: number): boolean {
     const dx = tx - from.x, dz = tz - from.z;
     const horiz = Math.hypot(dx, dz);
@@ -1960,9 +1980,37 @@ export class World {
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
       const rayY = from.y + (ty - from.y) * t;
-      if (this.groundY(from.x + dx * t, from.z + dz * t) > rayY + 0.05) return false;
+      if (this.groundSnapY(from.x + dx * t, from.z + dz * t) > rayY + 0.05) return false;
     }
     return true;
+  }
+
+  /**
+   * D1.5 (audit #4) terrain sightline ride: the metres the follow boom must lift so the STRAIGHT
+   * line from the lens (lx,ly,lz) to the ranger aim (ax,ay,az) clears the RENDERED terrain by
+   * CAM_GROUND_CLR everywhere between them. Marches `groundSnapY` (the raycast against the real
+   * ground mesh — never the mirrored analytic `heightAt`, which reads a dune ~2.6 m too low and
+   * lied the sightline clear, `11-controls-hud`). Raising the lens by δ raises the segment height
+   * at parameter t by (1−t)·δ (the aim end is pinned to the ranger), so a crest poking `deficit`
+   * above the line at t needs δ ≥ deficit/(1−t); the worst sample wins and clears them all at once
+   * (raising the eye lifts every point, never lowers one). Returns the RAW need (the caller caps
+   * it at MAX_TERRAIN_LIFT); 0 on flat ground. ~6 BVH ground rays on a 6 m boom — deterministic,
+   * so the idle-stability pose holds frame to frame, and on par with the per-frame ground snap. */
+  private terrainSightlineLift(lx: number, ly: number, lz: number, ax: number, ay: number, az: number): number {
+    const dx = ax - lx, dz = az - lz;
+    const horiz = Math.hypot(dx, dz);
+    if (horiz < 0.5) return 0; // lens on top of him — nothing between
+    const steps = Math.min(24, Math.max(6, Math.ceil(horiz / 2)));
+    let need = 0;
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      if (t > 0.85) break; // the last stretch IS the ranger + his own footing, not an occluder between
+      const g = this.groundSnapY(lx + dx * t, lz + dz * t);
+      const segY = ly + (ay - ly) * t;
+      const deficit = g + this.CAM_GROUND_CLR - segY;
+      if (deficit > 0) { const d = deficit / (1 - t); if (d > need) need = d; }
+    }
+    return need;
   }
 
   /** W4.5: hand the World the shared renderer so it can enable the shadow map (a
@@ -3653,20 +3701,32 @@ export class World {
         this.camDesired.z *= k;
       }
     }
-    // keep the lens above the terrain along the WHOLE boom, not just under itself —
-    // a berm or world-rim crest standing BETWEEN the ranger and the lens (a low spot
-    // at the edge sinks the boom into the hollow, F-11) would otherwise swallow him
-    // even though his box stays in the frustum. Sample the ground from the ranger out
-    // to the lens and lift the eye above the highest crossing by CAM_GROUND_CLR. A
-    // clearance lift only, never a downward move — the idle pose stays deterministic.
+    // D1.5 (audit #4): keep the WHOLE cam→ranger SIGHTLINE above the RENDERED terrain — not
+    // just the lens above the ground under itself. A dune face standing between the trailing
+    // lens and the ranger is an occluder NO fade can touch (terrain can't be made transparent
+    // the way a crown can) — the GATE-D1 audit #4 murk: fresh `11-controls-hud` a full-frame
+    // terrain void with NO ranger while the hook lied clear. Two faults fixed: (1) the old lift
+    // sampled the MIRRORED analytic `groundY`, which reads a dune ~2.6 m too LOW (groundSnapY is
+    // the one ground truth, D1.2/§2.2) so it never lifted for the real crest; (2) it only kept
+    // the LENS above max-ground, which does not clear the LINE to a ranger standing in a hollow.
+    // Ride the crest instead: first keep the lens above its own rendered ground, then lift the
+    // eye until the straight line lens→HEAD clears the raycast terrain by CAM_GROUND_CLR (capped
+    // at MAX_TERRAIN_LIFT). This is the D1.3 above-terrain law extended to the whole segment —
+    // damped follow behaviour (the lerp below eases it; a CUT on snap / under reduced-motion),
+    // never a player-initiated orbit. A clearance lift only (never a downward move) so the idle
+    // pose stays deterministic frame to frame (groundSnapY is deterministic).
     if (walk) {
-      let gmax = this.groundY(this.camDesired.x, this.camDesired.z);
-      for (let t = 0.2; t < 1; t += 0.2) {
-        const g = this.groundY(rp.x + (this.camDesired.x - rp.x) * t, rp.z + (this.camDesired.z - rp.z) * t);
-        if (g > gmax) gmax = g;
-      }
-      const gy = gmax + this.CAM_GROUND_CLR;
-      if (this.camDesired.y < gy) this.camDesired.y = gy;
+      const gLens = this.groundSnapY(this.camDesired.x, this.camDesired.z);
+      if (this.camDesired.y < gLens + this.CAM_GROUND_CLR) this.camDesired.y = gLens + this.CAM_GROUND_CLR;
+      const aimY = rp.y + this.avatarTopY; // clear the line to his HEAD (strictest aim → whole body reads)
+      const need = this.terrainSightlineLift(this.camDesired.x, this.camDesired.y, this.camDesired.z, rp.x, aimY, rp.z);
+      const lift = Math.min(need, this.MAX_TERRAIN_LIFT);
+      this.camDesired.y += lift;
+      this.terrainLiftState = lift;
+      // the settled (desired) line is clear iff the raw need fit under the cap — read off camDesired
+      // (where the eased boom is heading) so a mid-lerp frame doesn't blip false while it rides up;
+      // at any settled/shot frame camera==camDesired, so the hook still matches the pixels (§4/§8.7).
+      this.terrainClearState = need <= this.MAX_TERRAIN_LIFT;
     }
     if (snap) {
       this.camera.position.copy(this.camDesired);
@@ -3725,13 +3785,18 @@ export class World {
       else if (reduced || snap) co = 1;                             // RM / cut: snap back solid
       else co = this.canopyOpacity + (1 - this.canopyOpacity) * dampFactor(dt, this.CANOPY_RELEASE_TAU); // release: gentle ease up
       this.setCanopyOpacity(co);
-      // viewClear is FALSE while a sightline occluder still sits above SEE_THROUGH opacity, so
-      // the hook matches the pixels (a blocked-but-still-solid frame reads not-clear, not a lie).
-      this.viewClearState = !blocked || this.canopyOpacity <= this.CANOPY_SEE_THROUGH;
+      // viewClear is FALSE while a sightline occluder still sits above SEE_THROUGH opacity (a
+      // canopy crown that hasn't faded through) OR a terrain crest still blocks the cam→head line
+      // (the boom-lift capped out, `terrainClearState` above) — both tested against the SAME
+      // rendered geometry the pixels show, so the hook can never claim clear over a murk frame
+      // (audit #4: terrain used to be untested, so a dune-face frame lied clear).
+      this.viewClearState = (!blocked || this.canopyOpacity <= this.CANOPY_SEE_THROUGH) && this.terrainClearState;
     } else {
       if (this.avatarOpacity !== 1) this.setAvatarOpacity(1); // never leave the driver faded when he re-emerges
       if (this.canopyOpacity !== 1) this.setCanopyOpacity(1); // never leave the canopy faded off-foot
       this.viewClearState = true;
+      this.terrainLiftState = 0;   // no boom on a vehicle/heli/mission cam → nothing ridden
+      this.terrainClearState = true;
     }
   }
 

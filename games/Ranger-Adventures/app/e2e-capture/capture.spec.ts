@@ -470,6 +470,13 @@ test('audit capture flow', async ({ context }, testInfo) => {
       } finally { await releaseForward(page, isPad, stick); }
     });
     await scene(page, 'controls-hud', async () => {
+      // D1.5 (audit #4): PIN the sample to a fixed world spot (walk to coordinates, not for a
+      // duration) so the terrain-occlusion evidence stops wobbling between runs — the old
+      // settle-after-walk-burst landed anywhere from z≈−59 to −60.4, moving the dune under test.
+      // The follow boom then RIDES the crest of any dune between it and the ranger; settleCam lets
+      // that damped lift finish before the shot so the frame reads the settled, ranger-readable pose.
+      await walkToSpot(page, isPad, stick, CONTROLS_HUD_SPOT.x, CONTROLS_HUD_SPOT.z);
+      await settleCam(page);
       await settle(page, 400);
       await snap(page, 'controls-hud', 'Besturing', isPad
         ? 'iPad-kader: staat de joystick er, ≥56 px, tap-to-walk zichtbaar?'
@@ -1501,6 +1508,30 @@ async function walkToBoard(page: Page, isPad: boolean, stick: TouchStick | null)
   await walkTo(page, isPad, stick, () => hook(page, (r) => {
     const b = r.board(); const p = r.pos(); const y = r.cameraYaw();
     return b && p && y != null ? { tx: b.x, tz: b.z, near: b.near, px: p.x, pz: p.z, yaw: y } : null;
+  }));
+}
+
+// D1.5 (audit #4): the FIXED world spot for the controls-hud / pause-hub frames. The audit's
+// verify-by requires the pinned frame be "ranger + ground context readable, ZERO murk". The old
+// duration-walk drifted to z≈−59…−60.4 — deep in the dense bos, where the lens buries in stacked
+// foliage (a murk void, the wobble the audit convicted). Pin instead to a fixed, verified-readable
+// spot on the bosrand edge (the ranger solid + the cabin/board/tree-line/golden sky in frame, HUD
+// chips clear — a probe here reads viewClear/visible=true, opacity 1, drawCalls ~51). Reproducible
+// every run; the terrain-inclusive viewClear + boom-ride remain the safety net for any terrain murk
+// anywhere else in the capture.
+const CONTROLS_HUD_SPOT = { x: 0, z: -18 } as const;
+
+/** D1.5 (audit #4): walk to a FIXED world coordinate — `near` is a plain radius test on the LIVE
+ *  pos (read while the pulsed walkTo has the keys released, so it can never accept a stale/lagged
+ *  flag the way board.near did), so the walk converges on the exact spot every run instead of
+ *  drifting by seconds-of-hold. Reproducible evidence for the pinned controls-hud / pause-hub. */
+async function walkToSpot(
+  page: Page, isPad: boolean, stick: TouchStick | null, tx: number, tz: number, nearR = 1.6,
+): Promise<void> {
+  await walkTo(page, isPad, stick, () => hook(page, (r) => {
+    const p = r.pos(); const y = r.cameraYaw();
+    if (!p || y == null) return null;
+    return { tx, tz, near: Math.hypot(p.x - tx, p.z - tz) < nearR, px: p.x, pz: p.z, yaw: y };
   }));
 }
 

@@ -264,6 +264,18 @@ inside a crown reports a lying all-clear); every crown on the near-lens
 sightline fades, not only the first hit; and the clear-view hook reports false
 while any sightline occluder still sits above ~0.5 opacity. Under
 reduced-motion the fade may snap — an opacity fade is not a camera move.
+**And the sightline law covers TERRAIN (GATE-D1 audit #4, 2026-07-11):** a
+dune face between lens and ranger is an occluder no fade can fix — fresh
+`11-controls-hud` was a full-frame terrain murk with the hook claiming clear.
+The follow camera's existing damped terrain-following (the D1.3 above-terrain
+law: cam.y rides `groundAtCam`) extends to the WHOLE camera→avatar segment:
+sample it against the rendered terrain and lift the boom / ride the crest,
+damped, until the line clears — this is follow behaviour, not a
+player-initiated orbit, and under reduced-motion the correction lands as a
+cut. `viewClear`/`avatarScreen.visible` test the same terrain+prop line, so
+the hook can never claim clear over a murk frame. Occluder fades RESET when a
+composed screen (title, board, mission reframe) takes the camera — a
+half-ghosted crown on the title is a style break, not a fade at work.
 
 ### 2.6 Performance budget as an art constraint
 
@@ -534,7 +546,14 @@ A screen/game is **done** when ALL hold — this ends "optimize until happy":
    dev-hook visibility boolean the pixels contradict — the fresh set has both
    directions (`39-ven-shore` holds `avatarScreen.visible` true while the
    ranger is buried to his hair; simon-3D holds it false while he is plainly
-   in frame). Hooks are asserts; pixels are the court.
+   in frame). Hooks are asserts; pixels are the court. And equally
+   no-evidence (GATE-D1 audit #4, 2026-07-11): a scene that passes VACUOUSLY
+   because its precondition never held — fresh `28-mission-stopped` "proved"
+   stop-returns-to-world while NO mission had ever started (the board never
+   opened; the harness's lenient press() no-ops on absent controls and
+   `screen==='world'` held from the start, so the frame is the ranger simply
+   standing where he already was). A scene asserts its precondition
+   (the mission genuinely running before it is stopped) or GAPs honestly.
 
 **No re-litigating:** once a screen passes a gate it is frozen unless a later
 box forces it (VISION §10).
@@ -715,6 +734,34 @@ Phase 2 sharpened off fresh pixels: `CAM_LOOK_H = 1.1` and the idle look-at's
 (`avatarTopY` already self-measures at load), and the warden's distance fade
 means the P1.6a pair shot stages him close enough to read solid. No frozen
 contract and no §2.4 Alvah correction was touched.
+
+**GATE-D1 audit #4 (2026-07-11, Fable art director, against the fresh
+06:07–06:59 capture — 11/12 specs green, capture exit non-zero):** the
+mechanical core held a FOURTH consecutive time (D1.2 21/21 clearance 0,
+analyticGap →2.75 m; P1.5a 29/29 + reached; P1.5b heading 0→7.23 rad + ~36 m
+drift-free straight; D1.3 five-for-five; D1.1 settled + differing; RM
+freeze/cut pairs pixelDiff 0; drawCalls max 77), and the JEEP capture group
+completed for the first time in four captures (367 s/540, all eight world
+shots with the jeep visibly in frame — the pulsed-walk convergence fix is
+real for the jeep). The gate did NOT tick, on three findings: (1) D1.5
+re-opened — fresh `11-controls-hud` is a full-frame TERRAIN murk (dune face
+between lens and ranger; cam.y 3.71 vs groundAtCam 1.45) with the hook
+claiming clear: the sightline law now covers terrain (§2.5 above) and the fix
+is the damped boom-lift, not a fade; plus lingering fades ghosted the title's
+crowns (`13-title-return`) — fades reset on composed screens. (2) D1.6
+re-opened — the heli spec failed a fourth capture (the pulsed branch never
+converged over ~33 m; directed to the game's own click-walk, with a
+no-progress watchdog and incremental step-flush so failure leaves evidence),
+and the pulsed walkTo regressed the board group with a STALE-near acceptance
+(`27-board-affordance` snapped 2.87 m out, near=false, vs 0.97 m inside at
+audit #3 — the two new GAPs of the set), while `28-mission-stopped` passed
+vacuously (§8.7 extended). (3) D1.7 appended — fresh `14-title-return-world`
+renders the ranger's SHADOW but not his body (hook claims opacity 1): an
+invisible avatar on the title-return player path; the fix demands the real
+cause (rendered-vs-target opacity, or the F-07 skinned-bounds family) and a
+rendered-opacity hook. Phase 2 sequenced AFTER D1.7 (the rescale rebuilds the
+same bounds/opacity machinery; the pair shot asserts on the rendered-opacity
+hook). No frozen contract and no §2.4 Alvah correction was touched.
 
 ---
 

@@ -15,7 +15,7 @@
       "grounded": true,
       "clearance": 0,
       "analyticGap": 7.287118825027861e-11,
-      "drawCalls": 47,
+      "drawCalls": 48,
       "clip": null,
       "groundSpeed": 0
     },
@@ -24,12 +24,12 @@
       "file": "",
       "pos": {
         "x": 0,
-        "z": -0.8503199999973178
+        "z": -0.8830799999892712
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.048595352856780884,
-      "drawCalls": 45,
+      "analyticGap": 0.050467825773863176,
+      "drawCalls": 43,
       "clip": "walk",
       "groundSpeed": 1.8
     },
@@ -38,266 +38,266 @@
       "file": "",
       "pos": {
         "x": 0,
-        "z": -1.7731799999959765
+        "z": -1.8390599999919535
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.10134706437246592,
+      "analyticGap": 0.10511295622921518,
       "drawCalls": 39,
       "clip": "walk",
-      "groundSpeed": 1.7999999999999998
+      "groundSpeed": 1.8
     },
     {
       "i": 3,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -5.428079999995976
+        "z": -5.568300000000001
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.30959128149370274,
-      "drawCalls": 24,
+      "analyticGap": 0.3175368793633283,
+      "drawCalls": 16,
       "clip": "walk",
-      "groundSpeed": 1.7999999999999998
+      "groundSpeed": 1.8000000000000003
     },
     {
       "i": 4,
       "file": "laptop/d12-ground-burst/d12-ground-04.png",
       "pos": {
         "x": 0,
-        "z": -6.554879999995976
+        "z": -6.563700000000001
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.3734020057229026,
-      "drawCalls": 20,
+      "analyticGap": 0.37390109487361556,
+      "drawCalls": 19,
       "clip": "walk",
-      "groundSpeed": 1.8000000000000005
+      "groundSpeed": 1.8
     },
     {
       "i": 5,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -18.320039999994634
+        "z": -18.717479999989273
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.017900461656865,
+      "analyticGap": 1.0386743149035382,
       "drawCalls": 12,
       "clip": "walk",
-      "groundSpeed": 1.799999999999998
+      "groundSpeed": 1.8000000000000018
     },
     {
       "i": 6,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -19.826279999995975
+        "z": -20.291039999994638
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.0963917902689873,
+      "analyticGap": 1.1203108734282703,
       "drawCalls": 12,
       "clip": "walk",
-      "groundSpeed": 1.8
+      "groundSpeed": 1.8000000000000007
     },
     {
       "i": 7,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -21.306419999997317
+        "z": -21.836159999991956
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.1721250126218092,
+      "analyticGap": 1.199032237433647,
       "drawCalls": 12,
       "clip": "walk",
-      "groundSpeed": 1.8000000000000005
+      "groundSpeed": 1.8000000000000007
     },
     {
       "i": 8,
       "file": "laptop/d12-ground-burst/d12-ground-08.png",
       "pos": {
         "x": 0,
-        "z": -22.806179999995976
+        "z": -23.3622
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.2478838430690913,
+      "analyticGap": 1.2755128757627756,
       "drawCalls": 12,
       "clip": "walk",
-      "groundSpeed": 1.8
+      "groundSpeed": 1.7999999999999983
     },
     {
       "i": 9,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -33.494039999994634
+        "z": -34.18703999999464
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.7472274329558113,
+      "analyticGap": 1.7770435559544098,
       "drawCalls": 10,
       "clip": "walk",
-      "groundSpeed": 1.799999999999999
+      "groundSpeed": 1.8000000000000014
     },
     {
       "i": 10,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -34.9902
+        "z": -35.725500000000004
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.8113912984858778,
+      "analyticGap": 1.84198464253397,
       "drawCalls": 10,
       "clip": "walk",
-      "groundSpeed": 1.8000000000000043
+      "groundSpeed": 1.800000000000001
     },
     {
       "i": 11,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -36.495000000000005
+        "z": -37.26917999998928
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.8737886980476246,
+      "analyticGap": 1.9055751032044,
       "drawCalls": 10,
       "clip": "walk",
-      "groundSpeed": 1.8000000000000036
+      "groundSpeed": 1.8000000000000018
     },
     {
       "i": 12,
       "file": "laptop/d12-ground-burst/d12-ground-12.png",
       "pos": {
         "x": 0,
-        "z": -38.09717999999598
+        "z": -38.781000000000006
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.9387645744736353,
+      "analyticGap": 1.9658067523053315,
       "drawCalls": 10,
       "clip": "walk",
-      "groundSpeed": 1.7999999999999987
+      "groundSpeed": 1.8000000000000007
     },
     {
       "i": 13,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -47.882700000000014
+        "z": -48.69683999999464
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.2916077027539714,
+      "analyticGap": 2.3171542026161505,
       "drawCalls": 10,
       "clip": "walk",
-      "groundSpeed": 1.799999999999997
+      "groundSpeed": 1.799999999999999
     },
     {
       "i": 14,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -49.21001999999733
+        "z": -50.03855999999195
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.3331094225464977,
+      "analyticGap": 2.358579889570227,
       "drawCalls": 10,
       "clip": "walk",
-      "groundSpeed": 1.7999999999999954
+      "groundSpeed": 1.799999999999998
     },
     {
       "i": 15,
       "file": "",
       "pos": {
         "x": 0,
-        "z": -50.530139999994645
+        "z": -51.37415999999195
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.3729955258952793,
+      "analyticGap": 2.397492850304825,
       "drawCalls": 10,
       "clip": "walk",
-      "groundSpeed": 1.799999999999999
+      "groundSpeed": 1.7999999999999994
     },
     {
       "i": 16,
       "file": "laptop/d12-ground-burst/d12-ground-16.png",
       "pos": {
         "x": 0,
-        "z": -51.85727999999599
+        "z": -52.7112
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.4113693855579155,
+      "analyticGap": 2.4353769899383497,
       "drawCalls": 10,
       "clip": "walk",
-      "groundSpeed": 1.8000000000000025
+      "groundSpeed": 1.799999999999998
     },
     {
       "i": 17,
       "file": "",
       "pos": {
-        "x": -0.12002757945142573,
-        "z": -60.9593069356934
+        "x": 0,
+        "z": -62.22491999999731
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.6283453489927586,
-      "drawCalls": 9,
+      "analyticGap": 2.652228764349326,
+      "drawCalls": 12,
       "clip": "walk",
-      "groundSpeed": 1.4841246030840785
+      "groundSpeed": 1.8000000000000014
     },
     {
       "i": 18,
       "file": "",
       "pos": {
-        "x": -0.2617935492256483,
-        "z": -62.360111622796566
+        "x": 0,
+        "z": -65.40011999999732
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.6544106351299908,
-      "drawCalls": 13,
-      "clip": "walk",
-      "groundSpeed": 1.8000000000000032
-    },
-    {
-      "i": 19,
-      "file": "",
-      "pos": {
-        "x": -0.6588180102176184,
-        "z": -66.28315272171399
-      },
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 2.7155537148571325,
+      "analyticGap": 2.703705802196643,
       "drawCalls": 12,
       "clip": "walk",
       "groundSpeed": 1.800000000000002
     },
     {
-      "i": 20,
-      "file": "laptop/d12-ground-burst/d12-ground-20.png",
+      "i": 19,
+      "file": "",
       "pos": {
-        "x": -0.8766685544119138,
-        "z": -68.43575721404282
+        "x": 0,
+        "z": -67.45139999999999
       },
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.742377306657759,
+      "analyticGap": 2.731434216511891,
       "drawCalls": 12,
       "clip": "walk",
-      "groundSpeed": 1.8000000000000054
+      "groundSpeed": 1.7999999999999956
+    },
+    {
+      "i": 20,
+      "file": "laptop/d12-ground-burst/d12-ground-20.png",
+      "pos": {
+        "x": 0,
+        "z": -69.40256212799493
+      },
+      "grounded": true,
+      "clearance": 0,
+      "analyticGap": 2.753087042334421,
+      "drawCalls": 12,
+      "clip": "walk",
+      "groundSpeed": 1.6984349999999961
     }
   ]
 }

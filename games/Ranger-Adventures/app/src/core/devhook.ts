@@ -72,6 +72,15 @@ export type CamState = {
    *  a no-op, not evidence). Attack is instant (drops to CANOPY_FADE_MIN the frame a crown
    *  blocks), release eases back to 1; a cut under reduced-motion. */
   canopyFade: number;
+  /** D1.5 (audit #4) the metres the follow boom rode UP this frame to clear a TERRAIN dune
+   *  standing between the lens and the ranger (0 = flat ground, no lift needed). Terrain can't
+   *  be faded like a crown, so the comfort-safe response is the damped boom-ride (the D1.3
+   *  above-terrain law extended to the whole cam→head sightline). The drive-burst reads it as
+   *  the proof the walk actually MET an occluding dune and the ride engaged — the terrain analog
+   *  of `canopyFade` < 1 (a burst whose `terrainLift` stayed 0 never rode a crest, so a still-true
+   *  `viewClear` there is a flat-ground no-op, not terrain evidence). `viewClear` folds in the
+   *  terrain block too, so a dune the ride can't clear (capped) reads not-clear, never a lie. */
+  terrainLift: number;
   /** F-09 (spawn faces the void, the hub sits behind the player): true when at least
    *  one hub landmark — the cabin, the mission board, or a fixed beacon — is inside
    *  the live view frustum. The world-entry assert reads this to PROVE the spawn
