@@ -109,16 +109,26 @@ async function readHeli(page: Page): Promise<{ h: HeliHook; pos: { x: number; z:
 
 test('P1.5c heli enable+enter — the Instellingen toggle turns it on AND "Stap in" enters', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'ipad', 'laptop-only automated verification (real-device enable+fly = Floris demo, P1.5c +demo)');
-  test.setTimeout(300_000); // the first cold boot streams ~13 MB of GLBs (~3 min, config note)
+  // D1.6: 420 s. The first COLD isolated boot streams ~13 MB of GLBs (~3 min, config note),
+  // and the convergence-safe pulsed walk is honestly a touch slower than the old continuous
+  // hold (it STOPS during each poll so it can never orbit) — under `npm run capture` the
+  // server is warm and this finishes with wide margin; the raised ceiling only covers the
+  // cold self-verify + headless variance, it never lengthens a healthy run.
+  test.setTimeout(420_000);
   const platform = testInfo.project.name;
   const shotDir = path.join(EVID, platform, 'p15c-heli-enter');
   fs.mkdirSync(shotDir, { recursive: true });
   // D1.4: clear prior-run PNGs first — a fresh run with fewer phases/frames would otherwise
-  // leave stale ones beside fresh (the top-level prune skips subdirs; GATE-D1). JSON record
-  // is in the parent dir, so only .png is cleared.
+  // leave stale ones beside fresh (the top-level prune skips subdirs; GATE-D1).
   for (const f of fs.readdirSync(shotDir)) {
     if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
   }
+  // D1.6: WIPE the burst JSON up front too. Its write is the LAST line of the test, so a
+  // failed leg (the audit-#3 walk-to-pad exhaustion) skipped it and left LAST run's JSON
+  // stale (03:26) beside THIS run's fresh 04:58 PNGs — a failed leg masquerading as fresh
+  // evidence. Deleting it at start means a failed run leaves NO json (honest gap), never a
+  // stale one; a passing run rewrites it fresh at the end.
+  try { fs.rmSync(path.join(EVID, `heli-enter-${platform}.json`)); } catch { /* absent on a first run — fine */ }
 
   await bootToWorld(page);
 
@@ -196,30 +206,45 @@ test('P1.5c heli enable+enter — the Instellingen toggle turns it on AND "Stap 
 
   // ── (7) walk to the parked helicopter (heli.x/z) until heli().near (mirrors the frozen
   //        e2e/heli.spec.ts walkToHeli steering + budget). ──
+  // D1.6: CONVERGENCE-SAFE pulsed walk (mirrors the capture harness keyboardWalkTo fix).
+  // The audit-#3 capture failed here — the old loop held the arrow keys DOWN across each
+  // readHeli poll, and late in a full capture those polls return ~2 s late through a starved
+  // event loop, so the ranger kept walking the last heading, overshot HELI_NEAR_R and ORBITED
+  // the pad until the 240 steps ran out (its own at-pad PNG showed him standing AT the heli).
+  // On-foot movement has no momentum (World.ts drops the walk target on key-release), so
+  // PRESSING for a bounded pulse then RELEASING before the next read makes an uncorrected leg
+  // exactly speed×pulse — capped WELL under the 4 m near radius, so an orbit is impossible.
+  const WALK_SPEED_MPS = 1.8; // World.ts on-foot ground speed
   const target = { x: enabled.h!.x, z: enabled.h!.z };
   const held = new Set<string>();
-  const sync = async (want: Set<string>): Promise<void> => {
-    for (const k of KEYS) {
-      if (want.has(k) && !held.has(k)) { await page.keyboard.down(k); held.add(k); }
-      else if (!want.has(k) && held.has(k)) { await page.keyboard.up(k); held.delete(k); }
-    }
+  const pressKeys = async (want: Set<string>): Promise<void> => {
+    for (const k of KEYS) if (want.has(k) && !held.has(k)) { await page.keyboard.down(k); held.add(k); }
+  };
+  const releaseKeys = async (): Promise<void> => {
+    for (const k of KEYS) if (held.has(k)) { await page.keyboard.up(k); held.delete(k); }
   };
   let near = false;
   try {
     for (let step = 0; step < 240 && !near; step++) {
+      // keys RELEASED here → the ranger stands still while this (possibly slow) poll round-trips
       const { h, pos, yaw } = await readHeli(page);
-      if (h && pos && yaw != null) {
-        near = h.near;
-        if (near) break;
-        const { sx, sYf } = screenDir(target.x - pos.x, target.z - pos.z, yaw);
-        const want = new Set<string>();
-        if (sx > 0.4) want.add('ArrowRight'); else if (sx < -0.4) want.add('ArrowLeft');
-        if (sYf > 0.4) want.add('ArrowUp'); else if (sYf < -0.4) want.add('ArrowDown');
-        await sync(want);
-      }
-      await page.waitForTimeout(120);
+      if (!h || !pos || yaw == null) { await page.waitForTimeout(120); continue; }
+      near = h.near;
+      if (near) break;
+      const { sx, sYf } = screenDir(target.x - pos.x, target.z - pos.z, yaw);
+      const want = new Set<string>();
+      if (sx > 0.4) want.add('ArrowRight'); else if (sx < -0.4) want.add('ArrowLeft');
+      if (sYf > 0.4) want.add('ArrowUp'); else if (sYf < -0.4) want.add('ArrowDown');
+      if (want.size === 0) { await page.waitForTimeout(80); continue; }
+      const dist = Math.hypot(target.x - pos.x, target.z - pos.z);
+      // ≤ 2.16 m per leg (well under the 4 m heli near radius) so the walk needs FEW polls —
+      // each poll is stopped read-time, so bigger safe legs = a faster convergent approach.
+      const pulseMs = Math.max(200, Math.min(1200, (dist / WALK_SPEED_MPS) * 1000 * 0.6));
+      await pressKeys(want);
+      await page.waitForTimeout(pulseMs);
+      await releaseKeys(); // release BEFORE the next read — this is what breaks the orbit
     }
-  } finally { await sync(new Set()).catch(() => {}); }
+  } finally { await releaseKeys().catch(() => {}); }
   expect(near, 'ranger reached the parked helicopter (heli().near)').toBe(true);
   await page.waitForTimeout(400); // let the affordance render + camera settle
   const atPad = await record('at-pad', true); // shot: the "Stap in de helikopter" affordance at the pad

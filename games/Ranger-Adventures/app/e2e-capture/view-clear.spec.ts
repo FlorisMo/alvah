@@ -106,10 +106,13 @@ test('D1.5 view-clear drive-burst — the ranger is never lost in a foliage void
   const shotDir = path.join(EVID, platform, 'd15-viewclear-burst');
   fs.mkdirSync(shotDir, { recursive: true });
   // D1.4: clear prior-run PNGs from this incremental-named burst subdir so the fresh set on
-  // disk EQUALS this run (the top-level capture prune skips subdirs). JSON lives in the parent.
+  // disk EQUALS this run (the top-level capture prune skips subdirs).
   for (const f of fs.readdirSync(shotDir)) {
     if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
   }
+  // D1.6: WIPE the burst JSON up front too, so a failed leg leaves NO json (honest gap)
+  // rather than last run's stale one beside fresh PNGs; a passing run rewrites it fresh.
+  try { fs.rmSync(path.join(EVID, `viewclear-burst-${platform}.json`)); } catch { /* absent on a first run — fine */ }
 
   await bootToWorld(page);
 

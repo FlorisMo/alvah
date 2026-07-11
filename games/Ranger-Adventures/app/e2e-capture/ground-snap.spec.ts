@@ -105,10 +105,13 @@ test('D1.2 ground-snap drive-burst — the ranger stays on the rendered terrain'
   // D1.4: clear prior-run PNGs from this incremental-named burst subdir so the fresh set
   // on disk EQUALS this run — the top-level capture prune skips subdirs, so a sparser fresh
   // burst leaves stale higher-index frames beside fresh ones (GATE-D1 found mixed 17:0x +
-  // 23:5x frames here). The JSON burst record lives in the parent dir, so only .png is cleared.
+  // 23:5x frames here).
   for (const f of fs.readdirSync(shotDir)) {
     if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
   }
+  // D1.6: WIPE the burst JSON up front too, so a failed leg leaves NO json (honest gap)
+  // rather than last run's stale one beside fresh PNGs; a passing run rewrites it fresh.
+  try { fs.rmSync(path.join(EVID, `ground-burst-${platform}.json`)); } catch { /* absent on a first run — fine */ }
 
   await bootToWorld(page);
 
@@ -213,10 +216,13 @@ test('P1.5a ven-shore drive-burst — the ranger stays grounded from spawn to th
   fs.mkdirSync(shotDir, { recursive: true });
   // D1.4: clear prior-run PNGs first — a sparser fresh burst would otherwise leave stale
   // higher-index frames beside fresh ones (the top-level prune skips subdirs; GATE-D1
-  // found mixed 17:0x + 23:5x frames here). JSON record is in the parent dir, so only .png.
+  // found mixed 17:0x + 23:5x frames here).
   for (const f of fs.readdirSync(shotDir)) {
     if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
   }
+  // D1.6: WIPE the burst JSON up front too, so a failed leg leaves NO json (honest gap)
+  // rather than last run's stale one beside fresh PNGs; a passing run rewrites it fresh.
+  try { fs.rmSync(path.join(EVID, `ven-ground-burst-${platform}.json`)); } catch { /* absent on a first run — fine */ }
 
   await bootToWorld(page);
 

@@ -604,16 +604,18 @@ test('audit capture flow', async ({ context }, testInfo) => {
   }
 
   // ══ GROUP 2 — jeep: boot → walk to it (touch on iPad), climb in, drive burst
-  //    (steering test #3), climb back out. Own fresh page. D1.6: 720 s budget. This is
-  //    the flow's SLOWEST-completing group — the ~21 m walk-to-jeep PLUS enter + two
-  //    drive bursts (the second holds a ~3 s F-32 straight-heading contrast settle) + exit,
-  //    all crawling under throttled rAF. D1.4 sized it at 420 s off an earlier measure, but
-  //    the GATE-D1 audit #2 capture MEASURED 421 s — a 1 s overrun that GAPped the whole
-  //    group and dropped every world jeep shot. The body is fully bounded (walkTo caps at
-  //    300 iters, every waitFor/settle is bounded), so it returns at ~421 s well under this
-  //    ceiling; the raise only buys honest headroom for run-to-run headless variance, it
-  //    never lengthens a healthy run. ══
-  await runGroup('jeep', { budgetMs: 720_000 }, async (page, stick) => {
+  //    (steering test #3), climb back out. Own fresh page. D1.6: 540 s budget, sized for a
+  //    CONVERGING body. The audit #2/#3 GAPs (421/420 → 721/720, always +1 s = the budget
+  //    kill granularity) were NOT a slow body — they were the DIVERGENT walk-to-jeep: the
+  //    old poll-correct-hold loop held the keys DOWN across each ~2 s starved poll, so the
+  //    ranger overshot the near radius and ORBITED the jeep forever, eating any budget. The
+  //    walkTo fix above (pulsed keys released BEFORE each read → an uncorrected leg can't
+  //    exceed the near radius → no orbit) makes it converge; the other groups run 66–269 s
+  //    and this one does more (walk + enter + two drive bursts + exit), so ~200–300 s is the
+  //    honest converging measure and 540 s is ~2× headroom for headless variance — NOT the
+  //    720 s that was only ever masking the orbit. The body stays fully bounded (walkTo
+  //    iter-cap + every waitFor/settle bounded), so this ceiling only catches a real wedge. ══
+  await runGroup('jeep', { budgetMs: 540_000 }, async (page, stick) => {
     await bootWorld(page, isPad);
     await scene(page, 'jeep', async () => {
       const placed = await hook(page, (r) => r.vehicle()?.placed ?? false);
@@ -1396,6 +1398,39 @@ function screenDir(dx: number, dz: number, yaw: number): { sx: number; sYf: numb
   return { sx: dx * c - dz * s, sYf: -dx * s - dz * c };
 }
 
+// D1.6: convergence-safe PULSED walking. The GATE-D1 audit-#3 jeep GAP was a
+// DIVERGENCE, not a slow walk: the old loop held the arrow keys DOWN across each
+// poll's page.evaluate, and late in a full capture those evaluates return ~2 s late
+// through a starved event loop — so the ranger kept walking the LAST-commanded heading
+// for seconds, overshot the `near` radius, re-aimed, overshot again, and ORBITED a
+// fixed target forever (consuming ANY budget — hence 421/420 → 721/720). The fix is a
+// PULSE: hold the keys for a short BOUNDED window, then RELEASE them BEFORE the next
+// (possibly slow) read, so the ranger stands STILL while the poll round-trips. On-foot
+// movement has no momentum — World.ts drops the walk target the frame a key releases
+// (`this.target.set(rp,0,rp)`), so he stops instantly and an uncorrected leg is exactly
+// speed×pulse. Capped WELL under the tightest `near` radius (board/marker = 2.4 m),
+// which makes an orbit GEOMETRICALLY impossible even when polls crawl: a target-aimed
+// step shorter than the radius can never jump the ranger past the near zone.
+const WALK_SPEED_MPS = 1.8;    // World.ts on-foot ground speed — sizes the pulse cap
+const WALK_PULSE_MIN_MS = 200;
+const WALK_PULSE_MAX_MS = 900; // 1.8 m/s × 0.9 s = 1.62 m per uncorrected leg < 2.4 m (board/marker near
+                               // radius, the tightest) — an orbit needs a leg > ~2× the radius, so this has
+                               // wide margin — while keeping the leg BIG so the far approach needs few polls
+                               // (each poll is stopped read-time; the D1.6 slow-walk cost is poll COUNT).
+const WALK_PULSE_FRAC = 0.6;   // hold long enough to cover ~60 % of the remaining gap, then re-aim
+
+/** One combined read per poll: the walk TARGET (x,z,near) AND the ranger pos + camera
+ *  yaw, from a SINGLE page.evaluate. Halves the round-trips of the old two-evaluate poll,
+ *  so the walk starves the render loop half as much and each poll returns sooner under
+ *  capture load (the D1.4 fewer-round-trips insight, taken one step further). */
+type WalkRead = () => Promise<{ tx: number; tz: number; near: boolean; px: number; pz: number; yaw: number } | null>;
+
+/** How long to hold the keys this pulse: cover ~WALK_PULSE_FRAC of the remaining gap,
+ *  clamped to [MIN,MAX] so a single uncorrected leg is always ≪ the tightest near radius. */
+function walkPulseMs(dist: number): number {
+  return Math.max(WALK_PULSE_MIN_MS, Math.min(WALK_PULSE_MAX_MS, (dist / WALK_SPEED_MPS) * 1000 * WALK_PULSE_FRAC));
+}
+
 /** Camera-relative walk toward a world target. Keyboard (laptop) or joystick
  *  touch (iPad) — same geometry, so the iPad reaches the board/jeep as reliably
  *  as the laptop did (F-21: iPad locomotion must be touch, never `page.keyboard`). */
@@ -1403,77 +1438,70 @@ async function walkTo(
   page: Page,
   isPad: boolean,
   stick: TouchStick | null,
-  target: () => Promise<{ x: number; z: number; near: boolean } | null>,
-  // D1.4: default 300 iters (was 200). A REACHING walk short-circuits on `t.near`, so a
-  // higher cap NEVER slows a fast walk — it only gives a slow-but-progressing walk room to
-  // ARRIVE instead of throwing "never reached target" mid-crawl. Walk-to-board measures
-  // 45–67 s under load (§ game3d note) ≈ 150–220 iters at the throttled poll rate, so 200
-  // was marginal; 300 clears it with margin while the per-group wall-clock budget still caps
-  // a genuinely wedged walk. iPad stays clamped to 160 (its walk is a Floris demo anyway).
-  budget = 300,
+  read: WalkRead,
+  // D1.6: the pulsed walk takes MORE polls per metre (shorter legs) but each converges,
+  // so keep a generous iteration cap — a REACHING walk short-circuits on `near`, so the
+  // cap never slows a healthy walk; it only bounds a genuinely wedged one (the per-group
+  // wall-clock budget is the real backstop). iPad is a Floris demo (never auto-run).
+  budget = 320,
 ): Promise<void> {
-  if (isPad) return joystickWalkTo(page, stick!, target, Math.min(budget, 160));
-  return keyboardWalkTo(page, target, budget);
+  if (isPad) return joystickWalkTo(page, stick!, read, Math.min(budget, 220));
+  return keyboardWalkTo(page, read, budget);
 }
 
-async function keyboardWalkTo(
-  page: Page,
-  target: () => Promise<{ x: number; z: number; near: boolean } | null>,
-  budget: number,
-): Promise<void> {
+async function keyboardWalkTo(page: Page, read: WalkRead, budget: number): Promise<void> {
   const down = new Set<string>();
-  const sync = async (want: Set<string>) => {
-    for (const k of KEYS) {
-      if (want.has(k) && !down.has(k)) { await page.keyboard.down(k); down.add(k); }
-      else if (!want.has(k) && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
-    }
+  const pressKeys = async (want: Set<string>): Promise<void> => {
+    for (const k of KEYS) if (want.has(k) && !down.has(k)) { await page.keyboard.down(k); down.add(k); }
+  };
+  const releaseKeys = async (): Promise<void> => {
+    for (const k of KEYS) if (down.has(k)) { await page.keyboard.up(k); down.delete(k); }
   };
   try {
     for (let i = 0; i < budget; i++) {
-      const t = await target();
-      if (t?.near) return;
-      // D1.4: read pos + camera yaw in ONE evaluate (was two). Every page.evaluate stalls
-      // the very rAF the ranger walks on, so fewer round-trips per poll = less render-loop
-      // starvation = the walk crawls less under full-capture load (the GATE-D1 "walks crawl
-      // under load" diagnosis — the walk was three evaluates a poll, this makes it two).
-      const pv = await hook(page, (r) => { const q = r.pos(); const y = r.cameraYaw(); return q && y != null ? { x: q.x, z: q.z, yaw: y } : null; });
-      if (!pv || !t) { await page.waitForTimeout(100); continue; }
-      const { sx, sYf } = screenDir(t.x - pv.x, t.z - pv.z, pv.yaw);
+      // Keys are RELEASED here → the ranger is stationary while this (possibly seconds-late
+      // under load) read round-trips; he cannot drift past the target during a slow poll.
+      const s = await read();
+      if (!s) { await page.waitForTimeout(100); continue; }
+      if (s.near) return;
+      const { sx, sYf } = screenDir(s.tx - s.px, s.tz - s.pz, s.yaw);
       const want = new Set<string>();
       if (sx > 0.4) want.add('ArrowRight'); else if (sx < -0.4) want.add('ArrowLeft');
       if (sYf > 0.4) want.add('ArrowUp'); else if (sYf < -0.4) want.add('ArrowDown');
-      await sync(want);
-      await page.waitForTimeout(120);
+      if (want.size === 0) { await page.waitForTimeout(80); continue; }
+      // PULSE: press, hold for a bounded window (≪ near-radius of travel), release BEFORE
+      // the next read. The release is what breaks the orbit — the ranger never coasts.
+      await pressKeys(want);
+      await page.waitForTimeout(walkPulseMs(Math.hypot(s.tx - s.px, s.tz - s.pz)));
+      await releaseKeys();
     }
     throw new Error('never reached target within step budget');
-  } finally { await sync(new Set()).catch(() => {}); }
+  } finally { await releaseKeys().catch(() => {}); }
 }
 
-async function joystickWalkTo(
-  page: Page,
-  stick: TouchStick,
-  target: () => Promise<{ x: number; z: number; near: boolean } | null>,
-  budget: number,
-): Promise<void> {
-  await stick.hold(page, 0, 1); // start moving; re-steered immediately below
+async function joystickWalkTo(page: Page, stick: TouchStick, read: WalkRead, budget: number): Promise<void> {
   try {
     for (let i = 0; i < budget; i++) {
-      const t = await target();
-      if (t?.near) return;
-      // D1.4: pos + yaw in ONE evaluate (see keyboardWalkTo) — fewer render-loop stalls.
-      const pv = await hook(page, (r) => { const q = r.pos(); const y = r.cameraYaw(); return q && y != null ? { x: q.x, z: q.z, yaw: y } : null; });
-      if (!pv || !t) { await page.waitForTimeout(120); continue; }
-      const { sx, sYf } = screenDir(t.x - pv.x, t.z - pv.z, pv.yaw);
+      // Stick RELEASED between iterations (same pulse discipline as the keyboard path) — a
+      // slow poll can't carry the ranger past the target while the read is in flight.
+      const s = await read();
+      if (!s) { await page.waitForTimeout(120); continue; }
+      if (s.near) return;
+      const { sx, sYf } = screenDir(s.tx - s.px, s.tz - s.pz, s.yaw);
       const mag = Math.hypot(sx, sYf) || 1;
-      await stick.steer(sx / mag, sYf / mag);
-      await page.waitForTimeout(140);
+      await stick.hold(page, sx / mag, sYf / mag);
+      await page.waitForTimeout(walkPulseMs(Math.hypot(s.tx - s.px, s.tz - s.pz)));
+      await stick.release();
     }
     throw new Error('joystick walk never reached target within step budget');
-  } finally { await stick.release(); }
+  } finally { await stick.release().catch(() => {}); }
 }
 
 async function walkToBoard(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
-  await walkTo(page, isPad, stick, () => hook(page, (r) => r.board()));
+  await walkTo(page, isPad, stick, () => hook(page, (r) => {
+    const b = r.board(); const p = r.pos(); const y = r.cameraYaw();
+    return b && p && y != null ? { tx: b.x, tz: b.z, near: b.near, px: p.x, pz: p.z, yaw: y } : null;
+  }));
 }
 
 /** D1.0(b): open the case-board and start the mission with the given id — the REAL
@@ -1529,12 +1557,12 @@ async function advanceToStepCard(page: Page, isPad: boolean, targetCard: string,
  *  (a generous budget, past `walkTo`'s nearby-target iPad cap); bounded, so it can
  *  never become the 30-min stall P0.3 warns of, and it exits the instant it arrives. */
 async function walkToBoundary(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
-  const target = async (): Promise<{ x: number; z: number; near: boolean } | null> => {
-    const b = await hook(page, (r) => r.boundary());
-    return b ? { x: 0, z: -(b.bound + 50), near: b.atRim } : null;
-  };
-  if (isPad) { await joystickWalkTo(page, stick!, target, 400); return; }
-  await keyboardWalkTo(page, target, 400);
+  const read: WalkRead = () => hook(page, (r) => {
+    const b = r.boundary(); const p = r.pos(); const y = r.cameraYaw();
+    return b && p && y != null ? { tx: 0, tz: -(b.bound + 50), near: b.atRim, px: p.x, pz: p.z, yaw: y } : null;
+  });
+  if (isPad) { await joystickWalkTo(page, stick!, read, 500); return; }
+  await keyboardWalkTo(page, read, 500);
 }
 /** P1.2: walk out to the ven-water shore. Steers toward VEN_CENTER (the water basin
  *  at 46,-19; Biomes.VEN_CENTER) and latches on the reed-fringed bank as the ranger
@@ -1543,19 +1571,22 @@ async function walkToBoundary(page: Page, isPad: boolean, stick: TouchStick | nu
  *  INSIDE the forced-ven shore blob (VEN_SHORE_R 26), so the annotation `pos` reads
  *  as the ven biome. Bounded like walkToBoundary — never the 30-min stall (P0.3). */
 async function walkToVen(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
-  const VEN = { x: 46, z: -19 }; // Biomes.VEN_CENTER — the water basin
-  const target = async (): Promise<{ x: number; z: number; near: boolean } | null> => {
-    const p = await hook(page, (r) => r.pos());
-    if (!p) return null;
-    return { x: VEN.x, z: VEN.z, near: Math.hypot(p.x - VEN.x, p.z - VEN.z) < 22 };
-  };
-  if (isPad) { await joystickWalkTo(page, stick!, target, 400); return; }
-  await keyboardWalkTo(page, target, 400);
+  // NB the reader closure is stringified + re-run INSIDE the page (see `hook`), so it must
+  // capture NO Node-scope variable — VEN_CENTER (46,−19; Biomes.VEN_CENTER, the water basin)
+  // is inlined here, not referenced from an outer const.
+  const read: WalkRead = () => hook(page, (r) => {
+    const p = r.pos(); const y = r.cameraYaw();
+    if (!p || y == null) return null;
+    const vx = 46, vz = -19;
+    return { tx: vx, tz: vz, near: Math.hypot(p.x - vx, p.z - vz) < 22, px: p.x, pz: p.z, yaw: y };
+  });
+  if (isPad) { await joystickWalkTo(page, stick!, read, 500); return; }
+  await keyboardWalkTo(page, read, 500);
 }
 async function walkToJeep(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
   await walkTo(page, isPad, stick, () => hook(page, (r) => {
-    const v = r.vehicle();
-    return v ? { x: v.x, z: v.z, near: v.near } : null;
+    const v = r.vehicle(); const p = r.pos(); const y = r.cameraYaw();
+    return v && p && y != null ? { tx: v.x, tz: v.z, near: v.near, px: p.x, pz: p.z, yaw: y } : null;
   }));
 }
 

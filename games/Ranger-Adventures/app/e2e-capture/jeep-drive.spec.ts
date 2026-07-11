@@ -128,10 +128,13 @@ test('P1.5b jeep drive-burst — it translates along its heading, grounded, no s
   fs.mkdirSync(shotDir, { recursive: true });
   // D1.4: clear prior-run PNGs first — a shorter fresh drive would otherwise leave stale
   // higher-index frames beside fresh ones (the top-level prune skips subdirs; GATE-D1).
-  // JSON record is in the parent dir, so only .png is cleared.
   for (const f of fs.readdirSync(shotDir)) {
     if (f.endsWith('.png')) { try { fs.rmSync(path.join(shotDir, f)); } catch { /* a rm miss is not fatal */ } }
   }
+  // D1.6: WIPE the burst JSON up front too — its write is late in the test (after the walk +
+  // enter asserts), so a failed leg would leave last run's JSON stale beside fresh PNGs. A
+  // failed run now leaves NO json (honest gap); a passing run rewrites it fresh.
+  try { fs.rmSync(path.join(EVID, `jeep-drive-burst-${platform}.json`)); } catch { /* absent on a first run — fine */ }
 
   await bootToWorld(page);
 
