@@ -239,7 +239,9 @@ export class World {
   // comfort-law risk, §2.5) so the ranger is never lost behind leaves.
   private readonly CROWN_CENTER_FRAC = 0.55; // crown centre height ÷ tree height (low enough to reach a head-height sightline)
   private readonly CROWN_RADIUS_FRAC = 0.38; // crown radius ÷ tree height (the foliage volume, not the trunk)
-  private readonly CANOPY_FADE_MIN = 0.16;   // faded canopy opacity (the ranger reads through it)
+  private readonly CANOPY_FADE_MIN = 0.16;   // a lone between-lens crown ⇒ fade to this (the ranger reads through it)
+  private readonly CANOPY_FADE_BURIED = 0.04; // lens INSIDE a crown ⇒ fade near-invisible so stacked overlapping foliage still reads through (GATE-D1 audit #2: 0.16 global was still murk when buried)
+  private readonly CROWN_INSIDE_MARGIN = 0.6; // grow the crown for the lens-inside test so the fade LEADS the bury (no pop as the boom collapses into a crown)
   private readonly CANOPY_SEE_THROUGH = 0.5; // canopy ≤ this ⇒ ranger reads through ⇒ viewClear true
   private readonly CANOPY_RELEASE_TAU = 0.7; // gentle ease back to solid once the crown clears (calm, no pop)
   // F-16 laptop dolly zoom: the player-set WALK boom distance (m, horizontal). Starts
@@ -3684,19 +3686,32 @@ export class World {
       const hd = Math.hypot(this.camera.position.x - rp.x, this.camera.position.z - rp.z);
       const near = this.avatarRadius + 0.3, far = this.avatarRadius + 1.1;
       this.setAvatarOpacity(Math.max(0, Math.min(1, (hd - near) / (far - near))));
-      // D1.5 occluder fade: when a tree CROWN stands between the lens and the ranger on the
-      // free walk, fade the canopy so he is never lost in a full-frame foliage void
-      // (`09-walk-4`). The trunk anti-clip + the ranger fade above already handle a trunk
-      // behind him; this is the wide crown the lens sits INSIDE. Attack fast (a cut to
-      // CANOPY_FADE_MIN the frame it is blocked, so `viewClear` flips true at once and the
-      // ranger reads through it), release slow (ease back to solid) to kill edge flicker;
-      // under reduced-motion / on a snap both are cuts, so an idle frame behind a tree stays
-      // pixel-frozen (constant block → constant opacity → no per-frame change). A fade is an
-      // opacity change, never a camera move, so orbit/zoom/reframe stays player-initiated
-      // (frozen comfort law, §2.5). Test the sightline to his HEAD (where low-hanging foliage
-      // swallows him first, `10-walk-5`) AND his chest — fade if EITHER is behind a crown, so a
-      // bush over his face never reads as "clear" just because his boots show.
+      // D1.5 occluder fade: when a tree stands between the lens and the ranger on the free
+      // walk — OR the lens sits INSIDE a crown — fade the canopy so he is never lost in a
+      // full-frame foliage void (`09-walk-4`) or murk (`11-controls-hud`). TWO occlusion
+      // models, because a between-lens sightline test alone misses the lens-inside-crown case
+      // the GATE-D1 audit #2 convicted: the boom collapses behind the ranger (a trunk he just
+      // passed is a collision solid, boomClearFraction pulls the lens IN — World.ts:1539) and
+      // drives the lens into that crown; its centre then sits at ~t=0 on the cam→ranger segment,
+      // read as "behind the lens" and skipped, so a frontface-only ray exits unhit and the hook
+      // lied `viewClear`=true over raw leaves. (1) camInsideCrown — the camera POINT inside any
+      // crown sphere (a point-in-volume test — no frontface blind spot); (2) canopyBlocksSightline
+      // — a crown genuinely between lens and ranger (the `10-walk-5` sapling), tested to his HEAD
+      // (where low foliage swallows him first) AND his chest so a bush over his face never reads
+      // clear just because his boots show. setCanopyOpacity dims EVERY tree mesh at once, so this
+      // fades every crown on the sightline, not only the first hit. Attack fast (a cut to the fade
+      // target the frame it is blocked, so `viewClear` flips true at once and the ranger reads
+      // through it — buried ⇒ near-invisible CANOPY_FADE_BURIED so stacked overlapping crowns
+      // still clear, a lone between-lens crown ⇒ the gentler CANOPY_FADE_MIN), release slow (ease
+      // back to solid) to kill edge flicker; under reduced-motion / on a snap both are cuts, so an
+      // idle frame behind a tree stays pixel-frozen (constant block → constant opacity → no
+      // per-frame change). A fade is an opacity change, never a camera move, so orbit/zoom/reframe
+      // stays player-initiated (frozen comfort law, §2.5).
+      const insideCrown = this.camInsideCrown(
+        this.camera.position.x, this.camera.position.y, this.camera.position.z,
+      );
       const blocked =
+        insideCrown ||
         this.canopyBlocksSightline(
           this.camera.position.x, this.camera.position.y, this.camera.position.z,
           rp.x, rp.y + this.avatarTopY, rp.z,
@@ -3706,10 +3721,12 @@ export class World {
           rp.x, rp.y + this.CAM_LOOK_H, rp.z,
         );
       let co: number;
-      if (blocked) co = this.CANOPY_FADE_MIN;                       // attack: instant dim (never a hidden frame)
+      if (blocked) co = insideCrown ? this.CANOPY_FADE_BURIED : this.CANOPY_FADE_MIN; // attack: instant dim (buried ⇒ deeper, never a hidden frame)
       else if (reduced || snap) co = 1;                             // RM / cut: snap back solid
       else co = this.canopyOpacity + (1 - this.canopyOpacity) * dampFactor(dt, this.CANOPY_RELEASE_TAU); // release: gentle ease up
       this.setCanopyOpacity(co);
+      // viewClear is FALSE while a sightline occluder still sits above SEE_THROUGH opacity, so
+      // the hook matches the pixels (a blocked-but-still-solid frame reads not-clear, not a lie).
       this.viewClearState = !blocked || this.canopyOpacity <= this.CANOPY_SEE_THROUGH;
     } else {
       if (this.avatarOpacity !== 1) this.setAvatarOpacity(1); // never leave the driver faded when he re-emerges
@@ -3746,6 +3763,30 @@ export class World {
       if (t <= 0.02 || t >= 0.9) continue;
       const gx = ccx - (cx + dx * t), gy = ccy - (cy + dy * t), gz = ccz - (cz + dz * t);
       if (gx * gx + gy * gy + gz * gz <= R * R) return true;
+    }
+    return false;
+  }
+
+  /**
+   * D1.5 lens-inside-crown test (GATE-D1 audit #2's murk case): is the camera POINT inside any
+   * tree crown sphere? The between-lens sightline test misses this — a crown the lens sits
+   * INSIDE has its centre at ~t=0 on the cam→ranger segment (skipped as "behind the lens"), so
+   * a frontface-only ray exits unhit and the frame is raw-foliage murk while `viewClear` lied
+   * true (`11-controls-hud` z≈−59: `viewClear`=true + `canopyFade`=1 over full-frame murk). A
+   * point-in-sphere test has no frontface blind spot; the crown is grown by CROWN_INSIDE_MARGIN
+   * so the fade LEADS the bury (no pop as the boom collapses in). The fade then drives the canopy
+   * to CANOPY_FADE_BURIED — near-invisible — so even a stack of overlapping crowns near the lens
+   * reads through (fading to 0.16 was still murk when buried, `12-pause-hub`). Same crown model as
+   * canopyBlocksSightline (sphere at CROWN_CENTER_FRAC height, CROWN_RADIUS_FRAC radius over
+   * `TREE_BASE_H`×scale); pure numeric math over treePlacements — no allocation, deterministic so
+   * the idle-stability pose holds frame to frame.
+   */
+  private camInsideCrown(cx: number, cy: number, cz: number): boolean {
+    for (const p of this.treePlacements) {
+      const H = TREE_BASE_H[p.species] * p.s;
+      const R = H * this.CROWN_RADIUS_FRAC + this.CROWN_INSIDE_MARGIN;
+      const dx = cx - p.x, dy = cy - (p.y + H * this.CROWN_CENTER_FRAC), dz = cz - p.z;
+      if (dx * dx + dy * dy + dz * dz <= R * R) return true;
     }
     return false;
   }
