@@ -687,6 +687,35 @@ P1.6b turns the Alvah preset + shipped default blonde/blue at both judged
 ranges. Alvah still reads adult-scale dark-haired in every fresh frame. No
 frozen contract and no §2.4 Alvah correction was touched.
 
+**GATE-D1 audit #3 (2026-07-11, Fable art director, against the fresh
+04:22–05:09 capture — 11/12 specs green):** D1.5 is PROVEN and closed: the fade
+now attacks to 0.04 within one sample (its spec green INSIDE the full capture —
+minFade 0.04, occludedFrames 15), the lens-inside-crown case is a
+point-in-volume test with no frontface blind spot, `viewClear` matches the
+pixels, and the walk set is murk-free at the exact audit-#2 conviction spots
+(`09-walk-4` readable in context, `11-controls-hud` clear to the horizon,
+`12-pause-hub` fade 0.04 sampled at snap over a readable backdrop). One look
+note for GATE-D3: inside the bos the ghosted crowns read a little skeletal —
+the sanctioned trade (never lose the ranger) working as designed; judge the
+LOOK there, not the law. The mechanical core held a third time (D1.2 21/21
+clearance 0, analyticGap →2.74 m; P1.5a 28/28 reached; P1.5b 0→7.23 rad smooth
++ 49.7 m drift-free straight, jeep at three world spots; D1.3 5/5 above-terrain
+with task in frustum; RM freeze pairs pixel-identical). The gate did NOT tick:
+the `jeep` group GAPped its RAISED 720 s budget at 721 s — the +1 s signature
+(421/420 → 721/720) exposes a budget-kill, not a near-miss: the harness's
+poll-correct-hold walk loop DIVERGES under capture load (uncorrected
+multi-metre legs orbit the `near` radius forever), which also felled the heli
+spec's walk this run (`heli().near` false while the at-pad frame shows the
+ranger standing AT the helicopter — ruled harness-side; P1.5c's chain stays
+proven from audits #1+#2). D1.6 re-opened with the convergence fix (pulsed-key
+or F-17 click-walk steering, the heli spec's loop included, burst JSONs wiped
+at spec start so a failed leg can't leave stale evidence beside fresh PNGs).
+Phase 2 sharpened off fresh pixels: `CAM_LOOK_H = 1.1` and the idle look-at's
+`+1.0` are adult-height constants that must scale with the child rig
+(`avatarTopY` already self-measures at load), and the warden's distance fade
+means the P1.6a pair shot stages him close enough to read solid. No frozen
+contract and no §2.4 Alvah correction was touched.
+
 ---
 
 ## 10. Sources this direction stands on
