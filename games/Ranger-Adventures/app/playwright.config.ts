@@ -28,6 +28,14 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
+  // Per-test budget. CI runs on a 2-core GPU-less runner where SwiftShader
+  // renders the whole journey (boot → avatar → world init → shots) in just
+  // over the 30 s default — the world DOES reach 'world', the budget expires
+  // during the final asserts/screenshots (observed 2026-07-05..12, every red
+  // deploy). 120 s keeps it a real upper bound (a genuine hang still fails);
+  // every frozen assertion and per-step timeout is unchanged. Locally the
+  // default 30 s stays.
+  timeout: process.env.CI ? 120_000 : 30_000,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
