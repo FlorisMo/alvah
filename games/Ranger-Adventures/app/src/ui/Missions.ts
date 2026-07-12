@@ -297,6 +297,10 @@ function showTitle(): void {
   el.querySelector('.ra-title-begin')?.addEventListener('click', () => {
     Sound.unlock();
     void loadGameAudio();
+    // D3.17: mirror the boot Begin — tell the stage we are leaving so any title re-dress
+    // (kicked on the round-trip back to the title) bails cleanly instead of competing with
+    // the fresh world build (belt-and-suspenders with the `enterWorld` leave flag).
+    stage.markLeavingTitle();
     startExplore(); // returning player: avatar + progress persisted → straight into the world
   });
 }

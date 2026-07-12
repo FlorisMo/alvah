@@ -185,6 +185,13 @@ export interface RangerDevHook {
   /** Win the active 3D mission step via its genuine resolve path; true if one
    *  was pending. Drives the two-mission-chain E2E deterministically (W2.3). */
   winStep(): boolean;
+  /** D3.17: true once the composed TITLE has swapped its real hero props (cabin + tree line +
+   *  prikbord) in over the instant primitive stand-ins — the title reads at FULL fidelity, never
+   *  the low-poly cone/faceted backdrop. False while only the stand-in is up (fresh boot mid-dress,
+   *  or a world→title round-trip mid-re-dress). The capture HOLDS the title snap until this is true
+   *  so a composed title is never shot on its low-LOD stand-in world (fresh `d17-titlereturn-17`).
+   *  Reads the Stage directly, so it is meaningful on the title screen regardless of the world. */
+  titleReady(): boolean;
   /** The scenic story-arc actors (warden + poacher) with their measured rendered
    *  stand-height `height` (m) + live baked-clip {name, time}, or null before the
    *  hook/world is ready (W3.3 ⊕ P1.6a). The warden's `height` is the mature-human
@@ -328,6 +335,7 @@ const state = {
   board: null as null | (() => { x: number; z: number; near: boolean; inFrustum: boolean } | null),
   sitSpot: null as null | (() => { x: number; z: number; near: boolean } | null),
   winStep: null as null | (() => boolean),
+  titleReady: null as null | (() => boolean),
   actors: null as null | (() => { id: string; height: number; clip: { name: string; time: number } | null }[]),
   ambient: null as null | (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]),
   landmarks: null as null | (() => { id: string; x: number; z: number }[]),
@@ -453,6 +461,12 @@ export function provideSitSpot(
 /** Register the "win the active 3D step" driver (the mission runner). W2.3. */
 export function provideWinStep(fn: (() => boolean) | null): void {
   state.winStep = fn;
+}
+
+/** Register the D3.17 title-fidelity-ready source (the Stage's `titleReady()`). Always live —
+ *  it reads the Stage, which owns the title backdrop regardless of the world screen. */
+export function provideTitleReady(fn: (() => boolean) | null): void {
+  state.titleReady = fn;
 }
 
 /** Register the scenic-actors source (the World's warden + poacher clips + heights). W3.3. */
@@ -615,6 +629,7 @@ export function installDevHook(): boolean {
     board: () => (state.board ? state.board() : null),
     sitSpot: () => (state.sitSpot ? state.sitSpot() : null),
     winStep: () => (state.winStep ? state.winStep() : false),
+    titleReady: () => (state.titleReady ? state.titleReady() : false),
     actors: () => (state.actors ? state.actors() : null),
     ambient: () => (state.ambient ? state.ambient() : null),
     landmarks: () => (state.landmarks ? state.landmarks() : null),

@@ -39,6 +39,7 @@ type Sample = {
   pos: { x: number; z: number } | null;
   renderedOpacity: number | null; visible: boolean | null; onScreen: boolean | null;
   clip: string | null; drawCalls: number | null; screen: string | null;
+  titleReady: boolean | null; // D3.17: the composed title reads at full fidelity (real hero props up)
   file: string;
 };
 
@@ -97,6 +98,7 @@ test('D1.7 title-return drive-burst — the ranger renders after a title round-t
         screen: string; pos(): { x: number; z: number } | null;
         cam(): { avatarOpacity: number; avatarScreen: { visible: boolean; onScreen: boolean } } | null;
         clip(): { name: string } | null; drawCalls(): number | null;
+        titleReady?(): boolean;
       } }).__ranger;
       if (!r) return null;
       const c = r.cam();
@@ -107,6 +109,7 @@ test('D1.7 title-return drive-burst — the ranger renders after a title round-t
         onScreen: c ? c.avatarScreen.onScreen : null,
         clip: r.clip() ? r.clip()!.name : null,
         drawCalls: r.drawCalls(),
+        titleReady: r.titleReady ? r.titleReady() : null, // D3.17
       };
     });
     let file = '';
@@ -120,6 +123,7 @@ test('D1.7 title-return drive-burst — the ranger renders after a title round-t
       pos: s?.pos ?? null,
       renderedOpacity: s?.renderedOpacity ?? null, visible: s?.visible ?? null, onScreen: s?.onScreen ?? null,
       clip: s?.clip ?? null, drawCalls: s?.drawCalls ?? null, screen: s?.screen ?? null,
+      titleReady: s?.titleReady ?? null,
     };
     samples.push(sample);
     return sample;
@@ -150,7 +154,16 @@ test('D1.7 title-return drive-burst — the ranger renders after a title round-t
   await home.waitFor({ state: 'visible', timeout: 8_000 });
   await clickish(page, home);
   await expect.poll(() => rangerScreen(page), { timeout: 20_000 }).toBe('title');
-  await grab('title', true);
+  // D3.17: HOLD the title snap until the composed title has re-dressed its real hero props
+  // (cabin + tree line + prikbord) in over the primitive stand-ins. An early "Begin" (bootToWorld)
+  // BAILED the first dress, so the round-trip returned to the low-poly stand-in world
+  // (`d17-titlereturn-17`: cone pines, faceted oak, NO cabin); the game re-dresses on `exitWorld`,
+  // so wait for its readiness hook before shooting. Bounded — a timeout fails the spec honestly.
+  await expect.poll(() => page.evaluate(() => {
+    const r = (window as unknown as { __ranger?: { titleReady?(): boolean } }).__ranger;
+    return r?.titleReady ? r.titleReady() : false;
+  }), { timeout: 20_000 }).toBe(true);
+  const titleSample = await grab('title', true);
   await clickish(page, page.locator('.ra-title-begin'));
   await expect.poll(() => rangerScreen(page), { timeout: 40_000 }).toBe('world');
 
@@ -171,6 +184,11 @@ test('D1.7 title-return drive-burst — the ranger renders after a title round-t
   );
 
   // ── assertions ──
+  // D3.17: the composed title was shot at FULL fidelity — the real hero props (cabin + tree line +
+  // prikbord) had swapped in over the primitive cone/faceted stand-ins before the snap. This is the
+  // anti-`d17-titlereturn-17` assert; the returned title frame beside it is the pixel court of appeal.
+  expect(titleSample.titleReady, 'D3.17: the returned title reads full-fidelity (real hero props up, not the low-LOD stand-in world)').toBe(true);
+  expect(titleSample.drawCalls ?? 0, 'D3.17: the full-fidelity title still holds the draw-call budget').toBeLessThan(150);
   // Evidence the restore is genuinely exercised: world A DID fade the shared rig materials
   // (the F-05 boom fade fired), so a solid return is proof the force-solid restore works — not
   // a walk that never faded. (Skipped only in a zero-asset env where no tree can collapse the boom.)

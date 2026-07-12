@@ -6,7 +6,7 @@ import { applyReducedMotionClass, watchReducedMotion, setReducedMotionOverride }
 import { applyReadingPrefs } from './core/reading-prefs';
 import { store } from './core/state';
 import { Sound } from './core/sound';
-import { installDevHook, setScreen, provideDrawCalls, provideAvatar } from './core/devhook';
+import { installDevHook, setScreen, provideDrawCalls, provideAvatar, provideTitleReady } from './core/devhook';
 
 // W7.1 code-splitting: the mission/world/demo graph (World, the five engines,
 // the 3D mini-game views, render2d) is the bulk of the bundle but is only
@@ -58,6 +58,10 @@ provideDrawCalls(() => stage.drawCalls);
 // avatar.height ∈ [1.1, 1.35], same as the world. `startWorld` overrides this with
 // the live world ranger on "Begin"; null until the title rig finishes loading.
 provideAvatar(() => stage.titleAvatar());
+// D3.17: the title's full-fidelity readiness (real hero props swapped in over the low-poly
+// stand-ins). Always sourced from the Stage — it owns the title backdrop across a round-trip —
+// so the capture can hold the title snap until the composed screen is never the stand-in world.
+provideTitleReady(() => stage.titleReady());
 
 // --- title card → the lodge (mission picker) ---
 const card = document.createElement('div');

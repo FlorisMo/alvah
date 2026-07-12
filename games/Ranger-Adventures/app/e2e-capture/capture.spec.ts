@@ -182,6 +182,11 @@ interface Hook {
   // to reach dagnacht/wisselen (never a first step) — the same dev hook the frozen
   // chain.spec.ts drives. Dev-only (`?dev=1`/DEV), so present in the capture build.
   winStep(): boolean;
+  // D3.17: the composed TITLE has swapped its real hero props (cabin + tree line + prikbord)
+  // in over the primitive stand-ins — full fidelity, never the low-poly cone/faceted backdrop.
+  // The title-return scene HOLDS its snap until this is true so the frame is never the stand-in
+  // world (fresh `d17-titlereturn-17`). Dev-only, present in the capture build.
+  titleReady(): boolean;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -507,7 +512,11 @@ test('audit capture flow', async ({ context }, testInfo) => {
     await scene(page, 'title-return', async () => {
       await press(page, isPad, page.locator('.ph-hoofdmenu'));
       await waitFor(page, (r) => r.screen === 'title', 15_000);
-      await snap(page, 'title-return', 'Pauze/menu', 'Hoofdmenu vanuit de pauze — screen=title, geen wachtwoord opnieuw (F-27).',
+      // D3.17: HOLD the snap until the composed title has re-dressed its real hero props
+      // (cabin + tree line + prikbord) in over the primitive stand-ins — the round-trip must
+      // never be shot on the low-poly stand-in world (`d17-titlereturn-17`: cone pines, no cabin).
+      await waitFor(page, (r) => r.titleReady(), 20_000);
+      await snap(page, 'title-return', 'Pauze/menu', 'Hoofdmenu vanuit de pauze — screen=title, geen wachtwoord opnieuw (F-27); title op volle fidelity (D3.17).',
         ['.ra-title-begin']);
       await press(page, isPad, page.locator('.ra-title-begin'));
       await waitFor(page, (r) => r.screen === 'world', 40_000);

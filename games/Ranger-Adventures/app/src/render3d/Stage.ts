@@ -60,6 +60,16 @@ export class Stage {
   // or enters the world, so the async title dress stops decoding GLBs on the boot-
   // critical Begin→world path — the eager concurrent decode starved journey/movement.
   private leavingTitle = false;
+  // D3.17: the real-GLB title props (tree line, prikbord, cabin, grounded ranger) live in
+  // ONE tracked group so a RE-DRESS can manage them. `titleDressGen` cancels a stale async
+  // dress the moment a newer one starts (or the player leaves); `titleDressed` flips true
+  // only once the real hero props have swapped in over the primitive stand-ins — the composed
+  // title reads at FULL fidelity. The bug this repairs: an early "Begin" BAILS the first dress
+  // (the smoke-safety), so a world→title round-trip returned to the bare primitive backdrop —
+  // cone pines, a faceted oak, NO cabin (fresh `d17-titlereturn-17`) — and never re-dressed.
+  private titleReal: THREE.Group | null = null;
+  private titleDressGen = 0;
+  private titleDressed = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -269,9 +279,12 @@ export class Stage {
    */
   private async dressTitleReal(): Promise<void> {
     if (this.world || this.leavingTitle) return; // already leaving/left the title — dressing is moot
+    if (this.titleDressed) return;               // D3.17: the real hero props are already up — idempotent
+    const gen = ++this.titleDressGen;            // D3.17: this run's token; a newer (re)dress supersedes it
     const Models = await import('./Models');
     await Models.loadManifest();
-    if (this.world || this.leavingTitle) return; // navigated away while the chunk loaded
+    // navigated away / superseded while the chunk loaded
+    if (this.world || this.leavingTitle || gen !== this.titleDressGen) return;
     const { loadModel, loadRig, prepModel, skinnedRenderBox } = Models;
 
     // P1.4 smoke fix: load the real props ONE AT A TIME and BAIL the moment the
@@ -284,15 +297,20 @@ export class Stage {
     // scene in incrementally. The ranger rig loads LAST, so a loaded `titleAvatar()`
     // (P1.6a: the child reads >0.9) still doubles as "the title is fully dressed" for
     // the capture snap gate.
+    // D3.17: the real props go in ONE tracked group (`titleReal`) so a re-dress after a
+    // round-trip can bail-clean exactly its own run; a fresh run also drops any idle mixer a
+    // prior bailed run left pointing at a removed rig, so the title never accrues mixers.
     const real = new THREE.Group();
+    this.titleReal = real;
+    this.titleMixer = null;
     this.scene.add(real);
-    // Bail cleanly if the player leaves the title mid-load: drop the partial group
-    // (NEVER dispose it — the clones SHARE the world's id-cached geometry/materials,
-    // so disposing here would corrupt the props the world reuses) and keep the
-    // primitive stand-ins so the title is never bare. `bail()` always returns true,
-    // so `left() && bail()` only removes + signals a return when we have left.
-    const left = (): boolean => this.world !== null || this.leavingTitle;
-    const bail = (): true => { this.scene.remove(real); return true; };
+    // Bail cleanly if the player leaves the title mid-load — OR a newer dress supersedes this
+    // one (gen mismatch): drop the partial group (NEVER dispose it — the clones SHARE the
+    // world's id-cached geometry/materials, so disposing here would corrupt the props the world
+    // reuses) and keep the primitive stand-ins so the title is never bare. `bail()` always
+    // returns true, so `left() && bail()` only removes + signals a return when we have left.
+    const left = (): boolean => this.world !== null || this.leavingTitle || gen !== this.titleDressGen;
+    const bail = (): true => { this.scene.remove(real); if (this.titleReal === real) this.titleReal = null; return true; };
 
     // The bosrand: mixed real trees framing the clearing + path, the left
     // foreground kept open for the ranger and the centre open for the sand track.
@@ -372,12 +390,13 @@ export class Stage {
     // bare (the Models.ts best-effort contract). Only the primitive STAND-INS are
     // disposed (we own them); the real props are never disposed here (see `bail`).
     if (left() && bail()) return;
-    if (real.children.length === 0) return;
+    if (real.children.length === 0) { if (this.titleReal === real) this.titleReal = null; return; }
     if (this.fallbackTrees) {
       this.scene.remove(this.fallbackTrees);
       Stage.disposeTree(this.fallbackTrees);
       this.fallbackTrees = null;
     }
+    this.titleDressed = true; // D3.17: the composed title now reads at full fidelity (real hero props up)
   }
 
   /** Ground a real prop with a soft blob shadow (a child disc, so it rides the
@@ -410,6 +429,15 @@ export class Stage {
    *  assert — null until he loads (the world hook's null-before-ready contract). */
   titleAvatar(): { height: number } | null {
     return this.titleRangerH > 0 ? { height: this.titleRangerH } : null;
+  }
+
+  /** D3.17: true once the real hero props (cabin + tree line + prikbord) have swapped in over
+   *  the primitive stand-ins — the composed title reads at FULL fidelity. False while only the
+   *  instant low-poly stand-in is up (a fresh boot mid-dress, or a round-trip mid-re-dress). The
+   *  capture holds the title snap until this is true so a composed title is never shot on its
+   *  low-LOD stand-in world (fresh `d17-titlereturn-17`: cone pines, faceted oak, no cabin). */
+  titleReady(): boolean {
+    return this.titleDressed;
   }
 
   /** F-04: a soft radial blob (dark centre → transparent rim), baked once and
@@ -463,7 +491,15 @@ export class Stage {
   /** Return to the title backdrop. */
   exitWorld(): void {
     this.world = null;
+    // D3.17: back on the title — clear the leave flag (enterWorld / markLeavingTitle set it to
+    // BAIL the async dress) so a re-dress can run, and re-dress the real hero props if the title
+    // is still on its primitive stand-ins. An early "Begin" bails the first dress, so a round-trip
+    // returned to cone pines + no cabin (`d17-titlereturn-17`); the world session left every title
+    // GLB warm in the Models cache, so this re-dress is a fast swap, not a re-download. Skipped when
+    // the title never left its primitives (already dressed → the real props are still resident).
+    this.leavingTitle = false;
     this.resize();
+    if (!this.titleDressed) void this.dressTitleReal().catch(() => { /* zero-asset safe: primitives stay */ });
   }
 
   start(): void {
