@@ -23,6 +23,9 @@ export interface Obstacle {
   z: number;
   /** soft-collision radius — the ranger is kept this far from the centre */
   r: number;
+  /** D3.16: a tree trunk — its foliage fades as a crown, so the all-occluder
+   *  camera sightline test skips it (it reports through the fade, not opaque). */
+  tree?: boolean;
 }
 
 export interface MoveLimits {

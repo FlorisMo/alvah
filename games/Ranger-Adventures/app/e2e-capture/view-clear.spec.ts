@@ -130,8 +130,40 @@ test('D1.5 view-clear drive-burst — the ranger is never lost in a foliage void
   const spots = await page.evaluate(() => (window as unknown as {
     __ranger?: { treeSpots(): { x: number; z: number; s: number }[] | null };
   }).__ranger?.treeSpots() ?? null);
+  // D3.16: `viewClear` now reports EVERY rendered occluder class on the cam→ranger
+  // sightline (props, the parked jeep/heli, the scenic actors + ambient animals, marker
+  // models) — not only crowns + terrain. So this FOLIAGE spec must reach its scatter pine
+  // WITHOUT an unrelated point-occluder standing between the trailing lens and the ranger,
+  // or an incidental warden/marker would flip viewClear false (nothing to do with foliage).
+  // Read the live point-occluders and keep only targets whose straight spawn→(2.5 m past)
+  // path clears every one by ≥ CLR — so the burst tests the crown fade in isolation.
+  const occluders = await page.evaluate(() => {
+    const r = (window as unknown as { __ranger?: {
+      markers?: () => { x: number; z: number }[] | null;
+      ambient?: () => { x: number; z: number; h: number }[] | null;
+    } }).__ranger;
+    const pts: { x: number; z: number }[] = [
+      { x: 6.4, z: 4.4 }, { x: -11.5, z: 8.5 }, // W3.3 scenic actors (warden by the board, distant figure)
+    ];
+    for (const m of r?.markers?.() ?? []) pts.push({ x: m.x, z: m.z });     // mission-marker models
+    for (const a of r?.ambient?.() ?? []) if (a.h < 6) pts.push({ x: a.x, z: a.z }); // ground roamers (birds glide high)
+    return pts;
+  });
+  const CLR = 3.5; // an occluder must sit at least this far off the swept sightline
+  const pathClear = (tx: number, tz: number): boolean => {
+    const tr = Math.hypot(tx, tz) || 1;
+    const ex = tx * (tr + 2.5) / tr, ez = tz * (tr + 2.5) / tr; // stop point (2.5 m past the pine)
+    const len2 = ex * ex + ez * ez;
+    for (const o of occluders) {
+      let t = len2 > 1e-6 ? (o.x * ex + o.z * ez) / len2 : 0; // project onto origin→stop
+      t = Math.max(-0.3, Math.min(1, t));                     // a little back (the trailing boom) → the stop
+      const gx = o.x - ex * t, gz = o.z - ez * t;
+      if (gx * gx + gz * gz < CLR * CLR) return false;
+    }
+    return true;
+  };
   const target = (spots ?? [])
-    .filter((t) => { const r = Math.hypot(t.x, t.z); return r > 22 && r < 42 && Math.abs(t.x) > 1.6 * Math.abs(t.z); })
+    .filter((t) => { const r = Math.hypot(t.x, t.z); return r > 22 && r < 42 && Math.abs(t.x) > 1.6 * Math.abs(t.z) && pathClear(t.x, t.z); })
     .sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0] ?? null;
   const targetR = target ? Math.hypot(target.x, target.z) : 0;
   // aim = 2.5 m beyond the tree along the outward (origin→tree) ray. Stopping there leaves the tree

@@ -281,6 +281,13 @@ export class World {
   private viewClearState = true;        // D1.5 last cam→avatar sightline-clear read (camState reports it)
   private terrainClearState = true;     // D1.5 (audit #4) last cam→avatar TERRAIN-clear read (folded into viewClear)
   private terrainLiftState = 0;         // D1.5 (audit #4) metres the follow boom rode up to clear a dune this frame (0 = flat)
+  // D3.16: the diegetic "go here" halo rings (mission markers, the case-board, the
+  // sit-spot). They are wayfinding UI (§3), so they FADE by the lens's proximity — a
+  // collapsed close follow boom must never render one as a frame-filling hoop
+  // (`18-jeep-near`). Full 0.5 beyond RING_FADE_FAR, linearly to 0 by RING_FADE_NEAR.
+  private readonly groundRings: { mat: THREE.MeshBasicMaterial; x: number; z: number; base: number }[] = [];
+  private readonly RING_FADE_NEAR = 2.2; // lens ≤ this from a ring ⇒ fully faded (it's under/around the ranger)
+  private readonly RING_FADE_FAR = 4.2;  // lens ≥ this ⇒ full "go here" opacity (normal approach/standing boom ~4.6 m)
   private readonly _camPose = new THREE.Vector3();  // scratch: camera world forward
   private readonly _camBox = new THREE.Box3();       // scratch: ranger bbox for pose reads
   private readonly _labelFwd = new THREE.Vector3();  // scratch: camera forward for the label fade
@@ -1564,8 +1571,11 @@ export class World {
       rotY: (i * 2.39996) % (Math.PI * 2),          // golden-angle spin, no two alike
       species: TREE_SCATTER_MIX[i % TREE_SCATTER_MIX.length],
     }));
-    // a soft collision circle around each trunk (the ranger slides around it)
-    for (const p of placed) this.obstacles.push({ x: p.x, z: p.z, r: 0.6 * p.s });
+    // a soft collision circle around each trunk (the ranger slides around it).
+    // D3.16: tag it a TREE so the all-occluder sightline test (propBlocksSightline)
+    // skips it — a trunk's foliage is the fadeable crown (canopyBlocksSightline), so
+    // trees report THROUGH the fade, never as an opaque viewClear=false blocker.
+    for (const p of placed) this.obstacles.push({ x: p.x, z: p.z, r: 0.6 * p.s, tree: true });
     this.treePlacements.push(...placed);
     this.addTreeFallback(placed);
   }
@@ -1908,7 +1918,20 @@ export class World {
     // "ranger is readable" truth the projection tests above can't — `09-walk-4` kept
     // onScreen/avatarInView true while a crown swallowed him, §8.7). Only the free-walk
     // follow cam can sit inside a crown; a vehicle/heli/mission-owned cam reads clear.
-    const viewClear = (this.inVehicle || this.inHeli || this.activityActive) ? true : this.viewClearState;
+    // D3.16: fold in EVERY other rendered occluder class on the cam→ranger sightline — solid
+    // props + the parked vehicles (propBlocksSightline) and staged animals / marker models
+    // (animalBlocksSightline). These are UNFADEABLE, so a hit reports `viewClear` FALSE
+    // (honest) rather than ghosting them — the §2.5 (GATE-D2) law: "the clear-line test binds
+    // to anything the renderer draws; unfadeable ones report honestly" (`18-jeep-near` lied
+    // clear while a nachtzwaluw marker model swallowed the ranger). Tested HERE, per-SHOT, not
+    // in the per-frame placeCamera: they only drive the hook (no fade), so the walk path pays
+    // nothing. `rp`/head come from the live ranger; the same segment the crown/terrain legs use.
+    const rp = this.ranger.position;
+    const viewClear = (this.inVehicle || this.inHeli || this.activityActive)
+      ? true
+      : this.viewClearState
+        && !this.propBlocksSightline(cam.position.x, cam.position.z, rp.x, rp.z)
+        && !this.animalBlocksSightline(cam.position.x, cam.position.y, cam.position.z, rp.x, rp.y, rp.z);
     // D1.7: the RENDERED body opacity read off the shared materials — NOT the
     // `avatarOpacity` intent field, which lied 1 over an invisible ranger on the
     // title-return path. `visible` folds it in, so the hook matches the pixels: a
@@ -2199,6 +2222,7 @@ export class World {
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = 0.05;
       group.add(ring);
+      this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x, z, base: 0.5 }); // D3.16: fade near the lens
 
       // a small diegetic name-tag floating above the marker (in-world label, no
       // minimap chrome) — a camera-facing sprite so it stays readable from any angle
@@ -2395,6 +2419,7 @@ export class World {
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.05;
     board.add(ring);
+    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: boardAt.x, z: boardAt.z, base: 0.5 }); // D3.16
     const label = this.makeLabel('Missiebord', '#f5c23b');
     label.position.y = 2.0;
     board.add(label);
@@ -2437,6 +2462,7 @@ export class World {
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.05;
     group.add(ring);
+    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: at.x, z: at.z, base: 0.5 }); // D3.16
     const label = this.makeLabel(ROEP_COPY.wayfinding, '#cfe6f2');
     label.position.y = 1.7;
     group.add(label);
@@ -3704,6 +3730,7 @@ export class World {
     const s = Math.sin(bearing), c = Math.cos(bearing);
     const off = this.inHeli ? this.camOffsetHeli : this.inVehicle ? this.camOffsetVehicle : this.camOffset;
     let dist = off.z;
+    let boomK = 1; // D3.16: the fraction the F-05 anti-clip shrank the WALK boom (1 = untouched)
     // F-05 anti-clip (walk only): spherecast the boom against the collision solids
     // (the same circles the ranger can't walk through) so a prop or hut BEHIND the
     // ranger pulls the lens IN instead of rendering that prop's unlit interior. The
@@ -3713,7 +3740,8 @@ export class World {
       dist = this.zoomDist; // F-16: the player-set dolly distance replaces the fixed 4.6 boom
       const frac = this.boomClearFraction(rp.x, rp.z, -s * dist, -c * dist);
       const minFrac = Math.min(1, (this.avatarRadius + this.camera.near + 0.2) / dist);
-      dist *= Math.max(minFrac, frac);
+      boomK = Math.max(minFrac, frac);
+      dist *= boomK;
     } else if (this.inVehicle) {
       // F-30: give the jeep boom F-05's clearance too — a tree / hut / prop BEHIND the
       // jeep pulls the lens IN instead of burying it in that solid's unlit interior,
@@ -3727,7 +3755,18 @@ export class World {
     // F-17 pitch: the player's eye-lift tilts the WALK view. The horizontal boom is
     // unchanged, so the F-05 spherecast/min-clamp + fade rail stay exactly valid — only
     // the eye rises/drops, and the fixed lookAt at chest turns that into a down/up tilt.
-    const eyeY = rp.y + off.y + (walk ? this.orbitLift : 0);
+    // D3.16: keep the WALK follow pitch in its normal band when F-05 pulls the boom IN.
+    // The eye used to stay HIGH (off.y) while the horizontal boom collapsed, tipping the
+    // lens toward straight-down (the `18-jeep-near` −1.17 breach, boom ~0.7 m under a
+    // 2.4 m eye). Scale the eye's height ABOVE the look-point by the SAME fraction the
+    // boom shrank, so a pull-in becomes a pure radial dolly-IN at the settled follow
+    // pitch (~−0.33), never a steepening tilt. k=1 (nothing pulled it in) leaves the
+    // default framing AND the player's deliberate zoom/orbit-lift untouched; the value is
+    // deterministic (function of rp/off/boomK), so the RM cut stays pixel-frozen and the
+    // position lerp below still eases it — a geometry change, never a camera-move shake.
+    const lookH = walk ? this.camLookH : this.camIdleLookH;
+    const eyeAboveLook = off.y + (walk ? this.orbitLift : 0) - lookH;
+    const eyeY = rp.y + lookH + eyeAboveLook * (walk ? boomK : 1);
     this.camDesired.set(rp.x - s * dist, eyeY, rp.z - c * dist);
     // F-11: never let the walk lens swing OUT through the world-rim tree-line. When the
     // ranger stops at the edge and turns, the rim-ease cancels his outward step so his
@@ -3833,7 +3872,9 @@ export class World {
       // canopy crown that hasn't faded through) OR a terrain crest still blocks the cam→head line
       // (the boom-lift capped out, `terrainClearState` above) — both tested against the SAME
       // rendered geometry the pixels show, so the hook can never claim clear over a murk frame
-      // (audit #4: terrain used to be untested, so a dune-face frame lied clear).
+      // (audit #4: terrain used to be untested, so a dune-face frame lied clear). D3.16's solid
+      // prop / vehicle / animal occluders are folded in per-SHOT (camState) — they only drive the
+      // hook, not the fade, so they cost nothing on the per-frame walk path.
       this.viewClearState = (!blocked || this.canopyOpacity <= this.CANOPY_SEE_THROUGH) && this.terrainClearState;
     } else {
       if (this.avatarOpacity !== 1) this.setAvatarOpacity(1); // never leave the driver faded when he re-emerges
@@ -3842,6 +3883,11 @@ export class World {
       this.terrainLiftState = 0;   // no boom on a vehicle/heli/mission cam → nothing ridden
       this.terrainClearState = true;
     }
+    // D3.16: fade the ground "go here" rings by the lens's proximity so a marker ring
+    // never reads as a frame-filling hoop at a collapsed close boom (`18-jeep-near`).
+    // Runs in BOTH branches (a ring faded on foot restores once a vehicle cam pulls the
+    // lens far away). Rings are wayfinding UI (§3), so shrinking them near is on-spec.
+    this.fadeGroundRings();
   }
 
   /**
@@ -3896,6 +3942,77 @@ export class World {
       const R = H * this.CROWN_RADIUS_FRAC + this.CROWN_INSIDE_MARGIN;
       const dx = cx - p.x, dy = cy - (p.y + H * this.CROWN_CENTER_FRAC), dz = cz - p.z;
       if (dx * dx + dy * dy + dz * dz <= R * R) return true;
+    }
+    return false;
+  }
+
+  /**
+   * D3.16 all-occluder sightline (props + vehicles): does any SOLID collision circle
+   * (cabin, board, sign, watchtower, the parked jeep/helicopter — everything in
+   * `obstacles` EXCEPT the fadeable tree trunks) stand BETWEEN the lens and the ranger
+   * on the XZ plane? These are UNFADEABLE occluders, so — per §2.5 (GATE-D2: "the
+   * clear-line test binds to anything the renderer draws; unfadeable ones report
+   * honestly") — a hit makes `viewClear` FALSE rather than trying to fade the mesh. The
+   * `18-jeep-near` breach: the sightline test covered crowns + terrain but not props /
+   * vehicles / animals, so the hook lied clear while a mesh swallowed the ranger. Same
+   * 2D closest-approach-between math as `boomClearFraction`/`canopyBlocksSightline`;
+   * circles that CONTAIN the ranger's foot (the prop he stands at) are skipped so a POI
+   * never self-reports occluded. Trees are skipped (their crown fade already handles
+   * them, and the frozen view-clear spec walks past trunks expecting viewClear=true).
+   * Deterministic (no allocation) so the idle-stability pose holds frame to frame.
+   */
+  private propBlocksSightline(cx: number, cz: number, ax: number, az: number): boolean {
+    const dx = ax - cx, dz = az - cz;
+    const len2 = dx * dx + dz * dz;
+    if (len2 < 1e-6) return false; // lens on top of him
+    for (const o of this.obstacles) {
+      if (o.tree) continue;                        // fadeable crown — handled by the canopy fade
+      const fx = o.x - ax, fz = o.z - az;
+      if (fx * fx + fz * fz <= o.r * o.r) continue; // the prop the ranger stands at — not an occluder
+      const t = ((o.x - cx) * dx + (o.z - cz) * dz) / len2; // foot param on the segment
+      if (t <= 0.05 || t >= 0.95) continue;        // behind the lens or at/behind the ranger → a backdrop
+      const gx = o.x - (cx + dx * t), gz = o.z - (cz + dz * t);
+      if (gx * gx + gz * gz <= o.r * o.r) return true;
+    }
+    return false;
+  }
+
+  /**
+   * D3.16 all-occluder sightline (animals): does any staged CREATURE — a mission-marker
+   * model, a scenic actor (warden/poacher), or an ambient roamer/bird — stand BETWEEN
+   * the lens and the ranger's body? The `18-jeep-near` breach was exactly this: a
+   * mission-marker BIRD model (the stuifzand nachtzwaluw, anchored by the jeep) filled
+   * the near foreground while `viewClear` claimed clear. Each creature is modelled as a
+   * sphere at its group's world position, lifted to mid-height, with a radius from its
+   * stand-height (a floor so even a low bird reads); the cam→body segment is tested to
+   * the ranger's HEAD and CHEST (a low creature swallows his feet first, a tall one his
+   * head) by closest approach. Animals are UNFADEABLE set-dressing, so a hit reports
+   * `viewClear` FALSE (honest) — we do not ghost a live animal. Birds gliding tens of
+   * metres overhead never touch a follow-height sightline, so the loop is a cheap no-op
+   * for them. Pure numeric math over the staged casts — deterministic, no allocation.
+   */
+  private animalBlocksSightline(cx: number, cy: number, cz: number, rx: number, ry: number, rz: number): boolean {
+    const near = (px: number, py: number, pz: number, R: number, ay: number): boolean => {
+      const dx = rx - cx, dy = ay - cy, dz = rz - cz;
+      const len2 = dx * dx + dy * dy + dz * dz;
+      if (len2 < 1e-6) return false;
+      const t = ((px - cx) * dx + (py - cy) * dy + (pz - cz) * dz) / len2;
+      if (t <= 0.05 || t >= 0.95) return false;    // behind the lens / at-or-behind the ranger
+      const gx = px - (cx + dx * t), gy = py - (cy + dy * t), gz = pz - (cz + dz * t);
+      return gx * gx + gy * gy + gz * gz <= R * R;
+    };
+    const aimHead = ry + this.avatarTopY;          // his crown — a tall creature reaches it
+    const aimChest = ry + this.avatarTopY * 0.35;  // low on his body — a ground bird swallows here first
+    const test = (g: THREE.Vector3, h: number): boolean => {
+      const R = Math.max(0.45, h * 0.5);           // footprint sphere (floor so a small model still reads)
+      const cyc = g.y + h * 0.5;                   // centre at mid-height above the creature's own ground
+      return near(g.x, cyc, g.z, R, aimHead) || near(g.x, cyc, g.z, R, aimChest);
+    };
+    for (const m of this.markers) { if (test(m.group.position, 1.0)) return true; }
+    for (const a of this.scenicActors) { if (test(a.group.position, a.height)) return true; }
+    for (const a of this.ambient) {
+      if (a.glide) continue;                        // birds gliding overhead never cross a follow sightline
+      if (test(a.group.position, a.h)) return true;
     }
     return false;
   }
@@ -4040,6 +4157,29 @@ export class World {
         if (opaque) { mat.opacity = orig.o; mat.transparent = orig.t; mat.depthWrite = orig.d; }
         else { mat.opacity = orig.o * o; mat.transparent = true; mat.depthWrite = false; }
       }
+    }
+  }
+
+  /**
+   * D3.16: fade the diegetic "go here" halo rings (mission markers, case-board, sit-spot)
+   * by the LENS's horizontal proximity — full 0.5 beyond RING_FADE_FAR, linearly to 0 at
+   * RING_FADE_NEAR. The `18-jeep-near` breach filled the frame with a marker ring when a
+   * collapsed close boom looked near-straight-down at it; a ring is wayfinding UI (§3 /
+   * §2.5 GATE-D2), so it caps/hides at close range instead of reading as a giant hoop. The
+   * normal approach + standing boom (~4.6 m behind the ranger who stands ON the ring) sits
+   * beyond FAR, so the "go here" cue is untouched while walking up; only a lens driven
+   * right on top of a ring fades it. A pure per-material opacity write, guarded on change —
+   * no geometry/draw-call change (<150 holds), deterministic so RM frames stay frozen.
+   */
+  private fadeGroundRings(): void {
+    if (this.groundRings.length === 0) return;
+    const cx = this.camera.position.x, cz = this.camera.position.z;
+    const span = this.RING_FADE_FAR - this.RING_FADE_NEAR;
+    for (const r of this.groundRings) {
+      const d = Math.hypot(cx - r.x, cz - r.z);
+      const k = Math.max(0, Math.min(1, (d - this.RING_FADE_NEAR) / span));
+      const o = r.base * k;
+      if (r.mat.opacity !== o) r.mat.opacity = o;
     }
   }
 }
