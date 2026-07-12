@@ -39,10 +39,13 @@ export const OUTFIT_OPTIES: AvatarOptie[] = [
   { id: 'oranje', label: 'Herfst',     kleur: '#a8553a' },
 ];
 
+// Blauw is first → the shipped default (P1.6b): the real Alvah is blue-eyed
+// (public/img/Alvah.jpg), mirroring how 'blond' already leads HAAR_OPTIES. Every
+// option still works; `blankAvatar` just picks blue-eyed + blonde by default.
 export const IRIS_OPTIES: AvatarOptie[] = [
+  { id: 'blauw', label: 'Blauw', kleur: '#3a6a9a' },
   { id: 'bruin', label: 'Bruin', kleur: '#6b4a2b' },
   { id: 'groen', label: 'Groen', kleur: '#4a7a4a' },
-  { id: 'blauw', label: 'Blauw', kleur: '#3a6a9a' },
   { id: 'grijs', label: 'Grijs', kleur: '#7a8a8a' },
 ];
 
