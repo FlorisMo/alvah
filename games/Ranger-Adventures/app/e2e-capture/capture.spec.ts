@@ -995,8 +995,10 @@ test('audit capture flow', async ({ context }, testInfo) => {
       await bootWorld(page, isPad);
       await scene(page, `game3d-${g.ef}`, async () => {
         // Walk to the case-board → open it → pick THIS engine's mission by data-id →
-        // "Ga op pad" (the real player path; runGroup seeded a clean save).
-        await walkToBoard(page, isPad, stick);
+        // "Ga op pad" (the real player path; runGroup seeded a clean save). D3.15: confirm the
+        // open-board affordance is up before startMissionFromBoard's waitFor, re-converging on a
+        // marginal stop (game3d-corsi's `.explore-board-open` timeout, 04:46) instead of GAPping.
+        await walkToBoardAffordance(page, isPad, stick);
         await startMissionFromBoard(page, isPad, g.mission);
         await waitFor(page, (r) => r.missionView === '3d', 25_000);
         // Land on THIS engine's 3D surface: a first-step engine is already staged; a
@@ -1513,6 +1515,30 @@ async function walkToBoard(page: Page, isPad: boolean, stick: TouchStick | null)
   }));
 }
 
+/** D3.15: walk to the case-board AND confirm the "Bekijk het missiebord" affordance is on
+ *  screen before returning. The button renders exactly while `board.near` is true
+ *  (World.onBoardNear → Missions.onBoardApproach), and walkToBoard converges on that flag —
+ *  but under the heavier per-game3d-group load a marginal stop (settled a hair outside the
+ *  2.4 m ring, the rAF-lagged near relaxing to false the moment the walk returns) leaves the
+ *  button hidden, and the mission-entry path's immediate 15 s waitFor then timed out
+ *  (game3d-corsi GAP, 04:46 capture — "waiting for .explore-board-open"). Re-converge until the
+ *  button is actually visible: each walkToBoard is idempotent (returns at once when genuinely
+ *  near) and re-reads a FRESH settled `near` on the retry, so a stale-near stop self-corrects.
+ *  Bounded — a genuinely wedged approach (terrain-catch) still GAPs honestly via the final
+ *  waitFor (P0.3) instead of stalling. This is the convergence board-affordance proves
+ *  (walkToBoard → settle → the button up), applied to the mission-entry path. */
+async function walkToBoardAffordance(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
+  const open = page.locator('.explore-board-open');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { await walkToBoard(page, isPad, stick); }
+    catch { /* transient wedge (terrain-catch / step-budget) — settle + retry, bounded below */ }
+    await settle(page, 300); // let the proximity rAF fire onBoardNear → mount the button
+    if (await open.isVisible().catch(() => false)) return;
+  }
+  // Still hidden after re-converging → an honest bounded wait that GAPs the scene with a clear error.
+  await open.waitFor({ state: 'visible', timeout: 15_000 });
+}
+
 // D1.5 (audit #4): the FIXED world spot for the controls-hud / pause-hub frames. The audit's
 // verify-by requires the pinned frame be "ranger + ground context readable, ZERO murk". The old
 // duration-walk drifted to z≈−59…−60.4 — deep in the dense bos, where the lens buries in stacked
@@ -1526,15 +1552,21 @@ const CONTROLS_HUD_SPOT = { x: 0, z: -18 } as const;
 /** D1.5 (audit #4): walk to a FIXED world coordinate — `near` is a plain radius test on the LIVE
  *  pos (read while the pulsed walkTo has the keys released, so it can never accept a stale/lagged
  *  flag the way board.near did), so the walk converges on the exact spot every run instead of
- *  drifting by seconds-of-hold. Reproducible evidence for the pinned controls-hud / pause-hub. */
+ *  drifting by seconds-of-hold. Reproducible evidence for the pinned controls-hud / pause-hub.
+ *  D3.15: the radius test lives HERE in Node — the `hook` reader is stringified + re-run INSIDE
+ *  the page (see `hook`), so its closure may reference ONLY `r`; the old version read `tx` inside
+ *  that closure and threw `ReferenceError: tx is not defined`, GAPping the controls-hud frame
+ *  (04:46 capture). Read the raw pos+yaw in-page, then compute `near` from tx/tz/nearR in Node. */
 async function walkToSpot(
   page: Page, isPad: boolean, stick: TouchStick | null, tx: number, tz: number, nearR = 1.6,
 ): Promise<void> {
-  await walkTo(page, isPad, stick, () => hook(page, (r) => {
-    const p = r.pos(); const y = r.cameraYaw();
-    if (!p || y == null) return null;
-    return { tx, tz, near: Math.hypot(p.x - tx, p.z - tz) < nearR, px: p.x, pz: p.z, yaw: y };
-  }));
+  await walkTo(page, isPad, stick, async () => {
+    const s = await hook(page, (r) => {
+      const p = r.pos(); const y = r.cameraYaw();
+      return p && y != null ? { px: p.x, pz: p.z, yaw: y } : null;
+    });
+    return s ? { tx, tz, near: Math.hypot(s.px - tx, s.pz - tz) < nearR, px: s.px, pz: s.pz, yaw: s.yaw } : null;
+  });
 }
 
 /** D1.0(b): open the case-board and start the mission with the given id — the REAL
