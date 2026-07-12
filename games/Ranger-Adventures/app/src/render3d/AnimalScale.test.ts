@@ -16,7 +16,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  RANGER_STAND_HEIGHT, STAND_HEIGHT, standHeightFor, ratioToRanger,
+  RANGER_STAND_HEIGHT, ADULT_REFERENCE_HEIGHT, STAND_HEIGHT, standHeightFor, ratioToRanger,
 } from './AnimalScale.ts';
 
 // The 11 staged `animal`-category manifest ids (public/models/manifest.json).
@@ -34,14 +34,25 @@ test('every staged animal id has a canonical stand height', () => {
   }
 });
 
-test('the ranger reference is taller than every animal', () => {
-  assert.equal(standHeightFor('ranger-alvah'), RANGER_STAND_HEIGHT);
+test('the adult reference is taller than every animal', () => {
   for (const id of ANIMALS) {
     assert.ok(
-      (standHeightFor(id) as number) < RANGER_STAND_HEIGHT,
+      (standHeightFor(id) as number) < ADULT_REFERENCE_HEIGHT,
       `${id} must be shorter than the adult reference`,
     );
   }
+});
+
+test('the player Alvah is a child — shorter than the adult reference (P1.6a)', () => {
+  // Alvah is 8 (≈1.2 m); the ranger stand-height decouples from the adult anchor
+  // so animals do NOT rescale (direction doc §2.4). He is now SHORTER than the
+  // larger animals (edelhert/ree), which is biologically true for a child.
+  assert.equal(standHeightFor('ranger-alvah'), RANGER_STAND_HEIGHT);
+  assert.ok(RANGER_STAND_HEIGHT >= 1.1 && RANGER_STAND_HEIGHT <= 1.35, 'child band');
+  assert.ok(
+    RANGER_STAND_HEIGHT < 0.75 * ADULT_REFERENCE_HEIGHT,
+    'a clear head-and-shoulders shorter than a grown-up',
+  );
 });
 
 test('strict biological size ordering holds', () => {

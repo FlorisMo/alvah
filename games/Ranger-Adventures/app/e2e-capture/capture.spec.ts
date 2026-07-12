@@ -48,9 +48,10 @@ type Annotation = {
   name: string; platform: string; group: string; note: string; ok: boolean;
   screen: string | null; pos: { x: number; z: number } | null; cameraYaw: number | null;
   drawCalls: number | null; missionView: string | null; clip: { name: string; time: number } | null;
-  // F-07: the ranger's LIVE measured world bounding-box height (m). The scale
-  // assert reads avatar.height ∈ [1.5, 2.0] off any world/walk shot. null before
-  // the hook/world is ready (title/avatar screens, GAPs).
+  // F-07 ⊕ P1.6a: the ranger's LIVE measured world bounding-box height (m). Alvah
+  // is a CHILD now, so the scale assert reads avatar.height ∈ [1.1, 1.35] at idle
+  // (the child-scale.spec.ts pair-shot burst carries it); null before the hook/world
+  // is ready (title/avatar screens, GAPs).
   avatar: { height: number } | null;
   // F-08: the ranger's LIVE post-collision ground speed (m/s). The assert reads it
   // ∈ [1.4, 2.2] on the walk-burst shots (while clip = walk) to prove the retuned
@@ -148,7 +149,7 @@ type Annotation = {
   // the board FACE/papers point sits in the live view frustum (`inFrustum`). The
   // board-affordance assert reads `inFrustum` TRUE while `near` to prove the approach
   // framing swings the lens off the ranger's spine so the board is actually in shot at
-  // believable scale (with avatar.height ∈ [1.5,2.0]). null off-world / before boot.
+  // believable scale (the child ranger reads avatar.height ∈ [1.1, 1.35]). null off-world / before boot.
   board: { x: number; z: number; near: boolean; inFrustum: boolean } | null;
   // RUN-3 P5.3 (F-34d): the live `.rm` <body> class (reduced-motion.ts mirrors
   // prefersReducedMotion() onto it). Recorded on EVERY shot so the "`.rm` via BOTH
@@ -424,12 +425,13 @@ test('audit capture flow', async ({ context }, testInfo) => {
       // P1.4: the real world props (tree line, prikbord, cabin) + the grounded
       // ranger swap in async over the primitive backdrop — GATE the snap on the
       // ranger landing (avatar.height reads on the dev hook). The rig is the
-      // heaviest asset and loads concurrently with the props, so avatar>1 doubles
-      // as "the title is dressed". Generous 25 s (matches the world load budget);
-      // best-effort .catch so a zero-asset env still snaps rather than crashing.
+      // heaviest asset and loads concurrently with the props, so a loaded avatar
+      // doubles as "the title is dressed". P1.6a: Alvah is a CHILD (≈1.2 m), so the
+      // gate reads >0.9 (loaded), not the old adult >1. Generous 25 s (matches the
+      // world load budget); best-effort .catch so a zero-asset env still snaps.
       await page.waitForFunction(() => {
         const r = (window as unknown as { __ranger?: { avatar?: () => { height: number } | null } }).__ranger;
-        return !!(r && r.avatar && (r.avatar()?.height ?? 0) > 1);
+        return !!(r && r.avatar && (r.avatar()?.height ?? 0) > 0.9);
       }, undefined, { timeout: 25_000 }).catch(() => { /* zero-asset safe */ });
       await settle(page, 900); // seat the idle pose + let any last tree pop in
       await snap(page, 'title', 'Boot', 'Titelscherm "Word boswachter" — eerste indruk.', ['.btn-start']);

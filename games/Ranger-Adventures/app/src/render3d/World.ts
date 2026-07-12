@@ -20,7 +20,7 @@ import {
   anchorInBiome, biomeAt, heightAt, type Biome,
 } from './Biomes';
 import { loadManifest, loadModel, loadRig, prepModel, skinnedRenderBox } from './Models';
-import { standHeightFor, RANGER_STAND_HEIGHT } from './AnimalScale';
+import { standHeightFor, RANGER_STAND_HEIGHT, ADULT_REFERENCE_HEIGHT } from './AnimalScale';
 import { applyEyes } from './EyeMaterial';
 import { applyCoat, applyPosture } from './AnimalDress';
 import { applyFace } from './FaceRig';
@@ -226,7 +226,16 @@ export class World {
   // that tap row — a shallower lens lands the tap on sky and the ranger never
   // moves. So this is F-05's lower/closer intent, clamped by the frozen contract.
   private readonly camOffset = new THREE.Vector3(0, 2.4, 4.6); // behind-above, F-05 clearance
-  private readonly CAM_LOOK_H = 1.1;    // aim point above the ranger's feet (~sternum)
+  // P1.6a: the follow-lookAt aim point above the ranger's feet, derived as a
+  // FRACTION of his measured head height (`avatarTopY`) instead of a pin, so it
+  // tracks the ≈1.2 m child rig (~sternum: 1.1 m on a 1.7 m adult → ~0.78 m on the
+  // child) — else the child gets framed like a hobbit under an adult lens and the
+  // D1.5 chest-sightline test aims above his head (poort-audit #3). The walk aim
+  // sits a touch higher (sternum) than the idle aim (chest).
+  private readonly CAM_LOOK_FRAC = 0.65;      // walk aim ≈ sternum
+  private readonly CAM_IDLE_LOOK_FRAC = 0.59; // idle aim ≈ chest
+  private get camLookH(): number { return this.avatarTopY * this.CAM_LOOK_FRAC; }
+  private get camIdleLookH(): number { return this.avatarTopY * this.CAM_IDLE_LOOK_FRAC; }
   private readonly CAM_PROBE_R = 0.35;  // camera "sphere" radius for the push-in cast
   private readonly CAM_GROUND_CLR = 0.5; // keep the lens this far above the terrain
   // D1.5 (audit #4) terrain sightline: cap how far the follow boom rides UP to clear a dune
@@ -263,10 +272,10 @@ export class World {
   // Cached ranger horizontal bounding radius, measured once whenever the mesh is
   // (re)built (measureAvatar). The min-boom clamp is `radius + near-plane` and the
   // avatar fades when the boom gets within ~`radius + 1 m`, so a rig that ever
-  // renders bigger than the honest 1.7 m hook still can't smear the lens (§4:
+  // renders bigger than the honest measured height still can't smear the lens (§4:
   // pixels outrank the hook).
   private avatarRadius = 0.45;
-  private avatarTopY = 1.6;             // D1.5 measured head height (feet→top) — the occluder-fade sightline aim
+  private avatarTopY = 1.2;             // D1.5 ⊕ P1.6a measured head height (feet→top; child ≈1.2 m) — the occluder-fade sightline aim; measureAvatar overwrites it off the live rig
   private avatarOpacity = 1;            // current applied ranger fade (avoids churn)
   private canopyOpacity = 1;            // D1.5 current applied tree-canopy occluder fade (1 = solid)
   private viewClearState = true;        // D1.5 last cam→avatar sightline-clear read (camState reports it)
@@ -346,6 +355,8 @@ export class World {
   private readonly scenicActors: {
     id: string; group: THREE.Group;
     mixer: THREE.AnimationMixer | null; action: THREE.AnimationAction | null;
+    height: number;  // P1.6a: the actor's measured rendered stand-height (m) — the
+                     // mature-human reference the child ranger is judged against
   }[] = [];
   // W3.6 ambient wildlife: a few animals roam gentle wander loops (baked walk↔graze
   // clips via the mixer for the W3.5-staged cast, improved procedural bob elsewhere)
@@ -1719,10 +1730,10 @@ export class World {
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: '#e8c39a', roughness: 1 }));
     head.position.y = 1.32;
     g.add(body, head);
-    // F-07: normalize the instant stand-in to the SAME canonical height as the
-    // real rig (~1.7 m, feet on the ground) so it reads human-sized and there is
-    // no scale pop when the loaded ranger swaps in. Plain meshes (no skeleton),
-    // so a straight Box3 measure is correct.
+    // F-07 ⊕ P1.6a: normalize the instant stand-in to the SAME canonical height as
+    // the real rig (Alvah is a CHILD ≈1.2 m now, feet on the ground) so it reads
+    // child-sized and there is no scale pop when the loaded ranger swaps in. Plain
+    // meshes (no skeleton), so a straight Box3 measure is correct.
     const raw = Math.max(new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3()).y, 0.0001);
     g.scale.setScalar(RANGER_STAND_HEIGHT / raw);
     g.position.y -= new THREE.Box3().setFromObject(g).min.y;
@@ -1735,10 +1746,12 @@ export class World {
     // player animates. loadRig falls back to a static group when no clips exist.
     const rig = await loadRig('ranger-alvah');
     if (!rig) return;
-    // F-07: normalize the ranger to the canonical adult-human reference (~1.7 m)
-    // so trees/hut/animals read at believable proportions. prepModel scales off the
-    // SKELETON's world extent (Models.skinnedRenderBox) — the size that renders —
-    // not the bind-pose geometry box that read 1.7 m for a ~170 m bone-driven giant.
+    // F-07 ⊕ P1.6a: normalize the ranger to Alvah's CHILD stand-height (≈1.2 m,
+    // RANGER_STAND_HEIGHT) — a clear head shorter than the ~1.8 m warden — so
+    // trees/hut/animals read at believable proportions around a child. prepModel
+    // scales off the SKELETON's world extent (Models.skinnedRenderBox) — the size
+    // that renders — not the bind-pose geometry box that read 1.7 m for a ~170 m
+    // bone-driven giant.
     const prepped = prepModel(rig.group, RANGER_STAND_HEIGHT);
     // §1e eye system: bright, alive eyes (the golden-hour world is not dusk, so
     // eyeshine stays off; parallax freezes under reduced-motion).
@@ -1815,7 +1828,7 @@ export class World {
   private measureAvatar(): void {
     if (this.ranger.children.length === 0) return;
     this.ranger.updateWorldMatrix(true, true);
-    // F-07: off the SKELETON, so the rig's honest ~1.7 m radius seeds the rails —
+    // F-07: off the SKELETON, so the rig's honest measured size seeds the rails —
     // the bind-pose geometry box collapsed to ~0 on the giant and mis-clamped.
     const box = skinnedRenderBox(this.ranger) ?? this._camBox.setFromObject(this.ranger);
     const size = box.getSize(new THREE.Vector3());
@@ -2625,9 +2638,11 @@ export class World {
    * clear; neither pushes a collision circle or joins `markers` (pure dressing).
    */
   private placeScenicActors(): void {
+    // P1.6a: mature humans stand at the adult reference (~1.8 m), so the ≈1.2 m
+    // child ranger reads a clear head-and-shoulders shorter beside the warden.
     const ACTORS: { id: string; x: number; z: number; height: number }[] = [
-      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: 1.7 }, // the BOA by the report board
-      { id: 'figure-poacher', x: -11.5, z: 8.5, height: 1.7 },  // a distant figure in the trees
+      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: ADULT_REFERENCE_HEIGHT }, // the BOA by the report board
+      { id: 'figure-poacher', x: -11.5, z: 8.5, height: ADULT_REFERENCE_HEIGHT },  // a distant figure in the trees
     ];
     for (const a of ACTORS) {
       const group = new THREE.Group();
@@ -2635,7 +2650,7 @@ export class World {
       group.rotation.y = Math.atan2(-a.x, -a.z); // face the spawn clearing
       this.scene.add(group);
       this.addBlobShadow(group, 0.55); // W4.5: soft grounding under the figure
-      const entry = { id: a.id, group, mixer: null as THREE.AnimationMixer | null, action: null as THREE.AnimationAction | null };
+      const entry = { id: a.id, group, mixer: null as THREE.AnimationMixer | null, action: null as THREE.AnimationAction | null, height: a.height };
       this.scenicActors.push(entry);
       void loadRig(a.id).then((rig) => {
         if (!rig) return;
@@ -2643,6 +2658,16 @@ export class World {
         applyEyes(prepped, a.id, { dusk: false });
         applyCalmPose(prepped, a.id); // §B never-scary: bias the poacher into a calm rest shape
         group.add(prepped);
+        // P1.6a: expose the actor's MEASURED rendered stand-height (skinnedRenderBox
+        // — the same honest bone-extent `measureAvatar` reads for the ranger), NEVER
+        // the normalization target. Doc §8.7 / D1.7: a hook reports what RENDERS, so
+        // the child-vs-adult pair assert (Alvah < 0.75 × the warden) can never be
+        // faked by a mis-scaled adult reporting the constant it was asked for.
+        // `entry.height` keeps the target (`a.height`) as the pre-load fallback, and
+        // the geometry-box fallback covers a rig with no skeleton to measure.
+        const rbox = skinnedRenderBox(prepped) ?? new THREE.Box3().setFromObject(prepped);
+        const measuredY = rbox.getSize(new THREE.Vector3()).y;
+        if (Number.isFinite(measuredY) && measuredY > 0) entry.height = measuredY;
         if (rig.clips.length) {
           const mixer = new THREE.AnimationMixer(prepped);
           const clip = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
@@ -2654,12 +2679,15 @@ export class World {
     }
   }
 
-  /** Dev-hook accessor (W3.3): each scenic actor's id + its live baked-clip
-   *  {name, time} (null until the rig loads / when it carries no clip). Lets the
-   *  E2E assert the warden + poacher are present AND their mixers actually run. */
-  actorClips(): { id: string; clip: { name: string; time: number } | null }[] {
+  /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + its live baked-clip
+   *  {name, time} (null until the rig loads / when it carries no clip) + its measured
+   *  rendered stand-height (m). Lets the E2E assert the warden + poacher are present
+   *  AND their mixers run, and reads the mature-human height the child ranger's scale
+   *  is judged against (Alvah < 0.75 × the warden). */
+  actorClips(): { id: string; height: number; clip: { name: string; time: number } | null }[] {
     return this.scenicActors.map((a) => ({
       id: a.id,
+      height: a.height,
       clip: a.action ? { name: a.action.getClip().name, time: a.action.time } : null,
     }));
   }
@@ -3752,9 +3780,9 @@ export class World {
       this.camera.position.lerp(this.camDesired, dampFactor(dt, 0.3));
     }
     this.camera.up.set(0, 1, 0); // roll = 0 always
-    this.camera.lookAt(rp.x, rp.y + (walk ? this.CAM_LOOK_H : 1.0), rp.z);
+    this.camera.lookAt(rp.x, rp.y + (walk ? this.camLookH : this.camIdleLookH), rp.z);
     // F-05 fade rail: if the boom still collapses toward the ranger (an occluder
-    // right behind him, or a rig that renders larger than its honest 1.7 m height)
+    // right behind him, or a rig that renders larger than its honest measured height)
     // fade the ranger out rather than smear his interior across the lens — the
     // world stays visible. Opacity is a pure function of the REAL lens→ranger
     // distance, so it is a cut under reduced-motion too (no camera move).
@@ -3794,7 +3822,7 @@ export class World {
         ) ||
         this.canopyBlocksSightline(
           this.camera.position.x, this.camera.position.y, this.camera.position.z,
-          rp.x, rp.y + this.CAM_LOOK_H, rp.z,
+          rp.x, rp.y + this.camLookH, rp.z,
         );
       let co: number;
       if (blocked) co = insideCrown ? this.CANOPY_FADE_BURIED : this.CANOPY_FADE_MIN; // attack: instant dim (buried ⇒ deeper, never a hidden frame)

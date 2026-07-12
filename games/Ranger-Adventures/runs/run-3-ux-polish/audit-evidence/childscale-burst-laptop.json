@@ -1,0 +1,164 @@
+{
+  "box": "P1.6a",
+  "platform": "laptop",
+  "spec": "child-scale.spec.ts",
+  "warden": {
+    "x": 6.4,
+    "z": 4.4
+  },
+  "abreast": {
+    "x": 5.26694235422587,
+    "z": 6.048083848398735
+  },
+  "reached": true,
+  "distToWarden": 2.0836840878519514,
+  "idleAvatarH": 1.1999992884104873,
+  "wardenH": 1.8,
+  "maxDraw": 61,
+  "walked": 7.821352085682925,
+  "samples": [
+    {
+      "i": 0,
+      "file": "laptop/p16a-childscale-burst/p16a-childscale-00.png",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "yaw": 0,
+      "avatarH": 1.1999992906327162,
+      "wardenH": 1.8,
+      "drawCalls": 45,
+      "clip": "idle"
+    },
+    {
+      "i": 1,
+      "file": "",
+      "pos": {
+        "x": 0.8415052652218247,
+        "z": 0.7427099702515887
+      },
+      "yaw": 1.3284344979280913,
+      "avatarH": 1.1785902321487867,
+      "wardenH": 1.8,
+      "drawCalls": 49,
+      "clip": "walk"
+    },
+    {
+      "i": 2,
+      "file": "",
+      "pos": {
+        "x": 3.0438887160090013,
+        "z": 0.18757887876267354
+      },
+      "yaw": -2.0789682215944403,
+      "avatarH": 1.1695127195600767,
+      "wardenH": 1.8,
+      "drawCalls": 61,
+      "clip": "walk"
+    },
+    {
+      "i": 3,
+      "file": "",
+      "pos": {
+        "x": 2.1004351082961783,
+        "z": 2.316805923387694
+      },
+      "yaw": 2.5866772323327147,
+      "avatarH": 1.1978524980268597,
+      "wardenH": 1.8,
+      "drawCalls": 19,
+      "clip": "walk"
+    },
+    {
+      "i": 4,
+      "file": "laptop/p16a-childscale-burst/p16a-childscale-04.png",
+      "pos": {
+        "x": 4.553143995748566,
+        "z": 3.7907261797789817
+      },
+      "yaw": -2.2169803799024432,
+      "avatarH": 1.2086295749552423,
+      "wardenH": 1.8,
+      "drawCalls": 34,
+      "clip": "walk"
+    },
+    {
+      "i": 5,
+      "file": "",
+      "pos": {
+        "x": 3.460602790638445,
+        "z": 5.732155937281188
+      },
+      "yaw": 2.4123823787436827,
+      "avatarH": 1.2082877540420036,
+      "wardenH": 1.8,
+      "drawCalls": 22,
+      "clip": "walk"
+    },
+    {
+      "i": 6,
+      "file": "",
+      "pos": {
+        "x": 3.949177958572281,
+        "z": 4.763662090448108
+      },
+      "yaw": -2.869384255067965,
+      "avatarH": 1.1880719503720143,
+      "wardenH": 1.8,
+      "drawCalls": 32,
+      "clip": "walk"
+    },
+    {
+      "i": 7,
+      "file": "",
+      "pos": {
+        "x": 2.8208483778101683,
+        "z": 6.814977811322652
+      },
+      "yaw": 2.8507680041116803,
+      "avatarH": 1.2004638420665363,
+      "wardenH": 1.8,
+      "drawCalls": 12,
+      "clip": "walk"
+    },
+    {
+      "i": 8,
+      "file": "laptop/p16a-childscale-burst/p16a-childscale-08.png",
+      "pos": {
+        "x": 5.041358515477386,
+        "z": 5.979820462743032
+      },
+      "yaw": -2.174924944433931,
+      "avatarH": 1.1963842883231963,
+      "wardenH": 1.8,
+      "drawCalls": 30,
+      "clip": "walk"
+    },
+    {
+      "i": 9,
+      "file": "laptop/p16a-childscale-burst/p16a-child-vs-adult.png",
+      "pos": {
+        "x": 5.041358515477386,
+        "z": 5.979820462743032
+      },
+      "yaw": 3.0382714445904675,
+      "avatarH": 1.1999992884104873,
+      "wardenH": 1.8,
+      "drawCalls": 19,
+      "clip": "idle"
+    },
+    {
+      "i": 10,
+      "file": "",
+      "pos": {
+        "x": 5.041358515477386,
+        "z": 5.979820462743032
+      },
+      "yaw": 3.0382714445594843,
+      "avatarH": 1.1999992911563504,
+      "wardenH": 1.8,
+      "drawCalls": 26,
+      "clip": "idle"
+    }
+  ]
+}

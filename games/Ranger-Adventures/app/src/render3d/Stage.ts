@@ -281,8 +281,9 @@ export class Stage {
     // journey + movement @smoke out. Sequential + bail bounds the boot-path cost to
     // the single prop already mid-decode when "Begin" is tapped (the 30 s smoke
     // budget absorbs one), while a player who DWELLS on the title still fills the
-    // scene in incrementally. The ranger rig loads LAST, so `titleAvatar()>1` still
-    // doubles as "the title is fully dressed" for the capture snap gate.
+    // scene in incrementally. The ranger rig loads LAST, so a loaded `titleAvatar()`
+    // (P1.6a: the child reads >0.9) still doubles as "the title is fully dressed" for
+    // the capture snap gate.
     const real = new THREE.Group();
     this.scene.add(real);
     // Bail cleanly if the player leaves the title mid-load: drop the partial group
@@ -339,8 +340,8 @@ export class Stage {
 
     // The GROUNDED ranger avatar, standing calmly in the open left lane by the path.
     // He loads LAST (heaviest asset + the capture's "fully dressed" signal): his
-    // measured height feeds the scale assert (avatar.height ∈ [1.5,2.0]) and the
-    // capture's `avatar()>1` snap gate the moment he lands.
+    // measured height feeds the scale assert (P1.6a: Alvah is a CHILD, avatar.height
+    // ∈ [1.1, 1.35]) and the capture's avatar-loaded snap gate the moment he lands.
     if (left() && bail()) return;
     const rig = await loadRig('ranger-alvah');
     if (left() && bail()) return;

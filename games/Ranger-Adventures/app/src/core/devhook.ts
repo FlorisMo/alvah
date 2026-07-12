@@ -137,11 +137,12 @@ export interface RangerDevHook {
   drawCalls(): number | null;
   clip(): { name: string; time: number } | null;
   /** The player ranger's LIVE world bounding-box height (m), measured from the
-   *  real posed mesh — the honest scale signal the F-07 assert reads
-   *  (avatar.height ∈ [1.5, 2.0]). It is the measured render size, NOT the
-   *  normalization target, so the telemetry can never mask a mis-scaled rig
-   *  (AUDIT-FINDINGS §4: pixels are the court of appeal). Null before the
-   *  hook/world is ready. */
+   *  real posed mesh — the honest scale signal the scale assert reads. Alvah is
+   *  a CHILD (P1.6a), so his idle band is now child-scale (avatar.height ∈
+   *  [1.1, 1.35]), a clear head shorter than the ~1.8 m warden — NOT the old
+   *  ~1.7 m adult. It is the measured render size, NOT the normalization target,
+   *  so the telemetry can never mask a mis-scaled rig (AUDIT-FINDINGS §4: pixels
+   *  are the court of appeal). Null before the hook/world is ready. */
   avatar(): { height: number } | null;
   /** The player ranger's LIVE post-collision ground speed (m/s) — the honest
    *  walked speed AFTER the kinematic slide/clamp, which the walk clip's cadence
@@ -184,9 +185,12 @@ export interface RangerDevHook {
   /** Win the active 3D mission step via its genuine resolve path; true if one
    *  was pending. Drives the two-mission-chain E2E deterministically (W2.3). */
   winStep(): boolean;
-  /** The scenic story-arc actors (warden + poacher) with their live baked-clip
-   *  {name, time}, or null before the hook/world is ready (W3.3). */
-  actors(): { id: string; clip: { name: string; time: number } | null }[] | null;
+  /** The scenic story-arc actors (warden + poacher) with their measured rendered
+   *  stand-height `height` (m) + live baked-clip {name, time}, or null before the
+   *  hook/world is ready (W3.3 ⊕ P1.6a). The warden's `height` is the mature-human
+   *  reference (~1.8 m) the child ranger's scale is judged against — the pair-shot
+   *  assert reads Alvah < 0.75 × the warden. */
+  actors(): { id: string; height: number; clip: { name: string; time: number } | null }[] | null;
   /** The ambient wildlife (roaming animals + gliding birds): id + live world x/z
    *  + applied canonical stand height `h` (W3.7a) + dominant baked clip
    *  {name, time} (null for the procedural/bird cast), or null before the
@@ -324,7 +328,7 @@ const state = {
   board: null as null | (() => { x: number; z: number; near: boolean; inFrustum: boolean } | null),
   sitSpot: null as null | (() => { x: number; z: number; near: boolean } | null),
   winStep: null as null | (() => boolean),
-  actors: null as null | (() => { id: string; clip: { name: string; time: number } | null }[]),
+  actors: null as null | (() => { id: string; height: number; clip: { name: string; time: number } | null }[]),
   ambient: null as null | (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]),
   landmarks: null as null | (() => { id: string; x: number; z: number }[]),
   dressing: null as null | (() => { id: string; x: number; z: number }[]),
@@ -451,9 +455,9 @@ export function provideWinStep(fn: (() => boolean) | null): void {
   state.winStep = fn;
 }
 
-/** Register the scenic-actors source (the World's warden + poacher clips). W3.3. */
+/** Register the scenic-actors source (the World's warden + poacher clips + heights). W3.3. */
 export function provideActors(
-  fn: (() => { id: string; clip: { name: string; time: number } | null }[]) | null,
+  fn: (() => { id: string; height: number; clip: { name: string; time: number } | null }[]) | null,
 ): void {
   state.actors = fn;
 }

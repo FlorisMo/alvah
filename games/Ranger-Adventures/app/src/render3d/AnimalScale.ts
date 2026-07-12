@@ -25,14 +25,32 @@
  * test pins the ORDERING and the ranger ratio, which are robust to the exact
  * factor — the numbers are honest estimates, not a false precision claim.
  *
- * Reference: the dossier's schaal-referentie uses an adult human ≈ 1.7 m, and
- * the in-world PLAYER mesh is normalized to that same reference (F-07: World
- * preps the ranger GLB to RANGER_STAND_HEIGHT); these are the animals' TRUE
- * biological heights, so every creature reads correctly next to the ranger.
+ * Reference: the dossier's schaal-referentie uses an adult human, and the
+ * animals' TRUE biological heights are sized against it (`ratioToRanger`), so
+ * every creature reads correctly next to a grown-up. The in-world PLAYER,
+ * however, is Alvah — a CHILD of ≈8 (≈1.2 m, direction doc §2.4, Floris
+ * 2026-07-05) — so his own stand-height (`RANGER_STAND_HEIGHT`) is decoupled
+ * from the adult reference (`ADULT_REFERENCE_HEIGHT`): the animal ratios anchor
+ * on the grown-up, the player rig preps to the child height, and he reads a
+ * clear head-and-shoulders shorter than the mature warden NPC (P1.6a).
  */
 
-/** Adult-human reference height (m) — the dossier's schaal-referentie anchor. */
-export const RANGER_STAND_HEIGHT = 1.7;
+/**
+ * Adult-human reference height (m) — the dossier's schaal-referentie anchor.
+ * The denominator every animal is sized against (`ratioToRanger`) AND the
+ * mature-human NPC (warden / poacher) stand-height. NOT the player's height —
+ * Alvah is a child (see `RANGER_STAND_HEIGHT`). Keeping this at the adult scale
+ * is what stops the P1.6a child rescale from inflating every animal ~42%.
+ */
+export const ADULT_REFERENCE_HEIGHT = 1.8;
+
+/**
+ * The PLAYER ranger Alvah's stand height (m) — a CHILD of ≈8, ≈1.2 m, a clear
+ * head shorter than a ~1.8 m adult (direction doc §2.4). World + Stage prep his
+ * GLB to this; the animals do NOT (their absolute `STAND_HEIGHT` values below
+ * are unchanged, anchored on `ADULT_REFERENCE_HEIGHT`).
+ */
+export const RANGER_STAND_HEIGHT = 1.2;
 
 /**
  * Canonical stand height (m) per manifest id. Sourced shoulder heights + the
@@ -40,8 +58,8 @@ export const RANGER_STAND_HEIGHT = 1.7;
  * for every underlying claim + source URL.
  */
 export const STAND_HEIGHT: Record<string, number> = {
-  // ── the reference ────────────────────────────────────────────────────────
-  'ranger-alvah': RANGER_STAND_HEIGHT,      // dossier reference (adult ~1.7 m)
+  // ── the player (a CHILD, not the reference) ──────────────────────────────
+  'ranger-alvah': RANGER_STAND_HEIGHT,      // Alvah = child ≈1.2 m (P1.6a)
   // ── large mammals ────────────────────────────────────────────────────────
   'animal-edelhert-reddeer': 1.5,   // shoulder ~1.2 m × ~1.25 (head/neck up)
   'animal-ree-roedeer': 0.95,       // shoulder ~0.67 m × ~1.4 (long alert neck)
@@ -68,8 +86,9 @@ export function standHeightFor(id: string | null | undefined): number | null {
   return id in STAND_HEIGHT ? STAND_HEIGHT[id] : null;
 }
 
-/** A model's canonical height as a fraction of the adult-human reference. Pure. */
+/** A model's canonical height as a fraction of the adult-human reference (NOT
+ *  the child player — animals are sized against a grown-up). Pure. */
 export function ratioToRanger(id: string | null | undefined): number | null {
   const h = standHeightFor(id);
-  return h === null ? null : h / RANGER_STAND_HEIGHT;
+  return h === null ? null : h / ADULT_REFERENCE_HEIGHT;
 }

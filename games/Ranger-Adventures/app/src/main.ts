@@ -53,10 +53,10 @@ stage.start();
 installDevHook();
 setScreen('title');
 provideDrawCalls(() => stage.drawCalls);
-// P1.4: the title now stands the GROUNDED ranger on the heath — expose his
-// measured height to the scale assert so the title frame proves avatar.height ∈
-// [1.5, 2.0], same as the world. `startWorld` overrides this with the live world
-// ranger on "Begin"; null until the title rig finishes loading.
+// P1.4 ⊕ P1.6a: the title now stands the GROUNDED ranger on the heath — expose his
+// measured height to the scale assert so the title frame proves the CHILD band
+// avatar.height ∈ [1.1, 1.35], same as the world. `startWorld` overrides this with
+// the live world ranger on "Begin"; null until the title rig finishes loading.
 provideAvatar(() => stage.titleAvatar());
 
 // --- title card → the lodge (mission picker) ---
