@@ -2,7 +2,7 @@
   "box": "D1.7",
   "platform": "laptop",
   "spec": "title-return.spec.ts",
-  "worldAMinOpacity": 0.15071784916243267,
+  "worldAMinOpacity": 1,
   "returnPeakOpacity": 1,
   "settled": {
     "i": 34,
@@ -16,7 +16,7 @@
     "visible": true,
     "onScreen": true,
     "clip": "idle",
-    "drawCalls": 43,
+    "drawCalls": 44,
     "screen": "world"
   },
   "samples": [
@@ -32,7 +32,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 47,
+      "drawCalls": 46,
       "screen": "world"
     },
     {
@@ -40,14 +40,14 @@
       "phase": "walkA",
       "file": "laptop/d17-titlereturn-burst/d17-titlereturn-01.png",
       "pos": {
-        "x": 0.128424771203137,
-        "z": 0.6512065507302968
+        "x": 0.16712531594713442,
+        "z": 0.7392314347920318
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 47,
+      "drawCalls": 49,
       "screen": "world"
     },
     {
@@ -55,14 +55,14 @@
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 1.0781025905564605,
-        "z": 1.5898107788720723
+        "x": 1.3771861723872743,
+        "z": 1.6758228911702147
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 24,
+      "drawCalls": 18,
       "screen": "world"
     },
     {
@@ -70,14 +70,14 @@
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 1.952234326980197,
-        "z": 0.7350905550619998
+        "x": 1.9672605590581838,
+        "z": 0.45121200284301444
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 32,
+      "drawCalls": 64,
       "screen": "world"
     },
     {
@@ -85,14 +85,14 @@
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 1.2522218161591758,
-        "z": -0.32573880593518423
+        "x": 0.4886410843411619,
+        "z": 0.10514653942910845
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 23,
+      "drawCalls": 35,
       "screen": "world"
     },
     {
@@ -100,8 +100,38 @@
       "phase": "walkA",
       "file": "laptop/d17-titlereturn-burst/d17-titlereturn-05.png",
       "pos": {
-        "x": 2.2038387808051842,
-        "z": -1.169329964375052
+        "x": 0.11682407805135797,
+        "z": 1.7181194600504177
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 33,
+      "screen": "world"
+    },
+    {
+      "i": 6,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": -0.9304625781882403,
+        "z": 0.8670179574877622
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 38,
+      "screen": "world"
+    },
+    {
+      "i": 7,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": -2.124418394920017,
+        "z": 1.906453954312058
       },
       "renderedOpacity": 1,
       "visible": true,
@@ -111,48 +141,18 @@
       "screen": "world"
     },
     {
-      "i": 6,
-      "phase": "walkA",
-      "file": "",
-      "pos": {
-        "x": 1.1885081030006241,
-        "z": -2.015480462865079
-      },
-      "renderedOpacity": 1,
-      "visible": true,
-      "onScreen": true,
-      "clip": "walk",
-      "drawCalls": 46,
-      "screen": "world"
-    },
-    {
-      "i": 7,
-      "phase": "walkA",
-      "file": "",
-      "pos": {
-        "x": 0.02881085218971169,
-        "z": -1.2679448813881724
-      },
-      "renderedOpacity": 1,
-      "visible": true,
-      "onScreen": true,
-      "clip": "walk",
-      "drawCalls": 51,
-      "screen": "world"
-    },
-    {
       "i": 8,
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 1.0839891517986622,
-        "z": -0.539284823748801
+        "x": -0.6046541698067844,
+        "z": 1.9524645055367338
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 23,
+      "drawCalls": 33,
       "screen": "world"
     },
     {
@@ -160,14 +160,14 @@
       "phase": "walkA",
       "file": "laptop/d17-titlereturn-burst/d17-titlereturn-09.png",
       "pos": {
-        "x": 0.8189002404806198,
-        "z": -2.3902253973539795
+        "x": -1.2679363130924883,
+        "z": 0.6675500320250938
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 17,
+      "drawCalls": 68,
       "screen": "world"
     },
     {
@@ -175,14 +175,14 @@
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 1.331361449970033,
-        "z": -3.153174645436004
+        "x": -2.491025540910011,
+        "z": 1.466041738946993
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 66,
+      "drawCalls": 36,
       "screen": "world"
     },
     {
@@ -190,14 +190,14 @@
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 0.6617666816081265,
-        "z": -4.441428650107136
+        "x": -1.3472475211851191,
+        "z": 2.038665603992199
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 28,
+      "drawCalls": 20,
       "screen": "world"
     },
     {
@@ -205,14 +205,14 @@
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 1.5044093073503761,
-        "z": -4.92155518946918
+        "x": -1.3353728974081607,
+        "z": 0.6126695378253579
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 51,
+      "drawCalls": 69,
       "screen": "world"
     },
     {
@@ -220,14 +220,14 @@
       "phase": "walkA",
       "file": "laptop/d17-titlereturn-burst/d17-titlereturn-13.png",
       "pos": {
-        "x": 2.790181829205827,
-        "z": -3.957631253343813
+        "x": -2.803448145292418,
+        "z": 0.5328430478504964
       },
-      "renderedOpacity": 0.15071784916243267,
-      "visible": false,
+      "renderedOpacity": 1,
+      "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 17,
+      "drawCalls": 21,
       "screen": "world"
     },
     {
@@ -235,14 +235,14 @@
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 2.9053709378865733,
-        "z": -4.851764564795598
+        "x": -2.3086394836550435,
+        "z": -0.8105263107760141
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 64,
+      "drawCalls": 73,
       "screen": "world"
     },
     {
@@ -250,14 +250,14 @@
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 1.4157448100019798,
-        "z": -5.273283907137209
+        "x": -3.9015696409935563,
+        "z": -1.1174089270596665
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 51,
+      "drawCalls": 41,
       "screen": "world"
     },
     {
@@ -265,14 +265,14 @@
       "phase": "walkA",
       "file": "",
       "pos": {
-        "x": 0.9783134782647508,
-        "z": -4.308788045290346
+        "x": -3.062696055534124,
+        "z": -0.05746840926224095
       },
       "renderedOpacity": 1,
       "visible": true,
       "onScreen": true,
       "clip": "walk",
-      "drawCalls": 64,
+      "drawCalls": 17,
       "screen": "world"
     },
     {
@@ -299,7 +299,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 45,
+      "drawCalls": 42,
       "screen": "world"
     },
     {
@@ -314,7 +314,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 45,
+      "drawCalls": 42,
       "screen": "world"
     },
     {
@@ -329,7 +329,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 45,
+      "drawCalls": 42,
       "screen": "world"
     },
     {
@@ -344,7 +344,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 45,
+      "drawCalls": 44,
       "screen": "world"
     },
     {
@@ -359,7 +359,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 45,
+      "drawCalls": 44,
       "screen": "world"
     },
     {
@@ -374,7 +374,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 43,
+      "drawCalls": 44,
       "screen": "world"
     },
     {
@@ -389,7 +389,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 43,
+      "drawCalls": 44,
       "screen": "world"
     },
     {
@@ -404,7 +404,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 43,
+      "drawCalls": 44,
       "screen": "world"
     },
     {
@@ -419,7 +419,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 43,
+      "drawCalls": 44,
       "screen": "world"
     },
     {
@@ -434,7 +434,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 43,
+      "drawCalls": 42,
       "screen": "world"
     },
     {
@@ -449,7 +449,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 43,
+      "drawCalls": 42,
       "screen": "world"
     },
     {
@@ -464,7 +464,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 43,
+      "drawCalls": 42,
       "screen": "world"
     },
     {
@@ -479,7 +479,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 45,
+      "drawCalls": 42,
       "screen": "world"
     },
     {
@@ -494,7 +494,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 45,
+      "drawCalls": 42,
       "screen": "world"
     },
     {
@@ -509,7 +509,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 45,
+      "drawCalls": 42,
       "screen": "world"
     },
     {
@@ -524,7 +524,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 45,
+      "drawCalls": 44,
       "screen": "world"
     },
     {
@@ -539,7 +539,7 @@
       "visible": true,
       "onScreen": true,
       "clip": "idle",
-      "drawCalls": 43,
+      "drawCalls": 44,
       "screen": "world"
     }
   ]

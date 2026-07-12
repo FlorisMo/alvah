@@ -7,7 +7,7 @@
     "z": -19
   },
   "shoreR": 26,
-  "minDistToVen": 12.77884901541873,
+  "minDistToVen": 14.378153341667385,
   "sinkTol": 0.06,
   "airTol": 0.6,
   "reached": true,
@@ -24,7 +24,7 @@
       "grounded": true,
       "clearance": 0,
       "analyticGap": 7.287118825027861e-11,
-      "drawCalls": 49,
+      "drawCalls": 47,
       "clip": null,
       "groundSpeed": 0
     },
@@ -32,14 +32,14 @@
       "i": 1,
       "file": "",
       "pos": {
-        "x": 0.3166707008827902,
-        "z": -0.7445307008881545
+        "x": 0.309415785304023,
+        "z": -0.7466357853147518
       },
-      "yaw": -0.4950761192997515,
+      "yaw": -0.4883807394013253,
       "zone": "spawn",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.042416957250976724,
+      "analyticGap": 0.04254003299611912,
       "drawCalls": 38,
       "clip": "walk",
       "groundSpeed": 1.7999999999999998
@@ -48,15 +48,15 @@
       "i": 2,
       "file": "",
       "pos": {
-        "x": 1.0049877454219738,
-        "z": -0.950174739461358
+        "x": 0.9925539412023783,
+        "z": -0.9557247529125767
       },
-      "yaw": -1.1213332505505953,
+      "yaw": -1.1132312495165237,
       "zone": "spawn",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.0540872817603485,
-      "drawCalls": 71,
+      "analyticGap": 0.0544060117575364,
+      "drawCalls": 69,
       "clip": "walk",
       "groundSpeed": 1.7999999999999998
     },
@@ -64,303 +64,303 @@
       "i": 3,
       "file": "",
       "pos": {
-        "x": 1.7938420043911405,
-        "z": -0.6747306040814744
+        "x": 1.6690959853791818,
+        "z": -0.7256290718121444
       },
-      "yaw": -1.7840745413086339,
+      "yaw": -1.7381459658471101,
       "zone": "spawn",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.038414760050608024,
-      "drawCalls": 71,
+      "analyticGap": 0.04129471345438855,
+      "drawCalls": 69,
       "clip": "walk",
-      "groundSpeed": 1.8000000000000003
+      "groundSpeed": 1.7999999999999994
     },
     {
       "i": 4,
       "file": "",
       "pos": {
-        "x": 6.67280858922007,
-        "z": 3.4978122000881524
+        "x": 6.680815796901545,
+        "z": 3.1061494275121233
       },
-      "yaw": -1.6684507170959861,
+      "yaw": -1.6167008627871269,
       "zone": "spawn",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": -0.21352967130408906,
+      "analyticGap": -0.18986973033970722,
       "drawCalls": 55,
       "clip": "walk",
-      "groundSpeed": 1.7999999999999996
+      "groundSpeed": 1.7999999999999994
     },
     {
       "i": 5,
       "file": "",
       "pos": {
-        "x": 8.5253866920243,
-        "z": 1.9758266111254066
+        "x": 8.488225572204328,
+        "z": 1.4574999776233124
       },
-      "yaw": -0.886864694051031,
+      "yaw": -0.8347232132921825,
       "zone": "relief",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": -0.12641631350930382,
-      "drawCalls": 65,
+      "analyticGap": -0.09339646562599668,
+      "drawCalls": 64,
       "clip": "walk",
-      "groundSpeed": 1.7999999999999994
+      "groundSpeed": 1.7999999999999998
     },
     {
       "i": 6,
       "file": "",
       "pos": {
-        "x": 10.432791762909753,
-        "z": -3.013497153441862
+        "x": 10.142037119550569,
+        "z": -3.5997545487978675
       },
-      "yaw": -0.8875504997705939,
+      "yaw": -0.8360620920771922,
       "zone": "relief",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.1964541052646281,
-      "drawCalls": 63,
+      "analyticGap": 0.23319449455254482,
+      "drawCalls": 60,
       "clip": "walk",
-      "groundSpeed": 1.8000000000000005
+      "groundSpeed": 1.8000000000000003
     },
     {
       "i": 7,
       "file": "",
       "pos": {
-        "x": 12.291093643585246,
-        "z": -2.823004208932131
+        "x": 11.959681826185868,
+        "z": -3.5075866536322904
       },
-      "yaw": -1.6605821681155284,
+      "yaw": -1.6076999118670408,
       "zone": "relief",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.19511262670422214,
+      "analyticGap": 0.23848741959799424,
       "drawCalls": 46,
       "clip": "walk",
-      "groundSpeed": 1.7999999999999994
+      "groundSpeed": 1.7999999999999992
     },
     {
       "i": 8,
       "file": "laptop/p15a-ven-burst/p15a-ven-08.png",
       "pos": {
-        "x": 18.589604872007044,
-        "z": 2.0072667985816417
+        "x": 18.410100036339756,
+        "z": 0.916158236287131
       },
-      "yaw": -1.6392399663892245,
+      "yaw": -1.5840177609257342,
       "zone": "relief",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": -0.1902606928377124,
-      "drawCalls": 37,
+      "analyticGap": -0.08797620713472298,
+      "drawCalls": 45,
       "clip": "walk",
-      "groundSpeed": 1.8000000000000005
+      "groundSpeed": 1.7999999999999985
     },
     {
       "i": 9,
       "file": "",
       "pos": {
-        "x": 15.310944205335199,
-        "z": 0.07070473992487836
+        "x": 13.80351380603032,
+        "z": 0.3051471382925106
       },
-      "yaw": -2.4511495536824803,
+      "yaw": -2.382583237677119,
       "zone": "relief",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": -0.007364634582065155,
-      "drawCalls": 29,
-      "clip": "walk",
-      "groundSpeed": 1.7999999999999994
-    },
-    {
-      "i": 10,
-      "file": "",
-      "pos": {
-        "x": 17.597576664862448,
-        "z": 0.2884870060731811
-      },
-      "yaw": -1.6705187412801656,
-      "zone": "relief",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": -0.026769182481599985,
-      "drawCalls": 44,
-      "clip": "walk",
-      "groundSpeed": 1.8000000000000007
-    },
-    {
-      "i": 11,
-      "file": "",
-      "pos": {
-        "x": 19.342958101208502,
-        "z": -1.1393957073507437
-      },
-      "yaw": -0.8903536096801119,
-      "zone": "relief",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 0.10677894817005718,
-      "drawCalls": 60,
-      "clip": "walk",
-      "groundSpeed": 1.7999999999999994
-    },
-    {
-      "i": 12,
-      "file": "",
-      "pos": {
-        "x": 22.266549141821343,
-        "z": -8.546504849249535
-      },
-      "yaw": -0.891841945286739,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 0.9478140642341705,
-      "drawCalls": 38,
-      "clip": "walk",
-      "groundSpeed": 1.8000000000000003
-    },
-    {
-      "i": 13,
-      "file": "",
-      "pos": {
-        "x": 24.87591660140984,
-        "z": -8.267700133907448
-      },
-      "yaw": -1.6749362375643742,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 1.0821469751281203,
-      "drawCalls": 45,
-      "clip": "walk",
-      "groundSpeed": 1.8
-    },
-    {
-      "i": 14,
-      "file": "",
-      "pos": {
-        "x": 30.483291810780564,
-        "z": -4.115477034553355
-      },
-      "yaw": -1.6755990021731826,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 0.7829471410928277,
-      "drawCalls": 35,
-      "clip": "walk",
-      "groundSpeed": 1.8000000000000007
-    },
-    {
-      "i": 15,
-      "file": "",
-      "pos": {
-        "x": 32.23590470935126,
-        "z": -5.534474366946699
-      },
-      "yaw": -0.8954338705732852,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 1.1474856719190263,
-      "drawCalls": 41,
-      "clip": "walk",
-      "groundSpeed": 1.7999999999999996
-    },
-    {
-      "i": 16,
-      "file": "laptop/p15a-ven-burst/p15a-ven-16.png",
-      "pos": {
-        "x": 32.50166506769075,
-        "z": -7.939938031593344
-      },
-      "yaw": -0.11366192724945456,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 1.6289688086654888,
-      "drawCalls": 31,
-      "clip": "walk",
-      "groundSpeed": 1.7999999999999998
-    },
-    {
-      "i": 17,
-      "file": "",
-      "pos": {
-        "x": 34.591094284819704,
-        "z": -6.246415371228366
-      },
-      "yaw": -1.7062210892506826,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 1.440510930271307,
+      "analyticGap": -0.025857652898310768,
       "drawCalls": 30,
       "clip": "walk",
       "groundSpeed": 1.8
     },
     {
-      "i": 18,
+      "i": 10,
       "file": "",
       "pos": {
-        "x": 39.50804616525979,
-        "z": -2.4144896762287633
+        "x": 16.062626992936355,
+        "z": 0.36477614756867816
       },
-      "yaw": -1.7059125467572187,
+      "yaw": -1.6023618934284336,
+      "zone": "relief",
+      "grounded": true,
+      "clearance": 0,
+      "analyticGap": -0.033585845674255266,
+      "drawCalls": 47,
+      "clip": "walk",
+      "groundSpeed": 1.7999999999999996
+    },
+    {
+      "i": 11,
+      "file": "",
+      "pos": {
+        "x": 17.782563937252267,
+        "z": -1.249867885624591
+      },
+      "yaw": -0.8211165632460613,
+      "zone": "relief",
+      "grounded": true,
+      "clearance": 0,
+      "analyticGap": 0.10817295403470206,
+      "drawCalls": 63,
+      "clip": "walk",
+      "groundSpeed": 1.8000000000000003
+    },
+    {
+      "i": 12,
+      "file": "",
+      "pos": {
+        "x": 19.96180866522219,
+        "z": -8.711924325154353
+      },
+      "yaw": -0.8211699297805737,
+      "zone": "relief",
+      "grounded": true,
+      "clearance": 0,
+      "analyticGap": 0.841851859002392,
+      "drawCalls": 38,
+      "clip": "walk",
+      "groundSpeed": 1.8
+    },
+    {
+      "i": 13,
+      "file": "",
+      "pos": {
+        "x": 23.00312176577827,
+        "z": -8.603084755058719
+      },
+      "yaw": -1.6056601824263304,
       "zone": "ven-shore",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 0.6840991515391305,
-      "drawCalls": 29,
+      "analyticGap": 0.9978091456219678,
+      "drawCalls": 49,
       "clip": "walk",
-      "groundSpeed": 1.800000000000002
+      "groundSpeed": 1.7999999999999994
+    },
+    {
+      "i": 14,
+      "file": "",
+      "pos": {
+        "x": 28.766871028309822,
+        "z": -4.835717941495171
+      },
+      "yaw": -1.6066533582630758,
+      "zone": "ven-shore",
+      "grounded": true,
+      "clearance": 0,
+      "analyticGap": 0.8297306197846285,
+      "drawCalls": 37,
+      "clip": "walk",
+      "groundSpeed": 1.8
+    },
+    {
+      "i": 15,
+      "file": "",
+      "pos": {
+        "x": 30.39028947929488,
+        "z": -6.346697974901863
+      },
+      "yaw": -0.8269399656313379,
+      "zone": "ven-shore",
+      "grounded": true,
+      "clearance": 0,
+      "analyticGap": 1.181937067452653,
+      "drawCalls": 40,
+      "clip": "walk",
+      "groundSpeed": 1.7999999999999992
+    },
+    {
+      "i": 16,
+      "file": "laptop/p15a-ven-burst/p15a-ven-16.png",
+      "pos": {
+        "x": 32.69974230261497,
+        "z": -13.537908944401302
+      },
+      "yaw": -0.8289708288015856,
+      "zone": "ven-shore",
+      "grounded": true,
+      "clearance": 0,
+      "analyticGap": 2.5396715944600605,
+      "drawCalls": 24,
+      "clip": "walk",
+      "groundSpeed": 1.7999999999999994
+    },
+    {
+      "i": 17,
+      "file": "",
+      "pos": {
+        "x": 32.69974230261497,
+        "z": -13.537908944401302
+      },
+      "yaw": -0.8304731190917067,
+      "zone": "ven-shore",
+      "grounded": true,
+      "clearance": 0,
+      "analyticGap": 2.5396715944600605,
+      "drawCalls": 24,
+      "clip": "idle",
+      "groundSpeed": 0
+    },
+    {
+      "i": 18,
+      "file": "",
+      "pos": {
+        "x": 32.69974230261497,
+        "z": -13.537908944401302
+      },
+      "yaw": -0.8304731190917067,
+      "zone": "ven-shore",
+      "grounded": true,
+      "clearance": 0,
+      "analyticGap": 2.5396715944600605,
+      "drawCalls": 24,
+      "clip": "idle",
+      "groundSpeed": 0
     },
     {
       "i": 19,
       "file": "",
       "pos": {
-        "x": 41.21174599316364,
-        "z": -3.7104078873693993
+        "x": 32.69974230261497,
+        "z": -13.537908944401302
       },
-      "yaw": -0.9272633594546402,
+      "yaw": -0.8304731190917067,
       "zone": "ven-shore",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.0833088464604537,
-      "drawCalls": 32,
-      "clip": "walk",
-      "groundSpeed": 1.7999999999999985
+      "analyticGap": 2.5396715944600605,
+      "drawCalls": 24,
+      "clip": "idle",
+      "groundSpeed": 0
     },
     {
       "i": 20,
       "file": "",
       "pos": {
-        "x": 41.52289973742896,
-        "z": -5.888979853094075
+        "x": 32.69974230261497,
+        "z": -13.537908944401302
       },
-      "yaw": -0.14777014500311658,
+      "yaw": -0.8304731190917067,
       "zone": "ven-shore",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 1.6972612181554974,
-      "drawCalls": 28,
-      "clip": "walk",
-      "groundSpeed": 1.8000000000000003
+      "analyticGap": 2.5396715944600605,
+      "drawCalls": 24,
+      "clip": "idle",
+      "groundSpeed": 0
     },
     {
       "i": 21,
       "file": "",
       "pos": {
-        "x": 40.27269890954186,
-        "z": -7.5764714567649785
+        "x": 32.69974230261497,
+        "z": -13.537908944401302
       },
-      "yaw": 0.6376280149203497,
+      "yaw": -0.8304731190917067,
       "zone": "ven-shore",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.0914356152113167,
-      "drawCalls": 52,
+      "analyticGap": 2.5396715944600605,
+      "drawCalls": 24,
       "clip": "idle",
       "groundSpeed": 0
     },
@@ -368,113 +368,33 @@
       "i": 22,
       "file": "",
       "pos": {
-        "x": 40.27269890954186,
-        "z": -7.5764714567649785
+        "x": 32.69974230261497,
+        "z": -13.537908944401302
       },
-      "yaw": 0.637628018390334,
+      "yaw": -0.8304731190917067,
       "zone": "ven-shore",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.0914356152113167,
-      "drawCalls": 52,
+      "analyticGap": 2.5396715944600605,
+      "drawCalls": 24,
       "clip": "idle",
       "groundSpeed": 0
     },
     {
       "i": 23,
-      "file": "",
+      "file": "laptop/p15a-ven-burst/p15a-ven-23.png",
       "pos": {
-        "x": 40.27269890954186,
-        "z": -7.5764714567649785
+        "x": 32.77016287497071,
+        "z": -13.46083558331532
       },
-      "yaw": 0.6376280183943273,
+      "yaw": 0.2886514964977298,
       "zone": "ven-shore",
       "grounded": true,
       "clearance": 0,
-      "analyticGap": 2.0914356152113167,
-      "drawCalls": 52,
-      "clip": "idle",
-      "groundSpeed": 0
-    },
-    {
-      "i": 24,
-      "file": "laptop/p15a-ven-burst/p15a-ven-24.png",
-      "pos": {
-        "x": 40.27269890954186,
-        "z": -7.5764714567649785
-      },
-      "yaw": 0.6376280183943308,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 2.0914356152113167,
-      "drawCalls": 52,
-      "clip": "idle",
-      "groundSpeed": 0
-    },
-    {
-      "i": 25,
-      "file": "",
-      "pos": {
-        "x": 40.27269890954186,
-        "z": -7.5764714567649785
-      },
-      "yaw": 0.6376280183943308,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 2.0914356152113167,
-      "drawCalls": 48,
-      "clip": "idle",
-      "groundSpeed": 0
-    },
-    {
-      "i": 26,
-      "file": "",
-      "pos": {
-        "x": 40.27269890954186,
-        "z": -7.5764714567649785
-      },
-      "yaw": 0.6376280183943308,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 2.0914356152113167,
-      "drawCalls": 48,
-      "clip": "idle",
-      "groundSpeed": 0
-    },
-    {
-      "i": 27,
-      "file": "",
-      "pos": {
-        "x": 40.27269890954186,
-        "z": -7.5764714567649785
-      },
-      "yaw": 0.6376280183943308,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 2.0914356152113167,
-      "drawCalls": 48,
-      "clip": "idle",
-      "groundSpeed": 0
-    },
-    {
-      "i": 28,
-      "file": "laptop/p15a-ven-burst/p15a-ven-28.png",
-      "pos": {
-        "x": 40.27269890954186,
-        "z": -7.5764714567649785
-      },
-      "yaw": 0.6376280183943308,
-      "zone": "ven-shore",
-      "grounded": true,
-      "clearance": 0,
-      "analyticGap": 2.0914356152113167,
-      "drawCalls": 48,
-      "clip": "idle",
-      "groundSpeed": 0
+      "analyticGap": 2.5384390533176795,
+      "drawCalls": 28,
+      "clip": "walk",
+      "groundSpeed": 1.8
     }
   ]
 }

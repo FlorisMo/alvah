@@ -276,6 +276,16 @@ cut. `viewClear`/`avatarScreen.visible` test the same terrain+prop line, so
 the hook can never claim clear over a murk frame. Occluder fades RESET when a
 composed screen (title, board, mission reframe) takes the camera — a
 half-ghosted crown on the title is a style break, not a fade at work.
+**And the sightline law covers EVERY rendered occluder class (GATE-D2 audit,
+2026-07-12):** fresh `18-jeep-near` proved a third blind spot — an ANIMAL model
+between lens and ranger while `viewClear` claimed clear (crowns and terrain
+were tested; props/animals/vehicles were not). The clear-line test binds to
+anything the renderer draws; fadeable occluders fade, unfadeable ones report
+honestly. The same frame adds two staging laws: the vehicle-approach follow
+camera stays inside the normal follow pitch band (no near-straight-down
+collapse beside the jeep), and wayfinding marker RINGS are UI (§3) — they cap
+their screen-projected size or fade as the camera nears, never filling the
+frame as a giant hoop.
 
 ### 2.6 Performance budget as an art constraint
 
@@ -762,6 +772,35 @@ cause (rendered-vs-target opacity, or the F-07 skinned-bounds family) and a
 rendered-opacity hook. Phase 2 sequenced AFTER D1.7 (the rescale rebuilds the
 same bounds/opacity machinery; the pair shot asserts on the rendered-opacity
 hook). No frozen contract and no §2.4 Alvah correction was touched.
+
+**GATE-D2 audit (2026-07-12, Fable art director, against the fresh 04:46–05:33
+capture — Phase 2 PASSED, gate ticked):** Alvah is Alvah on laptop pixels. The
+child scale is TRUE end-to-end: idle `avatar.height` 1.19999 in every world
+annotation (band [1.1, 1.35]), the warden at 1.8 on a live hook, ratio 0.667,
+and the pair pixels unmistakable — `p16a-child-vs-adult` + the face-on approach
+frame show a small blonde child beside a solid adult warden, and
+`16-camera-orbit` repeats the read in the golden hub light. The §2.4 traps were
+all avoided, verified in code: `ADULT_REFERENCE_HEIGHT` (1.8) split from
+`RANGER_STAND_HEIGHT` (1.2) so no animal rescaled; `camLookH`/`camIdleLookH`
+derive from the self-measured `avatarTopY`; the RM freeze pairs stayed
+pixel-identical through the rescale. The blonde/blue read holds at every judged
+range: title close-up, zoom-in crown, all five d13 entries at follow distance,
+a face-on RM frame with clear blue eyes + yellow shirt + green jacket, and the
+avatar-creator preview (blonde under the hat, round blue irises, all five
+presets + swatch rows live) — blond, not oranje, under the golden key. P1.6b
+stays +demo-capped for Floris's resemblance verdict. Phase-1 spot-checks: D1.7
+proven (the title-return body renders, opacity hook honest); D1.5's crown+reset
+machinery proven while its TERRAIN-leg evidence went missing — the pinned
+controls-hud scene crashed on a harness `tx` ReferenceError (one of two GAPs;
+the other: game3d-corsi's board-open timeout) — the crash-fix + returning frame
+are D3.15 and GATE-D3 re-courts that leg. New pixel findings routed to Phase 3:
+the `18-jeep-near` void frame (→D3.16 + the §2.5 all-occluder-classes law
+above), the low-LOD title stand-in world on `d17-titlereturn-17` (→D3.17), the
+hard-edged cloud boundary, the below-fold `.tw-back` at y=1480, the min-zoom
+top-down crown read at child scale (→D3.13 sharpened), and D3.14's rim/ven/walk
+shadows appearing already met. The heli spec failed its fifth capture
+(harness-side, parked D1.6). No frozen contract and no §2.4 Alvah correction
+was touched.
 
 ---
 
