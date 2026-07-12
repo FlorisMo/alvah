@@ -1,0 +1,546 @@
+{
+  "box": "D1.7",
+  "platform": "laptop",
+  "spec": "title-return.spec.ts",
+  "worldAMinOpacity": 0.15071784916243267,
+  "returnPeakOpacity": 1,
+  "settled": {
+    "i": 34,
+    "phase": "settled",
+    "file": "laptop/d17-titlereturn-burst/d17-titlereturn-34.png",
+    "pos": {
+      "x": 0,
+      "z": 0
+    },
+    "renderedOpacity": 1,
+    "visible": true,
+    "onScreen": true,
+    "clip": "idle",
+    "drawCalls": 43,
+    "screen": "world"
+  },
+  "samples": [
+    {
+      "i": 0,
+      "phase": "spawn",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-00.png",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 47,
+      "screen": "world"
+    },
+    {
+      "i": 1,
+      "phase": "walkA",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-01.png",
+      "pos": {
+        "x": 0.128424771203137,
+        "z": 0.6512065507302968
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 47,
+      "screen": "world"
+    },
+    {
+      "i": 2,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 1.0781025905564605,
+        "z": 1.5898107788720723
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 24,
+      "screen": "world"
+    },
+    {
+      "i": 3,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 1.952234326980197,
+        "z": 0.7350905550619998
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 32,
+      "screen": "world"
+    },
+    {
+      "i": 4,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 1.2522218161591758,
+        "z": -0.32573880593518423
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 23,
+      "screen": "world"
+    },
+    {
+      "i": 5,
+      "phase": "walkA",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-05.png",
+      "pos": {
+        "x": 2.2038387808051842,
+        "z": -1.169329964375052
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 36,
+      "screen": "world"
+    },
+    {
+      "i": 6,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 1.1885081030006241,
+        "z": -2.015480462865079
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 46,
+      "screen": "world"
+    },
+    {
+      "i": 7,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 0.02881085218971169,
+        "z": -1.2679448813881724
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 51,
+      "screen": "world"
+    },
+    {
+      "i": 8,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 1.0839891517986622,
+        "z": -0.539284823748801
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 23,
+      "screen": "world"
+    },
+    {
+      "i": 9,
+      "phase": "walkA",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-09.png",
+      "pos": {
+        "x": 0.8189002404806198,
+        "z": -2.3902253973539795
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 17,
+      "screen": "world"
+    },
+    {
+      "i": 10,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 1.331361449970033,
+        "z": -3.153174645436004
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 66,
+      "screen": "world"
+    },
+    {
+      "i": 11,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 0.6617666816081265,
+        "z": -4.441428650107136
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 28,
+      "screen": "world"
+    },
+    {
+      "i": 12,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 1.5044093073503761,
+        "z": -4.92155518946918
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 51,
+      "screen": "world"
+    },
+    {
+      "i": 13,
+      "phase": "walkA",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-13.png",
+      "pos": {
+        "x": 2.790181829205827,
+        "z": -3.957631253343813
+      },
+      "renderedOpacity": 0.15071784916243267,
+      "visible": false,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 17,
+      "screen": "world"
+    },
+    {
+      "i": 14,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 2.9053709378865733,
+        "z": -4.851764564795598
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 64,
+      "screen": "world"
+    },
+    {
+      "i": 15,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 1.4157448100019798,
+        "z": -5.273283907137209
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 51,
+      "screen": "world"
+    },
+    {
+      "i": 16,
+      "phase": "walkA",
+      "file": "",
+      "pos": {
+        "x": 0.9783134782647508,
+        "z": -4.308788045290346
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "walk",
+      "drawCalls": 64,
+      "screen": "world"
+    },
+    {
+      "i": 17,
+      "phase": "title",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-17.png",
+      "pos": null,
+      "renderedOpacity": null,
+      "visible": null,
+      "onScreen": null,
+      "clip": null,
+      "drawCalls": 12,
+      "screen": "title"
+    },
+    {
+      "i": 18,
+      "phase": "return",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-18.png",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 45,
+      "screen": "world"
+    },
+    {
+      "i": 19,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 45,
+      "screen": "world"
+    },
+    {
+      "i": 20,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 45,
+      "screen": "world"
+    },
+    {
+      "i": 21,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 45,
+      "screen": "world"
+    },
+    {
+      "i": 22,
+      "phase": "return",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-22.png",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 45,
+      "screen": "world"
+    },
+    {
+      "i": 23,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 43,
+      "screen": "world"
+    },
+    {
+      "i": 24,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 43,
+      "screen": "world"
+    },
+    {
+      "i": 25,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 43,
+      "screen": "world"
+    },
+    {
+      "i": 26,
+      "phase": "return",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-26.png",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 43,
+      "screen": "world"
+    },
+    {
+      "i": 27,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 43,
+      "screen": "world"
+    },
+    {
+      "i": 28,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 43,
+      "screen": "world"
+    },
+    {
+      "i": 29,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 43,
+      "screen": "world"
+    },
+    {
+      "i": 30,
+      "phase": "return",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-30.png",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 45,
+      "screen": "world"
+    },
+    {
+      "i": 31,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 45,
+      "screen": "world"
+    },
+    {
+      "i": 32,
+      "phase": "return",
+      "file": "",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 45,
+      "screen": "world"
+    },
+    {
+      "i": 33,
+      "phase": "return",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-33.png",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 45,
+      "screen": "world"
+    },
+    {
+      "i": 34,
+      "phase": "settled",
+      "file": "laptop/d17-titlereturn-burst/d17-titlereturn-34.png",
+      "pos": {
+        "x": 0,
+        "z": 0
+      },
+      "renderedOpacity": 1,
+      "visible": true,
+      "onScreen": true,
+      "clip": "idle",
+      "drawCalls": 43,
+      "screen": "world"
+    }
+  ]
+}

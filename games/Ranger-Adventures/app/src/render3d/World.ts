@@ -1764,6 +1764,13 @@ export class World {
     // frustum test entirely — a couple of draw calls at most, far under the <150
     // budget — and let the camera alone decide what is on screen.
     prepped.traverse((o) => { o.frustumCulled = false; });
+    // D1.7: the rig materials are SHARED (Models.loadRig → SkeletonUtils.clone) with
+    // the Stage title clone + every prior World instance, so this fresh rig can
+    // inherit them left transparent by a prior fade; a fresh World's avatarOpacity==1
+    // guard would never restore them (the `14-title-return-world` invisible ranger).
+    // Force them solid the instant the rig is (re)built so world re-entry always
+    // renders his body.
+    this.forceAvatarOpaque();
     // wire the locomotion mixer: idle/walk crossfade by speed, or a procedural
     // bob when the clips are missing (loadRig returned an empty clip list).
     if (rig.clips.length) this.playerRig.attach(prepped, rig.clips);
@@ -1889,11 +1896,16 @@ export class World {
     // onScreen/avatarInView true while a crown swallowed him, §8.7). Only the free-walk
     // follow cam can sit inside a crown; a vehicle/heli/mission-owned cam reads clear.
     const viewClear = (this.inVehicle || this.inHeli || this.activityActive) ? true : this.viewClearState;
+    // D1.7: the RENDERED body opacity read off the shared materials — NOT the
+    // `avatarOpacity` intent field, which lied 1 over an invisible ranger on the
+    // title-return path. `visible` folds it in, so the hook matches the pixels: a
+    // ~0-opacity body (shadow still casting) reads not-visible (§8.7).
+    const renderedOpacity = this.renderedAvatarOpacity();
     const avatarScreen = {
       x: ndc.x, y: ndc.y,
       onScreen,
       heightFrac: Math.abs(topY - botY) / 2,
-      visible: onScreen && this.avatarOpacity > 0.5 && lensInRim && (headClear || chestClear) && viewClear,
+      visible: onScreen && renderedOpacity > 0.5 && lensInRim && (headClear || chestClear) && viewClear,
     };
     // F-09 hub-in-frustum: is at least one hub landmark actually in this frame? The
     // world-entry assert reads it to PROVE the spawn faces the hub, not the void —
@@ -1947,12 +1959,16 @@ export class World {
       // moves `yaw` (and `lift`) while `pos` holds; a clean click walks and never touches
       // it. The real render `yaw` above (quaternion) stays the court of appeal (§4).
       orbit: { yaw: this.orbitYaw, lift: this.orbitLift },
-      // the applied fade (setAvatarOpacity): 1 = the ranger renders solid. A grade
-      // reads this to know whether the F-05 fade rail fired on THIS frame instead
-      // of inferring it from murk in the pixels (§4). Steady 1 across the settled
-      // hero/POI shots is the F-07 proportion shot's "ranger is shown, not faded"
-      // signal; anything < 1 flags the empty-frame before the judge looks at it.
-      avatarOpacity: this.avatarOpacity,
+      // D1.7: the RENDERED body opacity (read off the shared materials), NOT the
+      // fade-rail INTENT field — which lied 1 over an invisible ranger after a
+      // title round-trip (`14-title-return-world`: shadow cast, body unrendered;
+      // the shared rig materials were left transparent and a fresh World's
+      // avatarOpacity==1 guard never restored them, §8.7). 1 = the ranger renders
+      // solid; anything < 1 flags an empty/faded frame BEFORE the judge looks, and
+      // now it cannot be faked by the intent field. In the normal case (a settled
+      // hero/POI shot, or the F-05 boom fade) this equals the applied fade, so the
+      // F-07 machine signal is unchanged; only the title-return lie is caught.
+      avatarOpacity: renderedOpacity,
       avatarScreen,
       viewClear,
       canopyFade: this.canopyOpacity,
@@ -3907,6 +3923,65 @@ export class World {
         else { mat.opacity = orig.o * o; mat.transparent = true; mat.depthWrite = false; }
       }
     });
+  }
+
+  /**
+   * D1.7: the ranger's ACTUAL rendered body opacity this frame — the honest,
+   * pixel-truthful signal the hook reports instead of the `avatarOpacity` INTENT
+   * field. The rig materials are SHARED by reference (Models.loadRig →
+   * SkeletonUtils.clone; a Mesh clone shares its material) across the Stage title
+   * clone and every World instance, so a fresh World inherits whatever opacity a
+   * prior instance's fade rail left them in while its own `avatarOpacity` field
+   * defaults to 1 — the `14-title-return-world` breach: shadow cast (the depth pass
+   * ignores opacity), body unrendered, hook lying `avatarOpacity` 1 (§8.7). This
+   * reads the materials directly: the MAX effective opacity across his meshes, so
+   * one solid mesh proves he draws (a non-transparent material renders opaque
+   * regardless of its `opacity` number → counts as 1; a faded material contributes
+   * its live `opacity`). ~1 = solid body, ~0 = invisible. Empty rig → 0.
+   */
+  private renderedAvatarOpacity(): number {
+    if (this.ranger.children.length === 0) return 0; // rig not built yet
+    // Visibility-aware walk that mirrors three's render gate: an invisible node hides
+    // its whole subtree, an invisible material draws nothing, and an OPAQUE material
+    // ignores its `opacity` number (renders solid). So MAX effective opacity over the
+    // meshes three would actually draw = "is the body visible": ~1 solid, 0 when a
+    // stale shared-material fade / a hidden mesh / a hidden group leaves him unrendered.
+    // With frustumCulled=false (loadRealRanger) there is no other draw gate, so this
+    // signal cannot lie the way the `avatarOpacity` intent field did (§8.7).
+    let max = 0;
+    const visit = (o: THREE.Object3D): void => {
+      if (!o.visible) return; // an invisible node hides its whole subtree
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh) {
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats) {
+          const mat = m as THREE.Material & { opacity: number; transparent: boolean; visible: boolean };
+          if (mat.visible === false) continue;
+          const eff = mat.transparent ? mat.opacity : 1;
+          if (eff > max) max = eff;
+        }
+      }
+      for (const c of o.children) visit(c);
+    };
+    visit(this.ranger);
+    return max;
+  }
+
+  /**
+   * D1.7: force the ranger's SHARED materials back to their authored solid state,
+   * bypassing setAvatarOpacity's churn-guard (`o === this.avatarOpacity`). A fresh
+   * World starts `avatarOpacity` at 1, so `setAvatarOpacity(1)` is a no-op and can
+   * NEVER un-fade materials a PRIOR instance left transparent (the shared-material
+   * desync above). Called when the real rig is (re)built (loadRealRanger's swap — the
+   * boot procedural stand-in makes its OWN fresh materials, so it can't inherit a leak)
+   * so world re-entry always renders him solid — instant, so it is a cut under
+   * reduced-motion too (an opacity reset is not a camera move). Poisoning
+   * the guard and reusing setAvatarOpacity keeps the restore logic (the `__fadeOrig`
+   * stash) in one place.
+   */
+  private forceAvatarOpaque(): void {
+    this.avatarOpacity = -1; // poison the guard so the restore always runs
+    this.setAvatarOpacity(1);
   }
 
   /**

@@ -24,14 +24,16 @@ export type CamState = {
   dist: number; yaw: number; pitch: number;
   x: number; y: number; z: number;
   target: 'avatar' | 'vehicle'; avatarInView: boolean;
-  /** The applied ranger render opacity this frame (1 = solid). The F-05 fade rail
-   *  drops it below 1 ONLY when the boom collapses toward the ranger; a settled
-   *  hero/POI frame must read 1. Exposed as the machine signal that ends the F-07
-   *  proportion-shot's blind retries: a genuinely faded ranger (opacity < 1)
-   *  predicts an empty frame BEFORE the judge looks, and opacity == 1 proves the
-   *  fade is NOT why the ranger is hard to see — so a hard-to-see-but-solid ranger
-   *  redirects the fix to framing, not to the boom (AUDIT-FINDINGS §4: pixels are
-   *  the court of appeal; this is the field that keeps them honest). */
+  /** D1.7: the RENDERED ranger body opacity this frame (1 = solid) — read off the
+   *  shared materials three would actually draw (visibility-aware max effective
+   *  opacity), NOT the fade-rail INTENT field. It lied `1` over an INVISIBLE ranger
+   *  after a title round-trip (`14-title-return-world`: shadow cast, body unrendered),
+   *  so the honest read is the material truth: 0 when a stale fade / hidden mesh /
+   *  hidden group leaves him unrendered, ~1 when he draws solid. In the normal case
+   *  (a settled hero/POI frame, or the F-05 boom fade) it EQUALS the applied fade, so
+   *  the F-07 machine signal is unchanged — a settled frame still reads 1, and
+   *  opacity < 1 still predicts an empty/faded frame BEFORE the judge looks (§4);
+   *  only the intent-field lie is now impossible. `avatarScreen.visible` folds it in. */
   avatarOpacity: number;
   /** The ranger's world centre projected to normalised screen space (F-05 framing,
    *  Run B monitor steer #2): `x`/`y` in [-1, 1] (0 = frame centre, +y up), `onScreen`
