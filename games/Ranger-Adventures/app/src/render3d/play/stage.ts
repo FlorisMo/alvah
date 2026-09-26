@@ -40,6 +40,10 @@ export interface StageSpec {
 
 const V = (x = 0, y = 0, z = 0): THREE.Vector3 => new THREE.Vector3(x, y, z);
 
+/** How much further out (m) the patch and lens may step, in order, when no heading
+ *  right in front of the ranger is clean. */
+const STAGE_STEP_OUT = [0, 1.5, 3, 4.5];
+
 export class Stage {
   readonly ctx: WorldCtx;
   readonly spec: Required<StageSpec>;
@@ -60,6 +64,8 @@ export class Stage {
   /** the follow camera's pose when the game began: `handBack()` returns here */
   private readonly homePos: THREE.Vector3;
   private readonly homeLook: THREE.Vector3;
+  /** tall things the lens could end up in or look through (built once, in `plan`) */
+  private tall: THREE.Box3[] = [];
   private readonly owned: THREE.Object3D[] = [];
   private readonly spawned: Spawned[] = [];
   private readonly hidden: { o: THREE.Object3D; was: boolean }[] = [];
@@ -88,6 +94,7 @@ export class Stage {
 
   private plan(): void {
     const ctx = this.ctx;
+    this.tall = this.tallBoxes();
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const R = V(ctx.player.x, 0, ctx.player.z);
     // straight ahead = where the lens already looks (so the reframe is a glide, no turn)
@@ -96,14 +103,18 @@ export class Stage {
     if (look0.lengthSq() < 1e-6) look0.set(-Math.sin(ctx.player.yaw), 0, -Math.cos(ctx.player.yaw));
     look0.normalize();
 
+    // Every heading first with the lens just ahead of the ranger; when none is clean
+    // (he stands under a tree, say) the patch and lens step further out along it.
     let best: { score: number; f: THREE.Vector3; P: THREE.Vector3; cam: THREE.Vector3; look: THREE.Vector3 } | null = null;
-    for (const deg of stageHeadings()) {
-      const f = look0.clone().applyAxisAngle(V(0, 1, 0), (deg * Math.PI) / 180);
-      const fit = this.fitAlong(R, f);
-      const bad = this.violations(fit.P, f, fit.cam);
-      const score = bad * 100 + Math.abs(deg) / 180;
-      if (!best || score < best.score) best = { score, f, P: fit.P, cam: fit.cam, look: fit.look };
-      if (bad < 0.01) break;
+    search: for (const extra of STAGE_STEP_OUT) {
+      for (const deg of stageHeadings()) {
+        const f = look0.clone().applyAxisAngle(V(0, 1, 0), (deg * Math.PI) / 180);
+        const fit = this.fitAlong(R, f, extra);
+        const bad = this.violations(fit.P, f, fit.cam);
+        const score = bad * 100 + Math.abs(deg) / 180 + extra / 10;
+        if (!best || score < best.score) best = { score, f, P: fit.P, cam: fit.cam, look: fit.look };
+        if (bad < 0.01) break search;
+      }
     }
     const b = best!;
     this.fwd.copy(b.f);
@@ -115,14 +126,15 @@ export class Stage {
 
   /** The lens pose that frames a patch laid along heading `f` from the ranger at R. The
    *  patch starts ≥1.2 m ahead of him and far enough out that the lens (which backs
-   *  off to fit the patch into the free screen band) still stands in FRONT of him. */
-  private fitAlong(R: THREE.Vector3, f: THREE.Vector3): { P: THREE.Vector3; cam: THREE.Vector3; look: THREE.Vector3 } {
+   *  off to fit the patch into the free screen band) still stands in FRONT of him —
+   *  and `extra` m further out still, when the spot right ahead of him is blocked. */
+  private fitAlong(R: THREE.Vector3, f: THREE.Vector3, extra = 0): { P: THREE.Vector3; cam: THREE.Vector3; look: THREE.Vector3 } {
     const { halfD } = this.spec;
-    let ahead = 1.2 + halfD;
+    let ahead = 1.2 + halfD + extra;
     let out = this.fitAt(R.clone().addScaledVector(f, ahead), f);
     for (let i = 0; i < 3; i++) {
       const lensBack = Math.hypot(out.cam.x - out.P.x, out.cam.z - out.P.z);
-      const need = Math.max(1.2 + halfD, lensBack + 0.35);
+      const need = Math.max(1.2 + halfD, lensBack + 0.35) + extra;
       if (need <= ahead + 0.05) break;
       ahead = need;
       out = this.fitAt(R.clone().addScaledVector(f, ahead), f);
@@ -223,6 +235,17 @@ export class Stage {
     }
     // the lens stands in the open and sees the patch over open ground
     if (!ctx.isClear(cam.x, cam.z, 0.6)) bad += 3;
+    // ... and in the open AIR: never inside a tree's foliage or a tall prop (a trunk's
+    // collision circle is far smaller than an oak's crown), and it looks at the patch
+    // past them, not through a crown
+    if (this.inTall(cam.x, cam.y, cam.z, 0.5)) bad += 3;
+    for (const u of [-halfW, 0, halfW]) {
+      const tx = P.x + right.x * u - f.x * halfD * 0.5, tz = P.z + right.z * u - f.z * halfD * 0.5;
+      const ty = ctx.groundY(tx, tz) + 0.3;
+      for (let t = 0.1; t < 0.86; t += 0.075) {
+        if (this.inTall(cam.x + (tx - cam.x) * t, cam.y + (ty - cam.y) * t, cam.z + (tz - cam.z) * t, 0.2)) { bad += 1; break; }
+      }
+    }
     for (let t = 0.15; t < 1; t += 0.15) {
       const x = cam.x + (P.x - cam.x) * t, z = cam.z + (P.z - cam.z) * t;
       if (!ctx.isClear(x, z, 0.3)) bad++;
@@ -238,6 +261,57 @@ export class Stage {
       }
     }
     return bad;
+  }
+
+  /**
+   * World boxes of everything TALL (over 2.2 m, under 14 m across) in the scene before
+   * the game stages anything: each tree of the instanced forest, the dressing trees,
+   * the watchtower, the cabin, the parked helicopter. The approached marker is left
+   * out (it steps away while its game runs), and so are sprites (floating labels).
+   */
+  private tallBoxes(): THREE.Box3[] {
+    const out: THREE.Box3[] = [];
+    const m = new THREE.Matrix4();
+    const b = new THREE.Box3();
+    const one = new THREE.Box3();
+    const isTall = (x: THREE.Box3): boolean => !x.isEmpty() && x.max.y - x.min.y > 2.2
+      && x.max.x - x.min.x < 14 && x.max.z - x.min.z < 14;
+    for (const top of this.scene.children) {
+      if (!top.visible || top === this.ctx.approachedModel) continue;
+      const im = top as THREE.InstancedMesh;
+      if (im.isInstancedMesh) {
+        if (!im.geometry.boundingBox) im.geometry.computeBoundingBox();
+        im.updateMatrixWorld();
+        for (let i = 0; i < im.count; i++) {
+          im.getMatrixAt(i, m);
+          b.copy(im.geometry.boundingBox!).applyMatrix4(m.premultiply(im.matrixWorld));
+          if (isTall(b)) out.push(b.clone());
+        }
+        continue;
+      }
+      b.makeEmpty();
+      top.updateWorldMatrix(false, true);
+      top.traverseVisible((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh || (o as unknown as THREE.Sprite).isSprite || (o as THREE.InstancedMesh).isInstancedMesh) return;
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        b.union(one.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld));
+      });
+      if (isTall(b)) out.push(b.clone());
+    }
+    return out;
+  }
+
+  /** Is (x,y,z) inside a tall thing's crown (its upper 70 %) or near its trunk/post? */
+  private inTall(x: number, y: number, z: number, pad: number): boolean {
+    for (const b of this.tall) {
+      if (x < b.min.x - pad || x > b.max.x + pad || z < b.min.z - pad || z > b.max.z + pad) continue;
+      if (y < b.min.y || y > b.max.y + pad) continue;
+      if (y >= b.min.y + (b.max.y - b.min.y) * 0.3) return true;
+      const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
+      if (Math.hypot(x - cx, z - cz) < 0.6 + pad) return true;
+    }
+    return false;
   }
 
   /* ------------------------------------------------------------- building ---- */
