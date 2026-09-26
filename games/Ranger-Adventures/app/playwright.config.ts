@@ -37,9 +37,10 @@ export default defineConfig({
   // over the 30 s default — the world DOES reach 'world', the budget expires
   // during the final asserts/screenshots (observed 2026-07-05..12, every red
   // deploy). 120 s keeps it a real upper bound (a genuine hang still fails);
-  // every frozen assertion and per-step timeout is unchanged. Locally the
-  // default 30 s stays.
-  timeout: process.env.CI ? 120_000 : 30_000,
+  // every frozen assertion and per-step timeout is unchanged. Locally 60 s: a
+  // full `npm run e2e` boots one world per worker on one GPU, and walk specs
+  // timed out at 30 s under that load (2026-09-26). The golden spec sets its own.
+  timeout: process.env.CI ? 120_000 : 60_000,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],

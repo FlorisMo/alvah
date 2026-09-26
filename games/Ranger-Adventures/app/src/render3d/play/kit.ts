@@ -195,8 +195,9 @@ function describeObject(o: THREE.Object3D, scene: THREE.Scene): string {
   let top = o;
   while (top.parent && top.parent !== scene) top = top.parent;
   const self = o.name || (o as THREE.Mesh).geometry?.type || o.type;
-  const at = `(${r2(top.position.x)}, ${r2(top.position.y)}, ${r2(top.position.z)})`;
-  return top === o ? `${self}@${at}` : `${self} in ${top.name || top.type}@${at}`;
+  const w = o.getWorldPosition(new THREE.Vector3());
+  const at = `(${r2(w.x)}, ${r2(w.y)}, ${r2(w.z)})`;
+  return top === o ? `${self}@${at}` : `${self}@${at} in ${top.name || top.type}`;
 }
 
 function describeElement(el: Element): string {
