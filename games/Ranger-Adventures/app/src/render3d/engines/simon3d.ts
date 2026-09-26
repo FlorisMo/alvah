@@ -92,15 +92,17 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     function speak(text: string): void { if (settings.voorlezen) narrator.speak(text); }
 
-    function banner(text: string): void {
+    function banner(text: string, dots = false): void {
       const card = anchoredPrompt(
         ctx.prompt,
         `<div class="p3-bottom"><div class="p3-card"><div class="p3-row">` +
           `<p class="p3-text">${esc(text)}</p>` +
+          (dots ? `<p class="p3-dots" aria-hidden="true"></p>` : '') +
           `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
           `</div></div></div>`,
       );
       card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(text));
+      showProgress();
     }
 
     let raf = 0;
@@ -204,10 +206,17 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       after(t, startEcho);
     }
 
+    /** how far the echo is: one dot per animal to repeat, filled as they are clicked
+     *  (so every right click visibly counts, even when the same animal calls twice) */
+    function showProgress(): void {
+      const el = ctx.prompt.querySelector('.p3-dots');
+      if (el) el.textContent = run.sequence.map((_, i) => (i < run.echoIndex ? '●' : '○')).join(' ');
+    }
+
     function startEcho(): void {
       phase = 'echo';
       quiet();
-      banner(echoTxt);
+      banner(echoTxt, true);
       speak(echoTxt);
     }
 
@@ -215,6 +224,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       if (phase !== 'echo') return;
       const f = fx.get(id);
       const res = run.tap(id);
+      showProgress();
       if (res === 'advance') {
         if (settings.geluid) Sound.call(id);
         if (f) { f.level = 0.45; f.lift = 0.5; f.color = OK; after(380, () => { f.level = 0; f.lift = 0; f.color = CALL; }); }
