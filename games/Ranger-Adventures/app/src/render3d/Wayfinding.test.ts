@@ -21,10 +21,14 @@ test('distanceTo is the ground (XZ) distance', () => {
 });
 
 test('bearing is relative to facing: ahead 0, right +, left −, behind ±π', () => {
-  // facing +z (facingY = 0): forward = (0,1)
+  // facing +z (facingY = 0): forward = (0,1). Looking along +z with y up, the
+  // right hand points to −x (a three.js camera looking down −z has +x on its right).
   assert.ok(Math.abs(bearing(0, 0, 0, 0, 10)) < NEAR, 'target ahead → 0');
-  assert.ok(bearing(0, 0, 0, 10, 0) > 0, 'target on the right → positive');
-  assert.ok(bearing(0, 0, 0, -10, 0) < 0, 'target on the left → negative');
+  assert.ok(bearing(0, 0, 0, -10, 0) > 0, 'target on the right (−x) → positive');
+  assert.ok(bearing(0, 0, 0, 10, 0) < 0, 'target on the left (+x) → negative');
+  // facing −z (the spawn view): +x is on the right, as on screen
+  assert.ok(bearing(0, 0, Math.PI, 10, 0) > 0, 'facing −z: +x is right');
+  assert.ok(bearing(0, 0, Math.PI, -15.6, -15.6) < 0, 'facing −z: the frisling marker is ahead-left');
   assert.ok(Math.abs(Math.abs(bearing(0, 0, 0, 0, -10)) - Math.PI) < NEAR, 'behind → ±π');
 });
 

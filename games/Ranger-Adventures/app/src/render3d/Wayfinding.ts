@@ -42,7 +42,10 @@ export function bearing(px: number, pz: number, facingY: number, tx: number, tz:
   const dirZ = tz - pz;
   const fx = Math.sin(facingY);
   const fz = Math.cos(facingY);
-  const cross = fz * dirX - fx * dirZ; // right-positive
+  // right of facing (sin θ, cos θ) is (−cos θ, sin θ) in three.js (y up, a camera
+  // looking down −z has +x on its right) — the old `fz·dx − fx·dz` was mirrored and
+  // sent the player to the wrong side (audit B4).
+  const cross = fx * dirZ - fz * dirX; // right-positive
   const dot = fx * dirX + fz * dirZ;   // ahead-positive
   return Math.atan2(cross, dot);
 }
