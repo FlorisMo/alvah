@@ -1,22 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
 
 /**
- * "Lucht + adem" E2E (WORLD-PLAN W4.6). The sky now breathes: a richer
- * golden-hour gradient, drifting cloud shadows, a gentle grass wind wave, and a
- * bird crossing the sky every ~12 s. All of it is SECONDARY motion, so it must
- * advance while the world runs AND freeze completely under reduced-motion. This
- * spec proves, against the dev-state hook:
- *   1) the richer gradient (>= 5 stops), a cloud-shadow layer, and >= 2 wind
- *      grass meshes exist;
- *   2) with normal motion the atmosphere clock advances and the cloud offset +
- *      wind sample drift over time (the sky is alive);
- *   3) with reduced-motion emulated the clock and every effect FREEZE (comfort);
- *   4) the draw-call budget still holds (`drawCalls()` < 150) — cloud layer +
- *      bird are one draw call each, the wind rides the existing grass instances.
- *
- * Not a @smoke test — the frozen movement smoke is untouched; this is the box's
- * own acceptance assert.
+ * Sky comfort law (WORLD-PLAN W4.6): the sky's cloud drift, grass wind and bird
+ * flyover are SECONDARY motion, so under reduced-motion they must freeze
+ * completely (Alvah is motion-sensitive). The motion-on "the sky is alive" stat
+ * test was retired 2026-09-26 (numbers only; the golden path judges the look).
  */
 
 interface Sky {
@@ -51,37 +39,6 @@ async function enterWorld(page: Page): Promise<void> {
     .poll(() => hook(page, (r) => (r.sky() ? r.sky()!.flyover !== null : false)), { timeout: 15_000 })
     .toBe(true);
 }
-
-test('sky is richer and breathes: gradient, cloud drift, wind, flyover — and stays in budget', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
-  const errors: string[] = [];
-  collectPageErrors(page, errors);
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await enterWorld(page);
-
-  const sky0 = await hook(page, (r) => r.sky());
-  expect(sky0).not.toBeNull();
-  expect(sky0!.gradientStops).toBeGreaterThanOrEqual(5); // richer than the old 3-stop ramp
-  expect(sky0!.cloudDrift).toBe(true);                   // cloud-shadow layer present
-  expect(sky0!.windMeshes).toBeGreaterThanOrEqual(2);    // marram + reed wave in the wind
-  expect(sky0!.flyover).not.toBeNull();                  // a bird is on its flyover cycle
-
-  // the atmosphere clock advances and the effects drift over time
-  const t0 = sky0!.skyTime;
-  await page.waitForTimeout(2200);
-  const sky1 = await hook(page, (r) => r.sky());
-  expect(sky1!.skyTime).toBeGreaterThan(t0 + 0.5);                 // clock advanced
-  expect(Math.abs(sky1!.cloudOffset.x - sky0!.cloudOffset.x)).toBeGreaterThan(1e-4); // clouds drifted
-  expect(sky1!.windSample).not.toBe(sky0!.windSample);            // grass swayed
-
-  const calls = await hook(page, (r) => r.drawCalls());
-  expect(calls).not.toBeNull();
-  expect(calls!).toBeLessThan(150);
-
-  await shot(page, 'w46-sky-breath');
-  await reportPageErrors(testInfo, errors);
-  expect(errors).toEqual([]);
-});
 
 test('sky freezes completely under reduced-motion (comfort law)', async ({ page }) => {
   test.setTimeout(60_000);

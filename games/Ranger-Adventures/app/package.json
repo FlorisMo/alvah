@@ -13,17 +13,13 @@
     "assets:opt:anim": "node scripts/optimize-animated.mjs",
     "assets:audio": "node scripts/audio-fetch.mjs",
     "assets:all": "node scripts/meshy-gen.mjs && node scripts/gltf-optimize.mjs && node scripts/optimize-animated.mjs && node scripts/audio-fetch.mjs",
-    "finish": "node scripts/ranger-run.mjs",
-    "run:status": "node scripts/ranger-run.mjs status",
     "test": "node --experimental-strip-types --test 'src/**/*.test.ts'",
     "e2e": "playwright test",
     "e2e:smoke": "playwright test --project=chromium --grep @smoke",
     "golden": "node scripts/golden.mjs",
     "gate": "tsc --noEmit && npm test && playwright test --project=chromium --grep @smoke",
     "e2e:webkit": "playwright test --project=webkit",
-    "e2e:preview": "playwright test --config playwright.preview.config.ts",
-    "capture": "playwright test --config playwright.capture.config.ts && node e2e-capture/contact-sheet.mjs",
-    "capture:sheet": "node e2e-capture/contact-sheet.mjs"
+    "e2e:preview": "playwright test --config playwright.preview.config.ts"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.4.0",

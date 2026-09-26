@@ -11,7 +11,7 @@ alvah.nl/ranger behind the client-side gate.
 ## Layout
 
 - **[app/](app/)** — the actual game (vanilla three.js + Vite + TS, no React). The
-  live code. `app/scripts/ranger-run.mjs` is the shared run tick-engine.
+  live code. `npm run golden` there plays the golden path (see [CLAUDE.md](CLAUDE.md)).
 - **[runs/](runs/)** — one folder per autonomous run:
   - **[runs/run-1-build/](runs/run-1-build/)** — ARCHIVE. First run (June 2026):
     procedural world + 5 EF mini-games, verified by unit tests only. Do not re-tick.
@@ -21,8 +21,7 @@ alvah.nl/ranger behind the client-side gate.
     Contains WORLD-PLAN, WORLD-LEDGER, the supervisor scripts, and `qa-evidence-2/`.
   - **[runs/run-3-ux-polish/](runs/run-3-ux-polish/)** — ARCHIVE. Run A (audit) +
     Run B (UX/controls build): 32 boxes fixed, 4 parked. Its `audit-evidence/` dir
-    stays the SHARED capture-output path for all later runs (hardcoded in
-    `app/e2e-capture/`).
+    holds the capture frames of the (removed) capture harness.
   - **[runs/run-4-experience/](runs/run-4-experience/)** — ARCHIVE. Run C
     (Fable-directed experience/polish): paused at ~9% on its 8h session cap;
     reconciled into Run D on 2026-07-05. The ledger/plan/direction/log stay as
@@ -42,4 +41,5 @@ alvah.nl/ranger behind the client-side gate.
 
 > Note: the archived run-1/run-2 `.sh` supervisor scripts assumed a top-level home;
 > after this reorg their relative paths are stale — treat them as pattern references.
-> The game (`app/`) and the tick-engine (`app/scripts/ranger-run.mjs`) are unaffected.
+> The run-loop tick-engine, capture harness and live status files were retired 2026-09-26;
+> their last output is `runs/RUN-STATUS.md` + `runs/RUN-LOG.md`.
