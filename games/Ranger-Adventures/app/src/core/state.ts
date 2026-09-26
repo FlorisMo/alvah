@@ -71,7 +71,6 @@ export interface Settings {
   wereldHintGezien: boolean;         // W1.6 first-world-entry control hint has been dismissed (step 1 of the P3.3 sequence)
   tikHintGezien: boolean;            // P3.3 (F-06): the post-walk "tik op een dier" transient tip has shown once
   kwaliteitTier: 'hoog' | 'laag';    // W7.2 adaptive quality tier — the last fps-probe verdict, persisted so a slow device boots light
-  skipBriefings: boolean;            // demo-skip (§9g): jump straight into play, no briefing card
   readSize: number;
   leading: number;
   ambient: number;
@@ -136,7 +135,6 @@ const DEFAULT_SETTINGS: Settings = {
   wereldHintGezien: false,
   tikHintGezien: false,
   kwaliteitTier: 'hoog',
-  skipBriefings: false,
   readSize: 28,
   leading: 1.7,
   ambient: 0.85,

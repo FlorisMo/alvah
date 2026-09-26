@@ -8,7 +8,7 @@ import { store } from './core/state';
 import { Sound } from './core/sound';
 import { installDevHook, setScreen, provideDrawCalls, provideAvatar, provideTitleReady } from './core/devhook';
 
-// W7.1 code-splitting: the mission/world/demo graph (World, the five engines,
+// W7.1 code-splitting: the mission/world graph (World, the five engines,
 // the 3D mini-game views, render2d) is the bulk of the bundle but is only
 // reachable AFTER "Begin". It is loaded via dynamic `import()` in the click
 // handler below so the entry `app.js` stays a light boot shell (three.js lives
@@ -29,8 +29,8 @@ const ui = document.getElementById('ui') as HTMLDivElement;
 
 // --- 3D render layer + live budget overlay (Phase 0) ---
 const stage = new Stage(canvas);
-// TEMP-PROBE (revert): expose the stage so a throwaway probe can traverse the
-// world scene for the ranger rig. Dev-gated; removed before this box is done.
+// `?dev=1` also exposes the stage (read-only use: `__stage.world` for probes and
+// playtest scripts that project scene objects to screen coordinates).
 if (new URLSearchParams(location.search).has('dev')) {
   (window as unknown as { __stage: unknown }).__stage = stage;
 }
@@ -63,7 +63,7 @@ provideAvatar(() => stage.titleAvatar());
 // so the capture can hold the title snap until the composed screen is never the stand-in world.
 provideTitleReady(() => stage.titleReady());
 
-// --- title card → the lodge (mission picker) ---
+// --- title card → the world ---
 const card = document.createElement('div');
 card.className = 'boot-card';
 card.innerHTML =
@@ -72,12 +72,6 @@ card.innerHTML =
   `<p class="boot-sub">Help de dieren van de Veluwe.<br>Kies een missie en train je breinkracht.</p>` +
   `<button class="btn-start" type="button">Begin</button>`;
 ui.appendChild(card);
-
-// `?sandbox` jumps straight into the compact Demo Sandbox; `?demo` launches the
-// Deep Demo guided tour (the Capstone review surface). Both are demo entries.
-const params = new URLSearchParams(location.search);
-const sandboxStart = params.has('sandbox');
-const deepDemoStart = params.has('demo');
 
 card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', async () => {
   // Unlock audio FIRST, synchronously in the tap (iOS gesture rule) — before
@@ -89,23 +83,8 @@ card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', a
   stage.markLeavingTitle();
   card.classList.add('boot-card--hidden');
   window.setTimeout(() => card.remove(), 360);
-  if (deepDemoStart) {
-    const { startDeepDemo } = await import('./ui/Missions');
-    startDeepDemo(ui, stage);
-    return;
-  }
-  if (sandboxStart) {
-    const [{ startSandbox }, { startLodge }] = await Promise.all([
-      import('./ui/Sandbox'),
-      import('./ui/Missions'),
-    ]);
-    startSandbox(ui, stage, () => startLodge(ui, stage));
-    return;
-  }
-  // W2.1: the walkable world is now the front door. First boot still makes your
-  // ranger first; afterwards (and on every later boot) drop STRAIGHT into the
-  // Veluwe. The lodge stays reachable from the explore HUD's "Terug naar de hut"
-  // pill until the in-world cabin hub (W2.2/W2.4) replaces it.
+  // The walkable world is the front door. First boot makes your ranger first;
+  // afterwards (and on every later boot) drop STRAIGHT into the Veluwe.
   if (store.get().avatarGemaakt) {
     const { startWorld } = await import('./ui/Missions');
     startWorld(ui, stage);
