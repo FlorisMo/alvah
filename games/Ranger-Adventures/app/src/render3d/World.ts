@@ -15,23 +15,18 @@
 import * as THREE from 'three';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { livePolicy } from './MotionMode';
-import {
-  VEN_CENTER, WATER_LEVEL,
-  anchorInBiome, type Biome,
-} from './Biomes';
+import { VEN_CENTER, WATER_LEVEL, type Biome } from './Biomes';
 import { Terrain } from './world/Terrain';
 import { Sky } from './world/Sky';
 import { Labels } from './world/Labels';
 import { Dressing, TREE_BASE_H } from './world/Dressing';
 import { Fauna } from './world/Fauna';
+import { Markers, type WorldMarker } from './world/Markers';
 import { enableCast, proceduralTotem } from './world/props';
 import { loadManifest, loadModel, loadRig, prepModel, skinnedRenderBox } from './Models';
 import { RANGER_STAND_HEIGHT } from './AnimalScale';
 import { applyEyes } from './EyeMaterial';
-import { applyCoat, applyPosture } from './AnimalDress';
 import { applyFace } from './FaceRig';
-import { applyCalmPose } from './CalmPoseRig';
-import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { resolveInput, screenVector, type StickVector } from '../core/input';
 import { driveStep, driveCaps, calmSpeed, rampSpeed, comfortSteer, ANIMAL_SLOW_RADIUS } from '../core/vehicle';
@@ -45,22 +40,13 @@ import { Sound } from '../core/sound';
 import { store } from '../core/state';
 import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, QUALITY_TIERS, type QualityTier } from '../core/quality';
-import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from './Wayfinding';
-import { routeVia } from './Paths';
+import type { WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
 import { PlayerRig } from './PlayerRig';
-import { ROEP_COPY } from '../engines/roep';
 
-export interface WorldMarker {
-  missionId: string;
-  titel: string;
-  modelId: string | null;   // generated GLB id, or null → procedural totem
-  height: number;           // target world height for the model
-  color: string;            // totem / accent colour
-  biome?: Biome;            // the mission's landschap → anchor the marker in it
-}
+export type { WorldMarker } from './world/Markers';
 
 // `grounded` band for the dev-hook court check (P1.5a asserts it across the world):
 // after the snap the feet sit ON the rendered surface, so clearance ≈ 0. A few cm of
@@ -184,13 +170,6 @@ export class World {
   private viewClearState = true;        // D1.5 last cam→avatar sightline-clear read (camState reports it)
   private terrainClearState = true;     // D1.5 (audit #4) last cam→avatar TERRAIN-clear read (folded into viewClear)
   private terrainLiftState = 0;         // D1.5 (audit #4) metres the follow boom rode up to clear a dune this frame (0 = flat)
-  // D3.16: the diegetic "go here" halo rings (mission markers, the case-board, the
-  // sit-spot). They are wayfinding UI (§3), so they FADE by the lens's proximity — a
-  // collapsed close follow boom must never render one as a frame-filling hoop
-  // (`18-jeep-near`). Full 0.5 beyond RING_FADE_FAR, linearly to 0 by RING_FADE_NEAR.
-  private readonly groundRings: { mat: THREE.MeshBasicMaterial; x: number; z: number; base: number }[] = [];
-  private readonly RING_FADE_NEAR = 2.2; // lens ≤ this from a ring ⇒ fully faded (it's under/around the ranger)
-  private readonly RING_FADE_FAR = 4.2;  // lens ≥ this ⇒ full "go here" opacity (normal approach/standing boom ~4.6 m)
   private readonly _camPose = new THREE.Vector3();  // scratch: camera world forward
   private readonly _camBox = new THREE.Box3();       // scratch: ranger bbox for pose reads
   // the sky, golden-hour light + ambient clock (world/Sky.ts) and the name-tags (world/Labels.ts)
@@ -199,6 +178,8 @@ export class World {
   private readonly dressing: Dressing;
   // the warden, the poacher and the roaming / gliding wildlife (world/Fauna.ts)
   private readonly fauna: Fauna;
+  // mission markers, the Missiebord + the sit-spot: proximity, interact, wayfinding (world/Markers.ts)
+  private readonly pois: Markers;
   private readonly labels = new Labels();
   // W1.5 rotating follow-cam: `followYaw` is the eased camera bearing; it chases
   // `followTargetYaw` (the ranger's facing, updated ONLY while he is moving — a
@@ -241,7 +222,6 @@ export class World {
   private boardFrameYaw = 0;
   private readonly BOARD_FRAME_YAW = 0.9;      // over-the-shoulder swing (rad) when near the board
   private readonly BOARD_FRAME_TAU = 0.16;     // board-reframe ease smooth-time (gentle, settles fast)
-  private readonly BOARD_APPROACH_FACE_TURN = 0.5; // static board face turn (rad) toward the +x approach view
   // click-vs-drag discriminator (F-17 §3 seam): a pointer that travels past DRAG_PX is a
   // camera drag (tap-to-walk suppressed); a cleaner press taps (walks to the release
   // point). ~6 px per the finding — precise on a mouse, forgiving of a small touch jitter.
@@ -252,21 +232,11 @@ export class World {
   private dragLastX = 0;
   private dragLastY = 0;
   private dragMoved = false;               // crossed DRAG_PX → this gesture is an orbit, not a tap
-  private readonly markers: {
-    group: THREE.Group; pos: THREE.Vector3; missionId: string;
-    recipe: MotionRecipe; phase: number;
-    label: THREE.Sprite;               // the floating diegetic name-tag (hidden during an activity)
-    anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
-    mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
-  }[] = [];
   // W4.4 ground detail: on by default; `?groundDetail=off` bakes the old flat
   // per-biome slab so the before/after evidence pair is one reproducible toggle.
   private readonly groundDetailOn: boolean =
     typeof location === 'undefined' ||
     new URLSearchParams(location.search).get('groundDetail') !== 'off';
-  private activeId: string | null = null;     // the mission the wayfinding cue points to
-  private readonly onWayfind: (cue: WayCue | null) => void;
-  private lastWayKey = '';                     // debounce identical cues (no DOM churn)
   private readonly raycaster = new THREE.Raycaster();
   // The ONE ground truth (world/Terrain.ts): the drawn ground mesh + y(x,z) + biome(x,z).
   // Every placement, the ranger's feet, the vehicles and the camera read terrain.y.
@@ -280,11 +250,8 @@ export class World {
   private tier: QualityTier = store.get().settings.kwaliteitTier;
   private readonly fpsProbe = new FpsProbe();
   private readonly canvas: HTMLCanvasElement;
-  private readonly onApproach: (missionId: string | null) => void;
-  private readonly onInteract: (missionId: string) => void;
   private readonly onBiome: (biome: Biome) => void;
   private lastBiome: Biome | null = null;       // re-pick the ambience bed on a crossing
-  private nearId: string | null = null;
   // F-08: on-foot ground speed (m/s). Retuned down from the giant-tuned 2.4 (which
   // measured ~2.7–3.5 m/s on the ground, 65–85 % of jeep speed) to a human ~1.8 m/s
   // now that F-07 sizes the ranger honestly. The jeep (max 6 m/s) stays clearly
@@ -318,32 +285,12 @@ export class World {
   // backside is caught. Set in ctx(), cleared in endActivity(); null in free-roam.
   private activityFocus: { x: number; y: number; z: number } | null = null;
 
-  // W2.2 spawn-clearing hub: the ranger-cabin (a solid prop the ranger walks
-  // around) + the case-board (the MISSION hub — proximity opens the mission board
-  // overlay WITHOUT tearing the world down). The board has its own proximity/tap/
-  // interact path kept OUT of `markers` so it never pollutes wayfinding or the
-  // "nearest mission marker" the E2E steers to.
-  private boardGroup: THREE.Group | null = null;
-  private boardPos: THREE.Vector3 | null = null;
-  private nearBoard = false;
-  private onBoardNear: (near: boolean) => void = () => {};
-  private onBoardOpen: () => void = () => {};
   // F-11: latched true while the ranger is pressed against the world rim heading
   // outward (the calm "Hier stopt het bos" cue has fired); re-armed once he walks
   // back inward. `onBoundary` fires on the rising edge — once per approach.
   private atBoundary = false;
   private onBoundary: () => void = () => {};
 
-  // W6.4b2 "Ken je roep" sit-spot: a bench by the vogelkijkhut. Its own
-  // proximity/tap/interact path (like the case-board) — walking up surfaces
-  // "Luister naar de vogels", and acting on it plays the roep3d perception slice
-  // in-place. Kept OUT of `markers` so it never pollutes wayfinding or the
-  // "nearest mission" proximity the E2E steers to.
-  private sitSpotGroup: THREE.Group | null = null;
-  private sitSpotPos: THREE.Vector3 | null = null;
-  private nearSitSpot = false;
-  private onSitSpotNear: (near: boolean) => void = () => {};
-  private onSitSpotActivate: () => void = () => {};
 
   // W5.1 drivable jeep: a solid parked prop the ranger walks up to ("Stap in"),
   // then drives arcade-kinematic (heading-based, rate-clamped, terrain-stuck)
@@ -447,11 +394,7 @@ export class World {
     onInteract: (missionId: string) => void = () => {},
   ) {
     this.canvas = canvas;
-    this.onApproach = onApproach;
-    this.onInteract = onInteract;
-    this.onWayfind = onWayfind;
     this.onBiome = onBiome;
-    this.activeId = activeId;
 
     this.sky = new Sky(this.scene); // golden-hour sky, fog, hemisphere fill + the hero-shadow sun
 
@@ -465,6 +408,10 @@ export class World {
       scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits, labels: this.labels,
     });
     this.fauna = new Fauna({ scene: this.scene, terrain: this.terrain });
+    this.pois = new Markers(
+      { scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, labels: this.labels },
+      { onApproach, onInteract, onWayfind }, activeId,
+    );
     this.scene.add(this.dressing.buildPaths()); // W4.3: sand-path ribbons over the ground
     this.scene.add(this.dressing.buildVenWater());
     this.sky.buildCloudShadows(); // W4.6: drifting cloud shadows over the ground
@@ -493,11 +440,11 @@ export class World {
     this.camera.up.set(0, 1, 0);
     this.placeCamera(true);
 
-    this.placeMarkers(markers);
+    this.pois.placeMarkers(markers);
     this.dressing.placeCabin();
-    this.placeBoard();
+    this.pois.placeBoard();
     this.dressing.placeLandmarks();
-    this.placeSitSpot();
+    this.pois.placeSitSpot();
     this.dressing.placeNatureDressing();
     this.fauna.placeScenicActors();
     this.fauna.placeAmbientLife();
@@ -532,32 +479,28 @@ export class World {
     // "aan de grond" message under reduced-motion / when the toggle is UIT; the
     // HUD reads `heliState().available` to decide what it shows).
     if (this.nearHeli) { this.enterHeli(); return; }
-    // the spawn case-board hub wins when the ranger stands at it (W2.2) — its
-    // "open the mission board" affordance is what the interact key fires there.
-    if (this.nearBoard) { this.onBoardOpen(); return; }
-    // W6.4b2: standing at the sit-spot → play the "Ken je roep" slice.
-    if (this.nearSitSpot) { this.onSitSpotActivate(); return; }
-    if (this.nearId) this.onInteract(this.nearId);
+    // then the spawn case-board hub (W2.2), the sit-spot (W6.4b2), a mission marker.
+    this.pois.interact();
   }
 
   /** Dev-hook accessor (W1.4): the mission the ranger is standing at, or null. */
   nearMission(): string | null {
-    return this.nearId;
+    return this.pois.nearId;
   }
 
   /** Dev-hook accessor (W2.2): the spawn case-board's world position + whether the
    *  ranger currently stands in its radius — lets the E2E steer to the hub and know
    *  it has arrived. `null` before the hub is placed. */
   boardState(): { x: number; z: number; near: boolean; inFrustum: boolean } | null {
-    if (!this.boardPos) return null;
+    if (!this.pois.boardPos) return null;
     // P1.0 (F-19): is the board FACE/papers point (~1.4 m up = the pinned-notes band)
     // actually inside the live view frustum? The board-affordance assert reads this
     // TRUE while `near` to prove the approach framing keeps the board (not just the
     // ranger's back) in shot. Pixels stay the court of appeal (AUDIT-FINDINGS §4).
     const inFrustum = this.pointInFrustum(
-      this.boardPos.x, this.groundY(this.boardPos.x, this.boardPos.z) + 1.4, this.boardPos.z,
+      this.pois.boardPos.x, this.groundY(this.pois.boardPos.x, this.pois.boardPos.z) + 1.4, this.pois.boardPos.z,
     );
-    return { x: this.boardPos.x, z: this.boardPos.z, near: this.nearBoard, inFrustum };
+    return { x: this.pois.boardPos.x, z: this.pois.boardPos.z, near: this.pois.nearBoard, inFrustum };
   }
 
   /** P1.0 dev-hook helper: is the world point (x,y,z) inside the live camera view
@@ -582,8 +525,7 @@ export class World {
    *  the prompt or press the interact key). The mission board opens as an overlay —
    *  the world is never torn down. */
   setBoard(cbs: { onNear: (near: boolean) => void; onOpen: () => void }): void {
-    this.onBoardNear = cbs.onNear;
-    this.onBoardOpen = cbs.onOpen;
+    this.pois.setBoard(cbs);
   }
 
   /** Register the F-11 world-rim cue: fired ONCE each time the walking ranger reaches
@@ -606,11 +548,9 @@ export class World {
   }
 
   /** Dev-hook accessor (W6.4b2): the sit-spot's world position + whether the ranger
-   *  stands in its radius — lets the E2E steer to the bench and know it has arrived.
-   *  `null` before the sit-spot is placed. */
+   *  stands in its radius. `null` before the sit-spot is placed. */
   sitSpotState(): { x: number; z: number; near: boolean } | null {
-    if (!this.sitSpotPos) return null;
-    return { x: this.sitSpotPos.x, z: this.sitSpotPos.z, near: this.nearSitSpot };
+    return this.pois.sitSpotState();
   }
 
   /** Register the sit-spot callbacks (W6.4b2): `onNear(true|false)` as the ranger
@@ -618,8 +558,7 @@ export class World {
    *  the prompt or press the interact key). The roep3d slice plays in-place — the
    *  world is never torn down. */
   setSitSpot(cbs: { onNear: (near: boolean) => void; onActivate: () => void }): void {
-    this.onSitSpotNear = cbs.onNear;
-    this.onSitSpotActivate = cbs.onActivate;
+    this.pois.setSitSpot(cbs);
   }
 
   /** Register the drivable-jeep HUD callbacks (W5.1): `onNear(true|false)` as the
@@ -713,8 +652,7 @@ export class World {
       this.heliObstacle = null;
     }
     this.ranger.visible = false;                       // he rides inside
-    if (this.nearId) { this.nearId = null; this.onApproach(null); }
-    if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
+    this.pois.clearForVehicle();
     this.followTargetYaw = this.heliHeading;
     this.onHeliChange(true);
   }
@@ -831,8 +769,7 @@ export class World {
     this.ranger.position.copy(this.jeepPos);
     this.ranger.rotation.y = this.jeepHeading;
     // clear any walk-time affordances so nothing lingers behind the "Stap uit" pill
-    if (this.nearId) { this.nearId = null; this.onApproach(null); }
-    if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
+    this.pois.clearForVehicle();
     // snap the follow bearing behind the parked jeep so the boarding reframe is a clean
     // CUT, never a swing from the old walk facing; the eased jeep-follow takes over next
     // frame (damped toward jeepHeading — F-30 wants a lagged follow, not a hard lock).
@@ -886,7 +823,7 @@ export class World {
 
   /** Dev-hook accessor (W1.4): every marker's world position, for E2E navigation. */
   markerPositions(): { x: number; z: number; missionId: string }[] {
-    return this.markers.map((m) => ({ x: m.pos.x, z: m.pos.z, missionId: m.missionId }));
+    return this.pois.markerPositions();
   }
 
   /** Register the on-screen joystick's live-vector source (W1.3). The HUD wires
@@ -1177,7 +1114,7 @@ export class World {
     };
     let landmarkInView =
       (this.dressing.cabinPos != null && ptInFrustum(this.dressing.cabinPos.x, this.dressing.cabinPos.z)) ||
-      (this.boardPos != null && ptInFrustum(this.boardPos.x, this.boardPos.z));
+      (this.pois.boardPos != null && ptInFrustum(this.pois.boardPos.x, this.pois.boardPos.z));
     for (let i = 0; !landmarkInView && i < this.dressing.landmarks.length; i++) {
       landmarkInView = ptInFrustum(this.dressing.landmarks[i].x, this.dressing.landmarks[i].z);
     }
@@ -1373,191 +1310,6 @@ export class World {
       clearance,
       analyticGap: surfaceY - this.terrain.field(p.x, p.z),
     };
-  }
-
-  private placeMarkers(markers: WorldMarker[]): void {
-    const N = Math.max(1, markers.length);
-    const perBiome = new Map<Biome, number>();
-    markers.forEach((mk, i) => {
-      let x: number, z: number;
-      if (mk.biome) {
-        // anchor each mission in the heart of its own landschap; fan repeats outward
-        const n = perBiome.get(mk.biome) ?? 0;
-        perBiome.set(mk.biome, n + 1);
-        const a = anchorInBiome(mk.biome, 22 + n * 9);
-        x = a.x; z = a.z;
-      } else {
-        const ang = (i / N) * Math.PI * 2;
-        x = Math.cos(ang) * 9; z = Math.sin(ang) * 9;
-      }
-      const group = new THREE.Group();
-      group.position.set(x, this.groundY(x, z), z);
-
-      // a soft halo ring so every marker reads as "go here", model or totem
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.9, 1.15, 24),
-        new THREE.MeshBasicMaterial({ color: mk.color, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-      );
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.05;
-      group.add(ring);
-      this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x, z, base: 0.5 }); // D3.16: fade near the lens
-
-      // a small diegetic name-tag floating above the marker (in-world label, no
-      // minimap chrome) — a camera-facing sprite so it stays readable from any angle
-      const label = this.labels.make(mk.titel, mk.color);
-      label.position.y = 1.9;
-      group.add(label);
-
-      group.add(proceduralTotem(mk.color)); // instant stand-in
-      this.scene.add(group);
-      const entry = {
-        group, pos: group.position.clone(), missionId: mk.missionId,
-        recipe: gaitFor(mk.modelId), phase: i * 1.7, label,
-        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
-      };
-      this.markers.push(entry);
-
-      if (mk.modelId) {
-        void loadRig(mk.modelId).then((rig) => {
-          if (!rig) return;
-          const prepped = prepModel(rig.group, mk.height);
-          // §1e eye system per species (catchlight + clearcoat cornea + pupil +
-          // iris parallax); golden-hour world ⇒ dusk off (eyeshine stays calm).
-          applyEyes(prepped, mk.modelId, { dusk: false }); // parallax reads the live policy (no restart)
-          // W3.7b dossier: coat-tint correction (only for a confirmed contradiction,
-          // e.g. the CC0 vos) + a subtle head-low posture for snuffling species.
-          applyCoat(prepped, mk.modelId);
-          applyPosture(prepped, mk.modelId);
-          // §B never-scary calm-pose: a static rest-pose bias (ears/tail/head into the
-          // calm shape). Best-effort — a single-mesh Meshy animal with no named bones is
-          // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
-          applyCalmPose(prepped, mk.modelId);
-          // drop the totem (keep the ring), add the real animal
-          const totem = group.children.find((c) => c.userData.totem);
-          if (totem) group.remove(totem);
-          group.add(prepped);
-          if (rig.clips.length) {
-            // prefer the real baked rig: play a calm idle (or the first clip)
-            const mixer = new THREE.AnimationMixer(prepped);
-            const idle = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
-            mixer.clipAction(idle).play();
-            entry.mixer = mixer;
-          } else {
-            // no rig → the always-on procedural fallback drives this wrapper
-            entry.anim = prepped;
-          }
-        });
-      }
-    });
-  }
-
-  /**
-   * The spawn-clearing case-board (§4, W2.2): the mission hub — walking up to it
-   * opens the mission board. Best-effort GLB over a procedural stand-in, a few
-   * metres out on the +x side of spawn, pushing a collision circle.
-   */
-  private placeBoard(): void {
-    // case-board: the mission hub. A halo ring + a floating "Missiebord" tag read
-    // as "go here", like a mission marker.
-    //
-    // F-09 (spawn faces the void, the hub sits BEHIND the player): it used to sit at
-    // (3.6, 2.6) — the +z side, i.e. straight BEHIND the back-turned ranger and off
-    // the world-entry frame, so the very content the player should walk toward was
-    // never in the first frame and holding forward (−z) walked AWAY from it into the
-    // heath. Moving it to (2.2, −5) puts the mission hub in the forward (−z) frustum,
-    // off to the RIGHT — a mirror of the cabin's forward-LEFT — so world-entry now
-    // composes cabin (left) + Missiebord (right) + the bos tree line ahead, and the
-    // first stride heads TOWARD content. It stays off the x≈0 tap-to-walk lane (its
-    // r=0.7 circle spans x∈[1.5,2.9]), ~1.3 m clear of the spawn→watchtower diagonal
-    // the paths @smoke walks, and 5.5 m out (> the 2.4 m board proximity, so the hub
-    // prompt does NOT fire at spawn). The board faces the spawn point (below).
-    const boardAt = new THREE.Vector3(2.2, 0, -5);
-    boardAt.y = this.groundY(boardAt.x, boardAt.z);
-    const board = new THREE.Group();
-    board.position.copy(boardAt);
-    // P1.0 (F-19): face the spawn point, then turn a little toward +x so the board
-    // face + its pinned papers point at the over-the-shoulder approach framing (the
-    // lens swings to the +x side while the ranger stands here — placeCamera), not
-    // straight back down the ranger's spine where his body hides them. A small turn:
-    // world-entry still reads the board face (its +z-facing component only grows).
-    board.rotation.y = Math.atan2(-boardAt.x, -boardAt.z) + this.BOARD_APPROACH_FACE_TURN;
-    board.add(this.proceduralBoard());
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.9, 1.15, 24),
-      new THREE.MeshBasicMaterial({ color: '#f5c23b', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.05;
-    board.add(ring);
-    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: boardAt.x, z: boardAt.z, base: 0.5 }); // D3.16
-    const label = this.labels.make('Missiebord', '#f5c23b');
-    label.position.y = 2.0;
-    board.add(label);
-    this.scene.add(board);
-    this.obstacles.push({ x: boardAt.x, z: boardAt.z, r: 0.7 });
-    this.boardGroup = board;
-    this.boardPos = boardAt.clone();
-    void loadModel('prop-case-board').then((m) => {
-      if (!m) return;
-      const prepped = prepModel(m, 1.8);
-      const totem = board.children.find((c) => c.userData.totem);
-      if (totem) board.remove(totem);
-      board.add(prepped); // keep the ring + label
-    });
-  }
-
-  /**
-   * W6.4b2: the "Ken je roep" sit-spot — a calm wooden bench a couple of metres
-   * out from the vogelkijkhut (landmark at 26,-11), facing the open heath so the
-   * perched bird forms of the perception slice have room to sit in front. Like the
-   * case-board hub it carries a halo ring + a floating "Zitplek · luister" label so
-   * it reads as "go here" (the diegetic wayfinding cue — no minimap chrome), and it
-   * has its own proximity/tap/interact path OUTSIDE `markers`. Acting on it plays
-   * `roep3d` in-place (Missions wires `onActivate`). The bench is a small procedural
-   * prop (no GLB dependency); its collision circle is tiny so the ranger can stand
-   * right at it.
-   */
-  private placeSitSpot(): void {
-    const at = new THREE.Vector3(22, 0, -6.5);
-    at.y = this.groundY(at.x, at.z);
-    const group = new THREE.Group();
-    group.position.copy(at);
-    // turn the seat to look out over the heath (away from the clearing/hide)
-    group.rotation.y = Math.atan2(at.x, at.z);
-    group.add(this.proceduralBench());
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.9, 1.15, 24),
-      new THREE.MeshBasicMaterial({ color: '#8ab6d6', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.05;
-    group.add(ring);
-    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: at.x, z: at.z, base: 0.5 }); // D3.16
-    const label = this.labels.make(ROEP_COPY.wayfinding, '#cfe6f2');
-    label.position.y = 1.7;
-    group.add(label);
-    this.scene.add(group);
-    this.obstacles.push({ x: at.x, z: at.z, r: 0.5 });
-    this.sitSpotGroup = group;
-    this.sitSpotPos = at.clone();
-  }
-
-  /** A small calm wooden bench (two legs + a seat + a low backrest) — an instant
-   *  procedural prop so the sit-spot needs no GLB. Warm heath-wood tones. */
-  private proceduralBench(): THREE.Group {
-    const g = new THREE.Group();
-    const wood = new THREE.MeshStandardMaterial({ color: '#7a5f3e', roughness: 1 });
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.09, 0.42), wood);
-    seat.position.y = 0.46;
-    const back = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.34, 0.07), wood);
-    back.position.set(0, 0.7, -0.18);
-    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.46, 0.42), wood);
-    legL.position.set(-0.6, 0.23, 0);
-    const legR = legL.clone();
-    legR.position.x = 0.6;
-    g.add(seat, back, legL, legR);
-    return g;
   }
 
   /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + live clip + measured height. */
@@ -1904,38 +1656,17 @@ export class World {
     this.dust.visible = anyAlive;
   }
 
-  /** Procedural stand-in for the case-board (two posts + a cork panel). */
-  private proceduralBoard(): THREE.Group {
-    const g = new THREE.Group();
-    g.userData.totem = true;
-    const postMat = new THREE.MeshStandardMaterial({ color: '#6b513a', roughness: 1 });
-    const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 6), postMat);
-    post1.position.set(-0.5, 0.7, 0);
-    const post2 = post1.clone(); post2.position.x = 0.5;
-    const cork = new THREE.Mesh(
-      new THREE.BoxGeometry(1.4, 0.9, 0.08),
-      new THREE.MeshStandardMaterial({ color: '#c8a36a', roughness: 1 }),
-    );
-    cork.position.set(0, 1.3, 0);
-    g.add(post1, post2, cork);
-    return g;
-  }
-
   /** Re-point the wayfinding cue at another mission (e.g. after one is completed). */
   setActiveMission(id: string | null): void {
-    this.activeId = id;
-    this.lastWayKey = '';
+    this.pois.setActiveMission(id);
   }
 
   /** The live `richting` phrase (relative to facing) toward a mission marker, for
    *  the world-EF "welke kant?" recall beat — `null` if the marker is unknown.
    *  Synchronous so the beat can score against the true bearing at fire time. */
   headingTo(id: string | null): string | null {
-    if (!id) return null;
-    const goal = this.markers.find((m) => m.missionId === id);
-    if (!goal) return null;
     const rp = this.ranger.position;
-    return wayfind(rp.x, rp.z, this.ranger.rotation.y, goal.pos.x, goal.pos.z).richting;
+    return this.pois.headingTo(id, rp.x, rp.z, this.ranger.rotation.y);
   }
 
   // ---- input (F-17 click-vs-drag seam) ----
@@ -1991,7 +1722,7 @@ export class World {
     this.raycaster.setFromCamera(ndc, this.camera);
 
     // 1) a tapped marker → walk over to it (proximity then offers "Speel mee")
-    for (const mk of this.markers) {
+    for (const mk of this.pois.list) {
       const hit = this.raycaster.intersectObject(mk.group, true);
       if (hit.length) {
         const dir = new THREE.Vector3(mk.pos.x, 0, mk.pos.z).sub(new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z));
@@ -2001,26 +1732,26 @@ export class World {
       }
     }
     // 1b) a tapped case-board hub → walk up to it (proximity then opens the board)
-    if (this.boardGroup && this.boardPos) {
-      const hit = this.raycaster.intersectObject(this.boardGroup, true);
+    if (this.pois.boardGroup && this.pois.boardPos) {
+      const hit = this.raycaster.intersectObject(this.pois.boardGroup, true);
       if (hit.length) {
-        const dir = new THREE.Vector3(this.boardPos.x, 0, this.boardPos.z).sub(
+        const dir = new THREE.Vector3(this.pois.boardPos.x, 0, this.pois.boardPos.z).sub(
           new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
         );
         if (dir.lengthSq() > 0.001) dir.normalize();
-        this.target.set(this.boardPos.x - dir.x * 1.6, 0, this.boardPos.z - dir.z * 1.6);
+        this.target.set(this.pois.boardPos.x - dir.x * 1.6, 0, this.pois.boardPos.z - dir.z * 1.6);
         return;
       }
     }
     // 1b') a tapped sit-spot bench → walk up to it (proximity then offers the roep slice)
-    if (this.sitSpotGroup && this.sitSpotPos) {
-      const hit = this.raycaster.intersectObject(this.sitSpotGroup, true);
+    if (this.pois.sitSpotGroup && this.pois.sitSpotPos) {
+      const hit = this.raycaster.intersectObject(this.pois.sitSpotGroup, true);
       if (hit.length) {
-        const dir = new THREE.Vector3(this.sitSpotPos.x, 0, this.sitSpotPos.z).sub(
+        const dir = new THREE.Vector3(this.pois.sitSpotPos.x, 0, this.pois.sitSpotPos.z).sub(
           new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
         );
         if (dir.lengthSq() > 0.001) dir.normalize();
-        this.target.set(this.sitSpotPos.x - dir.x * 1.4, 0, this.sitSpotPos.z - dir.z * 1.4);
+        this.target.set(this.pois.sitSpotPos.x - dir.x * 1.4, 0, this.pois.sitSpotPos.z - dir.z * 1.4);
         return;
       }
     }
@@ -2187,19 +1918,7 @@ export class World {
       }
     }
 
-    // per-animal motion: a real baked rig wins (mixer); else the always-on
-    // procedural fallback (gentle, never-scary, calm-pose gated). Both are
-    // secondary motion, so reduced-motion freezes them at the rest pose.
-    for (const mk of this.markers) {
-      if (mk.mixer) {
-        mk.mixer.update(reduced ? 0 : dt);
-      } else if (mk.anim) {
-        const d = reduced ? REST : motionAt(mk.recipe, t, mk.phase);
-        mk.anim.position.set(d.dx, d.dy, 0);
-        mk.anim.rotation.set(0, d.rotY, d.rotZ);
-        mk.anim.scale.set(1, d.scaleY, 1);
-      }
-    }
+    this.pois.animate(t, dt, reduced); // each mission marker's animal (secondary motion)
 
     this.fauna.update(t, dt, reduced); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
 
@@ -2244,50 +1963,20 @@ export class World {
       if (nh !== this.nearHeli) { this.nearHeli = nh; this.onHeliNear(nh); }
     }
 
-    // proximity → surface the "play" affordance (debounced by id). Marker + hub
-    // proximity are suppressed while driving/flying so no stale prompt sits behind
-    // the vehicle pill (rp is the vehicle's spot while the ranger rides hidden).
-    if (!this.inVehicle && !this.inHeli) {
-      let near: string | null = null;
-      for (const mk of this.markers) {
-        if (Math.hypot(mk.pos.x - rp.x, mk.pos.z - rp.z) < 2.4) { near = mk.missionId; break; }
-      }
-      if (near !== this.nearId) { this.nearId = near; this.onApproach(near); }
+    // proximity → the marker / Missiebord / sit-spot prompts. Suppressed while driving
+    // or flying so no stale prompt sits behind the vehicle pill (rp is the vehicle's
+    // spot while the ranger rides hidden).
+    if (!this.inVehicle && !this.inHeli) this.pois.updateProximity(rp.x, rp.z);
 
-      // case-board hub proximity (W2.2) — surface / hide the "open the mission board"
-      // affordance. Its own flag so a mission marker and the board never fight.
-      if (this.boardPos) {
-        const nb = Math.hypot(this.boardPos.x - rp.x, this.boardPos.z - rp.z) < 2.4;
-        if (nb !== this.nearBoard) { this.nearBoard = nb; this.onBoardNear(nb); }
-      }
-
-      // sit-spot proximity (W6.4b2) — surface / hide the "Luister naar de vogels"
-      // affordance. Its own flag so it never fights a mission marker or the board.
-      if (this.sitSpotPos) {
-        const ns = Math.hypot(this.sitSpotPos.x - rp.x, this.sitSpotPos.z - rp.z) < 2.4;
-        if (ns !== this.nearSitSpot) { this.nearSitSpot = ns; this.onSitSpotNear(ns); }
-      }
-    }
-
-    // wayfinding cue to the active mission — calm direction + distance, no minimap.
-    // Debounced so the diegetic HUD only re-renders when the words actually change.
-    const goal = this.activeId ? this.markers.find((m) => m.missionId === this.activeId) : null;
-    if (goal) {
-      // W4.3: the cue FOLLOWS the sand paths — the ARROW aims at the next path
-      // waypoint (routeVia), while the distance + "je bent er" stay measured to
-      // the real marker, so the child walks the trail then peels off at the end.
-      const wp = routeVia(rp.x, rp.z, goal.pos.x, goal.pos.z);
-      const angle = bearing(rp.x, rp.z, this.ranger.rotation.y, wp.x, wp.z);
-      const dist = distanceTo(rp.x, rp.z, goal.pos.x, goal.pos.z);
-      const cue = makeCue(angle, dist);
-      const key = `${cue.glyph}|${cue.richting}|${cue.afstand}`;
-      if (key !== this.lastWayKey) { this.lastWayKey = key; this.onWayfind(cue); }
-    } else if (this.lastWayKey !== '') {
-      this.lastWayKey = ''; this.onWayfind(null);
-    }
+    // the calm wayfinding cue toward the active mission (follows the sand paths)
+    this.pois.updateWayfinding(rp.x, rp.z, this.ranger.rotation.y);
 
     this.placeCamera(reduced, dt, reduced);
   }
+
+  // ctx() (below) reads the marker list and the nearest marker straight off the World.
+  private get markers(): Markers['list'] { return this.pois.list; }
+  private get nearId(): string | null { return this.pois.nearId; }
 
   /**
    * Build the live `WorldCtx` an in-place 3D mini-game renders into (3D-IMMERSION
@@ -2323,7 +2012,7 @@ export class World {
    *  activity reframe happens to keep in view never overlaps the play prompt. */
   beginActivity(): void {
     this.activityActive = true;
-    for (const m of this.markers) m.label.visible = false;
+    this.pois.setLabelsVisible(false);
   }
 
   /** Resume free-roam after an in-place activity; re-emit the wayfinding cue.
@@ -2332,11 +2021,8 @@ export class World {
   endActivity(): void {
     this.activityActive = false;
     this.activityFocus = null; // D1.3: no task owns the camera in free-roam
-    for (const m of this.markers) m.label.visible = true; // W6.1: restore the name-tags on resume
-    this.nearId = null;
-    this.nearBoard = false; // force a fresh proximity re-fire (re-surfaces the hub prompt)
-    this.nearSitSpot = false; // W6.4b2: same — re-surface the sit-spot prompt on resume
-    this.lastWayKey = '';
+    this.pois.setLabelsVisible(true); // W6.1: restore the name-tags on resume
+    this.pois.resetAfterActivity();   // fresh proximity + cue re-fire (re-surfaces the hub prompt)
     this.followTargetYaw = this.ranger.rotation.y;
     if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut back
     // otherwise the next update() frame damps position + yaw back into place.
@@ -2386,7 +2072,7 @@ export class World {
     // near-radius, so the lens swings off his spine and the board FACE + papers clear
     // his body. A CUT under reduced-motion (stepped, never a swoop); eases to 0 on
     // leaving. Walk cam only — the vehicle/heli cams own their framing (bearing below).
-    const boardFrameTarget = (walk && this.nearBoard) ? this.BOARD_FRAME_YAW : 0;
+    const boardFrameTarget = (walk && this.pois.nearBoard) ? this.BOARD_FRAME_YAW : 0;
     if (reduced) {
       this.boardFrameYaw = boardFrameTarget;
     } else if (dt > 0) {
@@ -2553,7 +2239,7 @@ export class World {
     // never reads as a frame-filling hoop at a collapsed close boom (`18-jeep-near`).
     // Runs in BOTH branches (a ring faded on foot restores once a vehicle cam pulls the
     // lens far away). Rings are wayfinding UI (§3), so shrinking them near is on-spec.
-    this.fadeGroundRings();
+    this.pois.fadeRings(this.camera);
   }
 
   /**
@@ -2674,7 +2360,7 @@ export class World {
       const cyc = g.y + h * 0.5;                   // centre at mid-height above the creature's own ground
       return near(g.x, cyc, g.z, R, aimHead) || near(g.x, cyc, g.z, R, aimChest);
     };
-    for (const m of this.markers) { if (test(m.group.position, 1.0)) return true; }
+    for (const m of this.pois.list) { if (test(m.group.position, 1.0)) return true; }
     for (const a of this.fauna.scenicActors) { if (test(a.group.position, a.height)) return true; }
     for (const a of this.fauna.ambient) {
       if (a.glide) continue;                        // birds gliding overhead never cross a follow sightline
@@ -2795,26 +2481,4 @@ export class World {
     this.setAvatarOpacity(1);
   }
 
-  /**
-   * D3.16: fade the diegetic "go here" halo rings (mission markers, case-board, sit-spot)
-   * by the LENS's horizontal proximity — full 0.5 beyond RING_FADE_FAR, linearly to 0 at
-   * RING_FADE_NEAR. The `18-jeep-near` breach filled the frame with a marker ring when a
-   * collapsed close boom looked near-straight-down at it; a ring is wayfinding UI (§3 /
-   * §2.5 GATE-D2), so it caps/hides at close range instead of reading as a giant hoop. The
-   * normal approach + standing boom (~4.6 m behind the ranger who stands ON the ring) sits
-   * beyond FAR, so the "go here" cue is untouched while walking up; only a lens driven
-   * right on top of a ring fades it. A pure per-material opacity write, guarded on change —
-   * no geometry/draw-call change (<150 holds), deterministic so RM frames stay frozen.
-   */
-  private fadeGroundRings(): void {
-    if (this.groundRings.length === 0) return;
-    const cx = this.camera.position.x, cz = this.camera.position.z;
-    const span = this.RING_FADE_FAR - this.RING_FADE_NEAR;
-    for (const r of this.groundRings) {
-      const d = Math.hypot(cx - r.x, cz - r.z);
-      const k = Math.max(0, Math.min(1, (d - this.RING_FADE_NEAR) / span));
-      const o = r.base * k;
-      if (r.mat.opacity !== o) r.mat.opacity = o;
-    }
-  }
 }
