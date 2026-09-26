@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { loadModel, prepModel } from '../Models';
 import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, WATER_LEVEL, type Biome } from '../Biomes';
 import { windSway } from '../Atmosphere';
-import { PATH_NODES, PATH_SEGMENTS, LANE_HALF } from '../Paths';
+import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork } from '../Paths';
 import { WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp } from '../Water';
 import type { Obstacle, MoveLimits } from '../CharacterController';
 import type { TierParams } from '../../core/quality';
@@ -21,6 +21,9 @@ import type { Terrain } from './Terrain';
 import type { Labels } from './Labels';
 import { enableCast, proceduralTotem } from './props';
 import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
+import { PlantField, heatherGeometry, plantMaterial, tuftGeometry, type PlantSpot } from './Plants';
+import { lodGeometries, lodMaterial } from '../Lod';
+import { heathCover } from '../GroundDetail';
 
 export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 
@@ -35,6 +38,14 @@ const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-
 const TREE_RIM_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-pine-scots', 'prop-birch-tree'];
 const NATURE_TREES = new Set<string>(['prop-pine-scots', 'prop-oak-tree', 'prop-birch-tree']);
 
+/** A stable hash of an integer pair + seed → [0,1) (the plant grid's jitter). */
+function hash2(x: number, z: number, seed: number): number {
+  let h = (Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(seed | 0, 2246822519)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
 export class Dressing {
   // W4.6: reusable scratch for the per-frame wind matrix recompose (no per-frame
   // allocation while re-tilting a few hundred grass blades).
@@ -43,6 +54,8 @@ export class Dressing {
   private static readonly _e = new THREE.Euler();
   private static readonly _p = new THREE.Vector3();
   private static readonly _s = new THREE.Vector3();
+  private static readonly _r = new THREE.Quaternion();
+  private static readonly _up = new THREE.Vector3(0, 1, 0);
   // W4.8 ven-water: the fresnel disc's shader material — the World drives its
   // `uTime` (from `skyTime`, so it freezes with the rest of the ambient motion)
   // and `uAmp` (0 under reduced-motion → waveless) each frame.
@@ -52,7 +65,7 @@ export class Dressing {
   // per-blade base transform, re-tilted each frame by windSway.
   readonly windMeshes: {
     mesh: THREE.InstancedMesh;
-    items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[];
+    items: { x: number; y: number; z: number; sx: number; sy: number; phase: number; rotY?: number }[];
     strength: number;
   }[] = [];
   // The furthest-out radius any LOW ground-tuft (heather/marram) landed at — reported on
@@ -65,6 +78,8 @@ export class Dressing {
   readonly treePlacements: TreePlacement[] = [];
   // the instanced real trees at distance-fitting detail + the per-tree occluder fade
   private forest: Forest | null = null;
+  // the low ground plants, one field per kind (world/Plants.ts)
+  private readonly plantFields: PlantField[] = [];
   private quality: TierParams | null = null;
   // F-09: the cabin's world position, kept so camState's landmark-in-frustum test
   // can prove a hub landmark is in the world-entry frame (the board + cabin are the
@@ -99,6 +114,7 @@ export class Dressing {
     this.scene.onBeforeRender = (...args) => {
       before.apply(this.scene, args);
       this.forest?.update(args[2]);
+      for (const f of this.plantFields) f.update(args[2]);
     };
   }
 
@@ -120,9 +136,7 @@ export class Dressing {
     const veg = quality.vegetationScale;
     this.quality = quality;
     this.scatterPines(Math.round(80 * veg));
-    this.scatterHeather(Math.round(150 * veg));
-    this.scatterMarram(Math.round(110 * veg));
-    this.scatterReeds(Math.round(160 * veg)); // D3.2: a denser reed fringe reads at the shore
+    this.scatterPlants(veg); // heather + grass, helmgras, ferns, the reed belt
     this.buildRim(); // F-11: the pine tree-line marking the world edge
     void this.buildForest(); // P1.3: swap the cone stand-ins for the real tree GLBs
     this.applyWind(0); // W4.6: initial wind pose for both grass meshes
@@ -355,21 +369,6 @@ export class Dressing {
     this.addTreeFallback(placed);
   }
 
-  private scatterHeather(budget: number): void {
-    const spots = this.candidates(budget * 3, 'heide');
-    const geo = new THREE.IcosahedronGeometry(0.32, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.heide.accent, roughness: 1, flatShading: true });
-    const tufts = new THREE.InstancedMesh(geo, mat, spots.length);
-    const m = new THREE.Matrix4();
-    spots.forEach(({ x, z, i }, k) => {
-      const s = 0.5 + (i % 4) * 0.22;
-      m.makeScale(s, s * 0.6, s); m.setPosition(x, this.groundY(x, z) + 0.12, z);
-      tufts.setMatrixAt(k, m);
-    });
-    tufts.instanceMatrix.needsUpdate = true;
-    this.scene.add(tufts);
-  }
-
   /**
    * F-11: a calm pine tree-line ringing the playable area at the move bound, so
    * walking outward meets a visible forest edge ("Hier stopt het bos") instead of
@@ -450,49 +449,105 @@ export class Dressing {
     this.treeFallbacks.length = 0;
   }
 
-  /** Drift-sand marram tussocks — upright pale grass blades on the stuifzand.
-   *  W4.6: registered as a wind mesh so the blades lean in the breeze. */
-  private scatterMarram(budget: number): void {
-    const spots = this.candidates(budget * 4, 'stuifzand');
-    const geo = new THREE.ConeGeometry(0.16, 0.9, 5);
-    const mat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.stuifzand.accent, roughness: 1, flatShading: true });
-    const grass = new THREE.InstancedMesh(geo, mat, spots.length);
-    const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
-    spots.forEach(({ x, z, i }) => {
-      const s = 0.6 + (i % 3) * 0.25;
-      items.push({ x, y: this.groundY(x, z) + 0.4 * s, z, sx: s, sy: s, phase: (i % 7) * 0.9 });
-    });
-    this.windMeshes.push({ mesh: grass, items, strength: 1 }); // full sway — exposed dune grass
-    this.scene.add(grass);
+  /**
+   * The low ground plants (world/Plants.ts), each kind in fixed 20 m chunks that the fog
+   * hides from afar: struikhei with straw grass between it on the heide (heather where
+   * the heath's ground reads as heather, grass on its sandier patches), helmgras on the
+   * stuifzand, adelaarsvaren in the bos and lisdodde round the ven. None stand on the
+   * sand paths or in the spawn clearing. The grasses and reeds lean in the wind (W4.6).
+   * `veg` (the quality tier) thins every field.
+   */
+  private scatterPlants(veg: number): void {
+    const thin = 1 / Math.sqrt(Math.max(0.2, veg)); // fewer cells, same look
+    const up = new THREE.Color();
+    // heide: heather cushions where the ground is heather, grass where it is sandier
+    const heather = this.gridSpots('heide', 2.3 * thin, 11, (x, z, h) => heathCover(x, z) > 0.32 + h * 0.3);
+    this.addField('heide-heather', heatherGeometry(5), plantMaterial(), heather.map((p, i) => ({
+      x: p.x, y: this.groundY(p.x, p.z), z: p.z,
+      s: 0.75 + p.h * 0.7, sy: 0.7 + p.h * 0.6, rotY: i * 2.39996,
+      tint: up.setRGB(0.9 + p.h * 0.2, 0.9 + ((i * 7) % 5) * 0.03, 0.9 + p.h * 0.15).clone(),
+    })), 58);
+    const heideGrass = this.gridSpots('heide', 3.1 * thin, 23, (x, z, h) => heathCover(x, z) < 0.55 + h * 0.2);
+    this.addField('heide-grass', tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), plantMaterial(),
+      heideGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.45 + p.h * 0.35, rotY: i * 1.7, phase: (i % 7) * 0.9 })), 46, 0.8);
+    // stuifzand: helmgras tussocks, grey-green to straw, full sway in the open
+    const marram = this.gridSpots('stuifzand', 2.9 * thin, 37, (_x, _z, h) => h < 0.62);
+    this.addField('stuifzand-helmgras', tuftGeometry({ blades: 22, seed: 5, root: '#6c7552', tip: '#dccf9e', lean: 0.24, width: 0.03 }), plantMaterial(),
+      marram.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.45, rotY: i * 2.1, phase: (i % 7) * 0.9 })), 60, 1);
+    // the GLB plants stream in: ferns under the bos trees, lisdodde round the ven
+    void this.scatterGlbPlants(veg, thin);
   }
 
-  /** Reed clumps fringing the ven — only on the bank just above the waterline.
-   *  W4.6: registered as a wind mesh (softer sway than the exposed marram). */
-  private scatterReeds(budget: number): void {
-    // D3.2: ring the basin with a golden-angle spread and keep only the stalks whose
-    // ground sits in the shore band — so every reed stands on the bank at the waterline,
-    // a tight belt around the water rather than a scatter over the whole ven biome.
+  /** The two real-GLB plants, simplified for the crowd (Lod.ts): adelaarsvaren in the bos
+   *  and lisdodde (the reed belt, D3.2: a tight ring on the bank just above the water). */
+  private async scatterGlbPlants(veg: number, thin: number): Promise<void> {
+    const fern = await loadModel('prop-fern');
+    if (fern) {
+      const [geo] = lodGeometries('prop-fern@1', prepModel(fern, 1), [700]);
+      const spots = this.gridSpots('bos', 4.2 * thin, 53, (_x, _z, h) => h < 0.45);
+      if (geo) this.addField('bos-varen', geo, lodMaterial(), spots.map((p, i) => ({
+        x: p.x, y: this.groundY(p.x, p.z) - 0.02, z: p.z, s: 0.55 + p.h * 0.5, rotY: i * 2.39996,
+        // late-summer bracken in the shade: olive, some already turning bronze
+        tint: new THREE.Color(0.72 + p.h * 0.25, 0.68 + p.h * 0.08, 0.42),
+      })), 46);
+    }
+    const reeds = await loadModel('prop-reeds');
+    if (!reeds) return;
+    const [geo] = lodGeometries('prop-reeds@1', prepModel(reeds, 1), [650]);
+    if (!geo) return;
     const bx = VEN_CENTER.x, bz = VEN_CENTER.z;
-    const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
-    for (let i = 0; i < budget * 12 && items.length < budget; i++) {
+    const budget = Math.round(90 * veg);
+    const spots: PlantSpot[] = [];
+    for (let i = 0; i < budget * 12 && spots.length < budget; i++) {
       const ang = i * 2.39996;             // golden angle → even, non-repeating ring
       const rad = 9 + (i % 22) * ((VEN_REED_OUT - 9) / 22); // 9–20 m out — a TIGHT belt hugging the waterline
       const x = bx + Math.cos(ang) * rad;
       const z = bz + Math.sin(ang) * rad;
       const gy = this.groundY(x, z);
       if (gy < WATER_LEVEL - 0.3 || gy > WATER_LEVEL + 1.0) continue; // keep the reed belt right at the shore
-      const s = 0.8 + (i % 4) * 0.22;
-      items.push({ x, y: gy + 0.85 * s, z, sx: s, sy: s, phase: (i % 5) * 1.3 });
+      spots.push({ x, y: gy - 0.03, z, s: 1.3 + (i % 4) * 0.18, rotY: ang * 3.1, phase: (i % 5) * 1.3 });
     }
-    // TALLER, thicker reeds (≈1.4–2.2 m) in a DARK reed-green so the fringe reads at follow
-    // distance against BOTH the golden water and the tan bank (the P1.2 grade found "no reed
-    // fringe" — thin pale 1.1 m stalks vanished against the shore). Still ONE instanced draw call.
-    const geo = new THREE.CylinderGeometry(0.05, 0.09, 1.7, 5);
-    const mat = new THREE.MeshStandardMaterial({ color: '#6d7b38', roughness: 1 });
-    const reeds = new THREE.InstancedMesh(geo, mat, Math.max(1, items.length));
-    reeds.count = items.length;
-    this.windMeshes.push({ mesh: reeds, items, strength: 0.7 }); // reeds sway gentler
-    this.scene.add(reeds);
+    void thin;
+    this.addField('ven-lisdodde', geo, lodMaterial(), spots, 75, 0.7);
+  }
+
+  /** Lay out one plant field and, when it sways (`wind` > 0), hand its chunks to the wind. */
+  private addField(name: string, geo: THREE.BufferGeometry, mat: THREE.Material, spots: PlantSpot[], hideBeyond: number, wind = 0): void {
+    if (!spots.length) return;
+    const field = new PlantField(this.scene, name, geo, mat, spots, hideBeyond);
+    this.plantFields.push(field);
+    if (wind > 0) {
+      for (const c of field.chunks) {
+        this.windMeshes.push({
+          mesh: c.mesh, strength: wind,
+          items: c.items.map((p) => ({ x: p.x, y: p.y, z: p.z, sx: p.s, sy: p.sy ?? p.s, phase: p.phase ?? 0, rotY: p.rotY })),
+        });
+      }
+      this.lastWindT = NaN; // pose the new blades on the next tick
+    }
+  }
+
+  /**
+   * Plant spots on a jittered grid of `cell` m over one landschap: off the sand paths,
+   * out of the spawn clearing, inside the rim; `keep(x, z, h)` (h: a stable per-spot
+   * random in [0,1)) thins them. Deterministic.
+   */
+  private gridSpots(want: Biome, cell: number, seed: number, keep: (x: number, z: number, h: number) => boolean): { x: number; z: number; h: number }[] {
+    const out: { x: number; z: number; h: number }[] = [];
+    const B = this.limits.bound - 1;
+    const n = Math.ceil(B / cell);
+    for (let gx = -n; gx < n; gx++) for (let gz = -n; gz < n; gz++) {
+      const x = (gx + hash2(gx, gz, seed)) * cell, z = (gz + hash2(gx, gz, seed + 1)) * cell;
+      const r = Math.hypot(x, z);
+      if (r < 9 || r > B) continue;                               // the spawn clearing, the rim
+      if (this.terrain.biome(x, z) !== want) continue;
+      if (distanceToNetwork(x, z) < LANE_HALF + 0.6) continue;  // the paths stay bare sand
+      const h = hash2(gx, gz, seed + 2);
+      if (!keep(x, z, h)) continue;
+      if (r > this.scatterMax) this.scatterMax = r;                // furthest low plant (dev hook)
+      out.push({ x, z, h });
+    }
+    return out;
   }
 
   /**
@@ -508,6 +563,7 @@ export class Dressing {
         const it = wm.items[k];
         Dressing._e.set(0, 0, windSway(t, it.phase) * wm.strength);
         Dressing._q.setFromEuler(Dressing._e);
+        if (it.rotY) Dressing._q.multiply(Dressing._r.setFromAxisAngle(Dressing._up, it.rotY)); // lean, then its own turn
         Dressing._p.set(it.x, it.y, it.z);
         Dressing._s.set(it.sx, it.sy, it.sx);
         Dressing._m.compose(Dressing._p, Dressing._q, Dressing._s);

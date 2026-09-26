@@ -19,11 +19,9 @@
 
 import * as THREE from 'three';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
-import { BIOME_PALETTE, WATER_LEVEL, biomeAt, heightAt, type Biome } from '../Biomes.ts';
-import {
-  BIOME_GROUND_TONES, GROUND_BRIGHTEN, GROUND_TILE_PX, GROUND_TILE_REPEAT,
-  groundPatch, mottleRGB, vertexTint,
-} from '../GroundDetail.ts';
+import { BIOME_PALETTE, VEN_CENTER, VEN_SHORE_R, WATER_LEVEL, biomeAt, heightAt, type Biome } from '../Biomes.ts';
+import { BIOME_GROUND_TONES, GROUND_BRIGHTEN, groundPatch, heathCover, vertexTint } from '../GroundDetail.ts';
+import { groundMaterial, mottleTexture } from '../GroundMaterial.ts';
 
 // three-mesh-bvh accelerated raycasts: the tap-to-walk ray (and the dev-hook ground
 // check) hit the ~18k-triangle terrain in O(log n). A mesh without a boundsTree falls
@@ -46,46 +44,75 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 
 const _a = new THREE.Color();
 const _b = new THREE.Color();
-const WET = new THREE.Color('#39422e'); // wet moss/peat at the ven waterline
+const WET = new THREE.Color('#4a4d33');   // wet moss and peat right at the ven's waterline
+const CLEAR = new THREE.Color('#b7a47b'); // trodden sand and dry grass round the lodge
+const FAR = new THREE.Color('#57533a');   // forest floor past the rim: shade under the tree-line
 
 /**
  * The ground colour at world (x,z) with height h. `detail` mixes the biome's two
- * ground tones by the patch field and adds the soft brightness wash (W4.4/P1.2);
- * without it every biome is its flat palette colour (the `?groundDetail=off` baseline).
+ * ground tones (the heide by its heather cover, the others by the patch field) and
+ * adds the soft brightness wash (W4.4/P1.2); without it every biome is its flat
+ * palette colour (the `?groundDetail=off` baseline). On top: the ven basin's bank
+ * turns to wet peat just above the water, the lodge clearing is trodden sand, and past
+ * the rim the ground falls into the forest's shade (so no pale "dune" shows behind the
+ * tree-line).
  */
 export function groundColor(x: number, z: number, h: number, detail: boolean, out: THREE.Color): THREE.Color {
   const biome = biomeAt(x, z);
   if (!detail) return out.set(BIOME_PALETTE[biome].ground);
   const [hexA, hexB] = BIOME_GROUND_TONES[biome];
   _a.set(hexA); _b.set(hexB);
-  // heide leans toward its bloom tone so the hub reads as flowering paarse heide
-  // (purple mats over sand), not a flat warm-brown slab; other biomes mix evenly.
-  const patch = groundPatch(x, z);
-  const t = biome === 'heide' ? Math.min(1, patch * 1.5 + 0.08) : patch;
+  // the heide mixes sand ↔ heather carpet by heathCover (the field its heather plants
+  // grow on, so bush and ground agree); the other biomes mix their tones by the patches.
+  const t = biome === 'heide' ? heathCover(x, z) : groundPatch(x, z);
   const m = GROUND_BRIGHTEN * vertexTint(x, z);
   out.setRGB(
     Math.min(1, (_a.r + (_b.r - _a.r) * t) * m),
     Math.min(1, (_a.g + (_b.g - _a.g) * t) * m),
     Math.min(1, (_a.b + (_b.b - _a.b) * t) * m),
   );
-  // the ven bank darkens toward wet peat as it nears the water, following the real
-  // basin slope (painted on the vertices, so it can never float or z-fight).
-  if (biome === 'ven') {
-    const wet = 1 - THREE.MathUtils.smoothstep(h, WATER_LEVEL - 0.3, WATER_LEVEL + 1.4);
-    out.lerp(WET, wet * 0.6);
+  const r = Math.hypot(x, z);
+  // the basin's bank darkens to wet peat only in the last metre above the water
+  if (Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) < VEN_SHORE_R + 2) {
+    out.lerp(WET, (1 - THREE.MathUtils.smoothstep(h, WATER_LEVEL - 0.2, WATER_LEVEL + 0.9)) * 0.75);
   }
+  if (r < 10) out.lerp(CLEAR, (1 - THREE.MathUtils.smoothstep(r, 5, 10)) * 0.85);
+  if (r > 76) out.lerp(FAR, THREE.MathUtils.smoothstep(r, 76, 88));
   return out;
 }
 
 /**
+ * Which fine ground detail (GroundDetail.detailTexel) the terrain shader lays down at
+ * world (x,z): [heather florets, pine needles, sand grain, grass/moss clumps], each in
+ * [0,1]. Painted on the vertices, so the landschappen blend over a few metres.
+ */
+export function groundMix(x: number, z: number, h: number): [number, number, number, number] {
+  const r = Math.hypot(x, z);
+  const clearing = 1 - THREE.MathUtils.smoothstep(r, 5, 10);
+  const inBasin = Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) < VEN_SHORE_R + 2;
+  let mix: [number, number, number, number];
+  switch (biomeAt(x, z)) {
+    case 'heide': { const c = heathCover(x, z); mix = [c, 0, (1 - c) * 0.8, (1 - c) * 0.6]; break; }
+    case 'bos': mix = [0, 1, 0, 0.35]; break;
+    case 'stuifzand': mix = [0, 0, 1, 0.25]; break;
+    default: mix = inBasin ? [0, 0.15, 0.1, 0.7] : [0.25, 0, 0.1, 0.8]; // ven: the wet bank / the wet heath
+  }
+  if (inBasin && h < WATER_LEVEL + 0.9) mix = [0, 0, 0, 0.5];      // wet peat: smooth
+  if (clearing > 0) mix = mix.map((v, i) => v * (1 - clearing) + [0, 0, 0.7, 0.5][i] * clearing) as typeof mix;
+  return mix;
+}
+
+/**
  * The displaced, vertex-coloured ground geometry in WORLD coordinates: vertex (x,z)
- * carries height `heightAt(x,z)` and colour `groundColor(x,z)`. One draw call.
+ * carries height `heightAt(x,z)`, colour `groundColor(x,z)` and (with detail) the fine
+ * detail mix `groundMix(x,z)`. One draw call.
  */
 export function buildTerrainGeometry(detail: boolean): THREE.BufferGeometry {
   const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGMENTS, TERRAIN_SEGMENTS);
   geo.rotateX(-Math.PI / 2); // lay it flat in the geometry itself: (x, 0, z) is now world
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const colors = new Float32Array(pos.count * 3);
+  const mixes = new Float32Array(pos.count * 4);
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
@@ -93,8 +120,10 @@ export function buildTerrainGeometry(detail: boolean): THREE.BufferGeometry {
     pos.setY(i, h);
     groundColor(x, z, h, detail, c);
     colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+    if (detail) mixes.set(groundMix(x, z, h), i * 4);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  if (detail) geo.setAttribute('groundMix', new THREE.BufferAttribute(mixes, 4));
   geo.computeVertexNormals();
   geo.computeBoundsTree();
   return geo;
@@ -114,8 +143,7 @@ export class Terrain {
     const pos = geo.attributes.position as THREE.BufferAttribute;
     this.heights = new Float32Array(pos.count);
     for (let i = 0; i < pos.count; i++) this.heights[i] = pos.getY(i);
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
-    if (opts.map) mat.map = opts.map;
+    const mat = groundMaterial(opts.detail, opts.map ?? null);
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.receiveShadow = true; // the hero shadow lands on the ground
   }
@@ -189,33 +217,9 @@ export class Terrain {
     return null;
   }
 
-  /**
-   * The fine painterly grain (GroundDetail.mottleRGB) baked once onto a small canvas
-   * that repeats over the terrain; multiplied against the vertex colour it reads as
-   * brushed tonal variation. Browser-only (needs a canvas).
-   */
+  /** The fine painterly grain (GroundDetail.mottleRGB) on a small repeating canvas
+   *  (GroundMaterial.ts). Browser-only (needs a canvas). */
   static mottleTexture(): THREE.CanvasTexture {
-    const N = GROUND_TILE_PX;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = N;
-    const ctx = cv.getContext('2d')!;
-    const img = ctx.createImageData(N, N);
-    for (let j = 0; j < N; j++) {
-      for (let i = 0; i < N; i++) {
-        const [r, g, b] = mottleRGB(i / N, j / N);
-        const o = (j * N + i) * 4;
-        img.data[o] = Math.round(r * 255);
-        img.data[o + 1] = Math.round(g * 255);
-        img.data[o + 2] = Math.round(b * 255);
-        img.data[o + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(GROUND_TILE_REPEAT, GROUND_TILE_REPEAT);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
-    return tex;
+    return mottleTexture();
   }
 }

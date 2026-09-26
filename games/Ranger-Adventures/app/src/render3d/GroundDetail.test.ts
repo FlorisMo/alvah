@@ -4,6 +4,8 @@ import {
   mottleRGB,
   vertexTint,
   groundPatch,
+  heathCover,
+  detailTexel,
   BIOME_GROUND_TONES,
   GROUND_TILE_PX,
   GROUND_TILE_REPEAT,
@@ -123,4 +125,31 @@ test('groundPatch varies over distance (clumps, not a flat constant)', () => {
   const b = groundPatch(40, -30);
   const c = groundPatch(-25, 55);
   assert.ok(Math.abs(a - b) > 0.02 || Math.abs(a - c) > 0.02, 'the mix field actually varies');
+});
+
+test('heathCover is deterministic, bounded and patchy (heather mats and sandy openings)', () => {
+  let lo = 0, hi = 0;
+  for (let i = 0; i < 400; i++) {
+    const x = -70 + (i % 20) * 7, z = -70 + Math.floor(i / 20) * 7;
+    const c = heathCover(x, z);
+    assert.equal(c, heathCover(x, z));
+    assert.ok(c >= 0 && c <= 1);
+    if (c < 0.3) lo++;
+    if (c > 0.7) hi++;
+  }
+  assert.ok(lo > 40 && hi > 40, `both open sand (${lo}) and dense heather (${hi}) occur`);
+});
+
+test('detailTexel is in [0,1], tiles seamlessly and has sparse florets', () => {
+  let florets = 0;
+  for (let i = 0; i < 256; i++) {
+    const u = (i * 37 % 256) / 256, v = (i * 91 % 256) / 256;
+    for (const c of detailTexel(u, v)) assert.ok(c >= 0 && c <= 1);
+    if (detailTexel(u, v)[1] > 0.5) florets++;
+  }
+  assert.ok(florets > 3 && florets < 128, `florets are sparse, not everywhere (${florets}/256)`);
+  for (const v of [0.1, 0.5, 0.9]) {
+    const a = detailTexel(0, v), b = detailTexel(0.99999, v);
+    assert.ok(Math.abs(a[3] - b[3]) < 0.05, 'clumps tile across u');
+  }
 });

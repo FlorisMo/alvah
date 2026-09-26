@@ -127,22 +127,21 @@ export function vertexTint(x: number, z: number): number {
  * busy speckle. This adds NO draw call: it is still the single vertex-coloured
  * ground mesh; THREE decodes each hex to its working colour space and lerps.
  *
- *   • heide     — warm sandy soil ↔ dusty heather bloom (the famous paarse heide,
- *                 bare sand between the struikhei mats). D3.2 deepens the bloom to a
- *                 more saturated dusty magenta-purple (#9a4f8c): the warm golden key
- *                 crushes the blue channel, so a muted grey-purple still washes to
- *                 brown (the P1.2 read, still convicted "flat warm-brown slab" at the
- *                 GATE-D2 audit) — a saturated magenta-purple survives the crush and
- *                 reads as flowering heather at golden hour, in clumps over the sand.
+ *   • heide     — sand with dry grass ↔ a muted purple-brown heather carpet, mixed by
+ *                 `heathCover` (not the patch field), the same field the heather plants
+ *                 grow on, so bush and ground agree. (2026-09-27: the D3.2 saturated
+ *                 magenta #9a4f8c read as paint smears once it covered mission 1's
+ *                 quadrant; real struikhei at golden hour is a dusty mauve-brown.)
  *   • bos       — needle/leaf-litter brown ↔ soft forest moss (not flat green).
  *   • stuifzand — pale drift sand ↔ slightly darker rippled / grass-tuft sand.
- *   • ven       — mossy fen bank ↔ dark wet peat near the waterline.
+ *   • ven       — mossy fen bank ↔ darker peat (Terrain darkens it further toward the
+ *                 waterline, so the bank reads wet where it meets the water).
  */
 export const BIOME_GROUND_TONES: Record<Biome, readonly [string, string]> = {
-  heide:     ['#c2a878', '#9a4f8c'],
-  bos:       ['#6a5636', '#4e5a35'],
-  stuifzand: ['#ddcaa1', '#c6b485'],
-  ven:       ['#5e6d45', '#46503a'],
+  heide:     ['#a89d74', '#7b6472'],
+  bos:       ['#977a52', '#7b7d48'],
+  stuifzand: ['#e0cfa6', '#c9b88b'],
+  ven:       ['#8d8f5d', '#6f7a4c'],
 };
 
 /**
@@ -159,4 +158,71 @@ export function groundPatch(x: number, z: number): number {
     0.7 * vnoise(x * 0.09 + 17, z * 0.09 - 9, 907, 0) +
     0.3 * vnoise(x * 0.27 - 3, z * 0.27 + 21, 4177, 0);
   return smooth(Math.min(1, Math.max(0, n)));
+}
+
+/**
+ * How much of the heide ground at (x,z) is heather carpet rather than sand and dry
+ * grass, in [0,1]. Real Veluwe heath is a patchwork: dense mats of struikhei broken by
+ * bare sand and pijpenstrootje. The ground tone (Terrain.groundColor) and the heather
+ * plants (world/Plants) both read THIS field, so a heather bush always stands on
+ * heather-coloured ground and a sandy opening stays open. Two octaves of open value
+ * noise (clumps of ~8-25 m), pushed through a smoothstep. Deterministic.
+ */
+export function heathCover(x: number, z: number): number {
+  const n =
+    0.62 * vnoise(x * 0.075 + 41, z * 0.075 - 13, 5501, 0) +
+    0.38 * vnoise(x * 0.19 - 7, z * 0.19 + 29, 7717, 0);
+  return smooth(Math.min(1, Math.max(0, (n - 0.2) / 0.42)));
+}
+
+/** Edge length in px of the fine ground-detail tile (Terrain bakes it once). */
+export const DETAIL_TILE_PX = 256;
+/** World metres one fine-detail tile covers (the shader also samples it 3× finer). */
+export const DETAIL_TILE_M = 2.4;
+
+/**
+ * The fine ground detail for a texel at (u,v) ∈ [0,1): four seamless patterns the
+ * terrain shader mixes per landschap, close to the lens only (they fade out with
+ * distance, so the far ground never shimmers):
+ *   [0] grit   — soil grain, every biome (~1-3 cm);
+ *   [1] speck  — little heather florets and leaves, sparse bright dots (the heide);
+ *   [2] needle — short pine needles and twigs in every direction (the bos floor);
+ *   [3] clump  — soft 20-40 cm clumps (tufts, moss cushions, ripples in the sand).
+ * All in [0,1], deterministic and tileable.
+ */
+export function detailTexel(u: number, v: number): [number, number, number, number] {
+  const N = DETAIL_TILE_PX;
+  const px = Math.floor(u * N), py = Math.floor(v * N);
+  // grit: fine value noise + per-texel hash
+  const grit = 0.55 * vnoise(u * 64, v * 64, 211, 64) + 0.45 * hash(px, py, 977);
+  // speck: a sparse set of 1-2 texel florets on a 32² jittered lattice (tileable)
+  let speck = 0;
+  const G = 32;
+  const cx = Math.floor(u * G), cy = Math.floor(v * G);
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const gx = ((cx + dx) % G + G) % G, gy = ((cy + dy) % G + G) % G;
+    if (hash(gx, gy, 419) < 0.35) continue; // not every cell flowers
+    const fx = (cx + dx + hash(gx, gy, 421)) / G, fy = (cy + dy + hash(gx, gy, 431)) / G;
+    const d = Math.hypot((u - fx) * N, (v - fy) * N);
+    speck = Math.max(speck, Math.max(0, 1 - d / (1.2 + hash(gx, gy, 433) * 1.3)));
+  }
+  // needle: short straight strokes on a 16² jittered lattice (tileable)
+  let needle = 0;
+  const H = 16;
+  const nx = Math.floor(u * H), ny = Math.floor(v * H);
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    for (let k = 0; k < 3; k++) {
+      const gx = ((nx + dx) % H + H) % H, gy = ((ny + dy) % H + H) % H;
+      const sx = (nx + dx + hash(gx, gy, 601 + k)) / H, sy = (ny + dy + hash(gx, gy, 607 + k)) / H;
+      const a = hash(gx, gy, 613 + k) * Math.PI;
+      const len = (5 + hash(gx, gy, 617 + k) * 9) / N;
+      const ex = Math.cos(a), ey = Math.sin(a);
+      const qx = u - sx, qy = v - sy;
+      const t = Math.max(-len, Math.min(len, qx * ex + qy * ey));
+      const d = Math.hypot(qx - ex * t, qy - ey * t) * N;
+      needle = Math.max(needle, Math.max(0, 1 - d / 0.9) * (0.6 + 0.4 * hash(gx, gy, 619 + k)));
+    }
+  }
+  const clump = vnoise(u * 8, v * 8, 263, 8) * 0.6 + vnoise(u * 16, v * 16, 271, 16) * 0.4;
+  return [grit, speck, needle, clump];
 }
