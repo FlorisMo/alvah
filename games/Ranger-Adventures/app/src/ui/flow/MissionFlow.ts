@@ -69,7 +69,7 @@ export function showBriefing(mission: Mission): void {
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
     `<button class="btn-start" type="button">Ga op pad</button>` +
     `</div>` +
-    `<button class="ra-text-btn briefing-back" type="button">Nog even rondkijken</button>` +
+    `<button class="ra-text-btn briefing-back" type="button" data-key="back">Nog even rondkijken</button>` +
     `</div>`,
   );
   const lineEls = Array.from(el.querySelectorAll<HTMLElement>('.briefing-line'));
@@ -158,6 +158,7 @@ function mountMissionPause(): void {
   const el = document.createElement('button');
   el.className = 'ra-pill mission-pause';
   el.type = 'button';
+  el.dataset.key = 'pause';
   el.textContent = '⏸ Pauze';
   el.addEventListener('click', showMissionPause);
   session.host.appendChild(el);
@@ -186,7 +187,7 @@ function showMissionPause(): void {
     `<button class="ra-chip mp-stop" type="button"><span class="ra-chip-ic" aria-hidden="true">🚩</span>` +
     `<span class="ra-chip-tx">Stop de missie</span></button>` +
     `</div>` +
-    `<button class="btn-start mp-resume" type="button">Ga verder</button>` +
+    `<button class="btn-start mp-resume" type="button" data-key="back">Ga verder</button>` +
     `</div>`;
   session.host.appendChild(el);
   el.querySelector('.mp-resume')?.addEventListener('click', () => el.remove());
@@ -304,7 +305,7 @@ function showWildcamCapture(clue: Clue): void {
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
     `<button class="btn-start wc-board" type="button">Bekijk het prikbord</button>` +
     `</div>` +
-    `<button class="ra-text-btn wc-patrol" type="button">Verder op patrouille</button>` +
+    `<button class="ra-text-btn wc-patrol" type="button" data-key="back">Verder op patrouille</button>` +
     `</div>`,
   );
   const ra = mountReadAloud({

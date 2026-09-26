@@ -185,7 +185,7 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
     `<p class="wb-prompt"></p>` +
     `<div class="wb-opts">${opts}</div>` +
     `<p class="wb-feedback" role="status" aria-live="polite" hidden></p>` +
-    `<button class="ra-text-btn wb-skip" type="button">Even verder lopen</button>` +
+    `<button class="ra-text-btn wb-skip" type="button" data-key="back">Even verder lopen</button>` +
     `</div>`,
   );
   const ra = mountReadAloud({

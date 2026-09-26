@@ -7,6 +7,7 @@ import { applyReadingPrefs } from './core/reading-prefs';
 import { store } from './core/state';
 import { Sound } from './core/sound';
 import { installDevHook, setScreen, provideDrawCalls, provideAvatar, provideTitleReady } from './core/devhook';
+import { installKeys } from './ui/keys';
 
 // W7.1 code-splitting: the mission/world graph (World, the five engines,
 // the 3D mini-game views, render2d) is the bulk of the bundle but is only
@@ -26,6 +27,8 @@ watchReducedMotion();
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 const ui = document.getElementById('ui') as HTMLDivElement;
+// Enter/Space press the primary button, Esc goes back or opens Pauze (every screen).
+installKeys(ui);
 
 // --- 3D render layer + live budget overlay (Phase 0) ---
 const stage = new Stage(canvas);

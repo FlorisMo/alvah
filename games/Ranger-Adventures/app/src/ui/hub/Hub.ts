@@ -93,7 +93,7 @@ export function showPauseHub(): void {
     `<button class="ra-chip ph-hoofdmenu" type="button"><span class="ra-chip-ic" aria-hidden="true">🏠</span>` +
     `<span class="ra-chip-tx">Naar het hoofdmenu</span></button>` +
     `</div>` +
-    `<button class="btn-start ph-back" type="button">Terug naar de open plek</button>` +
+    `<button class="btn-start ph-back" type="button" data-key="back">Terug naar de open plek</button>` +
     `</div>`,
   );
   el.querySelector('.ph-prikbord')?.addEventListener('click', () => showCaseBoard());
@@ -135,7 +135,7 @@ export function showMissionBoard(): void {
     `<p class="boot-kicker">Het missiebord · ${esc(area.naam)}</p>` +
     `<h1 class="boot-title">Kies een missie</h1>` +
     `<div class="mission-grid">${cards}</div>` +
-    `<button class="ra-chip mb-back" type="button">` +
+    `<button class="ra-chip mb-back" type="button" data-key="back">` +
     `<span class="ra-chip-ic" aria-hidden="true">‹</span>` +
     `<span class="ra-chip-tx">Terug naar de open plek</span></button>` +
     `</div>`,
@@ -224,7 +224,7 @@ export function showCaseBoard(): void {
     veldStrip +
     `<div class="ra-row">` +
     resolveBtn +
-    `<button class="ra-chip cb-back" type="button"><span class="ra-chip-ic" aria-hidden="true">‹</span>` +
+    `<button class="ra-chip cb-back" type="button" data-key="back"><span class="ra-chip-ic" aria-hidden="true">‹</span>` +
     `<span class="ra-chip-tx">Verder op patrouille</span></button>` +
     `</div>` +
     `</div>`,
@@ -304,7 +304,7 @@ export function showBadges(back: () => void): void {
     `<p class="boot-kicker">Jouw breinkracht</p>` +
     `<h1 class="boot-title">Badges</h1>` +
     `<div class="badge-row">${wall}</div>` +
-    `<button class="btn-start" type="button">Terug</button>` +
+    `<button class="btn-start" type="button" data-key="back">Terug</button>` +
     `</div>`,
   );
   el.querySelector('.btn-start')?.addEventListener('click', back);

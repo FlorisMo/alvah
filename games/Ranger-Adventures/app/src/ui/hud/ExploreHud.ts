@@ -63,7 +63,7 @@ export function showExploreHud(activeTitel: string | null): void {
     : '';
   const el = plainCard(
     `<div class="explore-hud">` +
-    `<button class="ra-pill explore-pause" type="button">⏸ Pauze</button>` +
+    `<button class="ra-pill explore-pause" type="button" data-key="pause">⏸ Pauze</button>` +
     veld +
     `<div class="explore-prompt" hidden></div>` +
     `<div class="explore-hub-prompt" hidden></div>` +
@@ -85,6 +85,7 @@ export function showExploreHud(activeTitel: string | null): void {
   provideHint(hintSnapshot);
   // The World only re-fires its onNear callbacks on a proximity CHANGE, so a fresh
   // HUD re-surfaces whatever the ranger is already standing at.
+  onApproach(world?.nearMission() ?? null);
   if (world?.boardState()?.near) onBoardApproach(true);
   if (world?.sitSpotState()?.near) onSitSpotApproach(true);
   renderVehiclePrompt();
@@ -93,23 +94,45 @@ export function showExploreHud(activeTitel: string | null): void {
   setHeliCockpit(world?.heliState()?.inHeli ?? false);
 }
 
+/* ------------------------------------------------ one prompt at a time ---- */
+/** The proximity prompts share ONE place on screen (bottom centre), so only the
+ *  most important one shows: never two buttons on top of each other, and Space /
+ *  Enter always does what the one visible button says. On foot: a mission first,
+ *  then the jeep, the helicopter, the missiebord, the bird bench. In a vehicle,
+ *  only getting out (or landing) — markers are not offered from a seat. */
+const FOOT_ORDER = ['.explore-prompt', '.explore-vehicle-prompt', '.explore-heli-prompt', '.explore-hub-prompt', '.explore-sit-prompt'];
+const RIDING_ORDER = ['.explore-vehicle-prompt', '.explore-heli-prompt'];
+
+function arbitratePrompts(): void {
+  const w = session.world;
+  const riding = !!(w?.vehicleState()?.inVehicle || w?.heliState()?.inHeli);
+  const order = riding ? RIDING_ORDER : FOOT_ORDER;
+  let shown = false;
+  for (const sel of FOOT_ORDER) {
+    const slot = session.host.querySelector<HTMLElement>(sel);
+    if (!slot) continue;
+    const show = !shown && order.includes(sel) && slot.childElementCount > 0;
+    slot.hidden = !show;
+    if (show) shown = true;
+  }
+}
+
 /* ----------------------------------------------------------- vehicles ---- */
 /** W5.1: the jeep affordance — "Stap in de jeep" beside the parked jeep, "Stap uit"
  *  while driving. Reads the live `vehicleState()` so a HUD re-render restores it. */
 export function renderVehiclePrompt(): void {
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-vehicle-prompt');
   if (!prompt) return;
-  const world = session.world;
-  const v = world?.vehicleState() ?? null;
-  if (!v || (!v.near && !v.inVehicle)) { prompt.hidden = true; prompt.innerHTML = ''; return; }
-  prompt.hidden = false;
-  if (v.inVehicle) {
+  const v = session.world?.vehicleState() ?? null;
+  if (!v || (!v.near && !v.inVehicle)) prompt.innerHTML = '';
+  else if (v.inVehicle) {
     prompt.innerHTML = `<button class="btn-start explore-vehicle-exit" type="button">🚙 Stap uit</button>`;
     prompt.querySelector('.explore-vehicle-exit')?.addEventListener('click', () => session.world?.exitVehicle());
   } else {
     prompt.innerHTML = `<button class="btn-start explore-vehicle-enter" type="button">🚙 Stap in de jeep</button>`;
     prompt.querySelector('.explore-vehicle-enter')?.addEventListener('click', () => session.world?.enterVehicle());
   }
+  arbitratePrompts();
 }
 
 /** W5.3b: the helicopter affordance — "Stap in de helikopter" beside a parked heli,
@@ -128,9 +151,8 @@ export function renderHeliPrompt(): void {
     : 'none';
   if (key === heliPromptKey) return;
   heliPromptKey = key;
-  if (!h || (!h.near && !h.inHeli)) { prompt.hidden = true; prompt.innerHTML = ''; return; }
-  prompt.hidden = false;
-  if (h.inHeli) {
+  if (!h || (!h.near && !h.inHeli)) prompt.innerHTML = '';
+  else if (h.inHeli) {
     if (h.onPad) {
       prompt.innerHTML = `<button class="btn-start explore-heli-land" type="button">🚁 Land hier</button>`;
       prompt.querySelector('.explore-heli-land')?.addEventListener('click', () => session.world?.landHeli());
@@ -147,6 +169,7 @@ export function renderHeliPrompt(): void {
       : 'Zet de helikopter aan bij Instellingen.';
     prompt.innerHTML = `<p class="explore-heli-hint">${msg}</p>`;
   }
+  arbitratePrompts();
 }
 
 /** W5.3b: show/hide the cockpit frame overlay on lift-off/touchdown. */
@@ -292,15 +315,16 @@ export function onApproach(missionId: string | null): void {
   approachId = missionId;
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-prompt');
   if (!prompt) return;
-  if (!missionId) { prompt.hidden = true; prompt.innerHTML = ''; return; }
-  const m = Content.activeArea().missies.find((mm) => mm.id === missionId);
-  if (!m) return;
-  prompt.hidden = false;
-  prompt.innerHTML = `<button class="btn-start explore-play" type="button">Speel mee: ${esc(m.titel)}</button>`;
-  prompt.querySelector('.explore-play')?.addEventListener('click', () => {
-    if (approachId !== missionId) return;
-    showBriefing(m);
-  });
+  const m = missionId ? Content.activeArea().missies.find((mm) => mm.id === missionId) : null;
+  if (!m) prompt.innerHTML = '';
+  else {
+    prompt.innerHTML = `<button class="btn-start explore-play" type="button">Speel mee: ${esc(m.titel)}</button>`;
+    prompt.querySelector('.explore-play')?.addEventListener('click', () => {
+      if (approachId !== m.id) return;
+      showBriefing(m);
+    });
+  }
+  arbitratePrompts();
 }
 
 /** The Space/Enter interact key (W1.4) — the laptop twin of the "Speel mee" tap.
@@ -318,10 +342,12 @@ export function onInteract(missionId: string): void {
 export function onBoardApproach(near: boolean): void {
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-hub-prompt');
   if (!prompt) return;
-  if (!near) { prompt.hidden = true; prompt.innerHTML = ''; return; }
-  prompt.hidden = false;
-  prompt.innerHTML = `<button class="btn-start explore-board-open" type="button">Bekijk het missiebord</button>`;
-  prompt.querySelector('.explore-board-open')?.addEventListener('click', tryOpenBoard);
+  if (!near) prompt.innerHTML = '';
+  else {
+    prompt.innerHTML = `<button class="btn-start explore-board-open" type="button">Bekijk het missiebord</button>`;
+    prompt.querySelector('.explore-board-open')?.addEventListener('click', tryOpenBoard);
+  }
+  arbitratePrompts();
 }
 
 /** Guarded entry to the mission board (button tap OR the interact key). */
@@ -335,10 +361,12 @@ export function tryOpenBoard(): void {
 export function onSitSpotApproach(near: boolean): void {
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-sit-prompt');
   if (!prompt) return;
-  if (!near) { prompt.hidden = true; prompt.innerHTML = ''; return; }
-  prompt.hidden = false;
-  prompt.innerHTML = `<button class="btn-start explore-sit-play" type="button">${esc(ROEP_COPY.zit)}</button>`;
-  prompt.querySelector('.explore-sit-play')?.addEventListener('click', tryPlayRoep);
+  if (!near) prompt.innerHTML = '';
+  else {
+    prompt.innerHTML = `<button class="btn-start explore-sit-play" type="button">${esc(ROEP_COPY.zit)}</button>`;
+    prompt.querySelector('.explore-sit-play')?.addEventListener('click', tryPlayRoep);
+  }
+  arbitratePrompts();
 }
 
 /** Guarded entry to the roep slice (button tap OR the interact key). */
