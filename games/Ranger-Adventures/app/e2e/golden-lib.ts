@@ -24,6 +24,11 @@ let current: Row = ROWS[0];
 /** Record a note (a measured number, what was done) on the current step. */
 export function note(msg: string): void { current.notes.push(msg); }
 
+/** Record a note unless the current step already has one containing `key`. */
+export function noteOnce(key: string, msg: string): void {
+  if (!current.notes.some((n) => n.includes(key))) current.notes.push(msg);
+}
+
 /** Quality check: a soft failure (`expect.soft`, the run goes on). */
 export function soft(ok: boolean, msg: string): boolean {
   expect.soft(ok, `[golden ${current.n}. ${current.step}] ${msg}`).toBe(true);
@@ -95,7 +100,7 @@ export type Cam = { x: number; y: number; z: number; yaw: number; viewClear: boo
 export type Snap = { p: P2 | null; c: Cam | null; g: { grounded: boolean; clearance: number } | null; near: string | null;
   jeepNear: boolean; screen: string; view: string | null; t: number };
 export type Hint = { id: string; x: number; y: number; onScreen: boolean; firstHit: boolean; aboveGround: boolean;
-  firstHitBy: string | null; bottomGap: number | null; reachesCanvas: boolean; blocker: string | null };
+  firstHitBy: string | null; bottomGap: number | null; reachesCanvas: boolean; blocker: string | null; parts: string[] };
 export type Seat = { id: string; x: number; y: number; z: number; gap: number; sig: string };
 export type Vehicle = { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; y: number;
   grounded: boolean; clearance: number; speed: number; fov: number; roll: number };

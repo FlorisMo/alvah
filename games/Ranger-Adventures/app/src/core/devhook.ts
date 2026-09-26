@@ -324,7 +324,8 @@ export interface RangerDevHook {
    *  `aboveGround`: the target's bbox top is above the rendered terrain at its x,z;
    *  `bottomGap` (m) is its bbox bottom minus that terrain height (≈0 = standing on it).
    *  `reachesCanvas`: a click at (x,y) lands on the 3D canvas; `blocker` names the DOM
-   *  element in the way when it does not. Null when no engine offers a hint right now. */
+   *  element in the way when it does not. `parts`: the geometry types it is drawn with.
+   *  Null when no engine offers a hint right now. */
   playHint(): PlayHintProbe | null;
   /** Triangles drawn in the last rendered frame (renderer.info.render.triangles). */
   tris(): number | null;
@@ -351,6 +352,9 @@ export type PlayHintProbe = {
   onScreen: boolean; firstHit: boolean; aboveGround: boolean;
   firstHitBy: string | null; bottomGap: number | null;
   reachesCanvas: boolean; blocker: string | null;
+  /** the geometry types the target is drawn with ('BufferGeometry' = a loaded model;
+   *  'CapsuleGeometry', 'SphereGeometry'... = a primitive stand-in) */
+  parts: string[];
 };
 
 /** One entry of `__ranger.seating()`. */

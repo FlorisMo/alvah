@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { AREA_VELUWE } from '../src/content/veluwe';
 import { HAAR_OPTIES, OUTFIT_OPTIES } from '../src/core/avatar';
 import {
-  R, SEAT_TOLERANCE, budget, clickButton, hard, holdKey, markTimedOut, note, r2, renderTable, renderedLook, save, setShotDir, shot,
+  R, SEAT_TOLERANCE, budget, clickButton, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
   sleep, snap, soft, step, uiText, under, visibleButtons, walkQuality, walkTo,
   type Hint, type P2, type Seat, type Vehicle,
 } from './golden-lib';
@@ -35,10 +35,12 @@ const optId = (list: { id: string; label: string }[], label: string): string => 
 test.use({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
 
 let shotDir = '';
+let loads = 0; let expectedLoads = 0; // page loads seen vs the ones golden caused (goto, reload)
 // The table is written here, not at the end of the test, so a timeout still gets one.
 test.afterEach(async ({}, testInfo) => {
   if (!shotDir) return;
   if (testInfo.status === 'timedOut') markTimedOut();
+  if (loads > expectedLoads) noteOnce('reloaded by itself', '✗✗ the page reloaded by itself during this step (a crash, or a Vite full reload because a source file changed on this dev server?)');
   const table = renderTable(shotDir);
   fs.writeFileSync(path.join(shotDir, 'SUMMARY.txt'), table);
   if (!process.env.GOLDEN_QUIET) console.log(table); // `npm run golden` prints it last instead
@@ -53,10 +55,14 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
   setShotDir(shotDir);
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
+  // A page that reloads by itself (an app crash, or Vite's full reload after a source
+  // edit on a shared dev server) turns every later step into nonsense: name it.
+  page.on('load', () => { loads += 1; });
   let errSeen = 0;
   const noNewErrors = (): void => {
     const fresh = errors.slice(errSeen); errSeen = errors.length;
     soft(fresh.length === 0, `page errors: ${fresh.join(' / ')}`);
+    hard(loads <= expectedLoads, `the page reloaded by itself ${loads - expectedLoads}× (a crash, or a Vite full reload because a source file changed on this dev server?)`);
   };
 
   let missionId = missions[0].id;
@@ -66,6 +72,7 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
   // ---------------------------------------------------- 1. opening screen ----
   await step(1, async () => {
     const t0 = Date.now();
+    expectedLoads += 1;
     await page.goto('/?dev=1');
     const begin = page.getByRole('button', { name: 'Begin', exact: true });
     const up = await begin.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true, () => false);
@@ -234,7 +241,7 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     const plan = mission.stappen.map((s) => s.ef as string);
     note(`"${mission.titel}": ${plan.join(' → ')}`);
     const base = (await save(page))?.trials ?? {};
-    type GameLog = { hints: number; clicks: number; answers: number; offScreen: string[]; hidden: string[]; buried: string[]; unseated: string[]; blocked: string[] };
+    type GameLog = { hints: number; clicks: number; answers: number; offScreen: string[]; hidden: string[]; buried: string[]; unseated: string[]; blocked: string[]; standIns: string[] };
     const logs: Record<string, GameLog> = {};
     const served2d = new Set<string>();
     let idx = 0;
@@ -250,7 +257,8 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     };
     while (idx < plan.length && Date.now() < deadline) {
       const ef = plan[idx];
-      const g = (logs[ef] ??= { hints: 0, clicks: 0, answers: 0, offScreen: [], hidden: [], buried: [], unseated: [], blocked: [] });
+      const g = (logs[ef] ??= { hints: 0, clicks: 0, answers: 0, offScreen: [], hidden: [], buried: [], unseated: [], blocked: [], standIns: [] });
+      const animal = (mission.stappen[idx].skin as { dier?: string }).dier; // this step's target is an animal
       // won? (the engine resolved: its skill record counted the trials)
       const sv = await save(page);
       if (sv && (sv.trials[ef] ?? 0) > (base[ef] ?? 0)) {
@@ -288,6 +296,8 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
         if (!h.aboveGround) g.buried.push(h.id);
         if (h.bottomGap !== null && Math.abs(h.bottomGap) > SEAT_TOLERANCE) g.unseated.push(`"${h.id}" ${h.bottomGap > 0 ? '+' : ''}${h.bottomGap} m`);
         if (!h.reachesCanvas) g.blocked.push(`"${h.id}" under ${h.blocker}`);
+        // GOAL 6: the same real animal models as the world, not primitive stand-ins
+        if (animal && h.parts.length && h.parts.every((t) => t !== 'BufferGeometry')) g.standIns.push(`the ${animal} "${h.id}" is ${h.parts.join(' + ')}`);
         hard(h.onScreen, `${ef}: the target "${h.id}" is off-screen (${h.x}, ${h.y}); a player cannot click it`);
         const before = { id: h.id, text: await uiText(page), trials: JSON.stringify((await save(page))?.trials) };
         await page.mouse.click(h.x, h.y);
@@ -338,6 +348,7 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
       soft(g.buried.length === 0, `${ef}: ${g.buried.length}/${g.hints} targets entirely under the rendered ground`);
       soft(g.unseated.length === 0, `${ef}: targets not standing on the ground (±${SEAT_TOLERANCE * 100} cm): ${[...new Set(g.unseated)].slice(0, 3).join('; ')}`);
       soft(g.blocked.length === 0, `${ef}: a click on the target lands on a DOM element: ${[...new Set(g.blocked)].slice(0, 2).join('; ')}`);
+      soft(g.standIns.length === 0, `${ef}: a primitive stand-in, not the real animal model: ${[...new Set(g.standIns)].slice(0, 2).join('; ')}`);
     }
     hard(idx >= plan.length, `won ${idx}/${plan.length} mini-games before the time ran out (stuck in ${plan[idx]})`);
     noNewErrors();
@@ -400,6 +411,7 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     const walk = await holdKey(page, 'ArrowUp', 1_000);
     soft(walk.moved >= 0.8, `cannot walk on after the mission (moved ${walk.moved} m in 1 s)`);
     // reload: the progress must survive
+    expectedLoads += 1;
     await page.reload();
     const up = await page.getByRole('button', { name: 'Begin', exact: true }).waitFor({ state: 'visible', timeout: 30_000 }).then(() => true, () => false);
     hard(up, 'after a reload the title never showed "Begin"');

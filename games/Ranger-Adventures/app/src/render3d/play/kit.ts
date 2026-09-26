@@ -205,6 +205,16 @@ function describeElement(el: Element): string {
   return `${el.tagName.toLowerCase()}${cls}${text ? ` "${text}"` : ''}`;
 }
 
+/** The geometry types the visible meshes under `root` are drawn with (unique, sorted). */
+function drawnWith(root: THREE.Object3D): string[] {
+  const types = new Set<string>();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && !m.userData.hitSphere && shownInTree(m)) types.add(m.geometry.type);
+  });
+  return [...types].sort();
+}
+
 function probePlayHint(): PlayHintProbe | null {
   const hint = currentPlayHint();
   if (!hint) return null;
@@ -215,7 +225,7 @@ function probePlayHint(): PlayHintProbe | null {
   const box = visibleBox(hint.target, new THREE.Box3());
   if (!v || box.isEmpty()) {
     return { id: hint.id, x: -1, y: -1, onScreen: false, firstHit: false, aboveGround: false,
-      firstHitBy: v ? 'target has no visible mesh' : 'no live world view', bottomGap: null, reachesCanvas: false, blocker: null };
+      firstHitBy: v ? 'target has no visible mesh' : 'no live world view', bottomGap: null, reachesCanvas: false, blocker: null, parts: [] };
   }
   const c = box.getCenter(new THREE.Vector3());
   const s = toScreen(v, c);
@@ -234,6 +244,7 @@ function probePlayHint(): PlayHintProbe | null {
     bottomGap: g === null ? null : r2(box.min.y - g),
     reachesCanvas: el === v.canvas,
     blocker: el && el !== v.canvas ? describeElement(el) : null,
+    parts: drawnWith(hint.target),
   };
 }
 
