@@ -54,6 +54,43 @@ export function triggerActivityWin(): boolean {
   return true;
 }
 
+/* ------------------------------------------------------- test play hint ---- */
+
+/**
+ * Where a perfect player would click NEXT (golden-path E2E, 2026-09-26). Unlike
+ * the win channel above, a hint resolves nothing: the test still has to press the
+ * real mouse on that spot, so picking, occlusion and the staged scene are proven
+ * along with the step. A running 3D variant registers a closure that returns the
+ * object a player should click now (its visible mesh or group), or null while it
+ * takes no input (e.g. a sequence is still being shown). Games answered with DOM
+ * buttons return null; the test clicks the button by its text. Dev-only: read via
+ * `__ranger.playHint()`, which projects `target` to screen coordinates.
+ */
+export interface PlayHint {
+  /** Stable id of the thing to click (e.g. the animal or stone id). */
+  id: string;
+  /** The object a player sees and clicks. */
+  target: THREE.Object3D;
+}
+
+let activeHint: (() => PlayHint | null) | null = null;
+
+/** A running 3D variant registers its "click here next" closure. Returns an unregister. */
+export function registerPlayHint(fn: () => PlayHint | null): () => void {
+  activeHint = fn;
+  return () => { if (activeHint === fn) activeHint = null; };
+}
+
+/** Drop any registered hint (the mission runner clears it after each step). */
+export function clearPlayHint(): void {
+  activeHint = null;
+}
+
+/** The current hint, if a variant registered one and is taking input. */
+export function currentPlayHint(): PlayHint | null {
+  return activeHint ? activeHint() : null;
+}
+
 /* --------------------------------------------------- activity abort scope ---- */
 
 /**
