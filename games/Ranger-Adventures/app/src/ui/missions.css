@@ -217,7 +217,8 @@
   border: 3px solid var(--ring);
   box-shadow: 0 0 14px var(--glow);
   color: #fff;
-  font: 700 26px/1 var(--font-head);
+  font-size: 30px;
+  line-height: 1;
 }
 .badge-name { font: 600 14px/1.1 var(--font-body); color: var(--ink); text-align: center; }
 .badge-tier { font: 600 12px/1 var(--font-body); color: var(--ink-soft); }
@@ -289,8 +290,8 @@
   background: rgba(0, 0, 0, 0.06);
   font-size: 28px;
 }
-.cb-clue-title { font: 600 15px/1.15 var(--font-body); color: var(--green-deep); text-align: center; }
-.cb-clue-text { font: 400 13px/1.35 var(--font-read); color: var(--ink-soft); text-align: center; }
+.cb-clue-title { font: 600 18px/1.2 var(--font-body); color: var(--green-deep); text-align: center; }
+.cb-clue-text { font: 400 17px/1.4 var(--font-read); color: var(--ink); text-align: center; }
 .cb-note { margin: 4px 0; font: 400 17px/1.4 var(--font-read); color: var(--ink); text-align: center; }
 .cb-note.ok { color: var(--green-deep); font-weight: 600; }
 .cb-note.muted { color: var(--ink-soft); }

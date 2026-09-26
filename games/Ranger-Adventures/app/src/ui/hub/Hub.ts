@@ -1,7 +1,9 @@
 /**
  * Hub.ts — the menus over the live world: the Pauze hub, the missiebord (pick a
- * mission, at the spawn board), the prikbord (clues + collected veldnotities, and
- * the hopeful resolution), the badge wall, and the way back to the title screen.
+ * mission; the board you walk up to at spawn), the sporenboek (your book of clues
+ * and collected veldnotities, and the hopeful resolution; opened from Pauze — it is
+ * NOT a board in the world, so it has a different name), the badge wall, and the
+ * way back to the title screen.
  * None of them tear the world down: the THREE scene stays live behind the card.
  */
 
@@ -82,8 +84,8 @@ export function showPauseHub(): void {
     `<p class="boot-kicker">Pauze</p>` +
     `<h1 class="boot-title">Wat wil je doen?</h1>` +
     `<div class="lodge-links">` +
-    `<button class="ra-chip ph-prikbord" type="button"><span class="ra-chip-ic" aria-hidden="true">📌</span>` +
-    `<span class="ra-chip-tx">Open het prikbord${cluesBadge()}</span></button>` +
+    `<button class="ra-chip ph-prikbord" type="button"><span class="ra-chip-ic" aria-hidden="true">📓</span>` +
+    `<span class="ra-chip-tx">Open je sporenboek${cluesBadge()}</span></button>` +
     `<button class="ra-chip ph-companion" type="button"><span class="ra-chip-ic" aria-hidden="true">🐦‍⬛</span>` +
     `<span class="ra-chip-tx">${esc(cabinLabel())}</span></button>` +
     `<button class="ra-chip ph-badges" type="button"><span class="ra-chip-ic" aria-hidden="true">🏅</span>` +
@@ -157,12 +159,13 @@ export function showMissionBoard(): void {
   el.querySelector('.mc-next')?.scrollIntoView({ block: 'nearest' });
 }
 
-/* ------------------------------------------------- prikbord (clues) ---- */
+/* ------------------------------------ sporenboek (clues; code: case-board) ---- */
 /** Simple per-soort glyph (dual-channel: glyph + the found colour). */
 export const CLUE_GLYPH: Record<string, string> = { spoor: '🐾', camera: '📷', band: '🛞' };
 
-/** The prikbord: found clues, the collected veldnotities and (once all clues are
- *  found) the way to the hopeful resolution. Its back returns to patrol. */
+/** The sporenboek (was "prikbord"; the class names stay case-board / ph-prikbord):
+ *  found clues, the collected veldnotities and (once all clues are found) the way
+ *  to the hopeful resolution. Its back returns to patrol. */
 export function showCaseBoard(): void {
   narrator.stop();
   const area = Content.activeArea();
@@ -215,7 +218,7 @@ export function showCaseBoard(): void {
     ? `<p class="cb-note ok">De stroper is gestopt. De heide en het ven groeien weer terug.</p>`
     : laatste
       ? `<p class="cb-note">${esc(laatste.tekst)}</p>`
-      : `<p class="cb-note muted">Los missies op. Aanwijzingen komen hier te hangen.</p>`;
+      : `<p class="cb-note muted">Los missies op. Aanwijzingen komen hier.</p>`;
   const resolveBtn =
     allFound && !gemeld
       ? `<button class="btn-start cb-resolve" type="button">Volg het spoor</button>`
@@ -227,7 +230,7 @@ export function showCaseBoard(): void {
     `<button class="ra-chip cb-back" type="button" data-key="back"><span class="ra-chip-ic" aria-hidden="true">‹</span>` +
     `<span class="ra-chip-tx">Verder op patrouille</span></button>` +
     `</div>` +
-    `<p class="boot-kicker">Het prikbord · ${esc(chapter?.naam ?? '')} · ${count}</p>` +
+    `<p class="boot-kicker">Je sporenboek · ${esc(chapter?.naam ?? '')} · ${count}</p>` +
     `<h1 class="boot-title">Wat is hier aan de hand?</h1>` +
     `<div class="cb-cork">${board}</div>` +
     note +
@@ -295,7 +298,7 @@ export function badgeHtml(e: Engine): string {
   const pct = Math.round(badgeProgress(best) * 100);
   return (
     `<div class="badge" style="--bk:${meta.kleur};--ring:${tier.ring};--glow:${tier.glow}">` +
-    `<span class="badge-disc" style="background:${tier.kleur}">${esc(meta.taak.slice(0, 1))}</span>` +
+    `<span class="badge-disc" style="background:${tier.kleur}" aria-hidden="true">${meta.glyph}</span>` +
     `<span class="badge-name">${esc(meta.naam)}</span>` +
     `<span class="badge-tier">${esc(tier.naam)}</span>` +
     `<span class="badge-bar"><span style="width:${pct}%"></span></span>` +

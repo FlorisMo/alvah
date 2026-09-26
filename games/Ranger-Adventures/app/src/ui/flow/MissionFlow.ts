@@ -343,10 +343,10 @@ function showWildcamCapture(clue: Clue): void {
     `<span class="cb-clue-title"></span>` +
     `<span class="cb-clue-text"></span>` +
     `</div>` +
-    `<p class="boot-sub">Hij hangt nu op het prikbord.</p>` +
+    `<p class="boot-sub">Hij zit nu in je sporenboek.</p>` +
     `<div class="ra-row">` +
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
-    `<button class="btn-start wc-board" type="button">Bekijk het prikbord</button>` +
+    `<button class="btn-start wc-board" type="button">Bekijk je sporenboek</button>` +
     `</div>` +
     `<button class="ra-text-btn wc-patrol" type="button" data-key="back">Verder op patrouille</button>` +
     `</div>`,
