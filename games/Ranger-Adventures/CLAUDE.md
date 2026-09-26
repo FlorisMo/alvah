@@ -20,8 +20,9 @@ RANGER_PORT=<your-port> npm run golden     # THE check: plays GOAL.md 1-8 like a
   It ends with a table `step | result | note`: `✗✗` = the player is blocked there (the run
   stopped), `✗` = a quality failure (the run went on), with the measured numbers. The
   screenshot of every step is in `app/test-results/golden/NN-<step>.png` (+ `SUMMARY.txt`):
-  **look at them**. A step counts as working only when golden passes AND its screenshot
-  looks right.
+  **look at them** (the next Playwright run, e.g. `npm run gate`, clears `test-results/`).
+  A step counts as working only when golden passes AND its screenshot looks right. Don't
+  edit `src/` while it runs: Vite reloads the page and golden stops ("reloaded by itself").
 - **3D mini-games must say where a perfect player clicks next**: each engine calls
   `registerPlayHint(() => ({ id, target }))` (`src/render3d/play/kit.ts`) with the object
   to click now, or `null` while it takes no input (a sequence being shown). Golden clicks
