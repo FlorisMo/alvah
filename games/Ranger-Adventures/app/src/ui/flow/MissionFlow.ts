@@ -7,6 +7,7 @@
  * Never a game-over: the reward always celebrates; difficulty flexes silently.
  */
 
+import type { Object3D, Scene } from 'three';
 import type { Mission, Step, Clue } from '../../content/types';
 import type { BeatSummary, Engine } from '../../core/skill';
 import { store } from '../../core/state';
@@ -18,7 +19,7 @@ import { capturedClue } from '../../core/patrol';
 import { setScreen, setMissionView } from '../../core/devhook';
 import { resolveViewMode, variantFor } from '../../render3d/play/ViewMode';
 import { REGISTRY_3D } from '../../render3d/play/registry';
-import { clearActivityWin, beginActivityScope, abortActivityScope } from '../../render3d/play/kit';
+import { clearActivityWin, clearPlayHint, beginActivityScope, abortActivityScope } from '../../render3d/play/kit';
 import { playZoeken } from '../../render2d/ZoekenView';
 import { playRoute } from '../../render2d/RouteView';
 import { playSimon } from '../../render2d/SimonView';
@@ -26,7 +27,8 @@ import { playDanger } from '../../render2d/DangerView';
 import { playWissel } from '../../render2d/WisselView';
 import { mountReadAloud } from '../ReadAloud';
 import { session, esc, naam, card, clearOverlays } from './session';
-import { resumePatrol, leaveWorld, startExplore, notePatrolCompletion } from './WorldSession';
+import { resumePatrol, notePatrolCompletion, activeExploreTitel } from './WorldSession';
+import { showExploreHud } from '../hud/ExploreHud';
 import { showCaseBoard, badgeHtml, CLUE_GLYPH } from '../hub/Hub';
 
 type PlayFn = (host: HTMLElement, step: Step) => Promise<BeatSummary>;
@@ -90,7 +92,7 @@ async function runMission(mission: Mission): Promise<void> {
   setScreen('mission');
   // ONE stop promise for the whole mission — every await below races it, so a stop
   // from any point (a running step OR a between-steps fact) bails at the next
-  // checkpoint. `stopMission()` owns the world teardown + return.
+  // checkpoint, and `abandonMission` puts the ranger back on patrol right there.
   stopRequested = false;
   missionStop = null;
   const stopped = new Promise<'STOP'>((res) => { missionStop = () => res('STOP'); });
@@ -101,6 +103,10 @@ async function runMission(mission: Mission): Promise<void> {
     const play = ENGINE_VIEWS[step.ef];
     if (!play) { skipped = step.ef; break; }
     clearOverlays();
+    // Everything this step puts on screen (a 2D panel, the engine's card, the
+    // raaf's fact) is newer than this snapshot, so "Stop de missie" can take
+    // exactly that away and leave the world as it was.
+    const domBefore = new Set(Array.from(session.host.children));
     const world = session.world;
     // The ONE branch (§1f): play the step in-place when the world is live AND a
     // parity-green 3D variant ships for this engine; otherwise the 2D floor.
@@ -115,26 +121,36 @@ async function runMission(mission: Mission): Promise<void> {
     setMissionView(mode);
     beginActivityScope(); // F-26: fresh abort scope — pick3d + the engine loop bind to it
     let result: BeatSummary | 'STOP';
-    if (mode === '3d' && world) {
-      const variant = variantFor(REGISTRY_3D, step.ef as Engine)!;
-      world.beginActivity();
-      try {
-        result = await raceStop(variant.play(world.ctx(session.host), step));
-      } finally {
-        // On a stop, stopMission() has already disposed this world — never touch it.
-        if (!stopRequested) { clearActivityWin(); world.endActivity(); }
+    let scene: Scene | null = null;
+    let sceneBefore = new Set<Object3D>();
+    // The world holds still while a step plays (2D floor included): the ranger stays
+    // at the marker and the step owns the camera.
+    world?.beginActivity();
+    try {
+      if (mode === '3d' && world) {
+        const variant = variantFor(REGISTRY_3D, step.ef as Engine)!;
+        const ctx = world.ctx(session.host);
+        scene = ctx.scene as Scene;
+        sceneBefore = new Set(scene.children);
+        result = await raceStop(variant.play(ctx, step));
+      } else {
+        result = await raceStop(play(session.host, step));
       }
-    } else {
-      result = await raceStop(play(session.host, step));
+    } finally {
+      clearActivityWin(); // W2.3: no win closure outlives its step
+      clearPlayHint();
+      // a stopped step never tidies up after itself: take out what it staged
+      if (stopRequested && scene) for (const o of [...scene.children]) if (!sceneBefore.has(o)) scene.remove(o);
+      world?.endActivity(); // camera + proximity back to free roam
     }
-    if (result === 'STOP' || stopRequested) return;
+    if (result === 'STOP' || stopRequested) { abandonMission(domBefore); return; }
     store.logSession(step.ef as Engine, result);
     played.push(step.ef as Engine);
     if (step.skin.feit) {
       // W6.3b: playing in the world pins the fact as a collectible veldnotitie.
       store.collectVeldnotitie(Content.veldnotitieId(mission.id, i));
       const fact = await raceStop(showFact(step, i + 1, mission.stappen.length));
-      if (fact === 'STOP' || stopRequested) return;
+      if (fact === 'STOP' || stopRequested) { abandonMission(domBefore); return; }
     }
   }
   unmountMissionPause();
@@ -194,18 +210,28 @@ function showMissionPause(): void {
   el.querySelector('.mp-stop')?.addEventListener('click', stopMission);
 }
 
-/** "Stop de missie": abort the running step cleanly, drop the mission world and
- *  rebuild the open plek. Never punitive — progress is already persisted.
- *  Idempotent via `stopRequested`, which also bails the `runMission` loop. */
+/** "Stop de missie": abort the running step (its pick listener and frame loop
+ *  stop) and let `runMission` take the step away. Never punitive — progress is
+ *  already persisted. Idempotent via `stopRequested`. */
 function stopMission(): void {
   if (stopRequested) return;
   stopRequested = true;
   narrator.stop();
   abortActivityScope();
   unmountMissionPause();
-  missionStop?.();
-  leaveWorld();
-  startExplore();
+  missionStop?.(); // resolve the step/fact race so runMission returns
+}
+
+/** Back to patrol right where the ranger stood: remove what the stopped step put
+ *  on screen (a 2D panel would otherwise stay over the world), keep the world, the
+ *  ranger and the jeep exactly as they were, and show the HUD again. */
+function abandonMission(domBefore: Set<Element>): void {
+  missionStop = null;
+  for (const el of Array.from(session.host.children)) if (!domBefore.has(el)) el.remove();
+  clearOverlays();
+  setScreen('world');
+  setMissionView(null);
+  showExploreHud(activeExploreTitel());
 }
 
 /* ------------------------------------------------------------- fact ---- */
