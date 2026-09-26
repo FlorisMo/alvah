@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { livePolicy } from './MotionMode';
 import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky } from './Lighting';
 import { RANGER_STAND_HEIGHT } from './AnimalScale';
+import { provideRenderView, provideTris } from '../core/devhook';
 
 /** The real staged tree species — the SAME GLBs the explorable world plants
  *  (World.ts TreeSpecies), so the title tree line and the world tree line are
@@ -79,6 +80,9 @@ export class Stage {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
+    // dev hook: the golden-path probes measure exactly what this Stage renders
+    provideRenderView(() => this.view);
+    provideTris(() => this.renderer.info.render.triangles);
 
     this.scene = new THREE.Scene();
     this.scene.background = this.makeSkyTexture();
@@ -462,6 +466,11 @@ export class Stage {
 
   onFrame(cb: FrameCallback): void {
     this.frameCbs.push(cb);
+  }
+
+  /** The scene + camera the loop renders now: the entered world, else the title. */
+  get view(): { scene: THREE.Scene; camera: THREE.PerspectiveCamera } {
+    return this.world ?? { scene: this.scene, camera: this.camera };
   }
 
   /** F-18: the draw calls of the most recently rendered frame, captured the

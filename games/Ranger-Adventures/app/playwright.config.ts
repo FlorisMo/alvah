@@ -23,6 +23,10 @@ import { defineConfig, devices } from '@playwright/test';
  *   are unchanged — webkit adds a second engine, it removes nothing.
  */
 const PORT = Number(process.env.RANGER_PORT ?? 4199); // RANGER_PORT: one port per parallel agent (a reused server would test another worktree's code)
+const CI_SOFTWARE_GL = ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'];
+const LOCAL_GPU = process.platform === 'darwin'
+  ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']
+  : ['--enable-gpu', '--ignore-gpu-blocklist'];
 
 export default defineConfig({
   testDir: './e2e',
@@ -33,9 +37,10 @@ export default defineConfig({
   // over the 30 s default — the world DOES reach 'world', the budget expires
   // during the final asserts/screenshots (observed 2026-07-05..12, every red
   // deploy). 120 s keeps it a real upper bound (a genuine hang still fails);
-  // every frozen assertion and per-step timeout is unchanged. Locally the
-  // default 30 s stays.
-  timeout: process.env.CI ? 120_000 : 30_000,
+  // every frozen assertion and per-step timeout is unchanged. Locally 60 s: a
+  // full `npm run e2e` boots one world per worker on one GPU, and walk specs
+  // timed out at 30 s under that load (2026-09-26). The golden spec sets its own.
+  timeout: process.env.CI ? 120_000 : 60_000,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
@@ -52,12 +57,9 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         // CI runners have no GPU; three.js WebGL needs software rendering.
         // SwiftShader via ANGLE keeps the world drawing headlessly (W0.6).
-        // Locally we have a real GPU, so these args stay off.
-        launchOptions: {
-          args: process.env.CI
-            ? ['--enable-unsafe-swiftshader', '--use-angle=swiftshader']
-            : [],
-        },
+        // Locally headless Chromium does NOT pick the GPU by itself: without these
+        // args it falls back to software GL and the world crawls (smoke timed out).
+        launchOptions: { args: process.env.CI ? CI_SOFTWARE_GL : LOCAL_GPU },
       },
     },
     {

@@ -91,6 +91,318 @@ export function currentPlayHint(): PlayHint | null {
   return activeHint ? activeHint() : null;
 }
 
+/*
+ * The golden-path probes behind `__ranger.playHint()/groundAt()/screenOf()/seating()`
+ * (devhook.ts documents each). They measure what the player SEES: the scene + camera
+ * the Stage rendered this frame (main.ts registers that view), the terrain mesh a
+ * down-ray meets, and the first opaque surface on a camera ray. Read-only; registered
+ * once below, only ever called by a test through the dev hook.
+ */
+
+// (imported here, not at the top, so this test section stays one self-contained block)
+import { provideGoldenProbes, renderView, selfMovers, type PlayHintProbe, type SeatProbe } from '../../core/devhook';
+
+type LiveView = { scene: THREE.Scene; camera: THREE.PerspectiveCamera; canvas: HTMLCanvasElement };
+
+function liveView(): LiveView | null {
+  const v = renderView() as { scene?: THREE.Scene; camera?: THREE.PerspectiveCamera } | null;
+  const canvas = document.getElementById('scene') as HTMLCanvasElement | null;
+  if (!v || !v.scene?.isScene || !v.camera || !canvas) return null;
+  return { scene: v.scene, camera: v.camera, canvas };
+}
+
+function shownInTree(o: THREE.Object3D): boolean {
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false;
+  return true;
+}
+
+/** Would this ray hit hide what lies behind it from the player? Pick hit-spheres,
+ *  hidden objects, invisible / colour-less materials and non-depth-writing (or
+ *  nearly clear) transparent overlays such as the cloud shade or contact shadows
+ *  do not. */
+function occludes(hit: THREE.Intersection): boolean {
+  const o = hit.object as THREE.Mesh;
+  if (!o.isMesh || o.userData.hitSphere || !shownInTree(o)) return false;
+  const mat = (Array.isArray(o.material) ? o.material[hit.face?.materialIndex ?? 0] : o.material) as THREE.Material | undefined;
+  if (!mat || !mat.visible || mat.colorWrite === false) return false;
+  return !(mat.transparent && (!mat.depthWrite || mat.opacity < 0.35));
+}
+
+const probeRay = new THREE.Raycaster();
+const probeBox = new THREE.Box3();
+const DOWN = new THREE.Vector3(0, -1, 0);
+let terrainCache: { scene: THREE.Scene; n: number; meshes: THREE.Object3D[] } | null = null;
+
+/** The meshes that ARE the ground: wide (≥ 40 m both ways), with relief, not instanced. */
+function terrainMeshes(scene: THREE.Scene): THREE.Object3D[] {
+  if (terrainCache && terrainCache.scene === scene && terrainCache.n === scene.children.length) return terrainCache.meshes;
+  const meshes: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || (m as THREE.InstancedMesh).isInstancedMesh || (m as THREE.SkinnedMesh).isSkinnedMesh) return;
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+    const b = probeBox.copy(m.geometry.boundingBox!).applyMatrix4(m.matrixWorld);
+    if (b.max.x - b.min.x >= 40 && b.max.z - b.min.z >= 40 && b.max.y - b.min.y > 0.05) meshes.push(m);
+  });
+  terrainCache = { scene, n: scene.children.length, meshes };
+  return meshes;
+}
+
+function groundUnder(scene: THREE.Scene, x: number, z: number): number | null {
+  probeRay.set(new THREE.Vector3(x, 200, z), DOWN);
+  probeRay.far = 400;
+  const hit = probeRay.intersectObjects(terrainMeshes(scene), false).find(occludes);
+  return hit ? hit.point.y : null;
+}
+
+/** World box of the VISIBLE meshes under `root` (hit-spheres and hidden parts left out). */
+function seenBox(root: THREE.Object3D, out: THREE.Box3): THREE.Box3 {
+  out.makeEmpty();
+  const part = new THREE.Box3();
+  root.updateWorldMatrix(true, true);
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || m.userData.hitSphere || !shownInTree(m)) return;
+    const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material | undefined;
+    if (!mat || !mat.visible) return;
+    const sk = m as THREE.SkinnedMesh;
+    if (sk.isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh) {
+      (m as THREE.SkinnedMesh).computeBoundingBox();
+      part.copy((m as THREE.SkinnedMesh).boundingBox!);
+    } else {
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      part.copy(m.geometry.boundingBox!);
+    }
+    out.union(part.applyMatrix4(m.matrixWorld));
+  });
+  return out;
+}
+
+function toScreen(v: LiveView, p: THREE.Vector3): { x: number; y: number; onScreen: boolean; ndc: THREE.Vector3 } {
+  const ndc = p.clone().project(v.camera);
+  const r = v.canvas.getBoundingClientRect();
+  return {
+    x: r.left + ((ndc.x + 1) / 2) * r.width,
+    y: r.top + ((1 - ndc.y) / 2) * r.height,
+    onScreen: Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1 && ndc.z > -1 && ndc.z < 1,
+    ndc,
+  };
+}
+
+const r2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** A readable name for a scene object: its own/ancestor name or geometry, plus where it stands. */
+function describeObject(o: THREE.Object3D, scene: THREE.Scene): string {
+  if (terrainMeshes(scene).includes(o)) return 'terrain';
+  let top = o;
+  while (top.parent && top.parent !== scene) top = top.parent;
+  const self = o.name || (o as THREE.Mesh).geometry?.type || o.type;
+  const w = o.getWorldPosition(new THREE.Vector3());
+  const at = `(${r2(w.x)}, ${r2(w.y)}, ${r2(w.z)})`;
+  return top === o ? `${self}@${at}` : `${self}@${at} in ${top.name || top.type}`;
+}
+
+function describeElement(el: Element): string {
+  const cls = typeof el.className === 'string' && el.className ? `.${el.className.trim().split(/\s+/).join('.')}` : '';
+  const text = (el as HTMLElement).innerText?.trim().slice(0, 40);
+  return `${el.tagName.toLowerCase()}${cls}${text ? ` "${text}"` : ''}`;
+}
+
+/** The geometry types the visible meshes under `root` are drawn with (unique, sorted). */
+function drawnWith(root: THREE.Object3D): string[] {
+  const types = new Set<string>();
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || m.userData.hitSphere || !shownInTree(m)) return;
+    const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material | undefined;
+    if (mat?.visible) types.add(m.geometry.type);
+  });
+  return [...types].sort();
+}
+
+function probePlayHint(): PlayHintProbe | null {
+  const hint = currentPlayHint();
+  if (!hint) return null;
+  const v = liveView();
+  let root = hint.target;
+  while (root.parent) root = root.parent;
+  if (v && root !== v.scene) return null; // not in the rendered scene (a finished step's stale hint): nothing to click
+  // The target is the visible thing itself (click its box centre), or an invisible anchor
+  // parked on it (a hintAnchor-style marker: click the anchor, judge the thing it sits on).
+  let body: THREE.Object3D | null = hint.target;
+  const box = seenBox(hint.target, new THREE.Box3());
+  const at = new THREE.Vector3();
+  if (box.isEmpty()) {
+    body = hint.target.parent;
+    if (body && body !== v?.scene) seenBox(body, box);
+    hint.target.getWorldPosition(at);
+  } else box.getCenter(at);
+  if (!v || !body || box.isEmpty()) {
+    return { id: hint.id, x: -1, y: -1, onScreen: false, firstHit: false, aboveGround: false,
+      firstHitBy: v ? 'target has no visible mesh' : 'no live world view', bottomGap: null, reachesCanvas: false, blocker: null, parts: [] };
+  }
+  const s = toScreen(v, at);
+  probeRay.setFromCamera(new THREE.Vector2(s.ndc.x, s.ndc.y), v.camera);
+  probeRay.far = Infinity;
+  probeRay.layers.mask = v.camera.layers.mask;
+  const first = probeRay.intersectObject(v.scene, true).find(occludes);
+  let firstHit = false;
+  for (let p: THREE.Object3D | null = first?.object ?? null; p; p = p.parent) if (p === body) { firstHit = true; break; }
+  const c = box.getCenter(new THREE.Vector3());
+  const g = groundUnder(v.scene, c.x, c.z);
+  const el = s.onScreen ? document.elementFromPoint(s.x, s.y) : null;
+  return {
+    id: hint.id, x: r2(s.x), y: r2(s.y), onScreen: s.onScreen, firstHit,
+    aboveGround: g !== null && box.max.y > g + 0.01,
+    firstHitBy: first ? (firstHit ? hint.id : describeObject(first.object, v.scene)) : 'nothing',
+    bottomGap: g === null ? null : r2(box.min.y - g),
+    reachesCanvas: el === v.canvas,
+    blocker: el && el !== v.canvas ? describeElement(el) : null,
+    parts: drawnWith(body),
+  };
+}
+
+/** A short "what it looks like" signature, so a before/after compare sees a change. */
+function lookSig(root: THREE.Object3D): string {
+  const parts: string[] = [];
+  root.traverse((o) => {
+    if (!shownInTree(o) || o.userData.hitSphere) return;
+    const m = o as THREE.Mesh;
+    if (!m.isMesh && !(o as THREE.Sprite).isSprite) return;
+    const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial | undefined;
+    const img = mat?.map?.image as { width?: number; src?: string } | undefined;
+    parts.push(`${m.geometry?.type ?? o.type}:${m.geometry?.attributes?.position?.count ?? 0}:${mat?.color?.getHexString() ?? ''}:${img?.src?.slice(-24) ?? img?.width ?? ''}`);
+  });
+  return parts.sort().join('|');
+}
+
+type Placed = { o: THREE.Object3D; box: THREE.Box3; moves?: 'player' | 'ambient' };
+
+/** Every placed thing whose footprint centre lies within r of (x,z): models, props and
+ *  staged pieces (a container at the origin is looked through), plus instanced copies
+ *  (reported one by one through `onInstance`, with the world box of that copy). Hidden
+ *  things and the terrain are skipped. A thing that moves by itself is tagged `moves`:
+ *  the group standing EXACTLY where the world reports the walking player ('player')
+ *  or an ambient creature ('ambient') — devhook `selfMovers()`. */
+function placedThings(v: LiveView, x: number, z: number, r: number,
+  onInstance?: (label: string, i: number, box: THREE.Box3) => void): Placed[] {
+  const out: Placed[] = [];
+  const terrain = terrainMeshes(v.scene);
+  const c = new THREE.Vector3();
+  const m4 = new THREE.Matrix4();
+  const movers = selfMovers();
+  const wp = new THREE.Vector3();
+  const moverOf = (o: THREE.Object3D): Placed['moves'] => {
+    if (!(o as THREE.Group).isGroup || !o.children.length) return undefined;
+    o.updateWorldMatrix(true, false);
+    o.getWorldPosition(wp);
+    const here = (p: { x: number; z: number }): boolean => p.x === wp.x && p.z === wp.z;
+    if (movers.player && here(movers.player)) return 'player';
+    return movers.ambient.some(here) ? 'ambient' : undefined;
+  };
+  const visit = (o: THREE.Object3D): void => {
+    if (!o.visible || o.userData.hitSphere || terrain.includes(o)) return;
+    if ((o as THREE.Light).isLight || (o as THREE.Camera).isCamera || (o as THREE.Points).isPoints
+      || (o as THREE.Line).isLine || (o as THREE.Sprite).isSprite) return;
+    if (o === v.scene) { o.children.forEach(visit); return; }
+    const inst = o as THREE.InstancedMesh;
+    if (inst.isInstancedMesh) {
+      if (!onInstance) return;
+      if (!inst.geometry.boundingBox) inst.geometry.computeBoundingBox();
+      for (let i = 0; i < inst.count; i++) {
+        inst.getMatrixAt(i, m4);
+        m4.premultiply(inst.matrixWorld);
+        c.setFromMatrixPosition(m4);
+        if (Math.hypot(c.x - x, c.z - z) <= r) onInstance(o.name || inst.geometry.type, i, inst.geometry.boundingBox!.clone().applyMatrix4(m4));
+      }
+      return;
+    }
+    // a pure container (at the origin, unrotated): what it holds is what is placed
+    if (o.children.length && !(o as THREE.Mesh).isMesh && o.position.lengthSq() < 1e-6 && o.quaternion.w > 0.99999) {
+      o.children.forEach(visit);
+      return;
+    }
+    const moves = moverOf(o);
+    const box = seenBox(o, new THREE.Box3());
+    if (box.isEmpty()) return;
+    box.getCenter(c);
+    const size = box.getSize(new THREE.Vector3());
+    if (size.x > 12 || size.z > 12 || Math.hypot(c.x - x, c.z - z) > r) return;
+    out.push(moves ? { o, box, moves } : { o, box });
+  };
+  visit(v.scene);
+  return out;
+}
+
+function probeSeating(x: number, z: number, r: number): SeatProbe[] | null {
+  const v = liveView();
+  if (!v) return null;
+  const out: SeatProbe[] = [];
+  const at = new THREE.Vector3();
+  const onInstance = (label: string, i: number, box: THREE.Box3): void => {
+    box.getCenter(at);
+    const g = groundUnder(v.scene, at.x, at.z);
+    if (g === null || box.min.y - g > 3) return;
+    out.push({ id: `${label}#${i}`, x: r2(at.x), y: r2(box.min.y), z: r2(at.z), gap: r2(box.min.y - g), sig: `${label}#${i}` });
+  };
+  const c = new THREE.Vector3();
+  for (const { o, box, moves } of placedThings(v, x, z, r, onInstance)) {
+    box.getCenter(c);
+    const g = groundUnder(v.scene, c.x, c.z);
+    if (g === null || box.min.y - g > 3) continue; // flying (a bird, a cloud): not a prop
+    const seat: SeatProbe = { id: describeObject(o, v.scene), x: r2(c.x), y: r2(box.min.y), z: r2(c.z), gap: r2(box.min.y - g), sig: lookSig(o) };
+    out.push(moves ? { ...seat, moves } : seat);
+  }
+  return out.sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
+}
+
+/** The biggest placed thing within 2.5 m of (x,z), measured along a world direction and
+ *  across it (from its vertices): a jeep that drives along (dx,dz) is long `along`. */
+function probeShapeAt(x: number, z: number, dx: number, dz: number): { id: string; along: number; across: number } | null {
+  const v = liveView();
+  const len = Math.hypot(dx, dz);
+  if (!v || len < 1e-6) return null;
+  const ux = dx / len; const uz = dz / len;
+  let best: Placed | null = null; let bestArea = 0;
+  for (const p of placedThings(v, x, z, 2.5)) {
+    if (p.moves === 'player') continue; // the ranger standing by it is not the thing
+    const area = (p.box.max.x - p.box.min.x) * (p.box.max.z - p.box.min.z);
+    if (area > bestArea) { bestArea = area; best = p; }
+  }
+  if (!best) return null;
+  let a0 = Infinity; let a1 = -Infinity; let c0 = Infinity; let c1 = -Infinity;
+  const p = new THREE.Vector3();
+  best.o.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || m.userData.hitSphere || !shownInTree(m) || (m as THREE.InstancedMesh).isInstancedMesh) return;
+    const pos = m.geometry.attributes.position;
+    if (!pos) return;
+    const stride = Math.max(1, Math.floor(pos.count / 4000));
+    for (let i = 0; i < pos.count; i += stride) {
+      p.fromBufferAttribute(pos, i);
+      if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).applyBoneTransform(i, p);
+      p.applyMatrix4(m.matrixWorld);
+      const a = p.x * ux + p.z * uz; const c = -p.x * uz + p.z * ux;
+      a0 = Math.min(a0, a); a1 = Math.max(a1, a); c0 = Math.min(c0, c); c1 = Math.max(c1, c);
+    }
+  });
+  if (!Number.isFinite(a0)) return null;
+  return { id: describeObject(best.o, v.scene), along: r2(a1 - a0), across: r2(c1 - c0) };
+}
+
+provideGoldenProbes({
+  playHint: probePlayHint,
+  groundAt: (x, z) => { const v = liveView(); return v ? groundUnder(v.scene, x, z) : null; },
+  screenOf: (x, y, z) => {
+    const v = liveView();
+    if (!v) return null;
+    const s = toScreen(v, new THREE.Vector3(x, y, z));
+    return { x: r2(s.x), y: r2(s.y), onScreen: s.onScreen };
+  },
+  seating: probeSeating,
+  shapeAt: probeShapeAt,
+});
+
 /* --------------------------------------------------- activity abort scope ---- */
 
 /**
