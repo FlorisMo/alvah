@@ -188,7 +188,7 @@ const MISSIE_FRISLING = {
             uitleg: 'Goed. Een moeder past goed op haar biggen.',
             gevolg: 'De zeug knort hard. Ze wil rust voor haar biggen.',
             reactie: 'rear', eikelKost: 2, terug: 0.4 },
-          { id: 'voeren', subject: 'wildzwijn', dier: 'wildzwijn',
+          { id: 'voeren', subject: 'zwijn-honger', dier: 'wildzwijn',
             vraag: 'Een hongerig zwijn snuffelt aan je rugzak.',
             opties: [{ label: 'Geef een koekje', goed: false }, { label: 'Niet voeren', goed: true }],
             uitleg: 'Goed. Een zwijn zoekt zelf eikels en wortels.',

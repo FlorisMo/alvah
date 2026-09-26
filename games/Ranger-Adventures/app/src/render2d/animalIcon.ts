@@ -14,6 +14,9 @@ const ICON: Record<string, string> = {
   heideblauwtje: '🦋',
 };
 
+/** The plain name of a content animal id where the id is not a word a child reads. */
+const NAME: Record<string, string> = { wildzwijn: 'wild zwijn', edelhert: 'hert', heikikker: 'kikker' };
+
 /** The picture for a content animal id (a small bird as the calm default). */
 export function animalIcon(id: string): string {
   return ICON[id] ?? '🐾';
@@ -26,9 +29,12 @@ export function subjectView(subject: string, dier?: string): { icon: string; lab
     case 'modderpoel': return { icon: '🟫', label: 'modderpoel' };
     case 'pad-veilig': return { icon: '🥾', label: 'vrij pad' };
     case 'zwijn-honger': return { icon: '🐗', label: 'hongerig zwijn' };
+    case 'frisling': return { icon: '🐗', label: 'frisling' };
+    case 'wildzwijn': return { icon: '🐗', label: 'zeug met biggen' };
+    case 'rotte': return { icon: '🐗🐗', label: 'de rotte' };
     case 'reekalf': return dier && dier !== 'ree'
       ? { icon: animalIcon(dier), label: dier }
       : { icon: '🦌', label: 'reekalf' };
-    default: return { icon: dier ? animalIcon(dier) : '🐾', label: dier ?? subject.replace(/-/g, ' ') };
+    default: return { icon: dier ? animalIcon(dier) : '🐾', label: (dier && NAME[dier]) ?? dier ?? subject.replace(/-/g, ' ') };
   }
 }
