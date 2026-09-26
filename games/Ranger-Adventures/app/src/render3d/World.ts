@@ -23,15 +23,15 @@ import { Terrain } from './world/Terrain';
 import { Sky } from './world/Sky';
 import { Labels } from './world/Labels';
 import { Dressing, TREE_BASE_H } from './world/Dressing';
+import { Fauna } from './world/Fauna';
 import { enableCast, proceduralTotem } from './world/props';
 import { loadManifest, loadModel, loadRig, prepModel, skinnedRenderBox } from './Models';
-import { standHeightFor, RANGER_STAND_HEIGHT, ADULT_REFERENCE_HEIGHT } from './AnimalScale';
+import { RANGER_STAND_HEIGHT } from './AnimalScale';
 import { applyEyes } from './EyeMaterial';
 import { applyCoat, applyPosture } from './AnimalDress';
 import { applyFace } from './FaceRig';
 import { applyCalmPose } from './CalmPoseRig';
 import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
-import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from './AmbientPaths';
 import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
 import { resolveInput, screenVector, type StickVector } from '../core/input';
 import { driveStep, driveCaps, calmSpeed, rampSpeed, comfortSteer, ANIMAL_SLOW_RADIUS } from '../core/vehicle';
@@ -197,6 +197,8 @@ export class World {
   private readonly sky: Sky;
   // the paths, water, trees, grasses, cabin, landmarks + nature dressing (world/Dressing.ts)
   private readonly dressing: Dressing;
+  // the warden, the poacher and the roaming / gliding wildlife (world/Fauna.ts)
+  private readonly fauna: Fauna;
   private readonly labels = new Labels();
   // W1.5 rotating follow-cam: `followYaw` is the eased camera bearing; it chases
   // `followTargetYaw` (the ranger's facing, updated ONLY while he is moving — a
@@ -257,35 +259,6 @@ export class World {
     anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
     mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
   }[] = [];
-  // W3.3 scenic actors: the warden (BOA) + poacher stand at fixed world spots and
-  // play their single baked clip via a mixer. They are NOT missions (kept out of
-  // `markers`), carry no proximity/collision — purely diegetic set-dressing that
-  // brings the story arc into the world. Their clip is SECONDARY motion, so it
-  // freezes at the rest pose under reduced-motion (unlike the player's locomotion).
-  private readonly scenicActors: {
-    id: string; group: THREE.Group;
-    mixer: THREE.AnimationMixer | null; action: THREE.AnimationAction | null;
-    height: number;  // P1.6a: the actor's measured rendered stand-height (m) — the
-                     // mature-human reference the child ranger is judged against
-  }[] = [];
-  // W3.6 ambient wildlife: a few animals roam gentle wander loops (baked walk↔graze
-  // clips via the mixer for the W3.5-staged cast, improved procedural bob elsewhere)
-  // and two birds glide overhead on spline loops. All are pure set-dressing — no
-  // markers, no collision, kept out of `markers`. Their motion is SECONDARY, so it
-  // freezes at the rest pose under reduced-motion (like the animals + scenic actors).
-  private readonly ambient: {
-    id: string; group: THREE.Group; phase: number;
-    wander: WanderConfig | null;   // ground animals roam this loop
-    glide: GlideConfig | null;     // birds sail this overhead orbit
-    faceOffset: number;            // per-GLB forward correction (tuned in W3.7)
-    recipe: MotionRecipe;          // procedural idle bob (procedural cast only)
-    anim: THREE.Group | null;      // the prepped wrapper to drive procedurally
-    mixer: THREE.AnimationMixer | null;
-    walk: THREE.AnimationAction | null;   // baked stride clip
-    graze: THREE.AnimationAction | null;  // baked rest/graze clip
-    walkW: number; grazeW: number;        // eased crossfade weights
-    h: number;                            // applied canonical stand height (W3.7a)
-  }[] = [];
   // W4.4 ground detail: on by default; `?groundDetail=off` bakes the old flat
   // per-biome slab so the before/after evidence pair is one reproducible toggle.
   private readonly groundDetailOn: boolean =
@@ -300,14 +273,12 @@ export class World {
   private readonly terrain: Terrain;
   private readonly ground: THREE.Mesh;
   private rangerCastsShadow = false;
-  private blobCount = 0;
   private renderer: THREE.WebGLRenderer | null = null;
   // W7.2 adaptive quality: the live tier drives the pixelRatio cap + vegetation
   // density. Seeded from the persisted verdict so a slow device boots light; the
   // per-frame fps probe re-decides with hysteresis (see update()).
   private tier: QualityTier = store.get().settings.kwaliteitTier;
   private readonly fpsProbe = new FpsProbe();
-  private static blobTex: THREE.Texture | null = null;
   private readonly canvas: HTMLCanvasElement;
   private readonly onApproach: (missionId: string | null) => void;
   private readonly onInteract: (missionId: string) => void;
@@ -493,6 +464,7 @@ export class World {
     this.dressing = new Dressing({
       scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits, labels: this.labels,
     });
+    this.fauna = new Fauna({ scene: this.scene, terrain: this.terrain });
     this.scene.add(this.dressing.buildPaths()); // W4.3: sand-path ribbons over the ground
     this.scene.add(this.dressing.buildVenWater());
     this.sky.buildCloudShadows(); // W4.6: drifting cloud shadows over the ground
@@ -527,8 +499,8 @@ export class World {
     this.dressing.placeLandmarks();
     this.placeSitSpot();
     this.dressing.placeNatureDressing();
-    this.placeScenicActors();
-    this.placeAmbientLife();
+    this.fauna.placeScenicActors();
+    this.fauna.placeAmbientLife();
     this.placeJeep();
     this.placeHelipads();
     void this.loadRealRanger();
@@ -969,42 +941,6 @@ export class World {
     });
   }
 
-  /** W4.5: a soft radial blob texture (dark centre → transparent rim), baked once
-   *  and shared by every animal blob shadow — cheap grounding with no shadow-map
-   *  cost, the plan's choice for the moving cast. */
-  private static getBlobTexture(): THREE.Texture {
-    if (World.blobTex) return World.blobTex;
-    const N = 64;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = N;
-    const ctx = cv.getContext('2d')!;
-    const g = ctx.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
-    g.addColorStop(0, 'rgba(30,24,12,0.55)');
-    g.addColorStop(0.6, 'rgba(30,24,12,0.28)');
-    g.addColorStop(1, 'rgba(30,24,12,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, N, N);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    World.blobTex = tex;
-    return tex;
-  }
-
-  /** W4.5: add a flat blob shadow disc under an animal/actor group. A child of the
-   *  group, so it rides the wander loop for free and freezes with the animal under
-   *  reduced-motion. Radially symmetric → the group's yaw never shows. */
-  private addBlobShadow(group: THREE.Group, radius: number): void {
-    const mat = new THREE.MeshBasicMaterial({
-      map: World.getBlobTexture(), transparent: true, depthWrite: false,
-    });
-    const disc = new THREE.Mesh(new THREE.PlaneGeometry(radius * 2, radius * 2), mat);
-    disc.rotation.x = -Math.PI / 2;
-    disc.position.y = 0.03; // just above the ground to avoid z-fighting
-    disc.renderOrder = 1;
-    group.add(disc);
-    this.blobCount++;
-  }
-
   /** The drawn ground height at world (x,z) — the one ground truth (world/Terrain.ts). */
   private groundY(x: number, z: number): number {
     return this.terrain.y(x, z);
@@ -1394,7 +1330,7 @@ export class World {
       shadowMap: this.renderer ? this.renderer.shadowMap.enabled : false,
       sunCastsShadow: this.sky.sun.castShadow,
       rangerCastsShadow: this.rangerCastsShadow,
-      blobShadows: this.blobCount,
+      blobShadows: this.fauna.blobCount,
     };
   }
 
@@ -1624,6 +1560,16 @@ export class World {
     return g;
   }
 
+  /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + live clip + measured height. */
+  actorClips(): { id: string; height: number; clip: { name: string; time: number } | null }[] {
+    return this.fauna.actorClips();
+  }
+
+  /** Dev-hook accessor (W3.6): each ambient creature's id + live world x/z + height + clip. */
+  ambientState(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] {
+    return this.fauna.ambientState();
+  }
+
   /** Dev-hook accessor (W4.1): every landmark's id + world x/z. */
   landmarkPositions(): { id: string; x: number; z: number }[] {
     return this.dressing.landmarkPositions();
@@ -1659,180 +1605,6 @@ export class World {
       textured: mat.map != null,
       tileRepeat: mat.map ? mat.map.repeat.x : 0,
     };
-  }
-
-  /**
-   * W3.3: place the two story-arc humans — the warden (BOA) near the case-board
-   * hub where the player reports, and the poacher as a distant, calm figure off
-   * in the bos edge. Each loads via `loadRig` and plays its single baked clip
-   * through a mixer (advanced in `update`, frozen under reduced-motion). Both sit
-   * to the +z side of spawn so the movement smoke's forward (−z) corridor stays
-   * clear; neither pushes a collision circle or joins `markers` (pure dressing).
-   */
-  private placeScenicActors(): void {
-    // P1.6a: mature humans stand at the adult reference (~1.8 m), so the ≈1.2 m
-    // child ranger reads a clear head-and-shoulders shorter beside the warden.
-    const ACTORS: { id: string; x: number; z: number; height: number }[] = [
-      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: ADULT_REFERENCE_HEIGHT }, // the BOA by the report board
-      { id: 'figure-poacher', x: -11.5, z: 8.5, height: ADULT_REFERENCE_HEIGHT },  // a distant figure in the trees
-    ];
-    for (const a of ACTORS) {
-      const group = new THREE.Group();
-      group.position.set(a.x, this.groundY(a.x, a.z), a.z);
-      group.rotation.y = Math.atan2(-a.x, -a.z); // face the spawn clearing
-      this.scene.add(group);
-      this.addBlobShadow(group, 0.55); // W4.5: soft grounding under the figure
-      const entry = { id: a.id, group, mixer: null as THREE.AnimationMixer | null, action: null as THREE.AnimationAction | null, height: a.height };
-      this.scenicActors.push(entry);
-      void loadRig(a.id).then((rig) => {
-        if (!rig) return;
-        const prepped = prepModel(rig.group, a.height);
-        applyEyes(prepped, a.id, { dusk: false });
-        applyCalmPose(prepped, a.id); // §B never-scary: bias the poacher into a calm rest shape
-        group.add(prepped);
-        // P1.6a: expose the actor's MEASURED rendered stand-height (skinnedRenderBox
-        // — the same honest bone-extent `measureAvatar` reads for the ranger), NEVER
-        // the normalization target. Doc §8.7 / D1.7: a hook reports what RENDERS, so
-        // the child-vs-adult pair assert (Alvah < 0.75 × the warden) can never be
-        // faked by a mis-scaled adult reporting the constant it was asked for.
-        // `entry.height` keeps the target (`a.height`) as the pre-load fallback, and
-        // the geometry-box fallback covers a rig with no skeleton to measure.
-        const rbox = skinnedRenderBox(prepped) ?? new THREE.Box3().setFromObject(prepped);
-        const measuredY = rbox.getSize(new THREE.Vector3()).y;
-        if (Number.isFinite(measuredY) && measuredY > 0) entry.height = measuredY;
-        if (rig.clips.length) {
-          const mixer = new THREE.AnimationMixer(prepped);
-          const clip = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
-          const action = mixer.clipAction(clip).play();
-          entry.mixer = mixer;
-          entry.action = action;
-        }
-      });
-    }
-  }
-
-  /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + its live baked-clip
-   *  {name, time} (null until the rig loads / when it carries no clip) + its measured
-   *  rendered stand-height (m). Lets the E2E assert the warden + poacher are present
-   *  AND their mixers run, and reads the mature-human height the child ranger's scale
-   *  is judged against (Alvah < 0.75 × the warden). */
-  actorClips(): { id: string; height: number; clip: { name: string; time: number } | null }[] {
-    return this.scenicActors.map((a) => ({
-      id: a.id,
-      height: a.height,
-      clip: a.action ? { name: a.action.getClip().name, time: a.action.time } : null,
-    }));
-  }
-
-  /**
-   * W3.6: place the ambient wildlife. Four animals roam gentle wander loops in
-   * the biomes (the W3.5-staged ree + vos crossfade their baked walk↔graze clips;
-   * the eekhoorn + wild zwijn — no honest CC0 match — get the improved procedural
-   * bob PLUS the roam/turn/graze the wander loop provides), and two birds glide
-   * overhead on spline orbits. None are markers, none push collision — pure life.
-   * Homes sit well clear of the spawn corridor (the −z movement-smoke lane) and
-   * the submerged ven (46,-19), so nothing wanders into water or across the demo.
-   */
-  private placeAmbientLife(): void {
-    // ground roamers: [id, home x/z, loop radius, whether the GLB carries baked
-    // walk/graze clips]. Target height now comes from the canonical dossier
-    // stand-height table (W3.7a, `AnimalScale.ts`) — one source of truth so the
-    // world and the showroom true-scale mode read the SAME relative sizes.
-    const GROUND: { id: string; hx: number; hz: number; r: number; baked: boolean }[] = [
-      { id: 'animal-ree-roedeer', hx: 26, hz: 26, r: 6, baked: true },   // bos/heide edge
-      { id: 'animal-vos-fox', hx: -30, hz: -10, r: 7, baked: true },     // heide, west
-      { id: 'animal-eekhoorn-squirrel', hx: -24, hz: -24, r: 3, baked: false }, // near trees
-      { id: 'animal-wildzwijn-boar', hx: 10, hz: 36, r: 6, baked: false },     // heide, south
-    ];
-    GROUND.forEach((a, i) => {
-      const h = standHeightFor(a.id) ?? 0.9; // dossier canonical (W3.7a)
-      const wander: WanderConfig = {
-        homeX: a.hx, homeZ: a.hz, radius: a.r,
-        period: 22 + i * 4,          // each roams at a slightly different pace
-        phase: (i * 0.27) % 1,       // desync the loops
-        angle: i * 1.1,              // rotate each loop differently
-      };
-      const group = new THREE.Group();
-      group.position.set(a.hx, this.groundY(a.hx, a.hz), a.hz);
-      this.scene.add(group);
-      this.addBlobShadow(group, Math.max(0.35, h * 0.7)); // W4.5: blob under each roamer
-      const entry = {
-        id: a.id, group, phase: i * 1.7,
-        wander, glide: null as GlideConfig | null, faceOffset: 0,
-        recipe: gaitFor(a.id),
-        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
-        walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 1, h,
-      };
-      this.ambient.push(entry);
-      void loadRig(a.id).then((rig) => {
-        if (!rig) return;
-        const prepped = prepModel(rig.group, h);
-        applyEyes(prepped, a.id, { dusk: false });
-        applyCoat(prepped, a.id);     // W3.7b: dossier coat-tint correction (vos rufous)
-        applyPosture(prepped, a.id);  // W3.7b: head-low stance for snuffling species
-        applyCalmPose(prepped, a.id); // §B never-scary rest-pose bias
-        group.add(prepped);
-        if (a.baked && rig.clips.length) {
-          // crossfade the baked walk (striding) against graze (paused) by `moving`;
-          // both play from frame one, weights eased each frame in update().
-          const mixer = new THREE.AnimationMixer(prepped);
-          const walkClip = rig.clips.find((c) => /walk/i.test(c.name)) ?? rig.clips[0];
-          const grazeClip = rig.clips.find((c) => /graze|eat|idle|rest/i.test(c.name)) ?? rig.clips[0];
-          entry.walk = mixer.clipAction(walkClip); entry.walk.play(); entry.walk.setEffectiveWeight(0);
-          entry.graze = mixer.clipAction(grazeClip); entry.graze.play(); entry.graze.setEffectiveWeight(1);
-          entry.mixer = mixer;
-        } else {
-          // no baked clips → the improved procedural bob drives this wrapper (the
-          // wander loop already supplies roam / turn-in-place / pause-and-graze).
-          entry.anim = prepped;
-        }
-      });
-    });
-
-    // two birds gliding overhead on slow spline orbits (the buizerd soars wide,
-    // the houtduif circles lower + tighter). Birds are static GLBs → the glide IS
-    // the motion; they hold the calm-pose gate (no diving, no flapping panic).
-    const BIRDS: { id: string; h: number; cx: number; cz: number; r: number; height: number; period: number; phase: number; bob: number }[] = [
-      { id: 'bird-buizerd', h: 0.9, cx: 4, cz: 0, r: 44, height: 24, period: 30, phase: 0, bob: 1.6 },
-      { id: 'bird-houtduif', h: 0.5, cx: -18, cz: 8, r: 26, height: 16, period: 22, phase: 0.5, bob: 1.1 },
-    ];
-    BIRDS.forEach((b, i) => {
-      const glide: GlideConfig = { cx: b.cx, cz: b.cz, radius: b.r, height: b.height, bob: b.bob, period: b.period, phase: b.phase };
-      const group = new THREE.Group();
-      const g0 = glideAt(glide, 0);
-      group.position.set(g0.x, g0.y, g0.z);
-      this.scene.add(group);
-      const entry = {
-        id: b.id, group, phase: i * 2.1,
-        wander: null as WanderConfig | null, glide, faceOffset: 0,
-        recipe: gaitFor(b.id),
-        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
-        walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 0, h: b.h,
-      };
-      this.ambient.push(entry);
-      void loadModel(b.id).then((m) => {
-        if (!m) return;
-        const prepped = prepModel(m, b.h);
-        applyCalmPose(prepped, b.id);
-        group.add(prepped);
-      });
-    });
-  }
-
-  /** Dev-hook accessor (W3.6): each ambient creature's id + live world x/z + its
-   *  dominant baked clip {name, time} (null for the procedural + bird cast). Lets
-   *  the E2E assert ≥2 animals are present AND a baked mixer clock advances. */
-  ambientState(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] {
-    return this.ambient.map((a) => {
-      const dom = a.mixer ? (a.walkW >= a.grazeW ? a.walk : a.graze) : null;
-      return {
-        id: a.id, x: a.group.position.x, z: a.group.position.z,
-        h: a.h, // applied canonical stand height (W3.7a) — E2E asserts the live ordering
-        clip: dom ? { name: dom.getClip().name, time: dom.time } : null,
-      };
-    });
   }
 
   /**
@@ -1999,7 +1771,7 @@ export class World {
     // W5.2 calm rule: auto-slow to a crawl within reach of any wandering animal so
     // it never panic-flees. The pure `calmSpeed` caps the signed speed; scaling the
     // move delta by the same factor keeps the heading + terrain stick intact.
-    const animalDist = this.nearestAnimalDist(jp.x, jp.z);
+    const animalDist = this.fauna.nearestAnimalDist(jp.x, jp.z);
     this.vehicleNearAnimal = animalDist <= ANIMAL_SLOW_RADIUS;
     const capped = calmSpeed(step.speed, animalDist);
     const k = step.speed !== 0 ? capped / step.speed : 1;
@@ -2026,18 +1798,6 @@ export class World {
     // ambience still follows across biomes while driving
     const here = this.terrain.biome(jp.x, jp.z);
     if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
-  }
-
-  /** W5.2: distance to the nearest wandering ground animal from a world point
-   *  (birds glide overhead → excluded). `Infinity` when none roam. */
-  private nearestAnimalDist(x: number, z: number): number {
-    let best = Infinity;
-    for (const a of this.ambient) {
-      if (!a.wander) continue;
-      const d = Math.hypot(a.group.position.x - x, a.group.position.z - z);
-      if (d < best) best = d;
-    }
-    return best;
   }
 
   /** W5.2: build the single dust Points cloud (1 draw call, hidden while idle). A
@@ -2441,40 +2201,7 @@ export class World {
       }
     }
 
-    // W3.3: the warden + poacher play their baked clips. Secondary motion, so the
-    // clip freezes at the rest pose under reduced-motion (same rule as the animals).
-    for (const a of this.scenicActors) a.mixer?.update(reduced ? 0 : dt);
-
-    // W3.6: ambient wildlife. Ground animals roam a gentle wander loop (baked
-    // walk↔graze crossfade for the W3.5 cast, procedural bob elsewhere); birds
-    // glide overhead. All SECONDARY motion → frozen at home/rest under reduced-
-    // motion (the loop halts, the mixer holds its pose — locomotion-exempt rule
-    // applies only to the PLAYER, §3.4).
-    for (const a of this.ambient) {
-      if (a.wander) {
-        if (reduced) { a.mixer?.update(0); continue; }
-        const st = wanderAt(a.wander, t);
-        a.group.position.set(st.x, this.groundY(st.x, st.z), st.z);
-        a.group.rotation.y = st.facing + a.faceOffset;
-        if (a.mixer) {
-          const k = dampFactor(dt, 0.25); // ease the walk↔graze crossfade (shared factor)
-          a.walkW += ((st.moving ? 1 : 0) - a.walkW) * k;
-          a.grazeW += ((st.moving ? 0 : 1) - a.grazeW) * k;
-          a.walk?.setEffectiveWeight(a.walkW);
-          a.graze?.setEffectiveWeight(a.grazeW);
-          a.mixer.update(dt);
-        } else if (a.anim) {
-          const d = motionAt(a.recipe, t, a.phase);
-          a.anim.position.set(d.dx, d.dy, 0);
-          a.anim.rotation.set(0, d.rotY, d.rotZ);
-          a.anim.scale.set(1, d.scaleY, 1);
-        }
-      } else if (a.glide && !reduced) {
-        const st = glideAt(a.glide, t);
-        a.group.position.set(st.x, st.y, st.z);
-        a.group.rotation.y = st.facing + a.faceOffset;
-      }
-    }
+    this.fauna.update(t, dt, reduced); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
 
     // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
     // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
@@ -2948,8 +2675,8 @@ export class World {
       return near(g.x, cyc, g.z, R, aimHead) || near(g.x, cyc, g.z, R, aimChest);
     };
     for (const m of this.markers) { if (test(m.group.position, 1.0)) return true; }
-    for (const a of this.scenicActors) { if (test(a.group.position, a.height)) return true; }
-    for (const a of this.ambient) {
+    for (const a of this.fauna.scenicActors) { if (test(a.group.position, a.height)) return true; }
+    for (const a of this.fauna.ambient) {
       if (a.glide) continue;                        // birds gliding overhead never cross a follow sightline
       if (test(a.group.position, a.h)) return true;
     }
