@@ -17,7 +17,8 @@
  */
 
 import * as THREE from 'three';
-import { dampFactor, highlightPulse, safeCamHeight, tapHitRadius, trailPoints } from './kit-math';
+import { easeInOut, highlightPulse, safeCamHeight, tapHitRadius, trailPoints } from './kit-math';
+import { skinnedRenderBox } from '../Models';
 
 /* ------------------------------------------------------ test win channel ---- */
 
@@ -137,38 +138,56 @@ export interface Pick3dOptions {
   onPick: (id: string) => void;
 }
 
+/** The world-space box a player actually sees for `object` — a rigged GLB renders at
+ *  its SKELETON's extent (Models.skinnedRenderBox, F-07), everything else at its
+ *  geometry box. Hit-spheres, hint anchors and framing all measure through this. */
+export function visibleBox(object: THREE.Object3D): THREE.Box3 {
+  object.updateWorldMatrix(true, true);
+  return skinnedRenderBox(object) ?? new THREE.Box3().setFromObject(object);
+}
+
 /**
- * A generous invisible raycast target ≥56px-projected, parented to `object` at
- * its origin. `visible:false` keeps it off-screen but still raycastable. Returns
- * the sphere so the caller can dispose it.
+ * A generous invisible raycast target ≥56px-projected, parented to `object` at the
+ * centre of what the player sees (not its feet). `visible:false` keeps it off-screen
+ * but still raycastable. Returns the sphere so the caller can dispose it.
  */
 export function addHitSphere(
   object: THREE.Object3D,
   camera: THREE.PerspectiveCamera,
   viewportH: number,
 ): THREE.Mesh {
-  const here = new THREE.Vector3();
-  object.getWorldPosition(here);
+  const box = visibleBox(object);
+  const here = box.isEmpty() ? object.getWorldPosition(new THREE.Vector3()) : box.getCenter(new THREE.Vector3());
   const dist = camera.position.distanceTo(here);
-  const r = tapHitRadius(dist, (camera.fov * Math.PI) / 180, viewportH);
+  const r = tapHitRadius(dist, (camera.fov * Math.PI) / 180, viewportH, 0.2);
   const sphere = new THREE.Mesh(
     new THREE.SphereGeometry(r, 8, 6),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
   sphere.userData.hitSphere = true;
+  sphere.userData.radius = r;
   object.add(sphere);
+  // world centre → the object's local space (undo its scale so the radius stays true)
+  object.updateWorldMatrix(true, false);
+  sphere.position.copy(object.worldToLocal(here.clone()));
+  const ws = object.getWorldScale(new THREE.Vector3());
+  sphere.scale.set(1 / (ws.x || 1), 1 / (ws.y || 1), 1 / (ws.z || 1));
   return sphere;
 }
 
 /**
- * Raycast picking with ≥56px hit-spheres. On pointerdown the first target whose
- * subtree (incl. its hit-sphere) is hit fires `onPick(id)`. Returns a teardown
- * that removes the listener + disposes the hit-spheres.
+ * Raycast picking. On pointerdown the NEAREST visible part of any target wins (so a
+ * bush in front of the piglet is the bush); when the pointer hits no visible mesh, the
+ * generous ≥56px hit-sphere whose centre lies closest to the ray does (a near-miss on
+ * a small animal still counts). Returns a teardown that removes the listener +
+ * disposes the hit-spheres.
  */
 export function pick3d(opts: Pick3dOptions): () => void {
   const { canvas, camera, raycaster, targets, onPick } = opts;
   const viewportH = canvas.getBoundingClientRect().height || 800;
   const spheres = targets.map((t) => addHitSphere(t.object, camera, viewportH));
+  const c = new THREE.Vector3();
+  const ws = new THREE.Vector3();
 
   const onDown = (e: PointerEvent): void => {
     const rect = canvas.getBoundingClientRect();
@@ -177,9 +196,26 @@ export function pick3d(opts: Pick3dOptions): () => void {
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
     raycaster.setFromCamera(ndc, camera);
+    let best: { id: string; d: number } | null = null;
     for (const t of targets) {
-      if (raycaster.intersectObject(t.object, true).length) { onPick(t.id); return; }
+      if (!t.object.visible) continue;
+      for (const h of raycaster.intersectObject(t.object, true)) {
+        if (h.object.userData.hitSphere || !h.object.visible) continue;
+        if (!best || h.distance < best.d) best = { id: t.id, d: h.distance };
+        break; // hits come sorted near → far
+      }
     }
+    if (!best) {
+      targets.forEach((t, i) => {
+        const s = spheres[i];
+        if (!t.object.visible) return;
+        s.getWorldPosition(c);
+        const r = (s.userData.radius as number) * s.getWorldScale(ws).x;
+        const d = raycaster.ray.distanceToPoint(c);
+        if (d <= r && (!best || d < best.d)) best = { id: t.id, d };
+      });
+    }
+    if (best) onPick((best as { id: string }).id);
   };
   // F-26: bind to the live activity-abort scope so "Stop de missie" removes this
   // canvas listener even when the engine's own teardown never runs (aborted
@@ -198,41 +234,109 @@ export function pick3d(opts: Pick3dOptions): () => void {
   };
 }
 
+/**
+ * The spot a player (and the golden-path test, via `registerPlayHint`) clicks on a
+ * target: a tiny invisible mesh parked on the visible body of `object` at height
+ * fraction `fy` of its box (0 = feet, 1 = top), `fx`/`fz` across it. A mesh rather than
+ * an empty so both `getWorldPosition` and a Box3 of it land on that spot.
+ */
+export function hintAnchor(object: THREE.Object3D, fy = 0.55, fx = 0.5, fz = 0.5): THREE.Mesh {
+  const box = visibleBox(object);
+  const p = new THREE.Vector3(
+    box.min.x + (box.max.x - box.min.x) * fx,
+    box.min.y + (box.max.y - box.min.y) * fy,
+    box.min.z + (box.max.z - box.min.z) * fz,
+  );
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.01, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
+  m.userData.hintAnchor = true;
+  object.add(m);
+  m.position.copy(object.worldToLocal(p));
+  return m;
+}
+
 /* ------------------------------------------------------------- highlight3d ---- */
 
-/**
- * Dual-channel highlight on a target: an emissive COLOUR glow on every standard
- * material in its subtree + a SCALE pulse on the group. `update(t, reduced)` is
- * called per frame (reduced-motion → a steady still glow, no scale oscillation).
- * `clear()` restores the originals.
- */
-export class Highlight3d {
-  private readonly target: THREE.Object3D;
-  private readonly mats: { mat: THREE.MeshStandardMaterial; emissive: THREE.Color; intensity: number }[] = [];
-  private readonly baseScale: THREE.Vector3;
-  private readonly glow = new THREE.Color();
+/** A 1×1 white texture: stands in for a model's own emissive map while it glows —
+ *  the world's Meshy GLBs carry a (dark) emissive map that would multiply any glow
+ *  colour back to black. Swapping one texture for another needs no shader recompile. */
+let _white: THREE.Texture | null = null;
+function whiteTex(): THREE.Texture {
+  if (_white) return _white;
+  const t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  t.needsUpdate = true;
+  _white = t;
+  return t;
+}
 
-  constructor(target: THREE.Object3D, color: string) {
-    this.target = target;
-    this.baseScale = target.scale.clone();
-    this.glow.set(color);
-    target.traverse((o) => {
-      const mat = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-      if (mat && mat.isMeshStandardMaterial) {
-        this.mats.push({ mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity });
-        mat.emissive = this.glow.clone();
+/**
+ * A warm emissive glow over every standard material in `root` (the COLOUR channel of
+ * a highlight). `set(0)` shows the model exactly as authored; `set(i)` lights it at
+ * intensity `i` in `color`. `clear()` restores the originals. Only use it on a model
+ * that owns its materials (every `spawnModel`/`spawnPlant` does), never a shared GLB.
+ */
+export class Glow {
+  private readonly mats: { mat: THREE.MeshStandardMaterial; emissive: THREE.Color; intensity: number; map: THREE.Texture | null }[] = [];
+  private readonly color = new THREE.Color();
+  private on = false;
+
+  constructor(root: THREE.Object3D, color: THREE.ColorRepresentation = '#ffe6a8') {
+    this.color.set(color);
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || mesh.userData.hitSphere || mesh.userData.hintAnchor) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const mat = m as THREE.MeshStandardMaterial;
+        if (!mat.isMeshStandardMaterial || this.mats.some((e) => e.mat === mat)) continue;
+        this.mats.push({ mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity, map: mat.emissiveMap });
       }
     });
   }
 
+  set(intensity: number, color?: THREE.ColorRepresentation): void {
+    if (color !== undefined) this.color.set(color);
+    if (intensity <= 0.001) { if (this.on) this.clear(); return; }
+    this.on = true;
+    for (const e of this.mats) {
+      e.mat.emissive.copy(this.color);
+      e.mat.emissiveIntensity = intensity;
+      if (e.map) e.mat.emissiveMap = whiteTex();
+    }
+  }
+
+  clear(): void {
+    this.on = false;
+    for (const e of this.mats) {
+      e.mat.emissive.copy(e.emissive);
+      e.mat.emissiveIntensity = e.intensity;
+      e.mat.emissiveMap = e.map;
+    }
+  }
+}
+
+/**
+ * Dual-channel highlight on a target: a warm emissive COLOUR glow (`Glow`) + a calm
+ * SCALE breath on the group. `update(t, reduced)` is called per frame
+ * (reduced-motion → a steady still glow, no scale oscillation). `clear()` restores.
+ */
+export class Highlight3d {
+  private readonly target: THREE.Object3D;
+  private readonly glow: Glow;
+  private readonly baseScale: THREE.Vector3;
+
+  constructor(target: THREE.Object3D, color: string) {
+    this.target = target;
+    this.baseScale = target.scale.clone();
+    this.glow = new Glow(target, color);
+  }
+
   update(t: number, reduced: boolean): void {
     const p = highlightPulse(t, reduced);
-    for (const m of this.mats) m.mat.emissiveIntensity = p.emissive;
+    this.glow.set(p.emissive);
     this.target.scale.set(this.baseScale.x * p.scale, this.baseScale.y * p.scale, this.baseScale.z * p.scale);
   }
 
   clear(): void {
-    for (const m of this.mats) { m.mat.emissive.copy(m.emissive); m.mat.emissiveIntensity = m.intensity; }
+    this.glow.clear();
     this.target.scale.copy(this.baseScale);
   }
 }
@@ -257,30 +361,73 @@ export function anchoredPrompt(host: HTMLElement, html: string): HTMLDivElement 
 
 /* -------------------------------------------------------------- spoorTrail ---- */
 
+/** One cloven hoof print (two soft teardrops, warm sand with a darker rim) — baked
+ *  once, shared by every trail (a permanent 64² texture is a trivial cost). */
+let _hoofTex: THREE.Texture | null = null;
+function hoofTexture(): THREE.Texture {
+  if (_hoofTex) return _hoofTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const toe = (x: number): void => {
+    g.beginPath();
+    g.ellipse(x, 30, 9, 21, 0, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(236,216,168,0.95)';
+    g.fill();
+    g.lineWidth = 4;
+    g.strokeStyle = 'rgba(92,66,38,0.95)';
+    g.stroke();
+  };
+  toe(21); toe(43);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _hoofTex = tex;
+  return tex;
+}
+
 /**
- * Instanced clue footprints laid along the ground path from (ax,az) to (bx,bz),
- * fading fainter toward the start (the `u` channel). One draw call. `groundY`
- * sets each clue on the terrain. Returns the group (add to the scene) + dispose.
+ * The "Volg het spoor" trail: hoof prints walking along the ground from (ax,az) to
+ * (bx,bz), `legs` stretches of three steps each (the zoeken spoor difficulty axis),
+ * left/right alternating, every print seated on `groundY` (the RENDERED ground) and
+ * tilted to its slope so none sinks or floats. Fainter toward the start, `opacity`
+ * overall. One instanced draw call. Returns the group (add to the scene) + dispose.
  */
 export function spoorTrail(
-  ax: number, az: number, bx: number, bz: number, n: number,
+  ax: number, az: number, bx: number, bz: number, legs: number,
   groundY: (x: number, z: number) => number,
-  color = '#cdb892',
+  opacity = 1,
 ): { group: THREE.Group; dispose: () => void } {
+  const n = Math.max(6, Math.round(legs) * 3);
   const pts = trailPoints(ax, az, bx, bz, n);
-  const geo = new THREE.CircleGeometry(0.22, 12);
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 1, transparent: true });
+  const len = Math.hypot(bx - ax, bz - az) || 1;
+  const dx = (bx - ax) / len, dz = (bz - az) / len;
+  const geo = new THREE.PlaneGeometry(0.17, 0.2);
+  geo.rotateX(-Math.PI / 2); // lie flat, the print's toes pointing along −z
+  const mat = new THREE.MeshStandardMaterial({
+    map: hoofTexture(), transparent: true, opacity, depthWrite: false, roughness: 1,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
   const marks = new THREE.InstancedMesh(geo, mat, pts.length);
   const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-  const scale = new THREE.Vector3(1, 1, 1);
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
   const pos = new THREE.Vector3();
+  const heading = Math.atan2(-dx, -dz); // yaw that points the print's −z along the walk
   pts.forEach((p, i) => {
-    pos.set(p.x, groundY(p.x, p.z) + 0.02, p.z);
-    m.compose(pos, q, scale);
+    const side = i % 2 === 0 ? 1 : -1;
+    const x = p.x + -dz * 0.1 * side, z = p.z + dx * 0.1 * side;
+    const ahead = groundY(x + dx * 0.12, z + dz * 0.12);
+    const behind = groundY(x - dx * 0.12, z - dz * 0.12);
+    const pitch = Math.atan2(ahead - behind, 0.24);
+    e.set(pitch, heading, 0, 'YXZ');
+    q.setFromEuler(e);
+    pos.set(x, groundY(x, z) + 0.035, z);
+    const fade = 0.55 + 0.45 * p.u;
+    m.compose(pos, q, new THREE.Vector3(fade, 1, fade));
     marks.setMatrixAt(i, m);
   });
   marks.instanceMatrix.needsUpdate = true;
+  marks.renderOrder = 2;
   const group = new THREE.Group();
   group.add(marks);
   return {
@@ -309,31 +456,47 @@ export function liftReframeAboveGround(
 }
 
 /**
- * A §1e camera reframe: exp-damped move of the camera to `to` while looking at
- * `lookAt`. Under reduced-motion it CUTS (snaps) on the first update. `update(dt)`
- * returns true once settled. The caller drives it from the world's frame loop and
- * stops calling World's own follow while a reframe is active.
+ * A §1e camera reframe (2026-09-26: one calm eased move). The lens glides from where
+ * it is to `to` over `seconds`, and its aim glides from where it looks now to
+ * `lookAt` on the SAME curve — so nothing snaps on the first frame, the view never
+ * swings faster than the move, and roll stays 0 (fixed FOV throughout). Under
+ * reduced-motion it CUTS on the first update. `update(dt)` returns true once settled
+ * and keeps holding the pose after that (nothing else drives the camera meanwhile).
  */
 export function makeReframe(
   camera: THREE.PerspectiveCamera,
   to: THREE.Vector3,
   lookAt: THREE.Vector3,
   reduced: boolean,
-  tau = 0.35,
+  seconds = 1.3,
+  arc = 0,
 ): { update: (dt: number) => boolean } {
+  let from: THREE.Vector3 | null = null;
+  let fromLook: THREE.Vector3 | null = null;
+  const look = new THREE.Vector3();
+  let t = 0;
   return {
     update(dt: number): boolean {
-      if (reduced) {
+      if (reduced || seconds <= 0) {
         camera.position.copy(to);
         camera.up.set(0, 1, 0);
         camera.lookAt(lookAt);
         return true;
       }
-      const a = dampFactor(dt, tau);
-      camera.position.lerp(to, a);
+      if (!from || !fromLook) {
+        from = camera.position.clone();
+        const dir = camera.getWorldDirection(new THREE.Vector3());
+        fromLook = from.clone().addScaledVector(dir, Math.max(1, to.distanceTo(lookAt)));
+      }
+      t = Math.min(1, t + dt / seconds);
+      const e = easeInOut(t);
+      camera.position.lerpVectors(from, to, e);
+      // a soft rise mid-move, so a glide that passes over the ranger clears his head
+      camera.position.y += Math.sin(Math.PI * e) * arc;
+      look.lerpVectors(fromLook, lookAt, e);
       camera.up.set(0, 1, 0); // roll = 0 always
-      camera.lookAt(lookAt);
-      return camera.position.distanceToSquared(to) < 1e-4;
+      camera.lookAt(look);
+      return t >= 1;
     },
   };
 }

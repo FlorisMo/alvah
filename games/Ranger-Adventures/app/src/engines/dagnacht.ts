@@ -20,6 +20,7 @@ export interface EncounterOption {
 export interface Encounter {
   id: string;
   subject: string;                 // 'adder' | 'reekalf' | 'zwijn-honger' | 'modderpoel' | 'pad-veilig'
+  dier?: string;                   // the animal met (content id) — the 3D view stages its model
   vraag: string;
   opties: EncounterOption[];
   uitleg?: string;

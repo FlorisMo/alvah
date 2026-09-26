@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MIN_TAP_PX, worldRadiusForPx, tapHitRadius, trailPoints, highlightPulse, dampFactor,
-  safeCamHeight, CAM_GROUND_CLEAR,
+  safeCamHeight, CAM_GROUND_CLEAR, easeInOut, stageHeadings, patchLocal,
 } from './kit-math.ts';
 
 const FOV = (55 * Math.PI) / 180; // World's camera FOV
@@ -90,4 +90,30 @@ test('safeCamHeight keeps the authored look on flat ground, lifts it above a ris
     assert.ok(safeCamHeight(d, g) >= g + CAM_GROUND_CLEAR - 1e-9);
     assert.ok(safeCamHeight(d, g) >= d - 1e-9);
   }
+});
+
+test('easeInOut: 0→0, 1→1, ½→½, monotone, clamped (a calm start + stop)', () => {
+  assert.equal(easeInOut(0), 0);
+  assert.equal(easeInOut(1), 1);
+  assert.ok(Math.abs(easeInOut(0.5) - 0.5) < 1e-9);
+  assert.equal(easeInOut(-1), 0);
+  assert.equal(easeInOut(2), 1);
+  let prev = 0;
+  for (let i = 1; i <= 20; i++) { const v = easeInOut(i / 20); assert.ok(v >= prev); prev = v; }
+  assert.ok(easeInOut(0.05) < 0.05, 'starts gently (slower than linear)');
+});
+
+test('stageHeadings: straight ahead first, then widening turns, each once', () => {
+  const h = stageHeadings();
+  assert.equal(h[0], 0);
+  assert.equal(new Set(h).size, h.length);
+  for (let i = 1; i < h.length - 1; i += 2) assert.equal(h[i], -h[i + 1]);
+  assert.ok(Math.abs(h[1]) <= 30, 'the first turn is small');
+});
+
+test('patchLocal: centre → origin, top row → back of the patch, right → +u', () => {
+  assert.deepEqual(patchLocal(50, 50, 2, 1.5), { u: 0, v: 0 });
+  assert.equal(patchLocal(50, 0, 2, 1.5).v, 1.5);
+  assert.equal(patchLocal(50, 100, 2, 1.5).v, -1.5);
+  assert.equal(patchLocal(100, 50, 2, 1.5).u, 2);
 });

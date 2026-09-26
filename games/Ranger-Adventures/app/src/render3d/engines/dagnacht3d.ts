@@ -1,26 +1,27 @@
 /**
  * dagnacht3d.ts — the diegetic 3D variant of the "dagnacht" engine (inhibition /
- * impulse control), the second in-place mini-game on the 3D play harness
- * (3D-IMMERSION-PLAN §3, BUILD-PLAN §1f / ledger 50).
+ * impulse control, "rustkracht"), played IN the world (3D-IMMERSION-PLAN §3).
  *
  * Construct parity (frozen, §1f): it consumes the SAME `buildDagnachtTrial`
  * builder and drives the SAME pure `DagnachtRun` core as the 2D `playDanger`, so
  * it emits the IDENTICAL `BeatSummary` (`{ trials: total, correct }`, correct =
- * encounters never answered wrong). 3D changes ONLY the staging — the subject you
- * meet on patrol becomes a calm in-world form, the camera §1e-reframes onto it —
- * and never WHAT is measured: the inhibition decision itself stays a two-choice
- * pick in the accessible DOM card (≥56px, dual-channel), exactly the 2D task.
+ * encounters never answered wrong). The decision itself stays a two-choice pick in
+ * the accessible DOM card (≥56px), exactly the 2D task.
  *
- * Never-scary / motion-comfort (§1e): the subject is calm-posed and STILL (it
- * "drukt zich"); a wrong choice's consequence is a soft lean-AWAY from the child
- * (never a lunge toward the camera) + the recoverable retry — never a game-over.
- * Highlight is dual-channel (emissive colour + a calm breath, steady under
- * reduced-motion); the reframe cuts under reduced-motion. rmSafe: the decision +
- * all words live in the DOM card, so the task is fully playable without the move.
+ * 2026-09-26 staging: each encounter shows ITS OWN subject from the world's cast —
+ * the reekalf (the ree GLB at calf size), the adder on a sandy patch, the hungry
+ * wild boar, a real mud pool, the open path — seated on the rendered ground in front
+ * of the ranger (he stands behind the lens). The card keeps the question, the ranger
+ * rules and the two choices together; the feedback toast sits ABOVE the card so it
+ * never covers a button; the "Nu mag het wél" note shows only on the flip encounter.
+ *
+ * Never-scary / motion-comfort (§1e): the subject is calm and still; a wrong choice
+ * makes it step softly AWAY from the child (never toward the camera) + the
+ * recoverable retry. One eased reframe (a cut under reduced-motion).
  */
 
 import * as THREE from 'three';
-import '../../render2d/danger.css';
+import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
 import type { WorldCtx, Play3dEngine } from '../play/types';
@@ -28,31 +29,99 @@ import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/d
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { Highlight3d, anchoredPrompt, contactShadow, liftReframeAboveGround, makeReframe, registerActivityWin, activityScopeSignal } from '../play/kit';
+import {
+  anchoredPrompt, contactShadow, registerActivityWin, registerPlayHint, activityScopeSignal,
+} from '../play/kit';
+import { Stage } from '../play/stage';
+import { heightFor } from '../play/spawn';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-/** A calm, still subject form in the mission colour (no model load inside the
- *  activity — a low-poly blob keeps it never-scary + cheap). Returns the group. */
-function buildSubject(): THREE.Group {
-  const g = new THREE.Group();
-  // P1.6 (DIRECTION §2.1): a hair less matte so the low golden key gives the calm
-  // subject a warm rim, reading as a real animal in the encounter-plaat, not a puzzle blob.
-  const mat = new THREE.MeshStandardMaterial({ color: '#b98a5a', roughness: 0.85 });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.34, 4, 8), mat);
-  body.position.y = 0.36;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), mat);
-  head.position.set(0, 0.66, 0.14);
-  g.add(body, head);
-  g.userData.mat = mat;
-  return g;
+/** A flat, soft-edged ground patch (sand under the adder, the mud pool, the path). */
+function groundPatch(stage: Stage, color: string, rx: number, rz: number, u: number, v: number, gloss = 1, layer = 1): THREE.Mesh {
+  const shape = new THREE.Shape();
+  const N = 28;
+  for (let i = 0; i <= N; i++) {
+    const a = (i / N) * Math.PI * 2;
+    const wob = 1 + 0.08 * Math.sin(a * 3 + u * 5) + 0.05 * Math.cos(a * 5 + v * 3);
+    const x = Math.cos(a) * rx * wob, y = Math.sin(a) * rz * wob;
+    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+  }
+  const geo = new THREE.ShapeGeometry(shape, 1);
+  geo.rotateX(-Math.PI / 2);
+  // drape it over the rendered ground: every vertex seated on groundY
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const c = stage.at(u, v);
+  const yaw = Math.atan2(stage.fwd.x, stage.fwd.z);
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  for (let i = 0; i < pos.count; i++) {
+    const lx = pos.getX(i), lz = pos.getZ(i);
+    const wx = c.x + lx * cy + lz * sy, wz = c.z - lx * sy + lz * cy;
+    pos.setXYZ(i, wx, stage.ctx.groundY(wx, wz) + 0.02 + layer * 0.012, wz);
+  }
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({
+    color, roughness: gloss, polygonOffset: true, polygonOffsetFactor: -2 * layer, polygonOffsetUnits: -2 * layer,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = layer;
+  return mesh;
+}
+
+/** A soft-edged alpha ramp across a ribbon (opaque middle, feathered sides). */
+let _edgeTex: THREE.Texture | null = null;
+function edgeTexture(): THREE.Texture {
+  if (_edgeTex) return _edgeTex;
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 4;
+  const g = c.getContext('2d')!;
+  const grad = g.createLinearGradient(0, 0, 64, 0);
+  grad.addColorStop(0, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.25, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.75, 'rgba(255,255,255,1)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 4);
+  _edgeTex = new THREE.CanvasTexture(c);
+  return _edgeTex;
+}
+
+/** A sandy footpath running away from the lens (patch-local v0 → v1), gently winding,
+ *  draped vertex by vertex over the rendered ground, its sides feathered into the grass. */
+function pathRibbon(stage: Stage, v0: number, v1: number, width: number): THREE.Mesh {
+  const rows = 24;
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i <= rows; i++) {
+    const t = i / rows;
+    const v = v0 + (v1 - v0) * t;
+    const u = Math.sin(t * 3.1) * 0.18;
+    const w = width * (0.9 + 0.1 * Math.sin(t * 7.3));
+    for (const side of [-1, 1]) {
+      const p = stage.at(u + side * w * 0.5, v, 0.025);
+      pos.push(p.x, p.y, p.z);
+      uv.push(side < 0 ? 0 : 1, t);
+    }
+    if (i < rows) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({
+    color: '#a88f63', roughness: 1, alphaMap: edgeTexture(), transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = 1;
+  return mesh;
 }
 
 export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
-    const scene = ctx.scene as THREE.Scene;
-    const camera = ctx.camera as THREE.PerspectiveCamera;
     const reduced = ctx.reducedMotion;
     const settings = store.get().settings;
 
@@ -62,76 +131,148 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
     const run = new DagnachtRun(trial.encounters.length);
     const instructie = step.skin.copy?.instructie ?? 'Blijf rustig. Maak de goede keuze.';
 
-    const sx = ctx.activitySpot.x, sy = ctx.activitySpot.y, sz = ctx.activitySpot.z;
+    const stage = new Stage(ctx, { halfW: 1.05, halfD: 0.75, tall: 0.9, pitchDeg: 24, insetBottom: 300, insetTop: 70 });
+    const reframe = stage.reframe();
 
-    // ---- the subject the ranger meets, staged just ahead of the activity spot ----
-    const subject = buildSubject();
-    subject.position.set(sx, sy, sz + 0.4);
-    const restZ = subject.position.z;
-    scene.add(subject);
-    // P1.6 (DIRECTION §2.2): a soft contact shadow grounds the subject at its rest
-    // spot so it belongs on the golden-hour ground (a small away-lean never lifts it).
-    const shadow = contactShadow(0.42);
-    shadow.position.set(sx, sy + 0.02, restZ);
-    scene.add(shadow);
-    const highlight = new Highlight3d(subject, '#ffe6a8');
-
-    // ---- §1e reframe onto the subject (cuts under reduced-motion) ----
-    const lookAt = new THREE.Vector3(sx, sy + 0.5, restZ);
-    const to = new THREE.Vector3(sx, sy + 2.2, sz + 4.0);
-    liftReframeAboveGround(to, ctx.groundY); // D1.3: never land the lens under the terrain
-    const reframe = makeReframe(camera, to, lookAt, reduced, 0.35);
-
-    // a soft, recoverable lean-AWAY on a wrong choice (never toward the child)
+    // ---- the subject of the current encounter (rebuilt per encounter) ----
+    let subject: THREE.Group | null = null;
+    let subjectToken = 0;
     let leanUntil = 0;
+
+    function clearSubject(): void {
+      if (!subject) return;
+      subject.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh || mesh.userData.spawned) return;
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      });
+      for (const d of (subject.userData.disposers as (() => void)[] | undefined) ?? []) d();
+      subject.removeFromParent();
+      subject = null;
+    }
+
+    /** Build the in-world subject of an encounter from the world's own cast. */
+    async function stageSubject(enc: Encounter): Promise<void> {
+      const token = ++subjectToken;
+      clearSubject();
+      const g = new THREE.Group();
+      g.userData.disposers = [];
+      const disposers = g.userData.disposers as (() => void)[];
+      const tickers: ((dt: number) => void)[] = [];
+      g.userData.tick = (dt: number) => { for (const t of tickers) t(dt); };
+      const addModel = async (id: string, u: number, v: number, turn: number, height?: number): Promise<THREE.Object3D | null> => {
+        const s = await ctx.spawnModel(id, { height: height ?? heightFor(id) });
+        if (!s) return null;
+        disposers.push(() => s.dispose());
+        const root = s.root as THREE.Group;
+        const p = stage.at(u, v);
+        root.position.copy(p);
+        root.rotation.y = stage.faceLens(p, turn);
+        root.traverse((o) => { o.userData.spawned = true; });
+        g.add(root);
+        tickers.push((dt) => s.update(dt));
+        const sh = contactShadow(Math.max(0.2, (height ?? heightFor(id)) * 0.55));
+        sh.position.copy(p).setY(p.y + 0.02);
+        g.add(sh);
+        return root;
+      };
+      const tufts = (pts: { u: number; v: number; h: number }[]): void => { g.add(stage.grassMesh(pts, 30)); };
+      const path = (): void => { g.add(pathRibbon(stage, -1.6, 3.4, 0.75)); };
+      switch (enc.subject) {
+        case 'adder':
+          g.add(groundPatch(stage, '#c9ad7a', 0.75, 0.45, 0, 0, 1));
+          tufts([{ u: -0.85, v: 0.1, h: 0.3 }, { u: 0.9, v: 0.2, h: 0.34 }, { u: 0.7, v: -0.45, h: 0.26 }, { u: -0.6, v: 0.55, h: 0.3 }]);
+          await addModel(enc.dier ?? 'adder', 0, 0, 1.3);
+          break;
+        case 'modderpoel':
+          // the mud lies across the sandy path, soft grass along its rim
+          path();
+          g.add(groundPatch(stage, '#4a3826', 0.95, 0.55, 0, 0.05, 0.35, 2));
+          g.add(groundPatch(stage, '#2e231a', 0.64, 0.34, 0.05, 0.08, 0.08, 3));
+          tufts([{ u: -1.05, v: 0.1, h: 0.36 }, { u: 1.08, v: -0.05, h: 0.4 }, { u: -0.8, v: 0.55, h: 0.3 }, { u: 0.85, v: 0.6, h: 0.34 }, { u: 0.3, v: 0.72, h: 0.3 }]);
+          break;
+        case 'pad-veilig':
+          // the path runs on, free — the one the ranger may now walk
+          path();
+          tufts([{ u: -0.7, v: -0.6, h: 0.34 }, { u: 0.72, v: -0.3, h: 0.36 }, { u: -0.75, v: 0.5, h: 0.3 }, { u: 0.7, v: 0.9, h: 0.32 }, { u: -0.62, v: 1.5, h: 0.3 }, { u: 0.6, v: 2.0, h: 0.3 }]);
+          if (enc.dier ?? step.skin.dier) await addModel(enc.dier ?? step.skin.dier ?? 'wildzwijn', 0.3, 2.6, 1.2);
+          break;
+        case 'zwijn-honger':
+          tufts([{ u: -0.75, v: -0.25, h: 0.3 }, { u: 0.8, v: -0.2, h: 0.34 }, { u: 0.55, v: 0.55, h: 0.3 }, { u: -0.6, v: 0.6, h: 0.3 }]);
+          await addModel(enc.dier ?? 'wildzwijn', 0, 0.1, 1.1);
+          break;
+        case 'reekalf':
+        default: {
+          // the calf stands still in the grass ("drukt zich"): tufts around and in front
+          const id = enc.dier === 'ree' || !enc.dier ? 'reekalf' : enc.dier;
+          const h = heightFor(id);
+          tufts([
+            { u: -0.2, v: -0.28, h: h * 0.5 }, { u: 0.22, v: -0.3, h: h * 0.45 }, { u: 0.02, v: -0.36, h: h * 0.4 },
+            { u: -0.5, v: 0.1, h: h * 0.45 }, { u: 0.5, v: 0.12, h: h * 0.5 }, { u: -0.1, v: 0.4, h: h * 0.4 },
+          ]);
+          await addModel(id, 0, 0.05, 1.2);
+          break;
+        }
+      }
+      if (token !== subjectToken || activityScopeSignal()?.aborted) { // superseded
+        for (const d of disposers) d();
+        return;
+      }
+      subject = g;
+      stage.add(g);
+    }
 
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) return; // F-26: "Stop de missie" tears the step down
+      if (activityScopeSignal()?.aborted) { clearSubject(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       reframe.update(dt);
-      highlight.update(now / 1000, reduced);
-      // calm away-lean settles back to rest (motion-comfort: small, damped, and
-      // AWAY from the viewer — camera sits at +z, so a lean is −z, never a lunge)
-      const target = now < leanUntil ? restZ - 0.3 : restZ;
-      subject.position.z += (target - subject.position.z) * (reduced ? 1 : 0.08);
+      if (subject) {
+        (subject.userData.tick as ((dt: number) => void) | undefined)?.(dt);
+        // a calm step AWAY from the child on a wrong choice, then back (never a lunge)
+        const back = now < leanUntil ? 0.35 : 0;
+        const want = back;
+        const cur = (subject.userData.v as number | undefined) ?? 0;
+        const nv = cur + (want - cur) * (reduced ? 1 : Math.min(1, dt * 5));
+        subject.userData.v = nv;
+        subject.position.set(stage.fwd.x * nv, 0, stage.fwd.z * nv);
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
 
     function speak(text: string): void { if (settings.voorlezen) narrator.speak(text); }
 
-    /** Render the current encounter's rule + two choices into the accessible card. */
+    const unHint = registerPlayHint(() => null); // answered with the DOM choice buttons
+
+    /** Render the current encounter: its subject in the world + the card. */
     function present(): void {
       if (run.finished) return finish();
       const enc = trial.encounters[run.index];
-      const flip = enc.flip
-        ? `<span class="flip-cue">Nu mag het wél</span>`
-        : '';
+      void stageSubject(enc).catch((e) => console.error('[dagnacht3d] subject failed', e));
       const regels = trial.regels.length
-        ? `<div class="enc-regels">${trial.regels.map((r) => `<span class="regel-chip">${esc(r)}</span>`).join('')}</div>`
+        ? `<div class="p3-chips" aria-label="Ranger-regels">${trial.regels.map((r) => `<span class="p3-chip">${esc(r)}</span>`).join('')}</div>`
         : '';
+      const flip = enc.flip ? `<p class="p3-flip">Nu mag het wél</p>` : '';
       // shuffle the two slots so position never cues the answer (as the 2D view)
       const order = Math.random() < 0.5 ? [0, 1] : [1, 0];
       const card = anchoredPrompt(
         ctx.prompt,
-        `<div class="dag3d-card" style="position:absolute;left:0;right:0;bottom:18px;display:flex;flex-direction:column;align-items:center;gap:12px;padding:0 16px;">` +
-          `<div class="danger-bar"><p class="danger-instr">${esc(enc.vraag)}</p>` +
-          `<button class="danger-speak" type="button" aria-label="Lees voor">🔊</button></div>` +
-          regels +
-          `<div class="rule-banner${enc.flip ? ' flip' : ''}">${flip}</div>` +
-          `<div class="enc-options">` +
-          order
-            .map((i) => `<button class="choice-opt" data-i="${i}" type="button"><span class="opt-label">${esc(enc.opties[i].label)}</span></button>`)
-            .join('') +
-          `</div>` +
-          `</div>`,
+        `<div class="p3-bottom dag3d">` +
+          `<div class="p3-card">` +
+          `<div class="p3-row"><p class="p3-text">${esc(enc.vraag)}</p>` +
+          `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button></div>` +
+          regels + flip +
+          `<div class="p3-choices">` +
+          order.map((i) => `<button class="p3-choice" data-i="${i}" type="button">${esc(enc.opties[i].label)}</button>`).join('') +
+          `</div></div></div>`,
       );
-      card.querySelector('.danger-speak')?.addEventListener('click', () => narrator.speak(enc.vraag));
+      card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(enc.vraag));
       speak(enc.vraag);
-      card.querySelectorAll<HTMLButtonElement>('.choice-opt').forEach((b) => {
+      card.querySelectorAll<HTMLButtonElement>('.p3-choice').forEach((b) => {
         b.addEventListener('click', () => choose(parseInt(b.dataset.i!, 10), enc, card));
       });
     }
@@ -139,7 +280,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
     function choose(optIndex: number, enc: Encounter, card: HTMLElement): void {
       const opt = enc.opties[optIndex];
       // lock the choices while feedback shows (one decision per presentation)
-      card.querySelectorAll<HTMLButtonElement>('.choice-opt').forEach((b) => { b.disabled = true; });
+      card.querySelectorAll<HTMLButtonElement>('.p3-choice').forEach((b) => { b.disabled = true; });
       if (opt.goed) {
         run.choose(true);
         if (settings.geluid) Sound.correct();
@@ -147,7 +288,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
       } else {
         run.choose(false); // recoverable — marks the encounter, keeps it up
         if (settings.geluid) Sound.tryAgain();
-        leanUntil = performance.now() + (reduced ? 0 : 700); // calm away-lean
+        leanUntil = performance.now() + (reduced ? 0 : 900); // a calm step away
         feedback('gevolg', enc.gevolg ?? 'Wacht even. Probeer het anders.', card, () => {
           card.remove();
           present(); // re-present the SAME encounter (run.index unchanged)
@@ -157,11 +298,14 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
 
     function feedback(kind: 'ok' | 'gevolg', text: string, card: HTMLElement, then: () => void): void {
       const t = document.createElement('div');
-      t.className = `feedback-toast ${kind}`;
+      t.className = `p3-toast ${kind}`;
+      t.setAttribute('role', 'status');
       t.textContent = text;
-      card.appendChild(t);
+      const col = card.classList.contains('p3-bottom') ? card : card.querySelector('.p3-bottom') ?? card;
+      col.insertBefore(t, col.firstChild); // ABOVE the card: never over a choice
       speak(text);
-      window.setTimeout(then, kind === 'ok' ? 1500 : (reduced ? 1500 : 2100));
+      const words = text.split(/\s+/).length;
+      window.setTimeout(then, Math.max(kind === 'ok' ? 1600 : 2400, words * 280));
     }
 
     function finish(): void {
@@ -169,16 +313,10 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
       const summary = run.summary();
       narrator.stop();
       cancelAnimationFrame(raf);
-      highlight.clear();
-      scene.remove(subject);
-      subject.traverse((o) => {
-        const m = (o as THREE.Mesh).geometry;
-        if (m) m.dispose();
-      });
-      (subject.userData.mat as THREE.Material).dispose();
-      scene.remove(shadow); // P1.6: free the contact shadow
-      shadow.geometry.dispose();
-      (shadow.material as THREE.Material).dispose();
+      unHint();
+      subjectToken++;
+      clearSubject();
+      stage.dispose();
       ctx.prompt.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
       resolve(summary);
     }
@@ -195,9 +333,9 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
 }
 
 /** The registered 3D dagnacht variant. rmSafe:true — the reduced-motion path is
- *  defined (camera CUTS, highlight steady, subject lean is an instant settle, the
- *  decision + every word stay in the DOM card), so the resolver may serve 3D even
- *  under reduced-motion (3D-IMMERSION-PLAN §4). */
+ *  defined (camera CUTS, the subject's step-away is an instant settle, the decision +
+ *  every word stay in the DOM card), so the resolver may serve 3D even under
+ *  reduced-motion (3D-IMMERSION-PLAN §4). */
 export const dagnacht3dEngine: Play3dEngine = {
   engine: 'dagnacht',
   play: playDagnacht3d,

@@ -110,3 +110,35 @@ export function safeCamHeight(
 ): number {
   return Math.max(desiredY, groundY + clearance);
 }
+
+/**
+ * The calm reframe curve (2026-09-26): a cubic ease-in-out over 0..1 — the lens starts
+ * and stops gently, so the one move into a mini-game never lurches (motion-comfort §1e;
+ * reduced-motion cuts instead and never reaches this curve).
+ */
+export function easeInOut(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+/**
+ * The headings (degrees, relative to where the lens already looks) a mini-game stage
+ * tries in order: straight ahead first — a pure forward dolly, no turn at all — then
+ * small turns either side, widening until one lands on a clear patch.
+ */
+export function stageHeadings(): number[] {
+  const out = [0];
+  for (const a of [25, 50, 75, 100, 130, 160]) out.push(a, -a);
+  out.push(180);
+  return out;
+}
+
+/**
+ * Map a 2D trial coordinate (0..100 across, 0..100 down the screen) onto a play patch
+ * of half-size `halfW` × `halfD` metres: `u` runs across (right +), `v` runs in depth
+ * AWAY from the lens (+), so the 2D field's top row lands at the back of the patch —
+ * the same layout the child sees in the 2D twin, laid on the ground.
+ */
+export function patchLocal(x: number, y: number, halfW: number, halfD: number): { u: number; v: number } {
+  return { u: ((x - 50) / 50) * halfW, v: ((50 - y) / 50) * halfD };
+}

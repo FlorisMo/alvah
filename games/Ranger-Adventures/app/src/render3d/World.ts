@@ -47,6 +47,7 @@ import {
   BIOME_GROUND_TONES, groundPatch,
 } from './GroundDetail';
 import type { WorldCtx } from './play/types';
+import { spawnModel, spawnPlant } from './play/spawn';
 import { dampFactor } from './play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
 import { PlayerRig } from './PlayerRig';
@@ -3679,24 +3680,43 @@ export class World {
   ctx(prompt: HTMLElement): WorldCtx {
     const near = this.nearId ? this.markers.find((m) => m.missionId === this.nearId) : null;
     const spot = near ? near.pos : this.ranger.position;
+    // 2026-09-26: seat the anchor on the RENDERED ground (the raycast ground-snap), never
+    // the marker's analytic Y — every mini-game stages per point on `groundY` from here.
+    const spotY = this.groundSnapY(spot.x, spot.z);
     // D1.3: remember the task anchor so camState can prove the reframe frames it.
-    this.activityFocus = { x: spot.x, y: spot.y, z: spot.z };
+    this.activityFocus = { x: spot.x, y: spotY, z: spot.z };
     return {
       scene: this.scene,
       camera: this.camera,
       cameraRig: this.camera, // the §1e follow drives the camera directly (no separate rig)
       approachedModel: near ? near.group : null,
-      activitySpot: { x: spot.x, y: spot.y, z: spot.z },
-      // D1.3: the rendered-terrain height (raycast ground-snap) so a mini-game reframe
-      // lifts the lens above the REAL surface, never the mirrored analytic marker Y
-      // that buried the mission camera (the markers seat on `heightAt`, which diverges
-      // from the pixels the way P1.5a's sink did — direction §2.2 one-ground-truth).
+      activitySpot: { x: spot.x, y: spotY, z: spot.z },
       groundY: (x, z) => this.groundSnapY(x, z),
+      isClear: (x, z, r) => this.playClear(x, z, r),
+      player: { x: this.ranger.position.x, z: this.ranger.position.z, yaw: this.ranger.rotation.y },
+      setFocus: (x, y, z) => { this.activityFocus = { x, y, z }; },
+      spawnModel,
+      spawnPlant,
       raycaster: this.raycaster,
       canvas: this.canvas,
       prompt,
       reducedMotion: prefersReducedMotion(),
     };
+  }
+
+  /** A mini-game patch is free at (x,z) within `r` m: dry land (not the ven), outside
+   *  every solid prop (a tree's CROWN, not just its trunk — so the lens never sits in
+   *  one), and clear of the other missions' animals. The approached marker is exempt:
+   *  the stage hides it while the game runs. */
+  private playClear(x: number, z: number, r: number): boolean {
+    if (this.limits.blocked?.(x, z)) return false;
+    for (const o of this.obstacles) {
+      if (Math.hypot(o.x - x, o.z - z) < o.r + (o.tree ? 1.6 : 0) + r) return false;
+    }
+    for (const m of this.markers) {
+      if (m.missionId !== this.nearId && Math.hypot(m.pos.x - x, m.pos.z - z) < 1.2 + r) return false;
+    }
+    return true;
   }
 
   /** Freeze the world for an in-place activity (the mini-game owns input + camera).

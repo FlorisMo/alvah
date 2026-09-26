@@ -38,6 +38,24 @@ export interface WorldCtx {
    *  surface (`safeCamHeight`) and never land under the visual terrain the way the
    *  mirrored analytic marker Y once buried the mission camera (direction §2.2/§2.5). */
   groundY(x: number, z: number): number;
+  /** 2026-09-26: is a play patch free at world (x,z) within radius `r` (m)? False on the
+   *  ven water, inside a tree crown, the cabin, the case-board, the bench, the parked
+   *  jeep/heli or another mission's animal — so a stage is planned clear of hub props. */
+  isClear(x: number, z: number, r: number): boolean;
+  /** the ranger's feet (world x,z) + facing (rad, rotation.y) when the activity began —
+   *  the stage keeps him out of the play patch (he stands behind the lens). */
+  player: { x: number; z: number; yaw: number };
+  /** move the task anchor the dev hook's `cam().taskInView` tests (the planned patch
+   *  centre, which the stage may offset from `activitySpot`). */
+  setFocus(x: number, y: number, z: number): void;
+  /** Load one of the world's OWN animals (GLB manifest id, e.g. `animal-frisling-piglet`)
+   *  with the world's dress (eyes, coat, posture, calm pose) at its canonical size
+   *  (`AnimalScale`) or `opts.height`. Resolves null when the model is missing. The
+   *  spawn owns its materials, so a game's glow never lights the world's copies. */
+  spawnModel(id: string, opts?: SpawnOpts): Promise<Spawned | null>;
+  /** Load a world vegetation piece (a GLB prop id such as `prop-bramble`, or `gras`
+   *  for a grass tuft) at `height` m; null when missing. */
+  spawnPlant(id: string, height: number): Promise<Spawned | null>;
   /** a shared THREE.Raycaster for pick3d */
   raycaster: unknown;
   /** the live render canvas — pick3d maps pointer coords + sizes ≥56px hit-spheres against it */
@@ -46,6 +64,24 @@ export interface WorldCtx {
   prompt: HTMLElement;
   /** true when motion must be reduced — views swap moves for cuts */
   reducedMotion: boolean;
+}
+
+/** Options for `WorldCtx.spawnModel`. */
+export interface SpawnOpts {
+  /** stand height (m); default = the world's canonical size for that model */
+  height?: number;
+  /** play the model's calm idle clip when it has one (default true; frozen under reduced-motion) */
+  idle?: boolean;
+}
+
+/** A model spawned for a mini-game. `root` is a THREE.Group (typed `unknown` here) with
+ *  its feet at local y=0; the caller positions it and adds it to the scene. */
+export interface Spawned {
+  root: unknown;
+  /** advance the idle clip (call once per frame); a no-op for static models */
+  update(dt: number): void;
+  /** remove from the scene and free what this spawn created (the GLB stays cached) */
+  dispose(): void;
 }
 
 /**

@@ -31,6 +31,7 @@ import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
 import { makeReframe } from './play/kit';
 import { Sound } from '../core/sound';
 import type { WorldCtx } from './play/types';
+import { spawnModel, spawnPlant } from './play/spawn';
 import {
   sandboxLayout, castCallKey,
   type SandboxInteraction, type SandboxPlacement, type SandboxLayout, type SandboxKind,
@@ -340,6 +341,8 @@ export class SandboxScene {
       approachedModel: t ? t.group : null,
       activitySpot: this.spotOf(id),
       groundY: () => 0, // D1.3: the showroom floor is a flat plane at y=0
+      isClear: () => true, player: { x: this.camera.position.x, z: this.camera.position.z, yaw: 0 },
+      setFocus: () => {}, spawnModel, spawnPlant,
       raycaster: this.raycaster,
       canvas: this.canvas,
       prompt,
