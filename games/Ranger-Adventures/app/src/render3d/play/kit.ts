@@ -210,7 +210,9 @@ export class Highlight3d {
 export function anchoredPrompt(host: HTMLElement, html: string): HTMLDivElement {
   host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
   const el = document.createElement('div');
-  el.className = 'ra-overlay';
+  // `ra-play`: the full-screen wrapper must let clicks through to the 3D canvas
+  // (pick3d) — only its card/buttons take pointer events (see missions.css).
+  el.className = 'ra-overlay ra-play';
   el.innerHTML = html;
   host.appendChild(el);
   return el;

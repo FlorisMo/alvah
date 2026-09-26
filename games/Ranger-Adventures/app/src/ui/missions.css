@@ -343,6 +343,10 @@
  * every tap (WORLD-PLAN W0.4 root cause). `#ui .explore-overlay` matches the
  * ID's specificity and adds a class, so it wins; controls stay `auto` below. */
 #ui .explore-overlay { pointer-events: none; }
+/* Same trap for the 3D mini-game prompt wrapper (kit.ts anchoredPrompt): without
+ * this, `#ui > *` made the full-screen wrapper eat every click, so no 3D
+ * mini-game could be played with a mouse or a tap (audit 2026-09-26, mg-01). */
+#ui .ra-overlay.ra-play { pointer-events: none; }
 .explore-hud { position: absolute; inset: 0; pointer-events: none; }
 .explore-hud > * { pointer-events: auto; }
 .ra-pill {
