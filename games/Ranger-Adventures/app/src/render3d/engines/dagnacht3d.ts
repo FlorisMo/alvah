@@ -46,10 +46,11 @@ function edgeTexture(): THREE.Texture {
   c.width = 64; c.height = 4;
   const g = c.getContext('2d')!;
   const grad = g.createLinearGradient(0, 0, 64, 0);
-  grad.addColorStop(0, 'rgba(255,255,255,0)');
-  grad.addColorStop(0.25, 'rgba(255,255,255,1)');
-  grad.addColorStop(0.75, 'rgba(255,255,255,1)');
-  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  // an alphaMap reads the GREEN channel: an opaque black→white→black ramp
+  grad.addColorStop(0, '#000');
+  grad.addColorStop(0.3, '#fff');
+  grad.addColorStop(0.7, '#fff');
+  grad.addColorStop(1, '#000');
   g.fillStyle = grad;
   g.fillRect(0, 0, 64, 4);
   _edgeTex = new THREE.CanvasTexture(c);
@@ -81,7 +82,8 @@ function pathRibbon(stage: Stage, v0: number, v1: number, width: number): THREE.
   geo.setIndex(idx);
   geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({
-    color: '#a88f63', roughness: 1, alphaMap: edgeTexture(), transparent: true, depthWrite: false,
+    color: '#b39866', roughness: 1, alphaMap: edgeTexture(), transparent: true, depthWrite: false,
+    side: THREE.DoubleSide, // (the strip's winding depends on the stage heading)
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });
   const mesh = new THREE.Mesh(geo, mat);
