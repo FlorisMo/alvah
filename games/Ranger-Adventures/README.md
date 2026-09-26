@@ -1,5 +1,8 @@
 # Ranger Adventures
 
+> **Start here: [GOAL.md](GOAL.md)** (the end goal) → [STATE.md](STATE.md) (what works today) →
+> [CLAUDE.md](CLAUDE.md) (how to work here). Everything under `runs/` is archive.
+
 **"Ranger van de Veluwe"** — a story layer wrapping Alvah's five executive-function
 mini-games as ranger missions on the Veluwe. Lives **outside** `src/` so the Astro
 build never picks it up until it's deliberately integrated. The game is deployed to
@@ -24,10 +27,8 @@ alvah.nl/ranger behind the client-side gate.
     (Fable-directed experience/polish): paused at ~9% on its 8h session cap;
     reconciled into Run D on 2026-07-05. The ledger/plan/direction/log stay as
     provenance.
-  - **[runs/run-5-cohesion/](runs/run-5-cohesion/)** — ACTIVE. Run D: the
-    reconciled, playability-first cohesion run (Opus builds, Fable verifies).
-    **Start at [RUN-D-LEDGER.md](runs/run-5-cohesion/RUN-D-LEDGER.md)**; the
-    supervisor is `run-d-loop.sh`.
+  - **[runs/run-5-cohesion/](runs/run-5-cohesion/)** — ARCHIVE. Run D (July 2026):
+    stopped at ~25% with the game still unplayable. Superseded by [GOAL.md](GOAL.md).
 - **[docs/](docs/)** — cross-run reference: [GAMEPLAN.md](docs/GAMEPLAN.md) (master
   orientation), [DEMO-SANDBOX.md](docs/DEMO-SANDBOX.md), [SETUP-realism-keys.md](docs/SETUP-realism-keys.md).
 - **[research/](research/)** — verified knowledge base (biology, EF science, 3D specs,

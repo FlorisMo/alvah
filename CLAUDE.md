@@ -48,3 +48,6 @@ Lees deze CLAUDE.md. Lees src/content.config.ts voor datamodel. Lees de te wijzi
 - `sessionStorage` onder de sleutel `alvah-gate-v1` om per tab-sessie eenmalig te vragen.
 - Bewust minimale beveiliging: doel is per-ongeluk-landers weren, niet bestand zijn tegen gerichte toegang. Alles is client-side, dus bypass-baar.
 - Niet verwijderen zonder expliciete opdracht. Wachtwoord wijzigen: bereken nieuwe SHA-256, vervang `EXPECTED` in BaseLayout.
+
+## Ranger-game (games/Ranger-Adventures)
+Het 3D-spel heeft eigen werkregels: begin bij `games/Ranger-Adventures/GOAL.md`, dan `STATE.md` en `CLAUDE.md` in die map.
