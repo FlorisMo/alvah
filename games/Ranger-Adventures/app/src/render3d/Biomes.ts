@@ -57,7 +57,7 @@ export const WATER_LEVEL = -1.4;
 /**
  * How far the wet ven reaches out from `VEN_CENTER`: the water disc (radius 20) plus
  * a moss/reed shore ring. `biomeAt` forces `'ven'` inside this radius so the ground
- * tone, the reed fringe (`scatterReeds` → `candidates('ven')`) and the footstep
+ * tone, the reed belt (`scatterReeds`) and the footstep
  * surface all AGREE with the water that physically sits here. Without it the compass
  * warp lands the basin in the stuifzand sector, so the fen renders as pale drift sand
  * with its reeds scattered off in the dry western ven sector — no frame reads as a
@@ -65,6 +65,9 @@ export const WATER_LEVEL = -1.4;
  * clusters"). Kept just past the 20 m water disc so a moss bank rings the water.
  */
 export const VEN_SHORE_R = 26;
+
+/** Outer radius (m from VEN_CENTER) of the reed belt that rings the water. */
+export const VEN_REED_OUT = 20;
 
 const TWO_PI = Math.PI * 2;
 
@@ -109,8 +112,15 @@ export function biomeAt(x: number, z: number): Biome {
  * line and, if that spot is off-biome (a wandering seam, or the forced ven shore that
  * sits inside the bos sector), searches the arc on BOTH sides, nearest first, so a
  * marker never ends up in another landschap (or in the ven water).
+ *
+ * The heart of the ven is its water, so a ven mission stands on the fen's bank instead
+ * (`venBankSpot`) — the frog hides in the reeds by the water, not on a dry compass sector.
  */
 export function anchorInBiome(biome: Biome, radius = 26): { x: number; z: number } {
+  if (biome === 'ven') {
+    const bank = venBankSpot(Math.max(0, Math.round((radius - 22) / 9)));
+    if (bank) return bank;
+  }
   const sector = BIOME_ORDER.indexOf(biome);
   const a0 = (sector + 0.5) * (Math.PI / 2) - Math.PI; // centre angle of the unwarped sector
   const STEP = 0.12;
@@ -120,4 +130,23 @@ export function anchorInBiome(biome: Biome, radius = 26): { x: number; z: number
     if (biomeAt(x, z) === biome) return { x, z };
   }
   return { x: Math.cos(a0) * radius, z: Math.sin(a0) * radius };
+}
+
+/** Direction (from VEN_CENTER) of the bank the first ven mission stands on: the west
+ *  bank, facing the clearing, just south of the vogelkijkhut. */
+const VEN_BANK_ANGLE = Math.PI;
+
+/**
+ * The n-th ven mission's spot on the fen's bank: along a ray out of VEN_CENTER (the
+ * first due west, later ones fanned south), the first point just behind the reed belt
+ * whose ground stands a step above the water — dry moss bank, with the reeds and the
+ * water right in front. Null when that ray finds no dry bank inside the ven shore.
+ */
+function venBankSpot(n: number): { x: number; z: number } | null {
+  const a = VEN_BANK_ANGLE + n * 0.3;
+  for (let r = VEN_REED_OUT + 1.5; r < VEN_SHORE_R - 1; r += 0.5) {
+    const x = VEN_CENTER.x + Math.cos(a) * r, z = VEN_CENTER.z + Math.sin(a) * r;
+    if (heightAt(x, z) >= WATER_LEVEL + 0.3) return { x, z };
+  }
+  return null;
 }

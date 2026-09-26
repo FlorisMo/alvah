@@ -16,7 +16,7 @@ import * as THREE from 'three';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { livePolicy } from './MotionMode';
 import {
-  BIOME_PALETTE, VEN_CENTER, WATER_LEVEL,
+  BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, WATER_LEVEL,
   anchorInBiome, type Biome,
 } from './Biomes';
 import { Terrain } from './world/Terrain';
@@ -1587,7 +1587,7 @@ export class World {
     const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
     for (let i = 0; i < budget * 12 && items.length < budget; i++) {
       const ang = i * 2.39996;             // golden angle → even, non-repeating ring
-      const rad = 9 + (i % 22) * 0.5;      // 9–20 m out — a TIGHT belt hugging the waterline
+      const rad = 9 + (i % 22) * ((VEN_REED_OUT - 9) / 22); // 9–20 m out — a TIGHT belt hugging the waterline
       const x = bx + Math.cos(ang) * rad;
       const z = bz + Math.sin(ang) * rad;
       const gy = this.groundY(x, z);
