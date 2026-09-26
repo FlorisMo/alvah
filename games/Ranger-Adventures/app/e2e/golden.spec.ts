@@ -171,7 +171,12 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     const off = samples.filter((s) => !s.grounded || Math.abs(s.clearance) > 0.1);
     soft(off.length === 0, `the jeep leaves the ground: ${off.length}/${samples.length} samples not grounded or > 10 cm off (worst ${r2(Math.max(...samples.map((s) => Math.abs(s.clearance))))} m)`);
     soft(samples.every((s) => s.fov === samples[0].fov && Math.abs(s.roll) < 1e-3), 'the jeep camera changed its FOV or rolled');
-    note('faces the way it drives? no driving through trees/buildings? judge the jeep-driving shot');
+    const shape = await R<{ id: string; along: number; across: number } | null>(page, `r.shapeAt(${b.x}, ${b.z}, ${b.x - a.x}, ${b.z - a.z})`);
+    if (shape) note(`the jeep measures ${shape.along} m along its driving direction, ${shape.across} m across`);
+    soft(!!shape && shape.along > shape.across, shape
+      ? `the jeep drives sideways: its long side (${shape.across} m) lies across the way it drives (${shape.along} m along)`
+      : 'could not find the jeep model to measure which way it faces');
+    note('driving through trees/buildings, dust over the screen? judge the jeep-driving shot');
     await sleep(page, 1_200);
     await clickButton(page, /Stap uit/, 'jeep');
     await expect.poll(async () => (await R<Vehicle>(page, 'r.vehicle()')).inVehicle, { timeout: 5_000, message: '"Stap uit" did not get the ranger out of the jeep' }).toBe(false);
@@ -205,7 +210,8 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     soft(bad.length === 0, `${bad.length}/${seatsBefore.length} of them are not on the ground (±${SEAT_TOLERANCE * 100} cm): ${bad.slice(0, 4).map((s) => `${s.id} ${s.gap > 0 ? '+' : ''}${s.gap} m`).join('; ')}`);
     // starting it should be one obvious action
     let clicks = 0;
-    await clickButton(page, /Speel mee/, 'mission prompt'); clicks += 1;
+    const titel = missions.find((x) => x.id === missionId)!.titel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    await clickButton(page, new RegExp(`Speel mee|${titel}`), 'mission prompt at the marker'); clicks += 1;
     const started = async (): Promise<boolean> => (await R<string | null>(page, 'r.missionView')) !== null;
     for (let i = 0; i < 3 && !(await started()); i++) {
       await sleep(page, 800);

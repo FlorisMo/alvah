@@ -209,6 +209,9 @@ function probePlayHint(): PlayHintProbe | null {
   const hint = currentPlayHint();
   if (!hint) return null;
   const v = liveView();
+  let root = hint.target;
+  while (root.parent) root = root.parent;
+  if (v && root !== v.scene) return null; // not in the rendered scene (a finished step's stale hint): nothing to click
   const box = visibleBox(hint.target, new THREE.Box3());
   if (!v || box.isEmpty()) {
     return { id: hint.id, x: -1, y: -1, onScreen: false, firstHit: false, aboveGround: false,
@@ -248,46 +251,98 @@ function lookSig(root: THREE.Object3D): string {
   return parts.sort().join('|');
 }
 
-function probeSeating(x: number, z: number, r: number): SeatProbe[] | null {
-  const v = liveView();
-  if (!v) return null;
-  const out: SeatProbe[] = [];
+type Placed = { o: THREE.Object3D; box: THREE.Box3 };
+
+/** Every placed thing whose footprint centre lies within r of (x,z): models, props and
+ *  staged pieces (a container at the origin is looked through), plus instanced copies
+ *  (reported one by one through `onInstance`). Hidden things and the terrain are skipped. */
+function placedThings(v: LiveView, x: number, z: number, r: number,
+  onInstance?: (label: string, i: number, at: THREE.Vector3) => void): Placed[] {
+  const out: Placed[] = [];
   const terrain = terrainMeshes(v.scene);
-  const box = new THREE.Box3();
   const c = new THREE.Vector3();
   const m4 = new THREE.Matrix4();
   const visit = (o: THREE.Object3D): void => {
     if (!o.visible || o.userData.hitSphere || terrain.includes(o)) return;
     if ((o as THREE.Light).isLight || (o as THREE.Camera).isCamera || (o as THREE.Points).isPoints
       || (o as THREE.Line).isLine || (o as THREE.Sprite).isSprite) return;
+    if (o === v.scene) { o.children.forEach(visit); return; }
     const inst = o as THREE.InstancedMesh;
     if (inst.isInstancedMesh) {
-      const label = o.name || inst.geometry.type;
+      if (!onInstance) return;
       for (let i = 0; i < inst.count; i++) {
         inst.getMatrixAt(i, m4);
         c.setFromMatrixPosition(m4.premultiply(inst.matrixWorld));
-        if (Math.hypot(c.x - x, c.z - z) > r) continue;
-        const g = groundUnder(v.scene, c.x, c.z);
-        if (g === null || c.y - g > 3) continue;
-        out.push({ id: `${label}#${i}`, x: r2(c.x), y: r2(c.y), z: r2(c.z), gap: r2(c.y - g), sig: `${label}#${i}` });
+        if (Math.hypot(c.x - x, c.z - z) <= r) onInstance(o.name || inst.geometry.type, i, c.clone());
       }
       return;
     }
     // a pure container (at the origin, unrotated): what it holds is what is placed
-    if (o.children.length && !(o as THREE.Mesh).isMesh && o.position.lengthSq() < 1e-6
-      && o.quaternion.w > 0.99999 && o !== v.scene) { o.children.forEach(visit); return; }
-    if (o === v.scene) { o.children.forEach(visit); return; }
-    visibleBox(o, box);
+    if (o.children.length && !(o as THREE.Mesh).isMesh && o.position.lengthSq() < 1e-6 && o.quaternion.w > 0.99999) {
+      o.children.forEach(visit);
+      return;
+    }
+    const box = visibleBox(o, new THREE.Box3());
     if (box.isEmpty()) return;
     box.getCenter(c);
     const size = box.getSize(new THREE.Vector3());
     if (size.x > 12 || size.z > 12 || Math.hypot(c.x - x, c.z - z) > r) return;
-    const g = groundUnder(v.scene, c.x, c.z);
-    if (g === null || box.min.y - g > 3) return;
-    out.push({ id: describeObject(o, v.scene), x: r2(c.x), y: r2(box.min.y), z: r2(c.z), gap: r2(box.min.y - g), sig: lookSig(o) });
+    out.push({ o, box });
   };
   visit(v.scene);
+  return out;
+}
+
+function probeSeating(x: number, z: number, r: number): SeatProbe[] | null {
+  const v = liveView();
+  if (!v) return null;
+  const out: SeatProbe[] = [];
+  const onInstance = (label: string, i: number, at: THREE.Vector3): void => {
+    const g = groundUnder(v.scene, at.x, at.z);
+    if (g === null || at.y - g > 3) return;
+    out.push({ id: `${label}#${i}`, x: r2(at.x), y: r2(at.y), z: r2(at.z), gap: r2(at.y - g), sig: `${label}#${i}` });
+  };
+  const c = new THREE.Vector3();
+  for (const { o, box } of placedThings(v, x, z, r, onInstance)) {
+    box.getCenter(c);
+    const g = groundUnder(v.scene, c.x, c.z);
+    if (g === null || box.min.y - g > 3) continue; // flying (a bird, a cloud): not a prop
+    out.push({ id: describeObject(o, v.scene), x: r2(c.x), y: r2(box.min.y), z: r2(c.z), gap: r2(box.min.y - g), sig: lookSig(o) });
+  }
   return out.sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
+}
+
+/** The biggest placed thing within 2.5 m of (x,z), measured along a world direction and
+ *  across it (from its vertices): a jeep that drives along (dx,dz) is long `along`. */
+function probeShapeAt(x: number, z: number, dx: number, dz: number): { id: string; along: number; across: number } | null {
+  const v = liveView();
+  const len = Math.hypot(dx, dz);
+  if (!v || len < 1e-6) return null;
+  const ux = dx / len; const uz = dz / len;
+  let best: Placed | null = null; let bestArea = 0;
+  for (const p of placedThings(v, x, z, 2.5)) {
+    const area = (p.box.max.x - p.box.min.x) * (p.box.max.z - p.box.min.z);
+    if (area > bestArea) { bestArea = area; best = p; }
+  }
+  if (!best) return null;
+  let a0 = Infinity; let a1 = -Infinity; let c0 = Infinity; let c1 = -Infinity;
+  const p = new THREE.Vector3();
+  best.o.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || m.userData.hitSphere || !shownInTree(m) || (m as THREE.InstancedMesh).isInstancedMesh) return;
+    const pos = m.geometry.attributes.position;
+    if (!pos) return;
+    const stride = Math.max(1, Math.floor(pos.count / 4000));
+    for (let i = 0; i < pos.count; i += stride) {
+      p.fromBufferAttribute(pos, i);
+      if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).applyBoneTransform(i, p);
+      p.applyMatrix4(m.matrixWorld);
+      const a = p.x * ux + p.z * uz; const c = -p.x * uz + p.z * ux;
+      a0 = Math.min(a0, a); a1 = Math.max(a1, a); c0 = Math.min(c0, c); c1 = Math.max(c1, c);
+    }
+  });
+  if (!Number.isFinite(a0)) return null;
+  return { id: describeObject(best.o, v.scene), along: r2(a1 - a0), across: r2(c1 - c0) };
 }
 
 provideGoldenProbes({
@@ -300,6 +355,7 @@ provideGoldenProbes({
     return { x: r2(s.x), y: r2(s.y), onScreen: s.onScreen };
   },
   seating: probeSeating,
+  shapeAt: probeShapeAt,
 });
 
 /* --------------------------------------------------- activity abort scope ---- */

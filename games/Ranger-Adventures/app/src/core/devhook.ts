@@ -339,6 +339,10 @@ export interface RangerDevHook {
    *  and a `sig` of what it looks like (so a before/after compare shows the world
    *  changed). Flying things (> 3 m up) and the terrain itself are left out. */
   seating(x: number, z: number, r: number): SeatProbe[] | null;
+  /** The biggest placed thing within 2.5 m of (x,z) (e.g. the jeep), measured from its
+   *  vertices `along` the world direction (dx,dz) and `across` it, in m. A vehicle that
+   *  drives along (dx,dz) and faces that way is longer along than across. */
+  shapeAt(x: number, z: number, dx: number, dz: number): { id: string; along: number; across: number } | null;
 }
 
 /** `__ranger.playHint()` (see the field doc). */
@@ -424,6 +428,7 @@ export interface GoldenProbes {
   groundAt(x: number, z: number): number | null;
   screenOf(x: number, y: number, z: number): { x: number; y: number; onScreen: boolean } | null;
   seating(x: number, z: number, r: number): SeatProbe[] | null;
+  shapeAt(x: number, z: number, dx: number, dz: number): { id: string; along: number; across: number } | null;
 }
 
 /** Register what the Stage renders right now ({ scene, camera }, THREE objects typed
@@ -723,6 +728,7 @@ export function installDevHook(): boolean {
     groundAt: (x, z) => (state.probes ? state.probes.groundAt(x, z) : null),
     screenOf: (x, y, z) => (state.probes ? state.probes.screenOf(x, y, z) : null),
     seating: (x, z, r) => (state.probes ? state.probes.seating(x, z, r) : null),
+    shapeAt: (x, z, dx, dz) => (state.probes ? state.probes.shapeAt(x, z, dx, dz) : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;
