@@ -104,7 +104,7 @@ export type Snap = { p: P2 | null; c: Cam | null; g: { grounded: boolean; cleara
   jeepNear: boolean; screen: string; view: string | null; t: number };
 export type Hint = { id: string; x: number; y: number; onScreen: boolean; firstHit: boolean; aboveGround: boolean;
   firstHitBy: string | null; bottomGap: number | null; reachesCanvas: boolean; blocker: string | null; parts: string[] };
-export type Seat = { id: string; x: number; y: number; z: number; gap: number; sig: string };
+export type Seat = { id: string; x: number; y: number; z: number; gap: number; sig: string; moves?: 'player' | 'ambient' };
 export type Vehicle = { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; y: number;
   grounded: boolean; clearance: number; speed: number; fov: number; roll: number };
 
@@ -158,6 +158,42 @@ export async function budget(page: Page, where: string): Promise<void> {
   const tris = await R<number | null>(page, 'r.tris()');
   soft(calls !== null && calls < MAX_DRAW_CALLS, `draw calls ${where}: ${calls} (budget < ${MAX_DRAW_CALLS})`);
   soft(tris !== null && tris < MAX_TRIS, `triangles ${where}: ${tris?.toLocaleString('en')} (budget < ${MAX_TRIS.toLocaleString('en')})`);
+}
+
+/** `n` readings of `seating()` around `at`, `gapMs` apart. One reading is one moment;
+ *  comparing moments needs to know what changes by itself in between. */
+export async function worldSamples(page: Page, at: P2, r: number, n: number, gapMs = 700): Promise<Seat[][]> {
+  const out: Seat[][] = [];
+  for (let i = 0; i < n; i++) {
+    if (i) await sleep(page, gapMs);
+    out.push((await R<Seat[] | null>(page, `r.seating(${at.x}, ${at.z}, ${r})`)) ?? []);
+  }
+  return out;
+}
+
+/** What changed in the WORLD between two sets of readings. Left out: whatever moves by
+ *  itself — the player's own ranger and roaming creatures (tagged `moves` by the probe),
+ *  and any look that already shifted between the `before` readings (an idle loop).
+ *  Counted: only a change that holds in every reading on both sides. */
+export function worldChange(before: Seat[][], after: Seat[][]): { appeared: Seat[]; gone: Seat[]; restless: string[] } {
+  const key = (s: Seat): string => `${s.sig}@${Math.round(s.x * 10)},${Math.round(s.y * 10)},${Math.round(s.z * 10)}`;
+  const where = (l: Seat[]): Map<string, string> => { // sig → where it stands in this reading
+    const m = new Map<string, string[]>();
+    for (const s of l) if (!s.moves) m.set(s.sig, [...(m.get(s.sig) ?? []), key(s)]);
+    return new Map([...m].map(([sig, keys]) => [sig, keys.sort().join(' ')]));
+  };
+  const reads = before.map(where);
+  const restless = new Set([...new Set(reads.flatMap((m) => [...m.keys()]))].filter((sig) => reads.some((m) => m.get(sig) !== reads[0].get(sig))));
+  const still = (l: Seat[]): Seat[] => l.filter((s) => !s.moves && !restless.has(s.sig));
+  const B = before.map((l) => new Set(still(l).map(key)));
+  const A = after.map((l) => new Set(still(l).map(key)));
+  const held = (sets: Set<string>[], k: string): boolean => sets.every((x) => x.has(k));
+  const never = (sets: Set<string>[], k: string): boolean => !sets.some((x) => x.has(k));
+  return {
+    appeared: still(after[0]).filter((s) => held(A, key(s)) && never(B, key(s))),
+    gone: still(before[0]).filter((s) => held(B, key(s)) && never(A, key(s))),
+    restless: [...restless].map((sig) => before.flat().find((s) => s.sig === sig)!.id),
+  };
 }
 
 /** Is the centre of this element free for a mouse, or does another element cover it? */

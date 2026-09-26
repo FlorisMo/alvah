@@ -339,7 +339,10 @@ export interface RangerDevHook {
    *  whose footprint centre lies within `r` m of (x,z), with `gap` = its lowest
    *  visible point minus the rendered terrain under its centre (buried < 0 < floating)
    *  and a `sig` of what it looks like (so a before/after compare shows the world
-   *  changed). Flying things (> 3 m up) and the terrain itself are left out. */
+   *  changed). Flying things (> 3 m up) and the terrain itself are left out. Things
+   *  that move by themselves carry `moves`: 'player' = the player's own ranger (on
+   *  foot), 'ambient' = a roaming creature. A "did the world change?" compare must
+   *  leave those out, or a step of the player's reads as a world reaction. */
   seating(x: number, z: number, r: number): SeatProbe[] | null;
   /** The biggest placed thing within 2.5 m of (x,z) (e.g. the jeep), measured from its
    *  vertices `along` the world direction (dx,dz) and `across` it, in m. A vehicle that
@@ -359,7 +362,7 @@ export type PlayHintProbe = {
 };
 
 /** One entry of `__ranger.seating()`. */
-export type SeatProbe = { id: string; x: number; y: number; z: number; gap: number; sig: string };
+export type SeatProbe = { id: string; x: number; y: number; z: number; gap: number; sig: string; moves?: 'player' | 'ambient' };
 
 // Bumped at the W7.4 ship box: stamps the shipped world-first release so the
 // deployed bundle is identifiable (the preview + live E2E assert this exact
@@ -455,6 +458,19 @@ export function provideTris(fn: (() => number) | null): void {
 /** Register the THREE-side golden-path probes (render3d/play/kit.ts does, once). */
 export function provideGoldenProbes(p: GoldenProbes | null): void {
   state.probes = p;
+}
+
+/** Where the things that move BY THEMSELVES stand right now, exactly as the world
+ *  reports them: the player's own ranger while he walks (`pos()` is that group's
+ *  position; null in the jeep or helicopter, where he is hidden) and each ambient
+ *  creature (`ambient()` reports its group's position). The golden probes use these
+ *  exact spots to tell such a thing apart from the world around it. */
+export function selfMovers(): { player: { x: number; z: number } | null; ambient: { x: number; z: number }[] } {
+  const riding = !!(state.vehicle?.()?.inVehicle || state.heli?.()?.inHeli);
+  return {
+    player: state.pos && !riding ? state.pos() : null,
+    ambient: state.ambient ? state.ambient().map((a) => ({ x: a.x, z: a.z })) : [],
+  };
 }
 
 /** Current screen the player is on. */

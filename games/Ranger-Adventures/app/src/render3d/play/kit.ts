@@ -100,7 +100,7 @@ export function currentPlayHint(): PlayHint | null {
  */
 
 // (imported here, not at the top, so this test section stays one self-contained block)
-import { provideGoldenProbes, renderView, type PlayHintProbe, type SeatProbe } from '../../core/devhook';
+import { provideGoldenProbes, renderView, selfMovers, type PlayHintProbe, type SeatProbe } from '../../core/devhook';
 
 type LiveView = { scene: THREE.Scene; camera: THREE.PerspectiveCamera; canvas: HTMLCanvasElement };
 
@@ -276,18 +276,30 @@ function lookSig(root: THREE.Object3D): string {
   return parts.sort().join('|');
 }
 
-type Placed = { o: THREE.Object3D; box: THREE.Box3 };
+type Placed = { o: THREE.Object3D; box: THREE.Box3; moves?: 'player' | 'ambient' };
 
 /** Every placed thing whose footprint centre lies within r of (x,z): models, props and
  *  staged pieces (a container at the origin is looked through), plus instanced copies
  *  (reported one by one through `onInstance`, with the world box of that copy). Hidden
- *  things and the terrain are skipped. */
+ *  things and the terrain are skipped. A thing that moves by itself is tagged `moves`:
+ *  the group standing EXACTLY where the world reports the walking player ('player')
+ *  or an ambient creature ('ambient') — devhook `selfMovers()`. */
 function placedThings(v: LiveView, x: number, z: number, r: number,
   onInstance?: (label: string, i: number, box: THREE.Box3) => void): Placed[] {
   const out: Placed[] = [];
   const terrain = terrainMeshes(v.scene);
   const c = new THREE.Vector3();
   const m4 = new THREE.Matrix4();
+  const movers = selfMovers();
+  const wp = new THREE.Vector3();
+  const moverOf = (o: THREE.Object3D): Placed['moves'] => {
+    if (!(o as THREE.Group).isGroup || !o.children.length) return undefined;
+    o.updateWorldMatrix(true, false);
+    o.getWorldPosition(wp);
+    const here = (p: { x: number; z: number }): boolean => p.x === wp.x && p.z === wp.z;
+    if (movers.player && here(movers.player)) return 'player';
+    return movers.ambient.some(here) ? 'ambient' : undefined;
+  };
   const visit = (o: THREE.Object3D): void => {
     if (!o.visible || o.userData.hitSphere || terrain.includes(o)) return;
     if ((o as THREE.Light).isLight || (o as THREE.Camera).isCamera || (o as THREE.Points).isPoints
@@ -310,12 +322,13 @@ function placedThings(v: LiveView, x: number, z: number, r: number,
       o.children.forEach(visit);
       return;
     }
+    const moves = moverOf(o);
     const box = seenBox(o, new THREE.Box3());
     if (box.isEmpty()) return;
     box.getCenter(c);
     const size = box.getSize(new THREE.Vector3());
     if (size.x > 12 || size.z > 12 || Math.hypot(c.x - x, c.z - z) > r) return;
-    out.push({ o, box });
+    out.push(moves ? { o, box, moves } : { o, box });
   };
   visit(v.scene);
   return out;
@@ -333,11 +346,12 @@ function probeSeating(x: number, z: number, r: number): SeatProbe[] | null {
     out.push({ id: `${label}#${i}`, x: r2(at.x), y: r2(box.min.y), z: r2(at.z), gap: r2(box.min.y - g), sig: `${label}#${i}` });
   };
   const c = new THREE.Vector3();
-  for (const { o, box } of placedThings(v, x, z, r, onInstance)) {
+  for (const { o, box, moves } of placedThings(v, x, z, r, onInstance)) {
     box.getCenter(c);
     const g = groundUnder(v.scene, c.x, c.z);
     if (g === null || box.min.y - g > 3) continue; // flying (a bird, a cloud): not a prop
-    out.push({ id: describeObject(o, v.scene), x: r2(c.x), y: r2(box.min.y), z: r2(c.z), gap: r2(box.min.y - g), sig: lookSig(o) });
+    const seat: SeatProbe = { id: describeObject(o, v.scene), x: r2(c.x), y: r2(box.min.y), z: r2(c.z), gap: r2(box.min.y - g), sig: lookSig(o) };
+    out.push(moves ? { ...seat, moves } : seat);
   }
   return out.sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
 }
@@ -351,6 +365,7 @@ function probeShapeAt(x: number, z: number, dx: number, dz: number): { id: strin
   const ux = dx / len; const uz = dz / len;
   let best: Placed | null = null; let bestArea = 0;
   for (const p of placedThings(v, x, z, 2.5)) {
+    if (p.moves === 'player') continue; // the ranger standing by it is not the thing
     const area = (p.box.max.x - p.box.min.x) * (p.box.max.z - p.box.min.z);
     if (area > bestArea) { bestArea = area; best = p; }
   }

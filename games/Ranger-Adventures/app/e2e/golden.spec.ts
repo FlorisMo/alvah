@@ -5,7 +5,7 @@ import { AREA_VELUWE } from '../src/content/veluwe';
 import { HAAR_OPTIES, OUTFIT_OPTIES } from '../src/core/avatar';
 import {
   R, SEAT_TOLERANCE, budget, clickButton, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
-  sleep, snap, soft, step, uiText, under, visibleButtons, walkQuality, walkTo,
+  sleep, snap, soft, step, uiText, under, visibleButtons, walkQuality, walkTo, worldChange, worldSamples,
   type Hint, type P2, type Seat, type Vehicle,
 } from './golden-lib';
 
@@ -67,7 +67,8 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
 
   let missionId = missions[0].id;
   let marker: P2 = { x: 0, z: 0 };
-  let seatsBefore: Seat[] = [];
+  let seatsBefore: Seat[][] = []; // readings around the marker before the mission (step 7 compares)
+  let playerTold = true; // seating() tells the player's own ranger apart (else step 7 cannot judge)
 
   // ---------------------------------------------------- 1. opening screen ----
   await step(1, async () => {
@@ -211,10 +212,18 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     await sleep(page, 1_000);
     await shot(page, 'at-marker');
     await budget(page, 'at the marker');
-    seatsBefore = (await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`)) ?? [];
-    const bad = seatsBefore.filter((s) => Math.abs(s.gap) > SEAT_TOLERANCE);
-    note(`${seatsBefore.length} things stand within ${SEAT_RADIUS} m of the marker`);
-    soft(bad.length === 0, `${bad.length}/${seatsBefore.length} of them are not on the ground (±${SEAT_TOLERANCE * 100} cm): ${bad.slice(0, 4).map((s) => `${s.id} ${s.gap > 0 ? '+' : ''}${s.gap} m`).join('; ')}`);
+    seatsBefore = await worldSamples(page, marker, SEAT_RADIUS, 3);
+    // The ranger stands at the marker, so the probe must see him there and tag him as the
+    // player: otherwise step 7 would count his own steps as the world reacting.
+    const me = (await snap(page)).p!;
+    const tagged = seatsBefore[0].filter((s) => s.moves === 'player').length;
+    const inside = Math.hypot(me.x - marker.x, me.z - marker.z) < SEAT_RADIUS - 1;
+    playerTold = !inside || tagged === 1;
+    soft(playerTold, `harness: seating() tagged ${tagged} things as the player's own ranger (want 1): step 7 cannot tell his steps from the world reacting`);
+    const things = seatsBefore[0].filter((s) => s.moves !== 'player'); // his feet are judged in step 3
+    const bad = things.filter((s) => Math.abs(s.gap) > SEAT_TOLERANCE);
+    note(`${things.length} things stand within ${SEAT_RADIUS} m of the marker`);
+    soft(bad.length === 0, `${bad.length}/${things.length} of them are not on the ground (±${SEAT_TOLERANCE * 100} cm): ${bad.slice(0, 4).map((s) => `${s.id} ${s.gap > 0 ? '+' : ''}${s.gap} m`).join('; ')}`);
     // starting it should be one obvious action
     let clicks = 0;
     const titel = missions.find((x) => x.id === missionId)!.titel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -382,16 +391,21 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
       } else if ((await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null) break;
       await sleep(page, 700);
     }
-    if (mission.verhaalHaak) soft(clue, `mission "${mission.id}" carries a clue (${mission.verhaalHaak}) but no clue card was offered`);
+    const hook = 'verhaalHaak' in mission ? mission.verhaalHaak : null; // the last mission has a payoff instead
+    if (hook) soft(clue, `mission "${mission.id}" carries a clue (${hook}) but no clue card was offered`);
     await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null,
       { timeout: 15_000, message: `the reward never led back to the world (visible buttons: ${await visibleButtons(page)})` }).toBe(true);
     await sleep(page, 2_000);
-    const after = (await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`)) ?? [];
-    const key = (s: Seat) => `${s.sig}@${Math.round(s.x * 10)},${Math.round(s.y * 10)},${Math.round(s.z * 10)}`;
-    const was = new Set(seatsBefore.map(key)); const now = new Set(after.map(key));
-    const changed = after.filter((s) => !was.has(key(s))).length + seatsBefore.filter((s) => !now.has(key(s))).length;
-    note(`within ${SEAT_RADIUS} m of the marker: ${seatsBefore.length} things before, ${after.length} after, ${changed} changed`);
-    soft(changed > 0, `the world does not react: nothing within ${SEAT_RADIUS} m of the marker looks different after finishing`);
+    // Did the WORLD change near the marker? Not the ranger walking about, not a roaming
+    // animal, not an idle loop (worldChange leaves those out); every change is named.
+    const after = await worldSamples(page, marker, SEAT_RADIUS, 3);
+    const { appeared, gone, restless } = worldChange(seatsBefore, after);
+    const names = (l: Seat[]): string => l.slice(0, 4).map((s) => s.id).join('; ') + (l.length > 4 ? '; …' : '');
+    note(`within ${SEAT_RADIUS} m of the marker: ${appeared.length} things appeared${appeared.length ? ` (${names(appeared)})` : ''}, ${gone.length} gone${gone.length ? ` (${names(gone)})` : ''}`);
+    const self = [...new Set(after.flat().filter((s) => s.moves).map((s) => `${s.moves === 'player' ? 'the ranger' : s.id}`))];
+    if (self.length || restless.length) note(`not counted, they move by themselves: ${[...self, ...restless].slice(0, 4).join('; ')}`);
+    if (!playerTold) soft(false, 'harness: "the world reacts" cannot be judged, the probe does not tell the player\'s own ranger apart (step 5)');
+    else soft(appeared.length + gone.length > 0, `the world does not react: nothing within ${SEAT_RADIUS} m of the marker looks different after finishing`);
     noNewErrors();
   });
 

@@ -40,7 +40,9 @@ RANGER_PORT=<your-port> npm run golden     # THE check: plays GOAL.md 1-8 like a
 - `?dev=1` exposes `window.__ranger` (`app/src/core/devhook.ts`) for READING state:
   `screen`, `pos()`, `cam()`, `grounded()`, `vehicle()`, `markers()`, `nearId()`,
   `drawCalls()`, `tris()`, `playHint()`, `groundAt(x,z)` (the rendered terrain height),
-  `seating(x,z,r)` (everything near a spot with its gap to the ground), `screenOf(x,y,z)`.
+  `seating(x,z,r)` (everything near a spot with its gap to the ground; the player's own
+  ranger and roaming animals carry `moves`, so leave them out of any "did the world
+  change?" compare), `screenOf(x,y,z)`.
   **Never use it to win or skip a step** (`winStep()` exists for old specs only) in
   anything that claims the game is playable.
 - Fresh save = fresh browser context (localStorage key `alvah-ef-v1`). First boot:
