@@ -280,9 +280,10 @@ type Placed = { o: THREE.Object3D; box: THREE.Box3 };
 
 /** Every placed thing whose footprint centre lies within r of (x,z): models, props and
  *  staged pieces (a container at the origin is looked through), plus instanced copies
- *  (reported one by one through `onInstance`). Hidden things and the terrain are skipped. */
+ *  (reported one by one through `onInstance`, with the world box of that copy). Hidden
+ *  things and the terrain are skipped. */
 function placedThings(v: LiveView, x: number, z: number, r: number,
-  onInstance?: (label: string, i: number, at: THREE.Vector3) => void): Placed[] {
+  onInstance?: (label: string, i: number, box: THREE.Box3) => void): Placed[] {
   const out: Placed[] = [];
   const terrain = terrainMeshes(v.scene);
   const c = new THREE.Vector3();
@@ -295,10 +296,12 @@ function placedThings(v: LiveView, x: number, z: number, r: number,
     const inst = o as THREE.InstancedMesh;
     if (inst.isInstancedMesh) {
       if (!onInstance) return;
+      if (!inst.geometry.boundingBox) inst.geometry.computeBoundingBox();
       for (let i = 0; i < inst.count; i++) {
         inst.getMatrixAt(i, m4);
-        c.setFromMatrixPosition(m4.premultiply(inst.matrixWorld));
-        if (Math.hypot(c.x - x, c.z - z) <= r) onInstance(o.name || inst.geometry.type, i, c.clone());
+        m4.premultiply(inst.matrixWorld);
+        c.setFromMatrixPosition(m4);
+        if (Math.hypot(c.x - x, c.z - z) <= r) onInstance(o.name || inst.geometry.type, i, inst.geometry.boundingBox!.clone().applyMatrix4(m4));
       }
       return;
     }
@@ -322,10 +325,12 @@ function probeSeating(x: number, z: number, r: number): SeatProbe[] | null {
   const v = liveView();
   if (!v) return null;
   const out: SeatProbe[] = [];
-  const onInstance = (label: string, i: number, at: THREE.Vector3): void => {
+  const at = new THREE.Vector3();
+  const onInstance = (label: string, i: number, box: THREE.Box3): void => {
+    box.getCenter(at);
     const g = groundUnder(v.scene, at.x, at.z);
-    if (g === null || at.y - g > 3) return;
-    out.push({ id: `${label}#${i}`, x: r2(at.x), y: r2(at.y), z: r2(at.z), gap: r2(at.y - g), sig: `${label}#${i}` });
+    if (g === null || box.min.y - g > 3) return;
+    out.push({ id: `${label}#${i}`, x: r2(at.x), y: r2(box.min.y), z: r2(at.z), gap: r2(box.min.y - g), sig: `${label}#${i}` });
   };
   const c = new THREE.Vector3();
   for (const { o, box } of placedThings(v, x, z, r, onInstance)) {
