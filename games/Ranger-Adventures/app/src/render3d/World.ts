@@ -45,7 +45,8 @@ import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import type { WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
-import { spawnModel, spawnPlant } from './play/spawn';
+import { spawnModel, spawnPlant, heightFor } from './play/spawn';
+import { Progress } from './world/Progress';
 
 export type { WorldMarker } from './world/Markers';
 
@@ -70,6 +71,8 @@ export class World {
   // the dev hook's read-backs (world/DevReadback.ts)
   private readonly readback: DevReadback;
   private readonly labels = new Labels();
+  // felt progress: each finished mission's lasting tableau at its marker (world/Progress.ts)
+  private readonly progress: Progress;
   // W4.4 ground detail: on by default; `?groundDetail=off` bakes the old flat
   // per-biome slab so the before/after evidence pair is one reproducible toggle.
   private readonly groundDetailOn: boolean =
@@ -217,6 +220,12 @@ export class World {
     this.vehicles.placeJeep();
     this.vehicles.placeHelipads();
     void this.player.loadRealRanger();
+    this.progress = new Progress({
+      scene: this.scene, groundY: (x, z) => this.terrain.y(x, z), spawnModel, spawnPlant, heightFor,
+      obstacles: this.obstacles, blocked: (x, z) => !!this.limits.blocked?.(x, z),
+      markers: () => this.markers.map((m) => ({ missionId: m.missionId, x: m.pos.x, z: m.pos.z, group: m.group })),
+      actors: () => this.fauna.scenicActors.map((a) => a.group.position),
+    });
 
     this.readback = new DevReadback(
       {
@@ -585,6 +594,7 @@ export class World {
     }
 
     this.pois.animate(t, dt, reduced); // each mission marker's animal (secondary motion)
+    this.progress.update(t, dt, reduced, this.camera); // finished tableaus: reunion walks, idle breathing
 
     this.fauna.update(t, dt, reduced); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
 
@@ -672,19 +682,34 @@ export class World {
    *  every solid prop (a tree's CROWN, not just its trunk; the cabin's porch, not just
    *  its walk-around circle), and clear of the other missions' animals and the two
    *  people. The approached marker is exempt: the stage hides it while the game runs. */
-  private playClear(x: number, z: number, r: number): boolean {
+  private playClear(x: number, z: number, r: number, except: string | null = this.nearId): boolean {
     if (this.limits.blocked?.(x, z)) return false;
+    if (this.progress.blocks(x, z, r, except)) return false; // a finished mission's family stays out of a game
     for (const o of this.obstacles) {
       const reach = o.r + (o.tree ? 1.6 : o.r >= 1.5 ? 1.0 : 0);
       if (Math.hypot(o.x - x, o.z - z) < reach + r) return false;
     }
     for (const m of this.markers) {
-      if (m.missionId !== this.nearId && Math.hypot(m.pos.x - x, m.pos.z - z) < 1.2 + r) return false;
+      if (m.missionId !== except && Math.hypot(m.pos.x - x, m.pos.z - z) < 1.2 + r) return false;
     }
     for (const a of this.fauna.scenicActors) { // the warden / poacher never stand in (or behind) a game
       if (Math.hypot(a.group.position.x - x, a.group.position.z - z) < 0.8 + r) return false;
     }
     return true;
+  }
+
+  /** Felt progress (ui/flow calls this on completion, and on world build for every
+   *  mission already done): the marker reads "klaar" and its finished tableau stands
+   *  (world/Progress.ts). `fresh` plays the calm reunion; resolves once it has played. */
+  onMissionComplete(missionId: string, opts: { fresh: boolean }): Promise<void> {
+    this.pois.setFinished(missionId);
+    const view = { x: this.camera.position.x, z: this.camera.position.z };
+    return this.progress.complete(missionId, opts.fresh, livePolicy().reduced, view);
+  }
+
+  /** The season's ontknoping (the poacher was reported): he stands by the warden now. */
+  setSeasonResolved(on: boolean): void {
+    this.fauna.setReformed(on);
   }
 
   /** Freeze the world for an in-place activity (the mini-game owns input + camera).

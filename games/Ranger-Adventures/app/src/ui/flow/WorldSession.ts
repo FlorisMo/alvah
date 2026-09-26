@@ -18,7 +18,11 @@ import type { Biome } from '../../render3d/Biomes';
 import type { Stage } from '../../render3d/Stage';
 import { World, type WorldMarker } from '../../render3d/World';
 import { playRoep3d } from '../../render3d/engines/roep3d';
+import { playRoep } from '../../render2d/RoepView';
+import { prefersReducedMotion } from '../../core/reduced-motion';
 import { clearActivityWin } from '../../render3d/play/kit';
+import { modelFor, heightFor } from '../../render3d/play/spawn';
+import { heroOf } from '../../render3d/world/Progress';
 import { nextPatrolTarget } from '../../core/patrol';
 import { pickWorldBeat, optionCorrect, coarseHeading, type WorldBeat } from '../../core/worldbeat';
 import { setScreen, setMissionView } from '../../core/devhook';
@@ -30,18 +34,6 @@ import {
   tryOpenBoard, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
   setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint,
 } from '../hud/ExploreHud';
-
-/** animal id (content) → generated GLB id (asset pipeline). Others → procedural. */
-const MODEL_OF: Record<string, string> = {
-  wildzwijn: 'animal-wildzwijn-boar',
-  frisling: 'animal-frisling-piglet',
-  das: 'animal-das-badger',
-  eekhoorn: 'animal-eekhoorn-squirrel',
-  raaf: 'animal-raaf-raven',
-  nachtzwaluw: 'animal-nachtzwaluw-nightjar',
-  adder: 'animal-adder-snake',
-  heikikker: 'animal-heikikker-frog',
-};
 
 // Light world-EF seasoning: count in-world mission completions this session so the
 // pure `pickWorldBeat` cadence (every Nth return) stays rare. `lastBeatTick` dedups
@@ -61,11 +53,40 @@ export function notePatrolCompletion(): void {
  * every mission already done with `fresh: false` (show the finished state, no beat),
  * so progress survives a reload. Optional: a world without the method ignores it.
  */
-interface CompletionListener {
-  onMissionComplete?(missionId: string, opts: { fresh: boolean }): void;
+export function tellWorldMissionDone(missionId: string, fresh: boolean): Promise<void> {
+  return session.world?.onMissionComplete(missionId, { fresh }) ?? Promise.resolve();
 }
-export function tellWorldMissionDone(missionId: string, fresh: boolean): void {
-  (session.world as unknown as CompletionListener | null)?.onMissionComplete?.(missionId, { fresh });
+
+/* ---------------------------------------------------- the world holds still ---- */
+// A mission (or the bird bench) freezes the live world for as long as it runs — not
+// per step: between two steps and on the reward the ranger stays put, no marker tag
+// or proximity prompt comes back, and the camera stays where the game left it.
+let held = false;
+
+/** Freeze the world for a mission (idempotent). */
+export function holdWorld(): void {
+  if (held || !session.world) return;
+  held = true;
+  session.world.beginActivity();
+}
+
+/** Let the world go again: free roam, the tags, the prompts (idempotent). */
+export function releaseWorld(): void {
+  if (!held) return;
+  held = false;
+  session.world?.endActivity();
+}
+
+/** WebGL support, probed once (the in-place 3D view needs it). */
+let webgl: boolean | null = null;
+function webglOk(): boolean {
+  if (webgl === null) {
+    try {
+      const c = document.createElement('canvas');
+      webgl = !!(c.getContext('webgl2') || c.getContext('webgl'));
+    } catch { webgl = false; }
+  }
+  return webgl;
 }
 
 /** Boot entry (main.ts): unlock audio inside the Begin gesture, then load the world. */
@@ -91,6 +112,7 @@ export function activeExploreTitel(): string | null {
 
 /** Tear the world down (title screen, or a stopped mission's rebuild). */
 export function leaveWorld(): void {
+  held = false;
   disposeExploreHud();
   const { world, stage } = session;
   if (world) { world.dispose(); session.world = null; stage.exitWorld(); }
@@ -102,16 +124,17 @@ export function startExplore(): void {
   const area = Content.activeArea();
   const markers: WorldMarker[] = area.missies.map((m) => {
     const ef = m.stappen[0]?.ef as Engine | undefined;
-    const animal = m.dier ?? '';
-    const isBird = MODEL_OF[animal]?.includes('raven') || MODEL_OF[animal]?.includes('nightjar');
+    // the animal the mission is about stands at its marker, at its real size: the
+    // frisling (not a grown boar), the reekalf, the frog in the reeds
+    const hero = heroOf(m.id, m.dier);
     const BIOMES = ['heide', 'bos', 'stuifzand', 'ven'] as const;
     const biome = (BIOMES as readonly string[]).includes(m.landschap)
       ? (m.landschap as typeof BIOMES[number]) : undefined;
     return {
       missionId: m.id,
       titel: m.titel,
-      modelId: MODEL_OF[animal] ?? null,
-      height: isBird ? 0.5 : 0.9,
+      modelId: hero ? modelFor(hero) : null,
+      height: heightFor(hero),
       color: (ef && SKILL_META[ef]?.kleur) || '#f5c23b',
       biome,
     };
@@ -158,7 +181,8 @@ export function startExplore(): void {
   // start the bed on the spawn clearing (heide) before the first crossing fires
   setAmbientScene('heide', seizoen);
   stage.enterWorld(world);
-  for (const m of area.missies) if (done[m.id]) tellWorldMissionDone(m.id, false);
+  for (const m of area.missies) if (done[m.id]) void tellWorldMissionDone(m.id, false);
+  if (store.get().arc.gemeld) world.setSeasonResolved(true);
   setScreen('world');
   setMissionView(null);
   wireWorldDevhook(world);
@@ -170,6 +194,7 @@ export function startExplore(): void {
 export function resumePatrol(): void {
   const world = session.world;
   if (!world) { startExplore(); return; }
+  releaseWorld();
   setScreen('world');
   setMissionView(null);
   const area = Content.activeArea();
@@ -251,13 +276,21 @@ export async function playRoepAtSitSpot(): Promise<void> {
   Sound.unlock();
   void loadGameAudio();
   clearOverlays();
-  setMissionView('3d');
-  world.beginActivity();
+  // the 2D floor when the player asked for it (Tweaks "altijd 2D"), under reduced
+  // motion, or without WebGL — the same rule the missions' steps follow
+  const flat = store.get().settings.force2d || prefersReducedMotion() || !webglOk();
+  setMissionView(flat ? '2d' : '3d');
+  holdWorld();
+  const host = document.createElement('div');
+  host.className = 'mission-step';
+  session.host.appendChild(host);
   try {
-    await playRoep3d(world.ctx(session.host));
+    if (flat) await playRoep(host);
+    else await playRoep3d(world.ctx(host));
   } finally {
     clearActivityWin();
-    world.endActivity();
+    host.remove();
+    releaseWorld();
     setMissionView(null);
   }
   // the ranger is still at the bench → the HUD re-surfaces the sit-spot affordance

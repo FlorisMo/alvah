@@ -79,6 +79,10 @@ export interface Spawned {
   root: unknown;
   /** advance the idle clip (call once per frame); a no-op for static models */
   update(dt: number): void;
+  /** true when the model carries baked clips (it animates itself; no procedural bob) */
+  rigged?: boolean;
+  /** calmly cross-fade to a baked clip ('walk', 'idle', 'graze'); a no-op without one */
+  clip?(name: 'walk' | 'idle' | 'graze'): void;
   /** remove from the scene and free what this spawn created (the GLB stays cached) */
   dispose(): void;
 }

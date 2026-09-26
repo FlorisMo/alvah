@@ -116,6 +116,8 @@ export interface Verhaalboog {
   clues: Record<string, Clue>;
   hoofdstukken: Hoofdstuk[];
   ontknoping: { id: string; tekst: string }[];
+  /** the season's last card, once every mission is done */
+  finale?: { kicker: string; titel: string; regels: string[] };
 }
 
 export interface Area {

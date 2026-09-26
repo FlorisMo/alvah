@@ -166,7 +166,7 @@ export const CLUE_GLYPH: Record<string, string> = { spoor: '🐾', camera: '📷
 /** The sporenboek (was "prikbord"; the class names stay case-board / ph-prikbord):
  *  found clues, the collected veldnotities and (once all clues are found) the way
  *  to the hopeful resolution. Its back returns to patrol. */
-export function showCaseBoard(): void {
+export function showCaseBoard(back: () => void = resumePatrol): void {
   narrator.stop();
   const area = Content.activeArea();
   const voltooid = store.get().voltooid;
@@ -245,12 +245,12 @@ export function showCaseBoard(): void {
     : null;
   el.querySelector('.cb-back')?.addEventListener('click', () => {
     ra?.stop();
-    resumePatrol();
+    back();
   });
   el.querySelector('.cb-resolve')?.addEventListener('click', () => {
     ra?.stop();
     Sound.unlock();
-    showOntknoping(0);
+    showOntknoping(0, () => showCaseBoard(back));
   });
   // W6.3b: each collected veldnotitie reads aloud on demand.
   el.querySelectorAll<HTMLElement>('.cb-veld-note').forEach((row, i) => {
@@ -261,12 +261,13 @@ export function showCaseBoard(): void {
   });
 }
 
-/** The hopeful resolution: step through the ontknoping beats, then report → resolved. */
-function showOntknoping(idx: number): void {
+/** The hopeful resolution: step through the ontknoping beats, then report → resolved,
+ *  and on to `done` (the sporenboek it was opened from, or the season finale). */
+export function showOntknoping(idx: number, done: () => void): void {
   const area = Content.activeArea();
   const beats = Content.verhaalboog(area.id)?.ontknoping ?? [];
   const beat = beats[idx];
-  if (!beat) { store.reportArc(); showCaseBoard(); return; }
+  if (!beat) { store.reportArc(); session.world?.setSeasonResolved(true); done(); return; }
   const last = idx === beats.length - 1;
   const el = card(
     `<div class="ontknoping boot-card-ish">` +
@@ -285,8 +286,8 @@ function showOntknoping(idx: number): void {
   });
   el.querySelector('.btn-start')?.addEventListener('click', () => {
     ra.stop();
-    if (last) { store.reportArc(); if (store.get().settings.geluid) Sound.found(); }
-    showOntknoping(idx + 1);
+    if (last) { store.reportArc(); session.world?.setSeasonResolved(true); if (store.get().settings.geluid) Sound.found(); }
+    showOntknoping(idx + 1, done);
   });
 }
 

@@ -49,6 +49,10 @@ export class Fauna {
     h: number;                            // applied canonical stand height (W3.7a)
   }[] = [];
   blobCount = 0;
+  // the season's ontknoping (the poacher was reported): he no longer lurks in the trees
+  // but stands calmly by the BOA warden — the reformed poacher of the canon (VISION §4a)
+  private readonly POACHER_REFORMED = { x: 8.1, z: 5.7 };
+  private poacherHome: { x: number; z: number } | null = null;
   private static blobTex: THREE.Texture | null = null;
   private readonly scene: THREE.Scene;
   private readonly terrain: Terrain;
@@ -186,6 +190,17 @@ export class Fauna {
         }
       });
     }
+  }
+
+  /** The ontknoping in the world: `true` walks the poacher out of the trees to stand
+   *  by the warden (a cut — he is simply there next time you look), `false` back. */
+  setReformed(on: boolean): void {
+    const a = this.scenicActors.find((x) => x.id === 'figure-poacher');
+    if (!a) return;
+    this.poacherHome ??= { x: a.group.position.x, z: a.group.position.z };
+    const at = on ? this.POACHER_REFORMED : this.poacherHome;
+    a.group.position.set(at.x, this.groundY(at.x, at.z), at.z);
+    a.group.rotation.y = Math.atan2(-at.x, -at.z); // face the spawn clearing, like the warden
   }
 
   /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + its live baked-clip

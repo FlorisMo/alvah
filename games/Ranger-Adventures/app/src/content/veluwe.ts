@@ -251,6 +251,7 @@ const MISSIE_REE = {
     badgeId: 'reekalf-wachter', badgeNaam: 'Reekalf-wachter',
     vaktermBadge: { id: 'knap-reegeit', naam: 'Knap woord: geit' },
   },
+  reunion: { sprite: 'ree', tekst: 'De moeder is terug bij haar kalf.' },
   stappen: [
     {
       ef: 'zoeken',
@@ -363,7 +364,7 @@ const MISSIE_NACHTRONDE = {
     badgeId: 'nachtwacht', badgeNaam: 'Nachtwacht',
     vaktermBadge: { id: 'knap-burlen', naam: 'Knap woord: burlen' },
   },
-  reunion: { sprite: 'edelhert', tekst: 'De nachtronde is klaar.' },
+  reunion: { sprite: 'edelhert', tekst: 'Het wordt licht. Alle dieren zijn veilig.' },
   stappen: [
     {
       ef: 'simon',
@@ -670,6 +671,18 @@ const VERHAALBOOG_VELUWE = {
     { id: 'meld',    tekst: 'Je meldt alles bij de BOA-boswachter.' },
     { id: 'herstel', tekst: 'De stroper stopt. De heide en het ven groeien terug.' },
   ],
+  // the season ends when every mission is done: one calm card, then free play in a
+  // world where every family is home (the ontknoping plays first if not yet reported)
+  finale: {
+    kicker: 'Seizoen klaar · Veluwe',
+    titel: 'Het is weer veilig op de Veluwe.',
+    regels: [
+      'Alle dieren zijn weer thuis.',
+      'De heide en het ven groeien terug.',
+      'Jij hebt goed op ze gepast.',
+      'Loop maar rustig rond.',
+    ],
+  },
 };
 
 /* ============================================================

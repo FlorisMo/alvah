@@ -668,3 +668,23 @@
   .wb-opt { transition: none; }
   .wb-opt.wb-goed, .wb-opt.wb-bijna { transform: none; } /* colour channel still carries it */
 }
+
+/* Felt progress: the reunion line over the LIVE world while the mission's family
+   comes back at its marker (MissionFlow.showReunion). A calm top caption, no scrim
+   and nothing to click, so the world beneath it is the picture. */
+.reunion-cap {
+  position: absolute;
+  top: max(20px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100vw - 32px), 640px);
+  box-sizing: border-box;
+  padding: 14px 22px;
+  border-radius: var(--spel-radius-lg);
+  background: rgba(253, 252, 248, 0.94);
+  border-left: 4px solid #8fd6a0;
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+.reunion-cap .boot-kicker { margin: 0 0 4px; color: var(--green-mid); }
+.reunion-text { margin: 0; font: 500 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }

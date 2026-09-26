@@ -86,8 +86,10 @@ export class Stage {
     ctx.setFocus(this.centre.x, this.centre.y, this.centre.z);
     // the approached marker IS this mission's animal — while its game runs it steps
     // out of the scene rather than standing in (or in front of) the patch
+    // (and so does a finished mission's family around it, world/Progress.ts: `companions`)
     const m = ctx.approachedModel as THREE.Object3D | null;
-    if (m) { this.hidden.push({ o: m, was: m.visible }); m.visible = false; }
+    const away = m ? [m, ...((m.userData.companions as THREE.Object3D[] | undefined) ?? [])] : [];
+    for (const o of away) { this.hidden.push({ o, was: o.visible }); o.visible = false; }
   }
 
   /* ------------------------------------------------------------- planning ---- */
