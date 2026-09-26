@@ -13,6 +13,7 @@ import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
 import { buildSimonTrial, randomCaller, SimonRun } from '../engines/simon';
+import { animalIcon } from './animalIcon';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -70,7 +71,7 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
       b.className = 'simon-dier';
       b.disabled = true;
       b.setAttribute('aria-label', a?.naam ?? id);
-      b.innerHTML = `<span class="sd-glow"></span><span class="sd-token">${esc((a?.naam ?? id).slice(0, 2))}</span><span class="sd-name">${esc(a?.naam ?? id)}</span>`;
+      b.innerHTML = `<span class="sd-glow"></span><span class="sd-token" aria-hidden="true">${animalIcon(id)}</span><span class="sd-name">${esc(a?.naam ?? id)}</span>`;
       b.addEventListener('click', () => onTap(id));
       row.appendChild(b);
       btns.set(id, b);

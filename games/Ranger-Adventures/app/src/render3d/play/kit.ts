@@ -8,16 +8,18 @@
  * Frozen guarantees:
  *  - **pick3d** raycasts against generous invisible hit-spheres sized so every
  *    target projects to ≥56px (a11y floor) regardless of distance.
- *  - **highlight3d** is dual-channel (emissive COLOUR + SCALE pulse) and freezes
- *    to a steady still glow under reduced-motion (motion-comfort §1e).
+ *  - **Glow** lights a model (its own materials) in a warm emissive colour; the
+ *    games pair it with a small lift/scale so feedback is dual-channel, and hold it
+ *    steady under reduced-motion (motion-comfort §1e).
  *  - **anchoredPrompt** keeps ALL words/choices/read-aloud in the existing
  *    accessible DOM card — 3D supplies the scene, the DOM supplies the text, so
  *    the text-only path stays fully playable.
- *  - **reframe** is a §1e exp-damped camera move, or a hard cut under reduced-motion.
+ *  - **reframe** is one eased camera move (position + aim on one curve), or a hard
+ *    cut under reduced-motion.
  */
 
 import * as THREE from 'three';
-import { easeInOut, highlightPulse, safeCamHeight, tapHitRadius, trailPoints } from './kit-math';
+import { easeInOut, tapHitRadius, trailPoints } from './kit-math';
 import { skinnedRenderBox } from '../Models';
 
 /* ------------------------------------------------------ test win channel ---- */
@@ -313,34 +315,6 @@ export class Glow {
   }
 }
 
-/**
- * Dual-channel highlight on a target: a warm emissive COLOUR glow (`Glow`) + a calm
- * SCALE breath on the group. `update(t, reduced)` is called per frame
- * (reduced-motion → a steady still glow, no scale oscillation). `clear()` restores.
- */
-export class Highlight3d {
-  private readonly target: THREE.Object3D;
-  private readonly glow: Glow;
-  private readonly baseScale: THREE.Vector3;
-
-  constructor(target: THREE.Object3D, color: string) {
-    this.target = target;
-    this.baseScale = target.scale.clone();
-    this.glow = new Glow(target, color);
-  }
-
-  update(t: number, reduced: boolean): void {
-    const p = highlightPulse(t, reduced);
-    this.glow.set(p.emissive);
-    this.target.scale.set(this.baseScale.x * p.scale, this.baseScale.y * p.scale, this.baseScale.z * p.scale);
-  }
-
-  clear(): void {
-    this.glow.clear();
-    this.target.scale.copy(this.baseScale);
-  }
-}
-
 /* ---------------------------------------------------------- anchoredPrompt ---- */
 
 /**
@@ -437,23 +411,6 @@ export function spoorTrail(
 }
 
 /* ----------------------------------------------------------------- reframe ---- */
-
-/**
- * D1.3: lift a reframe camera target above the RENDERED terrain under the lens.
- * Mutates `to.y` up to `groundY(to.x, to.z) + clearance` where the ground rises under
- * the camera's own XZ, and leaves flat-ground looks unchanged. A §1e mission reframe
- * then never lands below the visual surface — the mirrored analytic marker Y once
- * buried the mission camera (fresh simon-3D shot from `cam.y` −1.29, an up-tilt
- * through the terrain; direction §2.2 one-ground-truth / §2.5 never-under-terrain).
- * Call it on the `to` vector immediately before `makeReframe`, passing `ctx.groundY`
- * (the raycast ground-snap, which matches the pixels).
- */
-export function liftReframeAboveGround(
-  to: THREE.Vector3,
-  groundY: (x: number, z: number) => number,
-): void {
-  to.y = safeCamHeight(to.y, groundY(to.x, to.z));
-}
 
 /**
  * A §1e camera reframe (2026-09-26: one calm eased move). The lens glides from where

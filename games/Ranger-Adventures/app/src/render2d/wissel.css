@@ -141,8 +141,7 @@
   border-radius: 50%;
   background: var(--green-soft);
   color: var(--green);
-  font: 700 30px/1 var(--font-body);
-  text-transform: uppercase;
+  font: 700 48px/1 var(--font-body); /* an animal picture (animalIcon), never letters */
 }
 .wc-name { color: var(--paper); font: 600 16px/1 var(--font-body); }
 .wissel-center.wrong { animation: wc-wrong 0.46s var(--ease-standard); }

@@ -16,7 +16,7 @@
 import * as THREE from 'three';
 import type { Spawned, SpawnOpts, WorldCtx } from './types';
 import { makeReframe } from './kit';
-import { stageHeadings } from './kit-math';
+import { safeCamHeight, stageHeadings } from './kit-math';
 import { grassMaterial, grassTuftGeometry, heightFor } from './spawn';
 
 export interface StageSpec {
@@ -172,8 +172,7 @@ export class Stage {
       bestFit = { cam: look.clone().addScaledVector(dir, -16), look };
     }
     // never under (or skimming) the rendered ground at the lens's own spot
-    const gCam = ctx.groundY(bestFit.cam.x, bestFit.cam.z);
-    if (bestFit.cam.y < gCam + 1.4) bestFit.cam.y = gCam + 1.4;
+    bestFit.cam.y = safeCamHeight(bestFit.cam.y, ctx.groundY(bestFit.cam.x, bestFit.cam.z), 1.4);
     return { P, cam: bestFit.cam, look: bestFit.look };
   }
 
@@ -233,6 +232,7 @@ export class Stage {
 
   /** Add an object to the scene, owned by the stage (removed + freed on dispose). */
   add<T extends THREE.Object3D>(o: T): T {
+    if (this.disposed) return o; // a late async add after teardown never re-enters the scene
     this.scene.add(o);
     this.owned.push(o);
     return o;

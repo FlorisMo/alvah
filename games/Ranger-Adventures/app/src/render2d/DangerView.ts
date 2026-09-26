@@ -13,6 +13,7 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
 import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../engines/dagnacht';
+import { subjectView } from './animalIcon';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -85,7 +86,8 @@ export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> 
         (enc.flip ? `<span class="flip-cue">Nu mag het wél</span>` : '') + esc(enc.vraag);
       ruleBanner.classList.toggle('flip', !!enc.flip);
       subject.className = `enc-subject subj-${esc(enc.subject)}`;
-      subject.innerHTML = `<span class="subj-label">${esc(enc.subject)}</span>`;
+      const sv = subjectView(enc.subject, enc.dier);
+      subject.innerHTML = `<span class="subj-icon" aria-hidden="true">${sv.icon}</span><span class="subj-label">${esc(sv.label)}</span>`;
       // shuffle the two option slots so position never cues the answer
       const order = Math.random() < 0.5 ? [0, 1] : [1, 0];
       options.innerHTML = order

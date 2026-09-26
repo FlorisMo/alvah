@@ -131,6 +131,12 @@ function paintBoard(c: HTMLCanvasElement, inverted: boolean): void {
   }
 }
 
+/** The two place names inside a rule line "Dag-dier → X. Nacht-dier → Y." */
+function placeNames(regel: string): { open: string; hol: string } {
+  const m = /→\s*([^.]+)\.\s*[^→]*→\s*([^.]+)/.exec(regel);
+  return m ? { open: m[1].trim(), hol: m[2].trim() } : { open: 'open plek', hol: 'het hol' };
+}
+
 export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const camera = ctx.camera as THREE.PerspectiveCamera;
@@ -148,8 +154,10 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     const goed = copy.goed ?? 'Alle dieren op de goede plek!';
     const regelDag = copy.regel ?? 'Dag-dier → open plek. Nacht-dier → het hol.';
     const regelOm = copy.regelOm ?? 'Nu andersom! Volg het bordje.';
+    // the two places are named by the mission's own rule ("open plek" / "open zand")
+    const naam = placeNames(regelDag);
     // after a flip the banner states the NEW mapping outright (not only "andersom")
-    const regelAndersom = 'Dag-dier → het hol. Nacht-dier → open plek.';
+    const regelAndersom = `Dag-dier → ${naam.hol}. Nacht-dier → ${naam.open}.`;
 
     const tallest = Math.max(...trial.queue.map((q) => heightFor(q.id)), 1);
     const stage = new Stage(ctx, { halfW: SIDE + 0.9, halfD: 0.9, tall: Math.max(3.1, tallest + 0.5), pitchDeg: 20, insetBottom: 110, insetTop: 70 });
@@ -317,7 +325,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         stage.plant('prop-fern', 0.45, -SIDE - 0.9, -0.2, 2.4),
       ]);
       for (const f of flowers) if (f) open.add(f);
-      const openTag = nameTag('☀ open plek', 1.15);
+      const openTag = nameTag(`☀ ${naam.open}`, 1.15);
       openTag.position.copy(openAt).setY(openAt.y + 1.05);
       open.add(openTag);
       bins.set('open', { bin: 'open', group: open, glow: new Glow(clearing, '#8fd6a0'), anchor: hintAnchor(clearing, 0.5), at: openAt });
@@ -333,7 +341,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         holBody.position.copy(holAt);
         hol.add(holBody);
       }
-      const holTag = nameTag('🌙 het hol', 1.05);
+      const holTag = nameTag(`🌙 ${naam.hol}`, 1.05);
       holTag.position.copy(holAt).setY(holAt.y + 1.05);
       hol.add(holTag);
       bins.set('hol', { bin: 'hol', group: hol, glow: new Glow(holBody, '#8fd6a0'), anchor: hintAnchor(holBody, 0.6), at: holAt });

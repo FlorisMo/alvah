@@ -145,8 +145,7 @@
   border-radius: 50%;
   background: var(--green-soft);
   color: var(--green);
-  font: 700 22px/1 var(--font-body);
-  text-transform: uppercase;
+  font: 700 34px/1 var(--font-body); /* an animal picture (animalIcon), never letters */
 }
 .rd-name { font: 600 15px/1 var(--font-body); text-align: center; }
 .roep-dier.tapped { transform: scale(0.94); }

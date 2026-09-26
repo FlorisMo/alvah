@@ -31,12 +31,11 @@ export interface WorldCtx {
   cameraRig: unknown;
   /** the model group the ranger walked up to (the activity anchor), if any */
   approachedModel: unknown | null;
-  /** world-space anchor (x,y,z) the activity stages around */
+  /** world-space anchor (x,y,z) the activity stages around; y is seated on `groundY` */
   activitySpot: { x: number; y: number; z: number };
-  /** D1.3: the RENDERED-terrain ground height (m) at a world XZ — the raycast
-   *  ground-snap truth (D1.2), so a §1e reframe can lift the lens above the REAL
-   *  surface (`safeCamHeight`) and never land under the visual terrain the way the
-   *  mirrored analytic marker Y once buried the mission camera (direction §2.2/§2.5). */
+  /** The RENDERED-terrain ground height (m) at a world XZ — the raycast ground-snap
+   *  truth (World.groundSnapY). Everything a game stages sits on this, per point, and
+   *  the lens is kept above it (`safeCamHeight`). */
   groundY(x: number, z: number): number;
   /** 2026-09-26: is a play patch free at world (x,z) within radius `r` (m)? False on the
    *  ven water, inside a tree crown, the cabin, the case-board, the bench, the parked

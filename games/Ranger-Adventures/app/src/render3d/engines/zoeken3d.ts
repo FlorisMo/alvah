@@ -33,7 +33,7 @@ import {
   Glow, anchoredPrompt, contactShadow, hintAnchor, pick3d, registerActivityWin,
   registerPlayHint, activityScopeSignal, spoorTrail,
 } from '../play/kit';
-import { patchLocal } from '../play/kit-math';
+import { highlightPulse, patchLocal } from '../play/kit-math';
 import { Stage } from '../play/stage';
 import { heightFor } from '../play/spawn';
 
@@ -151,7 +151,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       if (ready && !done && !hint && target && (misses >= 2 || (now - t0) / 1000 > HINT_AFTER_S)) {
         hint = new Glow(target, '#ffd98a'); // the gentle hint, only after a calm wait
       }
-      if (hint && !done) hint.set(reduced ? 0.22 : 0.14 + 0.12 * (Math.sin(now / 700) + 1) / 2);
+      if (hint && !done) hint.set(highlightPulse(now / 1000, reduced).emissive * 0.4); // a soft breath, steady when reduced
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -209,7 +209,8 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       // the hide: thick grass in FRONT of the animal (toward the lens) and at its
       // flanks, taller than it, so only its back and head peek out — a real search,
       // no glow. A fern leans over its rump.
-      const hideH = Math.max(0.3, tgtH * 1.5);
+      // (a tall calf keeps its head above the grass; a small piglet or frog is covered)
+      const hideH = Math.max(0.3, tgtH * (tgtH > 0.4 ? 0.8 : 1.5));
       const hide = [
         { u: tgt.u - 0.16, v: tgt.v - 0.2, h: hideH }, { u: tgt.u + 0.14, v: tgt.v - 0.24, h: hideH * 0.95 },
         { u: tgt.u + 0.0, v: tgt.v - 0.3, h: hideH * 0.8 }, { u: tgt.u - 0.3, v: tgt.v + 0.02, h: hideH * 0.9 },
