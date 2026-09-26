@@ -7,7 +7,6 @@ import { applyReadingPrefs } from './core/reading-prefs';
 import { store } from './core/state';
 import { Sound } from './core/sound';
 import { installDevHook, setScreen, provideDrawCalls, provideAvatar, provideTitleReady } from './core/devhook';
-import { provideRenderView, provideTris } from './core/devhook';
 
 // W7.1 code-splitting: the mission/world/demo graph (World, the five engines,
 // the 3D mini-game views, render2d) is the bulk of the bundle but is only
@@ -54,8 +53,6 @@ stage.start();
 installDevHook();
 setScreen('title');
 provideDrawCalls(() => stage.drawCalls);
-provideRenderView(() => stage.view); // golden-path probes measure what is rendered (dev hook)
-provideTris(() => stage.renderer.info.render.triangles);
 // P1.4 ⊕ P1.6a: the title now stands the GROUNDED ranger on the heath — expose his
 // measured height to the scale assert so the title frame proves the CHILD band
 // avatar.height ∈ [1.1, 1.35], same as the world. `startWorld` overrides this with

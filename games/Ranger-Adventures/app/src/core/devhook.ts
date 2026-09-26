@@ -316,8 +316,9 @@ export interface RangerDevHook {
    * player SEES (the camera + scene the Stage rendered this frame), never resolve a
    * step. The THREE-side maths lives in render3d/play/kit.ts ("test play hint"). ---- */
   /** Where a perfect player would click NEXT in a running 3D mini-game: the engine's
-   *  registered hint target (kit `registerPlayHint`), its bounding-box centre projected
-   *  to CSS px with the live camera. `onScreen`: inside the viewport and in front of the
+   *  registered hint target (kit `registerPlayHint`) projected to CSS px with the live
+   *  camera — its bounding-box centre, or, when the target is an invisible anchor mesh
+   *  parked on the visible thing, the anchor's spot (the checks then judge that thing). `onScreen`: inside the viewport and in front of the
    *  lens. `firstHit`: a camera ray through (x,y) meets the target before any other
    *  opaque surface (terrain, a prop, the ranger); invisible pick hit-spheres, sprites
    *  and non-depth-writing overlays are ignored; `firstHitBy` names what it met first.

@@ -18,7 +18,6 @@
 
 import * as THREE from 'three';
 import { dampFactor, highlightPulse, safeCamHeight, tapHitRadius, trailPoints } from './kit-math';
-import { provideGoldenProbes, renderView, type PlayHintProbe, type SeatProbe } from '../../core/devhook';
 
 /* ------------------------------------------------------ test win channel ---- */
 
@@ -100,6 +99,9 @@ export function currentPlayHint(): PlayHint | null {
  * once below, only ever called by a test through the dev hook.
  */
 
+// (imported here, not at the top, so this test section stays one self-contained block)
+import { provideGoldenProbes, renderView, type PlayHintProbe, type SeatProbe } from '../../core/devhook';
+
 type LiveView = { scene: THREE.Scene; camera: THREE.PerspectiveCamera; canvas: HTMLCanvasElement };
 
 function liveView(): LiveView | null {
@@ -154,7 +156,7 @@ function groundUnder(scene: THREE.Scene, x: number, z: number): number | null {
 }
 
 /** World box of the VISIBLE meshes under `root` (hit-spheres and hidden parts left out). */
-function visibleBox(root: THREE.Object3D, out: THREE.Box3): THREE.Box3 {
+function seenBox(root: THREE.Object3D, out: THREE.Box3): THREE.Box3 {
   out.makeEmpty();
   const part = new THREE.Box3();
   root.updateWorldMatrix(true, true);
@@ -211,7 +213,9 @@ function drawnWith(root: THREE.Object3D): string[] {
   const types = new Set<string>();
   root.traverse((o) => {
     const m = o as THREE.Mesh;
-    if (m.isMesh && !m.userData.hitSphere && shownInTree(m)) types.add(m.geometry.type);
+    if (!m.isMesh || m.userData.hitSphere || !shownInTree(m)) return;
+    const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material | undefined;
+    if (mat?.visible) types.add(m.geometry.type);
   });
   return [...types].sort();
 }
@@ -223,19 +227,28 @@ function probePlayHint(): PlayHintProbe | null {
   let root = hint.target;
   while (root.parent) root = root.parent;
   if (v && root !== v.scene) return null; // not in the rendered scene (a finished step's stale hint): nothing to click
-  const box = visibleBox(hint.target, new THREE.Box3());
-  if (!v || box.isEmpty()) {
+  // The target is the visible thing itself (click its box centre), or an invisible anchor
+  // parked on it (a hintAnchor-style marker: click the anchor, judge the thing it sits on).
+  let body: THREE.Object3D | null = hint.target;
+  const box = seenBox(hint.target, new THREE.Box3());
+  const at = new THREE.Vector3();
+  if (box.isEmpty()) {
+    body = hint.target.parent;
+    if (body && body !== v?.scene) seenBox(body, box);
+    hint.target.getWorldPosition(at);
+  } else box.getCenter(at);
+  if (!v || !body || box.isEmpty()) {
     return { id: hint.id, x: -1, y: -1, onScreen: false, firstHit: false, aboveGround: false,
       firstHitBy: v ? 'target has no visible mesh' : 'no live world view', bottomGap: null, reachesCanvas: false, blocker: null, parts: [] };
   }
-  const c = box.getCenter(new THREE.Vector3());
-  const s = toScreen(v, c);
+  const s = toScreen(v, at);
   probeRay.setFromCamera(new THREE.Vector2(s.ndc.x, s.ndc.y), v.camera);
   probeRay.far = Infinity;
   probeRay.layers.mask = v.camera.layers.mask;
   const first = probeRay.intersectObject(v.scene, true).find(occludes);
   let firstHit = false;
-  for (let p: THREE.Object3D | null = first?.object ?? null; p; p = p.parent) if (p === hint.target) { firstHit = true; break; }
+  for (let p: THREE.Object3D | null = first?.object ?? null; p; p = p.parent) if (p === body) { firstHit = true; break; }
+  const c = box.getCenter(new THREE.Vector3());
   const g = groundUnder(v.scene, c.x, c.z);
   const el = s.onScreen ? document.elementFromPoint(s.x, s.y) : null;
   return {
@@ -245,7 +258,7 @@ function probePlayHint(): PlayHintProbe | null {
     bottomGap: g === null ? null : r2(box.min.y - g),
     reachesCanvas: el === v.canvas,
     blocker: el && el !== v.canvas ? describeElement(el) : null,
-    parts: drawnWith(hint.target),
+    parts: drawnWith(body),
   };
 }
 
@@ -294,7 +307,7 @@ function placedThings(v: LiveView, x: number, z: number, r: number,
       o.children.forEach(visit);
       return;
     }
-    const box = visibleBox(o, new THREE.Box3());
+    const box = seenBox(o, new THREE.Box3());
     if (box.isEmpty()) return;
     box.getCenter(c);
     const size = box.getSize(new THREE.Vector3());
