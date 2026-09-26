@@ -142,7 +142,7 @@ export interface Pick3dOptions {
 
 /** The world-space box a player actually sees for `object` — a rigged GLB renders at
  *  its SKELETON's extent (Models.skinnedRenderBox, F-07), everything else at its
- *  geometry box. Hit-spheres, hint anchors and framing all measure through this. */
+ *  geometry box. The pick hit-spheres centre on it. */
 export function visibleBox(object: THREE.Object3D): THREE.Box3 {
   object.updateWorldMatrix(true, true);
   return skinnedRenderBox(object) ?? new THREE.Box3().setFromObject(object);

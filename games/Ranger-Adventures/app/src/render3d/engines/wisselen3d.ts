@@ -319,6 +319,9 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       const openAt = stage.at(-SIDE, 0.2);
       const clearing = stage.decal('#e3c985', 0.9, 0.7, -SIDE, 0.2, { emissive: '#6b5220', emissiveIntensity: 0.25 });
       open.add(clearing);
+      // its sunlit heart: where the animal goes (and the spot a player clicks)
+      const sunny = stage.decal('#f3dc9c', 0.38, 0.3, -SIDE, 0.2, { emissive: '#8a6a2a', emissiveIntensity: 0.35, layer: 2 });
+      open.add(sunny);
       const flowers = await Promise.all([
         stage.plant('prop-foxglove', 0.7, -SIDE - 0.75, 0.55, 0.3),
         stage.plant('prop-foxglove', 0.62, -SIDE + 0.7, 0.7, 1.9),
@@ -328,7 +331,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       const openTag = nameTag(`☀ ${naam.open}`, 1.15);
       openTag.position.copy(openAt).setY(openAt.y + 1.05);
       open.add(openTag);
-      bins.set('open', { bin: 'open', group: open, glow: new Glow(clearing, '#8fd6a0'), body: clearing, at: openAt });
+      bins.set('open', { bin: 'open', group: open, glow: new Glow(open, '#8fd6a0'), body: sunny, at: openAt });
 
       // het hol: the world's badger sett
       const hol = new THREE.Group();

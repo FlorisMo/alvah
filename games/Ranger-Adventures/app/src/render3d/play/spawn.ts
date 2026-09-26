@@ -107,6 +107,27 @@ function disposer(root: THREE.Object3D, extra: THREE.BufferGeometry[] = []): () 
 }
 
 /**
+ * prepModel puts a RIGGED model's lowest BONE at y=0 (its size is read from the
+ * skeleton, F-07), but hooves and paws reach a few cm below their last joint, so a
+ * staged deer sank ~5 cm into the ground. Measure the posed skinned mesh itself and
+ * lift the model onto its soles. Only for game spawns — the world's own animals are
+ * placed by World and left as they are.
+ */
+function standOnSoles(wrapper: THREE.Group): void {
+  wrapper.updateMatrixWorld(true);
+  let minY = Infinity;
+  const box = new THREE.Box3();
+  wrapper.traverse((o) => {
+    const sk = o as THREE.SkinnedMesh;
+    if (!sk.isSkinnedMesh) return;
+    sk.computeBoundingBox();
+    if (sk.boundingBox) minY = Math.min(minY, box.copy(sk.boundingBox).applyMatrix4(sk.matrixWorld).min.y);
+  });
+  const inner = wrapper.children[0];
+  if (inner && Number.isFinite(minY) && Math.abs(minY) < 0.3) inner.position.y -= minY;
+}
+
+/**
  * Load one of the world's animals, dressed exactly as the world dresses it, at its
  * canonical size (or `opts.height`). Animated rigs play their calm idle clip (frozen
  * on its first frame under reduced-motion). Resolves null when the model is absent.
@@ -128,6 +149,7 @@ export async function spawnModel(id: string, opts: SpawnOpts = {}): Promise<Spaw
     mixer.clipAction(clip).play();
     mixer.update(0);
   }
+  standOnSoles(prepped);
   return {
     root: prepped,
     update: (dt) => { if (mixer && !livePolicy().reduced) mixer.update(dt); },
