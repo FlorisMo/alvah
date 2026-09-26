@@ -28,7 +28,7 @@ import { wireWorldDevhook, clearWorldDevhook } from '../dev/wireDevhook';
 import {
   showExploreHud, disposeExploreHud, onApproach, onWayfind, onInteract, onBoardApproach,
   tryOpenBoard, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
-  setHeliCockpit, setHeliVignette, showBoundaryHint,
+  setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint,
 } from '../hud/ExploreHud';
 
 /** animal id (content) → generated GLB id (asset pipeline). Others → procedural. */
@@ -144,7 +144,10 @@ export function startExplore(): void {
   // W6.4b2: the "Ken je roep" sit-spot by the vogelkijkhut.
   world.setSitSpot({ onNear: onSitSpotApproach, onActivate: tryPlayRoep });
   // W5.1: the drivable jeep — "Stap in" near it, "Stap uit" while driving.
-  world.setVehicle({ onNear: () => renderVehiclePrompt(), onChange: () => renderVehiclePrompt() });
+  world.setVehicle({
+    onNear: () => renderVehiclePrompt(),
+    onChange: (inVehicle) => { renderVehiclePrompt(); if (inVehicle) showDriveHint(); },
+  });
   // W5.3b: the opt-in helicopter; the optIn source is read live (Instellingen toggle).
   world.setHeli({
     onNear: () => renderHeliPrompt(),

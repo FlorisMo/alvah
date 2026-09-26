@@ -10,7 +10,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { joystickVisible } from '../../core/input';
-import { onboardHint, ONBOARD_TAP, ONBOARD_BOUNDARY } from '../../core/onboarding';
+import { onboardHint, ONBOARD_TAP, ONBOARD_BOUNDARY, ONBOARD_DRIVE } from '../../core/onboarding';
 import { provideHint } from '../../core/devhook';
 import { ROEP_COPY } from '../../engines/roep';
 import type { WayCue } from '../../render3d/Wayfinding';
@@ -49,6 +49,7 @@ export function disposeExploreHud(): void {
   if (tipTimer) { clearTimeout(tipTimer); tipTimer = 0; }
   hintState.active = null; hintState.helpChip = false;
   if (joystick) { joystick.dispose(); joystick = null; }
+  lastCue = null;
 }
 
 export function showExploreHud(activeTitel: string | null): void {
@@ -78,6 +79,9 @@ export function showExploreHud(activeTitel: string | null): void {
   // The HUD overlays the LIVE world: its wrapper must let taps fall through to the
   // canvas for tap-to-walk (W0.4); `.explore-overlay` reclaims transparency.
   el.classList.add('explore-overlay');
+  // the world only sends a cue when its words change: a fresh HUD shows the last
+  // one at once instead of "zoek het spoor…" until the ranger has walked a metre
+  if (lastCue && lastCue.titel === activeTitel) onWayfind(lastCue.cue);
   el.querySelector('.explore-pause')?.addEventListener('click', () => showPauseHub());
   const hud = el.querySelector<HTMLElement>('.explore-hud');
   mountJoystick(hud);
@@ -257,6 +261,15 @@ function showTip(id: 'walk' | 'tap' | 'boundary', text: string, ms = 5200): void
   }, ms);
 }
 
+/** How to drive, the first time the ranger gets into the jeep this session. */
+let driveHintShown = false;
+export function showDriveHint(): void {
+  if (driveHintShown) return;
+  driveHintShown = true;
+  const stick = joystickVisible(store.get().settings.joystick, coarsePointer());
+  showTip('walk', stick ? ONBOARD_DRIVE.stick : ONBOARD_DRIVE.keys);
+}
+
 /** F-11: the calm world-boundary cue, through the same one-tip channel. */
 export function showBoundaryHint(): void {
   showTip('boundary', ONBOARD_BOUNDARY);
@@ -295,9 +308,14 @@ function mountJoystick(hud: HTMLElement | null): void {
 }
 
 /* ------------------------------------------------------- wayfinding ---- */
+/** The last cue the world sent, and for which mission title (see showExploreHud). */
+let lastCue: { titel: string; cue: WayCue } | null = null;
+
 /** Render the calm wayfinding cue (dual-channel: glyph + words + colour). */
 export function onWayfind(cue: WayCue | null): void {
   const strip = session.host.querySelector<HTMLDivElement>('.explore-wayfind');
+  const titel = strip?.querySelector('.wf-doel')?.textContent ?? null;
+  lastCue = cue && titel ? { titel, cue } : null;
   if (!strip) return;
   if (!cue) { strip.hidden = true; return; }
   // F-06: keep the text fresh, but stay hidden while the entry control hint owns

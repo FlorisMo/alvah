@@ -29,8 +29,15 @@ export const ONBOARD_TAP = 'Tik op een dier om te spelen.';
  *  trigger it land in P4.6; the copy + read-aloud join the hint system here. */
 export const ONBOARD_BOUNDARY = 'Hier stopt het bos.';
 
+/** The drive hint, shown when the ranger first gets into the jeep this session
+ *  (players did not know how to drive). Device-aware like the walk hint. */
+export const ONBOARD_DRIVE = {
+  stick: 'Sleep de stick om te rijden.',
+  keys: 'Rijd met de pijltjes.',
+} as const;
+
 /** Every transient onboarding tip, for the reading-norm test (≤7 words each). */
-export const ONBOARD_TIPS = [ONBOARD_TAP, ONBOARD_BOUNDARY] as const;
+export const ONBOARD_TIPS = [ONBOARD_TAP, ONBOARD_BOUNDARY, ONBOARD_DRIVE.stick, ONBOARD_DRIVE.keys] as const;
 
 /**
  * Device-aware wording: every hint is written for touch ("Tik op een dier"); on a
