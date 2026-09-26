@@ -57,14 +57,15 @@ let stopRequested = false;
 let missionPauseEl: HTMLElement | null = null;
 
 /** The step as a view gets it: its instruction words in this device's terms
- *  ("Tik op de dieren" on touch, "Klik op de dieren" with a mouse). */
+ *  ("Tik op de dieren" on touch, "Klik op de dieren" with a mouse), and without
+ *  its "wist je dat" fact — the raaf tells the fact right after the step, so the
+ *  game's own found-card never says it first (the raaf used to repeat it). */
 function stepForView(step: Step): Step {
-  const copy = step.skin.copy;
-  if (!copy) return step;
-  const devCopy = Object.fromEntries(
-    Object.entries(copy).map(([k, v]) => [k, typeof v === 'string' ? deviceText(v) : v]),
-  );
-  return { ...step, skin: { ...step.skin, copy: devCopy } };
+  const { feit: _feit, feitDier: _feitDier, ...skin } = step.skin;
+  const copy = skin.copy
+    ? Object.fromEntries(Object.entries(skin.copy).map(([k, v]) => [k, typeof v === 'string' ? deviceText(v) : v]))
+    : undefined;
+  return { ...step, skin: copy ? { ...skin, copy } : skin };
 }
 
 /* ------------------------------------------------------------ briefing ---- */
@@ -110,6 +111,9 @@ async function runMission(mission: Mission): Promise<void> {
   const stopped = new Promise<'STOP'>((res) => { missionStop = () => res('STOP'); });
   const raceStop = <T>(p: Promise<T>): Promise<T | 'STOP'> => Promise.race([p, stopped]);
   mountMissionPause();
+  // the raaf counts its facts (1/3, 2/3, 3/3), not the steps
+  const facts = mission.stappen.filter((st) => st.skin.feit).length;
+  let factN = 0;
   for (let i = 0; i < mission.stappen.length; i++) {
     const step = mission.stappen[i];
     const play = ENGINE_VIEWS[step.ef];
@@ -161,7 +165,7 @@ async function runMission(mission: Mission): Promise<void> {
     if (step.skin.feit) {
       // W6.3b: playing in the world pins the fact as a collectible veldnotitie.
       store.collectVeldnotitie(Content.veldnotitieId(mission.id, i));
-      const fact = await raceStop(showFact(step, i + 1, mission.stappen.length));
+      const fact = await raceStop(showFact(step, ++factN, facts));
       if (fact === 'STOP' || stopRequested) { abandonMission(domBefore); return; }
     }
   }
