@@ -15,7 +15,7 @@ import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, WATER_LEVEL, type Biome } from
 import { windSway } from '../Atmosphere';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF } from '../Paths';
 import { WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp } from '../Water';
-import type { Obstacle, MoveLimits } from '../CharacterController';
+import { boxObstacle, type Obstacle, type MoveLimits } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import type { Labels } from './Labels';
 import { enableCast, proceduralTotem } from './props';
@@ -197,7 +197,9 @@ export class Dressing {
     cabin.rotation.y = Math.atan2(-cabinAt.x, -cabinAt.z); // face the spawn point
     cabin.add(this.proceduralCabin());
     this.scene.add(cabin);
-    this.obstacles.push({ x: cabinAt.x, z: cabinAt.z, r: 2.0 });
+    // wave 2: the cabin's real footprint (the GLB at 3 m tall, porch included: 3.9 × 3.8 m),
+    // turned with it, so the ranger cannot step onto the porch (the old r = 2 circle let him)
+    this.obstacles.push(boxObstacle(cabinAt.x, cabinAt.z, 1.97, 1.9, cabin.rotation.y));
     void loadModel('prop-ranger-cabin').then((m) => {
       if (!m) return;
       const prepped = prepModel(m, 3.0);
@@ -606,15 +608,18 @@ export class Dressing {
     // [dev-hook id, GLB model, world x/z, target Y-height (m), collision radius,
     //  optional beacon label]. The watchtower is deliberately the farthest —
     //  the W4.1 E2E walks spawn→watchtower.
+    // `foot` = the GLB's footprint half-extents at that height (its own x/z, measured
+    // off the loaded models): a solid rectangle, turned with the landmark (wave 2 — the
+    // old circles let the ranger stand between the watchtower's legs).
     const LANDMARKS: {
-      id: string; model: string; x: number; z: number; height: number; collide: number; label?: string;
+      id: string; model: string; x: number; z: number; height: number; foot: [number, number]; label?: string;
     }[] = [
-      { id: 'prop-fire-watchtower', model: 'prop-fire-watchtower', x: 37, z: -37, height: 9, collide: 1.8, label: 'Uitkijktoren' },
-      { id: 'prop-bird-hide', model: 'prop-bird-hide', x: 26, z: -11, height: 2.8, collide: 1.4, label: 'Vogelkijkhut' },
-      { id: 'prop-ecoduct', model: 'prop-ecoduct', x: -70, z: 6, height: 6, collide: 2.6, label: 'Ecoduct' },
-      { id: 'prop-boa-post', model: 'prop-boa-post', x: -56, z: -20, height: 3, collide: 1.0, label: 'BOA-post' },
-      { id: 'prop-signpost', model: 'prop-signpost', x: 9, z: -8, height: 1.7, collide: 0.5 },
-      { id: 'prop-signpost-west', model: 'prop-signpost', x: -16, z: 10, height: 1.7, collide: 0.5 },
+      { id: 'prop-fire-watchtower', model: 'prop-fire-watchtower', x: 37, z: -37, height: 9, foot: [1.78, 1.86], label: 'Uitkijktoren' },
+      { id: 'prop-bird-hide', model: 'prop-bird-hide', x: 26, z: -11, height: 2.8, foot: [1.61, 1.49], label: 'Vogelkijkhut' },
+      { id: 'prop-ecoduct', model: 'prop-ecoduct', x: -70, z: 6, height: 6, foot: [7.74, 7.8], label: 'Ecoduct' },
+      { id: 'prop-boa-post', model: 'prop-boa-post', x: -56, z: -20, height: 3, foot: [2.18, 2.13], label: 'BOA-post' },
+      { id: 'prop-signpost', model: 'prop-signpost', x: 9, z: -8, height: 1.7, foot: [0.83, 0.29] },
+      { id: 'prop-signpost-west', model: 'prop-signpost', x: -16, z: 10, height: 1.7, foot: [0.83, 0.29] },
     ];
     for (const lm of LANDMARKS) {
       const at = new THREE.Vector3(lm.x, this.groundY(lm.x, lm.z), lm.z);
@@ -628,7 +633,7 @@ export class Dressing {
         group.add(label);
       }
       this.scene.add(group);
-      this.obstacles.push({ x: lm.x, z: lm.z, r: lm.collide });
+      this.obstacles.push(boxObstacle(lm.x, lm.z, lm.foot[0], lm.foot[1], group.rotation.y));
       this.landmarks.push({ id: lm.id, x: lm.x, z: lm.z });
       void loadModel(lm.model).then((m) => {
         if (!m) return;
@@ -698,7 +703,14 @@ export class Dressing {
       group.rotation.y = (i * 2.39996) % (Math.PI * 2); // golden-angle spin for variety
       group.add(proceduralTotem(spec.collide > 0 ? '#6b5a3a' : '#7d8a4a')); // instant stand-in
       this.scene.add(group);
-      if (spec.collide > 0) this.obstacles.push({ x, z, r: spec.collide });
+      if (model === 'prop-fallen-log') {
+        this.obstacles.push(boxObstacle(x, z, 1.09, 0.32, group.rotation.y)); // a log is long, not round
+      } else if (spec.collide > 0) {
+        // a real tree also tells the follow camera where its foliage is (never a lens in the leaves)
+        const crown = model === 'prop-pine-scots' || model === 'prop-oak-tree' || model === 'prop-birch-tree'
+          ? { kind: model, h: spec.h, y: at.y } : undefined;
+        this.obstacles.push({ x, z, r: spec.collide, crown });
+      }
       this.props.push({ id: model, x, z });
       void loadModel(model).then((m) => {
         if (!m) return;

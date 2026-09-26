@@ -212,6 +212,8 @@ export class World {
     this.pois.placeSitSpot();
     this.dressing.placeNatureDressing();
     this.fauna.placeScenicActors();
+    // people are solid: the ranger walks round the warden and the poacher, never through them
+    for (const a of this.fauna.scenicActors) this.obstacles.push({ x: a.group.position.x, z: a.group.position.z, r: 0.45 });
     this.fauna.placeAmbientLife();
     this.vehicles.placeJeep();
     this.vehicles.placeHelipads();

@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import { skinnedRenderBox } from '../Models';
-import type { MoveLimits, Obstacle } from '../CharacterController';
+import { obstacleGap, segmentCrosses, type MoveLimits, type Obstacle } from '../CharacterController';
 import type { CamState } from '../../core/devhook';
 import { wrapAngle } from '../FollowCam';
 import type { Terrain } from './Terrain';
@@ -378,12 +378,9 @@ export class DevReadback {
     if (len2 < 1e-6) return false; // lens on top of him
     for (const o of this.obstacles) {
       if (o.tree) continue;                        // fadeable crown — handled by the canopy fade
-      const fx = o.x - ax, fz = o.z - az;
-      if (fx * fx + fz * fz <= o.r * o.r) continue; // the prop the ranger stands at — not an occluder
-      const t = ((o.x - cx) * dx + (o.z - cz) * dz) / len2; // foot param on the segment
-      if (t <= 0.05 || t >= 0.95) continue;        // behind the lens or at/behind the ranger → a backdrop
-      const gx = o.x - (cx + dx * t), gz = o.z - (cz + dz * t);
-      if (gx * gx + gz * gz <= o.r * o.r) return true;
+      if (obstacleGap(o, ax, az) + (o.box ? o.box.pad : 0) <= 0) continue; // the prop the ranger stands at — not an occluder
+      // behind the lens or at/behind the ranger (t outside 0.05–0.95) is a backdrop; a box by its real rectangle
+      if (segmentCrosses(o, cx, cz, ax, az, 0.05, 0.95)) return true;
     }
     return false;
   }

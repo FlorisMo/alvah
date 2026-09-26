@@ -19,7 +19,7 @@ import { gaitFor, motionAt, REST, type MotionRecipe } from '../ProceduralMotion'
 import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from '../Wayfinding';
 import { routeVia } from '../Paths';
 import { ROEP_COPY } from '../../engines/roep';
-import type { Obstacle } from '../CharacterController';
+import { boxObstacle, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import type { Labels } from './Labels';
 import { proceduralTotem } from './props';
@@ -229,7 +229,7 @@ export class Markers {
     label.position.y = 2.0;
     board.add(label);
     this.scene.add(board);
-    this.obstacles.push({ x: boardAt.x, z: boardAt.z, r: 0.7 });
+    this.obstacles.push(boxObstacle(boardAt.x, boardAt.z, 0.83, 0.24, board.rotation.y)); // its real footprint (wave 2)
     this.boardGroup = board;
     this.boardPos = boardAt.clone();
     void loadModel('prop-case-board').then((m) => {

@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { dampFactor } from '../play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW, FOLLOW_TAU, FOLLOW_MAX_RATE } from '../FollowCam';
 import { livePolicy } from '../MotionMode';
-import type { MoveLimits, Obstacle } from '../CharacterController';
+import { segmentEntry, type MoveLimits, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { TREE_BASE_H, type Dressing } from './Dressing';
 import type { Player, ViewFrame, CamSteer } from './Player';
@@ -545,19 +545,11 @@ export class CameraRig {
    * idle-stability assert (yaw/dist steady ±0.01) holds frame to frame.
    */
   private boomClearFraction(ox: number, oz: number, dx: number, dz: number): number {
-    const a = dx * dx + dz * dz;
-    if (a < 1e-6) return 1;
+    if (dx * dx + dz * dz < 1e-6) return 1;
     let best = 1;
     for (const o of this.obstacles) {
-      const R = o.r + this.CAM_PROBE_R;
-      const fx = ox - o.x, fz = oz - o.z;
-      const cc = fx * fx + fz * fz - R * R;
-      if (cc < 0) continue;                 // origin already inside — ignore this solid
-      const b = 2 * (fx * dx + fz * dz);
-      const disc = b * b - 4 * a * cc;
-      if (disc < 0) continue;               // boom misses the circle
-      const t = (-b - Math.sqrt(disc)) / (2 * a);
-      if (t > 0 && t < best) best = t;      // nearest entry along the boom
+      const t = segmentEntry(o, ox, oz, dx, dz, this.CAM_PROBE_R); // circles and building rectangles alike
+      if (t < best) best = t;
     }
     return best;
   }
