@@ -27,7 +27,7 @@ import { defineConfig, devices } from '@playwright/test';
  * already open never clashes. Not parallel: each project walks one page through
  * the whole flow in order.
  */
-const PORT = 4197;
+const PORT = Number(process.env.RANGER_PORT ?? 4197); // RANGER_PORT: one port per parallel agent (a reused server would test another worktree's code)
 
 // Select capture projects by name from CAPTURE_PROJECTS (comma-separated).
 // Unset/empty → keep all (both form factors). Unknown names are ignored; if the

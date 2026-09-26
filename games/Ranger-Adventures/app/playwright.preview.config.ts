@@ -27,7 +27,7 @@ import { defineConfig, devices } from '@playwright/test';
  * `astro preview` port is fixed uncommon (4323) so a dev/preview server already
  * open never clashes.
  */
-const PORT = 4323;
+const PORT = Number(process.env.RANGER_PORT ?? 4323); // RANGER_PORT: one port per parallel agent (a reused server would test another worktree's code)
 const ROOT = '../../..';
 
 export default defineConfig({

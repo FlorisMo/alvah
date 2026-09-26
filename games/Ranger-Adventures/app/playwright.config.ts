@@ -22,7 +22,7 @@ import { defineConfig, devices } from '@playwright/test';
  *   webkit run is `e2e:webkit`, local-only. Frozen smoke assertions (§3.1)
  *   are unchanged — webkit adds a second engine, it removes nothing.
  */
-const PORT = 4199;
+const PORT = Number(process.env.RANGER_PORT ?? 4199); // RANGER_PORT: one port per parallel agent (a reused server would test another worktree's code)
 
 export default defineConfig({
   testDir: './e2e',

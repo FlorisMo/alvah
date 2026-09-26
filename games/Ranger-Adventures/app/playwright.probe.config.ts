@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 // THROWAWAY probe config (P1.2 diagnosis) — separate from the frozen main +
 // capture configs. Laptop viewport only, own port. Deleted before the box closes.
-const PORT = 4198;
+const PORT = Number(process.env.RANGER_PORT ?? 4198); // RANGER_PORT: one port per parallel agent (a reused server would test another worktree's code)
 
 export default defineConfig({
   testDir: './e2e-probe',
