@@ -28,7 +28,7 @@ import { playWissel } from '../../render2d/WisselView';
 import { mountReadAloud } from '../ReadAloud';
 import { deviceText } from '../hud/device';
 import { session, esc, naam, card, clearOverlays } from './session';
-import { resumePatrol, notePatrolCompletion, activeExploreTitel } from './WorldSession';
+import { resumePatrol, notePatrolCompletion, activeExploreTitel, tellWorldMissionDone } from './WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
 import { showCaseBoard, badgeHtml, CLUE_GLYPH } from '../hub/Hub';
 
@@ -177,6 +177,7 @@ async function runMission(mission: Mission): Promise<void> {
   const areaId = Content.activeArea().id;
   const before = Content.cluesFound(areaId, store.get().voltooid);
   store.markMissionDone(mission.id);
+  tellWorldMissionDone(mission.id, true); // the world shows it: the reunion at the marker
   notePatrolCompletion();
   const clueId = capturedClue(mission, true, before);
   showReward(mission, played, skipped, clueId);

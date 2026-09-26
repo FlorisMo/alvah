@@ -319,7 +319,9 @@ export function onApproach(missionId: string | null): void {
   const m = missionId ? Content.activeArea().missies.find((mm) => mm.id === missionId) : null;
   if (!m) prompt.innerHTML = '';
   else {
-    prompt.innerHTML = `<button class="btn-start explore-play" type="button">Speel mee: ${esc(m.titel)}</button>`;
+    // a finished mission reads as done at its marker: replay, not a fresh start
+    const label = store.get().voltooid[m.id] ? 'Speel nog eens' : 'Speel mee';
+    prompt.innerHTML = `<button class="btn-start explore-play" type="button">${label}: ${esc(m.titel)}</button>`;
     prompt.querySelector('.explore-play')?.addEventListener('click', () => {
       if (approachId !== m.id) return;
       showBriefing(m);

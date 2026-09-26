@@ -54,6 +54,20 @@ export function notePatrolCompletion(): void {
   patrolTick++;
 }
 
+/**
+ * Felt progress — the ONE completion event the world listens to. When a mission is
+ * finished the flow tells the world `onMissionComplete(id, { fresh: true })` (play
+ * the reunion at the marker now); when a world is built, it hears the same for
+ * every mission already done with `fresh: false` (show the finished state, no beat),
+ * so progress survives a reload. Optional: a world without the method ignores it.
+ */
+interface CompletionListener {
+  onMissionComplete?(missionId: string, opts: { fresh: boolean }): void;
+}
+export function tellWorldMissionDone(missionId: string, fresh: boolean): void {
+  (session.world as unknown as CompletionListener | null)?.onMissionComplete?.(missionId, { fresh });
+}
+
 /** Boot entry (main.ts): unlock audio inside the Begin gesture, then load the world. */
 export function startWorld(ui: HTMLElement, st: Stage): void {
   session.host = ui;
@@ -141,6 +155,7 @@ export function startExplore(): void {
   // start the bed on the spawn clearing (heide) before the first crossing fires
   setAmbientScene('heide', seizoen);
   stage.enterWorld(world);
+  for (const m of area.missies) if (done[m.id]) tellWorldMissionDone(m.id, false);
   setScreen('world');
   setMissionView(null);
   wireWorldDevhook(world);
