@@ -25,8 +25,6 @@ import { JEEP_COLLIDE } from './Vehicles';
 export interface CameraRigHost {
   /** Riding the jeep / the helicopter (their chase offsets replace the walk boom). */
   mode(): { inVehicle: boolean; inHeli: boolean };
-  /** The walking ranger stands at the Missiebord (the over-the-shoulder reframe). */
-  nearBoard(): boolean;
   /** An in-place activity, the jeep or the helicopter owns the wheel. */
   inputBlocked(): boolean;
   /** Called after every placement (the "go here" rings fade by the lens). */
@@ -144,19 +142,10 @@ export class CameraRig {
   private readonly ORBIT_LIFT_MIN = -1.2;     // eye lower → flatter, toward the horizon (~pitch up)
   private readonly ORBIT_LIFT_MAX = 3.0;      // eye higher → more top-down (~pitch down)
   private readonly ORBIT_TAU = 0.18;          // orbit ease smooth-time (snappier than the follow)
-  // P1.0 (F-19) board-approach framing: when the walking ranger stands in the
-  // case-board's near-radius, `boardFrameYaw` eases onto the follow bearing so the
-  // lens swings to an over-the-shoulder three-quarter — the board FACE + its pinned
-  // papers clear the ranger's body instead of hiding directly behind his spine,
-  // while lookAt keeps the WHOLE ranger framed at believable scale. Player-initiated
-  // (walking INTO the radius), damped like the orbit, and a CUT under reduced-motion
-  // (the motion-comfort law: a reframe is a stepped cut, never a swoop). Eases back
-  // to 0 on leaving, so free-roam is untouched. The board is ALSO statically turned
-  // `BOARD_APPROACH_FACE_TURN` toward the +x swing side (Markers.placeBoard) so its face + notes
-  // stay readable at that angle instead of going edge-on.
-  private boardFrameYaw = 0;
-  private readonly BOARD_FRAME_YAW = 0.9;      // over-the-shoulder swing (rad) when near the board
-  private readonly BOARD_FRAME_TAU = 0.16;     // board-reframe ease smooth-time (gentle, settles fast)
+  // (P1.0's automatic over-the-shoulder swing at the Missiebord is gone, wave 2: it
+  // swung the view 51° whenever the ranger merely walked past the board, a camera move
+  // nobody asked for. With the child-height ranger the board face reads above his head
+  // from the plain follow framing.)
   // the wider vehicle follow-cam offset (§5 W5.1: distance 9, height 4.5) — the
   // walking offset stays (0, 3.4, 6.2). CameraRig.place picks by `inVehicle`.
   readonly camOffsetVehicle = new THREE.Vector3(0, 4.5, 9);
@@ -187,16 +176,16 @@ export class CameraRig {
   }
 
   /** The bearing on screen now (a heading: the lens looks along (sin b, cos b)). On
-   *  foot it is the follow bearing + the player's drag look-around + the board
-   *  reframe; in the jeep / helicopter the follow bearing alone. */
+   *  foot it is the follow bearing + the player's drag look-around; in the jeep /
+   *  helicopter the follow bearing alone. */
   bearing(): number {
     const { inVehicle, inHeli } = this.host.mode();
-    return inVehicle || inHeli ? this.followYaw : wrapAngle(this.followYaw + this.orbitYaw + this.boardFrameYaw);
+    return inVehicle || inHeli ? this.followYaw : wrapAngle(this.followYaw + this.orbitYaw);
   }
 
   /** Dev-hook accessor: the camera yaw in the legacy input convention (screen
    *  forward = (−sin ψ, −cos ψ), so ψ = bearing + π), taken from the bearing that is
-   *  ON SCREEN — the drag look-around and the board reframe included (audit foot-04:
+   *  ON SCREEN — the drag look-around included (audit foot-04:
    *  it used to leave them out, so after a drag the controls walked off-screen). */
   cameraYaw(): number {
     return wrapAngle(this.bearing() + Math.PI);
@@ -205,11 +194,7 @@ export class CameraRig {
   /** What the screen shows, for the ranger's steering (Player.walk). */
   viewFrame(): ViewFrame {
     const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
-    return {
-      bearing: this.bearing(),
-      base: wrapAngle(this.followYaw + this.orbitYaw),
-      follows: follow && !livePolicy().reduced,
-    };
+    return { bearing: this.bearing(), follows: follow && !livePolicy().reduced };
   }
 
   /**
@@ -321,21 +306,9 @@ export class CameraRig {
     // helicopter a higher aerial one (13, 6); walking keeps the F-05 clearance rig
     // (boom 4.6, eye 2.4). Same damping — the pull-back (and climb) eases on board.
     const walk = !inVehicle && !inHeli;
-    // P1.0 (F-19) board-approach framing: ease a fixed over-the-shoulder yaw offset
-    // onto the follow bearing whenever the walking ranger stands in the case-board's
-    // near-radius, so the lens swings off his spine and the board FACE + papers clear
-    // his body. A CUT under reduced-motion (stepped, never a swoop); eases to 0 on
-    // leaving. Walk cam only — the vehicle/heli cams own their framing (bearing below).
-    const boardFrameTarget = (walk && this.host.nearBoard()) ? this.BOARD_FRAME_YAW : 0;
-    if (reduced) {
-      this.boardFrameYaw = boardFrameTarget;
-    } else if (dt > 0) {
-      this.boardFrameYaw += (boardFrameTarget - this.boardFrameYaw) * dampFactor(dt, this.BOARD_FRAME_TAU);
-    }
-    // the walk boom's effective bearing = follow + the player's orbit + the board
-    // reframe (the vehicle/heli cams own their framing, so they ignore both offsets);
-    // s/c rotate the boom + spherecast.
-    const bearing = walk ? wrapAngle(this.followYaw + this.orbitYaw + this.boardFrameYaw) : this.followYaw;
+    // the walk boom's bearing = follow + the player's orbit (the vehicle/heli cams own
+    // their framing, so they ignore it); s/c rotate the boom + spherecast.
+    const bearing = this.bearing();
     const s = Math.sin(bearing), c = Math.cos(bearing);
     const off = inHeli ? this.camOffsetHeli : inVehicle ? this.camOffsetVehicle : this.camOffset;
     let dist = off.z;

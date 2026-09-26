@@ -189,7 +189,6 @@ export class World {
       this.player, this.dressing,
       {
         mode: () => ({ inVehicle: this.vehicles.inVehicle, inHeli: this.vehicles.inHeli }),
-        nearBoard: () => this.pois.nearBoard,
         inputBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
         afterPlace: () => this.pois.fadeRings(this.camera),
       },

@@ -48,6 +48,10 @@ const CAM_BEHIND_TAU = 0.8;
 const CAM_BEHIND_RATE = (40 * Math.PI) / 180;
 const CAM_BEHIND_GAP = (75 * Math.PI) / 180;
 
+/** The stick backs him up (instead of turning him round) only while he faces within
+ *  this angle of into-the-screen. */
+const BACKPEDAL_FACING = (45 * Math.PI) / 180;
+
 /** Who steered the ranger this frame. */
 type DriveMode = 'keys' | 'stick' | 'tap';
 
@@ -55,10 +59,9 @@ type DriveMode = 'keys' | 'stick' | 'tap';
  *  the lens looks along (sin b, cos b), so "the ranger faces into the screen" is
  *  heading == bearing. */
 export interface ViewFrame {
-  /** The bearing on screen now: follow + the player's drag look-around + the board reframe. */
+  /** The bearing on screen now: follow + the player's drag look-around (what the
+   *  follow bearing becomes after a fold). */
   bearing: number;
-  /** follow + the drag look-around (what the follow bearing becomes after a fold). */
-  base: number;
   /** The camera follows him (setting on, no reduced motion); else it is fixed. */
   follows: boolean;
 }
@@ -259,7 +262,7 @@ export class Player {
       // TANK: Up/Down along his heading, Left/Right turn it. If the view looks well off
       // his heading when the walk starts (a mouse drag, a tap-walk, the jeep), he first
       // turns to face into the screen, so Up is always "into the screen".
-      if (starting && Math.abs(wrapPi(view.base - this.heading)) > ALIGN_GAP) this.heading = view.base;
+      if (starting && Math.abs(wrapPi(view.bearing - this.heading)) > ALIGN_GAP) this.heading = view.bearing;
       const ax = tankAxes(keys!);
       if (ax.fwd !== 0) { speedK = ax.fwd > 0 ? 1 : BACK_SPEED; back = ax.fwd < 0; }
     } else if (mode === 'keys' || mode === 'stick') {
@@ -270,7 +273,10 @@ export class Player {
       const v = mode === 'keys' ? screenVector(keys!, null) : stick!;
       const m = Math.min(1, Math.hypot(v.x, v.y));
       if (m > 0) {
-        if (mode === 'stick' && view.follows && stickBackpedal(v)) { speedK = m * BACK_SPEED; back = true; }
+        // a stick pulled down backs him up like the Down key, but only while he faces
+        // into the screen; otherwise "down" walks down the screen, toward the camera
+        const intoScreen = Math.abs(wrapPi(this.facing - this.frame)) <= BACKPEDAL_FACING;
+        if (mode === 'stick' && view.follows && intoScreen && stickBackpedal(v)) { speedK = m * BACK_SPEED; back = true; }
         else { this.heading = stickHeading(v, this.frame); speedK = m; }
       }
     } else if (mode === 'tap') {
@@ -337,7 +343,7 @@ export class Player {
     else if (mode === 'stick' || mode === 'tap') {
       // ease in behind him only when he walks roughly into the screen; walking across
       // or toward the camera it holds (never a swing round to his face)
-      const gap = Math.abs(wrapPi(this.heading - view.base));
+      const gap = Math.abs(wrapPi(this.heading - view.bearing));
       this.camNow = !back && gap <= CAM_BEHIND_GAP ? { yaw: this.heading, tau: CAM_BEHIND_TAU, maxRate: CAM_BEHIND_RATE } : null;
     } else if (mode === null && this.camNow && this.camNow.tau !== CAM_TANK_TAU) this.camNow = null; // a tap/stick walk ended: hold
     const out = this.camNow ? { ...this.camNow, fold } : (fold ? { yaw: null, tau: 0, maxRate: 0, fold } : null);
