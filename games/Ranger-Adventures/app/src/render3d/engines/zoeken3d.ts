@@ -31,7 +31,7 @@ import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
   Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin,
-  registerPlayHint, activityScopeSignal, spoorTrail,
+  registerPlayHint, spoorTrail,
 } from '../play/kit';
 import { highlightPulse, patchLocal } from '../play/kit-math';
 import { Stage } from '../play/stage';
@@ -66,7 +66,7 @@ function decoyPlant(d: Distractor, i: number): { id: string; h: number } {
  * pointer-events:none so it never blocks picking. Returns a remover (also bound to
  * the activity-abort scope so "Stop de missie" never leaks it onto the hub).
  */
-function makeKijker(canvas: HTMLElement, lensSterkte: number): () => void {
+function makeKijker(canvas: HTMLElement, lensSterkte: number, signal: AbortSignal | null): () => void {
   const parent = canvas.parentElement;
   if (!parent) return () => {};
   const edge = (0.28 + Math.max(0, Math.min(1, lensSterkte)) * 0.2).toFixed(2); // 0.28..0.48 opacity
@@ -78,7 +78,7 @@ function makeKijker(canvas: HTMLElement, lensSterkte: number): () => void {
     `background:radial-gradient(ellipse 76% 80% at 50% 52%, transparent 60%, rgba(62,40,20,${edge}) 92%);`;
   parent.appendChild(v);
   const remove = (): void => v.remove();
-  activityScopeSignal()?.addEventListener('abort', remove, { once: true });
+  signal?.addEventListener('abort', remove, { once: true });
   return remove;
 }
 
@@ -113,7 +113,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // ---- the patch in front of the ranger + the one calm reframe ----
     const stage = new Stage(ctx, { halfW: HALF_W, halfD: HALF_D, tall: 0.7, pitchDeg: 32, insetTop: 116, insetBottom: 8 });
     const reframe = stage.reframe();
-    const removeKijker = makeKijker(ctx.canvas, trial.lensSterkte);
+    const removeKijker = makeKijker(ctx.canvas, trial.lensSterkte, stage.signal);
 
     // ---- accessible prompt (all words + read-aloud here) ----
     const promptEl = anchoredPrompt(
@@ -123,6 +123,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         `<p class="p3-sub">Volg het spoor naar de schuilplek.</p></div>` +
         `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
         `</div></div></div>`,
+      stage.signal,
     );
     promptEl.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(instructie));
     if (settings.voorlezen) narrator.speak(instructie);
@@ -142,7 +143,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { unHint(); stage.dispose(); removeKijker(); return; } // F-26
+      if (stage.aborted) { unHint(); stage.dispose(); removeKijker(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt)) settled = true;
@@ -243,7 +244,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       }
       stage.grass(cover);
       await Promise.all(jobs);
-      if (done || activityScopeSignal()?.aborted) return;
+      if (done || stage.aborted) return;
 
       // a soft contact shadow under the animal so it lies ON the grass
       const sh = contactShadow(Math.max(0.18, tgtH * 0.8));
@@ -273,6 +274,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
           if (id === 'target') onFound();
           else onMiss(id);
         },
+        signal: stage.signal,
       });
       ready = true;
     })().catch((e) => console.error('[zoeken3d] staging failed', e));
@@ -316,6 +318,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
           `<p class="p3-text">${esc(goedTxt)}</p>` +
           `<button class="p3-btn" type="button">Verder</button>` +
           `</div></div>`,
+        stage.signal,
       );
       if (settings.voorlezen) narrator.speak(`${goedTxt}`);
       card.querySelector('.p3-btn')?.addEventListener('click', () => {
@@ -324,11 +327,14 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         unHint();
         hint?.clear();
         removeKijker();
-        trail?.dispose();
-        stage.dispose();
         card.remove();
-        resolve({ trials: 1, correct });
-      });
+        // the lens glides back to the ranger before the world takes it over
+        void stage.handBack().then(() => {
+          trail?.dispose();
+          stage.dispose();
+          resolve({ trials: 1, correct });
+        });
+      }, { once: true });
     }
   });
 }

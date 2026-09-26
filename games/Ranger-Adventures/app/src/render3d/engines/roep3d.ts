@@ -27,7 +27,7 @@ import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  Glow, anchoredPrompt, pick3d, registerActivityWin, registerPlayHint, activityScopeSignal,
+  Glow, anchoredPrompt, pick3d, registerActivityWin, registerPlayHint,
 } from '../play/kit';
 import { Stage, nameTag } from '../play/stage';
 import { heightFor, materialsOf } from '../play/spawn';
@@ -108,6 +108,7 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
             ? `<button class="p3-call" type="button" aria-label="Speel de roep"><span aria-hidden="true">🔊</span><span>${esc(roep)}</span></button>`
             : '') +
           `</div></div>`,
+        stage.signal,
       );
       el.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(text));
       el.querySelector('.p3-call')?.addEventListener('click', () => { if (phase === 'kies') playCall(); });
@@ -116,7 +117,7 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { clearTimers(); unHint(); stage.dispose(); return; } // F-26
+      if (stage.aborted) { clearTimers(); unHint(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt) && !settled) { settled = true; maybeStart(); }
@@ -156,13 +157,14 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
           lift: 0, cur: 0, level: 0, color: CALL, live: true, shownLive: null,
         });
       }));
-      if (activityScopeSignal()?.aborted) return;
+      if (stage.aborted) return;
       teardownPick = pick3d({
         canvas: ctx.canvas,
         camera,
         raycaster,
         targets: [...fx.values()].map((f) => ({ id: f.id, object: f.group })),
         onPick,
+        signal: stage.signal,
       });
       loaded = true;
       maybeStart();
@@ -241,9 +243,9 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
         teardownPick?.();
         unHint();
         cancelAnimationFrame(raf);
-        stage.dispose();
         ctx.prompt.querySelectorAll('.ra-overlay').forEach((nn) => nn.remove());
-        resolve(summary);
+        // the lens glides back to the ranger before the world takes it over
+        void stage.handBack().then(() => { stage.dispose(); resolve(summary); });
       });
     }
 

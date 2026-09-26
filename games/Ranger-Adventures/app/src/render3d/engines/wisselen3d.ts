@@ -33,7 +33,6 @@ import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
   Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin, registerPlayHint,
-  activityScopeSignal,
 } from '../play/kit';
 import { Stage, nameTag } from '../play/stage';
 import { heightFor } from '../play/spawn';
@@ -233,7 +232,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       const cur = run.current;
       if (!cur) return;
       const s = await ctx.spawnModel(cur.id, { height: heightFor(cur.id) });
-      if (token !== animalToken || activityScopeSignal()?.aborted) { s?.dispose(); return; }
+      if (token !== animalToken || stage.aborted) { s?.dispose(); return; }
       const group = new THREE.Group();
       const h = heightFor(cur.id);
       lifted = h < PODIUM_BELOW && podium ? PODIUM_H : 0;
@@ -270,7 +269,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { unHint(); animal?.dispose(); boardTex.dispose(); stage.dispose(); return; } // F-26
+      if (stage.aborted) { unHint(); animal?.dispose(); boardTex.dispose(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt)) settled = true;
@@ -303,6 +302,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
           `<p class="p3-text">${esc(text)}</p>` +
           `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
           `</div></div></div>`,
+        stage.signal,
       );
       card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(text));
     }
@@ -352,13 +352,14 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       podium = await stage.plant('prop-tree-stump', PODIUM_H + 0.04, 0, -0.25, 0.7);
       if (podium) podium.position.y -= 0.04; // bedded into the ground a little
       await stageAnimal();
-      if (activityScopeSignal()?.aborted) return;
+      if (stage.aborted) return;
       teardownPick = pick3d({
         canvas: ctx.canvas,
         camera,
         raycaster,
         targets: [...bins.values()].map((b) => ({ id: b.bin, object: b.group })),
         onPick: (id) => onPick(id as WisselBin),
+        signal: stage.signal,
       });
       ready = true;
     })().catch((e) => console.error('[wisselen3d] staging failed', e));
@@ -399,7 +400,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
             banner(regelOm);
             speak(regelOm);
             window.setTimeout(() => {
-              if (activityScopeSignal()?.aborted) return;
+              if (stage.aborted) return;
               boardGlow.set(0);
               void stageAnimal().then(() => { banner(ruleText()); busy = false; });
             }, reduced ? 900 : 1700);
@@ -416,18 +417,21 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       speak(goed);
       const summary = run.summary();
       window.setTimeout(() => {
-        if (activityScopeSignal()?.aborted) return;
+        if (stage.aborted) return;
         narrator.stop();
         teardownPick?.();
         unHint();
         cancelAnimationFrame(raf);
         animalToken++;
-        animal?.dispose();
-        animal = null;
-        boardTex.dispose();
-        stage.dispose();
         ctx.prompt.querySelectorAll('.ra-overlay').forEach((nn) => nn.remove());
-        resolve(summary);
+        // the lens glides back to the ranger before the world takes it over
+        void stage.handBack().then(() => {
+          animal?.dispose();
+          animal = null;
+          boardTex.dispose();
+          stage.dispose();
+          resolve(summary);
+        });
       }, 1500);
     }
 

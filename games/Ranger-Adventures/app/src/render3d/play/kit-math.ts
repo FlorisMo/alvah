@@ -112,13 +112,41 @@ export function safeCamHeight(
 }
 
 /**
- * The calm reframe curve (2026-09-26): a cubic ease-in-out over 0..1 — the lens starts
- * and stops gently, so the one move into a mini-game never lurches (motion-comfort §1e;
+ * The calm reframe curve (2026-09-26): a smoothstep over 0..1 — the lens starts and
+ * stops gently, and its top speed is only 1.5× the average (a cubic in-out peaks at
+ * 3×), so the one move into or out of a mini-game never lurches (motion-comfort §1e;
  * reduced-motion cuts instead and never reaches this curve).
  */
 export function easeInOut(t: number): number {
   const x = Math.max(0, Math.min(1, t));
-  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  return x * x * (3 - 2 * x);
+}
+
+/** Yaw (rad, atan2(x, z)) and pitch (rad, + up) of a view direction. */
+export function yawPitch(x: number, y: number, z: number): { yaw: number; pitch: number } {
+  const len = Math.hypot(x, y, z) || 1;
+  return { yaw: Math.atan2(x, z), pitch: Math.asin(Math.max(-1, Math.min(1, y / len))) };
+}
+
+/** The unit view direction for a yaw/pitch (the inverse of `yawPitch`). */
+export function aimDir(yaw: number, pitch: number): { x: number; y: number; z: number } {
+  const c = Math.cos(pitch);
+  return { x: Math.sin(yaw) * c, y: Math.sin(pitch), z: Math.cos(yaw) * c };
+}
+
+/** Blend angle `a` toward `b` by `e` (0..1) the SHORT way round. */
+export function lerpAngle(a: number, b: number, e: number): number {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return a + d * e;
+}
+
+/** How long a reframe that turns the view by `turnDeg` takes: never under `base`
+ *  seconds, and at least 1 s per 60° — so with the smoothstep the view turns at most
+ *  ~90°/s (1.5° a frame) however far it has to go. */
+export function reframeSeconds(base: number, turnDeg: number): number {
+  return Math.max(base, turnDeg / 60);
 }
 
 /**

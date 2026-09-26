@@ -31,7 +31,6 @@ import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
   Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin, registerPlayHint,
-  activityScopeSignal,
 } from '../play/kit';
 import { Stage, nameTag } from '../play/stage';
 import { heightFor } from '../play/spawn';
@@ -100,6 +99,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
           (dots ? `<p class="p3-dots" aria-hidden="true"></p>` : '') +
           `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
           `</div></div></div>`,
+        stage.signal,
       );
       card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(text));
       showProgress();
@@ -108,7 +108,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { clearTimers(); unHint(); stage.dispose(); return; } // F-26
+      if (stage.aborted) { clearTimers(); unHint(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt) && !settled) { settled = true; maybeStart(); }
@@ -157,13 +157,14 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
           lift: 0, cur: 0, level: 0, color: CALL,
         });
       }));
-      if (activityScopeSignal()?.aborted) return;
+      if (stage.aborted) return;
       teardownPick = pick3d({
         canvas: ctx.canvas,
         camera,
         raycaster,
         targets: [...fx.values()].map((f) => ({ id: f.id, object: f.group })),
         onPick,
+        signal: stage.signal,
       });
       loaded = true;
       maybeStart();
@@ -259,9 +260,9 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         teardownPick?.();
         unHint();
         cancelAnimationFrame(raf);
-        stage.dispose();
         ctx.prompt.querySelectorAll('.ra-overlay').forEach((nn) => nn.remove());
-        resolve(summary);
+        // the lens glides back to the ranger before the world takes it over
+        void stage.handBack().then(() => { stage.dispose(); resolve(summary); });
       });
     }
 

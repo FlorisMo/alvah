@@ -11,11 +11,16 @@
  * Everything staged on it sits PER POINT on `WorldCtx.groundY` (the rendered ground),
  * never on a flat activity Y. The approached marker animal is hidden while the game
  * runs (its mission is being played right here) and comes back on `dispose()`.
+ *
+ * The stage also owns the game's lifetime: `signal` is the activity's abort scope,
+ * read once here, and `handBack()` glides the lens back to the exact pose the world's
+ * follow camera had when the game began — so when the world takes the camera back
+ * its aim continues from where the player left it, with no snap.
  */
 
 import * as THREE from 'three';
 import type { Spawned, SpawnOpts, WorldCtx } from './types';
-import { makeReframe } from './kit';
+import { activityScopeSignal, makeReframe } from './kit';
 import { safeCamHeight, stageHeadings } from './kit-math';
 import { grassMaterial, grassTuftGeometry, heightFor } from './spawn';
 
@@ -48,7 +53,13 @@ export class Stage {
   readonly cam = V();
   readonly look = V();
 
+  /** this game's abort scope ("Stop de missie"), captured when it began */
+  readonly signal: AbortSignal | null = activityScopeSignal();
+
   private readonly scene: THREE.Scene;
+  /** the follow camera's pose when the game began: `handBack()` returns here */
+  private readonly homePos: THREE.Vector3;
+  private readonly homeLook: THREE.Vector3;
   private readonly owned: THREE.Object3D[] = [];
   private readonly spawned: Spawned[] = [];
   private readonly hidden: { o: THREE.Object3D; was: boolean }[] = [];
@@ -60,6 +71,11 @@ export class Stage {
     this.spec = {
       tall: 1, pitchDeg: 30, insetTop: 0, insetBottom: 0, ...spec,
     };
+    // remember where the follow camera stood and which way it looked (at the ranger)
+    // before the reframe takes it
+    const camera = ctx.camera as THREE.PerspectiveCamera;
+    this.homePos = camera.position.clone();
+    this.homeLook = this.homePos.clone().add(camera.getWorldDirection(V()));
     this.plan();
     ctx.setFocus(this.centre.x, this.centre.y, this.centre.z);
     // the approached marker IS this mission's animal — while its game runs it steps
@@ -358,6 +374,34 @@ export class Stage {
   reframe(): { update: (dt: number) => boolean } {
     // the lens glides forward over the ranger's head: a small rise keeps him low in frame
     return makeReframe(this.ctx.camera as THREE.PerspectiveCamera, this.cam.clone(), this.look.clone(), this.ctx.reducedMotion, 1.3, 0.6);
+  }
+
+  /** true once "Stop de missie" aborted this game */
+  get aborted(): boolean {
+    return !!this.signal?.aborted;
+  }
+
+  /**
+   * The one calm move back: the lens glides (same curve, same rise over the ranger's
+   * head) to the follow camera's pose from before the game, then resolves. The world's
+   * follow takes over from exactly that pose, so its aim never snaps (a cut under
+   * reduced-motion). The staged scene stays in place during the glide (the caller
+   * disposes it after), and the idle clips keep playing. Resolves at once on a stop.
+   */
+  handBack(): Promise<void> {
+    const move = makeReframe(this.ctx.camera as THREE.PerspectiveCamera, this.homePos.clone(), this.homeLook.clone(), this.ctx.reducedMotion, 1.1, 0.6);
+    return new Promise((resolve) => {
+      let last = performance.now();
+      const step = (now: number): void => {
+        if (this.disposed || this.aborted) { resolve(); return; }
+        const dt = Math.min((now - last) / 1000, 0.05);
+        last = now;
+        this.update(dt);
+        if (move.update(dt)) { resolve(); return; }
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
   }
 
   /** Advance every spawned idle clip (call once per frame). */

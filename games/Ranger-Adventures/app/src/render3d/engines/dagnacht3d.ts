@@ -30,7 +30,7 @@ import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  anchoredPrompt, contactShadow, registerActivityWin, registerPlayHint, activityScopeSignal,
+  anchoredPrompt, contactShadow, registerActivityWin, registerPlayHint,
 } from '../play/kit';
 import { Stage } from '../play/stage';
 import { heightFor } from '../play/spawn';
@@ -186,7 +186,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
           break;
         }
       }
-      if (token !== subjectToken || activityScopeSignal()?.aborted) { // superseded
+      if (token !== subjectToken || stage.aborted) { // superseded
         for (const d of disposers) d();
         return;
       }
@@ -197,7 +197,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { unHint(); subjectToken++; clearSubject(); stage.dispose(); return; } // F-26
+      if (stage.aborted) { unHint(); subjectToken++; clearSubject(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       reframe.update(dt);
@@ -240,6 +240,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
           `<div class="p3-choices">` +
           order.map((i) => `<button class="p3-choice" data-i="${i}" type="button">${esc(enc.opties[i].label)}</button>`).join('') +
           `</div></div></div>`,
+        stage.signal,
       );
       card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(enc.vraag));
       speak(enc.vraag);
@@ -276,7 +277,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
       col.insertBefore(t, col.firstChild); // ABOVE the card: never over a choice
       speak(text);
       const words = text.split(/\s+/).length;
-      window.setTimeout(() => { if (!activityScopeSignal()?.aborted) then(); }, Math.max(kind === 'ok' ? 1600 : 2400, words * 280));
+      window.setTimeout(() => { if (!stage.aborted) then(); }, Math.max(kind === 'ok' ? 1600 : 2400, words * 280));
     }
 
     function finish(): void {
@@ -286,10 +287,9 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
       cancelAnimationFrame(raf);
       unHint();
       subjectToken++;
-      clearSubject();
-      stage.dispose();
       ctx.prompt.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
-      resolve(summary);
+      // the lens glides back to the ranger before the world takes it over
+      void stage.handBack().then(() => { clearSubject(); stage.dispose(); resolve(summary); });
     }
 
     // W2.3: dev-only win — take the calm (goed) choice on every encounter, then finish.

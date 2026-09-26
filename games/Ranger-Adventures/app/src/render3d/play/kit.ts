@@ -19,7 +19,7 @@
  */
 
 import * as THREE from 'three';
-import { easeInOut, tapHitRadius, trailPoints } from './kit-math';
+import { aimDir, easeInOut, lerpAngle, reframeSeconds, tapHitRadius, trailPoints, yawPitch } from './kit-math';
 import { skinnedRenderBox } from '../Models';
 
 /* ------------------------------------------------------ test win channel ---- */
@@ -98,14 +98,14 @@ export function currentPlayHint(): PlayHint | null {
 
 /**
  * Cancellation for one in-flight mission step (RUN-3 P3.2 · F-26 "Stop de
- * missie"). The mission runner opens a fresh scope before each step; `pick3d`
- * binds its canvas listener to the scope's signal and every engine frame loop
- * early-returns once it aborts — so a mid-mission "Stop" tears the running step
- * down with no leaked pointer handler and no orphaned `requestAnimationFrame`,
- * and the world is then rebuilt clean (Missions.ts). The controller is NOT
- * nulled on abort: the already-scheduled loop frame must still read `aborted`
- * and return instead of rescheduling. A fresh `beginActivityScope()` replaces it
- * for the next step.
+ * missie"). The mission runner opens a fresh scope before each step. A running
+ * game reads the signal ONCE when it starts (`Stage.signal`) and binds everything
+ * to that one: `pick3d`'s canvas listener, `anchoredPrompt`, its frame loop and
+ * its late timers — so a mid-mission "Stop" tears the running step down with no
+ * leaked pointer handler, no orphaned `requestAnimationFrame` and no card coming
+ * back. The abort then RETIRES the scope (2026-09-26): a later activity that opens
+ * none of its own (the roep bench) starts un-aborted instead of inheriting the
+ * stopped mission's scope and freezing before its first frame.
  */
 let activityAbort: AbortController | null = null;
 
@@ -115,12 +115,14 @@ export function beginActivityScope(): AbortSignal {
   return activityAbort.signal;
 }
 
-/** Fire the current activity's abort (the "Stop de missie" action). Idempotent. */
+/** Fire the current activity's abort (the "Stop de missie" action) and retire the
+ *  scope. Idempotent. Games hold their own copy of the signal, so they still see it. */
 export function abortActivityScope(): void {
   activityAbort?.abort();
+  activityAbort = null;
 }
 
-/** The live activity-abort signal (engine loops read `?.aborted`); null when idle. */
+/** The live activity-abort signal (a game captures it once, at its start); null when idle. */
 export function activityScopeSignal(): AbortSignal | null {
   return activityAbort?.signal ?? null;
 }
@@ -138,6 +140,8 @@ export interface Pick3dOptions {
   raycaster: THREE.Raycaster;
   targets: Pick3dTarget[];
   onPick: (id: string) => void;
+  /** the game's own abort signal (`Stage.signal`): a stop removes the listener */
+  signal: AbortSignal | null;
 }
 
 /** The world-space box a player actually sees for `object` — a rigged GLB renders at
@@ -185,7 +189,8 @@ export function addHitSphere(
  * disposes the hit-spheres.
  */
 export function pick3d(opts: Pick3dOptions): () => void {
-  const { canvas, camera, raycaster, targets, onPick } = opts;
+  const { canvas, camera, raycaster, targets, onPick, signal } = opts;
+  if (signal?.aborted) return () => {}; // a stopped game takes no more picks
   const viewportH = canvas.getBoundingClientRect().height || 800;
   const spheres = targets.map((t) => addHitSphere(t.object, camera, viewportH));
   const c = new THREE.Vector3();
@@ -219,12 +224,11 @@ export function pick3d(opts: Pick3dOptions): () => void {
     }
     if (best) onPick((best as { id: string }).id);
   };
-  // F-26: bind to the live activity-abort scope so "Stop de missie" removes this
-  // canvas listener even when the engine's own teardown never runs (aborted
-  // mid-step). The explicit removeEventListener below stays correct on the normal
+  // F-26: bind to the game's abort scope so "Stop de missie" removes this canvas
+  // listener even when the engine's own teardown never runs (aborted mid-step).
+  // The explicit removeEventListener below stays correct on the normal
   // (non-aborted) path — removing twice is a no-op.
-  const abortSig = activityScopeSignal();
-  canvas.addEventListener('pointerdown', onDown, abortSig ? { signal: abortSig } : undefined);
+  canvas.addEventListener('pointerdown', onDown, signal ? { signal } : undefined);
 
   return () => {
     canvas.removeEventListener('pointerdown', onDown);
@@ -301,8 +305,9 @@ export class Glow {
  * The accessible DOM card the 3D view writes its words/choices/read-aloud into —
  * the same `.ra-overlay` system the 2D views + Missions use, so the text-only
  * path stays fully playable. Returns the element (caller fills + wires it).
+ * `signal` is the game's own abort signal (`Stage.signal`).
  */
-export function anchoredPrompt(host: HTMLElement, html: string): HTMLDivElement {
+export function anchoredPrompt(host: HTMLElement, html: string, signal: AbortSignal | null): HTMLDivElement {
   const el = document.createElement('div');
   // `ra-play`: the full-screen wrapper must let clicks through to the 3D canvas
   // (pick3d) — only its card/buttons take pointer events (see missions.css).
@@ -310,7 +315,7 @@ export function anchoredPrompt(host: HTMLElement, html: string): HTMLDivElement 
   el.innerHTML = html;
   // a late timer of a stopped step ("Stop de missie") must never put a card back over
   // the world: after an abort the card is built but never mounted
-  if (activityScopeSignal()?.aborted) return el;
+  if (signal?.aborted) return el;
   host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
   host.appendChild(el);
   return el;
@@ -397,11 +402,14 @@ export function spoorTrail(
 
 /**
  * A §1e camera reframe (2026-09-26: one calm eased move). The lens glides from where
- * it is to `to` over `seconds`, and its aim glides from where it looks now to
- * `lookAt` on the SAME curve — so nothing snaps on the first frame, the view never
- * swings faster than the move, and roll stays 0 (fixed FOV throughout). Under
- * reduced-motion it CUTS on the first update. `update(dt)` returns true once settled
- * and keeps holding the pose after that (nothing else drives the camera meanwhile).
+ * it is to `to`, and its aim turns from where it looks now to `lookAt` on the SAME
+ * smoothstep curve — yaw the short way round and pitch together, so nothing snaps on
+ * the first frame, the turn is spread evenly over the move and roll stays 0 (fixed
+ * FOV throughout). The move takes `seconds`, or longer for a big turn
+ * (`reframeSeconds`: the view never turns faster than ~90°/s). `arc` lifts the lens
+ * mid-move (so a glide over the ranger clears his head). Under reduced-motion it CUTS
+ * on the first update. `update(dt)` returns true once settled and keeps holding the
+ * pose after that (nothing else drives the camera meanwhile).
  */
 export function makeReframe(
   camera: THREE.PerspectiveCamera,
@@ -412,31 +420,36 @@ export function makeReframe(
   arc = 0,
 ): { update: (dt: number) => boolean } {
   let from: THREE.Vector3 | null = null;
-  let fromLook: THREE.Vector3 | null = null;
-  const look = new THREE.Vector3();
+  let aim0 = { yaw: 0, pitch: 0 };
+  let aim1 = { yaw: 0, pitch: 0 };
+  let dur = seconds;
+  const aim = new THREE.Vector3();
   let t = 0;
+  const hold = (): void => {
+    camera.position.copy(to);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(lookAt);
+  };
   return {
     update(dt: number): boolean {
-      if (reduced || seconds <= 0) {
-        camera.position.copy(to);
-        camera.up.set(0, 1, 0);
-        camera.lookAt(lookAt);
-        return true;
-      }
-      if (!from || !fromLook) {
+      if (reduced || seconds <= 0) { hold(); return true; }
+      if (!from) {
         from = camera.position.clone();
-        const dir = camera.getWorldDirection(new THREE.Vector3());
-        fromLook = from.clone().addScaledVector(dir, Math.max(1, to.distanceTo(lookAt)));
+        const d0 = camera.getWorldDirection(new THREE.Vector3());
+        const d1 = lookAt.clone().sub(to);
+        aim0 = yawPitch(d0.x, d0.y, d0.z);
+        aim1 = yawPitch(d1.x, d1.y, d1.z);
+        dur = reframeSeconds(seconds, (d0.angleTo(d1) * 180) / Math.PI);
       }
-      t = Math.min(1, t + dt / seconds);
+      t = Math.min(1, t + dt / dur);
+      if (t >= 1) { hold(); return true; }
       const e = easeInOut(t);
       camera.position.lerpVectors(from, to, e);
-      // a soft rise mid-move, so a glide that passes over the ranger clears his head
       camera.position.y += Math.sin(Math.PI * e) * arc;
-      look.lerpVectors(fromLook, lookAt, e);
+      const d = aimDir(lerpAngle(aim0.yaw, aim1.yaw, e), aim0.pitch + (aim1.pitch - aim0.pitch) * e);
       camera.up.set(0, 1, 0); // roll = 0 always
-      camera.lookAt(look);
-      return t >= 1;
+      camera.lookAt(aim.copy(camera.position).add(new THREE.Vector3(d.x, d.y, d.z)));
+      return false;
     },
   };
 }
