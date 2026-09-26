@@ -20,6 +20,9 @@ import {
   anchorInBiome, type Biome,
 } from './Biomes';
 import { Terrain } from './world/Terrain';
+import { Sky } from './world/Sky';
+import { Labels } from './world/Labels';
+import { enableCast, proceduralTotem } from './world/props';
 import { loadManifest, loadModel, loadRig, prepModel, skinnedRenderBox } from './Models';
 import { standHeightFor, RANGER_STAND_HEIGHT, ADULT_REFERENCE_HEIGHT } from './AnimalScale';
 import { applyEyes } from './EyeMaterial';
@@ -48,12 +51,7 @@ import { dampFactor } from './play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
 import { PlayerRig } from './PlayerRig';
 import { ROEP_COPY } from '../engines/roep';
-import {
-  SKY_STOPS, cloudOffset, windSway, flyoverAt, type Flyover,
-} from './Atmosphere';
-import {
-  GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky,
-} from './Lighting';
+import { windSway } from './Atmosphere';
 import {
   WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp,
 } from './Water';
@@ -66,8 +64,6 @@ export interface WorldMarker {
   color: string;            // totem / accent colour
   biome?: Biome;            // the mission's landschap → anchor the marker in it
 }
-
-const SKY_LOW = GOLDEN_HOUR.fogColor; // shared golden-hour horizon + fog colour (P1.1)
 
 // `grounded` band for the dev-hook court check (P1.5a asserts it across the world):
 // after the snap the feet sit ON the rendered surface, so clearance ≈ 0. A few cm of
@@ -114,13 +110,6 @@ const HELI_AIRBORNE_Y = 2.5;
 // het bos" cue fires (once per approach, re-armed inward). All in metres.
 const RIM_EASE = 8;
 const RIM_HINT = 3.5;
-// F-22 occlusion-proof labels: the diegetic name-tags draw with depthTest off so
-// no nearer mesh can clip them mid-glyph (see makeLabel). The cost of drawing them
-// on top of everything is that a far tag would otherwise punch through hills from
-// across the map, so each fades OUT with distance — full opacity within FULL m
-// (the hub / an open mission, i.e. the moment the label matters), gone by GONE m.
-const LABEL_FADE_FULL = 55;  // camera→label distance (m) below which a tag is fully opaque
-const LABEL_FADE_GONE = 85;  // …and above which it has faded to nothing
 
 // P1.3: the tree canopy is authored at ONE fidelity. Both the scattered bos trees and
 // the F-11 rim tree-line render an instant low-poly cone/cylinder stand-in, then the
@@ -262,11 +251,9 @@ export class World {
   private readonly RING_FADE_FAR = 4.2;  // lens ≥ this ⇒ full "go here" opacity (normal approach/standing boom ~4.6 m)
   private readonly _camPose = new THREE.Vector3();  // scratch: camera world forward
   private readonly _camBox = new THREE.Box3();       // scratch: ranger bbox for pose reads
-  private readonly _labelFwd = new THREE.Vector3();  // scratch: camera forward for the label fade
-  private readonly _labelWP = new THREE.Vector3();   // scratch: a label's world position
-  // F-22: every diegetic world/vehicle/POI name-tag makeLabel() builds, so one
-  // per-frame pass (fadeWorldLabels) can keep them all occlusion-proof + distance-faded.
-  private readonly labels: THREE.Sprite[] = [];
+  // the sky, golden-hour light + ambient clock (world/Sky.ts) and the name-tags (world/Labels.ts)
+  private readonly sky: Sky;
+  private readonly labels = new Labels();
   // W1.5 rotating follow-cam: `followYaw` is the eased camera bearing; it chases
   // `followTargetYaw` (the ranger's facing, updated ONLY while he is moving — a
   // standing ranger never swings the camera). Both start at π = straight behind
@@ -378,13 +365,6 @@ export class World {
   // Every placement, the ranger's feet, the vehicles and the camera read terrain.y.
   private readonly terrain: Terrain;
   private readonly ground: THREE.Mesh;
-  // W4.5 golden-hour light + selective hero shadow map. The warm sun casts a soft
-  // shadow only for the ranger + solid props (castShadow=true); its tight ortho
-  // frustum FOLLOWS the ranger via a fixed offset (`sunOffset`) so the covered set
-  // stays the CLOSEST props and the light DIRECTION never changes (static, no day
-  // cycle). Moving animals get cheap blob shadows instead (no shadow-map cost).
-  private sun: THREE.DirectionalLight | null = null;
-  private readonly sunOffset = new THREE.Vector3(-9, 7, 4);
   private rangerCastsShadow = false;
   private blobCount = 0;
   private renderer: THREE.WebGLRenderer | null = null;
@@ -401,19 +381,11 @@ export class World {
   private static readonly _e = new THREE.Euler();
   private static readonly _p = new THREE.Vector3();
   private static readonly _s = new THREE.Vector3();
-  // W4.6 "Lucht + adem": all SECONDARY ambient motion (drifting cloud shadows,
-  // grass wind wave, bird flyover). `skyTime` advances ONLY when reduced-motion is
-  // off, so every effect freezes together under reduced-motion (comfort §C). The
-  // effects are driven from the pure Atmosphere math.
-  private skyTime = 0;
   // W4.8 ven-water: the fresnel disc's shader material — the World drives its
   // `uTime` (from `skyTime`, so it freezes with the rest of the ambient motion)
   // and `uAmp` (0 under reduced-motion → waveless) each frame.
   private waterMat: THREE.ShaderMaterial | null = null;
   private lastWindT = NaN;                       // skip redundant wind re-uploads
-  private cloudLayer: THREE.Mesh | null = null;  // multiply-blended cloud-shadow plane
-  private flyBird: THREE.Group | null = null;    // the ~12 s sky crossing bird
-  private lastFlyover: Flyover | null = null;
   // tall grasses that catch the wind (marram + reed): their instanced mesh + the
   // per-blade base transform, re-tilted each frame by windSway.
   private readonly windMeshes: {
@@ -610,32 +582,7 @@ export class World {
     this.onBiome = onBiome;
     this.activeId = activeId;
 
-    this.scene.background = this.skyTexture();
-    this.scene.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 22, 90);
-
-    // P1.1: the ONE shared golden-hour rig (Lighting.GOLDEN_HOUR, §2.1) — the same
-    // cool-sky / warm-ground hemisphere fill + warm low key the title + sandbox use,
-    // so no screen reads as a different game.
-    addGoldenHourHemi(this.scene);
-    // W4.5: a warm, low golden-hour sun raking in from screen-left (the camera
-    // looks down −z, so −x is the left of frame). Static direction — no day cycle.
-    const sun = makeGoldenHourSun();
-    sun.position.copy(this.sunOffset);
-    // Selective HERO shadow map: only meshes with castShadow=true (the ranger +
-    // solid props, opted in on load) drop a soft shadow. The ortho frustum is
-    // kept tight (±16 m) and FOLLOWS the ranger each frame (see update()), so the
-    // covered set is always the CLOSEST props — high-res + budget-safe.
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 60;
-    const R = 16;
-    sun.shadow.camera.left = -R; sun.shadow.camera.right = R;
-    sun.shadow.camera.top = R; sun.shadow.camera.bottom = -R;
-    sun.shadow.bias = -0.0006; // kill shadow acne on the low-poly ground
-    this.scene.add(sun);
-    this.scene.add(sun.target); // the shadow camera aims here; moved with the ranger
-    this.sun = sun;
+    this.sky = new Sky(this.scene); // golden-hour sky, fog, hemisphere fill + the hero-shadow sun
 
     this.terrain = new Terrain({
       detail: this.groundDetailOn,
@@ -645,8 +592,8 @@ export class World {
     this.scene.add(this.ground);
     this.scene.add(this.buildPaths()); // W4.3: sand-path ribbons over the ground
     this.scene.add(this.buildVenWater());
-    this.buildCloudShadows(); // W4.6: drifting cloud shadows over the ground
-    this.buildFlyover();      // W4.6: the ~12 s bird flyover
+    this.sky.buildCloudShadows(); // W4.6: drifting cloud shadows over the ground
+    this.sky.buildFlyover();      // W4.6: the ~12 s bird flyover
     // W7.2: vegetation density scales with the persisted quality tier (laag ≈ half).
     const veg = QUALITY_TIERS[this.tier].vegetationScale;
     this.scatterPines(Math.round(80 * veg));
@@ -1125,20 +1072,6 @@ export class World {
     });
   }
 
-  // ---- build ----
-  private skyTexture(): THREE.Texture {
-    // P1.1: the SHARED golden-hour ramp (Atmosphere.SKY_STOPS via Lighting), the
-    // same soft warm zenith→horizon bands the title + sandbox bake — one sky.
-    return bakeGoldenHourSky();
-  }
-
-  /** W4.5: opt a loaded prop/ranger into the hero shadow map (Models.ts clears
-   *  castShadow on every mesh at load, so this re-enables it on the hero set only).
-   *  The sun's tight ranger-following frustum still culls to the closest props. */
-  private static enableCast(obj: THREE.Object3D): void {
-    obj.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
-  }
-
   /** W4.5: a soft radial blob texture (dark centre → transparent rim), baked once
    *  and shared by every animal blob shadow — cheap grounding with no shadow-map
    *  cost, the plan's choice for the moving cast. */
@@ -1173,75 +1106,6 @@ export class World {
     disc.renderOrder = 1;
     group.add(disc);
     this.blobCount++;
-  }
-
-  /**
-   * W4.6: drifting cloud shadows. ONE large flat plane over the play area,
-   * MULTIPLY-blended so its soft grey blobs darken the ground pixels behind it —
-   * a real cheap cloud shadow (one draw call, no shadow-map cost). The texture
-   * repeats and its offset is scrolled by `cloudOffset(skyTime)` each frame, so
-   * the patches drift; a frozen clock (reduced-motion) stops them. Sits low over
-   * the terrain and only DARKENS (multiply against white = no change), so it
-   * never adds a visible plane — just soft moving shade.
-   */
-  private buildCloudShadows(): void {
-    const N = 256;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = N;
-    const ctx = cv.getContext('2d')!;
-    ctx.fillStyle = '#ffffff'; // white = "no darkening" under multiply
-    ctx.fillRect(0, 0, N, N);
-    // a few soft grey blobs = the cloud undersides that darken the ground. Drawn
-    // with wrap-around copies so the tile stays seamless when it repeats.
-    const blobs: [number, number, number, number][] = [
-      [0.22, 0.30, 0.26, 0.30], [0.66, 0.20, 0.20, 0.24],
-      [0.48, 0.62, 0.30, 0.26], [0.83, 0.74, 0.22, 0.22],
-      [0.12, 0.82, 0.18, 0.20],
-    ];
-    for (const [bx, by, br, a] of blobs) {
-      for (const ox of [-1, 0, 1]) for (const oy of [-1, 0, 1]) {
-        const cx = (bx + ox) * N, cy = (by + oy) * N, r = br * N;
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        g.addColorStop(0, `rgba(120,116,110,${a})`); // soft warm-grey shade
-        g.addColorStop(1, 'rgba(120,116,110,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-      }
-    }
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(2.2, 2.2); // ~110 m per tile over the 240 m ground — big soft clouds
-    const mat = new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, depthWrite: false,
-      blending: THREE.MultiplyBlending, premultipliedAlpha: true, // three wants this for multiply
-    });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = 3.2;   // low over the gentle relief so shade reads on the ground
-    mesh.renderOrder = 2;    // after the ground + props so the multiply lands on them
-    mesh.frustumCulled = false;
-    this.scene.add(mesh);
-    this.cloudLayer = mesh;
-  }
-
-  /**
-   * W4.6: the bird flyover. A small dark silhouette (a shallow V of two wings)
-   * high in the sky; `flyoverAt(skyTime)` sails it west→east on the ~12 s period
-   * with a calm gap between passes. Parked off-view / frozen under reduced-motion.
-   */
-  private buildFlyover(): void {
-    const g = new THREE.Group();
-    const mat = new THREE.MeshBasicMaterial({ color: '#3b3630' });
-    const wing = new THREE.BoxGeometry(1.6, 0.06, 0.34);
-    const left = new THREE.Mesh(wing, mat);
-    const right = new THREE.Mesh(wing, mat);
-    left.position.set(-0.75, 0, 0); left.rotation.z = 0.28;
-    right.position.set(0.75, 0, 0); right.rotation.z = -0.28;
-    g.add(left, right);
-    g.visible = false;
-    this.flyBird = g;
-    this.scene.add(g);
   }
 
   /**
@@ -1645,7 +1509,7 @@ export class World {
     // no ARKit blendshape rig (the Meshy mesh today) is left untouched, never throws.
     // Expression + blink are essential motion, so they stay on under reduced-motion.
     applyFace(prepped, { emotion: 'neutral', child: true }); // microsaccade reads the live policy (no restart)
-    World.enableCast(prepped); // W4.5: the ranger is the primary hero shadow caster
+    enableCast(prepped); // W4.5: the ranger is the primary hero shadow caster
     this.rangerCastsShadow = true;
     this.ranger.clear();
     this.ranger.add(prepped);
@@ -1982,7 +1846,7 @@ export class World {
   lightingState(): { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number } {
     return {
       shadowMap: this.renderer ? this.renderer.shadowMap.enabled : false,
-      sunCastsShadow: this.sun ? this.sun.castShadow : false,
+      sunCastsShadow: this.sky.sun.castShadow,
       rangerCastsShadow: this.rangerCastsShadow,
       blobShadows: this.blobCount,
     };
@@ -1992,25 +1856,8 @@ export class World {
    *  stop count, whether the cloud-shadow layer + wind grasses are present, and
    *  the LIVE cloud offset / wind phase / bird position so the E2E can prove the
    *  ambient motion advances when moving AND freezes under reduced-motion. */
-  skyState(): {
-    gradientStops: number;
-    cloudDrift: boolean;
-    windMeshes: number;
-    skyTime: number;
-    cloudOffset: { x: number; y: number };
-    windSample: number;
-    flyover: { x: number; y: number; z: number; visible: boolean } | null;
-  } {
-    const f = this.lastFlyover;
-    return {
-      gradientStops: SKY_STOPS.length,
-      cloudDrift: this.cloudLayer !== null,
-      windMeshes: this.windMeshes.length,
-      skyTime: this.skyTime,
-      cloudOffset: cloudOffset(this.skyTime),
-      windSample: windSway(this.skyTime, 0),
-      flyover: f ? { x: f.x, y: f.y, z: f.z, visible: f.visible } : null,
-    };
+  skyState(): ReturnType<Sky['state']> {
+    return this.sky.state(this.windMeshes.length);
   }
 
   /** Dev-hook accessor (W4.7b): the running footstep count + the last surface
@@ -2089,11 +1936,11 @@ export class World {
 
       // a small diegetic name-tag floating above the marker (in-world label, no
       // minimap chrome) — a camera-facing sprite so it stays readable from any angle
-      const label = this.makeLabel(mk.titel, mk.color);
+      const label = this.labels.make(mk.titel, mk.color);
       label.position.y = 1.9;
       group.add(label);
 
-      group.add(this.proceduralTotem(mk.color)); // instant stand-in
+      group.add(proceduralTotem(mk.color)); // instant stand-in
       this.scene.add(group);
       const entry = {
         group, pos: group.position.clone(), missionId: mk.missionId,
@@ -2136,76 +1983,6 @@ export class World {
     });
   }
 
-  /** A camera-facing sprite name-tag (rounded warm card + the mission title). */
-  private makeLabel(text: string, color: string): THREE.Sprite {
-    const pad = 24, fontPx = 44;
-    const pipGap = 34; // left pad → colour pip → text: the title baseline starts pad+pipGap in
-    const c = document.createElement('canvas');
-    const ctx = c.getContext('2d')!;
-    ctx.font = `600 ${fontPx}px Inter, system-ui, sans-serif`;
-    // F-22 re-open: the width MUST cover the whole run — left pad + pip + text + an
-    // EQUAL right pad. The old `textW + pad*2` ignored the pipGap the title is drawn
-    // at, so the last glyph overflowed the canvas' right edge and clipped
-    // ("Missiebord" → "Missieborc"). Deriving both from pipGap keeps them in lockstep.
-    const w = pad + pipGap + Math.ceil(ctx.measureText(text).width) + pad;
-    const h = fontPx + pad * 2;
-    c.width = w; c.height = h;
-    // rounded warm card
-    const r = 22;
-    ctx.fillStyle = 'rgba(40, 30, 18, 0.78)';
-    ctx.beginPath();
-    ctx.moveTo(r, 0); ctx.arcTo(w, 0, w, h, r); ctx.arcTo(w, h, 0, h, r);
-    ctx.arcTo(0, h, 0, 0, r); ctx.arcTo(0, 0, w, 0, r); ctx.closePath(); ctx.fill();
-    // a colour pip + the title (dual-channel: colour + word)
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(pad + 10, h / 2, 12, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fdf6e8';
-    ctx.font = `600 ${fontPx}px Inter, system-ui, sans-serif`;
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, pad + pipGap, h / 2 + 2);
-
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    // F-22: depthTest OFF + a high renderOrder → a nearer mesh (the giant avatar's
-    // leg in Run A, the board planks, a pine, the parked jeep) can no longer
-    // depth-occlude the tag and cut the one string that names the object mid-glyph.
-    // depthWrite stays off so the tag never pollutes the depth buffer for what draws
-    // after it. The always-on-top trade-off is bounded by the per-frame
-    // distance/behind-camera fade in fadeWorldLabels().
-    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
-    const sprite = new THREE.Sprite(mat);
-    sprite.renderOrder = 12; // draw after the opaque world + props so it composites over them
-    const scale = 0.0042; // world units per px → ~legible without dominating
-    sprite.scale.set(w * scale, h * scale, 1);
-    this.labels.push(sprite); // registered for the F-22 occlusion-proof distance fade
-    return sprite;
-  }
-
-  /**
-   * F-22: keep every diegetic world/vehicle/POI name-tag readable. makeLabel draws
-   * them with depthTest off + a high renderOrder, so a nearer mesh can never clip a
-   * tag mid-glyph again (the whole defect). The cost of drawing on top of everything
-   * is that a distant tag would otherwise punch through hills from across the map,
-   * so fade each one out behind the camera and with distance. Reading close-up (the
-   * hub, an open mission — the moment the label matters) stays full opacity, so the
-   * fade never touches the frame the finding grades. Cheap: one dot + one length per
-   * tag, no allocation (scratch vectors), no draw-call change.
-   */
-  private fadeWorldLabels(): void {
-    if (this.labels.length === 0) return;
-    const cp = this.camera.position;
-    const fwd = this.camera.getWorldDirection(this._labelFwd);
-    for (const label of this.labels) {
-      const mat = label.material as THREE.SpriteMaterial;
-      const wp = label.getWorldPosition(this._labelWP);
-      const dx = wp.x - cp.x, dy = wp.y - cp.y, dz = wp.z - cp.z;
-      if (dx * fwd.x + dy * fwd.y + dz * fwd.z <= 0.5) { mat.opacity = 0; continue; } // behind the camera
-      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      mat.opacity = Math.max(0, Math.min(1,
-        (LABEL_FADE_GONE - dist) / (LABEL_FADE_GONE - LABEL_FADE_FULL)));
-    }
-  }
-
   /**
    * Place the spawn-clearing hub (§4, W2.2): the ranger-cabin (a solid building the
    * ranger walks around) and the case-board (the mission hub — walking up to it
@@ -2245,7 +2022,7 @@ export class World {
     void loadModel('prop-ranger-cabin').then((m) => {
       if (!m) return;
       const prepped = prepModel(m, 3.0);
-      World.enableCast(prepped); // W4.5: the spawn cabin is a hero prop near the player
+      enableCast(prepped); // W4.5: the spawn cabin is a hero prop near the player
       cabin.remove(...cabin.children);
       cabin.add(prepped);
     });
@@ -2283,7 +2060,7 @@ export class World {
     ring.position.y = 0.05;
     board.add(ring);
     this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: boardAt.x, z: boardAt.z, base: 0.5 }); // D3.16
-    const label = this.makeLabel('Missiebord', '#f5c23b');
+    const label = this.labels.make('Missiebord', '#f5c23b');
     label.position.y = 2.0;
     board.add(label);
     this.scene.add(board);
@@ -2326,7 +2103,7 @@ export class World {
     ring.position.y = 0.05;
     group.add(ring);
     this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: at.x, z: at.z, base: 0.5 }); // D3.16
-    const label = this.makeLabel(ROEP_COPY.wayfinding, '#cfe6f2');
+    const label = this.labels.make(ROEP_COPY.wayfinding, '#cfe6f2');
     label.position.y = 1.7;
     group.add(label);
     this.scene.add(group);
@@ -2384,9 +2161,9 @@ export class World {
       const group = new THREE.Group();
       group.position.copy(at);
       group.rotation.y = Math.atan2(-lm.x, -lm.z); // turn its face toward the clearing
-      group.add(this.proceduralTotem(lm.label ? '#c8a36a' : '#8a7a5a')); // instant stand-in
+      group.add(proceduralTotem(lm.label ? '#c8a36a' : '#8a7a5a')); // instant stand-in
       if (lm.label) {
-        const label = this.makeLabel(lm.label, '#e8d6a8');
+        const label = this.labels.make(lm.label, '#e8d6a8');
         label.position.y = lm.height * 0.55 + 1.4;
         group.add(label);
       }
@@ -2396,7 +2173,7 @@ export class World {
       void loadModel(lm.model).then((m) => {
         if (!m) return;
         const prepped = prepModel(m, lm.height);
-        World.enableCast(prepped); // W4.5: solid landmarks cast when near the player
+        enableCast(prepped); // W4.5: solid landmarks cast when near the player
         const totem = group.children.find((c) => c.userData.totem);
         if (totem) group.remove(totem); // keep the label
         group.add(prepped);
@@ -2465,7 +2242,7 @@ export class World {
       const group = new THREE.Group();
       group.position.copy(at);
       group.rotation.y = (i * 2.39996) % (Math.PI * 2); // golden-angle spin for variety
-      group.add(this.proceduralTotem(spec.collide > 0 ? '#6b5a3a' : '#7d8a4a')); // instant stand-in
+      group.add(proceduralTotem(spec.collide > 0 ? '#6b5a3a' : '#7d8a4a')); // instant stand-in
       this.scene.add(group);
       if (spec.collide > 0) this.obstacles.push({ x, z, r: spec.collide });
       this.dressing.push({ id: model, x, z });
@@ -2475,7 +2252,7 @@ export class World {
         // W4.5: only the SOLID dressing (trees/boulders/logs/snags/juniper/stumps)
         // casts a hero shadow; low ground detail (mushrooms/fern/foxglove/reeds)
         // does not. The tight ranger-following frustum still culls to the closest.
-        if (spec.collide > 0) World.enableCast(prepped);
+        if (spec.collide > 0) enableCast(prepped);
         const totem = group.children.find((c) => c.userData.totem);
         if (totem) group.remove(totem);
         group.add(prepped);
@@ -2704,7 +2481,7 @@ export class World {
     group.position.set(x, this.groundY(x, z), z); // on the drawn ground: the drive begins grounded
     this.jeepHeading = Math.atan2(-x, -z); // parked facing the clearing (like the landmarks)
     group.rotation.y = this.jeepHeading;
-    group.add(this.proceduralTotem('#6a7b4a')); // instant stand-in until the GLB streams in
+    group.add(proceduralTotem('#6a7b4a')); // instant stand-in until the GLB streams in
     this.scene.add(group);
     this.jeepObstacle = { x, z, r: JEEP_COLLIDE };
     this.obstacles.push(this.jeepObstacle);
@@ -2713,7 +2490,7 @@ export class World {
     void loadModel('vehicle-ranger-jeep').then((m) => {
       if (!m) return;
       const prepped = prepModel(m, height);
-      World.enableCast(prepped); // W4.5: a solid hero prop near the player casts a shadow
+      enableCast(prepped); // W4.5: a solid hero prop near the player casts a shadow
       const totem = group.children.find((c) => c.userData.totem);
       if (totem) group.remove(totem);
       group.add(prepped);
@@ -2745,7 +2522,7 @@ export class World {
     group.position.set(pad.x, this.groundY(pad.x, pad.z), pad.z);
     this.heliHeading = Math.atan2(-pad.x, -pad.z); // parked facing the clearing
     group.rotation.y = this.heliHeading;
-    group.add(this.proceduralTotem('#8a8f98')); // instant stand-in until the GLB streams in
+    group.add(proceduralTotem('#8a8f98')); // instant stand-in until the GLB streams in
     this.scene.add(group);
     this.heliObstacle = { x: pad.x, z: pad.z, r: HELI_COLLIDE };
     this.obstacles.push(this.heliObstacle);
@@ -2755,7 +2532,7 @@ export class World {
     void loadModel('vehicle-helicopter').then((m) => {
       if (!m) return;
       const prepped = prepModel(m, 2.6);
-      World.enableCast(prepped);
+      enableCast(prepped);
       const totem = group.children.find((c) => c.userData.totem);
       if (totem) group.remove(totem);
       group.add(prepped);
@@ -3053,17 +2830,6 @@ export class World {
     return wayfind(rp.x, rp.z, this.ranger.rotation.y, goal.pos.x, goal.pos.z).richting;
   }
 
-  private proceduralTotem(color: string): THREE.Group {
-    const g = new THREE.Group();
-    g.userData.totem = true;
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1, 6), new THREE.MeshStandardMaterial({ color: '#6b513a', roughness: 1 }));
-    post.position.y = 0.5;
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), new THREE.MeshStandardMaterial({ color, roughness: 0.6, emissive: new THREE.Color(color), emissiveIntensity: 0.25 }));
-    orb.position.y = 1.2;
-    g.add(post, orb);
-    return g;
-  }
-
   // ---- input (F-17 click-vs-drag seam) ----
   /**
    * A pointerdown on the canvas STARTS a gesture; it does not act yet. If the pointer
@@ -3223,15 +2989,7 @@ export class World {
     // turns naturally when a collision slides them sideways. Frozen during an
     // in-place activity (the mini-game holds the scene + drives the camera itself).
     const rp = this.ranger.position;
-    // W4.5: the hero shadow camera follows the ranger — the tight ortho frustum
-    // tracks him via a FIXED offset so the light DIRECTION never changes (static
-    // golden-hour sun), only the covered set (the closest props) moves with him.
-    if (this.sun) {
-      const o = this.sunOffset;
-      this.sun.position.set(rp.x + o.x, o.y, rp.z + o.z);
-      this.sun.target.position.set(rp.x, 0, rp.z);
-      this.sun.target.updateMatrixWorld();
-    }
+    this.sky.followSun(rp.x, rp.z); // W4.5: the hero shadow frustum follows the ranger
     this.playerSpeed = 0; // 0 while standing or during an in-place activity → mixer eases to idle
     this.dustEmitting = false; // driveJeep re-arms it while the jeep is moving (W5.2)
     if (!this.activityActive && this.inHeli) {
@@ -3387,21 +3145,8 @@ export class World {
     // All SECONDARY motion → the atmosphere clock advances ONLY when reduced-motion
     // is off, so a frozen clock stills every effect together (comfort §C). Runs
     // every frame (even during an in-place activity) so the sky keeps breathing.
-    if (!reduced) this.skyTime += dt;
-    const st = this.skyTime;
-    if (this.cloudLayer) {
-      const off = cloudOffset(st);
-      const map = (this.cloudLayer.material as THREE.MeshBasicMaterial).map;
-      if (map) map.offset.set(off.x, off.y);
-    }
+    const st = this.sky.advance(dt, reduced); // clouds drift + the flyover bird sails
     this.applyWind(st);
-    if (this.flyBird) {
-      const f = flyoverAt(st);
-      this.lastFlyover = f;
-      this.flyBird.visible = f.visible;
-      this.flyBird.position.set(f.x, f.y, f.z);
-      this.flyBird.rotation.y = f.facing;
-    }
 
     // W4.8 ven-water: share the ambient clock (`skyTime` froze above under
     // reduced-motion) and gate the ripple amplitude to 0 when reduced → the disc
@@ -3414,7 +3159,7 @@ export class World {
     // F-22: keep the occlusion-proof world/vehicle/POI name-tags distance-faded.
     // Runs before the activity early-return so an open mission's Missiebord tag
     // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity too.
-    this.fadeWorldLabels();
+    this.labels.fade(this.camera);
 
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
 
