@@ -212,7 +212,7 @@ export class Markers {
     board.position.copy(boardAt);
     // P1.0 (F-19): face the spawn point, then turn a little toward +x so the board
     // face + its pinned papers point at the over-the-shoulder approach framing (the
-    // lens swings to the +x side while the ranger stands here — placeCamera), not
+    // lens swings to the +x side while the ranger stands here — CameraRig.place), not
     // straight back down the ranger's spine where his body hides them. A small turn:
     // world-entry still reads the board face (its +z-facing component only grows).
     board.rotation.y = Math.atan2(-boardAt.x, -boardAt.z) + this.BOARD_APPROACH_FACE_TURN;

@@ -443,7 +443,7 @@ export class Player {
    * A pointerdown on the canvas STARTS a gesture; it does not act yet. If the pointer
    * then travels past DRAG_PX it is a camera orbit (yaw + eye-lift via orbitTarget*,
    * tap-to-walk suppressed); a cleaner press walks to the release point on pointerup.
-   * The orbit feeds ONLY the lens (placeCamera), so a drag never moves `pos` — the exact
+   * The orbit feeds ONLY the lens (CameraRig.place), so a drag never moves `pos` — the exact
    * F-17 defect (a look-around used to relocate the ranger and flip the view 180°).
    */
   private onPointerDown = (e: PointerEvent): void => {

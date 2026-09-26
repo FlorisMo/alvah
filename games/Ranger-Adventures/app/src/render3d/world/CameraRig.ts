@@ -39,7 +39,7 @@ export class CameraRig {
   // human-sized in an immersive over-the-shoulder frame. The old rig had no
   // anti-clip rail, so the boom buried itself in whatever solid stood behind the
   // ranger at a POI (the spawn hub, the dune by the jeep) and rendered that prop's
-  // unlit interior — Floris's #1 finding. placeCamera now spherecasts this boom
+  // unlit interior — Floris's #1 finding. CameraRig.place now spherecasts this boom
   // against the collision solids + the ground and fades the ranger if it still
   // collapses, so the world is always visible.
   //
@@ -84,9 +84,9 @@ export class CameraRig {
   private readonly CANOPY_RELEASE_TAU = 0.7; // gentle ease back to solid once the crown clears (calm, no pop)
   // F-16 laptop dolly zoom: the player-set WALK boom distance (m, horizontal). Starts
   // at the F-05 default (camOffset.z = 4.6); wheel/trackpad scroll dollies it in/out,
-  // clamped [zoomMinBoom() … CAM_ZOOM_MAX]. placeCamera reads it for the walk boom, so
+  // clamped [zoomMinBoom() … CAM_ZOOM_MAX]. CameraRig.place reads it for the walk boom, so
   // the existing position-damp gives the damped feel (and a CUT under reduced-motion,
-  // where placeCamera already snaps). The FOV is NEVER touched — a dolly, not a lens
+  // where CameraRig.place already snaps). The FOV is NEVER touched — a dolly, not a lens
   // zoom (motion-comfort law). Vehicle/heli/activity own the camera, so a scroll there
   // is ignored (onWheel returns early).
   readonly CAM_ZOOM_MAX = 9.5;   // dolly ceiling (~8–10 m boom, F-16)
@@ -109,7 +109,7 @@ export class CameraRig {
   // clamped) raises/lowers the eye to tilt the view (the camera's real pitch — shown on
   // the hook — follows). Both EASE toward their drag-set targets with the boom's own
   // exp-damp, or CUT to them under reduced-motion (the "orbit as stepped cuts" the
-  // finding asks for). placeCamera applies them to the WALK cam only, so the drag moves
+  // finding asks for). CameraRig.place applies them to the WALK cam only, so the drag moves
   // ONLY the lens — never `pos` (the F-17 defect was a drag relocating the ranger). The
   // click-vs-drag seam (onPointerDown/Move/Up) routes a clean tap to tap-to-walk and a
   // past-threshold drag to the orbit alone. Input forward stays on the base bearing
@@ -131,13 +131,13 @@ export class CameraRig {
   // (walking INTO the radius), damped like the orbit, and a CUT under reduced-motion
   // (the motion-comfort law: a reframe is a stepped cut, never a swoop). Eases back
   // to 0 on leaving, so free-roam is untouched. The board is ALSO statically turned
-  // `BOARD_APPROACH_FACE_TURN` toward the +x swing side (placeHub) so its face + notes
+  // `BOARD_APPROACH_FACE_TURN` toward the +x swing side (Markers.placeBoard) so its face + notes
   // stay readable at that angle instead of going edge-on.
   private boardFrameYaw = 0;
   private readonly BOARD_FRAME_YAW = 0.9;      // over-the-shoulder swing (rad) when near the board
   private readonly BOARD_FRAME_TAU = 0.16;     // board-reframe ease smooth-time (gentle, settles fast)
   // the wider vehicle follow-cam offset (§5 W5.1: distance 9, height 4.5) — the
-  // walking offset stays (0, 3.4, 6.2). placeCamera picks by `inVehicle`.
+  // walking offset stays (0, 3.4, 6.2). CameraRig.place picks by `inVehicle`.
   readonly camOffsetVehicle = new THREE.Vector3(0, 4.5, 9);
   // an aerial follow offset (higher + further back than the jeep) — the ranger
   // rides at the heli's world position (y = altitude), so the camera rises with it.
@@ -209,8 +209,8 @@ export class CameraRig {
    * F-16 laptop wheel / trackpad-pinch DOLLY zoom on the walk follow-boom.
    * Player-initiated + clamped [zoomMinBoom() … CAM_ZOOM_MAX]; NEVER a FOV zoom
    * (fixed lens is the motion-comfort law). The boom TARGET moves instantly here;
-   * placeCamera then eases the camera toward it (damped ~0.3 s) — or CUTS to it under
-   * reduced-motion (placeCamera snaps then), exactly the "zoom applies as an instant
+   * CameraRig.place then eases the camera toward it (damped ~0.3 s) — or CUTS to it under
+   * reduced-motion (CameraRig.place snaps then), exactly the "zoom applies as an instant
    * step" the finding asks for. Ignored while driving/flying/in an activity (those own
    * the camera). preventDefault stops the page scrolling under the canvas.
    */
@@ -343,7 +343,7 @@ export class CameraRig {
     // at MAX_TERRAIN_LIFT). This is the D1.3 above-terrain law extended to the whole segment —
     // damped follow behaviour (the lerp below eases it; a CUT on snap / under reduced-motion),
     // never a player-initiated orbit. A clearance lift only (never a downward move) so the idle
-    // pose stays deterministic frame to frame (groundSnapY is deterministic).
+    // pose stays deterministic frame to frame (terrain.y is deterministic).
     if (walk) {
       const gLens = this.terrain.y(this.camDesired.x, this.camDesired.z);
       if (this.camDesired.y < gLens + this.CAM_GROUND_CLR) this.camDesired.y = gLens + this.CAM_GROUND_CLR;
@@ -380,7 +380,7 @@ export class CameraRig {
       // full-frame foliage void (`09-walk-4`) or murk (`11-controls-hud`). TWO occlusion
       // models, because a between-lens sightline test alone misses the lens-inside-crown case
       // the GATE-D1 audit #2 convicted: the boom collapses behind the ranger (a trunk he just
-      // passed is a collision solid, boomClearFraction pulls the lens IN — World.ts:1539) and
+      // passed is a collision solid, boomClearFraction pulls the lens IN) and
       // drives the lens into that crown; its centre then sits at ~t=0 on the cam→ranger segment,
       // read as "behind the lens" and skipped, so a frontface-only ray exits unhit and the hook
       // lied `viewClear`=true over raw leaves. (1) camInsideCrown — the camera POINT inside any
@@ -522,7 +522,7 @@ export class CameraRig {
   /**
    * D1.5 (audit #4) terrain sightline ride: the metres the follow boom must lift so the STRAIGHT
    * line from the lens (lx,ly,lz) to the ranger aim (ax,ay,az) clears the RENDERED terrain by
-   * CAM_GROUND_CLR everywhere between them. Marches the drawn terrain (`groundSnapY`). Raising the lens by δ raises the segment height
+   * CAM_GROUND_CLR everywhere between them. Marches the drawn terrain (terrain.y). Raising the lens by δ raises the segment height
    * at parameter t by (1−t)·δ (the aim end is pinned to the ranger), so a crest poking `deficit`
    * above the line at t needs δ ≥ deficit/(1−t); the worst sample wins and clears them all at once
    * (raising the eye lifts every point, never lowers one). Returns the RAW need (the caller caps

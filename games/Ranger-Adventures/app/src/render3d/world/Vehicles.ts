@@ -568,7 +568,7 @@ export class Vehicles {
     const targetY = this.groundY(next.x, next.z);
     jp.y += (targetY - jp.y) * (1 - Math.exp(-JEEP_HOVER_RATE * dt));
     this.jeep.rotation.y = this.jeepHeading;
-    // the ranger rides along (hidden) so placeCamera + exitVehicle anchor track it
+    // the ranger rides along (hidden) so CameraRig.place + exitVehicle anchor track it
     this.host.ranger.position.set(jp.x, jp.y, jp.z);
     this.host.ranger.rotation.y = this.jeepHeading;
     this.host.follow(this.jeepHeading, false);

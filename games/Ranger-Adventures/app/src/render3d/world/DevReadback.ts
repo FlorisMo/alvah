@@ -179,7 +179,7 @@ export class DevReadback {
     const lensInRim = Math.hypot(cam.position.x, cam.position.z) < this.limits.bound + 0.6;
     const ndc = centre.project(cam); // centre → NDC in [-1, 1]³ (mutates in place)
     const onScreen = ndc.z > -1 && ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;
-    // D1.5 free-walk canopy clear-line: the REAL cam→avatar occluder test placeCamera
+    // D1.5 free-walk canopy clear-line: the REAL cam→avatar occluder test CameraRig.place
     // computed this frame (a tree crown between lens and ranger fades, so this reads the
     // "ranger is readable" truth the projection tests above can't — `09-walk-4` kept
     // onScreen/avatarInView true while a crown swallowed him, §8.7). Only the free-walk
@@ -190,7 +190,7 @@ export class DevReadback {
     // (honest) rather than ghosting them — the §2.5 (GATE-D2) law: "the clear-line test binds
     // to anything the renderer draws; unfadeable ones report honestly" (`18-jeep-near` lied
     // clear while a nachtzwaluw marker model swallowed the ranger). Tested HERE, per-SHOT, not
-    // in the per-frame placeCamera: they only drive the hook (no fade), so the walk path pays
+    // in the per-frame CameraRig.place: they only drive the hook (no fade), so the walk path pays
     // nothing. `rp`/head come from the live ranger; the same segment the crown/terrain legs use.
     const rp = this.player.group.position;
     const viewClear = (this.vehicles.inVehicle || this.vehicles.inHeli || this.host.activityActive())
@@ -283,7 +283,7 @@ export class DevReadback {
 
   /** F-11 / D1.5 (audit #4) line-of-sight over the terrain: true when the RENDERED ground never
    *  climbs above the straight segment from `from` to the world point (`tx,ty,tz`). Marches
-   *  the drawn terrain (`groundSnapY` = terrain.y, the ONE ground truth). A crest poking above the ray (a rim berm / dune face between lens and
+   *  the drawn terrain (terrain.y, the ONE ground truth). A crest poking above the ray (a rim berm / dune face between lens and
    *  ranger) returns false = the ranger is hidden, so `avatarScreen.visible` matches the pixels.
    *  Deterministic, so the idle pose holds frame to frame; a per-SHOT hook read (camState). */
   private terrainClearTo(from: THREE.Vector3, tx: number, ty: number, tz: number): boolean {
