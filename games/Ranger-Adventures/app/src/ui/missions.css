@@ -487,6 +487,12 @@
   padding: 12px 6px 6px;
 }
 .mission-board .mission-grid { width: 100%; }
+/* a little tighter than the free-standing cards so all ten fit a laptop screen */
+.mission-board { gap: 10px; padding-top: max(16px, env(safe-area-inset-top)); }
+.mission-board .boot-title { font-size: clamp(28px, 5vw, 38px); }
+.mission-board .mission-card { gap: 6px; padding: 12px 16px; min-height: 0; }
+.mission-board .mc-icon { width: 44px; height: 44px; }
+.mission-board .mc-icon svg { width: 30px; height: 30px; }
 /* the recommended mission (first unfinished in story order): a sun outline + tag */
 .mission-card.mc-next { box-shadow: 0 0 0 4px var(--spel-sun), var(--shadow-lg); }
 .mc-next-tag {
