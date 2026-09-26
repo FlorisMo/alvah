@@ -128,16 +128,18 @@ export function vertexTint(x: number, z: number): number {
  * ground mesh; THREE decodes each hex to its working colour space and lerps.
  *
  *   • heide     — warm sandy soil ↔ dusty heather bloom (the famous paarse heide,
- *                 bare sand between the struikhei mats). The bloom tone carries a
- *                 clear (still calm) purple so the hub reads as flowering heath, not
- *                 a flat warm-brown slab — the muted grey-mauve it replaced washed to
- *                 brown under the golden key (P1.2 grade, 2026-07-05).
+ *                 bare sand between the struikhei mats). D3.2 deepens the bloom to a
+ *                 more saturated dusty magenta-purple (#9a4f8c): the warm golden key
+ *                 crushes the blue channel, so a muted grey-purple still washes to
+ *                 brown (the P1.2 read, still convicted "flat warm-brown slab" at the
+ *                 GATE-D2 audit) — a saturated magenta-purple survives the crush and
+ *                 reads as flowering heather at golden hour, in clumps over the sand.
  *   • bos       — needle/leaf-litter brown ↔ soft forest moss (not flat green).
  *   • stuifzand — pale drift sand ↔ slightly darker rippled / grass-tuft sand.
  *   • ven       — mossy fen bank ↔ dark wet peat near the waterline.
  */
 export const BIOME_GROUND_TONES: Record<Biome, readonly [string, string]> = {
-  heide:     ['#c2a878', '#93608f'],
+  heide:     ['#c2a878', '#9a4f8c'],
   bos:       ['#6a5636', '#4e5a35'],
   stuifzand: ['#ddcaa1', '#c6b485'],
   ven:       ['#5e6d45', '#46503a'],

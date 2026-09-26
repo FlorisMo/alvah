@@ -14,14 +14,23 @@
  * pinned by a unit test with no browser. Deterministic — no Math.random / Date.
  */
 
-/** Deep tint seen head-on (looking straight down): forest-teal, calm. */
-export const WATER_DEEP = '#3f5f6b';
-/** Grazing / edge tint: a lighter warm sky-glow (golden-hour reflection). */
-export const WATER_SHALLOW = '#9fc4c2';
-/** Disc opacity — translucent enough to hint at the submerged basin. */
-export const WATER_OPACITY = 0.85;
-/** Schlick-ish fresnel exponent: higher → the sky-glow hugs the grazing edge. */
-export const FRESNEL_POWER = 3.0;
+/** Deep tint seen head-on (looking straight down): a clear dark lake blue-teal so the
+ *  water body reads as WATER, distinct from the olive moss-bank ground it sits over
+ *  (D3.2 — the old forest-teal #3f5f6b muddied into the dark bank and read as ground). */
+export const WATER_DEEP = '#35627c';
+/** Grazing / edge tint: the GOLDEN-HOUR SKY reflected in the still water (D3.2 —
+ *  the ven must read a warm golden reflection, not a pale cyan rim). A bright version of
+ *  the §2.1 key (#FFCF8F→#FFB870): the far/grazing water glows warm gold while the near
+ *  water stays dark blue-teal — the dark-blue→bright-gold gradient IS the "reflective
+ *  still water" cue that separates a water surface from dark ground. */
+export const WATER_SHALLOW = '#eecf95';
+/** Disc opacity — opaque enough that the dark basin bed never muddies the surface tint. */
+export const WATER_OPACITY = 0.92;
+/** Schlick-ish fresnel exponent: higher → the golden sky-glow hugs the far grazing edge and
+ *  the bulk of the disc holds the dark blue-teal water body ("dark still water + a golden
+ *  reflection", not a uniform gold pool that reads as sand). Tuned against the follow cam's
+ *  shallow downward pitch so the near/mid water reads dark and only the far shore glows gold. */
+export const FRESNEL_POWER = 3.6;
 /** Peak ripple-shimmer amplitude (fraction of the tint mix) when motion is on. */
 export const RIPPLE_AMP = 0.12;
 

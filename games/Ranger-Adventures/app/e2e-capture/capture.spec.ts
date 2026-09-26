@@ -1638,24 +1638,92 @@ async function walkToBoundary(page: Page, isPad: boolean, stick: TouchStick | nu
   if (isPad) { await joystickWalkTo(page, stick!, read, 500); return; }
   await keyboardWalkTo(page, read, 500);
 }
-/** P1.2: walk out to the ven-water shore. Steers toward VEN_CENTER (the water basin
- *  at 46,-19; Biomes.VEN_CENTER) and latches on the reed-fringed bank as the ranger
- *  nears the waterline — the ven is un-wadeable (World.limits.blocked), so he stops
- *  on the moss bank with the water ahead. The near-latch (< 22 m from centre) trips
- *  INSIDE the forced-ven shore blob (VEN_SHORE_R 26), so the annotation `pos` reads
- *  as the ven biome. Bounded like walkToBoundary — never the 30-min stall (P0.3). */
+/** P1.2 / D3.2: walk to the ven-water shore AND aim the lens at the water. The ven's RENDERED
+ *  basin is at WORLD (VEN_CENTER.x, -VEN_CENTER.z) = (46, −19): buildGround's −90° tilt mirrors z,
+ *  so the depression heightAt() digs at VEN_CENTER (arg z = +19) renders at world z = −19, where
+ *  the water disc + ground-tone-ven + moss bank + no-wade all resolve (World.buildVenWater). This
+ *  is a FORWARD walk from spawn (the follow cam looks −z, so a −z target is ahead — reliable),
+ *  unlike a +z target which needs a backward press + a 180° follow-cam swing that diverges. Latch
+ *  inside the disc (< 17 m; the no-wade stops him at the reed-fringed shore). Then AIM: the walk
+ *  latches while still turning, so his facing isn't reliably at the water — an explicit orbit-drag
+ *  on the lens (aimCameraAt) frames it deterministically. Bounded like walkToBoundary (P0.3). */
 async function walkToVen(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
-  // NB the reader closure is stringified + re-run INSIDE the page (see `hook`), so it must
-  // capture NO Node-scope variable — VEN_CENTER (46,−19; Biomes.VEN_CENTER, the water basin)
-  // is inlined here, not referenced from an outer const.
-  const read: WalkRead = () => hook(page, (r) => {
-    const p = r.pos(); const y = r.cameraYaw();
-    if (!p || y == null) return null;
-    const vx = 46, vz = -19;
-    return { tx: vx, tz: vz, near: Math.hypot(p.x - vx, p.z - vz) < 22, px: p.x, pz: p.z, yaw: y };
-  });
-  if (isPad) { await joystickWalkTo(page, stick!, read, 500); return; }
-  await keyboardWalkTo(page, read, 500);
+  const VX = 46, VZ = -19; // world basin centre (see the doc-comment above)
+  if (isPad) {
+    // iPad is a Floris demo (never auto-run); the shared pulsed joystick walk is fine here.
+    const read: WalkRead = () => hook(page, (r) => {
+      const p = r.pos(); const y = r.cameraYaw();
+      return p && y != null ? { tx: VX, tz: VZ, near: Math.hypot(p.x - VX, p.z - VZ) < 17, px: p.x, pz: p.z, yaw: y } : null;
+    });
+    await joystickWalkTo(page, stick!, read, 500);
+  } else {
+    // The far ~50 m walk to the ven needs the p15a-PROVEN continuous-hold (ground-snap.spec.ts):
+    // hold the steered keys across polls (never release between reads) and break when he can get
+    // no closer (pressed onto the no-wade bank). The shared PULSED walkTo releases keys each poll,
+    // and under headless timing the follow-cam ease + re-read feedback DIVERGES on a walk this long
+    // (it reverses mid-approach). Continuous-hold is stable for a −z (forward) target like this.
+    const held = new Set<string>();
+    const sync = async (want: Set<string>): Promise<void> => {
+      for (const k of KEYS) {
+        if (want.has(k) && !held.has(k)) { await page.keyboard.down(k); held.add(k); }
+        else if (!want.has(k) && held.has(k)) { await page.keyboard.up(k); held.delete(k); }
+      }
+    };
+    let minD = Infinity, noImp = 0;
+    try {
+      for (let i = 0; i < 220; i++) {
+        const s = await hook(page, (r) => {
+          const p = r.pos(); const y = r.cameraYaw();
+          return p && y != null ? { px: p.x, pz: p.z, yaw: y } : null;
+        });
+        if (!s) { await page.waitForTimeout(120); continue; }
+        const d = Math.hypot(s.px - VX, s.pz - VZ);
+        if (d < minD - 0.05) { minD = d; noImp = 0; } else { noImp += 1; }
+        // Latch during the CLEAN approach (< 17 m, this side of the ~14 m no-wade wall): he is
+        // still moving toward the basin, so he FACES the water and the follow cam behind him
+        // frames it — the orbit-aim then only fine-corrects (never a big swing into the bank).
+        // Pressing onto the wall (noImp) is only the fallback so the walk can never stall.
+        if (d < 17 || noImp >= 8) break;
+        const { sx, sYf } = screenDir(VX - s.px, VZ - s.pz, s.yaw);
+        const want = new Set<string>();
+        if (sx > 0.4) want.add('ArrowRight'); else if (sx < -0.4) want.add('ArrowLeft');
+        if (sYf > 0.4) want.add('ArrowUp'); else if (sYf < -0.4) want.add('ArrowDown');
+        await sync(want);
+        await page.waitForTimeout(150);
+      }
+    } finally { await sync(new Set()).catch(() => {}); }
+  }
+  await aimCameraAt(page, isPad, VX, VZ); // orbit the follow lens to look at the water
+}
+
+/** D3.2: orbit-drag the follow lens to look at world (tx,tz) — a deterministic camera aim that
+ *  needs no exact facing from the walk. `cam.yaw` (= followYaw + orbitYaw) is the camera-position
+ *  bearing (ranger→lens); the lens LOOKS along cam.yaw + π, so to look AT (tx,tz) we drive cam.yaw
+ *  toward wrap(bearing + π). A horizontal drag of dx px adds dx·ORBIT_YAW_PER_PX (0.005) to
+ *  orbitYaw (World.onPointerMove), so dx = Δ·200; a few iterations absorb the ~0.18 s orbit ease.
+ *  dy stays 0 so the pitch/eye-lift is untouched. Laptop-only (mouse) — the iPad leg is a Floris
+ *  demo (capture is CAPTURE_PROJECTS=laptop). A clean drag never moves `pos` (F-17 seam). */
+async function aimCameraAt(page: Page, isPad: boolean, tx: number, tz: number): Promise<void> {
+  if (isPad) return;
+  const vp = page.viewportSize(); if (!vp) return;
+  const cx = Math.round(vp.width / 2), cy = Math.round(vp.height / 2);
+  for (let iter = 0; iter < 5; iter++) {
+    const s = await hook(page, (r) => {
+      const c = r.cam(); const p = r.pos();
+      return c && p ? { camYaw: c.yaw, px: p.x, pz: p.z } : null;
+    });
+    if (!s) return;
+    const bearing = Math.atan2(tx - s.px, tz - s.pz);            // world bearing ranger→water
+    const target = Math.atan2(Math.sin(bearing + Math.PI), Math.cos(bearing + Math.PI));
+    const delta = Math.atan2(Math.sin(target - s.camYaw), Math.cos(target - s.camYaw));
+    if (Math.abs(delta) < 0.12) return;                          // lens aimed at the water
+    const dxTotal = Math.max(-600, Math.min(600, delta * 200));  // +px → +orbitYaw → +cam.yaw
+    const steps = Math.max(6, Math.round(Math.abs(dxTotal) / 18));
+    await page.mouse.move(cx, cy); await page.mouse.down();
+    for (let k = 1; k <= steps; k++) { await page.mouse.move(cx + Math.round(dxTotal * k / steps), cy); await page.waitForTimeout(15); }
+    await page.mouse.up();
+    await settle(page, 500); // let the orbit ease reach its target before the next read/snap
+  }
 }
 async function walkToJeep(page: Page, isPad: boolean, stick: TouchStick | null): Promise<void> {
   await walkTo(page, isPad, stick, () => hook(page, (r) => {

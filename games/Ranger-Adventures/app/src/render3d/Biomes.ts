@@ -42,8 +42,19 @@ export const BIOME_PALETTE: Record<Biome, BiomePalette> = {
 /** Radius of the flat-ish lodge clearing at world centre; always heide. */
 export const CLEARING_R = 7;
 
-/** Centre of the ven basin (in the heart of the ven sector) + its smooth dip. */
-export const VEN_CENTER = { x: 46, z: -19 };
+/**
+ * Basin centre for `heightAt` (the Gaussian dip that makes the ven the lowest ground).
+ * D3.2 NOTE — the z-mirror: `World.buildGround` displaces the plane by `heightAt(x, y)`
+ * then tilts it −90° about X, so the RENDERED surface at world (x,z) equals `heightAt(x, −z)`.
+ * The dip that `heightAt` digs at this arg therefore renders at world **(x, −z)** =
+ * (46, +19)… which is the DRY hill on the mirrored side; the old value (z −19) buried the
+ * water disc there and the ven "never read as water". Digging the basin at arg z = +19 lands
+ * the rendered depression at world (46, −19) — the spot the water disc, ground-tone-ven, moss
+ * bank + no-wade all resolve to (World.ts uses `-VEN_CENTER.z` for the world basin) AND the
+ * spot the ven POIs/paths sit near (SE). So this is the heightAt-arg centre; the WORLD ven
+ * centre is (VEN_CENTER.x, -VEN_CENTER.z) = (46, −19).
+ */
+export const VEN_CENTER = { x: 46, z: 19 };
 const BASIN_DEPTH = 3.4; // deeper than the global relief (±2.2) so the ven is the lowest ground
 const BASIN_SIGMA = 14;
 

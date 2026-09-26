@@ -625,9 +625,16 @@ export class World {
     bound: 75,                                   // ground plane is 240² → trees at ~76 land on it
     // off-limits = the submerged ven only (inside the water disc AND below the
     // surface) — NOT a global height test, so dry relief troughs stay walkable.
+    // D3.2: the RENDERED terrain basin sits at world (VEN_CENTER.x, -VEN_CENTER.z)
+    // — buildGround tilts the plane so the rendered height at world (x,z) is
+    // heightAt(x, -z) (the z-mirror). The water disc, ground-tone-ven and moss bank
+    // all live over that world basin, so the no-wade must too: block within the disc
+    // AND where the RENDERED surface (heightAt(x,-z)) is below the waterline. The old
+    // check used VEN_CENTER as a world coord + the analytic heightAt(x,z), which dip
+    // at the MIRRORED spot — a hill under the water, so the ven never read as water.
     blocked: (x, z) => {
-      const dx = x - VEN_CENTER.x, dz = z - VEN_CENTER.z;
-      return dx * dx + dz * dz < 18 * 18 && heightAt(x, z) < WATER_LEVEL + 0.15;
+      const dx = x - VEN_CENTER.x, dz = z + VEN_CENTER.z; // world basin = (VEN_CENTER.x, -VEN_CENTER.z)
+      return dx * dx + dz * dz < 18 * 18 && heightAt(x, -z) < WATER_LEVEL + 0.15;
     },
   };
 
@@ -685,7 +692,7 @@ export class World {
     this.scatterPines(Math.round(80 * veg));
     this.scatterHeather(Math.round(150 * veg));
     this.scatterMarram(Math.round(110 * veg));
-    this.scatterReeds(Math.round(90 * veg));
+    this.scatterReeds(Math.round(160 * veg)); // D3.2: a denser reed fringe reads at the shore
     this.buildRim(); // F-11: the pine tree-line marking the world edge
     void this.upgradeTreesToGLB(); // P1.3: swap the cone stand-ins for the real tree GLBs
     this.applyWind(0); // W4.6: initial wind pose for both grass meshes
@@ -1182,9 +1189,11 @@ export class World {
     const colors = new Float32Array(pos.count * 3);
     const c = new THREE.Color();
     const cA = new THREE.Color(), cB = new THREE.Color(); // P1.2 two-tone scratch
+    const cWet = new THREE.Color('#39422e'); // D3.2 wet moss/peat at the waterline
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), y = pos.getY(i); // plane is XY before the -90° tilt → world z = y
-      pos.setZ(i, this.groundY(x, y));
+      const gh = this.groundY(x, y);
+      pos.setZ(i, gh);
       const biome = biomeAt(x, y);
       if (detail) {
         // P1.2: mix the biome's two naturalistic ground tones by the patch field
@@ -1194,13 +1203,26 @@ export class World {
         // add the soft per-vertex wash blotch; clamp so no channel blows past 1.
         const [hexA, hexB] = BIOME_GROUND_TONES[biome];
         cA.set(hexA); cB.set(hexB);
-        const t = groundPatch(x, y);
+        // D3.2: bias the HEIDE toward its bloom tone so the hub reads as flowering paarse
+        // heide (purple mats over sand patches), not a flat warm-brown slab — real bloeiende
+        // heide is purple-dominant. Other biomes keep the even two-tone mix.
+        const patch = groundPatch(x, y);
+        const t = biome === 'heide' ? Math.min(1, patch * 1.5 + 0.08) : patch;
         const m = GROUND_BRIGHTEN * vertexTint(x, y);
         c.setRGB(
           Math.min(1, (cA.r + (cB.r - cA.r) * t) * m),
           Math.min(1, (cA.g + (cB.g - cA.g) * t) * m),
           Math.min(1, (cA.b + (cB.b - cA.b) * t) * m),
         );
+        // D3.2: a wet moss/peat BANK at the ven waterline — the ground darkens + cools
+        // toward wet peat as it nears WATER_LEVEL, so the shore reads as a moss-soft bank
+        // grading into the water (doc §2.2 "moss-soft banks, reed clusters"), never the
+        // bare tan edge the P1.2 grade convicted. Painted onto the terrain vertices, so it
+        // follows the real basin slope exactly — it can never float or z-fight (no mesh).
+        if (biome === 'ven') {
+          const wet = 1 - THREE.MathUtils.smoothstep(gh, WATER_LEVEL - 0.3, WATER_LEVEL + 1.4);
+          c.lerp(cWet, wet * 0.6);
+        }
       } else {
         // `?groundDetail=off` keeps the old flat per-biome slab (the before baseline).
         c.set(BIOME_PALETTE[biome].ground);
@@ -1396,7 +1418,8 @@ export class World {
    * from `update()`. One mesh → one draw call, budget untouched (§3.4).
    */
   private buildVenWater(): THREE.Mesh {
-    const geo = new THREE.CircleGeometry(20, 48);
+    const RADIUS = 20;
+    const geo = new THREE.CircleGeometry(RADIUS, 48);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       uniforms: {
@@ -1406,11 +1429,14 @@ export class World {
         uShallow: { value: new THREE.Color(WATER_SHALLOW) },
         uOpacity: { value: WATER_OPACITY },
         uFresnelPower: { value: FRESNEL_POWER },
+        uRadius: { value: RADIUS },
       },
       vertexShader: `
         varying vec3 vWorld;
+        varying float vR;
         void main() {
           vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+          vR = length(position.xy); // local radial distance from the disc centre (pre-tilt)
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
@@ -1421,7 +1447,9 @@ export class World {
         uniform vec3 uShallow;
         uniform float uOpacity;
         uniform float uFresnelPower;
+        uniform float uRadius;
         varying vec3 vWorld;
+        varying float vR;
         void main() {
           // flat, up-facing plane → normal is world-up; fresnel from the view's
           // vertical component (straight-down = deep, grazing = sky-glow).
@@ -1433,14 +1461,24 @@ export class World {
                        * sin(vWorld.z * 1.07 - uTime * 0.55);
           float mixv = clamp(fres + ripple * uAmp, 0.0, 1.0);
           vec3 col = mix(uDeep, uShallow, mixv);
-          gl_FragColor = vec4(col, uOpacity);
+          // D3.2: fade the alpha to 0 over the outer ~2.4 m so the water meets the
+          // moss bank as a soft waterline, never a hard-edged dark polygon (the P1.2
+          // grade's "hard-edged dark POLYGON" finding). The reed fringe + painted moss
+          // bank complete the shore.
+          float edge = smoothstep(uRadius, uRadius - 2.4, vR);
+          gl_FragColor = vec4(col, uOpacity * edge);
         }
       `,
     });
     this.waterMat = mat;
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(VEN_CENTER.x, WATER_LEVEL, VEN_CENTER.z);
+    // D3.2: seat the disc over the REAL rendered basin at world (VEN_CENTER.x, -VEN_CENTER.z).
+    // buildGround's −90° tilt mirrors z, so the terrain low-point that heightAt() digs at
+    // (VEN_CENTER) renders at world z = -VEN_CENTER.z. Placing the disc at raw VEN_CENTER.z
+    // buried it under the hill on the mirrored side (the ven "never read as water"); here it
+    // fills the actual depression, coincident with the ven ground tone + the moss bank.
+    mesh.position.set(VEN_CENTER.x, WATER_LEVEL, -VEN_CENTER.z);
     return mesh;
   }
 
@@ -1712,21 +1750,33 @@ export class World {
     this.scene.add(grass);
   }
 
-  /** Reed clumps fringing the ven — only on land just above the waterline.
+  /** Reed clumps fringing the ven — only on the bank just above the waterline.
    *  W4.6: registered as a wind mesh (softer sway than the exposed marram). */
   private scatterReeds(budget: number): void {
-    const spots = this.candidates(budget * 6, 'ven').filter(({ x, z }) => {
-      const y = this.groundY(x, z);
-      return y > WATER_LEVEL - 0.1 && y < WATER_LEVEL + 1.1; // a reed belt at the shore
-    });
-    const geo = new THREE.CylinderGeometry(0.04, 0.06, 1.1, 5);
-    const mat = new THREE.MeshStandardMaterial({ color: '#8f8a4a', roughness: 1 });
-    const reeds = new THREE.InstancedMesh(geo, mat, Math.max(1, spots.length));
+    // D3.2: fringe the ACTUAL rendered basin at world (VEN_CENTER.x, -VEN_CENTER.z) — the
+    // spot the water disc + ground-tone-ven + moss bank share (the z-mirror; see
+    // buildVenWater). candidates('ven') can't be used: it filters biomeAt in WORLD space,
+    // which lands on the dry hill on the far side. Ring the basin with a golden-angle spread
+    // and keep only the stalks whose RENDERED surface (groundSnapY) sits in the shore band —
+    // so every reed is seated on the real bank at the waterline, never floating over water.
+    const bx = VEN_CENTER.x, bz = -VEN_CENTER.z;
     const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
-    spots.forEach(({ x, z, i }) => {
-      const s = 0.7 + (i % 4) * 0.2;
-      items.push({ x, y: this.groundY(x, z) + 0.55 * s, z, sx: s, sy: s, phase: (i % 5) * 1.3 });
-    });
+    for (let i = 0; i < budget * 12 && items.length < budget; i++) {
+      const ang = i * 2.39996;             // golden angle → even, non-repeating ring
+      const rad = 9 + (i % 22) * 0.5;      // 9–20 m out — a TIGHT belt hugging the waterline
+      const x = bx + Math.cos(ang) * rad;
+      const z = bz + Math.sin(ang) * rad;
+      const gy = this.groundSnapY(x, z);   // RENDERED surface (raycast), not the mirrored analytic field
+      if (gy < WATER_LEVEL - 0.3 || gy > WATER_LEVEL + 1.0) continue; // keep the reed belt right at the shore
+      const s = 0.8 + (i % 4) * 0.22;
+      items.push({ x, y: gy + 0.85 * s, z, sx: s, sy: s, phase: (i % 5) * 1.3 });
+    }
+    // TALLER, thicker reeds (≈1.4–2.2 m) in a DARK reed-green so the fringe reads at follow
+    // distance against BOTH the golden water and the tan bank (the P1.2 grade found "no reed
+    // fringe" — thin pale 1.1 m stalks vanished against the shore). Still ONE instanced draw call.
+    const geo = new THREE.CylinderGeometry(0.05, 0.09, 1.7, 5);
+    const mat = new THREE.MeshStandardMaterial({ color: '#6d7b38', roughness: 1 });
+    const reeds = new THREE.InstancedMesh(geo, mat, Math.max(1, items.length));
     reeds.count = items.length;
     this.windMeshes.push({ mesh: reeds, items, strength: 0.7 }); // reeds sway gentler
     this.scene.add(reeds);
