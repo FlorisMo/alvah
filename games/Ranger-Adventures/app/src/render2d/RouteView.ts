@@ -34,7 +34,7 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
     let done = false;
     const timers: number[] = [];
     const after = (ms: number, fn: () => void): void => {
-      timers.push(window.setTimeout(fn, ms));
+      timers.push(window.setTimeout(() => { if (panel.isConnected) fn(); }, ms)); // a stopped step's panel is gone: its timers stand down
     };
     const clearTimers = (): void => {
       for (const t of timers) window.clearTimeout(t);

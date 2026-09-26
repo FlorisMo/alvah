@@ -109,12 +109,16 @@ function render(): void {
     `<p class="boot-kicker">Word boswachter</p>` +
     `<h1 class="boot-title">Maak je ranger</h1>` +
     `<div class="av-preview"><div class="av-art-wrap">${rangerSvg(av)}</div><p class="av-greet"></p></div>` +
+    // the choices scroll between the fixed preview and the fixed button, so the
+    // button never covers a swatch (it used to sit over the last row on iPad)
+    `<div class="av-body">` +
     `<label class="av-naam-veld"><span class="av-naam-cap">Je naam</span>` +
     `<input class="av-naam-input" type="text" inputmode="text" maxlength="${MAX_NAAM}" ` +
     `autocomplete="off" spellcheck="false" value="${esc(av.naam)}" aria-label="Je rangernaam"/></label>` +
     `<div class="av-naam-chips">${suggesties}</div>` +
     `<div class="av-groups">` +
     (Object.keys(AVATAR_KENMERKEN) as AvatarKenmerk[]).map((k) => groupHtml(k, av)).join('') +
+    `</div>` +
     `</div>` +
     `<div class="ra-row av-klaar-row"><button class="btn-start av-klaar" type="button">Dit is mijn ranger</button></div>` +
     `</div>`;

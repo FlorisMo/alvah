@@ -174,7 +174,7 @@ function render(): void {
     accentHtml() +
     `</div>` +
     `<div class="ra-row">` +
-    `<button class="btn-start tw-back" type="button">Klaar</button>` +
+    `<button class="btn-start tw-back" type="button" data-key="back">Klaar</button>` +
     `</div>` +
     `</div>`;
   host.appendChild(el);

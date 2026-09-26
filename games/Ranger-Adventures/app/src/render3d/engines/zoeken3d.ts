@@ -211,22 +211,18 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       if (settings.geluid) Sound.found();
       const correct = scoreZoeken(misses); // identical scoring to playZoeken (shared rule)
 
-      // win beat: the find is "vastgelegd op de wildcamera" — a snapshot card that
-      // feeds the case-board (via the existing mission-completion data gate, §3d).
+      // win beat: the found card (the wildcamera snapshot belongs to the clue beat
+      // after the mission, not to this step; the fact is the raaf's, after the step).
       const feit = skin.feit ? `<p class="zoeken-feit">${esc(String(skin.feit))}</p>` : '';
-      const wildcamLine = 'Vastgelegd op de wildcamera.';
       const card = anchoredPrompt(
         ctx.prompt,
         `<div class="zoeken-card wildcam-card">` +
-          `<p class="wildcam-kicker">📷 ${wildcamLine}</p>` +
           `<p class="zoeken-goed">${esc(goedTxt)}</p>` +
           feit +
           `<button class="btn-start" type="button">Verder</button>` +
           `</div>`,
       );
-      if (settings.voorlezen) {
-        narrator.speak(skin.feit ? `${wildcamLine} ${goedTxt}. ${skin.feit}` : `${wildcamLine} ${goedTxt}`);
-      }
+      if (settings.voorlezen) narrator.speak(skin.feit ? `${goedTxt}. ${skin.feit}` : goedTxt);
 
       card.querySelector('.btn-start')?.addEventListener('click', () => {
         narrator.stop();

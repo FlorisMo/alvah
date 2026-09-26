@@ -65,7 +65,7 @@ function render(): void {
     `<p class="boot-kicker">De ranger-hut</p>` +
     `<h1 class="boot-title">Jouw plekje</h1>` +
     `<div class="cabin-sections"></div>` +
-    `<button class="ra-text-btn cabin-back" type="button">${esc(backLabel)}</button>` +
+    `<button class="ra-text-btn cabin-back" type="button" data-key="back">${esc(backLabel)}</button>` +
     `</div>`;
   host.appendChild(el);
 

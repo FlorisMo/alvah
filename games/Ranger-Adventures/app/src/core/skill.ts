@@ -22,15 +22,18 @@ export interface SkillMeta {
   naam: string;
   taak: string;
   kleur: string;
+  /** the badge picture: what the ranger DOES with this breinkracht (a child reads
+   *  the picture, not a letter) */
+  glyph: string;
 }
 
 /** Per-engine identity for the 5 breinkracht badges (data, not hardcoded UI). */
 export const SKILL_META: Record<Engine, SkillMeta> = {
-  zoeken:   { badgeId: 'brein-zoeken',   naam: 'Speurkracht',    taak: 'Speuren',         kleur: '#5e8c3a' },
-  corsi:    { badgeId: 'brein-corsi',    naam: 'Geheugenkracht', taak: 'Route onthouden', kleur: '#2f6fb0' },
-  simon:    { badgeId: 'brein-simon',    naam: 'Echokracht',     taak: 'Naroepen',        kleur: '#bb6a2c' },
-  dagnacht: { badgeId: 'brein-dagnacht', naam: 'Rustkracht',     taak: 'Rustig blijven',  kleur: '#7a52b3' },
-  wisselen: { badgeId: 'brein-wisselen', naam: 'Wisselkracht',   taak: 'Omschakelen',     kleur: '#c1467e' },
+  zoeken:   { badgeId: 'brein-zoeken',   naam: 'Speurkracht',    taak: 'Speuren',         kleur: '#5e8c3a', glyph: '🔍' },
+  corsi:    { badgeId: 'brein-corsi',    naam: 'Geheugenkracht', taak: 'Route onthouden', kleur: '#2f6fb0', glyph: '👣' },
+  simon:    { badgeId: 'brein-simon',    naam: 'Echokracht',     taak: 'Naroepen',        kleur: '#bb6a2c', glyph: '👂' },
+  dagnacht: { badgeId: 'brein-dagnacht', naam: 'Rustkracht',     taak: 'Rustig blijven',  kleur: '#7a52b3', glyph: '✋' },
+  wisselen: { badgeId: 'brein-wisselen', naam: 'Wisselkracht',   taak: 'Omschakelen',     kleur: '#c1467e', glyph: '🔄' },
 };
 
 export const SKILL_MIN = 1;
