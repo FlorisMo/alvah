@@ -413,6 +413,10 @@
    the motion vignette fades in with flight speed and is OFF at hover. All
    pointer-events:none so they never block the world or the controls. ---- */
 .explore-heli-prompt[hidden] { display: none; }
+/* wave 2 vehicles: the controls line sits just above the vehicle's own button */
+.explore-vehicle-prompt,
+.explore-heli-prompt { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.explore-drive-hint { line-height: 1.5; white-space: nowrap; }
 .explore-heli-hint {
   margin: 0;
   padding: 10px 16px;

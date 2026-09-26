@@ -424,7 +424,14 @@ export class CameraRig {
       this.viewClearState = (!blocked || this.dressing.canopyOpacity <= this.CANOPY_SEE_THROUGH) && this.terrainClearState;
     } else {
       if (this.player.avatarOpacity !== 1) this.player.setAvatarOpacity(1); // never leave the driver faded when he re-emerges
-      if (this.dressing.canopyOpacity !== 1) this.dressing.setCanopyOpacity(1); // never leave the canopy faded off-foot
+      // wave 2 vehicles: the jeep / heli chase-cam gets the walk's canopy fade too — a crown
+      // between the lens and the vehicle, or the lens inside one, fades (never full-frame leaves)
+      const c = this.camera.position;
+      const inside = this.camInsideCrown(c.x, c.y, c.z);
+      const crown = inside || this.canopyBlocksSightline(c.x, c.y, c.z, rp.x, rp.y + 1, rp.z);
+      const co = crown ? (inside ? this.CANOPY_FADE_BURIED : this.CANOPY_FADE_MIN) : (reduced || snap) ? 1
+        : this.dressing.canopyOpacity + (1 - this.dressing.canopyOpacity) * dampFactor(dt, this.CANOPY_RELEASE_TAU);
+      if (co !== this.dressing.canopyOpacity) this.dressing.setCanopyOpacity(co);
       this.viewClearState = true;
       this.terrainLiftState = 0;   // no boom on a vehicle/heli/mission cam → nothing ridden
       this.terrainClearState = true;

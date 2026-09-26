@@ -123,15 +123,29 @@ function arbitratePrompts(): void {
 }
 
 /* ----------------------------------------------------------- vehicles ---- */
-/** W5.1: the jeep affordance — "Stap in de jeep" beside the parked jeep, "Stap uit"
- *  while driving. Reads the live `vehicleState()` so a HUD re-render restores it. */
+/** How to drive / fly and how to get out: a short line (≤ 7 words, dyslexia-friendly
+ *  arrows) shown with the vehicle's own button, device-aware like the walk hint. */
+const DRIVE_KEYS = '⬆ gas · ⬇ rem · ⬅ ➡ sturen';
+const DRIVE_OUT_KEYS = 'Stap uit met de spatiebalk.';
+const FLY_KEYS = 'Vlieg met de pijltjes.';
+const LANDING = 'De helikopter landt.';
+
+function stickShown(): boolean {
+  return joystickVisible(store.get().settings.joystick, coarsePointer());
+}
+
+/** W5.1: the jeep affordance — "Stap in de jeep" beside the parked jeep; while
+ *  driving the controls line and "Stap uit". Reads the live `vehicleState()`. */
 export function renderVehiclePrompt(): void {
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-vehicle-prompt');
   if (!prompt) return;
   const v = session.world?.vehicleState() ?? null;
   if (!v || (!v.near && !v.inVehicle)) prompt.innerHTML = '';
   else if (v.inVehicle) {
-    prompt.innerHTML = `<button class="btn-start explore-vehicle-exit" type="button">🚙 Stap uit</button>`;
+    const lines = stickShown() ? [ONBOARD_DRIVE.stick] : [DRIVE_KEYS, DRIVE_OUT_KEYS];
+    prompt.innerHTML =
+      `<p class="explore-heli-hint explore-drive-hint">${lines.map(esc).join('<br>')}</p>` +
+      `<button class="btn-start explore-vehicle-exit" type="button">🚙 Stap uit</button>`;
     prompt.querySelector('.explore-vehicle-exit')?.addEventListener('click', () => session.world?.exitVehicle());
   } else {
     prompt.innerHTML = `<button class="btn-start explore-vehicle-enter" type="button">🚙 Stap in de jeep</button>`;
@@ -140,54 +154,60 @@ export function renderVehiclePrompt(): void {
   arbitratePrompts();
 }
 
-/** W5.3b: the helicopter affordance — "Stap in de helikopter" beside a parked heli,
- *  a calm "aan de grond" note when it is withheld, "Land hier" over a pad, and a
- *  "vlieg naar een helipad" hint while flying off a pad. */
+/** W5.3b: the helicopter affordance. Beside it: "Stap in de helikopter" (or why it
+ *  stays on the ground). Inside, on the ground: how to fly + "Stap uit". In the air:
+ *  over a pad "Land hier"; elsewhere where the nearest pad is + "Land op de helipad"
+ *  (the autopilot always brings it down); landing: a calm line. */
 let heliPromptKey = '';
 export function renderHeliPrompt(): void {
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-heli-prompt');
   if (!prompt) return;
   const h = session.world?.heliState() ?? null;
-  // Debounce: this runs every flight frame (via setHeliVignette); only rebuild the
-  // DOM when the affordance actually changes.
+  const cue = h?.padCue ?? null;
+  const where = cue ? `${cue.glyph} Helipad ${cue.richting} · ${Math.max(5, Math.round(cue.distance / 5) * 5)} m` : '';
+  // Debounce: this runs every frame inside the heli (via setHeliVignette); only rebuild
+  // the DOM when what it says actually changes.
   const key = !h ? 'none'
-    : h.inHeli ? (h.onPad ? 'land' : 'flyhint')
+    : h.inHeli ? (!h.airborne ? 'ground' : h.landing ? 'landing' : h.onPad ? 'land' : `fly:${where}`)
     : h.near ? (h.available ? 'enter' : h.optIn ? 'reduced' : 'off')
     : 'none';
   if (key === heliPromptKey) return;
   heliPromptKey = key;
-  if (!h || (!h.near && !h.inHeli)) prompt.innerHTML = '';
-  else if (h.inHeli) {
-    if (h.onPad) {
-      prompt.innerHTML = `<button class="btn-start explore-heli-land" type="button">🚁 Land hier</button>`;
-      prompt.querySelector('.explore-heli-land')?.addEventListener('click', () => session.world?.landHeli());
-    } else {
-      prompt.innerHTML = `<p class="explore-heli-hint">Vlieg naar een helipad om te landen.</p>`;
-    }
-  } else if (h.available) {
-    prompt.innerHTML = `<button class="btn-start explore-heli-enter" type="button">🚁 Stap in de helikopter</button>`;
-    prompt.querySelector('.explore-heli-enter')?.addEventListener('click', () => session.world?.enterHeli());
+  const hint = (text: string): string => `<p class="explore-heli-hint">${esc(text)}</p>`;
+  const button = (cls: string, label: string): string => `<button class="btn-start ${cls}" type="button">${label}</button>`;
+  if (key === 'none') prompt.innerHTML = '';
+  else if (key === 'ground') {
+    prompt.innerHTML = hint(stickShown() ? 'Sleep de stick om te vliegen.' : FLY_KEYS) + button('explore-heli-exit', '🚁 Stap uit');
+  } else if (key === 'landing') {
+    prompt.innerHTML = hint(LANDING);
+  } else if (key === 'land') {
+    prompt.innerHTML = button('explore-heli-land', '🚁 Land hier');
+  } else if (key.startsWith('fly:')) {
+    prompt.innerHTML = hint(where) + button('explore-heli-land', '🚁 Land op de helipad');
+  } else if (key === 'enter') {
+    prompt.innerHTML = button('explore-heli-enter', '🚁 Stap in de helikopter');
   } else {
-    // near, but withheld. optIn true → reduced-motion; optIn false → toggle is UIT.
-    const msg = h.optIn
-      ? 'De helikopter blijft nu aan de grond.'
-      : 'Zet de helikopter aan bij Instellingen.';
-    prompt.innerHTML = `<p class="explore-heli-hint">${msg}</p>`;
+    // near, but withheld: reduced-motion (toggle on) or the toggle is UIT
+    prompt.innerHTML = hint(key === 'reduced' ? 'De helikopter blijft nu aan de grond.' : 'Zet de helikopter aan bij Instellingen.');
   }
+  prompt.querySelector('.explore-heli-enter')?.addEventListener('click', () => session.world?.enterHeli());
+  prompt.querySelector('.explore-heli-land')?.addEventListener('click', () => session.world?.landHeli());
+  prompt.querySelector('.explore-heli-exit')?.addEventListener('click', () => session.world?.exitHeli());
   arbitratePrompts();
 }
 
-/** W5.3b: show/hide the cockpit frame overlay on lift-off/touchdown. */
+/** W5.3b: show/hide the cockpit frame overlay while in the helicopter. */
 export function setHeliCockpit(inHeli: boolean): void {
   const frame = session.host.querySelector<HTMLDivElement>('.explore-heli-cockpit');
   if (frame) frame.hidden = !inHeli;
 }
 
-/** W5.3b: drive the motion-vignette opacity each flight frame (0 at hover). */
+/** W5.3b: drive the motion-vignette opacity each frame inside (0 at hover / on the
+ *  ground), and keep the prompt in step with the flight (pad reached, landed). */
 export function setHeliVignette(v: number): void {
   const vig = session.host.querySelector<HTMLDivElement>('.explore-heli-vignette');
   if (vig) vig.style.opacity = String(v);
-  renderHeliPrompt(); // onPad may have flipped → swap "Land hier" ⇄ hint
+  renderHeliPrompt();
 }
 
 /* ------------------------------------------------------------ hints ---- */
@@ -261,13 +281,14 @@ function showTip(id: 'walk' | 'tap' | 'boundary', text: string, ms = 5200): void
   }, ms);
 }
 
-/** How to drive, the first time the ranger gets into the jeep this session. */
-let driveHintShown = false;
+/** How to drive: the line itself stays with the "Stap uit" button while driving
+ *  (renderVehiclePrompt); the first time this session it is also read aloud. */
+let driveHintSpoken = false;
 export function showDriveHint(): void {
-  if (driveHintShown) return;
-  driveHintShown = true;
-  const stick = joystickVisible(store.get().settings.joystick, coarsePointer());
-  showTip('walk', stick ? ONBOARD_DRIVE.stick : ONBOARD_DRIVE.keys);
+  if (driveHintSpoken) return;
+  driveHintSpoken = true;
+  if (!store.get().settings.voorlezen) return;
+  narrator.speak(stickShown() ? ONBOARD_DRIVE.stick : `${ONBOARD_DRIVE.keys} ${DRIVE_OUT_KEYS}`);
 }
 
 /** F-11: the calm world-boundary cue, through the same one-tip channel. */

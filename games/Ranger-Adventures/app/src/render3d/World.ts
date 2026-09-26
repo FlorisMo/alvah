@@ -182,6 +182,9 @@ export class World {
         crossBiome: (here) => this.crossBiome(here),
         nearestAnimalDist: (x, z) => this.fauna.nearestAnimalDist(x, z),
         camOffsets: () => ({ walk: this.cam.camOffset, vehicle: this.cam.camOffsetVehicle, heli: this.cam.camOffsetHeli }),
+        people: () => this.fauna.scenicActors.map((a) => a.group.position),
+        animals: () => this.fauna.ambientState(),
+        markers: () => this.pois.markerPositions(),
       },
     );
     this.cam = new CameraRig(
@@ -352,9 +355,14 @@ export class World {
     this.vehicles.enterHeli();
   }
 
-  /** W5.3b: begin the descent — only over a helipad. */
+  /** W5.3b: land — the autopilot sets it down on the nearest helipad. */
   landHeli(): void {
     this.vehicles.landHeli();
+  }
+
+  /** W5.3b: step out of the helicopter resting on the ground (no-op in the air). */
+  exitHeli(): void {
+    this.vehicles.exitHeli();
   }
 
   /** Dev-hook accessor (W5.1): the drivable jeep's live state (null before it is placed). */
