@@ -163,7 +163,8 @@ export class Terrain {
   }
 
   /**
-   * Where a ray first meets the drawn ground, or null when it does not within `far`.
+   * Where a ray first meets the drawn ground, or null when it does not within `far`
+   * (or leaves the ground plane first).
    * Marches the ray against `y(x,z)` and bisects the crossing. Unlike a mesh raycast it
    * cannot slip between the two triangles of a shared edge: a click whose ray runs
    * exactly along a grid line (the screen-centre column while the camera sits at x = 0,
@@ -176,6 +177,8 @@ export class Terrain {
     const STEP = 0.5;
     let t0 = 0;
     for (let t1 = STEP; t1 <= far; t1 += STEP) {
+      const x = o.x + d.x * t1, z = o.z + d.z * t1;
+      if (Math.abs(x) > HALF || Math.abs(z) > HALF) return null; // left the drawn ground
       if (above(t1) <= 0) {
         let a = t0, b = t1;
         for (let i = 0; i < 30; i++) { const m = (a + b) / 2; if (above(m) > 0) a = m; else b = m; }

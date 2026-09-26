@@ -118,6 +118,7 @@ test('intersectRay finds the drawn ground where a mesh raycast does, and on grid
   const p = t.intersectRay(along);
   assert.ok(p, 'a ray along a grid line still meets the ground');
   assert.ok(Math.abs(p!.y - t.y(p!.x, p!.z)) < 1e-4, 'and the point lies on the drawn surface');
-  // a ray pointing up never does
+  // a ray pointing up never does, nor one that would only land far past the ground plane
   assert.equal(t.intersectRay(new THREE.Ray(eye.clone(), new THREE.Vector3(0, 1, 0))), null);
+  assert.equal(t.intersectRay(new THREE.Ray(eye.clone(), new THREE.Vector3(0, -0.001, -1).normalize())), null);
 });
