@@ -17,8 +17,9 @@ import { prefersReducedMotion } from '../core/reduced-motion';
 import { livePolicy } from './MotionMode';
 import {
   BIOME_PALETTE, VEN_CENTER, WATER_LEVEL,
-  anchorInBiome, biomeAt, heightAt, type Biome,
+  anchorInBiome, type Biome,
 } from './Biomes';
+import { Terrain } from './world/Terrain';
 import { loadManifest, loadModel, loadRig, prepModel, skinnedRenderBox } from './Models';
 import { standHeightFor, RANGER_STAND_HEIGHT, ADULT_REFERENCE_HEIGHT } from './AnimalScale';
 import { applyEyes } from './EyeMaterial';
@@ -42,10 +43,6 @@ import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from './Wayfinding';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, routeVia } from './Paths';
-import {
-  mottleRGB, vertexTint, GROUND_TILE_PX, GROUND_TILE_REPEAT, GROUND_BRIGHTEN,
-  BIOME_GROUND_TONES, groundPatch,
-} from './GroundDetail';
 import type { WorldCtx } from './play/types';
 import { dampFactor } from './play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
@@ -60,18 +57,6 @@ import {
 import {
   WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp,
 } from './Water';
-import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
-
-// D1.2 locomotion ground-truth: opt three.js raycasts into three-mesh-bvh's
-// accelerated path so the per-frame ground-snap ray (see `groundSnapY`) is O(log n)
-// against the ~18k-tri terrain instead of brute-force — cheap on iPad, and the
-// foundation the P1.5a/P1.5b bursts and prop-seating build on. MIT, zero runtime
-// network, already an installed dep (RUN-D-DIRECTION §7.2). One-time prototype patch;
-// a mesh without a boundsTree still falls back to the stock raycast, so this is safe
-// for every other `intersectObject` in the file.
-THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
-THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
-THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 export interface WorldMarker {
   missionId: string;
@@ -84,10 +69,6 @@ export interface WorldMarker {
 
 const SKY_LOW = GOLDEN_HOUR.fogColor; // shared golden-hour horizon + fog colour (P1.1)
 
-// D1.2 ground-snap constants. The ranger's Y is read by a ray cast straight DOWN
-// from well above his head (clear of any relief) against the real terrain mesh.
-const SNAP_ORIGIN_Y = 60;   // ray origin height (m) — above the tallest relief
-const SNAP_RAY_FAR = 200;   // ray length (m) — reaches the deepest ven basin
 // `grounded` band for the dev-hook court check (P1.5a asserts it across the world):
 // after the snap the feet sit ON the rendered surface, so clearance ≈ 0. A few cm of
 // float tolerance absorbs numeric wobble; more than SINK below or AIR above is "not
@@ -100,8 +81,7 @@ const GROUND_AIR_TOL = 0.60;  // and at most 60 cm above it (a step), else airbo
 // the jeep is a bigger object the ranger walks up to).
 const JEEP_COLLIDE = 1.6;
 const JEEP_NEAR_R = 3.6;
-// P1.5b jeep ground contact (RUN-D-DIRECTION §2.2: vehicles read the RENDERED mesh,
-// not the mirrored analytic `heightAt`; runs/animation-research.md §4.5: a damped
+// P1.5b jeep ground contact (runs/animation-research.md §4.5: a damped
 // hover, NEVER a hard per-frame Y-snap). The jeep's Y EASES toward the raycast ground
 // target each frame instead of clamping exactly to it — the old snap welded it to every
 // undulation (the "magnetically welded" stick Floris felt). The rate converges in ~0.1 s:
@@ -134,14 +114,6 @@ const HELI_AIRBORNE_Y = 2.5;
 // het bos" cue fires (once per approach, re-armed inward). All in metres.
 const RIM_EASE = 8;
 const RIM_HINT = 3.5;
-// P5.5 (F-11 rim): low ground-tufts (heather/marram/reed) are kept at least this far (m)
-// inside the bound. Past here a short tuft falls in the parked ranger's OUTWARD rim frame
-// and — at mid-distance on the gently-rolling relief — detaches from its own ground line
-// (the foreground sweeps down past it to his boots), reading as a clump floating at head
-// height in the world-edge hero frame (GATE-P5). Sized to cover the rim-ease stop
-// (~bound−RIM_EASE) plus the ~4.6 m follow boom, so the whole class clears his view.
-const RIM_TUFT_CLEAR = 13;
-
 // F-22 occlusion-proof labels: the diegetic name-tags draw with depthTest off so
 // no nearer mesh can clip them mid-glyph (see makeLabel). The cost of drawing them
 // on top of everything is that a far tag would otherwise punch through hills from
@@ -240,7 +212,7 @@ export class World {
   private readonly CAM_GROUND_CLR = 0.5; // keep the lens this far above the terrain
   // D1.5 (audit #4) terrain sightline: cap how far the follow boom rides UP to clear a dune
   // standing BETWEEN the lens and the ranger, so a pathological crest can't rocket the eye
-  // skyward. The Veluwe relief is gentle (~±2.2 m) plus the ~2.6 m mirrored-field divergence,
+  // skyward. The Veluwe relief is gentle (~±2.2 m) and the ven basin ~3.4 m deep,
   // so ~6 m clears every real dune; past it viewClear honestly reads not-clear (the fade rail
   // then keeps the world visible rather than a smear).
   private readonly MAX_TERRAIN_LIFT = 6;
@@ -402,14 +374,10 @@ export class World {
   private readonly onWayfind: (cue: WayCue | null) => void;
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
   private readonly raycaster = new THREE.Raycaster();
+  // The ONE ground truth (world/Terrain.ts): the drawn ground mesh + y(x,z) + biome(x,z).
+  // Every placement, the ranger's feet, the vehicles and the camera read terrain.y.
+  private readonly terrain: Terrain;
   private readonly ground: THREE.Mesh;
-  // D1.2: a dedicated DOWN ray for the per-frame ground-snap, kept separate from the
-  // pointer `raycaster` so a tap-to-walk never disturbs the ground query (and vice
-  // versa). `firstHitOnly` (three-mesh-bvh) returns just the topmost terrain hit — all
-  // the ground-snap needs — so the accelerated cast can stop early.
-  private readonly groundRay = Object.assign(new THREE.Raycaster(), { firstHitOnly: true });
-  private readonly _snapOrigin = new THREE.Vector3();
-  private static readonly DOWN = new THREE.Vector3(0, -1, 0);
   // W4.5 golden-hour light + selective hero shadow map. The warm sun casts a soft
   // shadow only for the ranger + solid props (castShadow=true); its tight ortho
   // frustum FOLLOWS the ranger via a fixed offset (`sunOffset`) so the covered set
@@ -586,13 +554,8 @@ export class World {
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
   private readonly obstacles: Obstacle[] = [];
-  // P5.5 (F-11 rim): the furthest-out radius any LOW ground-tuft (heather/marram/reed)
-  // landed at. candidates() clears that class from the outer rim band (bound−RIM_TUFT_CLEAR)
-  // so none falls in the parked ranger's outward frame, where a mid-distance tuft on the
-  // rolling relief detaches from its ground line and reads as a clump floating at head
-  // height (the world-edge hero frame). The boundary annotation exposes this so the rim
-  // shot's assert can prove scatterMax ≤ bound−RIM_TUFT_CLEAR (the tall pines are exempt —
-  // they merge into the buildRim tree-line and may fill to the bound).
+  // The furthest-out radius any LOW ground-tuft (heather/marram) landed at — reported on
+  // the dev hook's boundary read-back.
   private scatterMax = 0;
   // P1.3 tree canopy (see the module note above `instancesFromPrepped`): the instant
   // cone/cylinder stand-ins to swap out, and the per-instance placements (scattered bos
@@ -625,16 +588,9 @@ export class World {
     bound: 75,                                   // ground plane is 240² → trees at ~76 land on it
     // off-limits = the submerged ven only (inside the water disc AND below the
     // surface) — NOT a global height test, so dry relief troughs stay walkable.
-    // D3.2: the RENDERED terrain basin sits at world (VEN_CENTER.x, -VEN_CENTER.z)
-    // — buildGround tilts the plane so the rendered height at world (x,z) is
-    // heightAt(x, -z) (the z-mirror). The water disc, ground-tone-ven and moss bank
-    // all live over that world basin, so the no-wade must too: block within the disc
-    // AND where the RENDERED surface (heightAt(x,-z)) is below the waterline. The old
-    // check used VEN_CENTER as a world coord + the analytic heightAt(x,z), which dip
-    // at the MIRRORED spot — a hill under the water, so the ven never read as water.
     blocked: (x, z) => {
-      const dx = x - VEN_CENTER.x, dz = z + VEN_CENTER.z; // world basin = (VEN_CENTER.x, -VEN_CENTER.z)
-      return dx * dx + dz * dz < 18 * 18 && heightAt(x, -z) < WATER_LEVEL + 0.15;
+      const dx = x - VEN_CENTER.x, dz = z - VEN_CENTER.z;
+      return dx * dx + dz * dz < 18 * 18 && this.terrain.y(x, z) < WATER_LEVEL + 0.15;
     },
   };
 
@@ -681,7 +637,11 @@ export class World {
     this.scene.add(sun.target); // the shadow camera aims here; moved with the ranger
     this.sun = sun;
 
-    this.ground = this.buildGround();
+    this.terrain = new Terrain({
+      detail: this.groundDetailOn,
+      map: this.groundDetailOn ? Terrain.mottleTexture() : null,
+    });
+    this.ground = this.terrain.mesh;
     this.scene.add(this.ground);
     this.scene.add(this.buildPaths()); // W4.3: sand-path ribbons over the ground
     this.scene.add(this.buildVenWater());
@@ -822,10 +782,8 @@ export class World {
    *  m), the ranger's live `dist` from world centre, and `atRim` (he is pressed
    *  against the rim heading outward, so the "Hier stopt het bos" cue has fired). The
    *  P4.6 assert reads `dist` ≤ `bound` (clamped, never beyond) with `atRim` true
-   *  after an outward walk — the gentle stop, not an invisible wall. P5.5 adds
-   *  `scatterMax` (the furthest LOW ground-tuft radius — heather/marram/reed): the rim
-   *  shot's assert reads `scatterMax` ≤ `bound − RIM_TUFT_CLEAR` to prove that class is
-   *  cleared from the outer rim band, so none floats at head height in the edge frame. */
+   *  after an outward walk — the gentle stop, not an invisible wall. `scatterMax` is the
+   *  furthest LOW ground-tuft radius (heather/marram). */
   boundaryState(): { bound: number; dist: number; atRim: boolean; scatterMax: number } {
     const p = this.ranger.position;
     return { bound: this.limits.bound, dist: Math.hypot(p.x, p.z), atRim: this.atBoundary, scatterMax: this.scatterMax };
@@ -970,7 +928,7 @@ export class World {
     // ground and inside the rim, and the heli obstacle isn't back yet so he clears it.
     const side = 2.6;
     const next = resolveMove(hx, hz, hx + Math.cos(h) * side, hz - Math.sin(h) * side, this.obstacles, this.limits);
-    this.ranger.position.set(next.x, this.groundSnapY(next.x, next.z), next.z); // D1.2: land on the rendered surface, never a sunk exit
+    this.ranger.position.set(next.x, this.groundY(next.x, next.z), next.z); // step out onto the drawn ground
     this.ranger.rotation.y = h;
     this.ranger.visible = true;
     this.target.set(next.x, 0, next.z);      // no stale walk target
@@ -1000,18 +958,15 @@ export class World {
     if (!this.jeep || !this.jeepPos) return null;
     const caps = driveCaps(livePolicy().reduced);
     const off = this.inVehicle ? this.camOffsetVehicle : this.camOffset;
-    // P1.5b: the jeep's live ground contact — its world Y against the RENDERED surface
-    // directly under it (the D1.2 ray truth, never the mirrored analytic field). Sitting
-    // still, `clearance` ≈ 0; while driving relief the damped hover lets it lag a little
-    // (that lag IS the smoothing — never the old hard snap). `grounded` = the ray hit AND
-    // the clearance sits in the jeep suspension band. Pixels stay the court of appeal
-    // (§8.7): a shot that contradicts this outranks it.
-    this.groundRay.far = SNAP_RAY_FAR;
-    this.groundRay.set(this._snapOrigin.set(this.jeepPos.x, SNAP_ORIGIN_Y, this.jeepPos.z), World.DOWN);
-    const gh = this.groundRay.intersectObject(this.ground, false);
-    const jeepSurfaceY = gh.length ? gh[0].point.y : this.groundY(this.jeepPos.x, this.jeepPos.z);
+    // P1.5b: the jeep's live ground contact — its world Y against the drawn surface
+    // directly under it, read by an independent downward ray onto the ground mesh.
+    // Sitting still, `clearance` ≈ 0; while driving relief the damped hover lets it lag
+    // a little (that lag IS the smoothing — never a hard snap). `grounded` = the ray hit
+    // AND the clearance sits in the jeep suspension band.
+    const rayY = this.terrain.raycastY(this.jeepPos.x, this.jeepPos.z);
+    const jeepSurfaceY = Number.isFinite(rayY) ? rayY : this.groundY(this.jeepPos.x, this.jeepPos.z);
     const jeepClearance = this.jeepPos.y - jeepSurfaceY;
-    const jeepGrounded = gh.length > 0 && jeepClearance >= -JEEP_SINK_TOL && jeepClearance <= JEEP_AIR_TOL;
+    const jeepGrounded = Number.isFinite(rayY) && jeepClearance >= -JEEP_SINK_TOL && jeepClearance <= JEEP_AIR_TOL;
     // TRUE roll = tilt of the camera's right vector off horizontal. `camera.up` is
     // pinned to world-up and lookAt derives the basis from it, so right lies in the
     // xz-plane → right.y ≈ 0 at ANY yaw/pitch. (camera.rotation.z is NOT roll here —
@@ -1091,7 +1046,7 @@ export class World {
     // and inside the rim; the jeep obstacle isn't back yet, so he clears it fully.
     const side = 2.4;
     const next = resolveMove(jx, jz, jx + Math.cos(h) * side, jz - Math.sin(h) * side, this.obstacles, this.limits);
-    this.ranger.position.set(next.x, this.groundSnapY(next.x, next.z), next.z); // D1.2: land on the rendered surface, never a sunk exit
+    this.ranger.position.set(next.x, this.groundY(next.x, next.z), next.z); // step out onto the drawn ground
     this.ranger.rotation.y = h;
     this.ranger.visible = true;
     this.playerRig.setSeated(false);       // F-31: back on foot — locomotion resumes (idle)
@@ -1175,70 +1130,6 @@ export class World {
     // P1.1: the SHARED golden-hour ramp (Atmosphere.SKY_STOPS via Lighting), the
     // same soft warm zenith→horizon bands the title + sandbox bake — one sky.
     return bakeGoldenHourSky();
-  }
-
-  private buildGround(): THREE.Mesh {
-    // continuous biome relief (Biomes.heightAt) + per-vertex biome tint so heide
-    // fades into bos / stuifzand / ven with no seam. One draw call (vertexColors).
-    // W4.4: on top of the flat slab, each vertex gets a low-frequency brightness
-    // wash (vertexTint) and the material carries a repeating procedural mottle
-    // canvas (mottleRGB) for hand-brushed grain — both add detail, no draw calls.
-    const detail = this.groundDetailOn;
-    const geo = new THREE.PlaneGeometry(240, 240, 96, 96);
-    const pos = geo.attributes.position as THREE.BufferAttribute;
-    const colors = new Float32Array(pos.count * 3);
-    const c = new THREE.Color();
-    const cA = new THREE.Color(), cB = new THREE.Color(); // P1.2 two-tone scratch
-    const cWet = new THREE.Color('#39422e'); // D3.2 wet moss/peat at the waterline
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), y = pos.getY(i); // plane is XY before the -90° tilt → world z = y
-      const gh = this.groundY(x, y);
-      pos.setZ(i, gh);
-      const biome = biomeAt(x, y);
-      if (detail) {
-        // P1.2: mix the biome's two naturalistic ground tones by the patch field
-        // so each landschap reads as real Veluwe ground (heather-over-sand heide,
-        // litter+moss bos, pale drift stuifzand, mossy-peat ven) — never a flat
-        // hue. Then brighten to offset the mottle map's average shade (parity) and
-        // add the soft per-vertex wash blotch; clamp so no channel blows past 1.
-        const [hexA, hexB] = BIOME_GROUND_TONES[biome];
-        cA.set(hexA); cB.set(hexB);
-        // D3.2: bias the HEIDE toward its bloom tone so the hub reads as flowering paarse
-        // heide (purple mats over sand patches), not a flat warm-brown slab — real bloeiende
-        // heide is purple-dominant. Other biomes keep the even two-tone mix.
-        const patch = groundPatch(x, y);
-        const t = biome === 'heide' ? Math.min(1, patch * 1.5 + 0.08) : patch;
-        const m = GROUND_BRIGHTEN * vertexTint(x, y);
-        c.setRGB(
-          Math.min(1, (cA.r + (cB.r - cA.r) * t) * m),
-          Math.min(1, (cA.g + (cB.g - cA.g) * t) * m),
-          Math.min(1, (cA.b + (cB.b - cA.b) * t) * m),
-        );
-        // D3.2: a wet moss/peat BANK at the ven waterline — the ground darkens + cools
-        // toward wet peat as it nears WATER_LEVEL, so the shore reads as a moss-soft bank
-        // grading into the water (doc §2.2 "moss-soft banks, reed clusters"), never the
-        // bare tan edge the P1.2 grade convicted. Painted onto the terrain vertices, so it
-        // follows the real basin slope exactly — it can never float or z-fight (no mesh).
-        if (biome === 'ven') {
-          const wet = 1 - THREE.MathUtils.smoothstep(gh, WATER_LEVEL - 0.3, WATER_LEVEL + 1.4);
-          c.lerp(cWet, wet * 0.6);
-        }
-      } else {
-        // `?groundDetail=off` keeps the old flat per-biome slab (the before baseline).
-        c.set(BIOME_PALETTE[biome].ground);
-      }
-      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
-    }
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geo.computeVertexNormals();
-    // D1.2: build the BVH so the per-frame ground-snap ray (groundSnapY) is cheap.
-    geo.computeBoundsTree();
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
-    if (detail) mat.map = this.groundMottleTexture();
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.receiveShadow = true; // W4.5: the hero shadow lands on the ground
-    return mesh;
   }
 
   /** W4.5: opt a loaded prop/ranger into the hero shadow map (Models.ts clears
@@ -1376,38 +1267,6 @@ export class World {
   }
 
   /**
-   * W4.4: bake the fine painterly grain (GroundDetail.mottleRGB) onto ONE small
-   * canvas that repeats over the terrain. Grayscale-ish + faintly warm, so
-   * multiplied against the biome vertex colour it reads as brushed tonal
-   * variation. No external texture fetch, one texture shared by the single ground
-   * draw call. Seamlessly tileable (the pure fn wraps), so no repeat seams show.
-   */
-  private groundMottleTexture(): THREE.CanvasTexture {
-    const N = GROUND_TILE_PX;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = N;
-    const ctx = cv.getContext('2d')!;
-    const img = ctx.createImageData(N, N);
-    for (let j = 0; j < N; j++) {
-      for (let i = 0; i < N; i++) {
-        const [r, g, b] = mottleRGB(i / N, j / N);
-        const o = (j * N + i) * 4;
-        img.data[o] = Math.round(r * 255);
-        img.data[o + 1] = Math.round(g * 255);
-        img.data[o + 2] = Math.round(b * 255);
-        img.data[o + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(GROUND_TILE_REPEAT, GROUND_TILE_REPEAT);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
-    return tex;
-  }
-
-  /**
    * W4.8: the ven-water disc — a FRESNEL-tinted still plane. A custom shader
    * mixes a deep forest-teal (seen head-on) with a lighter warm sky-glow (at
    * grazing angles) by the Schlick view-angle factor (`Water.ts` mirrors the
@@ -1473,37 +1332,19 @@ export class World {
     this.waterMat = mat;
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
-    // D3.2: seat the disc over the REAL rendered basin at world (VEN_CENTER.x, -VEN_CENTER.z).
-    // buildGround's −90° tilt mirrors z, so the terrain low-point that heightAt() digs at
-    // (VEN_CENTER) renders at world z = -VEN_CENTER.z. Placing the disc at raw VEN_CENTER.z
-    // buried it under the hill on the mirrored side (the ven "never read as water"); here it
-    // fills the actual depression, coincident with the ven ground tone + the moss bank.
-    mesh.position.set(VEN_CENTER.x, WATER_LEVEL, -VEN_CENTER.z);
+    mesh.position.set(VEN_CENTER.x, WATER_LEVEL, VEN_CENTER.z); // over the basin the terrain digs at VEN_CENTER
     return mesh;
   }
 
-  /** sample ground height at world x,z (delegates to the pure biome field). */
+  /** The drawn ground height at world (x,z) — the one ground truth (world/Terrain.ts). */
   private groundY(x: number, z: number): number {
-    return heightAt(x, z);
+    return this.terrain.y(x, z);
   }
 
-  /**
-   * D1.2 locomotion ground-truth (RUN-D-DIRECTION §2.2): the Y of the RENDERED
-   * terrain surface directly under world (x,z), read by casting a ray straight down
-   * against the real ground mesh. This is the ONE ground truth for the character's
-   * feet — it can never disagree with the pixels the way the analytic `heightAt`
-   * does. (`buildGround` displaces the plane by `heightAt(x, y_plane)` then tilts it
-   * −90° about X, which maps y_plane → world −z; so the mesh surface at world (x,z)
-   * equals `heightAt(x, −z)`, while a `heightAt(x, z)` Y-write samples the MIRRORED
-   * field — up to ~4 m off at the ven basin, burying the ranger to his hair on the
-   * shore. The raycast reads the surface the eye sees, so grounding to it is correct
-   * regardless of that analytic divergence.) Falls back to `heightAt` only if the ray
-   * ever misses (defensive — the 240 m ground plane always covers the 75 m bound). */
+  /** Same ground truth as `groundY`; kept under this name for `ctx()` (the in-place
+   *  mini-games read it through `WorldCtx.groundY`). */
   private groundSnapY(x: number, z: number): number {
-    this.groundRay.far = SNAP_RAY_FAR;
-    this.groundRay.set(this._snapOrigin.set(x, SNAP_ORIGIN_Y, z), World.DOWN);
-    const hit = this.groundRay.intersectObject(this.ground, false);
-    return hit.length ? hit[0].point.y : this.groundY(x, z);
+    return this.terrain.y(x, z);
   }
 
   /**
@@ -1563,8 +1404,8 @@ export class World {
   /**
    * Deterministic golden-angle candidate positions over the world, kept only where
    * they fall in the wanted biome (so each landschap grows its own vegetation),
-   * outside the lodge clearing, and inside the playable bound (P5.5 — no vegetation
-   * out in the fog band past the tree-line). Returns the surviving (x,z) — fully
+   * outside the lodge clearing, and inside the playable bound (no vegetation out in
+   * the fog band past the tree-line). Returns the surviving (x,z) — fully
    * reproducible.
    */
   private candidates(count: number, want: Biome): { x: number; z: number; i: number }[] {
@@ -1576,23 +1417,9 @@ export class World {
       const z = Math.sin(ang) * rad + Math.cos(i * 7.3) * 6;
       const r = Math.hypot(x, z);
       if (r < 12) continue;                        // clearing
-      // P5.5 (F-11 rim): keep scatter out of the OUTER RIM BAND, not just past the bound.
-      // The low ground-tufts (heather/marram/reed) sit correctly on `groundY`, but at
-      // mid-distance on the rolling relief a tuft near the edge detaches from its own
-      // ground line — the foreground sweeps DOWN past it to the ranger's boots — so it
-      // reads as a purple clump floating at head height in the world-edge hero frame
-      // (GATE-P5). A radius-only cap at the bound left one at r≈74.9 (< 75) and did NOT
-      // fix it. When the ranger eases to his rim stop (~bound−RIM_EASE) the ~4.6 m follow
-      // boom sits ~bound−13 out, so any short tuft beyond there lands in his outward
-      // frame — clear the whole class from that band (every approach angle, deterministic).
-      // The tall pines (bos) may fill to the bound: they read as trees and merge into the
-      // buildRim tree-line, so they take the full radius (no bare ring inside the forest).
-      const outerLimit = want === 'bos' ? this.limits.bound : this.limits.bound - RIM_TUFT_CLEAR;
-      if (r > outerLimit) continue;
-      if (biomeAt(x, z) !== want) continue;        // wrong landschap
-      // witness the furthest LOW-tuft radius (the floating-clump class) so the rim
-      // annotation can prove it is pulled inside the band; pines are exempt above.
-      if (want !== 'bos' && r > this.scatterMax) this.scatterMax = r;
+      if (r > this.limits.bound) continue;         // no vegetation out past the tree-line
+      if (this.terrain.biome(x, z) !== want) continue; // wrong landschap
+      if (want !== 'bos' && r > this.scatterMax) this.scatterMax = r; // furthest low tuft (dev hook)
       out.push({ x, z, i });
     }
     return out;
@@ -1753,20 +1580,17 @@ export class World {
   /** Reed clumps fringing the ven — only on the bank just above the waterline.
    *  W4.6: registered as a wind mesh (softer sway than the exposed marram). */
   private scatterReeds(budget: number): void {
-    // D3.2: fringe the ACTUAL rendered basin at world (VEN_CENTER.x, -VEN_CENTER.z) — the
-    // spot the water disc + ground-tone-ven + moss bank share (the z-mirror; see
-    // buildVenWater). candidates('ven') can't be used: it filters biomeAt in WORLD space,
-    // which lands on the dry hill on the far side. Ring the basin with a golden-angle spread
-    // and keep only the stalks whose RENDERED surface (groundSnapY) sits in the shore band —
-    // so every reed is seated on the real bank at the waterline, never floating over water.
-    const bx = VEN_CENTER.x, bz = -VEN_CENTER.z;
+    // D3.2: ring the basin with a golden-angle spread and keep only the stalks whose
+    // ground sits in the shore band — so every reed stands on the bank at the waterline,
+    // a tight belt around the water rather than a scatter over the whole ven biome.
+    const bx = VEN_CENTER.x, bz = VEN_CENTER.z;
     const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
     for (let i = 0; i < budget * 12 && items.length < budget; i++) {
       const ang = i * 2.39996;             // golden angle → even, non-repeating ring
       const rad = 9 + (i % 22) * 0.5;      // 9–20 m out — a TIGHT belt hugging the waterline
       const x = bx + Math.cos(ang) * rad;
       const z = bz + Math.sin(ang) * rad;
-      const gy = this.groundSnapY(x, z);   // RENDERED surface (raycast), not the mirrored analytic field
+      const gy = this.groundY(x, z);
       if (gy < WATER_LEVEL - 0.3 || gy > WATER_LEVEL + 1.0) continue; // keep the reed belt right at the shore
       const s = 0.8 + (i % 4) * 0.22;
       items.push({ x, y: gy + 0.85 * s, z, sx: s, sy: s, phase: (i % 5) * 1.3 });
@@ -2011,9 +1835,8 @@ export class World {
     for (let i = 0; !landmarkInView && i < this.landmarks.length; i++) {
       landmarkInView = ptInFrustum(this.landmarks[i].x, this.landmarks[i].z);
     }
-    // D1.3 mission-entry camera truth. `groundAtCam` = the RENDERED-terrain height
-    // under the lens off the raycast ground-snap (matches the pixels, unlike the
-    // mirrored `heightAt` the markers seat on); a game-3D reframe assert reads
+    // D1.3 mission-entry camera truth. `groundAtCam` = the drawn terrain height
+    // under the lens; a game-3D reframe assert reads
     // `y > groundAtCam` so a below-ground entry (fresh simon-3D, cam.y −1.29) is caught.
     const groundAtCam = this.groundSnapY(cam.position.x, cam.position.z);
     // `taskInView` = the running activity's task anchor (its staging centre, a hair
@@ -2067,13 +1890,9 @@ export class World {
 
   /** F-11 / D1.5 (audit #4) line-of-sight over the terrain: true when the RENDERED ground never
    *  climbs above the straight segment from `from` to the world point (`tx,ty,tz`). Marches
-   *  `groundSnapY` (the raycast against the real ground mesh — the ONE ground truth, D1.2/§2.2);
-   *  the mirrored analytic `heightAt` it used to march reads a dune ~2.6 m too LOW and lied the
-   *  sightline clear over a full-frame terrain murk (fresh `11-controls-hud`: viewClear/visible
-   *  true, no ranger). A crest poking above the ray (a rim berm / dune face between lens and
+   *  the drawn terrain (`groundSnapY` = terrain.y, the ONE ground truth). A crest poking above the ray (a rim berm / dune face between lens and
    *  ranger) returns false = the ranger is hidden, so `avatarScreen.visible` matches the pixels.
-   *  Deterministic (groundSnapY is), so the idle pose holds frame to frame; a per-SHOT hook read
-   *  (camState), not a per-frame cost, and the BVH keeps each ground ray O(log n). */
+   *  Deterministic, so the idle pose holds frame to frame; a per-SHOT hook read (camState). */
   private terrainClearTo(from: THREE.Vector3, tx: number, ty: number, tz: number): boolean {
     const dx = tx - from.x, dz = tz - from.z;
     const horiz = Math.hypot(dx, dz);
@@ -2090,9 +1909,7 @@ export class World {
   /**
    * D1.5 (audit #4) terrain sightline ride: the metres the follow boom must lift so the STRAIGHT
    * line from the lens (lx,ly,lz) to the ranger aim (ax,ay,az) clears the RENDERED terrain by
-   * CAM_GROUND_CLR everywhere between them. Marches `groundSnapY` (the raycast against the real
-   * ground mesh — never the mirrored analytic `heightAt`, which reads a dune ~2.6 m too low and
-   * lied the sightline clear, `11-controls-hud`). Raising the lens by δ raises the segment height
+   * CAM_GROUND_CLR everywhere between them. Marches the drawn terrain (`groundSnapY`). Raising the lens by δ raises the segment height
    * at parameter t by (1−t)·δ (the aim end is pinned to the ranger), so a crest poking `deficit`
    * above the line at t needs δ ≥ deficit/(1−t); the worst sample wins and clears them all at once
    * (raising the eye lifts every point, never lowers one). Returns the RAW need (the caller caps
@@ -2206,13 +2023,12 @@ export class World {
   /** Dev-hook accessor (D1.2 locomotion ground-truth; P1.5a asserts it across the
    *  walkable world). Reads the ranger's feet against the RENDERED terrain surface
    *  right under him — the court check for "he is ON the ground, not through it":
-   *   - `clearance` = his feet Y minus the raycast surface Y. After the ground-snap
-   *     it is ≈ 0; the pre-fix analytic Y-write read ~ −4 m at the ven basin (buried).
-   *   - `analyticGap` = the rendered surface minus the OLD analytic `heightAt(x,z)`
-   *     value at the same spot — how far the mesh and the mirrored analytic field
-   *     disagree here. A burst that reaches |analyticGap| ≫ 0 proves it crossed a zone
-   *     where the old Y-write WOULD have sunk/floated him, so a still-grounded ranger
-   *     there is real evidence, not a flat-spawn no-op.
+   *   - `clearance` = his feet Y minus the surface Y an independent downward ray hits
+   *     on the ground mesh. ≈ 0 when he stands on the drawn ground.
+   *   - `analyticGap` = that drawn surface minus the smooth relief field `heightAt(x,z)`
+   *     at the same spot. Since the terrain un-mirror (2026-09-26) this is only the
+   *     triangle-vs-curve difference (< ~2 cm); anything larger means the drawn ground and
+   *     the field every placement reads have come apart again.
    *   - `grounded` = the ray hit the terrain AND clearance sits in the on-foot band.
    *  Null before the rig is up or while seated in a vehicle (his mesh is hidden then,
    *  so a feet-on-ground check is meaningless). Pixels stay the court of appeal (§8.7):
@@ -2220,16 +2036,13 @@ export class World {
   groundedState(): { grounded: boolean; clearance: number; analyticGap: number } | null {
     if (this.ranger.children.length === 0 || this.inVehicle) return null;
     const p = this.ranger.position;
-    this.groundRay.far = SNAP_RAY_FAR;
-    this.groundRay.set(this._snapOrigin.set(p.x, SNAP_ORIGIN_Y, p.z), World.DOWN);
-    const hit = this.groundRay.intersectObject(this.ground, false);
-    if (!hit.length) return { grounded: false, clearance: Number.NEGATIVE_INFINITY, analyticGap: 0 };
-    const surfaceY = hit[0].point.y;
+    const surfaceY = this.terrain.raycastY(p.x, p.z);
+    if (!Number.isFinite(surfaceY)) return { grounded: false, clearance: Number.NEGATIVE_INFINITY, analyticGap: 0 };
     const clearance = p.y - surfaceY;
     return {
       grounded: clearance >= -GROUND_SINK_TOL && clearance <= GROUND_AIR_TOL,
       clearance,
-      analyticGap: surfaceY - this.groundY(p.x, p.z),
+      analyticGap: surfaceY - this.terrain.field(p.x, p.z),
     };
   }
 
@@ -2888,11 +2701,7 @@ export class World {
   private placeJeep(): void {
     const x = 16, z = 14, height = 1.9; // stuifzand NE; ~21 m from spawn, +z off the smoke corridor
     const group = new THREE.Group();
-    // P1.5b: seat the parked jeep on the RENDERED surface (the D1.2 ray truth), not the
-    // mirrored analytic `heightAt` that reads a different height here — so the drive
-    // begins grounded and the hover has nothing to correct on frame one. (buildGround at
-    // construction precedes placeJeep, so `this.ground` + its BVH are already up.)
-    group.position.set(x, this.groundSnapY(x, z), z);
+    group.position.set(x, this.groundY(x, z), z); // on the drawn ground: the drive begins grounded
     this.jeepHeading = Math.atan2(-x, -z); // parked facing the clearing (like the landmarks)
     group.rotation.y = this.jeepHeading;
     group.add(this.proceduralTotem('#6a7b4a')); // instant stand-in until the GLB streams in
@@ -3007,7 +2816,7 @@ export class World {
       return;
     }
     // ambience still follows across biomes while flying
-    const here = biomeAt(hp.x, hp.z);
+    const here = this.terrain.biome(hp.x, hp.z);
     if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
   }
 
@@ -3054,13 +2863,11 @@ export class World {
     this.vehicleSpeed = capped;
     const next = resolveMove(jp.x, jp.z, jp.x + step.dx * k, jp.z + step.dz * k, this.obstacles, this.limits);
     jp.x = next.x; jp.z = next.z;
-    // P1.5b ground contact: EASE the jeep's Y toward the rendered-surface target with a
-    // damped hover (research §4.5), NOT the old `jp.y = groundY(...)` hard per-frame snap.
-    // The snap welded the jeep to every undulation (the "magnetically welded" stick) AND
-    // read the mirrored analytic field (the same divergence D1.2 fixed for the walker at
-    // the ven). `groundSnapY` is the rendered-mesh truth; the exponential approach smooths
-    // it into a suspension-like glide that still hugs the ground. Frame-rate independent.
-    const targetY = this.groundSnapY(next.x, next.z);
+    // P1.5b ground contact: EASE the jeep's Y toward the ground with a damped hover
+    // (research §4.5), never a hard per-frame snap — the snap welded the jeep to every
+    // undulation (the "magnetically welded" stick). The exponential approach smooths it
+    // into a suspension-like glide that still hugs the ground. Frame-rate independent.
+    const targetY = this.groundY(next.x, next.z);
     jp.y += (targetY - jp.y) * (1 - Math.exp(-JEEP_HOVER_RATE * dt));
     this.jeep.rotation.y = this.jeepHeading;
     // the ranger rides along (hidden) so placeCamera + exitVehicle anchor track it
@@ -3074,7 +2881,7 @@ export class World {
     this.dustEmitting = !reduced && Math.abs(capped) > 1.2;
     if (this.dustEmitting) this.emitDust(jp.x, jp.y, jp.z, this.jeepHeading);
     // ambience still follows across biomes while driving
-    const here = biomeAt(jp.x, jp.z);
+    const here = this.terrain.biome(jp.x, jp.z);
     if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
   }
 
@@ -3496,10 +3303,10 @@ export class World {
         rp.x = next.x;
         rp.z = next.z;
       }
-      rp.y = this.groundSnapY(rp.x, rp.z); // D1.2: feet follow the rendered terrain, never the mirrored analytic field
+      rp.y = this.groundY(rp.x, rp.z); // feet on the drawn terrain
 
       // ambience follows the ranger across biomes — re-pick the bed on a crossing
-      const here = biomeAt(rp.x, rp.z);
+      const here = this.terrain.biome(rp.x, rp.z);
       if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
 
       // W4.7b: surface-aware footsteps. The distance-carry cadence advances every
@@ -3838,12 +3645,9 @@ export class World {
     // just the lens above the ground under itself. A dune face standing between the trailing
     // lens and the ranger is an occluder NO fade can touch (terrain can't be made transparent
     // the way a crown can) — the GATE-D1 audit #4 murk: fresh `11-controls-hud` a full-frame
-    // terrain void with NO ranger while the hook lied clear. Two faults fixed: (1) the old lift
-    // sampled the MIRRORED analytic `groundY`, which reads a dune ~2.6 m too LOW (groundSnapY is
-    // the one ground truth, D1.2/§2.2) so it never lifted for the real crest; (2) it only kept
-    // the LENS above max-ground, which does not clear the LINE to a ranger standing in a hollow.
-    // Ride the crest instead: first keep the lens above its own rendered ground, then lift the
-    // eye until the straight line lens→HEAD clears the raycast terrain by CAM_GROUND_CLR (capped
+    // terrain void with NO ranger while the hook lied clear. Keeping only the LENS above the
+    // ground does not clear the LINE to a ranger standing in a hollow. Ride the crest instead: first keep the lens above its own rendered ground, then lift the
+    // eye until the straight line lens→HEAD clears the drawn terrain by CAM_GROUND_CLR (capped
     // at MAX_TERRAIN_LIFT). This is the D1.3 above-terrain law extended to the whole segment —
     // damped follow behaviour (the lerp below eases it; a CUT on snap / under reduced-motion),
     // never a player-initiated orbit. A clearance lift only (never a downward move) so the idle

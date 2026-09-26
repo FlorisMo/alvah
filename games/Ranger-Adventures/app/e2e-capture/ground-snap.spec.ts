@@ -180,11 +180,10 @@ test('D1.2 ground-snap drive-burst — the ranger stays on the rendered terrain'
   expect(first && last, 'spawn + final position present').toBeTruthy();
   const moved = Math.hypot(last!.x - first!.x, last!.z - first!.z);
   expect(moved, 'burst walked a real distance across the terrain').toBeGreaterThan(5);
-  // and it crossed a REAL divergence zone — somewhere the rendered surface disagrees
-  // with the old analytic field by ≫ 0, so the pre-fix Y-write WOULD have sunk/floated
-  // him there. A still-grounded ranger at that spot is the proof the snap fixed it.
+  // and the drawn ground IS the relief field every placement reads (the terrain
+  // un-mirror, 2026-09-26): only the triangle-vs-curve difference may remain.
   const maxGap = Math.max(...samples.map((s) => Math.abs(s.analyticGap ?? 0)));
-  expect(maxGap, 'burst reached a heightAt-vs-mesh divergence zone (proves the fix bites)').toBeGreaterThan(0.3);
+  expect(maxGap, 'drawn terrain matches heightAt (no z-mirror)').toBeLessThan(0.05);
 });
 
 /**
@@ -334,12 +333,10 @@ test('P1.5a ven-shore drive-burst — the ranger stays grounded from spawn to th
   const first = samples[0].pos, lastP = shore.pos;
   expect(first && lastP, 'spawn + ven-shore positions present').toBeTruthy();
   expect(Math.hypot(lastP!.x - first!.x, lastP!.z - first!.z), 'walked the full spawn → ven distance').toBeGreaterThan(20);
-  // …and it crossed the ven divergence zone — the deepest the ranger can STAND is the
-  // no-wade bank (the ~4 m centre is water), and even there the pre-D1.2 analytic Y-write
-  // read ~2 m+ below the rendered surface (D0.1: buried to the neck on the 1.7 m model). A
-  // still-grounded ranger across that zone is the proof D1.2's raycast snap fixed the sink.
+  // …and all the way to the ven bank the drawn ground IS the relief field every placement
+  // reads (the terrain un-mirror, 2026-09-26): only the triangle-vs-curve difference remains.
   const maxGap = Math.max(...samples.map((s) => Math.abs(s.analyticGap ?? 0)));
-  expect(maxGap, 'burst crossed the ven divergence zone (pre-fix neck-deep sink)').toBeGreaterThan(1.5);
+  expect(maxGap, 'drawn terrain matches heightAt at the ven (no z-mirror)').toBeLessThan(0.05);
   // he crossed real relief between spawn and the ven — the slopes/dunes the ledger names
   const zones = new Set(samples.map((s) => s.zone));
   expect(zones.has('spawn') && zones.has('relief') && zones.has('ven-shore'), 'burst crossed spawn → relief → ven-shore').toBe(true);

@@ -43,18 +43,11 @@ export const BIOME_PALETTE: Record<Biome, BiomePalette> = {
 export const CLEARING_R = 7;
 
 /**
- * Basin centre for `heightAt` (the Gaussian dip that makes the ven the lowest ground).
- * D3.2 NOTE — the z-mirror: `World.buildGround` displaces the plane by `heightAt(x, y)`
- * then tilts it −90° about X, so the RENDERED surface at world (x,z) equals `heightAt(x, −z)`.
- * The dip that `heightAt` digs at this arg therefore renders at world **(x, −z)** =
- * (46, +19)… which is the DRY hill on the mirrored side; the old value (z −19) buried the
- * water disc there and the ven "never read as water". Digging the basin at arg z = +19 lands
- * the rendered depression at world (46, −19) — the spot the water disc, ground-tone-ven, moss
- * bank + no-wade all resolve to (World.ts uses `-VEN_CENTER.z` for the world basin) AND the
- * spot the ven POIs/paths sit near (SE). So this is the heightAt-arg centre; the WORLD ven
- * centre is (VEN_CENTER.x, -VEN_CENTER.z) = (46, −19).
+ * World centre of the ven basin: the Gaussian dip `heightAt` digs here is where the
+ * water disc, the reed belt, the no-wade zone and the forced 'ven' shore all sit (SE,
+ * below the vogelkijkhut). A world point like every other coordinate in this file.
  */
-export const VEN_CENTER = { x: 46, z: 19 };
+export const VEN_CENTER = { x: 46, z: -19 };
 const BASIN_DEPTH = 3.4; // deeper than the global relief (±2.2) so the ven is the lowest ground
 const BASIN_SIGMA = 14;
 
@@ -112,18 +105,19 @@ export function biomeAt(x: number, z: number): Biome {
 
 /**
  * A comfortable anchor point inside a given biome at a chosen radius — used to drop
- * a mission marker in the heart of its own landschap. Walks the warped field a few
- * steps to land safely inside the target sector rather than on a wandering seam.
+ * a mission marker in the heart of its own landschap. Starts on the sector's centre
+ * line and, if that spot is off-biome (a wandering seam, or the forced ven shore that
+ * sits inside the bos sector), searches the arc on BOTH sides, nearest first, so a
+ * marker never ends up in another landschap (or in the ven water).
  */
 export function anchorInBiome(biome: Biome, radius = 26): { x: number; z: number } {
   const sector = BIOME_ORDER.indexOf(biome);
-  // centre angle of the unwarped sector
-  const u = (sector + 0.5) * (Math.PI / 2);
-  let a = u - Math.PI;
-  for (let i = 0; i < 6; i++) {
+  const a0 = (sector + 0.5) * (Math.PI / 2) - Math.PI; // centre angle of the unwarped sector
+  const STEP = 0.12;
+  for (let k = 0; k <= 12; k++) {
+    const a = a0 + (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * STEP; // 0, +δ, −δ, +2δ, …
     const x = Math.cos(a) * radius, z = Math.sin(a) * radius;
     if (biomeAt(x, z) === biome) return { x, z };
-    a += 0.12; // nudge along the arc until we're clear of a seam
   }
-  return { x: Math.cos(a) * radius, z: Math.sin(a) * radius };
+  return { x: Math.cos(a0) * radius, z: Math.sin(a0) * radius };
 }

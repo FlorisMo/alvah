@@ -63,9 +63,24 @@ test('the lodge clearing at world centre is heide', () => {
 });
 
 test('anchorInBiome lands a marker inside the requested landschap', () => {
+  // every radius the world uses: 22 m + 9 m per extra mission in the same landschap
   for (const b of BIOME_ORDER) {
-    const p = anchorInBiome(b);
-    assert.equal(biomeAt(p.x, p.z), b, `${b} anchor is in ${b}`);
-    assert.ok(Math.hypot(p.x, p.z) > CLEARING_R, `${b} anchor is outside the clearing`);
+    for (const r of [26, 22, 31, 40, 49, 58]) {
+      const p = anchorInBiome(b, r);
+      assert.equal(biomeAt(p.x, p.z), b, `${b} anchor at r=${r} is in ${b}`);
+      assert.ok(Math.hypot(p.x, p.z) > CLEARING_R, `${b} anchor is outside the clearing`);
+    }
+  }
+});
+
+test('the ven basin sits at VEN_CENTER in world coordinates, clear of the other missions', () => {
+  // the water basin is where the ven biome is forced, and no non-ven marker lands in it
+  assert.equal(biomeAt(VEN_CENTER.x, VEN_CENTER.z), 'ven');
+  for (const b of BIOME_ORDER) {
+    if (b === 'ven') continue;
+    for (const r of [22, 31, 40, 49, 58]) {
+      const p = anchorInBiome(b, r);
+      assert.ok(Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) > 20, `${b} r=${r} marker is off the water`);
+    }
   }
 });
