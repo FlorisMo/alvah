@@ -23,6 +23,10 @@ import { defineConfig, devices } from '@playwright/test';
  *   are unchanged — webkit adds a second engine, it removes nothing.
  */
 const PORT = Number(process.env.RANGER_PORT ?? 4199); // RANGER_PORT: one port per parallel agent (a reused server would test another worktree's code)
+const CI_SOFTWARE_GL = ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'];
+const LOCAL_GPU = process.platform === 'darwin'
+  ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist']
+  : ['--enable-gpu', '--ignore-gpu-blocklist'];
 
 export default defineConfig({
   testDir: './e2e',
@@ -52,12 +56,9 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         // CI runners have no GPU; three.js WebGL needs software rendering.
         // SwiftShader via ANGLE keeps the world drawing headlessly (W0.6).
-        // Locally we have a real GPU, so these args stay off.
-        launchOptions: {
-          args: process.env.CI
-            ? ['--enable-unsafe-swiftshader', '--use-angle=swiftshader']
-            : [],
-        },
+        // Locally headless Chromium does NOT pick the GPU by itself: without these
+        // args it falls back to software GL and the world crawls (smoke timed out).
+        launchOptions: { args: process.env.CI ? CI_SOFTWARE_GL : LOCAL_GPU },
       },
     },
     {
