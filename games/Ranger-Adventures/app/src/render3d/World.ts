@@ -42,7 +42,7 @@ import type { FootSurface } from '../core/footstep';
 import { Sound } from '../core/sound';
 import { store } from '../core/state';
 import type { CamState } from '../core/devhook';
-import { FpsProbe, nextTier, QUALITY_TIERS, type QualityTier } from '../core/quality';
+import { FpsProbe, nextTier, bootTier, coarsePointer, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import type { WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
 import { spawnModel, spawnPlant } from './play/spawn';
@@ -83,7 +83,7 @@ export class World {
   // W7.2 adaptive quality: the live tier drives the pixelRatio cap + vegetation
   // density. Seeded from the persisted verdict so a slow device boots light; the
   // per-frame fps probe re-decides with hysteresis (see update()).
-  private tier: QualityTier = store.get().settings.kwaliteitTier;
+  private tier: QualityTier = bootTier(store.get().settings.kwaliteitTier, coarsePointer()); // an iPad boots laag
   private readonly fpsProbe = new FpsProbe();
   private readonly canvas: HTMLCanvasElement;
   private readonly onBiome: (biome: Biome) => void;
@@ -199,7 +199,7 @@ export class World {
     this.sky.buildCloudShadows(); // W4.6: drifting cloud shadows over the ground
     this.sky.buildFlyover();      // W4.6: the ~12 s bird flyover
     // W7.2: vegetation density scales with the persisted quality tier (laag ≈ half).
-    this.dressing.scatterVegetation(QUALITY_TIERS[this.tier].vegetationScale);
+    this.dressing.scatterVegetation(QUALITY_TIERS[this.tier]);
 
     this.player.spawn(); // the instant stand-in at spawn, back to the lens; the real rig streams in below
 
@@ -507,6 +507,7 @@ export class World {
     this.tier = next;
     store.setSetting({ kwaliteitTier: next });
     this.applyPixelRatio();
+    this.dressing.setQuality(QUALITY_TIERS[next]); // the forest swaps to lighter/heavier detail now
   }
 
   /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + live clip + measured height. */

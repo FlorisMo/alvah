@@ -10,69 +10,30 @@
  */
 
 import * as THREE from 'three';
-import { loadManifest, loadModel, prepModel } from '../Models';
+import { loadModel, prepModel } from '../Models';
 import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, WATER_LEVEL, type Biome } from '../Biomes';
 import { windSway } from '../Atmosphere';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF } from '../Paths';
 import { WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp } from '../Water';
 import type { Obstacle, MoveLimits } from '../CharacterController';
+import type { TierParams } from '../../core/quality';
 import type { Terrain } from './Terrain';
 import type { Labels } from './Labels';
 import { enableCast, proceduralTotem } from './props';
+import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 
-// P1.3: the tree canopy is authored at ONE fidelity. Both the scattered bos trees and
-// the F-11 rim tree-line render an instant low-poly cone/cylinder stand-in, then the
-// real staged tree GLBs (Scots pine · oak · birch) stream in as InstancedMesh and
-// REPLACE them — so no low-poly tree ever stands beside a realistic prop or animal
-// (RUN-C-DIRECTION §2.3: "no low-poly outlier may stand next to a realistic asset").
-// InstancedMesh keeps the whole forest at a handful of draw calls regardless of tree
-// count (§A8). The species mix is grove den dominant with eik/berk woven in (§2.2). The
-// trees are static (no wind), so the reduced-motion freeze is a no-op on them.
-export type TreeSpecies = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
-export interface TreePlacement { x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies }
-// prepModel target height (m) per species — mixed sizes; a per-instance scale rides on top.
-export const TREE_BASE_H: Record<TreeSpecies, number> = {
-  'prop-pine-scots': 6.6, 'prop-oak-tree': 5.4, 'prop-birch-tree': 6.0,
-};
+export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
+
+// P1.3: the tree canopy is authored at ONE fidelity: the scattered bos trees, the grove
+// trees at the landmarks and the F-11 rim tree-line are all the real staged tree GLBs
+// (Scots pine · oak · birch), instanced by world/Forest.ts at a detail that fits the
+// distance. An instant low-poly cone/cylinder stand-in shows only until they are ready.
+// The species mix is grove den dominant with eik/berk woven in (§2.2). The trees are
+// static (no wind), so the reduced-motion freeze is a no-op on them.
 // deterministic species pattern woven along the scatter/rim index — pine dominant.
 const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree'];
 const TREE_RIM_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-pine-scots', 'prop-birch-tree'];
-
-/**
- * Build one InstancedMesh per sub-mesh of a normalized (feet at y=0, x/z-centred)
- * model, one instance per placement. Each sub-mesh's model-local matrix is baked into
- * every instance so a clone renders identically to loadModel+prepModel — just shared
- * across N spots at 1 draw call each. Shadows off + an instance-aware bounding sphere
- * so the follow frustum culls the ring correctly (the trees never pop at the rim).
- */
-function instancesFromPrepped(prepped: THREE.Object3D, placements: TreePlacement[]): THREE.InstancedMesh[] {
-  prepped.updateMatrixWorld(true); // wrapper sits at identity → mesh.matrixWorld IS model-local
-  const out: THREE.InstancedMesh[] = [];
-  const world = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const pos = new THREE.Vector3();
-  const scl = new THREE.Vector3();
-  const yAxis = new THREE.Vector3(0, 1, 0);
-  prepped.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const local = mesh.matrixWorld.clone(); // this sub-mesh's transform in model-local space
-    const inst = new THREE.InstancedMesh(mesh.geometry, mesh.material, placements.length);
-    inst.castShadow = false;
-    inst.receiveShadow = false;
-    placements.forEach((p, k) => {
-      q.setFromAxisAngle(yAxis, p.rotY);
-      pos.set(p.x, p.y, p.z);
-      scl.set(p.s, p.s, p.s);
-      world.compose(pos, q, scl).multiply(local);
-      inst.setMatrixAt(k, world);
-    });
-    inst.instanceMatrix.needsUpdate = true;
-    inst.computeBoundingSphere(); // cover all instances so the rim ring isn't wrongly culled
-    out.push(inst);
-  });
-  return out;
-}
+const NATURE_TREES = new Set<string>(['prop-pine-scots', 'prop-oak-tree', 'prop-birch-tree']);
 
 export class Dressing {
   // W4.6: reusable scratch for the per-frame wind matrix recompose (no per-frame
@@ -97,16 +58,14 @@ export class Dressing {
   // The furthest-out radius any LOW ground-tuft (heather/marram) landed at — reported on
   // the dev hook's boundary read-back.
   scatterMax = 0;
-  // P1.3 tree canopy (see the module note above `instancesFromPrepped`): the instant
-  // cone/cylinder stand-ins to swap out, and the per-instance placements (scattered bos
-  // trees + the rim tree-line) to instance the real tree GLBs onto once they load.
+  // P1.3 tree canopy: the instant cone/cylinder stand-ins (dropped once the Forest is
+  // ready) and every tree placement: the bos scatter, the rim tree-line and the grove
+  // trees of the nature dressing. The camera rig tests its crowns against these.
   private readonly treeFallbacks: THREE.Object3D[] = [];
-  // D1.5 occluder fade: the tree meshes the free-walk occluder fade currently dims — the
-  // cone fallback while the GLBs stream, then the instanced GLB canopy after the swap.
-  readonly treeFadeMeshes: THREE.Object3D[] = [];
   readonly treePlacements: TreePlacement[] = [];
-  // D1.5 current applied tree-canopy occluder fade (1 = solid); the camera rig decides it.
-  canopyOpacity = 1;
+  // the instanced real trees at distance-fitting detail + the per-tree occluder fade
+  private forest: Forest | null = null;
+  private quality: TierParams | null = null;
   // F-09: the cabin's world position, kept so camState's landmark-in-frustum test
   // can prove a hub landmark is in the world-entry frame (the board + cabin are the
   // only hub markers inside the forward frustum; the beacons sit off to the sides).
@@ -134,6 +93,19 @@ export class Dressing {
     this.obstacles = env.obstacles;
     this.limits = env.limits;
     this.labels = env.labels;
+    // Once per rendered frame, with the camera actually rendered (free walk, vehicle,
+    // mini-game reframe alike): the forest picks each tree's detail and culls the rest.
+    const before = this.scene.onBeforeRender;
+    this.scene.onBeforeRender = (...args) => {
+      before.apply(this.scene, args);
+      this.forest?.update(args[2]);
+    };
+  }
+
+  /** The opacity of the tree crowns that block the view right now (1 = none; the
+   *  camera rig reads it for `viewClear`, the dev hook reports it). */
+  get canopyOpacity(): number {
+    return this.forest?.blockingOpacity ?? 1;
   }
 
   /** The drawn ground height (the one ground truth, world/Terrain.ts). */
@@ -144,14 +116,22 @@ export class Dressing {
   /** The vegetation, in build order: bos trees, heather, marram, the reed belt, the rim
    *  tree-line, then the real tree GLBs stream in over the cone stand-ins. Density
    *  scales with the quality tier (W7.2: laag ≈ half). */
-  scatterVegetation(veg: number): void {
+  scatterVegetation(quality: TierParams): void {
+    const veg = quality.vegetationScale;
+    this.quality = quality;
     this.scatterPines(Math.round(80 * veg));
     this.scatterHeather(Math.round(150 * veg));
     this.scatterMarram(Math.round(110 * veg));
     this.scatterReeds(Math.round(160 * veg)); // D3.2: a denser reed fringe reads at the shore
     this.buildRim(); // F-11: the pine tree-line marking the world edge
-    void this.upgradeTreesToGLB(); // P1.3: swap the cone stand-ins for the real tree GLBs
+    void this.buildForest(); // P1.3: swap the cone stand-ins for the real tree GLBs
     this.applyWind(0); // W4.6: initial wind pose for both grass meshes
+  }
+
+  /** The quality tier changed (the fps probe): the forest tightens its detail distances. */
+  setQuality(quality: TierParams): void {
+    this.quality = quality;
+    this.forest?.setTier(quality.treeDetail);
   }
 
   /** Per frame, on the ambient clock: the grasses lean in the wind and the ven water
@@ -357,7 +337,7 @@ export class Dressing {
 
   /** The scattered bos trees. P1.3: record real-tree placements (mixed species) +
    *  the soft trunk collisions, and drop the instant cone stand-in — the real GLBs
-   *  swap in via upgradeTreesToGLB. */
+   *  swap in via buildForest. */
   private scatterPines(budget: number): void {
     const spots = this.candidates(budget * 4, 'bos');
     const placed: TreePlacement[] = spots.map(({ x, z, i }) => ({
@@ -428,7 +408,7 @@ export class Dressing {
 
   /** P1.3: the instant low-poly stand-in for a set of tree placements — an instanced
    *  cone crown + cylinder trunk (2 draw calls) shown ONLY until the real staged tree
-   *  GLBs stream in and replace it (upgradeTreesToGLB). Tracked in `treeFallbacks`. */
+   *  GLBs stream in and replace it (buildForest). Tracked in `treeFallbacks`. */
   private addTreeFallback(placed: TreePlacement[]): void {
     if (!placed.length) return;
     const trunkGeo = new THREE.CylinderGeometry(0.14, 0.2, 1.4, 6);
@@ -444,43 +424,22 @@ export class Dressing {
     });
     trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
     this.treeFallbacks.push(trunks, crowns);
-    this.treeFadeMeshes.push(trunks, crowns); // D1.5: the occluder fade dims the cones until the GLBs land
     this.scene.add(trunks, crowns);
   }
 
   /**
-   * P1.3: replace the instant cone/cylinder tree stand-ins with the real staged tree
-   * GLBs (Scots pine · oak · birch), instanced so the whole canopy — the scattered bos
-   * trees AND the F-11 rim tree-line — reads at the SAME fidelity as every other prop
-   * and animal (RUN-C-DIRECTION §2.3). One InstancedMesh per species-mesh, so the
-   * entire forest costs only a handful of draw calls regardless of tree count (§A8),
-   * well under the <150 contract. Best-effort + all-or-nothing: only when EVERY needed
-   * species loads do we build the real canopy and drop the cones — a partial load keeps
-   * the whole cone stand-in (so a spot is never double-drawn, the world always playable).
+   * P1.3: replace the instant cone/cylinder stand-ins with the real tree GLBs, instanced
+   * by world/Forest.ts (near trees at full detail, far ones as simplified copies of the
+   * same GLB, everything outside the view culled). It starts after a tick, so the grove
+   * trees of the nature dressing (placed later in the World's build) join it too.
+   * All-or-nothing: a species that fails to load keeps the whole cone stand-in.
    */
-  private async upgradeTreesToGLB(): Promise<void> {
+  private async buildForest(): Promise<void> {
+    await Promise.resolve();
     if (!this.treePlacements.length) return;
-    await loadManifest();
-    const species = [...new Set(this.treePlacements.map((p) => p.species))];
-    const prepped = new Map<TreeSpecies, THREE.Object3D>();
-    for (const id of species) {
-      const m = await loadModel(id);
-      if (m) prepped.set(id, prepModel(m, TREE_BASE_H[id]));
-    }
-    if (prepped.size !== species.length) return; // a species is missing → keep the cone canopy
-    const built: THREE.InstancedMesh[] = [];
-    for (const [id, model] of prepped) {
-      built.push(...instancesFromPrepped(model, this.treePlacements.filter((p) => p.species === id)));
-    }
-    for (const inst of built) this.scene.add(inst);
-    // D1.5: the occluder fade now dims the real GLB canopy — retire the cone entries and
-    // point it at the instanced tree meshes. Reset the fade cache to solid so the next
-    // setCanopyOpacity re-applies to these fresh materials (the guard would otherwise skip
-    // a mid-fade equal value on meshes that never had it stashed).
-    this.treeFadeMeshes.length = 0;
-    this.treeFadeMeshes.push(...built);
-    this.canopyOpacity = 1;
-    // swap: drop + dispose the now-hidden cone stand-ins so they leave no cost behind.
+    const forest = new Forest(this.scene, this.treePlacements, this.quality?.treeDetail ?? 'hoog');
+    if (!(await forest.build())) return;
+    this.forest = forest;
     for (const f of this.treeFallbacks) {
       this.scene.remove(f);
       const im = f as THREE.InstancedMesh;
@@ -559,34 +518,24 @@ export class Dressing {
   }
 
   /**
-   * D1.5 occluder fade (sibling of setAvatarOpacity): set the tree-canopy render opacity
-   * (1 = solid) so a crown between the lens and the ranger on the free walk stops swallowing
-   * him (`09-walk-4`). Each material's ORIGINAL opacity/transparent/depthWrite is stashed
-   * once and restored at full, so a faded crown never loses its authored look; a faded
-   * canopy drops depthWrite so the ranger behind it stays visible. Guarded on the cached
-   * value — no traversal unless the fade actually changes. Fades the CURRENT tree meshes
-   * (`treeFadeMeshes`: the cone fallback while the GLBs stream, then the instanced GLB
-   * canopy). Draw-call count is untouched (same meshes, just transparent) so the <150
-   * contract holds. Materials are tree-only (each species GLB / the cones own theirs), so
-   * this never dims a non-tree prop.
+   * D1.5 occluder fade, per tree: the camera rig decides the view is `blocked`; the
+   * forest finds the crowns on the lens → ranger sightline (at each aim height above his
+   * feet) or around the lens, and makes only THOSE see-through (`min`, or `buried` when
+   * the lens sits inside one). Crowns that no longer block ease back to solid by
+   * `release` (0..1 of the way per frame; 1 = a cut). The rest of the forest never fades.
    */
+  fadeOccluders(
+    blocked: boolean, eye: THREE.Vector3, feet: THREE.Vector3, aimHeights: readonly number[],
+    release: number, min: number, buried: number,
+  ): void {
+    this.forest?.fadeOccluders(blocked, eye, feet, aimHeights, release, min, buried);
+  }
+
+  /** Every crown solid again at once (`1`), e.g. off-foot or at teardown. Kept for the
+   *  callers of the old whole-canopy fade: any value below 1 is ignored (the fade is per
+   *  tree now, see `fadeOccluders`). */
   setCanopyOpacity(o: number): void {
-    if (o === this.canopyOpacity) return;
-    this.canopyOpacity = o;
-    const opaque = o >= 1;
-    for (const obj of this.treeFadeMeshes) {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh) continue;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const m of mats) {
-        const mat = m as THREE.Material & { opacity: number; transparent: boolean; depthWrite: boolean };
-        const ud = mat.userData as { __canopyFadeOrig?: { o: number; t: boolean; d: boolean } };
-        if (!ud.__canopyFadeOrig) ud.__canopyFadeOrig = { o: mat.opacity, t: mat.transparent, d: mat.depthWrite };
-        const orig = ud.__canopyFadeOrig;
-        if (opaque) { mat.opacity = orig.o; mat.transparent = orig.t; mat.depthWrite = orig.d; }
-        else { mat.opacity = orig.o * o; mat.transparent = true; mat.depthWrite = false; }
-      }
-    }
+    if (o >= 1) this.forest?.clearFades();
   }
 
   /**
@@ -690,8 +639,17 @@ export class Dressing {
       // Signpost path dressing
       ['prop-boulder', 13, -13], ['prop-mushrooms', -19, 14],
     ];
+    const groveTrees: TreePlacement[] = [];
     PLACES.forEach(([model, x, z], i) => {
       const spec = SPEC[model];
+      if (NATURE_TREES.has(model)) {
+        // a grove tree joins the forest: the same instanced GLB, its detail and its fade
+        const species = model as TreeSpecies;
+        groveTrees.push({ x, y: this.groundY(x, z), z, s: spec.h / TREE_BASE_H[species], rotY: (i * 2.39996) % (Math.PI * 2), species });
+        this.obstacles.push({ x, z, r: spec.collide });
+        this.props.push({ id: model, x, z });
+        return;
+      }
       const at = new THREE.Vector3(x, this.groundY(x, z), z);
       const group = new THREE.Group();
       group.position.copy(at);
@@ -712,6 +670,8 @@ export class Dressing {
         group.add(prepped);
       });
     });
+    this.treePlacements.push(...groveTrees);
+    this.addTreeFallback(groveTrees);
   }
 
   /** Procedural stand-in for the ranger-cabin (instant, before the GLB loads). */
