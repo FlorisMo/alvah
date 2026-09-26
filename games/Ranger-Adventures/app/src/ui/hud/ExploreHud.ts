@@ -15,6 +15,7 @@ import { provideHint } from '../../core/devhook';
 import { ROEP_COPY } from '../../engines/roep';
 import type { WayCue } from '../../render3d/Wayfinding';
 import { Joystick } from '../Joystick';
+import { coarsePointer, deviceText } from './device';
 import { session, esc, plainCard } from '../flow/session';
 import { showBriefing } from '../flow/MissionFlow';
 import { playRoepAtSitSpot } from '../flow/WorldSession';
@@ -193,7 +194,7 @@ function mountOnboardHint(hud: HTMLElement | null): void {
   if (onboardRaf) { cancelAnimationFrame(onboardRaf); onboardRaf = 0; }
   const world = session.world;
   if (!hud || !world || store.get().settings.wereldHintGezien) return;
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const coarse = coarsePointer();
   const stick = joystickVisible(store.get().settings.joystick, coarse);
   const text = onboardHint(stick);
   const el = document.createElement('div');
@@ -215,7 +216,7 @@ function mountOnboardHint(hud: HTMLElement | null): void {
     revealTracker();
     if (!store.get().settings.tikHintGezien) {
       store.setSetting({ tikHintGezien: true });
-      showTip('tap', ONBOARD_TAP);
+      showTip('tap', deviceText(ONBOARD_TAP));
     }
   };
   const watch = (): void => {
@@ -266,7 +267,7 @@ export function showBoundaryHint(): void {
 function mountHelpChip(hud: HTMLElement | null): void {
   hintState.helpChip = false;
   if (!hud || !session.world) return;
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const coarse = coarsePointer();
   const stick = joystickVisible(store.get().settings.joystick, coarse);
   if (stick) return;
   const btn = document.createElement('button');
@@ -286,7 +287,7 @@ function mountJoystick(hud: HTMLElement | null): void {
   const world = session.world;
   if (!hud || !world) return;
   const js = new Joystick();
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const coarse = coarsePointer();
   js.setVisible(joystickVisible(store.get().settings.joystick, coarse));
   hud.appendChild(js.el);
   world.setJoystick(() => js.vector());

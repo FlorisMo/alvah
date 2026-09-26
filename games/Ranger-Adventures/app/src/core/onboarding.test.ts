@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { onboardHint, ONBOARD_HINT, ONBOARD_TIPS } from './onboarding.ts';
+import { onboardHint, forPointer, ONBOARD_HINT, ONBOARD_TAP, ONBOARD_TIPS } from './onboarding.ts';
 import { countWords } from './readlevel.ts';
 
 test('onboardHint picks the stick line on a coarse pointer, arrows otherwise', () => {
@@ -26,4 +26,18 @@ test('the sequenced transient tips (tap + boundary) stay ≤7 words (P3.3)', () 
     assert.ok(countWords(line) <= 7, `"${line}" should be ≤7 words`);
     assert.ok(line.trim().length > 0);
   }
+});
+
+test('forPointer: touch keeps "Tik", a mouse reads "Klik" (same word count)', () => {
+  assert.equal(forPointer(ONBOARD_TAP, false), ONBOARD_TAP);
+  assert.equal(forPointer(ONBOARD_TAP, true), 'Klik op een dier om te spelen.');
+  assert.equal(forPointer('Doe ze na. Tik op de dieren.', true), 'Doe ze na. Klik op de dieren.');
+  assert.equal(forPointer('Je tik op het bord.', true), 'Je klik op het bord.');
+  assert.equal(countWords(forPointer(ONBOARD_TAP, true)), countWords(ONBOARD_TAP));
+});
+
+test('forPointer never touches a bird call or other words with "tik" in them', () => {
+  assert.equal(forPointer('Tik tik. Net twee steentjes.', true), 'Tik tik. Net twee steentjes.');
+  assert.equal(forPointer('Het tikt zacht.', true), 'Het tikt zacht.');
+  assert.equal(forPointer('Stik', true), 'Stik');
 });

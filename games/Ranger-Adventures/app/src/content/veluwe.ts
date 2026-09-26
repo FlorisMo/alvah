@@ -369,7 +369,7 @@ const MISSIE_NACHTRONDE = {
         copy: {
           instructie: 'Antwoord de dieren.',
           luister: 'Luister naar de dieren…',
-          echo: 'Doe ze na. Tik de dieren.',
+          echo: 'Doe ze na. Tik op de dieren.',
           goed: 'Knap onthouden!',
         },
         feit: 'In de herfst burlt het edelhert hard. Zo roept hij andere herten.',
@@ -446,7 +446,7 @@ const MISSIE_WILDCAMERA = {
         copy: {
           instructie: 'Antwoord de dieren.',
           luister: 'Luister wie er roept…',
-          echo: 'Doe ze na. Tik de dieren.',
+          echo: 'Doe ze na. Tik op de dieren.',
           goed: 'Knap onthouden!',
         },
         feit: 'Een wildcamera maakt heel veel foto’s. Zo weet de ranger wie er leeft.',
@@ -621,7 +621,7 @@ const MISSIE_EEKHOORN = {
         copy: {
           instructie: 'Antwoord de dieren in het bos.',
           luister: 'Luister wie er roept…',
-          echo: 'Doe ze na. Tik de dieren.',
+          echo: 'Doe ze na. Tik op de dieren.',
           goed: 'Knap onthouden!',
         },
         feit: 'De eekhoorn slaapt niet de hele winter. Soms wordt hij wakker om te eten.',
@@ -713,7 +713,7 @@ const MISSIE_VOS = {
         copy: {
           instructie: 'Antwoord de vos en zijn buren.',
           luister: 'Luister wie er roept…',
-          echo: 'Doe ze na. Tik de dieren.',
+          echo: 'Doe ze na. Tik op de dieren.',
           goed: 'Knap onthouden!',
         },
         feit: 'De vos heeft een grote pluimstaart. Die gebruikt hij als een warme sjaal.',

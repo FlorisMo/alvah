@@ -26,6 +26,7 @@ import { playSimon } from '../../render2d/SimonView';
 import { playDanger } from '../../render2d/DangerView';
 import { playWissel } from '../../render2d/WisselView';
 import { mountReadAloud } from '../ReadAloud';
+import { deviceText } from '../hud/device';
 import { session, esc, naam, card, clearOverlays } from './session';
 import { resumePatrol, notePatrolCompletion, activeExploreTitel } from './WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
@@ -54,6 +55,17 @@ const WEBGL_OK: boolean = (() => {
 let missionStop: (() => void) | null = null;
 let stopRequested = false;
 let missionPauseEl: HTMLElement | null = null;
+
+/** The step as a view gets it: its instruction words in this device's terms
+ *  ("Tik op de dieren" on touch, "Klik op de dieren" with a mouse). */
+function stepForView(step: Step): Step {
+  const copy = step.skin.copy;
+  if (!copy) return step;
+  const devCopy = Object.fromEntries(
+    Object.entries(copy).map(([k, v]) => [k, typeof v === 'string' ? deviceText(v) : v]),
+  );
+  return { ...step, skin: { ...step.skin, copy: devCopy } };
+}
 
 /* ------------------------------------------------------------ briefing ---- */
 /** The mission entry card: a diegetic *veldnotitie* (field note), so launching a
@@ -132,9 +144,9 @@ async function runMission(mission: Mission): Promise<void> {
         const ctx = world.ctx(session.host);
         scene = ctx.scene as Scene;
         sceneBefore = new Set(scene.children);
-        result = await raceStop(variant.play(ctx, step));
+        result = await raceStop(variant.play(ctx, stepForView(step)));
       } else {
-        result = await raceStop(play(session.host, step));
+        result = await raceStop(play(session.host, stepForView(step)));
       }
     } finally {
       clearActivityWin(); // W2.3: no win closure outlives its step

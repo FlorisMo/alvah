@@ -31,3 +31,14 @@ export const ONBOARD_BOUNDARY = 'Hier stopt het bos.';
 
 /** Every transient onboarding tip, for the reading-norm test (≤7 words each). */
 export const ONBOARD_TIPS = [ONBOARD_TAP, ONBOARD_BOUNDARY] as const;
+
+/**
+ * Device-aware wording: every hint is written for touch ("Tik op een dier"); on a
+ * mouse device the same line says "Klik op een dier". ONE rule for the whole game,
+ * so the laptop never tells the player to tap. Only the verb before op/de/het/een
+ * changes (never the "tik tik" of a bird call), and the word count stays the same.
+ */
+export function forPointer(text: string, mouse: boolean): string {
+  if (!mouse) return text;
+  return text.replace(/\b([Tt])ik(?= (?:op|de|het|een|aan)\b)/g, (_m, t: string) => (t === 'T' ? 'Klik' : 'klik'));
+}
