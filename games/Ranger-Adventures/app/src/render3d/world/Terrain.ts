@@ -163,6 +163,30 @@ export class Terrain {
   }
 
   /**
+   * Where a ray first meets the drawn ground, or null when it does not within `far`.
+   * Marches the ray against `y(x,z)` and bisects the crossing. Unlike a mesh raycast it
+   * cannot slip between the two triangles of a shared edge: a click whose ray runs
+   * exactly along a grid line (the screen-centre column while the camera sits at x = 0,
+   * i.e. at spawn) used to hit nothing and the tap walked nowhere.
+   */
+  intersectRay(ray: THREE.Ray, far = 240, out = new THREE.Vector3()): THREE.Vector3 | null {
+    const o = ray.origin, d = ray.direction;
+    const above = (t: number): number => o.y + d.y * t - this.y(o.x + d.x * t, o.z + d.z * t);
+    if (above(0) < 0) return null; // the ray starts under the ground
+    const STEP = 0.5;
+    let t0 = 0;
+    for (let t1 = STEP; t1 <= far; t1 += STEP) {
+      if (above(t1) <= 0) {
+        let a = t0, b = t1;
+        for (let i = 0; i < 30; i++) { const m = (a + b) / 2; if (above(m) > 0) a = m; else b = m; }
+        return out.set(o.x + d.x * b, o.y + d.y * b, o.z + d.z * b);
+      }
+      t0 = t1;
+    }
+    return null;
+  }
+
+  /**
    * The fine painterly grain (GroundDetail.mottleRGB) baked once onto a small canvas
    * that repeats over the terrain; multiplied against the vertex colour it reads as
    * brushed tonal variation. Browser-only (needs a canvas).

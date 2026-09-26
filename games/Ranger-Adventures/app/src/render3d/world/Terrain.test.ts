@@ -95,3 +95,29 @@ test('the ven basin is drawn where the water sits (VEN_CENTER is a world point)'
   assert.equal(t.biome(VEN_CENTER.x, VEN_CENTER.z), 'ven');
   assert.ok(t.y(VEN_CENTER.x, -VEN_CENTER.z) > WATER_LEVEL, 'the mirrored spot is dry ground');
 });
+
+test('intersectRay finds the drawn ground where a mesh raycast does, and on grid lines too', () => {
+  const t = new Terrain({ detail: false });
+  t.mesh.updateMatrixWorld(true);
+  const rc = new THREE.Raycaster();
+  const eye = new THREE.Vector3(0, 2.4, 4.6); // the spawn follow camera
+  let compared = 0;
+  for (let k = 0; k < 60; k++) {
+    const dir = new THREE.Vector3(Math.sin(k * 1.7) * 0.6, -0.15 - (k % 7) * 0.08, -1).normalize();
+    rc.set(eye, dir);
+    const hit = rc.intersectObject(t.mesh, false)[0];
+    const p = t.intersectRay(rc.ray);
+    if (!hit) continue;
+    assert.ok(p, `ray ${k} meets the ground`);
+    assert.ok(p!.distanceTo(hit.point) < 1e-3, `ray ${k}: march ${p!.toArray()} vs mesh ${hit.point.toArray()}`);
+    compared++;
+  }
+  assert.ok(compared >= 40, `compared ${compared} rays`);
+  // a ray exactly along the x = 0 grid line (the centre-column click at spawn)
+  const along = new THREE.Ray(eye.clone(), new THREE.Vector3(0, -0.559, -0.829).normalize());
+  const p = t.intersectRay(along);
+  assert.ok(p, 'a ray along a grid line still meets the ground');
+  assert.ok(Math.abs(p!.y - t.y(p!.x, p!.z)) < 1e-4, 'and the point lies on the drawn surface');
+  // a ray pointing up never does
+  assert.equal(t.intersectRay(new THREE.Ray(eye.clone(), new THREE.Vector3(0, 1, 0))), null);
+});

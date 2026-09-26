@@ -500,12 +500,10 @@ export class Player {
         return;
       }
     }
-    // 2) otherwise walk to the tapped ground point
-    const g = this.raycaster.intersectObject(this.terrain.mesh, false);
-    if (g.length) {
-      const p = g[0].point;
-      this.target.set(p.x, 0, p.z);
-    }
+    // 2) otherwise walk to the tapped ground point (marched against terrain.y, so a ray
+    //    along a grid line — the centre-column click at spawn — still lands)
+    const p = this.terrain.intersectRay(this.raycaster.ray);
+    if (p) this.target.set(p.x, 0, p.z);
   }
 
   /** Dev-hook accessor (WORLD-PLAN §3.1): the ranger's world position {x,z}. */
