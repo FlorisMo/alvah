@@ -32,7 +32,7 @@ import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  Glow, anchoredPrompt, contactShadow, hintAnchor, pick3d, registerActivityWin, registerPlayHint,
+  Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin, registerPlayHint,
   activityScopeSignal,
 } from '../play/kit';
 import { Stage, nameTag } from '../play/stage';
@@ -167,7 +167,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     function centreAt(lift: number): THREE.Vector3 { return stage.at(0, -0.25, lift); }
 
     // ---- the two places (always visible + named) ----
-    interface BinFx { bin: WisselBin; group: THREE.Group; glow: Glow; anchor: THREE.Object3D; at: THREE.Vector3 }
+    interface BinFx { bin: WisselBin; group: THREE.Group; glow: Glow; body: THREE.Object3D; at: THREE.Vector3 }
     const bins = new Map<WisselBin, BinFx>();
 
     // ---- the rule board, facing the player between the places ----
@@ -270,7 +270,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { animal?.dispose(); stage.dispose(); return; } // F-26
+      if (activityScopeSignal()?.aborted) { unHint(); animal?.dispose(); boardTex.dispose(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt)) settled = true;
@@ -328,7 +328,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       const openTag = nameTag(`☀ ${naam.open}`, 1.15);
       openTag.position.copy(openAt).setY(openAt.y + 1.05);
       open.add(openTag);
-      bins.set('open', { bin: 'open', group: open, glow: new Glow(clearing, '#8fd6a0'), anchor: hintAnchor(clearing, 0.5), at: openAt });
+      bins.set('open', { bin: 'open', group: open, glow: new Glow(clearing, '#8fd6a0'), body: clearing, at: openAt });
 
       // het hol: the world's badger sett
       const hol = new THREE.Group();
@@ -344,7 +344,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       const holTag = nameTag(`🌙 ${naam.hol}`, 1.05);
       holTag.position.copy(holAt).setY(holAt.y + 1.05);
       hol.add(holTag);
-      bins.set('hol', { bin: 'hol', group: hol, glow: new Glow(holBody, '#8fd6a0'), anchor: hintAnchor(holBody, 0.6), at: holAt });
+      bins.set('hol', { bin: 'hol', group: hol, glow: new Glow(holBody, '#8fd6a0'), body: holBody, at: holAt });
 
       podium = await stage.plant('prop-tree-stump', PODIUM_H + 0.04, 0, -0.25, 0.7);
       if (podium) podium.position.y -= 0.04; // bedded into the ground a little
@@ -363,7 +363,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     const unHint = registerPlayHint(() => {
       if (!ready || !settled || busy || glide || run.finished || !animal) return null;
       const b = bins.get(run.correctBin());
-      return b ? { id: b.bin, target: b.anchor } : null;
+      return b ? { id: b.bin, target: b.body } : null; // the clearing / the sett a player sees
     });
 
     function onPick(bin: WisselBin): void {
@@ -396,6 +396,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
             banner(regelOm);
             speak(regelOm);
             window.setTimeout(() => {
+              if (activityScopeSignal()?.aborted) return;
               boardGlow.set(0);
               void stageAnimal().then(() => { banner(ruleText()); busy = false; });
             }, reduced ? 900 : 1700);
@@ -412,6 +413,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       speak(goed);
       const summary = run.summary();
       window.setTimeout(() => {
+        if (activityScopeSignal()?.aborted) return;
         narrator.stop();
         teardownPick?.();
         unHint();

@@ -30,7 +30,7 @@ import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  Glow, anchoredPrompt, contactShadow, hintAnchor, pick3d, registerActivityWin, registerPlayHint,
+  Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin, registerPlayHint,
   activityScopeSignal,
 } from '../play/kit';
 import { Stage, nameTag } from '../play/stage';
@@ -50,7 +50,6 @@ interface CallerFx {
   id: string;
   group: THREE.Group;   // animal (+ perch) + tag, lifted as one
   glow: Glow | null;
-  anchor: THREE.Object3D | null;
   lift: number;
   cur: number;
   level: number;
@@ -107,7 +106,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { clearTimers(); stage.dispose(); return; } // F-26
+      if (activityScopeSignal()?.aborted) { clearTimers(); unHint(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt) && !settled) { settled = true; maybeStart(); }
@@ -153,7 +152,6 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         group.add(tag);
         fx.set(id, {
           id, group, glow: animal ? new Glow(animal, CALL) : null,
-          anchor: animal ? hintAnchor(animal, 0.6) : null,
           lift: 0, cur: 0, level: 0, color: CALL,
         });
       }));
@@ -172,7 +170,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     const unHint = registerPlayHint(() => {
       if (phase !== 'echo') return null;
       const f = fx.get(run.expected);
-      return f?.anchor ? { id: f.id, target: f.anchor } : null;
+      return f ? { id: f.id, target: f.group } : null; // the animal (on its stump) a player sees
     });
 
     function quiet(): void {

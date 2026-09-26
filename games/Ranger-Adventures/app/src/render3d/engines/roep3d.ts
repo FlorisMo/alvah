@@ -27,7 +27,7 @@ import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  Glow, anchoredPrompt, hintAnchor, pick3d, registerActivityWin, registerPlayHint, activityScopeSignal,
+  Glow, anchoredPrompt, pick3d, registerActivityWin, registerPlayHint, activityScopeSignal,
 } from '../play/kit';
 import { Stage, nameTag } from '../play/stage';
 import { heightFor, materialsOf } from '../play/spawn';
@@ -50,7 +50,6 @@ interface BirdFx {
   group: THREE.Group;     // perch + bird + tag
   bird: THREE.Object3D | null;
   glow: Glow | null;
-  anchor: THREE.Object3D | null;
   mats: THREE.Material[];
   lift: number;
   cur: number;
@@ -117,7 +116,7 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { clearTimers(); stage.dispose(); return; } // F-26
+      if (activityScopeSignal()?.aborted) { clearTimers(); unHint(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt) && !settled) { settled = true; maybeStart(); }
@@ -153,7 +152,6 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
         fx.set(v.id, {
           id: v.id, group, bird,
           glow: bird ? new Glow(bird, CALL) : null,
-          anchor: bird ? hintAnchor(bird, 0.5) : null,
           mats: [...(bird ? materialsOf(bird) : []), ...(stump ? materialsOf(stump) : []), tag.material],
           lift: 0, cur: 0, level: 0, color: CALL, live: true, shownLive: null,
         });
@@ -173,7 +171,7 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
     const unHint = registerPlayHint(() => {
       if (phase !== 'kies' || !round) return null;
       const f = fx.get(round.target);
-      return f?.anchor ? { id: f.id, target: f.anchor } : null;
+      return f ? { id: f.id, target: f.group } : null; // the bird on its stump
     });
 
     function playCall(): void {

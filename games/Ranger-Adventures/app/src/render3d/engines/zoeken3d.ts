@@ -30,7 +30,7 @@ import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  Glow, anchoredPrompt, contactShadow, hintAnchor, pick3d, registerActivityWin,
+  Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin,
   registerPlayHint, activityScopeSignal, spoorTrail,
 } from '../play/kit';
 import { highlightPulse, patchLocal } from '../play/kit-math';
@@ -132,7 +132,6 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let settled = false; // the one reframe has landed (the hint waits for a still camera)
     let misses = 0;
     let target: THREE.Object3D | null = null;
-    let anchor: THREE.Object3D | null = null;
     let hint: Glow | null = null;
     let teardownPick: (() => void) | null = null;
     let trail: { group: THREE.Group; dispose: () => void } | null = null;
@@ -143,7 +142,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { stage.dispose(); removeKijker(); return; } // F-26
+      if (activityScopeSignal()?.aborted) { unHint(); stage.dispose(); removeKijker(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt)) settled = true;
@@ -206,15 +205,18 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
           }));
         }
       });
-      // the hide: thick grass in FRONT of the animal (toward the lens) and at its
-      // flanks, taller than it, so only its back and head peek out — a real search,
-      // no glow. A fern leans over its rump.
-      // (a tall calf keeps its head above the grass; a small piglet or frog is covered)
+      // the hide: thick cover at the animal's head and rump (toward the lens) and
+      // behind it, a low tuft over its legs — only its back shows, no glow. The middle
+      // of its body stays in sight, so a child (and the golden-path click) can find it.
+      // Heide hides in grass + a fern, the ven in reeds, the drift sand in dry heather.
+      const L = tgtH * 1.7;                                   // body length, side-on
       const hideH = Math.max(0.3, tgtH * (tgtH > 0.4 ? 0.8 : 1.5));
-      const hide = [
-        { u: tgt.u - 0.16, v: tgt.v - 0.2, h: hideH }, { u: tgt.u + 0.14, v: tgt.v - 0.24, h: hideH * 0.95 },
-        { u: tgt.u + 0.0, v: tgt.v - 0.3, h: hideH * 0.8 }, { u: tgt.u - 0.3, v: tgt.v + 0.02, h: hideH * 0.9 },
-        { u: tgt.u + 0.3, v: tgt.v + 0.06, h: hideH * 0.85 },
+      const flanks = [
+        { u: tgt.u - L * 0.55, v: tgt.v - 0.12, h: hideH }, { u: tgt.u + L * 0.55, v: tgt.v - 0.1, h: hideH * 0.95 },
+      ];
+      const around = [
+        { u: tgt.u - 0.12, v: tgt.v + 0.26, h: hideH * 0.9 }, { u: tgt.u + 0.24, v: tgt.v + 0.22, h: hideH * 0.8 },
+        { u: tgt.u, v: tgt.v - 0.22, h: tgtH * 0.45 },
       ];
       // loose ground cover over the rest of the patch, kept off the decoys
       const cover: { u: number; v: number; h: number }[] = [];
@@ -225,12 +227,19 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         if (taken.some((q) => Math.hypot(q.u - u, q.v - v) < 0.45)) continue;
         cover.push({ u, v, h: 0.22 + (k % 3) * 0.06 });
       }
-      if (inReeds) {
-        for (const h of hide.slice(0, 3)) jobs.push(stage.plant('prop-reeds', h.h * 1.5, h.u, h.v, h.u * 7));
-        stage.grass(hide.slice(3), 40);
+      const inSand = trial.decoys.some((d) => d.animal === 'pol gras');
+      if (inReeds || inSand) {
+        const id = inReeds ? 'prop-reeds' : 'prop-heather-winter';
+        // a reed clump or heather bush is wider than a tuft: keep it off the body's middle
+        const side = L * 0.5 + 0.24;
+        for (const h of flanks) {
+          const u = tgt.u + Math.sign(h.u - tgt.u) * side;
+          jobs.push(stage.plant(id, inReeds ? h.h * 1.5 : h.h, u, h.v, u * 7));
+        }
+        stage.grass(around, 40);
       } else {
-        stage.grass(hide, 40);
-        jobs.push(stage.plant('prop-fern', Math.max(0.32, tgtH * 1.3), tgt.u + 0.3, tgt.v + 0.12, 2.1));
+        stage.grass([...flanks, ...around], 40);
+        jobs.push(stage.plant('prop-fern', Math.max(0.32, tgtH * 1.3), tgt.u + L * 0.5, tgt.v + 0.2, 2.1));
       }
       stage.grass(cover);
       await Promise.all(jobs);
@@ -251,7 +260,6 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       trail = spoorTrail(start.x, start.z, stop.x, stop.z, spoor.legs, ctx.groundY, 0.45 + 0.55 * spoor.helderheid);
       stage.add(trail.group);
 
-      anchor = hintAnchor(target!, 0.7);
       teardownPick = pick3d({
         canvas: ctx.canvas,
         camera,
@@ -269,7 +277,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       ready = true;
     })().catch((e) => console.error('[zoeken3d] staging failed', e));
 
-    const unHint = registerPlayHint(() => (ready && settled && !done && anchor ? { id: 'target', target: anchor } : null));
+    const unHint = registerPlayHint(() => (ready && settled && !done && target ? { id: 'target', target } : null));
 
     // W2.3: dev-only win — a clean first-tap hit + advance past the win card.
     registerActivityWin(() => {

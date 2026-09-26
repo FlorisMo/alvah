@@ -236,27 +236,7 @@ export function pick3d(opts: Pick3dOptions): () => void {
   };
 }
 
-/**
- * The spot a player (and the golden-path test, via `registerPlayHint`) clicks on a
- * target: a tiny invisible mesh parked on the visible body of `object` at height
- * fraction `fy` of its box (0 = feet, 1 = top), `fx`/`fz` across it. A mesh rather than
- * an empty so both `getWorldPosition` and a Box3 of it land on that spot.
- */
-export function hintAnchor(object: THREE.Object3D, fy = 0.55, fx = 0.5, fz = 0.5): THREE.Mesh {
-  const box = visibleBox(object);
-  const p = new THREE.Vector3(
-    box.min.x + (box.max.x - box.min.x) * fx,
-    box.min.y + (box.max.y - box.min.y) * fy,
-    box.min.z + (box.max.z - box.min.z) * fz,
-  );
-  const m = new THREE.Mesh(new THREE.SphereGeometry(0.01, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
-  m.userData.hintAnchor = true;
-  object.add(m);
-  m.position.copy(object.worldToLocal(p));
-  return m;
-}
-
-/* ------------------------------------------------------------- highlight3d ---- */
+/* -------------------------------------------------------------------- glow ---- */
 
 /** A 1×1 white texture: stands in for a model's own emissive map while it glows —
  *  the world's Meshy GLBs carry a (dark) emissive map that would multiply any glow
@@ -323,12 +303,15 @@ export class Glow {
  * path stays fully playable. Returns the element (caller fills + wires it).
  */
 export function anchoredPrompt(host: HTMLElement, html: string): HTMLDivElement {
-  host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
   const el = document.createElement('div');
   // `ra-play`: the full-screen wrapper must let clicks through to the 3D canvas
   // (pick3d) — only its card/buttons take pointer events (see missions.css).
   el.className = 'ra-overlay ra-play';
   el.innerHTML = html;
+  // a late timer of a stopped step ("Stop de missie") must never put a card back over
+  // the world: after an abort the card is built but never mounted
+  if (activityScopeSignal()?.aborted) return el;
+  host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
   host.appendChild(el);
   return el;
 }

@@ -197,6 +197,14 @@ export class Stage {
         if (!ctx.isClear(x, z, 0.4)) bad += v < halfD + 3.5 ? 0.3 : 0.1;
       }
     }
+    // the wedge the lens sees on its way down to the patch (the lower frame corners)
+    // is open too — no cabin porch or trunk poking in at the edge of the picture
+    for (const u of [-halfW - 0.9, halfW + 0.9]) {
+      const tx = P.x + right.x * u - f.x * halfD, tz = P.z + right.z * u - f.z * halfD;
+      for (let t = 0.2; t < 1; t += 0.2) {
+        if (!ctx.isClear(cam.x + (tx - cam.x) * t, cam.z + (tz - cam.z) * t, 0.4)) bad += 0.5;
+      }
+    }
     // the lens stands in the open and sees the patch over open ground
     if (!ctx.isClear(cam.x, cam.z, 0.6)) bad += 3;
     for (let t = 0.15; t < 1; t += 0.15) {

@@ -28,7 +28,7 @@ import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  Glow, anchoredPrompt, contactShadow, hintAnchor, pick3d, registerActivityWin, registerPlayHint,
+  Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin, registerPlayHint,
   activityScopeSignal,
 } from '../play/kit';
 import { patchLocal } from '../play/kit-math';
@@ -50,7 +50,6 @@ interface StoneFx {
   id: number;
   group: THREE.Group;   // the stone (+ its shadow), lifted as one
   glow: Glow;
-  anchor: THREE.Object3D;
   base: number;         // ground y
   lift: number;         // 0..1 target lift
   cur: number;          // eased lift
@@ -104,7 +103,7 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { clearTimers(); stage.dispose(); return; } // F-26
+      if (activityScopeSignal()?.aborted) { clearTimers(); unHint(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt) && !settled) { settled = true; maybeStart(); }
@@ -133,7 +132,7 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         let stone = await stage.plant('prop-boulder', STONE_H, u, v, i * 1.7);
         if (stone) {
           group.add(stone);
-          stone.position.set(0, -0.03, 0); // bedded a little into the ground
+          stone.position.set(0, -0.01, 0); // bedded a hair into the ground
           stone.scale.set(1.35, 1, 1.35);
         } else {
           stone = new THREE.Group();
@@ -142,8 +141,7 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
           stone.add(m);
           group.add(stone);
         }
-        const anchor = hintAnchor(stone, 0.8);
-        fx.set(s.id, { id: s.id, group, glow: new Glow(stone, SHOW), anchor, base: p.y, lift: 0, cur: 0, level: 0, color: SHOW });
+        fx.set(s.id, { id: s.id, group, glow: new Glow(stone, SHOW), base: p.y, lift: 0, cur: 0, level: 0, color: SHOW });
       }));
       if (activityScopeSignal()?.aborted) return;
       teardownPick = pick3d({
@@ -160,7 +158,7 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     const unHint = registerPlayHint(() => {
       if (phase !== 'recall') return null;
       const f = fx.get(run.expected);
-      return f ? { id: String(f.id), target: f.anchor } : null;
+      return f ? { id: String(f.id), target: f.group } : null; // the stone a player sees
     });
 
     function allDark(): void {

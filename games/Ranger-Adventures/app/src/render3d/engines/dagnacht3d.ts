@@ -195,7 +195,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) { clearSubject(); stage.dispose(); return; } // F-26
+      if (activityScopeSignal()?.aborted) { unHint(); subjectToken++; clearSubject(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       reframe.update(dt);
@@ -274,7 +274,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
       col.insertBefore(t, col.firstChild); // ABOVE the card: never over a choice
       speak(text);
       const words = text.split(/\s+/).length;
-      window.setTimeout(then, Math.max(kind === 'ok' ? 1600 : 2400, words * 280));
+      window.setTimeout(() => { if (!activityScopeSignal()?.aborted) then(); }, Math.max(kind === 'ok' ? 1600 : 2400, words * 280));
     }
 
     function finish(): void {
