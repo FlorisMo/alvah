@@ -35,7 +35,7 @@ const optId = (list: { id: string; label: string }[], label: string): string => 
 test.use({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
 
 let shotDir = '';
-let loads = 0; let expectedLoads = 0; // page loads seen vs the ones golden caused (goto, reload)
+let loads = 0; let expectedLoads = 0; // main-frame navigations seen vs the ones golden caused (goto, reload)
 // The table is written here, not at the end of the test, so a timeout still gets one.
 test.afterEach(async ({}, testInfo) => {
   if (!shotDir) return;
@@ -57,7 +57,7 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
   // A page that reloads by itself (an app crash, or Vite's full reload after a source
   // edit on a shared dev server) turns every later step into nonsense: name it.
-  page.on('load', () => { loads += 1; });
+  page.on('framenavigated', (f) => { if (f === page.mainFrame()) loads += 1; });
   let errSeen = 0;
   const noNewErrors = (): void => {
     const fresh = errors.slice(errSeen); errSeen = errors.length;

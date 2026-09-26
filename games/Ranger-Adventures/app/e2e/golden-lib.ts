@@ -59,8 +59,11 @@ export async function step(n: number, body: () => Promise<void>): Promise<void> 
     await test.step(`${n}. ${current.step}`, body);
   } catch (e) {
     current.status = 'FAIL';
-    const msg = String((e as Error)?.message ?? e).replace(/\u001b\[[0-9;]*m/g, '').split('\n').filter(Boolean);
-    current.notes.push(`✗✗ ${msg.slice(0, 2).join(' — ').replace(/\[golden [^\]]*\]\s*/, '')}`);
+    // first line + the last line of Playwright's call log (what it was waiting for)
+    const lines = String((e as Error)?.message ?? e).replace(/\u001b\[[0-9;]*m/g, '').split('\n').map((l) => l.trim()).filter(Boolean);
+    const log = lines.indexOf('Call log:');
+    const why = log >= 0 ? lines.slice(log + 1).filter((l) => l.startsWith('- ')).pop()?.slice(2) : lines[1];
+    current.notes.push(`✗✗ ${lines[0].replace(/\[golden [^\]]*\]\s*/, '')}${why && log >= 0 ? ` (${why})` : why ? ` — ${why}` : ''}`);
     throw e;
   }
 }
