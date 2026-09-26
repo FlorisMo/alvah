@@ -1,32 +1,26 @@
 /**
  * simon3d.ts — the diegetic 3D variant of the "simon" engine (audio-visual
- * working memory), the fourth in-place mini-game on the 3D play harness
- * (3D-IMMERSION-PLAN §3, BUILD-PLAN §1f / ledger 53).
+ * working memory), played IN the world (3D-IMMERSION-PLAN §3).
  *
  * Construct parity (frozen, §1f): it consumes the SAME `buildSimonTrial` builder
  * and drives the SAME pure `SimonRun` core as the 2D `playSimon`, so it emits the
- * IDENTICAL `BeatSummary` (`{ trials: 1, correct }`, correct = 1 only when the
- * whole growing sequence is echoed with no wrong tap). 3D changes ONLY the staging
- * — the dusk callers become calm still in-world forms on the heath; "listen" lights
- * each caller in turn with its real call; "echo" is a raycast tap-back — and never
- * WHAT is measured: same growing sequence, same callers, same binary score. No
- * cross-construct contamination — the forms stay put and the ranger does not walk
- * during the echo, so it's memory, not navigation.
+ * IDENTICAL `BeatSummary` (`{ trials: 1, correct }`, correct = 1 only when the whole
+ * growing sequence is echoed with no wrong tap). 3D changes ONLY staging + input.
  *
- * Never-scary / motion-comfort (§1e): the callers are calm earthy forms (each a
- * distinct hue so WHICH animal is the memory cue, exactly as the 2D tokens); "call"
- * is a gentle per-form glow + small lift that settles (steady, no pulse, under
- * reduced-motion); a wrong tap re-lists the SAME sequence (recoverable, never a
- * game-over). Dual-channel everywhere (emissive COLOUR + SCALE + the real call /
- * step sound). ≥56px raycast hit-spheres via the shared kit. The §1e reframe cuts
- * under reduced-motion. rmSafe:false — a flat, named row reads cleaner than a 3D
- * perspective for a sequence-memory task under reduced-motion, so the resolver
- * serves the proven 2D floor there (this view still degrades gracefully if entered:
- * camera cuts, no pulse, calls + words intact).
+ * 2026-09-26 staging: the callers are the world's own animals (edelhert, ree, wild
+ * zwijn, raaf, das, vos, eekhoorn …) at their real size, in a calm row on a patch in
+ * front of the ranger — clear of the cabin, board and jeep, the ranger behind the
+ * lens — each with its name over it. "Listen" lights one animal at a time with its
+ * real call, only after the camera has settled; "echo" is a click on the animal. A
+ * small bird or squirrel sits on a stump so it reads beside a red deer.
+ *
+ * Never-scary / motion-comfort (§1e): the animals stand still; a call is a warm glow
+ * plus a tiny lift; a wrong click replays the SAME sequence (never game-over). One
+ * eased reframe (a cut under reduced-motion).
  */
 
 import * as THREE from 'three';
-import '../../render2d/simon.css';
+import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
 import type { WorldCtx, Play3dEngine } from '../play/types';
@@ -35,36 +29,36 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, contactShadow, liftReframeAboveGround, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
+import {
+  Glow, anchoredPrompt, contactShadow, hintAnchor, pick3d, registerActivityWin, registerPlayHint,
+  activityScopeSignal,
+} from '../play/kit';
+import { Stage, nameTag } from '../play/stage';
+import { heightFor } from '../play/spawn';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-/** Half-width of the caller row laid around the activity spot (metres). */
-const SPREAD = 2.8;
+const CALL = '#ffd98a';  // warm "calling" light
+const OK = '#8fd6a0';    // calm green for a right echo
+const WRONG = '#e8a27a'; // soft warm for a wrong echo
 
-/** Calm earthy hues so each caller is a distinct, memorable form (never-scary;
- *  all muted heath/dusk tones). The glow on top is a warm "calling" light.
- *  P1.6 (DIRECTION §2.1: warm key / cool fill, "één wereld"): the two coolest
- *  tones are nudged off cold blue-plastic toward warm-grey / heath-green dusk so no
- *  caller reads out of the golden-hour palette while the six stay clearly distinct. */
-const CALLER_HUES = ['#b98a5a', '#8a9b6e', '#9a7b6a', '#8b8676', '#a9925e', '#79826c'];
+/** Below this stand height an animal sits on a stump so it reads in the row. */
+const PERCH_BELOW = 0.45;
 
-/** A calm, still caller form. Its own material so it can glow (call + recall
- *  feedback) without touching any other mesh. */
 interface CallerFx {
   id: string;
-  group: THREE.Group;
-  mat: THREE.MeshStandardMaterial;
-  glow: number;   // 0..1 target emissive level
-  lift: number;   // 0..1 target lift (dual-channel with colour)
-  cur: number;    // eased current lift
-  hue: THREE.Color;
+  group: THREE.Group;   // animal (+ perch) + tag, lifted as one
+  glow: Glow | null;
+  anchor: THREE.Object3D | null;
+  lift: number;
+  cur: number;
+  level: number;
+  color: string;
 }
 
 export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
-    const scene = ctx.scene as THREE.Scene;
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const raycaster = ctx.raycaster as THREE.Raycaster;
     const reduced = ctx.reducedMotion;
@@ -78,117 +72,135 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     const instructie = copy.instructie ?? 'De dieren roepen. Doe ze na.';
     const luister = copy.luister ?? 'Luister naar de dieren…';
-    const echoTxt = copy.echo ?? 'Doe ze na. Tik de dieren.';
+    const echoTxt = copy.echo ?? 'Doe ze na. Klik op de dieren.';
     const goed = copy.goed ?? 'Knap onthouden!';
 
-    const sx = ctx.activitySpot.x, sy = ctx.activitySpot.y, sz = ctx.activitySpot.z;
-    const callHue = new THREE.Color('#ffe6a8'); // warm "calling" glow
-    const okHue = new THREE.Color('#8fd6a0');   // calm green for a correct echo tap
-
-    // ---- stage the callers in a gentle row on the heath ----
-    const fx = new Map<string, CallerFx>();
-    const shadows: THREE.Mesh[] = []; // P1.6: a soft blob under each caller (§2.2 grounding)
+    // the row: spacing grows with the biggest animal so no two overlap
     const n = trial.dieren.length;
-    trial.dieren.forEach((id, i) => {
-      const f = n > 1 ? i / (n - 1) : 0.5; // 0..1 across the row
-      const x = sx + (f - 0.5) * 2 * SPREAD;
-      const z = sz - Math.abs(f - 0.5) * 0.8; // slight arc — ends sit a touch back
-      const base = new THREE.Color(CALLER_HUES[i % CALLER_HUES.length]);
-      const mat = new THREE.MeshStandardMaterial({
-        color: base, emissive: callHue.clone(), emissiveIntensity: 0, roughness: 0.85,
-      });
-      const group = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.36, 4, 8), mat);
-      body.position.y = 0.38;
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), mat);
-      head.position.set(0, 0.7, 0.14);
-      group.add(body, head);
-      group.position.set(x, sy, z);
-      scene.add(group);
-      // P1.6 (DIRECTION §2.2): a static contact shadow grounds the caller under the
-      // low golden key so it belongs on the heath instead of floating (the shadow
-      // stays put on the ground while the caller does its small "calling" lift).
-      const shadow = contactShadow(0.44);
-      shadow.position.set(x, sy + 0.02, z);
-      scene.add(shadow);
-      shadows.push(shadow);
-      fx.set(id, { id, group, mat, glow: 0, lift: 0, cur: 0, hue: callHue });
+    const sizes = trial.dieren.map((id) => heightFor(id));
+    const gapM = Math.max(1.15, Math.max(...sizes) * 0.95);
+    const halfW = ((n - 1) * gapM) / 2 + 0.3 + Math.max(...sizes) * 0.6; // + half the longest body
+    const tallest = Math.max(...sizes.map((h) => (h < PERCH_BELOW ? h + 0.45 : h))) + 0.45; // + name tag
+    const stage = new Stage(ctx, { halfW, halfD: 0.55, tall: tallest, pitchDeg: 20, insetBottom: 110, insetTop: 70 });
+    const reframe = stage.reframe();
+    let settled = false;
 
-      // a camera-facing name tag (dual-channel with the form's hue), like the 2D names
-      const naam = Content.animal(id)?.naam ?? id;
-      const label = makeLabel(naam);
-      label.position.set(0, 1.15, 0);
-      group.add(label);
-    });
+    const fx = new Map<string, CallerFx>();
+    let phase: 'wait' | 'listen' | 'echo' | 'done' = 'wait';
+    const timers: number[] = [];
+    const after = (ms: number, fn: () => void): void => { timers.push(window.setTimeout(fn, ms)); };
+    const clearTimers = (): void => { for (const t of timers) window.clearTimeout(t); timers.length = 0; };
 
-    // ---- §1e reframe — a calm raised look over the whole row (cuts if reduced) ----
-    const lookAt = new THREE.Vector3(sx, sy + 0.5, sz);
-    const to = new THREE.Vector3(sx, sy + 3.2, sz + 5.0);
-    liftReframeAboveGround(to, ctx.groundY); // D1.3: never land the lens under the terrain
-    const reframe = makeReframe(camera, to, lookAt, reduced, 0.35);
+    function speak(text: string): void { if (settings.voorlezen) narrator.speak(text); }
 
-    function applyFx(f: CallerFx): void {
-      f.mat.emissive.copy(f.hue);
-      f.mat.emissiveIntensity = f.glow;
-      const lift = reduced ? f.lift : f.cur;
-      f.group.position.y = sy + lift * 0.16;
-      const sc = 1 + lift * 0.14;
-      f.group.scale.set(sc, sc, sc);
+    function banner(text: string): void {
+      const card = anchoredPrompt(
+        ctx.prompt,
+        `<div class="p3-bottom"><div class="p3-card"><div class="p3-row">` +
+          `<p class="p3-text">${esc(text)}</p>` +
+          `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+          `</div></div></div>`,
+      );
+      card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(text));
     }
 
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) return; // F-26: "Stop de missie" tears the step down
+      if (activityScopeSignal()?.aborted) { clearTimers(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
-      reframe.update(dt);
+      if (reframe.update(dt) && !settled) { settled = true; maybeStart(); }
+      stage.update(dt);
       for (const f of fx.values()) {
         f.cur += (f.lift - f.cur) * (reduced ? 1 : Math.min(1, dt * 10));
-        applyFx(f);
+        f.group.position.y = f.cur * 0.1;
+        f.glow?.set(f.level, f.color);
       }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
 
-    function speak(text: string): void { if (settings.voorlezen) narrator.speak(text); }
+    // ---- stage the callers: the world's animals in a gentle row ----
+    let teardownPick: (() => void) | null = null;
+    let loaded = false;
+    void (async () => {
+      await Promise.all(trial.dieren.map(async (id, i) => {
+        const f = n > 1 ? i / (n - 1) : 0.5;
+        const u = (f - 0.5) * (n - 1) * gapM;
+        const v = Math.abs(f - 0.5) * 0.5; // a slight arc: the ends sit a touch back
+        const group = new THREE.Group();
+        stage.add(group);
+        const h = heightFor(id);
+        const p = stage.at(u, v);
+        let top = h;
+        let perchH = 0;
+        if (h < PERCH_BELOW) {
+          const stump = await stage.plant('prop-tree-stump', 0.42, u, v, i);
+          if (stump) { group.add(stump); perchH = 0.4; }
+        }
+        const animal = await stage.animal(id, u, v, 1.15);
+        if (animal) {
+          group.add(animal);
+          animal.position.y += perchH;
+          top = h + perchH;
+        }
+        const sh = contactShadow(Math.max(0.25, h * 0.6));
+        sh.position.copy(p).setY(p.y + 0.02);
+        group.add(sh);
+        const tag = nameTag(Content.animal(id)?.naam ?? id, 0.9);
+        tag.position.copy(p).setY(p.y + top + 0.28);
+        group.add(tag);
+        fx.set(id, {
+          id, group, glow: animal ? new Glow(animal, CALL) : null,
+          anchor: animal ? hintAnchor(animal, 0.6) : null,
+          lift: 0, cur: 0, level: 0, color: CALL,
+        });
+      }));
+      if (activityScopeSignal()?.aborted) return;
+      teardownPick = pick3d({
+        canvas: ctx.canvas,
+        camera,
+        raycaster,
+        targets: [...fx.values()].map((f) => ({ id: f.id, object: f.group })),
+        onPick,
+      });
+      loaded = true;
+      maybeStart();
+    })().catch((e) => console.error('[simon3d] staging failed', e));
 
-    // ---- the accessible DOM banner (all words + read-aloud live here) ----
-    function banner(text: string): void {
-      const card = anchoredPrompt(
-        ctx.prompt,
-        `<div class="simon3d-card" style="position:absolute;left:0;right:0;bottom:18px;display:flex;justify-content:center;padding:0 16px;">` +
-          `<div class="simon-bar" style="max-width:520px;">` +
-          `<p class="simon-instr">${esc(text)}</p>` +
-          `<button class="simon-speak" type="button" aria-label="Lees voor">🔊</button>` +
-          `</div></div>`,
-      );
-      card.querySelector('.simon-speak')?.addEventListener('click', () => narrator.speak(text));
+    const unHint = registerPlayHint(() => {
+      if (phase !== 'echo') return null;
+      const f = fx.get(run.expected);
+      return f?.anchor ? { id: f.id, target: f.anchor } : null;
+    });
+
+    function quiet(): void {
+      for (const f of fx.values()) { f.level = 0; f.lift = 0; f.color = CALL; }
     }
 
-    let phase: 'listen' | 'echo' | 'done' = 'listen';
-    const timers: number[] = [];
-    const after = (ms: number, fn: () => void): void => { timers.push(window.setTimeout(fn, ms)); };
-    const clearTimers = (): void => { for (const t of timers) window.clearTimeout(t); timers.length = 0; };
-
-    function clearGlow(): void {
-      for (const f of fx.values()) { f.glow = 0; f.lift = 0; f.hue = callHue; }
+    function maybeStart(): void {
+      if (phase !== 'wait' || !loaded || !settled) return;
+      run.begin();
+      listen();
     }
 
     function listen(): void {
       clearTimers();
       phase = 'listen';
-      clearGlow();
+      quiet();
       banner(luister);
-      const gap = reduced ? 380 : 250;
-      let t = 480;
+      const gap = reduced ? 420 : 320;
+      let t = 900;
       run.sequence.forEach((id) => {
         after(t, () => {
-          for (const f of fx.values()) { f.hue = callHue; f.glow = f.id === id ? 1 : 0; f.lift = f.id === id ? 1 : 0; }
+          quiet();
+          const f = fx.get(id);
+          if (f) { f.level = 0.9; f.lift = 1; f.color = CALL; }
           if (settings.geluid) Sound.call(id);
         });
-        const dur = Sound.callDur(id) * 1000;
-        after(t + dur, () => { const f = fx.get(id); if (f) { f.glow = 0; f.lift = 0; } });
+        const dur = Math.max(650, Sound.callDur(id) * 1000);
+        after(t + dur, () => { const f = fx.get(id); if (f) { f.level = 0; f.lift = 0; } });
         t += dur + gap;
       });
       after(t, startEcho);
@@ -196,8 +208,9 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     function startEcho(): void {
       phase = 'echo';
-      clearGlow();
+      quiet();
       banner(echoTxt);
+      speak(echoTxt);
     }
 
     function onPick(id: string): void {
@@ -206,119 +219,55 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       const res = run.tap(id);
       if (res === 'advance') {
         if (settings.geluid) Sound.call(id);
-        if (f) { f.glow = 0.7; f.lift = 0.4; f.hue = okHue; after(260, () => { f.glow = 0; f.lift = 0; f.hue = callHue; }); }
+        if (f) { f.level = 0.45; f.lift = 0.5; f.color = OK; after(380, () => { f.level = 0; f.lift = 0; f.color = CALL; }); }
       } else if (res === 'complete') {
-        if (f) { f.glow = 0.7; f.lift = 0.4; f.hue = okHue; }
+        if (f) { f.level = 0.45; f.lift = 0.5; f.color = OK; }
         finish();
       } else if (res === 'grow') {
-        // a full echo below target — celebrate, then re-list the longer sequence
-        phase = 'listen';
-        if (f) { f.glow = 0.7; f.lift = 0.4; f.hue = okHue; }
+        phase = 'listen'; // a full echo below target — celebrate, then the longer row
+        if (f) { f.level = 0.45; f.lift = 0.5; f.color = OK; }
         if (settings.geluid) Sound.correct();
         banner('Goed onthouden!');
-        after(1100, listen);
-      } else { // 'replay' — wrong tap, recoverable: re-list the SAME sequence
+        after(1200, listen);
+      } else { // 'replay' — a wrong click, recoverable: the SAME sequence again
         phase = 'listen';
-        if (f) { f.glow = 1; f.lift = 0.3; f.hue = new THREE.Color('#e08a6a'); after(600, () => { f.glow = 0; f.lift = 0; f.hue = callHue; }); }
+        if (f) { f.level = 0.6; f.lift = 0.3; f.color = WRONG; after(650, () => { f.level = 0; f.lift = 0; f.color = CALL; }); }
         if (settings.geluid) Sound.tryAgain();
         banner('Luister nog een keer.');
-        after(1300, listen);
+        after(1400, listen);
       }
     }
 
-    const teardownPick = pick3d({
-      canvas: ctx.canvas,
-      camera,
-      raycaster,
-      targets: [...fx.values()].map((f) => ({ id: f.id, object: f.group })),
-      onPick,
-    });
-
     function finish(): void {
+      if (phase === 'done') return;
       phase = 'done';
       if (settings.geluid) Sound.found();
       banner(goed);
       speak(goed);
       const summary = run.summary();
-      after(1500, () => {
+      after(1600, () => {
         clearTimers();
         narrator.stop();
-        teardownPick();
+        teardownPick?.();
+        unHint();
         cancelAnimationFrame(raf);
-        for (const f of fx.values()) {
-          f.group.traverse((o) => {
-            const mesh = o as THREE.Mesh;
-            if (mesh.geometry) mesh.geometry.dispose();
-            const m = mesh.material as THREE.Material | undefined;
-            if (m) m.dispose();
-          });
-          scene.remove(f.group);
-        }
-        for (const s of shadows) { // P1.6: free the per-caller blob shadows
-          s.geometry.dispose();
-          (s.material as THREE.Material).dispose();
-          scene.remove(s);
-        }
+        stage.dispose();
         ctx.prompt.querySelectorAll('.ra-overlay').forEach((nn) => nn.remove());
         resolve(summary);
       });
     }
 
     registerActivityWin(() => finish()); // W2.3: dev-only win → genuine resolve + teardown
+    banner(instructie);
     speak(instructie);
-    run.begin();
-    listen();
   });
 }
 
-/** A small camera-facing name sprite (depthWrite off) so the caller is named in
- *  world, the dual-channel partner to its hue (no chrome, ≥ readable). */
-function makeLabel(text: string): THREE.Sprite {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256; canvas.height = 64;
-  const g = canvas.getContext('2d')!;
-  g.font = '600 34px Inter, system-ui, sans-serif';
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillStyle = 'rgba(28,24,18,0.72)';
-  const w = g.measureText(text).width + 28;
-  roundRect(g, (256 - w) / 2, 12, w, 40, 12);
-  g.fill();
-  g.fillStyle = '#fff';
-  g.fillText(text, 128, 33);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.anisotropy = 4;
-  const mat = new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(0.9, 0.225, 1);
-  return sprite;
-}
-
-function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  g.beginPath();
-  g.moveTo(x + r, y);
-  g.arcTo(x + w, y, x + w, y + h, r);
-  g.arcTo(x + w, y + h, x, y + h, r);
-  g.arcTo(x, y + h, x, y, r);
-  g.arcTo(x, y, x + w, y, r);
-  g.closePath();
-}
-
-/** The registered 3D simon variant. rmSafe:false — a flat, named row is the clearer
- *  surface for an audio-visual sequence-memory task under reduced-motion, so the
- *  resolver serves the 2D floor there (3D-IMMERSION-PLAN §4).
- *
- *  W6.2b rmSafe audit (KEEP verdict, closer call than corsi): the reduced path is
- *  ALREADY cuts-not-moves (makeReframe(reduced) snaps the camera; caller lift/scale
- *  snap instantly because `f.cur` eases at factor 1 and applyFx reads `f.lift`;
- *  glow is dual-channel feedback). And unlike corsi, simon's memory cue is IDENTITY
- *  (name + hue + call sound), not spatial position, so 3D perspective does NOT
- *  distort the construct (this is why dagnacht — also identity-based — could flip).
- *  KEEP rests instead on the READING channel: the callers are NAMED, and for a
- *  dyslexic player (AVI M3/E3) the name is a genuine memory/reading cue. The
- *  camera-facing name sprites on side/back callers shrink and foreshorten under the
- *  raised 3D angle, degrading that reading channel, whereas the flat 2D row shows
- *  every name at uniform size. Per "bij twijfel rmSafe:false HOUDEN" that reading
- *  cost tips it to false; the proven 2D floor stays the reduced-motion surface. */
+/** The registered 3D simon variant. rmSafe:false — the callers are NAMED, and for a
+ *  dyslexic player the flat 2D row shows every name at one size, whereas camera-facing
+ *  tags in perspective vary; so the resolver serves the 2D floor under reduced-motion
+ *  (3D-IMMERSION-PLAN §4). The 3D path itself is cuts-not-moves (reframe cuts, the
+ *  call lift snaps, glow is steady). */
 export const simon3dEngine: Play3dEngine = {
   engine: 'simon',
   play: playSimon3d,

@@ -3706,7 +3706,7 @@ export class World {
 
   /** A mini-game patch is free at (x,z) within `r` m: dry land (not the ven), outside
    *  every solid prop (a tree's CROWN, not just its trunk — so the lens never sits in
-   *  one), and clear of the other missions' animals. The approached marker is exempt:
+   *  one), and clear of the other missions' animals and the two people. The approached marker is exempt:
    *  the stage hides it while the game runs. */
   private playClear(x: number, z: number, r: number): boolean {
     if (this.limits.blocked?.(x, z)) return false;
@@ -3715,6 +3715,9 @@ export class World {
     }
     for (const m of this.markers) {
       if (m.missionId !== this.nearId && Math.hypot(m.pos.x - x, m.pos.z - z) < 1.2 + r) return false;
+    }
+    for (const a of this.scenicActors) { // the warden / poacher never stand in (or behind) a game
+      if (Math.hypot(a.group.position.x - x, a.group.position.z - z) < 0.8 + r) return false;
     }
     return true;
   }

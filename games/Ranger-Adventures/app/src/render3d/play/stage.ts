@@ -87,7 +87,7 @@ export class Stage {
       const bad = this.violations(fit.P, f, fit.cam);
       const score = bad * 100 + Math.abs(deg) / 180;
       if (!best || score < best.score) best = { score, f, P: fit.P, cam: fit.cam, look: fit.look };
-      if (bad === 0) break;
+      if (bad < 0.01) break;
     }
     const b = best!;
     this.fwd.copy(b.f);
@@ -190,6 +190,14 @@ export class Stage {
         if (!ctx.isClear(x, z, 0.2)) bad++;
       }
     }
+    // the backdrop just behind the patch stays calm too (no jeep, cabin or person
+    // standing over the game) — a lighter rule: it only breaks a tie
+    for (let u = -halfW - 1; u <= halfW + 1.01; u += 1.0) {
+      for (let v = halfD + 0.9; v <= halfD + 7; v += 1.2) {
+        const x = P.x + right.x * u + f.x * v, z = P.z + right.z * u + f.z * v;
+        if (!ctx.isClear(x, z, 0.4)) bad += v < halfD + 3.5 ? 0.3 : 0.1;
+      }
+    }
     // the lens stands in the open and sees the patch over open ground
     if (!ctx.isClear(cam.x, cam.z, 0.6)) bad += 3;
     for (let t = 0.15; t < 1; t += 0.15) {
@@ -272,6 +280,56 @@ export class Stage {
     return mesh;
   }
 
+  /**
+   * A flat, soft-edged ground patch (sand under an adder, a mud pool, a sunny
+   * clearing) centred at patch-local (u,v), `rx` across × `rz` deep, with a gently
+   * irregular rim. A polar mesh draped vertex by vertex over the RENDERED ground, so
+   * it never cuts into a slope or floats over a dip. `layer` stacks decals (a higher
+   * layer draws over a lower one without z-fighting). The caller owns the mesh.
+   */
+  decal(color: THREE.ColorRepresentation, rx: number, rz: number, u: number, v: number,
+    opts: { roughness?: number; layer?: number; emissive?: THREE.ColorRepresentation; emissiveIntensity?: number } = {}): THREE.Mesh {
+    const layer = opts.layer ?? 1;
+    const RINGS = 6, SEGS = 32;
+    const pos: number[] = [];
+    const idx: number[] = [];
+    const c = this.at(u, v);
+    pos.push(c.x, c.y + 0.02 + layer * 0.012, c.z);
+    for (let r = 1; r <= RINGS; r++) {
+      const k = r / RINGS;
+      for (let i = 0; i < SEGS; i++) {
+        const a = (i / SEGS) * Math.PI * 2;
+        const wob = k === 1 ? 1 + 0.08 * Math.sin(a * 3 + u * 5) + 0.05 * Math.cos(a * 5 + v * 3) : 1;
+        const lu = u + Math.cos(a) * rx * k * wob, lv = v + Math.sin(a) * rz * k * wob;
+        const p = this.at(lu, lv, 0.02 + layer * 0.012);
+        pos.push(p.x, p.y, p.z);
+      }
+    }
+    for (let i = 0; i < SEGS; i++) idx.push(0, 1 + ((i + 1) % SEGS), 1 + i);
+    for (let r = 1; r < RINGS; r++) {
+      const a0 = 1 + (r - 1) * SEGS, b0 = 1 + r * SEGS;
+      for (let i = 0; i < SEGS; i++) {
+        const i1 = (i + 1) % SEGS;
+        idx.push(a0 + i, a0 + i1, b0 + i, a0 + i1, b0 + i1, b0 + i);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    // make sure the faces point up whatever the winding came out as
+    const n = geo.attributes.normal as THREE.BufferAttribute;
+    if (n.getY(0) < 0) { geo.setIndex(idx.slice().reverse()); geo.computeVertexNormals(); }
+    const mat = new THREE.MeshStandardMaterial({
+      color, roughness: opts.roughness ?? 1,
+      emissive: opts.emissive ?? '#000000', emissiveIntensity: opts.emissiveIntensity ?? 0,
+      polygonOffset: true, polygonOffsetFactor: -2 * layer, polygonOffsetUnits: -2 * layer,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.renderOrder = layer;
+    return mesh;
+  }
+
   /** Seat a spawn at patch-local (u,v) on the ground and hand it to the stage. */
   place(s: Spawned, u: number, v: number, turn: number): THREE.Group {
     const root = s.root as THREE.Group;
@@ -308,6 +366,7 @@ export class Stage {
     for (const o of this.owned) {
       o.removeFromParent();
       o.traverse((c) => {
+        if ((c as THREE.Sprite).isSprite) { disposeTag(c as THREE.Sprite); return; } // shared sprite geometry stays
         const mesh = c as THREE.Mesh;
         if (mesh.geometry) mesh.geometry.dispose();
         const mats = mesh.material ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
@@ -353,7 +412,6 @@ export function nameTag(text: string, width = 0.95): THREE.Sprite {
 
 /** Dispose a sprite made by `nameTag` (its canvas texture + material). */
 export function disposeTag(s: THREE.Sprite): void {
-  s.removeFromParent();
   s.material.map?.dispose();
   s.material.dispose();
 }

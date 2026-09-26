@@ -1,65 +1,138 @@
 /**
  * wisselen3d.ts — the diegetic 3D variant of the "wisselen" engine (cognitive
- * flexibility / set-shifting), the fifth and last in-place mini-game on the 3D
- * play harness (3D-IMMERSION-PLAN §3, BUILD-PLAN §1f / ledger 60).
+ * flexibility / set-shifting), played IN the world (3D-IMMERSION-PLAN §3).
  *
  * Construct parity (frozen, §1f): it consumes the SAME `buildWisselTrial` builder
  * and drives the SAME pure `WisselRun` core as the 2D `playWissel`, so it emits the
- * IDENTICAL `BeatSummary` (`{ trials: 1, correct }`, correct = 1 only when the
- * whole queue is sorted with no wrong tap). 3D changes ONLY the staging — the
- * animal-to-sort stands at the activity spot, the two destinations (open plek + het
- * hol) sit either side as calm in-world places, and the signpost between them
- * carries the rule — and never WHAT is measured: same queue, same flip cadence,
- * same binary score. **No cross-construct contamination (§1f, explicit):** both
- * destinations stay VISIBLE + LABELLED the whole time and the ranger never walks to
- * reach one, so this is rule-application (which place does the rule send this animal
- * to *now*), NOT spatial working memory.
+ * IDENTICAL `BeatSummary` (`{ trials: 1, correct }`, correct = 1 only when the whole
+ * queue is sorted with no wrong click). **No cross-construct contamination:** both
+ * places stay visible + named the whole time and the ranger never walks, so this is
+ * rule-application, not spatial memory.
  *
- * Never-scary / motion-comfort (§1e): the animal is a calm still earthy form; a
- * correct sort glides it gently to its place + settles (cuts under reduced-motion);
- * the rule flip is dual-channel (the signpost re-colours + turns its label AND the
- * DOM banner swaps the rule words + plays a soft cue) — no startle. A wrong sort is
- * a small wiggle + "probeer de andere plek", recoverable, never a game-over.
- * Dual-channel everywhere (place COLOUR + the glide/settle + sound). ≥56px raycast
- * hit-spheres via the shared kit. The §1e reframe cuts under reduced-motion.
- * rmSafe:false — two labelled DOM-clear bins read cleaner than a 3D perspective for
- * a rule-switch task under reduced-motion, so the resolver serves the proven 2D
- * floor there (matches corsi/simon; this view still degrades gracefully if entered:
- * camera cuts, glide becomes an instant settle, words + cue intact).
+ * 2026-09-26 staging: the animal to sort is the world's own model at its real size,
+ * its name over it; "de open plek" (a sunny clearing with flowers) sits left and "het
+ * hol" (the world's badger sett) right, each named with its icon. Between them, a
+ * signboard FACING the player carries the rule as icon + word + arrow — ☀ dag → the
+ * side it goes, 🌙 nacht → the other — so the rule reads without colour; when the rule
+ * flips ("Nu andersom!") the board redraws its arrows.
+ *
+ * Never-scary / motion-comfort (§1e): a right choice walks the animal calmly to its
+ * place (an instant settle under reduced-motion); a wrong one is a small shake + "probeer
+ * de andere plek", recoverable, never game-over. One eased reframe (a cut when reduced).
  */
 
 import * as THREE from 'three';
-import '../../render2d/wissel.css';
+import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
 import type { WorldCtx, Play3dEngine } from '../play/types';
-import { buildWisselTrial, WisselRun } from '../../engines/wisselen';
-import type { WisselBin } from '../../engines/wisselen';
+import { buildWisselTrial, WisselRun, type WisselBin } from '../../engines/wisselen';
 import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
-import { anchoredPrompt, contactShadow, liftReframeAboveGround, makeReframe, pick3d, registerActivityWin, activityScopeSignal } from '../play/kit';
+import {
+  Glow, anchoredPrompt, contactShadow, hintAnchor, pick3d, registerActivityWin, registerPlayHint,
+  activityScopeSignal,
+} from '../play/kit';
+import { Stage, nameTag } from '../play/stage';
+import { heightFor } from '../play/spawn';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-/** How far either side of the activity spot the two destinations sit (metres). */
-const SPREAD = 3.0;
+/** How far either side of the centre the two places sit (m). */
+const SIDE = 2.3;
 
-/** The two destination places, staged once and kept visible+labelled the whole
- *  activity (rule-application, not spatial memory). */
-interface BinFx {
-  bin: WisselBin;
-  group: THREE.Group;
-  mat: THREE.MeshStandardMaterial;
-  base: THREE.Color;
-  pos: THREE.Vector3;
+/* ------------------------------------------------------------ the rule board ---- */
+
+function drawSun(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  g.save();
+  g.fillStyle = '#f2b62c';
+  g.strokeStyle = '#f2b62c';
+  g.lineWidth = r * 0.22;
+  g.lineCap = 'round';
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(x + Math.cos(a) * r * 0.78, y + Math.sin(a) * r * 0.78);
+    g.lineTo(x + Math.cos(a) * r * 1.12, y + Math.sin(a) * r * 1.12);
+    g.stroke();
+  }
+  g.beginPath();
+  g.arc(x, y, r * 0.55, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+}
+
+function drawMoon(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  g.save();
+  g.fillStyle = '#5b6fb0';
+  g.beginPath();
+  g.arc(x, y, r * 0.85, 0, Math.PI * 2);
+  g.fill();
+  g.globalCompositeOperation = 'destination-out';
+  g.beginPath();
+  g.arc(x + r * 0.42, y - r * 0.22, r * 0.72, 0, Math.PI * 2);
+  g.fill();
+  g.restore();
+}
+
+function drawArrow(g: CanvasRenderingContext2D, x0: number, x1: number, y: number): void {
+  const dir = Math.sign(x1 - x0);
+  g.save();
+  g.strokeStyle = '#3b2a18';
+  g.fillStyle = '#3b2a18';
+  g.lineWidth = 12;
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(x0, y);
+  g.lineTo(x1 - dir * 18, y);
+  g.stroke();
+  g.beginPath();
+  g.moveTo(x1, y);
+  g.lineTo(x1 - dir * 34, y - 22);
+  g.lineTo(x1 - dir * 34, y + 22);
+  g.closePath();
+  g.fill();
+  g.restore();
+}
+
+/** The board face: ☀ dag + arrow to its place, 🌙 nacht + arrow to the other place.
+ *  The open plek is LEFT, het hol RIGHT (as staged), so the arrows point at them. */
+function paintBoard(c: HTMLCanvasElement, inverted: boolean): void {
+  const g = c.getContext('2d')!;
+  const W = c.width, H = c.height;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#e9d7ae';
+  g.strokeStyle = '#7a5a36';
+  g.lineWidth = 14;
+  g.beginPath();
+  g.roundRect(8, 8, W - 16, H - 16, 26);
+  g.fill();
+  g.stroke();
+  g.font = '700 88px Inter, system-ui, sans-serif';
+  g.textBaseline = 'middle';
+  g.fillStyle = '#2a1e10';
+  const rows: { icon: 'sun' | 'moon'; word: string; y: number; toLeft: boolean }[] = [
+    { icon: 'sun', word: 'dag', y: H * 0.3, toLeft: !inverted },
+    { icon: 'moon', word: 'nacht', y: H * 0.72, toLeft: inverted },
+  ];
+  for (const r of rows) {
+    // the icon + word sit on the side OPPOSITE the arrow tip, the arrow points to the place
+    const iconX = r.toLeft ? W - 100 : 100;
+    if (r.icon === 'sun') drawSun(g, iconX, r.y, 56); else drawMoon(g, iconX, r.y, 56);
+    g.textAlign = r.toLeft ? 'right' : 'left';
+    const wordX = r.toLeft ? W - 178 : 178;
+    g.fillText(r.word, wordX, r.y + 2);
+    const wordW = g.measureText(r.word).width;
+    if (r.toLeft) drawArrow(g, wordX - wordW - 24, 40, r.y);
+    else drawArrow(g, wordX + wordW + 24, W - 40, r.y);
+  }
 }
 
 export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
-    const scene = ctx.scene as THREE.Scene;
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const raycaster = ctx.raycaster as THREE.Raycaster;
     const reduced = ctx.reducedMotion;
@@ -74,219 +147,256 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     const instructie = copy.instructie ?? 'Breng elk dier naar de goede plek.';
     const goed = copy.goed ?? 'Alle dieren op de goede plek!';
     const regelDag = copy.regel ?? 'Dag-dier → open plek. Nacht-dier → het hol.';
-    const regelOm = copy.regelOm ?? 'Nu andersom!';
+    const regelOm = copy.regelOm ?? 'Nu andersom! Volg het bordje.';
+    // after a flip the banner states the NEW mapping outright (not only "andersom")
+    const regelAndersom = 'Dag-dier → het hol. Nacht-dier → open plek.';
 
-    const sx = ctx.activitySpot.x, sy = ctx.activitySpot.y, sz = ctx.activitySpot.z;
+    const tallest = Math.max(...trial.queue.map((q) => heightFor(q.id)), 1);
+    const stage = new Stage(ctx, { halfW: SIDE + 0.9, halfD: 0.9, tall: Math.max(3.1, tallest + 0.5), pitchDeg: 20, insetBottom: 110, insetTop: 70 });
+    const reframe = stage.reframe();
 
-    // ---- stage the two destinations (always visible + labelled) ----
-    // open plek = a warm sunny clearing disc; het hol = a calm dark den mound.
-    // P1.6 (DIRECTION §2.1): a sunny open-plek clearing + a calm warm-earth den, both
-    // in the golden-hour palette (the den warmed off cold grey so it belongs, still a
-    // clearly darker "hol" than the open plek for the dual-channel place cue).
-    const sunHue = new THREE.Color('#d8b86a');
-    const denHue = new THREE.Color('#5f5142');
-    const okHue = new THREE.Color('#8fd6a0');
+    /** where the animal waits: the middle, a step nearer the lens than the board */
+    function centreAt(lift: number): THREE.Vector3 { return stage.at(0, -0.25, lift); }
 
+    // ---- the two places (always visible + named) ----
+    interface BinFx { bin: WisselBin; group: THREE.Group; glow: Glow; anchor: THREE.Object3D; at: THREE.Vector3 }
     const bins = new Map<WisselBin, BinFx>();
-    const mkBin = (bin: WisselBin, x: number, hue: THREE.Color, naam: string): BinFx => {
-      const mat = new THREE.MeshStandardMaterial({ color: hue, emissive: okHue.clone(), emissiveIntensity: 0, roughness: 0.95 });
-      const group = new THREE.Group();
-      // a low place-disc on the ground (the "spot" the animal goes to)
-      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.95, 0.12, 20), mat);
-      disc.position.y = 0.06;
-      group.add(disc);
-      if (bin === 'hol') {
-        // a calm den mound with a dark opening (still, no shadowy interior to read as scary)
-        const mound = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat);
-        mound.position.y = 0.1;
-        group.add(mound);
-      } else {
-        // a small sun marker above the open plek (warm, friendly)
-        const sun = new THREE.Mesh(
-          new THREE.SphereGeometry(0.22, 14, 12),
-          new THREE.MeshStandardMaterial({ color: '#ffe2a0', emissive: '#ffcf6a', emissiveIntensity: 0.5, roughness: 0.6 }),
-        );
-        sun.position.y = 1.0;
-        group.add(sun);
-      }
-      group.position.set(x, sy, sz - 0.6);
-      const label = makeLabel(naam);
-      label.position.set(0, 1.5, 0);
-      group.add(label);
-      scene.add(group);
-      const fx: BinFx = { bin, group, mat, base: hue.clone(), pos: group.position.clone() };
-      bins.set(bin, fx);
-      return fx;
-    };
-    mkBin('open', sx - SPREAD, sunHue, 'open plek');
-    mkBin('hol', sx + SPREAD, denHue, 'het hol');
 
-    // ---- the signpost between the places: dual-channel rule cue (colour + label) ----
-    const signMat = new THREE.MeshStandardMaterial({ color: '#caa46a', roughness: 0.8 });
+    // ---- the rule board, facing the player between the places ----
+    const boardCanvas = document.createElement('canvas');
+    boardCanvas.width = 680; boardCanvas.height = 400;
+    paintBoard(boardCanvas, false);
+    const boardTex = new THREE.CanvasTexture(boardCanvas);
+    boardTex.colorSpace = THREE.SRGBColorSpace;
+    boardTex.anisotropy = 4;
     const sign = new THREE.Group();
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.3, 8), signMat);
-    post.position.y = 0.65;
-    const board = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.34, 0.06), signMat);
-    board.position.y = 1.2;
-    sign.add(post, board);
-    sign.position.set(sx, sy, sz + 0.4);
-    scene.add(sign);
-    const signLabel = makeLabel('Bordje');
-    signLabel.position.set(0, 1.7, 0);
-    sign.add(signLabel);
+    const wood = new THREE.MeshStandardMaterial({ color: '#6e5234', roughness: 1 });
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 2.2, 8), wood);
+    post.position.y = 1.1;
+    const faceMat = new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.9 });
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(1.62, 0.95), faceMat);
+    face.position.set(0, 1.85, 0.08);
+    sign.add(post, face);
+    const signAt = stage.at(0, 1.4);
+    sign.position.copy(signAt);
+    sign.rotation.y = stage.faceLens(signAt);
+    // lift the board until, seen from the planned lens, its lower edge clears the
+    // name tag of the tallest animal in the queue — the rule is never hidden
+    {
+      const view = new THREE.PerspectiveCamera(camera.fov, camera.aspect, 0.1, 200);
+      view.position.copy(stage.cam);
+      view.lookAt(stage.look);
+      view.updateMatrixWorld(true);
+      const tagTop = centreAt(0).clone().setY(centreAt(0).y + Math.max(0.3, tallest) + 0.45).project(view).y;
+      let lift = 0;
+      for (; lift < 1.6; lift += 0.05) {
+        const bottom = signAt.clone().setY(signAt.y + 1.85 - 0.48 + lift).project(view).y;
+        if (bottom > tagTop + 0.03) break;
+      }
+      post.scale.y = (2.2 + lift) / 2.2;
+      post.position.y = (2.2 + lift) / 2;
+      face.position.y = 1.85 + lift;
+    }
+    stage.add(sign);
+    const boardGlow = new Glow(face, '#fff1c4');
 
     function paintSign(): void {
-      // inverted rule → the board turns a cooler dusk hue (colour channel), and its
-      // word swaps too (the DOM banner carries the readable rule).
-      signMat.color.set(run.inverted ? '#8a7bb0' : '#caa46a');
-      sign.rotation.y = run.inverted ? Math.PI : 0;
+      paintBoard(boardCanvas, run.inverted);
+      boardTex.needsUpdate = true;
     }
 
-    // ---- the current animal, re-staged at the centre each turn ----
-    let animal: THREE.Group | null = null;
-    let animalMat: THREE.MeshStandardMaterial | null = null;
-    const centre = new THREE.Vector3(sx, sy, sz);
-    // P1.6 (DIRECTION §2.2): a soft contact shadow at the decision spot grounds the
-    // animal on the golden-hour ground (it stays put at centre while a sorted animal
-    // glides off to its place, so the next animal lands back onto the same pool).
-    const animalShadow = contactShadow(0.44);
-    animalShadow.position.set(sx, sy + 0.02, sz);
-    scene.add(animalShadow);
+    // ---- the current animal, standing in the middle with its name ----
+    let animal: { group: THREE.Group; dispose: () => void } | null = null;
+    let animalToken = 0;
+    const centre = centreAt(0);
+    const centreShadow = contactShadow(0.45);
+    centreShadow.position.copy(centre).setY(centre.y + 0.02);
+    stage.add(centreShadow);
+    /** a small animal (a nightjar, a squirrel) waits on a low stump so it reads */
+    const PODIUM_BELOW = 0.45;
+    const PODIUM_H = 0.36;
+    let podium: THREE.Object3D | null = null;
+    let lifted = 0; // how high the current animal stands (its podium), eased down on the walk
 
-    function disposeAnimal(): void {
-      if (!animal) return;
-      const g = animal;
-      g.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (mesh.geometry) mesh.geometry.dispose();
-        const m = mesh.material as THREE.Material | undefined;
-        if (m && m !== animalMat) m.dispose();
-      });
-      animalMat?.dispose();
-      scene.remove(g);
-      animal = null; animalMat = null;
-    }
-
-    function stageAnimal(): void {
-      disposeAnimal();
+    async function stageAnimal(): Promise<void> {
+      const token = ++animalToken;
+      animal?.dispose();
+      animal = null;
       const cur = run.current;
       if (!cur) return;
-      const hue = cur.dag ? new THREE.Color('#b9925a') : new THREE.Color('#6e6457');
-      animalMat = new THREE.MeshStandardMaterial({ color: hue, emissive: okHue.clone(), emissiveIntensity: 0, roughness: 0.9 });
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.36, 4, 8), animalMat);
-      body.position.y = 0.38;
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), animalMat);
-      head.position.set(0, 0.7, 0.14);
-      g.add(body, head);
-      g.position.copy(centre);
-      const naam = Content.animal(cur.id)?.naam ?? cur.id;
-      const label = makeLabel(naam);
-      label.position.set(0, 1.15, 0);
-      g.add(label);
-      scene.add(g);
-      animal = g;
+      const s = await ctx.spawnModel(cur.id, { height: heightFor(cur.id) });
+      if (token !== animalToken || activityScopeSignal()?.aborted) { s?.dispose(); return; }
+      const group = new THREE.Group();
+      const h = heightFor(cur.id);
+      lifted = h < PODIUM_BELOW && podium ? PODIUM_H : 0;
+      if (podium) podium.visible = lifted > 0;
+      group.position.copy(centre).setY(centre.y + lifted);
+      let top = h;
+      if (s) {
+        const root = s.root as THREE.Group;
+        root.rotation.y = stage.faceLens(centre, 1.2);
+        group.add(root);
+        tick = (dt) => s.update(dt);
+      }
+      const tag = nameTag(Content.animal(cur.id)?.naam ?? cur.id, 1.0);
+      top = Math.max(top, 0.3);
+      tag.position.set(0, top + 0.3, 0);
+      group.add(tag);
+      (ctx.scene as THREE.Scene).add(group);
+      animal = {
+        group,
+        dispose: () => {
+          group.removeFromParent();
+          s?.dispose();
+          tag.material.map?.dispose();
+          tag.material.dispose();
+        },
+      };
     }
+    let tick: (dt: number) => void = () => {};
 
-    // ---- §1e reframe — a calm raised look over the whole bench (cuts if reduced) ----
-    const lookAt = new THREE.Vector3(sx, sy + 0.4, sz);
-    const to = new THREE.Vector3(sx, sy + 3.4, sz + 5.4);
-    liftReframeAboveGround(to, ctx.groundY); // D1.3: never land the lens under the terrain
-    const reframe = makeReframe(camera, to, lookAt, reduced, 0.35);
-
-    // a one-shot glide of the animal to a destination (cut under reduced-motion)
+    // a calm walk of the animal to its place (an instant settle under reduced-motion)
     let glide: { from: THREE.Vector3; to: THREE.Vector3; t: number; done: () => void } | null = null;
+    let shakeUntil = 0;
 
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (activityScopeSignal()?.aborted) return; // F-26: "Stop de missie" tears the step down
+      if (activityScopeSignal()?.aborted) { animal?.dispose(); stage.dispose(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
-      reframe.update(dt);
-      if (glide && animal) {
-        glide.t = Math.min(1, glide.t + (reduced ? 1 : dt / 0.5));
-        const e = glide.t * glide.t * (3 - 2 * glide.t); // smoothstep
-        animal.position.lerpVectors(glide.from, glide.to, e);
-        animal.position.y = centre.y + Math.sin(e * Math.PI) * (reduced ? 0 : 0.18); // gentle hop arc
-        if (glide.t >= 1) { const d = glide.done; glide = null; d(); }
+      if (reframe.update(dt)) settled = true;
+      stage.update(dt);
+      tick(dt);
+      if (animal) {
+        if (glide) {
+          glide.t = Math.min(1, glide.t + (reduced ? 1 : dt / 0.7));
+          const e = glide.t * glide.t * (3 - 2 * glide.t);
+          animal.group.position.lerpVectors(glide.from, glide.to, e);
+          // off the podium (if any) and down onto the ground, then walking over it
+          animal.group.position.y = ctx.groundY(animal.group.position.x, animal.group.position.z) + lifted * Math.max(0, 1 - e * 3);
+          if (glide.t >= 1) { const d = glide.done; glide = null; d(); }
+        }
+      }
+      if (animal) { // (the walk's end may have swapped the animal just above)
+        animal.group.rotation.z = now < shakeUntil ? Math.sin(now / 30) * 0.05 * ((shakeUntil - now) / 500) : 0;
       }
       raf = requestAnimationFrame(loop);
     };
+    let settled = false;
     raf = requestAnimationFrame(loop);
 
     function speak(text: string): void { if (settings.voorlezen) narrator.speak(text); }
 
-    // ---- the accessible DOM banner (rule + read-aloud live here) ----
     function banner(text: string): void {
       const card = anchoredPrompt(
         ctx.prompt,
-        `<div class="wissel3d-card" style="position:absolute;left:0;right:0;bottom:18px;display:flex;justify-content:center;padding:0 16px;">` +
-          `<div class="wissel-bar" style="max-width:520px;">` +
-          `<p class="wissel-instr">${esc(text)}</p>` +
-          `<button class="wissel-speak" type="button" aria-label="Lees voor">🔊</button>` +
-          `</div></div>`,
+        `<div class="p3-bottom"><div class="p3-card"><div class="p3-row">` +
+          `<p class="p3-text">${esc(text)}</p>` +
+          `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+          `</div></div></div>`,
       );
-      card.querySelector('.wissel-speak')?.addEventListener('click', () => narrator.speak(text));
+      card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(text));
     }
+    function ruleText(): string { return run.inverted ? regelAndersom : regelDag; }
 
-    function ruleText(): string { return run.inverted ? regelOm : regelDag; }
-
+    // ---- build the places from the world's own assets ----
+    let teardownPick: (() => void) | null = null;
+    let ready = false;
     let busy = false;
+    void (async () => {
+      // de open plek: a sunny sandy clearing ringed by flowers and fern
+      const open = new THREE.Group();
+      stage.add(open);
+      const openAt = stage.at(-SIDE, 0.2);
+      const clearing = stage.decal('#e3c985', 0.9, 0.7, -SIDE, 0.2, { emissive: '#6b5220', emissiveIntensity: 0.25 });
+      open.add(clearing);
+      const flowers = await Promise.all([
+        stage.plant('prop-foxglove', 0.7, -SIDE - 0.75, 0.55, 0.3),
+        stage.plant('prop-foxglove', 0.62, -SIDE + 0.7, 0.7, 1.9),
+        stage.plant('prop-fern', 0.45, -SIDE - 0.9, -0.2, 2.4),
+      ]);
+      for (const f of flowers) if (f) open.add(f);
+      const openTag = nameTag('☀ open plek', 1.15);
+      openTag.position.copy(openAt).setY(openAt.y + 1.05);
+      open.add(openTag);
+      bins.set('open', { bin: 'open', group: open, glow: new Glow(clearing, '#8fd6a0'), anchor: hintAnchor(clearing, 0.5), at: openAt });
+
+      // het hol: the world's badger sett
+      const hol = new THREE.Group();
+      stage.add(hol);
+      const holAt = stage.at(SIDE, 0.25);
+      const sett = await stage.plant('prop-badger-sett', 0.62, SIDE, 0.25, stage.faceLens(holAt));
+      let holBody: THREE.Object3D;
+      if (sett) { hol.add(sett); holBody = sett; } else {
+        holBody = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#5f5142' }));
+        holBody.position.copy(holAt);
+        hol.add(holBody);
+      }
+      const holTag = nameTag('🌙 het hol', 1.05);
+      holTag.position.copy(holAt).setY(holAt.y + 1.05);
+      hol.add(holTag);
+      bins.set('hol', { bin: 'hol', group: hol, glow: new Glow(holBody, '#8fd6a0'), anchor: hintAnchor(holBody, 0.6), at: holAt });
+
+      podium = await stage.plant('prop-tree-stump', PODIUM_H + 0.04, 0, -0.25, 0.7);
+      if (podium) podium.position.y -= 0.04; // bedded into the ground a little
+      await stageAnimal();
+      if (activityScopeSignal()?.aborted) return;
+      teardownPick = pick3d({
+        canvas: ctx.canvas,
+        camera,
+        raycaster,
+        targets: [...bins.values()].map((b) => ({ id: b.bin, object: b.group })),
+        onPick: (id) => onPick(id as WisselBin),
+      });
+      ready = true;
+    })().catch((e) => console.error('[wisselen3d] staging failed', e));
+
+    const unHint = registerPlayHint(() => {
+      if (!ready || !settled || busy || glide || run.finished || !animal) return null;
+      const b = bins.get(run.correctBin());
+      return b ? { id: b.bin, target: b.anchor } : null;
+    });
 
     function onPick(bin: WisselBin): void {
-      if (busy || run.finished || glide) return;
+      if (!ready || busy || run.finished || glide || !animal) return;
       const res = run.choose(bin);
       const target = bins.get(bin)!;
       if (res === 'retry') {
-        // wrong place — small wiggle + recoverable hint, animal stays at centre
         if (settings.geluid) Sound.tryAgain();
-        if (animal && !reduced) {
-          const g = animal;
-          const t0 = performance.now();
-          const wig = (): void => {
-            const k = (performance.now() - t0) / 1000;
-            if (k > 0.5 || g !== animal) { if (g === animal) g.rotation.z = 0; return; }
-            g.rotation.z = Math.sin(k * 40) * 0.12 * (1 - k / 0.5);
-            requestAnimationFrame(wig);
-          };
-          requestAnimationFrame(wig);
-        }
+        if (!reduced) shakeUntil = performance.now() + 500;
         banner('Bijna! Probeer de andere plek.');
+        speak('Bijna! Probeer de andere plek.');
         return;
       }
       busy = true;
       if (settings.geluid) Sound.correct();
-      // green confirm on the destination (dual-channel: colour + the glide)
-      target.mat.emissiveIntensity = 0.6;
-      window.setTimeout(() => { target.mat.emissiveIntensity = 0; }, 520);
+      target.glow.set(0.5);
+      window.setTimeout(() => target.glow.set(0), 600);
+      const from = animal.group.position.clone();
+      const to = target.at.clone();
+      // turn toward the place, then walk there calmly
+      animal.group.rotation.y = Math.atan2(to.x - from.x, to.z - from.z) - (animal.group.children[0]?.rotation.y ?? 0);
       glide = {
-        from: animal ? animal.position.clone() : centre.clone(),
-        to: new THREE.Vector3(target.pos.x, sy, target.pos.z),
-        t: 0,
+        from, to, t: 0,
         done: () => {
           if (res === 'complete') { finish(); return; }
           if (res === 'flip') {
             paintSign();
+            boardGlow.set(0.45);
             if (settings.geluid) Sound.select();
-            banner(regelOm); // the flip announcement (signpost re-colours + turns alongside)
-            window.setTimeout(() => { stageAnimal(); banner(ruleText()); busy = false; }, reduced ? 500 : 1100);
+            banner(regelOm);
+            speak(regelOm);
+            window.setTimeout(() => {
+              boardGlow.set(0);
+              void stageAnimal().then(() => { banner(ruleText()); busy = false; });
+            }, reduced ? 900 : 1700);
             return;
           }
-          stageAnimal();
-          banner(ruleText());
-          busy = false;
+          void stageAnimal().then(() => { banner(ruleText()); busy = false; });
         },
       };
     }
-
-    const teardownPick = pick3d({
-      canvas: ctx.canvas,
-      camera,
-      raycaster,
-      targets: [...bins.values()].map((b) => ({ id: b.bin, object: b.group })),
-      onPick: (id) => onPick(id as WisselBin),
-    });
 
     function finish(): void {
       if (settings.geluid) Sound.found();
@@ -295,27 +405,14 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       const summary = run.summary();
       window.setTimeout(() => {
         narrator.stop();
-        teardownPick();
+        teardownPick?.();
+        unHint();
         cancelAnimationFrame(raf);
-        disposeAnimal();
-        scene.remove(animalShadow); // P1.6: free the animal's contact shadow
-        animalShadow.geometry.dispose();
-        (animalShadow.material as THREE.Material).dispose();
-        for (const b of bins.values()) {
-          b.group.traverse((o) => {
-            const mesh = o as THREE.Mesh;
-            if (mesh.geometry) mesh.geometry.dispose();
-            const m = mesh.material as THREE.Material | undefined;
-            if (m) m.dispose();
-          });
-          scene.remove(b.group);
-        }
-        sign.traverse((o) => {
-          const mesh = o as THREE.Mesh;
-          if (mesh.geometry) mesh.geometry.dispose();
-        });
-        signMat.dispose();
-        scene.remove(sign);
+        animalToken++;
+        animal?.dispose();
+        animal = null;
+        boardTex.dispose();
+        stage.dispose();
         ctx.prompt.querySelectorAll('.ra-overlay').forEach((nn) => nn.remove());
         resolve(summary);
       }, 1500);
@@ -323,66 +420,16 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     // boot
     registerActivityWin(() => finish()); // W2.3: dev-only win → genuine resolve + teardown
-    paintSign();
-    stageAnimal();
     speak(instructie);
     banner(ruleText());
   });
 }
 
-/** A small camera-facing name sprite (depthWrite off) — the dual-channel partner to
- *  each place's colour, naming it in-world without HUD chrome. */
-function makeLabel(text: string): THREE.Sprite {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256; canvas.height = 64;
-  const g = canvas.getContext('2d')!;
-  g.font = '600 32px Inter, system-ui, sans-serif';
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillStyle = 'rgba(28,24,18,0.72)';
-  const w = g.measureText(text).width + 28;
-  roundRect(g, (256 - w) / 2, 12, w, 40, 12);
-  g.fill();
-  g.fillStyle = '#fff';
-  g.fillText(text, 128, 33);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.anisotropy = 4;
-  const mat = new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(0.95, 0.238, 1);
-  return sprite;
-}
-
-function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  g.beginPath();
-  g.moveTo(x + r, y);
-  g.arcTo(x + w, y, x + w, y + h, r);
-  g.arcTo(x + w, y + h, x, y + h, r);
-  g.arcTo(x, y + h, x, y, r);
-  g.arcTo(x, y, x + w, y, r);
-  g.closePath();
-}
-
-/** The registered 3D wisselen variant. rmSafe:false — the resolver serves the flat
- *  2D floor under reduced-motion (3D-IMMERSION-PLAN §4).
- *
- *  W6.2d rmSafe audit (KEEP verdict): the reduced-motion path here is ALREADY
- *  cuts-not-moves — the reframe snaps (`makeReframe(reduced)`), the sort GLIDE
- *  collapses to an instant settle (`glide.t += reduced ? 1 : dt/0.5`, hop arc
- *  `* (reduced ? 0 : 0.18)` → 0), the wrong-sort wiggle is gated `!reduced`
- *  (wisselen3d.ts:233), and the flip re-paints/turns the signpost with an instant
- *  set (a cut, not a tween). So a reduced-motion "zero camera movement" E2E WOULD
- *  pass; nothing eased needs removing and the flip is TECHNICALLY available (like
- *  simon). IT IS NOT TAKEN for the same READING-channel reason as simon, sharpened by
- *  the construct: set-shifting is a speeded rule-application task, and every trial the
- *  child must re-read the (possibly flipped) rule AND the two destination NAMES
- *  ("open plek" / "het hol") AND the animal's name to apply the mapping. Those
- *  destination + animal names are camera-facing in-world sprites that shrink and
- *  foreshorten under the raised 3D angle, whereas the flat 2D named bins show every
- *  name at uniform size. For a dyslexic AVI-M3/E3 player any added reading friction
- *  directly taxes the shift cost the construct measures — a perceptual-legibility
- *  confound on an executive measure. Per "bij twijfel rmSafe:false HOUDEN" the clean
- *  2D floor stays the reduced-motion surface. No flip → no flip-gate E2E, no
- *  player-visible change, parity/trial builders untouched. */
+/** The registered 3D wisselen variant. rmSafe:false — every trial the child re-reads
+ *  the rule and the place + animal names, and the flat 2D bins show every name at one
+ *  size, so the resolver serves the 2D floor under reduced-motion (3D-IMMERSION-PLAN
+ *  §4). The 3D path itself is cuts-not-moves (reframe cuts, the walk settles at once,
+ *  the shake is gated `!reduced`, the board redraws in place). */
 export const wisselen3dEngine: Play3dEngine = {
   engine: 'wisselen',
   play: playWissel3d,

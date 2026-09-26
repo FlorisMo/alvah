@@ -38,37 +38,6 @@ import { heightFor } from '../play/spawn';
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-/** A flat, soft-edged ground patch (sand under the adder, the mud pool, the path). */
-function groundPatch(stage: Stage, color: string, rx: number, rz: number, u: number, v: number, gloss = 1, layer = 1): THREE.Mesh {
-  const shape = new THREE.Shape();
-  const N = 28;
-  for (let i = 0; i <= N; i++) {
-    const a = (i / N) * Math.PI * 2;
-    const wob = 1 + 0.08 * Math.sin(a * 3 + u * 5) + 0.05 * Math.cos(a * 5 + v * 3);
-    const x = Math.cos(a) * rx * wob, y = Math.sin(a) * rz * wob;
-    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
-  }
-  const geo = new THREE.ShapeGeometry(shape, 1);
-  geo.rotateX(-Math.PI / 2);
-  // drape it over the rendered ground: every vertex seated on groundY
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const c = stage.at(u, v);
-  const yaw = Math.atan2(stage.fwd.x, stage.fwd.z);
-  const cy = Math.cos(yaw), sy = Math.sin(yaw);
-  for (let i = 0; i < pos.count; i++) {
-    const lx = pos.getX(i), lz = pos.getZ(i);
-    const wx = c.x + lx * cy + lz * sy, wz = c.z - lx * sy + lz * cy;
-    pos.setXYZ(i, wx, stage.ctx.groundY(wx, wz) + 0.02 + layer * 0.012, wz);
-  }
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({
-    color, roughness: gloss, polygonOffset: true, polygonOffsetFactor: -2 * layer, polygonOffsetUnits: -2 * layer,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.renderOrder = layer;
-  return mesh;
-}
-
 /** A soft-edged alpha ramp across a ribbon (opaque middle, feathered sides). */
 let _edgeTex: THREE.Texture | null = null;
 function edgeTexture(): THREE.Texture {
@@ -181,15 +150,15 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
       const path = (): void => { g.add(pathRibbon(stage, -1.6, 3.4, 0.75)); };
       switch (enc.subject) {
         case 'adder':
-          g.add(groundPatch(stage, '#c9ad7a', 0.75, 0.45, 0, 0, 1));
+          g.add(stage.decal('#c9ad7a', 0.75, 0.45, 0, 0, { roughness: 1, layer: 1 }));
           tufts([{ u: -0.85, v: 0.1, h: 0.3 }, { u: 0.9, v: 0.2, h: 0.34 }, { u: 0.7, v: -0.45, h: 0.26 }, { u: -0.6, v: 0.55, h: 0.3 }]);
           await addModel(enc.dier ?? 'adder', 0, 0, 1.3);
           break;
         case 'modderpoel':
           // the mud lies across the sandy path, soft grass along its rim
           path();
-          g.add(groundPatch(stage, '#4a3826', 0.95, 0.55, 0, 0.05, 0.35, 2));
-          g.add(groundPatch(stage, '#2e231a', 0.64, 0.34, 0.05, 0.08, 0.08, 3));
+          g.add(stage.decal('#4a3826', 0.95, 0.55, 0, 0.05, { roughness: 0.35, layer: 2 }));
+          g.add(stage.decal('#2e231a', 0.64, 0.34, 0.05, 0.08, { roughness: 0.08, layer: 3 }));
           tufts([{ u: -1.05, v: 0.1, h: 0.36 }, { u: 1.08, v: -0.05, h: 0.4 }, { u: -0.8, v: 0.55, h: 0.3 }, { u: 0.85, v: 0.6, h: 0.34 }, { u: 0.3, v: 0.72, h: 0.3 }]);
           break;
         case 'pad-veilig':
