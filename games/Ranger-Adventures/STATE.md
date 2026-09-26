@@ -4,6 +4,22 @@
 > it was verified. Goal and steps: [GOAL.md](GOAL.md).
 > ✅ works · 🟡 works with problems · ❌ blocks the player
 
+## 2026-09-27 00:58: after wave 1 (`npm run golden` on main + screenshots looked at)
+
+**Nothing blocks the player any more:** golden plays 1 → 8 with real keys and clicks and
+wins mission 1 at its real marker. Remaining ✗ are quality failures.
+
+| # | Step | Status | What a player experiences |
+|---|------|--------|---------------------------|
+| 1 | Opening screen | ✅ | Calm, loads fast; Enter presses *Begin*. |
+| 2 | Make your ranger | 🟡 | Creator works; jacket/hair choices still don't reach the 3D ranger. |
+| 3 | Walk the world | 🟡 | Ground is fixed: ranger, trees, markers and props all stand on the drawn ground. Left/right keep the camera turning ~90° after release; Down swings the camera to face the ranger. ~2.6M triangles (budget 1M). Heide ground reads as magenta smears; dark cone "grass" spikes. |
+| 4 | Jeep / helicopter | 🟡 | Jeep drives 15 m in 3 s on the terrain, but its model faces sideways and a dust blob covers it; the driver stands on it. Heli not re-checked. |
+| 5 | Go to mission 1 | ✅ | Chip names the right side; one prompt at a time; one click/Space starts it. |
+| 6 | Mission 1 mini-games | ✅ | zoeken (piglet hidden in real bushes, trail), corsi (mossy stones), rustkracht (answer buttons) all won with real clicks. Rustkracht shows an adult boar where the text says *frisling*. |
+| 7 | Finish mission | 🟡 | Reward + clue work; the world still does not change at the marker. |
+| 8 | Back in the world | 🟡 | Next mission offered, reload keeps progress. An oversized marker label floats in front of the camera and the marker boar fills the bottom of the frame. |
+
 ## 2026-09-26: baseline audit (six Opus 5.5 playtest audits, laptop + iPad)
 
 | # | Step | Status | What a player experiences |

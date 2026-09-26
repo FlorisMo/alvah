@@ -1,7 +1,8 @@
 # Ranger Adventures
 
 > **Start here: [GOAL.md](GOAL.md)** (the end goal) → [STATE.md](STATE.md) (what works today) →
-> [CLAUDE.md](CLAUDE.md) (how to work here). Everything under `runs/` is archive.
+> [CLAUDE.md](CLAUDE.md) (how to work here) → [ARCHITECTURE.md](ARCHITECTURE.md) (where the code lives).
+> Everything under `runs/` is archive.
 
 **"Ranger van de Veluwe"** — a story layer wrapping Alvah's five executive-function
 mini-games as ranger missions on the Veluwe. Lives **outside** `src/` so the Astro
@@ -29,7 +30,7 @@ alvah.nl/ranger behind the client-side gate.
   - **[runs/run-5-cohesion/](runs/run-5-cohesion/)** — ARCHIVE. Run D (July 2026):
     stopped at ~25% with the game still unplayable. Superseded by [GOAL.md](GOAL.md).
 - **[docs/](docs/)** — cross-run reference: [GAMEPLAN.md](docs/GAMEPLAN.md) (master
-  orientation), [DEMO-SANDBOX.md](docs/DEMO-SANDBOX.md), [SETUP-realism-keys.md](docs/SETUP-realism-keys.md).
+  orientation), [SETUP-realism-keys.md](docs/SETUP-realism-keys.md).
 - **[research/](research/)** — verified knowledge base (biology, EF science, 3D specs,
   animal-accuracy dossiers). Keep forever.
 - **[design/](design/)** — brief, craft bible, handoff + UI mockups.
