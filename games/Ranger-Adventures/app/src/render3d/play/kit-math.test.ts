@@ -12,7 +12,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MIN_TAP_PX, worldRadiusForPx, tapHitRadius, trailPoints, highlightPulse, dampFactor,
-  safeCamHeight, CAM_GROUND_CLEAR,
+  safeCamHeight, CAM_GROUND_CLEAR, easeInOut, stageHeadings, patchLocal,
+  yawPitch, aimDir, lerpAngle, reframeSeconds,
 } from './kit-math.ts';
 
 const FOV = (55 * Math.PI) / 180; // World's camera FOV
@@ -90,4 +91,58 @@ test('safeCamHeight keeps the authored look on flat ground, lifts it above a ris
     assert.ok(safeCamHeight(d, g) >= g + CAM_GROUND_CLEAR - 1e-9);
     assert.ok(safeCamHeight(d, g) >= d - 1e-9);
   }
+});
+
+test('easeInOut: 0→0, 1→1, ½→½, monotone, clamped (a calm start + stop)', () => {
+  assert.equal(easeInOut(0), 0);
+  assert.equal(easeInOut(1), 1);
+  assert.ok(Math.abs(easeInOut(0.5) - 0.5) < 1e-9);
+  assert.equal(easeInOut(-1), 0);
+  assert.equal(easeInOut(2), 1);
+  let prev = 0;
+  for (let i = 1; i <= 20; i++) { const v = easeInOut(i / 20); assert.ok(v >= prev); prev = v; }
+  assert.ok(easeInOut(0.05) < 0.05, 'starts gently (slower than linear)');
+  // its top speed is 1.5× the average: a reframe never whips through its middle
+  let peak = 0;
+  for (let i = 0; i < 1000; i++) peak = Math.max(peak, (easeInOut((i + 1) / 1000) - easeInOut(i / 1000)) * 1000);
+  assert.ok(peak <= 1.5 + 1e-6, `peak speed ${peak}`);
+});
+
+test('yawPitch/aimDir round-trip; lerpAngle turns the short way round', () => {
+  for (const [yaw, pitch] of [[0, 0], [2.5, -0.4], [-3, 0.3], [1.2, -1.1]]) {
+    const d = aimDir(yaw, pitch);
+    const back = yawPitch(d.x * 3, d.y * 3, d.z * 3);
+    assert.ok(Math.abs(back.pitch - pitch) < 1e-9);
+    assert.ok(Math.abs(Math.atan2(Math.sin(back.yaw - yaw), Math.cos(back.yaw - yaw))) < 1e-9);
+  }
+  // from +170° to -170° is a 20° turn through 180°, never 340° the long way
+  const a = (170 * Math.PI) / 180, b = (-170 * Math.PI) / 180;
+  const mid = lerpAngle(a, b, 0.5);
+  assert.ok(Math.abs(Math.cos(mid) - Math.cos(Math.PI)) < 1e-9);
+  assert.ok(Math.abs(lerpAngle(a, b, 1) - (a + (20 * Math.PI) / 180)) < 1e-9);
+  assert.equal(lerpAngle(0.3, 1.1, 0), 0.3);
+});
+
+test('reframeSeconds: a big turn takes longer, so the view never turns faster than 90°/s', () => {
+  assert.equal(reframeSeconds(1.3, 20), 1.3);
+  assert.equal(reframeSeconds(1.3, 160), 160 / 60);
+  for (const turn of [10, 60, 90, 120, 160, 180]) {
+    const peakDegPerS = (1.5 * turn) / reframeSeconds(1.1, turn); // smoothstep top speed
+    assert.ok(peakDegPerS <= 90 + 1e-9, `${turn}° → ${peakDegPerS}°/s`);
+  }
+});
+
+test('stageHeadings: straight ahead first, then widening turns, each once', () => {
+  const h = stageHeadings();
+  assert.equal(h[0], 0);
+  assert.equal(new Set(h).size, h.length);
+  for (let i = 1; i < h.length - 1; i += 2) assert.equal(h[i], -h[i + 1]);
+  assert.ok(Math.abs(h[1]) <= 30, 'the first turn is small');
+});
+
+test('patchLocal: centre → origin, top row → back of the patch, right → +u', () => {
+  assert.deepEqual(patchLocal(50, 50, 2, 1.5), { u: 0, v: 0 });
+  assert.equal(patchLocal(50, 0, 2, 1.5).v, 1.5);
+  assert.equal(patchLocal(50, 100, 2, 1.5).v, -1.5);
+  assert.equal(patchLocal(100, 50, 2, 1.5).u, 2);
 });

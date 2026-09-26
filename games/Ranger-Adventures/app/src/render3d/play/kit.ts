@@ -8,16 +8,19 @@
  * Frozen guarantees:
  *  - **pick3d** raycasts against generous invisible hit-spheres sized so every
  *    target projects to ≥56px (a11y floor) regardless of distance.
- *  - **highlight3d** is dual-channel (emissive COLOUR + SCALE pulse) and freezes
- *    to a steady still glow under reduced-motion (motion-comfort §1e).
+ *  - **Glow** lights a model (its own materials) in a warm emissive colour; the
+ *    games pair it with a small lift/scale so feedback is dual-channel, and hold it
+ *    steady under reduced-motion (motion-comfort §1e).
  *  - **anchoredPrompt** keeps ALL words/choices/read-aloud in the existing
  *    accessible DOM card — 3D supplies the scene, the DOM supplies the text, so
  *    the text-only path stays fully playable.
- *  - **reframe** is a §1e exp-damped camera move, or a hard cut under reduced-motion.
+ *  - **reframe** is one eased camera move (position + aim on one curve), or a hard
+ *    cut under reduced-motion.
  */
 
 import * as THREE from 'three';
-import { dampFactor, highlightPulse, safeCamHeight, tapHitRadius, trailPoints } from './kit-math';
+import { aimDir, easeInOut, lerpAngle, reframeSeconds, tapHitRadius, trailPoints, yawPitch } from './kit-math';
+import { skinnedRenderBox } from '../Models';
 
 /* ------------------------------------------------------ test win channel ---- */
 
@@ -407,14 +410,14 @@ provideGoldenProbes({
 
 /**
  * Cancellation for one in-flight mission step (RUN-3 P3.2 · F-26 "Stop de
- * missie"). The mission runner opens a fresh scope before each step; `pick3d`
- * binds its canvas listener to the scope's signal and every engine frame loop
- * early-returns once it aborts — so a mid-mission "Stop" tears the running step
- * down with no leaked pointer handler and no orphaned `requestAnimationFrame`,
- * and the world is then rebuilt clean (Missions.ts). The controller is NOT
- * nulled on abort: the already-scheduled loop frame must still read `aborted`
- * and return instead of rescheduling. A fresh `beginActivityScope()` replaces it
- * for the next step.
+ * missie"). The mission runner opens a fresh scope before each step. A running
+ * game reads the signal ONCE when it starts (`Stage.signal`) and binds everything
+ * to that one: `pick3d`'s canvas listener, `anchoredPrompt`, its frame loop and
+ * its late timers — so a mid-mission "Stop" tears the running step down with no
+ * leaked pointer handler, no orphaned `requestAnimationFrame` and no card coming
+ * back. The abort then RETIRES the scope (2026-09-26): a later activity that opens
+ * none of its own (the roep bench) starts un-aborted instead of inheriting the
+ * stopped mission's scope and freezing before its first frame.
  */
 let activityAbort: AbortController | null = null;
 
@@ -424,12 +427,14 @@ export function beginActivityScope(): AbortSignal {
   return activityAbort.signal;
 }
 
-/** Fire the current activity's abort (the "Stop de missie" action). Idempotent. */
+/** Fire the current activity's abort (the "Stop de missie" action) and retire the
+ *  scope. Idempotent. Games hold their own copy of the signal, so they still see it. */
 export function abortActivityScope(): void {
   activityAbort?.abort();
+  activityAbort = null;
 }
 
-/** The live activity-abort signal (engine loops read `?.aborted`); null when idle. */
+/** The live activity-abort signal (a game captures it once, at its start); null when idle. */
 export function activityScopeSignal(): AbortSignal | null {
   return activityAbort?.signal ?? null;
 }
@@ -447,40 +452,61 @@ export interface Pick3dOptions {
   raycaster: THREE.Raycaster;
   targets: Pick3dTarget[];
   onPick: (id: string) => void;
+  /** the game's own abort signal (`Stage.signal`): a stop removes the listener */
+  signal: AbortSignal | null;
+}
+
+/** The world-space box a player actually sees for `object` — a rigged GLB renders at
+ *  its SKELETON's extent (Models.skinnedRenderBox, F-07), everything else at its
+ *  geometry box. The pick hit-spheres centre on it. */
+export function visibleBox(object: THREE.Object3D): THREE.Box3 {
+  object.updateWorldMatrix(true, true);
+  return skinnedRenderBox(object) ?? new THREE.Box3().setFromObject(object);
 }
 
 /**
- * A generous invisible raycast target ≥56px-projected, parented to `object` at
- * its origin. `visible:false` keeps it off-screen but still raycastable. Returns
- * the sphere so the caller can dispose it.
+ * A generous invisible raycast target ≥56px-projected, parented to `object` at the
+ * centre of what the player sees (not its feet). `visible:false` keeps it off-screen
+ * but still raycastable. Returns the sphere so the caller can dispose it.
  */
 export function addHitSphere(
   object: THREE.Object3D,
   camera: THREE.PerspectiveCamera,
   viewportH: number,
 ): THREE.Mesh {
-  const here = new THREE.Vector3();
-  object.getWorldPosition(here);
+  const box = visibleBox(object);
+  const here = box.isEmpty() ? object.getWorldPosition(new THREE.Vector3()) : box.getCenter(new THREE.Vector3());
   const dist = camera.position.distanceTo(here);
-  const r = tapHitRadius(dist, (camera.fov * Math.PI) / 180, viewportH);
+  const r = tapHitRadius(dist, (camera.fov * Math.PI) / 180, viewportH, 0.2);
   const sphere = new THREE.Mesh(
     new THREE.SphereGeometry(r, 8, 6),
     new THREE.MeshBasicMaterial({ visible: false }),
   );
   sphere.userData.hitSphere = true;
+  sphere.userData.radius = r;
   object.add(sphere);
+  // world centre → the object's local space (undo its scale so the radius stays true)
+  object.updateWorldMatrix(true, false);
+  sphere.position.copy(object.worldToLocal(here.clone()));
+  const ws = object.getWorldScale(new THREE.Vector3());
+  sphere.scale.set(1 / (ws.x || 1), 1 / (ws.y || 1), 1 / (ws.z || 1));
   return sphere;
 }
 
 /**
- * Raycast picking with ≥56px hit-spheres. On pointerdown the first target whose
- * subtree (incl. its hit-sphere) is hit fires `onPick(id)`. Returns a teardown
- * that removes the listener + disposes the hit-spheres.
+ * Raycast picking. On pointerdown the NEAREST visible part of any target wins (so a
+ * bush in front of the piglet is the bush); when the pointer hits no visible mesh, the
+ * generous ≥56px hit-sphere whose centre lies closest to the ray does (a near-miss on
+ * a small animal still counts). Returns a teardown that removes the listener +
+ * disposes the hit-spheres.
  */
 export function pick3d(opts: Pick3dOptions): () => void {
-  const { canvas, camera, raycaster, targets, onPick } = opts;
+  const { canvas, camera, raycaster, targets, onPick, signal } = opts;
+  if (signal?.aborted) return () => {}; // a stopped game takes no more picks
   const viewportH = canvas.getBoundingClientRect().height || 800;
   const spheres = targets.map((t) => addHitSphere(t.object, camera, viewportH));
+  const c = new THREE.Vector3();
+  const ws = new THREE.Vector3();
 
   const onDown = (e: PointerEvent): void => {
     const rect = canvas.getBoundingClientRect();
@@ -489,16 +515,32 @@ export function pick3d(opts: Pick3dOptions): () => void {
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
     raycaster.setFromCamera(ndc, camera);
+    let best: { id: string; d: number } | null = null;
     for (const t of targets) {
-      if (raycaster.intersectObject(t.object, true).length) { onPick(t.id); return; }
+      if (!t.object.visible) continue;
+      for (const h of raycaster.intersectObject(t.object, true)) {
+        if (h.object.userData.hitSphere || !h.object.visible) continue;
+        if (!best || h.distance < best.d) best = { id: t.id, d: h.distance };
+        break; // hits come sorted near → far
+      }
     }
+    if (!best) {
+      targets.forEach((t, i) => {
+        const s = spheres[i];
+        if (!t.object.visible) return;
+        s.getWorldPosition(c);
+        const r = (s.userData.radius as number) * s.getWorldScale(ws).x;
+        const d = raycaster.ray.distanceToPoint(c);
+        if (d <= r && (!best || d < best.d)) best = { id: t.id, d };
+      });
+    }
+    if (best) onPick((best as { id: string }).id);
   };
-  // F-26: bind to the live activity-abort scope so "Stop de missie" removes this
-  // canvas listener even when the engine's own teardown never runs (aborted
-  // mid-step). The explicit removeEventListener below stays correct on the normal
+  // F-26: bind to the game's abort scope so "Stop de missie" removes this canvas
+  // listener even when the engine's own teardown never runs (aborted mid-step).
+  // The explicit removeEventListener below stays correct on the normal
   // (non-aborted) path — removing twice is a no-op.
-  const abortSig = activityScopeSignal();
-  canvas.addEventListener('pointerdown', onDown, abortSig ? { signal: abortSig } : undefined);
+  canvas.addEventListener('pointerdown', onDown, signal ? { signal } : undefined);
 
   return () => {
     canvas.removeEventListener('pointerdown', onDown);
@@ -510,42 +552,62 @@ export function pick3d(opts: Pick3dOptions): () => void {
   };
 }
 
-/* ------------------------------------------------------------- highlight3d ---- */
+/* -------------------------------------------------------------------- glow ---- */
+
+/** A 1×1 white texture: stands in for a model's own emissive map while it glows —
+ *  the world's Meshy GLBs carry a (dark) emissive map that would multiply any glow
+ *  colour back to black. Swapping one texture for another needs no shader recompile. */
+let _white: THREE.Texture | null = null;
+function whiteTex(): THREE.Texture {
+  if (_white) return _white;
+  const t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  t.needsUpdate = true;
+  _white = t;
+  return t;
+}
 
 /**
- * Dual-channel highlight on a target: an emissive COLOUR glow on every standard
- * material in its subtree + a SCALE pulse on the group. `update(t, reduced)` is
- * called per frame (reduced-motion → a steady still glow, no scale oscillation).
- * `clear()` restores the originals.
+ * A warm emissive glow over every standard material in `root` (the COLOUR channel of
+ * a highlight). `set(0)` shows the model exactly as authored; `set(i)` lights it at
+ * intensity `i` in `color`. `clear()` restores the originals. Only use it on a model
+ * that owns its materials (every `spawnModel`/`spawnPlant` does), never a shared GLB.
  */
-export class Highlight3d {
-  private readonly target: THREE.Object3D;
-  private readonly mats: { mat: THREE.MeshStandardMaterial; emissive: THREE.Color; intensity: number }[] = [];
-  private readonly baseScale: THREE.Vector3;
-  private readonly glow = new THREE.Color();
+export class Glow {
+  private readonly mats: { mat: THREE.MeshStandardMaterial; emissive: THREE.Color; intensity: number; map: THREE.Texture | null }[] = [];
+  private readonly color = new THREE.Color();
+  private on = false;
 
-  constructor(target: THREE.Object3D, color: string) {
-    this.target = target;
-    this.baseScale = target.scale.clone();
-    this.glow.set(color);
-    target.traverse((o) => {
-      const mat = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-      if (mat && mat.isMeshStandardMaterial) {
-        this.mats.push({ mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity });
-        mat.emissive = this.glow.clone();
+  constructor(root: THREE.Object3D, color: THREE.ColorRepresentation = '#ffe6a8') {
+    this.color.set(color);
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || mesh.userData.hitSphere || mesh.userData.hintAnchor) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const mat = m as THREE.MeshStandardMaterial;
+        if (!mat.isMeshStandardMaterial || this.mats.some((e) => e.mat === mat)) continue;
+        this.mats.push({ mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity, map: mat.emissiveMap });
       }
     });
   }
 
-  update(t: number, reduced: boolean): void {
-    const p = highlightPulse(t, reduced);
-    for (const m of this.mats) m.mat.emissiveIntensity = p.emissive;
-    this.target.scale.set(this.baseScale.x * p.scale, this.baseScale.y * p.scale, this.baseScale.z * p.scale);
+  set(intensity: number, color?: THREE.ColorRepresentation): void {
+    if (color !== undefined) this.color.set(color);
+    if (intensity <= 0.001) { if (this.on) this.clear(); return; }
+    this.on = true;
+    for (const e of this.mats) {
+      e.mat.emissive.copy(this.color);
+      e.mat.emissiveIntensity = intensity;
+      if (e.map) e.mat.emissiveMap = whiteTex();
+    }
   }
 
   clear(): void {
-    for (const m of this.mats) { m.mat.emissive.copy(m.emissive); m.mat.emissiveIntensity = m.intensity; }
-    this.target.scale.copy(this.baseScale);
+    this.on = false;
+    for (const e of this.mats) {
+      e.mat.emissive.copy(e.emissive);
+      e.mat.emissiveIntensity = e.intensity;
+      e.mat.emissiveMap = e.map;
+    }
   }
 }
 
@@ -555,44 +617,91 @@ export class Highlight3d {
  * The accessible DOM card the 3D view writes its words/choices/read-aloud into —
  * the same `.ra-overlay` system the 2D views + Missions use, so the text-only
  * path stays fully playable. Returns the element (caller fills + wires it).
+ * `signal` is the game's own abort signal (`Stage.signal`).
  */
-export function anchoredPrompt(host: HTMLElement, html: string): HTMLDivElement {
-  host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
+export function anchoredPrompt(host: HTMLElement, html: string, signal: AbortSignal | null): HTMLDivElement {
   const el = document.createElement('div');
   // `ra-play`: the full-screen wrapper must let clicks through to the 3D canvas
   // (pick3d) — only its card/buttons take pointer events (see missions.css).
   el.className = 'ra-overlay ra-play';
   el.innerHTML = html;
+  // a late timer of a stopped step ("Stop de missie") must never put a card back over
+  // the world: after an abort the card is built but never mounted
+  if (signal?.aborted) return el;
+  host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
   host.appendChild(el);
   return el;
 }
 
 /* -------------------------------------------------------------- spoorTrail ---- */
 
+/** One cloven hoof print (two soft teardrops, warm sand with a darker rim) — baked
+ *  once, shared by every trail (a permanent 64² texture is a trivial cost). */
+let _hoofTex: THREE.Texture | null = null;
+function hoofTexture(): THREE.Texture {
+  if (_hoofTex) return _hoofTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const toe = (x: number): void => {
+    g.beginPath();
+    g.ellipse(x, 30, 9, 21, 0, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(236,216,168,0.95)';
+    g.fill();
+    g.lineWidth = 4;
+    g.strokeStyle = 'rgba(92,66,38,0.95)';
+    g.stroke();
+  };
+  toe(21); toe(43);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _hoofTex = tex;
+  return tex;
+}
+
 /**
- * Instanced clue footprints laid along the ground path from (ax,az) to (bx,bz),
- * fading fainter toward the start (the `u` channel). One draw call. `groundY`
- * sets each clue on the terrain. Returns the group (add to the scene) + dispose.
+ * The "Volg het spoor" trail: hoof prints walking along the ground from (ax,az) to
+ * (bx,bz), `legs` stretches of three steps each (the zoeken spoor difficulty axis),
+ * left/right alternating, every print seated on `groundY` (the RENDERED ground) and
+ * tilted to its slope so none sinks or floats. Fainter toward the start, `opacity`
+ * overall. One instanced draw call. Returns the group (add to the scene) + dispose.
  */
 export function spoorTrail(
-  ax: number, az: number, bx: number, bz: number, n: number,
+  ax: number, az: number, bx: number, bz: number, legs: number,
   groundY: (x: number, z: number) => number,
-  color = '#cdb892',
+  opacity = 1,
 ): { group: THREE.Group; dispose: () => void } {
+  const n = Math.max(6, Math.round(legs) * 3);
   const pts = trailPoints(ax, az, bx, bz, n);
-  const geo = new THREE.CircleGeometry(0.22, 12);
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 1, transparent: true });
+  const len = Math.hypot(bx - ax, bz - az) || 1;
+  const dx = (bx - ax) / len, dz = (bz - az) / len;
+  const geo = new THREE.PlaneGeometry(0.17, 0.2);
+  geo.rotateX(-Math.PI / 2); // lie flat, the print's toes pointing along −z
+  const mat = new THREE.MeshStandardMaterial({
+    map: hoofTexture(), transparent: true, opacity, depthWrite: false, roughness: 1,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
   const marks = new THREE.InstancedMesh(geo, mat, pts.length);
   const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-  const scale = new THREE.Vector3(1, 1, 1);
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
   const pos = new THREE.Vector3();
+  const heading = Math.atan2(-dx, -dz); // yaw that points the print's −z along the walk
   pts.forEach((p, i) => {
-    pos.set(p.x, groundY(p.x, p.z) + 0.02, p.z);
-    m.compose(pos, q, scale);
+    const side = i % 2 === 0 ? 1 : -1;
+    const x = p.x + -dz * 0.1 * side, z = p.z + dx * 0.1 * side;
+    const ahead = groundY(x + dx * 0.12, z + dz * 0.12);
+    const behind = groundY(x - dx * 0.12, z - dz * 0.12);
+    const pitch = Math.atan2(ahead - behind, 0.24);
+    e.set(pitch, heading, 0, 'YXZ');
+    q.setFromEuler(e);
+    pos.set(x, groundY(x, z) + 0.035, z);
+    const fade = 0.55 + 0.45 * p.u;
+    m.compose(pos, q, new THREE.Vector3(fade, 1, fade));
     marks.setMatrixAt(i, m);
   });
   marks.instanceMatrix.needsUpdate = true;
+  marks.renderOrder = 2;
   const group = new THREE.Group();
   group.add(marks);
   return {
@@ -604,48 +713,55 @@ export function spoorTrail(
 /* ----------------------------------------------------------------- reframe ---- */
 
 /**
- * D1.3: lift a reframe camera target above the RENDERED terrain under the lens.
- * Mutates `to.y` up to `groundY(to.x, to.z) + clearance` where the ground rises under
- * the camera's own XZ, and leaves flat-ground looks unchanged. A §1e mission reframe
- * then never lands below the visual surface — the mirrored analytic marker Y once
- * buried the mission camera (fresh simon-3D shot from `cam.y` −1.29, an up-tilt
- * through the terrain; direction §2.2 one-ground-truth / §2.5 never-under-terrain).
- * Call it on the `to` vector immediately before `makeReframe`, passing `ctx.groundY`
- * (the raycast ground-snap, which matches the pixels).
- */
-export function liftReframeAboveGround(
-  to: THREE.Vector3,
-  groundY: (x: number, z: number) => number,
-): void {
-  to.y = safeCamHeight(to.y, groundY(to.x, to.z));
-}
-
-/**
- * A §1e camera reframe: exp-damped move of the camera to `to` while looking at
- * `lookAt`. Under reduced-motion it CUTS (snaps) on the first update. `update(dt)`
- * returns true once settled. The caller drives it from the world's frame loop and
- * stops calling World's own follow while a reframe is active.
+ * A §1e camera reframe (2026-09-26: one calm eased move). The lens glides from where
+ * it is to `to`, and its aim turns from where it looks now to `lookAt` on the SAME
+ * smoothstep curve — yaw the short way round and pitch together, so nothing snaps on
+ * the first frame, the turn is spread evenly over the move and roll stays 0 (fixed
+ * FOV throughout). The move takes `seconds`, or longer for a big turn
+ * (`reframeSeconds`: the view never turns faster than ~90°/s). `arc` lifts the lens
+ * mid-move (so a glide over the ranger clears his head). Under reduced-motion it CUTS
+ * on the first update. `update(dt)` returns true once settled and keeps holding the
+ * pose after that (nothing else drives the camera meanwhile).
  */
 export function makeReframe(
   camera: THREE.PerspectiveCamera,
   to: THREE.Vector3,
   lookAt: THREE.Vector3,
   reduced: boolean,
-  tau = 0.35,
+  seconds = 1.3,
+  arc = 0,
 ): { update: (dt: number) => boolean } {
+  let from: THREE.Vector3 | null = null;
+  let aim0 = { yaw: 0, pitch: 0 };
+  let aim1 = { yaw: 0, pitch: 0 };
+  let dur = seconds;
+  const aim = new THREE.Vector3();
+  let t = 0;
+  const hold = (): void => {
+    camera.position.copy(to);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(lookAt);
+  };
   return {
     update(dt: number): boolean {
-      if (reduced) {
-        camera.position.copy(to);
-        camera.up.set(0, 1, 0);
-        camera.lookAt(lookAt);
-        return true;
+      if (reduced || seconds <= 0) { hold(); return true; }
+      if (!from) {
+        from = camera.position.clone();
+        const d0 = camera.getWorldDirection(new THREE.Vector3());
+        const d1 = lookAt.clone().sub(to);
+        aim0 = yawPitch(d0.x, d0.y, d0.z);
+        aim1 = yawPitch(d1.x, d1.y, d1.z);
+        dur = reframeSeconds(seconds, (d0.angleTo(d1) * 180) / Math.PI);
       }
-      const a = dampFactor(dt, tau);
-      camera.position.lerp(to, a);
+      t = Math.min(1, t + dt / dur);
+      if (t >= 1) { hold(); return true; }
+      const e = easeInOut(t);
+      camera.position.lerpVectors(from, to, e);
+      camera.position.y += Math.sin(Math.PI * e) * arc;
+      const d = aimDir(lerpAngle(aim0.yaw, aim1.yaw, e), aim0.pitch + (aim1.pitch - aim0.pitch) * e);
       camera.up.set(0, 1, 0); // roll = 0 always
-      camera.lookAt(lookAt);
-      return camera.position.distanceToSquared(to) < 1e-4;
+      camera.lookAt(aim.copy(camera.position).add(new THREE.Vector3(d.x, d.y, d.z)));
+      return false;
     },
   };
 }

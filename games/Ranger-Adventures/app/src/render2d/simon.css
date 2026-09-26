@@ -127,8 +127,7 @@
   border-radius: 50%;
   background: var(--green-soft);
   color: var(--green);
-  font: 700 24px/1 var(--font-body);
-  text-transform: uppercase;
+  font: 700 36px/1 var(--font-body); /* an animal picture (animalIcon), never letters */
 }
 .sd-name { font: 600 15px/1 var(--font-body); }
 .simon-dier.calling { transform: scale(1.12); background: rgba(245, 194, 59, 0.22); }

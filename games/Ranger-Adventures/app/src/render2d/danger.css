@@ -143,6 +143,7 @@
   color: var(--paper);
   font: 600 14px/1 var(--font-body);
 }
+.enc-subject .subj-icon { align-self: center; font-size: 56px; line-height: 1; }
 .enc-subject.subj-adder, .enc-subject.subj-modderpoel { background: rgba(193, 70, 126, 0.18); }
 .enc-subject.subj-pad-veilig { background: rgba(122, 184, 90, 0.2); }
 .enc-subject.react { animation: subj-react 0.6s var(--ease-standard); }

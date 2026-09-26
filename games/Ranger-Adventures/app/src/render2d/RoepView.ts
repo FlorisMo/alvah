@@ -16,6 +16,7 @@ import './roep.css';
 import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
 import { buildRoepTrial, RoepRun, ROEP_COPY, type RoepVogel } from '../engines/roep';
+import { animalIcon } from './animalIcon';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -72,7 +73,7 @@ export function playRoep(host: HTMLElement): Promise<BeatSummary> {
       b.setAttribute('aria-label', v.naam);
       b.innerHTML =
         `<span class="rd-glow"></span>` +
-        `<span class="rd-token">${esc(v.naam.slice(0, 2))}</span>` +
+        `<span class="rd-token" aria-hidden="true">${animalIcon(v.id)}</span>` +
         `<span class="rd-name">${esc(v.naam)}</span>`;
       b.addEventListener('click', () => onTap(v.id));
       row.appendChild(b);

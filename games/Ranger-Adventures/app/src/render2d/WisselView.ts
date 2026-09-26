@@ -13,6 +13,7 @@ import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
 import { buildWisselTrial, WisselRun } from '../engines/wisselen';
+import { animalIcon } from './animalIcon';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -82,7 +83,7 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
       const a = Content.animal(cur.id);
       center.classList.remove('wrong', 'fly-open', 'fly-hol');
       center.innerHTML =
-        `<span class="wc-token">${esc((a?.naam ?? cur.id).slice(0, 2))}</span>` +
+        `<span class="wc-token" aria-hidden="true">${animalIcon(cur.id)}</span>` +
         `<span class="wc-name">${esc(a?.naam ?? cur.id)}</span>`;
       rule.textContent = run.inverted ? regelOm : regelDag;
       field.classList.toggle('inverted', run.inverted);

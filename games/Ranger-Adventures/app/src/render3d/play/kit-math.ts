@@ -110,3 +110,63 @@ export function safeCamHeight(
 ): number {
   return Math.max(desiredY, groundY + clearance);
 }
+
+/**
+ * The calm reframe curve (2026-09-26): a smoothstep over 0..1 — the lens starts and
+ * stops gently, and its top speed is only 1.5× the average (a cubic in-out peaks at
+ * 3×), so the one move into or out of a mini-game never lurches (motion-comfort §1e;
+ * reduced-motion cuts instead and never reaches this curve).
+ */
+export function easeInOut(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * (3 - 2 * x);
+}
+
+/** Yaw (rad, atan2(x, z)) and pitch (rad, + up) of a view direction. */
+export function yawPitch(x: number, y: number, z: number): { yaw: number; pitch: number } {
+  const len = Math.hypot(x, y, z) || 1;
+  return { yaw: Math.atan2(x, z), pitch: Math.asin(Math.max(-1, Math.min(1, y / len))) };
+}
+
+/** The unit view direction for a yaw/pitch (the inverse of `yawPitch`). */
+export function aimDir(yaw: number, pitch: number): { x: number; y: number; z: number } {
+  const c = Math.cos(pitch);
+  return { x: Math.sin(yaw) * c, y: Math.sin(pitch), z: Math.cos(yaw) * c };
+}
+
+/** Blend angle `a` toward `b` by `e` (0..1) the SHORT way round. */
+export function lerpAngle(a: number, b: number, e: number): number {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return a + d * e;
+}
+
+/** How long a reframe that turns the view by `turnDeg` takes: never under `base`
+ *  seconds, and at least 1 s per 60° — so with the smoothstep the view turns at most
+ *  ~90°/s (1.5° a frame) however far it has to go. */
+export function reframeSeconds(base: number, turnDeg: number): number {
+  return Math.max(base, turnDeg / 60);
+}
+
+/**
+ * The headings (degrees, relative to where the lens already looks) a mini-game stage
+ * tries in order: straight ahead first — a pure forward dolly, no turn at all — then
+ * small turns either side, widening until one lands on a clear patch.
+ */
+export function stageHeadings(): number[] {
+  const out = [0];
+  for (const a of [25, 50, 75, 100, 130, 160]) out.push(a, -a);
+  out.push(180);
+  return out;
+}
+
+/**
+ * Map a 2D trial coordinate (0..100 across, 0..100 down the screen) onto a play patch
+ * of half-size `halfW` × `halfD` metres: `u` runs across (right +), `v` runs in depth
+ * AWAY from the lens (+), so the 2D field's top row lands at the back of the patch —
+ * the same layout the child sees in the 2D twin, laid on the ground.
+ */
+export function patchLocal(x: number, y: number, halfW: number, halfD: number): { u: number; v: number } {
+  return { u: ((x - 50) / 50) * halfW, v: ((50 - y) / 50) * halfD };
+}
