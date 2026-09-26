@@ -18,6 +18,14 @@ import {
   joystickVector,
   joystickVisible,
   JOYSTICK_DEADZONE,
+  tankAxes,
+  turnStep,
+  approachAngle,
+  stickBackpedal,
+  stickHeading,
+  wrapPi,
+  TURN_RATE,
+  TURN_DECEL_TAU,
   type MoveKey,
 } from './input.ts';
 
@@ -214,4 +222,66 @@ test('joystickVisible: auto follows the coarse-pointer flag', () => {
 test('joystickVisible: aan/uit override the pointer either way', () => {
   assert.equal(joystickVisible('aan', false), true, 'aan on a fine pointer');
   assert.equal(joystickVisible('uit', true), false, 'uit on a coarse pointer');
+});
+
+/* ---- steering (wave 2): tank keys, eased turn, latched stick ---- */
+
+test('tankAxes: Left/Right turn, Up/Down walk; opposing keys cancel', () => {
+  assert.deepEqual(tankAxes(held('up')), { turn: 0, fwd: 1 });
+  assert.deepEqual(tankAxes(held('down', 'left')), { turn: -1, fwd: -1 });
+  assert.deepEqual(tankAxes(held('left', 'right')), { turn: 0, fwd: 0 });
+  // a diagonal is NOT normalised: Up+Right walks full speed while turning full rate
+  assert.deepEqual(tankAxes(held('up', 'right')), { turn: 1, fwd: 1 });
+});
+
+test('turnStep eases up to TURN_RATE and never past it', () => {
+  let v = 0;
+  let maxV = 0;
+  for (let i = 0; i < 120; i++) { v = turnStep(v, 1, 1 / 60); maxV = Math.max(maxV, v); }
+  assert.ok(maxV <= TURN_RATE + 1e-9, `never faster than TURN_RATE (${maxV})`);
+  assert.ok(v > TURN_RATE * 0.99, 'reaches the calm top rate');
+  // the first frame is a gentle start, not a jump to full rate
+  assert.ok(turnStep(0, 1, 1 / 60) < TURN_RATE * 0.2, 'eases in');
+});
+
+test('turnStep: after release the turn stops within a few degrees', () => {
+  let v = TURN_RATE;
+  let travel = 0;
+  for (let i = 0; i < 120; i++) { v = turnStep(v, 0, 1 / 60); travel += Math.abs(v) / 60; }
+  assert.equal(v, 0, 'comes to a full stop');
+  const deg = (travel * 180) / Math.PI;
+  assert.ok(deg < 8, `overshoot after release is ${deg.toFixed(1)}° (want < 8°)`);
+  assert.ok(deg < ((TURN_RATE * TURN_DECEL_TAU) * 180) / Math.PI + 1, 'bounded by rate × decel tau');
+});
+
+test('turnStep is frame-rate independent while easing', () => {
+  let a = 0; for (let i = 0; i < 30; i++) a = turnStep(a, 1, 1 / 60);
+  let b = 0; for (let i = 0; i < 60; i++) b = turnStep(b, 1, 1 / 120);
+  assert.ok(Math.abs(a - b) < 1e-9, `${a} vs ${b}`);
+  assert.equal(turnStep(0.5, 1, 0), 0.5, 'a paused frame is a no-op');
+});
+
+test('approachAngle takes the short way and never overshoots', () => {
+  near(approachAngle(0, 0.5, 0.1), 0.1);
+  near(approachAngle(0, 0.05, 0.1), 0.05);
+  // across ±π: from 3.0 toward −3.0 is +0.28 the short way
+  const a = approachAngle(3.0, -3.0, 0.1);
+  near(wrapPi(a - 3.0), 0.1, 'steps forward across π');
+});
+
+test('stickHeading: up = into the screen, right = a quarter turn right', () => {
+  const bearing = Math.PI; // the spawn view: looking down −z
+  near(stickHeading({ x: 0, y: 1 }, bearing), Math.PI, 'up');
+  // heading π/2 walks +x = screen right at bearing π
+  near(stickHeading({ x: 1, y: 0 }, bearing), Math.PI / 2, 'right');
+  near(Math.sin(stickHeading({ x: -1, y: 0 }, bearing)), -1, 'left walks −x');
+  // a thumb 6° off straight up still walks straight
+  near(stickHeading({ x: Math.sin(0.1), y: Math.cos(0.1) }, bearing), Math.PI, 'snap');
+});
+
+test('stickBackpedal only for a stick pulled (nearly) straight down', () => {
+  assert.equal(stickBackpedal({ x: 0, y: -1 }), true);
+  assert.equal(stickBackpedal({ x: 0.3, y: -0.9 }), true);
+  assert.equal(stickBackpedal({ x: 1, y: -0.2 }), false, 'sideways is a walk that way');
+  assert.equal(stickBackpedal({ x: 0, y: 1 }), false);
 });

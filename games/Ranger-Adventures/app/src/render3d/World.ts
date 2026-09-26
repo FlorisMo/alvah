@@ -579,9 +579,9 @@ export class World {
       // W5.1: arcade drive mode owns movement while the ranger is in the jeep.
       this.vehicles.driveJeep(dt);
     } else if (!this.activityActive) {
-      // W1.2: keys / stick (camera-relative) or the tapped target move the ranger; the
-      // follow-cam chases his facing only while he actually moves (W1.5).
-      if (this.player.walk(dt, this.cameraYaw())) this.cam.followTargetYaw = this.ranger.rotation.y;
+      // on foot: tank keys, the stick or a tap-walk move the ranger, and his steering
+      // tells the follow camera what to do (world/Player.walk → CameraRig.steer).
+      this.cam.steer(this.player.walk(dt, this.cam.viewFrame()));
     }
 
     this.pois.animate(t, dt, reduced); // each mission marker's animal (secondary motion)

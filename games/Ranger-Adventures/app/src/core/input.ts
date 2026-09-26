@@ -168,3 +168,97 @@ export function joystickVector(dx: number, dy: number, radius: number): StickVec
 export function joystickVisible(pref: JoystickPref, coarsePointer: boolean): boolean {
   return pref === 'aan' ? true : pref === 'uit' ? false : coarsePointer;
 }
+
+/* ------------------------------------------------------------- steering -- */
+/*
+ * How the ranger is steered on foot (wave 2, laptop first). Headings are world
+ * yaws in the ranger's convention: heading θ walks along (sin θ, cos θ) in (x, z),
+ * and a camera BEARING β sits the lens behind that heading, looking along
+ * (sin β, cos β). So "the ranger faces into the screen" is heading == bearing.
+ *
+ * - Keys (follow camera on) are TANK controls: Up walks forward, Down backs up
+ *   (the camera never swings round), Left/Right turn him at a calm eased rate and
+ *   the camera stays behind his heading. Nothing is camera-relative while a key is
+ *   held, so there is no feedback loop between the input and the follow camera.
+ * - The touch stick points where to go ON SCREEN, in the frame latched at touch-
+ *   down (the camera may ease behind him during the hold without bending the walk).
+ *   A stick pulled straight down backs up, like the Down key.
+ * - With the follow camera off (setting or reduced motion) everything is
+ *   screen-relative against the fixed bearing.
+ */
+
+/** Tank-turn top rate on a held Left/Right (rad/s): a calm ~90°/s. */
+export const TURN_RATE = (90 * Math.PI) / 180;
+/** Smooth-time of the turn's start (s): no jolt when a key goes down. */
+export const TURN_ACCEL_TAU = 0.12;
+/** Smooth-time of the turn's stop (s): short, so the view settles right after release. */
+export const TURN_DECEL_TAU = 0.05;
+/** Backing up walks at this share of the walking speed. */
+export const BACK_SPEED = 0.6;
+/** How fast the ranger's BODY swings round to a new heading (rad/s). Only the
+ *  ranger turns in a pivot, never the camera, so it can be brisk. */
+export const PIVOT_RATE = (420 * Math.PI) / 180;
+/** Keys: when a walk starts and the view looks further than this off his heading
+ *  (after a mouse drag, a tap-walk, stepping out of the jeep), he first turns to
+ *  face into the screen, so Up always means "into the screen". */
+export const ALIGN_GAP = (20 * Math.PI) / 180;
+/** Stick: within this angle of straight down the stick backs him up (no turn). */
+export const BACKPEDAL_CONE = (35 * Math.PI) / 180;
+/** Stick: within this angle of straight up a wobbly thumb reads as straight up. */
+export const STICK_SNAP = (10 * Math.PI) / 180;
+
+/** Normalize an angle to (−π, π]. */
+export function wrapPi(a: number): number {
+  const twoPi = Math.PI * 2;
+  const r = ((a % twoPi) + twoPi) % twoPi;
+  return r > Math.PI ? r - twoPi : r;
+}
+
+/** The held keys as tank axes: `turn` right (+) / left (−), `fwd` up (+) / down (−). */
+export function tankAxes(held: ReadonlySet<MoveKey>): { turn: number; fwd: number } {
+  return {
+    turn: (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0),
+    fwd: (held.has('up') ? 1 : 0) - (held.has('down') ? 1 : 0),
+  };
+}
+
+/**
+ * One frame of the eased tank-turn velocity (rad/s, + = heading increases = a turn
+ * to the LEFT). `input` in [−1, 1] is the wanted share of TURN_RATE. Speeding up
+ * eases in over TURN_ACCEL_TAU; slowing, stopping or reversing eases out over the
+ * shorter TURN_DECEL_TAU, so a released key stops the turn within a few degrees.
+ * Frame-rate independent (exp damping); dt ≤ 0 is a no-op.
+ */
+export function turnStep(vel: number, input: number, dt: number): number {
+  if (!(dt > 0)) return vel;
+  const target = Math.max(-1, Math.min(1, input)) * TURN_RATE;
+  const speeding = target !== 0 && (vel === 0 || Math.sign(vel) === Math.sign(target)) &&
+    Math.abs(target) >= Math.abs(vel);
+  const tau = speeding ? TURN_ACCEL_TAU : TURN_DECEL_TAU;
+  const v = vel + (target - vel) * (1 - Math.exp(-dt / tau));
+  return target === 0 && Math.abs(v) < 1e-3 ? 0 : v;
+}
+
+/** Step angle `cur` toward `target` along the short way by at most `maxStep` rad. */
+export function approachAngle(cur: number, target: number, maxStep: number): number {
+  const d = wrapPi(target - cur);
+  if (Math.abs(d) <= maxStep) return wrapPi(target);
+  return wrapPi(cur + Math.sign(d) * maxStep);
+}
+
+/** True when the stick is pulled (nearly) straight down: back up, don't turn. */
+export function stickBackpedal(stick: StickVector): boolean {
+  return stick.y < 0 && Math.abs(Math.atan2(stick.x, -stick.y)) <= BACKPEDAL_CONE;
+}
+
+/**
+ * The world heading a stick direction means, on the screen whose camera bearing
+ * was `frameBearing` when the thumb touched down: straight up = into the screen
+ * (the bearing itself), right = a quarter turn to the right. A thumb within
+ * STICK_SNAP of straight up reads as straight up.
+ */
+export function stickHeading(stick: StickVector, frameBearing: number): number {
+  let a = Math.atan2(stick.x, stick.y); // 0 = up, +π/2 = right
+  if (Math.abs(a) < STICK_SNAP) a = 0;
+  return wrapPi(frameBearing - a);
+}

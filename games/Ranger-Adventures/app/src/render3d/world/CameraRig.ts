@@ -13,11 +13,12 @@
 
 import * as THREE from 'three';
 import { dampFactor } from '../play/kit-math';
-import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from '../FollowCam';
+import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW, FOLLOW_TAU, FOLLOW_MAX_RATE } from '../FollowCam';
+import { livePolicy } from '../MotionMode';
 import type { MoveLimits, Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { TREE_BASE_H, type Dressing } from './Dressing';
-import type { Player } from './Player';
+import type { Player, ViewFrame, CamSteer } from './Player';
 import { JEEP_COLLIDE } from './Vehicles';
 
 /** What the camera needs from the rest of the world. */
@@ -34,6 +35,21 @@ export interface CameraRigHost {
 
 export class CameraRig {
   private readonly camDesired = new THREE.Vector3();
+  // Wave 2 lens model (place): a smoothed pivot + boom length + eye height at the
+  // eased bearing, plus a decaying offset when something else moved the lens.
+  private readonly pivot = new THREE.Vector3();
+  private boomNow = 4.6;
+  private eyeNow = 2.4;
+  private placed = false;
+  private readonly lastSet = new THREE.Vector3();
+  private readonly extOff = new THREE.Vector3();
+  private readonly _lens = new THREE.Vector3();
+  private readonly PIVOT_TAU = 0.15;         // on foot: the lens trails his steps a touch
+  private readonly PIVOT_TAU_VEHICLE = 0.3;  // the jeep / helicopter: the old ~0.3 s follow
+  private readonly BOOM_IN_TAU = 0.06;       // a solid behind him: pull in quickly
+  private readonly BOOM_OUT_TAU = 0.5;       // …and let the boom out calmly
+  private readonly EYE_UP_TAU = 0.12;        // rise over a crest quickly
+  private readonly EYE_DOWN_TAU = 0.45;      // settle down calmly
   // F-05: the third-person walk boom, rebuilt with guaranteed clearance and
   // brought in + down from the giant-era (3.4, 6.2) rig so the ranger reads
   // human-sized in an immersive over-the-shoulder frame. The old rig had no
@@ -96,24 +112,29 @@ export class CameraRig {
   terrainClearState = true;     // D1.5 (audit #4) last cam→avatar TERRAIN-clear read (folded into viewClear)
   terrainLiftState = 0;         // D1.5 (audit #4) metres the follow boom rode up to clear a dune this frame (0 = flat)
   // W1.5 rotating follow-cam: `followYaw` is the eased camera bearing; it chases
-  // `followTargetYaw` (the ranger's facing, updated ONLY while he is moving — a
-  // standing ranger never swings the camera). Both start at π = straight behind
-  // on +z (the pre-W1.5 diorama bearing). Damped + rate-clamped in FollowCam.ts.
+  // `followTargetYaw`, which on foot is set every frame by the ranger's steering
+  // (steer(): behind a tank-turning ranger, slowly behind a tap/stick walk, or hold —
+  // a standing ranger never swings the view). Both start at π = straight behind on
+  // +z. Damped + rate-clamped in FollowCam.ts.
   followYaw = FIXED_FOLLOW_YAW;
   followTargetYaw = FIXED_FOLLOW_YAW;
+  // wave 2: on foot the ranger's steering tells the camera how to chase (steer()):
+  // tightly behind a tank-turning ranger, slowly behind a tap/stick walk, or hold.
+  // The vehicles keep the default ease (FollowCam's FOLLOW_TAU / FOLLOW_MAX_RATE).
+  private followTau = FOLLOW_TAU;
+  private followMaxRate = FOLLOW_MAX_RATE;
   // "Camera draait mee" toggle (Instellingen, default aan), read LIVE each frame
   // so flipping it needs no restart; reduced-motion also forces the fixed bearing.
   private cameraFollowSource: (() => boolean) | null = null;
   // F-17 laptop drag-orbit: a PLAYER look-around layered ON TOP of the follow bearing.
   // `orbitYaw` (free, wraps) rotates the walk boom around the ranger; `orbitLift` (m,
-  // clamped) raises/lowers the eye to tilt the view (the camera's real pitch — shown on
-  // the hook — follows). Both EASE toward their drag-set targets with the boom's own
-  // exp-damp, or CUT to them under reduced-motion (the "orbit as stepped cuts" the
-  // finding asks for). CameraRig.place applies them to the WALK cam only, so the drag moves
-  // ONLY the lens — never `pos` (the F-17 defect was a drag relocating the ranger). The
-  // click-vs-drag seam (onPointerDown/Move/Up) routes a clean tap to tap-to-walk and a
-  // past-threshold drag to the orbit alone. Input forward stays on the base bearing
-  // (cameraYaw unchanged) so orbiting can never feed back into a heading spin.
+  // clamped) raises/lowers the eye to tilt the view. Both EASE toward their drag-set
+  // targets, or CUT to them under reduced-motion. place() applies them to the WALK cam
+  // only, so a drag moves ONLY the lens, never the ranger. The click-vs-drag seam
+  // (Player.onPointerDown/Move/Up) routes a clean tap to tap-to-walk and a past-
+  // threshold drag to the orbit. The steering reads the bearing ON SCREEN (orbit
+  // included), and when he walks again steer() folds the orbit into the follow bearing
+  // (the view does not move) so the camera then settles behind him from there.
   orbitYaw = 0;
   private orbitTargetYaw = 0;
   orbitLift = 0;
@@ -165,16 +186,51 @@ export class CameraRig {
     this.host = host;
   }
 
-  /** Dev-hook accessor: the follow-camera yaw in radians — the world direction
-   *  "into the screen" that camera-relative input (`resolveInput`) rotates by.
-   *  Derived DIRECTLY from the follow bearing (not read back from the pitched
-   *  camera's Euler, which couples yaw with pitch): the camera looks along
-   *  `(sin followYaw, cos followYaw)`, and `resolveInput`'s forward at yaw ψ is
-   *  `(−sin ψ, −cos ψ)`, so ψ = followYaw + π. Fixed-bearing (followYaw = π)
-   *  reads exactly 0, matching the W1.2–W1.4 baseline; the rotating follow makes
-   *  it track input-driven facing so the W1.5 yaw-change assert has a real signal. */
+  /** The bearing on screen now (a heading: the lens looks along (sin b, cos b)). On
+   *  foot it is the follow bearing + the player's drag look-around + the board
+   *  reframe; in the jeep / helicopter the follow bearing alone. */
+  bearing(): number {
+    const { inVehicle, inHeli } = this.host.mode();
+    return inVehicle || inHeli ? this.followYaw : wrapAngle(this.followYaw + this.orbitYaw + this.boardFrameYaw);
+  }
+
+  /** Dev-hook accessor: the camera yaw in the legacy input convention (screen
+   *  forward = (−sin ψ, −cos ψ), so ψ = bearing + π), taken from the bearing that is
+   *  ON SCREEN — the drag look-around and the board reframe included (audit foot-04:
+   *  it used to leave them out, so after a drag the controls walked off-screen). */
   cameraYaw(): number {
-    return wrapAngle(this.followYaw + Math.PI);
+    return wrapAngle(this.bearing() + Math.PI);
+  }
+
+  /** What the screen shows, for the ranger's steering (Player.walk). */
+  viewFrame(): ViewFrame {
+    const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
+    return {
+      bearing: this.bearing(),
+      base: wrapAngle(this.followYaw + this.orbitYaw),
+      follows: follow && !livePolicy().reduced,
+    };
+  }
+
+  /**
+   * Take this frame's instruction from the ranger's steering. `fold` first moves
+   * the player's drag look-around into the base bearing (the rendered bearing does
+   * not change, so the view does not move): from then on "behind him" is measured
+   * from what the screen shows, which is what makes the view ease back behind the
+   * ranger once he walks again. Then chase `yaw` with the given ease, or hold.
+   */
+  steer(s: CamSteer | null): void {
+    if (s?.fold) {
+      this.followYaw = wrapAngle(this.followYaw + this.orbitYaw);
+      this.orbitYaw = this.orbitTargetYaw = 0;
+    }
+    if (s && s.yaw !== null) {
+      this.followTargetYaw = s.yaw;
+      this.followTau = s.tau;
+      this.followMaxRate = s.maxRate;
+    } else {
+      this.followTargetYaw = this.followYaw; // hold: nothing on foot swings the view
+    }
   }
 
   /** The "Camera draait mee" setting source (W1.5). Read live each frame
@@ -227,18 +283,22 @@ export class CameraRig {
    * The horizontal offset is the fixed distance/height rotated by `followYaw`:
    * `-(sin yaw, cos yaw)·distance` sits the camera behind the ranger's facing.
    * When the follow rotates (toggle on AND not reduced-motion) `followYaw` eases
-   * toward the ranger's facing with the damped, rate-clamped `dampedYaw`; else it
+   * toward the steering's target with the damped, rate-clamped `dampedYaw`; else it
    * is pinned to π — the pre-W1.5 straight-behind bearing (reduced-motion falls
-   * back to the fixed bearing per §3.2). Position exp-damps (~0.3 s) unless
-   * `snap` (reduced-motion cut, activity resume, or first placement). Roll is
-   * always 0 and the FOV is fixed at construction — the motion-comfort law.
+   * back to the fixed bearing per §3.2). The lens hangs off a smoothed pivot on a
+   * smoothed boom at that bearing (see below) unless `snap` (reduced-motion cut,
+   * first placement), which sets it at once. Roll is always 0 and the FOV is fixed
+   * at construction — the motion-comfort law.
    */
   place(snap: boolean, dt = 0, reduced = false): void {
     const rp = this.player.group.position;
     const { inVehicle, inHeli } = this.host.mode();
     const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
     if (follow && !reduced) {
-      this.followYaw = dampedYaw(this.followYaw, this.followTargetYaw, dt);
+      const walking = !inVehicle && !inHeli;
+      this.followYaw = walking
+        ? dampedYaw(this.followYaw, this.followTargetYaw, dt, this.followTau, this.followMaxRate)
+        : dampedYaw(this.followYaw, this.followTargetYaw, dt);
     } else {
       // fixed bearing: straight behind on +z, no rotation — and reset the target
       // so re-enabling the follow doesn't whip-pan from a stale facing.
@@ -283,11 +343,13 @@ export class CameraRig {
     // F-05 anti-clip (walk only): spherecast the boom against the collision solids
     // (the same circles the ranger can't walk through) so a prop or hut BEHIND the
     // ranger pulls the lens IN instead of rendering that prop's unlit interior. The
-    // eye height stays put (a pull-in, never a dip); the min clamp keeps the lens
-    // outside the ranger's own radius + near plane.
+    // min clamp keeps the lens outside the ranger's own radius + near plane.
     if (walk) {
       dist = this.zoomDist; // F-16: the player-set dolly distance replaces the fixed 4.6 boom
-      const frac = this.boomClearFraction(rp.x, rp.z, -s * dist, -c * dist);
+      // F-11: never let the walk lens swing OUT through the world-rim tree-line: the boom
+      // stops just inside the ring (a no-op everywhere but the rim).
+      const frac = Math.min(this.boomClearFraction(rp.x, rp.z, -s * dist, -c * dist),
+        this.rimFraction(rp.x, rp.z, -s * dist, -c * dist));
       const minFrac = Math.min(1, (this.player.avatarRadius + this.camera.near + 0.2) / dist);
       boomK = Math.max(minFrac, frac);
       dist *= boomK;
@@ -301,69 +363,59 @@ export class CameraRig {
       const minFrac = Math.min(1, (JEEP_COLLIDE + this.camera.near + 0.3) / dist);
       dist *= Math.max(minFrac, frac);
     }
-    // F-17 pitch: the player's eye-lift tilts the WALK view. The horizontal boom is
-    // unchanged, so the F-05 spherecast/min-clamp + fade rail stay exactly valid — only
-    // the eye rises/drops, and the fixed lookAt at chest turns that into a down/up tilt.
-    // D3.16: keep the WALK follow pitch in its normal band when F-05 pulls the boom IN.
-    // The eye used to stay HIGH (off.y) while the horizontal boom collapsed, tipping the
-    // lens toward straight-down (the `18-jeep-near` −1.17 breach, boom ~0.7 m under a
-    // 2.4 m eye). Scale the eye's height ABOVE the look-point by the SAME fraction the
-    // boom shrank, so a pull-in becomes a pure radial dolly-IN at the settled follow
-    // pitch (~−0.33), never a steepening tilt. k=1 (nothing pulled it in) leaves the
-    // default framing AND the player's deliberate zoom/orbit-lift untouched; the value is
-    // deterministic (function of rp/off/boomK), so the RM cut stays pixel-frozen and the
-    // position lerp below still eases it — a geometry change, never a camera-move shake.
+    // F-17 pitch: the player's eye-lift tilts the WALK view. D3.16: when F-05 pulls the
+    // boom IN, the eye's height ABOVE the look-point shrinks by the SAME fraction, so a
+    // pull-in is a pure radial dolly-in at the settled follow pitch, never a steepening
+    // tilt toward straight down. k=1 leaves the default framing and the player's zoom /
+    // orbit-lift untouched.
     const lookH = walk ? this.camLookH : this.camIdleLookH;
     const eyeAboveLook = off.y + (walk ? this.orbitLift : 0) - lookH;
-    const eyeY = rp.y + lookH + eyeAboveLook * (walk ? boomK : 1);
-    this.camDesired.set(rp.x - s * dist, eyeY, rp.z - c * dist);
-    // F-11: never let the walk lens swing OUT through the world-rim tree-line. When the
-    // ranger stops at the edge and turns, the rim-ease cancels his outward step so his
-    // residual (tangential) facing can rotate the follow boom back into the NON-collision
-    // pine ring (bound + ~1.2 m out) — a trunk then buries the lens and the rim frame
-    // reads "ranger nowhere". Clamp the lens's distance-from-centre to just inside the
-    // ring so it stays in the open with the tree-line as a backdrop BEHIND the ranger.
-    // A pure no-op everywhere but the rim (the cap is only reachable near the edge).
+    let eye = lookH + eyeAboveLook * (walk ? boomK : 1); // lens height above his feet
+    // D1.5 (audit #4): keep the WHOLE cam→ranger SIGHTLINE above the RENDERED terrain, not
+    // just the lens above the ground under itself: first keep the lens above its own
+    // ground, then lift the eye until the straight line lens→HEAD clears the drawn terrain
+    // by CAM_GROUND_CLR (capped at MAX_TERRAIN_LIFT). A clearance lift only (never a
+    // downward move), deterministic (terrain.y), so an idle pose holds frame to frame.
+    const lx = rp.x - s * dist, lz = rp.z - c * dist;
     if (walk) {
-      const camR = Math.hypot(this.camDesired.x, this.camDesired.z);
-      const capR = this.limits.bound - 0.8;
-      if (camR > capR) {
-        const k = capR / camR;
-        this.camDesired.x *= k;
-        this.camDesired.z *= k;
-      }
-    }
-    // D1.5 (audit #4): keep the WHOLE cam→ranger SIGHTLINE above the RENDERED terrain — not
-    // just the lens above the ground under itself. A dune face standing between the trailing
-    // lens and the ranger is an occluder NO fade can touch (terrain can't be made transparent
-    // the way a crown can) — the GATE-D1 audit #4 murk: fresh `11-controls-hud` a full-frame
-    // terrain void with NO ranger while the hook lied clear. Keeping only the LENS above the
-    // ground does not clear the LINE to a ranger standing in a hollow. Ride the crest instead: first keep the lens above its own rendered ground, then lift the
-    // eye until the straight line lens→HEAD clears the drawn terrain by CAM_GROUND_CLR (capped
-    // at MAX_TERRAIN_LIFT). This is the D1.3 above-terrain law extended to the whole segment —
-    // damped follow behaviour (the lerp below eases it; a CUT on snap / under reduced-motion),
-    // never a player-initiated orbit. A clearance lift only (never a downward move) so the idle
-    // pose stays deterministic frame to frame (terrain.y is deterministic).
-    if (walk) {
-      const gLens = this.terrain.y(this.camDesired.x, this.camDesired.z);
-      if (this.camDesired.y < gLens + this.CAM_GROUND_CLR) this.camDesired.y = gLens + this.CAM_GROUND_CLR;
+      const gLens = this.terrain.y(lx, lz);
+      if (rp.y + eye < gLens + this.CAM_GROUND_CLR) eye = gLens + this.CAM_GROUND_CLR - rp.y;
       const aimY = rp.y + this.player.avatarTopY; // clear the line to his HEAD (strictest aim → whole body reads)
-      const need = this.terrainSightlineLift(this.camDesired.x, this.camDesired.y, this.camDesired.z, rp.x, aimY, rp.z);
+      const need = this.terrainSightlineLift(lx, rp.y + eye, lz, rp.x, aimY, rp.z);
       const lift = Math.min(need, this.MAX_TERRAIN_LIFT);
-      this.camDesired.y += lift;
+      eye += lift;
       this.terrainLiftState = lift;
-      // the settled (desired) line is clear iff the raw need fit under the cap — read off camDesired
-      // (where the eased boom is heading) so a mid-lerp frame doesn't blip false while it rides up;
-      // at any settled/shot frame camera==camDesired, so the hook still matches the pixels (§4/§8.7).
+      // the settled line is clear iff the raw need fit under the cap
       this.terrainClearState = need <= this.MAX_TERRAIN_LIFT;
     }
-    if (snap) {
-      this.camera.position.copy(this.camDesired);
+    // Wave 2: the lens hangs off a smoothed PIVOT (the ranger's spot) on a smoothed
+    // boom (length + eye height) at the follow BEARING. The bearing is already eased
+    // (followYaw above), so the view turns exactly as much as the bearing does: no
+    // extra swing-lag after a turn stops (the old whole-position lerp added ~0.3 s of
+    // lag, so the view kept turning ~30° after the key came up) and no corner-cutting
+    // toward the ranger mid-turn. The boom pulls IN fast (a solid appears behind him)
+    // and lets out slowly (calm). A cut (reduced motion, first placement) sets all of
+    // it at once.
+    if (snap || !this.placed) {
+      this.pivot.copy(rp);
+      this.boomNow = dist;
+      this.eyeNow = eye;
+      this.extOff.set(0, 0, 0);
     } else {
-      // exp-damping (~0.3 s) off the REAL frame dt → genuinely frame-rate independent
-      // (§C.5 item 2: identical feel at 30/60/120 fps), no shake. Shared dampFactor.
-      this.camera.position.lerp(this.camDesired, dampFactor(dt, 0.3));
+      this.pivot.lerp(rp, dampFactor(dt, walk ? this.PIVOT_TAU : this.PIVOT_TAU_VEHICLE));
+      this.boomNow += (dist - this.boomNow) * dampFactor(dt, dist < this.boomNow ? this.BOOM_IN_TAU : this.BOOM_OUT_TAU);
+      this.eyeNow += (eye - this.eyeNow) * dampFactor(dt, eye > this.eyeNow ? this.EYE_UP_TAU : this.EYE_DOWN_TAU);
+      // someone else moved the lens since the last frame (a mini-game's reframe): ease
+      // from where it left it instead of cutting (the old whole-position lerp did this)
+      if (this.camera.position.distanceToSquared(this.lastSet) > 1e-8) {
+        this.extOff.copy(this.camera.position).sub(this.lensAt(this._lens, s, c));
+      }
+      this.extOff.multiplyScalar(1 - dampFactor(dt, 0.3));
     }
+    this.lensAt(this.camDesired, s, c).add(this.extOff);
+    this.camera.position.copy(this.camDesired);
+    this.lastSet.copy(this.camDesired);
+    this.placed = true;
     this.camera.up.set(0, 1, 0); // roll = 0 always
     this.camera.lookAt(rp.x, rp.y + (walk ? this.camLookH : this.camIdleLookH), rp.z);
     // F-05 fade rail: if the boom still collapses toward the ranger (an occluder
@@ -434,6 +486,24 @@ export class CameraRig {
     // Runs in BOTH branches (a ring faded on foot restores once a vehicle cam pulls the
     // lens far away). Rings are wayfinding UI (§3), so shrinking them near is on-spec.
     this.host.afterPlace();
+  }
+
+  /** The lens for this frame's smoothed pivot / boom / eye at bearing (s, c). */
+  private lensAt(out: THREE.Vector3, s: number, c: number): THREE.Vector3 {
+    return out.set(this.pivot.x - s * this.boomNow, this.pivot.y + this.eyeNow, this.pivot.z - c * this.boomNow);
+  }
+
+  /** F-11: the fraction of the boom (origin ox,oz; vector dx,dz) that stays inside the
+   *  world-rim ring (bound − 0.8 m), so the lens never ends in the rim tree-line. */
+  private rimFraction(ox: number, oz: number, dx: number, dz: number): number {
+    const R = this.limits.bound - 0.8;
+    const ex = ox + dx, ez = oz + dz;
+    if (ex * ex + ez * ez <= R * R) return 1;
+    // solve |o + t·d| = R for the t in (0, 1]
+    const a = dx * dx + dz * dz, b = 2 * (ox * dx + oz * dz), cc = ox * ox + oz * oz - R * R;
+    const disc = b * b - 4 * a * cc;
+    if (a < 1e-9 || disc < 0) return 1;
+    return Math.max(0, Math.min(1, (-b + Math.sqrt(disc)) / (2 * a)));
   }
 
   /**
