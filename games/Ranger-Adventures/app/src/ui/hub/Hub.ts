@@ -19,7 +19,7 @@ import { showCabin } from '../Companion';
 import { showTweaks } from '../Tweaks';
 import { session, esc, card, plainCard } from '../flow/session';
 import { showBriefing, unmountMissionPause } from '../flow/MissionFlow';
-import { startExplore, leaveWorld, resumePatrol, activeExploreTitel } from '../flow/WorldSession';
+import { startExplore, leaveWorld, resumePatrol, activeExploreTitel, nextMissionId } from '../flow/WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
 
 /* ---------------------------------------------------------------- title ---- */
@@ -115,12 +115,17 @@ export function showMissionBoard(): void {
   narrator.stop();
   const area = Content.activeArea();
   const done = store.get().voltooid;
+  const next = nextMissionId();
   const cards = area.missies
     .map((m) => {
       const engines = Array.from(new Set(m.stappen.map((s) => SKILL_META[s.ef as Engine]?.naam ?? s.ef)));
       const klaar = done[m.id] ? `<span class="mc-done" aria-label="voltooid">✓</span>` : '';
+      // the recommended mission: first unfinished in story order (the chip points at it too)
+      const isNext = m.id === next;
+      const nu = isNext ? `<span class="mc-next-tag">Nu doen</span>` : '';
       return (
-        `<button class="mission-card" type="button" data-id="${esc(m.id)}">` +
+        `<button class="mission-card${isNext ? ' mc-next' : ''}${done[m.id] ? ' mc-klaar' : ''}" type="button" data-id="${esc(m.id)}"${isNext ? ' data-key="primary"' : ''}>` +
+        nu +
         missionIcon(m) +
         `<span class="mc-land">${esc(m.landschap)}</span>${klaar}` +
         `<span class="mc-title">${esc(m.titel)}</span>` +
@@ -134,7 +139,7 @@ export function showMissionBoard(): void {
     `<div class="mission-board">` +
     `<p class="boot-kicker">Het missiebord · ${esc(area.naam)}</p>` +
     `<h1 class="boot-title">Kies een missie</h1>` +
-    `<div class="mission-grid">${cards}</div>` +
+    `<div class="mb-scroll"><div class="mission-grid">${cards}</div></div>` +
     `<button class="ra-chip mb-back" type="button" data-key="back">` +
     `<span class="ra-chip-ic" aria-hidden="true">‹</span>` +
     `<span class="ra-chip-tx">Terug naar de open plek</span></button>` +
@@ -149,6 +154,7 @@ export function showMissionBoard(): void {
     });
   });
   el.querySelector('.mb-back')?.addEventListener('click', () => showExploreHud(activeExploreTitel()));
+  el.querySelector('.mc-next')?.scrollIntoView({ block: 'nearest' });
 }
 
 /* ------------------------------------------------- prikbord (clues) ---- */
@@ -217,16 +223,16 @@ export function showCaseBoard(): void {
 
   const el = card(
     `<div class="case-board boot-card-ish">` +
+    `<div class="card-top">` +
+    `<button class="ra-chip cb-back" type="button" data-key="back"><span class="ra-chip-ic" aria-hidden="true">‹</span>` +
+    `<span class="ra-chip-tx">Verder op patrouille</span></button>` +
+    `</div>` +
     `<p class="boot-kicker">Het prikbord · ${esc(chapter?.naam ?? '')} · ${count}</p>` +
     `<h1 class="boot-title">Wat is hier aan de hand?</h1>` +
     `<div class="cb-cork">${board}</div>` +
     note +
     veldStrip +
-    `<div class="ra-row">` +
-    resolveBtn +
-    `<button class="ra-chip cb-back" type="button" data-key="back"><span class="ra-chip-ic" aria-hidden="true">‹</span>` +
-    `<span class="ra-chip-tx">Verder op patrouille</span></button>` +
-    `</div>` +
+    (resolveBtn ? `<div class="ra-row">${resolveBtn}</div>` : '') +
     `</div>`,
   );
   // Only the latest-clue note is read aloud (and karaoke-highlighted).

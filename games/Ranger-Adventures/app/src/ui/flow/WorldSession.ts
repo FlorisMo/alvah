@@ -63,12 +63,16 @@ export function startWorld(ui: HTMLElement, st: Stage): void {
   startExplore();
 }
 
-/** The title the wayfinding cue points at = the first not-yet-done mission. */
+/** The mission the game recommends next: the first unfinished one in story order.
+ *  The wayfinding chip points at it and the missiebord marks it. Null when all done. */
+export function nextMissionId(): string | null {
+  return nextPatrolTarget(Content.activeArea().missies, store.get().voltooid);
+}
+
+/** The title the wayfinding chip shows (the recommended mission), or null. */
 export function activeExploreTitel(): string | null {
-  const area = Content.activeArea();
-  const done = store.get().voltooid;
-  const id = area.missies.find((m) => !done[m.id])?.id ?? area.missies[0]?.id ?? null;
-  return area.missies.find((m) => m.id === id)?.titel ?? null;
+  const id = nextMissionId();
+  return Content.activeArea().missies.find((m) => m.id === id)?.titel ?? null;
 }
 
 /** Tear the world down (title screen, or a stopped mission's rebuild). */
@@ -99,9 +103,9 @@ export function startExplore(): void {
     };
   });
 
-  // the active mission the wayfinding cue points to = the first not-yet-done one
+  // the active mission the wayfinding cue points to = the recommended next one
   const done = store.get().voltooid;
-  const active = area.missies.find((m) => !done[m.id])?.id ?? area.missies[0]?.id ?? null;
+  const active = nextMissionId();
 
   // the season tints the ambience bed; take it from the story's current chapter so
   // the world matches the arc moment.
@@ -151,7 +155,7 @@ export function resumePatrol(): void {
   setScreen('world');
   setMissionView(null);
   const area = Content.activeArea();
-  const next = nextPatrolTarget(area.missies, store.get().voltooid);
+  const next = nextMissionId();
   world.setActiveMission(next);
   const titel = area.missies.find((m) => m.id === next)?.titel ?? null;
   // Light world-EF seasoning (BUILD-PLAN §8b): once per completed patrol cycle,
