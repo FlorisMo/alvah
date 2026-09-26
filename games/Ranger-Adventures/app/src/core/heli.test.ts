@@ -89,3 +89,25 @@ test('heliAvailable: opt-in AND not reduced-motion — flight is withheld, not m
   assert.equal(heliAvailable(true, true), false, 'reduced-motion withholds flight entirely');
   assert.equal(heliAvailable(false, true), false, 'off and reduced → unavailable');
 });
+
+// ── wave 2: faces where it flies, lands on a pad, calm speed changes ───────────
+
+import { heliRamp, landingAltitude, HELI_RAMP_TIME } from './heli.ts';
+
+test('heliRamp: never flies backwards, builds and brakes gently', () => {
+  assert.equal(heliRamp(0, -1, 1), 0, 'Down never reverses: it only brakes to a hover');
+  const first = heliRamp(0, 1, 1 / 60);
+  assert.ok(near(first, HELI_CAPS.maxSpeed / HELI_RAMP_TIME / 60), 'one bounded step from a hover');
+  let v = 0;
+  for (let i = 0; i < Math.round(HELI_RAMP_TIME * 60); i++) v = heliRamp(v, 1, 1 / 60);
+  assert.ok(near(v, HELI_CAPS.maxSpeed, 1e-6), 'reaches cruise speed in the ramp time');
+  assert.ok(heliRamp(HELI_CAPS.maxSpeed, 0, 1 / 60) < HELI_CAPS.maxSpeed, 'lets go → eases down');
+});
+
+test('landingAltitude: cruise far out, down to the pad over the approach, 0 on the pad', () => {
+  assert.equal(landingAltitude(200), HELI_CRUISE_HEIGHT);
+  assert.equal(landingAltitude(0), HELI_PAD_HEIGHT);
+  assert.equal(landingAltitude(1), HELI_PAD_HEIGHT);
+  let prev = -1;
+  for (let d = 0; d < 60; d += 0.5) { const a = landingAltitude(d); assert.ok(a >= prev); prev = a; }
+});

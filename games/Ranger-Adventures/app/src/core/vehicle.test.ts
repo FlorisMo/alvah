@@ -151,3 +151,124 @@ test('F-32 comfort composition: no-throttle steer never pivots; the reachable tu
   const rate = Math.abs(s.heading) / dt;
   assert.ok(rate >= 0.6 - 1e-6 && rate <= 0.9, `reachable turn rate ${rate.toFixed(3)} rad/s in the F-32 band [0.6, 0.9]`);
 });
+
+// ── wave 2: the jeep feels like a real, calm vehicle ─────────────────────────
+
+import {
+  driveIntent, STEER_CREEP, REVERSE_FRACTION, vehicleDt, MAX_VEHICLE_DT,
+  JEEP_BODY, resolveBody, bodyOverlap, freeDistance, contactSpeedCap, CONTACT_CREEP, wheelContact,
+} from './vehicle.ts';
+
+test('driveIntent: Up = gas, Down = reverse (slower), nothing = nothing', () => {
+  assert.deepEqual(driveIntent({ x: 0, y: 0 }), { throttle: 0, steer: 0 });
+  const up = driveIntent({ x: 0, y: 1 });
+  assert.ok(near(up.throttle, 1) && near(up.steer, 0), 'Up alone is full gas, straight');
+  const down = driveIntent({ x: 0, y: -1 });
+  assert.ok(near(down.throttle, -REVERSE_FRACTION) && near(down.steer, 0), 'Down alone backs up, calmer than forward');
+});
+
+test('driveIntent: pushed only sideways the jeep creeps forward AND turns (audit veh-05)', () => {
+  for (const x of [1, -1]) {
+    const s = driveIntent({ x, y: 0 });
+    assert.ok(near(s.throttle, STEER_CREEP), 'a sideways push still rolls forward');
+    assert.ok(near(s.steer, x), 'full steer toward the push');
+    // the whole pipeline from rest: it moves AND its heading changes
+    const caps = JEEP_CAPS;
+    let speed = 0, h = 0, dist = 0;
+    for (let i = 0; i < 120; i++) {
+      speed = rampSpeed(speed, s.throttle, 1 / 60, caps);
+      const st = driveStep(h, { throttle: speed / caps.maxSpeed, steer: comfortSteer(s.steer, speed, caps) }, 1 / 60, caps);
+      h = st.heading; dist += Math.hypot(st.dx, st.dz);
+    }
+    assert.ok(dist > 2, `2 s of a sideways push drives on (${dist.toFixed(2)} m)`);
+    assert.ok(x > 0 ? h < -0.1 : h > 0.1, 'and turns toward the push (right lowers the yaw)');
+  }
+});
+
+test('driveIntent: a diagonal gives gas and steer; down-diagonal reverses while steering', () => {
+  const c = Math.SQRT1_2;
+  const ur = driveIntent({ x: c, y: c });
+  assert.ok(ur.throttle > 0.6 && ur.steer > 0.6, 'up-right: gas + right');
+  const dr = driveIntent({ x: c, y: -c });
+  assert.ok(dr.throttle < 0 && dr.steer > 0.6, 'down-right: reverse + right');
+  assert.ok(Math.abs(dr.throttle) <= REVERSE_FRACTION + 1e-9, 'reverse never faster than its cap');
+});
+
+test('comfortSteer: reversing swings the nose the other way (a real car), floor keeps authority', () => {
+  assert.ok(comfortSteer(1, -JEEP_CAPS.maxSpeed / 2, JEEP_CAPS) < 0, 'reverse + right → the nose goes left');
+  assert.ok(near(comfortSteer(1, 0, JEEP_CAPS, 0.4), 0.4), 'pressed against a trunk it can still turn away');
+  assert.ok(near(comfortSteer(1, JEEP_CAPS.maxSpeed, JEEP_CAPS, 0.4), 1), 'the floor never lowers real authority');
+});
+
+test('vehicleDt: a stall never teleports a vehicle', () => {
+  assert.equal(vehicleDt(8.2), MAX_VEHICLE_DT, 'an 8 s frame integrates as 0.1 s');
+  assert.equal(vehicleDt(1 / 60), 1 / 60, 'a normal frame passes through');
+  assert.equal(vehicleDt(-1), 0);
+  assert.equal(vehicleDt(Number.NaN), 0);
+});
+
+const OPEN = { bound: 75 };
+
+test('resolveBody: open ground → the wanted pose, no contact', () => {
+  const r = resolveBody(0, 0, 0, 0, 0.1, 0.02, JEEP_BODY, [{ x: 10, z: 10, r: 0.6 }], OPEN);
+  assert.ok(near(r.x, 0) && near(r.z, 0.1) && near(r.heading, 0.02) && !r.contact);
+});
+
+test('resolveBody: the BODY (not the centre) stops at a trunk ahead — never inside it', () => {
+  const tree = { x: 0, z: 3, r: 0.6 };
+  // drive straight at the trunk in small steps, as the World does each frame
+  let x = 0, z = 0, contact = false;
+  for (let i = 0; i < 200; i++) {
+    const r = resolveBody(x, z, 0, x, z + 0.05, 0, JEEP_BODY, [tree], OPEN);
+    x = r.x; z = r.z; contact ||= r.contact;
+    assert.ok(bodyOverlap(x, z, 0, JEEP_BODY, [tree]) < 1e-6, 'no step ends inside the trunk');
+  }
+  assert.ok(contact, 'it touched the trunk');
+  assert.ok(z < tree.z - tree.r - JEEP_BODY[0].along - JEEP_BODY[0].r + 0.2, `the nose stops at the trunk (centre z ${z.toFixed(2)})`);
+});
+
+test('resolveBody: an off-centre trunk makes the jeep SLIDE past, not stop dead', () => {
+  const tree = { x: 0.6, z: 3, r: 0.6 };
+  let x = 0, z = 0;
+  for (let i = 0; i < 200; i++) {
+    const r = resolveBody(x, z, 0, x, z + 0.05, 0, JEEP_BODY, [tree], OPEN);
+    x = r.x; z = r.z;
+  }
+  assert.ok(z > tree.z + 1, `it slid past the trunk (z ${z.toFixed(2)})`);
+  assert.ok(x < -0.3, 'by sliding to the free side');
+});
+
+test('resolveBody: wedged between two trunks it keeps the old pose (never deeper)', () => {
+  const solids = [{ x: -1.3, z: 0, r: 0.6 }, { x: 1.3, z: 0, r: 0.6 }];
+  const r = resolveBody(0, -3, 0, 0, -2.9, 0, JEEP_BODY, solids, OPEN);
+  assert.ok(bodyOverlap(r.x, r.z, r.heading, JEEP_BODY, solids) <= bodyOverlap(0, -2.9, 0, JEEP_BODY, solids));
+});
+
+test('resolveBody: the whole body stays inside the world rim, and out of the water', () => {
+  const r = resolveBody(0, 72, 0, 0, 80, 0, JEEP_BODY, [], OPEN);
+  assert.ok(Math.hypot(r.x, r.z) + 1.9 <= 75 + 1e-6, 'the nose stays inside the rim');
+  const wet = { bound: 75, blocked: (x: number, z: number) => z > 5 };
+  const w = resolveBody(0, 2.5, 0, 0, 3.5, 0, JEEP_BODY, [], wet);
+  assert.ok(w.z + 1.9 <= 5 + 1e-6 && w.z > 2.5 && w.contact, `stops at the shore with its nose dry (z ${w.z.toFixed(2)})`);
+});
+
+test('freeDistance + contactSpeedCap: the jeep brakes softly toward a trunk ahead', () => {
+  const tree = { x: 0, z: 10, r: 0.6 };
+  const d = freeDistance(0, 0, 0, 1, JEEP_BODY, [tree], 30);
+  assert.ok(near(d, 10 - 0.6 - 1.0 - 0.9, 1e-6), `free run to the trunk (${d.toFixed(2)} m)`);
+  assert.equal(freeDistance(0, 0, 0, -1, JEEP_BODY, [tree], 30), 30, 'reversing away: nothing behind');
+  assert.equal(freeDistance(0, 0, Math.PI / 2, 1, JEEP_BODY, [tree], 30), 30, 'heading past it: clear');
+  const decel = JEEP_CAPS.maxSpeed / JEEP_RAMP_TIME;
+  assert.ok(contactSpeedCap(20, decel) >= JEEP_CAPS.maxSpeed, 'far away the cap does not bind');
+  assert.ok(near(contactSpeedCap(0, decel), CONTACT_CREEP), 'at the trunk only the creep is left');
+  assert.ok(contactSpeedCap(1, decel) < contactSpeedCap(2, decel), 'the closer, the slower (a smooth stop)');
+});
+
+test('wheelContact: flat ground → level; a slope → the matching pitch and roll', () => {
+  const flat = wheelContact(3, 4, 0.7, () => 2);
+  assert.ok(near(flat.y, 2) && near(flat.pitch, 0) && near(flat.roll, 0));
+  const up = wheelContact(0, 0, 0, (_x, z) => z * 0.1); // rises along +z = the nose at heading 0
+  assert.ok(up.pitch > 0 && near(Math.tan(up.pitch), 0.1, 1e-9), 'nose-up pitch on an uphill');
+  const side = wheelContact(0, 0, 0, (x) => x * 0.1); // left of forward at heading 0 is +x
+  assert.ok(side.roll > 0 && near(Math.tan(side.roll), 0.1, 1e-9), 'left side up on a side slope');
+});
