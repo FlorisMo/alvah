@@ -18,6 +18,7 @@
 
 import * as THREE from 'three';
 import { dampFactor, highlightPulse, safeCamHeight, tapHitRadius, trailPoints } from './kit-math';
+import { provideGoldenProbes, renderView, type PlayHintProbe, type SeatProbe } from '../../core/devhook';
 
 /* ------------------------------------------------------ test win channel ---- */
 
@@ -90,6 +91,216 @@ export function clearPlayHint(): void {
 export function currentPlayHint(): PlayHint | null {
   return activeHint ? activeHint() : null;
 }
+
+/*
+ * The golden-path probes behind `__ranger.playHint()/groundAt()/screenOf()/seating()`
+ * (devhook.ts documents each). They measure what the player SEES: the scene + camera
+ * the Stage rendered this frame (main.ts registers that view), the terrain mesh a
+ * down-ray meets, and the first opaque surface on a camera ray. Read-only; registered
+ * once below, only ever called by a test through the dev hook.
+ */
+
+type LiveView = { scene: THREE.Scene; camera: THREE.PerspectiveCamera; canvas: HTMLCanvasElement };
+
+function liveView(): LiveView | null {
+  const v = renderView() as { scene?: THREE.Scene; camera?: THREE.PerspectiveCamera } | null;
+  const canvas = document.getElementById('scene') as HTMLCanvasElement | null;
+  if (!v || !v.scene?.isScene || !v.camera || !canvas) return null;
+  return { scene: v.scene, camera: v.camera, canvas };
+}
+
+function shownInTree(o: THREE.Object3D): boolean {
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) return false;
+  return true;
+}
+
+/** Would this ray hit hide what lies behind it from the player? Pick hit-spheres,
+ *  hidden objects, invisible / colour-less materials and non-depth-writing (or
+ *  nearly clear) transparent overlays such as the cloud shade or contact shadows
+ *  do not. */
+function occludes(hit: THREE.Intersection): boolean {
+  const o = hit.object as THREE.Mesh;
+  if (!o.isMesh || o.userData.hitSphere || !shownInTree(o)) return false;
+  const mat = (Array.isArray(o.material) ? o.material[hit.face?.materialIndex ?? 0] : o.material) as THREE.Material | undefined;
+  if (!mat || !mat.visible || mat.colorWrite === false) return false;
+  return !(mat.transparent && (!mat.depthWrite || mat.opacity < 0.35));
+}
+
+const probeRay = new THREE.Raycaster();
+const probeBox = new THREE.Box3();
+const DOWN = new THREE.Vector3(0, -1, 0);
+let terrainCache: { scene: THREE.Scene; n: number; meshes: THREE.Object3D[] } | null = null;
+
+/** The meshes that ARE the ground: wide (≥ 40 m both ways), with relief, not instanced. */
+function terrainMeshes(scene: THREE.Scene): THREE.Object3D[] {
+  if (terrainCache && terrainCache.scene === scene && terrainCache.n === scene.children.length) return terrainCache.meshes;
+  const meshes: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || (m as THREE.InstancedMesh).isInstancedMesh || (m as THREE.SkinnedMesh).isSkinnedMesh) return;
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+    const b = probeBox.copy(m.geometry.boundingBox!).applyMatrix4(m.matrixWorld);
+    if (b.max.x - b.min.x >= 40 && b.max.z - b.min.z >= 40 && b.max.y - b.min.y > 0.05) meshes.push(m);
+  });
+  terrainCache = { scene, n: scene.children.length, meshes };
+  return meshes;
+}
+
+function groundUnder(scene: THREE.Scene, x: number, z: number): number | null {
+  probeRay.set(new THREE.Vector3(x, 200, z), DOWN);
+  probeRay.far = 400;
+  const hit = probeRay.intersectObjects(terrainMeshes(scene), false).find(occludes);
+  return hit ? hit.point.y : null;
+}
+
+/** World box of the VISIBLE meshes under `root` (hit-spheres and hidden parts left out). */
+function visibleBox(root: THREE.Object3D, out: THREE.Box3): THREE.Box3 {
+  out.makeEmpty();
+  const part = new THREE.Box3();
+  root.updateWorldMatrix(true, true);
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || m.userData.hitSphere || !shownInTree(m)) return;
+    const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material | undefined;
+    if (!mat || !mat.visible) return;
+    const sk = m as THREE.SkinnedMesh;
+    if (sk.isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh) {
+      (m as THREE.SkinnedMesh).computeBoundingBox();
+      part.copy((m as THREE.SkinnedMesh).boundingBox!);
+    } else {
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      part.copy(m.geometry.boundingBox!);
+    }
+    out.union(part.applyMatrix4(m.matrixWorld));
+  });
+  return out;
+}
+
+function toScreen(v: LiveView, p: THREE.Vector3): { x: number; y: number; onScreen: boolean; ndc: THREE.Vector3 } {
+  const ndc = p.clone().project(v.camera);
+  const r = v.canvas.getBoundingClientRect();
+  return {
+    x: r.left + ((ndc.x + 1) / 2) * r.width,
+    y: r.top + ((1 - ndc.y) / 2) * r.height,
+    onScreen: Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1 && ndc.z > -1 && ndc.z < 1,
+    ndc,
+  };
+}
+
+const r2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** A readable name for a scene object: its own/ancestor name or geometry, plus where it stands. */
+function describeObject(o: THREE.Object3D, scene: THREE.Scene): string {
+  if (terrainMeshes(scene).includes(o)) return 'terrain';
+  let top = o;
+  while (top.parent && top.parent !== scene) top = top.parent;
+  const self = o.name || (o as THREE.Mesh).geometry?.type || o.type;
+  const at = `(${r2(top.position.x)}, ${r2(top.position.y)}, ${r2(top.position.z)})`;
+  return top === o ? `${self}@${at}` : `${self} in ${top.name || top.type}@${at}`;
+}
+
+function describeElement(el: Element): string {
+  const cls = typeof el.className === 'string' && el.className ? `.${el.className.trim().split(/\s+/).join('.')}` : '';
+  const text = (el as HTMLElement).innerText?.trim().slice(0, 40);
+  return `${el.tagName.toLowerCase()}${cls}${text ? ` "${text}"` : ''}`;
+}
+
+function probePlayHint(): PlayHintProbe | null {
+  const hint = currentPlayHint();
+  if (!hint) return null;
+  const v = liveView();
+  const box = visibleBox(hint.target, new THREE.Box3());
+  if (!v || box.isEmpty()) {
+    return { id: hint.id, x: -1, y: -1, onScreen: false, firstHit: false, aboveGround: false,
+      firstHitBy: v ? 'target has no visible mesh' : 'no live world view', bottomGap: null, reachesCanvas: false, blocker: null };
+  }
+  const c = box.getCenter(new THREE.Vector3());
+  const s = toScreen(v, c);
+  probeRay.setFromCamera(new THREE.Vector2(s.ndc.x, s.ndc.y), v.camera);
+  probeRay.far = Infinity;
+  probeRay.layers.mask = v.camera.layers.mask;
+  const first = probeRay.intersectObject(v.scene, true).find(occludes);
+  let firstHit = false;
+  for (let p: THREE.Object3D | null = first?.object ?? null; p; p = p.parent) if (p === hint.target) { firstHit = true; break; }
+  const g = groundUnder(v.scene, c.x, c.z);
+  const el = s.onScreen ? document.elementFromPoint(s.x, s.y) : null;
+  return {
+    id: hint.id, x: r2(s.x), y: r2(s.y), onScreen: s.onScreen, firstHit,
+    aboveGround: g !== null && box.max.y > g + 0.01,
+    firstHitBy: first ? (firstHit ? hint.id : describeObject(first.object, v.scene)) : 'nothing',
+    bottomGap: g === null ? null : r2(box.min.y - g),
+    reachesCanvas: el === v.canvas,
+    blocker: el && el !== v.canvas ? describeElement(el) : null,
+  };
+}
+
+/** A short "what it looks like" signature, so a before/after compare sees a change. */
+function lookSig(root: THREE.Object3D): string {
+  const parts: string[] = [];
+  root.traverse((o) => {
+    if (!shownInTree(o) || o.userData.hitSphere) return;
+    const m = o as THREE.Mesh;
+    if (!m.isMesh && !(o as THREE.Sprite).isSprite) return;
+    const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial | undefined;
+    const img = mat?.map?.image as { width?: number; src?: string } | undefined;
+    parts.push(`${m.geometry?.type ?? o.type}:${m.geometry?.attributes?.position?.count ?? 0}:${mat?.color?.getHexString() ?? ''}:${img?.src?.slice(-24) ?? img?.width ?? ''}`);
+  });
+  return parts.sort().join('|');
+}
+
+function probeSeating(x: number, z: number, r: number): SeatProbe[] | null {
+  const v = liveView();
+  if (!v) return null;
+  const out: SeatProbe[] = [];
+  const terrain = terrainMeshes(v.scene);
+  const box = new THREE.Box3();
+  const c = new THREE.Vector3();
+  const m4 = new THREE.Matrix4();
+  const visit = (o: THREE.Object3D): void => {
+    if (!o.visible || o.userData.hitSphere || terrain.includes(o)) return;
+    if ((o as THREE.Light).isLight || (o as THREE.Camera).isCamera || (o as THREE.Points).isPoints
+      || (o as THREE.Line).isLine || (o as THREE.Sprite).isSprite) return;
+    const inst = o as THREE.InstancedMesh;
+    if (inst.isInstancedMesh) {
+      const label = o.name || inst.geometry.type;
+      for (let i = 0; i < inst.count; i++) {
+        inst.getMatrixAt(i, m4);
+        c.setFromMatrixPosition(m4.premultiply(inst.matrixWorld));
+        if (Math.hypot(c.x - x, c.z - z) > r) continue;
+        const g = groundUnder(v.scene, c.x, c.z);
+        if (g === null || c.y - g > 3) continue;
+        out.push({ id: `${label}#${i}`, x: r2(c.x), y: r2(c.y), z: r2(c.z), gap: r2(c.y - g), sig: `${label}#${i}` });
+      }
+      return;
+    }
+    // a pure container (at the origin, unrotated): what it holds is what is placed
+    if (o.children.length && !(o as THREE.Mesh).isMesh && o.position.lengthSq() < 1e-6
+      && o.quaternion.w > 0.99999 && o !== v.scene) { o.children.forEach(visit); return; }
+    if (o === v.scene) { o.children.forEach(visit); return; }
+    visibleBox(o, box);
+    if (box.isEmpty()) return;
+    box.getCenter(c);
+    const size = box.getSize(new THREE.Vector3());
+    if (size.x > 12 || size.z > 12 || Math.hypot(c.x - x, c.z - z) > r) return;
+    const g = groundUnder(v.scene, c.x, c.z);
+    if (g === null || box.min.y - g > 3) return;
+    out.push({ id: describeObject(o, v.scene), x: r2(c.x), y: r2(box.min.y), z: r2(c.z), gap: r2(box.min.y - g), sig: lookSig(o) });
+  };
+  visit(v.scene);
+  return out.sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
+}
+
+provideGoldenProbes({
+  playHint: probePlayHint,
+  groundAt: (x, z) => { const v = liveView(); return v ? groundUnder(v.scene, x, z) : null; },
+  screenOf: (x, y, z) => {
+    const v = liveView();
+    if (!v) return null;
+    const s = toScreen(v, new THREE.Vector3(x, y, z));
+    return { x: r2(s.x), y: r2(s.y), onScreen: s.onScreen };
+  },
+  seating: probeSeating,
+});
 
 /* --------------------------------------------------- activity abort scope ---- */
 

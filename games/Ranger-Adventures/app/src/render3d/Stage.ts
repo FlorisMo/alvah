@@ -464,6 +464,11 @@ export class Stage {
     this.frameCbs.push(cb);
   }
 
+  /** The scene + camera the loop renders now: the entered world, else the title. */
+  get view(): { scene: THREE.Scene; camera: THREE.PerspectiveCamera } {
+    return this.world ?? { scene: this.scene, camera: this.camera };
+  }
+
   /** F-18: the draw calls of the most recently rendered frame, captured the
    *  instant after render (renderer.info fresh). The dev hook reads this. */
   get drawCalls(): number {

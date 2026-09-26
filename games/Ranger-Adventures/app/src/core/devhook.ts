@@ -312,7 +312,45 @@ export interface RangerDevHook {
    *  band and none floats at head height in the edge frame. Null before the hook is
    *  ready. */
   boundary(): { bound: number; dist: number; atRim: boolean; scatterMax: number } | null;
+  /* ---- golden-path probes (e2e/golden.spec.ts). Read-only: they measure what the
+   * player SEES (the camera + scene the Stage rendered this frame), never resolve a
+   * step. The THREE-side maths lives in render3d/play/kit.ts ("test play hint"). ---- */
+  /** Where a perfect player would click NEXT in a running 3D mini-game: the engine's
+   *  registered hint target (kit `registerPlayHint`), its bounding-box centre projected
+   *  to CSS px with the live camera. `onScreen`: inside the viewport and in front of the
+   *  lens. `firstHit`: a camera ray through (x,y) meets the target before any other
+   *  opaque surface (terrain, a prop, the ranger); invisible pick hit-spheres, sprites
+   *  and non-depth-writing overlays are ignored; `firstHitBy` names what it met first.
+   *  `aboveGround`: the target's bbox top is above the rendered terrain at its x,z;
+   *  `bottomGap` (m) is its bbox bottom minus that terrain height (≈0 = standing on it).
+   *  `reachesCanvas`: a click at (x,y) lands on the 3D canvas; `blocker` names the DOM
+   *  element in the way when it does not. Null when no engine offers a hint right now. */
+  playHint(): PlayHintProbe | null;
+  /** Triangles drawn in the last rendered frame (renderer.info.render.triangles). */
+  tris(): number | null;
+  /** The RENDERED terrain height (m) at a world XZ (a down-ray onto the terrain mesh
+   *  the player sees), or null when no world is up. */
+  groundAt(x: number, z: number): number | null;
+  /** A world point projected to CSS px with the live camera (`onScreen` as playHint). */
+  screenOf(x: number, y: number, z: number): { x: number; y: number; onScreen: boolean } | null;
+  /** Every placed thing (model, prop, staged mini-game piece, instanced tree/tuft)
+   *  whose footprint centre lies within `r` m of (x,z), with `gap` = its lowest
+   *  visible point minus the rendered terrain under its centre (buried < 0 < floating)
+   *  and a `sig` of what it looks like (so a before/after compare shows the world
+   *  changed). Flying things (> 3 m up) and the terrain itself are left out. */
+  seating(x: number, z: number, r: number): SeatProbe[] | null;
 }
+
+/** `__ranger.playHint()` (see the field doc). */
+export type PlayHintProbe = {
+  id: string; x: number; y: number;
+  onScreen: boolean; firstHit: boolean; aboveGround: boolean;
+  firstHitBy: string | null; bottomGap: number | null;
+  reachesCanvas: boolean; blocker: string | null;
+};
+
+/** One entry of `__ranger.seating()`. */
+export type SeatProbe = { id: string; x: number; y: number; z: number; gap: number; sig: string };
 
 // Bumped at the W7.4 ship box: stamps the shipped world-first release so the
 // deployed bundle is identifiable (the preview + live E2E assert this exact
@@ -373,7 +411,41 @@ const state = {
   quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
   hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
   boundary: null as null | (() => { bound: number; dist: number; atRim: boolean; scatterMax: number } | null),
+  // golden-path probes: the Stage's live view + renderer (main.ts) and the THREE-side
+  // measurements (kit.ts). Kept `unknown` so this module stays three.js-free.
+  renderView: null as null | (() => unknown),
+  tris: null as null | (() => number),
+  probes: null as null | GoldenProbes,
 };
+
+/** The THREE-side golden-path measurements, registered by `render3d/play/kit.ts`. */
+export interface GoldenProbes {
+  playHint(): PlayHintProbe | null;
+  groundAt(x: number, z: number): number | null;
+  screenOf(x: number, y: number, z: number): { x: number; y: number; onScreen: boolean } | null;
+  seating(x: number, z: number, r: number): SeatProbe[] | null;
+}
+
+/** Register what the Stage renders right now ({ scene, camera }, THREE objects typed
+ *  unknown) — the golden-path probes measure exactly this view. */
+export function provideRenderView(fn: (() => unknown) | null): void {
+  state.renderView = fn;
+}
+
+/** The Stage's live { scene, camera } (unknown; the kit narrows it), or null. */
+export function renderView(): unknown {
+  return state.renderView ? state.renderView() : null;
+}
+
+/** Register the live triangle-count source (renderer.info.render.triangles). */
+export function provideTris(fn: (() => number) | null): void {
+  state.tris = fn;
+}
+
+/** Register the THREE-side golden-path probes (render3d/play/kit.ts does, once). */
+export function provideGoldenProbes(p: GoldenProbes | null): void {
+  state.probes = p;
+}
 
 /** Current screen the player is on. */
 export function setScreen(s: Screen): void {
@@ -646,6 +718,11 @@ export function installDevHook(): boolean {
     quality: () => (state.quality ? state.quality() : null),
     hint: () => (state.hint ? state.hint() : null),
     boundary: () => (state.boundary ? state.boundary() : null),
+    playHint: () => (state.probes ? state.probes.playHint() : null),
+    tris: () => (state.tris ? state.tris() : null),
+    groundAt: (x, z) => (state.probes ? state.probes.groundAt(x, z) : null),
+    screenOf: (x, y, z) => (state.probes ? state.probes.screenOf(x, y, z) : null),
+    seating: (x, z, r) => (state.probes ? state.probes.seating(x, z, r) : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;
