@@ -654,6 +654,9 @@
    so a tap never leaks through to the canvas, and it never clears the engine's
    `.ra-overlay` prompt underneath (which "Ga verder" resumes seamlessly). ---- */
 .mission-pause { z-index: 6; }
+/* The running step's own container (MissionFlow): no box of its own, so the step's
+   cards and 2D panel lay out and stack exactly as if they sat straight in #ui. */
+.mission-step { display: contents; }
 .mission-pause-menu {
   position: absolute;
   inset: 0;

@@ -7,7 +7,7 @@
  * Never a game-over: the reward always celebrates; difficulty flexes silently.
  */
 
-import type { Object3D, Scene } from 'three';
+import { Group, type Scene } from 'three';
 import type { Mission, Step, Clue } from '../../content/types';
 import type { BeatSummary, Engine } from '../../core/skill';
 import { store } from '../../core/state';
@@ -119,10 +119,6 @@ async function runMission(mission: Mission): Promise<void> {
     const play = ENGINE_VIEWS[step.ef];
     if (!play) { skipped = step.ef; break; }
     clearOverlays();
-    // Everything this step puts on screen (a 2D panel, the engine's card, the
-    // raaf's fact) is newer than this snapshot, so "Stop de missie" can take
-    // exactly that away and leave the world as it was.
-    const domBefore = new Set(Array.from(session.host.children));
     const world = session.world;
     // The ONE branch (§1f): play the step in-place when the world is live AND a
     // parity-green 3D variant ships for this engine; otherwise the 2D floor.
@@ -136,37 +132,46 @@ async function runMission(mission: Mission): Promise<void> {
     });
     setMissionView(mode);
     beginActivityScope(); // F-26: fresh abort scope — pick3d + the engine loop bind to it
+    // The step gets its OWN two containers, and the flow takes both away when the
+    // step ends — finished or stopped. Everything the step shows goes into `stepHost`
+    // (its cards, a 2D panel) and everything it stages into `stepStage` (a group in
+    // the world scene). So "Stop de missie" removes exactly the step and nothing of
+    // the world (trees that finish loading mid-step stay), and a timer the stopped
+    // step still had running writes into a container that is no longer on screen:
+    // it can never put a card back or take the explore HUD away.
+    const stepHost = document.createElement('div');
+    stepHost.className = 'mission-step';
+    session.host.appendChild(stepHost);
+    const stepStage = new Group();
+    stepStage.name = 'mission-step';
     let result: BeatSummary | 'STOP';
-    let scene: Scene | null = null;
-    let sceneBefore = new Set<Object3D>();
     // The world holds still while a step plays (2D floor included): the ranger stays
     // at the marker and the step owns the camera.
     world?.beginActivity();
     try {
       if (mode === '3d' && world) {
         const variant = variantFor(REGISTRY_3D, step.ef as Engine)!;
-        const ctx = world.ctx(session.host);
-        scene = ctx.scene as Scene;
-        sceneBefore = new Set(scene.children);
-        result = await raceStop(variant.play(ctx, stepForView(step)));
+        const ctx = world.ctx(stepHost);
+        (ctx.scene as Scene).add(stepStage);
+        result = await raceStop(variant.play({ ...ctx, scene: stepStage }, stepForView(step)));
       } else {
-        result = await raceStop(play(session.host, stepForView(step)));
+        result = await raceStop(play(stepHost, stepForView(step)));
       }
     } finally {
       clearActivityWin(); // W2.3: no win closure outlives its step
       clearPlayHint();
-      // a stopped step never tidies up after itself: take out what it staged
-      if (stopRequested && scene) for (const o of [...scene.children]) if (!sceneBefore.has(o)) scene.remove(o);
+      stepStage.removeFromParent();
+      stepHost.remove();
       world?.endActivity(); // camera + proximity back to free roam
     }
-    if (result === 'STOP' || stopRequested) { abandonMission(domBefore); return; }
+    if (result === 'STOP' || stopRequested) { abandonMission(); return; }
     store.logSession(step.ef as Engine, result);
     played.push(step.ef as Engine);
     if (step.skin.feit) {
       // W6.3b: playing in the world pins the fact as a collectible veldnotitie.
       store.collectVeldnotitie(Content.veldnotitieId(mission.id, i));
       const fact = await raceStop(showFact(step, ++factN, facts));
-      if (fact === 'STOP' || stopRequested) { abandonMission(domBefore); return; }
+      if (fact === 'STOP' || stopRequested) { abandonMission(); return; }
     }
   }
   unmountMissionPause();
@@ -239,12 +244,12 @@ function stopMission(): void {
   missionStop?.(); // resolve the step/fact race so runMission returns
 }
 
-/** Back to patrol right where the ranger stood: remove what the stopped step put
- *  on screen (a 2D panel would otherwise stay over the world), keep the world, the
- *  ranger and the jeep exactly as they were, and show the HUD again. */
-function abandonMission(domBefore: Set<Element>): void {
+/** Back to patrol right where the ranger stood. The stopped step is already gone
+ *  (its own containers were taken away when it ended); this removes the raaf's fact
+ *  card if the stop came there, keeps the world, the ranger and the jeep exactly as
+ *  they were, and shows the HUD again. */
+function abandonMission(): void {
   missionStop = null;
-  for (const el of Array.from(session.host.children)) if (!domBefore.has(el)) el.remove();
   clearOverlays();
   setScreen('world');
   setMissionView(null);
