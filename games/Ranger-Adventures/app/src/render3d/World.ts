@@ -1,487 +1,92 @@
 /**
- * World.ts — the explorable 3D Veluwe (BUILD-PLAN §4). A naturalistic heath/forest
- * (instanced real tree GLBs — pine·oak·birch — plus heather, all instanced to stay
- * well under the draw-call budget; P1.3), the real generated ranger you walk around,
- * and one animal "marker" per mission. Tap the
- * ground to walk; tap an animal (or walk up to it) to start that mission.
+ * World.ts — the explorable 3D Veluwe: a thin composer over the modules in world/.
  *
- * Render layer only — it drives the spine through the onApproach callback and
- * holds no game logic. Camera follows the §1e spec: fixed FOV, exponentially
- * damped follow, roll=0 always, no shake / head-bob / snap-rotate. Under
- * reduced-motion the follow cuts instead of damping and idle motion is off.
+ * It builds the modules in a fixed order (the order is behaviour: the shared
+ * collision-circle list is walked in insertion order by resolveMove), runs them once
+ * a frame in `update`, routes the interact key and the pointer, and keeps the public
+ * API the HUD (ui/Missions.ts), the in-place mini-games (`ctx()`) and the dev hook use.
+ *
+ *   world/Terrain.ts     the ground: mesh, y(x,z), biome(x,z) — the one ground truth
+ *   world/Sky.ts         sky, fog, golden-hour light + hero-shadow sun, clouds, flyover, ambient clock
+ *   world/Labels.ts      the diegetic name-tags + their distance fade
+ *   world/Dressing.ts    paths, ven water, trees + rim, heather, marram, reeds + wind, cabin, landmarks, nature props
+ *   world/Fauna.ts       the warden, the poacher, roaming animals, gliding birds
+ *   world/Markers.ts     mission markers, the Missiebord, the sit-spot: proximity, interact, wayfinding
+ *   world/Vehicles.ts    the jeep, the helicopter + pads, dust
+ *   world/Player.ts      the ranger: rig, controls, on-foot step, footsteps
+ *   world/CameraRig.ts   the follow camera and its comfort / visibility rails
+ *   world/DevReadback.ts the dev hook's read-backs
+ *
+ * Render layer only — it drives the spine through callbacks and holds no game logic.
+ * Camera law (§1e): fixed FOV, damped follow, roll 0, no shake; reduced-motion cuts.
  * Every asset is best-effort — missing models fall back to procedural stand-ins.
  */
 
 import * as THREE from 'three';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { livePolicy } from './MotionMode';
-import {
-  BIOME_PALETTE, VEN_CENTER, WATER_LEVEL,
-  anchorInBiome, biomeAt, heightAt, type Biome,
-} from './Biomes';
-import { loadManifest, loadModel, loadRig, prepModel, skinnedRenderBox } from './Models';
-import { standHeightFor, RANGER_STAND_HEIGHT, ADULT_REFERENCE_HEIGHT } from './AnimalScale';
-import { applyEyes } from './EyeMaterial';
-import { applyCoat, applyPosture } from './AnimalDress';
-import { applyFace } from './FaceRig';
-import { applyCalmPose } from './CalmPoseRig';
-import { gaitFor, motionAt, REST, type MotionRecipe } from './ProceduralMotion';
-import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from './AmbientPaths';
-import { resolveMove, type MoveLimits, type Obstacle } from './CharacterController';
-import { resolveInput, screenVector, type StickVector } from '../core/input';
-import { driveStep, driveCaps, calmSpeed, rampSpeed, comfortSteer, ANIMAL_SLOW_RADIUS } from '../core/vehicle';
-import {
-  flyStep, heliVignette, heliAvailable,
-  HELI_CRUISE_HEIGHT, HELI_PAD_HEIGHT, HELI_CAPS, HELI_ROLL,
-} from '../core/heli';
-import { attachInput, type InputHandle } from '../core/attach-input';
-import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../core/footstep';
+import { VEN_CENTER, WATER_LEVEL, type Biome } from './Biomes';
+import { Terrain } from './world/Terrain';
+import { Sky } from './world/Sky';
+import { Labels } from './world/Labels';
+import { Dressing } from './world/Dressing';
+import { Fauna } from './world/Fauna';
+import { Markers, type WorldMarker } from './world/Markers';
+import { Vehicles } from './world/Vehicles';
+import { Player, type TapTarget } from './world/Player';
+import { CameraRig } from './world/CameraRig';
+import { DevReadback } from './world/DevReadback';
+import type { MoveLimits, Obstacle } from './CharacterController';
+import type { StickVector } from '../core/input';
+import type { FootSurface } from '../core/footstep';
 import { Sound } from '../core/sound';
 import { store } from '../core/state';
 import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, QUALITY_TIERS, type QualityTier } from '../core/quality';
-import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from './Wayfinding';
-import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, routeVia } from './Paths';
-import {
-  mottleRGB, vertexTint, GROUND_TILE_PX, GROUND_TILE_REPEAT, GROUND_BRIGHTEN,
-  BIOME_GROUND_TONES, groundPatch,
-} from './GroundDetail';
+import type { WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
-import { dampFactor } from './play/kit-math';
-import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW } from './FollowCam';
-import { PlayerRig } from './PlayerRig';
-import { ROEP_COPY } from '../engines/roep';
-import {
-  SKY_STOPS, cloudOffset, windSway, flyoverAt, type Flyover,
-} from './Atmosphere';
-import {
-  GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky,
-} from './Lighting';
-import {
-  WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp,
-} from './Water';
-import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 
-// D1.2 locomotion ground-truth: opt three.js raycasts into three-mesh-bvh's
-// accelerated path so the per-frame ground-snap ray (see `groundSnapY`) is O(log n)
-// against the ~18k-tri terrain instead of brute-force — cheap on iPad, and the
-// foundation the P1.5a/P1.5b bursts and prop-seating build on. MIT, zero runtime
-// network, already an installed dep (RUN-D-DIRECTION §7.2). One-time prototype patch;
-// a mesh without a boundsTree still falls back to the stock raycast, so this is safe
-// for every other `intersectObject` in the file.
-THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
-THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
-THREE.Mesh.prototype.raycast = acceleratedRaycast;
-
-export interface WorldMarker {
-  missionId: string;
-  titel: string;
-  modelId: string | null;   // generated GLB id, or null → procedural totem
-  height: number;           // target world height for the model
-  color: string;            // totem / accent colour
-  biome?: Biome;            // the mission's landschap → anchor the marker in it
-}
-
-const SKY_LOW = GOLDEN_HOUR.fogColor; // shared golden-hour horizon + fog colour (P1.1)
-
-// D1.2 ground-snap constants. The ranger's Y is read by a ray cast straight DOWN
-// from well above his head (clear of any relief) against the real terrain mesh.
-const SNAP_ORIGIN_Y = 60;   // ray origin height (m) — above the tallest relief
-const SNAP_RAY_FAR = 200;   // ray length (m) — reaches the deepest ven basin
-// `grounded` band for the dev-hook court check (P1.5a asserts it across the world):
-// after the snap the feet sit ON the rendered surface, so clearance ≈ 0. A few cm of
-// float tolerance absorbs numeric wobble; more than SINK below or AIR above is "not
-// grounded" (the pre-fix analytic Y-write buried him ~4 m at the ven — clearance ≪ 0).
-const GROUND_SINK_TOL = 0.06; // feet may sit at most 6 cm below the rendered surface
-const GROUND_AIR_TOL = 0.60;  // and at most 60 cm above it (a step), else airborne
-
-// W5.1 jeep: its collision radius while parked, and the proximity radius that
-// surfaces the "Stap in" affordance (a touch wider than the 2.4 m marker radius —
-// the jeep is a bigger object the ranger walks up to).
-const JEEP_COLLIDE = 1.6;
-const JEEP_NEAR_R = 3.6;
-// P1.5b jeep ground contact (RUN-D-DIRECTION §2.2: vehicles read the RENDERED mesh,
-// not the mirrored analytic `heightAt`; runs/animation-research.md §4.5: a damped
-// hover, NEVER a hard per-frame Y-snap). The jeep's Y EASES toward the raycast ground
-// target each frame instead of clamping exactly to it — the old snap welded it to every
-// undulation (the "magnetically welded" stick Floris felt). The rate converges in ~0.1 s:
-// small enough that the jeep visually hugs the ground, large enough that its Y is a
-// smoothed suspension glide, not a lockstep terrain trace. Frame-rate independent.
-const JEEP_HOVER_RATE = 10;   // 1/s exponential approach of the jeep Y toward the ground target
-// The jeep's grounded band is wider than the walker's tight feet band: the hover lets Y
-// lag the target a little (that lag IS the smoothing) and a suspension rides a touch into
-// or above the surface. Below −SINK it has dropped THROUGH the ground; above +AIR it has
-// launched off a crest — either bound failing means "not grounded" (the dev-hook court).
-const JEEP_SINK_TOL = 0.5;    // may ride up to 0.5 m below the surface (compress / uphill lag)
-const JEEP_AIR_TOL = 1.0;     // and up to 1.0 m above it (crest / downhill lag) before airborne
-
-// W5.3b helicopter: its parked collision radius, the pad-proximity radius that
-// surfaces "Stap in de helikopter", and how close (horizontally) the aircraft
-// must be to a helipad to land on it.
-const HELI_COLLIDE = 1.8;
-const HELI_NEAR_R = 4.0;
-const PAD_LAND_R = 6.0;
-// Above this altitude (m) the flying helicopter ignores ground obstacles (it is
-// over the treetops) — only the world rim still bounds it; below it, on descent,
-// the normal resolver applies again (pads are walk-through, so touchdown is clean).
-const HELI_AIRBORNE_Y = 2.5;
-
-// F-11 world rim: a calm pine tree-line rings the playable area at the move bound
-// (`limits.bound`, 75 m) so walking outward meets a visible forest edge, never the
-// Run A silent void. RIM_EASE is the band (m) over which the ranger's OUTWARD step
-// eases to zero — a gentle stop, no invisible-wall jolt (the tangential slide ALONG
-// the rim keeps full speed). RIM_HINT is how close to the bound the calm "Hier stopt
-// het bos" cue fires (once per approach, re-armed inward). All in metres.
-const RIM_EASE = 8;
-const RIM_HINT = 3.5;
-// P5.5 (F-11 rim): low ground-tufts (heather/marram/reed) are kept at least this far (m)
-// inside the bound. Past here a short tuft falls in the parked ranger's OUTWARD rim frame
-// and — at mid-distance on the gently-rolling relief — detaches from its own ground line
-// (the foreground sweeps down past it to his boots), reading as a clump floating at head
-// height in the world-edge hero frame (GATE-P5). Sized to cover the rim-ease stop
-// (~bound−RIM_EASE) plus the ~4.6 m follow boom, so the whole class clears his view.
-const RIM_TUFT_CLEAR = 13;
-
-// F-22 occlusion-proof labels: the diegetic name-tags draw with depthTest off so
-// no nearer mesh can clip them mid-glyph (see makeLabel). The cost of drawing them
-// on top of everything is that a far tag would otherwise punch through hills from
-// across the map, so each fades OUT with distance — full opacity within FULL m
-// (the hub / an open mission, i.e. the moment the label matters), gone by GONE m.
-const LABEL_FADE_FULL = 55;  // camera→label distance (m) below which a tag is fully opaque
-const LABEL_FADE_GONE = 85;  // …and above which it has faded to nothing
-
-// P1.3: the tree canopy is authored at ONE fidelity. Both the scattered bos trees and
-// the F-11 rim tree-line render an instant low-poly cone/cylinder stand-in, then the
-// real staged tree GLBs (Scots pine · oak · birch) stream in as InstancedMesh and
-// REPLACE them — so no low-poly tree ever stands beside a realistic prop or animal
-// (RUN-C-DIRECTION §2.3: "no low-poly outlier may stand next to a realistic asset").
-// InstancedMesh keeps the whole forest at a handful of draw calls regardless of tree
-// count (§A8). The species mix is grove den dominant with eik/berk woven in (§2.2). The
-// trees are static (no wind), so the reduced-motion freeze is a no-op on them.
-type TreeSpecies = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
-interface TreePlacement { x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies }
-// prepModel target height (m) per species — mixed sizes; a per-instance scale rides on top.
-const TREE_BASE_H: Record<TreeSpecies, number> = {
-  'prop-pine-scots': 6.6, 'prop-oak-tree': 5.4, 'prop-birch-tree': 6.0,
-};
-// deterministic species pattern woven along the scatter/rim index — pine dominant.
-const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree'];
-const TREE_RIM_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-pine-scots', 'prop-birch-tree'];
-
-/**
- * Build one InstancedMesh per sub-mesh of a normalized (feet at y=0, x/z-centred)
- * model, one instance per placement. Each sub-mesh's model-local matrix is baked into
- * every instance so a clone renders identically to loadModel+prepModel — just shared
- * across N spots at 1 draw call each. Shadows off + an instance-aware bounding sphere
- * so the follow frustum culls the ring correctly (the trees never pop at the rim).
- */
-function instancesFromPrepped(prepped: THREE.Object3D, placements: TreePlacement[]): THREE.InstancedMesh[] {
-  prepped.updateMatrixWorld(true); // wrapper sits at identity → mesh.matrixWorld IS model-local
-  const out: THREE.InstancedMesh[] = [];
-  const world = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const pos = new THREE.Vector3();
-  const scl = new THREE.Vector3();
-  const yAxis = new THREE.Vector3(0, 1, 0);
-  prepped.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const local = mesh.matrixWorld.clone(); // this sub-mesh's transform in model-local space
-    const inst = new THREE.InstancedMesh(mesh.geometry, mesh.material, placements.length);
-    inst.castShadow = false;
-    inst.receiveShadow = false;
-    placements.forEach((p, k) => {
-      q.setFromAxisAngle(yAxis, p.rotY);
-      pos.set(p.x, p.y, p.z);
-      scl.set(p.s, p.s, p.s);
-      world.compose(pos, q, scl).multiply(local);
-      inst.setMatrixAt(k, world);
-    });
-    inst.instanceMatrix.needsUpdate = true;
-    inst.computeBoundingSphere(); // cover all instances so the rim ring isn't wrongly culled
-    out.push(inst);
-  });
-  return out;
-}
+export type { WorldMarker } from './world/Markers';
 
 export class World {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(55, 1, 0.1, 240);
 
-  private readonly ranger = new THREE.Group();
-  private readonly target = new THREE.Vector3(0, 0, 0);
-  private readonly camDesired = new THREE.Vector3();
-  // F-05: the third-person walk boom, rebuilt with guaranteed clearance and
-  // brought in + down from the giant-era (3.4, 6.2) rig so the ranger reads
-  // human-sized in an immersive over-the-shoulder frame. The old rig had no
-  // anti-clip rail, so the boom buried itself in whatever solid stood behind the
-  // ranger at a POI (the spawn hub, the dune by the jeep) and rendered that prop's
-  // unlit interior — Floris's #1 finding. placeCamera now spherecasts this boom
-  // against the collision solids + the ground and fades the ranger if it still
-  // collapses, so the world is always visible.
-  //
-  // Eye 2.4 m / boom 4.6 m / aim 1.1 m gives ~16° down. That is steeper than
-  // F-05's "a few degrees" because the FROZEN tap-to-walk smoke (e2e/movement:
-  // taps 32 % from the top expecting ground ahead) needs the horizon to sit above
-  // that tap row — a shallower lens lands the tap on sky and the ranger never
-  // moves. So this is F-05's lower/closer intent, clamped by the frozen contract.
-  private readonly camOffset = new THREE.Vector3(0, 2.4, 4.6); // behind-above, F-05 clearance
-  // P1.6a: the follow-lookAt aim point above the ranger's feet, derived as a
-  // FRACTION of his measured head height (`avatarTopY`) instead of a pin, so it
-  // tracks the ≈1.2 m child rig (~sternum: 1.1 m on a 1.7 m adult → ~0.78 m on the
-  // child) — else the child gets framed like a hobbit under an adult lens and the
-  // D1.5 chest-sightline test aims above his head (poort-audit #3). The walk aim
-  // sits a touch higher (sternum) than the idle aim (chest).
-  private readonly CAM_LOOK_FRAC = 0.65;      // walk aim ≈ sternum
-  private readonly CAM_IDLE_LOOK_FRAC = 0.59; // idle aim ≈ chest
-  private get camLookH(): number { return this.avatarTopY * this.CAM_LOOK_FRAC; }
-  private get camIdleLookH(): number { return this.avatarTopY * this.CAM_IDLE_LOOK_FRAC; }
-  private readonly CAM_PROBE_R = 0.35;  // camera "sphere" radius for the push-in cast
-  private readonly CAM_GROUND_CLR = 0.5; // keep the lens this far above the terrain
-  // D1.5 (audit #4) terrain sightline: cap how far the follow boom rides UP to clear a dune
-  // standing BETWEEN the lens and the ranger, so a pathological crest can't rocket the eye
-  // skyward. The Veluwe relief is gentle (~±2.2 m) plus the ~2.6 m mirrored-field divergence,
-  // so ~6 m clears every real dune; past it viewClear honestly reads not-clear (the fade rail
-  // then keeps the world visible rather than a smear).
-  private readonly MAX_TERRAIN_LIFT = 6;
-  // D1.5 free-walk occluder fade — the crown model for the cam→avatar sightline test.
-  // A tree's foliage is approximated as a sphere at CROWN_CENTER_FRAC of its GLB height
-  // (`TREE_BASE_H`×scale) with CROWN_RADIUS_FRAC radius. The trunk anti-clip
-  // (boomClearFraction) + the ranger fade already cover a trunk BEHIND him; the gap is
-  // the wide CROWN the lens lands INSIDE on a forest walk (`09-walk-4` full-frame void),
-  // which the projection-based avatarInView/onScreen cannot see. When a crown crosses the
-  // sightline the canopy is FADED (an opacity change, never a camera move → no
-  // comfort-law risk, §2.5) so the ranger is never lost behind leaves.
-  private readonly CROWN_CENTER_FRAC = 0.55; // crown centre height ÷ tree height (low enough to reach a head-height sightline)
-  private readonly CROWN_RADIUS_FRAC = 0.38; // crown radius ÷ tree height (the foliage volume, not the trunk)
-  private readonly CANOPY_FADE_MIN = 0.16;   // a lone between-lens crown ⇒ fade to this (the ranger reads through it)
-  private readonly CANOPY_FADE_BURIED = 0.04; // lens INSIDE a crown ⇒ fade near-invisible so stacked overlapping foliage still reads through (GATE-D1 audit #2: 0.16 global was still murk when buried)
-  private readonly CROWN_INSIDE_MARGIN = 0.6; // grow the crown for the lens-inside test so the fade LEADS the bury (no pop as the boom collapses into a crown)
-  private readonly CANOPY_SEE_THROUGH = 0.5; // canopy ≤ this ⇒ ranger reads through ⇒ viewClear true
-  private readonly CANOPY_RELEASE_TAU = 0.7; // gentle ease back to solid once the crown clears (calm, no pop)
-  // F-16 laptop dolly zoom: the player-set WALK boom distance (m, horizontal). Starts
-  // at the F-05 default (camOffset.z = 4.6); wheel/trackpad scroll dollies it in/out,
-  // clamped [zoomMinBoom() … CAM_ZOOM_MAX]. placeCamera reads it for the walk boom, so
-  // the existing position-damp gives the damped feel (and a CUT under reduced-motion,
-  // where placeCamera already snaps). The FOV is NEVER touched — a dolly, not a lens
-  // zoom (motion-comfort law). Vehicle/heli/activity own the camera, so a scroll there
-  // is ignored (onWheel returns early).
-  private readonly CAM_ZOOM_MAX = 9.5;   // dolly ceiling (~8–10 m boom, F-16)
-  private readonly CAM_ZOOM_STEP = 0.01; // wheel deltaY → metres of boom change per notch
-  private zoomDist = this.camOffset.z;   // current player-set walk boom (default = F-05 rig)
-  // Cached ranger horizontal bounding radius, measured once whenever the mesh is
-  // (re)built (measureAvatar). The min-boom clamp is `radius + near-plane` and the
-  // avatar fades when the boom gets within ~`radius + 1 m`, so a rig that ever
-  // renders bigger than the honest measured height still can't smear the lens (§4:
-  // pixels outrank the hook).
-  private avatarRadius = 0.45;
-  private avatarTopY = 1.2;             // D1.5 ⊕ P1.6a measured head height (feet→top; child ≈1.2 m) — the occluder-fade sightline aim; measureAvatar overwrites it off the live rig
-  private avatarOpacity = 1;            // current applied ranger fade (avoids churn)
-  private canopyOpacity = 1;            // D1.5 current applied tree-canopy occluder fade (1 = solid)
-  private viewClearState = true;        // D1.5 last cam→avatar sightline-clear read (camState reports it)
-  private terrainClearState = true;     // D1.5 (audit #4) last cam→avatar TERRAIN-clear read (folded into viewClear)
-  private terrainLiftState = 0;         // D1.5 (audit #4) metres the follow boom rode up to clear a dune this frame (0 = flat)
-  // D3.16: the diegetic "go here" halo rings (mission markers, the case-board, the
-  // sit-spot). They are wayfinding UI (§3), so they FADE by the lens's proximity — a
-  // collapsed close follow boom must never render one as a frame-filling hoop
-  // (`18-jeep-near`). Full 0.5 beyond RING_FADE_FAR, linearly to 0 by RING_FADE_NEAR.
-  private readonly groundRings: { mat: THREE.MeshBasicMaterial; x: number; z: number; base: number }[] = [];
-  private readonly RING_FADE_NEAR = 2.2; // lens ≤ this from a ring ⇒ fully faded (it's under/around the ranger)
-  private readonly RING_FADE_FAR = 4.2;  // lens ≥ this ⇒ full "go here" opacity (normal approach/standing boom ~4.6 m)
-  private readonly _camPose = new THREE.Vector3();  // scratch: camera world forward
-  private readonly _camBox = new THREE.Box3();       // scratch: ranger bbox for pose reads
-  private readonly _labelFwd = new THREE.Vector3();  // scratch: camera forward for the label fade
-  private readonly _labelWP = new THREE.Vector3();   // scratch: a label's world position
-  // F-22: every diegetic world/vehicle/POI name-tag makeLabel() builds, so one
-  // per-frame pass (fadeWorldLabels) can keep them all occlusion-proof + distance-faded.
-  private readonly labels: THREE.Sprite[] = [];
-  // W1.5 rotating follow-cam: `followYaw` is the eased camera bearing; it chases
-  // `followTargetYaw` (the ranger's facing, updated ONLY while he is moving — a
-  // standing ranger never swings the camera). Both start at π = straight behind
-  // on +z (the pre-W1.5 diorama bearing). Damped + rate-clamped in FollowCam.ts.
-  private followYaw = FIXED_FOLLOW_YAW;
-  private followTargetYaw = FIXED_FOLLOW_YAW;
-  // "Camera draait mee" toggle (Instellingen, default aan), read LIVE each frame
-  // so flipping it needs no restart; reduced-motion also forces the fixed bearing.
-  private cameraFollowSource: (() => boolean) | null = null;
-  // F-17 laptop drag-orbit: a PLAYER look-around layered ON TOP of the follow bearing.
-  // `orbitYaw` (free, wraps) rotates the walk boom around the ranger; `orbitLift` (m,
-  // clamped) raises/lowers the eye to tilt the view (the camera's real pitch — shown on
-  // the hook — follows). Both EASE toward their drag-set targets with the boom's own
-  // exp-damp, or CUT to them under reduced-motion (the "orbit as stepped cuts" the
-  // finding asks for). placeCamera applies them to the WALK cam only, so the drag moves
-  // ONLY the lens — never `pos` (the F-17 defect was a drag relocating the ranger). The
-  // click-vs-drag seam (onPointerDown/Move/Up) routes a clean tap to tap-to-walk and a
-  // past-threshold drag to the orbit alone. Input forward stays on the base bearing
-  // (cameraYaw unchanged) so orbiting can never feed back into a heading spin.
-  private orbitYaw = 0;
-  private orbitTargetYaw = 0;
-  private orbitLift = 0;
-  private orbitTargetLift = 0;
-  private readonly ORBIT_YAW_PER_PX = 0.005;  // rad of yaw per CSS px dragged (feel: demo)
-  private readonly ORBIT_LIFT_PER_PX = 0.02;  // m of eye-lift per CSS px dragged (feel: demo)
-  private readonly ORBIT_LIFT_MIN = -1.2;     // eye lower → flatter, toward the horizon (~pitch up)
-  private readonly ORBIT_LIFT_MAX = 3.0;      // eye higher → more top-down (~pitch down)
-  private readonly ORBIT_TAU = 0.18;          // orbit ease smooth-time (snappier than the follow)
-  // P1.0 (F-19) board-approach framing: when the walking ranger stands in the
-  // case-board's near-radius, `boardFrameYaw` eases onto the follow bearing so the
-  // lens swings to an over-the-shoulder three-quarter — the board FACE + its pinned
-  // papers clear the ranger's body instead of hiding directly behind his spine,
-  // while lookAt keeps the WHOLE ranger framed at believable scale. Player-initiated
-  // (walking INTO the radius), damped like the orbit, and a CUT under reduced-motion
-  // (the motion-comfort law: a reframe is a stepped cut, never a swoop). Eases back
-  // to 0 on leaving, so free-roam is untouched. The board is ALSO statically turned
-  // `BOARD_APPROACH_FACE_TURN` toward the +x swing side (placeHub) so its face + notes
-  // stay readable at that angle instead of going edge-on.
-  private boardFrameYaw = 0;
-  private readonly BOARD_FRAME_YAW = 0.9;      // over-the-shoulder swing (rad) when near the board
-  private readonly BOARD_FRAME_TAU = 0.16;     // board-reframe ease smooth-time (gentle, settles fast)
-  private readonly BOARD_APPROACH_FACE_TURN = 0.5; // static board face turn (rad) toward the +x approach view
-  // click-vs-drag discriminator (F-17 §3 seam): a pointer that travels past DRAG_PX is a
-  // camera drag (tap-to-walk suppressed); a cleaner press taps (walks to the release
-  // point). ~6 px per the finding — precise on a mouse, forgiving of a small touch jitter.
-  private readonly DRAG_PX = 6;
-  private dragId: number | null = null;   // the active orbit pointer (null = no gesture)
-  private dragStartX = 0;
-  private dragStartY = 0;
-  private dragLastX = 0;
-  private dragLastY = 0;
-  private dragMoved = false;               // crossed DRAG_PX → this gesture is an orbit, not a tap
-  private readonly markers: {
-    group: THREE.Group; pos: THREE.Vector3; missionId: string;
-    recipe: MotionRecipe; phase: number;
-    label: THREE.Sprite;               // the floating diegetic name-tag (hidden during an activity)
-    anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
-    mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
-  }[] = [];
-  // W3.3 scenic actors: the warden (BOA) + poacher stand at fixed world spots and
-  // play their single baked clip via a mixer. They are NOT missions (kept out of
-  // `markers`), carry no proximity/collision — purely diegetic set-dressing that
-  // brings the story arc into the world. Their clip is SECONDARY motion, so it
-  // freezes at the rest pose under reduced-motion (unlike the player's locomotion).
-  private readonly scenicActors: {
-    id: string; group: THREE.Group;
-    mixer: THREE.AnimationMixer | null; action: THREE.AnimationAction | null;
-    height: number;  // P1.6a: the actor's measured rendered stand-height (m) — the
-                     // mature-human reference the child ranger is judged against
-  }[] = [];
-  // W3.6 ambient wildlife: a few animals roam gentle wander loops (baked walk↔graze
-  // clips via the mixer for the W3.5-staged cast, improved procedural bob elsewhere)
-  // and two birds glide overhead on spline loops. All are pure set-dressing — no
-  // markers, no collision, kept out of `markers`. Their motion is SECONDARY, so it
-  // freezes at the rest pose under reduced-motion (like the animals + scenic actors).
-  private readonly ambient: {
-    id: string; group: THREE.Group; phase: number;
-    wander: WanderConfig | null;   // ground animals roam this loop
-    glide: GlideConfig | null;     // birds sail this overhead orbit
-    faceOffset: number;            // per-GLB forward correction (tuned in W3.7)
-    recipe: MotionRecipe;          // procedural idle bob (procedural cast only)
-    anim: THREE.Group | null;      // the prepped wrapper to drive procedurally
-    mixer: THREE.AnimationMixer | null;
-    walk: THREE.AnimationAction | null;   // baked stride clip
-    graze: THREE.AnimationAction | null;  // baked rest/graze clip
-    walkW: number; grazeW: number;        // eased crossfade weights
-    h: number;                            // applied canonical stand height (W3.7a)
-  }[] = [];
-  // W4.1 landmark props: the fixed wayfinding beacons (watchtower, ecoduct,
-  // bird-hide, BOA post, signposts) placed per §4. Each is set-dressing with a
-  // solid collision circle; the named ones carry a floating diegetic label so
-  // they read as "over there" beacons. Kept out of `markers` (no proximity /
-  // mission). Their world x/z is exposed through the dev hook for E2E navigation.
-  private readonly landmarks: { id: string; x: number; z: number }[] = [];
-  // W4.2 nature dressing: real tree/rock/mushroom/reed GLBs clustered near the
-  // POIs and biome cores, on top of the instanced-primitive background filler.
-  // Their world x/z is exposed through the dev hook so the E2E can assert them.
-  private readonly dressing: { id: string; x: number; z: number }[] = [];
+  // the sky, golden-hour light + ambient clock (world/Sky.ts) and the name-tags (world/Labels.ts)
+  private readonly sky: Sky;
+  // the paths, water, trees, grasses, cabin, landmarks + nature dressing (world/Dressing.ts)
+  private readonly dressing: Dressing;
+  // the warden, the poacher and the roaming / gliding wildlife (world/Fauna.ts)
+  private readonly fauna: Fauna;
+  // mission markers, the Missiebord + the sit-spot: proximity, interact, wayfinding (world/Markers.ts)
+  private readonly pois: Markers;
+  // the jeep, the helicopter + its pads, the dust (world/Vehicles.ts)
+  private readonly vehicles: Vehicles;
+  // the ranger: rig, controls, the on-foot step, footsteps (world/Player.ts)
+  private readonly player: Player;
+  // the follow camera: bearing, orbit, zoom, reframes, anti-clip + fade rails (world/CameraRig.ts)
+  private readonly cam: CameraRig;
+  // the dev hook's read-backs (world/DevReadback.ts)
+  private readonly readback: DevReadback;
+  private readonly labels = new Labels();
   // W4.4 ground detail: on by default; `?groundDetail=off` bakes the old flat
   // per-biome slab so the before/after evidence pair is one reproducible toggle.
   private readonly groundDetailOn: boolean =
     typeof location === 'undefined' ||
     new URLSearchParams(location.search).get('groundDetail') !== 'off';
-  private activeId: string | null = null;     // the mission the wayfinding cue points to
-  private readonly onWayfind: (cue: WayCue | null) => void;
-  private lastWayKey = '';                     // debounce identical cues (no DOM churn)
   private readonly raycaster = new THREE.Raycaster();
-  private readonly ground: THREE.Mesh;
-  // D1.2: a dedicated DOWN ray for the per-frame ground-snap, kept separate from the
-  // pointer `raycaster` so a tap-to-walk never disturbs the ground query (and vice
-  // versa). `firstHitOnly` (three-mesh-bvh) returns just the topmost terrain hit — all
-  // the ground-snap needs — so the accelerated cast can stop early.
-  private readonly groundRay = Object.assign(new THREE.Raycaster(), { firstHitOnly: true });
-  private readonly _snapOrigin = new THREE.Vector3();
-  private static readonly DOWN = new THREE.Vector3(0, -1, 0);
-  // W4.5 golden-hour light + selective hero shadow map. The warm sun casts a soft
-  // shadow only for the ranger + solid props (castShadow=true); its tight ortho
-  // frustum FOLLOWS the ranger via a fixed offset (`sunOffset`) so the covered set
-  // stays the CLOSEST props and the light DIRECTION never changes (static, no day
-  // cycle). Moving animals get cheap blob shadows instead (no shadow-map cost).
-  private sun: THREE.DirectionalLight | null = null;
-  private readonly sunOffset = new THREE.Vector3(-9, 7, 4);
-  private rangerCastsShadow = false;
-  private blobCount = 0;
+  // The ONE ground truth (world/Terrain.ts): the drawn ground mesh + y(x,z) + biome(x,z).
+  // Every placement, the ranger's feet, the vehicles and the camera read terrain.y.
+  private readonly terrain: Terrain;
   private renderer: THREE.WebGLRenderer | null = null;
   // W7.2 adaptive quality: the live tier drives the pixelRatio cap + vegetation
   // density. Seeded from the persisted verdict so a slow device boots light; the
   // per-frame fps probe re-decides with hysteresis (see update()).
   private tier: QualityTier = store.get().settings.kwaliteitTier;
   private readonly fpsProbe = new FpsProbe();
-  private static blobTex: THREE.Texture | null = null;
-  // W4.6: reusable scratch for the per-frame wind matrix recompose (no per-frame
-  // allocation while re-tilting a few hundred grass blades).
-  private static readonly _m = new THREE.Matrix4();
-  private static readonly _q = new THREE.Quaternion();
-  private static readonly _e = new THREE.Euler();
-  private static readonly _p = new THREE.Vector3();
-  private static readonly _s = new THREE.Vector3();
-  // W4.6 "Lucht + adem": all SECONDARY ambient motion (drifting cloud shadows,
-  // grass wind wave, bird flyover). `skyTime` advances ONLY when reduced-motion is
-  // off, so every effect freezes together under reduced-motion (comfort §C). The
-  // effects are driven from the pure Atmosphere math.
-  private skyTime = 0;
-  // W4.8 ven-water: the fresnel disc's shader material — the World drives its
-  // `uTime` (from `skyTime`, so it freezes with the rest of the ambient motion)
-  // and `uAmp` (0 under reduced-motion → waveless) each frame.
-  private waterMat: THREE.ShaderMaterial | null = null;
-  private lastWindT = NaN;                       // skip redundant wind re-uploads
-  private cloudLayer: THREE.Mesh | null = null;  // multiply-blended cloud-shadow plane
-  private flyBird: THREE.Group | null = null;    // the ~12 s sky crossing bird
-  private lastFlyover: Flyover | null = null;
-  // tall grasses that catch the wind (marram + reed): their instanced mesh + the
-  // per-blade base transform, re-tilted each frame by windSway.
-  private readonly windMeshes: {
-    mesh: THREE.InstancedMesh;
-    items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[];
-    strength: number;
-  }[] = [];
   private readonly canvas: HTMLCanvasElement;
-  private readonly onApproach: (missionId: string | null) => void;
-  private readonly onInteract: (missionId: string) => void;
   private readonly onBiome: (biome: Biome) => void;
   private lastBiome: Biome | null = null;       // re-pick the ambience bed on a crossing
-  private nearId: string | null = null;
-  // F-08: on-foot ground speed (m/s). Retuned down from the giant-tuned 2.4 (which
-  // measured ~2.7–3.5 m/s on the ground, 65–85 % of jeep speed) to a human ~1.8 m/s
-  // now that F-07 sizes the ranger honestly. The jeep (max 6 m/s) stays clearly
-  // faster — speed is its reason to exist. Drives BOTH the key-held and tap-to-walk
-  // seek below; the walk clip's cadence is tied to the resulting ground speed.
-  private speed = 1.8;
-  // W3.2 player animation: the mixer wrapper (idle/walk crossfade by speed, or a
-  // procedural bob when the rigged GLB lacks clips). `playerSpeed` is the ranger's
-  // post-collision ground speed (m/s), fed to the crossfade each frame.
-  private readonly playerRig = new PlayerRig();
-  private playerSpeed = 0;
-  // W4.7b surface-aware footsteps: a distance-carry cadence (fires every stride
-  // of ground actually covered), gated on sound + speed + biome surface.
-  // Locomotion feedback, so NOT reduced-motion gated (§3.4 exempts locomotion).
-  private footAccum: FootAccum = newFootAccum();
-  private footstepCount = 0;
-  private lastFootSurface: FootSurface | null = null;
-  // keyboard (+ joystick) movement: the held-keys set feeds resolveInput →
-  // resolveMove each frame, overriding tap-to-walk while any key is down (§3.2).
-  private input: InputHandle | null = null;
-  // the on-screen joystick's live vector (W1.3), fused with the keys at the
-  // resolveInput call site. Set by the HUD via setJoystick; null when absent.
-  private joystickSource: (() => StickVector | null) | null = null;
   // while a diegetic mini-game plays IN-PLACE, the world stays loaded but freezes:
   // movement, walk-taps, proximity, wayfinding and the §1e follow all pause so the
   // activity's reframe owns the camera (it restores on endActivity).
@@ -492,116 +97,9 @@ export class World {
   // backside is caught. Set in ctx(), cleared in endActivity(); null in free-roam.
   private activityFocus: { x: number; y: number; z: number } | null = null;
 
-  // W2.2 spawn-clearing hub: the ranger-cabin (a solid prop the ranger walks
-  // around) + the case-board (the MISSION hub — proximity opens the mission board
-  // overlay WITHOUT tearing the world down). The board has its own proximity/tap/
-  // interact path kept OUT of `markers` so it never pollutes wayfinding or the
-  // "nearest mission marker" the E2E steers to.
-  private boardGroup: THREE.Group | null = null;
-  private boardPos: THREE.Vector3 | null = null;
-  // F-09: the cabin's world position, kept so camState's landmark-in-frustum test
-  // can prove a hub landmark is in the world-entry frame (the board + cabin are the
-  // only hub markers inside the forward frustum; the beacons sit off to the sides).
-  private cabinPos: THREE.Vector3 | null = null;
-  private nearBoard = false;
-  private onBoardNear: (near: boolean) => void = () => {};
-  private onBoardOpen: () => void = () => {};
-  // F-11: latched true while the ranger is pressed against the world rim heading
-  // outward (the calm "Hier stopt het bos" cue has fired); re-armed once he walks
-  // back inward. `onBoundary` fires on the rising edge — once per approach.
-  private atBoundary = false;
-  private onBoundary: () => void = () => {};
-
-  // W6.4b2 "Ken je roep" sit-spot: a bench by the vogelkijkhut. Its own
-  // proximity/tap/interact path (like the case-board) — walking up surfaces
-  // "Luister naar de vogels", and acting on it plays the roep3d perception slice
-  // in-place. Kept OUT of `markers` so it never pollutes wayfinding or the
-  // "nearest mission" proximity the E2E steers to.
-  private sitSpotGroup: THREE.Group | null = null;
-  private sitSpotPos: THREE.Vector3 | null = null;
-  private nearSitSpot = false;
-  private onSitSpotNear: (near: boolean) => void = () => {};
-  private onSitSpotActivate: () => void = () => {};
-
-  // W5.1 drivable jeep: a solid parked prop the ranger walks up to ("Stap in"),
-  // then drives arcade-kinematic (heading-based, rate-clamped, terrain-stuck)
-  // with a WIDER follow-cam; "Stap uit" drops him beside it. Kept OUT of
-  // `markers` so it never pollutes wayfinding or the "nearest mission" proximity
-  // the E2E steers to (same reasoning as the case-board + scenic actors).
-  private jeep: THREE.Group | null = null;
-  private jeepPos: THREE.Vector3 | null = null;   // === jeep.position (x/z the controller drives)
-  private jeepHeading = 0;                         // yaw the arcade controller steers
-  private jeepHeadingUnwrapped = 0;                // F-32: cumulative (never wrapped) yaw the
-                                                   //   steering assert reads — a whole turn can
-                                                   //   never alias away between samples (F-18)
-  private jeepObstacle: Obstacle | null = null;    // its collision circle while parked
-  private inVehicle = false;
-  private nearJeep = false;
-  private vehicleSpeed = 0;                         // live signed speed (m/s), for the dev hook
-  private vehicleNearAnimal = false;                // W5.2: within the auto-slow radius of an animal
-  private onJeepNear: (near: boolean) => void = () => {};
-  private onVehicleChange: (inVehicle: boolean) => void = () => {};
-  // the wider vehicle follow-cam offset (§5 W5.1: distance 9, height 4.5) — the
-  // walking offset stays (0, 3.4, 6.2). placeCamera picks by `inVehicle`.
-  private readonly camOffsetVehicle = new THREE.Vector3(0, 4.5, 9);
-
-  // W5.3b helicopter (opt-in, unavailable under reduced-motion): a parked prop the
-  // ranger walks up to on a helipad, "Stap in" lifts off to a fixed cruise height
-  // (exp-damped ≤ 2 m/s climb, always-level horizon, damped yaw only), and landing
-  // at either pad steps back out. The pure flight maths live in core/heli.ts; World
-  // owns placement, collision (shared resolveMove), the follow-cam and the overlay.
-  private heli: THREE.Group | null = null;
-  private heliPos: THREE.Vector3 | null = null;     // === heli.position (x/z driven; y = ground + altitude)
-  private heliHeading = 0;                           // yaw (the only rotation)
-  private heliAltitude = 0;                          // metres above the ground plane
-  private heliObstacle: Obstacle | null = null;      // its collision circle while parked on a pad
-  private inHeli = false;
-  private nearHeli = false;
-  private heliLanding = false;                        // descend-to-pad in progress → exit on touchdown
-  private heliSpeed = 0;                              // live signed horizontal speed (m/s)
-  private heliClimbRate = 0;                          // live signed vertical speed (m/s)
-  private heliVignetteVal = 0;                        // live motion-vignette opacity (0 at hover)
-  private readonly helipads: { x: number; z: number }[] = [];
-  private onHeliNear: (near: boolean) => void = () => {};
-  private onHeliChange: (inHeli: boolean) => void = () => {};
-  private onHeliFrame: (vignette: number) => void = () => {};
-  private heliOptInSource: () => boolean = () => false; // Instellingen "Helikopter" toggle, read live
-  // an aerial follow offset (higher + further back than the jeep) — the ranger
-  // rides at the heli's world position (y = altitude), so the camera rises with it.
-  private readonly camOffsetHeli = new THREE.Vector3(0, 6, 13);
-
-  // W5.2 jeep dust: a single Points cloud (1 draw call, hidden while idle) that
-  // kicks up sand behind the driving jeep. Per-particle age/life drives a
-  // shader-side fade; emission is OFF under reduced-motion (secondary motion).
-  private dust: THREE.Points | null = null;
-  private dustPos: Float32Array | null = null;      // N·3 world positions
-  private dustVel: Float32Array | null = null;      // N·3 drift velocities
-  private dustAge: Float32Array | null = null;      // N ages (s)
-  private dustLife: Float32Array | null = null;     // N lifespans (s); ≤0 → dead slot
-  private dustNext = 0;                              // round-robin emit cursor
-  private dustSeed = 0x9e3779b1;                     // LCG state for deterministic scatter
-  private dustEmitting = false;                      // emitted this frame (dev hook: off under reduced-motion)
-  private static readonly DUST_N = 40;
-
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
   private readonly obstacles: Obstacle[] = [];
-  // P5.5 (F-11 rim): the furthest-out radius any LOW ground-tuft (heather/marram/reed)
-  // landed at. candidates() clears that class from the outer rim band (bound−RIM_TUFT_CLEAR)
-  // so none falls in the parked ranger's outward frame, where a mid-distance tuft on the
-  // rolling relief detaches from its ground line and reads as a clump floating at head
-  // height (the world-edge hero frame). The boundary annotation exposes this so the rim
-  // shot's assert can prove scatterMax ≤ bound−RIM_TUFT_CLEAR (the tall pines are exempt —
-  // they merge into the buildRim tree-line and may fill to the bound).
-  private scatterMax = 0;
-  // P1.3 tree canopy (see the module note above `instancesFromPrepped`): the instant
-  // cone/cylinder stand-ins to swap out, and the per-instance placements (scattered bos
-  // trees + the rim tree-line) to instance the real tree GLBs onto once they load.
-  private readonly treeFallbacks: THREE.Object3D[] = [];
-  // D1.5 occluder fade: the tree meshes the free-walk occluder fade currently dims — the
-  // cone fallback while the GLBs stream, then the instanced GLB canopy after the swap.
-  private readonly treeFadeMeshes: THREE.Object3D[] = [];
-  private readonly treePlacements: TreePlacement[] = [];
   private readonly limits: MoveLimits = {
     // F-11 (P4.6 rim re-judge): the calm forest edge sits at 75 m, NOT the old 116 m.
     // The Meshy ranger rig is a ~85-unit SKELETON scaled ×0.02 (bind-pose mesh geometry
@@ -625,16 +123,9 @@ export class World {
     bound: 75,                                   // ground plane is 240² → trees at ~76 land on it
     // off-limits = the submerged ven only (inside the water disc AND below the
     // surface) — NOT a global height test, so dry relief troughs stay walkable.
-    // D3.2: the RENDERED terrain basin sits at world (VEN_CENTER.x, -VEN_CENTER.z)
-    // — buildGround tilts the plane so the rendered height at world (x,z) is
-    // heightAt(x, -z) (the z-mirror). The water disc, ground-tone-ven and moss bank
-    // all live over that world basin, so the no-wade must too: block within the disc
-    // AND where the RENDERED surface (heightAt(x,-z)) is below the waterline. The old
-    // check used VEN_CENTER as a world coord + the analytic heightAt(x,z), which dip
-    // at the MIRRORED spot — a hill under the water, so the ven never read as water.
     blocked: (x, z) => {
-      const dx = x - VEN_CENTER.x, dz = z + VEN_CENTER.z; // world basin = (VEN_CENTER.x, -VEN_CENTER.z)
-      return dx * dx + dz * dz < 18 * 18 && heightAt(x, -z) < WATER_LEVEL + 0.15;
+      const dx = x - VEN_CENTER.x, dz = z - VEN_CENTER.z;
+      return dx * dx + dz * dz < 18 * 18 && this.terrain.y(x, z) < WATER_LEVEL + 0.15;
     },
   };
 
@@ -648,94 +139,100 @@ export class World {
     onInteract: (missionId: string) => void = () => {},
   ) {
     this.canvas = canvas;
-    this.onApproach = onApproach;
-    this.onInteract = onInteract;
-    this.onWayfind = onWayfind;
     this.onBiome = onBiome;
-    this.activeId = activeId;
 
-    this.scene.background = this.skyTexture();
-    this.scene.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 22, 90);
+    this.sky = new Sky(this.scene); // golden-hour sky, fog, hemisphere fill + the hero-shadow sun
 
-    // P1.1: the ONE shared golden-hour rig (Lighting.GOLDEN_HOUR, §2.1) — the same
-    // cool-sky / warm-ground hemisphere fill + warm low key the title + sandbox use,
-    // so no screen reads as a different game.
-    addGoldenHourHemi(this.scene);
-    // W4.5: a warm, low golden-hour sun raking in from screen-left (the camera
-    // looks down −z, so −x is the left of frame). Static direction — no day cycle.
-    const sun = makeGoldenHourSun();
-    sun.position.copy(this.sunOffset);
-    // Selective HERO shadow map: only meshes with castShadow=true (the ranger +
-    // solid props, opted in on load) drop a soft shadow. The ortho frustum is
-    // kept tight (±16 m) and FOLLOWS the ranger each frame (see update()), so the
-    // covered set is always the CLOSEST props — high-res + budget-safe.
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 60;
-    const R = 16;
-    sun.shadow.camera.left = -R; sun.shadow.camera.right = R;
-    sun.shadow.camera.top = R; sun.shadow.camera.bottom = -R;
-    sun.shadow.bias = -0.0006; // kill shadow acne on the low-poly ground
-    this.scene.add(sun);
-    this.scene.add(sun.target); // the shadow camera aims here; moved with the ranger
-    this.sun = sun;
-
-    this.ground = this.buildGround();
-    this.scene.add(this.ground);
-    this.scene.add(this.buildPaths()); // W4.3: sand-path ribbons over the ground
-    this.scene.add(this.buildVenWater());
-    this.buildCloudShadows(); // W4.6: drifting cloud shadows over the ground
-    this.buildFlyover();      // W4.6: the ~12 s bird flyover
+    this.terrain = new Terrain({
+      detail: this.groundDetailOn,
+      map: this.groundDetailOn ? Terrain.mottleTexture() : null,
+    });
+    this.scene.add(this.terrain.mesh);
+    this.dressing = new Dressing({
+      scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits, labels: this.labels,
+    });
+    this.fauna = new Fauna({ scene: this.scene, terrain: this.terrain });
+    this.pois = new Markers(
+      { scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, labels: this.labels },
+      { onApproach, onInteract, onWayfind }, activeId,
+    );
+    this.player = new Player(
+      {
+        scene: this.scene, camera: this.camera, canvas, raycaster: this.raycaster,
+        terrain: this.terrain, obstacles: this.obstacles, limits: this.limits,
+      },
+      {
+        pointerBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
+        orbitDrag: (dx, dy) => this.cam.orbitDrag(dx, dy),
+        tapTargets: () => this.tapTargets(),
+        crossBiome: (here) => this.crossBiome(here),
+      },
+    );
+    this.vehicles = new Vehicles(
+      { scene: this.scene, camera: this.camera, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits },
+      {
+        ranger: this.ranger,
+        seat: (seated) => this.player.rig.setSeated(seated),
+        stopWalk: (x, z) => { this.player.target.set(x, 0, z); this.player.groundSpeedNow = 0; },
+        intent: () => this.player.intent(),
+        follow: (yaw, snap) => { this.cam.followTargetYaw = yaw; if (snap) this.cam.followYaw = yaw; },
+        recut: () => this.cam.place(true, 0, livePolicy().reduced),
+        clearWalkPrompts: () => this.pois.clearForVehicle(),
+        crossBiome: (here) => this.crossBiome(here),
+        nearestAnimalDist: (x, z) => this.fauna.nearestAnimalDist(x, z),
+        camOffsets: () => ({ walk: this.cam.camOffset, vehicle: this.cam.camOffsetVehicle, heli: this.cam.camOffsetHeli }),
+      },
+    );
+    this.cam = new CameraRig(
+      { camera: this.camera, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits },
+      this.player, this.dressing,
+      {
+        mode: () => ({ inVehicle: this.vehicles.inVehicle, inHeli: this.vehicles.inHeli }),
+        nearBoard: () => this.pois.nearBoard,
+        inputBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
+        afterPlace: () => this.pois.fadeRings(this.camera),
+      },
+    );
+    this.scene.add(this.dressing.buildPaths()); // W4.3: sand-path ribbons over the ground
+    this.scene.add(this.dressing.buildVenWater());
+    this.sky.buildCloudShadows(); // W4.6: drifting cloud shadows over the ground
+    this.sky.buildFlyover();      // W4.6: the ~12 s bird flyover
     // W7.2: vegetation density scales with the persisted quality tier (laag ≈ half).
-    const veg = QUALITY_TIERS[this.tier].vegetationScale;
-    this.scatterPines(Math.round(80 * veg));
-    this.scatterHeather(Math.round(150 * veg));
-    this.scatterMarram(Math.round(110 * veg));
-    this.scatterReeds(Math.round(160 * veg)); // D3.2: a denser reed fringe reads at the shore
-    this.buildRim(); // F-11: the pine tree-line marking the world edge
-    void this.upgradeTreesToGLB(); // P1.3: swap the cone stand-ins for the real tree GLBs
-    this.applyWind(0); // W4.6: initial wind pose for both grass meshes
+    this.dressing.scatterVegetation(QUALITY_TIERS[this.tier].vegetationScale);
 
-    // ranger: procedural stand-in first (instant), real model swaps in when loaded
-    this.ranger.add(this.proceduralRanger());
-    this.scene.add(this.ranger);
-    // F-05 / F-09 world-entry composition (Run B P1.2 steer): spawn with the
-    // ranger's BACK to the follow lens. The rig defaults to rotation.y = 0 = facing
-    // +z = straight INTO the +z follow camera, so the world-entry / idle shots were
-    // a front-on, centre-frame ranger whose own coat filled the lens (the "reddish
-    // murk" five P1.1 re-grades misread as a buried boom — cam.dist ≈ 4.85 and
-    // avatarOpacity == 1 later proved the boom was healthy; the murk was his coat).
-    // π turns him down −z (forward, away from the lens) so the camera frames his
-    // back + open ground/horizon ahead — the third-person composition the movement
-    // smoke already assumes ("the camera sits behind, looking forward") — and it
-    // drops the 180° about-face the first forward press used to trigger. followYaw /
-    // followTargetYaw already init to π (FIXED_FOLLOW_YAW) so the lens is behind him
-    // from frame one; loadRealRanger clears only the children, never this rotation.
-    this.ranger.rotation.y = Math.PI;
-    this.measureAvatar(); // F-05: seed the camera rails off the stand-in's size
+    this.player.spawn(); // the instant stand-in at spawn, back to the lens; the real rig streams in below
 
     this.camera.up.set(0, 1, 0);
-    this.placeCamera(true);
+    this.cam.place(true);
 
-    this.placeMarkers(markers);
-    this.placeHub();
-    this.placeLandmarks();
-    this.placeSitSpot();
-    this.placeNatureDressing();
-    this.placeScenicActors();
-    this.placeAmbientLife();
-    this.placeJeep();
-    this.placeHelipads();
-    void this.loadRealRanger();
+    this.pois.placeMarkers(markers);
+    this.dressing.placeCabin();
+    this.pois.placeBoard();
+    this.dressing.placeLandmarks();
+    this.pois.placeSitSpot();
+    this.dressing.placeNatureDressing();
+    this.fauna.placeScenicActors();
+    this.fauna.placeAmbientLife();
+    this.vehicles.placeJeep();
+    this.vehicles.placeHelipads();
+    void this.player.loadRealRanger();
 
-    canvas.addEventListener('pointerdown', this.onPointerDown); // F-17 click-vs-drag seam
-    // move/up on the window so a drag that leaves the canvas still orbits + ends cleanly
-    window.addEventListener('pointermove', this.onPointerMove);
-    window.addEventListener('pointerup', this.onPointerUp);
-    window.addEventListener('pointercancel', this.onPointerUp);
-    canvas.addEventListener('wheel', this.onWheel, { passive: false }); // F-16 dolly zoom
-    this.input = attachInput(window, { onInteract: () => this.tryInteract() });
+    this.readback = new DevReadback(
+      {
+        camera: this.camera, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits,
+        sky: this.sky, dressing: this.dressing, fauna: this.fauna, pois: this.pois,
+        vehicles: this.vehicles, player: this.player, cam: this.cam,
+      },
+      {
+        renderer: () => this.renderer,
+        activityActive: () => this.activityActive,
+        activityFocus: () => this.activityFocus,
+      },
+    );
+
+    this.player.listenPointer(); // F-17 click-vs-drag seam: tap-to-walk or drag-orbit
+    canvas.addEventListener('wheel', this.cam.onWheel, { passive: false }); // F-16 dolly zoom
+    this.player.listenKeys(() => this.tryInteract());
   }
 
   /**
@@ -746,59 +243,52 @@ export class World {
    */
   private tryInteract(): void {
     if (this.activityActive) return;
-    // W5.1: the jeep owns the interact key when driving (Space = "Stap uit") or
-    // when standing beside the parked jeep (Space = "Stap in") — it wins over the
-    // hub/marker affordances (they never overlap the jeep's spot in practice).
-    if (this.inVehicle) { this.exitVehicle(); return; }
-    if (this.inHeli) { this.landHeli(); return; } // W5.3b: Space while flying → land at a pad
-    if (this.nearJeep) { this.enterVehicle(); return; }
-    // W5.3b: standing beside the parked helicopter → lift off (no-op + a calm
-    // "aan de grond" message under reduced-motion / when the toggle is UIT; the
-    // HUD reads `heliState().available` to decide what it shows).
-    if (this.nearHeli) { this.enterHeli(); return; }
-    // the spawn case-board hub wins when the ranger stands at it (W2.2) — its
-    // "open the mission board" affordance is what the interact key fires there.
-    if (this.nearBoard) { this.onBoardOpen(); return; }
-    // W6.4b2: standing at the sit-spot → play the "Ken je roep" slice.
-    if (this.nearSitSpot) { this.onSitSpotActivate(); return; }
-    if (this.nearId) this.onInteract(this.nearId);
+    // W5.1/W5.3b: the jeep + helicopter own the interact key while riding and when
+    // standing beside a parked one — they win over the hub/marker affordances.
+    if (this.vehicles.interact()) return;
+    // then the spawn case-board hub (W2.2), the sit-spot (W6.4b2), a mission marker.
+    this.pois.interact();
   }
 
   /** Dev-hook accessor (W1.4): the mission the ranger is standing at, or null. */
   nearMission(): string | null {
-    return this.nearId;
+    return this.pois.nearId;
   }
 
-  /** Dev-hook accessor (W2.2): the spawn case-board's world position + whether the
-   *  ranger currently stands in its radius — lets the E2E steer to the hub and know
-   *  it has arrived. `null` before the hub is placed. */
+  /** Dev-hook accessor (W2.2 ⊕ P1.0): the Missiebord's position, whether the ranger
+   *  stands at it, and whether its face is in frame. `null` before it is placed. */
   boardState(): { x: number; z: number; near: boolean; inFrustum: boolean } | null {
-    if (!this.boardPos) return null;
-    // P1.0 (F-19): is the board FACE/papers point (~1.4 m up = the pinned-notes band)
-    // actually inside the live view frustum? The board-affordance assert reads this
-    // TRUE while `near` to prove the approach framing keeps the board (not just the
-    // ranger's back) in shot. Pixels stay the court of appeal (AUDIT-FINDINGS §4).
-    const inFrustum = this.pointInFrustum(
-      this.boardPos.x, this.groundY(this.boardPos.x, this.boardPos.z) + 1.4, this.boardPos.z,
-    );
-    return { x: this.boardPos.x, z: this.boardPos.z, near: this.nearBoard, inFrustum };
+    return this.readback.boardState();
   }
 
-  /** P1.0 dev-hook helper: is the world point (x,y,z) inside the live camera view
-   *  frustum? Same plane-distance idiom as camState's landmark test, built off the
-   *  ACTUAL render camera (fresh matrices) so a board-in-frustum claim can never sit
-   *  on a stale matrix. Dev-hook-only (read at capture time), so the per-call Frustum
-   *  build is fine. */
-  private pointInFrustum(x: number, y: number, z: number): boolean {
-    const cam = this.camera;
-    cam.updateMatrixWorld();
-    cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
-    const fr = new THREE.Frustum().setFromProjectionMatrix(
-      new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse),
-    );
-    const p = new THREE.Vector3(x, y, z);
-    for (const plane of fr.planes) if (plane.distanceToPoint(p) < 0) return false;
-    return true;
+  /** Dev-hook accessor (F-11): the world-rim state (bound, distance, at-rim, tuft reach). */
+  boundaryState(): { bound: number; dist: number; atRim: boolean; scatterMax: number } {
+    return this.readback.boundaryState();
+  }
+
+  /** Dev-hook accessor (F-05 ⊕ F-18): the REAL render camera read-back. */
+  camState(): CamState | null {
+    return this.readback.camState();
+  }
+
+  /** Dev-hook accessor (W4.5): shadow map, sun, ranger caster, blob shadows. */
+  lightingState(): { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number } {
+    return this.readback.lightingState();
+  }
+
+  /** Dev-hook accessor (W4.6): the live sky / cloud / wind / flyover state. */
+  skyState(): ReturnType<Sky['state']> {
+    return this.readback.skyState();
+  }
+
+  /** Dev-hook accessor (D1.2): the ranger's feet against the drawn ground. */
+  groundedState(): { grounded: boolean; clearance: number; analyticGap: number } | null {
+    return this.readback.groundedState();
+  }
+
+  /** Dev-hook accessor (W4.4): the procedural ground detail on/off + its mottle map. */
+  groundDetailState(): { on: boolean; textured: boolean; tileRepeat: number } {
+    return this.readback.groundDetailState();
   }
 
   /** Register the spawn case-board hub callbacks (W2.2): `onNear(true|false)` as the
@@ -806,8 +296,7 @@ export class World {
    *  the prompt or press the interact key). The mission board opens as an overlay —
    *  the world is never torn down. */
   setBoard(cbs: { onNear: (near: boolean) => void; onOpen: () => void }): void {
-    this.onBoardNear = cbs.onNear;
-    this.onBoardOpen = cbs.onOpen;
+    this.pois.setBoard(cbs);
   }
 
   /** Register the F-11 world-rim cue: fired ONCE each time the walking ranger reaches
@@ -815,28 +304,13 @@ export class World {
    *  wires it to the calm "Hier stopt het bos" one-tip channel (`showBoundaryHint`) —
    *  the boundary hint joining the one sequenced hint system (BUILD-PLAN §3). */
   setBoundaryHint(cb: () => void): void {
-    this.onBoundary = cb;
-  }
-
-  /** Dev-hook accessor (F-11): the world-rim state — `bound` (the move-limit radius,
-   *  m), the ranger's live `dist` from world centre, and `atRim` (he is pressed
-   *  against the rim heading outward, so the "Hier stopt het bos" cue has fired). The
-   *  P4.6 assert reads `dist` ≤ `bound` (clamped, never beyond) with `atRim` true
-   *  after an outward walk — the gentle stop, not an invisible wall. P5.5 adds
-   *  `scatterMax` (the furthest LOW ground-tuft radius — heather/marram/reed): the rim
-   *  shot's assert reads `scatterMax` ≤ `bound − RIM_TUFT_CLEAR` to prove that class is
-   *  cleared from the outer rim band, so none floats at head height in the edge frame. */
-  boundaryState(): { bound: number; dist: number; atRim: boolean; scatterMax: number } {
-    const p = this.ranger.position;
-    return { bound: this.limits.bound, dist: Math.hypot(p.x, p.z), atRim: this.atBoundary, scatterMax: this.scatterMax };
+    this.player.onBoundary = cb;
   }
 
   /** Dev-hook accessor (W6.4b2): the sit-spot's world position + whether the ranger
-   *  stands in its radius — lets the E2E steer to the bench and know it has arrived.
-   *  `null` before the sit-spot is placed. */
+   *  stands in its radius. `null` before the sit-spot is placed. */
   sitSpotState(): { x: number; z: number; near: boolean } | null {
-    if (!this.sitSpotPos) return null;
-    return { x: this.sitSpotPos.x, z: this.sitSpotPos.z, near: this.nearSitSpot };
+    return this.pois.sitSpotState();
   }
 
   /** Register the sit-spot callbacks (W6.4b2): `onNear(true|false)` as the ranger
@@ -844,8 +318,7 @@ export class World {
    *  the prompt or press the interact key). The roep3d slice plays in-place — the
    *  world is never torn down. */
   setSitSpot(cbs: { onNear: (near: boolean) => void; onActivate: () => void }): void {
-    this.onSitSpotNear = cbs.onNear;
-    this.onSitSpotActivate = cbs.onActivate;
+    this.pois.setSitSpot(cbs);
   }
 
   /** Register the drivable-jeep HUD callbacks (W5.1): `onNear(true|false)` as the
@@ -853,298 +326,113 @@ export class World {
    *  `onChange(inVehicle)` when he climbs in / steps out. The HUD swaps its
    *  "Stap in" / "Stap uit" affordance from the live `vehicleState()`. */
   setVehicle(cbs: { onNear: (near: boolean) => void; onChange: (inVehicle: boolean) => void }): void {
-    this.onJeepNear = cbs.onNear;
-    this.onVehicleChange = cbs.onChange;
+    this.vehicles.setVehicle(cbs);
   }
 
-  /** Register the helicopter HUD callbacks (W5.3b): `onNear` as the ranger enters/
-   *  leaves a parked heli's pad radius, `onChange(inHeli)` on lift-off/touchdown
-   *  (the HUD toggles the cockpit frame), `onFrame(vignette)` each flight frame (the
-   *  HUD drives the motion-vignette opacity — off at hover), and `optIn` = the live
-   *  Instellingen "Helikopter" toggle (read each frame, so the availability updates
-   *  with no restart). */
+  /** Register the helicopter HUD callbacks (W5.3b): `onNear`, `onChange(inHeli)`,
+   *  `onFrame(vignette)` each flight frame, and `optIn` = the live Instellingen
+   *  "Helikopter" toggle (read each frame, so availability updates with no restart). */
   setHeli(cbs: {
     onNear: (near: boolean) => void;
     onChange: (inHeli: boolean) => void;
     onFrame: (vignette: number) => void;
     optIn: () => boolean;
   }): void {
-    this.onHeliNear = cbs.onNear;
-    this.onHeliChange = cbs.onChange;
-    this.onHeliFrame = cbs.onFrame;
-    this.heliOptInSource = cbs.optIn;
+    this.vehicles.setHeli(cbs);
   }
 
-  /** Dev-hook accessor (W5.3b): the helicopter's live state — placement, the two
-   *  helipads, opt-in + availability (withheld under reduced-motion), proximity,
-   *  whether the ranger is flying, world position + heading + altitude, the flight
-   *  caps + fixed cruise height, whether it is over a pad (can land), the live
-   *  vignette, and the comfort invariants (fixed FOV, roll 0) the E2E asserts. Null
-   *  before the helicopter is placed. */
-  heliState(): {
-    placed: boolean; available: boolean; optIn: boolean; near: boolean; inHeli: boolean; onPad: boolean;
-    x: number; z: number; heading: number; altitude: number;
-    speed: number; climbRate: number; cruiseHeight: number; maxSpeed: number; turnRate: number;
-    camDist: number; camHeight: number; fov: number; roll: number; vignette: number;
-    pads: { x: number; z: number }[];
-  } | null {
-    if (!this.heli || !this.heliPos) return null;
-    const optIn = this.heliOptInSource();
-    // TRUE roll = the camera right-vector's world-y (== 0 at any yaw/pitch because
-    // camera.up is world-up), NOT the Euler z — the same trap vehicleState() documents.
-    this.camera.updateMatrixWorld();
-    const rightY = this.camera.matrixWorld.elements[1];
-    return {
-      placed: true, available: heliAvailable(optIn, livePolicy().reduced), optIn,
-      near: this.nearHeli, inHeli: this.inHeli, onPad: this.overPad(),
-      x: this.heliPos.x, z: this.heliPos.z, heading: this.heliHeading, altitude: this.heliAltitude,
-      speed: this.heliSpeed, climbRate: this.heliClimbRate,
-      cruiseHeight: HELI_CRUISE_HEIGHT, maxSpeed: HELI_CAPS.maxSpeed, turnRate: HELI_CAPS.turnRate,
-      camDist: this.camOffsetHeli.z, camHeight: this.camOffsetHeli.y,
-      fov: this.camera.fov, roll: rightY, vignette: this.heliVignetteVal,
-      pads: this.helipads.map((p) => ({ x: p.x, z: p.z })),
-    };
+  /** Dev-hook accessor (W5.3b): the helicopter's live state (null before it is placed). */
+  heliState(): ReturnType<Vehicles['heliState']> {
+    return this.vehicles.heliState();
   }
 
-  /** Horizontal distance from the helicopter to the nearest helipad (m). */
-  private nearestPadDist(x: number, z: number): number {
-    let best = Infinity;
-    for (const p of this.helipads) {
-      const d = Math.hypot(p.x - x, p.z - z);
-      if (d < best) best = d;
-    }
-    return best;
-  }
-
-  /** Whether the flying helicopter is over a pad (so the interact key can land it). */
-  private overPad(): boolean {
-    return this.heliPos ? this.nearestPadDist(this.heliPos.x, this.heliPos.z) <= PAD_LAND_R : false;
-  }
-
-  /** W5.3b: lift off from the pad into damped flight. No-op unless standing beside
-   *  the parked heli AND the mode is available (opt-in + NOT reduced-motion — flight
-   *  is the one mode withheld entirely rather than merely calmed). The parked
-   *  collision circle is lifted so the aircraft can move; the ranger rides hidden. */
+  /** W5.3b: lift off from the pad (no-op unless beside the parked heli and available). */
   enterHeli(): void {
-    if (this.inHeli || !this.heli || !this.heliPos) return;
-    if (!heliAvailable(this.heliOptInSource(), livePolicy().reduced)) return; // withheld
-    this.inHeli = true;
-    this.heliHeading = this.heli.rotation.y;
-    this.heliAltitude = HELI_PAD_HEIGHT;
-    this.heliLanding = false;
-    this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
-    if (this.heliObstacle) {
-      const i = this.obstacles.indexOf(this.heliObstacle);
-      if (i >= 0) this.obstacles.splice(i, 1);
-      this.heliObstacle = null;
-    }
-    this.ranger.visible = false;                       // he rides inside
-    if (this.nearId) { this.nearId = null; this.onApproach(null); }
-    if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
-    this.followTargetYaw = this.heliHeading;
-    this.onHeliChange(true);
+    this.vehicles.enterHeli();
   }
 
-  /** W5.3b: begin the descent when the interact key is pressed while flying — but
-   *  ONLY over a helipad (§5 W5.3 "descend at pads only"). Off a pad it is a no-op
-   *  (the HUD then shows a calm "vlieg naar een helipad" hint). The exp-damped
-   *  ≤ 2 m/s descent + touchdown-triggered step-out happen in `flyHeli`. */
+  /** W5.3b: begin the descent — only over a helipad. */
   landHeli(): void {
-    if (!this.inHeli) return;
-    if (this.overPad()) this.heliLanding = true;
+    this.vehicles.landHeli();
   }
 
-  /** W5.3b: touchdown — set the helicopter down on the pad, step the ranger out
-   *  beside it (its LEFT, like the jeep), and re-park it as a solid prop so it
-   *  blocks + can be re-entered. Called from `flyHeli` at ground contact. */
-  private exitHeli(): void {
-    if (!this.inHeli || !this.heli || !this.heliPos) return;
-    this.inHeli = false;
-    this.heliLanding = false;
-    const h = this.heliHeading;
-    const hx = this.heliPos.x, hz = this.heliPos.z;
-    this.heliAltitude = HELI_PAD_HEIGHT;
-    this.heliPos.y = this.groundY(hx, hz);   // rest on the pad
-    this.heli.rotation.set(0, h, HELI_ROLL);
-    // step out to the heli's LEFT — (cos h, −sin h); resolveMove keeps him on solid
-    // ground and inside the rim, and the heli obstacle isn't back yet so he clears it.
-    const side = 2.6;
-    const next = resolveMove(hx, hz, hx + Math.cos(h) * side, hz - Math.sin(h) * side, this.obstacles, this.limits);
-    this.ranger.position.set(next.x, this.groundSnapY(next.x, next.z), next.z); // D1.2: land on the rendered surface, never a sunk exit
-    this.ranger.rotation.y = h;
-    this.ranger.visible = true;
-    this.target.set(next.x, 0, next.z);      // no stale walk target
-    this.followTargetYaw = h;
-    this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
-    this.playerSpeed = 0;
-    this.heliObstacle = { x: hx, z: hz, r: HELI_COLLIDE };
-    this.obstacles.push(this.heliObstacle);
-    this.nearHeli = true;                     // standing right beside it → "Stap in" again
-    this.onHeliChange(false);
-    this.onHeliFrame(0);                       // clear the motion vignette
+  /** Dev-hook accessor (W5.1): the drivable jeep's live state (null before it is placed). */
+  vehicleState(): ReturnType<Vehicles['vehicleState']> {
+    return this.vehicles.vehicleState();
   }
 
-  /** Dev-hook accessor (W5.1): the drivable jeep's live state — placement,
-   *  proximity, whether the ranger is driving, world position + heading, the
-   *  active arcade caps (reduced-motion halves them), the wider camera offset and
-   *  the comfort invariants (fixed FOV, roll 0) the E2E asserts. Null before the
-   *  jeep is placed. */
-  vehicleState(): {
-    placed: boolean; near: boolean; inVehicle: boolean;
-    x: number; z: number; y: number; heading: number; headingUnwrapped: number;
-    grounded: boolean; clearance: number;
-    speed: number; maxSpeed: number; turnRate: number;
-    camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
-  } | null {
-    if (!this.jeep || !this.jeepPos) return null;
-    const caps = driveCaps(livePolicy().reduced);
-    const off = this.inVehicle ? this.camOffsetVehicle : this.camOffset;
-    // P1.5b: the jeep's live ground contact — its world Y against the RENDERED surface
-    // directly under it (the D1.2 ray truth, never the mirrored analytic field). Sitting
-    // still, `clearance` ≈ 0; while driving relief the damped hover lets it lag a little
-    // (that lag IS the smoothing — never the old hard snap). `grounded` = the ray hit AND
-    // the clearance sits in the jeep suspension band. Pixels stay the court of appeal
-    // (§8.7): a shot that contradicts this outranks it.
-    this.groundRay.far = SNAP_RAY_FAR;
-    this.groundRay.set(this._snapOrigin.set(this.jeepPos.x, SNAP_ORIGIN_Y, this.jeepPos.z), World.DOWN);
-    const gh = this.groundRay.intersectObject(this.ground, false);
-    const jeepSurfaceY = gh.length ? gh[0].point.y : this.groundY(this.jeepPos.x, this.jeepPos.z);
-    const jeepClearance = this.jeepPos.y - jeepSurfaceY;
-    const jeepGrounded = gh.length > 0 && jeepClearance >= -JEEP_SINK_TOL && jeepClearance <= JEEP_AIR_TOL;
-    // TRUE roll = tilt of the camera's right vector off horizontal. `camera.up` is
-    // pinned to world-up and lookAt derives the basis from it, so right lies in the
-    // xz-plane → right.y ≈ 0 at ANY yaw/pitch. (camera.rotation.z is NOT roll here —
-    // the pitched+yawed Euler couples the axes, the same trap cameraYaw() avoids.)
-    this.camera.updateMatrixWorld();
-    const rightY = this.camera.matrixWorld.elements[1]; // column 0, row 1 = right.y
-    return {
-      placed: true, near: this.nearJeep, inVehicle: this.inVehicle,
-      x: this.jeepPos.x, z: this.jeepPos.z, y: this.jeepPos.y, heading: this.jeepHeading,
-      headingUnwrapped: this.jeepHeadingUnwrapped,
-      grounded: jeepGrounded, clearance: jeepClearance,
-      speed: this.vehicleSpeed, maxSpeed: caps.maxSpeed, turnRate: caps.turnRate,
-      camDist: off.z, camHeight: off.y, fov: this.camera.fov, roll: rightY,
-      nearAnimal: this.vehicleNearAnimal, dust: this.dustEmitting,
-      // F-31: true only while actually riding the jeep with the ranger mesh hidden
-      // (the sanctioned fallback). Read off the REAL `.visible`, so it can never
-      // claim a hidden driver the render did not hide (§4: telemetry stays honest).
-      driverHidden: this.inVehicle && !this.ranger.visible,
-    };
-  }
-
-  /** W5.1: climb into the parked jeep — arcade drive mode takes over movement and
-   *  the wider follow-cam eases in; the ranger rides hidden. The parked collision
-   *  circle is lifted so the jeep can move. No-op unless standing beside it. */
+  /** W5.1: climb into the parked jeep (no-op unless standing beside it). */
   enterVehicle(): void {
-    if (this.inVehicle || !this.jeep || !this.jeepPos) return;
-    this.inVehicle = true;
-    this.jeepHeading = this.jeep.rotation.y;
-    this.jeepHeadingUnwrapped = 0;   // F-32: fresh drive → measure steering drift from entry
-    this.vehicleSpeed = 0;
-    if (this.jeepObstacle) {
-      const i = this.obstacles.indexOf(this.jeepObstacle);
-      if (i >= 0) this.obstacles.splice(i, 1);
-      this.jeepObstacle = null;
-    }
-    this.ranger.visible = false;                       // he rides inside
-    // F-31: he is now SEATED, not idling — freeze locomotion so `clip` reports a
-    // still `sit` (never idle/walk) for every in-vehicle frame, killing the empty-
-    // jeep story-lie. He rides hidden under the jeep's canopy (the sanctioned
-    // "verifiably hidden" fallback — the cabin roof occludes a driver from the
-    // F-30 chase cam anyway); `vehicleState().driverHidden` proves it to the assert.
-    this.playerRig.setSeated(true);
-    // F-30: re-anchor the (hidden) ranger AT the jeep now, so the boarding CUT frames
-    // the jeep itself, not the boarding spot ~2 m to its side (driveJeep keeps him
-    // pinned here every frame after, so the follow-cam + step-out anchor track the jeep).
-    this.ranger.position.copy(this.jeepPos);
-    this.ranger.rotation.y = this.jeepHeading;
-    // clear any walk-time affordances so nothing lingers behind the "Stap uit" pill
-    if (this.nearId) { this.nearId = null; this.onApproach(null); }
-    if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
-    // snap the follow bearing behind the parked jeep so the boarding reframe is a clean
-    // CUT, never a swing from the old walk facing; the eased jeep-follow takes over next
-    // frame (damped toward jeepHeading — F-30 wants a lagged follow, not a hard lock).
-    this.followTargetYaw = this.jeepHeading;
-    this.followYaw = this.jeepHeading;
-    this.onVehicleChange(true);
-    // W5.2: soft engine loop while driving (gated on the sound setting; the
-    // Space-to-enter gesture already unlocked the AudioContext).
-    if (store.get().settings.geluid) Sound.engineStart();
-    // F-30: boarding is a CUT for EVERYONE, not only under reduced-motion — the walk
-    // boom → wider jeep chase-cam reframe is exactly the kind of camera MOVE the
-    // motion-comfort law turns into a step. Snap straight to the jeep cam; pass the
-    // live reduced flag through so the fade/orbit handling stays correct.
-    this.placeCamera(true, 0, livePolicy().reduced);
+    this.vehicles.enterVehicle();
   }
 
-  /** W5.1: step out of the jeep beside it, back to walking; re-park the jeep as a
-   *  solid prop at its resting spot so it blocks + can be re-entered. No-op unless
-   *  currently driving. */
+  /** W5.1: step out of the jeep beside it, back to walking (no-op unless driving). */
   exitVehicle(): void {
-    if (!this.inVehicle || !this.jeep || !this.jeepPos) return;
-    this.inVehicle = false;
-    const h = this.jeepHeading;
-    const jx = this.jeepPos.x, jz = this.jeepPos.z;
-    // step out to the jeep's LEFT — the left-of-forward vector is (cos h, −sin h)
-    // (see vehicle.ts steer derivation). resolveMove keeps him on solid ground
-    // and inside the rim; the jeep obstacle isn't back yet, so he clears it fully.
-    const side = 2.4;
-    const next = resolveMove(jx, jz, jx + Math.cos(h) * side, jz - Math.sin(h) * side, this.obstacles, this.limits);
-    this.ranger.position.set(next.x, this.groundSnapY(next.x, next.z), next.z); // D1.2: land on the rendered surface, never a sunk exit
-    this.ranger.rotation.y = h;
-    this.ranger.visible = true;
-    this.playerRig.setSeated(false);       // F-31: back on foot — locomotion resumes (idle)
-    this.target.set(next.x, 0, next.z);   // no stale walk target
-    this.followTargetYaw = h;
-    this.followYaw = h; // snap the bearing behind the exit facing so the step-out is a CUT too
-    this.vehicleSpeed = 0;
-    this.playerSpeed = 0;
-    // re-park the jeep as a solid obstacle at its new resting spot
-    this.jeepObstacle = { x: jx, z: jz, r: JEEP_COLLIDE };
-    this.obstacles.push(this.jeepObstacle);
-    this.nearJeep = true;                  // standing right beside it → "Stap in" again
-    this.vehicleNearAnimal = false;
-    this.dustEmitting = false;
-    Sound.engineStop();                    // W5.2: engine falls silent on step-out
-    this.onVehicleChange(false);
-    // F-30: stepping out hands straight back to the walk boom as a CUT for EVERYONE
-    // (symmetry with boarding; the motion-comfort law prefers cuts to reframe moves).
-    this.placeCamera(true, 0, livePolicy().reduced);
+    this.vehicles.exitVehicle();
   }
 
   /** Dev-hook accessor (W1.4): every marker's world position, for E2E navigation. */
   markerPositions(): { x: number; z: number; missionId: string }[] {
-    return this.markers.map((m) => ({ x: m.pos.x, z: m.pos.z, missionId: m.missionId }));
+    return this.pois.markerPositions();
+  }
+
+  /** Dev-hook accessor (WORLD-PLAN §3.1): the ranger's world position {x,z}. */
+  pos(): { x: number; z: number } {
+    return this.player.pos();
+  }
+
+  /** The ranger's active locomotion clip for the dev hook (null when procedural). */
+  playerClip(): { name: string; time: number } | null {
+    return this.player.clip();
+  }
+
+  /** Dev-hook accessor (F-08): the ranger's live post-collision ground speed (m/s). */
+  groundSpeed(): number {
+    return this.player.groundSpeed();
+  }
+
+  /** Dev-hook accessor (F-07): the player ranger's live rendered height (m). */
+  avatarState(): { height: number } | null {
+    return this.player.avatarState();
+  }
+
+  /** Dev-hook accessor (W4.7b): the running footstep count + the last surface. */
+  footstepState(): { count: number; surface: FootSurface | null } {
+    return this.player.footstepState();
+  }
+
+  /** The ambience follows the ranger (on foot, driving or flying) across biomes. */
+  private crossBiome(here: Biome): void {
+    if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
+  }
+
+  /** What a tap on the canvas can walk the ranger up to, in pick order (then the ground). */
+  private tapTargets(): TapTarget[] {
+    const out: TapTarget[] = [];
+    for (const mk of this.pois.list) out.push({ object: mk.group, x: mk.pos.x, z: mk.pos.z, stop: 1.6 });
+    const p = this.pois, v = this.vehicles;
+    if (p.boardGroup && p.boardPos) out.push({ object: p.boardGroup, x: p.boardPos.x, z: p.boardPos.z, stop: 1.6 });
+    if (p.sitSpotGroup && p.sitSpotPos) out.push({ object: p.sitSpotGroup, x: p.sitSpotPos.x, z: p.sitSpotPos.z, stop: 1.4 });
+    if (v.jeep && v.jeepPos) out.push({ object: v.jeep, x: v.jeepPos.x, z: v.jeepPos.z, stop: 2.2 });
+    if (v.heli && v.heliPos) out.push({ object: v.heli, x: v.heliPos.x, z: v.heliPos.z, stop: 2.4 });
+    return out;
   }
 
   /** Register the on-screen joystick's live-vector source (W1.3). The HUD wires
    *  it on world entry; pass null to clear. Fused with held keys each frame. */
   setJoystick(source: (() => StickVector | null) | null): void {
-    this.joystickSource = source;
+    this.player.joystickSource = source;
   }
 
   /** Register the "Camera draait mee" setting source (W1.5). Read live each frame
    *  so the toggle takes effect with no restart; null → default aan. */
   setCameraFollow(source: (() => boolean) | null): void {
-    this.cameraFollowSource = source;
+    this.cam.setFollowSource(source);
   }
 
-  /** Dev-hook accessor (WORLD-PLAN §3.1): the ranger's world position {x,z}. */
-  pos(): { x: number; z: number } {
-    return { x: this.ranger.position.x, z: this.ranger.position.z };
-  }
-
-  /** Dev-hook accessor: the follow-camera yaw in radians — the world direction
-   *  "into the screen" that camera-relative input (`resolveInput`) rotates by.
-   *  Derived DIRECTLY from the follow bearing (not read back from the pitched
-   *  camera's Euler, which couples yaw with pitch): the camera looks along
-   *  `(sin followYaw, cos followYaw)`, and `resolveInput`'s forward at yaw ψ is
-   *  `(−sin ψ, −cos ψ)`, so ψ = followYaw + π. Fixed-bearing (followYaw = π)
-   *  reads exactly 0, matching the W1.2–W1.4 baseline; the rotating follow makes
-   *  it track input-driven facing so the W1.5 yaw-change assert has a real signal. */
+  /** Dev-hook accessor: the follow-camera yaw the camera-relative input rotates by. */
   cameraYaw(): number {
-    return wrapAngle(this.followYaw + Math.PI);
+    return this.cam.cameraYaw();
   }
 
   dispose(): void {
@@ -1154,965 +442,26 @@ export class World {
     // world's id-cached geometry/materials") — the fresh `13-title-return` showed half-ghosted
     // crowns on the title, the slow fade release carried into a composed hero screen (§2.5:
     // occluder fades reset when a composed screen takes the camera). Cheap material writes only.
-    this.setCanopyOpacity(1);
-    this.setAvatarOpacity(1);
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown); // F-17
-    window.removeEventListener('pointermove', this.onPointerMove);
-    window.removeEventListener('pointerup', this.onPointerUp);
-    window.removeEventListener('pointercancel', this.onPointerUp);
-    this.canvas.removeEventListener('wheel', this.onWheel); // F-16 dolly zoom
+    this.dressing.setCanopyOpacity(1);
+    this.player.setAvatarOpacity(1);
+    this.player.dispose(); // pointer seam + keys
+    this.canvas.removeEventListener('wheel', this.cam.onWheel); // F-16 dolly zoom
     Sound.engineStop(); // W5.2: never leak the engine loop past teardown
-    this.input?.dispose();
-    this.input = null;
     this.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       if (m.geometry) m.geometry.dispose();
     });
   }
 
-  // ---- build ----
-  private skyTexture(): THREE.Texture {
-    // P1.1: the SHARED golden-hour ramp (Atmosphere.SKY_STOPS via Lighting), the
-    // same soft warm zenith→horizon bands the title + sandbox bake — one sky.
-    return bakeGoldenHourSky();
-  }
-
-  private buildGround(): THREE.Mesh {
-    // continuous biome relief (Biomes.heightAt) + per-vertex biome tint so heide
-    // fades into bos / stuifzand / ven with no seam. One draw call (vertexColors).
-    // W4.4: on top of the flat slab, each vertex gets a low-frequency brightness
-    // wash (vertexTint) and the material carries a repeating procedural mottle
-    // canvas (mottleRGB) for hand-brushed grain — both add detail, no draw calls.
-    const detail = this.groundDetailOn;
-    const geo = new THREE.PlaneGeometry(240, 240, 96, 96);
-    const pos = geo.attributes.position as THREE.BufferAttribute;
-    const colors = new Float32Array(pos.count * 3);
-    const c = new THREE.Color();
-    const cA = new THREE.Color(), cB = new THREE.Color(); // P1.2 two-tone scratch
-    const cWet = new THREE.Color('#39422e'); // D3.2 wet moss/peat at the waterline
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), y = pos.getY(i); // plane is XY before the -90° tilt → world z = y
-      const gh = this.groundY(x, y);
-      pos.setZ(i, gh);
-      const biome = biomeAt(x, y);
-      if (detail) {
-        // P1.2: mix the biome's two naturalistic ground tones by the patch field
-        // so each landschap reads as real Veluwe ground (heather-over-sand heide,
-        // litter+moss bos, pale drift stuifzand, mossy-peat ven) — never a flat
-        // hue. Then brighten to offset the mottle map's average shade (parity) and
-        // add the soft per-vertex wash blotch; clamp so no channel blows past 1.
-        const [hexA, hexB] = BIOME_GROUND_TONES[biome];
-        cA.set(hexA); cB.set(hexB);
-        // D3.2: bias the HEIDE toward its bloom tone so the hub reads as flowering paarse
-        // heide (purple mats over sand patches), not a flat warm-brown slab — real bloeiende
-        // heide is purple-dominant. Other biomes keep the even two-tone mix.
-        const patch = groundPatch(x, y);
-        const t = biome === 'heide' ? Math.min(1, patch * 1.5 + 0.08) : patch;
-        const m = GROUND_BRIGHTEN * vertexTint(x, y);
-        c.setRGB(
-          Math.min(1, (cA.r + (cB.r - cA.r) * t) * m),
-          Math.min(1, (cA.g + (cB.g - cA.g) * t) * m),
-          Math.min(1, (cA.b + (cB.b - cA.b) * t) * m),
-        );
-        // D3.2: a wet moss/peat BANK at the ven waterline — the ground darkens + cools
-        // toward wet peat as it nears WATER_LEVEL, so the shore reads as a moss-soft bank
-        // grading into the water (doc §2.2 "moss-soft banks, reed clusters"), never the
-        // bare tan edge the P1.2 grade convicted. Painted onto the terrain vertices, so it
-        // follows the real basin slope exactly — it can never float or z-fight (no mesh).
-        if (biome === 'ven') {
-          const wet = 1 - THREE.MathUtils.smoothstep(gh, WATER_LEVEL - 0.3, WATER_LEVEL + 1.4);
-          c.lerp(cWet, wet * 0.6);
-        }
-      } else {
-        // `?groundDetail=off` keeps the old flat per-biome slab (the before baseline).
-        c.set(BIOME_PALETTE[biome].ground);
-      }
-      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
-    }
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geo.computeVertexNormals();
-    // D1.2: build the BVH so the per-frame ground-snap ray (groundSnapY) is cheap.
-    geo.computeBoundsTree();
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
-    if (detail) mat.map = this.groundMottleTexture();
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.receiveShadow = true; // W4.5: the hero shadow lands on the ground
-    return mesh;
-  }
-
-  /** W4.5: opt a loaded prop/ranger into the hero shadow map (Models.ts clears
-   *  castShadow on every mesh at load, so this re-enables it on the hero set only).
-   *  The sun's tight ranger-following frustum still culls to the closest props. */
-  private static enableCast(obj: THREE.Object3D): void {
-    obj.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
-  }
-
-  /** W4.5: a soft radial blob texture (dark centre → transparent rim), baked once
-   *  and shared by every animal blob shadow — cheap grounding with no shadow-map
-   *  cost, the plan's choice for the moving cast. */
-  private static getBlobTexture(): THREE.Texture {
-    if (World.blobTex) return World.blobTex;
-    const N = 64;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = N;
-    const ctx = cv.getContext('2d')!;
-    const g = ctx.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
-    g.addColorStop(0, 'rgba(30,24,12,0.55)');
-    g.addColorStop(0.6, 'rgba(30,24,12,0.28)');
-    g.addColorStop(1, 'rgba(30,24,12,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, N, N);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    World.blobTex = tex;
-    return tex;
-  }
-
-  /** W4.5: add a flat blob shadow disc under an animal/actor group. A child of the
-   *  group, so it rides the wander loop for free and freezes with the animal under
-   *  reduced-motion. Radially symmetric → the group's yaw never shows. */
-  private addBlobShadow(group: THREE.Group, radius: number): void {
-    const mat = new THREE.MeshBasicMaterial({
-      map: World.getBlobTexture(), transparent: true, depthWrite: false,
-    });
-    const disc = new THREE.Mesh(new THREE.PlaneGeometry(radius * 2, radius * 2), mat);
-    disc.rotation.x = -Math.PI / 2;
-    disc.position.y = 0.03; // just above the ground to avoid z-fighting
-    disc.renderOrder = 1;
-    group.add(disc);
-    this.blobCount++;
-  }
-
-  /**
-   * W4.6: drifting cloud shadows. ONE large flat plane over the play area,
-   * MULTIPLY-blended so its soft grey blobs darken the ground pixels behind it —
-   * a real cheap cloud shadow (one draw call, no shadow-map cost). The texture
-   * repeats and its offset is scrolled by `cloudOffset(skyTime)` each frame, so
-   * the patches drift; a frozen clock (reduced-motion) stops them. Sits low over
-   * the terrain and only DARKENS (multiply against white = no change), so it
-   * never adds a visible plane — just soft moving shade.
-   */
-  private buildCloudShadows(): void {
-    const N = 256;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = N;
-    const ctx = cv.getContext('2d')!;
-    ctx.fillStyle = '#ffffff'; // white = "no darkening" under multiply
-    ctx.fillRect(0, 0, N, N);
-    // a few soft grey blobs = the cloud undersides that darken the ground. Drawn
-    // with wrap-around copies so the tile stays seamless when it repeats.
-    const blobs: [number, number, number, number][] = [
-      [0.22, 0.30, 0.26, 0.30], [0.66, 0.20, 0.20, 0.24],
-      [0.48, 0.62, 0.30, 0.26], [0.83, 0.74, 0.22, 0.22],
-      [0.12, 0.82, 0.18, 0.20],
-    ];
-    for (const [bx, by, br, a] of blobs) {
-      for (const ox of [-1, 0, 1]) for (const oy of [-1, 0, 1]) {
-        const cx = (bx + ox) * N, cy = (by + oy) * N, r = br * N;
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        g.addColorStop(0, `rgba(120,116,110,${a})`); // soft warm-grey shade
-        g.addColorStop(1, 'rgba(120,116,110,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-      }
-    }
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(2.2, 2.2); // ~110 m per tile over the 240 m ground — big soft clouds
-    const mat = new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, depthWrite: false,
-      blending: THREE.MultiplyBlending, premultipliedAlpha: true, // three wants this for multiply
-    });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = 3.2;   // low over the gentle relief so shade reads on the ground
-    mesh.renderOrder = 2;    // after the ground + props so the multiply lands on them
-    mesh.frustumCulled = false;
-    this.scene.add(mesh);
-    this.cloudLayer = mesh;
-  }
-
-  /**
-   * W4.6: the bird flyover. A small dark silhouette (a shallow V of two wings)
-   * high in the sky; `flyoverAt(skyTime)` sails it west→east on the ~12 s period
-   * with a calm gap between passes. Parked off-view / frozen under reduced-motion.
-   */
-  private buildFlyover(): void {
-    const g = new THREE.Group();
-    const mat = new THREE.MeshBasicMaterial({ color: '#3b3630' });
-    const wing = new THREE.BoxGeometry(1.6, 0.06, 0.34);
-    const left = new THREE.Mesh(wing, mat);
-    const right = new THREE.Mesh(wing, mat);
-    left.position.set(-0.75, 0, 0); left.rotation.z = 0.28;
-    right.position.set(0.75, 0, 0); right.rotation.z = -0.28;
-    g.add(left, right);
-    g.visible = false;
-    this.flyBird = g;
-    this.scene.add(g);
-  }
-
-  /**
-   * W4.6: re-tilt every wind-blade to `windSway(skyTime, phase)` about its base
-   * transform. Cheap (a few hundred instance matrices), skipped when the clock is
-   * unchanged (reduced-motion → one still pose, no redundant GPU uploads).
-   */
-  private applyWind(t: number): void {
-    if (t === this.lastWindT) return;
-    this.lastWindT = t;
-    for (const wm of this.windMeshes) {
-      for (let k = 0; k < wm.items.length; k++) {
-        const it = wm.items[k];
-        World._e.set(0, 0, windSway(t, it.phase) * wm.strength);
-        World._q.setFromEuler(World._e);
-        World._p.set(it.x, it.y, it.z);
-        World._s.set(it.sx, it.sy, it.sx);
-        World._m.compose(World._p, World._q, World._s);
-        wm.mesh.setMatrixAt(k, World._m);
-      }
-      wm.mesh.instanceMatrix.needsUpdate = true;
-    }
-  }
-
-  /**
-   * W4.4: bake the fine painterly grain (GroundDetail.mottleRGB) onto ONE small
-   * canvas that repeats over the terrain. Grayscale-ish + faintly warm, so
-   * multiplied against the biome vertex colour it reads as brushed tonal
-   * variation. No external texture fetch, one texture shared by the single ground
-   * draw call. Seamlessly tileable (the pure fn wraps), so no repeat seams show.
-   */
-  private groundMottleTexture(): THREE.CanvasTexture {
-    const N = GROUND_TILE_PX;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = N;
-    const ctx = cv.getContext('2d')!;
-    const img = ctx.createImageData(N, N);
-    for (let j = 0; j < N; j++) {
-      for (let i = 0; i < N; i++) {
-        const [r, g, b] = mottleRGB(i / N, j / N);
-        const o = (j * N + i) * 4;
-        img.data[o] = Math.round(r * 255);
-        img.data[o + 1] = Math.round(g * 255);
-        img.data[o + 2] = Math.round(b * 255);
-        img.data[o + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, 0);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(GROUND_TILE_REPEAT, GROUND_TILE_REPEAT);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
-    return tex;
-  }
-
-  /**
-   * W4.8: the ven-water disc — a FRESNEL-tinted still plane. A custom shader
-   * mixes a deep forest-teal (seen head-on) with a lighter warm sky-glow (at
-   * grazing angles) by the Schlick view-angle factor (`Water.ts` mirrors the
-   * maths), so the disc reads as water instead of a flat painted circle. The
-   * ripple is a GENTLE FRAGMENT-TINT shimmer only — never a vertex displacement —
-   * so the silhouette never moves (motion-comfort §1e/§C); it is WAVELESS by
-   * default and its amplitude (`uAmp`) is driven to exactly 0 under reduced-motion
-   * from `update()`. One mesh → one draw call, budget untouched (§3.4).
-   */
-  private buildVenWater(): THREE.Mesh {
-    const RADIUS = 20;
-    const geo = new THREE.CircleGeometry(RADIUS, 48);
-    const mat = new THREE.ShaderMaterial({
-      transparent: true,
-      uniforms: {
-        uTime: { value: 0 },
-        uAmp: { value: 0 },
-        uDeep: { value: new THREE.Color(WATER_DEEP) },
-        uShallow: { value: new THREE.Color(WATER_SHALLOW) },
-        uOpacity: { value: WATER_OPACITY },
-        uFresnelPower: { value: FRESNEL_POWER },
-        uRadius: { value: RADIUS },
-      },
-      vertexShader: `
-        varying vec3 vWorld;
-        varying float vR;
-        void main() {
-          vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
-          vR = length(position.xy); // local radial distance from the disc centre (pre-tilt)
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform float uTime;
-        uniform float uAmp;
-        uniform vec3 uDeep;
-        uniform vec3 uShallow;
-        uniform float uOpacity;
-        uniform float uFresnelPower;
-        uniform float uRadius;
-        varying vec3 vWorld;
-        varying float vR;
-        void main() {
-          // flat, up-facing plane → normal is world-up; fresnel from the view's
-          // vertical component (straight-down = deep, grazing = sky-glow).
-          vec3 viewDir = normalize(cameraPosition - vWorld);
-          float fres = pow(clamp(1.0 - max(viewDir.y, 0.0), 0.0, 1.0), uFresnelPower);
-          // subtle crossing shimmer — two slow sines over world position; uAmp is
-          // 0 under reduced-motion so this term vanishes (dead-still mirror).
-          float ripple = sin(vWorld.x * 1.15 + uTime * 0.8)
-                       * sin(vWorld.z * 1.07 - uTime * 0.55);
-          float mixv = clamp(fres + ripple * uAmp, 0.0, 1.0);
-          vec3 col = mix(uDeep, uShallow, mixv);
-          // D3.2: fade the alpha to 0 over the outer ~2.4 m so the water meets the
-          // moss bank as a soft waterline, never a hard-edged dark polygon (the P1.2
-          // grade's "hard-edged dark POLYGON" finding). The reed fringe + painted moss
-          // bank complete the shore.
-          float edge = smoothstep(uRadius, uRadius - 2.4, vR);
-          gl_FragColor = vec4(col, uOpacity * edge);
-        }
-      `,
-    });
-    this.waterMat = mat;
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    // D3.2: seat the disc over the REAL rendered basin at world (VEN_CENTER.x, -VEN_CENTER.z).
-    // buildGround's −90° tilt mirrors z, so the terrain low-point that heightAt() digs at
-    // (VEN_CENTER) renders at world z = -VEN_CENTER.z. Placing the disc at raw VEN_CENTER.z
-    // buried it under the hill on the mirrored side (the ven "never read as water"); here it
-    // fills the actual depression, coincident with the ven ground tone + the moss bank.
-    mesh.position.set(VEN_CENTER.x, WATER_LEVEL, -VEN_CENTER.z);
-    return mesh;
-  }
-
-  /** sample ground height at world x,z (delegates to the pure biome field). */
+  /** The drawn ground height at world (x,z) — the one ground truth (world/Terrain.ts).
+   *  Both names are what `ctx()` has always read (the in-place mini-games get it as
+   *  `WorldCtx.groundY`); every module seats itself with `terrain.y` directly. */
   private groundY(x: number, z: number): number {
-    return heightAt(x, z);
+    return this.terrain.y(x, z);
   }
 
-  /**
-   * D1.2 locomotion ground-truth (RUN-D-DIRECTION §2.2): the Y of the RENDERED
-   * terrain surface directly under world (x,z), read by casting a ray straight down
-   * against the real ground mesh. This is the ONE ground truth for the character's
-   * feet — it can never disagree with the pixels the way the analytic `heightAt`
-   * does. (`buildGround` displaces the plane by `heightAt(x, y_plane)` then tilts it
-   * −90° about X, which maps y_plane → world −z; so the mesh surface at world (x,z)
-   * equals `heightAt(x, −z)`, while a `heightAt(x, z)` Y-write samples the MIRRORED
-   * field — up to ~4 m off at the ven basin, burying the ranger to his hair on the
-   * shore. The raycast reads the surface the eye sees, so grounding to it is correct
-   * regardless of that analytic divergence.) Falls back to `heightAt` only if the ray
-   * ever misses (defensive — the 240 m ground plane always covers the 75 m bound). */
   private groundSnapY(x: number, z: number): number {
-    this.groundRay.far = SNAP_RAY_FAR;
-    this.groundRay.set(this._snapOrigin.set(x, SNAP_ORIGIN_Y, z), World.DOWN);
-    const hit = this.groundRay.intersectObject(this.ground, false);
-    return hit.length ? hit[0].point.y : this.groundY(x, z);
-  }
-
-  /**
-   * W4.3: the sand-path network (Paths.ts / §4) as ONE terrain-hugging ribbon
-   * mesh — a warm sand strip laid a hair above the ground along every §4 edge so
-   * the routes read visually (spawn ↔ the POIs). The whole network is a single
-   * merged geometry → one draw call, so the budget (§3.4, <150) is untouched. Each
-   * rib samples `groundY` at BOTH edge vertices so the strip hugs the rolling
-   * relief instead of poking through it; a small +y lift + polygonOffset keeps it
-   * off the ground plane without z-fighting. Sand vertex colour, no texture fetch.
-   */
-  private buildPaths(): THREE.Mesh {
-    const HALF = LANE_HALF;
-    const STEP = 1.6;        // rib spacing along a segment (m)
-    const LIFT = 0.05;       // sit just above the terrain
-    const sand = new THREE.Color('#cdb887');
-    const positions: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-    for (const [i, j] of PATH_SEGMENTS) {
-      const a = PATH_NODES[i], b = PATH_NODES[j];
-      const dx = b.x - a.x, dz = b.z - a.z;
-      const len = Math.hypot(dx, dz) || 1;
-      // unit perpendicular in XZ for the ribbon width
-      const px = -dz / len, pz = dx / len;
-      const ribs = Math.max(2, Math.ceil(len / STEP) + 1);
-      const base = positions.length / 3;
-      for (let r = 0; r < ribs; r++) {
-        const t = r / (ribs - 1);
-        const cx = a.x + dx * t, cz = a.z + dz * t;
-        const lx = cx + px * HALF, lz = cz + pz * HALF;
-        const rx = cx - px * HALF, rz = cz - pz * HALF;
-        positions.push(lx, this.groundY(lx, lz) + LIFT, lz);
-        positions.push(rx, this.groundY(rx, rz) + LIFT, rz);
-        colors.push(sand.r, sand.g, sand.b, sand.r, sand.g, sand.b);
-        if (r > 0) {
-          const p = base + (r - 1) * 2, q = base + r * 2;
-          // two triangles between rib r-1 and r
-          indices.push(p, p + 1, q, q, p + 1, q + 1);
-        }
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geo.setIndex(indices);
-    geo.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
-      vertexColors: true, roughness: 1, metalness: 0,
-      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.renderOrder = 1; // draw over the ground plane
-    return mesh;
-  }
-
-  /**
-   * Deterministic golden-angle candidate positions over the world, kept only where
-   * they fall in the wanted biome (so each landschap grows its own vegetation),
-   * outside the lodge clearing, and inside the playable bound (P5.5 — no vegetation
-   * out in the fog band past the tree-line). Returns the surviving (x,z) — fully
-   * reproducible.
-   */
-  private candidates(count: number, want: Biome): { x: number; z: number; i: number }[] {
-    const out: { x: number; z: number; i: number }[] = [];
-    for (let i = 0; i < count; i++) {
-      const ang = i * 2.39996; // golden angle
-      const rad = 12 + (i / count) * 100;
-      const x = Math.cos(ang) * rad + Math.sin(i * 12.9) * 6;
-      const z = Math.sin(ang) * rad + Math.cos(i * 7.3) * 6;
-      const r = Math.hypot(x, z);
-      if (r < 12) continue;                        // clearing
-      // P5.5 (F-11 rim): keep scatter out of the OUTER RIM BAND, not just past the bound.
-      // The low ground-tufts (heather/marram/reed) sit correctly on `groundY`, but at
-      // mid-distance on the rolling relief a tuft near the edge detaches from its own
-      // ground line — the foreground sweeps DOWN past it to the ranger's boots — so it
-      // reads as a purple clump floating at head height in the world-edge hero frame
-      // (GATE-P5). A radius-only cap at the bound left one at r≈74.9 (< 75) and did NOT
-      // fix it. When the ranger eases to his rim stop (~bound−RIM_EASE) the ~4.6 m follow
-      // boom sits ~bound−13 out, so any short tuft beyond there lands in his outward
-      // frame — clear the whole class from that band (every approach angle, deterministic).
-      // The tall pines (bos) may fill to the bound: they read as trees and merge into the
-      // buildRim tree-line, so they take the full radius (no bare ring inside the forest).
-      const outerLimit = want === 'bos' ? this.limits.bound : this.limits.bound - RIM_TUFT_CLEAR;
-      if (r > outerLimit) continue;
-      if (biomeAt(x, z) !== want) continue;        // wrong landschap
-      // witness the furthest LOW-tuft radius (the floating-clump class) so the rim
-      // annotation can prove it is pulled inside the band; pines are exempt above.
-      if (want !== 'bos' && r > this.scatterMax) this.scatterMax = r;
-      out.push({ x, z, i });
-    }
-    return out;
-  }
-
-  /** The scattered bos trees. P1.3: record real-tree placements (mixed species) +
-   *  the soft trunk collisions, and drop the instant cone stand-in — the real GLBs
-   *  swap in via upgradeTreesToGLB. */
-  private scatterPines(budget: number): void {
-    const spots = this.candidates(budget * 4, 'bos');
-    const placed: TreePlacement[] = spots.map(({ x, z, i }) => ({
-      x, y: this.groundY(x, z), z,
-      s: 0.85 + (i % 5) * 0.11,                     // 0.85–1.29 height variety
-      rotY: (i * 2.39996) % (Math.PI * 2),          // golden-angle spin, no two alike
-      species: TREE_SCATTER_MIX[i % TREE_SCATTER_MIX.length],
-    }));
-    // a soft collision circle around each trunk (the ranger slides around it).
-    // D3.16: tag it a TREE so the all-occluder sightline test (propBlocksSightline)
-    // skips it — a trunk's foliage is the fadeable crown (canopyBlocksSightline), so
-    // trees report THROUGH the fade, never as an opaque viewClear=false blocker.
-    for (const p of placed) this.obstacles.push({ x: p.x, z: p.z, r: 0.6 * p.s, tree: true });
-    this.treePlacements.push(...placed);
-    this.addTreeFallback(placed);
-  }
-
-  private scatterHeather(budget: number): void {
-    const spots = this.candidates(budget * 3, 'heide');
-    const geo = new THREE.IcosahedronGeometry(0.32, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.heide.accent, roughness: 1, flatShading: true });
-    const tufts = new THREE.InstancedMesh(geo, mat, spots.length);
-    const m = new THREE.Matrix4();
-    spots.forEach(({ x, z, i }, k) => {
-      const s = 0.5 + (i % 4) * 0.22;
-      m.makeScale(s, s * 0.6, s); m.setPosition(x, this.groundY(x, z) + 0.12, z);
-      tufts.setMatrixAt(k, m);
-    });
-    tufts.instanceMatrix.needsUpdate = true;
-    this.scene.add(tufts);
-  }
-
-  /**
-   * F-11: a calm pine tree-line ringing the playable area at the move bound, so
-   * walking outward meets a visible forest edge ("Hier stopt het bos") instead of
-   * the Run A silent void. The ring sits JUST BEYOND the bound (the ranger clamps at
-   * `limits.bound`; the trees start a touch past it), so it needs no collision — it
-   * is a backdrop wall, hidden by the fog and only revealed as the player nears the
-   * edge (so hub/spawn shots are untouched). P1.3: the ring is now the real staged tree
-   * cast (pine·oak·birch), instanced → a handful of draw calls regardless of count, so
-   * the tree-line reads at the SAME fidelity as the animals/props it frames while the
-   * <150 budget holds. Deterministic (index-driven jitter, no Math.random), uniform all
-   * the way round so every heading ends at the same tidy edge. Shadows off — a distant
-   * backdrop needs none.
-   */
-  private buildRim(): void {
-    const bound = this.limits.bound;
-    const N = 180;
-    const placed: TreePlacement[] = [];
-    for (let k = 0; k < N; k++) {
-      const ang = (k / N) * Math.PI * 2;
-      // two staggered rows just past the bound (bound+1.2 → bound+3.6, ≈76–79 at the
-      // 75 m bound) → a wall with depth, not a single-file fence; stays well under 120
-      // so it always lands on the 240² ground plane on-axis.
-      const rad = bound + 1.2 + (k % 2) * 1.8 + Math.sin(k * 12.9) * 0.6;
-      const x = Math.cos(ang) * rad;
-      const z = Math.sin(ang) * rad;
-      placed.push({
-        x, y: this.groundY(x, z), z,
-        s: 1.0 + (k % 5) * 0.18,                    // varied heights so the line reads as a natural edge
-        rotY: (k * 1.71) % (Math.PI * 2),           // per-tree spin so the ring never repeats
-        species: TREE_RIM_MIX[k % TREE_RIM_MIX.length],
-      });
-    }
-    this.treePlacements.push(...placed);
-    this.addTreeFallback(placed); // P1.3: cone stand-in until the real tree GLBs stream in
-  }
-
-  /** P1.3: the instant low-poly stand-in for a set of tree placements — an instanced
-   *  cone crown + cylinder trunk (2 draw calls) shown ONLY until the real staged tree
-   *  GLBs stream in and replace it (upgradeTreesToGLB). Tracked in `treeFallbacks`. */
-  private addTreeFallback(placed: TreePlacement[]): void {
-    if (!placed.length) return;
-    const trunkGeo = new THREE.CylinderGeometry(0.14, 0.2, 1.4, 6);
-    const crownGeo = new THREE.ConeGeometry(1.05, 2.8, 7);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: '#5b4327', roughness: 1 });
-    const crownMat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.bos.ground, roughness: 1 });
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, placed.length);
-    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, placed.length);
-    const m = new THREE.Matrix4();
-    placed.forEach((p, k) => {
-      m.makeScale(p.s, p.s, p.s); m.setPosition(p.x, p.y + 0.7 * p.s, p.z); trunks.setMatrixAt(k, m);
-      m.makeScale(p.s, p.s, p.s); m.setPosition(p.x, p.y + 2.2 * p.s, p.z); crowns.setMatrixAt(k, m);
-    });
-    trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
-    this.treeFallbacks.push(trunks, crowns);
-    this.treeFadeMeshes.push(trunks, crowns); // D1.5: the occluder fade dims the cones until the GLBs land
-    this.scene.add(trunks, crowns);
-  }
-
-  /**
-   * P1.3: replace the instant cone/cylinder tree stand-ins with the real staged tree
-   * GLBs (Scots pine · oak · birch), instanced so the whole canopy — the scattered bos
-   * trees AND the F-11 rim tree-line — reads at the SAME fidelity as every other prop
-   * and animal (RUN-C-DIRECTION §2.3). One InstancedMesh per species-mesh, so the
-   * entire forest costs only a handful of draw calls regardless of tree count (§A8),
-   * well under the <150 contract. Best-effort + all-or-nothing: only when EVERY needed
-   * species loads do we build the real canopy and drop the cones — a partial load keeps
-   * the whole cone stand-in (so a spot is never double-drawn, the world always playable).
-   */
-  private async upgradeTreesToGLB(): Promise<void> {
-    if (!this.treePlacements.length) return;
-    await loadManifest();
-    const species = [...new Set(this.treePlacements.map((p) => p.species))];
-    const prepped = new Map<TreeSpecies, THREE.Object3D>();
-    for (const id of species) {
-      const m = await loadModel(id);
-      if (m) prepped.set(id, prepModel(m, TREE_BASE_H[id]));
-    }
-    if (prepped.size !== species.length) return; // a species is missing → keep the cone canopy
-    const built: THREE.InstancedMesh[] = [];
-    for (const [id, model] of prepped) {
-      built.push(...instancesFromPrepped(model, this.treePlacements.filter((p) => p.species === id)));
-    }
-    for (const inst of built) this.scene.add(inst);
-    // D1.5: the occluder fade now dims the real GLB canopy — retire the cone entries and
-    // point it at the instanced tree meshes. Reset the fade cache to solid so the next
-    // setCanopyOpacity re-applies to these fresh materials (the guard would otherwise skip
-    // a mid-fade equal value on meshes that never had it stashed).
-    this.treeFadeMeshes.length = 0;
-    this.treeFadeMeshes.push(...built);
-    this.canopyOpacity = 1;
-    // swap: drop + dispose the now-hidden cone stand-ins so they leave no cost behind.
-    for (const f of this.treeFallbacks) {
-      this.scene.remove(f);
-      const im = f as THREE.InstancedMesh;
-      im.geometry?.dispose();
-      (im.material as THREE.Material)?.dispose?.();
-      im.dispose?.();
-    }
-    this.treeFallbacks.length = 0;
-  }
-
-  /** Drift-sand marram tussocks — upright pale grass blades on the stuifzand.
-   *  W4.6: registered as a wind mesh so the blades lean in the breeze. */
-  private scatterMarram(budget: number): void {
-    const spots = this.candidates(budget * 4, 'stuifzand');
-    const geo = new THREE.ConeGeometry(0.16, 0.9, 5);
-    const mat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.stuifzand.accent, roughness: 1, flatShading: true });
-    const grass = new THREE.InstancedMesh(geo, mat, spots.length);
-    const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
-    spots.forEach(({ x, z, i }) => {
-      const s = 0.6 + (i % 3) * 0.25;
-      items.push({ x, y: this.groundY(x, z) + 0.4 * s, z, sx: s, sy: s, phase: (i % 7) * 0.9 });
-    });
-    this.windMeshes.push({ mesh: grass, items, strength: 1 }); // full sway — exposed dune grass
-    this.scene.add(grass);
-  }
-
-  /** Reed clumps fringing the ven — only on the bank just above the waterline.
-   *  W4.6: registered as a wind mesh (softer sway than the exposed marram). */
-  private scatterReeds(budget: number): void {
-    // D3.2: fringe the ACTUAL rendered basin at world (VEN_CENTER.x, -VEN_CENTER.z) — the
-    // spot the water disc + ground-tone-ven + moss bank share (the z-mirror; see
-    // buildVenWater). candidates('ven') can't be used: it filters biomeAt in WORLD space,
-    // which lands on the dry hill on the far side. Ring the basin with a golden-angle spread
-    // and keep only the stalks whose RENDERED surface (groundSnapY) sits in the shore band —
-    // so every reed is seated on the real bank at the waterline, never floating over water.
-    const bx = VEN_CENTER.x, bz = -VEN_CENTER.z;
-    const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
-    for (let i = 0; i < budget * 12 && items.length < budget; i++) {
-      const ang = i * 2.39996;             // golden angle → even, non-repeating ring
-      const rad = 9 + (i % 22) * 0.5;      // 9–20 m out — a TIGHT belt hugging the waterline
-      const x = bx + Math.cos(ang) * rad;
-      const z = bz + Math.sin(ang) * rad;
-      const gy = this.groundSnapY(x, z);   // RENDERED surface (raycast), not the mirrored analytic field
-      if (gy < WATER_LEVEL - 0.3 || gy > WATER_LEVEL + 1.0) continue; // keep the reed belt right at the shore
-      const s = 0.8 + (i % 4) * 0.22;
-      items.push({ x, y: gy + 0.85 * s, z, sx: s, sy: s, phase: (i % 5) * 1.3 });
-    }
-    // TALLER, thicker reeds (≈1.4–2.2 m) in a DARK reed-green so the fringe reads at follow
-    // distance against BOTH the golden water and the tan bank (the P1.2 grade found "no reed
-    // fringe" — thin pale 1.1 m stalks vanished against the shore). Still ONE instanced draw call.
-    const geo = new THREE.CylinderGeometry(0.05, 0.09, 1.7, 5);
-    const mat = new THREE.MeshStandardMaterial({ color: '#6d7b38', roughness: 1 });
-    const reeds = new THREE.InstancedMesh(geo, mat, Math.max(1, items.length));
-    reeds.count = items.length;
-    this.windMeshes.push({ mesh: reeds, items, strength: 0.7 }); // reeds sway gentler
-    this.scene.add(reeds);
-  }
-
-  private proceduralRanger(): THREE.Group {
-    const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: '#3f7a3a', roughness: 1 });
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.6, 4, 8), mat);
-    body.position.y = 0.7;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: '#e8c39a', roughness: 1 }));
-    head.position.y = 1.32;
-    g.add(body, head);
-    // F-07 ⊕ P1.6a: normalize the instant stand-in to the SAME canonical height as
-    // the real rig (Alvah is a CHILD ≈1.2 m now, feet on the ground) so it reads
-    // child-sized and there is no scale pop when the loaded ranger swaps in. Plain
-    // meshes (no skeleton), so a straight Box3 measure is correct.
-    const raw = Math.max(new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3()).y, 0.0001);
-    g.scale.setScalar(RANGER_STAND_HEIGHT / raw);
-    g.position.y -= new THREE.Box3().setFromObject(g).min.y;
-    return g;
-  }
-
-  private async loadRealRanger(): Promise<void> {
-    await loadManifest();
-    // W3.2: load WITH clips (the W3.1-staged rig carries idle/walk/run) so the
-    // player animates. loadRig falls back to a static group when no clips exist.
-    const rig = await loadRig('ranger-alvah');
-    if (!rig) return;
-    // F-07 ⊕ P1.6a: normalize the ranger to Alvah's CHILD stand-height (≈1.2 m,
-    // RANGER_STAND_HEIGHT) — a clear head shorter than the ~1.8 m warden — so
-    // trees/hut/animals read at believable proportions around a child. prepModel
-    // scales off the SKELETON's world extent (Models.skinnedRenderBox) — the size
-    // that renders — not the bind-pose geometry box that read 1.7 m for a ~170 m
-    // bone-driven giant.
-    const prepped = prepModel(rig.group, RANGER_STAND_HEIGHT);
-    // §1e eye system: bright, alive eyes (the golden-hour world is not dusk, so
-    // eyeshine stays off; parallax freezes under reduced-motion).
-    applyEyes(prepped, 'ranger-alvah', { dusk: false }); // parallax reads the live policy (no restart)
-    // §A ARKit face: data-driven emotion + always-alive blink/microsaccade. The
-    // child ranger blinks at the lower child rate. Best-effort — a humanoid GLB with
-    // no ARKit blendshape rig (the Meshy mesh today) is left untouched, never throws.
-    // Expression + blink are essential motion, so they stay on under reduced-motion.
-    applyFace(prepped, { emotion: 'neutral', child: true }); // microsaccade reads the live policy (no restart)
-    World.enableCast(prepped); // W4.5: the ranger is the primary hero shadow caster
-    this.rangerCastsShadow = true;
-    this.ranger.clear();
-    this.ranger.add(prepped);
-    // F-11 (P4.6 rim re-judge): NEVER frustum-cull the ranger. He is a SkinnedMesh
-    // whose `geometry.boundingSphere` is the BIND-POSE extent — the very F-07
-    // giant-skeleton / small-geometry mismatch — and three's frustum test transforms
-    // THAT stale sphere by the mesh matrix, not the live skinned bones. So once he
-    // walks far from origin (the world rim, ~112 m out, camera facing OUTWARD) the
-    // sphere falls behind the frustum and three drops him from BOTH the colour and
-    // shadow passes: the "ranger nowhere in frame" the rim shot showed (mesh AND
-    // blob-shadow gone) while `skinnedRenderBox` (real bones) still read him
-    // in-frustum. He is one small model the follow-cam always frames, so skip his
-    // frustum test entirely — a couple of draw calls at most, far under the <150
-    // budget — and let the camera alone decide what is on screen.
-    prepped.traverse((o) => { o.frustumCulled = false; });
-    // D1.7: the rig materials are SHARED (Models.loadRig → SkeletonUtils.clone) with
-    // the Stage title clone + every prior World instance, so this fresh rig can
-    // inherit them left transparent by a prior fade; a fresh World's avatarOpacity==1
-    // guard would never restore them (the `14-title-return-world` invisible ranger).
-    // Force them solid the instant the rig is (re)built so world re-entry always
-    // renders his body.
-    this.forceAvatarOpaque();
-    // wire the locomotion mixer: idle/walk crossfade by speed, or a procedural
-    // bob when the clips are missing (loadRig returned an empty clip list).
-    if (rig.clips.length) this.playerRig.attach(prepped, rig.clips);
-    else this.playerRig.attachProcedural(prepped);
-    this.measureAvatar(); // F-05: re-seed the camera rails off the REAL rig's size
-  }
-
-  /** The ranger's active locomotion clip for the dev hook (null when procedural). */
-  playerClip(): { name: string; time: number } | null {
-    return this.playerRig.clip();
-  }
-
-  /** Dev-hook accessor (F-08): the ranger's LIVE post-collision ground speed
-   *  (m/s) — the honest walked speed AFTER slide/clamp, the value the walk clip's
-   *  cadence is tied to. The assert reads it ∈ [1.4, 2.2] while `clip` = walk to
-   *  prove the retuned foot speed is human-scaled, not the old near-jeep glide;
-   *  0 while standing or in an in-place activity. */
-  groundSpeed(): number {
-    return this.playerSpeed;
-  }
-
-  /** Dev-hook accessor (F-07): the player ranger's LIVE rendered height (m),
-   *  measured off the SKELETON (`skinnedRenderBox`) — the extent that actually
-   *  draws — so the scale assert reads reality, not the bind-pose geometry box
-   *  that once reported 1.7 m for a ~170 m bone-driven giant (§4: pixels are the
-   *  court of appeal; this is the field that keeps them honest). Falls back to the
-   *  geometry box for the procedural stand-in (no skeleton); null if empty. */
-  avatarState(): { height: number } | null {
-    if (this.ranger.children.length === 0) return null;
-    this.ranger.updateWorldMatrix(true, true);
-    const box = skinnedRenderBox(this.ranger) ?? new THREE.Box3().setFromObject(this.ranger);
-    const h = box.getSize(new THREE.Vector3()).y;
-    return Number.isFinite(h) && h > 0 ? { height: h } : null;
-  }
-
-  /** F-05: cache the ranger's horizontal bounding radius + box height whenever the
-   *  mesh is (re)built (stand-in at boot, real rig on load). The camera's min-boom
-   *  clamp and its avatar-fade band are defined off this radius, so if a rig ever
-   *  renders larger than the honest F-07 height the boom still clears it and the
-   *  ranger fades rather than smear the lens. Measured off the SAME posed bbox the
-   *  F-07 assert reads — one honest source, never the normalization target. */
-  private measureAvatar(): void {
-    if (this.ranger.children.length === 0) return;
-    this.ranger.updateWorldMatrix(true, true);
-    // F-07: off the SKELETON, so the rig's honest measured size seeds the rails —
-    // the bind-pose geometry box collapsed to ~0 on the giant and mis-clamped.
-    const box = skinnedRenderBox(this.ranger) ?? this._camBox.setFromObject(this.ranger);
-    const size = box.getSize(new THREE.Vector3());
-    const r = Math.hypot(size.x, size.z) * 0.5;
-    if (Number.isFinite(r) && r > 0) this.avatarRadius = Math.max(0.2, r);
-    // D1.5: cache his head height (feet→top) so the occluder-fade sightline can aim at the
-    // HEAD, the part low-hanging foliage swallows first (`10-walk-5`). Child-scale-safe: it
-    // reads the measured rig, so it shrinks with the Phase-2 ≈1.2 m child height, not a pin.
-    if (Number.isFinite(size.y) && size.y > 0) this.avatarTopY = Math.max(0.6, size.y);
-  }
-
-  /** Dev-hook accessor (F-05 ⊕ F-18): the REAL render camera, read back off the
-   *  actual `this.camera` object (position + world quaternion) and the ranger's
-   *  live bbox — NOT the follow bearing that lied in Run A. `dist` is the true
-   *  camera→ranger-centre boom length (the field F-16's zoom also reads); `yaw`
-   *  and `pitch` come from the camera's own forward vector; `avatarInView` tests
-   *  the ranger's whole box against the live view frustum (F-05's "avatar bbox
-   *  inside the frustum" assert). Any camera claim is graded off these, and the
-   *  pixels outrank them if they ever disagree (§4). Null before the world is up. */
-  camState(): CamState | null {
-    if (this.ranger.children.length === 0) return null;
-    const cam = this.camera;
-    cam.updateMatrixWorld();
-    cam.matrixWorldInverse.copy(cam.matrixWorld).invert(); // fresh frustum, not last-render's
-    // ranger centre from the SKELETON box (F-07): the extent that actually renders,
-    // so dist / avatarInView / avatarScreen can't sit on the bind-pose box that
-    // once framed a 1.7 m phantom while a ~170 m giant filled the lens (§4).
-    const box = skinnedRenderBox(this.ranger) ?? this._camBox.setFromObject(this.ranger);
-    const centre = box.getCenter(new THREE.Vector3());
-    const dist = cam.position.distanceTo(centre);
-    // yaw/pitch from the camera's OWN forward vector (world quaternion), so the
-    // value is whatever the render actually shows — the F-18 cross-check.
-    const fwd = cam.getWorldDirection(this._camPose);
-    const yaw = wrapAngle(Math.atan2(fwd.x, fwd.z) + Math.PI);
-    const pitch = Math.asin(Math.max(-1, Math.min(1, fwd.y)));
-    // whole-box-in-frustum: build the frustum from the live view-projection and
-    // require every bbox corner inside it (fully visible, not merely intersecting).
-    const frustum = new THREE.Frustum().setFromProjectionMatrix(
-      new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse),
-    );
-    const min = box.min, max = box.max;
-    let avatarInView = true;
-    for (let i = 0; i < 8 && avatarInView; i++) {
-      const corner = this._camPose.set(
-        i & 1 ? max.x : min.x, i & 2 ? max.y : min.y, i & 4 ? max.z : min.z,
-      );
-      for (const plane of frustum.planes) {
-        if (plane.distanceToPoint(corner) < 0) { avatarInView = false; break; }
-      }
-    }
-    // Framing machine signal (F-05 / Run B monitor steer #2): project the ranger's
-    // bbox to normalised screen space so a grade can PROVE he is framed rather than
-    // infer it from a soft-DOF frame. `heightFrac` (box top→bottom, projected)
-    // catches the "solid but a distant speck" frame that avatarInView alone passes.
-    const wx = centre.x, wz = centre.z; // keep world x/z before `centre` is spent
-    const topY = this._camPose.set(wx, max.y, wz).project(cam).y;
-    const botY = this._camPose.set(wx, min.y, wz).project(cam).y;
-    // F-11 TERRAIN-occlusion-aware visibility: the frustum/projection tests above stay
-    // TRUE when something stands BETWEEN the lens and the ranger (projection cannot see
-    // an occluder in the way). Two occluders modelled: (1) TERRAIN — march the ground
-    // height field along the sightline lens→ranger, hidden if it climbs above the line
-    // (test his head AND chest so a crest that only clips his legs still reads visible);
-    // (2) the rim TREE-LINE — a lens at/beyond the pine ring (bound + ~1.2 m) has a
-    // trunk in the way, so require the lens inside the ring. Folded with onScreen + the
-    // fade into `visible`. NB this catches GEOMETRIC occlusion only — the actual P4.6
-    // rim "ranger nowhere" was a SkinnedMesh view-space precision collapse far from
-    // origin (BUILD-PLAN §8), invisible to any raycast; the 75 m `bound` fixes that by
-    // keeping the rim (and where the rim-ease parks the ranger, ~72 m) inside the
-    // precision-safe radius. Pixels remain the court (§4).
-    const headClear = this.terrainClearTo(cam.position, wx, max.y - 0.15, wz);
-    const chestClear = this.terrainClearTo(cam.position, wx, (min.y + max.y) * 0.5, wz);
-    const lensInRim = Math.hypot(cam.position.x, cam.position.z) < this.limits.bound + 0.6;
-    const ndc = centre.project(cam); // centre → NDC in [-1, 1]³ (mutates in place)
-    const onScreen = ndc.z > -1 && ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;
-    // D1.5 free-walk canopy clear-line: the REAL cam→avatar occluder test placeCamera
-    // computed this frame (a tree crown between lens and ranger fades, so this reads the
-    // "ranger is readable" truth the projection tests above can't — `09-walk-4` kept
-    // onScreen/avatarInView true while a crown swallowed him, §8.7). Only the free-walk
-    // follow cam can sit inside a crown; a vehicle/heli/mission-owned cam reads clear.
-    // D3.16: fold in EVERY other rendered occluder class on the cam→ranger sightline — solid
-    // props + the parked vehicles (propBlocksSightline) and staged animals / marker models
-    // (animalBlocksSightline). These are UNFADEABLE, so a hit reports `viewClear` FALSE
-    // (honest) rather than ghosting them — the §2.5 (GATE-D2) law: "the clear-line test binds
-    // to anything the renderer draws; unfadeable ones report honestly" (`18-jeep-near` lied
-    // clear while a nachtzwaluw marker model swallowed the ranger). Tested HERE, per-SHOT, not
-    // in the per-frame placeCamera: they only drive the hook (no fade), so the walk path pays
-    // nothing. `rp`/head come from the live ranger; the same segment the crown/terrain legs use.
-    const rp = this.ranger.position;
-    const viewClear = (this.inVehicle || this.inHeli || this.activityActive)
-      ? true
-      : this.viewClearState
-        && !this.propBlocksSightline(cam.position.x, cam.position.z, rp.x, rp.z)
-        && !this.animalBlocksSightline(cam.position.x, cam.position.y, cam.position.z, rp.x, rp.y, rp.z);
-    // D1.7: the RENDERED body opacity read off the shared materials — NOT the
-    // `avatarOpacity` intent field, which lied 1 over an invisible ranger on the
-    // title-return path. `visible` folds it in, so the hook matches the pixels: a
-    // ~0-opacity body (shadow still casting) reads not-visible (§8.7).
-    const renderedOpacity = this.renderedAvatarOpacity();
-    const avatarScreen = {
-      x: ndc.x, y: ndc.y,
-      onScreen,
-      heightFrac: Math.abs(topY - botY) / 2,
-      visible: onScreen && renderedOpacity > 0.5 && lensInRim && (headClear || chestClear) && viewClear,
-    };
-    // F-09 hub-in-frustum: is at least one hub landmark actually in this frame? The
-    // world-entry assert reads it to PROVE the spawn faces the hub, not the void —
-    // `landmarkInView` == true means the cabin, the mission board, or a fixed beacon
-    // sits inside the live view frustum (the pixels stay the court of appeal, §4).
-    // Same plane-distance idiom as avatarInView above (no new three API); the point
-    // is lifted a metre so a prop whose base grazes the bottom plane still counts.
-    const hub = new THREE.Vector3();
-    const ptInFrustum = (px: number, pz: number): boolean => {
-      hub.set(px, this.groundY(px, pz) + 1.0, pz);
-      for (const plane of frustum.planes) if (plane.distanceToPoint(hub) < 0) return false;
-      return true;
-    };
-    let landmarkInView =
-      (this.cabinPos != null && ptInFrustum(this.cabinPos.x, this.cabinPos.z)) ||
-      (this.boardPos != null && ptInFrustum(this.boardPos.x, this.boardPos.z));
-    for (let i = 0; !landmarkInView && i < this.landmarks.length; i++) {
-      landmarkInView = ptInFrustum(this.landmarks[i].x, this.landmarks[i].z);
-    }
-    // D1.3 mission-entry camera truth. `groundAtCam` = the RENDERED-terrain height
-    // under the lens off the raycast ground-snap (matches the pixels, unlike the
-    // mirrored `heightAt` the markers seat on); a game-3D reframe assert reads
-    // `y > groundAtCam` so a below-ground entry (fresh simon-3D, cam.y −1.29) is caught.
-    const groundAtCam = this.groundSnapY(cam.position.x, cam.position.z);
-    // `taskInView` = the running activity's task anchor (its staging centre, a hair
-    // above the ground so a form/footprint at the spot still counts) sits inside the
-    // live frustum — proving the reframe lands ON the playfield, not on a backside or
-    // bare ground off the field. null in free-roam (no in-place activity owns the cam).
-    let taskInView: boolean | null = null;
-    if (this.activityActive && this.activityFocus) {
-      const f = this.activityFocus;
-      hub.set(f.x, f.y + 0.4, f.z);
-      taskInView = true;
-      for (const plane of frustum.planes) if (plane.distanceToPoint(hub) < 0) { taskInView = false; break; }
-    }
-    // F-16 dolly-zoom read-back: the player-set walk boom clamped to its live bounds,
-    // so a grade proves the wheel respects BOTH clamps straight off the annotation
-    // (`zoom.dist` ∈ [min, max] as an invariant; wheel-in saturates to min, wheel-out
-    // to max). `fov` is the fixed lens — a dolly must never change it, so the assert
-    // reads it constant across the zoom pair. `dist` above (the real 3D boom) still
-    // outranks these if the pixels ever disagree (§4).
-    const zoomMin = this.zoomMinBoom();
-    const zoomDist = Math.max(zoomMin, Math.min(this.CAM_ZOOM_MAX, this.zoomDist));
-    return {
-      dist, yaw, pitch,
-      x: cam.position.x, y: cam.position.y, z: cam.position.z,
-      target: this.inVehicle ? 'vehicle' : 'avatar', avatarInView,
-      fov: this.camera.fov,
-      zoom: { dist: zoomDist, min: zoomMin, max: this.CAM_ZOOM_MAX },
-      // F-17 drag-orbit read-back: the player's look offset on the follow bearing. A drag
-      // moves `yaw` (and `lift`) while `pos` holds; a clean click walks and never touches
-      // it. The real render `yaw` above (quaternion) stays the court of appeal (§4).
-      orbit: { yaw: this.orbitYaw, lift: this.orbitLift },
-      // D1.7: the RENDERED body opacity (read off the shared materials), NOT the
-      // fade-rail INTENT field — which lied 1 over an invisible ranger after a
-      // title round-trip (`14-title-return-world`: shadow cast, body unrendered;
-      // the shared rig materials were left transparent and a fresh World's
-      // avatarOpacity==1 guard never restored them, §8.7). 1 = the ranger renders
-      // solid; anything < 1 flags an empty/faded frame BEFORE the judge looks, and
-      // now it cannot be faked by the intent field. In the normal case (a settled
-      // hero/POI shot, or the F-05 boom fade) this equals the applied fade, so the
-      // F-07 machine signal is unchanged; only the title-return lie is caught.
-      avatarOpacity: renderedOpacity,
-      avatarScreen,
-      viewClear,
-      canopyFade: this.canopyOpacity,
-      terrainLift: this.terrainLiftState,
-      landmarkInView,
-      groundAtCam,
-      taskInView,
-    };
-  }
-
-  /** F-11 / D1.5 (audit #4) line-of-sight over the terrain: true when the RENDERED ground never
-   *  climbs above the straight segment from `from` to the world point (`tx,ty,tz`). Marches
-   *  `groundSnapY` (the raycast against the real ground mesh — the ONE ground truth, D1.2/§2.2);
-   *  the mirrored analytic `heightAt` it used to march reads a dune ~2.6 m too LOW and lied the
-   *  sightline clear over a full-frame terrain murk (fresh `11-controls-hud`: viewClear/visible
-   *  true, no ranger). A crest poking above the ray (a rim berm / dune face between lens and
-   *  ranger) returns false = the ranger is hidden, so `avatarScreen.visible` matches the pixels.
-   *  Deterministic (groundSnapY is), so the idle pose holds frame to frame; a per-SHOT hook read
-   *  (camState), not a per-frame cost, and the BVH keeps each ground ray O(log n). */
-  private terrainClearTo(from: THREE.Vector3, tx: number, ty: number, tz: number): boolean {
-    const dx = tx - from.x, dz = tz - from.z;
-    const horiz = Math.hypot(dx, dz);
-    if (horiz < 0.5) return true; // lens is right on top of him — nothing can be between
-    const steps = Math.min(48, Math.max(6, Math.ceil(horiz / 1.5)));
-    for (let i = 1; i < steps; i++) {
-      const t = i / steps;
-      const rayY = from.y + (ty - from.y) * t;
-      if (this.groundSnapY(from.x + dx * t, from.z + dz * t) > rayY + 0.05) return false;
-    }
-    return true;
-  }
-
-  /**
-   * D1.5 (audit #4) terrain sightline ride: the metres the follow boom must lift so the STRAIGHT
-   * line from the lens (lx,ly,lz) to the ranger aim (ax,ay,az) clears the RENDERED terrain by
-   * CAM_GROUND_CLR everywhere between them. Marches `groundSnapY` (the raycast against the real
-   * ground mesh — never the mirrored analytic `heightAt`, which reads a dune ~2.6 m too low and
-   * lied the sightline clear, `11-controls-hud`). Raising the lens by δ raises the segment height
-   * at parameter t by (1−t)·δ (the aim end is pinned to the ranger), so a crest poking `deficit`
-   * above the line at t needs δ ≥ deficit/(1−t); the worst sample wins and clears them all at once
-   * (raising the eye lifts every point, never lowers one). Returns the RAW need (the caller caps
-   * it at MAX_TERRAIN_LIFT); 0 on flat ground. ~6 BVH ground rays on a 6 m boom — deterministic,
-   * so the idle-stability pose holds frame to frame, and on par with the per-frame ground snap. */
-  private terrainSightlineLift(lx: number, ly: number, lz: number, ax: number, ay: number, az: number): number {
-    const dx = ax - lx, dz = az - lz;
-    const horiz = Math.hypot(dx, dz);
-    if (horiz < 0.5) return 0; // lens on top of him — nothing between
-    const steps = Math.min(24, Math.max(6, Math.ceil(horiz / 2)));
-    let need = 0;
-    for (let i = 1; i < steps; i++) {
-      const t = i / steps;
-      if (t > 0.85) break; // the last stretch IS the ranger + his own footing, not an occluder between
-      const g = this.groundSnapY(lx + dx * t, lz + dz * t);
-      const segY = ly + (ay - ly) * t;
-      const deficit = g + this.CAM_GROUND_CLR - segY;
-      if (deficit > 0) { const d = deficit / (1 - t); if (d > need) need = d; }
-    }
-    return need;
+    return this.groundY(x, z);
   }
 
   /** W4.5: hand the World the shared renderer so it can enable the shadow map (a
@@ -2159,1250 +508,53 @@ export class World {
     this.applyPixelRatio();
   }
 
-  /** Dev-hook accessor (W4.5): the lighting/shadow state — renderer shadow map on,
-   *  sun casting the hero shadow, ranger opted in, and the animal blob count — so
-   *  the E2E can assert selective shadows exist. */
-  lightingState(): { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number } {
-    return {
-      shadowMap: this.renderer ? this.renderer.shadowMap.enabled : false,
-      sunCastsShadow: this.sun ? this.sun.castShadow : false,
-      rangerCastsShadow: this.rangerCastsShadow,
-      blobShadows: this.blobCount,
-    };
-  }
-
-  /** Dev-hook accessor (W4.6): the live "Lucht + adem" state — richer-gradient
-   *  stop count, whether the cloud-shadow layer + wind grasses are present, and
-   *  the LIVE cloud offset / wind phase / bird position so the E2E can prove the
-   *  ambient motion advances when moving AND freezes under reduced-motion. */
-  skyState(): {
-    gradientStops: number;
-    cloudDrift: boolean;
-    windMeshes: number;
-    skyTime: number;
-    cloudOffset: { x: number; y: number };
-    windSample: number;
-    flyover: { x: number; y: number; z: number; visible: boolean } | null;
-  } {
-    const f = this.lastFlyover;
-    return {
-      gradientStops: SKY_STOPS.length,
-      cloudDrift: this.cloudLayer !== null,
-      windMeshes: this.windMeshes.length,
-      skyTime: this.skyTime,
-      cloudOffset: cloudOffset(this.skyTime),
-      windSample: windSway(this.skyTime, 0),
-      flyover: f ? { x: f.x, y: f.y, z: f.z, visible: f.visible } : null,
-    };
-  }
-
-  /** Dev-hook accessor (W4.7b): the running footstep count + the last surface
-   *  the ranger planted a foot on, so the E2E can prove footsteps fire while
-   *  walking (and the sound gate holds them when `geluid` is off). */
-  footstepState(): { count: number; surface: FootSurface | null } {
-    return { count: this.footstepCount, surface: this.lastFootSurface };
-  }
-
-  /** Dev-hook accessor (D1.2 locomotion ground-truth; P1.5a asserts it across the
-   *  walkable world). Reads the ranger's feet against the RENDERED terrain surface
-   *  right under him — the court check for "he is ON the ground, not through it":
-   *   - `clearance` = his feet Y minus the raycast surface Y. After the ground-snap
-   *     it is ≈ 0; the pre-fix analytic Y-write read ~ −4 m at the ven basin (buried).
-   *   - `analyticGap` = the rendered surface minus the OLD analytic `heightAt(x,z)`
-   *     value at the same spot — how far the mesh and the mirrored analytic field
-   *     disagree here. A burst that reaches |analyticGap| ≫ 0 proves it crossed a zone
-   *     where the old Y-write WOULD have sunk/floated him, so a still-grounded ranger
-   *     there is real evidence, not a flat-spawn no-op.
-   *   - `grounded` = the ray hit the terrain AND clearance sits in the on-foot band.
-   *  Null before the rig is up or while seated in a vehicle (his mesh is hidden then,
-   *  so a feet-on-ground check is meaningless). Pixels stay the court of appeal (§8.7):
-   *  this is an assert, and a shot that contradicts it outranks it. */
-  groundedState(): { grounded: boolean; clearance: number; analyticGap: number } | null {
-    if (this.ranger.children.length === 0 || this.inVehicle) return null;
-    const p = this.ranger.position;
-    this.groundRay.far = SNAP_RAY_FAR;
-    this.groundRay.set(this._snapOrigin.set(p.x, SNAP_ORIGIN_Y, p.z), World.DOWN);
-    const hit = this.groundRay.intersectObject(this.ground, false);
-    if (!hit.length) return { grounded: false, clearance: Number.NEGATIVE_INFINITY, analyticGap: 0 };
-    const surfaceY = hit[0].point.y;
-    const clearance = p.y - surfaceY;
-    return {
-      grounded: clearance >= -GROUND_SINK_TOL && clearance <= GROUND_AIR_TOL,
-      clearance,
-      analyticGap: surfaceY - this.groundY(p.x, p.z),
-    };
-  }
-
-  /** Dev-hook accessor (W4.8): the live ven-water state — whether the fresnel
-   *  shader disc exists, the ripple amplitude in force (0 under reduced-motion →
-   *  waveless), and the live clock, so the E2E can prove the disc ripples with
-   *  motion on and holds dead-still under reduced-motion. */
-  waterState(): { shader: boolean; amp: number; time: number } {
-    const mat = this.waterMat;
-    return {
-      shader: mat !== null,
-      amp: mat ? (mat.uniforms.uAmp.value as number) : 0,
-      time: mat ? (mat.uniforms.uTime.value as number) : 0,
-    };
-  }
-
-  private placeMarkers(markers: WorldMarker[]): void {
-    const N = Math.max(1, markers.length);
-    const perBiome = new Map<Biome, number>();
-    markers.forEach((mk, i) => {
-      let x: number, z: number;
-      if (mk.biome) {
-        // anchor each mission in the heart of its own landschap; fan repeats outward
-        const n = perBiome.get(mk.biome) ?? 0;
-        perBiome.set(mk.biome, n + 1);
-        const a = anchorInBiome(mk.biome, 22 + n * 9);
-        x = a.x; z = a.z;
-      } else {
-        const ang = (i / N) * Math.PI * 2;
-        x = Math.cos(ang) * 9; z = Math.sin(ang) * 9;
-      }
-      const group = new THREE.Group();
-      group.position.set(x, this.groundY(x, z), z);
-
-      // a soft halo ring so every marker reads as "go here", model or totem
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.9, 1.15, 24),
-        new THREE.MeshBasicMaterial({ color: mk.color, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-      );
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.05;
-      group.add(ring);
-      this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x, z, base: 0.5 }); // D3.16: fade near the lens
-
-      // a small diegetic name-tag floating above the marker (in-world label, no
-      // minimap chrome) — a camera-facing sprite so it stays readable from any angle
-      const label = this.makeLabel(mk.titel, mk.color);
-      label.position.y = 1.9;
-      group.add(label);
-
-      group.add(this.proceduralTotem(mk.color)); // instant stand-in
-      this.scene.add(group);
-      const entry = {
-        group, pos: group.position.clone(), missionId: mk.missionId,
-        recipe: gaitFor(mk.modelId), phase: i * 1.7, label,
-        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
-      };
-      this.markers.push(entry);
-
-      if (mk.modelId) {
-        void loadRig(mk.modelId).then((rig) => {
-          if (!rig) return;
-          const prepped = prepModel(rig.group, mk.height);
-          // §1e eye system per species (catchlight + clearcoat cornea + pupil +
-          // iris parallax); golden-hour world ⇒ dusk off (eyeshine stays calm).
-          applyEyes(prepped, mk.modelId, { dusk: false }); // parallax reads the live policy (no restart)
-          // W3.7b dossier: coat-tint correction (only for a confirmed contradiction,
-          // e.g. the CC0 vos) + a subtle head-low posture for snuffling species.
-          applyCoat(prepped, mk.modelId);
-          applyPosture(prepped, mk.modelId);
-          // §B never-scary calm-pose: a static rest-pose bias (ears/tail/head into the
-          // calm shape). Best-effort — a single-mesh Meshy animal with no named bones is
-          // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
-          applyCalmPose(prepped, mk.modelId);
-          // drop the totem (keep the ring), add the real animal
-          const totem = group.children.find((c) => c.userData.totem);
-          if (totem) group.remove(totem);
-          group.add(prepped);
-          if (rig.clips.length) {
-            // prefer the real baked rig: play a calm idle (or the first clip)
-            const mixer = new THREE.AnimationMixer(prepped);
-            const idle = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
-            mixer.clipAction(idle).play();
-            entry.mixer = mixer;
-          } else {
-            // no rig → the always-on procedural fallback drives this wrapper
-            entry.anim = prepped;
-          }
-        });
-      }
-    });
-  }
-
-  /** A camera-facing sprite name-tag (rounded warm card + the mission title). */
-  private makeLabel(text: string, color: string): THREE.Sprite {
-    const pad = 24, fontPx = 44;
-    const pipGap = 34; // left pad → colour pip → text: the title baseline starts pad+pipGap in
-    const c = document.createElement('canvas');
-    const ctx = c.getContext('2d')!;
-    ctx.font = `600 ${fontPx}px Inter, system-ui, sans-serif`;
-    // F-22 re-open: the width MUST cover the whole run — left pad + pip + text + an
-    // EQUAL right pad. The old `textW + pad*2` ignored the pipGap the title is drawn
-    // at, so the last glyph overflowed the canvas' right edge and clipped
-    // ("Missiebord" → "Missieborc"). Deriving both from pipGap keeps them in lockstep.
-    const w = pad + pipGap + Math.ceil(ctx.measureText(text).width) + pad;
-    const h = fontPx + pad * 2;
-    c.width = w; c.height = h;
-    // rounded warm card
-    const r = 22;
-    ctx.fillStyle = 'rgba(40, 30, 18, 0.78)';
-    ctx.beginPath();
-    ctx.moveTo(r, 0); ctx.arcTo(w, 0, w, h, r); ctx.arcTo(w, h, 0, h, r);
-    ctx.arcTo(0, h, 0, 0, r); ctx.arcTo(0, 0, w, 0, r); ctx.closePath(); ctx.fill();
-    // a colour pip + the title (dual-channel: colour + word)
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(pad + 10, h / 2, 12, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fdf6e8';
-    ctx.font = `600 ${fontPx}px Inter, system-ui, sans-serif`;
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, pad + pipGap, h / 2 + 2);
-
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    // F-22: depthTest OFF + a high renderOrder → a nearer mesh (the giant avatar's
-    // leg in Run A, the board planks, a pine, the parked jeep) can no longer
-    // depth-occlude the tag and cut the one string that names the object mid-glyph.
-    // depthWrite stays off so the tag never pollutes the depth buffer for what draws
-    // after it. The always-on-top trade-off is bounded by the per-frame
-    // distance/behind-camera fade in fadeWorldLabels().
-    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
-    const sprite = new THREE.Sprite(mat);
-    sprite.renderOrder = 12; // draw after the opaque world + props so it composites over them
-    const scale = 0.0042; // world units per px → ~legible without dominating
-    sprite.scale.set(w * scale, h * scale, 1);
-    this.labels.push(sprite); // registered for the F-22 occlusion-proof distance fade
-    return sprite;
-  }
-
-  /**
-   * F-22: keep every diegetic world/vehicle/POI name-tag readable. makeLabel draws
-   * them with depthTest off + a high renderOrder, so a nearer mesh can never clip a
-   * tag mid-glyph again (the whole defect). The cost of drawing on top of everything
-   * is that a distant tag would otherwise punch through hills from across the map,
-   * so fade each one out behind the camera and with distance. Reading close-up (the
-   * hub, an open mission — the moment the label matters) stays full opacity, so the
-   * fade never touches the frame the finding grades. Cheap: one dot + one length per
-   * tag, no allocation (scratch vectors), no draw-call change.
-   */
-  private fadeWorldLabels(): void {
-    if (this.labels.length === 0) return;
-    const cp = this.camera.position;
-    const fwd = this.camera.getWorldDirection(this._labelFwd);
-    for (const label of this.labels) {
-      const mat = label.material as THREE.SpriteMaterial;
-      const wp = label.getWorldPosition(this._labelWP);
-      const dx = wp.x - cp.x, dy = wp.y - cp.y, dz = wp.z - cp.z;
-      if (dx * fwd.x + dy * fwd.y + dz * fwd.z <= 0.5) { mat.opacity = 0; continue; } // behind the camera
-      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      mat.opacity = Math.max(0, Math.min(1,
-        (LABEL_FADE_GONE - dist) / (LABEL_FADE_GONE - LABEL_FADE_FULL)));
-    }
-  }
-
-  /**
-   * Place the spawn-clearing hub (§4, W2.2): the ranger-cabin (a solid building the
-   * ranger walks around) and the case-board (the mission hub — walking up to it
-   * opens the mission board). Both are best-effort GLBs over a procedural stand-in.
-   * The case-board (the mission hub) stays a few metres out on the +x side; the
-   * cabin sits forward-left (see below). Both keep the x≈0 forward (−z) corridor the
-   * movement smoke walks clear, and both push a collision circle.
-   */
-  private placeHub(): void {
-    // ranger-cabin: forward-left of spawn (WSW), its door turned toward the clearing;
-    // a solid blocker (bigger collision circle) the ranger can't walk through.
-    //
-    // F-05 ⊕ F-07 world-entry composition: at (−4.6, 3.6) the cabin sat straight
-    // BEHIND spawn on +z — exactly where the follow boom lands — so its 3.9 m-wide
-    // GLB filled the world-entry lens AND (as a hero shadow caster, sun from −x/+z)
-    // dropped its shadow +x/−z right over the spawn, leaving the frame a dark
-    // reddish murk (no ground/horizon/ranger — Floris's #1 finding). Moving it to
-    // (−6, −9): interim — that cleared the boom but parked the cabin ~14 m deep off
-    // the left edge, reading too small to give the ranger scale (five P1.1 re-grades
-    // read "nothing beside him"). (−4.2, −4): keeps it OUT of the +z boom volume and
-    // ~2 m clear of the x≈0 tap-to-walk lane (its circle spans x∈[−6.2,−2.2] at
-    // z=−4, so the movement/journey/ground @smoke walks and the spawn boom are
-    // untouched — the boom casts +z, never toward this −z circle), while sitting it
-    // ~10 m from the lens in the forward (−z) frustum, off to the LEFT: a believable
-    // hut BESIDE the back-turned ranger (see the rotation.y = π spawn) for the F-07
-    // proportion shot AND the F-09 hub in the first frame. Sun from −x/+z still
-    // throws the cabin shadow −z AWAY from the lit spawn. Its door faces spawn (below).
-    const cabinAt = new THREE.Vector3(-4.2, 0, -4);
-    cabinAt.y = this.groundY(cabinAt.x, cabinAt.z);
-    this.cabinPos = cabinAt.clone(); // F-09: hub-in-frustum test reads this
-    const cabin = new THREE.Group();
-    cabin.position.copy(cabinAt);
-    cabin.rotation.y = Math.atan2(-cabinAt.x, -cabinAt.z); // face the spawn point
-    cabin.add(this.proceduralCabin());
-    this.scene.add(cabin);
-    this.obstacles.push({ x: cabinAt.x, z: cabinAt.z, r: 2.0 });
-    void loadModel('prop-ranger-cabin').then((m) => {
-      if (!m) return;
-      const prepped = prepModel(m, 3.0);
-      World.enableCast(prepped); // W4.5: the spawn cabin is a hero prop near the player
-      cabin.remove(...cabin.children);
-      cabin.add(prepped);
-    });
-
-    // case-board: the mission hub. A halo ring + a floating "Missiebord" tag read
-    // as "go here", like a mission marker.
-    //
-    // F-09 (spawn faces the void, the hub sits BEHIND the player): it used to sit at
-    // (3.6, 2.6) — the +z side, i.e. straight BEHIND the back-turned ranger and off
-    // the world-entry frame, so the very content the player should walk toward was
-    // never in the first frame and holding forward (−z) walked AWAY from it into the
-    // heath. Moving it to (2.2, −5) puts the mission hub in the forward (−z) frustum,
-    // off to the RIGHT — a mirror of the cabin's forward-LEFT — so world-entry now
-    // composes cabin (left) + Missiebord (right) + the bos tree line ahead, and the
-    // first stride heads TOWARD content. It stays off the x≈0 tap-to-walk lane (its
-    // r=0.7 circle spans x∈[1.5,2.9]), ~1.3 m clear of the spawn→watchtower diagonal
-    // the paths @smoke walks, and 5.5 m out (> the 2.4 m board proximity, so the hub
-    // prompt does NOT fire at spawn). The board faces the spawn point (below).
-    const boardAt = new THREE.Vector3(2.2, 0, -5);
-    boardAt.y = this.groundY(boardAt.x, boardAt.z);
-    const board = new THREE.Group();
-    board.position.copy(boardAt);
-    // P1.0 (F-19): face the spawn point, then turn a little toward +x so the board
-    // face + its pinned papers point at the over-the-shoulder approach framing (the
-    // lens swings to the +x side while the ranger stands here — placeCamera), not
-    // straight back down the ranger's spine where his body hides them. A small turn:
-    // world-entry still reads the board face (its +z-facing component only grows).
-    board.rotation.y = Math.atan2(-boardAt.x, -boardAt.z) + this.BOARD_APPROACH_FACE_TURN;
-    board.add(this.proceduralBoard());
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.9, 1.15, 24),
-      new THREE.MeshBasicMaterial({ color: '#f5c23b', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.05;
-    board.add(ring);
-    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: boardAt.x, z: boardAt.z, base: 0.5 }); // D3.16
-    const label = this.makeLabel('Missiebord', '#f5c23b');
-    label.position.y = 2.0;
-    board.add(label);
-    this.scene.add(board);
-    this.obstacles.push({ x: boardAt.x, z: boardAt.z, r: 0.7 });
-    this.boardGroup = board;
-    this.boardPos = boardAt.clone();
-    void loadModel('prop-case-board').then((m) => {
-      if (!m) return;
-      const prepped = prepModel(m, 1.8);
-      const totem = board.children.find((c) => c.userData.totem);
-      if (totem) board.remove(totem);
-      board.add(prepped); // keep the ring + label
-    });
-  }
-
-  /**
-   * W6.4b2: the "Ken je roep" sit-spot — a calm wooden bench a couple of metres
-   * out from the vogelkijkhut (landmark at 26,-11), facing the open heath so the
-   * perched bird forms of the perception slice have room to sit in front. Like the
-   * case-board hub it carries a halo ring + a floating "Zitplek · luister" label so
-   * it reads as "go here" (the diegetic wayfinding cue — no minimap chrome), and it
-   * has its own proximity/tap/interact path OUTSIDE `markers`. Acting on it plays
-   * `roep3d` in-place (Missions wires `onActivate`). The bench is a small procedural
-   * prop (no GLB dependency); its collision circle is tiny so the ranger can stand
-   * right at it.
-   */
-  private placeSitSpot(): void {
-    const at = new THREE.Vector3(22, 0, -6.5);
-    at.y = this.groundY(at.x, at.z);
-    const group = new THREE.Group();
-    group.position.copy(at);
-    // turn the seat to look out over the heath (away from the clearing/hide)
-    group.rotation.y = Math.atan2(at.x, at.z);
-    group.add(this.proceduralBench());
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.9, 1.15, 24),
-      new THREE.MeshBasicMaterial({ color: '#8ab6d6', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.05;
-    group.add(ring);
-    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: at.x, z: at.z, base: 0.5 }); // D3.16
-    const label = this.makeLabel(ROEP_COPY.wayfinding, '#cfe6f2');
-    label.position.y = 1.7;
-    group.add(label);
-    this.scene.add(group);
-    this.obstacles.push({ x: at.x, z: at.z, r: 0.5 });
-    this.sitSpotGroup = group;
-    this.sitSpotPos = at.clone();
-  }
-
-  /** A small calm wooden bench (two legs + a seat + a low backrest) — an instant
-   *  procedural prop so the sit-spot needs no GLB. Warm heath-wood tones. */
-  private proceduralBench(): THREE.Group {
-    const g = new THREE.Group();
-    const wood = new THREE.MeshStandardMaterial({ color: '#7a5f3e', roughness: 1 });
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.09, 0.42), wood);
-    seat.position.y = 0.46;
-    const back = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.34, 0.07), wood);
-    back.position.set(0, 0.7, -0.18);
-    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.46, 0.42), wood);
-    legL.position.set(-0.6, 0.23, 0);
-    const legR = legL.clone();
-    legR.position.x = 0.6;
-    g.add(seat, back, legL, legR);
-    return g;
-  }
-
-  /**
-   * W4.1: place the fixed landmark props per the §4 world map — the
-   * fire-watchtower (bos beacon), the vogelkijkhut overlooking the ven, the
-   * ecoduct + BOA post on the west rim, and two wegwijzer signposts along the
-   * routes out of the spawn clearing. Each is a best-effort GLB over an instant
-   * procedural totem stand-in; every one pushes a solid collision circle (the
-   * ranger slides around it), and the four named beacons float a diegetic label
-   * so they read as wayfinding cues from a distance (no minimap chrome — same
-   * camera-facing sprite the mission markers + case-board use). None join
-   * `markers`: they are set-dressing, not missions, so they never pollute the
-   * "nearest mission" proximity/wayfinding path. Positions sit clear of the
-   * −z movement-smoke corridor and off the mission-marker anchors (radius 22+).
-   */
-  private placeLandmarks(): void {
-    // [dev-hook id, GLB model, world x/z, target Y-height (m), collision radius,
-    //  optional beacon label]. The watchtower is deliberately the farthest —
-    //  the W4.1 E2E walks spawn→watchtower.
-    const LANDMARKS: {
-      id: string; model: string; x: number; z: number; height: number; collide: number; label?: string;
-    }[] = [
-      { id: 'prop-fire-watchtower', model: 'prop-fire-watchtower', x: 37, z: -37, height: 9, collide: 1.8, label: 'Uitkijktoren' },
-      { id: 'prop-bird-hide', model: 'prop-bird-hide', x: 26, z: -11, height: 2.8, collide: 1.4, label: 'Vogelkijkhut' },
-      { id: 'prop-ecoduct', model: 'prop-ecoduct', x: -70, z: 6, height: 6, collide: 2.6, label: 'Ecoduct' },
-      { id: 'prop-boa-post', model: 'prop-boa-post', x: -56, z: -20, height: 3, collide: 1.0, label: 'BOA-post' },
-      { id: 'prop-signpost', model: 'prop-signpost', x: 9, z: -8, height: 1.7, collide: 0.5 },
-      { id: 'prop-signpost-west', model: 'prop-signpost', x: -16, z: 10, height: 1.7, collide: 0.5 },
-    ];
-    for (const lm of LANDMARKS) {
-      const at = new THREE.Vector3(lm.x, this.groundY(lm.x, lm.z), lm.z);
-      const group = new THREE.Group();
-      group.position.copy(at);
-      group.rotation.y = Math.atan2(-lm.x, -lm.z); // turn its face toward the clearing
-      group.add(this.proceduralTotem(lm.label ? '#c8a36a' : '#8a7a5a')); // instant stand-in
-      if (lm.label) {
-        const label = this.makeLabel(lm.label, '#e8d6a8');
-        label.position.y = lm.height * 0.55 + 1.4;
-        group.add(label);
-      }
-      this.scene.add(group);
-      this.obstacles.push({ x: lm.x, z: lm.z, r: lm.collide });
-      this.landmarks.push({ id: lm.id, x: lm.x, z: lm.z });
-      void loadModel(lm.model).then((m) => {
-        if (!m) return;
-        const prepped = prepModel(m, lm.height);
-        World.enableCast(prepped); // W4.5: solid landmarks cast when near the player
-        const totem = group.children.find((c) => c.userData.totem);
-        if (totem) group.remove(totem); // keep the label
-        group.add(prepped);
-      });
-    }
-  }
-
-  /** Dev-hook accessor (W4.1): every landmark's id + world x/z, so the E2E can
-   *  steer the ranger from spawn to the watchtower and back. */
-  landmarkPositions(): { id: string; x: number; z: number }[] {
-    return this.landmarks.map((l) => ({ id: l.id, x: l.x, z: l.z }));
-  }
-
-  /**
-   * W4.2: nature dressing. Real GLB trees, stumps, snags, logs, boulders,
-   * mushrooms, ferns, foxgloves and reeds clustered at the POIs (watchtower
-   * grove, ecoduct + BOA approaches, ven shore by the bird-hide) and scattered
-   * through the biome cores — layered ON TOP of the instanced-primitive filler
-   * (scatterPines/Heather/Marram/Reeds), which stays the cheap background. Only
-   * the solid props (trees, boulders, logs, snags, juniper, stumps) push a
-   * collision circle; low ground detail (mushrooms/fern/foxglove/reeds) is
-   * walk-through. Every position was pre-validated (a helper script) to sit off
-   * the −z movement-smoke corridor, out of the spawn clearing, and clear of the
-   * submerged ven disc — the reeds ring the water's DRY shore. Fully
-   * deterministic; a procedural totem stands in until each GLB streams in.
-   */
-  private placeNatureDressing(): void {
-    // per-model stand height (m, prepModel target) + collision radius (0 = none)
-    const SPEC: Record<string, { h: number; collide: number }> = {
-      'prop-pine-scots': { h: 5.5, collide: 0.7 },
-      'prop-oak-tree': { h: 5.0, collide: 0.7 },
-      'prop-birch-tree': { h: 5.5, collide: 0.7 },
-      'prop-tree-stump': { h: 0.7, collide: 0.5 },
-      'prop-fallen-log': { h: 0.7, collide: 0.7 },
-      'prop-dead-snag': { h: 3.5, collide: 0.6 },
-      'prop-boulder': { h: 1.1, collide: 0.9 },
-      'prop-juniper-bush': { h: 1.1, collide: 0.7 },
-      'prop-mushrooms': { h: 0.35, collide: 0 },
-      'prop-fern': { h: 0.6, collide: 0 },
-      'prop-foxglove': { h: 0.8, collide: 0 },
-      'prop-reeds': { h: 1.1, collide: 0 },
-    };
-    // [model, x, z] — curated + validated placements per §4.
-    const PLACES: [string, number, number][] = [
-      // Watchtower bos grove (POI 37,-37): trees + a real forest floor
-      ['prop-pine-scots', 33, -40], ['prop-oak-tree', 41, -40], ['prop-birch-tree', 34, -33],
-      ['prop-tree-stump', 31, -37], ['prop-mushrooms', 46, -42], ['prop-fern', 30, -42],
-      ['prop-dead-snag', 44, -42], ['prop-fallen-log', 35, -43],
-      // Ecoduct approach grove (POI -70,6)
-      ['prop-pine-scots', -64, 10], ['prop-birch-tree', -66, 1], ['prop-pine-scots', -73, 12], ['prop-fern', -61, 4],
-      // BOA-post trees (POI -56,-20)
-      ['prop-oak-tree', -51, -24], ['prop-birch-tree', -60, -15],
-      // Bird-hide + ven shore reeds (POI 26,-11, basin 46,-19 dry shore)
-      ['prop-fern', 23, -14], ['prop-reeds', 33, -8], ['prop-reeds', 38, -4], ['prop-reeds', 43, -2],
-      ['prop-reeds', 30, -13], ['prop-reeds', 49, -2], ['prop-reeds', 56, -35],
-      // Heide scatter (SW)
-      ['prop-foxglove', -10, -22], ['prop-boulder', -20, -28], ['prop-foxglove', -6, -30],
-      // Stuifzand junipers + boulders (NE)
-      ['prop-juniper-bush', 24, 20], ['prop-boulder', 30, 26], ['prop-juniper-bush', 16, 30],
-      // Signpost path dressing
-      ['prop-boulder', 13, -13], ['prop-mushrooms', -19, 14],
-    ];
-    PLACES.forEach(([model, x, z], i) => {
-      const spec = SPEC[model];
-      const at = new THREE.Vector3(x, this.groundY(x, z), z);
-      const group = new THREE.Group();
-      group.position.copy(at);
-      group.rotation.y = (i * 2.39996) % (Math.PI * 2); // golden-angle spin for variety
-      group.add(this.proceduralTotem(spec.collide > 0 ? '#6b5a3a' : '#7d8a4a')); // instant stand-in
-      this.scene.add(group);
-      if (spec.collide > 0) this.obstacles.push({ x, z, r: spec.collide });
-      this.dressing.push({ id: model, x, z });
-      void loadModel(model).then((m) => {
-        if (!m) return;
-        const prepped = prepModel(m, spec.h);
-        // W4.5: only the SOLID dressing (trees/boulders/logs/snags/juniper/stumps)
-        // casts a hero shadow; low ground detail (mushrooms/fern/foxglove/reeds)
-        // does not. The tight ranger-following frustum still culls to the closest.
-        if (spec.collide > 0) World.enableCast(prepped);
-        const totem = group.children.find((c) => c.userData.totem);
-        if (totem) group.remove(totem);
-        group.add(prepped);
-      });
-    });
-  }
-
-  /** Dev-hook accessor (D1.5): the scatter + rim tree placements (world x/z + scale), so the
-   *  view-clear E2E can steer a walk PAST a tree to reproduce a genuine cam→ranger crown
-   *  occlusion. Read-only snapshot; the placements are fixed after build. */
-  treeSpotList(): { x: number; z: number; s: number }[] {
-    return this.treePlacements.map((p) => ({ x: p.x, z: p.z, s: p.s }));
-  }
-
-  /** Dev-hook accessor (W4.2): every nature-dressing prop's id + world x/z, so
-   *  the E2E can assert the biomes are dressed with real GLBs. */
-  dressingPositions(): { id: string; x: number; z: number }[] {
-    return this.dressing.map((d) => ({ id: d.id, x: d.x, z: d.z }));
-  }
-
-  /** Dev-hook accessor (W4.3): the sand-path network — route nodes (id + world
-   *  x/z) and the segment index pairs — so the E2E can assert the trails connect
-   *  spawn to every POI. Static (the network is deterministic). */
-  pathNetwork(): { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] } {
-    return {
-      nodes: PATH_NODES.map((n) => ({ id: n.id, x: n.x, z: n.z })),
-      segments: PATH_SEGMENTS.map(([i, j]) => [i, j] as [number, number]),
-    };
-  }
-
-  /** Dev-hook accessor (W4.4): the ground-detail state — whether the procedural
-   *  albedo layers are on and whether the repeating mottle map is actually bound
-   *  to the ground material — so the E2E asserts the before/after toggle flips. */
-  groundDetailState(): { on: boolean; textured: boolean; tileRepeat: number } {
-    const mat = this.ground.material as THREE.MeshStandardMaterial;
-    return {
-      on: this.groundDetailOn,
-      textured: mat.map != null,
-      tileRepeat: mat.map ? mat.map.repeat.x : 0,
-    };
-  }
-
-  /**
-   * W3.3: place the two story-arc humans — the warden (BOA) near the case-board
-   * hub where the player reports, and the poacher as a distant, calm figure off
-   * in the bos edge. Each loads via `loadRig` and plays its single baked clip
-   * through a mixer (advanced in `update`, frozen under reduced-motion). Both sit
-   * to the +z side of spawn so the movement smoke's forward (−z) corridor stays
-   * clear; neither pushes a collision circle or joins `markers` (pure dressing).
-   */
-  private placeScenicActors(): void {
-    // P1.6a: mature humans stand at the adult reference (~1.8 m), so the ≈1.2 m
-    // child ranger reads a clear head-and-shoulders shorter beside the warden.
-    const ACTORS: { id: string; x: number; z: number; height: number }[] = [
-      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: ADULT_REFERENCE_HEIGHT }, // the BOA by the report board
-      { id: 'figure-poacher', x: -11.5, z: 8.5, height: ADULT_REFERENCE_HEIGHT },  // a distant figure in the trees
-    ];
-    for (const a of ACTORS) {
-      const group = new THREE.Group();
-      group.position.set(a.x, this.groundY(a.x, a.z), a.z);
-      group.rotation.y = Math.atan2(-a.x, -a.z); // face the spawn clearing
-      this.scene.add(group);
-      this.addBlobShadow(group, 0.55); // W4.5: soft grounding under the figure
-      const entry = { id: a.id, group, mixer: null as THREE.AnimationMixer | null, action: null as THREE.AnimationAction | null, height: a.height };
-      this.scenicActors.push(entry);
-      void loadRig(a.id).then((rig) => {
-        if (!rig) return;
-        const prepped = prepModel(rig.group, a.height);
-        applyEyes(prepped, a.id, { dusk: false });
-        applyCalmPose(prepped, a.id); // §B never-scary: bias the poacher into a calm rest shape
-        group.add(prepped);
-        // P1.6a: expose the actor's MEASURED rendered stand-height (skinnedRenderBox
-        // — the same honest bone-extent `measureAvatar` reads for the ranger), NEVER
-        // the normalization target. Doc §8.7 / D1.7: a hook reports what RENDERS, so
-        // the child-vs-adult pair assert (Alvah < 0.75 × the warden) can never be
-        // faked by a mis-scaled adult reporting the constant it was asked for.
-        // `entry.height` keeps the target (`a.height`) as the pre-load fallback, and
-        // the geometry-box fallback covers a rig with no skeleton to measure.
-        const rbox = skinnedRenderBox(prepped) ?? new THREE.Box3().setFromObject(prepped);
-        const measuredY = rbox.getSize(new THREE.Vector3()).y;
-        if (Number.isFinite(measuredY) && measuredY > 0) entry.height = measuredY;
-        if (rig.clips.length) {
-          const mixer = new THREE.AnimationMixer(prepped);
-          const clip = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
-          const action = mixer.clipAction(clip).play();
-          entry.mixer = mixer;
-          entry.action = action;
-        }
-      });
-    }
-  }
-
-  /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + its live baked-clip
-   *  {name, time} (null until the rig loads / when it carries no clip) + its measured
-   *  rendered stand-height (m). Lets the E2E assert the warden + poacher are present
-   *  AND their mixers run, and reads the mature-human height the child ranger's scale
-   *  is judged against (Alvah < 0.75 × the warden). */
+  /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + live clip + measured height. */
   actorClips(): { id: string; height: number; clip: { name: string; time: number } | null }[] {
-    return this.scenicActors.map((a) => ({
-      id: a.id,
-      height: a.height,
-      clip: a.action ? { name: a.action.getClip().name, time: a.action.time } : null,
-    }));
+    return this.fauna.actorClips();
   }
 
-  /**
-   * W3.6: place the ambient wildlife. Four animals roam gentle wander loops in
-   * the biomes (the W3.5-staged ree + vos crossfade their baked walk↔graze clips;
-   * the eekhoorn + wild zwijn — no honest CC0 match — get the improved procedural
-   * bob PLUS the roam/turn/graze the wander loop provides), and two birds glide
-   * overhead on spline orbits. None are markers, none push collision — pure life.
-   * Homes sit well clear of the spawn corridor (the −z movement-smoke lane) and
-   * the submerged ven (46,-19), so nothing wanders into water or across the demo.
-   */
-  private placeAmbientLife(): void {
-    // ground roamers: [id, home x/z, loop radius, whether the GLB carries baked
-    // walk/graze clips]. Target height now comes from the canonical dossier
-    // stand-height table (W3.7a, `AnimalScale.ts`) — one source of truth so the
-    // world and the showroom true-scale mode read the SAME relative sizes.
-    const GROUND: { id: string; hx: number; hz: number; r: number; baked: boolean }[] = [
-      { id: 'animal-ree-roedeer', hx: 26, hz: 26, r: 6, baked: true },   // bos/heide edge
-      { id: 'animal-vos-fox', hx: -30, hz: -10, r: 7, baked: true },     // heide, west
-      { id: 'animal-eekhoorn-squirrel', hx: -24, hz: -24, r: 3, baked: false }, // near trees
-      { id: 'animal-wildzwijn-boar', hx: 10, hz: 36, r: 6, baked: false },     // heide, south
-    ];
-    GROUND.forEach((a, i) => {
-      const h = standHeightFor(a.id) ?? 0.9; // dossier canonical (W3.7a)
-      const wander: WanderConfig = {
-        homeX: a.hx, homeZ: a.hz, radius: a.r,
-        period: 22 + i * 4,          // each roams at a slightly different pace
-        phase: (i * 0.27) % 1,       // desync the loops
-        angle: i * 1.1,              // rotate each loop differently
-      };
-      const group = new THREE.Group();
-      group.position.set(a.hx, this.groundY(a.hx, a.hz), a.hz);
-      this.scene.add(group);
-      this.addBlobShadow(group, Math.max(0.35, h * 0.7)); // W4.5: blob under each roamer
-      const entry = {
-        id: a.id, group, phase: i * 1.7,
-        wander, glide: null as GlideConfig | null, faceOffset: 0,
-        recipe: gaitFor(a.id),
-        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
-        walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 1, h,
-      };
-      this.ambient.push(entry);
-      void loadRig(a.id).then((rig) => {
-        if (!rig) return;
-        const prepped = prepModel(rig.group, h);
-        applyEyes(prepped, a.id, { dusk: false });
-        applyCoat(prepped, a.id);     // W3.7b: dossier coat-tint correction (vos rufous)
-        applyPosture(prepped, a.id);  // W3.7b: head-low stance for snuffling species
-        applyCalmPose(prepped, a.id); // §B never-scary rest-pose bias
-        group.add(prepped);
-        if (a.baked && rig.clips.length) {
-          // crossfade the baked walk (striding) against graze (paused) by `moving`;
-          // both play from frame one, weights eased each frame in update().
-          const mixer = new THREE.AnimationMixer(prepped);
-          const walkClip = rig.clips.find((c) => /walk/i.test(c.name)) ?? rig.clips[0];
-          const grazeClip = rig.clips.find((c) => /graze|eat|idle|rest/i.test(c.name)) ?? rig.clips[0];
-          entry.walk = mixer.clipAction(walkClip); entry.walk.play(); entry.walk.setEffectiveWeight(0);
-          entry.graze = mixer.clipAction(grazeClip); entry.graze.play(); entry.graze.setEffectiveWeight(1);
-          entry.mixer = mixer;
-        } else {
-          // no baked clips → the improved procedural bob drives this wrapper (the
-          // wander loop already supplies roam / turn-in-place / pause-and-graze).
-          entry.anim = prepped;
-        }
-      });
-    });
-
-    // two birds gliding overhead on slow spline orbits (the buizerd soars wide,
-    // the houtduif circles lower + tighter). Birds are static GLBs → the glide IS
-    // the motion; they hold the calm-pose gate (no diving, no flapping panic).
-    const BIRDS: { id: string; h: number; cx: number; cz: number; r: number; height: number; period: number; phase: number; bob: number }[] = [
-      { id: 'bird-buizerd', h: 0.9, cx: 4, cz: 0, r: 44, height: 24, period: 30, phase: 0, bob: 1.6 },
-      { id: 'bird-houtduif', h: 0.5, cx: -18, cz: 8, r: 26, height: 16, period: 22, phase: 0.5, bob: 1.1 },
-    ];
-    BIRDS.forEach((b, i) => {
-      const glide: GlideConfig = { cx: b.cx, cz: b.cz, radius: b.r, height: b.height, bob: b.bob, period: b.period, phase: b.phase };
-      const group = new THREE.Group();
-      const g0 = glideAt(glide, 0);
-      group.position.set(g0.x, g0.y, g0.z);
-      this.scene.add(group);
-      const entry = {
-        id: b.id, group, phase: i * 2.1,
-        wander: null as WanderConfig | null, glide, faceOffset: 0,
-        recipe: gaitFor(b.id),
-        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
-        walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 0, h: b.h,
-      };
-      this.ambient.push(entry);
-      void loadModel(b.id).then((m) => {
-        if (!m) return;
-        const prepped = prepModel(m, b.h);
-        applyCalmPose(prepped, b.id);
-        group.add(prepped);
-      });
-    });
-  }
-
-  /** Dev-hook accessor (W3.6): each ambient creature's id + live world x/z + its
-   *  dominant baked clip {name, time} (null for the procedural + bird cast). Lets
-   *  the E2E assert ≥2 animals are present AND a baked mixer clock advances. */
+  /** Dev-hook accessor (W3.6): each ambient creature's id + live world x/z + height + clip. */
   ambientState(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] {
-    return this.ambient.map((a) => {
-      const dom = a.mixer ? (a.walkW >= a.grazeW ? a.walk : a.graze) : null;
-      return {
-        id: a.id, x: a.group.position.x, z: a.group.position.z,
-        h: a.h, // applied canonical stand height (W3.7a) — E2E asserts the live ordering
-        clip: dom ? { name: dom.getClip().name, time: dom.time } : null,
-      };
-    });
+    return this.fauna.ambientState();
   }
 
-  /**
-   * W5.1: place the drivable jeep at a sand-track head in the stuifzand sector
-   * (§4, NE), parked facing the clearing. It pushes a solid collision circle
-   * while parked (the ranger walks up to it), kept OUT of `markers`. The spot is
-   * off the frozen −z movement-smoke corridor and clear of the spawn clearing.
-   */
-  private placeJeep(): void {
-    const x = 16, z = 14, height = 1.9; // stuifzand NE; ~21 m from spawn, +z off the smoke corridor
-    const group = new THREE.Group();
-    // P1.5b: seat the parked jeep on the RENDERED surface (the D1.2 ray truth), not the
-    // mirrored analytic `heightAt` that reads a different height here — so the drive
-    // begins grounded and the hover has nothing to correct on frame one. (buildGround at
-    // construction precedes placeJeep, so `this.ground` + its BVH are already up.)
-    group.position.set(x, this.groundSnapY(x, z), z);
-    this.jeepHeading = Math.atan2(-x, -z); // parked facing the clearing (like the landmarks)
-    group.rotation.y = this.jeepHeading;
-    group.add(this.proceduralTotem('#6a7b4a')); // instant stand-in until the GLB streams in
-    this.scene.add(group);
-    this.jeepObstacle = { x, z, r: JEEP_COLLIDE };
-    this.obstacles.push(this.jeepObstacle);
-    this.jeep = group;
-    this.jeepPos = group.position;
-    void loadModel('vehicle-ranger-jeep').then((m) => {
-      if (!m) return;
-      const prepped = prepModel(m, height);
-      World.enableCast(prepped); // W4.5: a solid hero prop near the player casts a shadow
-      const totem = group.children.find((c) => c.userData.totem);
-      if (totem) group.remove(totem);
-      group.add(prepped);
-    });
-    this.initDust(); // W5.2: the jeep's dust cloud (hidden until it drives)
+  /** Dev-hook accessor (W4.1): every landmark's id + world x/z. */
+  landmarkPositions(): { id: string; x: number; z: number }[] {
+    return this.dressing.landmarkPositions();
   }
 
-  /**
-   * W5.3b: place the two helipads (§4 — one on the stuifzand apron by the sand
-   * track, one by the BOA-post on the western rim) as flat walk-through discs, and
-   * park the helicopter on the stuifzand pad. The pads never push a collision
-   * circle (you land ON them); the parked aircraft does (the ranger walks up to
-   * it). Its PRESENCE is unconditional — the opt-in + reduced-motion gate governs
-   * only whether it can be ENTERED (`enterHeli`/`heliAvailable`).
-   */
-  private placeHelipads(): void {
-    const PADS = [
-      { x: 24, z: 22 },    // stuifzand NE apron — the aviation area, heli parked here
-      { x: -46, z: -22 },  // by the BOA-post on the western rim
-    ];
-    for (const p of PADS) {
-      const disc = World.makeHelipad();
-      disc.position.set(p.x, this.groundY(p.x, p.z) + 0.02, p.z);
-      this.scene.add(disc);
-      this.helipads.push({ x: p.x, z: p.z });
-    }
-    const pad = PADS[0];
-    const group = new THREE.Group();
-    group.position.set(pad.x, this.groundY(pad.x, pad.z), pad.z);
-    this.heliHeading = Math.atan2(-pad.x, -pad.z); // parked facing the clearing
-    group.rotation.y = this.heliHeading;
-    group.add(this.proceduralTotem('#8a8f98')); // instant stand-in until the GLB streams in
-    this.scene.add(group);
-    this.heliObstacle = { x: pad.x, z: pad.z, r: HELI_COLLIDE };
-    this.obstacles.push(this.heliObstacle);
-    this.heli = group;
-    this.heliPos = group.position;
-    this.heliAltitude = HELI_PAD_HEIGHT;
-    void loadModel('vehicle-helicopter').then((m) => {
-      if (!m) return;
-      const prepped = prepModel(m, 2.6);
-      World.enableCast(prepped);
-      const totem = group.children.find((c) => c.userData.totem);
-      if (totem) group.remove(totem);
-      group.add(prepped);
-    });
+  /** Dev-hook accessor (D1.5): the scatter + rim tree placements (world x/z + scale). */
+  treeSpotList(): { x: number; z: number; s: number }[] {
+    return this.dressing.treeSpotList();
   }
 
-  /** W5.3b: a flat helipad disc (1 draw call) — dark asphalt circle laid on the
-   *  ground, the visual landing target. Walk-through (no collision). */
-  private static makeHelipad(): THREE.Mesh {
-    const geo = new THREE.CircleGeometry(3.2, 24);
-    const mat = new THREE.MeshStandardMaterial({ color: '#454b52', roughness: 1, metalness: 0 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2; // lay the XY disc flat, normal up
-    mesh.receiveShadow = true;
-    return mesh;
+  /** Dev-hook accessor (W4.2): every nature-dressing prop's id + world x/z. */
+  dressingPositions(): { id: string; x: number; z: number }[] {
+    return this.dressing.dressingPositions();
   }
 
-  /**
-   * W5.3b: advance the helicopter one frame. The SAME `screenVector` becomes
-   * throttle (y) + steer (x); the pure `flyStep` core (core/heli.ts) turns them
-   * into a rate-clamped heading + horizontal delta AND an exp-damped ≤ 2 m/s
-   * vertical ease toward the target altitude (cruise while flying, 0 while
-   * landing). Horizontal motion resolves through the SAME `resolveMove` — but
-   * ABOVE the treetops (`HELI_AIRBORNE_Y`) it ignores ground obstacles (only the
-   * world rim bounds it), so it never snags on a pine at altitude. The horizon is
-   * a hard level (roll 0); the ranger rides hidden at the aircraft's spot so the
-   * follow-cam + step-out anchor track it. The motion vignette fades in with
-   * translation and is OFF at hover.
-   */
-  private flyHeli(dt: number): void {
-    if (!this.heli || !this.heliPos) return;
-    const stick = this.joystickSource ? this.joystickSource() : null;
-    const intent = this.input ? screenVector(this.input.held, stick) : { x: 0, y: 0 };
-    const targetAlt = this.heliLanding ? HELI_PAD_HEIGHT : HELI_CRUISE_HEIGHT;
-    const step = flyStep(
-      { heading: this.heliHeading, altitude: this.heliAltitude },
-      { throttle: intent.y, steer: intent.x },
-      targetAlt, dt, HELI_CAPS,
-    );
-    this.heliHeading = step.heading;
-    const hp = this.heliPos;
-    const obs = this.heliAltitude > HELI_AIRBORNE_Y ? [] : this.obstacles; // over the treetops → free
-    const next = resolveMove(hp.x, hp.z, hp.x + step.dx, hp.z + step.dz, obs, this.limits);
-    hp.x = next.x; hp.z = next.z;
-    this.heliAltitude = step.altitude;
-    hp.y = this.groundY(next.x, next.z) + this.heliAltitude; // fly ABOVE the ground
-    this.heli.rotation.set(0, this.heliHeading, HELI_ROLL);  // yaw only; horizon level (roll 0)
-    this.heliSpeed = step.speed;
-    this.heliClimbRate = step.climbRate;
-    this.ranger.position.set(hp.x, hp.y, hp.z);
-    this.ranger.rotation.y = this.heliHeading;
-    this.followTargetYaw = this.heliHeading;
-    this.heliVignetteVal = heliVignette(step.speed, step.climbRate);
-    this.onHeliFrame(this.heliVignetteVal);
-    // touchdown: the landing descent has reached the pad → step out
-    if (this.heliLanding && this.heliAltitude <= HELI_PAD_HEIGHT + 0.2) {
-      this.exitHeli();
-      return;
-    }
-    // ambience still follows across biomes while flying
-    const here = biomeAt(hp.x, hp.z);
-    if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
+  /** Dev-hook accessor (W4.3): the sand-path network (nodes + segments). */
+  pathNetwork(): { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] } {
+    return this.dressing.pathNetwork();
   }
 
-  /**
-   * W5.1: advance the jeep one frame in arcade-kinematic drive mode. The SAME
-   * `screenVector` the walker reads becomes throttle (y) + steer (x); the pure
-   * `driveStep` core turns them into a heading + move delta (rate-clamped, caps
-   * halved under reduced-motion), which the SAME `resolveMove` resolves for
-   * collision/rim/water. The jeep sticks to the terrain and the ranger rides
-   * hidden at its spot so the follow-cam + step-out anchor track it.
-   */
-  private driveJeep(dt: number): void {
-    if (!this.jeep || !this.jeepPos) return;
-    const reduced = livePolicy().reduced;
-    const stick = this.joystickSource ? this.joystickSource() : null;
-    const intent = this.input ? screenVector(this.input.held, stick) : { x: 0, y: 0 };
-    const caps = driveCaps(reduced);
-    // F-32 comfort tuning (jeep only — the shared driveStep core + the heli stay
-    // untouched, and the frozen turnRate/maxSpeed caps are unchanged):
-    //  (1) ACCEL RAMP: ease the live speed toward the throttle's target over ~1 s
-    //      instead of snapping to the cap on frame one. Feed the ramped speed back
-    //      in as an effective throttle so the pure core drives at the built-up pace.
-    //  (2) SPEED-SCALED STEER: scale the steer by how fast the jeep is really moving
-    //      so a held turn key can never pivot it in place (the audit's spin-top).
-    // `this.vehicleSpeed` (the calm-capped live speed) is the ramp's carried state,
-    // so leaving an animal's slow-radius re-accelerates smoothly from the crawl.
-    const ramped = rampSpeed(this.vehicleSpeed, intent.y, dt, caps);
-    const effThrottle = caps.maxSpeed !== 0 ? ramped / caps.maxSpeed : 0;
-    const effSteer = comfortSteer(intent.x, ramped, caps);
-    const step = driveStep(this.jeepHeading, { throttle: effThrottle, steer: effSteer }, dt, caps);
-    this.jeepHeading = step.heading;
-    // F-32: accumulate the UNWRAPPED heading from the exact yaw delta driveStep applied
-    // (heading -= steer·turnRate·dt), the honest steering signal the control-condition
-    // assert reads — no turn key ⇒ drift 0, a held turn ⇒ a monotonic change.
-    this.jeepHeadingUnwrapped += -effSteer * caps.turnRate * dt;
-    const jp = this.jeepPos;
-    // W5.2 calm rule: auto-slow to a crawl within reach of any wandering animal so
-    // it never panic-flees. The pure `calmSpeed` caps the signed speed; scaling the
-    // move delta by the same factor keeps the heading + terrain stick intact.
-    const animalDist = this.nearestAnimalDist(jp.x, jp.z);
-    this.vehicleNearAnimal = animalDist <= ANIMAL_SLOW_RADIUS;
-    const capped = calmSpeed(step.speed, animalDist);
-    const k = step.speed !== 0 ? capped / step.speed : 1;
-    this.vehicleSpeed = capped;
-    const next = resolveMove(jp.x, jp.z, jp.x + step.dx * k, jp.z + step.dz * k, this.obstacles, this.limits);
-    jp.x = next.x; jp.z = next.z;
-    // P1.5b ground contact: EASE the jeep's Y toward the rendered-surface target with a
-    // damped hover (research §4.5), NOT the old `jp.y = groundY(...)` hard per-frame snap.
-    // The snap welded the jeep to every undulation (the "magnetically welded" stick) AND
-    // read the mirrored analytic field (the same divergence D1.2 fixed for the walker at
-    // the ven). `groundSnapY` is the rendered-mesh truth; the exponential approach smooths
-    // it into a suspension-like glide that still hugs the ground. Frame-rate independent.
-    const targetY = this.groundSnapY(next.x, next.z);
-    jp.y += (targetY - jp.y) * (1 - Math.exp(-JEEP_HOVER_RATE * dt));
-    this.jeep.rotation.y = this.jeepHeading;
-    // the ranger rides along (hidden) so placeCamera + exitVehicle anchor track it
-    this.ranger.position.set(jp.x, jp.y, jp.z);
-    this.ranger.rotation.y = this.jeepHeading;
-    this.followTargetYaw = this.jeepHeading;
-    // W5.2: rev the engine loop by drive fraction (gated on the sound setting) and
-    // kick up dust behind the jeep when it is moving with any pace — off under
-    // reduced-motion (dust is secondary motion; the engine hum stays, it is audio).
-    if (store.get().settings.geluid) Sound.engineSet(Math.abs(capped) / caps.maxSpeed);
-    this.dustEmitting = !reduced && Math.abs(capped) > 1.2;
-    if (this.dustEmitting) this.emitDust(jp.x, jp.y, jp.z, this.jeepHeading);
-    // ambience still follows across biomes while driving
-    const here = biomeAt(jp.x, jp.z);
-    if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
-  }
-
-  /** W5.2: distance to the nearest wandering ground animal from a world point
-   *  (birds glide overhead → excluded). `Infinity` when none roam. */
-  private nearestAnimalDist(x: number, z: number): number {
-    let best = Infinity;
-    for (const a of this.ambient) {
-      if (!a.wander) continue;
-      const d = Math.hypot(a.group.position.x - x, a.group.position.z - z);
-      if (d < best) best = d;
-    }
-    return best;
-  }
-
-  /** W5.2: build the single dust Points cloud (1 draw call, hidden while idle). A
-   *  small fixed pool of particles is recycled round-robin; per-particle age/life
-   *  attributes drive a shader-side fade so one buffer covers every puff. */
-  private initDust(): void {
-    const N = World.DUST_N;
-    this.dustPos = new Float32Array(N * 3);
-    this.dustVel = new Float32Array(N * 3);
-    this.dustAge = new Float32Array(N);
-    this.dustLife = new Float32Array(N); // all 0 → every slot starts dead
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.dustPos, 3));
-    geo.setAttribute('aAge', new THREE.BufferAttribute(this.dustAge, 1));
-    geo.setAttribute('aLife', new THREE.BufferAttribute(this.dustLife, 1));
-    const mat = new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: new THREE.Color('#d8c49a') } }, // warm sandy haze
-      transparent: true,
-      depthWrite: false,
-      vertexShader: `
-        attribute float aAge;
-        attribute float aLife;
-        varying float vAlpha;
-        void main() {
-          float lifeSafe = max(aLife, 0.0001);
-          float f = clamp(aAge / lifeSafe, 0.0, 1.0);
-          float alive = step(0.0001, aLife);
-          float within = 1.0 - step(aLife, aAge);
-          vAlpha = (1.0 - f) * alive * within;
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          float sz = mix(7.0, 30.0, f);       // puffs expand as they rise + thin out
-          gl_PointSize = sz * (260.0 / max(-mv.z, 1.0));
-          gl_Position = projectionMatrix * mv;
-        }
-      `,
-      fragmentShader: `
-        precision mediump float;
-        uniform vec3 uColor;
-        varying float vAlpha;
-        void main() {
-          vec2 d = gl_PointCoord - vec2(0.5);
-          float soft = smoothstep(0.5, 0.12, length(d));
-          float a = soft * vAlpha * 0.45;      // deliberately faint — a light haze
-          if (a <= 0.002) discard;
-          gl_FragColor = vec4(uColor, a);
-        }
-      `,
-    });
-    const pts = new THREE.Points(geo, mat);
-    pts.frustumCulled = false; // particles live in world space, not around the origin
-    pts.visible = false;
-    this.scene.add(pts);
-    this.dust = pts;
-  }
-
-  /** A deterministic 0..1 (LCG) for dust scatter — no `Math.random`, stable frames. */
-  private dustRand(): number {
-    this.dustSeed = (this.dustSeed * 1103515245 + 12345) & 0x7fffffff;
-    return this.dustSeed / 0x7fffffff;
-  }
-
-  /** W5.2: kick two dust puffs off the jeep's rear wheels. Rear = −forward; the
-   *  left-of-forward vector (cos h, −sin h) scatters them across the track. */
-  private emitDust(x: number, y: number, z: number, heading: number): void {
-    if (!this.dustPos || !this.dustVel || !this.dustAge || !this.dustLife) return;
-    const fx = Math.sin(heading), fz = Math.cos(heading); // forward
-    const lx = fz, lz = -fx;                              // left-of-forward
-    for (let s = 0; s < 2; s++) {
-      const i = this.dustNext;
-      this.dustNext = (this.dustNext + 1) % World.DUST_N;
-      const lat = (this.dustRand() - 0.5) * 1.1;
-      const back = 1.3 + this.dustRand() * 0.5;
-      this.dustPos[i * 3] = x - fx * back + lx * lat;
-      this.dustPos[i * 3 + 1] = y + 0.12;
-      this.dustPos[i * 3 + 2] = z - fz * back + lz * lat;
-      this.dustVel[i * 3] = lx * lat * 0.3 - fx * 0.2;
-      this.dustVel[i * 3 + 1] = 0.5 + this.dustRand() * 0.4; // rise
-      this.dustVel[i * 3 + 2] = lz * lat * 0.3 - fz * 0.2;
-      this.dustAge[i] = 0;
-      this.dustLife[i] = 0.7 + this.dustRand() * 0.4;
-    }
-  }
-
-  /** W5.2: age every live dust particle, drift it up + settle, and hide the whole
-   *  cloud once none survive (so an idle jeep costs no draw call). */
-  private updateDust(dt: number): void {
-    if (!this.dust || !this.dustPos || !this.dustVel || !this.dustAge || !this.dustLife) return;
-    let anyAlive = false;
-    for (let i = 0; i < World.DUST_N; i++) {
-      if (this.dustLife[i] <= 0) continue;
-      const age = this.dustAge[i] + dt;
-      if (age >= this.dustLife[i]) { this.dustLife[i] = 0; this.dustAge[i] = age; continue; }
-      this.dustAge[i] = age;
-      this.dustPos[i * 3] += this.dustVel[i * 3] * dt;
-      this.dustPos[i * 3 + 1] += this.dustVel[i * 3 + 1] * dt;
-      this.dustPos[i * 3 + 2] += this.dustVel[i * 3 + 2] * dt;
-      this.dustVel[i * 3 + 1] *= (1 - Math.min(dt * 1.2, 1)); // the rise eases off
-      anyAlive = true;
-    }
-    const g = this.dust.geometry;
-    (g.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
-    (g.getAttribute('aAge') as THREE.BufferAttribute).needsUpdate = true;
-    (g.getAttribute('aLife') as THREE.BufferAttribute).needsUpdate = true;
-    this.dust.visible = anyAlive;
-  }
-
-  /** Procedural stand-in for the ranger-cabin (instant, before the GLB loads). */
-  private proceduralCabin(): THREE.Group {
-    const g = new THREE.Group();
-    g.userData.totem = true;
-    const wall = new THREE.Mesh(
-      new THREE.BoxGeometry(2.4, 1.8, 2.0),
-      new THREE.MeshStandardMaterial({ color: '#7a5a3a', roughness: 1 }),
-    );
-    wall.position.y = 0.9;
-    const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(1.9, 1.0, 4),
-      new THREE.MeshStandardMaterial({ color: '#5b4327', roughness: 1 }),
-    );
-    roof.position.y = 2.3; roof.rotation.y = Math.PI / 4;
-    g.add(wall, roof);
-    return g;
-  }
-
-  /** Procedural stand-in for the case-board (two posts + a cork panel). */
-  private proceduralBoard(): THREE.Group {
-    const g = new THREE.Group();
-    g.userData.totem = true;
-    const postMat = new THREE.MeshStandardMaterial({ color: '#6b513a', roughness: 1 });
-    const post1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 6), postMat);
-    post1.position.set(-0.5, 0.7, 0);
-    const post2 = post1.clone(); post2.position.x = 0.5;
-    const cork = new THREE.Mesh(
-      new THREE.BoxGeometry(1.4, 0.9, 0.08),
-      new THREE.MeshStandardMaterial({ color: '#c8a36a', roughness: 1 }),
-    );
-    cork.position.set(0, 1.3, 0);
-    g.add(post1, post2, cork);
-    return g;
+  /** Dev-hook accessor (W4.8): the ven-water shader + ripple amplitude + clock. */
+  waterState(): { shader: boolean; amp: number; time: number } {
+    return this.dressing.waterState();
   }
 
   /** Re-point the wayfinding cue at another mission (e.g. after one is completed). */
   setActiveMission(id: string | null): void {
-    this.activeId = id;
-    this.lastWayKey = '';
+    this.pois.setActiveMission(id);
   }
 
   /** The live `richting` phrase (relative to facing) toward a mission marker, for
    *  the world-EF "welke kant?" recall beat — `null` if the marker is unknown.
    *  Synchronous so the beat can score against the true bearing at fire time. */
   headingTo(id: string | null): string | null {
-    if (!id) return null;
-    const goal = this.markers.find((m) => m.missionId === id);
-    if (!goal) return null;
     const rp = this.ranger.position;
-    return wayfind(rp.x, rp.z, this.ranger.rotation.y, goal.pos.x, goal.pos.z).richting;
+    return this.pois.headingTo(id, rp.x, rp.z, this.ranger.rotation.y);
   }
-
-  private proceduralTotem(color: string): THREE.Group {
-    const g = new THREE.Group();
-    g.userData.totem = true;
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1, 6), new THREE.MeshStandardMaterial({ color: '#6b513a', roughness: 1 }));
-    post.position.y = 0.5;
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10), new THREE.MeshStandardMaterial({ color, roughness: 0.6, emissive: new THREE.Color(color), emissiveIntensity: 0.25 }));
-    orb.position.y = 1.2;
-    g.add(post, orb);
-    return g;
-  }
-
-  // ---- input (F-17 click-vs-drag seam) ----
-  /**
-   * A pointerdown on the canvas STARTS a gesture; it does not act yet. If the pointer
-   * then travels past DRAG_PX it is a camera orbit (yaw + eye-lift via orbitTarget*,
-   * tap-to-walk suppressed); a cleaner press walks to the release point on pointerup.
-   * The orbit feeds ONLY the lens (placeCamera), so a drag never moves `pos` — the exact
-   * F-17 defect (a look-around used to relocate the ranger and flip the view 180°).
-   */
-  private onPointerDown = (e: PointerEvent): void => {
-    if (this.activityActive || this.inVehicle || this.inHeli) return; // pick / drive / flight own input
-    this.dragId = e.pointerId;
-    this.dragStartX = this.dragLastX = e.clientX;
-    this.dragStartY = this.dragLastY = e.clientY;
-    this.dragMoved = false;
-    try { this.canvas.setPointerCapture(e.pointerId); } catch { /* a synthetic mouse may lack capture */ }
-  };
-
-  private onPointerMove = (e: PointerEvent): void => {
-    if (this.dragId !== e.pointerId) return;
-    const dx = e.clientX - this.dragLastX, dy = e.clientY - this.dragLastY;
-    this.dragLastX = e.clientX; this.dragLastY = e.clientY;
-    if (!this.dragMoved) {
-      // commit to "this is a drag" only once total travel from the press crosses DRAG_PX
-      if (Math.hypot(e.clientX - this.dragStartX, e.clientY - this.dragStartY) < this.DRAG_PX) return;
-      this.dragMoved = true;
-    }
-    // free yaw (drag right → the lens orbits right around the ranger); clamped eye-lift
-    // (drag up → look further down; drag down → flatten toward the horizon).
-    this.orbitTargetYaw += dx * this.ORBIT_YAW_PER_PX;
-    this.orbitTargetLift = Math.max(this.ORBIT_LIFT_MIN, Math.min(this.ORBIT_LIFT_MAX,
-      this.orbitTargetLift - dy * this.ORBIT_LIFT_PER_PX));
-  };
-
-  private onPointerUp = (e: PointerEvent): void => {
-    if (this.dragId !== e.pointerId) return;
-    this.dragId = null;
-    try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* already released */ }
-    if (this.activityActive || this.inVehicle || this.inHeli) return;
-    if (!this.dragMoved) this.walkToPointer(e); // a clean tap still walks — the seam's other half
-  };
-
-  /** Tap-to-walk: raycast the tapped marker / hub / vehicle / ground and set the walk
-   *  target. Called ONLY for a clean click (onPointerUp with no drag) so a look-around
-   *  never relocates the ranger (F-17). Pick order unchanged from the pre-seam handler. */
-  private walkToPointer(e: PointerEvent): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const ndc = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1,
-    );
-    this.raycaster.setFromCamera(ndc, this.camera);
-
-    // 1) a tapped marker → walk over to it (proximity then offers "Speel mee")
-    for (const mk of this.markers) {
-      const hit = this.raycaster.intersectObject(mk.group, true);
-      if (hit.length) {
-        const dir = new THREE.Vector3(mk.pos.x, 0, mk.pos.z).sub(new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z));
-        if (dir.lengthSq() > 0.001) dir.normalize();
-        this.target.set(mk.pos.x - dir.x * 1.6, 0, mk.pos.z - dir.z * 1.6); // stop just in front
-        return;
-      }
-    }
-    // 1b) a tapped case-board hub → walk up to it (proximity then opens the board)
-    if (this.boardGroup && this.boardPos) {
-      const hit = this.raycaster.intersectObject(this.boardGroup, true);
-      if (hit.length) {
-        const dir = new THREE.Vector3(this.boardPos.x, 0, this.boardPos.z).sub(
-          new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
-        );
-        if (dir.lengthSq() > 0.001) dir.normalize();
-        this.target.set(this.boardPos.x - dir.x * 1.6, 0, this.boardPos.z - dir.z * 1.6);
-        return;
-      }
-    }
-    // 1b') a tapped sit-spot bench → walk up to it (proximity then offers the roep slice)
-    if (this.sitSpotGroup && this.sitSpotPos) {
-      const hit = this.raycaster.intersectObject(this.sitSpotGroup, true);
-      if (hit.length) {
-        const dir = new THREE.Vector3(this.sitSpotPos.x, 0, this.sitSpotPos.z).sub(
-          new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
-        );
-        if (dir.lengthSq() > 0.001) dir.normalize();
-        this.target.set(this.sitSpotPos.x - dir.x * 1.4, 0, this.sitSpotPos.z - dir.z * 1.4);
-        return;
-      }
-    }
-    // 1c) a tapped parked jeep → walk up to it (proximity then offers "Stap in")
-    if (this.jeep && this.jeepPos) {
-      const hit = this.raycaster.intersectObject(this.jeep, true);
-      if (hit.length) {
-        const dir = new THREE.Vector3(this.jeepPos.x, 0, this.jeepPos.z).sub(
-          new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
-        );
-        if (dir.lengthSq() > 0.001) dir.normalize();
-        this.target.set(this.jeepPos.x - dir.x * 2.2, 0, this.jeepPos.z - dir.z * 2.2); // stop beside it
-        return;
-      }
-    }
-    // 1d) a tapped parked helicopter → walk up to it (proximity then offers "Stap in")
-    if (this.heli && this.heliPos) {
-      const hit = this.raycaster.intersectObject(this.heli, true);
-      if (hit.length) {
-        const dir = new THREE.Vector3(this.heliPos.x, 0, this.heliPos.z).sub(
-          new THREE.Vector3(this.ranger.position.x, 0, this.ranger.position.z),
-        );
-        if (dir.lengthSq() > 0.001) dir.normalize();
-        this.target.set(this.heliPos.x - dir.x * 2.4, 0, this.heliPos.z - dir.z * 2.4); // stop beside it
-        return;
-      }
-    }
-    // 2) otherwise walk to the tapped ground point
-    const g = this.raycaster.intersectObject(this.ground, false);
-    if (g.length) {
-      const p = g[0].point;
-      this.target.set(p.x, 0, p.z);
-    }
-  }
-
-  /**
-   * F-16 dolly floor: outside the avatar's own radius + the near plane (the F-05
-   * min-clamp intent — a full zoom-in never buries the lens inside the ranger), and
-   * set just PAST the F-05 fade rail's `far` threshold (`avatarRadius + 1.1`) so the
-   * closest zoom keeps the ranger SOLID (opacity 1) rather than fading him translucent
-   * — a faded ranger at max zoom-in reads as the exact "murk" the F-05 saga chased.
-   * Kept a metre below the ceiling so min < max even if a mis-scaled rig inflates
-   * `avatarRadius`.
-   */
-  private zoomMinBoom(): number {
-    return Math.min(this.avatarRadius + 1.3, this.CAM_ZOOM_MAX - 1);
-  }
-
-  /**
-   * F-16 laptop wheel / trackpad-pinch DOLLY zoom on the walk follow-boom.
-   * Player-initiated + clamped [zoomMinBoom() … CAM_ZOOM_MAX]; NEVER a FOV zoom
-   * (fixed lens is the motion-comfort law). The boom TARGET moves instantly here;
-   * placeCamera then eases the camera toward it (damped ~0.3 s) — or CUTS to it under
-   * reduced-motion (placeCamera snaps then), exactly the "zoom applies as an instant
-   * step" the finding asks for. Ignored while driving/flying/in an activity (those own
-   * the camera). preventDefault stops the page scrolling under the canvas.
-   */
-  private onWheel = (e: WheelEvent): void => {
-    if (this.activityActive || this.inVehicle || this.inHeli) return;
-    e.preventDefault();
-    const next = this.zoomDist + e.deltaY * this.CAM_ZOOM_STEP;
-    this.zoomDist = Math.max(this.zoomMinBoom(), Math.min(this.CAM_ZOOM_MAX, next));
-  };
 
   // ---- per-frame ----
   update(dt: number, t: number): void {
@@ -3416,157 +568,29 @@ export class World {
     // turns naturally when a collision slides them sideways. Frozen during an
     // in-place activity (the mini-game holds the scene + drives the camera itself).
     const rp = this.ranger.position;
-    // W4.5: the hero shadow camera follows the ranger — the tight ortho frustum
-    // tracks him via a FIXED offset so the light DIRECTION never changes (static
-    // golden-hour sun), only the covered set (the closest props) moves with him.
-    if (this.sun) {
-      const o = this.sunOffset;
-      this.sun.position.set(rp.x + o.x, o.y, rp.z + o.z);
-      this.sun.target.position.set(rp.x, 0, rp.z);
-      this.sun.target.updateMatrixWorld();
-    }
-    this.playerSpeed = 0; // 0 while standing or during an in-place activity → mixer eases to idle
-    this.dustEmitting = false; // driveJeep re-arms it while the jeep is moving (W5.2)
-    if (!this.activityActive && this.inHeli) {
+    this.sky.followSun(rp.x, rp.z); // W4.5: the hero shadow frustum follows the ranger
+    this.player.groundSpeedNow = 0; // 0 while standing or during an in-place activity → mixer eases to idle
+    this.vehicles.dustEmitting = false; // driveJeep re-arms it while the jeep is moving (W5.2)
+    if (!this.activityActive && this.vehicles.inHeli) {
       // W5.3b: damped flight mode owns movement while the ranger is in the heli.
-      this.flyHeli(dt);
-    } else if (!this.activityActive && this.inVehicle) {
+      this.vehicles.flyHeli(dt);
+    } else if (!this.activityActive && this.vehicles.inVehicle) {
       // W5.1: arcade drive mode owns movement while the ranger is in the jeep.
-      this.driveJeep(dt);
+      this.vehicles.driveJeep(dt);
     } else if (!this.activityActive) {
-      // W1.2 velocity branch: while a movement key is held (camera-relative via
-      // resolveInput), it OVERRIDES tap-to-walk — the desired step is the input
-      // vector · speed · dt, resolved by the same kinematic controller. When no
-      // key is held we fall back to seeking the tapped target. Either way the
-      // ACTUAL post-collision delta drives facing (slide-around-pine still turns).
-      const stick = this.joystickSource ? this.joystickSource() : null;
-      const move = this.input ? resolveInput(this.input.held, stick, this.cameraYaw()) : { x: 0, z: 0 };
-      let wantX: number, wantZ: number, moving: boolean;
-      let moved = 0; // post-collision ground distance this frame (drives footsteps)
-      if (move.x !== 0 || move.z !== 0) {
-        const step = this.speed * dt;
-        wantX = rp.x + move.x * step;
-        wantZ = rp.z + move.z * step;
-        this.target.set(rp.x, 0, rp.z); // drop any stale walk target so it can't resume on key-release
-        moving = true;
-      } else {
-        const dx = this.target.x - rp.x, dz = this.target.z - rp.z;
-        const dist = Math.hypot(dx, dz);
-        moving = dist > 0.06;
-        const step = moving ? Math.min(this.speed * dt, dist) : 0;
-        wantX = rp.x + (moving ? (dx / dist) * step : 0);
-        wantZ = rp.z + (moving ? (dz / dist) * step : 0);
-      }
-      if (moving) {
-        // F-11: the world rim is a calm stop, never an invisible wall. Ease the
-        // OUTWARD part of the intended step to zero across the last RIM_EASE metres
-        // (the tangential slide ALONG the rim keeps full speed); resolveMove's radial
-        // clamp stays the hard backstop. And fire the calm "Hier stopt het bos" cue
-        // once each time the ranger reaches the rim heading out — re-armed when he
-        // walks back inward. Foot travel only (the jeep is clamped by resolveMove).
-        const rNow = Math.hypot(rp.x, rp.z);
-        const bound = this.limits.bound;
-        let outward = 0;
-        if (rNow > bound - RIM_EASE) {
-          const nx = rp.x / (rNow || 1), nz = rp.z / (rNow || 1);
-          outward = (wantX - rp.x) * nx + (wantZ - rp.z) * nz; // >0 ⇒ the step heads outward
-          if (outward > 0) {
-            const ease = Math.max(0, (bound - rNow) / RIM_EASE); // 1 at the band's inner edge → 0 at the bound
-            wantX -= outward * nx * (1 - ease);
-            wantZ -= outward * nz * (1 - ease);
-          }
-        }
-        if (rNow > bound - RIM_HINT && outward > 0) {
-          if (!this.atBoundary) { this.atBoundary = true; this.onBoundary(); }
-        } else if (rNow < bound - RIM_HINT - 6) {
-          this.atBoundary = false; // hysteresis: re-arm once well back inside the rim
-        }
-        const next = resolveMove(rp.x, rp.z, wantX, wantZ, this.obstacles, this.limits);
-        const mx = next.x - rp.x, mz = next.z - rp.z;
-        if (mx * mx + mz * mz > 1e-7) {
-          this.ranger.rotation.y = Math.atan2(mx, mz);
-          // W1.5: the follow-cam chases the ranger's facing ONLY while he moves,
-          // so a standing ranger (or a mini-game reframe) never swings the view.
-          this.followTargetYaw = this.ranger.rotation.y;
-        }
-        // W3.2: the actual post-collision ground speed drives the idle↔walk
-        // crossfade (slide-around-pine slows him, so the gait reads honestly).
-        moved = Math.hypot(mx, mz);
-        this.playerSpeed = moved / Math.max(dt, 1e-4);
-        rp.x = next.x;
-        rp.z = next.z;
-      }
-      rp.y = this.groundSnapY(rp.x, rp.z); // D1.2: feet follow the rendered terrain, never the mirrored analytic field
-
-      // ambience follows the ranger across biomes — re-pick the bed on a crossing
-      const here = biomeAt(rp.x, rp.z);
-      if (here !== this.lastBiome) { this.lastBiome = here; this.onBiome(here); }
-
-      // W4.7b: surface-aware footsteps. The distance-carry cadence advances every
-      // frame (so a stop re-arms cleanly); when a stride is crossed we plant a
-      // foot with the timbre of the biome underfoot — gated on the sound setting.
-      const fs = stepFrame(this.footAccum, this.playerSpeed, moved);
-      this.footAccum = fs.accum;
-      if (fs.steps > 0 && store.get().settings.geluid) {
-        this.footstepCount += fs.steps;
-        this.lastFootSurface = footSurface(here);
-        Sound.footstep(this.lastFootSurface);
-      }
+      // W1.2: keys / stick (camera-relative) or the tapped target move the ranger; the
+      // follow-cam chases his facing only while he actually moves (W1.5).
+      if (this.player.walk(dt, this.cameraYaw())) this.cam.followTargetYaw = this.ranger.rotation.y;
     }
 
-    // per-animal motion: a real baked rig wins (mixer); else the always-on
-    // procedural fallback (gentle, never-scary, calm-pose gated). Both are
-    // secondary motion, so reduced-motion freezes them at the rest pose.
-    for (const mk of this.markers) {
-      if (mk.mixer) {
-        mk.mixer.update(reduced ? 0 : dt);
-      } else if (mk.anim) {
-        const d = reduced ? REST : motionAt(mk.recipe, t, mk.phase);
-        mk.anim.position.set(d.dx, d.dy, 0);
-        mk.anim.rotation.set(0, d.rotY, d.rotZ);
-        mk.anim.scale.set(1, d.scaleY, 1);
-      }
-    }
+    this.pois.animate(t, dt, reduced); // each mission marker's animal (secondary motion)
 
-    // W3.3: the warden + poacher play their baked clips. Secondary motion, so the
-    // clip freezes at the rest pose under reduced-motion (same rule as the animals).
-    for (const a of this.scenicActors) a.mixer?.update(reduced ? 0 : dt);
-
-    // W3.6: ambient wildlife. Ground animals roam a gentle wander loop (baked
-    // walk↔graze crossfade for the W3.5 cast, procedural bob elsewhere); birds
-    // glide overhead. All SECONDARY motion → frozen at home/rest under reduced-
-    // motion (the loop halts, the mixer holds its pose — locomotion-exempt rule
-    // applies only to the PLAYER, §3.4).
-    for (const a of this.ambient) {
-      if (a.wander) {
-        if (reduced) { a.mixer?.update(0); continue; }
-        const st = wanderAt(a.wander, t);
-        a.group.position.set(st.x, this.groundY(st.x, st.z), st.z);
-        a.group.rotation.y = st.facing + a.faceOffset;
-        if (a.mixer) {
-          const k = dampFactor(dt, 0.25); // ease the walk↔graze crossfade (shared factor)
-          a.walkW += ((st.moving ? 1 : 0) - a.walkW) * k;
-          a.grazeW += ((st.moving ? 0 : 1) - a.grazeW) * k;
-          a.walk?.setEffectiveWeight(a.walkW);
-          a.graze?.setEffectiveWeight(a.grazeW);
-          a.mixer.update(dt);
-        } else if (a.anim) {
-          const d = motionAt(a.recipe, t, a.phase);
-          a.anim.position.set(d.dx, d.dy, 0);
-          a.anim.rotation.set(0, d.rotY, d.rotZ);
-          a.anim.scale.set(1, d.scaleY, 1);
-        }
-      } else if (a.glide && !reduced) {
-        const st = glideAt(a.glide, t);
-        a.group.position.set(st.x, st.y, st.z);
-        a.group.rotation.y = st.facing + a.faceOffset;
-      }
-    }
+    this.fauna.update(t, dt, reduced); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
 
     // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
     // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
     // animates in both motion modes; only the procedural-bob fallback holds still.
-    this.playerRig.update(dt, this.playerSpeed, reduced);
+    this.player.rig.update(dt, this.player.groundSpeedNow, reduced);
 
     // W7.2: measure fps and step the quality tier down/up with hysteresis.
     this.probeQuality(dt);
@@ -3574,101 +598,41 @@ export class World {
     // W5.2: age the jeep's dust cloud every frame (so puffs keep fading after a
     // stop or step-out). Emission itself happens in driveJeep, gated on motion +
     // reduced-motion; this only advances what is already alive.
-    this.updateDust(dt);
+    this.vehicles.updateDust(dt);
 
     // W4.6 "Lucht + adem": drifting cloud shadows + grass wind wave + bird flyover.
     // All SECONDARY motion → the atmosphere clock advances ONLY when reduced-motion
     // is off, so a frozen clock stills every effect together (comfort §C). Runs
     // every frame (even during an in-place activity) so the sky keeps breathing.
-    if (!reduced) this.skyTime += dt;
-    const st = this.skyTime;
-    if (this.cloudLayer) {
-      const off = cloudOffset(st);
-      const map = (this.cloudLayer.material as THREE.MeshBasicMaterial).map;
-      if (map) map.offset.set(off.x, off.y);
-    }
-    this.applyWind(st);
-    if (this.flyBird) {
-      const f = flyoverAt(st);
-      this.lastFlyover = f;
-      this.flyBird.visible = f.visible;
-      this.flyBird.position.set(f.x, f.y, f.z);
-      this.flyBird.rotation.y = f.facing;
-    }
-
-    // W4.8 ven-water: share the ambient clock (`skyTime` froze above under
-    // reduced-motion) and gate the ripple amplitude to 0 when reduced → the disc
-    // holds waveless-still (fresnel tint stays; only the shimmer stops).
-    if (this.waterMat) {
-      this.waterMat.uniforms.uTime.value = st;
-      this.waterMat.uniforms.uAmp.value = rippleAmp(reduced);
-    }
+    const st = this.sky.advance(dt, reduced); // clouds drift + the flyover bird sails
+    this.dressing.animate(st, reduced); // grass wind wave + the ven water shimmer
 
     // F-22: keep the occlusion-proof world/vehicle/POI name-tags distance-faded.
     // Runs before the activity early-return so an open mission's Missiebord tag
     // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity too.
-    this.fadeWorldLabels();
+    this.labels.fade(this.camera);
 
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
 
-    // W5.1 jeep proximity — surface "Stap in" while walking near the parked jeep.
-    // Suppressed while driving (the HUD then shows "Stap uit" via onVehicleChange).
-    if (this.jeep && this.jeepPos && !this.inVehicle && !this.inHeli) {
-      const nj = Math.hypot(this.jeepPos.x - rp.x, this.jeepPos.z - rp.z) < JEEP_NEAR_R;
-      if (nj !== this.nearJeep) { this.nearJeep = nj; this.onJeepNear(nj); }
-    }
+    // W5.1 / W5.3b: "Stap in" near the parked jeep or helicopter (suppressed while riding)
+    this.vehicles.updateProximity(rp.x, rp.z);
 
-    // W5.3b helicopter proximity — surface "Stap in de helikopter" while walking
-    // near the parked heli. Suppressed while flying (rp is the aircraft's spot).
-    if (this.heli && this.heliPos && !this.inHeli && !this.inVehicle) {
-      const nh = Math.hypot(this.heliPos.x - rp.x, this.heliPos.z - rp.z) < HELI_NEAR_R;
-      if (nh !== this.nearHeli) { this.nearHeli = nh; this.onHeliNear(nh); }
-    }
+    // proximity → the marker / Missiebord / sit-spot prompts. Suppressed while driving
+    // or flying so no stale prompt sits behind the vehicle pill (rp is the vehicle's
+    // spot while the ranger rides hidden).
+    if (!this.vehicles.inVehicle && !this.vehicles.inHeli) this.pois.updateProximity(rp.x, rp.z);
 
-    // proximity → surface the "play" affordance (debounced by id). Marker + hub
-    // proximity are suppressed while driving/flying so no stale prompt sits behind
-    // the vehicle pill (rp is the vehicle's spot while the ranger rides hidden).
-    if (!this.inVehicle && !this.inHeli) {
-      let near: string | null = null;
-      for (const mk of this.markers) {
-        if (Math.hypot(mk.pos.x - rp.x, mk.pos.z - rp.z) < 2.4) { near = mk.missionId; break; }
-      }
-      if (near !== this.nearId) { this.nearId = near; this.onApproach(near); }
+    // the calm wayfinding cue toward the active mission (follows the sand paths)
+    this.pois.updateWayfinding(rp.x, rp.z, this.ranger.rotation.y);
 
-      // case-board hub proximity (W2.2) — surface / hide the "open the mission board"
-      // affordance. Its own flag so a mission marker and the board never fight.
-      if (this.boardPos) {
-        const nb = Math.hypot(this.boardPos.x - rp.x, this.boardPos.z - rp.z) < 2.4;
-        if (nb !== this.nearBoard) { this.nearBoard = nb; this.onBoardNear(nb); }
-      }
-
-      // sit-spot proximity (W6.4b2) — surface / hide the "Luister naar de vogels"
-      // affordance. Its own flag so it never fights a mission marker or the board.
-      if (this.sitSpotPos) {
-        const ns = Math.hypot(this.sitSpotPos.x - rp.x, this.sitSpotPos.z - rp.z) < 2.4;
-        if (ns !== this.nearSitSpot) { this.nearSitSpot = ns; this.onSitSpotNear(ns); }
-      }
-    }
-
-    // wayfinding cue to the active mission — calm direction + distance, no minimap.
-    // Debounced so the diegetic HUD only re-renders when the words actually change.
-    const goal = this.activeId ? this.markers.find((m) => m.missionId === this.activeId) : null;
-    if (goal) {
-      // W4.3: the cue FOLLOWS the sand paths — the ARROW aims at the next path
-      // waypoint (routeVia), while the distance + "je bent er" stay measured to
-      // the real marker, so the child walks the trail then peels off at the end.
-      const wp = routeVia(rp.x, rp.z, goal.pos.x, goal.pos.z);
-      const angle = bearing(rp.x, rp.z, this.ranger.rotation.y, wp.x, wp.z);
-      const dist = distanceTo(rp.x, rp.z, goal.pos.x, goal.pos.z);
-      const cue = makeCue(angle, dist);
-      const key = `${cue.glyph}|${cue.richting}|${cue.afstand}`;
-      if (key !== this.lastWayKey) { this.lastWayKey = key; this.onWayfind(cue); }
-    } else if (this.lastWayKey !== '') {
-      this.lastWayKey = ''; this.onWayfind(null);
-    }
-
-    this.placeCamera(reduced, dt, reduced);
+    this.cam.place(reduced, dt, reduced);
   }
+
+  // ctx() (below) reads the ranger's position straight off the World.
+  private get ranger(): THREE.Group { return this.player.group; }
+  // ctx() (below) reads the marker list and the nearest marker straight off the World.
+  private get markers(): Markers['list'] { return this.pois.list; }
+  private get nearId(): string | null { return this.pois.nearId; }
 
   /**
    * Build the live `WorldCtx` an in-place 3D mini-game renders into (3D-IMMERSION
@@ -3704,7 +668,7 @@ export class World {
    *  activity reframe happens to keep in view never overlaps the play prompt. */
   beginActivity(): void {
     this.activityActive = true;
-    for (const m of this.markers) m.label.visible = false;
+    this.pois.setLabelsVisible(false);
   }
 
   /** Resume free-roam after an in-place activity; re-emit the wayfinding cue.
@@ -3713,523 +677,11 @@ export class World {
   endActivity(): void {
     this.activityActive = false;
     this.activityFocus = null; // D1.3: no task owns the camera in free-roam
-    for (const m of this.markers) m.label.visible = true; // W6.1: restore the name-tags on resume
-    this.nearId = null;
-    this.nearBoard = false; // force a fresh proximity re-fire (re-surfaces the hub prompt)
-    this.nearSitSpot = false; // W6.4b2: same — re-surface the sit-spot prompt on resume
-    this.lastWayKey = '';
-    this.followTargetYaw = this.ranger.rotation.y;
-    if (livePolicy().reduced) this.placeCamera(true, 0, true); // reduced → cut back
+    this.pois.setLabelsVisible(true); // W6.1: restore the name-tags on resume
+    this.pois.resetAfterActivity();   // fresh proximity + cue re-fire (re-surfaces the hub prompt)
+    this.cam.followTargetYaw = this.ranger.rotation.y;
+    if (livePolicy().reduced) this.cam.place(true, 0, true); // reduced → cut back
     // otherwise the next update() frame damps position + yaw back into place.
   }
 
-  /**
-   * Place the follow-camera (§1e position follow + W1.5 rotating bearing).
-   *
-   * The horizontal offset is the fixed distance/height rotated by `followYaw`:
-   * `-(sin yaw, cos yaw)·distance` sits the camera behind the ranger's facing.
-   * When the follow rotates (toggle on AND not reduced-motion) `followYaw` eases
-   * toward the ranger's facing with the damped, rate-clamped `dampedYaw`; else it
-   * is pinned to π — the pre-W1.5 straight-behind bearing (reduced-motion falls
-   * back to the fixed bearing per §3.2). Position exp-damps (~0.3 s) unless
-   * `snap` (reduced-motion cut, activity resume, or first placement). Roll is
-   * always 0 and the FOV is fixed at construction — the motion-comfort law.
-   */
-  private placeCamera(snap: boolean, dt = 0, reduced = false): void {
-    const rp = this.ranger.position;
-    const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
-    if (follow && !reduced) {
-      this.followYaw = dampedYaw(this.followYaw, this.followTargetYaw, dt);
-    } else {
-      // fixed bearing: straight behind on +z, no rotation — and reset the target
-      // so re-enabling the follow doesn't whip-pan from a stale facing.
-      this.followYaw = FIXED_FOLLOW_YAW;
-      this.followTargetYaw = FIXED_FOLLOW_YAW;
-    }
-    // F-17 player orbit: ease the drag-set look toward its target with the boom's own
-    // exp-damp, or CUT to it under reduced-motion (a step, never an interpolation — the
-    // motion-comfort law). Layered ON TOP of the follow bearing, so the auto-follow still
-    // re-centres behind the ranger as he walks with the player's offset held on top.
-    if (reduced) {
-      this.orbitYaw = this.orbitTargetYaw;
-      this.orbitLift = this.orbitTargetLift;
-    } else if (dt > 0) {
-      const k = dampFactor(dt, this.ORBIT_TAU);
-      this.orbitYaw += (this.orbitTargetYaw - this.orbitYaw) * k;
-      this.orbitLift += (this.orbitTargetLift - this.orbitLift) * k;
-    }
-    // W5.1/W5.3b: the jeep uses the wider offset (distance 9, height 4.5) and the
-    // helicopter a higher aerial one (13, 6); walking keeps the F-05 clearance rig
-    // (boom 4.6, eye 2.4). Same damping — the pull-back (and climb) eases on board.
-    const walk = !this.inVehicle && !this.inHeli;
-    // P1.0 (F-19) board-approach framing: ease a fixed over-the-shoulder yaw offset
-    // onto the follow bearing whenever the walking ranger stands in the case-board's
-    // near-radius, so the lens swings off his spine and the board FACE + papers clear
-    // his body. A CUT under reduced-motion (stepped, never a swoop); eases to 0 on
-    // leaving. Walk cam only — the vehicle/heli cams own their framing (bearing below).
-    const boardFrameTarget = (walk && this.nearBoard) ? this.BOARD_FRAME_YAW : 0;
-    if (reduced) {
-      this.boardFrameYaw = boardFrameTarget;
-    } else if (dt > 0) {
-      this.boardFrameYaw += (boardFrameTarget - this.boardFrameYaw) * dampFactor(dt, this.BOARD_FRAME_TAU);
-    }
-    // the walk boom's effective bearing = follow + the player's orbit + the board
-    // reframe (the vehicle/heli cams own their framing, so they ignore both offsets);
-    // s/c rotate the boom + spherecast.
-    const bearing = walk ? wrapAngle(this.followYaw + this.orbitYaw + this.boardFrameYaw) : this.followYaw;
-    const s = Math.sin(bearing), c = Math.cos(bearing);
-    const off = this.inHeli ? this.camOffsetHeli : this.inVehicle ? this.camOffsetVehicle : this.camOffset;
-    let dist = off.z;
-    let boomK = 1; // D3.16: the fraction the F-05 anti-clip shrank the WALK boom (1 = untouched)
-    // F-05 anti-clip (walk only): spherecast the boom against the collision solids
-    // (the same circles the ranger can't walk through) so a prop or hut BEHIND the
-    // ranger pulls the lens IN instead of rendering that prop's unlit interior. The
-    // eye height stays put (a pull-in, never a dip); the min clamp keeps the lens
-    // outside the ranger's own radius + near plane.
-    if (walk) {
-      dist = this.zoomDist; // F-16: the player-set dolly distance replaces the fixed 4.6 boom
-      const frac = this.boomClearFraction(rp.x, rp.z, -s * dist, -c * dist);
-      const minFrac = Math.min(1, (this.avatarRadius + this.camera.near + 0.2) / dist);
-      boomK = Math.max(minFrac, frac);
-      dist *= boomK;
-    } else if (this.inVehicle) {
-      // F-30: give the jeep boom F-05's clearance too — a tree / hut / prop BEHIND the
-      // jeep pulls the lens IN instead of burying it in that solid's unlit interior,
-      // the exact "driving is blind" murk the finding names. The jeep's own collision
-      // circle is lifted while driving (enterVehicle), so the cast can't hit itself;
-      // the min-clamp keeps the lens outside the JEEP's bounding radius + near plane.
-      const frac = this.boomClearFraction(rp.x, rp.z, -s * dist, -c * dist);
-      const minFrac = Math.min(1, (JEEP_COLLIDE + this.camera.near + 0.3) / dist);
-      dist *= Math.max(minFrac, frac);
-    }
-    // F-17 pitch: the player's eye-lift tilts the WALK view. The horizontal boom is
-    // unchanged, so the F-05 spherecast/min-clamp + fade rail stay exactly valid — only
-    // the eye rises/drops, and the fixed lookAt at chest turns that into a down/up tilt.
-    // D3.16: keep the WALK follow pitch in its normal band when F-05 pulls the boom IN.
-    // The eye used to stay HIGH (off.y) while the horizontal boom collapsed, tipping the
-    // lens toward straight-down (the `18-jeep-near` −1.17 breach, boom ~0.7 m under a
-    // 2.4 m eye). Scale the eye's height ABOVE the look-point by the SAME fraction the
-    // boom shrank, so a pull-in becomes a pure radial dolly-IN at the settled follow
-    // pitch (~−0.33), never a steepening tilt. k=1 (nothing pulled it in) leaves the
-    // default framing AND the player's deliberate zoom/orbit-lift untouched; the value is
-    // deterministic (function of rp/off/boomK), so the RM cut stays pixel-frozen and the
-    // position lerp below still eases it — a geometry change, never a camera-move shake.
-    const lookH = walk ? this.camLookH : this.camIdleLookH;
-    const eyeAboveLook = off.y + (walk ? this.orbitLift : 0) - lookH;
-    const eyeY = rp.y + lookH + eyeAboveLook * (walk ? boomK : 1);
-    this.camDesired.set(rp.x - s * dist, eyeY, rp.z - c * dist);
-    // F-11: never let the walk lens swing OUT through the world-rim tree-line. When the
-    // ranger stops at the edge and turns, the rim-ease cancels his outward step so his
-    // residual (tangential) facing can rotate the follow boom back into the NON-collision
-    // pine ring (bound + ~1.2 m out) — a trunk then buries the lens and the rim frame
-    // reads "ranger nowhere". Clamp the lens's distance-from-centre to just inside the
-    // ring so it stays in the open with the tree-line as a backdrop BEHIND the ranger.
-    // A pure no-op everywhere but the rim (the cap is only reachable near the edge).
-    if (walk) {
-      const camR = Math.hypot(this.camDesired.x, this.camDesired.z);
-      const capR = this.limits.bound - 0.8;
-      if (camR > capR) {
-        const k = capR / camR;
-        this.camDesired.x *= k;
-        this.camDesired.z *= k;
-      }
-    }
-    // D1.5 (audit #4): keep the WHOLE cam→ranger SIGHTLINE above the RENDERED terrain — not
-    // just the lens above the ground under itself. A dune face standing between the trailing
-    // lens and the ranger is an occluder NO fade can touch (terrain can't be made transparent
-    // the way a crown can) — the GATE-D1 audit #4 murk: fresh `11-controls-hud` a full-frame
-    // terrain void with NO ranger while the hook lied clear. Two faults fixed: (1) the old lift
-    // sampled the MIRRORED analytic `groundY`, which reads a dune ~2.6 m too LOW (groundSnapY is
-    // the one ground truth, D1.2/§2.2) so it never lifted for the real crest; (2) it only kept
-    // the LENS above max-ground, which does not clear the LINE to a ranger standing in a hollow.
-    // Ride the crest instead: first keep the lens above its own rendered ground, then lift the
-    // eye until the straight line lens→HEAD clears the raycast terrain by CAM_GROUND_CLR (capped
-    // at MAX_TERRAIN_LIFT). This is the D1.3 above-terrain law extended to the whole segment —
-    // damped follow behaviour (the lerp below eases it; a CUT on snap / under reduced-motion),
-    // never a player-initiated orbit. A clearance lift only (never a downward move) so the idle
-    // pose stays deterministic frame to frame (groundSnapY is deterministic).
-    if (walk) {
-      const gLens = this.groundSnapY(this.camDesired.x, this.camDesired.z);
-      if (this.camDesired.y < gLens + this.CAM_GROUND_CLR) this.camDesired.y = gLens + this.CAM_GROUND_CLR;
-      const aimY = rp.y + this.avatarTopY; // clear the line to his HEAD (strictest aim → whole body reads)
-      const need = this.terrainSightlineLift(this.camDesired.x, this.camDesired.y, this.camDesired.z, rp.x, aimY, rp.z);
-      const lift = Math.min(need, this.MAX_TERRAIN_LIFT);
-      this.camDesired.y += lift;
-      this.terrainLiftState = lift;
-      // the settled (desired) line is clear iff the raw need fit under the cap — read off camDesired
-      // (where the eased boom is heading) so a mid-lerp frame doesn't blip false while it rides up;
-      // at any settled/shot frame camera==camDesired, so the hook still matches the pixels (§4/§8.7).
-      this.terrainClearState = need <= this.MAX_TERRAIN_LIFT;
-    }
-    if (snap) {
-      this.camera.position.copy(this.camDesired);
-    } else {
-      // exp-damping (~0.3 s) off the REAL frame dt → genuinely frame-rate independent
-      // (§C.5 item 2: identical feel at 30/60/120 fps), no shake. Shared dampFactor.
-      this.camera.position.lerp(this.camDesired, dampFactor(dt, 0.3));
-    }
-    this.camera.up.set(0, 1, 0); // roll = 0 always
-    this.camera.lookAt(rp.x, rp.y + (walk ? this.camLookH : this.camIdleLookH), rp.z);
-    // F-05 fade rail: if the boom still collapses toward the ranger (an occluder
-    // right behind him, or a rig that renders larger than its honest measured height)
-    // fade the ranger out rather than smear his interior across the lens — the
-    // world stays visible. Opacity is a pure function of the REAL lens→ranger
-    // distance, so it is a cut under reduced-motion too (no camera move).
-    if (walk) {
-      const hd = Math.hypot(this.camera.position.x - rp.x, this.camera.position.z - rp.z);
-      const near = this.avatarRadius + 0.3, far = this.avatarRadius + 1.1;
-      this.setAvatarOpacity(Math.max(0, Math.min(1, (hd - near) / (far - near))));
-      // D1.5 occluder fade: when a tree stands between the lens and the ranger on the free
-      // walk — OR the lens sits INSIDE a crown — fade the canopy so he is never lost in a
-      // full-frame foliage void (`09-walk-4`) or murk (`11-controls-hud`). TWO occlusion
-      // models, because a between-lens sightline test alone misses the lens-inside-crown case
-      // the GATE-D1 audit #2 convicted: the boom collapses behind the ranger (a trunk he just
-      // passed is a collision solid, boomClearFraction pulls the lens IN — World.ts:1539) and
-      // drives the lens into that crown; its centre then sits at ~t=0 on the cam→ranger segment,
-      // read as "behind the lens" and skipped, so a frontface-only ray exits unhit and the hook
-      // lied `viewClear`=true over raw leaves. (1) camInsideCrown — the camera POINT inside any
-      // crown sphere (a point-in-volume test — no frontface blind spot); (2) canopyBlocksSightline
-      // — a crown genuinely between lens and ranger (the `10-walk-5` sapling), tested to his HEAD
-      // (where low foliage swallows him first) AND his chest so a bush over his face never reads
-      // clear just because his boots show. setCanopyOpacity dims EVERY tree mesh at once, so this
-      // fades every crown on the sightline, not only the first hit. Attack fast (a cut to the fade
-      // target the frame it is blocked, so `viewClear` flips true at once and the ranger reads
-      // through it — buried ⇒ near-invisible CANOPY_FADE_BURIED so stacked overlapping crowns
-      // still clear, a lone between-lens crown ⇒ the gentler CANOPY_FADE_MIN), release slow (ease
-      // back to solid) to kill edge flicker; under reduced-motion / on a snap both are cuts, so an
-      // idle frame behind a tree stays pixel-frozen (constant block → constant opacity → no
-      // per-frame change). A fade is an opacity change, never a camera move, so orbit/zoom/reframe
-      // stays player-initiated (frozen comfort law, §2.5).
-      const insideCrown = this.camInsideCrown(
-        this.camera.position.x, this.camera.position.y, this.camera.position.z,
-      );
-      const blocked =
-        insideCrown ||
-        this.canopyBlocksSightline(
-          this.camera.position.x, this.camera.position.y, this.camera.position.z,
-          rp.x, rp.y + this.avatarTopY, rp.z,
-        ) ||
-        this.canopyBlocksSightline(
-          this.camera.position.x, this.camera.position.y, this.camera.position.z,
-          rp.x, rp.y + this.camLookH, rp.z,
-        );
-      let co: number;
-      if (blocked) co = insideCrown ? this.CANOPY_FADE_BURIED : this.CANOPY_FADE_MIN; // attack: instant dim (buried ⇒ deeper, never a hidden frame)
-      else if (reduced || snap) co = 1;                             // RM / cut: snap back solid
-      else co = this.canopyOpacity + (1 - this.canopyOpacity) * dampFactor(dt, this.CANOPY_RELEASE_TAU); // release: gentle ease up
-      this.setCanopyOpacity(co);
-      // viewClear is FALSE while a sightline occluder still sits above SEE_THROUGH opacity (a
-      // canopy crown that hasn't faded through) OR a terrain crest still blocks the cam→head line
-      // (the boom-lift capped out, `terrainClearState` above) — both tested against the SAME
-      // rendered geometry the pixels show, so the hook can never claim clear over a murk frame
-      // (audit #4: terrain used to be untested, so a dune-face frame lied clear). D3.16's solid
-      // prop / vehicle / animal occluders are folded in per-SHOT (camState) — they only drive the
-      // hook, not the fade, so they cost nothing on the per-frame walk path.
-      this.viewClearState = (!blocked || this.canopyOpacity <= this.CANOPY_SEE_THROUGH) && this.terrainClearState;
-    } else {
-      if (this.avatarOpacity !== 1) this.setAvatarOpacity(1); // never leave the driver faded when he re-emerges
-      if (this.canopyOpacity !== 1) this.setCanopyOpacity(1); // never leave the canopy faded off-foot
-      this.viewClearState = true;
-      this.terrainLiftState = 0;   // no boom on a vehicle/heli/mission cam → nothing ridden
-      this.terrainClearState = true;
-    }
-    // D3.16: fade the ground "go here" rings by the lens's proximity so a marker ring
-    // never reads as a frame-filling hoop at a collapsed close boom (`18-jeep-near`).
-    // Runs in BOTH branches (a ring faded on foot restores once a vehicle cam pulls the
-    // lens far away). Rings are wayfinding UI (§3), so shrinking them near is on-spec.
-    this.fadeGroundRings();
-  }
-
-  /**
-   * D1.5 free-walk occluder test: does ANY tree crown intersect the straight cam→avatar
-   * segment? Each placement's foliage is modelled as a sphere at CROWN_CENTER_FRAC of its
-   * GLB height (`TREE_BASE_H`×scale) with CROWN_RADIUS_FRAC radius; the segment is tested
-   * by its closest approach to that centre (≤ R ⇒ the crown is in the way). This is the
-   * REAL occlusion the projection-based `avatarInView`/`onScreen` cannot see — they stay
-   * true with a crown between lens and ranger (the `09-walk-4` full-frame void, §8.7).
-   * Pure numeric math over `treePlacements` — no allocation, no THREE calls, deterministic
-   * so the idle-stability pose holds frame to frame; a few-hundred-sphere loop, on par with
-   * `boomClearFraction`'s obstacle loop (the tree trunks live in that same list).
-   */
-  private canopyBlocksSightline(cx: number, cy: number, cz: number, ax: number, ay: number, az: number): boolean {
-    const dx = ax - cx, dy = ay - cy, dz = az - cz;
-    const len2 = dx * dx + dy * dy + dz * dz;
-    if (len2 < 1e-6) return false; // lens on top of him — nothing between
-    for (const p of this.treePlacements) {
-      const H = TREE_BASE_H[p.species] * p.s;
-      const R = H * this.CROWN_RADIUS_FRAC;
-      const ccx = p.x, ccy = p.y + H * this.CROWN_CENTER_FRAC, ccz = p.z;
-      const t = ((ccx - cx) * dx + (ccy - cy) * dy + (ccz - cz) * dz) / len2; // foot param, unclamped
-      // Only a crown genuinely BETWEEN the lens and the ranger occludes him. A crown behind
-      // the lens (t ≤ 0) or BEYOND the ranger (t ≥ ~0.9) is a BACKDROP he stands in front of,
-      // not an occluder — fading it would needlessly ghost the tree-line (e.g. the F-11
-      // world-rim edge). The 0.9 upper bound also skips the tree he stands directly under
-      // (t ≈ 1), whose close-boom collapse the ranger-fade rail already handles.
-      if (t <= 0.02 || t >= 0.9) continue;
-      const gx = ccx - (cx + dx * t), gy = ccy - (cy + dy * t), gz = ccz - (cz + dz * t);
-      if (gx * gx + gy * gy + gz * gz <= R * R) return true;
-    }
-    return false;
-  }
-
-  /**
-   * D1.5 lens-inside-crown test (GATE-D1 audit #2's murk case): is the camera POINT inside any
-   * tree crown sphere? The between-lens sightline test misses this — a crown the lens sits
-   * INSIDE has its centre at ~t=0 on the cam→ranger segment (skipped as "behind the lens"), so
-   * a frontface-only ray exits unhit and the frame is raw-foliage murk while `viewClear` lied
-   * true (`11-controls-hud` z≈−59: `viewClear`=true + `canopyFade`=1 over full-frame murk). A
-   * point-in-sphere test has no frontface blind spot; the crown is grown by CROWN_INSIDE_MARGIN
-   * so the fade LEADS the bury (no pop as the boom collapses in). The fade then drives the canopy
-   * to CANOPY_FADE_BURIED — near-invisible — so even a stack of overlapping crowns near the lens
-   * reads through (fading to 0.16 was still murk when buried, `12-pause-hub`). Same crown model as
-   * canopyBlocksSightline (sphere at CROWN_CENTER_FRAC height, CROWN_RADIUS_FRAC radius over
-   * `TREE_BASE_H`×scale); pure numeric math over treePlacements — no allocation, deterministic so
-   * the idle-stability pose holds frame to frame.
-   */
-  private camInsideCrown(cx: number, cy: number, cz: number): boolean {
-    for (const p of this.treePlacements) {
-      const H = TREE_BASE_H[p.species] * p.s;
-      const R = H * this.CROWN_RADIUS_FRAC + this.CROWN_INSIDE_MARGIN;
-      const dx = cx - p.x, dy = cy - (p.y + H * this.CROWN_CENTER_FRAC), dz = cz - p.z;
-      if (dx * dx + dy * dy + dz * dz <= R * R) return true;
-    }
-    return false;
-  }
-
-  /**
-   * D3.16 all-occluder sightline (props + vehicles): does any SOLID collision circle
-   * (cabin, board, sign, watchtower, the parked jeep/helicopter — everything in
-   * `obstacles` EXCEPT the fadeable tree trunks) stand BETWEEN the lens and the ranger
-   * on the XZ plane? These are UNFADEABLE occluders, so — per §2.5 (GATE-D2: "the
-   * clear-line test binds to anything the renderer draws; unfadeable ones report
-   * honestly") — a hit makes `viewClear` FALSE rather than trying to fade the mesh. The
-   * `18-jeep-near` breach: the sightline test covered crowns + terrain but not props /
-   * vehicles / animals, so the hook lied clear while a mesh swallowed the ranger. Same
-   * 2D closest-approach-between math as `boomClearFraction`/`canopyBlocksSightline`;
-   * circles that CONTAIN the ranger's foot (the prop he stands at) are skipped so a POI
-   * never self-reports occluded. Trees are skipped (their crown fade already handles
-   * them, and the frozen view-clear spec walks past trunks expecting viewClear=true).
-   * Deterministic (no allocation) so the idle-stability pose holds frame to frame.
-   */
-  private propBlocksSightline(cx: number, cz: number, ax: number, az: number): boolean {
-    const dx = ax - cx, dz = az - cz;
-    const len2 = dx * dx + dz * dz;
-    if (len2 < 1e-6) return false; // lens on top of him
-    for (const o of this.obstacles) {
-      if (o.tree) continue;                        // fadeable crown — handled by the canopy fade
-      const fx = o.x - ax, fz = o.z - az;
-      if (fx * fx + fz * fz <= o.r * o.r) continue; // the prop the ranger stands at — not an occluder
-      const t = ((o.x - cx) * dx + (o.z - cz) * dz) / len2; // foot param on the segment
-      if (t <= 0.05 || t >= 0.95) continue;        // behind the lens or at/behind the ranger → a backdrop
-      const gx = o.x - (cx + dx * t), gz = o.z - (cz + dz * t);
-      if (gx * gx + gz * gz <= o.r * o.r) return true;
-    }
-    return false;
-  }
-
-  /**
-   * D3.16 all-occluder sightline (animals): does any staged CREATURE — a mission-marker
-   * model, a scenic actor (warden/poacher), or an ambient roamer/bird — stand BETWEEN
-   * the lens and the ranger's body? The `18-jeep-near` breach was exactly this: a
-   * mission-marker BIRD model (the stuifzand nachtzwaluw, anchored by the jeep) filled
-   * the near foreground while `viewClear` claimed clear. Each creature is modelled as a
-   * sphere at its group's world position, lifted to mid-height, with a radius from its
-   * stand-height (a floor so even a low bird reads); the cam→body segment is tested to
-   * the ranger's HEAD and CHEST (a low creature swallows his feet first, a tall one his
-   * head) by closest approach. Animals are UNFADEABLE set-dressing, so a hit reports
-   * `viewClear` FALSE (honest) — we do not ghost a live animal. Birds gliding tens of
-   * metres overhead never touch a follow-height sightline, so the loop is a cheap no-op
-   * for them. Pure numeric math over the staged casts — deterministic, no allocation.
-   */
-  private animalBlocksSightline(cx: number, cy: number, cz: number, rx: number, ry: number, rz: number): boolean {
-    const near = (px: number, py: number, pz: number, R: number, ay: number): boolean => {
-      const dx = rx - cx, dy = ay - cy, dz = rz - cz;
-      const len2 = dx * dx + dy * dy + dz * dz;
-      if (len2 < 1e-6) return false;
-      const t = ((px - cx) * dx + (py - cy) * dy + (pz - cz) * dz) / len2;
-      if (t <= 0.05 || t >= 0.95) return false;    // behind the lens / at-or-behind the ranger
-      const gx = px - (cx + dx * t), gy = py - (cy + dy * t), gz = pz - (cz + dz * t);
-      return gx * gx + gy * gy + gz * gz <= R * R;
-    };
-    const aimHead = ry + this.avatarTopY;          // his crown — a tall creature reaches it
-    const aimChest = ry + this.avatarTopY * 0.35;  // low on his body — a ground bird swallows here first
-    const test = (g: THREE.Vector3, h: number): boolean => {
-      const R = Math.max(0.45, h * 0.5);           // footprint sphere (floor so a small model still reads)
-      const cyc = g.y + h * 0.5;                   // centre at mid-height above the creature's own ground
-      return near(g.x, cyc, g.z, R, aimHead) || near(g.x, cyc, g.z, R, aimChest);
-    };
-    for (const m of this.markers) { if (test(m.group.position, 1.0)) return true; }
-    for (const a of this.scenicActors) { if (test(a.group.position, a.height)) return true; }
-    for (const a of this.ambient) {
-      if (a.glide) continue;                        // birds gliding overhead never cross a follow sightline
-      if (test(a.group.position, a.h)) return true;
-    }
-    return false;
-  }
-
-  /**
-   * F-05 spherecast: the fraction of the walk boom (origin `ox,oz`, vector
-   * `dx,dz` = the horizontal offset) that is clear before the lens would enter a
-   * collision solid's circle grown by the camera probe radius. 1 = no obstacle in
-   * the way. Circles that already CONTAIN the origin (the prop the ranger stands
-   * at) are skipped so the lens never collapses onto him at a POI. Cheap 2D
-   * ray–circle math over the existing `obstacles` list — deterministic, so the
-   * idle-stability assert (yaw/dist steady ±0.01) holds frame to frame.
-   */
-  private boomClearFraction(ox: number, oz: number, dx: number, dz: number): number {
-    const a = dx * dx + dz * dz;
-    if (a < 1e-6) return 1;
-    let best = 1;
-    for (const o of this.obstacles) {
-      const R = o.r + this.CAM_PROBE_R;
-      const fx = ox - o.x, fz = oz - o.z;
-      const cc = fx * fx + fz * fz - R * R;
-      if (cc < 0) continue;                 // origin already inside — ignore this solid
-      const b = 2 * (fx * dx + fz * dz);
-      const disc = b * b - 4 * a * cc;
-      if (disc < 0) continue;               // boom misses the circle
-      const t = (-b - Math.sqrt(disc)) / (2 * a);
-      if (t > 0 && t < best) best = t;      // nearest entry along the boom
-    }
-    return best;
-  }
-
-  /**
-   * F-05 fade rail: set the ranger's render opacity (1 = solid). Each material's
-   * ORIGINAL opacity/transparent/depthWrite is stashed once and restored at full
-   * opacity, so a faded eye/coat material never loses its authored blend. A faded
-   * ranger drops depthWrite so the world behind it stays visible. Guarded on the
-   * cached value — no per-frame traversal unless the fade actually changes.
-   */
-  private setAvatarOpacity(o: number): void {
-    if (o === this.avatarOpacity) return;
-    this.avatarOpacity = o;
-    const opaque = o >= 1;
-    this.ranger.traverse((n) => {
-      const mesh = n as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const m of mats) {
-        const mat = m as THREE.Material & { opacity: number; transparent: boolean; depthWrite: boolean };
-        const ud = mat.userData as { __fadeOrig?: { o: number; t: boolean; d: boolean } };
-        if (!ud.__fadeOrig) ud.__fadeOrig = { o: mat.opacity, t: mat.transparent, d: mat.depthWrite };
-        const orig = ud.__fadeOrig;
-        if (opaque) { mat.opacity = orig.o; mat.transparent = orig.t; mat.depthWrite = orig.d; }
-        else { mat.opacity = orig.o * o; mat.transparent = true; mat.depthWrite = false; }
-      }
-    });
-  }
-
-  /**
-   * D1.7: the ranger's ACTUAL rendered body opacity this frame — the honest,
-   * pixel-truthful signal the hook reports instead of the `avatarOpacity` INTENT
-   * field. The rig materials are SHARED by reference (Models.loadRig →
-   * SkeletonUtils.clone; a Mesh clone shares its material) across the Stage title
-   * clone and every World instance, so a fresh World inherits whatever opacity a
-   * prior instance's fade rail left them in while its own `avatarOpacity` field
-   * defaults to 1 — the `14-title-return-world` breach: shadow cast (the depth pass
-   * ignores opacity), body unrendered, hook lying `avatarOpacity` 1 (§8.7). This
-   * reads the materials directly: the MAX effective opacity across his meshes, so
-   * one solid mesh proves he draws (a non-transparent material renders opaque
-   * regardless of its `opacity` number → counts as 1; a faded material contributes
-   * its live `opacity`). ~1 = solid body, ~0 = invisible. Empty rig → 0.
-   */
-  private renderedAvatarOpacity(): number {
-    if (this.ranger.children.length === 0) return 0; // rig not built yet
-    // Visibility-aware walk that mirrors three's render gate: an invisible node hides
-    // its whole subtree, an invisible material draws nothing, and an OPAQUE material
-    // ignores its `opacity` number (renders solid). So MAX effective opacity over the
-    // meshes three would actually draw = "is the body visible": ~1 solid, 0 when a
-    // stale shared-material fade / a hidden mesh / a hidden group leaves him unrendered.
-    // With frustumCulled=false (loadRealRanger) there is no other draw gate, so this
-    // signal cannot lie the way the `avatarOpacity` intent field did (§8.7).
-    let max = 0;
-    const visit = (o: THREE.Object3D): void => {
-      if (!o.visible) return; // an invisible node hides its whole subtree
-      const mesh = o as THREE.Mesh;
-      if (mesh.isMesh) {
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        for (const m of mats) {
-          const mat = m as THREE.Material & { opacity: number; transparent: boolean; visible: boolean };
-          if (mat.visible === false) continue;
-          const eff = mat.transparent ? mat.opacity : 1;
-          if (eff > max) max = eff;
-        }
-      }
-      for (const c of o.children) visit(c);
-    };
-    visit(this.ranger);
-    return max;
-  }
-
-  /**
-   * D1.7: force the ranger's SHARED materials back to their authored solid state,
-   * bypassing setAvatarOpacity's churn-guard (`o === this.avatarOpacity`). A fresh
-   * World starts `avatarOpacity` at 1, so `setAvatarOpacity(1)` is a no-op and can
-   * NEVER un-fade materials a PRIOR instance left transparent (the shared-material
-   * desync above). Called when the real rig is (re)built (loadRealRanger's swap — the
-   * boot procedural stand-in makes its OWN fresh materials, so it can't inherit a leak)
-   * so world re-entry always renders him solid — instant, so it is a cut under
-   * reduced-motion too (an opacity reset is not a camera move). Poisoning
-   * the guard and reusing setAvatarOpacity keeps the restore logic (the `__fadeOrig`
-   * stash) in one place.
-   */
-  private forceAvatarOpaque(): void {
-    this.avatarOpacity = -1; // poison the guard so the restore always runs
-    this.setAvatarOpacity(1);
-  }
-
-  /**
-   * D1.5 occluder fade (sibling of setAvatarOpacity): set the tree-canopy render opacity
-   * (1 = solid) so a crown between the lens and the ranger on the free walk stops swallowing
-   * him (`09-walk-4`). Each material's ORIGINAL opacity/transparent/depthWrite is stashed
-   * once and restored at full, so a faded crown never loses its authored look; a faded
-   * canopy drops depthWrite so the ranger behind it stays visible. Guarded on the cached
-   * value — no traversal unless the fade actually changes. Fades the CURRENT tree meshes
-   * (`treeFadeMeshes`: the cone fallback while the GLBs stream, then the instanced GLB
-   * canopy). Draw-call count is untouched (same meshes, just transparent) so the <150
-   * contract holds. Materials are tree-only (each species GLB / the cones own theirs), so
-   * this never dims a non-tree prop.
-   */
-  private setCanopyOpacity(o: number): void {
-    if (o === this.canopyOpacity) return;
-    this.canopyOpacity = o;
-    const opaque = o >= 1;
-    for (const obj of this.treeFadeMeshes) {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh) continue;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const m of mats) {
-        const mat = m as THREE.Material & { opacity: number; transparent: boolean; depthWrite: boolean };
-        const ud = mat.userData as { __canopyFadeOrig?: { o: number; t: boolean; d: boolean } };
-        if (!ud.__canopyFadeOrig) ud.__canopyFadeOrig = { o: mat.opacity, t: mat.transparent, d: mat.depthWrite };
-        const orig = ud.__canopyFadeOrig;
-        if (opaque) { mat.opacity = orig.o; mat.transparent = orig.t; mat.depthWrite = orig.d; }
-        else { mat.opacity = orig.o * o; mat.transparent = true; mat.depthWrite = false; }
-      }
-    }
-  }
-
-  /**
-   * D3.16: fade the diegetic "go here" halo rings (mission markers, case-board, sit-spot)
-   * by the LENS's horizontal proximity — full 0.5 beyond RING_FADE_FAR, linearly to 0 at
-   * RING_FADE_NEAR. The `18-jeep-near` breach filled the frame with a marker ring when a
-   * collapsed close boom looked near-straight-down at it; a ring is wayfinding UI (§3 /
-   * §2.5 GATE-D2), so it caps/hides at close range instead of reading as a giant hoop. The
-   * normal approach + standing boom (~4.6 m behind the ranger who stands ON the ring) sits
-   * beyond FAR, so the "go here" cue is untouched while walking up; only a lens driven
-   * right on top of a ring fades it. A pure per-material opacity write, guarded on change —
-   * no geometry/draw-call change (<150 holds), deterministic so RM frames stay frozen.
-   */
-  private fadeGroundRings(): void {
-    if (this.groundRings.length === 0) return;
-    const cx = this.camera.position.x, cz = this.camera.position.z;
-    const span = this.RING_FADE_FAR - this.RING_FADE_NEAR;
-    for (const r of this.groundRings) {
-      const d = Math.hypot(cx - r.x, cz - r.z);
-      const k = Math.max(0, Math.min(1, (d - this.RING_FADE_NEAR) / span));
-      const o = r.base * k;
-      if (r.mat.opacity !== o) r.mat.opacity = o;
-    }
-  }
 }

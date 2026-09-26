@@ -1638,10 +1638,9 @@ async function walkToBoundary(page: Page, isPad: boolean, stick: TouchStick | nu
   if (isPad) { await joystickWalkTo(page, stick!, read, 500); return; }
   await keyboardWalkTo(page, read, 500);
 }
-/** P1.2 / D3.2: walk to the ven-water shore AND aim the lens at the water. The ven's RENDERED
- *  basin is at WORLD (VEN_CENTER.x, -VEN_CENTER.z) = (46, −19): buildGround's −90° tilt mirrors z,
- *  so the depression heightAt() digs at VEN_CENTER (arg z = +19) renders at world z = −19, where
- *  the water disc + ground-tone-ven + moss bank + no-wade all resolve (World.buildVenWater). This
+/** P1.2 / D3.2: walk to the ven-water shore AND aim the lens at the water. The ven basin is at
+ *  world VEN_CENTER = (46, −19), where the water disc + ground-tone-ven + moss bank + no-wade all
+ *  resolve (world/Dressing.buildVenWater; the terrain is no longer z-mirrored, 2026-09-26). This
  *  is a FORWARD walk from spawn (the follow cam looks −z, so a −z target is ahead — reliable),
  *  unlike a +z target which needs a backward press + a 180° follow-cam swing that diverges. Latch
  *  inside the disc (< 17 m; the no-wade stops him at the reed-fringed shore). Then AIM: the walk
