@@ -16,9 +16,8 @@ import path from 'node:path';
  *   - clearance ≥ −tol       feet ON the rendered surface, never sunk below it (the
  *                            pre-fix analytic Y-write read ~ −4 m here);
  *   - drawCalls < 150        the budget contract still holds with the BVH ground-snap.
- * It also proves the burst reached a REAL divergence zone (max |analyticGap| ≫ 0) so a
- * still-grounded ranger there is genuine evidence, not a flat-spawn no-op — on the OLD
- * code the analytic Y-write would have sunk/floated him at that exact spot.
+ * Since the terrain un-mirror (2026-09-26, world/Terrain.ts) it also proves the drawn
+ * ground IS the relief field every placement reads: max |analyticGap| stays under 5 cm.
  *
  * Lives in the capture testDir so `npm run capture` (the phase audit) re-runs it, and it
  * is runnable in isolation for a fast self-verify:
@@ -193,12 +192,10 @@ test('D1.2 ground-snap drive-burst — the ranger stays on the rendered terrain'
  * Where the D1.2 burst holds ONE forward direction, this one STEERS spawn → the sloped
  * bos/ven relief → the ven-water bank (Biomes.VEN_CENTER 46,−19), sampling
  * `__ranger.grounded()` EVERY frame. The ven bank is the exact spot D0.1's fresh
- * `45-ven-shore` buried the ranger to his NECK on laptop: the rendered terrain surface
- * at world (x,z) is `heightAt(x,−z)` (buildGround tilts the plane −90° about X) while the
- * pre-D1.2 analytic Y-write read `heightAt(x,z)` — the two disagree by ~4 m AT THE VEN, so
- * the old code sank him ~3–4 m under the bank. This burst proves D1.2's raycast ground-snap
- * keeps his feet ON the rendered surface across the WHOLE traverse, ending on the bank with
- * the water ahead (no half-buried frame) — the drive-assert the ledger's verify-by names.
+ * `45-ven-shore` buried the ranger to his NECK on laptop (the terrain was z-mirrored
+ * against the field placements read, fixed at the source on 2026-09-26). This burst proves
+ * his feet stay ON the drawn surface across the WHOLE traverse, ending on the bank with the
+ * water ahead (no half-buried frame), and that the drawn ground matches heightAt there.
  *
  * Fast self-verify in isolation:
  *   npx playwright test --config playwright.capture.config.ts e2e-capture/ground-snap.spec.ts \
