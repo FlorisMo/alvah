@@ -63,6 +63,13 @@ export interface WorldCtx {
   prompt: HTMLElement;
   /** true when motion must be reduced — views swap moves for cuts */
   reducedMotion: boolean;
+  /** 2026-09-27: this step is not the mission's last — when it ends the lens stays on
+   *  the play view (no glide back to the ranger), and the next step's one reframe
+   *  starts from there: one calm move between two games instead of back-and-forth. */
+  keepView?: boolean;
+  /** the follow camera's pose from before the mission's FIRST step — where the last
+   *  step's glide back returns to (default: the pose when this step began) */
+  home?: { pos: { x: number; y: number; z: number }; look: { x: number; y: number; z: number } } | null;
 }
 
 /** Options for `WorldCtx.spawnModel`. */

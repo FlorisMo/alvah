@@ -251,6 +251,8 @@ interface Live {
   /** fade-up 0..1 (props + flag) */
   fade: number | null;
   mats: THREE.Material[];
+  /** rides on another piece (a raven on its log): that piece places it */
+  riding?: boolean;
 }
 
 interface Built {
@@ -449,6 +451,13 @@ export class Progress {
       group.add(root);
       live.push(l);
     }));
+    // a piece that sits ON another (the raven on the log) becomes part of it: one
+    // thing standing on the ground, and it moves and rests with its log
+    for (const l of live) {
+      if (!l.piece.lift) continue;
+      const base = live.find((q) => q !== l && !q.piece.lift && q.piece.a === l.piece.a && q.piece.s === l.piece.s);
+      if (base) { base.root.attach(l.root); l.riding = true; }
+    }
 
     const b: Built = { missionId, group, frame, live, flag, spots };
     env.scene.add(group);
@@ -465,7 +474,7 @@ export class Progress {
     for (const l of b.live) {
       l.walk = null;
       l.root.visible = true;
-      l.root.position.set(l.x, l.y, l.z);
+      if (!l.riding) l.root.position.set(l.x, l.y, l.z);
       if (l.fade !== null) { l.fade = null; setOpacity(l.mats, 1); }
     }
     b.flag.scale.y = 1;

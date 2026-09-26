@@ -7,7 +7,7 @@
  * Never a game-over: the reward always celebrates; difficulty flexes silently.
  */
 
-import { Group, type Scene } from 'three';
+import { Group, Vector3, type Scene } from 'three';
 import type { Mission, Step, Clue } from '../../content/types';
 import type { BeatSummary, Engine } from '../../core/skill';
 import { store } from '../../core/state';
@@ -121,6 +121,9 @@ async function runMission(mission: Mission): Promise<void> {
   // proximity prompt comes back near the lens. It lets go when the ranger walks on
   // (resumePatrol) or the mission is stopped.
   holdWorld();
+  // the follow camera's pose before the first game: the last game glides back to it
+  const cam = session.world?.camera;
+  const home = cam ? { pos: cam.position.clone(), look: cam.position.clone().add(cam.getWorldDirection(new Vector3())) } : null;
   for (let i = 0; i < mission.stappen.length; i++) {
     const step = mission.stappen[i];
     const play = ENGINE_VIEWS[step.ef];
@@ -157,7 +160,9 @@ async function runMission(mission: Mission): Promise<void> {
         const variant = variantFor(REGISTRY_3D, step.ef as Engine)!;
         const ctx = world.ctx(stepHost);
         (ctx.scene as Scene).add(stepStage);
-        result = await raceStop(variant.play({ ...ctx, scene: stepStage }, stepForView(step)));
+        // between two games the lens stays on the play view (one calm move to the next)
+        const keepView = i < mission.stappen.length - 1;
+        result = await raceStop(variant.play({ ...ctx, scene: stepStage, keepView, home }, stepForView(step)));
       } else {
         result = await raceStop(play(stepHost, stepForView(step)));
       }

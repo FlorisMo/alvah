@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { loadModel, loadRig, prepModel } from '../Models';
-import { anchorInBiome, type Biome } from '../Biomes';
+import { anchorInBiome, biomeAt, type Biome } from '../Biomes';
 import { applyEyes } from '../EyeMaterial';
 import { applyCoat, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
@@ -23,6 +23,7 @@ import type { Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { Labels } from './Labels';
 import { proceduralTotem } from './props';
+import { standOnSoles } from '../play/spawn';
 
 export interface WorldMarker {
   missionId: string;
@@ -35,8 +36,10 @@ export interface WorldMarker {
 
 /** Within this distance (m) of a marker, the board or the sit-spot its prompt shows. */
 const NEAR_R = 2.4;
+/** Per landschap, how far (rad) its markers turn off the biome's centre line. */
+const ANCHOR_TURN: Partial<Record<Biome, number>> = { stuifzand: 0.4 };
 /** A finished mission's halo + tag pip: a calm green ("klaar"). */
-const FINISHED_COLOR = '#74c985';
+const FINISHED_COLOR = '#3dbb5c';
 
 export class Markers {
   readonly list: {
@@ -126,6 +129,15 @@ export class Markers {
         perBiome.set(mk.biome, n + 1);
         const a = anchorInBiome(mk.biome, 22 + n * 9);
         x = a.x; z = a.z;
+        // the stuifzand diagonal is the jeep's parking bay and the helicopter apron
+        // (world/Vehicles.ts): its marker stands a little to the side, so the mission's
+        // nightjar never hides behind a parked jeep
+        const turn = ANCHOR_TURN[mk.biome];
+        if (turn) {
+          const r = Math.hypot(x, z), ang = Math.atan2(z, x) + turn;
+          const tx = Math.cos(ang) * r, tz = Math.sin(ang) * r;
+          if (biomeAt(tx, tz) === mk.biome) { x = tx; z = tz; }
+        }
       } else {
         const ang = (i / N) * Math.PI * 2;
         x = Math.cos(ang) * 9; z = Math.sin(ang) * 9;
@@ -169,6 +181,7 @@ export class Markers {
           // calm shape). Best-effort — a single-mesh Meshy animal with no named bones is
           // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
           applyCalmPose(prepped, mk.modelId);
+          standOnSoles(prepped); // on its hooves (or its lowest point), not in the ground
           // drop the totem (keep the ring), add the real animal
           const totem = group.children.find((c) => c.userData.totem);
           if (totem) group.remove(totem);
@@ -352,7 +365,8 @@ export class Markers {
     m.finished = true;
     m.ring.color.set(FINISHED_COLOR);
     const ring = this.groundRings.find((r) => r.mat === m.ring);
-    if (ring) ring.base = 0.8; // a full, calm "klaar" halo (it still fades near the lens)
+    if (ring) ring.base = 0.85; // a full, calm "klaar" halo (it still fades near the lens)
+    m.ring.opacity = Math.max(m.ring.opacity, 0.85);
     const fresh = new Labels().make(`✓ ${m.titel}`, FINISHED_COLOR); // draw the new tag, keep our sprite
     const mat = m.label.material as THREE.SpriteMaterial;
     const newMat = fresh.material as THREE.SpriteMaterial;
@@ -470,7 +484,13 @@ export class Markers {
   /** The tags show, except during an activity and over the marker the ranger stands at:
    *  its prompt already names it, and its tag would float big right in front of the lens. */
   private syncLabels(): void {
-    for (const m of this.list) m.label.visible = this.labelsOn && m.missionId !== this.nearId;
+    for (const m of this.list) {
+      m.label.visible = this.labelsOn && m.missionId !== this.nearId;
+      // while its mission plays, the marker's own halo would lie right under the play
+      // view (a big ring filling the frame between two games): it steps away too
+      const ring = m.group.children.find((c) => (c as THREE.Mesh).material === m.ring);
+      if (ring) ring.visible = this.labelsOn || m.missionId !== this.nearId;
+    }
   }
 
   /** After an in-place activity: forget every proximity + the last cue so the next

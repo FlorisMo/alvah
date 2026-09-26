@@ -566,7 +566,7 @@
    F-13: sits TOP-LEFT under the Pauze pill — OUT of the bottom-left joystick quadrant
    it used to share on iPad (the thumb disc covered the mission text). Away from the
    joystick (bottom-left), the board pill (top-right) and the prompts (bottom-centre). */
-.explore-wayfind {
+.explore-wayfind, .explore-klaar {
   position: absolute;
   left: 16px;
   top: calc(max(16px, env(safe-area-inset-top)) + 68px);
@@ -582,7 +582,7 @@
   box-shadow: var(--shadow-md);
 }
 .explore-wayfind[hidden] { display: none; }
-.explore-wayfind .wf-glyph {
+.explore-wayfind .wf-glyph, .explore-klaar .wf-glyph {
   flex: none;
   width: 40px;
   height: 40px;
@@ -592,9 +592,11 @@
   background: rgba(253, 246, 232, 0.16);
   font: 600 24px/1 var(--font-body);
 }
-.explore-wayfind .wf-text { display: flex; flex-direction: column; line-height: 1.25; }
-.explore-wayfind .wf-doel { font: 600 16px/1.25 var(--font-body); }
-.explore-wayfind .wf-cue { font: 500 14px/1.25 var(--font-body); opacity: 0.85; }
+.explore-wayfind .wf-text, .explore-klaar .wf-text { display: flex; flex-direction: column; line-height: 1.25; }
+.explore-wayfind .wf-doel, .explore-klaar .wf-doel { font: 600 16px/1.25 var(--font-body); }
+.explore-wayfind .wf-cue, .explore-klaar .wf-cue { font: 500 14px/1.25 var(--font-body); opacity: 0.85; }
+/* the season is done: the chip that pointed the way now says so (felt progress) */
+.explore-klaar { background: rgba(63, 122, 58, 0.9); }
 .explore-wayfind.wf-arrived { background: rgba(63, 122, 58, 0.9); } /* second channel on arrival */
 
 /* F-15: laptop help chip — re-shows the control hint on demand (laptop steady-state

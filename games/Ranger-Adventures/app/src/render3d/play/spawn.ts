@@ -111,19 +111,24 @@ function disposer(root: THREE.Object3D, extra: THREE.BufferGeometry[] = []): () 
  * prepModel puts a RIGGED model's lowest BONE at y=0 (its size is read from the
  * skeleton, F-07), but hooves and paws reach a few cm below their last joint, so a
  * staged deer sank ~5 cm into the ground. Measure the posed skinned mesh itself and
- * lift the model onto its soles. Only for game spawns — the world's own animals are
- * placed by World and left as they are.
+ * lift the model onto its soles. The mission markers' animals (world/Markers.ts) stand
+ * the same way.
  */
-function standOnSoles(wrapper: THREE.Group): void {
+export function standOnSoles(wrapper: THREE.Group): void {
   wrapper.updateMatrixWorld(true);
   let minY = Infinity;
+  let skinned = false;
   const box = new THREE.Box3();
   wrapper.traverse((o) => {
     const sk = o as THREE.SkinnedMesh;
     if (!sk.isSkinnedMesh) return;
+    skinned = true;
     sk.computeBoundingBox();
     if (sk.boundingBox) minY = Math.min(minY, box.copy(sk.boundingBox).applyMatrix4(sk.matrixWorld).min.y);
   });
+  // a static mesh: the calm posture (head low, AnimalDress) can tip its snout below
+  // the hooves prepModel stood on the ground — stand it on its lowest point again
+  if (!skinned) minY = box.setFromObject(wrapper).min.y;
   const inner = wrapper.children[0];
   if (inner && Number.isFinite(minY) && Math.abs(minY) < 0.3) inner.position.y -= minY;
 }

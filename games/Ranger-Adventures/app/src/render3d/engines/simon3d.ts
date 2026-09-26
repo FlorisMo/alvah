@@ -76,7 +76,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // the row: spacing grows with the biggest animal so no two overlap
     const n = trial.dieren.length;
     const sizes = trial.dieren.map((id) => heightFor(id));
-    const gapM = Math.max(1.15, Math.max(...sizes) * 0.95);
+    const gapM = Math.max(1.15, Math.max(...sizes) * 1.35);
     const halfW = ((n - 1) * gapM) / 2 + 0.3 + Math.max(...sizes) * 0.6; // + half the longest body
     const tallest = Math.max(...sizes.map((h) => (h < PERCH_BELOW ? h + 0.45 : h))) + 0.45; // + name tag
     const stage = new Stage(ctx, { halfW, halfD: 0.55, tall: tallest, pitchDeg: 20, insetBottom: 110, insetTop: 70 });
@@ -140,7 +140,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
           const stump = await stage.plant('prop-tree-stump', 0.42, u, v, i);
           if (stump) { group.add(stump); perchH = 0.4; }
         }
-        const animal = await stage.animal(id, u, v, 1.15);
+        const animal = await stage.animal(id, u, v, h < PERCH_BELOW ? 1.15 : 0.75);
         if (animal) {
           group.add(animal);
           animal.position.y += perchH;

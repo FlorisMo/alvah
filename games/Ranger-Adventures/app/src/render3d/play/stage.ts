@@ -80,8 +80,10 @@ export class Stage {
     // remember where the follow camera stood and which way it looked (at the ranger)
     // before the reframe takes it
     const camera = ctx.camera as THREE.PerspectiveCamera;
-    this.homePos = camera.position.clone();
-    this.homeLook = this.homePos.clone().add(camera.getWorldDirection(V()));
+    this.homePos = ctx.home ? V(ctx.home.pos.x, ctx.home.pos.y, ctx.home.pos.z) : camera.position.clone();
+    this.homeLook = ctx.home
+      ? V(ctx.home.look.x, ctx.home.look.y, ctx.home.look.z)
+      : this.homePos.clone().add(camera.getWorldDirection(V()));
     this.plan();
     ctx.setFocus(this.centre.x, this.centre.y, this.centre.z);
     // the approached marker IS this mission's animal — while its game runs it steps
@@ -459,12 +461,14 @@ export class Stage {
 
   /**
    * The one calm move back: the lens glides (same curve, same rise over the ranger's
-   * head) to the follow camera's pose from before the game, then resolves. The world's
+   * head) to the follow camera's pose from before the game (the mission's first game,
+   * `ctx.home`), then resolves — only after the mission's last step (`ctx.keepView`). The world's
    * follow takes over from exactly that pose, so its aim never snaps (a cut under
    * reduced-motion). The staged scene stays in place during the glide (the caller
    * disposes it after), and the idle clips keep playing. Resolves at once on a stop.
    */
   handBack(): Promise<void> {
+    if (this.ctx.keepView) return Promise.resolve(); // more steps follow: the lens stays on the play view
     const move = makeReframe(this.ctx.camera as THREE.PerspectiveCamera, this.homePos.clone(), this.homeLook.clone(), this.ctx.reducedMotion, 1.1, 0.6);
     return new Promise((resolve) => {
       let last = performance.now();
