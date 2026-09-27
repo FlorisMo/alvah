@@ -134,13 +134,12 @@ export class CameraRig {
   private readonly LOOKAHEAD = 0.5;         // s: search where he is going (and where his turn takes the view) too
   private wasWalk = true;
   private readonly HUG_ANGLE = (60 * Math.PI) / 180;
-  // A boom pulled in by a solid keeps its eye up (up to PULL_SLOPE) so the lens looks
-  // down on him from above-behind instead of sinking to his head. With no room behind
-  // him at all (his back to a wall) the lens rides up over his head, never into the
-  // wall: it keeps HEAD_ROOM from his body, so he stays solid (never a see-through
-  // giant: the fade works on the real lens→body distance), and the view tips down no
-  // steeper than PITCH_MAX, aiming a little ahead of him so the ground he walks to shows.
-  private readonly PULL_SLOPE = Math.tan((50 * Math.PI) / 180);
+  // With little or no room behind him (his back to a wall, a turn past the board) the
+  // lens rides up over his head, never into the wall and never through his head: it
+  // keeps headRoom from his body, so he stays solid (never a see-through giant: the fade
+  // works on the real lens→body distance), it stays under the leaves of the tree above,
+  // and the view tips down no steeper than PITCH_MAX, aiming a little ahead of him so
+  // the ground he walks to shows.
   private readonly PITCH_MAX = (68 * Math.PI) / 180;
   private readonly MIN_BOOM = 0.05;
   private get headRoom(): number { return this.player.avatarRadius + 1.2; }
@@ -668,9 +667,12 @@ export class CameraRig {
     const eyeWant = eyeAt(want);
     const top = this.player.avatarTopY, room = this.headRoom;
     const eyeFor = (d: number): number => {
-      const e = d >= want ? eyeWant : Math.min(eyeWant, Math.max(eyeAt(d), lookH + d * this.PULL_SLOPE));
-      // close in, keep HEAD_ROOM from his body: over his head, never through it
-      return d >= room || Math.hypot(d, Math.max(0, e - top)) >= room ? e : top + Math.sqrt(room * room - d * d);
+      const e = d >= want ? eyeWant : eyeAt(d); // the dolly's eye (the settled pitch)
+      if (d >= room || Math.hypot(d, Math.max(0, e - top)) >= room) return e;
+      // close in: over his head, never through it, and under the leaves above the lens
+      const up = top + Math.sqrt(room * room - d * d);
+      const leaves = this.crownFloor(rp.x + ux * d, rp.z + uz * d, 0.3) - rp.y;
+      return Math.max(e, Math.min(up, leaves));
     };
     // never a lens in the leaves: step the boom in until it is out of every crown
     // (not below 35 % of the zoom: then the canopy fade has to carry it)
@@ -707,6 +709,17 @@ export class CameraRig {
     else if (this.crownBetween(lx, ly, lz, rp.x, headY, rp.z, true)) cost += 0.5; // the forest fades, but a clear line is nicer
     out.cost = cost;
     return out;
+  }
+
+  /** The lowest underside of the near crowns (grown by `margin`) above the ground point
+   *  (x, z): how high a lens there may rise before it is in leaves. Infinity: none. */
+  private crownFloor(x: number, z: number, margin: number): number {
+    let floor = Infinity;
+    for (const k of this.nearCrowns) {
+      const R = k.R + margin, dx = x - k.x, dz = z - k.z, q = (dx * dx + dz * dz) / (R * R);
+      if (q < 1) floor = Math.min(floor, k.y - (k.V + margin) * Math.sqrt(1 - q));
+    }
+    return floor;
   }
 
   /** Is (x, y, z) inside a crown grown by `margin`? `fade`: only fadeable (true),
