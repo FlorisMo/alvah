@@ -511,7 +511,7 @@ test('the bird bench on the 2D floor (Tweaks "altijd 2D"): RoepView plays and ha
   }
 });
 
-test('a mission picked on the missiebord: played at the board, its family comes home at its OWN marker, in view @missions', async ({ page }, info) => {
+test('a mission picked on the missiebord: played at its OWN marker (the pick brings him there), its family comes home there @missions', async ({ page }, info) => {
   test.setTimeout(8 * 60_000);
   const log: Log = new Log(page, outDir(info, 'missiebord'));
   const mission = missions[0];
@@ -545,25 +545,9 @@ test('a mission picked on the missiebord: played at the board, its family comes 
     await finish(log, mission);
     await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null,
       { timeout: 15_000, message: 'the reward never led back to the world' }).toBe(true);
-    // nothing of the family stands at the board: it belongs at its marker
+    // the pick brought him to its marker (wave 4, parent B6): it was played there, in view
     const at = (await snap(page)).p!;
-    const byBoard = ((await R<Seat[] | null>(page, `r.seating(${at.x}, ${at.z}, 10)`)) ?? []).filter((s) => s.id.includes('progress-'));
-    log.soft(byBoard.length === 0, `the family stands at the board: ${byBoard.map((s) => s.id.split('@')[0]).join(', ')}`);
-    // nobody saw it come home yet: it waits until the ranger comes to look
-    const early = ((await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`)) ?? []).filter((s) => s.id.includes('progress-'));
-    log.soft(early.length === 0, `the family came home while the ranger was at the board, out of view (${early.length} pieces already at the marker)`);
-    // walk to the marker: once it is in view, the flag rises and the family walks home
-    await walkTo(page, marker, { stopDist: 12, timeout: 90_000 });
-    const familyNow = async (): Promise<Seat[]> => ((await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`)) ?? []).filter((s) => s.id.includes('progress-'));
-    const a = await familyNow();
-    await sleep(page, 400);
-    const b = await familyNow();
-    await log.shot('coming-home');
-    const moved = b.filter((s) => !a.some((x) => x.sig === s.sig && Math.hypot(x.x - s.x, x.z - s.z) < 0.05)); // (two piglets share a look)
-    log.note(`at ~12 m: ${b.length} pieces of the family in view, ${moved.length} on their way home`);
-    log.soft(moved.length > 0, 'coming up to the marker, the ranger sees the family walk home');
-    log.soft(b.some((s) => s.id.startsWith('klaar-flag')), 'coming up to the marker, its "klaar" flag stands there');
-    await walkTo(page, marker, { stopDist: 2.4, timeout: 60_000 });
+    log.soft(Math.hypot(at.x - marker.x, at.z - marker.z) < 2.4, `the mission picked on the board was played ${r2d(Math.hypot(at.x - marker.x, at.z - marker.z))} m from its marker`);
     await sleep(page, 3_000);
     await log.shot('at-marker');
     const after = await worldSamples(page, marker, SEAT_RADIUS, 3);
