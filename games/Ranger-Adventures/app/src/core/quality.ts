@@ -70,15 +70,19 @@ export function pixelRatioFor(tier: QualityTier, devicePixelRatio: number, light
   return Math.min(devicePixelRatio, QUALITY_TIERS[tier].pixelRatioCap, light ? 1 : Infinity);
 }
 
-/** Which GL renderer this browser draws with: a throwaway context's unmasked renderer
- *  name (WEBGL_debug_renderer_info), else its plain RENDERER. Null outside a browser
- *  or without WebGL. */
+/** Which GL renderer this browser draws with, read off a throwaway context: its
+ *  RENDERER, or where that is the generic "WebKit WebGL" (Chrome, Safari) the unmasked
+ *  name from WEBGL_debug_renderer_info (Firefox reports the real name in RENDERER and
+ *  warns when the extension is asked for). Null outside a browser or without WebGL. */
 export function glRendererName(): string | null {
   try {
     const gl = document.createElement('canvas').getContext('webgl2') as WebGL2RenderingContext | null;
     if (!gl) return null;
-    const info = gl.getExtension('WEBGL_debug_renderer_info');
-    const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    let name = String(gl.getParameter(gl.RENDERER));
+    if (/^webkit webgl$/i.test(name)) {
+      const info = gl.getExtension('WEBGL_debug_renderer_info');
+      if (info) name = String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
+    }
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     return name;
   } catch {

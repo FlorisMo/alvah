@@ -768,17 +768,16 @@ export class World {
   }
 
   /** Resume free-roam after an in-place activity; re-emit the wayfinding cue.
-   *  The activity reframe owned the camera; on resume the follow-yaw eases back
-   *  to behind the ranger (a cut under reduced-motion, per §3.2). */
+   *  The activity reframe owned the camera; from the next update() the follow lens
+   *  eases back onto the bearing it held before the activity (the ranger's steering
+   *  tells CameraRig.steer to hold it), a cut under reduced motion (§3.2). */
   endActivity(): void {
     this.activityActive = false;
     this.activityFocus = null; // D1.3: no task owns the camera in free-roam
     this.pois.setLabelsVisible(true); // W6.1: restore the name-tags on resume
     this.pois.hideForActivity(null);
     this.pois.resetAfterActivity();   // fresh proximity + cue re-fire (re-surfaces the hub prompt)
-    this.cam.followTargetYaw = this.ranger.rotation.y;
     if (livePolicy().reduced) this.cam.place(true, 0, true); // reduced → cut back
-    // otherwise the next update() frame damps position + yaw back into place.
   }
 
 }

@@ -116,8 +116,8 @@ test('light mode: every software rasterizer is recognised, no GPU is', () => {
     'Software Adapter',
   ]) assert.equal(isSoftwareRenderer(sw), true, sw);
   for (const gpu of [
-    'ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)', // this laptop
-    'Apple GPU', // iPad Safari
+    'ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)', // this Mac's headless Chromium
+    'Apple GPU', // WebKit (the iPad engine)
     'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)',
     'Mali-G78',
   ]) assert.equal(isSoftwareRenderer(gpu), false, gpu);

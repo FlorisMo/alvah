@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { collectPageErrors, reportPageErrors } from './helpers';
+import { isSoftwareRenderer } from '../src/core/quality';
 
 /**
  * Dev-state hook (WORLD-PLAN W0.2). The E2E suite reads runtime STATE through
@@ -28,6 +29,13 @@ test('devhook: window.__ranger present on boot, screen === "title" @smoke', asyn
   expect(hook!.missionView).toBeNull();
   // draw calls come from renderer.info — a number once the title backdrop renders.
   expect(typeof hook!.drawCalls === 'number' || hook!.drawCalls === null).toBe(true);
+
+  // The light mode is on exactly when the GL draws in software: on CI's SwiftShader it
+  // must be on (or the smoke crawls), on a laptop or iPad GPU it must be off (its
+  // picture is never traded away). core/quality.ts decides it once at boot.
+  const mode = await page.evaluate(() => (window as unknown as { __ranger: { renderMode(): { light: boolean; renderer: string | null } | null } }).__ranger.renderMode());
+  expect(mode, 'renderMode() reports the boot decision').not.toBeNull();
+  expect(mode!.light, `light mode ⇔ software GL (renderer: ${mode!.renderer})`).toBe(isSoftwareRenderer(mode!.renderer));
 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
