@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { loadModel, prepModel } from '../Models';
-import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, WATER_LEVEL, type Biome } from '../Biomes';
+import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, VEN_SHORE_R, WATER_LEVEL, type Biome } from '../Biomes';
 import { windSway } from '../Atmosphere';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork } from '../Paths';
 import { WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp } from '../Water';
@@ -35,7 +35,6 @@ export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 // static (no wind), so the reduced-motion freeze is a no-op on them.
 // deterministic species pattern woven along the scatter/rim index — pine dominant.
 const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree'];
-const TREE_RIM_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-pine-scots', 'prop-birch-tree'];
 const NATURE_TREES = new Set<string>(['prop-pine-scots', 'prop-oak-tree', 'prop-birch-tree']);
 
 /** A stable hash of an integer pair + seed → [0,1) (the plant grid's jitter). */
@@ -80,6 +79,8 @@ export class Dressing {
   private forest: Forest | null = null;
   // the low ground plants, one field per kind (world/Plants.ts)
   private readonly plantFields: PlantField[] = [];
+  // small nature-dressing props, hidden once they are deep in the fog
+  private readonly farProps: { group: THREE.Object3D; x: number; z: number; far: number }[] = [];
   private quality: TierParams | null = null;
   // F-09: the cabin's world position, kept so camState's landmark-in-frustum test
   // can prove a hub landmark is in the world-entry frame (the board + cabin are the
@@ -113,8 +114,11 @@ export class Dressing {
     const before = this.scene.onBeforeRender;
     this.scene.onBeforeRender = (...args) => {
       before.apply(this.scene, args);
-      this.forest?.update(args[2]);
-      for (const f of this.plantFields) f.update(args[2]);
+      const cam = args[2];
+      this.forest?.update(cam);
+      for (const f of this.plantFields) f.update(cam);
+      const e = cam.matrixWorld.elements;
+      for (const p of this.farProps) p.group.visible = Math.hypot(p.x - e[12], p.z - e[14]) < p.far;
     };
   }
 
@@ -370,37 +374,37 @@ export class Dressing {
   }
 
   /**
-   * F-11: a calm pine tree-line ringing the playable area at the move bound, so
-   * walking outward meets a visible forest edge ("Hier stopt het bos") instead of
-   * the Run A silent void. The ring sits JUST BEYOND the bound (the ranger clamps at
-   * `limits.bound`; the trees start a touch past it), so it needs no collision — it
-   * is a backdrop wall, hidden by the fog and only revealed as the player nears the
-   * edge (so hub/spawn shots are untouched). P1.3: the ring is now the real staged tree
-   * cast (pine·oak·birch), instanced → a handful of draw calls regardless of count, so
-   * the tree-line reads at the SAME fidelity as the animals/props it frames while the
-   * <150 budget holds. Deterministic (index-driven jitter, no Math.random), uniform all
-   * the way round so every heading ends at the same tidy edge. Shadows off — a distant
-   * backdrop needs none.
+   * F-11: a calm forest edge ringing the playable area just past the move bound, so
+   * walking outward meets a real tree-line ("Hier stopt het bos") instead of a void.
+   * It sits JUST BEYOND the bound (the ranger clamps at `limits.bound`), so it needs no
+   * collision: a backdrop wall the fog reveals only as the player nears the edge.
+   * 2026-09-27: three staggered, jittered rows (pine-dominant with oak, birch only in
+   * front) instead of two even rows, so it reads as the edge of a forest with depth, not
+   * a fence of identical poles; the far rows cost little (world/Forest draws them as
+   * simplified copies). Deterministic (index-hashed jitter), the same all the way round.
    */
   private buildRim(): void {
     const bound = this.limits.bound;
-    const N = 180;
+    const ROWS: readonly { n: number; out: number; spread: number; s0: number; mix: readonly TreeSpecies[] }[] = [
+      { n: 170, out: 1.4, spread: 0.8, s0: 1.0, mix: ['prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree', 'prop-pine-scots'] },
+      { n: 150, out: 5.6, spread: 1.2, s0: 1.15, mix: ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree'] },
+      { n: 130, out: 10.2, spread: 1.4, s0: 1.3, mix: ['prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-pine-scots'] },
+    ];
     const placed: TreePlacement[] = [];
-    for (let k = 0; k < N; k++) {
-      const ang = (k / N) * Math.PI * 2;
-      // two staggered rows just past the bound (bound+1.2 → bound+3.6, ≈76–79 at the
-      // 75 m bound) → a wall with depth, not a single-file fence; stays well under 120
-      // so it always lands on the 240² ground plane on-axis.
-      const rad = bound + 1.2 + (k % 2) * 1.8 + Math.sin(k * 12.9) * 0.6;
-      const x = Math.cos(ang) * rad;
-      const z = Math.sin(ang) * rad;
-      placed.push({
-        x, y: this.groundY(x, z), z,
-        s: 1.0 + (k % 5) * 0.18,                    // varied heights so the line reads as a natural edge
-        rotY: (k * 1.71) % (Math.PI * 2),           // per-tree spin so the ring never repeats
-        species: TREE_RIM_MIX[k % TREE_RIM_MIX.length],
-      });
-    }
+    ROWS.forEach((row, r) => {
+      for (let k = 0; k < row.n; k++) {
+        const h1 = hash2(k, r, 91), h2 = hash2(k, r, 92), h3 = hash2(k, r, 93);
+        const ang = ((k + (h1 - 0.5) * 0.8 + r * 0.37) / row.n) * Math.PI * 2;
+        const rad = bound + row.out + (h2 - 0.5) * 2 * row.spread;
+        const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+        placed.push({
+          x, y: this.groundY(x, z), z,
+          s: row.s0 + h3 * 0.6,                          // varied heights: a ragged, natural skyline
+          rotY: h1 * Math.PI * 2,
+          species: row.mix[(k + r) % row.mix.length],
+        });
+      }
+    });
     this.treePlacements.push(...placed);
     this.addTreeFallback(placed); // P1.3: cone stand-in until the real tree GLBs stream in
   }
@@ -466,7 +470,7 @@ export class Dressing {
       x: p.x, y: this.groundY(p.x, p.z), z: p.z,
       s: 0.75 + p.h * 0.7, sy: 0.7 + p.h * 0.6, rotY: i * 2.39996,
       tint: up.setRGB(0.9 + p.h * 0.2, 0.9 + ((i * 7) % 5) * 0.03, 0.9 + p.h * 0.15).clone(),
-    })), 58);
+    })), 58, 0, { geometry: heatherGeometry(5, 60), from: 16 });
     const heideGrass = this.gridSpots('heide', 3.1 * thin, 23, (x, z, h) => heathCover(x, z) < 0.55 + h * 0.2);
     this.addField('heide-grass', tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), plantMaterial(),
       heideGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.45 + p.h * 0.35, rotY: i * 1.7, phase: (i % 7) * 0.9 })), 46, 0.8);
@@ -474,6 +478,17 @@ export class Dressing {
     const marram = this.gridSpots('stuifzand', 2.9 * thin, 37, (_x, _z, h) => h < 0.62);
     this.addField('stuifzand-helmgras', tuftGeometry({ blades: 22, seed: 5, root: '#6c7552', tip: '#dccf9e', lean: 0.24, width: 0.03 }), plantMaterial(),
       marram.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.45, rotY: i * 2.1, phase: (i % 7) * 0.9 })), 60, 1);
+    // the ven sector away from the water is wet heath: pijpenstrootje tussocks and
+    // pinker dopheide between them
+    const dryVen = (x: number, z: number): boolean => Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) > VEN_SHORE_R + 1;
+    const wetGrass = this.gridSpots('ven', 2.6 * thin, 61, (x, z, h) => dryVen(x, z) && h < 0.7);
+    this.addField('ven-pijpenstrootje', tuftGeometry({ blades: 18, seed: 7, root: '#5c6536', tip: '#cdbd82', lean: 0.34 }), plantMaterial(),
+      wetGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.5 + p.h * 0.4, rotY: i * 1.9, phase: (i % 7) * 0.9 })), 46, 0.8);
+    const dopheide = this.gridSpots('ven', 3.4 * thin, 67, (x, z, h) => dryVen(x, z) && heathCover(x, z) > 0.45 + h * 0.3);
+    this.addField('ven-dopheide', heatherGeometry(9), plantMaterial(), dopheide.map((p, i) => ({
+      x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.5, sy: 0.6 + p.h * 0.4, rotY: i * 2.39996,
+      tint: new THREE.Color(1.02, 0.9, 1.0),
+    })), 50, 0, { geometry: heatherGeometry(9, 60), from: 16 });
     // the GLB plants stream in: ferns under the bos trees, lisdodde round the ven
     void this.scatterGlbPlants(veg, thin);
   }
@@ -512,9 +527,12 @@ export class Dressing {
   }
 
   /** Lay out one plant field and, when it sways (`wind` > 0), hand its chunks to the wind. */
-  private addField(name: string, geo: THREE.BufferGeometry, mat: THREE.Material, spots: PlantSpot[], hideBeyond: number, wind = 0): void {
+  private addField(
+    name: string, geo: THREE.BufferGeometry, mat: THREE.Material, spots: PlantSpot[], hideBeyond: number, wind = 0,
+    far?: { geometry: THREE.BufferGeometry; from: number },
+  ): void {
     if (!spots.length) return;
-    const field = new PlantField(this.scene, name, geo, mat, spots, hideBeyond);
+    const field = new PlantField(this.scene, name, geo, mat, spots, hideBeyond, far);
     this.plantFields.push(field);
     if (wind > 0) {
       for (const c of field.chunks) {
@@ -712,6 +730,9 @@ export class Dressing {
       group.rotation.y = (i * 2.39996) % (Math.PI * 2); // golden-angle spin for variety
       group.add(proceduralTotem(spec.collide > 0 ? '#6b5a3a' : '#7d8a4a')); // instant stand-in
       this.scene.add(group);
+      // small dressing is not drawn once the fog has it (a 12k-triangle mushroom at 60 m
+      // is a few grey pixels): low plants from 38 m, logs, stumps and boulders from 58 m
+      if (spec.h <= 1.1) this.farProps.push({ group, x, z, far: spec.collide > 0 ? 58 : 38 });
       if (spec.collide > 0) this.obstacles.push({ x, z, r: spec.collide });
       this.props.push({ id: model, x, z });
       void loadModel(model).then((m) => {

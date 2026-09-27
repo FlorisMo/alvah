@@ -46,42 +46,58 @@ function evalQ(q: Float64Array, o: number, x: number, y: number, z: number): num
     + q[o + 7] * z * z + 2 * q[o + 8] * z + q[o + 9];
 }
 
-/** Binary min-heap of edge candidates (cost, a, b, stamps), stored in parallel arrays. */
+/** Binary min-heap of edge candidates. The records (cost, ends, their stamps, the
+ *  collapse point) live in growable typed arrays; the heap orders record ids only. */
 class EdgeHeap {
-  cost: number[] = []; a: number[] = []; b: number[] = []; sa: number[] = []; sb: number[] = [];
-  x: number[] = []; y: number[] = []; z: number[] = [];
-  get size(): number { return this.cost.length; }
+  private cap = 1024;
+  private n = 0;         // records written
+  private size_ = 0;     // ids in the heap
+  private cost = new Float64Array(this.cap);
+  private ends = new Int32Array(this.cap * 4); // a, b, stamp a, stamp b
+  private pt = new Float64Array(this.cap * 3);
+  private heap = new Int32Array(this.cap);
+  get size(): number { return this.size_; }
+  private grow(): void {
+    this.cap *= 2;
+    const c = new Float64Array(this.cap); c.set(this.cost); this.cost = c;
+    const e = new Int32Array(this.cap * 4); e.set(this.ends); this.ends = e;
+    const p = new Float64Array(this.cap * 3); p.set(this.pt); this.pt = p;
+    const h = new Int32Array(this.cap); h.set(this.heap); this.heap = h;
+  }
   push(cost: number, a: number, b: number, sa: number, sb: number, x: number, y: number, z: number): void {
-    this.cost.push(cost); this.a.push(a); this.b.push(b); this.sa.push(sa); this.sb.push(sb);
-    this.x.push(x); this.y.push(y); this.z.push(z);
-    let i = this.cost.length - 1;
+    if (this.n >= this.cap || this.size_ >= this.cap) this.grow();
+    const id = this.n++;
+    this.cost[id] = cost;
+    this.ends[id * 4] = a; this.ends[id * 4 + 1] = b; this.ends[id * 4 + 2] = sa; this.ends[id * 4 + 3] = sb;
+    this.pt[id * 3] = x; this.pt[id * 3 + 1] = y; this.pt[id * 3 + 2] = z;
+    const H = this.heap, C = this.cost;
+    let i = this.size_++;
     while (i > 0) {
       const p = (i - 1) >> 1;
-      if (this.cost[p] <= this.cost[i]) break;
-      this.swap(i, p); i = p;
+      if (C[H[p]] <= cost) break;
+      H[i] = H[p]; i = p;
     }
+    H[i] = id;
   }
-  /** Remove the top into slot `out` (returned as an index into a 1-entry scratch). */
+  /** Take the cheapest record into `out`. */
   pop(out: { cost: number; a: number; b: number; sa: number; sb: number; x: number; y: number; z: number }): void {
-    out.cost = this.cost[0]; out.a = this.a[0]; out.b = this.b[0]; out.sa = this.sa[0]; out.sb = this.sb[0];
-    out.x = this.x[0]; out.y = this.y[0]; out.z = this.z[0];
-    const last = this.cost.length - 1;
-    if (last > 0) this.swap(0, last);
-    this.cost.pop(); this.a.pop(); this.b.pop(); this.sa.pop(); this.sb.pop(); this.x.pop(); this.y.pop(); this.z.pop();
+    const H = this.heap, C = this.cost;
+    const id = H[0];
+    out.cost = C[id]; out.a = this.ends[id * 4]; out.b = this.ends[id * 4 + 1]; out.sa = this.ends[id * 4 + 2]; out.sb = this.ends[id * 4 + 3];
+    out.x = this.pt[id * 3]; out.y = this.pt[id * 3 + 1]; out.z = this.pt[id * 3 + 2];
+    const last = H[--this.size_];
+    const n = this.size_;
+    const lc = C[last];
     let i = 0;
-    const n = this.cost.length;
     for (;;) {
-      const l = 2 * i + 1, r = l + 1;
-      let m = i;
-      if (l < n && this.cost[l] < this.cost[m]) m = l;
-      if (r < n && this.cost[r] < this.cost[m]) m = r;
-      if (m === i) break;
-      this.swap(i, m); i = m;
+      const l = 2 * i + 1;
+      if (l >= n) break;
+      const r = l + 1;
+      const m = r < n && C[H[r]] < C[H[l]] ? r : l;
+      if (C[H[m]] >= lc) break;
+      H[i] = H[m]; i = m;
     }
-  }
-  private swap(i: number, j: number): void {
-    const s = (arr: number[]): void => { const t = arr[i]; arr[i] = arr[j]; arr[j] = t; };
-    s(this.cost); s(this.a); s(this.b); s(this.sa); s(this.sb); s(this.x); s(this.y); s(this.z);
+    H[i] = last;
   }
 }
 
@@ -102,15 +118,15 @@ export function simplify(input: SimplifyInput, targets: number[]): SimplifiedMes
     if (x > maxX) maxX = x; if (y > maxY) maxY = y; if (z > maxZ) maxZ = z;
   }
   const diag = Math.hypot(maxX - minX, maxY - minY, maxZ - minZ) || 1;
-  const eps = diag * 1e-5;
+  const eps = diag / 90000; // quantized coords stay < 1e5, so three pack into one exact number
   const weldMap = new Int32Array(nSrc);
-  const seen = new Map<string, number>();
+  const seen = new Map<number, number>();
   const pos: number[] = [];
   const colSum: number[] = [];
   const colN: number[] = [];
   const cin = input.colors;
   for (let i = 0; i < nSrc; i++) {
-    const k = `${Math.round(src[i * 3] / eps)},${Math.round(src[i * 3 + 1] / eps)},${Math.round(src[i * 3 + 2] / eps)}`;
+    const k = Math.round((src[i * 3] - minX) / eps) * 1e10 + Math.round((src[i * 3 + 1] - minY) / eps) * 1e5 + Math.round((src[i * 3 + 2] - minZ) / eps);
     let v = seen.get(k);
     if (v === undefined) {
       v = pos.length / 3;
@@ -174,7 +190,7 @@ export function simplify(input: SimplifyInput, targets: number[]): SimplifiedMes
     if (len > 0) { nx /= len; ny /= len; nz /= len; }
     const d = -(nx * P[a * 3] + ny * P[a * 3 + 1] + nz * P[a * 3 + 2]);
     for (const v of [a, b, c]) { addPlane(QV, v * Q, nx, ny, nz, d, ar); area[v] += ar / 3; }
-    for (const [p, q] of [[a, b], [b, c], [c, a]]) { const k = ekey(p, q); edgeFaces.set(k, (edgeFaces.get(k) ?? 0) + 1); }
+    for (let e = 0; e < 3; e++) { const k = ekey(F[f * 3 + e], F[f * 3 + (e + 1) % 3]); edgeFaces.set(k, (edgeFaces.get(k) ?? 0) + 1); }
   }
   // borders: a plane through the edge, perpendicular to its face, weighted heavily
   for (let f = 0; f < nF; f++) {
@@ -183,7 +199,8 @@ export function simplify(input: SimplifyInput, targets: number[]): SimplifiedMes
     const vx = P[c * 3] - P[a * 3], vy = P[c * 3 + 1] - P[a * 3 + 1], vz = P[c * 3 + 2] - P[a * 3 + 2];
     let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
     const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
-    for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+    for (let e = 0; e < 3; e++) {
+      const p = F[f * 3 + e], q = F[f * 3 + (e + 1) % 3];
       if (edgeFaces.get(ekey(p, q)) !== 1) continue;
       const ex = P[q * 3] - P[p * 3], ey = P[q * 3 + 1] - P[p * 3 + 1], ez = P[q * 3 + 2] - P[p * 3 + 2];
       const el = Math.hypot(ex, ey, ez);
@@ -215,8 +232,8 @@ export function simplify(input: SimplifyInput, targets: number[]): SimplifiedMes
   };
   const edgeDone = new Set<number>();
   for (let f = 0; f < nF; f++) {
-    const a = F[f * 3], b = F[f * 3 + 1], c = F[f * 3 + 2];
-    for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+    for (let e = 0; e < 3; e++) {
+      const p = F[f * 3 + e], q = F[f * 3 + (e + 1) % 3];
       const k = ekey(p, q);
       if (edgeDone.has(k)) continue;
       edgeDone.add(k);
@@ -227,6 +244,8 @@ export function simplify(input: SimplifyInput, targets: number[]): SimplifiedMes
   const order = targets.map((t, i) => ({ t: Math.max(1, Math.floor(t)), i })).sort((p, q) => q.t - p.t);
   const out: SimplifiedMesh[] = new Array(targets.length);
   const top = { cost: 0, a: 0, b: 0, sa: 0, sb: 0, x: 0, y: 0, z: 0 };
+  const seenMark = new Int32Array(nV);
+  let mark = 0;
 
   /** Would moving vertex v to (x,y,z) flip or crush any of its faces (ignoring faces with `skip`)? */
   const flips = (v: number, skip: number, x: number, y: number, z: number): boolean => {
@@ -303,12 +322,19 @@ export function simplify(input: SimplifyInput, targets: number[]): SimplifiedMes
       vf[a].push(f);
     }
     vf[b] = [];
-    vf[a] = vf[a].filter((f) => faceAlive[f]);
+    const fa = vf[a];
+    let w = 0;
+    for (let r = 0; r < fa.length; r++) if (faceAlive[fa[r]]) fa[w++] = fa[r];
+    fa.length = w;
     stamp[a] += 1;
-    // re-queue a's edges
-    const nb = new Set<number>();
-    for (const f of vf[a]) for (let k = 0; k < 3; k++) { const v = F[f * 3 + k]; if (v !== a) nb.add(v); }
-    for (const v of nb) pushEdge(a, v);
+    // re-queue a's edges (each neighbour once)
+    mark += 1;
+    for (const f of fa) for (let k = 0; k < 3; k++) {
+      const v = F[f * 3 + k];
+      if (v === a || seenMark[v] === mark) continue;
+      seenMark[v] = mark;
+      pushEdge(a, v);
+    }
     while (oi < order.length && order[oi].t >= liveFaces) out[order[oi++].i] = snapshot();
   }
   while (oi < order.length) out[order[oi++].i] = snapshot();

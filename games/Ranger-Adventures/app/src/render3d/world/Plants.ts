@@ -30,20 +30,21 @@ const _col = new THREE.Color();
 /**
  * One struikhei plant, ~1 m wide and ~0.45 m high before scaling: a dark, low core
  * (so the ground never shows through) bristling with thin twig spikes, olive-brown at
- * the root and muted mauve at the flowering tip. Every normal points away from the
- * plant's heart, so the low sun lights it as one soft, rounded bush (not as a scatter
- * of hard cards). Its base sits a hair below y=0 so it grows out of a gentle slope.
+ * the root and muted mauve at the flowering tip. Every normal leans up and away from
+ * the plant's heart, so the low sun lights it as one soft, rounded bush (not as a
+ * scatter of hard cards, and never with a black side). Its base sits a hair below y=0 so it grows out of a gentle slope.
  */
-export function heatherGeometry(seed = 1, spikes = 130): THREE.BufferGeometry {
+export function heatherGeometry(seed = 1, spikes = 200): THREE.BufferGeometry {
   const rnd = stream(seed);
   const P: number[] = [], N: number[] = [], C: number[] = [], I: number[] = [];
-  const core = new THREE.Color('#554a32');
-  const stem = new THREE.Color('#6f6443');
-  const tipGreen = new THREE.Color('#8c8756');
-  const bloom = new THREE.Color('#a47a9c');
+  const core = new THREE.Color('#4a412c');
+  const stem = new THREE.Color('#857a52');
+  const tipGreen = new THREE.Color('#a9a36b');
+  const bloom = new THREE.Color('#c296b3');
+  const dry = new THREE.Color('#a48d62');
   const push = (x: number, y: number, z: number, c: THREE.Color): number => {
     P.push(x, y, z);
-    const nx = x, ny = (y - 0.02) * 1.6 + 0.25, nz = z;
+    const nx = x * 0.7, ny = 0.75 + y, nz = z * 0.7; // mostly up: the whole bush takes the low sun
     const l = Math.hypot(nx, ny, nz) || 1;
     N.push(nx / l, ny / l, nz / l);
     C.push(c.r, c.g, c.b);
@@ -51,14 +52,14 @@ export function heatherGeometry(seed = 1, spikes = 130): THREE.BufferGeometry {
   };
   const tri = (a: number, b: number, c: number): void => { I.push(a, b, c); };
   // the core: a low, slightly lumpy dome of 8 x 3 quads
-  const SEG = 8, RINGS = 3, R0 = 0.36, H0 = 0.17;
+  const SEG = 8, RINGS = 3, R0 = 0.3, H0 = 0.12;
   const ring: number[][] = [];
   for (let j = 0; j <= RINGS; j++) {
     const v = j / RINGS, row: number[] = [];
     for (let i = 0; i < SEG; i++) {
       const a = (i / SEG) * Math.PI * 2, lump = 0.85 + rnd() * 0.3;
       const rr = R0 * Math.cos(v * Math.PI * 0.5) * lump, y = H0 * Math.sin(v * Math.PI * 0.5) - 0.03;
-      _col.copy(core).lerp(stem, v * 0.6);
+      _col.copy(core).lerp(stem, v);
       row.push(push(Math.cos(a) * rr, y, Math.sin(a) * rr, _col));
     }
     ring.push(row);
@@ -76,12 +77,13 @@ export function heatherGeometry(seed = 1, spikes = 130): THREE.BufferGeometry {
     const rr = R0 * Math.cos(up * Math.PI * 0.5) * (0.75 + rnd() * 0.3);
     const bx = Math.cos(a) * rr, bz = Math.sin(a) * rr, by = H0 * Math.sin(up * Math.PI * 0.5) - 0.05;
     // outward and upward: a heather twig leans out of the bush, tips reaching up
-    const out = 0.3 + (1 - up) * 0.9, len = 0.08 + rnd() * 0.1;
+    const out = 0.25 + (1 - up) * 0.8, len = 0.1 + rnd() * 0.11;
     let dx = Math.cos(a) * out + (rnd() - 0.5) * 0.3, dy = 1, dz = Math.sin(a) * out + (rnd() - 0.5) * 0.3;
     const dl = Math.hypot(dx, dy, dz); dx /= dl; dy /= dl; dz /= dl;
     const tx = bx + dx * len, ty = by + dy * len, tz = bz + dz * len;
-    const w = 0.018 + rnd() * 0.014;
-    const tip = inBloom && rnd() > 0.35 ? bloom : tipGreen;
+    const w = 0.018 + rnd() * 0.016;
+    const roll = rnd();
+    const tip = inBloom && roll > 0.3 ? bloom : roll > 0.12 ? tipGreen : dry;
     for (const turn of [0, Math.PI / 2]) {
       const px = Math.cos(a + turn + 1.3) * w, pz = Math.sin(a + turn + 1.3) * w;
       const i0 = push(bx - px, by, bz - pz, stem);
@@ -176,14 +178,20 @@ const noRaycast = (): void => {};
 /**
  * One kind of plant laid out in fixed 20 m chunks (see the module note). `hideBeyond`
  * is the lens distance (m, to the nearest point of a chunk) past which a chunk is not
- * drawn. `wind` > 0 lets the field lean in the wind (the Dressing re-tilts it).
+ * drawn. A `far` geometry (a lighter version of the same plant) takes over for chunks
+ * wholly beyond `far.from` m; it shares the chunk's instances, so nothing moves.
  */
 export class PlantField {
-  readonly chunks: { mesh: THREE.InstancedMesh; items: PlantSpot[]; cx: number; cz: number; r: number }[] = [];
+  readonly chunks: { mesh: THREE.InstancedMesh; farMesh: THREE.InstancedMesh | null; items: PlantSpot[]; cx: number; cz: number; r: number }[] = [];
   private readonly hideBeyond: number;
+  private readonly farFrom: number;
 
-  constructor(scene: THREE.Scene, name: string, geometry: THREE.BufferGeometry, material: THREE.Material, spots: PlantSpot[], hideBeyond: number) {
+  constructor(
+    scene: THREE.Scene, name: string, geometry: THREE.BufferGeometry, material: THREE.Material, spots: PlantSpot[],
+    hideBeyond: number, far?: { geometry: THREE.BufferGeometry; from: number },
+  ) {
     this.hideBeyond = hideBeyond;
+    this.farFrom = far?.from ?? Infinity;
     const cells = new Map<string, PlantSpot[]>();
     for (const s of spots) {
       const k = `${Math.floor(s.x / CHUNK)},${Math.floor(s.z / CHUNK)}`;
@@ -215,16 +223,34 @@ export class PlantField {
       const r = Math.hypot(maxX - minX, maxZ - minZ) / 2 + gr * maxS;
       mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, (minY + maxY) / 2, cz), Math.hypot(r, (maxY - minY) / 2 + gr * maxS));
       scene.add(mesh);
-      this.chunks.push({ mesh, items, cx, cz, r });
+      let farMesh: THREE.InstancedMesh | null = null;
+      if (far) {
+        // the same instances (one shared buffer, so the wind moves both), lighter plant
+        farMesh = new THREE.InstancedMesh(far.geometry, material, items.length);
+        farMesh.instanceMatrix = mesh.instanceMatrix;
+        farMesh.instanceColor = mesh.instanceColor;
+        farMesh.name = `${name}-far@${key}`;
+        farMesh.castShadow = false;
+        farMesh.receiveShadow = false;
+        farMesh.raycast = noRaycast;
+        farMesh.boundingSphere = mesh.boundingSphere;
+        farMesh.visible = false;
+        scene.add(farMesh);
+      }
+      this.chunks.push({ mesh, farMesh, items, cx, cz, r });
     }
   }
 
-  /** Per rendered frame: draw only the chunks the fog has not yet taken. */
+  /** Per rendered frame: near chunks draw the full plant, far ones the light one, and
+   *  the chunks the fog has taken are not drawn at all. */
   update(camera: THREE.Camera): void {
     const e = camera.matrixWorld.elements;
     for (const c of this.chunks) {
       const d = Math.hypot(c.cx - e[12], c.cz - e[14]) - c.r;
-      c.mesh.visible = d < this.hideBeyond;
+      const shown = d < this.hideBeyond;
+      const far = c.farMesh !== null && d > this.farFrom;
+      c.mesh.visible = shown && !far;
+      if (c.farMesh) c.farMesh.visible = shown && far;
     }
   }
 }
