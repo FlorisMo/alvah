@@ -385,3 +385,127 @@ test('the season finale: the last mission ends the season, then the world is cal
     if (!process.env.MISSIONS_QUIET) console.log(`\n── finale ──\n${text}`);
   }
 });
+
+/** The 2D floors a reduced-motion player gets, played with real clicks: zoeken (click
+ *  the hidden animal, then Verder), corsi (watch the route light up, click it back). */
+async function play2dFloor(log: Log): Promise<boolean> {
+  const page = log.page;
+  const vis = (sel: string): Promise<boolean> => page.locator(sel).first().isVisible().catch(() => false);
+  if (await vis('.zoeken-card .btn-start')) {
+    const cover = await uncovered(page.locator('.zoeken-card .btn-start'));
+    log.soft(cover === null, `the zoeken found card's Verder is covered by ${cover}`);
+    await page.locator('.zoeken-card .btn-start').click();
+    return true;
+  }
+  if (await vis('.zoeken-target')) { await page.locator('.zoeken-target').click(); return true; }
+  if (await vis('.route-intro .btn-start')) {
+    await page.locator('.route-intro .btn-start').click();
+    const order: number[] = [];
+    const t0 = Date.now();
+    while (Date.now() - t0 < 25_000) {
+      const s = await page.evaluate(() => {
+        const spots = [...document.querySelectorAll<HTMLButtonElement>('.route-spot')];
+        return { act: spots.findIndex((b) => b.classList.contains('active')), enabled: spots.some((b) => !b.disabled) };
+      });
+      if (s.act >= 0 && order[order.length - 1] !== s.act) order.push(s.act);
+      if (s.enabled) break;
+      await sleep(page, 40);
+    }
+    for (const i of order) { await page.locator('.route-spot').nth(i).click(); await sleep(page, 300); }
+    log.note(`corsi 2D: watched and clicked back ${order.length} stones`);
+    return true;
+  }
+  return false;
+}
+
+test('reduced motion: mission 1 on the 2D floors with real clicks, and its reunion is a cut @missions', async ({ page }, info) => {
+  test.setTimeout(6 * 60_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const log: Log = new Log(page, outDir(info, 'reduced-motion'));
+  const mission = missions[0];
+  try {
+    await boot(log);
+    const marker = await goToMarker(log, mission);
+    const before = await worldSamples(page, marker, SEAT_RADIUS, 3);
+    await start(log, mission);
+    const t0 = Date.now();
+    const skin = (i: number): Skin => mission.stappen[i].skin as Skin;
+    const answers = new Set(mission.stappen.flatMap((_, i) => (skin(i).encounters ?? []).flatMap((e) => e.opties.filter((o) => o.goed).map((o) => o.label))));
+    const views = new Set<string>();
+    while (!(await save(page))?.voltooid[mission.id] && Date.now() - t0 < 4 * 60_000) {
+      const v = await R<string | null>(page, 'r.missionView');
+      if (v) views.add(v);
+      if (await play2dFloor(log)) { await sleep(page, 500); continue; }
+      const choice = page.locator('button.p3-choice:not([disabled]), button.choice-opt:not([disabled])');
+      let answered = false;
+      for (let i = 0; i < await choice.count(); i++) {
+        if (answers.has((await choice.nth(i).innerText()).trim())) { await choice.nth(i).click(); answered = true; break; }
+      }
+      if (answered) { await sleep(page, 1_800); continue; }
+      if (await visible(page, /^(Verder|Klaar)$/)) { await click(log, /^(Verder|Klaar)$/, 'card'); await sleep(page, 400); continue; }
+      await sleep(page, 250);
+    }
+    log.hard(!!(await save(page))?.voltooid[mission.id], 'mission 1 was not won on the reduced-motion floors');
+    log.note(`views served: ${[...views].join(', ')}`);
+    log.soft(views.has('2d'), 'reduced motion serves the 2D floor for zoeken + corsi');
+    // the reunion is a cut: the moment the line shows, the family already stands in its place
+    await expect.poll(() => page.locator('.reunion-cap').isVisible().catch(() => false), { timeout: 8_000 }).toBe(true);
+    await sleep(page, 300);
+    const now = await worldSamples(page, marker, SEAT_RADIUS, 1);
+    const later = (await sleep(page, 1_200), await worldSamples(page, marker, SEAT_RADIUS, 1));
+    const { appeared } = worldChange(before, now);
+    log.note(`at the first frame of the reunion ${appeared.length} things stand at the marker`);
+    log.soft(appeared.length >= 3, 'under reduced motion the family is there at once (a cut, no walk-in)');
+    log.soft(worldChange(now, later).appeared.length === 0, 'nothing walks in after the cut');
+    await log.shot('reunion-cut');
+    await finish(log, mission);
+    await worldReacted(log, mission, marker, before);
+  } finally {
+    const text = log.write();
+    await info.attach('notes', { body: text, contentType: 'text/plain' });
+    if (!process.env.MISSIONS_QUIET) console.log(`\n── reduced-motion ──\n${text}`);
+  }
+});
+
+test('the bird bench on the 2D floor (Tweaks "altijd 2D"): RoepView plays and hands the world back @missions', async ({ page, context }, info) => {
+  test.setTimeout(4 * 60_000);
+  await context.addInitScript((seed) => {
+    if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: seed }));
+  }, { avatarGemaakt: true, settings: { wereldHintGezien: true, tikHintGezien: true, force2d: true } });
+  const log: Log = new Log(page, outDir(info, 'roep-2d'));
+  try {
+    await boot(log);
+    const sit = await R<{ x: number; z: number } | null>(page, 'r.sitSpot()');
+    log.hard(!!sit, 'no sit-spot');
+    const w = await walkTo(page, sit!, { stopDist: 1.0, timeout: 90_000 });
+    log.note(`walked to the bench: ${w.res}`);
+    await click(log, 'Luister naar de vogels', 'bench');
+    await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 5_000 }).toBe('2d');
+    await click(log, 'Luister', 'roep intro');
+    const byCall: Record<string, string> = { 'Krok krok': 'raaf', Koekoek: 'koekoek', fluitliedje: 'merel', 'Tik tik': 'roodborsttapuit', 'Kju kju': 'groene specht', 'Ti ta': 'koolmees' };
+    let n = 0;
+    const t0 = Date.now();
+    while ((await page.locator('.roep').count()) && Date.now() - t0 < 90_000) {
+      const call = await page.locator('.rc-text').innerText().catch(() => '');
+      const key = Object.keys(byCall).find((k) => call.includes(k));
+      const b = key ? page.getByRole('button', { name: byCall[key], exact: true }) : null;
+      if (b && await b.isEnabled().catch(() => false)) {
+        if (!n) await log.shot('roep-2d');
+        await b.click(); n += 1; await sleep(page, 1_500); continue;
+      }
+      await sleep(page, 250);
+    }
+    log.note(`answered ${n} calls by the words on screen`);
+    log.soft(n >= 3, 'the roep rounds were played');
+    await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null,
+      { timeout: 10_000, message: 'the bench hands the world back' }).toBe(true);
+    const p0 = (await snap(page)).p!;
+    await page.keyboard.down('ArrowUp'); await sleep(page, 1_000); await page.keyboard.up('ArrowUp');
+    const p1 = (await snap(page)).p!;
+    log.soft(Math.hypot(p1.x - p0.x, p1.z - p0.z) > 0.6, 'the ranger walks on after the bench');
+  } finally {
+    const text = log.write();
+    await info.attach('notes', { body: text, contentType: 'text/plain' });
+    if (!process.env.MISSIONS_QUIET) console.log(`\n── roep-2d ──\n${text}`);
+  }
+});
