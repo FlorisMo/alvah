@@ -366,7 +366,8 @@ export function resolveBody(
         if (out > 0) {
           for (let i = 0; i < 6; i++) { const m = (lo + out) / 2; if (wet(x - n.x * m, z - n.z * m, h)) lo = m; else out = m; }
           out += 0.01; // a hair of room, so the next small turn has some
-          if (wet(x - n.x * out, z - n.z * out, h) || deeper(x - n.x * out, z - n.z * out, h)) out = -1;
+          const ox = x - n.x * out, oz = z - n.z * out;
+          if (wet(ox, oz, h) || deeper(ox, oz, h) || Math.hypot(ox, oz) > lim + 1e-6) out = -1; // never out past the rim
         }
       }
       if (n && out > 0) { x -= n.x * out; z -= n.z * out; }

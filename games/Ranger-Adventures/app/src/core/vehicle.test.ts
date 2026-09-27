@@ -416,3 +416,13 @@ test('met at a slant, the shore slides the jeep along it instead of stopping it 
   assert.ok(slid > 2, `pushed on, it slid along the bank (${slid.toFixed(2)} m in 4 s), like along a trunk`);
   assert.ok(Math.hypot(s.x - LAKE.x, s.z - LAKE.z) > LAKE.r, 'its centre stays on the dry side');
 });
+
+test('pushed back off the water, the body never ends up past the rim', () => {
+  // at the very rim, facing in, its nose a hair from a strip of water: a step in wets the
+  // nose, and the push back out (with its centimetre of room) would land past the rim
+  const lim = 75 - 1.9; // the bound less the body's reach
+  const strip = { bound: 75, blocked: (_x: number, z: number) => z < lim - 1.905 && z > lim - 6 };
+  const r = resolveBody(0, lim, Math.PI, 0, lim - 0.1, Math.PI, JEEP_BODY, [], strip);
+  assert.ok(r.contact, 'the water stopped it');
+  assert.ok(Math.hypot(r.x, r.z) <= lim + 1e-6, `inside the rim (${(Math.hypot(r.x, r.z) - lim).toFixed(4)} m past it)`);
+});
