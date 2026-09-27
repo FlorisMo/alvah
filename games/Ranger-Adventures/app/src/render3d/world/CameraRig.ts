@@ -171,6 +171,7 @@ export class CameraRig {
   private readonly crowns: Crown[] = [];
   private crownTrees = -1;       // the tree / obstacle counts the crown list was built for
   private crownSolids = -1;
+  private trunks = new WeakSet<Obstacle>(); // collision circles that are a forest tree's trunk
   private readonly nearCrowns: Crown[] = [];      // this frame's crowns / solids / creatures near the target
   private readonly nearSolids: Obstacle[] = [];
   private readonly creaturePool: Creature[] = []; // reused: nearCreatures = the first creatureCount
@@ -674,15 +675,28 @@ export class CameraRig {
     this.crownTrees = this.dressing.treePlacements.length;
     this.crownSolids = this.obstacles.length;
     this.crowns.length = 0;
+    const at = new Set<string>();
     this.dressing.treePlacements.forEach((p, i) => {
       const k = crownOf(p.species, TREE_BASE_H[p.species] * p.s, p.x, p.y, p.z, i);
       if (k) this.crowns.push(k);
+      at.add(`${p.x},${p.z}`);
     });
+    // a forest tree's collision circle is its trunk, tagged or not (the grove trees at the
+    // landmarks push an untagged one): it fades with the tree, so it is no solid to the view
+    this.trunks = new WeakSet();
+    for (const o of this.obstacles) if (o.tree || at.has(`${o.x},${o.z}`)) this.trunks.add(o);
     for (const o of this.obstacles) {
       if (!o.crown) continue;
       const k = crownOf(o.crown.kind, o.crown.h, o.x, o.crown.y, o.z, -1);
       if (k) this.crowns.push(k);
     }
+  }
+
+  /** Is this collision solid a forest tree's trunk (it fades with its tree, world/Crowns.ts),
+   *  rather than a building, prop or person? (The dev hook's clear-line read asks too.) */
+  isTree(o: Obstacle): boolean {
+    this.refreshCrowns();
+    return this.trunks.has(o);
   }
 
   /** This frame's trees, solids and creatures within `reach` of (x, z). */
@@ -835,7 +849,7 @@ export class CameraRig {
    *  the trees: they fade)? A building by its real walls, not its elbow-room pad. */
   private lensClear(x: number, z: number): boolean {
     for (const o of this.nearSolids) {
-      if (o.tree) continue;
+      if (this.isTree(o)) continue;
       if ((o.box ? obstacleGap(o, x, z, -o.box.pad) : obstacleGap(o, x, z)) < this.CAM_PROBE_R) return false;
     }
     return true;
@@ -845,7 +859,7 @@ export class CameraRig {
    *  ground plane — the same test the dev hook's viewClear uses. */
   private solidBetween(cx: number, cz: number, ax: number, az: number): boolean {
     for (const o of this.nearSolids) {
-      if (o.tree) continue;
+      if (this.isTree(o)) continue;
       if (obstacleGap(o, ax, az) + (o.box ? o.box.pad : 0) <= 0) continue; // the prop he stands at
       if (segmentCrosses(o, cx, cz, ax, az, 0.05, 0.95)) return true;
     }
@@ -857,7 +871,7 @@ export class CameraRig {
    *  building is measured by its real walls, never by the circle round it. */
   private solidHugsLens(lx: number, lz: number): boolean {
     for (const o of this.nearSolids) {
-      if (o.tree) continue;
+      if (this.isTree(o)) continue;
       if (obstacleGap(o, lx, lz) < 0.8) return true;
       if (obstacleSpan(o, lx, lz) > this.HUG_ANGLE) return true;
     }
@@ -894,7 +908,7 @@ export class CameraRig {
     if (dx * dx + dz * dz < 1e-6) return 1;
     let best = 1;
     for (const o of nearOnly ? this.nearSolids : this.obstacles) {
-      if (skipTrees && o.tree) continue;
+      if (skipTrees && this.isTree(o)) continue;
       // circles and building rectangles alike; a building by its real walls + the probe
       // (its pad is the ranger's elbow room, not wall: a boom that grazes a corner stays out)
       const t = segmentEntry(o, ox, oz, dx, dz, o.box ? probe - o.box.pad : probe);
