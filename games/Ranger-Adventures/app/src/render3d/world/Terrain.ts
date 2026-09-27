@@ -253,21 +253,36 @@ function vnoise2(x: number, z: number, seed: number): number {
  * shading (farCanopyTexture) both read it, so the painted crowns sit on the modelled ones.
  */
 export function canopyCrown(u: number, v: number): { t: number; bx: number; bz: number; size: number } {
-  const G = FAR_GRID;
+  const G = FAR_GRID, C = crownTable();
   const cu = Math.floor(u), cv = Math.floor(v);
-  const wrap = (i: number): number => ((i % G) + G) % G;
   let t = Infinity, bx = 0, bz = 0, size = 0;
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
-    const wi = wrap(cu + i), wj = wrap(cv + j);
-    const x = cu + i + 0.2 + 0.6 * hash2(wi, wj, 17), z = cv + j + 0.2 + 0.6 * hash2(wi, wj, 19);
-    const sz = hash2(wi, wj, 23);
-    const r = 0.5 + 0.2 * sz;
-    const dx = u - x, dz = v - z;
-    const lobe = 1 + 0.15 * Math.sin(Math.atan2(dz, dx) * 5 + hash2(wi, wj, 31) * 6.28); // leaf clusters
-    const k = Math.sqrt(dx * dx + dz * dz) / (r * lobe);
-    if (k < t) { t = k; bx = dx / r; bz = dz / r; size = sz; }
+    const wi = (((cu + i) % G) + G) % G, wj = (((cv + j) % G) + G) % G;
+    const c = (wj * G + wi) * 5;
+    const dx = u - (cu + i + C[c]), dz = v - (cv + j + C[c + 1]), r = C[c + 2];
+    const d = Math.sqrt(dx * dx + dz * dz);
+    // a lobed outline (leaf clusters); a crown clearly out of reach needs no trig
+    const k = d > r * 1.16 ? d / r : d / (r * (1 + 0.15 * Math.sin(Math.atan2(dz, dx) * 5 + C[c + 4])));
+    if (k < t) { t = k; bx = dx / r; bz = dz / r; size = C[c + 3]; }
   }
   return { t, bx, bz, size };
+}
+
+let crowns: Float32Array | null = null;
+/** Per crown of the tile: its centre in its cell, radius, size and lobe phase (made once). */
+function crownTable(): Float32Array {
+  if (crowns) return crowns;
+  const G = FAR_GRID;
+  crowns = new Float32Array(G * G * 5);
+  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+    const c = (j * G + i) * 5, sz = hash2(i, j, 23);
+    crowns[c] = 0.2 + 0.6 * hash2(i, j, 17);
+    crowns[c + 1] = 0.2 + 0.6 * hash2(i, j, 19);
+    crowns[c + 2] = 0.5 + 0.2 * sz;
+    crowns[c + 3] = sz;
+    crowns[c + 4] = hash2(i, j, 31) * 6.28;
+  }
+  return crowns;
 }
 
 /** Which trees make up the forest beyond the rim at (x,z), in [0,1]: dark pine stands
@@ -282,10 +297,10 @@ export function farStand(x: number, z: number): number {
  *  scales the domes: the coarse outer rings cannot draw them. */
 export function farCanopyLift(x: number, z: number, fine = 1): number {
   const swell = 6.6 + 1.2 * (vnoise2(x * 0.03, z * 0.03, 311) * 2 - 1);
-  if (fine <= 0) return swell + 0.9;
+  if (fine <= 0) return swell + 0.7;
   const c = canopyCrown((x / FAR_TILE_M) * FAR_GRID, (z / FAR_TILE_M) * FAR_GRID);
-  const dome = c.t < 1 ? (1 - c.t * c.t) ** 0.8 : 0;
-  return swell + (1 - fine) * 0.9 + fine * (1.7 + 1.3 * c.size) * dome;
+  const dome = c.t < 1 ? (1 - c.t * c.t) ** 1.2 : 0;
+  return swell + (1 - fine) * 0.7 + fine * (1.2 + 0.9 * c.size) * dome;
 }
 
 // the forest beyond, seen from inside: dark shade under the trees, then the canopy
@@ -303,9 +318,8 @@ const FAR_LEAF = new THREE.Color('#7f9636');    // oak and birch
  * crowns) behind the real rim trees; its top is a canopy of rounded crowns (modelled where
  * the rings are fine enough, painted everywhere by `farCanopyTexture` on the same layout)
  * in pine stands and lighter oak and birch, and the fog dissolves it into the horizon
- * haze. One draw call, ~46k triangles. Positions, vertex colours and uv (the canopy in
- * tile units of world metres; the shaded face one even texel). `ground` = the drawn
- * ground height.
+ * haze. One draw call, ~46k triangles. Positions, vertex colours and uv (in tile units
+ * of world metres, every row alike). `ground` = the drawn ground height.
  */
 export function buildFarForest(bound: number, ground: (x: number, z: number) => number): THREE.BufferGeometry {
   const r0 = bound + FAR_FOREST_IN;
@@ -337,14 +351,15 @@ export function buildFarForest(bound: number, ground: (x: number, z: number) => 
       const g = ground(x, z);
       let y: number;
       const j = k * A + a;
+      // every row takes the texture in world metres: a row with other uv squeezes whole
+      // tiles into the band between them, which aliased into stripes seen from the air
+      uv[j * 2] = x / FAR_TILE_M; uv[j * 2 + 1] = z / FAR_TILE_M;
       if (row.kind === 'canopy') {
         y = g + farCanopyLift(x, z, fine);
         c.copy(FAR_PINE).lerp(FAR_LEAF, farStand(x, z));
-        uv[j * 2] = x / FAR_TILE_M; uv[j * 2 + 1] = z / FAR_TILE_M;
       } else {
         y = g + (row.kind === 'deep' ? -0.6 : row.kind === 'trunks' ? 2.6 : 5.0);
         c.copy(row.kind === 'deep' ? FAR_DEEP : row.kind === 'trunks' ? FAR_TRUNKS : FAR_UNDER);
-        uv[j * 2] = 0.5 / FAR_GRID; uv[j * 2 + 1] = 0.5 / FAR_GRID; // one even texel: streaks aliased into stripes from the air
       }
       pos[j * 3] = x; pos[j * 3 + 1] = y; pos[j * 3 + 2] = z;
       col[j * 3] = c.r; col[j * 3 + 1] = c.g; col[j * 3 + 2] = c.b;
@@ -375,7 +390,7 @@ export function buildFarForest(bound: number, ground: (x: number, z: number) => 
  */
 export function farCanopyTexture(): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null;
-  const N = 512;
+  const N = 256;
   const cv = document.createElement('canvas');
   cv.width = cv.height = N;
   const ctx = cv.getContext('2d');
@@ -386,13 +401,13 @@ export function farCanopyTexture(): THREE.CanvasTexture | null {
   for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
     // uv (0,0) is the canvas's bottom-left (flipY): v runs up the canvas
     const cr = canopyCrown(((px + 0.5) / N) * FAR_GRID, (1 - (py + 0.5) / N) * FAR_GRID);
-    const clump = vnoise2(px / 9, py / 9, 41) * 0.55 + vnoise2(px / 4, py / 4, 43) * 0.45; // leafy grain
+    const clump = vnoise2(px / 4.5, py / 4.5, 41) * 0.55 + vnoise2(px / 2, py / 2, 43) * 0.45; // leafy grain
     let b: number;
     if (cr.t < 1) {
       const ny = Math.sqrt(Math.max(0, 1 - cr.bx * cr.bx - cr.bz * cr.bz));
       const lit = Math.max(0, cr.bx * L.x + ny * L.y + cr.bz * L.z);
-      b = (0.36 + 0.7 * lit) * (0.8 + 0.34 * clump) * (1 - 0.4 * cr.t ** 3);
-    } else b = 0.17 + 0.1 * clump;                           // the dark gaps between crowns
+      b = (0.5 + 0.55 * lit) * (0.84 + 0.26 * clump) * (1 - 0.3 * cr.t ** 3);
+    } else b = 0.34 + 0.1 * clump;                           // the shaded gaps between crowns (soft: hard ones alias into stripes at a glance)
     const o = (py * N + px) * 4;
     const val = Math.round(Math.min(1, b) * 255);
     img.data[o] = val; img.data[o + 1] = val; img.data[o + 2] = Math.round(val * 0.95); img.data[o + 3] = 255;
@@ -401,7 +416,7 @@ export function farCanopyTexture(): THREE.CanvasTexture | null {
   const tex = new THREE.CanvasTexture(cv);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 16; // seen at a glancing angle from the heli: sharp, not striped (three clamps to the GPU's max)
   return tex;
 }
 
