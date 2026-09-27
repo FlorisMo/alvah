@@ -28,7 +28,7 @@ import { resolveMove } from '../CharacterController';
 import { wayfind, type WayCue } from '../Wayfinding';
 import {
   driveStep, driveCaps, calmSpeed, rampSpeed, comfortSteer, driveIntent, vehicleDt,
-  resolveBody, freeDistance, contactSpeedCap, wheelContact,
+  resolveBody, freeDistance, contactSpeedCap, wheelContact, keepOutSteer, guidedSteer, bodyReach,
   ANIMAL_SLOW_RADIUS, JEEP_BODY, JEEP_RAMP_TIME, CONTACT_CREEP,
   type BodyCircle, type Solid,
 } from '../../core/vehicle';
@@ -52,11 +52,13 @@ const MODEL_YAW = Math.PI / 2;
 export const JEEP_COLLIDE = 1.6;
 const JEEP_NEAR_R = 3.6;
 // The jeep's home: on the stuifzand, ≥ 13 m from every mission marker (audit veh-09:
-// it used to park ON "Het stille zand"), on flat open sand, parked facing the way to
-// the first mission so a straight drive has a clear 20 m run past the clearing. The
-// walk to it from the spawn passes the warden ≥ 3 m wide (he never steps into the
-// camera's view of the ranger on the way).
-const JEEP_HOME = { x: 22, z: 4, faceX: -15.6, faceZ: -15.6 };
+// it used to park ON "Het stille zand"), on flat open sand. It faces east, away from
+// the clearing, into the widest open ground there is: a straight drive has 45 m free of
+// every solid, zone, the ven and the rim (verifier V1: faced at the first mission it
+// drove straight into the Missiebord). The ranger walks up from the spawn behind it,
+// so boarding does not swing the camera round, and the walk passes the warden ≥ 3 m
+// wide (he never steps into the camera's view of the ranger on the way).
+const JEEP_HOME = { x: 22, z: 4, faceX: 60, faceZ: 14 };
 // P1.5b ground contact: the body eases toward the wheels' ground each frame (a damped
 // suspension glide, never a hard per-frame snap). Converges in ~0.1 s.
 const JEEP_HOVER_RATE = 10;
@@ -588,11 +590,47 @@ export class Vehicles {
     this.host.ranger.visible = true;
   }
 
-  /** Step out to the vehicle's LEFT (the driver's door), onto the drawn ground. */
-  private stepOut(x: number, z: number, h: number, side: number): void {
-    // resolveMove keeps him on solid ground inside the rim; the vehicle's footprint is
-    // not back in the list yet, so he clears it fully
-    const next = resolveMove(x, z, x + Math.cos(h) * side, z - Math.sin(h) * side, this.obstacles, this.limits);
+  /**
+   * Where the rider steps out of a vehicle at (x, z) facing h: the driver's door (its
+   * LEFT) first, then its right, then behind it — the first spot with room round him
+   * AND a clear line behind him for the walk camera, whose boom must not fold into the
+   * parked vehicle or a solid (verifier V1: stepped out beside the Missiebord, the lens
+   * collapsed onto him and he faded to a see-through, giant ghost). Room = ≥ 2 m from
+   * every solid, which also keeps him out of the board's and the bench's reach. None
+   * clear (a thicket): the roomiest. `side` = how far out beside the vehicle.
+   */
+  private exitSpot(x: number, z: number, h: number, side: number, body: readonly BodyCircle[]): { x: number; z: number } {
+    const fx = Math.sin(h), fz = Math.cos(h);
+    const lx = Math.cos(h), lz = -Math.sin(h);         // left-of-forward
+    const back = bodyReach(body) + 1.2;
+    const offsets = [[lx * side, lz * side], [-lx * side, -lz * side], [-fx * back, -fz * back]];
+    // the vehicle's own footprint as it is about to be parked (the walker and the lens see it)
+    const parked = body.map((c) => ({ x: x + fx * c.along, z: z + fz * c.along, r: c.r + WALKER_ROOM }));
+    const solids = this.solids();
+    const BOOM = 5, PROBE = 0.35;                         // the walk camera's boom + its probe
+    let best = { x: x + offsets[0][0], z: z + offsets[0][1] }, bestScore = -Infinity;
+    for (const [ox, oz] of offsets) {
+      const p = resolveMove(x, z, x + ox, z + oz, this.obstacles, this.limits);
+      let room = Infinity, boom = Infinity;
+      for (const o of solids) room = Math.min(room, Math.hypot(p.x - o.x, p.z - o.z) - o.r);
+      for (const o of solids.concat(parked)) {
+        // the gap between the boom (the segment behind him along −forward) and this circle
+        const t = Math.max(0, Math.min(BOOM, -((o.x - p.x) * fx + (o.z - p.z) * fz)));
+        boom = Math.min(boom, Math.hypot(o.x - (p.x - fx * t), o.z - (p.z - fz * t)) - o.r - PROBE);
+      }
+      const score = Math.min(room - 2, boom);
+      if (score >= 0) return p;
+      if (score > bestScore) { bestScore = score; best = p; }
+    }
+    return best;
+  }
+
+  /** Step out of a vehicle onto the drawn ground, at `exitSpot` (the driver's door when
+   *  it has room). */
+  private stepOut(x: number, z: number, h: number, side: number, body: readonly BodyCircle[]): void {
+    // exitSpot keeps him on solid ground inside the rim; the vehicle's footprint is not
+    // back in the list yet, so he clears it fully
+    const next = this.exitSpot(x, z, h, side, body);
     const r = this.host.ranger;
     r.position.set(next.x, this.groundY(next.x, next.z), next.z);
     r.rotation.set(0, h, 0, 'XYZ');
@@ -630,7 +668,7 @@ export class Vehicles {
     if (!this.inVehicle || !this.jeep || !this.jeepPos) return;
     this.inVehicle = false;
     const h = this.jeepHeading;
-    this.stepOut(this.jeepPos.x, this.jeepPos.z, h, 2.1);
+    this.stepOut(this.jeepPos.x, this.jeepPos.z, h, 2.4, JEEP_BODY);
     this.host.follow(h, true);          // the step-out is a CUT too
     this.vehicleSpeed = 0;
     this.jeepMoved = 0;
@@ -645,14 +683,21 @@ export class Vehicles {
   }
 
   /** Every solid a vehicle's body meets: the static list (trunks, cabin, landmarks,
-   *  board, props, the other parked vehicle) plus people, walking animals and the keep-out
-   *  zone around each mission marker. For the jeep the helipads are solid too, so a pad
-   *  is always free for the helicopter to land on (the autopilot must always finish). */
-  private solids(forJeep: boolean): Solid[] {
+   *  board, props, the other parked vehicle) plus people and walking animals. */
+  private solids(): Solid[] {
     const out: Solid[] = this.obstacles.slice();
     for (const p of this.host.people()) out.push({ x: p.x, z: p.z, r: PERSON_R });
     for (const a of this.host.animals()) if (a.id.startsWith('animal-')) out.push({ x: a.x, z: a.z, r: animalR(a.h) });
-    for (const m of this.host.markers()) out.push({ x: m.x, z: m.z, r: MARKER_R });
+    return out;
+  }
+
+  /** The keep-out zones: the ground round each mission marker (so a vehicle never parks
+   *  in a mission's stage: ≥ 6 m from the marker) and, for the jeep, each helipad (so a
+   *  pad is always free for the helicopter's autopilot to land on). Unlike a solid a zone
+   *  shows nothing to stop at, so the jeep bends round it (`keepOutSteer`) instead of
+   *  braking for it; its body still never enters one. */
+  private zones(forJeep: boolean): Solid[] {
+    const out: Solid[] = this.host.markers().map((m) => ({ x: m.x, z: m.z, r: MARKER_R }));
     if (forJeep) for (const p of this.helipads) out.push({ x: p.x, z: p.z, r: PAD_RADIUS });
     return out;
   }
@@ -660,10 +705,11 @@ export class Vehicles {
   /**
    * W5.1: one frame of the arcade drive. Up = gas, Down = brake then reverse,
    * Left/Right = steer (a sideways push creeps forward while it turns: `driveIntent`).
-   * The speed ramps (~1 s), brakes softly for whatever is ahead (it rolls to rest AT a
-   * trunk, never into it), crawls near animals; the whole body then resolves against
-   * every solid and slides along it. The wheels rest on the drawn ground, the driver
-   * rides in his seat, the follow-cam trails the heading.
+   * The speed ramps (~1 s), brakes softly for whatever solid is ahead (it rolls to rest
+   * AT a trunk, never into it), crawls near animals, and bends round a keep-out zone in
+   * its path; the whole body then resolves against every solid and zone and slides
+   * along it. The wheels rest on the drawn ground, the driver rides in his seat, the
+   * follow-cam trails the heading.
    */
   driveJeep(rawDt: number): void {
     const dt = vehicleDt(rawDt);          // a stall never teleports the jeep
@@ -672,12 +718,15 @@ export class Vehicles {
     const reduced = livePolicy().reduced;
     const caps = driveCaps(reduced);
     const want = driveIntent(this.host.intent());
-    const solids = this.solids(true);
-    // (1) speed: the ramp, then a soft brake for what lies ahead
+    const solids = this.solids();
+    const zones = this.zones(true);
+    const all = solids.concat(zones);
+    // (1) speed: the ramp, then a soft brake for the solid ahead (backing up: for a zone
+    // behind too — driving forward the jeep bends round a zone instead, step 2)
     let speed = rampSpeed(this.vehicleSpeed, want.throttle, dt, caps);
     if (speed !== 0) {
       const dir = speed > 0 ? 1 : -1;
-      const free = freeDistance(jp.x, jp.z, this.jeepHeading, dir, JEEP_BODY, solids, 40);
+      const free = freeDistance(jp.x, jp.z, this.jeepHeading, dir, JEEP_BODY, dir > 0 ? solids : all, 40);
       const cap = contactSpeedCap(free, caps.maxSpeed / JEEP_RAMP_TIME);
       if (Math.abs(speed) > cap) speed = dir * cap;
     }
@@ -685,14 +734,16 @@ export class Vehicles {
     const animalDist = this.host.nearestAnimalDist(jp.x, jp.z);
     this.vehicleNearAnimal = animalDist <= ANIMAL_SLOW_RADIUS;
     speed = calmSpeed(speed, animalDist);
-    // (2) steer: speed-scaled (it never pivots in open ground), a little authority kept
-    // while pressed against something so a held turn key always swings it free
+    // (2) steer: the player's, bent round a keep-out zone ahead; speed-scaled (it never
+    // pivots in open ground), with a little authority kept while pressed against
+    // something so a held turn key always swings it free
+    const avoid = speed > 0 ? keepOutSteer(jp.x, jp.z, this.jeepHeading, zones, JEEP_BODY, want.steer) : 0;
     const floor = this.jeepContact && want.throttle !== 0 ? CONTACT_STEER : 0;
-    const steer = comfortSteer(want.steer, speed, caps, floor);
+    const steer = comfortSteer(guidedSteer(want.steer, avoid), speed, caps, floor);
     const step = driveStep(this.jeepHeading, { throttle: speed / caps.maxSpeed, steer }, dt, caps);
-    // (3) the whole body against every solid: pushed out, sliding along
+    // (3) the whole body against every solid and zone: pushed out, sliding along
     const next = resolveBody(jp.x, jp.z, this.jeepHeading, jp.x + step.dx, jp.z + step.dz, step.heading,
-      JEEP_BODY, solids, this.limits);
+      JEEP_BODY, all, this.limits);
     const fx = Math.sin(this.jeepHeading), fz = Math.cos(this.jeepHeading);
     const moved = ((next.x - jp.x) * fx + (next.z - jp.z) * fz) / dt;
     this.jeepHeadingUnwrapped += Math.atan2(Math.sin(next.heading - this.jeepHeading), Math.cos(next.heading - this.jeepHeading));
@@ -771,7 +822,7 @@ export class Vehicles {
     const h = this.heliHeading;
     this.heliAltitude = HELI_PAD_HEIGHT;
     this.heliPos.y = this.groundY(this.heliPos.x, this.heliPos.z);
-    this.stepOut(this.heliPos.x, this.heliPos.z, h, 2.6);
+    this.stepOut(this.heliPos.x, this.heliPos.z, h, 2.6, HELI_BODY);
     this.host.follow(h, true);
     this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
     this.heliParked = this.park(this.heliPos.x, this.heliPos.z, h, HELI_BODY);
@@ -833,7 +884,7 @@ export class Vehicles {
       this.heliSpeed = 0;
     }
     if (this.heliAltitude <= HELI_AIRBORNE_Y) { // low: the body collides like the jeep's
-      const next = resolveBody(hp.x, hp.z, this.heliHeading, nx, nz, nh, HELI_BODY, this.solids(false), this.limits);
+      const next = resolveBody(hp.x, hp.z, this.heliHeading, nx, nz, nh, HELI_BODY, this.solids().concat(this.zones(false)), this.limits);
       nx = next.x; nz = next.z; nh = next.heading;
     } else {                                     // over the treetops: only the rim bounds it
       const r = Math.hypot(nx, nz), lim = this.limits.bound - 2;

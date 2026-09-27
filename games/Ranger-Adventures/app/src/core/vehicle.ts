@@ -270,7 +270,7 @@ export function bodyOverlap(x: number, z: number, heading: number, body: readonl
 }
 
 /** The furthest any body circle reaches from the vehicle's centre. */
-function bodyReach(body: readonly BodyCircle[]): number {
+export function bodyReach(body: readonly BodyCircle[]): number {
   let r = 0;
   for (const c of body) r = Math.max(r, Math.abs(c.along) + c.r);
   return r;
@@ -400,6 +400,59 @@ export const CONTACT_CREEP = 0.8;
  */
 export function contactSpeedCap(free: number, decel: number): number {
   return Math.max(CONTACT_CREEP, Math.sqrt(2 * decel * Math.max(0, free - 0.1)));
+}
+
+/* ---------------------------------------------------------- keep-out zones -- */
+
+/** From this far ahead of the nose (m) the jeep starts to bend round a keep-out zone
+ *  in its path, and from `KEEP_OUT_FULL` on the bend is a full turn of the wheel. With
+ *  the speed-scaled steer (a ~5 m turning circle) that clears a zone met head-on. */
+export const KEEP_OUT_LOOK = 9;
+export const KEEP_OUT_FULL = 4;
+
+/**
+ * A keep-out zone (the ground round a mission marker, a helipad) is not a wall: it is
+ * an empty patch of ground a child cannot see, so the jeep must never stop dead at its
+ * edge (verifier V2: steered at a ree behind the stuifzand marker it sat pressed
+ * against the invisible zone for 30 s). Instead the jeep bends round it, like a driver
+ * keeping off a lawn: when a zone lies in its path within `KEEP_OUT_LOOK` m, this
+ * returns the steer (right +, in [−1, 1]) that turns it away — to the side it already
+ * passes on, or, met dead centre, the way the player steers (right by default) —
+ * growing to a full turn by `KEEP_OUT_FULL` m. 0 when the path is clear. Forward
+ * driving only (the World brakes for a zone behind a reversing jeep). Pure.
+ */
+export function keepOutSteer(
+  x: number, z: number, heading: number,
+  zones: readonly Solid[], body: readonly BodyCircle[], bias = 0,
+): number {
+  let lead = body[0], half = 0;
+  for (const c of body) { if (c.along > lead.along) lead = c; half = Math.max(half, c.r); }
+  const fx = Math.sin(heading), fz = Math.cos(heading);
+  const lx = fz, lz = -fx;                              // left-of-forward
+  const nx = x + fx * lead.along, nz = z + fz * lead.along;
+  let best = 0;
+  for (const o of zones) {
+    const dx = o.x - nx, dz = o.z - nz;
+    const ahead = dx * fx + dz * fz;
+    const left = dx * lx + dz * lz;                     // + = its centre lies to the left
+    const R = o.r + half;
+    if (ahead <= 0 || Math.abs(left) >= R) continue;     // behind the nose, or the path clears it
+    const entry = ahead - Math.sqrt(R * R - left * left);
+    const u = Math.max(0, Math.min(1, (KEEP_OUT_LOOK - entry) / (KEEP_OUT_LOOK - KEEP_OUT_FULL)));
+    if (u <= Math.abs(best)) continue;
+    const side = Math.abs(left) > 0.05 ? (left > 0 ? 1 : -1) : (bias < 0 ? -1 : 1);
+    best = side * u;                                    // a zone on the left → steer right
+  }
+  return best;
+}
+
+/** The player's steer with the keep-out bend folded in: a steer the same way as the
+ *  bend adds to it; one into the zone gives way as the zone nears (at a full bend
+ *  the zone wins). No bend → the player's steer untouched. Pure. */
+export function guidedSteer(player: number, avoid: number): number {
+  if (avoid === 0) return clampUnit(player);
+  if (Math.sign(player) === Math.sign(avoid)) return Math.sign(avoid) * Math.max(Math.abs(player), Math.abs(avoid));
+  return clampUnit(avoid + player * (1 - Math.abs(avoid)));
 }
 
 /* ----------------------------------------------------------- ground contact -- */

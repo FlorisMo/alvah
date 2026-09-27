@@ -272,3 +272,57 @@ test('wheelContact: flat ground → level; a slope → the matching pitch and ro
   const side = wheelContact(0, 0, 0, (x) => x * 0.1); // left of forward at heading 0 is +x
   assert.ok(side.roll > 0 && near(Math.tan(side.roll), 0.1, 1e-9), 'left side up on a side slope');
 });
+
+import { keepOutSteer, guidedSteer, KEEP_OUT_LOOK } from './vehicle.ts';
+
+test('keepOutSteer: only a zone IN the path, ahead and within reach, bends the jeep', () => {
+  const zone = { x: 0, z: 12, r: 5.2 };
+  assert.equal(keepOutSteer(0, 0, Math.PI, [zone], JEEP_BODY), 0, 'driving away from it: no bend');
+  assert.equal(keepOutSteer(8, 0, 0, [zone], JEEP_BODY), 0, 'a path that clears it: no bend');
+  assert.equal(keepOutSteer(0, -20, 0, [zone], JEEP_BODY), 0, `further than ${KEEP_OUT_LOOK} m ahead: no bend yet`);
+  // left of forward at heading 0 is +x: a zone whose centre lies to the left → steer right (+)
+  const far = keepOutSteer(-2, 0, 0, [zone], JEEP_BODY), close = keepOutSteer(-2, 3, 0, [zone], JEEP_BODY);
+  assert.ok(far > 0 && close > far, `it bends right, more as it nears (${far.toFixed(2)} → ${close.toFixed(2)})`);
+  assert.ok(keepOutSteer(2, 3, 0, [zone], JEEP_BODY) < 0, 'a zone to the right → steer left');
+  assert.ok(near(keepOutSteer(0, 4, 0, [zone], JEEP_BODY), 1), 'about to touch: a full turn');
+  assert.ok(keepOutSteer(0, 4, 0, [zone], JEEP_BODY, -1) < 0, 'met dead centre it goes the way the player steers');
+});
+
+test('guidedSteer: the bend adds to a steer the same way and outweighs one into the zone', () => {
+  assert.equal(guidedSteer(0.4, 0), 0.4, 'no bend: the player steers');
+  assert.equal(guidedSteer(1, 0.5), 1, 'the same way: the stronger one');
+  assert.equal(guidedSteer(0, 0.5), 0.5);
+  assert.ok(near(guidedSteer(-1, 0.5), 0), 'into the zone at half bend: they cancel');
+  assert.equal(guidedSteer(-1, 1), 1, 'into the zone at a full bend: the zone wins');
+});
+
+/** One second-by-second drive like World.driveJeep: the ramp, the soft brake for SOLIDS
+ *  (not zones), the keep-out bend, the speed-scaled steer, the body resolve. */
+function driveAt(target: { x: number; z: number }, zones: { x: number; z: number; r: number }[], seconds: number) {
+  const dt = 1 / 60;
+  let x = 0, z = 0, h = 0, v = 0, contact = false, worst = 0, slowest = Infinity, far = 0;
+  for (let t = 0; t < seconds; t += dt) {
+    const e = Math.atan2(Math.sin(Math.atan2(target.x - x, target.z - z) - h), Math.cos(Math.atan2(target.x - x, target.z - z) - h));
+    const want = e > 0.12 ? -1 : e < -0.12 ? 1 : 0;        // a child steering at what he sees
+    let speed = rampSpeed(v, 1, dt, JEEP_CAPS);
+    const steer = comfortSteer(guidedSteer(want, keepOutSteer(x, z, h, zones, JEEP_BODY, want)), speed, JEEP_CAPS, contact ? 0.45 : 0);
+    const s = driveStep(h, { throttle: speed / JEEP_CAPS.maxSpeed, steer }, dt, JEEP_CAPS);
+    const n = resolveBody(x, z, h, x + s.dx, z + s.dz, s.heading, JEEP_BODY, zones, OPEN);
+    const moved = Math.hypot(n.x - x, n.z - z) / dt;
+    if (n.contact && moved < speed) speed = Math.min(speed, Math.max(moved, CONTACT_CREEP));
+    x = n.x; z = n.z; h = n.heading; v = speed; contact = n.contact;
+    worst = Math.max(worst, bodyOverlap(x, z, h, JEEP_BODY, zones));
+    if (t > 1.5) slowest = Math.min(slowest, moved);
+    far = Math.max(far, z);
+  }
+  return { x, z, worst, slowest, far };
+}
+
+test('keep-out zone: steered straight at a ree behind it, the jeep glides round — never stuck, never inside (verifier V2)', () => {
+  for (const off of [0, 0.3, 2, 5]) {
+    const r = driveAt({ x: off * 0.3, z: 60 }, [{ x: off, z: 22, r: 5.2 }], 12);
+    assert.ok(r.worst < 0.05, `offset ${off}: the body never sinks into the zone (${r.worst.toFixed(3)} m)`);
+    assert.ok(r.slowest > 3, `offset ${off}: it keeps rolling, never pressed to a crawl (slowest ${r.slowest.toFixed(2)} m/s)`);
+    assert.ok(r.far > 40, `offset ${off}: it got round to the far side (z ${r.far.toFixed(1)})`);
+  }
+});

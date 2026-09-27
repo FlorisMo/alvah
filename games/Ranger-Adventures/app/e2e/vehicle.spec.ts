@@ -321,8 +321,11 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
   await enterJeep(page);
 
   // a tree with a clear straight run to it from where the jeep stands: every other
-  // solid (tree, landmark, prop, marker, bench, board) stays clear of the jeep's path
-  const tree = (await hook(page, (r) => {
+  // solid (tree, landmark, prop, bench, board) and keep-out zone (marker, helipad: the
+  // jeep bends round those) stays clear of the jeep's path. `cone` = how far off the
+  // nose it may lie (rad), `min`/`max` = how far away (m).
+  const pickTree = (cone: number, min: number, max: number) => page.evaluate(([cone, min, max]) => {
+    const r = (window as unknown as { __ranger: Hook & { heli(): { pads: { x: number; z: number }[] } | null } }).__ranger;
     const v = r.vehicle()!;
     const trees = r.treeSpots() ?? [];
     type C = { x: number; z: number; r: number; t?: object };
@@ -330,7 +333,8 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
       ...trees.map((t) => ({ x: t.x, z: t.z, r: 0.6 * t.s, t })),
       ...(r.landmarks() ?? []).map((l) => ({ x: l.x, z: l.z, r: 2.6 })),
       ...(r.dressing() ?? []).map((d) => ({ x: d.x, z: d.z, r: 1 })),
-      ...(r.markers() ?? []).map((m) => ({ x: m.x, z: m.z, r: 5.2 })), // a marker is a keep-out zone for the jeep
+      ...(r.markers() ?? []).map((m) => ({ x: m.x, z: m.z, r: 5.2 })),       // keep-out zone round a marker
+      ...(r.heli()?.pads ?? []).map((p) => ({ x: p.x, z: p.z, r: 3.2 })),    // and round a helipad
       ...[r.sitSpot(), r.board()].filter((o): o is { x: number; z: number } => !!o).map((o) => ({ x: o.x, z: o.z, r: 0.7 })),
     ];
     const clear = (t: object & { x: number; z: number }): boolean => others.every((o) => {
@@ -339,21 +343,53 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
       const k = Math.max(0, Math.min(1, ((o.x - v.x) * dx + (o.z - v.z) * dz) / L2));
       return Math.hypot(o.x - (v.x + dx * k), o.z - (v.z + dz * k)) > o.r + 1.3; // body half-width + room
     });
+    const off = (t: { x: number; z: number }): number => {
+      const a = Math.atan2(t.x - v.x, t.z - v.z) - v.heading;
+      return Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
+    };
     return trees
-      .filter((t) => { const d = Math.hypot(t.x - v.x, t.z - v.z); return d > 10 && d < 40 && clear(t); })
+      .filter((t) => { const d = Math.hypot(t.x - v.x, t.z - v.z); return d > min && d < max && off(t) < cone && clear(t); })
       .sort((a, b) => Math.hypot(a.x - v.x, a.z - v.z) - Math.hypot(b.x - v.x, b.z - v.z))[0] ?? null;
-  }))!;
-  expect(tree, 'a tree with a clear run to it').not.toBeNull();
+  }, [cone, min, max] as const);
+  // turn to face it. A turn needs a little roll (the jeep never pivots): a big one loops
+  // round a ~5 m circle, so it loops on the side with open ground (like a driver would,
+  // not through the bench and the trees), then short taps line the nose up.
+  const openSide = () => page.evaluate(() => {
+    const r = (window as unknown as { __ranger: Hook }).__ranger;
+    const v = r.vehicle()!;
+    const lx = Math.cos(v.heading), lz = -Math.sin(v.heading); // left-of-forward
+    const things = [...(r.treeSpots() ?? []), ...(r.landmarks() ?? []), ...(r.dressing() ?? []),
+      ...[r.sitSpot(), r.board()].filter((o): o is { x: number; z: number } => !!o)];
+    const crowd = (s: number): number => things.filter((o) => Math.hypot(o.x - (v.x + lx * 5 * s), o.z - (v.z + lz * 5 * s)) < 8).length;
+    return crowd(1) <= crowd(-1) ? 'ArrowLeft' : 'ArrowRight';
+  });
+  const face = async (t: { x: number; z: number }): Promise<void> => {
+    const err = async (): Promise<number> => {
+      const v = (await hook(page, (r) => r.vehicle()))!;
+      const want = Math.atan2(t.x - v.x, t.z - v.z);
+      return Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
+    };
+    if (Math.abs(await err()) > 1.2) {
+      const key = await openSide();
+      await page.keyboard.down(key);
+      try {
+        for (let i = 0; i < 120 && Math.abs(await err()) > 0.5; i++) await page.waitForTimeout(80);
+      } finally { await page.keyboard.up(key); }
+    }
+    for (let i = 0; i < 80; i++) {
+      const e = await err();
+      if (Math.abs(e) < 0.05) break;
+      await hold(page, [e > 0 ? 'ArrowLeft' : 'ArrowRight'], Math.min(250, 60 + Math.abs(e) * 400));
+    }
+  };
+  const first = await pickTree(Math.PI, 10, 40);
+  expect(first, 'a tree with a clear run to it').not.toBeNull();
+  await face(first!);
+  // a turn rolls the jeep several metres (it never pivots), so pick again from where it
+  // ended up: the nearest tree ahead with a clear run, and face that one exactly
+  const tree = (await pickTree(0.6, 5, 40)) ?? first!;
+  await face(tree);
   const trunk = { x: tree.x, z: tree.z, r: 0.6 * tree.s };
-
-  // turn to face it (short taps; a turn needs a little roll, never a pivot)
-  for (let i = 0; i < 80; i++) {
-    const v = (await hook(page, (r) => r.vehicle()))!;
-    const want = Math.atan2(trunk.x - v.x, trunk.z - v.z);
-    const e = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
-    if (Math.abs(e) < 0.05) break;
-    await hold(page, [e > 0 ? 'ArrowLeft' : 'ArrowRight'], Math.min(250, 60 + Math.abs(e) * 400));
-  }
   await page.waitForTimeout(800);
 
   // full gas straight at it for 5 s: it brakes by itself and rests against the trunk
@@ -380,11 +416,17 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
   expect(bodyGap(atTree, trunk), 'it came to rest AT the trunk').toBeLessThan(0.5);
   expect(jolt, 'no crash: it slows down before it touches').toBe(0);
 
-  // it never gets stuck: gas + a turn key swings it free along the trunk
-  await hold(page, ['ArrowUp', 'ArrowLeft'], 3_000);
-  const free = (await hook(page, (r) => r.vehicle()))!;
-  expect(Math.hypot(free.x - atTree.x, free.z - atTree.z), 'gas + left drives on past the tree').toBeGreaterThan(2);
-  expect(bodyGap(free, trunk), 'still never inside the trunk').toBeGreaterThan(-0.05);
+  // it never gets stuck: gas + a turn key swings it free along the trunk. A child tries
+  // one way, then the other (a second trunk can close off one side of the nose).
+  let free = atTree;
+  for (const turn of ['ArrowLeft', 'ArrowRight']) {
+    const from = (await hook(page, (r) => r.vehicle()))!;
+    await hold(page, ['ArrowUp', turn], 3_000);
+    free = (await hook(page, (r) => r.vehicle()))!;
+    expect(bodyGap(free, trunk), 'still never inside the trunk').toBeGreaterThan(-0.05);
+    if (Math.hypot(free.x - from.x, free.z - from.z) > 2) break;
+  }
+  expect(Math.hypot(free.x - atTree.x, free.z - atTree.z), 'gas + a turn key drives on past the tree').toBeGreaterThan(2);
 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
