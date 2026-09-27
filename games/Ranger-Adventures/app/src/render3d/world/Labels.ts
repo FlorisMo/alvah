@@ -12,8 +12,11 @@ import * as THREE from 'three';
 // on top of everything is that a far tag would otherwise punch through hills from
 // across the map, so each fades OUT with distance — full opacity within FULL m
 // (the hub / an open mission, i.e. the moment the label matters), gone by GONE m.
-const LABEL_FADE_FULL = 55;  // camera→label distance (m) below which a tag is fully opaque
-const LABEL_FADE_GONE = 85;  // …and above which it has faded to nothing
+// Wave 2: nearer than before (55 → 85 m): now that a far tag stays readable (the size
+// floor below) a whole horizon of them read as a wall of words; the HUD chip names the
+// way to anything further.
+const LABEL_FADE_FULL = 35;  // camera→label distance (m) below which a tag is fully opaque
+const LABEL_FADE_GONE = 55;  // …and above which it has faded to nothing
 // Wave 2: a tag's size ON SCREEN is clamped (card height in CSS px): never a giant card
 // in front of the lens when the camera passes close to a marker, never an unreadable
 // speck far away. And a tag the lens is almost touching fades out (it is right there;
