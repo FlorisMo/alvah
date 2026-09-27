@@ -309,7 +309,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
         subject.userData.v = nv;
         subject.position.set(stage.fwd.x * nv, 0, stage.fwd.z * nv);
       }
-      for (const w of walks) {
+      for (const w of [...walks]) { // (a finished walk leaves the list)
         w.t = Math.min(1, w.t + dt / w.dur);
         const e = w.t * w.t * (3 - 2 * w.t);
         w.obj.position.lerpVectors(w.from, w.to, e);

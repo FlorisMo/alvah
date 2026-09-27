@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
-import { lieY, lieDown, isSpot, LEG_SHARE } from './pose.ts';
+import { lieY, lieDown, isSpot, backTop, LEG_SHARE } from './pose.ts';
 
 test('the soles stay on the ground; the legs fold; the back drops by the fold', () => {
   const legTop = 0.3, keep = 0.16;
@@ -39,4 +39,14 @@ test('the fawn has spots, but not everywhere', () => {
   let n = 0;
   for (let x = 0; x < 20; x++) for (let z = 0; z < 20; z++) if (isSpot(x, z)) n++;
   assert.ok(n > 60 && n < 180, `${n}/400 cells are spots`);
+});
+
+test('the back, not the raised head: where a player finds a lying fawn', () => {
+  // a body 1 m long, 0.3 m high, and a head block 0.6 m high at its front (+z) end
+  const root = new THREE.Group();
+  root.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 1, 2, 2, 6).translate(0, 0.15, 0)));
+  root.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.2).translate(0, 0.3, 0.45)));
+  const p = backTop(root);
+  assert.ok(p.y < 0.3 && p.y > 0.27, `on the back (${p.y}), never the head`);
+  assert.ok(Math.abs(p.z) < 0.2, 'in the middle of the body');
 });

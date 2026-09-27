@@ -60,9 +60,11 @@ function posedMeshes(root: THREE.Object3D): { mesh: THREE.Mesh; toRoot: THREE.Ma
 
 /**
  * Lay a spawned animal down (see the file note). `root` is the spawn's root (soles at
- * its y=0); `legShare` the belly line as a share of its height. A skinned model is
- * baked into a still mesh in its current pose (spawn it with `idle: false`). Returns
- * a disposer for the geometry it created.
+ * its y=0); `legShare` the belly line as a share of its height. A skinned model keeps
+ * being a SkinnedMesh — so it draws with the very shader program the world's deer
+ * already use (a plain Mesh would compile a new program: a 3 s freeze on a busy
+ * laptop) — but every vertex is bound to one still bone, placed so the skin shows the
+ * lying shape (spawn it with `idle: false`). Returns a disposer for the geometry it made.
  */
 export function lieDown(root: THREE.Object3D, legShare: number, keep = KEEP): () => void {
   const meshes = posedMeshes(root);
@@ -74,38 +76,79 @@ export function lieDown(root: THREE.Object3D, legShare: number, keep = KEEP): ()
   for (const { mesh, toRoot, pts } of meshes) {
     const fromRoot = toRoot.clone().invert();
     const geo = mesh.geometry.clone();
-    geo.deleteAttribute('skinIndex');
-    geo.deleteAttribute('skinWeight');
     const pos = geo.attributes.position as THREE.BufferAttribute;
-    const v = new THREE.Vector3();
+    const nrm = geo.attributes.normal as THREE.BufferAttribute | undefined;
+    const sk = (mesh as THREE.SkinnedMesh).isSkinnedMesh ? (mesh as THREE.SkinnedMesh) : null;
+    // skinned: geometry g such that the skin (all weight on bone 0) renders the new shape
+    let unskin: THREE.Matrix4 | null = null;
+    if (sk) {
+      sk.updateMatrixWorld(true);
+      sk.skeleton.update();
+      const bone0 = new THREE.Matrix4().multiplyMatrices(sk.skeleton.bones[0].matrixWorld, sk.skeleton.boneInverses[0]);
+      unskin = sk.bindMatrixInverse.clone().multiply(bone0).multiply(sk.bindMatrix).invert();
+    }
+    const nMat = unskin ? new THREE.Matrix3().setFromMatrix4(unskin) : null;
+    const v = new THREE.Vector3(), n = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3();
     for (let i = 0; i < pts.length; i++) {
       v.copy(pts[i]);
       v.y = minY + lieY(v.y - minY, legTop, keep);
-      v.applyMatrix4(fromRoot);
+      v.applyMatrix4(fromRoot); // mesh-local, as rendered
+      if (sk && unskin && nMat && nrm) {
+        // the normal as the old pose rendered it (skinning a nudge along it), then un-skinned
+        a.fromBufferAttribute(sk.geometry.attributes.position as THREE.BufferAttribute, i);
+        n.fromBufferAttribute(nrm, i);
+        b.copy(a).addScaledVector(n, 0.01);
+        sk.applyBoneTransform(i, a);
+        sk.applyBoneTransform(i, b);
+        n.subVectors(b, a).applyMatrix3(nMat).normalize();
+        nrm.setXYZ(i, n.x, n.y, n.z);
+      }
+      if (unskin) v.applyMatrix4(unskin);
       pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    if (sk) {
+      const count = pos.count;
+      const idx = new Uint16Array(count * 4);
+      const w = new Float32Array(count * 4);
+      for (let i = 0; i < count; i++) w[i * 4] = 1;
+      geo.setAttribute('skinIndex', new THREE.BufferAttribute(idx, 4));
+      geo.setAttribute('skinWeight', new THREE.BufferAttribute(w, 4));
+      if (nrm) nrm.needsUpdate = true;
     }
     pos.needsUpdate = true;
     geo.computeBoundingBox();
     geo.computeBoundingSphere();
     made.push(geo);
-    if ((mesh as THREE.SkinnedMesh).isSkinnedMesh) {
-      // a skinned mesh would re-apply its bones to the baked shape: swap in a still mesh
-      const still = new THREE.Mesh(geo, mesh.material);
-      still.name = mesh.name;
-      still.position.copy(mesh.position);
-      still.quaternion.copy(mesh.quaternion);
-      still.scale.copy(mesh.scale);
-      still.castShadow = mesh.castShadow;
-      still.receiveShadow = mesh.receiveShadow;
-      still.renderOrder = mesh.renderOrder;
-      mesh.parent?.add(still);
-      mesh.removeFromParent();
-    } else {
-      mesh.geometry = geo;
-    }
+    mesh.geometry = geo;
+    if (sk) { sk.computeBoundingBox(); sk.computeBoundingSphere(); }
   }
   root.userData.lying = true;
   return () => { for (const g of made) g.dispose(); };
+}
+
+/**
+ * The top of an animal's back in `root` space: the highest point of its middle (the
+ * central third along its length and width), so never the raised head of a lying fawn
+ * nor the air above a flat bird. It sits ON the body, just under the surface: where a
+ * player looks for an animal in the grass, and where a click surely lands on it.
+ */
+export function backTop(root: THREE.Object3D): THREE.Vector3 {
+  const meshes = posedMeshes(root);
+  const box = new THREE.Box3();
+  for (const m of meshes) for (const p of m.pts) box.expandByPoint(p);
+  if (box.isEmpty()) return new THREE.Vector3();
+  const c = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  let best: THREE.Vector3 | null = null;
+  for (const m of meshes) {
+    for (const p of m.pts) {
+      if (Math.abs(p.x - c.x) > size.x / 6 || Math.abs(p.z - c.z) > size.z / 6) continue;
+      if (!best || p.y > best.y) best = p;
+    }
+  }
+  const top = (best ?? c).clone();
+  top.y -= Math.min(0.02, size.y * 0.08); // just under the surface
+  return top;
 }
 
 /** Pure: is this spot (cell coordinates) one of the fawn's spots? A calm, even scatter. */

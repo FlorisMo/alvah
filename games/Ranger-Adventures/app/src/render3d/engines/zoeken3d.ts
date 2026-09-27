@@ -36,7 +36,7 @@ import {
 import { highlightPulse, patchLocal } from '../play/kit-math';
 import { Stage } from '../play/stage';
 import { heightFor } from '../play/spawn';
-import { lieDown, fawnSpots, lyingHeight, LEG_SHARE } from '../play/pose';
+import { lieDown, fawnSpots, lyingHeight, backTop, LEG_SHARE } from '../play/pose';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -117,16 +117,16 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     const removeKijker = makeKijker(ctx.canvas, trial.lensSterkte, stage.signal);
 
     // ---- accessible prompt (all words + read-aloud here) ----
+    const spoorTxt = 'Volg het spoor naar de schuilplek.';
     const promptEl = anchoredPrompt(
       ctx.prompt,
       `<div class="p3-top"><div class="p3-card"><div class="p3-row">` +
         `<div class="p3-lines"><p class="p3-text">${esc(instructie)}</p>` +
-        `<p class="p3-sub">${esc('Volg het spoor naar de schuilplek.')}</p></div>` +
+        `<p class="p3-sub">${esc(spoorTxt)}</p></div>` +
         `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
         `</div></div></div>`,
       stage.signal,
     );
-    const spoorTxt = 'Volg het spoor naar de schuilplek.';
     promptEl.querySelector('.p3-speak')?.addEventListener('click', () => { narrator.speak(instructie); narrator.queue(spoorTxt); });
     if (settings.voorlezen) { narrator.speak(instructie); narrator.queue(spoorTxt); }
 
@@ -184,7 +184,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         // it (the hint golden clicks; the whole animal answers a click, grass or not)
         anchor = new THREE.Object3D();
         anchor.userData.hintAnchor = true;
-        anchor.position.set(0, tgtH * 0.82, 0);
+        anchor.position.copy(g ? backTop(g) : new THREE.Vector3(0, tgtH * 0.8, 0));
         target.add(anchor);
       }));
       // the decoys the 2D field shows, each its real-world self
