@@ -168,6 +168,10 @@ export const CLUE_GLYPH: Record<string, string> = { spoor: '🐾', camera: '📷
  *  to the hopeful resolution. Its back returns to patrol. */
 export function showCaseBoard(back: () => void = resumePatrol): void {
   narrator.stop();
+  // a hub card over the world, also when it follows a finished mission's clue: the dev
+  // hook no longer says 'mission' / '3d' there (breaker note)
+  setScreen('world');
+  setMissionView(null);
   const area = Content.activeArea();
   const voltooid = store.get().voltooid;
   const clues = Content.clues(area.id);
