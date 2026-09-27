@@ -387,7 +387,7 @@ export class CameraRig {
       // crown sphere (a point-in-volume test — no frontface blind spot); (2) canopyBlocksSightline
       // — a crown genuinely between lens and ranger (the `10-walk-5` sapling), tested to his HEAD
       // (where low foliage swallows him first) AND his chest so a bush over his face never reads
-      // clear just because his boots show. setCanopyOpacity dims EVERY tree mesh at once, so this
+      // clear just because his boots show. The per-tree fade below then
       // fades every crown on the sightline, not only the first hit. Attack fast (a cut to the fade
       // target the frame it is blocked, so `viewClear` flips true at once and the ranger reads
       // through it — buried ⇒ near-invisible CANOPY_FADE_BURIED so stacked overlapping crowns
@@ -409,11 +409,10 @@ export class CameraRig {
           this.camera.position.x, this.camera.position.y, this.camera.position.z,
           rp.x, rp.y + this.camLookH, rp.z,
         );
-      let co: number;
-      if (blocked) co = insideCrown ? this.CANOPY_FADE_BURIED : this.CANOPY_FADE_MIN; // attack: instant dim (buried ⇒ deeper, never a hidden frame)
-      else if (reduced || snap) co = 1;                             // RM / cut: snap back solid
-      else co = this.dressing.canopyOpacity + (1 - this.dressing.canopyOpacity) * dampFactor(dt, this.CANOPY_RELEASE_TAU); // release: gentle ease up
-      this.dressing.setCanopyOpacity(co);
+      // per tree (2026-09-27): only the crowns in the way fade (at once; buried ⇒ deeper); the others
+      // ease back solid (a cut under RM / on a snap). The rest of the forest never fades.
+      const release = reduced || snap ? 1 : dampFactor(dt, this.CANOPY_RELEASE_TAU);
+      this.dressing.fadeOccluders(blocked, this.camera.position, rp, [this.player.avatarTopY, this.camLookH], release, this.CANOPY_FADE_MIN, this.CANOPY_FADE_BURIED);
       // viewClear is FALSE while a sightline occluder still sits above SEE_THROUGH opacity (a
       // canopy crown that hasn't faded through) OR a terrain crest still blocks the cam→head line
       // (the boom-lift capped out, `terrainClearState` above) — both tested against the SAME

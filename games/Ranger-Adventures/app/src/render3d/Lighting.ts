@@ -25,21 +25,24 @@ import { SKY_STOPS } from './Atmosphere';
 /** The single golden-hour rig every 3D scene reads from (RUN-C-DIRECTION §2.1). */
 export const GOLDEN_HOUR = {
   /** Warm directional KEY — a low golden sun in the #FFCF8F→#FFB870 band (§2.1). */
-  keyColor: 0xffc588,
-  keyIntensity: 1.7,
+  keyColor: 0xffc080,
+  keyIntensity: 2.1,
   /** Low, raking key direction (screen-left, camera looks down −z). Matches the
    *  World's shadow-follow offset so the hero shadow rakes the same way the light
    *  reads on every other screen. */
   keyDir: new THREE.Vector3(-9, 7, 4),
   /** HemisphereLight FILL — COOL sky bounce over WARM ground bounce (§2.1): warm
-   *  highlights, cool shadows, the shared shading signature of the whole cast. */
-  skyColor: 0xa8c4e8,
-  groundColor: 0x7a6347,
-  fillIntensity: 1.0,
-  /** Warm horizon fog colour — the last SKY_STOPS band, so fog dissolves into the
-   *  sky instead of greying it. Ranges stay per-scene (each clearing is a
-   *  different size); the COLOUR is shared so the palette can never diverge. */
-  fogColor: '#e9b27f',
+   *  highlights, cool shadows, the shared shading signature of the whole cast. A
+   *  little lower than the key so the low sun models every form (2026-09-27). */
+  skyColor: 0xb4c6e0,
+  groundColor: 0x8a6b4a,
+  fillIntensity: 0.85,
+  /** The horizon haze: the fog colour AND the last SKY_STOPS band, so fog dissolves
+   *  into the sky at the horizon instead of drawing a band under it. Ranges stay
+   *  per-scene (each clearing is a different size); the COLOUR is shared. */
+  fogColor: '#f3cc9c',
+  /** Renderer exposure for the ACES curve (Stage owns the one renderer). */
+  exposure: 1.08,
 } as const;
 
 /** Add the shared cool-sky / warm-ground hemisphere fill to a scene. */
@@ -76,4 +79,59 @@ export function bakeGoldenHourSky(): THREE.Texture {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
+}
+
+/**
+ * The golden-hour sky as a dome drawn behind everything: SKY_STOPS laid on the view
+ * direction's elevation (zenith → horizon, and the haze below it), with a soft warm
+ * glow toward the sun. The same dome stands behind the title and the world, so the
+ * sky, the fog at the horizon and the light are one. It never moves with anything
+ * (it is drawn at infinity) and costs one draw call.
+ */
+export function makeSkyDome(): THREE.Mesh {
+  const geo = new THREE.SphereGeometry(1, 32, 16);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uRamp: { value: bakeGoldenHourSky() },
+      uSunDir: { value: GOLDEN_HOUR.keyDir.clone().normalize() },
+      uSun: { value: new THREE.Color(GOLDEN_HOUR.keyColor) },
+    },
+    vertexShader: `
+      varying vec3 vDir;
+      void main() {
+        vDir = position;
+        vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0);
+        gl_Position = p.xyww; // on the far plane: behind everything, never clipped
+      }`,
+    fragmentShader: `
+      uniform sampler2D uRamp;
+      uniform vec3 uSunDir;
+      uniform vec3 uSun;
+      varying vec3 vDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        float up = clamp(d.y, 0.0, 1.0);
+        // the warm bands hug the horizon; the blue only opens up well above it
+        // (the haze holds for the first few degrees, where distant hills stand in it)
+        float t = 1.0 - pow(clamp((up - 0.03) / 0.97, 0.0, 1.0), 0.6);
+        vec3 col = texture2D(uRamp, vec2(0.5, 1.0 - t)).rgb;
+        float glow = pow(max(dot(d, uSunDir), 0.0), 5.0);
+        col += uSun * glow * 0.22 * (1.0 - up * 0.6);
+        gl_FragColor = vec4(col, 1.0);
+        // the horizon band goes through the same tone curve as the fogged world it meets
+        // (so hills dissolve into it); higher up the sky keeps its own soft colours
+        #include <tonemapping_fragment>
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, col, smoothstep(0.03, 0.3, up));
+        #include <colorspace_fragment>
+      }`,
+    depthWrite: false,
+    side: THREE.BackSide,
+    fog: false,
+  });
+  const dome = new THREE.Mesh(geo, mat);
+  dome.name = 'sky';
+  dome.frustumCulled = false;
+  dome.renderOrder = -1000; // first: everything else draws over it
+  dome.raycast = () => {};  // the sky is never clicked
+  return dome;
 }

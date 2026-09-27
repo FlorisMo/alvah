@@ -22,12 +22,35 @@ export interface TierParams {
   readonly pixelRatioCap: number;
   /** Multiplier on the vegetation-scatter budgets (geometry/vertex load). */
   readonly vegetationScale: number;
+  /** Which detail distances the forest uses (world/Forest.ts LOD_RANGES): `laag`
+   *  swaps each tree to its lighter copy sooner. */
+  readonly treeDetail: QualityTier;
 }
 
 export const QUALITY_TIERS: Record<QualityTier, TierParams> = {
-  hoog: { pixelRatioCap: 2, vegetationScale: 1 },
-  laag: { pixelRatioCap: 1.25, vegetationScale: 0.55 },
+  hoog: { pixelRatioCap: 2, vegetationScale: 1, treeDetail: 'hoog' },
+  laag: { pixelRatioCap: 1.25, vegetationScale: 0.55, treeDetail: 'laag' },
 };
+
+/**
+ * The tier a session starts on. A touch-first device (coarse pointer: the iPad) always
+ * boots `laag` and earns `hoog` by measurement during the session (the fps probe steps
+ * up above STEP_UP_FPS), so a first boot on an older iPad never starts on the heavy
+ * tier. A laptop (fine pointer) starts on its last measured verdict (`hoog` when new).
+ */
+export function bootTier(saved: QualityTier | undefined, coarsePointer: boolean): QualityTier {
+  if (coarsePointer) return 'laag';
+  return saved === 'laag' ? 'laag' : 'hoog';
+}
+
+/** Whether this device's main pointer is coarse (a finger). False outside a browser. */
+export function coarsePointer(): boolean {
+  try {
+    return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  } catch {
+    return false;
+  }
+}
 
 /** How long each fps window measures before it emits an average and decides. */
 export const PROBE_WINDOW_SEC = 5;

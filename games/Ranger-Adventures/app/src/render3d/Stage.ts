@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { livePolicy } from './MotionMode';
-import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky } from './Lighting';
+import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, makeSkyDome } from './Lighting';
+import { BIOME_GROUND_TONES, GROUND_BRIGHTEN, heathCover, vertexTint } from './GroundDetail';
+import { groundMaterial, mottleTexture } from './GroundMaterial';
+import { heatherGeometry, plantMaterial, tuftGeometry } from './world/Plants';
 import { RANGER_STAND_HEIGHT } from './AnimalScale';
 import { provideRenderView, provideTris } from '../core/devhook';
 
@@ -12,11 +15,9 @@ type TitleTree = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
 /** Called once per rendered frame, AFTER the render (so renderer.info is fresh). */
 export type FrameCallback = (dtSeconds: number, elapsedSeconds: number) => void;
 
-const HEATH = new THREE.Color('#8a9a55');
 const FOG = new THREE.Color(GOLDEN_HOUR.fogColor); // shared golden-hour horizon (P1.1)
 // Echoes of the Veluwe biome palette (Biomes.ts) so the title reads like the
-// world beyond the Begin button: heather bloom, pine + birch greens, sand path.
-const HEATHER = new THREE.Color('#9a6aa8');
+// world beyond the Begin button: pine + birch greens, sand path.
 const PINE_GREEN = new THREE.Color('#2f6b46');
 const BIRCH_GREEN = new THREE.Color('#88a24d');
 const SAND = new THREE.Color('#d0bd90');
@@ -79,13 +80,14 @@ export class Stage {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // cap for iPad fill-rate
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = GOLDEN_HOUR.exposure; // the one golden-hour exposure (title, world, games)
     // dev hook: the golden-path probes measure exactly what this Stage renders
     provideRenderView(() => this.view);
     provideTris(() => this.renderer.info.render.triangles);
 
     this.scene = new THREE.Scene();
-    this.scene.background = this.makeSkyTexture();
+    this.scene.background = FOG.clone();
+    this.scene.add(makeSkyDome()); // the same golden-hour sky the world stands under
     this.scene.fog = new THREE.Fog(FOG, 16, 64);
 
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200); // fixed FOV — no dynamic FOV
@@ -101,12 +103,6 @@ export class Stage {
     window.addEventListener('resize', this.resize);
   }
 
-  /** Vertical golden-hour gradient as the sky background — the SHARED world ramp
-   *  (P1.1), so the title sky is literally the same gradient as world-entry. */
-  private makeSkyTexture(): THREE.Texture {
-    return bakeGoldenHourSky();
-  }
-
   /** The shared golden-hour rig (P1.1): warm low key + cool-sky / warm-ground
    *  hemisphere fill, identical to the World and Sandbox scenes. */
   private addLights(): void {
@@ -116,12 +112,30 @@ export class Stage {
     this.scene.add(sun);
   }
 
+  /**
+   * The heath the title stands on: the SAME ground as the world's heide (GroundMaterial:
+   * sand with dry grass broken by mats of muted mauve heather, the fine detail close to
+   * the lens), opening to bare sand along the track. One draw call.
+   */
   private addGround(): void {
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(200, 200),
-      new THREE.MeshStandardMaterial({ color: HEATH, roughness: 1, metalness: 0 }),
-    );
-    ground.rotation.x = -Math.PI / 2;
+    const geo = new THREE.PlaneGeometry(160, 160, 64, 64);
+    geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const col = new Float32Array(pos.count * 3);
+    const mix = new Float32Array(pos.count * 4);
+    const sand = new THREE.Color(BIOME_GROUND_TONES.heide[0]);
+    const heath = new THREE.Color(BIOME_GROUND_TONES.heide[1]);
+    const c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      const cover = titleCover(x, z);
+      c.copy(sand).lerp(heath, cover).multiplyScalar(GROUND_BRIGHTEN * vertexTint(x, z));
+      col.set([c.r, c.g, c.b], i * 3);
+      mix.set([cover, 0, (1 - cover) * 0.8, (1 - cover) * 0.6], i * 4);
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('groundMix', new THREE.BufferAttribute(mix, 4));
+    const ground = new THREE.Mesh(geo, groundMaterial(true, mottleTexture()));
     this.scene.add(ground);
   }
 
@@ -214,23 +228,43 @@ export class Stage {
     parent.add(trunks, crowns);
   }
 
-  /** A low heather carpet — the Veluwe's signature purple bloom (F-04). */
+  /**
+   * The heath's plants — the SAME struikhei and straw grass the world's heide grows
+   * (world/Plants.ts), heather on the heather mats, grass on the sandier ground, none on
+   * the track or under the cabin, the board or the ranger. Three instanced draw calls.
+   */
   private addHeather(): void {
-    const spots: ReadonlyArray<readonly [number, number]> = [
-      [-1.5, 2], [1.6, 2.5], [-3, 0.5], [3.2, 0.8], [-2, -1.5], [2.4, -1],
-      [-4, -2.5], [4.2, -2], [-1, -4], [1.4, -4.5], [-5.5, -6], [5.2, -7],
-      [-3.5, -8], [3.8, -9.5], [-2.5, -11], [2, -12.5],
+    const keepOut: ReadonlyArray<readonly [number, number, number]> = [
+      [-6.0, -4.8, 2.8], [2.6, -5.2, 1.3], [-2.3, 2.8, 0.9], // cabin, prikbord, the ranger
     ];
-    const mat = new THREE.MeshStandardMaterial({ color: HEATHER, roughness: 1, flatShading: true });
-    const tufts = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.3, 0), mat, spots.length);
-    const m = new THREE.Matrix4();
-    spots.forEach(([x, z], k) => {
-      const s = 0.5 + ((k * 7) % 5) * 0.09; // deterministic size jitter (no Math.random)
-      m.makeScale(s, s * 0.6, s); m.setPosition(x, 0.12, z);
-      tufts.setMatrixAt(k, m);
-    });
-    tufts.instanceMatrix.needsUpdate = true;
-    this.scene.add(tufts);
+    const heather: THREE.Matrix4[] = [], farHeather: THREE.Matrix4[] = [], grass: THREE.Matrix4[] = [];
+    const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+    for (let gx = -16; gx <= 16; gx++) for (let gz = -30; gz <= 4; gz++) {
+      const h = titleHash(gx, gz);
+      const x = gx * 0.95 + (h - 0.5) * 0.8, z = gz * 0.95 + (titleHash(gz, gx) - 0.5) * 0.8;
+      if (Math.abs(x + 0.4 - (z + 7) * 0.06) < 2.4 && z < 6) continue;   // the sand track
+      if (keepOut.some(([kx, kz, r]) => Math.hypot(x - kx, z - kz) < r)) continue;
+      const cover = titleCover(x, z);
+      const m = new THREE.Matrix4();
+      if (cover > 0.45 + h * 0.35) {
+        const s = 0.7 + h * 0.6;
+        const far = Math.hypot(x - this.camBase.x, z - this.camBase.z) > 15; // past 15 m a lighter bush
+        (far ? farHeather : heather).push(m.compose(new THREE.Vector3(x, 0, z), q.setFromAxisAngle(up, h * 40), new THREE.Vector3(s, s * (0.8 + h * 0.4), s)));
+      } else if (h < 0.3) {
+        const s = 0.35 + h * 0.8;
+        grass.push(m.compose(new THREE.Vector3(x, 0, z), q.setFromAxisAngle(up, h * 31), new THREE.Vector3(s, s, s)));
+      }
+    }
+    const put = (geo: THREE.BufferGeometry, list: THREE.Matrix4[]): void => {
+      const inst = new THREE.InstancedMesh(geo, plantMaterial(), Math.max(1, list.length));
+      list.forEach((m, k) => inst.setMatrixAt(k, m));
+      inst.count = list.length;
+      inst.instanceMatrix.needsUpdate = true;
+      this.scene.add(inst);
+    };
+    put(heatherGeometry(5), heather);
+    put(heatherGeometry(5, 60), farHeather);
+    put(tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), grass);
   }
 
   /** One recognizable landmark: the mission board, echoing World.proceduralBoard. */
@@ -564,4 +598,20 @@ export class Stage {
       this.world.camera.updateProjectionMatrix();
     }
   };
+}
+
+/** How much heather covers the title's heath at (x,z): the world's heath field, opened
+ *  up to sand and grass along the track and in the ranger's foreground. */
+function titleCover(x: number, z: number): number {
+  const track = THREE.MathUtils.smoothstep(Math.abs(x + 0.4 - (z + 7) * 0.06), 1.6, 5.5);
+  const fore = THREE.MathUtils.smoothstep(Math.hypot(x + 2.3, z - 2.8), 1.5, 4.5);
+  return heathCover(x * 1.3 + 17, z * 1.3 - 6) * track * (0.35 + 0.65 * fore);
+}
+
+/** A stable hash of an integer pair → [0,1) (the title heath's jitter). */
+function titleHash(a: number, b: number): number {
+  let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + 1013904223) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
 }

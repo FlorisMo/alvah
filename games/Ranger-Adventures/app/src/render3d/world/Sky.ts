@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import { SKY_STOPS, cloudOffset, windSway, flyoverAt, type Flyover } from '../Atmosphere';
-import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky } from '../Lighting';
+import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, makeSkyDome } from '../Lighting';
 
 const SKY_LOW = GOLDEN_HOUR.fogColor; // shared golden-hour horizon + fog colour (P1.1)
 
@@ -33,9 +33,12 @@ export class Sky {
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
-    // P1.1: the SHARED golden-hour ramp (Atmosphere.SKY_STOPS via Lighting), the
-    // same soft warm zenith→horizon bands the title + sandbox bake — one sky.
-    scene.background = bakeGoldenHourSky();
+    // P1.1: the SHARED golden-hour sky (Lighting.makeSkyDome over Atmosphere.SKY_STOPS),
+    // the same dome the title stands under — one sky. It is laid on the view's elevation,
+    // so its horizon band IS the fog colour at the horizon: distant hills and the rim
+    // dissolve into the sky there instead of showing a pale band under it.
+    scene.background = new THREE.Color(SKY_LOW);
+    scene.add(makeSkyDome());
     scene.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 22, 90);
 
     // P1.1: the ONE shared golden-hour rig (Lighting.GOLDEN_HOUR, §2.1) — the same

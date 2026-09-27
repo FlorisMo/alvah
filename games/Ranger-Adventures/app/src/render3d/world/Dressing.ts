@@ -10,68 +10,39 @@
  */
 
 import * as THREE from 'three';
-import { loadManifest, loadModel, prepModel } from '../Models';
-import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, WATER_LEVEL, type Biome } from '../Biomes';
+import { loadModel, prepModel } from '../Models';
+import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, VEN_SHORE_R, WATER_LEVEL, type Biome } from '../Biomes';
 import { windSway } from '../Atmosphere';
-import { PATH_NODES, PATH_SEGMENTS, LANE_HALF } from '../Paths';
-import { WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp } from '../Water';
+import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork } from '../Paths';
+import { WATER_DEEP, WATER_SHALLOW, WATER_TREES, WATER_OPACITY, FRESNEL_POWER, WATER_F0, rippleAmp } from '../Water';
 import type { Obstacle, MoveLimits } from '../CharacterController';
+import type { TierParams } from '../../core/quality';
 import type { Terrain } from './Terrain';
 import type { Labels } from './Labels';
 import { enableCast, proceduralTotem } from './props';
+import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
+import { PlantField, heatherGeometry, plantMaterial, tuftGeometry, type PlantSpot } from './Plants';
+import { lodGeometries, lodMaterial } from '../Lod';
+import { heathCover } from '../GroundDetail';
 
-// P1.3: the tree canopy is authored at ONE fidelity. Both the scattered bos trees and
-// the F-11 rim tree-line render an instant low-poly cone/cylinder stand-in, then the
-// real staged tree GLBs (Scots pine · oak · birch) stream in as InstancedMesh and
-// REPLACE them — so no low-poly tree ever stands beside a realistic prop or animal
-// (RUN-C-DIRECTION §2.3: "no low-poly outlier may stand next to a realistic asset").
-// InstancedMesh keeps the whole forest at a handful of draw calls regardless of tree
-// count (§A8). The species mix is grove den dominant with eik/berk woven in (§2.2). The
-// trees are static (no wind), so the reduced-motion freeze is a no-op on them.
-export type TreeSpecies = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
-export interface TreePlacement { x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies }
-// prepModel target height (m) per species — mixed sizes; a per-instance scale rides on top.
-export const TREE_BASE_H: Record<TreeSpecies, number> = {
-  'prop-pine-scots': 6.6, 'prop-oak-tree': 5.4, 'prop-birch-tree': 6.0,
-};
+export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
+
+// P1.3: the tree canopy is authored at ONE fidelity: the scattered bos trees, the grove
+// trees at the landmarks and the F-11 rim tree-line are all the real staged tree GLBs
+// (Scots pine · oak · birch), instanced by world/Forest.ts at a detail that fits the
+// distance. An instant low-poly cone/cylinder stand-in shows only until they are ready.
+// The species mix is grove den dominant with eik/berk woven in (§2.2). The trees are
+// static (no wind), so the reduced-motion freeze is a no-op on them.
 // deterministic species pattern woven along the scatter/rim index — pine dominant.
 const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree'];
-const TREE_RIM_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-pine-scots', 'prop-birch-tree'];
+const NATURE_TREES = new Set<string>(['prop-pine-scots', 'prop-oak-tree', 'prop-birch-tree']);
 
-/**
- * Build one InstancedMesh per sub-mesh of a normalized (feet at y=0, x/z-centred)
- * model, one instance per placement. Each sub-mesh's model-local matrix is baked into
- * every instance so a clone renders identically to loadModel+prepModel — just shared
- * across N spots at 1 draw call each. Shadows off + an instance-aware bounding sphere
- * so the follow frustum culls the ring correctly (the trees never pop at the rim).
- */
-function instancesFromPrepped(prepped: THREE.Object3D, placements: TreePlacement[]): THREE.InstancedMesh[] {
-  prepped.updateMatrixWorld(true); // wrapper sits at identity → mesh.matrixWorld IS model-local
-  const out: THREE.InstancedMesh[] = [];
-  const world = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const pos = new THREE.Vector3();
-  const scl = new THREE.Vector3();
-  const yAxis = new THREE.Vector3(0, 1, 0);
-  prepped.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const local = mesh.matrixWorld.clone(); // this sub-mesh's transform in model-local space
-    const inst = new THREE.InstancedMesh(mesh.geometry, mesh.material, placements.length);
-    inst.castShadow = false;
-    inst.receiveShadow = false;
-    placements.forEach((p, k) => {
-      q.setFromAxisAngle(yAxis, p.rotY);
-      pos.set(p.x, p.y, p.z);
-      scl.set(p.s, p.s, p.s);
-      world.compose(pos, q, scl).multiply(local);
-      inst.setMatrixAt(k, world);
-    });
-    inst.instanceMatrix.needsUpdate = true;
-    inst.computeBoundingSphere(); // cover all instances so the rim ring isn't wrongly culled
-    out.push(inst);
-  });
-  return out;
+/** A stable hash of an integer pair + seed → [0,1) (the plant grid's jitter). */
+function hash2(x: number, z: number, seed: number): number {
+  let h = (Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(seed | 0, 2246822519)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
 }
 
 export class Dressing {
@@ -82,6 +53,8 @@ export class Dressing {
   private static readonly _e = new THREE.Euler();
   private static readonly _p = new THREE.Vector3();
   private static readonly _s = new THREE.Vector3();
+  private static readonly _r = new THREE.Quaternion();
+  private static readonly _up = new THREE.Vector3(0, 1, 0);
   // W4.8 ven-water: the fresnel disc's shader material — the World drives its
   // `uTime` (from `skyTime`, so it freezes with the rest of the ambient motion)
   // and `uAmp` (0 under reduced-motion → waveless) each frame.
@@ -91,22 +64,24 @@ export class Dressing {
   // per-blade base transform, re-tilted each frame by windSway.
   readonly windMeshes: {
     mesh: THREE.InstancedMesh;
-    items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[];
+    items: { x: number; y: number; z: number; sx: number; sy: number; phase: number; rotY?: number }[];
     strength: number;
   }[] = [];
   // The furthest-out radius any LOW ground-tuft (heather/marram) landed at — reported on
   // the dev hook's boundary read-back.
   scatterMax = 0;
-  // P1.3 tree canopy (see the module note above `instancesFromPrepped`): the instant
-  // cone/cylinder stand-ins to swap out, and the per-instance placements (scattered bos
-  // trees + the rim tree-line) to instance the real tree GLBs onto once they load.
+  // P1.3 tree canopy: the instant cone/cylinder stand-ins (dropped once the Forest is
+  // ready) and every tree placement: the bos scatter, the rim tree-line and the grove
+  // trees of the nature dressing. The camera rig tests its crowns against these.
   private readonly treeFallbacks: THREE.Object3D[] = [];
-  // D1.5 occluder fade: the tree meshes the free-walk occluder fade currently dims — the
-  // cone fallback while the GLBs stream, then the instanced GLB canopy after the swap.
-  readonly treeFadeMeshes: THREE.Object3D[] = [];
   readonly treePlacements: TreePlacement[] = [];
-  // D1.5 current applied tree-canopy occluder fade (1 = solid); the camera rig decides it.
-  canopyOpacity = 1;
+  // the instanced real trees at distance-fitting detail + the per-tree occluder fade
+  private forest: Forest | null = null;
+  // the low ground plants, one field per kind (world/Plants.ts)
+  private readonly plantFields: PlantField[] = [];
+  // small nature-dressing props, hidden once they are deep in the fog
+  private readonly farProps: { group: THREE.Object3D; x: number; z: number; far: number }[] = [];
+  private quality: TierParams | null = null;
   // F-09: the cabin's world position, kept so camState's landmark-in-frustum test
   // can prove a hub landmark is in the world-entry frame (the board + cabin are the
   // only hub markers inside the forward frustum; the beacons sit off to the sides).
@@ -134,6 +109,23 @@ export class Dressing {
     this.obstacles = env.obstacles;
     this.limits = env.limits;
     this.labels = env.labels;
+    // Once per rendered frame, with the camera actually rendered (free walk, vehicle,
+    // mini-game reframe alike): the forest picks each tree's detail and culls the rest.
+    const before = this.scene.onBeforeRender;
+    this.scene.onBeforeRender = (...args) => {
+      before.apply(this.scene, args);
+      const cam = args[2];
+      this.forest?.update(cam);
+      for (const f of this.plantFields) f.update(cam);
+      const e = cam.matrixWorld.elements;
+      for (const p of this.farProps) p.group.visible = Math.hypot(p.x - e[12], p.z - e[14]) < p.far;
+    };
+  }
+
+  /** The opacity of the tree crowns that block the view right now (1 = none; the
+   *  camera rig reads it for `viewClear`, the dev hook reports it). */
+  get canopyOpacity(): number {
+    return this.forest?.blockingOpacity ?? 1;
   }
 
   /** The drawn ground height (the one ground truth, world/Terrain.ts). */
@@ -144,14 +136,20 @@ export class Dressing {
   /** The vegetation, in build order: bos trees, heather, marram, the reed belt, the rim
    *  tree-line, then the real tree GLBs stream in over the cone stand-ins. Density
    *  scales with the quality tier (W7.2: laag ≈ half). */
-  scatterVegetation(veg: number): void {
+  scatterVegetation(quality: TierParams): void {
+    const veg = quality.vegetationScale;
+    this.quality = quality;
     this.scatterPines(Math.round(80 * veg));
-    this.scatterHeather(Math.round(150 * veg));
-    this.scatterMarram(Math.round(110 * veg));
-    this.scatterReeds(Math.round(160 * veg)); // D3.2: a denser reed fringe reads at the shore
+    this.scatterPlants(veg); // heather + grass, helmgras, ferns, the reed belt
     this.buildRim(); // F-11: the pine tree-line marking the world edge
-    void this.upgradeTreesToGLB(); // P1.3: swap the cone stand-ins for the real tree GLBs
+    void this.buildForest(); // P1.3: swap the cone stand-ins for the real tree GLBs
     this.applyWind(0); // W4.6: initial wind pose for both grass meshes
+  }
+
+  /** The quality tier changed (the fps probe): the forest tightens its detail distances. */
+  setQuality(quality: TierParams): void {
+    this.quality = quality;
+    this.forest?.setTier(quality.treeDetail);
   }
 
   /** Per frame, on the ambient clock: the grasses lean in the wind and the ven water
@@ -263,9 +261,11 @@ export class Dressing {
 
   /**
    * W4.8: the ven-water disc — a FRESNEL-tinted still plane. A custom shader
-   * mixes a deep forest-teal (seen head-on) with a lighter warm sky-glow (at
-   * grazing angles) by the Schlick view-angle factor (`Water.ts` mirrors the
-   * maths), so the disc reads as water instead of a flat painted circle. The
+   * mixes a dark peaty teal (seen head-on) with what the still water mirrors (the
+   * cream sky where the view is steeper, the far bank's tree-line at grazing angles)
+   * by the Schlick view-angle factor (`Water.ts` holds the constants), so the disc
+   * reads as dark still water instead of a flat painted circle; it is fogged and tone
+   * mapped like the rest of the world (2026-09-27). The
    * ripple is a GENTLE FRAGMENT-TINT shimmer only — never a vertex displacement —
    * so the silhouette never moves (motion-comfort §1e/§C); it is WAVELESS by
    * default and its amplitude (`uAmp`) is driven to exactly 0 under reduced-motion
@@ -276,51 +276,65 @@ export class Dressing {
     const geo = new THREE.CircleGeometry(RADIUS, 48);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
-      uniforms: {
+      fog: true,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
         uTime: { value: 0 },
         uAmp: { value: 0 },
         uDeep: { value: new THREE.Color(WATER_DEEP) },
         uShallow: { value: new THREE.Color(WATER_SHALLOW) },
+        uTrees: { value: new THREE.Color(WATER_TREES) },
         uOpacity: { value: WATER_OPACITY },
         uFresnelPower: { value: FRESNEL_POWER },
+        uF0: { value: WATER_F0 },
         uRadius: { value: RADIUS },
-      },
+      }]),
       vertexShader: `
+        #include <fog_pars_vertex>
         varying vec3 vWorld;
         varying float vR;
         void main() {
           vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
           vR = length(position.xy); // local radial distance from the disc centre (pre-tilt)
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
         }
       `,
       fragmentShader: `
+        #include <fog_pars_fragment>
         uniform float uTime;
         uniform float uAmp;
         uniform vec3 uDeep;
         uniform vec3 uShallow;
+        uniform vec3 uTrees;
         uniform float uOpacity;
         uniform float uFresnelPower;
+        uniform float uF0;
         uniform float uRadius;
         varying vec3 vWorld;
         varying float vR;
         void main() {
-          // flat, up-facing plane → normal is world-up; fresnel from the view's
-          // vertical component (straight-down = deep, grazing = sky-glow).
+          // flat, up-facing plane → normal is world-up; Schlick fresnel from the view's
+          // vertical component: looking down = the dark water, grazing = the sky's haze.
           vec3 viewDir = normalize(cameraPosition - vWorld);
-          float fres = pow(clamp(1.0 - max(viewDir.y, 0.0), 0.0, 1.0), uFresnelPower);
+          float fres = uF0 + (1.0 - uF0) * pow(clamp(1.0 - max(viewDir.y, 0.0), 0.0, 1.0), uFresnelPower);
           // subtle crossing shimmer — two slow sines over world position; uAmp is
           // 0 under reduced-motion so this term vanishes (dead-still mirror).
           float ripple = sin(vWorld.x * 1.15 + uTime * 0.8)
                        * sin(vWorld.z * 1.07 - uTime * 0.55);
-          float mixv = clamp(fres + ripple * uAmp, 0.0, 1.0);
-          vec3 col = mix(uDeep, uShallow, mixv);
+          float mixv = clamp(fres + ripple * uAmp * 0.5, 0.0, 1.0);
+          // what it mirrors: grazing (the far water) sees the far bank's tree-line, a
+          // steeper look (nearer water) sees the sky; the dark body shows through
+          vec3 mirrored = mix(uTrees, uShallow, smoothstep(0.07, 0.24, viewDir.y));
+          vec3 col = mix(uDeep, mirrored, mixv);
           // D3.2: fade the alpha to 0 over the outer ~2.4 m so the water meets the
-          // moss bank as a soft waterline, never a hard-edged dark polygon (the P1.2
-          // grade's "hard-edged dark POLYGON" finding). The reed fringe + painted moss
-          // bank complete the shore.
+          // bank as a soft waterline, never a hard-edged dark polygon. The reed belt
+          // and the wet bank complete the shore.
           float edge = smoothstep(uRadius, uRadius - 2.4, vR);
           gl_FragColor = vec4(col, uOpacity * edge);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          #include <fog_fragment>
         }
       `,
     });
@@ -357,7 +371,7 @@ export class Dressing {
 
   /** The scattered bos trees. P1.3: record real-tree placements (mixed species) +
    *  the soft trunk collisions, and drop the instant cone stand-in — the real GLBs
-   *  swap in via upgradeTreesToGLB. */
+   *  swap in via buildForest. */
   private scatterPines(budget: number): void {
     const spots = this.candidates(budget * 4, 'bos');
     const placed: TreePlacement[] = spots.map(({ x, z, i }) => ({
@@ -375,60 +389,45 @@ export class Dressing {
     this.addTreeFallback(placed);
   }
 
-  private scatterHeather(budget: number): void {
-    const spots = this.candidates(budget * 3, 'heide');
-    const geo = new THREE.IcosahedronGeometry(0.32, 0);
-    const mat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.heide.accent, roughness: 1, flatShading: true });
-    const tufts = new THREE.InstancedMesh(geo, mat, spots.length);
-    const m = new THREE.Matrix4();
-    spots.forEach(({ x, z, i }, k) => {
-      const s = 0.5 + (i % 4) * 0.22;
-      m.makeScale(s, s * 0.6, s); m.setPosition(x, this.groundY(x, z) + 0.12, z);
-      tufts.setMatrixAt(k, m);
-    });
-    tufts.instanceMatrix.needsUpdate = true;
-    this.scene.add(tufts);
-  }
-
   /**
-   * F-11: a calm pine tree-line ringing the playable area at the move bound, so
-   * walking outward meets a visible forest edge ("Hier stopt het bos") instead of
-   * the Run A silent void. The ring sits JUST BEYOND the bound (the ranger clamps at
-   * `limits.bound`; the trees start a touch past it), so it needs no collision — it
-   * is a backdrop wall, hidden by the fog and only revealed as the player nears the
-   * edge (so hub/spawn shots are untouched). P1.3: the ring is now the real staged tree
-   * cast (pine·oak·birch), instanced → a handful of draw calls regardless of count, so
-   * the tree-line reads at the SAME fidelity as the animals/props it frames while the
-   * <150 budget holds. Deterministic (index-driven jitter, no Math.random), uniform all
-   * the way round so every heading ends at the same tidy edge. Shadows off — a distant
-   * backdrop needs none.
+   * F-11: a calm forest edge ringing the playable area just past the move bound, so
+   * walking outward meets a real tree-line ("Hier stopt het bos") instead of a void.
+   * It sits JUST BEYOND the bound (the ranger clamps at `limits.bound`), so it needs no
+   * collision: a backdrop wall the fog reveals only as the player nears the edge.
+   * 2026-09-27: three staggered, jittered rows (pine-dominant with oak, birch only in
+   * front) instead of two even rows, so it reads as the edge of a forest with depth, not
+   * a fence of identical poles; the far rows cost little (world/Forest draws them as
+   * simplified copies). Deterministic (index-hashed jitter), the same all the way round.
    */
   private buildRim(): void {
     const bound = this.limits.bound;
-    const N = 180;
+    const ROWS: readonly { n: number; out: number; spread: number; s0: number; mix: readonly TreeSpecies[] }[] = [
+      { n: 170, out: 1.4, spread: 0.8, s0: 1.0, mix: ['prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree', 'prop-pine-scots'] },
+      { n: 150, out: 5.6, spread: 1.2, s0: 1.15, mix: ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree'] },
+      { n: 130, out: 10.2, spread: 1.4, s0: 1.3, mix: ['prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-pine-scots'] },
+    ];
     const placed: TreePlacement[] = [];
-    for (let k = 0; k < N; k++) {
-      const ang = (k / N) * Math.PI * 2;
-      // two staggered rows just past the bound (bound+1.2 → bound+3.6, ≈76–79 at the
-      // 75 m bound) → a wall with depth, not a single-file fence; stays well under 120
-      // so it always lands on the 240² ground plane on-axis.
-      const rad = bound + 1.2 + (k % 2) * 1.8 + Math.sin(k * 12.9) * 0.6;
-      const x = Math.cos(ang) * rad;
-      const z = Math.sin(ang) * rad;
-      placed.push({
-        x, y: this.groundY(x, z), z,
-        s: 1.0 + (k % 5) * 0.18,                    // varied heights so the line reads as a natural edge
-        rotY: (k * 1.71) % (Math.PI * 2),           // per-tree spin so the ring never repeats
-        species: TREE_RIM_MIX[k % TREE_RIM_MIX.length],
-      });
-    }
+    ROWS.forEach((row, r) => {
+      for (let k = 0; k < row.n; k++) {
+        const h1 = hash2(k, r, 91), h2 = hash2(k, r, 92), h3 = hash2(k, r, 93);
+        const ang = ((k + (h1 - 0.5) * 0.8 + r * 0.37) / row.n) * Math.PI * 2;
+        const rad = bound + row.out + (h2 - 0.5) * 2 * row.spread;
+        const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+        placed.push({
+          x, y: this.groundY(x, z), z,
+          s: row.s0 + h3 * 0.6,                          // varied heights: a ragged, natural skyline
+          rotY: h1 * Math.PI * 2,
+          species: row.mix[(k + r) % row.mix.length],
+        });
+      }
+    });
     this.treePlacements.push(...placed);
     this.addTreeFallback(placed); // P1.3: cone stand-in until the real tree GLBs stream in
   }
 
   /** P1.3: the instant low-poly stand-in for a set of tree placements — an instanced
    *  cone crown + cylinder trunk (2 draw calls) shown ONLY until the real staged tree
-   *  GLBs stream in and replace it (upgradeTreesToGLB). Tracked in `treeFallbacks`. */
+   *  GLBs stream in and replace it (buildForest). Tracked in `treeFallbacks`. */
   private addTreeFallback(placed: TreePlacement[]): void {
     if (!placed.length) return;
     const trunkGeo = new THREE.CylinderGeometry(0.14, 0.2, 1.4, 6);
@@ -444,43 +443,22 @@ export class Dressing {
     });
     trunks.instanceMatrix.needsUpdate = true; crowns.instanceMatrix.needsUpdate = true;
     this.treeFallbacks.push(trunks, crowns);
-    this.treeFadeMeshes.push(trunks, crowns); // D1.5: the occluder fade dims the cones until the GLBs land
     this.scene.add(trunks, crowns);
   }
 
   /**
-   * P1.3: replace the instant cone/cylinder tree stand-ins with the real staged tree
-   * GLBs (Scots pine · oak · birch), instanced so the whole canopy — the scattered bos
-   * trees AND the F-11 rim tree-line — reads at the SAME fidelity as every other prop
-   * and animal (RUN-C-DIRECTION §2.3). One InstancedMesh per species-mesh, so the
-   * entire forest costs only a handful of draw calls regardless of tree count (§A8),
-   * well under the <150 contract. Best-effort + all-or-nothing: only when EVERY needed
-   * species loads do we build the real canopy and drop the cones — a partial load keeps
-   * the whole cone stand-in (so a spot is never double-drawn, the world always playable).
+   * P1.3: replace the instant cone/cylinder stand-ins with the real tree GLBs, instanced
+   * by world/Forest.ts (near trees at full detail, far ones as simplified copies of the
+   * same GLB, everything outside the view culled). It starts after a tick, so the grove
+   * trees of the nature dressing (placed later in the World's build) join it too.
+   * All-or-nothing: a species that fails to load keeps the whole cone stand-in.
    */
-  private async upgradeTreesToGLB(): Promise<void> {
+  private async buildForest(): Promise<void> {
+    await Promise.resolve();
     if (!this.treePlacements.length) return;
-    await loadManifest();
-    const species = [...new Set(this.treePlacements.map((p) => p.species))];
-    const prepped = new Map<TreeSpecies, THREE.Object3D>();
-    for (const id of species) {
-      const m = await loadModel(id);
-      if (m) prepped.set(id, prepModel(m, TREE_BASE_H[id]));
-    }
-    if (prepped.size !== species.length) return; // a species is missing → keep the cone canopy
-    const built: THREE.InstancedMesh[] = [];
-    for (const [id, model] of prepped) {
-      built.push(...instancesFromPrepped(model, this.treePlacements.filter((p) => p.species === id)));
-    }
-    for (const inst of built) this.scene.add(inst);
-    // D1.5: the occluder fade now dims the real GLB canopy — retire the cone entries and
-    // point it at the instanced tree meshes. Reset the fade cache to solid so the next
-    // setCanopyOpacity re-applies to these fresh materials (the guard would otherwise skip
-    // a mid-fade equal value on meshes that never had it stashed).
-    this.treeFadeMeshes.length = 0;
-    this.treeFadeMeshes.push(...built);
-    this.canopyOpacity = 1;
-    // swap: drop + dispose the now-hidden cone stand-ins so they leave no cost behind.
+    const forest = new Forest(this.scene, this.treePlacements, this.quality?.treeDetail ?? 'hoog');
+    if (!(await forest.build())) return;
+    this.forest = forest;
     for (const f of this.treeFallbacks) {
       this.scene.remove(f);
       const im = f as THREE.InstancedMesh;
@@ -491,49 +469,119 @@ export class Dressing {
     this.treeFallbacks.length = 0;
   }
 
-  /** Drift-sand marram tussocks — upright pale grass blades on the stuifzand.
-   *  W4.6: registered as a wind mesh so the blades lean in the breeze. */
-  private scatterMarram(budget: number): void {
-    const spots = this.candidates(budget * 4, 'stuifzand');
-    const geo = new THREE.ConeGeometry(0.16, 0.9, 5);
-    const mat = new THREE.MeshStandardMaterial({ color: BIOME_PALETTE.stuifzand.accent, roughness: 1, flatShading: true });
-    const grass = new THREE.InstancedMesh(geo, mat, spots.length);
-    const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
-    spots.forEach(({ x, z, i }) => {
-      const s = 0.6 + (i % 3) * 0.25;
-      items.push({ x, y: this.groundY(x, z) + 0.4 * s, z, sx: s, sy: s, phase: (i % 7) * 0.9 });
-    });
-    this.windMeshes.push({ mesh: grass, items, strength: 1 }); // full sway — exposed dune grass
-    this.scene.add(grass);
+  /**
+   * The low ground plants (world/Plants.ts), each kind in fixed 20 m chunks that the fog
+   * hides from afar: struikhei with straw grass between it on the heide (heather where
+   * the heath's ground reads as heather, grass on its sandier patches), helmgras on the
+   * stuifzand, adelaarsvaren in the bos and lisdodde round the ven. None stand on the
+   * sand paths or in the spawn clearing. The grasses and reeds lean in the wind (W4.6).
+   * `veg` (the quality tier) thins every field.
+   */
+  private scatterPlants(veg: number): void {
+    const thin = 1 / Math.sqrt(Math.max(0.2, veg)); // fewer cells, same look
+    const up = new THREE.Color();
+    // heide: heather cushions where the ground is heather, grass where it is sandier
+    const heather = this.gridSpots('heide', 2.3 * thin, 11, (x, z, h) => heathCover(x, z) > 0.32 + h * 0.3);
+    this.addField('heide-heather', heatherGeometry(5), plantMaterial(), heather.map((p, i) => ({
+      x: p.x, y: this.groundY(p.x, p.z), z: p.z,
+      s: 0.75 + p.h * 0.7, sy: 0.7 + p.h * 0.6, rotY: i * 2.39996,
+      tint: up.setRGB(0.9 + p.h * 0.2, 0.9 + ((i * 7) % 5) * 0.03, 0.9 + p.h * 0.15).clone(),
+    })), 50, 0, { geometry: heatherGeometry(5, 60), from: 16 });
+    const heideGrass = this.gridSpots('heide', 3.1 * thin, 23, (x, z, h) => heathCover(x, z) < 0.55 + h * 0.2);
+    this.addField('heide-grass', tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), plantMaterial(),
+      heideGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.45 + p.h * 0.35, rotY: i * 1.7, phase: (i % 7) * 0.9 })), 40, 0.8);
+    // stuifzand: helmgras tussocks, grey-green to straw, full sway in the open
+    const marram = this.gridSpots('stuifzand', 2.9 * thin, 37, (_x, _z, h) => h < 0.62);
+    this.addField('stuifzand-helmgras', tuftGeometry({ blades: 22, seed: 5, root: '#6c7552', tip: '#dccf9e', lean: 0.24, width: 0.03 }), plantMaterial(),
+      marram.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.45, rotY: i * 2.1, phase: (i % 7) * 0.9 })), 48, 1);
+    // the ven sector away from the water is wet heath: pijpenstrootje tussocks and
+    // pinker dopheide between them
+    const dryVen = (x: number, z: number): boolean => Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) > VEN_SHORE_R + 1;
+    const wetGrass = this.gridSpots('ven', 2.6 * thin, 61, (x, z, h) => dryVen(x, z) && h < 0.7);
+    this.addField('ven-pijpenstrootje', tuftGeometry({ blades: 18, seed: 7, root: '#5c6536', tip: '#cdbd82', lean: 0.34 }), plantMaterial(),
+      wetGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.5 + p.h * 0.4, rotY: i * 1.9, phase: (i % 7) * 0.9 })), 40, 0.8);
+    const dopheide = this.gridSpots('ven', 3.4 * thin, 67, (x, z, h) => dryVen(x, z) && heathCover(x, z) > 0.45 + h * 0.3);
+    this.addField('ven-dopheide', heatherGeometry(9), plantMaterial(), dopheide.map((p, i) => ({
+      x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.5, sy: 0.6 + p.h * 0.4, rotY: i * 2.39996,
+      tint: new THREE.Color(1.02, 0.9, 1.0),
+    })), 44, 0, { geometry: heatherGeometry(9, 60), from: 16 });
+    // the GLB plants stream in: ferns under the bos trees, lisdodde round the ven
+    void this.scatterGlbPlants(veg, thin);
   }
 
-  /** Reed clumps fringing the ven — only on the bank just above the waterline.
-   *  W4.6: registered as a wind mesh (softer sway than the exposed marram). */
-  private scatterReeds(budget: number): void {
-    // D3.2: ring the basin with a golden-angle spread and keep only the stalks whose
-    // ground sits in the shore band — so every reed stands on the bank at the waterline,
-    // a tight belt around the water rather than a scatter over the whole ven biome.
+  /** The two real-GLB plants, simplified for the crowd (Lod.ts): adelaarsvaren in the bos
+   *  and lisdodde (the reed belt, D3.2: a tight ring on the bank just above the water). */
+  private async scatterGlbPlants(veg: number, thin: number): Promise<void> {
+    const fern = await loadModel('prop-fern');
+    if (fern) {
+      const [geo, far] = lodGeometries('prop-fern@1', prepModel(fern, 1), [2000, 600]);
+      const spots = this.gridSpots('bos', 4.2 * thin, 53, (_x, _z, h) => h < 0.45);
+      if (geo && far) this.addField('bos-varen', geo, lodMaterial(), spots.map((p, i) => ({
+        x: p.x, y: this.groundY(p.x, p.z) - 0.02, z: p.z, s: 0.55 + p.h * 0.5, rotY: i * 2.39996,
+        // late-summer bracken in the shade: olive, some already turning bronze
+        tint: new THREE.Color(0.72 + p.h * 0.25, 0.68 + p.h * 0.08, 0.42),
+      })), 40, 0, { geometry: far, from: 14 });
+    }
+    const reeds = await loadModel('prop-reeds');
+    if (!reeds) return;
+    const [geo] = lodGeometries('prop-reeds@1', prepModel(reeds, 1), [650]);
+    if (!geo) return;
     const bx = VEN_CENTER.x, bz = VEN_CENTER.z;
-    const items: { x: number; y: number; z: number; sx: number; sy: number; phase: number }[] = [];
-    for (let i = 0; i < budget * 12 && items.length < budget; i++) {
+    const budget = Math.round(90 * veg);
+    const spots: PlantSpot[] = [];
+    for (let i = 0; i < budget * 12 && spots.length < budget; i++) {
       const ang = i * 2.39996;             // golden angle → even, non-repeating ring
       const rad = 9 + (i % 22) * ((VEN_REED_OUT - 9) / 22); // 9–20 m out — a TIGHT belt hugging the waterline
       const x = bx + Math.cos(ang) * rad;
       const z = bz + Math.sin(ang) * rad;
       const gy = this.groundY(x, z);
       if (gy < WATER_LEVEL - 0.3 || gy > WATER_LEVEL + 1.0) continue; // keep the reed belt right at the shore
-      const s = 0.8 + (i % 4) * 0.22;
-      items.push({ x, y: gy + 0.85 * s, z, sx: s, sy: s, phase: (i % 5) * 1.3 });
+      spots.push({ x, y: gy - 0.03, z, s: 1.3 + (i % 4) * 0.18, rotY: ang * 3.1, phase: (i % 5) * 1.3 });
     }
-    // TALLER, thicker reeds (≈1.4–2.2 m) in a DARK reed-green so the fringe reads at follow
-    // distance against BOTH the golden water and the tan bank (the P1.2 grade found "no reed
-    // fringe" — thin pale 1.1 m stalks vanished against the shore). Still ONE instanced draw call.
-    const geo = new THREE.CylinderGeometry(0.05, 0.09, 1.7, 5);
-    const mat = new THREE.MeshStandardMaterial({ color: '#6d7b38', roughness: 1 });
-    const reeds = new THREE.InstancedMesh(geo, mat, Math.max(1, items.length));
-    reeds.count = items.length;
-    this.windMeshes.push({ mesh: reeds, items, strength: 0.7 }); // reeds sway gentler
-    this.scene.add(reeds);
+    void thin;
+    this.addField('ven-lisdodde', geo, lodMaterial(), spots, 62, 0.7);
+  }
+
+  /** Lay out one plant field and, when it sways (`wind` > 0), hand its chunks to the wind. */
+  private addField(
+    name: string, geo: THREE.BufferGeometry, mat: THREE.Material, spots: PlantSpot[], hideBeyond: number, wind = 0,
+    far?: { geometry: THREE.BufferGeometry; from: number },
+  ): void {
+    if (!spots.length) return;
+    const field = new PlantField(this.scene, name, geo, mat, spots, hideBeyond, far);
+    this.plantFields.push(field);
+    if (wind > 0) {
+      for (const c of field.chunks) {
+        this.windMeshes.push({
+          mesh: c.mesh, strength: wind,
+          items: c.items.map((p) => ({ x: p.x, y: p.y, z: p.z, sx: p.s, sy: p.sy ?? p.s, phase: p.phase ?? 0, rotY: p.rotY })),
+        });
+      }
+      this.lastWindT = NaN; // pose the new blades on the next tick
+    }
+  }
+
+  /**
+   * Plant spots on a jittered grid of `cell` m over one landschap: off the sand paths,
+   * out of the spawn clearing, inside the rim; `keep(x, z, h)` (h: a stable per-spot
+   * random in [0,1)) thins them. Deterministic.
+   */
+  private gridSpots(want: Biome, cell: number, seed: number, keep: (x: number, z: number, h: number) => boolean): { x: number; z: number; h: number }[] {
+    const out: { x: number; z: number; h: number }[] = [];
+    const B = this.limits.bound - 1;
+    const n = Math.ceil(B / cell);
+    for (let gx = -n; gx < n; gx++) for (let gz = -n; gz < n; gz++) {
+      const x = (gx + hash2(gx, gz, seed)) * cell, z = (gz + hash2(gx, gz, seed + 1)) * cell;
+      const r = Math.hypot(x, z);
+      if (r < 9 || r > B) continue;                               // the spawn clearing, the rim
+      if (this.terrain.biome(x, z) !== want) continue;
+      if (distanceToNetwork(x, z) < LANE_HALF + 0.6) continue;  // the paths stay bare sand
+      const h = hash2(gx, gz, seed + 2);
+      if (!keep(x, z, h)) continue;
+      if (r > this.scatterMax) this.scatterMax = r;                // furthest low plant (dev hook)
+      out.push({ x, z, h });
+    }
+    return out;
   }
 
   /**
@@ -549,6 +597,7 @@ export class Dressing {
         const it = wm.items[k];
         Dressing._e.set(0, 0, windSway(t, it.phase) * wm.strength);
         Dressing._q.setFromEuler(Dressing._e);
+        if (it.rotY) Dressing._q.multiply(Dressing._r.setFromAxisAngle(Dressing._up, it.rotY)); // lean, then its own turn
         Dressing._p.set(it.x, it.y, it.z);
         Dressing._s.set(it.sx, it.sy, it.sx);
         Dressing._m.compose(Dressing._p, Dressing._q, Dressing._s);
@@ -559,34 +608,24 @@ export class Dressing {
   }
 
   /**
-   * D1.5 occluder fade (sibling of setAvatarOpacity): set the tree-canopy render opacity
-   * (1 = solid) so a crown between the lens and the ranger on the free walk stops swallowing
-   * him (`09-walk-4`). Each material's ORIGINAL opacity/transparent/depthWrite is stashed
-   * once and restored at full, so a faded crown never loses its authored look; a faded
-   * canopy drops depthWrite so the ranger behind it stays visible. Guarded on the cached
-   * value — no traversal unless the fade actually changes. Fades the CURRENT tree meshes
-   * (`treeFadeMeshes`: the cone fallback while the GLBs stream, then the instanced GLB
-   * canopy). Draw-call count is untouched (same meshes, just transparent) so the <150
-   * contract holds. Materials are tree-only (each species GLB / the cones own theirs), so
-   * this never dims a non-tree prop.
+   * D1.5 occluder fade, per tree: the camera rig decides the view is `blocked`; the
+   * forest finds the crowns on the lens → ranger sightline (at each aim height above his
+   * feet) or around the lens, and makes only THOSE see-through (`min`, or `buried` when
+   * the lens sits inside one). Crowns that no longer block ease back to solid by
+   * `release` (0..1 of the way per frame; 1 = a cut). The rest of the forest never fades.
    */
+  fadeOccluders(
+    blocked: boolean, eye: THREE.Vector3, feet: THREE.Vector3, aimHeights: readonly number[],
+    release: number, min: number, buried: number,
+  ): void {
+    this.forest?.fadeOccluders(blocked, eye, feet, aimHeights, release, min, buried);
+  }
+
+  /** Every crown solid again at once (`1`), e.g. off-foot or at teardown. Kept for the
+   *  callers of the old whole-canopy fade: any value below 1 is ignored (the fade is per
+   *  tree now, see `fadeOccluders`). */
   setCanopyOpacity(o: number): void {
-    if (o === this.canopyOpacity) return;
-    this.canopyOpacity = o;
-    const opaque = o >= 1;
-    for (const obj of this.treeFadeMeshes) {
-      const mesh = obj as THREE.Mesh;
-      if (!mesh.isMesh) continue;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      for (const m of mats) {
-        const mat = m as THREE.Material & { opacity: number; transparent: boolean; depthWrite: boolean };
-        const ud = mat.userData as { __canopyFadeOrig?: { o: number; t: boolean; d: boolean } };
-        if (!ud.__canopyFadeOrig) ud.__canopyFadeOrig = { o: mat.opacity, t: mat.transparent, d: mat.depthWrite };
-        const orig = ud.__canopyFadeOrig;
-        if (opaque) { mat.opacity = orig.o; mat.transparent = orig.t; mat.depthWrite = orig.d; }
-        else { mat.opacity = orig.o * o; mat.transparent = true; mat.depthWrite = false; }
-      }
-    }
+    if (o >= 1) this.forest?.clearFades();
   }
 
   /**
@@ -690,14 +729,26 @@ export class Dressing {
       // Signpost path dressing
       ['prop-boulder', 13, -13], ['prop-mushrooms', -19, 14],
     ];
+    const groveTrees: TreePlacement[] = [];
     PLACES.forEach(([model, x, z], i) => {
       const spec = SPEC[model];
+      if (NATURE_TREES.has(model)) {
+        // a grove tree joins the forest: the same instanced GLB, its detail and its fade
+        const species = model as TreeSpecies;
+        groveTrees.push({ x, y: this.groundY(x, z), z, s: spec.h / TREE_BASE_H[species], rotY: (i * 2.39996) % (Math.PI * 2), species });
+        this.obstacles.push({ x, z, r: spec.collide });
+        this.props.push({ id: model, x, z });
+        return;
+      }
       const at = new THREE.Vector3(x, this.groundY(x, z), z);
       const group = new THREE.Group();
       group.position.copy(at);
       group.rotation.y = (i * 2.39996) % (Math.PI * 2); // golden-angle spin for variety
       group.add(proceduralTotem(spec.collide > 0 ? '#6b5a3a' : '#7d8a4a')); // instant stand-in
       this.scene.add(group);
+      // small dressing is not drawn once the fog has it (a 12k-triangle mushroom at 60 m
+      // is a few grey pixels): low plants from 36 m, logs, stumps and boulders from 50 m
+      if (spec.h <= 1.1) this.farProps.push({ group, x, z, far: spec.collide > 0 ? 50 : 36 });
       if (spec.collide > 0) this.obstacles.push({ x, z, r: spec.collide });
       this.props.push({ id: model, x, z });
       void loadModel(model).then((m) => {
@@ -712,6 +763,8 @@ export class Dressing {
         group.add(prepped);
       });
     });
+    this.treePlacements.push(...groveTrees);
+    this.addTreeFallback(groveTrees);
   }
 
   /** Procedural stand-in for the ranger-cabin (instant, before the GLB loads). */

@@ -4,6 +4,9 @@ import {
   mottleRGB,
   vertexTint,
   groundPatch,
+  heathCover,
+  detailTile,
+  DETAIL_TILE_PX as TILE,
   BIOME_GROUND_TONES,
   GROUND_TILE_PX,
   GROUND_TILE_REPEAT,
@@ -123,4 +126,36 @@ test('groundPatch varies over distance (clumps, not a flat constant)', () => {
   const b = groundPatch(40, -30);
   const c = groundPatch(-25, 55);
   assert.ok(Math.abs(a - b) > 0.02 || Math.abs(a - c) > 0.02, 'the mix field actually varies');
+});
+
+test('heathCover is deterministic, bounded and patchy (heather mats and sandy openings)', () => {
+  let lo = 0, hi = 0;
+  for (let i = 0; i < 400; i++) {
+    const x = -70 + (i % 20) * 7, z = -70 + Math.floor(i / 20) * 7;
+    const c = heathCover(x, z);
+    assert.equal(c, heathCover(x, z));
+    assert.ok(c >= 0 && c <= 1);
+    if (c < 0.3) lo++;
+    if (c > 0.7) hi++;
+  }
+  assert.ok(lo > 40 && hi > 40, `both open sand (${lo}) and dense heather (${hi}) occur`);
+});
+
+test('detailTile is in [0,1], quick to bake, and its florets are sparse', () => {
+  // CPU time, not wall time: the bake is one synchronous pass, so this is what it costs;
+  // a wall clock on a busy machine (parallel builds) measures the wait for a core.
+  const t0 = process.cpuUsage();
+  const { grit, speck, needle } = detailTile();
+  const used = process.cpuUsage(t0);
+  const ms = (used.user + used.system) / 1000;
+  assert.ok(ms < 400, `bakes in ${ms.toFixed(0)} ms of CPU (it sits on the title's boot path)`);
+  for (const ch of [grit, speck, needle]) {
+    assert.equal(ch.length, TILE * TILE);
+    for (let i = 0; i < ch.length; i += 97) assert.ok(ch[i] >= 0 && ch[i] <= 1);
+  }
+  const lit = speck.filter((v) => v > 0.5).length / speck.length;
+  assert.ok(lit > 0.005 && lit < 0.2, `florets are sparse, not everywhere (${(lit * 100).toFixed(1)}%)`);
+  const strokes = needle.filter((v) => v > 0.3).length / needle.length;
+  assert.ok(strokes > 0.02 && strokes < 0.6, `needles cover part of the tile (${(strokes * 100).toFixed(1)}%)`);
+  assert.deepEqual(detailTile().needle.slice(0, 64), needle.slice(0, 64), 'deterministic');
 });

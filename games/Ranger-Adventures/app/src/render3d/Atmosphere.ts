@@ -20,16 +20,18 @@
  * no browser. Everything is deterministic — no Math.random / Date.now.
  */
 
-/** Vertical sky gradient — richer than the old 3-stop ramp so the golden-hour
- *  sky reads as soft warm bands, not a flat wash. `[position 0..1, css colour]`,
- *  top (zenith) → bottom (horizon). The World bakes these onto its sky canvas. */
+/** The golden-hour sky from the zenith (0) down to the horizon (1): a pale, cool
+ *  blue overhead warming through cream and gold into the peach haze the fog is made
+ *  of, so distant hills and trees dissolve into the sky exactly at the horizon.
+ *  `[position 0..1, css colour]`. Lighting.makeSkyDome maps it onto the view's
+ *  ELEVATION (not the screen), so the horizon colour always sits at the horizon. */
 export const SKY_STOPS: readonly [number, string][] = [
-  [0.0, '#fde4d0'], // soft warm zenith
-  [0.28, '#fde8c8'],
-  [0.5, '#f8d3a6'],
-  [0.7, '#f2c390'],
-  [0.86, '#edb884'],
-  [1.0, '#e9b27f'], // warm horizon (matches the fog colour)
+  [0.0, '#96b3d9'], // pale evening blue overhead
+  [0.3, '#c6d2de'],
+  [0.55, '#eedfc8'], // cream
+  [0.75, '#f6d8ae'], // gold
+  [0.9, '#f6d2a2'],
+  [1.0, '#f3cc9c'], // the bright horizon haze = the fog colour (Lighting.GOLDEN_HOUR.fogColor)
 ];
 
 /** Cloud-shadow drift speed, in texture-uv units per second (slow, calm). */

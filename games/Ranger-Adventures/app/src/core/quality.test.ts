@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  FpsProbe, nextTier, QUALITY_TIERS,
+  FpsProbe, nextTier, bootTier, QUALITY_TIERS,
   STEP_DOWN_FPS, STEP_UP_FPS, PROBE_WINDOW_SEC,
 } from './quality.ts';
 
@@ -95,4 +95,17 @@ test('FpsProbe: resets between windows (a second window measures independently)'
   const second = drain(1 / 30);
   assert.ok(Math.abs(first - 60) < 2);
   assert.ok(Math.abs(second - 30) < 2, 'the fast first window did not bleed into the slow second');
+});
+
+test('bootTier: a touch-first device (iPad) always starts light; a laptop starts on its verdict', () => {
+  assert.equal(bootTier(undefined, true), 'laag', 'first boot on an iPad');
+  assert.equal(bootTier('hoog', true), 'laag', 'an iPad earns hoog per session, by measurement');
+  assert.equal(bootTier(undefined, false), 'hoog', 'first boot on a laptop');
+  assert.equal(bootTier('hoog', false), 'hoog');
+  assert.equal(bootTier('laag', false), 'laag', 'a slow laptop boots light next time');
+});
+
+test('tiers: laag also draws the forest with its lighter detail distances', () => {
+  assert.equal(QUALITY_TIERS.hoog.treeDetail, 'hoog');
+  assert.equal(QUALITY_TIERS.laag.treeDetail, 'laag');
 });
