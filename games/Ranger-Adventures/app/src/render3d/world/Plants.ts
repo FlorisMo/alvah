@@ -40,7 +40,7 @@ export function heatherGeometry(seed = 1, spikes = 200): THREE.BufferGeometry {
   const core = new THREE.Color('#4a412c');
   const stem = new THREE.Color('#857a52');
   const tipGreen = new THREE.Color('#a9a36b');
-  const bloom = new THREE.Color('#c296b3');
+  const bloom = new THREE.Color('#b48ea6');
   const dry = new THREE.Color('#a48d62');
   const push = (x: number, y: number, z: number, c: THREE.Color): number => {
     P.push(x, y, z);

@@ -36,7 +36,7 @@ function addGroundDetail(mat: THREE.MeshStandardMaterial, tex: THREE.Texture): v
           // pine needles: warm straight strokes on a darker litter
           float nd = max(d1.b, d2.b * 0.8) * vGround.y * gNear;
           diffuseColor.rgb *= mix(1.0, 0.85, vGround.y * gNear * 0.6);
-          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.55, 1.25, 0.9), nd);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.4, 1.18, 0.9), nd * 0.85);
           // heather: little mauve florets and olive leaf flecks
           float fl = max(d1.g, d2.g) * vGround.x * gNear;
           vec3 floret = mix(vec3(0.34, 0.16, 0.30), vec3(0.20, 0.19, 0.08), step(0.5, d1.r));

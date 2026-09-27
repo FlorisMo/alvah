@@ -118,7 +118,10 @@ export function makeSkyDome(): THREE.Mesh {
         float glow = pow(max(dot(d, uSunDir), 0.0), 5.0);
         col += uSun * glow * 0.22 * (1.0 - up * 0.6);
         gl_FragColor = vec4(col, 1.0);
+        // the horizon band goes through the same tone curve as the fogged world it meets
+        // (so hills dissolve into it); higher up the sky keeps its own soft colours
         #include <tonemapping_fragment>
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, col, smoothstep(0.03, 0.3, up));
         #include <colorspace_fragment>
       }`,
     depthWrite: false,

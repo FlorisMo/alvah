@@ -231,13 +231,13 @@ export class Stage {
   /**
    * The heath's plants — the SAME struikhei and straw grass the world's heide grows
    * (world/Plants.ts), heather on the heather mats, grass on the sandier ground, none on
-   * the track or under the cabin, the board or the ranger. Two instanced draw calls.
+   * the track or under the cabin, the board or the ranger. Three instanced draw calls.
    */
   private addHeather(): void {
     const keepOut: ReadonlyArray<readonly [number, number, number]> = [
       [-6.0, -4.8, 2.8], [2.6, -5.2, 1.3], [-2.3, 2.8, 0.9], // cabin, prikbord, the ranger
     ];
-    const heather: THREE.Matrix4[] = [], grass: THREE.Matrix4[] = [];
+    const heather: THREE.Matrix4[] = [], farHeather: THREE.Matrix4[] = [], grass: THREE.Matrix4[] = [];
     const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
     for (let gx = -16; gx <= 16; gx++) for (let gz = -30; gz <= 4; gz++) {
       const h = titleHash(gx, gz);
@@ -248,7 +248,8 @@ export class Stage {
       const m = new THREE.Matrix4();
       if (cover > 0.45 + h * 0.35) {
         const s = 0.7 + h * 0.6;
-        heather.push(m.compose(new THREE.Vector3(x, 0, z), q.setFromAxisAngle(up, h * 40), new THREE.Vector3(s, s * (0.8 + h * 0.4), s)));
+        const far = Math.hypot(x - this.camBase.x, z - this.camBase.z) > 15; // past 15 m a lighter bush
+        (far ? farHeather : heather).push(m.compose(new THREE.Vector3(x, 0, z), q.setFromAxisAngle(up, h * 40), new THREE.Vector3(s, s * (0.8 + h * 0.4), s)));
       } else if (h < 0.3) {
         const s = 0.35 + h * 0.8;
         grass.push(m.compose(new THREE.Vector3(x, 0, z), q.setFromAxisAngle(up, h * 31), new THREE.Vector3(s, s, s)));
@@ -262,6 +263,7 @@ export class Stage {
       this.scene.add(inst);
     };
     put(heatherGeometry(5), heather);
+    put(heatherGeometry(5, 60), farHeather);
     put(tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), grass);
   }
 
