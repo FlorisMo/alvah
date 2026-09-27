@@ -122,6 +122,8 @@ export class CameraRig {
   private avoidHeld = 0;
   private readonly AVOID_AFTER_TURN = 1.2; // s after the player's own turn before the dodge may move
   private sinceTurn = 99;
+  private wasWalk = true;
+  private readonly HUG_ANGLE = (60 * Math.PI) / 180;
   private readonly AVOID_TAU = 0.6;
   private readonly AVOID_MAX_RATE = (30 * Math.PI) / 180;
   private readonly AVOID_URGENT_RATE = (45 * Math.PI) / 180; // the line is blocked now: a little quicker
@@ -377,10 +379,14 @@ export class CameraRig {
       this.ahead.copy(rp).addScaledVector(this.vel, this.AVOID_LOOKAHEAD);
       this.ahead.y = this.terrain.y(this.ahead.x, this.ahead.z);
       let urgent = false;
+      // stepping out of the jeep / helicopter is already a reframe: the walk view starts
+      // on its clearest bearing right away (a solid parked beside the lens is common there)
+      const stepOut = !this.wasWalk;
+      if (stepOut) this.avoidHeld = this.AVOID_HOLD;
       this.avoidHeld += dt;
       this.sinceTurn = this.player.turning ? 0 : this.sinceTurn + dt;
       if (reduced || this.player.dragging) this.avoidTarget = 0;
-      else if (this.player.turning || this.sinceTurn < this.AVOID_AFTER_TURN) {
+      else if (!stepOut && (this.player.turning || this.sinceTurn < this.AVOID_AFTER_TURN)) {
         // the player is turning the view himself, or just did: the dodge holds still (it
         // never adds a turn of its own on top, nor starts one the moment he lets go)
       } else {
@@ -397,7 +403,7 @@ export class CameraRig {
           (urgent || (this.avoidHeld >= this.AVOID_HOLD && best < cur - 0.3));
         if (change) { this.avoidTarget = pick; this.avoidHeld = 0; }
       }
-      if (reduced || snap) this.avoidYaw = this.avoidTarget;
+      if (reduced || snap || stepOut) this.avoidYaw = this.avoidTarget;
       else if (dt > 0 && !this.player.turning && this.sinceTurn >= this.AVOID_AFTER_TURN) {
         const step = (this.avoidTarget - this.avoidYaw) * dampFactor(dt, urgent ? this.AVOID_TAU / 2 : this.AVOID_TAU);
         // the dodge only gets what the follow leaves of the calm turn budget, so the two
@@ -423,6 +429,7 @@ export class CameraRig {
       const minFrac = Math.min(1, (JEEP_COLLIDE + this.camera.near + 0.3) / dist);
       dist *= Math.max(minFrac, frac);
     }
+    this.wasWalk = walk;
     const bearing = this.bearing();
     const s = Math.sin(bearing), c = Math.cos(bearing);
     // Wave 2: the lens hangs off a smoothed PIVOT (the ranger's spot) on a smoothed
@@ -674,10 +681,14 @@ export class CameraRig {
     return false;
   }
 
-  /** A building, prop or person (not a tree trunk) within arm's reach of the lens. */
+  /** A building, prop or person (not a tree trunk) within arm's reach of the lens, or
+   *  so close and big that it fills a third of the view (a parked jeep beside it). */
   private solidHugsLens(lx: number, lz: number): boolean {
     for (const o of this.nearSolids) {
-      if (!o.tree && obstacleGap(o, lx, lz) < 0.8) return true;
+      if (o.tree) continue;
+      if (obstacleGap(o, lx, lz) < 0.8) return true;
+      const d = Math.hypot(o.x - lx, o.z - lz);
+      if (d > 0 && 2 * Math.asin(Math.min(1, o.r / d)) > this.HUG_ANGLE) return true;
     }
     return false;
   }
