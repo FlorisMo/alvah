@@ -141,3 +141,43 @@ test('camera: reduced-motion — the view turns only by cuts, and Up walks into 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });
+
+test('camera: a drag tips the view gently, a sideways drag never tips it, and the tilt stays calm', async ({ page }, testInfo) => {
+  // parent B10 (2026-09-27): a 60 px drag up tipped the view from the horizon to steep,
+  // and a slightly diagonal sideways drag tipped it too. Real mouse drags on the canvas.
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/?dev=1');
+  await page.getByRole('button', { name: 'Begin' }).click();
+  await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
+  await expect.poll(() => hook(page, (r) => r.screen), { timeout: 30_000 }).toBe('world');
+  await page.waitForTimeout(1_500);
+  const pitch = async (): Promise<number> => {
+    const p = await page.evaluate(() => (window as unknown as { __ranger: { cam(): { pitch: number } } }).__ranger.cam().pitch);
+    return (-p * 180) / Math.PI; // degrees down
+  };
+  const drag = async (dx: number, dy: number): Promise<void> => {
+    await page.mouse.move(640, 420);
+    await page.mouse.down();
+    for (let i = 1; i <= 20; i++) { await page.mouse.move(640 + (dx * i) / 20, 420 + (dy * i) / 20); await page.waitForTimeout(16); }
+    await page.mouse.up();
+    await page.waitForTimeout(700); // the tilt eases in
+  };
+  const p0 = await pitch();
+  await drag(0, -60);
+  const p1 = await pitch();
+  expect(p1 - p0, `a 60 px drag up tips the view a little (${p0.toFixed(1)}° → ${p1.toFixed(1)}°)`).toBeGreaterThan(1);
+  expect(p1 - p0, `…never a lurch (${p0.toFixed(1)}° → ${p1.toFixed(1)}°)`).toBeLessThan(8);
+  await drag(300, -40);
+  const p2 = await pitch();
+  expect(Math.abs(p2 - p1), `a mostly sideways drag turns the view but does not tip it (${p1.toFixed(1)}° → ${p2.toFixed(1)}°)`).toBeLessThan(1);
+  await drag(0, -700);
+  expect(await pitch(), 'dragged all the way up, the view tips no steeper than 40°').toBeLessThanOrEqual(40.5);
+  await drag(0, 1400);
+  expect(await pitch(), 'dragged all the way down, the view still looks a little down').toBeGreaterThanOrEqual(5.5);
+  await shot(page, 'camera-drag-tilt-floor');
+
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
