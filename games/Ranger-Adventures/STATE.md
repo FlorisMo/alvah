@@ -4,6 +4,28 @@
 > it was verified. Goal and steps: [GOAL.md](GOAL.md).
 > ✅ works · 🟡 works with problems · ❌ blocks the player
 
+## 2026-09-27 13:50: after wave 4 (merged main; played + screenshots looked at)
+
+**The golden path is ALL GREEN: 8 of 8 steps pass, no quality failures**
+(`npm run golden`). All ten missions pass at their real markers (`e2e/missions.spec.ts`
+15/15). The deploy gate passes the CI way (`CI=1 npm run e2e:smoke`, software GL +
+production build: 4/4 in 1.4 min). `npm run gate` green, 491 unit tests.
+
+What wave 3's four fresh-eyes testers found and wave 4 fixed: the wayfinding arrow no
+longer loops (a route guide along the sand paths), a mission picked on the missiebord
+brings you to its marker, *Stop de missie* keeps the marker, pause/board/briefing stop
+the arrow keys, the jeep slides off the ven shore, the world continues past the rim
+(forest, no plate edge), the chase camera fades the trees round the jeep, the camera
+never dives onto his head at the rim or the cabin, one crown model for camera + forest,
+animal calls are one short calm snippet at a time, every screen reads aloud, wisselen
+speaks its rule, pictures match their words, software GL boots a light mode, and the
+title survives a return from the pause menu without leaking GPU memory.
+
+Still open (small): the *Onderweg* world-beat card has no Enter target; the 2D bird
+bench's own timers don't stop on *Stop*; distant marker labels can overlap; the jeep's
+collision list is copied every frame; the full `npm run e2e` suite (~22 min) was not
+re-run after the final merge.
+
 ## 2026-09-27 07:00: after wave 2 (`npm run golden` + `missions.spec` on main, screenshots looked at)
 
 **Golden: 7 of 8 steps pass, nothing blocks the player.** All ten missions pass at their
