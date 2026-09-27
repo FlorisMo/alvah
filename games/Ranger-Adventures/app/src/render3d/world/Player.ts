@@ -40,10 +40,10 @@ const RIM_EASE = 8;
 const RIM_HINT = 3.5;
 
 // How the follow camera answers each way of walking (see walk()). Tank keys: it stays
-// tightly behind his heading (lag = turn rate × tau ≈ 6°, so it settles within a few
+// tightly behind his heading (lag = turn rate × tau ≈ 3°, so it settles within a few
 // degrees of release). Stick / tap-walk: it eases in behind him slowly, and only
 // when he walks roughly into the screen (within CAM_BEHIND_GAP of the view).
-const CAM_TANK_TAU = 0.07;
+const CAM_TANK_TAU = 0.03;
 const CAM_TANK_RATE = (100 * Math.PI) / 180; // just above the 90°/s turn: it catches up, never whips
 const CAM_BEHIND_TAU = 0.8;
 const CAM_BEHIND_RATE = (40 * Math.PI) / 180;
@@ -230,6 +230,8 @@ export class Player {
    * screen-relative when the follow camera is off.
    */
   walk(dt: number, view: ViewFrame): CamSteer | null {
+    // a hitch (one long frame) never jumps him a long way or a big turn at once
+    dt = Math.min(dt, 0.05);
     const rp = this.group.position;
     // someone else turned him (stepping out of the jeep, a reframe): take that as his
     // heading, and let the camera hold where it is.
@@ -609,6 +611,11 @@ export class Player {
     //    along a grid line — the centre-column click at spawn — still lands)
     const p = this.terrain.intersectRay(this.raycaster.ray);
     if (p) this.target.set(p.x, 0, p.z);
+  }
+
+  /** The keys are turning him (tank turn, easing in or out) right now. */
+  get turning(): boolean {
+    return this.turnVel !== 0;
   }
 
   /** A past-threshold mouse / finger drag is looking around right now. */

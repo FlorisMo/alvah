@@ -120,6 +120,8 @@ export class CameraRig {
   private readonly TURN_BUDGET = (110 * Math.PI) / 180; // rad/s: follow + dodge together, well under a restless 150°/s
   private readonly AVOID_HOLD = 0.8;   // s a choice is kept before the search may change its mind (no dithering)
   private avoidHeld = 0;
+  private readonly AVOID_AFTER_TURN = 1.2; // s after the player's own turn before the dodge may move
+  private sinceTurn = 99;
   private readonly AVOID_TAU = 0.6;
   private readonly AVOID_MAX_RATE = (30 * Math.PI) / 180;
   private readonly AVOID_URGENT_RATE = (45 * Math.PI) / 180; // the line is blocked now: a little quicker
@@ -317,6 +319,9 @@ export class CameraRig {
    * at construction — the motion-comfort law.
    */
   place(snap: boolean, dt = 0, reduced = false): void {
+    // a hitch (a long frame) never turns into a jump of the view: the camera eases at
+    // most one 20 fps frame's worth per frame and catches up over the next ones
+    dt = Math.min(dt, 0.05);
     const rp = this.player.group.position;
     const { inVehicle, inHeli } = this.host.mode();
     const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
@@ -365,8 +370,12 @@ export class CameraRig {
       this.ahead.y = this.terrain.y(this.ahead.x, this.ahead.z);
       let urgent = false;
       this.avoidHeld += dt;
+      this.sinceTurn = this.player.turning ? 0 : this.sinceTurn + dt;
       if (reduced || this.player.dragging) this.avoidTarget = 0;
-      else {
+      else if (this.player.turning || this.sinceTurn < this.AVOID_AFTER_TURN) {
+        // the player is turning the view himself, or just did: the dodge holds still (it
+        // never adds a turn of its own on top, nor starts one the moment he lets go)
+      } else {
         // score each side offset now and where he is heading; keep the current choice
         // unless it is blocked or another is clearly better and it has been held a while
         let best = Infinity, pick = 0, cur = Infinity;
@@ -381,7 +390,7 @@ export class CameraRig {
         if (change) { this.avoidTarget = pick; this.avoidHeld = 0; }
       }
       if (reduced || snap) this.avoidYaw = this.avoidTarget;
-      else if (dt > 0) {
+      else if (dt > 0 && !this.player.turning && this.sinceTurn >= this.AVOID_AFTER_TURN) {
         const step = (this.avoidTarget - this.avoidYaw) * dampFactor(dt, urgent ? this.AVOID_TAU / 2 : this.AVOID_TAU);
         // the dodge only gets what the follow leaves of the calm turn budget, so the two
         // together never turn the view faster than TURN_BUDGET
