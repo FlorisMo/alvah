@@ -22,7 +22,9 @@ export function onboardHint(stickShown: boolean): string {
  *  shown as a brief transient only AFTER the ranger has learned to walk — so the
  *  first world frame carries ONE hint (the control line), never a stack of three.
  *  Replaces the old 16-word toast; stays inside the M3/E3 ≤7-word norm. */
-export const ONBOARD_TAP = 'Tik op een dier om te spelen.';
+// child:B11: the tip names the real action (a mission starts at its marker ring; a
+// roaming animal is not clickable), so it never promises what does not happen.
+export const ONBOARD_TAP = 'Loop naar een ring om te spelen.';
 
 /** The calm world-boundary cue (F-11): shown through this SAME one-tip channel
  *  when the ranger heads past the last content. The visible rim + gentle stop that

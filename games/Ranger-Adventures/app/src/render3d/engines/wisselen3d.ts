@@ -26,7 +26,7 @@ import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
 import type { WorldCtx, Play3dEngine } from '../play/types';
-import { buildWisselTrial, WisselRun, type WisselBin } from '../../engines/wisselen';
+import { buildWisselTrial, WisselRun, placeNames, regelAndersom, dagOfNacht, type WisselBin } from '../../engines/wisselen';
 import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
@@ -44,6 +44,8 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 const SIDE = 2.3;
 
 /* ------------------------------------------------------------ the rule board ---- */
+
+const BOARD_BG = '#e9d7ae';
 
 function drawSun(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
   g.save();
@@ -64,13 +66,15 @@ function drawSun(g: CanvasRenderingContext2D, x: number, y: number, r: number): 
   g.restore();
 }
 
+/** A crescent moon: the disc, then the board's own colour bites it (erasing would
+ *  punch a see-through hole in the board, which rendered as a black disc). */
 function drawMoon(g: CanvasRenderingContext2D, x: number, y: number, r: number): void {
   g.save();
   g.fillStyle = '#5b6fb0';
   g.beginPath();
   g.arc(x, y, r * 0.85, 0, Math.PI * 2);
   g.fill();
-  g.globalCompositeOperation = 'destination-out';
+  g.fillStyle = BOARD_BG;
   g.beginPath();
   g.arc(x + r * 0.42, y - r * 0.22, r * 0.72, 0, Math.PI * 2);
   g.fill();
@@ -103,7 +107,7 @@ function paintBoard(c: HTMLCanvasElement, inverted: boolean): void {
   const g = c.getContext('2d')!;
   const W = c.width, H = c.height;
   g.clearRect(0, 0, W, H);
-  g.fillStyle = '#e9d7ae';
+  g.fillStyle = BOARD_BG;
   g.strokeStyle = '#7a5a36';
   g.lineWidth = 14;
   g.beginPath();
@@ -130,10 +134,37 @@ function paintBoard(c: HTMLCanvasElement, inverted: boolean): void {
   }
 }
 
-/** The two place names inside a rule line "Dag-dier → X. Nacht-dier → Y." */
-function placeNames(regel: string): { open: string; hol: string } {
-  const m = /→\s*([^.]+)\.\s*[^→]*→\s*([^.]+)/.exec(regel);
-  return m ? { open: m[1].trim(), hol: m[2].trim() } : { open: 'open plek', hol: 'het hol' };
+/**
+ * The waiting animal's tag: its name, and under it its cue — ☀ dag-dier on a sun pill
+ * or 🌙 nacht-dier on a night pill (icon + word, never colour alone; child:B3). A
+ * camera-facing sprite like the stage's name tags. `width` in metres.
+ */
+function animalTag(naam: string, dag: boolean, width = 1.0): THREE.Sprite {
+  const W = 512, H = 236;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d')!;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  const pill = (text: string, y: number, h: number, bg: string, fg: string, font: string): void => {
+    g.font = font;
+    const w = Math.min(W - 8, g.measureText(text).width + 60);
+    g.fillStyle = bg;
+    g.beginPath();
+    g.roundRect((W - w) / 2, y, w, h, h / 2.6);
+    g.fill();
+    g.fillStyle = fg;
+    g.fillText(text, W / 2, y + h / 2 + 3);
+  };
+  pill(naam, 8, 96, 'rgba(28,24,18,0.8)', '#fff', '600 62px Inter, system-ui, sans-serif');
+  const cue = dagOfNacht(dag);
+  pill(`${cue.icoon} ${cue.woord}`, 118, 104, dag ? '#f6d77a' : '#3f4f86', dag ? '#3b2a0c' : '#f3f1ff', '700 60px Inter, system-ui, sans-serif');
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false, transparent: true }));
+  sprite.scale.set(width, width * (H / W), 1);
+  sprite.renderOrder = 5;
+  return sprite;
 }
 
 export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
@@ -156,7 +187,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // the two places are named by the mission's own rule ("open plek" / "open zand")
     const naam = placeNames(regelDag);
     // after a flip the banner states the NEW mapping outright (not only "andersom")
-    const regelAndersom = `Dag-dier → ${naam.hol}. Nacht-dier → ${naam.open}.`;
+    const regelOmgekeerd = regelAndersom(regelDag);
 
     const tallest = Math.max(...trial.queue.map((q) => heightFor(q.id)), 1);
     const stage = new Stage(ctx, { halfW: SIDE + 0.9, halfD: 0.9, tall: Math.max(3.1, tallest + 0.5), pitchDeg: 20, insetBottom: 110, insetTop: 70 });
@@ -194,7 +225,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       view.position.copy(stage.cam);
       view.lookAt(stage.look);
       view.updateMatrixWorld(true);
-      const tagTop = centreAt(0).clone().setY(centreAt(0).y + Math.max(0.3, tallest) + 0.45).project(view).y;
+      const tagTop = centreAt(0).clone().setY(centreAt(0).y + Math.max(0.3, tallest) + 0.42 + 0.27).project(view).y;
       let lift = 0;
       for (; lift < 1.6; lift += 0.05) {
         const bottom = signAt.clone().setY(signAt.y + 1.85 - 0.48 + lift).project(view).y;
@@ -245,9 +276,9 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         group.add(root);
         tick = (dt) => s.update(dt);
       }
-      const tag = nameTag(Content.animal(cur.id)?.naam ?? cur.id, 1.0);
+      const tag = animalTag(Content.animal(cur.id)?.naam ?? cur.id, cur.dag, 1.0);
       top = Math.max(top, 0.3);
-      tag.position.set(0, top + 0.3, 0);
+      tag.position.set(0, top + 0.42, 0);
       group.add(tag);
       (ctx.scene as THREE.Scene).add(group);
       animal = {
@@ -294,19 +325,29 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     raf = requestAnimationFrame(loop);
 
     function speak(text: string): void { if (settings.voorlezen) narrator.speak(text); }
+    /** said after the line being said, never over it */
+    function queue(text: string): void { if (settings.voorlezen) narrator.queue(text); }
 
     function banner(text: string): void {
+      // one short sentence per line ("Dag-dier → open plek." / "Nacht-dier → het hol."):
+      // never more than ~7 words on a line
+      const lines = text.split(/(?<=[.!?])\s+/).map(esc).join('<br>');
       const card = anchoredPrompt(
         ctx.prompt,
         `<div class="p3-bottom"><div class="p3-card"><div class="p3-row">` +
-          `<p class="p3-text">${esc(text)}</p>` +
+          `<p class="p3-text">${lines}</p>` +
           `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
           `</div></div></div>`,
         stage.signal,
       );
       card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(text));
     }
-    function ruleText(): string { return run.inverted ? regelAndersom : regelDag; }
+    function ruleText(): string { return run.inverted ? regelOmgekeerd : regelDag; }
+    /** What the waiting animal is, said aloud: "Das. Nacht-dier." (child:B3) */
+    function animalLine(): string {
+      const cur = run.current;
+      return cur ? `${Content.animal(cur.id)?.naam ?? cur.id}. ${dagOfNacht(cur.dag).woord}.` : '';
+    }
 
     // ---- build the places from the world's own assets ----
     let teardownPick: (() => void) | null = null;
@@ -353,6 +394,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       if (podium) podium.position.y -= 0.04; // bedded into the ground a little
       await stageAnimal();
       if (stage.aborted) return;
+      queue(animalLine());
       teardownPick = pick3d({
         canvas: ctx.canvas,
         camera,
@@ -402,11 +444,16 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
             window.setTimeout(() => {
               if (stage.aborted) return;
               boardGlow.set(0);
-              void stageAnimal().then(() => { banner(ruleText()); busy = false; });
+              void stageAnimal().then(() => {
+                banner(ruleText());
+                queue(ruleText()); // the NEW rule, said outright (child:B3)
+                queue(animalLine());
+                busy = false;
+              });
             }, reduced ? 900 : 1700);
             return;
           }
-          void stageAnimal().then(() => { banner(ruleText()); busy = false; });
+          void stageAnimal().then(() => { banner(ruleText()); speak(animalLine()); busy = false; });
         },
       };
     }
@@ -438,6 +485,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // boot
     registerActivityWin(() => finish()); // W2.3: dev-only win → genuine resolve + teardown
     speak(instructie);
+    queue(ruleText()); // the rule is read aloud, not only shown (child:B3)
     banner(ruleText());
   });
 }

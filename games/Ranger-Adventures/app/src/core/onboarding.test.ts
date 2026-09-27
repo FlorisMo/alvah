@@ -30,7 +30,7 @@ test('the sequenced transient tips (tap + boundary) stay ≤7 words (P3.3)', () 
 
 test('forPointer: touch keeps "Tik", a mouse reads "Klik" (same word count)', () => {
   assert.equal(forPointer(ONBOARD_TAP, false), ONBOARD_TAP);
-  assert.equal(forPointer(ONBOARD_TAP, true), 'Klik op een dier om te spelen.');
+  assert.equal(forPointer('Tik op een dier om te spelen.', true), 'Klik op een dier om te spelen.');
   assert.equal(forPointer('Doe ze na. Tik op de dieren.', true), 'Doe ze na. Klik op de dieren.');
   assert.equal(forPointer('Je tik op het bord.', true), 'Je klik op het bord.');
   assert.equal(countWords(forPointer(ONBOARD_TAP, true)), countWords(ONBOARD_TAP));

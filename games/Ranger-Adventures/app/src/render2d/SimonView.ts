@@ -62,7 +62,14 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
     const dots = panel.querySelector('.simon-dots') as HTMLDivElement;
     const row = panel.querySelector('.simon-row') as HTMLDivElement;
     const intro = panel.querySelector('.simon-intro') as HTMLDivElement;
-    panel.querySelector('.simon-speak')?.addEventListener('click', () => narrator.speak(instructie));
+    // read-aloud (child:B2): every new line on the banner is spoken when voorlezen is on;
+    // 🔊 says the line on screen now
+    const say = (text: string, after = false): void => {
+      if (!settings.voorlezen) return;
+      if (after) narrator.queue(text); else narrator.speak(text);
+    };
+    panel.querySelector('.simon-speak')?.addEventListener('click', () => narrator.speak(
+      phase === 'intro' ? instructie : banner.textContent ?? instructie));
 
     const btns = new Map<string, HTMLButtonElement>();
     trial.dieren.forEach((id) => {
@@ -77,6 +84,8 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
       btns.set(id, b);
     });
 
+    say(instructie);
+
     function renderDots(): void {
       const pos = run.echoIndex;
       dots.innerHTML = run.sequence
@@ -88,32 +97,41 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
       intro.style.display = 'none';
       Sound.unlock();
       run.begin();
-      listen();
+      listen(true);
     });
 
-    function listen(): void {
+    /** The animals call the sequence. `sayIt`: speak "Luister…" first; the calls always
+     *  wait until the voice is quiet, so no call sounds over the words. */
+    let listenToken = 0;
+    function listen(sayIt: boolean): void {
       clearTimers();
       phase = 'listen';
       banner.textContent = luister;
       for (const b of btns.values()) { b.disabled = true; b.classList.remove('calling'); }
       renderDots();
-      const gap = reduced ? 380 : 250;
-      let t = 480;
-      run.sequence.forEach((id) => {
-        after(t, () => {
-          for (const [bid, b] of btns) b.classList.toggle('calling', bid === id);
-          if (settings.geluid) Sound.call(id);
+      if (sayIt) say(luister);
+      const token = ++listenToken;
+      void (settings.voorlezen ? narrator.quiet(5000) : Promise.resolve()).then(() => {
+        if (token !== listenToken || !panel.isConnected || phase !== 'listen') return;
+        const gap = reduced ? 380 : 250;
+        let t = 480;
+        run.sequence.forEach((id) => {
+          after(t, () => {
+            for (const [bid, b] of btns) b.classList.toggle('calling', bid === id);
+            if (settings.geluid) Sound.call(id);
+          });
+          const dur = Sound.callDur(id) * 1000;
+          after(t + dur, () => btns.get(id)?.classList.remove('calling'));
+          t += dur + gap;
         });
-        const dur = Sound.callDur(id) * 1000;
-        after(t + dur, () => btns.get(id)?.classList.remove('calling'));
-        t += dur + gap;
+        after(t, startEcho);
       });
-      after(t, startEcho);
     }
 
     function startEcho(): void {
       phase = 'echo';
       banner.textContent = echoTxt;
+      say(echoTxt);
       for (const b of btns.values()) { b.disabled = false; b.classList.remove('calling'); }
       renderDots();
     }
@@ -123,25 +141,28 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
       const b = btns.get(id);
       b?.classList.remove('tapped');
       requestAnimationFrame(() => b?.classList.add('tapped'));
-      if (settings.geluid) Sound.call(id);
       after(240, () => b?.classList.remove('tapped'));
 
       const res = run.tap(id);
       renderDots();
-      if (res === 'advance') return;
+      // the tapped animal calls only between taps (as in 3D): the last tap is answered
+      // by the words, and a call never sounds over "Luister nog een keer"
+      if (res === 'advance') { if (settings.geluid) Sound.call(id); return; }
       if (res === 'complete') { finish(); return; }
       if (res === 'grow') {
         phase = 'pause';
         for (const bb of btns.values()) bb.disabled = true;
         if (settings.geluid) Sound.correct();
         banner.textContent = 'Goed onthouden!';
-        after(1100, listen);
+        say('Goed onthouden!');
+        after(1100, () => listen(true));
       } else { // 'replay' — wrong tap, recoverable: replay the SAME sequence
         phase = 'pause';
         for (const bb of btns.values()) bb.disabled = true;
         if (settings.geluid) Sound.tryAgain();
         banner.textContent = 'Luister nog een keer.';
-        after(1300, listen);
+        say('Luister nog een keer.');
+        after(1300, () => listen(false));
       }
     }
 
@@ -150,9 +171,9 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
       for (const b of btns.values()) b.disabled = true;
       if (settings.geluid) Sound.found();
       banner.textContent = goed;
-      if (settings.voorlezen) narrator.speak(goed);
+      say(goed);
       const summary = run.summary();
-      after(1600, () => { clearTimers(); narrator.stop(); panel.remove(); resolve(summary); });
+      after(1600, () => { clearTimers(); narrator.stop(); Sound.stopCall(); panel.remove(); resolve(summary); });
     }
   });
 }

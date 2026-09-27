@@ -144,6 +144,14 @@
   font: 700 48px/1 var(--font-body); /* an animal picture (animalIcon), never letters */
 }
 .wc-name { color: var(--paper); font: 600 16px/1 var(--font-body); }
+/* the animal's day/night cue: icon + word on a sun or night pill (child:B3) */
+.wc-kind {
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font: 700 17px/1.1 var(--font-body);
+}
+.wc-kind.is-dag { background: #f6d77a; color: #3b2a0c; }
+.wc-kind.is-nacht { background: #3f4f86; color: #f3f1ff; }
 .wissel-center.wrong { animation: wc-wrong 0.46s var(--ease-standard); }
 @keyframes wc-wrong { 0%, 100% { transform: none; } 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
 .wissel-center.fly-open { transform: translate(-180px, -40px) scale(0.4); opacity: 0; }
@@ -171,3 +179,5 @@
   font: 600 17px/1.2 var(--font-body);
 }
 .feedback-toast.ok { background: var(--green-soft); color: var(--green); }
+.wissel .feedback-toast.gevolg { background: rgba(193, 70, 126, 0.92); color: var(--paper); }
+.wissel .feedback-toast { width: max-content; max-width: 30ch; text-align: center; }

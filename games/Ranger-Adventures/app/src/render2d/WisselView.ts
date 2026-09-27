@@ -12,7 +12,7 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
-import { buildWisselTrial, WisselRun } from '../engines/wisselen';
+import { buildWisselTrial, WisselRun, dagOfNacht, regelAndersom } from '../engines/wisselen';
 import { animalIcon } from './animalIcon';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
@@ -33,6 +33,8 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
     const goed = copy.goed ?? 'Alle dieren op de goede plek!';
     const regelDag = copy.regel ?? 'Dag-dier → open plek. Nacht-dier → het hol.';
     const regelOm = copy.regelOm ?? 'Nu andersom!';
+    // after a flip the sign states the NEW mapping outright, as in 3D
+    const regelOmgekeerd = regelAndersom(regelDag);
 
     let busy = false;
     const timers: number[] = [];
@@ -48,7 +50,7 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
       `</div>` +
       `<div class="wissel-field" role="group" aria-label="${esc(instructie)}">` +
       `<div class="wissel-sky"></div>` +
-      `<div class="wissel-sign"><span class="ws-flag"></span><span class="ws-rule">${esc(regelDag)}</span></div>` +
+      `<div class="wissel-sign"><span class="ws-flag"></span><span class="ws-rule"></span></div>` +
       `<div class="wissel-stage">` +
       `<button class="wissel-bin bin-open" type="button" aria-label="open plek"><span class="bin-ico">☀️</span><span class="bin-label">open plek</span></button>` +
       `<div class="wissel-center"></div>` +
@@ -66,7 +68,14 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
     const dotsBox = panel.querySelector('.wissel-progress') as HTMLDivElement;
     const binOpen = panel.querySelector('.bin-open') as HTMLButtonElement;
     const binHol = panel.querySelector('.bin-hol') as HTMLButtonElement;
-    panel.querySelector('.wissel-speak')?.addEventListener('click', () => narrator.speak(rule.textContent ?? instructie));
+    // read-aloud (child:B2/B3): the instruction and the rule, the new rule after every
+    // flip, and each animal with what it is (a day or a night animal)
+    const say = (text: string, after = false): void => {
+      if (!settings.voorlezen) return;
+      if (after) narrator.queue(text); else narrator.speak(text);
+    };
+    const ruleNow = (): string => (run.inverted ? regelOmgekeerd : regelDag);
+    panel.querySelector('.wissel-speak')?.addEventListener('click', () => narrator.speak(ruleNow()));
 
     binOpen.addEventListener('click', () => choose('open'));
     binHol.addEventListener('click', () => choose('hol'));
@@ -77,15 +86,22 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
         .join('');
     }
 
-    function renderAnimal(): void {
+    /** `afterRule`: the rule is being said, so the animal waits its turn; otherwise
+     *  its line replaces the last animal's (the voice never lags behind the screen). */
+    function renderAnimal(afterRule = false): void {
       const cur = run.current;
       if (!cur) return;
       const a = Content.animal(cur.id);
+      const soort = dagOfNacht(cur.dag);
       center.classList.remove('wrong', 'fly-open', 'fly-hol');
+      // the animal carries its cue: ☀ dag-dier / 🌙 nacht-dier (icon + word, child:B3)
       center.innerHTML =
         `<span class="wc-token" aria-hidden="true">${animalIcon(cur.id)}</span>` +
-        `<span class="wc-name">${esc(a?.naam ?? cur.id)}</span>`;
-      rule.textContent = run.inverted ? regelOm : regelDag;
+        `<span class="wc-name">${esc(a?.naam ?? cur.id)}</span>` +
+        `<span class="wc-kind ${cur.dag ? 'is-dag' : 'is-nacht'}">${soort.icoon} ${esc(soort.woord)}</span>`;
+      say(`${a?.naam ?? cur.id}. ${soort.woord}.`, afterRule);
+      // one sentence per line: never more than ~7 words on a line
+      rule.innerHTML = ruleNow().split(/(?<=[.!?])\s+/).map(esc).join('<br>');
       field.classList.toggle('inverted', run.inverted);
       renderDots();
     }
@@ -95,6 +111,7 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
       const res = run.choose(bin);
       if (res === 'retry') {
         if (settings.geluid) Sound.tryAgain();
+        toast('Bijna! Probeer de andere plek.', 'gevolg');
         center.classList.remove('wrong');
         requestAnimationFrame(() => center.classList.add('wrong'));
         after(480, () => center.classList.remove('wrong'));
@@ -109,23 +126,33 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
           flag.textContent = 'Bordje draait!';
           sign.classList.add('flipping');
           if (settings.geluid) Sound.select();
+          say(regelOm); // "Nu andersom!" + the new rule, before the next animal
+          say(regelOmgekeerd, true);
           after(reduced ? 700 : 1400, () => { flag.textContent = ''; sign.classList.remove('flipping'); });
         }
-        renderAnimal();
+        renderAnimal(res === 'flip');
         busy = false;
       });
     }
 
+    function toast(text: string, kind: 'ok' | 'gevolg'): void {
+      field.querySelectorAll('.feedback-toast').forEach((n) => n.remove());
+      const t = document.createElement('div');
+      t.className = `feedback-toast ${kind}`;
+      t.textContent = text;
+      field.appendChild(t);
+      say(text);
+      if (kind === 'gevolg') after(1400, () => t.remove());
+    }
+
     function finish(): void {
       if (settings.geluid) Sound.found();
-      const toast = document.createElement('div');
-      toast.className = 'feedback-toast ok';
-      toast.textContent = goed;
-      field.appendChild(toast);
-      if (settings.voorlezen) narrator.speak(goed);
+      toast(goed, 'ok');
       after(1500, () => { clearTimers(); narrator.stop(); panel.remove(); resolve(run.summary()); });
     }
 
-    renderAnimal();
+    say(instructie);
+    say(regelDag, true);
+    renderAnimal(true);
   });
 }

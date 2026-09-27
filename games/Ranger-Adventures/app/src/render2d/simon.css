@@ -135,9 +135,8 @@
 .simon-dier.tapped { transform: scale(0.94); background: rgba(122, 184, 90, 0.3); }
 
 .simon-intro {
-  position: absolute;
-  inset: 0;
+  /* below the animal row, never over it (child:B13: 'Luister' used to cover two cards) */
+  position: relative;
   display: grid;
   place-items: center;
-  background: var(--floor-scrim);            /* RUN-C P1.6: warm dusk scrim, not cool blue-black */
 }

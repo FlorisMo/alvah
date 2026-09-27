@@ -58,7 +58,12 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
     const field = panel.querySelector('.route-field') as HTMLDivElement;
     const banner = panel.querySelector('.route-banner') as HTMLParagraphElement;
     const intro = panel.querySelector('.route-intro') as HTMLDivElement;
-    panel.querySelector('.route-speak')?.addEventListener('click', () => narrator.speak(instructie));
+    // read-aloud (child:B2): the instruction, then each new line on the banner
+    const say = (text: string): void => { if (settings.voorlezen) narrator.speak(text); };
+    let started = false;
+    panel.querySelector('.route-speak')?.addEventListener('click', () => narrator.speak(
+      started ? banner.textContent ?? instructie : instructie));
+    say(instructie);
 
     const spotEls = new Map<number, HTMLButtonElement>();
     for (const s of PRINT_SPOTS) {
@@ -75,7 +80,8 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
 
     intro.querySelector('.btn-start')?.addEventListener('click', () => {
       intro.style.display = 'none';
-      if (settings.voorlezen) narrator.speak(tonen);
+      started = true;
+      say(tonen);
       showSequence();
     });
 
@@ -107,6 +113,7 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
         b.disabled = false;
       }
       banner.textContent = terug;
+      say(terug);
     }
 
     function onTap(id: number): void {
@@ -120,6 +127,8 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
           requestAnimationFrame(() => b.classList.add('wrong'));
         }
         for (const bb of spotEls.values()) bb.disabled = true;
+        banner.textContent = 'Kijk nog een keer.';
+        say('Kijk nog een keer.');
         after(750, showSequence);
       } else {
         if (settings.geluid) Sound.step();
@@ -133,7 +142,7 @@ export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
       for (const b of spotEls.values()) b.disabled = true;
       if (settings.geluid) Sound.found();
       banner.textContent = goed;
-      if (settings.voorlezen) narrator.speak(goed);
+      say(goed);
       const summary = run.summary();
       after(1500, () => {
         clearTimers();

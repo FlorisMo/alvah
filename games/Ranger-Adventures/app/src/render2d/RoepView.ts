@@ -62,6 +62,7 @@ export function playRoep(host: HTMLElement): Promise<BeatSummary> {
     const callBtn = panel.querySelector('.roep-call') as HTMLButtonElement;
     const callText = panel.querySelector('.rc-text') as HTMLSpanElement;
     panel.querySelector('.roep-speak')?.addEventListener('click', () => narrator.speak(ROEP_COPY.instructie));
+    if (settings.voorlezen) narrator.speak(ROEP_COPY.instructie);
 
     // one ≥56px button per bird (the full pool is always the row; the round only
     // decides which are the live options, so the layout never jumps)
@@ -87,11 +88,15 @@ export function playRoep(host: HTMLElement): Promise<BeatSummary> {
         .join('');
     }
 
+    /** The call, then its words ("kroa-kroa") — one after the other, never at once. */
     function playCall(): void {
       if (!round) return;
-      if (settings.geluid) Sound.call(round.target);
       const roep = byId.get(round.target)?.roep ?? '';
-      if (settings.voorlezen) narrator.speak(roep);
+      const target = round.target;
+      if (!settings.geluid) { if (settings.voorlezen) narrator.speak(roep); return; }
+      narrator.stop();
+      const dur = Sound.call(target);
+      if (settings.voorlezen) after(dur * 1000 + 150, () => { if (round?.target === target) narrator.speak(roep); });
     }
 
     callBtn.addEventListener('click', () => { if (phase === 'kies') playCall(); });
@@ -99,6 +104,7 @@ export function playRoep(host: HTMLElement): Promise<BeatSummary> {
     intro.querySelector('.btn-start')?.addEventListener('click', () => {
       intro.style.display = 'none';
       Sound.unlock();
+      if (settings.voorlezen) narrator.speak(ROEP_COPY.luister);
       nextRound();
     });
 
@@ -118,7 +124,11 @@ export function playRoep(host: HTMLElement): Promise<BeatSummary> {
         b.classList.toggle('off', !live.has(id));
         b.classList.remove('good', 'bad', 'tapped');
       }
-      after(reduced ? 460 : 320, playCall);
+      // the call waits until the voice is quiet (the instruction, the last "goed")
+      const token = round;
+      void (settings.voorlezen ? narrator.quiet(6000) : Promise.resolve()).then(() => {
+        if (round === token && phase === 'kies' && panel.isConnected) after(reduced ? 460 : 320, playCall);
+      });
     }
 
     function onTap(id: string): void {

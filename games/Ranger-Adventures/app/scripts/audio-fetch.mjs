@@ -34,7 +34,7 @@ const TARGETS = [
   // mammals → freesound (free-text; CC-filtered)
   { id: 'edelhert',    source: 'free', q: 'deer bellow' },
   { id: 'ree',         source: 'free', q: 'deer bark' },
-  { id: 'wildzwijn',   source: 'free', q: 'wild boar grunt' },
+  // wildzwijn: no recording — the one fetched read as a dinosaur roar; sound.ts synthesises a soft knor
   { id: 'das',         source: 'free', q: 'badger growl snuffle' },
   { id: 'eekhoorn',    source: 'free', q: 'squirrel' },
   // ambience → freesound (looping bed for the world)

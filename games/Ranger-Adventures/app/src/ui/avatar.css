@@ -8,20 +8,57 @@
    the "Dit is mijn ranger" CTA always on-screen. Tighter gaps + a smaller
    portrait shrink the natural height; a sticky footer (.av-klaar-row, below)
    guarantees the CTA is visible even when the kenmerk groups still overflow. */
-/* The card itself does not scroll: kicker, title and the live preview stay on top,
-   the name + kenmerk choices scroll in .av-body, and the button row sits below it.
-   (A sticky button over a scrolling card covered the last swatch row on iPad.) */
+/* The card itself does not scroll: kicker and title stay on top, the choices sit in
+   .av-main, and the button row sits below it. (A sticky button over a scrolling card
+   covered the last swatch row on iPad.) */
 .avatar-creator.boot-card-ish { gap: 10px; max-width: 460px; overflow: hidden; padding-bottom: 0; }
-.avatar-creator .av-body {
+/* The choices: one scrolling column on a narrow screen (with the "Meer kiezen" cue while
+   anything is below the fold, child:B8) … */
+.avatar-creator .av-main {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   padding: 4px 2px 10px;
+}
+.avatar-creator .av-side { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.av-more {
+  display: none;
+  position: sticky;
+  bottom: 0;
+  align-self: center;
+  flex: none;
+  min-height: var(--tap-min);
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--green-deep);
+  color: var(--paper);
+  font: 700 18px/1 var(--font-body);
+  box-shadow: 0 -10px 22px rgba(253, 252, 248, 0.95), var(--shadow-md);
+  cursor: pointer;
+}
+.avatar-creator.av-has-more .av-more { display: inline-flex; align-items: center; gap: 8px; }
+/* … and on a laptop (or an iPad on its side) everything at once, side by side: the
+   ranger + name on the left, Huid / Haar / Ranger-jas / Ogen on the right. */
+@media (min-width: 880px) and (min-height: 600px) {
+  .avatar-creator.boot-card-ish { max-width: none; width: min(94vw, 860px); max-height: 94vh; }
+  .avatar-creator .av-main {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    align-items: start;
+    gap: 8px 28px;
+    overflow-y: auto;
+  }
+  .avatar-creator .av-groups { gap: 6px; }
+  .avatar-creator .av-legend { padding-bottom: 4px; text-align: left; }
+  .avatar-creator .av-swatch { padding: 4px 6px 6px; }
+  .avatar-creator .av-more { grid-column: 1 / -1; }
 }
 
 /* ---- live preview ---- */
@@ -86,7 +123,7 @@
 .av-group { border: 0; margin: 0; padding: 0; }
 .av-legend {
   padding: 0 0 8px;
-  font: 600 14px/1.2 var(--font-body);
+  font: 600 16px/1.2 var(--font-body);
   color: var(--green-mid);
 }
 .av-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
