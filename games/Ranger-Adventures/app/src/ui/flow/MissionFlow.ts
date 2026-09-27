@@ -28,7 +28,7 @@ import { playWissel } from '../../render2d/WisselView';
 import { mountReadAloud, readScreenAloud, speakButtonBeside } from '../ReadAloud';
 import { SAY } from '../../content/screens';
 import { deviceText } from '../hud/device';
-import { session, esc, naam, card, clearOverlays } from './session';
+import { session, esc, naam, card, clearOverlays, fadeCut } from './session';
 import {
   resumePatrol, notePatrolCompletion, activeExploreTitel, tellWorldMissionDone, holdWorld, releaseWorld,
 } from './WorldSession';
@@ -71,6 +71,21 @@ function stepForView(step: Step): Step {
   return { ...step, skin: copy ? { ...skin, copy } : skin };
 }
 
+/* ------------------------------------------------------- to the marker ---- */
+/**
+ * Start a mission picked away from its marker (on the missiebord, or "Volgende" at a
+ * finished one): the ranger is brought to its marker first, under a calm fade (a plain
+ * cut under reduced motion), and its briefing opens there. So the mission plays where
+ * it belongs — the frog by the ven, not on the dry heath by the cabin (parent B6) —
+ * and its family comes home where he stands. Already at the marker: just the briefing.
+ */
+export function goToMission(mission: Mission): void {
+  const world = session.world;
+  if (!world || world.nearMission() === mission.id) { showBriefing(mission); return; }
+  narrator.stop();
+  fadeCut(() => { clearOverlays(); world.bringRangerTo(mission.id); }, () => showBriefing(mission));
+}
+
 /* ------------------------------------------------------------ briefing ---- */
 /** The mission entry card: a diegetic *veldnotitie* (field note), so launching a
  *  mission never feels like leaving the world. */
@@ -78,16 +93,22 @@ export function showBriefing(mission: Mission): void {
   const jargon = store.get().settings.jargon;
   const lines = (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
 
+  // "Ga op pad" and "Nog even rondkijken" sit in a pinned footer: at 800×600 the way
+  // back used to fall below the card (breaker note)
   const el = card(
-    `<div class="briefing veldnotitie boot-card-ish">` +
+    `<div class="briefing veldnotitie boot-card-ish has-foot">` +
     `<p class="boot-kicker">Veldnotitie · ${esc(mission.landschap)}</p>` +
     `<h1 class="boot-title">${esc(mission.titel)}</h1>` +
+    `<div class="card-body">` +
     `<div class="briefing-lines">${lines.map((_, i) => `<p class="briefing-line" data-line="${i}"></p>`).join('')}</div>` +
+    `</div>` +
+    `<div class="card-foot">` +
     `<div class="ra-row">` +
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
     `<button class="btn-start" type="button">Ga op pad</button>` +
     `</div>` +
     `<button class="ra-text-btn briefing-back" type="button" data-key="back">Nog even rondkijken</button>` +
+    `</div>` +
     `</div>`,
   );
   const lineEls = Array.from(el.querySelectorAll<HTMLElement>('.briefing-line'));
@@ -185,6 +206,9 @@ async function runMission(mission: Mission): Promise<void> {
   }
   unmountMissionPause();
   missionStop = null;
+  // no mini-game view is live any more: the reunion, reward, clue and sporenboek are
+  // cards over the (still held) world, so the dev hook no longer says '3d' (breaker note)
+  setMissionView(null);
   // The case-board data gate keys off voltooid, so snapshot the found-set BEFORE
   // marking this mission done: the clue beat fires only when this completion makes
   // the hook NEWLY appear on the board.
@@ -274,10 +298,17 @@ export function showSeasonFinale(): void {
 }
 
 /* ------------------------------------------------ in-mission pause (F-26) ---- */
+/** What the pause card's stop does, and what it says (the mission's, or the bench's). */
+let pauseStop: () => void = () => stopMission();
+let pauseStopLabel = 'Stop de missie';
+
 /** A persistent Pauze chip for the whole in-world mission. NOT a `.ra-overlay`, so
- *  the engine's own prompt swaps never remove it; `unmountMissionPause` clears it. */
-function mountMissionPause(): void {
+ *  the engine's own prompt swaps never remove it; `unmountMissionPause` clears it.
+ *  The bird bench mounts the same chip with its own stop (breaker B5). */
+export function mountMissionPause(stop: () => void = stopMission, stopLabel = 'Stop de missie'): void {
   unmountMissionPause();
+  pauseStop = stop;
+  pauseStopLabel = stopLabel;
   const el = document.createElement('button');
   el.className = 'ra-pill mission-pause';
   el.type = 'button';
@@ -308,7 +339,7 @@ function showMissionPause(): void {
     `<h1 class="boot-title">Wat wil je doen?</h1>` +
     `<div class="lodge-links">` +
     `<button class="ra-chip mp-stop" type="button"><span class="ra-chip-ic" aria-hidden="true">🚩</span>` +
-    `<span class="ra-chip-tx">Stop de missie</span></button>` +
+    `<span class="ra-chip-tx">${esc(pauseStopLabel)}</span></button>` +
     `</div>` +
     `<button class="btn-start mp-resume" type="button" data-key="back">Ga verder</button>` +
     `</div>`;
@@ -316,7 +347,7 @@ function showMissionPause(): void {
   const voor = store.get().settings.voorlezen; // child:B12
   readScreenAloud(el, { text: SAY.missiePauze, anchor: '.mp-resume', autoStart: voor, items: '.ra-chip', hover: voor });
   el.querySelector('.mp-resume')?.addEventListener('click', () => el.remove());
-  el.querySelector('.mp-stop')?.addEventListener('click', stopMission);
+  el.querySelector('.mp-stop')?.addEventListener('click', () => pauseStop());
 }
 
 /** "Stop de missie": abort the running step (its pick listener and frame loop
@@ -439,11 +470,12 @@ function showWildcamCapture(clue: Clue, then: () => void): void {
     `<span class="cb-clue-text"></span>` +
     `</div>` +
     `<p class="boot-sub">Hij zit nu in je sporenboek.</p>` +
+    // Enter walks on (child B7): "Verder" is the primary, the sporenboek a quiet side step
     `<div class="ra-row">` +
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
-    `<button class="btn-start wc-board" type="button">Bekijk je sporenboek</button>` +
+    `<button class="btn-start wc-patrol" type="button" data-key="back">${then === resumePatrol ? 'Verder op patrouille' : 'Verder'}</button>` +
     `</div>` +
-    `<button class="ra-text-btn wc-patrol" type="button" data-key="back">Verder op patrouille</button>` +
+    `<button class="ra-text-btn wc-board" type="button">Bekijk je sporenboek</button>` +
     `</div>`,
   );
   const ra = mountReadAloud({

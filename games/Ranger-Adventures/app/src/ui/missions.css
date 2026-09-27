@@ -46,6 +46,52 @@
   box-shadow: var(--shadow-lg);
 }
 
+/* flow/session.fadeCut: the calm cut to another place (a mission picked on the
+   missiebord). Warm paper, not black; it covers everything, so nothing is clicked
+   mid-cut. Under reduced motion `.rm *` makes it a plain cut. */
+.ra-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: #f3ead8;
+  opacity: 0;
+  transition: opacity 0.38s ease-in-out;
+}
+.ra-fade.on { opacity: 1; }
+/* lifting: the card under it already takes clicks and keys. `#ui` because base.css's
+   `#ui > * { pointer-events: auto }` outranks a class-only rule (the veil used to keep
+   swallowing them until it was gone). */
+#ui .ra-fade.lifting { pointer-events: none; }
+
+/* A card whose way on never falls below the fold (breaker B3, the 800×600 briefing):
+   the card itself does not scroll, its `.card-body` does, and the `.card-foot` with
+   the primary / way back sits pinned under it, like the ranger maker's button row. */
+.boot-card-ish.has-foot { overflow: hidden; padding-bottom: 0; }
+.has-foot > .card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 2px 8px;
+}
+.has-foot > .card-foot {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 0 -30px;
+  padding: 10px 30px 14px;
+  background: rgba(253, 252, 248, 0.98);
+  border-top: 1px solid rgba(40, 60, 30, 0.12);
+}
+.has-foot > .card-foot .ra-row { margin-top: 0; }
+
 /* Karaoke read-aloud (ui/ReadAloud.ts): the word being spoken gets a calm,
    non-flashing highlight — a soft tint + colour swap. Only one word at a time.
    Under reduced-motion base.css `.rm *` zeroes the transition → an instant
@@ -416,6 +462,16 @@
   bottom: max(28px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
 }
+/* at a finished marker: "Volgende: …" is the big button, playing it again a quiet
+   pill under it (child B6) — readable over the world, never the key's primary */
+.explore-prompt { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.explore-prompt .explore-replay {
+  padding: 8px 20px;
+  border-radius: var(--radius-pill);
+  background: rgba(20, 16, 12, 0.62);
+  color: var(--paper);
+  text-decoration: none;
+}
 .explore-prompt[hidden],
 .explore-hub-prompt[hidden],
 .explore-sit-prompt[hidden],
@@ -610,6 +666,9 @@
   background: rgba(253, 246, 232, 0.16);
   font: 600 24px/1 var(--font-body);
 }
+/* the arrow turns with the bearing (ExploreHud.onWayfind sets its rotate) — a calm, short
+   ease; under reduced motion base.css `.rm *` makes it a plain step */
+.explore-wayfind .wf-glyph { transition: transform 0.2s ease-out; }
 .explore-wayfind .wf-text, .explore-klaar .wf-text { display: flex; flex-direction: column; line-height: 1.25; }
 .explore-wayfind .wf-doel, .explore-klaar .wf-doel { font: 600 16px/1.25 var(--font-body); }
 .explore-wayfind .wf-cue, .explore-klaar .wf-cue { font: 500 14px/1.25 var(--font-body); opacity: 0.85; }
@@ -634,6 +693,16 @@
 
 /* ---- world-EF micro-beat (light open-world seasoning between missions) ---- */
 .worldbeat { text-align: center; }
+/* the Onderweg beat sits low, with no scrim, so the animal it is about stays in view
+   above it (child B14); two options side by side keep it short */
+.worldbeat.wb-low {
+  top: auto;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  gap: 8px;
+  padding: 18px 24px;
+}
+.worldbeat.wb-low .wb-opts { flex-direction: row; flex-wrap: wrap; justify-content: center; }
 .wb-prompt {
   margin: 6px 0 14px;
   font: 400 var(--read-size)/var(--read-leading) var(--font-read);

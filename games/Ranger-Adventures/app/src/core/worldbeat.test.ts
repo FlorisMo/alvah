@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  pickWorldBeat, optionCorrect, coarseHeading, WORLDBEAT_EVERY,
+  pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, WORLDBEAT_EVERY, WORLDBEAT_WALK_M,
   type CoarseHeading,
 } from './worldbeat.ts';
 
@@ -94,4 +94,30 @@ test('deterministic + pure — repeated calls match, input untouched', () => {
     pickWorldBeat({ ...input }),
   );
   assert.equal(JSON.stringify(input), before);
+});
+
+test('the beat lines are short: at most 7 words (child B14)', () => {
+  const words = (t: string): number => t.split(/\s+/).filter(Boolean).length;
+  for (let k = 1; k <= 4; k++) {
+    const b = pickWorldBeat({ patrolTick: WORLDBEAT_EVERY * k, heading: H })!;
+    assert.ok(words(b.prompt) <= 7, `"${b.prompt}"`);
+    assert.ok(words(withAnimal(b, 'wildzwijn').prompt) <= 7);
+  }
+});
+
+test('the impulse beat names the animal in view; the wayfinding beat is left alone', () => {
+  const impulse = pickWorldBeat({ patrolTick: WORLDBEAT_EVERY, heading: H })!;
+  assert.equal(withAnimal(impulse, 'vos').prompt, 'Een vos loopt weg. Wat doe jij?');
+  const way = pickWorldBeat({ patrolTick: WORLDBEAT_EVERY * 2, heading: H })!;
+  assert.equal(withAnimal(way, 'vos'), way);
+});
+
+test('a beat waits until he has walked on, and the impulse beat until an animal is in view', () => {
+  const impulse = pickWorldBeat({ patrolTick: WORLDBEAT_EVERY, heading: H })!;
+  const way = pickWorldBeat({ patrolTick: WORLDBEAT_EVERY * 2, heading: H })!;
+  assert.equal(beatReady(impulse, 0, true), false, 'never right on the reward cards');
+  assert.equal(beatReady(way, WORLDBEAT_WALK_M - 1, false), false);
+  assert.equal(beatReady(way, WORLDBEAT_WALK_M, false), true);
+  assert.equal(beatReady(impulse, WORLDBEAT_WALK_M + 5, false), false, 'no animal in view: it waits');
+  assert.equal(beatReady(impulse, WORLDBEAT_WALK_M + 5, true), true);
 });

@@ -17,8 +17,8 @@ import type { WayCue } from '../../render3d/Wayfinding';
 import { Joystick } from '../Joystick';
 import { coarsePointer, deviceText } from './device';
 import { session, esc, plainCard } from '../flow/session';
-import { showBriefing } from '../flow/MissionFlow';
-import { playRoepAtSitSpot } from '../flow/WorldSession';
+import { showBriefing, goToMission } from '../flow/MissionFlow';
+import { playRoepAtSitSpot, nextMissionId } from '../flow/WorldSession';
 import { showPauseHub, showMissionBoard } from '../hub/Hub';
 
 // the on-screen joystick (W1.3) lives inside the explore HUD; re-created each
@@ -49,7 +49,6 @@ export function disposeExploreHud(): void {
   if (tipTimer) { clearTimeout(tipTimer); tipTimer = 0; }
   hintState.active = null; hintState.helpChip = false;
   if (joystick) { joystick.dispose(); joystick = null; }
-  lastCue = null;
 }
 
 export function showExploreHud(activeTitel: string | null): void {
@@ -87,9 +86,9 @@ export function showExploreHud(activeTitel: string | null): void {
   // The HUD overlays the LIVE world: its wrapper must let taps fall through to the
   // canvas for tap-to-walk (W0.4); `.explore-overlay` reclaims transparency.
   el.classList.add('explore-overlay');
-  // the world only sends a cue when its words change: a fresh HUD shows the last
-  // one at once instead of "zoek het spoor…" until the ranger has walked a metre
-  if (lastCue && lastCue.titel === activeTitel) onWayfind(lastCue.cue);
+  // a fresh chip gets its cue at once, from where the ranger stands, instead of
+  // "zoek het spoor…" until he has walked a step (parent B12)
+  world?.setActiveMission(nextMissionId());
   el.querySelector('.explore-pause')?.addEventListener('click', () => showPauseHub());
   const hud = el.querySelector<HTMLElement>('.explore-hud');
   mountJoystick(hud);
@@ -108,25 +107,24 @@ export function showExploreHud(activeTitel: string | null): void {
 }
 
 /* ------------------------------------------------ one prompt at a time ---- */
-/** The proximity prompts share ONE place on screen (bottom centre), so only the
- *  most important one shows: never two buttons on top of each other, and Space /
- *  Enter always does what the one visible button says. On foot: a mission first,
- *  then the jeep, the helicopter, the missiebord, the bird bench. In a vehicle,
- *  only getting out (or landing) — markers are not offered from a seat. */
-const FOOT_ORDER = ['.explore-prompt', '.explore-vehicle-prompt', '.explore-heli-prompt', '.explore-hub-prompt', '.explore-sit-prompt'];
+/** The proximity prompts share ONE place on screen (bottom centre), so only one shows:
+ *  never two buttons on top of each other, and Space / Enter always does what the one
+ *  visible button says. On foot the places with a ring on the ground come first — a
+ *  mission marker, the missiebord, the bird bench (their rings never overlap) — and a
+ *  parked jeep or helicopter only when he stands in none of them: standing in the
+ *  missiebord's ring he gets "Bekijk het missiebord" even with the jeep parked beside it
+ *  (breaker B4, parent B8). In a vehicle, only getting out (or landing). */
+const FOOT_ORDER = ['.explore-prompt', '.explore-hub-prompt', '.explore-sit-prompt', '.explore-vehicle-prompt', '.explore-heli-prompt'];
 const RIDING_ORDER = ['.explore-vehicle-prompt', '.explore-heli-prompt'];
 
 function arbitratePrompts(): void {
   const w = session.world;
   const riding = !!(w?.vehicleState()?.inVehicle || w?.heliState()?.inHeli);
   const order = riding ? RIDING_ORDER : FOOT_ORDER;
-  let shown = false;
+  const show = order.find((sel) => (session.host.querySelector<HTMLElement>(sel)?.childElementCount ?? 0) > 0) ?? null;
   for (const sel of FOOT_ORDER) {
     const slot = session.host.querySelector<HTMLElement>(sel);
-    if (!slot) continue;
-    const show = !shown && order.includes(sel) && slot.childElementCount > 0;
-    slot.hidden = !show;
-    if (show) shown = true;
+    if (slot) slot.hidden = sel !== show;
   }
 }
 
@@ -360,14 +358,15 @@ function mountJoystick(hud: HTMLElement | null): void {
 }
 
 /* ------------------------------------------------------- wayfinding ---- */
-/** The last cue the world sent, and for which mission title (see showExploreHud). */
-let lastCue: { titel: string; cue: WayCue } | null = null;
+/** The chip arrow's turn so far (rad, never wrapped): each new bearing is reached the
+ *  short way round, so passing "achter je" never spins the arrow a whole turn. */
+let arrowTurn = 0;
 
-/** Render the calm wayfinding cue (dual-channel: glyph + words + colour). */
+/** Render the calm wayfinding cue (dual-channel: an arrow + words + colour). The arrow
+ *  turns with the true bearing, so it is exact while he steers; the words hold steady
+ *  (render3d/Wayfinding SteadyCue) and never flicker for a dyslexic reader (child B10). */
 export function onWayfind(cue: WayCue | null): void {
   const strip = session.host.querySelector<HTMLDivElement>('.explore-wayfind');
-  const titel = strip?.querySelector('.wf-doel')?.textContent ?? null;
-  lastCue = cue && titel ? { titel, cue } : null;
   if (!strip) return;
   if (!cue) { strip.hidden = true; return; }
   // F-06: keep the text fresh, but stay hidden while the entry control hint owns
@@ -375,8 +374,14 @@ export function onWayfind(cue: WayCue | null): void {
   if (store.get().settings.wereldHintGezien) strip.hidden = false;
   const glyph = strip.querySelector<HTMLSpanElement>('.wf-glyph');
   const cueEl = strip.querySelector<HTMLSpanElement>('.wf-cue');
-  if (glyph) glyph.textContent = cue.glyph;
-  if (cueEl) cueEl.textContent = cue.arrived ? 'je bent er' : `${cue.richting} · ${cue.afstand}`;
+  if (glyph) {
+    const g = cue.arrived ? '◎' : '↑';
+    if (glyph.textContent !== g) glyph.textContent = g;
+    if (!cue.arrived) arrowTurn += Math.atan2(Math.sin(cue.angle - arrowTurn), Math.cos(cue.angle - arrowTurn));
+    glyph.style.transform = cue.arrived ? '' : `rotate(${arrowTurn.toFixed(3)}rad)`;
+  }
+  const words = cue.arrived ? 'je bent er' : `${cue.richting} · ${cue.afstand}`;
+  if (cueEl && cueEl.textContent !== words) cueEl.textContent = words;
   strip.classList.toggle('wf-arrived', cue.arrived);
 }
 
@@ -386,17 +391,23 @@ export function onApproach(missionId: string | null): void {
   approachId = missionId;
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-prompt');
   if (!prompt) return;
-  const m = missionId ? Content.activeArea().missies.find((mm) => mm.id === missionId) : null;
+  const area = Content.activeArea();
+  const m = missionId ? area.missies.find((mm) => mm.id === missionId) : null;
   if (!m) prompt.innerHTML = '';
-  else {
-    // a finished mission reads as done at its marker: replay, not a fresh start
-    const label = store.get().voltooid[m.id] ? 'Speel nog eens' : 'Speel mee';
-    prompt.innerHTML = `<button class="btn-start explore-play" type="button">${label}: ${esc(m.titel)}</button>`;
-    prompt.querySelector('.explore-play')?.addEventListener('click', () => {
-      if (approachId !== m.id) return;
-      showBriefing(m);
-    });
+  else if (!store.get().voltooid[m.id]) {
+    prompt.innerHTML = `<button class="btn-start explore-play" type="button">Speel mee: ${esc(m.titel)}</button>`;
+  } else {
+    // a finished mission: the big button leads ON to the next one (child B6); playing
+    // this one again is a quiet second choice, never what Space or Enter does
+    const next = area.missies.find((mm) => mm.id === nextMissionId()) ?? null;
+    prompt.innerHTML =
+      (next ? `<button class="btn-start explore-next" type="button">Volgende: ${esc(next.titel)}</button>` : '') +
+      `<button class="ra-text-btn explore-play explore-replay" type="button">Speel nog eens: ${esc(m.titel)}</button>`;
+    prompt.querySelector('.explore-next')?.addEventListener('click', () => { if (next) goToMission(next); });
   }
+  prompt.querySelector('.explore-play')?.addEventListener('click', () => {
+    if (m && approachId === m.id) showBriefing(m);
+  });
   arbitratePrompts();
 }
 
@@ -407,7 +418,7 @@ export function onInteract(missionId: string): void {
   if (!prompt || prompt.hidden) return;
   if (approachId !== missionId) return;
   const m = Content.activeArea().missies.find((mm) => mm.id === missionId);
-  if (!m) return;
+  if (!m || store.get().voltooid[m.id]) return; // a replay is a click, never the interact key
   showBriefing(m);
 }
 
