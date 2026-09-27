@@ -246,10 +246,9 @@ export class Player {
     const stick = !keys && raw && Math.hypot(raw.x, raw.y) >= JOYSTICK_DEADZONE ? raw : null;
     const dxT = this.target.x - rp.x, dzT = this.target.z - rp.z;
     const tapDist = Math.hypot(dxT, dzT);
-    const mode: DriveMode | null = keys ? 'keys' : stick ? 'stick' : tapDist > 0.06 ? 'tap' : null;
+    const mode: DriveMode | null = keys ? 'keys' : stick ? 'stick' : tapDist > 0.1 ? 'tap' : null;
     const starting = mode !== null && mode !== this.drive;
     this.drive = mode;
-    if (mode === 'keys' || mode === 'stick') this.target.set(rp.x, 0, rp.z); // a stale tap target never resumes
     // Any walk start folds the player's drag look-around into the camera's base
     // bearing (invisible: the view does not move) so "behind him" is measured from
     // what the screen shows.
@@ -339,6 +338,9 @@ export class Player {
     const pivoting = Math.abs(wrapPi(this.facing - pivotFrom)) > 1e-4;
     this.rig.setGait(back && moved > 0, pivoting && moved < 1e-4);
     rp.y = this.terrain.y(rp.x, rp.z); // feet on the drawn terrain
+    // keys / stick drop any tap target where he now stands (after the step: a target left
+    // a step behind him turned him round to walk back to it once the key came up)
+    if (mode === 'keys' || mode === 'stick') this.target.set(rp.x, 0, rp.z);
 
     // what the follow camera does (it is told, never left to chase the facing):
     if (!view.follows) this.camNow = null;
