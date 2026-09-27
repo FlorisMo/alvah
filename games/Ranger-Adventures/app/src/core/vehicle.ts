@@ -284,10 +284,11 @@ export function bodyReach(body: readonly BodyCircle[]): number {
  * TANGENTIAL: the jeep slides along a trunk or a wall instead of stopping dead, and
  * it never bounces. If the body is still wedged after the passes, the old pose wins
  * (it never ends up inside a solid). The world rim keeps the whole body inside. The
- * ven's water is a wall of its own: a step that would wet the body keeps its turn
- * (taken on the spot), as much of its move as stays dry, and slides the rest along
- * the shore, so a jeep nosed into the water always steers free. `contact` is true when
- * a solid or the shore stopped the body this step. Pure + deterministic.
+ * ven's water is a wall of its own: a step that would wet the body is pushed straight
+ * back out along the shore's normal, keeping its turn and its move along the shore, so
+ * a jeep nosed into the water always steers free (a narrow inlet with no clear way out
+ * keeps the last dry pose). `contact` is true when a solid or the shore stopped the
+ * body this step. Pure + deterministic.
  */
 export function resolveBody(
   fx: number, fz: number, fh: number,
@@ -357,9 +358,9 @@ export function resolveBody(
       const n = shoreNormal(x, z, h, probes, blocked);
       let out = -1;
       if (n) {
-        const reach = Math.hypot(x - fx, z - fz) + 0.3; // never further than the step came in
+        const maxPush = Math.hypot(x - fx, z - fz) + 0.3; // never further than the step came in
         let lo = 0;
-        for (let d = 0.04; d <= reach + 1e-9; d += 0.04) {
+        for (let d = 0.04; d <= maxPush + 1e-9; d += 0.04) {
           if (!wet(x - n.x * d, z - n.z * d, h)) { out = d; break; }
           lo = d;
         }

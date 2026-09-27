@@ -59,6 +59,9 @@ const LANDMARKS: readonly {
 /** The landmarks' footprints: no plant grows inside one (no grass through a floor). */
 const LANDMARK_FEET: readonly Obstacle[] = LANDMARKS.map((lm) => boxObstacle(lm.x, lm.z, lm.foot[0], lm.foot[1], Math.atan2(-lm.x, -lm.z)));
 
+/** The forest beyond the rim's material (Terrain.buildFarForest), made once a session. */
+let farMat: THREE.MeshLambertMaterial | null = null;
+
 /** A stable hash of an integer pair + seed → [0,1) (the plant grid's jitter). */
 function hash2(x: number, z: number, seed: number): number {
   let h = (Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(seed | 0, 2246822519)) | 0;
@@ -412,7 +415,7 @@ export class Dressing {
     this.addTreeFallback(placed); // P1.3: cone stand-in until the real tree GLBs stream in
     // behind the tree-line the forest goes on (Terrain.buildFarForest): no view ever
     // reaches the end of the ground plate (parent B11, breaker B9)
-    const farMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: farCanopyTexture() });
+    farMat ??= new THREE.MeshLambertMaterial({ vertexColors: true, map: farCanopyTexture() }); // one a session
     const far = new THREE.Mesh(buildFarForest(bound, (x, z) => this.groundY(x, z), this.quality?.treeDetail === 'laag'), farMat);
     far.name = 'far-forest';
     far.raycast = () => {}; // scenery past the rim: never clicked, never a probe's ground

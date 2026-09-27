@@ -36,7 +36,6 @@ export function proceduralTotem(color: string): THREE.Group {
  */
 export function naturaliseConcrete(root: THREE.Object3D): void {
   if (typeof document === 'undefined') return;
-  const done = new Set<THREE.Texture>();
   const SAND = [0.74, 0.64, 0.45], GRASS = [0.52, 0.56, 0.28], MOSS = [0.34, 0.45, 0.2];
   const hash = (x: number, y: number): number => {
     let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0;
@@ -54,9 +53,12 @@ export function naturaliseConcrete(root: THREE.Object3D): void {
     if (!mesh.isMesh) return;
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
       const mat = m as THREE.MeshStandardMaterial;
+      // the GLB's materials are shared by every clone of it (Models caches the GLTF): paint once
+      if (mat.userData.naturalised) continue;
+      mat.userData.naturalised = true;
       const tex = mat.map;
       const img = tex?.image as CanvasImageSource & { width: number; height: number } | undefined;
-      if (!tex || !img?.width || done.has(tex)) continue;
+      if (!tex || !img?.width) continue;
       const cv = document.createElement('canvas');
       cv.width = img.width; cv.height = img.height;
       const ctx = cv.getContext('2d', { willReadFrequently: true });
@@ -80,7 +82,6 @@ export function naturaliseConcrete(root: THREE.Object3D): void {
       const out = new THREE.CanvasTexture(cv);
       out.flipY = tex.flipY; out.colorSpace = tex.colorSpace; out.wrapS = tex.wrapS; out.wrapT = tex.wrapT;
       out.channel = tex.channel; out.anisotropy = tex.anisotropy;
-      done.add(out);
       mat.map = out;
       mat.needsUpdate = true;
     }

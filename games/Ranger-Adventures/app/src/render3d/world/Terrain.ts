@@ -387,9 +387,12 @@ export function buildFarForest(bound: number, ground: (x: number, z: number) => 
  * The canopy seen from above, one seamless tile (FAR_TILE_M metres, FAR_GRID² crowns on
  * the `canopyCrown` layout the geometry's domes use): each crown lit by the low sun from
  * the west-south-west (as in the world) with leafy grain, dark gaps between them.
- * Brightness only: the vertex colour gives the hue. Browser-only (a canvas); null without.
+ * Brightness only: the vertex colour gives the hue. Baked once a session. Browser-only
+ * (a canvas); null without.
  */
+let canopyTex: THREE.CanvasTexture | null = null;
 export function farCanopyTexture(): THREE.CanvasTexture | null {
+  if (canopyTex) return canopyTex; // baked once a session: every world build shares it
   if (typeof document === 'undefined') return null;
   const N = 256;
   const cv = document.createElement('canvas');
@@ -418,6 +421,7 @@ export function farCanopyTexture(): THREE.CanvasTexture | null {
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 16; // seen at a glancing angle from the heli: sharp, not striped (three clamps to the GPU's max)
+  canopyTex = tex;
   return tex;
 }
 
