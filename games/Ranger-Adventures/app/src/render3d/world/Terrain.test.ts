@@ -122,3 +122,37 @@ test('intersectRay finds the drawn ground where a mesh raycast does, and on grid
   assert.equal(t.intersectRay(new THREE.Ray(eye.clone(), new THREE.Vector3(0, 1, 0))), null);
   assert.equal(t.intersectRay(new THREE.Ray(eye.clone(), new THREE.Vector3(0, -0.001, -1).normalize())), null);
 });
+
+import { buildFarForest, FAR_FOREST_IN, FAR_FOREST_OUT } from './Terrain.ts';
+
+test('the forest beyond the rim hides the end of the ground plate from every view (parent B11, breaker B9)', () => {
+  const bound = 75, lensFar = 240;              // World: limits.bound, camera far plane
+  const t = new Terrain({ detail: false });
+  const geo = buildFarForest(bound, (x, z) => t.y(x, z));
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const nrm = geo.attributes.normal as THREE.BufferAttribute;
+  let rMin = Infinity, rMax = 0, faceBelow = 0, faceN = 0, canopyN = 0, canopyLow = 0, canopyDown = 0;
+  const around = new Set<number>();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), r = Math.hypot(x, z);
+    rMin = Math.min(rMin, r); rMax = Math.max(rMax, r);
+    around.add(Math.round(Math.atan2(z, x) * 100));
+    if (r < bound + FAR_FOREST_IN + 0.1) { faceN++; if (y < t.y(x, z)) faceBelow++; }
+    else if (r > bound + FAR_FOREST_IN + 1.5) {
+      canopyN++;
+      if (y - t.y(x, z) < 5) canopyLow++;
+      if (nrm.getY(i) <= 0) canopyDown++;
+    }
+  }
+  // it starts right behind the rim tree-line's last row and ends past the lens's reach
+  assert.ok(Math.abs(rMin - (bound + FAR_FOREST_IN)) < 0.01 && bound + FAR_FOREST_IN - 10.2 - 1.4 > 1, `inner edge ${rMin.toFixed(1)} m, behind the rim rows`);
+  assert.ok(rMin < 120, 'it starts well inside the 240 m ground plate, so it covers the plate edge');
+  assert.ok(rMax >= FAR_FOREST_OUT - 0.01 && FAR_FOREST_OUT >= bound + lensFar, `it runs out to ${rMax.toFixed(0)} m, past anything the lens can see`);
+  assert.ok(around.size >= 360, 'it goes all the way round');
+  // its inner face starts under the ground (no gap to see through) and its canopy stands
+  // over the ground as tall as the rim trees, facing the sky
+  assert.ok(faceN >= 360 && faceBelow === faceN, 'the bottom row of the inner face is sunk into the ground');
+  assert.equal(canopyLow, 0, `every canopy vertex stands ≥ 5 m over the ground (${canopyN} checked)`);
+  assert.equal(canopyDown, 0, 'the canopy faces up');
+  assert.ok(geo.index!.count / 3 < 60_000, `a light backdrop: ${geo.index!.count / 3} triangles`);
+});

@@ -17,7 +17,7 @@ import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork } from '../Path
 import { WATER_DEEP, WATER_SHALLOW, WATER_TREES, WATER_OPACITY, FRESNEL_POWER, WATER_F0, rippleAmp } from '../Water';
 import { boxObstacle, type Obstacle, type MoveLimits } from '../CharacterController';
 import type { TierParams } from '../../core/quality';
-import type { Terrain } from './Terrain';
+import { buildFarForest, farCanopyTexture, type Terrain } from './Terrain';
 import type { Labels } from './Labels';
 import { enableCast, proceduralTotem } from './props';
 import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
@@ -426,6 +426,13 @@ export class Dressing {
     });
     this.treePlacements.push(...placed);
     this.addTreeFallback(placed); // P1.3: cone stand-in until the real tree GLBs stream in
+    // behind the tree-line the forest goes on (Terrain.buildFarForest): no view ever
+    // reaches the end of the ground plate (parent B11, breaker B9)
+    const farMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: farCanopyTexture() });
+    const far = new THREE.Mesh(buildFarForest(bound, (x, z) => this.groundY(x, z)), farMat);
+    far.name = 'far-forest';
+    far.raycast = () => {}; // scenery past the rim: never clicked, never a probe's ground
+    this.scene.add(far);
   }
 
   /** P1.3: the instant low-poly stand-in for a set of tree placements — an instanced

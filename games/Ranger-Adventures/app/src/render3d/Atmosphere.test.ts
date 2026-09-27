@@ -81,3 +81,14 @@ test('flyoverAt stays high above the play area', () => {
 test('flyoverAt freezes for a frozen clock (reduced-motion)', () => {
   assert.deepEqual(flyoverAt(5.2), flyoverAt(5.2), 'same t → same pose');
 });
+
+import { toneMappedHex } from './Atmosphere.ts';
+
+test('toneMappedHex: the horizon haze through the ACES curve is the cream the sky dome draws (measured on screen)', () => {
+  // measured in the rendered world (2026-09-27): the dome's horizon at exposure 1.08 read
+  // rgb(227, 211, 185) while the raw-haze fog drew rgb(243, 204, 156): a visible band
+  const got = toneMappedHex('#f3cc9c', 1.08);
+  const rgb = [1, 3, 5].map((i) => parseInt(got.slice(i, i + 2), 16));
+  assert.ok(Math.abs(rgb[0] - 227) <= 2 && Math.abs(rgb[1] - 211) <= 2 && Math.abs(rgb[2] - 185) <= 2, `drawn horizon ${got}`);
+  assert.equal(toneMappedHex('#000000', 1), '#000000', 'black stays black');
+});

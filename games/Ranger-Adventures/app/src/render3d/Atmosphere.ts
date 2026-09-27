@@ -31,8 +31,39 @@ export const SKY_STOPS: readonly [number, string][] = [
   [0.55, '#eedfc8'], // cream
   [0.75, '#f6d8ae'], // gold
   [0.9, '#f6d2a2'],
-  [1.0, '#f3cc9c'], // the bright horizon haze = the fog colour (Lighting.GOLDEN_HOUR.fogColor)
+  [1.0, '#f3cc9c'], // the bright horizon haze (the fog is this through the tone curve: Lighting.GOLDEN_HOUR.fogColor)
 ];
+
+/**
+ * The colour the renderer draws for an sRGB `hex` put through three.js's ACES filmic tone
+ * curve at `exposure` (the same maths as its tonemapping_fragment), back as sRGB hex. The
+ * sky dome's horizon band is tone mapped but three mixes fog in AFTER the tone curve, so
+ * the fog must BE this colour to meet the sky seamlessly (a fog of the raw haze drew a
+ * visible orange band under a cream horizon: the "end of the plate" seen from the
+ * helicopter, breaker B9). Pure.
+ */
+export function toneMappedHex(hex: string, exposure: number): string {
+  const lin = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4) * (exposure / 0.6);
+  });
+  // ACESInputMat · v (three's column-major mat3, transposed from the ACES source)
+  const a = [
+    0.59719 * lin[0] + 0.35458 * lin[1] + 0.04823 * lin[2],
+    0.076 * lin[0] + 0.90834 * lin[1] + 0.01566 * lin[2],
+    0.0284 * lin[0] + 0.13383 * lin[1] + 0.83777 * lin[2],
+  ].map((v) => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.432951) + 0.238081)); // RRT + ODT fit
+  const o = [
+    1.60475 * a[0] - 0.53108 * a[1] - 0.07367 * a[2],
+    -0.10208 * a[0] + 1.10813 * a[1] - 0.00605 * a[2],
+    -0.00327 * a[0] - 0.07276 * a[1] + 1.07602 * a[2],
+  ];
+  return '#' + o.map((v) => {
+    const c = Math.min(1, Math.max(0, v));
+    const s = c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055;
+    return Math.round(s * 255).toString(16).padStart(2, '0');
+  }).join('');
+}
 
 /** Cloud-shadow drift speed, in texture-uv units per second (slow, calm). */
 export const CLOUD_DRIFT = { x: 0.0042, y: 0.0016 } as const;

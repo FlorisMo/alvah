@@ -129,6 +129,192 @@ export function buildTerrainGeometry(detail: boolean): THREE.BufferGeometry {
   return geo;
 }
 
+/* ----------------------------------------------------------- beyond the rim ---- */
+
+/** The forest beyond the rim starts this far (m) past the move bound: just behind the
+ *  rim tree-line's third row (Dressing.buildRim: rows at +1.4, +5.6 and +10.2 m). */
+export const FAR_FOREST_IN = 13;
+/** ...and runs out to this radius: past anything the lens (far plane 240 m, never
+ *  further out than the bound) can see, so no view ever reaches its end. */
+export const FAR_FOREST_OUT = 330;
+const FAR_AROUND = 420;        // segments round the ring (1.3 m apart at its inner edge)
+/** Crowns per side of one canopy tile, and the tile's size in world metres (~3.8 m crowns). */
+const FAR_GRID = 8;
+export const FAR_TILE_M = 30;
+
+/** A stable hash of an integer pair + seed → [0,1). */
+function hash2(x: number, z: number, seed: number): number {
+  let h = (Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(seed | 0, 2246822519)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+/** Smooth open value noise in [0,1]. */
+function vnoise2(x: number, z: number, seed: number): number {
+  const x0 = Math.floor(x), z0 = Math.floor(z);
+  const fx = x - x0, fz = z - z0;
+  const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+  const a = hash2(x0, z0, seed), b = hash2(x0 + 1, z0, seed), c = hash2(x0, z0 + 1, seed), d = hash2(x0 + 1, z0 + 1, seed);
+  return a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz;
+}
+
+/**
+ * The crown of the canopy at tile coordinates (u, v) (FAR_GRID crowns per tile side,
+ * repeating seamlessly): how far in from its edge the point lies (`t`: 0 on the crest, 1
+ * at the lobed edge, > 1 in a gap), the offset from its centre in crown radii (`bx`, `bz`)
+ * and the crown's own size in [0,1). The geometry's domes (buildFarForest) and the painted
+ * shading (farCanopyTexture) both read it, so the painted crowns sit on the modelled ones.
+ */
+export function canopyCrown(u: number, v: number): { t: number; bx: number; bz: number; size: number } {
+  const G = FAR_GRID;
+  const cu = Math.floor(u), cv = Math.floor(v);
+  const wrap = (i: number): number => ((i % G) + G) % G;
+  let t = Infinity, bx = 0, bz = 0, size = 0;
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const wi = wrap(cu + i), wj = wrap(cv + j);
+    const x = cu + i + 0.2 + 0.6 * hash2(wi, wj, 17), z = cv + j + 0.2 + 0.6 * hash2(wi, wj, 19);
+    const sz = hash2(wi, wj, 23);
+    const r = 0.5 + 0.2 * sz;
+    const dx = u - x, dz = v - z;
+    const lobe = 1 + 0.15 * Math.sin(Math.atan2(dz, dx) * 5 + hash2(wi, wj, 31) * 6.28); // leaf clusters
+    const k = Math.sqrt(dx * dx + dz * dz) / (r * lobe);
+    if (k < t) { t = k; bx = dx / r; bz = dz / r; size = sz; }
+  }
+  return { t, bx, bz, size };
+}
+
+/** Which trees make up the forest beyond the rim at (x,z), in [0,1]: dark pine stands
+ *  (0) to lighter oak and birch (1), in patches of a few tens of metres. */
+export function farStand(x: number, z: number): number {
+  const n = 0.7 * vnoise2(x * 0.035, z * 0.035, 331) + 0.3 * vnoise2(x * 0.09, z * 0.09, 337);
+  return THREE.MathUtils.smoothstep(n, 0.42, 0.68);
+}
+
+/** How high (m) the canopy stands above the ground at (x,z): a slow swell (~5.5-8 m; the
+ *  rim's own trees are 6.6-12 m tall) with each crown a rounded dome on it. `fine` (0..1)
+ *  scales the domes: the coarse outer rings cannot draw them. */
+export function farCanopyLift(x: number, z: number, fine = 1): number {
+  const swell = 6.6 + 1.2 * (vnoise2(x * 0.03, z * 0.03, 311) * 2 - 1);
+  if (fine <= 0) return swell + 0.9;
+  const c = canopyCrown((x / FAR_TILE_M) * FAR_GRID, (z / FAR_TILE_M) * FAR_GRID);
+  const dome = c.t < 1 ? (1 - c.t * c.t) ** 0.8 : 0;
+  return swell + (1 - fine) * 0.9 + fine * (1.7 + 1.3 * c.size) * dome;
+}
+
+// the forest beyond, seen from inside: dark shade under the trees, then the canopy
+const FAR_DEEP = new THREE.Color('#2a2717');    // the forest floor in deep shade
+const FAR_TRUNKS = new THREE.Color('#403c23');  // the trunk zone in shadow (the texture streaks it)
+const FAR_UNDER = new THREE.Color('#4a5626');   // the crowns' undersides
+const FAR_PINE = new THREE.Color('#566f28');    // pine stands (the texture shades the crowns)
+const FAR_LEAF = new THREE.Color('#7f9636');    // oak and birch
+
+/**
+ * The forest beyond the playable rim (parent B11, breaker B9): one ring-shaped mesh from
+ * just behind the rim tree-line out to FAR_FOREST_OUT, so no view — on foot at the rim,
+ * from the jeep, from the helicopter at cruise height — ever reaches the end of the
+ * ground plate. Its inner edge is the shaded depth of a forest (dark trunks under the
+ * crowns) behind the real rim trees; its top is a canopy of rounded crowns (modelled where
+ * the rings are fine enough, painted everywhere by `farCanopyTexture` on the same layout)
+ * in pine stands and lighter oak and birch, and the fog dissolves it into the horizon
+ * haze. One draw call, ~45k triangles. Positions, vertex colours and uv (the canopy in
+ * tile units of world metres; the inner face samples one line of the texture, stretched
+ * upright into trunks and gaps). `ground` = the drawn ground height.
+ */
+export function buildFarForest(bound: number, ground: (x: number, z: number) => number): THREE.BufferGeometry {
+  const r0 = bound + FAR_FOREST_IN;
+  // the rows from the inside out: the shaded face, then the canopy rings (finer near the rim)
+  const rows: { r: number; kind: 'deep' | 'trunks' | 'under' | 'canopy'; step: number }[] = [
+    { r: r0, kind: 'deep', step: 0 },
+    { r: r0 + 0.2, kind: 'trunks', step: 0 },
+    { r: r0 + 0.9, kind: 'under', step: 0 },
+  ];
+  for (let r = r0 + 1.6, step = 1.25; r < FAR_FOREST_OUT + step; r += step, step *= 1.045) {
+    rows.push({ r: Math.min(r, FAR_FOREST_OUT), kind: 'canopy', step });
+  }
+  const A = FAR_AROUND;
+  const pos = new Float32Array(rows.length * A * 3);
+  const col = new Float32Array(rows.length * A * 3);
+  const uv = new Float32Array(rows.length * A * 2);
+  const c = new THREE.Color();
+  rows.forEach((row, k) => {
+    const around = (2 * Math.PI * row.r) / A;
+    // the domes need ~4 vertices across a crown: they flatten out as the rings coarsen
+    const fine = THREE.MathUtils.clamp((2.4 - Math.max(row.step, around)) / 0.9, 0, 1);
+    for (let a = 0; a < A; a++) {
+      const ang = (a / A) * Math.PI * 2;
+      const x = Math.cos(ang) * row.r, z = Math.sin(ang) * row.r;
+      const g = ground(x, z);
+      let y: number;
+      const j = k * A + a;
+      if (row.kind === 'canopy') {
+        y = g + farCanopyLift(x, z, fine);
+        c.copy(FAR_PINE).lerp(FAR_LEAF, farStand(x, z));
+        uv[j * 2] = x / FAR_TILE_M; uv[j * 2 + 1] = z / FAR_TILE_M;
+      } else {
+        y = g + (row.kind === 'deep' ? -0.6 : row.kind === 'trunks' ? 2.4 : 4.6);
+        c.copy(row.kind === 'deep' ? FAR_DEEP : row.kind === 'trunks' ? FAR_TRUNKS : FAR_UNDER);
+        uv[j * 2] = (ang * r0) / (FAR_TILE_M * 0.3); uv[j * 2 + 1] = 0.31;
+      }
+      pos[j * 3] = x; pos[j * 3 + 1] = y; pos[j * 3 + 2] = z;
+      col[j * 3] = c.r; col[j * 3 + 1] = c.g; col[j * 3 + 2] = c.b;
+    }
+  });
+  const index: number[] = [];
+  for (let k = 0; k + 1 < rows.length; k++) {
+    for (let a = 0; a < A; a++) {
+      const p = k * A + a, q = k * A + ((a + 1) % A), p2 = p + A, q2 = q + A;
+      index.push(p, q, p2, q, q2, p2); // wound so the canopy faces up and the inner face the rim
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geo.setIndex(index);
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+  return geo;
+}
+
+/**
+ * The canopy seen from above, one seamless tile (FAR_TILE_M metres, FAR_GRID² crowns on
+ * the `canopyCrown` layout the geometry's domes use): each crown lit by the low sun from
+ * the west-south-west (as in the world) with leafy grain, dark gaps between them.
+ * Brightness only: the vertex colour gives the hue. Browser-only (a canvas); null without.
+ */
+export function farCanopyTexture(): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const N = 512;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = N;
+  const ctx = cv.getContext('2d');
+  if (!ctx) return null;
+  const img = ctx.createImageData(N, N);
+  // the sun (Lighting keyDir −9, 7, 4) in the tile's frame: u = world x, v = world z
+  const L = new THREE.Vector3(-9, 7, 4).normalize();
+  for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+    // uv (0,0) is the canvas's bottom-left (flipY): v runs up the canvas
+    const cr = canopyCrown(((px + 0.5) / N) * FAR_GRID, (1 - (py + 0.5) / N) * FAR_GRID);
+    const clump = vnoise2(px / 9, py / 9, 41) * 0.55 + vnoise2(px / 4, py / 4, 43) * 0.45; // leafy grain
+    let b: number;
+    if (cr.t < 1) {
+      const ny = Math.sqrt(Math.max(0, 1 - cr.bx * cr.bx - cr.bz * cr.bz));
+      const lit = Math.max(0, cr.bx * L.x + ny * L.y + cr.bz * L.z);
+      b = (0.36 + 0.7 * lit) * (0.8 + 0.34 * clump) * (1 - 0.4 * cr.t ** 3);
+    } else b = 0.17 + 0.1 * clump;                           // the dark gaps between crowns
+    const o = (py * N + px) * 4;
+    const val = Math.round(Math.min(1, b) * 255);
+    img.data[o] = val; img.data[o + 1] = val; img.data[o + 2] = Math.round(val * 0.95); img.data[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 export class Terrain {
   readonly mesh: THREE.Mesh;
   readonly detail: boolean;
