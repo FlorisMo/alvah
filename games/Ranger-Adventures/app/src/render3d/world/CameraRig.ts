@@ -7,13 +7,14 @@
  * drag-orbit and wheel dolly on top, the jeep / helicopter chase offsets, and the rails
  * that keep the ranger (or the vehicle) visible: the lens slides sideways for a clear line
  * to him (never turning the view: its direction belongs to the player), the boom pulls
- * in calmly before a solid (spherecast, and never into a wall), the eye rides over a dune
- * between lens and ranger, and every tree in the way fades (world/Crowns.ts is the one
- * tree model; world/Forest.ts fades exactly the trees found here). The view never tips
- * down steeper than PITCH_MAX: with no room behind him the lens comes in close (he fades
- * a little) instead of craning up over his head. At the world rim the lens may stand
- * among the rim trees, which fade, so turning round at the edge keeps the normal view.
- * Fixed FOV, roll 0, no shake; every reframe is a cut under reduced motion.
+ * in calmly before a building, prop or person (and never into one), the eye rides over a
+ * dune between lens and ranger, and every tree in the way fades (world/Crowns.ts is the
+ * one tree model; world/Forest.ts fades exactly the trees found here). The view never
+ * tips down steeper than PITCH_MAX: with no room behind him the lens comes in over his
+ * shoulder instead of craning up over his head, and only right up against him does he
+ * fade out. At the world rim the lens may stand among the rim trees, which fade, so
+ * turning round at the edge keeps the normal view. Fixed FOV, roll 0, no shake; every
+ * reframe is a cut under reduced motion.
  */
 
 import * as THREE from 'three';
@@ -67,8 +68,8 @@ export class CameraRig {
   private readonly EYE_DOWN_TAU = 0.45;      // settle down calmly
   // The walk boom: eye 2.4 m / boom 4.6 m / aim at his sternum ≈ 19° down (the frozen
   // tap-to-walk smoke taps 32 % from the top expecting ground there, so the horizon must
-  // sit above that row). The spherecast keeps it out of solids; the fade rail fades him
-  // if the lens still has to come close.
+  // sit above that row). The boom cast keeps it out of solids; the fade rail fades him
+  // out if the lens has to come right up to him.
   readonly camOffset = new THREE.Vector3(0, 2.4, 4.6);
   // The look-at aim above his feet, as a FRACTION of his measured head height
   // (`avatarTopY`), so it tracks the ≈1.2 m child rig: walk ≈ sternum, idle ≈ chest.
@@ -76,8 +77,8 @@ export class CameraRig {
   private readonly CAM_IDLE_LOOK_FRAC = 0.59;
   private get camLookH(): number { return this.player.avatarTopY * this.CAM_LOOK_FRAC; }
   private get camIdleLookH(): number { return this.player.avatarTopY * this.CAM_IDLE_LOOK_FRAC; }
-  private readonly CAM_PROBE_R = 0.35;  // camera "sphere" radius for the push-in cast
-  private readonly WALL_PROBE = 0.12;   // the lens itself: the eased boom never goes past this
+  private readonly CAM_PROBE_R = 0.35;  // the lens keeps this far from a solid (lensClear; the jeep's boom cast)
+  private readonly WALL_PROBE = 0.12;   // the walk boom's line cast, and the wall the eased boom never passes
   private readonly CAM_GROUND_CLR = 0.5; // keep the lens this far above the terrain
   // The terrain sightline ride: how far the eye may rise to clear a dune between the lens
   // and the ranger (the Veluwe relief is gentle, ~±2.2 m, the ven ~3.4 m deep); past it
@@ -117,14 +118,15 @@ export class CameraRig {
   private wasWalk = true;
   private readonly HUG_ANGLE = (60 * Math.PI) / 180;
   // The view never tips down steeper than this (child B4, parent B4: a lens craned up
-  // over his head showed only his hair). With no room behind him the lens comes in close
-  // at most this steep and he fades a little (the fade rail), and the search slides it to
-  // a side with room. The drag look-around stays inside PITCH_MIN…PITCH_MAX too.
+  // over his head showed only his hair). With no room behind him the lens comes in close,
+  // at most this steep, and the search slides it to a side with room. The drag
+  // look-around stays inside PITCH_MIN…PITCH_MAX too.
   private readonly PITCH_MAX = 40 * DEG;
   private readonly PITCH_MIN = 6 * DEG;
   // …and closer in than PITCH_CLOSE_D (his back to a wall) the steepest view flattens to
   // PITCH_CLOSE and the eye comes to his own eye height: a look over his shoulder at the
-  // world ahead (he fades), never a lens on his hair or at the ground by his feet.
+  // world ahead (right up against him he fades out), never a lens on his hair or at the
+  // ground by his feet.
   private readonly PITCH_CLOSE = 14 * DEG;
   private readonly PITCH_CLOSE_D = 1.2;
   private readonly EYES_FRAC = 0.9;
@@ -733,9 +735,9 @@ export class CameraRig {
 
   /**
    * Solve the walk boom at bearing `b`, the lens slid `k` boom lengths to the screen's
-   * right: the player's zoom, pulled in before a solid (buildings, trunks, people: the
-   * spherecast along the line to him) and the lens ring at the rim, then further in while
-   * the lens would sit in foliage; the eye at the settled pitch (rising, no steeper than
+   * right: the player's zoom, pulled in before a solid (buildings, props, people: a cast
+   * along the line to him, then the lens kept clear) and the lens ring at the rim, then
+   * further in while the lens would sit in a tree; the eye at the settled pitch (rising, no steeper than
    * PITCH_MAX, when a solid pulled the boom in close), above its own ground and lifted
    * until the line to his head clears the terrain. `cost` scores how clear the line to the
    * ranger is (0 = clear at full length); the search picks the lowest. `wall` is how far
