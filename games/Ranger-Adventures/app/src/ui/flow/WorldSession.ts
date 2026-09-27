@@ -27,7 +27,7 @@ import { nextPatrolTarget } from '../../core/patrol';
 import { pickWorldBeat, optionCorrect, coarseHeading, type WorldBeat } from '../../core/worldbeat';
 import { setScreen, setMissionView } from '../../core/devhook';
 import { mountReadAloud } from '../ReadAloud';
-import { session, esc, card, clearOverlays } from './session';
+import { session, esc, card, clearOverlays, menuOpen } from './session';
 import { wireWorldDevhook, clearWorldDevhook } from '../dev/wireDevhook';
 import {
   showExploreHud, disposeExploreHud, onApproach, onWayfind, onInteract, onBoardApproach,
@@ -159,6 +159,8 @@ export function startExplore(): void {
   world.setRenderer(stage.renderer);
   // W1.5: the rotating follow-cam reads the "Camera draait mee" setting live each frame.
   world.setCameraFollow(() => store.get().settings.cameraDraaitMee);
+  // a menu card over the world (Pauze, the missiebord, a briefing ...) holds him still
+  world.setMenuGate(menuOpen);
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
   // mission board overlay in-place (no leaveWorld).
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });

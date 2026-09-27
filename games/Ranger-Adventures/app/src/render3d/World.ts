@@ -95,6 +95,9 @@ export class World {
   // movement, walk-taps, proximity, wayfinding and the §1e follow all pause so the
   // activity's reframe owns the camera (it restores on endActivity).
   private activityActive = false;
+  // a menu card over the live world (Pauze, the missiebord, a briefing, the sporenboek):
+  // the ranger stands still behind it and a jeep or helicopter gets no input
+  private menuOpen: () => boolean = () => false;
   // D1.3: the world-space anchor the running in-place activity stages its task
   // around (= the `ctx()` activitySpot). camState tests it against the live frustum
   // for `taskInView`, so a game-3D reframe that lands off the playfield / on a
@@ -178,7 +181,7 @@ export class World {
         ranger: this.ranger,
         seat: (seated) => this.player.rig.setSeated(seated),
         stopWalk: (x, z) => { this.player.target.set(x, 0, z); this.player.groundSpeedNow = 0; },
-        intent: () => this.player.intent(),
+        intent: () => (this.menuOpen() ? { x: 0, y: 0 } : this.player.intent()),
         follow: (yaw, snap) => { this.cam.followTargetYaw = yaw; if (snap) this.cam.followYaw = yaw; },
         recut: () => this.cam.place(true, 0, livePolicy().reduced),
         clearWalkPrompts: () => this.pois.clearForVehicle(),
@@ -262,7 +265,7 @@ export class World {
    * what the action is (open the mission briefing).
    */
   private tryInteract(): void {
-    if (this.activityActive) return;
+    if (this.activityActive || this.menuOpen()) return;
     // W5.1/W5.3b: the jeep + helicopter own the interact key while riding and when
     // standing beside a parked one — they win over the hub/marker affordances.
     if (this.vehicles.interact()) return;
@@ -309,6 +312,11 @@ export class World {
   /** Dev-hook accessor (W4.4): the procedural ground detail on/off + its mottle map. */
   groundDetailState(): { on: boolean; textured: boolean; tileRepeat: number } {
     return this.readback.groundDetailState();
+  }
+
+  /** The UI's "a menu card is over the world" test, read each frame (see `menuOpen`). */
+  setMenuGate(fn: () => boolean): void {
+    this.menuOpen = fn;
   }
 
   /** Register the spawn case-board hub callbacks (W2.2): `onNear(true|false)` as the
@@ -603,7 +611,7 @@ export class World {
     } else if (!this.activityActive && this.vehicles.inVehicle) {
       // W5.1: arcade drive mode owns movement while the ranger is in the jeep.
       this.vehicles.driveJeep(dt);
-    } else if (!this.activityActive) {
+    } else if (!this.activityActive && !this.menuOpen()) {
       // on foot: tank keys, the stick or a tap-walk move the ranger, and his steering
       // tells the follow camera what to do (world/Player.walk → CameraRig.steer).
       this.cam.steer(this.player.walk(dt, this.cam.viewFrame()));

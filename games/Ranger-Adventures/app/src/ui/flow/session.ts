@@ -24,6 +24,16 @@ export const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? 
 /** The ranger's name (falls back to "Alvah") — threaded into briefing/fact/reward + voice. */
 export const naam = (): string => rangerNaam(store.get().avatar);
 
+/** A menu card is over the live world: any `.ra-overlay` but the see-through explore HUD
+ *  and the reunion line (both `.explore-overlay`). Pauze, the missiebord, a briefing, the
+ *  sporenboek, the raaf hut, Instellingen, the reward cards: the world reads this each
+ *  frame and holds the ranger (and a jeep or helicopter) still while one is up, so held
+ *  arrow keys never walk him away behind a card. Derived from the DOM, so every way back
+ *  releases it without anyone having to remember to. */
+export function menuOpen(): boolean {
+  return !!session.host?.querySelector('.ra-overlay:not(.explore-overlay)');
+}
+
 export function clearOverlays(): void {
   session.host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
 }
