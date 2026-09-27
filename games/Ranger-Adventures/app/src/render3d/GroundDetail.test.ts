@@ -142,10 +142,13 @@ test('heathCover is deterministic, bounded and patchy (heather mats and sandy op
 });
 
 test('detailTile is in [0,1], quick to bake, and its florets are sparse', () => {
-  const t0 = performance.now();
+  // CPU time, not wall time: the bake is one synchronous pass, so this is what it costs;
+  // a wall clock on a busy machine (parallel builds) measures the wait for a core.
+  const t0 = process.cpuUsage();
   const { grit, speck, needle } = detailTile();
-  const ms = performance.now() - t0;
-  assert.ok(ms < 400, `bakes in ${ms.toFixed(0)} ms (it sits on the title's boot path)`);
+  const used = process.cpuUsage(t0);
+  const ms = (used.user + used.system) / 1000;
+  assert.ok(ms < 400, `bakes in ${ms.toFixed(0)} ms of CPU (it sits on the title's boot path)`);
   for (const ch of [grit, speck, needle]) {
     assert.equal(ch.length, TILE * TILE);
     for (let i = 0; i < ch.length; i += 97) assert.ok(ch[i] >= 0 && ch[i] <= 1);
