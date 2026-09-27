@@ -24,6 +24,10 @@ export interface LoadedRig { group: THREE.Group; clips: THREE.AnimationClip[] }
 
 let manifest: Record<string, ModelEntry> | null = null;
 const cache = new Map<string, GLTF>();
+// What a cached GLB owns (geometries, materials, textures): every clone shares it, so a
+// teardown (World.dispose) must never free it (the title's clones stop drawing).
+const owned = new WeakSet<object>();
+export const cachedResource = (res: object): boolean => owned.has(res);
 
 export async function loadManifest(): Promise<Record<string, ModelEntry>> {
   if (manifest) return manifest;
@@ -47,7 +51,9 @@ async function loadGLTF(id: string): Promise<GLTF | null> {
   if (!e) return null;
   if (!cache.has(id)) {
     try {
-      cache.set(id, await loader.loadAsync(assetUrl(`/models/${e.file}`)));
+      const gltf = await loader.loadAsync(assetUrl(`/models/${e.file}`));
+      gltf.scene.traverse((o) => { const m = o as THREE.Mesh; for (const r of [m.geometry, ...[m.material ?? []].flat()]) if (r) { owned.add(r); for (const v of Object.values(r)) if ((v as THREE.Texture)?.isTexture) owned.add(v); } });
+      cache.set(id, gltf);
     } catch {
       return null;
     }

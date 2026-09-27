@@ -46,9 +46,42 @@ import { FpsProbe, nextTier, bootTier, coarsePointer, lightMode, pixelRatioFor, 
 import type { WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
+import { cachedResource } from './Models';
 import { Progress } from './world/Progress';
 
 export type { WorldMarker } from './world/Markers';
+
+/**
+ * Free what a torn-down world made on the GPU, and nothing the GLB cache owns. The world
+ * makes its own textures (name-tags, pads, water, dust, the ground mottle), materials,
+ * geometry, forest instance buffers, a bone texture per rig and the sun's shadow map;
+ * freeing only its geometry leaked 22-36 textures per title round trip (LEAK-1). What a
+ * cached GLB owns (Models.cachedResource) is shared by every clone: the title backdrop
+ * keeps drawing those same buffers, and freeing them under it left the title's ranger
+ * and cabin undrawn after "Naar het hoofdmenu" (parent:B9). Module-wide singletons (the
+ * plant material, the ground mottle) are freed too: three uploads them again on next use.
+ */
+function disposeScene(root: THREE.Object3D): void {
+  const done = new Set<object>();
+  const free = (r: { dispose(): void } | null | undefined): void => {
+    if (!r || done.has(r) || cachedResource(r)) return;
+    done.add(r);
+    r.dispose();
+  };
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!(o as THREE.Sprite).isSprite) free(m.geometry); // every sprite shares three's one quad
+    for (const mat of [m.material ?? []].flat()) {
+      if (cachedResource(mat)) continue;
+      for (const v of Object.values(mat)) if ((v as THREE.Texture)?.isTexture) free(v as THREE.Texture);
+      for (const u of Object.values((mat as THREE.ShaderMaterial).uniforms ?? {})) if (u?.value?.isTexture) free(u.value as THREE.Texture);
+      free(mat);
+    }
+    if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); // its instance buffers
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) free((o as THREE.SkinnedMesh).skeleton); // its bone texture
+    if ((o as THREE.Light).isLight) free(o as THREE.Light); // the sun's shadow map
+  });
+}
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -472,10 +505,7 @@ export class World {
     this.player.dispose(); // pointer seam + keys
     this.canvas.removeEventListener('wheel', this.cam.onWheel); // F-16 dolly zoom
     Sound.engineStop(); // W5.2: never leak the engine loop past teardown
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-    });
+    disposeScene(this.scene);
   }
 
   /** The drawn ground height at world (x,z) — the one ground truth (world/Terrain.ts).
