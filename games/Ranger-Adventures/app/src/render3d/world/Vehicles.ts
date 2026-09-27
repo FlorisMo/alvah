@@ -51,10 +51,12 @@ const MODEL_YAW = Math.PI / 2;
 // and the proximity radius that surfaces the "Stap in" affordance (from its centre).
 export const JEEP_COLLIDE = 1.6;
 const JEEP_NEAR_R = 3.6;
-// The jeep's home: on the stuifzand, ≥ 8 m from every mission marker (audit veh-09:
+// The jeep's home: on the stuifzand, ≥ 13 m from every mission marker (audit veh-09:
 // it used to park ON "Het stille zand"), on flat open sand, parked facing the way to
-// the first mission so a straight drive has a clear 20 m run past the clearing.
-const JEEP_HOME = { x: 22, z: 8, faceX: -15.6, faceZ: -15.6 };
+// the first mission so a straight drive has a clear 20 m run past the clearing. The
+// walk to it from the spawn passes the warden ≥ 3 m wide (he never steps into the
+// camera's view of the ranger on the way).
+const JEEP_HOME = { x: 22, z: 4, faceX: -15.6, faceZ: -15.6 };
 // P1.5b ground contact: the body eases toward the wheels' ground each frame (a damped
 // suspension glide, never a hard per-frame snap). Converges in ~0.1 s.
 const JEEP_HOVER_RATE = 10;
