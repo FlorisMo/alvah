@@ -6,8 +6,8 @@
  *
  *   1. a RICHER golden-hour gradient (`SKY_STOPS` — more colour bands than the
  *      old three-stop ramp), baked once onto the sky canvas;
- *   2. DRIFTING cloud shadows — a soft cloud-alpha plane multiply-darkening the
- *      ground, its texture offset scrolled by `cloudOffset(t)`;
+ *   2. DRIFTING cloud shadows — soft shade in the ground's own lighting
+ *      (`cloudShadeShader`, before tone mapping and fog), scrolled by `cloudOffset(t)`;
  *   3. a gentle WIND wave on the tall grasses (marram + reed), each blade tilted
  *      by `windSway(t, phase)`;
  *   4. a BIRD FLYOVER — one high bird crossing the sky on `FLYOVER_PERIOD` (~12 s)
@@ -67,6 +67,63 @@ export function toneMappedHex(hex: string, exposure: number): string {
 
 /** Cloud-shadow drift speed, in texture-uv units per second (slow, calm). */
 export const CLOUD_DRIFT = { x: 0.0042, y: 0.0016 } as const;
+
+/** Metres of ground one cloud-shade tile covers (~136 m: big, soft clouds). */
+export const CLOUD_TILE_M = 300 / 2.2;
+/** Where the tile starts (uv at the world origin), so the clouds lie where they always did. */
+const CLOUD_PHASE = 1.1;
+
+/** The cloud-shade texture coordinate on the ground at world (x,z) for drift offset
+ *  `off` (`cloudOffset`). World +x runs along u and world −z along v. The shader in
+ *  `cloudShadeShader` computes exactly this. Pure. */
+export function cloudUv(x: number, z: number, off: { x: number; y: number }): { u: number; v: number } {
+  return { u: x / CLOUD_TILE_M + CLOUD_PHASE + off.x, v: -z / CLOUD_TILE_M + CLOUD_PHASE + off.y };
+}
+
+/**
+ * Patch a lit three.js shader (MeshStandardMaterial) so the drifting cloud shade falls ON
+ * THE GROUND: the texture dims the SUN's light (the direct terms) at the fragment's world
+ * position, while it is being lit, so tone mapping and then the fog come after it the way
+ * they come after every other shadow. Haze therefore covers a far cloud shadow like it
+ * covers the far ground, and a fully fogged hill is exactly the fog colour.
+ *
+ * It replaces a multiply-blended plane 3.2 m over the ground (W4.6). That plane was drawn
+ * over the finished, already fogged picture, so from the helicopter the far ground came
+ * out as the fog colour times the fog colour: a hard tan band under the cream sky (the end
+ * of the plate, verifier W4V-1). It also left its shade on the lower 3.2 m of every tree
+ * and was culled from below, so on foot the clouds mostly did not show at all.
+ *
+ * Needs `uniform vec2 uCloudOff` (vertex) and `uniform sampler2D uCloudMap` (fragment).
+ * Throws when an anchor is missing (a three upgrade renamed a chunk), rather than
+ * silently drawing no clouds. Pure string work.
+ */
+export function cloudShadeShader(vertex: string, fragment: string): { vertex: string; fragment: string } {
+  const need = (src: string, anchor: string): void => {
+    if (!src.includes(anchor)) throw new Error(`cloudShadeShader: no ${anchor} to patch`);
+  };
+  need(vertex, '#include <common>');
+  need(vertex, '#include <begin_vertex>');
+  need(fragment, '#include <common>');
+  need(fragment, '#include <lights_fragment_end>');
+  const k = (1 / CLOUD_TILE_M).toFixed(6);
+  return {
+    vertex: vertex
+      .replace('#include <common>', '#include <common>\nuniform vec2 uCloudOff;\nvarying vec2 vCloudUv;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        {
+          vec4 cloudWorld = modelMatrix * vec4(transformed, 1.0);
+          vCloudUv = vec2(cloudWorld.x, -cloudWorld.z) * ${k} + ${CLOUD_PHASE.toFixed(2)} + uCloudOff;
+        }`),
+    fragment: fragment
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uCloudMap;\nvarying vec2 vCloudUv;')
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        {
+          vec3 cloudShade = texture2D(uCloudMap, vCloudUv).rgb;
+          reflectedLight.directDiffuse *= cloudShade;
+          reflectedLight.directSpecular *= cloudShade;
+        }`),
+  };
+}
 
 /** Seconds for one bird to cross the sky (the "~12 s vogel-overvlucht"). */
 export const FLYOVER_PERIOD = 12;

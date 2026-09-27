@@ -92,3 +92,35 @@ test('toneMappedHex: the horizon haze through the ACES curve is the cream the sk
   assert.ok(Math.abs(rgb[0] - 227) <= 2 && Math.abs(rgb[1] - 211) <= 2 && Math.abs(rgb[2] - 185) <= 2, `drawn horizon ${got}`);
   assert.equal(toneMappedHex('#000000', 1), '#000000', 'black stays black');
 });
+
+import * as THREE from 'three';
+import { CLOUD_TILE_M, cloudShadeShader, cloudUv } from './Atmosphere.ts';
+
+test('cloudShadeShader: the cloud shade dims the sun on the ground BEFORE tone mapping and fog (verifier W4V-1)', () => {
+  // The old shade was a multiply-blended plane drawn over the finished, fogged picture:
+  // a fully fogged far ground came out fog x fog, a hard tan band under the cream sky.
+  // Shaded while it is lit, haze covers a far cloud shadow like it covers the ground.
+  const { vertex, fragment } = cloudShadeShader(THREE.ShaderLib.standard.vertexShader, THREE.ShaderLib.standard.fragmentShader);
+  assert.match(vertex, /uniform vec2 uCloudOff;/);
+  assert.match(vertex, /vCloudUv = /, 'the vertex stage hands the world-space cloud uv on');
+  assert.match(fragment, /uniform sampler2D uCloudMap;/);
+  const shade = fragment.indexOf('reflectedLight.directDiffuse *= cloudShade');
+  assert.ok(shade > 0, 'the sun on the ground is dimmed by the cloud shade');
+  assert.ok(shade > fragment.indexOf('#include <lights_fragment_end>'), 'after the lights are gathered');
+  assert.ok(shade < fragment.indexOf('#include <tonemapping_fragment>'), 'before the tone curve');
+  assert.ok(shade < fragment.indexOf('#include <fog_fragment>'), 'before the fog: the haze covers it');
+  assert.ok(!/indirectDiffuse \*= cloudShade/.test(fragment), 'the sky fill is not shaded: a cloud blocks the sun');
+  assert.throws(() => cloudShadeShader('void main() {}', fragment), /begin_vertex|common/, 'a renamed chunk fails loudly');
+});
+
+test('cloudUv: the clouds lie where the old 300 m plane (repeat 2.2) put them, and the shader agrees', () => {
+  const off = { x: 0.31, y: 0.07 };
+  for (const [x, z] of [[0, 0], [40, -12], [-73, 35], [120, 120]]) {
+    // the plane: uv (x+150)/300 across, (−z+150)/300 up (rotated −π/2 about x), then × repeat + offset
+    const u = ((x + 150) / 300) * 2.2 + off.x, v = ((-z + 150) / 300) * 2.2 + off.y;
+    const got = cloudUv(x, z, off);
+    assert.ok(Math.abs(got.u - u) < 1e-9 && Math.abs(got.v - v) < 1e-9, `(${x},${z}) → ${got.u},${got.v} vs ${u},${v}`);
+  }
+  const { vertex } = cloudShadeShader(THREE.ShaderLib.standard.vertexShader, THREE.ShaderLib.standard.fragmentShader);
+  assert.ok(vertex.includes((1 / CLOUD_TILE_M).toFixed(6)), 'the GLSL uses the same tile size');
+});

@@ -440,6 +440,7 @@ export class Terrain {
     this.heights = new Float32Array(pos.count);
     for (let i = 0; i < pos.count; i++) this.heights[i] = pos.getY(i);
     const mat = groundMaterial(opts.detail, opts.map ?? null);
+    mat.userData.cloudShade = true; // the drifting cloud shade lands here (Sky.buildCloudShadows)
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.receiveShadow = true; // the hero shadow lands on the ground
   }

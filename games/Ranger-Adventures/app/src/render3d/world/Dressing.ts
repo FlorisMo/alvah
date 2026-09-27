@@ -241,7 +241,9 @@ export class Dressing {
   buildPaths(): THREE.Mesh {
     const geo = buildPathGeometry(this.terrain);
     // the ground's own material (same program, textures and light)
-    const mesh = new THREE.Mesh(geo, groundMaterial(this.terrain.detail, (this.terrain.mesh.material as THREE.MeshStandardMaterial).map));
+    const mat = groundMaterial(this.terrain.detail, (this.terrain.mesh.material as THREE.MeshStandardMaterial).map);
+    mat.userData.cloudShade = true; // the cloud shade drifts over the paths like the ground (Sky.buildCloudShadows)
+    const mesh = new THREE.Mesh(geo, mat);
     mesh.name = 'sand-paths';
     mesh.renderOrder = 1;        // drawn after the ground it lies on
     mesh.receiveShadow = true;
