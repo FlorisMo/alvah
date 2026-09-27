@@ -168,6 +168,7 @@ export class Vehicles {
   nearHeli = false;
   private heliAirborne = false;
   private heliLanding = false;
+  private liftArmed = false;               // a push lifts off only after the keys were let go once
   private landPad: { x: number; z: number } | null = null;
   private heliSpeed = 0;
   private heliClimbRate = 0;
@@ -196,6 +197,10 @@ export class Vehicles {
   private dustSeed = 0x9e3779b1;
   dustEmitting = false;
   private static readonly DUST_N = 48;
+  // Draw the dust and the pad beacons for the first frames (all invisible: no live puffs,
+  // pads far away) so their shaders compile while the world loads — not as a ~1 s stall
+  // the moment the jeep first kicks up dust or the helicopter first lifts off.
+  private warmFrames = 3;
 
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
@@ -340,7 +345,8 @@ export class Vehicles {
       this.scene.add(this.makeHelipad(p.x, p.z, tex));
       const beacon = Vehicles.makeBeacon();
       beacon.position.set(p.x, this.groundY(p.x, p.z), p.z);
-      beacon.visible = false;               // shown only while flying: "land here"
+      beacon.visible = true;                // warm-up; then shown only while flying: "land here"
+      beacon.frustumCulled = false;         // (two still columns; drawn only while flying)
       this.scene.add(beacon);
       this.beacons.push(beacon);
       this.helipads.push({ x: p.x, z: p.z });
@@ -719,6 +725,7 @@ export class Vehicles {
     if (!heliAvailable(this.heliOptInSource(), livePolicy().reduced)) return;
     this.inHeli = true;
     this.heliAirborne = false;
+    this.liftArmed = false;
     this.heliLanding = false;
     this.landPad = null;
     this.heliAltitude = HELI_PAD_HEIGHT;
@@ -778,7 +785,9 @@ export class Vehicles {
     const hp = this.heliPos;
     const intent = this.host.intent();
     if (!this.heliAirborne) {
-      if (Math.hypot(intent.x, intent.y) > 0.2) this.heliAirborne = true; // lift off
+      const push = Math.hypot(intent.x, intent.y);
+      if (push < 0.1) this.liftArmed = true;   // let go once (after boarding / touchdown)
+      if (this.liftArmed && push > 0.2) this.heliAirborne = true; // lift off
       else {
         hp.y = this.groundY(hp.x, hp.z);
         this.heli.rotation.set(0, this.heliHeading, HELI_ROLL, 'YXZ');
@@ -835,6 +844,7 @@ export class Vehicles {
       this.heliAltitude = HELI_PAD_HEIGHT;
       hp.y = this.groundY(hp.x, hp.z);
       this.heliAirborne = false;
+      this.liftArmed = false;             // a key still held from the flight never lifts it again
       this.heliLanding = false;
       this.landPad = null;
       this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
@@ -900,7 +910,7 @@ export class Vehicles {
     });
     const pts = new THREE.Points(geo, mat);
     pts.frustumCulled = false; // particles live in world space, not around the origin
-    pts.visible = false;
+    pts.visible = true; // warm-up (all puffs dead: nothing shows); updateDust hides it
     const size = new THREE.Vector2();
     pts.onBeforeRender = (renderer, _scene, cam) => {
       renderer.getDrawingBufferSize(size);
@@ -967,6 +977,7 @@ export class Vehicles {
     (g.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     (g.getAttribute('aAge') as THREE.BufferAttribute).needsUpdate = true;
     (g.getAttribute('aLife') as THREE.BufferAttribute).needsUpdate = true;
-    this.dust.visible = anyAlive;
+    if (this.warmFrames > 0 && --this.warmFrames === 0 && !this.inHeli) for (const b of this.beacons) b.visible = false;
+    this.dust.visible = anyAlive || this.warmFrames > 0;
   }
 }

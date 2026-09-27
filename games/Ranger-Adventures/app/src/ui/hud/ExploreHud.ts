@@ -165,15 +165,22 @@ export function renderHeliPrompt(): void {
   const h = session.world?.heliState() ?? null;
   const cue = h?.padCue ?? null;
   const where = cue ? `${cue.glyph} Helipad ${cue.richting} · ${Math.max(5, Math.round(cue.distance / 5) * 5)} m` : '';
-  // Debounce: this runs every frame inside the heli (via setHeliVignette); only rebuild
-  // the DOM when what it says actually changes.
+  // Debounce: this runs every frame inside the heli (via setHeliVignette); rebuild the DOM
+  // only when the affordance changes. While flying only the pad line's words change —
+  // they are updated in place, so the "Land" button under a moving finger stays put.
   const key = !h ? 'none'
-    : h.inHeli ? (!h.airborne ? 'ground' : h.landing ? 'landing' : h.onPad ? 'land' : `fly:${where}`)
+    : h.inHeli ? (!h.airborne ? 'ground' : h.landing ? 'landing' : h.onPad ? 'land' : 'fly')
     : h.near ? (h.available ? 'enter' : h.optIn ? 'reduced' : 'off')
     : 'none';
-  if (key === heliPromptKey) return;
+  if (key === heliPromptKey) {
+    if (key === 'fly') {
+      const line = prompt.querySelector<HTMLElement>('.explore-heli-where');
+      if (line && line.textContent !== where) line.textContent = where;
+    }
+    return;
+  }
   heliPromptKey = key;
-  const hint = (text: string): string => `<p class="explore-heli-hint">${esc(text)}</p>`;
+  const hint = (text: string, cls = ''): string => `<p class="explore-heli-hint${cls}">${esc(text)}</p>`;
   const button = (cls: string, label: string): string => `<button class="btn-start ${cls}" type="button">${label}</button>`;
   if (key === 'none') prompt.innerHTML = '';
   else if (key === 'ground') {
@@ -182,8 +189,8 @@ export function renderHeliPrompt(): void {
     prompt.innerHTML = hint(LANDING);
   } else if (key === 'land') {
     prompt.innerHTML = button('explore-heli-land', '🚁 Land hier');
-  } else if (key.startsWith('fly:')) {
-    prompt.innerHTML = hint(where) + button('explore-heli-land', '🚁 Land op de helipad');
+  } else if (key === 'fly') {
+    prompt.innerHTML = hint(where, ' explore-heli-where') + button('explore-heli-land', '🚁 Land op de helipad');
   } else if (key === 'enter') {
     prompt.innerHTML = button('explore-heli-enter', '🚁 Stap in de helikopter');
   } else {
