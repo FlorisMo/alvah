@@ -245,6 +245,12 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
   await page.keyboard.press('Space');
   await expectLandedOnPad(page, padB);
   await shot(page, 'heli-landed');
+  // nothing grows through either pad (breaker B9: heather poked through the pad and the skids)
+  const growing = await page.evaluate((pads) => {
+    const r = (window as unknown as { __ranger: { seating(x: number, z: number, r: number): { id: string }[] | null } }).__ranger;
+    return pads.flatMap((p) => (r.seating(p.x, p.z, 3.2) ?? []).map((s) => s.id)).filter((id) => /^(heide|stuifzand|ven|bos)-/.test(id));
+  }, avail.pads);
+  expect(growing, 'no plant stands on a helipad').toEqual([]);
 
   // 4) "Stap uit" (Space presses the one visible button) — on foot beside pad B
   await page.keyboard.press('Space');

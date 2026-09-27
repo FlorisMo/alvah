@@ -79,7 +79,8 @@ const WALKER_ROOM = 0.3;
 // and how close (horizontally) it must be to a pad for "Land hier".
 const HELI_NEAR_R = 4.0;
 const PAD_LAND_R = 6.0;
-const PAD_RADIUS = 3.2;
+/** The radius (m) of a drawn helipad. */
+export const PAD_RADIUS = 3.2;
 const DEPART_CLEAR = 15;
 // Above this altitude (m) the flying helicopter is over every trunk and roof; below
 // it (lifting off, touching down) its body collides like the jeep's.
@@ -87,7 +88,7 @@ const HELI_AIRBORNE_Y = 2.5;
 // The two helipads: flat, open, ≥ 9 m from every marker and ≥ 6 m from every solid.
 // A: the stuifzand apron beyond the jeep (the helicopter parks here); B: the heath by
 // the BOA-post on the western side (the old A had a juniper on it, the old B a slope).
-const PADS = [
+export const PADS: readonly { readonly x: number; readonly z: number }[] = [
   { x: 32, z: 18 },
   { x: -44, z: -26 },
 ];

@@ -24,6 +24,7 @@ import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies } from './For
 import { PlantField, heatherGeometry, plantMaterial, tuftGeometry, type PlantSpot } from './Plants';
 import { lodGeometries, lodMaterial } from '../Lod';
 import { heathCover } from '../GroundDetail';
+import { PADS, PAD_RADIUS } from './Vehicles';
 
 export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 
@@ -564,8 +565,8 @@ export class Dressing {
   }
 
   /**
-   * Plant spots on a jittered grid of `cell` m over one landschap: off the sand paths,
-   * out of the spawn clearing, inside the rim; `keep(x, z, h)` (h: a stable per-spot
+   * Plant spots on a jittered grid of `cell` m over one landschap: off the sand paths and
+   * the helipads, out of the spawn clearing, inside the rim; `keep(x, z, h)` (h: a stable per-spot
    * random in [0,1)) thins them. Deterministic.
    */
   private gridSpots(want: Biome, cell: number, seed: number, keep: (x: number, z: number, h: number) => boolean): { x: number; z: number; h: number }[] {
@@ -578,6 +579,7 @@ export class Dressing {
       if (r < 9 || r > B) continue;                               // the spawn clearing, the rim
       if (this.terrain.biome(x, z) !== want) continue;
       if (distanceToNetwork(x, z) < LANE_HALF + 0.6) continue;  // the paths stay bare sand
+      if (PADS.some((p) => Math.hypot(x - p.x, z - p.z) < PAD_RADIUS + 0.9)) continue; // nothing grows through a helipad (breaker B9)
       const h = hash2(gx, gz, seed + 2);
       if (!keep(x, z, h)) continue;
       if (r > this.scatterMax) this.scatterMax = r;                // furthest low plant (dev hook)
