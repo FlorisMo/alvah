@@ -5,7 +5,8 @@ import {
   vertexTint,
   groundPatch,
   heathCover,
-  detailTexel,
+  detailTile,
+  DETAIL_TILE_PX as TILE,
   BIOME_GROUND_TONES,
   GROUND_TILE_PX,
   GROUND_TILE_REPEAT,
@@ -140,16 +141,18 @@ test('heathCover is deterministic, bounded and patchy (heather mats and sandy op
   assert.ok(lo > 40 && hi > 40, `both open sand (${lo}) and dense heather (${hi}) occur`);
 });
 
-test('detailTexel is in [0,1], tiles seamlessly and has sparse florets', () => {
-  let florets = 0;
-  for (let i = 0; i < 256; i++) {
-    const u = (i * 37 % 256) / 256, v = (i * 91 % 256) / 256;
-    for (const c of detailTexel(u, v)) assert.ok(c >= 0 && c <= 1);
-    if (detailTexel(u, v)[1] > 0.5) florets++;
+test('detailTile is in [0,1], quick to bake, and its florets are sparse', () => {
+  const t0 = performance.now();
+  const { grit, speck, needle } = detailTile();
+  const ms = performance.now() - t0;
+  assert.ok(ms < 400, `bakes in ${ms.toFixed(0)} ms (it sits on the title's boot path)`);
+  for (const ch of [grit, speck, needle]) {
+    assert.equal(ch.length, TILE * TILE);
+    for (let i = 0; i < ch.length; i += 97) assert.ok(ch[i] >= 0 && ch[i] <= 1);
   }
-  assert.ok(florets > 3 && florets < 128, `florets are sparse, not everywhere (${florets}/256)`);
-  for (const v of [0.1, 0.5, 0.9]) {
-    const a = detailTexel(0, v), b = detailTexel(0.99999, v);
-    assert.ok(Math.abs(a[3] - b[3]) < 0.05, 'clumps tile across u');
-  }
+  const lit = speck.filter((v) => v > 0.5).length / speck.length;
+  assert.ok(lit > 0.005 && lit < 0.2, `florets are sparse, not everywhere (${(lit * 100).toFixed(1)}%)`);
+  const strokes = needle.filter((v) => v > 0.3).length / needle.length;
+  assert.ok(strokes > 0.02 && strokes < 0.6, `needles cover part of the tile (${(strokes * 100).toFixed(1)}%)`);
+  assert.deepEqual(detailTile().needle.slice(0, 64), needle.slice(0, 64), 'deterministic');
 });

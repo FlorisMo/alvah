@@ -6,7 +6,7 @@
  */
 
 import * as THREE from 'three';
-import { DETAIL_TILE_M, DETAIL_TILE_PX, GROUND_TILE_PX, GROUND_TILE_REPEAT, detailTexel, mottleRGB } from './GroundDetail.ts';
+import { DETAIL_TILE_M, DETAIL_TILE_PX, GROUND_TILE_PX, GROUND_TILE_REPEAT, detailTile, mottleRGB } from './GroundDetail.ts';
 
 /**
  * The fine ground detail, close to the lens only (it fades out by ~55 m so the far
@@ -61,35 +61,40 @@ export function groundMaterial(detail: boolean, map: THREE.Texture | null): THRE
   return mat;
 }
 
-/** The fine-detail tile (GroundDetail.detailTexel) on a small repeating canvas. */
-function detailTexture(): THREE.CanvasTexture {
+let detailTex: THREE.DataTexture | null = null;
+/** The fine-detail tile (GroundDetail.detailTile) as a small repeating texture, baked
+ *  once a session (the title and the world share it). */
+function detailTexture(): THREE.DataTexture {
+  if (detailTex) return detailTex;
   const N = DETAIL_TILE_PX;
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = N;
-  const ctx = cv.getContext('2d')!;
-  const img = ctx.createImageData(N, N);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const [grit, speck, needle] = detailTexel(i / N, j / N);
-    const o = (j * N + i) * 4;
-    img.data[o] = Math.round(grit * 255);
-    img.data[o + 1] = Math.round(speck * 255);
-    img.data[o + 2] = Math.round(needle * 255);
-    img.data[o + 3] = 255;
+  const { grit, speck, needle } = detailTile();
+  const data = new Uint8Array(N * N * 4);
+  for (let i = 0; i < N * N; i++) {
+    data[i * 4] = Math.round(grit[i] * 255);
+    data[i * 4 + 1] = Math.round(speck[i] * 255);
+    data[i * 4 + 2] = Math.round(needle[i] * 255);
+    data[i * 4 + 3] = 255;
   }
-  ctx.putImageData(img, 0, 0);
-  const tex = new THREE.CanvasTexture(cv);
+  const tex = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
   tex.colorSpace = THREE.NoColorSpace; // data, not colour
   tex.anisotropy = 8;
+  tex.needsUpdate = true;
+  detailTex = tex;
   return tex;
 }
 
 /**
- * The fine painterly grain (GroundDetail.mottleRGB) baked once onto a small canvas
- * that repeats over the ground (12 × over 240 m); multiplied against the vertex colour
- * it reads as brushed tonal variation. Browser-only (needs a canvas).
+ * The fine painterly grain (GroundDetail.mottleRGB) baked once (per session) onto a
+ * small canvas that repeats over the ground (12 × over 240 m); multiplied against the
+ * vertex colour it reads as brushed tonal variation. Browser-only (needs a canvas).
  */
+let mottleTex: THREE.CanvasTexture | null = null;
 export function mottleTexture(): THREE.CanvasTexture {
+  if (mottleTex) return mottleTex; // baked once a session: the title and the world share it
   const N = GROUND_TILE_PX;
   const cv = document.createElement('canvas');
   cv.width = cv.height = N;
@@ -111,5 +116,6 @@ export function mottleTexture(): THREE.CanvasTexture {
   tex.repeat.set(GROUND_TILE_REPEAT, GROUND_TILE_REPEAT);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
+  mottleTex = tex;
   return tex;
 }

@@ -181,48 +181,53 @@ export const DETAIL_TILE_PX = 256;
 export const DETAIL_TILE_M = 2.4;
 
 /**
- * The fine ground detail for a texel at (u,v) ∈ [0,1): four seamless patterns the
- * terrain shader mixes per landschap, close to the lens only (they fade out with
+ * The fine ground detail tile, DETAIL_TILE_PX² texels, as three channels in [0,1] that
+ * the terrain shader mixes per landschap, close to the lens only (they fade out with
  * distance, so the far ground never shimmers):
- *   [0] grit   — soil grain, every biome (~1-3 cm);
- *   [1] speck  — little heather florets and leaves, sparse bright dots (the heide);
- *   [2] needle — short pine needles and twigs in every direction (the bos floor);
- *   [3] clump  — soft 20-40 cm clumps (tufts, moss cushions, ripples in the sand).
- * All in [0,1], deterministic and tileable.
+ *   grit   — soil grain, every biome (~1-3 cm);
+ *   speck  — little heather florets and leaves, sparse bright dots (the heide);
+ *   needle — short pine needles and twigs in every direction (the bos floor).
+ * Specks and needles are DRAWN (a disc or a short stroke each, wrapping at the edges so
+ * the tile is seamless) instead of searched for per texel, so the bake stays a few ms
+ * on the title's boot path. Deterministic.
  */
-export function detailTexel(u: number, v: number): [number, number, number, number] {
+export function detailTile(): { grit: Float32Array; speck: Float32Array; needle: Float32Array } {
   const N = DETAIL_TILE_PX;
-  const px = Math.floor(u * N), py = Math.floor(v * N);
-  // grit: fine value noise + per-texel hash
-  const grit = 0.55 * vnoise(u * 64, v * 64, 211, 64) + 0.45 * hash(px, py, 977);
-  // speck: a sparse set of 1-2 texel florets on a 32² jittered lattice (tileable)
-  let speck = 0;
-  const G = 32;
-  const cx = Math.floor(u * G), cy = Math.floor(v * G);
-  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-    const gx = ((cx + dx) % G + G) % G, gy = ((cy + dy) % G + G) % G;
-    if (hash(gx, gy, 419) < 0.35) continue; // not every cell flowers
-    const fx = (cx + dx + hash(gx, gy, 421)) / G, fy = (cy + dy + hash(gx, gy, 431)) / G;
-    const d = Math.hypot((u - fx) * N, (v - fy) * N);
-    speck = Math.max(speck, Math.max(0, 1 - d / (1.2 + hash(gx, gy, 433) * 1.3)));
+  const grit = new Float32Array(N * N), speck = new Float32Array(N * N), needle = new Float32Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    grit[y * N + x] = 0.55 * vnoise((x / N) * 64, (y / N) * 64, 211, 64) + 0.45 * hash(x, y, 977);
   }
-  // needle: short straight strokes on a 16² jittered lattice (tileable)
-  let needle = 0;
-  const H = 16;
-  const nx = Math.floor(u * H), ny = Math.floor(v * H);
-  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-    for (let k = 0; k < 3; k++) {
-      const gx = ((nx + dx) % H + H) % H, gy = ((ny + dy) % H + H) % H;
-      const sx = (nx + dx + hash(gx, gy, 601 + k)) / H, sy = (ny + dy + hash(gx, gy, 607 + k)) / H;
-      const a = hash(gx, gy, 613 + k) * Math.PI;
-      const len = (5 + hash(gx, gy, 617 + k) * 9) / N;
-      const ex = Math.cos(a), ey = Math.sin(a);
-      const qx = u - sx, qy = v - sy;
-      const t = Math.max(-len, Math.min(len, qx * ex + qy * ey));
-      const d = Math.hypot(qx - ex * t, qy - ey * t) * N;
-      needle = Math.max(needle, Math.max(0, 1 - d / 0.9) * (0.6 + 0.4 * hash(gx, gy, 619 + k)));
+  const at = (x: number, y: number): number => ((((y % N) + N) % N) * N + (((x % N) + N) % N));
+  // florets: a jittered 32² lattice, ~65% of cells flower, each a soft 1-2.5 px dot
+  const G = 32;
+  for (let gy = 0; gy < G; gy++) for (let gx = 0; gx < G; gx++) {
+    if (hash(gx, gy, 419) < 0.35) continue;
+    const cx = (gx + hash(gx, gy, 421)) * (N / G), cy = (gy + hash(gx, gy, 431)) * (N / G);
+    const r = 1.2 + hash(gx, gy, 433) * 1.3;
+    for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+      const px = Math.floor(cx) + dx, py = Math.floor(cy) + dy;
+      const v = Math.max(0, 1 - Math.hypot(px + 0.5 - cx, py + 0.5 - cy) / r);
+      const k = at(px, py);
+      if (v > speck[k]) speck[k] = v;
     }
   }
-  const clump = vnoise(u * 8, v * 8, 263, 8) * 0.6 + vnoise(u * 16, v * 16, 271, 16) * 0.4;
-  return [grit, speck, needle, clump];
+  // needles: three short strokes per cell of a jittered 16² lattice, any direction
+  const H = 16;
+  for (let gy = 0; gy < H; gy++) for (let gx = 0; gx < H; gx++) for (let s = 0; s < 3; s++) {
+    const sx = (gx + hash(gx, gy, 601 + s)) * (N / H), sy = (gy + hash(gx, gy, 607 + s)) * (N / H);
+    const a = hash(gx, gy, 613 + s) * Math.PI;
+    const len = 5 + hash(gx, gy, 617 + s) * 9;
+    const bright = 0.6 + 0.4 * hash(gx, gy, 619 + s);
+    const ex = Math.cos(a), ey = Math.sin(a);
+    for (let t = -len; t <= len; t += 0.5) {
+      const qx = sx + ex * t, qy = sy + ey * t;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const px = Math.floor(qx) + dx, py = Math.floor(qy) + dy;
+        const v = Math.max(0, 1 - Math.hypot(px + 0.5 - qx, py + 0.5 - qy) / 0.9) * bright;
+        const k = at(px, py);
+        if (v > needle[k]) needle[k] = v;
+      }
+    }
+  }
+  return { grit, speck, needle };
 }

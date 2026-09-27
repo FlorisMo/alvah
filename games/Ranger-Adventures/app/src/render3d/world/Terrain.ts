@@ -82,7 +82,7 @@ export function groundColor(x: number, z: number, h: number, detail: boolean, ou
 }
 
 /**
- * Which fine ground detail (GroundDetail.detailTexel) the terrain shader lays down at
+ * Which fine ground detail (GroundDetail.detailTile) the terrain shader lays down at
  * world (x,z): [heather florets, pine needles, sand grain, grass/moss clumps], each in
  * [0,1]. Painted on the vertices, so the landschappen blend over a few metres.
  */
