@@ -193,7 +193,8 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
   let reached = false;
   try {
     let prev = await hook(page, (r) => r.heli());
-    for (let i = 0; i < 400; i++) {
+    const tFly = Date.now();
+    while (Date.now() - tFly < 90_000) {
       const h = await hook(page, (r) => r.heli());
       if (!h) { await page.waitForTimeout(100); continue; }
       assertComfort(h);

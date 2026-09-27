@@ -103,7 +103,10 @@ const SIT_POSE: Record<string, [number, number, number]> = {
 
 // Solid things that move or are not in the static collision list, as the jeep sees them.
 const PERSON_R = 0.45;   // the warden, the poacher
-const MARKER_R = 1.0;    // a mission marker's animal + ring
+// A mission marker is a keep-out zone for vehicles: the jeep rolls to a soft stop at
+// its edge and parks ≥ 6 m from the marker (audit veh-09 / B3: a jeep parked on or by a
+// marker hid its prompt, sat in the mini-game's stage and collapsed the walk camera).
+const MARKER_R = 5.2;
 const animalR = (h: number): number => Math.min(0.7, Math.max(0.25, h * 0.6));
 
 /** What the vehicles need from the rest of the world. */
@@ -639,7 +642,8 @@ export class Vehicles {
   }
 
   /** Every solid the jeep's body meets: the static list (trunks, cabin, landmarks,
-   *  board, props, the parked helicopter) plus people, walking animals and markers. */
+   *  board, props, the parked helicopter) plus people, walking animals and the keep-out
+   *  zone around each mission marker. */
   private jeepSolids(): Solid[] {
     const out: Solid[] = this.obstacles.slice();
     for (const p of this.host.people()) out.push({ x: p.x, z: p.z, r: PERSON_R });

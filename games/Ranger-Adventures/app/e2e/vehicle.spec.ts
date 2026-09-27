@@ -330,7 +330,7 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
       ...trees.map((t) => ({ x: t.x, z: t.z, r: 0.6 * t.s, t })),
       ...(r.landmarks() ?? []).map((l) => ({ x: l.x, z: l.z, r: 2.6 })),
       ...(r.dressing() ?? []).map((d) => ({ x: d.x, z: d.z, r: 1 })),
-      ...(r.markers() ?? []).map((m) => ({ x: m.x, z: m.z, r: 1 })),
+      ...(r.markers() ?? []).map((m) => ({ x: m.x, z: m.z, r: 5.2 })), // a marker is a keep-out zone for the jeep
       ...[r.sitSpot(), r.board()].filter((o): o is { x: number; z: number } => !!o).map((o) => ({ x: o.x, z: o.z, r: 0.7 })),
     ];
     const clear = (t: object & { x: number; z: number }): boolean => others.every((o) => {
@@ -359,14 +359,15 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
   // full gas straight at it for 5 s: it brakes by itself and rests against the trunk
   let minGap = Infinity;
   let jolt = 0;
-  let prev: Vehicle | null = null;
+  let prev: (Vehicle & { t: number }) | null = null;
   await page.keyboard.down('ArrowUp');
   try {
     const t0 = Date.now();
     while (Date.now() - t0 < 5_000) {
-      const v = (await hook(page, (r) => r.vehicle()))!;
+      const v = { ...(await hook(page, (r) => r.vehicle()))!, t: Date.now() };
       minGap = Math.min(minGap, bodyGap(v, trunk));
-      if (prev && prev.speed - v.speed > 2.5) jolt += 1; // a dead stop from speed in one ~80 ms sample
+      // a crash = the speed dropping far faster than the ~6 m/s² soft brake
+      if (prev && (prev.speed - v.speed) / Math.max(0.05, (v.t - prev.t) / 1000) > 15) jolt += 1;
       prev = v;
       await page.waitForTimeout(80);
     }
