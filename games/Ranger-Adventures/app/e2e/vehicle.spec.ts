@@ -320,11 +320,11 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
   await walkToJeep(page);
   await enterJeep(page);
 
-  // a tree with a clear straight run to it from where the jeep stands: every other
-  // solid (tree, landmark, prop, bench, board) and keep-out zone (marker, helipad: the
-  // jeep bends round those) stays clear of the jeep's path. `cone` = how far off the
-  // nose it may lie (rad), `min`/`max` = how far away (m).
-  const pickTree = (cone: number, min: number, max: number) => page.evaluate(([cone, min, max]) => {
+  // A tree to drive into, and a run-up to it like a player lines one up: a start point
+  // Q in open ground ahead of the jeep and a point P 12 m out from the trunk, Q–P–trunk
+  // on one straight line that every other solid (tree, landmark, prop, bench, board) and
+  // keep-out zone (marker, helipad: the jeep bends round those) stays clear of.
+  const plan = await page.evaluate(() => {
     const r = (window as unknown as { __ranger: Hook & { heli(): { pads: { x: number; z: number }[] } | null } }).__ranger;
     const v = r.vehicle()!;
     const trees = r.treeSpots() ?? [];
@@ -333,62 +333,65 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
       ...trees.map((t) => ({ x: t.x, z: t.z, r: 0.6 * t.s, t })),
       ...(r.landmarks() ?? []).map((l) => ({ x: l.x, z: l.z, r: 2.6 })),
       ...(r.dressing() ?? []).map((d) => ({ x: d.x, z: d.z, r: 1 })),
-      ...(r.markers() ?? []).map((m) => ({ x: m.x, z: m.z, r: 5.2 })),       // keep-out zone round a marker
-      ...(r.heli()?.pads ?? []).map((p) => ({ x: p.x, z: p.z, r: 3.2 })),    // and round a helipad
+      ...(r.markers() ?? []).map((m) => ({ x: m.x, z: m.z, r: 5.2 })),
+      ...(r.heli()?.pads ?? []).map((p) => ({ x: p.x, z: p.z, r: 3.6 })),
       ...[r.sitSpot(), r.board()].filter((o): o is { x: number; z: number } => !!o).map((o) => ({ x: o.x, z: o.z, r: 0.7 })),
     ];
-    const clear = (t: object & { x: number; z: number }): boolean => others.every((o) => {
-      if (o.t === t) return true;
-      const dx = t.x - v.x, dz = t.z - v.z, L2 = dx * dx + dz * dz;
-      const k = Math.max(0, Math.min(1, ((o.x - v.x) * dx + (o.z - v.z) * dz) / L2));
-      return Math.hypot(o.x - (v.x + dx * k), o.z - (v.z + dz * k)) > o.r + 1.3; // body half-width + room
-    });
-    const off = (t: { x: number; z: number }): number => {
-      const a = Math.atan2(t.x - v.x, t.z - v.z) - v.heading;
-      return Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
+    const gap = (o: C, ax: number, az: number, bx: number, bz: number): number => {
+      const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
+      const k = Math.max(0, Math.min(1, ((o.x - ax) * dx + (o.z - az) * dz) / L2));
+      return Math.hypot(o.x - (ax + dx * k), o.z - (az + dz * k)) - o.r;
     };
-    return trees
-      .filter((t) => { const d = Math.hypot(t.x - v.x, t.z - v.z); return d > min && d < max && off(t) < cone && clear(t); })
-      .sort((a, b) => Math.hypot(a.x - v.x, a.z - v.z) - Math.hypot(b.x - v.x, b.z - v.z))[0] ?? null;
-  }, [cone, min, max] as const);
-  // turn to face it. A turn needs a little roll (the jeep never pivots): a big one loops
-  // round a ~5 m circle, so it loops on the side with open ground (like a driver would,
-  // not through the bench and the trees), then short taps line the nose up.
-  const openSide = () => page.evaluate(() => {
-    const r = (window as unknown as { __ranger: Hook }).__ranger;
-    const v = r.vehicle()!;
-    const lx = Math.cos(v.heading), lz = -Math.sin(v.heading); // left-of-forward
-    const things = [...(r.treeSpots() ?? []), ...(r.landmarks() ?? []), ...(r.dressing() ?? []),
-      ...[r.sitSpot(), r.board()].filter((o): o is { x: number; z: number } => !!o)];
-    const crowd = (s: number): number => things.filter((o) => Math.hypot(o.x - (v.x + lx * 5 * s), o.z - (v.z + lz * 5 * s)) < 8).length;
-    return crowd(1) <= crowd(-1) ? 'ArrowLeft' : 'ArrowRight';
+    const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
+    let best: { t: { x: number; z: number; s: number }; P: { x: number; z: number }; Q: { x: number; z: number }; cost: number } | null = null;
+    for (const t of trees) {
+      const d = Math.hypot(t.x - v.x, t.z - v.z);
+      if (d < 6 || d > 45) continue;
+      for (let a = 0; a < 24; a++) {
+        const ux = Math.sin((a * Math.PI) / 12), uz = Math.cos((a * Math.PI) / 12);
+        const P = { x: t.x + ux * 12, z: t.z + uz * 12 }, Q = { x: t.x + ux * 20, z: t.z + uz * 20 };
+        if (Math.hypot(Q.x, Q.z) > 60) continue;
+        const ok = others.every((o) => o.t === t || (gap(o, Q.x, Q.z, t.x, t.z) > 1.6 && gap(o, v.x, v.z, Q.x, Q.z) > 1.6 && gap(o, Q.x, Q.z, Q.x, Q.z) > 6));
+        if (!ok) continue;
+        const ahead = (Q.x - v.x) * fx + (Q.z - v.z) * fz;
+        const cost = Math.hypot(Q.x - v.x, Q.z - v.z) - ahead; // prefer a start point ahead of the nose
+        if (!best || cost < best.cost) best = { t, P, Q, cost };
+      }
+    }
+    return best;
   });
-  const face = async (t: { x: number; z: number }): Promise<void> => {
-    const err = async (): Promise<number> => {
-      const v = (await hook(page, (r) => r.vehicle()))!;
-      const want = Math.atan2(t.x - v.x, t.z - v.z);
-      return Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
+  expect(plan, 'a tree with a clear straight run-up').not.toBeNull();
+  const tree = plan!.t;
+  // drive the run-up with the arrow keys: Up + steer toward Q, then toward P
+  const driveTo = async (goal: { x: number; z: number }, within: number): Promise<void> => {
+    const held = new Set<string>();
+    const set = async (k: string, on: boolean): Promise<void> => {
+      if (on && !held.has(k)) { await page.keyboard.down(k); held.add(k); } else if (!on && held.has(k)) { await page.keyboard.up(k); held.delete(k); }
     };
-    if (Math.abs(await err()) > 1.2) {
-      const key = await openSide();
-      await page.keyboard.down(key);
-      try {
-        for (let i = 0; i < 120 && Math.abs(await err()) > 0.5; i++) await page.waitForTimeout(80);
-      } finally { await page.keyboard.up(key); }
-    }
-    for (let i = 0; i < 80; i++) {
-      const e = await err();
-      if (Math.abs(e) < 0.05) break;
-      await hold(page, [e > 0 ? 'ArrowLeft' : 'ArrowRight'], Math.min(250, 60 + Math.abs(e) * 400));
-    }
+    try {
+      for (let i = 0; i < 300; i++) {
+        const v = (await hook(page, (r) => r.vehicle()))!;
+        if (Math.hypot(goal.x - v.x, goal.z - v.z) < within) break;
+        const want = Math.atan2(goal.x - v.x, goal.z - v.z);
+        const e = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
+        await set('ArrowUp', true);
+        await set('ArrowLeft', e > 0.1);
+        await set('ArrowRight', e < -0.1);
+        await page.waitForTimeout(80);
+      }
+    } finally { for (const k of [...held]) await page.keyboard.up(k); }
   };
-  const first = await pickTree(Math.PI, 10, 40);
-  expect(first, 'a tree with a clear run to it').not.toBeNull();
-  await face(first!);
-  // a turn rolls the jeep several metres (it never pivots), so pick again from where it
-  // ended up: the nearest tree ahead with a clear run, and face that one exactly
-  const tree = (await pickTree(0.6, 5, 40)) ?? first!;
-  await face(tree);
+  await driveTo(plan!.Q, 3);
+  await driveTo(plan!.P, 2);
+  // let it roll out, then line the nose up on the trunk with short taps (it never pivots)
+  await page.waitForTimeout(1_200);
+  for (let i = 0; i < 80; i++) {
+    const v = (await hook(page, (r) => r.vehicle()))!;
+    const want = Math.atan2(tree.x - v.x, tree.z - v.z);
+    const e = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
+    if (Math.abs(e) < 0.05) break;
+    await hold(page, [e > 0 ? 'ArrowLeft' : 'ArrowRight'], Math.min(250, 60 + Math.abs(e) * 400));
+  }
   const trunk = { x: tree.x, z: tree.z, r: 0.6 * tree.s };
   await page.waitForTimeout(800);
 

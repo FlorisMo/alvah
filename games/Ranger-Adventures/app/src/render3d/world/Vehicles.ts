@@ -51,14 +51,16 @@ const MODEL_YAW = Math.PI / 2;
 // and the proximity radius that surfaces the "Stap in" affordance (from its centre).
 export const JEEP_COLLIDE = 1.6;
 const JEEP_NEAR_R = 3.6;
-// The jeep's home: on the stuifzand, ≥ 13 m from every mission marker (audit veh-09:
-// it used to park ON "Het stille zand"), on flat open sand. It faces east, away from
-// the clearing, into the widest open ground there is: a straight drive has 45 m free of
-// every solid, zone, the ven and the rim (verifier V1: faced at the first mission it
-// drove straight into the Missiebord). The ranger walks up from the spawn behind it,
-// so boarding does not swing the camera round, and the walk passes the warden ≥ 3 m
-// wide (he never steps into the camera's view of the ranger on the way).
-const JEEP_HOME = { x: 22, z: 4, faceX: 60, faceZ: 14 };
+// The jeep's home: on the stuifzand 14 m east of the spawn, ≥ 15 m from every mission
+// marker (audit veh-09: it used to park ON "Het stille zand"). It faces east-north-east,
+// away from the clearing, into open sand: a straight drive has 45 m free of every solid,
+// zone, the ven and the rim, never nearer than 4 m to a solid (verifier V1: faced at the
+// first mission it drove straight into the Missiebord). The ranger walks up from the
+// spawn behind it (the warden ≥ 4 m to the side, never in the camera's view of him), and
+// the helicopter stands ahead of it: stepped out after a short drive, the walk on to it
+// passes the jeep's nose instead of rounding its tail (a parked body between the walk
+// camera and the ranger folds the camera in).
+const JEEP_HOME = { x: 14, z: 0, faceX: 48, faceZ: 21 };
 // P1.5b ground contact: the body eases toward the wheels' ground each frame (a damped
 // suspension glide, never a hard per-frame snap). Converges in ~0.1 s.
 const JEEP_HOVER_RATE = 10;
