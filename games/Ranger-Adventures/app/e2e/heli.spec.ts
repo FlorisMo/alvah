@@ -155,6 +155,13 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
   const avail = await board(page);
   const padB = avail.pads[1]; // the BOA-post helipad on the western side
   const start = { x: avail.x, z: avail.z };
+  // parked on the pad there is no cockpit frame (parent B14: an 18 px grey border framed
+  // the screen the whole time and read as a rendering bug)
+  const cockpit = (): Promise<{ opacity: string; border: string }> => page.evaluate(() => {
+    const cs = getComputedStyle(document.querySelector('.explore-heli-cockpit')!);
+    return { opacity: cs.opacity, border: cs.borderTopWidth };
+  });
+  await expect.poll(async () => (await cockpit()).opacity, { message: 'no cockpit frame while parked' }).toBe('0');
 
   const down = new Set<string>();
   const setKey = async (k: string, on: boolean): Promise<void> => {
@@ -239,12 +246,22 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
   expect(sawClimb, 'the helicopter climbed toward cruise height').toBe(true);
   expect(sawVignette, 'the motion vignette faded in while translating').toBe(true);
 
+  // in the air a calm, screen-fixed sill low in the frame is the steady horizon cue
+  await expect.poll(async () => (await cockpit()).opacity, { message: 'the sill shows in the air' }).toBe('1');
+  expect((await cockpit()).border, 'never the grey border').toBe('0px');
+
   // 3) over pad B the HUD offers "Land hier"; Space presses it; it glides onto the
   // pad centre (≤ 2 m/s descent) and rests there with the pilot inside
   await expect(page.locator('.explore-heli-land'), '"Land hier" shows over the pad').toBeVisible();
   await page.keyboard.press('Space');
   await expectLandedOnPad(page, padB);
   await shot(page, 'heli-landed');
+  // nothing grows through either pad (breaker B9: heather poked through the pad and the skids)
+  const growing = await page.evaluate((pads) => {
+    const r = (window as unknown as { __ranger: { seating(x: number, z: number, r: number): { id: string }[] | null } }).__ranger;
+    return pads.flatMap((p) => (r.seating(p.x, p.z, 3.2) ?? []).map((s) => s.id)).filter((id) => /^(heide|stuifzand|ven|bos)-/.test(id));
+  }, avail.pads);
+  expect(growing, 'no plant stands on a helipad').toEqual([]);
 
   // 4) "Stap uit" (Space presses the one visible button) — on foot beside pad B
   await page.keyboard.press('Space');
@@ -336,6 +353,85 @@ test('heli: reduced-motion withholds flight — a calm message, Space does not l
   await page.waitForTimeout(600);
   expect((await hook(page, (r) => r.heli()))!.inHeli, 'Space cannot lift off under reduced-motion').toBe(false);
 
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+/** Chase-camera poses at the rim, read off a real flight (Up 25 s from pad A, then
+ *  Left): looking out, along the west rim (verifier W4V-1's view) and back across. */
+const RIM_VIEWS = [
+  { name: 'out', p: [-52.87, 20.99, -29.42], d: [-0.807, -0.377, -0.454] },
+  { name: 'along', p: [-65.42, 20.99, -48.15], d: [0.153, -0.377, 0.914] },
+  { name: 'back', p: [-68.1, 20.99, -24.1], d: [0.311, -0.377, -0.872] },
+  { name: 'jeep-high', p: [55, 7, 6], d: [-0.99, -0.12, 0.05] },
+];
+
+test('heli: from the air the far ground melts into the sky, no band where the plate ends (breaker B9, verifier W4V-1)', async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/?dev=1'); // `__stage`: the world's own scene, camera and renderer (read-only)
+  await page.getByRole('button', { name: 'Begin' }).click();
+  await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
+  await expect.poll(() => hook(page, (r) => r.screen), { timeout: 30_000 }).toBe('world');
+  await page.waitForTimeout(1000);
+
+  // Each view is drawn twice with the world's renderer, back to back: as the player sees
+  // it, and once more with the fog painted magenta from just past its far edge. The
+  // magenta pixels are the ones wholly in the haze, so in the first picture they must BE
+  // the fog colour, the colour the sky draws at the horizon. A layer drawn over the fogged
+  // picture (the old cloud-shadow plane) turned them fog x fog: a hard tan band (#c8af85)
+  // under the cream sky, the end of the plate.
+  const res = await page.evaluate((views) => {
+    interface Fog { near: number; far: number; color: { r: number; g: number; b: number; getHexString(): string; setRGB(r: number, g: number, b: number): void } }
+    interface V3 { set(x: number, y: number, z: number): void }
+    const stage = (window as unknown as { __stage: {
+      renderer: { getContext(): WebGL2RenderingContext; render(s: unknown, c: unknown): void; domElement: HTMLCanvasElement };
+      world: {
+        scene: { fog: Fog };
+        camera: { clone(): { position: V3; aspect: number; lookAt(x: number, y: number, z: number): void; updateProjectionMatrix(): void; updateMatrixWorld(): void } };
+      };
+    } }).__stage;
+    const { renderer: r, world } = stage;
+    const gl = r.getContext();
+    const W = r.domElement.width, H = r.domElement.height;
+    const fog = world.scene.fog;
+    const fogHex = fog.color.getHexString();
+    const want = [0, 2, 4].map((i) => parseInt(fogHex.slice(i, i + 2), 16));
+    const read = (): Uint8Array => { const b = new Uint8Array(W * H * 4); gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, b); return b; };
+    const out: { name: string; far: number; bad: number; worst: string }[] = [];
+    for (const v of views) {
+      const cam = world.camera.clone();
+      cam.position.set(v.p[0], v.p[1], v.p[2]);
+      cam.lookAt(v.p[0] + v.d[0], v.p[1] + v.d[1], v.p[2] + v.d[2]);
+      cam.aspect = W / H;
+      cam.updateProjectionMatrix();
+      cam.updateMatrixWorld();
+      r.render(world.scene, cam);
+      const drawn = read();
+      const { near, far: farM } = fog, { r: cr, g: cg, b: cb } = fog.color;
+      fog.near = farM + 2; fog.far = farM + 2.01; fog.color.setRGB(1, 0, 1);
+      r.render(world.scene, cam);
+      const past = read();
+      fog.near = near; fog.far = farM; fog.color.setRGB(cr, cg, cb);
+      let far = 0, bad = 0, worstD = 0, worst = '';
+      for (let i = 0; i < W * H * 4; i += 4) {
+        if (past[i] < 250 || past[i + 1] > 5 || past[i + 2] < 250) continue; // not wholly in the haze
+        far++;
+        const d = Math.max(Math.abs(drawn[i] - want[0]), Math.abs(drawn[i + 1] - want[1]), Math.abs(drawn[i + 2] - want[2]));
+        if (d > 5) bad++;
+        if (d > worstD) { worstD = d; worst = '#' + [drawn[i], drawn[i + 1], drawn[i + 2]].map((c) => c.toString(16).padStart(2, '0')).join(''); }
+      }
+      out.push({ name: v.name, far, bad, worst });
+    }
+    return { fogHex, out };
+  }, RIM_VIEWS);
+
+  for (const v of res.out) {
+    expect(v.far, `${v.name}: the view reaches past the haze's far edge`).toBeGreaterThan(5000);
+    expect(v.bad, `${v.name}: every fully hazed pixel is the fog #${res.fogHex} (worst ${v.worst})`).toBe(0);
+  }
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });

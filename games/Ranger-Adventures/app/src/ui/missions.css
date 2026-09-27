@@ -444,13 +444,13 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* a soft always-level frame: a thick inset border reads as the cockpit surround
-     and, because it is screen-fixed, is the steady horizon reference the comfort
-     clause asks for (it never tilts — roll is 0 in the world too). */
-  border: 18px solid rgba(24, 20, 14, 0.42);
-  border-radius: 26px;
-  box-shadow: inset 0 0 60px rgba(24, 20, 14, 0.28);
+  /* a soft screen-fixed sill low in the frame, in the air only: the steady horizon cue
+     the comfort clause asks for (it never tilts: roll is 0). The old 18 px grey border
+     read as a rendering bug, even parked on the pad (parent B14). */
+  background: linear-gradient(to top, rgba(30, 26, 20, 0.34), rgba(30, 26, 20, 0.14) 5%, rgba(30, 26, 20, 0) 11%);
+  transition: opacity 500ms ease;
 }
+.explore-heli-prompt:has(.explore-heli-exit) ~ .explore-heli-cockpit { opacity: 0; } /* on the ground */
 .explore-heli-cockpit[hidden] { display: none; }
 .explore-heli-vignette {
   position: absolute;

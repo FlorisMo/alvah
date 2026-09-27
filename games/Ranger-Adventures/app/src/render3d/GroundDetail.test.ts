@@ -159,3 +159,21 @@ test('detailTile is in [0,1], quick to bake, and its florets are sparse', () => 
   assert.ok(strokes > 0.02 && strokes < 0.6, `needles cover part of the tile (${(strokes * 100).toFixed(1)}%)`);
   assert.deepEqual(detailTile().needle.slice(0, 64), needle.slice(0, 64), 'deterministic');
 });
+
+import { groundSpeckle, BIOME_ACCENT_TONES } from './GroundDetail.ts';
+
+test('groundSpeckle: deterministic, bounded, and both accent tails occur (patches a few metres across)', () => {
+  let lo = 0, hi = 0, n = 0, jumps = 0;
+  for (let x = -70; x < 70; x += 0.9) for (let z = -70; z < 70; z += 0.9) {
+    const s = groundSpeckle(x, z);
+    assert.ok(s >= 0 && s <= 1);
+    n++;
+    if (s < 0.38) lo++;
+    if (s > 0.6) hi++;
+    if (Math.abs(groundSpeckle(x + 0.9, z) - s) > 0.25) jumps++;
+  }
+  assert.equal(groundSpeckle(3.3, -8.1), groundSpeckle(3.3, -8.1));
+  assert.ok(lo / n > 0.12 && hi / n > 0.12, `low ${(lo / n).toFixed(2)} and high ${(hi / n).toFixed(2)} patches both occur`);
+  assert.ok(jumps / n < 0.01, 'smooth patches, not per-point noise');
+  for (const [a, b] of Object.values(BIOME_ACCENT_TONES)) assert.notEqual(a, b);
+});

@@ -355,3 +355,74 @@ test('keep-out zone: a jeep that only grazes a zone gets a nudge, not a lock —
   const turned = Math.atan2(Math.sin(h - Math.atan2(18, 18.4)), Math.cos(h - Math.atan2(18, 18.4)));
   assert.ok(turned < -0.4, `it turned right as pushed (${turned.toFixed(2)} rad)`);
 });
+
+// ── wave 4: the shore of the ven is a wall the jeep slides along, never a trap ─
+
+/** A round lake ahead of the jeep (it starts at the origin facing +z). */
+const LAKE = { x: 0, z: 20, r: 12 };
+const LAKE_LIMITS = { bound: 75, blocked: (x: number, z: number) => Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r };
+const bodyWet = (x: number, z: number, h: number): boolean => {
+  const fx = Math.sin(h), fz = Math.cos(h);
+  return [1.9, 1, 0, -1, -1.9].some((a) => LAKE_LIMITS.blocked(x + fx * a, z + fz * a));
+};
+
+/** Seconds of World.driveJeep's pipeline under held keys (screen intent): the ramp, the
+ *  speed-scaled steer with the contact floor (Vehicles.CONTACT_STEER 0.45), the body
+ *  resolve, and the carried speed dropping to what really happened. */
+function holdKeys(s: { x: number; z: number; h: number; v: number; contact: boolean }, screen: { x: number; y: number }, seconds: number) {
+  const dt = 1 / 60;
+  let wetFrames = 0;
+  for (let t = 0; t < seconds; t += dt) {
+    const want = driveIntent(screen);
+    let speed = rampSpeed(s.v, want.throttle, dt, JEEP_CAPS);
+    const steer = comfortSteer(want.steer, speed, JEEP_CAPS, s.contact && want.throttle !== 0 ? 0.45 : 0);
+    const st = driveStep(s.h, { throttle: speed / JEEP_CAPS.maxSpeed, steer }, dt, JEEP_CAPS);
+    const n = resolveBody(s.x, s.z, s.h, s.x + st.dx, s.z + st.dz, st.heading, JEEP_BODY, [], LAKE_LIMITS);
+    const moved = ((n.x - s.x) * Math.sin(s.h) + (n.z - s.z) * Math.cos(s.h)) / dt;
+    if (n.contact && Math.abs(moved) < Math.abs(speed)) {
+      speed = Math.sign(speed) * Math.min(Math.abs(speed), Math.max(Math.abs(moved), CONTACT_CREEP));
+    }
+    s.x = n.x; s.z = n.z; s.h = n.heading; s.v = speed; s.contact = n.contact;
+    if (bodyWet(s.x, s.z, s.h)) wetFrames++;
+  }
+  return wetFrames;
+}
+
+test('at the shore, Up+Left (and every other turn key) swings the jeep free — only reverse used to (parent B5, breaker B2)', () => {
+  const c = Math.SQRT1_2;
+  for (const [name, screen] of [['Up+Left', { x: -c, y: c }], ['Up+Right', { x: c, y: c }], ['Left', { x: -1, y: 0 }], ['Right', { x: 1, y: 0 }]] as const) {
+    const s = { x: 0, z: 0, h: 0, v: 0, contact: false };
+    holdKeys(s, { x: 0, y: 1 }, 4);                         // straight into the water until it stops
+    assert.ok(s.contact && s.z > 5 && s.z < 7, `${name}: pinned nose-first at the shore (z ${s.z.toFixed(2)})`);
+    const h0 = s.h, x0 = s.x, z0 = s.z;
+    const wet = holdKeys(s, screen, 3);
+    const turned = Math.atan2(Math.sin(s.h - h0), Math.cos(s.h - h0));
+    assert.ok(Math.abs(turned) > 0.5, `${name}: the heading changes (${turned.toFixed(2)} rad in 3 s)`);
+    assert.ok(screen.x < 0 ? turned > 0 : turned < 0, `${name}: toward the key (left raises the yaw)`);
+    assert.ok(Math.hypot(s.x - x0, s.z - z0) > 0.8, `${name}: and it drives on (${Math.hypot(s.x - x0, s.z - z0).toFixed(2)} m)`);
+    assert.equal(wet, 0, `${name}: the body never enters the water`);
+  }
+});
+
+test('met at a slant, the shore slides the jeep along it instead of stopping it dead', () => {
+  // aimed 0.5 rad off the lake's centre: it meets the bank at a slant and keeps pushing
+  const s = { x: 0, z: 0, h: 0.5, v: 0, contact: false };
+  let wet = 0, hit: { x: number; z: number } | null = null;
+  for (let k = 0; k < 60 && !hit; k++) { wet += holdKeys(s, { x: 0, y: 1 }, 0.1); if (s.contact) hit = { x: s.x, z: s.z }; }
+  assert.ok(hit, 'it reached the bank');
+  wet += holdKeys(s, { x: 0, y: 1 }, 4);
+  assert.equal(wet, 0, 'the body never enters the water');
+  const slid = Math.hypot(s.x - hit!.x, s.z - hit!.z);
+  assert.ok(slid > 2, `pushed on, it slid along the bank (${slid.toFixed(2)} m in 4 s), like along a trunk`);
+  assert.ok(Math.hypot(s.x - LAKE.x, s.z - LAKE.z) > LAKE.r, 'its centre stays on the dry side');
+});
+
+test('pushed back off the water, the body never ends up past the rim', () => {
+  // at the very rim, facing in, its nose a hair from a strip of water: a step in wets the
+  // nose, and the push back out (with its centimetre of room) would land past the rim
+  const lim = 75 - 1.9; // the bound less the body's reach
+  const strip = { bound: 75, blocked: (_x: number, z: number) => z < lim - 1.905 && z > lim - 6 };
+  const r = resolveBody(0, lim, Math.PI, 0, lim - 0.1, Math.PI, JEEP_BODY, [], strip);
+  assert.ok(r.contact, 'the water stopped it');
+  assert.ok(Math.hypot(r.x, r.z) <= lim + 1e-6, `inside the rim (${(Math.hypot(r.x, r.z) - lim).toFixed(4)} m past it)`);
+});

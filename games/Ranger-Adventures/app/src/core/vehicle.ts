@@ -283,9 +283,12 @@ export function bodyReach(body: readonly BodyCircle[]): number {
  * pushed straight out of every solid it overlaps, so the residual motion is
  * TANGENTIAL: the jeep slides along a trunk or a wall instead of stopping dead, and
  * it never bounces. If the body is still wedged after the passes, the old pose wins
- * (it never ends up inside a solid). The world rim keeps the whole body inside, and
- * the ven's water stops it at the shore like the walker. `contact` is true when a
- * solid pushed the body this step. Pure + deterministic.
+ * (it never ends up inside a solid). The world rim keeps the whole body inside. The
+ * ven's water is a wall of its own: a step that would wet the body is pushed straight
+ * back out along the shore's normal, keeping its turn and its move along the shore, so
+ * a jeep nosed into the water always steers free (a narrow inlet with no clear way out
+ * keeps the last dry pose). `contact` is true when a solid or the shore stopped the
+ * body this step. Pure + deterministic.
  */
 export function resolveBody(
   fx: number, fz: number, fh: number,
@@ -331,31 +334,81 @@ export function resolveBody(
   const lim = limits.bound - reach;
   const rr = Math.hypot(x, z);
   if (rr > lim) { x = (x / rr) * lim; z = (z / rr) * lim; }
-  // the ven: stop at the last dry pose along the step (the shore stays drivable)
+  // the ven: the body never enters the water; the shore is a wall it slides along
   const blocked = limits.blocked;
   if (blocked) {
     let nose = 0, tail = 0; // the bumpers: the furthest body points fore and aft
     for (const c of body) { nose = Math.max(nose, c.along + c.r); tail = Math.min(tail, c.along - c.r); }
-    const wet = (px: number, pz: number, ph: number): boolean => {
+    // the body's probe points at a pose: the two bumpers and every circle's centre
+    const probes = (px: number, pz: number, ph: number, visit: (qx: number, qz: number) => boolean): boolean => {
       const ax = Math.sin(ph), az = Math.cos(ph);
-      if (blocked(px + ax * nose, pz + az * nose) || blocked(px + ax * tail, pz + az * tail)) return true;
-      for (const c of body) if (blocked(px + ax * c.along, pz + az * c.along)) return true;
+      if (visit(px + ax * nose, pz + az * nose) || visit(px + ax * tail, pz + az * tail)) return true;
+      for (const c of body) if (visit(px + ax * c.along, pz + az * c.along)) return true;
       return false;
     };
+    const wet = (px: number, pz: number, ph: number): boolean => probes(px, pz, ph, blocked);
     if (wet(x, z, h)) {
-      let sx2 = fx, sz2 = fz, sh = fh;
-      const STEPS = 6;
-      for (let i = 1; i <= STEPS; i++) {
-        const s = i / STEPS;
-        const px = fx + (x - fx) * s, pz = fz + (z - fz) * s, ph = fh + wrap(h - fh) * s;
-        if (wet(px, pz, ph)) break;
-        sx2 = px; sz2 = pz; sh = ph;
+      // Pushed straight back out of the water along the shore's normal, like a body out of a
+      // trunk: the turn is kept and so is the part of the move along the shore, so a jeep
+      // nosed into the water swings free with a turn key and slides along the bank (parent
+      // B5 / breaker B2: the whole step used to roll back to the last dry pose, heading and
+      // all, so no key but reverse ever freed it).
+      const deeper = (px: number, pz: number, ph: number): boolean => solids.length > 0
+        && bodyOverlap(px, pz, ph, body, solids) > Math.max(0.02, bodyOverlap(fx, fz, fh, body, solids));
+      const n = shoreNormal(x, z, h, probes, blocked);
+      let out = -1;
+      if (n) {
+        const maxPush = Math.hypot(x - fx, z - fz) + 0.3; // never further than the step came in
+        let lo = 0;
+        for (let d = 0.04; d <= maxPush + 1e-9; d += 0.04) {
+          if (!wet(x - n.x * d, z - n.z * d, h)) { out = d; break; }
+          lo = d;
+        }
+        if (out > 0) {
+          for (let i = 0; i < 6; i++) { const m = (lo + out) / 2; if (wet(x - n.x * m, z - n.z * m, h)) lo = m; else out = m; }
+          out += 0.01; // a hair of room, so the next small turn has some
+          const ox = x - n.x * out, oz = z - n.z * out;
+          if (wet(ox, oz, h) || deeper(ox, oz, h) || Math.hypot(ox, oz) > lim + 1e-6) out = -1; // never out past the rim
+        }
       }
-      x = sx2; z = sz2; h = sh;
+      if (n && out > 0) { x -= n.x * out; z -= n.z * out; }
+      else {
+        // no clear way out (a narrow inlet): the last dry pose along the step
+        let sx2 = fx, sz2 = fz, sh = fh;
+        const STEPS = 6;
+        for (let i = 1; i <= STEPS; i++) {
+          const f = i / STEPS;
+          const px = fx + (x - fx) * f, pz = fz + (z - fz) * f, ph = fh + wrap(h - fh) * f;
+          if (wet(px, pz, ph)) break;
+          sx2 = px; sz2 = pz; sh = ph;
+        }
+        x = sx2; z = sz2; h = sh;
+      }
       contact = true;
     }
   }
   return { x, z, heading: h, contact };
+}
+
+/** The unit ground-plane direction INTO the water at a body pose (the shore's normal),
+ *  from a ring of samples round every wet probe point; null when it cannot tell. */
+function shoreNormal(
+  px: number, pz: number, ph: number,
+  probes: (px: number, pz: number, ph: number, visit: (qx: number, qz: number) => boolean) => boolean,
+  blocked: (x: number, z: number) => boolean,
+): { x: number; z: number } | null {
+  const RING = 16, RHO = 0.8;
+  let sx = 0, sz = 0;
+  probes(px, pz, ph, (qx, qz) => {
+    if (!blocked(qx, qz)) return false;
+    for (let k = 0; k < RING; k++) {
+      const a = (k / RING) * Math.PI * 2, ux = Math.cos(a), uz = Math.sin(a);
+      if (blocked(qx + ux * RHO, qz + uz * RHO)) { sx += ux; sz += uz; }
+    }
+    return false;
+  });
+  const l = Math.hypot(sx, sz);
+  return l > 1e-6 ? { x: sx / l, z: sz / l } : null;
 }
 
 /**

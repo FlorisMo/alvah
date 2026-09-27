@@ -20,7 +20,10 @@
  */
 
 import * as THREE from 'three';
-import { SKY_STOPS } from './Atmosphere';
+import { SKY_STOPS, toneMappedHex } from './Atmosphere';
+
+/** Renderer exposure for the ACES curve (Stage owns the one renderer). */
+const EXPOSURE = 1.08;
 
 /** The single golden-hour rig every 3D scene reads from (RUN-C-DIRECTION §2.1). */
 export const GOLDEN_HOUR = {
@@ -37,12 +40,15 @@ export const GOLDEN_HOUR = {
   skyColor: 0xb4c6e0,
   groundColor: 0x8a6b4a,
   fillIntensity: 0.85,
-  /** The horizon haze: the fog colour AND the last SKY_STOPS band, so fog dissolves
-   *  into the sky at the horizon instead of drawing a band under it. Ranges stay
-   *  per-scene (each clearing is a different size); the COLOUR is shared. */
-  fogColor: '#f3cc9c',
+  /** The horizon haze as the sky dome DRAWS it: the last SKY_STOPS band through the
+   *  tone curve (three mixes fog in after tone mapping, so the fog must be the drawn
+   *  colour, not the raw haze). Fully fogged hills, trees and the forest beyond the rim
+   *  then dissolve into the sky at the horizon in every direction instead of drawing an
+   *  orange band under it (breaker B9, parent B11). Ranges stay per-scene (each clearing
+   *  is a different size); the COLOUR is shared. */
+  fogColor: toneMappedHex(SKY_STOPS[SKY_STOPS.length - 1][1], EXPOSURE),
   /** Renderer exposure for the ACES curve (Stage owns the one renderer). */
-  exposure: 1.08,
+  exposure: EXPOSURE,
 } as const;
 
 /** Add the shared cool-sky / warm-ground hemisphere fill to a scene. */
@@ -115,11 +121,13 @@ export function makeSkyDome(): THREE.Mesh {
         // (the haze holds for the first few degrees, where distant hills stand in it)
         float t = 1.0 - pow(clamp((up - 0.03) / 0.97, 0.0, 1.0), 0.6);
         vec3 col = texture2D(uRamp, vec2(0.5, 1.0 - t)).rgb;
-        float glow = pow(max(dot(d, uSunDir), 0.0), 5.0);
+        // the sun's warm glow hangs just above the horizon, so the horizon band itself is
+        // the same haze all the way round (the fog it meets has no direction)
+        float glow = pow(max(dot(d, uSunDir), 0.0), 5.0) * smoothstep(0.0, 0.12, up);
         col += uSun * glow * 0.22 * (1.0 - up * 0.6);
         gl_FragColor = vec4(col, 1.0);
-        // the horizon band goes through the same tone curve as the fogged world it meets
-        // (so hills dissolve into it); higher up the sky keeps its own soft colours
+        // the horizon band goes through the tone curve (GOLDEN_HOUR.fogColor is its result,
+        // so the fogged world dissolves into it); higher up the sky keeps its own colours
         #include <tonemapping_fragment>
         gl_FragColor.rgb = mix(gl_FragColor.rgb, col, smoothstep(0.03, 0.3, up));
         #include <colorspace_fragment>

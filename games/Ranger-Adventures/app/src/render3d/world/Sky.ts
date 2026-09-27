@@ -2,17 +2,53 @@
  * world/Sky.ts — the sky, the golden-hour light and the slow ambient clock.
  *
  * The baked golden-hour sky + fog, the shared hemisphere fill, the warm sun with its
- * tight hero shadow frustum that follows the ranger, the drifting cloud shadows and
- * the ~12 s bird flyover. `skyTime` is the ambient clock every secondary motion reads
+ * tight hero shadow frustum that follows the ranger, the drifting cloud shade on the
+ * ground and the ~12 s bird flyover. `skyTime` is the ambient clock every secondary motion reads
  * (wind in the grass, the water shimmer); it only advances when reduced-motion is off,
  * so all of it freezes together (comfort §C).
  */
 
 import * as THREE from 'three';
-import { SKY_STOPS, cloudOffset, windSway, flyoverAt, type Flyover } from '../Atmosphere';
+import { SKY_STOPS, cloudOffset, cloudShadeShader, windSway, flyoverAt, type Flyover } from '../Atmosphere';
 import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, makeSkyDome } from '../Lighting';
 
 const SKY_LOW = GOLDEN_HOUR.fogColor; // shared golden-hour horizon + fog colour (P1.1)
+
+/**
+ * The cloud shade's tile: white (no shade) with a few soft warm-grey blobs, drawn with
+ * wrap-around copies so it repeats seamlessly. Baked once a session (a title round trip
+ * builds a new World; the texture is shared, not rebuilt).
+ */
+let cloudTex: THREE.CanvasTexture | null = null;
+function cloudTexture(): THREE.CanvasTexture {
+  if (cloudTex) return cloudTex;
+  const N = 256;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = N;
+  const ctx = cv.getContext('2d')!;
+  ctx.fillStyle = '#ffffff'; // white = the full sun
+  ctx.fillRect(0, 0, N, N);
+  const blobs: [number, number, number, number][] = [
+    [0.22, 0.30, 0.26, 0.30], [0.66, 0.20, 0.20, 0.24],
+    [0.48, 0.62, 0.30, 0.26], [0.83, 0.74, 0.22, 0.22],
+    [0.12, 0.82, 0.18, 0.20],
+  ];
+  for (const [bx, by, br, a] of blobs) {
+    for (const ox of [-1, 0, 1]) for (const oy of [-1, 0, 1]) {
+      const cx = (bx + ox) * N, cy = (by + oy) * N, r = br * N;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      g.addColorStop(0, `rgba(120,116,110,${a})`); // soft warm-grey shade
+      g.addColorStop(1, 'rgba(120,116,110,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  cloudTex = tex;
+  return tex;
+}
 
 export class Sky {
   // W4.5 golden-hour light + selective hero shadow map. The warm sun casts a soft
@@ -26,7 +62,8 @@ export class Sky {
   // grass wind wave, bird flyover). `skyTime` advances ONLY when reduced-motion is
   // off, so every effect freezes together under reduced-motion (comfort §C).
   skyTime = 0;
-  private cloudLayer: THREE.Mesh | null = null;  // multiply-blended cloud-shadow plane
+  private readonly cloudOff = { value: new THREE.Vector2() }; // the cloud shade's drift (shared uniform)
+  private cloudReceivers = 0;                                    // materials that draw the cloud shade
   private flyBird: THREE.Group | null = null;    // the ~12 s sky crossing bird
   private lastFlyover: Flyover | null = null;
   private readonly scene: THREE.Scene;
@@ -67,53 +104,44 @@ export class Sky {
   }
 
   /**
-   * W4.6: drifting cloud shadows. ONE large flat plane over the play area,
-   * MULTIPLY-blended so its soft grey blobs darken the ground pixels behind it —
-   * a real cheap cloud shadow (one draw call, no shadow-map cost). The texture
-   * repeats and its offset is scrolled by `cloudOffset(skyTime)` each frame, so
-   * the patches drift; a frozen clock (reduced-motion) stops them. Sits low over
-   * the terrain and only DARKENS (multiply against white = no change), so it
-   * never adds a visible plane — just soft moving shade.
+   * W4.6: drifting cloud shadows, ON THE GROUND. Every material that asks for them
+   * (`userData.cloudShade`: the terrain and the sand paths) gets the soft grey blobs of
+   * one repeating texture in its own lighting: the blobs dim the sun there, before tone
+   * mapping and fog (Atmosphere.cloudShadeShader), so the haze covers a far cloud
+   * shadow like it covers the far ground. The shared offset is scrolled by
+   * `cloudOffset(skyTime)` each frame, so the patches drift; a frozen clock
+   * (reduced-motion) stops them. No mesh and no draw call of its own.
+   *
+   * It used to be a multiply-blended plane 3.2 m over the ground, drawn over the finished
+   * and fogged picture: from the helicopter the far ground came out as the fog colour
+   * times itself, a hard tan band under the cream sky (verifier W4V-1). Called once the
+   * ground and the paths are in the scene.
    */
   buildCloudShadows(): void {
-    const N = 256;
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = N;
-    const ctx = cv.getContext('2d')!;
-    ctx.fillStyle = '#ffffff'; // white = "no darkening" under multiply
-    ctx.fillRect(0, 0, N, N);
-    // a few soft grey blobs = the cloud undersides that darken the ground. Drawn
-    // with wrap-around copies so the tile stays seamless when it repeats.
-    const blobs: [number, number, number, number][] = [
-      [0.22, 0.30, 0.26, 0.30], [0.66, 0.20, 0.20, 0.24],
-      [0.48, 0.62, 0.30, 0.26], [0.83, 0.74, 0.22, 0.22],
-      [0.12, 0.82, 0.18, 0.20],
-    ];
-    for (const [bx, by, br, a] of blobs) {
-      for (const ox of [-1, 0, 1]) for (const oy of [-1, 0, 1]) {
-        const cx = (bx + ox) * N, cy = (by + oy) * N, r = br * N;
-        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        g.addColorStop(0, `rgba(120,116,110,${a})`); // soft warm-grey shade
-        g.addColorStop(1, 'rgba(120,116,110,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    const map = { value: cloudTexture() };
+    const off = this.cloudOff;
+    this.scene.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        if (!mat.userData.cloudShade || mat.userData.cloudShaded) continue;
+        mat.userData.cloudShaded = true;
+        const prev = mat.onBeforeCompile;
+        const prevKey = mat.customProgramCacheKey();
+        mat.onBeforeCompile = (shader, renderer) => {
+          prev.call(mat, shader, renderer);
+          shader.uniforms.uCloudMap = map;
+          shader.uniforms.uCloudOff = off; // one shared uniform: advance() drifts them all
+          const s = cloudShadeShader(shader.vertexShader, shader.fragmentShader);
+          shader.vertexShader = s.vertex;
+          shader.fragmentShader = s.fragment;
+        };
+        // its own program: the title's heath shares the ground material's key without clouds
+        mat.customProgramCacheKey = () => `${prevKey}|cloud-shade`;
+        mat.needsUpdate = true;
+        this.cloudReceivers++;
       }
-    }
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(2.2, 2.2); // ~110 m per tile over the 240 m ground — big soft clouds
-    const mat = new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, depthWrite: false,
-      blending: THREE.MultiplyBlending, premultipliedAlpha: true, // three wants this for multiply
     });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.y = 3.2;   // low over the gentle relief so shade reads on the ground
-    mesh.renderOrder = 2;    // after the ground + props so the multiply lands on them
-    mesh.frustumCulled = false;
-    this.scene.add(mesh);
-    this.cloudLayer = mesh;
   }
 
   /**
@@ -146,15 +174,14 @@ export class Sky {
   }
 
   /** W4.6: advance the ambient clock (frozen under reduced-motion) and drift the cloud
-   *  shadows + sail the flyover bird. Runs every frame, even during an in-place
+   *  shade + sail the flyover bird. Runs every frame, even during an in-place
    *  activity, so the sky keeps breathing. Returns the clock for the wind + water. */
   advance(dt: number, reduced: boolean): number {
     if (!reduced) this.skyTime += dt;
     const st = this.skyTime;
-    if (this.cloudLayer) {
+    if (this.cloudReceivers > 0) {
       const off = cloudOffset(st);
-      const map = (this.cloudLayer.material as THREE.MeshBasicMaterial).map;
-      if (map) map.offset.set(off.x, off.y);
+      this.cloudOff.value.set(off.x, off.y);
     }
     if (this.flyBird) {
       const f = flyoverAt(st);
@@ -166,8 +193,8 @@ export class Sky {
     return st;
   }
 
-  /** Dev-hook read-back (W4.6): gradient stop count, whether the cloud-shadow layer is
-   *  present, the LIVE clock / cloud offset / wind phase / bird position. */
+  /** Dev-hook read-back (W4.6): gradient stop count, whether the ground draws the cloud
+   *  shade, the LIVE clock / cloud offset / wind phase / bird position. */
   state(windMeshes: number): {
     gradientStops: number;
     cloudDrift: boolean;
@@ -180,7 +207,7 @@ export class Sky {
     const f = this.lastFlyover;
     return {
       gradientStops: SKY_STOPS.length,
-      cloudDrift: this.cloudLayer !== null,
+      cloudDrift: this.cloudReceivers > 0,
       windMeshes,
       skyTime: this.skyTime,
       cloudOffset: cloudOffset(this.skyTime),

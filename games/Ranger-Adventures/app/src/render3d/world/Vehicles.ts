@@ -79,7 +79,8 @@ const WALKER_ROOM = 0.3;
 // and how close (horizontally) it must be to a pad for "Land hier".
 const HELI_NEAR_R = 4.0;
 const PAD_LAND_R = 6.0;
-const PAD_RADIUS = 3.2;
+/** The radius (m) of a drawn helipad. */
+export const PAD_RADIUS = 3.2;
 const DEPART_CLEAR = 15;
 // Above this altitude (m) the flying helicopter is over every trunk and roof; below
 // it (lifting off, touching down) its body collides like the jeep's.
@@ -87,7 +88,7 @@ const HELI_AIRBORNE_Y = 2.5;
 // The two helipads: flat, open, ≥ 9 m from every marker and ≥ 6 m from every solid.
 // A: the stuifzand apron beyond the jeep (the helicopter parks here); B: the heath by
 // the BOA-post on the western side (the old A had a juniper on it, the old B a slope).
-const PADS = [
+export const PADS: readonly { readonly x: number; readonly z: number }[] = [
   { x: 32, z: 18 },
   { x: -44, z: -26 },
 ];
@@ -140,12 +141,12 @@ export interface VehicleHost {
   nearestAnimalDist(x: number, z: number): number;
   /** The camera offsets (walk / jeep / heli) the read-backs report. */
   camOffsets(): { walk: THREE.Vector3; vehicle: THREE.Vector3; heli: THREE.Vector3 };
-  /** Where the people (warden, poacher) stand now. */
-  people(): readonly { x: number; z: number }[];
-  /** Where the roaming creatures are now (`id` animal-* walk, bird-* fly), `h` = height. */
-  animals(): readonly { id: string; x: number; z: number; h: number }[];
-  /** The mission markers. */
-  markers(): readonly { x: number; z: number }[];
+  /** Visit every moving solid a vehicle meets: the people (warden, poacher) and the
+   *  walking animals (`h` = the animal's height). Called every frame: it must not
+   *  allocate (review PERF-2). */
+  movers(visit: (x: number, z: number, kind: 'person' | 'animal', h: number) => void): void;
+  /** The mission markers (read every frame: the live list, not a copy). */
+  markers(): readonly { readonly pos: { readonly x: number; readonly z: number } }[];
 }
 
 export class Vehicles {
@@ -245,6 +246,7 @@ export class Vehicles {
   private groundY(x: number, z: number): number {
     return this.terrain.y(x, z);
   }
+  private readonly groundAt = (x: number, z: number): number => this.terrain.y(x, z);
 
   /** The interact key when no button on screen takes it: in the jeep = step out; in
    *  the helicopter = land (in the air) or step out (on the ground); beside a parked
@@ -507,7 +509,7 @@ export class Vehicles {
     this.camera.updateMatrixWorld();
     const rightY = this.camera.matrixWorld.elements[1];
     let markerDist = Infinity;
-    for (const m of this.host.markers()) markerDist = Math.min(markerDist, Math.hypot(m.x - this.jeepPos.x, m.z - this.jeepPos.z));
+    for (const m of this.host.markers()) markerDist = Math.min(markerDist, Math.hypot(m.pos.x - this.jeepPos.x, m.pos.z - this.jeepPos.z));
     return {
       placed: true, near: this.nearJeep, inVehicle: this.inVehicle,
       x: this.jeepPos.x, z: this.jeepPos.z, y: this.jeepPos.y, heading: this.jeepHeading,
@@ -714,22 +716,53 @@ export class Vehicles {
   }
 
   /** Every solid a vehicle's body meets: the static list (trunks, cabin, landmarks,
-   *  board, props, the other parked vehicle) plus people and walking animals. */
+   *  board, props, the other parked vehicle) plus people and walking animals. Rebuilt
+   *  every frame into reused arrays and pooled circles, so driving makes no garbage
+   *  (review PERF-2: it copied the whole obstacle list and made new objects per frame). */
   private solids(): Solid[] {
-    const out: Solid[] = this.obstacles.slice();
-    for (const p of this.host.people()) out.push({ x: p.x, z: p.z, r: PERSON_R });
-    for (const a of this.host.animals()) if (a.id.startsWith('animal-')) out.push({ x: a.x, z: a.z, r: animalR(a.h) });
+    const out = this.solidBuf;
+    out.length = 0;
+    for (const o of this.obstacles) out.push(o);
+    this.poolUsed = 0;
+    this.host.movers(this.addMover);
     return out;
   }
+
+  private readonly solidBuf: Solid[] = [];
+  private readonly zoneBuf: Solid[] = [];
+  private readonly allBuf: Solid[] = [];
+  private readonly pool: Solid[] = [];
+  private poolUsed = 0;
+  private pooled(x: number, z: number, r: number): Solid {
+    const c = this.pool[this.poolUsed] ?? (this.pool[this.poolUsed] = { x: 0, z: 0, r: 0 });
+    this.poolUsed++;
+    c.x = x; c.z = z; c.r = r;
+    return c;
+  }
+  private readonly addMover = (x: number, z: number, kind: 'person' | 'animal', h: number): void => {
+    this.solidBuf.push(this.pooled(x, z, kind === 'person' ? PERSON_R : animalR(h)));
+  };
 
   /** The keep-out zones: the ground round each mission marker (so a vehicle never parks
    *  in a mission's stage: ≥ 6 m from the marker) and, for the jeep, each helipad (so a
    *  pad is always free for the helicopter's autopilot to land on). Unlike a solid a zone
    *  shows nothing to stop at, so the jeep bends round it (`keepOutSteer`) instead of
-   *  braking for it; its body still never enters one. */
+   *  braking for it; its body still never enters one. Pooled like `solids`: call
+   *  `solids()` first, the two share the pool. */
   private zones(forJeep: boolean): Solid[] {
-    const out: Solid[] = this.host.markers().map((m) => ({ x: m.x, z: m.z, r: MARKER_R }));
-    if (forJeep) for (const p of this.helipads) out.push({ x: p.x, z: p.z, r: PAD_RADIUS });
+    const out = this.zoneBuf;
+    out.length = 0;
+    for (const m of this.host.markers()) out.push(this.pooled(m.pos.x, m.pos.z, MARKER_R));
+    if (forJeep) for (const p of this.helipads) out.push(this.pooled(p.x, p.z, PAD_RADIUS));
+    return out;
+  }
+
+  /** `a` then `b` in one reused array (no garbage). */
+  private joined(a: readonly Solid[], b: readonly Solid[]): Solid[] {
+    const out = this.allBuf;
+    out.length = 0;
+    for (const o of a) out.push(o);
+    for (const o of b) out.push(o);
     return out;
   }
 
@@ -751,7 +784,7 @@ export class Vehicles {
     const want = driveIntent(this.host.intent());
     const solids = this.solids();
     const zones = this.zones(true);
-    const all = solids.concat(zones);
+    const all = this.joined(solids, zones);
     // (1) speed: the ramp, then a soft brake for the solid ahead (backing up: for a zone
     // behind too — driving forward the jeep bends round a zone instead, step 2)
     let speed = rampSpeed(this.vehicleSpeed, want.throttle, dt, caps);
@@ -790,7 +823,7 @@ export class Vehicles {
     this.jeepMoved = moved;
     // (4) the wheels on the drawn ground: height + pitch + roll ease in (a damped
     // suspension glide — research §4.5 — never a hard per-frame snap)
-    const wc = wheelContact(jp.x, jp.z, this.jeepHeading, (x, z) => this.groundY(x, z));
+    const wc = wheelContact(jp.x, jp.z, this.jeepHeading, this.groundAt);
     const k = 1 - Math.exp(-JEEP_HOVER_RATE * dt);
     jp.y += (wc.y - jp.y) * k;
     this.jeepPitch += (wc.pitch - this.jeepPitch) * k;
@@ -921,7 +954,8 @@ export class Vehicles {
       this.heliSpeed = 0;
     }
     if (this.heliAltitude <= HELI_AIRBORNE_Y) { // low: the body collides like the jeep's
-      const next = resolveBody(hp.x, hp.z, this.heliHeading, nx, nz, nh, HELI_BODY, this.solids().concat(this.zones(false)), this.limits);
+      const solids = this.solids();
+      const next = resolveBody(hp.x, hp.z, this.heliHeading, nx, nz, nh, HELI_BODY, this.joined(solids, this.zones(false)), this.limits);
       nx = next.x; nz = next.z; nh = next.heading;
     } else {                                     // over the treetops: only the rim bounds it
       const r = Math.hypot(nx, nz), lim = this.limits.bound - 2;

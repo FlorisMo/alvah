@@ -122,3 +122,83 @@ test('intersectRay finds the drawn ground where a mesh raycast does, and on grid
   assert.equal(t.intersectRay(new THREE.Ray(eye.clone(), new THREE.Vector3(0, 1, 0))), null);
   assert.equal(t.intersectRay(new THREE.Ray(eye.clone(), new THREE.Vector3(0, -0.001, -1).normalize())), null);
 });
+
+import { buildFarForest, FAR_FOREST_IN, FAR_FOREST_OUT } from './Terrain.ts';
+
+test('the forest beyond the rim hides the end of the ground plate from every view (parent B11, breaker B9)', () => {
+  const bound = 75, lensFar = 240;              // World: limits.bound, camera far plane
+  const t = new Terrain({ detail: false });
+  const geo = buildFarForest(bound, (x, z) => t.y(x, z));
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const nrm = geo.attributes.normal as THREE.BufferAttribute;
+  let rMin = Infinity, rMax = 0, faceBelow = 0, faceN = 0, canopyN = 0, canopyLow = 0, canopyDown = 0;
+  const around = new Set<number>();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), r = Math.hypot(x, z);
+    rMin = Math.min(rMin, r); rMax = Math.max(rMax, r);
+    around.add(Math.round(Math.atan2(z, x) * 100));
+    if (Math.abs(r - (bound + FAR_FOREST_IN)) < 0.05) { faceN++; if (y < t.y(x, z)) faceBelow++; }
+    else if (r > bound + FAR_FOREST_IN + 1.5) {
+      canopyN++;
+      if (y - t.y(x, z) < 5) canopyLow++;
+      if (nrm.getY(i) <= 0) canopyDown++;
+    }
+  }
+  // it starts right behind the rim tree-line's last row and ends past the lens's reach
+  assert.ok(rMin > bound + 10.2 + 1.4 + 0.5 && rMin < bound + FAR_FOREST_IN + 0.01, `inner edge ${rMin.toFixed(1)} m, right behind the rim rows (≤ ${bound + 10.2 + 1.4} m)`);
+  assert.ok(rMin < 120, 'it starts well inside the 240 m ground plate, so it covers the plate edge');
+  assert.ok(rMax >= FAR_FOREST_OUT - 0.01 && FAR_FOREST_OUT >= bound + lensFar, `it runs out to ${rMax.toFixed(0)} m, past anything the lens can see`);
+  assert.ok(around.size >= 360, 'it goes all the way round');
+  // its inner face starts under the ground (no gap to see through) and its canopy stands
+  // over the ground as tall as the rim trees, facing the sky
+  assert.ok(faceN >= 360 && faceBelow === faceN, 'the bottom row of the inner face is sunk into the ground');
+  assert.equal(canopyLow, 0, `every canopy vertex stands ≥ 5 m over the ground (${canopyN} checked)`);
+  assert.equal(canopyDown, 0, 'the canopy faces up');
+  assert.ok(geo.index!.count / 3 < 60_000, `a light backdrop: ${geo.index!.count / 3} triangles`);
+  // the light tier (an iPad) gets a lighter one that still reaches as far, all the way round
+  const lite = buildFarForest(bound, (x, z) => t.y(x, z), true);
+  const lp = lite.attributes.position as THREE.BufferAttribute;
+  let lMax = 0;
+  for (let i = 0; i < lp.count; i++) lMax = Math.max(lMax, Math.hypot(lp.getX(i), lp.getZ(i)));
+  assert.ok(lite.index!.count / 3 < 20_000 && lMax >= FAR_FOREST_OUT - 0.01, `lite: ${lite.index!.count / 3} triangles out to ${lMax.toFixed(0)} m`);
+});
+
+import { buildPathGeometry } from './Terrain.ts';
+import { PATH_NODES, PATH_SEGMENTS, distanceToNetwork } from '../Paths.ts';
+
+test('the sand paths face the sky (they were culled face-down, never drawn) and fade into the ground at their edges', () => {
+  for (const detail of [true, false]) {
+    const t = new Terrain({ detail });
+    const geo = buildPathGeometry(t);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const nrm = geo.attributes.normal as THREE.BufferAttribute;
+    const col = geo.attributes.color as THREE.BufferAttribute;
+    const gc: number[] = [];
+    let down = 0, edges = 0, edgeOff = 0, sandy = 0, ruts = 0;
+    const sand = new THREE.Color('#cdb887');
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      if (nrm.getY(i) <= 0.5) down++;
+      assert.ok(y - t.y(x, z) > 0.02 && y - t.y(x, z) < 0.05, `a hair over the drawn ground at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+      const d = distanceToNetwork(x, z);
+      if (d > 1.85) { // its outer edge: exactly the ground's own colour
+        edges++;
+        t.sampleAttr('color', x, z, gc);
+        if (Math.abs(col.getX(i) - gc[0]) + Math.abs(col.getY(i) - gc[1]) + Math.abs(col.getZ(i) - gc[2]) > 1e-4) edgeOff++;
+      } else if (d > 0.4 && d < 1.2 && Math.hypot(x, z) > 12) { // a wheel rut out of the clearing: sand
+        ruts++;
+        if (Math.abs(col.getX(i) - sand.r) < 0.08 && Math.abs(col.getY(i) - sand.g) < 0.08 && Math.abs(col.getZ(i) - sand.b) < 0.08) sandy++;
+      }
+    }
+    assert.equal(down, 0, 'every vertex faces up (a face-down ribbon is culled from above)');
+    assert.ok(edges > 100 && edgeOff === 0, `its ${edges} edge vertices take the ground's own colour`);
+    assert.ok(ruts > 100 && sandy / ruts > 0.95, `the wheel ruts are sand (${sandy}/${ruts})`);
+    // it covers every route of the network
+    for (const [a, b] of PATH_SEGMENTS) {
+      const mx = (PATH_NODES[a].x + PATH_NODES[b].x) / 2, mz = (PATH_NODES[a].z + PATH_NODES[b].z) / 2;
+      let near = Infinity;
+      for (let i = 0; i < pos.count; i++) near = Math.min(near, Math.hypot(pos.getX(i) - mx, pos.getZ(i) - mz));
+      assert.ok(near < 1, `a track runs through the middle of ${PATH_NODES[a].id} → ${PATH_NODES[b].id}`);
+    }
+  }
+});
