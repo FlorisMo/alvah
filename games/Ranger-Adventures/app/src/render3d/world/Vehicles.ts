@@ -628,6 +628,7 @@ export class Vehicles {
     this.host.follow(h, true);          // the step-out is a CUT too
     this.vehicleSpeed = 0;
     this.jeepMoved = 0;
+    this.settleJeep();                  // parked: all four wheels exactly on the ground
     this.jeepParked = this.park(this.jeepPos.x, this.jeepPos.z, h, JEEP_BODY);
     this.nearJeep = true;               // standing right beside it → "Stap in" again
     this.vehicleNearAnimal = false;
@@ -870,7 +871,7 @@ export class Vehicles {
     geo.setAttribute('position', new THREE.BufferAttribute(this.dustPos, 3));
     geo.setAttribute('aAge', new THREE.BufferAttribute(this.dustAge, 1));
     geo.setAttribute('aLife', new THREE.BufferAttribute(this.dustLife, 1));
-    const uniforms = { uColor: { value: new THREE.Color('#d9c7a0') }, uScale: { value: 700 } };
+    const uniforms = { uColor: { value: new THREE.Color('#ebdfc4') }, uScale: { value: 700 } };
     const mat = new THREE.ShaderMaterial({
       uniforms,
       transparent: true,
@@ -889,7 +890,7 @@ export class Vehicles {
           // fade in fast, out slowly; and away near the lens: never a blob over the screen
           float near = smoothstep(2.5, 6.0, depth);
           vAlpha = smoothstep(0.0, 0.15, f) * (1.0 - f) * alive * near;
-          float metres = mix(0.35, 1.0, f);
+          float metres = mix(0.45, 1.3, f);
           gl_PointSize = clamp(metres * uScale / depth, 1.0, 72.0);
           gl_Position = projectionMatrix * mv;
         }
@@ -902,7 +903,7 @@ export class Vehicles {
           vec2 d = gl_PointCoord - vec2(0.5);
           float r2 = dot(d, d) * 4.0;          // 0 at the centre, 1 at the rim
           float soft = exp(-3.5 * r2) * (1.0 - r2);
-          float a = max(soft, 0.0) * vAlpha * 0.24; // a faint haze, not a cloud
+          float a = max(soft, 0.0) * vAlpha * 0.4; // a light haze, not a cloud
           if (a <= 0.003) discard;
           gl_FragColor = vec4(uColor, a);
         }
@@ -953,7 +954,7 @@ export class Vehicles {
       this.dustVel[i * 3 + 1] = 0.12 + this.dustRand() * 0.18; // a low, slow rise
       this.dustVel[i * 3 + 2] = lz * spread - fz * 0.3;
       this.dustAge[i] = 0;
-      this.dustLife[i] = 0.8 + this.dustRand() * 0.5;
+      this.dustLife[i] = 0.9 + this.dustRand() * 0.6;
     }
   }
 
