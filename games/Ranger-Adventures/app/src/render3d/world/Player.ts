@@ -21,7 +21,7 @@ import { resolveMove, type MoveLimits, type Obstacle } from '../CharacterControl
 import { PlayerRig } from '../PlayerRig';
 import {
   screenVector, tankAxes, turnStep, approachAngle, stickBackpedal, stickHeading, wrapPi,
-  JOYSTICK_DEADZONE, ALIGN_GAP, BACK_SPEED, PIVOT_RATE, type StickVector,
+  JOYSTICK_DEADZONE, ALIGN_GAP, BACK_SPEED, PIVOT_RATE, TURN_RATE, type StickVector,
 } from '../../core/input';
 import { attachInput, type InputHandle } from '../../core/attach-input';
 import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../../core/footstep';
@@ -131,6 +131,7 @@ export class Player {
   private heading = Math.PI;
   private facing = Math.PI;
   private turnVel = 0;
+  private turnWant = 0;
   private drive: DriveMode | null = null;
   private frame = Math.PI;
   private tapStuck = 0;
@@ -258,7 +259,9 @@ export class Player {
     // Only held keys turn him tank-style; a leftover turn eases out when they lift.
     if (mode !== null && mode !== 'keys') this.turnVel = 0;
     const tank = view.follows && (mode === 'keys' || (mode === null && this.turnVel !== 0));
-    this.turnVel = turnStep(this.turnVel, mode === 'keys' && view.follows ? -tankAxes(keys!).turn : 0, dt);
+    const turnIn = mode === 'keys' && view.follows ? -tankAxes(keys!).turn : 0;
+    this.turnWant = turnIn * TURN_RATE;
+    this.turnVel = turnStep(this.turnVel, turnIn, dt);
 
     let speedK = 0;        // share of the walking speed this frame
     let back = false;      // backing up: walk opposite his heading, facing unchanged
@@ -622,10 +625,11 @@ export class Player {
     return this.turnVel !== 0;
   }
 
-  /** How fast the keys turn him now (rad/s, + = to his left); the camera looks ahead
-   *  along it for a clear view. */
+  /** Where the keys are taking his turn (rad/s, + = to his left): the full turn rate
+   *  while a turn key is held, else what is left of the turn easing out. The camera
+   *  looks ahead along it for a clear view. */
   get turnRate(): number {
-    return this.turnVel;
+    return this.turnWant !== 0 ? this.turnWant : this.turnVel;
   }
 
   /** A past-threshold mouse / finger drag is looking around right now. */

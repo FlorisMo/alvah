@@ -129,7 +129,7 @@ export class CameraRig {
   private sideHeld = 0;
   private readonly SIDE_TAU = 0.5;
   private readonly SIDE_RATE = 0.25;        // boom lengths per second (≈1.2 m/s on the 4.6 m boom)
-  private readonly SIDE_URGENT_RATE = 0.45; // the line is blocked now: a little quicker
+  private readonly SIDE_URGENT_RATE = 0.5;  // squeezed now, or he is turning: a little quicker
   private readonly BLOCKED = 2;             // a search cost this high = the line to him is blocked now
   private readonly LOOKAHEAD = 0.5;         // s: search where he is going (and where his turn takes the view) too
   private wasWalk = true;
@@ -406,32 +406,37 @@ export class CameraRig {
       const moving = this.vel.x * this.vel.x + this.vel.z * this.vel.z > 0.01 || this.player.turning;
       this.sideHeld += dt;
       const kMax = this.sideMax();
-      let urgent = false;
+      // squeezed: the line to him is blocked, or a solid pulled the boom in below 60 %
+      const squeezed = (cost: number, d: number): boolean => cost >= this.BLOCKED || d < this.zoomNow * 0.6;
+      const here = this.solveWalk(base, this.sideNow, rp);
+      const squeezedNow = squeezed(here.cost, here.dist); // the view as it is this frame
       if (reduced || !follow || this.player.dragging) this.sideStep = 0; // a fixed camera stays fixed
       else {
         // score each slide now and where he is heading; keep the current choice unless
-        // the line is blocked now, or (while he moves) another is clearly better and it
-        // has been held a while. Standing still, nothing changes it but a blocked line.
-        let best = Infinity, pick = 0, pickNow = 0, cur = Infinity;
+        // its view is squeezed now (then a clearly clearer one wins at once), or (while
+        // he moves) another is clearly better and it has been held a while. Standing
+        // still, nothing but a squeezed view changes it.
+        let best = Infinity, pick = 0, pickNow = 0, cur = Infinity, curNow = 0, urgent = false;
         for (const f of this.SIDE_STEPS) {
-          const now = this.solveWalk(base, f * kMax, rp).cost;
+          const sol = this.solveWalk(base, f * kMax, rp);
+          const now = sol.cost;
+          if (f === this.sideStep) { curNow = now; urgent = squeezed(now, sol.dist); }
           const cost = now + this.solveWalk(aheadBearing, f * kMax, this.ahead).cost + Math.abs(f) * this.SIDE_COST;
-          if (f === this.sideStep) { cur = cost; urgent = now >= this.BLOCKED; }
+          if (f === this.sideStep) cur = cost;
           if (cost < best - 1e-9) { best = cost; pick = f; pickNow = now; }
         }
-        // a blocked line moves to a slide that is clear now (never from one blocked
-        // slide to another: that dithers); otherwise only while he moves, after a hold
         const better = best < cur - 0.3;
         const change = pick !== this.sideStep && (stepOut ||
-          (urgent && better && pickNow < this.BLOCKED) ||
+          (urgent && better && pickNow < curNow - 0.3) ||
           (moving && this.sideHeld >= this.SIDE_HOLD && better));
         if (change) { this.sideStep = pick; this.sideHeld = 0; }
       }
       const sideTo = this.sideStep * kMax;
       if (reduced || snap || stepOut) this.sideNow = sideTo;
       else if (dt > 0) {
+        // a squeezed view, or one the player is turning anyway, slides a little quicker
         const step = (sideTo - this.sideNow) * dampFactor(dt, this.SIDE_TAU);
-        const max = (urgent ? this.SIDE_URGENT_RATE : this.SIDE_RATE) * dt;
+        const max = (squeezedNow || this.player.turning ? this.SIDE_URGENT_RATE : this.SIDE_RATE) * dt;
         this.sideNow += Math.max(-max, Math.min(max, step));
       }
       const sol = this.solveWalk(base, this.sideNow, rp);
