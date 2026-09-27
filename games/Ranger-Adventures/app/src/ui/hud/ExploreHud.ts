@@ -63,10 +63,18 @@ export function showExploreHud(activeTitel: string | null): void {
       `<span class="wf-text"><b class="wf-doel">${esc(activeTitel)}</b><span class="wf-cue">zoek het spoor…</span></span>` +
       `</div>`
     : '';
+  // every mission done: no way to point any more — the chip says the season is done
+  const allDone = !activeTitel && Content.activeArea().missies.every((m) => store.get().voltooid[m.id]);
+  const klaar = allDone
+    ? `<div class="explore-klaar" role="status">` +
+      `<span class="wf-glyph" aria-hidden="true">✓</span>` +
+      `<span class="wf-text"><b class="wf-doel">Alle missies klaar</b><span class="wf-cue">loop rustig rond</span></span>` +
+      `</div>`
+    : '';
   const el = plainCard(
     `<div class="explore-hud">` +
     `<button class="ra-pill explore-pause" type="button" data-key="pause">⏸ Pauze</button>` +
-    veld +
+    veld + klaar +
     `<div class="explore-prompt" hidden></div>` +
     `<div class="explore-hub-prompt" hidden></div>` +
     `<div class="explore-sit-prompt" hidden></div>` +

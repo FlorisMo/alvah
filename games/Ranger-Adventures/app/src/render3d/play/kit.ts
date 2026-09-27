@@ -168,6 +168,10 @@ function seenBox(root: THREE.Object3D, out: THREE.Box3): THREE.Box3 {
     if (!m.isMesh || m.userData.hitSphere || !shownInTree(m)) return;
     const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material | undefined;
     if (!mat || !mat.visible) return;
+    // a see-through overlay that writes no depth (a halo ring or a blob / contact
+    // shadow draped over the ground) is not a thing that STANDS there: on a slope its
+    // downhill rim lies below the ground at its centre by construction
+    if (mat.transparent && !mat.depthWrite) return;
     const sk = m as THREE.SkinnedMesh;
     if (sk.isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh) {
       (m as THREE.SkinnedMesh).computeBoundingBox();

@@ -17,10 +17,12 @@ import { applyEyes } from '../EyeMaterial';
 import { applyCoat, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
 import { livePolicy } from '../MotionMode';
+import { mergeColourSplits } from './merge';
 import type { SpawnOpts, Spawned } from './types';
 
-/** content animal id → the world's GLB manifest id (the same cast `Missions.MODEL_OF`
- *  and the ambient life use; birds follow the `bird-<id>` manifest convention). */
+/** content animal id → the world's GLB manifest id: the ONE cast table (the mission
+ *  markers, their finished tableaus and the mini-games all read it; birds follow the
+ *  `bird-<id>` manifest convention). */
 const ANIMAL_MODEL: Record<string, string> = {
   wildzwijn: 'animal-wildzwijn-boar',
   frisling: 'animal-frisling-piglet',
@@ -110,19 +112,24 @@ function disposer(root: THREE.Object3D, extra: THREE.BufferGeometry[] = []): () 
  * prepModel puts a RIGGED model's lowest BONE at y=0 (its size is read from the
  * skeleton, F-07), but hooves and paws reach a few cm below their last joint, so a
  * staged deer sank ~5 cm into the ground. Measure the posed skinned mesh itself and
- * lift the model onto its soles. Only for game spawns — the world's own animals are
- * placed by World and left as they are.
+ * lift the model onto its soles. The mission markers' animals (world/Markers.ts) stand
+ * the same way.
  */
-function standOnSoles(wrapper: THREE.Group): void {
+export function standOnSoles(wrapper: THREE.Group): void {
   wrapper.updateMatrixWorld(true);
   let minY = Infinity;
+  let skinned = false;
   const box = new THREE.Box3();
   wrapper.traverse((o) => {
     const sk = o as THREE.SkinnedMesh;
     if (!sk.isSkinnedMesh) return;
+    skinned = true;
     sk.computeBoundingBox();
     if (sk.boundingBox) minY = Math.min(minY, box.copy(sk.boundingBox).applyMatrix4(sk.matrixWorld).min.y);
   });
+  // a static mesh: the calm posture (head low, AnimalDress) can tip its snout below
+  // the hooves prepModel stood on the ground — stand it on its lowest point again
+  if (!skinned) minY = box.setFromObject(wrapper).min.y;
   const inner = wrapper.children[0];
   if (inner && Number.isFinite(minY) && Math.abs(minY) < 0.3) inner.position.y -= minY;
 }
@@ -142,18 +149,32 @@ export async function spawnModel(id: string, opts: SpawnOpts = {}): Promise<Spaw
   applyCoat(prepped, glb);
   applyPosture(prepped, glb);
   applyCalmPose(prepped, glb);
+  mergeColourSplits(prepped); // one draw call per animal, not one per colour
   let mixer: THREE.AnimationMixer | null = null;
+  let current: THREE.AnimationAction | null = null;
+  const CLIP: Record<string, RegExp> = { idle: /idle|rest|stand|breath/i, walk: /walk/i, graze: /graze|eat/i };
+  const play = (name: string): void => {
+    if (!rig.clips.length) return;
+    const clip = rig.clips.find((c) => CLIP[name]?.test(c.name)) ?? (name === 'idle' ? rig.clips[0] : null);
+    if (!clip) return;
+    mixer ??= new THREE.AnimationMixer(prepped);
+    const next = mixer.clipAction(clip);
+    if (next === current) return;
+    next.reset().play();
+    if (current) next.crossFadeFrom(current, 0.35, false);
+    current = next;
+  };
   if (opts.idle !== false && rig.clips.length) {
-    const clip = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
-    mixer = new THREE.AnimationMixer(prepped);
-    mixer.clipAction(clip).play();
-    mixer.update(0);
+    play('idle');
+    (mixer as THREE.AnimationMixer | null)?.update(0);
   }
   standOnSoles(prepped);
   return {
     root: prepped,
     update: (dt) => { if (mixer && !livePolicy().reduced) mixer.update(dt); },
     dispose: disposer(prepped),
+    rigged: rig.clips.length > 0,
+    clip: play,
   };
 }
 
@@ -223,5 +244,6 @@ export async function spawnPlant(id: string, height: number): Promise<Spawned | 
   if (!m) return null;
   ownMaterials(m);
   const prepped = prepModel(m, height);
-  return { root: prepped, update: () => {}, dispose: disposer(prepped) };
+  mergeColourSplits(prepped);
+  return { root: prepped, update: () => {}, dispose: disposer(prepped), rigged: false };
 }

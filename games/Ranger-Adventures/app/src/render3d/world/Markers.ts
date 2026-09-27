@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { loadModel, loadRig, prepModel } from '../Models';
-import { anchorInBiome, type Biome } from '../Biomes';
+import { anchorInBiome, biomeAt, type Biome } from '../Biomes';
 import { applyEyes } from '../EyeMaterial';
 import { applyCoat, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
@@ -21,8 +21,11 @@ import { routeVia } from '../Paths';
 import { ROEP_COPY } from '../../engines/roep';
 import { boxObstacle, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
-import type { Labels } from './Labels';
+import { Labels } from './Labels';
 import { proceduralTotem } from './props';
+import { standOnSoles } from '../play/spawn';
+import { mergeColourSplits } from '../play/merge';
+import { FarRest, restFar } from '../play/fade';
 
 export interface WorldMarker {
   missionId: string;
@@ -35,16 +38,33 @@ export interface WorldMarker {
 
 /** Within this distance (m) of a marker, the board or the sit-spot its prompt shows. */
 const NEAR_R = 2.4;
+/** Per landschap, how far (rad) its markers turn off the biome's centre line. */
+const ANCHOR_TURN: Partial<Record<Biome, number>> = { stuifzand: 0.4 };
+/** Per landschap, how far (rad) its 2nd, 3rd … marker fan out left/right of the first. */
+const ANCHOR_FAN: Partial<Record<Biome, number>> = { heide: 0.28 };
+/** Far off, half in the golden-hour fog, a marker's animal calmly fades out and rests
+ *  (beyond ANIMAL_REST_FAR m from the lens; back within ANIMAL_REST_NEAR m). Its halo
+ *  and name-tag stay: they are the way there. */
+const ANIMAL_REST_NEAR = 50;
+const ANIMAL_REST_FAR = 56;
+/** A finished mission's halo + tag pip: a calm green ("klaar"). */
+const FINISHED_COLOR = '#3dbb5c';
 
 export class Markers {
   readonly list: {
     group: THREE.Group; pos: THREE.Vector3; missionId: string;
     recipe: MotionRecipe; phase: number;
     label: THREE.Sprite;               // the floating diegetic name-tag (hidden during an activity)
+    titel: string;                     // the mission title the tag shows
+    ring: THREE.MeshBasicMaterial;     // the "go here" halo (turns the finished colour when done)
+    finished: boolean;                 // the mission is done: the tag reads "✓ <titel>"
     anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
+    model: THREE.Group | null;         // the loaded animal (fades out far off in the fog)
+    rest: FarRest;
     mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
   }[] = [];
   nearId: string | null = null;                // the mission marker the ranger stands at
+  private readonly lens = { x: 0, z: 0, seen: false }; // where the camera stood last frame
   // W2.2 spawn-clearing hub: the ranger-cabin (a solid prop the ranger walks
   // around) + the case-board (the MISSION hub — proximity opens the mission board
   // overlay WITHOUT tearing the world down). The board has its own proximity/tap/
@@ -73,6 +93,7 @@ export class Markers {
   private readonly RING_FADE_NEAR = 2.2; // lens ≤ this from a ring ⇒ fully faded (it's under/around the ranger)
   private readonly RING_FADE_FAR = 4.2;  // lens ≥ this ⇒ full "go here" opacity (normal approach/standing boom ~4.6 m)
   private activeId: string | null = null;     // the mission the wayfinding cue points to
+  private labelsOn = true;                     // false while an in-place activity runs (W6.1)
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
   private readonly onApproach: (missionId: string | null) => void;
   private readonly onInteract: (missionId: string) => void;
@@ -120,6 +141,18 @@ export class Markers {
         perBiome.set(mk.biome, n + 1);
         const a = anchorInBiome(mk.biome, 22 + n * 9);
         x = a.x; z = a.z;
+        // the stuifzand diagonal is the jeep's parking bay and the helicopter apron
+        // (world/Vehicles.ts): its marker stands a little to the side, so the mission's
+        // nightjar never hides behind a parked jeep. The heide's later missions fan out
+        // left and right of the first one's line, so from the clearing their animals and
+        // name tags never stand stacked behind each other.
+        const fan = n > 0 ? (n % 2 ? 1 : -1) * (ANCHOR_FAN[mk.biome] ?? 0) : 0;
+        const turn = (ANCHOR_TURN[mk.biome] ?? 0) + fan;
+        if (turn) {
+          const r = Math.hypot(x, z), ang = Math.atan2(z, x) + turn;
+          const tx = Math.cos(ang) * r, tz = Math.sin(ang) * r;
+          if (biomeAt(tx, tz) === mk.biome) { x = tx; z = tz; }
+        }
       } else {
         const ang = (i / N) * Math.PI * 2;
         x = Math.cos(ang) * 9; z = Math.sin(ang) * 9;
@@ -128,12 +161,7 @@ export class Markers {
       group.position.set(x, this.groundY(x, z), z);
 
       // a soft halo ring so every marker reads as "go here", model or totem
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.9, 1.15, 24),
-        new THREE.MeshBasicMaterial({ color: mk.color, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-      );
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.05;
+      const ring = this.haloRing(mk.color, x, z, group.position.y, 0);
       group.add(ring);
       this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x, z, base: 0.5 }); // D3.16: fade near the lens
 
@@ -147,8 +175,10 @@ export class Markers {
       this.scene.add(group);
       const entry = {
         group, pos: group.position.clone(), missionId: mk.missionId,
-        recipe: gaitFor(mk.modelId), phase: i * 1.7, label,
+        recipe: gaitFor(mk.modelId), phase: i * 1.7, label, titel: mk.titel,
+        ring: ring.material as THREE.MeshBasicMaterial, finished: false,
         anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
+        model: null as THREE.Group | null, rest: new FarRest(ANIMAL_REST_NEAR, ANIMAL_REST_FAR),
       };
       this.list.push(entry);
 
@@ -167,10 +197,13 @@ export class Markers {
           // calm shape). Best-effort — a single-mesh Meshy animal with no named bones is
           // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
           applyCalmPose(prepped, mk.modelId);
+          mergeColourSplits(prepped); // one draw call per animal, not one per colour
+          standOnSoles(prepped); // on its hooves (or its lowest point), not in the ground
           // drop the totem (keep the ring), add the real animal
           const totem = group.children.find((c) => c.userData.totem);
           if (totem) group.remove(totem);
           group.add(prepped);
+          entry.model = prepped;
           if (rig.clips.length) {
             // prefer the real baked rig: play a calm idle (or the first clip)
             const mixer = new THREE.AnimationMixer(prepped);
@@ -217,12 +250,7 @@ export class Markers {
     // world-entry still reads the board face (its +z-facing component only grows).
     board.rotation.y = Math.atan2(-boardAt.x, -boardAt.z) + this.BOARD_APPROACH_FACE_TURN;
     board.add(this.proceduralBoard());
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.9, 1.15, 24),
-      new THREE.MeshBasicMaterial({ color: '#f5c23b', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.05;
+    const ring = this.haloRing('#f5c23b', boardAt.x, boardAt.z, boardAt.y, board.rotation.y);
     board.add(ring);
     this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: boardAt.x, z: boardAt.z, base: 0.5 }); // D3.16
     const label = this.labels.make('Missiebord', '#f5c23b');
@@ -260,12 +288,7 @@ export class Markers {
     // turn the seat to look out over the heath (away from the clearing/hide)
     group.rotation.y = Math.atan2(at.x, at.z);
     group.add(this.proceduralBench());
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.9, 1.15, 24),
-      new THREE.MeshBasicMaterial({ color: '#8ab6d6', transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.05;
+    const ring = this.haloRing('#8ab6d6', at.x, at.z, at.y, group.rotation.y);
     group.add(ring);
     this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: at.x, z: at.z, base: 0.5 }); // D3.16
     const label = this.labels.make(ROEP_COPY.wayfinding, '#cfe6f2');
@@ -275,6 +298,30 @@ export class Markers {
     this.obstacles.push({ x: at.x, z: at.z, r: 0.5 });
     this.sitSpotGroup = group;
     this.sitSpotPos = at.clone();
+  }
+
+  /**
+   * The "go here" halo: a flat ring laid ON the rendered ground — every vertex seated
+   * on the terrain under it (5 cm proud), so on a slope it follows the ground instead
+   * of sinking half under the hill. Built in the local frame of a group standing at
+   * (x, y0, z) turned by `yaw`.
+   */
+  private haloRing(color: string, x: number, z: number, y0: number, yaw: number): THREE.Mesh {
+    const geo = new THREE.RingGeometry(0.9, 1.15, 32, 2);
+    geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const v = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyAxisAngle(up, yaw); // local → world offset
+      pos.setY(i, this.groundY(x + v.x, z + v.z) - y0 + 0.05);
+    }
+    pos.needsUpdate = true;
+    geo.computeBoundingSphere();
+    return new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }),
+    );
   }
 
   /** A small calm wooden bench (two legs + a seat + a low backrest) — an instant
@@ -325,6 +372,29 @@ export class Markers {
     this.onSitSpotActivate = cbs.onActivate;
   }
 
+  /**
+   * A finished mission's marker (felt progress, world/Progress.ts adds its tableau):
+   * the halo turns a calm green and the tag reads "✓ <titel>" — colour + glyph + word,
+   * so "klaar" reads at a glance. Idempotent; the tag keeps its sprite (and its fade).
+   */
+  setFinished(missionId: string): void {
+    const m = this.list.find((k) => k.missionId === missionId);
+    if (!m || m.finished) return;
+    m.finished = true;
+    m.ring.color.set(FINISHED_COLOR);
+    const ring = this.groundRings.find((r) => r.mat === m.ring);
+    if (ring) ring.base = 0.85; // a full, calm "klaar" halo (it still fades near the lens)
+    m.ring.opacity = Math.max(m.ring.opacity, 0.85);
+    const fresh = new Labels().make(`✓ ${m.titel}`, FINISHED_COLOR); // draw the new tag, keep our sprite
+    const mat = m.label.material as THREE.SpriteMaterial;
+    const newMat = fresh.material as THREE.SpriteMaterial;
+    mat.map?.dispose();
+    mat.map = newMat.map;
+    mat.needsUpdate = true;
+    newMat.dispose();
+    m.label.scale.copy(fresh.scale);
+  }
+
   /** Re-point the wayfinding cue at another mission (e.g. after one is completed). */
   setActiveMission(id: string | null): void {
     this.activeId = id;
@@ -348,6 +418,9 @@ export class Markers {
    */
   animate(t: number, dt: number, reduced: boolean): void {
     for (const mk of this.list) {
+      // far off, half in the fog, the animal fades out and rests (not drawn): a whole
+      // Veluwe of markers in one view stays inside the draw-call budget
+      if (mk.model && this.lens.seen) restFar(mk.model, mk.rest.step(Math.hypot(this.lens.x - mk.pos.x, this.lens.z - mk.pos.z), dt, reduced));
       if (mk.mixer) {
         mk.mixer.update(reduced ? 0 : dt);
       } else if (mk.anim) {
@@ -370,7 +443,11 @@ export class Markers {
     for (const mk of this.list) {
       if (Math.hypot(mk.pos.x - x, mk.pos.z - z) < NEAR_R) { near = mk.missionId; break; }
     }
-    if (near !== this.nearId) { this.nearId = near; this.onApproach(near); }
+    if (near !== this.nearId) {
+      this.nearId = near;
+      this.onApproach(near);
+      this.syncLabels();
+    }
     if (this.boardPos) {
       const nb = Math.hypot(this.boardPos.x - x, this.boardPos.z - z) < NEAR_R;
       if (nb !== this.nearBoard) { this.nearBoard = nb; this.onBoardNear(nb); }
@@ -414,14 +491,44 @@ export class Markers {
   /** Boarding a vehicle: drop the walk-time marker + hub prompts so nothing lingers
    *  behind the "Stap uit" pill. */
   clearForVehicle(): void {
-    if (this.nearId) { this.nearId = null; this.onApproach(null); }
+    if (this.nearId) { this.nearId = null; this.onApproach(null); this.syncLabels(); }
     if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
   }
 
   /** W6.1: hide the floating mission name-tags during an in-place activity (so a label
    *  the reframe keeps in view never overlaps the play prompt), restore them after. */
   setLabelsVisible(visible: boolean): void {
-    for (const m of this.list) m.label.visible = visible;
+    this.labelsOn = visible;
+    this.syncLabels();
+  }
+
+  /** The tags show, except during an activity and over the marker the ranger stands at:
+   *  its prompt already names it, and its tag would float big right in front of the lens. */
+  private syncLabels(): void {
+    for (const m of this.list) {
+      m.label.visible = this.labelsOn && m.missionId !== this.nearId;
+      // while its mission plays, the marker's own halo would lie right under the play
+      // view (a big ring filling the frame between two games): it steps away too
+      const ring = m.group.children.find((c) => (c as THREE.Mesh).material === m.ring);
+      if (ring) ring.visible = this.labelsOn || m.missionId !== this.nearId;
+    }
+  }
+
+  /**
+   * While a mission plays at its marker, the marker (its animal, its halo) and a
+   * finished family around it step out of the scene for the WHOLE mission — not
+   * per game, so nothing pops back in front of the lens between two games. `null`
+   * brings them back (the mission ended, or its reunion is about to play).
+   */
+  hideForActivity(missionId: string | null): void {
+    for (const m of this.list) {
+      const away = m.missionId === missionId;
+      const all = [m.group, ...((m.group.userData.companions as THREE.Object3D[] | undefined) ?? [])];
+      for (const o of all) {
+        if (away && o.userData.awayWas === undefined) { o.userData.awayWas = o.visible; o.visible = false; }
+        if (!away && o.userData.awayWas !== undefined) { o.visible = o.userData.awayWas as boolean; delete o.userData.awayWas; }
+      }
+    }
   }
 
   /** After an in-place activity: forget every proximity + the last cue so the next
@@ -445,8 +552,9 @@ export class Markers {
    * no geometry/draw-call change (<150 holds), deterministic so RM frames stay frozen.
    */
   fadeRings(camera: THREE.Camera): void {
-    if (this.groundRings.length === 0) return;
     const cx = camera.position.x, cz = camera.position.z;
+    this.lens.x = cx; this.lens.z = cz; this.lens.seen = true; // (the far marker animals rest by it: animate)
+    if (this.groundRings.length === 0) return;
     const span = this.RING_FADE_FAR - this.RING_FADE_NEAR;
     for (const r of this.groundRings) {
       const d = Math.hypot(cx - r.x, cz - r.z);

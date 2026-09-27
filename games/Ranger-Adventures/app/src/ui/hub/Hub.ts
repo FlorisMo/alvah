@@ -166,7 +166,7 @@ export const CLUE_GLYPH: Record<string, string> = { spoor: '🐾', camera: '📷
 /** The sporenboek (was "prikbord"; the class names stay case-board / ph-prikbord):
  *  found clues, the collected veldnotities and (once all clues are found) the way
  *  to the hopeful resolution. Its back returns to patrol. */
-export function showCaseBoard(): void {
+export function showCaseBoard(back: () => void = resumePatrol): void {
   narrator.stop();
   const area = Content.activeArea();
   const voltooid = store.get().voltooid;
@@ -234,8 +234,9 @@ export function showCaseBoard(): void {
     `<h1 class="boot-title">Wat is hier aan de hand?</h1>` +
     `<div class="cb-cork">${board}</div>` +
     note +
+    // the way to the ontknoping sits right under the clues, never below the notes
+    (resolveBtn ? `<div class="ra-row cb-act">${resolveBtn}</div>` : '') +
     veldStrip +
-    (resolveBtn ? `<div class="ra-row">${resolveBtn}</div>` : '') +
     `</div>`,
   );
   // Only the latest-clue note is read aloud (and karaoke-highlighted).
@@ -245,12 +246,12 @@ export function showCaseBoard(): void {
     : null;
   el.querySelector('.cb-back')?.addEventListener('click', () => {
     ra?.stop();
-    resumePatrol();
+    back();
   });
   el.querySelector('.cb-resolve')?.addEventListener('click', () => {
     ra?.stop();
     Sound.unlock();
-    showOntknoping(0);
+    showOntknoping(0, () => showCaseBoard(back));
   });
   // W6.3b: each collected veldnotitie reads aloud on demand.
   el.querySelectorAll<HTMLElement>('.cb-veld-note').forEach((row, i) => {
@@ -261,12 +262,13 @@ export function showCaseBoard(): void {
   });
 }
 
-/** The hopeful resolution: step through the ontknoping beats, then report → resolved. */
-function showOntknoping(idx: number): void {
+/** The hopeful resolution: step through the ontknoping beats, then report → resolved,
+ *  and on to `done` (the sporenboek it was opened from, or the season finale). */
+export function showOntknoping(idx: number, done: () => void): void {
   const area = Content.activeArea();
   const beats = Content.verhaalboog(area.id)?.ontknoping ?? [];
   const beat = beats[idx];
-  if (!beat) { store.reportArc(); showCaseBoard(); return; }
+  if (!beat) { store.reportArc(); session.world?.setSeasonResolved(true); done(); return; }
   const last = idx === beats.length - 1;
   const el = card(
     `<div class="ontknoping boot-card-ish">` +
@@ -285,8 +287,8 @@ function showOntknoping(idx: number): void {
   });
   el.querySelector('.btn-start')?.addEventListener('click', () => {
     ra.stop();
-    if (last) { store.reportArc(); if (store.get().settings.geluid) Sound.found(); }
-    showOntknoping(idx + 1);
+    if (last) { store.reportArc(); session.world?.setSeasonResolved(true); if (store.get().settings.geluid) Sound.found(); }
+    showOntknoping(idx + 1, done);
   });
 }
 
@@ -308,11 +310,18 @@ export function badgeHtml(e: Engine): string {
 
 export function showBadges(back: () => void): void {
   const wall = (Object.keys(SKILL_META) as Engine[]).map(badgeHtml).join('');
+  // the knappe woorden earned on missions (each reward card names one)
+  const woorden = Object.values(store.get().knapWoorden).map((w) => w.naam);
+  const knap = woorden.length
+    ? `<p class="boot-kicker">Knappe woorden · ${woorden.length}</p>` +
+      `<div class="knap-woorden">${woorden.map((w) => `<span class="knap-woord">${esc(w)}</span>`).join('')}</div>`
+    : '';
   const el = card(
     `<div class="reward boot-card-ish">` +
     `<p class="boot-kicker">Jouw breinkracht</p>` +
     `<h1 class="boot-title">Badges</h1>` +
     `<div class="badge-row">${wall}</div>` +
+    knap +
     `<button class="btn-start" type="button" data-key="back">Terug</button>` +
     `</div>`,
   );

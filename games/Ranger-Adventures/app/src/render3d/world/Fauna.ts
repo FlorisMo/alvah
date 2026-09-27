@@ -16,7 +16,14 @@ import { applyCalmPose } from '../CalmPoseRig';
 import { gaitFor, motionAt, type MotionRecipe } from '../ProceduralMotion';
 import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from '../AmbientPaths';
 import { dampFactor } from '../play/kit-math';
+import { mergeColourSplits } from '../play/merge';
+import { FarRest, restFar } from '../play/fade';
 import type { Terrain } from './Terrain';
+
+/** Far off in the golden-hour fog a roaming animal calmly fades out and rests (not
+ *  drawn): the same edge as the mission markers' animals. */
+const ROAM_REST_NEAR = 50;
+const ROAM_REST_FAR = 56;
 
 export class Fauna {
   // W3.3 scenic actors: the warden (BOA) + poacher stand at fixed world spots and
@@ -47,8 +54,13 @@ export class Fauna {
     graze: THREE.AnimationAction | null;  // baked rest/graze clip
     walkW: number; grazeW: number;        // eased crossfade weights
     h: number;                            // applied canonical stand height (W3.7a)
+    rest: FarRest;                        // far off in the fog it rests (not drawn)
   }[] = [];
   blobCount = 0;
+  // the season's ontknoping (the poacher was reported): he no longer lurks in the trees
+  // but stands calmly by the BOA warden — the reformed poacher of the canon (VISION §4a)
+  private readonly POACHER_REFORMED = { x: 8.1, z: 5.7 };
+  private poacherHome: { x: number; z: number } | null = null;
   private static blobTex: THREE.Texture | null = null;
   private readonly scene: THREE.Scene;
   private readonly terrain: Terrain;
@@ -64,8 +76,9 @@ export class Fauna {
   }
 
   /** Per frame: the scenic actors play their clips and the ambient animals roam /
-   *  glide. All SECONDARY motion, so it freezes under reduced-motion. */
-  update(t: number, dt: number, reduced: boolean): void {
+   *  glide. All SECONDARY motion, so it freezes under reduced-motion. With the lens
+   *  (`camera`), a roamer far off in the fog rests. */
+  update(t: number, dt: number, reduced: boolean, camera?: THREE.Camera): void {
     // W3.3: the warden + poacher play their baked clips. Secondary motion, so the
     // clip freezes at the rest pose under reduced-motion (same rule as the animals).
     for (const a of this.scenicActors) a.mixer?.update(reduced ? 0 : dt);
@@ -76,6 +89,10 @@ export class Fauna {
     // motion (the loop halts, the mixer holds its pose — locomotion-exempt rule
     // applies only to the PLAYER, §3.4).
     for (const a of this.ambient) {
+      if (a.wander && camera) {
+        const g = a.group.position;
+        restFar(a.group, a.rest.step(Math.hypot(g.x - camera.position.x, g.z - camera.position.z), dt, reduced));
+      }
       if (a.wander) {
         if (reduced) { a.mixer?.update(0); continue; }
         const st = wanderAt(a.wander, t);
@@ -188,6 +205,17 @@ export class Fauna {
     }
   }
 
+  /** The ontknoping in the world: `true` walks the poacher out of the trees to stand
+   *  by the warden (a cut — he is simply there next time you look), `false` back. */
+  setReformed(on: boolean): void {
+    const a = this.scenicActors.find((x) => x.id === 'figure-poacher');
+    if (!a) return;
+    this.poacherHome ??= { x: a.group.position.x, z: a.group.position.z };
+    const at = on ? this.POACHER_REFORMED : this.poacherHome;
+    a.group.position.set(at.x, this.groundY(at.x, at.z), at.z);
+    a.group.rotation.y = Math.atan2(-at.x, -at.z); // face the spawn clearing, like the warden
+  }
+
   /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + its live baked-clip
    *  {name, time} (null until the rig loads / when it carries no clip) + its measured
    *  rendered stand-height (m). Lets the E2E assert the warden + poacher are present
@@ -239,7 +267,7 @@ export class Fauna {
         recipe: gaitFor(a.id),
         anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
         walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 1, h,
+        walkW: 0, grazeW: 1, h, rest: new FarRest(ROAM_REST_NEAR, ROAM_REST_FAR),
       };
       this.ambient.push(entry);
       void loadRig(a.id).then((rig) => {
@@ -249,6 +277,7 @@ export class Fauna {
         applyCoat(prepped, a.id);     // W3.7b: dossier coat-tint correction (vos rufous)
         applyPosture(prepped, a.id);  // W3.7b: head-low stance for snuffling species
         applyCalmPose(prepped, a.id); // §B never-scary rest-pose bias
+        mergeColourSplits(prepped);   // one draw call per animal, not one per colour
         group.add(prepped);
         if (a.baked && rig.clips.length) {
           // crossfade the baked walk (striding) against graze (paused) by `moving`;
@@ -286,7 +315,7 @@ export class Fauna {
         recipe: gaitFor(b.id),
         anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
         walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 0, h: b.h,
+        walkW: 0, grazeW: 0, h: b.h, rest: new FarRest(ROAM_REST_NEAR, ROAM_REST_FAR),
       };
       this.ambient.push(entry);
       void loadModel(b.id).then((m) => {

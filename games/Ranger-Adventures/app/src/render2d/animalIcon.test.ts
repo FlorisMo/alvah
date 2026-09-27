@@ -21,4 +21,9 @@ test('encounter subjects read as words, never as raw ids', () => {
     assert.ok(v.icon.length > 0);
   }
   assert.equal(subjectView('reekalf', 'edelhert').label, 'edelhert');
+  // mission 1 (the frisling): its three subjects read as the piglet, the sow + her piglets, the rotte
+  assert.equal(subjectView('frisling', 'wildzwijn').label, 'frisling');
+  assert.equal(subjectView('wildzwijn', 'wildzwijn').label, 'zeug met biggen');
+  assert.equal(subjectView('rotte', 'wildzwijn').label, 'de rotte');
+  assert.equal(subjectView('onbekend', 'wildzwijn').label, 'wild zwijn');
 });

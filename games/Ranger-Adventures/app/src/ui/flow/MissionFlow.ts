@@ -7,7 +7,7 @@
  * Never a game-over: the reward always celebrates; difficulty flexes silently.
  */
 
-import { Group, type Scene } from 'three';
+import { Group, Vector3, type Scene } from 'three';
 import type { Mission, Step, Clue } from '../../content/types';
 import type { BeatSummary, Engine } from '../../core/skill';
 import { store } from '../../core/state';
@@ -28,9 +28,11 @@ import { playWissel } from '../../render2d/WisselView';
 import { mountReadAloud } from '../ReadAloud';
 import { deviceText } from '../hud/device';
 import { session, esc, naam, card, clearOverlays } from './session';
-import { resumePatrol, notePatrolCompletion, activeExploreTitel, tellWorldMissionDone } from './WorldSession';
+import {
+  resumePatrol, notePatrolCompletion, activeExploreTitel, tellWorldMissionDone, holdWorld, releaseWorld,
+} from './WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
-import { showCaseBoard, badgeHtml, CLUE_GLYPH } from '../hub/Hub';
+import { showCaseBoard, showOntknoping, badgeHtml, CLUE_GLYPH } from '../hub/Hub';
 
 type PlayFn = (host: HTMLElement, step: Step) => Promise<BeatSummary>;
 const ENGINE_VIEWS: Partial<Record<string, PlayFn>> = {
@@ -114,6 +116,14 @@ async function runMission(mission: Mission): Promise<void> {
   // the raaf counts its facts (1/3, 2/3, 3/3), not the steps
   const facts = mission.stappen.filter((st) => st.skin.feit).length;
   let factN = 0;
+  // The world holds still for the WHOLE mission (2D floor included): the ranger stays
+  // at the marker, the step owns the camera, and between two steps no marker tag or
+  // proximity prompt comes back near the lens. It lets go when the ranger walks on
+  // (resumePatrol) or the mission is stopped.
+  holdWorld();
+  // the follow camera's pose before the first game: the last game glides back to it
+  const cam = session.world?.camera;
+  const home = cam ? { pos: cam.position.clone(), look: cam.position.clone().add(cam.getWorldDirection(new Vector3())) } : null;
   for (let i = 0; i < mission.stappen.length; i++) {
     const step = mission.stappen[i];
     const play = ENGINE_VIEWS[step.ef];
@@ -145,15 +155,14 @@ async function runMission(mission: Mission): Promise<void> {
     const stepStage = new Group();
     stepStage.name = 'mission-step';
     let result: BeatSummary | 'STOP';
-    // The world holds still while a step plays (2D floor included): the ranger stays
-    // at the marker and the step owns the camera.
-    world?.beginActivity();
     try {
       if (mode === '3d' && world) {
         const variant = variantFor(REGISTRY_3D, step.ef as Engine)!;
         const ctx = world.ctx(stepHost);
         (ctx.scene as Scene).add(stepStage);
-        result = await raceStop(variant.play({ ...ctx, scene: stepStage }, stepForView(step)));
+        // between two games the lens stays on the play view (one calm move to the next)
+        const keepView = i < mission.stappen.length - 1;
+        result = await raceStop(variant.play({ ...ctx, scene: stepStage, keepView, home }, stepForView(step)));
       } else {
         result = await raceStop(play(stepHost, stepForView(step)));
       }
@@ -162,7 +171,6 @@ async function runMission(mission: Mission): Promise<void> {
       clearPlayHint();
       stepStage.removeFromParent();
       stepHost.remove();
-      world?.endActivity(); // camera + proximity back to free roam
     }
     if (result === 'STOP' || stopRequested) { abandonMission(); return; }
     store.logSession(step.ef as Engine, result);
@@ -179,13 +187,89 @@ async function runMission(mission: Mission): Promise<void> {
   // The case-board data gate keys off voltooid, so snapshot the found-set BEFORE
   // marking this mission done: the clue beat fires only when this completion makes
   // the hook NEWLY appear on the board.
-  const areaId = Content.activeArea().id;
-  const before = Content.cluesFound(areaId, store.get().voltooid);
-  store.markMissionDone(mission.id);
-  tellWorldMissionDone(mission.id, true); // the world shows it: the reunion at the marker
+  const area = Content.activeArea();
+  const before = Content.cluesFound(area.id, store.get().voltooid);
+  const seasonBefore = seasonDone();
+  const knap = mission.beloning.vaktermBadge;
+  store.markMissionDone(mission.id, knap ? { id: knap.id, naam: knap.naam.replace(/^Knap woord:\s*/i, '') } : undefined);
   notePatrolCompletion();
   const clueId = capturedClue(mission, true, before);
-  showReward(mission, played, skipped, clueId);
+  // this completion finishes the season: the finale follows the reward (and the clue)
+  const finale = !seasonBefore && seasonDone();
+  await showReunion(mission); // the world shows it: the family comes back at the marker
+  showReward(mission, played, skipped, clueId, finale ? showSeasonFinale : resumePatrol);
+}
+
+/** Every mission of the area is done. */
+function seasonDone(): boolean {
+  const done = store.get().voltooid;
+  return Content.activeArea().missies.every((m) => done[m.id]);
+}
+
+/* ------------------------------------------------------------ reunion ---- */
+/**
+ * Felt progress, the moment itself: the mission's ending plays IN the world at its
+ * marker (the sow and the piglets come to the frisling, the roe's mother comes back,
+ * the fox cub trots out of the den — world/Progress.ts) while one calm line says what
+ * happened, read aloud. The camera stays where it is; under reduced motion the family
+ * simply stands there. Then the reward card. Never longer than a few seconds.
+ */
+function showReunion(mission: Mission): Promise<void> {
+  narrator.stop();
+  const tekst = mission.reunion?.tekst ?? '';
+  const el = card(
+    `<div class="reunion-cap" role="status">` +
+    `<p class="boot-kicker">Missie klaar · ${esc(mission.titel)}</p>` +
+    (tekst ? `<p class="reunion-text"></p>` : '') +
+    `</div>`,
+    { scrim: false },
+  );
+  el.classList.add('explore-overlay'); // the world shows through; nothing to click here
+  const textEl = el.querySelector<HTMLElement>('.reunion-text');
+  const ra = textEl ? mountReadAloud({ textEl, text: tekst, autoStart: store.get().settings.voorlezen }) : null;
+  const inWorld = tellWorldMissionDone(mission.id, true);
+  const read = new Promise<void>((r) => window.setTimeout(r, REUNION_MIN_MS));
+  const cap = new Promise<void>((r) => window.setTimeout(r, REUNION_MAX_MS)); // a slow model load never holds the reward
+  return Promise.race([Promise.all([inWorld, read]).then(() => {}), cap]).then(() => { ra?.stop(); });
+}
+
+/** The reunion line stays up at least this long (reading time), at most that long. */
+const REUNION_MIN_MS = 3200;
+const REUNION_MAX_MS = 7000;
+
+/* -------------------------------------------------------- season finale ---- */
+/**
+ * The season ends (VISION §4a: Kraamtijd → Zomer → Bronst → Herstel): the last
+ * mission is done. If the poacher was not reported yet, the sporenboek's ontknoping
+ * plays first (the photos beside the tracks, the report to the BOA); then one calm
+ * finale card, and the ranger walks on in a free, quiet world where every marker
+ * reads "klaar" and every family is home.
+ */
+export function showSeasonFinale(): void {
+  if (!store.get().arc.gemeld) { showOntknoping(0, showSeasonFinale); return; }
+  narrator.stop();
+  const vb = Content.verhaalboog(Content.activeArea().id);
+  const regels = vb?.finale?.regels ?? [];
+  const el = card(
+    `<div class="reward finale boot-card-ish">` +
+    `<p class="boot-kicker">${esc(vb?.finale?.kicker ?? 'Seizoen klaar')}</p>` +
+    `<h1 class="boot-title">${esc(vb?.finale?.titel ?? 'Het is weer veilig.')}</h1>` +
+    `<div class="briefing-lines">${regels.map((_, i) => `<p class="briefing-line" data-line="${i}"></p>`).join('')}</div>` +
+    `<div class="ra-row">` +
+    `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
+    `<button class="btn-start" type="button">Verder op patrouille</button>` +
+    `</div>` +
+    `</div>`,
+  );
+  if (store.get().settings.geluid) Sound.found();
+  const lineEls = Array.from(el.querySelectorAll<HTMLElement>('.briefing-line'));
+  const ra = mountReadAloud({
+    lead: `${vb?.finale?.titel ?? ''}`,
+    segments: regels.map((l, i) => ({ el: lineEls[i], text: l })),
+    speakBtn: el.querySelector('.ra-speak'),
+    autoStart: store.get().settings.voorlezen,
+  });
+  el.querySelector('.btn-start')?.addEventListener('click', () => { ra.stop(); resumePatrol(); });
 }
 
 /* ------------------------------------------------ in-mission pause (F-26) ---- */
@@ -251,6 +335,7 @@ function stopMission(): void {
 function abandonMission(): void {
   missionStop = null;
   clearOverlays();
+  releaseWorld();
   setScreen('world');
   setMissionView(null);
   showExploreHud(activeExploreTitel());
@@ -289,7 +374,7 @@ function showFact(step: Step, n: number, total: number): Promise<void> {
 }
 
 /* ------------------------------------------------------------- reward ---- */
-function showReward(mission: Mission, played: Engine[], skipped: string | null, clueId: string | null): void {
+function showReward(mission: Mission, played: Engine[], skipped: string | null, clueId: string | null, then: () => void): void {
   const badges = Array.from(new Set(played)).map(badgeHtml).join('');
   const knap = mission.beloning.vaktermBadge
     ? `<p class="reward-knap">Knap woord: <b>${esc(mission.beloning.vaktermBadge.naam.replace(/^Knap woord:\s*/i, ''))}</b></p>`
@@ -306,7 +391,7 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
     : null;
 
   const lof = `Knap gedaan, ${naam()}!`;
-  const backLabel = clue ? 'Bekijk de wildcamera' : 'Verder op patrouille';
+  const backLabel = clue ? 'Bekijk de wildcamera' : then === resumePatrol ? 'Verder op patrouille' : 'Verder';
   const el = card(
     `<div class="reward boot-card-ish">` +
     `<p class="boot-kicker">Missie klaar · ${esc(mission.titel)}</p>` +
@@ -326,8 +411,8 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
   });
   el.querySelector('.btn-start')?.addEventListener('click', () => {
     ra.stop();
-    if (clue) showWildcamCapture(clue);
-    else resumePatrol();
+    if (clue) showWildcamCapture(clue, then);
+    else then();
   });
 }
 
@@ -335,7 +420,7 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
 /** The diegetic clue beat: a verhaalHaak mission completed on patrol is "vastgelegd
  *  op de wildcamera" — a calm snapshot card showing the new aanwijzing now on the
  *  prikbord. Two ways on: peek at the board, or walk straight on. */
-function showWildcamCapture(clue: Clue): void {
+function showWildcamCapture(clue: Clue, then: () => void): void {
   narrator.stop();
   const line = 'Vastgelegd op de wildcamera.';
   const glyph = CLUE_GLYPH[clue.soort] ?? '📌';
@@ -365,6 +450,6 @@ function showWildcamCapture(clue: Clue): void {
     speakBtn: el.querySelector('.ra-speak'),
     autoStart: store.get().settings.voorlezen,
   });
-  el.querySelector('.wc-board')?.addEventListener('click', () => { ra.stop(); showCaseBoard(); });
-  el.querySelector('.wc-patrol')?.addEventListener('click', () => { ra.stop(); resumePatrol(); });
+  el.querySelector('.wc-board')?.addEventListener('click', () => { ra.stop(); showCaseBoard(then); });
+  el.querySelector('.wc-patrol')?.addEventListener('click', () => { ra.stop(); then(); });
 }
