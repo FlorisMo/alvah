@@ -169,7 +169,8 @@ export class CameraRig {
   private sideNow = 0;           // the eased side slide, in boom lengths (+ = to the screen's right)
   private sideStep = 0;          // the SIDE_STEPS entry the last search chose
   private readonly crowns: Crown[] = [];
-  private crownKey = '';
+  private crownTrees = -1;       // the tree / obstacle counts the crown list was built for
+  private crownSolids = -1;
   private readonly nearCrowns: Crown[] = [];      // this frame's crowns / solids / creatures near the target
   private readonly nearSolids: Obstacle[] = [];
   private readonly creaturePool: Creature[] = []; // reused: nearCreatures = the first creatureCount
@@ -669,9 +670,9 @@ export class CameraRig {
    *  prop tree): the forest's trees (fadeable, by their index) and any tree the forest
    *  does not draw (a collision solid with a `crown`: unfadeable). */
   private refreshCrowns(): void {
-    const key = `${this.dressing.treePlacements.length}/${this.obstacles.length}`;
-    if (key === this.crownKey) return;
-    this.crownKey = key;
+    if (this.dressing.treePlacements.length === this.crownTrees && this.obstacles.length === this.crownSolids) return;
+    this.crownTrees = this.dressing.treePlacements.length;
+    this.crownSolids = this.obstacles.length;
     this.crowns.length = 0;
     this.dressing.treePlacements.forEach((p, i) => {
       const k = crownOf(p.species, TREE_BASE_H[p.species] * p.s, p.x, p.y, p.z, i);
