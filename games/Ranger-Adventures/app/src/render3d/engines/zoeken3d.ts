@@ -36,6 +36,7 @@ import {
 import { highlightPulse, patchLocal } from '../play/kit-math';
 import { Stage } from '../play/stage';
 import { heightFor } from '../play/spawn';
+import { lieDown, fawnSpots, lyingHeight, LEG_SHARE } from '../play/pose';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -144,7 +145,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     let raf = 0;
     let last = performance.now();
     const loop = (now: number): void => {
-      if (stage.aborted) { unHint(); stage.dispose(); removeKijker(); return; } // F-26
+      if (stage.aborted) { unHint(); stage.dispose(); removeKijker(); for (const f of freeTarget) f(); return; } // F-26
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       if (reframe.update(dt)) settled = true;
@@ -160,7 +161,13 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // ---- build the hiding place from the world's own models ----
     const tgtId = TARGET_OF[skin.dier ?? ''] ?? skin.dier ?? 'frisling';
     const tgt = patchLocal(trial.target.x, trial.target.y, HALF_W, HALF_D);
-    const tgtH = heightFor(tgtId);
+    // the piglet and the fawn LIE in the grass, legs tucked under ("Hij drukt zich
+    // plat"): a lying animal is lower, so the grass really hides it (breaker:B7)
+    const legShare = LEG_SHARE[tgtId];
+    const standH = heightFor(tgtId);
+    const tgtH = legShare ? lyingHeight(standH, legShare) : standH;
+    const freeTarget: (() => void)[] = [];
+    let anchor: THREE.Object3D | null = null;
     const inReeds = trial.decoys.some((d) => d.animal === 'riet');
 
     void (async () => {
@@ -169,6 +176,16 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       jobs.push(stage.animal(tgtId, tgt.u, tgt.v, 1.25, { idle: false }).then((g) => {
         target = g ?? stage.add(fallbackForm(tgtH, '#8a6a4a'));
         if (!g) target.position.copy(stage.at(tgt.u, tgt.v));
+        if (g && legShare) {
+          freeTarget.push(lieDown(g, legShare));
+          if (tgtId === 'reekalf') freeTarget.push(fawnSpots(g));
+        }
+        // where a player sees it best: the top of its back, above the grass in front of
+        // it (the hint golden clicks; the whole animal answers a click, grass or not)
+        anchor = new THREE.Object3D();
+        anchor.userData.hintAnchor = true;
+        anchor.position.set(0, tgtH * 0.82, 0);
+        target.add(anchor);
       }));
       // the decoys the 2D field shows, each its real-world self
       trial.decoys.forEach((d, i) => {
@@ -211,14 +228,16 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       // behind it, a low tuft over its legs — only its back shows, no glow. The middle
       // of its body stays in sight, so a child (and the golden-path click) can find it.
       // Heide hides in grass + a fern, the ven in reeds, the drift sand in dry heather.
-      const L = tgtH * 1.7;                                   // body length, side-on
+      const L = standH * 1.7;                                 // body length, side-on
       const hideH = Math.max(0.3, tgtH * (tgtH > 0.4 ? 0.8 : 1.5));
       const flanks = [
         { u: tgt.u - L * 0.55, v: tgt.v - 0.12, h: hideH }, { u: tgt.u + L * 0.55, v: tgt.v - 0.1, h: hideH * 0.95 },
       ];
       const around = [
         { u: tgt.u - 0.12, v: tgt.v + 0.26, h: hideH * 0.9 }, { u: tgt.u + 0.24, v: tgt.v + 0.22, h: hideH * 0.8 },
-        { u: tgt.u, v: tgt.v - 0.22, h: tgtH * 0.45 },
+        // cover on the lens side hides its legs and flank; its back and head show above
+        { u: tgt.u - L * 0.25, v: tgt.v - 0.2, h: tgtH * 0.7 }, { u: tgt.u + L * 0.2, v: tgt.v - 0.22, h: tgtH * 0.65 },
+        { u: tgt.u, v: tgt.v - 0.26, h: tgtH * 0.55 },
       ];
       // loose ground cover over the rest of the patch, kept off the decoys
       const cover: { u: number; v: number; h: number }[] = [];
@@ -280,7 +299,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       ready = true;
     })().catch((e) => console.error('[zoeken3d] staging failed', e));
 
-    const unHint = registerPlayHint(() => (ready && settled && !done && target ? { id: 'target', target } : null));
+    const unHint = registerPlayHint(() => (ready && settled && !done && target ? { id: 'target', target: anchor ?? target } : null));
 
     // W2.3: dev-only win — a clean first-tap hit + advance past the win card.
     registerActivityWin(() => {
@@ -338,6 +357,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         void stage.handBack().then(() => {
           trail?.dispose();
           stage.dispose();
+          for (const f of freeTarget) f();
           resolve({ trials: 1, correct });
         });
       }, { once: true });

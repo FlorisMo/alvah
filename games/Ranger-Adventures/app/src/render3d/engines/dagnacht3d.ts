@@ -36,6 +36,7 @@ import {
 } from '../play/kit';
 import { Stage } from '../play/stage';
 import { heightFor } from '../play/spawn';
+import { lieDown, fawnSpots, LEG_SHARE } from '../play/pose';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -138,14 +139,17 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
     /** Build the in-world subject of an encounter from the world's own cast. */
     async function stageSubject(enc: Encounter): Promise<void> {
       const token = ++subjectToken;
+      walks.length = 0;
       clearSubject();
       const g = new THREE.Group();
       g.userData.disposers = [];
       const disposers = g.userData.disposers as (() => void)[];
       const tickers: ((dt: number) => void)[] = [];
+      g.userData.tickers = tickers;
       g.userData.tick = (dt: number) => { for (const t of tickers) t(dt); };
-      const addModel = async (id: string, u: number, v: number, turn: number, height?: number): Promise<THREE.Object3D | null> => {
-        const s = await ctx.spawnModel(id, { height: height ?? heightFor(id) });
+      const lying = enc.pose === 'ligt';
+      const addModel = async (id: string, u: number, v: number, turn: number, height?: number, lie = false): Promise<THREE.Object3D | null> => {
+        const s = await ctx.spawnModel(id, { height: height ?? heightFor(id), idle: !lie });
         if (!s) return null;
         disposers.push(() => s.dispose());
         const root = s.root as THREE.Group;
@@ -153,11 +157,18 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
         root.position.copy(p);
         root.rotation.y = stage.faceLens(p, turn);
         root.traverse((o) => { o.userData.spawned = true; });
+        // "ligt stil in het gras": the words say it lies, so it lies (child:B13)
+        if (lie) {
+          disposers.push(lieDown(root, LEG_SHARE[id] ?? 0.35));
+          if (id === 'reekalf') disposers.push(fawnSpots(root));
+        }
         g.add(root);
         tickers.push((dt) => s.update(dt));
         const sh = contactShadow(Math.max(0.2, (height ?? heightFor(id)) * 0.55));
         sh.position.copy(p).setY(p.y + 0.02);
         g.add(sh);
+        root.userData.shadow = sh;
+        g.userData.lead ??= { id, root, shadow: sh, spawned: s, u, v, turn, height: height ?? heightFor(id), lie };
         return root;
       };
       const tufts = (pts: { u: number; v: number; h: number }[]): void => { g.add(stage.grassMesh(pts, 30)); };
@@ -192,7 +203,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
             { u: -0.32, v: -0.2, h: 0.26 }, { u: 0.34, v: -0.18, h: 0.24 }, { u: -0.5, v: 0.2, h: 0.3 },
             { u: 0.5, v: 0.25, h: 0.28 }, { u: 0.05, v: 0.42, h: 0.26 },
           ]);
-          await addModel('frisling', 0, 0.05, 1.2, h);
+          await addModel('frisling', 0, 0.05, 1.2, h, lying);
           break;
         }
         case 'wildzwijn':
@@ -224,7 +235,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
             { u: -0.2, v: -0.28, h: h * 0.5 }, { u: 0.22, v: -0.3, h: h * 0.45 }, { u: 0.02, v: -0.36, h: h * 0.4 },
             { u: -0.5, v: 0.1, h: h * 0.45 }, { u: 0.5, v: 0.12, h: h * 0.5 }, { u: -0.1, v: 0.4, h: h * 0.4 },
           ]);
-          await addModel(id, 0, 0.05, 1.2);
+          await addModel(id, 0, 0.05, 1.2, undefined, lying);
           break;
         }
       }
@@ -234,6 +245,51 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
       }
       subject = g;
       stage.add(g);
+    }
+
+    /** Calm walks the words describe: a calf that "springt op en rent weg", a group that
+     *  "loopt verder". Always AWAY from the child (along the view), then out of sight. */
+    const walks: { obj: THREE.Object3D; from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; hide: boolean }[] = [];
+    function walkAway(obj: THREE.Object3D, dist: number, dur: number, hide: boolean): void {
+      if (reduced) { if (hide) obj.visible = false; else obj.position.addScaledVector(stage.fwd, dist); return; } // a cut
+      obj.rotation.y = Math.atan2(stage.fwd.x, stage.fwd.z); // faces where it goes: away from the lens
+      walks.push({ obj, from: obj.position.clone(), to: obj.position.clone().addScaledVector(stage.fwd, dist), t: 0, dur, hide });
+    }
+
+    /** The picture of a wrong choice (child:B13): what the words say happens, happens. */
+    async function react(enc: Encounter): Promise<void> {
+      const g = subject;
+      if (!g) return;
+      const lead = g.userData.lead as { id: string; root: THREE.Object3D; shadow: THREE.Object3D; u: number; v: number; height: number; lie: boolean } | undefined;
+      if (enc.reactie === 'flee' && lead) {
+        let runner: THREE.Object3D = lead.root;
+        if (lead.lie) {
+          // it jumps up: the lying calf/piglet is swapped for the same animal standing
+          const s = await ctx.spawnModel(lead.id, { height: lead.height });
+          if (!s || subject !== g || stage.aborted) { s?.dispose(); return; }
+          (g.userData.disposers as (() => void)[]).push(() => s.dispose());
+          (g.userData.tickers as ((dt: number) => void)[] | undefined)?.push((dt) => s.update(dt));
+          runner = s.root as THREE.Object3D;
+          if (lead.id === 'reekalf') (g.userData.disposers as (() => void)[]).push(fawnSpots(runner)); // the same spotted calf
+          runner.position.copy(lead.root.position);
+          runner.traverse((o) => { o.userData.spawned = true; });
+          g.add(runner);
+          lead.root.visible = false;
+          s.clip?.('walk');
+        }
+        lead.shadow.visible = false;
+        walkAway(runner, 3.2, 1.5, true);
+      } else if (enc.reactie === 'recede') {
+        // the family / the mother walks on, further up the path
+        for (const c of [...g.children]) {
+          if (!(c as THREE.Group).isGroup || !c.userData.spawned) continue;
+          if (c.userData.shadow) (c.userData.shadow as THREE.Object3D).visible = false; // its shadow goes with it
+          walkAway(c, 1.6, 1.8, false);
+        }
+      } else {
+        leanUntil = performance.now() + (reduced ? 0 : 900); // a calm step away
+        if (enc.subject === 'wildzwijn' && settings.geluid) Sound.call('wildzwijn'); // "De moeder knort"
+      }
     }
 
     let raf = 0;
@@ -252,6 +308,13 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
         const nv = cur + (want - cur) * (reduced ? 1 : Math.min(1, dt * 5));
         subject.userData.v = nv;
         subject.position.set(stage.fwd.x * nv, 0, stage.fwd.z * nv);
+      }
+      for (const w of walks) {
+        w.t = Math.min(1, w.t + dt / w.dur);
+        const e = w.t * w.t * (3 - 2 * w.t);
+        w.obj.position.lerpVectors(w.from, w.to, e);
+        w.obj.position.y = ctx.groundY(w.obj.position.x, w.obj.position.z);
+        if (w.t >= 1) { w.obj.visible = !w.hide; walks.splice(walks.indexOf(w), 1); }
       }
       raf = requestAnimationFrame(loop);
     };
@@ -304,7 +367,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
       } else {
         run.choose(false); // recoverable — marks the encounter, keeps it up
         if (settings.geluid) Sound.tryAgain();
-        leanUntil = performance.now() + (reduced ? 0 : 900); // a calm step away
+        void react(enc).catch((e) => console.error('[dagnacht3d] reaction failed', e));
         feedback('gevolg', enc.gevolg ?? 'Wacht even. Probeer het anders.', card, () => {
           card.remove();
           present(); // re-present the SAME encounter (run.index unchanged)
