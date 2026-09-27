@@ -399,8 +399,9 @@ export class CameraRig {
       this.ahead.copy(rp).addScaledVector(this.vel, this.LOOKAHEAD);
       this.ahead.y = this.terrain.y(this.ahead.x, this.ahead.z);
       const aheadBearing = wrapAngle(base + this.player.turnRate * this.LOOKAHEAD);
-      // stepping out of the jeep / helicopter is already a reframe: the walk view starts
-      // on its clearest slide right away (a solid parked beside the lens is common there)
+      // stepping out of the jeep / helicopter is already a reframe: the walk view picks its
+      // clearest slide right away (a solid parked beside the lens is common there) and
+      // eases to it
       const stepOut = !this.wasWalk;
       const moving = this.vel.x * this.vel.x + this.vel.z * this.vel.z > 0.01 || this.player.turning;
       this.sideHeld += dt;
@@ -431,7 +432,7 @@ export class CameraRig {
         if (change) { this.sideStep = pick; this.sideHeld = 0; }
       }
       const sideTo = this.sideStep * kMax;
-      if (reduced || snap || stepOut) this.sideNow = sideTo;
+      if (reduced || snap) this.sideNow = sideTo;
       else if (dt > 0) {
         // a squeezed view, or one the player is turning anyway, slides a little quicker
         const step = (sideTo - this.sideNow) * dampFactor(dt, this.SIDE_TAU);
@@ -647,9 +648,9 @@ export class CameraRig {
    * Solve the walk boom at bearing `b`, the lens slid `k` boom lengths to the screen's
    * right: the player's zoom, pulled in before a solid (buildings, trunks, people: the
    * spherecast along the line to him) and the rim, then further in while the lens would
-   * sit in foliage; the eye at the settled follow pitch (kept up when a solid pulled the
-   * boom in, so the lens looks down on him rather than into his head), above its own
-   * ground and lifted until the line to his head clears the terrain. `cost` scores how
+   * sit in foliage; the eye at the settled follow pitch (riding up over his head when a
+   * solid pulled the boom in too short to clear it), above its own ground and lifted
+   * until the line to his head clears the terrain. `cost` scores how
    * clear the line to the ranger is (0 = clear at full length); the search picks the lowest.
    */
   private solveWalk(b: number, k: number, rp: THREE.Vector3): CameraRig['sol'] {
