@@ -155,6 +155,13 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
   const avail = await board(page);
   const padB = avail.pads[1]; // the BOA-post helipad on the western side
   const start = { x: avail.x, z: avail.z };
+  // parked on the pad there is no cockpit frame (parent B14: an 18 px grey border framed
+  // the screen the whole time and read as a rendering bug)
+  const cockpit = (): Promise<{ opacity: string; border: string }> => page.evaluate(() => {
+    const cs = getComputedStyle(document.querySelector('.explore-heli-cockpit')!);
+    return { opacity: cs.opacity, border: cs.borderTopWidth };
+  });
+  await expect.poll(async () => (await cockpit()).opacity, { message: 'no cockpit frame while parked' }).toBe('0');
 
   const down = new Set<string>();
   const setKey = async (k: string, on: boolean): Promise<void> => {
@@ -238,6 +245,10 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
   expect(Math.hypot(here.x - start.x, here.z - start.z), 'genuinely flew pad-to-pad (≥ 40 m)').toBeGreaterThan(40);
   expect(sawClimb, 'the helicopter climbed toward cruise height').toBe(true);
   expect(sawVignette, 'the motion vignette faded in while translating').toBe(true);
+
+  // in the air a calm, screen-fixed sill low in the frame is the steady horizon cue
+  await expect.poll(async () => (await cockpit()).opacity, { message: 'the sill shows in the air' }).toBe('1');
+  expect((await cockpit()).border, 'never the grey border').toBe('0px');
 
   // 3) over pad B the HUD offers "Land hier"; Space presses it; it glides onto the
   // pad centre (≤ 2 m/s descent) and rests there with the pilot inside
