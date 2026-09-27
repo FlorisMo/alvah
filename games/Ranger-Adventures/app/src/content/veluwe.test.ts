@@ -70,6 +70,10 @@ test('a wrong answer says what happens in one or two short sentences', () => {
 test('the plain lines (knappe woorden off) use no jargon: big, moeder, groep', () => {
   const bad: string[] = [];
   for (const m of AREA_VELUWE.missies) {
+    const mm = m as { kort?: string; reunion?: { tekst?: string }; briefing: { simpel: string[] } };
+    for (const [k, t] of [['kort', mm.kort], ['reunion', mm.reunion?.tekst], ...mm.briefing.simpel.map((l, i) => [`brief.simpel[${i}]`, l])]) {
+      for (const w of jargonIn(t ?? '')) bad.push(`${m.id}.${k}: ${w}`);
+    }
     for (const st of m.stappen) {
       const c = (st.skin.copy ?? {}) as Record<string, string | undefined>;
       for (const k of ['instructie', 'goed', 'toon', 'terug', 'luister', 'echo', 'regel', 'regelOm']) {

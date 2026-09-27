@@ -124,7 +124,7 @@ const MISSIE_FRISLING = {
     badgeId: 'frisling-redder', badgeNaam: 'Frisling-redder',
     vaktermBadge: { id: 'knap-frisling', naam: 'Knap woord: frisling' },
   },
-  reunion: { tekst: 'De zeug knort blij. Haar big is terug.' },
+  reunion: { tekst: 'De moeder knort blij. Haar big is terug.' },
   stappen: [
     {
       ef: 'zoeken',
