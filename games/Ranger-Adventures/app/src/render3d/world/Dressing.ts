@@ -659,7 +659,7 @@ export class Dressing {
           // a green wildlife bridge, not a grey block (parent B11): its bare concrete slab
           // is painted as soil and plants, and the slab's 0.3 m edge is sunk into the heath
           naturaliseConcrete(prepped);
-          prepped.position.y -= 0.32;
+          prepped.position.y -= 0.45;
         }
         enableCast(prepped); // W4.5: solid landmarks cast when near the player
         const totem = group.children.find((c) => c.userData.totem);
