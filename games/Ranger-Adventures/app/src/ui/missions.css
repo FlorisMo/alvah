@@ -243,6 +243,9 @@
 }
 
 /* ---- case-board (prikbord) ---- */
+/* wide enough on a laptop for the three clues side by side, so the way on
+   ("Volg het spoor") sits right under them, in view at 1280×800 */
+.case-board.boot-card-ish { width: min(92vw, 720px); }
 .cb-cork {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -295,7 +298,18 @@
 .cb-note { margin: 4px 0; font: 400 17px/1.4 var(--font-read); color: var(--ink); text-align: center; }
 .cb-note.ok { color: var(--green-deep); font-weight: 600; }
 .cb-note.muted { color: var(--ink-soft); }
-.cb-resolve { margin-top: 2px; }
+/* the way to the ontknoping never scrolls out of view: on a short screen it
+   stays at the bottom edge of the sporenboek until you reach its place */
+.cb-act {
+  position: sticky;
+  bottom: -28px; /* the card's bottom padding: stick to the very bottom edge */
+  z-index: 2;
+  align-self: stretch;
+  justify-content: center;
+  margin: 0 -30px;
+  padding: 8px 30px 10px;
+  background: rgb(250, 249, 244);
+}
 /* the way back sits at the TOP of the prikbord and stays there while it scrolls
    (the list of veldnotities grows; a back button at the bottom fell off-screen) */
 .card-top {

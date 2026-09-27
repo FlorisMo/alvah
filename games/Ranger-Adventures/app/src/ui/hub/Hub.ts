@@ -235,7 +235,7 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
     `<div class="cb-cork">${board}</div>` +
     note +
     // the way to the ontknoping sits right under the clues, never below the notes
-    (resolveBtn ? `<div class="ra-row">${resolveBtn}</div>` : '') +
+    (resolveBtn ? `<div class="ra-row cb-act">${resolveBtn}</div>` : '') +
     veldStrip +
     `</div>`,
   );
