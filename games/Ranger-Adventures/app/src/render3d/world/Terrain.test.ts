@@ -137,7 +137,7 @@ test('the forest beyond the rim hides the end of the ground plate from every vie
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), r = Math.hypot(x, z);
     rMin = Math.min(rMin, r); rMax = Math.max(rMax, r);
     around.add(Math.round(Math.atan2(z, x) * 100));
-    if (r < bound + FAR_FOREST_IN + 0.1) { faceN++; if (y < t.y(x, z)) faceBelow++; }
+    if (Math.abs(r - (bound + FAR_FOREST_IN)) < 0.05) { faceN++; if (y < t.y(x, z)) faceBelow++; }
     else if (r > bound + FAR_FOREST_IN + 1.5) {
       canopyN++;
       if (y - t.y(x, z) < 5) canopyLow++;
@@ -145,7 +145,7 @@ test('the forest beyond the rim hides the end of the ground plate from every vie
     }
   }
   // it starts right behind the rim tree-line's last row and ends past the lens's reach
-  assert.ok(Math.abs(rMin - (bound + FAR_FOREST_IN)) < 0.01 && bound + FAR_FOREST_IN - 10.2 - 1.4 > 1, `inner edge ${rMin.toFixed(1)} m, behind the rim rows`);
+  assert.ok(rMin > bound + 10.2 + 1.4 + 0.5 && rMin < bound + FAR_FOREST_IN + 0.01, `inner edge ${rMin.toFixed(1)} m, right behind the rim rows (≤ ${bound + 10.2 + 1.4} m)`);
   assert.ok(rMin < 120, 'it starts well inside the 240 m ground plate, so it covers the plate edge');
   assert.ok(rMax >= FAR_FOREST_OUT - 0.01 && FAR_FOREST_OUT >= bound + lensFar, `it runs out to ${rMax.toFixed(0)} m, past anything the lens can see`);
   assert.ok(around.size >= 360, 'it goes all the way round');

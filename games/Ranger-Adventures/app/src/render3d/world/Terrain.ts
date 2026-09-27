@@ -303,19 +303,23 @@ const FAR_LEAF = new THREE.Color('#7f9636');    // oak and birch
  * crowns) behind the real rim trees; its top is a canopy of rounded crowns (modelled where
  * the rings are fine enough, painted everywhere by `farCanopyTexture` on the same layout)
  * in pine stands and lighter oak and birch, and the fog dissolves it into the horizon
- * haze. One draw call, ~45k triangles. Positions, vertex colours and uv (the canopy in
- * tile units of world metres; the inner face samples one line of the texture, stretched
- * upright into trunks and gaps). `ground` = the drawn ground height.
+ * haze. One draw call, ~46k triangles. Positions, vertex colours and uv (the canopy in
+ * tile units of world metres; the shaded face one even texel). `ground` = the drawn
+ * ground height.
  */
 export function buildFarForest(bound: number, ground: (x: number, z: number) => number): THREE.BufferGeometry {
   const r0 = bound + FAR_FOREST_IN;
   // the rows from the inside out: the shaded face, then the canopy rings (finer near the rim)
+  // The canopy's first ring hangs out over the face (like the crowns of edge trees), so
+  // from above only crowns show behind the rim trees, never a dark band; from below, the
+  // fold between them is the crowns' shaded underside.
   const rows: { r: number; kind: 'deep' | 'trunks' | 'under' | 'canopy'; step: number }[] = [
     { r: r0, kind: 'deep', step: 0 },
     { r: r0 + 0.2, kind: 'trunks', step: 0 },
-    { r: r0 + 0.9, kind: 'under', step: 0 },
+    { r: r0 + 0.7, kind: 'under', step: 0 },
+    { r: r0 - 0.6, kind: 'canopy', step: 1.25 },
   ];
-  for (let r = r0 + 1.6, step = 1.25; r < FAR_FOREST_OUT + step; r += step, step *= 1.045) {
+  for (let r = r0 + 0.8, step = 1.25; r < FAR_FOREST_OUT + step; r += step, step *= 1.045) {
     rows.push({ r: Math.min(r, FAR_FOREST_OUT), kind: 'canopy', step });
   }
   const A = FAR_AROUND;
@@ -338,9 +342,9 @@ export function buildFarForest(bound: number, ground: (x: number, z: number) => 
         c.copy(FAR_PINE).lerp(FAR_LEAF, farStand(x, z));
         uv[j * 2] = x / FAR_TILE_M; uv[j * 2 + 1] = z / FAR_TILE_M;
       } else {
-        y = g + (row.kind === 'deep' ? -0.6 : row.kind === 'trunks' ? 2.4 : 4.6);
+        y = g + (row.kind === 'deep' ? -0.6 : row.kind === 'trunks' ? 2.6 : 5.0);
         c.copy(row.kind === 'deep' ? FAR_DEEP : row.kind === 'trunks' ? FAR_TRUNKS : FAR_UNDER);
-        uv[j * 2] = (ang * r0) / (FAR_TILE_M * 0.3); uv[j * 2 + 1] = 0.31;
+        uv[j * 2] = 0.5 / FAR_GRID; uv[j * 2 + 1] = 0.5 / FAR_GRID; // one even texel: streaks aliased into stripes from the air
       }
       pos[j * 3] = x; pos[j * 3 + 1] = y; pos[j * 3 + 2] = z;
       col[j * 3] = c.r; col[j * 3 + 1] = c.g; col[j * 3 + 2] = c.b;
