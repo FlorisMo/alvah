@@ -156,3 +156,43 @@ test('the forest beyond the rim hides the end of the ground plate from every vie
   assert.equal(canopyDown, 0, 'the canopy faces up');
   assert.ok(geo.index!.count / 3 < 60_000, `a light backdrop: ${geo.index!.count / 3} triangles`);
 });
+
+import { buildPathGeometry } from './Terrain.ts';
+import { PATH_NODES, PATH_SEGMENTS, distanceToNetwork } from '../Paths.ts';
+
+test('the sand paths face the sky (they were culled face-down, never drawn) and fade into the ground at their edges', () => {
+  for (const detail of [true, false]) {
+    const t = new Terrain({ detail });
+    const geo = buildPathGeometry(t);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const nrm = geo.attributes.normal as THREE.BufferAttribute;
+    const col = geo.attributes.color as THREE.BufferAttribute;
+    const gc: number[] = [];
+    let down = 0, edges = 0, edgeOff = 0, sandy = 0, ruts = 0;
+    const sand = new THREE.Color('#cdb887');
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      if (nrm.getY(i) <= 0.5) down++;
+      assert.ok(y - t.y(x, z) > 0.02 && y - t.y(x, z) < 0.05, `a hair over the drawn ground at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+      const d = distanceToNetwork(x, z);
+      if (d > 1.85) { // its outer edge: exactly the ground's own colour
+        edges++;
+        t.sampleAttr('color', x, z, gc);
+        if (Math.abs(col.getX(i) - gc[0]) + Math.abs(col.getY(i) - gc[1]) + Math.abs(col.getZ(i) - gc[2]) > 1e-4) edgeOff++;
+      } else if (d > 0.4 && d < 1.2 && Math.hypot(x, z) > 12) { // a wheel rut out of the clearing: sand
+        ruts++;
+        if (Math.abs(col.getX(i) - sand.r) < 0.08 && Math.abs(col.getY(i) - sand.g) < 0.08 && Math.abs(col.getZ(i) - sand.b) < 0.08) sandy++;
+      }
+    }
+    assert.equal(down, 0, 'every vertex faces up (a face-down ribbon is culled from above)');
+    assert.ok(edges > 100 && edgeOff === 0, `its ${edges} edge vertices take the ground's own colour`);
+    assert.ok(ruts > 100 && sandy / ruts > 0.95, `the wheel ruts are sand (${sandy}/${ruts})`);
+    // it covers every route of the network
+    for (const [a, b] of PATH_SEGMENTS) {
+      const mx = (PATH_NODES[a].x + PATH_NODES[b].x) / 2, mz = (PATH_NODES[a].z + PATH_NODES[b].z) / 2;
+      let near = Infinity;
+      for (let i = 0; i < pos.count; i++) near = Math.min(near, Math.hypot(pos.getX(i) - mx, pos.getZ(i) - mz));
+      assert.ok(near < 1, `a track runs through the middle of ${PATH_NODES[a].id} → ${PATH_NODES[b].id}`);
+    }
+  }
+});

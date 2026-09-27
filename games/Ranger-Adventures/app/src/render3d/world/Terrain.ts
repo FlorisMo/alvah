@@ -20,8 +20,9 @@
 import * as THREE from 'three';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 import { BIOME_PALETTE, VEN_CENTER, VEN_SHORE_R, WATER_LEVEL, biomeAt, heightAt, type Biome } from '../Biomes.ts';
-import { BIOME_GROUND_TONES, GROUND_BRIGHTEN, groundPatch, heathCover, vertexTint } from '../GroundDetail.ts';
+import { BIOME_ACCENT_TONES, BIOME_GROUND_TONES, GROUND_BRIGHTEN, groundPatch, groundSpeckle, heathCover, vertexTint } from '../GroundDetail.ts';
 import { groundMaterial, mottleTexture } from '../GroundMaterial.ts';
+import { PATH_NODES, PATH_SEGMENTS, distanceToNetwork } from '../Paths.ts';
 
 // three-mesh-bvh accelerated raycasts: the tap-to-walk ray (and the dev-hook ground
 // check) hit the ~18k-triangle terrain in O(log n). A mesh without a boundsTree falls
@@ -45,17 +46,18 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 const _a = new THREE.Color();
 const _b = new THREE.Color();
 const WET = new THREE.Color('#4a4d33');   // wet moss and peat right at the ven's waterline
-const CLEAR = new THREE.Color('#b7a47b'); // trodden sand and dry grass round the lodge
+const CLEAR = new THREE.Color('#c2b089'); // trodden sand and dry grass round the lodge
 const FAR = new THREE.Color('#57533a');   // forest floor past the rim: shade under the tree-line
 
 /**
  * The ground colour at world (x,z) with height h. `detail` mixes the biome's two
  * ground tones (the heide by its heather cover, the others by the patch field) and
  * adds the soft brightness wash (W4.4/P1.2); without it every biome is its flat
- * palette colour (the `?groundDetail=off` baseline). On top: the ven basin's bank
- * turns to wet peat just above the water, the lodge clearing is trodden sand, and past
- * the rim the ground falls into the forest's shade (so no pale "dune" shows behind the
- * tree-line).
+ * palette colour (the `?groundDetail=off` baseline). On top: the lodge clearing is
+ * trodden sand, smaller patches a few metres across break every landschap up (its
+ * BIOME_ACCENT_TONES by `groundSpeckle`), the ven basin's bank turns to wet peat just
+ * above the water, and past the rim the ground falls into the forest's shade (so no pale
+ * "dune" shows behind the tree-line).
  */
 export function groundColor(x: number, z: number, h: number, detail: boolean, out: THREE.Color): THREE.Color {
   const biome = biomeAt(x, z);
@@ -72,11 +74,19 @@ export function groundColor(x: number, z: number, h: number, detail: boolean, ou
     Math.min(1, (_a.b + (_b.b - _a.b) * t) * m),
   );
   const r = Math.hypot(x, z);
+  const clearing = 1 - THREE.MathUtils.smoothstep(r, 5, 10);
+  if (clearing > 0) out.lerp(CLEAR, clearing * 0.85);
+  // smaller patches a few metres across (wave 4: the floor read as one smooth wash), on
+  // the trodden clearing too, more softly: worn sand with tufts and darker soil
+  const sp = groundSpeckle(x, z);
+  const [lowHex, highHex] = BIOME_ACCENT_TONES[biome];
+  const k = 0.8 * (1 - 0.45 * clearing);
+  if (sp < 0.38) out.lerp(_a.set(lowHex).multiplyScalar(m), Math.min(1, (0.38 - sp) / 0.12) * k);
+  else if (sp > 0.6) out.lerp(_a.set(highHex).multiplyScalar(m), Math.min(1, (sp - 0.6) / 0.12) * k);
   // the basin's bank darkens to wet peat only in the last metre above the water
   if (Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) < VEN_SHORE_R + 2) {
     out.lerp(WET, (1 - THREE.MathUtils.smoothstep(h, WATER_LEVEL - 0.2, WATER_LEVEL + 0.9)) * 0.75);
   }
-  if (r < 10) out.lerp(CLEAR, (1 - THREE.MathUtils.smoothstep(r, 5, 10)) * 0.85);
   if (r > 76) out.lerp(FAR, THREE.MathUtils.smoothstep(r, 76, 88));
   return out;
 }
@@ -126,6 +136,82 @@ export function buildTerrainGeometry(detail: boolean): THREE.BufferGeometry {
   if (detail) geo.setAttribute('groundMix', new THREE.BufferAttribute(mixes, 4));
   geo.computeVertexNormals();
   geo.computeBoundsTree();
+  return geo;
+}
+
+/**
+ * W4.3 → wave 4: the sand-path network (Paths.ts) as ONE terrain-hugging ribbon mesh along
+ * every edge, a Veluwe sand track: two sandy wheel ruts with a strip of the ground's own
+ * growth between them, fading at its edges into the ground it lies on (it takes the
+ * ground's own colour and detail mix there: `Terrain.sampleAttr`, and the ground's plate
+ * uv for its mottle map, so drawn with the ground's material it has no seam). The colour
+ * comes from the distance to the whole NETWORK, not to its own ribbon, so where ribbons
+ * overlap (the spokes at the clearing) both draw the same colour and never flicker. The
+ * tracks start at the edge of the trodden spawn clearing. Every vertex sits 3 cm over the
+ * drawn ground (under the 5 cm halo rings). Wound to face UP: the old ribbon faced down, so
+ * it was back-face culled and no path was ever drawn (parent B11 "flat brown ground").
+ */
+export function buildPathGeometry(terrain: Terrain): THREE.BufferGeometry {
+  const STEP = 1.0;                                   // rib spacing along a segment (m)
+  const LIFT = 0.03;                                  // just above the terrain (under the 5 cm halo rings)
+  const ACROSS = [-1.9, -1.15, -0.45, -0.2, 0.2, 0.45, 1.15, 1.9]; // the cross-section (m)
+  const W = ACROSS.length;
+  const sand = new THREE.Color('#cdb887'), rut = new THREE.Color('#bda877'), c = new THREE.Color();
+  const detail = terrain.detail;
+  const positions: number[] = [], colors: number[] = [], mixes: number[] = [], uvs: number[] = [], indices: number[] = [];
+  const gc: number[] = [], gm: number[] = [];
+  // how sandy the track is at (x,z) from the network's centreline: 0 = the ground itself
+  const profile = (d: number): { sand: number; mid: number } => {
+    const edge = 1 - THREE.MathUtils.smoothstep(d, 1.05, 1.9);  // the sandy band fades out at its edges
+    const mid = 1 - THREE.MathUtils.smoothstep(d, 0.2, 0.45);    // the grassy strip between the ruts
+    return { sand: edge, mid };
+  };
+  for (const [i, j] of PATH_SEGMENTS) {
+    const a = PATH_NODES[i], b = PATH_NODES[j];
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const px = -dz / len, pz = dx / len;              // unit perpendicular in XZ
+    const ribs = Math.max(2, Math.ceil(len / STEP) + 1);
+    const base = positions.length / 3;
+    for (let r = 0; r < ribs; r++) {
+      const t = r / (ribs - 1);
+      const cx = a.x + dx * t, cz = a.z + dz * t;
+      for (const off of ACROSS) {
+        const x = cx + px * off, z = cz + pz * off;
+        positions.push(x, terrain.y(x, z) + LIFT, z);
+        uvs.push((x + 120) / 240, (120 - z) / 240);   // the ground plate's own uv (its mottle map)
+        terrain.sampleAttr('color', x, z, gc);
+        const d = distanceToNetwork(x, z);
+        const prof = profile(d), mid = prof.mid;
+        // the tracks start at the edge of the trodden spawn clearing (Terrain paints that)
+        const s = prof.sand * THREE.MathUtils.smoothstep(Math.hypot(x, z), 6, 11);
+        // ruts of sand (a touch darker in the wheel tracks), a strip of the ground's own
+        // growth between them, the ground itself at the edges
+        c.copy(sand).lerp(rut, THREE.MathUtils.smoothstep(d, 0.45, 0.9) * (1 - THREE.MathUtils.smoothstep(d, 0.9, 1.2)));
+        const k = s * (1 - 0.6 * mid);
+        colors.push(gc[0] + (c.r - gc[0]) * k, gc[1] + (c.g - gc[1]) * k, gc[2] + (c.b - gc[2]) * k);
+        if (detail) {
+          terrain.sampleAttr('groundMix', x, z, gm);
+          const want = [0, 0, 0.9, 0.3 + 0.5 * mid];   // sand grain in the ruts, clumps in the strip
+          for (let q = 0; q < 4; q++) mixes.push(gm[q] + (want[q] - gm[q]) * s);
+        }
+      }
+      if (r > 0) {
+        const p0 = base + (r - 1) * W, p1 = base + r * W;
+        for (let q = 0; q + 1 < W; q++) {
+          // wound so the face looks UP (the old ribbon faced down and was culled)
+          indices.push(p0 + q, p0 + q + 1, p1 + q, p0 + q + 1, p1 + q + 1, p1 + q);
+        }
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  if (detail) geo.setAttribute('groundMix', new THREE.Float32BufferAttribute(mixes, 4));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
   return geo;
 }
 
@@ -355,6 +441,33 @@ export class Terrain {
     // PlaneGeometry splits each cell along b–d: triangle (a,b,d) below it, (b,c,d) above.
     if (fx + fz <= 1) return ha + fx * (hd - ha) + fz * (hb - ha);
     return hc + (1 - fx) * (hb - hc) + (1 - fz) * (hd - hc);
+  }
+
+  /**
+   * The ground's own vertex attribute (`color`: rgb, `groundMix`: the four detail weights)
+   * as the GPU interpolates it at world (x,z): the same two triangles per cell as `y`.
+   * Something drawn over the ground with the ground's material (the sand paths) fades
+   * into it seamlessly by taking these at its edge. Writes `out` (zeros when the
+   * attribute is missing or (x,z) is off the plane) and returns it.
+   */
+  sampleAttr(name: 'color' | 'groundMix', x: number, z: number, out: number[]): number[] {
+    const attr = this.mesh.geometry.getAttribute(name) as THREE.BufferAttribute | undefined;
+    const n = name === 'color' ? 3 : 4;
+    out.length = n;
+    out.fill(0);
+    const gx = (x + HALF) / CELL, gz = (z + HALF) / CELL;
+    if (!attr || !(gx >= 0 && gz >= 0 && gx <= TERRAIN_SEGMENTS && gz <= TERRAIN_SEGMENTS)) return out;
+    const ix = Math.min(TERRAIN_SEGMENTS - 1, Math.floor(gx));
+    const iz = Math.min(TERRAIN_SEGMENTS - 1, Math.floor(gz));
+    const fx = gx - ix, fz = gz - iz;
+    const a = (ix + ROW * iz) * n, b = (ix + ROW * (iz + 1)) * n, c = (ix + 1 + ROW * (iz + 1)) * n, d = (ix + 1 + ROW * iz) * n;
+    const v = attr.array as Float32Array;
+    for (let k = 0; k < n; k++) {
+      out[k] = fx + fz <= 1
+        ? v[a + k] + fx * (v[d + k] - v[a + k]) + fz * (v[b + k] - v[a + k])
+        : v[c + k] + (1 - fx) * (v[b + k] - v[c + k]) + (1 - fz) * (v[d + k] - v[c + k]);
+    }
+    return out;
   }
 
   /** Which landschap world (x,z) is (the same field the ground is painted with). */

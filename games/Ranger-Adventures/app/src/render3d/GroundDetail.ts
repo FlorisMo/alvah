@@ -175,6 +175,33 @@ export function heathCover(x: number, z: number): number {
   return smooth(Math.min(1, Math.max(0, (n - 0.2) / 0.42)));
 }
 
+/**
+ * Wave 4 (parent B11 "flat brown ground"): the smaller patches that make a landschap read
+ * as a real, lived-in floor from the ranger's height and not one smooth wash: per biome a
+ * LOW and a HIGH accent that `groundSpeckle` lays in over the two ground tones, a few
+ * metres across.
+ *   • heide     — old, dark heather ↔ straw-yellow grass (pijpenstrootje) and sand;
+ *   • bos       — rust needle litter ↔ green moss cushions;
+ *   • stuifzand — grey-green lichen and grass ↔ bright blown sand;
+ *   • ven       — dark peat ↔ bright wet moss.
+ */
+export const BIOME_ACCENT_TONES: Record<Biome, readonly [string, string]> = {
+  heide:     ['#5c4a52', '#b8a466'],
+  bos:       ['#86522c', '#63783a'],
+  stuifzand: ['#a3a585', '#efe2bf'],
+  ven:       ['#4e4a30', '#7f9450'],
+};
+
+/**
+ * The small patch field in [0,1] the accents follow: two octaves of open value noise (~9 m
+ * and ~3.5 m), so the ground breaks up into patches a few metres across (the 2.5 m ground
+ * grid still draws them) on top of the broad `groundPatch` clumps. Mostly mid values;
+ * the tails (< 0.3, > 0.7) take the accents. Deterministic.
+ */
+export function groundSpeckle(x: number, z: number): number {
+  return 0.6 * vnoise(x * 0.11 + 3, z * 0.11 - 7, 6131, 0) + 0.4 * vnoise(x * 0.29 - 11, z * 0.29 + 5, 6133, 0);
+}
+
 /** Edge length in px of the fine ground-detail tile (Terrain bakes it once). */
 export const DETAIL_TILE_PX = 256;
 /** World metres one fine-detail tile covers (the shader also samples it 3× finer). */
@@ -184,8 +211,8 @@ export const DETAIL_TILE_M = 2.4;
  * The fine ground detail tile, DETAIL_TILE_PX² texels, as three channels in [0,1] that
  * the terrain shader mixes per landschap, close to the lens only (they fade out with
  * distance, so the far ground never shimmers):
- *   grit   — soil grain, every biome (~1-3 cm);
- *   speck  — little heather florets and leaves, sparse bright dots (the heide);
+ *   grit   — soil grain over little clods and hollows, every biome (~1-40 cm);
+ *   speck  — heather florets and leaves, sparse bright dots of 2-4 cm (the heide);
  *   needle — short pine needles and twigs in every direction (the bos floor).
  * Specks and needles are DRAWN (a disc or a short stroke each, wrapping at the edges so
  * the tile is seamless) instead of searched for per texel, so the bake stays a few ms
@@ -195,16 +222,20 @@ export function detailTile(): { grit: Float32Array; speck: Float32Array; needle:
   const N = DETAIL_TILE_PX;
   const grit = new Float32Array(N * N), speck = new Float32Array(N * N), needle = new Float32Array(N * N);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    grit[y * N + x] = 0.55 * vnoise((x / N) * 64, (y / N) * 64, 211, 64) + 0.45 * hash(x, y, 977);
+    // soil grain over little clods and hollows (15-40 cm): the finest grain alone averaged
+    // away to a flat wash from the ranger's height (wave 4, parent B11)
+    const g = 0.3 * vnoise((x / N) * 64, (y / N) * 64, 211, 64) + 0.28 * vnoise((x / N) * 16, (y / N) * 16, 223, 16)
+      + 0.22 * vnoise((x / N) * 6, (y / N) * 6, 227, 6) + 0.2 * hash(x, y, 977);
+    grit[y * N + x] = Math.min(1, Math.max(0, 0.5 + (g - 0.5) * 1.9)); // four summed layers bunch at ½: stretch
   }
   const at = (x: number, y: number): number => ((((y % N) + N) % N) * N + (((x % N) + N) % N));
-  // florets: a jittered 32² lattice, ~65% of cells flower, each a soft 1-2.5 px dot
-  const G = 32;
+  // florets: a jittered 24² lattice, ~65% of cells flower, each a soft 2-4 px dot
+  const G = 24;
   for (let gy = 0; gy < G; gy++) for (let gx = 0; gx < G; gx++) {
     if (hash(gx, gy, 419) < 0.35) continue;
     const cx = (gx + hash(gx, gy, 421)) * (N / G), cy = (gy + hash(gx, gy, 431)) * (N / G);
-    const r = 1.2 + hash(gx, gy, 433) * 1.3;
-    for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+    const r = 2 + hash(gx, gy, 433) * 2;
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
       const px = Math.floor(cx) + dx, py = Math.floor(cy) + dy;
       const v = Math.max(0, 1 - Math.hypot(px + 0.5 - cx, py + 0.5 - cy) / r);
       const k = at(px, py);
@@ -216,14 +247,14 @@ export function detailTile(): { grit: Float32Array; speck: Float32Array; needle:
   for (let gy = 0; gy < H; gy++) for (let gx = 0; gx < H; gx++) for (let s = 0; s < 3; s++) {
     const sx = (gx + hash(gx, gy, 601 + s)) * (N / H), sy = (gy + hash(gx, gy, 607 + s)) * (N / H);
     const a = hash(gx, gy, 613 + s) * Math.PI;
-    const len = 5 + hash(gx, gy, 617 + s) * 9;
+    const len = 8 + hash(gx, gy, 617 + s) * 10;
     const bright = 0.6 + 0.4 * hash(gx, gy, 619 + s);
     const ex = Math.cos(a), ey = Math.sin(a);
     for (let t = -len; t <= len; t += 0.5) {
       const qx = sx + ex * t, qy = sy + ey * t;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         const px = Math.floor(qx) + dx, py = Math.floor(qy) + dy;
-        const v = Math.max(0, 1 - Math.hypot(px + 0.5 - qx, py + 0.5 - qy) / 0.9) * bright;
+        const v = Math.max(0, 1 - Math.hypot(px + 0.5 - qx, py + 0.5 - qy) / 1.2) * bright;
         const k = at(px, py);
         if (v > needle[k]) needle[k] = v;
       }

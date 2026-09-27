@@ -17,13 +17,14 @@ import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork } from '../Path
 import { WATER_DEEP, WATER_SHALLOW, WATER_TREES, WATER_OPACITY, FRESNEL_POWER, WATER_F0, rippleAmp } from '../Water';
 import { boxObstacle, obstacleGap, type Obstacle, type MoveLimits } from '../CharacterController';
 import type { TierParams } from '../../core/quality';
-import { buildFarForest, farCanopyTexture, type Terrain } from './Terrain';
+import { buildFarForest, buildPathGeometry, farCanopyTexture, type Terrain } from './Terrain';
 import type { Labels } from './Labels';
 import { enableCast, naturaliseConcrete, proceduralTotem } from './props';
 import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 import { PlantField, heatherGeometry, plantMaterial, tuftGeometry, type PlantSpot } from './Plants';
 import { lodGeometries, lodMaterial } from '../Lod';
 import { heathCover } from '../GroundDetail';
+import { groundMaterial } from '../GroundMaterial';
 import { PADS, PAD_RADIUS } from './Vehicles';
 
 export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
@@ -229,56 +230,19 @@ export class Dressing {
   }
 
   /**
-   * W4.3: the sand-path network (Paths.ts / §4) as ONE terrain-hugging ribbon
-   * mesh — a warm sand strip laid a hair above the ground along every §4 edge so
-   * the routes read visually (spawn ↔ the POIs). The whole network is a single
-   * merged geometry → one draw call, so the budget (§3.4, <150) is untouched. Each
-   * rib samples `groundY` at BOTH edge vertices so the strip hugs the rolling
-   * relief instead of poking through it; a small +y lift + polygonOffset keeps it
-   * off the ground plane without z-fighting. Sand vertex colour, no texture fetch.
+   * W4.3: the sand-path network (Paths.ts / §4), so the routes read (spawn ↔ the POIs):
+   * sand tracks that fade into the ground (Terrain.buildPathGeometry), drawn with the
+   * ground's own material so they share its light, fog, mottle and near-lens detail. One
+   * draw call; it takes the hero shadow like the ground.
    */
   buildPaths(): THREE.Mesh {
-    const HALF = LANE_HALF;
-    const STEP = 1.6;        // rib spacing along a segment (m)
-    const LIFT = 0.05;       // sit just above the terrain
-    const sand = new THREE.Color('#cdb887');
-    const positions: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-    for (const [i, j] of PATH_SEGMENTS) {
-      const a = PATH_NODES[i], b = PATH_NODES[j];
-      const dx = b.x - a.x, dz = b.z - a.z;
-      const len = Math.hypot(dx, dz) || 1;
-      // unit perpendicular in XZ for the ribbon width
-      const px = -dz / len, pz = dx / len;
-      const ribs = Math.max(2, Math.ceil(len / STEP) + 1);
-      const base = positions.length / 3;
-      for (let r = 0; r < ribs; r++) {
-        const t = r / (ribs - 1);
-        const cx = a.x + dx * t, cz = a.z + dz * t;
-        const lx = cx + px * HALF, lz = cz + pz * HALF;
-        const rx = cx - px * HALF, rz = cz - pz * HALF;
-        positions.push(lx, this.groundY(lx, lz) + LIFT, lz);
-        positions.push(rx, this.groundY(rx, rz) + LIFT, rz);
-        colors.push(sand.r, sand.g, sand.b, sand.r, sand.g, sand.b);
-        if (r > 0) {
-          const p = base + (r - 1) * 2, q = base + r * 2;
-          // two triangles between rib r-1 and r
-          indices.push(p, p + 1, q, q, p + 1, q + 1);
-        }
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geo.setIndex(indices);
-    geo.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
-      vertexColors: true, roughness: 1, metalness: 0,
-      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.renderOrder = 1; // draw over the ground plane
+    const geo = buildPathGeometry(this.terrain);
+    // the ground's own material (same program, textures and light)
+    const mesh = new THREE.Mesh(geo, groundMaterial(this.terrain.detail, (this.terrain.mesh.material as THREE.MeshStandardMaterial).map));
+    mesh.name = 'sand-paths';
+    mesh.renderOrder = 1;        // drawn after the ground it lies on
+    mesh.receiveShadow = true;
+    mesh.raycast = () => {};     // paint on the ground, not ground: clicks and probes meet the terrain
     return mesh;
   }
 
