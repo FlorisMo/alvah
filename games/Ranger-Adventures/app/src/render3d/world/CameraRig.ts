@@ -370,7 +370,8 @@ export class CameraRig {
       this.zoomNow = reduced || snap ? this.zoomDist
         : this.zoomNow + (this.zoomDist - this.zoomNow) * dampFactor(dt, this.CAM_ZOOM_TAU);
       this.gatherNear(rp);
-      // search the bearings (not in reduced motion, and not while the player drags the view)
+      // search the bearings (not in reduced motion or with the follow off, and not while
+      // the player drags the view)
       const base = wrapAngle(this.followYaw + this.orbitYaw);
       // where he will be in ~half a second, so the dodge starts before a person or tree
       // is in the line, not after
@@ -385,7 +386,7 @@ export class CameraRig {
       if (stepOut) this.avoidHeld = this.AVOID_HOLD;
       this.avoidHeld += dt;
       this.sinceTurn = this.player.turning ? 0 : this.sinceTurn + dt;
-      if (reduced || this.player.dragging) this.avoidTarget = 0;
+      if (reduced || !follow || this.player.dragging) this.avoidTarget = 0; // a fixed camera stays fixed
       else if (!stepOut && (this.player.turning || this.sinceTurn < this.AVOID_AFTER_TURN)) {
         // the player is turning the view himself, or just did: the dodge holds still (it
         // never adds a turn of its own on top, nor starts one the moment he lets go)
@@ -638,8 +639,7 @@ export class CameraRig {
   /** Is (x, y, z) inside a crown grown by `margin`? `fade`: only fadeable (true),
    *  only unfadeable (false) or any (null) crowns. Walks this frame's near crowns. */
   private lensInCrown(x: number, y: number, z: number, margin: number, fade: boolean | null): boolean {
-    const list = this.nearCrowns.length || this.crowns.length === 0 ? this.nearCrowns : this.crowns;
-    for (const k of list) {
+    for (const k of this.nearCrowns) {
       if (fade !== null && k.fade !== fade) continue;
       const R = k.R + margin, V = k.V + margin;
       const dx = x - k.x, dy = y - k.y, dz = z - k.z;
