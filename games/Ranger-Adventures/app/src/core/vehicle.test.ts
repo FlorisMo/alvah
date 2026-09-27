@@ -273,19 +273,19 @@ test('wheelContact: flat ground → level; a slope → the matching pitch and ro
   assert.ok(side.roll > 0 && near(Math.tan(side.roll), 0.1, 1e-9), 'left side up on a side slope');
 });
 
-import { keepOutSteer, guidedSteer, KEEP_OUT_LOOK } from './vehicle.ts';
+import { keepOutSteer, guidedSteer, KEEP_OUT_LOOK_S } from './vehicle.ts';
 
 test('keepOutSteer: only a zone IN the path, ahead and within reach, bends the jeep', () => {
   const zone = { x: 0, z: 12, r: 5.2 };
-  assert.equal(keepOutSteer(0, 0, Math.PI, [zone], JEEP_BODY), 0, 'driving away from it: no bend');
-  assert.equal(keepOutSteer(8, 0, 0, [zone], JEEP_BODY), 0, 'a path that clears it: no bend');
-  assert.equal(keepOutSteer(0, -20, 0, [zone], JEEP_BODY), 0, `further than ${KEEP_OUT_LOOK} m ahead: no bend yet`);
+  assert.equal(keepOutSteer(0, 0, Math.PI, 6, [zone], JEEP_BODY), 0, 'driving away from it: no bend');
+  assert.equal(keepOutSteer(8, 0, 0, 6, [zone], JEEP_BODY), 0, 'a path that clears it: no bend');
+  assert.equal(keepOutSteer(0, -20, 0, 6, [zone], JEEP_BODY), 0, `further than ${KEEP_OUT_LOOK_S * 6} m ahead at 6 m/s: no bend yet`);
   // left of forward at heading 0 is +x: a zone whose centre lies to the left → steer right (+)
-  const far = keepOutSteer(-2, 0, 0, [zone], JEEP_BODY), close = keepOutSteer(-2, 3, 0, [zone], JEEP_BODY);
+  const far = keepOutSteer(-2, 0, 0, 6, [zone], JEEP_BODY), close = keepOutSteer(-2, 3, 0, 6, [zone], JEEP_BODY);
   assert.ok(far > 0 && close > far, `it bends right, more as it nears (${far.toFixed(2)} → ${close.toFixed(2)})`);
-  assert.ok(keepOutSteer(2, 3, 0, [zone], JEEP_BODY) < 0, 'a zone to the right → steer left');
-  assert.ok(near(keepOutSteer(0, 4, 0, [zone], JEEP_BODY), 1), 'about to touch: a full turn');
-  assert.ok(keepOutSteer(0, 4, 0, [zone], JEEP_BODY, -1) < 0, 'met dead centre it goes the way the player steers');
+  assert.ok(keepOutSteer(2, 3, 0, 6, [zone], JEEP_BODY) < 0, 'a zone to the right → steer left');
+  assert.ok(near(keepOutSteer(0, 4, 0, 6, [zone], JEEP_BODY), 1), 'about to touch: a full turn');
+  assert.ok(keepOutSteer(0, 4, 0, 6, [zone], JEEP_BODY, -1) < 0, 'met dead centre it goes the way the player steers');
 });
 
 test('guidedSteer: the bend adds to a steer the same way and outweighs one into the zone', () => {
@@ -305,7 +305,7 @@ function driveAt(target: { x: number; z: number }, zones: { x: number; z: number
     const e = Math.atan2(Math.sin(Math.atan2(target.x - x, target.z - z) - h), Math.cos(Math.atan2(target.x - x, target.z - z) - h));
     const want = e > 0.12 ? -1 : e < -0.12 ? 1 : 0;        // a child steering at what he sees
     let speed = rampSpeed(v, 1, dt, JEEP_CAPS);
-    const steer = comfortSteer(guidedSteer(want, keepOutSteer(x, z, h, zones, JEEP_BODY, want)), speed, JEEP_CAPS, contact ? 0.45 : 0);
+    const steer = comfortSteer(guidedSteer(want, keepOutSteer(x, z, h, speed, zones, JEEP_BODY, want)), speed, JEEP_CAPS, contact ? 0.45 : 0);
     const s = driveStep(h, { throttle: speed / JEEP_CAPS.maxSpeed, steer }, dt, JEEP_CAPS);
     const n = resolveBody(x, z, h, x + s.dx, z + s.dz, s.heading, JEEP_BODY, zones, OPEN);
     const moved = Math.hypot(n.x - x, n.z - z) / dt;
@@ -337,4 +337,21 @@ test('keep-out zones: two markers close together block as one patch — the jeep
       assert.ok(r.far > 40, `gap ${gap}, offset ${off}: it got round the pair (z ${r.far.toFixed(1)})`);
     }
   }
+});
+
+test('keep-out zone: a jeep that only grazes a zone gets a nudge, not a lock — the sideways push of a child still turns it (audit veh-05)', () => {
+  // the stick pushed right beside the stuifzand zone, as from the jeep's home: it creeps and turns right
+  const zones = [{ x: 15.6, z: 15.6, r: 5.2 }];
+  const dt = 1 / 60;
+  let x = 14, z = 0, h = Math.atan2(18, 18.4), v = 0;
+  const want = driveIntent({ x: 1, y: 0 });
+  for (let t = 0; t < 3; t += dt) {
+    const speed = rampSpeed(v, want.throttle, dt, JEEP_CAPS);
+    const steer = comfortSteer(guidedSteer(want.steer, keepOutSteer(x, z, h, speed, zones, JEEP_BODY, want.steer)), speed, JEEP_CAPS);
+    const s = driveStep(h, { throttle: speed / JEEP_CAPS.maxSpeed, steer }, dt, JEEP_CAPS);
+    const n = resolveBody(x, z, h, x + s.dx, z + s.dz, s.heading, JEEP_BODY, zones, OPEN);
+    x = n.x; z = n.z; h = n.heading; v = speed;
+  }
+  const turned = Math.atan2(Math.sin(h - Math.atan2(18, 18.4)), Math.cos(h - Math.atan2(18, 18.4)));
+  assert.ok(turned < -0.4, `it turned right as pushed (${turned.toFixed(2)} rad)`);
 });

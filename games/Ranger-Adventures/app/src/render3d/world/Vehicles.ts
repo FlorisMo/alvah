@@ -768,7 +768,7 @@ export class Vehicles {
     // (2) steer: the player's, bent round a keep-out zone ahead; speed-scaled (it never
     // pivots in open ground), with a little authority kept while pressed against
     // something so a held turn key always swings it free
-    const avoid = speed > 0 ? keepOutSteer(jp.x, jp.z, this.jeepHeading, zones, JEEP_BODY, want.steer) : 0;
+    const avoid = speed > 0 ? keepOutSteer(jp.x, jp.z, this.jeepHeading, speed, zones, JEEP_BODY, want.steer) : 0;
     const floor = this.jeepContact && want.throttle !== 0 ? CONTACT_STEER : 0;
     const steer = comfortSteer(guidedSteer(want.steer, avoid), speed, caps, floor);
     const step = driveStep(this.jeepHeading, { throttle: speed / caps.maxSpeed, steer }, dt, caps);

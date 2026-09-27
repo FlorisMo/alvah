@@ -404,20 +404,25 @@ export function contactSpeedCap(free: number, decel: number): number {
 
 /* ---------------------------------------------------------- keep-out zones -- */
 
-/** From this far ahead of the nose (m) the jeep starts to bend round a keep-out zone
- *  in its path, and from `KEEP_OUT_FULL` on the bend is a full turn of the wheel. With
- *  the speed-scaled steer (a ~5 m turning circle) that clears a zone met head-on. */
-export const KEEP_OUT_LOOK = 9;
-export const KEEP_OUT_FULL = 4;
+/** From this long before its nose would reach a keep-out zone in its path (s) the jeep
+ *  starts to bend round it, and from `KEEP_OUT_FULL_S` on the bend is a full turn of
+ *  the wheel: 9 m and 4 m at top speed, which with the speed-scaled steer (a ~5 m
+ *  turning circle) clears a zone met head-on. Timed, not measured: a jeep creeping at
+ *  a child's sideways push is not steered off a zone still seconds away. */
+export const KEEP_OUT_LOOK_S = 1.5;
+export const KEEP_OUT_FULL_S = 0.67;
+/** A path this far (rad) or more inside a zone's edge gets the full bend; less, less. */
+export const KEEP_OUT_TURN = 0.35;
 
 /**
  * A keep-out zone (the ground round a mission marker, a helipad) is not a wall: it is
  * an empty patch of ground a child cannot see, so the jeep must never stop dead at its
  * edge (verifier V2: steered at a ree behind the stuifzand marker it sat pressed
  * against the invisible zone for 30 s). Instead the jeep bends round it, like a driver
- * keeping off a lawn: when zones lie in its path within `KEEP_OUT_LOOK` m, this
- * returns the steer (right +, in [−1, 1]) that turns it away, growing to a full turn
- * by `KEEP_OUT_FULL` m; 0 when the path is clear.
+ * keeping off a lawn: when zones lie in its path within `KEEP_OUT_LOOK_S` of its
+ * `speed` (m/s), this returns the steer (right +, in [−1, 1]) that turns it away,
+ * growing to a full turn by `KEEP_OUT_FULL_S` (and with how far the path points inside
+ * the zone's edge: `KEEP_OUT_TURN`); 0 when the path is clear.
  *
  * Seen from the nose each zone blocks a sector of directions. The sectors that overlap
  * the heading are merged — two markers close together block as ONE patch, so the jeep
@@ -427,9 +432,11 @@ export const KEEP_OUT_FULL = 4;
  * a reversing jeep). Pure.
  */
 export function keepOutSteer(
-  x: number, z: number, heading: number,
+  x: number, z: number, heading: number, speed: number,
   zones: readonly Solid[], body: readonly BodyCircle[], bias = 0,
 ): number {
+  const v = Math.max(1, Math.abs(speed));
+  const look = KEEP_OUT_LOOK_S * v, full = KEEP_OUT_FULL_S * v;
   let lead = body[0], half = 0;
   for (const c of body) { if (c.along > lead.along) lead = c; half = Math.max(half, c.r); }
   const fx = Math.sin(heading), fz = Math.cos(heading);
@@ -439,7 +446,7 @@ export function keepOutSteer(
   for (const o of zones) {
     const dx = o.x - nx, dz = o.z - nz;
     const dist = Math.hypot(dx, dz), R = o.r + half;
-    const u = Math.max(0, Math.min(1, (KEEP_OUT_LOOK - (dist - R)) / (KEEP_OUT_LOOK - KEEP_OUT_FULL)));
+    const u = Math.max(0, Math.min(1, (look - (dist - R)) / (look - full)));
     if (u <= 0) continue;
     const rel = Math.atan2(dx * lx + dz * lz, dx * fx + dz * fz); // its bearing, left +
     const spread = dist > R ? Math.asin(R / dist) : Math.PI / 2;  // touching: a whole half-plane
@@ -461,7 +468,10 @@ export function keepOutSteer(
   if (u <= 0) return 0;
   const toLeft = hi, toRight = -lo;                     // how far to turn to either edge
   const side = Math.abs(toLeft - toRight) > 0.05 ? (toLeft < toRight ? -1 : 1) : (bias < 0 ? -1 : 1);
-  return side * u;                                      // left edge nearer → steer left (−)
+  // as strong as the turn it takes: a path that only grazes a zone gets a nudge, not a
+  // full lock (a slow jeep turning at a child's push kept its turn)
+  const need = Math.min(1, Math.min(toLeft, toRight) / KEEP_OUT_TURN);
+  return side * u * need;                               // left edge nearer → steer left (−)
 }
 
 /** The player's steer with the keep-out bend folded in: a steer the same way as the
