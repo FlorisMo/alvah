@@ -20,7 +20,7 @@ import { wayfind, bearing, distanceTo, SteadyCue, type WayCue } from '../Wayfind
 import { RouteGuide, RouteMap } from '../Paths';
 import { VEN_CENTER } from '../Biomes';
 import { ROEP_COPY } from '../../engines/roep';
-import { boxObstacle, type MoveLimits, type Obstacle } from '../CharacterController';
+import { boxObstacle, obstacleGap, type MoveLimits, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { Labels } from './Labels';
 import { proceduralTotem } from './props';
@@ -503,6 +503,37 @@ export class Markers {
     } else if (this.lastWayKey !== '') {
       this.lastWayKey = ''; this.onWayfind(null);
     }
+  }
+
+  /**
+   * Where the ranger stands when a mission is brought to him (World.bringRangerTo: one
+   * picked on the missiebord, or "Volgende"): 1.8 m out from its marker on the side he
+   * comes from, turned to face it — as if he had walked up to it — on dry, open ground
+   * (searched round the ring). Null for an unknown marker.
+   */
+  approachSpot(missionId: string, from: { x: number; z: number }): { x: number; z: number; yaw: number } | null {
+    const m = this.list.find((k) => k.missionId === missionId);
+    if (!m) return null;
+    const base = Math.atan2(from.x - m.pos.x, from.z - m.pos.z); // from the marker toward him
+    const at = (a: number, r: number) => {
+      const x = m.pos.x + Math.sin(a) * r, z = m.pos.z + Math.cos(a) * r;
+      return { x, z, yaw: Math.atan2(m.pos.x - x, m.pos.z - z) };
+    };
+    for (const r of [1.8, 2.1, 1.5]) {
+      for (let k = 0; k < 16; k++) {
+        const s = at(base + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 8), r);
+        if (this.standable(s.x, s.z)) return s;
+      }
+    }
+    return at(base, 1.8);
+  }
+
+  /** Dry, inside the world and clear of every solid (with a little room). */
+  private standable(x: number, z: number): boolean {
+    const lim = this.limits;
+    if (lim && (Math.hypot(x, z) > lim.bound - 2 || lim.blocked?.(x, z))) return false;
+    for (const o of this.obstacles) if (obstacleGap(o, x, z) < 0.35) return false;
+    return true;
   }
 
   /** The interact key at the hub, the sit-spot or a marker (W1.4/W2.2/W6.4b2), in

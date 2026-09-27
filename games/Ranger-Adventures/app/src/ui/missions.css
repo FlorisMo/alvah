@@ -46,6 +46,19 @@
   box-shadow: var(--shadow-lg);
 }
 
+/* flow/session.fadeCut: the calm cut to another place (a mission picked on the
+   missiebord). Warm paper, not black; it covers everything, so nothing is clicked
+   mid-cut. Under reduced motion `.rm *` makes it a plain cut. */
+.ra-fade {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: #f3ead8;
+  opacity: 0;
+  transition: opacity 0.38s ease-in-out;
+}
+.ra-fade.on { opacity: 1; }
+
 /* A card whose way on never falls below the fold (breaker B3, the 800×600 briefing):
    the card itself does not scroll, its `.card-body` does, and the `.card-foot` with
    the primary / way back sits pinned under it, like the ranger maker's button row. */
@@ -444,6 +457,16 @@
   left: 50%;
   bottom: max(28px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
+}
+/* at a finished marker: "Volgende: …" is the big button, playing it again a quiet
+   pill under it (child B6) — readable over the world, never the key's primary */
+.explore-prompt { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.explore-prompt .explore-replay {
+  padding: 8px 20px;
+  border-radius: var(--radius-pill);
+  background: rgba(20, 16, 12, 0.62);
+  color: var(--paper);
+  text-decoration: none;
 }
 .explore-prompt[hidden],
 .explore-hub-prompt[hidden],

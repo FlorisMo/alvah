@@ -27,7 +27,7 @@ import { playDanger } from '../../render2d/DangerView';
 import { playWissel } from '../../render2d/WisselView';
 import { mountReadAloud } from '../ReadAloud';
 import { deviceText } from '../hud/device';
-import { session, esc, naam, card, clearOverlays } from './session';
+import { session, esc, naam, card, clearOverlays, fadeCut } from './session';
 import {
   resumePatrol, notePatrolCompletion, activeExploreTitel, tellWorldMissionDone, holdWorld, releaseWorld,
 } from './WorldSession';
@@ -68,6 +68,21 @@ function stepForView(step: Step): Step {
     ? Object.fromEntries(Object.entries(skin.copy).map(([k, v]) => [k, typeof v === 'string' ? deviceText(v) : v]))
     : undefined;
   return { ...step, skin: copy ? { ...skin, copy } : skin };
+}
+
+/* ------------------------------------------------------- to the marker ---- */
+/**
+ * Start a mission picked away from its marker (on the missiebord, or "Volgende" at a
+ * finished one): the ranger is brought to its marker first, under a calm fade (a plain
+ * cut under reduced motion), and its briefing opens there. So the mission plays where
+ * it belongs — the frog by the ven, not on the dry heath by the cabin (parent B6) —
+ * and its family comes home where he stands. Already at the marker: just the briefing.
+ */
+export function goToMission(mission: Mission): void {
+  const world = session.world;
+  if (!world || world.nearMission() === mission.id) { showBriefing(mission); return; }
+  narrator.stop();
+  fadeCut(() => { clearOverlays(); world.bringRangerTo(mission.id); }, () => showBriefing(mission));
 }
 
 /* ------------------------------------------------------------ briefing ---- */

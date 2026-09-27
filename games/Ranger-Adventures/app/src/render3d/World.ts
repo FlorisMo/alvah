@@ -577,6 +577,24 @@ export class World {
     return this.dressing.waterState();
   }
 
+  /** Bring the ranger to a mission's marker (a mission picked on the missiebord, or
+   *  "Volgende"; the UI covers it with a calm fade): he stands just outside its ring,
+   *  facing it, the camera cuts in behind him and its prompt is his, so the mission
+   *  plays where it belongs (parent B6). False on foot-less states or an unknown id. */
+  bringRangerTo(missionId: string): boolean {
+    if (this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli) return false;
+    const spot = this.pois.approachSpot(missionId, this.ranger.position);
+    if (!spot) return false;
+    this.ranger.position.set(spot.x, this.terrain.y(spot.x, spot.z), spot.z);
+    this.ranger.rotation.y = spot.yaw;
+    this.player.target.set(spot.x, 0, spot.z);
+    this.cam.followYaw = this.cam.followTargetYaw = spot.yaw;
+    this.cam.place(true, 0, livePolicy().reduced);
+    this.crossBiome(this.terrain.biome(spot.x, spot.z));
+    this.pois.updateProximity(spot.x, spot.z);
+    return true;
+  }
+
   /** Re-point the wayfinding cue at another mission (e.g. after one is completed). */
   setActiveMission(id: string | null): void {
     this.pois.setActiveMission(id);

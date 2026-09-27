@@ -20,7 +20,7 @@ import { missionIcon } from '../MissionIcon';
 import { showCabin } from '../Companion';
 import { showTweaks } from '../Tweaks';
 import { session, esc, card, plainCard } from '../flow/session';
-import { showBriefing, unmountMissionPause } from '../flow/MissionFlow';
+import { goToMission, unmountMissionPause } from '../flow/MissionFlow';
 import { startExplore, leaveWorld, resumePatrol, activeExploreTitel, nextMissionId } from '../flow/WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
 
@@ -152,7 +152,7 @@ export function showMissionBoard(): void {
       Sound.unlock();
       void loadGameAudio();
       const m = area.missies.find((mm) => mm.id === b.dataset.id);
-      if (m) showBriefing(m);
+      if (m) goToMission(m); // played at its own marker (parent B6)
     });
   });
   el.querySelector('.mb-back')?.addEventListener('click', () => showExploreHud(activeExploreTitel()));

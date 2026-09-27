@@ -11,6 +11,7 @@ import type { Stage } from '../../render3d/Stage';
 import type { World } from '../../render3d/World';
 import { store } from '../../core/state';
 import { rangerNaam } from '../../core/avatar';
+import { prefersReducedMotion } from '../../core/reduced-motion';
 
 export const session: { host: HTMLElement; stage: Stage; world: World | null } = {
   host: null as unknown as HTMLElement,
@@ -31,8 +32,37 @@ export const naam = (): string => rangerNaam(store.get().avatar);
  *  arrow keys never walk him away behind a card. Derived from the DOM, so every way back
  *  releases it without anyone having to remember to. */
 export function menuOpen(): boolean {
-  return !!session.host?.querySelector('.ra-overlay:not(.explore-overlay)');
+  return !!session.host?.querySelector('.ra-overlay:not(.explore-overlay), .ra-fade');
 }
+
+/**
+ * A calm cut to somewhere else in the world: the screen fades to the warm paper colour,
+ * `move` runs while it is covered, `then` opens what comes next, and the colour fades
+ * away again (a plain cut under reduced motion: `.rm *` has no transitions). Never a
+ * camera glide across the map, so nothing moves in front of a motion-sensitive player.
+ */
+export function fadeCut(move: () => void, then: () => void): void {
+  const ms = prefersReducedMotion() ? 0 : FADE_MS;
+  session.host.querySelector('.ra-fade')?.remove();
+  const veil = document.createElement('div');
+  veil.className = 'ra-fade';
+  veil.setAttribute('aria-hidden', 'true');
+  session.host.appendChild(veil);
+  requestAnimationFrame(() => veil.classList.add('on'));
+  window.setTimeout(() => {
+    move();
+    // two frames so the world draws the new place under the veil before it lifts
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      then();
+      session.host.appendChild(veil); // keep it on top of the card `then` opened
+      veil.classList.remove('on');
+      window.setTimeout(() => veil.remove(), ms + 40);
+    }));
+  }, ms + 40);
+}
+
+/** How long (ms) a fadeCut takes each way. */
+const FADE_MS = 380;
 
 export function clearOverlays(): void {
   session.host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());

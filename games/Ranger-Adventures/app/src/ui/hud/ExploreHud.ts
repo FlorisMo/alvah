@@ -17,7 +17,7 @@ import type { WayCue } from '../../render3d/Wayfinding';
 import { Joystick } from '../Joystick';
 import { coarsePointer, deviceText } from './device';
 import { session, esc, plainCard } from '../flow/session';
-import { showBriefing } from '../flow/MissionFlow';
+import { showBriefing, goToMission } from '../flow/MissionFlow';
 import { playRoepAtSitSpot, nextMissionId } from '../flow/WorldSession';
 import { showPauseHub, showMissionBoard } from '../hub/Hub';
 
@@ -393,17 +393,23 @@ export function onApproach(missionId: string | null): void {
   approachId = missionId;
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-prompt');
   if (!prompt) return;
-  const m = missionId ? Content.activeArea().missies.find((mm) => mm.id === missionId) : null;
+  const area = Content.activeArea();
+  const m = missionId ? area.missies.find((mm) => mm.id === missionId) : null;
   if (!m) prompt.innerHTML = '';
-  else {
-    // a finished mission reads as done at its marker: replay, not a fresh start
-    const label = store.get().voltooid[m.id] ? 'Speel nog eens' : 'Speel mee';
-    prompt.innerHTML = `<button class="btn-start explore-play" type="button">${label}: ${esc(m.titel)}</button>`;
-    prompt.querySelector('.explore-play')?.addEventListener('click', () => {
-      if (approachId !== m.id) return;
-      showBriefing(m);
-    });
+  else if (!store.get().voltooid[m.id]) {
+    prompt.innerHTML = `<button class="btn-start explore-play" type="button">Speel mee: ${esc(m.titel)}</button>`;
+  } else {
+    // a finished mission: the big button leads ON to the next one (child B6); playing
+    // this one again is a quiet second choice, never what Space or Enter does
+    const next = area.missies.find((mm) => mm.id === nextMissionId()) ?? null;
+    prompt.innerHTML =
+      (next ? `<button class="btn-start explore-next" type="button">Volgende: ${esc(next.titel)}</button>` : '') +
+      `<button class="ra-text-btn explore-play explore-replay" type="button">Speel nog eens: ${esc(m.titel)}</button>`;
+    prompt.querySelector('.explore-next')?.addEventListener('click', () => { if (next) goToMission(next); });
   }
+  prompt.querySelector('.explore-play')?.addEventListener('click', () => {
+    if (m && approachId === m.id) showBriefing(m);
+  });
   arbitratePrompts();
 }
 
@@ -414,7 +420,7 @@ export function onInteract(missionId: string): void {
   if (!prompt || prompt.hidden) return;
   if (approachId !== missionId) return;
   const m = Content.activeArea().missies.find((mm) => mm.id === missionId);
-  if (!m) return;
+  if (!m || store.get().voltooid[m.id]) return; // a replay is a click, never the interact key
   showBriefing(m);
 }
 
