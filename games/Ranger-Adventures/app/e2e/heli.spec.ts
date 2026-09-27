@@ -214,7 +214,9 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
         if (Math.hypot(mx, mz) > 0.3) {
           const off = offNose(mx, mz, prev.heading, h.heading);
           if (off > 0.35) sideways += 1;
-          if (!measured && h.altitude > 8) {
+          // measured on a straight stretch: in a turn the move between two samples is a
+          // chord of the arc, not the nose's direction (a slow sample read it 30° off)
+          if (!measured && h.altitude > 8 && Math.abs(Math.atan2(Math.sin(h.heading - prev.heading), Math.cos(h.heading - prev.heading))) < 0.03) {
             measured = true;
             const shape = await page.evaluate(([dx, dz]) => { // measured where it is NOW
               const r = (window as unknown as { __ranger: Hook }).__ranger;
@@ -240,6 +242,7 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
     for (const k of [...down]) await page.keyboard.up(k);
   }
   expect(sideways, 'it never flies sideways or backwards (motion within 20° of the nose)').toBe(0);
+  expect(measured, 'its shape was measured along a straight stretch of the flight').toBe(true);
   const here = (await hook(page, (r) => r.heli()))!;
   expect(Math.hypot(here.x - start.x, here.z - start.z), 'genuinely flew pad-to-pad (≥ 40 m)').toBeGreaterThan(40);
   expect(sawClimb, 'the helicopter climbed toward cruise height').toBe(true);
