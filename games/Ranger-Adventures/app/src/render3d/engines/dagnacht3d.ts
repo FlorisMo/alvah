@@ -284,8 +284,10 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
           `</div></div></div>`,
         stage.signal,
       );
-      card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(enc.vraag));
-      speak(enc.vraag);
+      const q = enc.flip ? `Nu mag het wél. ${enc.vraag}` : enc.vraag;
+      card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(q));
+      // after the line being said (the instruction, the last "goed"): never over it (child:B2)
+      if (settings.voorlezen) narrator.queue(q);
       card.querySelectorAll<HTMLButtonElement>('.p3-choice').forEach((b) => {
         b.addEventListener('click', () => choose(parseInt(b.dataset.i!, 10), enc, card));
       });

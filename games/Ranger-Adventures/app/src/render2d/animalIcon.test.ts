@@ -20,10 +20,21 @@ test('encounter subjects read as words, never as raw ids', () => {
     assert.ok(!v.label.includes('-'), `${s} → ${v.label}`);
     assert.ok(v.icon.length > 0);
   }
-  assert.equal(subjectView('reekalf', 'edelhert').label, 'edelhert');
-  // mission 1 (the frisling): its three subjects read as the piglet, the sow + her piglets, the rotte
-  assert.equal(subjectView('frisling', 'wildzwijn').label, 'frisling');
-  assert.equal(subjectView('wildzwijn', 'wildzwijn').label, 'zeug met biggen');
-  assert.equal(subjectView('rotte', 'wildzwijn').label, 'de rotte');
+  assert.equal(subjectView('reekalf', 'edelhert').label, 'hert');
+  // mission 1 (the frisling): its three subjects read as the piglet, the sow + her piglets, the
+  // group — in simple words unless "knappe woorden" is on (child:B9)
+  assert.equal(subjectView('frisling', 'wildzwijn').label, 'big');
+  assert.equal(subjectView('wildzwijn', 'wildzwijn').label, 'moeder met biggen');
+  assert.equal(subjectView('rotte', 'wildzwijn').label, 'de groep');
+  assert.equal(subjectView('frisling', 'wildzwijn', true).label, 'frisling');
+  assert.equal(subjectView('wildzwijn', 'wildzwijn', true).label, 'zeug met biggen');
+  assert.equal(subjectView('rotte', 'wildzwijn', true).label, 'de rotte');
   assert.equal(subjectView('onbekend', 'wildzwijn').label, 'wild zwijn');
+});
+
+test('the ree never shares the red deer picture (child:B13)', () => {
+  assert.notEqual(animalIcon('ree'), animalIcon('edelhert'));
+  assert.notEqual(animalIcon('reekalf'), animalIcon('ree'), 'the fawn has its spots');
+  const icons = ['edelhert', 'ree', 'wildzwijn', 'raaf', 'das', 'vos', 'eekhoorn'].map(animalIcon);
+  assert.equal(new Set(icons).size, icons.length, 'every simon caller has its own picture');
 });

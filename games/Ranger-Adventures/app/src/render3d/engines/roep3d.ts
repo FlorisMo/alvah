@@ -176,11 +176,15 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
       return f ? { id: f.id, target: f.group } : null; // the bird on its stump
     });
 
+    /** The call, then its words ("kroa-kroa") — one after the other, never at once. */
     function playCall(): void {
       if (!round) return;
-      if (settings.geluid) Sound.call(round.target);
       const roep = byId.get(round.target)?.roep ?? '';
-      if (settings.voorlezen) narrator.speak(roep);
+      const target = round.target;
+      if (!settings.geluid) { if (settings.voorlezen) narrator.speak(roep); return; }
+      narrator.stop();
+      const dur = Sound.call(target);
+      if (settings.voorlezen) after(dur * 1000 + 150, () => { if (round?.target === target) narrator.speak(roep); });
     }
 
     function quiet(): void {
@@ -202,7 +206,11 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
       for (const [id, f] of fx) f.live = live.has(id);
       const roep = byId.get(round.target)?.roep ?? '';
       banner(ROEP_COPY.luister, roep);
-      after(reduced ? 460 : 320, playCall);
+      // the call waits until the voice is quiet (the instruction, the last "goed")
+      const token = round;
+      void (settings.voorlezen ? narrator.quiet(6000) : Promise.resolve()).then(() => {
+        if (round === token && phase === 'kies' && !stage.aborted) after(reduced ? 460 : 320, playCall);
+      });
     }
 
     function onPick(id: string): void {

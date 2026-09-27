@@ -120,13 +120,14 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       ctx.prompt,
       `<div class="p3-top"><div class="p3-card"><div class="p3-row">` +
         `<div class="p3-lines"><p class="p3-text">${esc(instructie)}</p>` +
-        `<p class="p3-sub">Volg het spoor naar de schuilplek.</p></div>` +
+        `<p class="p3-sub">${esc('Volg het spoor naar de schuilplek.')}</p></div>` +
         `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
         `</div></div></div>`,
       stage.signal,
     );
-    promptEl.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(instructie));
-    if (settings.voorlezen) narrator.speak(instructie);
+    const spoorTxt = 'Volg het spoor naar de schuilplek.';
+    promptEl.querySelector('.p3-speak')?.addEventListener('click', () => { narrator.speak(instructie); narrator.queue(spoorTxt); });
+    if (settings.voorlezen) { narrator.speak(instructie); narrator.queue(spoorTxt); }
 
     let done = false;
     let ready = false;
@@ -304,23 +305,28 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       done = true;
       if (settings.geluid) Sound.found();
       const correct = scoreZoeken(misses); // identical scoring to playZoeken (shared rule)
-      if (target) { hint?.clear(); hint = new Glow(target, '#ffe2a0'); hint.set(0.24); } // a warm "gevonden" light
+      // a faint warm "gevonden" light that keeps the animal's own colours (a strong glow
+      // turned the striped piglet white, child:B13)
+      if (target) { hint?.clear(); hint = new Glow(target, '#ffc46b'); hint.set(0.07); }
       teardownPick?.();
       teardownPick = null;
 
       // the find becomes a photo for the prikbord; the fact itself follows on the
-      // mission's own fact card (never twice)
+      // mission's own fact card (never twice). Enter/Space press Verder (parent:B7), 🔊
+      // says the card again (child:B12).
       const kicker = '📷 Klik! Je maakt een foto.';
       const card = anchoredPrompt(
         ctx.prompt,
         `<div class="p3-bottom zoeken-found"><div class="p3-card">` +
           `<p class="p3-sub">${esc(kicker)}</p>` +
-          `<p class="p3-text">${esc(goedTxt)}</p>` +
-          `<button class="p3-btn" type="button">Verder</button>` +
+          `<div class="p3-row"><p class="p3-text">${esc(goedTxt)}</p>` +
+          `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button></div>` +
+          `<button class="p3-btn" type="button" data-key="primary">Verder</button>` +
           `</div></div>`,
         stage.signal,
       );
-      if (settings.voorlezen) narrator.speak(`${goedTxt}`);
+      card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(goedTxt));
+      if (settings.voorlezen) narrator.speak(goedTxt);
       card.querySelector('.p3-btn')?.addEventListener('click', () => {
         narrator.stop();
         cancelAnimationFrame(raf);

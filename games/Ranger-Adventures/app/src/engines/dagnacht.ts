@@ -21,10 +21,16 @@ export interface Encounter {
   id: string;
   subject: string;                 // 'adder' | 'reekalf' | 'zwijn-honger' | 'modderpoel' | 'pad-veilig' | 'frisling' | 'wildzwijn' (sow + piglets) | 'rotte'
   dier?: string;                   // the animal met (content id) — the 3D view stages its model
+  pose?: 'ligt';                   // the animal lies still in the grass (the words say so)
   vraag: string;
   opties: EncounterOption[];
   uitleg?: string;
   gevolg?: string;
+  /** the same lines with the "knappe woorden" (frisling, rotte, reegeit), used only when
+   *  that setting is on; the plain lines above are the default (child:B9) */
+  vraagKnap?: string;
+  uitlegKnap?: string;
+  gevolgKnap?: string;
   reactie?: string;                // 'flee' | 'rear' | 'swarm' | 'mud' | 'recede'
   flip?: boolean;
   terug?: number;                  // lost ground on a wrong choice (encounter units)
@@ -46,9 +52,13 @@ export interface DagnachtTrial {
 
 /** Resolve the encounter list + the slow-mo support window. */
 export function buildDagnachtTrial(skin: Skin, diff: Settings): DagnachtTrial {
-  const encounters = (skin.encounters as Encounter[] | undefined)?.length
+  const authored = (skin.encounters as Encounter[] | undefined)?.length
     ? (skin.encounters as Encounter[])
     : FALLBACK;
+  // "knappe woorden" on: the lines with the real terms; off (default): the plain lines
+  const encounters = diff.jargon
+    ? authored.map((e) => ({ ...e, vraag: e.vraagKnap ?? e.vraag, uitleg: e.uitlegKnap ?? e.uitleg, gevolg: e.gevolgKnap ?? e.gevolg }))
+    : authored;
   return {
     encounters,
     regels: skin.regels ?? [],

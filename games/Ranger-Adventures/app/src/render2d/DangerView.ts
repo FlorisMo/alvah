@@ -71,7 +71,15 @@ export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> 
     const options = panel.querySelector('.enc-options') as HTMLDivElement;
     const walker = panel.querySelector('.danger-walker') as HTMLDivElement;
     const field = panel.querySelector('.danger-field') as HTMLDivElement;
-    panel.querySelector('.danger-speak')?.addEventListener('click', () => narrator.speak(instructie));
+    // read-aloud (child:B2): the instruction, then every question as it comes; 🔊 says
+    // the question on screen (or the instruction before the first one)
+    const say = (text: string, after = false): void => {
+      if (!settings.voorlezen) return;
+      if (after) narrator.queue(text); else narrator.speak(text);
+    };
+    let spokenQ = '';
+    panel.querySelector('.danger-speak')?.addEventListener('click', () => narrator.speak(spokenQ || instructie));
+    say(instructie);
 
     function progress(): void {
       const eff = Math.max(0, run.index - terugSlag);
@@ -85,8 +93,11 @@ export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> 
       ruleBanner.innerHTML =
         (enc.flip ? `<span class="flip-cue">Nu mag het wél</span>` : '') + esc(enc.vraag);
       ruleBanner.classList.toggle('flip', !!enc.flip);
+      const q = enc.flip ? `Nu mag het wél. ${enc.vraag}` : enc.vraag;
+      say(q, true); // after the line being said (the instruction, the last "goed"), never over it
+      spokenQ = q;
       subject.className = `enc-subject subj-${esc(enc.subject)}`;
-      const sv = subjectView(enc.subject, enc.dier);
+      const sv = subjectView(enc.subject, enc.dier, settings.jargon);
       subject.innerHTML = `<span class="subj-icon" aria-hidden="true">${sv.icon}</span><span class="subj-label">${esc(sv.label)}</span>`;
       // shuffle the two option slots so position never cues the answer
       const order = Math.random() < 0.5 ? [0, 1] : [1, 0];
@@ -155,7 +166,7 @@ export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> 
       t.className = `feedback-toast ${kind}`;
       t.textContent = text;
       field.appendChild(t);
-      if (settings.voorlezen) narrator.speak(text);
+      say(text);
       after(kind === 'ok' ? 1400 : 1900, () => t.remove());
     }
 

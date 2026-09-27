@@ -45,6 +45,24 @@ export function buildWisselTrial(skin: Skin, diff: Settings, rng: () => number =
   return { queue: pool, flipEvery };
 }
 
+/** The two place names in a rule line "Dag-dier → X. Nacht-dier → Y." */
+export function placeNames(regel: string): { open: string; hol: string } {
+  const m = /→\s*([^.]+)\.\s*[^→]*→\s*([^.]+)/.exec(regel);
+  return m ? { open: m[1].trim(), hol: m[2].trim() } : { open: 'open plek', hol: 'het hol' };
+}
+
+/** The rule after a flip, said outright (not only "andersom"): the places swap. */
+export function regelAndersom(regel: string): string {
+  const naam = placeNames(regel);
+  return `Dag-dier → ${naam.hol}. Nacht-dier → ${naam.open}.`;
+}
+
+/** The cue every animal carries while it waits to be sorted: an icon + a word, the
+ *  same in 2D and 3D (child:B3 — a child should never have to guess). */
+export function dagOfNacht(dag: boolean): { icoon: string; woord: string } {
+  return dag ? { icoon: '☀️', woord: 'Dag-dier' } : { icoon: '🌙', woord: 'Nacht-dier' };
+}
+
 /** One of the two destinations a sorted animal goes to. */
 export type WisselBin = 'open' | 'hol';
 

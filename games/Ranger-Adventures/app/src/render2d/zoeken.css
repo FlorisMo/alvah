@@ -197,3 +197,8 @@
 }
 .zoeken-goed { margin: 0; font: 600 26px/1.2 var(--font-head); color: var(--green-deep); }
 .zoeken-feit { margin: 0; font: 400 20px/1.5 var(--font-read); color: var(--ink-soft); }
+
+/* the found card: 🔊 beside Verder (child:B12); the bar's grid placement does not apply here */
+.zoeken-actions { display: flex; align-items: center; gap: 12px; }
+.zoeken-actions .zoeken-speak { grid-column: auto; grid-row: auto; flex: none; }
+.zoeken-feit { max-width: 24ch; }

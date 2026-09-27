@@ -112,11 +112,16 @@ export function playZoeken(host: HTMLElement, step: Step): Promise<BeatSummary> 
         `<div class="zoeken-card">` +
         `<p class="zoeken-goed">${esc(goedTxt)}</p>` +
         feit +
+        `<div class="zoeken-actions">` +
+        `<button class="zoeken-speak" type="button" aria-label="Lees voor">🔊</button>` +
         `<button class="btn-start" type="button">Verder</button>` +
+        `</div>` +
         `</div>`;
       panel.appendChild(closeup);
 
-      if (settings.voorlezen) narrator.speak(skin.feit ? `${goedTxt}. ${skin.feit}` : goedTxt);
+      const found = skin.feit ? `${goedTxt} ${skin.feit}` : goedTxt;
+      closeup.querySelector('.zoeken-speak')?.addEventListener('click', () => narrator.speak(found));
+      if (settings.voorlezen) narrator.speak(found);
 
       const verder = closeup.querySelector('.btn-start') as HTMLButtonElement;
       verder.addEventListener('click', () => {

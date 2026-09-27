@@ -169,15 +169,17 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     /** Start the route once the stones stand AND the camera is still (never mid-move). */
     function maybeStart(): void {
       if (phase !== 'wait' || !loaded || !settled) return;
-      showSequence();
+      showSequence(true);
     }
 
-    function showSequence(): void {
+    /** Show the route. `sayIt`: say "Kijk goed…" after the line being said (never
+     *  cutting the instruction off); a re-show after "Kijk nog een keer." says nothing. */
+    function showSequence(sayIt: boolean): void {
       clearTimers();
       phase = 'show';
       allDark();
       banner(tonen);
-      speak(tonen);
+      if (sayIt && settings.voorlezen) narrator.queue(tonen);
       const on = reduced ? 620 : 700;   // how long a stone stays lit
       const gap = 300;                  // dark between two stones, so each is its own beat
       let t = 1100;
@@ -212,7 +214,8 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         allDark();
         if (f) { f.level = 0.8; f.lift = 0.4; f.color = WRONG; }
         banner('Kijk nog een keer.');
-        after(1000, showSequence);
+        speak('Kijk nog een keer.');
+        after(1000, () => showSequence(false));
       } else {
         if (settings.geluid) Sound.step();
         if (f) { f.level = 0.3; f.lift = 0; f.color = OK; }

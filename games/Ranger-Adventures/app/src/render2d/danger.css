@@ -189,3 +189,5 @@
 }
 .feedback-toast.ok { background: var(--green-soft); color: var(--green); }
 .feedback-toast.gevolg { background: rgba(193, 70, 126, 0.92); color: var(--paper); }
+/* short lines: at most ~7 words on a line (child:B9) */
+.danger .feedback-toast { width: max-content; max-width: min(80%, 30ch); }

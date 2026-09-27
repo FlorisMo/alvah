@@ -183,28 +183,38 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     function maybeStart(): void {
       if (phase !== 'wait' || !loaded || !settled) return;
       run.begin();
-      listen();
+      listen('queue');
     }
 
-    function listen(): void {
+    /** The animals call the sequence. "Luister…" is said first (`queue`: after the
+     *  instruction; `speak`: a new line; `none`: just said) and the calls always wait
+     *  until the voice is quiet, so no call ever sounds over the words (child:B1/B2). */
+    let listenToken = 0;
+    function listen(sayIt: 'queue' | 'speak' | 'none'): void {
       clearTimers();
       phase = 'listen';
       quiet();
       banner(luister);
-      const gap = reduced ? 420 : 320;
-      let t = 900;
-      run.sequence.forEach((id) => {
-        after(t, () => {
-          quiet();
-          const f = fx.get(id);
-          if (f) { f.level = 0.9; f.lift = 1; f.color = CALL; }
-          if (settings.geluid) Sound.call(id);
+      if (settings.voorlezen && sayIt === 'queue') narrator.queue(luister);
+      else if (sayIt === 'speak') speak(luister);
+      const token = ++listenToken;
+      void (settings.voorlezen ? narrator.quiet(6000) : Promise.resolve()).then(() => {
+        if (token !== listenToken || stage.aborted || phase !== 'listen') return;
+        const gap = reduced ? 420 : 320;
+        let t = 500;
+        run.sequence.forEach((id) => {
+          after(t, () => {
+            quiet();
+            const f = fx.get(id);
+            if (f) { f.level = 0.9; f.lift = 1; f.color = CALL; }
+            if (settings.geluid) Sound.call(id);
+          });
+          const dur = Math.max(650, Sound.callDur(id) * 1000);
+          after(t + dur, () => { const f = fx.get(id); if (f) { f.level = 0; f.lift = 0; } });
+          t += dur + gap;
         });
-        const dur = Math.max(650, Sound.callDur(id) * 1000);
-        after(t + dur, () => { const f = fx.get(id); if (f) { f.level = 0; f.lift = 0; } });
-        t += dur + gap;
+        after(t, startEcho);
       });
-      after(t, startEcho);
     }
 
     /** how far the echo is: one dot per animal to repeat, filled as they are clicked
@@ -237,13 +247,15 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         if (f) { f.level = 0.45; f.lift = 0.5; f.color = OK; }
         if (settings.geluid) Sound.correct();
         banner('Goed onthouden!');
-        after(1200, listen);
+        speak('Goed onthouden!');
+        after(1200, () => listen('speak'));
       } else { // 'replay' — a wrong click, recoverable: the SAME sequence again
         phase = 'listen';
         if (f) { f.level = 0.6; f.lift = 0.3; f.color = WRONG; after(650, () => { f.level = 0; f.lift = 0; f.color = CALL; }); }
         if (settings.geluid) Sound.tryAgain();
         banner('Luister nog een keer.');
-        after(1400, listen);
+        speak('Luister nog een keer.');
+        after(1400, () => listen('none'));
       }
     }
 
@@ -257,6 +269,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       after(1600, () => {
         clearTimers();
         narrator.stop();
+        Sound.stopCall();
         teardownPick?.();
         unHint();
         cancelAnimationFrame(raf);

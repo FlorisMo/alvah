@@ -7,8 +7,32 @@
  * mapping carries a unit test.
  */
 
+/** A roe deer drawn small and without antlers, with its white rump — so the ree never
+ *  shares the red deer's antlered 🦌 in a game where the child must tell them apart
+ *  (child:B13). `spots` draws the fawn's white spots. Inline SVG sized in em, so it
+ *  scales with the token's font size like the emoji beside it. */
+function roeSvg(spots: boolean): string {
+  const dots = spots
+    ? '<g fill="#fff4dc"><circle cx="24" cy="30" r="1.6"/><circle cx="30" cy="28.5" r="1.6"/><circle cx="36" cy="30" r="1.6"/>' +
+      '<circle cx="27" cy="34" r="1.4"/><circle cx="33" cy="33.5" r="1.4"/><circle cx="21" cy="34" r="1.3"/></g>'
+    : '';
+  return (
+    '<svg class="ai-svg" viewBox="0 0 64 64" width="1.15em" height="1.15em" aria-hidden="true">' +
+    '<g fill="#8a5429"><rect x="18" y="38" width="2.8" height="18" rx="1.2"/><rect x="23" y="38" width="2.8" height="17" rx="1.2"/>' +
+    '<rect x="36" y="38" width="2.8" height="18" rx="1.2"/><rect x="41" y="38" width="2.8" height="17" rx="1.2"/></g>' +
+    '<ellipse cx="30" cy="33" rx="16" ry="8.5" fill="#b9773f"/>' +
+    '<path d="M39 30 L46 15 L52 17 L46 34 Z" fill="#b9773f"/>' +
+    '<ellipse cx="51.5" cy="17.5" rx="6.5" ry="4.2" fill="#b9773f"/>' +
+    '<path d="M46 14 Q44 6 48 7 Q49 11 48.5 14 Z M50 13.5 Q50 5 54 7 Q53 11 51.8 14 Z" fill="#9c6232"/>' +
+    '<ellipse cx="15.5" cy="31" rx="3.6" ry="4.4" fill="#fff4dc"/>' +
+    '<circle cx="52" cy="16.2" r="1.3" fill="#2a1a10"/><circle cx="57.6" cy="18.6" r="1.4" fill="#2a1a10"/>' +
+    dots +
+    '</svg>'
+  );
+}
+
 const ICON: Record<string, string> = {
-  edelhert: '🦌', ree: '🦌', reekalf: '🦌', wildzwijn: '🐗', frisling: '🐗', das: '🦡', vos: '🦊',
+  edelhert: '🦌', ree: roeSvg(false), reekalf: roeSvg(true), wildzwijn: '🐗', frisling: '🐗', das: '🦡', vos: '🦊',
   eekhoorn: '🐿️', wolf: '🐺', raaf: '🐦‍⬛', merel: '🐦‍⬛', nachtzwaluw: '🐦', koekoek: '🐦',
   roodborsttapuit: '🐦', 'groene-specht': '🐦', koolmees: '🐦', heikikker: '🐸', adder: '🐍',
   heideblauwtje: '🦋',
@@ -22,19 +46,20 @@ export function animalIcon(id: string): string {
   return ICON[id] ?? '🐾';
 }
 
-/** What a dagnacht encounter shows: a picture + plain words (never a raw id). */
-export function subjectView(subject: string, dier?: string): { icon: string; label: string } {
+/** What a dagnacht encounter shows: a picture + plain words (never a raw id). With
+ *  `jargon` off ("knappe woorden" uit) the words are the simple ones: big, moeder, groep. */
+export function subjectView(subject: string, dier?: string, jargon = false): { icon: string; label: string } {
   switch (subject) {
     case 'adder': return { icon: '🐍', label: 'adder' };
     case 'modderpoel': return { icon: '🟫', label: 'modderpoel' };
     case 'pad-veilig': return { icon: '🥾', label: 'vrij pad' };
     case 'zwijn-honger': return { icon: '🐗', label: 'hongerig zwijn' };
-    case 'frisling': return { icon: '🐗', label: 'frisling' };
-    case 'wildzwijn': return { icon: '🐗', label: 'zeug met biggen' };
-    case 'rotte': return { icon: '🐗🐗', label: 'de rotte' };
+    case 'frisling': return { icon: '🐗', label: jargon ? 'frisling' : 'big' };
+    case 'wildzwijn': return { icon: '🐗', label: jargon ? 'zeug met biggen' : 'moeder met biggen' };
+    case 'rotte': return { icon: '🐗🐗', label: jargon ? 'de rotte' : 'de groep' };
     case 'reekalf': return dier && dier !== 'ree'
-      ? { icon: animalIcon(dier), label: dier }
-      : { icon: '🦌', label: 'reekalf' };
+      ? { icon: animalIcon(dier), label: NAME[dier] ?? dier }
+      : { icon: animalIcon('reekalf'), label: 'reekalf' };
     default: return { icon: dier ? animalIcon(dier) : '🐾', label: (dier && NAME[dier]) ?? dier ?? subject.replace(/-/g, ' ') };
   }
 }
