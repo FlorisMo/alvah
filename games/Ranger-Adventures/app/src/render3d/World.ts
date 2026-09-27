@@ -185,9 +185,11 @@ export class World {
         crossBiome: (here) => this.crossBiome(here),
         nearestAnimalDist: (x, z) => this.fauna.nearestAnimalDist(x, z),
         camOffsets: () => ({ walk: this.cam.camOffset, vehicle: this.cam.camOffsetVehicle, heli: this.cam.camOffsetHeli }),
-        people: () => this.fauna.scenicActors.map((a) => a.group.position),
-        animals: () => this.fauna.ambientState(),
-        markers: () => this.pois.markerPositions(),
+        movers: (visit) => { // every frame: no allocation (review PERF-2)
+          for (const a of this.fauna.scenicActors) visit(a.group.position.x, a.group.position.z, 'person', a.height);
+          for (const a of this.fauna.ambient) if (a.id.startsWith('animal-')) visit(a.group.position.x, a.group.position.z, 'animal', a.h);
+        },
+        markers: () => this.pois.list,
       },
     );
     this.cam = new CameraRig(
