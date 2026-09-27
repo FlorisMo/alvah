@@ -82,7 +82,7 @@ async function chip(page: Page): Promise<{ turn: number | null; cue: string; gly
 
 /** Follow ONLY the chip, like a child: walk while its arrow points up, turn toward it
  *  otherwise. Returns how it went: arrived, how often the words changed once he was on
- *  his way (the first turn toward it aside), metres walked away from the mission. */
+ *  his way (the first turn toward it and the last 6 m aside), metres walked away. */
 async function followChip(page: Page, target: string, timeout = 90_000): Promise<{ arrived: boolean; changes: number; away: number; words: string[] }> {
   const held = new Set<string>();
   const setKeys = async (want: Set<string>): Promise<void> => {
@@ -98,10 +98,12 @@ async function followChip(page: Page, target: string, timeout = 90_000): Promise
       if ((await snap(page)).near === target) { arrived = true; break; }
       const c = await chip(page);
       const d = dist(await pos(page), goal);
-      if (prev !== null && d > prev + 0.05) away += d - prev;
+      if (prev !== null && d > prev + 0.05 && d > 6) away += d - prev;
       prev = d;
+      // the words once he is on his way, until the last few metres (stepping past the
+      // ring and turning back to it is his steering, not the arrow swinging)
       const w = (c?.cue ?? '').split(' · ')[0];
-      if (w && (words.length || w === 'recht vooruit') && w !== words[words.length - 1]) words.push(w);
+      if (w && d > 6 && (words.length || w === 'recht vooruit') && w !== words[words.length - 1]) words.push(w);
       const a = c?.turn == null ? 0 : Math.atan2(Math.sin(c.turn), Math.cos(c.turn));
       const want = new Set<string>();
       if (c?.glyph === '◎' || Math.abs(a) < 0.35) want.add('ArrowUp');
