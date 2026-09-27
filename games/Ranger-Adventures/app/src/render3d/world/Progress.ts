@@ -12,7 +12,11 @@
  *   complete(id, fresh=true)   the reunion: the flag rises, the props fade up and the
  *                              family walks calmly in to the marker (~2.6 s). The
  *                              camera never moves; under reduced motion it is a cut:
- *                              everything simply stands there.
+ *                              everything simply stands there. Finished somewhere
+ *                              else (a mission picked on the missiebord is played at
+ *                              the board), the family is laid out at its marker as a
+ *                              reload lays it out, and it comes home the first time
+ *                              the ranger comes to look.
  *
  * Where: each tableau is laid out in the marker's own frame — `a` metres along the
  * line from where the ranger comes from to the marker (beyond it = +), `s` metres
@@ -28,6 +32,7 @@
 
 import * as THREE from 'three';
 import type { Spawned, SpawnOpts } from '../play/types';
+import { fadeable, FarRest, setOpacity } from '../play/fade.ts';
 import { gaitFor, motionAt, REST, type MotionRecipe } from '../ProceduralMotion.ts';
 
 /* ------------------------------------------------------------ the tableaus ---- */
@@ -233,8 +238,26 @@ export function reunionFrame(mx: number, mz: number, view: ReunionView): Frame {
   if (dir.lengthSq() < 1e-6) return frameAt(mx, mz, view.camera.position.x, view.camera.position.z);
   dir.normalize();
   const along = (mx - view.camera.position.x) * dir.x + (mz - view.camera.position.z) * dir.z;
-  const shift = Math.max(0, 5 - along);
+  const shift = Math.min(SHIFT_MAX, Math.max(0, 5 - along)); // the family stays AT its marker
   return { ox: mx + dir.x * shift, oz: mz + dir.z * shift, dx: dir.x, dz: dir.z };
+}
+
+/** The reunion plays in the picture when the ranger finished the mission this close
+ *  to its marker (m) — at the marker itself, where its games are staged. */
+export const HERE_R = 6;
+/** How far (m) a reunion frame may step forward along the look: never further, so
+ *  the family always gathers round its own marker. */
+const SHIFT_MAX = 3.5;
+/** A family that comes home later (the mission was finished at the board) walks in
+ *  when the lens comes this close (m) with the marker in the picture. */
+const COME_HOME_R = 18;
+
+/** Is the marker at (mx, my, mz) in the lens's picture, within `r` m? */
+export function markerInSight(camera: THREE.Camera, mx: number, my: number, mz: number, r: number): boolean {
+  if (Math.hypot(mx - camera.position.x, mz - camera.position.z) > r) return false;
+  camera.updateMatrixWorld();
+  const p = new THREE.Vector3(mx, my, mz).project(camera);
+  return p.z > -1 && p.z < 1 && Math.abs(p.x) < 0.8 && Math.abs(p.y) < 0.85;
 }
 
 /** Is a piece at (x, y, z) in the lens's picture (clear of the top caption band), a
@@ -284,11 +307,16 @@ interface Live {
   x: number; z: number; y: number;
   recipe: MotionRecipe;
   phase: number;
+  /** hidden until its reunion starts (then it walks in, or fades up) */
+  held: boolean;
   /** reunion walk: from (fx,fz) to (x,z), 0..1 */
   walk: { fx: number; fz: number; t: number } | null;
-  /** fade-up 0..1 (props + flag) */
+  /** reunion fade-up 0..1 (the props); null = done */
   fade: number | null;
+  /** its own materials (fadeable), and the opacity they are drawn at now: the
+   *  reunion fade-up times the fade into the far fog */
   mats: THREE.Material[];
+  alpha: number;
   /** rides on another piece (a raven on its log): that piece places it */
   riding?: boolean;
 }
@@ -300,13 +328,20 @@ interface Built {
   live: Live[];
   flag: THREE.Mesh;
   spots: { x: number; z: number; r: number }[];
+  /** finished away from its marker: the family comes home once the ranger comes to look */
+  later: boolean;
+  /** far off, its family rests (the flag stays) */
+  rest: FarRest;
 }
 
 /** How long the reunion takes (s): the family's calm walk in, the flag rising. */
 export const REUNION_S = 2.6;
-/** Beyond this lens distance (m) a tableau's animals + props rest (the flag stays):
- *  well into the golden-hour fog, and it keeps the draw calls inside the budget. */
-const REST_BEYOND = 45;
+/** A tableau's animals + props calmly fade out once the lens is further than
+ *  REST_FAR m, and back in within REST_NEAR m (the flag, the green halo and the "✓"
+ *  tag always stay): the families you walk up to stand there, and a bos full of
+ *  finished families never pushes the draw calls past the budget. */
+export const REST_NEAR = 30;
+export const REST_FAR = 36;
 
 /**
  * Is (x,z) a free spot for a piece of radius r at mission `id`'s marker (frame `f`)?
@@ -355,13 +390,17 @@ export class Progress {
     const t = TABLEAUS[missionId];
     const m = this.env.markers().find((k) => k.missionId === missionId);
     if (!t || !m) return;
+    // finished AT its marker (its games were staged there), or somewhere else: a
+    // mission picked on the missiebord is played at the board
+    const here = !!view && Math.hypot(view.ranger.x - m.x, view.ranger.z - m.z) <= HERE_R;
     let b = this.built.get(missionId) ?? null;
     if (!b) {
       let job = this.pending.get(missionId);
       if (!job) {
-        // finished just now: laid out in the picture the player is looking at; else
-        // (a reload) as seen from spawn, where a returning ranger comes from
-        const seen = fresh && view ? view : null;
+        // finished just now at the marker: laid out in the picture the player is
+        // looking at; else as a reload lays it out, as seen from spawn (where the
+        // board stands, and where a returning ranger comes from)
+        const seen = fresh && here ? view! : null;
         const frame = seen ? reunionFrame(m.x, m.z, seen) : frameAt(m.x, m.z, 0, 0);
         job = this.build(missionId, t, frame, m, fresh && !reduced, seen);
         this.pending.set(missionId, job);
@@ -371,6 +410,9 @@ export class Progress {
       if (!b) return;
     }
     if (!fresh || reduced) { this.settle(b); return; }
+    // away from the marker nobody would see it: the family waits out of sight and
+    // comes home the first time the ranger comes to look (update)
+    if (!here) { if (b.live.some((l) => l.held)) b.later = true; return; }
     this.startReunion(b);
     await new Promise<void>((resolve) => this.waiters.push({ until: this.clock + REUNION_S, resolve }));
   }
@@ -385,22 +427,34 @@ export class Progress {
     return false;
   }
 
-  /** Per frame: the reunion walks + fades, the idle breathing, and resting far tableaus. */
-  update(t: number, dt: number, reduced: boolean, camera: THREE.Camera): void {
+  /** Per frame: the reunion walks + fades, the idle breathing, and resting far tableaus.
+   *  `activity` = a mission is being played (a waiting family never walks in then). */
+  update(t: number, dt: number, reduced: boolean, camera: THREE.Camera, activity = false): void {
     this.clock += dt;
     for (let i = this.waiters.length - 1; i >= 0; i--) {
       if (this.clock >= this.waiters[i].until) { this.waiters[i].resolve(); this.waiters.splice(i, 1); }
     }
     const cx = camera.position.x, cz = camera.position.z;
     for (const b of this.built.values()) {
-      const far = Math.hypot(b.frame.ox - cx, b.frame.oz - cz) > REST_BEYOND;
+      if (b.later && !activity && b.group.visible) {
+        const m = this.env.markers().find((k) => k.missionId === b.missionId);
+        if (m && markerInSight(camera, m.x, this.env.groundY(m.x, m.z) + 0.5, m.z, COME_HOME_R)) {
+          b.later = false;
+          if (reduced) this.settle(b); else this.startReunion(b); // it comes home now, in view
+        }
+      }
+      const near = b.rest.step(Math.hypot(b.frame.ox - cx, b.frame.oz - cz), dt, reduced);
       for (const l of b.live) {
-        const waiting = !!l.walk && l.walk.t < 0; // hidden until its reunion walk starts
-        const show = !far && !waiting;
+        if (l.fade !== null) { // the reunion's fade-up
+          l.fade = Math.min(1, l.fade + (reduced ? 1 : dt / 1.2));
+          if (l.fade >= 1) l.fade = null;
+        }
+        const alpha = l.held ? 0 : near * (l.fade ?? 1);
+        if (alpha !== l.alpha) { l.alpha = alpha; if (alpha > 0) setOpacity(l.mats, alpha); }
+        const show = alpha > 0;
         if (l.root.visible !== show) l.root.visible = show;
         if (!show) continue;
         if (l.walk) this.stepWalk(l, dt, reduced);
-        if (l.fade !== null) this.stepFade(l, reduced ? 1 : dt / 1.2);
         l.spawned?.update(dt);
         this.breathe(l, t, reduced);
       }
@@ -453,7 +507,7 @@ export class Progress {
     const flag = finishedFlag();
     flag.position.set(fp.x, env.groundY(fp.x, fp.z), fp.z);
     flag.rotation.y = yawToward(-frame.dx, -frame.dz) + 0.35; // the pennant (and its check) turned to the lens
-    if (hidden) { flag.scale.y = 0.001; flag.userData.rise = 0; }
+    if (hidden) { flag.scale.y = 0.001; flag.visible = false; } // it rises when the reunion starts
     group.add(flag);
 
     const plans = t.pieces.map((p) => {
@@ -493,12 +547,10 @@ export class Progress {
       const l: Live = {
         piece: p, root, spawned: s, x: at.x, z: at.z, y,
         recipe: p.kind === 'animal' ? gaitFor(modelKey(p.id)) : gaitFor(null),
-        phase: i * 1.9 + missionId.length, walk: null, fade: null, mats: [],
+        phase: i * 1.9 + missionId.length, held: hidden, walk: null, fade: null,
+        mats: fadeable(root), alpha: 1, // (collected before a rider is attached: each fades on its own)
       };
-      if (hidden) {
-        if (p.kind === 'animal' && p.arrive) { root.visible = false; l.walk = { fx: at.x, fz: at.z, t: -1 }; }
-        else { l.mats = fadeable(root); l.fade = 0; setOpacity(l.mats, 0); }
-      }
+      if (hidden) { root.visible = false; l.alpha = 0; } // out of sight until the reunion
       group.add(root);
       live.push(l);
     }));
@@ -510,7 +562,7 @@ export class Progress {
       if (base) { base.root.attach(l.root); l.riding = true; }
     }
 
-    const b: Built = { missionId, group, frame, live, flag, spots };
+    const b: Built = { missionId, group, frame, live, flag, spots, later: false, rest: new FarRest(REST_NEAR, REST_FAR) };
     env.scene.add(group);
     this.built.set(missionId, b);
     // a replay of this mission stages its game right here: the tableau steps away
@@ -522,20 +574,29 @@ export class Progress {
 
   /** Everything at its place at once (a reload, a replay, reduced motion). */
   private settle(b: Built): void {
+    b.later = false;
+    b.flag.visible = true;
     for (const l of b.live) {
       l.walk = null;
+      l.held = false;
       l.root.visible = true;
       if (!l.riding) l.root.position.set(l.x, l.y, l.z);
-      if (l.fade !== null) { l.fade = null; setOpacity(l.mats, 1); }
+      l.fade = null;
+      l.alpha = 1;
+      setOpacity(l.mats, 1); // (the next frame fades it by its distance)
     }
     b.flag.scale.y = 1;
     delete b.flag.userData.rise;
   }
 
-  /** The reunion: the arriving animals start a few metres out and walk in. */
+  /** The reunion: the flag rises, the props fade up, and the arriving animals start
+   *  a few metres out and walk in. A tableau already standing (a replay) just stands. */
   private startReunion(b: Built): void {
+    if (!b.flag.visible) { b.flag.visible = true; b.flag.userData.rise = 0; }
     for (const l of b.live) {
-      if (!l.walk) continue;
+      if (!l.held) continue;
+      l.held = false;
+      if (!(l.piece.kind === 'animal' && l.piece.arrive)) { l.fade = 0; continue; } // it fades up
       // start 2.4 m further out from the marker, on the line through their spot
       let ox = l.x - b.frame.ox, oz = l.z - b.frame.oz;
       const len = Math.hypot(ox, oz) || 1;
@@ -551,18 +612,11 @@ export class Progress {
 
   private stepWalk(l: Live, dt: number, reduced: boolean): void {
     const w = l.walk!;
-    if (w.t < 0) return; // waiting for the reunion to start
     w.t = reduced ? 1 : Math.min(1, w.t + dt / (REUNION_S - 0.3));
     const k = easeInOut(w.t);
     const x = w.fx + (l.x - w.fx) * k, z = w.fz + (l.z - w.fz) * k;
     l.root.position.set(x, this.env.groundY(x, z) + (l.piece.lift ?? 0), z);
     if (w.t >= 1) { l.walk = null; l.root.position.set(l.x, l.y, l.z); l.spawned?.clip?.('idle'); }
-  }
-
-  private stepFade(l: Live, dk: number): void {
-    l.fade = Math.min(1, (l.fade ?? 0) + dk);
-    setOpacity(l.mats, l.fade);
-    if (l.fade >= 1) l.fade = null;
   }
 
   /** Calm procedural breathing for the static-mesh animals (the rigged ones idle). */
@@ -603,32 +657,6 @@ function facing(p: Piece, f: Frame, at: { x: number; z: number }): number {
   }
   if (p.face === 'lens' || p.face === undefined) return back;
   return back + p.face;
-}
-
-/** Materials of a freshly spawned piece, made fadeable (spawns own their materials);
- *  each remembers how it was drawn, so a finished fade gives it back exactly. */
-function fadeable(root: THREE.Object3D): THREE.Material[] {
-  const out: THREE.Material[] = [];
-  root.traverse((o) => {
-    const m = (o as THREE.Mesh).material;
-    if (!m) return;
-    for (const x of Array.isArray(m) ? m : [m]) {
-      x.userData.solid ??= { transparent: x.transparent, opacity: x.opacity, depthWrite: x.depthWrite };
-      out.push(x);
-    }
-  });
-  return out;
-}
-
-function setOpacity(mats: THREE.Material[], k: number): void {
-  for (const m of mats) {
-    const was = m.userData.solid as { transparent: boolean; opacity: number; depthWrite: boolean };
-    const done = k >= 1;
-    const transparent = done ? was.transparent : true;
-    if (m.transparent !== transparent) { m.transparent = transparent; m.needsUpdate = true; }
-    m.opacity = was.opacity * k;
-    m.depthWrite = done ? was.depthWrite : k > 0.6;
-  }
 }
 
 /** A slim wooden stake (m tall), feet at y=0: what a wildcamera is strapped to. */

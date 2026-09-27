@@ -17,6 +17,7 @@ import { applyEyes } from '../EyeMaterial';
 import { applyCoat, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
 import { livePolicy } from '../MotionMode';
+import { mergeColourSplits } from './merge';
 import type { SpawnOpts, Spawned } from './types';
 
 /** content animal id → the world's GLB manifest id: the ONE cast table (the mission
@@ -148,6 +149,7 @@ export async function spawnModel(id: string, opts: SpawnOpts = {}): Promise<Spaw
   applyCoat(prepped, glb);
   applyPosture(prepped, glb);
   applyCalmPose(prepped, glb);
+  mergeColourSplits(prepped); // one draw call per animal, not one per colour
   let mixer: THREE.AnimationMixer | null = null;
   let current: THREE.AnimationAction | null = null;
   const CLIP: Record<string, RegExp> = { idle: /idle|rest|stand|breath/i, walk: /walk/i, graze: /graze|eat/i };
@@ -242,5 +244,6 @@ export async function spawnPlant(id: string, height: number): Promise<Spawned | 
   if (!m) return null;
   ownMaterials(m);
   const prepped = prepModel(m, height);
+  mergeColourSplits(prepped);
   return { root: prepped, update: () => {}, dispose: disposer(prepped), rigged: false };
 }

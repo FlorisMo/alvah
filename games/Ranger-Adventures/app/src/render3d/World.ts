@@ -594,9 +594,9 @@ export class World {
     }
 
     this.pois.animate(t, dt, reduced); // each mission marker's animal (secondary motion)
-    this.progress.update(t, dt, reduced, this.camera); // finished tableaus: reunion walks, idle breathing
+    this.progress.update(t, dt, reduced, this.camera, this.activityActive); // finished tableaus: reunion walks, idle breathing
 
-    this.fauna.update(t, dt, reduced); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
+    this.fauna.update(t, dt, reduced, this.camera); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
 
     // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
     // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger

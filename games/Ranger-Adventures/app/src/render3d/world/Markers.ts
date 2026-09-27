@@ -24,6 +24,8 @@ import type { Terrain } from './Terrain';
 import { Labels } from './Labels';
 import { proceduralTotem } from './props';
 import { standOnSoles } from '../play/spawn';
+import { mergeColourSplits } from '../play/merge';
+import { FarRest, restFar } from '../play/fade';
 
 export interface WorldMarker {
   missionId: string;
@@ -40,6 +42,11 @@ const NEAR_R = 2.4;
 const ANCHOR_TURN: Partial<Record<Biome, number>> = { stuifzand: 0.4 };
 /** Per landschap, how far (rad) its 2nd, 3rd … marker fan out left/right of the first. */
 const ANCHOR_FAN: Partial<Record<Biome, number>> = { heide: 0.28 };
+/** Far off, half in the golden-hour fog, a marker's animal calmly fades out and rests
+ *  (beyond ANIMAL_REST_FAR m from the lens; back within ANIMAL_REST_NEAR m). Its halo
+ *  and name-tag stay: they are the way there. */
+const ANIMAL_REST_NEAR = 50;
+const ANIMAL_REST_FAR = 56;
 /** A finished mission's halo + tag pip: a calm green ("klaar"). */
 const FINISHED_COLOR = '#3dbb5c';
 
@@ -52,9 +59,12 @@ export class Markers {
     ring: THREE.MeshBasicMaterial;     // the "go here" halo (turns the finished colour when done)
     finished: boolean;                 // the mission is done: the tag reads "✓ <titel>"
     anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
+    model: THREE.Group | null;         // the loaded animal (fades out far off in the fog)
+    rest: FarRest;
     mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
   }[] = [];
   nearId: string | null = null;                // the mission marker the ranger stands at
+  private readonly lens = { x: 0, z: 0, seen: false }; // where the camera stood last frame
   // W2.2 spawn-clearing hub: the ranger-cabin (a solid prop the ranger walks
   // around) + the case-board (the MISSION hub — proximity opens the mission board
   // overlay WITHOUT tearing the world down). The board has its own proximity/tap/
@@ -168,6 +178,7 @@ export class Markers {
         recipe: gaitFor(mk.modelId), phase: i * 1.7, label, titel: mk.titel,
         ring: ring.material as THREE.MeshBasicMaterial, finished: false,
         anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
+        model: null as THREE.Group | null, rest: new FarRest(ANIMAL_REST_NEAR, ANIMAL_REST_FAR),
       };
       this.list.push(entry);
 
@@ -186,11 +197,13 @@ export class Markers {
           // calm shape). Best-effort — a single-mesh Meshy animal with no named bones is
           // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
           applyCalmPose(prepped, mk.modelId);
+          mergeColourSplits(prepped); // one draw call per animal, not one per colour
           standOnSoles(prepped); // on its hooves (or its lowest point), not in the ground
           // drop the totem (keep the ring), add the real animal
           const totem = group.children.find((c) => c.userData.totem);
           if (totem) group.remove(totem);
           group.add(prepped);
+          entry.model = prepped;
           if (rig.clips.length) {
             // prefer the real baked rig: play a calm idle (or the first clip)
             const mixer = new THREE.AnimationMixer(prepped);
@@ -405,6 +418,9 @@ export class Markers {
    */
   animate(t: number, dt: number, reduced: boolean): void {
     for (const mk of this.list) {
+      // far off, half in the fog, the animal fades out and rests (not drawn): a whole
+      // Veluwe of markers in one view stays inside the draw-call budget
+      if (mk.model && this.lens.seen) restFar(mk.model, mk.rest.step(Math.hypot(this.lens.x - mk.pos.x, this.lens.z - mk.pos.z), dt, reduced));
       if (mk.mixer) {
         mk.mixer.update(reduced ? 0 : dt);
       } else if (mk.anim) {
@@ -536,8 +552,9 @@ export class Markers {
    * no geometry/draw-call change (<150 holds), deterministic so RM frames stay frozen.
    */
   fadeRings(camera: THREE.Camera): void {
-    if (this.groundRings.length === 0) return;
     const cx = camera.position.x, cz = camera.position.z;
+    this.lens.x = cx; this.lens.z = cz; this.lens.seen = true; // (the far marker animals rest by it: animate)
+    if (this.groundRings.length === 0) return;
     const span = this.RING_FADE_FAR - this.RING_FADE_NEAR;
     for (const r of this.groundRings) {
       const d = Math.hypot(cx - r.x, cz - r.z);

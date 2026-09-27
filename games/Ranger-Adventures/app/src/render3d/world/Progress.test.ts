@@ -12,7 +12,7 @@ import test from 'node:test';
 import * as THREE from 'three';
 import { AREA_VELUWE } from '../../content/veluwe.ts';
 import {
-  Progress, TABLEAUS, REUNION_S, heroOf, frameAt, toWorld, spotFree, finishedFlag, earthDen, inReunionView,
+  Progress, TABLEAUS, REUNION_S, HERE_R, REST_NEAR, REST_FAR, heroOf, frameAt, toWorld, spotFree, finishedFlag, earthDen, inReunionView,
   type ProgressEnv, type ReunionView,
 } from './Progress.ts';
 
@@ -70,10 +70,9 @@ function world(extra: Partial<ProgressEnv> = {}) {
 }
 
 /** Advance the module's clock like the World does each frame. */
-function tick(p: Progress, seconds: number, reduced = false): void {
-  const cam = new THREE.PerspectiveCamera();
-  cam.position.set(0, 2, 0);
-  for (let t = 0; t < seconds; t += 1 / 30) p.update(t, 1 / 30, reduced, cam);
+function tick(p: Progress, seconds: number, reduced = false, cam?: THREE.Camera, activity = false): void {
+  if (!cam) { cam = new THREE.PerspectiveCamera(); cam.position.set(0, 2, 0); }
+  for (let t = 0; t < seconds; t += 1 / 30) p.update(t, 1 / 30, reduced, cam, activity);
 }
 
 test('every mission ends in its own tableau, with the animal it is about at its marker', () => {
@@ -239,4 +238,97 @@ test('a reunion gathers IN the picture: seen from behind the ranger, and when he
       }
     }
   }
+});
+
+test('finished at the missiebord: the family stands at its OWN marker and comes home when the ranger comes to look', async () => {
+  // the reload layout, for comparison
+  const ref = world();
+  await ref.progress.complete('frisling', false, false);
+  const home = ref.progress.state().find((s) => s.missionId === 'frisling')!.pieces;
+
+  const w = world();
+  const m = w.markers.find((k) => k.missionId === 'frisling')!;
+  // the board: the ranger stands far from the marker, the lens looks away from it
+  const board = { x: m.x * 0.1, z: m.z * 0.1 };
+  assert.ok(Math.hypot(board.x - m.x, board.z - m.z) > HERE_R);
+  const view = lens({ x: board.x - m.x * 0.2, z: board.z - m.z * 0.2 }, board, 0);
+  const t0 = Date.now();
+  await w.progress.complete('frisling', true, false, view);
+  assert.ok(Date.now() - t0 < 500, 'nothing to wait for at the board: the reward follows the caption');
+  const g = w.scene.getObjectByName('progress-frisling')!;
+  const flag = g.getObjectByName('klaar-flag')!;
+  const pieces = () => g.children.filter((c) => c.name !== 'klaar-flag');
+  // laid out at its marker, exactly as a reload lays it out
+  const at = w.progress.state().find((s) => s.missionId === 'frisling')!.pieces;
+  assert.deepEqual(at.map((p) => [p.id, +p.x.toFixed(6), +p.z.toFixed(6)]), home.map((p) => [p.id, +p.x.toFixed(6), +p.z.toFixed(6)]));
+  for (const p of at) assert.ok(Math.hypot(p.x - m.x, p.z - m.z) < 6, `${p.id} stands at its marker`);
+  // nobody saw it yet: the family waits out of sight while the lens is elsewhere (or a game plays)
+  tick(w.progress, 1, false, view.camera);
+  assert.ok(!flag.visible && pieces().every((c) => !c.visible), 'waiting out of sight');
+  const atMarker = lens(m, { x: 0, z: 0 });
+  tick(w.progress, 1, false, atMarker.camera, true);
+  assert.ok(pieces().every((c) => !c.visible), 'never during a game');
+  // the ranger walks up to the marker: the flag rises and the family walks calmly in
+  tick(w.progress, 0.5, false, atMarker.camera);
+  assert.ok(flag.visible && flag.scale.y < 1, 'the flag is rising');
+  const mid = pieces().map((c) => Math.hypot(c.position.x - m.x, c.position.z - m.z));
+  tick(w.progress, REUNION_S, false, atMarker.camera);
+  assert.ok(Math.abs(flag.scale.y - 1) < 1e-6, 'the flag stands');
+  pieces().forEach((c, i) => {
+    assert.ok(c.visible);
+    assert.ok(Math.hypot(c.position.x - at[i].x, c.position.z - at[i].z) < 1e-6, `${at[i].id} is home`);
+    const d = Math.hypot(c.position.x - m.x, c.position.z - m.z);
+    if (TABLEAUS.frisling.pieces[i].arrive) assert.ok(mid[i] > d + 0.2, `${at[i].id} walked in`);
+  });
+});
+
+test('finished at the missiebord under reduced motion: the family simply stands at its marker', async () => {
+  const w = world();
+  const m = w.markers.find((k) => k.missionId === 'vos')!;
+  const board = { x: m.x * 0.1, z: m.z * 0.1 };
+  await w.progress.complete('vos', true, true, lens({ x: board.x - m.x * 0.2, z: board.z - m.z * 0.2 }, board, 0));
+  const g = w.scene.getObjectByName('progress-vos')!;
+  tick(w.progress, 0.1, true);
+  assert.ok(g.children.every((c) => c.visible), 'everything stands there');
+  assert.equal(g.getObjectByName('klaar-flag')!.scale.y, 1);
+  for (const c of g.children) assert.ok(Math.hypot(c.position.x - m.x, c.position.z - m.z) < 6);
+});
+
+test('a far family calmly fades out and rests (not drawn); the flag stays; coming back it fades in, solid', async () => {
+  const w = world();
+  const m = w.markers.find((k) => k.missionId === 'ecoduct')!;
+  await w.progress.complete('ecoduct', false, false);
+  const g = w.scene.getObjectByName('progress-ecoduct')!;
+  const flag = g.getObjectByName('klaar-flag')!;
+  const pieces = g.children.filter((c) => c !== flag);
+  const opacity = (o: THREE.Object3D): number[] => {
+    const out: number[] = [];
+    o.traverse((x) => { const mat = (x as THREE.Mesh).material as THREE.Material | undefined; if (mat) out.push(mat.opacity); });
+    return out;
+  };
+  const camAt = (d: number): THREE.Camera => {
+    const c = new THREE.PerspectiveCamera();
+    const u = Math.hypot(m.x, m.z);
+    c.position.set(m.x - (m.x / u) * d, 2, m.z - (m.z / u) * d);
+    return c;
+  };
+  const solid = () => pieces.every((c) => c.visible && opacity(c).every((o) => o === 1));
+  tick(w.progress, 0.1, false, camAt(4));
+  assert.ok(solid(), 'up close: solid');
+  // standing still anywhere short of the edge, it stays solid (never a see-through family)
+  tick(w.progress, 3, false, camAt((REST_NEAR + REST_FAR) / 2));
+  assert.ok(solid(), 'between the edges: still solid');
+  // past the far edge: a short calm fade, then it rests
+  tick(w.progress, 0.4, false, camAt(REST_FAR + 5));
+  assert.ok(pieces.every((c) => c.visible && opacity(c).every((o) => o > 0.2 && o < 0.8)), 'fading out, not popping');
+  tick(w.progress, 1, false, camAt(REST_FAR + 5));
+  assert.ok(pieces.every((c) => !c.visible), 'far off: resting, not drawn');
+  assert.ok(flag.visible, 'the klaar flag still stands');
+  tick(w.progress, 3, false, camAt((REST_NEAR + REST_FAR) / 2));
+  assert.ok(pieces.every((c) => !c.visible), 'between the edges it keeps resting (no flicker on the edge)');
+  tick(w.progress, 1.2, false, camAt(REST_NEAR - 2));
+  assert.ok(solid(), 'within the near edge: faded back in, solid again');
+  // reduced motion: a cut
+  tick(w.progress, 1 / 30, true, camAt(REST_FAR + 5));
+  assert.ok(pieces.every((c) => !c.visible), 'reduced motion: it simply rests');
 });
