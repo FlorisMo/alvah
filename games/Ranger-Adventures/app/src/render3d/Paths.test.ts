@@ -199,11 +199,11 @@ test('a mission brought to him puts him where the arrow\'s walk comes in: 1.8 m 
   assert.ok(a.z > VEN_MARKER.z, 'he comes in from the bird hide\'s side');
 });
 
-/** How much of the strip where a game is laid (2.5-6.5 m ahead, 2.4 m either side) is wet. */
+/** How much of the strip where a game is laid (2.5-8.5 m ahead, 2.4 m either side) is wet. */
 function wetAhead(x: number, z: number, h: number): number {
   const fx = Math.sin(h), fz = Math.cos(h);
   let n = 0;
-  for (let v = 2.5; v <= 6.51; v += 1) for (let u = -2.4; u <= 2.41; u += 1.2) if (obstacleGap(VEN, x + fx * v + fz * u, z + fz * v - fx * u) <= 0) n++;
+  for (let v = 2.5; v <= 8.51; v += 1) for (let u = -2.4; u <= 2.41; u += 1.2) if (obstacleGap(VEN, x + fx * v + fz * u, z + fz * v - fx * u) <= 0) n++;
   return n;
 }
 

@@ -455,10 +455,9 @@ export class RouteGuide {
  * `stop` m from it that his walk from P reaches first (a RouteGuide walk in half-metre
  * steps, like Paths.test's walker). A mission brought to the ranger — picked on the
  * missiebord, or "Volgende" at a finished marker — puts him on THIS side of its marker,
- * so its game is staged the way it is when he walks up himself: by the ven the frog's
- * water lies beside him and ahead, never behind him (parent B6; the old straight line
- * from the board faced him into the water, and the stage turned the lens round to dry
- * heath). Pure and deterministic.
+ * the side he would have walked up to (along the trail, round the buildings and the
+ * water, never across them); `openHeading` then turns him to face ground its game can
+ * be laid on. Pure and deterministic.
  */
 export function arrivalSpot(px: number, pz: number, gx: number, gz: number, map: RouteMap = OPEN, stop = 1.8): P {
   const guide = new RouteGuide(map);
@@ -482,8 +481,10 @@ const OPEN_TURNS = [0, 20, -20, 35, -35, 50, -50];
 
 /**
  * The heading nearest `yaw` (up to 50° off it) whose ground ahead is open: the strip
- * 2.5-6.5 m in front and 2.4 m either side, about where a stage (render3d/play/stage.ts)
- * lays a mini-game's patch straight ahead of the lens. The first fully open one wins;
+ * 2.5-8.5 m in front and 2.4 m either side, where a stage (render3d/play/stage.ts) lays
+ * a mini-game's patch straight ahead of the lens (further out on a tablet's narrower
+ * screen: at 1180×820 the frog's patch reached 7.5 m, and a 6.5 m strip let the stage
+ * turn the lens away from the water after all). The first fully open one wins;
  * else the one with the fewest blocked samples. A ranger brought to the frog's marker
  * facing into the ven turns along the shore, so its game is laid on the dry bank with
  * the water beside it, and the lens need not swing round (parent B6).
@@ -494,7 +495,7 @@ export function openHeading(x: number, z: number, yaw: number, clear: (x: number
     const h = yaw + (deg * Math.PI) / 180;
     const fx = Math.sin(h), fz = Math.cos(h);
     let blocked = 0;
-    for (let v = 2.5; v <= 6.51; v += 1) {
+    for (let v = 2.5; v <= 8.51; v += 1) {
       for (let u = -2.4; u <= 2.41; u += 1.2) if (!clear(x + fx * v + fz * u, z + fz * v - fx * u)) blocked++;
     }
     if (blocked < fewest) { fewest = blocked; best = h; }
