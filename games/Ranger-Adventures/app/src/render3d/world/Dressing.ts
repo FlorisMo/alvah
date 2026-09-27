@@ -413,7 +413,7 @@ export class Dressing {
     // behind the tree-line the forest goes on (Terrain.buildFarForest): no view ever
     // reaches the end of the ground plate (parent B11, breaker B9)
     const farMat = new THREE.MeshLambertMaterial({ vertexColors: true, map: farCanopyTexture() });
-    const far = new THREE.Mesh(buildFarForest(bound, (x, z) => this.groundY(x, z)), farMat);
+    const far = new THREE.Mesh(buildFarForest(bound, (x, z) => this.groundY(x, z), this.quality?.treeDetail === 'laag'), farMat);
     far.name = 'far-forest';
     far.raycast = () => {}; // scenery past the rim: never clicked, never a probe's ground
     this.scene.add(far);

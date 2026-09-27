@@ -224,6 +224,7 @@ export const FAR_FOREST_IN = 13;
  *  further out than the bound) can see, so no view ever reaches its end. */
 export const FAR_FOREST_OUT = 330;
 const FAR_AROUND = 420;        // segments round the ring (1.3 m apart at its inner edge)
+const FAR_AROUND_LITE = 240;   // ...on the light tier (an iPad): ~15k triangles, crowns mostly painted
 /** Crowns per side of one canopy tile, and the tile's size in world metres (~3.8 m crowns). */
 const FAR_GRID = 8;
 export const FAR_TILE_M = 30;
@@ -318,10 +319,10 @@ const FAR_LEAF = new THREE.Color('#7f9636');    // oak and birch
  * crowns) behind the real rim trees; its top is a canopy of rounded crowns (modelled where
  * the rings are fine enough, painted everywhere by `farCanopyTexture` on the same layout)
  * in pine stands and lighter oak and birch, and the fog dissolves it into the horizon
- * haze. One draw call, ~46k triangles. Positions, vertex colours and uv (in tile units
+ * haze. One draw call, ~46k triangles (`lite`, the light quality tier: ~15k). Positions, vertex colours and uv (in tile units
  * of world metres, every row alike). `ground` = the drawn ground height.
  */
-export function buildFarForest(bound: number, ground: (x: number, z: number) => number): THREE.BufferGeometry {
+export function buildFarForest(bound: number, ground: (x: number, z: number) => number, lite = false): THREE.BufferGeometry {
   const r0 = bound + FAR_FOREST_IN;
   // the rows from the inside out: the shaded face, then the canopy rings (finer near the rim)
   // The canopy's first ring hangs out over the face (like the crowns of edge trees), so
@@ -333,10 +334,10 @@ export function buildFarForest(bound: number, ground: (x: number, z: number) => 
     { r: r0 + 0.7, kind: 'under', step: 0 },
     { r: r0 - 0.6, kind: 'canopy', step: 1.25 },
   ];
-  for (let r = r0 + 0.8, step = 1.25; r < FAR_FOREST_OUT + step; r += step, step *= 1.045) {
+  for (let r = r0 + 0.8, step = lite ? 2 : 1.25; r < FAR_FOREST_OUT + step; r += step, step *= lite ? 1.08 : 1.045) {
     rows.push({ r: Math.min(r, FAR_FOREST_OUT), kind: 'canopy', step });
   }
-  const A = FAR_AROUND;
+  const A = lite ? FAR_AROUND_LITE : FAR_AROUND;
   const pos = new Float32Array(rows.length * A * 3);
   const col = new Float32Array(rows.length * A * 3);
   const uv = new Float32Array(rows.length * A * 2);

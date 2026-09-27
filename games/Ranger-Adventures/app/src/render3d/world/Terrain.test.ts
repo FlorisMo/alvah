@@ -155,6 +155,12 @@ test('the forest beyond the rim hides the end of the ground plate from every vie
   assert.equal(canopyLow, 0, `every canopy vertex stands ≥ 5 m over the ground (${canopyN} checked)`);
   assert.equal(canopyDown, 0, 'the canopy faces up');
   assert.ok(geo.index!.count / 3 < 60_000, `a light backdrop: ${geo.index!.count / 3} triangles`);
+  // the light tier (an iPad) gets a lighter one that still reaches as far, all the way round
+  const lite = buildFarForest(bound, (x, z) => t.y(x, z), true);
+  const lp = lite.attributes.position as THREE.BufferAttribute;
+  let lMax = 0;
+  for (let i = 0; i < lp.count; i++) lMax = Math.max(lMax, Math.hypot(lp.getX(i), lp.getZ(i)));
+  assert.ok(lite.index!.count / 3 < 20_000 && lMax >= FAR_FOREST_OUT - 0.01, `lite: ${lite.index!.count / 3} triangles out to ${lMax.toFixed(0)} m`);
 });
 
 import { buildPathGeometry } from './Terrain.ts';
