@@ -195,6 +195,7 @@ export class Vehicles {
   private dustVel: Float32Array | null = null;
   private dustAge: Float32Array | null = null;
   private dustLife: Float32Array | null = null;
+  private dustSoil: Float32Array | null = null;   // N strengths: pale sand shows most, dark heath least
   private dustNext = 0;
   private dustDebt = 0;                   // fractional puffs owed (emission is per second)
   private dustSeed = 0x9e3779b1;
@@ -871,10 +872,12 @@ export class Vehicles {
     this.dustVel = new Float32Array(N * 3);
     this.dustAge = new Float32Array(N);
     this.dustLife = new Float32Array(N); // all 0 → every slot starts dead
+    this.dustSoil = new Float32Array(N);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(this.dustPos, 3));
     geo.setAttribute('aAge', new THREE.BufferAttribute(this.dustAge, 1));
     geo.setAttribute('aLife', new THREE.BufferAttribute(this.dustLife, 1));
+    geo.setAttribute('aSoil', new THREE.BufferAttribute(this.dustSoil, 1));
     const uniforms = { uColor: { value: new THREE.Color('#ebdfc4') }, uScale: { value: 700 } };
     const mat = new THREE.ShaderMaterial({
       uniforms,
@@ -884,6 +887,7 @@ export class Vehicles {
         uniform float uScale;
         attribute float aAge;
         attribute float aLife;
+        attribute float aSoil;
         varying float vAlpha;
         void main() {
           float life = max(aLife, 0.0001);
@@ -893,7 +897,7 @@ export class Vehicles {
           float depth = max(-mv.z, 0.5);
           // fade in fast, out slowly; and away near the lens: never a blob over the screen
           float near = smoothstep(2.5, 6.0, depth);
-          vAlpha = smoothstep(0.0, 0.15, f) * (1.0 - f) * alive * near;
+          vAlpha = smoothstep(0.0, 0.15, f) * (1.0 - f) * alive * near * aSoil;
           float metres = mix(0.45, 1.3, f);
           gl_PointSize = clamp(metres * uScale / depth, 1.0, 72.0);
           gl_Position = projectionMatrix * mv;
@@ -935,13 +939,15 @@ export class Vehicles {
   /** W5.2: puffs off the two REAR wheels, low on the ground, at a rate that follows
    *  the pace and the ground (sand kicks up most, heather and forest floor less). */
   private emitDust(dt: number, pace: number): void {
-    if (!this.jeepPos || !this.dustPos || !this.dustVel || !this.dustAge || !this.dustLife) return;
+    if (!this.jeepPos || !this.dustPos || !this.dustVel || !this.dustAge || !this.dustLife || !this.dustSoil) return;
     const soil: Record<Biome, number> = { stuifzand: 1, heide: 0.55, bos: 0.35, ven: 0.3 };
+    const shows: Record<Biome, number> = { stuifzand: 1, heide: 0.45, bos: 0.35, ven: 0.35 }; // on dark ground a pale puff stands out: fainter
     const jp = this.jeepPos;
     const h = this.jeepHeading;
     const fx = Math.sin(h), fz = Math.cos(h);  // forward
     const lx = fz, lz = -fx;                   // left-of-forward
-    this.dustDebt += dt * 34 * pace * soil[this.terrain.biome(jp.x, jp.z)];
+    const biome = this.terrain.biome(jp.x, jp.z);
+    this.dustDebt += dt * 34 * pace * soil[biome];
     while (this.dustDebt >= 1) {
       this.dustDebt -= 1;
       const i = this.dustNext;
@@ -959,6 +965,7 @@ export class Vehicles {
       this.dustVel[i * 3 + 2] = lz * spread - fz * 0.3;
       this.dustAge[i] = 0;
       this.dustLife[i] = 0.9 + this.dustRand() * 0.6;
+      this.dustSoil[i] = shows[biome];
     }
   }
 
@@ -982,6 +989,7 @@ export class Vehicles {
     (g.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     (g.getAttribute('aAge') as THREE.BufferAttribute).needsUpdate = true;
     (g.getAttribute('aLife') as THREE.BufferAttribute).needsUpdate = true;
+    (g.getAttribute('aSoil') as THREE.BufferAttribute).needsUpdate = true;
     if (this.warmFrames > 0 && --this.warmFrames === 0 && !this.inHeli) for (const b of this.beacons) b.visible = false;
     this.dust.visible = anyAlive || this.warmFrames > 0;
   }
