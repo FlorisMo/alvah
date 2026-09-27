@@ -18,12 +18,17 @@ main.ts ── title card ─► ui/Missions.ts (thin entry)
 render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls update(dt),
                    exposes the public API the flow uses, and ctx() for the mini-games
    world/Terrain.ts     THE ground: mesh, terrain.y(x,z), biome, intersectRay. One truth.
-   world/Dressing.ts    trees + rim, grass + wind, water, paths, cabin, landmarks, props
+   world/Dressing.ts    grass + wind, water, paths, cabin, landmarks, props, collision list
+   world/Forest.ts      every tree: instanced real GLBs per distance level (Lod.ts), per-tree
+                        occluder fade (only the crowns between camera and ranger fade)
+   world/Progress.ts    lasting per-mission tableau at a finished marker (onMissionComplete)
    world/Fauna.ts       warden, poacher, roaming animals
    world/Markers.ts     mission markers, missiebord, sit-spot, proximity, wayfinding
    world/Vehicles.ts    jeep, helicopter + pads, dust
    world/Player.ts      the ranger rig, on-foot movement, footsteps
-   world/CameraRig.ts   follow camera, orbit, occluder fade decision, reframes
+   world/CameraRig.ts   follow camera (told by the player's steering, never chasing), orbit,
+                        clear-view search, occluder-fade decision, reframes
+   RangerLook.ts        paints the avatar maker's choices onto the ranger GLB
    world/Sky.ts, Labels.ts, props.ts, DevReadback.ts
                             │
 render3d/play/     the mini-game kit: stage.ts (a per-step staged patch), spawn.ts

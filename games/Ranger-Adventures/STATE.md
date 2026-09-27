@@ -4,6 +4,27 @@
 > it was verified. Goal and steps: [GOAL.md](GOAL.md).
 > ✅ works · 🟡 works with problems · ❌ blocks the player
 
+## 2026-09-27 07:00: after wave 2 (`npm run golden` + `missions.spec` on main, screenshots looked at)
+
+**Golden: 7 of 8 steps pass, nothing blocks the player.** All ten missions pass at their
+real markers with real clicks (`npx playwright test e2e/missions.spec.ts`: 15/15, incl. the
+season finale, the 2D floor, the bird bench and a mission started from the missiebord).
+Root `npm run build` (the deploy build) is green.
+
+| # | Step | Status | What a player experiences |
+|---|------|--------|---------------------------|
+| 1 | Opening screen | ✅ | Warm heath with real heather and grass tufts; ~260k triangles. |
+| 2 | Make your ranger | ✅ | Skin, hair, jacket and eyes show on the 3D ranger (world, maker preview). |
+| 3 | Walk the world | ✅ | Tank keys: ↑ walks, ↓ backs up, ←/→ turn; the camera settles within ~6° of a release and never swings to face him. Drag to look, click to walk, solid buildings. 0.25–0.46M triangles. |
+| 4 | Jeep / helicopter | ✅ | Jeep faces forward, driver seated, soft collisions, faint tracks, clear key hint. Heli flies to a pad and lands on it. |
+| 5 | Go to mission 1 | 🟡 | Works; the view of the ranger was briefly blocked in 5 of 150 samples on the walk. |
+| 6 | Mission 1 mini-games | ✅ | zoeken, corsi, rustkracht won with real clicks, in the world, with real animals. |
+| 7 | Finish mission | ✅ | The sow with three striped piglets stays at the marker, a ✓ flag and halo; a calm reunion plays. |
+| 8 | Back in the world | ✅ | Next mission offered; progress and the reunited family survive a reload. |
+
+Known red outside golden: 4 older e2e specs (anim flaky under load, friction/nachtronde,
+quality laag tier, sitspot's renamed roep card).
+
 ## 2026-09-27 00:58: after wave 1 (`npm run golden` on main + screenshots looked at)
 
 **Nothing blocks the player any more:** golden plays 1 → 8 with real keys and clicks and
