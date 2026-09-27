@@ -21,7 +21,6 @@ import {
   screenVector, tankAxes, turnStep, approachAngle, stickBackpedal, stickHeading, wrapPi,
   JOYSTICK_DEADZONE, ALIGN_GAP, BACK_SPEED, PIVOT_RATE, type StickVector,
 } from '../../core/input';
-import { FOLLOW_MAX_RATE } from '../FollowCam';
 import { attachInput, type InputHandle } from '../../core/attach-input';
 import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../../core/footstep';
 import { Sound } from '../../core/sound';
@@ -43,7 +42,7 @@ const RIM_HINT = 3.5;
 // degrees of release). Stick / tap-walk: it eases in behind him slowly, and only
 // when he walks roughly into the screen (within CAM_BEHIND_GAP of the view).
 const CAM_TANK_TAU = 0.07;
-const CAM_TANK_RATE = FOLLOW_MAX_RATE;
+const CAM_TANK_RATE = (100 * Math.PI) / 180; // just above the 90°/s turn: it catches up, never whips
 const CAM_BEHIND_TAU = 0.8;
 const CAM_BEHIND_RATE = (40 * Math.PI) / 180;
 const CAM_BEHIND_GAP = (75 * Math.PI) / 180;
@@ -606,6 +605,11 @@ export class Player {
     //    along a grid line — the centre-column click at spawn — still lands)
     const p = this.terrain.intersectRay(this.raycaster.ray);
     if (p) this.target.set(p.x, 0, p.z);
+  }
+
+  /** A past-threshold mouse / finger drag is looking around right now. */
+  get dragging(): boolean {
+    return this.dragId !== null && this.dragMoved;
   }
 
   /** Dev-hook accessor (WORLD-PLAN §3.1): the ranger's world position {x,z}. */

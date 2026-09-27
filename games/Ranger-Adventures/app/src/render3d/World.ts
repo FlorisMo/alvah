@@ -191,6 +191,11 @@ export class World {
         mode: () => ({ inVehicle: this.vehicles.inVehicle, inHeli: this.vehicles.inHeli }),
         inputBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
         afterPlace: () => this.pois.fadeRings(this.camera),
+        creatures: () => [ // what stands on the ground, for the clear view (marker animals ~1 m, as the dev hook reads them)
+          ...this.pois.list.map((m) => ({ x: m.group.position.x, y: m.group.position.y, z: m.group.position.z, h: 1.0 })),
+          ...this.fauna.scenicActors.map((a) => ({ x: a.group.position.x, y: a.group.position.y, z: a.group.position.z, h: a.height })),
+          ...this.fauna.ambient.filter((a) => !a.glide).map((a) => ({ x: a.group.position.x, y: a.group.position.y, z: a.group.position.z, h: a.h })),
+        ],
       },
     );
     this.scene.add(this.dressing.buildPaths()); // W4.3: sand-path ribbons over the ground
@@ -212,8 +217,9 @@ export class World {
     this.pois.placeSitSpot();
     this.dressing.placeNatureDressing();
     this.fauna.placeScenicActors();
-    // people are solid: the ranger walks round the warden and the poacher, never through them
-    for (const a of this.fauna.scenicActors) this.obstacles.push({ x: a.group.position.x, z: a.group.position.z, r: 0.45 });
+    // people are solid: the ranger walks round the warden and the poacher (with a child's
+    // bit of personal space), never through them
+    for (const a of this.fauna.scenicActors) this.obstacles.push({ x: a.group.position.x, z: a.group.position.z, r: 1.1 });
     this.fauna.placeAmbientLife();
     this.vehicles.placeJeep();
     this.vehicles.placeHelipads();
