@@ -33,15 +33,17 @@ async function enterWorld(page: Page): Promise<void> {
 }
 
 test('anim: holding a key plays the walk clip and its mixer clock advances', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
 
   await enterWorld(page);
 
-  // the rig loads async (loadRig + mixer wiring); wait until clip() reports.
+  // the rig loads async (loadRig + mixer wiring); wait until clip() reports. It takes
+  // ~1 s alone and over 30 s with other worlds booting on the same GPU (TEST-2).
   await expect
     .poll(() => hook(page, (r) => (r.clip() ? r.clip()!.name : null)), {
-      timeout: 30_000, message: 'player rig should attach and clip() report a gait',
+      timeout: 60_000, message: 'player rig should attach and clip() report a gait',
     })
     .not.toBeNull();
 

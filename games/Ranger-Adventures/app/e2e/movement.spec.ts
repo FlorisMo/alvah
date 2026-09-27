@@ -69,7 +69,8 @@ test('movement: tap-to-walk moves the ranger ≥2 m @smoke', async ({ page }, te
     const d = p ? Math.hypot(p.x - sx, p.z - sz) : 0;
     const frames = (r.frames() ?? 0) - f0;
     return d >= 2 || frames >= n ? { d, frames } : false;
-  }, { sx: start!.x, sz: start!.z, f0: f0!, n: WALK_FRAMES }, { timeout: 0, polling: 200 }).then((h) => h.jsonValue());
+  }, { sx: start!.x, sz: start!.z, f0: f0!, n: WALK_FRAMES }, { timeout: 0, polling: 200 })
+    .then((h) => h.jsonValue() as Promise<{ d: number; frames: number }>);
   expect(walked.d, `the ranger should walk ≥2 m toward the tapped ground (walked ${walked.d.toFixed(2)} m in ${walked.frames} frames)`)
     .toBeGreaterThanOrEqual(2);
 

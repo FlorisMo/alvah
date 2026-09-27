@@ -469,7 +469,7 @@ test('reduced motion: mission 1 on the 2D floors with real clicks, and its reuni
 });
 
 test('the bird bench on the 2D floor (Tweaks "altijd 2D"): RoepView plays and hands the world back @missions', async ({ page, context }, info) => {
-  test.setTimeout(4 * 60_000);
+  test.setTimeout(6 * 60_000); // 1.4 min alone; ran out of 4 min with other worlds on the GPU
   await context.addInitScript((seed) => {
     if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: seed }));
   }, { avatarGemaakt: true, settings: { wereldHintGezien: true, tikHintGezien: true, force2d: true } });
@@ -479,7 +479,7 @@ test('the bird bench on the 2D floor (Tweaks "altijd 2D"): RoepView plays and ha
     const sit = await R<{ x: number; z: number } | null>(page, 'r.sitSpot()');
     log.hard(!!sit, 'no sit-spot');
     const w = await walkTo(page, sit!, { stopDist: 1.0, timeout: 90_000 });
-    log.note(`walked to the bench: ${w.res}`);
+    log.note(`walked to the bench: ${w.res} in ${(w.ms / 1000).toFixed(1)} s`);
     await click(log, 'Luister naar de vogels', 'bench');
     await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 5_000 }).toBe('2d');
     await click(log, 'Luister', 'roep intro');

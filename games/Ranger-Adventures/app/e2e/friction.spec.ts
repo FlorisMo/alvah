@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
+import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { walkTo } from './golden-lib';
 
 /**
  * In-world mission friction audit (WORLD-PLAN W6.1). Walks the ranger to a real
@@ -46,41 +47,17 @@ async function enterWorld(page: Page): Promise<void> {
   await expect.poll(() => hook(page, (r) => r.screen), { timeout: 30_000 }).toBe('world');
 }
 
-const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
-
 /**
- * Steer the ranger to the marker of a SPECIFIC mission with arrow keys until its
- * proximity fires (the tank keys: helpers.keySteer turns him until it is ahead,
- * then walks, side-stepping when something stops him).
+ * Walk the ranger to the marker of a SPECIFIC mission with the arrow keys until its
+ * proximity fires (golden-lib walkTo: turn toward it, walk, go round what stops him).
  */
 async function walkToMarker(page: Page, missionId: string): Promise<void> {
   const markers = await hook(page, (r) => r.markers());
   expect(markers, 'markers() available in world').not.toBeNull();
   const target = markers!.find((m) => m.missionId === missionId);
   expect(target, `a world marker exists for ${missionId}`).toBeTruthy();
-
-  const down = new Set<string>();
-  const sync = async (want: Set<string>): Promise<void> => {
-    for (const k of KEYS) {
-      if (want.has(k) && !down.has(k)) { await page.keyboard.down(k); down.add(k); }
-      else if (!want.has(k) && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
-    }
-  };
-  const steer = await keySteer(page);
-  try {
-    for (let i = 0; i < 220; i++) {
-      if (await hook(page, (r) => r.nearId()) === missionId) return;
-      const p = await hook(page, (r) => r.pos());
-      const yaw = await hook(page, (r) => r.cameraYaw());
-      if (!p || yaw == null) { await page.waitForTimeout(100); continue; }
-      const dx = target!.x - p.x, dz = target!.z - p.z;
-      await sync(steer(dx, dz, yaw)); // the arrow keys a child would hold (helpers.keySteer)
-      await page.waitForTimeout(120);
-    }
-    throw new Error(`ranger never reached the ${missionId} marker within the step budget`);
-  } finally {
-    await sync(new Set());
-  }
+  const w = await walkTo(page, target!, { until: (s) => s.near === missionId, timeout: 150_000 });
+  expect(w.res, `the ranger reached the ${missionId} marker (${w.res} at ${w.end.x.toFixed(1)}, ${w.end.z.toFixed(1)})`).toBe('until');
 }
 
 /** Open the veldnotitie at the marker with Space (interact key), then start it. */
@@ -160,7 +137,7 @@ const AUDIT = [
 
 for (const { mission, engines, beats } of AUDIT) {
   test(`friction: ${mission} plays from its world marker (${engines}), no rough edges`, async ({ page }, testInfo) => {
-    test.setTimeout(90_000 + beats * 45_000); // walk-to-marker + each beat's play, on slow SwiftShader
+    test.setTimeout(180_000 + beats * 60_000); // the walk to the marker + each beat, with other worlds on the GPU
     const errors: string[] = [];
     collectPageErrors(page, errors);
 
