@@ -610,6 +610,9 @@
   background: rgba(253, 246, 232, 0.16);
   font: 600 24px/1 var(--font-body);
 }
+/* the arrow turns with the bearing (ExploreHud.onWayfind sets its rotate) — a calm, short
+   ease; under reduced motion base.css `.rm *` makes it a plain step */
+.explore-wayfind .wf-glyph { transition: transform 0.2s ease-out; }
 .explore-wayfind .wf-text, .explore-klaar .wf-text { display: flex; flex-direction: column; line-height: 1.25; }
 .explore-wayfind .wf-doel, .explore-klaar .wf-doel { font: 600 16px/1.25 var(--font-body); }
 .explore-wayfind .wf-cue, .explore-klaar .wf-cue { font: 500 14px/1.25 var(--font-body); opacity: 0.85; }

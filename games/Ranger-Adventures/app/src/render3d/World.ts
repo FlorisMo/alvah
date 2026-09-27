@@ -160,7 +160,7 @@ export class World {
     });
     this.fauna = new Fauna({ scene: this.scene, terrain: this.terrain });
     this.pois = new Markers(
-      { scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, labels: this.labels },
+      { scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, labels: this.labels, limits: this.limits },
       { onApproach, onInteract, onWayfind }, activeId,
     );
     this.player = new Player(

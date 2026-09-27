@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  ARRIVE_RADIUS, bearing, cue, distanceTo, wayfind, type WayCue,
+  ARRIVE_RADIUS, bearing, cue, distanceTo, wayfind, SteadyCue, CUE_HOLD_MS, CUE_HYSTERESIS, type WayCue,
 } from './Wayfinding.ts';
 
 const NEAR = 1e-9;
@@ -71,6 +71,38 @@ test('wayfind composes pose → cue deterministically', () => {
   const b = wayfind(0, 0, 0, 10, 10);
   assert.deepEqual(a, b);
   assert.equal(a.arrived, false);
+});
+
+test('steady cue: a bearing wobbling round a bucket edge never flickers the words (child B10)', () => {
+  const s = new SteadyCue();
+  // walking toward a marker ~34° off to the left: the bearing wobbles ±6° round the 0.6 rad edge
+  const seen = new Set<string>();
+  for (let t = 0; t < 10_000; t += 100) {
+    const a = -0.6 + 0.1 * Math.sin(t / 130);
+    seen.add(s.update(a, 30, t).richting);
+  }
+  assert.equal(seen.size, 1, `the words changed: ${[...seen].join(' / ')}`);
+});
+
+test('steady cue: words change once the bearing is well past the edge, then hold', () => {
+  const s = new SteadyCue();
+  assert.equal(s.update(0, 30, 0).richting, 'recht vooruit');
+  // just past the edge: still ahead (hysteresis)
+  assert.equal(s.update(0.6 + CUE_HYSTERESIS * 0.5, 30, 2000).richting, 'recht vooruit');
+  // clearly right now, and it has been ahead for long: the words change at once
+  assert.equal(s.update(1.0, 30, 2100).richting, 'naar rechts');
+  // swinging straight back: held for CUE_HOLD_MS, then allowed
+  assert.equal(s.update(0, 30, 2100 + CUE_HOLD_MS - 100).richting, 'naar rechts');
+  assert.equal(s.update(0, 30, 2100 + CUE_HOLD_MS + 1).richting, 'recht vooruit');
+});
+
+test('steady cue: arriving is never held back, and the true angle travels with the cue', () => {
+  const s = new SteadyCue();
+  s.update(1.0, 30, 0);
+  const here = s.update(-1.0, 1.0, 10);
+  assert.equal(here.arrived, true);
+  assert.equal(here.richting, 'je bent er');
+  assert.equal(s.update(0.3, 30, 20).angle, 0.3); // the chip turns its arrow by this
 });
 
 function pick(c: WayCue): { glyph: string; richting: string } {

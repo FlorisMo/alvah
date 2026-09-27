@@ -78,6 +78,68 @@ export function cue(angle: number, distance: number): WayCue {
   return { angle, distance, glyph, richting, afstand, arrived: false };
 }
 
+/** The direction buckets of `cue`, in order round the ranger: each with its glyph and
+ *  words and the bearing range (rad) it covers. */
+type Bucket = 'ahead' | 'slightRight' | 'right' | 'behind' | 'left' | 'slightLeft';
+const BUCKETS: Record<Bucket, { glyph: string; richting: string; lo: number; hi: number }> = {
+  ahead: { glyph: '↑', richting: 'recht vooruit', lo: -0.6, hi: 0.6 },
+  slightRight: { glyph: '↗', richting: 'naar rechts', lo: 0.6, hi: 1.5 },
+  right: { glyph: '→', richting: 'naar rechts', lo: 1.5, hi: 2.4 },
+  behind: { glyph: '↓', richting: 'achter je', lo: 2.4, hi: 2 * Math.PI - 2.4 }, // wraps round ±π
+  left: { glyph: '←', richting: 'naar links', lo: -2.4, hi: -1.5 },
+  slightLeft: { glyph: '↖', richting: 'naar links', lo: -1.5, hi: -0.6 },
+};
+
+function bucketOf(a: number): Bucket {
+  if (Math.abs(a) < 0.6) return 'ahead';
+  if (Math.abs(a) >= 2.4) return 'behind';
+  if (a > 0) return a < 1.5 ? 'slightRight' : 'right';
+  return a > -1.5 ? 'slightLeft' : 'left';
+}
+
+/** Is bearing `a` inside the bucket's range grown by `grow` rad on each side? */
+function inBucket(b: Bucket, a: number, grow: number): boolean {
+  const { lo, hi } = BUCKETS[b];
+  const x = b === 'behind' && a < 0 ? a + 2 * Math.PI : a;
+  return x >= lo - grow && x <= hi + grow;
+}
+
+/** How far (rad, ~8°) the bearing must pass a bucket edge before the cue changes. */
+export const CUE_HYSTERESIS = 0.14;
+/** The words on the chip stay at least this long (ms) before they change again. */
+export const CUE_HOLD_MS = 1000;
+
+/**
+ * The chip's cue over time, for a dyslexic reader: the words never flicker (child
+ * B10). A bearing near a bucket edge keeps the words it has until it is CUE_HYSTERESIS
+ * past the edge, and once changed the words stay CUE_HOLD_MS before they change again.
+ * Arriving ("je bent er") is never held back. Pure: the caller passes the clock.
+ */
+export class SteadyCue {
+  private shown: Bucket | null = null;
+  private since = 0;
+
+  /** Forget the words shown (a new goal): the next cue shows at once. */
+  reset(): void {
+    this.shown = null;
+  }
+
+  update(angle: number, distance: number, nowMs: number): WayCue {
+    const raw = cue(angle, distance);
+    if (raw.arrived) { this.shown = null; return raw; }
+    let b = this.shown;
+    if (b === null) {
+      b = bucketOf(angle);
+      this.since = nowMs;
+    } else if (!inBucket(b, angle, CUE_HYSTERESIS) && nowMs - this.since >= CUE_HOLD_MS) {
+      b = bucketOf(angle);
+      this.since = nowMs;
+    }
+    this.shown = b;
+    return { ...raw, glyph: BUCKETS[b].glyph, richting: BUCKETS[b].richting };
+  }
+}
+
 /** One-shot helper: ranger pose + target → the ready-to-render cue. */
 export function wayfind(px: number, pz: number, facingY: number, tx: number, tz: number): WayCue {
   return cue(bearing(px, pz, facingY, tx, tz), distanceTo(px, pz, tx, tz));

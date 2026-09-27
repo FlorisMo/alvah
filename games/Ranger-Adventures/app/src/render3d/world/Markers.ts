@@ -16,10 +16,11 @@ import { applyEyes } from '../EyeMaterial';
 import { applyCoat, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
 import { gaitFor, motionAt, REST, type MotionRecipe } from '../ProceduralMotion';
-import { wayfind, bearing, cue as makeCue, distanceTo, type WayCue } from '../Wayfinding';
-import { routeVia } from '../Paths';
+import { wayfind, bearing, distanceTo, SteadyCue, type WayCue } from '../Wayfinding';
+import { RouteGuide, RouteMap } from '../Paths';
+import { VEN_CENTER } from '../Biomes';
 import { ROEP_COPY } from '../../engines/roep';
-import { boxObstacle, type Obstacle } from '../CharacterController';
+import { boxObstacle, type MoveLimits, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { Labels } from './Labels';
 import { proceduralTotem } from './props';
@@ -47,6 +48,8 @@ const ANCHOR_FAN: Partial<Record<Biome, number>> = { heide: 0.28 };
  *  and name-tag stay: they are the way there. */
 const ANIMAL_REST_NEAR = 50;
 const ANIMAL_REST_FAR = 56;
+/** The chip's arrow turns with the bearing in steps of this many rad (~4°). */
+const ARROW_STEP = 0.07;
 /** A finished mission's halo + tag pip: a calm green ("klaar"). */
 const FINISHED_COLOR = '#3dbb5c';
 
@@ -95,6 +98,11 @@ export class Markers {
   private activeId: string | null = null;     // the mission the wayfinding cue points to
   private labelsOn = true;                     // false while an in-place activity runs (W6.1)
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
+  // the steady arrow (parent B1, child B10): one route followed with memory, words that
+  // never flicker, and the pose they were last worked out for (to re-send them at once)
+  private guide: RouteGuide | null = null;
+  private readonly steady = new SteadyCue();
+  private lastPose: { x: number; z: number; facing: number } | null = null;
   private readonly onApproach: (missionId: string | null) => void;
   private readonly onInteract: (missionId: string) => void;
   private readonly onWayfind: (cue: WayCue | null) => void;
@@ -104,10 +112,11 @@ export class Markers {
   private readonly scene: THREE.Scene;
   private readonly terrain: Terrain;
   private readonly obstacles: Obstacle[];
+  private readonly limits: MoveLimits | null;
   private readonly labels: Labels;
 
   constructor(
-    env: { scene: THREE.Scene; terrain: Terrain; obstacles: Obstacle[]; labels: Labels },
+    env: { scene: THREE.Scene; terrain: Terrain; obstacles: Obstacle[]; labels: Labels; limits?: MoveLimits },
     cbs: {
       onApproach: (missionId: string | null) => void;
       onInteract: (missionId: string) => void;
@@ -118,6 +127,7 @@ export class Markers {
     this.scene = env.scene;
     this.terrain = env.terrain;
     this.obstacles = env.obstacles;
+    this.limits = env.limits ?? null;
     this.labels = env.labels;
     this.onApproach = cbs.onApproach;
     this.onInteract = cbs.onInteract;
@@ -395,10 +405,24 @@ export class Markers {
     m.label.scale.copy(fresh.scale);
   }
 
-  /** Re-point the wayfinding cue at another mission (e.g. after one is completed). */
+  /** Point the wayfinding cue at a mission (after one is completed, or when the HUD is
+   *  drawn afresh) and send the cue for it at once, from where the ranger stands: a new
+   *  chip never waits for his first step (parent B12). The same mission keeps its route. */
   setActiveMission(id: string | null): void {
+    if (id !== this.activeId) { this.guide?.reset(); this.steady.reset(); }
     this.activeId = id;
     this.lastWayKey = '';
+    if (this.lastPose) this.updateWayfinding(this.lastPose.x, this.lastPose.z, this.lastPose.facing);
+  }
+
+  /** What a route may not cross off the sand: the buildings (the cabin and the
+   *  landmarks, every big solid box) and the ven's water, where he stops at the shore.
+   *  Built once, on the first cue: by then every building stands. */
+  private routeMap(): RouteMap {
+    const solids: Obstacle[] = this.obstacles.filter((o) => !!o.box && o.r >= 2);
+    solids.push({ x: VEN_CENTER.x, z: VEN_CENTER.z, r: 18 }); // the submerged ven (World.limits.blocked)
+    const lim = this.limits;
+    return new RouteMap(solids, (x, z) => !lim || (Math.hypot(x, z) < lim.bound - 1 && !lim.blocked?.(x, z)));
   }
 
   /** The live `richting` phrase (relative to facing) toward a mission marker, for
@@ -460,19 +484,21 @@ export class Markers {
 
   /**
    * The wayfinding cue to the active mission — calm direction + distance, no minimap.
-   * Debounced so the diegetic HUD only re-renders when the words actually change.
-   * W4.3: the ARROW aims at the next sand-path waypoint (routeVia) while the distance
-   * and "je bent er" stay measured to the real marker, so the child walks the trail
-   * then peels off at the end.
+   * W4.3: the ARROW aims along the route (RouteGuide: the sand paths when they are worth
+   * it, round the buildings and the water) while the distance and "je bent er" stay
+   * measured to the real marker. The words hold steady (SteadyCue); the chip's arrow
+   * turns with the bearing, so it is sent again whenever that turns by a few degrees.
    */
   updateWayfinding(x: number, z: number, facing: number): void {
+    this.lastPose = { x, z, facing };
     const goal = this.activeId ? this.list.find((m) => m.missionId === this.activeId) : null;
     if (goal) {
-      const wp = routeVia(x, z, goal.pos.x, goal.pos.z);
+      this.guide ??= new RouteGuide(this.routeMap());
+      const wp = this.guide.aim(x, z, goal.pos.x, goal.pos.z);
       const angle = bearing(x, z, facing, wp.x, wp.z);
       const dist = distanceTo(x, z, goal.pos.x, goal.pos.z);
-      const cue = makeCue(angle, dist);
-      const key = `${cue.glyph}|${cue.richting}|${cue.afstand}`;
+      const cue = this.steady.update(angle, dist, performance.now());
+      const key = `${cue.glyph}|${cue.richting}|${cue.afstand}|${Math.round(angle / ARROW_STEP)}`;
       if (key !== this.lastWayKey) { this.lastWayKey = key; this.onWayfind(cue); }
     } else if (this.lastWayKey !== '') {
       this.lastWayKey = ''; this.onWayfind(null);

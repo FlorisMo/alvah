@@ -18,7 +18,7 @@ import { Joystick } from '../Joystick';
 import { coarsePointer, deviceText } from './device';
 import { session, esc, plainCard } from '../flow/session';
 import { showBriefing } from '../flow/MissionFlow';
-import { playRoepAtSitSpot } from '../flow/WorldSession';
+import { playRoepAtSitSpot, nextMissionId } from '../flow/WorldSession';
 import { showPauseHub, showMissionBoard } from '../hub/Hub';
 
 // the on-screen joystick (W1.3) lives inside the explore HUD; re-created each
@@ -49,7 +49,6 @@ export function disposeExploreHud(): void {
   if (tipTimer) { clearTimeout(tipTimer); tipTimer = 0; }
   hintState.active = null; hintState.helpChip = false;
   if (joystick) { joystick.dispose(); joystick = null; }
-  lastCue = null;
 }
 
 export function showExploreHud(activeTitel: string | null): void {
@@ -87,9 +86,9 @@ export function showExploreHud(activeTitel: string | null): void {
   // The HUD overlays the LIVE world: its wrapper must let taps fall through to the
   // canvas for tap-to-walk (W0.4); `.explore-overlay` reclaims transparency.
   el.classList.add('explore-overlay');
-  // the world only sends a cue when its words change: a fresh HUD shows the last
-  // one at once instead of "zoek het spoor…" until the ranger has walked a metre
-  if (lastCue && lastCue.titel === activeTitel) onWayfind(lastCue.cue);
+  // a fresh chip gets its cue at once, from where the ranger stands, instead of
+  // "zoek het spoor…" until he has walked a step (parent B12)
+  world?.setActiveMission(nextMissionId());
   el.querySelector('.explore-pause')?.addEventListener('click', () => showPauseHub());
   const hud = el.querySelector<HTMLElement>('.explore-hud');
   mountJoystick(hud);
@@ -360,14 +359,15 @@ function mountJoystick(hud: HTMLElement | null): void {
 }
 
 /* ------------------------------------------------------- wayfinding ---- */
-/** The last cue the world sent, and for which mission title (see showExploreHud). */
-let lastCue: { titel: string; cue: WayCue } | null = null;
+/** The chip arrow's turn so far (rad, never wrapped): each new bearing is reached the
+ *  short way round, so passing "achter je" never spins the arrow a whole turn. */
+let arrowTurn = 0;
 
-/** Render the calm wayfinding cue (dual-channel: glyph + words + colour). */
+/** Render the calm wayfinding cue (dual-channel: an arrow + words + colour). The arrow
+ *  turns with the true bearing, so it is exact while he steers; the words hold steady
+ *  (render3d/Wayfinding SteadyCue) and never flicker for a dyslexic reader (child B10). */
 export function onWayfind(cue: WayCue | null): void {
   const strip = session.host.querySelector<HTMLDivElement>('.explore-wayfind');
-  const titel = strip?.querySelector('.wf-doel')?.textContent ?? null;
-  lastCue = cue && titel ? { titel, cue } : null;
   if (!strip) return;
   if (!cue) { strip.hidden = true; return; }
   // F-06: keep the text fresh, but stay hidden while the entry control hint owns
@@ -375,8 +375,15 @@ export function onWayfind(cue: WayCue | null): void {
   if (store.get().settings.wereldHintGezien) strip.hidden = false;
   const glyph = strip.querySelector<HTMLSpanElement>('.wf-glyph');
   const cueEl = strip.querySelector<HTMLSpanElement>('.wf-cue');
-  if (glyph) glyph.textContent = cue.glyph;
-  if (cueEl) cueEl.textContent = cue.arrived ? 'je bent er' : `${cue.richting} · ${cue.afstand}`;
+  if (glyph) {
+    const g = cue.arrived ? '◎' : '↑';
+    if (glyph.textContent !== g) glyph.textContent = g;
+    if (!cue.arrived) arrowTurn += Math.atan2(Math.sin(cue.angle - arrowTurn), Math.cos(cue.angle - arrowTurn));
+    glyph.style.transform = cue.arrived ? '' : `rotate(${arrowTurn.toFixed(3)}rad)`;
+    glyph.dataset.richting = cue.richting; // the words the arrow stands for (tests read it)
+  }
+  const words = cue.arrived ? 'je bent er' : `${cue.richting} · ${cue.afstand}`;
+  if (cueEl && cueEl.textContent !== words) cueEl.textContent = words;
   strip.classList.toggle('wf-arrived', cue.arrived);
 }
 
