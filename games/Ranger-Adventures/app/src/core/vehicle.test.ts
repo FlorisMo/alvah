@@ -298,9 +298,9 @@ test('guidedSteer: the bend adds to a steer the same way and outweighs one into 
 
 /** One second-by-second drive like World.driveJeep: the ramp, the soft brake for SOLIDS
  *  (not zones), the keep-out bend, the speed-scaled steer, the body resolve. */
-function driveAt(target: { x: number; z: number }, zones: { x: number; z: number; r: number }[], seconds: number) {
+function driveAt(target: { x: number; z: number }, zones: { x: number; z: number; r: number }[], seconds: number, x0 = 0) {
   const dt = 1 / 60;
-  let x = 0, z = 0, h = 0, v = 0, contact = false, worst = 0, slowest = Infinity, far = 0;
+  let x = x0, z = 0, h = 0, v = 0, contact = false, worst = 0, slowest = Infinity, far = 0;
   for (let t = 0; t < seconds; t += dt) {
     const e = Math.atan2(Math.sin(Math.atan2(target.x - x, target.z - z) - h), Math.cos(Math.atan2(target.x - x, target.z - z) - h));
     const want = e > 0.12 ? -1 : e < -0.12 ? 1 : 0;        // a child steering at what he sees
@@ -324,5 +324,17 @@ test('keep-out zone: steered straight at a ree behind it, the jeep glides round 
     assert.ok(r.worst < 0.05, `offset ${off}: the body never sinks into the zone (${r.worst.toFixed(3)} m)`);
     assert.ok(r.slowest > 3, `offset ${off}: it keeps rolling, never pressed to a crawl (slowest ${r.slowest.toFixed(2)} m/s)`);
     assert.ok(r.far > 40, `offset ${off}: it got round to the far side (z ${r.far.toFixed(1)})`);
+  }
+});
+
+test('keep-out zones: two markers close together block as one patch — the jeep goes round the pair, never pinned in the notch between them', () => {
+  for (const gap of [9, 12]) {
+    for (const off of [0, 0.5, 2]) {
+      const zones = [{ x: -gap / 2, z: 22, r: 5.2 }, { x: gap / 2, z: 22, r: 5.2 }];
+      const r = driveAt({ x: off, z: 60 }, zones, 12, off);
+      assert.ok(r.worst < 0.05, `gap ${gap}, offset ${off}: the body never sinks into a zone (${r.worst.toFixed(3)} m)`);
+      assert.ok(r.slowest > 3, `gap ${gap}, offset ${off}: it keeps rolling (slowest ${r.slowest.toFixed(2)} m/s)`);
+      assert.ok(r.far > 40, `gap ${gap}, offset ${off}: it got round the pair (z ${r.far.toFixed(1)})`);
+    }
   }
 });

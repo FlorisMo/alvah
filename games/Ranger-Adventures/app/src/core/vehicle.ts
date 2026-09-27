@@ -415,11 +415,16 @@ export const KEEP_OUT_FULL = 4;
  * an empty patch of ground a child cannot see, so the jeep must never stop dead at its
  * edge (verifier V2: steered at a ree behind the stuifzand marker it sat pressed
  * against the invisible zone for 30 s). Instead the jeep bends round it, like a driver
- * keeping off a lawn: when a zone lies in its path within `KEEP_OUT_LOOK` m, this
- * returns the steer (right +, in [−1, 1]) that turns it away — to the side it already
- * passes on, or, met dead centre, the way the player steers (right by default) —
- * growing to a full turn by `KEEP_OUT_FULL` m. 0 when the path is clear. Forward
- * driving only (the World brakes for a zone behind a reversing jeep). Pure.
+ * keeping off a lawn: when zones lie in its path within `KEEP_OUT_LOOK` m, this
+ * returns the steer (right +, in [−1, 1]) that turns it away, growing to a full turn
+ * by `KEEP_OUT_FULL` m; 0 when the path is clear.
+ *
+ * Seen from the nose each zone blocks a sector of directions. The sectors that overlap
+ * the heading are merged — two markers close together block as ONE patch, so the jeep
+ * never swings from one into the notch between them and pins itself there — and it
+ * turns toward the nearer edge of that patch (met dead centre: the way the player
+ * steers, right by default). Forward driving only (the World brakes for a zone behind
+ * a reversing jeep). Pure.
  */
 export function keepOutSteer(
   x: number, z: number, heading: number,
@@ -430,20 +435,33 @@ export function keepOutSteer(
   const fx = Math.sin(heading), fz = Math.cos(heading);
   const lx = fz, lz = -fx;                              // left-of-forward
   const nx = x + fx * lead.along, nz = z + fz * lead.along;
-  let best = 0;
+  const sectors: { lo: number; hi: number; u: number }[] = [];
   for (const o of zones) {
     const dx = o.x - nx, dz = o.z - nz;
-    const ahead = dx * fx + dz * fz;
-    const left = dx * lx + dz * lz;                     // + = its centre lies to the left
-    const R = o.r + half;
-    if (ahead <= 0 || Math.abs(left) >= R) continue;     // behind the nose, or the path clears it
-    const entry = ahead - Math.sqrt(R * R - left * left);
-    const u = Math.max(0, Math.min(1, (KEEP_OUT_LOOK - entry) / (KEEP_OUT_LOOK - KEEP_OUT_FULL)));
-    if (u <= Math.abs(best)) continue;
-    const side = Math.abs(left) > 0.05 ? (left > 0 ? 1 : -1) : (bias < 0 ? -1 : 1);
-    best = side * u;                                    // a zone on the left → steer right
+    const dist = Math.hypot(dx, dz), R = o.r + half;
+    const u = Math.max(0, Math.min(1, (KEEP_OUT_LOOK - (dist - R)) / (KEEP_OUT_LOOK - KEEP_OUT_FULL)));
+    if (u <= 0) continue;
+    const rel = Math.atan2(dx * lx + dz * lz, dx * fx + dz * fz); // its bearing, left +
+    const spread = dist > R ? Math.asin(R / dist) : Math.PI / 2;  // touching: a whole half-plane
+    sectors.push({ lo: rel - spread, hi: rel + spread, u });
   }
-  return best;
+  // grow the blocked patch from the heading outward through every overlapping sector
+  let lo = 0, hi = 0, u = 0, grew = true;
+  while (grew) {
+    grew = false;
+    for (const s of sectors) {
+      if (s.u < 0 || s.lo > hi || s.hi < lo) continue;
+      if (s.lo < lo) lo = s.lo;
+      if (s.hi > hi) hi = s.hi;
+      u = Math.max(u, s.u);
+      s.u = -1;                                         // merged
+      grew = true;
+    }
+  }
+  if (u <= 0) return 0;
+  const toLeft = hi, toRight = -lo;                     // how far to turn to either edge
+  const side = Math.abs(toLeft - toRight) > 0.05 ? (toLeft < toRight ? -1 : 1) : (bias < 0 ? -1 : 1);
+  return side * u;                                      // left edge nearer → steer left (−)
 }
 
 /** The player's steer with the keep-out bend folded in: a steer the same way as the
