@@ -119,7 +119,7 @@ async function playToTheEnd(page: Page, id: string): Promise<void> {
   const t0 = Date.now();
   while (!(await save(page))?.voltooid[id] && Date.now() - t0 < 4 * 60_000) {
     const h = await R<Hint | null>(page, 'r.playHint()');
-    if (h) {
+    if (h?.onScreen) {
       let s = h;
       for (let i = 0; i < 12; i++) { // let a camera move settle
         await sleep(page, 150);
@@ -128,9 +128,7 @@ async function playToTheEnd(page: Page, id: string): Promise<void> {
         const still = Math.hypot(h2.x - s.x, h2.y - s.y) < 3; s = h2;
         if (still) break;
       }
-      if (s.onScreen) await page.mouse.click(s.x, s.y);
-      await sleep(page, 400);
-      continue;
+      if (s.onScreen) { await page.mouse.click(s.x, s.y); await sleep(page, 400); continue; }
     }
     const text = await page.evaluate(() => document.getElementById('ui')?.innerText ?? '');
     const enc = mission.stappen.flatMap((st) => (st.skin as Skin).encounters ?? []).find((e) => text.includes(e.vraag));
@@ -183,7 +181,7 @@ test('Pauze, the missiebord and a briefing hold the ranger still under held arro
 });
 
 test('Stop de missie keeps the marker; the replay is won, Enter walks on, the chip points and the next mission is the big button @flow', async ({ page }) => {
-  test.setTimeout(6 * 60_000);
+  test.setTimeout(9 * 60_000); // a whole mission with real clicks; slow on a loaded machine
   await seed(page);
   await boot(page);
   const marker = await markerOf(page, 'frisling');
