@@ -6,7 +6,7 @@
  * triggering tap satisfies the autoplay-unlock rule).
  */
 
-import { fadeInCurve, fadeOutCurve } from './audiofade';
+import { fadeInCurve, fadeOutCurve, callWindow, callGain } from './audiofade';
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
@@ -59,7 +59,7 @@ function noiseBurst(dur: number, filter: BiquadFilterType, cutoff: number, q: nu
   src.start(t0);
 }
 
-function tone(freq: number, start: number, dur: number, type: OscillatorType, peak: number): void {
+function tone(freq: number, start: number, dur: number, type: OscillatorType, peak: number, dest?: AudioNode): void {
   const a = ac();
   if (!a) return;
   const t0 = a.currentTime + start;
@@ -71,9 +71,46 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType, pe
   gain.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
   osc.connect(gain);
-  gain.connect(a.destination);
+  gain.connect(dest ?? a.destination);
   osc.start(t0);
   osc.stop(t0 + dur + 0.03);
+}
+
+/**
+ * A soft pig "knor": a low, warm, filtered buzz with a gentle pulse, gliding down a
+ * little — the wild boar's call. (The recorded boar clip read as a dinosaur roar to a
+ * child tester, child:B1, so the boar speaks with this calm synth instead.)
+ */
+function knor(freq: number, start: number, dur: number, peak: number, dest: AudioNode): void {
+  const a = ac();
+  if (!a) return;
+  const t0 = a.currentTime + start;
+  const osc = a.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(freq, t0);
+  osc.frequency.linearRampToValueAtTime(freq * 0.82, t0 + dur);
+  const filt = a.createBiquadFilter();
+  filt.type = 'lowpass';
+  filt.frequency.value = 520;
+  filt.Q.value = 0.8;
+  const pulse = a.createGain(); // the grunt's soft flutter
+  pulse.gain.value = 0.6;
+  const lfo = a.createOscillator();
+  lfo.frequency.value = 24;
+  const lfoDepth = a.createGain();
+  lfoDepth.gain.value = 0.4;
+  lfo.connect(lfoDepth);
+  lfoDepth.connect(pulse.gain);
+  const env = a.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(peak, t0 + 0.05);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(filt);
+  filt.connect(pulse);
+  pulse.connect(env);
+  env.connect(dest);
+  osc.start(t0); lfo.start(t0);
+  osc.stop(t0 + dur + 0.03); lfo.stop(t0 + dur + 0.03);
 }
 
 /**
@@ -86,11 +123,11 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType, pe
 // `notes` (when present) plays that pitch SEQUENCE instead of `rep` copies of
 // `freq` — the way to synth a call with distinct successive pitches (koekoek's
 // hoog→laag, koolmees' ti-ta-ti-ta) so "Ken je roep" (W6.4) is learnable by ear.
-interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[] }
+interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[]; knor?: boolean }
 const CALLS: Record<string, CallSpec> = {
   edelhert:   { freq: 150, dur: 0.7,  type: 'sawtooth', vibrato: 6 },   // burlen — deep bellow
   ree:        { freq: 420, dur: 0.22, type: 'square',   rep: 2 },        // blaf — short bark
-  wildzwijn:  { freq: 190, dur: 0.3,  type: 'sawtooth', rep: 2 },        // knor — grunt
+  wildzwijn:  { freq: 120, dur: 0.3,  type: 'sawtooth', rep: 2, knor: true }, // knor-knor — a soft grunt
   frisling:   { freq: 520, dur: 0.18, type: 'square',   rep: 3 },        // piglet squeak
   raaf:       { freq: 280, dur: 0.34, type: 'sawtooth', rep: 2 },        // kroa — diep en laag
   das:        { freq: 240, dur: 0.28, type: 'triangle', rep: 2 },        // churr
@@ -108,22 +145,58 @@ const CALLS: Record<string, CallSpec> = {
 };
 const DEFAULT_CALL: CallSpec = { freq: 440, dur: 0.3, type: 'sine', rep: 2 };
 
+/** The longest a call may ring (s): one short snippet, never a whole recording. */
+const CALL_MAX_S = 1.6;
+/** Soft edges of a call snippet (s): in, out, and the quick fade of a call cut short. */
+const CALL_FADE_IN = 0.03;
+const CALL_FADE_OUT = 0.25;
+const CALL_CUT = 0.08;
+
+/** A recorded call, trimmed to its calm snippet and levelled (see `callWindow`). */
+interface CallSample { buffer: AudioBuffer; offset: number; dur: number; gain: number }
+
 /** Real recorded calls keyed by animal id — populated at runtime by the audio layer. */
-const sampleBuffers = new Map<string, AudioBuffer>();
+const sampleBuffers = new Map<string, CallSample>();
+
+/** The call that is sounding now: at most ONE at a time (child:B1). */
+let currentCall: { bus: GainNode; sources: AudioScheduledSourceNode[] } | null = null;
+
+/** Fade the sounding call out quickly and let it go. */
+function stopCurrentCall(a: AudioContext): void {
+  const c = currentCall;
+  currentCall = null;
+  if (!c) return;
+  const now = a.currentTime;
+  try {
+    c.bus.gain.cancelScheduledValues(now);
+    c.bus.gain.setValueAtTime(c.bus.gain.value, now);
+    c.bus.gain.linearRampToValueAtTime(0, now + CALL_CUT);
+    for (const src of c.sources) src.stop(now + CALL_CUT + 0.02);
+  } catch { /* already stopped */ }
+}
 
 function playCall(id: string): number {
   const a = ac();
   if (!a) return 0.3;
-  const buf = sampleBuffers.get(id);
-  if (buf) {
+  stopCurrentCall(a); // one animal at a time: a new call gently ends the last one
+  const bus = a.createGain();
+  bus.connect(a.destination);
+  const sample = sampleBuffers.get(id);
+  if (sample) {
+    const t0 = a.currentTime;
+    const { dur } = sample;
     const src = a.createBufferSource();
-    const gain = a.createGain();
-    gain.gain.value = 0.9;
-    src.buffer = buf;
-    src.connect(gain);
-    gain.connect(a.destination);
-    src.start();
-    return Math.min(buf.duration, 1.4);
+    src.buffer = sample.buffer;
+    const env = a.createGain();
+    env.gain.setValueAtTime(0, t0);
+    env.gain.linearRampToValueAtTime(sample.gain, t0 + CALL_FADE_IN);
+    env.gain.setValueAtTime(sample.gain, t0 + Math.max(CALL_FADE_IN, dur - CALL_FADE_OUT));
+    env.gain.linearRampToValueAtTime(0, t0 + dur);
+    src.connect(env);
+    env.connect(bus);
+    src.start(t0, sample.offset, dur);
+    currentCall = { bus, sources: [src] };
+    return dur;
   }
   const spec = CALLS[id] ?? DEFAULT_CALL;
   const gap = spec.dur * 0.45;
@@ -132,14 +205,17 @@ function playCall(id: string): number {
   const notes = spec.notes ?? Array.from({ length: spec.rep ?? 1 }, () => spec.freq);
   notes.forEach((freq, i) => {
     const start = i * (spec.dur + gap);
-    if (spec.vibrato) {
+    if (spec.knor) {
+      knor(freq * (i % 2 ? 0.92 : 1), start, spec.dur, 0.5, bus);
+    } else if (spec.vibrato) {
       // a small warble for the trilling/bellowing/singing calls
-      tone(freq, start, spec.dur, spec.type, 0.16);
-      tone(freq * 1.04, start + 0.03, spec.dur, spec.type, 0.08);
+      tone(freq, start, spec.dur, spec.type, 0.16, bus);
+      tone(freq * 1.04, start + 0.03, spec.dur, spec.type, 0.08, bus);
     } else {
-      tone(freq, start, spec.dur, spec.type, 0.16);
+      tone(freq, start, spec.dur, spec.type, 0.16, bus);
     }
   });
+  currentCall = { bus, sources: [] };
   return notes.length * (spec.dur + gap);
 }
 
@@ -233,15 +309,22 @@ export const Sound = {
   },
   /** the duration (s) of an animal's call — for scheduling the listen phase */
   callDur(id: string): number {
-    const buf = sampleBuffers.get(id);
-    if (buf) return Math.min(buf.duration, 1.4);
+    const sample = sampleBuffers.get(id);
+    if (sample) return sample.dur;
     const spec = CALLS[id] ?? DEFAULT_CALL;
     const count = spec.notes?.length ?? spec.rep ?? 1;
     return count * (spec.dur + spec.dur * 0.45);
   },
-  /** the audio pipeline calls this to swap a synth motif for a real recording */
+  /** the audio pipeline calls this to swap a synth motif for a real recording:
+   *  it keeps only the calm snippet of the recording, levelled (child:B1) */
   registerCall(id: string, buffer: AudioBuffer): void {
-    sampleBuffers.set(id, buffer);
+    const w = callWindow(buffer.getChannelData(0), buffer.sampleRate, CALL_MAX_S);
+    sampleBuffers.set(id, { buffer, offset: w.offset, dur: w.dur, gain: callGain(w) });
+  },
+  /** fade out the call that is sounding (a game step ends) */
+  stopCall(): void {
+    const a = ac();
+    if (a) stopCurrentCall(a);
   },
 
   /** fetch + decode an audio file into a buffer (null if unavailable/offline) */
