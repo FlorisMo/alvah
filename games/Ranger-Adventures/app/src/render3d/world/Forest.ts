@@ -16,9 +16,12 @@
  *   3. each level of each species is ONE InstancedMesh holding just its trees, so the
  *      forest costs at most 12 draw calls however many trees stand in it.
  *
- * The occluder fade is per tree: the crowns that block the lens → ranger sightline are
- * lifted out of the instanced meshes and drawn as a see-through copy of their own
- * (`fadeOccluders`); every other tree stays solid (the forest never ghosts as a whole).
+ * The occluder fade is per tree: the trees the camera rig finds between the lens and the
+ * ranger (world/Crowns.ts, the one tree model both use) are lifted out of the instanced
+ * meshes and drawn as a see-through copy of their own (`fadeOccluders`); every other
+ * tree stays solid (the forest never ghosts as a whole). The see-through copies come from
+ * a pool that lives as long as the forest, and their shader is compiled once when the
+ * forest is built, so a tree fading in never stalls a frame on a shader compile.
  */
 
 import * as THREE from 'three';
@@ -31,12 +34,6 @@ export interface TreePlacement { x: number; y: number; z: number; s: number; rot
 export const TREE_BASE_H: Record<TreeSpecies, number> = {
   'prop-pine-scots': 6.6, 'prop-oak-tree': 5.4, 'prop-birch-tree': 6.0,
 };
-/** The crown model the camera rig's occluder test uses (CameraRig): a sphere at this
- *  fraction of the tree's height, with this fraction of its height as radius; the lens
- *  counts as INSIDE a crown within the radius + this margin. */
-export const CROWN_CENTER_FRAC = 0.55;
-export const CROWN_RADIUS_FRAC = 0.38;
-export const CROWN_INSIDE_MARGIN = 0.6;
 
 /** Triangle targets of the simplified copies (per species: the birch's leaves are
  *  small separate cards that thin out fast, so it keeps more). */
@@ -63,9 +60,13 @@ interface SpeciesSet {
   trees: number[];                       // indices into `placements`, in fixed order
   parts: Part[];                         // the real GLB's sub-meshes (level 0)
   levels: THREE.InstancedMesh[][];       // [level][part] — levels ≥ 1 have one part
+  lists: number[][];                     // per level: the trees it draws this frame (reused)
   counts: number[];                      // instances drawn per level this frame
   sig: number[];                         // a running signature of what each level holds
+  spare: Ghost[];                        // see-through copies not in use (kept, never disposed)
 }
+/** A see-through copy of one tree: one mesh per GLB part, each with its own material. */
+interface Ghost { group: THREE.Group; mats: THREE.MeshStandardMaterial[]; set: SpeciesSet }
 
 const _frustum = new THREE.Frustum();
 const _pv = new THREE.Matrix4();
@@ -84,7 +85,9 @@ export class Forest {
   private readonly world: Float32Array;            // per tree: its placement matrix (16 floats)
   private readonly tint: Float32Array;             // per tree: rgb variety
   private readonly fade: Float32Array;             // per tree: occluder-fade opacity (1 = solid)
-  private readonly ghosts = new Map<number, { group: THREE.Group; mats: THREE.Material[] }>();
+  private readonly ghosts = new Map<number, Ghost>();
+  private warm: THREE.Mesh[] = [];                  // the shader warm-up meshes (see `warmGhosts`)
+  private warmed = false;
 
   constructor(scene: THREE.Scene, placements: TreePlacement[], tier: 'hoog' | 'laag') {
     this.scene = scene;
@@ -158,12 +161,44 @@ export class Forest {
       const short = id.replace('prop-', '');
       const levels: THREE.InstancedMesh[][] = [parts.map((pt, k) => mk(pt.geometry, pt.material, `${short}-tree${k ? `-${k}` : ''}`))];
       lods.forEach((g, k) => levels.push([mk(g, lodMaterial(), `${short}-tree-lod${k + 1}`)]));
-      sets.push({ species: id, trees, parts, levels, counts: levels.map(() => 0), sig: levels.map(() => -1) });
+      sets.push({ species: id, trees, parts, levels, lists: levels.map(() => []), counts: levels.map(() => 0), sig: levels.map(() => -1), spare: [] });
     }
     this.sets = sets;
     for (const set of sets) for (const lv of set.levels) for (const inst of lv) this.scene.add(inst);
+    this.warmGhosts();
     this.ready = true;
     return true;
+  }
+
+  /**
+   * Compile the see-through copies' shader now, not on the first fade (review PERF-1:
+   * each fade cloned the GLB materials and disposed them again when the tree turned
+   * solid, and three drops a shader once no material uses it, so every fade after the
+   * last ghost cleared compiled it again: a ~100 ms hitch right when the view needs a
+   * tree faded). One spare copy per species goes into its pool, and each of its parts
+   * is drawn once by an empty mesh (same material, a one-vertex stand-in geometry with
+   * the part's attribute layout, nothing to draw), which compiles the shader; the pool
+   * keeps its materials alive, so three keeps the shader.
+   */
+  private warmGhosts(): void {
+    for (const set of this.sets) {
+      const g = this.makeGhost(set);
+      set.spare.push(g);
+      set.parts.forEach((pt, k) => {
+        const geo = new THREE.BufferGeometry();
+        for (const [name, attr] of Object.entries(pt.geometry.attributes)) {
+          geo.setAttribute(name, new THREE.BufferAttribute(new Float32Array(attr.itemSize), attr.itemSize));
+        }
+        geo.setDrawRange(0, 0);
+        const mesh = new THREE.Mesh(geo, g.mats[k]);
+        mesh.frustumCulled = false;
+        mesh.castShadow = false;
+        mesh.name = 'tree-ghost-warmup';
+        mesh.onAfterRender = () => { this.warmed = true; };
+        this.warm.push(mesh);
+        this.scene.add(mesh);
+      });
+    }
   }
 
   get isReady(): boolean { return this.ready; }
@@ -171,6 +206,10 @@ export class Forest {
   /** Per rendered frame: cull, choose each tree's level, refill the level meshes that changed. */
   update(camera: THREE.Camera): void {
     if (!this.ready) return;
+    if (this.warmed && this.warm.length) { // the ghost shader is compiled: drop the warm-up meshes
+      for (const m of this.warm) { this.scene.remove(m); m.geometry.dispose(); }
+      this.warm = [];
+    }
     _pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_pv);
     const e = camera.matrixWorld.elements;
@@ -178,7 +217,8 @@ export class Forest {
     const R = this.ranges;
     for (const set of this.sets) {
       const H = TREE_BASE_H[set.species];
-      const lists = set.levels.map(() => [] as number[]);
+      const lists = set.lists;
+      for (const l of lists) l.length = 0;
       for (const i of set.trees) {
         if (this.fade[i] < 1) { this.level[i] = -1; continue; } // drawn by its see-through copy
         const p = this.placements[i];
@@ -214,47 +254,24 @@ export class Forest {
   }
 
   /**
-   * Fade the crowns between the lens and the ranger (the camera rig decides the view is
-   * `blocked`; this finds WHICH trees do it, with the rig's crown model). A blocking
-   * crown drops at once to `min` (`buried` when the lens sits inside it); every other
-   * faded crown eases back toward solid by `release` (0..1 of the way per frame; 1 = a
-   * cut). Only the blocking trees ever change: the forest never ghosts as a whole.
+   * Fade exactly the trees the camera rig found in the way (it tests them with
+   * world/Crowns.ts, the one tree model): `targets` maps a tree's index to the opacity
+   * it drops to at once (see-through, or near-invisible when the lens sits inside it).
+   * Every other faded tree eases back toward solid by `release` (0..1 of the way per
+   * frame; 1 = a cut). Only those trees ever change: the forest never ghosts as a whole.
    */
-  fadeOccluders(
-    blocked: boolean, eye: THREE.Vector3, feet: THREE.Vector3, aimHeights: readonly number[],
-    release: number, min: number, buried: number,
-  ): void {
+  fadeOccluders(targets: ReadonlyMap<number, number>, release: number): void {
     let worst = -1;
-    const ex = eye.x, ey = eye.y, ez = eye.z;
-    for (let i = 0; i < this.placements.length; i++) {
-      const p = this.placements[i];
-      const H = TREE_BASE_H[p.species] * p.s;
-      const R = H * CROWN_RADIUS_FRAC;
-      const ccx = p.x, ccy = p.y + H * CROWN_CENTER_FRAC, ccz = p.z;
-      let target = 1;
-      if (blocked && Math.abs(ccx - ex) < 30 && Math.abs(ccz - ez) < 30) {
-        const ix = ex - ccx, iy = ey - ccy, iz = ez - ccz, Ri = R + CROWN_INSIDE_MARGIN;
-        if (ix * ix + iy * iy + iz * iz <= Ri * Ri) target = buried;
-        else {
-          for (const ah of aimHeights) {
-            const dx = feet.x - ex, dy = feet.y + ah - ey, dz = feet.z - ez;
-            const len2 = dx * dx + dy * dy + dz * dz;
-            if (len2 < 1e-6) continue;
-            const t = ((ccx - ex) * dx + (ccy - ey) * dy + (ccz - ez) * dz) / len2;
-            if (t <= 0.02 || t >= 0.9) continue;
-            const gx = ccx - (ex + dx * t), gy = ccy - (ey + dy * t), gz = ccz - (ez + dz * t);
-            if (gx * gx + gy * gy + gz * gz <= R * R) { target = min; break; }
-          }
-        }
-      }
+    for (const [i, o] of targets) {
+      if (i < 0 || i >= this.placements.length) continue;
+      if (o > worst) worst = o;
+      if (this.fade[i] !== o) this.setFade(i, o);
+    }
+    for (const i of this.ghosts.keys()) { // (a Map may lose entries while it is iterated)
+      if (targets.has(i)) continue;
       const was = this.fade[i];
-      let o: number;
-      if (target < 1) o = target;                          // attack: at once
-      else if (was >= 1) continue;                         // solid and staying solid
-      else o = was + (1 - was) * release;                  // release: ease back
-      if (o > 0.995) o = 1;
-      if (target < 1 && o > worst) worst = o;
-      this.setFade(i, o);
+      const o = was + (1 - was) * release;
+      this.setFade(i, o > 0.995 ? 1 : o);
     }
     this.blockingOpacity = worst < 0 ? 1 : worst;
   }
@@ -275,7 +292,7 @@ export class Forest {
     if (o >= 1) {
       if (g) {
         this.scene.remove(g.group);
-        for (const m of g.mats) m.dispose();
+        g.set.spare.push(g); // back to its pool: its materials (and so the shader) stay alive
         this.ghosts.delete(i);
       }
       return;
@@ -283,30 +300,39 @@ export class Forest {
     if (!g) {
       const set = this.sets.find((s) => s.species === this.placements[i].species);
       if (!set) return; // stand-ins still up: nothing of its own to fade
-      const group = new THREE.Group();
-      group.name = `${set.species.replace('prop-', '')}-tree-faded`;
-      group.matrixAutoUpdate = false;
-      group.matrix.fromArray(this.world, i * 16);
-      const mats: THREE.Material[] = [];
-      for (const pt of set.parts) {
-        const mat = pt.material.clone();
-        mat.transparent = true;
-        mat.depthWrite = false;
-        mats.push(mat);
-        const mesh = new THREE.Mesh(pt.geometry, mat);
-        mesh.matrixAutoUpdate = false;
-        mesh.matrix.copy(pt.local);
-        mesh.castShadow = false;
-        group.add(mesh);
-      }
+      g = set.spare.pop() ?? this.makeGhost(set);
+      g.group.matrix.fromArray(this.world, i * 16);
       // the same per-tree tint the instanced copy wore
       _c.setRGB(this.tint[i * 3], this.tint[i * 3 + 1], this.tint[i * 3 + 2]);
-      for (const m of mats) (m as THREE.MeshStandardMaterial).color?.multiply(_c);
-      g = { group, mats };
+      g.mats.forEach((m, k) => {
+        const base = (set.parts[k].material as THREE.MeshStandardMaterial).color;
+        if (base && m.color) m.color.copy(base).multiply(_c);
+      });
       this.ghosts.set(i, g);
-      this.scene.add(group);
+      this.scene.add(g.group);
     }
     for (const m of g.mats) m.opacity = o;
+    g.group.visible = o > 0.005; // fully faded (the lens inside it): not drawn at all
+  }
+
+  /** A new see-through copy of a tree of this species (placed and tinted by setFade). */
+  private makeGhost(set: SpeciesSet): Ghost {
+    const group = new THREE.Group();
+    group.name = `${set.species.replace('prop-', '')}-tree-faded`;
+    group.matrixAutoUpdate = false;
+    const mats: THREE.MeshStandardMaterial[] = [];
+    for (const pt of set.parts) {
+      const mat = pt.material.clone() as THREE.MeshStandardMaterial;
+      mat.transparent = true;
+      mat.depthWrite = false;
+      mats.push(mat);
+      const mesh = new THREE.Mesh(pt.geometry, mat);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(pt.local);
+      mesh.castShadow = false;
+      group.add(mesh);
+    }
+    return { group, mats, set };
   }
 }
 

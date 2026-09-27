@@ -164,39 +164,32 @@ export class DevReadback {
     const botY = this._camPose.set(wx, min.y, wz).project(cam).y;
     // F-11 TERRAIN-occlusion-aware visibility: the frustum/projection tests above stay
     // TRUE when something stands BETWEEN the lens and the ranger (projection cannot see
-    // an occluder in the way). Two occluders modelled: (1) TERRAIN — march the ground
-    // height field along the sightline lens→ranger, hidden if it climbs above the line
-    // (test his head AND chest so a crest that only clips his legs still reads visible);
-    // (2) the rim TREE-LINE — a lens at/beyond the pine ring (bound + ~1.2 m) has a
-    // trunk in the way, so require the lens inside the ring. Folded with onScreen + the
-    // fade into `visible`. NB this catches GEOMETRIC occlusion only — the actual P4.6
-    // rim "ranger nowhere" was a SkinnedMesh view-space precision collapse far from
-    // origin (BUILD-PLAN §8), invisible to any raycast; the 75 m `bound` fixes that by
-    // keeping the rim (and where the rim-ease parks the ranger, ~72 m) inside the
-    // precision-safe radius. Pixels remain the court (§4).
+    // an occluder in the way). The terrain: march the ground height field along the
+    // sightline lens→ranger, hidden if it climbs above the line (test his head AND chest
+    // so a crest that only clips his legs still reads visible). The rim tree-line is no
+    // special case any more: the lens may stand among the rim trees, and they are trees
+    // like any other (viewClear below). Folded with onScreen + the fade into `visible`.
+    // Pixels remain the court (§4).
     const headClear = this.terrainClearTo(cam.position, wx, max.y - 0.15, wz);
     const chestClear = this.terrainClearTo(cam.position, wx, (min.y + max.y) * 0.5, wz);
-    const lensInRim = Math.hypot(cam.position.x, cam.position.z) < this.limits.bound + 0.6;
     const ndc = centre.project(cam); // centre → NDC in [-1, 1]³ (mutates in place)
     const onScreen = ndc.z > -1 && ndc.z < 1 && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1;
-    // D1.5 free-walk canopy clear-line: the REAL cam→avatar occluder test CameraRig.place
-    // computed this frame (a tree crown between lens and ranger fades, so this reads the
-    // "ranger is readable" truth the projection tests above can't — `09-walk-4` kept
-    // onScreen/avatarInView true while a crown swallowed him, §8.7). Only the free-walk
-    // follow cam can sit inside a crown; a vehicle/heli/mission-owned cam reads clear.
-    // D3.16: fold in EVERY other rendered occluder class on the cam→ranger sightline — solid
-    // props + the parked vehicles (propBlocksSightline) and staged animals / marker models
-    // (animalBlocksSightline). These are UNFADEABLE, so a hit reports `viewClear` FALSE
-    // (honest) rather than ghosting them — the §2.5 (GATE-D2) law: "the clear-line test binds
-    // to anything the renderer draws; unfadeable ones report honestly" (`18-jeep-near` lied
-    // clear while a nachtzwaluw marker model swallowed the ranger). Tested HERE, per-SHOT, not
-    // in the per-frame CameraRig.place: they only drive the hook (no fade), so the walk path pays
-    // nothing. `rp`/head come from the live ranger; the same segment the crown/terrain legs use.
+    // The clear line: the REAL lens→target occluder read CameraRig.place made this frame —
+    // every tree in the way is faded below see-through (world/Crowns.ts, the one tree model),
+    // no unfadeable tree, no dune the eye could not rise over — for the walk AND the jeep /
+    // helicopter chase cams (their target is the seated ranger, i.e. the vehicle: parent B3,
+    // where a chase lens buried in rim crowns read clear). Only a mission's reframe, which
+    // owns its framing, reads clear. D3.16: fold in EVERY other rendered occluder class on the
+    // lens→target line — solid props + the parked vehicles (propBlocksSightline) and staged
+    // animals / marker models (animalBlocksSightline). These are UNFADEABLE, so a hit reports
+    // `viewClear` FALSE (honest) rather than ghosting them. Tested HERE, per-SHOT, not in the
+    // per-frame CameraRig.place: they only drive the hook (no fade), so the walk pays nothing.
     const rp = this.player.group.position;
-    const viewClear = (this.vehicles.inVehicle || this.vehicles.inHeli || this.host.activityActive())
+    const aloft = this.vehicles.inHeli && rp.y - this.terrain.y(rp.x, rp.z) > 8; // flying high over the props
+    const viewClear = this.host.activityActive()
       ? true
       : this.cam.viewClearState
-        && !this.propBlocksSightline(cam.position.x, cam.position.z, rp.x, rp.z)
+        && (aloft || !this.propBlocksSightline(cam.position.x, cam.position.z, rp.x, rp.z))
         && !this.animalBlocksSightline(cam.position.x, cam.position.y, cam.position.z, rp.x, rp.y, rp.z);
     // D1.7: the RENDERED body opacity read off the shared materials — NOT the
     // `avatarOpacity` intent field, which lied 1 over an invisible ranger on the
@@ -207,7 +200,7 @@ export class DevReadback {
       x: ndc.x, y: ndc.y,
       onScreen,
       heightFrac: Math.abs(topY - botY) / 2,
-      visible: onScreen && renderedOpacity > 0.5 && lensInRim && (headClear || chestClear) && viewClear,
+      visible: onScreen && renderedOpacity > 0.5 && (headClear || chestClear) && viewClear,
     };
     // F-09 hub-in-frustum: is at least one hub landmark actually in this frame? The
     // world-entry assert reads it to PROVE the spawn faces the hub, not the void —
@@ -260,7 +253,7 @@ export class DevReadback {
       // F-17 drag-orbit read-back: the player's look offset on the follow bearing. A drag
       // moves `yaw` (and `lift`) while `pos` holds; a clean click walks and never touches
       // it. The real render `yaw` above (quaternion) stays the court of appeal (§4).
-      orbit: { yaw: this.cam.orbitYaw, lift: this.cam.orbitLift },
+      orbit: { yaw: this.cam.orbitYaw, lift: this.cam.orbitLiftMetres() },
       // D1.7: the RENDERED body opacity (read off the shared materials), NOT the
       // fade-rail INTENT field — which lied 1 over an invisible ranger after a
       // title round-trip (`14-title-return-world`: shadow cast, body unrendered;
@@ -365,8 +358,8 @@ export class DevReadback {
    * clear-line test binds to anything the renderer draws; unfadeable ones report
    * honestly") — a hit makes `viewClear` FALSE rather than trying to fade the mesh. The
    * `18-jeep-near` breach: the sightline test covered crowns + terrain but not props /
-   * vehicles / animals, so the hook lied clear while a mesh swallowed the ranger. Same
-   * 2D closest-approach-between math as `boomClearFraction`/`canopyBlocksSightline`;
+   * vehicles / animals, so the hook lied clear while a mesh swallowed the ranger. The same
+   * 2D between-test the camera rig's clear-view search uses (CameraRig.solidBetween);
    * circles that CONTAIN the ranger's foot (the prop he stands at) are skipped so a POI
    * never self-reports occluded. Trees are skipped (their crown fade already handles
    * them, and the frozen view-clear spec walks past trunks expecting viewClear=true).
