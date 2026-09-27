@@ -459,7 +459,7 @@ export class CameraRig {
           const t = this.LOOKAHEAD * f;
           this._probe.copy(rp).addScaledVector(this.vel, t);
           this._probe.y = this.terrain.y(this._probe.x, this._probe.z);
-          cap = Math.min(cap, this.solveWalk(wrapAngle(base + this.player.turnRate * t), this.sideNow, this._probe).dist);
+          cap = Math.min(cap, this.solveWalk(wrapAngle(base + this.player.turnRate * t), this.sideNow, this._probe, Infinity, true).dist);
         }
       }
       const sol = this.solveWalk(base, this.sideNow, rp, cap);
@@ -477,14 +477,16 @@ export class CameraRig {
       this.gatherNear(rp.x, rp.z, off.z + 4);
       const b0 = this.bearing();
       const ux = -Math.sin(b0), uz = -Math.cos(b0);
-      // the chase lens stays inside the lens ring at the rim (among the first rim trees at
-      // most, which fade), and the jeep's boom pulls in before a hut / prop / person behind
-      // it instead of burying the lens in that solid (its own collision circle is lifted
-      // while driving, so the cast can't hit itself); trees fade instead
-      let frac = this.rimFraction(rp.x, rp.z, ux * dist, uz * dist);
+      // the jeep's chase lens stays inside the lens ring at the rim (among the first rim
+      // trees at most, which fade), and its boom pulls in before a hut / prop / person
+      // behind it instead of burying the lens in that solid (its own collision circle is
+      // lifted while driving, so the cast can't hit itself); trees fade instead. The
+      // helicopter's lens rides above the treetops, where the rim is no wall.
+      let frac = 1;
       let min = this.HELI_MIN_BOOM;
       if (inVehicle) {
-        frac = Math.min(frac, this.boomClearFraction(rp.x, rp.z, ux * dist, uz * dist, this.CAM_PROBE_R, true, true));
+        frac = Math.min(this.rimFraction(rp.x, rp.z, ux * dist, uz * dist),
+          this.boomClearFraction(rp.x, rp.z, ux * dist, uz * dist, this.CAM_PROBE_R, true, true));
         min = JEEP_COLLIDE + this.camera.near + 0.3;
         const len = Math.max(dist, this.boomNow);
         wall = Math.max(min, len * this.boomClearFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE, true, true));
@@ -738,9 +740,10 @@ export class CameraRig {
    * until the line to his head clears the terrain. `cost` scores how clear the line to the
    * ranger is (0 = clear at full length); the search picks the lowest. `wall` is how far
    * the lens itself may go before it touches a solid (the eased boom never goes past it).
-   * `cap`: a shorter boom wanted already (the one where he is heading).
+   * `cap`: a shorter boom wanted already (the one where he is heading). `solidsOnly`: only
+   * `dist` as the solids and the rim leave it (the look-ahead's question), nothing else.
    */
-  private solveWalk(b: number, k: number, rp: THREE.Vector3, cap = Infinity): CameraRig['sol'] {
+  private solveWalk(b: number, k: number, rp: THREE.Vector3, cap = Infinity, solidsOnly = false): CameraRig['sol'] {
     const out = this.sol;
     const s = Math.sin(b), c = Math.cos(b);
     // the lens per metre of boom: back along the bearing, and k to the screen's right
@@ -757,6 +760,7 @@ export class CameraRig {
       this.rimFraction(rp.x, rp.z, ux * want, uz * want));
     let dist = Math.max(minDist, Math.min(cap, want * frac));
     while (dist > minDist && !this.lensClear(rp.x + ux * dist, rp.z + uz * dist)) dist = Math.max(minDist, dist - 0.15);
+    if (solidsOnly) { out.dist = dist; return out; } // (the look-ahead only asks how far the solids let it)
     const len = Math.max(want, this.boomNow);
     out.wall = Math.max(minDist, len * this.boomClearFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE, true, true));
     // never a lens in the leaves: step the boom in until it is out of every crown
