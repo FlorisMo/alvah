@@ -38,6 +38,8 @@ export interface WorldMarker {
 const NEAR_R = 2.4;
 /** Per landschap, how far (rad) its markers turn off the biome's centre line. */
 const ANCHOR_TURN: Partial<Record<Biome, number>> = { stuifzand: 0.4 };
+/** Per landschap, how far (rad) its 2nd, 3rd … marker fan out left/right of the first. */
+const ANCHOR_FAN: Partial<Record<Biome, number>> = { heide: 0.28 };
 /** A finished mission's halo + tag pip: a calm green ("klaar"). */
 const FINISHED_COLOR = '#3dbb5c';
 
@@ -131,8 +133,11 @@ export class Markers {
         x = a.x; z = a.z;
         // the stuifzand diagonal is the jeep's parking bay and the helicopter apron
         // (world/Vehicles.ts): its marker stands a little to the side, so the mission's
-        // nightjar never hides behind a parked jeep
-        const turn = ANCHOR_TURN[mk.biome];
+        // nightjar never hides behind a parked jeep. The heide's later missions fan out
+        // left and right of the first one's line, so from the clearing their animals and
+        // name tags never stand stacked behind each other.
+        const fan = n > 0 ? (n % 2 ? 1 : -1) * (ANCHOR_FAN[mk.biome] ?? 0) : 0;
+        const turn = (ANCHOR_TURN[mk.biome] ?? 0) + fan;
         if (turn) {
           const r = Math.hypot(x, z), ang = Math.atan2(z, x) + turn;
           const tx = Math.cos(ang) * r, tz = Math.sin(ang) * r;
@@ -490,6 +495,23 @@ export class Markers {
       // view (a big ring filling the frame between two games): it steps away too
       const ring = m.group.children.find((c) => (c as THREE.Mesh).material === m.ring);
       if (ring) ring.visible = this.labelsOn || m.missionId !== this.nearId;
+    }
+  }
+
+  /**
+   * While a mission plays at its marker, the marker (its animal, its halo) and a
+   * finished family around it step out of the scene for the WHOLE mission — not
+   * per game, so nothing pops back in front of the lens between two games. `null`
+   * brings them back (the mission ended, or its reunion is about to play).
+   */
+  hideForActivity(missionId: string | null): void {
+    for (const m of this.list) {
+      const away = m.missionId === missionId;
+      const all = [m.group, ...((m.group.userData.companions as THREE.Object3D[] | undefined) ?? [])];
+      for (const o of all) {
+        if (away && o.userData.awayWas === undefined) { o.userData.awayWas = o.visible; o.visible = false; }
+        if (!away && o.userData.awayWas !== undefined) { o.visible = o.userData.awayWas as boolean; delete o.userData.awayWas; }
+      }
     }
   }
 

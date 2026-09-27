@@ -190,7 +190,8 @@ async function runMission(mission: Mission): Promise<void> {
   const area = Content.activeArea();
   const before = Content.cluesFound(area.id, store.get().voltooid);
   const seasonBefore = seasonDone();
-  store.markMissionDone(mission.id);
+  const knap = mission.beloning.vaktermBadge;
+  store.markMissionDone(mission.id, knap ? { id: knap.id, naam: knap.naam.replace(/^Knap woord:\s*/i, '') } : undefined);
   notePatrolCompletion();
   const clueId = capturedClue(mission, true, before);
   // this completion finishes the season: the finale follows the reward (and the clue)

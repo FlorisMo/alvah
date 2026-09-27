@@ -234,8 +234,9 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
     `<h1 class="boot-title">Wat is hier aan de hand?</h1>` +
     `<div class="cb-cork">${board}</div>` +
     note +
-    veldStrip +
+    // the way to the ontknoping sits right under the clues, never below the notes
     (resolveBtn ? `<div class="ra-row">${resolveBtn}</div>` : '') +
+    veldStrip +
     `</div>`,
   );
   // Only the latest-clue note is read aloud (and karaoke-highlighted).
@@ -309,11 +310,18 @@ export function badgeHtml(e: Engine): string {
 
 export function showBadges(back: () => void): void {
   const wall = (Object.keys(SKILL_META) as Engine[]).map(badgeHtml).join('');
+  // the knappe woorden earned on missions (each reward card names one)
+  const woorden = Object.values(store.get().knapWoorden).map((w) => w.naam);
+  const knap = woorden.length
+    ? `<p class="boot-kicker">Knappe woorden · ${woorden.length}</p>` +
+      `<div class="knap-woorden">${woorden.map((w) => `<span class="knap-woord">${esc(w)}</span>`).join('')}</div>`
+    : '';
   const el = card(
     `<div class="reward boot-card-ish">` +
     `<p class="boot-kicker">Jouw breinkracht</p>` +
     `<h1 class="boot-title">Badges</h1>` +
     `<div class="badge-row">${wall}</div>` +
+    knap +
     `<button class="btn-start" type="button" data-key="back">Terug</button>` +
     `</div>`,
   );

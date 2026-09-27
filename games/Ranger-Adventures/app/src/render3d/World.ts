@@ -703,6 +703,7 @@ export class World {
    *  (world/Progress.ts). `fresh` plays the calm reunion; resolves once it has played. */
   onMissionComplete(missionId: string, opts: { fresh: boolean }): Promise<void> {
     this.pois.setFinished(missionId);
+    if (opts.fresh) this.pois.hideForActivity(null); // the marker's animal is back for its reunion
     const view = { camera: this.camera, ranger: { x: this.ranger.position.x, z: this.ranger.position.z } };
     return this.progress.complete(missionId, opts.fresh, livePolicy().reduced, view);
   }
@@ -718,6 +719,7 @@ export class World {
   beginActivity(): void {
     this.activityActive = true;
     this.pois.setLabelsVisible(false);
+    this.pois.hideForActivity(this.nearId); // the played marker steps away for the whole mission
   }
 
   /** Resume free-roam after an in-place activity; re-emit the wayfinding cue.
@@ -727,6 +729,7 @@ export class World {
     this.activityActive = false;
     this.activityFocus = null; // D1.3: no task owns the camera in free-roam
     this.pois.setLabelsVisible(true); // W6.1: restore the name-tags on resume
+    this.pois.hideForActivity(null);
     this.pois.resetAfterActivity();   // fresh proximity + cue re-fire (re-surfaces the hub prompt)
     this.cam.followTargetYaw = this.ranger.rotation.y;
     if (livePolicy().reduced) this.cam.place(true, 0, true); // reduced → cut back

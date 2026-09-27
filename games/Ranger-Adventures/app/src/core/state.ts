@@ -256,8 +256,12 @@ class Store {
     this.set({ worldStep });
   }
 
-  markMissionDone(missieId: string): void {
-    this.commit({ ...this.state, voltooid: { ...this.state.voltooid, [missieId]: true } });
+  /** A mission is done; its "knap woord" (the reward card names it) is earned for good. */
+  markMissionDone(missieId: string, knapWoord?: { id: string; naam: string }): void {
+    const knapWoorden = knapWoord && !this.state.knapWoorden[knapWoord.id]
+      ? { ...this.state.knapWoorden, [knapWoord.id]: { naam: knapWoord.naam } }
+      : this.state.knapWoorden;
+    this.commit({ ...this.state, voltooid: { ...this.state.voltooid, [missieId]: true }, knapWoorden });
   }
 
   /** W6.3b: pin a "Wist je dat"-veldnotitie to the case-board. Idempotent (a

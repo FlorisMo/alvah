@@ -690,3 +690,14 @@
 }
 .reunion-cap .boot-kicker { margin: 0 0 4px; color: var(--green-mid); }
 .reunion-text { margin: 0; font: 500 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
+
+/* the knappe woorden earned on missions, on the badge wall */
+.knap-woorden { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 4px 0 12px; }
+.knap-woord {
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  border: 1px solid var(--green-line);
+  color: var(--green);
+  font: 600 17px/1.2 var(--font-body);
+}
