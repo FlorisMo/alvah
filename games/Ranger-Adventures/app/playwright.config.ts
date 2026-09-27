@@ -13,7 +13,8 @@ import { defineConfig, devices } from '@playwright/test';
  *   everything. Locally it gets the real-GPU args: without them headless Chromium
  *   silently draws in software and the world crawls.
  * - CI (`CI=1`, GitHub's GPU-less ubuntu runner) runs `npm run e2e:smoke` only: boot,
- *   devhook, journey, movement, on SwiftShader (software GL). The game detects software
+ *   devhook, journey, movement, against the production build (vite build + preview; the
+ *   smoke opens `/?dev=1` for the hook), on SwiftShader (software GL). The game detects software
  *   GL and boots its light mode there (core/quality.ts); the smoke waits for rendered
  *   frames, not seconds, where it waits for the game to act (movement.spec). CI also
  *   retries twice, runs one worker and gives each test 120 s.
@@ -70,10 +71,16 @@ export default defineConfig({
       use: { ...devices['iPad (gen 7) landscape'] },
     },
   ],
+  // CI serves the PRODUCTION build (vite build + vite preview, ~15 s to build): the page
+  // loads a few bundled chunks, where the dev server first transforms every module on
+  // request, and on a busy GPU-less runner that cold transform ate much of a smoke
+  // test's budget. It is also closer to what ships. Local runs use the dev server.
   webServer: {
-    command: `npm run dev -- --port ${PORT} --strictPort`,
+    command: process.env.CI
+      ? `npx vite build --outDir dist && npx vite preview --outDir dist --port ${PORT} --strictPort`
+      : `npm run dev -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: process.env.CI ? 240_000 : 120_000,
   },
 });

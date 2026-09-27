@@ -4,15 +4,15 @@ import { isSoftwareRenderer } from '../src/core/quality';
 
 /**
  * Dev-state hook (WORLD-PLAN W0.2). The E2E suite reads runtime STATE through
- * `window.__ranger` (gated behind DEV or ?dev=1; the dev server is DEV, so it
- * is present without the flag). This box's acceptance: `screen === 'title'` on
+ * `window.__ranger` (gated behind DEV or ?dev=1: the smoke opens `?dev=1`, since CI
+ * serves the production build). This box's acceptance: `screen === 'title'` on
  * boot. Later boxes extend the same hook (pos, cameraYaw, missionView, clip).
  */
 test('devhook: window.__ranger present on boot, screen === "title" @smoke', async ({ page }, testInfo) => {
   const errors: string[] = [];
   collectPageErrors(page, errors);
 
-  await page.goto('/');
+  await page.goto('/?dev=1'); // the hook; CI serves the production build, where only ?dev=1 installs it
   await expect(page.locator('.boot-title')).toBeVisible();
 
   const hook = await page.evaluate(() => {
@@ -23,7 +23,7 @@ test('devhook: window.__ranger present on boot, screen === "title" @smoke', asyn
     return { version: r.version, screen: r.screen, missionView: r.missionView, drawCalls: r.drawCalls() };
   });
 
-  expect(hook, 'window.__ranger installed under DEV').not.toBeNull();
+  expect(hook, 'window.__ranger installed under ?dev=1').not.toBeNull();
   expect(hook!.version).toBe('2.1.0-ship');
   expect(hook!.screen).toBe('title');
   expect(hook!.missionView).toBeNull();

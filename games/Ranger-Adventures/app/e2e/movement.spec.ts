@@ -33,10 +33,10 @@ const WALK_FRAMES = 240;
 
 /** Drive title → avatar → world (W2.1: world is the front door); return once screen === 'world'. */
 async function enterWorld(page: Page): Promise<void> {
-  await page.goto('/');
+  await page.goto('/?dev=1'); // the hook; CI serves the production build, where only ?dev=1 installs it
   await page.getByRole('button', { name: 'Begin' }).click();
   await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
-  await expect.poll(() => hook(page, (r) => r.screen), { timeout: 30_000 }).toBe('world');
+  await expect.poll(() => hook(page, (r) => r.screen), { timeout: 60_000 }).toBe('world'); // loading + building the world
 }
 
 test('movement: tap-to-walk moves the ranger ≥2 m @smoke', async ({ page }, testInfo) => {
