@@ -549,13 +549,20 @@ test('a mission picked on the missiebord: played at the board, its family comes 
     const at = (await snap(page)).p!;
     const byBoard = ((await R<Seat[] | null>(page, `r.seating(${at.x}, ${at.z}, 10)`)) ?? []).filter((s) => s.id.includes('progress-'));
     log.soft(byBoard.length === 0, `the family stands at the board: ${byBoard.map((s) => s.id.split('@')[0]).join(', ')}`);
+    // nobody saw it come home yet: it waits until the ranger comes to look
+    const early = ((await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`)) ?? []).filter((s) => s.id.includes('progress-'));
+    log.soft(early.length === 0, `the family came home while the ranger was at the board, out of view (${early.length} pieces already at the marker)`);
     // walk to the marker: once it is in view, the flag rises and the family walks home
-    await walkTo(page, marker, { stopDist: 11, timeout: 90_000 });
-    await sleep(page, 900);
+    await walkTo(page, marker, { stopDist: 12, timeout: 90_000 });
+    const familyNow = async (): Promise<Seat[]> => ((await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`)) ?? []).filter((s) => s.id.includes('progress-'));
+    const a = await familyNow();
+    await sleep(page, 400);
+    const b = await familyNow();
     await log.shot('coming-home');
-    const coming = (await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`)) ?? [];
-    log.note(`at ~11 m: ${coming.filter((s) => s.id.includes('progress-')).length} pieces of the family in view`);
-    log.soft(coming.some((s) => s.id.startsWith('klaar-flag')), 'coming up to the marker, its "klaar" flag stands there');
+    const moved = b.filter((s) => !a.some((x) => x.sig === s.sig && Math.hypot(x.x - s.x, x.z - s.z) < 0.05)); // (two piglets share a look)
+    log.note(`at ~12 m: ${b.length} pieces of the family in view, ${moved.length} on their way home`);
+    log.soft(moved.length > 0, 'coming up to the marker, the ranger sees the family walk home');
+    log.soft(b.some((s) => s.id.startsWith('klaar-flag')), 'coming up to the marker, its "klaar" flag stands there');
     await walkTo(page, marker, { stopDist: 2.4, timeout: 60_000 });
     await sleep(page, 3_000);
     await log.shot('at-marker');
