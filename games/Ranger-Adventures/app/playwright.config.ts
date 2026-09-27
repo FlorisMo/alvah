@@ -1,26 +1,30 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright config for the browser-proof contract (WORLD-PLAN §3.1).
+ * Playwright config for the browser suite (the dev server; `playwright.preview.config.ts`
+ * drives the built site instead). E2E asserts against the dev-state hook
+ * `window.__ranger` (state, not pixels); golden, missions, sitspot and roundtrip play
+ * with real input only, some older specs still win steps through `winStep()`.
  *
- * The whole point of run 2: no box may claim "done" without a rendered frame /
- * input event checked in a real browser. E2E asserts against the dev-state
- * hook `window.__ranger` (state, not pixels — headless SwiftShader renders
- * deterministically enough for state asserts, W0.2 adds the hook).
- *
- * - Fixed uncommon port 4199 so a vite dev server Floris has open on 5173 never
- *   turns the suite red; `reuseExistingServer` reuses a 4199 server locally but
- *   never in CI.
- * - `retries: 2` in CI only (SwiftShader is ~10× slower; movement asserts use
- *   `expect.poll`, never fixed sleeps).
- * - Screenshots on failure + explicit artifact shots go to `e2e/__shots__/`
- *   (gitignored). The CI swiftshader launch args (W0.6) live on chromium.
- * - WebKit (W0.8) is the iPad Safari engine — the primary device. It runs the
- *   smoke set only (`grep: /@smoke/` = boot + journey + movement) so it stays
- *   fast; `shot()` no-ops on webkit (helpers.ts). CI installs chromium only,
- *   so `e2e:smoke` is scoped to `--project=chromium` (package.json) and the
- *   webkit run is `e2e:webkit`, local-only. Frozen smoke assertions (§3.1)
- *   are unchanged — webkit adds a second engine, it removes nothing.
+ * - The port is `RANGER_PORT` (one per parallel agent; 4199 when unset). Locally a
+ *   server already running on it is reused, so a shared port tests someone else's code;
+ *   in CI a fresh one is always started.
+ * - Chromium (the laptop engine: the device that decides every trade-off, GOAL.md) runs
+ *   everything. Locally it gets the real-GPU args: without them headless Chromium
+ *   silently draws in software and the world crawls.
+ * - CI (`CI=1`, GitHub's GPU-less ubuntu runner) runs `npm run e2e:smoke` only: boot,
+ *   devhook, journey, movement, against the production build (vite build + preview; the
+ *   smoke opens `/?dev=1` for the hook), on SwiftShader (software GL). The game detects software
+ *   GL and boots its light mode there (core/quality.ts); the smoke waits for rendered
+ *   frames, not seconds, where it waits for the game to act (movement.spec). CI also
+ *   retries twice, runs one worker and gives each test 120 s.
+ * - WebKit is the iPad engine (second device: it must keep working). It runs the smoke
+ *   set only, locally (`npm run e2e:webkit`); `shot()` no-ops on it (helpers.ts).
+ * - Local runs use at most 2 workers: every worker boots a whole 3D world on the one
+ *   GPU, and at the default (half the cores) the walking and mission specs timed out
+ *   under load while each passed alone (review TEST-2, 2026-09-27).
+ * - Screenshots on failure + explicit artifact shots go to `e2e/__shots__/` and
+ *   `test-results/` (both gitignored).
  */
 const PORT = Number(process.env.RANGER_PORT ?? 4199); // RANGER_PORT: one port per parallel agent (a reused server would test another worktree's code)
 const CI_SOFTWARE_GL = ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'];
@@ -32,17 +36,13 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  // Per-test budget. CI runs on a 2-core GPU-less runner where SwiftShader
-  // renders the whole journey (boot → avatar → world init → shots) in just
-  // over the 30 s default — the world DOES reach 'world', the budget expires
-  // during the final asserts/screenshots (observed 2026-07-05..12, every red
-  // deploy). 120 s keeps it a real upper bound (a genuine hang still fails);
-  // every frozen assertion and per-step timeout is unchanged. Locally 60 s: a
-  // full `npm run e2e` boots one world per worker on one GPU, and walk specs
-  // timed out at 30 s under that load (2026-09-26). The golden spec sets its own.
+  // Per-test budget. CI's GPU-less runner renders with SwiftShader, so a whole journey
+  // (boot → avatar → world → shots) needs more than the 30 s default: 120 s is still a
+  // real upper bound (a hang fails). Locally 60 s; the walking and mission specs set
+  // their own, longer budgets.
   timeout: process.env.CI ? 120_000 : 60_000,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 1 : 2, // each worker boots a world on the one GPU (see above)
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   outputDir: './test-results',
   use: {
@@ -55,26 +55,32 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        // CI runners have no GPU; three.js WebGL needs software rendering.
-        // SwiftShader via ANGLE keeps the world drawing headlessly (W0.6).
-        // Locally headless Chromium does NOT pick the GPU by itself: without these
-        // args it falls back to software GL and the world crawls (smoke timed out).
+        // CI runners have no GPU: SwiftShader via ANGLE draws WebGL in software (and the
+        // game boots its light mode). Locally headless Chromium does NOT pick the GPU by
+        // itself: without these args it falls back to software GL and the world crawls.
         launchOptions: { args: process.env.CI ? CI_SOFTWARE_GL : LOCAL_GPU },
       },
     },
     {
-      // iPad Safari engine (the primary device). Smoke set only — boot,
-      // journey, movement — so the second-engine pass stays quick. Not part
-      // of CI's chromium-only `e2e:smoke`; run it locally via `e2e:webkit`.
+      // iPad Safari engine (the second device: it must keep working). Smoke set only,
+      // so the second-engine pass stays quick. Not part of CI's chromium-only
+      // `e2e:smoke`; run it locally via `e2e:webkit`.
       name: 'webkit',
       grep: /@smoke/,
+      timeout: 120_000, // WebKit boots the world slower: 46-57 s per smoke test with other agents' worlds on the machine
       use: { ...devices['iPad (gen 7) landscape'] },
     },
   ],
+  // CI serves the PRODUCTION build (vite build + vite preview, ~15 s to build): the page
+  // loads a few bundled chunks, where the dev server first transforms every module on
+  // request, and on a busy GPU-less runner that cold transform ate much of a smoke
+  // test's budget. It is also closer to what ships. Local runs use the dev server.
   webServer: {
-    command: `npm run dev -- --port ${PORT} --strictPort`,
+    command: process.env.CI
+      ? `npx vite build --outDir dist && npx vite preview --outDir dist --port ${PORT} --strictPort`
+      : `npm run dev -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: process.env.CI ? 240_000 : 120_000,
   },
 });

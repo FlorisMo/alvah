@@ -211,14 +211,17 @@ export async function uncovered(loc: Locator): Promise<string | null> {
   });
 }
 
-/** Click a visible button like a player: the real mouse, at its centre. */
-export async function clickButton(page: Page, name: RegExp | string, what: string, timeout = 10_000): Promise<void> {
+/** Click a visible button like a player: the real mouse, at its centre. `clickTimeout`
+ *  is how long the click may wait for the page to take it: Begin and "Dit is mijn
+ *  ranger" build the world inside their handler, and on a busy machine the page stays
+ *  busy past 5 s ("waiting for scheduled navigations", breaker B10). */
+export async function clickButton(page: Page, name: RegExp | string, what: string, timeout = 10_000, clickTimeout = 5_000): Promise<void> {
   const btn = page.getByRole('button', { name, exact: typeof name === 'string' }).filter({ visible: true }).first();
   const shown = await btn.waitFor({ state: 'visible', timeout }).then(() => true, () => false);
   if (!shown) hard(false, `${what}: no visible button ${String(name)} (visible buttons: ${await visibleButtons(page)})`);
   const cover = await uncovered(btn);
   soft(cover === null, `${what}: the "${String(name)}" button is covered by ${cover}`);
-  await btn.click({ timeout: 5_000 });
+  await btn.click({ timeout: clickTimeout });
 }
 
 // ------------------------------------------------------------------ walking ----
@@ -241,6 +244,7 @@ export async function walkTo(page: Page, goal: P2, opts: { stopDist?: number; un
   const st: WalkStats = { res: 'timeout', ms: 0, samples: 0, worstClearance: 0, notGrounded: 0, viewBlocked: 0, camAhead: 0, maxYawRate: 0, end: { x: 0, z: 0 } };
   const t0 = Date.now();
   let best = Infinity; let bestAt = Date.now(); let prev: Snap | null = null; let detour = 0;
+  let side = 1; let sideTries = 0; // which way he goes round a solid, and how often he tried it
   try {
     while (Date.now() - t0 < timeout) {
       const s = await snap(page);
@@ -265,11 +269,18 @@ export async function walkTo(page: Page, goal: P2, opts: { stopDist?: number; un
         }
       }
       prev = s;
-      if (d < best - 0.3) { best = d; bestAt = Date.now(); detour = 0; }
-      if (Date.now() - bestAt > 4_000) { // blocked (a tree, the cabin): side-step like a child would
-        if (++detour > 4) { st.res = 'stuck'; break; }
-        await setKeys(new Set([detour % 2 ? 'ArrowRight' : 'ArrowLeft', 'ArrowUp']));
-        await sleep(page, 900);
+      if (d < best - 0.3) { best = d; bestAt = Date.now(); detour = 0; sideTries = 0; }
+      if (Date.now() - bestAt > 3_000) {
+        // Blocked (a tree, the cabin): go round it like a child would. Turn away and walk
+        // on past the corner, always to the SAME side, and only after three tries that
+        // way got nowhere the other side. (Alternating right, left, right on every try
+        // undid each step and pinned him on the cabin's corner: breaker B10.)
+        if (++detour > 8) { st.res = 'stuck'; break; }
+        if (++sideTries > 3) { side = -side; sideTries = 1; }
+        await setKeys(new Set([side > 0 ? 'ArrowRight' : 'ArrowLeft', 'ArrowUp']));
+        await sleep(page, 700);
+        await setKeys(new Set(['ArrowUp']));
+        await sleep(page, 1_000);
         bestAt = Date.now();
         continue;
       }

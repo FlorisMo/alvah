@@ -30,20 +30,22 @@ test('journey: Begin → avatar → world (≤2 clicks), screen reaches "world" 
 
   // A fresh browser context has no saved avatar, so "Begin" routes through the
   // avatar creator — the genuine first-boot journey.
-  await page.goto('/');
+  await page.goto('/?dev=1'); // the hook; CI serves the production build, where only ?dev=1 installs it
   await expect(page.locator('.boot-title')).toHaveText('Word boswachter');
   expect(await screen(page)).toBe('title');
   await shot(page, 'journey-1-title');
 
   // click 1: title → avatar creator
   await page.getByRole('button', { name: 'Begin' }).click();
-  await expect(page.getByRole('button', { name: 'Dit is mijn ranger' })).toBeVisible({ timeout: 15_000 });
-  await expect.poll(() => screen(page)).toBe('avatar');
+  // (these waits are for the page to load code and build the world: on CI's software GL
+  // under load that is tens of seconds; the test's own timeout stays the upper bound)
+  await expect(page.getByRole('button', { name: 'Dit is mijn ranger' })).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => screen(page), { timeout: 30_000 }).toBe('avatar');
   await shot(page, 'journey-2-avatar');
 
   // click 2: avatar → STRAIGHT into the walkable world (W2.1: no lodge stop).
   await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
-  await expect.poll(() => screen(page), { timeout: 30_000 }).toBe('world');
+  await expect.poll(() => screen(page), { timeout: 60_000 }).toBe('world');
   await shot(page, 'journey-3-world');
 
   // The lodge is no longer reachable in normal play (W2.4b). The world HUD's

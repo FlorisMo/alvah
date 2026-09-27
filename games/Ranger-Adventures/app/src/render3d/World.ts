@@ -42,13 +42,46 @@ import type { FootSurface } from '../core/footstep';
 import { Sound } from '../core/sound';
 import { store } from '../core/state';
 import type { CamState } from '../core/devhook';
-import { FpsProbe, nextTier, bootTier, coarsePointer, QUALITY_TIERS, type QualityTier } from '../core/quality';
+import { FpsProbe, nextTier, bootTier, coarsePointer, lightMode, pixelRatioFor, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import type { WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
+import { cachedResource } from './Models';
 import { Progress } from './world/Progress';
 
 export type { WorldMarker } from './world/Markers';
+
+/**
+ * Free what a torn-down world made on the GPU, and nothing the GLB cache owns. The world
+ * makes its own textures (name-tags, pads, water, dust, the ground mottle), materials,
+ * geometry, forest instance buffers, a bone texture per rig and the sun's shadow map;
+ * freeing only its geometry leaked 22-36 textures per title round trip (LEAK-1). What a
+ * cached GLB owns (Models.cachedResource) is shared by every clone: the title backdrop
+ * keeps drawing those same buffers, and freeing them under it left the title's ranger
+ * and cabin undrawn after "Naar het hoofdmenu" (parent:B9). Module-wide singletons (the
+ * plant material, the ground mottle) are freed too: three uploads them again on next use.
+ */
+function disposeScene(root: THREE.Object3D): void {
+  const done = new Set<object>();
+  const free = (r: { dispose(): void } | null | undefined): void => {
+    if (!r || done.has(r) || cachedResource(r)) return;
+    done.add(r);
+    r.dispose();
+  };
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!(o as THREE.Sprite).isSprite) free(m.geometry); // every sprite shares three's one quad
+    for (const mat of [m.material ?? []].flat()) {
+      if (cachedResource(mat)) continue;
+      for (const v of Object.values(mat)) if ((v as THREE.Texture)?.isTexture) free(v as THREE.Texture);
+      for (const u of Object.values((mat as THREE.ShaderMaterial).uniforms ?? {})) if (u?.value?.isTexture) free(u.value as THREE.Texture);
+      free(mat);
+    }
+    if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); // its instance buffers
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) free((o as THREE.SkinnedMesh).skeleton); // its bone texture
+    if ((o as THREE.Light).isLight) free(o as THREE.Light); // the sun's shadow map
+  });
+}
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -86,7 +119,7 @@ export class World {
   // W7.2 adaptive quality: the live tier drives the pixelRatio cap + vegetation
   // density. Seeded from the persisted verdict so a slow device boots light; the
   // per-frame fps probe re-decides with hysteresis (see update()).
-  private tier: QualityTier = bootTier(store.get().settings.kwaliteitTier, coarsePointer()); // an iPad boots laag
+  private tier: QualityTier = bootTier(store.get().settings.kwaliteitTier, coarsePointer(), lightMode()); // an iPad (and software GL) boots laag
   private readonly fpsProbe = new FpsProbe();
   private readonly canvas: HTMLCanvasElement;
   private readonly onBiome: (biome: Biome) => void;
@@ -472,10 +505,7 @@ export class World {
     this.player.dispose(); // pointer seam + keys
     this.canvas.removeEventListener('wheel', this.cam.onWheel); // F-16 dolly zoom
     Sound.engineStop(); // W5.2: never leak the engine loop past teardown
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.geometry) m.geometry.dispose();
-    });
+    disposeScene(this.scene);
   }
 
   /** The drawn ground height at world (x,z) — the one ground truth (world/Terrain.ts).
@@ -494,7 +524,7 @@ export class World {
    *  scene there carries a casting light. Called once after construction. */
   setRenderer(renderer: THREE.WebGLRenderer): void {
     this.renderer = renderer;
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = !lightMode(); // software GL draws no shadow pass (core/quality.ts light mode)
     renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoft is deprecated in this three build
     this.applyPixelRatio(); // W7.2: seed the fill-rate cap from the persisted tier
   }
@@ -503,8 +533,7 @@ export class World {
    *  ratio). Cheap and safe to call live on a tier change — no re-render needed. */
   private applyPixelRatio(): void {
     if (!this.renderer) return;
-    const cap = QUALITY_TIERS[this.tier].pixelRatioCap;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
+    this.renderer.setPixelRatio(pixelRatioFor(this.tier, window.devicePixelRatio, lightMode()));
   }
 
   /** Dev-hook accessor (W7.2): the resolved quality tier + the live pixelRatio and
@@ -739,17 +768,16 @@ export class World {
   }
 
   /** Resume free-roam after an in-place activity; re-emit the wayfinding cue.
-   *  The activity reframe owned the camera; on resume the follow-yaw eases back
-   *  to behind the ranger (a cut under reduced-motion, per §3.2). */
+   *  The activity reframe owned the camera; from the next update() the follow lens
+   *  eases back onto the bearing it held before the activity (the ranger's steering
+   *  tells CameraRig.steer to hold it), a cut under reduced motion (§3.2). */
   endActivity(): void {
     this.activityActive = false;
     this.activityFocus = null; // D1.3: no task owns the camera in free-roam
     this.pois.setLabelsVisible(true); // W6.1: restore the name-tags on resume
     this.pois.hideForActivity(null);
     this.pois.resetAfterActivity();   // fresh proximity + cue re-fire (re-surfaces the hub prompt)
-    this.cam.followTargetYaw = this.ranger.rotation.y;
     if (livePolicy().reduced) this.cam.place(true, 0, true); // reduced → cut back
-    // otherwise the next update() frame damps position + yaw back into place.
   }
 
 }

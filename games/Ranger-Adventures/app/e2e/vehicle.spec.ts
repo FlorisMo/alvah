@@ -38,6 +38,7 @@ interface Hook {
   sitSpot(): { x: number; z: number } | null;
   board(): { x: number; z: number } | null;
   shapeAt(x: number, z: number, dx: number, dz: number): { id: string; along: number; across: number } | null;
+  frames(): number | null;
 }
 /** The jeep's footprint (core/vehicle.ts JEEP_BODY): circles along its axis. */
 const JEEP_BODY = [{ along: 1.0, r: 0.9 }, { along: 0, r: 0.95 }, { along: -1.0, r: 0.9 }];
@@ -299,6 +300,16 @@ test('vehicle: auto-slows to a crawl near a wandering animal (calm rule)', async
   expect(errors).toEqual([]);
 });
 
+/** Hold keys for `n` rendered frames (at most 60 s), then let go: the game clock clamps a
+ *  long frame, so on a loaded machine a fixed hold in wall-clock time drives less far. */
+async function holdFrames(page: Page, keys: string[], n: number): Promise<void> {
+  const f0 = (await hook(page, (r) => r.frames()))!;
+  for (const k of keys) await page.keyboard.down(k);
+  try {
+    await page.waitForFunction(({ f0, n }) => ((window as unknown as { __ranger: { frames(): number } }).__ranger.frames() - f0) >= n, { f0, n }, { timeout: 60_000, polling: 50 });
+  } finally { for (const k of keys) await page.keyboard.up(k); }
+}
+
 /** Hold keys for `ms`, then let go. */
 async function hold(page: Page, keys: string[], ms: number): Promise<void> {
   for (const k of keys) await page.keyboard.down(k);
@@ -321,13 +332,13 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
     const r = (window as unknown as { __ranger: Hook & { heli(): { pads: { x: number; z: number }[] } | null } }).__ranger;
     const v = r.vehicle()!;
     const trees = r.treeSpots() ?? [];
-    type C = { x: number; z: number; r: number; t?: object };
+    type C = { x: number; z: number; r: number; t?: object; zone?: boolean };
     const others: C[] = [
       ...trees.map((t) => ({ x: t.x, z: t.z, r: 0.6 * t.s, t })),
       ...(r.landmarks() ?? []).map((l) => ({ x: l.x, z: l.z, r: 2.6 })),
       ...(r.dressing() ?? []).map((d) => ({ x: d.x, z: d.z, r: 1 })),
-      ...(r.markers() ?? []).map((m) => ({ x: m.x, z: m.z, r: 5.2 })),
-      ...(r.heli()?.pads ?? []).map((p) => ({ x: p.x, z: p.z, r: 3.6 })),
+      ...(r.markers() ?? []).map((m) => ({ x: m.x, z: m.z, r: 5.2, zone: true })),
+      ...(r.heli()?.pads ?? []).map((p) => ({ x: p.x, z: p.z, r: 3.6, zone: true })),
       ...[r.sitSpot(), r.board()].filter((o): o is { x: number; z: number } => !!o).map((o) => ({ x: o.x, z: o.z, r: 0.7 })),
     ];
     const gap = (o: C, ax: number, az: number, bx: number, bz: number): number => {
@@ -344,7 +355,12 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
         const ux = Math.sin((a * Math.PI) / 12), uz = Math.cos((a * Math.PI) / 12);
         const P = { x: t.x + ux * 12, z: t.z + uz * 12 }, Q = { x: t.x + ux * 20, z: t.z + uz * 20 };
         if (Math.hypot(Q.x, Q.z) > 60) continue;
-        const ok = others.every((o) => o.t === t || (gap(o, Q.x, Q.z, t.x, t.z) > 1.6 && gap(o, v.x, v.z, Q.x, Q.z) > 1.6 && gap(o, Q.x, Q.z, Q.x, Q.z) > 6));
+        // the jeep bends round a keep-out zone it sees ~1.5 s ahead of its nose, so a zone
+        // just BEHIND the trunk would steer it off the line before it arrives: keep the
+        // line's continuation past the trunk clear of zones too
+        const B = { x: t.x - ux * 10, z: t.z - uz * 10 };
+        const ok = others.every((o) => o.t === t || (gap(o, Q.x, Q.z, t.x, t.z) > 1.6 && gap(o, v.x, v.z, Q.x, Q.z) > 1.6 && gap(o, Q.x, Q.z, Q.x, Q.z) > 6
+          && (!o.zone || gap(o, t.x, t.z, B.x, B.z) > 1.6)));
         if (!ok) continue;
         const ahead = (Q.x - v.x) * fx + (Q.z - v.z) * fz;
         const cost = Math.hypot(Q.x - v.x, Q.z - v.z) - ahead; // prefer a start point ahead of the nose
@@ -356,7 +372,7 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
   expect(plan, 'a tree with a clear straight run-up').not.toBeNull();
   const tree = plan!.t;
   // drive the run-up with the arrow keys: Up + steer toward Q, then toward P
-  const driveTo = async (goal: { x: number; z: number }, within: number): Promise<void> => {
+  const driveTo = async (goal: { x: number; z: number }, within: number, coastAt = 0): Promise<void> => {
     const held = new Set<string>();
     const set = async (k: string, on: boolean): Promise<void> => {
       if (on && !held.has(k)) { await page.keyboard.down(k); held.add(k); } else if (!on && held.has(k)) { await page.keyboard.up(k); held.delete(k); }
@@ -367,7 +383,7 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
         if (Math.hypot(goal.x - v.x, goal.z - v.z) < within) break;
         const want = Math.atan2(goal.x - v.x, goal.z - v.z);
         const e = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
-        await set('ArrowUp', true);
+        await set('ArrowUp', Math.hypot(goal.x - v.x, goal.z - v.z) > coastAt || Math.abs(v.speed) < 1);
         await set('ArrowLeft', e > 0.1);
         await set('ArrowRight', e < -0.1);
         await page.waitForTimeout(80);
@@ -375,38 +391,57 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
     } finally { for (const k of [...held]) await page.keyboard.up(k); }
   };
   await driveTo(plan!.Q, 3);
-  await driveTo(plan!.P, 2);
-  // let it roll out, then line the nose up on the trunk with short taps (it never pivots)
-  await page.waitForTimeout(1_200);
-  for (let i = 0; i < 80; i++) {
+  await driveTo(plan!.P, 2, 7); // coast the last metres, so it comes to rest ON the run-up line, not metres past P
+  // let it roll out, then line the nose up on the trunk with short taps (it never pivots).
+  // Wait for the jeep itself, not for a fixed time: on a loaded machine it is still
+  // rolling after 1.2 s, and the taps then aim a moving jeep.
+  const rest = async (): Promise<void> => {
+    await expect.poll(async () => Math.abs((await hook(page, (r) => r.vehicle()))!.speed), { timeout: 30_000, message: 'the jeep rolls to a stop' }).toBeLessThan(0.05);
+  };
+  await rest();
+  const aim = async (): Promise<number> => {
     const v = (await hook(page, (r) => r.vehicle()))!;
     const want = Math.atan2(tree.x - v.x, tree.z - v.z);
-    const e = Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
+    return Math.atan2(Math.sin(want - v.heading), Math.cos(want - v.heading));
+  };
+  for (let i = 0; i < 200; i++) {
+    const e = await aim();
     if (Math.abs(e) < 0.05) break;
     await hold(page, [e > 0 ? 'ArrowLeft' : 'ArrowRight'], Math.min(250, 60 + Math.abs(e) * 400));
   }
+  await rest();
+  expect(Math.abs(await aim()), 'the nose is lined up on the trunk').toBeLessThan(0.1);
   const trunk = { x: tree.x, z: tree.z, r: 0.6 * tree.s };
-  await page.waitForTimeout(800);
 
-  // full gas straight at it for 5 s: it brakes by itself and rests against the trunk
+  // full gas straight at it until it stops, then let go, like a child who drove into a
+  // tree: it brakes by itself and rests against the trunk. Judged at the moment it stops,
+  // in rendered frames (not a fixed 5 s of wall clock: on a loaded machine the game clock
+  // clamps each long frame, and with the gas still held the jeep slides slowly round the
+  // trunk and drives on, so where a fixed window ends is luck).
   let minGap = Infinity;
   let jolt = 0;
+  let peak = 0;
+  let stop: Vehicle | null = null;
   let prev: (Vehicle & { t: number }) | null = null;
   await page.keyboard.down('ArrowUp');
   try {
     const t0 = Date.now();
-    while (Date.now() - t0 < 5_000) {
+    const f0 = (await hook(page, (r) => r.frames()))!;
+    while ((await hook(page, (r) => r.frames()))! - f0 < 600 && Date.now() - t0 < 60_000) {
       const v = { ...(await hook(page, (r) => r.vehicle()))!, t: Date.now() };
       minGap = Math.min(minGap, bodyGap(v, trunk));
       // a crash = the speed dropping far faster than the ~6 m/s² soft brake
       if (prev && (prev.speed - v.speed) / Math.max(0.05, (v.t - prev.t) / 1000) > 15) jolt += 1;
       prev = v;
-      await page.waitForTimeout(80);
+      peak = Math.max(peak, v.speed);
+      if (peak > 2 && Math.abs(v.speed) < 0.1) { stop = v; break; } // it drove, and now it stands
+      await page.waitForTimeout(40);
     }
   } finally {
     await page.keyboard.up('ArrowUp');
   }
-  const atTree = (await hook(page, (r) => r.vehicle()))!;
+  expect(stop, `it came to a stop (top speed ${peak.toFixed(1)} m/s)`).not.toBeNull();
+  const atTree = stop!;
   await shot(page, 'vehicle-at-tree');
   expect(minGap, 'the jeep body never drives into the trunk').toBeGreaterThan(-0.05);
   expect(bodyGap(atTree, trunk), 'it came to rest AT the trunk').toBeLessThan(0.5);
@@ -417,7 +452,7 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
   let free = atTree;
   for (const turn of ['ArrowLeft', 'ArrowRight']) {
     const from = (await hook(page, (r) => r.vehicle()))!;
-    await hold(page, ['ArrowUp', turn], 3_000);
+    await holdFrames(page, ['ArrowUp', turn], 180); // 3 s of play at 60 fps
     free = (await hook(page, (r) => r.vehicle()))!;
     expect(bodyGap(free, trunk), 'still never inside the trunk').toBeGreaterThan(-0.05);
     if (Math.hypot(free.x - from.x, free.z - from.z) > 2) break;

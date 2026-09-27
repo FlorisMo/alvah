@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   FpsProbe, nextTier, bootTier, QUALITY_TIERS,
   STEP_DOWN_FPS, STEP_UP_FPS, PROBE_WINDOW_SEC,
+  isSoftwareRenderer, lightOverride, pixelRatioFor,
 } from './quality.ts';
 
 test('tiers: laag is a genuine step-down on both knobs', () => {
@@ -103,6 +104,42 @@ test('bootTier: a touch-first device (iPad) always starts light; a laptop starts
   assert.equal(bootTier(undefined, false), 'hoog', 'first boot on a laptop');
   assert.equal(bootTier('hoog', false), 'hoog');
   assert.equal(bootTier('laag', false), 'laag', 'a slow laptop boots light next time');
+});
+
+test('light mode: every software rasterizer is recognised, no GPU is', () => {
+  for (const sw of [
+    'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)', // CI's headless Chrome
+    'Google SwiftShader',
+    'llvmpipe (LLVM 15.0.7, 256 bits)',
+    'Mesa softpipe',
+    'Microsoft Basic Render Driver',
+    'Software Adapter',
+  ]) assert.equal(isSoftwareRenderer(sw), true, sw);
+  for (const gpu of [
+    'ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)', // this Mac's headless Chromium
+    'Apple GPU', // WebKit (the iPad engine)
+    'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    'Mali-G78',
+  ]) assert.equal(isSoftwareRenderer(gpu), false, gpu);
+  assert.equal(isSoftwareRenderer(null), false, 'unknown renderer: not light');
+  assert.equal(isSoftwareRenderer(''), false);
+});
+
+test('light mode: ?light=1 forces it, ?light=0 refuses it, otherwise detect', () => {
+  assert.equal(lightOverride('?light=1'), true);
+  assert.equal(lightOverride('?dev=1&light=0'), false);
+  assert.equal(lightOverride('?dev=1'), null);
+  assert.equal(lightOverride(''), null);
+});
+
+test('light mode: boots laag and draws at pixelRatio 1; a GPU keeps its picture', () => {
+  assert.equal(bootTier('hoog', false, true), 'laag', 'a saved hoog verdict does not override software GL');
+  assert.equal(bootTier(undefined, false, false), 'hoog', 'the laptop GPU default is unchanged');
+  assert.equal(pixelRatioFor('laag', 2, true), 1);
+  assert.equal(pixelRatioFor('laag', 1, true), 1);
+  assert.equal(pixelRatioFor('hoog', 2, false), 2, 'a retina laptop keeps 2×');
+  assert.equal(pixelRatioFor('laag', 2, false), 1.25, 'the laag tier cap is unchanged');
+  assert.equal(pixelRatioFor('hoog', 1, false), 1);
 });
 
 test('tiers: laag also draws the forest with its lighter detail distances', () => {

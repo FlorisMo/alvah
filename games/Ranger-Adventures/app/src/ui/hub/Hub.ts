@@ -38,7 +38,7 @@ export function showTitle(): void {
   setScreen('title');
   setMissionView(null);
   const el = plainCard(
-    `<div class="boot-card-ish ra-title-card">` +
+    `<div class="boot-card ra-title-card">` + // the boot card's own place (main.ts), not mid-screen
     `<p class="boot-kicker">Ranger van de Veluwe</p>` +
     `<h1 class="boot-title">Word boswachter</h1>` +
     `<p class="boot-sub">Help de dieren van de Veluwe.<br>Kies een missie en train je breinkracht.</p>` +

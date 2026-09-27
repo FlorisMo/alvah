@@ -84,8 +84,8 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const dressed = await page.waitForFunction(() => (window as unknown as { __ranger?: { titleReady(): boolean } }).__ranger?.titleReady(), null, { timeout: 15_000 }).then(() => true, () => false);
     soft(dressed, 'after 15 s the title still shows its low-poly stand-in props (titleReady=false)');
     await shot(page, 'title');
-    await clickButton(page, 'Begin', 'title');
-    await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 20_000, message: 'a mouse click on Begin must open the ranger maker' }).not.toBe('title');
+    await clickButton(page, 'Begin', 'title', 10_000, 30_000); // its handler loads the maker + world code
+    await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 30_000, message: 'a mouse click on Begin must open the ranger maker' }).not.toBe('title');
     noNewErrors();
   });
 
@@ -102,7 +102,7 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     }
     note(`chose ${Object.entries(CHOICE).map(([k, v]) => `${k} ${v}`).join(', ')}`);
     await shot(page, 'ranger-maker');
-    await clickButton(page, 'Dit is mijn ranger', 'ranger maker');
+    await clickButton(page, 'Dit is mijn ranger', 'ranger maker', 10_000, 30_000); // its handler builds the world
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000, message: '"Dit is mijn ranger" must lead into the world' }).toBe('world');
     await expect.poll(() => R<P2 | null>(page, 'r.pos()'), { timeout: 30_000, message: 'the world never placed the ranger' }).not.toBeNull();
     note('colours on the 3D ranger are measured in step 3, once the spawn hint has left his head');
@@ -399,7 +399,7 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
         const reacted = await expect.poll(async () => {
           const h3 = await R<Hint | null>(page, 'r.playHint()');
           return h3?.id !== before.id || (await uiText(page)) !== before.text || JSON.stringify((await save(page))?.trials) !== before.trials;
-        }, { timeout: 4_000 }).toBe(true).then(() => true, () => false);
+        }, { timeout: 10_000 }).toBe(true).then(() => true, () => false); // a click reacts within a frame or two; 4 s ran out in missions.spec at load ~80
         hard(reacted, `${ef}: a real mouse click on "${h.id}" at (${h.x}, ${h.y}) did nothing` +
           (h.reachesCanvas ? '' : ` — the click lands on ${h.blocker}, not on the 3D scene`));
         lastProgress = Date.now();
@@ -522,7 +522,7 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
       || !(await page.getByRole('button', { name: 'Begin', exact: true }).isVisible().catch(() => false));
     const enterWorks = await expect.poll(beginGone, { timeout: 3_000 }).toBe(true).then(() => true, () => false);
     soft(enterWorks, 'Enter does not press Begin on the title');
-    if (!enterWorks) await clickButton(page, 'Begin', 'title after reload');
+    if (!enterWorks) await clickButton(page, 'Begin', 'title after reload', 10_000, 30_000);
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000, message: 'after a reload Begin must go straight back into the world' }).toBe('world');
     const sv = await save(page);
     hard(!!sv?.voltooid[missionId], `after a reload mission "${missionId}" is no longer done`);

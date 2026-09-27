@@ -27,28 +27,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0 # the whole history: one push can carry many commits
       - name: Detect ranger-related changes
         id: filter
         shell: bash
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
         run: |
-          if git rev-parse HEAD^ >/dev/null 2>&1; then
-            changed="$(git diff --name-only HEAD^ HEAD)"
+          # Judge the WHOLE push: every file changed between the branch tip before
+          # the push and after it, not only the push's last commit. No usable
+          # "before" (a manual run, a new branch's 000…0, or a force-push that
+          # dropped it from history) → run everything.
+          if [ -n "$BEFORE" ] && ! printf '%s' "$BEFORE" | grep -qE '^0+$' && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            changed="$(git diff --name-only "$BEFORE" "$AFTER")"
+            everything=false
           else
-            changed=""   # first commit / shallow root — run everything
+            changed=""
+            everything=true
           fi
-          if [ -z "$changed" ] || printf '%s\n' "$changed" | grep -qE '^(games/|src/pages/ranger/|\.github/workflows/deploy\.yml)'; then
+          if [ "$everything" = true ] || printf '%s\n' "$changed" | grep -qE '^(games/|src/pages/ranger/|\.github/workflows/deploy\.yml)'; then
             ranger=true
           else
             ranger=false
           fi
           echo "ranger=$ranger" >> "$GITHUB_OUTPUT"
-          echo "ranger-related changes: $ranger"
+          echo "ranger-related changes: $ranger (everything=$everything, ${BEFORE:-no before}..$AFTER)"
 
   # Browser-proof gate (WORLD-PLAN §3.1). Unit tests block every push; the
-  # e2e:smoke step only runs for ranger changes and is currently
-  # continue-on-error (W0.6a) — it flips to blocking after one green ubuntu run
-  # (W0.6b).
+  # e2e:smoke step (boot, devhook, journey, movement: headless Chromium on
+  # SwiftShader, where the game boots its light mode, against the production
+  # build that playwright.config.ts builds and previews when CI is set) runs for
+  # ranger changes and BLOCKS the deploy when it fails.
   test:
     needs: changes
     runs-on: ubuntu-latest
@@ -78,10 +88,9 @@ jobs:
       - name: E2E smoke (browser-proof, WORLD-PLAN §3.1)
         if: needs.changes.outputs.ranger == 'true'
         working-directory: games/Ranger-Adventures/app
-        # BLOCKING (W0.6b): flipped from continue-on-error after one observed
-        # green ubuntu run (run 28589759505). A red browser smoke now fails the
-        # test job and gates the deploy. SwiftShader args come from
-        # playwright.config.ts (gated on the CI env var).
+        # BLOCKING: a red browser smoke fails the test job and gates the deploy.
+        # The SwiftShader args, the production build + preview server and the
+        # retries all come from playwright.config.ts (gated on the CI env var).
         run: npm run e2e:smoke
 
   build:
