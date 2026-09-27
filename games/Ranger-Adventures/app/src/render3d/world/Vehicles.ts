@@ -642,14 +642,16 @@ export class Vehicles {
     this.host.recut();
   }
 
-  /** Every solid the jeep's body meets: the static list (trunks, cabin, landmarks,
-   *  board, props, the parked helicopter) plus people, walking animals and the keep-out
-   *  zone around each mission marker. */
-  private jeepSolids(): Solid[] {
+  /** Every solid a vehicle's body meets: the static list (trunks, cabin, landmarks,
+   *  board, props, the other parked vehicle) plus people, walking animals and the keep-out
+   *  zone around each mission marker. For the jeep the helipads are solid too, so a pad
+   *  is always free for the helicopter to land on (the autopilot must always finish). */
+  private solids(forJeep: boolean): Solid[] {
     const out: Solid[] = this.obstacles.slice();
     for (const p of this.host.people()) out.push({ x: p.x, z: p.z, r: PERSON_R });
     for (const a of this.host.animals()) if (a.id.startsWith('animal-')) out.push({ x: a.x, z: a.z, r: animalR(a.h) });
     for (const m of this.host.markers()) out.push({ x: m.x, z: m.z, r: MARKER_R });
+    if (forJeep) for (const p of this.helipads) out.push({ x: p.x, z: p.z, r: PAD_RADIUS });
     return out;
   }
 
@@ -668,7 +670,7 @@ export class Vehicles {
     const reduced = livePolicy().reduced;
     const caps = driveCaps(reduced);
     const want = driveIntent(this.host.intent());
-    const solids = this.jeepSolids();
+    const solids = this.solids(true);
     // (1) speed: the ramp, then a soft brake for what lies ahead
     let speed = rampSpeed(this.vehicleSpeed, want.throttle, dt, caps);
     if (speed !== 0) {
@@ -829,7 +831,7 @@ export class Vehicles {
       this.heliSpeed = 0;
     }
     if (this.heliAltitude <= HELI_AIRBORNE_Y) { // low: the body collides like the jeep's
-      const next = resolveBody(hp.x, hp.z, this.heliHeading, nx, nz, nh, HELI_BODY, this.jeepSolids(), this.limits);
+      const next = resolveBody(hp.x, hp.z, this.heliHeading, nx, nz, nh, HELI_BODY, this.solids(false), this.limits);
       nx = next.x; nz = next.z; nh = next.heading;
     } else {                                     // over the treetops: only the rim bounds it
       const r = Math.hypot(nx, nz), lim = this.limits.bound - 2;
