@@ -245,7 +245,7 @@ export class CameraRig {
     const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
     // the steering reads the bearing without the clear-view side offset: that is the
     // camera's own small dodge, never a new "forward" for the ranger
-    return { bearing: wrapAngle(this.followYaw + this.orbitYaw), follows: follow && !livePolicy().reduced };
+    return { bearing: wrapAngle(this.followYaw + this.orbitYaw), screen: this.bearing(), follows: follow && !livePolicy().reduced };
   }
 
   /**

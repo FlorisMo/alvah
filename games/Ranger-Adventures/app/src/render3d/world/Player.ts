@@ -60,9 +60,12 @@ type DriveMode = 'keys' | 'stick' | 'tap';
  *  the lens looks along (sin b, cos b), so "the ranger faces into the screen" is
  *  heading == bearing. */
 export interface ViewFrame {
-  /** The bearing on screen now: follow + the player's drag look-around (what the
-   *  follow bearing becomes after a fold). */
+  /** The camera's base bearing: follow + the player's drag look-around (what the
+   *  follow bearing becomes after a fold). Tank keys align the ranger to it. */
   bearing: number;
+  /** The bearing on screen right now (the base + the camera's small clear-view
+   *  dodge): what the stick and the screen-relative keys are relative to. */
+  screen: number;
   /** The camera follows him (setting on, no reduced motion); else it is fixed. */
   follows: boolean;
 }
@@ -271,7 +274,7 @@ export class Player {
       // screen-relative: the stick (and, with the follow camera off, the keys) point
       // where to go on the screen as it was when the walk started (a latched frame, so
       // the camera easing behind him never bends the walk: no feedback loop).
-      if (starting) this.frame = view.bearing;
+      if (starting) this.frame = view.screen;
       const v = mode === 'keys' ? screenVector(keys!, null) : stick!;
       const m = Math.min(1, Math.hypot(v.x, v.y));
       if (m > 0) {
