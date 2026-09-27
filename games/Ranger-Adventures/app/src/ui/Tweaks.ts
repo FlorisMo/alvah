@@ -158,9 +158,11 @@ function render(): void {
   const el = document.createElement('div');
   el.className = 'ra-overlay';
   el.innerHTML =
-    `<div class="tweaks boot-card-ish">` +
+    // "Klaar" sits in a pinned footer: never below the fold at 1280×800 (breaker B3)
+    `<div class="tweaks boot-card-ish has-foot">` +
     `<p class="boot-kicker">Instellingen</p>` +
     `<h1 class="boot-title">Maak het van jou</h1>` +
+    `<div class="card-body">` +
     `<div class="tw-list">` +
     TOGGLES.map(toggleHtml).join('') +
     sliderHtml('readSize', 'Tekstgrootte', READ_SIZE.min, READ_SIZE.max, READ_SIZE.step, s.readSize,
@@ -173,9 +175,10 @@ function render(): void {
     joystickHtml() +
     accentHtml() +
     `</div>` +
-    `<div class="ra-row">` +
-    `<button class="btn-start tw-back" type="button" data-key="back">Klaar</button>` +
     `</div>` +
+    `<div class="card-foot"><div class="ra-row">` +
+    `<button class="btn-start tw-back" type="button" data-key="back">Klaar</button>` +
+    `</div></div>` +
     `</div>`;
   host.appendChild(el);
 

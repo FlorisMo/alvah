@@ -219,24 +219,26 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
     : laatste
       ? `<p class="cb-note">${esc(laatste.tekst)}</p>`
       : `<p class="cb-note muted">Los missies op. Aanwijzingen komen hier.</p>`;
-  const resolveBtn =
-    allFound && !gemeld
-      ? `<button class="btn-start cb-resolve" type="button">Volg het spoor</button>`
-      : '';
+  // Enter always moves on (child B7): the pinned footer carries the primary. With every
+  // clue found that is "Volg het spoor" (the way to the ontknoping), and walking on is
+  // the quiet way back; otherwise "Verder op patrouille" itself is the primary.
+  const resolve = allFound && !gemeld;
+  const onLabel = back === resumePatrol ? 'Verder op patrouille' : 'Verder';
+  const foot = resolve
+    ? `<div class="ra-row cb-act"><button class="btn-start cb-resolve" type="button">Volg het spoor</button></div>` +
+      `<button class="ra-text-btn cb-back" type="button" data-key="back">${onLabel}</button>`
+    : `<div class="ra-row"><button class="btn-start cb-back" type="button" data-key="back">${onLabel}</button></div>`;
 
   const el = card(
-    `<div class="case-board boot-card-ish">` +
-    `<div class="card-top">` +
-    `<button class="ra-chip cb-back" type="button" data-key="back"><span class="ra-chip-ic" aria-hidden="true">‹</span>` +
-    `<span class="ra-chip-tx">Verder op patrouille</span></button>` +
-    `</div>` +
+    `<div class="case-board boot-card-ish has-foot">` +
     `<p class="boot-kicker">Je sporenboek · ${esc(chapter?.naam ?? '')} · ${count}</p>` +
     `<h1 class="boot-title">Wat is hier aan de hand?</h1>` +
+    `<div class="card-body">` +
     `<div class="cb-cork">${board}</div>` +
     note +
-    // the way to the ontknoping sits right under the clues, never below the notes
-    (resolveBtn ? `<div class="ra-row cb-act">${resolveBtn}</div>` : '') +
     veldStrip +
+    `</div>` +
+    `<div class="card-foot">${foot}</div>` +
     `</div>`,
   );
   // Only the latest-clue note is read aloud (and karaoke-highlighted).

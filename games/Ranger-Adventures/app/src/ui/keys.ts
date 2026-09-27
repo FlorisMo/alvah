@@ -26,7 +26,17 @@ export function installKeys(ui: HTMLElement): void {
   window.addEventListener('keydown', onKey, { capture: true });
 }
 
-/** Rendered, enabled, and (when its centre is in the viewport) not covered. */
+/** The screen layer an element belongs to: its ancestor that is a direct child of the UI root. */
+function layerOf(el: Element | null): Element | null {
+  let at = el;
+  while (at && at.parentElement !== root) at = at.parentElement;
+  return at;
+}
+
+/** Rendered, enabled, and (when its centre is in the viewport) not covered. A way back
+ *  (`mustBeOnScreen` false) also counts when it is only scrolled out of its own card:
+ *  what sits at its centre then belongs to the same screen layer, not one on top of it
+ *  (the raaf hut's "Terug" below the fold, breaker B3). */
 function usable(el: HTMLElement, mustBeOnScreen: boolean): boolean {
   if ((el as HTMLButtonElement).disabled) return false;
   const r = el.getBoundingClientRect();
@@ -38,7 +48,9 @@ function usable(el: HTMLElement, mustBeOnScreen: boolean): boolean {
   const inView = x >= 0 && y >= 0 && x <= innerWidth && y <= innerHeight;
   if (!inView) return !mustBeOnScreen;
   const hit = document.elementFromPoint(x, y);
-  return !!hit && (hit === el || el.contains(hit));
+  if (!hit) return false;
+  if (hit === el || el.contains(hit)) return true;
+  return !mustBeOnScreen && layerOf(hit) === layerOf(el);
 }
 
 /** The last usable match in document order (later layers sit on top). */

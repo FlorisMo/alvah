@@ -61,11 +61,15 @@ function render(): void {
   const el = document.createElement('div');
   el.className = 'ra-overlay';
   el.innerHTML =
-    `<div class="cabin boot-card-ish">` +
+    // the way back sits in a pinned footer: it never scrolls out of the card (breaker B3)
+    `<div class="cabin boot-card-ish has-foot">` +
     `<p class="boot-kicker">De ranger-hut</p>` +
     `<h1 class="boot-title">Jouw plekje</h1>` +
-    `<div class="cabin-sections"></div>` +
-    `<button class="ra-text-btn cabin-back" type="button" data-key="back">${esc(backLabel)}</button>` +
+    `<div class="card-body"><div class="cabin-sections"></div></div>` +
+    `<div class="card-foot">` +
+    `<button class="ra-chip cabin-back" type="button" data-key="back">` +
+    `<span class="ra-chip-ic" aria-hidden="true">‹</span><span class="ra-chip-tx">${esc(backLabel)}</span></button>` +
+    `</div>` +
     `</div>`;
   host.appendChild(el);
 

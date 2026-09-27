@@ -77,16 +77,22 @@ export function showBriefing(mission: Mission): void {
   const jargon = store.get().settings.jargon;
   const lines = (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
 
+  // "Ga op pad" and "Nog even rondkijken" sit in a pinned footer: at 800×600 the way
+  // back used to fall below the card (breaker note)
   const el = card(
-    `<div class="briefing veldnotitie boot-card-ish">` +
+    `<div class="briefing veldnotitie boot-card-ish has-foot">` +
     `<p class="boot-kicker">Veldnotitie · ${esc(mission.landschap)}</p>` +
     `<h1 class="boot-title">${esc(mission.titel)}</h1>` +
+    `<div class="card-body">` +
     `<div class="briefing-lines">${lines.map((_, i) => `<p class="briefing-line" data-line="${i}"></p>`).join('')}</div>` +
+    `</div>` +
+    `<div class="card-foot">` +
     `<div class="ra-row">` +
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
     `<button class="btn-start" type="button">Ga op pad</button>` +
     `</div>` +
     `<button class="ra-text-btn briefing-back" type="button" data-key="back">Nog even rondkijken</button>` +
+    `</div>` +
     `</div>`,
   );
   const lineEls = Array.from(el.querySelectorAll<HTMLElement>('.briefing-line'));
@@ -434,11 +440,12 @@ function showWildcamCapture(clue: Clue, then: () => void): void {
     `<span class="cb-clue-text"></span>` +
     `</div>` +
     `<p class="boot-sub">Hij zit nu in je sporenboek.</p>` +
+    // Enter walks on (child B7): "Verder" is the primary, the sporenboek a quiet side step
     `<div class="ra-row">` +
     `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
-    `<button class="btn-start wc-board" type="button">Bekijk je sporenboek</button>` +
+    `<button class="btn-start wc-patrol" type="button" data-key="back">${then === resumePatrol ? 'Verder op patrouille' : 'Verder'}</button>` +
     `</div>` +
-    `<button class="ra-text-btn wc-patrol" type="button" data-key="back">Verder op patrouille</button>` +
+    `<button class="ra-text-btn wc-board" type="button">Bekijk je sporenboek</button>` +
     `</div>`,
   );
   const ra = mountReadAloud({
