@@ -180,10 +180,13 @@ export class Vehicles {
   private heliLanding = false;
   private liftArmed = false;               // a push lifts off only after the keys were let go once
   private landPad: { x: number; z: number } | null = null;
-  // The pad it just lifted off from: until it is DEPART_CLEAR m away the pad chip points
-  // at the OTHER pad and no "Land hier" shows over this one (it was offered — and read
-  // aloud — the moment it lifted off: "Land hier. Helipad achter je, 5 meter.").
+  // The pad it lifted off from. For the whole flight the pad chip — and the Land
+  // autopilot with it — goes to the OTHER pad: a flight goes somewhere (the chip used to
+  // say "Helipad achter je, 5 meter" at lift-off, and flipped back to it mid-flight).
+  // "Land hier" shows over it again only once the helicopter has been away
+  // (`departLeft`, DEPART_CLEAR m) — not the moment it lifts off.
   private departPad: { x: number; z: number } | null = null;
+  private departLeft = false;
   private heliSpeed = 0;
   private heliClimbRate = 0;
   private heliVignetteVal = 0;
@@ -556,16 +559,23 @@ export class Vehicles {
     return best;
   }
 
-  /** The pad the flight is guided to: the nearest one, but not the pad it just left. */
+  /** The pad the flight is guided to (the chip, the Land autopilot): the nearest one
+   *  other than the pad it lifted off from. */
   private guidePad(x: number, z: number): { x: number; z: number } | null {
     return this.nearestPad(x, z, this.inHeli && this.heliAirborne ? this.departPad : null) ?? this.nearestPad(x, z);
   }
 
+  /** The pad the helicopter is over and may land on ("Land hier"), or null. */
+  private padBelow(): { x: number; z: number } | null {
+    if (!this.heliPos) return null;
+    const skip = this.inHeli && this.heliAirborne && !this.departLeft ? this.departPad : null;
+    const p = this.nearestPad(this.heliPos.x, this.heliPos.z, skip);
+    return p && Math.hypot(p.x - this.heliPos.x, p.z - this.heliPos.z) <= PAD_LAND_R ? p : null;
+  }
+
   /** Whether the helicopter is over a pad it may land on (so "Land hier" shows). */
   private overPad(): boolean {
-    if (!this.heliPos) return false;
-    const p = this.guidePad(this.heliPos.x, this.heliPos.z);
-    return !!p && Math.hypot(p.x - this.heliPos.x, p.z - this.heliPos.z) <= PAD_LAND_R;
+    return this.padBelow() !== null;
   }
 
   /* ------------------------------------------------------- the rider ---- */
@@ -815,14 +825,15 @@ export class Vehicles {
   }
 
   /**
-   * W5.3b: "Land": in the air, the autopilot takes the helicopter to the NEAREST pad
-   * (over one: that one), turning to face where it flies, descending calmly (≤ 2 m/s)
-   * and setting down on the pad's centre. It always finishes, so a child can never be
-   * stuck in the air. On the ground it is a no-op.
+   * W5.3b: "Land": in the air, the autopilot takes the helicopter to the pad it is over
+   * ("Land hier") or else to the pad the chip points at ("Land op de helipad"), turning
+   * to face where it flies, descending calmly (≤ 2 m/s) and setting down on the pad's
+   * centre. It always finishes, so a child can never be stuck in the air. On the
+   * ground it is a no-op.
    */
   landHeli(): void {
     if (!this.inHeli || !this.heliAirborne || !this.heliPos) return;
-    this.landPad = this.nearestPad(this.heliPos.x, this.heliPos.z);
+    this.landPad = this.padBelow() ?? this.guidePad(this.heliPos.x, this.heliPos.z);
     this.heliLanding = !!this.landPad;
   }
 
@@ -865,6 +876,7 @@ export class Vehicles {
         this.heliAirborne = true;
         const from = this.nearestPad(hp.x, hp.z);
         this.departPad = from && Math.hypot(from.x - hp.x, from.z - hp.z) <= PAD_LAND_R ? from : null;
+        this.departLeft = false;
       }
       else {
         hp.y = this.groundY(hp.x, hp.z);
@@ -908,7 +920,7 @@ export class Vehicles {
       if (r > lim) { nx = (nx / r) * lim; nz = (nz / r) * lim; }
     }
     hp.x = nx; hp.z = nz;
-    if (this.departPad && Math.hypot(this.departPad.x - hp.x, this.departPad.z - hp.z) > DEPART_CLEAR) this.departPad = null;
+    if (this.departPad && Math.hypot(this.departPad.x - hp.x, this.departPad.z - hp.z) > DEPART_CLEAR) this.departLeft = true;
     this.heliHeading = nh;
     this.heliAltitude = step.altitude;
     hp.y = this.groundY(hp.x, hp.z) + this.heliAltitude;

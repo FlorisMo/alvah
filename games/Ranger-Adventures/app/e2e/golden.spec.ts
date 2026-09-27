@@ -152,6 +152,13 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
 
   // ------------------------------------ 4. drive the jeep, fly the helicopter ----
   await step(4, async () => {
+    // back on foot, the walk camera stands clear behind the ranger: not folded onto him
+    // by the parked vehicle or a solid, and he is not faded to a see-through ghost
+    const clearOnFoot = async (where: string): Promise<void> => {
+      const c = await R<{ dist: number; avatarOpacity: number } | null>(page, 'r.cam()');
+      note(`${where}: the camera stands ${r2(c?.dist ?? 0)} m behind the ranger (ranger opacity ${r2(c?.avatarOpacity ?? 0)})`);
+      soft(!!c && c.dist >= 2.5 && c.avatarOpacity >= 0.95, `${where}: the camera folds onto the ranger (${r2(c?.dist ?? 0)} m, opacity ${r2(c?.avatarOpacity ?? 0)})`);
+    };
     // -- the jeep: parked clear of every mission, on the ground; board, drive, step out
     const v0 = await R<Vehicle | null>(page, 'r.vehicle()');
     hard(!!v0?.placed, 'there is no jeep in the world (vehicle().placed=false)');
@@ -168,12 +175,12 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     soft(a.driverSeated, 'the driver does not sit in the jeep (hidden, or no seated pose)');
     const hint = await uiText(page);
     soft(/stap uit/i.test(hint) && /(gas|rijd|stick)/i.test(hint), `no line says how to drive and how to get out (HUD: "${hint.replace(/\s+/g, ' ').slice(0, 100)}")`);
-    const samples: Vehicle[] = [];
+    const samples: (Vehicle & { contact: boolean })[] = [];
     await page.keyboard.down('KeyW');
     const t0 = Date.now();
     try {
       while (Date.now() - t0 < 3_000) {
-        samples.push(await R<Vehicle>(page, 'r.vehicle()'));
+        samples.push(await R<Vehicle & { contact: boolean }>(page, 'r.vehicle()'));
         if (samples.length === 20) await shot(page, 'jeep-driving');
         await sleep(page, 100);
       }
@@ -182,6 +189,7 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const moved = Math.hypot(b.x - a.x, b.z - a.z);
     note(`hold W 3 s: the jeep moved ${r2(moved)} m, top speed ${r2(Math.max(...samples.map((s) => s.speed)))} m/s`);
     hard(moved >= 10, `holding W for 3 s moved the jeep only ${r2(moved)} m (want ≥ 10 m)`);
+    soft(!samples.some((s) => s.contact), 'driving straight on from where the jeep is parked, it runs into something');
     const off = samples.filter((s) => !s.grounded || Math.abs(s.clearance) > 0.1);
     soft(off.length === 0, `the jeep leaves the ground: ${off.length}/${samples.length} samples not grounded or > 10 cm off (worst ${r2(Math.max(...samples.map((s) => Math.abs(s.clearance))))} m)`);
     soft(samples.every((s) => s.fov === samples[0].fov && Math.abs(s.roll) < 1e-3), 'the jeep camera changed its FOV or rolled');
@@ -199,6 +207,7 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     soft(parked.markerDist >= 6 && Math.abs(parked.clearance) <= 0.1, `where the ranger left it the jeep is ${r2(parked.markerDist)} m from a marker (want ≥ 6) and ${r2(parked.clearance)} m off the ground`);
     const walkOn = await holdKey(page, 'ArrowUp', 1_000);
     hard(walkOn.moved >= 0.8, `after "Stap uit" the ranger cannot walk on (moved ${walkOn.moved} m in 1 s)`);
+    await clearOnFoot('out of the jeep');
     await shot(page, 'out-of-jeep');
 
     // -- the helicopter: switched on in Pauze → Instellingen with real clicks
@@ -237,7 +246,8 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
           const mx = h.x - prev.x; const mz = h.z - prev.z;
           if (Math.hypot(mx, mz) > 0.3) {
             flights += 1;
-            if (Math.abs(wrap(Math.atan2(mx, mz) - h.heading)) > 0.35) sideways += 1;
+            // against the nose halfway between the two samples (in a turn it swings between them)
+            if (Math.abs(wrap(Math.atan2(mx, mz) - (prev.heading + wrap(h.heading - prev.heading) / 2))) > 0.35) sideways += 1;
           }
         }
         prev = h;
@@ -266,6 +276,7 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     await sleep(page, 600);
     const walkOff = await holdKey(page, 'ArrowUp', 1_000);
     hard(walkOff.moved >= 0.8, `after landing the ranger cannot walk on (moved ${walkOff.moved} m in 1 s)`);
+    await clearOnFoot('out of the helicopter');
     noNewErrors();
   });
 

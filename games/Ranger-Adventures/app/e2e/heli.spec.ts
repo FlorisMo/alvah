@@ -20,7 +20,7 @@ interface Heli {
   x: number; z: number; heading: number; altitude: number;
   speed: number; climbRate: number; cruiseHeight: number; maxSpeed: number; turnRate: number;
   camDist: number; camHeight: number; fov: number; roll: number; vignette: number;
-  pads: { x: number; z: number }[];
+  pads: { x: number; z: number }[]; padCue: { distance: number } | null;
 }
 interface Hook {
   screen: string;
@@ -137,6 +137,15 @@ async function board(page: Page): Promise<Heli> {
 }
 
 /** Wait for touchdown; it must rest ON a pad (centre, drawn ground), pilot still in. */
+/** How far (rad) a move (mx, mz) between two samples points off the nose. The nose is
+ *  taken halfway between its heading at the two samples: in a turn it swings between
+ *  them, so comparing with the last heading alone read a slow sample as "sideways". */
+function offNose(mx: number, mz: number, h0: number, h1: number): number {
+  const mid = h0 + Math.atan2(Math.sin(h1 - h0), Math.cos(h1 - h0)) / 2;
+  const d = Math.atan2(mx, mz) - mid;
+  return Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
+}
+
 async function expectLandedOnPad(page: Page, pad: { x: number; z: number }): Promise<void> {
   await expect.poll(() => hook(page, (r) => r.heli()?.airborne ?? true), { timeout: 60_000, message: 'it touches down' }).toBe(false);
   const h = (await hook(page, (r) => r.heli()))!;
@@ -203,7 +212,7 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
       if (prev && h.speed > 3) {
         const mx = h.x - prev.x, mz = h.z - prev.z;
         if (Math.hypot(mx, mz) > 0.3) {
-          const off = Math.abs(Math.atan2(Math.sin(Math.atan2(mx, mz) - h.heading), Math.cos(Math.atan2(mx, mz) - h.heading)));
+          const off = offNose(mx, mz, prev.heading, h.heading);
           if (off > 0.35) sideways += 1;
           if (!measured && h.altitude > 8) {
             measured = true;
@@ -255,7 +264,7 @@ test('heli: switch on in Instellingen, fly pad-to-pad facing its travel, land on
   expect(errors).toEqual([]);
 });
 
-test('heli: "Land op de helipad" always lands on the nearest pad, facing where it flies', async ({ page }, testInfo) => {
+test('heli: "Land op de helipad" always lands, on the pad the chip points to, facing where it flies', async ({ page }, testInfo) => {
   test.setTimeout(180_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
@@ -263,6 +272,7 @@ test('heli: "Land op de helipad" always lands on the nearest pad, facing where i
   await optInHelicopter(page);
   await enterWorld(page);
   await board(page);
+  const start = (await hook(page, (r) => r.heli()))!;
 
   // lift off and fly away from the pads for a while (a child lost in the air)
   await page.keyboard.down('ArrowUp');
@@ -274,7 +284,9 @@ test('heli: "Land op de helipad" always lands on the nearest pad, facing where i
   const lost = (await hook(page, (r) => r.heli()))!;
   expect(lost.airborne, 'flying').toBe(true);
   expect(lost.onPad, 'away from any pad').toBe(false);
-  const nearest = lost.pads.reduce((a, b) => (Math.hypot(b.x - lost.x, b.z - lost.z) < Math.hypot(a.x - lost.x, a.z - lost.z) ? b : a));
+  // a flight goes somewhere: the chip (and the autopilot) point at the pad it did not lift off from
+  const other = lost.pads.reduce((a, b) => (Math.hypot(b.x - start.x, b.z - start.z) > Math.hypot(a.x - start.x, a.z - start.z) ? b : a));
+  expect(Math.abs(lost.padCue!.distance - Math.hypot(other.x - lost.x, other.z - lost.z)), 'the chip points at the other pad').toBeLessThan(1);
 
   const land = page.locator('.explore-heli-land');
   await expect(land, 'a Land button is always there while flying').toBeVisible();
@@ -289,14 +301,14 @@ test('heli: "Land op de helipad" always lands on the nearest pad, facing where i
     if (!h.airborne) break;
     const mx = h.x - prev!.x, mz = h.z - prev!.z;
     if (h.speed > 3 && Math.hypot(mx, mz) > 0.3) {
-      const off = Math.abs(Math.atan2(Math.sin(Math.atan2(mx, mz) - h.heading), Math.cos(Math.atan2(mx, mz) - h.heading)));
+      const off = offNose(mx, mz, prev!.heading, h.heading);
       if (off > 0.35) sideways += 1;
     }
     prev = h;
     await page.waitForTimeout(100);
   }
   expect(sideways, 'the autopilot flies nose-first').toBe(0);
-  await expectLandedOnPad(page, nearest);
+  await expectLandedOnPad(page, other);
   await shot(page, 'heli-autolanded');
 
   await reportPageErrors(testInfo, errors);
