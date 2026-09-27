@@ -379,7 +379,6 @@ export function onWayfind(cue: WayCue | null): void {
     if (glyph.textContent !== g) glyph.textContent = g;
     if (!cue.arrived) arrowTurn += Math.atan2(Math.sin(cue.angle - arrowTurn), Math.cos(cue.angle - arrowTurn));
     glyph.style.transform = cue.arrived ? '' : `rotate(${arrowTurn.toFixed(3)}rad)`;
-    glyph.dataset.richting = cue.richting; // the words the arrow stands for (tests read it)
   }
   const words = cue.arrived ? 'je bent er' : `${cue.richting} · ${cue.afstand}`;
   if (cueEl && cueEl.textContent !== words) cueEl.textContent = words;
