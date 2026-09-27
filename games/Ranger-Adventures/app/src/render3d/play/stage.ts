@@ -9,8 +9,8 @@
  * the patch needs to fit the part of the screen the game's DOM card leaves free.
  *
  * Everything staged on it sits PER POINT on `WorldCtx.groundY` (the rendered ground),
- * never on a flat activity Y. The approached marker animal is hidden while the game
- * runs (its mission is being played right here) and comes back on `dispose()`.
+ * never on a flat activity Y. The approached marker animal is out of the scene while
+ * its mission plays right here; the World hides and restores it, never the stage.
  *
  * The stage also owns the game's lifetime: `signal` is the activity's abort scope,
  * read once here, and `handBack()` glides the lens back to the exact pose the world's
@@ -68,7 +68,6 @@ export class Stage {
   private tall: THREE.Box3[] = [];
   private readonly owned: THREE.Object3D[] = [];
   private readonly spawned: Spawned[] = [];
-  private readonly hidden: { o: THREE.Object3D; was: boolean }[] = [];
   private disposed = false;
 
   constructor(ctx: WorldCtx, spec: StageSpec) {
@@ -86,12 +85,11 @@ export class Stage {
       : this.homePos.clone().add(camera.getWorldDirection(V()));
     this.plan();
     ctx.setFocus(this.centre.x, this.centre.y, this.centre.z);
-    // the approached marker IS this mission's animal — while its game runs it steps
-    // out of the scene rather than standing in (or in front of) the patch
-    // (and so does a finished mission's family around it, world/Progress.ts: `companions`)
-    const m = ctx.approachedModel as THREE.Object3D | null;
-    const away = m ? [m, ...((m.userData.companions as THREE.Object3D[] | undefined) ?? [])] : [];
-    for (const o of away) { this.hidden.push({ o, was: o.visible }); o.visible = false; }
+    // The approached marker (this mission's animal, and a finished family around it) is
+    // out of the scene while its game runs, but the WORLD owns that: it steps away for the
+    // whole mission (World.beginActivity) and comes back when the mission ends or is
+    // stopped (World.endActivity). The stage never touches it, so a stopped game that
+    // disposes a frame after the world let go can never hide it again (review MIS-1).
   }
 
   /* ------------------------------------------------------------- planning ---- */
@@ -489,7 +487,7 @@ export class Stage {
     for (const s of this.spawned) s.update(dt);
   }
 
-  /** Remove + free everything the stage made and bring the hidden marker back. */
+  /** Remove + free everything the stage made. */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
@@ -506,8 +504,6 @@ export class Stage {
       });
     }
     this.owned.length = 0;
-    for (const h of this.hidden) h.o.visible = h.was;
-    this.hidden.length = 0;
   }
 }
 
