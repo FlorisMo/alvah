@@ -206,7 +206,7 @@ function playCall(id: string): number {
   notes.forEach((freq, i) => {
     const start = i * (spec.dur + gap);
     if (spec.knor) {
-      knor(freq * (i % 2 ? 0.92 : 1), start, spec.dur, 0.5, bus);
+      knor(freq * (i % 2 ? 0.92 : 1), start, spec.dur, 0.4, bus);
     } else if (spec.vibrato) {
       // a small warble for the trilling/bellowing/singing calls
       tone(freq, start, spec.dur, spec.type, 0.16, bus);
