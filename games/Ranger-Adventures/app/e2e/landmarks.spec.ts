@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 
 /**
  * Landmark-props E2E (WORLD-PLAN W4.1). The world now carries fixed landmark
@@ -44,9 +44,8 @@ const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
 
 /**
  * Steer the ranger toward a fixed world target with arrow keys until within
- * `arrive` metres (or the step budget runs out). Mirrors interact.spec's
- * camera-relative mapping: for camera yaw ψ,
- *   screenX =  dx·cosψ − dz·sinψ,   screenY = −dx·sinψ − dz·cosψ.
+ * `arrive` metres (or the step budget runs out), with the tank keys
+ * (helpers.keySteer: turn until it is ahead, then walk).
  */
 async function walkTo(page: Page, tx: number, tz: number, arrive: number): Promise<number> {
   const down = new Set<string>();
@@ -57,6 +56,7 @@ async function walkTo(page: Page, tx: number, tz: number, arrive: number): Promi
     }
   };
   let dist = Infinity;
+  const steer = await keySteer(page);
   try {
     for (let i = 0; i < 260; i++) {
       const p = await hook(page, (r) => r.pos());
@@ -65,15 +65,7 @@ async function walkTo(page: Page, tx: number, tz: number, arrive: number): Promi
       const dx = tx - p.x, dz = tz - p.z;
       dist = Math.hypot(dx, dz);
       if (dist <= arrive) return dist;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const sx = dx * cy - dz * sy;
-      const sYf = -dx * sy - dz * cy;
-      const want = new Set<string>();
-      if (sx > 0.4) want.add('ArrowRight');
-      else if (sx < -0.4) want.add('ArrowLeft');
-      if (sYf > 0.4) want.add('ArrowUp');
-      else if (sYf < -0.4) want.add('ArrowDown');
-      await sync(want);
+      await sync(steer(dx, dz, yaw)); // the arrow keys a child would hold (helpers.keySteer)
       await page.waitForTimeout(120);
     }
     return dist;

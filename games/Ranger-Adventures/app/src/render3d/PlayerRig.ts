@@ -22,6 +22,9 @@ function pick(clips: THREE.AnimationClip[], re: RegExp): THREE.AnimationClip | n
   return clips.find((c) => re.test(c.name)) ?? null;
 }
 
+/** The walk cadence (m/s equivalent) a turn on the spot steps at: slow, small steps. */
+const TURN_STEP_SPEED = 0.7;
+
 export class PlayerRig {
   private mixer: THREE.AnimationMixer | null = null;
   private idle: THREE.AnimationAction | null = null;
@@ -36,6 +39,11 @@ export class PlayerRig {
   // `clip()` reports a still `sit`, so the dev hook never reads idle/walk while
   // driving (the boarding CUT the empty-jeep story hung on).
   private seated = false;
+  // wave 2 tank steering: this frame's gait hints from Player.walk (consumed by the
+  // next update): backing up plays the walk clip in reverse, and a turn on the spot
+  // steps the feet at a slow walk instead of sliding round in the idle pose.
+  private backward = false;
+  private turning = false;
 
   /**
    * Drive `model` from its baked clips. Needs both an idle-ish and a walk-ish
@@ -82,6 +90,12 @@ export class PlayerRig {
     }
   }
 
+  /** The next update's gait hints (Player.walk sets them each on-foot frame). */
+  setGait(backward: boolean, turningOnTheSpot: boolean): void {
+    this.backward = backward;
+    this.turning = turningOnTheSpot;
+  }
+
   /**
    * Advance one frame. `speed` is the ranger's post-collision ground speed
    * (m/s). Locomotion is reduced-motion-exempt, so the mixer always uses real
@@ -92,6 +106,9 @@ export class PlayerRig {
     // F-31: seated in the vehicle → locomotion is frozen (he is neither idling nor
     // walking, he is riding), so neither the mixer nor the procedural bob advances.
     if (this.seated) return;
+    const backward = this.backward, turning = this.turning;
+    this.backward = this.turning = false; // hints last one frame (off foot: none)
+    if (turning) speed = Math.max(speed, TURN_STEP_SPEED);
     if (this.mixer && this.idle && this.walk) {
       this.walkWeight = stepWalkWeight(this.walkWeight, speed, dt);
       this.idle.setEffectiveWeight(1 - this.walkWeight);
@@ -99,7 +116,7 @@ export class PlayerRig {
       // F-08: tie the walk clip's cadence to the REAL ground speed so the feet
       // plant on the ground instead of sliding (distance-per-cycle ≈ the authored
       // stride at any speed). Locomotion feedback, so it runs in both motion modes.
-      this.walk.timeScale = strideRate(speed);
+      this.walk.timeScale = strideRate(speed) * (backward ? -1 : 1);
       this.mixer.update(dt);
       return;
     }

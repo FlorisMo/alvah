@@ -189,9 +189,13 @@ export class World {
       this.player, this.dressing,
       {
         mode: () => ({ inVehicle: this.vehicles.inVehicle, inHeli: this.vehicles.inHeli }),
-        nearBoard: () => this.pois.nearBoard,
         inputBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
         afterPlace: () => this.pois.fadeRings(this.camera),
+        creatures: () => [ // what stands on the ground, for the clear view (marker animals ~1 m, as the dev hook reads them)
+          ...this.pois.list.map((m) => ({ x: m.group.position.x, y: m.group.position.y, z: m.group.position.z, h: 1.0 })),
+          ...this.fauna.scenicActors.map((a) => ({ x: a.group.position.x, y: a.group.position.y, z: a.group.position.z, h: a.height })),
+          ...this.fauna.ambient.filter((a) => !a.glide).map((a) => ({ x: a.group.position.x, y: a.group.position.y, z: a.group.position.z, h: a.h })),
+        ],
       },
     );
     this.scene.add(this.dressing.buildPaths()); // W4.3: sand-path ribbons over the ground
@@ -213,6 +217,9 @@ export class World {
     this.pois.placeSitSpot();
     this.dressing.placeNatureDressing();
     this.fauna.placeScenicActors();
+    // people are solid: the ranger walks round the warden and the poacher (with a child's
+    // bit of personal space), never through them
+    for (const a of this.fauna.scenicActors) this.obstacles.push({ x: a.group.position.x, z: a.group.position.z, r: 1.1 });
     this.fauna.placeAmbientLife();
     this.vehicles.placeJeep();
     this.vehicles.placeHelipads();
@@ -580,9 +587,9 @@ export class World {
       // W5.1: arcade drive mode owns movement while the ranger is in the jeep.
       this.vehicles.driveJeep(dt);
     } else if (!this.activityActive) {
-      // W1.2: keys / stick (camera-relative) or the tapped target move the ranger; the
-      // follow-cam chases his facing only while he actually moves (W1.5).
-      if (this.player.walk(dt, this.cameraYaw())) this.cam.followTargetYaw = this.ranger.rotation.y;
+      // on foot: tank keys, the stick or a tap-walk move the ranger, and his steering
+      // tells the follow camera what to do (world/Player.walk → CameraRig.steer).
+      this.cam.steer(this.player.walk(dt, this.cam.viewFrame()));
     }
 
     this.pois.animate(t, dt, reduced); // each mission marker's animal (secondary motion)
@@ -612,7 +619,7 @@ export class World {
     // F-22: keep the occlusion-proof world/vehicle/POI name-tags distance-faded.
     // Runs before the activity early-return so an open mission's Missiebord tag
     // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity too.
-    this.labels.fade(this.camera);
+    this.labels.fade(this.camera, this.canvas.clientHeight);
 
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
 

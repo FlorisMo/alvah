@@ -13,13 +13,17 @@
 export interface AvatarOptie {
   id: string;
   label: string;
-  kleur: string; // the tint used for the 2D preview now + the 3D material later
+  kleur: string; // the swatch + 2D preview tint (and the 3D paint, unless `verf` says otherwise)
+  /** The paint on the 3D ranger when the swatch colour would not read as itself there:
+   *  the ranger's texture also glows (it lights its own paint), which washes a pale
+   *  colour out to near-white. */
+  verf?: string;
 }
 
 /** Inclusive skin tones (lichtest→donkerst). First entry is the blank default. */
 export const HUID_OPTIES: AvatarOptie[] = [
-  { id: 'licht',  label: 'Licht',  kleur: '#f2c9a0' },
-  { id: 'getint', label: 'Getint', kleur: '#d99a6c' },
+  { id: 'licht',  label: 'Licht',  kleur: '#f2c9a0', verf: '#eba27c' },
+  { id: 'getint', label: 'Getint', kleur: '#d99a6c', verf: '#cf8a5c' },
   { id: 'bruin',  label: 'Bruin',  kleur: '#a96b3c' },
   { id: 'donker', label: 'Donker', kleur: '#6d4226' },
 ];
@@ -99,10 +103,17 @@ export function geldigeOptie(kenmerk: AvatarKenmerk, id: unknown): string {
   return typeof id === 'string' && opties.some((o) => o.id === id) ? id : opties[0].id;
 }
 
-/** The tint for a chosen option (preview + 3D material). */
+/** The tint for a chosen option (swatch + 2D preview). */
 export function kleurVan(kenmerk: AvatarKenmerk, id: string): string {
   const opties = AVATAR_KENMERKEN[kenmerk];
   return (opties.find((o) => o.id === id) ?? opties[0]).kleur;
+}
+
+/** The paint for a chosen option on the 3D ranger (its `verf`, else its swatch colour). */
+export function verfVan(kenmerk: AvatarKenmerk, id: string): string {
+  const opties: readonly AvatarOptie[] = AVATAR_KENMERKEN[kenmerk];
+  const o = opties.find((x) => x.id === id) ?? opties[0];
+  return o.verf ?? o.kleur;
 }
 
 export function blankAvatar(): Avatar {
@@ -138,4 +149,68 @@ export function applyAvatar(prev: Avatar | undefined, patch: Partial<Avatar>): A
   if (patch.outfit !== undefined) base.outfit = geldigeOptie('outfit', patch.outfit);
   if (patch.iris !== undefined) base.iris = geldigeOptie('iris', patch.iris);
   return base;
+}
+
+/* ------------------------------------------------------- the 3D ranger look -- */
+/*
+ * The ranger GLB is one mesh with one painted texture atlas, so the creator's
+ * choices reach the 3D ranger by repainting that atlas (render3d/RangerLook.ts does
+ * the pixels). The rule for which texel is what lives here, pure and tested: the
+ * atlas is painted in a handful of flat colours (a k-means over it, wave 2), and the
+ * body height a texel is drawn at (from the mesh, 0 = soles, 1 = top of the hair)
+ * tells the cream of the hair from the cream on the soles.
+ */
+
+/** The painted parts the creator recolours (the kenmerk that drives each). */
+export type LookPart = 'haar' | 'outfit' | 'huid' | 'iris';
+
+/** The atlas palette: each measured paint colour and the part it belongs to (null =
+ *  left as painted: the shorts, boots, soles, the yellow shirt). */
+const RANGER_PAINT: readonly (readonly [number, number, number, LookPart | null])[] = [
+  [104, 125, 66, 'outfit'], [83, 104, 53, 'outfit'],                      // the green jacket
+  [203, 188, 146, 'haar'], [217, 204, 173, 'haar'], [195, 175, 122, 'haar'], // white-blond hair
+  [248, 159, 116, 'huid'],                                                // skin
+  [187, 136, 86, null], [101, 55, 38, null], [61, 49, 37, null], [238, 178, 23, null],
+];
+
+/**
+ * Which recolourable part a texel of the ranger atlas is: its painted colour (the
+ * nearest palette entry) and where on the body it is drawn (`h` = height 0..1 of the
+ * triangle it sits in, negative = not on the mesh). A clear blue in the head is the
+ * iris. Pure.
+ */
+export function lookPart(r: number, g: number, b: number, h: number): LookPart | null {
+  if (h < 0) return null;
+  if (h >= 0.6 && b > r + 25 && b > g + 5) return 'iris';
+  let best: LookPart | null = null;
+  let bd = Infinity;
+  for (const [pr, pg, pb, part] of RANGER_PAINT) {
+    const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+    if (d < bd) { bd = d; best = part; }
+  }
+  if (best === 'haar' && h < 0.66) return null;                 // cream on the soles, not hair
+  if (best === 'outfit' && (h < 0.38 || h > 0.86)) return null;  // green bits on the boots
+  return best;
+}
+
+/** Perceived brightness of an sRGB colour (0..255). */
+export function paintLum(r: number, g: number, b: number): number {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * Repaint one texel toward the chosen colour, keeping its painted light and shade:
+ * a texel as bright as its part's average becomes exactly `target`, a brighter or
+ * darker brush stroke stays that much brighter or darker. Pure, clamped to 0..255.
+ */
+export function repaint(r: number, g: number, b: number, target: readonly [number, number, number], partLum: number): [number, number, number] {
+  const k = partLum > 0 ? paintLum(r, g, b) / partLum : 1;
+  const c = (v: number): number => Math.max(0, Math.min(255, Math.round(v * k)));
+  return [c(target[0]), c(target[1]), c(target[2])];
+}
+
+/** '#rrggbb' → [r, g, b]. */
+export function hexRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }

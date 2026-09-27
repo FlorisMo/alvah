@@ -13,6 +13,7 @@ import test from 'node:test';
 import {
   blankAvatar, mergeAvatar, applyAvatar, rangerNaam, schoonNaam, geldigeOptie, kleurVan,
   HUID_OPTIES, HAAR_OPTIES, OUTFIT_OPTIES, IRIS_OPTIES, STANDAARD_NAAM, MAX_NAAM,
+  lookPart, repaint, paintLum, hexRgb,
 } from './avatar.ts';
 
 test('blankAvatar defaults to Alvah and the first option of each kenmerk', () => {
@@ -72,4 +73,33 @@ test('mergeAvatar tolerates junk and never desyncs a kenmerk', () => {
   assert.deepEqual(mergeAvatar(null), blankAvatar());
   assert.deepEqual(mergeAvatar(undefined), blankAvatar());
   assert.equal(mergeAvatar({ naam: '' }).naam, 'Alvah');
+});
+
+/* ---- the 3D ranger look: which texel is what, and the repaint ---- */
+
+test('lookPart: the painted parts, told apart by colour and body height', () => {
+  assert.equal(lookPart(104, 125, 66, 0.5), 'outfit', 'green on the torso = jacket');
+  assert.equal(lookPart(104, 125, 66, 0.1), null, 'green on the boots is not the jacket');
+  assert.equal(lookPart(203, 188, 146, 0.85), 'haar', 'cream on the head = hair');
+  assert.equal(lookPart(203, 188, 146, 0.02), null, 'cream on the soles is not hair');
+  assert.equal(lookPart(248, 159, 116, 0.7), 'huid', 'peach face');
+  assert.equal(lookPart(248, 159, 116, 0.15), 'huid', 'peach legs');
+  assert.equal(lookPart(187, 136, 86, 0.3), null, 'the shorts stay as painted');
+  assert.equal(lookPart(238, 178, 23, 0.45), null, 'the yellow shirt stays');
+  assert.equal(lookPart(58, 106, 154, 0.75), 'iris', 'a clear blue in the head = the iris');
+  assert.equal(lookPart(104, 125, 66, -1), null, 'off the mesh: untouched');
+});
+
+test('repaint: the part\'s average becomes the chosen colour, light and shade kept', () => {
+  const target = hexRgb('#b5532a');
+  const mean = paintLum(203, 188, 146);
+  assert.deepEqual(repaint(203, 188, 146, target, mean), target, 'average texel → exactly the swatch');
+  const dark = repaint(150, 139, 108, target, mean);
+  assert.ok(paintLum(...dark) < paintLum(...target), 'a darker stroke stays darker');
+  const bright = repaint(255, 255, 255, target, mean);
+  assert.ok(bright.every((v) => v >= 0 && v <= 255), 'clamped');
+});
+
+test('hexRgb reads the swatch colours', () => {
+  assert.deepEqual(hexRgb('#3a5a6b'), [0x3a, 0x5a, 0x6b]);
 });

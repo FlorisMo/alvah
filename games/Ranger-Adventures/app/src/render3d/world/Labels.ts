@@ -12,8 +12,19 @@ import * as THREE from 'three';
 // on top of everything is that a far tag would otherwise punch through hills from
 // across the map, so each fades OUT with distance — full opacity within FULL m
 // (the hub / an open mission, i.e. the moment the label matters), gone by GONE m.
-const LABEL_FADE_FULL = 55;  // camera→label distance (m) below which a tag is fully opaque
-const LABEL_FADE_GONE = 85;  // …and above which it has faded to nothing
+// Wave 2: nearer than before (55 → 85 m): now that a far tag stays readable (the size
+// floor below) a whole horizon of them read as a wall of words; the HUD chip names the
+// way to anything further.
+const LABEL_FADE_FULL = 35;  // camera→label distance (m) below which a tag is fully opaque
+const LABEL_FADE_GONE = 55;  // …and above which it has faded to nothing
+// Wave 2: a tag's size ON SCREEN is clamped (card height in CSS px): never a giant card
+// in front of the lens when the camera passes close to a marker, never an unreadable
+// speck far away. And a tag the lens is almost touching fades out (it is right there;
+// the prompt names it).
+const LABEL_PX_MIN = 24;     // ≈ 11 px text: still readable at a distance, not a wall of cards
+const LABEL_PX_MAX = 48;     // ≈ 23 px text: the biggest a tag ever gets
+const LABEL_NEAR_GONE = 2.5; // m from the lens: hidden
+const LABEL_NEAR_FULL = 4;   // m: fully there again
 
 export class Labels {
   // every diegetic world/vehicle/POI name-tag make() builds, so one per-frame pass
@@ -21,6 +32,8 @@ export class Labels {
   private readonly list: THREE.Sprite[] = [];
   private readonly _fwd = new THREE.Vector3();  // scratch: camera forward for the label fade
   private readonly _wp = new THREE.Vector3();   // scratch: a label's world position
+  private readonly _ws = new THREE.Vector3();   // scratch: a label's parent world scale
+  private readonly baseSize = new Map<THREE.Sprite, { w: number; h: number }>(); // its world size before the clamp
 
   /** A camera-facing sprite name-tag (rounded warm card + the mission title). */
   make(text: string, color: string): THREE.Sprite {
@@ -63,32 +76,43 @@ export class Labels {
     sprite.renderOrder = 12; // draw after the opaque world + props so it composites over them
     const scale = 0.0042; // world units per px → ~legible without dominating
     sprite.scale.set(w * scale, h * scale, 1);
+    this.baseSize.set(sprite, { w: w * scale, h: h * scale });
     this.list.push(sprite); // registered for the F-22 occlusion-proof distance fade
     return sprite;
   }
 
   /**
-   * F-22: keep every diegetic world/vehicle/POI name-tag readable. makeLabel draws
-   * them with depthTest off + a high renderOrder, so a nearer mesh can never clip a
-   * tag mid-glyph again (the whole defect). The cost of drawing on top of everything
-   * is that a distant tag would otherwise punch through hills from across the map,
-   * so fade each one out behind the camera and with distance. Reading close-up (the
-   * hub, an open mission — the moment the label matters) stays full opacity, so the
-   * fade never touches the frame the finding grades. Cheap: one dot + one length per
-   * tag, no allocation (scratch vectors), no draw-call change.
+   * F-22: keep every diegetic name-tag readable. make() draws them with depthTest off
+   * + a high renderOrder, so a nearer mesh can never clip a tag mid-glyph; the cost is
+   * that a far tag would punch through hills, so each fades out behind the camera and
+   * with distance. Wave 2: each tag's card is also held between LABEL_PX_MIN and
+   * LABEL_PX_MAX tall on screen (`viewportPx` = the canvas height in CSS px) and fades
+   * out when the lens nearly touches it — never a giant card filling the frame. Cheap:
+   * a dot, a length and a scale per tag, no allocation, no draw-call change.
    */
-  fade(camera: THREE.Camera): void {
+  fade(camera: THREE.PerspectiveCamera, viewportPx: number): void {
     if (this.list.length === 0) return;
     const cp = camera.position;
     const fwd = camera.getWorldDirection(this._fwd);
+    // metres of height one CSS px covers at 1 m in front of the lens
+    const perPx = (2 * Math.tan((camera.fov * Math.PI) / 360)) / Math.max(1, viewportPx);
     for (const label of this.list) {
       const mat = label.material as THREE.SpriteMaterial;
       const wp = label.getWorldPosition(this._wp);
       const dx = wp.x - cp.x, dy = wp.y - cp.y, dz = wp.z - cp.z;
-      if (dx * fwd.x + dy * fwd.y + dz * fwd.z <= 0.5) { mat.opacity = 0; continue; } // behind the camera
+      const depth = dx * fwd.x + dy * fwd.y + dz * fwd.z;
+      if (depth <= 0.5) { mat.opacity = 0; continue; } // behind the camera
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      mat.opacity = Math.max(0, Math.min(1,
-        (LABEL_FADE_GONE - dist) / (LABEL_FADE_GONE - LABEL_FADE_FULL)));
+      const far = (LABEL_FADE_GONE - dist) / (LABEL_FADE_GONE - LABEL_FADE_FULL);
+      const near = (dist - LABEL_NEAR_GONE) / (LABEL_NEAR_FULL - LABEL_NEAR_GONE);
+      mat.opacity = Math.max(0, Math.min(1, far, near));
+      // clamp the card's on-screen height (a parent's scale is divided out)
+      const base = this.baseSize.get(label);
+      if (!base) continue;
+      const parentScale = label.parent ? label.parent.getWorldScale(this._ws).y || 1 : 1;
+      const px = (base.h * parentScale) / (depth * perPx);
+      const k = px > LABEL_PX_MAX ? LABEL_PX_MAX / px : px < LABEL_PX_MIN ? LABEL_PX_MIN / px : 1;
+      label.scale.set(base.w * k, base.h * k, 1);
     }
   }
 }

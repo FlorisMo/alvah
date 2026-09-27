@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 
 /**
  * Sit-spot / "Ken je roep" E2E (WORLD-PLAN W6.4b2). A bench by the vogelkijkhut is
@@ -41,8 +41,8 @@ async function enterWorld(page: Page): Promise<void> {
 
 const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
 
-/** Walk to the sit-spot bench with arrow keys until its proximity fires. Same
- *  camera-relative mapping as board.spec's board walk (see that file's note). */
+/** Walk to the sit-spot bench with arrow keys until its proximity fires (the tank
+ *  keys: helpers.keySteer). */
 async function walkToSitSpot(page: Page): Promise<void> {
   const spot = await hook(page, (r) => r.sitSpot());
   expect(spot, 'sitSpot() available in world').not.toBeNull();
@@ -54,6 +54,7 @@ async function walkToSitSpot(page: Page): Promise<void> {
       else if (!want.has(k) && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
     }
   };
+  const steer = await keySteer(page);
   try {
     for (let i = 0; i < 300; i++) {
       const s = await hook(page, (r) => r.sitSpot());
@@ -62,15 +63,7 @@ async function walkToSitSpot(page: Page): Promise<void> {
       const yaw = await hook(page, (r) => r.cameraYaw());
       if (!p || !s || yaw == null) { await page.waitForTimeout(100); continue; }
       const dx = s.x - p.x, dz = s.z - p.z;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const sx = dx * cy - dz * sy;
-      const sYf = -dx * sy - dz * cy;
-      const want = new Set<string>();
-      if (sx > 0.4) want.add('ArrowRight');
-      else if (sx < -0.4) want.add('ArrowLeft');
-      if (sYf > 0.4) want.add('ArrowUp');
-      else if (sYf < -0.4) want.add('ArrowDown');
-      await sync(want);
+      await sync(steer(dx, dz, yaw)); // the arrow keys a child would hold (helpers.keySteer)
       await page.waitForTimeout(120);
     }
     throw new Error('ranger never reached the sit-spot within the step budget');

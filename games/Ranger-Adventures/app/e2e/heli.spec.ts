@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 
 /**
  * Helicopter E2E (WORLD-PLAN W5.3b). The opt-in aircraft is parked on the
@@ -55,10 +55,8 @@ async function enterWorld(page: Page): Promise<void> {
 
 const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
 
-/** Steer the ranger to the parked helicopter with arrow keys until `heli().near`.
- *  Same camera-relative mapping as the jeep/interact specs (the follow-cam rotates,
- *  so each tick we read the live `cameraYaw()` and map the world direction back to
- *  screen keys with the inverse of `resolveInput`'s rotation). */
+/** Steer the ranger to the parked helicopter with arrow keys until `heli().near`
+ *  (the tank keys: helpers.keySteer turns him until it is ahead, then walks). */
 async function walkToHeli(page: Page): Promise<void> {
   const h0 = await hook(page, (r) => r.heli());
   expect(h0, 'heli() available in world').not.toBeNull();
@@ -72,6 +70,7 @@ async function walkToHeli(page: Page): Promise<void> {
       else if (!want.has(k) && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
     }
   };
+  const steer = await keySteer(page);
   try {
     for (let i = 0; i < 240; i++) {
       const near = await hook(page, (r) => r.heli()?.near ?? false);
@@ -80,15 +79,7 @@ async function walkToHeli(page: Page): Promise<void> {
       const yaw = await hook(page, (r) => r.cameraYaw());
       if (!p || yaw == null) { await page.waitForTimeout(100); continue; }
       const dx = target.x - p.x, dz = target.z - p.z;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const sx = dx * cy - dz * sy;
-      const sYf = -dx * sy - dz * cy;
-      const want = new Set<string>();
-      if (sx > 0.4) want.add('ArrowRight');
-      else if (sx < -0.4) want.add('ArrowLeft');
-      if (sYf > 0.4) want.add('ArrowUp');
-      else if (sYf < -0.4) want.add('ArrowDown');
-      await sync(want);
+      await sync(steer(dx, dz, yaw)); // the arrow keys a child would hold (helpers.keySteer)
       await page.waitForTimeout(120);
     }
     throw new Error('ranger never reached the helicopter within the step budget');

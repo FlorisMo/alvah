@@ -14,10 +14,15 @@ import { loadManifest, loadRig, prepModel, skinnedRenderBox } from '../Models';
 import { RANGER_STAND_HEIGHT } from '../AnimalScale';
 import { applyEyes } from '../EyeMaterial';
 import { applyFace } from '../FaceRig';
+import { dressRanger } from '../RangerLook';
+import { verfVan } from '../../core/avatar';
 import type { Biome } from '../Biomes';
 import { resolveMove, type MoveLimits, type Obstacle } from '../CharacterController';
 import { PlayerRig } from '../PlayerRig';
-import { resolveInput, screenVector, type StickVector } from '../../core/input';
+import {
+  screenVector, tankAxes, turnStep, approachAngle, stickBackpedal, stickHeading, wrapPi,
+  JOYSTICK_DEADZONE, ALIGN_GAP, BACK_SPEED, PIVOT_RATE, TURN_RATE, type StickVector,
+} from '../../core/input';
 import { attachInput, type InputHandle } from '../../core/attach-input';
 import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../../core/footstep';
 import { Sound } from '../../core/sound';
@@ -33,6 +38,41 @@ import { enableCast } from './props';
 // het bos" cue fires (once per approach, re-armed inward). All in metres.
 const RIM_EASE = 8;
 const RIM_HINT = 3.5;
+
+// How the follow camera answers each way of walking (see walk()). Tank keys: it stays
+// tightly behind his heading (lag = turn rate × tau ≈ 3°, so it settles within a few
+// degrees of release). Stick / tap-walk: it eases in behind him slowly, and only
+// when he walks roughly into the screen (within CAM_BEHIND_GAP of the view).
+const CAM_TANK_TAU = 0.03;
+const CAM_TANK_RATE = (100 * Math.PI) / 180; // just above the 90°/s turn: it catches up, never whips
+const CAM_BEHIND_TAU = 0.8;
+const CAM_BEHIND_RATE = (40 * Math.PI) / 180;
+const CAM_BEHIND_GAP = (75 * Math.PI) / 180;
+
+/** The stick backs him up (instead of turning him round) only while he faces within
+ *  this angle of into-the-screen. */
+const BACKPEDAL_FACING = (45 * Math.PI) / 180;
+
+/** Who steered the ranger this frame. */
+type DriveMode = 'keys' | 'stick' | 'tap';
+
+/** What the camera shows, for steering (CameraRig.viewFrame). Bearings are headings:
+ *  the lens looks along (sin b, cos b), so "the ranger faces into the screen" is
+ *  heading == bearing. */
+export interface ViewFrame {
+  /** The bearing on screen: follow + the player's drag look-around (what the follow
+   *  bearing becomes after a fold). Tank keys align the ranger to it; the stick and
+   *  the screen-relative keys are relative to it. (The camera's clear-view slide moves
+   *  the lens sideways, never this bearing.) */
+  bearing: number;
+  /** The camera follows him (setting on, no reduced motion); else it is fixed. */
+  follows: boolean;
+}
+
+/** What the follow camera should do this frame: chase `yaw` (with that ease), or
+ *  hold its bearing (`yaw` null); `fold` = first fold the drag look-around into the
+ *  base bearing (the view does not move). null = nothing new: hold. */
+export interface CamSteer { yaw: number | null; tau: number; maxRate: number; fold: boolean }
 
 /** A thing the ranger walks up to when it is tapped (stops `stop` metres short). */
 export interface TapTarget { object: THREE.Object3D; x: number; z: number; stop: number }
@@ -85,6 +125,17 @@ export class Player {
   // the on-screen joystick's live vector (W1.3), fused with the keys at the
   // resolveInput call site. Set by the HUD via setJoystick; null when absent.
   joystickSource: (() => StickVector | null) | null = null;
+  // steering (walk()): the commanded heading, the ranger's body facing that swings to
+  // it, the eased tank-turn rate, who steered last frame, the stick's latched view
+  // bearing, a stuck tap-walk timer, and the camera's current instruction.
+  private heading = Math.PI;
+  private facing = Math.PI;
+  private turnVel = 0;
+  private turnWant = 0;
+  private drive: DriveMode | null = null;
+  private frame = Math.PI;
+  private tapStuck = 0;
+  private camNow: { yaw: number; tau: number; maxRate: number } | null = null;
   // F-11: latched true while the ranger is pressed against the world rim heading
   // outward (the calm "Hier stopt het bos" cue has fired); re-armed once he walks
   // back inward. `onBoundary` fires on the rising edge — once per approach.
@@ -173,39 +224,87 @@ export class Player {
   }
 
   /**
-   * One on-foot frame: move the ranger toward the walk target — the desired straight
-   * step is resolved by the kinematic controller (slide around pines, stay out of the
-   * ven, stay inside the world). Facing follows the ACTUAL motion so the ranger turns
-   * naturally when a collision slides him sideways. Returns true when he turned this
-   * frame (the follow camera then chases his new facing).
+   * One on-foot frame. Picks who steers (held keys, else the touch stick, else a
+   * tap-walk target), turns the ranger's HEADING, walks him along it through the
+   * kinematic controller (slide around pines, stay out of the ven, stay inside the
+   * world), keeps his feet on the drawn ground, and says what the follow camera
+   * should do this frame (see `CamSteer`). The steering rules live in core/input.ts:
+   * tank keys, a latched screen-relative stick, point-and-walk taps; everything
+   * screen-relative when the follow camera is off.
    */
-  walk(dt: number, cameraYaw: number): boolean {
+  walk(dt: number, view: ViewFrame): CamSteer | null {
+    // a hitch (one long frame) never jumps him a long way or a big turn at once
+    dt = Math.min(dt, 0.05);
     const rp = this.group.position;
-    let turned = false;
-    // W1.2 velocity branch: while a movement key is held (camera-relative via
-    // resolveInput), it OVERRIDES tap-to-walk — the desired step is the input
-    // vector · speed · dt, resolved by the same kinematic controller. When no
-    // key is held we fall back to seeking the tapped target. Either way the
-    // ACTUAL post-collision delta drives facing (slide-around-pine still turns).
-    const stick = this.joystickSource ? this.joystickSource() : null;
-    const move = this.input ? resolveInput(this.input.held, stick, cameraYaw) : { x: 0, z: 0 };
-    let wantX: number, wantZ: number, moving: boolean;
-    let moved = 0; // post-collision ground distance this frame (drives footsteps)
-    if (move.x !== 0 || move.z !== 0) {
-      const step = this.speed * dt;
-      wantX = rp.x + move.x * step;
-      wantZ = rp.z + move.z * step;
-      this.target.set(rp.x, 0, rp.z); // drop any stale walk target so it can't resume on key-release
-      moving = true;
-    } else {
-      const dx = this.target.x - rp.x, dz = this.target.z - rp.z;
-      const dist = Math.hypot(dx, dz);
-      moving = dist > 0.06;
-      const step = moving ? Math.min(this.speed * dt, dist) : 0;
-      wantX = rp.x + (moving ? (dx / dist) * step : 0);
-      wantZ = rp.z + (moving ? (dz / dist) * step : 0);
+    // someone else turned him (stepping out of the jeep, a reframe): take that as his
+    // heading, and let the camera hold where it is.
+    if (this.group.rotation.y !== this.facing) {
+      this.heading = this.facing = this.group.rotation.y;
+      this.turnVel = 0;
+      this.camNow = null;
     }
-    if (moving) {
+    const held = this.input?.held;
+    const keys = held && held.size > 0 ? held : null;
+    const raw = this.joystickSource ? this.joystickSource() : null;
+    const stick = !keys && raw && Math.hypot(raw.x, raw.y) >= JOYSTICK_DEADZONE ? raw : null;
+    const dxT = this.target.x - rp.x, dzT = this.target.z - rp.z;
+    const tapDist = Math.hypot(dxT, dzT);
+    const mode: DriveMode | null = keys ? 'keys' : stick ? 'stick' : tapDist > 0.1 ? 'tap' : null;
+    const starting = mode !== null && mode !== this.drive;
+    this.drive = mode;
+    // Any walk start folds the player's drag look-around into the camera's base
+    // bearing (invisible: the view does not move) so "behind him" is measured from
+    // what the screen shows.
+    const fold = starting && view.follows;
+    // Only held keys turn him tank-style; a leftover turn eases out when they lift.
+    if (mode !== null && mode !== 'keys') this.turnVel = 0;
+    const tank = view.follows && (mode === 'keys' || (mode === null && this.turnVel !== 0));
+    const turnIn = mode === 'keys' && view.follows ? -tankAxes(keys!).turn : 0;
+    this.turnWant = turnIn * TURN_RATE;
+    this.turnVel = turnStep(this.turnVel, turnIn, dt);
+
+    let speedK = 0;        // share of the walking speed this frame
+    let back = false;      // backing up: walk opposite his heading, facing unchanged
+    if (mode === 'keys' && view.follows) {
+      // TANK: Up/Down along his heading, Left/Right turn it. If the view looks well off
+      // his heading when the walk starts (a mouse drag, a tap-walk, the jeep), he first
+      // turns to face into the screen, so Up is always "into the screen".
+      if (starting && Math.abs(wrapPi(view.bearing - this.heading)) > ALIGN_GAP) this.heading = view.bearing;
+      const ax = tankAxes(keys!);
+      if (ax.fwd !== 0) { speedK = ax.fwd > 0 ? 1 : BACK_SPEED; back = ax.fwd < 0; }
+    } else if (mode === 'keys' || mode === 'stick') {
+      // screen-relative: the stick (and, with the follow camera off, the keys) point
+      // where to go on the screen as it was when the walk started (a latched frame, so
+      // the camera easing behind him never bends the walk: no feedback loop).
+      if (starting) this.frame = view.bearing;
+      const v = mode === 'keys' ? screenVector(keys!, null) : stick!;
+      const m = Math.min(1, Math.hypot(v.x, v.y));
+      if (m > 0) {
+        // a stick pulled down backs him up like the Down key, but only while he faces
+        // into the screen; otherwise "down" walks down the screen, toward the camera
+        const intoScreen = Math.abs(wrapPi(this.facing - this.frame)) <= BACKPEDAL_FACING;
+        if (mode === 'stick' && view.follows && intoScreen && stickBackpedal(v)) { speedK = m * BACK_SPEED; back = true; }
+        else { this.heading = stickHeading(v, this.frame); speedK = m; }
+      }
+    } else if (mode === 'tap') {
+      this.heading = Math.atan2(dxT, dzT);
+      speedK = 1;
+    }
+    if (tank) this.heading = wrapPi(this.heading + this.turnVel * dt);
+
+    // the body swings round to the heading (only the ranger turns, never the camera)
+    const pivotFrom = this.facing;
+    this.facing = approachAngle(this.facing, this.heading, PIVOT_RATE * dt);
+    this.group.rotation.y = this.facing;
+    // walk once he (nearly) faces the way he goes: no moonwalk toward the camera mid-pivot
+    const along = back ? 1 : Math.max(0, Math.cos(wrapPi(this.heading - this.facing)));
+    let step = this.speed * speedK * along * dt;
+    if (mode === 'tap') step = Math.min(step, tapDist);
+    const dir = back ? this.heading + Math.PI : this.heading;
+    let wantX = rp.x + Math.sin(dir) * step;
+    let wantZ = rp.z + Math.cos(dir) * step;
+    let moved = 0; // post-collision ground distance this frame (drives footsteps)
+    if (step > 0) {
       // F-11: the world rim is a calm stop, never an invisible wall. Ease the
       // OUTWARD part of the intended step to zero across the last RIM_EASE metres
       // (the tangential slide ALONG the rim keeps full speed); resolveMove's radial
@@ -230,21 +329,34 @@ export class Player {
         this.atBoundary = false; // hysteresis: re-arm once well back inside the rim
       }
       const next = resolveMove(rp.x, rp.z, wantX, wantZ, this.obstacles, this.limits);
-      const mx = next.x - rp.x, mz = next.z - rp.z;
-      if (mx * mx + mz * mz > 1e-7) {
-        this.group.rotation.y = Math.atan2(mx, mz);
-        // W1.5: the follow-cam chases the ranger's facing ONLY while he moves,
-        // so a standing ranger (or a mini-game reframe) never swings the view.
-        turned = true;
-      }
-      // W3.2: the actual post-collision ground speed drives the idle↔walk
-      // crossfade (slide-around-pine slows him, so the gait reads honestly).
-      moved = Math.hypot(mx, mz);
-      this.groundSpeedNow = moved / Math.max(dt, 1e-4);
+      moved = Math.hypot(next.x - rp.x, next.z - rp.z);
+      // a tap-walk pressed against a wall gives up instead of treading on the spot
+      if (mode === 'tap' && moved < step * 0.15) {
+        if ((this.tapStuck += dt) > 0.6) this.target.set(rp.x, 0, rp.z);
+      } else this.tapStuck = 0;
       rp.x = next.x;
       rp.z = next.z;
     }
+    // W3.2: the actual post-collision ground speed drives the idle↔walk crossfade;
+    // a turn on the spot steps the feet too, and backing up plays the walk in reverse.
+    this.groundSpeedNow = moved / Math.max(dt, 1e-4);
+    const pivoting = Math.abs(wrapPi(this.facing - pivotFrom)) > 1e-4;
+    this.rig.setGait(back && moved > 0, pivoting && moved < 1e-4);
     rp.y = this.terrain.y(rp.x, rp.z); // feet on the drawn terrain
+    // keys / stick drop any tap target where he now stands (after the step: a target left
+    // a step behind him turned him round to walk back to it once the key came up)
+    if (mode === 'keys' || mode === 'stick') this.target.set(rp.x, 0, rp.z);
+
+    // what the follow camera does (it is told, never left to chase the facing):
+    if (!view.follows) this.camNow = null;
+    else if (tank || (mode === 'keys')) this.camNow = { yaw: this.heading, tau: CAM_TANK_TAU, maxRate: CAM_TANK_RATE };
+    else if (mode === 'stick' || mode === 'tap') {
+      // ease in behind him only when he walks roughly into the screen; walking across
+      // or toward the camera it holds (never a swing round to his face)
+      const gap = Math.abs(wrapPi(this.heading - view.bearing));
+      this.camNow = !back && gap <= CAM_BEHIND_GAP ? { yaw: this.heading, tau: CAM_BEHIND_TAU, maxRate: CAM_BEHIND_RATE } : null;
+    } else if (mode === null && this.camNow && this.camNow.tau !== CAM_TANK_TAU) this.camNow = null; // a tap/stick walk ended: hold
+    const out = this.camNow ? { ...this.camNow, fold } : (fold ? { yaw: null, tau: 0, maxRate: 0, fold } : null);
 
     // ambience follows the ranger across biomes — re-pick the bed on a crossing
     const here = this.terrain.biome(rp.x, rp.z);
@@ -260,15 +372,16 @@ export class Player {
       this.lastFootSurface = footSurface(here);
       Sound.footstep(this.lastFootSurface);
     }
-    return turned;
+    return out;
   }
 
   private proceduralRanger(): THREE.Group {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: '#3f7a3a', roughness: 1 });
+    const av = store.get().avatar; // the stand-in already wears the chosen jacket and skin
+    const mat = new THREE.MeshStandardMaterial({ color: verfVan('outfit', av.outfit), roughness: 1 });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.6, 4, 8), mat);
     body.position.y = 0.7;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: '#e8c39a', roughness: 1 }));
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: verfVan('huid', av.huid), roughness: 1 }));
     head.position.y = 1.32;
     g.add(body, head);
     // F-07 ⊕ P1.6a: normalize the instant stand-in to the SAME canonical height as
@@ -302,6 +415,7 @@ export class Player {
     // no ARKit blendshape rig (the Meshy mesh today) is left untouched, never throws.
     // Expression + blink are essential motion, so they stay on under reduced-motion.
     applyFace(prepped, { emotion: 'neutral', child: true }); // microsaccade reads the live policy (no restart)
+    dressRanger(prepped); // wave 2: the creator's skin / hair / jacket / eyes, kept live
     enableCast(prepped); // W4.5: the ranger is the primary hero shadow caster
     this.castsShadow = true;
     this.group.clear();
@@ -504,6 +618,23 @@ export class Player {
     //    along a grid line — the centre-column click at spawn — still lands)
     const p = this.terrain.intersectRay(this.raycaster.ray);
     if (p) this.target.set(p.x, 0, p.z);
+  }
+
+  /** The keys are turning him (tank turn, easing in or out) right now. */
+  get turning(): boolean {
+    return this.turnVel !== 0;
+  }
+
+  /** Where the keys are taking his turn (rad/s, + = to his left): the full turn rate
+   *  while a turn key is held, else what is left of the turn easing out. The camera
+   *  looks ahead along it for a clear view. */
+  get turnRate(): number {
+    return this.turnWant !== 0 ? this.turnWant : this.turnVel;
+  }
+
+  /** A past-threshold mouse / finger drag is looking around right now. */
+  get dragging(): boolean {
+    return this.dragId !== null && this.dragMoved;
   }
 
   /** Dev-hook accessor (WORLD-PLAN §3.1): the ranger's world position {x,z}. */

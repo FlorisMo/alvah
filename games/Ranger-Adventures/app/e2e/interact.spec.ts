@@ -7,15 +7,15 @@ import { shot, collectPageErrors, reportPageErrors } from './helpers';
  * opens the mission briefing. This proves the keyboard-only path Floris needs —
  * no canvas pointer event is used to trigger the action.
  *
- * Navigation reuses the frozen keyboard-walk path (arrows drive `resolveInput`);
- * the E2E reads the marker positions + live proximity from the dev hook and steers
- * toward the nearest marker until `nearId()` reports the ranger has arrived.
+ * Navigation uses the real arrow keys (tank steering); the E2E reads the marker
+ * positions + live proximity from the dev hook and steers toward the nearest marker
+ * until `nearId()` reports the ranger has arrived.
  */
 
 interface Hook {
   screen: string;
   pos(): { x: number; z: number } | null;
-  cameraYaw(): number | null;
+  cam(): { x: number; z: number } | null;
   nearId(): string | null;
   markers(): { x: number; z: number; missionId: string }[] | null;
 }
@@ -38,14 +38,10 @@ async function enterWorld(page: Page): Promise<void> {
 const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
 
 /**
- * Steer the ranger to the nearest marker with arrow keys until proximity fires.
- * The follow-cam ROTATES now (W1.5, default on), so world −z is no longer a
- * fixed "ArrowUp": the arrow keys are camera-relative. Each tick we read the
- * live `cameraYaw()` and map the desired WORLD direction back into screen keys
- * with the inverse of `resolveInput`'s rotation (which is its own inverse — a
- * length-preserving rotation+reflection): for camera yaw ψ,
- *   screenX =  dx·cosψ − dz·sinψ,   screenY = −dx·sinψ − dz·cosψ.
- * Re-evaluating every tick keeps the closed loop convergent as the camera eases.
+ * Steer the ranger to the nearest marker with arrow keys until proximity fires, the
+ * way a child plays the tank keys (wave 2): Left/Right turn him until the marker is
+ * ahead on screen (the camera looks from behind him), then Up walks. "Ahead" is the
+ * camera→ranger direction on the ground, re-read every tick.
  */
 async function walkToNearestMarker(page: Page): Promise<string> {
   const markers = await hook(page, (r) => r.markers());
@@ -75,18 +71,18 @@ async function walkToNearestMarker(page: Page): Promise<string> {
       const near = await hook(page, (r) => r.nearId());
       if (near) return near;
       const p = await hook(page, (r) => r.pos());
-      const yaw = await hook(page, (r) => r.cameraYaw());
-      if (!p || yaw == null) { await page.waitForTimeout(100); continue; }
-      // desired world direction → camera-relative screen intent (see doc above)
+      const cam = await hook(page, (r) => r.cam());
+      if (!p || !cam) { await page.waitForTimeout(100); continue; }
       const dx = target.x - p.x, dz = target.z - p.z;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const sx = dx * cy - dz * sy;
-      const sYf = -dx * sy - dz * cy;
+      const d = Math.hypot(dx, dz) || 1;
+      let fx = p.x - cam.x, fz = p.z - cam.z;
+      const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
+      // the marker's angle off the screen's forward (+ = to the right)
+      const ang = (Math.atan2((dx * -fz + dz * fx) / d, (dx * fx + dz * fz) / d) * 180) / Math.PI;
       const want = new Set<string>();
-      if (sx > 0.4) want.add('ArrowRight');
-      else if (sx < -0.4) want.add('ArrowLeft');
-      if (sYf > 0.4) want.add('ArrowUp');
-      else if (sYf < -0.4) want.add('ArrowDown');
+      if (Math.abs(ang) < 20) want.add('ArrowUp');
+      else if (Math.abs(ang) < 70) { want.add('ArrowUp'); want.add(ang > 0 ? 'ArrowRight' : 'ArrowLeft'); }
+      else want.add(ang > 0 ? 'ArrowRight' : 'ArrowLeft');
       await sync(want);
       await page.waitForTimeout(120);
     }

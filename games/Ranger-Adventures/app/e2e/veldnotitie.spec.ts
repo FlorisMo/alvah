@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 
 /**
  * W6.3b — the collectible veldnotitie. Playing a mission IN THE WORLD pins each
@@ -53,6 +53,7 @@ async function walkToMarker(page: Page, missionId: string): Promise<void> {
       else if (!want.has(k) && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
     }
   };
+  const steer = await keySteer(page);
   try {
     for (let i = 0; i < 220; i++) {
       if (await hook(page, (r) => r.nearId()) === missionId) return;
@@ -60,15 +61,7 @@ async function walkToMarker(page: Page, missionId: string): Promise<void> {
       const yaw = await hook(page, (r) => r.cameraYaw());
       if (!p || yaw == null) { await page.waitForTimeout(100); continue; }
       const dx = target!.x - p.x, dz = target!.z - p.z;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const sx = dx * cy - dz * sy;
-      const sYf = -dx * sy - dz * cy;
-      const want = new Set<string>();
-      if (sx > 0.4) want.add('ArrowRight');
-      else if (sx < -0.4) want.add('ArrowLeft');
-      if (sYf > 0.4) want.add('ArrowUp');
-      else if (sYf < -0.4) want.add('ArrowDown');
-      await sync(want);
+      await sync(steer(dx, dz, yaw)); // the arrow keys a child would hold (helpers.keySteer)
       await page.waitForTimeout(120);
     }
     throw new Error(`ranger never reached the ${missionId} marker within the step budget`);

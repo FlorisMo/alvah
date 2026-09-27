@@ -17,15 +17,172 @@
  * Pure + render-agnostic (no THREE import) so it carries its own seeded unit test.
  */
 
-/** A soft circular blocker in the XZ plane (a pine trunk, a rock, …). */
+/** A soft blocker in the XZ plane: a circle (a pine trunk, a rock, …) or, with
+ *  `box`, a building's real footprint (the cabin, the watchtower, the board …). */
 export interface Obstacle {
   x: number;
   z: number;
-  /** soft-collision radius — the ranger is kept this far from the centre */
+  /** circle: the soft-collision radius (the ranger is kept this far from the centre).
+   *  box: the radius of a circle around the whole keep-out shape, for readers that
+   *  only know circles (always on the safe side). */
   r: number;
   /** D3.16: a tree trunk — its foliage fades as a crown, so the all-occluder
    *  camera sightline test skips it (it reports through the fade, not opaque). */
   tree?: boolean;
+  /** Wave 2: an oriented rectangle footprint — half-extents `hx`/`hz` along its own
+   *  x/z, turned `rot` about +y (three's rotation.y). The ranger keeps `pad` metres
+   *  from it (the keep-out shape is the rectangle with rounded corners), so he slides
+   *  along its walls and round its corners and never stands on a porch or between
+   *  the watchtower's legs. */
+  box?: { hx: number; hz: number; rot: number; pad: number };
+  /** Wave 2: a tree whose foliage the follow camera must keep out of (see CameraRig):
+   *  its kind (the GLB id), its height and the ground under it. */
+  crown?: { kind: string; h: number; y: number };
+}
+
+/** The ranger's clearance from a building wall (m). */
+export const WALL_PAD = 0.3;
+
+/** A rectangle footprint obstacle (see `Obstacle.box`). */
+export function boxObstacle(x: number, z: number, hx: number, hz: number, rot: number, pad = WALL_PAD): Obstacle {
+  return { x, z, r: Math.hypot(hx, hz) + pad, box: { hx, hz, rot, pad } };
+}
+
+/** World offset (dx, dz) from a box's centre → its own x/z (undo rotation.y). */
+function toLocal(b: NonNullable<Obstacle['box']>, dx: number, dz: number): [number, number] {
+  const c = Math.cos(b.rot), s = Math.sin(b.rot);
+  return [dx * c - dz * s, dx * s + dz * c];
+}
+
+/** Its own x/z → world offset (three's rotation.y). */
+function toWorldOff(b: NonNullable<Obstacle['box']>, lx: number, lz: number): [number, number] {
+  const c = Math.cos(b.rot), s = Math.sin(b.rot);
+  return [lx * c + lz * s, -lx * s + lz * c];
+}
+
+/**
+ * Signed distance (m) from (x, z) to the obstacle's keep-out edge grown by `grow`:
+ * < 0 inside, > 0 outside. Circle: the radius; box: the rectangle + pad + grow.
+ */
+export function obstacleGap(o: Obstacle, x: number, z: number, grow = 0): number {
+  if (!o.box) return Math.hypot(x - o.x, z - o.z) - (o.r + grow);
+  const b = o.box;
+  const [lx, lz] = toLocal(b, x - o.x, z - o.z);
+  const qx = Math.abs(lx) - b.hx, qz = Math.abs(lz) - b.hz;
+  const out = Math.hypot(Math.max(qx, 0), Math.max(qz, 0));
+  const inside = Math.min(Math.max(qx, qz), 0);
+  return out + inside - (b.pad + grow);
+}
+
+/**
+ * The fraction t ∈ [0, 1] of the segment from (ox, oz) along (dx, dz) where it first
+ * enters the obstacle's keep-out shape grown by `grow` (1 = it never does). The shape
+ * is grown out from the solid itself (a circle; a box's bare walls) by pad + grow, but
+ * never past the origin: a ranger standing close to a wall (inside its grown shape)
+ * still has that wall stop a segment aimed into it, at once, and a segment aimed away
+ * passes. An origin inside the solid itself ignores it (the prop he stands at never
+ * collapses the camera onto him). Boxes are grown with rounded corners, so a boom
+ * that passes a corner by more than `grow` is not stopped.
+ */
+export function segmentEntry(o: Obstacle, ox: number, oz: number, dx: number, dz: number, grow: number): number {
+  const pad = o.box ? o.box.pad : 0;
+  const out = obstacleGap(o, ox, oz, -pad); // how far out of the solid itself the origin stands
+  if (out < -1e-6) return 1;
+  const g = Math.max(0, Math.min(pad + grow, out));
+  let t: number;
+  if (!o.box) t = circleEntry(ox - o.x, oz - o.z, dx, dz, o.r - pad + g);
+  else {
+    // the rectangle grown by g with ROUNDED corners (the same shape obstacleGap measures):
+    // the two plus-shaped slabs and a circle on each corner
+    const b = o.box;
+    const [px, pz] = toLocal(b, ox - o.x, oz - o.z);
+    const [vx, vz] = toLocal(b, dx, dz);
+    t = Math.min(slabEntry(slab(px, pz, vx, vz, b.hx + g, b.hz)), slabEntry(slab(px, pz, vx, vz, b.hx, b.hz + g)));
+    if (g > 0) {
+      for (const [cx, cz] of [[b.hx, b.hz], [b.hx, -b.hz], [-b.hx, b.hz], [-b.hx, -b.hz]]) {
+        t = Math.min(t, circleEntry(px - cx, pz - cz, vx, vz, g));
+      }
+    }
+  }
+  return t < 1 ? t : 1;
+}
+
+/** Where a ray entering a span [tIn, tOut] starts inside it (0 when it starts on its edge
+ *  going in), or Infinity when it never enters ahead. */
+function slabEntry(span: [number, number] | null): number {
+  return span && span[1] > 1e-9 && span[0] > -1e-9 ? Math.max(0, span[0]) : Infinity;
+}
+
+/** Ray f + t·d (f relative to the centre) entering the circle of radius R. */
+function circleEntry(fx: number, fz: number, dx: number, dz: number, R: number): number {
+  const a = dx * dx + dz * dz;
+  if (a < 1e-12) return Infinity;
+  const b = 2 * (fx * dx + fz * dz), cc = fx * fx + fz * fz - R * R;
+  const disc = b * b - 4 * a * cc;
+  if (disc < 0) return Infinity;
+  const q = Math.sqrt(disc);
+  return slabEntry([(-b - q) / (2 * a), (-b + q) / (2 * a)]);
+}
+
+/** Ray p + t·v against the axis-aligned rectangle |x| ≤ ex, |z| ≤ ez: [tIn, tOut] or null. */
+function slab(px: number, pz: number, vx: number, vz: number, ex: number, ez: number): [number, number] | null {
+  let t0 = -Infinity, t1 = Infinity;
+  for (const [p, v, e] of [[px, vx, ex], [pz, vz, ez]] as const) {
+    if (Math.abs(v) < 1e-12) { if (p < -e || p > e) return null; continue; }
+    let a = (-e - p) / v, b = (e - p) / v;
+    if (a > b) [a, b] = [b, a];
+    if (a > t0) t0 = a;
+    if (b < t1) t1 = b;
+    if (t0 > t1) return null;
+  }
+  return [t0, t1];
+}
+
+/**
+ * Does the segment from (ax, az) to (bx, bz) pass through the obstacle's SOLID part
+ * (the circle; the bare rectangle, no pad) between the fractions t0 and t1? The
+ * sightline test a camera read-back uses: a circle by its closest approach (foot
+ * parameter in (t0, t1)), a box by where the segment crosses the rectangle.
+ */
+export function segmentCrosses(o: Obstacle, ax: number, az: number, bx: number, bz: number, t0: number, t1: number): boolean {
+  const dx = bx - ax, dz = bz - az;
+  const len2 = dx * dx + dz * dz;
+  if (len2 < 1e-12) return false;
+  if (!o.box) {
+    const t = ((o.x - ax) * dx + (o.z - az) * dz) / len2;
+    if (t <= t0 || t >= t1) return false;
+    const gx = o.x - (ax + dx * t), gz = o.z - (az + dz * t);
+    return gx * gx + gz * gz <= o.r * o.r;
+  }
+  const [px, pz] = toLocal(o.box, ax - o.x, az - o.z);
+  const [vx, vz] = toLocal(o.box, dx, dz);
+  const span = slab(px, pz, vx, vz, o.box.hx, o.box.hz);
+  return !!span && span[1] > t0 && span[0] < t1;
+}
+
+/**
+ * How wide the obstacle's SOLID part (the circle; the bare rectangle, no pad) looks
+ * from (x, z): the horizontal angle (rad) it covers, π when (x, z) is inside it. A box
+ * is measured by its real corners, so a long low building seen end-on reads narrow
+ * (the circle around it would read it as wide from anywhere near).
+ */
+export function obstacleSpan(o: Obstacle, x: number, z: number): number {
+  if (!o.box) {
+    const d = Math.hypot(o.x - x, o.z - z);
+    return d <= o.r ? Math.PI : 2 * Math.asin(o.r / d);
+  }
+  const b = o.box;
+  const [px, pz] = toLocal(b, x - o.x, z - o.z);
+  if (Math.abs(px) <= b.hx && Math.abs(pz) <= b.hz) return Math.PI;
+  const mid = Math.atan2(-px, -pz); // toward the centre, in the box's own frame
+  let lo = 0, hi = 0;
+  for (const [cx, cz] of [[b.hx, b.hz], [b.hx, -b.hz], [-b.hx, b.hz], [-b.hx, -b.hz]]) {
+    let a = Math.atan2(cx - px, cz - pz) - mid;
+    a = Math.atan2(Math.sin(a), Math.cos(a));
+    if (a < lo) lo = a;
+    if (a > hi) hi = a;
+  }
+  return hi - lo;
 }
 
 export interface MoveLimits {
@@ -61,6 +218,7 @@ export function resolveMove(
   //    Two passes so de-penetrating one circle can't leave us inside the next.
   for (let pass = 0; pass < 2; pass++) {
     for (const o of obstacles) {
+      if (o.box) { [x, z] = pushOutOfBox(o, x, z, fx, fz); continue; }
       const ox = x - o.x;
       const oz = z - o.z;
       const d = Math.hypot(ox, oz);
@@ -109,4 +267,33 @@ export function resolveMove(
   }
 
   return { x, z };
+}
+
+/**
+ * Push (x, z) out of a box obstacle's keep-out shape (the rectangle + pad, rounded
+ * corners) along the contact normal, so the residual motion slides along the wall
+ * or round the corner. A point that somehow sits inside the rectangle itself leaves
+ * by the nearest wall (or, dead centre, back the way it came from (fx, fz)).
+ */
+function pushOutOfBox(o: Obstacle, x: number, z: number, fx: number, fz: number): [number, number] {
+  const b = o.box!;
+  let [lx, lz] = toLocal(b, x - o.x, z - o.z);
+  const qx = Math.max(-b.hx, Math.min(b.hx, lx)), qz = Math.max(-b.hz, Math.min(b.hz, lz));
+  const ox = lx - qx, oz = lz - qz;
+  const d = Math.hypot(ox, oz);
+  if (d >= b.pad) return [x, z];            // clear of the wall
+  if (d > EPS) {                             // in the padding: out along the normal
+    lx = qx + (ox / d) * b.pad;
+    lz = qz + (oz / d) * b.pad;
+  } else {                                   // inside the rectangle: leave by the nearest wall
+    const px = b.hx - Math.abs(lx), pz = b.hz - Math.abs(lz);
+    if (Math.abs(px - pz) < EPS && Math.abs(lx) < EPS && Math.abs(lz) < EPS) {
+      const [fl, fm] = toLocal(b, fx - o.x, fz - o.z); // dead centre: back toward where we came from
+      if (Math.abs(fl) / b.hx >= Math.abs(fm) / b.hz) lx = (fl >= 0 ? 1 : -1) * (b.hx + b.pad);
+      else lz = (fm >= 0 ? 1 : -1) * (b.hz + b.pad);
+    } else if (px < pz) lx = (lx >= 0 ? 1 : -1) * (b.hx + b.pad);
+    else lz = (lz >= 0 ? 1 : -1) * (b.hz + b.pad);
+  }
+  const [wx, wz] = toWorldOff(b, lx, lz);
+  return [o.x + wx, o.z + wz];
 }
