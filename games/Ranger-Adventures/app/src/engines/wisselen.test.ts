@@ -26,3 +26,9 @@ test('every animal carries an icon and a word for day or night', () => {
 test('a rule is spoken with "naar", never "pijl"', () => {
   assert.equal(forSpeech('Dag-dier → open plek. Nacht-dier → het hol.'), 'Dag-dier naar open plek. Nacht-dier naar het hol.');
 });
+
+test('a count is said as "van" and an icon is never said (V1 minor: "📓Open je sporenboek 0/3")', () => {
+  assert.equal(forSpeech('📓Open je sporenboek 0/3'), 'Open je sporenboek 0 van 3');
+  assert.equal(forSpeech('🐦‍⬛ Bezoek de raaf'), 'Bezoek de raaf');
+  assert.equal(forSpeech('☀️ Dag-dier'), 'Dag-dier');
+});

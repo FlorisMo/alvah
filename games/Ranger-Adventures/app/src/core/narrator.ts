@@ -30,9 +30,15 @@ function chooseDutchVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice 
 }
 
 /** A shown line as it should sound: a rule's arrow is said as "naar" ("Dag-dier →
- *  open plek" → "Dag-dier naar open plek"), never as "pijl". */
+ *  open plek" → "Dag-dier naar open plek"), never as "pijl"; a count as "van"
+ *  ("0/3" → "0 van 3", never a date); an icon is a picture, so it is not said. */
 export function forSpeech(text: string): string {
-  return text.replace(/\s*→\s*/g, ' naar ');
+  return text
+    .replace(/\s*→\s*/g, ' naar ')
+    .replace(/(\d+)\s*\/\s*(\d+)/g, '$1 van $2')
+    .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 class WebSpeechNarrator implements Narrator {

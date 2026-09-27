@@ -77,6 +77,7 @@ test('menus read aloud, the maker shows every choice, Enter presses Verder after
   await said(page, SAY.pauze, 'Pauze reads "Wat wil je doen?" aloud');
   await page.locator('.ra-chip', { hasText: 'Instellingen' }).hover();
   await said(page, 'Instellingen', 'a Pauze choice says its words on hover');
+  expect((await spoken(page)).filter((t) => /[\p{Extended_Pictographic}]/u.test(t)), 'a hover label never says its icon').toEqual([]);
   await page.getByRole('button', { name: 'Terug naar de open plek' }).click();
   await sleep(page, 800);
 
@@ -91,8 +92,19 @@ test('menus read aloud, the maker shows every choice, Enter presses Verder after
   await page.locator(`.mission-card[data-id="${mission.id}"]`).hover();
   await said(page, mission.titel, 'a mission card says its title on hover');
 
-  // --- zoeken: find the animal with a real click, then ENTER presses "Verder" (parent:B7)
-  await page.locator(`.mission-card[data-id="${mission.id}"]`).click();
+  // --- a quick click (before the hover label is due) opens the briefing, and no stale
+  //     label talks over the briefing's voice afterwards (V1)
+  await page.mouse.move(5, 5, { steps: 4 });
+  await sleep(page, 300);
+  const box = (await page.locator(`.mission-card[data-id="${mission.id}"]`).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 6 });
+  await sleep(page, 200);
+  await clearSpoken(page);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await said(page, mission.titel, 'the briefing is read aloud');
+  await sleep(page, 1_200);
+  const afterClick = await spoken(page);
+  expect(afterClick.length, `only the briefing is said after the click, got ${JSON.stringify(afterClick)}`).toBe(1);
   await page.getByRole('button', { name: 'Ga op pad' }).click();
   let hint: Hint | null = null;
   await expect.poll(async () => (hint = await R<Hint | null>(page, 'r.playHint()')) !== null, { timeout: 30_000, message: 'the zoeken game offers a target' }).toBe(true);

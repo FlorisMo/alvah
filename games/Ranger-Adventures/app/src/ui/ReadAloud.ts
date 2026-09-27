@@ -191,6 +191,30 @@ export interface ScreenAloudOptions {
 /** How long the mouse rests on an item before it is read (no chatter while moving). */
 const HOVER_DWELL_MS = 450;
 
+/** The one hover read waiting to be said: only one item is ever under the mouse. */
+let hoverTimer = 0;
+function cancelHoverRead(): void {
+  if (hoverTimer) window.clearTimeout(hoverTimer);
+  hoverTimer = 0;
+}
+/** A press (click, tap, key) ends the wait: whatever the player pressed speaks for
+ *  itself — the next screen's voice is never talked over by a stale label (V1). */
+let pressCancelsHover = false;
+function cancelHoverOnPress(): void {
+  if (pressCancelsHover || typeof document === 'undefined') return;
+  pressCancelsHover = true;
+  document.addEventListener('pointerdown', cancelHoverRead, true);
+  document.addEventListener('keydown', cancelHoverRead, true);
+}
+/** The words an item says: its label without the icons beside it (aria-hidden). */
+function itemWords(item: HTMLElement): string {
+  const label = item.getAttribute('aria-label');
+  if (label) return label;
+  const copy = item.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+  return (copy.textContent ?? '').replace(/\s+/g, ' ');
+}
+
 /**
  * Read a whole screen aloud (child:B12): the title, the ranger maker, Pauze, the
  * missiebord, the reward card. A 🔊 beside the primary action says `text` at any
@@ -204,18 +228,26 @@ export function readScreenAloud(el: HTMLElement, opts: ScreenAloudOptions): Read
   btn?.addEventListener('click', (e) => { e.stopPropagation(); speak(); });
   if (opts.items && opts.hover) {
     const say = (item: HTMLElement): void => {
-      const t = (opts.itemText?.(item) ?? item.getAttribute('aria-label') ?? item.textContent ?? '').trim();
+      const t = (opts.itemText?.(item) ?? itemWords(item)).trim();
       if (t) narrator.speak(t);
     };
+    cancelHoverOnPress();
     el.querySelectorAll<HTMLElement>(opts.items).forEach((item) => {
-      let dwell = 0;
-      item.addEventListener('mouseenter', () => { dwell = window.setTimeout(() => say(item), HOVER_DWELL_MS); });
-      item.addEventListener('mouseleave', () => window.clearTimeout(dwell));
+      item.addEventListener('mouseenter', () => {
+        cancelHoverRead();
+        hoverTimer = window.setTimeout(() => {
+          hoverTimer = 0;
+          // only while the item is still on screen and under the mouse: a tap that
+          // opened the next screen took it away (mouseleave never fires then)
+          if (item.isConnected && item.matches(':hover')) say(item);
+        }, HOVER_DWELL_MS);
+      });
+      item.addEventListener('mouseleave', cancelHoverRead);
       item.addEventListener('focus', () => { if (item.matches(':focus-visible')) say(item); });
     });
   }
   // a browser only lets a page speak after the player has touched it (the first boot)
   const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }) : null;
   if (opts.autoStart && nav?.userActivation?.hasBeenActive !== false) speak();
-  return { speak, stop: () => narrator.stop() };
+  return { speak, stop: () => { cancelHoverRead(); narrator.stop(); } };
 }
