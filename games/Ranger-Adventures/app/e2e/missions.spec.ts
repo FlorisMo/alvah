@@ -90,7 +90,8 @@ async function boot(log: Log): Promise<void> {
   await page.goto('/?dev=1');
   await click(log, 'Begin', 'title', 30_000, 30_000); // the title may still be dressing itself
   const maker = page.getByRole('button', { name: 'Dit is mijn ranger' });
-  if (await maker.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false)) await click(log, 'Dit is mijn ranger', 'ranger maker');
+  // (its click builds the world inside the handler: on a busy machine that takes a while)
+  if (await maker.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false)) await click(log, 'Dit is mijn ranger', 'ranger maker', 10_000, 30_000);
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
   await expect.poll(() => R<P2 | null>(page, 'r.pos()'), { timeout: 30_000 }).not.toBeNull();
   await sleep(page, 1_200);
@@ -509,3 +510,101 @@ test('the bird bench on the 2D floor (Tweaks "altijd 2D"): RoepView plays and ha
     if (!process.env.MISSIONS_QUIET) console.log(`\n── roep-2d ──\n${text}`);
   }
 });
+
+test('a mission picked on the missiebord: played at the board, its family comes home at its OWN marker, in view @missions', async ({ page }, info) => {
+  test.setTimeout(8 * 60_000);
+  const log: Log = new Log(page, outDir(info, 'missiebord'));
+  const mission = missions[0];
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
+  try {
+    await boot(log);
+    const all = await R<(P2 & { missionId: string })[]>(page, 'r.markers()');
+    const m = all.find((x) => x.missionId === mission.id)!;
+    const marker = { x: m.x, z: m.z };
+    const before = await worldSamples(page, marker, SEAT_RADIUS, 3);
+    const board = await R<P2 | null>(page, 'r.board()');
+    log.hard(!!board, 'no missiebord');
+    const w = await walkTo(page, board!, { stopDist: 1.6, timeout: 60_000 });
+    log.note(`walked to the missiebord: ${w.res}`);
+    await click(log, 'Bekijk het missiebord', 'board prompt');
+    await sleep(page, 700);
+    await page.locator(`.mission-card[data-id="${mission.id}"]`).click();
+    await sleep(page, 700);
+    await page.evaluate(() => {
+      const win = window as unknown as { __reunion?: string };
+      win.__reunion = '';
+      new MutationObserver(() => {
+        const el = document.querySelector('.reunion-cap') as HTMLElement | null;
+        if (el && !win.__reunion) win.__reunion = el.innerText;
+      }).observe(document.getElementById('ui')!, { childList: true, subtree: true });
+    });
+    await click(log, 'Ga op pad', 'briefing');
+    await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 10_000, message: 'the mission never started' }).not.toBeNull();
+    await playSteps(log, mission);
+    await finish(log, mission);
+    await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null,
+      { timeout: 15_000, message: 'the reward never led back to the world' }).toBe(true);
+    // nothing of the family stands at the board: it belongs at its marker
+    const at = (await snap(page)).p!;
+    const byBoard = ((await R<Seat[] | null>(page, `r.seating(${at.x}, ${at.z}, 10)`)) ?? []).filter((s) => s.id.includes('progress-'));
+    log.soft(byBoard.length === 0, `the family stands at the board: ${byBoard.map((s) => s.id.split('@')[0]).join(', ')}`);
+    // walk to the marker: once it is in view, the flag rises and the family walks home
+    await walkTo(page, marker, { stopDist: 11, timeout: 90_000 });
+    await sleep(page, 900);
+    await log.shot('coming-home');
+    const coming = (await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`)) ?? [];
+    log.note(`at ~11 m: ${coming.filter((s) => s.id.includes('progress-')).length} pieces of the family in view`);
+    log.soft(coming.some((s) => s.id.startsWith('klaar-flag')), 'coming up to the marker, its "klaar" flag stands there');
+    await walkTo(page, marker, { stopDist: 2.4, timeout: 60_000 });
+    await sleep(page, 3_000);
+    await log.shot('at-marker');
+    const after = await worldSamples(page, marker, SEAT_RADIUS, 3);
+    const { appeared } = worldChange(before, after);
+    const family = appeared.filter((s) => s.id.includes('progress-') && !s.id.startsWith('klaar-flag'));
+    log.note(`at the marker: ${family.length} of the family stand within ${SEAT_RADIUS} m (${family.map((s) => `${s.id.split('@')[0]} ${r2d(Math.hypot(s.x - marker.x, s.z - marker.z))} m`).join(', ')})`);
+    log.soft(family.length >= 3, 'the sow and her piglets stand at their own marker');
+    log.soft(family.every((s) => Math.hypot(s.x - marker.x, s.z - marker.z) < 4), 'the family stands right at the marker, not metres off');
+    log.soft(family.every((s) => Math.abs(s.gap) <= SEAT_TOLERANCE), 'the family stands on the ground');
+    log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
+  } finally {
+    const text = log.write();
+    await info.attach('notes', { body: text, contentType: 'text/plain' });
+    if (!process.env.MISSIONS_QUIET) console.log(`\n── missiebord ──\n${text}`);
+  }
+});
+
+test('the sporenboek at 1280×800: with every clue found, "Volg het spoor" is in view and opens the ontknoping @missions', async ({ page, context }, info) => {
+  test.setTimeout(3 * 60_000);
+  const voltooid = Object.fromEntries(missions.slice(0, -1).map((m) => [m.id, true]));
+  await context.addInitScript((seed) => {
+    if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: seed }));
+  }, { voltooid, avatarGemaakt: true, settings: { wereldHintGezien: true, tikHintGezien: true } });
+  const log: Log = new Log(page, outDir(info, 'sporenboek'));
+  try {
+    await boot(log);
+    await click(log, /Pauze/, 'HUD');
+    await sleep(page, 500);
+    await page.locator('.ph-prikbord').click();
+    const btn = page.getByRole('button', { name: 'Volg het spoor', exact: true });
+    await btn.waitFor({ state: 'visible', timeout: 5_000 });
+    await sleep(page, 500);
+    await log.shot('sporenboek');
+    const box = await btn.boundingBox();
+    log.hard(!!box, 'no "Volg het spoor" button');
+    log.soft(box!.y >= 0 && box!.y + box!.height <= 800, `"Volg het spoor" is below the fold (${Math.round(box!.y)}-${Math.round(box!.y + box!.height)} px)`);
+    const cover = await uncovered(btn);
+    log.soft(cover === null, `"Volg het spoor" is covered by ${cover}`);
+    await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2); // where the player sees it: no scrolling
+    const first = AREA_VELUWE.verhaalboog.ontknoping[0].tekst.split(' ').slice(0, 3).join(' ');
+    const opened = await expect.poll(async () => (await uiText(page)).includes(first), { timeout: 5_000 }).toBe(true).then(() => true, () => false);
+    log.soft(opened, 'a click on "Volg het spoor" opens the ontknoping');
+    await log.shot('ontknoping');
+  } finally {
+    const text = log.write();
+    await info.attach('notes', { body: text, contentType: 'text/plain' });
+    if (!process.env.MISSIONS_QUIET) console.log(`\n── sporenboek ──\n${text}`);
+  }
+});
+
+const r2d = (n: number): number => Math.round(n * 10) / 10;

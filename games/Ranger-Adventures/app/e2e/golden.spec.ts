@@ -431,7 +431,11 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     hard(up, 'after a reload the title never showed "Begin"');
     await sleep(page, 500);
     await page.keyboard.press('Enter');
-    const enterWorks = await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 3_000 }).not.toBe('title').then(() => true, () => false);
+    // Enter pressed Begin when the title card goes (the world may take a few seconds
+    // more to load behind it: that is not Enter failing)
+    const beginGone = async (): Promise<boolean> => (await R<string>(page, 'r.screen')) !== 'title'
+      || !(await page.getByRole('button', { name: 'Begin', exact: true }).isVisible().catch(() => false));
+    const enterWorks = await expect.poll(beginGone, { timeout: 3_000 }).toBe(true).then(() => true, () => false);
     soft(enterWorks, 'Enter does not press Begin on the title');
     if (!enterWorks) await clickButton(page, 'Begin', 'title after reload');
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000, message: 'after a reload Begin must go straight back into the world' }).toBe('world');
