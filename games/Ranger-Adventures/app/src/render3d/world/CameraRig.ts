@@ -603,6 +603,7 @@ export class CameraRig {
     if (lensInCrown) cost += 3;
     if (!out.terrainClear) cost += 2;
     if (this.solidBetween(lx, lz, rp.x, rp.z)) cost += 4;              // a building / prop / person in the line
+    if (this.solidHugsLens(lx, lz)) cost += 0.8;                        // …or right beside the lens, filling a side of the frame
     if (this.creatureBetween(lx, ly, lz, rp.x, headY, chestY, rp.z)) cost += 4;
     if (this.crownBetween(lx, ly, lz, rp.x, headY, rp.z, false)) cost += 4; // an unfadeable prop tree
     else if (this.crownBetween(lx, ly, lz, rp.x, headY, rp.z, true)) cost += 0.5; // the forest fades, but a clear line is nicer
@@ -652,6 +653,14 @@ export class CameraRig {
       if (o.tree) continue;
       if (obstacleGap(o, ax, az) + (o.box ? o.box.pad : 0) <= 0) continue; // the prop he stands at
       if (segmentCrosses(o, cx, cz, ax, az, 0.05, 0.95)) return true;
+    }
+    return false;
+  }
+
+  /** A building, prop or person (not a tree trunk) within arm's reach of the lens. */
+  private solidHugsLens(lx: number, lz: number): boolean {
+    for (const o of this.nearSolids) {
+      if (!o.tree && obstacleGap(o, lx, lz) < 0.8) return true;
     }
     return false;
   }

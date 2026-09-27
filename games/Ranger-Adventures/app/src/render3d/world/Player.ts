@@ -14,6 +14,8 @@ import { loadManifest, loadRig, prepModel, skinnedRenderBox } from '../Models';
 import { RANGER_STAND_HEIGHT } from '../AnimalScale';
 import { applyEyes } from '../EyeMaterial';
 import { applyFace } from '../FaceRig';
+import { dressRanger } from '../RangerLook';
+import { verfVan } from '../../core/avatar';
 import type { Biome } from '../Biomes';
 import { resolveMove, type MoveLimits, type Obstacle } from '../CharacterController';
 import { PlayerRig } from '../PlayerRig';
@@ -366,10 +368,11 @@ export class Player {
 
   private proceduralRanger(): THREE.Group {
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: '#3f7a3a', roughness: 1 });
+    const av = store.get().avatar; // the stand-in already wears the chosen jacket and skin
+    const mat = new THREE.MeshStandardMaterial({ color: verfVan('outfit', av.outfit), roughness: 1 });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.6, 4, 8), mat);
     body.position.y = 0.7;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: '#e8c39a', roughness: 1 }));
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), new THREE.MeshStandardMaterial({ color: verfVan('huid', av.huid), roughness: 1 }));
     head.position.y = 1.32;
     g.add(body, head);
     // F-07 ⊕ P1.6a: normalize the instant stand-in to the SAME canonical height as
@@ -403,6 +406,7 @@ export class Player {
     // no ARKit blendshape rig (the Meshy mesh today) is left untouched, never throws.
     // Expression + blink are essential motion, so they stay on under reduced-motion.
     applyFace(prepped, { emotion: 'neutral', child: true }); // microsaccade reads the live policy (no restart)
+    dressRanger(prepped); // wave 2: the creator's skin / hair / jacket / eyes, kept live
     enableCast(prepped); // W4.5: the ranger is the primary hero shadow caster
     this.castsShadow = true;
     this.group.clear();

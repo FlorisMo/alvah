@@ -618,7 +618,7 @@ export class World {
     // F-22: keep the occlusion-proof world/vehicle/POI name-tags distance-faded.
     // Runs before the activity early-return so an open mission's Missiebord tag
     // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity too.
-    this.labels.fade(this.camera);
+    this.labels.fade(this.camera, this.canvas.clientHeight);
 
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
 

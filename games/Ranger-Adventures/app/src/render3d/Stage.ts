@@ -3,6 +3,7 @@ import { livePolicy } from './MotionMode';
 import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, bakeGoldenHourSky } from './Lighting';
 import { RANGER_STAND_HEIGHT } from './AnimalScale';
 import { provideRenderView, provideTris } from '../core/devhook';
+import { dressRanger } from './RangerLook';
 
 /** The real staged tree species — the SAME GLBs the explorable world plants
  *  (World.ts TreeSpecies), so the title tree line and the world tree line are
@@ -369,6 +370,7 @@ export class Stage {
     if (left() && bail()) return;
     if (rig) {
       const p = prepModel(rig.group, RANGER_STAND_HEIGHT);
+      dressRanger(p); // the creator's look, live: this ranger is the maker's 3D preview
       p.position.set(-2.3, 0, 2.8);
       p.rotation.y = Math.PI * 0.86; // face the camera / path — a calm welcome
       p.traverse((o) => { o.frustumCulled = false; }); // F-11: never cull the hero

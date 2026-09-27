@@ -52,12 +52,8 @@ function rangerSvg(av: Avatar): string {
     `<rect x="52" y="74" width="16" height="14" rx="6" fill="${huid}"/>` +
     // head
     `<circle cx="60" cy="52" r="30" fill="${huid}"/>` +
-    // hair cap
-    `<path d="M30 50 Q32 20 60 20 Q88 20 90 50 Q78 36 60 36 Q42 36 30 50 Z" fill="${haar}"/>` +
-    // ranger hat brim (reads as boswachter)
-    `<ellipse cx="60" cy="26" rx="40" ry="8" fill="${jas}"/>` +
-    `<path d="M44 26 Q44 8 60 8 Q76 8 76 26 Z" fill="${jas}"/>` +
-    `<rect x="44" y="22" width="32" height="5" rx="2.5" fill="rgba(0,0,0,.18)"/>` +
+    // a full mop of hair, like the 3D ranger's (no hat: the 3D ranger wears none)
+    `<path d="M27 54 Q22 30 36 20 Q46 10 60 12 Q76 10 86 22 Q98 32 93 54 Q88 40 78 36 Q70 30 60 32 Q48 30 40 38 Q31 43 27 54 Z" fill="${haar}"/>` +
     // eyes (white sclera + iris)
     `<circle cx="49" cy="54" r="6" fill="#fff"/><circle cx="71" cy="54" r="6" fill="#fff"/>` +
     `<circle cx="49" cy="54" r="3.4" fill="${iris}"/><circle cx="71" cy="54" r="3.4" fill="${iris}"/>` +
