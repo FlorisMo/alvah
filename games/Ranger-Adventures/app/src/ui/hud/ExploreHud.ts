@@ -159,6 +159,7 @@ export function renderVehiclePrompt(): void {
  *  over a pad "Land hier"; elsewhere where the nearest pad is + "Land op de helipad"
  *  (the autopilot always brings it down); landing: a calm line. */
 let heliPromptKey = '';
+let heliSpokenKey = '';
 export function renderHeliPrompt(): void {
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-heli-prompt');
   if (!prompt) return;
@@ -182,20 +183,35 @@ export function renderHeliPrompt(): void {
   heliPromptKey = key;
   const hint = (text: string, cls = ''): string => `<p class="explore-heli-hint${cls}">${esc(text)}</p>`;
   const button = (cls: string, label: string): string => `<button class="btn-start ${cls}" type="button">${label}</button>`;
+  let say = ''; // what is read aloud as this line appears (verifier V3: the heli lines were never spoken)
   if (key === 'none') prompt.innerHTML = '';
   else if (key === 'ground') {
-    prompt.innerHTML = hint(stickShown() ? 'Sleep de stick om te vliegen.' : FLY_KEYS) + button('explore-heli-exit', '🚁 Stap uit');
+    say = stickShown() ? 'Sleep de stick om te vliegen.' : FLY_KEYS;
+    prompt.innerHTML = hint(say) + button('explore-heli-exit', '🚁 Stap uit');
   } else if (key === 'landing') {
-    prompt.innerHTML = hint(LANDING);
+    say = LANDING;
+    prompt.innerHTML = hint(say);
   } else if (key === 'land') {
+    say = 'Land hier.';
     prompt.innerHTML = button('explore-heli-land', '🚁 Land hier');
   } else if (key === 'fly') {
+    // spoken without the arrow glyph: "Helipad achter je, 35 meter." (the chip's words
+    // keep changing in flight; only its first reading is spoken, not every 5 m)
+    say = cue ? `Helipad ${cue.richting}, ${Math.max(5, Math.round(cue.distance / 5) * 5)} meter.` : '';
     prompt.innerHTML = hint(where, ' explore-heli-where') + button('explore-heli-land', '🚁 Land op de helipad');
   } else if (key === 'enter') {
     prompt.innerHTML = button('explore-heli-enter', '🚁 Stap in de helikopter');
   } else {
     // near, but withheld: reduced-motion (toggle on) or the toggle is UIT
-    prompt.innerHTML = hint(key === 'reduced' ? 'De helikopter blijft nu aan de grond.' : 'Zet de helikopter aan bij Instellingen.');
+    say = key === 'reduced' ? 'De helikopter blijft nu aan de grond.' : 'Zet de helikopter aan bij Instellingen.';
+    prompt.innerHTML = hint(say);
+  }
+  // spoken once per state: a HUD re-render (after Pauze) resets heliPromptKey, not this.
+  // Just landed: "De helikopter landt." was the line; the fly line is not repeated.
+  if (key !== heliSpokenKey) {
+    const landed = heliSpokenKey === 'landing' && key === 'ground';
+    heliSpokenKey = key;
+    if (say && !landed && store.get().settings.voorlezen) narrator.speak(say);
   }
   prompt.querySelector('.explore-heli-enter')?.addEventListener('click', () => session.world?.enterHeli());
   prompt.querySelector('.explore-heli-land')?.addEventListener('click', () => session.world?.landHeli());

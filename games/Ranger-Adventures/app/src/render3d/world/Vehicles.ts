@@ -76,6 +76,7 @@ const WALKER_ROOM = 0.3;
 const HELI_NEAR_R = 4.0;
 const PAD_LAND_R = 6.0;
 const PAD_RADIUS = 3.2;
+const DEPART_CLEAR = 15;
 // Above this altitude (m) the flying helicopter is over every trunk and roof; below
 // it (lifting off, touching down) its body collides like the jeep's.
 const HELI_AIRBORNE_Y = 2.5;
@@ -177,6 +178,10 @@ export class Vehicles {
   private heliLanding = false;
   private liftArmed = false;               // a push lifts off only after the keys were let go once
   private landPad: { x: number; z: number } | null = null;
+  // The pad it just lifted off from: until it is DEPART_CLEAR m away the pad chip points
+  // at the OTHER pad and no "Land hier" shows over this one (it was offered — and read
+  // aloud — the moment it lifted off: "Land hier. Helipad achter je, 5 meter.").
+  private departPad: { x: number; z: number } | null = null;
   private heliSpeed = 0;
   private heliClimbRate = 0;
   private heliVignetteVal = 0;
@@ -521,7 +526,7 @@ export class Vehicles {
     const optIn = this.heliOptInSource();
     this.camera.updateMatrixWorld();
     const rightY = this.camera.matrixWorld.elements[1];
-    const pad = this.nearestPad(this.heliPos.x, this.heliPos.z);
+    const pad = this.guidePad(this.heliPos.x, this.heliPos.z);
     const rayY = this.terrain.raycastY(this.heliPos.x, this.heliPos.z);
     return {
       placed: true, available: heliAvailable(optIn, livePolicy().reduced), optIn,
@@ -539,19 +544,25 @@ export class Vehicles {
     };
   }
 
-  private nearestPad(x: number, z: number): { x: number; z: number } | null {
+  private nearestPad(x: number, z: number, skip: { x: number; z: number } | null = null): { x: number; z: number } | null {
     let best: { x: number; z: number } | null = null, bd = Infinity;
     for (const p of this.helipads) {
+      if (p === skip) continue;
       const d = Math.hypot(p.x - x, p.z - z);
       if (d < bd) { bd = d; best = p; }
     }
     return best;
   }
 
-  /** Whether the helicopter is over a pad (so "Land hier" shows). */
+  /** The pad the flight is guided to: the nearest one, but not the pad it just left. */
+  private guidePad(x: number, z: number): { x: number; z: number } | null {
+    return this.nearestPad(x, z, this.inHeli && this.heliAirborne ? this.departPad : null) ?? this.nearestPad(x, z);
+  }
+
+  /** Whether the helicopter is over a pad it may land on (so "Land hier" shows). */
   private overPad(): boolean {
     if (!this.heliPos) return false;
-    const p = this.nearestPad(this.heliPos.x, this.heliPos.z);
+    const p = this.guidePad(this.heliPos.x, this.heliPos.z);
     return !!p && Math.hypot(p.x - this.heliPos.x, p.z - this.heliPos.z) <= PAD_LAND_R;
   }
 
@@ -848,7 +859,11 @@ export class Vehicles {
     if (!this.heliAirborne) {
       const push = Math.hypot(intent.x, intent.y);
       if (push < 0.1) this.liftArmed = true;   // let go once (after boarding / touchdown)
-      if (this.liftArmed && push > 0.2) this.heliAirborne = true; // lift off
+      if (this.liftArmed && push > 0.2) { // lift off
+        this.heliAirborne = true;
+        const from = this.nearestPad(hp.x, hp.z);
+        this.departPad = from && Math.hypot(from.x - hp.x, from.z - hp.z) <= PAD_LAND_R ? from : null;
+      }
       else {
         hp.y = this.groundY(hp.x, hp.z);
         this.heli.rotation.set(0, this.heliHeading, HELI_ROLL, 'YXZ');
@@ -891,6 +906,7 @@ export class Vehicles {
       if (r > lim) { nx = (nx / r) * lim; nz = (nz / r) * lim; }
     }
     hp.x = nx; hp.z = nz;
+    if (this.departPad && Math.hypot(this.departPad.x - hp.x, this.departPad.z - hp.z) > DEPART_CLEAR) this.departPad = null;
     this.heliHeading = nh;
     this.heliAltitude = step.altitude;
     hp.y = this.groundY(hp.x, hp.z) + this.heliAltitude;
@@ -908,6 +924,7 @@ export class Vehicles {
       this.liftArmed = false;             // a key still held from the flight never lifts it again
       this.heliLanding = false;
       this.landPad = null;
+      this.departPad = null;
       this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
       for (const b of this.beacons) b.visible = false;
       this.seatRider(this.heli, HELI_SEAT);
