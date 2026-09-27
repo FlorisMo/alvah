@@ -12,7 +12,7 @@
  */
 
 import * as THREE from 'three';
-import { simplify } from './Simplify';
+import { simplify } from './Simplify.ts';
 
 const cache = new Map<string, THREE.BufferGeometry[]>();
 const SAMPLE_PX = 128; // the texture is read at this size: a far copy needs the colour, not the detail

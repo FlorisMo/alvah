@@ -22,8 +22,8 @@
  */
 
 import * as THREE from 'three';
-import { loadManifest, loadModel, prepModel } from '../Models';
-import { lodGeometries, lodMaterial } from '../Lod';
+import { loadManifest, loadModel, prepModel } from '../Models.ts';
+import { lodGeometries, lodMaterial } from '../Lod.ts';
 
 export type TreeSpecies = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
 export interface TreePlacement { x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies }
@@ -206,19 +206,8 @@ export class Forest {
         set.sig[k] = sig;
         set.counts[k] = list.length;
         set.levels[k].forEach((inst, j) => {
-          inst.count = list.length;
           inst.visible = list.length > 0;
-          if (same) return;
-          const arr = inst.instanceMatrix.array as Float32Array;
-          const col = inst.instanceColor!.array as Float32Array;
-          const local = k === 0 ? set.parts[j].local : null;
-          list.forEach((i, n) => {
-            if (local && !isIdentity(local)) _m.fromArray(this.world, i * 16).multiply(local).toArray(arr, n * 16);
-            else arr.set(this.world.subarray(i * 16, i * 16 + 16), n * 16);
-            col.set(this.tint.subarray(i * 3, i * 3 + 3), n * 3);
-          });
-          inst.instanceMatrix.needsUpdate = true;
-          inst.instanceColor!.needsUpdate = true;
+          if (!same) fillLevel(inst, list, this.world, this.tint, k === 0 ? set.parts[j].local : null);
         });
       });
     }
@@ -326,4 +315,37 @@ function isIdentity(m: THREE.Matrix4): boolean {
   const e = m.elements;
   for (let i = 0; i < 16; i++) if (Math.abs(e[i] - (i % 5 === 0 ? 1 : 0)) > 1e-6) return false;
   return true;
+}
+
+/**
+ * Refill one level mesh with the trees in `list` (indices into the per-tree `world`
+ * matrices, 16 floats each, and `tint`, 3 each): each tree's placement, times the GLB
+ * part's own `local` matrix when it has one, and its tint.
+ *
+ * It also drops the mesh's cached bounds. three computes an InstancedMesh's bounding
+ * sphere once, from the instances it holds at that moment, and never again: a ray
+ * that misses that sphere tests no tree at all, and the renderer takes the sphere's
+ * centre as the mesh's draw-order depth. Kept, it would describe the trees of an
+ * earlier frame, so once the camera had moved a scene ray (golden's occluder probe, a
+ * click test) would pass straight through the trees drawn now. Dropped, three
+ * recomputes it from the trees drawn now when it next needs it (one pass over them,
+ * like the refill itself; the frustum never reads it, each tree is culled in `update`).
+ */
+export function fillLevel(
+  inst: THREE.InstancedMesh, list: readonly number[], world: Float32Array, tint: Float32Array,
+  local: THREE.Matrix4 | null,
+): void {
+  const arr = inst.instanceMatrix.array as Float32Array;
+  const col = inst.instanceColor?.array as Float32Array | undefined;
+  const part = local && !isIdentity(local) ? local : null;
+  list.forEach((i, n) => {
+    if (part) _m.fromArray(world, i * 16).multiply(part).toArray(arr, n * 16);
+    else arr.set(world.subarray(i * 16, i * 16 + 16), n * 16);
+    col?.set(tint.subarray(i * 3, i * 3 + 3), n * 3);
+  });
+  inst.count = list.length;
+  inst.instanceMatrix.needsUpdate = true;
+  if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+  inst.boundingSphere = null;
+  inst.boundingBox = null;
 }
