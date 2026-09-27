@@ -52,19 +52,39 @@ export interface WorldBeatInput {
   heading: CoarseHeading | null;
 }
 
+// Short lines (≤ 7 words, child B14): the impulse beat names the animal he can SEE
+// (withAnimal), it never asks about one that is not there.
 const IMPULSE: WorldBeat = {
   kind: 'blijf-op-pad',
-  prompt: 'Een nieuwsgierig dier wipt het pad af. Blijf jij rustig op het pad?',
+  prompt: 'Een dier loopt weg. Wat doe jij?',
   options: [
     { label: 'Blijf op het pad', glyph: '🥾', correct: true },
-    { label: 'Ren er snel achteraan', glyph: '🐾', correct: false },
+    { label: 'Ren erachteraan', glyph: '🐾', correct: false },
   ],
 };
+
+/** The impulse beat about the animal in view: "Een vos loopt weg. Wat doe jij?". */
+export function withAnimal(beat: WorldBeat, naam: string): WorldBeat {
+  return beat.kind === 'blijf-op-pad' ? { ...beat, prompt: `Een ${naam} loopt weg. Wat doe jij?` } : beat;
+}
+
+/** A beat never lands on the reward cards (child B14): it waits until the ranger has
+ *  walked this far (m) on foot in free roam since the mission ended … */
+export const WORLDBEAT_WALK_M = 15;
+/** … and the impulse beat until a roaming animal is this close (m) and in view. */
+export const WORLDBEAT_ANIMAL_M = 18;
+
+/** May the armed beat come now? After WORLDBEAT_WALK_M of walking; the impulse beat
+ *  also needs its animal in view (else it waits). */
+export function beatReady(beat: WorldBeat, walked: number, animalInView: boolean): boolean {
+  if (walked < WORLDBEAT_WALK_M) return false;
+  return beat.kind === 'welke-kant' || animalInView;
+}
 
 function wayfindBeat(heading: CoarseHeading): WorldBeat {
   return {
     kind: 'welke-kant',
-    prompt: 'Welke kant ligt de volgende plek? Wijs maar rustig.',
+    prompt: 'Welke kant is je volgende missie?',
     options: [
       { label: 'Naar links', glyph: '←', correct: heading === 'links' },
       { label: 'Rechtdoor', glyph: '↑', correct: heading === 'rechtdoor' },

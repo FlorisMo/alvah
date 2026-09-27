@@ -20,13 +20,17 @@ import { World, type WorldMarker } from '../../render3d/World';
 import { playRoep3d } from '../../render3d/engines/roep3d';
 import { playRoep } from '../../render2d/RoepView';
 import { prefersReducedMotion } from '../../core/reduced-motion';
-import { clearActivityWin } from '../../render3d/play/kit';
+import { clearActivityWin, clearPlayHint, beginActivityScope, abortActivityScope } from '../../render3d/play/kit';
 import { modelFor, heightFor } from '../../render3d/play/spawn';
 import { heroOf } from '../../render3d/world/Progress';
 import { nextPatrolTarget } from '../../core/patrol';
-import { pickWorldBeat, optionCorrect, coarseHeading, type WorldBeat } from '../../core/worldbeat';
+import { Vector3 } from 'three';
+import {
+  pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, WORLDBEAT_ANIMAL_M, type WorldBeat,
+} from '../../core/worldbeat';
 import { setScreen, setMissionView } from '../../core/devhook';
 import { mountReadAloud } from '../ReadAloud';
+import { mountMissionPause, unmountMissionPause } from './MissionFlow';
 import { session, esc, card, clearOverlays, menuOpen } from './session';
 import { wireWorldDevhook, clearWorldDevhook } from '../dev/wireDevhook';
 import {
@@ -113,6 +117,7 @@ export function activeExploreTitel(): string | null {
 /** Tear the world down (title screen, or a stopped mission's rebuild). */
 export function leaveWorld(): void {
   held = false;
+  disarmBeat();
   disposeExploreHud();
   const { world, stage } = session;
   if (world) { world.dispose(); session.world = null; stage.exitWorld(); }
@@ -203,13 +208,73 @@ export function resumePatrol(): void {
   const next = nextMissionId();
   world.setActiveMission(next);
   const titel = area.missies.find((m) => m.id === next)?.titel ?? null;
-  // Light world-EF seasoning (BUILD-PLAN §8b): once per completed patrol cycle,
-  // on the rare cadence, dust a calm skippable micro-beat before resuming.
-  if (patrolTick !== lastBeatTick) {
-    const beat = pickWorldBeat({ patrolTick, heading: coarseHeading(world.headingTo(next)) });
-    if (beat) { lastBeatTick = patrolTick; showWorldBeat(beat, () => showExploreHud(titel)); return; }
+  // Light world-EF seasoning (BUILD-PLAN §8b): once per completed patrol cycle, on the
+  // rare cadence, a calm skippable micro-beat — armed here, shown only once he has
+  // walked on (never stacked on the reward cards: child B14).
+  if (patrolTick !== lastBeatTick && pickWorldBeat({ patrolTick, heading: 'rechtdoor' })) {
+    lastBeatTick = patrolTick;
+    armBeat(patrolTick);
   }
   showExploreHud(titel);
+}
+
+/* ------------------------------------------------ the armed world-EF beat ---- */
+// The beat waits for a free-roam walk of WORLDBEAT_WALK_M (on foot, no menu, no mission),
+// and the impulse beat for a roaming animal close by and in view: it names THAT animal.
+let beatTick: number | null = null;
+let beatWalked = 0;
+let beatLast: { x: number; z: number } | null = null;
+let beatRaf = 0;
+
+function armBeat(tick: number): void {
+  beatTick = tick;
+  beatWalked = 0;
+  beatLast = null;
+  if (!beatRaf) beatRaf = requestAnimationFrame(watchBeat);
+}
+
+function disarmBeat(): void {
+  beatTick = null;
+  if (beatRaf) { cancelAnimationFrame(beatRaf); beatRaf = 0; }
+}
+
+/** A roaming ground animal close by and in the picture: its name ("vos"), or null. */
+function animalInView(world: World): string | null {
+  const p = world.pos();
+  if (!p) return null;
+  const cam = world.camera;
+  for (const a of world.ambientState()) {
+    // close enough to SEE: a roe deer across the heath, a squirrel only a few metres off
+    // (about 36 px tall on a 1280×800 screen at the fixed 55° lens: h × 21 m)
+    const reach = Math.min(WORLDBEAT_ANIMAL_M, a.h * 21);
+    if (a.id.startsWith('bird-') || Math.hypot(a.x - p.x, a.z - p.z) > reach) continue;
+    const v = new Vector3(a.x, cam.position.y - 2, a.z).project(cam);
+    // in the picture, and above the low beat card that will name it
+    if (v.z < 1 && Math.abs(v.x) < 0.85 && v.y > -0.3 && v.y < 0.9) return a.id.split('-')[1] ?? null; // animal-vos-fox → vos
+  }
+  return null;
+}
+
+function watchBeat(): void {
+  beatRaf = 0;
+  const world = session.world;
+  if (!world || beatTick === null) return;
+  const onFoot = !world.vehicleState()?.inVehicle && !world.heliState()?.inHeli;
+  const free = onFoot && !held && !menuOpen() && !!session.host.querySelector('.explore-hud');
+  const p = world.pos();
+  if (free && p) {
+    if (beatLast) beatWalked += Math.hypot(p.x - beatLast.x, p.z - beatLast.z);
+    beatLast = p;
+    // decided now, from where he stands: the way to the next mission, the animal in view
+    const beat = pickWorldBeat({ patrolTick: beatTick, heading: coarseHeading(world.headingTo(nextMissionId())) });
+    const animal = beat?.kind === 'blijf-op-pad' ? animalInView(world) : null;
+    if (beat && beatReady(beat, beatWalked, !!animal)) {
+      beatTick = null;
+      showWorldBeat(animal ? withAnimal(beat, animal) : beat, () => showExploreHud(activeExploreTitel()));
+      return;
+    }
+  } else beatLast = null; // riding, a menu, a mission: those metres do not count
+  beatRaf = requestAnimationFrame(watchBeat);
 }
 
 /* --------------------------------------------------- world-EF micro-beat ---- */
@@ -228,14 +293,16 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
       `</button>`,
     )
     .join('');
+  // low on the screen and without a scrim: the animal the impulse beat names is in view
   const el = card(
-    `<div class="worldbeat boot-card-ish">` +
+    `<div class="worldbeat boot-card-ish${beat.kind === 'blijf-op-pad' ? ' wb-low' : ''}">` +
     `<p class="boot-kicker">${kicker}</p>` +
     `<p class="wb-prompt"></p>` +
     `<div class="wb-opts">${opts}</div>` +
     `<p class="wb-feedback" role="status" aria-live="polite" hidden></p>` +
     `<button class="ra-text-btn wb-skip" type="button" data-key="back">Even verder lopen</button>` +
     `</div>`,
+    { scrim: beat.kind !== 'blijf-op-pad' },
   );
   const ra = mountReadAloud({
     textEl: el.querySelector('.wb-prompt')!,
@@ -251,8 +318,9 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
       if (optionCorrect(beat, i)) {
         btn.classList.add('wb-goed');
         if (store.get().settings.geluid) Sound.found();
-        if (fb) { fb.hidden = false; fb.textContent = 'Goed onthouden, ranger!'; fb.className = 'wb-feedback wb-fb-goed'; }
-        if (store.get().settings.voorlezen) narrator.speak('Goed onthouden, ranger!');
+        const goed = beat.kind === 'blijf-op-pad' ? 'Knap, je blijft rustig.' : 'Goed onthouden, ranger!';
+        if (fb) { fb.hidden = false; fb.textContent = goed; fb.className = 'wb-feedback wb-fb-goed'; }
+        if (store.get().settings.voorlezen) narrator.speak(goed);
         el.querySelectorAll<HTMLButtonElement>('.wb-opt').forEach((b) => (b.disabled = true));
         window.setTimeout(finish, 900);
       } else {
@@ -286,11 +354,18 @@ export async function playRoepAtSitSpot(): Promise<void> {
   const host = document.createElement('div');
   host.className = 'mission-step';
   session.host.appendChild(host);
+  // the bench is never a one-way door (breaker B5): the mission's Pauze chip, with a
+  // calm "Stop met luisteren" that aborts the game's scope, and Esc opens it
+  beginActivityScope();
+  let stop: () => void = () => {};
+  const stopped = new Promise<'STOP'>((res) => { stop = () => res('STOP'); });
+  mountMissionPause(() => { narrator.stop(); abortActivityScope(); unmountMissionPause(); stop(); }, 'Stop met luisteren');
   try {
-    if (flat) await playRoep(host);
-    else await playRoep3d(world.ctx(host));
+    await Promise.race([flat ? playRoep(host) : playRoep3d(world.ctx(host)), stopped]);
   } finally {
+    unmountMissionPause();
     clearActivityWin();
+    clearPlayHint();
     host.remove();
     releaseWorld();
     setMissionView(null);

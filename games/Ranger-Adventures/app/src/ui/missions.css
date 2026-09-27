@@ -689,6 +689,16 @@
 
 /* ---- world-EF micro-beat (light open-world seasoning between missions) ---- */
 .worldbeat { text-align: center; }
+/* the Onderweg beat sits low, with no scrim, so the animal it is about stays in view
+   above it (child B14); two options side by side keep it short */
+.worldbeat.wb-low {
+  top: auto;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  gap: 8px;
+  padding: 18px 24px;
+}
+.worldbeat.wb-low .wb-opts { flex-direction: row; flex-wrap: wrap; justify-content: center; }
 .wb-prompt {
   margin: 6px 0 14px;
   font: 400 var(--read-size)/var(--read-leading) var(--font-read);

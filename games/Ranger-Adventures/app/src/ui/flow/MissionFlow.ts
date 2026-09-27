@@ -205,6 +205,9 @@ async function runMission(mission: Mission): Promise<void> {
   }
   unmountMissionPause();
   missionStop = null;
+  // no mini-game view is live any more: the reunion, reward, clue and sporenboek are
+  // cards over the (still held) world, so the dev hook no longer says '3d' (breaker note)
+  setMissionView(null);
   // The case-board data gate keys off voltooid, so snapshot the found-set BEFORE
   // marking this mission done: the clue beat fires only when this completion makes
   // the hook NEWLY appear on the board.
@@ -294,10 +297,17 @@ export function showSeasonFinale(): void {
 }
 
 /* ------------------------------------------------ in-mission pause (F-26) ---- */
+/** What the pause card's stop does, and what it says (the mission's, or the bench's). */
+let pauseStop: () => void = () => stopMission();
+let pauseStopLabel = 'Stop de missie';
+
 /** A persistent Pauze chip for the whole in-world mission. NOT a `.ra-overlay`, so
- *  the engine's own prompt swaps never remove it; `unmountMissionPause` clears it. */
-function mountMissionPause(): void {
+ *  the engine's own prompt swaps never remove it; `unmountMissionPause` clears it.
+ *  The bird bench mounts the same chip with its own stop (breaker B5). */
+export function mountMissionPause(stop: () => void = stopMission, stopLabel = 'Stop de missie'): void {
   unmountMissionPause();
+  pauseStop = stop;
+  pauseStopLabel = stopLabel;
   const el = document.createElement('button');
   el.className = 'ra-pill mission-pause';
   el.type = 'button';
@@ -328,13 +338,13 @@ function showMissionPause(): void {
     `<h1 class="boot-title">Wat wil je doen?</h1>` +
     `<div class="lodge-links">` +
     `<button class="ra-chip mp-stop" type="button"><span class="ra-chip-ic" aria-hidden="true">🚩</span>` +
-    `<span class="ra-chip-tx">Stop de missie</span></button>` +
+    `<span class="ra-chip-tx">${esc(pauseStopLabel)}</span></button>` +
     `</div>` +
     `<button class="btn-start mp-resume" type="button" data-key="back">Ga verder</button>` +
     `</div>`;
   session.host.appendChild(el);
   el.querySelector('.mp-resume')?.addEventListener('click', () => el.remove());
-  el.querySelector('.mp-stop')?.addEventListener('click', stopMission);
+  el.querySelector('.mp-stop')?.addEventListener('click', () => pauseStop());
 }
 
 /** "Stop de missie": abort the running step (its pick listener and frame loop
