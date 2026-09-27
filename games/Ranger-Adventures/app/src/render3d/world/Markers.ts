@@ -17,7 +17,7 @@ import { applyCoat, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
 import { gaitFor, motionAt, REST, type MotionRecipe } from '../ProceduralMotion';
 import { wayfind, bearing, distanceTo, SteadyCue, type WayCue } from '../Wayfinding';
-import { RouteGuide, RouteMap } from '../Paths';
+import { RouteGuide, RouteMap, arrivalSpot, openHeading } from '../Paths';
 import { VEN_CENTER } from '../Biomes';
 import { ROEP_COPY } from '../../engines/roep';
 import { boxObstacle, obstacleGap, type MoveLimits, type Obstacle } from '../CharacterController';
@@ -101,6 +101,8 @@ export class Markers {
   // the steady arrow (parent B1, child B10): one route followed with memory, words that
   // never flicker, and the pose they were last worked out for (to re-send them at once)
   private guide: RouteGuide | null = null;
+  /** the solids a route walks round (built once, on first use: by then every building stands) */
+  private routes: RouteMap | null = null;
   private readonly steady = new SteadyCue();
   private lastPose: { x: number; z: number; facing: number } | null = null;
   private readonly onApproach: (missionId: string | null) => void;
@@ -419,10 +421,12 @@ export class Markers {
    *  landmarks, every big solid box) and the ven's water, where he stops at the shore.
    *  Built once, on the first cue: by then every building stands. */
   private routeMap(): RouteMap {
+    if (this.routes) return this.routes;
     const solids: Obstacle[] = this.obstacles.filter((o) => !!o.box && o.r >= 2);
     solids.push({ x: VEN_CENTER.x, z: VEN_CENTER.z, r: 18 }); // the submerged ven (World.limits.blocked)
     const lim = this.limits;
-    return new RouteMap(solids, (x, z) => !lim || (Math.hypot(x, z) < lim.bound - 1 && !lim.blocked?.(x, z)));
+    this.routes = new RouteMap(solids, (x, z) => !lim || (Math.hypot(x, z) < lim.bound - 1 && !lim.blocked?.(x, z)));
+    return this.routes;
   }
 
   /** The live `richting` phrase (relative to facing) toward a mission marker, for
@@ -507,14 +511,25 @@ export class Markers {
 
   /**
    * Where the ranger stands when a mission is brought to him (World.bringRangerTo: one
-   * picked on the missiebord, or "Volgende"): 1.8 m out from its marker on the side he
-   * comes from, turned to face it — as if he had walked up to it — on dry, open ground
-   * (searched round the ring). Null for an unknown marker.
+   * picked on the missiebord, or "Volgende"): 1.8 m out from its marker where the arrow
+   * would have brought him walking from `from` (Paths.arrivalSpot: along the trail, round
+   * the ven), on dry, open ground (searched round the ring), turned toward the marker —
+   * and, where the ground right past it is no place for a game (the ven's water), turned
+   * along it (up to 50°) until the ground ahead is open (`clear`: the World's own test
+   * for a play patch). The stage lays the first game straight ahead of the lens, so it is
+   * framed with no turn, by the water. Facing straight into the ven, the stage swung the
+   * lens round ~200° and the frog's game played on dry heath (parent B6). Null for an
+   * unknown marker.
    */
-  approachSpot(missionId: string, from: { x: number; z: number }): { x: number; z: number; yaw: number } | null {
+  approachSpot(
+    missionId: string,
+    from: { x: number; z: number },
+    clear: (x: number, z: number) => boolean = (x, z) => this.standable(x, z),
+  ): { x: number; z: number; yaw: number } | null {
     const m = this.list.find((k) => k.missionId === missionId);
     if (!m) return null;
-    const base = Math.atan2(from.x - m.pos.x, from.z - m.pos.z); // from the marker toward him
+    const came = arrivalSpot(from.x, from.z, m.pos.x, m.pos.z, this.routeMap());
+    const base = Math.atan2(came.x - m.pos.x, came.z - m.pos.z); // from the marker toward where he comes in
     const at = (a: number, r: number) => {
       const x = m.pos.x + Math.sin(a) * r, z = m.pos.z + Math.cos(a) * r;
       return { x, z, yaw: Math.atan2(m.pos.x - x, m.pos.z - z) };
@@ -522,7 +537,7 @@ export class Markers {
     for (const r of [1.8, 2.1, 1.5]) {
       for (let k = 0; k < 16; k++) {
         const s = at(base + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 8), r);
-        if (this.standable(s.x, s.z)) return s;
+        if (this.standable(s.x, s.z)) return { ...s, yaw: openHeading(s.x, s.z, s.yaw, clear) };
       }
     }
     return at(base, 1.8);

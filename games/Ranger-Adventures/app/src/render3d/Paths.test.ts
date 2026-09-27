@@ -14,6 +14,9 @@
  *  - STEADY: a walker who simply heads where the arrow points reaches every mission from
  *    every start, and the arrow never swings back and forth (parent B1: it pointed back
  *    at a node the moment he left its 7 m ring, and could loop for ever).
+ *  - BROUGHT: a mission picked on the missiebord stands him where the arrow's walk comes
+ *    in to its marker, and by the ven turned along the shore, so its game is laid on dry
+ *    ground (parent B6: facing into the water, the frog's game swung round to the heath).
  */
 
 import assert from 'node:assert/strict';
@@ -21,6 +24,7 @@ import test from 'node:test';
 import {
   PATH_NODES, PATH_SEGMENTS, LANE_HALF, DIRECT_R,
   distanceToNetwork, onPath, nearestNodeIndex, shortestPath, planRoute, RouteGuide, RouteMap,
+  arrivalSpot, openHeading,
 } from './Paths.ts';
 import { boxObstacle, obstacleGap, segmentEntry, type Obstacle } from './CharacterController.ts';
 
@@ -176,4 +180,42 @@ test('a node he cannot stand on never holds the arrow: past the ecoduct node he 
   // the parent's B2 walk: from the clearing west toward the ecoduct, goal beyond the BOA post
   const run = follow(-50, 0, -35, -19.37);
   assert.ok(run.reached);
+});
+
+/** The frog's marker by the ven, and the missiebord by the cabin (as r.board() reads them). */
+const VEN_MARKER = { x: 24.5, z: -19 };
+const BOARD = { x: 2.2, z: -5 };
+
+test('a mission brought to him puts him where the arrow\'s walk comes in: 1.8 m out, on open ground', () => {
+  for (const [sx, sz] of [[BOARD.x, BOARD.z], [0, 0], [-44, -26], [30, -32]]) {
+    for (const [id, gx, gz] of MARKERS) {
+      const a = arrivalSpot(sx, sz, gx, gz, MAP);
+      assert.ok(Math.abs(Math.hypot(a.x - gx, a.z - gz) - 1.8) < 0.05, `from (${sx}, ${sz}) he never came in to ${id}`);
+      for (const o of SOLIDS) assert.ok(obstacleGap(o, a.x, a.z) > 0, `brought to ${id} from (${sx}, ${sz}) he stands in a solid`);
+    }
+  }
+  // from the clearing the frog's marker is reached along the trail past the bird hide
+  const a = arrivalSpot(0, 0, VEN_MARKER.x, VEN_MARKER.z, MAP);
+  assert.ok(a.z > VEN_MARKER.z, 'he comes in from the bird hide\'s side');
+});
+
+/** How much of the strip where a game is laid (2.5-6.5 m ahead, 2.4 m either side) is wet. */
+function wetAhead(x: number, z: number, h: number): number {
+  const fx = Math.sin(h), fz = Math.cos(h);
+  let n = 0;
+  for (let v = 2.5; v <= 6.51; v += 1) for (let u = -2.4; u <= 2.41; u += 1.2) if (obstacleGap(VEN, x + fx * v + fz * u, z + fz * v - fx * u) <= 0) n++;
+  return n;
+}
+
+test('brought to the frog facing into the ven, he turns along the shore so its game is laid on dry ground ahead', () => {
+  const dry = (x: number, z: number): boolean => obstacleGap(VEN, x, z) > 0;
+  const at = arrivalSpot(BOARD.x, BOARD.z, VEN_MARKER.x, VEN_MARKER.z, MAP); // the walk from the missiebord
+  const toMarker = Math.atan2(VEN_MARKER.x - at.x, VEN_MARKER.z - at.z);
+  assert.ok(wetAhead(at.x, at.z, toMarker) > 0, 'facing the marker from here, the strip ahead is wet (the case this is for)');
+  const h = openHeading(at.x, at.z, toMarker, dry);
+  const turn = Math.abs(Math.atan2(Math.sin(h - toMarker), Math.cos(h - toMarker))) * 180 / Math.PI;
+  assert.ok(turn > 1 && turn <= 50.01, `he turned ${turn.toFixed(0)}°`);
+  assert.ok(wetAhead(at.x, at.z, h) < wetAhead(at.x, at.z, toMarker), 'the ground ahead is drier than straight at the marker');
+  // on open ground he simply faces the marker
+  assert.equal(openHeading(0, 0, 1.0, () => true), 1.0);
 });

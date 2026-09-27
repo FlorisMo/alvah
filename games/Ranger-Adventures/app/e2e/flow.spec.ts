@@ -229,7 +229,7 @@ test('Stop de missie keeps the marker; the replay is won, Enter walks on, the ch
   expect(await markerShown(page, 'frisling')).toBe(true);
 });
 
-test('a mission picked on the missiebord is played at its own marker, not by the board @flow', async ({ page }) => {
+test('a mission picked on the missiebord is played at its own marker, by the water, and Enter starts it at once @flow', async ({ page }) => {
   test.setTimeout(3 * 60_000);
   await seed(page, ['frisling', 'ree-niet-aanraken', 'wildcamera']); // "Nu doen": the frog by the ven
   await boot(page);
@@ -239,10 +239,27 @@ test('a mission picked on the missiebord is played at its own marker, not by the
   await expect(page.locator('.mission-card.mc-next')).toBeVisible();
   await page.keyboard.press('Enter'); // the "Nu doen" card
   await expect(page.locator('.briefing .boot-title')).toHaveText('De kikker in het ven', { timeout: 10_000 });
-  const ven = await markerOf(page, 'ven');
-  expect(dist(await pos(page), ven), 'the ven mission starts away from the ven').toBeLessThan(2.4);
-  expect((await snap(page)).near).toBe('ven');
-  await shot(page, 'briefing-at-the-ven');
+  // the calm cut's veil is still lifting now: it must not swallow the next Enter
+  const at = await snap(page);
+  await page.keyboard.press('Enter'); // Ga op pad, at once
+  expect(at.near).toBe('ven');
+  expect(dist(at.p!, await markerOf(page, 'ven')), 'the ven mission starts away from the ven').toBeLessThan(2.4);
+  await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 5_000, message: 'Enter on "Ga op pad" was swallowed by the lifting veil' }).not.toBeNull();
+  await sleep(page, 3_000); // the stage's one calm reframe
+  // "Zoek de kikker bij het water": framed straight ahead, the ven in view — not swung
+  // ~200° round to the dry heath behind him (parent B6)
+  const yaw0 = at.c!.yaw, yaw1 = (await snap(page)).c!.yaw;
+  const turn = Math.abs(Math.atan2(Math.sin(yaw1 - yaw0), Math.cos(yaw1 - yaw0))) * 180 / Math.PI;
+  expect(turn, 'the lens swung away from where he looked').toBeLessThan(40);
+  const water = await page.evaluate(() => {
+    const w = (window as unknown as { __stage?: { world?: { limits?: { blocked?: (x: number, z: number) => boolean } } } }).__stage?.world;
+    const r = (window as unknown as { __ranger?: { screenOf(x: number, y: number, z: number): { onScreen: boolean } | null } }).__ranger;
+    let on = 0;
+    for (let x = 28; x <= 64; x += 2) for (let z = -37; z <= -1; z += 2) if (w?.limits?.blocked?.(x, z) && r?.screenOf(x, -1.4, z)?.onScreen) on++;
+    return on;
+  });
+  expect(water, 'the ven is not in the picture of "Zoek de kikker bij het water"').toBeGreaterThan(10);
+  await shot(page, 'frog-game-by-the-water');
 });
 
 test('the raaf hut and Instellingen keep their way back on screen, and Esc leaves them @flow', async ({ page }) => {

@@ -13,6 +13,9 @@
  *     the ranger to the goal over the sand paths (when they are worth the walk), and
  *     the steady point on it the calm direction cue aims at. Distance/arrival stay
  *     measured to the true goal (Markers does that); this only bends the ARROW.
+ *   • `arrivalSpot` / `openHeading` — where a mission brought to the ranger (picked on
+ *     the missiebord, or "Volgende") stands him: where the arrow's walk comes in to its
+ *     marker, facing ground its game can be laid on (not the ven's water).
  *
  * Deterministic + render-agnostic (no THREE, no Math.random / Date.now) so it
  * carries a seeded unit test like every other render3d construct (§9e / §3.1).
@@ -445,4 +448,57 @@ export class RouteGuide {
     }
     return { ...pts[pts.length - 1] };
   }
+}
+
+/**
+ * Where a walker who simply heads where the arrow points comes in to the goal: the spot
+ * `stop` m from it that his walk from P reaches first (a RouteGuide walk in half-metre
+ * steps, like Paths.test's walker). A mission brought to the ranger — picked on the
+ * missiebord, or "Volgende" at a finished marker — puts him on THIS side of its marker,
+ * so its game is staged the way it is when he walks up himself: by the ven the frog's
+ * water lies beside him and ahead, never behind him (parent B6; the old straight line
+ * from the board faced him into the water, and the stage turned the lens round to dry
+ * heath). Pure and deterministic.
+ */
+export function arrivalSpot(px: number, pz: number, gx: number, gz: number, map: RouteMap = OPEN, stop = 1.8): P {
+  const guide = new RouteGuide(map);
+  let x = px, z = pz;
+  for (let i = 0; i < 4000; i++) {
+    const left = Math.hypot(gx - x, gz - z) - stop;
+    if (left <= 1e-6) break;
+    const aim = guide.aim(x, z, gx, gz);
+    const d = Math.hypot(aim.x - x, aim.z - z);
+    if (d < 1e-6) break;
+    const step = Math.min(0.5, left);
+    x += ((aim.x - x) / d) * step;
+    z += ((aim.z - z) / d) * step;
+  }
+  return { x, z };
+}
+
+/** Turns tried (deg off facing the marker), nearest first, when the ground ahead of a
+ *  ranger brought to a marker is no place for a game (openHeading). */
+const OPEN_TURNS = [0, 20, -20, 35, -35, 50, -50];
+
+/**
+ * The heading nearest `yaw` (up to 50° off it) whose ground ahead is open: the strip
+ * 2.5-6.5 m in front and 2.4 m either side, about where a stage (render3d/play/stage.ts)
+ * lays a mini-game's patch straight ahead of the lens. The first fully open one wins;
+ * else the one with the fewest blocked samples. A ranger brought to the frog's marker
+ * facing into the ven turns along the shore, so its game is laid on the dry bank with
+ * the water beside it, and the lens need not swing round (parent B6).
+ */
+export function openHeading(x: number, z: number, yaw: number, clear: (x: number, z: number) => boolean): number {
+  let best = yaw, fewest = Infinity;
+  for (const deg of OPEN_TURNS) {
+    const h = yaw + (deg * Math.PI) / 180;
+    const fx = Math.sin(h), fz = Math.cos(h);
+    let blocked = 0;
+    for (let v = 2.5; v <= 6.51; v += 1) {
+      for (let u = -2.4; u <= 2.41; u += 1.2) if (!clear(x + fx * v + fz * u, z + fz * v - fx * u)) blocked++;
+    }
+    if (blocked < fewest) { fewest = blocked; best = h; }
+    if (blocked === 0) break;
+  }
+  return best;
 }

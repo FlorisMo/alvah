@@ -583,7 +583,8 @@ export class World {
    *  plays where it belongs (parent B6). False on foot-less states or an unknown id. */
   bringRangerTo(missionId: string): boolean {
     if (this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli) return false;
-    const spot = this.pois.approachSpot(missionId, this.ranger.position);
+    // facing ground where its game can be laid (the patch test the stage itself uses)
+    const spot = this.pois.approachSpot(missionId, this.ranger.position, (x, z) => this.playClear(x, z, 0.2, missionId));
     if (!spot) return false;
     this.ranger.position.set(spot.x, this.terrain.y(spot.x, spot.z), spot.z);
     this.ranger.rotation.y = spot.yaw;
