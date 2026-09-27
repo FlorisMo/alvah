@@ -58,6 +58,7 @@
   transition: opacity 0.38s ease-in-out;
 }
 .ra-fade.on { opacity: 1; }
+.ra-fade:not(.on) { pointer-events: none; } /* lifting: the card under it already takes clicks and keys */
 
 /* A card whose way on never falls below the fold (breaker B3, the 800×600 briefing):
    the card itself does not scroll, its `.card-body` does, and the `.card-foot` with

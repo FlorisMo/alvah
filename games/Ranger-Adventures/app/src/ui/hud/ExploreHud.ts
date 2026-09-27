@@ -47,8 +47,6 @@ function hintSnapshot(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen:
 export function disposeExploreHud(): void {
   if (onboardRaf) { cancelAnimationFrame(onboardRaf); onboardRaf = 0; }
   if (tipTimer) { clearTimeout(tipTimer); tipTimer = 0; }
-  if (promptRaf) { cancelAnimationFrame(promptRaf); promptRaf = 0; }
-  footWinner = null;
   hintState.active = null; hintState.helpChip = false;
   if (joystick) { joystick.dispose(); joystick = null; }
 }
@@ -111,56 +109,22 @@ export function showExploreHud(activeTitel: string | null): void {
 /* ------------------------------------------------ one prompt at a time ---- */
 /** The proximity prompts share ONE place on screen (bottom centre), so only one shows:
  *  never two buttons on top of each other, and Space / Enter always does what the one
- *  visible button says. On foot the NEAREST place wins, measured against its own reach
- *  (a jeep parked by the missiebord no longer hides "Bekijk het missiebord" while he
- *  stands in the board's ring: breaker B4, parent B8), with a little hysteresis so two
- *  places side by side never flicker. In a vehicle only getting out (or landing). */
-const SLOTS = ['.explore-prompt', '.explore-vehicle-prompt', '.explore-heli-prompt', '.explore-hub-prompt', '.explore-sit-prompt'];
+ *  visible button says. On foot the places with a ring on the ground come first — a
+ *  mission marker, the missiebord, the bird bench (their rings never overlap) — and a
+ *  parked jeep or helicopter only when he stands in none of them: standing in the
+ *  missiebord's ring he gets "Bekijk het missiebord" even with the jeep parked beside it
+ *  (breaker B4, parent B8). In a vehicle, only getting out (or landing). */
+const FOOT_ORDER = ['.explore-prompt', '.explore-hub-prompt', '.explore-sit-prompt', '.explore-vehicle-prompt', '.explore-heli-prompt'];
 const RIDING_ORDER = ['.explore-vehicle-prompt', '.explore-heli-prompt'];
-/** How far (m) each place's prompt reaches (world/Markers NEAR_R, world/Vehicles *_NEAR_R). */
-const REACH: Record<string, number> = { '.explore-vehicle-prompt': 3.6, '.explore-heli-prompt': 4.0 };
-/** Another place must be this much nearer (share of its reach) to take the prompt over. */
-const PROMPT_HYST = 0.12;
-let footWinner: string | null = null;
-let promptRaf = 0;
-
-/** Where each on-foot prompt's place stands. */
-function promptPlace(sel: string): { x: number; z: number } | null {
-  const w = session.world;
-  if (!w) return null;
-  switch (sel) {
-    case '.explore-prompt': { const id = w.nearMission(); return w.markerPositions().find((m) => m.missionId === id) ?? null; }
-    case '.explore-vehicle-prompt': return w.vehicleState();
-    case '.explore-heli-prompt': return w.heliState();
-    case '.explore-hub-prompt': return w.boardState();
-    default: return w.sitSpotState();
-  }
-}
 
 function arbitratePrompts(): void {
   const w = session.world;
   const riding = !!(w?.vehicleState()?.inVehicle || w?.heliState()?.inHeli);
-  const filled = SLOTS.filter((sel) => (session.host.querySelector<HTMLElement>(sel)?.childElementCount ?? 0) > 0);
-  let show: string | null = null;
-  if (riding) show = RIDING_ORDER.find((sel) => filled.includes(sel)) ?? null;
-  else if (filled.length === 1) show = filled[0];
-  else if (filled.length > 1) {
-    const p = w?.pos();
-    const score = (sel: string): number => {
-      const at = promptPlace(sel);
-      return at && p ? Math.hypot(at.x - p.x, at.z - p.z) / (REACH[sel] ?? 2.4) : Infinity;
-    };
-    show = filled.reduce((best, sel) => (score(sel) < score(best) ? sel : best));
-    if (footWinner && footWinner !== show && filled.includes(footWinner) && score(footWinner) <= score(show) + PROMPT_HYST) show = footWinner;
-  }
-  footWinner = riding ? null : show;
-  for (const sel of SLOTS) {
+  const order = riding ? RIDING_ORDER : FOOT_ORDER;
+  const show = order.find((sel) => (session.host.querySelector<HTMLElement>(sel)?.childElementCount ?? 0) > 0) ?? null;
+  for (const sel of FOOT_ORDER) {
     const slot = session.host.querySelector<HTMLElement>(sel);
     if (slot) slot.hidden = sel !== show;
-  }
-  // two places in reach at once: keep re-choosing as he moves between them
-  if (!riding && filled.length > 1 && !promptRaf) {
-    promptRaf = requestAnimationFrame(() => { promptRaf = 0; if (session.host.querySelector('.explore-hud')) arbitratePrompts(); });
   }
 }
 
