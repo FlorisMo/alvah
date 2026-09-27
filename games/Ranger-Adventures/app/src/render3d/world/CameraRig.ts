@@ -1,21 +1,22 @@
 /**
  * world/CameraRig.ts — the follow camera (the motion-comfort law lives here).
  *
- * A damped, rate-clamped follow bearing that chases the ranger's facing while he
- * moves (or a fixed bearing when "Camera draait mee" is off / under reduced-motion),
- * the player's drag-orbit and wheel dolly on top, the Missiebord over-the-shoulder
- * reframe, the jeep / helicopter chase offsets, and the rails that keep the ranger
- * visible: the boom pulls in before a solid (spherecast), the eye rides over a dune
- * between lens and ranger, the ranger fades when the boom collapses onto him and the
- * tree canopy fades when a crown crosses the sightline. Fixed FOV, roll 0, no shake;
- * every reframe is a cut under reduced-motion.
+ * A damped, rate-clamped follow bearing that the ranger's steering tells what to do
+ * (steer(); a fixed bearing when "Camera draait mee" is off / under reduced-motion),
+ * the player's drag-orbit and wheel dolly on top, the jeep / helicopter chase offsets,
+ * and the rails that keep the ranger visible: the lens slides sideways for a clear line
+ * to him (never turning the view: its direction belongs to the player), the boom pulls
+ * in before a solid (spherecast) and rides up over his head when there is no room
+ * behind him, the eye rides over a dune between lens and ranger, and the tree canopy
+ * fades when a crown crosses the sightline. Fixed FOV, roll 0, no shake; every
+ * reframe is a cut under reduced-motion.
  */
 
 import * as THREE from 'three';
 import { dampFactor } from '../play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW, FOLLOW_TAU, FOLLOW_MAX_RATE } from '../FollowCam';
 import { livePolicy } from '../MotionMode';
-import { segmentEntry, segmentCrosses, obstacleGap, type MoveLimits, type Obstacle } from '../CharacterController';
+import { segmentEntry, segmentCrosses, obstacleGap, obstacleSpan, type MoveLimits, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { TREE_BASE_H, type Dressing } from './Dressing';
 import type { Player, ViewFrame, CamSteer } from './Player';
@@ -111,34 +112,50 @@ export class CameraRig {
   private readonly CROWN_INSIDE_MARGIN = 0.4; // grow the crown for the lens-inside test so the fade LEADS the bury (no pop as the boom collapses into a crown)
   private readonly CANOPY_SEE_THROUGH = 0.5; // canopy ≤ this ⇒ ranger reads through ⇒ viewClear true
   private readonly CANOPY_RELEASE_TAU = 0.7; // gentle ease back to solid once the crown clears (calm, no pop)
-  // Wave 2 clear view: every frame the walk boom is solved for a few bearings (straight
-  // behind and gentle side offsets) and the one with the clearest line to the ranger wins:
-  // no lens inside foliage or a building, no creature, prop or unfadeable crown between.
-  // The chosen side offset eases in slowly (never a swing), and it is off under reduced
-  // motion (there only the boom pulls in, as a cut).
-  private readonly AVOID_OFFSETS = [0, 0.26, -0.26, 0.52, -0.52, 0.79, -0.79]; // straight behind, ±15°, ±30°, ±45°
-  private readonly TURN_BUDGET = (110 * Math.PI) / 180; // rad/s: follow + dodge together, well under a restless 150°/s
-  private readonly AVOID_HOLD = 0.8;   // s a choice is kept before the search may change its mind (no dithering)
-  private avoidHeld = 0;
-  private readonly AVOID_AFTER_TURN = 1.2; // s after the player's own turn before the dodge may move
-  private sinceTurn = 99;
+  // Wave 2 clear view, by SLIDING the lens sideways (never by turning it): every frame
+  // the walk boom is solved for a few side slides (straight behind, and the lens moved
+  // left or right with the view still looking the same way) and the one with the
+  // clearest line to the ranger wins: no lens inside foliage or a building, no creature,
+  // prop or unfadeable crown between, no boom so short he fades. The view's direction
+  // belongs to the player alone (his turn keys, his drag, his walk), so "Up" is always
+  // straight into the screen, and nothing turns the view by itself. The slide changes
+  // only while he moves or turns (the view is moving anyway) or when the line to him is
+  // blocked right now; it eases in slowly, and it is off under reduced motion and with
+  // the follow camera off (there only the boom pulls in, as a cut).
+  private readonly SIDE_STEPS = [0, 1 / 3, -1 / 3, 2 / 3, -2 / 3, 1, -1]; // of the widest slide
+  private readonly SIDE_NDC = 0.45;  // the widest slide puts him this far off the screen's centre (of half its width)
+  private readonly SIDE_COST = 0.6;  // what the widest slide costs in the search (straight behind is nicer)
+  private readonly SIDE_HOLD = 0.8;  // s a choice is kept before the search may change its mind (no dithering)
+  private sideHeld = 0;
+  private readonly SIDE_TAU = 0.5;
+  private readonly SIDE_RATE = 0.25;        // boom lengths per second (≈1.2 m/s on the 4.6 m boom)
+  private readonly SIDE_URGENT_RATE = 0.45; // the line is blocked now: a little quicker
+  private readonly BLOCKED = 2;             // a search cost this high = the line to him is blocked now
+  private readonly LOOKAHEAD = 0.5;         // s: search where he is going (and where his turn takes the view) too
   private wasWalk = true;
   private readonly HUG_ANGLE = (60 * Math.PI) / 180;
-  private readonly AVOID_TAU = 0.6;
-  private readonly AVOID_MAX_RATE = (30 * Math.PI) / 180;
-  private readonly AVOID_URGENT_RATE = (45 * Math.PI) / 180; // the line is blocked now: a little quicker
-  private readonly AVOID_LOOKAHEAD = 0.5;                     // s: search where he is going too
+  // A boom pulled in by a solid keeps its eye up (up to PULL_SLOPE) so the lens looks
+  // down on him from above-behind instead of sinking to his head. With no room behind
+  // him at all (his back to a wall) the lens rides up over his head, never into the
+  // wall: it keeps HEAD_ROOM from his body, so he stays solid (never a see-through
+  // giant: the fade works on the real lens→body distance), and the view tips down no
+  // steeper than PITCH_MAX, aiming a little ahead of him so the ground he walks to shows.
+  private readonly PULL_SLOPE = Math.tan((50 * Math.PI) / 180);
+  private readonly PITCH_MAX = (68 * Math.PI) / 180;
+  private readonly MIN_BOOM = 0.05;
+  private get headRoom(): number { return this.player.avatarRadius + 1.2; }
   private readonly vel = new THREE.Vector3();
   private readonly lastRp = new THREE.Vector3();
   private readonly ahead = new THREE.Vector3();
-  private avoidYaw = 0;          // the eased side offset on the walk bearing
-  private avoidTarget = 0;       // the offset the last search chose
+  private sideNow = 0;           // the eased side slide, in boom lengths (+ = to the screen's right)
+  private sideStep = 0;          // the SIDE_STEPS entry the last search chose
   private readonly crowns: Crown[] = [];
   private crownKey = '';
   private readonly nearCrowns: Crown[] = [];      // this frame's crowns / solids / creatures near the ranger
   private readonly nearSolids: Obstacle[] = [];
   private readonly nearCreatures: Creature[] = [];
   private readonly sol = { dist: 0, eye: 0, lift: 0, terrainClear: true, lensInCrown: false, cost: 0 };
+  private readonly _look = new THREE.Vector3();
   // F-16 laptop dolly zoom: the player-set WALK boom distance (m, horizontal). Starts
   // at the F-05 default (camOffset.z = 4.6); wheel/trackpad scroll dollies it in/out,
   // clamped [zoomMinBoom() … CAM_ZOOM_MAX]. CameraRig.place reads it for the walk boom, so
@@ -226,10 +243,11 @@ export class CameraRig {
 
   /** The bearing on screen now (a heading: the lens looks along (sin b, cos b)). On
    *  foot it is the follow bearing + the player's drag look-around; in the jeep /
-   *  helicopter the follow bearing alone. */
+   *  helicopter the follow bearing alone. The clear-view slide moves the lens, never
+   *  this bearing. */
   bearing(): number {
     const { inVehicle, inHeli } = this.host.mode();
-    return inVehicle || inHeli ? this.followYaw : wrapAngle(this.followYaw + this.orbitYaw + this.avoidYaw);
+    return inVehicle || inHeli ? this.followYaw : wrapAngle(this.followYaw + this.orbitYaw);
   }
 
   /** Dev-hook accessor: the camera yaw in the legacy input convention (screen
@@ -243,9 +261,14 @@ export class CameraRig {
   /** What the screen shows, for the ranger's steering (Player.walk). */
   viewFrame(): ViewFrame {
     const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
-    // the steering reads the bearing without the clear-view side offset: that is the
-    // camera's own small dodge, never a new "forward" for the ranger
-    return { bearing: wrapAngle(this.followYaw + this.orbitYaw), screen: this.bearing(), follows: follow && !livePolicy().reduced };
+    return { bearing: wrapAngle(this.followYaw + this.orbitYaw), follows: follow && !livePolicy().reduced };
+  }
+
+  /** The widest clear-view slide (boom lengths) for this screen's shape: it puts him
+   *  SIDE_NDC of the half-width off centre, whatever the aspect. */
+  private sideMax(): number {
+    const halfW = this.camera.aspect * Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
+    return this.SIDE_NDC * halfW;
   }
 
   /**
@@ -333,7 +356,6 @@ export class CameraRig {
     const rp = this.player.group.position;
     const { inVehicle, inHeli } = this.host.mode();
     const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
-    const followBefore = this.followYaw;
     if (follow && !reduced) {
       const walking = !inVehicle && !inHeli;
       this.followYaw = walking
@@ -361,8 +383,8 @@ export class CameraRig {
     // helicopter a higher aerial one (13, 6); walking keeps the F-05 clearance rig
     // (boom 4.6, eye 2.4). Same damping — the pull-back (and climb) eases on board.
     const walk = !inVehicle && !inHeli;
-    // the walk boom's bearing = follow + the player's orbit + the clear-view side offset
-    // (the vehicle/heli cams own their framing, so they ignore both).
+    // the walk boom's bearing = follow + the player's orbit, its lens slid sideways for a
+    // clear view (the vehicle/heli cams own their framing, so they ignore both).
     const off = inHeli ? this.camOffsetHeli : inVehicle ? this.camOffsetVehicle : this.camOffset;
     let dist = off.z;
     let eye = off.y;
@@ -370,56 +392,60 @@ export class CameraRig {
       this.zoomNow = reduced || snap ? this.zoomDist
         : this.zoomNow + (this.zoomDist - this.zoomNow) * dampFactor(dt, this.CAM_ZOOM_TAU);
       this.gatherNear(rp);
-      // search the bearings (not in reduced motion or with the follow off, and not while
-      // the player drags the view)
       const base = wrapAngle(this.followYaw + this.orbitYaw);
-      // where he will be in ~half a second, so the dodge starts before a person or tree
-      // is in the line, not after
+      // where he will be in half a second, and where his turn is taking the view, so the
+      // slide starts before a person, a tree or the board is in the line, not after
       if (dt > 0 && this.placed) this.vel.set(rp.x - this.lastRp.x, 0, rp.z - this.lastRp.z).divideScalar(dt);
       this.lastRp.copy(rp);
-      this.ahead.copy(rp).addScaledVector(this.vel, this.AVOID_LOOKAHEAD);
+      this.ahead.copy(rp).addScaledVector(this.vel, this.LOOKAHEAD);
       this.ahead.y = this.terrain.y(this.ahead.x, this.ahead.z);
-      let urgent = false;
+      const aheadBearing = wrapAngle(base + this.player.turnRate * this.LOOKAHEAD);
       // stepping out of the jeep / helicopter is already a reframe: the walk view starts
-      // on its clearest bearing right away (a solid parked beside the lens is common there)
+      // on its clearest slide right away (a solid parked beside the lens is common there)
       const stepOut = !this.wasWalk;
-      if (stepOut) this.avoidHeld = this.AVOID_HOLD;
-      this.avoidHeld += dt;
-      this.sinceTurn = this.player.turning ? 0 : this.sinceTurn + dt;
-      if (reduced || !follow || this.player.dragging) this.avoidTarget = 0; // a fixed camera stays fixed
-      else if (!stepOut && (this.player.turning || this.sinceTurn < this.AVOID_AFTER_TURN)) {
-        // the player is turning the view himself, or just did: the dodge holds still (it
-        // never adds a turn of its own on top, nor starts one the moment he lets go)
-      } else {
-        // score each side offset now and where he is heading; keep the current choice
-        // unless it is blocked or another is clearly better and it has been held a while
-        let best = Infinity, pick = 0, cur = Infinity;
-        for (const o of this.AVOID_OFFSETS) {
-          const now = this.solveWalk(wrapAngle(base + o), rp).cost;
-          const cost = now + this.solveWalk(wrapAngle(base + o), this.ahead).cost + Math.abs(o) * 0.8;
-          if (o === this.avoidTarget) { cur = cost; urgent = now >= 4; }
-          if (cost < best - 1e-9) { best = cost; pick = o; }
+      const moving = this.vel.x * this.vel.x + this.vel.z * this.vel.z > 0.01 || this.player.turning;
+      this.sideHeld += dt;
+      const kMax = this.sideMax();
+      let urgent = false;
+      if (reduced || !follow || this.player.dragging) this.sideStep = 0; // a fixed camera stays fixed
+      else {
+        // score each slide now and where he is heading; keep the current choice unless
+        // the line is blocked now, or (while he moves) another is clearly better and it
+        // has been held a while. Standing still, nothing changes it but a blocked line.
+        let best = Infinity, pick = 0, pickNow = 0, cur = Infinity;
+        for (const f of this.SIDE_STEPS) {
+          const now = this.solveWalk(base, f * kMax, rp).cost;
+          const cost = now + this.solveWalk(aheadBearing, f * kMax, this.ahead).cost + Math.abs(f) * this.SIDE_COST;
+          if (f === this.sideStep) { cur = cost; urgent = now >= this.BLOCKED; }
+          if (cost < best - 1e-9) { best = cost; pick = f; pickNow = now; }
         }
-        const change = pick !== this.avoidTarget &&
-          (urgent || (this.avoidHeld >= this.AVOID_HOLD && best < cur - 0.3));
-        if (change) { this.avoidTarget = pick; this.avoidHeld = 0; }
+        // a blocked line moves to a slide that is clear now (never from one blocked
+        // slide to another: that dithers); otherwise only while he moves, after a hold
+        const better = best < cur - 0.3;
+        const change = pick !== this.sideStep && (stepOut ||
+          (urgent && better && pickNow < this.BLOCKED) ||
+          (moving && this.sideHeld >= this.SIDE_HOLD && better));
+        if (change) { this.sideStep = pick; this.sideHeld = 0; }
       }
-      if (reduced || snap || stepOut) this.avoidYaw = this.avoidTarget;
-      else if (dt > 0 && !this.player.turning && this.sinceTurn >= this.AVOID_AFTER_TURN) {
-        const step = (this.avoidTarget - this.avoidYaw) * dampFactor(dt, urgent ? this.AVOID_TAU / 2 : this.AVOID_TAU);
-        // the dodge only gets what the follow leaves of the calm turn budget, so the two
-        // together never turn the view faster than TURN_BUDGET
-        const followStep = Math.abs(wrapAngle(this.followYaw - followBefore));
-        const max = Math.min(urgent ? this.AVOID_URGENT_RATE : this.AVOID_MAX_RATE,
-          Math.max(0, this.TURN_BUDGET - followStep / dt)) * dt;
-        this.avoidYaw += Math.max(-max, Math.min(max, step));
+      const sideTo = this.sideStep * kMax;
+      if (reduced || snap || stepOut) this.sideNow = sideTo;
+      else if (dt > 0) {
+        const step = (sideTo - this.sideNow) * dampFactor(dt, this.SIDE_TAU);
+        const max = (urgent ? this.SIDE_URGENT_RATE : this.SIDE_RATE) * dt;
+        this.sideNow += Math.max(-max, Math.min(max, step));
       }
-      const sol = this.solveWalk(this.bearing(), rp);
+      const sol = this.solveWalk(base, this.sideNow, rp);
       dist = sol.dist;
       eye = sol.eye;
       this.terrainLiftState = sol.lift;
       this.terrainClearState = sol.terrainClear;
-    } else if (inVehicle) {
+    } else {
+      // the jeep / helicopter chase cams own their framing: the slide eases out (quickly,
+      // while their longer boom lets out)
+      this.sideStep = 0;
+      if (dt > 0) this.sideNow *= 1 - dampFactor(dt, 0.3);
+    }
+    if (inVehicle) {
       // F-30: give the jeep boom F-05's clearance too — a tree / hut / prop BEHIND the
       // jeep pulls the lens IN instead of burying it in that solid's unlit interior,
       // the exact "driving is blind" murk the finding names. The jeep's own collision
@@ -449,7 +475,9 @@ export class CameraRig {
     } else {
       this.pivot.lerp(rp, dampFactor(dt, walk ? this.PIVOT_TAU : this.PIVOT_TAU_VEHICLE));
       this.boomNow += (dist - this.boomNow) * dampFactor(dt, dist < this.boomNow ? this.BOOM_IN_TAU : this.BOOM_OUT_TAU);
-      this.eyeNow += (eye - this.eyeNow) * dampFactor(dt, eye > this.eyeNow ? this.EYE_UP_TAU : this.EYE_DOWN_TAU);
+      // the eye rises as fast as the boom comes in when the lens rides up over his head
+      const eyeTau = eye <= this.eyeNow ? this.EYE_DOWN_TAU : dist < this.boomNow ? this.BOOM_IN_TAU : this.EYE_UP_TAU;
+      this.eyeNow += (eye - this.eyeNow) * dampFactor(dt, eyeTau);
       // someone else moved the lens since the last frame (a mini-game's reframe): ease
       // from where it left it instead of cutting (the old whole-position lerp did this)
       if (this.camera.position.distanceToSquared(this.lastSet) > 1e-8) {
@@ -462,18 +490,27 @@ export class CameraRig {
     this.lastSet.copy(this.camDesired);
     this.placed = true;
     this.camera.up.set(0, 1, 0); // roll = 0 always
-    // look at the smoothed pivot the boom hangs off (not his live feet), so the view's
-    // yaw IS the eased bearing: a boom pulling in or his steps can never add a twist
-    this.camera.lookAt(this.pivot.x, this.pivot.y + (walk ? this.camLookH : this.camIdleLookH), this.pivot.z);
+    // look at the smoothed pivot the boom hangs off (not his live feet), moved by the
+    // same side slide as the lens, so the view looks exactly along the eased bearing: a
+    // boom pulling in, a slide or his steps can never add a twist
+    const aimH = walk ? this.camLookH : this.camIdleLookH;
+    this.sideOff(this._look.copy(this.pivot), s, c, 1);
+    if (walk) {
+      // a lens craned up over him (no room behind): aim ahead so the view tips down no
+      // steeper than PITCH_MAX (and its heading stays the bearing)
+      const ahead = (this.eyeNow - aimH) / Math.tan(this.PITCH_MAX) - this.boomNow;
+      if (ahead > 0) { this._look.x += s * ahead; this._look.z += c * ahead; }
+    }
+    this.camera.lookAt(this._look.x, this._look.y + aimH, this._look.z);
     // F-05 fade rail: if the boom still collapses toward the ranger (an occluder
     // right behind him, or a rig that renders larger than its honest measured height)
     // fade the ranger out rather than smear his interior across the lens — the
     // world stays visible. Opacity is a pure function of the REAL lens→ranger
-    // distance, so it is a cut under reduced-motion too (no camera move).
+    // distance (to his body, feet to head: a lens above-behind him that looks down
+    // over his shoulders is far enough), so it is a cut under reduced-motion too.
     if (walk) {
-      const hd = Math.hypot(this.camera.position.x - rp.x, this.camera.position.z - rp.z);
-      const near = this.player.avatarRadius + 0.3, far = this.player.avatarRadius + 1.1;
-      this.player.setAvatarOpacity(Math.max(0, Math.min(1, (hd - near) / (far - near))));
+      const lp = this.camera.position;
+      this.player.setAvatarOpacity(this.opacityAt(Math.hypot(lp.x - rp.x, lp.z - rp.z), lp.y - rp.y));
       // D1.5 occluder fade: when a tree stands between the lens and the ranger on the free
       // walk — OR the lens sits INSIDE a crown — fade the canopy so he is never lost in a
       // full-frame foliage void (`09-walk-4`) or murk (`11-controls-hud`). TWO occlusion
@@ -529,9 +566,28 @@ export class CameraRig {
     this.host.afterPlace();
   }
 
-  /** The lens for this frame's smoothed pivot / boom / eye at bearing (s, c). */
+  /** The fade rail: his opacity for a lens `hd` m from him (horizontally) and `up` m
+   *  above his feet — by the lens's distance to his body (a post from his feet to the
+   *  top of his head), solid beyond his radius + 1.1 m, gone within his radius + 0.3 m. */
+  private opacityAt(hd: number, up: number): number {
+    const dy = up > this.player.avatarTopY ? up - this.player.avatarTopY : up < 0 ? -up : 0;
+    const d = Math.hypot(hd, dy);
+    const near = this.player.avatarRadius + 0.3, far = this.player.avatarRadius + 1.1;
+    return Math.max(0, Math.min(1, (d - near) / (far - near)));
+  }
+
+  /** The lens for this frame's smoothed pivot / boom / eye / side slide at bearing (s, c). */
   private lensAt(out: THREE.Vector3, s: number, c: number): THREE.Vector3 {
-    return out.set(this.pivot.x - s * this.boomNow, this.pivot.y + this.eyeNow, this.pivot.z - c * this.boomNow);
+    out.set(this.pivot.x - s * this.boomNow, this.pivot.y + this.eyeNow, this.pivot.z - c * this.boomNow);
+    return this.sideOff(out, s, c, 1);
+  }
+
+  /** Move `out` by the side slide (× `k`) along the screen's right, (−cos b, sin b). */
+  private sideOff(out: THREE.Vector3, s: number, c: number, k: number): THREE.Vector3 {
+    const m = this.sideNow * this.boomNow * k;
+    out.x -= c * m;
+    out.z += s * m;
+    return out;
   }
 
   /** F-11: the fraction of the boom (origin ox,oz; vector dx,dz) that stays inside the
@@ -584,34 +640,45 @@ export class CameraRig {
   }
 
   /**
-   * Solve the walk boom at bearing `b`: the player's zoom, pulled in before a solid
-   * (buildings, trunks, people: the spherecast) and the rim, then further in while the
-   * lens would sit in foliage; the eye at the settled follow pitch, above its own ground
-   * and lifted until the line to his head clears the terrain. `cost` scores how clear the
-   * line to the ranger is (0 = clear at full length); the search picks the lowest.
+   * Solve the walk boom at bearing `b`, the lens slid `k` boom lengths to the screen's
+   * right: the player's zoom, pulled in before a solid (buildings, trunks, people: the
+   * spherecast along the line to him) and the rim, then further in while the lens would
+   * sit in foliage; the eye at the settled follow pitch (kept up when a solid pulled the
+   * boom in, so the lens looks down on him rather than into his head), above its own
+   * ground and lifted until the line to his head clears the terrain. `cost` scores how
+   * clear the line to the ranger is (0 = clear at full length); the search picks the lowest.
    */
-  private solveWalk(b: number, rp: THREE.Vector3): CameraRig['sol'] {
+  private solveWalk(b: number, k: number, rp: THREE.Vector3): CameraRig['sol'] {
     const out = this.sol;
     const s = Math.sin(b), c = Math.cos(b);
+    // the lens per metre of boom: back along the bearing, and k to the screen's right
+    const ux = -s - c * k, uz = -c + s * k;
     const want = this.zoomNow;
-    const minDist = Math.min(want, this.player.avatarRadius + this.camera.near + 0.2);
-    const frac = Math.min(this.boomClearFraction(rp.x, rp.z, -s * want, -c * want, true),
-      this.rimFraction(rp.x, rp.z, -s * want, -c * want));
+    const minDist = Math.min(want, this.MIN_BOOM); // no room behind him: the lens rides up instead (eyeFor)
+    const frac = Math.min(this.boomClearFraction(rp.x, rp.z, ux * want, uz * want, true),
+      this.rimFraction(rp.x, rp.z, ux * want, uz * want));
     let dist = Math.max(minDist, want * frac);
     const lookH = this.camLookH;
     const eyeAt = (d: number): number => lookH + (this.camOffset.y + this.orbitLift - lookH) * (d / this.camOffset.z);
+    const eyeWant = eyeAt(want);
+    const top = this.player.avatarTopY, room = this.headRoom;
+    const eyeFor = (d: number): number => {
+      const e = d >= want ? eyeWant : Math.min(eyeWant, Math.max(eyeAt(d), lookH + d * this.PULL_SLOPE));
+      // close in, keep HEAD_ROOM from his body: over his head, never through it
+      return d >= room || Math.hypot(d, Math.max(0, e - top)) >= room ? e : top + Math.sqrt(room * room - d * d);
+    };
     // never a lens in the leaves: step the boom in until it is out of every crown
     // (not below 35 % of the zoom: then the canopy fade has to carry it)
-    let lensInCrown = this.lensInCrown(rp.x - s * dist, rp.y + eyeAt(dist), rp.z - c * dist, 0.3, null);
+    let lensInCrown = this.lensInCrown(rp.x + ux * dist, rp.y + eyeFor(dist), rp.z + uz * dist, 0.3, null);
     if (lensInCrown) {
       for (let d = dist - 0.3; d >= Math.max(minDist, want * 0.35); d -= 0.3) {
-        if (!this.lensInCrown(rp.x - s * d, rp.y + eyeAt(d), rp.z - c * d, 0.3, null)) { dist = d; lensInCrown = false; break; }
+        if (!this.lensInCrown(rp.x + ux * d, rp.y + eyeFor(d), rp.z + uz * d, 0.3, null)) { dist = d; lensInCrown = false; break; }
       }
     }
     // D1.5 (audit #4): keep the WHOLE cam→ranger SIGHTLINE above the RENDERED terrain, not
     // just the lens above the ground under itself (a clearance lift only, deterministic).
-    let eye = eyeAt(dist);
-    const lx = rp.x - s * dist, lz = rp.z - c * dist;
+    let eye = eyeFor(dist);
+    const lx = rp.x + ux * dist, lz = rp.z + uz * dist;
     const gLens = this.terrain.y(lx, lz);
     if (rp.y + eye < gLens + this.CAM_GROUND_CLR) eye = gLens + this.CAM_GROUND_CLR - rp.y;
     const headY = rp.y + this.player.avatarTopY;
@@ -625,6 +692,7 @@ export class CameraRig {
     // how clear is the line to him from there?
     const ly = rp.y + eye, chestY = rp.y + this.player.avatarTopY * 0.35;
     let cost = (want - dist) / want;                                   // prefer the full boom
+    cost += 3 * (1 - this.opacityAt(dist * Math.hypot(1, k), eye));    // …and never so short he fades
     if (lensInCrown) cost += 3;
     if (!out.terrainClear) cost += 2;
     if (this.solidBetween(lx, lz, rp.x, rp.z)) cost += 4;              // a building / prop / person in the line
@@ -682,13 +750,14 @@ export class CameraRig {
   }
 
   /** A building, prop or person (not a tree trunk) within arm's reach of the lens, or
-   *  so close and big that it fills a third of the view (a parked jeep beside it). */
+   *  so close and big that it fills a third of the view (a parked jeep beside it). A
+   *  building is measured by its real walls, never by the circle round it (that circle
+   *  read the cabin as "hugging" the lens from 6 m away). */
   private solidHugsLens(lx: number, lz: number): boolean {
     for (const o of this.nearSolids) {
       if (o.tree) continue;
       if (obstacleGap(o, lx, lz) < 0.8) return true;
-      const d = Math.hypot(o.x - lx, o.z - lz);
-      if (d > 0 && 2 * Math.asin(Math.min(1, o.r / d)) > this.HUG_ANGLE) return true;
+      if (obstacleSpan(o, lx, lz) > this.HUG_ANGLE) return true;
     }
     return false;
   }
@@ -724,7 +793,9 @@ export class CameraRig {
     if (dx * dx + dz * dz < 1e-6) return 1;
     let best = 1;
     for (const o of nearOnly ? this.nearSolids : this.obstacles) {
-      const t = segmentEntry(o, ox, oz, dx, dz, this.CAM_PROBE_R); // circles and building rectangles alike
+      // circles and building rectangles alike; a building by its real walls + the probe
+      // (its pad is the ranger's elbow room, not wall: a boom that grazes a corner stays out)
+      const t = segmentEntry(o, ox, oz, dx, dz, o.box ? this.CAM_PROBE_R - o.box.pad : this.CAM_PROBE_R);
       if (t < best) best = t;
     }
     return best;

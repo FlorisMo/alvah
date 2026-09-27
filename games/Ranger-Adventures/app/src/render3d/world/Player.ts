@@ -60,12 +60,11 @@ type DriveMode = 'keys' | 'stick' | 'tap';
  *  the lens looks along (sin b, cos b), so "the ranger faces into the screen" is
  *  heading == bearing. */
 export interface ViewFrame {
-  /** The camera's base bearing: follow + the player's drag look-around (what the
-   *  follow bearing becomes after a fold). Tank keys align the ranger to it. */
+  /** The bearing on screen: follow + the player's drag look-around (what the follow
+   *  bearing becomes after a fold). Tank keys align the ranger to it; the stick and
+   *  the screen-relative keys are relative to it. (The camera's clear-view slide moves
+   *  the lens sideways, never this bearing.) */
   bearing: number;
-  /** The bearing on screen right now (the base + the camera's small clear-view
-   *  dodge): what the stick and the screen-relative keys are relative to. */
-  screen: number;
   /** The camera follows him (setting on, no reduced motion); else it is fixed. */
   follows: boolean;
 }
@@ -274,7 +273,7 @@ export class Player {
       // screen-relative: the stick (and, with the follow camera off, the keys) point
       // where to go on the screen as it was when the walk started (a latched frame, so
       // the camera easing behind him never bends the walk: no feedback loop).
-      if (starting) this.frame = view.screen;
+      if (starting) this.frame = view.bearing;
       const v = mode === 'keys' ? screenVector(keys!, null) : stick!;
       const m = Math.min(1, Math.hypot(v.x, v.y));
       if (m > 0) {
@@ -621,6 +620,12 @@ export class Player {
   /** The keys are turning him (tank turn, easing in or out) right now. */
   get turning(): boolean {
     return this.turnVel !== 0;
+  }
+
+  /** How fast the keys turn him now (rad/s, + = to his left); the camera looks ahead
+   *  along it for a clear view. */
+  get turnRate(): number {
+    return this.turnVel;
   }
 
   /** A past-threshold mouse / finger drag is looking around right now. */

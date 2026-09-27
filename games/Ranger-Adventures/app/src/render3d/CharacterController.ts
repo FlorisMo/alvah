@@ -75,36 +75,53 @@ export function obstacleGap(o: Obstacle, x: number, z: number, grow = 0): number
 }
 
 /**
- * The fraction t ∈ (0, 1] of the segment from (ox, oz) along (dx, dz) where it first
- * enters the obstacle's keep-out shape grown by `grow` (1 = it never does). When the
- * origin already stands in the grown shape only the bare keep-out shape counts, and
- * inside that the obstacle is ignored (the prop he stands at never collapses the
- * camera onto him). Boxes are tested as the rectangle grown by pad + grow (square
- * corners: a touch conservative, never a miss).
+ * The fraction t ∈ [0, 1] of the segment from (ox, oz) along (dx, dz) where it first
+ * enters the obstacle's keep-out shape grown by `grow` (1 = it never does). The shape
+ * is grown out from the solid itself (a circle; a box's bare walls) by pad + grow, but
+ * never past the origin: a ranger standing close to a wall (inside its grown shape)
+ * still has that wall stop a segment aimed into it, at once, and a segment aimed away
+ * passes. An origin inside the solid itself ignores it (the prop he stands at never
+ * collapses the camera onto him). Boxes are grown with rounded corners, so a boom
+ * that passes a corner by more than `grow` is not stopped.
  */
 export function segmentEntry(o: Obstacle, ox: number, oz: number, dx: number, dz: number, grow: number): number {
-  let g = grow;
-  if (obstacleGap(o, ox, oz, g) < 0) {
-    if (obstacleGap(o, ox, oz, 0) < 0) return 1;
-    g = 0;
+  const pad = o.box ? o.box.pad : 0;
+  const out = obstacleGap(o, ox, oz, -pad); // how far out of the solid itself the origin stands
+  if (out < -1e-6) return 1;
+  const g = Math.max(0, Math.min(pad + grow, out));
+  let t: number;
+  if (!o.box) t = circleEntry(ox - o.x, oz - o.z, dx, dz, o.r - pad + g);
+  else {
+    // the rectangle grown by g with ROUNDED corners (the same shape obstacleGap measures):
+    // the two plus-shaped slabs and a circle on each corner
+    const b = o.box;
+    const [px, pz] = toLocal(b, ox - o.x, oz - o.z);
+    const [vx, vz] = toLocal(b, dx, dz);
+    t = Math.min(slabEntry(slab(px, pz, vx, vz, b.hx + g, b.hz)), slabEntry(slab(px, pz, vx, vz, b.hx, b.hz + g)));
+    if (g > 0) {
+      for (const [cx, cz] of [[b.hx, b.hz], [b.hx, -b.hz], [-b.hx, b.hz], [-b.hx, -b.hz]]) {
+        t = Math.min(t, circleEntry(px - cx, pz - cz, vx, vz, g));
+      }
+    }
   }
-  if (!o.box) {
-    const R = o.r + g;
-    const a = dx * dx + dz * dz;
-    if (a < 1e-12) return 1;
-    const fx = ox - o.x, fz = oz - o.z;
-    const b = 2 * (fx * dx + fz * dz), cc = fx * fx + fz * fz - R * R;
-    const disc = b * b - 4 * a * cc;
-    if (disc < 0) return 1;
-    const t = (-b - Math.sqrt(disc)) / (2 * a);
-    return t > 0 && t < 1 ? t : 1;
-  }
-  const bx = o.box;
-  const ex = bx.hx + bx.pad + g, ez = bx.hz + bx.pad + g;
-  const [px, pz] = toLocal(bx, ox - o.x, oz - o.z);
-  const [vx, vz] = toLocal(bx, dx, dz);
-  const span = slab(px, pz, vx, vz, ex, ez);
-  return span && span[0] > 0 && span[0] < 1 ? span[0] : 1;
+  return t < 1 ? t : 1;
+}
+
+/** Where a ray entering a span [tIn, tOut] starts inside it (0 when it starts on its edge
+ *  going in), or Infinity when it never enters ahead. */
+function slabEntry(span: [number, number] | null): number {
+  return span && span[1] > 1e-9 && span[0] > -1e-9 ? Math.max(0, span[0]) : Infinity;
+}
+
+/** Ray f + t·d (f relative to the centre) entering the circle of radius R. */
+function circleEntry(fx: number, fz: number, dx: number, dz: number, R: number): number {
+  const a = dx * dx + dz * dz;
+  if (a < 1e-12) return Infinity;
+  const b = 2 * (fx * dx + fz * dz), cc = fx * fx + fz * fz - R * R;
+  const disc = b * b - 4 * a * cc;
+  if (disc < 0) return Infinity;
+  const q = Math.sqrt(disc);
+  return slabEntry([(-b - q) / (2 * a), (-b + q) / (2 * a)]);
 }
 
 /** Ray p + t·v against the axis-aligned rectangle |x| ≤ ex, |z| ≤ ez: [tIn, tOut] or null. */
@@ -141,6 +158,31 @@ export function segmentCrosses(o: Obstacle, ax: number, az: number, bx: number, 
   const [vx, vz] = toLocal(o.box, dx, dz);
   const span = slab(px, pz, vx, vz, o.box.hx, o.box.hz);
   return !!span && span[1] > t0 && span[0] < t1;
+}
+
+/**
+ * How wide the obstacle's SOLID part (the circle; the bare rectangle, no pad) looks
+ * from (x, z): the horizontal angle (rad) it covers, π when (x, z) is inside it. A box
+ * is measured by its real corners, so a long low building seen end-on reads narrow
+ * (the circle around it would read it as wide from anywhere near).
+ */
+export function obstacleSpan(o: Obstacle, x: number, z: number): number {
+  if (!o.box) {
+    const d = Math.hypot(o.x - x, o.z - z);
+    return d <= o.r ? Math.PI : 2 * Math.asin(o.r / d);
+  }
+  const b = o.box;
+  const [px, pz] = toLocal(b, x - o.x, z - o.z);
+  if (Math.abs(px) <= b.hx && Math.abs(pz) <= b.hz) return Math.PI;
+  const mid = Math.atan2(-px, -pz); // toward the centre, in the box's own frame
+  let lo = 0, hi = 0;
+  for (const [cx, cz] of [[b.hx, b.hz], [b.hx, -b.hz], [-b.hx, b.hz], [-b.hx, -b.hz]]) {
+    let a = Math.atan2(cx - px, cz - pz) - mid;
+    a = Math.atan2(Math.sin(a), Math.cos(a));
+    if (a < lo) lo = a;
+    if (a > hi) hi = a;
+  }
+  return hi - lo;
 }
 
 export interface MoveLimits {
