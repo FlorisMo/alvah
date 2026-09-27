@@ -40,10 +40,10 @@ export async function reportPageErrors(testInfo: TestInfo, errors: string[]): Pr
 
 /**
  * The arrow keys a child holds to walk to a goal (wave 2). With the follow camera on
- * they are tank keys: Left / Right turn the ranger (the camera stays behind him) until
- * the goal is ahead on screen, and Up walks once it is within 70° of ahead. Under
- * reduced motion the camera stands still and the keys walk the way the screen shows
- * (Right = to the right of the screen). Call the result every tick with the goal's
+ * they are tank keys: Left / Right turn the ranger (the camera stays behind him, by cuts
+ * under reduced motion) until the goal is ahead on screen, and Up walks once it is within
+ * 70° of ahead. With "Camera draait mee" off the camera stands still and the keys walk
+ * the way the screen shows (Right = to the right of the screen). Call the result every tick with the goal's
  * offset from the ranger (dx, dz) and `cameraYaw()` (the screen's forward on the ground
  * is (−sin ψ, −cos ψ)). When the goal has come no closer for 2 s (pressed against a
  * wall; the cabin stands on the line from spawn to the frisling) he goes round it like
@@ -51,7 +51,9 @@ export async function reportPageErrors(testInfo: TestInfo, errors: string[]): Pr
  * other side after three tries that got nowhere).
  */
 export async function keySteer(page: Page): Promise<(dx: number, dz: number, yaw: number) => Set<string>> {
-  const screen = await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const screen = await page.evaluate(() => {
+    try { return JSON.parse(localStorage.getItem('alvah-ef-v1') ?? '{}').ranger?.settings?.cameraDraaitMee === false; } catch { return false; }
+  });
   let best = Infinity, bestAt = Date.now(), tries = 0, side = 1, turnUntil = 0, walkUntil = 0;
   return (dx, dz, yaw) => {
     const now = Date.now();

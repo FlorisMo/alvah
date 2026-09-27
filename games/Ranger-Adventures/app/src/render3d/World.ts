@@ -230,11 +230,11 @@ export class World {
         mode: () => ({ inVehicle: this.vehicles.inVehicle, inHeli: this.vehicles.inHeli }),
         inputBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
         afterPlace: () => this.pois.fadeRings(this.camera),
-        creatures: () => [ // what stands on the ground, for the clear view (marker animals ~1 m, as the dev hook reads them)
-          ...this.pois.list.map((m) => ({ x: m.group.position.x, y: m.group.position.y, z: m.group.position.z, h: 1.0 })),
-          ...this.fauna.scenicActors.map((a) => ({ x: a.group.position.x, y: a.group.position.y, z: a.group.position.z, h: a.height })),
-          ...this.fauna.ambient.filter((a) => !a.glide).map((a) => ({ x: a.group.position.x, y: a.group.position.y, z: a.group.position.z, h: a.h })),
-        ],
+        creatures: (visit) => { // what stands on the ground, for the clear view (marker animals ~1 m, as the dev hook reads them)
+          for (const m of this.pois.list) { const p = m.group.position; visit(p.x, p.y, p.z, 1.0); }
+          for (const a of this.fauna.scenicActors) { const p = a.group.position; visit(p.x, p.y, p.z, a.height); }
+          for (const a of this.fauna.ambient) if (!a.glide) { const p = a.group.position; visit(p.x, p.y, p.z, a.h); }
+        },
       },
     );
     this.scene.add(this.dressing.buildPaths()); // W4.3: sand-path ribbons over the ground
@@ -768,9 +768,9 @@ export class World {
   }
 
   /** Resume free-roam after an in-place activity; re-emit the wayfinding cue.
-   *  The activity reframe owned the camera; from the next update() the follow lens
-   *  eases back onto the bearing it held before the activity (the ranger's steering
-   *  tells CameraRig.steer to hold it), a cut under reduced motion (§3.2). */
+   *  The activity reframe owned the camera; on resume the lens eases back from where
+   *  the reframe left it to the follow view at the bearing it had (a cut under
+   *  reduced-motion, per §3.2). */
   endActivity(): void {
     this.activityActive = false;
     this.activityFocus = null; // D1.3: no task owns the camera in free-roam
@@ -778,6 +778,7 @@ export class World {
     this.pois.hideForActivity(null);
     this.pois.resetAfterActivity();   // fresh proximity + cue re-fire (re-surfaces the hub prompt)
     if (livePolicy().reduced) this.cam.place(true, 0, true); // reduced → cut back
+    // otherwise the next update() frame eases the lens back into place.
   }
 
 }

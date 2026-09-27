@@ -384,7 +384,7 @@ export class Dressing {
     }));
     // a soft collision circle around each trunk (the ranger slides around it).
     // D3.16: tag it a TREE so the all-occluder sightline test (propBlocksSightline)
-    // skips it — a trunk's foliage is the fadeable crown (canopyBlocksSightline), so
+    // skips it — the whole tree is the camera's fadeable crown (world/Crowns.ts), so
     // trees report THROUGH the fade, never as an opaque viewClear=false blocker.
     for (const p of placed) this.obstacles.push({ x: p.x, z: p.z, r: 0.6 * p.s, tree: true });
     this.treePlacements.push(...placed);
@@ -609,18 +609,10 @@ export class Dressing {
     }
   }
 
-  /**
-   * D1.5 occluder fade, per tree: the camera rig decides the view is `blocked`; the
-   * forest finds the crowns on the lens → ranger sightline (at each aim height above his
-   * feet) or around the lens, and makes only THOSE see-through (`min`, or `buried` when
-   * the lens sits inside one). Crowns that no longer block ease back to solid by
-   * `release` (0..1 of the way per frame; 1 = a cut). The rest of the forest never fades.
-   */
-  fadeOccluders(
-    blocked: boolean, eye: THREE.Vector3, feet: THREE.Vector3, aimHeights: readonly number[],
-    release: number, min: number, buried: number,
-  ): void {
-    this.forest?.fadeOccluders(blocked, eye, feet, aimHeights, release, min, buried);
+  /** The occluder fade, per tree: the camera rig finds the trees in the way (tree index →
+   *  opacity, world/Crowns.ts) and the forest fades exactly those (world/Forest.ts). */
+  fadeOccluders(targets: ReadonlyMap<number, number>, release: number): void {
+    this.forest?.fadeOccluders(targets, release);
   }
 
   /** Every crown solid again at once (`1`), e.g. off-foot or at teardown. Kept for the

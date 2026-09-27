@@ -65,8 +65,14 @@ export interface ViewFrame {
    *  the screen-relative keys are relative to it. (The camera's clear-view slide moves
    *  the lens sideways, never this bearing.) */
   bearing: number;
-  /** The camera follows him (setting on, no reduced motion); else it is fixed. */
+  /** The camera follows him ("Camera draait mee" on); else it is fixed and the keys walk
+   *  the way the screen shows. */
   follows: boolean;
+  /** Reduced motion: the camera follows by CUTS (it holds while he turns and cuts behind
+   *  him once the turn rests), never by easing round. The keys stay tank keys (child B5:
+   *  screen-relative keys turned him to face the lens on Down); a stick or tap walk leaves
+   *  the view where it is. */
+  cuts: boolean;
 }
 
 /** What the follow camera should do this frame: chase `yaw` (with that ease), or
@@ -95,7 +101,7 @@ export class Player {
   readonly target = new THREE.Vector3(0, 0, 0);
   // Cached ranger horizontal bounding radius, measured once whenever the mesh is
   // (re)built (measureAvatar). The min-boom clamp is `radius + near-plane` and the
-  // avatar fades when the boom gets within ~`radius + 1 m`, so a rig that ever
+  // avatar fades out when the lens gets within ~`radius + 0.35 m`, so a rig that ever
   // renders bigger than the honest measured height still can't smear the lens (§4:
   // pixels outrank the hook).
   avatarRadius = 0.45;
@@ -354,7 +360,7 @@ export class Player {
       // ease in behind him only when he walks roughly into the screen; walking across
       // or toward the camera it holds (never a swing round to his face)
       const gap = Math.abs(wrapPi(this.heading - view.bearing));
-      this.camNow = !back && gap <= CAM_BEHIND_GAP ? { yaw: this.heading, tau: CAM_BEHIND_TAU, maxRate: CAM_BEHIND_RATE } : null;
+      this.camNow = !view.cuts && !back && gap <= CAM_BEHIND_GAP ? { yaw: this.heading, tau: CAM_BEHIND_TAU, maxRate: CAM_BEHIND_RATE } : null;
     } else if (mode === null && this.camNow && this.camNow.tau !== CAM_TANK_TAU) this.camNow = null; // a tap/stick walk ended: hold
     const out = this.camNow ? { ...this.camNow, fold } : (fold ? { yaw: null, tau: 0, maxRate: 0, fold } : null);
 
