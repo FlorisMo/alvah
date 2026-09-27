@@ -86,7 +86,9 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
         .join('');
     }
 
-    function renderAnimal(): void {
+    /** `afterRule`: the rule is being said, so the animal waits its turn; otherwise
+     *  its line replaces the last animal's (the voice never lags behind the screen). */
+    function renderAnimal(afterRule = false): void {
       const cur = run.current;
       if (!cur) return;
       const a = Content.animal(cur.id);
@@ -97,7 +99,7 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
         `<span class="wc-token" aria-hidden="true">${animalIcon(cur.id)}</span>` +
         `<span class="wc-name">${esc(a?.naam ?? cur.id)}</span>` +
         `<span class="wc-kind ${cur.dag ? 'is-dag' : 'is-nacht'}">${soort.icoon} ${esc(soort.woord)}</span>`;
-      say(`${a?.naam ?? cur.id}. ${soort.woord}.`, true);
+      say(`${a?.naam ?? cur.id}. ${soort.woord}.`, afterRule);
       // one sentence per line: never more than ~7 words on a line
       rule.innerHTML = ruleNow().split(/(?<=[.!?])\s+/).map(esc).join('<br>');
       field.classList.toggle('inverted', run.inverted);
@@ -128,7 +130,7 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
           say(regelOmgekeerd, true);
           after(reduced ? 700 : 1400, () => { flag.textContent = ''; sign.classList.remove('flipping'); });
         }
-        renderAnimal();
+        renderAnimal(res === 'flip');
         busy = false;
       });
     }
@@ -151,6 +153,6 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
 
     say(instructie);
     say(regelDag, true);
-    renderAnimal();
+    renderAnimal(true);
   });
 }

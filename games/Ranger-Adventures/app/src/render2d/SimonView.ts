@@ -141,12 +141,13 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
       const b = btns.get(id);
       b?.classList.remove('tapped');
       requestAnimationFrame(() => b?.classList.add('tapped'));
-      if (settings.geluid) Sound.call(id);
       after(240, () => b?.classList.remove('tapped'));
 
       const res = run.tap(id);
       renderDots();
-      if (res === 'advance') return;
+      // the tapped animal calls only between taps (as in 3D): the last tap is answered
+      // by the words, and a call never sounds over "Luister nog een keer"
+      if (res === 'advance') { if (settings.geluid) Sound.call(id); return; }
       if (res === 'complete') { finish(); return; }
       if (res === 'grow') {
         phase = 'pause';
