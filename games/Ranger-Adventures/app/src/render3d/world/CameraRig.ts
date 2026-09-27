@@ -144,9 +144,15 @@ export class CameraRig {
   // where CameraRig.place already snaps). The FOV is NEVER touched — a dolly, not a lens
   // zoom (motion-comfort law). Vehicle/heli/activity own the camera, so a scroll there
   // is ignored (onWheel returns early).
-  readonly CAM_ZOOM_MAX = 9.5;   // dolly ceiling (~8–10 m boom, F-16)
+  // Wave 2: a calm band (2.6–8 m), and the boom follows the wheel with its own gentle
+  // ease (`zoomNow`); the eye rises and sinks with the boom so the view keeps its pitch
+  // (a true dolly: zooming in never tips the view steeply down).
+  readonly CAM_ZOOM_MAX = 8;     // dolly ceiling
+  private readonly CAM_ZOOM_MIN = 2.6; // dolly floor: the whole ranger stays in view, solid
   private readonly CAM_ZOOM_STEP = 0.01; // wheel deltaY → metres of boom change per notch
+  private readonly CAM_ZOOM_TAU = 0.25;
   zoomDist = this.camOffset.z;   // current player-set walk boom (default = F-05 rig)
+  private zoomNow = this.camOffset.z; // the eased boom the lens uses
   viewClearState = true;        // D1.5 last cam→avatar sightline-clear read (camState reports it)
   terrainClearState = true;     // D1.5 (audit #4) last cam→avatar TERRAIN-clear read (folded into viewClear)
   terrainLiftState = 0;         // D1.5 (audit #4) metres the follow boom rode up to clear a dune this frame (0 = flat)
@@ -286,7 +292,7 @@ export class CameraRig {
    * `avatarRadius`.
    */
   zoomMinBoom(): number {
-    return Math.min(this.player.avatarRadius + 1.3, this.CAM_ZOOM_MAX - 1);
+    return Math.min(Math.max(this.CAM_ZOOM_MIN, this.player.avatarRadius + 1.3), this.CAM_ZOOM_MAX - 1);
   }
 
   /**
@@ -359,6 +365,8 @@ export class CameraRig {
     let dist = off.z;
     let eye = off.y;
     if (walk) {
+      this.zoomNow = reduced || snap ? this.zoomDist
+        : this.zoomNow + (this.zoomDist - this.zoomNow) * dampFactor(dt, this.CAM_ZOOM_TAU);
       this.gatherNear(rp);
       // search the bearings (not in reduced motion, and not while the player drags the view)
       const base = wrapAngle(this.followYaw + this.orbitYaw);
@@ -577,13 +585,13 @@ export class CameraRig {
   private solveWalk(b: number, rp: THREE.Vector3): CameraRig['sol'] {
     const out = this.sol;
     const s = Math.sin(b), c = Math.cos(b);
-    const want = this.zoomDist;
+    const want = this.zoomNow;
     const minDist = Math.min(want, this.player.avatarRadius + this.camera.near + 0.2);
     const frac = Math.min(this.boomClearFraction(rp.x, rp.z, -s * want, -c * want, true),
       this.rimFraction(rp.x, rp.z, -s * want, -c * want));
     let dist = Math.max(minDist, want * frac);
     const lookH = this.camLookH;
-    const eyeAt = (d: number): number => lookH + (this.camOffset.y + this.orbitLift - lookH) * (d / want);
+    const eyeAt = (d: number): number => lookH + (this.camOffset.y + this.orbitLift - lookH) * (d / this.camOffset.z);
     // never a lens in the leaves: step the boom in until it is out of every crown
     // (not below 35 % of the zoom: then the canopy fade has to carry it)
     let lensInCrown = this.lensInCrown(rp.x - s * dist, rp.y + eyeAt(dist), rp.z - c * dist, 0.3, null);
