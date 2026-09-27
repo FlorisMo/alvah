@@ -10,8 +10,8 @@ today) → [ARCHITECTURE.md](ARCHITECTURE.md) if present (where the code lives).
 cd games/Ranger-Adventures/app
 npm install                                # once
 npx vite --port <your-port> --strictPort   # play it yourself: http://localhost:<port>/?dev=1
-RANGER_PORT=<your-port> npm run gate       # tsc + unit tests + browser @smoke (~1 min)
-RANGER_PORT=<your-port> npm run golden     # THE check: plays GOAL.md 1-8 like a player (~2-3 min)
+RANGER_PORT=<your-port> npm run gate       # tsc + unit tests + browser @smoke (~0.5-2 min: slower when other agents load the machine)
+RANGER_PORT=<your-port> npm run golden     # THE check: plays GOAL.md 1-8 like a player (~3-4 min)
 ```
 
 - **`npm run golden`** (`app/e2e/golden.spec.ts`) plays the golden path with a fresh save
@@ -35,11 +35,23 @@ RANGER_PORT=<your-port> npm run golden     # THE check: plays GOAL.md 1-8 like a
   is), so a shared port tests somebody else's code.
 - Local Playwright runs get the real-GPU args from `playwright.config.ts`
   (`--use-angle=metal --enable-gpu --ignore-gpu-blocklist`); without them headless
-  Chromium silently renders in software and the world crawls. CI keeps SwiftShader and
-  runs `npm run e2e:smoke` only. Your own scripts need the same args.
+  Chromium silently renders in software and the world crawls. Your own scripts need the
+  same args. Local runs use at most 2 workers (each boots a world on the one GPU).
+- **CI** (the deploy gate, `.github/workflows/deploy.yml`) runs `npm run e2e:smoke` only:
+  headless Chromium on SwiftShader (software GL, no GPU), against the production build
+  (`vite build` + `vite preview`, so the smoke opens `/?dev=1`). The game detects
+  software GL and boots a **light mode** there: no MSAA, pixelRatio 1, the `laag` tier,
+  no shadow pass, and a sparse title (primitive tree line, no heath scatter)
+  (`core/quality.ts`; `?light=1` shows it on your GPU, `?light=0` refuses it). A GPU
+  never gets it. Before you push a change to boot, the title or the first walk, run it
+  the CI way: `CI=1 RANGER_PORT=<port> npm run e2e:smoke` (1.5-4 min; stop your own
+  server on that port first: CI mode always builds and serves a fresh one). A smoke that
+  waits for the game to act counts rendered frames (`__ranger.frames()`), not seconds:
+  under software GL every frame, and every Playwright click, is slow.
 - `?dev=1` exposes `window.__ranger` (`app/src/core/devhook.ts`) for READING state:
   `screen`, `pos()`, `cam()`, `grounded()`, `vehicle()`, `markers()`, `nearId()`,
-  `drawCalls()`, `tris()`, `playHint()`, `groundAt(x,z)` (the rendered terrain height),
+  `drawCalls()`, `tris()`, `frames()` (rendered frames), `renderMode()` (light mode +
+  GL renderer), `playHint()`, `groundAt(x,z)` (the rendered terrain height),
   `seating(x,z,r)` (everything near a spot with its gap to the ground; the player's own
   ranger and roaming animals carry `moves`, so leave them out of any "did the world
   change?" compare), `screenOf(x,y,z)`.
@@ -47,7 +59,8 @@ RANGER_PORT=<your-port> npm run golden     # THE check: plays GOAL.md 1-8 like a
   anything that claims the game is playable.
 - Fresh save = fresh browser context (localStorage key `alvah-ef-v1`). First boot:
   *Begin* → avatar creator → *Dit is mijn ranger* → world.
-- Other suites: `npm run e2e` (everything, slow; several older specs still win through
+- Other suites: `npm run e2e` (everything; `--project=chromium` for the laptop engine
+  only; ~22 min at 2 workers, the ten missions are most of it; several older specs still win through
   `winStep()`), `npm run e2e:webkit` (the iPad engine, smoke only),
   `npm run e2e:preview` (the shipped build, after a root `npm run build`).
 
