@@ -8,6 +8,8 @@ import { store } from './core/state';
 import { Sound } from './core/sound';
 import { installDevHook, setScreen, provideDrawCalls, provideAvatar, provideTitleReady } from './core/devhook';
 import { installKeys } from './ui/keys';
+import { readScreenAloud } from './ui/ReadAloud';
+import { SAY } from './content/screens';
 
 // W7.1 code-splitting: the mission/world graph (World, the five engines,
 // the 3D mini-game views, render2d) is the bulk of the bundle but is only
@@ -75,6 +77,7 @@ card.innerHTML =
   `<p class="boot-sub">Help de dieren van de Veluwe.<br>Kies een missie en train je breinkracht.</p>` +
   `<button class="btn-start" type="button">Begin</button>`;
 ui.appendChild(card);
+readScreenAloud(card, { text: SAY.title, autoStart: saved.voorlezen }); // 🔊 beside Begin (child:B12)
 
 card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', async () => {
   // Unlock audio FIRST, synchronously in the tap (iOS gesture rule) — before

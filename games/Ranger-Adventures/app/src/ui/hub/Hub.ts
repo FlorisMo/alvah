@@ -15,7 +15,8 @@ import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import { loadGameAudio } from '../../core/calls';
 import { setScreen, setMissionView } from '../../core/devhook';
-import { mountReadAloud } from '../ReadAloud';
+import { mountReadAloud, readScreenAloud } from '../ReadAloud';
+import { SAY } from '../../content/screens';
 import { missionIcon } from '../MissionIcon';
 import { showCabin } from '../Companion';
 import { showTweaks } from '../Tweaks';
@@ -45,6 +46,7 @@ export function showTitle(): void {
     `<button class="btn-start ra-title-begin" type="button">Begin</button>` +
     `</div>`,
   );
+  readScreenAloud(el, { text: SAY.title, autoStart: store.get().settings.voorlezen }); // child:B12
   el.querySelector('.ra-title-begin')?.addEventListener('click', () => {
     Sound.unlock();
     void loadGameAudio();
@@ -98,6 +100,8 @@ export function showPauseHub(): void {
     `<button class="btn-start ph-back" type="button" data-key="back">Terug naar de open plek</button>` +
     `</div>`,
   );
+  const voor = store.get().settings.voorlezen; // child:B12: the menu reads aloud, each choice on hover/focus
+  readScreenAloud(el, { text: SAY.pauze, autoStart: voor, items: '.ra-chip', hover: voor });
   el.querySelector('.ph-prikbord')?.addEventListener('click', () => showCaseBoard());
   el.querySelector('.ph-companion')?.addEventListener('click', () =>
     showCabin(session.host, toWorld, 'Terug naar de open plek'));
@@ -157,6 +161,9 @@ export function showMissionBoard(): void {
   });
   el.querySelector('.mb-back')?.addEventListener('click', () => showExploreHud(activeExploreTitel()));
   el.querySelector('.mc-next')?.scrollIntoView({ block: 'nearest' });
+  const voor = store.get().settings.voorlezen; // child:B12: 🔊 by the heading; a card says its title
+  readScreenAloud(el, { text: SAY.bord, anchor: '.boot-title', autoStart: voor, items: '.mission-card', hover: voor,
+    itemText: (b) => b.querySelector('.mc-title')?.textContent ?? '' });
 }
 
 /* ------------------------------------ sporenboek (clues; code: case-board) ---- */

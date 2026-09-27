@@ -25,7 +25,8 @@ import { playRoute } from '../../render2d/RouteView';
 import { playSimon } from '../../render2d/SimonView';
 import { playDanger } from '../../render2d/DangerView';
 import { playWissel } from '../../render2d/WisselView';
-import { mountReadAloud } from '../ReadAloud';
+import { mountReadAloud, readScreenAloud, speakButtonBeside } from '../ReadAloud';
+import { SAY } from '../../content/screens';
 import { deviceText } from '../hud/device';
 import { session, esc, naam, card, clearOverlays } from './session';
 import {
@@ -312,6 +313,8 @@ function showMissionPause(): void {
     `<button class="btn-start mp-resume" type="button" data-key="back">Ga verder</button>` +
     `</div>`;
   session.host.appendChild(el);
+  const voor = store.get().settings.voorlezen; // child:B12
+  readScreenAloud(el, { text: SAY.missiePauze, anchor: '.mp-resume', autoStart: voor, items: '.ra-chip', hover: voor });
   el.querySelector('.mp-resume')?.addEventListener('click', () => el.remove());
   el.querySelector('.mp-stop')?.addEventListener('click', stopMission);
 }
@@ -407,6 +410,8 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
   const ra = mountReadAloud({
     textEl: el.querySelector('.reward-lof')!,
     text: lof,
+    trail: mission.beloning.vaktermBadge ? `Knap woord: ${mission.beloning.vaktermBadge.naam.replace(/^Knap woord:\s*/i, '')}.` : '',
+    speakBtn: speakButtonBeside(el.querySelector('.btn-start')), // 🔊 to hear it again (child:B12)
     autoStart: store.get().settings.voorlezen,
   });
   el.querySelector('.btn-start')?.addEventListener('click', () => {

@@ -19,6 +19,8 @@ import {
   type Avatar, type AvatarKenmerk,
 } from '../core/avatar';
 import { setScreen } from '../core/devhook';
+import { readScreenAloud } from './ReadAloud';
+import { SAY } from '../content/screens';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -104,21 +106,35 @@ function render(): void {
     `<div class="avatar-creator boot-card-ish">` +
     `<p class="boot-kicker">Word boswachter</p>` +
     `<h1 class="boot-title">Maak je ranger</h1>` +
+    // child:B8: on a laptop every choice is on screen at once — the ranger + name on the
+    // left, the four groups (Huid, Haar, Ranger-jas, Ogen) on the right. A narrow screen
+    // stacks them and scrolls, with a clear "Meer kiezen" cue while choices are below.
+    `<div class="av-main">` +
+    `<div class="av-side">` +
     `<div class="av-preview"><div class="av-art-wrap">${rangerSvg(av)}</div><p class="av-greet"></p></div>` +
-    // the choices scroll between the fixed preview and the fixed button, so the
-    // button never covers a swatch (it used to sit over the last row on iPad)
-    `<div class="av-body">` +
     `<label class="av-naam-veld"><span class="av-naam-cap">Je naam</span>` +
     `<input class="av-naam-input" type="text" inputmode="text" maxlength="${MAX_NAAM}" ` +
     `autocomplete="off" spellcheck="false" value="${esc(av.naam)}" aria-label="Je rangernaam"/></label>` +
     `<div class="av-naam-chips">${suggesties}</div>` +
+    `</div>` +
     `<div class="av-groups">` +
     (Object.keys(AVATAR_KENMERKEN) as AvatarKenmerk[]).map((k) => groupHtml(k, av)).join('') +
     `</div>` +
+    `<button class="av-more" type="button" tabindex="-1"><span aria-hidden="true">↓</span> Meer kiezen</button>` +
     `</div>` +
     `<div class="ra-row av-klaar-row"><button class="btn-start av-klaar" type="button">Dit is mijn ranger</button></div>` +
     `</div>`;
   host.appendChild(el);
+
+  // the scroll cue: shown only while choices sit below the fold; a click scrolls to them
+  const main = el.querySelector<HTMLElement>('.av-main')!;
+  const more = el.querySelector<HTMLButtonElement>('.av-more')!;
+  const creator = el.querySelector<HTMLElement>('.avatar-creator')!;
+  const cue = (): void => { creator.classList.toggle('av-has-more', main.scrollTop + main.clientHeight < main.scrollHeight - 8); };
+  main.addEventListener('scroll', cue, { passive: true });
+  window.addEventListener('resize', cue);
+  requestAnimationFrame(cue);
+  more.addEventListener('click', () => main.scrollBy({ top: main.clientHeight * 0.8, behavior: document.documentElement.classList.contains('rm') || document.body.classList.contains('rm') ? 'auto' : 'smooth' }));
 
   const input = el.querySelector<HTMLInputElement>('.av-naam-input')!;
   const artWrap = el.querySelector<HTMLDivElement>('.av-art-wrap')!;
@@ -167,9 +183,13 @@ function render(): void {
     });
   });
 
-  speak('Maak je eigen ranger. Kies een naam en hoe je eruitziet.');
+  // child:B12: said once, 🔊 beside the button says it again; a swatch or name chip
+  // says its own label ("Haar: Rood") when the mouse rests on it or it is focused
+  const voor = store.get().settings.voorlezen;
+  readScreenAloud(el, { text: SAY.maker, anchor: '.av-klaar', autoStart: voor, items: '.av-swatch, .av-naam-chip', hover: voor });
 
   el.querySelector('.av-klaar')?.addEventListener('click', () => {
+    window.removeEventListener('resize', cue);
     Sound.unlock(); Sound.found();
     store.markAvatarGemaakt();
     const naam = rangerNaam(store.get().avatar);

@@ -18,6 +18,7 @@
  * highlight flows across the lines exactly as the voice does.
  */
 
+import './readaloud.css';
 import { narrator } from '../core/narrator';
 import { buildWordClock, activeWordAt, type WordClock } from '../core/wordclock';
 
@@ -52,6 +53,9 @@ export interface ReadAloudOptions {
    *  personalised "Ranger Alvah." greeting + title). The clock accounts for it,
    *  so the visible highlight starts on the first body word at the right moment. */
   lead?: string;
+  /** Spoken AFTER the segments but not rendered as spans (e.g. the reward's knap
+   *  woord and the way on). The highlight simply rests once the segments end. */
+  trail?: string;
   /** Optional 🔊 button — clicking it always (re)speaks, even if voorlezen is off. */
   speakBtn?: Element | null;
   /** Speak immediately on mount (the caller passes the `voorlezen` setting). */
@@ -85,7 +89,7 @@ export function mountReadAloud(opts: ReadAloudOptions): ReadAloudHandle {
     running += tokens.length;
   }
   // Joined exactly as the spans concatenate (single spaces) → identical tokens.
-  const fullText = [opts.lead, ...segments.map((s) => s.text)]
+  const fullText = [opts.lead, ...segments.map((s) => s.text), opts.trail]
     .map((t) => (t ?? '').trim())
     .filter(Boolean)
     .join(' ');
@@ -142,4 +146,76 @@ export function mountReadAloud(opts: ReadAloudOptions): ReadAloudHandle {
   if (opts.autoStart) speak();
 
   return { speak, stop };
+}
+
+/* ------------------------------------------------------ a screen read aloud ---- */
+
+
+/**
+ * A 🔊 "Lees voor" button beside `target` (child:B12): in the target's `.ra-row` when
+ * it sits in one, else in a new row that takes the target's place (the target moves
+ * into it, its listeners stay). Returns the button, or null without a target.
+ */
+export function speakButtonBeside(target: Element | null): HTMLButtonElement | null {
+  if (!target?.parentElement) return null;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ra-say';
+  btn.setAttribute('aria-label', 'Lees voor');
+  btn.textContent = '🔊';
+  const row = target.parentElement.classList.contains('ra-row') || target.parentElement.classList.contains('ra-say-row')
+    ? target.parentElement
+    : null;
+  if (row) { row.insertBefore(btn, target); return btn; }
+  const wrap = document.createElement('div');
+  wrap.className = 'ra-say-row';
+  target.parentElement.insertBefore(wrap, target);
+  wrap.append(btn, target);
+  return btn;
+}
+
+export interface ScreenAloudOptions {
+  /** What the screen says: its heading and what the primary action does. */
+  text: string;
+  /** The element the 🔊 sits beside (default: the screen's primary button). */
+  anchor?: string;
+  /** Say it once as the screen opens (the caller passes the `voorlezen` setting). */
+  autoStart?: boolean;
+  /** Items (mission cards, menu choices) that say their own words when focused with
+   *  the keyboard or when the mouse rests on them — only while `hover` is on. */
+  items?: string;
+  itemText?: (item: HTMLElement) => string;
+  hover?: boolean;
+}
+
+/** How long the mouse rests on an item before it is read (no chatter while moving). */
+const HOVER_DWELL_MS = 450;
+
+/**
+ * Read a whole screen aloud (child:B12): the title, the ranger maker, Pauze, the
+ * missiebord, the reward card. A 🔊 beside the primary action says `text` at any
+ * time; the screen says it once when it opens; each item says its own words on focus
+ * or hover. Returns a handle so the screen can `stop()` when it closes.
+ */
+export function readScreenAloud(el: HTMLElement, opts: ScreenAloudOptions): ReadAloudHandle {
+  const target = el.querySelector(opts.anchor ?? '[data-key="primary"], .btn-start');
+  const btn = speakButtonBeside(target);
+  const speak = (): void => narrator.speak(opts.text);
+  btn?.addEventListener('click', (e) => { e.stopPropagation(); speak(); });
+  if (opts.items && opts.hover) {
+    const say = (item: HTMLElement): void => {
+      const t = (opts.itemText?.(item) ?? item.getAttribute('aria-label') ?? item.textContent ?? '').trim();
+      if (t) narrator.speak(t);
+    };
+    el.querySelectorAll<HTMLElement>(opts.items).forEach((item) => {
+      let dwell = 0;
+      item.addEventListener('mouseenter', () => { dwell = window.setTimeout(() => say(item), HOVER_DWELL_MS); });
+      item.addEventListener('mouseleave', () => window.clearTimeout(dwell));
+      item.addEventListener('focus', () => { if (item.matches(':focus-visible')) say(item); });
+    });
+  }
+  // a browser only lets a page speak after the player has touched it (the first boot)
+  const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }) : null;
+  if (opts.autoStart && nav?.userActivation?.hasBeenActive !== false) speak();
+  return { speak, stop: () => narrator.stop() };
 }
