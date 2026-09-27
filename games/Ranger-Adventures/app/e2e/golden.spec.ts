@@ -5,8 +5,8 @@ import { AREA_VELUWE } from '../src/content/veluwe';
 import { HAAR_OPTIES, OUTFIT_OPTIES } from '../src/core/avatar';
 import {
   R, SEAT_TOLERANCE, budget, clickButton, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
-  sleep, snap, soft, step, uiText, under, visibleButtons, walkQuality, walkTo, worldChange, worldSamples,
-  type Hint, type P2, type Seat, type Vehicle,
+  sleep, snap, soft, step, uiText, under, visibleButtons, walkQuality, walkTo, worldChange, worldSamples, wrap,
+  type Heli, type Hint, type P2, type Seat, type Vehicle,
 } from './golden-lib';
 
 /**
@@ -47,7 +47,7 @@ test.afterEach(async ({}, testInfo) => {
   await testInfo.attach('golden-summary', { body: table, contentType: 'text/plain' });
 });
 
-test('golden path: title → ranger → walk → jeep → mission 1 by real clicks → reward → reload @golden', async ({ page }, testInfo: TestInfo) => {
+test('golden path: title → ranger → walk → jeep + heli → mission 1 by real clicks → reward → reload @golden', async ({ page }, testInfo: TestInfo) => {
   test.setTimeout(10 * 60_000);
   shotDir = path.join(testInfo.project.outputDir, 'golden');
   fs.rmSync(shotDir, { recursive: true, force: true });
@@ -150,10 +150,20 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     noNewErrors();
   });
 
-  // ------------------------------------------------------ 4. drive the jeep ----
+  // ------------------------------------ 4. drive the jeep, fly the helicopter ----
   await step(4, async () => {
+    // back on foot, the walk camera stands clear behind the ranger: not folded onto him
+    // by the parked vehicle or a solid, and he is not faded to a see-through ghost
+    const clearOnFoot = async (where: string): Promise<void> => {
+      const c = await R<{ dist: number; avatarOpacity: number } | null>(page, 'r.cam()');
+      note(`${where}: the camera stands ${r2(c?.dist ?? 0)} m behind the ranger (ranger opacity ${r2(c?.avatarOpacity ?? 0)})`);
+      soft(!!c && c.dist >= 2.5 && c.avatarOpacity >= 0.95, `${where}: the camera folds onto the ranger (${r2(c?.dist ?? 0)} m, opacity ${r2(c?.avatarOpacity ?? 0)})`);
+    };
+    // -- the jeep: parked clear of every mission, on the ground; board, drive, step out
     const v0 = await R<Vehicle | null>(page, 'r.vehicle()');
     hard(!!v0?.placed, 'there is no jeep in the world (vehicle().placed=false)');
+    soft(v0!.markerDist >= 6, `the jeep is parked ${r2(v0!.markerDist)} m from a mission marker (want ≥ 6 m)`);
+    soft(Math.abs(v0!.clearance) <= 0.1, `the parked jeep does not sit on the ground (${r2(v0!.clearance)} m off)`);
     const w = await walkTo(page, { x: v0!.x, z: v0!.z }, { stopDist: 0.3, until: (s) => s.jeepNear, timeout: 60_000 });
     walkQuality(w, 'walk to the jeep');
     hard(w.res === 'until', `walked to the jeep at (${r2(v0!.x)}, ${r2(v0!.z)}) but it never offered "Stap in" (${w.res} at ${r2(w.end.x)}, ${r2(w.end.z)})`);
@@ -162,12 +172,15 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     await expect.poll(async () => (await R<Vehicle>(page, 'r.vehicle()')).inVehicle, { timeout: 5_000, message: '"Stap in de jeep" did not seat the ranger in the jeep' }).toBe(true);
     await sleep(page, 800);
     const a = await R<Vehicle>(page, 'r.vehicle()');
-    const samples: Vehicle[] = [];
+    soft(a.driverSeated, 'the driver does not sit in the jeep (hidden, or no seated pose)');
+    const hint = await uiText(page);
+    soft(/stap uit/i.test(hint) && /(gas|rijd|stick)/i.test(hint), `no line says how to drive and how to get out (HUD: "${hint.replace(/\s+/g, ' ').slice(0, 100)}")`);
+    const samples: (Vehicle & { contact: boolean })[] = [];
     await page.keyboard.down('KeyW');
     const t0 = Date.now();
     try {
       while (Date.now() - t0 < 3_000) {
-        samples.push(await R<Vehicle>(page, 'r.vehicle()'));
+        samples.push(await R<Vehicle & { contact: boolean }>(page, 'r.vehicle()'));
         if (samples.length === 20) await shot(page, 'jeep-driving');
         await sleep(page, 100);
       }
@@ -176,6 +189,7 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     const moved = Math.hypot(b.x - a.x, b.z - a.z);
     note(`hold W 3 s: the jeep moved ${r2(moved)} m, top speed ${r2(Math.max(...samples.map((s) => s.speed)))} m/s`);
     hard(moved >= 10, `holding W for 3 s moved the jeep only ${r2(moved)} m (want ≥ 10 m)`);
+    soft(!samples.some((s) => s.contact), 'driving straight on from where the jeep is parked, it runs into something');
     const off = samples.filter((s) => !s.grounded || Math.abs(s.clearance) > 0.1);
     soft(off.length === 0, `the jeep leaves the ground: ${off.length}/${samples.length} samples not grounded or > 10 cm off (worst ${r2(Math.max(...samples.map((s) => Math.abs(s.clearance))))} m)`);
     soft(samples.every((s) => s.fov === samples[0].fov && Math.abs(s.roll) < 1e-3), 'the jeep camera changed its FOV or rolled');
@@ -184,14 +198,85 @@ test('golden path: title → ranger → walk → jeep → mission 1 by real clic
     soft(!!shape && shape.along > shape.across, shape
       ? `the jeep drives sideways: its long side (${shape.across} m) lies across the way it drives (${shape.along} m along)`
       : 'could not find the jeep model to measure which way it faces');
-    note('driving through trees/buildings, dust over the screen? judge the jeep-driving shot');
+    note('dust behind the wheels, the driver in his seat? judge the jeep-driving shot');
     await sleep(page, 1_200);
     await clickButton(page, /Stap uit/, 'jeep');
     await expect.poll(async () => (await R<Vehicle>(page, 'r.vehicle()')).inVehicle, { timeout: 5_000, message: '"Stap uit" did not get the ranger out of the jeep' }).toBe(false);
     await sleep(page, 600);
+    const parked = await R<Vehicle>(page, 'r.vehicle()');
+    soft(parked.markerDist >= 6 && Math.abs(parked.clearance) <= 0.1, `where the ranger left it the jeep is ${r2(parked.markerDist)} m from a marker (want ≥ 6) and ${r2(parked.clearance)} m off the ground`);
     const walkOn = await holdKey(page, 'ArrowUp', 1_000);
     hard(walkOn.moved >= 0.8, `after "Stap uit" the ranger cannot walk on (moved ${walkOn.moved} m in 1 s)`);
+    await clearOnFoot('out of the jeep');
     await shot(page, 'out-of-jeep');
+
+    // -- the helicopter: switched on in Pauze → Instellingen with real clicks
+    await clickButton(page, /Pauze/, 'explore HUD');
+    await clickButton(page, /Instellingen/, 'pause');
+    const toggle = page.getByRole('switch', { name: 'Helikopter' });
+    const shown = await toggle.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true, () => false);
+    hard(shown, `Instellingen has no "Helikopter" switch (visible buttons: ${await visibleButtons(page)})`);
+    await toggle.click();
+    await clickButton(page, /^Klaar$/, 'Instellingen');
+    await clickButton(page, /Terug naar de open plek/, 'pause');
+    const h0 = await R<Heli | null>(page, 'r.heli()');
+    hard(!!h0?.placed, 'there is no helicopter in the world');
+    hard(h0!.optIn && h0!.available, `after switching it on the helicopter is not available (optIn ${h0!.optIn}, available ${h0!.available})`);
+    const wh = await walkTo(page, { x: h0!.x, z: h0!.z }, { stopDist: 0.3, until: (s) => s.heliNear, timeout: 60_000 });
+    walkQuality(wh, 'walk to the helicopter');
+    hard(wh.res === 'until', `walked to the helicopter but it never offered "Stap in" (${wh.res} at ${r2(wh.end.x)}, ${r2(wh.end.z)})`);
+    await shot(page, 'at-heli');
+    await clickButton(page, /Stap in de helikopter/, 'helicopter');
+    await expect.poll(async () => (await R<Heli>(page, 'r.heli()')).inHeli, { timeout: 5_000, message: '"Stap in de helikopter" did not seat the ranger' }).toBe(true);
+    soft((await R<Heli>(page, 'r.heli()')).pilotSeated, 'the pilot does not sit in the helicopter');
+    // take off and fly to the other helipad with the arrow keys, like a player
+    const pad = h0!.pads.reduce((f, p) => (Math.hypot(p.x - h0!.x, p.z - h0!.z) > Math.hypot(f.x - h0!.x, f.z - h0!.z) ? p : f));
+    const held = new Set<string>();
+    const setKey = async (k: string, on: boolean): Promise<void> => {
+      if (on && !held.has(k)) { await page.keyboard.down(k); held.add(k); } else if (!on && held.has(k)) { await page.keyboard.up(k); held.delete(k); }
+    };
+    let prev: Heli | null = null; let sideways = 0; let flights = 0; let steep = 0; let comfort = 0; let flyShot = false; let over = false;
+    const tf = Date.now();
+    try {
+      while (Date.now() - tf < 90_000) {
+        const h = await R<Heli>(page, 'r.heli()');
+        if (Math.abs(h.climbRate) > 2.05) steep += 1;
+        if (h.fov !== h0!.fov || Math.abs(h.roll) > 1e-3) comfort += 1;
+        if (prev && h.speed > 3) {
+          const mx = h.x - prev.x; const mz = h.z - prev.z;
+          if (Math.hypot(mx, mz) > 0.3) {
+            flights += 1;
+            // against the nose halfway between the two samples (in a turn it swings between them)
+            if (Math.abs(wrap(Math.atan2(mx, mz) - (prev.heading + wrap(h.heading - prev.heading) / 2))) > 0.35) sideways += 1;
+          }
+        }
+        prev = h;
+        if (!flyShot && h.altitude > 10 && h.speed > 5) { flyShot = true; await shot(page, 'heli-flying'); }
+        if (h.onPad && Math.hypot(h.x - pad.x, h.z - pad.z) < 4) { over = true; break; }
+        const e = wrap(Math.atan2(pad.x - h.x, pad.z - h.z) - h.heading);
+        await setKey('ArrowUp', true);
+        await setKey('ArrowLeft', e > 0.12);
+        await setKey('ArrowRight', e < -0.12);
+        await sleep(page, 100);
+      }
+    } finally { for (const k of [...held]) await page.keyboard.up(k); }
+    note(`flew ${r2(Math.hypot(pad.x - h0!.x, pad.z - h0!.z))} m to the helipad at (${pad.x}, ${pad.z}) in ${((Date.now() - tf) / 1000).toFixed(1)} s`);
+    hard(over, 'flying with the arrow keys never brought the helicopter over the other helipad');
+    soft(sideways === 0, `the helicopter flies sideways: ${sideways}/${flights} samples move > 20° off its nose`);
+    soft(steep === 0 && comfort === 0, `flight comfort: ${steep} samples climb/sink faster than 2 m/s, ${comfort} change the FOV or roll`);
+    await clickButton(page, /Land hier/, 'helicopter over the pad');
+    await expect.poll(async () => (await R<Heli>(page, 'r.heli()')).airborne, { timeout: 60_000, message: '"Land hier" never set the helicopter down' }).toBe(false);
+    await sleep(page, 500);
+    const hl = await R<Heli>(page, 'r.heli()');
+    note(`landed ${r2(Math.hypot(hl.x - pad.x, hl.z - pad.z))} m from the pad centre, ${r2(hl.clearance)} m off the ground`);
+    soft(Math.hypot(hl.x - pad.x, hl.z - pad.z) < 1 && Math.abs(hl.clearance) <= 0.1, 'the helicopter did not land on the pad (centre, on the ground)');
+    await shot(page, 'heli-landed');
+    await clickButton(page, /Stap uit/, 'landed helicopter');
+    await expect.poll(async () => (await R<Heli>(page, 'r.heli()')).inHeli, { timeout: 5_000, message: '"Stap uit" did not get the ranger out of the helicopter' }).toBe(false);
+    await sleep(page, 600);
+    const walkOff = await holdKey(page, 'ArrowUp', 1_000);
+    hard(walkOff.moved >= 0.8, `after landing the ranger cannot walk on (moved ${walkOff.moved} m in 1 s)`);
+    await clearOnFoot('out of the helicopter');
     noNewErrors();
   });
 

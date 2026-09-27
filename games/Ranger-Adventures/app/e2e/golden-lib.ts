@@ -16,7 +16,7 @@ export type Status = 'pass' | 'FAIL' | 'soft-fail' | 'not reached';
 export interface Row { n: number; step: string; status: Status; notes: string[] }
 
 const ROWS: Row[] = [
-  'Opening screen', 'Make your ranger', 'Walk the free world', 'Drive the jeep',
+  'Opening screen', 'Make your ranger', 'Walk the free world', 'Drive the jeep, fly the heli',
   'Go to the first mission', 'Play its mini-games', 'Finish the mission', 'Back in the world + reload',
 ].map((step, i) => ({ n: i + 1, step, status: 'not reached' as Status, notes: [] }));
 let current: Row = ROWS[0];
@@ -101,12 +101,16 @@ export type P2 = { x: number; z: number };
 export type Cam = { x: number; y: number; z: number; yaw: number; viewClear: boolean; fov: number;
   avatarScreen: { x: number; y: number; onScreen: boolean; heightFrac: number; visible: boolean } };
 export type Snap = { p: P2 | null; c: Cam | null; g: { grounded: boolean; clearance: number } | null; near: string | null;
-  jeepNear: boolean; screen: string; view: string | null; t: number };
+  jeepNear: boolean; heliNear: boolean; screen: string; view: string | null; t: number };
 export type Hint = { id: string; x: number; y: number; onScreen: boolean; firstHit: boolean; aboveGround: boolean;
   firstHitBy: string | null; bottomGap: number | null; reachesCanvas: boolean; blocker: string | null; parts: string[] };
 export type Seat = { id: string; x: number; y: number; z: number; gap: number; sig: string; moves?: 'player' | 'ambient' };
 export type Vehicle = { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; y: number;
-  grounded: boolean; clearance: number; speed: number; fov: number; roll: number };
+  grounded: boolean; clearance: number; speed: number; fov: number; roll: number;
+  heading: number; driverSeated: boolean; markerDist: number };
+export type Heli = { placed: boolean; optIn: boolean; available: boolean; near: boolean; inHeli: boolean; onPad: boolean;
+  airborne: boolean; landing: boolean; pilotSeated: boolean; x: number; z: number; heading: number; altitude: number;
+  clearance: number; speed: number; climbRate: number; fov: number; roll: number; pads: P2[] };
 
 /** Evaluate `expr` against the dev hook (`r` = window.__ranger). Read-only. */
 export function R<T>(page: Page, expr: string): Promise<T> {
@@ -114,7 +118,7 @@ export function R<T>(page: Page, expr: string): Promise<T> {
 }
 
 export const snap = (page: Page): Promise<Snap> => R<Snap>(page,
-  '({ p: r.pos(), c: r.cam(), g: r.grounded(), near: r.nearId(), jeepNear: !!r.vehicle()?.near, screen: r.screen, view: r.missionView, t: performance.now() })');
+  '({ p: r.pos(), c: r.cam(), g: r.grounded(), near: r.nearId(), jeepNear: !!r.vehicle()?.near, heliNear: !!r.heli()?.near, screen: r.screen, view: r.missionView, t: performance.now() })');
 
 export const sleep = (page: Page, ms: number): Promise<void> => page.waitForTimeout(ms);
 export const r2 = (n: number): number => Math.round(n * 100) / 100;

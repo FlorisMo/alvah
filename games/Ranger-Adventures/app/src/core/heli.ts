@@ -26,10 +26,13 @@
  * imports render3d.
  */
 
-import { driveStep, type DriveInput, type DriveCaps } from './vehicle.ts';
+import { driveStep, type DriveInput, type DriveCaps, type BodyCircle } from './vehicle.ts';
 
-/** Fixed cruise height (m) the helicopter eases to once airborne (§5 W5.3 ~25 m). */
-export const HELI_CRUISE_HEIGHT = 25;
+/** Fixed cruise height (m) the helicopter eases to once airborne. Wave 2: 16 m, not
+ *  the old 25 m — clear of every crown (trees are ≤ ~9 m), low enough that the world
+ *  below still reads as the Veluwe (at 25 m it was "an orange haze bowl"), and a
+ *  shorter ≤ 2 m/s climb and descent. */
+export const HELI_CRUISE_HEIGHT = 16;
 
 /** The ground altitude — the target while landing at a pad; hover-on-deck. */
 export const HELI_PAD_HEIGHT = 0;
@@ -153,6 +156,37 @@ export function heliVignette(speed: number, climbRate: number): number {
   const ramp = (motion / HELI_CAPS.maxSpeed) * HELI_VIGNETTE_MAX;
   return ramp < HELI_VIGNETTE_MAX ? ramp : HELI_VIGNETTE_MAX;
 }
+
+/** Seconds for the helicopter to build from a hover to its cruise speed (and to
+ *  brake back to a hover): a gentle push, never a lurch. */
+export const HELI_RAMP_TIME = 1.5;
+
+/** Ease the horizontal speed toward `throttle · maxSpeed` (throttle clamped to
+ *  [0, 1]: the helicopter never flies backwards, it faces where it flies) at a bounded
+ *  rate. Pure. */
+export function heliRamp(current: number, throttle: number, dt: number, caps: DriveCaps = HELI_CAPS): number {
+  const target = Math.max(0, Math.min(1, throttle)) * caps.maxSpeed;
+  const maxDv = (caps.maxSpeed / HELI_RAMP_TIME) * Math.max(0, dt);
+  const dv = target - current;
+  return Math.abs(dv) <= maxDv ? target : current + Math.sign(dv) * maxDv;
+}
+
+/**
+ * The landing glide: the altitude to aim for with `dist` metres still to fly to the
+ * pad. Far out it holds cruise; it starts down ~35 m out and reaches the ground over
+ * the pad, so the ≤ 2 m/s descent is spread along the approach instead of a long
+ * hover at the end. Monotone in `dist`, 0 at the pad. Pure.
+ */
+export function landingAltitude(dist: number): number {
+  return Math.max(HELI_PAD_HEIGHT, Math.min(HELI_CRUISE_HEIGHT, (dist - 1.2) * 0.5));
+}
+
+/** The helicopter's footprint on the ground (nose along +z after the model turn):
+ *  the cabin and the tail boom. The rotor turns above a walker's head. */
+export const HELI_BODY: readonly BodyCircle[] = [
+  { along: 0.5, r: 1.05 },
+  { along: -1.35, r: 0.5 },
+];
 
 /**
  * Whether the helicopter may be entered at all. It is OPT-IN (Instellingen, default
