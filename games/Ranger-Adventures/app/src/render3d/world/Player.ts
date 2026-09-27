@@ -101,7 +101,7 @@ export class Player {
   readonly target = new THREE.Vector3(0, 0, 0);
   // Cached ranger horizontal bounding radius, measured once whenever the mesh is
   // (re)built (measureAvatar). The min-boom clamp is `radius + near-plane` and the
-  // avatar fades when the boom gets within ~`radius + 1 m`, so a rig that ever
+  // avatar fades out when the lens gets within ~`radius + 0.35 m`, so a rig that ever
   // renders bigger than the honest measured height still can't smear the lens (§4:
   // pixels outrank the hook).
   avatarRadius = 0.45;

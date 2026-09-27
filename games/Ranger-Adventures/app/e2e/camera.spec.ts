@@ -6,8 +6,11 @@ import { shot, collectPageErrors, reportPageErrors } from './helpers';
  * as he turns (damped, rate-clamped, roll 0, fixed FOV). Two asserts, straight
  * from the box acceptance:
  *  1) walk a quarter-circle → `cameraYaw()` changes ≥ 45°.
- *  2) with reduced-motion emulated → the bearing is FIXED, so `cameraYaw()` does
- *     not move (locomotion still runs — the ranger walks, the view just holds).
+ *  2) with reduced-motion emulated → the view never TURNS: while he walks a curve the
+ *     bearing only ever changes by a cut (never a frame of smooth rotation), once the
+ *     turn key is up it has cut behind him, so Up walks straight into the screen, and
+ *     Down backs him up without turning him to face the lens (child B5, 2026-09-27:
+ *     screen-relative keys under reduced motion turned him round on Down).
  *
  * State-only asserts against the dev hook (headless SwiftShader renders
  * deterministically enough for state, not pixels — §3.1). Screenshots are
@@ -68,42 +71,72 @@ test('camera: walking a quarter-circle rotates the follow-cam ≥45°', async ({
   expect(errors).toEqual([]);
 });
 
-test('camera: reduced-motion keeps the bearing fixed while the ranger still walks', async ({ page }, testInfo) => {
+test('camera: reduced-motion — the view turns only by cuts, and Up walks into the screen after a turn', async ({ page }, testInfo) => {
   const errors: string[] = [];
   collectPageErrors(page, errors);
 
-  // OS-level reduce → prefersReducedMotion() true → the follow falls back to the
-  // fixed bearing (§3.2) with position cuts. Set before entering the world.
+  // OS-level reduce → prefersReducedMotion() true → the follow turns by cuts only.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await enterWorld(page);
 
-  const startYaw = await hook(page, (r) => r.cameraYaw());
   const startPos = await hook(page, (r) => r.pos());
-  expect(startYaw, 'cameraYaw() available').not.toBeNull();
   expect(startPos, 'pos() available').not.toBeNull();
 
-  // Hold the same lateral key long enough that a ROTATING cam would have swung
-  // well past 45°; here the bearing must stay put.
-  await page.keyboard.down('ArrowRight');
-  try {
-    // the ranger keeps walking — locomotion is never reduced (§1e KEEP)
-    await expect
-      .poll(async () => {
-        const p = await hook(page, (r) => r.pos());
-        return p ? Math.hypot(p.x - startPos!.x, p.z - startPos!.z) : 0;
-      }, { timeout: 20_000, message: 'reduced-motion still lets the ranger walk' })
-      .toBeGreaterThanOrEqual(2);
+  /** Every rendered frame for `ms`: how the bearing changed frame to frame (a cut is a
+   *  jump of > 5°, anything between 0.05° and 5° is a frame of smooth rotation). */
+  const trace = (ms: number): Promise<{ frames: number; cuts: number; smooth: number }> => page.evaluate(async (dur) => {
+    const r = (window as unknown as { __ranger: { cameraYaw(): number } }).__ranger;
+    let prev = r.cameraYaw(), frames = 0, cuts = 0, smooth = 0;
+    const t0 = performance.now();
+    await new Promise<void>((res) => {
+      const tick = (): void => {
+        const y = r.cameraYaw();
+        const d = Math.abs(Math.atan2(Math.sin(y - prev), Math.cos(y - prev))) * 180 / Math.PI;
+        if (d > 5) cuts += 1; else if (d > 0.05) smooth += 1;
+        prev = y; frames += 1;
+        if (performance.now() - t0 < dur) requestAnimationFrame(tick); else res();
+      };
+      requestAnimationFrame(tick);
+    });
+    return { frames, cuts, smooth };
+  }, ms);
 
-    const endYaw = await hook(page, (r) => r.cameraYaw());
-    expect(endYaw).not.toBeNull();
-    expect(
-      degApart(endYaw!, startYaw!),
-      'reduced-motion holds a fixed camera bearing (no rotation)',
-    ).toBeLessThan(2);
-  } finally {
-    await page.keyboard.up('ArrowRight');
-  }
-  await shot(page, 'camera-reduced-motion-fixed');
+  // a curve: Up + Right for 2.5 s (the ranger turns ~225° while he walks)
+  await page.keyboard.down('ArrowUp');
+  await page.keyboard.down('ArrowRight');
+  const curve = trace(3000);
+  await page.waitForTimeout(2500);
+  await page.keyboard.up('ArrowRight');
+  await page.keyboard.up('ArrowUp');
+  const c = await curve;
+  const p1 = (await hook(page, (r) => r.pos()))!;
+  expect(Math.hypot(p1.x - startPos!.x, p1.z - startPos!.z), 'reduced-motion still lets the ranger walk').toBeGreaterThanOrEqual(2);
+  expect(c.smooth, `reduced motion: the view never rotates smoothly (${JSON.stringify(c)})`).toBe(0);
+  expect(c.cuts, `a long turn is a few calm cuts (${JSON.stringify(c)})`).toBeGreaterThanOrEqual(1);
+  expect(c.cuts, `…never a flicker of cuts (${JSON.stringify(c)})`).toBeLessThanOrEqual(8);
+
+  // the turn is over: the view has cut behind him, so Up walks straight into the screen
+  await page.waitForTimeout(300);
+  const yaw = (await hook(page, (r) => r.cameraYaw()))!;
+  await page.keyboard.down('ArrowUp');
+  await page.waitForTimeout(1200);
+  await page.keyboard.up('ArrowUp');
+  const p2 = (await hook(page, (r) => r.pos()))!;
+  const walked = Math.atan2(p2.x - p1.x, p2.z - p1.z);
+  const intoScreen = Math.atan2(-Math.sin(yaw), -Math.cos(yaw));
+  const off = Math.abs(Math.atan2(Math.sin(walked - intoScreen), Math.cos(walked - intoScreen))) * 180 / Math.PI;
+  expect(off, 'after the turn, Up walks straight into the screen').toBeLessThan(12);
+
+  // Down backs him up toward the lens without turning him round: the bearing stays put
+  const back = trace(1500);
+  await page.keyboard.down('ArrowDown');
+  await page.waitForTimeout(1200);
+  await page.keyboard.up('ArrowDown');
+  const b = await back;
+  const p3 = (await hook(page, (r) => r.pos()))!;
+  expect(Math.hypot(p3.x - p2.x, p3.z - p2.z), 'Down backs him up').toBeGreaterThan(0.5);
+  expect(b.cuts + b.smooth, `Down never turns the view (${JSON.stringify(b)})`).toBe(0);
+  await shot(page, 'camera-reduced-motion-cuts');
 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);

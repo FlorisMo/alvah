@@ -112,6 +112,8 @@ export class CameraRig {
   private readonly SIDE_URGENT_RATE = 0.5;  // squeezed now, or he is turning: a little quicker
   private readonly BLOCKED = 2;             // a search cost this high = the line to him is blocked now
   private readonly LOOKAHEAD = 0.5;         // s: search where he is going (and where his turn takes the view) too
+  private readonly BOOM_AHEAD = [1 / 3, 2 / 3, 1]; // …and the boom, at these shares of it
+  private readonly _probe = new THREE.Vector3();
   private wasWalk = true;
   private readonly HUG_ANGLE = (60 * Math.PI) / 180;
   // The view never tips down steeper than this (child B4, parent B4: a lens craned up
@@ -126,6 +128,14 @@ export class CameraRig {
   private readonly PITCH_CLOSE = 14 * DEG;
   private readonly PITCH_CLOSE_D = 1.2;
   private readonly EYES_FRAC = 0.9;
+  private readonly AHEAD_TAU = 0.35;
+  private aheadNow = 0;          // how far ahead of him the view aims now (m; eased)
+  // The fade rail (place): he fades out when the lens comes within his radius + HIDE_IN of
+  // his body, and back in past his radius + HIDE_OUT, over AVATAR_FADE_TAU.
+  private readonly HIDE_IN = 0.35;
+  private readonly HIDE_OUT = 0.5;
+  private readonly AVATAR_FADE_TAU = 0.08;
+  private avatarHidden = false;
   private readonly MIN_BOOM = 0.05;
   private get headRoom(): number { return this.player.avatarRadius + 1.2; }
   // The world rim: the lens may stand this far outside the walk bound, among the rim
@@ -141,12 +151,11 @@ export class CameraRig {
   private readonly RM_MIN_GAP = 1 * DEG;
   private rmLastTarget = FIXED_FOLLOW_YAW;
   private rmRest = 0;
-  // …and the boom: under reduced motion every change of its length is a cut, so trees
-  // never shorten it (the fade carries them: no cut per trunk walked past), and after a
-  // solid shortened it, it cuts back out only once the full boom has been free RM_BOOM_OUT.
+  // …and the boom: under reduced motion every change of its length is a cut, so after a
+  // solid shortened it, it cuts back out only once the full boom has been free RM_BOOM_OUT
+  // (trees never shorten it at all: the fade carries them).
   private readonly RM_BOOM_OUT = 0.6;
   private rmBoomFree = 0;
-  private reducedNow = false;
   // The jeep / helicopter chase: the eye keeps the chase's pitch when the boom pulls in,
   // but never below the vehicle's roof.
   private readonly JEEP_EYE_MIN = 2.6;
@@ -321,9 +330,8 @@ export class CameraRig {
   }
 
   /**
-   * F-16 dolly floor: outside the avatar's own radius + the near plane, and just PAST the
-   * fade rail's `far` threshold (`avatarRadius + 1.1`) so the closest zoom keeps the
-   * ranger SOLID. Kept a metre below the ceiling so min < max even if a mis-scaled rig
+   * F-16 dolly floor: outside the avatar's own radius + the near plane, and well past the
+   * fade rail (`avatarRadius + HIDE_OUT`) so the closest zoom keeps the ranger SOLID. Kept a metre below the ceiling so min < max even if a mis-scaled rig
    * inflates `avatarRadius`.
    */
   zoomMinBoom(): number {
@@ -357,7 +365,6 @@ export class CameraRig {
     const { inVehicle, inHeli } = this.host.mode();
     const walk = !inVehicle && !inHeli;
     const follow = this.cameraFollowSource ? this.cameraFollowSource() : true;
-    this.reducedNow = reduced;
     let bearingCut = false;
     if (follow && !reduced) {
       this.followYaw = walk
@@ -385,6 +392,7 @@ export class CameraRig {
     let eye = off.y;
     let wall = Infinity;
     const first = !this.placed;
+    let reframe = first;
     if (walk) {
       this.zoomNow = reduced || snap ? this.zoomDist
         : this.zoomNow + (this.zoomDist - this.zoomNow) * dampFactor(dt, this.CAM_ZOOM_TAU);
@@ -400,7 +408,7 @@ export class CameraRig {
       // stepping out of the jeep / helicopter is already a reframe (a solid parked beside
       // the lens is common there), and so is a reduced-motion bearing cut: the walk view
       // picks its clearest slide right away
-      const reframe = !this.wasWalk || bearingCut || first;
+      reframe = !this.wasWalk || bearingCut || first;
       const moving = this.vel.x * this.vel.x + this.vel.z * this.vel.z > 0.01 || this.player.turning;
       const calm = follow && !reduced; // the slide eases, and may change while he moves
       this.sideHeld += dt;
@@ -442,8 +450,18 @@ export class CameraRig {
       }
       // the boom starts in before a solid his walk or his turn is about to put behind him
       // (it comes in calmly, so it has to start early: a wall swept in by a turn would
-      // otherwise stop the lens at once)
-      const cap = calm && moving ? this.solveWalk(aheadBearing, this.sideNow, this.ahead).dist : Infinity;
+      // otherwise stop the lens at once): the shortest boom over the next half second (not
+      // further: a turn key held now is not a turn held for a second, and a lens pulled in
+      // for a wall he never turns to hides him for nothing)
+      let cap = Infinity;
+      if (calm && moving) {
+        for (const f of this.BOOM_AHEAD) {
+          const t = this.LOOKAHEAD * f;
+          this._probe.copy(rp).addScaledVector(this.vel, t);
+          this._probe.y = this.terrain.y(this._probe.x, this._probe.z);
+          cap = Math.min(cap, this.solveWalk(wrapAngle(base + this.player.turnRate * t), this.sideNow, this._probe).dist);
+        }
+      }
       const sol = this.solveWalk(base, this.sideNow, rp, cap);
       dist = sol.dist;
       eye = sol.eye;
@@ -460,16 +478,16 @@ export class CameraRig {
       const b0 = this.bearing();
       const ux = -Math.sin(b0), uz = -Math.cos(b0);
       // the chase lens stays inside the lens ring at the rim (among the first rim trees at
-      // most, which fade), and the jeep's boom pulls in before a tree / hut / prop behind
+      // most, which fade), and the jeep's boom pulls in before a hut / prop / person behind
       // it instead of burying the lens in that solid (its own collision circle is lifted
-      // while driving, so the cast can't hit itself)
+      // while driving, so the cast can't hit itself); trees fade instead
       let frac = this.rimFraction(rp.x, rp.z, ux * dist, uz * dist);
       let min = this.HELI_MIN_BOOM;
       if (inVehicle) {
-        frac = Math.min(frac, this.boomClearFraction(rp.x, rp.z, ux * dist, uz * dist, this.CAM_PROBE_R, true));
+        frac = Math.min(frac, this.boomClearFraction(rp.x, rp.z, ux * dist, uz * dist, this.CAM_PROBE_R, true, true));
         min = JEEP_COLLIDE + this.camera.near + 0.3;
         const len = Math.max(dist, this.boomNow);
-        wall = Math.max(min, len * this.boomClearFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE, true));
+        wall = Math.max(min, len * this.boomClearFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE, true, true));
       }
       dist = Math.max(Math.min(min, dist), dist * frac);
       // a shorter boom keeps the chase's pitch (never a dive onto the roof), above the roof
@@ -494,7 +512,7 @@ export class CameraRig {
       this.pivot.copy(rp);
       // reduced motion: a boom a solid shortened cuts back out only once the full boom has
       // been free a moment (one cut, not one per frame the line flickers)
-      this.rmBoomFree = walk && reduced && !first && dist > this.boomNow + 0.05 ? this.rmBoomFree + dt : 0;
+      this.rmBoomFree = walk && reduced && !reframe && dist > this.boomNow + 0.05 ? this.rmBoomFree + dt : 0;
       if (this.rmBoomFree === 0 || this.rmBoomFree >= this.RM_BOOM_OUT) {
         this.boomNow = dist;
         this.eyeNow = eye;
@@ -504,7 +522,14 @@ export class CameraRig {
     } else {
       this.pivot.lerp(rp, dampFactor(dt, walk ? this.PIVOT_TAU : this.PIVOT_TAU_VEHICLE));
       this.boomNow += (dist - this.boomNow) * dampFactor(dt, dist < this.boomNow ? this.BOOM_IN_TAU : this.BOOM_OUT_TAU);
-      if (this.boomNow > wall) this.boomNow = wall;
+      if (this.boomNow > wall) {
+        // a wall the look-ahead did not see coming: the lens never goes into it; it comes
+        // in to it at once, but along the view (the eye comes down with it), so the view
+        // does not tip, it only steps closer
+        const aim = walk ? this.camLookH : this.camIdleLookH;
+        this.eyeNow = aim + (this.eyeNow - aim) * (wall / this.boomNow);
+        this.boomNow = wall;
+      }
       this.eyeNow += (eye - this.eyeNow) * dampFactor(dt, eye > this.eyeNow ? this.EYE_UP_TAU : this.EYE_DOWN_TAU);
       // someone else moved the lens since the last frame (a mini-game's reframe): ease
       // from where it left it instead of cutting
@@ -520,20 +545,34 @@ export class CameraRig {
     this.camera.up.set(0, 1, 0); // roll = 0 always
     // look at the smoothed pivot the boom hangs off (not his live feet), moved by the
     // same side slide as the lens, so the view looks exactly along the eased bearing: a
-    // boom pulling in, a slide or his steps can never add a twist. While the boom and the
-    // eye are still settling the view could tip past PITCH_MAX for a moment: then it aims
-    // a little ahead of him instead (its heading stays the bearing).
+    // boom pulling in, a slide or his steps can never add a twist. With the lens close to
+    // him the view flattens (pitchCapAt) by aiming a little ahead of him (its heading stays
+    // the bearing); that aim eases, so the view never nods, but it never lets the view tip
+    // past PITCH_MAX, not even for a frame while the boom and the eye settle.
     const aimH = walk ? this.camLookH : this.camIdleLookH;
     this.sideOff(this._look.copy(this.pivot), s, c, 1);
-    const ahead = (this.eyeNow - aimH) / Math.tan(this.pitchCapAt(this.boomNow)) - this.boomNow;
+    const rise = this.eyeNow - aimH;
+    const aheadWant = Math.max(0, rise / Math.tan(this.pitchCapAt(this.boomNow)) - this.boomNow);
+    if (snap || first) this.aheadNow = aheadWant;
+    else this.aheadNow += (aheadWant - this.aheadNow) * dampFactor(dt, this.AHEAD_TAU);
+    const ahead = Math.max(this.aheadNow, rise / Math.tan(this.PITCH_MAX) - this.boomNow);
     if (ahead > 0) { this._look.x += s * ahead; this._look.z += c * ahead; }
     this.camera.lookAt(this._look.x, this._look.y + aimH, this._look.z);
-    // F-05 fade rail: if the boom still has to come close (an occluder right behind him)
-    // fade the ranger rather than smear his interior across the lens. Opacity is a pure
-    // function of the REAL lens→body distance, so it is a cut under reduced motion too.
+    // F-05 fade rail: when the lens has to come right up to him (his back to a wall) he
+    // fades OUT rather than smear his interior across the lens; the view then looks over
+    // where he stands. Solid or gone, never half: a half-faded head seen from close
+    // behind shows his face and eyes inside his hair. The switch has a little hysteresis
+    // and a quick dissolve (a cut under reduced motion or on a snap).
     const lp = this.camera.position;
-    if (walk) this.player.setAvatarOpacity(this.opacityAt(Math.hypot(lp.x - rp.x, lp.z - rp.z), lp.y - rp.y));
-    else if (this.player.avatarOpacity !== 1) this.player.setAvatarOpacity(1); // never leave the driver faded
+    if (walk) {
+      const d = this.bodyDist(Math.hypot(lp.x - rp.x, lp.z - rp.z), lp.y - rp.y);
+      const r = this.player.avatarRadius;
+      this.avatarHidden = d < r + (this.avatarHidden ? this.HIDE_OUT : this.HIDE_IN);
+      const target = this.avatarHidden ? 0 : 1;
+      const now = this.player.avatarOpacity;
+      const o = snap || first ? target : now + (target - now) * dampFactor(dt, this.AVATAR_FADE_TAU);
+      this.player.setAvatarOpacity(Math.abs(o - target) < 0.02 ? target : o);
+    } else if (this.player.avatarOpacity !== 1) this.player.setAvatarOpacity(1); // never leave the driver faded
     // The occluder fade + the honest clear-line read, for the walk AND the chase cams:
     // every tree between the lens and him (his head and his chest; the vehicle's body and
     // roof), or round the lens, fades — exactly those trees (world/Forest.ts) — at once,
@@ -581,14 +620,18 @@ export class CameraRig {
     return cost >= this.BLOCKED || d < this.zoomNow * 0.6;
   }
 
-  /** The fade rail: his opacity for a lens `hd` m from him (horizontally) and `up` m
-   *  above his feet — by the lens's distance to his body (a post from his feet to the
-   *  top of his head), solid beyond his radius + 1.1 m, gone within his radius + 0.3 m. */
-  private opacityAt(hd: number, up: number): number {
+  /** The lens's distance to his body (a post from his feet to the top of his head), for
+   *  a lens `hd` m from him horizontally and `up` m above his feet. */
+  private bodyDist(hd: number, up: number): number {
     const dy = up > this.player.avatarTopY ? up - this.player.avatarTopY : up < 0 ? -up : 0;
-    const d = Math.hypot(hd, dy);
-    const near = this.player.avatarRadius + 0.3, far = this.player.avatarRadius + 1.1;
-    return Math.max(0, Math.min(1, (d - near) / (far - near)));
+    return Math.hypot(hd, dy);
+  }
+
+  /** How well a lens there shows him, for the clear-view search (1 = a good distance,
+   *  0 = so close he fades out): a ramp from the fade-out distance to 0.4 m past it. */
+  private opacityAt(hd: number, up: number): number {
+    const near = this.player.avatarRadius + this.HIDE_IN;
+    return Math.max(0, Math.min(1, (this.bodyDist(hd, up) - near) / 0.4));
   }
 
   /** The lens for this frame's smoothed pivot / boom / eye / side slide at bearing (s, c). */
@@ -706,11 +749,16 @@ export class CameraRig {
     const pitch = Math.max(this.PITCH_MIN, Math.min(this.PITCH_MAX, this.basePitch() + this.orbitTilt));
     this.pitchTan = Math.tan(pitch);
     const minDist = Math.min(want, this.MIN_BOOM); // no room behind him: the lens comes in close
-    const frac = Math.min(this.boomClearFraction(rp.x, rp.z, ux * want, uz * want, this.CAM_PROBE_R, true, this.reducedNow),
+    // the boom reaches as far as the player's zoom until the LINE to him would pass through
+    // a solid (a thin cast: a corner it merely grazes is no reason to come in), then the
+    // lens itself keeps CAM_PROBE_R clear of every solid; the trees are left to the fade
+    // (world/Crowns.ts has their trunks too), so the boom never pumps past each trunk
+    const frac = Math.min(this.boomClearFraction(rp.x, rp.z, ux * want, uz * want, this.WALL_PROBE, true, true),
       this.rimFraction(rp.x, rp.z, ux * want, uz * want));
     let dist = Math.max(minDist, Math.min(cap, want * frac));
+    while (dist > minDist && !this.lensClear(rp.x + ux * dist, rp.z + uz * dist)) dist = Math.max(minDist, dist - 0.15);
     const len = Math.max(want, this.boomNow);
-    out.wall = Math.max(minDist, len * this.boomClearFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE, true, this.reducedNow));
+    out.wall = Math.max(minDist, len * this.boomClearFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE, true, true));
     // never a lens in the leaves: step the boom in until it is out of every crown
     // (not below 35 % of the zoom: then the fade has to carry it)
     let lensInCrown = this.lensInCrown(rp.x + ux * dist, rp.y + this.eyeFor(dist, rp, ux, uz), rp.z + uz * dist, 0.3, null);
@@ -774,6 +822,16 @@ export class CameraRig {
       if (blocksLine(k, cx, cy, cz, ax, ay, az)) return true;
     }
     return false;
+  }
+
+  /** Does the lens at (x, z) keep CAM_PROBE_R from every building, prop and person (not
+   *  the trees: they fade)? A building by its real walls, not its elbow-room pad. */
+  private lensClear(x: number, z: number): boolean {
+    for (const o of this.nearSolids) {
+      if (o.tree) continue;
+      if ((o.box ? obstacleGap(o, x, z, -o.box.pad) : obstacleGap(o, x, z)) < this.CAM_PROBE_R) return false;
+    }
+    return true;
   }
 
   /** A building, prop or person (not a tree) in the line from the lens to him on the
