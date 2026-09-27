@@ -486,25 +486,25 @@ export class Dressing {
       x: p.x, y: this.groundY(p.x, p.z), z: p.z,
       s: 0.75 + p.h * 0.7, sy: 0.7 + p.h * 0.6, rotY: i * 2.39996,
       tint: up.setRGB(0.9 + p.h * 0.2, 0.9 + ((i * 7) % 5) * 0.03, 0.9 + p.h * 0.15).clone(),
-    })), 58, 0, { geometry: heatherGeometry(5, 60), from: 16 });
+    })), 50, 0, { geometry: heatherGeometry(5, 60), from: 16 });
     const heideGrass = this.gridSpots('heide', 3.1 * thin, 23, (x, z, h) => heathCover(x, z) < 0.55 + h * 0.2);
     this.addField('heide-grass', tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), plantMaterial(),
-      heideGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.45 + p.h * 0.35, rotY: i * 1.7, phase: (i % 7) * 0.9 })), 46, 0.8);
+      heideGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.45 + p.h * 0.35, rotY: i * 1.7, phase: (i % 7) * 0.9 })), 40, 0.8);
     // stuifzand: helmgras tussocks, grey-green to straw, full sway in the open
     const marram = this.gridSpots('stuifzand', 2.9 * thin, 37, (_x, _z, h) => h < 0.62);
     this.addField('stuifzand-helmgras', tuftGeometry({ blades: 22, seed: 5, root: '#6c7552', tip: '#dccf9e', lean: 0.24, width: 0.03 }), plantMaterial(),
-      marram.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.45, rotY: i * 2.1, phase: (i % 7) * 0.9 })), 60, 1);
+      marram.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.45, rotY: i * 2.1, phase: (i % 7) * 0.9 })), 48, 1);
     // the ven sector away from the water is wet heath: pijpenstrootje tussocks and
     // pinker dopheide between them
     const dryVen = (x: number, z: number): boolean => Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) > VEN_SHORE_R + 1;
     const wetGrass = this.gridSpots('ven', 2.6 * thin, 61, (x, z, h) => dryVen(x, z) && h < 0.7);
     this.addField('ven-pijpenstrootje', tuftGeometry({ blades: 18, seed: 7, root: '#5c6536', tip: '#cdbd82', lean: 0.34 }), plantMaterial(),
-      wetGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.5 + p.h * 0.4, rotY: i * 1.9, phase: (i % 7) * 0.9 })), 46, 0.8);
+      wetGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.5 + p.h * 0.4, rotY: i * 1.9, phase: (i % 7) * 0.9 })), 40, 0.8);
     const dopheide = this.gridSpots('ven', 3.4 * thin, 67, (x, z, h) => dryVen(x, z) && heathCover(x, z) > 0.45 + h * 0.3);
     this.addField('ven-dopheide', heatherGeometry(9), plantMaterial(), dopheide.map((p, i) => ({
       x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.5, sy: 0.6 + p.h * 0.4, rotY: i * 2.39996,
       tint: new THREE.Color(1.02, 0.9, 1.0),
-    })), 50, 0, { geometry: heatherGeometry(9, 60), from: 16 });
+    })), 44, 0, { geometry: heatherGeometry(9, 60), from: 16 });
     // the GLB plants stream in: ferns under the bos trees, lisdodde round the ven
     void this.scatterGlbPlants(veg, thin);
   }
@@ -520,7 +520,7 @@ export class Dressing {
         x: p.x, y: this.groundY(p.x, p.z) - 0.02, z: p.z, s: 0.55 + p.h * 0.5, rotY: i * 2.39996,
         // late-summer bracken in the shade: olive, some already turning bronze
         tint: new THREE.Color(0.72 + p.h * 0.25, 0.68 + p.h * 0.08, 0.42),
-      })), 46, 0, { geometry: far, from: 14 });
+      })), 40, 0, { geometry: far, from: 14 });
     }
     const reeds = await loadModel('prop-reeds');
     if (!reeds) return;
@@ -539,7 +539,7 @@ export class Dressing {
       spots.push({ x, y: gy - 0.03, z, s: 1.3 + (i % 4) * 0.18, rotY: ang * 3.1, phase: (i % 5) * 1.3 });
     }
     void thin;
-    this.addField('ven-lisdodde', geo, lodMaterial(), spots, 75, 0.7);
+    this.addField('ven-lisdodde', geo, lodMaterial(), spots, 62, 0.7);
   }
 
   /** Lay out one plant field and, when it sways (`wind` > 0), hand its chunks to the wind. */
@@ -747,8 +747,8 @@ export class Dressing {
       group.add(proceduralTotem(spec.collide > 0 ? '#6b5a3a' : '#7d8a4a')); // instant stand-in
       this.scene.add(group);
       // small dressing is not drawn once the fog has it (a 12k-triangle mushroom at 60 m
-      // is a few grey pixels): low plants from 38 m, logs, stumps and boulders from 58 m
-      if (spec.h <= 1.1) this.farProps.push({ group, x, z, far: spec.collide > 0 ? 58 : 38 });
+      // is a few grey pixels): low plants from 36 m, logs, stumps and boulders from 50 m
+      if (spec.h <= 1.1) this.farProps.push({ group, x, z, far: spec.collide > 0 ? 50 : 36 });
       if (spec.collide > 0) this.obstacles.push({ x, z, r: spec.collide });
       this.props.push({ id: model, x, z });
       void loadModel(model).then((m) => {
