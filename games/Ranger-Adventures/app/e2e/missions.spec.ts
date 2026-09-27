@@ -194,7 +194,7 @@ async function playSteps(log: Log, mission: Mission): Promise<void> {
       const reacted = await expect.poll(async () => {
         const h3 = await R<Hint | null>(page, 'r.playHint()');
         return h3?.id !== before.id || (await uiText(page)) !== before.text || JSON.stringify((await save(page))?.trials) !== before.trials;
-      }, { timeout: 4_000 }).toBe(true).then(() => true, () => false);
+      }, { timeout: 10_000 }).toBe(true).then(() => true, () => false); // a real click reacts within a frame or two; 4 s ran out at load ~80
       log.hard(reacted, `${ef}: a real click on "${h.id}" did nothing`);
       lastProgress = Date.now();
       continue;

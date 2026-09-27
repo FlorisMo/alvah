@@ -399,7 +399,7 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
         const reacted = await expect.poll(async () => {
           const h3 = await R<Hint | null>(page, 'r.playHint()');
           return h3?.id !== before.id || (await uiText(page)) !== before.text || JSON.stringify((await save(page))?.trials) !== before.trials;
-        }, { timeout: 4_000 }).toBe(true).then(() => true, () => false);
+        }, { timeout: 10_000 }).toBe(true).then(() => true, () => false); // a click reacts within a frame or two; 4 s ran out in missions.spec at load ~80
         hard(reacted, `${ef}: a real mouse click on "${h.id}" at (${h.x}, ${h.y}) did nothing` +
           (h.reachesCanvas ? '' : ` — the click lands on ${h.blocker}, not on the 3D scene`));
         lastProgress = Date.now();
