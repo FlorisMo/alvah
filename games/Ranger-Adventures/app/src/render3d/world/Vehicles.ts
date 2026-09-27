@@ -52,15 +52,17 @@ const MODEL_YAW = Math.PI / 2;
 export const JEEP_COLLIDE = 1.6;
 const JEEP_NEAR_R = 3.6;
 // The jeep's home: on the stuifzand 14 m east of the spawn, ≥ 15 m from every mission
-// marker (audit veh-09: it used to park ON "Het stille zand"). It faces east-north-east,
-// away from the clearing, into open sand: a straight drive has 45 m free of every solid,
-// zone, the ven and the rim, never nearer than 4 m to a solid (verifier V1: faced at the
-// first mission it drove straight into the Missiebord). The ranger walks up from the
-// spawn behind it (the warden ≥ 4 m to the side, never in the camera's view of him), and
-// the helicopter stands ahead of it: stepped out after a short drive, the walk on to it
-// passes the jeep's nose instead of rounding its tail (a parked body between the walk
-// camera and the ranger folds the camera in).
-const JEEP_HOME = { x: 14, z: 0, faceX: 48, faceZ: 21 };
+// marker (audit veh-09: it used to park ON "Het stille zand"), facing away from the
+// clearing (verifier V1: faced at the first mission it drove straight into the
+// Missiebord, and stepping out there buried the walk camera). It looks at the
+// helicopter on pad A, 25 m ahead over open sand: a first push on the gas drives toward
+// it and eases round the pad (a keep-out zone), leaving the helicopter on the driver's
+// side — so after "Stap uit" the walk to it leads away from the parked jeep instead of
+// round it (a parked body between the walk camera and the ranger folds the camera in;
+// played clean for drives of 14-25 m). Aimed a hair right of
+// the pad's centre, so it always eases round the same side. The ranger walks up from
+// the spawn behind it, the warden ≥ 4 m off his path.
+const JEEP_HOME = { x: 14, z: 0, faceX: 32, faceZ: 18.4 };
 // P1.5b ground contact: the body eases toward the wheels' ground each frame (a damped
 // suspension glide, never a hard per-frame snap). Converges in ~0.1 s.
 const JEEP_HOVER_RATE = 10;
@@ -258,12 +260,18 @@ export class Vehicles {
   /** Walking near a parked jeep surfaces "Stap in" (W5.1), near the parked heli "Stap in
    *  de helikopter" (W5.3b). Suppressed while riding either one. */
   updateProximity(x: number, z: number): void {
+    // Parked side by side, both are within reach: only the NEARER one offers "Stap in",
+    // so the button on screen and Space always mean the vehicle he walked up to (the
+    // jeep's prompt used to hide the helicopter's whenever it stood within 3.6 m).
+    const dj = this.jeepPos ? Math.hypot(this.jeepPos.x - x, this.jeepPos.z - z) : Infinity;
+    const dh = this.heliPos ? Math.hypot(this.heliPos.x - x, this.heliPos.z - z) : Infinity;
+    const inJ = dj < JEEP_NEAR_R, inH = dh < HELI_NEAR_R;
     if (this.jeep && this.jeepPos && !this.inVehicle && !this.inHeli) {
-      const nj = Math.hypot(this.jeepPos.x - x, this.jeepPos.z - z) < JEEP_NEAR_R;
+      const nj = inJ && !(inH && dh < dj);
       if (nj !== this.nearJeep) { this.nearJeep = nj; this.onJeepNear(nj); }
     }
     if (this.heli && this.heliPos && !this.inHeli && !this.inVehicle) {
-      const nh = Math.hypot(this.heliPos.x - x, this.heliPos.z - z) < HELI_NEAR_R;
+      const nh = inH && !(inJ && dj <= dh);
       if (nh !== this.nearHeli) { this.nearHeli = nh; this.onHeliNear(nh); }
     }
   }
