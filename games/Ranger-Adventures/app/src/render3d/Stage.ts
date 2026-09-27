@@ -5,8 +5,9 @@ import { BIOME_GROUND_TONES, GROUND_BRIGHTEN, heathCover, vertexTint } from './G
 import { groundMaterial, mottleTexture } from './GroundMaterial';
 import { heatherGeometry, plantMaterial, tuftGeometry } from './world/Plants';
 import { RANGER_STAND_HEIGHT } from './AnimalScale';
-import { provideRenderView, provideTris } from '../core/devhook';
+import { provideRenderView, provideTris, provideFrames, provideRenderMode } from '../core/devhook';
 import { dressRanger } from './RangerLook';
+import { glRendererName, isSoftwareRenderer, lightOverride, setLightMode } from '../core/quality';
 
 /** The real staged tree species — the SAME GLBs the explorable world plants
  *  (World.ts TreeSpecies), so the title tree line and the world tree line are
@@ -73,12 +74,22 @@ export class Stage {
   private titleReal: THREE.Group | null = null;
   private titleDressGen = 0;
   private titleDressed = false;
+  /** Software GL (no GPU): no MSAA, pixelRatio 1, a sparse title, and the world boots its
+   *  light mode (core/quality.ts). Decided once, before the WebGL context exists. */
+  readonly light: boolean;
+  private frameCount = 0; // rendered frames, for tests that count frames instead of seconds
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
 
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // cap for iPad fill-rate
+    const glName = glRendererName();
+    this.light = lightOverride(location.search) ?? isSoftwareRenderer(glName);
+    setLightMode(this.light);
+    // MSAA is a context attribute, so the light mode must be known before this line
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !this.light, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.light ? 1 : 2)); // cap for iPad fill-rate
+    provideRenderMode(() => ({ light: this.light, renderer: glName }));
+    provideFrames(() => this.frameCount);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = GOLDEN_HOUR.exposure; // the one golden-hour exposure (title, world, games)
@@ -169,7 +180,7 @@ export class Stage {
     const blobs: Array<readonly [number, number, number]> = []; // [x, z, radius]
     this.addPines(group, blobs);
     this.addBirches(group, blobs);
-    this.addHeather();
+    if (!this.light) this.addHeather(); // the light mode's sparse title: no heath scatter
     this.addMissionBoard(group, blobs);
     this.addBlobShadows(group, blobs);
     this.scene.add(group);
@@ -567,6 +578,7 @@ export class Stage {
         this.renderer.render(this.scene, this.camera);
       }
       this.lastDrawCalls = this.renderer.info.render.calls; // F-18: same-frame sample
+      this.frameCount += 1;
       for (const cb of this.frameCbs) cb(dt, t);
     };
     this.rafId = requestAnimationFrame(loop);

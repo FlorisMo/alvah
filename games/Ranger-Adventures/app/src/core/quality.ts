@@ -37,11 +37,59 @@ export const QUALITY_TIERS: Record<QualityTier, TierParams> = {
  * boots `laag` and earns `hoog` by measurement during the session (the fps probe steps
  * up above STEP_UP_FPS), so a first boot on an older iPad never starts on the heavy
  * tier. A laptop (fine pointer) starts on its last measured verdict (`hoog` when new).
+ * The light mode (software GL, below) always boots `laag`.
  */
-export function bootTier(saved: QualityTier | undefined, coarsePointer: boolean): QualityTier {
-  if (coarsePointer) return 'laag';
+export function bootTier(saved: QualityTier | undefined, coarsePointer: boolean, light = false): QualityTier {
+  if (coarsePointer || light) return 'laag';
   return saved === 'laag' ? 'laag' : 'hoog';
 }
+
+/* ------------------------------------------------------------ light mode ---- */
+/*
+ * A machine with no GPU draws WebGL in SOFTWARE: SwiftShader (headless Chrome on a
+ * GPU-less CI runner), Mesa's llvmpipe / softpipe, Microsoft's Basic Render Driver.
+ * There the full game draws at seconds per frame, so it boots a LIGHT mode: no MSAA,
+ * pixelRatio 1, the `laag` tier, no shadow map, and a sparse title (no heath scatter).
+ * The Stage decides it once at boot; a laptop or iPad GPU never matches, so their
+ * picture is untouched. `?light=1` forces it on (to look at it on a GPU), `?light=0` off.
+ */
+
+/** Whether a GL renderer name is a software rasterizer. */
+export function isSoftwareRenderer(renderer: string | null | undefined): boolean {
+  return !!renderer && /swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer);
+}
+
+/** The `?light=` override in a query string: true (1), false (0), or null (detect). */
+export function lightOverride(search: string): boolean | null {
+  const v = new URLSearchParams(search).get('light');
+  return v === '1' ? true : v === '0' ? false : null;
+}
+
+/** The renderer pixelRatio: the device ratio, capped by the tier, and at 1 in light mode. */
+export function pixelRatioFor(tier: QualityTier, devicePixelRatio: number, light: boolean): number {
+  return Math.min(devicePixelRatio, QUALITY_TIERS[tier].pixelRatioCap, light ? 1 : Infinity);
+}
+
+/** Which GL renderer this browser draws with: a throwaway context's unmasked renderer
+ *  name (WEBGL_debug_renderer_info), else its plain RENDERER. Null outside a browser
+ *  or without WebGL. */
+export function glRendererName(): string | null {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2') as WebGL2RenderingContext | null;
+    if (!gl) return null;
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return name;
+  } catch {
+    return null;
+  }
+}
+
+let light = false;
+/** Whether this session renders in the light mode (set once at boot by the Stage). */
+export function lightMode(): boolean { return light; }
+export function setLightMode(on: boolean): void { light = on; }
 
 /** Whether this device's main pointer is coarse (a finger). False outside a browser. */
 export function coarsePointer(): boolean {

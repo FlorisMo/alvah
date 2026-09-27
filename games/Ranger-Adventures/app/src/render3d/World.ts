@@ -42,7 +42,7 @@ import type { FootSurface } from '../core/footstep';
 import { Sound } from '../core/sound';
 import { store } from '../core/state';
 import type { CamState } from '../core/devhook';
-import { FpsProbe, nextTier, bootTier, coarsePointer, QUALITY_TIERS, type QualityTier } from '../core/quality';
+import { FpsProbe, nextTier, bootTier, coarsePointer, lightMode, pixelRatioFor, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import type { WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
@@ -86,7 +86,7 @@ export class World {
   // W7.2 adaptive quality: the live tier drives the pixelRatio cap + vegetation
   // density. Seeded from the persisted verdict so a slow device boots light; the
   // per-frame fps probe re-decides with hysteresis (see update()).
-  private tier: QualityTier = bootTier(store.get().settings.kwaliteitTier, coarsePointer()); // an iPad boots laag
+  private tier: QualityTier = bootTier(store.get().settings.kwaliteitTier, coarsePointer(), lightMode()); // an iPad (and software GL) boots laag
   private readonly fpsProbe = new FpsProbe();
   private readonly canvas: HTMLCanvasElement;
   private readonly onBiome: (biome: Biome) => void;
@@ -494,7 +494,7 @@ export class World {
    *  scene there carries a casting light. Called once after construction. */
   setRenderer(renderer: THREE.WebGLRenderer): void {
     this.renderer = renderer;
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = !lightMode(); // software GL draws no shadow pass (core/quality.ts light mode)
     renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoft is deprecated in this three build
     this.applyPixelRatio(); // W7.2: seed the fill-rate cap from the persisted tier
   }
@@ -503,8 +503,7 @@ export class World {
    *  ratio). Cheap and safe to call live on a tier change — no re-render needed. */
   private applyPixelRatio(): void {
     if (!this.renderer) return;
-    const cap = QUALITY_TIERS[this.tier].pixelRatioCap;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
+    this.renderer.setPixelRatio(pixelRatioFor(this.tier, window.devicePixelRatio, lightMode()));
   }
 
   /** Dev-hook accessor (W7.2): the resolved quality tier + the live pixelRatio and

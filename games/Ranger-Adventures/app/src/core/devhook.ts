@@ -330,6 +330,13 @@ export interface RangerDevHook {
   playHint(): PlayHintProbe | null;
   /** Triangles drawn in the last rendered frame (renderer.info.render.triangles). */
   tris(): number | null;
+  /** How many frames the Stage has rendered since boot. A test that waits for the game
+   *  to DO something (walk 2 m) counts frames, so a slow software renderer is not a
+   *  failure, only a slower clock. */
+  frames(): number | null;
+  /** The render mode decided at boot: `light` = the light mode for software GL
+   *  (core/quality.ts), `renderer` = the GL renderer's name. */
+  renderMode(): { light: boolean; renderer: string | null } | null;
   /** The RENDERED terrain height (m) at a world XZ (a down-ray onto the terrain mesh
    *  the player sees), or null when no world is up. */
   groundAt(x: number, z: number): number | null;
@@ -427,6 +434,8 @@ const state = {
   // measurements (kit.ts). Kept `unknown` so this module stays three.js-free.
   renderView: null as null | (() => unknown),
   tris: null as null | (() => number),
+  frames: null as null | (() => number),
+  renderMode: null as null | (() => { light: boolean; renderer: string | null }),
   probes: null as null | GoldenProbes,
 };
 
@@ -448,6 +457,16 @@ export function provideRenderView(fn: (() => unknown) | null): void {
 /** The Stage's live { scene, camera } (unknown; the kit narrows it), or null. */
 export function renderView(): unknown {
   return state.renderView ? state.renderView() : null;
+}
+
+/** Register the Stage's rendered-frame counter. */
+export function provideFrames(fn: (() => number) | null): void {
+  state.frames = fn;
+}
+
+/** Register the Stage's boot-time render mode (light mode + GL renderer name). */
+export function provideRenderMode(fn: (() => { light: boolean; renderer: string | null }) | null): void {
+  state.renderMode = fn;
 }
 
 /** Register the live triangle-count source (renderer.info.render.triangles). */
@@ -746,6 +765,8 @@ export function installDevHook(): boolean {
     boundary: () => (state.boundary ? state.boundary() : null),
     playHint: () => (state.probes ? state.probes.playHint() : null),
     tris: () => (state.tris ? state.tris() : null),
+    frames: () => (state.frames ? state.frames() : null),
+    renderMode: () => (state.renderMode ? state.renderMode() : null),
     groundAt: (x, z) => (state.probes ? state.probes.groundAt(x, z) : null),
     screenOf: (x, y, z) => (state.probes ? state.probes.screenOf(x, y, z) : null),
     seating: (x, z, r) => (state.probes ? state.probes.seating(x, z, r) : null),
