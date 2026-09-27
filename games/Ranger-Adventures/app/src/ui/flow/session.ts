@@ -55,7 +55,10 @@ export function fadeCut(move: () => void, then: () => void): void {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       then();
       session.host.appendChild(veil); // keep it on top of the card `then` opened
+      // lifting: it only fades now, and the card under it takes clicks and keys at once
+      // (a keyboard player's Enter on "Ga op pad" was swallowed by the fading veil)
       veil.classList.remove('on');
+      veil.classList.add('lifting');
       window.setTimeout(() => veil.remove(), ms + 40);
     }));
   }, ms + 40);
