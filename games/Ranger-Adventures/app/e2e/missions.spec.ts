@@ -103,9 +103,13 @@ async function goToMarker(log: Log, mission: Mission): Promise<P2> {
   const m = all?.find((x) => x.missionId === mission.id);
   log.hard(!!m, `no marker for "${mission.id}"`);
   const marker = { x: m.x, z: m.z };
-  const w = await walkTo(page, marker, { until: (s) => s.near === mission.id, timeout: 150_000 });
+  // a step inside the prompt's ring (2.4 m), so a stride of momentum never carries him out again
+  const inside = (s: { near: string | null; p: P2 | null }): boolean =>
+    s.near === mission.id && !!s.p && Math.hypot(s.p.x - marker.x, s.p.z - marker.z) < 1.9;
+  const w = await walkTo(page, marker, { stopDist: 1.0, until: inside, timeout: 150_000 });
   log.note(`walked to the marker (${Math.round(marker.x)}, ${Math.round(marker.z)}): ${w.res} in ${(w.ms / 1000).toFixed(1)} s`);
-  log.hard(w.res === 'until', `walking never reached the "${mission.id}" marker (${w.res} at ${w.end.x.toFixed(1)}, ${w.end.z.toFixed(1)})`);
+  log.hard(w.res === 'until' || w.res === 'arrived', `walking never reached the "${mission.id}" marker (${w.res} at ${w.end.x.toFixed(1)}, ${w.end.z.toFixed(1)})`);
+  await expect.poll(async () => (await snap(page)).near, { timeout: 5_000, message: `the "${mission.id}" prompt ring` }).toBe(mission.id);
   return marker;
 }
 

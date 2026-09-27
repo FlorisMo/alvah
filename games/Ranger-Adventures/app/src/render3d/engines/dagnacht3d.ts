@@ -104,7 +104,17 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
     const run = new DagnachtRun(trial.encounters.length);
     const instructie = step.skin.copy?.instructie ?? 'Blijf rustig. Maak de goede keuze.';
 
-    const stage = new Stage(ctx, { halfW: 1.05, halfD: 0.75, tall: 0.9, pitchDeg: 24, insetBottom: 300, insetTop: 70 });
+    // frame the tallest subject whole (a red deer on the free path is 1.5 m), and a
+    // little deeper when one waits further up the path (the rotte, the herd)
+    const subjectH = (e: Encounter): number =>
+      e.subject === 'modderpoel' || (e.subject === 'pad-veilig' && !(e.dier ?? step.skin.dier)) ? 0.4
+        : e.subject === 'rotte' || e.subject === 'wildzwijn' ? 0.8
+          : heightFor(e.subject === 'reekalf' && (!e.dier || e.dier === 'ree') ? 'reekalf' : e.dier ?? step.skin.dier ?? 'wildzwijn');
+    const far = trial.encounters.some((e) => e.subject === 'rotte' || (e.subject === 'pad-veilig' && (e.dier ?? step.skin.dier)));
+    const halfD = far ? 1.05 : 0.75;
+    const stage = new Stage(ctx, {
+      halfW: 1.05, halfD, tall: Math.max(0.9, ...trial.encounters.map(subjectH)) + 0.1, pitchDeg: 24, insetBottom: 300, insetTop: 70,
+    });
     const reframe = stage.reframe();
 
     // ---- the subject of the current encounter (rebuilt per encounter) ----
@@ -169,7 +179,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
           // the path runs on, free — the one the ranger may now walk
           path();
           tufts([{ u: -0.7, v: -0.6, h: 0.34 }, { u: 0.72, v: -0.3, h: 0.36 }, { u: -0.75, v: 0.5, h: 0.3 }, { u: 0.7, v: 0.9, h: 0.32 }, { u: -0.62, v: 1.5, h: 0.3 }, { u: 0.6, v: 2.0, h: 0.3 }]);
-          if (enc.dier ?? step.skin.dier) await addModel(enc.dier ?? step.skin.dier ?? 'wildzwijn', 0.3, 2.6, 1.2);
+          if (enc.dier ?? step.skin.dier) await addModel(enc.dier ?? step.skin.dier ?? 'wildzwijn', 0.3, halfD - 0.05, 1.2);
           break;
         case 'zwijn-honger':
           tufts([{ u: -0.75, v: -0.25, h: 0.3 }, { u: 0.8, v: -0.2, h: 0.34 }, { u: 0.55, v: 0.55, h: 0.3 }, { u: -0.6, v: 0.6, h: 0.3 }]);
@@ -199,10 +209,10 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
           path();
           tufts([{ u: -0.7, v: -0.6, h: 0.34 }, { u: 0.72, v: -0.3, h: 0.36 }, { u: -0.75, v: 0.5, h: 0.3 }, { u: 0.7, v: 0.9, h: 0.32 }]);
           await Promise.all([
-            addModel('wildzwijn', 0.35, 2.5, 1.3, 0.8),
-            addModel('frisling', -0.15, 2.2, 1.1),
-            addModel('frisling', 0.75, 2.05, 1.6),
-            addModel('frisling', 0.2, 1.8, 0.9),
+            addModel('wildzwijn', 0.35, halfD + 0.45, 1.3, 0.8),
+            addModel('frisling', -0.2, halfD + 0.2, 1.1),
+            addModel('frisling', 0.8, halfD + 0.05, 1.6),
+            addModel('frisling', 0.15, halfD - 0.25, 0.9),
           ]);
           break;
         case 'reekalf':

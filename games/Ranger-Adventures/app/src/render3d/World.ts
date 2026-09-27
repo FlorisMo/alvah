@@ -703,7 +703,7 @@ export class World {
    *  (world/Progress.ts). `fresh` plays the calm reunion; resolves once it has played. */
   onMissionComplete(missionId: string, opts: { fresh: boolean }): Promise<void> {
     this.pois.setFinished(missionId);
-    const view = { x: this.camera.position.x, z: this.camera.position.z };
+    const view = { camera: this.camera, ranger: { x: this.ranger.position.x, z: this.ranger.position.z } };
     return this.progress.complete(missionId, opts.fresh, livePolicy().reduced, view);
   }
 

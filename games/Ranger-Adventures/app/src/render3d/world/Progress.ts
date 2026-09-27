@@ -202,7 +202,7 @@ export function freeSpot(
 ): { x: number; z: number } | null {
   const dist = Math.hypot(a, s);
   const ang = Math.atan2(s, a);
-  for (const k of [1, 1.3, 1.6]) {
+  for (const k of [1, 1.3, 1.6, 2.0]) {
     for (let i = 0; i <= 14; i++) {
       const turn = (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (25 * Math.PI) / 180;
       if (Math.abs(turn) > Math.PI) break;
@@ -212,6 +212,44 @@ export function freeSpot(
     }
   }
   return null;
+}
+
+/** What the lens sees when a mission is finished: the reunion is laid out IN view. */
+export interface ReunionView {
+  camera: THREE.Camera;
+  /** where the ranger stands (nothing may stand between the lens and him) */
+  ranger: { x: number; z: number };
+}
+
+/**
+ * The marker frame for a reunion seen through `view`: `d` is where the lens looks
+ * (flat), and when the marker lies close in front of (or beside, or under) the lens —
+ * the ranger walked past it and turned round — the frame's origin steps forward along
+ * the look, so the family gathers in the picture instead of at the lens's feet.
+ */
+export function reunionFrame(mx: number, mz: number, view: ReunionView): Frame {
+  const dir = view.camera.getWorldDirection(new THREE.Vector3());
+  dir.y = 0;
+  if (dir.lengthSq() < 1e-6) return frameAt(mx, mz, view.camera.position.x, view.camera.position.z);
+  dir.normalize();
+  const along = (mx - view.camera.position.x) * dir.x + (mz - view.camera.position.z) * dir.z;
+  const shift = Math.max(0, 5 - along);
+  return { ox: mx + dir.x * shift, oz: mz + dir.z * shift, dx: dir.x, dz: dir.z };
+}
+
+/** Is a piece at (x, y, z) in the lens's picture (clear of the top caption band), a
+ *  calm distance away, and not standing between the lens and the ranger? */
+export function inReunionView(view: ReunionView, x: number, y: number, z: number, r: number): boolean {
+  const cam = view.camera;
+  cam.updateMatrixWorld();
+  const p = new THREE.Vector3(x, y, z).project(cam);
+  if (!(p.z > -1 && p.z < 1) || Math.abs(p.x) > 0.82 || p.y < -0.72 || p.y > 0.5) return false;
+  const cx = cam.position.x, cz = cam.position.z;
+  if (Math.hypot(x - cx, z - cz) < 3.5) return false;
+  const sx = view.ranger.x - cx, sz = view.ranger.z - cz;
+  const len2 = sx * sx + sz * sz || 1;
+  const t = Math.max(0, Math.min(1, ((x - cx) * sx + (z - cz) * sz) / len2));
+  return Math.hypot(x - (cx + sx * t), z - (cz + sz * t)) >= 0.8 + r;
 }
 
 /** rotation.y that turns a model's +z face toward the world direction (fx, fz). */
@@ -313,7 +351,7 @@ export class Progress {
    * when it has played (at once under `reduced`). `view` = the lens position when
    * fresh, so the family gathers on the side the player is looking from.
    */
-  async complete(missionId: string, fresh: boolean, reduced: boolean, view?: { x: number; z: number }): Promise<void> {
+  async complete(missionId: string, fresh: boolean, reduced: boolean, view?: ReunionView): Promise<void> {
     const t = TABLEAUS[missionId];
     const m = this.env.markers().find((k) => k.missionId === missionId);
     if (!t || !m) return;
@@ -321,8 +359,11 @@ export class Progress {
     if (!b) {
       let job = this.pending.get(missionId);
       if (!job) {
-        const from = fresh && view ? view : { x: 0, z: 0 }; // spawn is where a returning ranger comes from
-        job = this.build(missionId, t, frameAt(m.x, m.z, from.x, from.z), m.group, fresh && !reduced);
+        // finished just now: laid out in the picture the player is looking at; else
+        // (a reload) as seen from spawn, where a returning ranger comes from
+        const seen = fresh && view ? view : null;
+        const frame = seen ? reunionFrame(m.x, m.z, seen) : frameAt(m.x, m.z, 0, 0);
+        job = this.build(missionId, t, frame, m, fresh && !reduced, seen);
         this.pending.set(missionId, job);
       }
       b = await job;
@@ -383,21 +424,31 @@ export class Progress {
 
   /* ------------------------------------------------------------ building ---- */
 
-  private async build(missionId: string, t: Tableau, frame: Frame, markerGroup: THREE.Object3D, hidden: boolean): Promise<Built | null> {
+  private async build(
+    missionId: string, t: Tableau, frame: Frame,
+    marker: { x: number; z: number; group: THREE.Object3D }, hidden: boolean, view: ReunionView | null,
+  ): Promise<Built | null> {
     const env = this.env;
+    const markerGroup = marker.group;
     const group = new THREE.Group();
     group.name = `progress-${missionId}`;
     const spots: { x: number; z: number; r: number }[] = [];
-    const free = (x: number, z: number, r: number): boolean =>
+    const ground = (x: number, z: number, r: number): boolean =>
       spotFree(env, missionId, frame, x, z, r)
       && !this.blocks(x, z, r, missionId) // a neighbour's family keeps its place
       && spots.every((p) => Math.hypot(p.x - x, p.z - z) >= p.r + r)
-      && Math.hypot(x - frame.ox, z - frame.oz) >= 0.55 + r // the marker's own animal keeps its spot
+      && Math.hypot(x - marker.x, z - marker.z) >= 0.55 + r // the marker's own animal keeps its spot
       && level(env.groundY, x, z, Math.max(0.3, r));
+    // a reunion is laid out in the picture; if nothing in reach is, then anywhere free
+    const seen = (h: number) => (x: number, z: number, r: number): boolean =>
+      ground(x, z, r) && (!view || inReunionView(view, x, env.groundY(x, z) + h * 0.5, z, r));
+    const place = (f: Frame, a: number, s: number, r: number, h: number): { x: number; z: number } | null =>
+      freeSpot(f, a, s, r, seen(h)) ?? (view ? freeSpot(f, a, s, r, ground) : null);
 
-    // the flag first: it is the "klaar" sign, it must stand
+    // the flag first: it is the "klaar" sign, it must stand — at the marker's own ring
     const fa = t.flag ?? FLAG_AT;
-    const fp = freeSpot(frame, fa.a, fa.s, 0.15, free) ?? toWorld(frame, fa.a, fa.s);
+    const atMarker: Frame = { ...frame, ox: marker.x, oz: marker.z };
+    const fp = place(atMarker, fa.a, fa.s, 0.15, 1.1) ?? toWorld(atMarker, fa.a, fa.s);
     spots.push({ x: fp.x, z: fp.z, r: 0.15 });
     const flag = finishedFlag();
     flag.position.set(fp.x, env.groundY(fp.x, fp.z), fp.z);
@@ -408,7 +459,7 @@ export class Progress {
     const plans = t.pieces.map((p) => {
       const h = p.h ?? (p.kind === 'animal' ? env.heightFor(p.id) : 0.5);
       const r = p.lift ? 0 : Math.max(0.12, h * (p.kind === 'animal' ? 0.45 : 0.6));
-      const at = p.lift ? toWorld(frame, p.a, p.s) : freeSpot(frame, p.a, p.s, r, free);
+      const at = p.lift ? toWorld(frame, p.a, p.s) : place(frame, p.a, p.s, r, h);
       if (at && r > 0) spots.push({ x: at.x, z: at.z, r });
       return { p, h, at };
     });

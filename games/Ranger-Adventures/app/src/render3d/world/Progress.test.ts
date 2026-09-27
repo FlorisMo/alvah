@@ -12,9 +12,22 @@ import test from 'node:test';
 import * as THREE from 'three';
 import { AREA_VELUWE } from '../../content/veluwe.ts';
 import {
-  Progress, TABLEAUS, REUNION_S, heroOf, frameAt, toWorld, spotFree, finishedFlag, earthDen,
-  type ProgressEnv,
+  Progress, TABLEAUS, REUNION_S, heroOf, frameAt, toWorld, spotFree, finishedFlag, earthDen, inReunionView,
+  type ProgressEnv, type ReunionView,
 } from './Progress.ts';
+
+/** The follow lens behind the ranger, looking at him (he stands `back` m before the marker
+ *  on the line from `from`, the lens 4.6 m further back and 2.4 m up). */
+function lens(m: { x: number; z: number }, from: { x: number; z: number }, back = 2): ReunionView {
+  const dx = m.x - from.x, dz = m.z - from.z, l = Math.hypot(dx, dz);
+  const ux = dx / l, uz = dz / l;
+  const ranger = { x: m.x - ux * back, z: m.z - uz * back };
+  const camera = new THREE.PerspectiveCamera(55, 1280 / 800, 0.1, 240);
+  camera.position.set(ranger.x - ux * 4.6, groundY(ranger.x, ranger.z) + 2.4, ranger.z - uz * 4.6);
+  camera.lookAt(ranger.x, groundY(ranger.x, ranger.z) + 0.8, ranger.z);
+  camera.updateMatrixWorld();
+  return { camera, ranger };
+}
 
 /** A rolling test ground (so "on the ground" means something). */
 const groundY = (x: number, z: number): number => 0.4 * Math.sin(x * 0.3) + 0.3 * Math.cos(z * 0.25);
@@ -151,7 +164,7 @@ test('the reunion: the family walks calmly in and the flag rises; the promise re
   const w = world();
   const m = w.markers.find((k) => k.missionId === 'frisling')!;
   let done = false;
-  const run = w.progress.complete('frisling', true, false, { x: m.x - 6, z: m.z }).then(() => { done = true; });
+  const run = w.progress.complete('frisling', true, false, lens(m, { x: 0, z: 0 })).then(() => { done = true; });
   await new Promise((r) => setTimeout(r, 0)); // the build (spawns) resolves
   await new Promise((r) => setTimeout(r, 0));
   const g = w.scene.getObjectByName('progress-frisling')!;
@@ -179,7 +192,8 @@ test('the reunion: the family walks calmly in and the flag rises; the promise re
 
 test('under reduced motion the reunion is a cut: everything simply stands there at once', async () => {
   const w = world();
-  await w.progress.complete('herstel', true, true, { x: 0, z: 0 });
+  const mh = w.markers.find((k) => k.missionId === 'herstel')!;
+  await w.progress.complete('herstel', true, true, lens(mh, { x: 0, z: 0 }));
   const g = w.scene.getObjectByName('progress-herstel')!;
   assert.equal(g.getObjectByName('klaar-flag')!.scale.y, 1);
   const target = w.progress.state().find((s) => s.missionId === 'herstel')!.pieces;
@@ -208,4 +222,21 @@ test('the flag and the den are one draw call each', () => {
   (den.root as THREE.Object3D).traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes += 1; });
   assert.equal(meshes, 1);
   den.dispose();
+});
+
+test('a reunion gathers IN the picture: seen from behind the ranger, and when he walked past the marker', async () => {
+  for (const back of [2, -2.5]) { // before the marker · past it (the marker at the lens's feet)
+    const w = world();
+    for (const m of w.markers) {
+      const view = lens(m, { x: m.x * 0.3 + 5, z: m.z * 0.3 - 4 }, back);
+      await w.progress.complete(m.missionId, true, true, view);
+      const g = w.scene.getObjectByName(`progress-${m.missionId}`)!;
+      for (const c of g.children) {
+        if (c.name === 'klaar-flag') continue; // the flag stands at the marker's own ring
+        const ok = inReunionView(view, c.position.x, c.position.y + 0.2, c.position.z, 0.1);
+        assert.ok(ok, `${m.missionId} (${back > 0 ? 'before' : 'past'} the marker): a piece stands out of the picture`);
+        assert.ok(Math.hypot(c.position.x - m.x, c.position.z - m.z) < 6.5, `${m.missionId}: still at the marker`);
+      }
+    }
+  }
 });
