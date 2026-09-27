@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 
 /**
  * In-world mission friction audit (WORLD-PLAN W6.1). Walks the ranger to a real
@@ -50,9 +50,8 @@ const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
 
 /**
  * Steer the ranger to the marker of a SPECIFIC mission with arrow keys until its
- * proximity fires. Camera-relative steering (the follow-cam rotates, W1.5): each
- * tick maps the desired WORLD direction back into screen keys via the inverse of
- * `resolveInput`'s rotation (its own inverse — see interact.spec).
+ * proximity fires (the tank keys: helpers.keySteer turns him until it is ahead,
+ * then walks, side-stepping when something stops him).
  */
 async function walkToMarker(page: Page, missionId: string): Promise<void> {
   const markers = await hook(page, (r) => r.markers());
@@ -67,6 +66,7 @@ async function walkToMarker(page: Page, missionId: string): Promise<void> {
       else if (!want.has(k) && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
     }
   };
+  const steer = await keySteer(page);
   try {
     for (let i = 0; i < 220; i++) {
       if (await hook(page, (r) => r.nearId()) === missionId) return;
@@ -74,15 +74,7 @@ async function walkToMarker(page: Page, missionId: string): Promise<void> {
       const yaw = await hook(page, (r) => r.cameraYaw());
       if (!p || yaw == null) { await page.waitForTimeout(100); continue; }
       const dx = target!.x - p.x, dz = target!.z - p.z;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const sx = dx * cy - dz * sy;
-      const sYf = -dx * sy - dz * cy;
-      const want = new Set<string>();
-      if (sx > 0.4) want.add('ArrowRight');
-      else if (sx < -0.4) want.add('ArrowLeft');
-      if (sYf > 0.4) want.add('ArrowUp');
-      else if (sYf < -0.4) want.add('ArrowDown');
-      await sync(want);
+      await sync(steer(dx, dz, yaw)); // the arrow keys a child would hold (helpers.keySteer)
       await page.waitForTimeout(120);
     }
     throw new Error(`ranger never reached the ${missionId} marker within the step budget`);

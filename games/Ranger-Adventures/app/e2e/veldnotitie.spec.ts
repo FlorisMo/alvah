@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 
 /**
  * W6.3b — the collectible veldnotitie. Playing a mission IN THE WORLD pins each
@@ -41,13 +41,6 @@ async function enterWorld(page: Page): Promise<void> {
 
 const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
 
-/**
- * Walk to the marker the way a child plays the tank keys (wave 2): Left/Right turn the
- * ranger (the camera stays behind him) until the marker is ahead on screen, then Up
- * walks. "Ahead" is the camera's own heading (`cameraYaw()` = the bearing on screen +
- * π). Pressed against something (the cabin stands on the straight line from spawn), he
- * side-steps like a child would: turn a little and walk on.
- */
 async function walkToMarker(page: Page, missionId: string): Promise<void> {
   const markers = await hook(page, (r) => r.markers());
   expect(markers, 'markers() available in world').not.toBeNull();
@@ -60,28 +53,15 @@ async function walkToMarker(page: Page, missionId: string): Promise<void> {
       else if (!want.has(k) && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
     }
   };
-  let best = Infinity, bestAt = Date.now(), detour = 0;
+  const steer = await keySteer(page);
   try {
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 220; i++) {
       if (await hook(page, (r) => r.nearId()) === missionId) return;
       const p = await hook(page, (r) => r.pos());
       const yaw = await hook(page, (r) => r.cameraYaw());
       if (!p || yaw == null) { await page.waitForTimeout(100); continue; }
-      const dx = target!.x - p.x, dz = target!.z - p.z, d = Math.hypot(dx, dz) || 1;
-      if (d < best - 0.3) { best = d; bestAt = Date.now(); }
-      if (Date.now() - bestAt > 3_000) { // stuck against a wall: side-step, alternating sides
-        await sync(new Set([++detour % 2 ? 'ArrowRight' : 'ArrowLeft', 'ArrowUp']));
-        await page.waitForTimeout(900);
-        bestAt = Date.now();
-        continue;
-      }
-      const fx = -Math.sin(yaw), fz = -Math.cos(yaw); // the screen's forward on the ground
-      const ang = (Math.atan2((dx * -fz + dz * fx) / d, (dx * fx + dz * fz) / d) * 180) / Math.PI; // + = to the right
-      const want = new Set<string>();
-      if (Math.abs(ang) < 20) want.add('ArrowUp');
-      else if (Math.abs(ang) < 70) { want.add('ArrowUp'); want.add(ang > 0 ? 'ArrowRight' : 'ArrowLeft'); }
-      else want.add(ang > 0 ? 'ArrowRight' : 'ArrowLeft');
-      await sync(want);
+      const dx = target!.x - p.x, dz = target!.z - p.z;
+      await sync(steer(dx, dz, yaw)); // the arrow keys a child would hold (helpers.keySteer)
       await page.waitForTimeout(120);
     }
     throw new Error(`ranger never reached the ${missionId} marker within the step budget`);

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 
 /**
  * Drivable-jeep E2E (WORLD-PLAN W5.1). The ranger walks up to the parked jeep,
@@ -50,16 +50,16 @@ async function enterWorld(page: Page): Promise<void> {
 const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
 
 /**
- * Steer the ranger to the parked jeep with arrow keys until `vehicle().near`.
- * Same camera-relative mapping as interact.spec: the follow-cam rotates, so each
- * tick we read the live `cameraYaw()` and map the desired WORLD direction back to
- * screen keys with the inverse of `resolveInput`'s rotation (its own inverse).
+ * Steer the ranger to the parked jeep with arrow keys until `vehicle().near` (the
+ * tank keys: helpers.keySteer turns him until it is ahead, then walks).
  */
 async function walkToJeep(page: Page): Promise<void> {
   const v0 = await hook(page, (r) => r.vehicle());
   expect(v0, 'vehicle() available in world').not.toBeNull();
   expect(v0!.placed, 'the jeep is placed in the world').toBe(true);
-  const target = { x: v0!.x, z: v0!.z };
+  // come up to its open south side: the stuifzand marker stands 1.6 m north of the
+  // jeep, and on foot a mission's prompt comes before "Stap in de jeep"
+  const target = { x: v0!.x, z: v0!.z - 1.2 };
 
   const down = new Set<string>();
   const sync = async (want: Set<string>): Promise<void> => {
@@ -68,6 +68,7 @@ async function walkToJeep(page: Page): Promise<void> {
       else if (!want.has(k) && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
     }
   };
+  const steer = await keySteer(page);
   try {
     for (let i = 0; i < 240; i++) {
       const near = await hook(page, (r) => r.vehicle()?.near ?? false);
@@ -76,15 +77,7 @@ async function walkToJeep(page: Page): Promise<void> {
       const yaw = await hook(page, (r) => r.cameraYaw());
       if (!p || yaw == null) { await page.waitForTimeout(100); continue; }
       const dx = target.x - p.x, dz = target.z - p.z;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const sx = dx * cy - dz * sy;
-      const sYf = -dx * sy - dz * cy;
-      const want = new Set<string>();
-      if (sx > 0.4) want.add('ArrowRight');
-      else if (sx < -0.4) want.add('ArrowLeft');
-      if (sYf > 0.4) want.add('ArrowUp');
-      else if (sYf < -0.4) want.add('ArrowDown');
-      await sync(want);
+      await sync(steer(dx, dz, yaw)); // the arrow keys a child would hold (helpers.keySteer)
       await page.waitForTimeout(120);
     }
     throw new Error('ranger never reached the jeep within the step budget');

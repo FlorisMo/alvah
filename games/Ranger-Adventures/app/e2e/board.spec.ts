@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 
 /**
  * Cabin-hub / mission-board E2E (WORLD-PLAN W2.2). The spawn case-board is the
@@ -38,8 +38,8 @@ async function enterWorld(page: Page): Promise<void> {
 
 const KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
 
-/** Walk to the spawn case-board with arrow keys until its proximity fires. Same
- *  camera-relative mapping as interact.spec's marker walk (see that file's note). */
+/** Walk to the spawn case-board with arrow keys until its proximity fires (the tank
+ *  keys: helpers.keySteer). */
 async function walkToBoard(page: Page): Promise<void> {
   const board = await hook(page, (r) => r.board());
   expect(board, 'board() available in world').not.toBeNull();
@@ -51,6 +51,7 @@ async function walkToBoard(page: Page): Promise<void> {
       else if (!want.has(k) && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
     }
   };
+  const steer = await keySteer(page);
   try {
     for (let i = 0; i < 200; i++) {
       const b = await hook(page, (r) => r.board());
@@ -59,15 +60,7 @@ async function walkToBoard(page: Page): Promise<void> {
       const yaw = await hook(page, (r) => r.cameraYaw());
       if (!p || !b || yaw == null) { await page.waitForTimeout(100); continue; }
       const dx = b.x - p.x, dz = b.z - p.z;
-      const cy = Math.cos(yaw), sy = Math.sin(yaw);
-      const sx = dx * cy - dz * sy;
-      const sYf = -dx * sy - dz * cy;
-      const want = new Set<string>();
-      if (sx > 0.4) want.add('ArrowRight');
-      else if (sx < -0.4) want.add('ArrowLeft');
-      if (sYf > 0.4) want.add('ArrowUp');
-      else if (sYf < -0.4) want.add('ArrowDown');
-      await sync(want);
+      await sync(steer(dx, dz, yaw)); // the arrow keys a child would hold (helpers.keySteer)
       await page.waitForTimeout(120);
     }
     throw new Error('ranger never reached the case-board within the step budget');
