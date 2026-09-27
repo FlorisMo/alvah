@@ -15,11 +15,11 @@ import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, VEN_SHORE_R, WATER_LEVEL, type
 import { windSway } from '../Atmosphere';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork } from '../Paths';
 import { WATER_DEEP, WATER_SHALLOW, WATER_TREES, WATER_OPACITY, FRESNEL_POWER, WATER_F0, rippleAmp } from '../Water';
-import { boxObstacle, type Obstacle, type MoveLimits } from '../CharacterController';
+import { boxObstacle, obstacleGap, type Obstacle, type MoveLimits } from '../CharacterController';
 import type { TierParams } from '../../core/quality';
 import { buildFarForest, farCanopyTexture, type Terrain } from './Terrain';
 import type { Labels } from './Labels';
-import { enableCast, proceduralTotem } from './props';
+import { enableCast, naturaliseConcrete, proceduralTotem } from './props';
 import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 import { PlantField, heatherGeometry, plantMaterial, tuftGeometry, type PlantSpot } from './Plants';
 import { lodGeometries, lodMaterial } from '../Lod';
@@ -37,6 +37,26 @@ export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 // deterministic species pattern woven along the scatter/rim index — pine dominant.
 const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree'];
 const NATURE_TREES = new Set<string>(['prop-pine-scots', 'prop-oak-tree', 'prop-birch-tree']);
+
+/**
+ * W4.1 landmarks: [dev-hook id, GLB model, world x/z, target Y-height (m), footprint half
+ * extents at that height (its own x/z, measured off the loaded models: a solid rectangle
+ * turned with the landmark, wave 2), optional beacon label]. The watchtower is
+ * deliberately the farthest — the W4.1 E2E walks spawn→watchtower. Each one faces the
+ * clearing (rotation.y = atan2(−x, −z)).
+ */
+const LANDMARKS: readonly {
+  id: string; model: string; x: number; z: number; height: number; foot: [number, number]; label?: string;
+}[] = [
+  { id: 'prop-fire-watchtower', model: 'prop-fire-watchtower', x: 37, z: -37, height: 9, foot: [1.78, 1.86], label: 'Uitkijktoren' },
+  { id: 'prop-bird-hide', model: 'prop-bird-hide', x: 26, z: -11, height: 2.8, foot: [1.61, 1.49], label: 'Vogelkijkhut' },
+  { id: 'prop-ecoduct', model: 'prop-ecoduct', x: -70, z: 6, height: 6, foot: [7.74, 7.8], label: 'Ecoduct' },
+  { id: 'prop-boa-post', model: 'prop-boa-post', x: -56, z: -20, height: 3, foot: [2.18, 2.13], label: 'BOA-post' },
+  { id: 'prop-signpost', model: 'prop-signpost', x: 9, z: -8, height: 1.7, foot: [0.83, 0.29] },
+  { id: 'prop-signpost-west', model: 'prop-signpost', x: -16, z: 10, height: 1.7, foot: [0.83, 0.29] },
+];
+/** The landmarks' footprints: no plant grows inside one (no grass through a floor). */
+const LANDMARK_FEET: readonly Obstacle[] = LANDMARKS.map((lm) => boxObstacle(lm.x, lm.z, lm.foot[0], lm.foot[1], Math.atan2(-lm.x, -lm.z)));
 
 /** A stable hash of an integer pair + seed → [0,1) (the plant grid's jitter). */
 function hash2(x: number, z: number, seed: number): number {
@@ -572,8 +592,8 @@ export class Dressing {
   }
 
   /**
-   * Plant spots on a jittered grid of `cell` m over one landschap: off the sand paths and
-   * the helipads, out of the spawn clearing, inside the rim; `keep(x, z, h)` (h: a stable per-spot
+   * Plant spots on a jittered grid of `cell` m over one landschap: off the sand paths, the
+   * helipads and the landmarks' footprints, out of the spawn clearing, inside the rim; `keep(x, z, h)` (h: a stable per-spot
    * random in [0,1)) thins them. Deterministic.
    */
   private gridSpots(want: Biome, cell: number, seed: number, keep: (x: number, z: number, h: number) => boolean): { x: number; z: number; h: number }[] {
@@ -587,6 +607,7 @@ export class Dressing {
       if (this.terrain.biome(x, z) !== want) continue;
       if (distanceToNetwork(x, z) < LANE_HALF + 0.6) continue;  // the paths stay bare sand
       if (PADS.some((p) => Math.hypot(x - p.x, z - p.z) < PAD_RADIUS + 0.9)) continue; // nothing grows through a helipad (breaker B9)
+      if (LANDMARK_FEET.some((o) => obstacleGap(o, x, z) < 0.3)) continue;       // ...nor through a landmark's floor
       const h = hash2(gx, gz, seed + 2);
       if (!keep(x, z, h)) continue;
       if (r > this.scatterMax) this.scatterMax = r;                // furthest low plant (dev hook)
@@ -653,22 +674,6 @@ export class Dressing {
    * −z movement-smoke corridor and off the mission-marker anchors (radius 22+).
    */
   placeLandmarks(): void {
-    // [dev-hook id, GLB model, world x/z, target Y-height (m), collision radius,
-    //  optional beacon label]. The watchtower is deliberately the farthest —
-    //  the W4.1 E2E walks spawn→watchtower.
-    // `foot` = the GLB's footprint half-extents at that height (its own x/z, measured
-    // off the loaded models): a solid rectangle, turned with the landmark (wave 2 — the
-    // old circles let the ranger stand between the watchtower's legs).
-    const LANDMARKS: {
-      id: string; model: string; x: number; z: number; height: number; foot: [number, number]; label?: string;
-    }[] = [
-      { id: 'prop-fire-watchtower', model: 'prop-fire-watchtower', x: 37, z: -37, height: 9, foot: [1.78, 1.86], label: 'Uitkijktoren' },
-      { id: 'prop-bird-hide', model: 'prop-bird-hide', x: 26, z: -11, height: 2.8, foot: [1.61, 1.49], label: 'Vogelkijkhut' },
-      { id: 'prop-ecoduct', model: 'prop-ecoduct', x: -70, z: 6, height: 6, foot: [7.74, 7.8], label: 'Ecoduct' },
-      { id: 'prop-boa-post', model: 'prop-boa-post', x: -56, z: -20, height: 3, foot: [2.18, 2.13], label: 'BOA-post' },
-      { id: 'prop-signpost', model: 'prop-signpost', x: 9, z: -8, height: 1.7, foot: [0.83, 0.29] },
-      { id: 'prop-signpost-west', model: 'prop-signpost', x: -16, z: 10, height: 1.7, foot: [0.83, 0.29] },
-    ];
     for (const lm of LANDMARKS) {
       const at = new THREE.Vector3(lm.x, this.groundY(lm.x, lm.z), lm.z);
       const group = new THREE.Group();
@@ -686,6 +691,12 @@ export class Dressing {
       void loadModel(lm.model).then((m) => {
         if (!m) return;
         const prepped = prepModel(m, lm.height);
+        if (lm.id === 'prop-ecoduct') {
+          // a green wildlife bridge, not a grey block (parent B11): its bare concrete slab
+          // is painted as soil and plants, and the slab's 0.3 m edge is sunk into the heath
+          naturaliseConcrete(prepped);
+          prepped.position.y -= 0.32;
+        }
         enableCast(prepped); // W4.5: solid landmarks cast when near the player
         const totem = group.children.find((c) => c.userData.totem);
         if (totem) group.remove(totem); // keep the label
