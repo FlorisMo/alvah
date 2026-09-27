@@ -467,8 +467,8 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     for (let i = 0; i < 8; i++) { // click through to the world like a player: prefer "back to patrol"
       if (await page.getByRole('button', { name: /Verder op patrouille/ }).filter({ visible: true }).count()) {
         await clickButton(page, /Verder op patrouille/, 'reward');
-      } else if (await page.getByRole('button', { name: /Bekijk de wildcamera/ }).filter({ visible: true }).count()) {
-        await clickButton(page, /Bekijk de wildcamera/, 'reward'); clue = true;
+      } else if (await page.getByRole('button', { name: /Kijk wat je vond|Bekijk de wildcamera/ }).filter({ visible: true }).count()) {
+        await clickButton(page, /Kijk wat je vond|Bekijk de wildcamera/, 'reward'); clue = true;
         await sleep(page, 800); await shot(page, 'clue');
         continue;
       } else if (await page.getByRole('button', { name: /^(Verder|Klaar)$/ }).filter({ visible: true }).count()) {

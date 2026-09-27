@@ -252,8 +252,8 @@ async function finish(log: Log, mission: Mission, then: 'patrol' | 'finale' = 'p
   await log.shot('reward');
   let clue = false;
   for (let i = 0; i < 6; i++) {
-    if (await visible(page, /Bekijk de wildcamera/)) {
-      await click(log, /Bekijk de wildcamera/, 'reward'); clue = true;
+    if (await visible(page, /Kijk wat je vond|Bekijk de wildcamera/)) {
+      await click(log, /Kijk wat je vond|Bekijk de wildcamera/, 'reward'); clue = true;
       await sleep(page, 700); await log.shot('clue');
       continue;
     }

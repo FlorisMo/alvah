@@ -125,7 +125,7 @@ async function completeMissionInPlace(page: Page): Promise<void> {
 async function returnToPatrol(page: Page): Promise<void> {
   await expect(page.locator('.reward')).toBeVisible();
   const patrol = page.getByRole('button', { name: 'Verder op patrouille' });
-  const wildcam = page.getByRole('button', { name: 'Bekijk de wildcamera' });
+  const wildcam = page.getByRole('button', { name: /Kijk wat je vond|Bekijk de wildcamera/ });
   if (await patrol.isVisible().catch(() => false)) await patrol.click();
   else { await wildcam.click(); await page.getByRole('button', { name: 'Verder op patrouille' }).click(); }
   const skip = page.getByRole('button', { name: 'Even verder lopen' }); // optional world-beat

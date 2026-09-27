@@ -394,7 +394,7 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
     : null;
 
   const lof = `Knap gedaan, ${naam()}!`;
-  const backLabel = clue ? 'Bekijk de wildcamera' : then === resumePatrol ? 'Verder op patrouille' : 'Verder';
+  const backLabel = clue ? 'Kijk wat je vond' : then === resumePatrol ? 'Verder op patrouille' : 'Verder'; // child:B15
   const el = card(
     `<div class="reward boot-card-ish">` +
     `<p class="boot-kicker">Missie klaar · ${esc(mission.titel)}</p>` +
@@ -427,7 +427,7 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
  *  prikbord. Two ways on: peek at the board, or walk straight on. */
 function showWildcamCapture(clue: Clue, then: () => void): void {
   narrator.stop();
-  const line = 'Vastgelegd op de wildcamera.';
+  const line = clue.soort === 'camera' ? 'Vastgelegd op de wildcamera.' : 'Je maakt er een foto van.'; // child:B15: no wildcamera before you met one
   const glyph = CLUE_GLYPH[clue.soort] ?? '📌';
   const el = card(
     `<div class="wildcam boot-card-ish">` +

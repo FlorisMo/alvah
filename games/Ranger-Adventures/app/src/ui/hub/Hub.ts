@@ -60,7 +60,7 @@ export function showTitle(): void {
 /** The raaf link reflects the companion: rescue prompt → friend's name. */
 function cabinLabel(): string {
   const c = store.get().companion;
-  if (!c.rescued) return 'Vang je raaf op';
+  if (!c.rescued) return 'Help de jonge raaf'; // parent:B13
   return `Verzorg ${c.naam || 'je raaf'}`;
 }
 
@@ -168,7 +168,7 @@ export function showMissionBoard(): void {
 
 /* ------------------------------------ sporenboek (clues; code: case-board) ---- */
 /** Simple per-soort glyph (dual-channel: glyph + the found colour). */
-export const CLUE_GLYPH: Record<string, string> = { spoor: '🐾', camera: '📷', band: '🛞' };
+export const CLUE_GLYPH: Record<string, string> = { spoor: '👣', camera: '📷', band: '🛞' }; // footprints, not a paw (parent:B13)
 
 /** The sporenboek (was "prikbord"; the class names stay case-board / ph-prikbord):
  *  found clues, the collected veldnotities and (once all clues are found) the way

@@ -191,7 +191,7 @@
 .briefing.veldnotitie .boot-kicker { color: var(--green-mid); }
 .briefing-lines { display: grid; gap: 6px; }
 .briefing-line { margin: 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
-.fact-text { margin: 4px 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
+.fact-text { margin: 4px auto; max-width: 24ch; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); } /* ≤7 words a line (child:B9) */
 /* W6.3a: the diegetic raaf-companion fact beat in the world — the raaf tells you
    the fact on location. A soft green frame + corvid mark set it apart from the
    neutral lodge card, without new motion. */

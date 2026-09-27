@@ -41,3 +41,61 @@ test('every mission ends in a reunion line, and the season in a finale, both at 
   assert.ok(f.regels.length >= 2);
   for (const l of [f.titel, f.kicker, ...f.regels]) assert.deepEqual(lintText(l), [], l);
 });
+
+/* ---- child:B9 / B13 — short, plain words that match the picture ---- */
+
+type EncFull = Enc & { subject: string; dier?: string; pose?: string; reactie?: string; vraagKnap?: string; uitlegKnap?: string; gevolgKnap?: string };
+const encountersOf = (): { m: string; e: EncFull; skinDier?: string }[] =>
+  AREA_VELUWE.missies.flatMap((m) => m.stappen.flatMap((st) =>
+    (((st.skin as { encounters?: EncFull[] }).encounters) ?? []).map((e) => ({ m: m.id, e, skinDier: st.skin.dier }))));
+
+/** The "knappe woorden": fine when that setting is on, never in the plain lines. */
+const JARGON = ['frisling', 'rotte', 'zeug', 'keiler', 'overloper', 'geit', 'reegeit', 'bok', 'hinde', 'roedel', 'rekel', 'moervos', 'welp', 'sprong'];
+const jargonIn = (t: string): string[] => JARGON.filter((w) => new RegExp(`\\b${w}\\b`, 'i').test(t));
+
+test('a wrong answer says what happens in one or two short sentences', () => {
+  const bad: string[] = [];
+  for (const { m, e } of encountersOf()) {
+    for (const t of [e.gevolg, e.gevolgKnap]) {
+      if (!t) continue;
+      const zinnen = t.split(/[.!?]+/).map((z) => z.trim()).filter(Boolean);
+      if (zinnen.length > 2) bad.push(`${m}.${e.id}: "${t}" (${zinnen.length} sentences)`);
+      for (const i of lintText(t)) bad.push(`${m}.${e.id}: "${i.sentence}" [${i.words}]`);
+    }
+    for (const t of [e.vraagKnap, e.uitlegKnap]) for (const i of lintText(t ?? '')) bad.push(`${m}.${e.id} knap: "${i.sentence}"`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+test('the plain lines (knappe woorden off) use no jargon: big, moeder, groep', () => {
+  const bad: string[] = [];
+  for (const m of AREA_VELUWE.missies) {
+    for (const st of m.stappen) {
+      const c = (st.skin.copy ?? {}) as Record<string, string | undefined>;
+      for (const k of ['instructie', 'goed', 'toon', 'terug', 'luister', 'echo', 'regel', 'regelOm']) {
+        for (const w of jargonIn(c[k] ?? '')) bad.push(`${m.id}.${st.ef}.${k}: ${w}`);
+      }
+    }
+  }
+  for (const { m, e } of encountersOf()) {
+    for (const k of ['vraag', 'uitleg', 'gevolg'] as const) for (const w of jargonIn(e[k] ?? '')) bad.push(`${m}.${e.id}.${k}: ${w}`);
+    for (const o of e.opties) for (const w of jargonIn(o.label)) bad.push(`${m}.${e.id} choice: ${w}`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+test('the words match the picture: a lying animal is posed lying, a fleeing one runs off', () => {
+  const bad: string[] = [];
+  // a snake always lies; a mud pool or an empty path is no animal
+  const stands = (s: string): boolean => !['modderpoel', 'pad-veilig', 'adder'].includes(s);
+  for (const { m, e, skinDier } of encountersOf()) {
+    const words = [e.vraag, ...e.opties.map((o) => o.label)].join(' ');
+    if (stands(e.subject) && /\blig(t|gen)\b/i.test(words) && e.pose !== 'ligt') bad.push(`${m}.${e.id}: says it lies, but stands`);
+    if (/\b(rent|loopt|draaft|glijdt|schiet) weg\b|\bspringt op\b/i.test(e.gevolg ?? '') && !['flee', 'recede'].includes(e.reactie ?? ''))
+      bad.push(`${m}.${e.id}: says it runs off, but it stays (${e.reactie})`);
+    const shown = e.subject !== 'pad-veilig' || !!(e.dier ?? skinDier); // an empty path shows no animal to move
+    if (shown && ['flee', 'recede'].includes(e.reactie ?? '') && !/\bweg\b|\bverder\b|\bterug\b|\bspringt op\b/i.test(e.gevolg ?? ''))
+      bad.push(`${m}.${e.id}: it runs off (${e.reactie}), but the words do not say so`);
+  }
+  assert.deepEqual(bad, []);
+});
