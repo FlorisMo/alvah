@@ -14,7 +14,7 @@ import { loadModel, prepModel } from '../Models';
 import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, VEN_SHORE_R, WATER_LEVEL, type Biome } from '../Biomes';
 import { windSway } from '../Atmosphere';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork } from '../Paths';
-import { WATER_DEEP, WATER_SHALLOW, WATER_OPACITY, FRESNEL_POWER, rippleAmp } from '../Water';
+import { WATER_DEEP, WATER_SHALLOW, WATER_TREES, WATER_OPACITY, FRESNEL_POWER, WATER_F0, rippleAmp } from '../Water';
 import type { Obstacle, MoveLimits } from '../CharacterController';
 import type { TierParams } from '../../core/quality';
 import type { Terrain } from './Terrain';
@@ -261,9 +261,11 @@ export class Dressing {
 
   /**
    * W4.8: the ven-water disc — a FRESNEL-tinted still plane. A custom shader
-   * mixes a deep forest-teal (seen head-on) with a lighter warm sky-glow (at
-   * grazing angles) by the Schlick view-angle factor (`Water.ts` mirrors the
-   * maths), so the disc reads as water instead of a flat painted circle. The
+   * mixes a dark peaty teal (seen head-on) with what the still water mirrors (the
+   * cream sky where the view is steeper, the far bank's tree-line at grazing angles)
+   * by the Schlick view-angle factor (`Water.ts` holds the constants), so the disc
+   * reads as dark still water instead of a flat painted circle; it is fogged and tone
+   * mapped like the rest of the world (2026-09-27). The
    * ripple is a GENTLE FRAGMENT-TINT shimmer only — never a vertex displacement —
    * so the silhouette never moves (motion-comfort §1e/§C); it is WAVELESS by
    * default and its amplitude (`uAmp`) is driven to exactly 0 under reduced-motion
@@ -274,51 +276,65 @@ export class Dressing {
     const geo = new THREE.CircleGeometry(RADIUS, 48);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
-      uniforms: {
+      fog: true,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
         uTime: { value: 0 },
         uAmp: { value: 0 },
         uDeep: { value: new THREE.Color(WATER_DEEP) },
         uShallow: { value: new THREE.Color(WATER_SHALLOW) },
+        uTrees: { value: new THREE.Color(WATER_TREES) },
         uOpacity: { value: WATER_OPACITY },
         uFresnelPower: { value: FRESNEL_POWER },
+        uF0: { value: WATER_F0 },
         uRadius: { value: RADIUS },
-      },
+      }]),
       vertexShader: `
+        #include <fog_pars_vertex>
         varying vec3 vWorld;
         varying float vR;
         void main() {
           vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
           vR = length(position.xy); // local radial distance from the disc centre (pre-tilt)
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
         }
       `,
       fragmentShader: `
+        #include <fog_pars_fragment>
         uniform float uTime;
         uniform float uAmp;
         uniform vec3 uDeep;
         uniform vec3 uShallow;
+        uniform vec3 uTrees;
         uniform float uOpacity;
         uniform float uFresnelPower;
+        uniform float uF0;
         uniform float uRadius;
         varying vec3 vWorld;
         varying float vR;
         void main() {
-          // flat, up-facing plane → normal is world-up; fresnel from the view's
-          // vertical component (straight-down = deep, grazing = sky-glow).
+          // flat, up-facing plane → normal is world-up; Schlick fresnel from the view's
+          // vertical component: looking down = the dark water, grazing = the sky's haze.
           vec3 viewDir = normalize(cameraPosition - vWorld);
-          float fres = pow(clamp(1.0 - max(viewDir.y, 0.0), 0.0, 1.0), uFresnelPower);
+          float fres = uF0 + (1.0 - uF0) * pow(clamp(1.0 - max(viewDir.y, 0.0), 0.0, 1.0), uFresnelPower);
           // subtle crossing shimmer — two slow sines over world position; uAmp is
           // 0 under reduced-motion so this term vanishes (dead-still mirror).
           float ripple = sin(vWorld.x * 1.15 + uTime * 0.8)
                        * sin(vWorld.z * 1.07 - uTime * 0.55);
-          float mixv = clamp(fres + ripple * uAmp, 0.0, 1.0);
-          vec3 col = mix(uDeep, uShallow, mixv);
+          float mixv = clamp(fres + ripple * uAmp * 0.5, 0.0, 1.0);
+          // what it mirrors: grazing (the far water) sees the far bank's tree-line, a
+          // steeper look (nearer water) sees the sky; the dark body shows through
+          vec3 mirrored = mix(uTrees, uShallow, smoothstep(0.07, 0.24, viewDir.y));
+          vec3 col = mix(uDeep, mirrored, mixv);
           // D3.2: fade the alpha to 0 over the outer ~2.4 m so the water meets the
-          // moss bank as a soft waterline, never a hard-edged dark polygon (the P1.2
-          // grade's "hard-edged dark POLYGON" finding). The reed fringe + painted moss
-          // bank complete the shore.
+          // bank as a soft waterline, never a hard-edged dark polygon. The reed belt
+          // and the wet bank complete the shore.
           float edge = smoothstep(uRadius, uRadius - 2.4, vR);
           gl_FragColor = vec4(col, uOpacity * edge);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          #include <fog_fragment>
         }
       `,
     });
@@ -498,13 +514,13 @@ export class Dressing {
   private async scatterGlbPlants(veg: number, thin: number): Promise<void> {
     const fern = await loadModel('prop-fern');
     if (fern) {
-      const [geo] = lodGeometries('prop-fern@1', prepModel(fern, 1), [700]);
+      const [geo, far] = lodGeometries('prop-fern@1', prepModel(fern, 1), [2000, 600]);
       const spots = this.gridSpots('bos', 4.2 * thin, 53, (_x, _z, h) => h < 0.45);
-      if (geo) this.addField('bos-varen', geo, lodMaterial(), spots.map((p, i) => ({
+      if (geo && far) this.addField('bos-varen', geo, lodMaterial(), spots.map((p, i) => ({
         x: p.x, y: this.groundY(p.x, p.z) - 0.02, z: p.z, s: 0.55 + p.h * 0.5, rotY: i * 2.39996,
         // late-summer bracken in the shade: olive, some already turning bronze
         tint: new THREE.Color(0.72 + p.h * 0.25, 0.68 + p.h * 0.08, 0.42),
-      })), 46);
+      })), 46, 0, { geometry: far, from: 14 });
     }
     const reeds = await loadModel('prop-reeds');
     if (!reeds) return;

@@ -14,23 +14,24 @@
  * pinned by a unit test with no browser. Deterministic — no Math.random / Date.
  */
 
-/** Deep tint seen head-on (looking straight down): a clear dark lake blue-teal so the
- *  water body reads as WATER, distinct from the olive moss-bank ground it sits over
- *  (D3.2 — the old forest-teal #3f5f6b muddied into the dark bank and read as ground). */
-export const WATER_DEEP = '#35627c';
-/** Grazing / edge tint: the GOLDEN-HOUR SKY reflected in the still water (D3.2 —
- *  the ven must read a warm golden reflection, not a pale cyan rim). A bright version of
- *  the §2.1 key (#FFCF8F→#FFB870): the far/grazing water glows warm gold while the near
- *  water stays dark blue-teal — the dark-blue→bright-gold gradient IS the "reflective
- *  still water" cue that separates a water surface from dark ground. */
-export const WATER_SHALLOW = '#eecf95';
+/** Deep tint seen head-on (looking down into it): the dark, peaty teal of a Veluwe ven.
+ *  2026-09-27: darker than the D3.2 lake blue, because under the brighter golden-hour sky
+ *  the old mix read as pale sand; still water reads as WATER when it is darker than the
+ *  bank and only the far part carries the sky. */
+export const WATER_DEEP = '#243d44';
+/** The golden-hour sky the still water mirrors where the view looks down into it
+ *  steeply enough to see the sky's reflection (Atmosphere.SKY_STOPS' cream band). */
+export const WATER_SHALLOW = '#d8ccb0';
+/** What the FAR water mirrors at a grazing angle: the tree-line on the far bank, so the
+ *  far water is a dark band under the trees (the cue that says "still water"). */
+export const WATER_TREES = '#343a26';
 /** Disc opacity — opaque enough that the dark basin bed never muddies the surface tint. */
-export const WATER_OPACITY = 0.92;
-/** Schlick-ish fresnel exponent: higher → the golden sky-glow hugs the far grazing edge and
- *  the bulk of the disc holds the dark blue-teal water body ("dark still water + a golden
- *  reflection", not a uniform gold pool that reads as sand). Tuned against the follow cam's
- *  shallow downward pitch so the near/mid water reads dark and only the far shore glows gold. */
-export const FRESNEL_POWER = 3.6;
+export const WATER_OPACITY = 0.94;
+/** Schlick fresnel exponent (5 is the physical one): the sky only takes over toward the
+ *  far, grazing water; the near water stays dark. */
+export const FRESNEL_POWER = 5;
+/** Water's reflectance looking straight down (Schlick F0): even head-on a little sky. */
+export const WATER_F0 = 0.04;
 /** Peak ripple-shimmer amplitude (fraction of the tint mix) when motion is on. */
 export const RIPPLE_AMP = 0.12;
 
