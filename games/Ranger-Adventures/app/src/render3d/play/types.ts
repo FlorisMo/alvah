@@ -44,6 +44,9 @@ export interface WorldCtx {
   /** the ranger's feet (world x,z) + facing (rad, rotation.y) when the activity began —
    *  the stage keeps him out of the play patch (he stands behind the lens). */
   player: { x: number; z: number; yaw: number };
+  /** the ranger's motion right now (live, read it each frame): a game's animals react
+   *  to him walking up calmly or running at them. */
+  rangerMotion(): RangerMotion;
   /** move the task anchor the dev hook's `cam().taskInView` tests (the planned patch
    *  centre, which the stage may offset from `activitySpot`). */
   setFocus(x: number, y: number, z: number): void;
@@ -72,12 +75,28 @@ export interface WorldCtx {
   home?: { pos: { x: number; y: number; z: number }; look: { x: number; y: number; z: number } } | null;
 }
 
+/** How the ranger moves right now (`World.rangerMotion`, `WorldCtx.rangerMotion`). */
+export interface RangerMotion {
+  /** where he stands (world x, z) */
+  x: number;
+  z: number;
+  /** the way he faces (rad, rotation.y: he looks along (sin, cos)) */
+  heading: number;
+  /** his ground speed (m/s) after collisions: 0 standing still, riding or in a game */
+  speed: number;
+  /** the run gait is on (Shift, or the stick at its rim) */
+  running: boolean;
+}
+
 /** Options for `WorldCtx.spawnModel`. */
 export interface SpawnOpts {
   /** stand height (m); default = the world's canonical size for that model */
   height?: number;
   /** play the model's calm idle clip when it has one (default true; frozen under reduced-motion) */
   idle?: boolean;
+  /** false = the red-deer model without the stag's antlers (a hind, a calf): hidden
+   *  before it is sized, so the body takes the height */
+  antlers?: false;
 }
 
 /** A model spawned for a mini-game. `root` is a THREE.Group (typed `unknown` here) with

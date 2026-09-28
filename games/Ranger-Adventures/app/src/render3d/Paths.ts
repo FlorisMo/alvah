@@ -44,7 +44,7 @@ export const PATH_NODES: readonly PathNode[] = [
   { id: 'stuifzand', x: 20, z: 24 },     // drift-sand juniper head (NE)
   { id: 'boa', x: -52.2, z: -18.7 },     // in front of the BOA post (-56, -20) on the west rim
   { id: 'ecoduct', x: -60, z: 4 },       // in front of the ecoduct (-70, 6): its 15 m deck is solid
-  { id: 'hut', x: -6, z: 2.5 },          // the west trail bends round the ranger cabin (-4.2, -4)
+  { id: 'hut', x: -6, z: 2.5 },          // the west trail bends round the ranger cabin (-6.5, -6)
 ] as const;
 
 /**
