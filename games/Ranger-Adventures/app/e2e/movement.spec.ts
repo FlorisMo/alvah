@@ -13,6 +13,7 @@ interface Hook {
   screen: string;
   pos(): { x: number; z: number } | null;
   frames(): number | null;
+  cam(): { dist: number } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -37,6 +38,13 @@ async function enterWorld(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Begin' }).click();
   await page.getByRole('button', { name: 'Dit is mijn ranger' }).click();
   await expect.poll(() => hook(page, (r) => r.screen), { timeout: 60_000 }).toBe('world'); // loading + building the world
+  // "Dit is mijn ranger" glides the camera from in front of him round behind him (one
+  // ~2 s move, world/Presenter.ts): the fixed tap below means "the ground ahead in the
+  // follow view", so wait (in rendered frames, never seconds) until that view stands
+  await page.waitForFunction(() => {
+    const r = (window as unknown as { __ranger: Hook }).__ranger;
+    return (r.cam()?.dist ?? 0) > 4.2;
+  }, null, { timeout: 0, polling: 200 });
 }
 
 test('movement: tap-to-walk moves the ranger ≥2 m @smoke', async ({ page }, testInfo) => {
