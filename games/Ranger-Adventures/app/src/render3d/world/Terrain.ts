@@ -23,6 +23,7 @@ import { BIOME_PALETTE, VEN_CENTER, VEN_SHORE_R, WATER_LEVEL, biomeAt, heightAt,
 import { BIOME_ACCENT_TONES, BIOME_GROUND_TONES, GROUND_BRIGHTEN, groundPatch, groundSpeckle, heathCover, vertexTint } from '../GroundDetail.ts';
 import { groundMaterial, mottleTexture } from '../GroundMaterial.ts';
 import { PATH_NODES, PATH_SEGMENTS, distanceToNetwork, trackSand } from '../Paths.ts';
+import { SIZE } from '../AnimalScale.ts';
 
 // three-mesh-bvh accelerated raycasts: the tap-to-walk ray (and the dev-hook ground
 // check) hit the ~18k-triangle terrain in O(log n). A mesh without a boundsTree falls
@@ -327,6 +328,9 @@ const FAR_LEAF = new THREE.Color('#7f9636');    // oak and birch
  */
 export function buildFarForest(bound: number, ground: (x: number, z: number) => number, lite = false): THREE.BufferGeometry {
   const r0 = bound + FAR_FOREST_IN;
+  // its crowns (`farCanopyLift`, shaped for 6.6 m pines) stand as tall as the grown rim
+  // trees in front of it (the scale table's pine), so no step shows over the tree-line
+  const K = SIZE.den.h / 6.6;
   // the rows from the inside out: the shaded face, then the canopy rings (finer near the rim)
   // The canopy's first ring hangs out over the face (like the crowns of edge trees), so
   // from above only crowns show behind the rim trees, never a dark band; from below, the
@@ -359,10 +363,10 @@ export function buildFarForest(bound: number, ground: (x: number, z: number) => 
       // tiles into the band between them, which aliased into stripes seen from the air
       uv[j * 2] = x / FAR_TILE_M; uv[j * 2 + 1] = z / FAR_TILE_M;
       if (row.kind === 'canopy') {
-        y = g + farCanopyLift(x, z, fine);
+        y = g + farCanopyLift(x, z, fine) * K;
         c.copy(FAR_PINE).lerp(FAR_LEAF, farStand(x, z));
       } else {
-        y = g + (row.kind === 'deep' ? -0.6 : row.kind === 'trunks' ? 2.6 : 5.0);
+        y = g + (row.kind === 'deep' ? -0.6 : row.kind === 'trunks' ? 2.6 * K : 5.0 * K);
         c.copy(row.kind === 'deep' ? FAR_DEEP : row.kind === 'trunks' ? FAR_TRUNKS : FAR_UNDER);
       }
       pos[j * 3] = x; pos[j * 3 + 1] = y; pos[j * 3 + 2] = z;

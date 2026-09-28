@@ -28,11 +28,11 @@
 
 import { driveStep, type DriveInput, type DriveCaps, type BodyCircle } from './vehicle.ts';
 
-/** Fixed cruise height (m) the helicopter eases to once airborne. Wave 2: 16 m, not
- *  the old 25 m — clear of every crown (trees are ≤ ~9 m), low enough that the world
- *  below still reads as the Veluwe (at 25 m it was "an orange haze bowl"), and a
- *  shorter ≤ 2 m/s climb and descent. */
-export const HELI_CRUISE_HEIGHT = 16;
+/** Fixed cruise height (m) the helicopter eases to once airborne: 20 m, its skids clear
+ *  of the grown forest (run 6: the tallest bos pine stands ≈ 16 m, the watchtower 14),
+ *  low enough that the world below still reads as the Veluwe (at 25 m it was "an orange
+ *  haze bowl"), and a ≤ 2 m/s climb and descent of ~10 s. */
+export const HELI_CRUISE_HEIGHT = 20;
 
 /** The ground altitude — the target while landing at a pad; hover-on-deck. */
 export const HELI_PAD_HEIGHT = 0;
@@ -181,11 +181,17 @@ export function landingAltitude(dist: number): number {
   return Math.max(HELI_PAD_HEIGHT, Math.min(HELI_CRUISE_HEIGHT, (dist - 1.2) * 0.5));
 }
 
-/** The helicopter's footprint on the ground (nose along +z after the model turn):
- *  the cabin and the tail boom. The rotor turns above a walker's head. */
+/** The helicopter's footprint on the ground (nose along +z after the model turn), at
+ *  its 3.3 m size (render3d/AnimalScale), measured off the model: the cabin on its skids
+ *  (≈ 2 m wide, from 0.75 m behind the centre to the nose at +2.3) as three circles, the
+ *  slim tail boom and its stabiliser (≈ 1.4 m across) back to −2.7. Close-fitting, so a
+ *  walker passing its side keeps the walk camera's room. The rotor turns above his head. */
 export const HELI_BODY: readonly BodyCircle[] = [
-  { along: 0.5, r: 1.05 },
-  { along: -1.35, r: 0.5 },
+  { along: 1.6, r: 0.95 },
+  { along: 0.55, r: 1.1 },
+  { along: -0.35, r: 1.0 },
+  { along: -1.5, r: 0.5 },
+  { along: -2.2, r: 0.6 },
 ];
 
 /**

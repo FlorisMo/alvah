@@ -230,18 +230,18 @@ export async function clickButton(page: Page, name: RegExp | string, what: strin
  *  ranger (rad), and the slowest frame (ms). */
 export type Glide = { frames: number; settled: boolean; maxStep: number; maxTurn: number; maxYaw: number; slowest: number };
 
-/** Start reading the render camera (`r.cam()`) and the ranger's facing (`r.avatar().yaw`)
- *  on every rendered frame. Read-only; `endGlide` stops it. */
+/** Start reading the render camera (`r.cam()`) and the ranger's facing
+ *  (`r.motion().heading`) on every rendered frame. Read-only; `endGlide` stops it. */
 export async function startGlide(page: Page): Promise<void> {
   await page.evaluate(() => {
-    type Hook = { cam(): { x: number; y: number; z: number; yaw: number; pitch: number } | null; avatar(): { yaw: number } | null };
+    type Hook = { cam(): { x: number; y: number; z: number; yaw: number; pitch: number } | null; motion(): { heading: number } | null };
     const w = window as unknown as { __ranger: Hook; __glide?: { on: boolean; rows: number[][] } };
     const g = { on: true, rows: [] as number[][] };
     w.__glide = g;
     const tick = (): void => {
       if (!g.on) return;
-      const c = w.__ranger.cam(); const a = w.__ranger.avatar();
-      if (c) g.rows.push([performance.now(), c.x, c.y, c.z, c.yaw, c.pitch, a ? a.yaw : NaN]);
+      const c = w.__ranger.cam(); const m = w.__ranger.motion();
+      if (c) g.rows.push([performance.now(), c.x, c.y, c.z, c.yaw, c.pitch, m ? m.heading : NaN]);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);

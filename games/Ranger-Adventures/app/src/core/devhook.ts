@@ -138,14 +138,11 @@ export interface RangerDevHook {
   clip(): { name: string; time: number } | null;
   /** The player ranger's LIVE world bounding-box height (m), measured from the
    *  real posed mesh — the honest scale signal the scale assert reads. Alvah is
-   *  a CHILD (P1.6a), so his idle band is now child-scale (avatar.height ∈
-   *  [1.1, 1.35]), a clear head shorter than the ~1.8 m warden — NOT the old
-   *  ~1.7 m adult. It is the measured render size, NOT the normalization target,
+   *  a real 8-year-old (run 6: 1.32 m, render3d/AnimalScale), a head and a half
+   *  under the 1.8 m warden. It is the measured render size, NOT the normalization target,
    *  so the telemetry can never mask a mis-scaled rig (AUDIT-FINDINGS §4: pixels
-   *  are the court of appeal). `yaw` is the way he faces (rad, the group's heading):
-   *  golden reads it every frame to prove a turn of his never snaps. Null before the
-   *  hook/world is ready. */
-  avatar(): { height: number; yaw: number } | null;
+   *  are the court of appeal). Null before the hook/world is ready. */
+  avatar(): { height: number } | null;
   /** The player ranger's LIVE post-collision ground speed (m/s) — the honest
    *  walked speed AFTER the kinematic slide/clamp, which the walk clip's cadence
    *  is tied to (F-08). The assert reads it ∈ [1.4, 2.2] while `clip` = walk to
@@ -153,6 +150,10 @@ export interface RangerDevHook {
    *  that slid the feet ~2.5× per stride. 0 while standing or in an in-place
    *  activity; null before the hook/world is ready. */
   groundSpeed(): number | null;
+  /** How the ranger moves right now (World.rangerMotion): where he stands, the way he
+   *  faces (rad), his post-collision ground speed (m/s) and whether he runs. Null
+   *  before the world is up. */
+  motion(): { x: number; z: number; heading: number; speed: number; running: boolean } | null;
   /** D1.2 locomotion ground-truth (P1.5a asserts it across the walkable world): is the
    *  ranger's Y actually ON the RENDERED terrain surface, not through it? `grounded` is
    *  true when a down-ray hits the terrain under him AND his feet sit in the on-foot
@@ -383,8 +384,9 @@ const state = {
   cameraYaw: null as null | (() => number),
   drawCalls: null as null | (() => number),
   clip: null as null | (() => { name: string; time: number } | null),
-  avatar: null as null | (() => { height: number; yaw: number } | null),
+  avatar: null as null | (() => { height: number } | null),
   groundSpeed: null as null | (() => number | null),
+  motion: null as null | (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null),
   grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
@@ -524,7 +526,7 @@ export function provideClip(fn: (() => { name: string; time: number } | null) | 
 
 /** Register the live avatar-scale source (the World's measured ranger bbox
  *  height). Pass null to clear (F-07). */
-export function provideAvatar(fn: (() => { height: number; yaw: number } | null) | null): void {
+export function provideAvatar(fn: (() => { height: number } | null) | null): void {
   state.avatar = fn;
 }
 
@@ -532,6 +534,11 @@ export function provideAvatar(fn: (() => { height: number; yaw: number } | null)
  *  in m/s). Pass null to clear (F-08). */
 export function provideGroundSpeed(fn: (() => number | null) | null): void {
   state.groundSpeed = fn;
+}
+
+/** Register the ranger's live motion read (World.rangerMotion). Pass null to clear. */
+export function provideMotion(fn: (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null) | null): void {
+  state.motion = fn;
 }
 
 /** Register the live real-camera read-back source (the World's `camState`, read
@@ -739,6 +746,7 @@ export function installDevHook(): boolean {
     clip: () => (state.clip ? state.clip() : null),
     avatar: () => (state.avatar ? state.avatar() : null),
     groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
+    motion: () => (state.motion ? state.motion() : null),
     grounded: () => (state.grounded ? state.grounded() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),

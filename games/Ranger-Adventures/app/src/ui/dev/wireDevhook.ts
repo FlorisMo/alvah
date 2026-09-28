@@ -8,7 +8,7 @@
 import type { World } from '../../render3d/World';
 import {
   providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot,
-  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideGrounded, provideCam,
+  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
   provideHeli, provideQuality, provideBoundary,
@@ -27,6 +27,7 @@ export function wireWorldDevhook(world: World): void {
   provideClip(() => world.playerClip());              // W3.2: the ranger's active locomotion clip
   provideAvatar(() => world.avatarState());           // F-07: live ranger scale (measured bbox height)
   provideGroundSpeed(() => world.groundSpeed());      // F-08: live post-collision foot speed (m/s)
+  provideMotion(() => world.rangerMotion());          // run 6: where he is, his heading, speed, running
   provideGrounded(() => world.groundedState());       // D1.2: feet on the rendered terrain
   provideCam(() => world.camState());                 // F-05 ⊕ F-18: the REAL render camera read-back
   provideActors(() => world.actorClips());            // W3.3: warden + poacher baked clips
