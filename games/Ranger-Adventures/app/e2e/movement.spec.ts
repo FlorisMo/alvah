@@ -13,7 +13,8 @@ interface Hook {
   screen: string;
   pos(): { x: number; z: number } | null;
   frames(): number | null;
-  cam(): { dist: number } | null;
+  cam(): { dist: number; x: number; z: number } | null;
+  motion(): { heading: number } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -41,13 +42,21 @@ async function enterWorld(page: Page): Promise<void> {
   // "Dit is mijn ranger" glides the camera from in front of him round behind him (one
   // ~2 s move, world/Presenter.ts): the fixed tap below means "the ground ahead in the
   // follow view", so wait (in rendered frames, never seconds) until that view stands:
-  // the lens out behind him and still from one rendered frame to the next
+  // the lens behind him (against the way he faces) and still for 10 rendered frames. A
+  // glide starts eased, so its first frames are still too, but the lens is in front of
+  // him there (the maker's view)
   await page.waitForFunction(() => {
-    const w = window as unknown as { __ranger: Hook; __lastCam?: { f: number; d: number } };
-    const d = w.__ranger.cam()?.dist ?? 0, f = w.__ranger.frames() ?? 0;
-    const last = w.__lastCam;
-    if (!last || f !== last.f) w.__lastCam = { f, d };
-    return !!last && f !== last.f && d > 4.2 && Math.abs(d - last.d) < 0.002;
+    const w = window as unknown as { __ranger: Hook; __view?: { f: number; x: number; z: number; still: number } };
+    const r = w.__ranger;
+    const c = r.cam(), p = r.pos(), m = r.motion(), f = r.frames() ?? 0;
+    if (!c || !p || !m) return false;
+    const last = w.__view;
+    if (last && f === last.f) return false; // the same frame: wait for the next one
+    const vx = c.x - p.x, vz = c.z - p.z, len = Math.hypot(vx, vz) || 1;
+    const behind = (vx * Math.sin(m.heading) + vz * Math.cos(m.heading)) / len < -0.8;
+    const still = !!last && Math.hypot(c.x - last.x, c.z - last.z) < 0.002;
+    w.__view = { f, x: c.x, z: c.z, still: behind && still ? (last?.still ?? 0) + 1 : 0 };
+    return w.__view.still >= 10;
   }, null, { timeout: 0, polling: 'raf' });
 }
 
