@@ -721,7 +721,7 @@ export class Dressing {
       // Watchtower bos grove (POI 37,-37): trees + a real forest floor. Run 6: grown, the
       // trees stand far enough out that no crown reaches into the tower (a spreading oak
       // would need ~10 m, so pines and a birch).
-      ['prop-pine-scots', 31.5, -41.5], ['prop-pine-scots', 42.5, -42], ['prop-birch-tree', 33, -30.5],
+      ['prop-pine-scots', 31.5, -41.5], ['prop-pine-scots', 42.5, -42], ['prop-birch-tree', 44.5, -45],
       ['prop-tree-stump', 31, -37], ['prop-mushrooms', 46, -42], ['prop-fern', 30, -42],
       ['prop-dead-snag', 45.5, -40.5], ['prop-fallen-log', 35, -43],
       // Ecoduct approach grove (POI -70,6): beside the bridge, out of its footprint (grown
