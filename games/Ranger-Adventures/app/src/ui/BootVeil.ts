@@ -25,8 +25,8 @@ export function mountBootVeil(ui: HTMLElement): BootVeil {
   // the name sits where the title's wordmark will sit (the same block, the same letter),
   // so the paper dissolves round it and the name stays
   el.innerHTML =
-    `<div class="title-block">` +
-    `<p class="title-mark">${TITLE.naam}</p>` +
+    `<div class="boot-veil-block">` +
+    `<p class="boot-veil-name">${TITLE.naam}</p>` +
     `<div class="boot-veil-prints" aria-hidden="true">` +
     Array.from({ length: 5 }, (_, i) => `<span class="boot-veil-print" style="--i:${i}">${PRINT}</span>`).join('') +
     `</div></div>`;

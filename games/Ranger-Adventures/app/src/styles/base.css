@@ -67,9 +67,8 @@ body {
 }
 .boot-veil--lifting { opacity: 0; }
 #ui .boot-veil--lifting { pointer-events: none; }
-.boot-veil .title-block { background: none; }
-.boot-veil .title-mark { opacity: 0; transition: opacity 500ms var(--ease-out); text-shadow: none; }
-.boot-veil--named .title-mark { opacity: 1; }
+.boot-veil-name { opacity: 0; transition: opacity 500ms var(--ease-out); text-shadow: none !important; }
+.boot-veil--named .boot-veil-name { opacity: 1; }
 .boot-veil-prints { display: flex; align-items: flex-end; justify-content: center; gap: 22px; height: 48px; margin-top: 30px; }
 .boot-veil-print { width: 22px; height: 33px; color: #a8875a; }
 .boot-veil-print:nth-child(odd) { transform: translateY(-8px) rotate(-6deg); }
@@ -89,7 +88,7 @@ body {
 .title-overlay { position: absolute; inset: 0; pointer-events: none; }
 .title-overlay > * { pointer-events: auto; }
 #ui .title-overlay--leaving, #ui .title-overlay--leaving * { pointer-events: none; }
-.title-block {
+.title-block, .boot-veil-block {
   position: absolute;
   left: 50%;
   top: clamp(40px, 9vh, 96px);
@@ -102,9 +101,9 @@ body {
   max-width: 92vw;
   padding: 18px 44px 22px;
   text-align: center;
-  /* a soft warm glow behind the words, never a hard panel */
-  background: radial-gradient(closest-side, rgba(255, 247, 228, 0.72), rgba(255, 247, 228, 0.36) 62%, rgba(255, 247, 228, 0));
 }
+/* a soft warm glow behind the title's words, never a hard panel */
+.title-block { background: radial-gradient(closest-side, rgba(255, 247, 228, 0.72), rgba(255, 247, 228, 0.36) 62%, rgba(255, 247, 228, 0)); }
 /* the words ease in one after the other; straight after the veil the name is already
    there (it was the veil's), so only the line and the buttons come in */
 .title-overlay .title-block > * { animation: title-in 800ms var(--ease-out) both; }
@@ -114,7 +113,7 @@ body {
 @keyframes title-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .title-overlay--leaving .title-block { animation: title-out 300ms var(--ease-in) both; }
 @keyframes title-out { from { opacity: 1; } to { opacity: 0; transform: translate(-50%, -8px); } }
-.title-mark {
+.title-mark, .boot-veil-name {
   margin: 0;
   font: 700 clamp(44px, 7.4vw, 76px)/1 var(--font-head);
   letter-spacing: -0.015em;
