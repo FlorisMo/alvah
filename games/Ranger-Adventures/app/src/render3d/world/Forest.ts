@@ -27,12 +27,14 @@
 import * as THREE from 'three';
 import { loadManifest, loadModel, prepModel } from '../Models.ts';
 import { lodGeometries, lodMaterial } from '../Lod.ts';
+import { SIZE } from '../AnimalScale.ts';
 
 export type TreeSpecies = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
 export interface TreePlacement { x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies }
-/** prepModel target height (m) per species; a per-tree scale rides on top. */
+/** prepModel target height (m) per species: grown trees (the scale table); a per-tree
+ *  scale rides on top. */
 export const TREE_BASE_H: Record<TreeSpecies, number> = {
-  'prop-pine-scots': 6.6, 'prop-oak-tree': 5.4, 'prop-birch-tree': 6.0,
+  'prop-pine-scots': SIZE.den.h, 'prop-oak-tree': SIZE.eik.h, 'prop-birch-tree': SIZE.berk.h,
 };
 
 /** Triangle targets of the simplified copies (per species: the birch's leaves are

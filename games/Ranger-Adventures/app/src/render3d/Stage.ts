@@ -4,7 +4,7 @@ import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, makeSkyDome } from '
 import { BIOME_GROUND_TONES, GROUND_BRIGHTEN, heathCover, vertexTint } from './GroundDetail';
 import { groundMaterial, mottleTexture } from './GroundMaterial';
 import { heatherGeometry, plantMaterial, tuftGeometry } from './world/Plants';
-import { RANGER_STAND_HEIGHT } from './AnimalScale';
+import { RANGER_STAND_HEIGHT, SIZE, standHeightFor } from './AnimalScale';
 import { provideRenderView, provideTris, provideFrames, provideRenderMode } from '../core/devhook';
 import { dressRanger } from './RangerLook';
 import { glRendererName, isSoftwareRenderer, lightOverride, setLightMode } from '../core/quality';
@@ -18,6 +18,11 @@ type TitleTree = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
 export type FrameCallback = (dtSeconds: number, elapsedSeconds: number) => void;
 
 const FOG = new THREE.Color(GOLDEN_HOUR.fogColor); // shared golden-hour horizon (P1.1)
+/** How much further from the lens the title's real trees and cabin stand than where the
+ *  line was first composed (with 6 m trees and a 3 m cabin): at their true size (run 6)
+ *  this keeps the crowns in frame and the cabin from crowding the ranger. */
+const TITLE_TREE_BACK = 1.55;
+const TITLE_CABIN_BACK = 1.3;
 // Echoes of the Veluwe biome palette (Biomes.ts) so the title reads like the
 // world beyond the Begin button: pine + birch greens, sand path.
 const PINE_GREEN = new THREE.Color('#2f6b46');
@@ -335,7 +340,7 @@ export class Stage {
     await Models.loadManifest();
     // navigated away / superseded while the chunk loaded
     if (this.world || this.leavingTitle || gen !== this.titleDressGen) return;
-    const { loadModel, loadRig, prepModel, skinnedRenderBox } = Models;
+    const { loadModel, loadRig, prepModel, renderedHeight } = Models;
 
     // P1.4 smoke fix: load the real props ONE AT A TIME and BAIL the moment the
     // player leaves the title. The earlier version fired ~10 GLB decodes CONCURRENTLY
@@ -365,25 +370,31 @@ export class Stage {
     // The bosrand: mixed real trees framing the clearing + path, the left
     // foreground kept open for the ranger and the centre open for the sand track.
     // A modest count (kind to the iPad tri budget + boot decode) that still reads
-    // as a Veluwe tree line. [x, z, species, targetHeight(m)] — echo World TREE_BASE_H.
+    // as a Veluwe tree line. [x, z, species, share of its grown height (AnimalScale)].
     // The light mode (software GL) keeps the cheap primitive tree line and board: the real
     // crowns fill half the screen and cost a software renderer most of each frame.
     const trees: ReadonlyArray<readonly [number, number, TitleTree, number]> = this.light ? [] : [
-      [-5.2, -7.5, 'prop-pine-scots', 6.4], [-7.0, -11.5, 'prop-oak-tree', 5.6],
-      [-4.0, -13.5, 'prop-birch-tree', 6.0],
-      [5.0, -7.5, 'prop-oak-tree', 5.4], [7.0, -11.5, 'prop-pine-scots', 6.4],
-      [4.2, -14, 'prop-birch-tree', 6.0], [0.7, -18, 'prop-pine-scots', 6.9],
+      [-5.2, -7.5, 'prop-pine-scots', 0.97], [-7.0, -11.5, 'prop-oak-tree', 1.04],
+      [-4.0, -13.5, 'prop-birch-tree', 1.0],
+      [5.0, -7.5, 'prop-oak-tree', 1.0], [7.0, -11.5, 'prop-pine-scots', 0.97],
+      [4.2, -14, 'prop-birch-tree', 1.0], [0.7, -18, 'prop-pine-scots', 1.05],
     ];
+    // Grown trees (run 6: ~1.9× the saplings this line was composed with) stand further
+    // back from the lens by TITLE_TREE_BACK, so their crowns stay framed above the clearing.
+    const back = (x: number, z: number, k: number): [number, number] =>
+      [this.camBase.x + (x - this.camBase.x) * k, this.camBase.z + (z - this.camBase.z) * k];
     for (let i = 0; i < trees.length; i++) {
       if (left() && bail()) return;
-      const [x, z, id, h] = trees[i];
+      const [x0, z0, id, k] = trees[i];
+      const h = (standHeightFor(id) ?? 10) * k;
+      const [x, z] = back(x0, z0, TITLE_TREE_BACK);
       const m = await loadModel(id);
       if (left() && bail()) return;
       if (!m) continue;
       const p = prepModel(m, h);
       p.position.set(x, 0, z);
       p.rotation.y = (i * 1.3) % (Math.PI * 2); // deterministic facing jitter (no Math.random)
-      this.groundProp(real, p, Math.min(1.4, 0.2 * h));
+      this.groundProp(real, p, Math.min(1.4, 0.1 * h));
     }
 
     // The prikbord (real case board), cork face angled toward the approach.
@@ -391,7 +402,7 @@ export class Stage {
     const board = this.light ? null : await loadModel('prop-case-board');
     if (left() && bail()) return;
     if (board) {
-      const p = prepModel(board, 1.8);
+      const p = prepModel(board, SIZE.missiebord.h);
       p.position.set(2.6, 0, -5.2);
       p.rotation.y = -0.5;
       this.groundProp(real, p, 1.1);
@@ -402,16 +413,17 @@ export class Stage {
     const cabin = await loadModel('prop-ranger-cabin');
     if (left() && bail()) return;
     if (cabin) {
-      const p = prepModel(cabin, 3.0);
-      p.position.set(-6.0, 0, -4.8);
+      const p = prepModel(cabin, SIZE.boshut.h);
+      const [cx, cz] = back(-6.0, -4.8, TITLE_CABIN_BACK); // its true 4.5 m, a step further back
+      p.position.set(cx, 0, cz);
       p.rotation.y = 0.5;
       this.groundProp(real, p, 2.2);
     }
 
     // The GROUNDED ranger avatar, standing calmly in the open left lane by the path.
     // He loads LAST (heaviest asset + the capture's "fully dressed" signal): his
-    // measured height feeds the scale assert (P1.6a: Alvah is a CHILD, avatar.height
-    // ∈ [1.1, 1.35]) and the capture's avatar-loaded snap gate the moment he lands.
+    // measured height feeds the scale read (avatar.height: the 1.32 m boy) and the
+    // capture's avatar-loaded snap gate the moment he lands.
     if (left() && bail()) return;
     const rig = await loadRig('ranger-alvah');
     if (left() && bail()) return;
@@ -431,11 +443,9 @@ export class Stage {
         this.titleMixer.clipAction(idle).play();
         this.titleMixer.update(0);
       }
-      // Expose the grounded title ranger to the scale assert. Measure the SKELETON
-      // (skinnedRenderBox) — the extent that renders — not the bind-pose geometry
-      // box (the F-07 telemetry lie).
-      const box = skinnedRenderBox(p) ?? new THREE.Box3().setFromObject(p);
-      this.titleRangerH = Math.max(box.getSize(new THREE.Vector3()).y, 0);
+      // Expose the grounded title ranger to the scale read: what he draws
+      // (Models.renderedHeight), in his idle pose.
+      this.titleRangerH = renderedHeight(p.children[0]) ?? 0;
     }
 
     // Swap: dispose the primitive stand-ins now every real prop has settled. Guard

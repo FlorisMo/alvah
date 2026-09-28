@@ -40,15 +40,26 @@ export function applyCoat(root: THREE.Object3D, id: string | null): number {
   return n;
 }
 
+const _box = new THREE.Box3();
+const _at = new THREE.Vector3();
+
 /**
  * Bias a head-low / snuffling species into a subtle nose-down stance. `wrapper` is
  * the group `prepModel` returns (feet at y=0, so pitching its child about X pivots
  * near the feet — nose dips, back lifts a hair). A no-op for upright species.
  * One-time transform (not motion), so reduced-motion does not apply.
+ *
+ * Tipped forward, the snout dips below the hooves prepModel stood on the ground, so
+ * the posture stands the animal on its lowest point again (the posture species are
+ * static meshes: the geometry, vertex by vertex, is what draws).
  */
 export function applyPosture(wrapper: THREE.Object3D, id: string | null): void {
   const { pitch } = postureFor(id);
   if (pitch <= 0) return;
   const inner = wrapper.children[0];
-  if (inner) inner.rotation.x += pitch;
+  if (!inner) return;
+  inner.rotation.x += pitch;
+  wrapper.updateWorldMatrix(true, true);
+  const low = _box.setFromObject(wrapper, true).min.y - wrapper.getWorldPosition(_at).y;
+  if (Number.isFinite(low)) inner.position.y -= low;
 }

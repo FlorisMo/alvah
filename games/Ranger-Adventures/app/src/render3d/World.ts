@@ -44,7 +44,7 @@ import { store } from '../core/state';
 import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, bootTier, coarsePointer, lightMode, pixelRatioFor, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import type { WayCue } from './Wayfinding';
-import type { WorldCtx } from './play/types';
+import type { RangerMotion, WorldCtx } from './play/types';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
 import { cachedResource } from './Models';
 import { Progress } from './world/Progress';
@@ -459,6 +459,12 @@ export class World {
     return this.player.groundSpeed();
   }
 
+  /** How the ranger moves right now: where he stands, his heading, his ground speed
+   *  (m/s) and whether he runs. Live; the missions' animals and the dev hook read it. */
+  rangerMotion(): RangerMotion {
+    return this.player.motion();
+  }
+
   /** Dev-hook accessor (F-07): the player ranger's live rendered height (m). */
   avatarState(): { height: number } | null {
     return this.player.avatarState();
@@ -742,6 +748,7 @@ export class World {
       groundY: (x, z) => this.groundSnapY(x, z),
       isClear: (x, z, r) => this.playClear(x, z, r),
       player: { x: this.ranger.position.x, z: this.ranger.position.z, yaw: this.ranger.rotation.y },
+      rangerMotion: () => this.player.motion(),
       setFocus: (x, y, z) => { this.activityFocus = { x, y, z }; },
       spawnModel,
       spawnPlant,
