@@ -4,8 +4,8 @@ import * as path from 'node:path';
 import { AREA_VELUWE } from '../src/content/veluwe';
 import { HAAR_OPTIES, OUTFIT_OPTIES } from '../src/core/avatar';
 import {
-  R, SEAT_TOLERANCE, budget, clickButton, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
-  sleep, snap, soft, step, uiText, under, visibleButtons, walkQuality, walkTo, worldChange, worldSamples, wrap,
+  R, SEAT_TOLERANCE, budget, calmGlide, clickButton, endGlide, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
+  sleep, snap, soft, startGlide, step, uiText, under, visibleButtons, walkQuality, walkTo, worldChange, worldSamples, wrap,
   type Heli, type Hint, type P2, type Seat, type Vehicle,
 } from './golden-lib';
 
@@ -71,6 +71,8 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
   let playerTold = true; // seating() tells the player's own ranger apart (else step 7 cannot judge)
 
   // ---------------------------------------------------- 1. opening screen ----
+  // The paper veil hides every load, then lifts onto the REAL world: the title is a shot
+  // of the spawn clearing (world/Presenter.ts), never a stand-in prop.
   await step(1, async () => {
     const t0 = Date.now();
     expectedLoads += 1;
@@ -81,19 +83,35 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const tBegin = (Date.now() - t0) / 1000;
     note(`Begin visible after ${tBegin.toFixed(1)} s`);
     soft(tBegin < 8, `the title is slow: Begin appeared after ${tBegin.toFixed(1)} s (want < 8 s)`);
-    const dressed = await page.waitForFunction(() => (window as unknown as { __ranger?: { titleReady(): boolean } }).__ranger?.titleReady(), null, { timeout: 15_000 }).then(() => true, () => false);
-    soft(dressed, 'after 15 s the title still shows its low-poly stand-in props (titleReady=false)');
+    const ready = await page.waitForFunction(() => (window as unknown as { __ranger?: { titleReady(): boolean } }).__ranger?.titleReady(), null, { timeout: 15_000 }).then(() => true, () => false);
+    soft(ready, 'after 15 s the world behind the title is still not ready (titleReady=false)');
+    await expect.poll(() => page.locator('.boot-veil').count(), { timeout: 5_000, message: 'the boot veil lifts' }).toBe(0);
+    await sleep(page, 900); // the title block has eased in
     await shot(page, 'title');
-    await clickButton(page, 'Begin', 'title', 10_000, 30_000); // its handler loads the maker + world code
+    await budget(page, 'on the title');
+    // the title block sits over the sky: never over the ranger on the sand track
+    const block = await page.locator('.title-block').boundingBox();
+    const c = await R<{ avatarScreen: { y: number; heightFrac: number; onScreen: boolean } } | null>(page, 'r.cam()');
+    const rangerTop = c ? ((1 - (c.avatarScreen.y + c.avatarScreen.heightFrac)) / 2) * 800 : 0;
+    soft(!!c?.avatarScreen.onScreen, 'the ranger is not in the title picture');
+    soft(!!block && block.y + block.height < rangerTop, `the title block (bottom ${r2(block ? block.y + block.height : 0)} px) covers the ranger (top ${r2(rangerTop)} px)`);
+    // the session's first Begin: the page stalls in the tap (the sound starts there), and
+    // the glide down to the ranger must still never jump — read on every drawn frame
+    await startGlide(page);
+    await clickButton(page, 'Begin', 'title', 10_000, 30_000);
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 30_000, message: 'a mouse click on Begin must open the ranger maker' }).not.toBe('title');
+    calmGlide(await endGlide(page), 'title → maker glide');
     noNewErrors();
   });
 
   // --------------------------------------------------- 2. make your ranger ----
+  // The camera glides down to the ranger, who turns to face you; the maker is a panel
+  // beside him and he IS the preview: every swatch repaints the big 3D ranger.
   await step(2, async () => {
     const done = page.getByRole('button', { name: 'Dit is mijn ranger' });
     const up = await done.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true, () => false);
     hard(up, `the ranger maker never showed "Dit is mijn ranger" (visible buttons: ${await visibleButtons(page)})`);
+    await budget(page, 'in the ranger maker');
     for (const label of [`Huid: ${CHOICE.huid}`, `Haar: ${CHOICE.haar}`, `Ranger-jas: ${CHOICE.outfit}`, `Ogen: ${CHOICE.iris}`]) {
       const sw = page.getByRole('radio', { name: label });
       const ok = await sw.click({ timeout: 5_000 }).then(() => true, () => false);
@@ -101,11 +119,31 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
       soft((await sw.getAttribute('aria-checked')) === 'true', `swatch "${label}" does not show as chosen after a click`);
     }
     note(`chose ${Object.entries(CHOICE).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+    await sleep(page, 400); // the glide down has settled
+    // GOAL 2: the maker is the first place a player judges his ranger: the jacket he
+    // picked is the jacket the 3D ranger wears, on screen, facing him
+    const look = await renderedLook(page, {
+      jacket: OUTFIT_OPTIES.map((o) => `${o.id}=${o.kleur}`),
+      hair: HAAR_OPTIES.map((o) => `${o.id}=${o.kleur}`),
+      front: true,
+    });
     await shot(page, 'ranger-maker');
-    await clickButton(page, 'Dit is mijn ranger', 'ranger maker', 10_000, 30_000); // its handler builds the world
+    if (!look) soft(false, 'the 3D ranger is not on screen in the maker');
+    else {
+      const jacket = optId(OUTFIT_OPTIES, CHOICE.outfit);
+      note(`in the maker the 3D ranger wears jacket "${look.jacket}" (${look.jacketShare}% of coloured pixels), hair "${look.hair}"`);
+      soft(look.jacket === jacket, `the chosen jacket does not show on the 3D ranger in the maker: chose ${jacket}, it renders ${look.jacket}`);
+    }
+    const panel = await page.locator('.avatar-creator').evaluate((el) => ({ scrolls: el.scrollHeight > el.clientHeight + 1, left: el.getBoundingClientRect().left }));
+    soft(!panel.scrolls, 'the maker panel scrolls at 1280×800');
+    const c = await R<{ avatarScreen: { x: number } } | null>(page, 'r.cam()');
+    soft(!!c && ((c.avatarScreen.x + 1) / 2) * 1280 < panel.left, 'the 3D ranger stands behind the maker panel, not beside it');
+    await startGlide(page);
+    await clickButton(page, 'Dit is mijn ranger', 'ranger maker', 10_000, 30_000);
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000, message: '"Dit is mijn ranger" must lead into the world' }).toBe('world');
     await expect.poll(() => R<P2 | null>(page, 'r.pos()'), { timeout: 30_000, message: 'the world never placed the ranger' }).not.toBeNull();
-    note('colours on the 3D ranger are measured in step 3, once the spawn hint has left his head');
+    calmGlide(await endGlide(page), 'maker → play glide');
+    note('colours on the 3D ranger in play are measured in step 3, once the spawn hint has left his head');
     noNewErrors();
   });
 

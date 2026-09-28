@@ -8,8 +8,8 @@
  */
 
 import * as THREE from 'three';
-import { loadModel, loadRig, prepModel, skinnedRenderBox } from '../Models';
-import { standHeightFor, ADULT_REFERENCE_HEIGHT } from '../AnimalScale';
+import { loadModel, loadRig, prepModel, renderedHeight } from '../Models';
+import { SIZE, standHeightFor } from '../AnimalScale';
 import { applyEyes } from '../EyeMaterial';
 import { applyCoat, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
@@ -34,8 +34,8 @@ export class Fauna {
   readonly scenicActors: {
     id: string; group: THREE.Group;
     mixer: THREE.AnimationMixer | null; action: THREE.AnimationAction | null;
-    height: number;  // P1.6a: the actor's measured rendered stand-height (m) — the
-                     // mature-human reference the child ranger is judged against
+    height: number;  // the actor's measured rendered height (m): the grown-up the
+                     // boy is judged against
   }[] = [];
   // W3.6 ambient wildlife: a few animals roam gentle wander loops (baked walk↔graze
   // clips via the mixer for the W3.5-staged cast, improved procedural bob elsewhere)
@@ -164,11 +164,10 @@ export class Fauna {
    * clear; neither pushes a collision circle or joins `markers` (pure dressing).
    */
   placeScenicActors(): void {
-    // P1.6a: mature humans stand at the adult reference (~1.8 m), so the ≈1.2 m
-    // child ranger reads a clear head-and-shoulders shorter beside the warden.
+    // grown men at their true heights (AnimalScale), a head and a half above the boy
     const ACTORS: { id: string; x: number; z: number; height: number }[] = [
-      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: ADULT_REFERENCE_HEIGHT }, // the BOA by the report board
-      { id: 'figure-poacher', x: -11.5, z: 8.5, height: ADULT_REFERENCE_HEIGHT },  // a distant figure in the trees
+      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: SIZE.boa.h },   // the BOA by the report board
+      { id: 'figure-poacher', x: -11.5, z: 8.5, height: SIZE.stroper.h }, // a distant figure in the trees
     ];
     for (const a of ACTORS) {
       const group = new THREE.Group();
@@ -184,16 +183,10 @@ export class Fauna {
         applyEyes(prepped, a.id, { dusk: false });
         applyCalmPose(prepped, a.id); // §B never-scary: bias the poacher into a calm rest shape
         group.add(prepped);
-        // P1.6a: expose the actor's MEASURED rendered stand-height (skinnedRenderBox
-        // — the same honest bone-extent `measureAvatar` reads for the ranger), NEVER
-        // the normalization target. Doc §8.7 / D1.7: a hook reports what RENDERS, so
-        // the child-vs-adult pair assert (Alvah < 0.75 × the warden) can never be
-        // faked by a mis-scaled adult reporting the constant it was asked for.
-        // `entry.height` keeps the target (`a.height`) as the pre-load fallback, and
-        // the geometry-box fallback covers a rig with no skeleton to measure.
-        const rbox = skinnedRenderBox(prepped) ?? new THREE.Box3().setFromObject(prepped);
-        const measuredY = rbox.getSize(new THREE.Vector3()).y;
-        if (Number.isFinite(measuredY) && measuredY > 0) entry.height = measuredY;
+        // expose the actor's MEASURED rendered height (Models.renderedHeight, the same
+        // read as the ranger's), never the target it was asked for: a hook reports what
+        // renders. `entry.height` keeps the target as the pre-load fallback.
+        entry.height = renderedHeight(prepped) ?? entry.height;
         if (rig.clips.length) {
           const mixer = new THREE.AnimationMixer(prepped);
           const clip = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
@@ -240,9 +233,7 @@ export class Fauna {
    */
   placeAmbientLife(): void {
     // ground roamers: [id, home x/z, loop radius, whether the GLB carries baked
-    // walk/graze clips]. Target height now comes from the canonical dossier
-    // stand-height table (W3.7a, `AnimalScale.ts`) — one source of truth so the
-    // world and the showroom true-scale mode read the SAME relative sizes.
+    // walk/graze clips]. Their size is the scale table's (`AnimalScale.ts`).
     const GROUND: { id: string; hx: number; hz: number; r: number; baked: boolean }[] = [
       { id: 'animal-ree-roedeer', hx: 26, hz: 26, r: 6, baked: true },   // bos/heide edge
       { id: 'animal-vos-fox', hx: -30, hz: -10, r: 7, baked: true },     // heide, west
@@ -250,7 +241,7 @@ export class Fauna {
       { id: 'animal-wildzwijn-boar', hx: 10, hz: 36, r: 6, baked: false },     // heide, south
     ];
     GROUND.forEach((a, i) => {
-      const h = standHeightFor(a.id) ?? 0.9; // dossier canonical (W3.7a)
+      const h = standHeightFor(a.id) ?? 0.9; // the scale table (AnimalScale)
       const wander: WanderConfig = {
         homeX: a.hx, homeZ: a.hz, radius: a.r,
         period: 22 + i * 4,          // each roams at a slightly different pace
@@ -300,8 +291,8 @@ export class Fauna {
     // the houtduif circles lower + tighter). Birds are static GLBs → the glide IS
     // the motion; they hold the calm-pose gate (no diving, no flapping panic).
     const BIRDS: { id: string; h: number; cx: number; cz: number; r: number; height: number; period: number; phase: number; bob: number }[] = [
-      { id: 'bird-buizerd', h: 0.9, cx: 4, cz: 0, r: 44, height: 24, period: 30, phase: 0, bob: 1.6 },
-      { id: 'bird-houtduif', h: 0.5, cx: -18, cz: 8, r: 26, height: 16, period: 22, phase: 0.5, bob: 1.1 },
+      { id: 'bird-buizerd', h: SIZE.buizerd.h, cx: 4, cz: 0, r: 44, height: 24, period: 30, phase: 0, bob: 1.6 },
+      { id: 'bird-houtduif', h: SIZE.houtduif.h, cx: -18, cz: 8, r: 26, height: 16, period: 22, phase: 0.5, bob: 1.1 },
     ];
     BIRDS.forEach((b, i) => {
       const glide: GlideConfig = { cx: b.cx, cz: b.cz, radius: b.r, height: b.height, bob: b.bob, period: b.period, phase: b.phase };

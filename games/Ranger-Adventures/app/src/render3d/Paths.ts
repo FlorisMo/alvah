@@ -44,7 +44,7 @@ export const PATH_NODES: readonly PathNode[] = [
   { id: 'stuifzand', x: 20, z: 24 },     // drift-sand juniper head (NE)
   { id: 'boa', x: -52.2, z: -18.7 },     // in front of the BOA post (-56, -20) on the west rim
   { id: 'ecoduct', x: -60, z: 4 },       // in front of the ecoduct (-70, 6): its 15 m deck is solid
-  { id: 'hut', x: -6, z: 2.5 },          // the west trail bends round the ranger cabin (-4.2, -4)
+  { id: 'hut', x: -6, z: 2.5 },          // the west trail bends round the ranger cabin (-6.5, -6)
 ] as const;
 
 /**
@@ -115,6 +115,43 @@ export function distanceToNetwork(x: number, z: number): number {
     if (d2 < best) best = d2;
   }
   return Math.sqrt(best);
+}
+
+/** Where a spoke's sand track starts, out from the spawn (m): the track to the
+ *  missiebord (and on to the watchtower) runs from the ranger's feet, the west trail
+ *  from beside the cabin; the others come in from the edge of the cabin's grassy yard. */
+const SPOKE_START: Readonly<Record<string, number>> = { watchtower: 0.8, hut: 2.2 };
+const YARD_EDGE_START = 5.5;
+const TRACK_FADE_IN = 2.5; // m over which a spoke's sand comes in
+
+const smooth = (e0: number, e1: number, v: number): number => {
+  const t = Math.max(0, Math.min(1, (v - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * How much sand track shows at (x,z), 0..1: full in the ruts, fading out at its edges
+ * (1.05 → 1.9 m from the centreline) and where a spoke comes in to the yard. The track
+ * ribbons (world/Terrain) and the yard's grass (world/Dressing) read the same value, so
+ * grass never grows through sand and where two ribbons overlap they draw one colour.
+ */
+export function trackSand(x: number, z: number): number {
+  let best = 0;
+  for (const [i, j] of PATH_SEGMENTS) {
+    const a = PATH_NODES[i], b = PATH_NODES[j];
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len2 = dx * dx + dz * dz;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / len2)) : 0;
+    const d = Math.hypot(x - (a.x + t * dx), z - (a.z + t * dz));
+    let k = 1 - smooth(1.05, 1.9, d);
+    if (k <= best) continue;
+    if (a.id === 'spawn') {
+      const s0 = SPOKE_START[b.id] ?? YARD_EDGE_START;
+      k *= smooth(s0, s0 + TRACK_FADE_IN, t * Math.sqrt(len2));
+    }
+    if (k > best) best = k;
+  }
+  return best;
 }
 
 /** True when (x,z) is on a sand path (within a lane half-width). */

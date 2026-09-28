@@ -6,7 +6,9 @@
 ## The big picture
 
 ```
-main.ts ── title card ─► ui/Missions.ts (thin entry)
+main.ts ── boot veil + Stage (renderer, loop) ─► ui/Missions.ts → WorldSession.bootWorld:
+                            the ONE world, built at boot, shown as the title and the ranger
+                            maker (world/Presenter.ts), never torn down
                             │
           ui/flow/WorldSession.ts   builds the World, runs free roam, returns from missions
           ui/flow/MissionFlow.ts    briefing → steps (mini-games) → reward → clue → back
@@ -27,7 +29,10 @@ render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls
    world/Vehicles.ts    jeep, helicopter + pads, dust
    world/Player.ts      the ranger rig, on-foot movement, footsteps
    world/CameraRig.ts   follow camera (told by the player's steering, never chasing), orbit,
-                        clear-view search, occluder-fade decision, reframes
+                        clear-view search, occluder-fade decision, reframes, the hand-over
+                        from a presented shot
+   world/Presenter.ts   the title and the maker as shots of the spawn clearing (the world
+                        frozen like an activity), glides between them, the ranger's turns
    RangerLook.ts        paints the avatar maker's choices onto the ranger GLB
    world/Sky.ts, Labels.ts, props.ts, DevReadback.ts
                             │

@@ -224,6 +224,70 @@ export async function clickButton(page: Page, name: RegExp | string, what: strin
   await btn.click({ timeout: clickTimeout });
 }
 
+// ------------------------------------------------- a calm glide, frame by frame ----
+/** A glide the player watches (a shot change, the hand-over into play), read on every
+ *  rendered frame: the most one frame moved the lens (m), turned it (°) and turned the
+ *  ranger (rad), and the slowest frame (ms). */
+export type Glide = { frames: number; settled: boolean; maxStep: number; maxTurn: number; maxYaw: number; slowest: number };
+
+/** Start reading the render camera (`r.cam()`) and the ranger's facing
+ *  (`r.motion().heading`) on every rendered frame. Read-only; `endGlide` stops it. */
+export async function startGlide(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    type Hook = { cam(): { x: number; y: number; z: number; yaw: number; pitch: number } | null; motion(): { heading: number } | null };
+    const w = window as unknown as { __ranger: Hook; __glide?: { on: boolean; rows: number[][] } };
+    const g = { on: true, rows: [] as number[][] };
+    w.__glide = g;
+    const tick = (): void => {
+      if (!g.on) return;
+      const c = w.__ranger.cam(); const m = w.__ranger.motion();
+      if (c) g.rows.push([performance.now(), c.x, c.y, c.z, c.yaw, c.pitch, m ? m.heading : NaN]);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+/** Wait until the lens has stood still for 12 frames (the glide is over; at most
+ *  `timeout` ms), stop reading, and measure the glide. */
+export async function endGlide(page: Page, timeout = 8_000): Promise<Glide> {
+  const settled = await page.waitForFunction(() => {
+    const rows = (window as unknown as { __glide?: { rows: number[][] } }).__glide?.rows ?? [];
+    if (rows.length < 14) return false;
+    const last = rows.slice(-13);
+    return last.every((r, i) => i === 0 || Math.hypot(r[1] - last[i - 1][1], r[2] - last[i - 1][2], r[3] - last[i - 1][3]) < 1e-3);
+  }, null, { timeout, polling: 100 }).then(() => true, () => false);
+  const rows = await page.evaluate(() => {
+    const g = (window as unknown as { __glide?: { on: boolean; rows: number[][] } }).__glide;
+    if (!g) return [];
+    g.on = false;
+    return g.rows;
+  });
+  const dir = (yaw: number, pitch: number): number[] => [Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw)];
+  let maxStep = 0, maxTurn = 0, maxYaw = 0, slowest = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const [t0, x0, y0, z0, yw0, p0, ry0] = rows[i - 1];
+    const [t1, x1, y1, z1, yw1, p1, ry1] = rows[i];
+    maxStep = Math.max(maxStep, Math.hypot(x1 - x0, y1 - y0, z1 - z0));
+    const a = dir(yw0, p0), b = dir(yw1, p1);
+    maxTurn = Math.max(maxTurn, (Math.acos(Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])) * 180) / Math.PI);
+    if (Number.isFinite(ry0) && Number.isFinite(ry1)) maxYaw = Math.max(maxYaw, Math.abs(wrap(ry1 - ry0)));
+    slowest = Math.max(slowest, t1 - t0);
+  }
+  return { frames: rows.length, settled, maxStep, maxTurn, maxYaw, slowest };
+}
+
+/** Soft-fail a glide that snaps (Alvah's calm camera: no cut, no snap): one frame moving
+ *  the lens over 0.3 m, turning it over 5°, or turning the ranger over 0.35 rad. */
+export function calmGlide(g: Glide, what: string): void {
+  note(`${what}: ${g.frames} frames; the most in one frame: lens ${r2(g.maxStep)} m, turn ${r2(g.maxTurn)}°, ranger ${r2(g.maxYaw)} rad (slowest frame ${Math.round(g.slowest)} ms)`);
+  soft(g.frames >= 10, `${what}: only ${g.frames} frames were drawn`);
+  soft(g.settled, `${what}: the lens never came to rest`);
+  soft(g.maxStep <= 0.3, `${what}: the lens jumps ${r2(g.maxStep)} m in one frame (a snap; want ≤ 0.3 m)`);
+  soft(g.maxTurn <= 5, `${what}: the lens turns ${r2(g.maxTurn)}° in one frame (a snap; want ≤ 5°)`);
+  soft(g.maxYaw <= 0.35, `${what}: the ranger turns ${r2(g.maxYaw)} rad in one frame (a snap; want ≤ 0.35 rad)`);
+}
+
 // ------------------------------------------------------------------ walking ----
 export type WalkStats = { res: 'arrived' | 'until' | 'stuck' | 'timeout'; ms: number; samples: number;
   worstClearance: number; notGrounded: number; viewBlocked: number; camAhead: number; maxYawRate: number; end: P2 };
@@ -358,17 +422,20 @@ export async function holdKey(page: Page, key: string, ms: number): Promise<{ du
  * it; (hair) takes the strip's mean Lab and the nearest option. `options` are
  * "id=#rrggbb" strings from core/avatar.ts.
  */
-export async function renderedLook(page: Page, options: { jacket: string[]; hair: string[] }): Promise<{ jacket: string; jacketShare: number; hair: string } | null> {
+export async function renderedLook(page: Page, options: { jacket: string[]; hair: string[]; front?: boolean }): Promise<{ jacket: string; jacketShare: number; hair: string } | null> {
   const c = await R<Cam | null>(page, 'r.cam()');
   if (!c || !c.avatarScreen.onScreen) return null;
   const vp = page.viewportSize()!;
   const cx = ((c.avatarScreen.x + 1) / 2) * vp.width;
   const cy = ((1 - c.avatarScreen.y) / 2) * vp.height;
   const h = c.avatarScreen.heightFrac * vp.height;
-  const clip = (y0: number, y1: number, halfW: number) => ({
-    x: Math.max(0, cx - halfW * h), y: Math.max(0, cy + y0 * h), width: Math.max(2, 2 * halfW * h), height: Math.max(2, (y1 - y0) * h),
+  const clip = (y0: number, y1: number, halfW: number, dx = 0) => ({
+    x: Math.max(0, cx + dx * h - halfW * h), y: Math.max(0, cy + y0 * h), width: Math.max(2, 2 * halfW * h), height: Math.max(2, (y1 - y0) * h),
   });
-  const jacketPng = (await page.screenshot({ clip: clip(-0.14, 0.1, 0.1) })).toString('base64');
+  // from behind the jacket fills his back; from the front (the maker) it is open over
+  // his shirt, so read the two jacket fronts beside it
+  const jacketClips = options.front ? [clip(-0.16, 0.04, 0.045, -0.105), clip(-0.16, 0.04, 0.045, 0.105)] : [clip(-0.14, 0.1, 0.1)];
+  const jacketPng = await Promise.all(jacketClips.map(async (k) => (await page.screenshot({ clip: k })).toString('base64')));
   const hairPng = (await page.screenshot({ clip: clip(-0.5, -0.32, 0.09) })).toString('base64');
   return page.evaluate(async ({ jacketPng, hairPng, jacket, hair }) => {
     const lab = (r: number, g: number, b: number): [number, number, number] => {
@@ -388,13 +455,15 @@ export async function renderedLook(page: Page, options: { jacket: string[]; hair
     };
     const opts = (list: string[]) => list.map((s) => { const [id, col] = s.split('='); return { id, lab: lab(...hex(col)) }; });
     const jo = opts(jacket); const votes = new Map<string, number>(); let n = 0;
-    const jp = await pixels(jacketPng);
+    for (const png of jacketPng) {
+    const jp = await pixels(png);
     for (let i = 0; i < jp.length; i += 4) {
       const [L, a, b] = lab(jp[i], jp[i + 1], jp[i + 2]);
       if (L < 8 || Math.hypot(a, b) < 6) continue; // too dark / grey to carry a colour
       const ang = Math.atan2(b, a); let best = ''; let bd = Infinity;
       for (const o of jo) { let d = Math.abs(ang - Math.atan2(o.lab[2], o.lab[1])); if (d > Math.PI) d = 2 * Math.PI - d; if (d < bd) { bd = d; best = o.id; } }
       votes.set(best, (votes.get(best) ?? 0) + 1); n += 1;
+    }
     }
     let jWin = 'none'; let jCount = 0;
     for (const [k, v] of votes) if (v > jCount) { jWin = k; jCount = v; }

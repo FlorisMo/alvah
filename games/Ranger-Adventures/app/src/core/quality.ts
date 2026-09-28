@@ -49,7 +49,7 @@ export function bootTier(saved: QualityTier | undefined, coarsePointer: boolean,
  * A machine with no GPU draws WebGL in SOFTWARE: SwiftShader (headless Chrome on a
  * GPU-less CI runner), Mesa's llvmpipe / softpipe, Microsoft's Basic Render Driver.
  * There the full game draws at seconds per frame, so it boots a LIGHT mode: no MSAA,
- * pixelRatio 1, the `laag` tier, no shadow map, and a sparse title (no heath scatter).
+ * pixelRatio 1, the `laag` tier and no shadow map (the title is that same light world).
  * The Stage decides it once at boot; a laptop or iPad GPU never matches, so their
  * picture is untouched. `?light=1` forces it on (to look at it on a GPU), `?light=0` off.
  */

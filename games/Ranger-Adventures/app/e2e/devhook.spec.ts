@@ -13,7 +13,7 @@ test('devhook: window.__ranger present on boot, screen === "title" @smoke', asyn
   collectPageErrors(page, errors);
 
   await page.goto('/?dev=1'); // the hook; CI serves the production build, where only ?dev=1 installs it
-  await expect(page.locator('.boot-title')).toBeVisible();
+  await expect(page.locator('.title-mark')).toBeVisible({ timeout: 60_000 });
 
   const hook = await page.evaluate(() => {
     const r = (window as unknown as {
@@ -27,7 +27,7 @@ test('devhook: window.__ranger present on boot, screen === "title" @smoke', asyn
   expect(hook!.version).toBe('2.1.0-ship');
   expect(hook!.screen).toBe('title');
   expect(hook!.missionView).toBeNull();
-  // draw calls come from renderer.info — a number once the title backdrop renders.
+  // draw calls come from renderer.info — a number once the title (the world) renders.
   expect(typeof hook!.drawCalls === 'number' || hook!.drawCalls === null).toBe(true);
 
   // The light mode is on exactly when the GL draws in software: on CI's SwiftShader it

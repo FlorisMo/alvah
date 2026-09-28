@@ -150,6 +150,13 @@ export function mountReadAloud(opts: ReadAloudOptions): ReadAloudHandle {
 
 /* ------------------------------------------------------ a screen read aloud ---- */
 
+/** The 🔊 as a drawn line icon (an emoji renders as a grey blob on some systems). */
+const SPEAKER_SVG =
+  '<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false" fill="none" ' +
+  'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" fill-opacity=".18"/>' +
+  '<path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.3 6.4a8 8 0 0 1 0 11.2"/></svg>';
+
 
 /**
  * A 🔊 "Lees voor" button beside `target` (child:B12): in the target's `.ra-row` when
@@ -162,7 +169,7 @@ export function speakButtonBeside(target: Element | null): HTMLButtonElement | n
   btn.type = 'button';
   btn.className = 'ra-say';
   btn.setAttribute('aria-label', 'Lees voor');
-  btn.textContent = '🔊';
+  btn.innerHTML = SPEAKER_SVG;
   const row = target.parentElement.classList.contains('ra-row') || target.parentElement.classList.contains('ra-say-row')
     ? target.parentElement
     : null;

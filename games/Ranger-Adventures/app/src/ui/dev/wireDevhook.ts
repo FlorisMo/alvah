@@ -1,6 +1,6 @@
 /**
- * wireDevhook.ts — connects a live World to the `?dev=1` read-back hook
- * (`window.__ranger`, core/devhook.ts) and disconnects it again. Read-only state for
+ * wireDevhook.ts — connects the live World (built once, at boot) to the `?dev=1`
+ * read-back hook (`window.__ranger`, core/devhook.ts). Read-only state for
  * the browser tests; the one write (`winStep`) is the E2E shortcut the golden-path
  * test must never use.
  */
@@ -8,10 +8,10 @@
 import type { World } from '../../render3d/World';
 import {
   providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot,
-  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideGrounded, provideCam,
+  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
-  provideHeli, provideQuality, provideHint, provideBoundary,
+  provideHeli, provideQuality, provideBoundary,
 } from '../../core/devhook';
 import { triggerActivityWin } from '../../render3d/play/kit';
 
@@ -27,6 +27,7 @@ export function wireWorldDevhook(world: World): void {
   provideClip(() => world.playerClip());              // W3.2: the ranger's active locomotion clip
   provideAvatar(() => world.avatarState());           // F-07: live ranger scale (measured bbox height)
   provideGroundSpeed(() => world.groundSpeed());      // F-08: live post-collision foot speed (m/s)
+  provideMotion(() => world.rangerMotion());          // run 6: where he is, his heading, speed, running
   provideGrounded(() => world.groundedState());       // D1.2: feet on the rendered terrain
   provideCam(() => world.camState());                 // F-05 ⊕ F-18: the REAL render camera read-back
   provideActors(() => world.actorClips());            // W3.3: warden + poacher baked clips
@@ -44,35 +45,4 @@ export function wireWorldDevhook(world: World): void {
   provideHeli(() => world.heliState());               // W5.3b: opt-in helicopter
   provideQuality(() => world.qualityState());         // W7.2: adaptive quality tier
   provideWinStep(() => triggerActivityWin());         // W2.3: E2E-only resolve of a 3D step
-}
-
-/** Drop every world read-back (the world is gone). */
-export function clearWorldDevhook(): void {
-  providePos(null);
-  provideCameraYaw(null);
-  provideNearId(null);
-  provideMarkers(null);
-  provideBoard(null);
-  provideBoundary(null);
-  provideSitSpot(null);
-  provideClip(null);
-  provideAvatar(null);
-  provideGroundSpeed(null);
-  provideGrounded(null);
-  provideCam(null);
-  provideActors(null);
-  provideAmbient(null);
-  provideLandmarks(null);
-  provideDressing(null);
-  provideTreeSpots(null);
-  providePaths(null);
-  provideGroundDetail(null);
-  provideLighting(null);
-  provideSky(null);
-  provideFootsteps(null);
-  provideWater(null);
-  provideVehicle(null);
-  provideHeli(null);
-  provideQuality(null);
-  provideHint(null);
 }

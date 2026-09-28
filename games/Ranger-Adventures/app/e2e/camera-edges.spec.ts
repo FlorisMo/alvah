@@ -174,14 +174,14 @@ test('camera at the edges: past the cabin, the jeep at the rim, turning round on
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 90_000 }).toBe('world');
   await sleep(page, 2_000);
 
-  // 1. past the cabin (3.9 × 3.8 m at (-4.2, -4), turned so its door faces spawn): along
+  // 1. past the cabin (5.9 × 5.7 m at (-6.5, -6), turned so its door faces spawn): along
   //    its front wall a metre out, round its corner and along its side wall, then turn
   //    round there (the lens has to come in between him and the wall)
-  await walkTo(page, { x: -4.5, z: 0.5 }, { stopDist: 0.5, timeout: 20_000 });
+  await walkTo(page, { x: -6.7, z: -0.13 }, { stopDist: 0.5, timeout: 20_000 });
   await startTrace(page);
-  await walkTo(page, { x: -0.55, z: -3.65 }, { stopDist: 0.5, timeout: 20_000 });
-  await walkTo(page, { x: -0.8, z: -4.85 }, { stopDist: 0.5, timeout: 20_000 });
-  await walkTo(page, { x: -3.5, z: -7.45 }, { stopDist: 0.5, timeout: 20_000 });
+  await walkTo(page, { x: -1.48, z: -5.79 }, { stopDist: 0.5, timeout: 20_000 });
+  await walkTo(page, { x: -1.76, z: -6.99 }, { stopDist: 0.5, timeout: 20_000 });
+  await walkTo(page, { x: -5.87, z: -10.82 }, { stopDist: 0.5, timeout: 20_000 });
   const along = await stopTrace(page);
   await shot(page, 'edges-past-the-cabin');
   calm(along, 'along the cabin walls');

@@ -10,7 +10,7 @@
  */
 
 import * as THREE from 'three';
-import { loadManifest, loadRig, prepModel, skinnedRenderBox } from '../Models';
+import { loadManifest, loadRig, prepModel, renderedBox, renderedHeight } from '../Models';
 import { RANGER_STAND_HEIGHT } from '../AnimalScale';
 import { applyEyes } from '../EyeMaterial';
 import { applyFace } from '../FaceRig';
@@ -28,6 +28,7 @@ import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface 
 import { Sound } from '../../core/sound';
 import { store } from '../../core/state';
 import type { Terrain } from './Terrain';
+import type { RangerMotion } from '../play/types';
 import { enableCast } from './props';
 
 // F-11 world rim: a calm pine tree-line rings the playable area at the move bound
@@ -52,6 +53,10 @@ const CAM_BEHIND_GAP = (75 * Math.PI) / 180;
 /** The stick backs him up (instead of turning him round) only while he faces within
  *  this angle of into-the-screen. */
 const BACKPEDAL_FACING = (45 * Math.PI) / 180;
+
+/** Where every game starts: the ranger on the spawn clearing, facing the forest (−z),
+ *  his back to the follow lens. The title and the maker are shots around this spot. */
+export const SPAWN = { x: 0, z: 0, heading: Math.PI } as const;
 
 /** Who steered the ranger this frame. */
 type DriveMode = 'keys' | 'stick' | 'tap';
@@ -105,7 +110,7 @@ export class Player {
   // renders bigger than the honest measured height still can't smear the lens (§4:
   // pixels outrank the hook).
   avatarRadius = 0.45;
-  avatarTopY = 1.2;             // D1.5 ⊕ P1.6a measured head height (feet→top; child ≈1.2 m) — the occluder-fade sightline aim; measureAvatar overwrites it off the live rig
+  avatarTopY: number = RANGER_STAND_HEIGHT; // D1.5 measured head height (feet→top; the 1.32 m boy) — the occluder-fade sightline aim; measureAvatar overwrites it off the live rig
   avatarOpacity = 1;            // current applied ranger fade (avoids churn)
   castsShadow = false;                  // W4.5: the ranger is the primary hero shadow caster once loaded
   // F-08: on-foot ground speed (m/s). Retuned down from the giant-tuned 2.4 (which
@@ -196,7 +201,9 @@ export class Player {
     // drops the 180° about-face the first forward press used to trigger. The follow
     // bearing already starts at π (FIXED_FOLLOW_YAW), so the lens is behind him from
     // frame one; loadRealRanger clears only the children, never this rotation.
-    this.group.rotation.y = Math.PI;
+    this.group.position.set(SPAWN.x, this.terrain.y(SPAWN.x, SPAWN.z), SPAWN.z); // feet on the drawn ground from frame one
+    this.group.rotation.y = SPAWN.heading;
+    this.target.set(SPAWN.x, 0, SPAWN.z);
     this.measureAvatar(); // F-05: seed the camera rails off the stand-in's size
   }
 
@@ -212,15 +219,6 @@ export class Player {
   /** Start listening to the movement keys; `onInteract` is the interact key (Space). */
   listenKeys(onInteract: () => void): void {
     this.input = attachInput(window, { onInteract });
-  }
-
-  dispose(): void {
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown); // F-17
-    window.removeEventListener('pointermove', this.onPointerMove);
-    window.removeEventListener('pointerup', this.onPointerUp);
-    window.removeEventListener('pointercancel', this.onPointerUp);
-    this.input?.dispose();
-    this.input = null;
   }
 
   /** The held keys + joystick as a screen vector (the jeep and heli read it). */
@@ -406,12 +404,8 @@ export class Player {
     // player animates. loadRig falls back to a static group when no clips exist.
     const rig = await loadRig('ranger-alvah');
     if (!rig) return;
-    // F-07 ⊕ P1.6a: normalize the ranger to Alvah's CHILD stand-height (≈1.2 m,
-    // RANGER_STAND_HEIGHT) — a clear head shorter than the ~1.8 m warden — so
-    // trees/hut/animals read at believable proportions around a child. prepModel
-    // scales off the SKELETON's world extent (Models.skinnedRenderBox) — the size
-    // that renders — not the bind-pose geometry box that read 1.7 m for a ~170 m
-    // bone-driven giant.
+    // Alvah at his true height (a real 8-year-old, AnimalScale): prepModel measures the
+    // skinned mesh as it draws, head and soles included, so he stands 1.32 m on his soles.
     const prepped = prepModel(rig.group, RANGER_STAND_HEIGHT);
     // §1e eye system: bright, alive eyes (the golden-hour world is not dusk, so
     // eyeshine stays off; parallax freezes under reduced-motion).
@@ -461,15 +455,13 @@ export class Player {
   measureAvatar(): void {
     if (this.group.children.length === 0) return;
     this.group.updateWorldMatrix(true, true);
-    // F-07: off the SKELETON, so the rig's honest measured size seeds the rails —
-    // the bind-pose geometry box collapsed to ~0 on the giant and mis-clamped.
-    const box = skinnedRenderBox(this.group) ?? this._box.setFromObject(this.group);
-    const size = box.getSize(new THREE.Vector3());
+    // what he draws (Models.renderedBox): the rails see the ranger the lens sees
+    const size = renderedBox(this.group, this._box).getSize(new THREE.Vector3());
     const r = Math.hypot(size.x, size.z) * 0.5;
     if (Number.isFinite(r) && r > 0) this.avatarRadius = Math.max(0.2, r);
     // D1.5: cache his head height (feet→top) so the occluder-fade sightline can aim at the
     // HEAD, the part low-hanging foliage swallows first (`10-walk-5`). Child-scale-safe: it
-    // reads the measured rig, so it shrinks with the Phase-2 ≈1.2 m child height, not a pin.
+    // reads the measured rig, never a pin.
     if (Number.isFinite(size.y) && size.y > 0) this.avatarTopY = Math.max(0.6, size.y);
   }
 
@@ -626,6 +618,11 @@ export class Player {
     if (p) this.target.set(p.x, 0, p.z);
   }
 
+  /** The player steered him this frame (keys, the stick or a tap-walk). */
+  get steering(): boolean {
+    return this.drive !== null;
+  }
+
   /** The keys are turning him (tank turn, easing in or out) right now. */
   get turning(): boolean {
     return this.turnVel !== 0;
@@ -648,6 +645,14 @@ export class Player {
     return { x: this.group.position.x, z: this.group.position.z };
   }
 
+  /** How he moves right now (the read other lanes code against: World.rangerMotion,
+   *  WorldCtx.rangerMotion): where he stands, the way he faces, his post-collision
+   *  ground speed and whether the run gait is on (a walk only, until he can run). */
+  motion(): RangerMotion {
+    const p = this.group.position;
+    return { x: p.x, z: p.z, heading: this.group.rotation.y, speed: this.groundSpeedNow, running: false };
+  }
+
   /** The ranger's active locomotion clip for the dev hook (null when procedural). */
   clip(): { name: string; time: number } | null {
     return this.rig.clip();
@@ -662,18 +667,13 @@ export class Player {
     return this.groundSpeedNow;
   }
 
-  /** Dev-hook accessor (F-07): the player ranger's LIVE rendered height (m),
-   *  measured off the SKELETON (`skinnedRenderBox`) — the extent that actually
-   *  draws — so the scale assert reads reality, not the bind-pose geometry box
-   *  that once reported 1.7 m for a ~170 m bone-driven giant (§4: pixels are the
-   *  court of appeal; this is the field that keeps them honest). Falls back to the
-   *  geometry box for the procedural stand-in (no skeleton); null if empty. */
+  /** Dev-hook accessor (F-07): the player ranger's LIVE rendered height (m), as he
+   *  draws this frame (Models.renderedHeight: the skinned mesh, head and soles
+   *  included); null before anything is built. */
   avatarState(): { height: number } | null {
     if (this.group.children.length === 0) return null;
-    this.group.updateWorldMatrix(true, true);
-    const box = skinnedRenderBox(this.group) ?? new THREE.Box3().setFromObject(this.group);
-    const h = box.getSize(new THREE.Vector3()).y;
-    return Number.isFinite(h) && h > 0 ? { height: h } : null;
+    const h = renderedHeight(this.group);
+    return h === null ? null : { height: h };
   }
 
   /** Dev-hook accessor (W4.7b): the running footstep count + the last surface

@@ -41,7 +41,7 @@ RANGER_PORT=<your-port> npm run golden     # THE check: plays GOAL.md 1-8 like a
   headless Chromium on SwiftShader (software GL, no GPU), against the production build
   (`vite build` + `vite preview`, so the smoke opens `/?dev=1`). The game detects
   software GL and boots a **light mode** there: no MSAA, pixelRatio 1, the `laag` tier,
-  no shadow pass, and a sparse title (primitive tree line, no heath scatter)
+  no shadow pass, and a boot veil that lifts after at most ~2 s (the title is that light world)
   (`core/quality.ts`; `?light=1` shows it on your GPU, `?light=0` refuses it). A GPU
   never gets it. Before you push a change to boot, the title or the first walk, run it
   the CI way: `CI=1 RANGER_PORT=<port> npm run e2e:smoke` (1.5-4 min; stop your own

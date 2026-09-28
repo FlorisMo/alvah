@@ -27,12 +27,14 @@
 import * as THREE from 'three';
 import { loadManifest, loadModel, prepModel } from '../Models.ts';
 import { lodGeometries, lodMaterial } from '../Lod.ts';
+import { SIZE } from '../AnimalScale.ts';
 
 export type TreeSpecies = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
 export interface TreePlacement { x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies }
-/** prepModel target height (m) per species; a per-tree scale rides on top. */
+/** prepModel target height (m) per species: grown trees (the scale table); a per-tree
+ *  scale rides on top. */
 export const TREE_BASE_H: Record<TreeSpecies, number> = {
-  'prop-pine-scots': 6.6, 'prop-oak-tree': 5.4, 'prop-birch-tree': 6.0,
+  'prop-pine-scots': SIZE.den.h, 'prop-oak-tree': SIZE.eik.h, 'prop-birch-tree': SIZE.berk.h,
 };
 
 /** Triangle targets of the simplified copies (per species: the birch's leaves are
@@ -124,9 +126,10 @@ export class Forest {
     if (!this.placements.length) return false;
     await loadManifest();
     const species = [...new Set(this.placements.map((p) => p.species))];
+    const models = species.map((id) => loadModel(id)); // every species downloads at once
     const sets: SpeciesSet[] = [];
-    for (const id of species) {
-      const m = await loadModel(id);
+    for (const [k, id] of species.entries()) {
+      const m = await models[k];
       if (!m) return false;
       const prepped = prepModel(m, TREE_BASE_H[id]);
       prepped.updateMatrixWorld(true);

@@ -1,10 +1,12 @@
 /**
- * WorldSession.ts — the free-roam world's life cycle: build it (`startExplore`),
- * return to it after a mission or a menu (`resumePatrol`), and tear it down
- * (`leaveWorld`). Also the two in-world beats that are not missions: the calm
- * world-EF micro-beat between missions and "Ken je roep" at the bird bench.
- *
- * The world is the front door: Begin → (first boot: make your ranger) → here.
+ * WorldSession.ts — the one world's life cycle. It is built ONCE, at boot, behind the
+ * veil (`bootWorld`), and shown as the title (world/Presenter.ts: the title and the
+ * ranger maker are shots of the real spawn clearing). Begin glides into the maker (a
+ * first-time player) or straight into play (`enterPlay`); Pauze → "Naar het hoofdmenu"
+ * glides back up to the title (`returnToTitle`). The world is never torn down.
+ * Also here: coming back from a mission or a menu (`resumePatrol`) and the two
+ * in-world beats that are not missions: the calm world-EF micro-beat between missions
+ * and "Ken je roep" at the bird bench.
  */
 
 import type { Engine } from '../../core/skill';
@@ -14,6 +16,7 @@ import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import { loadGameAudio, setAmbientScene } from '../../core/calls';
+import { SAY, TITLE } from '../../content/screens';
 import type { Biome } from '../../render3d/Biomes';
 import type { Stage } from '../../render3d/Stage';
 import { World, type WorldMarker } from '../../render3d/World';
@@ -28,11 +31,12 @@ import { Vector3 } from 'three';
 import {
   pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, WORLDBEAT_ANIMAL_M, type WorldBeat,
 } from '../../core/worldbeat';
-import { setScreen, setMissionView } from '../../core/devhook';
-import { mountReadAloud } from '../ReadAloud';
+import { setScreen, setMissionView, provideTitleReady } from '../../core/devhook';
+import { mountReadAloud, readScreenAloud } from '../ReadAloud';
+import { showAvatarCreator } from '../AvatarCreator';
 import { mountMissionPause, unmountMissionPause } from './MissionFlow';
-import { session, esc, card, clearOverlays, menuOpen } from './session';
-import { wireWorldDevhook, clearWorldDevhook } from '../dev/wireDevhook';
+import { session, esc, card, plainCard, clearOverlays, menuOpen, fadeCut } from './session';
+import { wireWorldDevhook } from '../dev/wireDevhook';
 import {
   showExploreHud, disposeExploreHud, onApproach, onWayfind, onInteract, onBoardApproach,
   tryOpenBoard, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
@@ -93,15 +97,6 @@ function webglOk(): boolean {
   return webgl;
 }
 
-/** Boot entry (main.ts): unlock audio inside the Begin gesture, then load the world. */
-export function startWorld(ui: HTMLElement, st: Stage): void {
-  session.host = ui;
-  session.stage = st;
-  Sound.unlock();
-  void loadGameAudio();
-  startExplore();
-}
-
 /** The mission the game recommends next: the first unfinished one in story order.
  *  The wayfinding chip points at it and the missiebord marks it. Null when all done. */
 export function nextMissionId(): string | null {
@@ -114,18 +109,36 @@ export function activeExploreTitel(): string | null {
   return Content.activeArea().missies.find((m) => m.id === id)?.titel ?? null;
 }
 
-/** Tear the world down (title screen, or a stopped mission's rebuild). */
-export function leaveWorld(): void {
-  held = false;
-  disarmBeat();
-  disposeExploreHud();
-  const { world, stage } = session;
-  if (world) { world.dispose(); session.world = null; stage.exitWorld(); }
-  clearWorldDevhook();
+/* -------------------------------------------------------- the one world ---- */
+// the season tints the ambience bed; taken from the story's current chapter at boot
+let seizoen: string | undefined;
+
+/**
+ * Boot (main.ts): build the world behind the veil and show it as the title. The veil
+ * lifts once the world is ready (every model it asked for has arrived, or a cap), so the
+ * first thing a player sees is the finished clearing, never a stand-in.
+ */
+export function bootWorld(ui: HTMLElement, st: Stage, veil: { lift: () => void }): void {
+  session.host = ui;
+  session.stage = st;
+  const world = buildWorld();
+  world.present('title');
+  setScreen('title');
+  setMissionView(null);
+  let titleUp = false;
+  provideTitleReady(() => titleUp && world.ready());
+  const wait = (): void => {
+    if (!world.ready()) { requestAnimationFrame(wait); return; }
+    showTitleCard({ afterVeil: true });
+    veil.lift();
+    titleUp = true;
+  };
+  wait();
 }
 
-/* ----------------------------------------------------- 3D free-roam ---- */
-export function startExplore(): void {
+/** The world, built once: the markers, the callbacks the HUD listens on, the finished
+ *  missions' lasting tableaus, handed to the Stage. */
+function buildWorld(): World {
   const area = Content.activeArea();
   const markers: WorldMarker[] = area.missies.map((m) => {
     const ef = m.stappen[0]?.ef as Engine | undefined;
@@ -147,16 +160,12 @@ export function startExplore(): void {
 
   // the active mission the wayfinding cue points to = the recommended next one
   const done = store.get().voltooid;
-  const active = nextMissionId();
-
-  // the season tints the ambience bed; take it from the story's current chapter so
-  // the world matches the arc moment.
-  const seizoen = Content.currentChapter(area.id, done)?.seizoen;
+  seizoen = Content.currentChapter(area.id, done)?.seizoen;
   const onBiome = (b: Biome) => setAmbientScene(b, seizoen);
 
   const { stage } = session;
   const world = new World(
-    stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, active,
+    stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, nextMissionId(),
     onBiome, onInteract,
   );
   session.world = world;
@@ -167,7 +176,7 @@ export function startExplore(): void {
   // a menu card over the world (Pauze, the missiebord, a briefing ...) holds him still
   world.setMenuGate(menuOpen);
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
-  // mission board overlay in-place (no leaveWorld).
+  // mission board overlay in-place.
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });
   // F-11: the calm world-rim cue ("Hier stopt het bos") through the one hint channel.
   world.setBoundaryHint(showBoundaryHint);
@@ -185,22 +194,87 @@ export function startExplore(): void {
     onFrame: (v) => setHeliVignette(v),
     optIn: () => store.get().settings.helikopter,
   });
-  // start the bed on the spawn clearing (heide) before the first crossing fires
-  setAmbientScene('heide', seizoen);
   stage.enterWorld(world);
   for (const m of area.missies) if (done[m.id]) void tellWorldMissionDone(m.id, false);
   if (store.get().arc.gemeld) world.setSeasonResolved(true);
+  wireWorldDevhook(world);
+  return world;
+}
+
+/**
+ * The title block over the sky of the real clearing: the name, one line of story, 🔊
+ * and Begin (a click or Enter). Begin unlocks the sound inside the gesture (iOS), then
+ * glides down to the ranger: into the maker the first time, straight into play after.
+ */
+function showTitleCard(opts: { after?: number; afterVeil?: boolean } = {}): void {
+  const el = plainCard(
+    `<div class="title-block">` +
+    `<h1 class="title-mark">${esc(TITLE.naam)}</h1>` +
+    `<p class="title-sub">${esc(TITLE.sub)}</p>` +
+    `<div class="ra-row title-row"><button class="btn-start title-begin" type="button">${esc(TITLE.begin)}</button></div>` +
+    `</div>`,
+  );
+  el.classList.add('title-overlay');
+  if (opts.afterVeil) el.classList.add('title-overlay--after-veil'); // the veil's name stays
+  // back from Pauze the camera is still rising to the title: the words wait for the sky
+  if (opts.after) {
+    el.querySelectorAll<HTMLElement>('.title-block > *').forEach((w, i) => w.style.setProperty('animation-delay', `${(opts.after ?? 0) + i * 160}ms`));
+  }
+  const ra = readScreenAloud(el, { text: SAY.title, autoStart: store.get().settings.voorlezen }); // child:B12
+  el.querySelector('.title-begin')?.addEventListener('click', () => {
+    // iOS: the AudioContext must be made inside the tap, before anything awaits
+    Sound.unlock();
+    void loadGameAudio();
+    ra.stop();
+    el.className = 'title-overlay title-overlay--leaving'; // not a menu any more: the glide starts at once
+    el.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    window.setTimeout(() => el.remove(), prefersReducedMotion() ? 0 : 320);
+    if (store.get().avatarGemaakt) enterPlay();
+    else showAvatarCreator(session.host, session.world!, enterPlay);
+  }, { once: true });
+}
+
+/** From the title or the maker into play: the follow camera takes the lens over from the
+ *  shot in one move, the ranger turns to the forest, the HUD and the sound come in. The
+ *  player can walk at once. */
+export function enterPlay(): void {
+  const world = session.world;
+  if (!world) return;
+  world.present(null);
+  setAmbientScene('heide', seizoen);
   setScreen('world');
   setMissionView(null);
-  wireWorldDevhook(world);
-  showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
+  showExploreHud(activeExploreTitel());
+  // the HUD comes in as the glide settles, not over the moving picture
+  session.host.querySelector('.explore-hud')?.classList.add('explore-hud--arriving');
+}
+
+/**
+ * Pauze → "Naar het hoofdmenu": a soft fade, the ranger back on the spawn clearing (out
+ * of any vehicle), the camera rising from behind him to the title, the title block back.
+ * The same world, never rebuilt; Begin glides back in.
+ */
+export function returnToTitle(): void {
+  const world = session.world;
+  if (!world) return;
+  narrator.stop();
+  held = false;
+  disarmBeat();
+  fadeCut(() => {
+    clearOverlays();
+    disposeExploreHud();
+    world.resetToSpawn();
+    world.present('title', false);
+    setScreen('title');
+    setMissionView(null);
+  }, () => showTitleCard({ after: prefersReducedMotion() ? 0 : 900 }));
 }
 
 /** Resume free-roam after an in-world mission or menu: keep the world loaded,
  *  re-point the wayfinding cue at the next thing to do and restore the explore HUD. */
 export function resumePatrol(): void {
   const world = session.world;
-  if (!world) { startExplore(); return; }
+  if (!world) return;
   releaseWorld();
   setScreen('world');
   setMissionView(null);

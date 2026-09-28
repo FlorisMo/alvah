@@ -138,9 +138,8 @@ export interface RangerDevHook {
   clip(): { name: string; time: number } | null;
   /** The player ranger's LIVE world bounding-box height (m), measured from the
    *  real posed mesh — the honest scale signal the scale assert reads. Alvah is
-   *  a CHILD (P1.6a), so his idle band is now child-scale (avatar.height ∈
-   *  [1.1, 1.35]), a clear head shorter than the ~1.8 m warden — NOT the old
-   *  ~1.7 m adult. It is the measured render size, NOT the normalization target,
+   *  a real 8-year-old (run 6: 1.32 m, render3d/AnimalScale), a head and a half
+   *  under the 1.8 m warden. It is the measured render size, NOT the normalization target,
    *  so the telemetry can never mask a mis-scaled rig (AUDIT-FINDINGS §4: pixels
    *  are the court of appeal). Null before the hook/world is ready. */
   avatar(): { height: number } | null;
@@ -151,6 +150,10 @@ export interface RangerDevHook {
    *  that slid the feet ~2.5× per stride. 0 while standing or in an in-place
    *  activity; null before the hook/world is ready. */
   groundSpeed(): number | null;
+  /** How the ranger moves right now (World.rangerMotion): where he stands, the way he
+   *  faces (rad), his post-collision ground speed (m/s) and whether he runs. Null
+   *  before the world is up. */
+  motion(): { x: number; z: number; heading: number; speed: number; running: boolean } | null;
   /** D1.2 locomotion ground-truth (P1.5a asserts it across the walkable world): is the
    *  ranger's Y actually ON the RENDERED terrain surface, not through it? `grounded` is
    *  true when a down-ray hits the terrain under him AND his feet sit in the on-foot
@@ -185,12 +188,10 @@ export interface RangerDevHook {
   /** Win the active 3D mission step via its genuine resolve path; true if one
    *  was pending. Drives the two-mission-chain E2E deterministically (W2.3). */
   winStep(): boolean;
-  /** D3.17: true once the composed TITLE has swapped its real hero props (cabin + tree line +
-   *  prikbord) in over the instant primitive stand-ins — the title reads at FULL fidelity, never
-   *  the low-poly cone/faceted backdrop. False while only the stand-in is up (fresh boot mid-dress,
-   *  or a world→title round-trip mid-re-dress). The capture HOLDS the title snap until this is true
-   *  so a composed title is never shot on its low-LOD stand-in world (fresh `d17-titlereturn-17`).
-   *  Reads the Stage directly, so it is meaningful on the title screen regardless of the world. */
+  /** True once the title is up over a READY world: the boot veil has lifted (every model
+   *  the world asked for has arrived, or the cap passed) and the title block is shown.
+   *  The title is a shot of the live world (world/Presenter.ts), so this is also true on
+   *  a return from Pauze. Read it to wait for the title, never to skip it. */
   titleReady(): boolean;
   /** The scenic story-arc actors (warden + poacher) with their measured rendered
    *  stand-height `height` (m) + live baked-clip {name, time}, or null before the
@@ -385,6 +386,7 @@ const state = {
   clip: null as null | (() => { name: string; time: number } | null),
   avatar: null as null | (() => { height: number } | null),
   groundSpeed: null as null | (() => number | null),
+  motion: null as null | (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null),
   grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
@@ -534,6 +536,11 @@ export function provideGroundSpeed(fn: (() => number | null) | null): void {
   state.groundSpeed = fn;
 }
 
+/** Register the ranger's live motion read (World.rangerMotion). Pass null to clear. */
+export function provideMotion(fn: (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null) | null): void {
+  state.motion = fn;
+}
+
 /** Register the live real-camera read-back source (the World's `camState`, read
  *  off the actual render camera after the frame update). Pass null to clear
  *  (F-05 ⊕ F-18). */
@@ -580,8 +587,8 @@ export function provideWinStep(fn: (() => boolean) | null): void {
   state.winStep = fn;
 }
 
-/** Register the D3.17 title-fidelity-ready source (the Stage's `titleReady()`). Always live —
- *  it reads the Stage, which owns the title backdrop regardless of the world screen. */
+/** Register the title-ready source (WorldSession.bootWorld: the world is ready and the
+ *  title block has been shown). */
 export function provideTitleReady(fn: (() => boolean) | null): void {
   state.titleReady = fn;
 }
@@ -739,6 +746,7 @@ export function installDevHook(): boolean {
     clip: () => (state.clip ? state.clip() : null),
     avatar: () => (state.avatar ? state.avatar() : null),
     groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
+    motion: () => (state.motion ? state.motion() : null),
     grounded: () => (state.grounded ? state.grounded() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),

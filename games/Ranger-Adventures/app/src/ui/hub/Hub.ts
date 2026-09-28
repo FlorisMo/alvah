@@ -22,38 +22,20 @@ import { showCabin } from '../Companion';
 import { showTweaks } from '../Tweaks';
 import { session, esc, card, plainCard } from '../flow/session';
 import { goToMission, unmountMissionPause } from '../flow/MissionFlow';
-import { startExplore, leaveWorld, resumePatrol, activeExploreTitel, nextMissionId } from '../flow/WorldSession';
+import { returnToTitle, resumePatrol, activeExploreTitel, nextMissionId } from '../flow/WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
 
 /* ---------------------------------------------------------------- title ---- */
 /**
- * F-27: the pause hub's "Naar het hoofdmenu" lands here — the one exit back to the
- * title screen. It mirrors `main.ts`'s boot card, but as an in-app screen swap (no
- * page reload). Progress is write-through in `state.ts`, so "Begin" drops the
- * returning player straight back into the world.
+ * F-27: the pause hub's "Naar het hoofdmenu": back to the title. The title is a shot of
+ * the same live world (WorldSession.returnToTitle): a soft fade, the ranger back on the
+ * spawn clearing, the camera rising to the title. Progress is write-through in
+ * `state.ts`, so "Begin" glides the returning player straight back into play.
  */
 export function showTitle(): void {
   narrator.stop();
   unmountMissionPause();
-  leaveWorld();
-  setScreen('title');
-  setMissionView(null);
-  const el = plainCard(
-    `<div class="boot-card ra-title-card">` + // the boot card's own place (main.ts), not mid-screen
-    `<p class="boot-kicker">Ranger van de Veluwe</p>` +
-    `<h1 class="boot-title">Word boswachter</h1>` +
-    `<p class="boot-sub">Help de dieren van de Veluwe.<br>Kies een missie en train je breinkracht.</p>` +
-    `<button class="btn-start ra-title-begin" type="button">Begin</button>` +
-    `</div>`,
-  );
-  readScreenAloud(el, { text: SAY.title, autoStart: store.get().settings.voorlezen }); // child:B12
-  el.querySelector('.ra-title-begin')?.addEventListener('click', () => {
-    Sound.unlock();
-    void loadGameAudio();
-    // D3.17: tell the stage we are leaving so a title re-dress bails cleanly.
-    session.stage.markLeavingTitle();
-    startExplore();
-  });
+  returnToTitle();
 }
 
 /* ------------------------------------------------------------ pause hub ---- */

@@ -54,3 +54,29 @@ test('quality: a persisted laag tier boots the world light (slow-device contract
   expect(q!.pixelRatio).toBeCloseTo(Math.min(dpr, 1.25), 5); // fill-rate capped
   expect(q!.vegetationScale).toBe(0.55);                     // vegetation thinned
 });
+
+/**
+ * The light mode (software GL: CI's SwiftShader; `?light=1` shows it on a GPU) has no
+ * separate sparse title any more: the title is the world itself, built at boot in its
+ * light form (the `laag` tier, pixelRatio 1, no shadow pass). Its veil waits at most a
+ * short cap for the models, so Begin still comes quickly, and the picture stays inside
+ * the draw-call budget.
+ */
+test('quality: the light-mode title is the light world, quick to Begin and in budget', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const t0 = Date.now();
+  await page.goto('/?dev=1&light=1');
+  await expect(page.getByRole('button', { name: 'Begin', exact: true })).toBeVisible({ timeout: 30_000 });
+  const tBegin = (Date.now() - t0) / 1000;
+  await expect(page.locator('.title-mark')).toHaveText('Ranger van de Veluwe');
+  const mode = await page.evaluate(() => (window as unknown as { __ranger: { renderMode(): { light: boolean } | null } }).__ranger.renderMode());
+  expect(mode?.light, 'the light mode is on').toBe(true);
+  const q = await hook(page, (r) => r.quality());
+  expect(q?.tier, 'the light world boots laag').toBe('laag');
+  expect(q?.pixelRatio, 'at pixelRatio 1').toBe(1);
+  expect(tBegin, `Begin after ${tBegin.toFixed(1)} s`).toBeLessThan(15);
+  await page.waitForTimeout(500);
+  const calls = await hook(page, (r) => r.drawCalls());
+  expect(calls ?? 999, `draw calls on the light title: ${calls}`).toBeLessThan(150);
+});
