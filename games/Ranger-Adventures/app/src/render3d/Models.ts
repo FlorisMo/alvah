@@ -36,9 +36,15 @@ async function counted<T>(work: () => Promise<T>): Promise<T> {
   inFlight++;
   try { return await work(); } finally { inFlight--; }
 }
+/** Count work that turns loaded models into the world (the forest's tree levels) as a
+ *  load too: the world is not ready while it runs. */
+export function whileLoading<T>(work: Promise<T>): Promise<T> {
+  return counted(() => work);
+}
 
 export function loadManifest(): Promise<Record<string, ModelEntry>> {
   if (manifest) return Promise.resolve(manifest);
+  if (!manifestLoad) draco.preload(); // the decoder downloads alongside the list, not after the first model
   manifestLoad ??= counted(async () => {
     try {
       const res = await fetch(assetUrl('/models/manifest.json'));
@@ -63,7 +69,9 @@ async function loadGLTF(id: string): Promise<GLTF | null> {
   let pending = loading.get(id);
   if (!pending) {
     pending = counted(async () => {
-      const e = (await loadManifest())[id];
+      // with the manifest in hand (main.ts fetches it at boot) the fetch starts NOW, not
+      // after the synchronous world build the loads are asked for in
+      const e = (manifest ?? await loadManifest())[id];
       if (!e) return null;
       try {
         const gltf = await loader.loadAsync(assetUrl(`/models/${e.file}`));

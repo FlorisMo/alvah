@@ -116,6 +116,7 @@ export class World {
   private readonly builtAt = performance.now();
   private readyAt: number | null = null;
   private settledFrames = 0;
+  private compiling = false;
   // D1.3: the world-space anchor the running in-place activity stages its task
   // around (= the `ctx()` activitySpot). camState tests it against the live frustum
   // for `taskInView`, so a game-3D reframe that lands off the playfield / on a
@@ -557,6 +558,12 @@ export class World {
     return this.readyAt !== null;
   }
 
+  /** Whether the Stage should draw this frame: not while the boot veil hides a world that
+   *  is still loading (every frame drawn then is main-thread time the loading needs). */
+  get drawable(): boolean {
+    return this.readyAt !== null;
+  }
+
   /** The drawn ground height at world (x,z) — the one ground truth (world/Terrain.ts).
    *  Both names are what `ctx()` has always read (the in-place mini-games get it as
    *  `WorldCtx.groundY`); every module seats itself with `terrain.y` directly. */
@@ -716,12 +723,19 @@ export class World {
     // animates in both motion modes; only the procedural-bob fallback holds still.
     this.player.rig.update(dt, this.player.groundSpeedNow, reduced);
 
-    // ready once nothing the build asked for is still loading (three frames in a row,
-    // so a model that swaps in after its load has drawn), or at the cap
+    // ready once nothing the build asked for is still loading (two frames in a row, so a
+    // model that swaps in after its load is in the scene) and every shader the scene needs
+    // is compiled (in parallel, off the main thread where the GPU allows: the first frame
+    // the player sees never stalls), or at the cap
     if (this.readyAt === null) {
       this.settledFrames = loadsInFlight() === 0 ? this.settledFrames + 1 : 0;
       const now = performance.now();
-      if (this.settledFrames >= 3 || now - this.builtAt > (lightMode() ? READY_CAP_LIGHT_MS : READY_CAP_MS)) this.readyAt = now;
+      if (now - this.builtAt > (lightMode() ? READY_CAP_LIGHT_MS : READY_CAP_MS)) this.readyAt = now;
+      else if (this.settledFrames >= 2 && !this.compiling && this.renderer) {
+        this.compiling = true;
+        const done = (): void => { this.readyAt ??= performance.now(); };
+        this.renderer.compileAsync(this.scene, this.camera).then(done, done);
+      }
     }
 
     // W7.2: measure fps and step the quality tier down/up with hysteresis — only once

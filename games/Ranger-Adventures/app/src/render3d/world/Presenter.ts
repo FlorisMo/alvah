@@ -40,11 +40,13 @@ export class Presenter {
   /** The title pose, relative to the spawn (m): the lens and the point it looks at.
    *  Found by looking at candidate frames of the real clearing. */
   readonly title = {
-    // low over the heath behind him and to his right: heather and grass in the front,
-    // the ranger on the sand track by his cabin, the missiebord and the oaks, a stag far
-    // off on the heath, the tree line in the haze and the sky free for the title
-    lens: new THREE.Vector3(3.8, 1.8, 7.4),
-    look: new THREE.Vector3(-3.2, 2.3, -14),
+    // low over the heath behind him and to his right, looking toward the low sun: heather
+    // and grass in the front, the ranger on the sand track beside his cabin, the
+    // missiebord and the oaks framing the right, a stag and a fox far off on the heath,
+    // the west trail into the haze and the sky free for the title (it holds with the
+    // grown trees and the bigger cabin of run 6's true scale too)
+    lens: new THREE.Vector3(3.2, 1.7, 7.6),
+    look: new THREE.Vector3(-7, 2.2, -13),
   };
   /** The maker: the lens stands this far round from straight behind the spawn heading
    *  (rad, + = to his right as he walks off), and its eye at this share of his height. */

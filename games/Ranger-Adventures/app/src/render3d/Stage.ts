@@ -11,6 +11,8 @@ export interface StageView {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   update: (dt: number, t: number) => void;
+  /** False while it is not worth drawing (the world loading behind the boot veil). */
+  readonly drawable?: boolean;
 }
 
 /**
@@ -97,6 +99,7 @@ export class Stage {
       const dt = this.clock.getDelta();
       const t = this.clock.elapsedTime;
       this.world?.update(dt, t);
+      if (this.world && this.world.drawable === false) return; // behind the veil: loading, not drawing
       const { scene, camera } = this.view;
       this.renderer.render(scene, camera);
       this.lastDrawCalls = this.renderer.info.render.calls; // F-18: same-frame sample

@@ -58,4 +58,7 @@ setScreen('title');
 provideDrawCalls(() => stage.drawCalls);
 
 // --- the world, built behind the veil, shown as the title ---
+// The model list comes first, alongside the world's code: with it in hand every model the
+// world build asks for starts downloading at once, during the build instead of after it.
+void import('./render3d/Models').then((m) => m.loadManifest());
 void import('./ui/Missions').then(({ bootWorld }) => bootWorld(ui, stage, veil));

@@ -124,9 +124,10 @@ export class Forest {
     if (!this.placements.length) return false;
     await loadManifest();
     const species = [...new Set(this.placements.map((p) => p.species))];
+    const models = species.map((id) => loadModel(id)); // every species downloads at once
     const sets: SpeciesSet[] = [];
-    for (const id of species) {
-      const m = await loadModel(id);
+    for (const [k, id] of species.entries()) {
+      const m = await models[k];
       if (!m) return false;
       const prepped = prepModel(m, TREE_BASE_H[id]);
       prepped.updateMatrixWorld(true);

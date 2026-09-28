@@ -10,7 +10,7 @@
  */
 
 import * as THREE from 'three';
-import { loadModel, prepModel } from '../Models';
+import { loadModel, prepModel, whileLoading } from '../Models';
 import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, VEN_SHORE_R, WATER_LEVEL, type Biome } from '../Biomes';
 import { windSway } from '../Atmosphere';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork, trackSand } from '../Paths';
@@ -39,8 +39,10 @@ export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree'];
 const NATURE_TREES = new Set<string>(['prop-pine-scots', 'prop-oak-tree', 'prop-birch-tree']);
 
-/** The ranger-cabin on the spawn clearing (forward-left of spawn; see placeCabin). */
+/** The ranger-cabin on the spawn clearing (forward-left of spawn; see placeCabin), and
+ *  its height (m): the yard's flowers and its open porch scale with it. */
 const CABIN_AT = { x: -4.2, z: -4 } as const;
+const CABIN_H = 3.0; // = the height placeCabin gives its GLB
 /** The cabin's yard: the grassy clearing round the spawn, crossed by the sand tracks (the
  *  heath's own plant fields start where it ends: gridSpots). */
 const YARD_R = 9;
@@ -49,7 +51,7 @@ const YARD_R = 9;
  *  turns round), the missiebord and its ring (the warden stands by it), the cabin and
  *  its porch. [x, z, radius] */
 const YARD_OPEN: readonly (readonly [number, number, number])[] = [
-  [0, 0, 1.1], [0.5, 1.7, 1.7], [2.2, -5, 2.8], [CABIN_AT.x, CABIN_AT.z, 3.4],
+  [0, 0, 1.1], [0.5, 1.7, 1.7], [2.2, -5, 2.8], [CABIN_AT.x, CABIN_AT.z, 1.13 * CABIN_H],
 ];
 
 /**
@@ -180,7 +182,7 @@ export class Dressing {
     this.scatterPines(Math.round(80 * veg));
     this.scatterPlants(veg); // heather + grass, helmgras, ferns, the reed belt
     this.buildRim(); // F-11: the pine tree-line marking the world edge
-    void this.buildForest(); // P1.3: swap the cone stand-ins for the real tree GLBs
+    void whileLoading(this.buildForest()); // P1.3: swap the cone stand-ins for the real tree GLBs (the boot veil waits for it)
     this.applyWind(0); // W4.6: initial wind pose for both grass meshes
   }
 
@@ -564,12 +566,13 @@ export class Dressing {
     if (!geo) return;
     const face = Math.atan2(-CABIN_AT.x, -CABIN_AT.z);             // the cabin faces the spawn
     const fx = Math.sin(face), fz = Math.cos(face), sx = fz, sz = -fx; // its front and its side
-    // [along the front, out from the wall] in m, from the cabin's centre
+    // [along the front, out from the wall] in m from the cabin's centre, for a 3 m cabin
     const AT: readonly (readonly [number, number])[] = [
       [-2.55, 1.5], [-2.3, 2.25], [-2.8, 0.7], [2.5, 1.6], [2.75, 0.8], [2.35, 2.35], [-2.6, -0.4], [2.7, -0.3],
     ];
+    const k = CABIN_H / 3; // the offsets were set out round a 3 m cabin
     const spots: PlantSpot[] = AT.map(([a, o], i) => {
-      const x = CABIN_AT.x + sx * a + fx * o, z = CABIN_AT.z + sz * a + fz * o;
+      const x = CABIN_AT.x + (sx * a + fx * o) * k, z = CABIN_AT.z + (sz * a + fz * o) * k;
       const h = hash2(i, 5, 77);
       return { x, y: this.groundY(x, z) - 0.02, z, s: 0.7 + h * 0.45, rotY: i * 2.39996, phase: (i % 5) * 1.1 };
     });
