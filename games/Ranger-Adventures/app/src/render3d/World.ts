@@ -232,7 +232,9 @@ export class World {
     this.presenter = new Presenter(
       this.camera, this.player,
       { ...SPAWN, y: () => this.terrain.y(SPAWN.x, SPAWN.z) },
-      () => { const p = livePolicy(); return { reduced: p.reduced, secondary: p.secondaryMotion }; },
+      // software GL (the light mode) draws a few frames a second: a glide would be a slide
+      // show, so there every move between shots is a cut, as under reduced motion
+      () => { const p = livePolicy(); return { reduced: p.reduced || lightMode(), secondary: p.secondaryMotion }; },
     );
     this.scene.add(this.dressing.buildPaths()); // W4.3: sand-path ribbons over the ground
     this.scene.add(this.dressing.buildVenWater());
@@ -510,7 +512,7 @@ export class World {
    * walk at once.
    */
   present(shot: Shot | null, cut = !this.presenter.active): void {
-    const reduced = livePolicy().reduced;
+    const reduced = livePolicy().reduced || lightMode(); // moves are cuts (see the Presenter's live())
     if (shot) {
       const entering = !this.presenter.active;
       if (entering) {
@@ -529,7 +531,7 @@ export class World {
     this.pois.resetAfterActivity(); // fresh proximity + cue on the first play frame
     this.cam.reset(SPAWN.heading);
     if (!reduced) this.cam.handover(HANDOVER_S);
-    this.cam.place(true, 0, reduced);
+    this.cam.place(true, 0, livePolicy().reduced);
   }
 
   /** Where the free part of the screen is while the maker panel is up (the presenter
