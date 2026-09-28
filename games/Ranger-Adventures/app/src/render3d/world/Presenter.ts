@@ -35,6 +35,13 @@ const TITLE_DRIFT_M = 0.25;   // the title's slow drift: this far to each side �
 const TITLE_DRIFT_S = 22;     // … over this long a cycle (secondary motion, off when reduced)
 const TURN_S = 0.8;           // the ranger turns round in this long (eased)
 const GLIDE_S = 1.4;          // title → maker
+/** The most a frame moves a shot on (s). A presented move is a film: a slow frame slows
+ *  it, it never skips ahead. The first Begin of a session blocks the page for up to a
+ *  second (the sound starts inside the tap, the maker's first frame uploads), and that
+ *  raw time once jumped the lens most of its glide, and the ranger all his turn, in one
+ *  frame. At 1/30 s a glide still runs in real time at 30 fps and up, and one frame
+ *  never moves the lens more than ~0.25 m or turns him more than ~0.2 rad. */
+const MAX_STEP_S = 1 / 30;
 
 export class Presenter {
   shot: Shot | null = null;
@@ -106,6 +113,7 @@ export class Presenter {
 
   /** Per frame, after the world's own update: the lens and the ranger's turn. */
   update(dt: number): void {
+    dt = Math.min(dt, MAX_STEP_S); // a stalled frame never jumps the glide or the turn
     this.stepTurn(dt);
     if (!this.shot) return;
     const { secondary } = this.live();
