@@ -707,11 +707,13 @@ export class Vehicles {
    * parked vehicle or a solid (verifier V1: stepped out beside the Missiebord, the lens
    * collapsed onto him and he faded to a see-through, giant ghost). Room = ≥ 2 m from
    * every solid, which also keeps him out of the board's and the bench's reach. None
-   * clear (a thicket): the roomiest. `side` = how far out beside the vehicle.
+   * clear (a thicket): the roomiest. `side` = how far out beside the vehicle; `face` =
+   * the way he will look (his walk camera's boom lies behind him along it).
    */
-  private exitSpot(x: number, z: number, h: number, side: number, body: readonly BodyCircle[]): { x: number; z: number } {
+  private exitSpot(x: number, z: number, h: number, side: number, body: readonly BodyCircle[], face = h): { x: number; z: number } {
     const fx = Math.sin(h), fz = Math.cos(h);
     const lx = Math.cos(h), lz = -Math.sin(h);         // left-of-forward
+    const bx = Math.sin(face), bz = Math.cos(face);    // his facing: the boom lies behind it
     const back = bodyReach(body) + 1.2;
     const offsets = [[lx * side, lz * side], [-lx * side, -lz * side], [-fx * back, -fz * back]];
     // the vehicle's own footprint as it is about to be parked (the walker and the lens see it)
@@ -724,9 +726,9 @@ export class Vehicles {
       let room = Infinity, boom = Infinity;
       for (const o of solids) room = Math.min(room, Math.hypot(p.x - o.x, p.z - o.z) - o.r);
       for (const o of solids.concat(parked)) {
-        // the gap between the boom (the segment behind him along −forward) and this circle
-        const t = Math.max(0, Math.min(BOOM, -((o.x - p.x) * fx + (o.z - p.z) * fz)));
-        boom = Math.min(boom, Math.hypot(o.x - (p.x - fx * t), o.z - (p.z - fz * t)) - o.r - PROBE);
+        // the gap between the boom (the segment behind him along −facing) and this circle
+        const t = Math.max(0, Math.min(BOOM, -((o.x - p.x) * bx + (o.z - p.z) * bz)));
+        boom = Math.min(boom, Math.hypot(o.x - (p.x - bx * t), o.z - (p.z - bz * t)) - o.r - PROBE);
       }
       const score = Math.min(room - 2, boom);
       if (score >= 0) return p;
@@ -736,14 +738,14 @@ export class Vehicles {
   }
 
   /** Step out of a vehicle onto the drawn ground, at `exitSpot` (the driver's door when
-   *  it has room). */
-  private stepOut(x: number, z: number, h: number, side: number, body: readonly BodyCircle[]): void {
+   *  it has room), looking along `face` (default: the way the vehicle points). */
+  private stepOut(x: number, z: number, h: number, side: number, body: readonly BodyCircle[], face = h): void {
     // exitSpot keeps him on solid ground inside the rim; the vehicle's footprint is not
     // back in the list yet, so he clears it fully
-    const next = this.exitSpot(x, z, h, side, body);
+    const next = this.exitSpot(x, z, h, side, body, face);
     const r = this.host.ranger;
     r.position.set(next.x, this.groundY(next.x, next.z), next.z);
-    r.rotation.set(0, h, 0, 'XYZ');
+    r.rotation.set(0, face, 0, 'XYZ');
     this.unseatRider();
     this.host.seat(false);              // F-31: back on foot — locomotion resumes (idle)
     this.host.stopWalk(next.x, next.z); // no stale walk target, standing still
@@ -964,8 +966,12 @@ export class Vehicles {
     const h = this.heliHeading;
     this.heliAltitude = HELI_PAD_HEIGHT;
     this.heliPos.y = this.groundY(this.heliPos.x, this.heliPos.z);
-    this.stepOut(this.heliPos.x, this.heliPos.z, h, HELI_STEP_OUT, HELI_BODY);
-    this.host.follow(h, true);
+    // out of the helicopter he looks toward the clearing, not along the flight: the way
+    // back to the world lies ahead of him, and at his size the helicopter would otherwise
+    // stand in the walk camera's way as he turns home past it
+    const face = Math.atan2(-this.heliPos.x, -this.heliPos.z);
+    this.stepOut(this.heliPos.x, this.heliPos.z, h, HELI_STEP_OUT, HELI_BODY, face);
+    this.host.follow(face, true);
     this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
     this.heliParked = this.park(this.heliPos.x, this.heliPos.z, h, HELI_BODY);
     this.nearHeli = true;               // standing right beside it → "Stap in" again
