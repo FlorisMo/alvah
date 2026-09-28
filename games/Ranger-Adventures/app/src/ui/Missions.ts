@@ -1,5 +1,5 @@
 /**
- * Missions.ts — the entry into play (lazy-loaded by main.ts after "Begin").
+ * Missions.ts — the world graph's entry (loaded by main.ts at boot, behind the veil).
  *
  * The flow lives in small modules:
  *   flow/WorldSession.ts  build / resume / leave the free-roam world
@@ -12,4 +12,4 @@
 
 import './missions.css';
 
-export { startWorld } from './flow/WorldSession';
+export { bootWorld } from './flow/WorldSession';

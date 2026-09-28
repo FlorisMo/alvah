@@ -33,55 +33,32 @@ import { Dressing } from './world/Dressing';
 import { Fauna } from './world/Fauna';
 import { Markers, type WorldMarker } from './world/Markers';
 import { Vehicles } from './world/Vehicles';
-import { Player, type TapTarget } from './world/Player';
+import { Player, SPAWN, type TapTarget } from './world/Player';
 import { CameraRig } from './world/CameraRig';
+import { Presenter, type Shot, type Focus } from './world/Presenter';
 import { DevReadback } from './world/DevReadback';
 import type { MoveLimits, Obstacle } from './CharacterController';
 import type { StickVector } from '../core/input';
 import type { FootSurface } from '../core/footstep';
-import { Sound } from '../core/sound';
 import { store } from '../core/state';
 import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, bootTier, coarsePointer, lightMode, pixelRatioFor, QUALITY_TIERS, type QualityTier } from '../core/quality';
+import { loadsInFlight } from './Models';
 import type { WayCue } from './Wayfinding';
 import type { WorldCtx } from './play/types';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
-import { cachedResource } from './Models';
 import { Progress } from './world/Progress';
 
 export type { WorldMarker } from './world/Markers';
+export type { Shot, Focus } from './world/Presenter';
 
-/**
- * Free what a torn-down world made on the GPU, and nothing the GLB cache owns. The world
- * makes its own textures (name-tags, pads, water, dust, the ground mottle), materials,
- * geometry, forest instance buffers, a bone texture per rig and the sun's shadow map;
- * freeing only its geometry leaked 22-36 textures per title round trip (LEAK-1). What a
- * cached GLB owns (Models.cachedResource) is shared by every clone: the title backdrop
- * keeps drawing those same buffers, and freeing them under it left the title's ranger
- * and cabin undrawn after "Naar het hoofdmenu" (parent:B9). Module-wide singletons (the
- * plant material, the ground mottle) are freed too: three uploads them again on next use.
- */
-function disposeScene(root: THREE.Object3D): void {
-  const done = new Set<object>();
-  const free = (r: { dispose(): void } | null | undefined): void => {
-    if (!r || done.has(r) || cachedResource(r)) return;
-    done.add(r);
-    r.dispose();
-  };
-  root.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!(o as THREE.Sprite).isSprite) free(m.geometry); // every sprite shares three's one quad
-    for (const mat of [m.material ?? []].flat()) {
-      if (cachedResource(mat)) continue;
-      for (const v of Object.values(mat)) if ((v as THREE.Texture)?.isTexture) free(v as THREE.Texture);
-      for (const u of Object.values((mat as THREE.ShaderMaterial).uniforms ?? {})) if (u?.value?.isTexture) free(u.value as THREE.Texture);
-      free(mat);
-    }
-    if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose(); // its instance buffers
-    if ((o as THREE.SkinnedMesh).isSkinnedMesh) free((o as THREE.SkinnedMesh).skeleton); // its bone texture
-    if ((o as THREE.Light).isLight) free(o as THREE.Light); // the sun's shadow map
-  });
-}
+/** How long the follow rig takes to take the lens over from a presented shot (s). */
+const HANDOVER_S = 2.2;
+/** The boot veil waits at most this long for the models (ms; software GL: shorter). */
+const READY_CAP_MS = 6000;
+const READY_CAP_LIGHT_MS = 2000;
+/** The fps probe starts this long after the world is ready (ms). */
+const PROBE_AFTER_READY_MS = 1500;
 
 export class World {
   readonly scene = new THREE.Scene();
@@ -131,6 +108,14 @@ export class World {
   // a menu card over the live world (Pauze, the missiebord, a briefing, the sporenboek):
   // the ranger stands still behind it and a jeep or helicopter gets no input
   private menuOpen: () => boolean = () => false;
+  // the title and the ranger maker are shots of this world (world/Presenter.ts): while
+  // one is up the world is frozen like an activity, and the presenter owns the lens
+  private readonly presenter: Presenter;
+  // the boot veil lifts once every model the build asked for has arrived (Models counts
+  // them) or a cap has passed: the player never sees a stand-in waiting for its model
+  private readonly builtAt = performance.now();
+  private readyAt: number | null = null;
+  private settledFrames = 0;
   // D1.3: the world-space anchor the running in-place activity stages its task
   // around (= the `ctx()` activitySpot). camState tests it against the live frustum
   // for `taskInView`, so a game-3D reframe that lands off the playfield / on a
@@ -202,7 +187,7 @@ export class World {
         terrain: this.terrain, obstacles: this.obstacles, limits: this.limits,
       },
       {
-        pointerBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
+        pointerBlocked: () => this.frozen || this.vehicles.inVehicle || this.vehicles.inHeli,
         orbitDrag: (dx, dy) => this.cam.orbitDrag(dx, dy),
         tapTargets: () => this.tapTargets(),
         crossBiome: (here) => this.crossBiome(here),
@@ -233,7 +218,7 @@ export class World {
       this.player, this.dressing,
       {
         mode: () => ({ inVehicle: this.vehicles.inVehicle, inHeli: this.vehicles.inHeli }),
-        inputBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
+        inputBlocked: () => this.frozen || this.vehicles.inVehicle || this.vehicles.inHeli,
         afterPlace: () => this.pois.fadeRings(this.camera),
         creatures: (visit) => { // what stands on the ground, for the clear view (marker animals ~1 m, as the dev hook reads them)
           for (const m of this.pois.list) { const p = m.group.position; visit(p.x, p.y, p.z, 1.0); }
@@ -241,6 +226,11 @@ export class World {
           for (const a of this.fauna.ambient) if (!a.glide) { const p = a.group.position; visit(p.x, p.y, p.z, a.h); }
         },
       },
+    );
+    this.presenter = new Presenter(
+      this.camera, this.player,
+      { ...SPAWN, y: () => this.terrain.y(SPAWN.x, SPAWN.z) },
+      () => { const p = livePolicy(); return { reduced: p.reduced, secondary: p.secondaryMotion }; },
     );
     this.scene.add(this.dressing.buildPaths()); // W4.3: sand-path ribbons over the ground
     this.scene.add(this.dressing.buildVenWater());
@@ -300,7 +290,7 @@ export class World {
    * what the action is (open the mission briefing).
    */
   private tryInteract(): void {
-    if (this.activityActive || this.menuOpen()) return;
+    if (this.frozen || this.menuOpen()) return;
     // W5.1/W5.3b: the jeep + helicopter own the interact key while riding and when
     // standing beside a parked one — they win over the hub/marker affordances.
     if (this.vehicles.interact()) return;
@@ -503,19 +493,68 @@ export class World {
     return this.cam.cameraYaw();
   }
 
-  dispose(): void {
-    // D1.5 (audit #4): hand the shared id-cached tree + ranger materials back at FULL opacity
-    // before teardown. A canopy (or ranger) left faded LEAKS onto the Stage title backdrop, which
-    // CLONES the same cached GLBs and so SHARES their materials (Stage.ts: "the clones SHARE the
-    // world's id-cached geometry/materials") — the fresh `13-title-return` showed half-ghosted
-    // crowns on the title, the slow fade release carried into a composed hero screen (§2.5:
-    // occluder fades reset when a composed screen takes the camera). Cheap material writes only.
-    this.dressing.setCanopyOpacity(1);
-    this.player.setAvatarOpacity(1);
-    this.player.dispose(); // pointer seam + keys
-    this.canvas.removeEventListener('wheel', this.cam.onWheel); // F-16 dolly zoom
-    Sound.engineStop(); // W5.2: never leak the engine loop past teardown
-    disposeScene(this.scene);
+  /** An in-place activity or a presented shot holds the world still. */
+  private get frozen(): boolean {
+    return this.activityActive || this.presenter.active;
+  }
+
+  /**
+   * Show the world as the title or the ranger maker (world/Presenter.ts), or (`null`)
+   * hand it to the player. While a shot is up the world is frozen like an activity: no
+   * input, no prompts or wayfinding, no name-tags or rings; everything else lives. The
+   * first shot at boot is a cut; a move between shots, or up from play to the title
+   * (`cut` false), an eased glide. Leaving is one move: the follow rig takes the lens
+   * over from the shot while the ranger turns back to the forest, and the player can
+   * walk at once.
+   */
+  present(shot: Shot | null, cut = !this.presenter.active): void {
+    const reduced = livePolicy().reduced;
+    if (shot) {
+      const entering = !this.presenter.active;
+      if (entering) {
+        this.labels.setHidden(true);
+        this.pois.setRingsHidden(true);
+        this.dressing.setCanopyOpacity(1); // no tree left faded from play
+        this.player.setAvatarOpacity(1);   // and he stands solid in every shot
+      }
+      this.presenter.go(shot, cut);
+      return;
+    }
+    if (!this.presenter.active) return;
+    this.presenter.release();
+    this.labels.setHidden(false);
+    this.pois.setRingsHidden(false);
+    this.pois.resetAfterActivity(); // fresh proximity + cue on the first play frame
+    this.cam.reset(SPAWN.heading);
+    if (!reduced) this.cam.handover(HANDOVER_S);
+    this.cam.place(true, 0, reduced);
+  }
+
+  /** Where the free part of the screen is while the maker panel is up (the presenter
+   *  stands the ranger there). */
+  setFocus(fn: (() => Focus) | null): void {
+    this.presenter.setFocus(fn);
+  }
+
+  /** Back to the start (the title, from Pauze): out of any vehicle, the ranger on the
+   *  spawn facing the forest. Called under a fade; the next shot is a cut. */
+  resetToSpawn(): void {
+    if (this.vehicles.inVehicle) this.vehicles.exitVehicle();
+    if (this.vehicles.inHeli) this.vehicles.exitHeli();
+    const g = this.ranger;
+    g.position.set(SPAWN.x, this.terrain.y(SPAWN.x, SPAWN.z), SPAWN.z);
+    g.rotation.y = SPAWN.heading;
+    this.player.target.set(SPAWN.x, 0, SPAWN.z);
+    this.player.groundSpeedNow = 0;
+    this.crossBiome(this.terrain.biome(SPAWN.x, SPAWN.z));
+    this.cam.reset(SPAWN.heading);
+    this.cam.place(true, 0, true); // the lens behind him at the spawn: a glide to a shot starts here
+  }
+
+  /** The world is ready to be seen: every model the build asked for has arrived, or the
+   *  cap passed (a slow network or software GL never waits long). */
+  ready(): boolean {
+    return this.readyAt !== null;
   }
 
   /** The drawn ground height at world (x,z) — the one ground truth (world/Terrain.ts).
@@ -655,13 +694,13 @@ export class World {
     this.sky.followSun(rp.x, rp.z); // W4.5: the hero shadow frustum follows the ranger
     this.player.groundSpeedNow = 0; // 0 while standing or during an in-place activity → mixer eases to idle
     this.vehicles.dustEmitting = false; // driveJeep re-arms it while the jeep is moving (W5.2)
-    if (!this.activityActive && this.vehicles.inHeli) {
+    if (!this.frozen && this.vehicles.inHeli) {
       // W5.3b: damped flight mode owns movement while the ranger is in the heli.
       this.vehicles.flyHeli(dt);
-    } else if (!this.activityActive && this.vehicles.inVehicle) {
+    } else if (!this.frozen && this.vehicles.inVehicle) {
       // W5.1: arcade drive mode owns movement while the ranger is in the jeep.
       this.vehicles.driveJeep(dt);
-    } else if (!this.activityActive && !this.menuOpen()) {
+    } else if (!this.frozen && !this.menuOpen()) {
       // on foot: tank keys, the stick or a tap-walk move the ranger, and his steering
       // tells the follow camera what to do (world/Player.walk → CameraRig.steer).
       this.cam.steer(this.player.walk(dt, this.cam.viewFrame()));
@@ -677,8 +716,17 @@ export class World {
     // animates in both motion modes; only the procedural-bob fallback holds still.
     this.player.rig.update(dt, this.player.groundSpeedNow, reduced);
 
-    // W7.2: measure fps and step the quality tier down/up with hysteresis.
-    this.probeQuality(dt);
+    // ready once nothing the build asked for is still loading (three frames in a row,
+    // so a model that swaps in after its load has drawn), or at the cap
+    if (this.readyAt === null) {
+      this.settledFrames = loadsInFlight() === 0 ? this.settledFrames + 1 : 0;
+      const now = performance.now();
+      if (this.settledFrames >= 3 || now - this.builtAt > (lightMode() ? READY_CAP_LIGHT_MS : READY_CAP_MS)) this.readyAt = now;
+    }
+
+    // W7.2: measure fps and step the quality tier down/up with hysteresis — only once
+    // the world is up: the decode stalls behind the boot veil are not the device's pace
+    if (this.readyAt !== null && performance.now() - this.readyAt > PROBE_AFTER_READY_MS) this.probeQuality(dt);
 
     // W5.2: age the jeep's dust cloud every frame (so puffs keep fading after a
     // stop or step-out). Emission itself happens in driveJeep, gated on motion +
@@ -697,7 +745,8 @@ export class World {
     // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity too.
     this.labels.fade(this.camera, this.canvas.clientHeight);
 
-    if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
+    // the activity owns proximity/wayfinding/camera; a presented shot owns the lens
+    if (this.frozen) { this.presenter.update(dt); return; }
 
     // W5.1 / W5.3b: "Stap in" near the parked jeep or helicopter (suppressed while riding)
     this.vehicles.updateProximity(rp.x, rp.z);
@@ -711,6 +760,7 @@ export class World {
     this.pois.updateWayfinding(rp.x, rp.z, this.ranger.rotation.y);
 
     this.cam.place(reduced, dt, reduced);
+    this.presenter.update(dt); // the ranger's turn back to the forest after a shot
   }
 
   // ctx() (below) reads the ranger's position straight off the World.

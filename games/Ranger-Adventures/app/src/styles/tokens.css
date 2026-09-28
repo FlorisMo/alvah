@@ -1,11 +1,10 @@
 /* ============================================================
    Ranger van de Veluwe — design tokens
    Ported from prototype/styles.css (the craft bible's palette).
-   NOTE: Google Fonts @import intentionally dropped — the game must
-   stay client-side / offline-clean (no third-party request). The
-   font names are kept first in each stack so self-hosted Fraunces /
-   Lexend / Atkinson Hyperlegible activate the warm look once added
-   (TODO: self-host fonts in /public/fonts + @font-face).
+   Fonts are self-hosted (styles/fonts.css, imported by main.ts): no
+   request ever leaves the site. Fraunces for headings, the reading
+   font (Atkinson Hyperlegible, or Lexend with leesFont off) for all
+   text and buttons.
    ============================================================ */
 
 :root {
@@ -27,6 +26,7 @@
   --paper-tint:  #f7f2e7;
   --line:        #e8e5dc;
   --accent-warm: #d9b89a;
+  --veil-paper:  #f2e8d3;  /* the boot veil and the page under it before any script runs */
   --red-warn:    #9b3d2e;
 
   /* — playful spel palette (UI accents) — */
@@ -102,8 +102,10 @@
   --read-size:    28px;
   --read-leading: 1.7;
 
-  /* — font stacks (self-host later; system fallbacks for now) — */
+  /* — font stacks (self-hosted, styles/fonts.css). --font-read is re-set on :root
+       by core/reading-prefs.ts from the leesFont setting; buttons and labels follow
+       it, so a child reads one letter everywhere. — */
   --font-head: 'Fraunces', Georgia, 'Times New Roman', serif;
-  --font-body: 'Inter Tight', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-read: 'Lexend', 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-read: 'Atkinson Hyperlegible', 'Lexend', system-ui, sans-serif;
+  --font-body: var(--font-read);
 }

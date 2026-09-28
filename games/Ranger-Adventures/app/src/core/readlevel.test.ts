@@ -21,7 +21,7 @@ import {
 import { AREA_VELUWE, ANIMALS } from '../content/veluwe.ts';
 import { ONBOARD_HINT } from './onboarding.ts';
 import { ROEP_COPY, ROEP_VOGELS } from '../engines/roep.ts';
-import { SAY } from '../content/screens.ts';
+import { SAY, TITLE, MAKER } from '../content/screens.ts';
 
 // ---- 1. pure lint maths --------------------------------------------------
 
@@ -125,6 +125,10 @@ function readingCorpus(): LabeledText[] {
   for (const v of ROEP_VOGELS) { push(`roep.vogel.${v.id}.naam`, v.naam); push(`roep.vogel.${v.id}.roep`, v.roep); }
   // child:B12 — what the menu screens say aloud
   for (const k of Object.keys(SAY)) push(`say.${k}`, (SAY as Record<string, string>)[k]);
+  // the front door: the title over the clearing and the ranger maker
+  for (const k of ['naam', 'sub', 'begin'] as const) push(`title.${k}`, TITLE[k]);
+  for (const k of ['titel', 'naam', 'klaar'] as const) push(`maker.${k}`, MAKER[k]);
+  push('maker.groet', MAKER.groet('Alvah'));
   return E;
 }
 

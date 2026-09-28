@@ -1,3 +1,4 @@
+import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/base.css';
 import { Stage } from './render3d/Stage';
@@ -5,19 +6,16 @@ import { Budgets } from './ui/Budgets';
 import { applyReducedMotionClass, watchReducedMotion, setReducedMotionOverride } from './core/reduced-motion';
 import { applyReadingPrefs } from './core/reading-prefs';
 import { store } from './core/state';
-import { Sound } from './core/sound';
-import { installDevHook, setScreen, provideDrawCalls, provideAvatar, provideTitleReady } from './core/devhook';
+import { installDevHook, setScreen, provideDrawCalls } from './core/devhook';
 import { installKeys } from './ui/keys';
-import { readScreenAloud } from './ui/ReadAloud';
-import { SAY } from './content/screens';
+import { mountBootVeil } from './ui/BootVeil';
 
-// W7.1 code-splitting: the mission/world graph (World, the five engines,
-// the 3D mini-game views, render2d) is the bulk of the bundle but is only
-// reachable AFTER "Begin". It is loaded via dynamic `import()` in the click
-// handler below so the entry `app.js` stays a light boot shell (three.js lives
-// in the `vendor` chunk, see vite.config.ts). `Sound.unlock()` is imported
-// eagerly and fired synchronously in the gesture — the iOS AudioContext must be
-// created/resumed inside the user tap, before any `await`.
+// Boot: the veil goes up at once, the renderer starts, and the world graph (World, the
+// engines, the 3D mini-game views, render2d: the bulk of the bundle, W7.1 code-split) is
+// loaded straight away and built behind the veil. The title IS that world (a shot of the
+// spawn clearing, world/Presenter.ts), so there is no second scene to swap out; the veil
+// lifts once the world is ready. `Sound.unlock()` + `loadGameAudio()` run inside the
+// Begin tap (WorldSession.showTitleCard): the iOS AudioContext must be made in the gesture.
 
 // Apply the saved Tweaks before first paint: a persisted reduced-motion toggle
 // wins over the OS (off = defer to OS), and the reading/accent prefs re-flow :root.
@@ -29,10 +27,11 @@ watchReducedMotion();
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 const ui = document.getElementById('ui') as HTMLDivElement;
+const veil = mountBootVeil(ui);
 // Enter/Space press the primary button, Esc goes back or opens Pauze (every screen).
 installKeys(ui);
 
-// --- 3D render layer + live budget overlay (Phase 0) ---
+// --- the one renderer + frame loop ---
 const stage = new Stage(canvas);
 // `?dev=1` also exposes the stage (read-only use: `__stage.world` for probes and
 // playtest scripts that project scene objects to screen coordinates).
@@ -45,8 +44,7 @@ if (new URLSearchParams(location.search).has('dev')) {
 // E2E suite runs against the dev server, so a DEV gate would make the
 // "overlay absent" assertion impossible. `drawCalls()` stays available to E2E
 // through the dev hook (provideDrawCalls below) regardless of the overlay.
-const showBudgets = new URLSearchParams(location.search).has('dev');
-if (showBudgets) {
+if (new URLSearchParams(location.search).has('dev')) {
   const budgets = new Budgets(ui);
   stage.onFrame((dt) => budgets.update(stage.renderer, dt));
 }
@@ -58,47 +56,6 @@ stage.start();
 installDevHook();
 setScreen('title');
 provideDrawCalls(() => stage.drawCalls);
-// P1.4 ⊕ P1.6a: the title now stands the GROUNDED ranger on the heath — expose his
-// measured height to the scale assert so the title frame proves the CHILD band
-// avatar.height ∈ [1.1, 1.35], same as the world. `startWorld` overrides this with
-// the live world ranger on "Begin"; null until the title rig finishes loading.
-provideAvatar(() => stage.titleAvatar());
-// D3.17: the title's full-fidelity readiness (real hero props swapped in over the low-poly
-// stand-ins). Always sourced from the Stage — it owns the title backdrop across a round-trip —
-// so the capture can hold the title snap until the composed screen is never the stand-in world.
-provideTitleReady(() => stage.titleReady());
 
-// --- title card → the world ---
-const card = document.createElement('div');
-card.className = 'boot-card';
-card.innerHTML =
-  `<p class="boot-kicker">Ranger van de Veluwe</p>` +
-  `<h1 class="boot-title">Word boswachter</h1>` +
-  `<p class="boot-sub">Help de dieren van de Veluwe.<br>Kies een missie en train je breinkracht.</p>` +
-  `<button class="btn-start" type="button">Begin</button>`;
-ui.appendChild(card);
-readScreenAloud(card, { text: SAY.title, autoStart: saved.voorlezen }); // 🔊 beside Begin (child:B12)
-
-card.querySelector<HTMLButtonElement>('.btn-start')?.addEventListener('click', async () => {
-  // Unlock audio FIRST, synchronously in the tap (iOS gesture rule) — before
-  // the awaited dynamic import breaks the user-activation chain.
-  Sound.unlock();
-  // P1.4 smoke fix: the player is leaving the title — tell the stage NOW (before the
-  // awaited world/avatar import) so the async title dress stops decoding GLBs and
-  // never starves the Begin→world→movement boot (the eager decode timed smoke out).
-  stage.markLeavingTitle();
-  card.classList.add('boot-card--hidden');
-  window.setTimeout(() => card.remove(), 360);
-  // The walkable world is the front door. First boot makes your ranger first;
-  // afterwards (and on every later boot) drop STRAIGHT into the Veluwe.
-  if (store.get().avatarGemaakt) {
-    const { startWorld } = await import('./ui/Missions');
-    startWorld(ui, stage);
-  } else {
-    const [{ showAvatarCreator }, { startWorld }] = await Promise.all([
-      import('./ui/AvatarCreator'),
-      import('./ui/Missions'),
-    ]);
-    showAvatarCreator(ui, () => startWorld(ui, stage));
-  }
-});
+// --- the world, built behind the veil, shown as the title ---
+void import('./ui/Missions').then(({ bootWorld }) => bootWorld(ui, stage, veil));

@@ -18,7 +18,7 @@
  */
 
 import * as THREE from 'three';
-import { dampFactor } from '../play/kit-math';
+import { dampFactor, easeInOut, lerpAngle, yawPitch, aimDir } from '../play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW, FOLLOW_TAU, FOLLOW_MAX_RATE } from '../FollowCam';
 import { livePolicy } from '../MotionMode';
 import { segmentEntry, segmentCrosses, obstacleGap, obstacleSpan, type MoveLimits, type Obstacle } from '../CharacterController';
@@ -229,6 +229,12 @@ export class CameraRig {
   // with it). place() picks by the ride.
   readonly camOffsetVehicle = new THREE.Vector3(0, 4.5, 9);
   readonly camOffsetHeli = new THREE.Vector3(0, 6, 13);
+  // A presented shot (world/Presenter.ts: the title, the ranger maker) hands the lens to
+  // this rig as ONE move: for `dur` seconds the rig's own pose is blended in from where
+  // the shot left the lens (eased, yaw the short way, roll 0). The rig runs underneath,
+  // so a ranger who walks off mid-glide is followed; a cut under reduced motion.
+  private handoff: { pos: THREE.Vector3; yaw: number; pitch: number; t: number; dur: number } | null = null;
+  private readonly _dir = new THREE.Vector3();
   private readonly camera: THREE.PerspectiveCamera;
   private readonly terrain: Terrain;
   private readonly obstacles: Obstacle[];
@@ -301,6 +307,22 @@ export class CameraRig {
     } else {
       this.followTargetYaw = this.followYaw; // hold: nothing on foot swings the view
     }
+  }
+
+  /** Start the take-over from a presented shot: the lens is where the shot left it now,
+   *  and over `seconds` it becomes this rig's own view (see `handoff`). */
+  handover(seconds: number): void {
+    const d = this.camera.getWorldDirection(this._dir);
+    const a = yawPitch(d.x, d.y, d.z);
+    this.handoff = { pos: this.camera.position.clone(), yaw: a.yaw, pitch: a.pitch, t: 0, dur: seconds };
+  }
+
+  /** A fresh start at the spawn (back from the title): the bearing straight behind a
+   *  ranger heading `yaw`, no look-around. */
+  reset(yaw: number): void {
+    this.followYaw = this.followTargetYaw = this.rmLastTarget = yaw;
+    this.orbitYaw = this.orbitTargetYaw = this.orbitTilt = this.orbitTargetTilt = 0;
+    this.handoff = null;
   }
 
   /** The "Camera draait mee" setting source (W1.5). Read live each frame
@@ -603,9 +625,28 @@ export class CameraRig {
     this.dressing.fadeOccluders(this.fadeTargets, release);
     this.viewClearState = (!blocked || this.dressing.canopyOpacity <= this.CANOPY_SEE_THROUGH) &&
       this.terrainClearState && !solidTree;
+    if (this.handoff) this.blendHandoff(dt, reduced);
     // the ground "go here" rings fade by the lens's proximity (both branches: a ring faded
     // on foot restores once a vehicle cam pulls the lens far away)
     this.host.afterPlace();
+  }
+
+  /** The take-over from a presented shot (`handover`): this frame's view is the rig's own
+   *  pose blended in from the shot's, eased; `lastSet` follows, so the rig never reads the
+   *  blend as someone else moving its lens. */
+  private blendHandoff(dt: number, reduced: boolean): void {
+    const h = this.handoff!;
+    h.t += Math.min(dt, 0.05);
+    if (reduced || h.t >= h.dur) { this.handoff = null; return; }
+    const e = easeInOut(h.t / h.dur);
+    const d = this.camera.getWorldDirection(this._dir);
+    const to = yawPitch(d.x, d.y, d.z);
+    const p = this.camera.position;
+    p.set(h.pos.x + (p.x - h.pos.x) * e, h.pos.y + (p.y - h.pos.y) * e, h.pos.z + (p.z - h.pos.z) * e);
+    const a = aimDir(lerpAngle(h.yaw, to.yaw, e), h.pitch + (to.pitch - h.pitch) * e);
+    this.camera.up.set(0, 1, 0); // roll 0, always
+    this.camera.lookAt(p.x + a.x, p.y + a.y, p.z + a.z);
+    this.lastSet.copy(p);
   }
 
   /** Reduced motion: hold the bearing while the steering's target still turns, then cut

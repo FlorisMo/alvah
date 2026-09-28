@@ -567,6 +567,11 @@ export class Markers {
     if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
   }
 
+  /** Every "go here" ring off while the world is presented (the title, the maker). */
+  setRingsHidden(hidden: boolean): void {
+    for (const r of this.groundRings) r.mat.visible = !hidden;
+  }
+
   /** W6.1: hide the floating mission name-tags during an in-place activity (so a label
    *  the reframe keeps in view never overlaps the play prompt), restore them after. */
   setLabelsVisible(visible: boolean): void {

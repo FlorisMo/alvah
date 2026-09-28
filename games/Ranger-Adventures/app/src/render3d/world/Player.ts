@@ -53,6 +53,10 @@ const CAM_BEHIND_GAP = (75 * Math.PI) / 180;
  *  this angle of into-the-screen. */
 const BACKPEDAL_FACING = (45 * Math.PI) / 180;
 
+/** Where every game starts: the ranger on the spawn clearing, facing the forest (−z),
+ *  his back to the follow lens. The title and the maker are shots around this spot. */
+export const SPAWN = { x: 0, z: 0, heading: Math.PI } as const;
+
 /** Who steered the ranger this frame. */
 type DriveMode = 'keys' | 'stick' | 'tap';
 
@@ -196,7 +200,9 @@ export class Player {
     // drops the 180° about-face the first forward press used to trigger. The follow
     // bearing already starts at π (FIXED_FOLLOW_YAW), so the lens is behind him from
     // frame one; loadRealRanger clears only the children, never this rotation.
-    this.group.rotation.y = Math.PI;
+    this.group.position.set(SPAWN.x, this.terrain.y(SPAWN.x, SPAWN.z), SPAWN.z); // feet on the drawn ground from frame one
+    this.group.rotation.y = SPAWN.heading;
+    this.target.set(SPAWN.x, 0, SPAWN.z);
     this.measureAvatar(); // F-05: seed the camera rails off the stand-in's size
   }
 
@@ -212,15 +218,6 @@ export class Player {
   /** Start listening to the movement keys; `onInteract` is the interact key (Space). */
   listenKeys(onInteract: () => void): void {
     this.input = attachInput(window, { onInteract });
-  }
-
-  dispose(): void {
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown); // F-17
-    window.removeEventListener('pointermove', this.onPointerMove);
-    window.removeEventListener('pointerup', this.onPointerUp);
-    window.removeEventListener('pointercancel', this.onPointerUp);
-    this.input?.dispose();
-    this.input = null;
   }
 
   /** The held keys + joystick as a screen vector (the jeep and heli read it). */
@@ -624,6 +621,11 @@ export class Player {
     //    along a grid line — the centre-column click at spawn — still lands)
     const p = this.terrain.intersectRay(this.raycaster.ray);
     if (p) this.target.set(p.x, 0, p.z);
+  }
+
+  /** The player steered him this frame (keys, the stick or a tap-walk). */
+  get steering(): boolean {
+    return this.drive !== null;
   }
 
   /** The keys are turning him (tank turn, easing in or out) right now. */

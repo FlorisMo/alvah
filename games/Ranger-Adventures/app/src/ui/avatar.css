@@ -1,101 +1,68 @@
 /* ============================================================
-   avatar.css — "maak je ranger" creator. Sits over the 3D stage;
-   reuses the boot-card + missions tokens. Dual-channel everywhere
-   (colour + label + ✓ ring); ≥56px tap targets.
+   avatar.css — "maak je ranger": the panel beside the 3D ranger.
+   The ranger himself is the preview (the camera stands in front of him in
+   the world); this is the paper panel of choices on the right (a sheet
+   along the bottom on a narrow screen). Dual-channel everywhere (colour +
+   word + ✓ ring); ≥56px targets; nothing scrolls at 1280×800 or 1080×810.
    ============================================================ */
 
-/* RUN-3 P3.1 · F-01: the card must FIT the viewport (1280×800 / 1080×810) with
-   the "Dit is mijn ranger" CTA always on-screen. Tighter gaps + a smaller
-   portrait shrink the natural height; a sticky footer (.av-klaar-row, below)
-   guarantees the CTA is visible even when the kenmerk groups still overflow. */
-/* The card itself does not scroll: kicker and title stay on top, the choices sit in
-   .av-main, and the button row sits below it. (A sticky button over a scrolling card
-   covered the last swatch row on iPad.) */
-.avatar-creator.boot-card-ish { gap: 10px; max-width: 460px; overflow: hidden; padding-bottom: 0; }
-/* The choices: one scrolling column on a narrow screen (with the "Meer kiezen" cue while
-   anything is below the fold, child:B8) … */
-.avatar-creator .av-main {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px 2px 10px;
-}
-.avatar-creator .av-side { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
-.av-more {
-  display: none;
-  position: sticky;
-  bottom: 0;
-  align-self: center;
-  flex: none;
-  min-height: var(--tap-min);
-  padding: 0 22px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--green-deep);
-  color: var(--paper);
-  font: 700 18px/1 var(--font-body);
-  box-shadow: 0 -10px 22px rgba(253, 252, 248, 0.95), var(--shadow-md);
-  cursor: pointer;
-}
-.avatar-creator.av-has-more .av-more { display: inline-flex; align-items: center; gap: 8px; }
-/* … and on a laptop (or an iPad on its side) everything at once, side by side: the
-   ranger + name on the left, Huid / Haar / Ranger-jas / Ogen on the right. */
-@media (min-width: 880px) and (min-height: 600px) {
-  .avatar-creator.boot-card-ish { max-width: none; width: min(94vw, 860px); max-height: 94vh; }
-  .avatar-creator .av-main {
-    display: grid;
-    grid-template-columns: 280px 1fr;
-    align-items: start;
-    gap: 8px 28px;
-    overflow-y: auto;
-  }
-  .avatar-creator .av-groups { gap: 6px; }
-  .avatar-creator .av-legend { padding-bottom: 4px; text-align: left; }
-  .avatar-creator .av-swatch { padding: 4px 6px 6px; }
-  .avatar-creator .av-more { grid-column: 1 / -1; }
-}
+.av-overlay,
+.av-overlay--leaving { position: absolute; inset: 0; pointer-events: none; }
+.av-overlay > * { pointer-events: auto; }
+/* leaving: it slides away while he already walks (`#ui > *` would outrank a class rule) */
+#ui .av-overlay--leaving, #ui .av-overlay--leaving * { pointer-events: none; }
 
-/* ---- live preview ---- */
-.av-preview {
+.avatar-creator {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  bottom: 20px;
+  width: min(480px, calc(100vw - 40px));
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  gap: clamp(8px, 1.6vh, 16px);
+  padding: clamp(16px, 2.6vh, 26px) 26px 0;
+  background:
+    radial-gradient(120% 60% at 0% 0%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, rgba(253, 251, 245, 0.96), rgba(247, 242, 231, 0.96));
+  border: 1px solid rgba(120, 96, 56, 0.18);
+  border-radius: var(--spel-radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: av-in var(--dur-slow) var(--ease-out) both;
 }
-.av-art {
-  width: 104px;
-  height: 112px;
-  filter: drop-shadow(0 6px 14px rgba(30, 40, 25, 0.22));
+@keyframes av-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+.av-overlay--leaving .avatar-creator { animation: av-out 280ms var(--ease-in) both; }
+@keyframes av-out { to { opacity: 0; transform: translateX(28px); } }
+/* 1080×810 (an iPad on its side): a touch narrower */
+@media (max-width: 1100px) { .avatar-creator { width: min(460px, calc(100vw - 40px)); } }
+
+/* ---- header: the title and the greeting ---- */
+.av-head { display: flex; flex-direction: column; gap: 2px; }
+.av-titel {
+  margin: 0;
+  font: 700 clamp(28px, 4.4vh, 36px)/1.05 var(--font-head);
+  color: var(--green-deep);
 }
 .av-greet {
   margin: 0;
-  font: 600 18px/1.2 var(--font-head);
-  color: var(--green-deep);
+  min-height: 1.3em;
+  font: 600 clamp(20px, 3vh, 24px)/1.25 var(--font-head);
+  color: var(--green-mid);
 }
 
-/* ---- name ---- */
-.av-naam-veld {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  text-align: left;
-}
-.av-naam-cap { font: 600 13px/1.2 var(--font-body); color: var(--green-mid); }
+/* ---- the name ---- */
+.av-naam { display: flex; flex-direction: column; gap: 8px; }
+.av-naam-veld { display: flex; flex-direction: column; gap: 4px; }
+.av-naam-cap { font: 700 15px/1.2 var(--font-body); color: var(--green-mid); }
 .av-naam-input {
   width: 100%;
   min-height: var(--tap-min);
-  padding: 12px 16px;
+  padding: 8px 16px;
   border: 2px solid var(--green-line);
   border-radius: var(--spel-radius);
   background: var(--paper);
-  font: 600 22px/1.2 var(--font-head);
+  font: 600 24px/1.2 var(--font-head);
   color: var(--ink);
 }
 .av-naam-input:focus-visible {
@@ -103,46 +70,49 @@
   outline-offset: 2px;
   border-color: var(--green-mid);
 }
-
-.av-naam-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.av-naam-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .av-naam-chip {
   min-height: var(--tap-min);
-  padding: 8px 18px;
+  padding: 0 16px;
   border: 2px solid var(--green-line);
   border-radius: var(--radius-pill);
   background: var(--green-soft);
-  font: 600 16px/1 var(--font-body);
+  font: 700 18px/1 var(--font-body);
   color: var(--green-deep);
   cursor: pointer;
   transition: transform var(--dur-quick) var(--ease-overshoot), background var(--dur-quick);
 }
+.av-naam-chip:hover { background: #e4eddd; }
 .av-naam-chip:active { transform: scale(0.94); background: var(--spel-sun-glow); }
+.av-naam-chip:focus-visible { outline: 3px solid var(--spel-sun); outline-offset: 2px; }
 
-/* ---- kenmerk groups ---- */
-.av-groups { display: grid; gap: 10px; width: 100%; }
-.av-group { border: 0; margin: 0; padding: 0; }
-.av-legend {
-  padding: 0 0 8px;
-  font: 600 16px/1.2 var(--font-body);
-  color: var(--green-mid);
+/* ---- four compact rows: the word left, four swatches right ---- */
+.av-groups {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2px, 0.8vh, 8px);
+  padding-top: 6px;
+  border-top: 1px solid rgba(40, 60, 30, 0.1);
 }
-.av-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
-
+.av-group { display: grid; grid-template-columns: 104px 1fr; align-items: center; gap: 8px; }
+.av-legend { font: 700 17px/1.2 var(--font-body); color: var(--green-deep); }
+.av-swatches { display: flex; justify-content: space-between; gap: 2px; }
 .av-swatch {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  min-width: var(--tap-min);
+  gap: 3px;
+  min-width: 64px;
   min-height: var(--tap-min);
-  padding: 6px 8px 8px;
+  padding: 4px 2px 2px;
   border: 0;
+  border-radius: 14px;
   background: none;
   cursor: pointer;
 }
-/* F-02: the VISIBLE swatch circle is the affordance — grow it to the ≥56px floor
-   (was 48px). The selection ring is a box-shadow drawn ON TOP, so it never adds
-   to the hit area / layout. */
+.av-swatch:focus-visible { outline: 3px solid var(--spel-sun); outline-offset: 0; background: rgba(245, 194, 59, 0.14); }
+/* the visible circle is the affordance, at the 56px floor; the selection ring is a
+   box-shadow drawn over it, so it never grows the hit area */
 .av-chip {
   display: grid;
   place-items: center;
@@ -150,10 +120,11 @@
   height: var(--tap-min);
   border-radius: 50%;
   border: 3px solid rgba(0, 0, 0, 0.12);
-  box-shadow: var(--shadow-sm);
+  box-shadow: inset 0 -6px 10px rgba(0, 0, 0, 0.12), var(--shadow-sm);
   transition: transform var(--dur-quick) var(--ease-overshoot),
     border-color var(--dur-quick), box-shadow var(--dur-quick);
 }
+.av-swatch:hover .av-chip { transform: translateY(-2px); }
 .av-tick {
   color: #fff;
   font: 700 22px/1 var(--font-body);
@@ -162,30 +133,46 @@
   transform: scale(0.5);
   transition: opacity var(--dur-quick), transform var(--dur-quick) var(--ease-overshoot);
 }
-.av-swatch-label { font: 600 13px/1 var(--font-body); color: var(--ink-soft); }
-
+.av-swatch-label { font: 700 13px/1 var(--font-body); color: var(--ink-soft); white-space: nowrap; }
 .av-swatch.sel .av-chip {
   border-color: var(--green-deep);
-  transform: scale(1.12);
+  transform: scale(1.06);
   box-shadow: 0 0 0 3px var(--spel-sun), var(--shadow-md);
 }
 .av-swatch.sel .av-tick { opacity: 1; transform: scale(1); }
 .av-swatch.sel .av-swatch-label { color: var(--green-deep); }
 .av-swatch:active .av-chip { transform: scale(0.96); }
 
-/* ---- F-01: the "Dit is mijn ranger" row is always on screen ----
-   It is the last row of the card, outside the scrolling choices, bleeding to the
-   card's edges; a hairline says "the choices end here". */
-.av-klaar-row {
-  flex: 0 0 auto;
-  align-self: stretch;
+/* ---- the footer: 🔊 and "Dit is mijn ranger", pinned to the bottom ---- */
+.av-foot {
+  margin: auto -26px 0;
+  padding: clamp(10px, 1.8vh, 16px) 26px clamp(14px, 2.4vh, 22px);
   justify-content: center;
-  margin: 0 -30px;
-  padding: 12px 30px 20px;
-  background: rgba(253, 252, 248, 0.98);
-  border-top: 1px solid rgba(40, 60, 30, 0.12);
+  border-top: 1px solid rgba(40, 60, 30, 0.1);
+  background: rgba(253, 252, 248, 0.7);
+}
+.av-foot .btn-start { margin-top: 0; min-width: 260px; }
+
+/* ---- a narrow screen: the panel is a sheet along the bottom (the ranger above it);
+   only here may its choices scroll ---- */
+@media (max-width: 760px) {
+  .avatar-creator {
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-height: 62vh;
+    overflow-y: auto;
+    animation-name: av-up;
+  }
+  @keyframes av-up { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+  .av-overlay--leaving .avatar-creator { animation-name: av-down; }
+  @keyframes av-down { to { opacity: 0; transform: translateY(28px); } }
+  .av-group { grid-template-columns: 1fr; }
+  .av-foot { position: sticky; bottom: 0; }
 }
 
-/* reduced-motion (.rm body class): drop the scale pop, keep the ✓ + ring channels.
-   (Transition *durations* are already neutralised globally by base.css `.rm *`.) */
-.rm .av-swatch.sel .av-chip { transform: none; }
+/* reduced motion (.rm body class): no slide, no scale pop; keep the ✓ + ring channels */
+.rm .avatar-creator, .rm .av-overlay--leaving .avatar-creator { animation: none; }
+.rm .av-swatch.sel .av-chip, .rm .av-swatch:hover .av-chip { transform: none; }
