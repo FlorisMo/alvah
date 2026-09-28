@@ -46,7 +46,13 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 const _a = new THREE.Color();
 const _b = new THREE.Color();
 const WET = new THREE.Color('#4a4d33');   // wet moss and peat right at the ven's waterline
-const YARD = new THREE.Color('#8f9656');  // the cabin's yard: short, sun-dried grass (the sand tracks cross it)
+// the cabin's yard: short, sun-dried grass (the sand tracks cross it). Chosen by its
+// RENDERED pixels, not the constant: under the golden-hour light and the tone mapping an
+// olive reads as bare brown soil, so the albedo leans yellow-green and covers the yard
+// nearly whole, with only a few worn patches (YARD_WEAR) left in it.
+const YARD = new THREE.Color('#b3b95a');
+const YARD_K = 0.85; // how much of the yard's centre is its grass (the heath shows through the rest)
+const YARD_WEAR = 0.8; // how far the yard quiets the heath's darker and paler patches
 const FAR = new THREE.Color('#57533a');   // forest floor past the rim: shade under the tree-line
 
 /**
@@ -75,12 +81,12 @@ export function groundColor(x: number, z: number, h: number, detail: boolean, ou
   );
   const r = Math.hypot(x, z);
   const clearing = 1 - THREE.MathUtils.smoothstep(r, 5, 10);
-  if (clearing > 0) out.lerp(YARD, clearing * 0.6);
+  if (clearing > 0) out.lerp(YARD, clearing * YARD_K);
   // smaller patches a few metres across (wave 4: the floor read as one smooth wash), on
   // the trodden clearing too, more softly: worn sand with tufts and darker soil
   const sp = groundSpeckle(x, z);
   const [lowHex, highHex] = BIOME_ACCENT_TONES[biome];
-  const k = 0.8 * (1 - 0.45 * clearing);
+  const k = 0.8 * (1 - YARD_WEAR * clearing);
   if (sp < 0.38) out.lerp(_a.set(lowHex).multiplyScalar(m), Math.min(1, (0.38 - sp) / 0.12) * k);
   else if (sp > 0.6) out.lerp(_a.set(highHex).multiplyScalar(m), Math.min(1, (sp - 0.6) / 0.12) * k);
   // the basin's bank darkens to wet peat only in the last metre above the water

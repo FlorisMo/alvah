@@ -516,6 +516,14 @@ export class Dressing {
       x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.3 + p.h * 0.32, rotY: i * 2.3, phase: (i % 7) * 0.9,
       tint: yardGreen.clone().multiplyScalar(0.92 + p.h * 0.16),
     }));
+    // …and under it a short sward all over the yard, so the ground between the tufts reads
+    // as sun-dried grass, not soil (where the arrival and the maker look: in front of the
+    // lens and round his spot). Low enough to walk through and never to hide his feet.
+    this.yardSpots(0.3 * thin, 79, (_x, _z, h, r) => h < 0.8 * THREE.MathUtils.smoothstep(r, 1.0, 1.8))
+      .forEach((p, i) => grassSpots.push({
+        x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.2 + p.h * 0.12, rotY: i * 2.7, phase: (i % 7) * 0.9,
+        tint: yardGreen.clone().multiplyScalar(0.86 + p.h * 0.22),
+      }));
     this.addField('heide-grass', tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), plantMaterial(), grassSpots, 40, 0.8);
     // stuifzand: helmgras tussocks, grey-green to straw, full sway in the open
     const marram = this.gridSpots('stuifzand', 2.9 * thin, 37, (_x, _z, h) => h < 0.62);
