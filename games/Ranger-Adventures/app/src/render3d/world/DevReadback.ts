@@ -129,9 +129,10 @@ export class DevReadback {
     const cam = this.camera;
     cam.updateMatrixWorld();
     cam.matrixWorldInverse.copy(cam.matrixWorld).invert(); // fresh frustum, not last-render's
-    // ranger centre from the SKELETON box (F-07): the extent that actually renders,
-    // so dist / avatarInView / avatarScreen can't sit on the bind-pose box that
-    // once framed a 1.7 m phantom while a ~170 m giant filled the lens (§4).
+    // ranger centre from his joints (Models.skinnedRenderBox: cheap enough to read every
+    // poll; it spans ~94 % of what he draws, head and soles left out, see
+    // Models.renderedBox), never the bind-pose geometry box that once framed a 1.7 m
+    // phantom while a ~170 m giant filled the lens (§4).
     const box = skinnedRenderBox(this.player.group) ?? this._camBox.setFromObject(this.player.group);
     const centre = box.getCenter(new THREE.Vector3());
     const dist = cam.position.distanceTo(centre);
