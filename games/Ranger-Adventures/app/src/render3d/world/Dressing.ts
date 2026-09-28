@@ -44,10 +44,12 @@ const CABIN_AT = { x: -4.2, z: -4 } as const;
 /** The cabin's yard: the grassy clearing round the spawn, crossed by the sand tracks (the
  *  heath's own plant fields start where it ends: gridSpots). */
 const YARD_R = 9;
-/** The yard stays open here: the ranger's own spot, the missiebord and its ring (the
- *  warden stands by it), the cabin and its porch. [x, z, radius] */
+/** The yard stays open here: the ranger's own spot, the ground between him and the lens
+ *  of the ranger maker (world/Presenter.ts: a little to his right, in front of him as he
+ *  turns round), the missiebord and its ring (the warden stands by it), the cabin and
+ *  its porch. [x, z, radius] */
 const YARD_OPEN: readonly (readonly [number, number, number])[] = [
-  [0, 0, 1.1], [2.2, -5, 2.8], [CABIN_AT.x, CABIN_AT.z, 3.4],
+  [0, 0, 1.1], [0.5, 1.7, 1.7], [2.2, -5, 2.8], [CABIN_AT.x, CABIN_AT.z, 3.4],
 ];
 
 /**

@@ -129,9 +129,9 @@ export function bootWorld(ui: HTMLElement, st: Stage, veil: { lift: () => void }
   provideTitleReady(() => titleUp && world.ready());
   const wait = (): void => {
     if (!world.ready()) { requestAnimationFrame(wait); return; }
+    showTitleCard({ afterVeil: true });
     veil.lift();
     titleUp = true;
-    showTitleCard();
   };
   wait();
 }
@@ -206,7 +206,7 @@ function buildWorld(): World {
  * and Begin (a click or Enter). Begin unlocks the sound inside the gesture (iOS), then
  * glides down to the ranger: into the maker the first time, straight into play after.
  */
-function showTitleCard(): void {
+function showTitleCard(opts: { after?: number; afterVeil?: boolean } = {}): void {
   const el = plainCard(
     `<div class="title-block">` +
     `<h1 class="title-mark">${esc(TITLE.naam)}</h1>` +
@@ -215,6 +215,11 @@ function showTitleCard(): void {
     `</div>`,
   );
   el.classList.add('title-overlay');
+  if (opts.afterVeil) el.classList.add('title-overlay--after-veil'); // the veil's name stays
+  // back from Pauze the camera is still rising to the title: the words wait for the sky
+  if (opts.after) {
+    el.querySelectorAll<HTMLElement>('.title-block > *').forEach((w, i) => w.style.setProperty('animation-delay', `${(opts.after ?? 0) + i * 160}ms`));
+  }
   const ra = readScreenAloud(el, { text: SAY.title, autoStart: store.get().settings.voorlezen }); // child:B12
   el.querySelector('.title-begin')?.addEventListener('click', () => {
     // iOS: the AudioContext must be made inside the tap, before anything awaits
@@ -240,6 +245,8 @@ export function enterPlay(): void {
   setScreen('world');
   setMissionView(null);
   showExploreHud(activeExploreTitel());
+  // the HUD comes in as the glide settles, not over the moving picture
+  session.host.querySelector('.explore-hud')?.classList.add('explore-hud--arriving');
 }
 
 /**
@@ -260,7 +267,7 @@ export function returnToTitle(): void {
     world.present('title', false);
     setScreen('title');
     setMissionView(null);
-  }, showTitleCard);
+  }, () => showTitleCard({ after: prefersReducedMotion() ? 0 : 900 }));
 }
 
 /** Resume free-roam after an in-world mission or menu: keep the world loaded,
