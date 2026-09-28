@@ -182,12 +182,16 @@ export function landingAltitude(dist: number): number {
 }
 
 /** The helicopter's footprint on the ground (nose along +z after the model turn), at
- *  its 3.3 m size (render3d/AnimalScale): the cabin on its skids (≈ 2 m wide, from
- *  0.75 m behind the centre to the nose at +2.3) and the tail boom back to −2.7. The
- *  rotor turns above a walker's head. */
+ *  its 3.3 m size (render3d/AnimalScale), measured off the model: the cabin on its skids
+ *  (≈ 2 m wide, from 0.75 m behind the centre to the nose at +2.3) as three circles, the
+ *  slim tail boom and its stabiliser (≈ 1.4 m across) back to −2.7. Close-fitting, so a
+ *  walker passing its side keeps the walk camera's room. The rotor turns above his head. */
 export const HELI_BODY: readonly BodyCircle[] = [
-  { along: 0.75, r: 1.45 },
-  { along: -1.9, r: 0.7 },
+  { along: 1.6, r: 0.95 },
+  { along: 0.55, r: 1.1 },
+  { along: -0.35, r: 1.0 },
+  { along: -1.5, r: 0.5 },
+  { along: -2.2, r: 0.6 },
 ];
 
 /**
