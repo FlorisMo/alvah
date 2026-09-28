@@ -20,7 +20,7 @@ import { keyToMove, isInteractKey, type MoveKey } from './input';
 export interface InputHandle {
   /** The live set of held movement directions — read each frame, never mutated by callers. */
   readonly held: ReadonlySet<MoveKey>;
-  /** Detach every listener (call from `World.dispose`). */
+  /** Detach every listener. */
   dispose(): void;
 }
 

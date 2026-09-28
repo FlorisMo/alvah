@@ -15,6 +15,7 @@
  *   world/Vehicles.ts    the jeep, the helicopter + pads, dust
  *   world/Player.ts      the ranger: rig, controls, on-foot step, footsteps
  *   world/CameraRig.ts   the follow camera and its comfort / visibility rails
+ *   world/Presenter.ts   the title and the ranger maker: shots of this world (present())
  *   world/DevReadback.ts the dev hook's read-backs
  *
  * Render layer only — it drives the spine through callbacks and holds no game logic.
