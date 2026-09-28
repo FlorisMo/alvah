@@ -677,6 +677,12 @@ export class Player {
     if (p) this.target.set(p.x, 0, p.z);
   }
 
+  /** How fast he is going on foot (m/s, the smooth ramped pace; backing up counts too):
+   *  the follow camera keeps the same trail behind him at any pace. */
+  get pace(): number {
+    return Math.abs(this.speedNow.v);
+  }
+
   /** The keys are turning him (tank turn, easing in or out) right now. */
   get turning(): boolean {
     return this.turnVel !== 0;
