@@ -22,6 +22,7 @@
 import * as THREE from 'three';
 import { livePolicy } from '../MotionMode';
 import { loadModel, prepModel } from '../Models';
+import { SIZE } from '../AnimalScale';
 import type { Biome } from '../Biomes';
 import type { MoveLimits, Obstacle } from '../CharacterController';
 import { resolveMove } from '../CharacterController';
@@ -82,6 +83,8 @@ const PAD_LAND_R = 6.0;
 /** The radius (m) of a drawn helipad. */
 export const PAD_RADIUS = 3.2;
 const DEPART_CLEAR = 15;
+// In the air the helicopter stays this far inside the move bound, out of the rim trees.
+const HELI_RIM_KEEP = 8;
 // Above this altitude (m) the flying helicopter is over every trunk and roof; below
 // it (lifting off, touching down) its body collides like the jeep's.
 const HELI_AIRBORNE_Y = 2.5;
@@ -94,9 +97,20 @@ export const PADS: readonly { readonly x: number; readonly z: number }[] = [
 ];
 
 // Where the rider sits, in the vehicle's own frame: x = left, y = up from the ground
-// the body rests on, z = forward. The Dutch driver's seat is on the left.
+// the body rests on, z = forward. The Dutch driver's seat is on the left. In the
+// helicopter (3.3 m, AnimalScale) he sits behind its side window and canopy, his head
+// at ≈ 2 m, so he shows through the glass (`glazeCanopy`).
 const JEEP_SEAT = new THREE.Vector3(0.36, 0.48, -0.22);
-const HELI_SEAT = new THREE.Vector3(0.28, 0.5, 0.5);
+const HELI_SEAT = new THREE.Vector3(0.38, 1.25, 1.0);
+// The helicopter's chase camera looks at it a little from the pilot's (left) side, so
+// the boy shows in its side window (straight behind, only its closed back shows). A
+// fixed framing: the camera follows the heading exactly as calmly as before. (A bearing
+// below the heading puts the lens behind his left shoulder.)
+const HELI_CHASE_YAW = -0.45;
+// Stepping out, he stands this far to the side of the vehicle's centre: clear of its
+// body (the jeep ≈ 0.9 m half-wide, the helicopter's skids ≈ 1.05).
+const JEEP_STEP_OUT = 2.4;
+const HELI_STEP_OUT = 2.8;
 // The seated pose of the ranger rig (ranger-alvah): absolute bone turns (Euler XYZ),
 // its idle stance with the thighs forward, the knees bent and the hands on the wheel.
 // Absolute, so boarding mid-stride still sits straight. A rig without these bones
@@ -310,6 +324,68 @@ export class Vehicles {
     return prepped;
   }
 
+  /**
+   * The helicopter's cockpit glass. The GLB is one opaque mesh whose texture paints the
+   * canopy and side windows near-black, so the pilot sat unseen inside it. The triangles
+   * painted black in the cockpit (the upper front of the body; the black engine cowls
+   * further back stay solid) move to a second, see-through material: the boy shows
+   * through the glass from the chase camera and from the side. The body turns
+   * double-sided so the glass looks into a cabin, not out through the far side. A copy
+   * of the geometry (the cached GLB's stays untouched); one extra draw call.
+   */
+  private static glazeCanopy(prepped: THREE.Group): void {
+    if (typeof document === 'undefined') return;
+    prepped.updateMatrixWorld(true);
+    const h = SIZE.helikopter.h;
+    prepped.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      const img = mat.map?.image as CanvasImageSource & { width: number; height: number } | undefined;
+      const uv = mesh.geometry.getAttribute('uv');
+      const pos = mesh.geometry.getAttribute('position');
+      if (!img || !uv || !pos || !img.width) return;
+      const cv = document.createElement('canvas');
+      cv.width = img.width; cv.height = img.height;
+      const g2 = cv.getContext('2d', { willReadFrequently: true });
+      if (!g2) return;
+      g2.drawImage(img, 0, 0);
+      const px = g2.getImageData(0, 0, cv.width, cv.height).data;
+      const geo = mesh.geometry.clone();
+      const index = geo.index ? Array.from(geo.index.array) : Array.from({ length: pos.count }, (_, i) => i);
+      const solid: number[] = [], glass: number[] = [];
+      const v = new THREE.Vector3();
+      for (let t = 0; t < index.length; t += 3) {
+        let u = 0, w = 0, y = 0, along = 0;
+        for (let k = 0; k < 3; k++) {
+          const i = index[t + k];
+          u += uv.getX(i) / 3; w += uv.getY(i) / 3;
+          v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+          y += v.y / 3; along += v.z / 3;
+        }
+        const tx = Math.min(cv.width - 1, Math.max(0, Math.floor((u - Math.floor(u)) * cv.width)));
+        const ty = Math.min(cv.height - 1, Math.max(0, Math.floor((w - Math.floor(w)) * cv.height)));
+        const p = (ty * cv.width + tx) * 4;
+        const luma = (0.2126 * px[p] + 0.7152 * px[p + 1] + 0.0722 * px[p + 2]) / 255;
+        const cockpit = y > 0.46 * h && y < 0.82 * h && along > 0;
+        (cockpit && luma < 0.16 ? glass : solid).push(index[t], index[t + 1], index[t + 2]);
+      }
+      if (!glass.length) return;
+      geo.setIndex([...solid, ...glass]);
+      geo.clearGroups();
+      geo.addGroup(0, solid.length, 0);
+      geo.addGroup(solid.length, glass.length, 1);
+      const body = mat.clone();
+      body.side = THREE.DoubleSide;
+      const pane = mat.clone();
+      pane.transparent = true;
+      pane.opacity = 0.32;
+      pane.depthWrite = false;
+      mesh.geometry = geo;
+      mesh.material = [body, pane];
+    });
+  }
+
   /** Push a parked vehicle's footprint into the shared collision list (the walker and
    *  the other vehicle collide with its real shape, not one round blob). */
   private park(x: number, z: number, heading: number, body: readonly BodyCircle[]): Obstacle[] {
@@ -354,7 +430,7 @@ export class Vehicles {
     this.jeepParked = this.park(x, z, this.jeepHeading, JEEP_BODY);
     void loadModel('vehicle-ranger-jeep').then((m) => {
       if (!m) return;
-      const prepped = Vehicles.prepVehicle(m, 1.9);
+      const prepped = Vehicles.prepVehicle(m, SIZE.jeep.h);
       const totem = group.children.find((c) => c.userData.totem);
       if (totem) group.remove(totem);
       group.add(prepped);
@@ -392,7 +468,8 @@ export class Vehicles {
     this.heliParked = this.park(pad.x, pad.z, this.heliHeading, HELI_BODY);
     void loadModel('vehicle-helicopter').then((m) => {
       if (!m) return;
-      const prepped = Vehicles.prepVehicle(m, 2.6);
+      const prepped = Vehicles.prepVehicle(m, SIZE.helikopter.h);
+      Vehicles.glazeCanopy(prepped);
       const totem = group.children.find((c) => c.userData.totem);
       if (totem) group.remove(totem);
       group.add(prepped);
@@ -630,11 +707,13 @@ export class Vehicles {
    * parked vehicle or a solid (verifier V1: stepped out beside the Missiebord, the lens
    * collapsed onto him and he faded to a see-through, giant ghost). Room = ≥ 2 m from
    * every solid, which also keeps him out of the board's and the bench's reach. None
-   * clear (a thicket): the roomiest. `side` = how far out beside the vehicle.
+   * clear (a thicket): the roomiest. `side` = how far out beside the vehicle; `face` =
+   * the way he will look (his walk camera's boom lies behind him along it).
    */
-  private exitSpot(x: number, z: number, h: number, side: number, body: readonly BodyCircle[]): { x: number; z: number } {
+  private exitSpot(x: number, z: number, h: number, side: number, body: readonly BodyCircle[], face = h): { x: number; z: number } {
     const fx = Math.sin(h), fz = Math.cos(h);
     const lx = Math.cos(h), lz = -Math.sin(h);         // left-of-forward
+    const bx = Math.sin(face), bz = Math.cos(face);    // his facing: the boom lies behind it
     const back = bodyReach(body) + 1.2;
     const offsets = [[lx * side, lz * side], [-lx * side, -lz * side], [-fx * back, -fz * back]];
     // the vehicle's own footprint as it is about to be parked (the walker and the lens see it)
@@ -647,9 +726,9 @@ export class Vehicles {
       let room = Infinity, boom = Infinity;
       for (const o of solids) room = Math.min(room, Math.hypot(p.x - o.x, p.z - o.z) - o.r);
       for (const o of solids.concat(parked)) {
-        // the gap between the boom (the segment behind him along −forward) and this circle
-        const t = Math.max(0, Math.min(BOOM, -((o.x - p.x) * fx + (o.z - p.z) * fz)));
-        boom = Math.min(boom, Math.hypot(o.x - (p.x - fx * t), o.z - (p.z - fz * t)) - o.r - PROBE);
+        // the gap between the boom (the segment behind him along −facing) and this circle
+        const t = Math.max(0, Math.min(BOOM, -((o.x - p.x) * bx + (o.z - p.z) * bz)));
+        boom = Math.min(boom, Math.hypot(o.x - (p.x - bx * t), o.z - (p.z - bz * t)) - o.r - PROBE);
       }
       const score = Math.min(room - 2, boom);
       if (score >= 0) return p;
@@ -659,14 +738,14 @@ export class Vehicles {
   }
 
   /** Step out of a vehicle onto the drawn ground, at `exitSpot` (the driver's door when
-   *  it has room). */
-  private stepOut(x: number, z: number, h: number, side: number, body: readonly BodyCircle[]): void {
+   *  it has room), looking along `face` (default: the way the vehicle points). */
+  private stepOut(x: number, z: number, h: number, side: number, body: readonly BodyCircle[], face = h): void {
     // exitSpot keeps him on solid ground inside the rim; the vehicle's footprint is not
     // back in the list yet, so he clears it fully
-    const next = this.exitSpot(x, z, h, side, body);
+    const next = this.exitSpot(x, z, h, side, body, face);
     const r = this.host.ranger;
     r.position.set(next.x, this.groundY(next.x, next.z), next.z);
-    r.rotation.set(0, h, 0, 'XYZ');
+    r.rotation.set(0, face, 0, 'XYZ');
     this.unseatRider();
     this.host.seat(false);              // F-31: back on foot — locomotion resumes (idle)
     this.host.stopWalk(next.x, next.z); // no stale walk target, standing still
@@ -701,7 +780,7 @@ export class Vehicles {
     if (!this.inVehicle || !this.jeep || !this.jeepPos) return;
     this.inVehicle = false;
     const h = this.jeepHeading;
-    this.stepOut(this.jeepPos.x, this.jeepPos.z, h, 2.4, JEEP_BODY);
+    this.stepOut(this.jeepPos.x, this.jeepPos.z, h, JEEP_STEP_OUT, JEEP_BODY);
     this.host.follow(h, true);          // the step-out is a CUT too
     this.vehicleSpeed = 0;
     this.jeepMoved = 0;
@@ -860,7 +939,7 @@ export class Vehicles {
     this.host.seat(true);
     this.seatRider(this.heli, HELI_SEAT);
     this.host.clearWalkPrompts();
-    this.host.follow(this.heliHeading, true);
+    this.host.follow(this.heliHeading + HELI_CHASE_YAW, true);
     this.onHeliChange(true);
     this.host.recut();
   }
@@ -887,8 +966,12 @@ export class Vehicles {
     const h = this.heliHeading;
     this.heliAltitude = HELI_PAD_HEIGHT;
     this.heliPos.y = this.groundY(this.heliPos.x, this.heliPos.z);
-    this.stepOut(this.heliPos.x, this.heliPos.z, h, 2.6, HELI_BODY);
-    this.host.follow(h, true);
+    // out of the helicopter he looks toward the clearing, not along the flight: the way
+    // back to the world lies ahead of him, and at his size the helicopter would otherwise
+    // stand in the walk camera's way as he turns home past it
+    const face = Math.atan2(-this.heliPos.x, -this.heliPos.z);
+    this.stepOut(this.heliPos.x, this.heliPos.z, h, HELI_STEP_OUT, HELI_BODY, face);
+    this.host.follow(face, true);
     this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
     this.heliParked = this.park(this.heliPos.x, this.heliPos.z, h, HELI_BODY);
     this.nearHeli = true;               // standing right beside it → "Stap in" again
@@ -958,7 +1041,8 @@ export class Vehicles {
       const next = resolveBody(hp.x, hp.z, this.heliHeading, nx, nz, nh, HELI_BODY, this.joined(solids, this.zones(false)), this.limits);
       nx = next.x; nz = next.z; nh = next.heading;
     } else {                                     // over the treetops: only the rim bounds it
-      const r = Math.hypot(nx, nz), lim = this.limits.bound - 2;
+      // (short of the rim tree-line: its grown crowns, up to ≈ 24 m, reach ≈ 6 m inward)
+      const r = Math.hypot(nx, nz), lim = this.limits.bound - HELI_RIM_KEEP;
       if (r > lim) { nx = (nx / r) * lim; nz = (nz / r) * lim; }
     }
     hp.x = nx; hp.z = nz;
@@ -969,7 +1053,7 @@ export class Vehicles {
     this.heli.rotation.set(0, this.heliHeading, HELI_ROLL, 'YXZ'); // yaw only; horizon level
     this.heliClimbRate = step.climbRate;
     this.seatRider(this.heli, HELI_SEAT);
-    this.host.follow(this.heliHeading, false);
+    this.host.follow(this.heliHeading + HELI_CHASE_YAW, false);
     for (const b of this.beacons) b.visible = true; // the pads glow while flying
     this.heliVignetteVal = heliVignette(this.heliSpeed, step.climbRate);
     // touchdown on the pad's centre: it rests there, the pilot still in his seat

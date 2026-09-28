@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { loadModel, loadRig, prepModel } from '../Models';
+import { SIZE } from '../AnimalScale';
 import { anchorInBiome, biomeAt, type Biome } from '../Biomes';
 import { applyEyes } from '../EyeMaterial';
 import { applyCoat, applyPosture } from '../AnimalDress';
@@ -24,7 +25,6 @@ import { boxObstacle, obstacleGap, type MoveLimits, type Obstacle } from '../Cha
 import type { Terrain } from './Terrain';
 import { Labels } from './Labels';
 import { proceduralTotem } from './props';
-import { standOnSoles } from '../play/spawn';
 import { mergeColourSplits } from '../play/merge';
 import { FarRest, restFar } from '../play/fade';
 
@@ -210,7 +210,6 @@ export class Markers {
           // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
           applyCalmPose(prepped, mk.modelId);
           mergeColourSplits(prepped); // one draw call per animal, not one per colour
-          standOnSoles(prepped); // on its hooves (or its lowest point), not in the ground
           // drop the totem (keep the ring), add the real animal
           const totem = group.children.find((c) => c.userData.totem);
           if (totem) group.remove(totem);
@@ -274,7 +273,7 @@ export class Markers {
     this.boardPos = boardAt.clone();
     void loadModel('prop-case-board').then((m) => {
       if (!m) return;
-      const prepped = prepModel(m, 1.8);
+      const prepped = prepModel(m, SIZE.missiebord.h);
       const totem = board.children.find((c) => c.userData.totem);
       if (totem) board.remove(totem);
       board.add(prepped); // keep the ring + label
