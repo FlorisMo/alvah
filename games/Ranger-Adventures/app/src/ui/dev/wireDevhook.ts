@@ -1,6 +1,6 @@
 /**
- * wireDevhook.ts — connects a live World to the `?dev=1` read-back hook
- * (`window.__ranger`, core/devhook.ts) and disconnects it again. Read-only state for
+ * wireDevhook.ts — connects the live World (built once, at boot) to the `?dev=1`
+ * read-back hook (`window.__ranger`, core/devhook.ts). Read-only state for
  * the browser tests; the one write (`winStep`) is the E2E shortcut the golden-path
  * test must never use.
  */
@@ -11,7 +11,7 @@ import {
   provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
-  provideHeli, provideQuality, provideHint, provideBoundary,
+  provideHeli, provideQuality, provideBoundary,
 } from '../../core/devhook';
 import { triggerActivityWin } from '../../render3d/play/kit';
 
@@ -44,35 +44,4 @@ export function wireWorldDevhook(world: World): void {
   provideHeli(() => world.heliState());               // W5.3b: opt-in helicopter
   provideQuality(() => world.qualityState());         // W7.2: adaptive quality tier
   provideWinStep(() => triggerActivityWin());         // W2.3: E2E-only resolve of a 3D step
-}
-
-/** Drop every world read-back (the world is gone). */
-export function clearWorldDevhook(): void {
-  providePos(null);
-  provideCameraYaw(null);
-  provideNearId(null);
-  provideMarkers(null);
-  provideBoard(null);
-  provideBoundary(null);
-  provideSitSpot(null);
-  provideClip(null);
-  provideAvatar(null);
-  provideGroundSpeed(null);
-  provideGrounded(null);
-  provideCam(null);
-  provideActors(null);
-  provideAmbient(null);
-  provideLandmarks(null);
-  provideDressing(null);
-  provideTreeSpots(null);
-  providePaths(null);
-  provideGroundDetail(null);
-  provideLighting(null);
-  provideSky(null);
-  provideFootsteps(null);
-  provideWater(null);
-  provideVehicle(null);
-  provideHeli(null);
-  provideQuality(null);
-  provideHint(null);
 }

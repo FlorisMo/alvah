@@ -46,10 +46,10 @@ test('ship: site build boots the world behind the pre-seeded gate, reports 2.1.0
   // The real shipped route, with the dev hook opened for state asserts.
   await page.goto('/ranger/?dev=1');
 
-  // Gate bypassed → the game shell mounts; the boot title renders from the
+  // Gate bypassed → the game shell mounts; the title over the world renders from the
   // production bundle.
   await expect(page.locator('canvas#scene')).toBeVisible();
-  await expect(page.locator('.boot-title')).toHaveText('Word boswachter', { timeout: 30_000 });
+  await expect(page.locator('.title-mark')).toHaveText('Ranger van de Veluwe', { timeout: 60_000 });
 
   // The SHIPPED bundle reports the SHIPPED version — the same string the live
   // curl asserts after deploy.

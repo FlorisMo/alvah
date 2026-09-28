@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import { loadModel, prepModel } from '../Models';
 import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, VEN_SHORE_R, WATER_LEVEL, type Biome } from '../Biomes';
 import { windSway } from '../Atmosphere';
-import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork } from '../Paths';
+import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork, trackSand } from '../Paths';
 import { WATER_DEEP, WATER_SHALLOW, WATER_TREES, WATER_OPACITY, FRESNEL_POWER, WATER_F0, rippleAmp } from '../Water';
 import { boxObstacle, obstacleGap, type Obstacle, type MoveLimits } from '../CharacterController';
 import type { TierParams } from '../../core/quality';
@@ -38,6 +38,17 @@ export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 // deterministic species pattern woven along the scatter/rim index — pine dominant.
 const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-scots', 'prop-oak-tree', 'prop-pine-scots', 'prop-birch-tree'];
 const NATURE_TREES = new Set<string>(['prop-pine-scots', 'prop-oak-tree', 'prop-birch-tree']);
+
+/** The ranger-cabin on the spawn clearing (forward-left of spawn; see placeCabin). */
+const CABIN_AT = { x: -4.2, z: -4 } as const;
+/** The cabin's yard: the grassy clearing round the spawn, crossed by the sand tracks (the
+ *  heath's own plant fields start where it ends: gridSpots). */
+const YARD_R = 9;
+/** The yard stays open here: the ranger's own spot, the missiebord and its ring (the
+ *  warden stands by it), the cabin and its porch. [x, z, radius] */
+const YARD_OPEN: readonly (readonly [number, number, number])[] = [
+  [0, 0, 1.1], [2.2, -5, 2.8], [CABIN_AT.x, CABIN_AT.z, 3.4],
+];
 
 /**
  * W4.1 landmarks: [dev-hook id, GLB model, world x/z, target Y-height (m), footprint half
@@ -212,7 +223,7 @@ export class Dressing {
     // hut BESIDE the back-turned ranger (see the rotation.y = π spawn) for the F-07
     // proportion shot AND the F-09 hub in the first frame. Sun from −x/+z still
     // throws the cabin shadow −z AWAY from the lit spawn. Its door faces spawn (below).
-    const cabinAt = new THREE.Vector3(-4.2, 0, -4);
+    const cabinAt = new THREE.Vector3(CABIN_AT.x, 0, CABIN_AT.z);
     cabinAt.y = this.groundY(cabinAt.x, cabinAt.z);
     this.cabinPos = cabinAt.clone(); // F-09: hub-in-frustum test reads this
     const cabin = new THREE.Group();
@@ -481,14 +492,27 @@ export class Dressing {
     const up = new THREE.Color();
     // heide: heather cushions where the ground is heather, grass where it is sandier
     const heather = this.gridSpots('heide', 2.3 * thin, 11, (x, z, h) => heathCover(x, z) > 0.32 + h * 0.3);
+    // the cabin's yard (the spawn clearing): a few heather mats at its edge, between the tracks
+    heather.push(...this.yardSpots(1.05 * thin, 71, (x, z, h, r) => r > 4.2 && heathCover(x * 1.7 + 9, z * 1.7 - 4) > 0.42 + h * 0.25));
     this.addField('heide-heather', heatherGeometry(5), plantMaterial(), heather.map((p, i) => ({
       x: p.x, y: this.groundY(p.x, p.z), z: p.z,
       s: 0.75 + p.h * 0.7, sy: 0.7 + p.h * 0.6, rotY: i * 2.39996,
       tint: up.setRGB(0.9 + p.h * 0.2, 0.9 + ((i * 7) % 5) * 0.03, 0.9 + p.h * 0.15).clone(),
     })), 50, 0, { geometry: heatherGeometry(5, 60), from: 16 });
     const heideGrass = this.gridSpots('heide', 3.1 * thin, 23, (x, z, h) => heathCover(x, z) < 0.55 + h * 0.2);
-    this.addField('heide-grass', tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), plantMaterial(),
-      heideGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.45 + p.h * 0.35, rotY: i * 1.7, phase: (i % 7) * 0.9 })), 40, 0.8);
+    const grassSpots: PlantSpot[] = heideGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.45 + p.h * 0.35, rotY: i * 1.7, phase: (i % 7) * 0.9 }));
+    // …and the yard's grass, greener than the heath's straw (it is the cabin's own patch):
+    // thick along the tracks' edges and toward the yard's rim, short in the middle, where
+    // it is walked every day
+    const yardGreen = new THREE.Color(0.8, 0.98, 0.6);
+    this.yardSpots(0.5 * thin, 73, (x, z, h, r) => {
+      const byTrack = trackSand(x, z) > 0 || distanceToNetwork(x, z) < 2.6 ? 0.35 : 0;
+      return h < Math.min(0.92, 0.22 + THREE.MathUtils.smoothstep(r, 2, 7.5) * 0.5 + byTrack);
+    }).forEach((p, i) => grassSpots.push({
+      x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.3 + p.h * 0.32, rotY: i * 2.3, phase: (i % 7) * 0.9,
+      tint: yardGreen.clone().multiplyScalar(0.92 + p.h * 0.16),
+    }));
+    this.addField('heide-grass', tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), plantMaterial(), grassSpots, 40, 0.8);
     // stuifzand: helmgras tussocks, grey-green to straw, full sway in the open
     const marram = this.gridSpots('stuifzand', 2.9 * thin, 37, (_x, _z, h) => h < 0.62);
     this.addField('stuifzand-helmgras', tuftGeometry({ blades: 22, seed: 5, root: '#6c7552', tip: '#dccf9e', lean: 0.24, width: 0.03 }), plantMaterial(),
@@ -508,9 +532,52 @@ export class Dressing {
     void this.scatterGlbPlants(veg, thin);
   }
 
+  /**
+   * Spots on a jittered `cell` m grid over the cabin's yard (the spawn clearing, which
+   * `gridSpots` leaves out): never on the sand tracks, and the ranger's own spot, the
+   * missiebord's ring and the cabin's porch stay open. `keep(x, z, h, r)` thins them
+   * (h: a stable per-spot random in [0,1), r: the distance from the spawn).
+   */
+  private yardSpots(cell: number, seed: number, keep: (x: number, z: number, h: number, r: number) => boolean): { x: number; z: number; h: number }[] {
+    const out: { x: number; z: number; h: number }[] = [];
+    const n = Math.ceil(YARD_R / cell);
+    for (let gx = -n; gx < n; gx++) for (let gz = -n; gz < n; gz++) {
+      const x = (gx + hash2(gx, gz, seed)) * cell, z = (gz + hash2(gx, gz, seed + 1)) * cell;
+      const r = Math.hypot(x, z);
+      if (r >= YARD_R) continue;                                     // past it the heath's own field grows
+      if (trackSand(x, z) > 0.15) continue;                          // the tracks stay sand
+      if (YARD_OPEN.some(([ox, oz, or]) => Math.hypot(x - ox, z - oz) < or)) continue;
+      const h = hash2(gx, gz, seed + 2);
+      if (keep(x, z, h, r)) out.push({ x, z, h });
+    }
+    return out;
+  }
+
+  /** Foxgloves by the cabin: a few pink spires either side of its porch and along its
+   *  sunny wall (walk-through, one instanced draw call). */
+  private async plantYardFlowers(): Promise<void> {
+    const m = await loadModel('prop-foxglove');
+    if (!m) return;
+    const [geo] = lodGeometries('prop-foxglove@1', prepModel(m, 1), [1600]);
+    if (!geo) return;
+    const face = Math.atan2(-CABIN_AT.x, -CABIN_AT.z);             // the cabin faces the spawn
+    const fx = Math.sin(face), fz = Math.cos(face), sx = fz, sz = -fx; // its front and its side
+    // [along the front, out from the wall] in m, from the cabin's centre
+    const AT: readonly (readonly [number, number])[] = [
+      [-2.55, 1.5], [-2.3, 2.25], [-2.8, 0.7], [2.5, 1.6], [2.75, 0.8], [2.35, 2.35], [-2.6, -0.4], [2.7, -0.3],
+    ];
+    const spots: PlantSpot[] = AT.map(([a, o], i) => {
+      const x = CABIN_AT.x + sx * a + fx * o, z = CABIN_AT.z + sz * a + fz * o;
+      const h = hash2(i, 5, 77);
+      return { x, y: this.groundY(x, z) - 0.02, z, s: 0.7 + h * 0.45, rotY: i * 2.39996, phase: (i % 5) * 1.1 };
+    });
+    this.addField('yard-vingerhoedskruid', geo, lodMaterial(), spots, 60, 0.35);
+  }
+
   /** The two real-GLB plants, simplified for the crowd (Lod.ts): adelaarsvaren in the bos
    *  and lisdodde (the reed belt, D3.2: a tight ring on the bank just above the water). */
   private async scatterGlbPlants(veg: number, thin: number): Promise<void> {
+    void this.plantYardFlowers();
     const fern = await loadModel('prop-fern');
     if (fern) {
       const [geo, far] = lodGeometries('prop-fern@1', prepModel(fern, 1), [2000, 600]);

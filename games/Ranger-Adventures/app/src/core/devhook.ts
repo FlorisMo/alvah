@@ -185,12 +185,10 @@ export interface RangerDevHook {
   /** Win the active 3D mission step via its genuine resolve path; true if one
    *  was pending. Drives the two-mission-chain E2E deterministically (W2.3). */
   winStep(): boolean;
-  /** D3.17: true once the composed TITLE has swapped its real hero props (cabin + tree line +
-   *  prikbord) in over the instant primitive stand-ins — the title reads at FULL fidelity, never
-   *  the low-poly cone/faceted backdrop. False while only the stand-in is up (fresh boot mid-dress,
-   *  or a world→title round-trip mid-re-dress). The capture HOLDS the title snap until this is true
-   *  so a composed title is never shot on its low-LOD stand-in world (fresh `d17-titlereturn-17`).
-   *  Reads the Stage directly, so it is meaningful on the title screen regardless of the world. */
+  /** True once the title is up over a READY world: the boot veil has lifted (every model
+   *  the world asked for has arrived, or the cap passed) and the title block is shown.
+   *  The title is a shot of the live world (world/Presenter.ts), so this is also true on
+   *  a return from Pauze. Read it to wait for the title, never to skip it. */
   titleReady(): boolean;
   /** The scenic story-arc actors (warden + poacher) with their measured rendered
    *  stand-height `height` (m) + live baked-clip {name, time}, or null before the
@@ -580,8 +578,8 @@ export function provideWinStep(fn: (() => boolean) | null): void {
   state.winStep = fn;
 }
 
-/** Register the D3.17 title-fidelity-ready source (the Stage's `titleReady()`). Always live —
- *  it reads the Stage, which owns the title backdrop regardless of the world screen. */
+/** Register the title-ready source (WorldSession.bootWorld: the world is ready and the
+ *  title block has been shown). */
 export function provideTitleReady(fn: (() => boolean) | null): void {
   state.titleReady = fn;
 }

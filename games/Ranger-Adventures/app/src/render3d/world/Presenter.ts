@@ -40,12 +40,15 @@ export class Presenter {
   /** The title pose, relative to the spawn (m): the lens and the point it looks at.
    *  Found by looking at candidate frames of the real clearing. */
   readonly title = {
-    lens: new THREE.Vector3(-3.4, 2.5, 8.2),
-    look: new THREE.Vector3(0.2, 3.4, -10),
+    // low over the heath behind him and to his right: heather and grass in the front,
+    // the ranger on the sand track by his cabin, the missiebord and the oaks, a stag far
+    // off on the heath, the tree line in the haze and the sky free for the title
+    lens: new THREE.Vector3(3.8, 1.8, 7.4),
+    look: new THREE.Vector3(-3.2, 2.3, -14),
   };
   /** The maker: the lens stands this far round from straight behind the spawn heading
    *  (rad, + = to his right as he walks off), and its eye at this share of his height. */
-  readonly maker = { bearing: 0.32, eye: 0.62, fill: 0.62 };
+  readonly maker = { bearing: 0.32, eye: 0.62, fill: 0.56 };
 
   private move: { update: (dt: number) => boolean } | null = null;
   private turn: { from: number; to: number; t: number } | null = null;

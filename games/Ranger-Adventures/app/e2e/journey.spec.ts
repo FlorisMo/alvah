@@ -31,7 +31,7 @@ test('journey: Begin → avatar → world (≤2 clicks), screen reaches "world" 
   // A fresh browser context has no saved avatar, so "Begin" routes through the
   // avatar creator — the genuine first-boot journey.
   await page.goto('/?dev=1'); // the hook; CI serves the production build, where only ?dev=1 installs it
-  await expect(page.locator('.boot-title')).toHaveText('Word boswachter');
+  await expect(page.locator('.title-mark')).toHaveText('Ranger van de Veluwe', { timeout: 60_000 });
   expect(await screen(page)).toBe('title');
   await shot(page, 'journey-1-title');
 

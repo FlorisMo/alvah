@@ -22,7 +22,7 @@ import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-
 import { BIOME_PALETTE, VEN_CENTER, VEN_SHORE_R, WATER_LEVEL, biomeAt, heightAt, type Biome } from '../Biomes.ts';
 import { BIOME_ACCENT_TONES, BIOME_GROUND_TONES, GROUND_BRIGHTEN, groundPatch, groundSpeckle, heathCover, vertexTint } from '../GroundDetail.ts';
 import { groundMaterial, mottleTexture } from '../GroundMaterial.ts';
-import { PATH_NODES, PATH_SEGMENTS, distanceToNetwork } from '../Paths.ts';
+import { PATH_NODES, PATH_SEGMENTS, distanceToNetwork, trackSand } from '../Paths.ts';
 
 // three-mesh-bvh accelerated raycasts: the tap-to-walk ray (and the dev-hook ground
 // check) hit the ~18k-triangle terrain in O(log n). A mesh without a boundsTree falls
@@ -46,7 +46,7 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 const _a = new THREE.Color();
 const _b = new THREE.Color();
 const WET = new THREE.Color('#4a4d33');   // wet moss and peat right at the ven's waterline
-const CLEAR = new THREE.Color('#c2b089'); // trodden sand and dry grass round the lodge
+const YARD = new THREE.Color('#8f9656');  // the cabin's yard: short, sun-dried grass (the sand tracks cross it)
 const FAR = new THREE.Color('#57533a');   // forest floor past the rim: shade under the tree-line
 
 /**
@@ -54,7 +54,7 @@ const FAR = new THREE.Color('#57533a');   // forest floor past the rim: shade un
  * ground tones (the heide by its heather cover, the others by the patch field) and
  * adds the soft brightness wash (W4.4/P1.2); without it every biome is its flat
  * palette colour (the `?groundDetail=off` baseline). On top: the lodge clearing is
- * trodden sand, smaller patches a few metres across break every landschap up (its
+ * the cabin's yard of short dry grass (the sand tracks cross it), smaller patches a few metres across break every landschap up (its
  * BIOME_ACCENT_TONES by `groundSpeckle`), the ven basin's bank turns to wet peat just
  * above the water, and past the rim the ground falls into the forest's shade (so no pale
  * "dune" shows behind the tree-line).
@@ -75,7 +75,7 @@ export function groundColor(x: number, z: number, h: number, detail: boolean, ou
   );
   const r = Math.hypot(x, z);
   const clearing = 1 - THREE.MathUtils.smoothstep(r, 5, 10);
-  if (clearing > 0) out.lerp(CLEAR, clearing * 0.85);
+  if (clearing > 0) out.lerp(YARD, clearing * 0.6);
   // smaller patches a few metres across (wave 4: the floor read as one smooth wash), on
   // the trodden clearing too, more softly: worn sand with tufts and darker soil
   const sp = groundSpeckle(x, z);
@@ -108,7 +108,7 @@ export function groundMix(x: number, z: number, h: number): [number, number, num
     default: mix = inBasin ? [0, 0.15, 0.1, 0.7] : [0.25, 0, 0.1, 0.8]; // ven: the wet bank / the wet heath
   }
   if (inBasin && h < WATER_LEVEL + 0.9) mix = [0, 0, 0, 0.5];      // wet peat: smooth
-  if (clearing > 0) mix = mix.map((v, i) => v * (1 - clearing) + [0, 0, 0.7, 0.5][i] * clearing) as typeof mix;
+  if (clearing > 0) mix = mix.map((v, i) => v * (1 - clearing) + [0, 0, 0.3, 0.85][i] * clearing) as typeof mix;
   return mix;
 }
 
@@ -147,7 +147,7 @@ export function buildTerrainGeometry(detail: boolean): THREE.BufferGeometry {
  * uv for its mottle map, so drawn with the ground's material it has no seam). The colour
  * comes from the distance to the whole NETWORK, not to its own ribbon, so where ribbons
  * overlap (the spokes at the clearing) both draw the same colour and never flicker. The
- * tracks start at the edge of the trodden spawn clearing. Every vertex sits 3 cm over the
+ * tracks run in to the spawn, a sandy crossroads in the yard. Every vertex sits 3 cm over the
  * drawn ground (under the 5 cm halo rings). Wound to face UP: the old ribbon faced down, so
  * it was back-face culled and no path was ever drawn (parent B11 "flat brown ground").
  */
@@ -161,11 +161,7 @@ export function buildPathGeometry(terrain: Terrain): THREE.BufferGeometry {
   const positions: number[] = [], colors: number[] = [], mixes: number[] = [], uvs: number[] = [], indices: number[] = [];
   const gc: number[] = [], gm: number[] = [];
   // how sandy the track is at (x,z) from the network's centreline: 0 = the ground itself
-  const profile = (d: number): { sand: number; mid: number } => {
-    const edge = 1 - THREE.MathUtils.smoothstep(d, 1.05, 1.9);  // the sandy band fades out at its edges
-    const mid = 1 - THREE.MathUtils.smoothstep(d, 0.2, 0.45);    // the grassy strip between the ruts
-    return { sand: edge, mid };
-  };
+  const midStrip = (d: number): number => 1 - THREE.MathUtils.smoothstep(d, 0.2, 0.45); // the grassy strip between the ruts
   for (const [i, j] of PATH_SEGMENTS) {
     const a = PATH_NODES[i], b = PATH_NODES[j];
     const dx = b.x - a.x, dz = b.z - a.z;
@@ -182,9 +178,10 @@ export function buildPathGeometry(terrain: Terrain): THREE.BufferGeometry {
         uvs.push((x + 120) / 240, (120 - z) / 240);   // the ground plate's own uv (its mottle map)
         terrain.sampleAttr('color', x, z, gc);
         const d = distanceToNetwork(x, z);
-        const prof = profile(d), mid = prof.mid;
-        // the tracks start at the edge of the trodden spawn clearing (Terrain paints that)
-        const s = prof.sand * THREE.MathUtils.smoothstep(Math.hypot(x, z), 6, 11);
+        const mid = midStrip(d);
+        // the track to the missiebord runs from the spawn, the others come in from the
+        // edge of the cabin's grassy yard (Paths.trackSand; the yard's grass reads it too)
+        const s = trackSand(x, z);
         // ruts of sand (a touch darker in the wheel tracks), a strip of the ground's own
         // growth between them, the ground itself at the edges
         c.copy(sand).lerp(rut, THREE.MathUtils.smoothstep(d, 0.45, 0.9) * (1 - THREE.MathUtils.smoothstep(d, 0.9, 1.2)));

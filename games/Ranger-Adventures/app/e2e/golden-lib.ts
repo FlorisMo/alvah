@@ -358,17 +358,20 @@ export async function holdKey(page: Page, key: string, ms: number): Promise<{ du
  * it; (hair) takes the strip's mean Lab and the nearest option. `options` are
  * "id=#rrggbb" strings from core/avatar.ts.
  */
-export async function renderedLook(page: Page, options: { jacket: string[]; hair: string[] }): Promise<{ jacket: string; jacketShare: number; hair: string } | null> {
+export async function renderedLook(page: Page, options: { jacket: string[]; hair: string[]; front?: boolean }): Promise<{ jacket: string; jacketShare: number; hair: string } | null> {
   const c = await R<Cam | null>(page, 'r.cam()');
   if (!c || !c.avatarScreen.onScreen) return null;
   const vp = page.viewportSize()!;
   const cx = ((c.avatarScreen.x + 1) / 2) * vp.width;
   const cy = ((1 - c.avatarScreen.y) / 2) * vp.height;
   const h = c.avatarScreen.heightFrac * vp.height;
-  const clip = (y0: number, y1: number, halfW: number) => ({
-    x: Math.max(0, cx - halfW * h), y: Math.max(0, cy + y0 * h), width: Math.max(2, 2 * halfW * h), height: Math.max(2, (y1 - y0) * h),
+  const clip = (y0: number, y1: number, halfW: number, dx = 0) => ({
+    x: Math.max(0, cx + dx * h - halfW * h), y: Math.max(0, cy + y0 * h), width: Math.max(2, 2 * halfW * h), height: Math.max(2, (y1 - y0) * h),
   });
-  const jacketPng = (await page.screenshot({ clip: clip(-0.14, 0.1, 0.1) })).toString('base64');
+  // from behind the jacket fills his back; from the front (the maker) it is open over
+  // his shirt, so read the two jacket fronts beside it
+  const jacketClips = options.front ? [clip(-0.16, 0.04, 0.045, -0.105), clip(-0.16, 0.04, 0.045, 0.105)] : [clip(-0.14, 0.1, 0.1)];
+  const jacketPng = await Promise.all(jacketClips.map(async (k) => (await page.screenshot({ clip: k })).toString('base64')));
   const hairPng = (await page.screenshot({ clip: clip(-0.5, -0.32, 0.09) })).toString('base64');
   return page.evaluate(async ({ jacketPng, hairPng, jacket, hair }) => {
     const lab = (r: number, g: number, b: number): [number, number, number] => {
@@ -388,13 +391,15 @@ export async function renderedLook(page: Page, options: { jacket: string[]; hair
     };
     const opts = (list: string[]) => list.map((s) => { const [id, col] = s.split('='); return { id, lab: lab(...hex(col)) }; });
     const jo = opts(jacket); const votes = new Map<string, number>(); let n = 0;
-    const jp = await pixels(jacketPng);
+    for (const png of jacketPng) {
+    const jp = await pixels(png);
     for (let i = 0; i < jp.length; i += 4) {
       const [L, a, b] = lab(jp[i], jp[i + 1], jp[i + 2]);
       if (L < 8 || Math.hypot(a, b) < 6) continue; // too dark / grey to carry a colour
       const ang = Math.atan2(b, a); let best = ''; let bd = Infinity;
       for (const o of jo) { let d = Math.abs(ang - Math.atan2(o.lab[2], o.lab[1])); if (d > Math.PI) d = 2 * Math.PI - d; if (d < bd) { bd = d; best = o.id; } }
       votes.set(best, (votes.get(best) ?? 0) + 1); n += 1;
+    }
     }
     let jWin = 'none'; let jCount = 0;
     for (const [k, v] of votes) if (v > jCount) { jWin = k; jCount = v; }
