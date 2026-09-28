@@ -28,7 +28,7 @@ import {
 import { setScreen } from '../core/devhook';
 import { readScreenAloud } from './ReadAloud';
 import { SAY, MAKER } from '../content/screens';
-import type { World } from '../render3d/World';
+import type { World, Focus } from '../render3d/World';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -58,12 +58,14 @@ function groupHtml(kenmerk: AvatarKenmerk, av: Avatar): string {
 }
 
 /** Where the panel leaves the screen free (fractions of the canvas), for the ranger. */
-function freeFocus(panel: HTMLElement): { x: number; y: number; h: number } {
+function freeFocus(panel: HTMLElement): Focus {
   const W = window.innerWidth || 1, H = window.innerHeight || 1;
-  const r = panel.getBoundingClientRect();
-  if (r.width < 1) return { x: 0.5, y: 0.5, h: 1 };
-  if (r.left > W * 0.3) return { x: Math.max(0.2, r.left / 2 / W), y: 0.5, h: 1 }; // a panel on the right
-  const top = Math.max(0.3 * H, r.top);                                           // a sheet along the bottom
+  // its laid-out box (offset*: without the slide-in transform, so the aim never moves
+  // while the panel eases in); the overlay it sits in fills the screen
+  const left = panel.offsetLeft, top0 = panel.offsetTop;
+  if (panel.offsetWidth < 1) return { x: 0.5, y: 0.5, h: 1 };
+  if (left > W * 0.3) return { x: Math.max(0.2, left / 2 / W), y: 0.5, h: 1, w: left / W }; // a panel on the right
+  const top = Math.max(0.3 * H, top0);                                          // a sheet along the bottom
   return { x: 0.5, y: top / 2 / H, h: top / H };
 }
 

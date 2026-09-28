@@ -172,7 +172,7 @@
   .av-overlay--leaving .avatar-creator { animation-name: av-down; }
   @keyframes av-down { to { opacity: 0; transform: translateY(28px); } }
   .av-group { grid-template-columns: 1fr; }
-  .av-foot { position: sticky; bottom: 0; }
+  .av-foot { position: sticky; bottom: 0; background: rgba(253, 252, 248, 0.98); }
 }
 
 /* reduced motion (.rm body class): no slide, no scale pop; keep the ✓ + ring channels */

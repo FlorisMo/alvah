@@ -27,8 +27,9 @@ import type { Player } from './Player';
 export type Shot = 'title' | 'maker';
 
 /** Where the ranger should stand on screen, as fractions of the canvas (0..1 from the
- *  left / the top), and how much of the canvas height he may fill. */
-export interface Focus { x: number; y: number; h: number }
+ *  left / the top), and how much of the canvas height (`h`) and width (`w`, when the
+ *  free part is narrow) he may take. */
+export interface Focus { x: number; y: number; h: number; w?: number }
 
 const TITLE_DRIFT_M = 0.25;   // the title's slow drift: this far to each side …
 const TITLE_DRIFT_S = 22;     // … over this long a cycle (secondary motion, off when reduced)
@@ -161,7 +162,9 @@ export class Presenter {
     const f = this.focus();
     const H = this.player.avatarTopY;                   // his measured height
     const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
-    const d = H / (this.maker.fill * f.h * 2 * tanV);  // he fills `fill` of the free height
+    // he fills `fill` of the free height, and stands (about half as wide as he is tall)
+    // within three quarters of the free width when that is the narrower
+    const d = Math.max(H / (this.maker.fill * f.h * 2 * tanV), (0.5 * H) / (0.75 * (f.w ?? 1) * 2 * tanV * this.camera.aspect));
     const b = this.spawn.heading + Math.PI + this.maker.bearing; // from him toward the lens
     const lx = x + Math.sin(b) * d, lz = z + Math.cos(b) * d;
     this.pose.lens.set(lx, y + H * this.maker.eye, lz);
