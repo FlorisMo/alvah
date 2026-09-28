@@ -21,10 +21,13 @@ import { resolveMove, type MoveLimits, type Obstacle } from '../CharacterControl
 import { PlayerRig } from '../PlayerRig';
 import {
   screenVector, tankAxes, turnStep, approachAngle, stickBackpedal, stickHeading, wrapPi,
-  JOYSTICK_DEADZONE, ALIGN_GAP, BACK_SPEED, PIVOT_RATE, TURN_RATE, type StickVector,
+  stickWalkShare, stickRun, rampSpeed,
+  JOYSTICK_DEADZONE, ALIGN_GAP, BACK_SPEED, PIVOT_RATE, TURN_RATE, WALK_SPEED, RUN_SPEED, type StickVector, type SpeedRamp,
 } from '../../core/input';
 import { attachInput, type InputHandle } from '../../core/attach-input';
-import { footSurface, stepFrame, newFootAccum, type FootAccum, type FootSurface } from '../../core/footstep';
+import { footSurface, stepFrame, newFootAccum, MIN_STEP_SPEED, type FootAccum, type FootSurface } from '../../core/footstep';
+import type { Gait } from '../PlayerAnim';
+import type { SoleProbe } from '../PlayerRig';
 import { Sound } from '../../core/sound';
 import { store } from '../../core/state';
 import type { Terrain } from './Terrain';
@@ -53,6 +56,14 @@ const CAM_BEHIND_GAP = (75 * Math.PI) / 180;
 /** The stick backs him up (instead of turning him round) only while he faces within
  *  this angle of into-the-screen. */
 const BACKPEDAL_FACING = (45 * Math.PI) / 180;
+
+/** A tap-walk eases in over its last stretch: he goes no faster than this many metres
+ *  per second per metre still to go (he arrives, never brakes on the spot). */
+const ARRIVE_EASE = 3;
+
+/** Moved further than this (m) between two of his own frames: someone else put him there
+ *  (stepping out of the jeep, back from a mission), so he starts from standing. */
+const TELEPORT_M = 0.75;
 
 /** Who steered the ranger this frame. */
 type DriveMode = 'keys' | 'stick' | 'tap';
@@ -109,23 +120,28 @@ export class Player {
   avatarTopY: number = RANGER_STAND_HEIGHT; // D1.5 measured head height (feet→top; the 1.32 m boy) — the occluder-fade sightline aim; measureAvatar overwrites it off the live rig
   avatarOpacity = 1;            // current applied ranger fade (avoids churn)
   castsShadow = false;                  // W4.5: the ranger is the primary hero shadow caster once loaded
-  // F-08: on-foot ground speed (m/s). Retuned down from the giant-tuned 2.4 (which
-  // measured ~2.7–3.5 m/s on the ground, 65–85 % of jeep speed) to a human ~1.8 m/s
-  // now that F-07 sizes the ranger honestly. The jeep (max 6 m/s) stays clearly
-  // faster — speed is its reason to exist. Drives BOTH the key-held and tap-to-walk
-  // seek below; the walk clip's cadence is tied to the resulting ground speed.
-  private readonly speed = 1.8;
-  // W3.2 player animation: the mixer wrapper (idle/walk crossfade by speed, or a
+  // Run 6: how fast he goes, ramped (core/input rampSpeed): + along his heading, − when
+  // backing up. Brisk walking (WALK_SPEED, was 1.8), running with Shift or the stick at
+  // its rim (RUN_SPEED); the jeep (6 m/s) stays the fast way round. The step, and from
+  // it his legs, his footsteps and rangerMotion(), all follow this one speed.
+  private speedNow: SpeedRamp = { v: 0, a: 0 };
+  private stickRunning = false; // the stick's run latch (hysteresis, core/input stickRun)
+  private lastX = 0;
+  private lastZ = 0;
+  // W3.2 player animation: the mixer wrapper (idle/walk/run blended by speed, or a
   // procedural bob when the rigged GLB lacks clips). `groundSpeedNow` is the ranger's
-  // post-collision ground speed (m/s), fed to the crossfade each frame.
+  // post-collision ground speed (m/s), fed to the blend each frame.
   readonly rig = new PlayerRig();
   groundSpeedNow = 0;
+  /** The stick's ring shows when he runs (the HUD wires it to the joystick). */
+  stickRunFeedback: ((running: boolean) => void) | null = null;
   // W4.7b surface-aware footsteps: a distance-carry cadence (fires every stride
   // of ground actually covered), gated on sound + speed + biome surface.
   // Locomotion feedback, so NOT reduced-motion gated (§3.4 exempts locomotion).
   private footAccum: FootAccum = newFootAccum();
   private footstepCount = 0;
   private lastFootSurface: FootSurface | null = null;
+  private hereBiome: Biome | null = null; // the biome underfoot (the footsteps' surface)
   // keyboard (+ joystick) movement: the held-keys set feeds resolveInput →
   // resolveMove each frame, overriding tap-to-walk while any key is down (§3.2).
   private input: InputHandle | null = null;
@@ -142,6 +158,7 @@ export class Player {
   private drive: DriveMode | null = null;
   private frame = Math.PI;
   private tapStuck = 0;
+  private tapRun = false; // the tap was made with Shift held: he runs there
   private camNow: { yaw: number; tau: number; maxRate: number } | null = null;
   // F-11: latched true while the ranger is pressed against the world rim heading
   // outward (the calm "Hier stopt het bos" cue has fired); re-armed once he walks
@@ -250,7 +267,10 @@ export class Player {
       this.turnVel = 0;
       this.camNow = null;
     }
+    // ...or put him somewhere else: he starts from standing there (no coasting on)
+    if (Math.hypot(rp.x - this.lastX, rp.z - this.lastZ) > TELEPORT_M) this.speedNow = { v: 0, a: 0 };
     const held = this.input?.held;
+    const shift = this.input?.run ?? false;
     const keys = held && held.size > 0 ? held : null;
     const raw = this.joystickSource ? this.joystickSource() : null;
     const stick = !keys && raw && Math.hypot(raw.x, raw.y) >= JOYSTICK_DEADZONE ? raw : null;
@@ -272,13 +292,14 @@ export class Player {
 
     let speedK = 0;        // share of the walking speed this frame
     let back = false;      // backing up: walk opposite his heading, facing unchanged
+    let run = false;       // Shift (or the stick at its rim): he runs. Never backing up.
     if (mode === 'keys' && view.follows) {
       // TANK: Up/Down along his heading, Left/Right turn it. If the view looks well off
       // his heading when the walk starts (a mouse drag, a tap-walk, the jeep), he first
       // turns to face into the screen, so Up is always "into the screen".
       if (starting && Math.abs(wrapPi(view.bearing - this.heading)) > ALIGN_GAP) this.heading = view.bearing;
       const ax = tankAxes(keys!);
-      if (ax.fwd !== 0) { speedK = ax.fwd > 0 ? 1 : BACK_SPEED; back = ax.fwd < 0; }
+      if (ax.fwd !== 0) { speedK = ax.fwd > 0 ? 1 : BACK_SPEED; back = ax.fwd < 0; run = ax.fwd > 0 && shift; }
     } else if (mode === 'keys' || mode === 'stick') {
       // screen-relative: the stick (and, with the follow camera off, the keys) point
       // where to go on the screen as it was when the walk started (a latched frame, so
@@ -290,22 +311,37 @@ export class Player {
         // a stick pulled down backs him up like the Down key, but only while he faces
         // into the screen; otherwise "down" walks down the screen, toward the camera
         const intoScreen = Math.abs(wrapPi(this.facing - this.frame)) <= BACKPEDAL_FACING;
-        if (mode === 'stick' && view.follows && intoScreen && stickBackpedal(v)) { speedK = m * BACK_SPEED; back = true; }
-        else { this.heading = stickHeading(v, this.frame); speedK = m; }
+        if (mode === 'stick' && view.follows && intoScreen && stickBackpedal(v)) {
+          speedK = stickWalkShare(m) * BACK_SPEED; back = true; this.stickRunning = false;
+        } else {
+          this.heading = stickHeading(v, this.frame);
+          // the stick walks at full speed from ~80 % of its travel and runs at its rim
+          if (mode === 'stick') { speedK = stickWalkShare(m); run = this.stickRunning = stickRun(m, this.stickRunning); }
+          else { speedK = m; run = shift; }
+        }
       }
     } else if (mode === 'tap') {
       this.heading = Math.atan2(dxT, dzT);
       speedK = 1;
+      run = this.tapRun || shift; // Shift held on the click (or now): he runs there
     }
+    if (mode !== 'stick') this.stickRunning = false;
     if (tank) this.heading = wrapPi(this.heading + this.turnVel * dt);
 
     // the body swings round to the heading (only the ranger turns, never the camera)
     const pivotFrom = this.facing;
     this.facing = approachAngle(this.facing, this.heading, PIVOT_RATE * dt);
     this.group.rotation.y = this.facing;
+    // how fast he wants to go (+ along his heading, − backing up), eased in and out: a
+    // start, a stop and the walk↔run switch take ~0.3 s, and a released key coasts him a
+    // short way on (0.3 m walking, 0.55 m running) instead of stopping dead
+    let want = speedK === 0 ? 0 : back ? -WALK_SPEED * speedK : run ? RUN_SPEED : WALK_SPEED * speedK;
+    if (mode === 'tap') want = Math.min(want, Math.max(0.3, tapDist * ARRIVE_EASE)); // arrive, don't brake
+    this.speedNow = rampSpeed(this.speedNow, want, dt);
+    back = this.speedNow.v < 0;
     // walk once he (nearly) faces the way he goes: no moonwalk toward the camera mid-pivot
     const along = back ? 1 : Math.max(0, Math.cos(wrapPi(this.heading - this.facing)));
-    let step = this.speed * speedK * along * dt;
+    let step = Math.abs(this.speedNow.v) * along * dt;
     if (mode === 'tap') step = Math.min(step, tapDist);
     const dir = back ? this.heading + Math.PI : this.heading;
     let wantX = rp.x + Math.sin(dir) * step;
@@ -344,6 +380,9 @@ export class Player {
       rp.x = next.x;
       rp.z = next.z;
     }
+    this.lastX = rp.x;
+    this.lastZ = rp.z;
+    this.stickRunFeedback?.(mode === 'stick' && this.stickRunning);
     // W3.2: the actual post-collision ground speed drives the idle↔walk crossfade;
     // a turn on the spot steps the feet too, and backing up plays the walk in reverse.
     this.groundSpeedNow = moved / Math.max(dt, 1e-4);
@@ -368,18 +407,34 @@ export class Player {
     // ambience follows the ranger across biomes — re-pick the bed on a crossing
     const here = this.terrain.biome(rp.x, rp.z);
     this.host.crossBiome(here);
+    this.hereBiome = here;
 
-    // W4.7b: surface-aware footsteps. The distance-carry cadence advances every
-    // frame (so a stop re-arms cleanly); when a stride is crossed we plant a
-    // foot with the timbre of the biome underfoot — gated on the sound setting.
-    const fs = stepFrame(this.footAccum, this.groundSpeedNow, moved);
-    this.footAccum = fs.accum;
-    if (fs.steps > 0 && store.get().settings.geluid) {
-      this.footstepCount += fs.steps;
-      this.lastFootSurface = footSurface(here);
-      Sound.footstep(this.lastFootSurface);
+    // W4.7b: surface-aware footsteps. A baked rig puts them on its feet (animate());
+    // the stand-in steps by walked distance: the carry advances every frame (so a stop
+    // re-arms cleanly) and plants a foot each stride.
+    if (!this.rig.baked) {
+      const fs = stepFrame(this.footAccum, this.groundSpeedNow, moved);
+      this.footAccum = fs.accum;
+      if (fs.steps > 0) this.footstep();
     }
     return out;
+  }
+
+  /** One frame of his legs (after the step, every frame, also while riding: the rig
+   *  holds still when seated): the gait blend, and a footstep each time a foot goes
+   *  down. Locomotion: it animates in both motion modes (§3.4). */
+  animate(dt: number, reduced: boolean): void {
+    const plants = this.rig.update(dt, this.groundSpeedNow, reduced);
+    if (plants > 0 && this.groundSpeedNow >= MIN_STEP_SPEED) this.footstep();
+  }
+
+  /** A footstep with the timbre of the ground underfoot, brisker running; gated on the
+   *  sound setting (the count only moves when one is heard). */
+  private footstep(): void {
+    if (!store.get().settings.geluid || !this.hereBiome) return;
+    this.footstepCount += 1;
+    this.lastFootSurface = footSurface(this.hereBiome);
+    Sound.footstep(this.lastFootSurface, this.rig.running);
   }
 
   private proceduralRanger(): THREE.Group {
@@ -596,6 +651,7 @@ export class Player {
    *  target. Called ONLY for a clean click (onPointerUp with no drag) so a look-around
    *  never relocates the ranger (F-17). Pick order unchanged from the pre-seam handler. */
   private walkToPointer(e: PointerEvent): void {
+    this.tapRun = e.shiftKey;
     const rect = this.canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -645,10 +701,17 @@ export class Player {
 
   /** How he moves right now (the read other lanes code against: World.rangerMotion,
    *  WorldCtx.rangerMotion): where he stands, the way he faces, his post-collision
-   *  ground speed and whether the run gait is on (a walk only, until he can run). */
+   *  ground speed and whether the run gait is on (his legs are running). */
   motion(): RangerMotion {
     const p = this.group.position;
-    return { x: p.x, z: p.z, heading: this.group.rotation.y, speed: this.groundSpeedNow, running: false };
+    return { x: p.x, z: p.z, heading: this.group.rotation.y, speed: this.groundSpeedNow, running: this.rig.running };
+  }
+
+  /** Dev-hook accessor (run 6): his gait (which clip leads, the cycle phase, footfalls
+   *  per second, the run share, the stride gain) and his soles in world metres (heel,
+   *  ball, tip per foot: the foot-slip probe). */
+  gait(): { name: Gait; phase: number; cadence: number; run: number; gain: number; soles: SoleProbe[] } {
+    return { ...this.rig.gait(), soles: this.rig.soleProbe() };
   }
 
   /** The ranger's active locomotion clip for the dev hook (null when procedural). */
@@ -657,10 +720,9 @@ export class Player {
   }
 
   /** Dev-hook accessor (F-08): the ranger's LIVE post-collision ground speed
-   *  (m/s) — the honest walked speed AFTER slide/clamp, the value the walk clip's
-   *  cadence is tied to. The assert reads it ∈ [1.4, 2.2] while `clip` = walk to
-   *  prove the retuned foot speed is human-scaled, not the old near-jeep glide;
-   *  0 while standing or in an in-place activity. */
+   *  (m/s) — the honest walked speed AFTER slide/clamp, the value his legs' cadence is
+   *  tied to (run 6: ~2.2 walking, ~4.2 running); 0 while standing or in an in-place
+   *  activity. */
   groundSpeed(): number {
     return this.groundSpeedNow;
   }

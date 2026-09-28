@@ -38,8 +38,20 @@ export const ONBOARD_DRIVE = {
   keys: 'Rijd met de pijltjes.',
 } as const;
 
+// ---- run 6 (FEEL lane): the run tip ---------------------------------------------
+/** How to run, taught once per save after his first metres on foot (the HUD's one-tip
+ *  channel, read aloud). Device-aware like the walk hint. */
+export const ONBOARD_RUN = {
+  stick: 'Duw de stick ver om te rennen.',
+  keys: 'Houd Shift in om te rennen.',
+} as const;
+
+/** He has walked this far (m) on foot when the run tip shows. */
+export const RUN_TIP_AFTER_M = 15;
+// ---- end run 6 ------------------------------------------------------------------
+
 /** Every transient onboarding tip, for the reading-norm test (≤7 words each). */
-export const ONBOARD_TIPS = [ONBOARD_TAP, ONBOARD_BOUNDARY, ONBOARD_DRIVE.stick, ONBOARD_DRIVE.keys] as const;
+export const ONBOARD_TIPS = [ONBOARD_TAP, ONBOARD_BOUNDARY, ONBOARD_DRIVE.stick, ONBOARD_DRIVE.keys, ONBOARD_RUN.stick, ONBOARD_RUN.keys] as const;
 
 /**
  * Device-aware wording: every hint is written for touch ("Tik op een dier"); on a
