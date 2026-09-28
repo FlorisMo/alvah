@@ -55,6 +55,8 @@ export type { Shot, Focus } from './world/Presenter';
 
 /** How long the follow rig takes to take the lens over from a presented shot (s). */
 const HANDOVER_S = 2.2;
+/** Once it has, the name-tags and the "go here" rings come in over this long (s). */
+const WORDS_IN_S = 0.4;
 /** The boot veil waits at most this long for the models (ms; software GL: shorter). */
 const READY_CAP_MS = 6000;
 const READY_CAP_LIGHT_MS = 2000;
@@ -112,6 +114,9 @@ export class World {
   // the title and the ranger maker are shots of this world (world/Presenter.ts): while
   // one is up the world is frozen like an activity, and the presenter owns the lens
   private readonly presenter: Presenter;
+  // how far the name-tags and the "go here" rings are in (0..1): out while a shot is up,
+  // and after one they wait for the follow rig to have the lens, then ease in (no pop)
+  private wordsIn = 1;
   // the boot veil lifts once every model the build asked for has arrived (Models counts
   // them) or a cap has passed: the player never sees a stand-in waiting for its model
   private readonly builtAt = performance.now();
@@ -454,7 +459,7 @@ export class World {
   }
 
   /** Dev-hook accessor (F-07): the player ranger's live rendered height (m). */
-  avatarState(): { height: number } | null {
+  avatarState(): { height: number; yaw: number } | null {
     return this.player.avatarState();
   }
 
@@ -516,8 +521,7 @@ export class World {
     if (shot) {
       const entering = !this.presenter.active;
       if (entering) {
-        this.labels.setHidden(true);
-        this.pois.setRingsHidden(true);
+        this.setWordsIn(0);
         this.dressing.setCanopyOpacity(1); // no tree left faded from play
         this.player.setAvatarOpacity(1);   // and he stands solid in every shot
       }
@@ -526,11 +530,10 @@ export class World {
     }
     if (!this.presenter.active) return;
     this.presenter.release();
-    this.labels.setHidden(false);
-    this.pois.setRingsHidden(false);
     this.pois.resetAfterActivity(); // fresh proximity + cue on the first play frame
     this.cam.reset(SPAWN.heading);
     if (!reduced) this.cam.handover(HANDOVER_S);
+    else this.setWordsIn(1); // a cut: the tags and rings are there at once
     this.cam.place(true, 0, livePolicy().reduced);
   }
 
@@ -778,6 +781,16 @@ export class World {
 
     this.cam.place(reduced, dt, reduced);
     this.presenter.update(dt); // the ranger's turn back to the forest after a shot
+    // after a shot the tags and rings come in once the lens has settled behind him
+    if (this.wordsIn < 1 && !this.cam.handingOver) {
+      this.setWordsIn(reduced || lightMode() ? 1 : this.wordsIn + Math.min(dt, 0.05) / WORDS_IN_S);
+    }
+  }
+
+  private setWordsIn(k: number): void {
+    this.wordsIn = Math.min(1, k);
+    this.labels.setShown(this.wordsIn);
+    this.pois.setRingsShown(this.wordsIn);
   }
 
   // ctx() (below) reads the ranger's position straight off the World.

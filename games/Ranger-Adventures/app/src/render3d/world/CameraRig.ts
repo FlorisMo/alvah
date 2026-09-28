@@ -317,6 +317,11 @@ export class CameraRig {
     this.handoff = { pos: this.camera.position.clone(), yaw: a.yaw, pitch: a.pitch, t: 0, dur: seconds };
   }
 
+  /** The take-over from a presented shot is still moving the lens. */
+  get handingOver(): boolean {
+    return this.handoff !== null;
+  }
+
   /** A fresh start at the spawn (back from the title): the bearing straight behind a
    *  ranger heading `yaw`, no look-around. */
   reset(yaw: number): void {

@@ -93,6 +93,7 @@ export class Markers {
   // collapsed close follow boom must never render one as a frame-filling hoop
   // (`18-jeep-near`). Full 0.5 beyond RING_FADE_FAR, linearly to 0 by RING_FADE_NEAR.
   private readonly groundRings: { mat: THREE.MeshBasicMaterial; x: number; z: number; base: number }[] = [];
+  private ringsShown = 1; // 0..1: how far every ring is in (0 on the title and in the maker)
   private readonly RING_FADE_NEAR = 2.2; // lens ≤ this from a ring ⇒ fully faded (it's under/around the ranger)
   private readonly RING_FADE_FAR = 4.2;  // lens ≥ this ⇒ full "go here" opacity (normal approach/standing boom ~4.6 m)
   private activeId: string | null = null;     // the mission the wayfinding cue points to
@@ -567,9 +568,11 @@ export class Markers {
     if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
   }
 
-  /** Every "go here" ring off while the world is presented (the title, the maker). */
-  setRingsHidden(hidden: boolean): void {
-    for (const r of this.groundRings) r.mat.visible = !hidden;
+  /** How far every "go here" ring is in: 0 while the world is presented (the title, the
+   *  maker), easing back to 1 once the follow camera has the lens (World steps it). */
+  setRingsShown(k: number): void {
+    this.ringsShown = Math.max(0, Math.min(1, k));
+    for (const r of this.groundRings) r.mat.visible = this.ringsShown > 0;
   }
 
   /** W6.1: hide the floating mission name-tags during an in-place activity (so a label
@@ -636,7 +639,7 @@ export class Markers {
     for (const r of this.groundRings) {
       const d = Math.hypot(cx - r.x, cz - r.z);
       const k = Math.max(0, Math.min(1, (d - this.RING_FADE_NEAR) / span));
-      const o = r.base * k;
+      const o = r.base * k * this.ringsShown;
       if (r.mat.opacity !== o) r.mat.opacity = o;
     }
   }

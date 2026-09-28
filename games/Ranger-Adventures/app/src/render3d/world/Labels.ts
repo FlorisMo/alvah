@@ -34,11 +34,12 @@ export class Labels {
   private readonly _wp = new THREE.Vector3();   // scratch: a label's world position
   private readonly _ws = new THREE.Vector3();   // scratch: a label's parent world scale
   private readonly baseSize = new Map<THREE.Sprite, { w: number; h: number }>(); // its world size before the clamp
-  private hidden = false; // every tag off (the title and the maker show the world, no words)
+  private shown = 1; // 0..1: how far every tag is in (0 on the title and in the maker: the world, no words)
 
-  /** Hide every tag (a presented shot), or let the fade show them again. */
-  setHidden(hidden: boolean): void {
-    this.hidden = hidden;
+  /** How far every tag is in: 0 while a shot is up, easing back to 1 once the follow
+   *  camera has the lens (World steps it), so no tag pops in over a moving picture. */
+  setShown(k: number): void {
+    this.shown = Math.max(0, Math.min(1, k));
   }
 
   /** A camera-facing sprite name-tag (rounded warm card + the mission title). */
@@ -107,11 +108,11 @@ export class Labels {
       const wp = label.getWorldPosition(this._wp);
       const dx = wp.x - cp.x, dy = wp.y - cp.y, dz = wp.z - cp.z;
       const depth = dx * fwd.x + dy * fwd.y + dz * fwd.z;
-      if (this.hidden || depth <= 0.5) { mat.opacity = 0; continue; } // hidden, or behind the camera
+      if (this.shown <= 0 || depth <= 0.5) { mat.opacity = 0; continue; } // not in yet, or behind the camera
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const far = (LABEL_FADE_GONE - dist) / (LABEL_FADE_GONE - LABEL_FADE_FULL);
       const near = (dist - LABEL_NEAR_GONE) / (LABEL_NEAR_FULL - LABEL_NEAR_GONE);
-      mat.opacity = Math.max(0, Math.min(1, far, near));
+      mat.opacity = Math.max(0, Math.min(1, far, near)) * this.shown;
       // clamp the card's on-screen height (a parent's scale is divided out)
       const base = this.baseSize.get(label);
       if (!base) continue;
