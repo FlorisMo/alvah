@@ -4,8 +4,8 @@ import * as path from 'node:path';
 import { AREA_VELUWE } from '../src/content/veluwe';
 import { HAAR_OPTIES, OUTFIT_OPTIES } from '../src/core/avatar';
 import {
-  R, SEAT_TOLERANCE, budget, clickButton, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
-  sleep, snap, soft, step, uiText, under, visibleButtons, walkQuality, walkTo, worldChange, worldSamples, wrap,
+  R, SEAT_TOLERANCE, budget, calmGlide, clickButton, endGlide, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
+  sleep, snap, soft, startGlide, step, uiText, under, visibleButtons, walkQuality, walkTo, worldChange, worldSamples, wrap,
   type Heli, type Hint, type P2, type Seat, type Vehicle,
 } from './golden-lib';
 
@@ -95,8 +95,12 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const rangerTop = c ? ((1 - (c.avatarScreen.y + c.avatarScreen.heightFrac)) / 2) * 800 : 0;
     soft(!!c?.avatarScreen.onScreen, 'the ranger is not in the title picture');
     soft(!!block && block.y + block.height < rangerTop, `the title block (bottom ${r2(block ? block.y + block.height : 0)} px) covers the ranger (top ${r2(rangerTop)} px)`);
+    // the session's first Begin: the page stalls in the tap (the sound starts there), and
+    // the glide down to the ranger must still never jump — read on every drawn frame
+    await startGlide(page);
     await clickButton(page, 'Begin', 'title', 10_000, 30_000);
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 30_000, message: 'a mouse click on Begin must open the ranger maker' }).not.toBe('title');
+    calmGlide(await endGlide(page), 'title → maker glide');
     noNewErrors();
   });
 
@@ -134,9 +138,11 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     soft(!panel.scrolls, 'the maker panel scrolls at 1280×800');
     const c = await R<{ avatarScreen: { x: number } } | null>(page, 'r.cam()');
     soft(!!c && ((c.avatarScreen.x + 1) / 2) * 1280 < panel.left, 'the 3D ranger stands behind the maker panel, not beside it');
+    await startGlide(page);
     await clickButton(page, 'Dit is mijn ranger', 'ranger maker', 10_000, 30_000);
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000, message: '"Dit is mijn ranger" must lead into the world' }).toBe('world');
     await expect.poll(() => R<P2 | null>(page, 'r.pos()'), { timeout: 30_000, message: 'the world never placed the ranger' }).not.toBeNull();
+    calmGlide(await endGlide(page), 'maker → play glide');
     note('colours on the 3D ranger in play are measured in step 3, once the spawn hint has left his head');
     noNewErrors();
   });

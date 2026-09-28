@@ -670,12 +670,12 @@ export class Player {
    *  that once reported 1.7 m for a ~170 m bone-driven giant (§4: pixels are the
    *  court of appeal; this is the field that keeps them honest). Falls back to the
    *  geometry box for the procedural stand-in (no skeleton); null if empty. */
-  avatarState(): { height: number } | null {
+  avatarState(): { height: number; yaw: number } | null {
     if (this.group.children.length === 0) return null;
     this.group.updateWorldMatrix(true, true);
     const box = skinnedRenderBox(this.group) ?? new THREE.Box3().setFromObject(this.group);
     const h = box.getSize(new THREE.Vector3()).y;
-    return Number.isFinite(h) && h > 0 ? { height: h } : null;
+    return Number.isFinite(h) && h > 0 ? { height: h, yaw: this.group.rotation.y } : null;
   }
 
   /** Dev-hook accessor (W4.7b): the running footstep count + the last surface

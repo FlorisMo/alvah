@@ -142,8 +142,10 @@ export interface RangerDevHook {
    *  [1.1, 1.35]), a clear head shorter than the ~1.8 m warden — NOT the old
    *  ~1.7 m adult. It is the measured render size, NOT the normalization target,
    *  so the telemetry can never mask a mis-scaled rig (AUDIT-FINDINGS §4: pixels
-   *  are the court of appeal). Null before the hook/world is ready. */
-  avatar(): { height: number } | null;
+   *  are the court of appeal). `yaw` is the way he faces (rad, the group's heading):
+   *  golden reads it every frame to prove a turn of his never snaps. Null before the
+   *  hook/world is ready. */
+  avatar(): { height: number; yaw: number } | null;
   /** The player ranger's LIVE post-collision ground speed (m/s) — the honest
    *  walked speed AFTER the kinematic slide/clamp, which the walk clip's cadence
    *  is tied to (F-08). The assert reads it ∈ [1.4, 2.2] while `clip` = walk to
@@ -381,7 +383,7 @@ const state = {
   cameraYaw: null as null | (() => number),
   drawCalls: null as null | (() => number),
   clip: null as null | (() => { name: string; time: number } | null),
-  avatar: null as null | (() => { height: number } | null),
+  avatar: null as null | (() => { height: number; yaw: number } | null),
   groundSpeed: null as null | (() => number | null),
   grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
@@ -522,7 +524,7 @@ export function provideClip(fn: (() => { name: string; time: number } | null) | 
 
 /** Register the live avatar-scale source (the World's measured ranger bbox
  *  height). Pass null to clear (F-07). */
-export function provideAvatar(fn: (() => { height: number } | null) | null): void {
+export function provideAvatar(fn: (() => { height: number; yaw: number } | null) | null): void {
   state.avatar = fn;
 }
 
