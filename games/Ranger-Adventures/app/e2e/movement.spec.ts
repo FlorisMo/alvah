@@ -40,11 +40,15 @@ async function enterWorld(page: Page): Promise<void> {
   await expect.poll(() => hook(page, (r) => r.screen), { timeout: 60_000 }).toBe('world'); // loading + building the world
   // "Dit is mijn ranger" glides the camera from in front of him round behind him (one
   // ~2 s move, world/Presenter.ts): the fixed tap below means "the ground ahead in the
-  // follow view", so wait (in rendered frames, never seconds) until that view stands
+  // follow view", so wait (in rendered frames, never seconds) until that view stands:
+  // the lens out behind him and still from one rendered frame to the next
   await page.waitForFunction(() => {
-    const r = (window as unknown as { __ranger: Hook }).__ranger;
-    return (r.cam()?.dist ?? 0) > 4.2;
-  }, null, { timeout: 0, polling: 200 });
+    const w = window as unknown as { __ranger: Hook; __lastCam?: { f: number; d: number } };
+    const d = w.__ranger.cam()?.dist ?? 0, f = w.__ranger.frames() ?? 0;
+    const last = w.__lastCam;
+    if (!last || f !== last.f) w.__lastCam = { f, d };
+    return !!last && f !== last.f && d > 4.2 && Math.abs(d - last.d) < 0.002;
+  }, null, { timeout: 0, polling: 'raf' });
 }
 
 test('movement: tap-to-walk moves the ranger ≥2 m @smoke', async ({ page }, testInfo) => {
