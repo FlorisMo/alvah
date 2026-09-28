@@ -261,6 +261,14 @@ Beats 0-4 and 14-15 of §2.1. The bar:
   spec expects the title 🔊 to say "Word boswachter": update them to the new copy
   (§7.3), do not keep the old copy to please a test.
 - The dev hook is for reading; golden may read `titleReady()` to wait, never to skip.
+- The world's adaptive quality probe (`World.probeQuality`, W7.2) persists its verdict
+  (`kwaliteitTier`). Behind the veil the GLB decodes stall frames; do not let those
+  frames count, or a fast laptop boots into the `laag` tier next time. Start probing
+  after `ready()`.
+- `World.update` returns early while an activity is active (no `cam.place`, no
+  proximity); presentation relies on the same freeze, so the Presenter must drive the
+  camera every frame itself, and `labels.fade` keeps running (hide the tags with
+  `setLabelsVisible(false)`).
 
 ---
 
