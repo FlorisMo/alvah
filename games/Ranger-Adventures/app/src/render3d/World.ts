@@ -540,7 +540,7 @@ export class World {
    *  spawn facing the forest. Called under a fade; the next shot is a cut. */
   resetToSpawn(): void {
     if (this.vehicles.inVehicle) this.vehicles.exitVehicle();
-    if (this.vehicles.inHeli) this.vehicles.exitHeli();
+    if (this.vehicles.inHeli) { this.vehicles.setDownNow(); this.vehicles.exitHeli(); }
     const g = this.ranger;
     g.position.set(SPAWN.x, this.terrain.y(SPAWN.x, SPAWN.z), SPAWN.z);
     g.rotation.y = SPAWN.heading;

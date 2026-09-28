@@ -878,6 +878,27 @@ export class Vehicles {
     this.heliLanding = !!this.landPad;
   }
 
+  /** Back to the title from the air (Pauze → "Naar het hoofdmenu", under its fade): the
+   *  helicopter stands on the nearest pad at once, the pilot still seated, so he can step
+   *  out. No-op on the ground. */
+  setDownNow(): void {
+    const hp = this.heliPos;
+    if (!this.inHeli || !this.heliAirborne || !this.heli || !hp) return;
+    const pad = this.nearestPad(hp.x, hp.z); // any pad, the one it lifted off from too
+    if (pad) { hp.x = pad.x; hp.z = pad.z; }
+    this.heliAltitude = HELI_PAD_HEIGHT;
+    hp.y = this.groundY(hp.x, hp.z);
+    this.heliAirborne = false;
+    this.liftArmed = false;
+    this.heliLanding = false;
+    this.landPad = null;
+    this.departPad = null;
+    this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
+    for (const b of this.beacons) b.visible = false;
+    this.heli.rotation.set(0, this.heliHeading, 0, 'YXZ');
+    this.seatRider(this.heli, HELI_SEAT);
+  }
+
   /** W5.3b: step out of the helicopter resting on the ground (its left) and re-park it
    *  as a solid footprint. No-op in the air (land first). */
   exitHeli(): void {
