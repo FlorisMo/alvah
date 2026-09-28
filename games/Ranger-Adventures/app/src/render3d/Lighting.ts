@@ -125,6 +125,13 @@ export function makeSkyDome(): THREE.Mesh {
         // the same haze all the way round (the fog it meets has no direction)
         float glow = pow(max(dot(d, uSunDir), 0.0), 5.0) * smoothstep(0.0, 0.12, up);
         col += uSun * glow * 0.22 * (1.0 - up * 0.6);
+        // golden hour: a broad warm light over the tree line on the sun's side of the sky,
+        // fading round to the far side and up into the clear top (above the haze band, so
+        // the horizon still meets the direction-less fog seamlessly)
+        vec2 sunH = normalize(uSunDir.xz);
+        float side = max(dot(normalize(d.xz + vec2(1e-5)), sunH), 0.0);
+        float warm = side * side * smoothstep(0.02, 0.14, up) * (1.0 - smoothstep(0.12, 0.6, up));
+        col = mix(col, col * vec3(1.06, 0.97, 0.84) + uSun * 0.07, warm * 0.85);
         gl_FragColor = vec4(col, 1.0);
         // the horizon band goes through the tone curve (GOLDEN_HOUR.fogColor is its result,
         // so the fogged world dissolves into it); higher up the sky keeps its own colours
