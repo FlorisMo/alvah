@@ -21,7 +21,7 @@ import { session, esc, plainCard } from '../flow/session';
 import { showBriefing, goToMission } from '../flow/MissionFlow';
 import { playRoepAtSitSpot, nextMissionId } from '../flow/WorldSession';
 import { showPauseHub, showMissionBoard, showControls } from '../hub/Hub';
-import { startGuide, stopGuide, mountGuide, chipHeld, guideSnapshot, setStickSource } from './Lessons';
+import { startGuide, stopGuide, mountGuide, chipHeld, guideSnapshot } from './Lessons';
 
 // the on-screen joystick (W1.3) lives inside the explore HUD; re-created each
 // time the HUD renders, disposed here so its listeners never outlive the world.
@@ -47,7 +47,6 @@ export function disposeExploreHud(): void {
   tipState.active = null; tipState.helpChip = false;
   stopGuide();
   if (joystick) { joystick.dispose(); joystick = null; }
-  setStickSource(null);
 }
 
 export function showExploreHud(activeTitel: string | null): void {
@@ -309,9 +308,7 @@ function mountJoystick(hud: HTMLElement | null): void {
   const coarse = coarsePointer();
   js.setVisible(joystickVisible(store.get().settings.joystick, coarse));
   hud.appendChild(js.el);
-  // his stick run shows on the ring (FEEL); the run lesson reads how far it is pushed
   world.setJoystick(() => js.vector(), (running) => js.setRunning(running));
-  setStickSource(() => { const v = js.vector(); return v ? Math.hypot(v.x, v.y) : 0; });
   joystick = js;
 }
 

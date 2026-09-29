@@ -57,17 +57,6 @@ let chipShown = false;      // the chip has been revealed this session
 // the teaching slot in the HUD (bottom centre, above the prompt) and the lesson strip in it
 let slot: HTMLElement | null = null;
 let lessonEl: HTMLElement | null = null;
-// run detection when the ranger's gait says nothing: Shift held while walking forward, or
-// the stick at its rim
-let shiftHeld = false;
-let fwdHeld = false;
-let stickMag: () => number = () => 0;
-let keysBound = false;
-
-/** How far the stick is pushed (0..1) — the HUD hands the joystick over. */
-export function setStickSource(fn: (() => number) | null): void {
-  stickMag = fn ?? (() => 0);
-}
 
 /* ---------------------------------------------------------- start, stop ---- */
 /**
@@ -77,7 +66,6 @@ export function setStickSource(fn: (() => number) | null): void {
 export function startGuide(opts: { returning: boolean }): void {
   returning = opts.returning;
   startAt = performance.now() + (prefersReducedMotion() ? 300 : 1300);
-  bindKeys();
   started = true;
   session.world?.revealNext(!chipHeld());
   if (!raf) { lastT = performance.now(); raf = requestAnimationFrame(tick); }
@@ -153,7 +141,7 @@ function tick(now: number): void {
   if (free && onFoot) {
     const m = world.rangerMotion();
     progress.walkedM += m.speed * dt;
-    if (isRunning(m)) progress.runS += dt;
+    if (m.running) progress.runS += dt; // his run gait (Shift, or the stick at its rim)
     // standing still counts only with nothing on screen to read (listening to Bram is not idling)
     stillS = m.speed < 0.05 && !current && now >= gapUntil ? stillS + dt : 0;
     if (current?.kind === 'lesson') { current.walkedM += m.speed * dt; current.shownS += dt; }
@@ -218,14 +206,6 @@ function jeepFar(): boolean {
   const mk = next ? world.markerPositions().find((m) => m.missionId === next.id) : null;
   if (!mk) return false;
   return Math.hypot(mk.x - p.x, mk.z - p.z) > JEEP_BEAT.missionM && Math.hypot(v.x - p.x, v.z - p.z) <= JEEP_BEAT.jeepM;
-}
-
-/** Is he running? The ranger's own gait says so; without it, Shift held while he walks
- *  forward, or the stick pushed to its rim. */
-function isRunning(m: { speed: number; running: boolean }): boolean {
-  if (m.running) return true;
-  if (m.speed < 0.3) return false;
-  return (shiftHeld && fwdHeld) || stickMag() >= 0.95;
 }
 
 /* ----------------------------------------------------------- the steps ---- */
@@ -357,17 +337,4 @@ function removeLesson(): void {
   if (!el.isConnected || prefersReducedMotion()) { el.remove(); return; }
   el.classList.add('ls-leaving');
   window.setTimeout(() => el.remove(), 180);
-}
-
-/* ------------------------------------------------------------- the keys ---- */
-function bindKeys(): void {
-  if (keysBound || typeof window === 'undefined') return;
-  keysBound = true;
-  const set = (e: KeyboardEvent, down: boolean): void => {
-    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') shiftHeld = down;
-    if (e.code === 'ArrowUp' || e.code === 'KeyW') fwdHeld = down;
-  };
-  window.addEventListener('keydown', (e) => set(e, true));
-  window.addEventListener('keyup', (e) => set(e, false));
-  window.addEventListener('blur', () => { shiftHeld = false; fwdHeld = false; });
 }
