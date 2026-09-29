@@ -327,7 +327,6 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   const man = await photograph(P.snare, 0.62, 2.1, 'man', 'ochtend', () => home.poacherIn());
   if (man) photos.photos.push(man);
   k.cluePhoto = man?.url ?? null;
-  home.showSnare(true);
   await k.wait(1.4);
   k.ui.veil(null);
   k.daylight(1, 3.2); // the sun comes up
@@ -338,7 +337,11 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   await k.act(c.fotoKnop, c.fotos);
   k.say(null);
   k.stats.photos = photos.photos.length;
-  await k.guard(photos.review(c.fotoTitel, c.man, 'Verder', k.signal));
+  // (the snare he set lies by the trail: it is in the world from here on, while the
+  // photos' card is up, so the child finds it after the photo told him about it)
+  const review = photos.review(c.fotoTitel, c.man, 'Verder', k.signal);
+  home.showSnare(true);
+  await k.guard(review);
   /* 10 · the raaf: the camera tells the ranger who lives here */
   await k.fact(1);
 
