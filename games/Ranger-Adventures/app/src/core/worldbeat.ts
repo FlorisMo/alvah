@@ -25,11 +25,17 @@ export const WORLDBEAT_EVERY = 3;
 export type CoarseHeading = 'links' | 'rechtdoor' | 'rechts';
 export type WorldBeatKind = 'blijf-op-pad' | 'welke-kant';
 
+/** The drawn icon of an option (ui/icons.ts draws it; never an emoji). */
+export type WorldBeatIcon = 'boot' | 'paw' | 'arrow';
+
 export interface WorldBeatOption {
   label: string;
   /** Dual-channel **shape** cue (paired with a colour in the DOM layer) so the
-   *  feedback never rides on colour alone. */
-  glyph: string;
+   *  feedback never rides on colour alone: a drawn icon, turned by `turn` degrees. */
+  icon: WorldBeatIcon;
+  turn?: number;
+  /** The arrow key that picks it on a keyboard (the direction beat's ←, ↑, →). */
+  key?: 'ArrowLeft' | 'ArrowUp' | 'ArrowRight';
   correct: boolean;
 }
 
@@ -58,8 +64,8 @@ const IMPULSE: WorldBeat = {
   kind: 'blijf-op-pad',
   prompt: 'Een dier loopt weg. Wat doe jij?',
   options: [
-    { label: 'Blijf op het pad', glyph: '🥾', correct: true },
-    { label: 'Ren erachteraan', glyph: '🐾', correct: false },
+    { label: 'Blijf op het pad', icon: 'boot', correct: true },
+    { label: 'Ren erachteraan', icon: 'paw', correct: false },
   ],
 };
 
@@ -86,9 +92,9 @@ function wayfindBeat(heading: CoarseHeading): WorldBeat {
     kind: 'welke-kant',
     prompt: 'Welke kant is je volgende missie?',
     options: [
-      { label: 'Naar links', glyph: '←', correct: heading === 'links' },
-      { label: 'Rechtdoor', glyph: '↑', correct: heading === 'rechtdoor' },
-      { label: 'Naar rechts', glyph: '→', correct: heading === 'rechts' },
+      { label: 'Naar links', icon: 'arrow', turn: -90, key: 'ArrowLeft', correct: heading === 'links' },
+      { label: 'Rechtdoor', icon: 'arrow', turn: 0, key: 'ArrowUp', correct: heading === 'rechtdoor' },
+      { label: 'Naar rechts', icon: 'arrow', turn: 90, key: 'ArrowRight', correct: heading === 'rechts' },
     ],
   };
 }

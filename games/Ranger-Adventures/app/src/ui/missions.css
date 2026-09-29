@@ -1,101 +1,54 @@
 /* ============================================================
-   missions.css — HUD, missiebord, briefing/fact/reward cards, badges.
-   Sits over the 3D stage; reuses boot-card tokens.
+   missions.css — the screens between the world and a mission, built on the ONE card
+   (styles/base.css `.card`, run 6 FLOW P3): the scrim and the calm cut, the briefing
+   (Bram's field note), the fact, the reunion line, the reward, the clue, the finale,
+   the ontknoping, Onderweg, Pauze, the missiebord, the sporenboek, the badges — and
+   the explore HUD over the live world (Pauze pill, chip, prompts, joystick).
+   Only what makes each screen itself lives here; the paper, the type, the buttons and
+   the motion are base.css's.
    ============================================================ */
 
-.ra-overlay { position: absolute; inset: 0; pointer-events: none; }
+.ra-overlay, .ra-leaving { position: absolute; inset: 0; pointer-events: none; }
 .ra-overlay > * { pointer-events: auto; }
+/* leaving (session.leave): `#ui > *` would otherwise make it catch clicks again */
+#ui .ra-leaving, #ui .ra-leaving * { pointer-events: none; }
 
-/* ---- F-29 (RUN-3 P4.7): the ONE shared static modal scrim ------------------
-   Every over-world modal card (pause hub, briefing / fact / reward, prikbord,
-   worldbeat, wildcam, ontknoping) mounts inside `.ra-overlay.ra-scrim`; this
-   ::before paints a single dark dim BEHIND the card so the modal never floats
-   on raw, murky world pixels (Run A's `13-pause-hub` defect). Plain rgba
-   (var(--modal-scrim)), NO backdrop-filter, no transition → it appears as an
-   instant state change and is reduced-motion-safe by construction. It is a
-   pseudo-element, so it inherits the wrapper's `pointer-events: none` and stays
-   purely visual — it never changes what a tap hits. It paints first in source
-   order, so the positioned card renders on top. The full-screen `.lodge` /
-   `.mission-board` menus and `.mission-pause-menu` paint the SAME token as
-   their own background, so pause + board read as one identical backdrop. ---- */
-.ra-overlay.ra-scrim::before {
+/* ---- the ONE shared modal scrim (F-29): a warm golden-dusk dim BEHIND every card over
+   the world, painted by the overlay's ::before (pointer-transparent, no backdrop-filter).
+   It fades in with the first card, stays put from one card to the next (`--held`), and
+   fades out with the last one. ---- */
+.ra-scrim::before {
   content: '';
   position: absolute;
   inset: 0;
   background: var(--modal-scrim);
+  animation: scrim-in var(--dur-card-in) var(--ease-out) both;
 }
-
-/* shared card look (briefing / fact / reward), centered */
-.boot-card-ish {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  width: min(92vw, 560px);
-  max-height: 86vh;
-  overflow-y: auto;
-  padding: 28px 30px;
-  text-align: center;
-  background: rgba(253, 252, 248, 0.92);
-  backdrop-filter: blur(10px);
-  border-radius: var(--spel-radius-lg);
-  box-shadow: var(--shadow-lg);
-}
+.ra-scrim--held::before { animation: none; }
+.ra-leaving.ra-scrim::before { animation: scrim-out var(--dur-card-out) var(--ease-in) both; }
+@keyframes scrim-in { from { opacity: 0; } }
+@keyframes scrim-out { to { opacity: 0; } }
 
 /* flow/session.fadeCut: the calm cut to another place (a mission picked on the
-   missiebord). Warm paper, not black; it covers everything, so nothing is clicked
-   mid-cut. Under reduced motion `.rm *` makes it a plain cut. */
+   missiebord, back to the title). A short warm dip, never one flat colour: a golden
+   glow with warm edges over the picture, deepest for a couple of frames while the
+   world moves under it. Under reduced motion there is no dip at all (a plain cut). */
 .ra-fade {
   position: absolute;
   inset: 0;
   z-index: 50;
-  background: #f3ead8;
+  background: radial-gradient(ellipse 78% 70% at 50% 46%,
+    rgba(252, 242, 218, 0.86) 0%, rgba(238, 214, 168, 0.9) 58%, rgba(122, 86, 40, 0.94) 100%);
   opacity: 0;
-  transition: opacity 0.38s ease-in-out;
+  transition: opacity 220ms var(--ease-in);
 }
 .ra-fade.on { opacity: 1; }
-/* lifting: the card under it already takes clicks and keys. `#ui` because base.css's
-   `#ui > * { pointer-events: auto }` outranks a class-only rule (the veil used to keep
-   swallowing them until it was gone). */
+.ra-fade.lifting { transition: opacity 280ms var(--ease-out); }
+/* lifting: the card under it already takes clicks and keys (`#ui` outranks `#ui > *`) */
 #ui .ra-fade.lifting { pointer-events: none; }
 
-/* A card whose way on never falls below the fold (breaker B3, the 800×600 briefing):
-   the card itself does not scroll, its `.card-body` does, and the `.card-foot` with
-   the primary / way back sits pinned under it, like the ranger maker's button row. */
-.boot-card-ish.has-foot { overflow: hidden; padding-bottom: 0; }
-.has-foot > .card-body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 2px 2px 8px;
-}
-.has-foot > .card-foot {
-  flex: 0 0 auto;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  margin: 0 -30px;
-  padding: 10px 30px 14px;
-  background: rgba(253, 252, 248, 0.98);
-  border-top: 1px solid rgba(40, 60, 30, 0.12);
-}
-.has-foot > .card-foot .ra-row { margin-top: 0; }
-
-/* Karaoke read-aloud (ui/ReadAloud.ts): the word being spoken gets a calm,
-   non-flashing highlight — a soft tint + colour swap. Only one word at a time.
-   Under reduced-motion base.css `.rm *` zeroes the transition → an instant
-   colour swap only (no fade), which is exactly the calmer channel we want. */
+/* ---- karaoke read-aloud (ui/ReadAloud.ts): the word being spoken gets a calm,
+   non-flashing highlight; lines written as they are read wait, keeping their place ---- */
 .ra-word {
   border-radius: 5px;
   transition: background var(--dur-quick) var(--ease-standard), color var(--dur-quick);
@@ -105,405 +58,467 @@
   color: var(--green);
   box-shadow: 0 0 0 2px var(--green-soft);
 }
+.ra-line-wait { opacity: 0; }
+.ra-line-in { animation: write-in 260ms var(--ease-out) both; }
+@keyframes write-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
-.ra-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
-.ra-speak {
-  flex: none;
-  width: var(--tap-min);
-  height: var(--tap-min);
-  border: none;
-  border-radius: var(--radius-pill);
-  background: var(--green-soft);
-  color: var(--green);
-  font-size: 24px;
-  cursor: pointer;
-  transition: transform var(--dur-quick) var(--ease-standard), background var(--dur-quick);
+/* ---- the briefing: Bram's field note. His portrait and name, the mission's picture and
+   title, the lines on a ruled notebook page with a margin line ---- */
+.card.briefing { width: min(calc(100vw - 32px), 620px); align-items: stretch; text-align: left; gap: 14px; }
+.vn-head { display: flex; align-items: center; gap: 10px; }
+.vn-bram { flex: none; width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(47, 91, 58, 0.3); }
+.vn-bram .sp-face { width: 40px; height: 40px; }
+.vn-title { display: flex; align-items: center; gap: 16px; }
+.vn-title .boot-title { text-wrap: pretty; }
+.briefing-lines {
+  --rule: calc(var(--read-size) * var(--read-leading));
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  padding: 0 4px 0 20px;
+  border-left: 2px solid rgba(190, 96, 72, 0.32);
+  background: repeating-linear-gradient(180deg, transparent 0 calc(var(--rule) - 1px), rgba(64, 99, 111, 0.16) calc(var(--rule) - 1px) var(--rule));
+  background-origin: content-box;
+  background-clip: content-box;
 }
-.ra-speak:hover { transform: translateY(-2px); background: var(--green-line); }
-.ra-text-btn {
-  border: none;
-  background: none;
-  color: var(--green-mid);
-  font: 600 16px/1.2 var(--font-body);
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 8px 12px;
-  min-height: var(--tap-min); /* Alvah profile §3: ≥56px tap targets (stricter than the 44–48px general rule) */
-}
+.briefing-line { margin: 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
+.finale .briefing-lines { border-left: 0; padding-left: 4px; text-align: center; }
 
-/* ---- shared ≥56px VISIBLE-box chip token (RUN-3 P3.1 · F-20 board-exit, F-28
-   hub links). The `.ra-text-btn` hit area already met ≥56px, but it LOOKED like
-   an ~18px underlined link — an affordance failure for an 8-year-old. `.ra-chip`
-   is the one token that turns a navigation control into a button the child can
-   SEE: a pill whose visible box == its hit box (min-height routed through
-   --tap-min, height from padding not font-inflation), carrying an icon so
-   recognition doesn't need reading. Replaces `.ra-text-btn` on the nav links. ---- */
-.ra-chip {
+/* the mission's picture, big (briefing, reward) */
+.mc-icon.mc-icon--big { width: 76px; height: 76px; flex: none; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.65), 0 2px 6px rgba(46, 32, 12, 0.14); }
+.mc-icon.mc-icon--big svg { width: 50px; height: 50px; }
+
+/* ---- the fact: "Wist je dat?" (or the rescued raaf tells it) ---- */
+.fact { gap: 10px; }
+.fact-mark {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(245, 194, 59, 0.22);
+  color: #7a5a12;
+  box-shadow: inset 0 0 0 2px rgba(214, 160, 30, 0.35);
+}
+.fact--raaf .fact-mark { background: rgba(47, 59, 72, 0.12); color: #283340; box-shadow: inset 0 0 0 2px rgba(40, 51, 64, 0.2); }
+.fact-mark .ic { width: 38px; height: 38px; }
+.fact-text { margin: 2px auto 4px; max-width: 24ch; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); } /* ≤7 words a line (child:B9) */
+
+/* ---- the reward: the mission's picture with a ✓, the badges easing in one by one ---- */
+.reward { gap: 10px; }
+.rw-pic { position: relative; margin-bottom: 2px; }
+.rw-check {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--green-mid);
+  color: #fff;
+  box-shadow: 0 0 0 3px #fdf8ec;
+  animation: pop-in 380ms var(--ease-overshoot) 140ms both;
+}
+.rw-check .ic { width: 22px; height: 22px; stroke-width: 3; }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: none; } }
+.reward .badge { animation: badge-in 420ms var(--ease-out) both; animation-delay: calc(320ms + var(--i, 0) * 200ms); }
+@keyframes badge-in { from { opacity: 0; transform: translateY(8px) scale(0.9); } to { opacity: 1; transform: none; } }
+.reward-knap {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  min-height: var(--tap-min);
-  padding: 8px 20px;
-  border: 2px solid var(--green-line);
+  margin: 2px 0;
+  padding: 5px 6px 5px 16px;
+  border: 1px solid var(--green-line);
   border-radius: var(--radius-pill);
-  background: var(--green-soft);
-  color: var(--green-deep);
-  font: 600 16px/1.2 var(--font-body);
-  text-decoration: none;
-  cursor: pointer;
-  transition: transform var(--dur-quick) var(--ease-overshoot),
-    background var(--dur-quick), border-color var(--dur-quick);
+  background: rgba(236, 243, 231, 0.8);
 }
-.ra-chip:hover { background: var(--green-line); border-color: var(--green-mid); }
-.ra-chip:active { transform: scale(0.97); }
-.ra-chip-ic { flex: none; font-size: 22px; line-height: 1; }
-.ra-chip-tx { text-align: left; }
+.rk-label { font: 700 16px/1 var(--font-body); color: var(--green-mid); }
+.rk-word { padding: 7px 14px; border-radius: var(--radius-pill); background: #fff; font: 700 20px/1 var(--font-read); color: var(--green-deep); }
+.reward-note { font-size: 18px; }
 
-.mission-grid {
+/* ---- a breinkracht badge (reward + the badge wall): its drawn picture on the tier disc ---- */
+.badge-row { display: flex; flex-wrap: wrap; gap: 14px 10px; justify-content: center; margin: 4px 0; }
+.badge { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100px; }
+.badge-wall { width: min(calc(100vw - 32px), 640px); }
+.badge-disc {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 14px;
-  width: min(94vw, 880px);
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid var(--ring);
+  box-shadow: 0 0 14px var(--glow), inset 0 -5px 10px rgba(0, 0, 0, 0.14);
+  color: #fff;
 }
-.mission-card {
+.badge-disc .ic { width: 34px; height: 34px; stroke-width: 2.3; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3)); }
+.badge-name { font: 700 15px/1.1 var(--font-body); color: var(--ink); text-align: center; }
+.badge-tier { font: 600 13px/1 var(--font-body); color: var(--ink-soft); }
+.badge-bar { width: 72px; height: 6px; border-radius: var(--radius-pill); background: rgba(0, 0, 0, 0.12); overflow: hidden; }
+.badge-bar > span { display: block; height: 100%; background: var(--bk); border-radius: var(--radius-pill); }
+.kw-head { margin: 8px 0 0; font: 700 16px/1.2 var(--font-body); color: var(--green-mid); }
+.knap-woorden { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.knap-woord { padding: 7px 14px; border-radius: var(--radius-pill); background: #fff; border: 1px solid var(--green-line); color: var(--green-deep); font: 700 18px/1.2 var(--font-read); }
+
+/* ---- the clue: a photo taped into the card (then pinned in the sporenboek) ---- */
+.clue-photo {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 120px;
-  padding: 16px 18px;
-  text-align: left;
-  border: none;
-  border-radius: var(--spel-radius);
-  background: rgba(253, 252, 248, 0.94);
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
-  transition: transform var(--dur-quick) var(--ease-overshoot), box-shadow var(--dur-quick);
+  gap: 10px;
+  width: min(100%, 310px);
+  margin: 10px auto 2px;
+  padding: 12px 12px 14px;
+  border-radius: 6px;
+  background: #fffdf8;
+  box-shadow: 0 10px 22px rgba(46, 32, 12, 0.2), 0 1px 3px rgba(46, 32, 12, 0.18);
+  rotate: -1.5deg;
 }
-.mission-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
-.mission-card:active { transform: scale(0.98); }
-/* F-23: one flat pictogram per card on a biome-tinted disc — a dyslexic player
- * recognises "the frog one" at a glance instead of reading ten cards. The disc
- * colour (--disc) + silhouette ink (--ink) come from MissionIcon.ts per biome. */
-.mc-icon {
-  align-self: flex-start;
-  width: 52px;
-  height: 52px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--disc, #eef1e9);
-  color: var(--ink, var(--green-mid));
-}
-.mc-icon svg { width: 34px; height: 34px; display: block; }
-.mc-land {
-  font: 600 12px/1 var(--font-body);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--green-mid);
-}
-.mc-title { font: 600 22px/1.1 var(--font-head); color: var(--green-deep); }
-.mc-eng { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
-.mc-chip {
-  padding: 3px 9px;
-  border-radius: var(--radius-pill);
-  background: var(--green-soft);
-  color: var(--green);
-  font: 600 12px/1.3 var(--font-body);
-}
-.mc-done {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--green-bright);
-  color: #fff;
-  font: 700 15px/1 var(--font-body);
-}
+.clue-tape { position: absolute; top: -10px; left: 50%; width: 88px; height: 22px; translate: -50% 0; rotate: 3deg; background: rgba(233, 214, 160, 0.78); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); }
+.clue-pic, .cb-photo { display: grid; place-items: center; border-radius: 4px; background: radial-gradient(circle at 50% 38%, #e6d6ad, #b3955d); color: #4a3514; }
+.clue-pic { height: 118px; }
+.clue-pic .ic { width: 70px; height: 70px; stroke-width: 1.7; }
+.clue-photo figcaption { display: flex; flex-direction: column; gap: 4px; text-align: center; }
+.cb-clue-title { font: 700 20px/1.2 var(--font-read); color: var(--green-deep); text-align: center; }
+.cb-clue-text { font: 400 18px/1.4 var(--font-read); color: var(--ink); text-align: center; }
+.clue-where { display: inline-flex; align-items: center; gap: 8px; margin: 0; font: 400 20px/1.3 var(--font-read); color: var(--ink-soft); }
+.clue-where .ic { color: var(--green-mid); }
 
-/* ---- briefing / fact ---- */
-/* the from-the-world entry reads as the ranger's own field note (warm paper +
- * a left margin rule), not a mission-control screen — so a mission never feels
- * like leaving the world. Purely a re-skin; the briefing content is unchanged. */
-.briefing.veldnotitie {
-  background: var(--paper-tint);
-  border-left: 3px solid var(--accent-warm);
-  text-align: left;
-}
-.briefing.veldnotitie .boot-kicker { color: var(--green-mid); }
-.briefing-lines { display: grid; gap: 6px; }
-.briefing-line { margin: 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
-.fact-text { margin: 4px auto; max-width: 24ch; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); } /* ≤7 words a line (child:B9) */
-/* W6.3a: the diegetic raaf-companion fact beat in the world — the raaf tells you
-   the fact on location. A soft green frame + corvid mark set it apart from the
-   neutral lodge card, without new motion. */
-.fact--raaf { border-left: 3px solid var(--green); background: var(--green-soft); }
-.fact--raaf .boot-kicker { color: var(--green-mid); }
-.fact-raaf { display: block; font-size: 2rem; line-height: 1; margin-bottom: 2px; }
-
-/* ---- badges (reward + wall) ---- */
-.badge-row { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin: 6px 0; }
-.badge {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  width: 96px;
-}
-.badge-disc {
-  width: 60px;
-  height: 60px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 3px solid var(--ring);
-  box-shadow: 0 0 14px var(--glow);
-  color: #fff;
-  font-size: 30px;
-  line-height: 1;
-}
-.badge-name { font: 600 14px/1.1 var(--font-body); color: var(--ink); text-align: center; }
-.badge-tier { font: 600 12px/1 var(--font-body); color: var(--ink-soft); }
-.badge-bar { width: 72px; height: 6px; border-radius: var(--radius-pill); background: rgba(0, 0, 0, 0.12); overflow: hidden; }
-.badge-bar > span { display: block; height: 100%; background: var(--bk); border-radius: var(--radius-pill); }
-
-.reward-knap { margin: 2px 0; font: 400 18px/1.3 var(--font-read); color: var(--ink); }
-.reward-knap b { color: var(--green-deep); }
-.reward-note { font-size: 16px; }
-
-/* ---- lodge footer links ---- */
-.lodge-links { display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: center; align-items: center; }
-.lodge-clue-count {
-  display: inline-block;
-  margin-left: 4px;
-  padding: 1px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--spel-sun);
-  color: var(--green-deep);
-  font: 700 13px/1.4 var(--font-body);
-  text-decoration: none;
-}
-
-/* ---- case-board (prikbord) ---- */
-/* wide enough on a laptop for the three clues side by side, so the way on
-   ("Volg het spoor") sits right under them, in view at 1280×800 */
-.case-board.boot-card-ish { width: min(92vw, 720px); }
+/* ---- the sporenboek: the clues pinned on its page, the collected veldnotities ---- */
+.case-board { gap: 10px; }
 .cb-cork {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-  width: 100%;
-  margin: 6px 0;
-  padding: 16px;
-  border-radius: var(--spel-radius);
-  background: rgba(120, 86, 54, 0.14);
-  border: 2px dashed rgba(120, 86, 54, 0.3);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+  align-self: stretch;
+  padding: 18px 14px 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(150, 112, 70, 0.13), rgba(150, 112, 70, 0.19));
+  box-shadow: inset 0 1px 4px rgba(80, 55, 25, 0.16);
 }
 .cb-clue {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 14px 12px 12px;
-  border-radius: var(--spel-radius);
-  background: rgba(253, 252, 248, 0.7);
-  box-shadow: var(--shadow-md);
-  opacity: 0.6;
-  transition: transform var(--dur-quick) var(--ease-overshoot), opacity var(--dur-quick);
+  gap: 6px;
+  padding: 16px 12px 14px;
+  border-radius: 8px;
+  background: #fffdf8;
+  box-shadow: 0 6px 14px rgba(46, 32, 12, 0.16);
 }
-.cb-clue.found {
-  opacity: 1;
-  background: var(--green-soft);
-  box-shadow: 0 0 0 3px var(--green-line), var(--shadow-md);
-}
-.cb-pin {
-  position: absolute;
-  top: -6px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--red-warn, #c94174);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-.cb-photo {
-  display: grid;
-  place-items: center;
-  width: 56px;
-  height: 56px;
-  border-radius: var(--spel-radius);
-  background: rgba(0, 0, 0, 0.06);
-  font-size: 28px;
-}
-.cb-clue-title { font: 600 18px/1.2 var(--font-body); color: var(--green-deep); text-align: center; }
-.cb-clue-text { font: 400 17px/1.4 var(--font-read); color: var(--ink); text-align: center; }
-.cb-note { margin: 4px 0; font: 400 17px/1.4 var(--font-read); color: var(--ink); text-align: center; }
-.cb-note.ok { color: var(--green-deep); font-weight: 600; }
+.cb-clue.found:nth-child(odd) { rotate: -1deg; }
+.cb-clue.found:nth-child(even) { rotate: 1deg; }
+.cb-clue:not(.found) { justify-content: center; background: rgba(255, 253, 248, 0.45); border: 2px dashed rgba(120, 96, 56, 0.32); box-shadow: none; }
+.cb-pin { position: absolute; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #e0785f, #9b3d2e); box-shadow: 0 2px 3px rgba(0, 0, 0, 0.35); }
+.cb-clue:not(.found) .cb-pin { display: none; }
+.cb-photo { width: 64px; height: 64px; }
+.cb-photo .ic { width: 40px; height: 40px; }
+.cb-clue:not(.found) .cb-photo { background: none; color: rgba(120, 96, 56, 0.45); }
+.cb-clue:not(.found) .cb-clue-title { font-weight: 600; color: var(--ink-muted); }
+.cb-clue .cb-clue-text { font-size: 17px; }
+.cb-note { margin: 2px 0; font: 400 19px/1.45 var(--font-read); color: var(--ink); text-align: center; }
+.cb-note.ok { color: var(--green-deep); font-weight: 700; }
 .cb-note.muted { color: var(--ink-soft); }
-/* the way to the ontknoping never scrolls out of view: on a short screen it
-   stays at the bottom edge of the sporenboek until you reach its place */
-.cb-act {
-  position: sticky;
-  bottom: -28px; /* the card's bottom padding: stick to the very bottom edge */
-  z-index: 2;
-  align-self: stretch;
-  justify-content: center;
-  margin: 0 -30px;
-  padding: 8px 30px 10px;
-  background: rgb(250, 249, 244);
-}
-/* the way back sits at the TOP of the prikbord and stays there while it scrolls
-   (the list of veldnotities grows; a back button at the bottom fell off-screen) */
-.card-top {
-  position: sticky;
-  top: -28px; /* the card's top padding: stick to the very top edge */
-  z-index: 2;
-  align-self: stretch;
-  display: flex;
-  justify-content: flex-start;
-  margin: -28px -30px 0;
-  padding: 12px 18px 10px;
-  background: rgb(250, 249, 244);
-  border-bottom: 1px solid rgba(120, 86, 54, 0.14);
-}
-
-/* W6.3b: collected veldnotities pinned to the board (calm, no motion). */
-.cb-veld { display: grid; gap: 8px; margin: 8px 0 2px; }
-.cb-veld-head { margin: 0; font: 700 15px/1.3 var(--font-read); color: var(--green-mid); text-align: center; }
+.cb-veld { display: grid; gap: 8px; align-self: stretch; margin: 6px 0 2px; }
+.cb-veld-head { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin: 0; font: 700 16px/1.3 var(--font-body); color: var(--green-mid); }
+.cb-veld-head .ic { width: 20px; height: 20px; }
 .cb-veld-note {
-  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px;
-  padding: 8px 10px; border-left: 3px solid var(--green); background: var(--green-soft); border-radius: 8px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 10px 10px 10px 16px;
+  border-left: 4px solid var(--green-mid);
+  border-radius: 12px;
+  background: rgba(236, 243, 231, 0.75);
+  text-align: left;
 }
-.cb-veld-dier { grid-column: 1 / -1; font: 700 13px/1.2 var(--font-read); color: var(--green-deep); }
-.cb-veld-text { font: 400 15px/1.4 var(--font-read); color: var(--ink); }
-.cb-veld-speak { min-width: 56px; min-height: 56px; }
+.cb-veld-dier { grid-column: 1; font: 700 14px/1.2 var(--font-read); color: var(--green-mid); }
+.cb-veld-text { grid-column: 1; font: 400 18px/1.4 var(--font-read); color: var(--ink); }
+.cb-veld-speak { grid-column: 2; grid-row: 1 / span 2; }
 
-/* ---- wildcamera capture (diegetic clue beat → prikbord) ---- */
-.wildcam-shot {
-  align-self: center;
-  max-width: 260px;
-  margin: 8px auto;
-  opacity: 1; /* always the freshly-captured, found state */
+/* ---- the ontknoping ---- */
+.ont-text { margin: 4px 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
+
+/* ---- the reunion: one line over the LIVE world while the family comes back
+   (MissionFlow.showReunion). A paper strip at the top, no scrim, nothing to click ---- */
+.reunion-cap {
+  position: absolute;
+  top: max(20px, env(safe-area-inset-top));
+  left: 50%;
+  translate: -50% 0;
+  width: min(calc(100vw - 32px), 640px);
+  box-sizing: border-box;
+  padding: 14px 24px 16px;
+  border: 1px solid var(--paper-edge);
+  border-radius: 18px;
+  background: var(--paper-grain), var(--paper-card);
+  box-shadow: var(--card-shadow);
+  text-align: center;
+  animation: cap-in 260ms var(--ease-out) both;
 }
-.wildcam .cb-photo { font-size: 34px; }
+@keyframes cap-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+.ra-leaving .reunion-cap { animation: card-out var(--dur-card-out) var(--ease-in) both; }
+.reunion-cap .boot-kicker .ic { padding: 3px; border-radius: 50%; background: var(--green-mid); color: #fff; stroke-width: 3; }
+.reunion-text { margin: 4px 0 0; font: 500 var(--read-size)/1.45 var(--font-read); color: var(--ink); }
 
-/* ---- ontknoping (hopeful resolution beats) ---- */
-.ont-text { margin: 8px 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
+/* ---- Onderweg (the world-EF micro-beat between missions) ---- */
+.card.worldbeat { width: min(calc(100vw - 32px), 620px); gap: 8px; }
+/* the impulse beat sits low, with no scrim, so the animal it is about stays in view
+   above it (child B14) */
+.card.worldbeat.wb-low { top: auto; bottom: max(20px, env(safe-area-inset-bottom)); translate: -50% 0; padding: 18px 24px 20px; }
+.wb-prompt { margin: 2px 0 6px; font: 400 var(--read-size)/1.4 var(--font-read); color: var(--ink); }
+.wb-opts { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; align-self: stretch; }
+.wb-opt {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 100px;
+  padding: 12px 14px;
+  border: 2px solid rgba(47, 107, 70, 0.2);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--ink);
+  font: 700 19px/1.2 var(--font-body);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+.wb-opt:hover:not(:disabled) { border-color: var(--green-mid); background: #fff; }
+/* the keyboard's focus: a sun ring and a small lift (arrow keys move it, Enter picks) */
+.wb-opt.is-focus, .wb-opt:focus-visible { outline: none; border-color: var(--green-mid); background: #fff; box-shadow: 0 0 0 4px var(--spel-sun); transform: translateY(-2px); }
+.wb-opt:disabled { cursor: default; }
+.wb-opt:disabled:not(.wb-goed) { opacity: 0.55; }
+.wb-glyph { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: rgba(236, 243, 231, 0.95); color: var(--green-deep); }
+.wb-glyph .ic { width: 28px; height: 28px; rotate: var(--turn, 0deg); }
+.wb-cap.kcap { position: absolute; top: 8px; right: 8px; margin: 0; }
+/* dual-channel feedback: colour + scale + the words + sound */
+.wb-opt.wb-goed { border-color: var(--green); background: var(--green-soft); transform: scale(1.04); box-shadow: none; }
+.wb-opt.wb-bijna { border-color: var(--accent-warm); transform: scale(0.97); }
+.wb-feedback { min-height: 1.3em; margin: 4px 0 0; font: 700 18px/1.3 var(--font-body); }
+/* its line is kept free from the start: the answer never pushes the card up */
+.wb-feedback[hidden] { display: block; visibility: hidden; }
+.wb-fb-goed { color: var(--green); }
+.wb-fb-bijna { color: #9a6a3a; }
+.wb-skip { margin-top: 4px; }
+.rm .wb-opt.wb-goed, .rm .wb-opt.wb-bijna, .rm .wb-opt.is-focus { transform: none; }
+@media (prefers-reduced-motion: reduce) { .wb-opt.wb-goed, .wb-opt.wb-bijna, .wb-opt.is-focus { transform: none; } }
 
-/* ---- 3D explore HUD (overlays the world; pointer-events only on controls) ---- */
-/* The `.ra-overlay` wrapper must stay pointer-transparent so world taps fall
- * through to the canvas for tap-to-walk. `#ui > *` (base.css) would otherwise
- * force it back to `auto` — an ID beats the `.ra-overlay` class — swallowing
- * every tap (WORLD-PLAN W0.4 root cause). `#ui .explore-overlay` matches the
- * ID's specificity and adds a class, so it wins; controls stay `auto` below. */
+/* ---- Pauze (in the world): four big tiles, the way back, the title ---- */
+.pause-hub { width: min(calc(100vw - 32px), 660px); }
+.hub-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-self: stretch; margin-top: 4px; }
+.ra-chip.hub-tile {
+  justify-content: flex-start;
+  gap: 14px;
+  min-height: 78px;
+  padding: 10px 16px 10px 12px;
+  border-radius: 16px;
+  border-color: rgba(47, 107, 70, 0.16);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 19px;
+}
+.ra-chip.hub-tile:hover { background: #fff; border-color: rgba(47, 107, 70, 0.4); }
+.hub-tile .ra-chip-ic { width: 50px; height: 50px; border-radius: 50%; background: rgba(236, 243, 231, 0.95); color: var(--green-deep); }
+.hub-tile .ra-chip-ic .ic { width: 28px; height: 28px; }
+.lodge-clue-count {
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--spel-sun);
+  color: #5a3d09;
+  font: 700 14px/1.3 var(--font-body);
+}
+
+/* ---- the in-mission Pauze + "Stop de missie" (F-26): the chip rides above the game's
+   own prompt; the card is its own full-screen catcher over the game (a tap never
+   leaks to the canvas) and leaves the game's prompt intact for "Ga verder" ---- */
+.mission-pause { z-index: 6; }
+/* The running step's own container (MissionFlow): no box of its own, so the step's
+   cards and 2D panel lay out and stack exactly as if they sat straight in #ui. */
+.mission-step { display: contents; }
+.mission-pause-menu { position: absolute; inset: 0; z-index: 20; }
+
+/* ---- the missiebord: pick a mission, over the dimmed world ---- */
+.mission-board {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: max(16px, env(safe-area-inset-top)) 18px 24px;
+  overflow: hidden; /* header + exit stay put; only the grid scrolls (F-20/F-27) */
+  background: var(--modal-scrim);
+  animation: scrim-in var(--dur-card-in) var(--ease-out) both;
+}
+.ra-leaving .mission-board { animation: card-out var(--dur-card-out) var(--ease-in) both; }
+.mission-board .boot-kicker { color: var(--spel-sun); }
+.mission-board .boot-title { font-size: clamp(28px, 5vw, 38px); color: var(--paper); text-shadow: 0 2px 14px rgba(20, 12, 4, 0.45); }
+.mission-board .boot-kicker, .mission-board .boot-title, .mission-board .ra-say-row, .mission-board .mb-back { flex: 0 0 auto; }
+.mission-board .mb-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; width: min(96vw, 1100px); padding: 12px 6px 6px; }
+.mission-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; width: 100%; }
+.mission-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 14px 12px;
+  text-align: left;
+  border: 1px solid var(--paper-edge);
+  border-radius: 16px;
+  background: var(--paper-grain), var(--paper-card);
+  box-shadow: var(--chip-shadow);
+  cursor: pointer;
+  animation: card-in var(--dur-card-in) var(--ease-out) both;
+  transition: transform var(--dur-quick) var(--ease-standard), box-shadow var(--dur-quick);
+}
+.mission-card:hover { transform: translateY(-3px); box-shadow: var(--card-shadow); }
+.mission-card:active { transform: scale(0.98); }
+.mission-card:focus-visible { outline: 3px solid var(--spel-sun); outline-offset: 3px; }
+/* F-23: one flat pictogram per card on a biome-tinted disc (MissionIcon.ts) */
+.mc-icon { align-self: flex-start; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--disc, #eef1e9); color: var(--ink, var(--green-mid)); }
+.mc-icon svg { width: 30px; height: 30px; display: block; }
+.mc-land { font: 700 13px/1 var(--font-body); color: var(--green-mid); }
+.mc-title { font: 600 21px/1.1 var(--font-head); color: var(--green-deep); }
+.mc-eng { display: flex; flex-wrap: wrap; gap: 4px 5px; margin-top: auto; padding-top: 2px; }
+.mc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 5px; border-radius: var(--radius-pill); background: rgba(236, 243, 231, 0.9); color: var(--green-deep); font: 700 12.5px/1.3 var(--font-body); }
+.mc-chip .ic { width: 14px; height: 14px; color: var(--bk, var(--green-mid)); stroke-width: 2.6; }
+.mc-done { position: absolute; top: 12px; right: 14px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--green-mid); color: #fff; }
+.mc-done .ic { width: 18px; height: 18px; stroke-width: 3; }
+/* the recommended mission (first unfinished in story order): a sun outline + tag */
+.mission-card.mc-next { box-shadow: 0 0 0 4px var(--spel-sun), var(--card-shadow); }
+.mc-next-tag { position: absolute; top: -12px; right: 14px; padding: 4px 12px; border-radius: var(--radius-pill); background: var(--spel-sun); color: #5a3d09; font: 700 15px/1.2 var(--font-body); }
+.mission-card.mc-klaar { background: var(--paper-grain), linear-gradient(180deg, #f4f8ef, #e8f0e1); }
+
+/* ============================================================
+   The explore HUD over the live world (ExploreHud.ts). The wrapper lets taps fall
+   through to the canvas (tap-to-walk); only its controls take them. `#ui > *`
+   (base.css) would make the full-screen wrappers eat every tap — an ID beats a class —
+   so these match the ID (W0.4, mg-01).
+   ============================================================ */
 #ui .explore-overlay { pointer-events: none; }
-/* Same trap for the 3D mini-game prompt wrapper (kit.ts anchoredPrompt): without
- * this, `#ui > *` made the full-screen wrapper eat every click, so no 3D
- * mini-game could be played with a mouse or a tap (audit 2026-09-26, mg-01). */
 #ui .ra-overlay.ra-play { pointer-events: none; }
 .explore-hud { position: absolute; inset: 0; pointer-events: none; }
 .explore-hud > * { pointer-events: auto; }
+
+/* Pauze (top left) and the "?" chip (bottom right): paper pills */
 .ra-pill {
   position: absolute;
   top: max(16px, env(safe-area-inset-top));
   left: 16px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: var(--tap-min);
-  padding: 0 18px;
-  border: none;
+  padding: 0 20px 0 16px;
+  border: 1px solid var(--paper-edge);
   border-radius: var(--radius-pill);
-  background: rgba(253, 252, 248, 0.92);
+  background: var(--paper-chip);
   color: var(--green-deep);
-  font: 600 16px/1 var(--font-body);
-  box-shadow: var(--shadow-md);
+  font: 700 17px/1 var(--font-body);
+  box-shadow: var(--chip-shadow);
   cursor: pointer;
 }
-.ra-pill .lodge-clue-count {
-  min-width: 22px;
-  padding: 2px 6px;
-  border-radius: var(--radius-pill);
-  background: var(--green-soft);
-  color: var(--green-deep);
-  font: 600 13px/1 var(--font-body);
+.ra-pill .ic { width: 20px; height: 20px; }
+.ra-pill:focus-visible { outline: 3px solid var(--spel-sun); outline-offset: 2px; }
+.explore-help {
+  top: auto;
+  left: auto;
+  right: 16px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  justify-content: center;
+  min-width: var(--tap-min);
+  padding: 0 16px;
+  font: 700 26px/1 var(--font-head);
 }
-/* P3.3 (F-06/F-11/F-15): the ONE transient tip — the post-walk "tik op een dier"
-   line, the laptop help re-show, and the P4.6 boundary cue all flow through it. Top-
-   centre, calm dark pill, ≤7 words. `pointer-events:none` so a tap still reaches the
-   world (tap-to-walk) beneath it — the old always-on `.explore-hint` toast it replaces
-   sat here permanently and swallowed the region; this one fades on its own. */
+
+/* the chip under Pauze: where the next mission is (an arrow that turns + words) */
+.explore-wayfind, .explore-klaar {
+  position: absolute;
+  left: 16px;
+  top: calc(max(16px, env(safe-area-inset-top)) + 68px);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  max-width: 64vw;
+  padding: 7px 20px 7px 8px;
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--radius-pill);
+  background: var(--paper-chip);
+  color: var(--ink);
+  box-shadow: var(--chip-shadow);
+}
+.explore-wayfind[hidden] { display: none; }
+.explore-wayfind .wf-glyph, .explore-klaar .wf-glyph {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--spel-sun);
+  color: #5a3d09;
+  font: 700 24px/1 var(--font-body);
+}
+.wf-glyph .ic { width: 26px; height: 26px; stroke-width: 2.6; }
+/* the arrow turns with the bearing (ExploreHud.onWayfind): a calm, short ease */
+.explore-wayfind .wf-glyph { transition: transform 0.2s ease-out, background 0.2s; }
+.explore-wayfind.wf-arrived .wf-glyph, .explore-klaar .wf-glyph { background: var(--green-mid); color: #fff; }
+.wf-text { display: flex; flex-direction: column; line-height: 1.25; }
+.wf-doel { font: 700 17px/1.25 var(--font-body); color: var(--green-deep); }
+.wf-cue { font: 600 15px/1.25 var(--font-body); color: var(--ink-soft); }
+
+/* the one transient tip (the world's rim): a small paper strip, top centre, never taps */
+.explore-tip, .explore-heli-hint {
+  margin: 0;
+  padding: 10px 18px;
+  border: 1px solid var(--paper-edge);
+  border-radius: 16px;
+  background: var(--paper-chip);
+  color: var(--ink);
+  box-shadow: var(--chip-shadow);
+  font: 600 17px/1.35 var(--font-body);
+  text-align: center;
+}
 .explore-tip {
   position: absolute;
   top: max(18px, env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
-  margin: 0;
   max-width: 70vw;
-  padding: 10px 16px;
-  text-align: center;
-  border-radius: var(--radius-pill);
-  background: rgba(20, 16, 12, 0.62);
-  color: var(--paper);
-  font: 500 15px/1.3 var(--font-body);
-  white-space: pre-line; /* a two-sentence tip keeps each sentence on its own line (≤7 words a line) */
+  white-space: pre-line; /* a two-sentence tip keeps each sentence on its own line */
   pointer-events: none;
 }
-.explore-prompt,
-.explore-hub-prompt,
-.explore-sit-prompt,
-.explore-vehicle-prompt,
-.explore-heli-prompt {
+
+/* the proximity prompts share ONE place, bottom centre (ExploreHud.arbitratePrompts) */
+.explore-prompt, .explore-hub-prompt, .explore-sit-prompt, .explore-vehicle-prompt, .explore-heli-prompt {
   position: absolute;
   left: 50%;
   bottom: max(28px, env(safe-area-inset-bottom));
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
-/* at a finished marker: "Volgende: …" is the big button, playing it again a quiet
-   pill under it (child B6) — readable over the world, never the key's primary */
-.explore-prompt { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.explore-prompt .explore-replay {
-  padding: 8px 20px;
-  border-radius: var(--radius-pill);
-  background: rgba(20, 16, 12, 0.62);
-  color: var(--paper);
-  text-decoration: none;
-}
-.explore-prompt[hidden],
-.explore-hub-prompt[hidden],
-.explore-sit-prompt[hidden],
-.explore-vehicle-prompt[hidden] { display: none; }
+.explore-prompt[hidden], .explore-hub-prompt[hidden], .explore-sit-prompt[hidden],
+.explore-vehicle-prompt[hidden], .explore-heli-prompt[hidden] { display: none; }
+.explore-drive-hint { line-height: 1.9; white-space: nowrap; }
 
-/* ---- W5.3b helicopter: the "aan de grond" / "vlieg naar een helipad" note is a
-   calm pill (matches the .explore-tip wording style); the cockpit frame is a
-   fixed, always-level reference border that never moves (the horizon anchor), and
-   the motion vignette fades in with flight speed and is OFF at hover. All
-   pointer-events:none so they never block the world or the controls. ---- */
-.explore-heli-prompt[hidden] { display: none; }
-/* wave 2 vehicles: the controls line sits just above the vehicle's own button */
-.explore-vehicle-prompt,
-.explore-heli-prompt { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.explore-drive-hint { line-height: 1.5; white-space: nowrap; }
-.explore-heli-hint {
-  margin: 0;
-  padding: 10px 16px;
-  border-radius: var(--radius-pill);
-  background: rgba(20, 16, 12, 0.62);
-  color: var(--paper);
-  font: 500 15px/1.3 var(--font-body);
-  text-align: center;
-}
+/* the helicopter: a steady sill low in the frame in the air (the horizon cue; roll 0),
+   and a motion vignette that fades in with speed and is off at hover */
 .explore-heli-cockpit {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  /* a soft screen-fixed sill low in the frame, in the air only: the steady horizon cue
-     the comfort clause asks for (it never tilts: roll is 0). The old 18 px grey border
-     read as a rendering bug, even parked on the pad (parent B14). */
   background: linear-gradient(to top, rgba(30, 26, 20, 0.34), rgba(30, 26, 20, 0.14) 5%, rgba(30, 26, 20, 0) 11%);
   transition: opacity 500ms ease;
 }
@@ -515,74 +530,10 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms linear;
-  background: radial-gradient(ellipse at center,
-    rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.55) 100%);
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.55) 100%);
 }
 
-/* ---- in-world mission board (W2.2): the case-board's mission-pick overlay.
-   A full-screen grid like the lodge (the grid is wider than a boot-card),
-   reached from the world without tearing it down. The card GRID scrolls
-   internally (below) so the header + exit stay on-screen. ---- */
-.mission-board {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  padding: max(24px, env(safe-area-inset-top)) 18px 24px;
-  /* RUN-3 P3.2 re-open (F-20/F-27 · board-exit visibility): the F-23 pictogram
-     cards grew the 10-mission grid past the fold, so scrolling the WHOLE board
-     carried `.mb-back` off-screen (y≈882 in an 800px viewport — a child saw no
-     way back). The board is now a fixed full-screen frame: header + exit stay
-     put and ONLY the card grid scrolls inside it (rule below). Mirrors F-01's
-     sticky-footer intent, applied as an internal-scroll region. */
-  overflow: hidden;
-  /* F-29 (P4.7): the ONE shared modal scrim — same token as pause + lodge, no
-     backdrop-filter, so the board overlay reads as the same dimmed backdrop. */
-  background: var(--modal-scrim);
-}
-.mission-board .boot-title { color: var(--paper); }
-.mission-board .boot-kicker { color: var(--spel-sun); }
-/* Header + exit are pinned (flex-shrink 0 → never squeezed below their size);
-   the grid is the ONE scroll region, so the ≥56px `.mb-back` exit is always
-   on-screen no matter how many missions the area holds. */
-.mission-board .boot-kicker,
-.mission-board .boot-title,
-.mission-board .mb-back { flex: 0 0 auto; }
-/* The scroll region wraps the grid (instead of the grid scrolling itself): a grid
-   squeezed by the flex column shrank every row to the card's min-height, so a card
-   with three skill chips spilled into the card below. Wrapped, each row is as tall
-   as its content. Four columns at laptop width, so ten missions fit without scroll. */
-.mission-board .mb-scroll {
-  flex: 0 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  width: min(96vw, 1100px);
-  padding: 12px 6px 6px;
-}
-.mission-board .mission-grid { width: 100%; }
-/* a little tighter than the free-standing cards so all ten fit a laptop screen */
-.mission-board { gap: 10px; padding-top: max(16px, env(safe-area-inset-top)); }
-.mission-board .boot-title { font-size: clamp(28px, 5vw, 38px); }
-.mission-board .mission-card { gap: 6px; padding: 12px 16px; min-height: 0; }
-.mission-board .mc-icon { width: 44px; height: 44px; }
-.mission-board .mc-icon svg { width: 30px; height: 30px; }
-/* the recommended mission (first unfinished in story order): a sun outline + tag */
-.mission-card.mc-next { box-shadow: 0 0 0 4px var(--spel-sun), var(--shadow-lg); }
-.mc-next-tag {
-  position: absolute;
-  top: -12px;
-  right: 14px;
-  padding: 4px 12px;
-  border-radius: var(--radius-pill);
-  background: var(--spel-sun);
-  color: #5a3d09;
-  font: 700 15px/1.2 var(--font-body);
-}
-.mission-card.mc-klaar { background: rgba(236, 244, 232, 0.94); }
-
-/* ---- virtual joystick (W1.3): bottom-left, thumb ≥56 px, coarse-pointer default ---- */
+/* ---- the on-screen joystick (W1.3): bottom-left, thumb ≥56 px ---- */
 .rj-base {
   position: absolute;
   left: max(20px, env(safe-area-inset-left));
@@ -607,168 +558,11 @@
   box-shadow: var(--shadow-md);
   will-change: transform;
   pointer-events: none; /* the base owns the pointer capture */
+  transition: transform 0.12s ease-out; /* re-centres softly on release; the drag itself is instant */
 }
 .rj-base.rj-active { background: rgba(20, 16, 12, 0.3); }
+.rj-base.rj-active .rj-thumb { transition: none; }
 /* run 6: pushed to the rim he runs, and the ring shows it: a warm, steady ring (no
    pulse, no motion: a state, reduced-motion safe) */
 .rj-base.rj-run { border-color: #f5c23b; box-shadow: 0 0 0 5px rgba(245, 194, 59, 0.55); }
 .rj-base.rj-run .rj-thumb { border-color: #f5c23b; }
-/* the thumb re-centres with a soft ease on release; the drag itself is instant
-   (transform set inline every move), and this transition is calm/tiny so it is
-   reduced-motion-safe (locomotion feedback, not a camera move). */
-.rj-thumb { transition: transform 0.12s ease-out; }
-.rj-base.rj-active .rj-thumb { transition: none; }
-
-/* veldnotitie wayfinding strip — calm direction + distance to the active mission,
-   no minimap chrome. Dual-channel: arrow glyph (shape) + words + the mission colour.
-   F-13: sits TOP-LEFT under the Pauze pill — OUT of the bottom-left joystick quadrant
-   it used to share on iPad (the thumb disc covered the mission text). Away from the
-   joystick (bottom-left), the board pill (top-right) and the prompts (bottom-centre). */
-.explore-wayfind, .explore-klaar {
-  position: absolute;
-  left: 16px;
-  top: calc(max(16px, env(safe-area-inset-top)) + 68px);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  max-width: 64vw;
-  padding: 8px 18px 8px 12px;
-  border-radius: var(--radius-pill);
-  background: rgba(40, 30, 18, 0.82);
-  color: var(--paper);
-  box-shadow: var(--shadow-md);
-}
-.explore-wayfind[hidden] { display: none; }
-.explore-wayfind .wf-glyph, .explore-klaar .wf-glyph {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(253, 246, 232, 0.16);
-  font: 600 24px/1 var(--font-body);
-}
-/* the arrow turns with the bearing (ExploreHud.onWayfind sets its rotate) — a calm, short
-   ease; under reduced motion base.css `.rm *` makes it a plain step */
-.explore-wayfind .wf-glyph { transition: transform 0.2s ease-out; }
-.explore-wayfind .wf-text, .explore-klaar .wf-text { display: flex; flex-direction: column; line-height: 1.25; }
-.explore-wayfind .wf-doel, .explore-klaar .wf-doel { font: 600 16px/1.25 var(--font-body); }
-.explore-wayfind .wf-cue, .explore-klaar .wf-cue { font: 500 14px/1.25 var(--font-body); opacity: 0.85; }
-/* the season is done: the chip that pointed the way now says so (felt progress) */
-.explore-klaar { background: rgba(63, 122, 58, 0.9); }
-.explore-wayfind.wf-arrived { background: rgba(63, 122, 58, 0.9); } /* second channel on arrival */
-
-/* F-15: laptop help chip — re-shows the control hint on demand (laptop steady-state
-   HUD was otherwise bare). Shared ≥56 px `.ra-pill` sizing; overridden to sit in the
-   bottom-right corner (clear of the top-left Pauze, top-right board pill, and the
-   bottom-centre prompts). Only mounted on a fine pointer, so it never crowds the iPad. */
-.explore-help {
-  top: auto;
-  left: auto;
-  right: 16px;
-  bottom: max(20px, env(safe-area-inset-bottom));
-  justify-content: center;
-  min-width: var(--tap-min);
-  padding: 0 16px;
-  font: 700 22px/1 var(--font-body);
-}
-
-/* ---- world-EF micro-beat (light open-world seasoning between missions) ---- */
-.worldbeat { text-align: center; }
-/* the Onderweg beat sits low, with no scrim, so the animal it is about stays in view
-   above it (child B14); two options side by side keep it short */
-.worldbeat.wb-low {
-  top: auto;
-  bottom: max(20px, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  gap: 8px;
-  padding: 18px 24px;
-}
-.worldbeat.wb-low .wb-opts { flex-direction: row; flex-wrap: wrap; justify-content: center; }
-.wb-prompt {
-  margin: 6px 0 14px;
-  font: 400 var(--read-size)/var(--read-leading) var(--font-read);
-  color: var(--ink);
-}
-.wb-opts { display: flex; flex-direction: column; gap: 12px; }
-.wb-opt {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 64px;
-  padding: 0 18px;
-  border: 2px solid var(--green-soft);
-  border-radius: var(--radius-md, 16px);
-  background: var(--paper);
-  color: var(--ink);
-  font: 600 17px/1.2 var(--font-body);
-  cursor: pointer;
-  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-}
-.wb-opt:disabled { opacity: 0.6; cursor: default; }
-.wb-glyph { flex: none; font-size: 26px; line-height: 1; width: 34px; text-align: center; }
-.wb-label { text-align: left; }
-/* dual-channel feedback: colour + scale + the glyph/words + sound */
-.wb-opt.wb-goed { border-color: var(--green); background: var(--green-soft); transform: scale(1.04); }
-.wb-opt.wb-bijna { border-color: var(--accent-warm); transform: scale(0.97); }
-.wb-feedback { margin: 12px 0 2px; font: 600 16px/1.3 var(--font-body); }
-.wb-feedback[hidden] { display: none; }
-.wb-fb-goed { color: var(--green); }
-.wb-fb-bijna { color: var(--accent-warm); }
-.wb-skip { margin-top: 8px; }
-
-/* ---- in-mission Pauze + "Stop de missie" (RUN-3 P3.2 · F-26) --------------
-   A mission is no longer a one-way door. The Pauze chip reuses the shared ≥56 px
-   `.ra-pill`; a z-index lifts it ABOVE the engine's live prompt so a tap always
-   lands on it. The pause card is its own full-screen catcher — a calm static
-   scrim (plain rgba, no backdrop-filter, applied instantly = reduced-motion-safe)
-   so a tap never leaks through to the canvas, and it never clears the engine's
-   `.ra-overlay` prompt underneath (which "Ga verder" resumes seamlessly). ---- */
-.mission-pause { z-index: 6; }
-/* The running step's own container (MissionFlow): no box of its own, so the step's
-   cards and 2D panel lay out and stack exactly as if they sat straight in #ui. */
-.mission-step { display: contents; }
-.mission-pause-menu {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  background: var(--modal-scrim); /* F-29 (P4.7): the ONE shared modal scrim token */
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .wb-opt { transition: none; }
-  .wb-opt.wb-goed, .wb-opt.wb-bijna { transform: none; } /* colour channel still carries it */
-}
-
-/* Felt progress: the reunion line over the LIVE world while the mission's family
-   comes back at its marker (MissionFlow.showReunion). A calm top caption, no scrim
-   and nothing to click, so the world beneath it is the picture. */
-.reunion-cap {
-  position: absolute;
-  top: max(20px, env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(calc(100vw - 32px), 640px);
-  box-sizing: border-box;
-  padding: 14px 22px;
-  border-radius: var(--spel-radius-lg);
-  background: rgba(253, 252, 248, 0.94);
-  border-left: 4px solid #8fd6a0;
-  box-shadow: var(--shadow-md);
-  text-align: center;
-}
-.reunion-cap .boot-kicker { margin: 0 0 4px; color: var(--green-mid); }
-.reunion-text { margin: 0; font: 500 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
-
-/* the knappe woorden earned on missions, on the badge wall */
-.knap-woorden { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 4px 0 12px; }
-.knap-woord {
-  padding: 6px 14px;
-  border-radius: var(--radius-pill);
-  background: var(--green-soft);
-  border: 1px solid var(--green-line);
-  color: var(--green);
-  font: 600 17px/1.2 var(--font-body);
-}

@@ -14,8 +14,8 @@
   gap: 10px;
   padding: 16px;
   border-radius: var(--spel-radius);
-  background: var(--green-soft);
-  box-shadow: var(--shadow-md);
+  background: rgba(236, 243, 231, 0.8);
+  border: 1px solid rgba(47, 107, 70, 0.14);
 }
 .comp-head { display: flex; align-items: center; gap: 14px; }
 .comp-perch {
@@ -28,18 +28,19 @@
   background: rgba(120, 86, 54, 0.16);
   box-shadow: inset 0 -4px 10px rgba(0, 0, 0, 0.08);
 }
-.comp-sprite { font-size: 44px; line-height: 1; display: block; }
-.comp-sprite.fase-baby { font-size: 34px; }
-.comp-sprite.fase-jong { font-size: 44px; }
-.comp-sprite.fase-zelfstandig { font-size: 52px; }
-.comp-sprite.big { font-size: 72px; }
+.comp-sprite { display: grid; place-items: center; color: #283340; }
+.comp-sprite .ic { width: 46px; height: 46px; stroke-width: 1.8; }
+.comp-sprite.fase-baby .ic { width: 38px; height: 38px; }
+.comp-sprite.fase-zelfstandig .ic { width: 54px; height: 54px; }
+.comp-sprite.big .ic { width: 76px; height: 76px; }
 
 .comp-meta { display: flex; flex-direction: column; gap: 4px; flex: 1; text-align: left; }
 .comp-name { font: 600 22px/1.1 var(--font-head); color: var(--green-deep); }
 .comp-fase { font: 600 13px/1.2 var(--font-body); color: var(--green-mid); }
 
 .bond-meter { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
-.bm-heart { font-size: 16px; line-height: 1; }
+.bm-heart { display: grid; color: #c9573f; }
+.bm-heart .ic { width: 20px; height: 20px; fill: currentColor; fill-opacity: 0.25; }
 .bm-track {
   flex: 1;
   height: 10px;
@@ -118,7 +119,8 @@
 .ok-text { margin: 0; font: 400 16px/1.4 var(--font-read); color: var(--ink); text-align: center; }
 .ok-gast { display: flex; flex-direction: column; gap: 8px; }
 .ok-vrij { gap: 12px; }
-.ok-vrij-art { font-size: 64px; line-height: 1; }
+.ok-vrij-art { display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background: var(--green-soft); color: var(--green-mid); }
+.ok-vrij-art .ic { width: 48px; height: 48px; }
 
 /* ---- CareRoutine (the EF care skin) ---- */
 .care-routine { gap: 12px; }

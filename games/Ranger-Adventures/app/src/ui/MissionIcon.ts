@@ -106,12 +106,12 @@ const OVERRIDE: Record<string, string> = { ecoduct: 'brug', herstel: 'sneeuw' };
  * The card pictogram: a biome-tinted disc holding this mission's silhouette.
  * Decorative (aria-hidden) — the card's title text already names the mission.
  */
-export function missionIcon(m: Mission): string {
+export function missionIcon(m: Mission, cls = ''): string {
   const key = OVERRIDE[m.id] ?? m.dier ?? '';
   const sil = SIL[key] ?? SIL._leaf;
   const tint = BIOME_TINT[m.landschap] ?? NEUTRAL_TINT;
   return (
-    `<span class="mc-icon" aria-hidden="true" style="--disc:${tint.disc};--ink:${tint.ink}">` +
+    `<span class="mc-icon${cls ? ` ${cls}` : ''}" aria-hidden="true" style="--disc:${tint.disc};--ink:${tint.ink}">` +
     `<svg viewBox="0 0 64 64" fill="currentColor">${sil}</svg>` +
     `</span>`
   );

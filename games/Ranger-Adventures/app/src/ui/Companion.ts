@@ -21,6 +21,8 @@ import {
   COMPANION_SOORTEN, FASE_META, KUNSTJE_META, ZORG_STAPPEN, OPVANG_GASTEN, CARE_ENGINES,
   careBondDelta, type ZorgStap, type Fase, type Kunstje,
 } from '../core/companion';
+import { card, kicker } from './flow/session';
+import { icon } from './icons';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -29,25 +31,19 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 const CARE_GLYPH: Record<string, string> = {
   flame: '🔥', drop: '💧', moon: '🌙', check: '✅', wing: '🪶', heart: '💛', eye: '👁️', path: '🧭',
 };
-/** A simple species mark for the cabin overlay (the 3D model lives in the world, not here). */
-const SOORT_GLYPH: Record<string, string> = { raaf: '🐦‍⬛', hond: '🐕', vos: '🦊' };
+/** The friend's drawn mark in the cabin (the 3D model lives in the world, not here). */
+const soortMark = (soort: string): string => icon(soort === 'raaf' ? 'raven' : 'paw');
 
-let host: HTMLElement;
 let onBack: () => void;
 // The back-button label. Default "Terug naar de hut" (the lodge caller); the
 // world pause-hub (W2.4b) passes "Terug naar de open plek" so the raaf screen
 // reads right when it overlays the LIVE world instead of the lodge.
 let backLabel = 'Terug naar de hut';
 
-export function showCabin(ui: HTMLElement, back: () => void, label = 'Terug naar de hut'): void {
-  host = ui;
+export function showCabin(back: () => void, label = 'Terug naar de hut'): void {
   onBack = back;
   backLabel = label;
   render();
-}
-
-function clearOverlays(): void {
-  host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
 }
 
 function speak(text: string): void {
@@ -57,21 +53,18 @@ function speak(text: string): void {
 /* ----------------------------------------------------------- cabin shell ---- */
 function render(): void {
   narrator.stop();
-  clearOverlays();
-  const el = document.createElement('div');
-  el.className = 'ra-overlay';
-  el.innerHTML =
-    // the way back sits in a pinned footer: it never scrolls out of the card (breaker B3)
-    `<div class="cabin boot-card-ish has-foot">` +
-    `<p class="boot-kicker">De ranger-hut</p>` +
+  // the way back sits in the pinned footer: it never scrolls out of the card (breaker B3)
+  const el = card(
+    `<div class="card cabin">` +
+    kicker('raven', 'De ranger-hut') +
     `<h1 class="boot-title">Jouw plekje</h1>` +
     `<div class="card-body"><div class="cabin-sections"></div></div>` +
     `<div class="card-foot">` +
     `<button class="ra-chip cabin-back" type="button" data-key="back">` +
-    `<span class="ra-chip-ic" aria-hidden="true">‹</span><span class="ra-chip-tx">${esc(backLabel)}</span></button>` +
+    `<span class="ra-chip-ic">${icon('back')}</span><span class="ra-chip-tx">${esc(backLabel)}</span></button>` +
     `</div>` +
-    `</div>`;
-  host.appendChild(el);
+    `</div>`,
+  );
 
   const sections = el.querySelector<HTMLDivElement>('.cabin-sections')!;
   sections.appendChild(companionSection());
@@ -89,7 +82,7 @@ function companionSection(): HTMLElement {
   if (!c.rescued) {
     wrap.innerHTML =
       `<div class="comp-rescue">` +
-      `<div class="comp-perch"><span class="comp-sprite fase-baby" aria-hidden="true">${SOORT_GLYPH[c.soort] ?? '🐦‍⬛'}</span></div>` +
+      `<div class="comp-perch"><span class="comp-sprite fase-baby" aria-hidden="true">${soortMark(c.soort)}</span></div>` +
       `<p class="comp-title">Een jonge raaf is uit het nest gevallen.</p>` +
       `<p class="comp-text">Hij is zwak en heeft hulp nodig. Wil je hem opvangen? Later wordt hij je vaste vriend.</p>` +
       `<div class="naam-grid"></div>` +
@@ -135,11 +128,11 @@ function companionSection(): HTMLElement {
 
   wrap.innerHTML =
     `<div class="comp-head">` +
-    `<div class="comp-perch"><span class="comp-sprite fase-${esc(c.fase)}" aria-hidden="true">${SOORT_GLYPH[c.soort] ?? '🐦‍⬛'}</span></div>` +
+    `<div class="comp-perch"><span class="comp-sprite fase-${esc(c.fase)}" aria-hidden="true">${soortMark(c.soort)}</span></div>` +
     `<div class="comp-meta">` +
     `<div class="comp-name">${esc(c.naam || 'Je raaf')}</div>` +
     `<div class="comp-fase">${esc(fase.label)} · ${esc(fase.kort)}</div>` +
-    `<div class="bond-meter" aria-label="band ${bondPct} van 100"><span class="bm-heart">💛</span>` +
+    `<div class="bond-meter" aria-label="band ${bondPct} van 100"><span class="bm-heart">${icon('heart')}</span>` +
     `<span class="bm-track"><span class="bm-fill" style="width:${bondPct}%"></span></span></div>` +
     (kunstjes ? `<div class="comp-kunstjes">${kunstjes}</div>` : '') +
     `</div></div>` +
@@ -169,19 +162,16 @@ function celebrateGroei(fase: Fase): void {
   const meta = FASE_META[fase];
   const newKunstje = c.kunstjes.length ? KUNSTJE_META[c.kunstjes[c.kunstjes.length - 1]] : null;
   const line = `${c.naam || 'Je raaf'} is gegroeid: ${meta.label}. ${fase !== 'baby' ? `${c.naam || 'Hij'} kan nu met je mee.` : ''}`;
-  clearOverlays();
-  const el = document.createElement('div');
-  el.className = 'ra-overlay';
-  el.innerHTML =
-    `<div class="comp-groei boot-card-ish">` +
-    `<p class="boot-kicker">Je vriend groeit</p>` +
-    `<span class="comp-sprite big fase-${esc(fase)}" aria-hidden="true">${SOORT_GLYPH[c.soort] ?? '🐦‍⬛'}</span>` +
+  const el = card(
+    `<div class="card card--narrow comp-groei">` +
+    kicker('heart', 'Je vriend groeit') +
+    `<span class="comp-sprite big fase-${esc(fase)}" aria-hidden="true">${soortMark(c.soort)}</span>` +
     `<h1 class="boot-title">${esc(meta.label)}</h1>` +
     `<p class="comp-text">${esc(line)}</p>` +
     (newKunstje ? `<p class="comp-kunstje-new">Nieuw kunstje: <b>${esc(newKunstje.naam)}</b> — ${esc(newKunstje.uitleg.replace('{naam}', c.naam || 'Hij'))}</p>` : '') +
-    `<button class="btn-start" type="button">Fijn!</button>` +
-    `</div>`;
-  host.appendChild(el);
+    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button">Fijn!</button></div></div>` +
+    `</div>`,
+  );
   if (store.get().settings.geluid) Sound.found();
   speak(line);
   el.querySelector('.btn-start')?.addEventListener('click', () => {
@@ -203,7 +193,7 @@ function opvangSection(): HTMLElement {
     wrap.innerHTML =
       `<div class="ok-head"><span class="ok-title">De opvang</span>${count}</div>` +
       `<p class="ok-text">Soms heeft een dier even hulp nodig. Je verzorgt het en laat het weer vrij.</p>` +
-      `<div class="ra-row"><button class="ra-text-btn ok-haal" type="button">Kijk wie er is</button></div>`;
+      `<div class="ra-row"><button class="ra-chip ok-haal" type="button">Kijk wie er is</button></div>`;
     wrap.querySelector('.ok-haal')?.addEventListener('click', () => {
       Sound.unlock(); Sound.select();
       // deterministic pick (no Math.random in run-land): rotate by how many you've already released
@@ -232,18 +222,15 @@ function opvangSection(): HTMLElement {
 
 /** The hopeful goodbye — release the guest, count it, never sad. */
 function showRelease(naam: string): void {
-  clearOverlays();
-  const el = document.createElement('div');
-  el.className = 'ra-overlay';
-  el.innerHTML =
-    `<div class="ok-vrij boot-card-ish">` +
-    `<p class="boot-kicker">Sterk genoeg</p>` +
-    `<span class="ok-vrij-art" aria-hidden="true">🕊️</span>` +
+  const el = card(
+    `<div class="card card--narrow ok-vrij">` +
+    kicker('leaf', 'Sterk genoeg') +
+    `<span class="ok-vrij-art" aria-hidden="true">${icon('leaf')}</span>` +
     `<h1 class="boot-title">${esc(naam)} is weer vrij</h1>` +
     `<p class="comp-text">Hij is nu sterk genoeg. Je laat hem gaan — dat hoort erbij.</p>` +
-    `<button class="btn-start" type="button">Dag, sterke vriend</button>` +
-    `</div>`;
-  host.appendChild(el);
+    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button">Dag, sterke vriend</button></div></div>` +
+    `</div>`,
+  );
   if (store.get().settings.geluid) Sound.found();
   speak(`${naam} is weer sterk genoeg. Je laat hem vrij.`);
   el.querySelector('.btn-start')?.addEventListener('click', () => {
@@ -263,23 +250,20 @@ interface CareMiss { orderMiss: number; knuffelMiss: number; }
  * logged (correct iff no miss of that kind) and `done(miss)` fires.
  */
 function runCare(stappen: ZorgStap[], naam: string, done: (m: CareMiss) => void): void {
-  clearOverlays();
   let doneIds: string[] = [];
   let orderMiss = 0;
   let knuffelMiss = 0;
   let finished = false;
 
-  const el = document.createElement('div');
-  el.className = 'ra-overlay';
-  el.innerHTML =
-    `<div class="care-routine boot-card-ish">` +
-    `<p class="boot-kicker">Zorg op volgorde</p>` +
+  const el = card(
+    `<div class="card care-routine">` +
+    kicker('heart', 'Zorg op volgorde') +
     `<h1 class="boot-title">Verzorg ${esc(naam)}</h1>` +
     `<div class="care-progress" aria-label="zorgstappen"></div>` +
     `<div class="care-grid"></div>` +
     `<div class="care-msg tip" role="status">Doe de zorg op volgorde.</div>` +
-    `</div>`;
-  host.appendChild(el);
+    `</div>`,
+  );
 
   const progress = el.querySelector<HTMLDivElement>('.care-progress')!;
   const grid = el.querySelector<HTMLDivElement>('.care-grid')!;

@@ -15,7 +15,7 @@ import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import { loadGameAudio } from '../../core/calls';
 import { setScreen, setMissionView } from '../../core/devhook';
-import { mountReadAloud, readScreenAloud } from '../ReadAloud';
+import { mountReadAloud, readScreenAloud, speakButtonHtml } from '../ReadAloud';
 import { SAY } from '../../content/screens';
 import { BESTURING } from '../../content/mentor';
 import { joystickVisible } from '../../core/input';
@@ -23,7 +23,8 @@ import { coarsePointer } from '../hud/device';
 import { missionIcon } from '../MissionIcon';
 import { showCabin } from '../Companion';
 import { showTweaks } from '../Tweaks';
-import { session, esc, card, plainCard } from '../flow/session';
+import { session, esc, card, plainCard, kicker } from '../flow/session';
+import { icon, CLUE_ICON, type IconName } from '../icons';
 import { goToMission, unmountMissionPause } from '../flow/MissionFlow';
 import { returnToTitle, resumePatrol, activeExploreTitel, nextMissionId } from '../flow/WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
@@ -55,7 +56,7 @@ function cluesBadge(): string {
   const found = Content.cluesFound(area.id, store.get().voltooid).size;
   const total = Content.clues(area.id).length;
   if (!total) return '';
-  return ` <span class="lodge-clue-count">${found}/${total}</span>`;
+  return `<span class="lodge-clue-count">${found}/${total}</span>`;
 }
 
 /**
@@ -66,32 +67,33 @@ function cluesBadge(): string {
 export function showPauseHub(): void {
   narrator.stop();
   const toWorld = (): void => showExploreHud(activeExploreTitel());
+  const tile = (cls: string, ic: IconName, words: string, extra = ''): string =>
+    `<button class="ra-chip hub-tile ${cls}" type="button"><span class="ra-chip-ic">${icon(ic)}</span>` +
+    `<span class="ra-chip-tx">${words}</span>${extra}</button>`;
   const el = card(
-    `<div class="reward boot-card-ish">` +
-    `<p class="boot-kicker">Pauze</p>` +
+    `<div class="card pause-hub">` +
+    kicker('pause', 'Pauze') +
     `<h1 class="boot-title">Wat wil je doen?</h1>` +
-    `<div class="lodge-links">` +
-    `<button class="ra-chip ph-prikbord" type="button"><span class="ra-chip-ic" aria-hidden="true">📓</span>` +
-    `<span class="ra-chip-tx">Open je sporenboek${cluesBadge()}</span></button>` +
-    `<button class="ra-chip ph-companion" type="button"><span class="ra-chip-ic" aria-hidden="true">🐦‍⬛</span>` +
-    `<span class="ra-chip-tx">${esc(cabinLabel())}</span></button>` +
-    `<button class="ra-chip ph-badges" type="button"><span class="ra-chip-ic" aria-hidden="true">🏅</span>` +
-    `<span class="ra-chip-tx">Bekijk je breinkracht-badges</span></button>` +
-    `<button class="ra-chip ph-tweaks" type="button"><span class="ra-chip-ic" aria-hidden="true">⚙️</span>` +
-    `<span class="ra-chip-tx">Instellingen</span></button>` +
-    `<button class="ra-chip ph-hoofdmenu" type="button"><span class="ra-chip-ic" aria-hidden="true">🏠</span>` +
+    `<div class="hub-tiles">` +
+    tile('ph-prikbord', 'book', 'Open je sporenboek', cluesBadge()) +
+    tile('ph-companion', 'raven', esc(cabinLabel())) +
+    tile('ph-badges', 'badge', 'Bekijk je breinkracht-badges') +
+    tile('ph-tweaks', 'gear', 'Instellingen') +
+    `</div>` +
+    `<div class="card-foot">` +
+    `<div class="ra-row"><button class="btn-start ph-back" type="button" data-key="back">Terug naar de open plek</button></div>` +
+    `<button class="ra-chip ph-hoofdmenu" type="button"><span class="ra-chip-ic">${icon('home')}</span>` +
     `<span class="ra-chip-tx">Naar het hoofdmenu</span></button>` +
     `</div>` +
-    `<button class="btn-start ph-back" type="button" data-key="back">Terug naar de open plek</button>` +
     `</div>`,
   );
   const voor = store.get().settings.voorlezen; // child:B12: the menu reads aloud, each choice on hover/focus
   readScreenAloud(el, { text: SAY.pauze, autoStart: voor, items: '.ra-chip', hover: voor });
   el.querySelector('.ph-prikbord')?.addEventListener('click', () => showCaseBoard());
   el.querySelector('.ph-companion')?.addEventListener('click', () =>
-    showCabin(session.host, toWorld, 'Terug naar de open plek'));
+    showCabin(toWorld, 'Terug naar de open plek'));
   el.querySelector('.ph-badges')?.addEventListener('click', () => showBadges(showPauseHub));
-  el.querySelector('.ph-tweaks')?.addEventListener('click', () => showTweaks(session.host, showPauseHub));
+  el.querySelector('.ph-tweaks')?.addEventListener('click', () => showTweaks(showPauseHub));
   el.querySelector('.ph-hoofdmenu')?.addEventListener('click', () => showTitle());
   el.querySelector('.ph-back')?.addEventListener('click', toWorld);
 }
@@ -110,10 +112,10 @@ export function showControls(): void {
     .map((r) => `<li class="zs-row"><span class="zs-key" aria-hidden="true">${controlGlyph(r.toets)}</span><span class="zs-wat">${esc(r.wat)}</span></li>`)
     .join('');
   const el = card(
-    `<div class="controls-card boot-card-ish">` +
+    `<div class="card card--narrow controls-card">` +
     `<h1 class="boot-title">${esc(BESTURING.titel)}</h1>` +
     `<ul class="zs-list">${rows}</ul>` +
-    `<button class="btn-start zs-back" type="button" data-key="back">${esc(BESTURING.terug)}</button>` +
+    `<div class="card-foot"><div class="ra-row"><button class="btn-start zs-back" type="button" data-key="back">${esc(BESTURING.terug)}</button></div></div>` +
     `</div>`,
   );
   readScreenAloud(el, { text: stick ? BESTURING.zegStick : BESTURING.zegKeys, autoStart: store.get().settings.voorlezen, anchor: '.zs-back' });
@@ -152,8 +154,8 @@ export function showMissionBoard(): void {
   const next = nextMissionId();
   const cards = area.missies
     .map((m) => {
-      const engines = Array.from(new Set(m.stappen.map((s) => SKILL_META[s.ef as Engine]?.naam ?? s.ef)));
-      const klaar = done[m.id] ? `<span class="mc-done" aria-label="voltooid">✓</span>` : '';
+      const engines = Array.from(new Set(m.stappen.map((s) => s.ef as Engine))).filter((e) => SKILL_META[e]);
+      const klaar = done[m.id] ? `<span class="mc-done" aria-label="voltooid">${icon('check')}</span>` : '';
       // the recommended mission: first unfinished in story order (the chip points at it too)
       const isNext = m.id === next;
       const nu = isNext ? `<span class="mc-next-tag">Nu doen</span>` : '';
@@ -163,7 +165,7 @@ export function showMissionBoard(): void {
         missionIcon(m) +
         `<span class="mc-land">${esc(m.landschap)}</span>${klaar}` +
         `<span class="mc-title">${esc(m.titel)}</span>` +
-        `<span class="mc-eng">${engines.map((e) => `<span class="mc-chip">${esc(e)}</span>`).join('')}</span>` +
+        `<span class="mc-eng">${engines.map((e) => `<span class="mc-chip" style="--bk:${SKILL_META[e].kleur}">${icon(SKILL_META[e].icon)}${esc(SKILL_META[e].naam)}</span>`).join('')}</span>` +
         `</button>`
       );
     })
@@ -171,11 +173,11 @@ export function showMissionBoard(): void {
 
   const el = plainCard(
     `<div class="mission-board">` +
-    `<p class="boot-kicker">Het missiebord · ${esc(area.naam)}</p>` +
+    kicker('pin', `Het missiebord · ${area.naam}`) +
     `<h1 class="boot-title">Kies een missie</h1>` +
     `<div class="mb-scroll"><div class="mission-grid">${cards}</div></div>` +
     `<button class="ra-chip mb-back" type="button" data-key="back">` +
-    `<span class="ra-chip-ic" aria-hidden="true">‹</span>` +
+    `<span class="ra-chip-ic">${icon('back')}</span>` +
     `<span class="ra-chip-tx">Terug naar de open plek</span></button>` +
     `</div>`,
   );
@@ -195,9 +197,6 @@ export function showMissionBoard(): void {
 }
 
 /* ------------------------------------ sporenboek (clues; code: case-board) ---- */
-/** Simple per-soort glyph (dual-channel: glyph + the found colour). */
-export const CLUE_GLYPH: Record<string, string> = { spoor: '👣', camera: '📷', band: '🛞' }; // footprints, not a paw (parent:B13)
-
 /** The sporenboek (was "prikbord"; the class names stay case-board / ph-prikbord):
  *  found clues, the collected veldnotities and (once all clues are found) the way
  *  to the hopeful resolution. Its back returns to patrol. */
@@ -216,15 +215,16 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
   const allFound = clues.length > 0 && clues.every((c) => found.has(c.id));
   const laatste = [...clues].reverse().find((c) => found.has(c.id)) ?? null;
 
+  // a found clue: its drawn picture (footprints, not a paw: parent:B13), title and text;
+  // one still to find: an empty dashed frame, "Nog niet gevonden" (never "???")
   const board = clues
     .map((c) => {
       const isF = found.has(c.id);
-      const glyph = isF ? (CLUE_GLYPH[c.soort] ?? '📌') : '?';
       return (
         `<div class="cb-clue${isF ? ' found' : ''}">` +
         `<span class="cb-pin" aria-hidden="true"></span>` +
-        `<span class="cb-photo">${glyph}</span>` +
-        `<span class="cb-clue-title">${esc(isF ? c.titel : '???')}</span>` +
+        `<span class="cb-photo">${icon(isF ? CLUE_ICON[c.soort] ?? 'photo' : 'unknown')}</span>` +
+        `<span class="cb-clue-title">${esc(isF ? c.titel : 'Nog niet gevonden')}</span>` +
         (isF ? `<span class="cb-clue-text">${esc(c.tekst)}</span>` : '') +
         `</div>`
       );
@@ -237,14 +237,14 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
   const gotN = notities.filter((n) => collected[n.id]);
   const veldStrip = notities.length
     ? `<div class="cb-veld">` +
-      `<p class="cb-veld-head">Veldnotities · ${gotN.length}/${notities.length}</p>` +
+      `<p class="cb-veld-head">${icon('leaf')}<span>Veldnotities · ${gotN.length}/${notities.length}</span></p>` +
       (gotN.length
         ? gotN
             .map((n, i) =>
               `<div class="cb-veld-note" data-i="${i}">` +
               (n.dier ? `<span class="cb-veld-dier">${esc(n.dier)}</span>` : '') +
               `<span class="cb-veld-text">${esc(n.tekst)}</span>` +
-              `<button class="ra-speak cb-veld-speak" type="button" aria-label="Lees voor">🔊</button>` +
+              speakButtonHtml('ra-speak cb-veld-speak') +
               `</div>`,
             )
             .join('')
@@ -264,13 +264,13 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
   const resolve = allFound && !gemeld;
   const onLabel = back === resumePatrol ? 'Verder op patrouille' : 'Verder';
   const foot = resolve
-    ? `<div class="ra-row cb-act"><button class="btn-start cb-resolve" type="button">Volg het spoor</button></div>` +
-      `<button class="ra-text-btn cb-back" type="button" data-key="back">${onLabel}</button>`
+    ? `<div class="ra-row"><button class="btn-start cb-resolve" type="button">${icon('footprints')}Volg het spoor</button></div>` +
+      `<button class="ra-chip cb-back" type="button" data-key="back">${onLabel}</button>`
     : `<div class="ra-row"><button class="btn-start cb-back" type="button" data-key="back">${onLabel}</button></div>`;
 
   const el = card(
-    `<div class="case-board boot-card-ish has-foot">` +
-    `<p class="boot-kicker">Je sporenboek · ${esc(chapter?.naam ?? '')} · ${count}</p>` +
+    `<div class="card card--wide case-board">` +
+    kicker('book', `Je sporenboek · ${chapter?.naam ?? ''} · ${count}`) +
     `<h1 class="boot-title">Wat is hier aan de hand?</h1>` +
     `<div class="card-body">` +
     `<div class="cb-cork">${board}</div>` +
@@ -312,13 +312,12 @@ export function showOntknoping(idx: number, done: () => void): void {
   if (!beat) { store.reportArc(); session.world?.setSeasonResolved(true); done(); return; }
   const last = idx === beats.length - 1;
   const el = card(
-    `<div class="ontknoping boot-card-ish">` +
-    `<p class="boot-kicker">Op het spoor · ${idx + 1}/${beats.length}</p>` +
+    `<div class="card card--narrow ontknoping">` +
+    kicker('footprints', `Op het spoor · ${idx + 1}/${beats.length}`) +
     `<p class="ont-text"></p>` +
-    `<div class="ra-row">` +
-    `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
-    `<button class="btn-start" type="button">${last ? 'Klaar' : 'Verder'}</button>` +
-    `</div></div>`,
+    `<div class="card-foot"><div class="ra-row">${speakButtonHtml()}` +
+    `<button class="btn-start" type="button">${last ? 'Klaar' : 'Verder'}</button></div></div>` +
+    `</div>`,
   );
   const ra = mountReadAloud({
     textEl: el.querySelector('.ont-text')!,
@@ -334,14 +333,17 @@ export function showOntknoping(idx: number, done: () => void): void {
 }
 
 /* -------------------------------------------------------- badge wall ---- */
-export function badgeHtml(e: Engine): string {
+/** One breinkracht badge: its drawn picture on the tier's disc (brons, zilver, goud), its
+ *  name, the tier and how far to the next one. `i`: its place in a row that eases in one
+ *  badge after the other (the reward). */
+export function badgeHtml(e: Engine, i = 0): string {
   const meta = SKILL_META[e];
   const best = store.get().skill[e]?.best ?? 1;
   const tier = tierFor(best);
   const pct = Math.round(badgeProgress(best) * 100);
   return (
-    `<div class="badge" style="--bk:${meta.kleur};--ring:${tier.ring};--glow:${tier.glow}">` +
-    `<span class="badge-disc" style="background:${tier.kleur}" aria-hidden="true">${meta.glyph}</span>` +
+    `<div class="badge" style="--bk:${meta.kleur};--ring:${tier.ring};--glow:${tier.glow};--i:${i}">` +
+    `<span class="badge-disc" style="background:${tier.kleur}">${icon(meta.icon)}</span>` +
     `<span class="badge-name">${esc(meta.naam)}</span>` +
     `<span class="badge-tier">${esc(tier.naam)}</span>` +
     `<span class="badge-bar"><span style="width:${pct}%"></span></span>` +
@@ -350,20 +352,19 @@ export function badgeHtml(e: Engine): string {
 }
 
 export function showBadges(back: () => void): void {
-  const wall = (Object.keys(SKILL_META) as Engine[]).map(badgeHtml).join('');
+  const wall = (Object.keys(SKILL_META) as Engine[]).map((e) => badgeHtml(e)).join('');
   // the knappe woorden earned on missions (each reward card names one)
   const woorden = Object.values(store.get().knapWoorden).map((w) => w.naam);
   const knap = woorden.length
-    ? `<p class="boot-kicker">Knappe woorden · ${woorden.length}</p>` +
+    ? `<p class="kw-head">Knappe woorden · ${woorden.length}</p>` +
       `<div class="knap-woorden">${woorden.map((w) => `<span class="knap-woord">${esc(w)}</span>`).join('')}</div>`
     : '';
   const el = card(
-    `<div class="reward boot-card-ish">` +
-    `<p class="boot-kicker">Jouw breinkracht</p>` +
+    `<div class="card badge-wall">` +
+    kicker('badge', 'Jouw breinkracht') +
     `<h1 class="boot-title">Badges</h1>` +
-    `<div class="badge-row">${wall}</div>` +
-    knap +
-    `<button class="btn-start" type="button" data-key="back">Terug</button>` +
+    `<div class="card-body"><div class="badge-row">${wall}</div>${knap}</div>` +
+    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button" data-key="back">Terug</button></div></div>` +
     `</div>`,
   );
   el.querySelector('.btn-start')?.addEventListener('click', back);

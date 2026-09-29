@@ -18,6 +18,7 @@ import type { WayCue } from '../../render3d/Wayfinding';
 import { Joystick } from '../Joystick';
 import { coarsePointer } from './device';
 import { session, esc, plainCard } from '../flow/session';
+import { icon } from '../icons';
 import { showBriefing, goToMission } from '../flow/MissionFlow';
 import { playRoepAtSitSpot, nextMissionId } from '../flow/WorldSession';
 import { showPauseHub, showMissionBoard, showControls } from '../hub/Hub';
@@ -56,7 +57,7 @@ export function showExploreHud(activeTitel: string | null): void {
   const held = !!world && chipHeld();
   const veld = activeTitel
     ? `<div class="explore-wayfind" role="status" aria-live="polite"${held ? ' hidden' : ''}>` +
-      `<span class="wf-glyph" aria-hidden="true">·</span>` +
+      `<span class="wf-glyph" aria-hidden="true">${icon('arrow')}</span>` +
       `<span class="wf-text"><b class="wf-doel">${esc(activeTitel)}</b><span class="wf-cue">zoek het spoor…</span></span>` +
       `</div>`
     : '';
@@ -64,13 +65,13 @@ export function showExploreHud(activeTitel: string | null): void {
   const allDone = !activeTitel && Content.activeArea().missies.every((m) => store.get().voltooid[m.id]);
   const klaar = allDone
     ? `<div class="explore-klaar" role="status">` +
-      `<span class="wf-glyph" aria-hidden="true">✓</span>` +
+      `<span class="wf-glyph" aria-hidden="true">${icon('check')}</span>` +
       `<span class="wf-text"><b class="wf-doel">Alle missies klaar</b><span class="wf-cue">loop rustig rond</span></span>` +
       `</div>`
     : '';
   const el = plainCard(
     `<div class="explore-hud">` +
-    `<button class="ra-pill explore-pause" type="button" data-key="pause">⏸ Pauze</button>` +
+    `<button class="ra-pill explore-pause" type="button" data-key="pause">${icon('pause')}<span>Pauze</span></button>` +
     veld + klaar +
     `<div class="explore-prompt" hidden></div>` +
     `<div class="explore-hub-prompt" hidden></div>` +
@@ -137,9 +138,11 @@ function enterCap(): string {
 }
 
 /* ----------------------------------------------------------- vehicles ---- */
-/** How to drive / fly and how to get out: a short line (≤ 7 words, dyslexia-friendly
- *  arrows) shown with the vehicle's own button, device-aware like the walk hint. */
-const DRIVE_KEYS = '⬆ gas · ⬇ rem · ⬅ ➡ sturen';
+/** How to drive / fly and how to get out: a short line (≤ 7 words) shown with the
+ *  vehicle's own button, device-aware like the walk hint. On a laptop the keys are drawn
+ *  as key caps (the words say what they do). */
+const cap = (k: string): string => `<span class="kcap kcap-sm" aria-hidden="true">${k}</span>`;
+const DRIVE_KEYS_HTML = `${cap('↑')} gas · ${cap('↓')} rem · ${cap('←')}${cap('→')} sturen`;
 const DRIVE_OUT_KEYS = ONBOARD_DRIVE.uit;
 const FLY_KEYS = 'Vlieg met de pijltjes.';
 const LANDING = 'De helikopter landt.';
@@ -156,13 +159,13 @@ export function renderVehiclePrompt(): void {
   const v = session.world?.vehicleState() ?? null;
   if (!v || (!v.near && !v.inVehicle)) prompt.innerHTML = '';
   else if (v.inVehicle) {
-    const lines = stickShown() ? [ONBOARD_DRIVE.stick] : [DRIVE_KEYS, DRIVE_OUT_KEYS];
+    const lines = stickShown() ? [esc(ONBOARD_DRIVE.stick)] : [DRIVE_KEYS_HTML, esc(DRIVE_OUT_KEYS)];
     prompt.innerHTML =
-      `<p class="explore-heli-hint explore-drive-hint">${lines.map(esc).join('<br>')}</p>` +
-      `<button class="btn-start explore-vehicle-exit" type="button">🚙 Stap uit${enterCap()}</button>`;
+      `<p class="explore-heli-hint explore-drive-hint">${lines.join('<br>')}</p>` +
+      `<button class="btn-start explore-vehicle-exit" type="button">${icon('jeep')}Stap uit${enterCap()}</button>`;
     prompt.querySelector('.explore-vehicle-exit')?.addEventListener('click', () => session.world?.exitVehicle());
   } else {
-    prompt.innerHTML = `<button class="btn-start explore-vehicle-enter" type="button">🚙 Stap in de jeep${enterCap()}</button>`;
+    prompt.innerHTML = `<button class="btn-start explore-vehicle-enter" type="button">${icon('jeep')}Stap in de jeep${enterCap()}</button>`;
     prompt.querySelector('.explore-vehicle-enter')?.addEventListener('click', () => session.world?.enterVehicle());
   }
   arbitratePrompts();
@@ -196,25 +199,25 @@ export function renderHeliPrompt(): void {
   }
   heliPromptKey = key;
   const hint = (text: string, cls = ''): string => `<p class="explore-heli-hint${cls}">${esc(text)}</p>`;
-  const button = (cls: string, label: string): string => `<button class="btn-start ${cls}" type="button">${label}</button>`;
+  const button = (cls: string, label: string): string => `<button class="btn-start ${cls}" type="button">${icon('helicopter')}${label}</button>`;
   let say = ''; // what is read aloud as this line appears (verifier V3: the heli lines were never spoken)
   if (key === 'none') prompt.innerHTML = '';
   else if (key === 'ground') {
     say = stickShown() ? 'Sleep de stick om te vliegen.' : FLY_KEYS;
-    prompt.innerHTML = hint(say) + button('explore-heli-exit', '🚁 Stap uit');
+    prompt.innerHTML = hint(say) + button('explore-heli-exit', 'Stap uit');
   } else if (key === 'landing') {
     say = LANDING;
     prompt.innerHTML = hint(say);
   } else if (key === 'land') {
     say = 'Land hier.';
-    prompt.innerHTML = button('explore-heli-land', '🚁 Land hier');
+    prompt.innerHTML = button('explore-heli-land', 'Land hier');
   } else if (key === 'fly') {
     // spoken without the arrow glyph: "Helipad achter je, 35 meter." (the chip's words
     // keep changing in flight; only its first reading is spoken, not every 5 m)
     say = cue ? `Helipad ${cue.richting}, ${Math.max(5, Math.round(cue.distance / 5) * 5)} meter.` : '';
-    prompt.innerHTML = hint(where, ' explore-heli-where') + button('explore-heli-land', '🚁 Land op de helipad');
+    prompt.innerHTML = hint(where, ' explore-heli-where') + button('explore-heli-land', 'Land op de helipad');
   } else if (key === 'enter') {
-    prompt.innerHTML = button('explore-heli-enter', '🚁 Stap in de helikopter');
+    prompt.innerHTML = button('explore-heli-enter', 'Stap in de helikopter');
   } else {
     // near, but withheld: reduced-motion (toggle on) or the toggle is UIT
     say = key === 'reduced' ? 'De helikopter blijft nu aan de grond.' : 'Zet de helikopter aan bij Instellingen.';
@@ -332,8 +335,8 @@ export function onWayfind(cue: WayCue | null): void {
   const glyph = strip.querySelector<HTMLSpanElement>('.wf-glyph');
   const cueEl = strip.querySelector<HTMLSpanElement>('.wf-cue');
   if (glyph) {
-    const g = cue.arrived ? '◎' : '↑';
-    if (glyph.textContent !== g) glyph.textContent = g;
+    const g = cue.arrived ? 'target' : 'arrow';
+    if (glyph.dataset.ic !== g) { glyph.dataset.ic = g; glyph.innerHTML = icon(g); }
     if (!cue.arrived) arrowTurn += Math.atan2(Math.sin(cue.angle - arrowTurn), Math.cos(cue.angle - arrowTurn));
     glyph.style.transform = cue.arrived ? '' : `rotate(${arrowTurn.toFixed(3)}rad)`;
   }
@@ -359,7 +362,7 @@ export function onApproach(missionId: string | null): void {
     const next = area.missies.find((mm) => mm.id === nextMissionId()) ?? null;
     prompt.innerHTML =
       (next ? `<button class="btn-start explore-next" type="button">Volgende: ${esc(next.titel)}${enterCap()}</button>` : '') +
-      `<button class="ra-text-btn explore-play explore-replay" type="button">Speel nog eens: ${esc(m.titel)}</button>`;
+      `<button class="ra-chip explore-play explore-replay" type="button">Speel nog eens: ${esc(m.titel)}</button>`;
     prompt.querySelector('.explore-next')?.addEventListener('click', () => { if (next) goToMission(next); });
   }
   prompt.querySelector('.explore-play')?.addEventListener('click', () => {

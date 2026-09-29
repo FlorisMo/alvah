@@ -135,18 +135,92 @@ body {
 @keyframes hud-in { from { opacity: 0; } to { opacity: 1; } }
 .rm .explore-hud--arriving > * { animation: none; }
 
-/* the shared card words: a small kicker over a serif heading, a reading line */
+/* ============================================================
+   The ranger's field kit (run 6, FLOW P3): ONE card for every screen between the
+   world and a mission — briefing, fact, reward, clue, finale, ontknoping, Onderweg,
+   Pauze, sporenboek, badges, Zo speel je, Instellingen, the raaf hut. Warm paper with
+   a faint grain, the serif for the title, the reading font for the words, one sun
+   button (the primary) and one quiet chip (the other way), drawn line icons
+   (ui/icons.ts). It eases in (200 ms: opacity and a rise of 8 px) and out (140 ms:
+   ui/flow/session.clearOverlays); under reduced motion it simply is there and gone.
+
+     <div class="card">                      a centred card (flow/session.card())
+       <p class="boot-kicker">icon · words</p>  the small line over the title
+       <h1 class="boot-title">…</h1>          the serif title
+       <div class="card-body">…</div>         the words; the only part that may scroll
+       <div class="card-foot">…</div>         🔊 + the primary, the quiet way back
+     </div>
+   ============================================================ */
+.card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(calc(100vw - 32px), 580px);
+  max-height: calc(100% - 32px);
+  padding: 26px 30px;
+  box-sizing: border-box;
+  text-align: center;
+  color: var(--ink);
+  background: var(--paper-grain), var(--paper-card);
+  border: 1px solid var(--paper-edge);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  animation: card-in var(--dur-card-in) var(--ease-out) both;
+}
+.card--wide { width: min(calc(100vw - 32px), 760px); }
+.card--narrow { width: min(calc(100vw - 32px), 480px); }
+@keyframes card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* leaving (session.clearOverlays): no longer a menu, never clicked, fading out */
+.ra-leaving .card { animation: card-out var(--dur-card-out) var(--ease-in) both; }
+@keyframes card-out { from { opacity: 1; } to { opacity: 0; transform: translateY(4px); } }
+
+.card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 2px 2px 6px;
+}
+.card-foot {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 4px -30px -26px;
+  padding: 14px 30px 18px;
+  border-top: 1px solid var(--paper-rule);
+  background: rgba(255, 251, 242, 0.55);
+}
+
+/* the shared card words: a small kicker (sentence case: a dyslexic reader reads the
+   shape of a word, all caps take it away) over a serif title, a reading line */
 .boot-kicker {
   margin: 0;
-  font: 700 13px/1 var(--font-body);
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: 700 16px/1.2 var(--font-body);
   color: var(--green-mid);
 }
+.boot-kicker .ic { flex: none; width: 20px; height: 20px; }
 .boot-title {
   margin: 0;
-  font: 600 clamp(30px, 6vw, 44px)/1.05 var(--font-head);
+  font: 600 clamp(30px, 4.2vw, 42px)/1.08 var(--font-head);
   color: var(--green-deep);
+  text-wrap: balance;
 }
 .boot-sub {
   margin: 0;
@@ -154,22 +228,77 @@ body {
   color: var(--ink-soft);
 }
 
+/* a row of buttons: 🔊 beside the primary */
+.ra-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+
+/* the icons (ui/icons.ts) sit on the text's line, in its colour */
+.ic { display: block; flex: none; width: 24px; height: 24px; }
+
 /* one consistent primary button — ≥56px tap target (Alvah profile, BUILD-PLAN §3) */
 .btn-start {
-  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   min-height: var(--tap-min);
   padding: 0 30px;
   border: none;
   border-radius: var(--spel-radius);
-  background: var(--spel-sun);
+  background: linear-gradient(180deg, #f8cd4f, var(--spel-sun));
   color: #5a3d09;
   font: 700 21px/1 var(--font-body);
   cursor: pointer;
-  box-shadow: 0 6px 0 #d59f1d, 0 14px 26px var(--spel-sun-glow);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 214, 0.9), 0 5px 0 #d59f1d, 0 12px 24px var(--spel-sun-glow);
   transition: transform var(--dur-quick) var(--ease-standard), filter var(--dur-quick);
 }
+.btn-start .ic { width: 26px; height: 26px; }
 .btn-start:hover  { transform: translateY(-2px); filter: brightness(1.04); }
-.btn-start:active { transform: translateY(2px); box-shadow: 0 2px 0 #d59f1d, 0 8px 16px var(--spel-sun-glow); }
+.btn-start:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255, 246, 214, 0.9), 0 2px 0 #d59f1d, 0 8px 16px var(--spel-sun-glow); }
+.btn-start:focus-visible { outline: 3px solid var(--green-deep); outline-offset: 3px; }
+
+/* the ONE quiet way: a soft green chip with its icon (the way back, a side step, a menu
+   choice). Its visible box is its hit box (≥56px), so it reads as a button, not a link. */
+.ra-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: var(--tap-min);
+  padding: 8px 22px;
+  border: 2px solid rgba(47, 107, 70, 0.22);
+  border-radius: var(--radius-pill);
+  background: rgba(236, 243, 231, 0.85);
+  color: var(--green-deep);
+  font: 700 18px/1.15 var(--font-body);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--dur-quick), border-color var(--dur-quick), transform var(--dur-quick) var(--ease-standard);
+}
+.ra-chip:hover { background: #e2ecdb; border-color: rgba(47, 107, 70, 0.45); }
+.ra-chip:active { transform: scale(0.97); }
+.ra-chip:focus-visible { outline: 3px solid var(--spel-sun); outline-offset: 2px; }
+.ra-chip-ic { display: grid; place-items: center; flex: none; }
+.ra-chip-ic .ic { width: 22px; height: 22px; }
+.ra-chip-tx { text-align: left; }
+
+/* 🔊 "Lees voor": the drawn speaker in a soft green disc (never the emoji) */
+.ra-speak, .ra-say {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  padding: 0;
+  border: 2px solid rgba(47, 107, 70, 0.16);
+  border-radius: var(--radius-pill);
+  background: rgba(236, 243, 231, 0.9);
+  color: var(--green);
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-standard), background var(--dur-quick);
+}
+.ra-speak .ic, .ra-say .ic { width: 28px; height: 28px; }
+.ra-speak:hover, .ra-say:hover { transform: translateY(-2px); background: var(--green-line); }
+.ra-speak:focus-visible, .ra-say:focus-visible { outline: 3px solid var(--spel-sun); outline-offset: 2px; }
 
 /* ---- reduced motion: dual-gated (OS query + the .rm body class for the in-game toggle) ---- */
 .rm *, .rm *::before, .rm *::after {
