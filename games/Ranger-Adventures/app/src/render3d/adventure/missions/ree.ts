@@ -247,13 +247,16 @@ async function story(k: AdventureKit): Promise<void> {
   // 10 · on to the hide, quietly
   await k.walk({ name: 'hide', to: P.hide, r: 1.0, line: c.verstop, doel: c.chipHut, cue: c.zacht, glyph: '🤫', quiet: hush });
 
-  // 11 · watch: through his binoculars the lens moves toward the meadow; the bracken at
-  // the copse's gap stirs, and the mother steps out where she went in
+  // 11 · watch: the lens turns toward the meadow and he watches through his binoculars;
+  // the bracken at the copse's gap stirs, and the mother steps out where she went in
   k.beat = 'watch:walk';
   await k.walkRanger(P.hide.x, P.hide.z, 0.05);
   k.beat = 'watch';
-  k.ui.watching(true);
+  // he turns to the copse first and only then lifts his glasses: the turn sweeps past the
+  // wildcamera's glade next door, and the roe grazing there must never be the deer in his
+  // lenses just before the mother comes
   await k.frame(WATCH_VIEW, { face: P.hide.heading });
+  k.ui.watching(true);
   k.say(c.wacht);
   calf.idle();
   if (!doe.lies && dist(doe, DOE_BED) > 0.5) { // (a stop and a replay: she is in her bed)
