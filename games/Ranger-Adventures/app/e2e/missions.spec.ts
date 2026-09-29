@@ -417,9 +417,12 @@ test('the season finale: the last mission ends the season, then the world is cal
     await page.reload();
     await click(log, 'Begin', 'title after reload', 30_000);
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
-    await sleep(page, 3_000);
-    const seats = await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`);
-    log.soft(!!seats?.some((x) => x.id.startsWith('klaar-flag')), 'after a reload the finished marker still has its flag');
+    // (the flags come in as their models load: on a busy machine that is seconds after
+    // the world shows, so wait for it rather than a fixed moment)
+    const flagged = async (): Promise<boolean> =>
+      !!(await R<Seat[] | null>(page, `r.seating(${marker.x}, ${marker.z}, ${SEAT_RADIUS})`))?.some((x) => x.id.startsWith('klaar-flag'));
+    const flagBack = await expect.poll(flagged, { timeout: 20_000 }).toBe(true).then(() => true, () => false);
+    log.soft(flagBack, 'after a reload the finished marker still has its flag');
     await log.shot('after-reload');
     log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
   } finally {
