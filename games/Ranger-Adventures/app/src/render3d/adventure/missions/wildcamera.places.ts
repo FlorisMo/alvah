@@ -217,7 +217,8 @@ export const TRAIL_VIEW = (() => {
   const from = WILDCAMERA_PLACES.trailStart;
   return {
     at: { x: (t[1].x + t[2].x) / 2, z: (t[1].z + t[2].z) / 2 }, heading: headingTo(from, t[2]),
-    halfW: 2.0, halfD: 2.4, tall: 1.2, pitchDeg: 20, insetTop: 110, insetBottom: 30,
+    // (as far back and as high as the follow camera stands, so its hand-over is calm)
+    halfW: 3.0, halfD: 3.4, tall: 1.4, pitchDeg: 17, insetTop: 110, insetBottom: 60,
     include: [{ x: from.x, z: from.z, h: RANGER_STAND_HEIGHT }],
   } as const;
 })();
