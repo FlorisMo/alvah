@@ -138,6 +138,8 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
     if (!ready || busy || !item) return; // (the pause card covers the canvas: no click gets here)
     const bin = id as WisselBin;
     busy = true;
+    // the words of the pick before ("Leeg…", "Klik!…") go: they are not about this one
+    card?.querySelector('.p3-toast')?.remove();
     const s = aim.pick(bin);
     void (async () => {
       await w.look(bin);
