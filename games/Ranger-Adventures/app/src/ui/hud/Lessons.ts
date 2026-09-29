@@ -200,8 +200,9 @@ function tick(now: number): void {
   startStep(step);
 }
 
-/** The next step waits at most this long for another voice to finish (ms). */
-const QUIET_WAIT_MS = 4000;
+/** The next step waits at most this long for another voice to finish (ms): a prompt says
+ *  its words in about two seconds; the teaching never waits much longer than that. */
+const QUIET_WAIT_MS = 2500;
 function voiceBusy(): boolean {
   const synth = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
   return !!synth && store.get().settings.voorlezen && (synth.speaking || synth.pending);

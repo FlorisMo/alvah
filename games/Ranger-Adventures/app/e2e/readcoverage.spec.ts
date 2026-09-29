@@ -123,6 +123,17 @@ function shotsInto(testInfo: TestInfo, sub: string): void {
   n = 0;
 }
 
+/** Walk (real arrow keys) into the ring of mission 1, however long it takes under load:
+ *  stop as soon as he stands in it, and walk again if he overshot. */
+async function toFirstMarker(page: Page): Promise<void> {
+  const marker = (await R<{ x: number; z: number; missionId: string }[]>(page, 'r.markers()')).find((m) => m.missionId === FIRST.id)!;
+  for (let i = 0; i < 4 && (await R<string | null>(page, 'r.nearId()')) !== FIRST.id; i++) {
+    await walkTo(page, marker, { stopDist: 1.2, until: (s) => s.near === FIRST.id, timeout: 90_000 });
+    await sleep(page, 500);
+  }
+  expect(await R<string | null>(page, 'r.nearId()'), 'he stands in the ring of mission 1').toBe(FIRST.id);
+}
+
 /** Every line seen so far was spoken around the time it appeared. */
 async function everyLineSpoken(page: Page, where: string): Promise<Seen[]> {
   await sleep(page, 400);
@@ -179,8 +190,7 @@ test('the first visit, title to briefing: every line that appears is read aloud'
   await snap(page, 'hook-chip');
 
   // to the marker: its prompt names the mission and says so
-  const marker = (await R<{ x: number; z: number; missionId: string }[]>(page, 'r.markers()')).find((m) => m.missionId === FIRST.id)!;
-  await walkTo(page, marker, { stopDist: 1.6, timeout: 90_000 });
+  await toFirstMarker(page);
   await expect(page.getByRole('button', { name: `Speel mee: ${FIRST.titel}` })).toBeVisible({ timeout: 10_000 });
   await sleep(page, 1_200);
   await snap(page, 'marker');
@@ -214,8 +224,7 @@ test('mission 1 to its reward and first clue: every line is read aloud, the clue
   await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 40_000 });
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
   await sleep(page, 2_500);
-  const marker = (await R<{ x: number; z: number; missionId: string }[]>(page, 'r.markers()')).find((m) => m.missionId === FIRST.id)!;
-  await walkTo(page, marker, { stopDist: 1.6, timeout: 90_000 });
+  await toFirstMarker(page);
   await page.getByRole('button', { name: `Speel mee: ${FIRST.titel}` }).click({ timeout: 10_000 });
   await page.getByRole('button', { name: MISSIE.gaOpPad }).click({ timeout: 10_000 });
 
