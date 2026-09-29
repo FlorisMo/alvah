@@ -96,6 +96,7 @@ export class Markers {
   private readonly groundRings: {
     mat: THREE.MeshBasicMaterial; x: number; z: number; base: number;
     mesh: THREE.Mesh; glow: number; pulse: number; // run 6: a ring that glows (s left) breathes
+    glowTag?: THREE.Sprite | null;                  // …as long as this tag glows (seen-time, Labels)
   }[] = [];
   // run 6 (FLOW): the next mission's tag shows from afar only once Bram has told the
   // player about it (the chip and the tag come together); a glowing ring round the
@@ -442,14 +443,14 @@ export class Markers {
     if (!m) return;
     this.labels.setGlow(m.label, seconds);
     const r = this.groundRings.find((g) => g.mat === m.ring);
-    if (r) r.glow = seconds;
+    if (r) { r.glow = seconds; r.glowTag = m.label; }
   }
 
   /** The missiebord's ring and tag glow for `seconds` (more work waits there). */
   glowBoard(seconds: number): void {
     if (this.boardLabel) this.labels.setGlow(this.boardLabel, seconds);
     const r = this.boardPos ? this.groundRings.find((g) => g.x === this.boardPos!.x && g.z === this.boardPos!.z) : null;
-    if (r) r.glow = seconds;
+    if (r) { r.glow = seconds; r.glowTag = this.boardLabel; }
   }
 
   /** Whether the next mission's tag / the board's tag glows now (dev hook). */
@@ -487,7 +488,9 @@ export class Markers {
     const breath = reduced ? 1 : 0.5 - 0.5 * Math.cos((this.glowClock / 1.6) * Math.PI * 2);
     for (const r of this.groundRings) {
       if (r.glow <= 0 && r.pulse === 0) continue;
-      r.glow = Math.max(0, r.glow - dt);
+      // a ring glows as long as its tag does (the tag's glow counts only while it is seen)
+      if (r.glowTag) { if (!this.labels.glowing(r.glowTag)) { r.glow = 0; r.glowTag = null; } }
+      else r.glow = Math.max(0, r.glow - dt);
       r.pulse = r.glow > 0 ? breath : 0;
       const s = r.glow > 0 ? 1 + (reduced ? 0.06 : 0.1 * breath) : 1;
       r.mesh.scale.set(s, 1, s);
