@@ -74,10 +74,11 @@ export const WILDCAMERA_PLACES = {
   thicket: { ...THICKET, r: THICKET_R },
   sett: { ...SETT },
   snare: { ...SNARE },
-  /** where he stands to take the snare away: a step up the trail from it, facing it */
-  snareApproach: { x: 7.85, z: -27.3, r: 0.9, heading: Math.atan2(7.3 - 7.85, -28.3 + 27.3) },
+  /** where he stands to take the snare away: a step down the trail from it (the pine's
+   *  side), facing it */
+  snareApproach: { x: 6.95, z: -29.3, r: 0.8, heading: Math.atan2(7.3 - 6.95, -28.3 + 29.3) },
   /** the start of the wildwissel at the marker ring: he steps onto it, facing the wood */
-  trailStart: { x: MARKER.x - 1.25, z: MARKER.z - 1.2, r: 0.3, heading: 0 },
+  trailStart: { x: 14.35, z: -16.5, r: 0.3, heading: 0 },
   /** the home place: the ranger ends near it (golden step 8, missions.spec) */
   home: { ...TREE },
 } as const satisfies Record<string, Place>;
@@ -91,10 +92,10 @@ export function trailA(): Spot[] {
   const end = WILDCAMERA_PLACES.strap;
   return [
     { x: m.x - 0.7, z: m.z - 0.6 },
-    { x: 13.2, z: -18.4 },
-    { x: 11.3, z: -21.5 },
-    { x: 9.9, z: -24.3 },
-    { x: 8.2, z: -26.6 },
+    { x: 12.7, z: -17.5 },
+    { x: 11.1, z: -20.4 },
+    { x: 9.9, z: -23.6 },
+    { x: 8.3, z: -26.3 },
     { x: 7.0, z: -28.9 },
     { x: end.x + 0.1, z: end.z + 0.5 },
     // …and on past the pine, south into the wood
@@ -129,8 +130,10 @@ export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
     const mouth = at(3.0, -2.75);
     return { at: mouth, from: at(3.35, -2.05), yaw: headingTo(SETT, mouth) };
   }
-  const spot = animal === 'edelhert' ? at(5.1, -1.3) : animal === 'nachtzwaluw' ? at(4.0, -2.35) : at(4.5, -2.25);
-  return { at: spot, from: at(8.6, 2.2), yaw: headingTo(spot, TREE) - 1.1 };
+  // at the thicket's foot, in front of its bushes and clear of the sett as the camera
+  // sees it (an animal behind the mound would give a photo of the mound)
+  const spot = animal === 'edelhert' ? at(5.0, -0.95) : animal === 'nachtzwaluw' ? at(3.9, -1.2) : at(4.35, -1.05);
+  return { at: spot, from: at(8.4, 1.9), yaw: headingTo(spot, TREE) - 1.1 };
 }
 
 /** The four night callers round the crossing (design §4.3 beat 4): the badger at its
@@ -140,8 +143,8 @@ export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
  *  glade, the sky). */
 export const CALLER_SPOTS: Readonly<Record<string, { at: Spot; from: Spot; yaw: number }>> = {
   das: { at: at(2.7, -2.9), from: at(3.35, -2.05), yaw: VIEW_H + Math.PI - 0.6 },
-  wildzwijn: { at: at(5.4, -2.6), from: at(8.6, 1.6), yaw: VIEW_H + Math.PI + 0.9 },
-  ree: { at: at(-5.3, -1.1), from: at(-10.5, -0.6), yaw: VIEW_H + Math.PI - 1.2 },
+  wildzwijn: { at: at(4.8, -2.7), from: at(8.4, 1.9), yaw: VIEW_H + Math.PI + 0.9 },
+  ree: { at: at(-4.7, -1.0), from: at(-10.5, -0.6), yaw: VIEW_H + Math.PI - 1.2 },
   nachtzwaluw: { at: at(-1.9, -3.4), from: at(-6, -9), yaw: VIEW_H + Math.PI / 2 },
 };
 
@@ -165,14 +168,26 @@ export const REUNION_VIEW = {
   include: [{ x: WILDCAMERA_PLACES.snareApproach.x, z: WILDCAMERA_PLACES.snareApproach.z, h: RANGER_STAND_HEIGHT }],
 } as const;
 
+/** The snare: close by, from the side, the ranger at it (the action "Haal de val weg"). */
+export const SNARE_VIEW = (() => {
+  const sn = WILDCAMERA_PLACES.snare, me = WILDCAMERA_PLACES.snareApproach;
+  const mid = { x: (sn.x + me.x) / 2, z: (sn.z + me.z) / 2 };
+  const side = { x: mid.x - 2.2, z: mid.z + 2.4 }; // from the north-west: the thicket behind
+  return {
+    at: mid, heading: headingTo(side, mid),
+    halfW: 1.5, halfD: 1.2, tall: 1.4, pitchDeg: 26, insetTop: 120, insetBottom: 120,
+    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT }],
+  } as const;
+})();
+
 /** The start: from behind the ranger at the ring's edge, along the wildwissel into the
  *  wood (the follow camera takes over from there, looking the way he goes). */
 export const TRAIL_VIEW = (() => {
   const t = trailA();
   const from = WILDCAMERA_PLACES.trailStart;
   return {
-    at: t[2], heading: headingTo(from, t[2]),
-    halfW: 2.2, halfD: 3.0, tall: 1.2, pitchDeg: 22, insetTop: 110, insetBottom: 30,
+    at: { x: (t[1].x + t[2].x) / 2, z: (t[1].z + t[2].z) / 2 }, heading: headingTo(from, t[2]),
+    halfW: 2.0, halfD: 2.4, tall: 1.2, pitchDeg: 20, insetTop: 110, insetBottom: 30,
     include: [{ x: from.x, z: from.z, h: RANGER_STAND_HEIGHT }],
   } as const;
 })();

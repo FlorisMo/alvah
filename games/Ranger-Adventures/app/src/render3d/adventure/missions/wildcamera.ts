@@ -32,7 +32,7 @@ import type { Spot } from '../types';
 import { WildcameraHome } from './wildcamera.home';
 import { PhotoStrip, develop, type Photo } from './wildcamera.photos';
 import {
-  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, CALLER_SPOTS, LOG,
+  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, SNARE_VIEW, CALLER_SPOTS, LOG,
   aimSpot, cameraAim, wildcameraClearings, wildcameraTreeClearings, wildcameraTrees, type AimSpot,
 } from './wildcamera.places';
 
@@ -186,7 +186,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       shutter(night);
       // framed on the animal: its middle, a little more than its height in the picture
       const h = item.id === 'nachtzwaluw' ? 0.26 : A[item.id as Walker].height * (item.id === 'ree' && bin === 'hol' ? 0.5 : 1);
-      const p = await photograph(s.at, h * 0.5, Math.max(1.1, h * 2.3), item.id, night ? 'nacht' : 'dag');
+      const p = await photograph(s.at, h * 0.5, Math.max(1.1, h * (h > 1 ? 1.6 : 2.3)), item.id, night ? 'nacht' : 'dag');
       if (p) photos.add(p);
       k.stats.photos = photos.photos.length;
       await k.wait(0.6);
@@ -304,7 +304,9 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
 
   /* 11 · the snare by the trail: take it away */
   await k.walk({ name: 'val', to: P.snareApproach, r: P.snareApproach.r, line: c.zoekVal, doel: c.chipVal, cue: c.bijPad });
-  k.world.faceRanger(headingTo(k.ranger(), P.snare));
+  k.beat = 'val';
+  await k.walkRanger(P.snareApproach.x, P.snareApproach.z, 0.05);
+  await k.frame(SNARE_VIEW, { face: P.snareApproach.heading });
   await k.act(c.valKnop, c.valHier);
   home.showSnare(false);
   if (settings.geluid) { Sound.rustle(); Sound.found(); }

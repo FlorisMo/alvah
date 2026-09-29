@@ -318,11 +318,11 @@ export class WildcameraHome implements HomeDressing {
       });
       if (solid) env.obstacles.push({ x: p.x, z: p.z, r: solid });
     };
-    bush('prop-juniper-bush', 1.9, 5.6, -0.3, 0.3, 0.7, true);
-    bush('prop-bramble', 1.05, 4.2, -0.9, 1.2);
-    bush('prop-bramble', 0.95, 6.6, -1.3, 2.9);
-    bush('prop-fern', 1.15, 3.5, -0.35, 0.8);
-    bush('prop-fern', 1.0, 7.1, -2.1, 2.2);
+    bush('prop-juniper-bush', 1.9, 5.9, 0.25, 0.3, 0.7, true);
+    bush('prop-bramble', 1.05, 4.5, -0.15, 1.2);
+    bush('prop-bramble', 0.95, 6.9, -0.8, 2.9);
+    bush('prop-fern', 1.15, 3.6, 0.35, 0.8);
+    bush('prop-fern', 1.0, 7.3, -1.8, 2.2);
     const sett = P.sett;
     void env.spawnPlant('prop-badger-sett', SIZE.dassenburcht.h).then((s) => {
       // its way in faces into the thicket (the badger sleeps inside by day)
