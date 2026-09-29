@@ -28,7 +28,7 @@ import type { Residents, ResidentGroup } from '../world/Residents';
 import type { MissionMode } from '../World';
 import { Stage, type StageSpec } from '../play/stage';
 import { makeReframe, registerPlayHint, clearPlayHint } from '../play/kit';
-import { wayfind } from '../Wayfinding';
+import { ARRIVE_RADIUS, cue as cueAt, wayfind } from '../Wayfinding';
 import { isRunning, nearestAway } from './actors-math';
 import type { Actor } from './actors';
 import type { AdventureRead, Place, Places, Spot } from './types';
@@ -479,12 +479,16 @@ export class AdventureKit {
       if (!arrow && this.clock - bestAt > arrowAfter) arrow = true;
       // the chip: the goal in words; the arrow and the way only as the fallback
       const goal = lead && waiting ? lead.actor : to;
-      const cue = wayfind(m.x, m.z, m.heading, goal.x, goal.z);
+      const here = d < r || !!o.reached?.();
+      const raw = wayfind(m.x, m.z, m.heading, goal.x, goal.z);
+      // (within a marker's arrive radius of the goal but not yet at this walk's own: the
+      // way and the metres still, never "je bent er" while nothing happens)
+      const cue = raw.arrived && !(goal === to && here) ? cueAt(raw.angle, ARRIVE_RADIUS) : raw;
       this.ui.setChip({
         doel: lead && waiting ? (lead.waitLine ? this.copy.chipBig ?? o.doel : o.doel) : o.doel,
         cue: arrow || waiting ? `${cue.richting} · ${cue.afstand}` : (o.cue ?? ''),
         angle: arrow || waiting ? cue.angle : null,
-        arrived: d < r || !!o.reached?.(),
+        arrived: here,
         glyph: o.glyph,
       });
       o.tick?.(dt);
