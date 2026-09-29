@@ -142,8 +142,20 @@ test('keyboard: Shift + ArrowUp runs, ArrowUp walks briskly, backing up and Shif
   expect(median(tail.map((f) => f.speed)), 'releasing Shift walks again').toBeLessThanOrEqual(2.5);
   expect(tail.every((f) => !f.running), 'the run gait is off').toBe(true);
   expect(jumps(back2walk), 'easing back never pops').toBeLessThanOrEqual(0.35);
+  const tRelease = await pageNow(page);
   await page.keyboard.up('ArrowUp');
   await hold(800);
+  // letting go, he coasts a short way on, the way he faces, and stays facing it (he
+  // never turns round to walk back to where the key came up)
+  const coast = await window(tRelease);
+  const h0 = coast[0].heading;
+  const turned = Math.max(...coast.map((f) => Math.abs(Math.atan2(Math.sin(f.heading - h0), Math.cos(f.heading - h0)))));
+  expect(turned * 180 / Math.PI, 'letting go, he keeps facing the way he walked').toBeLessThan(5);
+  const last = coast[coast.length - 1];
+  const along = (last.x - coast[0].x) * Math.sin(h0) + (last.z - coast[0].z) * Math.cos(h0);
+  expect(along, `he coasts a short way on (${along.toFixed(2)} m), never back`).toBeGreaterThan(0.05);
+  expect(along).toBeLessThan(0.8);
+  expect(last.speed, 'and stands').toBe(0);
 
   // Shift + ArrowDown: backs up at the walking back-up speed, never runs
   t = await pageNow(page);

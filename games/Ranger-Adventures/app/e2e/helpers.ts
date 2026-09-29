@@ -90,6 +90,8 @@ export interface MotionFrame {
   /** page time (ms) and the frame's length (s) */
   t: number; dt: number;
   x: number; z: number;
+  /** the way he faces (rad; he walks along (sin h, cos h)) */
+  heading: number;
   /** post-collision ground speed (m/s) and whether the run gait is on */
   speed: number; running: boolean;
   /** the gait read: which clip leads, footfalls per second */
@@ -121,7 +123,7 @@ export async function recordMotion(page: Page): Promise<void> {
         const ground = balls.map((b) => r.groundAt(b.x, b.z) as number);
         const lift = soles.map((s, k) => Math.min(s.heel.y, s.toe.y, s.tip.y) - ground[k]);
         rec.push({
-          t: now, dt: (now - last) / 1000, x: m.x, z: m.z, speed: m.speed, running: m.running,
+          t: now, dt: (now - last) / 1000, x: m.x, z: m.z, heading: m.heading, speed: m.speed, running: m.running,
           gait: g?.name ?? null, cadence: g?.cadence ?? 0,
           balls, ground, lift,
           fov: c.fov, hf: c.avatarScreen.heightFrac, sx: c.avatarScreen.x, sy: c.avatarScreen.y, yaw: c.yaw,

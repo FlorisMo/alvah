@@ -382,8 +382,10 @@ export class Player {
     this.rig.setGait(back && moved > 0, pivoting && moved < 1e-4);
     rp.y = this.terrain.y(rp.x, rp.z); // feet on the drawn terrain
     // keys / stick drop any tap target where he now stands (after the step: a target left
-    // a step behind him turned him round to walk back to it once the key came up)
-    if (mode === 'keys' || mode === 'stick') this.target.set(rp.x, 0, rp.z);
+    // a step behind him turned him round to walk back to it once the key came up), and so
+    // does the short coast after a key or the stick lets go (run 6: else he coasted past
+    // the target the last held frame left and turned round to walk back to it)
+    if (mode === 'keys' || mode === 'stick' || (mode === null && this.speedNow.v !== 0)) this.target.set(rp.x, 0, rp.z);
 
     // what the follow camera does (it is told, never left to chase the facing):
     if (!view.follows) this.camNow = null;
