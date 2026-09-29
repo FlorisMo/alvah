@@ -125,9 +125,14 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     return { ...s, at: { x: s.at.x + (dx / l) * step, z: s.at.z + (dz / l) * step }, yaw: s.yaw + (n % 2 ? 0.5 : -0.45) };
   };
   const leaving = new Map<string, number>();
+  /** the animals still walking off after their photo: the place each left from (and a
+   *  few seconds at most: a walk that never ends never holds the next aim) */
+  const walkingOff = new Map<string, { bin: WisselBin; until: number }>();
+  const shotAt = new Map<string, WisselBin>();
   let birdToken = 0;
   const walkIn = async (id: string, s: AimSpot): Promise<void> => {
     leaving.delete(id);
+    walkingOff.delete(id);
     if (id === 'nachtzwaluw') {
       birdToken += 1;
       const from = home.bird.visible ? { x: home.birdAt.x, z: home.birdAt.z, y: home.birdAt.y - k.ctx.groundY(home.birdAt.x, home.birdAt.z) } : { ...s.from, y: 3.4 };
@@ -163,8 +168,11 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     const a = A[id as Walker];
     const t = (leaving.get(id) ?? 0) + 1;
     leaving.set(id, t);
+    const bin = shotAt.get(id);
+    if (bin) walkingOff.set(id, { bin, until: k.now + 4 });
     if (a.lies) void a.lie(false);
     void a.go(s.from.x, s.from.z, { speed: PACE[id] ?? 1.1 }).then((ok) => {
+      if (leaving.get(id) === t) walkingOff.delete(id);
       if (ok && leaving.get(id) === t) { a.group.visible = false; a.idle(); }
     });
   };
@@ -259,6 +267,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       const s = varied(aimSpot(item.id, bin), item.id);
       if (item.id === 'nachtzwaluw') s.lift = home.nightjarLift(bin); // (its perch, as the model stands)
       at.set(item.id, s);
+      shotAt.set(item.id, bin);
       await walkIn(item.id, s);
       // a deer rests in the thicket at night: the roe lies down
       if (item.id === 'ree' && bin === 'hol') await k.guard(A.ree.lie(true));
@@ -290,6 +299,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       await k.wait(0.5);
     },
     leave: (item) => { const s = at.get(item.id); if (s) walkOut(item.id, s); },
+    leaving: (bin) => [...walkingOff.values()].some((w) => w.bin === bin && k.now < w.until),
     turn: async (to) => {
       k.daylight(to === 'night' ? 0 : 1, 2.2);
       await k.wait(2.4);

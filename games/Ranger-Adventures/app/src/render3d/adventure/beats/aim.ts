@@ -50,6 +50,9 @@ export interface AimWorld {
   empty(bin: WisselBin): Promise<void>;
   /** the animal of the photo before walks off (the next one comes) */
   leave(item: WisselItem): void;
+  /** an animal photographed at this place is still walking off through it (a perfect
+   *  player waits for it to go before he aims there again: the play hint waits too) */
+  leaving?(bin: WisselBin): boolean;
   /** the day turns (the rule flipped): the sky fades to night or back to day */
   turn(to: 'night' | 'day'): Promise<void>;
 }
@@ -128,6 +131,7 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
   let ready = false;
   const unhint = k.hint(() => {
     if (!ready || busy || !aim.current) return null;
+    if (w.leaving?.(aim.right)) return null; // (the stag of the photo before still stands in front of the juniper)
     return { id: aim.right, target: w.places[aim.right].hint };
   });
 
