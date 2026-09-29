@@ -56,8 +56,10 @@ export interface FrameView {
 export interface HomeDressing {
   /** per frame while the lens is near: `movers` = the home's animals now */
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean }[]): void;
-  /** the home's state changed (a replay puts it back before; a finish after) */
-  setState(state: HomeState): void;
+  /** the home's state changed (a replay puts it back before; a finish after). `fresh`:
+   *  it happens in front of the player (a stop, a finish), so it may change calmly
+   *  rather than at once (run 6, additive) */
+  setState(state: HomeState, fresh?: boolean): void;
   dispose(): void;
 }
 
@@ -215,7 +217,7 @@ export class Residents {
     home.state = state;
     home.gen += 1;
     home.reacting.clear();
-    home.dressing?.setState(state);
+    home.dressing?.setState(state, walk);
     for (const r of home.spec.residents) {
       const a = home.actors.get(r.key)!;
       const pose = state === 'before' ? r.before : r.after;

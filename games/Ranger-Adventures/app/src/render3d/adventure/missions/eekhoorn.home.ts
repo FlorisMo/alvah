@@ -293,13 +293,25 @@ export class EekhoornHome implements HomeDressing {
     if (b && b.fly < 0) b.fly = 0;
   }
 
-  setState(state: HomeState): void {
+  setState(state: HomeState, fresh = false): void {
     this.state = state;
-    // after: the bigger store, the jay gone; before: the small store, the jay on its stub
-    this.heapShown = state === 'after' ? HEAP_SPOTS.length : 1;
-    this.showHeap(true);
+    // after: the bigger store, the jay gone; before: the small store, the jay on its stub.
+    // In front of him (a stop, a finish) nothing pops: the jay flies back up to its stub,
+    // the store keeps what the squirrel piled (it grows to full once it is done); a
+    // replay (under the briefing card) and a reload set it at once.
+    if (!fresh || state === 'after') this.heapShown = state === 'after' ? HEAP_SPOTS.length : 1;
+    if (!fresh) this.showHeap(true);
     for (const b of this.birds) {
       if (b.kind !== 'gaai') continue;
+      if (fresh && state === 'before' && b.fly < 0) {
+        // back up to its stub, if it came down
+        if (b.base.distanceTo(b.home) > 0.05 || b.glide) {
+          const from = b.o.position.clone();
+          b.glide = { from, to: b.home.clone(), yaw0: b.o.rotation.y, yaw1: b.homeYaw, t: 0, dur: 1.2 };
+        }
+        continue;
+      }
+      if (fresh && state === 'after') { if (b.fly < 0) b.fly = 0; continue; } // (it flies off, if it has not yet)
       b.fly = state === 'after' ? 99 : -1;
       b.glide = null;
       b.o.visible = state !== 'after';
