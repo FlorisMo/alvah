@@ -20,7 +20,8 @@ render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls
    world/Terrain.ts     THE ground: mesh, terrain.y(x,z), biome, intersectRay. One truth.
    world/Dressing.ts    grass + wind, water, paths, cabin, landmarks, props, collision list
    world/Forest.ts      every tree: instanced real GLBs per distance level (Lod.ts), per-tree
-                        occluder fade (only the crowns between camera and ranger fade)
+                        occluder fade (only the crowns between camera and ranger fade); a home
+                        tree's branch stub (TreeStub) is part of its tree: drawn and faded with it
    world/Progress.ts    lasting per-mission tableau at a finished marker (onMissionComplete)
    world/Fauna.ts       warden, poacher, roaming animals
    world/Markers.ts     mission markers, missiebord, sit-spot, proximity, wayfinding
