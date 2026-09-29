@@ -43,6 +43,7 @@ let rennenShown = false;
 let kijkenShown = false;
 let missiebordArmed = false;
 let started = false;
+let sessionStarted = false; // play began once this page load (a trip to the title and back is the same visit)
 let startAt = 0;            // the first step waits for the glide into play (ms)
 let gapUntil = 0;           // a breath between two steps (ms)
 let raf = 0;
@@ -62,9 +63,11 @@ let lessonEl: HTMLElement | null = null;
 /**
  * Play began (WorldSession.enterPlay): the first minute starts after the glide into
  * play has settled. `returning`: he came in from the title with a ranger already made.
+ * Only the first entry of a page load decides that: back from the title (Pauze → Naar het
+ * hoofdmenu → Begin) he is not welcomed back, and a greeting cut off by it carries on.
  */
 export function startGuide(opts: { returning: boolean }): void {
-  returning = opts.returning;
+  if (!sessionStarted) { returning = opts.returning; sessionStarted = true; }
   startAt = performance.now() + (prefersReducedMotion() ? 300 : 1300);
   started = true;
   session.world?.revealNext(!chipHeld());
