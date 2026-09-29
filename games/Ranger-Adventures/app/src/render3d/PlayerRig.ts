@@ -387,9 +387,10 @@ export class PlayerRig {
     return out;
   }
 
-  /** The run gait is on (the run clip leads the blend): rangerMotion().running. */
+  /** The run gait is on (his pace has the run leading the blend, with or without a run
+   *  clip to show it, the stand-in too): rangerMotion().running. */
   get running(): boolean {
-    return !this.seated && this.run !== null && dominantGait(this.walkWeight, this.runWeight) === 'run';
+    return !this.seated && dominantGait(this.walkWeight, this.runWeight) === 'run';
   }
 
   /** The gait for the dev hook: which clip leads, the cycle phase, footfalls per second,

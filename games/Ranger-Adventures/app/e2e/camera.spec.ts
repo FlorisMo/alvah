@@ -221,9 +221,13 @@ test('camera: running frames him like walking (same size and place), fixed FOV, 
       await page.waitForTimeout(1_500);
       await page.keyboard.up('ArrowLeft');
       const turn = await motionFrames(page, t1);
-      for (let i = 1; i < turn.length; i++) {
-        const d = Math.abs(Math.atan2(Math.sin(turn[i].yaw - turn[i - 1].yaw), Math.cos(turn[i].yaw - turn[i - 1].yaw)));
-        if (turn[i].dt > 0.004) yawRate = Math.max(yawRate, (d / turn[i].dt) * 180 / Math.PI);
+      // over 0.1 s windows: a single frame's rate is noise (this read-only recorder and the
+      // game share the frame, in either order, so one sample can span two game steps)
+      for (let i = 0, j = 0; i < turn.length; i++) {
+        while (j < turn.length && turn[j].t - turn[i].t < 100) j++;
+        if (j >= turn.length) break;
+        const d = Math.abs(Math.atan2(Math.sin(turn[j].yaw - turn[i].yaw), Math.cos(turn[j].yaw - turn[i].yaw)));
+        yawRate = Math.max(yawRate, (d / ((turn[j].t - turn[i].t) / 1000)) * 180 / Math.PI);
       }
     }
     await page.keyboard.up('ArrowUp');
