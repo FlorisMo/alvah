@@ -65,12 +65,8 @@ export const eekhoornAdventure: Adventure = {
     sq.lensAt = () => ({ x: k.world.camera.position.x, z: k.world.camera.position.z });
     sq.rangerAt = () => k.ranger();
     fam.voice('squirrel', false); // (the adventure chatters itself now)
-    try {
-      await story(k, fam, home, sq);
-    } finally {
-      sq.lensAt = null;
-      sq.rangerAt = null;
-    }
+    // (they stay set: running home after a stop it goes round the lens and the ranger too)
+    await story(k, fam, home, sq);
   },
 };
 
