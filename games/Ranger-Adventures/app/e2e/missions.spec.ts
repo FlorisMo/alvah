@@ -7,6 +7,11 @@ import {
   MAX_DRAW_CALLS, SEAT_TOLERANCE, type Hint, type P2, type Seat,
 } from './golden-lib';
 
+/** Run 6: a mission's home (an adventure's family lives there, before and after). */
+type Home = { missionId: string; state: 'before' | 'after'; borrowed: boolean; actors: { key: string; x: number; z: number; visible: boolean }[] };
+const homeOf = async (page: Page, id: string): Promise<Home | null> =>
+  (await R<Home[] | null>(page, 'r.residents()'))?.find((h) => h.missionId === id) ?? null;
+
 /**
  * ALL TEN MISSIONS, each played the way a first-time player plays it, from a fresh
  * save, at its real marker:
@@ -135,59 +140,81 @@ async function start(log: Log, mission: Mission): Promise<void> {
   await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 10_000, message: 'the mission never started' }).not.toBeNull();
 }
 
-/** Every step, with real clicks, until each one is won (golden.spec step 6's player). */
+/** Every step, with real input, until each one is won (golden.spec step 6's player). Run 6:
+ *  an adventure plays its steps as beats in the world, interleaved — walk hints are walked
+ *  with the arrow keys, an encounter is answered from ANY step of the mission, an action
+ *  button is pressed, and "won" = every step's trial count went up. */
 async function playSteps(log: Log, mission: Mission): Promise<void> {
   const page = log.page;
   const plan = mission.stappen.map((s) => s.ef as string);
   log.note(`steps: ${plan.join(' → ')}`);
   const base = (await save(page))?.trials ?? {};
+  const need: Record<string, number> = {};
+  for (const ef of plan) need[ef] = (need[ef] ?? 0) + 1;
+  const encounters = mission.stappen.flatMap((st) => (st.skin as Skin).encounters ?? []);
   const bad: string[] = [];
-  let idx = 0; let first = true; let lastProgress = Date.now(); let ended: number | null = null;
-  let clicks = 0; let answers = 0;
-  const deadline = Date.now() + 6 * 60_000;
-  while (idx < plan.length && Date.now() < deadline) {
-    const ef = plan[idx];
+  const won = new Set<string>();
+  let lastProgress = Date.now(); let ended: number | null = null;
+  let clicks = 0; let answers = 0; let walks = 0; let lastBeat = '';
+  const deadline = Date.now() + 9 * 60_000;
+  const t0 = Date.now();
+  while (won.size < Object.keys(need).length && Date.now() < deadline) {
     const sv = await save(page);
-    if (sv && (sv.trials[ef] ?? 0) > (base[ef] ?? 0)) {
-      log.note(`${ef}: won (${clicks} click(s) on 3D targets, ${answers} answer(s))`);
-      await log.shot(`${ef}-won`);
-      idx += 1; first = true; clicks = 0; answers = 0; lastProgress = Date.now();
-      continue;
+    for (const ef of Object.keys(need)) {
+      if (!won.has(ef) && sv && (sv.trials[ef] ?? 0) - (base[ef] ?? 0) >= need[ef]) {
+        won.add(ef);
+        log.note(`${ef}: won (${clicks} click(s) on 3D targets, ${answers} answer(s), ${walks} walk(s) so far)`);
+        await log.shot(`${ef}-won`);
+        lastProgress = Date.now();
+      }
     }
+    if (won.size >= Object.keys(need).length) break;
     const view = await R<string | null>(page, 'r.missionView');
     if ((await R<string>(page, 'r.screen')) === 'world' && view === null) {
       ended ??= Date.now();
-      log.hard(Date.now() - ended < 3_000, `the mission ended during "${ef}" without it being won`);
+      log.hard(Date.now() - ended < 3_000, `the mission ended before every step was won (won: ${[...won].join(', ') || 'none'})`);
     } else ended = null;
     if (Date.now() - lastProgress > 45_000) {
-      await log.shot(`${ef}-stuck`);
-      log.hard(false, `${ef}: stuck for 45 s (visible: ${await visibleButtons(page)})`);
+      await log.shot('stuck');
+      log.hard(false, `stuck for 45 s at "${lastBeat}" (visible: ${await visibleButtons(page)})`);
     }
-    const shoot = async (): Promise<void> => {
-      if (!first) return;
-      first = false;
-      await log.shot(`${ef}-start`);
-      const calls = await R<number | null>(page, 'r.drawCalls()');
-      log.soft(calls !== null && calls < MAX_DRAW_CALLS, `draw calls during ${ef}: ${calls} (< ${MAX_DRAW_CALLS})`);
-    };
-    // (a) a 3D target: where the engine says a perfect player clicks next
+    const adv = await R<{ beat: string } | null>(page, 'r.adventure()');
+    const calls = await R<number | null>(page, 'r.drawCalls()');
+    if (calls !== null && calls >= MAX_DRAW_CALLS) bad.push(`draw calls ${calls} at "${adv?.beat ?? view}"`);
+    if (adv && adv.beat !== lastBeat) {
+      lastBeat = adv.beat;
+      await sleep(page, 1_000);
+      await log.shot(`beat-${adv.beat.replace(/[^a-z0-9]+/gi, '-')}`);
+    }
+    // (a0) a walk hint: walk there with the arrow keys, until the hint changes
     const h0 = await R<Hint | null>(page, 'r.playHint()');
+    if (h0?.walk) {
+      const w = await walkTo(page, { x: h0.walk.x, z: h0.walk.z }, {
+        stopDist: h0.walk.r, timeout: 90_000, stopWhen: async () => (await R<Hint | null>(page, 'r.playHint()'))?.id !== h0.id,
+      });
+      walks += 1;
+      log.hard(w.res === 'arrived' || w.res === 'until', `walking to "${h0.id}" got ${w.res}`);
+      lastProgress = Date.now();
+      continue;
+    }
+    // (a) a 3D target: where the engine says a perfect player clicks next
     if (h0) {
-      await shoot();
       let h = h0;
       for (let i = 0; i < 15; i++) { // let a camera move settle first
         await sleep(page, 150);
         const h2 = await R<Hint | null>(page, 'r.playHint()');
-        if (!h2 || h2.id !== h.id) break;
+        if (!h2 || h2.id !== h.id || h2.walk) break;
         const still = Math.hypot(h2.x - h.x, h2.y - h.y) < 3; h = h2;
         if (still) break;
       }
-      if (!h.onScreen) bad.push(`${ef}: "${h.id}" off-screen`);
-      if (!h.firstHit) bad.push(`${ef}: "${h.id}" hidden behind ${h.firstHitBy}`);
-      if (!h.reachesCanvas) bad.push(`${ef}: "${h.id}" under ${h.blocker}`);
-      if (!h.aboveGround) bad.push(`${ef}: "${h.id}" under the ground`);
-      if (h.bottomGap !== null && Math.abs(h.bottomGap) > SEAT_TOLERANCE) bad.push(`${ef}: "${h.id}" ${h.bottomGap} m off the ground`);
-      log.hard(h.onScreen, `${ef}: the target "${h.id}" is off-screen`);
+      if (h.walk) continue;
+      const key = adv?.beat ?? view ?? '';
+      if (!h.onScreen) bad.push(`${key}: "${h.id}" off-screen`);
+      if (!h.firstHit) bad.push(`${key}: "${h.id}" hidden behind ${h.firstHitBy}`);
+      if (!h.reachesCanvas) bad.push(`${key}: "${h.id}" under ${h.blocker}`);
+      if (!h.aboveGround) bad.push(`${key}: "${h.id}" under the ground`);
+      if (h.bottomGap !== null && Math.abs(h.bottomGap) > SEAT_TOLERANCE) bad.push(`${key}: "${h.id}" ${h.bottomGap} m off the ground`);
+      log.hard(h.onScreen, `${key}: the target "${h.id}" is off-screen`);
       const before = { id: h.id, text: await uiText(page), trials: JSON.stringify((await save(page))?.trials) };
       await page.mouse.click(h.x, h.y);
       clicks += 1;
@@ -195,37 +222,40 @@ async function playSteps(log: Log, mission: Mission): Promise<void> {
         const h3 = await R<Hint | null>(page, 'r.playHint()');
         return h3?.id !== before.id || (await uiText(page)) !== before.text || JSON.stringify((await save(page))?.trials) !== before.trials;
       }, { timeout: 10_000 }).toBe(true).then(() => true, () => false); // a real click reacts within a frame or two; 4 s ran out at load ~80
-      log.hard(reacted, `${ef}: a real click on "${h.id}" did nothing`);
+      log.hard(reacted, `${key}: a real click on "${h.id}" did nothing`);
       lastProgress = Date.now();
       continue;
     }
-    // (b) a choice round: the option the content marks goed, by the question on screen
-    const skin = mission.stappen[idx].skin as Skin;
-    if (skin.encounters?.length) {
-      const text = await uiText(page);
-      const enc = skin.encounters.find((e) => text.includes(e.vraag));
-      const right = enc?.opties.find((o) => o.goed)?.label;
-      const btn = right ? page.getByRole('button', { name: right, exact: true }).filter({ visible: true }).first() : null;
-      if (enc && right && btn && await btn.isVisible().catch(() => false) && await btn.isEnabled().catch(() => false)) {
-        await shoot();
-        await click(log, right, `${ef} answer`);
-        answers += 1;
-        await expect.poll(async () => !(await uiText(page)).includes(enc.vraag), { timeout: 8_000 }).toBe(true).catch(() => {});
-        lastProgress = Date.now();
-        continue;
-      }
+    // (b) a choice round: the option the content marks goed, by the question on screen (any step)
+    const text = await uiText(page);
+    const enc = encounters.find((e) => text.includes(e.vraag));
+    const right = enc?.opties.find((o) => o.goed)?.label;
+    const btn = right ? page.getByRole('button', { name: right, exact: true }).filter({ visible: true }).first() : null;
+    if (enc && right && btn && await btn.isVisible().catch(() => false) && await btn.isEnabled().catch(() => false)) {
+      await click(log, right, `${adv?.beat ?? view} answer`);
+      answers += 1;
+      await expect.poll(async () => !(await uiText(page)).includes(enc.vraag), { timeout: 8_000 }).toBe(true).catch(() => {});
+      lastProgress = Date.now();
+      continue;
     }
-    // (c) a card to close (a find card, the raaf's fact)
+    // (c) a card to close (a find card, the raaf's fact), or an action in the world
     if (await visible(page, /^(Verder|Klaar)$/)) {
-      await click(log, /^(Verder|Klaar)$/, `${ef} card`);
+      await click(log, /^(Verder|Klaar)$/, `${adv?.beat ?? view} card`);
       await sleep(page, 400);
       lastProgress = Date.now();
       continue;
     }
-    await sleep(page, 250); // a sequence is being shown: watch it
+    const act = page.locator('.adv-action').filter({ visible: true }).first();
+    if (await act.isVisible().catch(() => false)) {
+      await click(log, (await act.innerText()).trim(), `${adv?.beat ?? view} action`);
+      lastProgress = Date.now();
+      continue;
+    }
+    await sleep(page, 250); // a sequence is being shown, an animal walks: watch it
   }
+  log.note(`played in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
   log.soft(bad.length === 0, `targets a player could not see or reach: ${[...new Set(bad)].slice(0, 4).join('; ')}`);
-  log.hard(idx >= plan.length, `won ${idx}/${plan.length} steps before the time ran out`);
+  log.hard(won.size >= Object.keys(need).length, `won ${won.size}/${Object.keys(need).length} steps before the time ran out`);
 }
 
 /** The ending: the reunion over the world, the reward, the clue, back on patrol. */
@@ -245,8 +275,11 @@ async function finish(log: Log, mission: Mission, then: 'patrol' | 'finale' = 'p
   const line = mission.reunion?.tekst ?? '';
   if (line) log.soft(capText.toLowerCase().includes(line.toLowerCase()), `the reunion says "${line}" (it says "${capText}")`);
   if (await page.locator('.reunion-cap').isVisible().catch(() => false)) { await sleep(page, 1_000); await log.shot('reunion'); }
-  // the reward card
-  const reward = await expect.poll(async () => (await uiText(page)).includes('Knap gedaan'), { timeout: 10_000 }).toBe(true).then(() => true, () => false);
+  // the reward card (an adventure tells its last fact after the reunion: read it on)
+  const reward = await expect.poll(async () => {
+    if (await visible(page, /^Verder$/) && !(await uiText(page)).includes('Knap gedaan')) await click(log, /^Verder$/, 'the fact after the reunion');
+    return (await uiText(page)).includes('Knap gedaan');
+  }, { timeout: 20_000 }).toBe(true).then(() => true, () => false);
   log.soft(reward, 'no reward card after the reunion');
   log.soft((await uiText(page)).toLowerCase().includes(mission.titel.toLowerCase()), `the reward names "${mission.titel}"`);
   await log.shot('reward');
@@ -280,7 +313,9 @@ async function worldReacted(log: Log, mission: Mission, marker: P2, before: Seat
   const off = appeared.filter((s) => Math.abs(s.gap) > SEAT_TOLERANCE);
   log.soft(off.length === 0, `what appeared is not on the ground: ${off.slice(0, 3).map((s) => `${s.id.split('@')[0]} ${s.gap} m`).join('; ')}`);
   const s = await snap(page);
-  log.soft(!!s.p && Math.hypot(s.p.x - marker.x, s.p.z - marker.z) < 12, 'back in the world near the marker');
+  const home = (await R<Record<string, P2> | null>(page, `r.missionPlaces(${JSON.stringify(mission.id)})`))?.home;
+  const near = (q: P2): boolean => !!s.p && Math.hypot(s.p.x - q.x, s.p.z - q.z) < 12;
+  log.soft(near(marker) || (!!home && near(home)), 'back in the world near the marker (or the mission\'s home)');
   const hud = await uiText(page);
   log.soft(hud.includes(`Speel nog eens: ${mission.titel}`) || hud.includes('Pauze'), 'the explore HUD is back');
   const calls = await R<number | null>(page, 'r.drawCalls()');
@@ -450,14 +485,23 @@ test('reduced motion: mission 1 on the 2D floors with real clicks, and its reuni
     log.note(`views served: ${[...views].join(', ')}`);
     log.soft(views.has('2d'), 'reduced motion serves the 2D floor for zoeken + corsi');
     // the reunion is a cut: the moment the line shows, the family already stands in its place
+    // (run 6: the rotte LIVES at its wallow, the mission's home — the lost piglet is simply
+    // there with his mother; the marker gets its "klaar" flag)
     await expect.poll(() => page.locator('.reunion-cap').isVisible().catch(() => false), { timeout: 8_000 }).toBe(true);
     await sleep(page, 300);
+    const places = await R<Record<string, P2> | null>(page, `r.missionPlaces(${JSON.stringify(mission.id)})`);
+    const fam = await homeOf(page, mission.id);
+    const at = (h: Home | null, key: string) => h?.actors.find((a) => a.key === key) ?? null;
+    const lost0 = at(fam, 'lost'), sow0 = at(fam, 'sow');
+    log.note(`at the first frame of the reunion the home is "${fam?.state}", the lost piglet ${lost0 && sow0 ? Math.hypot(lost0.x - sow0.x, lost0.z - sow0.z).toFixed(2) : '?'} m from his mother`);
+    log.soft(fam?.state === 'after' && !!lost0 && !!sow0 && Math.hypot(lost0.x - sow0.x, lost0.z - sow0.z) < 2.2,
+      'under reduced motion the family is together at its home at once (a cut, no walk-in)');
+    if (places?.home) log.soft(!!lost0 && Math.hypot(lost0.x - places.home.x, lost0.z - places.home.z) < 3, 'the piglet is home at the wallow');
+    await sleep(page, 1_200);
+    const lost1 = at(await homeOf(page, mission.id), 'lost');
+    log.soft(!!lost0 && !!lost1 && Math.hypot(lost1.x - lost0.x, lost1.z - lost0.z) < 0.05, 'nothing walks in after the cut (reduced motion holds them still)');
     const now = await worldSamples(page, marker, SEAT_RADIUS, 1);
-    const later = (await sleep(page, 1_200), await worldSamples(page, marker, SEAT_RADIUS, 1));
-    const { appeared } = worldChange(before, now);
-    log.note(`at the first frame of the reunion ${appeared.length} things stand at the marker`);
-    log.soft(appeared.length >= 3, 'under reduced motion the family is there at once (a cut, no walk-in)');
-    log.soft(worldChange(now, later).appeared.length === 0, 'nothing walks in after the cut');
+    log.soft(now[0].some((x) => x.id.startsWith('klaar-flag')), 'the "klaar" flag stands at the marker');
     await log.shot('reunion-cut');
     await finish(log, mission);
     await worldReacted(log, mission, marker, before);
@@ -545,18 +589,28 @@ test('a mission picked on the missiebord: played at its OWN marker (the pick bri
     await finish(log, mission);
     await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null,
       { timeout: 15_000, message: 'the reward never led back to the world' }).toBe(true);
-    // the pick brought him to its marker (wave 4, parent B6): it was played there, in view
+    // the pick brought him to its marker (wave 4, parent B6): it was played there, in view.
+    // Run 6: an adventure plays on from its marker to its home (the rotte's wallow), so he
+    // ends at one of the two; the family lives at the home, together, in the after state
     const at = (await snap(page)).p!;
-    log.soft(Math.hypot(at.x - marker.x, at.z - marker.z) < 2.4, `the mission picked on the board was played ${r2d(Math.hypot(at.x - marker.x, at.z - marker.z))} m from its marker`);
+    const places = await R<Record<string, P2> | null>(page, `r.missionPlaces(${JSON.stringify(mission.id)})`);
+    const dM = Math.hypot(at.x - marker.x, at.z - marker.z);
+    const dH = places?.home ? Math.hypot(at.x - places.home.x, at.z - places.home.z) : Infinity;
+    log.soft(Math.min(dM, dH) < (places?.home ? 6 : 2.4), `the mission picked on the board was played ${r2d(dM)} m from its marker${places?.home ? `, ${r2d(dH)} m from its home` : ''}`);
     await sleep(page, 3_000);
-    await log.shot('at-marker');
+    await log.shot('at-home');
     const after = await worldSamples(page, marker, SEAT_RADIUS, 3);
-    const { appeared } = worldChange(before, after);
-    const family = appeared.filter((s) => s.id.includes('progress-') && !s.id.startsWith('klaar-flag'));
-    log.note(`at the marker: ${family.length} of the family stand within ${SEAT_RADIUS} m (${family.map((s) => `${s.id.split('@')[0]} ${r2d(Math.hypot(s.x - marker.x, s.z - marker.z))} m`).join(', ')})`);
-    log.soft(family.length >= 3, 'the sow and her piglets stand at their own marker');
-    log.soft(family.every((s) => Math.hypot(s.x - marker.x, s.z - marker.z) < 4), 'the family stands right at the marker, not metres off');
-    log.soft(family.every((s) => Math.abs(s.gap) <= SEAT_TOLERANCE), 'the family stands on the ground');
+    log.soft(after[0].some((s) => s.id.startsWith('klaar-flag')), 'the "klaar" flag stands at its marker');
+    void worldChange(before, after);
+    const fam = await homeOf(page, mission.id);
+    const home = places?.home ?? marker;
+    const members = fam?.actors.filter((a) => a.visible) ?? [];
+    log.note(`at its home: ${members.length} of the family (${members.map((a) => `${a.key} ${r2d(Math.hypot(a.x - home.x, a.z - home.z))} m`).join(', ')})`);
+    log.soft(fam?.state === 'after' && members.length >= 5, 'the sow and her piglets are together at their home');
+    log.soft(members.every((a) => Math.hypot(a.x - home.x, a.z - home.z) < 4), 'the family stands right at its home, not metres off');
+    const seats = await R<Seat[] | null>(page, `r.seating(${home.x}, ${home.z}, 4)`);
+    const off = (seats ?? []).filter((s) => s.moves && Math.abs(s.gap) > SEAT_TOLERANCE && !s.id.includes('ranger'));
+    log.soft(off.length === 0, `the family stands on the ground: ${off.slice(0, 3).map((s) => `${s.id.split('@')[0]} ${s.gap} m`).join('; ')}`);
     log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
   } finally {
     const text = log.write();
