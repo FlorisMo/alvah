@@ -70,6 +70,22 @@
 .comp-text { margin: 0; font: 400 19px/1.4 var(--font-read); color: var(--ink); text-align: center; }
 .comp-rescue { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .comp-rescue .comp-perch { width: 96px; height: 96px; }
+/* the first thing a child reads in the hut: at the reading size of every other card */
+.comp-rescue .comp-title { font-size: 26px; }
+.comp-rescue .comp-text { font-size: var(--read-size); line-height: 1.35; }
+/* the rescue waits for a name: its button reads as the instruction it is, not as a sun
+   button that does nothing (no fill, no lift, a dashed outline) until a name is picked */
+.btn-start.comp-rescue-btn:disabled,
+.btn-start.comp-rescue-btn:disabled:hover {
+  background: transparent;
+  border: 2px dashed var(--paper-edge);
+  box-shadow: none;
+  color: var(--ink-warm);
+  font-weight: 600;
+  cursor: default;
+  transform: none;
+  filter: none;
+}
 
 /* ---- name picker (rescue) ---- */
 .naam-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
