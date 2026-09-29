@@ -331,7 +331,7 @@ export class EekhoornHome implements HomeDressing {
     this.field.clear();
   }
 
-  update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean }[]): void {
+  update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void {
     this.clock += dt;
     this.field.update(dt, reduced);
     // the store grows: each new cluster pops up in turn (a cut under reduced motion)
@@ -386,7 +386,7 @@ export class EekhoornHome implements HomeDressing {
     }
     // the seedling grows while the ranger is away (a later visit finds it)
     if (this.state === 'after' && this.seedlingWaits) {
-      const me = movers[movers.length - 1]; // (the ranger is the last mover a home is told)
+      const me = movers.find((q) => q.ranger);
       const far = me ? Math.hypot(me.x - EEKHOORN_PLACES.glade.x, me.z - EEKHOORN_PLACES.glade.z) > AWAY_M : false;
       this.away = far ? this.away + dt : 0;
       if (this.away > 2) { this.seedlingWaits = false; this.seedling.visible = true; }

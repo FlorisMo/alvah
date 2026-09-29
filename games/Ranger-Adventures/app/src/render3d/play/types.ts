@@ -109,6 +109,8 @@ export interface Spawned {
   rigged?: boolean;
   /** calmly cross-fade to a baked clip ('walk', 'idle', 'graze'); a no-op without one */
   clip?(name: 'walk' | 'idle' | 'graze'): void;
+  /** run 6: play the clips at `k` × their speed (a walk matched to the ground speed) */
+  rate?(k: number): void;
   /** remove from the scene and free what this spawn created (the GLB stays cached) */
   dispose(): void;
 }

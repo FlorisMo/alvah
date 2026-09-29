@@ -11,6 +11,7 @@ import type { HomeTree } from '../World';
 import type { AdventureKit } from './kit';
 import type { HomeSpec } from './types';
 import { frislingAdventure } from './missions/frisling';
+import { reeAdventure } from './missions/ree';
 import { eekhoornAdventure } from './missions/eekhoorn';
 
 export interface Adventure {
@@ -39,6 +40,7 @@ export interface Adventure {
 
 const ADVENTURES: Readonly<Record<string, Adventure>> = {
   frisling: frislingAdventure,
+  'ree-niet-aanraken': reeAdventure,
   eekhoorn: eekhoornAdventure,
 };
 

@@ -56,6 +56,26 @@ export interface ResidentSpec {
   after: ResidentPose | null;
   /** a call it makes now and then while the ranger is near (spatial, calm) */
   voice?: ResidentVoice;
+  /** a SHY animal (free roam): it slips into cover when the ranger comes near, and
+   *  comes back out once he has gone (world/Residents.ts); per home state */
+  shy?: readonly ResidentShy[];
+}
+
+/**
+ * How a shy resident keeps its distance while nobody borrows it (a roe doe grazing at
+ * a copse): once the ranger is within `within` m it lifts its head, looks at him and
+ * walks calmly to `to` (into the copse; `lie`: it beds down there). Once he has been
+ * further than `back` m away for `after` s it walks back to its spot and idles again.
+ */
+export interface ResidentShy {
+  within: number;
+  back: number;
+  to: Spot & { yaw?: number };
+  lie?: boolean;
+  /** seconds he must be gone before it comes out (default 3) */
+  after?: number;
+  /** only in this home state (default: both) */
+  state?: 'before' | 'after';
 }
 
 export interface ResidentVoice {

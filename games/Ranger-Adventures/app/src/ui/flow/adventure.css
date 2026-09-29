@@ -22,6 +22,8 @@
    words first, the arrow only once he seems lost */
 .adv-chip[hidden] { display: none; }
 .adv-chip .wf-glyph.adv-no-arrow { font-size: 22px; }
+/* a sign drawn dark (👣) sits on a light well, or the dark chip swallows it */
+.adv-chip .wf-glyph.adv-glyph-light { background: rgba(253, 246, 232, 0.9); }
 
 /* an action in the world ("Hang de camera op"): bottom centre, like a marker prompt */
 .adv-bottom {
@@ -42,6 +44,18 @@
   background: radial-gradient(ellipse 72% 70% at 50% 50%, transparent 58%, rgba(40, 26, 12, 0.5) 92%);
 }
 .adv-vignette.on { opacity: 1; }
+/* a long watch through the binoculars (the reekalf's hide): the two round lenses of
+   the glasses, the world round them dimmed (never black); nothing to click */
+.adv-glasses {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease-soft);
+}
+.adv-glasses.on { opacity: 1; }
 
 /* the joystick during a walk (iPad): the explore HUD's own ring */
 .adventure-hud .rj-base { pointer-events: auto; }

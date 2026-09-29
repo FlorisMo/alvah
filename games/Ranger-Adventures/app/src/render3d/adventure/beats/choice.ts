@@ -32,6 +32,10 @@ export interface AskOpts {
   right?: () => Promise<unknown> | void;
   /** shown with the card: the animal turns up (a look, a sound) */
   show?: () => void;
+  /** the wrong answer's reaction walks the RANGER (a boot into a pool): a card holds him
+   *  still, so the card makes way while it plays, and the consequence line stands over
+   *  the card when it comes back (what happened first, then the words for it) */
+  walks?: boolean;
 }
 
 export class ChoiceRun {
@@ -64,8 +68,10 @@ export class ChoiceRun {
     this.k.say(null);
     o.show?.();
     const settings = store.get().settings;
+    let note: string | null = null;
     for (;;) {
-      const goed = await this.present(enc);
+      const goed = await this.present(enc, note);
+      note = null;
       if (goed) {
         this.run.choose(true);
         if (settings.geluid) Sound.correct();
@@ -78,6 +84,13 @@ export class ChoiceRun {
       }
       this.run.choose(false); // recoverable: marks the encounter, keeps it up
       if (settings.geluid) Sound.tryAgain();
+      if (o.walks) {
+        this.card?.remove();
+        this.card = null;
+        await this.k.guard(Promise.resolve(o.wrong?.()));
+        note = enc.gevolg ?? 'Wacht even. Probeer het anders.';
+        continue;
+      }
       await this.k.guard(Promise.all([this.toast('gevolg', enc.gevolg ?? 'Wacht even. Probeer het anders.', 2400), Promise.resolve(o.wrong?.())]));
     }
   }
@@ -92,8 +105,9 @@ export class ChoiceRun {
 
   private card: HTMLDivElement | null = null;
 
-  /** The card for `enc`; resolves with whether the chosen option was the right one. */
-  private present(enc: Encounter): Promise<boolean> {
+  /** The card for `enc` (with `note` over it: what the last answer did); resolves with
+   *  whether the chosen option was the right one. */
+  private present(enc: Encounter, note: string | null = null): Promise<boolean> {
     const settings = store.get().settings;
     const regels = this.trial.regels.length
       ? `<div class="p3-chips" aria-label="Ranger-regels">${this.trial.regels.map((r) => `<span class="p3-chip">${esc(r)}</span>`).join('')}</div>`
@@ -115,6 +129,7 @@ export class ChoiceRun {
     this.card = card;
     const q = enc.flip ? `Nu mag het wél. ${enc.vraag}` : enc.vraag;
     card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(q));
+    if (note) this.note('gevolg', note);
     if (settings.voorlezen) narrator.queue(q);
     return this.k.guard(new Promise<boolean>((resolve) => {
       card.querySelectorAll<HTMLButtonElement>('.p3-choice').forEach((b) => {
@@ -129,6 +144,16 @@ export class ChoiceRun {
   /** The feedback line ABOVE the card (never over a choice), read aloud; resolves after a calm read. */
   private toast(kind: 'ok' | 'gevolg', text: string, min = 1600): Promise<void> {
     const card = this.card;
+    this.note(kind, text);
+    const words = text.split(/\s+/).length;
+    return this.k.wait(Math.max(min, words * 280) / 1000).then(() => {
+      if (kind === 'gevolg') { card?.remove(); if (this.card === card) this.card = null; }
+    });
+  }
+
+  /** A feedback line over the card up now, read aloud. */
+  private note(kind: 'ok' | 'gevolg', text: string): void {
+    const card = this.card;
     if (card) {
       const col = card.querySelector('.p3-bottom') ?? card;
       col.querySelector('.p3-toast')?.remove();
@@ -139,10 +164,6 @@ export class ChoiceRun {
       col.insertBefore(t, col.firstChild);
     }
     if (store.get().settings.voorlezen) narrator.speak(text);
-    const words = text.split(/\s+/).length;
-    return this.k.wait(Math.max(min, words * 280) / 1000).then(() => {
-      if (kind === 'gevolg') { card?.remove(); if (this.card === card) this.card = null; }
-    });
   }
 }
 
