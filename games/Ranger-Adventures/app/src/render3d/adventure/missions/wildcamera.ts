@@ -25,6 +25,7 @@ import type { Actor } from '../actors';
 import type { WisselBin, WisselItem } from '../../../engines/wisselen';
 import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
+import { applyAmbient } from '../../../core/calls';
 import { aimBeat, type AimWorld } from '../beats/aim';
 import { callersBeat, type Caller } from '../beats/callers';
 import { headingTo, atLocal } from '../places';
@@ -52,6 +53,7 @@ export const wildcameraAdventure: Adventure = {
       await story(k, fam.actors as Record<Walker, Actor>, home, photos);
     } finally {
       photos.dispose();
+      applyAmbient(); // the day's bed at its own level again
     }
   },
 };
@@ -96,7 +98,16 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     if (settings.geluid) Sound.shutter();
   };
 
-  /* -- the animals: in from out of view, and out again -- */
+  /* -- the night: the camera's fan cools, the birdsong of the day bed goes quiet -- */
+  const dayBed = 0.22 * settings.ambient;
+  let lastNight = -1;
+  k.onTick(() => {
+    const night = 1 - k.world.daylight();
+    if (Math.abs(night - lastNight) < 0.01) return;
+    lastNight = night;
+    home.setNight(night);
+    if (settings.geluid && settings.ambient > 0) Sound.setAmbientGain(dayBed * (1 - 0.7 * night));
+  });
   const leaving = new Map<string, number>();
   let birdToken = 0;
   const walkIn = async (id: string, s: AimSpot): Promise<void> => {
@@ -139,10 +150,10 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   // he steps onto the wildwissel where it leaves the ring, and the view looks along it
   // into the wood (one calm move; the follow camera takes over from there, facing the way)
   k.beat = 'pad';
+  k.say(c.kijkPad);
   k.lockFollow();
   await k.walkRanger(P.trailStart.x, P.trailStart.z, 0.05);
   k.world.faceRanger(TRAIL_VIEW.heading);
-  k.say(c.kijkPad);
   await k.frame(TRAIL_VIEW, { face: TRAIL_VIEW.heading });
   await k.wait(2.2);
 

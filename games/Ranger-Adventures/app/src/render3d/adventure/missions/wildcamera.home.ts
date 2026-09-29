@@ -149,7 +149,7 @@ function trailPrints(groundY: (x: number, z: number) => number, lines: readonly 
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   const rnd = stream(seed);
   // (shown ≈ 1.6× their true size, like the camera: a child must see them in the trail)
-  const SIZE_M: Record<PrintKind, number> = { 0: 0.17, 1: 0.19, 2: 0.17 };
+  const SIZE_M: Record<PrintKind, number> = { 0: 0.2, 1: 0.22, 2: 0.2 };
   const STRIDE: Record<PrintKind, number> = { 0: 0.66, 1: 0.5, 2: 0.4 };
   let kind: PrintKind = 0;
   for (const line of lines) {
@@ -490,6 +490,16 @@ export class WildcameraHome implements HomeDressing {
   /** Show the fan of ground the camera sees (fades in/out). */
   showFan(on: boolean): void { this.fanWant = on ? 1 : 0; if (on) this.fan.visible = true; }
 
+  /** The time of day (1 day, 0 night): at night the camera's fan is a faint cool glow,
+   *  not a beam of warm light. */
+  setNight(k: number): void {
+    const m = this.fan.material as THREE.MeshBasicMaterial;
+    m.color.set('#fff0b8').lerp(new THREE.Color('#aebfff'), Math.min(1, Math.max(0, k)));
+    this.fanPeak = 0.42 - 0.2 * Math.min(1, Math.max(0, k));
+    m.opacity = this.fanPeak * this.fanOn;
+  }
+  private fanPeak = 0.42;
+
   /** The shutter: the red light flashes, and at night the infrared ring glows softly. */
   flash(night: boolean): void {
     this.ledFlash = 0.35;
@@ -611,6 +621,7 @@ export class WildcameraHome implements HomeDressing {
     this.blink = after ? 'idle' : 'off';
     this.fanWant = this.fanOn = 0;
     this.fan.visible = false;
+    this.setNight(0);
     this.showTags(false);
     this.showSnare(false);
     this.birdGone();
@@ -631,7 +642,7 @@ export class WildcameraHome implements HomeDressing {
     // the fan fades in and out
     if (this.fanOn !== this.fanWant) {
       this.fanOn = reduced ? this.fanWant : this.fanOn + Math.sign(this.fanWant - this.fanOn) * Math.min(Math.abs(this.fanWant - this.fanOn), dt * 2.5);
-      (this.fan.material as THREE.MeshBasicMaterial).opacity = 0.42 * this.fanOn;
+      (this.fan.material as THREE.MeshBasicMaterial).opacity = this.fanPeak * this.fanOn;
       this.fan.visible = this.fanOn > 0.001;
       if (this.fan.visible) this.layFan();
     }
