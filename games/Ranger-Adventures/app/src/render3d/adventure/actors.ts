@@ -342,7 +342,14 @@ export class Actor {
     this.gaitNode.rotation.set(0, 0, g.roll);
     this.gaitNode.scale.set(1, breath.scaleY, 1);
     // pitch about the hind feet: nose down while rooting / sniffing, up when alert
-    this.pivot.rotation.x = g.pitch + dipNow * 0.13 - this.headUp * 0.05;
+    // (a rigid body tipping about its hind feet would sink its front feet: the pivot rises
+    // by half the front's drop, so neither end leaves the ground by more than ~2.5 cm, and
+    // a long body tips less)
+    const lf = this.len * 0.9; // hind feet → its front end's lowest point, at most
+    const k2 = Math.min(1, Math.asin(Math.min(1, 0.05 / lf)) / 0.13);
+    const pitch = g.pitch + (dipNow * 0.13 - this.headUp * 0.05) * k2;
+    this.pivot.rotation.x = pitch;
+    this.pivot.position.y = (lf * Math.sin(pitch)) / 2;
   }
 
   private seat(): void {
