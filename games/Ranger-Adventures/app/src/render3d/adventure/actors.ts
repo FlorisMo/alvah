@@ -11,6 +11,9 @@
  * turn is rate-limited, it never strafes), slides round the world's solids like the
  * ranger does (`resolveMove`), and — the boar and the piglet are static meshes —
  * trots with a procedural bob and roll scaled by its pace; at rest it breathes.
+ * A RIGGED animal (the roe deer: walk, graze and idle clips) plays its own clips
+ * instead — the walk while it moves (at a rate that keeps its hooves from sliding),
+ * the graze while it roots or sniffs, the idle otherwise — and gets no procedural bob.
  * Under reduced motion the secondary motion (the bob, the rooting dip, the breath)
  * holds still; walking somewhere still walks.
  *
@@ -19,14 +22,15 @@
 
 import * as THREE from 'three';
 import type { Spawned, SpawnOpts } from '../play/types';
-import { lieDown, LEG_SHARE } from '../play/pose';
+import { lieDown, fawnSpots, LEG_SHARE } from '../play/pose';
 import { contactShadow } from '../play/kit';
 import { resolveMove, type MoveLimits, type Obstacle } from '../CharacterController';
 import { gaitFor, motionAt, REST } from '../ProceduralMotion';
 import { modelFor } from '../play/spawn';
 import {
-  stepToward, followSpot, followSpeed, trot, strideOf, rootDip, turnToward, wrap, type Pose,
+  stepToward, followSpot, followSpeed, trot, strideOf, rootDip, turnToward, wrap, bodyLength, type Pose,
 } from './actors-math';
+import { SIZE } from '../AnimalScale';
 
 /** What an actor needs from the world. */
 export interface ActorEnv {
@@ -57,7 +61,20 @@ const PACE: Record<string, { walk: number; trot: number; turn: number }> = {
   frisling: { walk: 0.7, trot: 2.4, turn: 4.5 },
   overloper: { walk: 0.6, trot: 1.6, turn: 3 },
   wildzwijn: { walk: 0.5, trot: 1.0, turn: 2.2 },
+  // a roe doe walks calmly (≤ 1.2 m/s, design §3.5); her calf bolts a few metres when startled
+  ree: { walk: 0.8, trot: 1.6, turn: 2.4 },
+  reekalf: { walk: 0.55, trot: 2.3, turn: 3.6 },
 };
+
+/** A young one's own coat on its parent's model, laid on every body it shows (standing
+ *  and lying): the roe calf's white spots. Returns what frees it. */
+const DRESS: Record<string, (root: THREE.Object3D) => () => void> = {
+  reekalf: fawnSpots,
+};
+
+/** A rigged animal's walk clip matches its ground speed at this pace (m/s per metre of
+ *  its height): the roe's baked stride (1.17 s) carries a 1.1 m doe ≈ 0.9 m/s. */
+const CLIP_WALK_PER_H = 0.82;
 const PACE_DEFAULT = { walk: 0.6, trot: 1.2, turn: 3 };
 
 let nextPhase = 0.7;
@@ -95,13 +112,16 @@ export class Actor {
   private disposed = false;
   private readonly shadow: THREE.Mesh;
   private readonly len: number;
+  /** what frees its coat (a calf's spots) */
+  private readonly undress: (() => void)[] = [];
 
   constructor(key: string, animal: string, env: ActorEnv, opts: { height: number; len?: number }) {
     this.key = key;
     this.animal = animal;
     this.env = env;
     this.height = opts.height;
-    this.len = opts.len ?? opts.height * 1.7;
+    // (its length from the scale table: a roe is about as long as it is tall)
+    this.len = opts.len ?? bodyLength((SIZE as Record<string, { h: number; len?: number }>)[animal], opts.height);
     this.pace = PACE[animal] ?? PACE_DEFAULT;
     this.recipe = gaitFor(modelFor(animal));
     this.group.name = `actor-${key}`;
@@ -123,6 +143,8 @@ export class Actor {
     this.stand = s;
     const root = s.root as THREE.Object3D;
     root.traverse((o) => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).castShadow = false; });
+    const dress = DRESS[this.animal];
+    if (dress) this.undress.push(dress(root));
     this.gaitNode.add(root);
     root.visible = !this.isLying;
     if (this.isLying) await this.loadLying();
@@ -137,6 +159,8 @@ export class Actor {
       if (!s || this.disposed) { s?.dispose(); return; }
       const root = s.root as THREE.Object3D;
       this.freeLie = lieDown(root, share);
+      const dress = DRESS[this.animal];
+      if (dress) this.undress.push(dress(root)); // (after the fold: the coat on the lying shape)
       root.visible = this.isLying;
       this.gaitNode.add(root);
       this.lying = s;
@@ -321,6 +345,16 @@ export class Actor {
     this.stand?.update(dt); // a rigged animal's own clip
   }
 
+  /** A rigged animal's walk clip runs at a rate that keeps its hooves from sliding (its
+   *  other clips at their own pace). */
+  private clipRate(speed: number): void {
+    const ref = CLIP_WALK_PER_H * this.height;
+    this.stand?.rate?.(speed > 0.12 ? Math.max(0.45, Math.min(2.4, speed / ref)) : 1);
+  }
+
+  /** It plays its own baked clips (a rigged model), so no procedural gait rides on it. */
+  private get rigged(): boolean { return !!this.stand?.rigged; }
+
   /** One step toward (tx, tz) at `speed`, round the world's solids. Returns the speed. */
   private move(tx: number, tz: number, speed: number, dt: number): number {
     const p: Pose = { x: this.x, z: this.z, yaw: this.yaw };
@@ -334,6 +368,17 @@ export class Actor {
   /** The procedural body motion: the trot, the rooting dip, the alert head, the breath. */
   private animate(dt: number, t: number, speed: number, alert: number, reduced: boolean): void {
     const k = Math.min(1, dt * 4);
+    if (this.rigged) {
+      // its clips carry the stride, the grazing head and the breath: the body stays level
+      this.clipRate(speed);
+      this.phase = 0; this.dip = 0; this.headUp = 0;
+      this.gaitNode.position.y = 0;
+      this.gaitNode.rotation.set(0, 0, 0);
+      this.gaitNode.scale.set(1, 1, 1);
+      this.pivot.rotation.x = 0;
+      this.pivot.position.y = 0;
+      return;
+    }
     this.dip += ((reduced ? Math.min(this.dipWant, 0.6) : this.dipWant) - this.dip) * k;
     this.headUp += (alert - this.headUp) * k;
     this.phase += (speed * dt / strideOf(this.height)) * Math.PI * 2;
@@ -366,6 +411,7 @@ export class Actor {
     const t = this.task;
     this.task = { kind: 'idle' };
     if ('done' in t && t.done) t.done(false);
+    for (const u of this.undress) u();
     this.stand?.dispose();
     this.lying?.dispose();
     this.freeLie?.();

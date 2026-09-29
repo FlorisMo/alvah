@@ -20,6 +20,7 @@ import type { HomeState } from '../types';
 import { CoverField } from '../cover';
 import { backPoints, openWindow, standClumps, visibleShare, type Clump, type V3 } from '../cover-math';
 import { PatchField } from '../patches';
+import { StandDecoys, decoyClumps, type Decoy } from '../decoys';
 import { groundDecal } from '../decal';
 import { atLocal, dist, toLocal, headingTo } from '../places';
 import { patchLocal } from '../../play/kit-math';
@@ -33,24 +34,15 @@ import {
   fieldSpots, hideClumps, onStand, MARKER,
 } from './frisling.places';
 
-/** A look-alike a searching child may take for the piglet (a zoeken decoy). */
-export interface Decoy {
-  /** the content distractor id ('d1', 'v1', 'b1' ...) */
-  id: string;
-  kind: string;
-  /** what a click finds: its visible thing (a bird, a butterfly's flower) */
-  object: THREE.Object3D;
-  /** for a clump of dead bracken: its clump in the cover (it rustles and parts) */
-  clump: number | null;
-  x: number; z: number;
-}
+export type { Decoy } from '../decoys';
 
 /** The frisling home, as the adventure uses it. */
 export class FrislingHome implements HomeDressing {
   readonly group = new THREE.Group();
   readonly cover: CoverField;
   readonly field: PatchField;
-  readonly decoys: Decoy[] = [];
+  /** the trial's look-alikes in the stand (adventure/decoys.ts) */
+  private readonly lookAlikes: StandDecoys;
   /** the stems a lens at the search's eye sees the piglet's back past (stats) */
   readonly glimpse: { share: number; changed: number };
   /** the eye the stand's window was opened for */
@@ -62,8 +54,6 @@ export class FrislingHome implements HomeDressing {
    *  appearing in the reunion's view */
   holdClue = false;
   private readonly spawned: { dispose(): void }[] = [];
-  private readonly decoyParts: Map<string, THREE.Object3D[]> = new Map();
-  private readonly birds: { o: THREE.Object3D; base: THREE.Vector3; kind: string; t: number }[] = [];
   private clock = 0;
 
   constructor(env: DressingEnv, distractors: readonly Distractor[]) {
@@ -105,7 +95,7 @@ export class FrislingHome implements HomeDressing {
       clumps.push({ ...atLocal(STAND_FRAME, lp.u + u, lp.v + v), kind, size: 0.95 });
     }
     // the dead bracken decoys (rust-brown, low: the child may take one for the piglet)
-    for (const q of decoyAt) if (q.d.k === 'bush') clumps.push({ x: q.x, z: q.z, kind: 'dead', size: 1, decoy: q.d.id });
+    clumps.push(...decoyClumps(decoyAt));
     for (const h of hideClumps()) clumps.push({ x: h.x, z: h.z, kind: h.size >= 1 ? 'bracken' : 'mix', size: h.size });
     this.cover = new CoverField({ parent: this.group, groundY: g, clumps, seed: 17 });
 
@@ -118,61 +108,9 @@ export class FrislingHome implements HomeDressing {
     this.cover.refresh();
     this.glimpse = { share: visibleShare(back, lens.cam, this.cover.stems), changed: changed.length };
 
-    /* -- the other decoys: a butterfly on a foxglove, a stonechat on a stalk, a nightjar -- */
-    for (const q of decoyAt) {
-      if (q.d.k === 'bush') {
-        const ci = clumps.findIndex((c) => c.decoy === q.d.id);
-        const anchor = new THREE.Object3D();
-        anchor.name = `decoy-${q.d.id}`;
-        anchor.position.set(q.x, g(q.x, q.z) + 0.3, q.z);
-        this.group.add(anchor);
-        this.decoys.push({ id: q.d.id, kind: 'bush', object: anchor, clump: ci, x: q.x, z: q.z });
-        continue;
-      }
-      const holder = new THREE.Group();
-      holder.name = `decoy-${q.d.id}`;
-      holder.position.set(q.x, g(q.x, q.z), q.z);
-      holder.rotation.y = headingTo(q, FRISLING_PLACES.coverApproach) + 0.9;
-      this.group.add(holder);
-      this.decoys.push({ id: q.d.id, kind: q.d.k, object: holder, clump: null, x: q.x, z: q.z });
-      const parts: THREE.Object3D[] = [];
-      this.decoyParts.set(q.d.id, parts);
-      const add = (s: { root: unknown; dispose(): void } | null, y = 0): THREE.Object3D | null => {
-        if (!s) return null;
-        const r = s.root as THREE.Object3D;
-        r.position.y = y;
-        holder.add(r);
-        this.spawned.push(s);
-        parts.push(r);
-        return r;
-      };
-      if (q.d.k === 'butterfly') {
-        void env.spawnPlant('prop-foxglove', SIZE.vingerhoedskruid.h * 0.85).then((s) => add(s));
-        void env.spawnModel(q.d.animal ?? 'heideblauwtje', { idle: false }).then((s) => {
-          const r = add(s, SIZE.vingerhoedskruid.h * 0.62);
-          if (r) { r.position.x = 0.07; this.birds.push({ o: r, base: r.position.clone(), kind: 'butterfly', t: 0 }); }
-        });
-      } else if (q.d.animal === 'nachtzwaluw') {
-        // on a little bare patch at the stand's edge, pressed to the ground
-        this.group.add(groundDecal(g, q.x, q.z, 0.34, 0.28, 0.3, '#9a8358', { layer: 1, seed: 4, feather: true }));
-        void env.spawnModel('nachtzwaluw', { idle: false }).then((s) => {
-          const r = add(s);
-          if (r) this.birds.push({ o: r, base: r.position.clone(), kind: 'ground', t: 0 });
-        });
-      } else {
-        // a stonechat on the tip of a dry stalk above the fronds
-        const stalkH = 1.05;
-        const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.014, stalkH, 5).translate(0, stalkH / 2, 0),
-          new THREE.MeshStandardMaterial({ color: '#8c7a52', roughness: 1 }));
-        stalk.rotation.z = 0.06;
-        holder.add(stalk);
-        parts.push(stalk);
-        void env.spawnModel(q.d.animal ?? 'roodborsttapuit', { idle: false }).then((s) => {
-          const r = add(s, stalkH - 0.01);
-          if (r) this.birds.push({ o: r, base: r.position.clone(), kind: 'perch', t: 0 });
-        });
-      }
-    }
+    /* -- the decoys: the dead bracken clumps, a butterfly on a foxglove, a stonechat on a
+       stalk, a nightjar at the edge (adventure/decoys.ts) -- */
+    this.lookAlikes = new StandDecoys(env, this.group, decoyAt, this.cover, clumps, FRISLING_PLACES.coverApproach);
 
     /* -- the rooting field: seven look-alike patches of turned earth -- */
     this.field = new PatchField({ parent: this.group, groundY: g, spots: fieldSpots(), size: 0.95, heading: FIELD_FRAME.heading + Math.PI, seed: 23 });
@@ -205,20 +143,14 @@ export class FrislingHome implements HomeDressing {
     this.clue.show(true, secs);
   }
 
+  /** The trial's look-alikes in the stand. */
+  get decoys(): readonly Decoy[] { return this.lookAlikes.decoys; }
+
   /** The decoys of this trial stay; the others step out of the stand (under the briefing card). */
-  useDecoys(ids: readonly string[]): void {
-    for (const d of this.decoys) {
-      const on = ids.includes(d.id);
-      d.object.visible = on;
-      if (d.clump !== null) this.cover.showClump(d.clump, on);
-    }
-  }
+  useDecoys(ids: readonly string[]): void { this.lookAlikes.useDecoys(ids); }
 
   /** A decoy clicked: it does what it would (the dead fronds rustle and part, the bird flits). */
-  poke(d: Decoy, from: { x: number; z: number }): void {
-    if (d.clump !== null) { this.cover.rustle(d.clump, 0.16); this.cover.part(d.clump, from, 0.55, 1.4); return; }
-    for (const b of this.birds) if (b.o.parent === d.object) b.t = 1.1;
-  }
+  poke(d: Decoy, from: { x: number; z: number }): void { this.lookAlikes.poke(d, from); }
 
   setState(state: HomeState): void {
     this.ringPrints.visible = state === 'before';
@@ -230,19 +162,14 @@ export class FrislingHome implements HomeDressing {
     this.cover.update(dt, t, reduced, movers);
     this.field.update(dt, reduced);
     this.clue.update(dt);
-    // a poked bird flits up a little and settles again; a butterfly opens its wings
-    for (const b of this.birds) {
-      if (b.t <= 0) continue;
-      b.t = Math.max(0, b.t - dt);
-      const k = reduced ? 0 : Math.sin((1 - b.t / 1.1) * Math.PI);
-      b.o.position.set(b.base.x, b.base.y + k * (b.kind === 'ground' ? 0.12 : 0.22), b.base.z + k * 0.05);
-    }
+    this.lookAlikes.update(dt, reduced);
   }
 
   dispose(): void {
     this.cover.dispose();
     this.field.dispose();
     this.clue.dispose();
+    this.lookAlikes.dispose();
     for (const s of this.spawned) s.dispose();
     this.ringPrints.geometry.dispose();
     (this.ringPrints.material as THREE.Material).dispose();

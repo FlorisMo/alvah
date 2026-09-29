@@ -54,8 +54,9 @@ export interface FrameView {
 
 /** A built home dressing (the wallow, the cover, the field ...). */
 export interface HomeDressing {
-  /** per frame while the lens is near: `movers` = the home's animals now */
-  update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean }[]): void;
+  /** per frame while the lens is near: `movers` = the home's animals now (and the
+   *  ranger, `ranger: true`) */
+  update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void;
   /** the home's state changed (a replay puts it back before; a finish after) */
   setState(state: HomeState): void;
   dispose(): void;
@@ -101,8 +102,12 @@ interface Home {
   gen: number;
 }
 
-/** A resident's free-roam reaction to the ranger walking up. */
-interface Reaction { busy: boolean; away: boolean; cool: number }
+/** How a shy resident keeps its distance (adventure/types.ts `ResidentShy`). */
+type Shy = NonNullable<ResidentSpec['shy']>[number];
+
+/** A resident's free-roam reaction to the ranger walking up (`hidden`, `gone`: a shy
+ *  one is in its cover, and how long the ranger has been away). */
+interface Reaction { busy: boolean; away: boolean; cool: number; hidden?: boolean; gone?: number }
 
 /** Within this (m) of the ranger a resident looks up at him (then roots on). */
 const NOTICE = 5;
@@ -216,6 +221,15 @@ export class Residents {
       if (!pose) { a.idle(); continue; }
       const far = Math.hypot(pose.x - a.x, pose.z - a.z);
       const placed = a.x !== 0 || a.z !== 0;
+      // a shy one with the ranger near its spot (a mission stopped beside her copse) keeps
+      // to (or slips into) its cover, and comes out once he has gone — never out and
+      // straight back in
+      const shy = r.shy?.find((q) => !q.state || q.state === state);
+      if (shy && placed && Math.hypot(pose.x - this.rangerAt.x, pose.z - this.rangerAt.z) < shy.within) {
+        home.reacting.set(r.key, { busy: false, away: false, cool: 0, hidden: true, gone: 0 });
+        this.takeCover(a, shy, walk);
+        continue;
+      }
       if (walk && placed && far > 0.05 && far < WALK_HOME_MAX) {
         void a.go(pose.x, pose.z, { speed: 'walk', face: pose.yaw ?? this.faceHome(home, pose) }).then((ok) => { if (ok) this.idleAt(a, pose); });
       } else {
@@ -223,6 +237,19 @@ export class Residents {
         this.idleAt(a, pose);
       }
     }
+  }
+
+  /** A shy one into its cover (a calm walk, or at once), bedding down there if it does. */
+  private takeCover(a: Actor, shy: Shy, walk: boolean): void {
+    const to = shy.to;
+    const d = Math.hypot(to.x - a.x, to.z - a.z);
+    if (d < 0.3) { if (shy.lie && !a.lies) void a.lie(true); return; }
+    if (walk && d < WALK_HOME_MAX) {
+      void a.go(to.x, to.z, { speed: 'walk', face: to.yaw }).then((ok) => { if (ok && shy.lie) void a.lie(true); });
+      return;
+    }
+    a.place(to.x, to.z, to.yaw ?? a.yaw);
+    if (shy.lie) void a.lie(true); else a.idle();
   }
 
   private faceHome(home: Home, p: ResidentPose): number {
@@ -252,14 +279,14 @@ export class Residents {
       const k = home.borrowed ? 1 : home.rest.step(d, dt, reduced);
       restFar(home.group, k);
       if (k <= 0) continue;
-      const movers: { x: number; z: number; moving: boolean }[] = [];
+      const movers: { x: number; z: number; moving: boolean; ranger?: boolean }[] = [];
       for (const a of home.actors.values()) {
         if (!a.group.visible) continue;
         a.update(dt, t);
         movers.push({ x: a.x, z: a.z, moving: a.speed > 0.15 });
       }
       // the ranger pushes through the cover too
-      movers.push({ x: ranger.x, z: ranger.z, moving: rangerMoving });
+      movers.push({ x: ranger.x, z: ranger.z, moving: rangerMoving, ranger: true });
       home.dressing?.update(dt, t, reduced, movers);
       this.voices(home, dt, camera, ranger);
       if (!home.borrowed) this.react(home, dt, ranger);
@@ -276,11 +303,13 @@ export class Residents {
     for (const r of home.spec.residents) {
       const a = home.actors.get(r.key);
       const pose = home.state === 'before' ? r.before : r.after;
-      if (!a || !pose || !a.group.visible || pose.idle === 'lie' || a.lies) continue;
+      const shy = r.shy?.find((q) => !q.state || q.state === home.state) ?? null;
+      if (!a || !pose || !a.group.visible || pose.idle === 'lie') continue;
       let st = home.reacting.get(r.key);
       if (!st) { st = { busy: false, away: false, cool: 0 }; home.reacting.set(r.key, st); }
       st.cool = Math.max(0, st.cool - dt);
-      if (st.busy) continue;
+      if (shy) { this.shyReact(home, a, pose, shy, st, dt, ranger); continue; }
+      if (a.lies || st.busy) continue;
       const gen = home.gen;
       const s = st;
       const still = (): boolean => home.gen === gen && !home.borrowed;
@@ -311,6 +340,38 @@ export class Residents {
           if (still()) this.idleAt(a, pose);
         });
       }
+    }
+  }
+
+  /**
+   * A shy resident (a roe doe at her copse): the ranger coming within `within` m makes
+   * her lift her head and look at him a moment, then walk calmly into her cover (and bed
+   * down there); once he has been further than `back` m for a few seconds she walks back
+   * out to her spot and grazes again. Never toward him, never a run.
+   */
+  private shyReact(home: Home, a: Actor, pose: ResidentPose, shy: Shy, st: Reaction, dt: number, ranger: { x: number; z: number }): void {
+    const d = Math.hypot(a.x - ranger.x, a.z - ranger.z);
+    if (st.hidden) st.gone = d > shy.back ? (st.gone ?? 0) + dt : 0;
+    if (st.busy) return;
+    const gen = home.gen;
+    const still = (): boolean => home.gen === gen && !home.borrowed;
+    if (!st.hidden && d < shy.within) {
+      st.busy = true; st.hidden = true; st.gone = 0;
+      void a.lookAt(() => ({ x: this.rangerAt.x, z: this.rangerAt.z, speed: 0 }), 1.3)
+        .then((ok) => (ok && still() ? a.go(shy.to.x, shy.to.z, { speed: 'walk', face: shy.to.yaw }) : false))
+        .then(async (ok) => {
+          if (ok && still() && shy.lie) await a.lie(true);
+          if (ok && still()) a.idle();
+          st.busy = false;
+        });
+    } else if (st.hidden && (st.gone ?? 0) > (shy.after ?? 3)) {
+      st.busy = true;
+      void a.go(pose.x, pose.z, { speed: 'walk', face: pose.yaw }).then((ok) => {
+        st.busy = false;
+        if (!ok || !still()) return;
+        st.hidden = false;
+        this.idleAt(a, pose);
+      });
     }
   }
 

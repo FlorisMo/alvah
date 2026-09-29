@@ -281,21 +281,23 @@ const MISSIE_REE = {
   payoff: 'moeder-keert-terug',         // inverted: you LEAVE the kalf; the mother returns
   kort: 'Een reekalf ligt alleen. Leer waarom je het met rust laat.',
   briefing: {
+    // run 6: the briefing names what the child can already see in the world: the
+    // mother grazing by the copse (so the calf is not lost at all)
     simpel: [
       'Hoi ranger!',
-      'Er ligt een reekalf in het gras.',
-      'Het is helemaal alleen.',
-      'Maar de moeder is dichtbij.',
-      'Kijk goed. Niet aanraken.',
-      'Zoek het kalf eerst in het gras.',
+      'Een wandelaar belde ons op.',
+      'Hij zag een reekalf, helemaal alleen.',
+      'Is het verdwaald? Dat denkt hij.',
+      'Maar kijk: de moeder eet vlakbij.',
+      'Zoek het kalf. Niet aanraken!',
     ],
     knap: [
       'Hoi ranger!',
-      'Een reekalf ligt in het gras.',
-      'Het "drukt zich" heel stil.',
-      'De reegeit is vlakbij. Dat is de moeder.',
-      'Kijk goed. Niet aanraken.',
-      'Zoek het kalf eerst in het gras.',
+      'Een wandelaar belde ons op.',
+      'Hij zag een reekalf, helemaal alleen.',
+      'Is het verdwaald? Dat denkt hij.',
+      'De reegeit graast vlakbij. Dat is mama.',
+      'Zoek het kalf. Niet aanraken!',
     ],
   },
   beloning: {
@@ -303,6 +305,38 @@ const MISSIE_REE = {
     vaktermBadge: { id: 'knap-reegeit', naam: 'Knap woord: reegeit' },
   },
   reunion: { sprite: 'ree', tekst: 'De moeder is terug bij haar kalf.' },
+  /* run 6: Het reekalf in het gras as an adventure in the world (render3d/adventure/
+     missions/ree.ts): the mother seen at the copse, her prints to the tall grass, the
+     calf found and left alone, a quiet walk to the hide, and the mother coming back.
+     One line per beat. */
+  avontuur: {
+    simpel: {
+      kijk: 'Kijk. Daar eet de moeder.',
+      volg: 'Volg de sporen naar het gras.',
+      chipGras: 'Het hoge gras',
+      sporen: 'kijk naar de sporen',
+      weg: 'Ze loopt de struiken in.',
+      zoek: 'Waar ligt het kalf? Klik erop.',
+      mis: 'Hier niet. Zoek verder.',
+      hint: 'Het kalf piept zacht. Zie je het?',
+      stil: 'Loop stil naar de schuilplek.',
+      chipHut: 'De schuilplek',
+      zacht: 'loop, niet rennen',
+      sst: 'Sst. Loop stil.',
+      verstop: 'Verstop je bij de struik.',
+      wacht: 'Wacht stil. Kijk naar de struiken.',
+      staStil: 'Sta stil. Anders schrikt ze.',
+      daar: 'Daar is de moeder!',
+      ruikt: 'Ze ruikt aan haar kalf.',
+    },
+    knap: {
+      kijk: 'Kijk. Daar graast de reegeit.',
+      volg: 'Volg haar prenten naar het gras.',
+      sporen: 'kijk naar de prenten',
+      weg: 'De reegeit loopt de struiken in.',
+      daar: 'Daar is de reegeit!',
+    },
+  },
   stappen: [
     {
       ef: 'zoeken',
@@ -366,8 +400,8 @@ const MISSIE_REE = {
             gevolg: 'Plons! Dat maakt veel lawaai.',
             reactie: 'mud', eikelKost: 1, terug: 0.7 },
           { id: 'moeder', subject: 'pad-veilig', flip: true,
-            vraag: 'De moeder komt eraan. Het pad is vrij.',
-            vraagKnap: 'De reegeit komt eraan. Het pad is vrij.',
+            vraag: 'De moeder is terug. Het pad is vrij.',
+            vraagKnap: 'De reegeit is terug. Het pad is vrij.',
             opties: [{ label: 'Blijf staan', goed: false }, { label: 'Loop rustig weg', goed: true }],
             uitleg: 'Precies. Geef ze samen de ruimte.',
             gevolg: 'Je staat te dichtbij. De moeder loopt weg.',

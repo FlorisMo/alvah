@@ -46,9 +46,10 @@ function box(h: number) {
 
 /** Run 6: the missions whose family LIVES at a home of its own (world/Residents.ts,
  *  render3d/adventure): their tableau is only the "klaar" flag at the marker. */
-const LIVES_AT_HOME = new Set(['frisling', 'wildcamera']);
-/** A mission whose family still walks in to its marker (the classic tableau). */
-const FAMILY = 'ree-niet-aanraken';
+const LIVES_AT_HOME = new Set(['frisling', 'ree-niet-aanraken', 'wildcamera']);
+/** A mission whose family still walks in to its marker (the classic tableau: a hind and
+ *  her calf on the crossing). */
+const FAMILY = 'ecoduct';
 
 function world(extra: Partial<ProgressEnv> = {}) {
   const scene = new THREE.Scene();
@@ -95,7 +96,11 @@ test('every mission ends in its own tableau, with the animal it is about at its 
   // piglet is hidden in the bracken, you hear him) and gets only the "klaar" flag
   assert.equal(heroOf('frisling', 'wildzwijn'), '');
   assert.deepEqual(TABLEAUS.frisling.pieces, []);
-  assert.equal(heroOf('ree-niet-aanraken', 'ree'), 'reekalf');
+  // run 6: the reekalf and its mother live at their copse; the ring stays empty (the calf
+  // lies hidden in the tall grass) and gets only the flag
+  assert.equal(heroOf('ree-niet-aanraken', 'ree'), '');
+  assert.deepEqual(TABLEAUS['ree-niet-aanraken'].pieces, []);
+  assert.equal(heroOf('ecoduct', 'edelhert'), 'edelhert');
 });
 
 test('the marker frame: + along = beyond the marker, + across = right of the way in', () => {
