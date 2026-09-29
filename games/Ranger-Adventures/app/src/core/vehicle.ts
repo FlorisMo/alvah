@@ -657,7 +657,7 @@ function rollAlong(x0: number, z0: number, ux: number, uz: number, k: number, t:
 function eachTouch(
   x: number, z: number, heading: number, dir: 1 | -1, curvature: number,
   body: readonly BodyCircle[], solids: readonly Solid[], max: number,
-  visit: (t: number, into: number, nx: number, nz: number) => void,
+  visit: (t: number, into: number, nx: number, nz: number, wall: boolean) => void,
 ): void {
   const ux = Math.sin(heading) * dir, uz = Math.cos(heading) * dir;
   const k = Math.abs(curvature) < 1e-4 ? 0 : curvature;
@@ -681,7 +681,7 @@ function eachTouch(
           const into = -(gapNx * vx + gapNz * vz) / Math.hypot(vx, vz);
           // pressing in: a touch; already touching and sliding along it: a touch it will
           // not stop for (into 0), but one a squeeze can be made of
-          if (into > 0 || t === 0) visit(t, Math.min(1, Math.max(0, into)), gapNx, gapNz);
+          if (into > 0 || t === 0) visit(t, Math.min(1, Math.max(0, into)), gapNx, gapNz, !!o.box);
           break;
         }
         t += Math.max(g * 0.95, 0.005);
@@ -718,6 +718,11 @@ export function freeDistance(
 /** The slowest the jeep rolls while it is pressed against something (m/s): enough
  *  to slide along a trunk, far too slow to feel like a crash. */
 export const CONTACT_CREEP = 0.8;
+/** Brushing a trunk, a wall or the shore, the jeep comes to it no faster than lets the
+ *  brush take at most this much (m/s) off what it really moves in one frame (the part of
+ *  its step that runs into the solid is pushed back out: speed × headOn² of it): a brush is
+ *  a glance, never a jolt (the review's crash frame is 12 m/s², 0.2 m/s a frame). */
+export const BRUSH_LOSS = 0.15;
 
 /** Met more squarely than this (`impactAhead`'s `headOn`) a solid is driven AT, not
  *  brushed: the jeep comes to rest in front of it instead of sliding along it. */
@@ -747,7 +752,7 @@ export function brakeCap(free: number, gap: number, decel: number, now = 0, dt =
   let a = room > 1e-6 ? (v * v - e2) / (2 * room) : Infinity;   // steady, arriving right at the gap
   // a real brush (arriving at `end` or a little faster only brushes a little harder):
   // braked as the room needs, but never harder than firmly
-  if (end >= CONTACT_CREEP) return Math.max(gentle, v - Math.min(Math.max(decel, a), FIRM_DECEL) * dt);
+  if (end >= BRUSH_LOSS * 2) return Math.max(gentle, v - Math.min(Math.max(decel, a), FIRM_DECEL) * dt);
   if (a > FIRM_DECEL) {                                           // too close for a firm brake there
     const hard = free - hardGap;
     a = hard > 1e-6 ? Math.max(FIRM_DECEL, (v * v - e2) / (2 * hard)) : Infinity;
@@ -759,8 +764,8 @@ export function brakeCap(free: number, gap: number, decel: number, now = 0, dt =
  * The speed (m/s) the jeep may still have with `free` metres to the nearest solid
  * ahead, met `headOn` squarely (`impactAhead`; 1 = dead centre): braking at `decel`
  * m/s² it comes to rest right at the solid (v = √(2·a·d)), but it may still brush it
- * gently — the part of its speed that runs into the solid stays at the creep
- * (`CONTACT_CREEP / headOn²`: it slows only to that) — so a clipped trunk costs almost
+ * gently — the push-out takes at most `BRUSH_LOSS` off what it moves in the frame it
+ * touches (`BRUSH_LOSS / headOn²`: it slows only to that) — so a clipped trunk costs almost
  * nothing (run 6: every brush braked it to a 0.8 m/s crawl, then ground it along the
  * bark). Met squarely (fading in from `SQUARE_HIT`) there is nothing to slide along: it
  * simply stops in front of it, without the last creep into the bark. From `now` over
@@ -768,7 +773,7 @@ export function brakeCap(free: number, gap: number, decel: number, now = 0, dt =
  */
 export function contactSpeedCap(free: number, decel: number, headOn = 1, now = 0, dt = 0): number {
   const brush = Math.max(0, Math.min(1, (1 - headOn) / (1 - SQUARE_HIT)));
-  const end = headOn > 1e-6 ? (CONTACT_CREEP / (headOn * headOn)) * brush : Infinity;
+  const end = headOn > 1e-6 ? (BRUSH_LOSS / (headOn * headOn)) * brush : Infinity;
   if (!Number.isFinite(end)) return Infinity;
   return brakeCap(free, 0.1, decel, now, dt, 0.02, end);
 }
@@ -790,8 +795,10 @@ export function solidBrake(
   const look = (Math.max(vmax, Math.abs(now)) ** 2) / (2 * decel) + 1;
   const touches = touchBuf;
   touches.length = 0;
-  eachTouch(x, z, heading, dir, curvature, body, solids, look, (t, into, nx, nz) => {
-    if (touches.length < 24) touches.push(t, into, nx, nz);
+  // a building's wall turns under the jeep at its corners (the touch grows squarer as
+  // it gets there, the key let go): a brush along a wall is met as if more squarely
+  eachTouch(x, z, heading, dir, curvature, body, solids, look, (t, into, nx, nz, wall) => {
+    if (touches.length < 24) touches.push(t, wall ? Math.sqrt(into) : into, nx, nz);
   });
   let cap = Infinity, free = look, headOn = 0;
   for (let i = 0; i < touches.length; i += 4) {
@@ -1276,8 +1283,14 @@ export function waterSteer(
   const v = Math.max(1, Math.abs(speed));
   const need = (v * v) / (2 * RIM_DECEL) + WATER_GAP + WATER_CLEAR;
   const look = Math.min(WATER_LOOK, need + 1);
-  const dry = (steer: number): number =>
-    wetAhead(x, z, heading, 1, pathCurvature(steer, speed, 1, caps, floor), body, blocked, look, WATER_SIDE).free;
+  // along the arc the steer drives now, and the tighter one it curls into as it slows (the
+  // brake looks along both: a path that only grazes the shore is no path)
+  const slow = Math.min(Math.abs(speed), caps.maxSpeed * STEER_AUTHORITY_MAX);
+  const dry = (steer: number): number => {
+    const k = pathCurvature(steer, speed, 1, caps, floor), ks = pathCurvature(steer, slow, 1, caps, floor);
+    const a = wetAhead(x, z, heading, 1, k, body, blocked, look, WATER_SIDE).free;
+    return Math.abs(ks - k) > 1e-4 ? Math.min(a, wetAhead(x, z, heading, 1, ks, body, blocked, look, WATER_SIDE).free) : a;
+  };
   const p = clampUnit(from);
   if (dry(p) >= need) return p;                                // its own path stays dry
   // met square on its heading: no bend, the brake stops it
@@ -1305,6 +1318,22 @@ export function waterSteer(
     for (let i = 0; i < 6; i++) { const mid = (lo + hi) / 2; if (dry(mid) >= need) hi = mid; else lo = mid; }
   }
   return p + fade * (hi - p);
+}
+
+/**
+ * The water brake (m/s): the soft stop `WATER_GAP` short of the water its path reaches
+ * (`ShoreAhead`), at `RIM_DECEL`, from `now` over `dt` (`brakeCap`) — but a path that only
+ * skims the shore is braked no more than a trunk it brushes (`contactSpeedCap`,
+ * `BRUSH_LOSS`), so a jeep curving along the bank is never slowed frame by frame for the
+ * edge it runs beside. Pure.
+ */
+export function waterCap(shore: ShoreAhead, now = 0, dt = 0): number {
+  if (!(shore.free < WATER_LOOK)) return Infinity;
+  const into = Math.max(0, shore.mx * shore.nx + shore.mz * shore.nz);   // how squarely it meets the water
+  const brush = Math.max(0, Math.min(1, (1 - into) / (1 - SQUARE_HIT)));
+  const end = into > 1e-6 ? (BRUSH_LOSS / (into * into)) * brush : Infinity;
+  if (!Number.isFinite(end)) return Infinity;
+  return brakeCap(shore.free, WATER_GAP, RIM_DECEL, now, dt, EDGE_HARD_GAP, end);
 }
 
 /* ------------------------------------------------------------ dead ends -- */
@@ -1484,16 +1513,15 @@ export function jeepStep(
     // slowing down, the same steer turns it tighter (its yaw is capped, not its curve): the
     // solids and the water are also looked for along the tightest arc it curls into
     const kSlow = pathCurvature(steerWant, Math.min(Math.abs(speed), caps.maxSpeed * STEER_AUTHORITY_MAX), dir, caps, floorNow);
-    const curls = Math.abs(kSlow - k) > 0.01;
+    const curls = Math.abs(kSlow - k) > 1e-4;
     // animals: along the arc it is about to drive, and straight ahead too: a steer that
     // flickers between keys (or lets go) must never hide an animal in front of its nose
     const arc = yieldBrake(s.x, s.z, s.heading, dir, k, body, w.animals, s.speed, dt);
     const line = yieldBrake(s.x, s.z, s.heading, dir, 0, body, w.animals, s.speed, dt);
     const give = line.cap < arc.cap ? line : arc;
     const edge = rimSpeedCap(rimFree(s.x, s.z, s.heading, dir, lim), s.speed, dt);
-    const wetFree = !blocked ? Infinity : Math.min(wetAhead(s.x, s.z, s.heading, dir, k, body, blocked).free,
-      curls ? wetAhead(s.x, s.z, s.heading, dir, kSlow, body, blocked).free : Infinity);
-    const wet = blocked ? brakeCap(wetFree, WATER_GAP, RIM_DECEL, s.speed, dt, EDGE_HARD_GAP) : Infinity;
+    const wet = !blocked ? Infinity : Math.min(waterCap(wetAhead(s.x, s.z, s.heading, dir, k, body, blocked), s.speed, dt),
+      curls ? waterCap(wetAhead(s.x, s.z, s.heading, dir, kSlow, body, blocked), s.speed, dt) : Infinity);
     // solids, and a keep-out zone too: the bend keeps it off one, but squeezed between a
     // zone and the water it must come to a soft stop, never run into the invisible edge
     const decel = caps.maxSpeed / JEEP_RAMP_TIME;

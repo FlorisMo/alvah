@@ -139,7 +139,7 @@ test('F-32 comfort composition: no-throttle steer never pivots; full gas + full 
 
 import {
   driveIntent, STEER_CREEP, REVERSE_FRACTION, vehicleDt, MAX_VEHICLE_DT,
-  JEEP_BODY, resolveBody, bodyOverlap, freeDistance, contactSpeedCap, CONTACT_CREEP, wheelContact,
+  JEEP_BODY, resolveBody, bodyOverlap, freeDistance, contactSpeedCap, BRUSH_LOSS, wheelContact,
   jeepStep, type JeepState, type JeepWorld, type Solid, type YieldAnimal,
 } from './vehicle.ts';
 
@@ -272,9 +272,9 @@ test('freeDistance + contactSpeedCap: the jeep brakes softly toward a trunk ahea
   const decel = JEEP_CAPS.maxSpeed / JEEP_RAMP_TIME;
   assert.ok(contactSpeedCap(20, decel) >= JEEP_CAPS.maxSpeed, 'far away the cap does not bind');
   assert.ok(near(contactSpeedCap(0.1, decel), 0), 'met squarely: at the trunk it stands (no last creep into the bark)');
-  assert.ok(near(contactSpeedCap(0, decel, 0.5), CONTACT_CREEP / 0.25), 'met at a slant: it may brush on at the creep of its run into it');
+  assert.ok(near(contactSpeedCap(0, decel, 0.5), BRUSH_LOSS / 0.25), 'met at a slant: it brushes on only as fast as the push-out takes little off its step');
   assert.ok(contactSpeedCap(1, decel) < contactSpeedCap(2, decel), 'the closer, the slower (a smooth stop)');
-  assert.ok(contactSpeedCap(0, decel, 0.3) > JEEP_CAPS.maxSpeed, 'a trunk it only brushes: no brake at all');
+  assert.ok(contactSpeedCap(0, decel, 0.15) > JEEP_CAPS.maxSpeed, 'a trunk it only glances: no brake at all');
 });
 
 test('wheelContact: flat ground → level; a slope → the matching pitch and roll', () => {
@@ -649,7 +649,7 @@ test('a trunk it would only clip: the jeep eases round it at full speed, never t
   assert.ok(j.moved < 0.05 && j.z < 20 - 0.6 - 1.9 + 0.05, `dead ahead it rests at the trunk (z ${j.z.toFixed(2)})`);
   assert.ok(solid, 'the dev hook says a solid braked it');
   // brushed without the bend (a trunk that steps into its line close by), it slides past keeping most of its speed
-  assert.ok(contactSpeedCap(0.5, JEEP_CAPS.maxSpeed, 0.3) > JEEP_CAPS.maxSpeed, 'a brush costs no braking');
+  assert.ok(contactSpeedCap(0.5, JEEP_CAPS.maxSpeed, 0.15) > JEEP_CAPS.maxSpeed, 'a glance costs no braking');
 });
 
 test('clipSteer: only a solid it would clip, ahead and near, bends it; the way away from it', () => {
