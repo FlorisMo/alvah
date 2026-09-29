@@ -252,6 +252,14 @@ function cancelHoverRead(): void {
   if (hoverTimer) window.clearTimeout(hoverTimer);
   hoverTimer = 0;
 }
+/** An item whose press says something of its own (the maker's name chip says the new
+ *  greeting) ends the hover read still waiting on it. On a touch screen a tap's mouseenter
+ *  only comes AFTER the press, so that wait starts after the press already cleared it,
+ *  and its label would cut the item's own words off. An item that is quiet when pressed
+ *  (a swatch) keeps it: on a tablet the tap is how its label is heard. */
+export function endHoverRead(): void {
+  cancelHoverRead();
+}
 /** A press (click, tap, key) ends the wait: whatever the player pressed speaks for
  *  itself — the next screen's voice is never talked over by a stale label (V1). */
 let pressCancelsHover = false;

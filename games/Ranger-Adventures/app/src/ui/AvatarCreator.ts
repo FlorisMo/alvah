@@ -26,7 +26,7 @@ import {
   type Avatar, type AvatarKenmerk,
 } from '../core/avatar';
 import { setScreen } from '../core/devhook';
-import { readScreenAloud } from './ReadAloud';
+import { readScreenAloud, endHoverRead } from './ReadAloud';
 import { SAY, MAKER } from '../content/screens';
 import { metNaam } from '../content/mentor';
 import { ALGEMEEN } from '../content/copy';
@@ -118,7 +118,9 @@ export function showAvatarCreator(ui: HTMLElement, world: World, done: () => voi
       input.value = naam;
       store.setAvatar({ naam });
       paintGreet();
-      // the new greeting, said: "Hoi, ranger Bo!"
+      // the new greeting, said: "Hoi, ranger Bo!", whole (the chip's own label is not
+      // said over it, also not after a tap: endHoverRead)
+      endHoverRead();
       if (store.get().settings.voorlezen) narrator.speak(greet.textContent ?? '');
     });
   });
