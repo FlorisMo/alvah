@@ -566,13 +566,15 @@ export const KEEP_OUT_MARGIN = 0.5;
  * never swings from one into the notch between them and pins itself there — and it
  * turns toward the nearer edge of that patch (met dead centre: the way the player
  * steers, right by default). Forward driving only (the World brakes for a zone behind
- * a reversing jeep). Pure.
+ * a reversing jeep). `caps` = the caps in force (reduced motion looks further). Pure.
  */
 export function keepOutSteer(
   x: number, z: number, heading: number, speed: number,
-  zones: readonly Solid[], body: readonly BodyCircle[], bias = 0,
+  zones: readonly Solid[], body: readonly BodyCircle[], bias = 0, caps: DriveCaps = JEEP_CAPS,
 ): number {
-  const v = Math.max(1, Math.abs(speed));
+  // timed at the full caps' pace: under reduced motion the jeep turns half as fast at
+  // half the speed (the same wide circle), so it must start its bend as far out
+  const v = Math.max(1, Math.abs(speed)) * (JEEP_CAPS.turnRate / caps.turnRate);
   const look = KEEP_OUT_LOOK_S * v, full = KEEP_OUT_FULL_S * v;
   let lead = body[0], half = 0;
   for (const c of body) { if (c.along > lead.along) lead = c; half = Math.max(half, c.r); }
@@ -855,7 +857,7 @@ export function jeepStep(
   let avoid = 0;
   if (dir > 0) {
     for (const bend of [
-      keepOutSteer(s.x, s.z, s.heading, speed, w.zones, body, want.steer),
+      keepOutSteer(s.x, s.z, s.heading, speed, w.zones, body, want.steer, caps),
       rimSteer(s.x, s.z, s.heading, lim, want.steer),
       clipSteer(s.x, s.z, s.heading, speed, w.solids, body, caps),
     ]) if (Math.abs(bend) > Math.abs(avoid)) avoid = bend;

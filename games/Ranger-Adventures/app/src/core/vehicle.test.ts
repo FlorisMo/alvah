@@ -311,13 +311,13 @@ test('guidedSteer: the bend adds to a steer the same way and outweighs one into 
 
 /** Seconds of the jeep's own frame (`jeepStep`) with the keys a child holds while
  *  steering at `target`: Up, plus Left/Right while it points more than 0.12 rad off. */
-function driveAt(target: { x: number; z: number }, zones: { x: number; z: number; r: number }[], seconds: number, x0 = 0) {
+function driveAt(target: { x: number; z: number }, zones: { x: number; z: number; r: number }[], seconds: number, x0 = 0, caps = JEEP_CAPS) {
   const dt = 1 / 60;
   const j = jeep(x0);
   let worst = 0, slowest = Infinity, far = 0, touched = 0;
   for (let t = 0; t < seconds; t += dt) {
     const e = Math.atan2(Math.sin(Math.atan2(target.x - j.x, target.z - j.z) - j.heading), Math.cos(Math.atan2(target.x - j.x, target.z - j.z) - j.heading));
-    const f = jeepStep(j, driveIntent(KEY(1, e > 0.12 ? -1 : e < -0.12 ? 1 : 0), null), dt, JEEP_CAPS, world({ zones }));
+    const f = jeepStep(j, driveIntent(KEY(1, e > 0.12 ? -1 : e < -0.12 ? 1 : 0), null), dt, caps, world({ zones }));
     Object.assign(j, f);
     worst = Math.max(worst, bodyOverlap(j.x, j.z, j.heading, JEEP_BODY, zones));
     if (f.contact) touched++;
@@ -334,6 +334,14 @@ test('keep-out zone: steered straight at a ree behind it, the jeep glides round 
     assert.equal(r.touched, 0, `offset ${off}: the bend keeps the body off the zone: it never even touches it`);
     assert.ok(r.slowest > 5.9, `offset ${off}: it keeps its speed (slowest ${r.slowest.toFixed(2)} m/s: an invisible zone never slows it)`);
     assert.ok(r.far > 40, `offset ${off}: it got round to the far side (z ${r.far.toFixed(1)})`);
+  }
+});
+
+test('keep-out zone under reduced motion: half the speed, half the turn rate — it still bends round without touching it', () => {
+  for (const off of [0, 0.3, 2]) {
+    const r = driveAt({ x: off * 0.3, z: 60 }, [{ x: off, z: 22, r: 5.2 }], 24, 0, JEEP_CAPS_REDUCED);
+    assert.equal(r.touched, 0, `offset ${off}: never touches the zone`);
+    assert.ok(r.slowest > JEEP_CAPS_REDUCED.maxSpeed - 0.05 && r.far > 40, `offset ${off}: at its full (reduced) speed round it (slowest ${r.slowest.toFixed(2)})`);
   }
 });
 
