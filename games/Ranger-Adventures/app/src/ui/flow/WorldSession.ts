@@ -247,8 +247,12 @@ export function enterPlay(returning: boolean): void {
   setScreen('world');
   setMissionView(null);
   showExploreHud(activeExploreTitel());
-  // the HUD comes in as the glide settles, not over the moving picture
-  session.host.querySelector('.explore-hud')?.classList.add('explore-hud--arriving');
+  // the HUD comes in as the glide settles, not over the moving picture; then the class
+  // goes, or every prompt that appears later (a slot shown again restarts its animation)
+  // would wait a second and fade in behind the ring he already stands in
+  const hud = session.host.querySelector('.explore-hud');
+  hud?.classList.add('explore-hud--arriving');
+  window.setTimeout(() => hud?.classList.remove('explore-hud--arriving'), 1_700);
   beginGuide(returning);
 }
 

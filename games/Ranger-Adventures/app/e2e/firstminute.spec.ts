@@ -171,6 +171,17 @@ test('the first minute: Bram greets, walk and run are learned by doing, the hook
   await expect(page.locator('.speaker-strip')).toHaveCount(0, { timeout: 12_000 });
   expect((await hint(page)).learned).toContain('haak');
 
+  // -- standing still a while brings the look lesson; a drag with the mouse is it done
+  const look = page.locator('.lesson-strip.ls-kijken');
+  await expect(look, 'standing still ~5 s brings the look lesson').toBeVisible({ timeout: 12_000 });
+  await expect(look).toContainText(LES.kijken.keys);
+  await snapShot(page, 'lesson-look');
+  await page.mouse.move(640, 300); await page.mouse.down();
+  for (let i = 1; i <= 12; i++) { await page.mouse.move(640 + i * 12, 300); await sleep(page, 25); }
+  await page.mouse.up();
+  await expect(look, 'dragging the view round dismisses it').toHaveCount(0, { timeout: 5_000 });
+  expect((await hint(page)).learned).toContain('kijken');
+
   // -- to the marker: the tags stay clean all the way (every ~2 s)
   const marker = (await R<(P2 & { missionId: string })[]>(page, 'r.markers()')).find((m) => m.missionId === FIRST.id)!;
   const w = await walkTo(page, marker, { until: (s) => s.near === FIRST.id, timeout: 90_000 });

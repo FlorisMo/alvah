@@ -274,7 +274,7 @@ test('the raaf hut and Instellingen keep their way back on screen, and Esc leave
     return r.bottom <= innerHeight && !!hit && (hit === el || el.contains(hit));
   }, sel);
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: /Vang je raaf op/ }).click();
+  await page.getByRole('button', { name: /Help de jonge raaf|Verzorg/ }).click();
   expect(await clickable('.cabin-back'), 'the raaf hut\'s way back is clipped').toBe(true);
   await shot(page, 'raaf-hut');
   await page.keyboard.press('Escape');

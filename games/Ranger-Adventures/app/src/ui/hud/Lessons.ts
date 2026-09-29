@@ -262,8 +262,10 @@ function linesOf(id: Exclude<StepId, LessonId>): string[] {
 
 /** Say a beat (or its rest, after it was cut off by a menu). */
 function sayBeat(c: { kind: 'beat'; id: Exclude<StepId, LessonId>; from: number; saying: boolean }): void {
-  // the jeep beat is moot once he sits in the jeep
-  if (c.id === 'jeep' && session.world?.vehicleState()?.inVehicle) { store.learn('jeep'); finishStep(performance.now()); return; }
+  // a beat cut off by a menu or a mission is moot when it is picked up again if what it
+  // was about is past: the jeep once he sits in it, the hook once the first mission is done
+  const moot = (c.id === 'jeep' && !!session.world?.vehicleState()?.inVehicle) || (c.id === 'haak' && !hookRelevant());
+  if (moot) { store.learn(c.id as 'jeep' | 'haak'); finishStep(performance.now()); return; }
   const lines = linesOf(c.id);
   c.saying = true;
   void say(lines.slice(c.from), {

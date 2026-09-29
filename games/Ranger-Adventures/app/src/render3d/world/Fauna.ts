@@ -31,6 +31,8 @@ export const WARDEN_AT = { x: 3.9, z: -5.0 } as const;
 const WARDEN_TURN_RATE = 2.2;
 /** Quiet this long (s), he turns back to the clearing. */
 const WARDEN_RESUME_S = 1.6;
+/** The ranger this close (m), Bram looks at him even when he says nothing. */
+const WARDEN_NOTICE_M = 4.5;
 
 export class Fauna {
   // W3.3 scenic actors: the warden (BOA) + poacher stand at fixed world spots and
@@ -260,15 +262,16 @@ export class Fauna {
     return { x: p.x, z: p.z, h: w.height, talking: this.wardenTalking, mark: !!this.speechMark?.visible, offRanger: Math.round(off * 100) / 100 };
   }
 
-  /** Per frame: while he speaks Bram turns (calmly, the short way) to face the ranger;
-   *  a little after he has finished he turns back to the clearing. Under reduced motion
-   *  the turn is a cut. */
+  /** Per frame: while he speaks, and while the ranger stands near him, Bram turns
+   *  (calmly, the short way) to face the ranger; a little after he has finished he turns
+   *  back to the clearing. Under reduced motion the turn is a cut. */
   tendWarden(dt: number, ranger: { x: number; z: number }, reduced: boolean): void {
     const w = this.scenicActors.find((a) => a.id === 'ranger-warden-boa');
     if (!w) return;
     const p = w.group.position;
     if (!this.wardenTalking) this.wardenQuietS += dt;
-    const facing = this.wardenTalking || this.wardenQuietS < WARDEN_RESUME_S;
+    const near = Math.hypot(ranger.x - p.x, ranger.z - p.z) < WARDEN_NOTICE_M;
+    const facing = this.wardenTalking || near || this.wardenQuietS < WARDEN_RESUME_S;
     const want = facing ? Math.atan2(ranger.x - p.x, ranger.z - p.z) : Math.atan2(-p.x, -p.z);
     const d = Math.atan2(Math.sin(want - w.group.rotation.y), Math.cos(want - w.group.rotation.y));
     if (Math.abs(d) < 1e-3) return;
