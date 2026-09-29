@@ -40,8 +40,9 @@ import { wireWorldDevhook } from '../dev/wireDevhook';
 import {
   showExploreHud, disposeExploreHud, onApproach, onWayfind, onInteract, onBoardApproach,
   tryOpenBoard, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
-  setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint,
+  setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint, beginGuide,
 } from '../hud/ExploreHud';
+import { armMissiebordBeat } from '../hud/Lessons';
 
 // Light world-EF seasoning: count in-world mission completions this session so the
 // pure `pickWorldBeat` cadence (every Nth return) stays rare. `lastBeatTick` dedups
@@ -229,15 +230,16 @@ function showTitleCard(opts: { after?: number; afterVeil?: boolean } = {}): void
     el.className = 'title-overlay title-overlay--leaving'; // not a menu any more: the glide starts at once
     el.querySelectorAll('button').forEach((b) => { b.disabled = true; });
     window.setTimeout(() => el.remove(), prefersReducedMotion() ? 0 : 320);
-    if (store.get().avatarGemaakt) enterPlay();
-    else showAvatarCreator(session.host, session.world!, enterPlay);
+    if (store.get().avatarGemaakt) enterPlay(true);
+    else showAvatarCreator(session.host, session.world!, () => enterPlay(false));
   }, { once: true });
 }
 
 /** From the title or the maker into play: the follow camera takes the lens over from the
  *  shot in one move, the ranger turns to the forest, the HUD and the sound come in. The
- *  player can walk at once. */
-export function enterPlay(): void {
+ *  player can walk at once. Then the first minute: Bram greets a new boswachter (or
+ *  welcomes a `returning` one back) and the lessons follow (ui/hud/Lessons.ts). */
+export function enterPlay(returning: boolean): void {
   const world = session.world;
   if (!world) return;
   world.present(null);
@@ -247,6 +249,7 @@ export function enterPlay(): void {
   showExploreHud(activeExploreTitel());
   // the HUD comes in as the glide settles, not over the moving picture
   session.host.querySelector('.explore-hud')?.classList.add('explore-hud--arriving');
+  beginGuide(returning);
 }
 
 /**
@@ -290,6 +293,8 @@ export function resumePatrol(): void {
     armBeat(patrolTick);
   }
   showExploreHud(titel);
+  // back from a finished mission: Bram points at the missiebord (once, after the first)
+  if (patrolTick > 0) armMissiebordBeat();
 }
 
 /* ------------------------------------------------ the armed world-EF beat ---- */

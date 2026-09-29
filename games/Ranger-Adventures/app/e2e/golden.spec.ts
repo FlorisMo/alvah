@@ -185,6 +185,20 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     soft(back.during + back.after <= 90, `back: the camera swings round to face the ranger (${back.during + back.after}°)`);
     soft(back.onScreen, 'back: the ranger left the screen');
     await shot(page, 'after-turn-keys');
+
+    // run 6 (FLOW P2): Bram greets him, then the run lesson shows the Shift key; he does
+    // what it says (Shift + ↑) and the lesson goes, learned for good
+    const runLesson = page.locator('.lesson-strip.ls-rennen');
+    const shown = await runLesson.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false);
+    soft(shown, 'no run lesson ([Shift] "Hou Shift vast. Dan ren je.") after Bram\'s greeting');
+    if (shown) await shot(page, 'run-lesson');
+    await page.keyboard.down('Shift');
+    let ran: Awaited<ReturnType<typeof holdKey>>;
+    try { ran = await holdKey(page, 'ArrowUp', 2_000); } finally { await page.keyboard.up('Shift'); }
+    note(`Shift + ↑ 2 s: moved ${ran.moved} m${shown ? ', the run lesson was up' : ''}`);
+    const gone = await runLesson.waitFor({ state: 'detached', timeout: 5_000 }).then(() => true, () => false);
+    const learned = await R<{ learned: string[] } | null>(page, 'r.hint()');
+    soft(gone && !!learned?.learned.includes('rennen'), `running did not finish the run lesson (still up: ${!gone}, learned: ${learned?.learned.join(',')})`);
     noNewErrors();
   });
 
@@ -320,6 +334,11 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
 
   // --------------------------------------------- 5. go to the first mission ----
   await step(5, async () => {
+    // run 6 (FLOW P2): the chip shows once Bram has told the hook (it follows the lessons)
+    const t5 = Date.now();
+    const chip = await page.locator('.explore-wayfind').waitFor({ state: 'visible', timeout: 30_000 }).then(() => true, () => false);
+    if (Date.now() - t5 > 500) note(`the chip came ${((Date.now() - t5) / 1000).toFixed(1)} s into this step (Bram's hook)`);
+    soft(chip, 'the chip never showed (Bram\'s hook did not come)');
     const hud = await uiText(page);
     const pointed = missions.find((m) => hud.includes(m.titel));
     soft(!!pointed, `the HUD names no mission to go to (HUD text: "${hud.replace(/\s+/g, ' ').slice(0, 120)}")`);

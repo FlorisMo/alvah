@@ -75,6 +75,7 @@ export class Markers {
   // "nearest mission marker" the E2E steers to.
   boardGroup: THREE.Group | null = null;
   boardPos: THREE.Vector3 | null = null;
+  private boardLabel: THREE.Sprite | null = null;
   nearBoard = false;
   private onBoardNear: (near: boolean) => void = () => {};
   private onBoardOpen: () => void = () => {};
@@ -92,7 +93,16 @@ export class Markers {
   // sit-spot). They are wayfinding UI (§3), so they FADE by the lens's proximity — a
   // collapsed close follow boom must never render one as a frame-filling hoop
   // (`18-jeep-near`). Full 0.5 beyond RING_FADE_FAR, linearly to 0 by RING_FADE_NEAR.
-  private readonly groundRings: { mat: THREE.MeshBasicMaterial; x: number; z: number; base: number }[] = [];
+  private readonly groundRings: {
+    mat: THREE.MeshBasicMaterial; x: number; z: number; base: number;
+    mesh: THREE.Mesh; glow: number; pulse: number; // run 6: a ring that glows (s left) breathes
+  }[] = [];
+  // run 6 (FLOW): the next mission's tag shows from afar only once Bram has told the
+  // player about it (the chip and the tag come together); a glowing ring round the
+  // parked jeep when Bram suggests it (`setBeacon`)
+  private nextRevealed = true;
+  private beacon: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; clock: number } | null = null;
+  private glowClock = 0;
   private ringsShown = 1; // 0..1: how far every ring is in (0 on the title and in the maker)
   private readonly RING_FADE_NEAR = 2.2; // lens ≤ this from a ring ⇒ fully faded (it's under/around the ranger)
   private readonly RING_FADE_FAR = 4.2;  // lens ≥ this ⇒ full "go here" opacity (normal approach/standing boom ~4.6 m)
@@ -176,7 +186,7 @@ export class Markers {
       // a soft halo ring so every marker reads as "go here", model or totem
       const ring = this.haloRing(mk.color, x, z, group.position.y, 0);
       group.add(ring);
-      this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x, z, base: 0.5 }); // D3.16: fade near the lens
+      this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x, z, base: 0.5, mesh: ring, glow: 0, pulse: 0 }); // D3.16: fade near the lens
 
       // a small diegetic name-tag floating above the marker (in-world label, no
       // minimap chrome) — a camera-facing sprite so it stays readable from any angle
@@ -229,6 +239,7 @@ export class Markers {
         });
       }
     });
+    this.syncAlways(); // the next mission's tag reads from afar (run 6)
   }
 
   /**
@@ -264,8 +275,10 @@ export class Markers {
     board.add(this.proceduralBoard());
     const ring = this.haloRing('#f5c23b', boardAt.x, boardAt.z, boardAt.y, board.rotation.y);
     board.add(ring);
-    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: boardAt.x, z: boardAt.z, base: 0.5 }); // D3.16
-    const label = this.labels.make('Missiebord', '#f5c23b');
+    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: boardAt.x, z: boardAt.z, base: 0.5, mesh: ring, glow: 0, pulse: 0 }); // D3.16
+    // the board's tag reads from further than the rest (20 m): it is the hub of the clearing
+    const label = this.labels.make('Missiebord', '#f5c23b', { reach: 20 });
+    this.boardLabel = label;
     label.position.y = 2.0;
     board.add(label);
     this.scene.add(board);
@@ -302,7 +315,7 @@ export class Markers {
     group.add(this.proceduralBench());
     const ring = this.haloRing('#8ab6d6', at.x, at.z, at.y, group.rotation.y);
     group.add(ring);
-    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: at.x, z: at.z, base: 0.5 }); // D3.16
+    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: at.x, z: at.z, base: 0.5, mesh: ring, glow: 0, pulse: 0 }); // D3.16
     const label = this.labels.make(ROEP_COPY.wayfinding, '#cfe6f2');
     label.position.y = 1.7;
     group.add(label);
@@ -397,14 +410,7 @@ export class Markers {
     const ring = this.groundRings.find((r) => r.mat === m.ring);
     if (ring) ring.base = 0.85; // a full, calm "klaar" halo (it still fades near the lens)
     m.ring.opacity = Math.max(m.ring.opacity, 0.85);
-    const fresh = new Labels().make(`✓ ${m.titel}`, FINISHED_COLOR); // draw the new tag, keep our sprite
-    const mat = m.label.material as THREE.SpriteMaterial;
-    const newMat = fresh.material as THREE.SpriteMaterial;
-    mat.map?.dispose();
-    mat.map = newMat.map;
-    mat.needsUpdate = true;
-    newMat.dispose();
-    m.label.scale.copy(fresh.scale);
+    this.labels.retitle(m.label, `✓ ${m.titel}`, FINISHED_COLOR); // same sprite, new words
   }
 
   /** Point the wayfinding cue at a mission (after one is completed, or when the HUD is
@@ -414,8 +420,86 @@ export class Markers {
     if (id !== this.activeId) { this.guide?.reset(); this.steady.reset(); }
     this.activeId = id;
     this.lastWayKey = '';
+    this.syncAlways();
     if (this.lastPose) this.updateWayfinding(this.lastPose.x, this.lastPose.z, this.lastPose.facing);
   }
+
+  // ---- run 6 (FLOW lane): the tag that matters, and glowing "go here" cues -----------
+  /** Whether the next mission's tag may show from afar (false until Bram's hook). */
+  setNextRevealed(on: boolean): void {
+    this.nextRevealed = on;
+    this.syncAlways();
+  }
+
+  /** Only the next mission's tag shows at any distance (the rest near the ranger). */
+  private syncAlways(): void {
+    for (const m of this.list) this.labels.setAlways(m.label, this.nextRevealed && m.missionId === this.activeId);
+  }
+
+  /** The next mission's ring and tag glow for `seconds` (Bram just named it). */
+  glowActive(seconds: number): void {
+    const m = this.activeId ? this.list.find((k) => k.missionId === this.activeId) : null;
+    if (!m) return;
+    this.labels.setGlow(m.label, seconds);
+    const r = this.groundRings.find((g) => g.mat === m.ring);
+    if (r) r.glow = seconds;
+  }
+
+  /** The missiebord's ring and tag glow for `seconds` (more work waits there). */
+  glowBoard(seconds: number): void {
+    if (this.boardLabel) this.labels.setGlow(this.boardLabel, seconds);
+    const r = this.boardPos ? this.groundRings.find((g) => g.x === this.boardPos!.x && g.z === this.boardPos!.z) : null;
+    if (r) r.glow = seconds;
+  }
+
+  /** Whether the next mission's tag / the board's tag glows now (dev hook). */
+  glowState(): { next: boolean; board: boolean; beacon: boolean } {
+    const m = this.activeId ? this.list.find((k) => k.missionId === this.activeId) : null;
+    return {
+      next: !!m && this.labels.glowing(m.label),
+      board: !!this.boardLabel && this.labels.glowing(this.boardLabel),
+      beacon: !!this.beacon?.mesh.visible,
+    };
+  }
+
+  /** A warm glowing ring on the ground round a spot (the parked jeep Bram points at), or
+   *  none (`null`). One mesh, made on first use; laid on the ground where it is put. */
+  setBeacon(at: { x: number; z: number; r: number } | null): void {
+    if (!at) { if (this.beacon) this.beacon.mesh.visible = false; return; }
+    if (this.beacon) { this.scene.remove(this.beacon.mesh); this.beacon.mesh.geometry.dispose(); this.beacon.mat.dispose(); }
+    const y0 = this.groundY(at.x, at.z);
+    const geo = new THREE.RingGeometry(at.r, at.r + 0.32, 48, 2);
+    geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) pos.setY(i, this.groundY(at.x + pos.getX(i), at.z + pos.getZ(i)) - y0 + 0.06);
+    pos.needsUpdate = true;
+    geo.computeBoundingSphere();
+    const mat = new THREE.MeshBasicMaterial({ color: '#f5c23b', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(at.x, y0, at.z);
+    this.scene.add(mesh);
+    this.beacon = { mesh, mat, clock: 0 };
+  }
+
+  /** Per frame: the glowing rings breathe (a steady glow under reduced motion). */
+  private stepGlow(dt: number, reduced: boolean): void {
+    this.glowClock += dt;
+    const breath = reduced ? 1 : 0.5 - 0.5 * Math.cos((this.glowClock / 1.6) * Math.PI * 2);
+    for (const r of this.groundRings) {
+      if (r.glow <= 0 && r.pulse === 0) continue;
+      r.glow = Math.max(0, r.glow - dt);
+      r.pulse = r.glow > 0 ? breath : 0;
+      const s = r.glow > 0 ? 1 + (reduced ? 0.06 : 0.1 * breath) : 1;
+      r.mesh.scale.set(s, 1, s);
+    }
+    const b = this.beacon;
+    if (b?.mesh.visible) {
+      b.mat.opacity = (0.55 + 0.35 * breath) * this.ringsShown;
+      const s = reduced ? 1 : 1 + 0.05 * breath;
+      b.mesh.scale.set(s, 1, s);
+    }
+  }
+  // ---- end run 6 -------------------------------------------------------------------
 
   /** What a route may not cross off the sand: the buildings (the cabin and the
    *  landmarks, every big solid box) and the ven's water, where he stops at the shore.
@@ -445,6 +529,7 @@ export class Markers {
    * secondary motion, so reduced-motion freezes them at the rest pose.
    */
   animate(t: number, dt: number, reduced: boolean): void {
+    this.stepGlow(dt, reduced);
     for (const mk of this.list) {
       // far off, half in the fog, the animal fades out and rests (not drawn): a whole
       // Veluwe of markers in one view stays inside the draw-call budget
@@ -638,7 +723,8 @@ export class Markers {
     for (const r of this.groundRings) {
       const d = Math.hypot(cx - r.x, cz - r.z);
       const k = Math.max(0, Math.min(1, (d - this.RING_FADE_NEAR) / span));
-      const o = r.base * k * this.ringsShown;
+      const base = r.glow > 0 ? Math.max(r.base, 0.62 + 0.33 * r.pulse) : r.base; // run 6: a glowing ring
+      const o = base * k * this.ringsShown;
       if (r.mat.opacity !== o) r.mat.opacity = o;
     }
   }

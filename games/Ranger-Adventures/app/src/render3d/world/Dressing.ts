@@ -254,7 +254,7 @@ export class Dressing {
     // wave 2: the cabin's real footprint (porch included: 1.31 × 1.27 of its height,
     // measured off the GLB), turned with it, so the ranger cannot step onto the porch
     const H = SIZE.boshut.h;
-    this.obstacles.push(boxObstacle(cabinAt.x, cabinAt.z, CABIN_FOOT[0] * H, CABIN_FOOT[1] * H, cabin.rotation.y));
+    this.obstacles.push({ ...boxObstacle(cabinAt.x, cabinAt.z, CABIN_FOOT[0] * H, CABIN_FOOT[1] * H, cabin.rotation.y), h: H });
     void loadModel('prop-ranger-cabin').then((m) => {
       if (!m) return;
       const prepped = prepModel(m, H);
@@ -745,7 +745,7 @@ export class Dressing {
         group.add(label);
       }
       this.scene.add(group);
-      this.obstacles.push(boxObstacle(lm.x, lm.z, f.fx, f.fz, group.rotation.y));
+      this.obstacles.push({ ...boxObstacle(lm.x, lm.z, f.fx, f.fz, group.rotation.y), h: f.h });
       this.landmarks.push({ id: lm.id, x: lm.x, z: lm.z });
       void loadModel(lm.model).then((m) => {
         if (!m) return;

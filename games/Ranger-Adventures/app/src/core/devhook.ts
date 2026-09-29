@@ -295,14 +295,14 @@ export interface RangerDevHook {
    *  the E2E assert the fps probe exposes a tier and its knobs are consistent.
    *  Null before the world is live. */
   quality(): { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null;
-  /** RUN-3 P3.3 (F-06/F-15/F-11): the ONE sequenced onboarding-hint state. `active`
-   *  is the SINGLE hint on screen now — 'walk' (the entry control line), 'tap' (the
-   *  post-walk "tik op een dier" transient), 'boundary' (the P4.6 rim cue), or null.
-   *  `walkSeen`/`tapSeen` are the persisted one-time flags (state.ts, no new key);
-   *  `helpChip` is whether the laptop "?" re-show chip is mounted. The capture assert
-   *  reads `active` = 'walk' with the tracker held back to prove ONE hint at entry,
-   *  and that it advances on the first step. Null before the world/hook is ready. */
-  hint(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
+  /** Run 6 (FLOW P2): the first minute (ui/hud/Lessons.ts). `active` is the ONE step on
+   *  screen — a lesson ('lopen' walk, 'rennen' run, 'kijken' look round) or one of Bram's
+   *  beats ('bram' the greeting, 'haak' the hook, 'welkom', 'missiebord', 'jeep') — or
+   *  null; `speaking`/`line` what Bram says now; `learned` the steps saved for good
+   *  (settings.geleerd); `chip` whether the way-chip may show (false until the hook);
+   *  `tip` the one transient tip on screen ('boundary') or null; `helpChip` whether the
+   *  "?" chip is there. Null before the world/hook is ready. */
+  hint(): HintState | null;
   /** RUN-3 P4.6 (F-11): the world-rim state — `bound` (the move-limit radius, m),
    *  the ranger's live `dist` from world centre, and `atRim` (he is pressed against
    *  the rim heading outward, so the calm "Hier stopt het bos" cue has fired). The
@@ -313,6 +313,12 @@ export interface RangerDevHook {
    *  band and none floats at head height in the edge frame. Null before the hook is
    *  ready. */
   boundary(): { bound: number; dist: number; atRim: boolean; scatterMax: number } | null;
+  /** Run 6 (FLOW P2): every name-tag drawn now — its words, opacity and box on screen in
+   *  CSS px — so a test can prove no two overlap and none is cut at the edge. */
+  tags(): TagOnScreen[] | null;
+  /** Run 6 (FLOW P2): which "go here" cues glow now: the next mission's ring + tag, the
+   *  missiebord's, the ring round the parked jeep. */
+  glow(): { next: boolean; board: boolean; beacon: boolean } | null;
   /* ---- golden-path probes (e2e/golden.spec.ts). Read-only: they measure what the
    * player SEES (the camera + scene the Stage rendered this frame), never resolve a
    * step. The THREE-side maths lives in render3d/play/kit.ts ("test play hint"). ---- */
@@ -357,6 +363,19 @@ export interface RangerDevHook {
    *  drives along (dx,dz) and faces that way is longer along than across. */
   shapeAt(x: number, z: number, dx: number, dz: number): { id: string; along: number; across: number } | null;
 }
+
+/** `__ranger.tags()` (see the field doc). */
+export type TagOnScreen = { text: string; o: number; x: number; y: number; w: number; h: number; glow: boolean; d: number; always: boolean };
+
+/** `__ranger.hint()` (see the field doc). */
+export type HintState = {
+  active: string | null; speaking: boolean; line: string | null; learned: string[]; chip: boolean;
+  tip: string | null; helpChip: boolean; returning: boolean;
+  progress: { walkedM: number; runS: number; lookPx: number };
+  /** Bram: where he stands, his height, whether he talks (and shows the speech mark),
+   *  how far (rad) he turns away from facing the ranger. */
+  bram: { x: number; z: number; h: number; talking: boolean; mark: boolean; offRanger: number } | null;
+};
 
 /** `__ranger.playHint()` (see the field doc). */
 export type PlayHintProbe = {
@@ -430,8 +449,10 @@ const state = {
     pads: { x: number; z: number }[];
   } | null),
   quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
-  hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
+  hint: null as null | (() => HintState | null),
   boundary: null as null | (() => { bound: number; dist: number; atRim: boolean; scatterMax: number } | null),
+  tags: null as null | (() => TagOnScreen[]),
+  glow: null as null | (() => { next: boolean; board: boolean; beacon: boolean }),
   // golden-path probes: the Stage's live view + renderer (main.ts) and the THREE-side
   // measurements (kit.ts). Kept `unknown` so this module stays three.js-free.
   renderView: null as null | (() => unknown),
@@ -715,9 +736,18 @@ export function provideQuality(
 /** Register the RUN-3 P3.3 onboarding-hint state source (the explore HUD). Pass
  *  null to clear (F-06/F-15). */
 export function provideHint(
-  fn: (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null) | null,
+  fn: (() => HintState | null) | null,
 ): void {
   state.hint = fn;
+}
+
+/** Register the run-6 name-tag and glow read-backs (the World). */
+export function provideTags(
+  tags: (() => TagOnScreen[]) | null,
+  glow: (() => { next: boolean; board: boolean; beacon: boolean }) | null,
+): void {
+  state.tags = tags;
+  state.glow = glow;
 }
 
 /** Register the RUN-3 P4.6 world-rim state source (the World). Pass null to clear (F-11). */
@@ -771,6 +801,8 @@ export function installDevHook(): boolean {
     quality: () => (state.quality ? state.quality() : null),
     hint: () => (state.hint ? state.hint() : null),
     boundary: () => (state.boundary ? state.boundary() : null),
+    tags: () => (state.tags ? state.tags() : null),
+    glow: () => (state.glow ? state.glow() : null),
     playHint: () => (state.probes ? state.probes.playHint() : null),
     tris: () => (state.tris ? state.tris() : null),
     frames: () => (state.frames ? state.frames() : null),

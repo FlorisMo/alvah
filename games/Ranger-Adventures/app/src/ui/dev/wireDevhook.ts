@@ -11,7 +11,7 @@ import {
   provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
-  provideHeli, provideQuality, provideBoundary,
+  provideHeli, provideQuality, provideBoundary, provideTags,
 } from '../../core/devhook';
 import { triggerActivityWin } from '../../render3d/play/kit';
 
@@ -44,5 +44,6 @@ export function wireWorldDevhook(world: World): void {
   provideVehicle(() => world.vehicleState());         // W5.1: drivable jeep
   provideHeli(() => world.heliState());               // W5.3b: opt-in helicopter
   provideQuality(() => world.qualityState());         // W7.2: adaptive quality tier
+  provideTags(() => world.tagsOnScreen(), () => world.glowState()); // run 6: the tags drawn, the glowing cues
   provideWinStep(() => triggerActivityWin());         // W2.3: E2E-only resolve of a 3D step
 }

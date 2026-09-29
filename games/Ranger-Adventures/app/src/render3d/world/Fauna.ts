@@ -25,6 +25,13 @@ import type { Terrain } from './Terrain';
 const ROAM_REST_NEAR = 50;
 const ROAM_REST_FAR = 56;
 
+/** Where Bram, the warden, stands: beside the missiebord (run 6, FLOW). */
+export const WARDEN_AT = { x: 3.9, z: -5.0 } as const;
+/** How fast Bram turns to the ranger and back (rad/s): a calm turn of the body. */
+const WARDEN_TURN_RATE = 2.2;
+/** Quiet this long (s), he turns back to the clearing. */
+const WARDEN_RESUME_S = 1.6;
+
 export class Fauna {
   // W3.3 scenic actors: the warden (BOA) + poacher stand at fixed world spots and
   // play their single baked clip via a mixer. They are NOT missions (kept out of
@@ -58,8 +65,16 @@ export class Fauna {
   }[] = [];
   blobCount = 0;
   // the season's ontknoping (the poacher was reported): he no longer lurks in the trees
-  // but stands calmly by the BOA warden — the reformed poacher of the canon (VISION §4a)
-  private readonly POACHER_REFORMED = { x: 8.1, z: 5.7 };
+  // but stands calmly by the BOA warden — the reformed poacher of the canon (VISION §4a),
+  // a step behind Bram's shoulder, off the sand path
+  private readonly POACHER_REFORMED = { x: 5.6, z: -6.4 };
+  // ---- run 6 (FLOW lane): Bram, the warden, speaks ---------------------------------
+  // While he speaks (ui/hud/Speaker) he turns to the ranger and a small speech mark
+  // floats over his head; after, he turns back to his rest (facing the spawn clearing).
+  private wardenTalking = false;
+  private wardenQuietS = 0;                       // how long he has been quiet (turns back after a beat)
+  private speechMark: THREE.Sprite | null = null;
+  // ---- end run 6 -------------------------------------------------------------------
   private poacherHome: { x: number; z: number } | null = null;
   private static blobTex: THREE.Texture | null = null;
   private readonly scene: THREE.Scene;
@@ -166,7 +181,10 @@ export class Fauna {
   placeScenicActors(): void {
     // grown men at their true heights (AnimalScale), a head and a half above the boy
     const ACTORS: { id: string; x: number; z: number; height: number }[] = [
-      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: SIZE.boa.h },   // the BOA by the report board
+      // Bram, the BOA, stands beside his missiebord (2.2, -5) on its right as you arrive:
+      // in the first play frame, clear of its ring and of the forward (−z) corridor, at
+      // the edge of the sand track toward the watchtower (run 6, FLOW)
+      { id: 'ranger-warden-boa', x: WARDEN_AT.x, z: WARDEN_AT.z, height: SIZE.boa.h },
       { id: 'figure-poacher', x: -11.5, z: 8.5, height: SIZE.stroper.h }, // a distant figure in the trees
     ];
     for (const a of ACTORS) {
@@ -208,6 +226,84 @@ export class Fauna {
     a.group.position.set(at.x, this.groundY(at.x, at.z), at.z);
     a.group.rotation.y = Math.atan2(-at.x, -at.z); // face the spawn clearing, like the warden
   }
+
+  // ---- run 6 (FLOW lane): Bram speaks ------------------------------------------------
+  /** Bram speaks (true) or is quiet again (false): he turns to the ranger while he
+   *  speaks and a small speech mark floats over his head. */
+  setWardenTalking(on: boolean): void {
+    this.wardenTalking = on;
+    if (on) this.wardenQuietS = 0;
+    const w = this.scenicActors.find((a) => a.id === 'ranger-warden-boa');
+    if (!w) return;
+    if (on && !this.speechMark) {
+      this.speechMark = Fauna.makeSpeechMark();
+      this.speechMark.position.y = w.height + 0.34;
+      w.group.add(this.speechMark);
+    }
+    if (this.speechMark) this.speechMark.visible = on;
+  }
+
+  /** Where Bram stands (x, z), or null before he is placed. */
+  wardenPos(): { x: number; z: number } | null {
+    const w = this.scenicActors.find((a) => a.id === 'ranger-warden-boa');
+    return w ? { x: w.group.position.x, z: w.group.position.z } : null;
+  }
+
+  /** Bram for the dev hook: where he stands, how tall, whether he talks (a speech mark
+   *  over him) and how far (rad) he turns away from facing `ranger`. */
+  wardenState(ranger: { x: number; z: number }): { x: number; z: number; h: number; talking: boolean; mark: boolean; offRanger: number } | null {
+    const w = this.scenicActors.find((a) => a.id === 'ranger-warden-boa');
+    if (!w) return null;
+    const p = w.group.position;
+    const want = Math.atan2(ranger.x - p.x, ranger.z - p.z);
+    const off = Math.abs(Math.atan2(Math.sin(want - w.group.rotation.y), Math.cos(want - w.group.rotation.y)));
+    return { x: p.x, z: p.z, h: w.height, talking: this.wardenTalking, mark: !!this.speechMark?.visible, offRanger: Math.round(off * 100) / 100 };
+  }
+
+  /** Per frame: while he speaks Bram turns (calmly, the short way) to face the ranger;
+   *  a little after he has finished he turns back to the clearing. Under reduced motion
+   *  the turn is a cut. */
+  tendWarden(dt: number, ranger: { x: number; z: number }, reduced: boolean): void {
+    const w = this.scenicActors.find((a) => a.id === 'ranger-warden-boa');
+    if (!w) return;
+    const p = w.group.position;
+    if (!this.wardenTalking) this.wardenQuietS += dt;
+    const facing = this.wardenTalking || this.wardenQuietS < WARDEN_RESUME_S;
+    const want = facing ? Math.atan2(ranger.x - p.x, ranger.z - p.z) : Math.atan2(-p.x, -p.z);
+    const d = Math.atan2(Math.sin(want - w.group.rotation.y), Math.cos(want - w.group.rotation.y));
+    if (Math.abs(d) < 1e-3) return;
+    const step = reduced ? d : Math.sign(d) * Math.min(Math.abs(d), WARDEN_TURN_RATE * dt * Math.min(1, 0.35 + Math.abs(d)));
+    w.group.rotation.y += step;
+  }
+
+  /** A small warm speech mark (three dots in a paper bubble) over a speaker's head:
+   *  drawn on top of the world like the name-tags, never clipped by a crown. */
+  private static makeSpeechMark(): THREE.Sprite {
+    const W = 96, H = 80;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d')!;
+    ctx.fillStyle = 'rgba(253, 252, 248, 0.96)';
+    ctx.strokeStyle = 'rgba(40, 30, 18, 0.55)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    const r = 24, x0 = 6, y0 = 6, x1 = W - 6, y1 = H - 24;
+    ctx.moveTo(x0 + r, y0); ctx.arcTo(x1, y0, x1, y1, r); ctx.arcTo(x1, y1, x0, y1, r);
+    ctx.lineTo(W / 2 + 10, y1); ctx.lineTo(W / 2 - 4, H - 6); ctx.lineTo(W / 2 - 6, y1); // the tail
+    ctx.arcTo(x0, y1, x0, y0, r); ctx.arcTo(x0, y0, x1, y0, r); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#2f6b46';
+    for (const dx of [-22, 0, 22]) { ctx.beginPath(); ctx.arc(W / 2 + dx, (y0 + y1) / 2, 7, 0, Math.PI * 2); ctx.fill(); }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+    const s = new THREE.Sprite(mat);
+    s.renderOrder = 13;
+    s.scale.set(0.34, 0.34 * (H / W), 1);
+    s.center.set(0.5, 0);
+    return s;
+  }
+  // ---- end run 6 -------------------------------------------------------------------
 
   /** Dev-hook accessor (W3.3 ⊕ P1.6a): each scenic actor's id + its live baked-clip
    *  {name, time} (null until the rig loads / when it carries no clip) + its measured
