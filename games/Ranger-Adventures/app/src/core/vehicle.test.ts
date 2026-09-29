@@ -425,7 +425,7 @@ test('pushed back off the water, the body never ends up past the rim', () => {
 
 // ── run 6: a jeep that holds its speed and is never shoved ──────────────────────
 
-import { yieldBrake, yieldSpeed, rimFree, rimSteer, pathCurvature, YIELD_GAP, YIELD_HARD_GAP, YIELD_HARD_DECEL, RIM_GAP } from './vehicle.ts';
+import { yieldBrake, yieldSpeed, rimFree, rimSteer, pathCurvature, clipSteer, YIELD_GAP, YIELD_HARD_GAP, YIELD_HARD_DECEL, RIM_GAP } from './vehicle.ts';
 
 /** Run the jeep's frame for `seconds` with `keys` held; `each` sees every frame. */
 function hold(j: JeepState, keys: { fwd: number; turn: number }, seconds: number, w: JeepWorld, each?: (f: ReturnType<typeof jeepStep>, t: number, yaw: number) => void): JeepState {
@@ -577,19 +577,32 @@ test('rimFree / rimSteer: the chord to the edge, and a bend only when heading ou
   assert.equal(rimSteer(0, 68, 0.05, 73), 0, 'nearly head-on: no bend, it stops instead');
 });
 
-test('a trunk it only clips: the jeep brushes past keeping most of its speed; one dead ahead still stops it softly', () => {
-  for (const [lat, keep] of [[1.45, 5.5], [1.3, 2.2]] as const) {         // the nose circle + trunk reach 1.5 m
+test('a trunk it would only clip: the jeep eases round it at full speed, never touching; one dead ahead still stops it softly', () => {
+  for (const lat of [1.0, 1.3, 1.45, -1.3]) {                              // the nose circle + trunk reach 1.5 m
     const tree = { x: lat, z: 20, r: 0.6 };
-    let slow = Infinity, worst = 0;
-    const j = hold(jeep(0, 0, 0, 6), KEY(1), 6, world({ solids: [tree] }), (f) => { slow = Math.min(slow, f.moved); worst = Math.max(worst, bodyOverlap(f.x, f.z, f.heading, JEEP_BODY, [tree])); });
-    assert.ok(slow > keep, `a trunk ${lat} m off its line: it slows no lower than ${slow.toFixed(2)} m/s (run 6: a 0.8 m/s crawl)`);
-    assert.ok(j.z > 30 && j.moved > 5.9 && worst < 1e-6, `and slides past, never into it, back at full speed (z ${j.z.toFixed(1)})`);
+    let slow = Infinity, touched = 0;
+    const j = hold(jeep(0, 0, 0, 6), KEY(1), 6, world({ solids: [tree] }), (f) => { slow = Math.min(slow, f.moved); if (f.contact) touched++; });
+    assert.equal(touched, 0, `a trunk ${lat} m off its line: it moves over and never touches it (run 6: its corner scraped along it)`);
+    assert.ok(slow > 5.99 && j.z > 30, `and keeps its full speed past it (slowest ${slow.toFixed(2)} m/s)`);
+    assert.ok(Math.sign(j.x) === -Math.sign(lat) && Math.abs(j.x) < 3, `it moved over a little, away from it (x ${j.x.toFixed(2)})`);
   }
   const tree = { x: 0, z: 20, r: 0.6 };
   let solid = false;
   const j = hold(jeep(0, 0, 0, 6), KEY(1), 6, world({ solids: [tree] }), (f) => { if (f.brake === 'solid') solid = true; });
   assert.ok(j.moved < 0.05 && j.z < 20 - 0.6 - 1.9 + 0.05, `dead ahead it rests at the trunk (z ${j.z.toFixed(2)})`);
   assert.ok(solid, 'the dev hook says a solid braked it');
+  // brushed without the bend (a trunk that steps into its line close by), it slides past keeping most of its speed
+  assert.ok(contactSpeedCap(0.5, JEEP_CAPS.maxSpeed, 0.3) > JEEP_CAPS.maxSpeed, 'a brush costs no braking');
+});
+
+test('clipSteer: only a solid it would clip, ahead and near, bends it; the way away from it', () => {
+  const at = (x: number, z: number) => clipSteer(0, 0, 0, 6, [{ x, z, r: 0.6 }], JEEP_BODY, JEEP_CAPS);
+  assert.ok(at(1.2, 8) > 0 && at(-1.2, 8) < 0, 'on its left it bends right, on its right it bends left');
+  assert.equal(at(0.2, 8), 0, 'met squarely: no bend (it stops softly instead)');
+  assert.equal(at(2.5, 8), 0, 'passing well clear: no bend');
+  assert.equal(at(1.2, -3), 0, 'behind it: no bend');
+  assert.equal(at(1.2, 30), 0, 'far ahead: not yet');
+  assert.ok(at(1.2, 5) > at(1.2, 10), 'the nearer, the firmer');
 });
 
 test('jeepStep: a zero frame changes nothing', () => {

@@ -428,7 +428,7 @@ function shoreNormal(
  * nothing is in the way), and how squarely it would meet it (`headOn`: the share of
  * its motion that runs INTO the solid at that touch, 1 = dead centre, → 0 = a brush
  * along its side). The jeep brakes smoothly on these, so it rolls to a soft stop at a
- * tree it drives straight at and brushes past one it only clips. Pure.
+ * tree it drives straight at, and brushes past one it only clips. Pure.
  */
 export function impactAhead(
   x: number, z: number, heading: number, dir: 1 | -1,
@@ -490,6 +490,50 @@ export function contactSpeedCap(free: number, decel: number, headOn = 1): number
   const brush = Math.max(0, Math.min(1, (1 - headOn) / (1 - SQUARE_HIT)));
   const gentle = headOn > 1e-6 ? (CONTACT_CREEP / (headOn * headOn)) * brush : Infinity;
   return Math.max(gentle, Math.sqrt(2 * decel * Math.max(0, free - 0.1)));
+}
+
+/** A solid it would only clip (met less squarely than `SQUARE_HIT`), the jeep steers
+ *  round: from `CLIP_LOOK_S` before it gets there, aiming to pass `CLIP_MARGIN` (m) off
+ *  it with its widest body circle. */
+export const CLIP_LOOK_S = 2;
+export const CLIP_MARGIN = 0.3;
+
+/**
+ * Brushing a bush or a trunk with its corner, the jeep would be pushed sideways along it
+ * (run 6: the juniper beside the helipad nudged it 1-2 m/s sideways for a moment). A
+ * driver moves over a little instead: for the nearest solid ahead that its body would
+ * clip or pass closer than `CLIP_MARGIN` (driving forward), the steer (right +) of the
+ * gentle, steady turn that shifts its line clear by the time it is alongside, as a share
+ * of the turn it can make at this speed. A solid it would meet squarely gets no bend: it
+ * brakes to a soft stop in front of it instead (`contactSpeedCap`). Pure.
+ */
+export function clipSteer(
+  x: number, z: number, heading: number, speed: number,
+  solids: readonly Solid[], body: readonly BodyCircle[], caps: DriveCaps,
+): number {
+  const v = Math.max(1, Math.abs(speed));
+  let lead = body[0], half = 0;
+  for (const c of body) { if (c.along > lead.along) lead = c; half = Math.max(half, c.r); }
+  const fx = Math.sin(heading), fz = Math.cos(heading);
+  const lx = fz, lz = -fx;                                 // left-of-forward
+  const cx = x + fx * lead.along, cz = z + fz * lead.along;
+  const square = Math.sqrt(1 - SQUARE_HIT * SQUARE_HIT);   // within this share of the reach: met squarely
+  let near = Infinity, steer = 0;
+  for (const o of solids) {
+    const dx = o.x - cx, dz = o.z - cz;
+    const a = dx * fx + dz * fz;                           // ahead of its nose, along its line
+    const reach = o.r + half;                              // its side touches the solid at this offset
+    if (a <= 0 || a - reach > CLIP_LOOK_S * v) continue;
+    const off = dx * lx + dz * lz;                         // left (+) of its line
+    if (Math.abs(off) >= reach + CLIP_MARGIN || Math.abs(off) < (o.r + lead.r) * square) continue;
+    const d = Math.max(0.5, a - reach);                    // metres until it is alongside
+    if (d >= near) continue;
+    near = d;
+    const yaw = (2 * (reach + CLIP_MARGIN - Math.abs(off)) * v) / (d * d); // the steady turn that clears it
+    const can = Math.min(v / caps.maxSpeed, STEER_AUTHORITY_MAX) * caps.turnRate;
+    steer = (off >= 0 ? 1 : -1) * Math.min(1, yaw / can);  // it stands to the left: steer right (+)
+  }
+  return steer;
 }
 
 /* ---------------------------------------------------------- keep-out zones -- */
@@ -788,7 +832,8 @@ export interface JeepFrame extends JeepState {
 /**
  * One frame of the jeep (the World's `driveJeep` feeds it the keys and the world).
  * (1) the speed ramps toward the throttle (~1 s); (2) the player's steer, bent round a
- * keep-out zone or along the forest edge ahead; (3) the brakes: a soft stop at the
+ * keep-out zone, along the forest edge, or round a solid it would only clip; (3) the
+ * brakes: a soft stop at the
  * solid ahead (backing up: at a zone behind too), at the forest edge, and for an
  * animal in its path — the lowest wins; (4) the speed-scaled, yaw-capped steer (a
  * little authority kept while pressed or held still, so a turn key always swings it
@@ -805,12 +850,15 @@ export function jeepStep(
   let speed = ramped;
   const dir: 1 | -1 | 0 = speed > 0 ? 1 : speed < 0 ? -1 : want.throttle > 0 ? 1 : want.throttle < 0 ? -1 : 0;
   const lim = w.limits.bound - bodyReach(body);
-  // (2) the steer: bent round what lies ahead (forward only; backing up it brakes)
+  // (2) the steer: bent round what lies ahead (forward only; backing up it brakes): a
+  // keep-out zone, the forest edge, a solid it would only clip — the strongest bend wins
   let avoid = 0;
   if (dir > 0) {
-    const zone = keepOutSteer(s.x, s.z, s.heading, speed, w.zones, body, want.steer);
-    const rim = rimSteer(s.x, s.z, s.heading, lim, want.steer);
-    avoid = Math.abs(rim) > Math.abs(zone) ? rim : zone;
+    for (const bend of [
+      keepOutSteer(s.x, s.z, s.heading, speed, w.zones, body, want.steer),
+      rimSteer(s.x, s.z, s.heading, lim, want.steer),
+      clipSteer(s.x, s.z, s.heading, speed, w.solids, body, caps),
+    ]) if (Math.abs(bend) > Math.abs(avoid)) avoid = bend;
   }
   const steerWant = guidedSteer(want.steer, avoid);
   // (3) the brakes
