@@ -167,6 +167,9 @@ export class World {
       const dx = x - VEN_CENTER.x, dz = z - VEN_CENTER.z;
       return dx * dx + dz * dz < 18 * 18 && this.terrain.y(x, z) < WATER_LEVEL + 0.15;
     },
+    // whether any of that water lies within r of (x, z): the jeep's look for the ven's
+    // shore is skipped everywhere else
+    wetWithin: (x, z, r) => Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) < 18 + r,
   };
 
   constructor(
@@ -604,6 +607,11 @@ export class World {
   }
 
   /** Dev-hook accessor (D1.5): the scatter + rim tree placements (world x/z + scale). */
+  /** Every static solid (dev hook, run 6): circles and the buildings' real footprints. */
+  obstacleList(): { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[] {
+    return this.obstacles.map((o) => (o.box ? { x: o.x, z: o.z, r: o.r, box: { ...o.box } } : { x: o.x, z: o.z, r: o.r }));
+  }
+
   treeSpotList(): { x: number; z: number; s: number }[] {
     return this.dressing.treeSpotList();
   }

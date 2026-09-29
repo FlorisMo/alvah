@@ -266,7 +266,7 @@ test('resolveBody: the whole body stays inside the world rim, and out of the wat
 test('freeDistance + contactSpeedCap: the jeep brakes softly toward a trunk ahead', () => {
   const tree = { x: 0, z: 10, r: 0.6 };
   const d = freeDistance(0, 0, 0, 1, JEEP_BODY, [tree], 30);
-  assert.ok(near(d, 10 - 0.6 - 1.0 - 0.9, 1e-6), `free run to the trunk (${d.toFixed(2)} m)`);
+  assert.ok(near(d, 10 - 0.6 - 1.0 - 0.9, 0.005), `free run to the trunk (${d.toFixed(3)} m, found to 5 mm)`);
   assert.equal(freeDistance(0, 0, 0, -1, JEEP_BODY, [tree], 30), 30, 'reversing away: nothing behind');
   assert.equal(freeDistance(0, 0, Math.PI / 2, 1, JEEP_BODY, [tree], 30), 30, 'heading past it: clear');
   const decel = JEEP_CAPS.maxSpeed / JEEP_RAMP_TIME;
@@ -393,32 +393,74 @@ function holdKeys(j: JeepState, keys: { fwd: number; turn: number }, seconds: nu
   return wetFrames;
 }
 
-test('at the shore, Up+Left (and every other turn key) swings the jeep free — only reverse used to (parent B5, breaker B2)', () => {
+test('driven straight at the lake it stops smoothly short of the water — never wet, never touching — and every turn key swings it away (run 6 review P2)', () => {
   for (const [name, keys] of [['Up+Left', KEY(1, -1)], ['Up+Right', KEY(1, 1)], ['Left', KEY(0, -1)], ['Right', KEY(0, 1)]] as const) {
     const s = jeep();
-    holdKeys(s, KEY(1), 4);                                  // straight into the water until it stops
-    assert.ok(s.contact && s.z > 5 && s.z < 7, `${name}: pinned nose-first at the shore (z ${s.z.toFixed(2)})`);
+    let touched = 0, decel = 0, prev = 0, water = false;
+    const dt = 1 / 60;
+    for (let t = 0; t < 6; t += dt) {
+      const f = jeepStep(s, driveIntent(KEY(1), null), dt, JEEP_CAPS, world({ limits: LAKE_LIMITS }));
+      if (f.contact) touched++;
+      if (f.brake === 'water') water = true;
+      if (prev > 1.5) decel = Math.max(decel, (prev - f.speed) / dt);
+      prev = f.speed;
+      Object.assign(s, f);
+    }
+    const shore = LAKE.z - LAKE.r;                                 // the water's near edge on its line
+    assert.ok(s.speed === 0 && touched === 0, `${name}: it stands without ever touching the shore (${touched} contact frames)`);
+    assert.ok(water, `${name}: the dev hook says the water braked it`);
+    assert.ok(shore - (s.z + 1.9) >= WATER_GAP - 0.1 && shore - (s.z + 1.9) < WATER_GAP + 0.5, `${name}: its bumper stops ${(shore - s.z - 1.9).toFixed(2)} m short of the water`);
+    assert.ok(decel <= 6, `${name}: a smooth stop (at most ${decel.toFixed(1)} m/s²), never a one-frame drop`);
     const h0 = s.heading, x0 = s.x, z0 = s.z;
-    const wet = holdKeys(s, keys, 3);
+    const wet = holdKeys(s, keys, 4);
     const turned = Math.atan2(Math.sin(s.heading - h0), Math.cos(s.heading - h0));
-    assert.ok(Math.abs(turned) > 0.5, `${name}: the heading changes (${turned.toFixed(2)} rad in 3 s)`);
+    assert.ok(Math.abs(turned) > 0.5, `${name}: the heading changes (${turned.toFixed(2)} rad in 4 s)`);
     assert.ok(keys.turn < 0 ? turned > 0 : turned < 0, `${name}: toward the key (left raises the yaw)`);
-    assert.ok(Math.hypot(s.x - x0, s.z - z0) > 0.8, `${name}: and it drives on (${Math.hypot(s.x - x0, s.z - z0).toFixed(2)} m)`);
+    assert.ok(Math.hypot(s.x - x0, s.z - z0) > 0.8, `${name}: and it drives off (${Math.hypot(s.x - x0, s.z - z0).toFixed(2)} m)`);
     assert.equal(wet, 0, `${name}: the body never enters the water`);
   }
 });
 
-test('met at a slant, the shore slides the jeep along it instead of stopping it dead', () => {
-  // aimed 0.5 rad off the lake's centre: it meets the bank at a slant and keeps pushing
-  const s = jeep(0, 0, 0.5);
-  let wet = 0, hit: { x: number; z: number } | null = null;
-  for (let k = 0; k < 60 && !hit; k++) { wet += holdKeys(s, KEY(1), 0.1); if (s.contact) hit = { x: s.x, z: s.z }; }
-  assert.ok(hit, 'it reached the bank');
-  wet += holdKeys(s, KEY(1), 4);
-  assert.equal(wet, 0, 'the body never enters the water');
-  const slid = Math.hypot(s.x - hit!.x, s.z - hit!.z);
-  assert.ok(slid > 2, `pushed on, it slid along the bank (${slid.toFixed(2)} m in 4 s), like along a trunk`);
-  assert.ok(Math.hypot(s.x - LAKE.x, s.z - LAKE.z) > LAKE.r, 'its centre stays on the dry side');
+test('met at a slant, the lake bends the jeep along its shore at speed — never wet, never touching, never braked hard (run 6 review P2)', () => {
+  for (const aim of [0.4, 0.55, 0.7, -0.55]) {
+    const s = jeep(0, -10, aim);
+    let touched = 0, wet = 0, slow = Infinity, decel = 0, prev = 0;
+    const dt = 1 / 60;
+    for (let t = 0; t < 8; t += dt) {
+      const f = jeepStep(s, driveIntent(KEY(1), null), dt, JEEP_CAPS, world({ limits: LAKE_LIMITS }));
+      if (f.contact) touched++;
+      if (bodyWet(f.x, f.z, f.heading)) wet++;
+      if (t > 1.2) slow = Math.min(slow, f.moved);
+      if (prev > 1.5) decel = Math.max(decel, (prev - f.speed) / dt);
+      prev = f.speed;
+      Object.assign(s, f);
+    }
+    assert.equal(wet + touched, 0, `aimed ${aim} rad off its centre: never wet (${wet}), never touching (${touched})`);
+    assert.ok(slow >= 5, `aimed ${aim}: it curves along the shore at ${slow.toFixed(2)} m/s or more`);
+    assert.ok(decel <= 12, `aimed ${aim}: no crash frame (${decel.toFixed(1)} m/s²)`);
+  }
+});
+
+test('a key held toward the lake at full speed rolls the jeep along its bank instead — no crash frame, never wet (run 6 review P2: 6.0 → 1.98 m/s in two frames)', () => {
+  // running past the lake 1.5 m off its shore, then the child turns in at it
+  for (const turn of [-1, 1]) {
+    const x0 = turn < 0 ? -(LAKE.r + 1.9 + 1.5) : LAKE.r + 1.9 + 1.5;
+    const s = jeep(x0, 5, 0, 6);
+    let wet = 0, touched = 0, decel = 0, prev = 6, slow = Infinity;
+    const dt = 1 / 60;
+    for (let t = 0; t < 4; t += dt) {
+      const f = jeepStep(s, driveIntent(KEY(1, -turn), null), dt, JEEP_CAPS, world({ limits: LAKE_LIMITS }));
+      if (f.contact) touched++;
+      if (bodyWet(f.x, f.z, f.heading)) wet++;
+      decel = Math.max(decel, (prev - f.speed) / dt);
+      slow = Math.min(slow, f.moved);
+      prev = f.speed;
+      Object.assign(s, f);
+    }
+    assert.equal(wet + touched, 0, `turning in from the ${turn < 0 ? 'left' : 'right'}: never wet, never touching`);
+    assert.ok(decel <= 12, `no crash frame (${decel.toFixed(1)} m/s²)`);
+    assert.ok(slow > 4, `it rolls on along the bank (slowest ${slow.toFixed(2)} m/s)`);
+  }
 });
 
 test('pushed back off the water, the body never ends up past the rim', () => {
@@ -433,7 +475,7 @@ test('pushed back off the water, the body never ends up past the rim', () => {
 
 // ── run 6: a jeep that holds its speed and is never shoved ──────────────────────
 
-import { yieldBrake, yieldSpeed, rimFree, rimSteer, pathCurvature, clipSteer, YIELD_GAP, YIELD_HARD_GAP, YIELD_HARD_DECEL, RIM_GAP } from './vehicle.ts';
+import { yieldBrake, yieldSpeed, rimFree, rimSteer, pathCurvature, clipSteer, YIELD_GAP, YIELD_HARD_GAP, FIRM_DECEL, RIM_GAP } from './vehicle.ts';
 
 /** Run the jeep's frame for `seconds` with `keys` held; `each` sees every frame. */
 function hold(j: JeepState, keys: { fwd: number; turn: number }, seconds: number, w: JeepWorld, each?: (f: ReturnType<typeof jeepStep>, t: number, yaw: number) => void): JeepState {
@@ -528,19 +570,26 @@ test('give way: the brake looks along the arc the jeep turns on, not the straigh
   assert.ok(minGap > 0.3, `turning into it, the jeep never touches it (closest ${minGap.toFixed(2)} m)`);
 });
 
-test('give way: an animal stepping into the path close ahead — a firm but smooth brake, still short of it', () => {
+test('give way: an animal stepping into the path close ahead — a steady firm brake, never a one-frame drop, still short of it (run 6 review: 6.00 → 4.81 in 16 ms)', () => {
   const dt = 1 / 60;
-  const j = jeep(0, 0, 0, 6);
-  let minGap = Infinity, decel = 0;
-  const ree = { id: 'ree', x: 0, z: 1.9 + 3 + 0.56, r: 0.56 };             // 3 m from the bumper
-  for (let t = 0; t < 4; t += dt) {
-    const f = jeepStep(j, driveIntent(KEY(1), null), dt, JEEP_CAPS, world({ animals: [ree] }));
-    decel = Math.max(decel, (j.speed - f.speed) / dt);
-    Object.assign(j, f);
-    minGap = Math.min(minGap, bodyGapTo(j, ree));
+  for (const ahead of [3, 2.25, 1.6]) {                                    // metres from the bumper
+    const j = jeep(0, 0, 0, 6);
+    let minGap = Infinity, decel = 0, first = 0;
+    const ree = { id: 'ree', x: 0, z: 1.9 + ahead + 0.56, r: 0.56 };
+    // the steady brake that still stops it YIELD_HARD_GAP short: no gentler brake could
+    const need = (6 * 6) / (2 * (ahead - YIELD_HARD_GAP));
+    for (let t = 0; t < 4; t += dt) {
+      const f = jeepStep(j, driveIntent(KEY(1), null), dt, JEEP_CAPS, world({ animals: [ree] }));
+      const d = (j.speed - f.speed) / dt;
+      if (t === 0) first = j.speed - f.speed;
+      decel = Math.max(decel, d);
+      Object.assign(j, f);
+      minGap = Math.min(minGap, bodyGapTo(j, ree));
+    }
+    assert.ok(decel <= Math.max(FIRM_DECEL, need) * 1.05, `${ahead} m ahead: at most ${Math.max(FIRM_DECEL, need).toFixed(1)} m/s², the steady brake it needs (${decel.toFixed(2)})`);
+    assert.ok(first <= Math.max(FIRM_DECEL, need) * 1.05 * dt, `${ahead} m ahead: the first frame takes only ${first.toFixed(2)} m/s off`);
+    assert.ok(minGap >= YIELD_HARD_GAP - 0.03, `${ahead} m ahead: it stops ${minGap.toFixed(2)} m short, never touching`);
   }
-  assert.ok(decel <= YIELD_HARD_DECEL + 1e-6, `never more than ${YIELD_HARD_DECEL} m/s² (${decel.toFixed(2)}): no one-frame drop`);
-  assert.ok(minGap >= YIELD_HARD_GAP - 0.02, `and it stops ${minGap.toFixed(2)} m short`);
   assert.ok(yieldSpeed(30) > 6 && yieldSpeed(YIELD_GAP) === 0, 'far off no brake; at the gap a stop');
 });
 
@@ -617,4 +666,184 @@ test('jeepStep: a zero frame changes nothing', () => {
   const j = jeep(3, 4, 1, 5);
   const f = jeepStep(j, driveIntent(KEY(1, 1), null), 0, JEEP_CAPS, world());
   assert.ok(f.x === 3 && f.z === 4 && f.heading === 1 && f.speed === 5 && f.moved === 0);
+});
+
+// ── run 6, review round 2: a turn key always frees it; the ven and the landmarks are no wall to crash into ──
+
+import {
+  combineBends, bendGain, WATER_GAP, CONTACT_STEER, solidBrake, deadEndCap, TRAP_ROOM,
+  brakeCap, bodyDepth, type SolidBox,
+} from './vehicle.ts';
+
+/** A building's real footprint (as `boxObstacle` makes it: its circle is only the outer bound). */
+const building = (x: number, z: number, hx: number, hz: number, rot: number): Solid => ({ x, z, r: Math.hypot(hx, hz) + 0.3, box: { hx, hz, rot, pad: 0.3 } as SolidBox });
+/** The game's landmarks as the dev hook's obstacles() reads them. */
+const ECODUCT = building(-70, 6, 7.74, 7.8, 1.6563016204731014);
+const TOWER = building(37, -37, 2.772, 2.898, -Math.PI / 4);
+const HIDE = building(26, -11, 1.725, 1.596, -1.1705556697609225);
+
+/** Hold `keys` from a standing pose for up to `secs`: when it first rolls at 1 m/s (freed),
+ *  and every standing frame's yaw (it must turn toward the key: left raises the yaw). */
+function free(j: JeepState, keys: { fwd: number; turn: number }, w: JeepWorld, secs = 6) {
+  const dt = 1 / 60;
+  let freed = Infinity, still = 0, wrongWay = 0, flips = 0, prev = 0;
+  for (let t = 0; t < secs && freed === Infinity; t += dt) {
+    const f = jeepStep(j, driveIntent(keys, null), dt, JEEP_CAPS, w);
+    const yaw = Math.atan2(Math.sin(f.heading - j.heading), Math.cos(f.heading - j.heading)) / dt;
+    if (Math.abs(f.speed) < 0.05) { if (-keys.turn * yaw < 0.5) still++; }
+    if (yaw * keys.turn > 1e-9) wrongWay++;
+    if (prev * yaw < 0) flips++;
+    prev = yaw;
+    Object.assign(j, f);
+    if (f.speed >= 1) freed = t + dt;
+  }
+  return { freed, still, wrongWay, flips };
+}
+
+test('combineBends: two bends that disagree meet in the middle, two that agree never add up past the strongest — never a swap of sides frame to frame', () => {
+  assert.equal(combineBends(0.7, 0.4), 0.7, 'the same way: the strongest');
+  assert.equal(combineBends(-0.7, -0.9), -0.9);
+  assert.ok(near(combineBends(-0.77, 1), 0.23), 'the forest edge one way, a trunk the other: they meet in the middle');
+  // continuous: sliding one bend through zero never jumps the result
+  let prev = combineBends(-0.77, 0.5), jump = 0;
+  for (let b = 0.5; b >= -0.5; b -= 0.01) { const c = combineBends(-0.77, b); jump = Math.max(jump, Math.abs(c - prev)); prev = c; }
+  assert.ok(jump < 0.011, `no jump anywhere (largest step ${jump.toFixed(3)})`);
+  assert.equal(bendGain(0, JEEP_CAPS), 0, 'standing: no bend acts');
+  assert.equal(bendGain(0.9, JEEP_CAPS), 0, 'creeping under 1 m/s: none either');
+  assert.ok(near(bendGain(1.5, JEEP_CAPS), 0.5) && bendGain(2, JEEP_CAPS) === 1, 'fading in to full at 2 m/s');
+  assert.equal(CONTACT_STEER, STEER_AUTHORITY_MAX, 'a held jeep pivots at the same calm 0.6 rad/s it turns at full speed');
+});
+
+test('the review\'s lock by the ecoduct (seed 7, 27 s): from that exact pose W+A and W+D each free it within 3 s, turning the key\'s way every frame', () => {
+  // the ecoduct's real footprint, and the forest edge 0.45 m ahead of its centre's limit
+  for (const keys of [KEY(1, -1), KEY(1, 1)]) {
+    const j = { ...jeep(-72.359, -6.535, -1.1981), braked: true };
+    const r = free(j, keys, world({ solids: [ECODUCT] }), 4);
+    assert.ok(r.freed <= 3, `${keys.turn < 0 ? 'W+A' : 'W+D'}: freed after ${r.freed.toFixed(2)} s`);
+    assert.equal(r.still + r.wrongWay + r.flips, 0, `and it turned the key's way every frame (${r.still} standing still, ${r.wrongWay} the wrong way, ${r.flips} flips)`);
+  }
+  // the lead's repro, the ecoduct as its old 11.3 m circle: never locked either
+  for (const keys of [KEY(1, -1), KEY(1, 1)]) {
+    const j = { ...jeep(-72.359, -6.535, -1.1981), braked: true };
+    const r = free(j, keys, world({ solids: [{ x: -70, z: 6, r: 11.3 }] }), 6);
+    assert.ok(r.freed <= 4, `as a circle, ${keys.turn < 0 ? 'W+A' : 'W+D'}: freed after ${r.freed.toFixed(2)} s`);
+    assert.equal(r.still + r.flips, 0, `never a standing frame without its turn, never a flip`);
+  }
+});
+
+test('held for a ree with a juniper beside it (review trace k2), D keeps pivoting — the clip bend never cancels the key', () => {
+  const zones = [[-15.56, -15.56], [15.56, -15.56], [24.5, -19], [8.27, 20.39]].map(([x, z]) => ({ x, z, r: 5.2 }));
+  zones.push({ x: 32, z: 18, r: 3.2 });
+  const h = 0.359;
+  const ree = { id: 'ree', x: 26.34 + Math.sin(h) * 3.4, z: 16.97 + Math.cos(h) * 3.4, r: 0.56 };   // it waits in the path
+  const w = world({ solids: [{ x: 24, z: 20, r: 1 }, { x: 30, z: 26, r: 1 }, { x: 16, z: 30, r: 1 }], zones, animals: [ree] });
+  const j = { ...jeep(26.34, 16.97, h), braked: true };
+  const dt = 1 / 60;
+  let stalled = 0, held = 0, rolled = false;
+  for (let t = 0; t < 3; t += dt) {
+    const f = jeepStep(j, driveIntent(KEY(1, 1), null), dt, JEEP_CAPS, w);
+    const yaw = Math.atan2(Math.sin(f.heading - j.heading), Math.cos(f.heading - j.heading)) / dt;
+    if (Math.abs(f.speed) < 0.05) { held++; if (yaw > -0.5) stalled++; } // W+D: the yaw falls at the calm pivot
+    Object.assign(j, f);
+    if (f.speed > 1) { rolled = true; break; }
+  }
+  assert.ok(held > 30, `held for the ree for ${held} frames`);
+  assert.equal(stalled, 0, `every held frame it pivoted right (${stalled} frames it did not)`);
+  assert.ok(rolled, 'until it had swung clear of the ree and rolled off');
+});
+
+test('a sweep of standing starts — along the forest edge by the ecoduct, beside the watchtower and the bird-hide, 8 headings each: every turn key frees it', () => {
+  const lim = 75 - 1.9;
+  const solids = [ECODUCT, TOWER, HIDE];
+  const spots: { x: number; z: number }[] = [];
+  for (const a of [-1.8, -1.7, -1.62, -1.35, -1.25]) spots.push({ x: Math.sin(a) * (lim - 0.5), z: Math.cos(a) * (lim - 0.5) });
+  for (const b of [TOWER, HIDE]) for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; spots.push({ x: b.x + Math.sin(a) * (b.r + 0.2), z: b.z + Math.cos(a) * (b.r + 0.2) }); }
+  let n = 0, quickest = 0, slowest = 0, still = 0, flips = 0;
+  for (const sp of spots) for (let k = 0; k < 8; k++) {
+    const h = -Math.PI + (k / 8) * Math.PI * 2;
+    if (bodyDepth(sp.x, sp.z, h, JEEP_BODY, solids) > 0 || Math.hypot(sp.x, sp.z) > lim + 1e-9) continue;
+    const t: number[] = [];
+    for (const keys of [KEY(1, -1), KEY(1, 1)]) {
+      const r = free({ ...jeep(sp.x, sp.z, h), braked: true }, keys, world({ solids }), 8);
+      t.push(r.freed); still += r.still; flips += r.flips; n++;
+    }
+    quickest = Math.max(quickest, Math.min(...t)); slowest = Math.max(slowest, ...t);
+  }
+  assert.ok(n >= 80, `${n} starts`);
+  assert.equal(still + flips, 0, `every standing frame a held key turned it its way (${still} did not, ${flips} flips)`);
+  assert.ok(quickest <= 3, `from every start one of the keys frees it within 3 s (worst ${quickest.toFixed(2)} s)`);
+  // the other key has to swing it the long way round at the calm 0.6 rad/s pivot (up to 180°)
+  assert.ok(slowest <= 6, `and either key within 6 s (worst ${slowest.toFixed(2)} s, the long way round)`);
+});
+
+test('a building is its real footprint: head-on the jeep stops at the ecoduct\'s wall, not 3.5 m out at its circle', () => {
+  // along the ecoduct's own x axis toward its middle, from 20 m out
+  const c = Math.cos(ECODUCT.box!.rot), sn = Math.sin(ECODUCT.box!.rot);
+  const out = { x: c, z: -sn };                                  // its local +x in the world
+  const j = jeep(ECODUCT.x + out.x * 20, ECODUCT.z + out.z * 20, Math.atan2(-out.x, -out.z));
+  hold(j, KEY(1), 8, world({ solids: [ECODUCT] }));
+  const wall = ECODUCT.box!.hx + ECODUCT.box!.pad;               // its wall (with the pad) from its middle
+  const bumper = Math.hypot(j.x - ECODUCT.x, j.z - ECODUCT.z) - 1.9;
+  // (a wall as wide as the ecoduct is a dead end: it stops with room to swing round)
+  assert.ok(j.speed === 0 && bumper - wall >= 0.05 && bumper - wall < 1.5, `it stands ${(bumper - wall).toFixed(2)} m from the wall (the circle stood ${(ECODUCT.r - wall).toFixed(1)} m out)`);
+});
+
+test('turning at full speed toward a trunk the straight look misses: it eases round or slows smoothly — never a one-frame drop (review P3)', () => {
+  // a right turn at 6 m/s (a ~10 m circle round (-10, 0)): trunks on and beside its arc
+  for (const phi of [0.5, 0.7, 0.9]) for (const off of [0, 0.8, -0.8]) {
+    const R = 10 + off;
+    const tree = { x: -10 + R * Math.cos(phi), z: R * Math.sin(phi), r: 0.6 };
+    const j = jeep(0, 0, 0, 6);
+    let decel = 0, prev = 6, scrape = 0;
+    hold(j, KEY(1, 1), 3, world({ solids: [tree] }), (f) => {
+      if (prev > 1.5) decel = Math.max(decel, (prev - f.speed) * 60);
+      prev = f.speed;
+      if (f.contact) scrape++;
+    });
+    assert.ok(decel <= 12, `a trunk ${off} m off the arc at ${phi} rad: at most ${decel.toFixed(1)} m/s², never a crash frame`);
+    assert.ok(scrape <= 32, `and at most a brief slow slide round it (${scrape} contact frames)`);
+  }
+});
+
+test('a gap narrower than the jeep (a trunk beside a keep-out zone): it stops short of the squeeze, never wedges in, and a turn key takes it out', () => {
+  // the tree beside the wildcamera marker's zone (the review's seed 7 wedge): 1.7 m between them
+  const zone = { x: 15.56, z: -15.56, r: 5.2 }, tree = { x: 16.91, z: -7.87, r: 0.77 };
+  const w = world({ solids: [tree], zones: [zone] });
+  for (const y of [-9.2, -9.5]) {
+    const j = jeep(8, y, Math.PI / 2 + 0.05, 0);                  // heading east along the gap
+    let decel = 0, prev = 0, touchedFast = 0;
+    hold(j, KEY(1), 5, w, (f) => { if (prev > 1.5) decel = Math.max(decel, (prev - f.speed) * 60); if (f.contact && prev > 1.5) touchedFast++; prev = f.speed; });
+    assert.ok(j.speed === 0, `from z ${y}: it stands before the squeeze`);
+    assert.ok(bodyDepth(j.x, j.z, j.heading, JEEP_BODY, w.walls) < 0.02, `from z ${y}: not wedged in (${bodyDepth(j.x, j.z, j.heading, JEEP_BODY, w.walls).toFixed(3)} m deep)`);
+    assert.equal(touchedFast, 0, `from z ${y}: it touches a side only at a crawl, if at all`);
+    assert.ok(decel <= 12, `from z ${y}: a smooth stop (${decel.toFixed(1)} m/s²)`);
+    for (const keys of [KEY(1, -1), KEY(1, 1)]) {
+      const r = free({ ...j }, keys, w, 8);
+      assert.ok(r.freed <= 6 && r.still === 0, `from z ${y}, ${keys.turn < 0 ? 'W+A' : 'W+D'} turns it and takes it away (${r.freed.toFixed(2)} s)`);
+    }
+  }
+});
+
+test('a dead end (a pocket between the water, a keep-out zone and a building, like the one by the bird-hide): it stops with room to swing round, and swings out', () => {
+  // walls on three sides: a box ahead and two trunks a little wider than the jeep on either side
+  const back = building(0, 30, 6, 0.5, 0);
+  const w = world({ solids: [back, { x: -2.6, z: 24, r: 0.8 }, { x: 2.6, z: 24, r: 0.8 }, { x: -2.8, z: 20, r: 0.8 }, { x: 2.8, z: 20, r: 0.8 }] });
+  const j = jeep(0, 0, 0, 0);
+  hold(j, KEY(1), 10, w);
+  const room = 30 - 0.5 - 0.3 - (j.z + 1.9);
+  assert.ok(j.speed === 0 && room >= 0.8, `it stopped with ${room.toFixed(2)} m before the back wall, between the trunks' mouth and the wall`);
+  assert.ok(deadEndCap(j.x, j.z, j.heading, 0, JEEP_CAPS, JEEP_BODY, w.walls, 73.1, undefined) < 2, 'held by the dead end');
+  const r = free({ ...j }, KEY(1, 1), w, 10);
+  assert.ok(r.freed < 10 && r.still === 0, `W+D swings it round and out (${r.freed.toFixed(2)} s, never standing still)`);
+});
+
+test('brakeCap: the gentle stop, a steady firmer one when something appears close, and never a one-frame drop unless about to touch', () => {
+  assert.ok(near(brakeCap(10.5, 0.5, 3), Math.sqrt(60)), 'the gentle stop at 3 m/s²');
+  const dt = 1 / 60;
+  const steady = brakeCap(3, 1, 3, 6, dt, 0.8);                  // 6 m/s, 3 m ahead: 36 / (2·2) = 9 > 8 → the hard stop at 0.8
+  assert.ok(near(6 - steady, (36 / (2 * 2.2)) * dt, 1e-9), `it brakes at the steady ${((6 - steady) / dt).toFixed(1)} m/s² that stops it 0.8 m short`);
+  assert.ok(brakeCap(2, 1, 3, 2, dt, 0.8) === Math.sqrt(6), 'slower than the gentle stop: that is its cap');
+  assert.equal(brakeCap(0.05, 0.5, 3, 4, dt, 0.1), 0, 'about to touch: it stops');
+  const s = solidBrake(0, 0, 0, 1, 0, JEEP_BODY, [{ x: 0, z: 5, r: 0.6 }], 6, 6);
+  assert.ok(s.cap < 6 && near(s.free, 5 - 0.6 - 1.9, 0.01), `a trunk dead ahead: the brake sees it ${s.free.toFixed(2)} m off`);
 });

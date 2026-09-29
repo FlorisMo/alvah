@@ -21,7 +21,7 @@ interface Vehicle {
   x: number; z: number; y: number; heading: number;
   speed: number; maxSpeed: number; turnRate: number;
   camDist: number; camHeight: number; fov: number; roll: number;
-  yieldFor: string | null; brake: 'solid' | 'edge' | 'animal' | null; dust: boolean; contact: boolean;
+  yieldFor: string | null; brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null; dust: boolean; contact: boolean;
   clearance: number; grounded: boolean; driverSeated: boolean; markerDist: number;
 }
 interface Animal { id: string; x: number; z: number; h: number }

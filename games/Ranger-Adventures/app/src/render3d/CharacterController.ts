@@ -194,6 +194,9 @@ export interface MoveLimits {
    * mistaken for water (which would read as an invisible wall, breaking never-scary).
    */
   blocked?: (x: number, z: number) => boolean;
+  /** Whether any `blocked` ground lies within `r` of (x, z) (a cheap bound: the jeep
+   *  skips its look for the water where this says no). */
+  wetWithin?: (x: number, z: number, r: number) => boolean;
 }
 
 const EPS = 1e-6;

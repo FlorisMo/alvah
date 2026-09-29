@@ -108,7 +108,7 @@ export type Seat = { id: string; x: number; y: number; z: number; gap: number; s
 export type Vehicle = { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; y: number;
   grounded: boolean; clearance: number; speed: number; fov: number; roll: number;
   heading: number; driverSeated: boolean; markerDist: number; maxSpeed: number;
-  contact: boolean; brake: 'solid' | 'edge' | 'animal' | null; yieldFor: string | null };
+  contact: boolean; brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null; yieldFor: string | null };
 export type Heli = { placed: boolean; optIn: boolean; available: boolean; near: boolean; inHeli: boolean; onPad: boolean;
   airborne: boolean; landing: boolean; pilotSeated: boolean; x: number; z: number; heading: number; altitude: number;
   clearance: number; speed: number; climbRate: number; fov: number; roll: number; pads: P2[] };

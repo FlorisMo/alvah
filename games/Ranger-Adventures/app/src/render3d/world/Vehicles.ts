@@ -182,7 +182,8 @@ export class Vehicles {
   private vehicleSpeed = 0;               // the controller's carried signed speed (m/s)
   private jeepMoved = 0;                  // the speed it really moved at along its heading (m/s)
   private yieldFor: string | null = null; // run 6: the animal the jeep is braking for
-  private brake: 'solid' | 'edge' | 'animal' | null = null; // run 6: what held its speed back
+  private brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null = null; // run 6: what held its speed back
+  private intent = { throttle: 0, steer: 0 };     // run 6: what the keys / stick asked for last frame
   private onJeepNear: (near: boolean) => void = () => {};
   private onVehicleChange: (inVehicle: boolean) => void = () => {};
   // W5.3b helicopter (opt-in, withheld under reduced-motion). States while the ranger
@@ -572,7 +573,8 @@ export class Vehicles {
     grounded: boolean; clearance: number; bodyPitch: number; bodyRoll: number; contact: boolean;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    yieldFor: string | null; brake: 'solid' | 'edge' | 'animal' | null; dust: boolean; driverHidden: boolean; driverSeated: boolean;
+    yieldFor: string | null; brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null; dust: boolean; driverHidden: boolean; driverSeated: boolean;
+    intent: { throttle: number; steer: number };
     markerDist: number;
   } | null {
     if (!this.jeep || !this.jeepPos) return null;
@@ -598,6 +600,7 @@ export class Vehicles {
       speed: this.inVehicle ? this.jeepMoved : 0, maxSpeed: caps.maxSpeed, turnRate: caps.turnRate,
       camDist: off.z, camHeight: off.y, fov: this.camera.fov, roll: rightY,
       yieldFor: this.yieldFor, brake: this.inVehicle ? this.brake : null, dust: this.dustEmitting,
+      intent: { ...this.intent },
       // F-31: read off the REAL `.visible`, so it can never claim what the render did not do
       driverHidden: this.inVehicle && !this.host.ranger.visible,
       driverSeated: this.inVehicle && this.host.ranger.visible && this.posedRoot !== null,
@@ -898,9 +901,11 @@ export class Vehicles {
     const zones = this.zones(true);
     this.joined(solids, zones);
     this.yielding();
+    const want = driveIntent(c.keys, c.stick);
+    this.intent.throttle = want.throttle; this.intent.steer = want.steer;
     const f = jeepStep(
       { x: jp.x, z: jp.z, heading: this.jeepHeading, speed: this.vehicleSpeed, contact: this.jeepContact, braked: this.jeepBraked },
-      driveIntent(c.keys, c.stick), dt, caps, this.jeepWorld,
+      want, dt, caps, this.jeepWorld,
     );
     this.jeepHeadingUnwrapped += Math.atan2(Math.sin(f.heading - this.jeepHeading), Math.cos(f.heading - this.jeepHeading));
     this.jeepHeading = f.heading;
