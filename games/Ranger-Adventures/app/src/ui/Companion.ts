@@ -322,6 +322,9 @@ function runCare(stappen: ZorgStap[], naam: string, done: (m: CareMiss) => void)
   const grid = el.querySelector<HTMLDivElement>('.care-grid')!;
   const msg = el.querySelector<HTMLDivElement>('.care-msg')!;
 
+  // what the round is, said as it opens: its title and the rule
+  speak(`${vul(HUT.verzorg, { wie: naam })}. ${HUT.zorgTip}`);
+
   const setMsg = (kind: 'tip' | 'ok' | 'wait', text: string): void => {
     msg.className = `care-msg ${kind}`;
     msg.textContent = text;

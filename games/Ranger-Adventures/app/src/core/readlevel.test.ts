@@ -161,7 +161,7 @@ const SAMPLE: Record<string, string | number> = {
   titel: LONGEST(MISSIONS.map((m) => m.titel)), landschap: 'Stuifzand', gebied: 'Veluwe',
   hoofdstuk: 'Kraamtijd', telling: '1/3', n: 10, m: 12, woord: 'wintervoorraad', stap: 'wisselen',
   richting: 'achter je', dier: 'wild zwijn', gast: 'nachtzwaluw', reden: LONGEST(OPVANG_GASTEN.map((g) => g.reden)),
-  fase: LONGEST(Object.values(FASE_META).map((f) => f.label)), kunstje: 'Scout',
+  fase: LONGEST(Object.values(FASE_META).map((f) => f.label)), kunstje: 'Scout', stop: 'stop met luisteren',
 };
 
 interface Entry extends LabeledText { shown: boolean }

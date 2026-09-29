@@ -369,7 +369,8 @@ function showMissionPause(): void {
     `</div>`;
   session.host.appendChild(el);
   const voor = store.get().settings.voorlezen; // child:B12
-  readScreenAloud(el, { text: SAY.missiePauze, anchor: '.mp-resume', autoStart: voor, items: '.ra-chip', hover: voor });
+  const stop = pauseStopLabel.charAt(0).toLowerCase() + pauseStopLabel.slice(1); // the card says what its buttons do
+  readScreenAloud(el, { text: vul(SAY.missiePauze, { stop }), anchor: '.mp-resume', autoStart: voor, items: '.ra-chip', hover: voor });
   el.querySelector('.mp-resume')?.addEventListener('click', closeMissionPauseCard);
   el.querySelector('.mp-stop')?.addEventListener('click', () => pauseStop());
 }

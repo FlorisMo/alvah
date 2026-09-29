@@ -25,6 +25,7 @@ export const SAY = {
   /** `{naam}`: the ranger's name, as the greeting on the panel says it. */
   maker: 'Maak je ranger. Hoi, ranger {naam}! Kies je naam en je kleuren. Klaar? Druk op: Dit is mijn ranger.',
   pauze: 'Pauze. Wat wil je doen? Of ga terug naar de open plek.',
-  missiePauze: 'Pauze. Wil je verder? Of stop je de missie?',
+  /** `{stop}`: what the stop button says ("stop de missie", "stop met luisteren"). */
+  missiePauze: 'Pauze. Wat wil je doen? Ga verder of {stop}.',
   bord: 'Het missiebord. Kies een missie.',
 } as const;
