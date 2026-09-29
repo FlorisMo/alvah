@@ -10,7 +10,8 @@
  *  - both GLBs are turned where the model is prepared (`MODEL_YAW`), so the nose
  *    points along the heading they travel;
  *  - the jeep's whole BODY collides (three circles), brakes softly toward whatever is
- *    ahead, and slides along it; people, animals and mission markers are solid too;
+ *    ahead, and slides along it; the people are solid too, mission markers are zones it
+ *    bends round, and (run 6) the roaming animals are neither: it gives way to them;
  *  - the wheels rest on the drawn ground (height + pitch + roll of the MODEL; the
  *    camera never rolls);
  *  - the ranger SITS in the driver's seat / the pilot's seat, seen, never hidden;
@@ -22,16 +23,14 @@
 import * as THREE from 'three';
 import { livePolicy } from '../MotionMode';
 import { loadModel, prepModel } from '../Models';
-import { SIZE } from '../AnimalScale';
+import { SIZE, sizeRow } from '../AnimalScale';
 import type { Biome } from '../Biomes';
 import type { MoveLimits, Obstacle } from '../CharacterController';
 import { resolveMove } from '../CharacterController';
 import { wayfind, type WayCue } from '../Wayfinding';
 import {
-  driveStep, driveCaps, calmSpeed, rampSpeed, comfortSteer, driveIntent, vehicleDt,
-  resolveBody, freeDistance, contactSpeedCap, wheelContact, keepOutSteer, guidedSteer, bodyReach,
-  ANIMAL_SLOW_RADIUS, JEEP_BODY, JEEP_RAMP_TIME, CONTACT_CREEP,
-  type BodyCircle, type Solid,
+  driveCaps, driveIntent, vehicleDt, jeepStep, resolveBody, wheelContact, bodyReach,
+  JEEP_BODY, type BodyCircle, type Solid, type YieldAnimal, type JeepWorld,
 } from '../../core/vehicle';
 import {
   flyStep, heliVignette, heliAvailable, heliRamp, landingAltitude,
@@ -70,9 +69,6 @@ const JEEP_HOVER_RATE = 10;
 // The grounded band the dev hook judges (the hover lets Y lag a little on relief).
 const JEEP_SINK_TOL = 0.5;
 const JEEP_AIR_TOL = 1.0;
-// While pressed against something the jeep keeps this much steer (0..1), so a child
-// holding a turn key always swings free instead of feeling stuck.
-const CONTACT_STEER = 0.45;
 // A walker keeps this much extra room from a parked vehicle's footprint circles.
 const WALKER_ROOM = 0.3;
 
@@ -125,13 +121,15 @@ const SIT_POSE: Record<string, [number, number, number]> = {
   neck: [0.16, 0.01, -0.01], Head: [0.74, 0, -0.01],
 };
 
-// Solid things that move or are not in the static collision list, as the jeep sees them.
+// The people, as the jeep sees them (solid: it brakes for them and slides along them).
 const PERSON_R = 0.45;   // the warden, the poacher
-// A mission marker is a keep-out zone for vehicles: the jeep rolls to a soft stop at
-// its edge and parks ≥ 6 m from the marker (audit veh-09 / B3: a jeep parked on or by a
-// marker hid its prompt, sat in the mini-game's stage and collapsed the walk camera).
+// A mission marker is a keep-out zone for vehicles: the jeep bends round it and parks
+// ≥ 6 m from the marker (audit veh-09 / B3: a jeep parked on or by a marker hid its
+// prompt, sat in the mini-game's stage and collapsed the walk camera).
 const MARKER_R = 5.2;
-const animalR = (h: number): number => Math.min(0.7, Math.max(0.25, h * 0.6));
+// A roaming animal's footprint for the give-way brake: half its nose-to-tail length
+// (the scale table), so a boar met broadside or end-on is both covered.
+const animalR = (id: string): number => Math.max(0.2, (sizeRow(id)?.len ?? 1) / 2);
 
 /** What the vehicles need from the rest of the world. */
 export interface VehicleHost {
@@ -141,8 +139,11 @@ export interface VehicleHost {
   seat(seated: boolean): void;
   /** Stepping out: drop any walk target at (x,z) and stand still. */
   stopWalk(x: number, z: number): void;
-  /** The held keys + joystick as a screen vector (y = forward, x = right). */
+  /** The held keys + joystick as a screen vector (y = forward, x = right): the heli. */
   intent(): { x: number; y: number };
+  /** The jeep's controls: the held keys as tank axes (null when none are held) and the
+   *  touch stick (null when untouched). */
+  controls(): { keys: { turn: number; fwd: number } | null; stick: { x: number; y: number } | null };
   /** Point the follow camera behind `yaw`; `snap` also cuts the eased bearing there. */
   follow(yaw: number, snap: boolean): void;
   /** Boarding / stepping out re-frames the camera as a cut. */
@@ -151,14 +152,14 @@ export interface VehicleHost {
   clearWalkPrompts(): void;
   /** The ambience follows the biome under the vehicle. */
   crossBiome(biome: Biome): void;
-  /** Distance to the nearest roaming animal (the jeep's calm rule). */
-  nearestAnimalDist(x: number, z: number): number;
   /** The camera offsets (walk / jeep / heli) the read-backs report. */
   camOffsets(): { walk: THREE.Vector3; vehicle: THREE.Vector3; heli: THREE.Vector3 };
-  /** Visit every moving solid a vehicle meets: the people (warden, poacher) and the
-   *  walking animals (`h` = the animal's height). Called every frame: it must not
-   *  allocate (review PERF-2). */
-  movers(visit: (x: number, z: number, kind: 'person' | 'animal', h: number) => void): void;
+  /** Visit the people (warden, poacher) where they stand now: solid for a vehicle.
+   *  Called every frame: it must not allocate (review PERF-2). */
+  people(visit: (x: number, z: number) => void): void;
+  /** Visit the roaming ground animals (id + where they are now): never solid for a
+   *  vehicle, the jeep gives way to them. Called every frame: it must not allocate. */
+  animals(visit: (id: string, x: number, z: number) => void): void;
   /** The mission markers (read every frame: the live list, not a copy). */
   markers(): readonly { readonly pos: { readonly x: number; readonly z: number } }[];
 }
@@ -174,12 +175,13 @@ export class Vehicles {
   private jeepPitch = 0;                  // nose-up tilt of the model on a slope (rad)
   private jeepRoll = 0;                   // left-up tilt of the model on a side slope (rad)
   private jeepContact = false;            // the body touched a solid this frame
+  private jeepBraked = false;             // a brake held it back while the gas was on
   private jeepParked: Obstacle[] = [];    // its footprint circles while parked
   inVehicle = false;
   nearJeep = false;
   private vehicleSpeed = 0;               // the controller's carried signed speed (m/s)
   private jeepMoved = 0;                  // the speed it really moved at along its heading (m/s)
-  private vehicleNearAnimal = false;      // W5.2: within the auto-slow radius of an animal
+  private yieldFor: string | null = null; // run 6: the animal the jeep is braking for
   private onJeepNear: (near: boolean) => void = () => {};
   private onVehicleChange: (inVehicle: boolean) => void = () => {};
   // W5.3b helicopter (opt-in, withheld under reduced-motion). States while the ranger
@@ -569,7 +571,7 @@ export class Vehicles {
     grounded: boolean; clearance: number; bodyPitch: number; bodyRoll: number; contact: boolean;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean; driverHidden: boolean; driverSeated: boolean;
+    yieldFor: string | null; dust: boolean; driverHidden: boolean; driverSeated: boolean;
     markerDist: number;
   } | null {
     if (!this.jeep || !this.jeepPos) return null;
@@ -594,7 +596,7 @@ export class Vehicles {
       grounded, clearance, bodyPitch: this.jeepPitch, bodyRoll: this.jeepRoll, contact: this.jeepContact,
       speed: this.inVehicle ? this.jeepMoved : 0, maxSpeed: caps.maxSpeed, turnRate: caps.turnRate,
       camDist: off.z, camHeight: off.y, fov: this.camera.fov, roll: rightY,
-      nearAnimal: this.vehicleNearAnimal, dust: this.dustEmitting,
+      yieldFor: this.yieldFor, dust: this.dustEmitting,
       // F-31: read off the REAL `.visible`, so it can never claim what the render did not do
       driverHidden: this.inVehicle && !this.host.ranger.visible,
       driverSeated: this.inVehicle && this.host.ranger.visible && this.posedRoot !== null,
@@ -762,6 +764,8 @@ export class Vehicles {
     this.vehicleSpeed = 0;
     this.jeepMoved = 0;
     this.jeepContact = false;
+    this.jeepBraked = false;
+    this.yieldFor = null;
     this.unpark(this.jeepParked);
     this.jeepParked = [];
     this.host.seat(true);               // F-31: a still `sit`, never idle/walk, while riding
@@ -787,7 +791,7 @@ export class Vehicles {
     this.settleJeep();                  // parked: all four wheels exactly on the ground
     this.jeepParked = this.park(this.jeepPos.x, this.jeepPos.z, h, JEEP_BODY);
     this.nearJeep = true;               // standing right beside it → "Stap in" again
-    this.vehicleNearAnimal = false;
+    this.yieldFor = null;
     this.dustEmitting = false;
     Sound.engineStop();
     this.onVehicleChange(false);
@@ -795,21 +799,40 @@ export class Vehicles {
   }
 
   /** Every solid a vehicle's body meets: the static list (trunks, cabin, landmarks,
-   *  board, props, the other parked vehicle) plus people and walking animals. Rebuilt
-   *  every frame into reused arrays and pooled circles, so driving makes no garbage
-   *  (review PERF-2: it copied the whole obstacle list and made new objects per frame). */
+   *  board, props, the other parked vehicle) plus the people. Rebuilt every frame into
+   *  reused arrays and pooled circles, so driving makes no garbage (review PERF-2: it
+   *  copied the whole obstacle list and made new objects per frame). The roaming
+   *  animals are not solids (run 6): see `yielding`. */
   private solids(): Solid[] {
     const out = this.solidBuf;
     out.length = 0;
     for (const o of this.obstacles) out.push(o);
     this.poolUsed = 0;
-    this.host.movers(this.addMover);
+    this.host.people(this.addPerson);
+    return out;
+  }
+
+  /** The roaming animals the jeep gives way to (pooled, no garbage). */
+  private yielding(): YieldAnimal[] {
+    const out = this.animalBuf;
+    out.length = 0;
+    this.animalsUsed = 0;
+    this.host.animals(this.addAnimal);
     return out;
   }
 
   private readonly solidBuf: Solid[] = [];
+  private readonly animalBuf: YieldAnimal[] = [];
+  private readonly animalPool: { id: string; x: number; z: number; r: number }[] = [];
+  private animalsUsed = 0;
   private readonly zoneBuf: Solid[] = [];
   private readonly allBuf: Solid[] = [];
+  // what the jeep meets: the same reused buffers, refilled each frame by solids(),
+  // zones(), joined() and yielding()
+  private get jeepWorld(): JeepWorld {
+    return this.jeepWorldObj ??= { solids: this.solidBuf, zones: this.zoneBuf, walls: this.allBuf, animals: this.animalBuf, limits: this.limits };
+  }
+  private jeepWorldObj: JeepWorld | null = null;
   private readonly pool: Solid[] = [];
   private poolUsed = 0;
   private pooled(x: number, z: number, r: number): Solid {
@@ -818,8 +841,15 @@ export class Vehicles {
     c.x = x; c.z = z; c.r = r;
     return c;
   }
-  private readonly addMover = (x: number, z: number, kind: 'person' | 'animal', h: number): void => {
-    this.solidBuf.push(this.pooled(x, z, kind === 'person' ? PERSON_R : animalR(h)));
+  private readonly addPerson = (x: number, z: number): void => {
+    this.solidBuf.push(this.pooled(x, z, PERSON_R));
+  };
+  private readonly addAnimal = (id: string, x: number, z: number): void => {
+    const a = this.animalPool[this.animalsUsed] ?? (this.animalPool[this.animalsUsed] = { id: '', x: 0, z: 0, r: 0 });
+    this.animalsUsed++;
+    if (a.id !== id) { a.id = id; a.r = animalR(id); }
+    a.x = x; a.z = z;
+    this.animalBuf.push(a);
   };
 
   /** The keep-out zones: the ground round each mission marker (so a vehicle never parks
@@ -846,13 +876,14 @@ export class Vehicles {
   }
 
   /**
-   * W5.1: one frame of the arcade drive. Up = gas, Down = brake then reverse,
-   * Left/Right = steer (a sideways push creeps forward while it turns: `driveIntent`).
-   * The speed ramps (~1 s), brakes softly for whatever solid is ahead (it rolls to rest
-   * AT a trunk, never into it), crawls near animals, and bends round a keep-out zone in
-   * its path; the whole body then resolves against every solid and zone and slides
-   * along it. The wheels rest on the drawn ground, the driver rides in his seat, the
-   * follow-cam trails the heading.
+   * W5.1: one frame of the arcade drive (the pure frame is `core/vehicle.jeepStep`). Up
+   * = full gas, Down = brake then reverse, Left/Right = steer and keep the gas (run 6);
+   * a sideways push creeps forward while it turns. The speed ramps (~1 s), brakes softly
+   * for whatever solid is ahead (it rolls to rest AT a trunk, never into it), gives way
+   * to an animal in its path (a soft stop a metre short of it; nothing that moves ever
+   * pushes it), bends round a keep-out zone and along the forest edge; the whole body
+   * then resolves against every solid and zone and slides along it. The wheels rest on
+   * the drawn ground, the driver rides in his seat, the follow-cam trails the heading.
    */
   driveJeep(rawDt: number): void {
     const dt = vehicleDt(rawDt);          // a stall never teleports the jeep
@@ -860,46 +891,24 @@ export class Vehicles {
     const jp = this.jeepPos;
     const reduced = livePolicy().reduced;
     const caps = driveCaps(reduced);
-    const want = driveIntent(this.host.intent());
+    const c = this.host.controls();
     const solids = this.solids();
     const zones = this.zones(true);
-    const all = this.joined(solids, zones);
-    // (1) speed: the ramp, then a soft brake for the solid ahead (backing up: for a zone
-    // behind too — driving forward the jeep bends round a zone instead, step 2)
-    let speed = rampSpeed(this.vehicleSpeed, want.throttle, dt, caps);
-    if (speed !== 0) {
-      const dir = speed > 0 ? 1 : -1;
-      const free = freeDistance(jp.x, jp.z, this.jeepHeading, dir, JEEP_BODY, dir > 0 ? solids : all, 40);
-      const cap = contactSpeedCap(free, caps.maxSpeed / JEEP_RAMP_TIME);
-      if (Math.abs(speed) > cap) speed = dir * cap;
-    }
-    // W5.2 calm rule: a crawl within reach of any wandering animal
-    const animalDist = this.host.nearestAnimalDist(jp.x, jp.z);
-    this.vehicleNearAnimal = animalDist <= ANIMAL_SLOW_RADIUS;
-    speed = calmSpeed(speed, animalDist);
-    // (2) steer: the player's, bent round a keep-out zone ahead; speed-scaled (it never
-    // pivots in open ground), with a little authority kept while pressed against
-    // something so a held turn key always swings it free
-    const avoid = speed > 0 ? keepOutSteer(jp.x, jp.z, this.jeepHeading, speed, zones, JEEP_BODY, want.steer) : 0;
-    const floor = this.jeepContact && want.throttle !== 0 ? CONTACT_STEER : 0;
-    const steer = comfortSteer(guidedSteer(want.steer, avoid), speed, caps, floor);
-    const step = driveStep(this.jeepHeading, { throttle: speed / caps.maxSpeed, steer }, dt, caps);
-    // (3) the whole body against every solid and zone: pushed out, sliding along
-    const next = resolveBody(jp.x, jp.z, this.jeepHeading, jp.x + step.dx, jp.z + step.dz, step.heading,
-      JEEP_BODY, all, this.limits);
-    const fx = Math.sin(this.jeepHeading), fz = Math.cos(this.jeepHeading);
-    const moved = ((next.x - jp.x) * fx + (next.z - jp.z) * fz) / dt;
-    this.jeepHeadingUnwrapped += Math.atan2(Math.sin(next.heading - this.jeepHeading), Math.cos(next.heading - this.jeepHeading));
-    this.jeepHeading = next.heading;
-    jp.x = next.x; jp.z = next.z;
-    this.jeepContact = next.contact;
-    // pressed against something, the carried speed drops to what really happened (no
-    // pent-up surge when it slides free), but never below the creep that lets it slide
-    if (next.contact && Math.abs(moved) < Math.abs(speed)) {
-      speed = Math.sign(speed) * Math.min(Math.abs(speed), Math.max(Math.abs(moved), CONTACT_CREEP));
-    }
-    this.vehicleSpeed = speed;
-    this.jeepMoved = moved;
+    this.joined(solids, zones);
+    this.yielding();
+    const f = jeepStep(
+      { x: jp.x, z: jp.z, heading: this.jeepHeading, speed: this.vehicleSpeed, contact: this.jeepContact, braked: this.jeepBraked },
+      driveIntent(c.keys, c.stick), dt, caps, this.jeepWorld,
+    );
+    this.jeepHeadingUnwrapped += Math.atan2(Math.sin(f.heading - this.jeepHeading), Math.cos(f.heading - this.jeepHeading));
+    this.jeepHeading = f.heading;
+    jp.x = f.x; jp.z = f.z;
+    this.jeepContact = f.contact;
+    this.jeepBraked = f.braked;
+    this.vehicleSpeed = f.speed;
+    this.jeepMoved = f.moved;
+    this.yieldFor = f.yieldFor;
+    const moved = f.moved;
     // (4) the wheels on the drawn ground: height + pitch + roll ease in (a damped
     // suspension glide — research §4.5 — never a hard per-frame snap)
     const wc = wheelContact(jp.x, jp.z, this.jeepHeading, this.groundAt);

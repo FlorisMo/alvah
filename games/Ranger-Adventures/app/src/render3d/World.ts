@@ -215,15 +215,17 @@ export class World {
         seat: (seated) => this.player.rig.setSeated(seated),
         stopWalk: (x, z) => { this.player.target.set(x, 0, z); this.player.groundSpeedNow = 0; },
         intent: () => (this.menuOpen() ? { x: 0, y: 0 } : this.player.intent()),
+        controls: () => (this.menuOpen() ? { keys: null, stick: null } : this.player.controls()),
         follow: (yaw, snap) => { this.cam.followTargetYaw = yaw; if (snap) this.cam.followYaw = yaw; },
         recut: () => this.cam.place(true, 0, livePolicy().reduced),
         clearWalkPrompts: () => this.pois.clearForVehicle(),
         crossBiome: (here) => this.crossBiome(here),
-        nearestAnimalDist: (x, z) => this.fauna.nearestAnimalDist(x, z),
         camOffsets: () => ({ walk: this.cam.camOffset, vehicle: this.cam.camOffsetVehicle, heli: this.cam.camOffsetHeli }),
-        movers: (visit) => { // every frame: no allocation (review PERF-2)
-          for (const a of this.fauna.scenicActors) visit(a.group.position.x, a.group.position.z, 'person', a.height);
-          for (const a of this.fauna.ambient) if (a.id.startsWith('animal-')) visit(a.group.position.x, a.group.position.z, 'animal', a.h);
+        people: (visit) => { // every frame: no allocation (review PERF-2)
+          for (const a of this.fauna.scenicActors) visit(a.group.position.x, a.group.position.z);
+        },
+        animals: (visit) => { // the roaming ground animals (the birds glide overhead)
+          for (const a of this.fauna.ambient) if (a.wander) visit(a.id, a.group.position.x, a.group.position.z);
         },
         markers: () => this.pois.list,
       },

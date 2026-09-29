@@ -331,16 +331,4 @@ export class Fauna {
       };
     });
   }
-
-  /** W5.2: distance to the nearest wandering ground animal from a world point
-   *  (birds glide overhead → excluded). `Infinity` when none roam. */
-  nearestAnimalDist(x: number, z: number): number {
-    let best = Infinity;
-    for (const a of this.ambient) {
-      if (!a.wander) continue;
-      const d = Math.hypot(a.group.position.x - x, a.group.position.z - z);
-      if (d < best) best = d;
-    }
-    return best;
-  }
 }

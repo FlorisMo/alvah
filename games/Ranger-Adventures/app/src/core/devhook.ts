@@ -270,7 +270,9 @@ export interface RangerDevHook {
     x: number; z: number; heading: number; headingUnwrapped: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean;
+    /** run 6: the id of the roaming animal the jeep is braking (or held) for — one in
+     *  its path — or null. An animal beside the track never slows it. */
+    yieldFor: string | null; dust: boolean;
     /** P1.5b: the jeep's live ground contact — its world Y and the clearance of that Y
      *  above the RENDERED surface right under it (the D1.2 ray truth), with `grounded`
      *  true when the ray hits AND the clearance sits in the jeep suspension band. The
@@ -439,7 +441,7 @@ const state = {
     grounded: boolean; clearance: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
+    yieldFor: string | null; dust: boolean; driverHidden: boolean;
   } | null),
   heli: null as null | (() => {
     placed: boolean; available: boolean; optIn: boolean; near: boolean; inHeli: boolean; onPad: boolean;
@@ -710,7 +712,7 @@ export function provideVehicle(
     grounded: boolean; clearance: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
+    yieldFor: string | null; dust: boolean; driverHidden: boolean;
   } | null) | null,
 ): void {
   state.vehicle = fn;

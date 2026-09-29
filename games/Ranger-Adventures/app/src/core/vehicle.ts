@@ -25,13 +25,21 @@
  *
  * The comfort clause (§3.2 / research C.3): reduced-motion caps top speed ~3 m/s
  * and HALVES the turn-rate, so the whole drive stays gentle — `driveCaps(reduced)`
- * is the single place that lives. F-32 adds two more comfort shapers, applied by
- * the World to the JEEP ONLY (the heli reuses the raw `driveStep`): `rampSpeed`
- * eases the speed toward the throttle over ~1 s instead of snapping to the cap on
- * frame one, and `comfortSteer` scales the steer by how fast the jeep is actually
- * moving so it can never pivot in place (the audit's spin-top / doughnut). The two
- * keep the reachable turn rate ~0.6 rad/s WITHOUT touching the frozen caps the
- * `vehicle` E2E pins (turnRate 1.2 / maxSpeed 6, halved under reduced-motion).
+ * is the single place that lives. F-32 adds two more comfort shapers, applied to the
+ * JEEP ONLY (the heli reuses the raw `driveStep`): `rampSpeed` eases the speed toward
+ * the throttle over ~1 s instead of snapping to the cap on frame one, and
+ * `comfortSteer` scales the steer by how fast the jeep is actually moving so it can
+ * never pivot in place (the audit's spin-top / doughnut), and saturates it at half
+ * the turn rate: the reachable yaw rate is ~0.6 rad/s whatever steers (the player,
+ * a keep-out bend, the forest edge), WITHOUT touching the frozen caps the `vehicle`
+ * E2E pins (turnRate 1.2 / maxSpeed 6, halved under reduced-motion).
+ *
+ * Run 6 (Floris: "the car seems to slow down sometimes; it is bumped to the side by
+ * animals"): full gas is full speed, steering keeps the gas (`driveIntent` reads the
+ * keys as tank axes), no animal ever pushes the jeep (animals are not solids: the jeep
+ * brakes for one in its path, `yieldBrake`), and the forest edge bends it along the
+ * tree line (`rimSteer`, `rimFree`). `jeepStep` is the whole frame, pure, so the unit
+ * tests drive the same code the World does.
  */
 
 /** The active arcade caps: top speed (m/s) and the yaw rate-clamp (rad/s). */
@@ -55,31 +63,9 @@ export function driveCaps(reduced: boolean): DriveCaps {
   return reduced ? JEEP_CAPS_REDUCED : JEEP_CAPS;
 }
 
-/**
- * W5.2 calm rule: the jeep auto-slows near wildlife so animals never panic-flee
- * (§5 W5.2, frozen never-scary contract §3.4). Within `ANIMAL_SLOW_RADIUS` of the
- * nearest animal the top speed is held to `ANIMAL_SLOW_SPEED` — gentle enough to
- * drift past a grazing ree. Below the cap the drive is untouched.
- */
-export const ANIMAL_SLOW_SPEED = 2; // m/s — the crawl the jeep keeps near animals
-export const ANIMAL_SLOW_RADIUS = 8; // m — how close counts as "near an animal"
-
-/**
- * Cap a signed drive speed to the near-animal crawl when the nearest animal sits
- * within `ANIMAL_SLOW_RADIUS`. Preserves the sign (reverse still reverses) and
- * only ever slows — a speed already under the crawl passes through untouched.
- * Pure + deterministic (the World feeds it the live nearest-animal distance).
- */
-export function calmSpeed(speed: number, distToNearestAnimal: number): number {
-  if (distToNearestAnimal <= ANIMAL_SLOW_RADIUS && Math.abs(speed) > ANIMAL_SLOW_SPEED) {
-    return Math.sign(speed) * ANIMAL_SLOW_SPEED;
-  }
-  return speed;
-}
-
 /** Driver intent this frame: `throttle` forward (+) / reverse (−), `steer`
- *  right (+) / left (−). Both are read from the SAME `screenVector` the walker
- *  uses (y → throttle, x → steer), so keys and the joystick agree. */
+ *  right (+) / left (−), each in [−1, 1] (`driveIntent` reads them off the keys and
+ *  the stick). */
 export interface DriveInput {
   throttle: number;
   steer: number;
@@ -161,23 +147,32 @@ export function rampSpeed(current: number, throttle: number, dt: number, caps: D
 }
 
 /**
- * F-32 speed-scaled steering (JEEP only; applied by the World before `driveStep`).
- * Scale the raw steer by how fast the jeep is ACTUALLY moving (`speed / maxSpeed`)
- * so it can never pivot in place — the spin-top / doughnut the audit caught, where a
- * held turn key spun the nose while the jeep went nowhere. Fed to `driveStep` as its
- * `steer`, the reachable yaw rate then peaks at `turnRate / 2` (≈ 0.6 rad/s at full
- * caps — the shared unit-magnitude stick cannot hold full steer AND full throttle at
- * once), which lands inside the F-32 comfort band, and the turn radius
- * `maxSpeed / turnRate` stays roughly constant across speeds (one calm arc).
+ * The steer authority never exceeds this share of the turn rate: the calm yaw cap.
+ * At full caps the jeep then turns at most 0.6 rad/s (≈ 34°/s: the F-32 comfort band
+ * for a motion-sensitive child; the chase camera turns with it), and 0.3 rad/s under
+ * reduced motion. Until run 6 the unit-magnitude screen vector held this cap by
+ * accident (Up+Right = 0.71 throttle × 0.71 steer), which is why steering cut the gas.
+ */
+export const STEER_AUTHORITY_MAX = 0.5;
+
+/**
+ * F-32 speed-scaled steering (JEEP only; applied before `driveStep`). Scale the raw
+ * steer by how fast the jeep is ACTUALLY moving (`speed / maxSpeed`) so it can never
+ * pivot in place — the spin-top / doughnut the audit caught, where a held turn key spun
+ * the nose while the jeep went nowhere — and saturate it at `STEER_AUTHORITY_MAX`. The
+ * turn circle is then a tight ~5 m (`maxSpeed / turnRate`) at a crawl and widens to a
+ * calm ~10 m at full speed, and the yaw rate never passes `turnRate / 2` (≈ 0.6 rad/s)
+ * whatever steers: full gas and full steer together stay in the F-32 comfort band.
  *
  * The SIGN follows the speed, like a real car: reversing with the wheel turned right
  * swings the tail to the right (so the nose goes left). `floor` (0..1) is the least
- * steer authority kept whatever the speed — the World passes a small one only while
- * the jeep is pressed against something, so a child can always turn away. Pure.
+ * steer authority kept whatever the speed: `jeepStep` passes a small one only while the
+ * jeep is pressed against something, so a child can always turn away. Pure.
  */
 export function comfortSteer(steer: number, speed: number, caps: DriveCaps, floor = 0): number {
   const frac = Math.max(-1, Math.min(1, speed / caps.maxSpeed));
-  const auth = Math.abs(frac) >= floor ? frac : (frac < 0 ? -floor : floor);
+  let auth = Math.sign(frac) * Math.min(Math.abs(frac), STEER_AUTHORITY_MAX);
+  if (Math.abs(auth) < floor) auth = frac < 0 ? -floor : floor;
   return clampUnit(steer) * auth;
 }
 
@@ -190,23 +185,39 @@ export const STEER_CREEP = 0.35;
 /** Reverse is slower than forward: a calm back-up, never a backwards dash. */
 export const REVERSE_FRACTION = 0.5;
 
+/** The stick pushed within this angle of straight up (rad, 50°) still gives full gas
+ *  at its rim, so "up and a bit right" keeps the jeep at full speed while it turns. */
+export const STICK_FULL_GAS = (50 * Math.PI) / 180;
+
 /**
- * Turn the fused screen intent (held keys + stick: `x` right, `y` forward, |v| ≤ 1)
- * into the jeep's throttle + steer. "Push where you want to go":
- *  - Up = gas, Down = brake then reverse (the ramp brakes first, then backs up),
- *  - Left / Right = steer; pushed ONLY sideways the jeep creeps forward while it
- *    turns (`STEER_CREEP`), so a sideways stick or a lone arrow key never stops it,
- *  - a diagonal gives both, at the stick's magnitude.
- * Keys and the touch joystick share this one mapping. Pure.
+ * The held keys (tank axes: `fwd` Up + / Down −, `turn` Right + / Left −) and the
+ * touch stick (`x` right, `y` forward, |v| ≤ 1; null when untouched) → the jeep's
+ * throttle + steer. Held keys win over the stick, as on foot.
+ *  - Keys are two separate axes (run 6: the fused, unit-clamped screen vector made
+ *    Up + Right a 0.71 throttle, so steering with the keys cut the gas to 4.2 m/s):
+ *    Up = full gas, Down = reverse (the ramp brakes first, then backs up, slower),
+ *    Left / Right = full steer, and a lone turn key creeps forward while it turns
+ *    (`STEER_CREEP`, audit veh-05: it used to stop the jeep).
+ *  - The stick is "push where you want to go": up = gas, sideways = steer + creep,
+ *    down = reverse; within `STICK_FULL_GAS` of straight up its rim keeps full gas.
+ * The calm turn is `comfortSteer`'s job, not the intent's. Pure.
  */
-export function driveIntent(screen: { x: number; y: number }): DriveInput {
-  const m = Math.min(1, Math.hypot(screen.x, screen.y));
+export function driveIntent(
+  keys: { turn: number; fwd: number } | null,
+  stick: { x: number; y: number } | null,
+): DriveInput {
+  if (keys && (keys.turn !== 0 || keys.fwd !== 0)) {
+    const throttle = keys.fwd > 0 ? 1 : keys.fwd < 0 ? -REVERSE_FRACTION : STEER_CREEP;
+    return { throttle, steer: clampUnit(keys.turn) };
+  }
+  if (!stick) return { throttle: 0, steer: 0 };
+  const m = Math.min(1, Math.hypot(stick.x, stick.y));
   if (m < 1e-6) return { throttle: 0, steer: 0 };
-  const along = screen.y / m;               // cos of the angle from "up"
-  const steer = clampUnit(screen.x / m);    // sin of it: fully sideways = full steer
+  const along = stick.y / m;               // cos of the angle from "up"
+  const steer = clampUnit(stick.x / m);    // sin of it: fully sideways = full steer
   const throttle = along >= -0.2
-    ? m * Math.max(STEER_CREEP, along)       // forward half (and sideways): gas
-    : -m * REVERSE_FRACTION * Math.max(STEER_CREEP, -along); // backward half: reverse
+    ? m * Math.min(1, Math.max(STEER_CREEP, along / Math.cos(STICK_FULL_GAS))) // forward half (and sideways): gas
+    : -m * REVERSE_FRACTION * Math.max(STEER_CREEP, -along);                      // backward half: reverse
   return { throttle, steer };
 }
 
@@ -413,46 +424,72 @@ function shoreNormal(
 
 /**
  * How far (m) the vehicle can travel straight along its heading (`dir` +1 forward,
- * −1 reverse) before its leading body circle touches a solid; `max` when nothing is
- * in the way. The World brakes the jeep smoothly on this distance, so it rolls to a
- * soft stop at a tree instead of hitting it at full speed. Pure.
+ * −1 reverse) before its leading body circle touches a solid (`free`; `max` when
+ * nothing is in the way), and how squarely it would meet it (`headOn`: the share of
+ * its motion that runs INTO the solid at that touch, 1 = dead centre, → 0 = a brush
+ * along its side). The jeep brakes smoothly on these, so it rolls to a soft stop at a
+ * tree it drives straight at and brushes past one it only clips. Pure.
  */
-export function freeDistance(
+export function impactAhead(
   x: number, z: number, heading: number, dir: 1 | -1,
   body: readonly BodyCircle[], solids: readonly Solid[], max: number,
-): number {
+): { free: number; headOn: number } {
   let lead = body[0];
   for (const c of body) if (c.along * dir > lead.along * dir) lead = c;
   const fx = Math.sin(heading), fz = Math.cos(heading);
   const cx = x + fx * lead.along, cz = z + fz * lead.along;
   const ux = fx * dir, uz = fz * dir;
-  let best = max;
+  let best = max, headOn = 0;
   for (const o of solids) {
     const R = o.r + lead.r;
     const ox = cx - o.x, oz = cz - o.z;
     const b = ox * ux + oz * uz;                 // > 0: moving away from its centre
-    const c = ox * ox + oz * oz - R * R;
-    if (c <= 0) { if (b < 0) best = 0; continue; } // already touching, and pressing in
+    const d2 = ox * ox + oz * oz;
+    const c = d2 - R * R;
+    if (c <= 0) {                                // already touching, and pressing in
+      if (b < 0 && (best > 0 || -b / Math.sqrt(d2) > headOn)) { best = 0; headOn = -b / Math.sqrt(d2); }
+      continue;
+    }
     if (b >= 0) continue;
     const disc = b * b - c;
     if (disc < 0) continue;
     const t = -b - Math.sqrt(disc);
-    if (t < best) best = t;
+    if (t < best) { best = t; headOn = Math.sqrt(Math.max(0, 1 - (d2 - b * b) / (R * R))); }
   }
-  return Math.max(0, best);
+  return { free: Math.max(0, best), headOn };
+}
+
+/** How far (m) the vehicle can travel straight along its heading before its leading
+ *  body circle touches a solid; `max` when nothing is in the way (`impactAhead`). Pure. */
+export function freeDistance(
+  x: number, z: number, heading: number, dir: 1 | -1,
+  body: readonly BodyCircle[], solids: readonly Solid[], max: number,
+): number {
+  return impactAhead(x, z, heading, dir, body, solids, max).free;
 }
 
 /** The slowest the jeep rolls while it is pressed against something (m/s): enough
  *  to slide along a trunk, far too slow to feel like a crash. */
 export const CONTACT_CREEP = 0.8;
 
+/** Met more squarely than this (`impactAhead`'s `headOn`) a solid is driven AT, not
+ *  brushed: the jeep comes to rest in front of it instead of sliding along it. */
+export const SQUARE_HIT = 0.85;
+
 /**
  * The speed (m/s) the jeep may still have with `free` metres to the nearest solid
- * ahead: braking at `decel` m/s² it comes to rest right at the solid (v = √(2·a·d)),
- * never below the contact creep. A soft stop, never a crash. Pure.
+ * ahead, met `headOn` squarely (`impactAhead`; 1 = dead centre): braking at `decel`
+ * m/s² it comes to rest right at the solid (v = √(2·a·d)), but never below the speed at
+ * which it can brush it gently — the part of its speed that runs into the solid stays
+ * at the creep (`CONTACT_CREEP / headOn²`) — so a clipped trunk costs almost nothing
+ * (run 6: every brush braked it to a 0.8 m/s crawl, then ground it along the bark). Met
+ * squarely (fading in from `SQUARE_HIT`) there is nothing to slide along: it simply
+ * stops in front of it, without the last creep into the bark. Pure.
  */
-export function contactSpeedCap(free: number, decel: number): number {
-  return Math.max(CONTACT_CREEP, Math.sqrt(2 * decel * Math.max(0, free - 0.1)));
+export function contactSpeedCap(free: number, decel: number, headOn = 1): number {
+  const brush = Math.max(0, Math.min(1, (1 - headOn) / (1 - SQUARE_HIT)));
+  const gentle = headOn > 1e-6 ? (CONTACT_CREEP / (headOn * headOn)) * brush : Infinity;
+  return Math.max(gentle, Math.sqrt(2 * decel * Math.max(0, free - 0.1)));
 }
 
 /* ---------------------------------------------------------- keep-out zones -- */
@@ -462,10 +499,13 @@ export function contactSpeedCap(free: number, decel: number): number {
  *  the wheel: 9 m and 4 m at top speed, which with the speed-scaled steer (a ~5 m
  *  turning circle) clears a zone met head-on. Timed, not measured: a jeep creeping at
  *  a child's sideways push is not steered off a zone still seconds away. */
-export const KEEP_OUT_LOOK_S = 1.5;
-export const KEEP_OUT_FULL_S = 0.67;
+export const KEEP_OUT_LOOK_S = 2;
+export const KEEP_OUT_FULL_S = 1.3;
 /** A path this far (rad) or more inside a zone's edge gets the full bend; less, less. */
-export const KEEP_OUT_TURN = 0.35;
+export const KEEP_OUT_TURN = 0.2;
+/** The bend aims to pass this far (m) outside a zone's edge, so the whole body (not
+ *  only the nose's line) stays off it while the jeep turns. */
+export const KEEP_OUT_MARGIN = 0.5;
 
 /**
  * A keep-out zone (the ground round a mission marker, a helipad) is not a wall: it is
@@ -498,7 +538,7 @@ export function keepOutSteer(
   const sectors: { lo: number; hi: number; u: number }[] = [];
   for (const o of zones) {
     const dx = o.x - nx, dz = o.z - nz;
-    const dist = Math.hypot(dx, dz), R = o.r + half;
+    const dist = Math.hypot(dx, dz), R = o.r + half + KEEP_OUT_MARGIN;
     const u = Math.max(0, Math.min(1, (look - (dist - R)) / (look - full)));
     if (u <= 0) continue;
     const rel = Math.atan2(dx * lx + dz * lz, dx * fx + dz * fz); // its bearing, left +
@@ -534,6 +574,274 @@ export function guidedSteer(player: number, avoid: number): number {
   if (avoid === 0) return clampUnit(player);
   if (Math.sign(player) === Math.sign(avoid)) return Math.sign(avoid) * Math.max(Math.abs(player), Math.abs(avoid));
   return clampUnit(avoid + player * (1 - Math.abs(avoid)));
+}
+
+/* ------------------------------------------------------ animals: give way -- */
+
+/** A roaming animal as the jeep sees it: never a solid it pushes or is pushed by
+ *  (run 6: an animal walking into the jeep's side shoved the whole jeep sideways),
+ *  only something it gives way to. `r` = the radius of its footprint (m). */
+export interface YieldAnimal {
+  readonly id: string;
+  readonly x: number;
+  readonly z: number;
+  readonly r: number;
+}
+
+/** How gently the jeep brakes for an animal in its path (m/s²): 6 → 0 m/s in 2 s. */
+export const YIELD_DECEL = 3;
+/** It stops this far (m) short of an animal that stays in its path. */
+export const YIELD_GAP = 1;
+/** An animal this close (m) beside the jeep's swept body counts as in its path. */
+export const YIELD_MARGIN = 0.4;
+/** How far ahead (m, along its path) the jeep looks for animals. */
+export const YIELD_LOOK = 30;
+/** An animal that steps into the path close ahead: the jeep brakes harder (m/s²), over
+ *  a moment instead of in one frame, and still stops `YIELD_HARD_GAP` (m) short. */
+export const YIELD_HARD_DECEL = 8;
+export const YIELD_HARD_GAP = 0.8;
+
+/**
+ * The speed (m/s) the jeep may have this frame with `free` metres to the animal in its
+ * path, rolling at `now` m/s: the gentle stop `YIELD_GAP` short of it at `YIELD_DECEL`
+ * (√(2·a·(free − gap))); if the animal is closer than that stop needs, a harder but
+ * still smooth brake (at most `YIELD_HARD_DECEL` per second, never past the stop
+ * `YIELD_HARD_GAP` short), so a deer stepping out close ahead never makes the jeep
+ * drop speed in a single frame. Pure.
+ */
+export function yieldSpeed(free: number, now = 0, dt = 0): number {
+  const gentle = Math.sqrt(2 * YIELD_DECEL * Math.max(0, free - YIELD_GAP));
+  const hard = Math.sqrt(2 * YIELD_HARD_DECEL * Math.max(0, free - YIELD_HARD_GAP));
+  return Math.min(hard, Math.max(gentle, Math.abs(now) - YIELD_HARD_DECEL * dt));
+}
+
+/**
+ * The curvature (1/m, + = curving to the left of the way it moves) of the path the
+ * jeep drives with this steer at this speed (the same `comfortSteer` authority), so
+ * the give-way brake looks along the arc the jeep will really take. `dir` = the way it
+ * moves (+1 forward, −1 reverse), used when it stands still. Pure.
+ */
+export function pathCurvature(steer: number, speed: number, dir: 1 | -1, caps: DriveCaps): number {
+  const v = Math.max(Math.abs(speed), 1e-3);
+  const auth = Math.min(v / caps.maxSpeed, STEER_AUTHORITY_MAX);
+  return (-clampUnit(steer) * dir * auth * caps.turnRate) / v;
+}
+
+/**
+ * Give way to animals (run 6). Looks along the jeep's swept path — the arc its lead
+ * body circle drives with curvature `curvature` (`pathCurvature`), in the direction it
+ * moves (`dir`) — for animals whose footprint comes within `YIELD_MARGIN` of the body
+ * (half-width = the widest body circle + the animal's radius + the margin), and
+ * returns the first one's `id`, the `free` distance (m) the jeep can still roll before
+ * its body would touch it, and the speed `cap` (m/s) that brakes it to a soft stop
+ * `YIELD_GAP` short of it (`yieldSpeed`, from the speed `now` over the frame `dt`),
+ * `Infinity` when the path is clear. An animal beside the path, or behind the way it
+ * moves, changes nothing; the ramp resumes the moment the path clears. Pure.
+ */
+export function yieldBrake(
+  x: number, z: number, heading: number, dir: 1 | -1, curvature: number,
+  body: readonly BodyCircle[], animals: readonly YieldAnimal[], now = 0, dt = 0,
+): { id: string | null; free: number; cap: number } {
+  let lead = body[0], half = 0;
+  for (const c of body) { if (c.along * dir > lead.along * dir) lead = c; half = Math.max(half, c.r); }
+  const ux = Math.sin(heading) * dir, uz = Math.cos(heading) * dir; // the way it moves
+  const lx = uz, lz = -ux;                                          // left of that
+  const px = x + Math.sin(heading) * lead.along, pz = z + Math.cos(heading) * lead.along;
+  const turning = Math.abs(curvature) > 1e-4;
+  const R = turning ? 1 / Math.abs(curvature) : 0;
+  let free = Infinity, id: string | null = null;
+  for (const an of animals) {
+    const dx = an.x - px, dz = an.z - pz;
+    const a = dx * ux + dz * uz;
+    let b = dx * lx + dz * lz;
+    let s: number, lat: number;
+    if (!turning) { s = a; lat = Math.abs(b); }
+    else {
+      if (curvature < 0) b = -b;                  // mirror a right-hand curve onto the left
+      const phi = Math.atan2(a, R - b);           // how far round the turn it lies
+      if (phi <= 0) continue;
+      s = phi * R;
+      lat = Math.abs(Math.hypot(a, b - R) - R);
+    }
+    if (s <= 0 || s > YIELD_LOOK || lat >= half + an.r + YIELD_MARGIN) continue;
+    const touch = lead.r + an.r;
+    const d = s - (lat < touch ? Math.sqrt(touch * touch - lat * lat) : 0);
+    if (d < free) { free = d; id = an.id; }
+  }
+  const cap = id === null ? Infinity : yieldSpeed(free, now, dt);
+  return { id, free: Math.max(0, free), cap };
+}
+
+/* ------------------------------------------------------- the forest edge -- */
+
+/** The jeep brakes for the forest edge ahead as gently as for an animal (m/s²)… */
+export const RIM_DECEL = 3;
+/** …and stops this far (m) short of it, head-on: never pressed against it. */
+export const RIM_GAP = 0.5;
+/** Within this distance (m) of the edge, heading outward, the jeep bends along it… */
+export const RIM_BAND = 10;
+/** …and from this distance (m) on, the bend is a full turn of the wheel. */
+export const RIM_FULL = 5;
+/** A heading this far (rad) or more out of line with the edge gets the full bend. */
+export const RIM_TURN = 0.35;
+/** Closer than this (m) the bend also keeps a heading along the edge turning a little
+ *  inward (`RIM_KEEP_TILT` rad per metre), so it rolls along the tree line, never on it. */
+export const RIM_KEEP = 2;
+export const RIM_KEEP_TILT = 0.15;
+/** Driven at the edge nearly head-on (more than `RIM_HEAD_ON_FROM` rad out of line,
+ *  fading to nothing at `RIM_HEAD_ON_TO`) it does not bend but stops. */
+export const RIM_HEAD_ON_FROM = (60 * Math.PI) / 180;
+export const RIM_HEAD_ON_TO = (75 * Math.PI) / 180;
+
+/**
+ * How far (m) the jeep's centre can travel straight along its heading (`dir` +1
+ * forward, −1 reverse) before it reaches `lim`, the radius its centre may not pass
+ * (the move bound less the body's reach): the chord to the forest edge. 0 when it
+ * already presses on the edge, `Infinity` when it points inward from there. Pure.
+ */
+export function rimFree(x: number, z: number, heading: number, dir: 1 | -1, lim: number): number {
+  const ux = Math.sin(heading) * dir, uz = Math.cos(heading) * dir;
+  const pu = x * ux + z * uz;
+  const c = x * x + z * z - lim * lim;
+  if (c >= 0) return pu > 0 ? 0 : Infinity;
+  return -pu + Math.sqrt(pu * pu - c);
+}
+
+/** The speed (m/s) that stops the jeep `RIM_GAP` short of the forest edge `free` metres
+ *  ahead (`rimFree`), braking at `RIM_DECEL`: no crawl, no grind. Pure. */
+export function rimSpeedCap(free: number): number {
+  return Math.sqrt(2 * RIM_DECEL * Math.max(0, free - RIM_GAP));
+}
+
+/**
+ * The forest edge is not a wall to grind along (run 6: pressed against the world rim
+ * the jeep skated sideways along it, then ground on at 0.1 m/s). Like a keep-out zone
+ * it bends the jeep: heading outward within `RIM_BAND` of `lim` (see `rimFree`), this
+ * returns the steer (right +) that turns it along the tree line, the nearer way (met
+ * dead on: the way the player steers, right by default), growing to a full turn at
+ * `RIM_FULL` and with how far out of line it heads (`RIM_TURN`). Met nearly head-on
+ * it does not bend (`RIM_HEAD_ON_FROM`/`_TO`): `rimSpeedCap` brings it to a clean stop
+ * there and the player turns away. Forward driving only. Pure.
+ */
+export function rimSteer(x: number, z: number, heading: number, lim: number, bias = 0): number {
+  const r = Math.hypot(x, z);
+  const d = lim - r;
+  if (r < 1e-6 || d >= RIM_BAND) return 0;
+  const ox = x / r, oz = z / r;                          // straight out
+  const fx = Math.sin(heading), fz = Math.cos(heading);
+  const theta = Math.asin(Math.max(-1, Math.min(1, fx * ox + fz * oz))); // out of line with the edge (+ = outward)
+  const want = theta + Math.max(0, RIM_KEEP - d) * RIM_KEEP_TILT;
+  if (want <= 0) return 0;
+  const headOn = Math.max(0, Math.min(1, (RIM_HEAD_ON_TO - theta) / (RIM_HEAD_ON_TO - RIM_HEAD_ON_FROM)));
+  if (headOn <= 0) return 0;
+  const u = Math.max(0, Math.min(1, (RIM_BAND - d) / (RIM_BAND - RIM_FULL)));
+  const outLeft = fz * ox - fx * oz;                     // > 0: straight out lies to its left
+  const side = Math.abs(outLeft) > 0.02 ? (outLeft > 0 ? 1 : -1) : (bias < 0 ? -1 : 1);
+  return side * u * headOn * Math.min(1, want / RIM_TURN);
+}
+
+/* ------------------------------------------------------ one jeep frame -- */
+
+/** While pressed against something (or held back by a brake with the gas on) the jeep
+ *  keeps this much steer (0..1), so a child holding a turn key always swings free. */
+export const CONTACT_STEER = 0.45;
+/** A standing jeep sets off only when the forest edge or an animal ahead lets it roll
+ *  at least this fast (m/s): room for a real start, never an inch-by-inch crawl. */
+export const MOVE_OFF = 2;
+
+/** The jeep between frames. */
+export interface JeepState {
+  x: number;
+  z: number;
+  heading: number;
+  /** the carried signed drive speed (m/s) */
+  speed: number;
+  /** its body touched a solid or a zone last frame */
+  contact: boolean;
+  /** last frame a brake held it back (slowed it, or held it still) while the player
+   *  pushed on: it keeps the pressed-against-something steer */
+  braked: boolean;
+}
+
+/** What the jeep meets, rebuilt by the World each frame. */
+export interface JeepWorld {
+  /** trunks, buildings, props, the people, the other parked vehicle: it brakes for them */
+  readonly solids: readonly Solid[];
+  /** keep-out patches (mission markers, helipads): it bends round them */
+  readonly zones: readonly Solid[];
+  /** `solids` then `zones` in one list: what the body can never enter */
+  readonly walls: readonly Solid[];
+  /** the roaming animals: it gives way to them, never pushes or is pushed by them */
+  readonly animals: readonly YieldAnimal[];
+  readonly limits: BodyLimits;
+}
+
+/** One frame's result: the next state, what it really moved along its heading (m/s),
+ *  and the animal it is braking for (null when none). */
+export interface JeepFrame extends JeepState {
+  moved: number;
+  yieldFor: string | null;
+}
+
+/**
+ * One frame of the jeep (the World's `driveJeep` feeds it the keys and the world).
+ * (1) the speed ramps toward the throttle (~1 s); (2) the player's steer, bent round a
+ * keep-out zone or along the forest edge ahead; (3) the brakes: a soft stop at the
+ * solid ahead (backing up: at a zone behind too), at the forest edge, and for an
+ * animal in its path — the lowest wins; (4) the speed-scaled, yaw-capped steer (a
+ * little authority kept while pressed or held still, so a turn key always swings it
+ * free); (5) the arcade step; (6) the whole body against every solid and zone: pushed
+ * out, sliding along. Pressed against something, the carried speed drops to what
+ * really happened (no pent-up surge when it slides free), never below the creep. Pure.
+ */
+export function jeepStep(
+  s: JeepState, want: DriveInput, dt: number, caps: DriveCaps, w: JeepWorld,
+  body: readonly BodyCircle[] = JEEP_BODY,
+): JeepFrame {
+  if (!(dt > 0)) return { ...s, moved: 0, yieldFor: null };
+  const ramped = rampSpeed(s.speed, want.throttle, dt, caps);
+  let speed = ramped;
+  const dir: 1 | -1 | 0 = speed > 0 ? 1 : speed < 0 ? -1 : want.throttle > 0 ? 1 : want.throttle < 0 ? -1 : 0;
+  const lim = w.limits.bound - bodyReach(body);
+  // (2) the steer: bent round what lies ahead (forward only; backing up it brakes)
+  let avoid = 0;
+  if (dir > 0) {
+    const zone = keepOutSteer(s.x, s.z, s.heading, speed, w.zones, body, want.steer);
+    const rim = rimSteer(s.x, s.z, s.heading, lim, want.steer);
+    avoid = Math.abs(rim) > Math.abs(zone) ? rim : zone;
+  }
+  const steerWant = guidedSteer(want.steer, avoid);
+  // (3) the brakes
+  let yieldFor: string | null = null, braked = false;
+  if (dir !== 0) {
+    const give = yieldBrake(s.x, s.z, s.heading, dir, pathCurvature(steerWant, speed, dir, caps), body, w.animals, s.speed, dt);
+    let stop = Math.min(rimSpeedCap(rimFree(s.x, s.z, s.heading, dir, lim)), give.cap);
+    // standing still, it sets off only when the forest edge or the animal ahead leaves
+    // it room to roll (no 0.1 m/s inching): until then a turn key turns it (the floor)
+    if (Math.abs(s.speed) < 0.05 && stop < MOVE_OFF) stop = 0;
+    const hit = impactAhead(s.x, s.z, s.heading, dir, body, dir > 0 ? w.solids : w.walls, 40);
+    const cap = Math.min(contactSpeedCap(hit.free, caps.maxSpeed / JEEP_RAMP_TIME, hit.headOn), stop);
+    if (give.cap <= cap + 1e-9 && give.cap < Math.abs(ramped)) yieldFor = give.id; // braking (or held) for it
+    braked = cap < Math.abs(ramped) && want.throttle * dir > 0;
+    if (Math.abs(speed) > cap) speed = dir * cap;
+  }
+  // (4)-(5) the calm steer and the step: held back by a brake or pressed against
+  // something, a turn key keeps some authority, so it turns away instead of creeping on
+  const floor = (s.contact || s.braked || braked) && want.throttle !== 0 ? CONTACT_STEER : 0;
+  const steer = comfortSteer(steerWant, speed, caps, floor);
+  const st = driveStep(s.heading, { throttle: speed / caps.maxSpeed, steer }, dt, caps);
+  // (6) the body against every solid and zone
+  const n = resolveBody(s.x, s.z, s.heading, s.x + st.dx, s.z + st.dz, st.heading, body, w.walls, w.limits);
+  const moved = ((n.x - s.x) * Math.sin(s.heading) + (n.z - s.z) * Math.cos(s.heading)) / dt;
+  // pressed against something, the carried speed stays within the creep of what really
+  // happened: pressed head-on it drops to the creep (no pent-up surge when it slides
+  // free), sliding along a trunk it keeps what the slide keeps (it never ratchets down
+  // frame after frame)
+  if (n.contact) {
+    const real = Math.max(0, moved * Math.sign(speed));
+    speed = Math.sign(speed) * Math.min(Math.abs(speed), real + CONTACT_CREEP);
+  }
+  return { x: n.x, z: n.z, heading: n.heading, speed, contact: n.contact, braked, moved, yieldFor };
 }
 
 /* ----------------------------------------------------------- ground contact -- */
