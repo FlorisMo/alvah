@@ -299,11 +299,18 @@ export class EekhoornHome implements HomeDressing {
     if (!fresh) this.showHeap(true);
     for (const b of this.birds) {
       if (b.kind !== 'gaai') continue;
-      if (fresh && state === 'before' && b.fly < 0) {
-        // back up to its stub, if it came down
-        if (b.base.distanceTo(b.home) > 0.05 || b.glide) {
+      if (fresh && state === 'before') {
+        // back to its stub, if it left it: down from the ground by the store, or back
+        // in from its flight away (mid-flight, or from over the trees once it had gone)
+        if (b.fly >= 0) {
+          if (b.fly >= 99) b.o.position.copy(this.flightAt(b, 1));
+          b.fly = -1;
+          b.o.visible = true;
+        }
+        if (b.base.distanceTo(b.home) > 0.05 || b.glide || b.o.position.distanceTo(b.home) > 0.05) {
           const from = b.o.position.clone();
-          b.glide = { from, to: b.home.clone(), yaw0: b.o.rotation.y, yaw1: b.homeYaw, t: 0, dur: 1.2 };
+          const dur = Math.max(1.2, from.distanceTo(b.home) / 5); // (a jay glides ~5 m/s)
+          b.glide = { from, to: b.home.clone(), yaw0: b.o.rotation.y, yaw1: b.homeYaw, t: 0, dur };
         }
         continue;
       }
@@ -413,12 +420,21 @@ export class EekhoornHome implements HomeDressing {
     b.fly += dt;
     const T = 2.6;
     if (reduced || b.fly >= T) { b.o.visible = false; b.fly = 99; return; }
-    const u = b.fly / T;
-    // away from the stand, up over the canopy (never toward the lens)
-    const away = headingTo(EEKHOORN_PLACES.callers, { x: b.base.x, z: b.base.z }) - 0.5;
+    b.o.position.copy(this.flightAt(b, b.fly / T));
+    b.o.rotation.set(-0.35, this.flightHeading(b), 0.12 * Math.sin(b.fly * 9), 'YXZ');
+  }
+
+  /** Which way the jay flies off: away from the stand, over the canopy (never toward the lens). */
+  private flightHeading(b: Bird): number {
+    return headingTo(EEKHOORN_PLACES.callers, { x: b.base.x, z: b.base.z }) - 0.5;
+  }
+
+  /** Where the jay is `u` (0..1) of the way through its flight away: a hop off its
+   *  perch, then a rising curve up and away over the trees. */
+  private flightAt(b: Bird, u: number): THREE.Vector3 {
+    const away = this.flightHeading(b);
     const d = 14 * u * u + 1.2 * u;
-    b.o.position.set(b.base.x + Math.sin(away) * d, b.base.y + 0.25 * Math.sin(Math.min(1, u * 5) * Math.PI / 2) + 7 * u * u, b.base.z + Math.cos(away) * d);
-    b.o.rotation.set(-0.35, away, 0.12 * Math.sin(b.fly * 9), 'YXZ');
+    return new THREE.Vector3(b.base.x + Math.sin(away) * d, b.base.y + 0.25 * Math.sin(Math.min(1, u * 5) * Math.PI / 2) + 7 * u * u, b.base.z + Math.cos(away) * d);
   }
 
   dispose(): void {
