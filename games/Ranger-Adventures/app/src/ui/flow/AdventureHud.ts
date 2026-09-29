@@ -185,7 +185,7 @@ export class AdventureHud {
       const js = new Joystick();
       js.setVisible(joystickVisible(store.get().settings.joystick, coarsePointer()));
       this.el.appendChild(js.el);
-      world.setJoystick(() => js.vector());
+      world.setJoystick(() => js.vector(), (running) => js.setRunning(running)); // (the ring shows the run, as in free roam)
       this.joystick = js;
     } else if (!on && this.joystick) {
       this.joystick.dispose();
