@@ -60,6 +60,8 @@ export const SIZE = {
   // ── animals (the adult first: it is the model's default size) ───────────
   wildzwijn: { group: 'animals', h: 0.85, real: [0.75, 1.0], model: 'animal-wildzwijn-boar', len: 1.47,
     why: 'a sow: shoulder 0.65-0.85, the model tops out at its ears and hump; her back at a child\'s belly' },
+  overloper: { group: 'animals', h: 0.62, real: [0.5, 0.75], model: 'animal-wildzwijn-boar', len: 1.07,
+    why: 'a yearling wild boar (last year\'s young, reddish-brown): ≈ 70 % of the sow, shoulder 0.5-0.6' },
   frisling: { group: 'animals', h: 0.3, real: [0.25, 0.4], model: 'animal-frisling-piglet', len: 0.52,
     why: 'a striped piglet of a few months: shoulder ≈ 0.25-0.35, ≈ 0.5 m long' },
   ree: { group: 'animals', h: 1.1, real: [1.0, 1.2], model: 'animal-ree-roedeer', len: 1.12,
