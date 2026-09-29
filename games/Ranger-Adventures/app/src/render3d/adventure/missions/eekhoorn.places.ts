@@ -7,14 +7,15 @@
  *
  * Seen by a child walking up from the clearing: the marker ring in the wood, and right
  * past it the squirrel's PINE, the squirrel running up and down it. The squirrel leads
- * him off to the left, tree to tree: down its oak and over the forest floor to a first
- * pine (it waits on a branch stub there), a leap to the next pine and on to a third
- * (it waits again), then over the ground into its GLADE: an open patch of forest floor
- * with seven look-alike mossy spots (where it buries its acorns), a stump with its store
- * of acorns, a big oak at the side, and round it the neighbours' trees — a pine the jay
- * sits in, a dead snag the raven sits on, a pine the green woodpecker clings to.
+ * him off to the left, tree to tree: down its pine and over the forest floor to a
+ * second pine (it waits on a branch stub there), a leap to the next pine and on to a
+ * third (where it hides round the trunk until he walks round), then over the ground into
+ * its GLADE: an open patch of forest floor with seven look-alike mossy spots (where it
+ * buries its acorns), a stump with its store of acorns, a big oak at the side, and round
+ * the stump the neighbours — the pine by the store (the jay on its stub, the green
+ * woodpecker on its bark), a dead snag the raven sits on.
  *
- *   marker ── pine ── (dash) ── pine A · wait ── (leap) ── pine B ── (leap) ── pine C · wait
+ *   marker ── pine ── (dash) ── pine A · wait ── (leap) ── pine B ── (leap) ── pine C · hide
  *                                                                       └── (dash) ── the glade
  */
 
@@ -123,8 +124,10 @@ export const JAY_GROUND: Spot = g(-0.2, 1.45);
  *  its green back, its tail braced on the bark — never half behind the trunk. */
 export const WOODPECKER = { tree: HOME_TREES[5], h: 1.2, ang: headingTo(HOME_TREES[5], g(-1.0, -1.9)) + 1.5 } as const;
 
-/** Where the corsi's forgotten acorn grows into a seedling (after, on a later visit). */
-export const SEEDLING_SPOT = 6;
+/** Where a forgotten acorn grows into an oak seedling (after, on a later visit): in the
+ *  glade between the caching spots and the big oak, off every spot (the acorns the child
+ *  helped find are all back in the store: this one was forgotten long before). */
+export const SEEDLING_AT: Spot = g(1.6, 1.6);
 
 /** The places table. */
 export const EEKHOORN_PLACES = {
@@ -238,6 +241,7 @@ export function eekhoornClearings(): { x: number; z: number; r: number }[] {
     // the neighbours' corner: no fern in front of or behind the jay and the raven
     { x: JAY_GROUND.x, z: JAY_GROUND.z, r: 1.0 },
     { x: SNAG.x, z: SNAG.z, r: 1.3 },
+    { x: SEEDLING_AT.x, z: SEEDLING_AT.z, r: 0.8 },
     { ...g(0.1, 3.1), r: 1.6 },
   ];
 }

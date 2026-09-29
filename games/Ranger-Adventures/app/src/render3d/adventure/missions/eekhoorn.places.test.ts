@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_SPOT, JAY_GROUND,
+  EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_AT, JAY_GROUND,
   GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, HIDE_SEEN_AT, gladeSpots, eekhoornTreeClear, eekhoornClearings, hideSide,
 } from './eekhoorn.places.ts';
 import { biomeAt, VEN_CENTER, VEN_SHORE_R } from '../../Biomes.ts';
@@ -127,7 +127,9 @@ test('the glade: seven look-alike spots in the PRINT_SPOTS layout, uniformly sca
     const l = toLocal({ x: P.stand.x, z: P.stand.z, heading: P.stand.heading! }, p);
     assert.ok(l.v > 0.6 && Math.abs(Math.atan2(l.u, l.v)) < (50 * Math.PI) / 180, `spot ${p.id} is ahead in the view`);
   }
-  assert.ok(SEEDLING_SPOT >= 0 && SEEDLING_SPOT < s.length);
+  // the seedling grows in the glade, off every spot (not where an acorn was dug up)
+  for (const p of s) assert.ok(dist(SEEDLING_AT, p) > SPOT_SIZE, 'the seedling is off the spots');
+  assert.ok(dist(SEEDLING_AT, P.glade) < 3, 'the seedling is in the glade');
   // no fern grows through a spot
   for (const p of s) assert.ok(eekhoornClearings().some((c) => dist(c, p) < 0.01 && c.r >= SPOT_SIZE), `spot ${p.id} is kept bare`);
   // the view includes the ranger's spot and looks past him at the spots

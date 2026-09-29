@@ -1,19 +1,22 @@
 /**
  * eekhoorn.ts — "De verstopte nootjes" as an adventure in the world (design §4.4).
  *
- * The squirrel lives on its oak right by the marker: it runs down and round the trunk,
+ * The squirrel lives on its pine right by the marker: it runs down and round the trunk,
  * forages at its foot, sits on a branch stub, and chatters at the ranger when he comes
- * near. Once the mission starts it takes him to its glade: down the oak and over the
- * forest floor to a pine, where it sits on a stub and waits for him; a leap to the next
- * pine and on to a third, where it waits again; then into its glade. There it buries its
- * acorns in the moss, one spot after another, runs up the big oak — and forgets where
- * (CORSI: he points the spots out in order; it dashes to each, sniffs and digs it up; a
- * wrong spot, it sniffs and finds nothing, and the spots glow again as he remembers
- * them). With all its acorns back it piles them by its stump. Then the neighbours come
- * to see the store: the jay (the nut thief), the green woodpecker, the raven — and the
- * squirrel on its stump. They call, and he calls them back (SIMON). The jay flies off,
- * the squirrel sits on its stump and eats an acorn. Afterwards the store stays, the
- * squirrel lives at its glade, and a later visit finds an oak seedling at a forgotten spot.
+ * near. Once the mission starts the lens turns to it for one calm look (the child meets
+ * it on its stub), then it takes him to its glade: down its pine and over the forest
+ * floor to a second pine, where it waits on a stub for him; a leap to the next pine and
+ * on to a third, where it plays hide-and-seek round the trunk until he walks round and
+ * finds it; then into its glade. There it takes an acorn from its store and buries one in
+ * the moss at spot after spot, runs back to its stump — and forgets where (CORSI: he
+ * points the spots out in order; it dashes to each and digs the acorn up; a wrong spot,
+ * it sniffs and finds nothing, and the spots glow again as he remembers them). It brings
+ * the acorns back to its store. Then the jay (the nut thief) flies down to the store, the
+ * squirrel scolds it, and the neighbours call out — the squirrel on its stump, the jay,
+ * the green woodpecker on the pine, the raven on the dead snag: he calls them back
+ * (SIMON), and the jay gives up and flies off. The squirrel sits on its stump and eats an
+ * acorn. Afterwards the store stays, the squirrel lives in the pine by it, and a later
+ * visit finds an oak seedling where a forgotten acorn grew.
  *
  * Steps (content, the EF contract): 0 corsi · 1 simon, each logged once.
  */

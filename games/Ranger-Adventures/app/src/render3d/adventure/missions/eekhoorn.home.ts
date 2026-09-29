@@ -1,13 +1,15 @@
 /**
  * eekhoorn.home.ts — the squirrel's home in the world, built with the world (the THREE
- * half of eekhoorn.places.ts): the dead branch stubs it sits on (on its oak, on the
+ * half of eekhoorn.places.ts): the dead branch stubs it sits on (on its pine, on the
  * pines of its way), its GLADE — seven look-alike mossy cushions in the oak leaves where
  * it buries acorns, a stump with its store of acorns, a dead snag — and its neighbours:
- * the jay on a stub of its pine, the green woodpecker clinging to the next pine, the
- * raven on top of the snag. The trees themselves are forest trees (the world draws them).
+ * the jay on a stub of the pine by the store (it glides down to the acorns when they are
+ * piled), the green woodpecker clinging to the same pine, the raven on top of the snag.
+ * The trees themselves are forest trees (the world draws them). Plus the acorn being
+ * buried or dug up, and the little puffs of earth the squirrel throws as it digs.
  *
  * It stands before the mission and after it. After, the store is a bigger heap, the jay
- * has flown, and on a later visit a tiny oak seedling stands at one forgotten spot.
+ * has flown, and on a later visit a tiny oak seedling stands where an acorn was forgotten.
  */
 
 import * as THREE from 'three';
@@ -19,7 +21,7 @@ import { barkRadius, type Trunk } from '../squirrel-math';
 import type { SquirrelTree } from '../squirrel';
 import { SIZE } from '../../AnimalScale';
 import {
-  GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, JAY_GROUND, SEEDLING_SPOT, SNAG, SPOT_SIZE, STUMP, TREE, WOODPECKER, EEKHOORN_PLACES,
+  GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, JAY_GROUND, SEEDLING_AT, SNAG, SPOT_SIZE, STUMP, TREE, WOODPECKER, EEKHOORN_PLACES,
   gladeSpots, type HomeTree,
 } from './eekhoorn.places';
 import { headingTo } from '../places';
@@ -173,11 +175,11 @@ export class EekhoornHome implements HomeDressing {
     this.nut.visible = false;
     this.group.add(this.nut);
 
-    /* -- the seedling that grows at a forgotten spot (after, on a later visit) -- */
-    const sp = gladeSpots()[SEEDLING_SPOT];
+    /* -- the seedling a forgotten acorn grows into (after, on a later visit) -- */
+    const sp = SEEDLING_AT;
     this.seedling = new THREE.Mesh(seedlingGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
     this.seedling.name = 'oak-seedling';
-    this.seedling.position.set(sp.x + 0.05, g(sp.x, sp.z) + 0.03, sp.z - 0.04);
+    this.seedling.position.set(sp.x, g(sp.x, sp.z) + 0.01, sp.z);
     this.seedling.scale.setScalar(1.5); // (≈ 0.27 m: a first-year oak, big enough to spot)
     this.seedling.visible = false;
     this.group.add(this.seedling);
