@@ -12,6 +12,7 @@ import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { joystickVisible } from '../../core/input';
 import { HUD, HUB, HUT, TAG, vul } from '../../content/copy';
+import { BESTURING } from '../../content/mentor';
 import { provideHint, type HintState } from '../../core/devhook';
 import { ROEP_COPY } from '../../engines/roep';
 import type { WayCue } from '../../render3d/Wayfinding';
@@ -337,7 +338,7 @@ function mountHelpChip(hud: HTMLElement | null): void {
   const btn = document.createElement('button');
   btn.className = 'ra-pill explore-help';
   btn.type = 'button';
-  btn.setAttribute('aria-label', 'Zo speel je');
+  btn.setAttribute('aria-label', BESTURING.titel);
   btn.textContent = '?';
   hud.appendChild(btn);
   tipState.helpChip = true;

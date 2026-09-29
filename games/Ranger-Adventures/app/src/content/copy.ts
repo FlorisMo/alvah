@@ -159,7 +159,9 @@ export const HUB = {
   opgelost: 'opgelost',
   boekVraag: 'Wat is hier aan de hand?',
   nietGevonden: 'Nog niet gevonden',
-  veldnotities: 'Veldnotities · {n}/{m}',
+  /** The facts collected on missions: the same name as the card they came on (a
+   *  "Veldnotitie" is Bram's note on a briefing; the code calls both veldnotities). */
+  veldnotities: 'Wist je dat? · {n}/{m}',
   geenNotities: 'Speel een missie. Dan komen ze hier.',
   geenSporen: 'Los missies op. Aanwijzingen komen hier.',
   gestopt: ['De stroper is gestopt.', 'Alles groeit weer terug.'],
