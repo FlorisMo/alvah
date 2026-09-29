@@ -177,16 +177,19 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   await k.act(c.pakKnop, c.pak);
   home.pickUp(k.ranger(), k.reduced);
   if (settings.geluid) Sound.step();
-  // he steps onto the wildwissel where it leaves the ring, and the view looks along it
-  // into the wood (one calm move; the follow camera takes over from there, facing the way)
-  // (he walks a few steps out of the ring onto it, the follow camera behind him; then
-  // one calm move to the look along it, from about where the follow camera stands)
+  // he steps onto the wildwissel where it leaves the ring while the view glides round
+  // behind him to look along it into the wood (one calm move, whichever side he came
+  // from: he walks into the view it lands on); once the path is in view and he stands
+  // on it, the words say so (the follow camera takes over from there, facing the way)
   k.beat = 'pad';
-  k.say(c.kijkPad);
+  k.say(null);
+  const framed = k.frame(TRAIL_VIEW);
+  framed.catch(() => {}); // (a stop during his steps: the walk's own guard ends the story)
   await k.walkRanger(P.trailStart.x, P.trailStart.z, 0.05);
   k.world.faceRanger(TRAIL_VIEW.heading);
-  await k.frame(TRAIL_VIEW, { face: TRAIL_VIEW.heading });
-  await k.wait(2.0);
+  await framed;
+  k.say(c.kijkPad);
+  await k.wait(2.2);
 
   /* 2 · follow the wildwissel into the wood, to the crossing */
   await k.walk({ name: 'wissel', to: P.crossApproach, r: P.crossApproach.r, line: c.volg, doel: c.chipPad, cue: c.sporen });
