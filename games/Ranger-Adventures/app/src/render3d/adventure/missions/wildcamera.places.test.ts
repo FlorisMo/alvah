@@ -12,7 +12,7 @@ import test from 'node:test';
 import {
   WILDCAMERA_PLACES as P, MARKER, TREE, CAMERA, CROSS, CROSS_VIEW, CALLER_SPOTS, LOG, PINE,
   WILDCAMERA_HOME, WILDCAMERA_RESIDENTS, AIM_AT, FAN_HALF, JUNIPER, aimSpot, cameraAim, swivel, trailA, trailB,
-  NIGHTJAR_AT, NIGHTJAR_STUMP, TAG_AT, THICKET_BUSHES, SETT_MOUND,
+  NIGHTJAR_AT, NIGHTJAR_STUMP, TAG_AT, THICKET_BUSHES, SETT_MOUND, ROE_HIDEAWAY, ROE_SHY_WITHIN,
   wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW, VAL_VIEW, SETT_FACE,
 } from './wildcamera.places.ts';
 import { anchorInBiome, biomeAt } from '../../Biomes.ts';
@@ -233,9 +233,19 @@ test('the ground: the glade, the thicket and the trail keep clear of trees; the 
   void CROSS;
 });
 
-test('nobody stands about in daylight before; after, the roe grazes in the glade', () => {
-  for (const r of WILDCAMERA_RESIDENTS) assert.equal(r.before, null, `${r.key} is not there before`);
+test('before and after, the roe grazes in the glade (shy of him before); nobody else stands about in daylight', () => {
+  const v = { x: CROSS_VIEW.at.x, z: CROSS_VIEW.at.z, heading: CROSS_VIEW.heading };
   const roe = WILDCAMERA_RESIDENTS.find((r) => r.key === 'ree')!;
-  assert.ok(roe.after && dist(roe.after, P.glade) < P.glade.r && roe.after.idle === 'graze');
-  for (const r of WILDCAMERA_RESIDENTS) if (r.key !== 'ree') assert.equal(r.after, null);
+  for (const pose of [roe.before, roe.after]) assert.ok(pose && dist(pose, P.glade) < P.glade.r && pose.idle === 'graze', 'the roe grazes in the glade');
+  for (const r of WILDCAMERA_RESIDENTS) if (r.key !== 'ree') assert.ok(r.before === null && r.after === null, `${r.key} is out in the wood`);
+  // before, she is shy: she lifts her head and goes in under the trees as he comes along
+  // the game trail (well before he reaches the crossing), away from him, to where the
+  // glade's animals come from — out of the camera's view over the crossing
+  const shy = roe.shy?.find((q) => q.state === 'before');
+  assert.ok(shy && shy.within === ROE_SHY_WITHIN, 'shy before the mission');
+  assert.ok(dist(P.crossApproach, roe.before!) < ROE_SHY_WITHIN - 3, 'she goes before he reaches the crossing');
+  assert.ok(dist(ROE_HIDEAWAY, P.crossApproach) > dist(roe.before!, P.crossApproach) + 4, 'away from him');
+  assert.ok(dist(ROE_HIDEAWAY, aimSpot('ree', 'open').from) < 0.01, 'she comes back from there for the photos');
+  assert.ok(Math.abs(toLocal(v, ROE_HIDEAWAY).u) > CROSS_VIEW.halfW + 3, 'out of the view over the crossing');
+  assert.ok(wildcameraTreeClearings().every((c) => dist(c, ROE_HIDEAWAY) > c.r - 0.5), 'in under the trees');
 });

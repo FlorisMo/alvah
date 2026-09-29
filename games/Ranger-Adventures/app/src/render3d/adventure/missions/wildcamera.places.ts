@@ -132,8 +132,11 @@ export const WILDCAMERA_PLACES = {
   /** a few steps along the wildwissel out of the marker ring: he steps onto it, facing
    *  the wood (far enough from the stump that the follow camera behind him has room) */
   trailStart: { x: 12.95, z: -17.35, r: 0.3, heading: 0 },
-  /** the home place: the ranger ends near it (golden step 8, missions.spec) */
-  home: { ...TREE },
+  /** the home place: where the family lives (the roe's glade); the ranger ends near it
+   *  (missions.spec) */
+  home: { ...GLADE },
+  /** the camera pine (the camera hangs on it after the mission) */
+  pine: { ...TREE },
 } as const satisfies Record<string, Place>;
 
 /* ------------------------------------------------------------ the trails ---- */
@@ -312,17 +315,30 @@ export function wildcameraTrees(): { x: number; z: number; s: number; rotY: numb
 
 /* ------------------------------------------------------------- the home ---- */
 
+/** Where the roe grazes in the glade (before the mission, and again after it). */
+const ROE_GRAZE = { ...at(-4.6, -1.8), yaw: VIEW_H + Math.PI / 2 + 0.4, idle: 'graze', roam: 0.5 } as const;
+/** Where the shy roe slips off to when the ranger comes along the game trail: in under
+ *  the trees beyond the glade, the way the glade's animals come and go (out of the
+ *  camera's view over the crossing; she comes back from there for the photos). */
+export const ROE_HIDEAWAY: Spot & { yaw: number } = { ...at(-10.5, -0.6), yaw: VIEW_H - Math.PI / 2 };
+/** How near the ranger comes before the grazing roe lifts her head and goes (m). */
+export const ROE_SHY_WITHIN = 11;
+
 /**
  * Who lives here: the animals the camera photographs and the night callers — a red deer
- * stag, a roe, a badger, a wild boar and a nightjar. None of them stands about in the
- * daylight (before or after): they are in the wood, and come by while the camera
- * watches, each walking (or flying) in from out of view.
+ * stag, a roe, a badger, a wild boar and a nightjar. The roe grazes in the glade (the
+ * deer's place: the child sees her from the game trail, and she slips off into the wood
+ * as he comes — who comes back when nobody is there is what the camera is for); the
+ * badger sleeps in its sett by day; the stag, the boar and the nightjar are out in the
+ * wood. None of them pops up: each walks (or flies) in. After, the roe grazes in the
+ * glade again.
  */
 const nobody = (key: string, animal: string): ResidentSpec => ({ key, animal, before: null, after: null });
 export const WILDCAMERA_RESIDENTS: readonly ResidentSpec[] = [
   nobody('edelhert', 'edelhert'),
-  // after: the roe the camera photographed in the morning grazes in the glade
-  { key: 'ree', animal: 'ree', before: null, after: { ...at(-4.6, -1.8), yaw: VIEW_H + Math.PI / 2 + 0.4, idle: 'graze', roam: 0.5 } },
+  { key: 'ree', animal: 'ree', before: ROE_GRAZE, after: ROE_GRAZE,
+    // (in free roam before the mission, too: she steps in under the trees when he comes)
+    shy: [{ within: ROE_SHY_WITHIN, back: ROE_SHY_WITHIN + 5, to: { ...at(-8.6, -0.9), yaw: ROE_HIDEAWAY.yaw }, state: 'before' }] },
   nobody('das', 'das'),
   nobody('wildzwijn', 'wildzwijn'),
 ];

@@ -649,8 +649,9 @@ test('a mission picked on the missiebord: played at its OWN marker (the pick bri
 
 /** Run 6 · De wildcamera: the day turns into night while it plays; whatever happens, the
  *  golden hour comes back — after "Stop de missie" in the middle of the night, and on a
- *  reload — and the camera lies on its stump again until the mission is done; once it is
- *  done, it hangs on its pine (after a reload too) and the roe grazes in the glade. */
+ *  reload — and the camera lies on its stump again until the mission is done (the roe
+ *  back at home in her glade); once it is done, it hangs on its pine (after a reload
+ *  too) and the roe grazes in the glade. */
 type Sky = { daylight?: number } | null;
 const daylight = async (page: Page): Promise<number> => (await R<Sky>(page, 'r.sky()'))?.daylight ?? 1;
 const near = async (page: Page, p: P2, r: number, id: string): Promise<boolean> =>
@@ -681,9 +682,13 @@ test('De wildcamera: stopped in the night, the golden hour comes back and the ca
     await log.shot('after-stop');
     const home = await homeOf(page, 'wildcamera');
     log.soft(home?.state === 'before' && !home.borrowed, `the home is back in its before state (${home?.state}, borrowed ${home?.borrowed})`);
-    log.soft(!!home && home.actors.every((a) => !a.visible), 'no animal is left standing about');
+    // (only the roe, back at home in her glade or stepped in under its trees: she grazes
+    // there before the mission, and is shy of him)
+    const about = home?.actors.filter((a) => a.visible) ?? [];
+    log.soft(about.every((a) => a.key === 'ree' && Math.hypot(a.x - places.home.x, a.z - places.home.z) < 6),
+      `no animal is left standing about, only the roe at her glade (${about.map((a) => a.key).join(', ') || 'none'})`);
     log.soft(await near(page, marker, 1.2, 'camera-on-stump'), 'the camera lies on its stump again');
-    log.soft(!(await near(page, places.home, 1.5, 'camera-trap')), 'no camera on the pine yet');
+    log.soft(!(await near(page, places.pine, 1.5, 'camera-trap')), 'no camera on the pine yet');
     await page.reload();
     await click(log, 'Begin', 'title after reload', 30_000);
     await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
@@ -710,7 +715,7 @@ test('De wildcamera done: after a reload the camera hangs on its pine, the roe g
     log.soft(home?.state === 'after', `the home is in its after state (${home?.state})`);
     const roe = home?.actors.find((a) => a.key === 'ree');
     log.soft(!!roe?.visible && Math.hypot(roe.x - places.glade.x, roe.z - places.glade.z) < 2.5, 'the roe grazes in the glade');
-    log.soft(await near(page, places.home, 1.5, 'camera-trap'), 'the camera hangs on its pine');
+    log.soft(await near(page, places.pine, 1.5, 'camera-trap'), 'the camera hangs on its pine');
     const all = await R<(P2 & { missionId: string })[]>(page, 'r.markers()');
     const m = all.find((x) => x.missionId === 'wildcamera')!;
     log.soft(!(await near(page, m, 1.2, 'camera-on-stump')), 'the stump at the marker is empty');

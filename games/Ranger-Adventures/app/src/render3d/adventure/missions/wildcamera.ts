@@ -34,7 +34,8 @@ import { WildcameraHome } from './wildcamera.home';
 import { PhotoStrip, develop, type Photo } from './wildcamera.photos';
 import {
   WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, SNARE_VIEW, VAL_VIEW, STRAP_VIEW, CALLER_SPOTS, LOG,
-  AIM_AT, CAMERA, aimSpot, cameraAim, wildcameraClearings, wildcameraTreeClearings, wildcameraTrees, type AimSpot,
+  AIM_AT, CAMERA, ROE_HIDEAWAY, ROE_SHY_WITHIN, aimSpot, cameraAim, wildcameraClearings, wildcameraTreeClearings, wildcameraTrees,
+  type AimSpot,
 } from './wildcamera.places';
 
 export const wildcameraAdventure: Adventure = {
@@ -134,6 +135,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       return;
     }
     const a = A[id as Walker];
+    if (id === 'ree') roeTaken = true;
     if (!a.group.visible) {
       a.place(s.from.x, s.from.z, headingTo(s.from, s.at));
       a.group.visible = true;
@@ -164,6 +166,30 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     if (a.lies) void a.lie(false);
     void a.go(s.from.x, s.from.z, { speed: PACE[id] ?? 1.1 }).then((ok) => {
       if (ok && leaving.get(id) === t) { a.group.visible = false; a.idle(); }
+    });
+  };
+
+  /* 0 · the roe grazes in the glade (the deer's place); as he comes along the game trail
+         she lifts her head, looks at him and walks calmly in under the trees beyond it,
+         away from him — who comes back when nobody is there is what the camera is for.
+         Once the camera watches, she is out of its view (and comes back from there) */
+  let roeShy = A.ree.group.visible;
+  let roeGone: Promise<boolean> | null = null;
+  let roeTaken = false;
+  const unwatchRoe = k.onTick(() => {
+    if (!roeShy || roeGone) return;
+    const me = k.ranger(), a = A.ree;
+    if (Math.hypot(me.x - a.x, me.z - a.z) > ROE_SHY_WITHIN) return;
+    roeGone = a.lookAt(() => ({ x: k.ranger().x, z: k.ranger().z, speed: 0 }), 1.3)
+      .then((ok) => (ok && !roeTaken ? a.go(ROE_HIDEAWAY.x, ROE_HIDEAWAY.z, { speed: 'walk', face: ROE_HIDEAWAY.yaw }) : false));
+  });
+  /** the camera starts watching: the roe (out of its view under the trees) is gone */
+  const roeOut = (): void => {
+    unwatchRoe();
+    if (!roeShy) return;
+    roeShy = false;
+    void (roeGone ?? Promise.resolve(true)).then((ok) => {
+      if (ok && !roeTaken) { A.ree.group.visible = false; A.ree.idle(); }
     });
   };
 
@@ -223,7 +249,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       open: { pick: home.glade, hint: home.gladeHint },
       hol: { pick: home.thicket, hint: home.thicketHint },
     },
-    begin: () => { home.showTags(true); home.showFan(true); },
+    begin: () => { roeOut(); home.showTags(true); home.showFan(true); },
     end: () => { home.showTags(false); home.showFan(false); },
     look: async (bin) => {
       home.aim(cameraAim(AIM_AT[bin]), k.reduced);
