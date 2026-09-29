@@ -190,3 +190,40 @@ test('keyboard: Shift + ArrowUp runs, ArrowUp walks briskly, backing up and Shif
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });
+
+/**
+ * Run 6 (FLOW): Enter always means "the button I would expect". A child who CLICKS a
+ * swatch and then presses Enter gets "Dit is mijn ranger" (the maker closes), not that
+ * swatch again. A child who moves to a swatch WITH KEYS (Tab, then an arrow) and presses
+ * Enter picks that swatch, and the maker stays. Real keys and a real mouse.
+ */
+test('keyboard: after a clicked swatch Enter is Dit is mijn ranger; a swatch reached by keys keeps Enter', async ({ page }, testInfo) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Begin' }).click();
+  const klaar = page.getByRole('button', { name: 'Dit is mijn ranger' });
+  await expect(klaar).toBeVisible({ timeout: 30_000 });
+
+  // keys: from the name field, Tab to the first swatch row, → to the next swatch, Enter picks it
+  await page.getByRole('textbox').click();
+  const label = (): Promise<string> => page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '');
+  for (let i = 0; i < 12 && !(await label()).startsWith('Huid:'); i++) await page.keyboard.press('Tab');
+  expect(await label(), 'Tab reaches the skin row').toBe('Huid: Licht');
+  await page.keyboard.press('ArrowRight');
+  expect(await label(), '→ moves to the next swatch').toBe('Huid: Getint');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('radio', { name: 'Huid: Getint' }), 'Enter picks the swatch reached by keys').toHaveAttribute('aria-checked', 'true');
+  expect(await hook(page, (r) => r.screen), 'and the maker stays').toBe('avatar');
+
+  // mouse: click a swatch, then Enter is the primary button
+  await page.getByRole('radio', { name: 'Huid: Donker' }).click();
+  await expect(page.getByRole('radio', { name: 'Huid: Donker' })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => hook(page, (r) => r.screen), { timeout: 10_000, message: 'Enter after a clicked swatch is Dit is mijn ranger' }).toBe('world');
+  await expect(klaar).toBeHidden();
+
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
