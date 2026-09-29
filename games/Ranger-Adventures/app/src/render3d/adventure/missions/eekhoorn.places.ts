@@ -155,18 +155,29 @@ export function gladeSpots(): (Spot & { id: number })[] {
 }
 
 /** The one look at the start (design §3.6: an establishing look): the child meets the
- *  squirrel on its branch stub. The lens stands off to the side of the marker ring,
- *  where the stub points (so the squirrel is seen from the front, the trunk solid behind
- *  it, and the ranger out of the picture, never his head in front of the lens). */
+ *  squirrel on its branch stub. The lens stands on his side of the pine, turned ~40° off
+ *  the line from him to the squirrel (so his head is not in front of it, and the trunk
+ *  never stands between the lens and him), on the side the squirrel will lead him to
+ *  (so the hand-over to the follow camera behind him is a short, calm move). */
 const STUB_AT: Spot = (() => {
   const t = HOME_TREES[0], b = t.branch!;
   const r = barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, b.h) + b.out;
   return { x: t.x + Math.sin(b.ang) * r, z: t.z + Math.cos(b.ang) * r };
 })();
-export const INTRO_VIEW = {
-  at: STUB_AT, heading: headingTo(OAK_AT, MARKER) - 1.0 + Math.PI,
-  halfW: 0.75, halfD: 0.4, tall: 1.95, pitchDeg: 8, insetTop: 104, insetBottom: 60,
-} as const;
+const INTRO_OFF = 0.7;
+const INTRO_D = 2.8; // (≈ where the lens fit lands: for choosing the side only)
+export function introView(me: Spot): {
+  at: Spot; heading: number; halfW: number; halfD: number; tall: number; pitchDeg: number; insetTop: number; insetBottom: number;
+} {
+  const toStub = headingTo(me, STUB_AT);
+  // the follow camera will stand behind him, looking where the squirrel runs (pine A)
+  const on = headingTo(me, PINE_A);
+  const follow = { x: me.x - Math.sin(on) * 4, z: me.z - Math.cos(on) * 4 };
+  const lensOf = (h: number): Spot => ({ x: STUB_AT.x - Math.sin(h) * INTRO_D, z: STUB_AT.z - Math.cos(h) * INTRO_D });
+  const a = toStub + INTRO_OFF, b = toStub - INTRO_OFF;
+  const heading = Math.hypot(lensOf(a).x - follow.x, lensOf(a).z - follow.z) < Math.hypot(lensOf(b).x - follow.x, lensOf(b).z - follow.z) ? a : b;
+  return { at: STUB_AT, heading, halfW: 0.55, halfD: 0.3, tall: 1.85, pitchDeg: 8, insetTop: 104, insetBottom: 60 };
+}
 
 /** The framed views (design §3.6): the glade floor from above for the acorns (corsi),
  *  the stump in the picture too (where the squirrel sits when it forgets); and the

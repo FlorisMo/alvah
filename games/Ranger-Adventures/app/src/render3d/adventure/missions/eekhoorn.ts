@@ -36,7 +36,7 @@ import { dist, headingTo } from '../places';
 import { TREE_BASE_H } from '../../world/Forest';
 import { EekhoornHome, type Neighbour } from './eekhoorn.home';
 import {
-  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HOME_TREES, INTRO_VIEW, JAY_GROUND, STUMP, HIDE_SEEN_AT, hideSide,
+  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HOME_TREES, JAY_GROUND, STUMP, HIDE_SEEN_AT, hideSide, introView,
   eekhoornClearings, eekhoornTreeClear,
 } from './eekhoorn.places';
 
@@ -142,7 +142,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   //     child meets the squirrel he is going to follow; then the follow camera is back.
   k.beat = 'den';
   await k.guard(sq.goBranch(oak, faceMe(sq.branchPose(oak))));
-  await k.frame(INTRO_VIEW, { face: headingTo(k.ranger(), oak.trunk) });
+  await k.frame(introView(k.ranger()), { face: headingTo(k.ranger(), oak.trunk) });
   k.say(c.daar);
   chatter();
   await k.wait(1.5);
