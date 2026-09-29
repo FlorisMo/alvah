@@ -22,6 +22,7 @@ import { showBriefing, goToMission } from '../flow/MissionFlow';
 import { playRoepAtSitSpot, nextMissionId } from '../flow/WorldSession';
 import { showPauseHub, showMissionBoard, showControls } from '../hub/Hub';
 import { startGuide, stopGuide, mountGuide, chipHeld, guideSnapshot } from './Lessons';
+import { speaking } from './Speaker';
 
 // the on-screen joystick (W1.3) lives inside the explore HUD; re-created each
 // time the HUD renders, disposed here so its listeners never outlive the world.
@@ -139,7 +140,7 @@ function enterCap(): string {
 /** How to drive / fly and how to get out: a short line (≤ 7 words, dyslexia-friendly
  *  arrows) shown with the vehicle's own button, device-aware like the walk hint. */
 const DRIVE_KEYS = '⬆ gas · ⬇ rem · ⬅ ➡ sturen';
-const DRIVE_OUT_KEYS = 'Stap uit met de spatiebalk.';
+const DRIVE_OUT_KEYS = ONBOARD_DRIVE.uit;
 const FLY_KEYS = 'Vlieg met de pijltjes.';
 const LANDING = 'De helikopter landt.';
 
@@ -158,7 +159,7 @@ export function renderVehiclePrompt(): void {
     const lines = stickShown() ? [ONBOARD_DRIVE.stick] : [DRIVE_KEYS, DRIVE_OUT_KEYS];
     prompt.innerHTML =
       `<p class="explore-heli-hint explore-drive-hint">${lines.map(esc).join('<br>')}</p>` +
-      `<button class="btn-start explore-vehicle-exit" type="button">🚙 Stap uit</button>`;
+      `<button class="btn-start explore-vehicle-exit" type="button">🚙 Stap uit${enterCap()}</button>`;
     prompt.querySelector('.explore-vehicle-exit')?.addEventListener('click', () => session.world?.exitVehicle());
   } else {
     prompt.innerHTML = `<button class="btn-start explore-vehicle-enter" type="button">🚙 Stap in de jeep${enterCap()}</button>`;
@@ -275,7 +276,9 @@ export function showDriveHint(): void {
   if (driveHintSpoken) return;
   driveHintSpoken = true;
   if (!store.get().settings.voorlezen) return;
-  narrator.speak(stickShown() ? ONBOARD_DRIVE.stick : `${ONBOARD_DRIVE.keys} ${DRIVE_OUT_KEYS}`);
+  const line = stickShown() ? ONBOARD_DRIVE.stick : `${ONBOARD_DRIVE.keys} ${DRIVE_OUT_KEYS}`;
+  // Bram talking: after his line, never over it (his strip waits for the voice)
+  if (speaking()) narrator.queue(line); else narrator.speak(line);
 }
 
 /** F-11: the calm world-boundary cue, through the same one-tip channel. */

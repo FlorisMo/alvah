@@ -15,10 +15,12 @@ export const ONBOARD_BOUNDARY = 'Hier stopt het bos.';
 export const ONBOARD_DRIVE = {
   stick: 'Sleep de stick om te rijden.',
   keys: 'Rijd met de pijltjes.',
+  // how to get out on a laptop: Enter, the one key every world prompt teaches
+  uit: 'Stap uit met Enter.',
 } as const;
 
 /** Every transient onboarding tip, for the reading-norm test (≤7 words each). */
-export const ONBOARD_TIPS = [ONBOARD_BOUNDARY, ONBOARD_DRIVE.stick, ONBOARD_DRIVE.keys] as const;
+export const ONBOARD_TIPS = [ONBOARD_BOUNDARY, ONBOARD_DRIVE.stick, ONBOARD_DRIVE.keys, ONBOARD_DRIVE.uit] as const;
 
 /**
  * Device-aware wording: every hint is written for touch ("Tik op een dier"); on a

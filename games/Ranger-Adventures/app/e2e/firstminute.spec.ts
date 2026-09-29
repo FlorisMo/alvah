@@ -1,8 +1,9 @@
 import { test, expect, devices, type Page, type TestInfo } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { R, walkTo, sleep, type P2 } from './golden-lib';
+import { R, walkTo, sleep, type P2, type Vehicle } from './golden-lib';
 import { BRAM, LES, BESTURING, metNaam } from '../src/content/mentor';
+import { ONBOARD_DRIVE } from '../src/core/onboarding';
 import { AREA_VELUWE } from '../src/content/veluwe';
 
 /**
@@ -16,6 +17,8 @@ import { AREA_VELUWE } from '../src/content/veluwe';
  *   tag glow. Tags never overlap, never sit cut at the edge, and only the next mission,
  *   the Missiebord and near ones show. At the marker "Speel mee" carries an Enter cap and
  *   Enter opens the briefing. A reload never repeats a learned lesson.
+ *   A child who drives off in the jeep during the greeting still hears the hook and gets
+ *   the chip in the jeep; the run lesson waits until he is on foot again.
  *
  * The dev hook is only READ (what Bram says, which lesson is up, the tags on screen).
  * Screenshots of every beat: test-results/firstminute/.
@@ -284,6 +287,66 @@ test('not pressing Shift: the run lesson gives way and the hook and the chip sti
   // (the voice spy starts afresh with the page) the new boswachter's greeting is not said again
   const again = (await saidAll(page)).filter((l) => BRAM.intro.map((x) => metNaam(x, naam)).includes(l) || LES.lopen.keys === l);
   expect(again, 'after a reload neither the greeting nor the walk lesson again').toEqual([]);
+});
+
+test('a curious child drives off during the greeting: the hook and the chip come in the jeep, the run lesson once he is out', async ({ page }, testInfo) => {
+  test.setTimeout(4 * 60_000);
+  shotsInto(testInfo, 'jeep');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
+  await spyVoice(page);
+  await enterFresh(page);
+  await expect.poll(async () => (await hint(page)).active, { timeout: 20_000 }).toBe('bram');
+  // straight to the jeep while Bram is still greeting him (real arrow keys)
+  const v0 = (await R<Vehicle>(page, 'r.vehicle()'))!;
+  const w = await walkTo(page, v0, { stopDist: 0.3, until: (s) => s.jeepNear, timeout: 60_000 });
+  expect(w.res, `walking to the jeep (${w.res})`).toBe('until');
+  const atJeep = await hint(page);
+  expect(atJeep.learned, 'the hook is still to come when he reaches the jeep').not.toContain('haak');
+  const enter = page.getByRole('button', { name: 'Stap in de jeep' });
+  await expect(enter.locator('.kcap-in')).toHaveText('Enter');
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await R<Vehicle>(page, 'r.vehicle()'))?.inVehicle, { timeout: 5_000, message: 'Enter gets him into the jeep' }).toBe(true);
+  // the drive line teaches the same key as every other prompt, and "Stap uit" wears its cap
+  await expect(page.locator('.explore-drive-hint')).toContainText(ONBOARD_DRIVE.uit);
+  await expect(page.getByRole('button', { name: 'Stap uit' }).locator('.kcap-in')).toHaveText('Enter');
+  await snapShot(page, 'in-jeep');
+
+  // he drives about; the hook comes while he is in the jeep, and the chip with it
+  const hook = BRAM.haak.simpel;
+  const t0 = Date.now();
+  let turn = false;
+  while (!(await stripLines(page)).includes(hook[2]) && Date.now() - t0 < 45_000) {
+    await page.keyboard.down('ArrowUp'); if (turn) await page.keyboard.down('ArrowLeft');
+    await sleep(page, 1_200);
+    await page.keyboard.up('ArrowLeft'); await page.keyboard.up('ArrowUp');
+    await sleep(page, 900);
+    turn = !turn;
+    expect(await page.locator('.lesson-strip').count(), 'no lesson on foot shows (or waits on screen) in the jeep').toBe(0);
+  }
+  await bramSays(page, hook[0], 1_000);
+  await bramSays(page, hook[2], 1_000);
+  await expect(page.locator('.explore-wayfind'), 'the chip appears with the hook, in the jeep').toBeVisible({ timeout: 3_000 });
+  await expect(page.locator('.explore-wayfind .wf-doel')).toHaveText(FIRST.titel);
+  expect((await R<Vehicle>(page, 'r.vehicle()'))?.inVehicle, 'still in the jeep').toBe(true);
+  await snapShot(page, 'hook-in-jeep');
+  await expect(page.locator('.speaker-strip')).toHaveCount(0, { timeout: 12_000 });
+  const learned = (await hint(page)).learned;
+  expect(learned).toContain('haak');
+  expect(learned, 'the run was not learned in the jeep').not.toContain('rennen');
+
+  // out of the jeep (Enter): the run lesson comes, as he is on foot again
+  await page.keyboard.press('Enter');
+  await expect.poll(async () => (await R<Vehicle>(page, 'r.vehicle()'))?.inVehicle, { timeout: 5_000, message: 'Enter gets him out' }).toBe(false);
+  const run = page.locator('.lesson-strip.ls-rennen');
+  await expect(run, 'the run lesson comes once he is on foot').toBeVisible({ timeout: 6_000 });
+  await expect.poll(async () => (await saidAll(page)).includes(LES.rennen.keys)).toBe(true);
+  await snapShot(page, 'out-run-lesson');
+  // the drive line is read aloud too (queued behind Bram's line, never cutting it off)
+  const said = await saidAll(page);
+  const drive = said.findIndex((l) => l.includes(ONBOARD_DRIVE.uit));
+  expect(drive, 'the drive line is read aloud').toBeGreaterThanOrEqual(0);
+  expect(errors).toEqual([]);
 });
 
 test('the "?" chip opens "Zo speel je" with key caps, read aloud; Esc closes it', async ({ page }) => {
