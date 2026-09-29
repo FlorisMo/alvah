@@ -490,7 +490,7 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
   expect(errors).toEqual([]);
 });
 
-test('vehicle: the stick pushed only sideways still drives and turns (audit veh-05)', async ({ page }, testInfo) => {
+test('vehicle: the stick pushed only sideways still drives and turns (audit veh-05); up and aside at its rim it keeps full gas', async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
@@ -517,6 +517,22 @@ test('vehicle: the stick pushed only sideways still drives and turns (audit veh-
   expect(Math.hypot(b.x - a.x, b.z - a.z), 'a sideways push rolls the jeep forward').toBeGreaterThan(2);
   const turned = Math.atan2(Math.sin(b.heading - a.heading), Math.cos(b.heading - a.heading));
   expect(turned, 'and turns it to the right (right lowers the yaw)').toBeLessThan(-0.3);
+
+  // run 6: the stick pushed up and to the left, out to its rim, keeps full gas while it
+  // turns (on the iPad as with Up + Left on the keys)
+  await page.waitForTimeout(800);
+  const c = (await hook(page, (r) => r.vehicle()))!;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx - 75, cy - 75, { steps: 8 });
+  let top = 0;
+  const t0 = Date.now();
+  while (Date.now() - t0 < 3_000) { top = Math.max(top, (await hook(page, (r) => r.vehicle()))!.speed); await page.waitForTimeout(80); }
+  await page.mouse.up();
+  const d = (await hook(page, (r) => r.vehicle()))!;
+  const left = Math.atan2(Math.sin(d.heading - c.heading), Math.cos(d.heading - c.heading));
+  expect(top, 'up-left at the rim: full speed while it turns').toBeGreaterThan(5.7);
+  expect(left, 'turning left (left raises the yaw)').toBeGreaterThan(0.3);
 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);

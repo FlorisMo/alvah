@@ -446,8 +446,9 @@ test('full gas is full speed: W reaches 6 m/s in ~1 s and holds it; W+D keeps it
   let at11 = 0, low = Infinity;
   hold(jeep(), KEY(1), 4, world(), (f, t) => { if (Math.abs(t - 1.1) < 1 / 120) at11 = f.moved; if (t > 1.1) low = Math.min(low, f.moved); });
   assert.ok(at11 > 5.9 && low > 5.99, `W: ${at11.toFixed(2)} m/s at 1.1 s, never below ${low.toFixed(2)} after`);
-  let slow = Infinity, peak = 0;
-  hold(jeep(0, 0, 0, 6), KEY(1, 1), 6, world(), (f, _t, yaw) => { slow = Math.min(slow, f.moved); peak = Math.max(peak, Math.abs(yaw)); });
+  let slow = Infinity, peak = 0, braked = false;
+  hold(jeep(0, 0, 0, 6), KEY(1, 1), 6, world(), (f, _t, yaw) => { slow = Math.min(slow, f.moved); peak = Math.max(peak, Math.abs(yaw)); if (f.brake) braked = true; });
+  assert.ok(!braked, 'nothing in the way: no brake ever acts');
   assert.ok(slow > 5.99, `W+D keeps full speed through the turn (slowest ${slow.toFixed(2)} m/s)`);
   assert.ok(peak <= 0.6 + 1e-6 && peak > 0.59, `and turns at the calm ${peak.toFixed(3)} rad/s (a ~10 m circle)`);
 });
@@ -466,7 +467,7 @@ test('give way: a grazing animal in the path — a smooth stop a metre short, ne
   let minGap = Infinity, decel = 0, prev = 0, named = false;
   const j = hold(jeep(), KEY(1), 10, world({ animals: [ree] }), (f) => {
     minGap = Math.min(minGap, bodyGapTo(f, ree)); decel = Math.max(decel, (prev - f.speed) * 60); prev = f.speed;
-    if (f.yieldFor === ree.id) named = true;
+    if (f.yieldFor === ree.id && f.brake === 'animal') named = true;
   });
   assert.ok(j.speed === 0 && j.braked, 'it stands, held, while the gas is still on');
   assert.ok(minGap >= YIELD_GAP - 0.05 && minGap < YIELD_GAP + 0.3, `it stopped ${minGap.toFixed(2)} m short of the animal`);
@@ -551,8 +552,9 @@ test('the forest edge: met at a slant the jeep curves along the tree line at spe
 test('the forest edge: driven at it head-on the jeep stops cleanly short of it — no grind — and a turn key takes it away', () => {
   const lim = 75 - 1.9;
   const j = jeep(0, 40, 0, 6);
-  let crawl = 0;
-  hold(j, KEY(1), 10, world(), (f) => { if (f.moved > 0.01 && f.moved < 0.5) crawl++; });
+  let crawl = 0, edge = false;
+  hold(j, KEY(1), 10, world(), (f) => { if (f.moved > 0.01 && f.moved < 0.5) crawl++; if (f.brake === 'edge') edge = true; });
+  assert.ok(edge, 'the dev hook says the forest edge braked it');
   assert.ok(j.speed === 0 && Math.abs(lim - j.z - RIM_GAP) < 0.05, `stopped ${(lim - j.z).toFixed(2)} m short of the edge`);
   assert.ok(crawl <= 12, `the last of the stop only (${crawl} frames under 0.5 m/s), never a crawl along it`);
   const z0 = j.z;
@@ -584,8 +586,10 @@ test('a trunk it only clips: the jeep brushes past keeping most of its speed; on
     assert.ok(j.z > 30 && j.moved > 5.9 && worst < 1e-6, `and slides past, never into it, back at full speed (z ${j.z.toFixed(1)})`);
   }
   const tree = { x: 0, z: 20, r: 0.6 };
-  const j = hold(jeep(0, 0, 0, 6), KEY(1), 6, world({ solids: [tree] }));
+  let solid = false;
+  const j = hold(jeep(0, 0, 0, 6), KEY(1), 6, world({ solids: [tree] }), (f) => { if (f.brake === 'solid') solid = true; });
   assert.ok(j.moved < 0.05 && j.z < 20 - 0.6 - 1.9 + 0.05, `dead ahead it rests at the trunk (z ${j.z.toFixed(2)})`);
+  assert.ok(solid, 'the dev hook says a solid braked it');
 });
 
 test('jeepStep: a zero frame changes nothing', () => {
