@@ -77,7 +77,12 @@ adventure/actors.ts      Actor: calm behaviours (idle, root, go, follow, look, s
                          procedural trot for static GLBs; actors-math.ts is the pure part
 adventure/cover.ts       CoverField: instanced true-scale bracken, moor-grass, heather (3 draw
                          calls) that rustles and parts; cover-math.ts: line of sight, glimpse
-adventure/patches.ts     PatchField: look-alike rooting patches (corsi spots) + prints
+adventure/patches.ts     PatchField: look-alike rooting patches (corsi spots) + prints, or
+                         mossy cushions in leaf litter (`look: 'moss'`, the squirrel's glade)
+adventure/squirrel.ts    Squirrel (an Actor): the static squirrel mesh brought to life — dash-
+                         stop-dash, spiral trunk runs, branch stubs, leaps, hiding round a
+                         trunk, digging, an acorn in its mouth; squirrel-math.ts: the pure plans
+                         (speeds, never at the lens, on the bark), squirrel.test.ts
 adventure/places.ts      frames, headings, local↔world (pure)
 adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: where it
                          happens), <id>.home.ts (the home's dressing), <id>.ts (the beats)
