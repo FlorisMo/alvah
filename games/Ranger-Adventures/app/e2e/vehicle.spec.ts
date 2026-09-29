@@ -518,21 +518,25 @@ test('vehicle: the stick pushed only sideways still drives and turns (audit veh-
   const turned = Math.atan2(Math.sin(b.heading - a.heading), Math.cos(b.heading - a.heading));
   expect(turned, 'and turns it to the right (right lowers the yaw)').toBeLessThan(-0.3);
 
-  // run 6: the stick pushed up and to the left, out to its rim, keeps full gas while it
-  // turns (on the iPad as with Up + Left on the keys)
+  // run 6: the stick pushed up and aside, out to its rim, keeps full gas while it turns
+  // (on the iPad as with Up + Left/Right on the keys). It turns away from the nearest
+  // mission marker, whose keep-out bend would otherwise (rightly) straighten it.
   await page.waitForTimeout(800);
   const c = (await hook(page, (r) => r.vehicle()))!;
+  const m = (await hook(page, (r) => r.markers()))!.reduce((p, q) => (Math.hypot(q.x - c.x, q.z - c.z) < Math.hypot(p.x - c.x, p.z - c.z) ? q : p));
+  const leftOfNose = (m.x - c.x) * Math.cos(c.heading) - (m.z - c.z) * Math.sin(c.heading); // > 0: the marker lies to its left
+  const side = Math.hypot(m.x - c.x, m.z - c.z) < 25 && leftOfNose > 0 ? 1 : -1;            // +1: push up-right
   await page.mouse.move(cx, cy);
   await page.mouse.down();
-  await page.mouse.move(cx - 75, cy - 75, { steps: 8 });
+  await page.mouse.move(cx + side * 75, cy - 75, { steps: 8 });
   let top = 0;
   const t0 = Date.now();
   while (Date.now() - t0 < 3_000) { top = Math.max(top, (await hook(page, (r) => r.vehicle()))!.speed); await page.waitForTimeout(80); }
   await page.mouse.up();
   const d = (await hook(page, (r) => r.vehicle()))!;
-  const left = Math.atan2(Math.sin(d.heading - c.heading), Math.cos(d.heading - c.heading));
-  expect(top, 'up-left at the rim: full speed while it turns').toBeGreaterThan(5.7);
-  expect(left, 'turning left (left raises the yaw)').toBeGreaterThan(0.3);
+  const turned2 = Math.atan2(Math.sin(d.heading - c.heading), Math.cos(d.heading - c.heading));
+  expect(top, `up-${side > 0 ? 'right' : 'left'} at the rim: full speed while it turns`).toBeGreaterThan(5.7);
+  expect(-side * turned2, `turning ${side > 0 ? 'right' : 'left'} (${turned2.toFixed(2)} rad; right lowers the yaw)`).toBeGreaterThan(0.3);
 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
