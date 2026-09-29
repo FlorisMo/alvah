@@ -252,8 +252,10 @@ Beats 0-4 and 14-15 of §2.1. The bar:
   it, never hard-code a height in a shot.
 - Speech before the first gesture is blocked by the browser: the title's read-aloud
   starts on the first key/click (as today). The veil carries no words but the name.
-- `keys.ts` gives Enter to the visible `.btn-start`; a focused button (focus-visible)
-  keeps it. The name `<input>` must keep Space.
+- `keys.ts` gives Enter to the visible `.btn-start`; a button the player moved to with a
+  key (Tab, the arrows) keeps it, a clicked one does not (lane close: `:focus-visible`
+  could not tell them apart, since the Enter keydown itself sets it). The name `<input>`
+  must keep Space.
 - CI runs `npm run e2e:smoke` on SwiftShader against the production build; the world now
   builds at boot there too. Before you finish: stop your server and run
   `CI=1 RANGER_PORT=<port> npm run e2e:smoke`, and `npm run e2e:webkit` (iPad engine).
