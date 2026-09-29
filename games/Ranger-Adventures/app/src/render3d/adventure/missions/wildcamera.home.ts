@@ -227,6 +227,7 @@ export class WildcameraHome implements HomeDressing {
   readonly thicket = new THREE.Group();
   gladeHint: THREE.Object3D;
   thicketHint: THREE.Object3D;
+  private readonly zones: THREE.Mesh[] = [];
   /** the empty snare by the trail (the morning) */
   private snare: THREE.Object3D | null = null;
   private snareWanted = false;
@@ -401,11 +402,25 @@ export class WildcameraHome implements HomeDressing {
     this.fan.raycast = () => {};
     this.group.add(this.fan);
 
+    /* -- where a click counts as the glade or the thicket: the whole place, not just a
+          flower or a bush in it (invisible, never in a picture: `material.visible` off) -- */
+    const zone = (p: Spot, r: number, h: number, into: THREE.Group, name: string): void => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 20, 1).translate(0, h / 2 - 0.05, 0),
+        new THREE.MeshBasicMaterial({ visible: false }));
+      m.name = name;
+      m.position.set(p.x, g(p.x, p.z), p.z);
+      m.visible = false; // (only while the camera is aimed: showTags)
+      into.add(m);
+      this.zones.push(m);
+    };
+    zone(P.glade, GLADE_R + 0.2, 1.3, this.glade, 'glade-zone');
+    zone(atLocal(CROSS, 4.9, -0.8), 2.1, 2.0, this.thicket, 'thicket-zone');
+
     /* -- the places' names (shown while the camera is aimed) -- */
     this.tags = { open: nameTag('open plek', 1.5), hol: nameTag('het bosje', 1.5) };
     const tagAt = (p: Spot, y: number, t: THREE.Sprite): void => { t.position.set(p.x, g(p.x, p.z) + y, p.z); t.visible = false; this.group.add(t); };
-    tagAt(atLocal(CROSS, -4.3, -1.3), 1.75, this.tags.open);
-    tagAt(atLocal(CROSS, 4.9, -0.8), 2.25, this.tags.hol);
+    tagAt(P.glade, 1.45, this.tags.open);
+    tagAt(atLocal(CROSS, 4.8, -0.6), 2.35, this.tags.hol);
 
     /* -- the snare, the man in the photo, the nightjar -- */
     const sn = P.snare;
@@ -484,8 +499,13 @@ export class WildcameraHome implements HomeDressing {
   /** The infrared ring glows softly (a caller at night): 0..1. */
   glowIr(k: number): void { this.irFlash = Math.max(this.irFlash, k); }
 
-  /** The places' names over the glade and the thicket. */
-  showTags(on: boolean): void { this.tags.open.visible = on; this.tags.hol.visible = on; }
+  /** The places' names over the glade and the thicket (and the ground a click on either
+   *  counts on): while the camera is being aimed. */
+  showTags(on: boolean): void {
+    this.tags.open.visible = on;
+    this.tags.hol.visible = on;
+    for (const z of this.zones) z.visible = on;
+  }
 
   /** The empty snare by the trail (the morning): there, or taken away. */
   showSnare(on: boolean): void {
@@ -656,7 +676,7 @@ export class WildcameraHome implements HomeDressing {
     (this.fan.material as THREE.Material).dispose();
     this.strap.geometry.dispose();
     (this.strap.material as THREE.Material).dispose();
-    for (const o of [this.led, this.ir]) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
+    for (const o of [this.led, this.ir, ...this.zones]) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
     this.group.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh && (mesh.name === 'wildwissel' || mesh.name === 'wildwissel-prints')) {
