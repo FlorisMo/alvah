@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   WILDCAMERA_PLACES as P, MARKER, TREE, CAMERA, CROSS, CROSS_VIEW, CALLER_SPOTS, LOG, PINE,
-  WILDCAMERA_HOME, WILDCAMERA_RESIDENTS, AIM_AT, FAN_HALF, aimSpot, cameraAim, swivel, trailA, trailB,
+  WILDCAMERA_HOME, WILDCAMERA_RESIDENTS, AIM_AT, FAN_HALF, JUNIPER, aimSpot, cameraAim, swivel, trailA, trailB,
   wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW, VAL_VIEW, SETT_FACE,
 } from './wildcamera.places.ts';
 import { anchorInBiome, biomeAt } from '../../Biomes.ts';
@@ -118,6 +118,17 @@ test('the animals the camera photographs walk in from out of view, and the thick
         assert.ok(off > (12 * Math.PI) / 180, `${animal} is ${deg(off)}° off the sett`);
       }
     }
+  }
+  // every walk into the thicket keeps clear of its solid juniper (a walk round it could
+  // stall behind it), and of the sett's mound (the badger's own comes out of it)
+  for (const animal of ['edelhert', 'ree', 'wildzwijn', 'nachtzwaluw']) {
+    const s = aimSpot(animal, 'hol');
+    assert.ok(segDist(JUNIPER, s.from, s.at) > JUNIPER.r + 0.45, `${animal} walks in clear of the juniper (${segDist(JUNIPER, s.from, s.at).toFixed(2)} m)`);
+    assert.ok(segDist(P.sett, s.from, s.at) > 0.9, `${animal} walks in clear of the sett`);
+  }
+  for (const id of ['wildzwijn', 'ree']) {
+    const c = CALLER_SPOTS[id];
+    assert.ok(segDist(JUNIPER, c.from, c.at) > JUNIPER.r + 0.45, `the ${id} comes in at night clear of the juniper`);
   }
   // the badger by day: out of its sett onto the open ground at its side — clear of the
   // mound for the camera on the pine, and in front of it for the lens

@@ -140,7 +140,8 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     // past the pine at a trot, and the camera waits for it to get there
     const far = Math.hypot(s.at.x - a.x, s.at.z - a.z);
     const pace = far > 6 ? Math.min(1.6, (PACE[id] ?? 1.1) * 1.35) : PACE[id] ?? 1.1;
-    await k.guard(Promise.race([a.go(s.at.x, s.at.z, { speed: pace, face: s.yaw }), k.wait(far / pace + 5).then(() => false)]));
+    const came = await k.guard(Promise.race([a.go(s.at.x, s.at.z, { speed: pace, face: s.yaw }), k.wait(far / pace + 5).then(() => false)]));
+    if (!came && Math.hypot(s.at.x - a.x, s.at.z - a.z) > 0.8) k.stats.aim_late = (k.stats.aim_late ?? 0) + 1; // (dev read: it never got there)
   };
   const walkOut = (id: string, s: AimSpot): void => {
     if (id === 'nachtzwaluw') {

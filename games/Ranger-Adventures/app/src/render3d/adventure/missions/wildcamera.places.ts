@@ -62,6 +62,13 @@ export const SETT_FACE = VIEW_H + 0.3;
 const SNARE = at(-2.55, -1.35);
 
 export const GLADE_R = 2.3;
+
+/** The thicket's one solid bush (its juniper; the brambles and bracken the animals walk
+ *  through), and where the animals come into the thicket from, out of view: along the
+ *  second trail from the east, clear of the juniper (a walk round it could stall behind
+ *  it, and the camera would photograph the bush). */
+export const JUNIPER = { ...at(5.9, 0.25), r: 0.7 } as const;
+export const THICKET_ENTRY: Spot = at(8.6, -1.0);
 export const THICKET_R = 1.9;
 
 /** The places table. */
@@ -145,7 +152,7 @@ export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
   // at the thicket's foot, in front of its bushes and clear of the sett as the camera
   // sees it (an animal behind the mound would give a photo of the mound)
   const spot = animal === 'edelhert' ? at(5.0, -0.95) : animal === 'nachtzwaluw' ? at(3.9, -1.2) : at(4.35, -1.05);
-  return { at: spot, from: at(8.4, 1.9), yaw: headingTo(spot, TREE) - 1.1 };
+  return { at: spot, from: THICKET_ENTRY, yaw: headingTo(spot, TREE) - 1.1 };
 }
 
 /** The four night callers round the crossing (design §4.3 beat 4): the badger at its
@@ -155,7 +162,7 @@ export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
  *  glade, the sky). */
 export const CALLER_SPOTS: Readonly<Record<string, { at: Spot; from: Spot; yaw: number }>> = {
   das: { at: at(2.0, -2.75), from: at(3.35, -2.05), yaw: VIEW_H + Math.PI - 0.6 },
-  wildzwijn: { at: at(4.8, -2.7), from: at(8.4, 1.9), yaw: VIEW_H + Math.PI + 0.9 },
+  wildzwijn: { at: at(4.8, -2.7), from: THICKET_ENTRY, yaw: VIEW_H + Math.PI + 0.9 },
   ree: { at: at(-4.7, -1.0), from: at(-10.5, -0.6), yaw: VIEW_H + Math.PI - 1.2 },
   nachtzwaluw: { at: at(-1.9, -3.4), from: at(-6, -9), yaw: VIEW_H + Math.PI / 2 },
 };

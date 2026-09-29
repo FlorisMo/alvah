@@ -18,14 +18,14 @@ import * as THREE from 'three';
 import type { DressingEnv, HomeDressing } from '../../world/Residents';
 import type { HomeState } from '../types';
 import { groundDecal } from '../decal';
-import { atLocal, dist, headingTo, stream } from '../places';
+import { atLocal, dist, headingTo, stream, toLocal } from '../places';
 import { grassTuftGeometry, grassMaterial, heightFor } from '../../play/spawn';
 import { nameTag, disposeTag } from '../../play/stage';
 import { boxObstacle } from '../../CharacterController';
 import { SIZE } from '../../AnimalScale';
 import { crouchPose } from './wildcamera.pose';
 import {
-  WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, trailA, trailB,
+  WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, JUNIPER, trailA, trailB,
 } from './wildcamera.places';
 import type { Spot } from '../types';
 
@@ -347,7 +347,7 @@ export class WildcameraHome implements HomeDressing {
       });
       if (solid) env.obstacles.push({ x: p.x, z: p.z, r: solid });
     };
-    bush('prop-juniper-bush', 1.9, 5.9, 0.25, 0.3, 0.7, true);
+    { const j = toLocal(CROSS, JUNIPER); bush('prop-juniper-bush', 1.9, j.u, j.v, 0.3, JUNIPER.r, true); }
     bush('prop-bramble', 1.05, 4.5, -0.15, 1.2);
     bush('prop-bramble', 0.95, 6.9, -0.8, 2.9);
     bush('prop-fern', 1.15, 3.6, 0.35, 0.8);
