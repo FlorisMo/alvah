@@ -25,6 +25,8 @@ import { lyingHeight, LEG_SHARE } from '../../play/pose';
 import { boxObstacle } from '../../CharacterController';
 import { SIZE } from '../../AnimalScale';
 import { WATER_DEEP, WATER_SHALLOW, WATER_TREES, FRESNEL_POWER, WATER_F0 } from '../../Water';
+import { store } from '../../../core/state';
+import { Sound } from '../../../core/sound';
 import {
   juniperR, REE_PLACES, MEADOW, MEADOW_FRAME, COPSE_FRAME, CALF_SPOT, SEARCH_VIEW, JUNIPERS, COPSE_TREES, DOE_BED, CALF_BED, COPSE_GAP,
   HIDE_JUNIPER, HIDE_LOG, POOL, POOL_FRAME, MEET, onMeadow,
@@ -102,7 +104,7 @@ function poolWater(): THREE.ShaderMaterial {
 }
 
 /** A water ring spreading on the pool (a boot went in). */
-interface Ring { mesh: THREE.Mesh; t: number; delay: number }
+interface Ring { mesh: THREE.Mesh; t: number; delay: number; max: number }
 
 /** The reekalf home, as the adventure uses it. */
 export class ReeHome implements HomeDressing {
@@ -123,6 +125,9 @@ export class ReeHome implements HomeDressing {
   private dropT = -1;
   private readonly dropAt = new THREE.Vector3();
   private readonly groundY: (x: number, z: number) => number;
+  /** the ranger is wading in the pool (and how long since his last plash) */
+  private wading = false;
+  private wadeT = 0;
 
   constructor(env: DressingEnv, distractors: readonly Distractor[]) {
     this.group.name = 'ree-home';
@@ -250,7 +255,7 @@ export class ReeHome implements HomeDressing {
       mesh.renderOrder = 5;
       mesh.rotation.y = POOL.heading; // (its x across the pool, its z along it)
       this.group.add(mesh);
-      this.rings.push({ mesh, t: -1, delay: i * 0.3 });
+      this.rings.push({ mesh, t: -1, delay: i * 0.3, max: 0.72 });
     }
     this.drops = new THREE.InstancedMesh(new THREE.SphereGeometry(0.022, 6, 4), new THREE.MeshBasicMaterial({ color: '#e4ecea' }), DROPS);
     this.drops.visible = false;
@@ -267,11 +272,21 @@ export class ReeHome implements HomeDressing {
   /** A decoy clicked: it does what it would (the dead fronds rustle and part, the bird flits). */
   poke(d: Decoy, from: { x: number; z: number }): void { this.lookAlikes.poke(d, from); }
 
+  /** (x, z) is in the pool's water (a little inside its rim). */
+  inWater(x: number, z: number): boolean {
+    const l = toLocal(POOL_FRAME, { x, z });
+    return (l.u / POOL.halfW) ** 2 + (l.v / POOL.halfD) ** 2 < 0.85;
+  }
+
   /** A boot in the pool at (x, z): rings spread over the water, a few drops fly up. */
   splash(x: number, z: number): void {
     const y = this.groundY(x, z) + 0.08; // just over the water (its decal layer)
+    // the rings stay on the water: they spread no further than its rim from where he stands
+    const l = toLocal(POOL_FRAME, { x, z });
+    const room = Math.max(0.18, Math.min(0.72, POOL.halfW - Math.abs(l.u), (POOL.halfD - Math.abs(l.v)) / 0.72));
     for (const r of this.rings) {
       r.t = 0;
+      r.max = room;
       r.mesh.position.set(x, y, z);
     }
     this.dropT = 0;
@@ -280,8 +295,19 @@ export class ReeHome implements HomeDressing {
 
   setState(_state: HomeState): void { /* the meadow, the copse and the pool stay */ }
 
-  update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean }[]): void {
+  update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void {
     this.cover.update(dt, t, reduced, movers);
+    // a boot in the pool plashes (whoever's, whenever: a mission's wrong answer or a walk
+    // straight through it): a plash going in, rings at every step while he wades on
+    const me = movers.find((m) => m.ranger);
+    const inPool = !!me && this.inWater(me.x, me.z);
+    this.wadeT += dt;
+    if (inPool && me && (!this.wading || (me.moving && this.wadeT > 0.75))) {
+      if (!this.wading && store.get().settings.geluid) Sound.splash();
+      this.splash(me.x, me.z);
+      this.wadeT = 0;
+    }
+    this.wading = inPool;
     this.lookAlikes.update(dt, reduced);
     for (const r of this.rings) {
       if (r.t < 0) continue;
@@ -294,7 +320,7 @@ export class ReeHome implements HomeDressing {
       const e = 1 - (1 - k) * (1 - k); // fast at first, slowing as it spreads
       // (they stay on the water: the pool is longer across than along, and the boot
       // went in a little short of its middle)
-      const s = 0.1 + e * 0.62;
+      const s = 0.1 + e * (r.max - 0.1);
       r.mesh.scale.set(s, 1, s * 0.72);
       m.opacity = 0.8 * (1 - k);
     }

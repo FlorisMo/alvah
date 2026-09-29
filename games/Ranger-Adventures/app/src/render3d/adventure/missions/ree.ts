@@ -29,13 +29,13 @@ import { lyingHeight, LEG_SHARE } from '../../play/pose';
 import { searchBeat } from '../beats/search';
 import { choiceRun } from '../beats/choice';
 import { listenerOf } from '../../world/Residents';
-import { dist, headingTo, toLocal, toward } from '../places';
+import { dist, headingTo, toward } from '../places';
 import { backPoints, openWindow } from '../cover-math';
 import { SIZE } from '../../AnimalScale';
 import { TREE_BASE_H } from '../../world/Forest';
 import { ReeHome } from './ree.home';
 import {
-  REE_HOME, REE_PLACES as P, REE_RESIDENTS, COPSE_TREES, CALF_SPOT, COPSE_GAP, DOE_BED, MEET, POOL, POOL_FRAME, POOL_IN, POOL_ROUND,
+  REE_HOME, REE_PLACES as P, REE_RESIDENTS, COPSE_TREES, CALF_SPOT, COPSE_GAP, DOE_BED, MEET, POOL, POOL_IN, POOL_ROUND,
   SEARCH_VIEW, CALF_VIEW, POOL_VIEW, WATCH_VIEW, reeClearings, slotTrail, calfBolt, drinkSpot, leaveView,
 } from './ree.places';
 
@@ -225,15 +225,9 @@ async function story(k: AdventureKit): Promise<void> {
     // steps back out, and the card comes back under "Plons!"
     walks: true,
     wrong: async () => {
-      const inWater = (): boolean => {
-        const l = toLocal(POOL_FRAME, k.ranger());
-        return (l.u / POOL.halfW) ** 2 + (l.v / POOL.halfD) ** 2 < 0.85;
-      };
       const walkIn = k.walkRanger(POOL_IN.x, POOL_IN.z, 0.05);
-      await k.until(inWater, 3);
-      if (settings.geluid) Sound.splash();
-      const r = k.ranger();
-      home.splash(r.x, r.z);
+      // (the pool plashes by itself as his boot goes in: ree.home.ts)
+      await k.until(() => { const r = k.ranger(); return home.inWater(r.x, r.z); }, 3);
       void calf.lookAt(me, 2.2);
       await walkIn;
       await k.wait(1.0);

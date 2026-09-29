@@ -54,8 +54,9 @@ export interface FrameView {
 
 /** A built home dressing (the wallow, the cover, the field ...). */
 export interface HomeDressing {
-  /** per frame while the lens is near: `movers` = the home's animals now */
-  update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean }[]): void;
+  /** per frame while the lens is near: `movers` = the home's animals now (and the
+   *  ranger, `ranger: true`) */
+  update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void;
   /** the home's state changed (a replay puts it back before; a finish after) */
   setState(state: HomeState): void;
   dispose(): void;
@@ -278,14 +279,14 @@ export class Residents {
       const k = home.borrowed ? 1 : home.rest.step(d, dt, reduced);
       restFar(home.group, k);
       if (k <= 0) continue;
-      const movers: { x: number; z: number; moving: boolean }[] = [];
+      const movers: { x: number; z: number; moving: boolean; ranger?: boolean }[] = [];
       for (const a of home.actors.values()) {
         if (!a.group.visible) continue;
         a.update(dt, t);
         movers.push({ x: a.x, z: a.z, moving: a.speed > 0.15 });
       }
       // the ranger pushes through the cover too
-      movers.push({ x: ranger.x, z: ranger.z, moving: rangerMoving });
+      movers.push({ x: ranger.x, z: ranger.z, moving: rangerMoving, ranger: true });
       home.dressing?.update(dt, t, reduced, movers);
       this.voices(home, dt, camera, ranger);
       if (!home.borrowed) this.react(home, dt, ranger);
