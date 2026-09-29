@@ -246,6 +246,8 @@ export interface RangerDevHook {
     cloudOffset: { x: number; y: number };
     windSample: number;
     flyover: { x: number; y: number; z: number; visible: boolean } | null;
+    /** run 6: the time of day (1 = the golden hour, 0 = the wildcamera's night) */
+    daylight?: number;
   } | null;
   /** The W4.7b footstep state: the running count of footsteps planted and the
    *  last surface ('zand'|'gras'), or null before the hook/world is ready — lets
