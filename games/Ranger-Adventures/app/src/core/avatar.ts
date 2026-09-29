@@ -173,6 +173,16 @@ const RANGER_PAINT: readonly (readonly [number, number, number, LookPart | null]
   [187, 136, 86, null], [101, 55, 38, null], [61, 49, 37, null], [238, 178, 23, null],
 ];
 
+/** Paint only the face has (from FACE_FROM up): the pale lit skin of the eyelids round
+ *  the eyes, which sits between the skin and the white-blond hair and was sorted as hair
+ *  (the eyes then took the hair colour: orange rims with red hair), and the eye whites,
+ *  which stay as painted. Below the head the pale peach would catch the khaki shorts. */
+const FACE_PAINT: readonly (readonly [number, number, number, LookPart | null])[] = [
+  [226, 178, 142, 'huid'],   // the eyelids' pale skin
+  [242, 238, 230, null],     // the eye whites
+];
+const FACE_FROM = 0.75;
+
 /**
  * Which recolourable part a texel of the ranger atlas is: its painted colour (the
  * nearest palette entry) and where on the body it is drawn (`h` = height 0..1 of the
@@ -184,10 +194,14 @@ export function lookPart(r: number, g: number, b: number, h: number): LookPart |
   if (h >= 0.6 && b > r + 25 && b > g + 5) return 'iris';
   let best: LookPart | null = null;
   let bd = Infinity;
-  for (const [pr, pg, pb, part] of RANGER_PAINT) {
-    const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
-    if (d < bd) { bd = d; best = part; }
-  }
+  const near = (paint: typeof RANGER_PAINT): void => {
+    for (const [pr, pg, pb, part] of paint) {
+      const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+      if (d < bd) { bd = d; best = part; }
+    }
+  };
+  near(RANGER_PAINT);
+  if (h >= FACE_FROM) near(FACE_PAINT);
   if (best === 'haar' && h < 0.66) return null;                 // cream on the soles, not hair
   if (best === 'outfit' && (h < 0.38 || h > 0.86)) return null;  // green bits on the boots
   return best;

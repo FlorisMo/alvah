@@ -88,6 +88,13 @@ test('lookPart: the painted parts, told apart by colour and body height', () => 
   assert.equal(lookPart(238, 178, 23, 0.45), null, 'the yellow shirt stays');
   assert.equal(lookPart(58, 106, 154, 0.75), 'iris', 'a clear blue in the head = the iris');
   assert.equal(lookPart(104, 125, 66, -1), null, 'off the mesh: untouched');
+  // run 6: the face. The eyelids' pale lit skin goes with the skin (it took the hair
+  // colour before), the eye whites and catch-lights stay white, the hair stays hair.
+  assert.equal(lookPart(232, 187, 156, 0.85), 'huid', 'pale eyelid skin = skin');
+  assert.equal(lookPart(216, 170, 131, 0.85), 'huid', 'the lit rim round the eye = skin');
+  assert.equal(lookPart(244, 240, 232, 0.85), null, 'an eye white stays as painted');
+  assert.equal(lookPart(217, 204, 173, 0.9), 'haar', 'white-blond hair on the head is still hair');
+  assert.equal(lookPart(232, 187, 156, 0.4), null, 'below the head the pale peach is not skin (the khaki shorts)');
 });
 
 test('repaint: the part\'s average becomes the chosen colour, light and shade kept', () => {
