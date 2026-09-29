@@ -73,6 +73,10 @@ export class Actor {
   yaw = 0;
   /** ground speed this frame (m/s) */
   speed = 0;
+  /** run 6: how far (m) it goes home by itself when its home is laid out in front of the
+   *  player (a stop, a finish); further, and it is simply there (a cut). null: the
+   *  home's default (a walking animal: a few metres). A squirrel runs a long way. */
+  homeReach: number | null = null;
   /** loaded (its model stands in the world) */
   readonly ready: Promise<void>;
   protected readonly env: ActorEnv;

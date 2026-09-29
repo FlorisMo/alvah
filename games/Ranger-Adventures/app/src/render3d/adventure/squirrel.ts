@@ -86,6 +86,7 @@ export class Squirrel extends Actor {
 
   constructor(key: string, env: ActorEnv, opts: { height: number; trees: readonly SquirrelTree[]; seed?: number }) {
     super(key, 'eekhoorn', env, { height: opts.height, len: opts.height * 1.1 });
+    this.homeReach = 45; // (it runs home from anywhere round its glade, never a cut in view)
     this.trees = [...opts.trees];
     this.rnd = sqStream(opts.seed ?? 7);
     this.breathPhase = (opts.seed ?? 7) * 1.3;
@@ -311,33 +312,31 @@ export class Squirrel extends Actor {
     return ok;
   }
 
-  /** Put it at (x, z) — on its branch when (x, z) is one of its trees. The first time
-   *  (the world is built) it is simply there; later, when its home is laid out anew while
-   *  it is somewhere else (the mission stopped, the story moved on), it RUNS there itself
-   *  rather than popping from one spot to another (a cut only under reduced motion). */
+  /** Put it at (x, z) at once — on its branch when (x, z) is one of its trees (the world
+   *  being built, a reload, a replay under the briefing card). In front of the player its
+   *  home calls `go` instead (it runs there: see `homeReach`). */
   override place(x: number, z: number, yaw = this.yaw): void {
     this.carry(false); // (a home laid out anew: whatever it carried is put away)
     this.eatFrom = -9;
-    const tree = this.nearestTree(x, z);
-    const atTree = tree && Math.hypot(tree.trunk.x - x, tree.trunk.z - z) < 0.6 ? tree : null;
-    // (the world being built, a reload: it is simply there — its own clock has hardly run)
-    if (this.placed && this.t > 3 && !this.env.reduced() && Math.hypot(x - this.pose.x, z - this.pose.z) > 1.5) {
-      void this.play(atTree ? this.toBranchPlan(atTree) : this.dashTo(x, z, yaw), atTree ? { kind: 'branch', tree: atTree } : { kind: 'ground' });
-      return;
-    }
-    this.placed = true;
-    if (atTree) { this.placeOnBranch(atTree); return; }
+    const tree = this.treeAt(x, z);
+    if (tree) { this.placeOnBranch(tree); return; }
     this.pose = { x, z, alt: 0, yaw, pitch: 0, roll: 0, act: 'sit' };
     this.settled = { kind: 'ground' };
     this.plan = [];
+    this.planDone?.(false);
+    this.planDone = null;
     this.x = x; this.z = z; this.yaw = yaw;
     this.apply();
   }
-  private placed = false;
+
+  /** One of its trees, when (x, z) is its trunk (within 0.6 m). */
+  private treeAt(x: number, z: number): SquirrelTree | null {
+    const tree = this.nearestTree(x, z);
+    return tree && Math.hypot(tree.trunk.x - x, tree.trunk.z - z) < 0.6 ? tree : null;
+  }
 
   /** Put it on its branch of `tree` at once (a home laid out: it sits there). */
   placeOnBranch(tree: SquirrelTree, face?: number): void {
-    this.placed = true;
     this.pose = this.branchPose(tree, face);
     this.settled = { kind: 'branch', tree };
     this.plan = [];
@@ -365,6 +364,9 @@ export class Squirrel extends Actor {
   /** Go to (x, z): a dash there (down off its tree first). Up a tree it is already safe
    *  from someone walking up: a short "step away" there is only a turn on its branch. */
   override go(x: number, z: number, opts: { speed?: 'walk' | 'trot' | number; face?: number } = {}): Promise<boolean> {
+    // to one of its trees: it runs up to its branch there (its home going home)
+    const tree = this.treeAt(x, z);
+    if (tree) return this.run(this.toBranchPlan(tree), { kind: 'branch', tree });
     if (this.up && Math.hypot(x - this.x, z - this.z) < 2.5) return this.play([turn(this.pose, Math.atan2(x - this.x, z - this.z))], this.where);
     const plan = [...this.downPlan(), ...dashPlan(this.groundPose(), x, z, this.rnd, this.lens(), this.avoid())];
     if (opts.face !== undefined) plan.push(turn(poseAtEnd(plan, this.pose), opts.face));

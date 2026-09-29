@@ -225,7 +225,7 @@ export class Residents {
       if (!pose) { a.idle(); continue; }
       const far = Math.hypot(pose.x - a.x, pose.z - a.z);
       const placed = a.x !== 0 || a.z !== 0;
-      if (walk && placed && far > 0.05 && far < WALK_HOME_MAX) {
+      if (walk && placed && far > 0.05 && far < (a.homeReach ?? WALK_HOME_MAX)) {
         void a.go(pose.x, pose.z, { speed: 'walk', face: pose.yaw ?? this.faceHome(home, pose) }).then((ok) => { if (ok) this.idleAt(a, pose); });
       } else {
         a.place(pose.x, pose.z, pose.yaw ?? this.faceHome(home, pose));
