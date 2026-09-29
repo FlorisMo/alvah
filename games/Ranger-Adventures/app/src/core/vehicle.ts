@@ -50,6 +50,14 @@
  * `wetAhead`); a dead end stops it with room to swing round (`deadEndCap`); a pivot turns
  * about whichever end keeps the body clear, and a wedged body keeps its turn
  * (`resolveBody`).
+ *
+ * Run 6 review, round 3 (W held at a slant against the ecoduct's wall crawled along it at
+ * 0.23 m/s for 12 s): a building's wall is no trunk to brush past — a wall keeps its angle
+ * while the jeep slides along it, so the brush brake never lifted. Met at a slant, the wall
+ * bends the jeep along it like the forest edge (`wallSteer`); met squarely, it stops clean in
+ * front of it (a `flat` touch is brushed only as a real glance, `WALL_GLANCE`). Touching (or
+ * about to touch) a wall, a board or — on a slow jeep — a trunk at a slant, it turns along
+ * it at any speed, never against the player's turn key, instead of creeping round it.
  */
 
 /** The active arcade caps: top speed (m/s) and the yaw rate-clamp (rad/s). */
@@ -647,18 +655,21 @@ function rollAlong(x0: number, z0: number, ux: number, uz: number, k: number, t:
 /**
  * Every place along the vehicle's path (`dir` +1 forward, −1 reverse; the arc with
  * curvature `curvature` as `pathCurvature` gives it, 0 = straight along its heading) where
- * a circle of its body first touches a solid within `max` metres: `visit(t, into)` with
- * the metres rolled `t` and `into`, the share of that circle's motion that runs INTO the
- * solid there (1 = dead centre, → 0 = a brush). A circle already touching a solid it
- * slides along or leaves is a touch with `into` 0 (never a stop by itself); one that only
- * meets a solid moving along or away from it further on is none. Every body circle rides the real path (the body swings
- * round the turn: its middle cuts inside the line its nose takes), and every solid is met
- * as its real shape: the path is marched in steps never longer than the gap to it. Pure.
+ * a circle of its body first touches a solid within `max` metres: `visit(t, into, nx, nz,
+ * flat)` with the metres rolled `t`, `into`, the share of that circle's motion that runs
+ * INTO the solid there (1 = dead centre, → 0 = a brush), the solid's outward normal there,
+ * and whether it is `flat` (a footprint with straight sides: a surface that keeps its angle
+ * while the body slides along it, where a trunk's turns away). A circle already
+ * touching a solid it slides along or leaves is a touch with `into` 0 (never a stop by
+ * itself); one that only meets a solid moving along or away from it further on is none.
+ * Every body circle rides the real path (the body swings round the turn: its middle cuts
+ * inside the line its nose takes), and every solid is met as its real shape: the path is
+ * marched in steps never longer than the gap to it. Pure.
  */
 function eachTouch(
   x: number, z: number, heading: number, dir: 1 | -1, curvature: number,
   body: readonly BodyCircle[], solids: readonly Solid[], max: number,
-  visit: (t: number, into: number, nx: number, nz: number, wall: boolean) => void,
+  visit: (t: number, into: number, nx: number, nz: number, flat: boolean) => void,
 ): void {
   const ux = Math.sin(heading) * dir, uz = Math.cos(heading) * dir;
   const k = Math.abs(curvature) < 1e-4 ? 0 : curvature;
@@ -682,7 +693,7 @@ function eachTouch(
           const into = -(gapNx * vx + gapNz * vz) / Math.hypot(vx, vz);
           // pressing in: a touch; already touching and sliding along it: a touch it will
           // not stop for (into 0), but one a squeeze can be made of
-          if (into > 0 || t === 0) visit(t, Math.min(1, Math.max(0, into)), gapNx, gapNz, !!o.box);
+          if (into > 0 || t === 0) visit(t, Math.min(1, Math.max(0, into)), gapNx, gapNz, isFlat(o));
           break;
         }
         t += Math.max(g * 0.95, 0.005);
@@ -729,6 +740,29 @@ export const BRUSH_LOSS = 0.15;
  *  brushed: the jeep comes to rest in front of it instead of sliding along it. */
 export const SQUARE_HIT = 0.85;
 
+/** A building's wall (a `flat` touch, `eachTouch`) is brushed only as
+ *  a real glance: met within this share of square (`headOn` 0.26, about 15°; the brush then
+ *  keeps 2.2 m/s or more), fading to a clean stop in front of it by `WALL_GLANCE_TO` (20°).
+ *  A trunk slips past as the angle to it changes; a wall keeps its angle, so a brush at a
+ *  slant was a crawl along it that never ended (run 6 review round 3: 0.23 m/s for 12 s at
+ *  the ecoduct). A slanted wall is the wall bend's job (`wallSteer`), a square one the
+ *  brake's. */
+export const WALL_GLANCE = 0.26;
+export const WALL_GLANCE_TO = 0.34;
+/** Whether sliding along this solid keeps the angle to it: any footprint with straight
+ *  sides (`Solid.box`; a trunk turns away under the jeep as it passes). */
+function isFlat(o: Solid): boolean {
+  return !!o.box;
+}
+
+/** A footprint is a building's wall (a building, a landmark) when its longer half-side is at
+ *  least this (m): the jeep is bent along it (`wallSteer`). A board or a bench is eased past
+ *  like a trunk (`clipSteer`). */
+export const WALL_MIN_HALF = 1.2;
+function isWall(o: Solid): boolean {
+  return !!o.box && Math.max(o.box.hx, o.box.hz) >= WALL_MIN_HALF;
+}
+
 /** The firmest a brake eases the jeep down (m/s²) when something comes into view too
  *  close for its gentle stop; closer still, it brakes only as hard as it must. */
 export const FIRM_DECEL = 8;
@@ -768,12 +802,15 @@ export function brakeCap(free: number, gap: number, decel: number, now = 0, dt =
  * gently — the push-out takes at most `BRUSH_LOSS` off what it moves in the frame it
  * touches (`BRUSH_LOSS / headOn²`: it slows only to that) — so a clipped trunk costs almost
  * nothing (run 6: every brush braked it to a 0.8 m/s crawl, then ground it along the
- * bark). Met squarely (fading in from `SQUARE_HIT`) there is nothing to slide along: it
- * simply stops in front of it, without the last creep into the bark. From `now` over
- * `dt` it never drops in one frame (`brakeCap`). Pure.
+ * bark). Met squarely (fading in from `SQUARE_HIT`; a `flat` wall from
+ * `WALL_GLANCE`) there is nothing to slide along: it simply stops in front of it, without
+ * the last creep into the bark. From `now` over `dt` it never drops in one frame
+ * (`brakeCap`). Pure.
  */
-export function contactSpeedCap(free: number, decel: number, headOn = 1, now = 0, dt = 0): number {
-  const brush = Math.max(0, Math.min(1, (1 - headOn) / (1 - SQUARE_HIT)));
+export function contactSpeedCap(free: number, decel: number, headOn = 1, now = 0, dt = 0, flat = false): number {
+  const brush = flat
+    ? Math.max(0, Math.min(1, (WALL_GLANCE_TO - headOn) / (WALL_GLANCE_TO - WALL_GLANCE)))
+    : Math.max(0, Math.min(1, (1 - headOn) / (1 - SQUARE_HIT)));
   const end = headOn > 1e-6 ? (BRUSH_LOSS / (headOn * headOn)) * brush : Infinity;
   if (!Number.isFinite(end)) return Infinity;
   return brakeCap(free, 0.1, decel, now, dt, 0.02, end);
@@ -796,19 +833,17 @@ export function solidBrake(
   const look = (Math.max(vmax, Math.abs(now)) ** 2) / (2 * decel) + 1;
   const touches = touchBuf;
   touches.length = 0;
-  // a building's wall turns under the jeep at its corners (the touch grows squarer as
-  // it gets there, the key let go): a brush along a wall is met as if more squarely
-  eachTouch(x, z, heading, dir, curvature, body, solids, look, (t, into, nx, nz, wall) => {
-    if (touches.length < 24) touches.push(t, wall ? Math.sqrt(into) : into, nx, nz);
+  eachTouch(x, z, heading, dir, curvature, body, solids, look, (t, into, nx, nz, flat) => {
+    if (touches.length < 30) touches.push(t, into, nx, nz, flat ? 1 : 0);
   });
   let cap = Infinity, free = look, headOn = 0;
-  for (let i = 0; i < touches.length; i += 4) {
+  for (let i = 0; i < touches.length; i += 5) {
     const t = touches[i], into = touches[i + 1];
-    let c = contactSpeedCap(t, decel, into, now, dt);
+    let c = contactSpeedCap(t, decel, into, now, dt, touches[i + 4] === 1);
     // pushed off this one straight into another on its other side: a gap too narrow for
     // it (two trunks, a trunk and a zone) — it stops well short of the squeeze, never
     // wedges itself in (its path along the first is only roughly the arc it looked along)
-    for (let j = 0; j < touches.length; j += 4) {
+    for (let j = 0; j < touches.length; j += 5) {
       if (touches[i + 2] * touches[j + 2] + touches[i + 3] * touches[j + 3] < -SQUEEZE_DOT) {
         c = Math.min(c, brakeCap(Math.max(t, touches[j]), SQUEEZE_GAP, decel, now, dt, 0.1));
       }
@@ -846,10 +881,11 @@ export const CLIP_NEAR = 1;
  * turn it can make at this speed; the strongest each way, summed (a gap between two
  * trunks: it drives through the middle). A solid it would meet squarely gets no bend: it
  * brakes to a soft stop in front of it instead (`contactSpeedCap`). A building or a
- * landmark (`Solid.box`) is no trunk to ease past: its circle is only an outer bound.
- * Every edge fades (`CLIP_FADE`), so the bend never switches on and off frame by frame
- * (run 6 review: at its hard edges it flipped between 0.2 and 1 and pinned the jeep).
- * Pure.
+ * landmark (a `Solid.box` as long as a wall, `WALL_MIN_HALF`) is no trunk to ease past: its
+ * wall bends the jeep along it (`wallSteer`); a board or a bench is eased past like a trunk
+ * (its circle). Every edge fades (`CLIP_FADE`), so the bend never switches on and off
+ * frame by frame (run 6 review: at its hard edges it flipped between 0.2 and 1 and pinned
+ * the jeep). Pure.
  */
 export function clipSteer(
   x: number, z: number, heading: number, speed: number,
@@ -867,11 +903,7 @@ export function clipSteer(
   for (const o of solids) {
     const far = far0 + 2 * o.r, ox = o.x - x, oz = o.z - z;
     if (ox * ox + oz * oz > far * far) continue;           // out of reach of the look
-    if (o.box) {
-      const u = wallClip(x, z, fx, fz, curvature, o, lead.along, half, v, look, can);
-      if (u > 0) right = Math.max(right, u); else left = Math.max(left, -u);
-      continue;
-    }
+    if (isWall(o)) continue;                               // a building's wall: `wallSteer`
     frameOf(x, z, fx, fz, curvature, o.x, o.z);            // off the line its centre drives
     const s = frameS - lead.along;                         // ahead of its nose circle
     if (s <= 0) continue;
@@ -890,40 +922,6 @@ export function clipSteer(
     else left = Math.max(left, u);
   }
   return right - left;
-}
-
-/**
- * `clipSteer` for a building's wall (a `Solid.box`, its real footprint): along the path
- * its centre drives (from (x, z) along (fx, fz), curving `k`), where does its widest side
- * pass the wall closest, and how far ahead of its nose (`lead`) is that? Closer than
- * `CLIP_MARGIN`, the steady turn away from the wall that moves its line clear by then, as
- * a share of the turn it can make (`can` at speed `v`), fading in over the look ahead; a
- * wall it would drive at squarely (fading out from `SQUARE_HIT`) gets none, it brakes to
- * a soft stop instead. Running along a wall too close, it eases off it. Signed: right +.
- */
-function wallClip(
-  x: number, z: number, fx: number, fz: number, k: number, o: Solid,
-  lead: number, half: number, v: number, look: number, can: number,
-): number {
-  let best = Infinity, at = 0, side = 0, into = 0;
-  for (let t = 0; t <= lead + look + 1e-9; t += 0.5) {
-    rollAlong(x, z, fx, fz, k, t);
-    const g = solidGap(o, rollX, rollZ) - half;
-    if (g < best) {
-      best = g; at = t;
-      side = gapNx * rollMz - gapNz * rollMx > 0 ? -1 : 1; // the wall on its right: steer left (−)
-      into = -(gapNx * rollMx + gapNz * rollMz);           // how squarely it drives at the wall there
-    }
-    if (g < -0.5) break;                                   // it drives into the wall: that is the place
-  }
-  const need = CLIP_MARGIN - best;
-  if (need <= 0) return 0;
-  const d = Math.max(0, at - lead);                        // metres ahead of its nose
-  const dd = Math.max(CLIP_NEAR, d);
-  const u = Math.min(1, (2 * Math.min(need, 1) * v) / (dd * dd) / can)
-    * Math.min(1, Math.max(0, (SQUARE_HIT - into) / 0.15))  // met squarely: no bend, a soft stop
-    * Math.min(1, Math.max(0, (look - d) / (0.25 * look))); // far ahead: fading in
-  return side * u;
 }
 
 /* ---------------------------------------------------------- keep-out zones -- */
@@ -1188,6 +1186,81 @@ export function rimSteer(x: number, z: number, heading: number, lim: number, bia
   const outLeft = fz * ox - fx * oz;                     // > 0: straight out lies to its left
   const side = Math.abs(outLeft) > 0.02 ? (outLeft > 0 ? 1 : -1) : (bias < 0 ? -1 : 1);
   return side * u * headOn * Math.min(1, want / RIM_TURN);
+}
+
+/* ------------------------------------------------------ a building's wall -- */
+
+/** Within this distance (m) of a wall the jeep's body is about to touch it: the bend along
+ *  it then acts at any speed, fully from `WALL_NEAR_FULL` (m) on. */
+export const WALL_NEAR = 0.6;
+export const WALL_NEAR_FULL = 0.3;
+/** The bend starts this far (m) further out than the turn along the wall needs… */
+export const WALL_LEAD = 1;
+/** …and closer than this (m) it also keeps a heading along the wall turning a little away
+ *  (`RIM_KEEP_TILT` rad per metre), so it rolls along the wall, never on it. */
+export const WALL_KEEP = 1;
+
+/**
+ * A building's wall bends the jeep along it, like the forest edge (`rimSteer`) and never
+ * like a trunk it brushes (run 6 review round 3: met at a slant, the ecoduct's wall kept its
+ * angle while the jeep slid along it, so the brush brake held it at 0.23 m/s for 12 s and
+ * nothing turned it). For each building (`isWall`, its real footprint) the body circle
+ * nearest its wall says how far off it is (`c`, m) and how far out of line with the wall it
+ * heads (θ, + = into it); heading into it, this returns the steer (right +) that turns it
+ * along the wall, the nearer way (met dead on: the way the player's `key` steers), growing
+ * with θ (`RIM_TURN`) and as the wall nears: from `WALL_LEAD` m further out than its calm
+ * turning circle at this `speed` needs to swing that far (R·(1 − cos θ)), to a full turn of
+ * the wheel where it just still can; closer than `WALL_KEEP` it eases off the wall. Met
+ * nearly head-on (`RIM_HEAD_ON_FROM`/`_TO`) it does not bend: the solid brake stops it
+ * cleanly in front of the wall, and a turn key takes it away. Like every bend, `gain`
+ * (`bendGain`) fades it out on a slow jeep and a key into the wall gives way to it only as it
+ * nears (`guidedSteer`); but within `WALL_NEAR` of a wall (touching it or about to) it acts
+ * at any speed, never against a turn key the player holds: a held jeep swings along the wall
+ * instead of standing or crawling at it. A board or a bench (a smaller footprint, whose side
+ * also keeps its angle) gets only that last part (it is eased past like a trunk,
+ * `clipSteer`), and so does a trunk, but only on a jeep too slow for `clipSteer` (`gain`):
+ * one touched at a slant at a crawl was ground round at 0.3-0.9 m/s (its brush speed) for
+ * up to a second before its angle turned away. Forward driving only. Pure.
+ */
+export function wallSteer(
+  x: number, z: number, heading: number, speed: number,
+  solids: readonly Solid[], body: readonly BodyCircle[], caps: DriveCaps, gain: number, key = 0,
+): number {
+  const fx = Math.sin(heading), fz = Math.cos(heading);
+  const v = Math.max(1, Math.abs(speed));
+  // the calm turning circle at this speed (the speed-scaled, yaw-capped steer)
+  const R = Math.max(caps.maxSpeed / caps.turnRate, v / (STEER_AUTHORITY_MAX * caps.turnRate));
+  const far = bodyReach(body) + 1.5 * R + WALL_LEAD;
+  let right = 0, left = 0;
+  for (const o of solids) {
+    if (o.soft) continue;
+    const wall = isWall(o);                               // else only touching it, or about to
+    const reach = (wall ? far : bodyReach(body) + WALL_NEAR) + o.r, ox = o.x - x, oz = o.z - z;
+    if (ox * ox + oz * oz > reach * reach) continue;      // out of reach of any bend
+    let c = Infinity, nx = 0, nz = 0;                     // the nearest circle, the wall's normal there
+    for (const b of body) {
+      const g = solidGap(o, x + fx * b.along, z + fz * b.along) - b.r;
+      if (g < c) { c = g; nx = gapNx; nz = gapNz; }
+    }
+    const theta = Math.asin(Math.max(-1, Math.min(1, -(nx * fx + nz * fz))));
+    const want = theta + (wall ? Math.max(0, WALL_KEEP - c) * RIM_KEEP_TILT : 0);
+    if (want <= 0) continue;
+    const headOn = Math.max(0, Math.min(1, (RIM_HEAD_ON_TO - theta) / (RIM_HEAD_ON_TO - RIM_HEAD_ON_FROM)));
+    if (headOn <= 0) continue;
+    const inLeft = nz * fx - nx * fz;                     // > 0: the wall lies to its left
+    const side = Math.abs(inLeft) > 0.02 ? (inLeft > 0 ? 1 : -1) : (key < 0 ? -1 : 1);
+    // touching it or about to, at any speed — but never against the player's turn key
+    const near = key * side < 0 ? 0 : Math.max(0, Math.min(1, (WALL_NEAR - c) / (WALL_NEAR - WALL_NEAR_FULL)));
+    const need = R * (1 - Math.cos(Math.min(want, Math.PI / 2)));   // how far off it swings along it
+    const u = wall
+      ? Math.max(0, Math.min(1, (1.5 * need + WALL_LEAD - c) / (0.5 * need + WALL_LEAD))) * Math.max(gain, near)
+      : isFlat(o) ? near
+      : near * (1 - gain);                                // a trunk: rolling, `clipSteer` eases it round
+    if (u <= 0) continue;
+    const b = u * headOn * Math.min(1, want / RIM_TURN);
+    if (side > 0) right = Math.max(right, b); else left = Math.max(left, b);
+  }
+  return right - left;
 }
 
 /* ---------------------------------------------------------------- the ven -- */
@@ -1467,9 +1540,10 @@ function within(list: readonly Solid[], x: number, z: number, r: number, out: So
 /**
  * One frame of the jeep (the World's `driveJeep` feeds it the keys and the world).
  * (1) the speed ramps toward the throttle (~1 s); (2) the player's steer, bent round a
- * keep-out zone, along the forest edge and the ven's shore, and round a trunk it would
- * only clip (`combineBends`) — only while it really rolls forward (`bendGain`): held,
- * pivoting or creeping, the turn key alone turns it; (3) the brakes, looking along the
+ * keep-out zone, along the forest edge, a building's wall and the ven's shore, and round a
+ * trunk it would only clip (`combineBends`) — only while it really rolls forward
+ * (`bendGain`): held, pivoting or creeping, the turn key alone turns it, save for what it
+ * touches at a slant, which turns it along it at any speed (`wallSteer`); (3) the brakes, looking along the
  * arc it is about to drive: a soft stop at the solid ahead (backing up: at a zone behind
  * too), at the forest edge, at the water, and for an animal in its path — the lowest
  * wins, and none drops the speed in one frame (`brakeCap`); (4) the speed-scaled,
@@ -1502,15 +1576,21 @@ export function jeepStep(
   // (2) the steer: bent round what lies ahead (forward only; backing up it brakes)
   let steerWant = clampUnit(want.steer);
   const gain = dir > 0 ? bendGain(speed, caps) : 0;
-  if (gain > 0) {
-    const zone = keepOutSteer(s.x, s.z, s.heading, speed, w.zones, body, want.steer, caps);
-    const rim = rimSteer(s.x, s.z, s.heading, lim, want.steer);
+  // a building's wall bends it along it, and at any speed while it touches a wall or is
+  // about to (never against the player's turn key, `wallSteer`)
+  const wall = dir > 0 ? wallSteer(s.x, s.z, s.heading, speed, nearWalls, body, caps, gain, want.steer) : 0;
+  if (gain > 0 || wall !== 0) {
+    const zone = gain > 0 ? gain * keepOutSteer(s.x, s.z, s.heading, speed, w.zones, body, want.steer, caps) : 0;
+    // where a building meets the forest edge (the ecoduct) the tree line's way along it runs
+    // into the wall: the wall's bend outweighs it, fading it out as it grows (never a switch)
+    let rim = gain > 0 ? gain * rimSteer(s.x, s.z, s.heading, lim, want.steer) : 0;
+    if (rim * wall < 0) rim *= 1 - Math.min(1, Math.abs(wall));
     // a trunk it would clip, on the arc those bends and the player's key drive it along
-    const base = guidedSteer(want.steer, gain * combineBends(zone, rim));
-    const clip = clipSteer(s.x, s.z, s.heading, speed, nearSolids, body, caps, pathCurvature(base, speed, 1, caps, floorNow));
-    steerWant = guidedSteer(want.steer, gain * combineBends(zone, rim, clip));
+    const base = guidedSteer(want.steer, combineBends(zone, rim, wall));
+    const clip = gain > 0 ? gain * clipSteer(s.x, s.z, s.heading, speed, nearSolids, body, caps, pathCurvature(base, speed, 1, caps, floorNow)) : 0;
+    steerWant = guidedSteer(want.steer, combineBends(zone, rim, clip, wall));
     // the ven last: the one limit among them, the least change that keeps the path dry
-    if (blocked) steerWant += gain * (waterSteer(s.x, s.z, s.heading, speed, steerWant, body, blocked, caps, floorNow) - steerWant);
+    if (blocked && gain > 0) steerWant += gain * (waterSteer(s.x, s.z, s.heading, speed, steerWant, body, blocked, caps, floorNow) - steerWant);
   }
   // (3) the brakes
   let yieldFor: string | null = null, braked = false;
@@ -1558,9 +1638,15 @@ export function jeepStep(
   const st = driveStep(s.heading, { throttle: speed / caps.maxSpeed, steer }, dt, caps);
   // (6) the body against every solid and zone
   let n = resolveBody(s.x, s.z, s.heading, s.x + st.dx, s.z + st.dz, st.heading, body, nearWalls, w.limits);
+  // a standing jeep that only a wall bend swings (no turn key) swings on the spot or not at
+  // all, never scraped back along what it touches (wedged, the player's key frees it)
+  const along = (n.x - s.x) * Math.sin(s.heading) + (n.z - s.z) * Math.cos(s.heading);
+  if (Math.abs(speed) < 0.05 && want.steer === 0 && st.heading !== s.heading && n.contact && Math.abs(along) > 0.1 * dt) {
+    n = { x: s.x, z: s.z, heading: s.heading, contact: true };
+  }
   // a standing jeep whose turn is blocked on every side (its nose at the water, its tail on
   // a trunk): it eases back or aside a hair as it turns, so a held turn key always frees it
-  if (Math.abs(speed) < 0.05 && st.heading !== s.heading && n.heading === s.heading && want.throttle !== 0) {
+  else if (Math.abs(speed) < 0.05 && st.heading !== s.heading && n.heading === s.heading && want.throttle !== 0) {
     const bx = -Math.sin(s.heading) * Math.sign(want.throttle), bz = -Math.cos(s.heading) * Math.sign(want.throttle);
     const lx = -bz, lz = bx;                                          // aside
     for (const [back, side] of TURN_EASE) {

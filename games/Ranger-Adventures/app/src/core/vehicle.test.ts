@@ -788,6 +788,82 @@ test('a building is its real footprint: head-on the jeep stops at the ecoduct\'s
   assert.ok(j.speed === 0 && bumper - wall >= 0.05 && bumper - wall < 1.5, `it stands ${(bumper - wall).toFixed(2)} m from the wall (the circle stood ${(ECODUCT.r - wall).toFixed(1)} m out)`);
 });
 
+// ── run 6, review round 3: a wall met at a slant is driven along, never crawled along ──
+
+/** Hold `keysAt(frame)` for `secs` under `caps`: the longest run of frames in contact at a
+ *  crawl (0.02-1 m/s), the frames at rest pressed against something, and the slowest it rolled
+ *  while `beside(f)` after its first second (the forest edge's own stop left out). */
+function crawlRun(
+  j: JeepState, w: JeepWorld, secs: number, keysAt: (i: number) => { fwd: number; turn: number },
+  caps = JEEP_CAPS, beside: (f: JeepState) => boolean = () => false,
+) {
+  let run = 0, crawl = 0, restContact = 0, slowBeside = Infinity;
+  for (let i = 0; i < 60 * secs; i++) {
+    const f = jeepStep(j, driveIntent(keysAt(i), null), 1 / 60, caps, w);
+    if (f.contact && Math.abs(f.moved) > 0.02 && Math.abs(f.moved) < 1) crawl = Math.max(crawl, ++run); else run = 0;
+    if (f.contact && Math.abs(f.moved) < 0.02) restContact++;
+    if (i >= 60 && f.brake !== 'edge' && beside(f)) slowBeside = Math.min(slowBeside, f.moved);
+    Object.assign(j, f);
+  }
+  return { crawl: crawl / 60, restContact, slowBeside };
+}
+
+test('a building\'s long wall met at a slant (the ecoduct, 30°, 45° and 60° off its line, W alone): it rolls along it at 3 m/s or more, or comes to rest clear of it — never a crawl along it (run 6 review round 3: 0.23 m/s for 12 s)', () => {
+  const b = ECODUCT.box!, c = Math.cos(b.rot), sn = Math.sin(b.rot);
+  const toW = (lx: number, lz: number) => ({ x: ECODUCT.x + lx * c + lz * sn, z: ECODUCT.z - lx * sn + lz * c });
+  const dirW = (lx: number, lz: number) => ({ x: lx * c + lz * sn, z: -lx * sn + lz * c });
+  const gapTo = (p: JeepState): number => {
+    const dx = p.x - ECODUCT.x, dz = p.z - ECODUCT.z, lx = dx * c - dz * sn, lz = dx * sn + dz * c;
+    const qx = Math.abs(lx) - b.hx, qz = Math.abs(lz) - b.hz;
+    return Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - b.pad;
+  };
+  const w = world({ solids: [ECODUCT] });
+  // its long walls run west–east (its local z), from the forest edge (west) to its open end (east)
+  for (const caps of [JEEP_CAPS, JEEP_CAPS_REDUCED]) for (const wall of [1, -1]) for (const deg of [30, 45, 60]) for (const east of [1, -1]) for (const v0 of [caps.maxSpeed, 0]) {
+    const th = (deg * Math.PI) / 180, dl = [-wall * Math.sin(th), east * Math.cos(th)];
+    const back = v0 ? (east > 0 ? 6 : 10) : 4;                           // run-in (m) along its path
+    const P = toW(wall * (b.hx + b.pad) - dl[0] * back, (east > 0 ? 7 : 5) - dl[1] * back), D = dirW(dl[0], dl[1]);
+    const j = jeep(P.x, P.z, Math.atan2(D.x, D.z), v0);
+    const r = crawlRun(j, w, 8, () => KEY(1), caps, (f) => gapTo(f) < 2.5);
+    const what = `${caps === JEEP_CAPS ? '' : 'reduced motion, '}${wall > 0 ? 'south' : 'north'} wall at ${deg}° heading ${east > 0 ? 'east' : 'west'} from ${v0} m/s`;
+    assert.ok(r.crawl <= 0.5, `${what}: never a crawl along it (longest ${r.crawl.toFixed(2)} s)`);
+    assert.equal(r.restContact, 0, `${what}: never at rest pressed against it`);
+    if (east > 0) assert.equal(j.speed, caps.maxSpeed, `${what}: it rolled on past its end at full speed (${j.speed.toFixed(2)} m/s)`);
+    else assert.ok(j.speed === 0 && Math.hypot(j.x, j.z) > 72 && bodyDepth(j.x, j.z, j.heading, JEEP_BODY, w.walls) === 0,
+      `${what}: it rolled along it to the forest edge and rests there, clear of the wall (r ${Math.hypot(j.x, j.z).toFixed(1)})`);
+    if (v0 > 0 && caps === JEEP_CAPS) assert.ok(r.slowBeside >= 3, `${what}: beside it, never below 3 m/s (slowest ${r.slowBeside.toFixed(2)})`);
+  }
+  // the review's line (rv-eco): at the north wall from the east-north-east at full speed, W alone
+  const j = jeep(-58.4, 19.1, -2.013, 6);
+  let contact = 0, low = Infinity;
+  hold(j, KEY(1), 8, w, (f) => { if (f.contact) contact++; if (f.brake !== 'edge') low = Math.min(low, f.moved); });
+  assert.equal(contact, 0, 'the review\'s line: it bends along the wall without touching it');
+  assert.ok(low > 5.9 && j.speed === 0 && Math.hypot(j.x, j.z) > 72, `and holds its speed (slowest ${low.toFixed(2)} m/s) until the forest edge stops it in the corner`);
+});
+
+test('the bird-hide\'s corner (review seed 11: a short A tap, then W alone, crawled 3.8 s along it): it swings round the corner and drives on', () => {
+  const w = world({ solids: [HIDE], zones: [{ x: 24.5, z: -19, r: 5.2 }] });   // the hide, and the ven marker's zone beside it
+  for (const tap of [0, 6, 12, 18, 24, 36]) {
+    const j = jeep(29.907, -13.107, -0.559, 3);
+    const r = crawlRun(j, w, 6, (i) => (i < tap ? KEY(1, -1) : KEY(1)));
+    assert.ok(r.crawl <= 0.5 && r.restContact === 0, `A for ${tap} frames: no crawl along it (longest ${r.crawl.toFixed(2)} s)`);
+    assert.equal(j.speed, 6, `A for ${tap} frames: it drove on at full speed (${j.speed.toFixed(2)} m/s)`);
+  }
+});
+
+test('a trunk touched at a slant by a slow jeep: it turns along it and drives on — never a crawl round the bark', () => {
+  // standing or creeping with its nose beside a trunk, 20°–60° off the line to its middle
+  for (const deg of [20, 35, 50, 60]) for (const side of [1, -1]) for (const v0 of [0, 0.8]) {
+    const th = (deg * Math.PI) / 180, tree = { x: 0, z: 0, r: 0.6 };
+    const d = 0.6 + 0.9 + 0.05;                                         // its nose circle just clear of the bark
+    const nose = { x: -Math.sin(side * th) * d, z: -Math.cos(side * th) * d };   // heading +z, the trunk ahead of the nose at `deg`
+    const j = jeep(nose.x, nose.z - 1, 0, v0);
+    const r = crawlRun(j, world({ solids: [tree] }), 4, () => KEY(1));
+    assert.ok(r.crawl <= 0.5 && r.restContact === 0, `${deg}° ${side > 0 ? 'left' : 'right'} from ${v0} m/s: no crawl round it (longest ${r.crawl.toFixed(2)} s, ${r.restContact} frames at rest against it)`);
+    assert.ok(j.speed === 6 && j.z > 4, `${deg}° ${side > 0 ? 'left' : 'right'} from ${v0} m/s: it drove on past it (${j.speed.toFixed(2)} m/s)`);
+  }
+});
+
 test('turning at full speed toward a trunk the straight look misses: it eases round or slows smoothly — never a one-frame drop (review P3)', () => {
   // a right turn at 6 m/s (a ~10 m circle round (-10, 0)): trunks on and beside its arc
   for (const phi of [0.5, 0.7, 0.9]) for (const off of [0, 0.8, -0.8]) {
