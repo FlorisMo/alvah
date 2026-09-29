@@ -21,7 +21,9 @@
  * Steps (content, the EF contract): 0 corsi · 1 simon, each logged once.
  */
 
+import type * as THREE from 'three';
 import type { AdventureKit } from '../kit';
+import { Glow, clearPlayHint, pick3d } from '../../play/kit';
 import type { Adventure } from '../registry';
 import type { ResidentGroup } from '../../world/Residents';
 import { store } from '../../../core/state';
@@ -32,7 +34,7 @@ import { callersBeat, type Caller } from '../beats/callers';
 import { Squirrel } from '../squirrel';
 import { dist, headingTo } from '../places';
 import { TREE_BASE_H } from '../../world/Forest';
-import { EekhoornHome } from './eekhoorn.home';
+import { EekhoornHome, type Neighbour } from './eekhoorn.home';
 import {
   CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HOME_TREES, INTRO_VIEW, JAY_GROUND, STUMP, HIDE_SEEN_AT, hideSide,
   eekhoornClearings, eekhoornTreeClear,
@@ -73,6 +75,53 @@ export const eekhoornAdventure: Adventure = {
   },
 };
 
+/** Who lives round the store (beat 4): he clicks each neighbour; it lights up, hops, calls
+ *  and its name is said. Any order; one after another (a click while one is talking waits
+ *  its turn). Resolves once he has met all three. */
+async function meetNeighbours(k: AdventureKit, home: EekhoornHome, geluid: boolean): Promise<void> {
+  const c = k.copy;
+  const names: Record<Neighbour['id'], string> = { gaai: c.isGaai, 'groene-specht': c.isSpecht, raaf: c.isRaaf };
+  const left = new Set<string>(home.neighbours.map((n) => n.id));
+  const glows = new Map<string, Glow>(home.neighbours.filter((n) => n.body).map((n) => [n.id, new Glow(n.body!, '#ffd98a')]));
+  let busy = false;
+  k.say(c.wieWonen);
+  let finished!: () => void;
+  const done = new Promise<void>((r) => { finished = r; });
+  const onPick = (id: string): void => {
+    const n = home.neighbours.find((q) => q.id === id);
+    if (!n || busy) return;
+    busy = true;
+    left.delete(id);
+    glows.get(id)?.set(0.6);
+    n.call();
+    k.say(names[n.id]);
+    if (geluid) Sound.callAt(n.id, n.at.x, n.at.z, listenerOf(k.world.camera));
+    void k.wait(Math.max(1.6, Sound.callDur(n.id) + 0.4)).then(() => {
+      glows.get(id)?.set(0);
+      busy = false;
+      if (!left.size) finished();
+    }).catch(() => {});
+  };
+  const unhint = k.hint(() => {
+    if (busy) return null;
+    const n = home.neighbours.find((q) => left.has(q.id));
+    return n ? { id: `buur:${n.id}`, target: n.body ?? n.object } : null;
+  });
+  const teardown = pick3d({
+    canvas: k.ctx.canvas, camera: k.world.camera, raycaster: k.ctx.raycaster as THREE.Raycaster,
+    targets: home.neighbours.map((n) => ({ id: n.id, object: n.object })), onPick, signal: k.signal,
+  });
+  try {
+    await k.guard(done);
+  } finally {
+    teardown();
+    unhint();
+    clearPlayHint();
+    for (const g of glows.values()) g.clear();
+  }
+  await k.wait(0.6);
+}
+
 /** The adventure, beat by beat. */
 async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq: Squirrel): Promise<void> {
   const c = k.copy;
@@ -101,6 +150,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   await k.wait(1.1);
   chatter();
   await k.wait(1.2);
+  // (out of the picture he turns the way the squirrel will go: the follow camera comes
+  // back behind him looking there, and the keys walk him after it)
+  k.world.faceRanger(headingTo(k.ranger(), pineA.trunk));
   k.free();
 
   // 1 · "Volg de eekhoorn": tree to tree, it waits for him on a branch each time
@@ -190,6 +242,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     if (!(await sq.look(stumpFace - 0.8))) return;
     await sq.look(stumpFace, 0.1);
   };
+  /** the spots it buried its acorns in, in the order it did (the route) */
+  const buried: { x: number; z: number }[] = [];
   await routeBeat(k, 0, {
     view: GLADE_VIEW, stand: P.stand, field: home.field,
     lines: { kijk: c.routeKijk, wijs: c.routeWijs, mis: c.routeMis, goed: k.steps[0].skin.copy?.goed ?? c.routeWijs, vergeten: c.vergeten },
@@ -202,40 +256,44 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       sq.carry(false);
       const y = sq.now.yaw;
       home.buryAcorn(s.x + Math.sin(y) * 0.07, s.z + Math.cos(y) * 0.07, 0.62);
+      buried.push({ x: s.x, z: s.z });
       await sq.dig(0.72);
       light(false);
     },
-    // a pick: it dashes there and sniffs — the right one it digs up, a wrong one it
-    // shakes off (nothing there)
     // the show over, it runs back to its stump and forgets (recall is open at once)
     shown: (first) => { if (first) { sq.carry(false); void forget().catch(() => {}); } },
+    // a pick: it dashes there and sniffs — the right one it knows again (a flick of its
+    // tail: here!), a wrong one it shakes off (nothing there)
     picked: async (s, res) => {
+      if (!(await sq.goDash(s.x, s.z))) return;
+      await sq.sniffHere(res === 'reshow' ? 0.7 : 0.4);
       if (res === 'reshow') {
-        await sq.goDash(s.x, s.z);
-        await sq.sniffHere(0.7);
         // nothing there: a shake of its head (a quick look left and right)
         const y = sq.now.yaw;
         await sq.look(y + 0.6, 0.15);
         await sq.look(y - 0.5, 0.15);
         return;
       }
-      // the right spot: it digs, and the acorn comes up into its mouth
-      if (!(await sq.goDash(s.x, s.z))) return;
-      const y = sq.now.yaw;
-      home.unearthAcorn(s.x + Math.sin(y) * 0.07, s.z + Math.cos(y) * 0.07, 0.5);
-      if (!(await sq.dig(0.5))) return;
-      sq.carry(true);
       sq.flick();
+      if (settings.geluid) Sound.correct();
     },
   });
 
-  // it brings the acorns back to its store: a happy run, and its store grows
+  // it remembers them all: a happy run, spot after spot, digging each acorn up and
+  // carrying it to its store by the stump — the store grows one acorn at a time
   k.say(c.stapel);
-  sq.carry(true);
-  await k.guard(sq.goDash(HEAP_GRAB.x, HEAP_GRAB.z));
-  sq.carry(false);
-  await sq.dig(0.45);
-  home.growHeap(4);
+  for (const b of buried) {
+    if (!(await k.guard(sq.goDash(b.x, b.z)))) break;
+    const y = sq.now.yaw;
+    home.unearthAcorn(b.x + Math.sin(y) * 0.07, b.z + Math.cos(y) * 0.07, 0.35);
+    await k.guard(sq.dig(0.35));
+    sq.carry(true);
+    sq.flick();
+    if (!(await k.guard(sq.goDash(HEAP_GRAB.x, HEAP_GRAB.z)))) break;
+    sq.carry(false);
+    home.growHeap(1);
+    if (settings.geluid) Sound.dig();
+  }
   if (settings.geluid) Sound.found();
   await k.guard(sq.goStump(STUMP.x, STUMP.z, STUMP.top, STUMP.r, stumpFace));
   chatter();
@@ -243,12 +301,17 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   // 3 · the raaf: forgotten nuts grow into trees
   await k.fact(0);
 
-  k.beat = 'gaai';
-  // 4 · the jay (the nut thief) comes down for the store; the squirrel scolds it from its
-  //     stump, the neighbours call out, and he calls them back (simon). The lens turns
-  //     to the neighbours first, so he sees the jay come.
+  // 4 · who else lives here? The lens turns to the neighbours round the stump and he
+  //     meets them one by one: a click, and each calls and says who it is (so he knows
+  //     every voice before they call together; the jay is the one eyeing the store)
+  k.beat = 'buren';
   await k.walkRanger(P.callers.x, P.callers.z, 0.04);
   await k.frame(CALLERS_VIEW, { face: P.callers.heading });
+  await meetNeighbours(k, home, settings.geluid);
+
+  // 5 · the jay (the nut thief) comes down for the store; the squirrel scolds it from its
+  //     stump, the neighbours call out, and he calls them back (simon)
+  k.beat = 'gaai';
   k.say(c.gaaiKomt);
   home.jayDown();
   await k.wait(1.2);
@@ -275,7 +338,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   home.jayFlies();
   await k.wait(2.4);
 
-  // 5 · the squirrel sits on its stump and eats an acorn: all its nuts are back
+  // 6 · the squirrel sits on its stump and eats an acorn: all its nuts are back
   home.seedlingWaits = true; // (a later visit finds the forgotten one grown)
   await k.reunion(async () => {
     sq.flick();
