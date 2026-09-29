@@ -920,8 +920,8 @@ export class World {
 
   // ---- run 6 (FLOW lane): Bram, the lessons, the glowing cues --------------------------
   /** Bram speaks (he turns to the ranger, a speech mark over his head) or is quiet. */
-  setWardenTalking(on: boolean): void {
-    this.fauna.setWardenTalking(on);
+  setWardenTalking(on: boolean, mark = on): void {
+    this.fauna.setWardenTalking(on, mark);
   }
 
   /** How far the ranger is from Bram (m); Infinity before Bram stands. */

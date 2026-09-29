@@ -134,7 +134,7 @@ function startLine(): void {
   lineReadMs = readingMs(text);
   const radio = (session.world?.wardenDistance() ?? 0) > RADIO_M;
   showStrip(text, radio);
-  session.world?.setWardenTalking(true);
+  session.world?.setWardenTalking(true, !radio); // over the portofoon: no speech mark
   job.onLine?.(lineIdx);
 }
 

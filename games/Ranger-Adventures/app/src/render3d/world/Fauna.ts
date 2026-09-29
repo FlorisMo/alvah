@@ -231,8 +231,10 @@ export class Fauna {
 
   // ---- run 6 (FLOW lane): Bram speaks ------------------------------------------------
   /** Bram speaks (true) or is quiet again (false): he turns to the ranger while he
-   *  speaks and a small speech mark floats over his head. */
-  setWardenTalking(on: boolean): void {
+   *  speaks and, when he talks in person (`mark`), a small speech mark floats over his
+   *  head. Over the portofoon (far off) there is no mark: drawn on top of the world, it
+   *  showed through the cabin roof when he stood behind it. */
+  setWardenTalking(on: boolean, mark = on): void {
     this.wardenTalking = on;
     if (on) this.wardenQuietS = 0;
     const w = this.scenicActors.find((a) => a.id === 'ranger-warden-boa');
@@ -242,7 +244,7 @@ export class Fauna {
       this.speechMark.position.y = w.height + 0.34;
       w.group.add(this.speechMark);
     }
-    if (this.speechMark) this.speechMark.visible = on;
+    if (this.speechMark) this.speechMark.visible = on && mark;
   }
 
   /** Where Bram stands (x, z), or null before he is placed. */
