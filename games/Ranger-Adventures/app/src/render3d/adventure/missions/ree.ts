@@ -236,6 +236,12 @@ async function story(k: AdventureKit): Promise<void> {
   await k.wait(1.3);
   await go(doe, COPSE_GAP.x, COPSE_GAP.z, { speed: 'walk' });
   k.say(c.daar);
+  // in the gap she stops and tests the air; a step out, two calm bites of grass
+  await k.guard(doe.lookAt(() => ({ x: MEET.x, z: MEET.z, speed: 0 }), 1.3));
+  const bite = toward(COPSE_GAP, MEET, 0.8);
+  await go(doe, bite.x, bite.z, { speed: 'walk' });
+  doe.root(bite.x, bite.z, 0.05);
+  await k.wait(2.6);
   // out onto the open heath by the tall grass; she stops and looks round (toward the
   // hide: stil!), then toward the grass where her calf lies
   await go(doe, MEET.x, MEET.z, { speed: 'walk' });
@@ -247,7 +253,7 @@ async function story(k: AdventureKit): Promise<void> {
   home.cover.rustle(home.cover.nearestClump(calf.x, calf.z)?.i ?? 0, 0.1);
   await k.wait(0.8);
   await k.guard(calf.lie(false));
-  const to = toward(MEET, calfAt, 0.9); // (it stops at her head: she noses it)
+  const to = toward(MEET, calfAt, 0.75); // (it stops at her head: she noses it)
   await go(calf, to.x, to.z, { speed: 0.8, face: headingTo(to, MEET) });
   void calf.lookAt(() => ({ x: doe.x, z: doe.z, speed: 0 }), 4);
   void doe.sniff(calf.x, calf.z, 2.8, 0.5);
@@ -285,7 +291,7 @@ async function story(k: AdventureKit): Promise<void> {
     call('fiep', calf.x, calf.z);
     await calf.go(drink.x, drink.z, { speed: 'walk', face: drink.yaw });
     doe.idle();
-    await k.wait(3.6);
+    await k.wait(4.8);
   });
   k.stats.reunion_gap = Math.round(dist(calf, doe) * 100) / 100;
   k.ui.binoculars(false);

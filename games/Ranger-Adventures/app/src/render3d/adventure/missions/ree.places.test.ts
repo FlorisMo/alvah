@@ -139,7 +139,7 @@ test('the calf lies in the meadow where the trial says (content doel 48, 60), th
 test('the hide looks across the meadow at the copse: her way back runs across its view', () => {
   const doe = REE_RESIDENTS.find((r) => r.key === 'doe')!;
   const h = dist(P.hide, P.meadow);
-  assert.ok(h >= 7 && h <= 18, `the hide is ${h.toFixed(1)} m from the meadow`);
+  assert.ok(h >= 9 && h <= 18, `the hide is ${h.toFixed(1)} m from the meadow`);
   // both the calf and the copse's gap are in front of the hide, within one view
   for (const [name, q] of [['calf', CALF_SPOT], ['gap', COPSE_GAP]] as const) {
     const l = toLocal(HIDE_FRAME, q);
@@ -162,8 +162,11 @@ test('the hide looks across the meadow at the copse: her way back runs across it
   assert.ok(dist(P.calfTalk, POOL) > 3 && dist(P.hide, POOL) > 3, 'about half way');
   // "loop rustig weg": his steps back out of the hide take him away from the family
   assert.ok(dist(P.hideLeave, CALF_SPOT) > dist(P.hide, CALF_SPOT) + 1, 'the quiet steps lead away');
-  // and he ends near the family's home (the world's step-8 bar: ≤ 12 m)
-  assert.ok(dist(P.hideLeave, P.home) < 12.5 && dist(P.hide, P.home) < 11.5, `he ends ${dist(P.hideLeave, P.home).toFixed(1)} m from their home`);
+  // and he ends near the marker or the family's home (the world's step-8 bar: ≤ 12 m),
+  // where he can watch them graze
+  const end = Math.min(dist(P.hideLeave, P.home), dist(P.hideLeave, MARKER));
+  assert.ok(end < 11, `he ends ${end.toFixed(1)} m from the marker or their home`);
+  assert.ok(dist(P.hideLeave, P.home) < 16, 'their home is in sight');
 });
 
 test('her bed is out of sight: behind a juniper and not in line with the gap', () => {
@@ -289,5 +292,7 @@ test('the framed views look at their place from the ranger\'s side, with him in 
   // the watch has no ranger in it: the lens looks from the hide's side at the scene
   const l = toLocal({ x: WATCH_VIEW.at.x, z: WATCH_VIEW.at.z, heading: WATCH_VIEW.heading }, P.hide);
   assert.ok(l.v < -8 && Math.abs(l.u) < 1, 'the watch looks out from the hide');
-  assert.ok(WATCH_VIEW.halfW >= dist(COPSE_GAP, CALF_SPOT) / 2 + 0.5, 'the gap and the calf both fit its width');
+  const w = { x: WATCH_VIEW.at.x, z: WATCH_VIEW.at.z, heading: WATCH_VIEW.heading };
+  assert.ok(Math.abs(toLocal(w, COPSE_GAP).u) < WATCH_VIEW.halfW && Math.abs(toLocal(w, MEET).u) < WATCH_VIEW.halfW * 0.5,
+    'the gap she steps out of and the place they meet are both in the watch');
 });

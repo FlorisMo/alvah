@@ -109,15 +109,15 @@ export const COPSE_TREES: readonly HomeTree[] = [
  *  the side toward the marker, so it looks OUT across the meadow and the copse at the
  *  open heath and the far forest (never back at the clearing and its cabin); her way
  *  runs ACROSS its view, never toward it. */
-const HIDE_BACK = 8.5;
+const HIDE_BACK = 11.0;
 /** (along her way: toward the copse +, the calf −) */
 const HIDE_SHIFT = 0;
 /** Where mother and calf meet: on the open heath just out of the tall grass, toward her
  *  gap — the calf walks out of the grass to her there (a calf standing IN the grass
  *  would be hidden), so the reunion is seen whole. */
-export const MEET: Spot = toward(CALF_SPOT, COPSE_GAP, 3.9);
-/** The middle of the watched scene: her gap, the meeting place, the calf's grass. */
-const WATCH_MID: Spot = toward(CALF_SPOT, COPSE_GAP, 3.0);
+export const MEET: Spot = toward(CALF_SPOT, COPSE_GAP, 4.3);
+/** The middle of the watched scene: her gap, the meeting place, the edge of the grass. */
+const WATCH_MID: Spot = toward(MEET, CALF_SPOT, 0.7);
 const HIDE_AT: Spot = (() => {
   const d = { x: COPSE_GAP.x - CALF_SPOT.x, z: COPSE_GAP.z - CALF_SPOT.z };
   const l = Math.hypot(d.x, d.z);
@@ -217,7 +217,7 @@ export const POOL_VIEW = {
  *  copse's gap and the calf in one picture; the doe's way back runs across it. */
 export const WATCH_VIEW = {
   at: WATCH_MID, heading: HIDE_FRAME.heading,
-  halfW: 3.4, halfD: 1.6, tall: SIZE.ree.h + 0.3, pitchDeg: 12, insetTop: 110, insetBottom: 220,
+  halfW: 2.8, halfD: 1.4, tall: SIZE.ree.h + 0.3, pitchDeg: 12, insetTop: 110, insetBottom: 220,
 } as const;
 
 /* ------------------------------------------------------------ who lives here ---- */

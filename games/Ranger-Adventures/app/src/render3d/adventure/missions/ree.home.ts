@@ -19,7 +19,7 @@ import { CoverField } from '../cover';
 import { backPoints, openWindow, standClumps, visibleShare, type Clump, type V3 } from '../cover-math';
 import { StandDecoys, decoyClumps, type Decoy, type DecoyAt } from '../decoys';
 import { groundDecal } from '../decal';
-import { atLocal, dist, stream, toLocal } from '../places';
+import { atLocal, dist, segDist, stream, toLocal } from '../places';
 import { heightFor } from '../../play/spawn';
 import { lyingHeight, LEG_SHARE } from '../../play/pose';
 import { boxObstacle } from '../../CharacterController';
@@ -143,7 +143,8 @@ export class ReeHome implements HomeDressing {
       const k = 1.12 + rnd() * 0.35;
       const p = atLocal(MEADOW_FRAME, Math.cos(a) * (MEADOW.halfW + 0.45) * k, Math.sin(a) * (MEADOW.halfD + 0.4) * k);
       if (dist(p, REE_PLACES.meadowApproach) < 1.1 || dist(p, REE_PLACES.calfTalk) < 0.8) continue; // where he stands
-      if (dist(p, MEET) < 1.3) continue; // where mother and calf meet stays open
+      // where mother and calf meet stays open, and so does the hide's view of it
+      if (dist(p, MEET) < 1.9 || segDist(p, REE_PLACES.hide, MEET) < 0.9) continue;
       meadow.push({ ...p, kind: 'grass', size: 0.8 + rnd() * 0.3 });
     }
     const clumps: Clump[] = [...meadow, ...decoyClumps(decoyAt)];
