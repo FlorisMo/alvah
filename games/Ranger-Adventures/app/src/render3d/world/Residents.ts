@@ -94,7 +94,21 @@ interface Home {
   rest: FarRest;
   voices: Map<string, { next: number; on: boolean }>;
   centre: { x: number; z: number };
+  /** free roam: how each animal is reacting to the ranger (see `react`) */
+  reacting: Map<string, Reaction>;
+  /** bumped whenever the home is laid out, borrowed or given back: a reaction still
+   *  running from before leaves the animal alone */
+  gen: number;
 }
+
+/** A resident's free-roam reaction to the ranger walking up. */
+interface Reaction { busy: boolean; away: boolean; cool: number }
+
+/** Within this (m) of the ranger a resident looks up at him (then roots on). */
+const NOTICE = 5;
+/** Closer than this (m) it steps calmly away from him, never more than `AWAY_MAX` from its spot. */
+const SHY = 2.3;
+const AWAY_MAX = 1.5;
 
 /** Far off in the fog a home's animals rest (not drawn), like the other animals. */
 const REST_NEAR = 46;
@@ -106,6 +120,8 @@ export class Residents {
   private readonly env: ResidentsEnv;
   private readonly homes = new Map<string, Home>();
   private clock = 0;
+  /** where the ranger is now (the free-roam reactions look at him) */
+  private readonly rangerAt = { x: 0, z: 0 };
 
   constructor(env: ResidentsEnv) {
     this.env = env;
@@ -125,6 +141,7 @@ export class Residents {
       spec, group, dressing, actors, state: 'before', borrowed: false,
       rest: new FarRest(REST_NEAR, REST_FAR), voices: new Map(),
       centre: spec.places.home ?? spec.places.marker ?? { x: 0, z: 0 },
+      reacting: new Map(), gen: 0,
     };
     for (const r of spec.residents) {
       const a = new Actor(r.key, r.animal, {
@@ -165,6 +182,8 @@ export class Residents {
     const home = this.homes.get(missionId);
     if (!home) return null;
     home.borrowed = true;
+    home.gen += 1;
+    home.reacting.clear();
     // a borrowed home is where the mission plays: it is drawn, however far the lens
     restFar(home.group, 1);
     return {
@@ -187,6 +206,8 @@ export class Residents {
   /** Put every animal of a home at its spot in `state`: a calm walk, or at once. */
   private lay(home: Home, state: HomeState, walk: boolean): void {
     home.state = state;
+    home.gen += 1;
+    home.reacting.clear();
     home.dressing?.setState(state);
     for (const r of home.spec.residents) {
       const a = home.actors.get(r.key)!;
@@ -222,6 +243,8 @@ export class Residents {
    */
   update(t: number, dt: number, camera: THREE.Camera, ranger: { x: number; z: number }): void {
     this.clock += dt;
+    const rangerMoving = dt > 0 && Math.hypot(ranger.x - this.rangerAt.x, ranger.z - this.rangerAt.z) / dt > 0.3;
+    this.rangerAt.x = ranger.x; this.rangerAt.z = ranger.z;
     const reduced = this.env.reduced();
     const lx = camera.position.x, lz = camera.position.z;
     for (const home of this.homes.values()) {
@@ -235,8 +258,59 @@ export class Residents {
         a.update(dt, t);
         movers.push({ x: a.x, z: a.z, moving: a.speed > 0.15 });
       }
+      // the ranger pushes through the cover too
+      movers.push({ x: ranger.x, z: ranger.z, moving: rangerMoving });
       home.dressing?.update(dt, t, reduced, movers);
       this.voices(home, dt, camera, ranger);
+      if (!home.borrowed) this.react(home, dt, ranger);
+    }
+  }
+
+  /**
+   * Free roam: the family notices the ranger walking up. Within `NOTICE` an animal lifts
+   * its head and looks at him for a moment (then roots on); closer than `SHY` it steps
+   * calmly away (never toward him, never far from its spot), and once he has gone it
+   * wanders back. A lying animal (the hidden piglet) stays pressed flat.
+   */
+  private react(home: Home, dt: number, ranger: { x: number; z: number }): void {
+    for (const r of home.spec.residents) {
+      const a = home.actors.get(r.key);
+      const pose = home.state === 'before' ? r.before : r.after;
+      if (!a || !pose || !a.group.visible || pose.idle === 'lie' || a.lies) continue;
+      let st = home.reacting.get(r.key);
+      if (!st) { st = { busy: false, away: false, cool: 0 }; home.reacting.set(r.key, st); }
+      st.cool = Math.max(0, st.cool - dt);
+      if (st.busy) continue;
+      const gen = home.gen;
+      const s = st;
+      const still = (): boolean => home.gen === gen && !home.borrowed;
+      const d = Math.hypot(a.x - ranger.x, a.z - ranger.z);
+      if (d < SHY) {
+        const ux = (a.x - ranger.x) / (d || 1), uz = (a.z - ranger.z) / (d || 1);
+        let tx = a.x + ux * 1.2, tz = a.z + uz * 1.2;
+        const off = Math.hypot(tx - pose.x, tz - pose.z);
+        if (off > AWAY_MAX) { tx = pose.x + ((tx - pose.x) * AWAY_MAX) / off; tz = pose.z + ((tz - pose.z) * AWAY_MAX) / off; }
+        if (Math.hypot(tx - a.x, tz - a.z) < 0.25) continue; // as far as it goes: it holds its ground, calm
+        s.busy = true; s.away = true; s.cool = 4;
+        void a.go(tx, tz, { speed: 'walk' }).then(() => {
+          s.busy = false;
+          if (still()) a.root(a.x, a.z, 0.25);
+        });
+      } else if (d < NOTICE && s.cool <= 0) {
+        s.busy = true; s.cool = 9 + Math.random() * 4;
+        void a.lookAt(() => ({ x: this.rangerAt.x, z: this.rangerAt.z, speed: 0 }), 2.2).then(() => {
+          s.busy = false;
+          if (!still()) return;
+          if (s.away) a.root(a.x, a.z, 0.25);
+          else this.idleAt(a, pose);
+        });
+      } else if (d > NOTICE + 1.5 && s.away) {
+        s.busy = true; s.away = false;
+        void a.go(pose.x, pose.z, { speed: 'walk' }).then(() => {
+          s.busy = false;
+          if (still()) this.idleAt(a, pose);
+        });
+      }
     }
   }
 

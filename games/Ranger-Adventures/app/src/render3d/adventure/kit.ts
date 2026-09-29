@@ -256,6 +256,9 @@ export class AdventureKit {
 
   /** The mission is won: the flow marks it done, and shows its line while `play` plays. */
   async reunion(play: () => Promise<void>): Promise<void> {
+    // the EF contract: a mission is done only once every step was played and logged
+    const missing = this.steps.map((_, i) => i).filter((i) => !this.logged.includes(i));
+    if (missing.length) throw new Error(`[adventure] the reunion came before step(s) ${missing.join(', ')} were played`);
     this.beat = 'reunion';
     this.ui.say(null);
     this.ui.setChip(null);
