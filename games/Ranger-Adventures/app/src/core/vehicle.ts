@@ -261,6 +261,9 @@ export interface Solid {
   z: number;
   r: number;
   readonly box?: SolidBox;
+  /** an invisible keep-out zone (round a mission marker, a helipad), not a thing: the body
+   *  is kept out of it and eased back out, but it never blocks a turn on the spot */
+  soft?: boolean;
 }
 
 /** The unit ground direction straight out of the solid at the point `solidGap` last
@@ -345,13 +348,17 @@ export function bodyReach(body: readonly BodyCircle[]): number {
 }
 
 /** How deep (m) the body at pose (x, z, heading) sinks into every solid it touches,
- *  added up: squeezed between two trunks counts both. */
-export function bodyDepth(x: number, z: number, heading: number, body: readonly BodyCircle[], solids: readonly Solid[]): number {
+ *  added up: squeezed between two trunks counts both (`hardOnly`: the keep-out zones left
+ *  out). */
+export function bodyDepth(
+  x: number, z: number, heading: number, body: readonly BodyCircle[], solids: readonly Solid[], hardOnly = false,
+): number {
   const fx = Math.sin(heading), fz = Math.cos(heading);
   let sum = 0;
   for (const c of body) {
     const cx = x + fx * c.along, cz = z + fz * c.along;
     for (const o of solids) {
+      if (hardOnly && o.soft) continue;
       const R = o.r + c.r;
       const dx = cx - o.x, dz = cz - o.z;
       const d2 = dx * dx + dz * dz;
@@ -375,8 +382,14 @@ export function bodyWet(x: number, z: number, heading: number, body: readonly Bo
   return blocked(x + ax * nose, z + az * nose) || blocked(x + ax * tail, z + az * tail);
 }
 
-/** Wedged, a turn is tried on the spot and eased back this far (m) along the body. */
-const WEDGE_BACK = [0, 0.01, 0.02, 0.04];
+/** Wedged, a turn is tried on the spot and eased this far (m) back along the body and
+ *  aside, the smallest shift first. */
+const WEDGE_EASE: readonly (readonly [number, number])[] = [
+  [0, 0], [0.01, 0], [0, 0.02], [0, -0.02], [0.02, 0], [0.02, 0.02], [0.02, -0.02], [0, 0.04], [0, -0.04], [0.04, 0],
+];
+
+/** A keep-out zone eases a body back out of it by at least this much (m) a frame. */
+const SOFT_EASE = 0.03;
 
 /** Closer than this (m) to a solid's edge is resting against it, not pressing into it. */
 const TOUCH_EPS = 1e-4;
@@ -393,6 +406,9 @@ function pushOut(
 ): boolean {
   let contact = false;
   const sx = Math.sin(heading), sz = Math.cos(heading);
+  // a keep-out zone eases the body back out a little a frame (as far as it stepped in, or
+  // SOFT_EASE): a jeep turned on the spot with its nose in one is never shoved out of it
+  const soft = Math.max(SOFT_EASE, Math.hypot(x - fromX, z - fromZ));
   for (let pass = 0; pass < 4; pass++) {
     let pushed = false;
     for (const c of body) {
@@ -402,6 +418,13 @@ function pushOut(
         const dx = cx - o.x, dz = cz - o.z;
         const d2 = dx * dx + dz * dz;
         if (d2 >= R * R) continue;
+        if (o.soft) {
+          const d = Math.sqrt(d2), pen = Math.min(R - d, soft);
+          if (pen <= TOUCH_EPS || d < 1e-6) continue;
+          x += (dx / d) * pen; z += (dz / d) * pen;
+          pushed = true;
+          continue;
+        }
         if (o.box) {                             // a building: out through its nearest wall
           const pen = c.r - solidGap(o, cx, cz);
           if (pen <= TOUCH_EPS) continue;
@@ -453,17 +476,19 @@ export function resolveBody(
   // a turn on the spot (a held jeep pivoting on its key): about whichever point keeps the
   // body clear — its middle, else its nose or its tail staying put while the other end
   // swings — before anything has to push it (a pivot beside a trunk or the water used to
-  // shove the body sideways off it frame after frame)
+  // shove the body sideways off it frame after frame); an invisible keep-out zone never
+  // blocks it (run 6 review: nosed against the fox marker's zone with a trunk behind, W+D
+  // held it 2.8 s)
   if (tx === fx && tz === fz && th !== fh) {
     const lim = limits.bound - bodyReach(body);
-    const before = bodyDepth(fx, fz, fh, body, solids);
+    const before = bodyDepth(fx, fz, fh, body, solids, true);
     let nose = 0, tail = 0;
     for (const c of body) { nose = Math.max(nose, c.along + c.r); tail = Math.min(tail, c.along - c.r); }
     let bx = 0, bz = 0, best = Infinity;
     for (const end of [0, nose, tail]) {
       const cx = fx + (Math.sin(fh) - Math.sin(th)) * end, cz = fz + (Math.cos(fh) - Math.cos(th)) * end;
       if (Math.hypot(cx, cz) > lim || (limits.blocked && bodyWet(cx, cz, th, body, limits.blocked))) continue;
-      const d = bodyDepth(cx, cz, th, body, solids);
+      const d = bodyDepth(cx, cz, th, body, solids, true);           // a keep-out zone never blocks it
       if (d < best - 1e-9) { best = d; bx = cx; bz = cz; }
       if (d === 0) break;
     }
@@ -481,12 +506,13 @@ export function resolveBody(
     if (bodyDepth(x, z, h, body, solids) > before) {
       let kept = false;
       if (th !== fh) {
-        // the turn on the spot, or eased back a hair along its body (out of the squeeze it
-        // nosed into), whichever keeps the turn without sinking deeper
+        // the turn on the spot, or eased back or aside a hair (out of the squeeze it nosed
+        // into, off the trunk its nose and the wall its tail both touch), whichever keeps
+        // the turn without sinking deeper
         const ahead = (tx - fx) * Math.sin(fh) + (tz - fz) * Math.cos(fh) >= 0 ? 1 : -1;
-        const bx = -Math.sin(fh) * ahead, bz = -Math.cos(fh) * ahead;
-        for (const back of WEDGE_BACK) {
-          pushOut(fx + bx * back, fz + bz * back, th, fx, fz, body, solids);
+        const bx = -Math.sin(fh) * ahead, bz = -Math.cos(fh) * ahead, lx = -bz * ahead, lz = bx * ahead;
+        for (const [back, side] of WEDGE_EASE) {
+          pushOut(fx + bx * back + lx * side, fz + bz * back + lz * side, th, fx, fz, body, solids);
           if (bodyDepth(pushX, pushZ, th, body, solids) <= before) { x = pushX; z = pushZ; kept = true; break; }
         }
       }

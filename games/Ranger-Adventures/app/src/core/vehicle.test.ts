@@ -147,7 +147,7 @@ import {
 const jeep = (x = 0, z = 0, heading = 0, speed = 0): JeepState => ({ x, z, heading, speed, contact: false, braked: false });
 /** What the jeep meets: open ground inside the 75 m rim unless told otherwise. */
 function world(o: { solids?: Solid[]; zones?: Solid[]; animals?: YieldAnimal[]; limits?: JeepWorld['limits'] } = {}): JeepWorld {
-  const solids = o.solids ?? [], zones = o.zones ?? [];
+  const solids = o.solids ?? [], zones = (o.zones ?? []).map((z) => ({ ...z, soft: true }));   // as the World pools them
   return { solids, zones, walls: [...solids, ...zones], animals: o.animals ?? [], limits: o.limits ?? { bound: 75 } };
 }
 

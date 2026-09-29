@@ -840,10 +840,10 @@ export class Vehicles {
   private jeepWorldObj: JeepWorld | null = null;
   private readonly pool: Solid[] = [];
   private poolUsed = 0;
-  private pooled(x: number, z: number, r: number): Solid {
+  private pooled(x: number, z: number, r: number, soft = false): Solid {
     const c = this.pool[this.poolUsed] ?? (this.pool[this.poolUsed] = { x: 0, z: 0, r: 0 });
     this.poolUsed++;
-    c.x = x; c.z = z; c.r = r;
+    c.x = x; c.z = z; c.r = r; c.soft = soft;
     return c;
   }
   private readonly addPerson = (x: number, z: number): void => {
@@ -866,8 +866,8 @@ export class Vehicles {
   private zones(forJeep: boolean): Solid[] {
     const out = this.zoneBuf;
     out.length = 0;
-    for (const m of this.host.markers()) out.push(this.pooled(m.pos.x, m.pos.z, MARKER_R));
-    if (forJeep) for (const p of this.helipads) out.push(this.pooled(p.x, p.z, PAD_RADIUS));
+    for (const m of this.host.markers()) out.push(this.pooled(m.pos.x, m.pos.z, MARKER_R, true));
+    if (forJeep) for (const p of this.helipads) out.push(this.pooled(p.x, p.z, PAD_RADIUS, true));
     return out;
   }
 
