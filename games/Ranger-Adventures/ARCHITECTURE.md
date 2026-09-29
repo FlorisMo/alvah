@@ -71,8 +71,11 @@ through the flow's hooks (`log`, `fact`, `reunion`), so the EF contract is uncha
 ```
 adventure/registry.ts    Adventure { id, home, clearings?, dressing?, bind?, prepare?, unprepare?, play(kit) }
 adventure/kit.ts         AdventureKit: the only thing play() talks to
-adventure/beats/         search.ts (zoeken), route.ts (corsi), choice.ts (rustkracht): the SAME
-                         trial builders + pure runs as the 2D floor, played in the world
+adventure/beats/         search.ts (zoeken), route.ts (corsi), choice.ts (rustkracht), aim.ts
+                         (wisselen: aim a camera at one of two named places), callers.ts (simon:
+                         animals at their own spots call, he calls back): the SAME trial builders
+                         + pure runs as the 2D floor, played in the world (aim-math/callers-math:
+                         the pure mapping, beats.test.ts)
 adventure/actors.ts      Actor: calm behaviours (idle, root, go, follow, look, sniff, lie) + a
                          procedural trot for static GLBs; actors-math.ts is the pure part
 adventure/cover.ts       CoverField: instanced true-scale bracken, moor-grass, heather (3 draw
@@ -102,6 +105,13 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   (input locked) to a framed beat's spot.
 - *beats*: `searchBeat(k, step, …)`, `routeBeat(k, step, …)`, `choiceRun(k, step).ask(id,
   { show, wrong, right })` then `.done()`; `await k.fact(i)` shows the raaf's card.
+- *the world*: `await k.act(label, line)` — one action button in the world (Space presses
+  it); `k.daylight(k01, s)` turns the day (1 golden hour … 0 a readable blue night,
+  world/Sky.ts + Daylight.ts; the end of the adventure hands the golden hour back);
+  `k.ui.veil(text)` — time passes; `k.world.snapshot(cam, w, h, prepare)` — a photograph
+  of the world through another camera (a camera trap's, taken inside a frame). A home may
+  plant real forest trees (`Adventure.trees`) and keep a glade clear of them
+  (`treeClearings`); the trees between a held lens and what it frames fade.
 - *plumbing*: `k.say(line)`, `k.wait(s)`, `k.until(fn, s)`, `k.onTick(fn)`, `k.own(obj)`,
   `k.check()` (throws `Aborted` when the child stopped the mission), `k.beat` and `k.stats`
   (read by `__ranger.adventure()` and golden), `k.hint(fn)` (golden's play hint: a 3D

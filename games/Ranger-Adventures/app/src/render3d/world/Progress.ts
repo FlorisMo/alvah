@@ -59,8 +59,6 @@ export interface Piece {
   arrive?: boolean;
   /** false = a hind or a calf: the red-deer model without the stag's antlers */
   antlers?: false;
-  /** stands on a wooden stake this tall (m): a wildcamera strapped to its post */
-  stake?: number;
 }
 
 export interface Tableau {
@@ -536,13 +534,7 @@ export class Progress {
         : await env.spawnPlant(p.id, h);
       if (!s) return;
       const root = s.root as THREE.Object3D;
-      if (p.stake) { // strapped to its post: the post stands on the ground, the prop on top
-        const post = woodenStake(p.stake);
-        root.add(post);
-        post.position.y = -p.stake / root.scale.y;
-        post.scale.setScalar(1 / root.scale.y);
-      }
-      const y = env.groundY(at.x, at.z) + (p.lift ?? 0) + (p.stake ?? 0);
+      const y = env.groundY(at.x, at.z) + (p.lift ?? 0);
       root.position.set(at.x, y, at.z);
       root.rotation.y = facing(p, frame, at);
       const l: Live = {
@@ -658,15 +650,6 @@ function facing(p: Piece, f: Frame, at: { x: number; z: number }): number {
   }
   if (p.face === 'lens' || p.face === undefined) return back;
   return back + p.face;
-}
-
-/** A slim wooden stake (m tall), feet at y=0: what a wildcamera is strapped to. */
-function woodenStake(h: number): THREE.Mesh {
-  const g = new THREE.CylinderGeometry(0.035, 0.045, h, 6);
-  g.translate(0, h / 2, 0);
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#6b513a', roughness: 1 }));
-  m.name = 'stake';
-  return m;
 }
 
 /**
