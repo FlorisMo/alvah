@@ -325,6 +325,7 @@ const MISSIE_REE = {
       sst: 'Sst. Loop stil.',
       verstop: 'Verstop je bij de struik.',
       wacht: 'Wacht stil. Kijk naar de struiken.',
+      staStil: 'Sta stil. Anders schrikt ze.',
       daar: 'Daar is de moeder!',
       ruikt: 'Ze ruikt aan haar kalf.',
     },

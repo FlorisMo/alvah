@@ -100,8 +100,8 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   holds a framed view (a Stage fit at a world anchor, the ranger's spot among `include`),
   eased, ≤ 90°/s, a cut under reduced motion; `k.free()` gives the follow camera back with a
   blended hand-over; `await k.look(spot, line, hold, { turn })` is one calm look
-  (binoculars) and back (`turn`: he ends facing it); `k.ui.watching(on)` is the glasses'
-  closer frame for a long watch (the ree's hide).
+  (binoculars) and back (`turn`: he ends facing it); `k.ui.watching(on)` draws a long
+  watch through the glasses' two round lenses (the ree's hide; under the cards, no zoom).
 - *walking*: `await k.walk({ name, to, r, line, doel, lead, quiet })` — the child walks
   himself; the chip names the goal in words, the arrow only after ~20 s without progress;
   with `lead` an actor follows and hides when he runs; with `quiet` running says its line.
@@ -109,7 +109,8 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   procedural trot is for the static meshes (the boar, the piglet). `await k.walkRanger(x, z)` walks him
   (input locked) to a framed beat's spot.
 - *beats*: `searchBeat(k, step, …)`, `routeBeat(k, step, …)`, `choiceRun(k, step).ask(id,
-  { show, wrong, right })` then `.done()`; `await k.fact(i)` shows the raaf's card.
+  { show, wrong, right, walks })` then `.done()` (`walks`: the wrong answer's reaction walks
+  the ranger, so the card makes way first and its line follows); `await k.fact(i)` shows the raaf's card.
 - *plumbing*: `k.say(line)`, `k.wait(s)`, `k.until(fn, s)`, `k.onTick(fn)`, `k.own(obj)`,
   `k.check()` (throws `Aborted` when the child stopped the mission), `k.beat` and `k.stats`
   (read by `__ranger.adventure()` and golden), `k.hint(fn)` (golden's play hint: a 3D

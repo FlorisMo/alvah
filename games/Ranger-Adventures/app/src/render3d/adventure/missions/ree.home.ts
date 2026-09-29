@@ -30,6 +30,10 @@ import {
   HIDE_JUNIPER, HIDE_LOG, POOL, POOL_FRAME, MEET, onMeadow,
 } from './ree.places';
 
+/** The sky overhead that a small pool mirrors when it is seen from above (the ven, seen
+ *  across, mirrors the hazy horizon and the far trees instead). */
+const POOL_SKY = '#7d949a';
+
 /** The drops a boot throws up in the pool. */
 const DROPS = 9;
 
@@ -39,8 +43,9 @@ const JUNIPER_SLIM = 0.82;
 
 /**
  * The pool's still water: the ven's fresnel mix (world/Dressing.buildVenWater, Water.ts),
- * without its shimmer — looking down it is the dark peat water, toward the far side it
- * carries the golden-hour sky, at a grazing look the dark band of trees. The decal's
+ * without its shimmer — the dark peat water under a mirror of the sky overhead (seen
+ * from above, as a child sees a small pool), at a grazing look the golden haze and the
+ * dark band of trees. The decal's
  * feathered rim (vertex alpha) lets it meet the mud softly. In the fog like the rest.
  */
 function poolWater(): THREE.ShaderMaterial {
@@ -53,6 +58,7 @@ function poolWater(): THREE.ShaderMaterial {
       uDeep: { value: new THREE.Color(WATER_DEEP) },
       uShallow: { value: new THREE.Color(WATER_SHALLOW) },
       uTrees: { value: new THREE.Color(WATER_TREES) },
+      uSky: { value: new THREE.Color(POOL_SKY) },
       uFresnelPower: { value: FRESNEL_POWER },
       uF0: { value: WATER_F0 },
     }]),
@@ -74,6 +80,7 @@ function poolWater(): THREE.ShaderMaterial {
       uniform vec3 uDeep;
       uniform vec3 uShallow;
       uniform vec3 uTrees;
+      uniform vec3 uSky;
       uniform float uFresnelPower;
       uniform float uF0;
       varying vec3 vWorld;
@@ -82,7 +89,9 @@ function poolWater(): THREE.ShaderMaterial {
         vec3 viewDir = normalize(cameraPosition - vWorld);
         float fres = uF0 + (1.0 - uF0) * pow(clamp(1.0 - max(viewDir.y, 0.0), 0.0, 1.0), uFresnelPower);
         vec3 mirrored = mix(uTrees, uShallow, smoothstep(0.07, 0.24, viewDir.y));
-        vec3 col = mix(uDeep, mirrored, clamp(fres * 1.15 + 0.08, 0.0, 0.85));
+        // a steeper look (a small pool is seen from above) mirrors the sky overhead: blue
+        mirrored = mix(mirrored, uSky, smoothstep(0.1, 0.32, viewDir.y));
+        vec3 col = mix(uDeep, mirrored, clamp(fres * 1.3, 0.0, 0.8));
         gl_FragColor = vec4(col, 0.95 * smoothstep(0.0, 0.45, vEdge));
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -239,6 +248,7 @@ export class ReeHome implements HomeDressing {
       const mesh = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48).rotateX(-Math.PI / 2), this.ringMat.clone());
       mesh.visible = false;
       mesh.renderOrder = 5;
+      mesh.rotation.y = POOL.heading; // (its x across the pool, its z along it)
       this.group.add(mesh);
       this.rings.push({ mesh, t: -1, delay: i * 0.3 });
     }
@@ -282,8 +292,10 @@ export class ReeHome implements HomeDressing {
       if (k >= 1 || reduced) { r.t = -1; r.mesh.visible = false; m.opacity = 0; continue; }
       r.mesh.visible = true;
       const e = 1 - (1 - k) * (1 - k); // fast at first, slowing as it spreads
-      const s = 0.12 + e * 1.1;
-      r.mesh.scale.set(s, 1, s * 0.72); // (the pool is longer across than along)
+      // (they stay on the water: the pool is longer across than along, and the boot
+      // went in a little short of its middle)
+      const s = 0.1 + e * 0.62;
+      r.mesh.scale.set(s, 1, s * 0.72);
       m.opacity = 0.8 * (1 - k);
     }
     if (this.dropT >= 0) {

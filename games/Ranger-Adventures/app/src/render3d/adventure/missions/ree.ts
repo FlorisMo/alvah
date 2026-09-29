@@ -41,6 +41,11 @@ import {
 
 const MISSION = 'ree-niet-aanraken';
 
+/** The keys that would take a step (the watch from the hide asks him to keep still). */
+const STEP_KEYS = /^(Arrow(Up|Down|Left|Right)|Key[WASD])$/;
+/** How long (s) he must keep still before a startled mother walks on. */
+const STILL_S = 2.2;
+
 /** The content's zoeken decoys of this mission (the meadow shows them all until a
  *  trial keeps its own). */
 function distractorsOf(m: Mission | undefined): readonly Distractor[] {
@@ -205,7 +210,8 @@ async function story(k: AdventureKit): Promise<void> {
   await swing;
   k.world.faceRanger(headingTo(k.ranger(), POOL));
   const hush = { line: c.sst, onRun: (): void => { void calf.lookAt(me, 1.6); call('fiep', calf.x, calf.z); } };
-  await k.walk({ name: 'pool', to: { x: POOL.x, z: POOL.z }, r: 2.0, line: c.stil, doel: c.chipHut, cue: c.zacht, quiet: hush });
+  // (the walk ends at the pool's near edge: he stops before the water, running or not)
+  await k.walk({ name: 'pool', to: P.poolEdge, r: 1.2, line: c.stil, doel: c.chipHut, cue: c.zacht, quiet: hush });
 
   // 9 · at the pool's edge: round it, not through it (rustkracht 4)
   k.beat = 'pool:walk';
@@ -213,8 +219,10 @@ async function story(k: AdventureKit): Promise<void> {
   k.beat = 'pool:frame';
   await k.frame(POOL_VIEW, { face: POOL.heading });
   await rust.ask('modder', {
-    // straight through: the moment his boot is in the water a plash, rings and drops;
-    // off in the grass the calf lifts its head; he steps back out
+    // straight through: the card makes way, he steps in, and the moment his boot is in
+    // the water a plash, rings and drops; off in the grass the calf lifts its head; he
+    // steps back out, and the card comes back under "Plons!"
+    walks: true,
     wrong: async () => {
       const inWater = (): boolean => {
         const l = toLocal(POOL_FRAME, k.ranger());
@@ -252,22 +260,62 @@ async function story(k: AdventureKit): Promise<void> {
   if (!doe.lies && dist(doe, DOE_BED) > 0.5) { // (a stop and a replay: she is in her bed)
     await go(doe, DOE_BED.x, DOE_BED.z, { speed: 'walk', face: DOE_BED.yaw });
   }
-  await k.wait(2.6);
-  home.cover.rustle(home.gapClump, 0.16);
-  if (settings.geluid) Sound.rustle();
-  await k.wait(1.3);
-  await go(doe, COPSE_GAP.x, COPSE_GAP.z, { speed: 'walk' });
-  k.say(c.daar);
-  // in the gap she stops and tests the air; a step out, two calm bites of grass
-  await k.guard(doe.lookAt(() => ({ x: MEET.x, z: MEET.z, speed: 0 }), 1.3));
-  const bite = toward(COPSE_GAP, MEET, 0.8);
-  await go(doe, bite.x, bite.z, { speed: 'walk' });
-  doe.root(bite.x, bite.z, 0.05);
-  await k.wait(2.6);
-  // out onto the open heath by the tall grass; she stops and looks round (toward the
-  // hide: stil!), then toward the grass where her calf lies
-  await go(doe, MEET.x, MEET.z, { speed: 'walk' });
-  await k.guard(doe.lookAt(() => ({ x: P.hide.x, z: P.hide.z, speed: 0 }), 1.6));
+  // while she comes he must keep STILL (a roe hears everything): a step key or a tap on
+  // the world and she freezes, head up, staring at the hide ("Sta stil"); once he has
+  // been still a little while she goes on. Never a fail: it only makes her wait.
+  const hide = { x: P.hide.x, z: P.hide.z, speed: 0 };
+  let movedAt = -99;
+  const startle = (): void => {
+    const fresh = k.now - movedAt > 1.5;
+    movedAt = k.now;
+    if (!fresh) return;
+    k.stats.watch_moves = (k.stats.watch_moves ?? 0) + 1;
+    k.say(c.staStil);
+    if (settings.geluid) Sound.rustle();
+    if (!doe.lies) void doe.lookAt(() => hide, 1.8);
+  };
+  const onKey = (e: KeyboardEvent): void => { if (STEP_KEYS.test(e.code)) startle(); };
+  const onTap = (e: PointerEvent): void => { if (!(e.target as Element | null)?.closest?.('button')) startle(); };
+  window.addEventListener('keydown', onKey);
+  window.addEventListener('pointerdown', onTap);
+  /** He has been still long enough (else wait until he is, and say the watch line again). */
+  const still = async (): Promise<void> => {
+    if (k.now - movedAt >= STILL_S) return;
+    await k.until(() => k.now - movedAt >= STILL_S, 600);
+    k.say(c.wacht);
+  };
+  /** Her calm walk to (x, z); a startle stops her, and she walks on once he is still. */
+  const walkOn = async (x: number, z: number, o: Parameters<Actor['go']>[2] = {}): Promise<void> => {
+    for (;;) {
+      await still();
+      if (await go(doe, x, z, { speed: 'walk', ...o })) return;
+      if (k.now - movedAt > 1) return; // (blocked, not startled: she stays where she is)
+    }
+  };
+  try {
+    await k.wait(2.6);
+    await still();
+    home.cover.rustle(home.gapClump, 0.16);
+    if (settings.geluid) Sound.rustle();
+    await k.wait(1.3);
+    await walkOn(COPSE_GAP.x, COPSE_GAP.z);
+    k.say(c.daar);
+    // in the gap she stops and tests the air; a step out, two calm bites of grass
+    await k.guard(doe.lookAt(() => ({ x: MEET.x, z: MEET.z, speed: 0 }), 1.3));
+    const bite = toward(COPSE_GAP, MEET, 0.8);
+    await walkOn(bite.x, bite.z);
+    doe.root(bite.x, bite.z, 0.05);
+    await k.wait(2.6);
+    // out onto the open heath by the tall grass; she stops and looks round (toward the
+    // hide: stil!), then toward the grass where her calf lies
+    await walkOn(MEET.x, MEET.z);
+    await still();
+    await k.guard(doe.lookAt(() => hide, 1.6));
+    await still();
+  } finally {
+    window.removeEventListener('keydown', onKey);
+    window.removeEventListener('pointerdown', onTap);
+  }
   const calfAt = { x: calf.x, z: calf.z };
   await k.guard(doe.lookAt(() => ({ x: calfAt.x, z: calfAt.z, speed: 0 }), 0.9));
   // she calls it softly; the calf gets up and comes out of the grass to her
