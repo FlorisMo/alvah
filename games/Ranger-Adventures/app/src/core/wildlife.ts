@@ -493,8 +493,10 @@ const ON_LOOP = 0.15;
 const OFF_LOOP = 1.4;
 /** How quickly it catches up with its loop point (1/s). */
 const LOOP_GAIN = 3;
-/** Making way, it turns toward where it goes and only moves once it faces within this (rad)… */
+/** Walking back, it turns toward where it goes and only moves once it faces within this
+ *  (rad); making way, within this wider one (it sets off while it turns). */
 const MOVE_ALIGN = 1.2;
+const MOVE_ALIGN_QUICK = 1.75;
 /** Its calm acceleration and braking (m/s²), and its quick ones when it makes way. */
 const ACCEL = 1.6, ACCEL_QUICK = 5, BRAKE = 3, BRAKE_QUICK = 6;
 /** Watching, it turns its body to what it watches only when that is this far (rad) off its
@@ -676,7 +678,9 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
       // toward the jeep or the ranger, even mid-turn
       const tx = s.lookX - s.x, tz = s.lookZ - s.z, tl = Math.hypot(tx, tz);
       const toward = quick && tl > 1e-6 ? (Math.sin(s.facing) * tx + Math.cos(s.facing) * tz) / tl : -1;
-      const align = err > MOVE_ALIGN || toward > 0.1 ? 0 : Math.cos(err);
+      // making way it sets off while it turns (a curving start, never toward what it leaves);
+      // walking back it faces its way first
+      const align = toward > 0.1 ? 0 : quick ? (err > MOVE_ALIGN_QUICK ? 0 : Math.max(0.4, Math.cos(err))) : err > MOVE_ALIGN ? 0 : Math.cos(err);
       // arrive: never overshoot the spot, ease into it
       const arrive = Math.sqrt(2 * (quick ? BRAKE_QUICK : BRAKE) * 0.6 * dist);
       s.speed = approach(s.speed, Math.min(pace, arrive) * align, quick ? ACCEL_QUICK : ACCEL, quick ? BRAKE_QUICK : BRAKE, dt);
