@@ -85,11 +85,13 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
   const canvas = k.ctx.canvas;
   const body = o.target.body;
   if (!body) throw new Error('[adventure] the search target has no body');
-  // where a player sees him best: the top of his back (the golden hint clicks it)
+  // where a player sees him: the middle of the glimpse between the stems, as this lens
+  // sees it (the golden hint clicks it); the top of his back if no ray gets through
   const anchor = new THREE.Object3D();
   anchor.name = 'search-target';
   anchor.userData.hintAnchor = true;
-  anchor.position.copy(backTop(body));
+  const seen = glimpseOn(body, camera, [o.cover.group, ...o.decoys.map((d) => d.object)]);
+  anchor.position.copy(seen ? body.worldToLocal(seen) : backTop(body));
   body.add(anchor);
   // the design's bar, measured: the cover round him stands at least twice his lying height
   if (o.lyingH) {
@@ -200,4 +202,35 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
   await k.wait(2.4);
   anchor.removeFromParent();
   return { summary, misses, seconds };
+}
+
+/**
+ * The point of `body` a player sees best through the cover from `camera`: rays through
+ * a grid over its upper half, and of those whose first hit (body, cover, decoys) is the
+ * body, the one nearest the middle of what shows. World space; null when none gets
+ * through.
+ */
+function glimpseOn(body: THREE.Object3D, camera: THREE.Camera, cover: readonly THREE.Object3D[]): THREE.Vector3 | null {
+  body.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(body);
+  if (box.isEmpty()) return null;
+  const ray = new THREE.Raycaster();
+  const targets = [body, ...cover];
+  const inBody = (o: THREE.Object3D | null): boolean => { for (let p = o; p; p = p.parent) if (p === body) return true; return false; };
+  const eye = camera.getWorldPosition(new THREE.Vector3());
+  const hits: THREE.Vector3[] = [];
+  const p = new THREE.Vector3();
+  for (let i = 0; i <= 6; i++) {
+    for (let j = 0; j <= 4; j++) {
+      for (const k of [0.7, 0.95]) {
+        p.set(box.min.x + (box.max.x - box.min.x) * (i / 6), box.min.y + (box.max.y - box.min.y) * k, box.min.z + (box.max.z - box.min.z) * (j / 4));
+        ray.set(eye, p.clone().sub(eye).normalize());
+        const first = ray.intersectObjects(targets, true).find((h) => h.object.visible && !h.object.userData.hitSphere);
+        if (first && inBody(first.object)) hits.push(first.point.clone());
+      }
+    }
+  }
+  if (!hits.length) return null;
+  const mid = hits.reduce((a, b) => a.add(b), new THREE.Vector3()).multiplyScalar(1 / hits.length);
+  return hits.reduce((best, h) => (h.distanceTo(mid) < best.distanceTo(mid) ? h : best));
 }
