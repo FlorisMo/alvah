@@ -152,6 +152,7 @@ const MISSIE_FRISLING = {
       chipModder: 'De modderpoel',
       komt: 'Er komt een jong zwijn.',
       moeder: 'De moeder kijkt naar jou.',
+      hek: 'Kijk. Het hek is stuk.',
     },
     knap: {
       kijk: 'Daar is zijn rotte.',

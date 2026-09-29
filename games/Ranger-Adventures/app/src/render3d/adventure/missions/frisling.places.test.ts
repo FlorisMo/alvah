@@ -11,6 +11,7 @@ import test from 'node:test';
 import {
   FRISLING_PLACES as P, FRISLING_RESIDENTS, MARKER, STAND, STAND_FRAME, FIELD_FRAME, WALLOW, WALLOW_FRAME, LOST_SPOT,
   fieldSpots, hideClumps, frislingClearings, onStand, SEARCH_VIEW, FIELD_VIEW, WALLOW_VIEW,
+  cluePosts, clueGap, bootPrints, CLUE_FRAME,
 } from './frisling.places.ts';
 import { anchorInBiome, biomeAt, VEN_CENTER } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
@@ -43,6 +44,9 @@ const everything = (): { name: string; x: number; z: number; r: number }[] => [
     return { name: `stand-rim-${i}`, ...atLocal(STAND_FRAME, (STAND.halfW + 0.45) * Math.cos(a), (STAND.halfD + 0.4) * Math.sin(a)), r: 0.45 };
   }),
   { name: 'wallow', x: WALLOW_FRAME.x, z: WALLOW_FRAME.z, r: Math.max(WALLOW.halfW, WALLOW.halfD) + 0.4 },
+  // the clue (after): the cut fence and the boot prints through its gap
+  ...cluePosts().map((p, i) => ({ name: `clue-post-${i}`, ...p, r: 0.3 })),
+  ...bootPrints().map((p, i) => ({ name: `clue-print-${i}`, x: p.x, z: p.z, r: 0.2 })),
 ];
 
 test('the marker is where the world puts it (the heide anchor)', () => {
@@ -151,4 +155,27 @@ test('the framed views look at their place from the ranger\'s side, with him in 
   }
   const w = atLocal(WALLOW_FRAME, 0, 0);
   assert.ok(dist(w, P.wallow) < 1e-9);
+});
+
+test('the clue: a cut fence past the wallow, boot prints through its gap, clear of the family', () => {
+  const posts = cluePosts();
+  const gap = clueGap();
+  // the gap is a bay in the middle of the fence, the fence lies beyond the wallow
+  assert.ok(dist(gap, P.wallow) > 4.5 && dist(gap, P.wallow) < 7, `the gap is ${dist(gap, P.wallow).toFixed(1)} m past the wallow`);
+  assert.ok(toLocal(WALLOW_FRAME, CLUE_FRAME).v > 4, 'on the far side of the wallow from the ranger');
+  // the prints: a grown-up's stride, one line through the gap, from outside toward the wallow
+  const prints = bootPrints();
+  for (let i = 1; i < prints.length; i++) {
+    const s = dist(prints[i], prints[i - 1]);
+    assert.ok(s > 0.6 && s < 0.9, `a long stride (${s.toFixed(2)} m)`);
+    assert.ok(dist(prints[i], P.wallow) < dist(prints[i - 1], P.wallow), 'they lead toward the wallow');
+  }
+  const cross = prints.map((p) => toLocal(CLUE_FRAME, p).v);
+  assert.ok(cross[0] > 0 && cross[cross.length - 1] < 0, 'they cross the fence line');
+  const gu = toLocal(CLUE_FRAME, gap).u;
+  for (const p of prints) assert.ok(Math.abs(toLocal(CLUE_FRAME, p).u - gu) < 0.3, 'through the gap, not through the wire');
+  // the family (after) keeps clear of the wire
+  for (const r of FRISLING_RESIDENTS) {
+    for (const q of posts) assert.ok(dist(r.after!, q) > 2, `${r.key} keeps off the fence`);
+  }
 });

@@ -21,7 +21,7 @@ import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { patchLocal } from '../../play/kit-math.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
-import { approachOf, atLocal, headingTo, toward, uniformLocal, type Frame } from '../places.ts';
+import { approachOf, atLocal, headingTo, toLocal, toward, uniformLocal, type Frame } from '../places.ts';
 
 /** The frisling marker: the heide's first anchor (Biomes.anchorInBiome('heide', 22)).
  *  The marker stays where it always stood; the test checks the anchor still lands here. */
@@ -185,4 +185,44 @@ export function frislingClearings(): { x: number; z: number; r: number }[] {
     { x: WALLOW_AT.x, z: WALLOW_AT.z, r: Math.max(WALLOW.halfW, WALLOW.halfD) + 0.9 },
     ...fieldSpots().map((s) => ({ x: s.x, z: s.z, r: 0.95 })),
   ];
+}
+
+/* -------------------------------------------------------------- the clue ---- */
+
+/**
+ * The season's first clue as world dressing (design §4.1 beat 15, content clue 'spoor':
+ * "Iemand knipte het hek stuk. In het zand staan grote voetstappen."): a stretch of old
+ * wire fence on the far side of the wallow, one bay cut open, and a grown-up's boot
+ * prints in a strip of sand through the gap. It is there after the mission (and after a
+ * reload), never before. `v` is how far past the wallow's centre the fence runs.
+ */
+export const CLUE = { v: 5.4, posts: 5, bay: 1.55, gapBay: 1, postH: 1.2 } as const;
+/** The fence line: `u` along it, `v` away from the wallow. */
+export const CLUE_FRAME: Frame = { ...atLocal(WALLOW_FRAME, 0.4, CLUE.v), heading: WALLOW_FRAME.heading };
+
+/** The fence posts, left to right. */
+export function cluePosts(): Spot[] {
+  const half = ((CLUE.posts - 1) * CLUE.bay) / 2;
+  return Array.from({ length: CLUE.posts }, (_, i) => atLocal(CLUE_FRAME, -half + i * CLUE.bay, 0));
+}
+
+/** The middle of the cut bay (where the prints go through). */
+export function clueGap(): Spot {
+  const p = cluePosts();
+  return { x: (p[CLUE.gapBay].x + p[CLUE.gapBay + 1].x) / 2, z: (p[CLUE.gapBay].z + p[CLUE.gapBay + 1].z) / 2 };
+}
+
+/** A grown-up's boot prints through the gap: from outside the fence to the wallow side
+ *  (a long stride, 0.75 m), left and right feet apart; `yaw` is the way the toes point. */
+export function bootPrints(): (Spot & { yaw: number; left: boolean })[] {
+  const g = toLocal(CLUE_FRAME, clueGap());
+  const out: (Spot & { yaw: number; left: boolean })[] = [];
+  const toward = CLUE_FRAME.heading + Math.PI; // walking in: from the far side toward the wallow
+  for (let i = 0; i < 8; i++) {
+    const left = i % 2 === 0;
+    const v = 2.6 - i * 0.75;
+    const u = g.u + (left ? -0.13 : 0.13) + Math.sin(i * 1.7) * 0.05;
+    out.push({ ...atLocal(CLUE_FRAME, u, v), yaw: toward + Math.sin(i * 2.3) * 0.08, left });
+  }
+  return out;
 }

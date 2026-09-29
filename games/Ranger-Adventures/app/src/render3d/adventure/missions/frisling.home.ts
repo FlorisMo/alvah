@@ -26,6 +26,7 @@ import { patchLocal } from '../../play/kit-math';
 import { heightFor } from '../../play/spawn';
 import { lyingHeight, LEG_SHARE } from '../../play/pose';
 import { boxObstacle } from '../../CharacterController';
+import { CutFence } from './frisling.clue';
 import { SIZE } from '../../AnimalScale';
 import {
   FRISLING_PLACES, STAND, STAND_FRAME, WALLOW, WALLOW_FRAME, WALLOW_LOG, FIELD_FRAME, LOST_SPOT, SEARCH_VIEW,
@@ -55,6 +56,11 @@ export class FrislingHome implements HomeDressing {
   /** the eye the stand's window was opened for */
   readonly searchEye: V3;
   private readonly ringPrints: THREE.InstancedMesh;
+  /** the season's first clue (after): the cut fence past the wallow, boot prints through it */
+  readonly clue: CutFence;
+  /** while the adventure plays, the clue waits for its moment (`revealClue`), never
+   *  appearing in the reunion's view */
+  holdClue = false;
   private readonly spawned: { dispose(): void }[] = [];
   private readonly decoyParts: Map<string, THREE.Object3D[]> = new Map();
   private readonly birds: { o: THREE.Object3D; base: THREE.Vector3; kind: string; t: number }[] = [];
@@ -188,6 +194,15 @@ export class FrislingHome implements HomeDressing {
     this.ringPrints.instanceMatrix.needsUpdate = true;
     this.ringPrints.renderOrder = 2;
     this.group.add(this.ringPrints);
+
+    /* -- the clue (after): a cut fence past the wallow -- */
+    this.clue = new CutFence(this.group, g, env.obstacles);
+  }
+
+  /** The clue drops: the cut fence fades in (under the raaf's card). */
+  revealClue(secs = 1.2): void {
+    this.holdClue = false; // (the mission is done: a borrowed home gets its state on release)
+    this.clue.show(true, secs);
   }
 
   /** The decoys of this trial stay; the others step out of the stand (under the briefing card). */
@@ -207,12 +222,14 @@ export class FrislingHome implements HomeDressing {
 
   setState(state: HomeState): void {
     this.ringPrints.visible = state === 'before';
+    this.clue.show(state === 'after' && !this.holdClue);
   }
 
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean }[]): void {
     this.clock += dt;
     this.cover.update(dt, t, reduced, movers);
     this.field.update(dt, reduced);
+    this.clue.update(dt);
     // a poked bird flits up a little and settles again; a butterfly opens its wings
     for (const b of this.birds) {
       if (b.t <= 0) continue;
@@ -225,6 +242,7 @@ export class FrislingHome implements HomeDressing {
   dispose(): void {
     this.cover.dispose();
     this.field.dispose();
+    this.clue.dispose();
     for (const s of this.spawned) s.dispose();
     this.ringPrints.geometry.dispose();
     (this.ringPrints.material as THREE.Material).dispose();
