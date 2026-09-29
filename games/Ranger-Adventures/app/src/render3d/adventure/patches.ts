@@ -33,18 +33,22 @@ function moundGeometry(seed: number): THREE.BufferGeometry {
   // lumps and crumbs, a few pale sandy bits — never a smooth disc
   const moist = new THREE.Color('#3a2b20'), soil = new THREE.Color('#5a4431'), crumb = new THREE.Color('#7d6448'), sand = new THREE.Color('#a08a64');
   P.push(0, 0.004, 0); C.push(moist.r, moist.g, moist.b);
-  const lumps: number[] = Array.from({ length: SEG }, () => 0.8 + rnd() * 0.4);
+  // the outline and the crumbs follow slow waves round the patch (never a star of spikes)
+  const ph = [rnd() * 6.3, rnd() * 6.3, rnd() * 6.3, rnd() * 6.3];
+  const wave = (a: number, k: number): number => Math.sin(a * 2 + ph[0] + k) * 0.55 + Math.sin(a * 3 + ph[1] - k * 2) * 0.3 + Math.sin(a * 5 + ph[2]) * 0.15;
   for (let r = 1; r <= RINGS; r++) {
     const k = r / RINGS;
     for (let i = 0; i < SEG; i++) {
-      const a = (i / SEG) * Math.PI * 2 + (rnd() - 0.5) * 0.08;
-      const rr = 0.5 * k * (k === 1 ? lumps[i] : 1 + (rnd() - 0.5) * 0.18);
-      // low in the middle, the thrown-up rim highest, clods here and there
-      const rim = Math.exp(-((k - 0.78) ** 2) / 0.02) * 0.06;
-      const h = 0.004 * (1 - k) + rim + (k < 1 ? rnd() * 0.03 : -0.012);
+      const a = (i / SEG) * Math.PI * 2;
+      const rr = 0.5 * k * (1 + wave(a, 0) * 0.14 * k + (rnd() - 0.5) * 0.04);
+      // low in the middle, the thrown-up rim highest, the outer edge settling into the ground
+      const rim = Math.exp(-((k - 0.74) ** 2) / 0.018) * (0.05 + 0.025 * (wave(a, 1.3) + 1) / 2);
+      const h = 0.004 * (1 - k) + rim + (k < 1 ? rnd() * 0.012 : -0.006);
       P.push(Math.cos(a) * rr, h, Math.sin(a) * rr);
-      const pale = rnd();
-      const c = pale > 0.9 ? sand : k > 0.65 ? (pale > 0.5 ? crumb : soil) : new THREE.Color().copy(moist).lerp(soil, k * 0.9 + rnd() * 0.2);
+      const n = (wave(a * 1.3, k * 3 + ph[3]) + 1) / 2; // 0..1, slow round the patch
+      const c = k >= 1 ? soil
+        : k > 0.6 ? new THREE.Color().copy(soil).lerp(n > 0.72 ? sand : crumb, n > 0.72 ? 0.45 : n * 0.6)
+          : new THREE.Color().copy(moist).lerp(soil, k * 0.8 + n * 0.12);
       C.push(c.r, c.g, c.b);
     }
   }
