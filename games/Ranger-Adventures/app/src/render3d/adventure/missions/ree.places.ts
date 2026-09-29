@@ -207,6 +207,20 @@ export const CALF_VIEW = {
   halfW: 1.7, halfD: 1.0, tall: 0.9, pitchDeg: 52, insetTop: 40, insetBottom: 300,
   include: [{ x: calfTalk.x, z: calfTalk.z, h: RANGER_STAND_HEIGHT }],
 } as const;
+/** Leaving the calf: the lens swings round behind him as he turns away from it and
+ *  takes his first quiet steps toward the pool (the hide's juniper beyond it), so the
+ *  walk that follows starts with the way ahead in view. `at` his first steps' end. */
+export function leaveView(at: Spot): {
+  at: Spot; heading: number; halfW: number; halfD: number; tall: number; pitchDeg: number; insetTop: number; insetBottom: number;
+  include: { x: number; z: number; h: number }[]; seconds: number;
+} {
+  const h = headingTo(at, POOL);
+  return {
+    at: toward(at, POOL, 2.2), heading: h - 0.2, halfW: 1.6, halfD: 1.6, tall: 1.2, pitchDeg: 30, insetTop: 96, insetBottom: 16,
+    include: [{ x: at.x, z: at.z, h: RANGER_STAND_HEIGHT }], seconds: 2.6,
+  };
+}
+
 /** The pool: the lens behind him, the water in front (its choice, a splash, the way round). */
 export const POOL_VIEW = {
   at: { x: POOL.x, z: POOL.z }, heading: POOL.heading + 0.35,

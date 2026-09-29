@@ -35,7 +35,7 @@ import { SIZE } from '../../AnimalScale';
 import { ReeHome } from './ree.home';
 import {
   REE_HOME, REE_PLACES as P, REE_RESIDENTS, CALF_SPOT, COPSE_GAP, DOE_BED, MEET, POOL, POOL_FRAME, POOL_IN, POOL_ROUND,
-  SEARCH_VIEW, CALF_VIEW, POOL_VIEW, WATCH_VIEW, reeClearings, slotTrail, calfBolt, drinkSpot,
+  SEARCH_VIEW, CALF_VIEW, POOL_VIEW, WATCH_VIEW, reeClearings, slotTrail, calfBolt, drinkSpot, leaveView,
 } from './ree.places';
 
 const MISSION = 'ree-niet-aanraken';
@@ -171,8 +171,10 @@ async function story(k: AdventureKit): Promise<void> {
     // "stil weglopen": he steps back from it, quietly, and turns to it again
     right: async () => {
       const r = k.ranger();
-      const back = toward(calf, r, dist(calf, r) + 0.8);
+      const back = toward(calf, r, dist(calf, r) + 0.9);
       await k.walkRanger(back.x, back.z, 0.05);
+      const turn = toward(back, calf, 0.3); // (a small step toward it: he turns round calmly)
+      await k.walkRanger(turn.x, turn.z, 0.05);
       k.world.faceRanger(headingTo(k.ranger(), calf));
     },
   });
@@ -186,7 +188,16 @@ async function story(k: AdventureKit): Promise<void> {
     },
   });
 
-  // 8 · walk away quietly to the hide; a wet pool lies across the way
+  // 8 · he turns away from the calf and takes his first quiet steps toward the pool, the
+  // lens swinging round behind him (then the way ahead is in view); then he walks on
+  // himself, quietly, to the hide; a wet pool lies across the way
+  k.beat = 'calf:leave';
+  const r8 = k.ranger();
+  const first = toward(r8, POOL, 1.4);
+  const swing = k.frame(leaveView(first));
+  await k.walkRanger(first.x, first.z, 0.05);
+  await swing;
+  k.world.faceRanger(headingTo(k.ranger(), POOL));
   const hush = { line: c.sst, onRun: (): void => { void calf.lookAt(me, 1.6); call('fiep', calf.x, calf.z); } };
   await k.walk({ name: 'pool', to: { x: POOL.x, z: POOL.z }, r: 2.0, line: c.stil, doel: c.chipHut, cue: c.zacht, quiet: hush });
 

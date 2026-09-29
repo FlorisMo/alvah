@@ -13,7 +13,7 @@ import {
   REE_PLACES as P, REE_RESIDENTS, REE_HOME, MARKER, MEADOW, MEADOW_FRAME, CALF_SPOT, CALF_AT, COPSE_FRAME, COPSE_GAP,
   DOE_BED, JUNIPERS, COPSE_TREES, HIDE_FRAME, HIDE_JUNIPER, HIDE_LOG, POOL, POOL_ROUND, POOL_IN,
   SEARCH_VIEW, CALF_VIEW, POOL_VIEW, WATCH_VIEW, onMeadow, reeClearings, slotTrail, calfBolt, drinkSpot, inMeadow, alongLog,
-  juniperR, MEET,
+  juniperR, MEET, leaveView,
 } from './ree.places.ts';
 import {
   FRISLING_PLACES, hideClumps, fieldSpots, cluePosts, bootPrints,
@@ -289,6 +289,15 @@ test('the framed views look at their place from the ranger\'s side, with him in 
   assert.ok(across > 0.8, `calf: its flank faces the lens (${across.toFixed(2)})`);
   const fromSearch = Math.abs(Math.sin(CALF_SPOT.yaw - SEARCH_VIEW.heading));
   assert.ok(fromSearch > 0.7, `search: its back and flank face the searching eye (${fromSearch.toFixed(2)})`);
+  // leaving the calf the lens ends behind him looking at the pool and the hide beyond it
+  const first = { x: P.calfTalk.x + (POOL.x - P.calfTalk.x) * 0.2, z: P.calfTalk.z + (POOL.z - P.calfTalk.z) * 0.2 };
+  const lv = leaveView(first);
+  const lf = { x: lv.at.x, z: lv.at.z, heading: lv.heading };
+  assert.ok(toLocal(lf, first).v < -0.5, 'leave: he stands in front of the lens\'s patch');
+  for (const q of [POOL, P.hide]) {
+    const l = toLocal({ x: first.x, z: first.z, heading: lv.heading }, q);
+    assert.ok(l.v > 2 && Math.abs(Math.atan2(l.u, l.v)) < 0.5, 'leave: the pool and the hide lie ahead in the view');
+  }
   // the watch has no ranger in it: the lens looks from the hide's side at the scene
   const l = toLocal({ x: WATCH_VIEW.at.x, z: WATCH_VIEW.at.z, heading: WATCH_VIEW.heading }, P.hide);
   assert.ok(l.v < -8 && Math.abs(l.u) < 1, 'the watch looks out from the hide');

@@ -760,6 +760,9 @@ export class World {
    *  start; the follow camera does not move for it). */
   faceRanger(heading: number): void {
     this.ranger.rotation.y = heading;
+    // he stands: a tap-walk target left a few centimetres off (a walk the adventure asked
+    // for ends within 0.12 m of it) would turn him straight back to face that spot
+    if (!this.walkGoal) this.player.target.copy(this.ranger.position).setY(0);
   }
 
   /** Run `fn(dt, t)` every frame (inside the world's update, after the animals moved)

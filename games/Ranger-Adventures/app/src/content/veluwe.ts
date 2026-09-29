@@ -323,7 +323,7 @@ const MISSIE_REE = {
       chipHut: 'De schuilplek',
       zacht: 'loop, niet rennen',
       sst: 'Sst. Loop stil.',
-      verstop: 'Verstop je achter de struik.',
+      verstop: 'Verstop je bij de struik.',
       wacht: 'Wacht stil. Kijk naar de struiken.',
       daar: 'Daar is de moeder!',
       ruikt: 'Ze ruikt aan haar kalf.',
