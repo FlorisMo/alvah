@@ -29,7 +29,7 @@ import { VEN_CENTER, WATER_LEVEL, type Biome } from './Biomes';
 import { Terrain } from './world/Terrain';
 import { Sky } from './world/Sky';
 import { Labels } from './world/Labels';
-import { Dressing } from './world/Dressing';
+import { Dressing, type TreeSpecies } from './world/Dressing';
 import { Fauna } from './world/Fauna';
 import { Markers, type WorldMarker } from './world/Markers';
 import { Vehicles } from './world/Vehicles';
@@ -48,7 +48,7 @@ import type { RangerMotion, WorldCtx } from './play/types';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
 import { cachedResource } from './Models';
 import { Progress } from './world/Progress';
-import { Residents, type DressingBuilder, type FrameView } from './world/Residents';
+import { Residents, type DressingBuilder, type FrameView, type ResidentBody } from './world/Residents';
 import { Stage } from './play/stage';
 import type { HomeSpec } from './adventure/types';
 
@@ -76,6 +76,12 @@ export interface WorldHome {
   build?: DressingBuilder;
   /** ground its mud / turned earth keeps bare of the heath scatter */
   clearings?: readonly { x: number; z: number; r: number }[];
+  /** its own trees (a squirrel's oak): real forest trees with a solid trunk */
+  trees?: readonly { x: number; z: number; species: TreeSpecies; h: number; rotY: number }[];
+  /** ground the scattered bos trees keep clear of (a glade) */
+  treeClear?: readonly { x: number; z: number; r: number }[];
+  /** a resident's own body (a squirrel that climbs), instead of a walking animal */
+  actor?: ResidentBody;
 }
 
 /**
@@ -227,6 +233,7 @@ export class World {
       scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits, labels: this.labels,
     });
     this.dressing.clearings = (opts.homes ?? []).flatMap((h) => h.clearings ?? []);
+    this.dressing.treeClear = (opts.homes ?? []).flatMap((h) => h.treeClear ?? []);
     this.fauna = new Fauna({ scene: this.scene, terrain: this.terrain });
     this.pois = new Markers(
       { scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, labels: this.labels, limits: this.limits },
@@ -298,6 +305,7 @@ export class World {
     this.dressing.placeLandmarks();
     this.pois.placeSitSpot();
     this.dressing.placeNatureDressing();
+    this.dressing.addHomeTrees((opts.homes ?? []).flatMap((h) => h.trees ?? [])); // run 6: a home's own trees
     this.fauna.placeScenicActors();
     // people are solid: the ranger walks round the warden and the poacher (with a child's
     // bit of personal space), never through them
@@ -317,7 +325,7 @@ export class World {
       scene: this.scene, lensFor: (v) => this.frameLens(v), groundY: (x, z) => this.terrain.y(x, z), spawnModel, spawnPlant, heightFor,
       obstacles: this.obstacles, limits: this.limits, reduced: () => livePolicy().reduced,
     });
-    for (const h of opts.homes ?? []) this.residents.add(h.spec, h.build);
+    for (const h of opts.homes ?? []) this.residents.add(h.spec, h.build, h.actor);
 
     this.readback = new DevReadback(
       {

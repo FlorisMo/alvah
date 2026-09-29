@@ -138,14 +138,12 @@ export const TABLEAUS: Record<string, Tableau> = {
       { id: 'prop-mushrooms', kind: 'prop', h: SIZE.paddenstoelen.h, a: 0.6, s: -1.6, face: 'lens' },
     ],
   },
-  // "Alle nootjes terug." — the winter store by the stump, and a friend
+  // "Alle nootjes terug." — run 6: the squirrel LIVES on its oak by the marker and takes
+  // the ranger to its glade (world/Residents.ts, adventure/missions/eekhoorn.places.ts);
+  // its store by the stump stays there, and the "klaar" flag stands at the marker
   eekhoorn: {
-    hero: 'eekhoorn',
-    pieces: [
-      { id: 'prop-tree-stump', kind: 'prop', h: SIZE.stronk.h, a: 1.4, s: -1.5, face: 'lens' },
-      { id: 'prop-acorn-cluster', kind: 'prop', h: SIZE.eikels.h, a: 0.7, s: -1.2, face: 'lens' },
-      { id: 'eekhoorn', kind: 'animal', a: 0.8, s: 1.2, face: 'hero', arrive: true },
-    ],
+    hero: '',
+    pieces: [],
   },
   // "De vos is gerust. Hij draaft terug naar zijn hol." — the den, and a cub
   vos: {

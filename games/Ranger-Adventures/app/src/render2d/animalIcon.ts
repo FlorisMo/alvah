@@ -31,10 +31,41 @@ function roeSvg(spots: boolean): string {
   );
 }
 
+/** A jay side-on (pinkish brown, a black tail, the blue bar on its wing, its crest) and a
+ *  green woodpecker clinging upright (green, a red cap, a black mask): the squirrel's
+ *  tree neighbours, each its own picture beside the raven and the squirrel. */
+function jaySvg(): string {
+  return (
+    '<svg class="ai-svg" viewBox="0 0 64 64" width="1.15em" height="1.15em" aria-hidden="true">' +
+    '<path d="M12 40 L2 50 L6 52 L16 44 Z" fill="#1d1d22"/>' +
+    '<ellipse cx="30" cy="36" rx="17" ry="11" fill="#c89276"/>' +
+    '<path d="M22 32 Q32 26 40 34 Q32 40 22 38 Z" fill="#8b7d77"/>' +
+    '<rect x="26" y="33" width="10" height="3.2" fill="#3a7bd5"/><rect x="28" y="33" width="1.6" height="3.2" fill="#1d1d22"/>' +
+    '<rect x="32" y="33" width="1.6" height="3.2" fill="#1d1d22"/>' +
+    '<circle cx="46" cy="27" r="9" fill="#d09a80"/><path d="M42 19 Q46 13 51 19 Z" fill="#e8d8cc"/>' +
+    '<path d="M53 27 L61 29 L53 31 Z" fill="#3a3530"/><path d="M44 31 L50 33" stroke="#1d1d22" stroke-width="1.6"/>' +
+    '<circle cx="49" cy="26" r="1.6" fill="#1d1d22"/>' +
+    '<path d="M26 47 L25 55 M34 47 L35 55" stroke="#8a6a50" stroke-width="1.8"/>' +
+    '</svg>'
+  );
+}
+function greenWoodpeckerSvg(): string {
+  return (
+    '<svg class="ai-svg" viewBox="0 0 64 64" width="1.15em" height="1.15em" aria-hidden="true">' +
+    '<path d="M26 44 L22 60 L30 58 Z" fill="#3f5f25"/>' +
+    '<ellipse cx="30" cy="34" rx="10" ry="15" fill="#6f9a3a"/>' +
+    '<ellipse cx="34" cy="38" rx="5" ry="9" fill="#c8cf7a"/>' +
+    '<circle cx="33" cy="16" r="8" fill="#7da544"/><path d="M26 12 Q32 5 40 12 L38 14 Q32 10 28 14 Z" fill="#d8322a"/>' +
+    '<path d="M33 16 L39 18 L33 20 Z" fill="#1d1d22"/><path d="M40 16 L54 18 L40 20 Z" fill="#6b6660"/>' +
+    '<circle cx="35" cy="15.5" r="1.5" fill="#f4f0e0"/>' +
+    '</svg>'
+  );
+}
+
 const ICON: Record<string, string> = {
   edelhert: '🦌', ree: roeSvg(false), reekalf: roeSvg(true), wildzwijn: '🐗', frisling: '🐗', das: '🦡', vos: '🦊',
   eekhoorn: '🐿️', wolf: '🐺', raaf: '🐦‍⬛', merel: '🐦‍⬛', nachtzwaluw: '🐦', koekoek: '🐦',
-  roodborsttapuit: '🐦', 'groene-specht': '🐦', koolmees: '🐦', heikikker: '🐸', adder: '🐍',
+  roodborsttapuit: '🐦', 'groene-specht': greenWoodpeckerSvg(), gaai: jaySvg(), koolmees: '🐦', heikikker: '🐸', adder: '🐍',
   heideblauwtje: '🦋',
 };
 

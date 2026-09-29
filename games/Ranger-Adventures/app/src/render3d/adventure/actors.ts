@@ -75,10 +75,10 @@ export class Actor {
   speed = 0;
   /** loaded (its model stands in the world) */
   readonly ready: Promise<void>;
-  private readonly env: ActorEnv;
+  protected readonly env: ActorEnv;
   private readonly pace: { walk: number; trot: number; turn: number };
-  private readonly gaitNode = new THREE.Group();   // the trot bob/roll + the rooting dip
-  private readonly pivot = new THREE.Group();      // pitch pivot at the hind feet
+  protected readonly gaitNode = new THREE.Group();   // the trot bob/roll + the rooting dip
+  protected readonly pivot = new THREE.Group();      // pitch pivot at the hind feet
   private stand: Spawned | null = null;
   private lying: Spawned | null = null;
   private lyingJob: Promise<void> | null = null;
@@ -93,7 +93,7 @@ export class Actor {
   private headUp = 0;         // 0..1 alert: head up (looking at something)
   private readonly recipe;
   private disposed = false;
-  private readonly shadow: THREE.Mesh;
+  protected readonly shadow: THREE.Mesh;
   private readonly len: number;
 
   constructor(key: string, animal: string, env: ActorEnv, opts: { height: number; len?: number }) {
@@ -214,8 +214,11 @@ export class Actor {
     return new Promise((done) => this.replace({ kind: 'sniff', x, z, until: this.clock + secs, reach, done }));
   }
 
+  /** It just called (its voice, a squeak or a chatter): a subclass may move with it. */
+  called(): void { /* a static mesh just calls */ }
+
   /** What it is doing now. */
-  get doing(): Task['kind'] { return this.task.kind; }
+  get doing(): string { return this.task.kind; }
 
   /** Dev read: its behaviour's numbers (where to, how stuck). */
   get detail(): string {

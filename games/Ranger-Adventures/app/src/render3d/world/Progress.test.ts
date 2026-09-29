@@ -46,7 +46,7 @@ function box(h: number) {
 
 /** Run 6: the missions whose family LIVES at a home of its own (world/Residents.ts,
  *  render3d/adventure): their tableau is only the "klaar" flag at the marker. */
-const LIVES_AT_HOME = new Set(['frisling']);
+const LIVES_AT_HOME = new Set(['frisling', 'eekhoorn']);
 /** A mission whose family still walks in to its marker (the classic tableau). */
 const FAMILY = 'ree-niet-aanraken';
 
@@ -95,6 +95,10 @@ test('every mission ends in its own tableau, with the animal it is about at its 
   // piglet is hidden in the bracken, you hear him) and gets only the "klaar" flag
   assert.equal(heroOf('frisling', 'wildzwijn'), '');
   assert.deepEqual(TABLEAUS.frisling.pieces, []);
+  // run 6: the squirrel lives on its oak by the marker (a resident, not the ring's
+  // animal) and its store stays at its glade: the marker gets only the flag
+  assert.equal(heroOf('eekhoorn', 'eekhoorn'), '');
+  assert.deepEqual(TABLEAUS.eekhoorn.pieces, []);
   assert.equal(heroOf('ree-niet-aanraken', 'ree'), 'reekalf');
 });
 

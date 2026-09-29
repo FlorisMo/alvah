@@ -30,7 +30,18 @@ export interface RouteOpts {
   field: PatchField;
   /** the animal that goes to each spot he picks and sniffs it */
   walker?: Actor;
-  lines: { kijk: string; wijs: string; mis: string; goed: string };
+  /** `vergeten`: said after the first show, before `wijs` (the squirrel forgot) */
+  lines: { kijk: string; wijs: string; mis: string; goed: string; vergeten?: string };
+  /** Run 6 (the squirrel): the FIRST show is an animal's visits — `visit` goes to the
+   *  spot and calls `light(true)` while it is there (it digs), `light(false)` as it
+   *  leaves; the beat waits for each visit, one spot at a time. A reshow (after a wrong
+   *  pick) is the spots glowing in order, as always. */
+  visit?: (spot: { id: number; x: number; z: number }, light: (on: boolean) => void) => Promise<void>;
+  /** Run 6: the feedback to a pick, instead of the walker sniffing and the ranger walking
+   *  after it: resolves when the next pick may come (short: an animal's quick dash). */
+  picked?: (spot: { id: number; x: number; z: number }, res: 'advance' | 'complete' | 'reshow') => Promise<void>;
+  /** Run 6: a show just ended (recall is open): `first` = the animal's own visits */
+  shown?: (first: boolean) => void;
 }
 
 /** Show timings (s): each spot lit, dark between two, a breath before the first. */
@@ -53,22 +64,39 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
   let busy = false;
   k.stats.route_length = trial.sequence.length;
 
-  /** The route, one spot at a time (the mission clock: it waits while paused). */
+  /** The route, one spot at a time (the mission clock: it waits while paused). The
+   *  first show may be an animal's visits (`visit`); a reshow is the spots glowing. */
+  let shows = 0;
   const show = async (say: boolean): Promise<void> => {
     phase = 'show';
     field.clear();
     if (say) k.say(o.lines.kijk);
     await k.wait(LEAD_S);
+    const visits = o.visit && shows === 0;
+    shows += 1;
     for (const id of trial.sequence) {
-      field.show(id, true);
+      const i = field.spots.findIndex((s) => s.id === id);
+      if (visits) {
+        await k.guard(o.visit!(field.spots[i], (on) => { field.show(i, on); if (on && settings.geluid) Sound.dig(); }));
+        continue;
+      }
+      field.show(i, true);
       if (settings.geluid) Sound.dig();
       await k.wait(ON_S);
-      field.show(id, false);
+      field.show(i, false);
       await k.wait(GAP_S);
     }
-    await k.wait(0.2);
+    if (!visits) await k.wait(0.2);
     phase = 'recall';
-    k.say(o.lines.wijs);
+    o.shown?.(!!visits);
+    if (visits && o.lines.vergeten) {
+      // recall opens at once (right after the show); the words follow calmly
+      k.say(o.lines.vergeten);
+      const at = k.now;
+      void k.until(() => k.now - at > 2.4 || phase !== 'recall' || run.recallIndex > 0).then(() => {
+        if (phase === 'recall' && !busy) k.say(o.lines.wijs, { queue: true });
+      }).catch(() => {});
+    } else k.say(o.lines.wijs);
   };
 
   const unhint = k.hint(() => {
@@ -105,10 +133,11 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
     const s = field.spots[i];
     busy = true;
     // the piglet trots there and sniffs; the ranger walks after him (feedback, not input)
-    if (o.walker) void o.walker.sniff(s.x, s.z, 1.2);
+    // — or the beat's own feedback (the squirrel dashes there and sniffs)
+    if (o.walker && !o.picked) void o.walker.sniff(s.x, s.z, 1.2);
     const me = k.ranger();
     const d = Math.hypot(s.x - me.x, s.z - me.z);
-    const walk = d > 1.6 ? k.walkRanger(s.x, s.z, 1.25).catch(() => false) : Promise.resolve(true);
+    const walk = o.picked ? o.picked(s, res).catch(() => {}) : d > 1.6 ? k.walkRanger(s.x, s.z, 1.25).catch(() => false) : Promise.resolve(true);
     if (res === 'reshow') {
       field.mark(i, 'wrong');
       if (settings.geluid) { Sound.sniff(); Sound.tryAgain(); }

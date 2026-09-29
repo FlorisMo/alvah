@@ -45,6 +45,15 @@ const ANIMALS = {
     geluid: 'tjikt', toonVeilig: true,
     feiten: ['De eekhoorn verstopt nootjes. Soms vergeet hij er een. Daar groeit een boom uit.'],
   },
+  /* run 6: the squirrel's tree neighbours (De verstopte nootjes) */
+  gaai: {
+    id: 'gaai', naam: 'gaai', simpelWoord: 'gaai', geluid: 'krijst', toonVeilig: true,
+    feiten: ['De gaai verstopt ook eikels. Soms pikt hij er een.'],
+  },
+  'groene-specht': {
+    id: 'groene-specht', naam: 'groene specht', simpelWoord: 'specht', geluid: 'lacht', toonVeilig: true,
+    feiten: ['De groene specht lacht hard. Hij eet graag mieren.'],
+  },
   das: {
     id: 'das', naam: 'das', simpelWoord: 'das',
     vaktermen: { huis: 'burcht' }, geluid: 'snuift', toonVeilig: true,
@@ -636,21 +645,23 @@ const MISSIE_EEKHOORN = {
   status: 'actief',
   kort: 'De eekhoorn verstopt nootjes. Help hem ze terug te vinden.',
   briefing: {
+    // run 6: the briefing names what the child sees at the marker: the squirrel on its
+    // oak, and where it goes (its hiding place in the wood)
     simpel: [
       'Hoi ranger!',
-      'De eekhoorn verstopt nootjes.',
-      'Straks vergeet hij waar ze liggen.',
+      'Zie je de eekhoorn in de eik?',
+      'Hij gaat nootjes verstoppen.',
+      'Volg hem naar zijn plekje.',
       'Kijk goed waar hij ze stopt.',
-      'Wijs daarna de plekjes terug.',
-      'Laat de weg zien.',
+      'Straks vergeet hij het. Help hem dan.',
     ],
     knap: [
       'Hoi ranger!',
-      'De eekhoorn legt een wintervoorraad aan.',
-      'Hij verstopt nootjes door het hele bos.',
+      'Zie je de eekhoorn in de eik?',
+      'Hij legt een wintervoorraad aan.',
+      'Volg hem naar zijn plekje.',
       'Onthoud de volgorde van de plekjes.',
-      'Wijs ze daarna in volgorde terug.',
-      'Laat de weg zien.',
+      'Straks vergeet hij het. Help hem dan.',
     ],
   },
   beloning: {
@@ -658,14 +669,44 @@ const MISSIE_EEKHOORN = {
     vaktermBadge: { id: 'knap-wintervoorraad', naam: 'Knap woord: wintervoorraad' },
   },
   reunion: { sprite: 'eekhoorn', tekst: 'Alle nootjes terug. Knap gedaan.' },
+  /* run 6: De verstopte nootjes as an adventure in the world (render3d/adventure/
+     missions/eekhoorn.ts): follow the squirrel tree to tree, watch where it buries its
+     acorns and point them out when it forgets, call back its noisy neighbours. */
+  avontuur: {
+    simpel: {
+      volg: 'Volg de eekhoorn.',
+      chipEekhoorn: 'De eekhoorn',
+      luister: 'kijk omhoog',
+      wacht: 'Hij wacht op jou.',
+      weer: 'Daar gaat hij weer!',
+      plekje: 'Hier is zijn plekje.',
+      routeKijk: 'Kijk waar hij de nootjes stopt.',
+      vergeten: 'Oei, hij weet het niet meer!',
+      routeWijs: 'Klik de plekjes op volgorde.',
+      routeMis: 'Hier niet. Kijk nog een keer.',
+      stapel: 'Hij brengt ze naar zijn stronk.',
+      buren: 'Kijk, de buren komen kijken.',
+      luisterBuren: 'Luister wie er roept.',
+      naroepen: 'Roep ze na. Klik op de dieren.',
+      groei: 'Goed zo! Nu nog een.',
+      opnieuw: 'Luister nog een keer.',
+      goedBuren: 'Knap onthouden!',
+      gaai: 'De gaai vliegt weg.',
+    },
+    knap: {
+      routeKijk: 'Kijk waar hij zijn voorraad verstopt.',
+      stapel: 'Hij brengt ze naar zijn wintervoorraad.',
+    },
+  },
   stappen: [
     {
       ef: 'corsi',
       skin: {
         copy: {
+          // (the adventure frames it as the squirrel forgetting where it buried them)
           instructie: 'Onthoud waar de nootjes liggen.',
           toon: 'Kijk waar de eekhoorn ze verstopt…',
-          terug: 'Wijs de plekjes terug.',
+          terug: 'Hij vergeet het. Wijs de plekjes aan.',
           goed: 'Alle nootjes gevonden!',
         },
         feit: 'De eekhoorn vergeet soms een nootje. Daar groeit dan een boom uit.',
@@ -677,9 +718,10 @@ const MISSIE_EEKHOORN = {
       ef: 'simon',
       skin: {
         dier: 'eekhoorn',
-        dieren: ['eekhoorn', 'raaf', 'ree', 'das'],
+        // run 6: the squirrel's noisy tree neighbours (the jay is the nut thief)
+        dieren: ['eekhoorn', 'gaai', 'groene-specht', 'raaf'],
         copy: {
-          instructie: 'Antwoord de dieren in het bos.',
+          instructie: 'Antwoord de buren van de eekhoorn.',
           luister: 'Luister wie er roept…',
           echo: 'Doe ze na. Tik op de dieren.',
           goed: 'Knap onthouden!',
