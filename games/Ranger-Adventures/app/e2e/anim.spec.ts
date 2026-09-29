@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, recordMotion, pageNow, motionFrames, median, plantedSlip } from './helpers';
 
 /**
  * Player-animation E2E (WORLD-PLAN W3.2). The W3.1-staged ranger rig carries
@@ -81,6 +81,65 @@ test('anim: holding a key plays the walk clip and its mixer clock advances', asy
       timeout: 10_000, message: 'stopping should ease back to idle',
     })
     .toBe('idle');
+
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Run 6: the legs match the ground. Held Shift + ArrowUp plays the run clip (its clock
+ * advancing), the cadence quickens but stays a child's (walk ≤ 3.7, run ≤ 4.6 steps a
+ * second: long steps, not a scurry), and the ball of the planted foot stays put on the
+ * rendered ground: its slip over each stance is at most 25 % of his speed, walking and
+ * running (measured every rendered frame from the dev hook's sole probe, read only).
+ */
+test('anim: the run clip plays when he runs, and the planted foot does not skate (walk and run)', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await enterWorld(page);
+  await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 60_000, message: 'the ranger rig attaches' }).toBe('idle');
+  await recordMotion(page);
+
+  await page.keyboard.down('ArrowUp');
+  try {
+    await page.waitForTimeout(900);
+    let t = await pageNow(page);
+    await page.waitForTimeout(1300);
+    const walk = await motionFrames(page, t);
+    await page.keyboard.down('Shift');
+    await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 5_000, message: 'Shift + ArrowUp crossfades into the run clip' }).toBe('run');
+    const t1 = (await hook(page, (r) => r.clip()))!.time;
+    await expect.poll(async () => (await hook(page, (r) => r.clip()))?.time ?? t1, { timeout: 5_000, message: 'the run clip advances' }).not.toBe(t1);
+    await page.waitForTimeout(600);
+    t = await pageNow(page);
+    await page.waitForTimeout(1300);
+    const run = await motionFrames(page, t);
+    await shot(page, 'anim-running');
+    await page.keyboard.up('Shift');
+    await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 5_000, message: 'letting go of Shift walks again' }).toBe('walk');
+
+    const cadWalk = median(walk.map((f) => f.cadence)), cadRun = median(run.map((f) => f.cadence));
+    expect(cadWalk, `walking cadence ${cadWalk.toFixed(2)} steps/s: brisk, not a scurry`).toBeGreaterThan(2.6);
+    expect(cadWalk).toBeLessThanOrEqual(3.7);
+    expect(cadRun, `running cadence ${cadRun.toFixed(2)} steps/s: quicker, still a child's`).toBeGreaterThan(cadWalk);
+    expect(cadRun).toBeLessThanOrEqual(4.6);
+    const sw = plantedSlip(walk), sr = plantedSlip(run);
+    testInfo.annotations.push({ type: 'slip', description: `walk ${(100 * sw.slip).toFixed(1)} % (${sw.frames} planted frames), run ${(100 * sr.slip).toFixed(1)} % (${sr.frames})` });
+    expect(sw.frames, 'the walk has planted frames to judge').toBeGreaterThan(20);
+    expect(sr.frames, 'the run has planted frames to judge').toBeGreaterThan(10);
+    expect(sw.slip, `walking, the planted foot slips ${(100 * sw.slip).toFixed(1)} % of his speed (≤ 25 %)`).toBeLessThanOrEqual(0.25);
+    expect(sr.slip, `running, the planted foot slips ${(100 * sr.slip).toFixed(1)} % of his speed (≤ 25 %)`).toBeLessThanOrEqual(0.25);
+    // a run has flights: both soles off the ground; a walk never leaves it
+    const air = (fs: typeof run): number => fs.filter((f) => f.lift.length === 2 && f.lift[0] > 0.02 && f.lift[1] > 0.02).length / Math.max(1, fs.length);
+    testInfo.annotations.push({ type: 'flight', description: `both feet off the ground: walking ${(100 * air(walk)).toFixed(0)} % of frames, running ${(100 * air(run)).toFixed(0)} %` });
+    expect(air(run), 'running, both feet leave the ground mid-stride (≥ 10 % of frames)').toBeGreaterThanOrEqual(0.1);
+    expect(air(walk), 'walking, a foot is always on the ground').toBe(0);
+  } finally {
+    await page.keyboard.up('Shift');
+    await page.keyboard.up('ArrowUp');
+  }
+  await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 10_000 }).toBe('idle');
 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);

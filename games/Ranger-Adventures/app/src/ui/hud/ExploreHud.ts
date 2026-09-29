@@ -10,7 +10,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { joystickVisible } from '../../core/input';
-import { onboardHint, ONBOARD_TAP, ONBOARD_BOUNDARY, ONBOARD_DRIVE } from '../../core/onboarding';
+import { onboardHint, ONBOARD_TAP, ONBOARD_BOUNDARY, ONBOARD_DRIVE, ONBOARD_RUN, RUN_TIP_AFTER_M } from '../../core/onboarding';
 import { provideHint } from '../../core/devhook';
 import { ROEP_COPY } from '../../engines/roep';
 import type { WayCue } from '../../render3d/Wayfinding';
@@ -32,13 +32,13 @@ let onboardRaf = 0;
 // both the wayfinding tracker and the "tik op een dier" tip wait until it seals on
 // the first step. `active` is the single hint currently visible; mirrored on the dev
 // hook (`provideHint`). `helpChip` tracks the laptop "?" re-show chip (F-15).
-const hintState: { active: 'walk' | 'tap' | 'boundary' | null; helpChip: boolean } = {
+const hintState: { active: 'walk' | 'tap' | 'boundary' | 'run' | null; helpChip: boolean } = {
   active: null,
   helpChip: false,
 };
 // timeout handle for the single transient tip; one at a time.
 let tipTimer = 0;
-function hintSnapshot(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } {
+function hintSnapshot(): { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } {
   const s = store.get().settings;
   return { active: hintState.active, walkSeen: s.wereldHintGezien, tapSeen: s.tikHintGezien, helpChip: hintState.helpChip };
 }
@@ -47,6 +47,7 @@ function hintSnapshot(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen:
 export function disposeExploreHud(): void {
   if (onboardRaf) { cancelAnimationFrame(onboardRaf); onboardRaf = 0; }
   if (tipTimer) { clearTimeout(tipTimer); tipTimer = 0; }
+  if (runTipRaf) { cancelAnimationFrame(runTipRaf); runTipRaf = 0; }
   hintState.active = null; hintState.helpChip = false;
   if (joystick) { joystick.dispose(); joystick = null; }
 }
@@ -94,6 +95,7 @@ export function showExploreHud(activeTitel: string | null): void {
   mountJoystick(hud);
   mountOnboardHint(hud);
   mountHelpChip(hud); // F-15: laptop "?" chip re-shows the control hint on demand
+  mountRunTip(); // run 6: once, after his first metres, how to run
   provideHint(hintSnapshot);
   // The World only re-fires its onNear callbacks on a proximity CHANGE, so a fresh
   // HUD re-surfaces whatever the ranger is already standing at.
@@ -291,7 +293,7 @@ function revealTracker(): void {
 
 /** RUN-3 P3.3 · the ONE transient-tip channel (tap tip · boundary cue · help
  *  re-show). A short hint that fades on its own after `ms`; only one on screen. */
-function showTip(id: 'walk' | 'tap' | 'boundary', text: string, ms = 5200): void {
+function showTip(id: 'walk' | 'tap' | 'boundary' | 'run', text: string, ms = 5200): void {
   const hud = session.host.querySelector<HTMLElement>('.explore-hud');
   if (!hud) return;
   session.host.querySelectorAll('.explore-tip').forEach((n) => n.remove());
@@ -320,6 +322,36 @@ export function showDriveHint(): void {
   narrator.speak(stickShown() ? ONBOARD_DRIVE.stick : `${ONBOARD_DRIVE.keys} ${DRIVE_OUT_KEYS}`);
 }
 
+// ---- run 6 (FEEL lane): the run tip --------------------------------------------
+// Once per save, after he has walked RUN_TIP_AFTER_M on foot and no other tip is up:
+// "Houd Shift in om te rennen." (stick: "Duw de stick ver…"), read aloud, through the
+// one-tip channel. If he finds running by himself first, it never shows.
+let runTipRaf = 0;
+function mountRunTip(): void {
+  if (runTipRaf) { cancelAnimationFrame(runTipRaf); runTipRaf = 0; }
+  if (!session.world || store.get().settings.renHintGezien) return;
+  let walked = 0;
+  let last = performance.now();
+  const watch = (now: number): void => {
+    runTipRaf = 0;
+    const w = session.world;
+    if (!w || store.get().settings.renHintGezien) return;
+    const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
+    last = now;
+    const m = w.rangerMotion();
+    if (m.running) { store.setSetting({ renHintGezien: true }); return; } // he found it himself
+    walked += m.speed * dt;
+    if (walked >= RUN_TIP_AFTER_M && hintState.active === null && store.get().settings.wereldHintGezien) {
+      store.setSetting({ renHintGezien: true });
+      showTip('run', stickShown() ? ONBOARD_RUN.stick : ONBOARD_RUN.keys);
+      return;
+    }
+    runTipRaf = requestAnimationFrame(watch);
+  };
+  runTipRaf = requestAnimationFrame(watch);
+}
+// ---- end run 6 ------------------------------------------------------------------
+
 /** F-11: the calm world-boundary cue, through the same one-tip channel. */
 export function showBoundaryHint(): void {
   showTip('boundary', ONBOARD_BOUNDARY);
@@ -340,7 +372,7 @@ function mountHelpChip(hud: HTMLElement | null): void {
   btn.textContent = '?';
   hud.appendChild(btn);
   hintState.helpChip = true;
-  btn.addEventListener('click', () => showTip('walk', onboardHint(false)));
+  btn.addEventListener('click', () => showTip('walk', `${onboardHint(false)} ${ONBOARD_RUN.keys}`)); // run 6: and how to run
 }
 
 /** Build + wire the virtual joystick (W1.3) into the freshly-rendered HUD; the old
@@ -353,7 +385,7 @@ function mountJoystick(hud: HTMLElement | null): void {
   const coarse = coarsePointer();
   js.setVisible(joystickVisible(store.get().settings.joystick, coarse));
   hud.appendChild(js.el);
-  world.setJoystick(() => js.vector());
+  world.setJoystick(() => js.vector(), (running) => js.setRunning(running));
   joystick = js;
 }
 

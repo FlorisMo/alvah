@@ -629,6 +629,10 @@
   pointer-events: none; /* the base owns the pointer capture */
 }
 .rj-base.rj-active { background: rgba(20, 16, 12, 0.3); }
+/* run 6: pushed to the rim he runs, and the ring shows it: a warm, steady ring (no
+   pulse, no motion: a state, reduced-motion safe) */
+.rj-base.rj-run { border-color: #f5c23b; box-shadow: 0 0 0 5px rgba(245, 194, 59, 0.55); }
+.rj-base.rj-run .rj-thumb { border-color: #f5c23b; }
 /* the thumb re-centres with a soft ease on release; the drag itself is instant
    (transform set inline every move), and this transition is calm/tiny so it is
    reduced-motion-safe (locomotion feedback, not a camera move). */

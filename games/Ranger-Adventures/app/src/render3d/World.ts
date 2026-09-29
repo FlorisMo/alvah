@@ -459,6 +459,11 @@ export class World {
     return this.player.groundSpeed();
   }
 
+  /** Dev-hook accessor (run 6): the ranger's gait and his soles (the foot-slip probe). */
+  playerGait(): ReturnType<Player['gait']> {
+    return this.player.gait();
+  }
+
   /** How the ranger moves right now: where he stands, his heading, his ground speed
    *  (m/s) and whether he runs. Live; the missions' animals and the dev hook read it. */
   rangerMotion(): RangerMotion {
@@ -493,9 +498,11 @@ export class World {
   }
 
   /** Register the on-screen joystick's live-vector source (W1.3). The HUD wires
-   *  it on world entry; pass null to clear. Fused with held keys each frame. */
-  setJoystick(source: (() => StickVector | null) | null): void {
+   *  it on world entry; pass null to clear. Fused with held keys each frame. `onRun`
+   *  hears whether the stick has him running (its ring shows it, run 6). */
+  setJoystick(source: (() => StickVector | null) | null, onRun: ((running: boolean) => void) | null = null): void {
     this.player.joystickSource = source;
+    this.player.stickRunFeedback = onRun;
   }
 
   /** Register the "Camera draait mee" setting source (W1.5). Read live each frame
@@ -678,10 +685,11 @@ export class World {
 
     this.fauna.update(t, dt, reduced, this.camera); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
 
-    // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
-    // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
-    // animates in both motion modes; only the procedural-bob fallback holds still.
-    this.player.rig.update(dt, this.player.groundSpeedNow, reduced);
+    // W3.2: the ranger's own locomotion animation (and his footsteps, on his feet).
+    // Locomotion is reduced-motion EXEMPT (§3.4) so the mixer always advances with real
+    // dt — a walking ranger animates in both motion modes; only the procedural-bob
+    // fallback holds still.
+    this.player.animate(dt, reduced);
 
     // W7.2: measure fps and step the quality tier down/up with hysteresis.
     this.probeQuality(dt);
