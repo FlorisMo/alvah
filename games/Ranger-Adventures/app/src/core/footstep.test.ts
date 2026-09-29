@@ -11,6 +11,7 @@ import {
   newFootAccum,
   STRIDE_M,
   MIN_STEP_SPEED,
+  plantsBetween,
 } from './footstep.ts';
 
 test('surface: only drift-sand reads as zand, the rest as gras', () => {
@@ -74,4 +75,16 @@ test('a faster walk fires more steps in the same number of frames', () => {
   const slow = run(1.0, 1.0 / 60);
   const fast = run(3.0, 3.0 / 60);
   assert.ok(fast > slow, `fast (${fast}) covers more ground → more steps than slow (${slow})`);
+});
+
+test('plantsBetween: a foot goes down each time the cycle crosses its plant', () => {
+  const P = [0, 0.5];
+  assert.equal(plantsBetween(0.4, 0.45, P), 0);
+  assert.equal(plantsBetween(0.45, 0.55, P), 1, 'the right foot');
+  assert.equal(plantsBetween(0.95, 0.05, P), 1, 'the left foot, across the wrap');
+  assert.equal(plantsBetween(0.3, 0.3, P), 0, 'standing still');
+  assert.equal(plantsBetween(0.55, 0.45, P, true), 1, 'backing up crosses it backwards');
+  assert.equal(plantsBetween(0.05, 0.95, P, true), 1, 'backwards across the wrap');
+  assert.equal(plantsBetween(0.49, 0.5, P), 1, 'landing exactly on it counts once');
+  assert.equal(plantsBetween(0.5, 0.51, P), 0, '…and not again');
 });

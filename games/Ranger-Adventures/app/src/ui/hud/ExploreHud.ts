@@ -309,8 +309,8 @@ function mountJoystick(hud: HTMLElement | null): void {
   const coarse = coarsePointer();
   js.setVisible(joystickVisible(store.get().settings.joystick, coarse));
   hud.appendChild(js.el);
-  world.setJoystick(() => js.vector());
-  // the run lesson reads how far the stick is pushed (at its rim he runs)
+  // his stick run shows on the ring (FEEL); the run lesson reads how far it is pushed
+  world.setJoystick(() => js.vector(), (running) => js.setRunning(running));
   setStickSource(() => { const v = js.vector(); return v ? Math.hypot(v.x, v.y) : 0; });
   joystick = js;
 }

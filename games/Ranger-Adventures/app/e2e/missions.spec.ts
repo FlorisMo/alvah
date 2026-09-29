@@ -502,7 +502,13 @@ test('the bird bench on the 2D floor (Tweaks "altijd 2D"): RoepView plays and ha
       { timeout: 10_000, message: 'the bench hands the world back' }).toBe(true);
     const p0 = (await snap(page)).p!;
     await page.keyboard.down('ArrowUp'); await sleep(page, 1_000); await page.keyboard.up('ArrowUp');
-    const p1 = (await snap(page)).p!;
+    let p1 = (await snap(page)).p!;
+    // the bench stands by a pine: facing its trunk, a child backs up instead (run 6: the
+    // brisker walk can end the walk-in facing it)
+    if (Math.hypot(p1.x - p0.x, p1.z - p0.z) <= 0.6) {
+      await page.keyboard.down('ArrowDown'); await sleep(page, 1_000); await page.keyboard.up('ArrowDown');
+      p1 = (await snap(page)).p!;
+    }
     log.soft(Math.hypot(p1.x - p0.x, p1.z - p0.z) > 0.6, 'the ranger walks on after the bench');
   } finally {
     const text = log.write();

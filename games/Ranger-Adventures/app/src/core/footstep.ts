@@ -37,6 +37,25 @@ export const STRIDE_M = 0.85;
 export const MIN_STEP_SPEED = 0.6;
 
 /**
+ * Run 6: with a baked rig the footsteps follow the FEET. The legs turn one normalized
+ * cycle (render3d/PlayerAnim); each foot is put down at a fixed phase of it. This
+ * counts how many of those plant phases the cycle crossed going from `prev` to `next`
+ * (both in [0,1), wrapping; backwards when backing up). At most one cycle per frame is
+ * assumed (the cycle turns < 3×/s; a frame is ≤ 50 ms). Pure.
+ */
+export function plantsBetween(prev: number, next: number, plants: readonly number[], backward = false): number {
+  // forward: the plants in (prev, next], across the wrap if next < prev
+  const [a, b] = backward ? [next, prev] : [prev, next];
+  if (a === b) return 0;
+  let n = 0;
+  for (const p of plants) {
+    const hit = a < b ? p > a && p <= b : p > a || p <= b;
+    if (hit) n++;
+  }
+  return n;
+}
+
+/**
  * The carry accumulator: metres walked toward the next footstep. Seeded at a
  * full stride so the first moving frame plants a foot at once (a step on
  * starting to walk), rather than after a silent stride.

@@ -154,6 +154,11 @@ export interface RangerDevHook {
    *  faces (rad), his post-collision ground speed (m/s) and whether he runs. Null
    *  before the world is up. */
   motion(): { x: number; z: number; heading: number; speed: number; running: boolean } | null;
+  /** The ranger's legs (run 6): which clip leads (idle/walk/run), the shared cycle phase
+   *  (left foot down at 0, right at 0.5), footfalls per second, the run share, the stride
+   *  gain, and his soles in world metres (heel, ball, tip per foot, left first: the
+   *  foot-slip probe). Null before the world is up. */
+  gait(): GaitRead | null;
   /** D1.2 locomotion ground-truth (P1.5a asserts it across the walkable world): is the
    *  ranger's Y actually ON the RENDERED terrain surface, not through it? `grounded` is
    *  true when a down-ray hits the terrain under him AND his feet sit in the on-foot
@@ -396,6 +401,17 @@ export type SeatProbe = { id: string; x: number; y: number; z: number; gap: numb
 // value, proving the site served the freshly-built app.js, not a stale cache).
 const VERSION = '2.1.0-ship';
 
+type XYZ = { x: number; y: number; z: number };
+/** The ranger's gait read (World.playerGait). */
+export interface GaitRead {
+  name: 'idle' | 'walk' | 'run';
+  phase: number;
+  cadence: number;
+  run: number;
+  gain: number;
+  soles: { heel: XYZ; toe: XYZ; tip: XYZ }[];
+}
+
 const state = {
   screen: 'title' as Screen,
   missionView: null as MissionView,
@@ -406,6 +422,7 @@ const state = {
   avatar: null as null | (() => { height: number } | null),
   groundSpeed: null as null | (() => number | null),
   motion: null as null | (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null),
+  gait: null as null | (() => GaitRead | null),
   grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
@@ -555,6 +572,11 @@ export function provideAvatar(fn: (() => { height: number } | null) | null): voi
  *  in m/s). Pass null to clear (F-08). */
 export function provideGroundSpeed(fn: (() => number | null) | null): void {
   state.groundSpeed = fn;
+}
+
+/** Register the ranger's gait + sole probe read (World.playerGait). Pass null to clear. */
+export function provideGait(fn: (() => GaitRead | null) | null): void {
+  state.gait = fn;
 }
 
 /** Register the ranger's live motion read (World.rangerMotion). Pass null to clear. */
@@ -777,6 +799,7 @@ export function installDevHook(): boolean {
     avatar: () => (state.avatar ? state.avatar() : null),
     groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
     motion: () => (state.motion ? state.motion() : null),
+    gait: () => (state.gait ? state.gait() : null),
     grounded: () => (state.grounded ? state.grounded() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),

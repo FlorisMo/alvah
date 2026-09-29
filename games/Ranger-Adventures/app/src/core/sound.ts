@@ -249,14 +249,17 @@ export const Sound = {
    * A soft surface-aware footstep (W4.7b). Sand is a muffled low thud (lowpass
    * noise + a low body tone); grass is a lighter, slightly brighter swish. Kept
    * quiet on purpose — ambient locomotion feedback, never a foreground cue.
+   * Running (run 6), each step is a touch shorter and lighter: quick, light feet.
    */
-  footstep(surface: 'zand' | 'gras'): void {
+  footstep(surface: 'zand' | 'gras', brisk = false): void {
+    const len = brisk ? 0.72 : 1; // shorter
+    const lift = brisk ? 1.18 : 1; // a little brighter
     if (surface === 'zand') {
-      noiseBurst(0.14, 'lowpass', 900, 0.7, 0.06);
-      tone(76, 0, 0.09, 'sine', 0.05);
+      noiseBurst(0.14 * len, 'lowpass', 900 * lift, 0.7, 0.06);
+      tone(76 * lift, 0, 0.09 * len, 'sine', 0.05);
     } else {
-      noiseBurst(0.09, 'bandpass', 2600, 0.8, 0.05);
-      tone(120, 0, 0.05, 'sine', 0.035);
+      noiseBurst(0.09 * len, 'bandpass', 2600 * lift, 0.8, 0.05);
+      tone(120 * lift, 0, 0.05 * len, 'sine', 0.035);
     }
   },
   /**

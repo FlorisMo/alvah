@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { dampFactor, easeInOut, lerpAngle, yawPitch, aimDir } from '../play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW, FOLLOW_TAU, FOLLOW_MAX_RATE } from '../FollowCam';
 import { livePolicy } from '../MotionMode';
+import { WALK_SPEED } from '../../core/input';
 import { segmentEntry, segmentCrosses, obstacleGap, obstacleSpan, type MoveLimits, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { TREE_BASE_H, type Dressing } from './Dressing';
@@ -553,7 +554,11 @@ export class CameraRig {
       }
       this.extOff.set(0, 0, 0);
     } else {
-      this.pivot.lerp(rp, dampFactor(dt, walk ? this.PIVOT_TAU : this.PIVOT_TAU_VEHICLE));
+      // run 6: running, the pivot trails him by the same ~0.33 m as walking (its smooth-time
+      // shortens as his pace passes a walk), so a run never shrinks him on screen
+      const pace = this.player.pace;
+      const pivotTau = !walk ? this.PIVOT_TAU_VEHICLE : pace > WALK_SPEED ? (this.PIVOT_TAU * WALK_SPEED) / pace : this.PIVOT_TAU;
+      this.pivot.lerp(rp, dampFactor(dt, pivotTau));
       this.boomNow += (dist - this.boomNow) * dampFactor(dt, dist < this.boomNow ? this.BOOM_IN_TAU : this.BOOM_OUT_TAU);
       if (this.boomNow > wall) {
         // a wall the look-ahead did not see coming: the lens never goes into it; it comes
