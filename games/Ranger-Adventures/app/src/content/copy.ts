@@ -162,8 +162,13 @@ export const HUB = {
   /** The facts collected on missions: the same name as the card they came on (a
    *  "Veldnotitie" is Bram's note on a briefing; the code calls both veldnotities). */
   veldnotities: 'Wist je dat? · {n}/{m}',
-  geenNotities: 'Speel een missie. Dan komen ze hier.',
-  geenSporen: 'Los missies op. Aanwijzingen komen hier.',
+  geenNotities: 'Weetjes over dieren komen hier ook.',
+  /** The note under the clues, read after the newest clue: what is still to come. Never
+   *  that clue again. A count is said as a word ({aantal}: TELWOORD). */
+  geenSporen: ['Los missies op.', 'Aanwijzingen komen hier.'],
+  nogEen: 'Nog één aanwijzing te vinden.',
+  nogMeer: 'Nog {aantal} aanwijzingen te vinden.',
+  alleGevonden: ['Je hebt alle aanwijzingen!', 'Volg nu het spoor.'],
   gestopt: ['De stroper is gestopt.', 'Alles groeit weer terug.'],
   volgSpoor: 'Volg het spoor',
   verder: 'Verder',
@@ -293,3 +298,6 @@ export const ALGEMEEN = {
   leesVoor: 'Lees voor',
   jeNaam: 'Je rangernaam',
 } as const;
+
+/** A count said as a word: a child reads "twee" in a sentence, not "2" (the sporenboek's note). */
+export const TELWOORD = ['nul', 'één', 'twee', 'drie', 'vier', 'vijf', 'zes', 'zeven', 'acht', 'negen', 'tien'] as const;

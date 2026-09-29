@@ -15,10 +15,11 @@ import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import { loadGameAudio } from '../../core/calls';
 import { setScreen, setMissionView } from '../../core/devhook';
-import { mountReadAloud, readScreenAloud, speakButtonHtml } from '../ReadAloud';
+import { mountReadAloud, readScreenAloud, speakButtonHtml, speakButtonBeside, sentenceSegments, type ReadAloudHandle, type ReadAloudSegment } from '../ReadAloud';
+import { zinnen } from '../../core/readlevel';
 import { SAY } from '../../content/screens';
 import { BESTURING } from '../../content/mentor';
-import { HUB, vul } from '../../content/copy';
+import { HUB, TELWOORD, vul } from '../../content/copy';
 import { joystickVisible } from '../../core/input';
 import { coarsePointer } from '../hud/device';
 import { missionIcon } from '../MissionIcon';
@@ -216,17 +217,19 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
   const allFound = clues.length > 0 && clues.every((c) => found.has(c.id));
   const laatste = [...clues].reverse().find((c) => found.has(c.id)) ?? null;
 
-  // a found clue: its drawn picture (footprints, not a paw: parent:B13), title and text;
-  // one still to find: an empty dashed frame, "Nog niet gevonden" (never "???")
+  // a found clue: its drawn picture (footprints, not a paw: parent:B13), title and text,
+  // one sentence a line; one still to find: an empty dashed frame, "Nog niet gevonden"
+  // (never "???"; the note under the cork says how many are still to find)
   const board = clues
     .map((c) => {
       const isF = found.has(c.id);
       return (
-        `<div class="cb-clue${isF ? ' found' : ''}">` +
+        `<div class="cb-clue${isF ? ' found' : ''}" data-clue="${esc(c.id)}">` +
         `<span class="cb-pin" aria-hidden="true"></span>` +
         `<span class="cb-photo">${icon(isF ? CLUE_ICON[c.soort] ?? 'photo' : 'unknown')}</span>` +
-        `<span class="cb-clue-title">${esc(isF ? c.titel : HUB.nietGevonden)}</span>` +
-        (isF ? `<span class="cb-clue-text">${esc(c.tekst)}</span>` : '') +
+        (isF
+          ? `<span class="cb-clue-title">${esc(c.titel)}</span><span class="cb-clue-text">${zinHtml(zinnen(c.tekst))}</span>`
+          : `<span class="cb-clue-wait">${esc(HUB.nietGevonden)}</span>`) +
         `</div>`
       );
     })
@@ -244,21 +247,27 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
             .map((n, i) =>
               `<div class="cb-veld-note" data-i="${i}">` +
               (n.dier ? `<span class="cb-veld-dier">${esc(n.dier)}</span>` : '') +
-              `<span class="cb-veld-text">${esc(n.tekst)}</span>` +
+              `<span class="cb-veld-text"></span>` +
               speakButtonHtml('ra-speak cb-veld-speak') +
               `</div>`,
             )
             .join('')
-        : `<p class="cb-note muted">${esc(HUB.geenNotities)}</p>`) +
+        : `<p class="cb-note cb-veld-leeg muted"></p>`) +
       `</div>`
     : '';
 
   const count = gemeld ? HUB.opgelost : `${found.size}/${clues.length}`;
-  const note = gemeld
-    ? `<p class="cb-note ok">${HUB.gestopt.map((l) => `<span class="cb-note-line">${esc(l)}</span>`).join(' ')}</p>`
-    : laatste
-      ? `<p class="cb-note">${esc(laatste.tekst)}</p>`
-      : `<p class="cb-note muted">${esc(HUB.geenSporen)}</p>`;
+  // the note under the cork says what is still to come (never the newest clue again: that
+  // clue is read and lit up on the cork itself), or the happy end
+  const rest = clues.length - found.size;
+  const noteLines: readonly string[] = gemeld
+    ? HUB.gestopt
+    : !laatste
+      ? HUB.geenSporen
+      : allFound
+        ? HUB.alleGevonden
+        : [rest === 1 ? HUB.nogEen : vul(HUB.nogMeer, { aantal: TELWOORD[rest] ?? rest })];
+  const note = `<p class="cb-note cb-note-main${gemeld ? ' ok' : laatste ? '' : ' muted'}"></p>`;
   // Enter always moves on (child B7): the pinned footer carries the primary. With every
   // clue found that is "Volg het spoor" (the way to the ontknoping), and walking on is
   // the quiet way back; otherwise "Verder op patrouille" itself is the primary.
@@ -281,35 +290,50 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
     `<div class="card-foot">${foot}</div>` +
     `</div>`,
   );
-  // What the book is, then the note under the clues (the latest clue, or where they will
-  // come, or the happy end) is read aloud, karaoke-highlighted
-  const noteEl = el.querySelector<HTMLElement>('.cb-note');
-  const noteText = gemeld ? HUB.gestopt.join(' ') : laatste ? laatste.tekst : HUB.geenSporen;
-  const ra = noteEl
-    ? mountReadAloud({
-      lead: HUB.zegBoek,
-      segments: gemeld
-        ? Array.from(noteEl.querySelectorAll<HTMLElement>('.cb-note-line')).map((l, i) => ({ el: l, text: HUB.gestopt[i] }))
-        : [{ el: noteEl, text: noteText }],
-      autoStart: store.get().settings.voorlezen,
-    })
-    : null;
+  // What the book is, then the newest clue (its title and text) and the note under the
+  // cork, read aloud and lit up line by line (the happy end: only its note). The 🔊 by the
+  // heading says it again.
+  const newest = !gemeld && laatste ? el.querySelector<HTMLElement>(`.cb-clue[data-clue="${CSS.escape(laatste.id)}"]`) : null;
+  const leeg = el.querySelector<HTMLElement>('.cb-veld-leeg');
+  const segments = [
+    ...(newest && laatste
+      ? [{ el: newest.querySelector<HTMLElement>('.cb-clue-title')!, text: laatste.titel, sentence: true },
+        ...sentenceSegments(newest.querySelector<HTMLElement>('.cb-clue-text')!, laatste.tekst)]
+      : []),
+    ...lineSegments(el.querySelector<HTMLElement>('.cb-note-main')!, noteLines),
+    ...(leeg ? lineSegments(leeg, [HUB.geenNotities]) : []),
+  ];
+  const ra = mountReadAloud({ lead: HUB.zegBoek, segments, autoStart: store.get().settings.voorlezen });
+  // W6.3b: each collected veldnotitie reads aloud on demand, lit up line by line. One voice
+  // at a time: a new read stops the one before (its highlight too).
+  const facts = Array.from(el.querySelectorAll<HTMLElement>('.cb-veld-note')).map((row, i) => ({
+    btn: row.querySelector('.cb-veld-speak'),
+    ra: mountReadAloud({ segments: sentenceSegments(row.querySelector<HTMLElement>('.cb-veld-text')!, gotN[i]?.tekst ?? '') }),
+  }));
+  const reads = [ra, ...facts.map((f) => f.ra)];
+  const stopAll = (): void => reads.forEach((r) => r.stop());
+  const sayOnly = (r: ReadAloudHandle): void => { reads.forEach((o) => { if (o !== r) o.stop(); }); r.speak(); };
+  speakButtonBeside(el.querySelector('.boot-title'))?.addEventListener('click', () => sayOnly(ra));
+  facts.forEach((f) => f.btn?.addEventListener('click', () => sayOnly(f.ra)));
   el.querySelector('.cb-back')?.addEventListener('click', () => {
-    ra?.stop();
+    stopAll();
     back();
   });
   el.querySelector('.cb-resolve')?.addEventListener('click', () => {
-    ra?.stop();
+    stopAll();
     Sound.unlock();
     showOntknoping(0, () => showCaseBoard(back));
   });
-  // W6.3b: each collected veldnotitie reads aloud on demand.
-  el.querySelectorAll<HTMLElement>('.cb-veld-note').forEach((row, i) => {
-    row.querySelector('.cb-veld-speak')?.addEventListener('click', () => {
-      ra?.stop();
-      narrator.speak(gotN[i]?.tekst ?? '');
-    });
-  });
+}
+
+/** Lines of a card as `.zin` spans (one sentence a line), the text escaped. */
+function zinHtml(lines: readonly string[]): string {
+  return lines.map((l) => `<span class="zin">${esc(l)}</span>`).join(' ');
+}
+/** Given lines (each one sentence) into `host`, one a line, as read-aloud segments. */
+function lineSegments(host: HTMLElement, lines: readonly string[]): ReadAloudSegment[] {
+  host.innerHTML = zinHtml(lines);
+  return Array.from(host.querySelectorAll<HTMLElement>('.zin')).map((el, i) => ({ el, text: lines[i] }));
 }
 
 /** The hopeful resolution: step through the ontknoping beats, then report → resolved,
