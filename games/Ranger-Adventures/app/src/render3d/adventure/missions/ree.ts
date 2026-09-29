@@ -108,9 +108,14 @@ async function story(k: AdventureKit): Promise<void> {
     if (!(await doe.go(DOE_BED.x, DOE_BED.z, { speed: 'walk', face: DOE_BED.yaw }))) return;
     await doe.lie(true);                         // she beds down in the bracken
   };
+  // she notices him the moment he sets off (or comes near her)
+  const setOff = { ...k.ranger() };
   await k.walk({
     name: 'meadow', to: P.meadowApproach, r: 1.4, line: c.volg, doel: c.chipGras, cue: c.sporen,
-    tick: () => { if (!slipping && dist(k.ranger(), doe) < 16) slipping = slipAway(); },
+    tick: () => {
+      const m = k.ranger();
+      if (!slipping && (dist(m, setOff) > 1.2 || dist(m, doe) < 9)) slipping = slipAway();
+    },
   });
   slipping ??= slipAway();
   // he stops at the meadow's edge and watches her go in (the search's view holds still:

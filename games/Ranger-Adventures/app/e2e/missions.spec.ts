@@ -318,6 +318,15 @@ async function worldReacted(log: Log, mission: Mission, marker: P2, before: Seat
   const home = (await R<Record<string, P2> | null>(page, `r.missionPlaces(${JSON.stringify(mission.id)})`))?.home;
   const near = (q: P2): boolean => !!s.p && Math.hypot(s.p.x - q.x, s.p.z - q.z) < 12;
   log.soft(near(marker) || (!!home && near(home)), 'back in the world near the marker (or the mission\'s home)');
+  // run 6: an adventure's family lives at its home, in its after state, together there
+  const fam = await homeOf(page, mission.id);
+  if (fam && home) {
+    const members = fam.actors.filter((a) => a.visible);
+    const far = members.filter((a) => Math.hypot(a.x - home.x, a.z - home.z) > 4);
+    log.note(`its home: "${fam.state}", ${members.length} animal(s) there`);
+    log.soft(fam.state === 'after' && !fam.borrowed && members.length > 0 && far.length === 0,
+      `the family lives at its home after the mission (${fam.state}; off home: ${far.map((a) => a.key).join(', ') || 'none'})`);
+  }
   const hud = await uiText(page);
   log.soft(hud.includes(`Speel nog eens: ${mission.titel}`) || hud.includes('Pauze'), 'the explore HUD is back');
   const calls = await R<number | null>(page, 'r.drawCalls()');
@@ -340,6 +349,9 @@ for (const mission of missions) {
       await sleep(page, 800);
       await log.shot('at-marker');
       const before = await worldSamples(page, marker, SEAT_RADIUS, 3);
+      // run 6: an adventure's animals live in the world before it starts (nothing pops in)
+      const fam = await homeOf(page, mission.id);
+      if (fam) log.soft(fam.state === 'before' && fam.actors.some((a) => a.visible), `the story's animals are in the world before the mission (${fam.state})`);
       await start(log, mission);
       await playSteps(log, mission);
       await finish(log, mission);
