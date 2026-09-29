@@ -182,6 +182,7 @@ export class Vehicles {
   private vehicleSpeed = 0;               // the controller's carried signed speed (m/s)
   private jeepMoved = 0;                  // the speed it really moved at along its heading (m/s)
   private yieldFor: string | null = null; // run 6: the animal the jeep is braking for
+  private brake: 'solid' | 'edge' | 'animal' | null = null; // run 6: what held its speed back
   private onJeepNear: (near: boolean) => void = () => {};
   private onVehicleChange: (inVehicle: boolean) => void = () => {};
   // W5.3b helicopter (opt-in, withheld under reduced-motion). States while the ranger
@@ -571,7 +572,7 @@ export class Vehicles {
     grounded: boolean; clearance: number; bodyPitch: number; bodyRoll: number; contact: boolean;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    yieldFor: string | null; dust: boolean; driverHidden: boolean; driverSeated: boolean;
+    yieldFor: string | null; brake: 'solid' | 'edge' | 'animal' | null; dust: boolean; driverHidden: boolean; driverSeated: boolean;
     markerDist: number;
   } | null {
     if (!this.jeep || !this.jeepPos) return null;
@@ -596,7 +597,7 @@ export class Vehicles {
       grounded, clearance, bodyPitch: this.jeepPitch, bodyRoll: this.jeepRoll, contact: this.jeepContact,
       speed: this.inVehicle ? this.jeepMoved : 0, maxSpeed: caps.maxSpeed, turnRate: caps.turnRate,
       camDist: off.z, camHeight: off.y, fov: this.camera.fov, roll: rightY,
-      yieldFor: this.yieldFor, dust: this.dustEmitting,
+      yieldFor: this.yieldFor, brake: this.inVehicle ? this.brake : null, dust: this.dustEmitting,
       // F-31: read off the REAL `.visible`, so it can never claim what the render did not do
       driverHidden: this.inVehicle && !this.host.ranger.visible,
       driverSeated: this.inVehicle && this.host.ranger.visible && this.posedRoot !== null,
@@ -908,6 +909,7 @@ export class Vehicles {
     this.vehicleSpeed = f.speed;
     this.jeepMoved = f.moved;
     this.yieldFor = f.yieldFor;
+    this.brake = f.brake;
     const moved = f.moved;
     // (4) the wheels on the drawn ground: height + pitch + roll ease in (a damped
     // suspension glide — research §4.5 — never a hard per-frame snap)

@@ -209,13 +209,13 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     soft(a.driverSeated, 'the driver does not sit in the jeep (hidden, or no seated pose)');
     const hint = await uiText(page);
     soft(/stap uit/i.test(hint) && /(gas|rijd|stick)/i.test(hint), `no line says how to drive and how to get out (HUD: "${hint.replace(/\s+/g, ' ').slice(0, 100)}")`);
-    const samples: (Vehicle & { contact: boolean })[] = [];
+    const samples: (Vehicle & { t: number })[] = [];
     await page.keyboard.down('KeyW');
     const t0 = Date.now();
     let shifted = false;
     try {
       while (Date.now() - t0 < 3_000) {
-        samples.push(await R<Vehicle & { contact: boolean }>(page, 'r.vehicle()'));
+        samples.push({ ...(await R<Vehicle>(page, 'r.vehicle()')), t: Date.now() - t0 });
         if (samples.length === 20) await shot(page, 'jeep-driving');
         // run 6: Shift runs on foot; in the jeep it does nothing
         if (!shifted && Date.now() - t0 > 1_500) { shifted = true; await page.keyboard.down('Shift'); }
@@ -224,8 +224,30 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     } finally { await page.keyboard.up('KeyW'); await page.keyboard.up('Shift'); }
     const b = await R<Vehicle>(page, 'r.vehicle()');
     const moved = Math.hypot(b.x - a.x, b.z - a.z);
-    note(`hold W 3 s: the jeep moved ${r2(moved)} m, top speed ${r2(Math.max(...samples.map((s) => s.speed)))} m/s (Shift held for the last 1.5 s)`);
-    soft(Math.max(...samples.map((s) => s.speed)) <= a.maxSpeed + 0.05, `Shift made the jeep faster than its top speed (${r2(Math.max(...samples.map((s) => s.speed)))} > ${a.maxSpeed} m/s)`);
+    const top = Math.max(...samples.map((s) => s.speed));
+    // run 6: full gas is full speed, and it holds it (the calm rule held it to 2 m/s near
+    // any animal; a brake now only acts for something IN its way, and says which)
+    const full = samples.findIndex((s) => s.speed >= a.maxSpeed - 0.05);
+    const after = full >= 0 ? samples.slice(full) : [];
+    const free = after.filter((s) => !s.brake);
+    const kept = free.length ? Math.min(...free.map((s) => s.speed)) : 0;
+    const braked = [...new Set(after.map((s) => s.brake).filter(Boolean))];
+    note(`hold W 3 s: the jeep moved ${r2(moved)} m, reached ${r2(top)} m/s after ${full >= 0 ? (samples[full].t / 1000).toFixed(1) : '-'} s and held ≥ ${r2(kept)} m/s${braked.length ? ` (braked for: ${braked.join(', ')})` : ''} (Shift held for the last 1.5 s)`);
+    soft(full >= 0 && samples[full].t <= 1_600, `full gas did not bring the jeep to its top speed within ~1.5 s (top ${r2(top)} m/s)`);
+    soft(kept >= a.maxSpeed - 0.3, `full gas did not hold the top speed with nothing in the way (dropped to ${r2(kept)} m/s)`);
+    soft(top <= a.maxSpeed + 0.05, `Shift made the jeep faster than its top speed (${r2(top)} > ${a.maxSpeed} m/s)`);
+    // no shove: between samples it never steps sideways across its heading more than its
+    // turn explains (the chord of an arc) — roaming animals used to push its whole body
+    let shoved = 0, worstSide = 0;
+    for (let i = 1; i < samples.length; i++) {
+      const p = samples[i - 1], q = samples[i];
+      const dh = wrap(q.heading - p.heading), hm = p.heading + dh / 2;
+      const dx = q.x - p.x, dz = q.z - p.z;
+      const side = Math.abs(dx * Math.cos(hm) - dz * Math.sin(hm)) - Math.abs(Math.hypot(dx, dz) * Math.sin(dh / 2));
+      worstSide = Math.max(worstSide, side);
+      if (side > 0.05) shoved += 1;
+    }
+    soft(shoved === 0, `the jeep was pushed sideways in ${shoved}/${samples.length - 1} samples (worst ${r2(worstSide)} m across its heading)`);
     hard(moved >= 10, `holding W for 3 s moved the jeep only ${r2(moved)} m (want ≥ 10 m)`);
     soft(!samples.some((s) => s.contact), 'driving straight on from where the jeep is parked, it runs into something');
     const off = samples.filter((s) => !s.grounded || Math.abs(s.clearance) > 0.1);

@@ -777,10 +777,12 @@ export interface JeepWorld {
 }
 
 /** One frame's result: the next state, what it really moved along its heading (m/s),
- *  and the animal it is braking for (null when none). */
+ *  the animal it is braking for (null when none), and which brake held its speed back
+ *  this frame (null: none, it rolls as the gas asks). */
 export interface JeepFrame extends JeepState {
   moved: number;
   yieldFor: string | null;
+  brake: 'solid' | 'edge' | 'animal' | null;
 }
 
 /**
@@ -798,7 +800,7 @@ export function jeepStep(
   s: JeepState, want: DriveInput, dt: number, caps: DriveCaps, w: JeepWorld,
   body: readonly BodyCircle[] = JEEP_BODY,
 ): JeepFrame {
-  if (!(dt > 0)) return { ...s, moved: 0, yieldFor: null };
+  if (!(dt > 0)) return { ...s, moved: 0, yieldFor: null, brake: null };
   const ramped = rampSpeed(s.speed, want.throttle, dt, caps);
   let speed = ramped;
   const dir: 1 | -1 | 0 = speed > 0 ? 1 : speed < 0 ? -1 : want.throttle > 0 ? 1 : want.throttle < 0 ? -1 : 0;
@@ -813,15 +815,19 @@ export function jeepStep(
   const steerWant = guidedSteer(want.steer, avoid);
   // (3) the brakes
   let yieldFor: string | null = null, braked = false;
+  let brake: JeepFrame['brake'] = null;
   if (dir !== 0) {
     const give = yieldBrake(s.x, s.z, s.heading, dir, pathCurvature(steerWant, speed, dir, caps), body, w.animals, s.speed, dt);
-    let stop = Math.min(rimSpeedCap(rimFree(s.x, s.z, s.heading, dir, lim)), give.cap);
+    const edge = rimSpeedCap(rimFree(s.x, s.z, s.heading, dir, lim));
+    let stop = Math.min(edge, give.cap);
     // standing still, it sets off only when the forest edge or the animal ahead leaves
     // it room to roll (no 0.1 m/s inching): until then a turn key turns it (the floor)
     if (Math.abs(s.speed) < 0.05 && stop < MOVE_OFF) stop = 0;
     const hit = impactAhead(s.x, s.z, s.heading, dir, body, dir > 0 ? w.solids : w.walls, 40);
-    const cap = Math.min(contactSpeedCap(hit.free, caps.maxSpeed / JEEP_RAMP_TIME, hit.headOn), stop);
-    if (give.cap <= cap + 1e-9 && give.cap < Math.abs(ramped)) yieldFor = give.id; // braking (or held) for it
+    const solid = contactSpeedCap(hit.free, caps.maxSpeed / JEEP_RAMP_TIME, hit.headOn);
+    const cap = Math.min(solid, stop);
+    if (cap < Math.abs(ramped)) brake = cap === solid ? 'solid' : give.cap <= edge ? 'animal' : 'edge';
+    if (brake === 'animal') yieldFor = give.id;                  // braking (or held) for it
     braked = cap < Math.abs(ramped) && want.throttle * dir > 0;
     if (Math.abs(speed) > cap) speed = dir * cap;
   }
@@ -841,7 +847,7 @@ export function jeepStep(
     const real = Math.max(0, moved * Math.sign(speed));
     speed = Math.sign(speed) * Math.min(Math.abs(speed), real + CONTACT_CREEP);
   }
-  return { x: n.x, z: n.z, heading: n.heading, speed, contact: n.contact, braked, moved, yieldFor };
+  return { x: n.x, z: n.z, heading: n.heading, speed, contact: n.contact, braked, moved, yieldFor, brake };
 }
 
 /* ----------------------------------------------------------- ground contact -- */
