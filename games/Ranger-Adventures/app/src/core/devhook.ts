@@ -154,6 +154,11 @@ export interface RangerDevHook {
    *  faces (rad), his post-collision ground speed (m/s) and whether he runs. Null
    *  before the world is up. */
   motion(): { x: number; z: number; heading: number; speed: number; running: boolean } | null;
+  /** The ranger's legs (run 6): which clip leads (idle/walk/run), the shared cycle phase
+   *  (left foot down at 0, right at 0.5), footfalls per second, the run share, the stride
+   *  gain, and his soles in world metres (heel, ball, tip per foot, left first: the
+   *  foot-slip probe). Null before the world is up. */
+  gait(): GaitRead | null;
   /** D1.2 locomotion ground-truth (P1.5a asserts it across the walkable world): is the
    *  ranger's Y actually ON the RENDERED terrain surface, not through it? `grounded` is
    *  true when a down-ray hits the terrain under him AND his feet sit in the on-foot
@@ -304,7 +309,7 @@ export interface RangerDevHook {
    *  `helpChip` is whether the laptop "?" re-show chip is mounted. The capture assert
    *  reads `active` = 'walk' with the tracker held back to prove ONE hint at entry,
    *  and that it advances on the first step. Null before the world/hook is ready. */
-  hint(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
+  hint(): { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
   /** RUN-3 P4.6 (F-11): the world-rim state — `bound` (the move-limit radius, m),
    *  the ranger's live `dist` from world centre, and `atRim` (he is pressed against
    *  the rim heading outward, so the calm "Hier stopt het bos" cue has fired). The
@@ -396,6 +401,17 @@ export type SeatProbe = { id: string; x: number; y: number; z: number; gap: numb
 // value, proving the site served the freshly-built app.js, not a stale cache).
 const VERSION = '2.1.0-ship';
 
+type XYZ = { x: number; y: number; z: number };
+/** The ranger's gait read (World.playerGait). */
+export interface GaitRead {
+  name: 'idle' | 'walk' | 'run';
+  phase: number;
+  cadence: number;
+  run: number;
+  gain: number;
+  soles: { heel: XYZ; toe: XYZ; tip: XYZ }[];
+}
+
 const state = {
   screen: 'title' as Screen,
   missionView: null as MissionView,
@@ -406,6 +422,7 @@ const state = {
   avatar: null as null | (() => { height: number } | null),
   groundSpeed: null as null | (() => number | null),
   motion: null as null | (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null),
+  gait: null as null | (() => GaitRead | null),
   grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
@@ -449,7 +466,7 @@ const state = {
     pads: { x: number; z: number }[];
   } | null),
   quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
-  hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
+  hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
   boundary: null as null | (() => { bound: number; dist: number; atRim: boolean; scatterMax: number } | null),
   // golden-path probes: the Stage's live view + renderer (main.ts) and the THREE-side
   // measurements (kit.ts). Kept `unknown` so this module stays three.js-free.
@@ -578,6 +595,11 @@ export function provideAvatar(fn: (() => { height: number } | null) | null): voi
  *  in m/s). Pass null to clear (F-08). */
 export function provideGroundSpeed(fn: (() => number | null) | null): void {
   state.groundSpeed = fn;
+}
+
+/** Register the ranger's gait + sole probe read (World.playerGait). Pass null to clear. */
+export function provideGait(fn: (() => GaitRead | null) | null): void {
+  state.gait = fn;
 }
 
 /** Register the ranger's live motion read (World.rangerMotion). Pass null to clear. */
@@ -759,7 +781,7 @@ export function provideQuality(
 /** Register the RUN-3 P3.3 onboarding-hint state source (the explore HUD). Pass
  *  null to clear (F-06/F-15). */
 export function provideHint(
-  fn: (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null) | null,
+  fn: (() => { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null) | null,
 ): void {
   state.hint = fn;
 }
@@ -791,6 +813,7 @@ export function installDevHook(): boolean {
     avatar: () => (state.avatar ? state.avatar() : null),
     groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
     motion: () => (state.motion ? state.motion() : null),
+    gait: () => (state.gait ? state.gait() : null),
     grounded: () => (state.grounded ? state.grounded() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),

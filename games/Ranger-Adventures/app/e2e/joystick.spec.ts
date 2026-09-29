@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, recordMotion, pageNow, motionFrames, median } from './helpers';
 
 /**
  * Virtual-joystick E2E (WORLD-PLAN W1.3). The iPad-primary walking control:
@@ -17,6 +17,7 @@ import { shot, collectPageErrors, reportPageErrors } from './helpers';
 interface Hook {
   screen: string;
   pos(): { x: number; z: number } | null;
+  clip(): { name: string; time: number } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -98,6 +99,69 @@ test('joystick: dragging the thumb forward walks the ranger ≥2 m', async ({ pa
   const settled = await hook(page, (r) => r.pos());
   expect(Math.hypot(settled!.x - afterRelease!.x, settled!.z - afterRelease!.z),
     'ranger stops when the thumb is released').toBeLessThan(0.5);
+
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Run 6: the stick walks at a partial push and runs at its rim, and the ring shows it.
+ * A 60 % push walks (slower than the full walk, never running); pushed to the rim he
+ * runs a steady 3.8-4.6 m/s and the ring lights up (`.rj-run`); easing back to 60 %
+ * walks again and the ring goes back. Mouse on the stick (setting "aan"), like a finger.
+ */
+test('joystick: a partial push walks, the rim runs and the ring shows it', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await forceJoystickOn(page);
+  await enterWorld(page);
+  await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 60_000, message: 'the ranger rig attaches' }).not.toBeNull();
+  await recordMotion(page);
+  const stick = page.locator('.rj-base');
+  await expect(stick).toBeVisible();
+  const box = (await stick.boundingBox())!;
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2, radius = box.width / 2;
+
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  try {
+    // 60 % of the travel, straight up (into the screen)
+    await page.mouse.move(cx, cy - 0.6 * radius, { steps: 6 });
+    await page.waitForTimeout(900);
+    let t = await pageNow(page);
+    await page.waitForTimeout(700);
+    const part = await motionFrames(page, t);
+    const vPart = median(part.map((f) => f.speed));
+    expect(vPart, `a 60 % push walks, slower than a full walk (median ${vPart.toFixed(2)} m/s)`).toBeGreaterThan(1.2);
+    expect(vPart).toBeLessThan(2.1);
+    expect(part.every((f) => !f.running), 'a partial push never runs').toBe(true);
+    await expect(stick, 'the ring is plain while walking').not.toHaveClass(/rj-run/);
+
+    // to the rim (and past it: the thumb saturates at the ring)
+    await page.mouse.move(cx, cy - 1.5 * radius, { steps: 6 });
+    await page.waitForTimeout(900);
+    t = await pageNow(page);
+    await page.waitForTimeout(700);
+    const rim = await motionFrames(page, t);
+    const vRim = median(rim.map((f) => f.speed));
+    expect(vRim, `the rim runs a steady 3.8-4.6 m/s (median ${vRim.toFixed(2)})`).toBeGreaterThanOrEqual(3.8);
+    expect(vRim).toBeLessThanOrEqual(4.6);
+    expect(rim.every((f) => f.running), 'the run gait is on').toBe(true);
+    await expect(stick, 'the ring shows he runs').toHaveClass(/rj-run/);
+    const thumb = (await page.locator('.rj-thumb').boundingBox())!;
+    expect(Math.min(thumb.width, thumb.height), 'the thumb stays ≥ 56 px').toBeGreaterThanOrEqual(56);
+    await shot(page, 'joystick-running');
+
+    // back to 60 %: walks again, the ring goes back
+    await page.mouse.move(cx, cy - 0.6 * radius, { steps: 6 });
+    await page.waitForTimeout(900);
+    const again = await motionFrames(page, (await pageNow(page)) - 300);
+    expect(again.every((f) => !f.running), 'back from the rim he walks').toBe(true);
+    await expect(stick, 'the ring is plain again').not.toHaveClass(/rj-run/);
+  } finally {
+    await page.mouse.up();
+  }
 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
