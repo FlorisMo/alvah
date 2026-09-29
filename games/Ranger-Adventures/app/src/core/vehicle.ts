@@ -1638,11 +1638,11 @@ export function jeepStep(
   const st = driveStep(s.heading, { throttle: speed / caps.maxSpeed, steer }, dt, caps);
   // (6) the body against every solid and zone
   let n = resolveBody(s.x, s.z, s.heading, s.x + st.dx, s.z + st.dz, st.heading, body, nearWalls, w.limits);
-  // a standing jeep that only a wall bend swings (no turn key) swings on the spot or not at
-  // all, never scraped back along what it touches (wedged, the player's key frees it)
-  const along = (n.x - s.x) * Math.sin(s.heading) + (n.z - s.z) * Math.cos(s.heading);
-  if (Math.abs(speed) < 0.05 && want.steer === 0 && st.heading !== s.heading && n.contact && Math.abs(along) > 0.1 * dt) {
-    n = { x: s.x, z: s.z, heading: s.heading, contact: true };
+  // a standing jeep that only a bend swings (no turn key) swings clear of everything or not
+  // at all: never into, or scraped along, what it touches (a trunk beside its middle: the
+  // swing away from it brings its tail round onto it); the player's key frees it
+  if (Math.abs(speed) < 0.05 && want.steer === 0 && st.heading !== s.heading && n.contact) {
+    n = { x: s.x, z: s.z, heading: s.heading, contact: bodyDepth(s.x, s.z, s.heading, body, nearWalls) > TOUCH_EPS };
   }
   // a standing jeep whose turn is blocked on every side (its nose at the water, its tail on
   // a trunk): it eases back or aside a hair as it turns, so a held turn key always frees it

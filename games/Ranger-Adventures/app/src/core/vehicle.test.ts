@@ -862,6 +862,12 @@ test('a trunk touched at a slant by a slow jeep: it turns along it and drives on
     assert.ok(r.crawl <= 0.5 && r.restContact === 0, `${deg}° ${side > 0 ? 'left' : 'right'} from ${v0} m/s: no crawl round it (longest ${r.crawl.toFixed(2)} s, ${r.restContact} frames at rest against it)`);
     assert.ok(j.speed === 6 && j.z > 4, `${deg}° ${side > 0 ? 'left' : 'right'} from ${v0} m/s: it drove on past it (${j.speed.toFixed(2)} m/s)`);
   }
+  // a trunk beside its middle, a keep-out zone ahead (the squeeze by the wildcamera marker): held
+  // there, W alone never swings its tail round onto the trunk — it stands clear
+  const tree = { x: 16.906847500739847, z: -7.869907807436085, r: 0.774 }, zone = { x: 15.556349186104047, z: -15.556349186104043, r: 5.2 };
+  const j = { ...jeep(18.127242198412485, -9.087615810979013, -2.2674510227038738), braked: true };   // where a scout's drive left it
+  const r = crawlRun(j, world({ solids: [tree], zones: [zone] }), 3, () => KEY(1));
+  assert.equal(r.restContact, 0, `held beside a trunk: never swung onto it (${r.restContact} frames at rest against it)`);
 });
 
 test('turning at full speed toward a trunk the straight look misses: it eases round or slows smoothly — never a one-frame drop (review P3)', () => {
