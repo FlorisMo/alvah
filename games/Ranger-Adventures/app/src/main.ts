@@ -14,8 +14,9 @@ import { mountBootVeil } from './ui/BootVeil';
 // engines, the 3D mini-game views, render2d: the bulk of the bundle, W7.1 code-split) is
 // loaded straight away and built behind the veil. The title IS that world (a shot of the
 // spawn clearing, world/Presenter.ts), so there is no second scene to swap out; the veil
-// lifts once the world is ready. `Sound.unlock()` + `loadGameAudio()` run inside the
-// Begin tap (WorldSession.showTitleCard): the iOS AudioContext must be made in the gesture.
+// lifts once the world is ready. The AudioContext is made behind the veil (bootWorld:
+// its constructor is slow) and `Sound.unlock()` resumes it inside the Begin tap
+// (WorldSession.showTitleCard), with `loadGameAudio()`: iOS lets sound out from a gesture.
 
 // Apply the saved Tweaks before first paint: a persisted reduced-motion toggle
 // wins over the OS (off = defer to OS), and the reading/accent prefs re-flow :root.

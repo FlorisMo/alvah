@@ -131,6 +131,11 @@ export function bootWorld(ui: HTMLElement, st: Stage, veil: { lift: () => void }
   setMissionView(null);
   let titleUp = false;
   provideTitleReady(() => titleUp && world.ready());
+  // the AudioContext is slow to make (up to ~2 s under load): make it now, behind the
+  // veil, so the Begin tap only resumes it and the glide starts at once
+  const idle = (window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+  if (idle) idle(() => Sound.prepare(), { timeout: 1500 });
+  else window.setTimeout(() => Sound.prepare(), 300);
   const wait = (): void => {
     if (!world.ready()) { requestAnimationFrame(wait); return; }
     showTitleCard({ afterVeil: true });
@@ -228,7 +233,8 @@ function showTitleCard(opts: { after?: number; afterVeil?: boolean } = {}): void
   }
   const ra = readScreenAloud(el, { text: SAY.title, autoStart: store.get().settings.voorlezen }); // child:B12
   el.querySelector('.title-begin')?.addEventListener('click', () => {
-    // iOS: the AudioContext must be made inside the tap, before anything awaits
+    // iOS: the AudioContext (made behind the veil) must be resumed inside the tap, before
+    // anything awaits
     Sound.unlock();
     void loadGameAudio();
     ra.stop();
