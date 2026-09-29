@@ -232,6 +232,15 @@ export function hideSide(trunk: { x: number; z: number }, me: { x: number; z: nu
 /** How far out from the trunk's axis (m) the ranger stands to see it there. */
 export const HIDE_SEEN_AT = 2.8;
 
+/** Does the ranger at `me` see the squirrel hiding round the trunk at heading `hideAt`?
+ *  Anywhere on its side of the tree (within ~50° of it), from right up at the bark (a
+ *  child walks up to the chatter) out to a little past the spot to see it from. From
+ *  the way he came (110° round), the bark is between them. */
+export function seesHidden(trunk: { x: number; z: number }, hideAt: number, me: { x: number; z: number }): boolean {
+  const off = Math.abs(Math.atan2(Math.sin(headingTo(trunk, me) - hideAt), Math.cos(headingTo(trunk, me) - hideAt)));
+  return off < 0.9 && Math.hypot(me.x - trunk.x, me.z - trunk.z) < HIDE_SEEN_AT + 1.2;
+}
+
 /** Who lives here: the squirrel, round its pine by the marker before; at its glade after,
  *  in the pine by its store (the jay's branch is free: the jay flew off). */
 export const EEKHOORN_RESIDENTS: readonly ResidentSpec[] = [

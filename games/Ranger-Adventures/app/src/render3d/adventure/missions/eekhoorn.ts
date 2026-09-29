@@ -37,7 +37,7 @@ import { TREE_BASE_H } from '../../world/Forest';
 import { EekhoornHome, type Neighbour } from './eekhoorn.home';
 import {
   CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HOME_TREES, JAY_GROUND, STUMP, HIDE_SEEN_AT, hideSide, introView,
-  branchStub, eekhoornClearings, eekhoornTreeClear,
+  branchStub, eekhoornClearings, eekhoornTreeClear, seesHidden,
 } from './eekhoorn.places';
 
 /** The squirrel's size (m, sitting up with its tail): the upper end of a red squirrel,
@@ -187,7 +187,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   // it plays hide-and-seek: as he comes up it scurries round the trunk to the far side
   // (as red squirrels do), and he walks round the tree to find it — its chatter from
   // behind the bark tells him where. Round the side, not straight behind (the way round
-  // passes the trunk), on the side toward its glade.
+  // passes the trunk), on the side toward its glade. He has found it once he stands on
+  // its side of the tree: out at the spot to see it from (where the hint walks), or right
+  // up at the bark beside it (where a child steering at its chatter ends up).
   k.beat = 'verstop';
   const hideAt = hideSide(pineC.trunk, k.ranger(), STUMP);
   const hidden = k.guard(sq.goRound(pineC, { ang: hideAt, h: 1.1 }));
@@ -197,6 +199,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   await k.walk({
     name: 'om-de-boom', to: round, r: 1.2, line: c.waarIsHij, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 14,
     tick: () => { if (k.now - lastChatter > 3.4) chatter(); },
+    reached: () => seesHidden(pineC.trunk, hideAt, k.ranger()),
   });
   await hidden;
   // found: he stops (a moment with the keys resting), it pours down the bark and pops up

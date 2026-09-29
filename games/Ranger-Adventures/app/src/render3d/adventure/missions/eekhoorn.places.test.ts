@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_AT, JAY_GROUND,
-  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, HIDE_SEEN_AT, gladeSpots, eekhoornTreeClear, eekhoornClearings, hideSide, branchStub,
+  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, HIDE_SEEN_AT, gladeSpots, eekhoornTreeClear, eekhoornClearings, hideSide, branchStub, seesHidden,
 } from './eekhoorn.places.ts';
 import { STUB_TILT } from '../../world/Forest.ts';
 import { biomeAt, VEN_CENTER, VEN_SHORE_R } from '../../Biomes.ts';
@@ -212,4 +212,20 @@ test('each home tree\'s branch stub is part of its tree: rooted in the bark, out
     assert.ok(s.r > 0.03 && s.r < 0.09, `tree-${i}: a limb, not a log (${s.r} m)`);
   }
   assert.equal(n, HOME_TREES.length, 'every home tree has a branch');
+});
+
+test('hide-and-seek: he finds it on its side of the tree, out at the spot or right up at the bark, never from the way he came', () => {
+  const C = TREE.c;
+  const me0 = { x: C.x + Math.sin(0.4) * 3, z: C.z + Math.cos(0.4) * 3 }; // where he walks up from
+  const hideAt = hideSide(C, me0, STUMP);
+  const at = (a: number, d: number) => ({ x: C.x + Math.sin(a) * d, z: C.z + Math.cos(a) * d });
+  assert.equal(seesHidden(C, hideAt, me0), false, 'not from where he came up');
+  assert.equal(seesHidden(C, hideAt, at(hideAt, HIDE_SEEN_AT)), true, 'at the spot to see it from (where the hint walks)');
+  assert.equal(seesHidden(C, hideAt, at(hideAt + 0.5, 0.7)), true, 'right up at the bark beside it (steering at its chatter)');
+  assert.equal(seesHidden(C, hideAt, at(hideAt - 0.7, 1.6)), true, 'a little round the other way');
+  assert.equal(seesHidden(C, hideAt, at(hideAt + 1.3, 0.7)), false, 'at the bark, but still round the side: the trunk between');
+  assert.equal(seesHidden(C, hideAt, at(hideAt + Math.PI, 0.8)), false, 'behind the tree from it');
+  assert.equal(seesHidden(C, hideAt, at(hideAt, 6)), false, 'far off in the wood');
+  // the old way in (the viewing spot, r 1.2) is still inside it
+  for (const a of [-0.35, 0, 0.35]) assert.equal(seesHidden(C, hideAt, at(hideAt + a, HIDE_SEEN_AT + 0.6)), true);
 });
