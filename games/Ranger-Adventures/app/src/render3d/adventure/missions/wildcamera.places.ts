@@ -85,8 +85,9 @@ export const WILDCAMERA_PLACES = {
   /** where he stands to take the snare away: a step from it on the pine's side (toward
    *  the lens), facing it */
   snareApproach: { ...at(-1.75, -1.85), r: 0.8, heading: headingTo(at(-1.75, -1.85), SNARE) },
-  /** the start of the wildwissel at the marker ring: he steps onto it, facing the wood */
-  trailStart: { x: 14.35, z: -16.5, r: 0.3, heading: 0 },
+  /** a few steps along the wildwissel out of the marker ring: he steps onto it, facing
+   *  the wood (far enough from the stump that the follow camera behind him has room) */
+  trailStart: { x: 12.95, z: -17.35, r: 0.3, heading: 0 },
   /** the home place: the ranger ends near it (golden step 8, missions.spec) */
   home: { ...TREE },
 } as const satisfies Record<string, Place>;

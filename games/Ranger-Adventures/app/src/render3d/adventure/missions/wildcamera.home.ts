@@ -483,17 +483,35 @@ export class WildcameraHome implements HomeDressing {
 
   /* ------------------------------------------------------------ the story ---- */
 
-  /** He takes the camera off the stump. */
-  pickUp(): void {
+  /** He takes the camera off the stump: it lifts toward his hands (`to`, where he
+   *  stands) and he tucks it away (a cut under reduced motion). */
+  pickUp(to: Spot | null = null, reduced = false): void {
     this.stumpCamWanted = false;
-    if (this.stumpCam) this.stumpCam.visible = false;
+    const r = this.stumpCam;
+    if (!r) return;
+    if (!to || reduced) { r.visible = false; return; }
+    const from = r.position.clone();
+    const hands = new THREE.Vector3(from.x + (to.x - from.x) * 0.6, this.groundY(to.x, to.z) + 0.75, from.z + (to.z - from.z) * 0.6);
+    this.lift = { t: 0, from, to: hands, scale: r.scale.x };
+  }
+  private lift: { t: number; from: THREE.Vector3; to: THREE.Vector3; scale: number } | null = null;
+
+  /** Put the camera back on its stump exactly as it lay (a lift cut short). */
+  private restStumpCam(): void {
+    const l = this.lift, r = this.stumpCam;
+    this.lift = null;
+    if (!l || !r) return;
+    r.position.copy(l.from);
+    r.scale.setScalar(l.scale);
   }
 
   /** The camera goes onto the pine, looking at the crossing (toward the lens); its red
-   *  light starts to blink. */
-  strapOn(): void {
+   *  light starts to blink. It settles on its strap (a cut under reduced motion). */
+  strapOn(reduced = false): void {
     this.trap.visible = true;
     this.strap.visible = true;
+    this.settle = reduced ? 1 : 0;
+    this.trapBody.scale.setScalar(reduced ? 1 : 0.86);
     this.aimNow = this.aimFrom = this.aimTo = 0;
     this.aimT = 1;
     this.trap.rotation.y = 0;
@@ -531,6 +549,8 @@ export class WildcameraHome implements HomeDressing {
     m.opacity = this.fanPeak * this.fanOn;
   }
   private fanPeak = 0.42;
+  /** the camera settling on its strap (0 → 1) */
+  private settle = 1;
 
   /** The shutter: the red light flashes, and at night the infrared ring glows softly. */
   flash(night: boolean): void {
@@ -665,6 +685,9 @@ export class WildcameraHome implements HomeDressing {
   setState(state: HomeState): void {
     this.state = state;
     const after = state === 'after';
+    this.restStumpCam();
+    this.settle = 1;
+    this.trapBody.scale.setScalar(1);
     this.stumpCamWanted = !after;
     if (this.stumpCam) this.stumpCam.visible = !after;
     this.trap.visible = after;
@@ -684,6 +707,22 @@ export class WildcameraHome implements HomeDressing {
   update(dt: number, _t: number, reduced: boolean): void {
     this.clock += dt;
     for (const s of this.spawned) s.update?.(dt);
+    // the camera lifts off the stump into his hands, and is tucked away
+    const l = this.lift, sc = this.stumpCam;
+    if (l && sc) {
+      l.t = Math.min(1, l.t + dt / 0.5);
+      const e = l.t * l.t * (3 - 2 * l.t);
+      sc.position.lerpVectors(l.from, l.to, e);
+      sc.rotation.x = -Math.PI / 2 + 0.05 + e * (Math.PI / 2 - 0.05); // it turns upright as he lifts it
+      sc.scale.setScalar(l.scale * (1 - 0.35 * e));
+      if (l.t >= 1) { sc.visible = false; this.restStumpCam(); sc.rotation.x = -Math.PI / 2 + 0.05; }
+    }
+    // the camera settles on its strap
+    if (this.settle < 1) {
+      this.settle = Math.min(1, this.settle + dt / 0.3);
+      const e = 1 - (1 - this.settle) * (1 - this.settle);
+      this.trapBody.scale.setScalar(0.86 + 0.14 * e);
+    }
     // the camera turns on its strap
     if (this.aimT < 1) {
       this.aimT = Math.min(1, this.aimT + dt / this.aimDur);

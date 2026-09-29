@@ -55,7 +55,8 @@ test('the crossing lies in the bos, well inside the world, clear of the paths an
 test('the wildwissel runs from the marker ring to the pine; the second trail from the glade to the thicket', () => {
   const a = trailA();
   assert.ok(dist(a[0], MARKER) < 1.2 && dist(a[0], MARKER) > 0.6, 'it leaves the ring at its edge');
-  assert.ok(dist(P.trailStart, a[0]) < 1.2, 'he steps onto it where it leaves the ring');
+  assert.ok(segDist(P.trailStart, a[0], a[1]) < 0.3, 'he steps onto it just out of the ring');
+  assert.ok(dist(P.trailStart, P.stump) > 2.2, 'clear of the stump: the follow camera behind him has room');
   for (let i = 1; i < a.length; i++) assert.ok(dist(a[i - 1], a[i]) < 4, 'no jumps: one trodden line');
   const nearTree = Math.min(...a.map((p) => dist(p, TREE)));
   assert.ok(nearTree < 1.6, 'it passes the pine');

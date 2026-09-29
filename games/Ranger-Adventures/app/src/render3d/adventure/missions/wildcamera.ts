@@ -159,20 +159,33 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     });
   };
 
-  /* 1 · at the marker: the camera lies on the stump */
+  /* 1 · at the marker: the camera lies on the stump. He steps beside it (on the side
+         he stands, across the lens's view, so it is not behind him) and faces it; the
+         lens stays where it is */
   k.beat = 'pak';
+  {
+    const st = P.stump, lens = k.world.camera.position, me = k.ranger();
+    const dx = st.x - lens.x, dz = st.z - lens.z, l = Math.hypot(dx, dz) || 1;
+    const px = -dz / l, pz = dx / l; // across the view
+    const side = (me.x - st.x) * px + (me.z - st.z) * pz >= 0 ? 1 : -1;
+    const beside = { x: st.x + px * 0.62 * side - (dx / l) * 0.12, z: st.z + pz * 0.62 * side - (dz / l) * 0.12 };
+    k.lockFollow();
+    await k.walkRanger(beside.x, beside.z, 0.05);
+    k.world.faceRanger(headingTo(beside, st));
+  }
   await k.act(c.pakKnop, c.pak);
-  home.pickUp();
+  home.pickUp(k.ranger(), k.reduced);
   if (settings.geluid) Sound.step();
   // he steps onto the wildwissel where it leaves the ring, and the view looks along it
   // into the wood (one calm move; the follow camera takes over from there, facing the way)
+  // (he walks a few steps out of the ring onto it, the follow camera behind him; then
+  // one calm move to the look along it, from about where the follow camera stands)
   k.beat = 'pad';
   k.say(c.kijkPad);
-  k.lockFollow();
   await k.walkRanger(P.trailStart.x, P.trailStart.z, 0.05);
   k.world.faceRanger(TRAIL_VIEW.heading);
   await k.frame(TRAIL_VIEW, { face: TRAIL_VIEW.heading });
-  await k.wait(2.2);
+  await k.wait(2.0);
 
   /* 2 · follow the wildwissel into the wood, to the crossing */
   await k.walk({ name: 'wissel', to: P.crossApproach, r: P.crossApproach.r, line: c.volg, doel: c.chipPad, cue: c.sporen });
@@ -184,7 +197,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   await k.walkRanger(P.strap.x, P.strap.z, 0.05);
   await k.frame(STRAP_VIEW, { face: P.strap.heading });
   await k.wait(0.3);
-  home.strapOn();
+  home.strapOn(k.reduced);
   k.beat = 'hang:on';
   if (settings.geluid) Sound.strap();
   k.say(c.hangt, { good: true });
