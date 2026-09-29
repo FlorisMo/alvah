@@ -3,17 +3,28 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { R, walkTo, sleep, save, type P2, type Hint } from './golden-lib';
 import { AREA_VELUWE } from '../src/content/veluwe';
-import { MISSIE } from '../src/content/copy';
+import { MISSIE, HUB } from '../src/content/copy';
+import { SAY } from '../src/content/screens';
+import { metNaam } from '../src/content/mentor';
 
 /**
  * READ-ALOUD COVERAGE (run 6, FLOW P4): every line a child sees appear is also read aloud,
  * played like a player (real clicks and keys, a fresh browser):
  *
- *   1. the first visit: the title (the voice starts at the first click), the maker, Bram's
- *      greeting, the lessons, the hook, the mission marker's prompt, the briefing;
+ *   1. the first visit: the title (nothing is said before the player touches the page,
+ *      the voice starts at his first click), the maker, Bram's greeting, the lessons, the
+ *      hook, the mission marker's prompt, the briefing;
  *   2. a save that knows the first minute: mission 1 played with the real mouse (the play
  *      hints) to its reunion, the fact cards, the reward and the first clue, which says
- *      where the sporenboek is.
+ *      where the sporenboek is; then that sporenboek: the newest clue and the note under
+ *      it are read and lit up, each fact by its own 🔊, and no line on the clue card or the
+ *      book is over 7 words as the browser draws it;
+ *   3. a first visit that starts with Enter: the maker speaks, the title never does.
+ *
+ * A real first visit: Playwright's page counts as touched from the start
+ * (navigator.userActivation.hasBeenActive is true at load), so the title's wait for the
+ * first press would never run. Tests 1 and 3 make the page untouched until the first
+ * pointerdown or keydown, as a browser does for a child who just opened the link.
  *
  * How: a watcher in the page notes every reading line the moment it is on screen (the
  * surfaces below), and a spy on `speechSynthesis.speak` notes every utterance. A line
@@ -26,7 +37,9 @@ import { MISSIE } from '../src/content/copy';
  * the lesson strip, the one prompt bottom centre (its words, not the key cap), the rim
  * tip, and on the cards every title, briefing line, fact, reunion line, the reward's
  * praise and knap woord, the clue (its title, text and where it went) and Onderweg's
- * question and answer. Not lines to read: the wayfinding chip (a live compass: its title
+ * question and answer, and in the sporenboek the note under the clues and the facts. Not
+ * lines to read: an empty frame's "Nog niet gevonden" (the note says how many are still to
+ * find), the wayfinding chip (a live compass: its title
  * is said by the prompt at the ring), kickers and counts, key caps, the maker's legends
  * and swatches (they say themselves on hover), and the buttons on a card (the screen's
  * words name what they do). The dev hook is only READ.
@@ -47,6 +60,7 @@ const SURFACES = [
   '.explore-prompt button', '.explore-hub-prompt button', '.explore-porch-prompt button', '.explore-sit-prompt button', '.explore-vehicle-prompt button',
   '.card .boot-title', '.briefing-line', '.fact-text .zin', '.reunion-text .zin', '.reward-lof', '.reward-knap .rk-word',
   '.cb-clue-title', '.cb-clue-text .zin', '.clue-where .cw-lines > span', '.wb-prompt .zin', '.wb-feedback',
+  '.cb-note .zin', '.cb-veld-text .zin',
 ].join(', ');
 
 /** Spy on the voice and watch the screen, from the first frame. */
@@ -78,7 +92,8 @@ async function watch(page: Page): Promise<void> {
     };
     // which surface a line is on: its own name, or its card's for a line of a text
     const NAMES = ['title-mark', 'title-sub', 'av-titel', 'av-greet', 'sp-line', 'ls-text', 'explore-tip', 'reward-lof', 'rk-word',
-      'cb-clue-title', 'cw-boek', 'cw-waar', 'briefing-line', 'wb-feedback', 'fact-text', 'reunion-text', 'cb-clue-text', 'wb-prompt'];
+      'cb-clue-title', 'cw-boek', 'cw-waar', 'briefing-line', 'wb-feedback', 'fact-text', 'reunion-text', 'cb-clue-text', 'wb-prompt',
+      'cb-note', 'cb-veld-text'];
     const whereOf = (el: Element): string => {
       if (el.tagName === 'BUTTON') return 'prompt';
       const own = el.classList.contains('zin') ? el.parentElement : el;
@@ -96,6 +111,63 @@ async function watch(page: Page): Promise<void> {
     };
     requestAnimationFrame(tick);
   }, SURFACES);
+}
+
+/** A real first visit: the page is untouched until the first press (see the header). */
+async function untouchedUntilFirstPress(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    let active = false;
+    const on = (): void => { active = true; };
+    addEventListener('pointerdown', on, true);
+    addEventListener('keydown', on, true);
+    Object.defineProperty(Navigator.prototype, 'userActivation', {
+      configurable: true,
+      get: () => ({ hasBeenActive: active, isActive: active }),
+    });
+  });
+}
+
+/** Every utterance so far (the spy's). */
+const utterances = (page: Page): Promise<Said[]> =>
+  page.evaluate(() => (window as unknown as { __said: Said[] }).__said.slice());
+/** The page's clock now (the spy's time line). */
+const pageNow = (page: Page): Promise<number> => page.evaluate(() => performance.now());
+
+/** Every line inside `sel` with more than 7 words, measured as the browser draws it: each
+ *  word's Range rect, grouped by its block and the top of its line box. */
+async function longLines(page: Page, sel: string): Promise<string[]> {
+  return page.evaluate((s: string) => {
+    const root = document.querySelector(s);
+    if (!root) return [`no ${s} on screen`];
+    const blocks = new Map<Element, { top: number; words: string[] }[]>();
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const host = n.parentElement;
+      if (!host || host.closest('[aria-hidden="true"], [hidden]') || getComputedStyle(host).visibility === 'hidden') continue;
+      let block: Element | null = host;
+      while (block && getComputedStyle(block).display.startsWith('inline')) block = block.parentElement;
+      if (!block) continue;
+      const text = n.textContent ?? '';
+      for (const m of text.matchAll(/\S+/g)) {
+        if (!/[\p{L}\p{N}]/u.test(m[0])) continue; // a lone "·" is not a word
+        const r = document.createRange();
+        r.setStart(n, m.index ?? 0);
+        r.setEnd(n, (m.index ?? 0) + m[0].length);
+        const rect = r.getBoundingClientRect();
+        if (rect.width < 1) continue;
+        const lines = blocks.get(block) ?? [];
+        blocks.set(block, lines);
+        const line = lines.find((l) => Math.abs(l.top - rect.top) < 6);
+        if (line) line.words.push(m[0]);
+        else lines.push({ top: rect.top, words: [m[0]] });
+      }
+    }
+    const out: string[] = [];
+    for (const [block, lines] of blocks) {
+      for (const l of lines) if (l.words.length > 7) out.push(`${l.words.length} words [${String(block.className).split(' ')[0]}] "${l.words.join(' ')}"`);
+    }
+    return out;
+  }, sel);
 }
 
 /** How a line and an utterance compare: the words only, as the voice hears them. */
@@ -152,15 +224,19 @@ test('the first visit, title to briefing: every line that appears is read aloud'
   shotsInto(testInfo, 'first-visit');
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
+  await untouchedUntilFirstPress(page);
   await watch(page);
   await page.goto('/?dev=1');
 
-  // the title: the voice may only start at the first touch; a curious child clicks the sky
+  // the title: the voice may only start at the first touch (nothing is said before it);
+  // a curious child clicks the sky, and the title is said
   const begin = page.getByRole('button', { name: 'Begin', exact: true });
   await begin.waitFor({ state: 'visible', timeout: 40_000 });
-  await sleep(page, 600);
+  await sleep(page, 1_500);
+  expect((await utterances(page)).map((u) => u.text), 'nothing is said before the first touch').toEqual([]);
   await page.mouse.click(640, 40);
-  await sleep(page, 900);
+  await expect.poll(async () => (await utterances(page)).map((u) => u.text), { timeout: 5_000, message: 'the sky click says the title' }).toContain(SAY.title);
+  await sleep(page, 400);
   await snap(page, 'title');
   await begin.click();
 
@@ -285,14 +361,84 @@ test('mission 1 to its reward and first clue: every line is read aloud, the clue
   await sleep(page, 2_000);
   await snap(page, 'clue');
 
-  const seen = await everyLineSpoken(page, 'mission 1 → reward → clue');
-  const where = new Set(seen.map((s) => s.where));
-  for (const w of ['fact-text', 'reunion-text', 'reward-lof', 'rk-word', 'card-title', 'cb-clue-title', 'cb-clue-text', 'cw-boek', 'cw-waar']) expect(where.has(w), `a "${w}" line was seen`).toBe(true);
+  await everyLineSpoken(page, 'mission 1 → reward → clue');
+  expect(await longLines(page, '.card.wildcam'), 'the clue card: no line over 7 words').toEqual([]);
   expect(facts, 'the fact cards came between the games').toBeGreaterThan(0);
+
+  // the sporenboek it points at, one sentence a line: the newest clue (its title and text)
+  // and the note under the cork are read and lit up; the note never repeats the clue
+  const opened = await pageNow(page);
+  await page.getByRole('button', { name: MISSIE.bekijkBoek }).click();
+  const boek = page.locator('.case-board');
+  await expect(boek).toBeVisible({ timeout: 10_000 });
+  const newest = boek.locator('.cb-clue.found').last();
+  await expect.poll(() => newest.locator('.is-spoken').count(), { timeout: 10_000, intervals: [100], message: 'the newest clue lights up as it is read' }).toBeGreaterThan(0);
+  const note = boek.locator('.cb-note-main');
+  await expect.poll(() => note.locator('.is-spoken').count(), { timeout: 15_000, intervals: [100], message: 'the note lights up as it is read' }).toBeGreaterThan(0);
+  await expect(note).toHaveText(HUB.nogMeer.replace('{aantal}', 'twee'));
+  await snap(page, 'sporenboek');
+  const bookLines = [
+    ...(await newest.locator('.cb-clue-title').allTextContents()),
+    ...(await newest.locator('.cb-clue-text .zin').allTextContents()),
+    ...(await note.locator('.zin').allTextContents()),
+  ].map((t) => t.replace(/\s+/g, ' ').trim());
+  const clueText = norm(await newest.locator('.cb-clue-text').innerText());
+  expect(norm(await note.innerText()), 'the note does not repeat the clue').not.toContain(clueText);
+  const bookSaid = (await utterances(page)).filter((u) => u.at >= opened).map((u) => norm(u.text)).join(' | ');
+  expect(bookLines.filter((l) => !bookSaid.includes(norm(l))), 'every line of the sporenboek was read aloud').toEqual([]);
+  expect(bookLines.length, 'the clue title, its lines and the note').toBeGreaterThanOrEqual(3);
+
+  // each fact: its 🔊 reads it, lit up line by line
+  const notes = boek.locator('.cb-veld-note');
+  const nFacts = await notes.count();
+  expect(nFacts, 'the facts from mission 1 are in the book').toBeGreaterThan(0);
+  for (let i = 0; i < nFacts; i++) {
+    const row = notes.nth(i);
+    const at = await pageNow(page);
+    await row.locator('.cb-veld-speak').click();
+    await expect.poll(() => row.locator('.cb-veld-text .zin').first().locator('.is-spoken').count(), { timeout: 5_000, intervals: [100], message: `fact ${i + 1} lights up` }).toBeGreaterThan(0);
+    const lines = (await row.locator('.cb-veld-text .zin').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim());
+    expect(lines.length, `fact ${i + 1}: one sentence a line`).toBeGreaterThan(1);
+    if (i === 0) await expect.poll(() => row.locator('.cb-veld-text .zin').nth(1).locator('.is-spoken').count(), { timeout: 10_000, intervals: [100], message: 'then its next line lights up' }).toBeGreaterThan(0);
+    const factSaid = (await utterances(page)).filter((u) => u.at >= at).map((u) => norm(u.text)).join(' | ');
+    expect(lines.filter((l) => !factSaid.includes(norm(l))), `fact ${i + 1} was read aloud`).toEqual([]);
+  }
+  expect(await longLines(page, '.case-board'), 'the sporenboek: no line over 7 words').toEqual([]);
+
+  const seen = await everyLineSpoken(page, 'mission 1 → reward → clue → sporenboek');
+  const where = new Set(seen.map((s) => s.where));
+  for (const w of ['fact-text', 'reunion-text', 'reward-lof', 'rk-word', 'card-title', 'cb-clue-title', 'cb-clue-text', 'cw-boek', 'cw-waar', 'cb-note']) expect(where.has(w), `a "${w}" line was seen`).toBe(true);
   fs.writeFileSync(path.join(dir, 'LINES.txt'), seen.map((s) => `${(s.at / 1000).toFixed(1)}s ${s.where}: ${s.line}`).join('\n'));
 
-  // on patrol again; the sporenboek it pointed at is in Pauze
-  await page.getByRole('button', { name: MISSIE.verderPatrouille }).click();
+  // on patrol again; the sporenboek is in Pauze
+  await page.getByRole('button', { name: HUB.verderPatrouille }).click();
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 10_000 }).toBe('world');
+  expect(errors).toEqual([]);
+});
+
+test('a first visit that starts with Enter: the maker speaks, the title never does', async ({ page }, testInfo) => {
+  test.setTimeout(2 * 60_000);
+  shotsInto(testInfo, 'first-enter');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
+  await untouchedUntilFirstPress(page);
+  await watch(page);
+  await page.goto('/?dev=1');
+  const begin = page.getByRole('button', { name: 'Begin', exact: true });
+  await begin.waitFor({ state: 'visible', timeout: 40_000 });
+  await sleep(page, 1_500);
+  expect((await utterances(page)).map((u) => u.text), 'nothing is said before the first key').toEqual([]);
+
+  // Enter at once: it presses Begin, and the title's words (due at the first press) are
+  // not said over the maker
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Dit is mijn ranger' }).waitFor({ state: 'visible', timeout: 30_000 });
+  const maker = metNaam(SAY.maker, 'Alvah');
+  await expect.poll(async () => (await utterances(page)).map((u) => u.text), { timeout: 10_000, message: 'the maker says its line' }).toContain(maker);
+  await sleep(page, 1_500);
+  await snap(page, 'maker');
+  const all = (await utterances(page)).map((u) => u.text);
+  expect(all.filter((t) => t.includes('Word de nieuwe boswachter')), 'the title is never said').toEqual([]);
+  expect(all[0], 'the first words are the maker\'s').toBe(maker);
   expect(errors).toEqual([]);
 });
