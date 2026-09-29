@@ -90,7 +90,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   void fam;
 
   // 0 · it sees him coming: up to its branch on the oak, and it chatters at him
-  k.beat = 'oak';
+  k.beat = 'den';
   await k.guard(sq.goBranch(oak, faceMe(sq.branchPose(oak))));
   chatter();
 
@@ -99,11 +99,18 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     k.say(line);
     const there = k.guard(go());
     let arrived = false;
+    let toldWait = false;
     void there.then(() => { arrived = true; void sq.lookAt(me); chatter(); }).catch(() => {});
     await k.walk({
       name, to: { ...to, r: 4 }, r: 4, line, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 18,
-      // while he waits for the ranger it chatters now and then (a sound to follow)
-      tick: () => { if (arrived && k.now - lastChatter > 3.2) chatter(); },
+      // while he waits for the ranger it chatters now and then (a sound to follow); when
+      // the ranger wanders off, the line says so once
+      tick: () => {
+        if (!arrived) return;
+        if (k.now - lastChatter > 3.2) chatter();
+        const far = dist(k.ranger(), sq) > 9;
+        if (far && !toldWait) { toldWait = true; k.say(c.wacht); } else if (!far && toldWait && dist(k.ranger(), sq) < 6) { toldWait = false; k.say(line); }
+      },
     });
     await there; // (he may be quicker than the squirrel: it gets there first)
   };

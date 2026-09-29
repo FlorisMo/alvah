@@ -44,8 +44,9 @@ export interface Neighbour {
   at: THREE.Vector3;
 }
 
-/** How far (m) the ranger must have been from the glade before the seedling grows. */
-const AWAY_M = 26;
+/** How far (m) the ranger must have been from the glade before the seedling grows (out
+ *  of sight behind the trees: back at the squirrel's first pine is far enough). */
+const AWAY_M = 16;
 
 export class EekhoornHome implements HomeDressing {
   readonly group = new THREE.Group();
@@ -149,6 +150,7 @@ export class EekhoornHome implements HomeDressing {
     this.seedling = new THREE.Mesh(seedlingGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
     this.seedling.name = 'oak-seedling';
     this.seedling.position.set(sp.x + 0.05, g(sp.x, sp.z) + 0.03, sp.z - 0.04);
+    this.seedling.scale.setScalar(1.5); // (≈ 0.27 m: a first-year oak, big enough to spot)
     this.seedling.visible = false;
     this.group.add(this.seedling);
   }

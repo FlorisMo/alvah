@@ -251,7 +251,8 @@ export class Squirrel extends Actor {
   override place(x: number, z: number, yaw = this.yaw): void {
     const tree = this.nearestTree(x, z);
     const atTree = tree && Math.hypot(tree.trunk.x - x, tree.trunk.z - z) < 0.6 ? tree : null;
-    if (this.placed && !this.env.reduced() && Math.hypot(x - this.pose.x, z - this.pose.z) > 1.5) {
+    // (the world being built, a reload: it is simply there — its own clock has hardly run)
+    if (this.placed && this.t > 3 && !this.env.reduced() && Math.hypot(x - this.pose.x, z - this.pose.z) > 1.5) {
       void this.play(atTree ? this.toBranchPlan(atTree) : this.dashTo(x, z, yaw), atTree ? { kind: 'branch', tree: atTree } : { kind: 'ground' });
       return;
     }

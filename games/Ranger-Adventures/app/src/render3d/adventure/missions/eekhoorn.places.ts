@@ -156,13 +156,13 @@ export const CALLERS_VIEW = {
   halfW: 1.45, halfD: 1.0, tall: 2.45, pitchDeg: 3, insetTop: 104, insetBottom: 20,
 } as const;
 
-/** Who lives here: the squirrel, round its oak by the marker before; at its glade after
- *  (it sits on the stump by its store). */
+/** Who lives here: the squirrel, round its pine by the marker before; at its glade after,
+ *  in the pine by its store (the jay's branch is free: the jay flew off). */
 export const EEKHOORN_RESIDENTS: readonly ResidentSpec[] = [
   {
     key: 'squirrel', animal: 'eekhoorn',
     before: { ...OAK_AT, idle: 'root', roam: 0 },
-    after: { x: TREE.gladeOak.x, z: TREE.gladeOak.z, idle: 'root', roam: 0 },
+    after: { x: TREE.jayPine.x, z: TREE.jayPine.z, idle: 'root', roam: 0 },
     voice: { call: 'eekhoorn', every: [5, 9], within: 9 },
   },
 ];

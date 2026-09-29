@@ -677,7 +677,7 @@ const MISSIE_EEKHOORN = {
     simpel: {
       volg: 'Volg de eekhoorn.',
       chipEekhoorn: 'De eekhoorn',
-      luister: 'kijk omhoog',
+      luister: 'luister goed',
       wacht: 'Hij wacht op jou.',
       weer: 'Daar gaat hij weer!',
       plekje: 'Hier is zijn plekje.',

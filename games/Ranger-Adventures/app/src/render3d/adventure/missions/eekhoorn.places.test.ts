@@ -158,6 +158,7 @@ test('the scattered trees keep out of the glade, the lens and the room round eac
 test('the squirrel lives on its tree by the marker before, at its glade after', () => {
   const sq = EEKHOORN_RESIDENTS.find((r) => r.key === 'squirrel')!;
   assert.ok(sq.before && dist(sq.before, TREE.oak) < 0.01, 'on its tree by the marker');
-  assert.ok(sq.after && dist(sq.after, TREE.gladeOak) < 0.01, 'at its glade after');
+  assert.ok(sq.after && dist(sq.after, TREE.jayPine) < 0.01, 'at its glade after, in the pine by its store');
+  assert.ok(dist(TREE.jayPine, STUMP) < 3.5, 'its store is at the foot of that pine');
   assert.ok(sq.voice && sq.voice.call === 'eekhoorn', 'it chatters');
 });
