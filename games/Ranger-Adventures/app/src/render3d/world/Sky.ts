@@ -11,8 +11,91 @@
 import * as THREE from 'three';
 import { SKY_STOPS, cloudOffset, cloudShadeShader, windSway, flyoverAt, type Flyover } from '../Atmosphere';
 import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, makeSkyDome } from '../Lighting';
+import { DaylightFade, DAYLIGHT_FADE_S, MOON_DIR, NIGHT_STOPS, lightAt, nightSet, type LightSet } from '../Daylight';
 
 const SKY_LOW = GOLDEN_HOUR.fogColor; // shared golden-hour horizon + fog colour (P1.1)
+
+/** The golden hour's lights (Lighting.GOLDEN_HOUR), as the day↔night mix reads them. */
+const DAY_SET: LightSet = {
+  fog: SKY_LOW,
+  hemiSky: `#${new THREE.Color(GOLDEN_HOUR.skyColor).getHexString()}`,
+  hemiGround: `#${new THREE.Color(GOLDEN_HOUR.groundColor).getHexString()}`,
+  hemiI: GOLDEN_HOUR.fillIntensity,
+  key: `#${new THREE.Color(GOLDEN_HOUR.keyColor).getHexString()}`,
+  keyI: GOLDEN_HOUR.keyIntensity,
+};
+const NIGHT_SET: LightSet = nightSet(GOLDEN_HOUR.exposure);
+
+/**
+ * Run 6 (the wildcamera's day↔night): the night sky as a second dome over the golden one,
+ * drawn with the night's share as its opacity — NIGHT_STOPS on the view's elevation (the
+ * horizon band through the tone curve, so the night fog meets it seamlessly, exactly as
+ * the golden dome does), a scatter of faint stars above the tree line and a pale moon
+ * with a soft halo. It stays hidden (no draw call) all day. The world's own: the title
+ * and every other scene keep their golden dome untouched.
+ */
+function makeNightDome(): THREE.Mesh {
+  const c = document.createElement('canvas');
+  c.width = 2;
+  c.height = 128;
+  const g = c.getContext('2d');
+  if (g) {
+    const grad = g.createLinearGradient(0, 0, 0, 128);
+    for (const [at, col] of NIGHT_STOPS) grad.addColorStop(at, col);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 2, 128);
+  }
+  const ramp = new THREE.CanvasTexture(c);
+  ramp.colorSpace = THREE.SRGBColorSpace;
+  const moon = new THREE.Vector3(MOON_DIR.x, MOON_DIR.y, MOON_DIR.z).normalize();
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uRamp: { value: ramp }, uMoon: { value: moon }, uAlpha: { value: 0 } },
+    vertexShader: `
+      varying vec3 vDir;
+      void main() {
+        vDir = position;
+        vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0);
+        gl_Position = p.xyww;
+      }`,
+    fragmentShader: `
+      uniform sampler2D uRamp;
+      uniform vec3 uMoon;
+      uniform float uAlpha;
+      varying vec3 vDir;
+      float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      void main() {
+        vec3 d = normalize(vDir);
+        float up = clamp(d.y, 0.0, 1.0);
+        float t = 1.0 - pow(clamp((up - 0.03) / 0.97, 0.0, 1.0), 0.6);
+        vec3 col = texture2D(uRamp, vec2(0.5, 1.0 - t)).rgb;
+        // a few faint stars above the tree line (fixed: they never twinkle or move)
+        vec3 cell = floor(d * 180.0);
+        float star = step(0.9965, hash(cell)) * smoothstep(0.16, 0.5, up);
+        vec3 f = fract(d * 180.0) - 0.5;
+        star *= smoothstep(0.35, 0.0, length(f));
+        col += vec3(0.75, 0.8, 0.95) * star * 0.55;
+        // the moon: a pale disc and a soft halo round it
+        float m = dot(d, uMoon);
+        col += vec3(0.55, 0.62, 0.8) * pow(max(m, 0.0), 60.0) * 0.35;
+        col = mix(col, vec3(0.93, 0.95, 1.0), smoothstep(0.99935, 0.9996, m));
+        gl_FragColor = vec4(col, uAlpha);
+        #include <tonemapping_fragment>
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, col, smoothstep(0.03, 0.3, up));
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.BackSide,
+    fog: false,
+  });
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), mat);
+  dome.name = 'night-sky';
+  dome.frustumCulled = false;
+  dome.renderOrder = -999; // right after the golden dome; behind everything (depth 1)
+  dome.raycast = () => {};
+  dome.visible = false;
+  return dome;
+}
 
 /**
  * The cloud shade's tile: white (no shade) with a few soft warm-grey blobs, drawn with
@@ -67,6 +150,13 @@ export class Sky {
   private flyBird: THREE.Group | null = null;    // the ~12 s sky crossing bird
   private lastFlyover: Flyover | null = null;
   private readonly scene: THREE.Scene;
+  // run 6: the time of day (1 = the golden hour, 0 = a readable blue night) and what it
+  // turns: the hemisphere fill, the key (sun or moon), the fog + background, the night dome
+  private readonly daylightFade = new DaylightFade();
+  private readonly hemi: THREE.HemisphereLight;
+  private readonly fog: THREE.Fog;
+  private readonly background: THREE.Color;
+  private readonly nightDome: THREE.Mesh;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -74,14 +164,18 @@ export class Sky {
     // the same dome the title stands under — one sky. It is laid on the view's elevation,
     // so its horizon band IS the fog colour at the horizon: distant hills and the rim
     // dissolve into the sky there instead of showing a pale band under it.
-    scene.background = new THREE.Color(SKY_LOW);
+    this.background = new THREE.Color(SKY_LOW);
+    scene.background = this.background;
     scene.add(makeSkyDome());
-    scene.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 22, 90);
+    this.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 22, 90);
+    scene.fog = this.fog;
+    this.nightDome = makeNightDome();
+    scene.add(this.nightDome);
 
     // P1.1: the ONE shared golden-hour rig (Lighting.GOLDEN_HOUR, §2.1) — the same
     // cool-sky / warm-ground hemisphere fill + warm low key the title + sandbox use,
     // so no screen reads as a different game.
-    addGoldenHourHemi(scene);
+    this.hemi = addGoldenHourHemi(scene);
     // W4.5: a warm, low golden-hour sun raking in from screen-left (the camera
     // looks down −z, so −x is the left of frame). Static direction — no day cycle.
     const sun = makeGoldenHourSun();
@@ -173,10 +267,42 @@ export class Sky {
     this.sun.target.updateMatrixWorld();
   }
 
+  /**
+   * Run 6: turn the time of day to `k` (1 = the golden hour, 0 = a readable blue moonlit
+   * night) over `seconds` (~2 s, calm; a cut under reduced motion, or with `seconds` 0).
+   * The hemisphere fill, the key light (the low sun becomes a pale moon from the same
+   * direction, so no shadow jumps), the fog, the background and the night dome all move
+   * together. A new world starts at 1; whoever turns it hands 1 back (the adventure kit
+   * does when a mission ends or is stopped).
+   */
+  setDaylight(k: number, seconds = DAYLIGHT_FADE_S): void {
+    if (seconds <= 0) { this.daylightFade.cut(k); this.applyDaylight(); return; }
+    this.daylightFade.set(k, seconds);
+  }
+
+  /** The time of day now (1 = the golden hour), and where it is going. */
+  get daylight(): { now: number; target: number } {
+    return { now: this.daylightFade.value, target: this.daylightFade.target };
+  }
+
+  private applyDaylight(): void {
+    const L = lightAt(DAY_SET, NIGHT_SET, this.daylightFade.value);
+    this.hemi.color.set(L.hemiSky);
+    this.hemi.groundColor.set(L.hemiGround);
+    this.hemi.intensity = L.hemiI;
+    this.sun.color.set(L.key);
+    this.sun.intensity = L.keyI;
+    this.fog.color.set(L.fog);
+    this.background.set(L.fog);
+    this.nightDome.visible = L.night > 0.002;
+    (this.nightDome.material as THREE.ShaderMaterial).uniforms.uAlpha.value = L.night;
+  }
+
   /** W4.6: advance the ambient clock (frozen under reduced-motion) and drift the cloud
    *  shade + sail the flyover bird. Runs every frame, even during an in-place
    *  activity, so the sky keeps breathing. Returns the clock for the wind + water. */
   advance(dt: number, reduced: boolean): number {
+    if (this.daylightFade.step(dt, reduced)) this.applyDaylight(); // run 6: the day turns (a cut when reduced)
     if (!reduced) this.skyTime += dt;
     const st = this.skyTime;
     if (this.cloudReceivers > 0) {
@@ -203,9 +329,11 @@ export class Sky {
     cloudOffset: { x: number; y: number };
     windSample: number;
     flyover: { x: number; y: number; z: number; visible: boolean } | null;
+    daylight: number;
   } {
     const f = this.lastFlyover;
     return {
+      daylight: this.daylightFade.value,
       gradientStops: SKY_STOPS.length,
       cloudDrift: this.cloudReceivers > 0,
       windMeshes,
