@@ -111,8 +111,7 @@ export class Actor {
   private disposed = false;
   private readonly shadow: THREE.Mesh;
   private readonly len: number;
-  /** the baked clip playing now (a rigged animal), and what frees its coat */
-  private clipNow: 'walk' | 'idle' | 'graze' | null = null;
+  /** what frees its coat (a calf's spots) */
   private readonly undress: (() => void)[] = [];
 
   constructor(key: string, animal: string, env: ActorEnv, opts: { height: number; len?: number }) {
@@ -339,20 +338,16 @@ export class Actor {
     this.speed = speed;
     this.animate(dt, t, speed, alert, reduced);
     this.seat();
-    this.playClip(speed);
+    // a rigged animal (the roe, the red deer) walks and grazes with its own clips
+    if (this.stand?.rigged) this.stand.clip?.(speed > 0.12 ? 'walk' : this.dipWant > 0.5 ? 'graze' : 'idle');
     this.stand?.update(dt); // a rigged animal's own clip
   }
 
-  /** A rigged animal's clip for what it does now: the walk while it moves (its rate
-   *  keeps the hooves from sliding), the graze while its head is down (rooting,
-   *  sniffing), else the idle. Crossfaded calmly (spawn.ts). */
-  private playClip(speed: number): void {
-    const s = this.stand;
-    if (!s?.rigged || this.isLying) return;
-    const want = speed > 0.12 ? 'walk' : this.dipWant >= 0.5 ? 'graze' : 'idle';
-    if (want !== this.clipNow) { s.clip?.(want); this.clipNow = want; }
+  /** A rigged animal's walk clip runs at a rate that keeps its hooves from sliding (its
+   *  other clips at their own pace). */
+  private clipRate(speed: number): void {
     const ref = CLIP_WALK_PER_H * this.height;
-    s.rate?.(want === 'walk' ? Math.max(0.45, Math.min(2.4, speed / ref)) : 1);
+    this.stand?.rate?.(speed > 0.12 ? Math.max(0.45, Math.min(2.4, speed / ref)) : 1);
   }
 
   /** It plays its own baked clips (a rigged model), so no procedural gait rides on it. */
@@ -373,6 +368,7 @@ export class Actor {
     const k = Math.min(1, dt * 4);
     if (this.rigged) {
       // its clips carry the stride, the grazing head and the breath: the body stays level
+      this.clipRate(speed);
       this.phase = 0; this.dip = 0; this.headUp = 0;
       this.gaitNode.position.y = 0;
       this.gaitNode.rotation.set(0, 0, 0);
@@ -384,7 +380,8 @@ export class Actor {
     this.dip += ((reduced ? Math.min(this.dipWant, 0.6) : this.dipWant) - this.dip) * k;
     this.headUp += (alert - this.headUp) * k;
     this.phase += (speed * dt / strideOf(this.height)) * Math.PI * 2;
-    const g = reduced ? { dy: 0, roll: 0, pitch: 0 } : trot(this.phase, speed, this.height);
+    // (a rigged animal's walk clip carries its gait: no procedural trot on top of it)
+    const g = reduced || this.stand?.rigged ? { dy: 0, roll: 0, pitch: 0 } : trot(this.phase, speed, this.height);
     const breath = reduced || speed > 0.05 ? REST : motionAt(this.recipe, t, this.seed);
     const dipNow = this.dip * (reduced ? 1 : 0.75 + 0.25 * rootDip(t, this.seed));
     this.gaitNode.position.y = g.dy + breath.dy;

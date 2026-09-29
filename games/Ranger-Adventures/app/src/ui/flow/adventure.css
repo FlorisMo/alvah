@@ -50,3 +50,17 @@
 
 /* the joystick during a walk (iPad): the explore HUD's own ring */
 .adventure-hud .rj-base { pointer-events: auto; }
+
+/* time passes (the night goes by): a calm dark-blue veil with one line, never black */
+.adv-veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  background: #1b2742;
+  transition: opacity var(--dur-cine) var(--ease-soft);
+}
+.adv-veil.on { opacity: 0.96; }
+.adv-veil-text { margin: 0; font: 600 34px/1.3 var(--font-read); color: #f3f1ff; letter-spacing: 0.01em; }

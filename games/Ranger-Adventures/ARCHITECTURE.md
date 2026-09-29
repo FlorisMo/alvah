@@ -85,8 +85,7 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          happens), <id>.home.ts (the home's dressing), <id>.ts (the beats);
                          frisling (the wallow) and ree (the copse, the meadow, the hide)
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
-                         a `shy` resident slips into cover when he comes near (per state);
-                         a home's `trees` join the world forest (Dressing.addHomeTrees)
+                         a `shy` resident slips into cover when he comes near (per state)
 ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip, action button
 ```
 
@@ -101,8 +100,8 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   holds a framed view (a Stage fit at a world anchor, the ranger's spot among `include`),
   eased, ≤ 90°/s, a cut under reduced motion; `k.free()` gives the follow camera back with a
   blended hand-over; `await k.look(spot, line, hold, { turn })` is one calm look
-  (binoculars) and back (`turn`: he ends facing it); `k.ui.binoculars(on, strong)` is the
-  glasses' frame for a long watch (the ree's hide).
+  (binoculars) and back (`turn`: he ends facing it); `k.ui.watching(on)` is the glasses'
+  closer frame for a long watch (the ree's hide).
 - *walking*: `await k.walk({ name, to, r, line, doel, lead, quiet })` — the child walks
   himself; the chip names the goal in words, the arrow only after ~20 s without progress;
   with `lead` an actor follows and hides when he runs; with `quiet` running says its line.

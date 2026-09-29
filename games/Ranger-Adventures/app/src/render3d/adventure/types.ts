@@ -81,15 +81,6 @@ export interface ResidentShy {
   state?: 'before' | 'after';
 }
 
-/** A tree of a mission's home (a copse): it joins the world's forest — the same
- *  instanced tree, its detail by distance, its crown fading for the lens, its trunk
- *  solid (world/Dressing.addHomeTrees). */
-export interface HomeTree extends Spot {
-  species: 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
-  /** its height (m); default the scale table's grown tree */
-  h?: number;
-}
-
 export interface ResidentVoice {
   /** the call id (`Sound.callAt`) */
   call: string;
@@ -110,8 +101,6 @@ export interface HomeSpec {
   /** the mission marker: where it stands (default: its landschap's anchor) and what
    *  stands in its ring ('none': an empty ring; the story's animal is elsewhere) */
   marker?: { at?: Spot; look: 'animal' | 'prop' | 'none' };
-  /** trees of the home (a copse at the heath's edge), built into the world's forest */
-  trees?: readonly HomeTree[];
 }
 
 /** The two states of a home: before the mission is done, and after. */

@@ -46,6 +46,7 @@ export class AdventureHud {
     el.className = 'adventure-hud';
     el.innerHTML =
       `<div class="adv-vignette" aria-hidden="true"></div>` +
+      `<div class="adv-veil" role="status" aria-live="polite"><p class="adv-veil-text"></p></div>` +
       `<div class="adv-line p3-top" role="status" aria-live="polite" hidden>` +
       `<div class="p3-card"><div class="p3-row">` +
       `<p class="p3-text"></p>` +
@@ -126,11 +127,31 @@ export class AdventureHud {
     });
   }
 
-  /** The binocular frame for a look (on/off; the fade is CSS, a cut under reduced motion).
-   *  `strong`: a long watch through the glasses (the frame closes in further). */
-  binoculars(on: boolean, strong = false): void {
+  /** Time passes (the night goes by): a calm dark veil over the world with one line in
+   *  the middle, read aloud; null lifts it. The fade is CSS (a cut under reduced motion). */
+  veil(text: string | null): void {
+    const v = this.el.querySelector<HTMLElement>('.adv-veil')!;
+    if (text) {
+      v.querySelector('.adv-veil-text')!.textContent = text;
+      if (store.get().settings.voorlezen) narrator.speak(text);
+    }
+    v.classList.toggle('on', !!text);
+  }
+
+  /** The binocular frame for a look (on/off; the fade is CSS, a cut under reduced motion). */
+  binoculars(on: boolean): void {
     this.vignette.classList.toggle('on', on);
-    if (on) this.vignette.classList.toggle('strong', strong);
+  }
+
+  /** A long watch through the binoculars (the reekalf's hide): the frame closes in
+   *  further than a look's, so the picture reads as seen through the glasses. */
+  watching(on: boolean): void {
+    const v = this.vignette;
+    if (on) v.classList.add('strong');
+    // (the closer frame stays while it fades out, then a look's frame is the soft one again)
+    else if (v.classList.contains('on')) v.addEventListener('transitionend', () => { if (!v.classList.contains('on')) v.classList.remove('strong'); }, { once: true });
+    else v.classList.remove('strong');
+    this.binoculars(on);
   }
 
   /** The joystick while he walks himself (touch screens); gone while a beat holds him. */

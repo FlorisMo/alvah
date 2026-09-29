@@ -32,9 +32,10 @@ import { listenerOf } from '../../world/Residents';
 import { dist, headingTo, toLocal, toward } from '../places';
 import { backPoints, openWindow } from '../cover-math';
 import { SIZE } from '../../AnimalScale';
+import { TREE_BASE_H } from '../../world/Forest';
 import { ReeHome } from './ree.home';
 import {
-  REE_HOME, REE_PLACES as P, REE_RESIDENTS, CALF_SPOT, COPSE_GAP, DOE_BED, MEET, POOL, POOL_FRAME, POOL_IN, POOL_ROUND,
+  REE_HOME, REE_PLACES as P, REE_RESIDENTS, COPSE_TREES, CALF_SPOT, COPSE_GAP, DOE_BED, MEET, POOL, POOL_FRAME, POOL_IN, POOL_ROUND,
   SEARCH_VIEW, CALF_VIEW, POOL_VIEW, WATCH_VIEW, reeClearings, slotTrail, calfBolt, drinkSpot, leaveView,
 } from './ree.places';
 
@@ -52,6 +53,11 @@ export const reeAdventure: Adventure = {
   id: MISSION,
   home: REE_HOME,
   clearings: reeClearings(),
+  // the copse's birches and pine join the world's forest (instanced, faded for the lens,
+  // a solid trunk), each at its grown height
+  trees: COPSE_TREES.map((t, i) => ({
+    x: t.x, z: t.z, species: t.species, s: t.h / TREE_BASE_H[t.species], rotY: ((i + 3) * 2.39996) % (Math.PI * 2),
+  })),
   dressing: (env) => new ReeHome(env, contentDecoys),
   bind(mission) { contentDecoys = distractorsOf(mission); },
 
@@ -239,7 +245,7 @@ async function story(k: AdventureKit): Promise<void> {
   k.beat = 'watch:walk';
   await k.walkRanger(P.hide.x, P.hide.z, 0.05);
   k.beat = 'watch';
-  k.ui.binoculars(true, true);
+  k.ui.watching(true);
   await k.frame(WATCH_VIEW, { face: P.hide.heading });
   k.say(c.wacht);
   calf.idle();
@@ -310,7 +316,7 @@ async function story(k: AdventureKit): Promise<void> {
     await k.wait(4.8);
   });
   k.stats.reunion_gap = Math.round(dist(calf, doe) * 100) / 100;
-  k.ui.binoculars(false);
+  k.ui.watching(false);
   // 14 · the raaf: a mother leaves her calf alone for a while; that keeps it safe
   await k.fact(1);
 }

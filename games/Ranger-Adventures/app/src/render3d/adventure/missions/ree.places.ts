@@ -21,7 +21,7 @@
 
 import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import { patchLocal } from '../../play/kit-math.ts';
-import type { HomeSpec, HomeTree, Place, ResidentSpec, Spot } from '../types.ts';
+import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { approachOf, atLocal, dist, headingTo, toLocal, toward, type Frame } from '../places.ts';
 
 /** The ree marker: the heide's second anchor (Markers.placeMarkers: `anchorInBiome
@@ -95,8 +95,15 @@ export function juniperR(h: number): number {
   return 0.55 * (h / SIZE.jeneverbes.h) + 0.35;
 }
 
+/** A tree of the copse: its species and its grown height (m), from the scale table. It
+ *  joins the world's forest (ree.ts hands it over as the home's `trees`). */
+export interface CopseTree extends Spot {
+  species: 'prop-pine-scots' | 'prop-birch-tree';
+  h: number;
+}
+
 /** The copse's trees: three birches and a Scots pine, grown (the scale table). */
-export const COPSE_TREES: readonly HomeTree[] = [
+export const COPSE_TREES: readonly CopseTree[] = [
   { ...inCopse(-2.6, -0.6), species: 'prop-birch-tree', h: SIZE.berk.h * 0.92 },
   { ...inCopse(3.4, -1.4), species: 'prop-birch-tree', h: SIZE.berk.h * 1.02 },
   { ...inCopse(-0.7, -2.5), species: 'prop-pine-scots', h: SIZE.den.h * 0.95 },
@@ -264,7 +271,6 @@ export const REE_HOME: HomeSpec = {
   places: REE_PLACES,
   residents: REE_RESIDENTS,
   marker: { look: 'none' },
-  trees: COPSE_TREES,
 };
 
 /** Ground the world's heather scatter leaves bare: the meadow (tall grass grows there,
