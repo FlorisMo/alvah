@@ -103,8 +103,12 @@ export function card(html: string, opts: { scrim?: boolean } = {}): HTMLDivEleme
     el.classList.add('ra-scrim');
     if (dimmed) {
       el.classList.add('ra-scrim--held');
-      // the card going away leaves its dim to this one (two would darken the world)
-      session.host.querySelectorAll(':scope > .ra-leaving.ra-scrim').forEach((n) => n.classList.remove('ra-scrim'));
+      // the card going away leaves its dim to this one (two would darken the world), and
+      // goes quickly, before this one comes (missions.css: the swap)
+      session.host.querySelectorAll(':scope > .ra-leaving.ra-scrim').forEach((n) => {
+        n.classList.remove('ra-scrim');
+        n.classList.add('ra-leaving--swap');
+      });
     }
   }
   el.innerHTML = html;

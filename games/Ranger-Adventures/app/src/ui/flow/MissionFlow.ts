@@ -298,9 +298,12 @@ export function showSeasonFinale(): void {
   );
   if (store.get().settings.geluid) Sound.found();
   const lineEls = Array.from(el.querySelectorAll<HTMLElement>('.briefing-line'));
+  // the title lights up as it is read, the lines come as the voice reaches them
   const ra = mountReadAloud({
-    lead: `${vb?.finale?.titel ?? ''}`,
-    segments: regels.map((l, i) => ({ el: lineEls[i], text: l, reveal: true })),
+    segments: [
+      { el: el.querySelector<HTMLElement>('.finale .boot-title')!, text: vb?.finale?.titel ?? 'Het is weer veilig.', sentence: true },
+      ...regels.map((l, i) => ({ el: lineEls[i], text: l, reveal: i > 0 })),
+    ],
     speakBtn: el.querySelector('.ra-speak'),
     autoStart: store.get().settings.voorlezen,
   });

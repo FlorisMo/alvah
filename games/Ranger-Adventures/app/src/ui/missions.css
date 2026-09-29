@@ -25,6 +25,12 @@
   animation: scrim-in var(--dur-card-in) var(--ease-out) both;
 }
 .ra-scrim--held::before { animation: none; }
+/* one card after another (the dim stays): the old one goes quickly, then the new one
+   comes, so two cards never show through each other */
+.ra-leaving--swap .card { animation-duration: 90ms; }
+.ra-scrim--held > .card { animation-delay: 80ms; }
+.rm .ra-scrim--held > .card { animation-delay: 0s; }
+@media (prefers-reduced-motion: reduce) { .ra-scrim--held > .card { animation-delay: 0s; } }
 .ra-leaving.ra-scrim::before { animation: scrim-out var(--dur-card-out) var(--ease-in) both; }
 @keyframes scrim-in { from { opacity: 0; } }
 @keyframes scrim-out { to { opacity: 0; } }
@@ -82,7 +88,7 @@
   background-clip: content-box;
 }
 .briefing-line { margin: 0; font: 400 var(--read-size)/var(--read-leading) var(--font-read); color: var(--ink); }
-.finale .briefing-lines { border-left: 0; padding-left: 4px; text-align: center; }
+.finale .briefing-lines { border-left: 0; padding: 0 4px; background: none; text-align: center; }
 
 /* the mission's picture, big (briefing, reward) */
 .mc-icon.mc-icon--big { width: 76px; height: 76px; flex: none; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.65), 0 2px 6px rgba(46, 32, 12, 0.14); }
