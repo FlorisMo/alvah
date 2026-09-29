@@ -255,7 +255,9 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       act: (on) => { if (on) void a.lookAt(lens, 0.9); },
     };
   };
-  const bird: Caller = { id: 'nachtzwaluw', pick: home.birdObject, body: home.birdObject, at: () => home.birdAt, act: (on) => home.birdHop(on) };
+  const bird: Caller = {
+    id: 'nachtzwaluw', pick: home.perch, body: home.birdObject, hint: home.perch, at: () => home.birdAt, act: (on) => home.birdHop(on),
+  };
   const simonCopy = k.steps[1].skin.copy ?? {};
   await callersBeat(k, 1, {
     view: null,

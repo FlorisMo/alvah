@@ -41,6 +41,8 @@ export interface Caller {
   pick: THREE.Object3D;
   /** the model that lights up (one that owns its materials: a spawn) */
   body: THREE.Object3D | null;
+  /** what a perfect player clicks (golden's hint: standing on the ground); default the body */
+  hint?: THREE.Object3D;
   /** where it is (its call comes from there) */
   at(): { x: number; z: number };
   /** it calls now (on) / is done (off): a little movement of its own (head up, a hop) */
@@ -178,7 +180,7 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   const unhint = k.hint(() => {
     if (phase !== 'echo') return null;
     const c = byId.get(run.expected);
-    return c ? { id: c.id, target: c.body ?? c.pick } : null;
+    return c ? { id: c.id, target: c.hint ?? c.body ?? c.pick } : null;
   });
   const teardown = pick3d({
     canvas: k.ctx.canvas, camera: k.world.camera, raycaster: k.ctx.raycaster as THREE.Raycaster,

@@ -234,6 +234,9 @@ export class WildcameraHome implements HomeDressing {
   private poacher: THREE.Object3D | null = null;
   /** the nightjar: it flies in and lands, so the home moves it */
   readonly bird = new THREE.Group();
+  /** the log it sits on at night, and the bird: what a click on the nightjar finds (the
+   *  bird on its log reads as one thing; a container at the origin) */
+  readonly perch = new THREE.Group();
   private birdBody: THREE.Object3D | null = null;
   private flight: { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; yaw: number; done: () => void } | null = null;
   private readonly spawned: { dispose(): void; update?(dt: number): void }[] = [];
@@ -264,6 +267,7 @@ export class WildcameraHome implements HomeDressing {
     void env.spawnPlant('prop-wildlife-camera', CAM_H).then((s) => {
       const r = add(s, st.x, st.z, headingTo(st, { x: 0, z: 0 }) + 0.5, STUMP_H - 0.08);
       if (!r) return;
+      r.name = 'camera-on-stump';
       r.rotation.x = -Math.PI / 2 + 0.05; // lying on its back on the stump, lens up
       r.position.y += CAM_DEPTH * 0.5 - 0.02;
       r.visible = this.stumpCamWanted;
@@ -330,8 +334,10 @@ export class WildcameraHome implements HomeDressing {
       if (r) this.thicket.add(r);
     });
 
-    /* -- the fallen log the nightjar sits on at night -- */
-    void env.spawnPlant('prop-fallen-log', LOG.h).then((s) => add(s, LOG.x, LOG.z, LOG.turn, -0.04));
+    /* -- the fallen log the nightjar sits on at night (with the bird: one thing to click) -- */
+    this.perch.name = 'nightjar-perch';
+    this.group.add(this.perch);
+    void env.spawnPlant('prop-fallen-log', LOG.h).then((s) => { const r = add(s, LOG.x, LOG.z, LOG.turn, -0.04); if (r) this.perch.add(r); });
     env.obstacles.push(boxObstacle(LOG.x, LOG.z, 0.55, 0.16, LOG.turn, 0.2));
 
     /* -- the camera trap on the pine -- */
@@ -416,7 +422,7 @@ export class WildcameraHome implements HomeDressing {
     });
     this.bird.name = 'nightjar';
     this.bird.visible = false;
-    this.group.add(this.bird);
+    this.perch.add(this.bird);
     // (shown ≈ 1.5× its size, like the camera: a 17 cm bird must read on its log at night)
     void env.spawnModel('nachtzwaluw', { height: heightFor('nachtzwaluw') * 1.5, idle: false }).then((s) => {
       if (!s) return;

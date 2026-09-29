@@ -144,7 +144,7 @@ async function start(log: Log, mission: Mission): Promise<void> {
  *  an adventure plays its steps as beats in the world, interleaved — walk hints are walked
  *  with the arrow keys, an encounter is answered from ANY step of the mission, an action
  *  button is pressed, and "won" = every step's trial count went up. */
-async function playSteps(log: Log, mission: Mission): Promise<void> {
+async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<boolean>): Promise<void> {
   const page = log.page;
   const plan = mission.stappen.map((s) => s.ef as string);
   log.note(`steps: ${plan.join(' → ')}`);
@@ -173,6 +173,7 @@ async function playSteps(log: Log, mission: Mission): Promise<void> {
       }
     }
     if (won.size >= Object.keys(need).length && !await playingOn()) break;
+    if (stopWhen && await stopWhen()) return; // (a test that stops the mission part way)
     const view = await R<string | null>(page, 'r.missionView');
     if ((await R<string>(page, 'r.screen')) === 'world' && view === null) {
       ended ??= Date.now();
@@ -628,6 +629,82 @@ test('a mission picked on the missiebord: played at its OWN marker (the pick bri
     const text = log.write();
     await info.attach('notes', { body: text, contentType: 'text/plain' });
     if (!process.env.MISSIONS_QUIET) console.log(`\n── missiebord ──\n${text}`);
+  }
+});
+
+/** Run 6 · De wildcamera: the day turns into night while it plays; whatever happens, the
+ *  golden hour comes back — after "Stop de missie" in the middle of the night, and on a
+ *  reload — and the camera lies on its stump again until the mission is done; once it is
+ *  done, it hangs on its pine (after a reload too) and the roe grazes in the glade. */
+type Sky = { daylight?: number } | null;
+const daylight = async (page: Page): Promise<number> => (await R<Sky>(page, 'r.sky()'))?.daylight ?? 1;
+const near = async (page: Page, p: P2, r: number, id: string): Promise<boolean> =>
+  !!(await R<Seat[] | null>(page, `r.seating(${p.x}, ${p.z}, ${r})`))?.some((s) => s.id.startsWith(id));
+
+test('De wildcamera: stopped in the night, the golden hour comes back and the camera lies on its stump again @missions', async ({ page }, info) => {
+  test.setTimeout(8 * 60_000);
+  const mission = missions.find((m) => m.id === 'wildcamera')!;
+  const log: Log = new Log(page, outDir(info, 'wildcamera-stop'));
+  try {
+    await boot(log);
+    const marker = await goToMarker(log, mission);
+    log.soft(await near(page, marker, 1.2, 'camera-on-stump'), 'the camera lies on its stump at the marker');
+    await start(log, mission);
+    await playSteps(log, mission, async () => (await daylight(page)) < 0.05);
+    log.hard((await daylight(page)) < 0.05, 'the night never came');
+    const places = await R<Record<string, P2>>(page, `r.missionPlaces("wildcamera")`);
+    await sleep(page, 800);
+    await log.shot('night');
+    await click(log, /Pauze/, 'the mission pause chip');
+    await click(log, 'Stop de missie', 'pause card');
+    const t0 = Date.now();
+    await expect.poll(() => daylight(page), { timeout: 8_000, message: 'the golden hour comes back after a stop' }).toBe(1);
+    log.note(`the golden hour was back ${((Date.now() - t0) / 1000).toFixed(1)} s after the stop`);
+    await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null,
+      { timeout: 8_000, message: 'back in free roam' }).toBe(true);
+    await sleep(page, 1_000);
+    await log.shot('after-stop');
+    const home = await homeOf(page, 'wildcamera');
+    log.soft(home?.state === 'before' && !home.borrowed, `the home is back in its before state (${home?.state}, borrowed ${home?.borrowed})`);
+    log.soft(!!home && home.actors.every((a) => !a.visible), 'no animal is left standing about');
+    log.soft(await near(page, marker, 1.2, 'camera-on-stump'), 'the camera lies on its stump again');
+    log.soft(!(await near(page, places.home, 1.5, 'camera-trap')), 'no camera on the pine yet');
+    await page.reload();
+    await click(log, 'Begin', 'title after reload', 30_000);
+    await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
+    await sleep(page, 1_500);
+    log.soft((await daylight(page)) === 1, 'after a reload: the golden hour');
+  } finally {
+    const text = log.write();
+    await info.attach('notes', { body: text, contentType: 'text/plain' });
+    if (!process.env.MISSIONS_QUIET) console.log(`\n── wildcamera-stop ──\n${text}`);
+  }
+});
+
+test('De wildcamera done: after a reload the camera hangs on its pine, the roe grazes in the glade, in the golden hour @missions', async ({ page, context }, info) => {
+  test.setTimeout(3 * 60_000);
+  await context.addInitScript((seed) => {
+    if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: seed }));
+  }, { voltooid: { frisling: true, 'ree-niet-aanraken': true, wildcamera: true }, avatarGemaakt: true, settings: { wereldHintGezien: true, tikHintGezien: true } });
+  const log: Log = new Log(page, outDir(info, 'wildcamera-after'));
+  try {
+    await boot(log);
+    await sleep(page, 2_000);
+    const places = await R<Record<string, P2>>(page, `r.missionPlaces("wildcamera")`);
+    const home = await homeOf(page, 'wildcamera');
+    log.soft(home?.state === 'after', `the home is in its after state (${home?.state})`);
+    const roe = home?.actors.find((a) => a.key === 'ree');
+    log.soft(!!roe?.visible && Math.hypot(roe.x - places.glade.x, roe.z - places.glade.z) < 2.5, 'the roe grazes in the glade');
+    log.soft(await near(page, places.home, 1.5, 'camera-trap'), 'the camera hangs on its pine');
+    const all = await R<(P2 & { missionId: string })[]>(page, 'r.markers()');
+    const m = all.find((x) => x.missionId === 'wildcamera')!;
+    log.soft(!(await near(page, m, 1.2, 'camera-on-stump')), 'the stump at the marker is empty');
+    log.soft(await near(page, m, 6, 'klaar-flag'), 'the "klaar" flag stands at the marker');
+    log.soft((await daylight(page)) === 1, 'the golden hour');
+  } finally {
+    const text = log.write();
+    await info.attach('notes', { body: text, contentType: 'text/plain' });
+    if (!process.env.MISSIONS_QUIET) console.log(`\n── wildcamera-after ──\n${text}`);
   }
 });
 
