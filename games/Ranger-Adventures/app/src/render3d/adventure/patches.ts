@@ -40,9 +40,9 @@ function moundGeometry(seed: number): THREE.BufferGeometry {
     const k = r / RINGS;
     for (let i = 0; i < SEG; i++) {
       const a = (i / SEG) * Math.PI * 2;
-      const rr = 0.5 * k * (1 + wave(a, 0) * 0.14 * k + (rnd() - 0.5) * 0.04);
+      const rr = 0.5 * k * (1 + wave(a, 0) * 0.2 * k + (rnd() - 0.5) * 0.05);
       // low in the middle, the thrown-up rim highest, the outer edge settling into the ground
-      const rim = Math.exp(-((k - 0.74) ** 2) / 0.018) * (0.05 + 0.025 * (wave(a, 1.3) + 1) / 2);
+      const rim = Math.exp(-((k - 0.72) ** 2) / 0.03) * (0.022 + 0.022 * (wave(a, 1.3) + 1) / 2);
       const h = 0.004 * (1 - k) + rim + (k < 1 ? rnd() * 0.012 : -0.006);
       P.push(Math.cos(a) * rr, h, Math.sin(a) * rr);
       const n = (wave(a * 1.3, k * 3 + ph[3]) + 1) / 2; // 0..1, slow round the patch
@@ -102,6 +102,8 @@ export class PatchField {
   /** each spot's mound: what a child clicks and the play hint points at */
   readonly mounds: THREE.Mesh[] = [];
   private readonly prints: THREE.InstancedMesh;
+  /** the clods and torn-up sods thrown round every patch (one draw call) */
+  private readonly clods: THREE.InstancedMesh;
   private readonly state: PatchState[];
   private readonly printOn: number[];   // 0..1 each spot's fresh prints (eased)
   private readonly printWant: number[];
@@ -131,6 +133,17 @@ export class PatchField {
     this.mats.push(printMat);
     const rnd = stream(o.seed + 5);
     const q = new THREE.Quaternion(), e = new THREE.Euler();
+    const CLODS = 11;
+    const clodGeo = new THREE.DodecahedronGeometry(1, 0);
+    const clodMat = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true });
+    this.clods = new THREE.InstancedMesh(clodGeo, clodMat, n * CLODS);
+    this.clods.name = 'patch-clods';
+    this.clods.receiveShadow = true;
+    this.geos.push(clodGeo);
+    this.mats.push(clodMat);
+    const earth = [new THREE.Color('#4a3727'), new THREE.Color('#5e4632'), new THREE.Color('#3b2c20')];
+    const sod = new THREE.Color('#5b5a31');
+    const cm = new THREE.Matrix4(), cq = new THREE.Quaternion(), ce = new THREE.Euler(), cv = new THREE.Vector3(), cs = new THREE.Vector3();
     this.spots.forEach((s, i) => {
       // tilt to the slope under it
       const r = o.size * 0.5;
@@ -148,6 +161,22 @@ export class PatchField {
       mound.receiveShadow = true;
       this.mounds.push(mound);
       this.group.add(mound);
+      // clods thrown out round the rim, and a few torn-up sods (grass side up)
+      for (let k = 0; k < CLODS; k++) {
+        const a = rnd() * Math.PI * 2;
+        const turf = k < 3;
+        const rr = o.size * (0.36 + rnd() * 0.3);
+        const cx = s.x + Math.cos(a) * rr, cz = s.z + Math.sin(a) * rr;
+        const size = o.size * (turf ? 0.07 + rnd() * 0.04 : 0.028 + rnd() * 0.04);
+        const flat = turf ? 0.32 : 0.55 + rnd() * 0.25;
+        ce.set((rnd() - 0.5) * 0.5, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.5);
+        cq.setFromEuler(ce);
+        cs.set(size * (turf ? 1.4 : 1), size * flat, size);
+        cv.set(cx, o.groundY(cx, cz) + size * flat * 0.62, cz); // resting on the heath, never floating
+        cm.compose(cv, cq, cs);
+        this.clods.setMatrixAt(i * CLODS + k, cm);
+        this.clods.setColorAt(i * CLODS + k, turf ? sod : earth[Math.floor(rnd() * earth.length)]);
+      }
       // its prints: a few trotter marks walking over it
       for (let k = 0; k < this.per; k++) {
         const t = (k / (this.per - 1) - 0.5) * o.size * 0.8;
@@ -163,6 +192,10 @@ export class PatchField {
         this.prints.setMatrixAt(i * this.per + k, new THREE.Matrix4().makeScale(0, 0, 0));
       }
     });
+    this.clods.instanceMatrix.needsUpdate = true;
+    if (this.clods.instanceColor) this.clods.instanceColor.needsUpdate = true;
+    this.clods.computeBoundingSphere();
+    this.group.add(this.clods);
     this.prints.instanceMatrix.needsUpdate = true;
     this.prints.computeBoundingSphere();
     this.prints.frustumCulled = false; // (its instances start at scale 0: no honest sphere)
@@ -236,6 +269,7 @@ export class PatchField {
   dispose(): void {
     this.group.removeFromParent();
     this.prints.dispose();
+    this.clods.dispose();
     for (const g of this.geos) g.dispose();
     for (const mm of this.mats) mm.dispose();
   }
