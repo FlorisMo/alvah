@@ -85,7 +85,7 @@ export function develop(src: HTMLCanvasElement, time: Photo['time'], clock: stri
   // are the brightest things in the middle and must keep their colour, never go white):
   // the curve is softer, and the gain stops before the brightest 2 % of the middle would
   // pass 90 % of white
-  const kBase = dawn ? 0.8 : 1.35;
+  const kBase = dawn ? 0.55 : 1.35;
   if (hist) {
     let seen = 0, hi = 255;
     for (let v = 255; v >= 0; v--) { seen += hist[v]; if (seen >= cnt * 0.02) { hi = v; break; } }
@@ -100,7 +100,7 @@ export function develop(src: HTMLCanvasElement, time: Photo['time'], clock: stri
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4;
-      const dl = detail ? detail[y * W + x] * 0.8 : 0;
+      const dl = detail ? detail[y * W + x] * 1.1 : 0;
       const r = expose(Math.max(0, d[i] + dl)), gg = expose(Math.max(0, d[i + 1] + dl)), b = expose(Math.max(0, d[i + 2] + dl));
       const vx = (x / W - 0.5) * 2, vy = (y / H - 0.5) * 2;
       const vig = 1 - 0.28 * Math.min(1, (vx * vx + vy * vy) * 0.6);
@@ -116,7 +116,7 @@ export function develop(src: HTMLCanvasElement, time: Photo['time'], clock: stri
         // colour (a face keeps its skin tone), a little muted, a touch of grain
         const l = (0.3 * r + 0.59 * gg + 0.11 * b);
         const cool = Math.pow(Math.max(0, 1 - l / 255), 1.2);
-        const mix = (v: number, t: number): number => v * 0.8 + l * 0.2 + t * cool;
+        const mix = (v: number, t: number): number => v * 0.88 + l * 0.12 + t * cool;
         d[i] = Math.max(0, Math.min(255, mix(r, -10) * vig + (rnd() - 0.5) * 8));
         d[i + 1] = Math.max(0, Math.min(255, mix(gg, 0) * vig + (rnd() - 0.5) * 8));
         d[i + 2] = Math.max(0, Math.min(255, mix(b, 16) * vig + (rnd() - 0.5) * 8));
