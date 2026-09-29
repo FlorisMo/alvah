@@ -229,14 +229,19 @@ export function dashPath(
   const d1 = Math.hypot(tx - lens.x, tz - lens.z);
   const floor = Math.min(d0, d1);
   if (nearestOnSeg(lens, from, { x: tx, z: tz }) >= floor - 0.05) return straight;
-  // the segment dips toward the lens: go round by a corner on the far side of the line
-  const mx = (from.x + tx) / 2, mz = (from.z + tz) / 2;
-  let ox = mx - lens.x, oz = mz - lens.z;
-  const ol = Math.hypot(ox, oz) || 1;
-  ox /= ol; oz /= ol;
-  const need = floor - Math.hypot(mx - lens.x, mz - lens.z) + 0.15;
-  const corner = { x: mx + ox * Math.max(0, need), z: mz + oz * Math.max(0, need) };
-  return [{ x: from.x, z: from.z }, corner, { x: tx, z: tz }];
+  // the straight line dips toward the lens: go round it instead, on a gentle spiral from
+  // the start's distance to the end's (so it never comes nearer than the nearer end)
+  const a0 = Math.atan2(from.x - lens.x, from.z - lens.z), a1 = Math.atan2(tx - lens.x, tz - lens.z);
+  const da = wrap(a1 - a0);
+  const n = Math.max(2, Math.ceil(Math.abs(da) / 0.26));
+  const pts = [{ x: from.x, z: from.z }];
+  for (let i = 1; i < n; i++) {
+    const u = i / n;
+    const a = a0 + da * u, r = d0 + (d1 - d0) * u + 0.15 * Math.sin(u * Math.PI);
+    pts.push({ x: lens.x + Math.sin(a) * r, z: lens.z + Math.cos(a) * r });
+  }
+  pts.push({ x: tx, z: tz });
+  return pts;
 }
 
 /** Distance from `p` to the segment a–b. */

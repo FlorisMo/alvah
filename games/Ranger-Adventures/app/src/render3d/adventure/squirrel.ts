@@ -52,7 +52,10 @@ export class Squirrel extends Actor {
   /** the trees it knows (its home oak, the trees along its way, the glade's oak) */
   readonly trees: SquirrelTree[];
   private pose: SqPose;
-  private perch: Perch = { kind: 'ground' };
+  /** where the last plan left it (while a plan plays, `where` works it out from the pose) */
+  private settled: Perch = { kind: 'ground' };
+  /** the stumps it hops onto (their top, their radius) */
+  readonly stumps: { x: number; z: number; top: number; r: number }[] = [];
   private plan: Segment[] = [];
   private planT = 0;
   private planDone: ((ok: boolean) => void) | null = null;
@@ -146,15 +149,22 @@ export class Squirrel extends Actor {
 
   /* ------------------------------------------------------------ what it does ---- */
 
+  /** Where it is right now: where its last plan left it, or — in the middle of a plan
+   *  (another one took over) — worked out from where its body is. */
+  private get where(): Perch {
+    return this.plan.length ? inferPerch(this.pose, this.trees, this.stumps) : this.settled;
+  }
+
   /** Where it is now (its feet, its turn). */
   get now(): SqPose { return { ...this.pose }; }
 
   /** On a trunk or branch right now? */
-  get up(): boolean { return this.perch.kind === 'trunk' || this.perch.kind === 'branch'; }
+  get up(): boolean { const w = this.where; return w.kind === 'trunk' || w.kind === 'branch'; }
 
   /** The tree it is on (or null on the ground). */
   get onTree(): SquirrelTree | null {
-    return this.perch.kind === 'trunk' || this.perch.kind === 'branch' ? this.perch.tree : null;
+    const w = this.where;
+    return w.kind === 'trunk' || w.kind === 'branch' ? w.tree : null;
   }
 
   /** Play a plan; resolves true when it is played out, false when something else took over. */
@@ -200,7 +210,7 @@ export class Squirrel extends Actor {
   /** A small turn where it is (on a stump, a branch, the ground): it keeps its perch. */
   look(yaw: number, hold1 = 0.5): Promise<boolean> {
     const p = this.pose;
-    return this.run([turn(p, yaw), hold({ ...p, yaw }, hold1, p.act === 'cling' ? 'cling' : 'sit')], this.perch);
+    return this.run([turn(p, yaw), hold({ ...p, yaw }, hold1, p.act === 'cling' ? 'cling' : 'sit')], this.where);
   }
   private perchAfter: Perch | null = null;
 
@@ -231,7 +241,7 @@ export class Squirrel extends Actor {
 
   /** Sit up and eat (nibbling an acorn held in its paws) for `secs`. */
   eat(secs: number): Promise<boolean> {
-    return this.run([hold({ ...this.pose, pitch: 0, roll: 0, act: 'eat' }, secs, 'eat')], this.perch);
+    return this.run([hold({ ...this.pose, pitch: 0, roll: 0, act: 'eat' }, secs, 'eat')], this.where);
   }
 
   /** Put it at (x, z) — on its branch when (x, z) is one of its trees. The first time
@@ -248,7 +258,7 @@ export class Squirrel extends Actor {
     this.placed = true;
     if (atTree) { this.placeOnBranch(atTree); return; }
     this.pose = { x, z, alt: 0, yaw, pitch: 0, roll: 0, act: 'sit' };
-    this.perch = { kind: 'ground' };
+    this.settled = { kind: 'ground' };
     this.plan = [];
     this.x = x; this.z = z; this.yaw = yaw;
     this.apply();
@@ -259,7 +269,7 @@ export class Squirrel extends Actor {
   placeOnBranch(tree: SquirrelTree, face?: number): void {
     this.placed = true;
     this.pose = this.branchPose(tree, face);
-    this.perch = { kind: 'branch', tree };
+    this.settled = { kind: 'branch', tree };
     this.plan = [];
     this.x = this.pose.x; this.z = this.pose.z; this.yaw = this.pose.yaw;
     this.apply();
@@ -269,7 +279,7 @@ export class Squirrel extends Actor {
   override idle(): void {
     this.life = null;
     this.watching = null;
-    void this.play([hold({ ...this.pose, act: this.up ? this.pose.act : 'sit' }, 0.1)], this.perch);
+    void this.play([hold({ ...this.pose, act: this.up ? this.pose.act : 'sit' }, 0.1)], this.where);
   }
 
   /** A home's "root about your spot": live round the tree nearest (cx, cz). */
@@ -285,7 +295,7 @@ export class Squirrel extends Actor {
   /** Go to (x, z): a dash there (down off its tree first). Up a tree it is already safe
    *  from someone walking up: a short "step away" there is only a turn on its branch. */
   override go(x: number, z: number, opts: { speed?: 'walk' | 'trot' | number; face?: number } = {}): Promise<boolean> {
-    if (this.up && Math.hypot(x - this.x, z - this.z) < 2.5) return this.play([turn(this.pose, Math.atan2(x - this.x, z - this.z))], this.perch);
+    if (this.up && Math.hypot(x - this.x, z - this.z) < 2.5) return this.play([turn(this.pose, Math.atan2(x - this.x, z - this.z))], this.where);
     const plan = [...this.downPlan(), ...dashPlan(this.groundPose(), x, z, this.rnd, this.lens(), this.avoid())];
     if (opts.face !== undefined) plan.push(turn(poseAtEnd(plan, this.pose), opts.face));
     return this.run(plan, { kind: 'ground' });
@@ -305,7 +315,7 @@ export class Squirrel extends Actor {
     this.life = null;
     this.watching = lead;
     this.watchUntil = this.t + planTime(plan) + (Number.isFinite(secs) ? secs : 1e9);
-    return this.play(plan, tree ? { kind: 'branch', tree } : this.perch).then((ok) => {
+    return this.play(plan, tree ? { kind: 'branch', tree } : this.where).then((ok) => {
       if (!ok) return false;
       return new Promise<boolean>((done) => {
         const check = (): void => {
@@ -337,13 +347,14 @@ export class Squirrel extends Actor {
   /** To a tree's branch (where it sits to watch), from wherever it is, facing `face`. */
   toBranchPlan(tree: SquirrelTree, face?: number): Segment[] {
     const b = tree.branch;
-    const onIt = this.perch.kind === 'branch' && this.perch.tree === tree;
+    const w = this.where;
+    const onIt = w.kind === 'branch' && w.tree === tree;
     if (onIt) return face === undefined ? [] : [turn(this.pose, face)];
     const plan: Segment[] = [];
     // the bark just under the branch's root, on its side
     const under: OnTrunk = { ang: b.ang, h: b.h - 0.12 };
-    if ((this.perch.kind === 'trunk' || this.perch.kind === 'branch') && this.perch.tree === tree) {
-      const at = this.perch.kind === 'trunk' ? this.perch.at : { ang: b.ang, h: b.h };
+    if ((w.kind === 'trunk' || w.kind === 'branch') && w.tree === tree) {
+      const at = w.kind === 'trunk' ? w.at : { ang: b.ang, h: b.h };
       plan.push(...climbPlan(tree.trunk, at, under, 0));
     } else {
       plan.push(...this.downPlan());
@@ -365,7 +376,7 @@ export class Squirrel extends Actor {
     const plan: Segment[] = [];
     let a = this.pose;
     if (!from) return this.toBranchPlan(to, face);
-    if (this.perch.kind !== 'branch') { plan.push(...this.toBranchPlan(from)); a = poseAtEnd(plan, a); }
+    if (this.where.kind !== 'branch') { plan.push(...this.toBranchPlan(from)); a = poseAtEnd(plan, a); }
     // it turns on the branch to face the next tree, then leaps to its bark, a little lower
     const toward = Math.atan2(to.trunk.x - a.x, to.trunk.z - a.z);
     plan.push(turn(a, toward));
@@ -403,7 +414,7 @@ export class Squirrel extends Actor {
 
   /** Down off its tree to the ground at the trunk's foot (nothing when it is on the ground). */
   downPlan(): Segment[] {
-    const p = this.perch;
+    const p = this.where;
     if (p.kind === 'ground') return [];
     if (p.kind === 'stump') {
       const out = { x: p.x + Math.sin(this.pose.yaw) * 0.45, z: p.z + Math.cos(this.pose.yaw) * 0.45 };
@@ -514,12 +525,13 @@ export class Squirrel extends Actor {
     const r = this.rnd();
     const plan: Segment[] = [];
     let perch: Perch;
-    if (this.perch.kind === 'branch' && this.perch.tree === tree) {
+    const here = this.where;
+    if (here.kind === 'branch' && here.tree === tree) {
       if (this.lifeStep % 3 !== 2) {
         // sit a while, looking round now and then
         const p = this.pose;
         plan.push(hold(p, 1.6 + r * 2.4, 'sit'), turn(p, tree.branch.ang + (this.rnd() - 0.5) * 1.6), hold({ ...p, act: 'sit' }, 1 + this.rnd() * 2, 'sit'));
-        perch = this.perch;
+        perch = here;
       } else {
         // down to forage: two or three spots at the tree's foot (its front side)
         plan.push(...this.downPlan());
@@ -560,8 +572,8 @@ export class Squirrel extends Actor {
       this.step(p, dt);
       if (this.planT >= total) {
         this.plan = [];
-        if (this.perchAfter) { this.perch = this.perchAfter; this.perchAfter = null; }
-        else this.perch = inferPerch(this.pose, this.trees);
+        if (this.perchAfter) { this.settled = this.perchAfter; this.perchAfter = null; }
+        else this.settled = inferPerch(this.pose, this.trees, this.stumps);
         const done = this.planDone;
         this.planDone = null;
         done?.(true);
@@ -573,7 +585,7 @@ export class Squirrel extends Actor {
         // it keeps its eye on him: a small turn now and then on its branch
         const l = this.watching();
         const face = Math.atan2(l.x - this.pose.x, l.z - this.pose.z);
-        if (this.pose.act === 'sit' && Math.abs(wrap(face - this.pose.yaw)) > 0.5) void this.play([turn(this.pose, face)], this.perch);
+        if (this.pose.act === 'sit' && Math.abs(wrap(face - this.pose.yaw)) > 0.5) void this.play([turn(this.pose, face)], this.where);
       }
     }
     // digging: little puffs of earth thrown up from under its paws
@@ -642,7 +654,7 @@ export class Squirrel extends Actor {
 
   override get detail(): string {
     const p = this.pose;
-    return `act=${p.act} alt=${p.alt.toFixed(2)} perch=${this.perch.kind} plan=${this.plan.length} t=${this.planT.toFixed(1)}/${planTime(this.plan).toFixed(1)}`;
+    return `act=${p.act} alt=${p.alt.toFixed(2)} perch=${this.where.kind} plan=${this.plan.length} t=${this.planT.toFixed(1)}/${planTime(this.plan).toFixed(1)}`;
   }
 }
 
@@ -657,10 +669,18 @@ function footOf(t: Trunk, ang: number): { x: number; z: number } {
   return { x: t.x + Math.sin(ang) * r, z: t.z + Math.cos(ang) * r };
 }
 
-/** Where a plan left it, when the plan did not say. */
-function inferPerch(p: SqPose, trees: readonly SquirrelTree[]): Perch {
+/** Where a body in pose `p` is: on the ground, on a stump, on a tree's branch or its
+ *  bark (in the middle of a leap it counts as the ground it will land on). */
+function inferPerch(p: SqPose, trees: readonly SquirrelTree[], stumps: readonly { x: number; z: number; top: number; r: number }[] = []): Perch {
   if (p.alt < 0.05) return { kind: 'ground' };
+  for (const s of stumps) {
+    if (Math.hypot(p.x - s.x, p.z - s.z) < s.r + 0.1 && Math.abs(p.alt - s.top) < 0.15) return { kind: 'stump', top: s.top, x: s.x, z: s.z };
+  }
   for (const tree of trees) {
+    const b = tree.branch;
+    const r = barkRadius(tree.trunk, b.h) + b.out;
+    const bx = tree.trunk.x + Math.sin(b.ang) * r, bz = tree.trunk.z + Math.cos(b.ang) * r;
+    if (Math.hypot(p.x - bx, p.z - bz) < 0.2 && Math.abs(p.alt - b.h) < 0.2) return { kind: 'branch', tree };
     const d = Math.hypot(p.x - tree.trunk.x, p.z - tree.trunk.z);
     if (d < barkRadius(tree.trunk, p.alt) + 0.5) {
       return { kind: 'trunk', tree, at: { ang: Math.atan2(p.x - tree.trunk.x, p.z - tree.trunk.z), h: p.alt } };

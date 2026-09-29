@@ -72,7 +72,7 @@ export const SPOT_SIZE = 0.52;
 
 /** Where the ranger stands to watch the glade floor (the corsi), and where he steps to
  *  for the neighbours' calls (the simon): nearer to them, the view clear of every trunk. */
-const STAND = g(-0.2, -2.35);
+const STAND = g(-0.55, -2.6);
 const CALLERS_STAND = g(-0.45, -2.9);
 
 /** The trees of the home (the forest draws them with its own; the scatter keeps clear). */

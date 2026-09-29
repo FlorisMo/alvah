@@ -49,6 +49,7 @@ export const eekhoornAdventure: Adventure = {
   actor: (spec, env, _height, dressing) => {
     if (spec.key !== 'squirrel' || !(dressing instanceof EekhoornHome)) return null;
     const sq = new Squirrel(spec.key, env, { height: SQUIRREL_H, trees: dressing.trees, seed: 11 });
+    sq.stumps.push({ x: STUMP.x, z: STUMP.z, top: STUMP.top, r: STUMP.r });
     sq.onDig = (x, z) => dressing.puffAt(x, z, env.reduced());
     return sq;
   },
