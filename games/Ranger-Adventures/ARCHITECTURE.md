@@ -94,7 +94,10 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          happens), <id>.home.ts (the home's dressing), <id>.ts (the beats);
                          frisling (the wallow) and ree (the copse, the meadow, the hide)
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
-                         a `shy` resident slips into cover when he comes near (per state)
+                         a `shy` resident slips into cover when he comes near (per state);
+                         a home rests beyond 40-46 m, its small things (`env.detail(at)`:
+                         look-alikes, route spots, prints) beyond 22-28 m of their own spot,
+                         so a view over several homes stays under 150 draw calls
 ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip, action button
 ```
 

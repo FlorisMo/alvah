@@ -14,7 +14,11 @@
  * While nobody borrows them they idle believably (rooting, lying still), call now and
  * then while the ranger is near (a squeak you can place: spatial, calm, never over a
  * spoken line), rest in the fog far away like every other animal, stand per point on
- * the rendered ground, and are movers: the seating probe and the jeep see them.
+ * the rendered ground, and are movers: the seating probe and the jeep see them. A
+ * home's small things (a search's look-alikes, a route's spots, prints) rest sooner
+ * than the home itself, each by the lens's distance to its own spot
+ * (`DressingEnv.detail`): from further off they are specks, and a view over several
+ * homes stays inside the draw-call budget.
  */
 
 import * as THREE from 'three';
@@ -34,6 +38,12 @@ export interface DressingEnv {
   spawnPlant(id: string, height: number): Promise<Spawned | null>;
   /** the world's solids: a dressing may add its own (a fallen log) */
   obstacles: Obstacle[];
+  /** a group for SMALL things lying round `at` (a search's look-alikes, a route's spots,
+   *  prints, puffs of earth): it rests sooner than the home (`DETAIL_NEAR`/`DETAIL_FAR`
+   *  from `at`, so it never fades in right beside the ranger) and is drawn while the home
+   *  is borrowed. Never a piece that fades its own materials (the rest fade writes their
+   *  opacity). */
+  detail(at: { x: number; z: number }): THREE.Object3D;
   /** where the lens will stand for a framed view (a Stage fit with an anchor, on a
    *  1280×800 screen): a stand opens its glimpse window for the search's eye */
   lensFor(view: FrameView): { cam: { x: number; y: number; z: number }; look: { x: number; y: number; z: number } };
@@ -94,6 +104,9 @@ export interface ResidentGroup {
 interface Home {
   spec: HomeSpec;
   group: THREE.Group;
+  /** its small things (`DressingEnv.detail`), each group by its own spot: they rest
+   *  sooner than `group` */
+  details: { group: THREE.Group; at: { x: number; z: number }; rest: FarRest }[];
   dressing: HomeDressing | null;
   actors: Map<string, Actor>;
   state: HomeState;
@@ -121,9 +134,16 @@ const NOTICE = 5;
 const SHY = 2.3;
 const AWAY_MAX = 1.5;
 
-/** Far off in the fog a home's animals rest (not drawn), like the other animals. */
-const REST_NEAR = 46;
-const REST_FAR = 52;
+/** Far off in the fog a home rests (not drawn): a little sooner than a lone animal
+ *  (Fauna's 50/56 m), as a home costs 20-40 draw calls where an animal costs one to four,
+ *  and from the eekhoorn glade three other homes stand 30-50 m off in one view. Still far
+ *  enough that what establishes a story is there from its marker's approach (the camera
+ *  on its stump 20 m from the glade, the squirrel on its pine 19 m from its glade). */
+const REST_NEAR = 40;
+const REST_FAR = 46;
+/** Its small things rest sooner still (from their own spot): specks from further off. */
+const DETAIL_NEAR = 22;
+const DETAIL_FAR = 28;
 /** A home switched to after from further than this (m) is simply there (a cut). */
 const WALK_HOME_MAX = 9;
 
@@ -144,13 +164,21 @@ export class Residents {
     const group = new THREE.Group();
     group.name = `home-${spec.missionId}`;
     this.env.scene.add(group);
+    const details: Home['details'] = [];
+    const detail = (at: { x: number; z: number }): THREE.Object3D => {
+      const d = { group: new THREE.Group(), at: { x: at.x, z: at.z }, rest: new FarRest(DETAIL_NEAR, DETAIL_FAR) };
+      d.group.name = `home-${spec.missionId}-detail`;
+      this.env.scene.add(d.group);
+      details.push(d);
+      return d.group;
+    };
     const dressing = build ? build({
       parent: group, groundY: this.env.groundY, spawnModel: this.env.spawnModel, spawnPlant: this.env.spawnPlant,
-      obstacles: this.env.obstacles, lensFor: this.env.lensFor,
+      obstacles: this.env.obstacles, lensFor: this.env.lensFor, detail,
     }) : null;
     const actors = new Map<string, Actor>();
     const home: Home = {
-      spec, group, dressing, actors, state: 'before', borrowed: false,
+      spec, group, details, dressing, actors, state: 'before', borrowed: false,
       rest: new FarRest(REST_NEAR, REST_FAR), voices: new Map(),
       centre: spec.places.home ?? spec.places.marker ?? { x: 0, z: 0 },
       reacting: new Map(), gen: 0,
@@ -199,7 +227,9 @@ export class Residents {
     home.gen += 1;
     home.reacting.clear();
     // a borrowed home is where the mission plays: it is drawn, however far the lens
+    home.rest.hold();
     restFar(home.group, 1);
+    for (const d of home.details) { d.rest.hold(); restFar(d.group, 1); }
     return {
       missionId,
       actors: Object.fromEntries(home.actors),
@@ -284,9 +314,16 @@ export class Residents {
     const reduced = this.env.reduced();
     const lx = camera.position.x, lz = camera.position.z;
     for (const home of this.homes.values()) {
-      const d = Math.hypot(home.centre.x - lx, home.centre.z - lz);
-      const k = home.borrowed ? 1 : home.rest.step(d, dt, reduced);
+      // (a borrowed home counts as near — it is where the mission plays — so it is drawn
+      // however far the lens, and once given back it fades out calmly if it is far, never
+      // blinks from a rest it had before the mission)
+      const d = home.borrowed ? 0 : Math.hypot(home.centre.x - lx, home.centre.z - lz);
+      const k = home.rest.step(d, dt, reduced);
       restFar(home.group, k);
+      for (const q of home.details) {
+        const kd = q.rest.step(home.borrowed ? 0 : Math.hypot(q.at.x - lx, q.at.z - lz), dt, reduced);
+        restFar(q.group, Math.min(k, kd));
+      }
       if (k <= 0) continue;
       const movers: { x: number; z: number; moving: boolean; ranger?: boolean }[] = [];
       for (const a of home.actors.values()) {
@@ -438,6 +475,7 @@ export class Residents {
       for (const a of home.actors.values()) a.dispose();
       home.dressing?.dispose();
       home.group.removeFromParent();
+      for (const d of home.details) d.group.removeFromParent();
     }
     this.homes.clear();
   }

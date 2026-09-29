@@ -303,6 +303,7 @@ export class PatchField {
     this.prints.instanceMatrix.needsUpdate = true;
     this.prints.computeBoundingSphere();
     this.prints.frustumCulled = false; // (its instances start at scale 0: no honest sphere)
+    this.prints.visible = false;       // (drawn only while a spot shows its prints: an empty draw costs a call too)
     this.group.add(this.prints);
     o.parent.add(this.group);
   }
@@ -367,7 +368,10 @@ export class PatchField {
         prints = true;
       }
     }
-    if (prints) this.prints.instanceMatrix.needsUpdate = true;
+    if (prints) {
+      this.prints.instanceMatrix.needsUpdate = true;
+      this.prints.visible = this.printOn.some((p) => p > 1e-3);
+    }
   }
 
   dispose(): void {

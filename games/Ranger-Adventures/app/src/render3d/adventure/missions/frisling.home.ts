@@ -109,11 +109,12 @@ export class FrislingHome implements HomeDressing {
     this.glimpse = { share: visibleShare(back, lens.cam, this.cover.stems), changed: changed.length };
 
     /* -- the decoys: the dead bracken clumps, a butterfly on a foxglove, a stonechat on a
-       stalk, a nightjar at the edge (adventure/decoys.ts) -- */
-    this.lookAlikes = new StandDecoys(env, this.group, decoyAt, this.cover, clumps, FRISLING_PLACES.coverApproach);
+       stalk, a nightjar at the edge (adventure/decoys.ts); small things: they rest sooner
+       than the home (Residents `detail`) -- */
+    this.lookAlikes = new StandDecoys(env, env.detail(FRISLING_PLACES.cover), decoyAt, this.cover, clumps, FRISLING_PLACES.coverApproach);
 
-    /* -- the rooting field: seven look-alike patches of turned earth -- */
-    this.field = new PatchField({ parent: this.group, groundY: g, spots: fieldSpots(), size: 0.95, heading: FIELD_FRAME.heading + Math.PI, seed: 23 });
+    /* -- the rooting field: seven look-alike patches of turned earth (small things too) -- */
+    this.field = new PatchField({ parent: env.detail(FRISLING_PLACES.field), groundY: g, spots: fieldSpots(), size: 0.95, heading: FIELD_FRAME.heading + Math.PI, seed: 23 });
 
     /* -- a few small trotter prints in the empty marker ring, toward the stand -- */
     const n = 4;
@@ -131,7 +132,7 @@ export class FrislingHome implements HomeDressing {
     }
     this.ringPrints.instanceMatrix.needsUpdate = true;
     this.ringPrints.renderOrder = 2;
-    this.group.add(this.ringPrints);
+    env.detail(MARKER).add(this.ringPrints);
 
     /* -- the clue (after): a cut fence past the wallow -- */
     this.clue = new CutFence(this.group, g, env.obstacles);
@@ -173,6 +174,7 @@ export class FrislingHome implements HomeDressing {
     for (const s of this.spawned) s.dispose();
     this.ringPrints.geometry.dispose();
     (this.ringPrints.material as THREE.Material).dispose();
+    this.ringPrints.removeFromParent();
     this.group.removeFromParent();
   }
 }

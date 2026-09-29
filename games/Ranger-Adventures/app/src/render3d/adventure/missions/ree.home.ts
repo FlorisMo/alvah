@@ -204,7 +204,7 @@ export class ReeHome implements HomeDressing {
     this.glimpse = { share: visibleShare(back, lens.cam, this.cover.stems), changed: changed.length };
 
     /* -- the look-alikes in the meadow (adventure/decoys.ts) -- */
-    this.lookAlikes = new StandDecoys(env, this.group, decoyAt, this.cover, clumps, REE_PLACES.meadowApproach);
+    this.lookAlikes = new StandDecoys(env, env.detail(REE_PLACES.meadow), decoyAt, this.cover, clumps, REE_PLACES.meadowApproach); // (small things: they rest sooner, Residents `detail`)
 
     /* -- the junipers: the copse's three, and the hide's -- */
     const bush = (x: number, z: number, h: number, turn: number): void => {

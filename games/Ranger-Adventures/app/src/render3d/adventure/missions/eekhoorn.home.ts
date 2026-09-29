@@ -102,7 +102,10 @@ export class EekhoornHome implements HomeDressing {
     const g = env.groundY;
 
     /* -- the glade: seven look-alike mossy cushions in the oak leaves -- */
-    this.field = new PatchField({ parent: this.group, groundY: g, spots: gladeSpots(), size: SPOT_SIZE, heading: GLADE_FRAME.heading, seed: 41, look: 'moss' });
+    // (the cushions, the acorn, the puffs and the seedling are small things: they rest
+    // sooner than the home, Residents `detail`)
+    const small = env.detail(EEKHOORN_PLACES.glade);
+    this.field = new PatchField({ parent: small, groundY: g, spots: gladeSpots(), size: SPOT_SIZE, heading: GLADE_FRAME.heading, seed: 41, look: 'moss' });
 
     /* -- the stump with the store, the dead snag -- */
     void env.spawnPlant('prop-tree-stump', STUMP.h).then((s) => {
@@ -161,15 +164,16 @@ export class EekhoornHome implements HomeDressing {
     this.puffs = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: '#4a3525', roughness: 1, flatShading: true }), 18);
     this.puffs.name = 'dig-puffs';
     this.puffs.frustumCulled = false;
+    this.puffs.visible = false; // (drawn only while earth flies: an empty draw costs a call too)
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < 18; i++) this.puffs.setMatrixAt(i, zero);
-    this.group.add(this.puffs);
+    small.add(this.puffs);
 
     /* -- the acorn being buried or dug up (one at a time) -- */
     this.nut = new THREE.Mesh(acornGeometry(), acornMaterial());
     this.nut.name = 'acorn-in-the-moss';
     this.nut.visible = false;
-    this.group.add(this.nut);
+    small.add(this.nut);
 
     /* -- the seedling a forgotten acorn grows into (after, on a later visit) -- */
     const sp = SEEDLING_AT;
@@ -178,7 +182,7 @@ export class EekhoornHome implements HomeDressing {
     this.seedling.position.set(sp.x, g(sp.x, sp.z) + 0.01, sp.z);
     this.seedling.scale.setScalar(1.8); // (≈ 0.32 m: a young oak, big enough to spot from the glade's edge)
     this.seedling.visible = false;
-    this.group.add(this.seedling);
+    small.add(this.seedling);
   }
 
   /** A neighbour bird on its perch (it looks round now and then; the call-back game
@@ -371,9 +375,11 @@ export class EekhoornHome implements HomeDressing {
     // the puffs of earth
     if (this.puff.length) {
       const m = new THREE.Matrix4();
+      let live = false;
       for (let i = 0; i < this.puff.length; i++) {
         const p = this.puff[i];
         if (p.t <= 0) { this.puffs.setMatrixAt(i, m.makeScale(0, 0, 0)); continue; }
+        live = true;
         p.t -= dt;
         p.vy -= 3.2 * dt;
         p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
@@ -383,6 +389,7 @@ export class EekhoornHome implements HomeDressing {
         this.puffs.setMatrixAt(i, m.compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion(), new THREE.Vector3(s, s, s)));
       }
       this.puffs.instanceMatrix.needsUpdate = true;
+      this.puffs.visible = live;
     }
     // the seedling grows while the ranger is away (a later visit finds it)
     if (this.state === 'after' && this.seedlingWaits) {
@@ -447,6 +454,7 @@ export class EekhoornHome implements HomeDressing {
     (this.seedling.material as THREE.Material).dispose();
     this.nut.geometry.dispose();
     (this.nut.material as THREE.Material).dispose();
+    for (const o of [this.puffs, this.nut, this.seedling]) o.removeFromParent();
     this.group.removeFromParent();
   }
 }

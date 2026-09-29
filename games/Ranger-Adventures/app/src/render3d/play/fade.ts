@@ -75,6 +75,13 @@ export class FarRest {
     else this.k += Math.sign(to - this.k) * Math.min(Math.abs(to - this.k), dt / FAR_FADE_S);
     return this.k;
   }
+
+  /** Drawn from now on, fully (a piece the player needs at once, however far the lens):
+   *  a later `step` fades it out calmly if it is far. */
+  hold(): void {
+    this.want = true;
+    this.k = 1;
+  }
 }
 
 /**

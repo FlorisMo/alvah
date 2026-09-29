@@ -313,7 +313,10 @@ export class WildcameraHome implements HomeDressing {
     const G = P.glade;
     this.glade.name = 'glade';
     this.thicket.name = 'thicket';
-    this.group.add(this.glade, this.thicket);
+    // (the glade's grass and flowers and the thicket's bushes are small things: each rests
+    // sooner than the home, by its own spot, Residents `detail`)
+    env.detail(P.glade).add(this.glade);
+    env.detail(P.thicket).add(this.thicket);
     this.glade.add(groundDecal(g, G.x, G.z, GLADE_R, GLADE_R * 0.8, 0.3, '#8f9a4c', { layer: 1, wobble: 0.22, seed: 3, feather: true }));
     // its sunny middle (the spot the camera aims at): a warm patch of short grass
     const sunny = groundDecal(g, G.x, G.z, 0.75, 0.6, 0.3, '#a9a856', { layer: 2, wobble: 0.25, seed: 8 });
@@ -818,6 +821,7 @@ export class WildcameraHome implements HomeDressing {
         (mesh.material as THREE.Material).dispose();
       }
     });
+    for (const o of [this.glade, this.thicket]) o.removeFromParent();
     this.group.removeFromParent();
   }
 }
