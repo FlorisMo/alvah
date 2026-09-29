@@ -43,6 +43,9 @@ const ROAM_REST_FAR = 56;
 const NO_THREATS: Threats = { ranger: null, jeep: null };
 /** A roamer keeps this far (m) inside the world's move bound: the forest edge's band. */
 const RIM_KEEP = 9;
+/** Already this far (m) inside the ranger's or the jeep's circle, a roamer walks out of it
+ *  freely (never shoved); any less and the circle holds it. */
+const OVERLAP_FREE = 0.1;
 /** A roam loop keeps this much room (m) from every solid, marker ground and pad. */
 const LOOP_ROOM = 1.2;
 /** What a roamer looks at around it each frame (m): trunks, walls, marker ground. */
@@ -277,19 +280,19 @@ export class Fauna {
       const R = reach + r;
       if ((x - w.x) ** 2 + (z - w.z) ** 2 <= R * R) near.push(this.pooledObstacle(x, z, r + a.r));
     });
-    // the ranger on foot and a driven jeep: never walked through (only once it is clear of
-    // them: a roamer the ranger stepped out beside is never shoved)
+    // the ranger on foot and a driven jeep: never walked through (unless it already stands
+    // well inside one — the ranger stepped out of the jeep beside it — so it is never shoved)
     const rg = threats.ranger;
     if (rg) {
       const R = RANGER_BODY + a.r;
-      if (Math.hypot(rg.x - w.x, rg.z - w.z) >= R) near.push(this.pooledObstacle(rg.x, rg.z, R));
+      if (Math.hypot(rg.x - w.x, rg.z - w.z) >= R - OVERLAP_FREE) near.push(this.pooledObstacle(rg.x, rg.z, R));
     }
     const j = threats.jeep;
     if (j) {
       const fx = Math.sin(j.heading), fz = Math.cos(j.heading);
       for (const c of JEEP_BODY) {
         const cx = j.x + fx * c.along, cz = j.z + fz * c.along, R = c.r + a.r * 0.8;
-        if (Math.hypot(cx - w.x, cz - w.z) >= R) near.push(this.pooledObstacle(cx, cz, R));
+        if (Math.hypot(cx - w.x, cz - w.z) >= R - OVERLAP_FREE) near.push(this.pooledObstacle(cx, cz, R));
       }
     }
   }

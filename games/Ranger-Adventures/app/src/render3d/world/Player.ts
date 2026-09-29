@@ -57,6 +57,10 @@ const CAM_BEHIND_GAP = (75 * Math.PI) / 180;
  *  this angle of into-the-screen. */
 const BACKPEDAL_FACING = (45 * Math.PI) / 180;
 
+/** A roaming animal he already stands this far (m) inside of (stepped out of the jeep onto
+ *  it) lets him walk out rather than shoving him; any less, and it holds him. */
+const OVERLAP_FREE = 0.1;
+
 /** A tap-walk eases in over its last stretch: he goes no faster than this many metres
  *  per second per metre still to go (he arrives, never brakes on the spot). */
 const ARRIVE_EASE = 3;
@@ -434,8 +438,9 @@ export class Player {
   private moverX = 0;
   private moverZ = 0;
   private readonly addMover = (x: number, z: number, r: number): void => {
-    // only one he is clear of: stepping out of the jeep beside one never shoves him
-    if (Math.hypot(this.moverX - x, this.moverZ - z) < r) return;
+    // only one he is not already well inside (stepping out of the jeep onto one never shoves
+    // him; the step that slid him onto its rim leaves him ON it, and it still holds)
+    if (Math.hypot(this.moverX - x, this.moverZ - z) < r - OVERLAP_FREE) return;
     const o = this.moverPool[this.moversUsed] ?? (this.moverPool[this.moversUsed] = { x: 0, z: 0, r: 0 });
     this.moversUsed++;
     o.x = x; o.z = z; o.r = r;

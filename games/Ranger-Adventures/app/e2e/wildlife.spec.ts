@@ -301,7 +301,8 @@ test('wildlife: on foot a calm walker gets close to the ree, a runner sends it o
   expect(errors).toEqual([]);
 });
 
-test('wildlife: under reduced motion the roaming animals hold still (run 6)', async ({ page }, testInfo) => {
+test('wildlife: under reduced motion the roaming animals hold still, and he walks round one, never through it (run 6)', async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -314,6 +315,16 @@ test('wildlife: under reduced motion the roaming animals hold still (run 6)', as
     const b = after.find((x) => x.id === a.id)!;
     expect(Math.hypot(b.x - a.x, b.z - a.z), `${a.id} holds still`).toBeLessThan(0.001);
   }
+  // walk straight into the frozen ree with the arrow keys: he stops against it and goes
+  // round it (soft, like a trunk), never through it
+  const ree = after.find((a) => a.id === 'animal-ree-roedeer')!;
+  await recStart(page, ree.id);
+  await walkTo(page, { x: ree.x, z: ree.z }, { stopDist: 0.2, timeout: 45_000 });
+  const frames = await recStop(page);
+  await shot(page, 'wildlife-reduced-motion-beside-the-ree');
+  const closest = Math.min(...frames.filter((f) => f.p && f.a).map((f) => Math.hypot(f.a!.x - f.p!.x, f.a!.z - f.p!.z)));
+  console.log(`[wildlife] reduced motion: walking into the still ree he came no closer than ${closest.toFixed(2)} m (its footprint ${ree.r} m + his 0.3 m)`);
+  expect(closest, 'he never walked into the ree').toBeGreaterThanOrEqual(ree.r + 0.3 - 0.05);
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });
