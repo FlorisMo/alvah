@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_SPOT, JAY_GROUND,
-  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, gladeSpots, eekhoornTreeClear, eekhoornClearings,
+  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, HIDE_SEEN_AT, gladeSpots, eekhoornTreeClear, eekhoornClearings, hideSide,
 } from './eekhoorn.places.ts';
 import { biomeAt, VEN_CENTER, VEN_SHORE_R } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
@@ -86,6 +86,31 @@ test('the follow: 3-4 hops over 15-25 m, a dash, two leaps, a dash into the glad
   for (const [t, from] of [[TREE.a, TREE.oak], [TREE.c, TREE.a]] as const) {
     const back = headingTo(t, from);
     assert.ok(Math.abs(Math.atan2(Math.sin(t.branch!.ang - back), Math.cos(t.branch!.ang - back))) < 0.6);
+  }
+});
+
+test('hide-and-seek at pine C: it hides round the side, and the way round to see it is open', () => {
+  const c = TREE.c;
+  const cR = barkRadius(trunk(c), 1);
+  const clear = eekhoornTreeClear();
+  // he comes up from pine A's side, within 4 m, anywhere in a 100° fan
+  const from = headingTo(c, TREE.a);
+  for (let k = -5; k <= 5; k++) for (const d of [2.2, 3, 4]) {
+    const me = { x: c.x + Math.sin(from + k * 0.17) * d, z: c.z + Math.cos(from + k * 0.17) * d };
+    const h = hideSide(c, me, STUMP);
+    const off = Math.abs(Math.atan2(Math.sin(h - headingTo(c, me)), Math.cos(h - headingTo(c, me))));
+    // out of his sight: past the bark's edge as he sees it (acos(r/d)), with room for its body
+    const edge = Math.acos(cR / d);
+    assert.ok(off > edge + 0.35 && off < 2.1, `it hides round the side, out of his sight (${(off * 180 / Math.PI).toFixed(0)}°)`);
+    const seen = { x: c.x + Math.sin(h) * HIDE_SEEN_AT, z: c.z + Math.cos(h) * HIDE_SEEN_AT };
+    // the straight way there passes the trunk, never into it (its collider: 0.6 m per
+    // 12.5 m of tree, world/Dressing; the boy ≈ 0.3 m round)
+    const collide = (0.6 * c.h) / 12.5 + 0.3;
+    assert.ok(segDist(c, me, seen) > collide, `the way round clears the trunk (${segDist(c, me, seen).toFixed(2)} m)`);
+    // the spot to see it from is open ground: off every other tree, the stump, the spots
+    for (const t of HOME_TREES) if (t !== c) assert.ok(dist(seen, t) > barkRadius(trunk(t), 0) + 0.8, 'off every other trunk');
+    assert.ok(clear.some((q) => dist(q, seen) < q.r), 'no stray forest tree there');
+    assert.equal(biomeAt(seen.x, seen.z), 'bos');
   }
 });
 

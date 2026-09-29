@@ -241,6 +241,32 @@ export class Squirrel extends Actor {
   goTrunk(tree: SquirrelTree, at: OnTrunk): Promise<boolean> {
     return this.run(this.toTrunkPlan(tree, at), { kind: 'trunk', tree, at });
   }
+  /** Round its trunk to `at` (from its branch or the bark of that tree): a quick scurry
+   *  round the bark at about the same height — hiding on the far side of the tree from
+   *  someone, as red squirrels do. From anywhere else: up the trunk to `at`. */
+  goRound(tree: SquirrelTree, at: OnTrunk): Promise<boolean> {
+    const w = this.where;
+    if ((w.kind !== 'branch' && w.kind !== 'trunk') || w.tree !== tree) return this.goTrunk(tree, at);
+    const plan: Segment[] = [];
+    let from: OnTrunk;
+    if (w.kind === 'branch') { plan.push(this.offBranch(tree)); from = { ang: tree.branch.ang, h: tree.branch.h - 0.12 }; }
+    else from = w.at;
+    plan.push(...climbPlan(tree.trunk, from, at, 0));
+    plan.push(hold(trunkPose(tree.trunk, at, true, 'cling'), 0.1, 'cling'));
+    return this.run(plan, { kind: 'trunk', tree, at });
+  }
+
+  /** Back off its branch onto the bark under it, head down (the first move down). */
+  private offBranch(tree: SquirrelTree): Segment {
+    const b = tree.branch;
+    const s = this.pose;
+    const on = trunkPose(tree.trunk, { ang: b.ang, h: b.h - 0.12 }, false, 'climb');
+    return { dur: 0.3, len: 0.4, act: 'climb', at: (u) => {
+      const e = u * u * (3 - 2 * u);
+      return { x: s.x + (on.x - s.x) * e, z: s.z + (on.z - s.z) * e, alt: s.alt + (on.alt - s.alt) * e, yaw: s.yaw + wrap(on.yaw - s.yaw) * e, pitch: on.pitch * e, roll: e > 0.5 ? Math.PI : 0, act: 'climb' };
+    } };
+  }
+
   /** A small turn where it is (on a stump, a branch, the ground): it keeps its perch. */
   look(yaw: number, hold1 = 0.5): Promise<boolean> {
     const p = this.pose;
@@ -470,15 +496,7 @@ export class Squirrel extends Actor {
     const tree = p.tree;
     const at: OnTrunk = p.kind === 'trunk' ? p.at : { ang: tree.branch.ang, h: tree.branch.h - 0.12 };
     const plan: Segment[] = [];
-    if (p.kind === 'branch') {
-      // back off the branch onto the bark, head down
-      const s = this.pose;
-      const on = trunkPose(tree.trunk, at, false, 'climb');
-      plan.push({ dur: 0.3, len: 0.4, act: 'climb', at: (u) => {
-        const e = u * u * (3 - 2 * u);
-        return { x: s.x + (on.x - s.x) * e, z: s.z + (on.z - s.z) * e, alt: s.alt + (on.alt - s.alt) * e, yaw: s.yaw + wrap(on.yaw - s.yaw) * e, pitch: on.pitch * e, roll: e > 0.5 ? Math.PI : 0, act: 'climb' };
-      } });
-    }
+    if (p.kind === 'branch') plan.push(this.offBranch(tree)); // back off the branch onto the bark, head down
     // head first down the bark, round toward where it goes next (a little spiral)
     const downAng = at.ang + (this.rnd() < 0.5 ? -1 : 1) * (0.6 + this.rnd() * 0.8);
     plan.push(...climbPlan(tree.trunk, at, { ang: downAng, h: 0.25 }, 0));

@@ -182,6 +182,19 @@ export const CALLERS_VIEW = {
   halfW: 1.8, halfD: 0.7, tall: 2.15, pitchDeg: 3, insetTop: 60, insetBottom: 110,
 } as const;
 
+/** Where round a trunk (a heading from its axis) the squirrel hides from the ranger at
+ *  `me`: about 110° round from him (out of his sight behind the bark, and the way round
+ *  to see it passes the trunk with room to spare), on the side nearer `toward` (its glade). */
+export function hideSide(trunk: { x: number; z: number }, me: { x: number; z: number }, toward: { x: number; z: number }): number {
+  const him = headingTo(trunk, me);
+  const a = him + Math.PI - 1.2, b = him + Math.PI + 1.2;
+  const at = (h: number): { x: number; z: number } => ({ x: trunk.x + Math.sin(h) * 2, z: trunk.z + Math.cos(h) * 2 });
+  return Math.hypot(at(a).x - toward.x, at(a).z - toward.z) < Math.hypot(at(b).x - toward.x, at(b).z - toward.z) ? a : b;
+}
+
+/** How far out from the trunk's axis (m) the ranger stands to see it there. */
+export const HIDE_SEEN_AT = 2.8;
+
 /** Who lives here: the squirrel, round its pine by the marker before; at its glade after,
  *  in the pine by its store (the jay's branch is free: the jay flew off). */
 export const EEKHOORN_RESIDENTS: readonly ResidentSpec[] = [
@@ -218,6 +231,8 @@ export function eekhoornClearings(): { x: number; z: number; r: number }[] {
   return [
     ...gladeSpots().map((s) => ({ x: s.x, z: s.z, r: 0.7 })),
     { x: STUMP.x, z: STUMP.z, r: 0.9 },
+    // round pine C, where it plays hide-and-seek: no fern to hide it when it pops out
+    { x: PINE_C.x, z: PINE_C.z, r: 4.2 },
     // the marker ring stays open (the child stands in it, looking at the squirrel's pine)
     { x: MARKER.x, z: MARKER.z, r: 1.8 },
     // the neighbours' corner: no fern in front of or behind the jay and the raven

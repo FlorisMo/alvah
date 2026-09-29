@@ -31,7 +31,7 @@ import { dist, headingTo } from '../places';
 import { TREE_BASE_H } from '../../world/Forest';
 import { EekhoornHome } from './eekhoorn.home';
 import {
-  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HOME_TREES, INTRO_VIEW, JAY_GROUND, STUMP,
+  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HOME_TREES, INTRO_VIEW, JAY_GROUND, STUMP, HIDE_SEEN_AT, hideSide,
   eekhoornClearings, eekhoornTreeClear,
 } from './eekhoorn.places';
 
@@ -128,10 +128,47 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     return sq.goLeap(pineC, headingTo(pineC.trunk, pineA.trunk));
   }, pineC.trunk, c.weer);
 
+  // it plays hide-and-seek: as he comes up it scurries round the trunk to the far side
+  // (as red squirrels do), and he walks round the tree to find it — its chatter from
+  // behind the bark tells him where. Round the side, not straight behind (the way round
+  // passes the trunk), on the side toward its glade.
+  k.beat = 'verstop';
+  const hideAt = hideSide(pineC.trunk, k.ranger(), STUMP);
+  const hidden = k.guard(sq.goRound(pineC, { ang: hideAt, h: 1.1 }));
+  hidden.catch(() => {});
+  const round = { x: pineC.trunk.x + Math.sin(hideAt) * HIDE_SEEN_AT, z: pineC.trunk.z + Math.cos(hideAt) * HIDE_SEEN_AT };
+  await k.wait(0.6);
+  await k.walk({
+    name: 'om-de-boom', to: round, r: 1.2, line: c.waarIsHij, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 14,
+    tick: () => { if (k.now - lastChatter > 3.4) chatter(); },
+  });
+  await hidden;
+  // found: he stops (a moment with the keys resting), it pours down the bark and pops up
+  // on the ground in front of him, wherever he looks (in the follow camera's view), sits
+  // up facing him and chatters
+  k.lockFollow();
+  await k.until(() => k.ranger().speed < 0.1, 1.5);
+  const m = k.ranger();
+  const ahead = m.heading; // (where he looks: the follow camera looks there too)
+  // (ahead of him but off to the side away from the tree, on the open floor: straight
+  // ahead his own body would hide it from the camera behind him, by the trunk it is a
+  // small dark thing against the dark bark)
+  const toTree = headingTo(m, pineC.trunk);
+  const side = Math.sin(toTree - ahead) >= 0 ? -1 : 1;
+  const popAt = ahead + side * 0.75;
+  const pop = { x: m.x + Math.sin(popAt) * 1.8, z: m.z + Math.cos(popAt) * 1.8 };
+  k.say(c.gevonden);
+  await k.guard(sq.run(sq.dashTo(pop.x, pop.z, headingTo(pop, m))));
+  chatter();
+  await k.wait(0.7);
+  sq.flick();
+  await k.wait(1.1);
+
   // into its glade: down the pine and over the ground onto its stump by the store
   k.say(c.weer);
   const stumpFace = headingTo(STUMP, P.stand);
   const toStump = k.guard(sq.goStump(STUMP.x, STUMP.z, STUMP.top, STUMP.r, stumpFace));
+  toStump.catch(() => {}); // (a stop during the walk: the walk throws, this one is let go)
   await k.walk({ name: 'open-plek', to: P.stand, r: 1.6, line: c.weer, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 18 });
   await toStump;
   k.say(c.plekje);
@@ -215,7 +252,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   if (settings.geluid) Sound.callAt('gaai', JAY_GROUND.x, JAY_GROUND.z, listenerOf(k.world.camera));
   await k.wait(0.9);
   chatter(); // (the squirrel scolds it)
-  await k.wait(1.4);
+  await k.wait(0.8);
+  k.say(c.roepMee);
+  await k.wait(2.2);
   if (sq.body) sq.body.userData.perch = STUMP.top; // (it sits on its stump)
   const callers: Caller[] = [
     { id: 'eekhoorn', pick: sq.group, body: sq.body, at: () => ({ x: sq.x, z: sq.z }), act: (on) => { if (on) sq.called(); } },
