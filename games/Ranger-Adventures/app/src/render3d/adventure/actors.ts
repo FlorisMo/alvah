@@ -319,6 +319,8 @@ export class Actor {
     this.speed = speed;
     this.animate(dt, t, speed, alert, reduced);
     this.seat();
+    // a rigged animal (the roe, the red deer) walks and grazes with its own clips
+    if (this.stand?.rigged) this.stand.clip?.(speed > 0.12 ? 'walk' : this.dipWant > 0.5 ? 'graze' : 'idle');
     this.stand?.update(dt); // a rigged animal's own clip
   }
 
@@ -338,7 +340,8 @@ export class Actor {
     this.dip += ((reduced ? Math.min(this.dipWant, 0.6) : this.dipWant) - this.dip) * k;
     this.headUp += (alert - this.headUp) * k;
     this.phase += (speed * dt / strideOf(this.height)) * Math.PI * 2;
-    const g = reduced ? { dy: 0, roll: 0, pitch: 0 } : trot(this.phase, speed, this.height);
+    // (a rigged animal's walk clip carries its gait: no procedural trot on top of it)
+    const g = reduced || this.stand?.rigged ? { dy: 0, roll: 0, pitch: 0 } : trot(this.phase, speed, this.height);
     const breath = reduced || speed > 0.05 ? REST : motionAt(this.recipe, t, this.seed);
     const dipNow = this.dip * (reduced ? 1 : 0.75 + 0.25 * rootDip(t, this.seed));
     this.gaitNode.position.y = g.dy + breath.dy;

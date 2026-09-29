@@ -46,6 +46,11 @@ export interface MissionWorld {
   menuShown(): boolean;
   readonly residents: Residents;
   readonly camera: THREE.PerspectiveCamera;
+  /** the time of day (1 = the golden hour, 0 = a readable blue night), turned calmly */
+  setDaylight(k: number, seconds?: number): void;
+  daylight(): number;
+  /** a photograph of the world through `cam` (taken inside the next frame, never shown) */
+  snapshot(cam: THREE.Camera, w: number, h: number, prepare?: () => (() => void) | void): Promise<HTMLCanvasElement | null>;
 }
 
 /** The adventure's HUD (ui/flow/AdventureHud.ts implements it). */
@@ -55,6 +60,8 @@ export interface AdventureUi {
   setChip(c: { doel: string; cue: string; angle: number | null; arrived?: boolean } | null): void;
   action(label: string | null): Promise<void>;
   binoculars(on: boolean): void;
+  /** time passes: a calm veil over the world with one line (null lifts it) */
+  veil(text: string | null): void;
   walking(on: boolean): void;
 }
 
@@ -167,6 +174,10 @@ export class AdventureKit {
   private group: ResidentGroup | null = null;
   private disposed = false;
   private readonly owned: THREE.Object3D[] = [];
+  /** the adventure turned the time of day (the end hands the golden hour back) */
+  private dayTurned = false;
+  /** a photograph that belongs with the mission's clue (the reward's clue card shows it) */
+  cluePhoto: string | null = null;
 
   constructor(o: KitOptions) {
     this.mission = o.mission;
@@ -313,7 +324,10 @@ export class AdventureKit {
     const { cam, look, stage } = this.lensFor(f);
     if (opts.face !== undefined) this.world.faceRanger(opts.face);
     this.world.stopRanger();
-    this.world.setMissionMode({ missionId: this.mission.id, input: 'locked', camera: 'held' });
+    // (the trees between the held lens and what it frames fade, as for the follow camera)
+    const focus = [{ x: look.x, y: look.y, z: look.z },
+      ...(f.include ?? []).map((q) => ({ x: q.x, y: this.ctx.groundY(q.x, q.z) + q.h * 0.75, z: q.z }))];
+    this.world.setMissionMode({ missionId: this.mission.id, input: 'locked', camera: 'held', focus });
     this.ui.walking(false);
     this.ui.setChip(null);
     const move = makeReframe(this.world.camera, cam, look, this.reduced, f.seconds ?? 1.4, 0.3);
@@ -485,6 +499,29 @@ export class AdventureKit {
 
   /* ---------------------------------------------------------------- misc ---- */
 
+  /**
+   * An ACTION in the world (design §3.9): one big button bottom-centre ("Hang de camera
+   * op"; Space or Enter press it, golden clicks the visible `.adv-action`). The line, if
+   * given, says what to do. Resolves when he presses it.
+   */
+  async act(label: string, line?: string): Promise<void> {
+    this.check();
+    if (line) this.ui.say(line);
+    try {
+      await this.guard(this.ui.action(label));
+    } finally {
+      if (this.disposed || this.signal.aborted) this.ui.action(null);
+    }
+  }
+
+  /** Turn the time of day (1 = the golden hour, 0 = a readable blue night) over `seconds`
+   *  (~2 s; a cut under reduced motion). The end of the adventure hands the golden hour
+   *  back, whether it was won or stopped. */
+  daylight(k: number, seconds?: number): void {
+    this.dayTurned = true;
+    this.world.setDaylight(k, seconds);
+  }
+
   /** The objective line (read aloud once). */
   say(line: string | null, opts?: { good?: boolean; queue?: boolean }): void {
     this.ui.say(line, opts);
@@ -519,6 +556,7 @@ export class AdventureKit {
     this.ui.say(null);
     this.ui.action(null);
     this.ui.binoculars(false);
+    this.ui.veil(null);
     this.ui.walking(false);
     for (const o of this.owned) {
       o.removeFromParent();
@@ -530,5 +568,8 @@ export class AdventureKit {
     }
     if (this.group) this.world.residents.release(this.mission.id, state);
     this.group = null;
+    // the golden hour comes back (calmly; a cut under reduced motion): never a dark sky
+    // after a stop, a win or an error
+    if (this.dayTurned || this.world.daylight() < 1) this.world.setDaylight(1, this.reduced ? 0 : 2.4);
   }
 }

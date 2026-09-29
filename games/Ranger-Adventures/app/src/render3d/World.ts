@@ -29,7 +29,7 @@ import { VEN_CENTER, WATER_LEVEL, type Biome } from './Biomes';
 import { Terrain } from './world/Terrain';
 import { Sky } from './world/Sky';
 import { Labels } from './world/Labels';
-import { Dressing, type TreeSpecies } from './world/Dressing';
+import { Dressing } from './world/Dressing';
 import { Fauna } from './world/Fauna';
 import { Markers, type WorldMarker } from './world/Markers';
 import { Vehicles } from './world/Vehicles';
@@ -51,6 +51,7 @@ import { Progress } from './world/Progress';
 import { Residents, type DressingBuilder, type FrameView, type ResidentBody } from './world/Residents';
 import { Stage } from './play/stage';
 import type { HomeSpec } from './adventure/types';
+import type { TreeSpecies } from './world/Forest';
 
 export type { WorldMarker } from './world/Markers';
 
@@ -68,6 +69,9 @@ export interface MissionMode {
   missionId: string;
   input: 'free' | 'locked';
   camera: 'follow' | 'held';
+  /** a held lens: what it looks at (the framed view's spots). The trees between the lens
+   *  and these (and the ranger) fade, as they do for the follow camera. */
+  focus?: readonly { x: number; y: number; z: number }[];
 }
 
 /** A mission's home, built with the world (world/Residents.ts). */
@@ -76,13 +80,16 @@ export interface WorldHome {
   build?: DressingBuilder;
   /** ground its mud / turned earth keeps bare of the heath scatter */
   clearings?: readonly { x: number; z: number; r: number }[];
-  /** its own trees (a squirrel's oak): real forest trees with a solid trunk */
-  trees?: readonly { x: number; z: number; species: TreeSpecies; h: number; rotY: number }[];
-  /** ground the scattered bos trees keep clear of (a glade) */
-  treeClear?: readonly { x: number; z: number; r: number }[];
-  /** a resident's own body (a squirrel that climbs), instead of a walking animal */
+  /** ground the forest's scattered trees keep clear of (a glade, a game trail, a view) */
+  treeClearings?: readonly { x: number; z: number; r: number }[];
+  /** trees the home plants itself, as real forest trees (a camera tree) */
+  trees?: readonly HomeTree[];
+  /** a resident's own body (a squirrel that climbs), instead of a walking animal's */
   actor?: ResidentBody;
 }
+
+/** A tree a mission's home plants (world/Forest.ts draws it with the rest). */
+export interface HomeTree { x: number; z: number; s: number; rotY: number; species: TreeSpecies }
 
 /**
  * Free what a torn-down world made on the GPU, and nothing the GLB cache owns. The world
@@ -174,6 +181,8 @@ export class World {
   private mode: MissionMode | null = null;
   private readonly frameFns = new Set<(dt: number, t: number) => void>();
   private walkGoal: { x: number; z: number; near: number; done: (ok: boolean) => void } | null = null;
+  // run 6: photographs the world asked for (a camera trap's), taken inside the frame
+  private readonly shots: { cam: THREE.Camera; w: number; h: number; prepare?: () => (() => void) | void; done: (c: HTMLCanvasElement | null) => void }[] = [];
   /** the animals that live at the missions' homes, and the homes (world/Residents.ts) */
   readonly residents: Residents;
 
@@ -233,7 +242,8 @@ export class World {
       scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits, labels: this.labels,
     });
     this.dressing.clearings = (opts.homes ?? []).flatMap((h) => h.clearings ?? []);
-    this.dressing.treeClear = (opts.homes ?? []).flatMap((h) => h.treeClear ?? []);
+    this.dressing.treeClearings = (opts.homes ?? []).flatMap((h) => h.treeClearings ?? []);
+    this.dressing.homeTrees = (opts.homes ?? []).flatMap((h) => h.trees ?? []);
     this.fauna = new Fauna({ scene: this.scene, terrain: this.terrain });
     this.pois = new Markers(
       { scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, labels: this.labels, limits: this.limits },
@@ -305,7 +315,6 @@ export class World {
     this.dressing.placeLandmarks();
     this.pois.placeSitSpot();
     this.dressing.placeNatureDressing();
-    this.dressing.addHomeTrees((opts.homes ?? []).flatMap((h) => h.trees ?? [])); // run 6: a home's own trees
     this.fauna.placeScenicActors();
     // people are solid: the ranger walks round the warden and the poacher (with a child's
     // bit of personal space), never through them
@@ -581,6 +590,7 @@ export class World {
     this.frameFns.clear();
     this.walkGoal?.done(false);
     this.walkGoal = null;
+    for (const j of this.shots.splice(0)) j.done(null);
     this.residents.dispose();
     this.canvas.removeEventListener('wheel', this.cam.onWheel); // F-16 dolly zoom
     Sound.engineStop(); // W5.2: never leak the engine loop past teardown
@@ -781,6 +791,65 @@ export class World {
     return this.menuOpen();
   }
 
+  /** Run 6: turn the time of day (1 = the golden hour, 0 = a readable blue night) over
+   *  `seconds` (~2 s; a cut under reduced motion). World/Sky.ts. */
+  setDaylight(k: number, seconds?: number): void {
+    this.sky.setDaylight(k, seconds);
+  }
+
+  /** The time of day now (1 = the golden hour). */
+  daylight(): number {
+    return this.sky.daylight.now;
+  }
+
+  /**
+   * Run 6: a photograph of the world through `cam` (a camera trap on a tree), `w`×`h` CSS
+   * px. It is taken at the end of the next frame's update, right before the frame is drawn
+   * (so the picture is lit, tone mapped and fogged exactly as the screen is, and nothing
+   * of it ever reaches the screen): the renderer draws the view into a corner of the
+   * canvas and it is copied out at once; the frame then draws over it. `prepare` may put
+   * something in the picture for that one render (it returns how to take it out again).
+   * Resolves null without a renderer.
+   */
+  snapshot(cam: THREE.Camera, w: number, h: number, prepare?: () => (() => void) | void): Promise<HTMLCanvasElement | null> {
+    return new Promise((done) => this.shots.push({ cam, w, h, prepare, done }));
+  }
+
+  private takeShots(): void {
+    const r = this.renderer;
+    while (this.shots.length) {
+      const job = this.shots.shift()!;
+      if (!r) { job.done(null); continue; }
+      const undo = job.prepare?.();
+      const out = document.createElement('canvas');
+      out.width = job.w;
+      out.height = job.h;
+      try {
+        const pr = r.getPixelRatio();
+        const bufH = r.domElement.height;
+        const vp = r.getViewport(new THREE.Vector4());
+        const sc = r.getScissor(new THREE.Vector4());
+        const scOn = r.getScissorTest();
+        r.setViewport(0, 0, job.w, job.h);
+        r.setScissor(0, 0, job.w, job.h);
+        r.setScissorTest(true);
+        if ((job.cam as THREE.PerspectiveCamera).isPerspectiveCamera) {
+          const pc = job.cam as THREE.PerspectiveCamera;
+          pc.aspect = job.w / job.h;
+          pc.updateProjectionMatrix();
+        }
+        r.render(this.scene, job.cam);
+        out.getContext('2d')?.drawImage(r.domElement, 0, bufH - job.h * pr, job.w * pr, job.h * pr, 0, 0, job.w, job.h);
+        r.setViewport(vp);
+        r.setScissor(sc);
+        r.setScissorTest(scOn);
+      } finally {
+        if (typeof undo === 'function') undo();
+      }
+      job.done(out);
+    }
+  }
+
   /** The heading (rad) the lens looks along on the ground. */
   lensHeading(): number {
     const d = this.camera.getWorldDirection(new THREE.Vector3());
@@ -884,11 +953,15 @@ export class World {
 
     for (const fn of this.frameFns) fn(dt, t); // an adventure's per-frame beat (its lens, its animals, its checks)
 
+    if (this.shots.length) this.takeShots(); // run 6: a camera trap's photographs (before the frame is drawn)
+
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
     if (this.mode) {
       // an adventure: nothing to offer but the adventure (no prompts, no wayfinding);
-      // the follow camera, unless the adventure holds the lens
+      // the follow camera, unless the adventure holds the lens (then the trees between
+      // the held lens and what it frames still fade, as they do for the follow camera)
       if (this.mode.camera === 'follow') this.cam.place(reduced, dt, reduced);
+      else this.cam.fadeHeld(dt, reduced, this.mode.focus ?? []);
       return;
     }
 

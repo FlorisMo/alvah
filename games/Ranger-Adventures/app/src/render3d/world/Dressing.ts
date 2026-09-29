@@ -113,9 +113,10 @@ export class Dressing {
   // Run 6: ground a mission's home keeps bare (a wallow's mud, a rooting field's turned
   // earth): no scattered heather or grass grows through it. Set before the scatter.
   clearings: readonly { x: number; z: number; r: number }[] = [];
-  // Run 6: ground a home keeps free of the scattered bos trees (a squirrel's glade, the
-  // room round the trees it runs up). Set before the scatter.
-  treeClear: readonly { x: number; z: number; r: number }[] = [];
+  /** run 6: ground a mission's home keeps free of the scattered trees (a glade, a trail) */
+  treeClearings: readonly { x: number; z: number; r: number }[] = [];
+  /** run 6: trees a mission's home plants itself (a camera tree), drawn with the forest */
+  homeTrees: readonly { x: number; z: number; s: number; rotY: number; species: TreeSpecies }[] = [];
   // P1.3 tree canopy: the instant cone/cylinder stand-ins (dropped once the Forest is
   // ready) and every tree placement: the bos scatter, the rim tree-line and the grove
   // trees of the nature dressing. The camera rig tests its crowns against these.
@@ -391,13 +392,15 @@ export class Dressing {
    *  swap in via buildForest. */
   private scatterPines(budget: number): void {
     const spots = this.candidates(budget * 4, 'bos')
-      .filter((p) => !this.treeClear.some((c) => Math.hypot(p.x - c.x, p.z - c.z) < c.r)); // a home's glade stays open
+      .filter((p) => !this.treeClearings.some((c) => Math.hypot(p.x - c.x, p.z - c.z) < c.r)); // a home's glade stays open
     const placed: TreePlacement[] = spots.map(({ x, z, i }) => ({
       x, y: this.groundY(x, z), z,
       s: 0.85 + (i % 5) * 0.11,                     // 0.85–1.29 height variety
       rotY: (i * 2.39996) % (Math.PI * 2),          // golden-angle spin, no two alike
       species: TREE_SCATTER_MIX[i % TREE_SCATTER_MIX.length],
     }));
+    // run 6: the trees a mission's home plants (a camera tree at a crossing)
+    for (const t of this.homeTrees) placed.push({ x: t.x, y: this.groundY(t.x, t.z), z: t.z, s: t.s, rotY: t.rotY, species: t.species });
     // a soft collision circle around each trunk (the ranger slides around it).
     // D3.16: tag it a TREE so the all-occluder sightline test (propBlocksSightline)
     // skips it — the whole tree is the camera's fadeable crown (world/Crowns.ts), so
@@ -448,20 +451,6 @@ export class Dressing {
     far.name = 'far-forest';
     far.raycast = () => {}; // scenery past the rim: never clicked, never a probe's ground
     this.scene.add(far);
-  }
-
-  /**
-   * Run 6: a mission home's own trees (the squirrel's oak, the pines of its way): real
-   * forest trees like every other (instanced, faded when they stand between the lens and
-   * the ranger), with a solid trunk. Added before the forest builds (it waits a tick).
-   */
-  addHomeTrees(trees: readonly { x: number; z: number; species: TreeSpecies; h: number; rotY: number }[]): void {
-    const placed: TreePlacement[] = trees.map((t) => ({
-      x: t.x, y: this.groundY(t.x, t.z), z: t.z, s: t.h / TREE_BASE_H[t.species], rotY: t.rotY, species: t.species,
-    }));
-    for (const p of placed) this.obstacles.push({ x: p.x, z: p.z, r: 0.45 * Math.min(1.4, p.s), tree: true });
-    this.treePlacements.push(...placed);
-    this.addTreeFallback(placed);
   }
 
   /** P1.3: the instant low-poly stand-in for a set of tree placements — an instanced

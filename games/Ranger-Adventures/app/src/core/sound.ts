@@ -347,6 +347,12 @@ export const Sound = {
     noiseBurst(0.18, 'lowpass', 420, 0.7, 0.09);
     noiseBurst(0.14, 'bandpass', 1400, 0.8, 0.035, 0.07);
   },
+  /** a strap pulled tight round a trunk, and the buckle's click */
+  strap(): void {
+    noiseBurst(0.26, 'bandpass', 1800, 1.2, 0.05);
+    noiseBurst(0.03, 'highpass', 3200, 0.8, 0.06, 0.3);
+    tone(900, 0.31, 0.03, 'triangle', 0.06);
+  },
   /** a trail camera's soft shutter click */
   shutter(): void {
     noiseBurst(0.03, 'highpass', 3000, 0.7, 0.06);
