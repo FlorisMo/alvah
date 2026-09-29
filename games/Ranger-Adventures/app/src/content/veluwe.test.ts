@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AREA_VELUWE, VERHAALBOOG_VELUWE } from './veluwe.ts';
 import { lintText } from '../core/readlevel.ts';
+import { forPointer } from '../core/onboarding.ts';
 
 type Enc = { id: string; vraag: string; uitleg?: string; gevolg?: string; opties: { label: string; goed: boolean }[] };
 
@@ -124,6 +125,17 @@ test('every adventure line reads at M3/E3 (≤7 words a sentence); the plain lin
   }
   assert.ok(lines >= 10, 'the frisling adventure has its words');
   assert.deepEqual(bad, []);
+});
+
+test('the squirrel adventure asks for a tap in the Tik form: an iPad reads "Tik", a mouse "Klik"', () => {
+  const m = AREA_VELUWE.missies.find((x) => x.id === 'eekhoorn')!;
+  const a = (m as { avontuur?: { simpel: Record<string, string>; knap?: Record<string, string> } }).avontuur!;
+  const all = { ...a.simpel, ...a.knap };
+  for (const [k, t] of Object.entries(all)) assert.ok(!/\bklik/i.test(t), `eekhoorn.avontuur.${k} is written with "Tik" (the device rule turns it into "Klik"): "${t}"`);
+  for (const k of ['routeWijs', 'wieWonen', 'naroepen']) {
+    assert.match(forPointer(all[k], false), /\bTik\b/, `${k} on a touch screen`);
+    assert.match(forPointer(all[k], true), /\bKlik\b/, `${k} with a mouse`);
+  }
 });
 
 test('the frisling rounds come in the order the adventure meets them: aaien, dragen, voeren, zeug, pad', () => {
