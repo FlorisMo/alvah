@@ -66,8 +66,8 @@
 }
 .comp-mee { margin: 0; font: 500 15px/1.3 var(--font-read); color: var(--green-deep); text-align: center; }
 
-.comp-title { margin: 2px 0 0; font: 600 18px/1.25 var(--font-head); color: var(--green-deep); text-align: center; }
-.comp-text { margin: 0; font: 400 16px/1.4 var(--font-read); color: var(--ink); text-align: center; }
+.comp-title { margin: 2px 0 0; font: 600 21px/1.25 var(--font-head); color: var(--green-deep); text-align: center; }
+.comp-text { margin: 0; font: 400 19px/1.4 var(--font-read); color: var(--ink); text-align: center; }
 .comp-rescue { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .comp-rescue .comp-perch { width: 96px; height: 96px; }
 
@@ -116,7 +116,7 @@
   color: #fff;
   font: 700 12px/1.5 var(--font-body);
 }
-.ok-text { margin: 0; font: 400 16px/1.4 var(--font-read); color: var(--ink); text-align: center; }
+.ok-text { margin: 0; font: 400 18px/1.4 var(--font-read); color: var(--ink); text-align: center; }
 .ok-gast { display: flex; flex-direction: column; gap: 8px; }
 .ok-vrij { gap: 12px; }
 .ok-vrij-art { display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%; background: var(--green-soft); color: var(--green-mid); }
