@@ -781,14 +781,12 @@ export class World {
     const st = this.sky.advance(dt, reduced); // clouds drift + the flyover bird sails
     this.dressing.animate(st, reduced); // grass wind wave + the ven water shimmer
 
-    // F-22: keep the occlusion-proof world/vehicle/POI name-tags distance-faded.
-    // Runs before the activity early-return so an open mission's Missiebord tag
-    // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity too.
-    this.labels.fade(this.camera, { w: this.canvas.clientWidth, h: this.canvas.clientHeight }, rp, dt, reduced);
     this.tendBeacon();
 
-    // the activity owns proximity/wayfinding/camera; a presented shot owns the lens
-    if (this.frozen) { this.presenter.update(dt); return; }
+    // the activity owns proximity/wayfinding/camera; a presented shot owns the lens.
+    // F-22: the name-tags are faded here too, so an open mission's Missiebord tag
+    // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity.
+    if (this.frozen) { this.presenter.update(dt); this.fadeTags(rp, dt, reduced); return; }
 
     // W5.1 / W5.3b: "Stap in" near the parked jeep or helicopter (suppressed while riding)
     this.vehicles.updateProximity(rp.x, rp.z);
@@ -803,10 +801,18 @@ export class World {
 
     this.cam.place(reduced, dt, reduced);
     this.presenter.update(dt); // the ranger's turn back to the forest after a shot
+    this.fadeTags(rp, dt, reduced);
     // after a shot the tags and rings come in once the lens has settled behind him
     if (this.wordsIn < 1 && !this.cam.handingOver) {
       this.setWordsIn(reduced || lightMode() ? 1 : this.wordsIn + Math.min(dt, 0.05) / WORDS_IN_S);
     }
+  }
+
+  /** F-22 + run 6: the name-tags' per-frame pass (who shows, faded, never cut at the edge),
+   *  run once the lens stands where this frame draws it: a tag's box on screen is the one
+   *  the player sees, never last frame's (a turning view moved it by tens of px). */
+  private fadeTags(rp: THREE.Vector3, dt: number, reduced: boolean): void {
+    this.labels.fade(this.camera, { w: this.canvas.clientWidth, h: this.canvas.clientHeight }, rp, dt, reduced);
   }
 
   private setWordsIn(k: number): void {

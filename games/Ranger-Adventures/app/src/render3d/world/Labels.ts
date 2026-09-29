@@ -13,9 +13,11 @@
  *     solid footprints, with their height);
  *   - two tags never overlap on screen: the one that matters more (the next mission,
  *     then the nearer) stays, the other fades;
- *   - a tag at the screen edge fades before it is cut, so no word fragment shows;
- *   - `setGlow` makes a tag glow for a few seconds (a warm sun outline, a soft breath;
- *     steady under reduced motion): the chip's mission after Bram's hook, the board.
+ *   - a tag at the screen edge fades before it is cut, so no word fragment shows (this
+ *     frame's edge, never eased: an eased fade trails a turning view by several frames);
+ *   - `setGlow` makes a tag glow for a few seconds of being seen (a warm sun outline, a
+ *     soft breath; steady under reduced motion): the chip's mission after Bram's hook, the
+ *     board. Hidden behind the cabin it waits, so the glow Bram points at is seen.
  */
 
 import * as THREE from 'three';
@@ -54,6 +56,11 @@ const OCCLUDER_DEFAULT_H = 4;
 /** A glowing tag breathes this much (scale) at this pace (s a breath). */
 const GLOW_BREATH = 0.08;
 const GLOW_PERIOD_S = 1.6;
+/** A glow counts down only while its tag is drawn at least this much (Bram points at a
+ *  tag the cabin still hides: it glows once he sees it), and ends this long after it
+ *  began, seen or not. */
+const GLOW_SEEN = 0.5;
+const GLOW_MAX_S = 30;
 
 interface Tag {
   sprite: THREE.Sprite;
@@ -64,8 +71,10 @@ interface Tag {
   w: number; h: number;     // world size before the on-screen clamp
   plain: THREE.CanvasTexture;
   glowTex: THREE.CanvasTexture | null;
-  glowLeft: number;         // s of glow left (0: none)
+  glowLeft: number;         // s of glow left, counted only while the tag is seen (0: none)
+  glowAge: number;          // s since the glow began (it ends by GLOW_MAX_S, seen or not)
   vis: number;              // eased 0..1: how far in it is after the rules
+  edge: number;             // 0..1 this frame: how clear of the screen's edge it is (not eased)
   blocked: boolean;         // faded by the overlap pass last frame (hysteresis)
   // this frame, in screen px (CSS) and metres
   on: boolean; sx: number; sy: number; hw: number; hh: number; dist: number; rank: number;
@@ -115,7 +124,7 @@ export class Labels {
     sprite.scale.set(plain.w, plain.h, 1);
     const tag: Tag = {
       sprite, text, color, reach: opts.reach ?? TAG_REACH_M, always: false,
-      w: plain.w, h: plain.h, plain: plain.tex, glowTex: null, glowLeft: 0, vis: 0, blocked: false,
+      w: plain.w, h: plain.h, plain: plain.tex, glowTex: null, glowLeft: 0, glowAge: 0, vis: 0, edge: 1, blocked: false,
       on: false, sx: 0, sy: 0, hw: 0, hh: 0, dist: 0, rank: 0, fromRanger: 0,
     };
     this.tags.push(tag);
@@ -145,11 +154,13 @@ export class Labels {
     if (tag) tag.always = on;
   }
 
-  /** A tag glows for `seconds` (0 stops it): the warm outlined card and a soft breath. */
+  /** A tag glows for `seconds` of being seen (0 stops it): the warm outlined card and a
+   *  soft breath. The seconds count only while the tag is drawn; it ends by 30 s anyway. */
   setGlow(sprite: THREE.Sprite, seconds: number): void {
     const tag = this.bySprite.get(sprite);
     if (!tag) return;
     tag.glowLeft = Math.max(0, seconds);
+    tag.glowAge = 0;
     const mat = sprite.material as THREE.SpriteMaterial;
     const map = tag.glowLeft > 0 ? this.glowTexOf(tag) : tag.plain;
     if (mat.map !== map) { mat.map = map; mat.needsUpdate = true; }
@@ -190,14 +201,33 @@ export class Labels {
       const label = tag.sprite;
       tag.on = false;
       if (tag.glowLeft > 0) {
-        tag.glowLeft = Math.max(0, tag.glowLeft - dt);
-        if (tag.glowLeft === 0) this.setGlow(label, 0);
+        // the glow counts down only while the tag is drawn (last frame), and ends by 30 s
+        tag.glowAge += dt;
+        if ((label.material as THREE.SpriteMaterial).opacity > GLOW_SEEN) tag.glowLeft = Math.max(0, tag.glowLeft - dt);
+        if (tag.glowLeft === 0 || tag.glowAge >= GLOW_MAX_S) this.setGlow(label, 0);
       }
       if (this.shown <= 0 || !Labels.shownInScene(label)) continue;
       const wp = label.getWorldPosition(this._wp);
       const dx = wp.x - cp.x, dy = wp.y - cp.y, dz = wp.z - cp.z;
       const depth = dx * fwd.x + dy * fwd.y + dz * fwd.z;
       if (depth <= 0.5) continue; // behind the camera
+      // where it stands on screen and how big, for every tag in front of the lens (one
+      // fading out is still drawn there): the card's on-screen height is clamped (a
+      // parent's scale is divided out)
+      const parentScale = label.parent ? label.parent.getWorldScale(this._ws).y || 1 : 1;
+      const px = (tag.h * parentScale) / (depth * perPx);
+      const k = px > LABEL_PX_MAX ? LABEL_PX_MAX / px : px < LABEL_PX_MIN ? LABEL_PX_MIN / px : 1;
+      const breath = tag.glowLeft > 0 && !reduced ? 1 + GLOW_BREATH * (0.5 - 0.5 * Math.cos((this.clock / GLOW_PERIOD_S) * Math.PI * 2)) : 1;
+      label.scale.set(tag.w * k * breath, tag.h * k * breath, 1);
+      const ndc = this._ndc.copy(wp).project(camera);
+      tag.sx = (ndc.x * 0.5 + 0.5) * vpW;
+      tag.sy = (0.5 - ndc.y * 0.5) * vpH;
+      tag.hh = (tag.h * k * breath * parentScale) / (depth * perPx) / 2;
+      tag.hw = tag.hh * (tag.w / tag.h);
+      // the screen's edge: this frame's own, never eased (an eased fade lags a turning
+      // view by several frames, and a cut word shows): gone once the card touches the edge
+      const inset = Math.min(tag.sx - tag.hw, vpW - (tag.sx + tag.hw), tag.sy - tag.hh, vpH - (tag.sy + tag.hh));
+      tag.edge = Math.max(0, Math.min(1, inset / EDGE_FADE_PX));
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const far = (LABEL_FADE_GONE - dist) / (LABEL_FADE_GONE - LABEL_FADE_FULL);
       const near = (dist - LABEL_NEAR_GONE) / (LABEL_NEAR_FULL - LABEL_NEAR_GONE);
@@ -208,18 +238,6 @@ export class Labels {
       if (!tag.always && tag.glowLeft <= 0 && fromRanger > tag.reach) continue;
       // a building between the lens and the tag hides it (not its own landmark)
       if (this.occluded(cp.x, cp.y, cp.z, wp.x, wp.y, wp.z)) continue;
-      // clamp the card's on-screen height (a parent's scale is divided out)
-      const parentScale = label.parent ? label.parent.getWorldScale(this._ws).y || 1 : 1;
-      const px = (tag.h * parentScale) / (depth * perPx);
-      const k = px > LABEL_PX_MAX ? LABEL_PX_MAX / px : px < LABEL_PX_MIN ? LABEL_PX_MIN / px : 1;
-      const breath = tag.glowLeft > 0 && !reduced ? 1 + GLOW_BREATH * (0.5 - 0.5 * Math.cos((this.clock / GLOW_PERIOD_S) * Math.PI * 2)) : 1;
-      label.scale.set(tag.w * k * breath, tag.h * k * breath, 1);
-      // its rectangle on screen
-      const ndc = this._ndc.copy(wp).project(camera);
-      tag.sx = (ndc.x * 0.5 + 0.5) * vpW;
-      tag.sy = (0.5 - ndc.y * 0.5) * vpH;
-      tag.hh = (tag.h * k * breath * parentScale) / (depth * perPx) / 2;
-      tag.hw = tag.hh * (tag.w / tag.h);
       tag.dist = dist;
       tag.rank = (tag.always || tag.glowLeft > 0 ? 0 : 1000) + dist;
       tag.on = true;
@@ -234,7 +252,7 @@ export class Labels {
       order[b + 1] = v;
     }
 
-    // 3. overlap (the later one fades), the screen edge, then ease and write the opacity
+    // 3. overlap (the later one fades), ease the rules in or out, then the edge as is
     for (let a = 0; a < n; a++) {
       const tag = this.tags[order[a]];
       const mat = tag.sprite.material as THREE.SpriteMaterial;
@@ -244,22 +262,21 @@ export class Labels {
         let clear = true;
         for (let b = 0; b < a && clear; b++) {
           const o = this.tags[order[b]];
-          if (!o.on || o.blocked) continue;
+          if (!o.on || o.blocked || o.edge <= 0) continue; // one off the edge hides nothing
           if (Math.abs(tag.sx - o.sx) < tag.hw + o.hw + gap && Math.abs(tag.sy - o.sy) < tag.hh + o.hh + gap) clear = false;
         }
         tag.blocked = !clear;
         if (clear) {
-          const inset = Math.min(tag.sx - tag.hw, vpW - (tag.sx + tag.hw), tag.sy - tag.hh, vpH - (tag.sy + tag.hh));
-          const edge = Math.max(0, Math.min(1, inset / EDGE_FADE_PX));
           const d = tag.dist;
           const far = (LABEL_FADE_GONE - d) / (LABEL_FADE_GONE - LABEL_FADE_FULL);
           const near = (d - LABEL_NEAR_GONE) / (LABEL_NEAR_FULL - LABEL_NEAR_GONE);
-          target = Math.max(0, Math.min(1, far, near)) * edge;
+          target = Math.max(0, Math.min(1, far, near));
         }
       } else tag.blocked = false;
+      // the rules (distance, reach, a building, another tag) ease softly; the edge does not
       tag.vis = reduced ? target : tag.vis + (target - tag.vis) * Math.min(1, dt * EASE_PER_S);
       if (tag.vis < 0.004) tag.vis = 0;
-      mat.opacity = tag.vis * this.shown;
+      mat.opacity = tag.vis * tag.edge * this.shown;
     }
   }
 

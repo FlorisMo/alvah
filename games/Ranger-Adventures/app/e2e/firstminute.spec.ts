@@ -18,7 +18,9 @@ import { AREA_VELUWE } from '../src/content/veluwe';
  *   the Missiebord and near ones show. At the marker "Speel mee" carries an Enter cap and
  *   Enter opens the briefing. A reload never repeats a learned lesson.
  *   A child who drives off in the jeep during the greeting still hears the hook and gets
- *   the chip in the jeep; the run lesson waits until he is on foot again.
+ *   the chip in the jeep; the run lesson waits until he is on foot again. Turning with
+ *   the arrow keys or dragging the view, no tag ever shows cut at the screen's edge (read
+ *   every frame).
  *
  * The dev hook is only READ (what Bram says, which lesson is up, the tags on screen).
  * Screenshots of every beat: test-results/firstminute/.
@@ -347,6 +349,64 @@ test('a curious child drives off during the greeting: the hook and the chip come
   const drive = said.findIndex((l) => l.includes(ONBOARD_DRIVE.uit));
   expect(drive, 'the drive line is read aloud').toBeGreaterThanOrEqual(0);
   expect(errors).toEqual([]);
+});
+
+test('turning and dragging the view: no tag is ever drawn cut at the screen edge (read every frame)', async ({ page }, testInfo) => {
+  test.setTimeout(3 * 60_000);
+  shotsInto(testInfo, 'edge');
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: { avatarGemaakt: true, settings: { geleerd: { bram: true, lopen: true, rennen: true, haak: true, kijken: true, missiebord: true, jeep: true } } } }));
+  });
+  await page.goto('/?dev=1');
+  await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 40_000 });
+  await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
+  await sleep(page, 3_500); // the lens is behind him, the tags are in
+  type Sweep = { n: number; bad: string[]; nearEdge: number };
+  const sweep = async (act: () => Promise<void>): Promise<Sweep> => {
+    await page.evaluate(() => {
+      const w = window as unknown as { __edge: (Sweep & { raf: number }) | null; __ranger: { tags(): Tag[] | null } };
+      w.__edge = { n: 0, bad: [], nearEdge: 0, raf: 0 };
+      const loop = (): void => {
+        const e = w.__edge; if (!e) return;
+        e.n++;
+        let near = false;
+        for (const t of w.__ranger.tags() ?? []) {
+          const cut = t.x < 0 || t.y < 0 || t.x + t.w > innerWidth || t.y + t.h > innerHeight;
+          if (cut && t.o > 0.1) e.bad.push(`${t.text} o=${t.o} x=${t.x} w=${t.w}`);
+          if (t.x < 40 || t.x + t.w > innerWidth - 40) near = true;
+        }
+        if (near) e.nearEdge++;
+        e.raf = requestAnimationFrame(loop);
+      };
+      loop();
+    });
+    await act();
+    return page.evaluate(() => {
+      const w = window as unknown as { __edge: (Sweep & { raf: number }) | null };
+      const e = w.__edge!; cancelAnimationFrame(e.raf); w.__edge = null;
+      return { n: e.n, bad: e.bad, nearEdge: e.nearEdge };
+    });
+  };
+  const hold = (key: string) => async (): Promise<void> => {
+    await page.keyboard.down(key); await sleep(page, 6_000); await page.keyboard.up(key); await sleep(page, 500);
+  };
+  const left = await sweep(hold('ArrowLeft'));
+  await snapShot(page, 'after-left');
+  const right = await sweep(hold('ArrowRight'));
+  const drags = await sweep(async () => {
+    for (let k = 0; k < 4; k++) {
+      const from = k % 2 === 0 ? 390 : 890, to = k % 2 === 0 ? 890 : 390;
+      await page.mouse.move(from, 420); await page.mouse.down();
+      await page.mouse.move(to, 420, { steps: 20 }); await page.mouse.up();
+      await sleep(page, 350);
+    }
+  });
+  await snapShot(page, 'after-drags');
+  for (const [what, r] of [['holding ArrowLeft', left], ['holding ArrowRight', right], ['four mouse drags', drags]] as const) {
+    expect(r.n, `${what}: frames read`).toBeGreaterThan(60);
+    expect(r.bad, `${what}: ${r.bad.length}/${r.n} frames show a tag cut at the edge`).toEqual([]);
+  }
+  expect(left.nearEdge + right.nearEdge + drags.nearEdge, 'the tags did sweep past the screen edges').toBeGreaterThan(0);
 });
 
 test('the "?" chip opens "Zo speel je" with key caps, read aloud; Esc closes it', async ({ page }) => {
