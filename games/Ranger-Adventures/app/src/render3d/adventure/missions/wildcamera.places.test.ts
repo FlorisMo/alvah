@@ -12,7 +12,7 @@ import test from 'node:test';
 import {
   WILDCAMERA_PLACES as P, MARKER, TREE, CAMERA, CROSS, CROSS_VIEW, CALLER_SPOTS, LOG, PINE,
   WILDCAMERA_HOME, WILDCAMERA_RESIDENTS, aimSpot, cameraAim, swivel, trailA, trailB,
-  wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW,
+  wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW,
 } from './wildcamera.places.ts';
 import { anchorInBiome, biomeAt } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
@@ -82,8 +82,10 @@ test('one view: the glade left, the thicket right, the camera pine between, the 
   for (const q of [P.glade, P.thicket]) assert.ok(Math.abs(swivel(q)) < (80 * Math.PI) / 180, `a swivel of ${deg(swivel(q))}°`);
   assert.ok(swivel(P.glade) < 0 && swivel(P.thicket) > 0, 'left for the glade, right for the thicket');
   assert.ok(dist(CAMERA, TREE) > PINE.trunkR && dist(CAMERA, TREE) < PINE.trunkR + 0.15, 'the camera sits on the trunk');
+  const reach = dist(P.strap, CAMERA);
+  assert.ok(reach > 0.5 && reach < 1, `he straps it on within reach (${reach.toFixed(2)} m), beside it, not in front of the lens`);
   // the other views are the ranger's side of what they show
-  for (const [name, view] of [['trail', TRAIL_VIEW], ['snare', SNARE_VIEW], ['reunion', REUNION_VIEW]] as const) {
+  for (const [name, view] of [['trail', TRAIL_VIEW], ['strap', STRAP_VIEW], ['snare', SNARE_VIEW], ['reunion', REUNION_VIEW]] as const) {
     for (const q of view.include) assert.ok(toLocal({ x: view.at.x, z: view.at.z, heading: view.heading }, q).v < 1, `${name}: he stands in front of what it shows`);
   }
 });

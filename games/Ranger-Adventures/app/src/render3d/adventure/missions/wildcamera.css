@@ -17,8 +17,10 @@
 .wc-row { display: flex; gap: 8px; justify-content: center; flex-wrap: nowrap; }
 .wc-thumb {
   display: block;
-  width: 88px;
-  height: 55px;
+  /* nine photos fit next to the Pauze pill on a laptop and on an iPad */
+  width: clamp(48px, calc((100vw - 360px) / 9), 88px);
+  aspect-ratio: 16 / 10;
+  height: auto;
   object-fit: cover;
   border: 3px solid var(--paper);
   border-radius: 6px;

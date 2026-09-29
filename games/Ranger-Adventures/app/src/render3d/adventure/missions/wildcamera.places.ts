@@ -66,8 +66,8 @@ export const WILDCAMERA_PLACES = {
   stump: { x: MARKER.x - 0.35, z: MARKER.z - 0.25 },
   /** the end of the wildwissel: he arrives at the crossing here */
   crossApproach: { ...at(0.9, -2.6), r: 1.6, heading: VIEW_H },
-  /** where he stands to strap the camera on (facing the trunk) */
-  strap: { ...at(0, -0.85), r: 0.3, heading: VIEW_H },
+  /** where he stands to strap the camera on: beside the trunk's face, facing the camera */
+  strap: { ...at(0.62, -0.62), r: 0.3, heading: headingTo(at(0.62, -0.62), CAMERA) },
   /** where he stands while the camera watches: beside the pine, a step back from its face */
   watch: { ...at(1.15, 0.2), r: 0.3, heading: VIEW_H },
   glade: { ...GLADE, r: GLADE_R },
@@ -179,6 +179,14 @@ export const SNARE_VIEW = (() => {
     include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT }],
   } as const;
 })();
+
+/** Strapping the camera on: close, low, from the north-west — the camera on the trunk's
+ *  face, the ranger at its side. */
+export const STRAP_VIEW = {
+  at: { x: CAMERA.x + 0.2, z: CAMERA.z + 0.1 }, heading: headingTo({ x: CAMERA.x - 2.4, z: CAMERA.z + 2.6 }, CAMERA),
+  halfW: 1.0, halfD: 0.7, tall: 1.5, pitchDeg: 14, insetTop: 130, insetBottom: 60,
+  include: [{ x: at(0.62, -0.62).x, z: at(0.62, -0.62).z, h: RANGER_STAND_HEIGHT }],
+} as const;
 
 /** The start: from behind the ranger at the ring's edge, along the wildwissel into the
  *  wood (the follow camera takes over from there, looking the way he goes). */

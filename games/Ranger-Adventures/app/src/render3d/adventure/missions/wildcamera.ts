@@ -33,7 +33,7 @@ import type { Spot } from '../types';
 import { WildcameraHome } from './wildcamera.home';
 import { PhotoStrip, develop, type Photo } from './wildcamera.photos';
 import {
-  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, SNARE_VIEW, CALLER_SPOTS, LOG,
+  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, SNARE_VIEW, STRAP_VIEW, CALLER_SPOTS, LOG,
   aimSpot, cameraAim, wildcameraClearings, wildcameraTreeClearings, wildcameraTrees, type AimSpot,
 } from './wildcamera.places';
 
@@ -163,10 +163,12 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   /* 3 · strap the camera to the pine */
   k.beat = 'hang';
   await k.act(c.hangKnop, c.hang);
+  k.beat = 'hang:strap';
   await k.walkRanger(P.strap.x, P.strap.z, 0.05);
-  k.world.faceRanger(P.strap.heading);
+  await k.frame(STRAP_VIEW, { face: P.strap.heading });
   await k.wait(0.3);
   home.strapOn();
+  k.beat = 'hang:on';
   if (settings.geluid) Sound.strap();
   k.say(c.hangt, { good: true });
   k.stats.camera_strapped = 1;
