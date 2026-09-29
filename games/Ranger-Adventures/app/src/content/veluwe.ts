@@ -668,7 +668,8 @@ const MISSIE_EEKHOORN = {
     badgeId: 'nootjes-vinder', badgeNaam: 'Nootjes-vinder',
     vaktermBadge: { id: 'knap-wintervoorraad', naam: 'Knap woord: wintervoorraad' },
   },
-  reunion: { sprite: 'eekhoorn', tekst: 'Alle nootjes terug. Knap gedaan.' },
+  // (the squirrel sits on its stump and eats one: the ending the child sees)
+  reunion: { sprite: 'eekhoorn', tekst: 'Alle nootjes terug. Hij eet er een op.' },
   /* run 6: De verstopte nootjes as an adventure in the world (render3d/adventure/
      missions/eekhoorn.ts): follow the squirrel tree to tree, watch where it buries its
      acorns and point them out when it forgets, call back its noisy neighbours. */

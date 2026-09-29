@@ -177,6 +177,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
 
   // 4 · the neighbours come to see the store; call them back (simon)
   k.say(c.buren);
+  if (sq.body) sq.body.userData.perch = STUMP.top; // (it sits on its stump)
   const callers: Caller[] = [
     { id: 'eekhoorn', pick: sq.group, body: sq.body, at: () => ({ x: sq.x, z: sq.z }), act: (on) => { if (on) sq.called(); } },
     ...home.neighbours.map((n): Caller => ({ id: n.id, pick: n.object, body: n.body, at: () => ({ x: n.at.x, z: n.at.z }), act: (on) => { if (on) n.call(); } })),
@@ -185,6 +186,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     view: CALLERS_VIEW, stand: P.callers, callers,
     lines: { luister: c.luisterBuren, echo: c.naroepen, groei: c.groei, opnieuw: c.opnieuw, goed: c.goedBuren },
   });
+  if (sq.body) delete sq.body.userData.perch;
   // the jay (the nut thief) gives up and flies off over the trees
   k.say(c.gaai);
   if (settings.geluid) Sound.callAt('gaai', home.neighbours.find((n) => n.id === 'gaai')?.at.x ?? 0, home.neighbours.find((n) => n.id === 'gaai')?.at.z ?? 0, listenerOf(k.world.camera));

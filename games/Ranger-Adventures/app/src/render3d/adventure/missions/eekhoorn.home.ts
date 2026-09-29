@@ -188,6 +188,9 @@ export class EekhoornHome implements HomeDressing {
       }
       holder.add(r);
       n.body = r;
+      // it sits on a perch (a stub, the snag's top, the bark): how high above the ground
+      r.updateWorldMatrix(true, true);
+      r.userData.perch = new THREE.Box3().setFromObject(r).min.y - this.env.groundY(at.x, at.z);
       this.spawned.push(s);
     });
   }
