@@ -124,3 +124,9 @@ export function nearestAway<T extends { x: number; z: number }>(
   }
   return best;
 }
+
+/** An animal's body length (m) at `height`: the scale table's own proportion (a roe is
+ *  about as long as it is tall, a boar 1.7 × its height), else a pig's 1.7 ×. */
+export function bodyLength(size: { h: number; len?: number } | undefined, height: number): number {
+  return size?.len ? (size.len / size.h) * height : height * 1.7;
+}

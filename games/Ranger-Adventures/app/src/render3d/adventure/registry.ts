@@ -7,9 +7,11 @@
 
 import type { Mission } from '../../content/types';
 import type { DressingBuilder, Residents } from '../world/Residents';
+import type { HomeTree } from '../World';
 import type { AdventureKit } from './kit';
 import type { HomeSpec } from './types';
 import { frislingAdventure } from './missions/frisling';
+import { reeAdventure } from './missions/ree';
 
 export interface Adventure {
   /** the mission id */
@@ -17,6 +19,10 @@ export interface Adventure {
   home: HomeSpec;
   /** ground the world's heath scatter leaves bare (mud, turned earth) */
   clearings?: readonly { x: number; z: number; r: number }[];
+  /** ground the forest's scattered trees keep clear of (a glade, a game trail) */
+  treeClearings?: readonly { x: number; z: number; r: number }[];
+  /** trees the home plants itself, as real forest trees (a camera pine) */
+  trees?: readonly HomeTree[];
   /** the home's THREE side, built with the world */
   dressing?: DressingBuilder;
   /** the mission's content, handed over before the world is built (its decoys ...) */
@@ -31,6 +37,7 @@ export interface Adventure {
 
 const ADVENTURES: Readonly<Record<string, Adventure>> = {
   frisling: frislingAdventure,
+  'ree-niet-aanraken': reeAdventure,
 };
 
 /** The adventure a mission is played as, or null (the classic path). */

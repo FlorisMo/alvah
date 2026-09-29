@@ -46,16 +46,25 @@ export interface MissionWorld {
   menuShown(): boolean;
   readonly residents: Residents;
   readonly camera: THREE.PerspectiveCamera;
+  /** the time of day (1 = the golden hour, 0 = a readable blue night), turned calmly */
+  setDaylight(k: number, seconds?: number): void;
+  daylight(): number;
+  /** a photograph of the world through `cam` (taken inside the next frame, never shown) */
+  snapshot(cam: THREE.Camera, w: number, h: number, prepare?: () => (() => void) | void): Promise<HTMLCanvasElement | null>;
 }
 
 /** The adventure's HUD (ui/flow/AdventureHud.ts implements it). */
 export interface AdventureUi {
   say(text: string | null, opts?: { good?: boolean; queue?: boolean }): void;
   readonly current: string | null;
-  setChip(c: { doel: string; cue: string; angle: number | null; arrived?: boolean } | null): void;
+  setChip(c: { doel: string; cue: string; angle: number | null; arrived?: boolean; glyph?: string } | null): void;
   action(label: string | null): Promise<void>;
   binoculars(on: boolean): void;
+  /** time passes: a calm veil over the world with one line (null lifts it) */
+  veil(text: string | null): void;
   walking(on: boolean): void;
+  /** the binoculars' frame for a LONG watch (a hide): it closes in further than a look's */
+  watching(on: boolean): void;
 }
 
 /** What the mission flow does for the kit (ui/flow/MissionFlow.ts). */
@@ -121,6 +130,8 @@ export interface WalkOpts {
   /** the chip: where he goes, in words, and the cue under it before the arrow shows */
   doel: string;
   cue?: string;
+  /** the chip's sign before the words (default 👂: a sound to follow; 👣 prints) */
+  glyph?: string;
   /** seconds without getting closer before the chip shows the arrow (default 20) */
   arrowAfter?: number;
   /** an animal that follows him (the piglet he leads): it keeps its gap, hides when he
@@ -138,6 +149,9 @@ export interface WalkOpts {
   };
   /** extra per-frame work while he walks (a squeak getting louder ...) */
   tick?: (dt: number) => void;
+  /** he should walk QUIETLY (away from a calf lying in the grass): running says `line`
+   *  (and calls `onRun`) once per run; walking calmly again brings the walk's line back */
+  quiet?: { line: string; onRun?: () => void };
 }
 
 const WALK_HINT_R = 0.8; // golden walks until it is within this share of r
@@ -167,6 +181,10 @@ export class AdventureKit {
   private group: ResidentGroup | null = null;
   private disposed = false;
   private readonly owned: THREE.Object3D[] = [];
+  /** the adventure turned the time of day (the end hands the golden hour back) */
+  private dayTurned = false;
+  /** a photograph that belongs with the mission's clue (the reward's clue card shows it) */
+  cluePhoto: string | null = null;
 
   constructor(o: KitOptions) {
     this.mission = o.mission;
@@ -313,7 +331,10 @@ export class AdventureKit {
     const { cam, look, stage } = this.lensFor(f);
     if (opts.face !== undefined) this.world.faceRanger(opts.face);
     this.world.stopRanger();
-    this.world.setMissionMode({ missionId: this.mission.id, input: 'locked', camera: 'held' });
+    // (the trees between the held lens and what it frames fade, as for the follow camera)
+    const focus = [{ x: look.x, y: look.y, z: look.z },
+      ...(f.include ?? []).map((q) => ({ x: q.x, y: this.ctx.groundY(q.x, q.z) + q.h * 0.75, z: q.z }))];
+    this.world.setMissionMode({ missionId: this.mission.id, input: 'locked', camera: 'held', focus });
     this.ui.walking(false);
     this.ui.setChip(null);
     const move = makeReframe(this.world.camera, cam, look, this.reduced, f.seconds ?? 1.4, 0.3);
@@ -351,8 +372,11 @@ export class AdventureKit {
    * One calm LOOK at a place (design §3.6): the lens glides a little toward it and rises
    * (a soft binocular frame), holds `hold` s (Space or Enter ends it sooner), and glides
    * back to where it was; a cut each way under reduced motion. At most one per mission.
+   * `turn`: the ranger turns to face the place while the lens is on it (out of his own
+   * sight), and the lens glides back to behind him facing it — he ends up looking where
+   * the story goes on, instead of the way he came.
    */
-  async look(at: Spot & { y?: number }, line: string, hold = 2.5): Promise<void> {
+  async look(at: Spot & { y?: number }, line: string, hold = 2.5, opts: { turn?: boolean } = {}): Promise<void> {
     this.check();
     this.beat = 'look';
     this.ui.say(line);
@@ -383,7 +407,21 @@ export class AdventureKit {
       window.removeEventListener('keydown', onKey);
     }
     this.ui.binoculars(false);
-    move = makeReframe(cam, from, fromLook, this.reduced, 2.0, 0);
+    let back = from, backLook = fromLook;
+    if (opts.turn) {
+      // the lens's pose behind him, turned round him by as much as he turns to face it
+      const me = this.ranger();
+      const h = headingTo(me, at);
+      const d = h - Math.atan2(fromLook.x - from.x, fromLook.z - from.z);
+      const turnAbout = (p: THREE.Vector3): THREE.Vector3 => {
+        const dx = p.x - me.x, dz = p.z - me.z;
+        return new THREE.Vector3(me.x + dx * Math.cos(d) + dz * Math.sin(d), p.y, me.z - dx * Math.sin(d) + dz * Math.cos(d));
+      };
+      back = turnAbout(from);
+      backLook = turnAbout(fromLook);
+      this.world.faceRanger(h);
+    }
+    move = makeReframe(cam, back, backLook, this.reduced, 2.0, 0);
     this.held = { update: (dt) => move.update(dt), settled: false };
     await this.until(() => !!this.held?.settled);
     this.free();
@@ -421,10 +459,19 @@ export class AdventureKit {
     const rangerLead = (): { x: number; z: number; speed: number } => { const m = this.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
     if (lead) lead.actor.follow(rangerLead, gap);
     const unhint = this.hint(() => ({ id: `walk:${o.name}`, walk: { x: to.x, z: to.z, r: r * WALK_HINT_R } }));
+    let loud = false;
+    let hushFor = 0;
+    let runs = 0;
     const off = this.onTick((dt) => {
       const m = this.ranger();
       const d = dist(m, to);
       if (d < best - 1) { best = d; bestAt = this.clock; }
+      if (o.quiet) {
+        // a quiet walk: running gets the hush line once, a calm walk brings the goal back
+        const run = isRunning(m);
+        if (run && !loud) { loud = true; hushFor = 0; runs += 1; this.ui.say(o.quiet.line); o.quiet.onRun?.(); }
+        else if (loud) { hushFor = run ? 0 : hushFor + dt; if (hushFor > 1.6) { loud = false; this.ui.say(o.line); } }
+      }
       if (!arrow && this.clock - bestAt > arrowAfter) arrow = true;
       // the chip: the goal in words; the arrow and the way only as the fallback
       const goal = lead && waiting ? lead.actor : to;
@@ -434,6 +481,7 @@ export class AdventureKit {
         cue: arrow || waiting ? `${cue.richting} · ${cue.afstand}` : (o.cue ?? ''),
         angle: arrow || waiting ? cue.angle : null,
         arrived: d < r,
+        glyph: o.glyph,
       });
       o.tick?.(dt);
       if (!lead) return;
@@ -481,9 +529,33 @@ export class AdventureKit {
       this.ui.setChip(null);
     }
     this.stats[`walk_${o.name}_s`] = Math.round(this.clock);
+    if (o.quiet) this.stats[`walk_${o.name}_runs`] = runs;
   }
 
   /* ---------------------------------------------------------------- misc ---- */
+
+  /**
+   * An ACTION in the world (design §3.9): one big button bottom-centre ("Hang de camera
+   * op"; Space or Enter press it, golden clicks the visible `.adv-action`). The line, if
+   * given, says what to do. Resolves when he presses it.
+   */
+  async act(label: string, line?: string): Promise<void> {
+    this.check();
+    if (line) this.ui.say(line);
+    try {
+      await this.guard(this.ui.action(label));
+    } finally {
+      if (this.disposed || this.signal.aborted) this.ui.action(null);
+    }
+  }
+
+  /** Turn the time of day (1 = the golden hour, 0 = a readable blue night) over `seconds`
+   *  (~2 s; a cut under reduced motion). The end of the adventure hands the golden hour
+   *  back, whether it was won or stopped. */
+  daylight(k: number, seconds?: number): void {
+    this.dayTurned = true;
+    this.world.setDaylight(k, seconds);
+  }
 
   /** The objective line (read aloud once). */
   say(line: string | null, opts?: { good?: boolean; queue?: boolean }): void {
@@ -519,6 +591,7 @@ export class AdventureKit {
     this.ui.say(null);
     this.ui.action(null);
     this.ui.binoculars(false);
+    this.ui.veil(null);
     this.ui.walking(false);
     for (const o of this.owned) {
       o.removeFromParent();
@@ -530,5 +603,8 @@ export class AdventureKit {
     }
     if (this.group) this.world.residents.release(this.mission.id, state);
     this.group = null;
+    // the golden hour comes back (calmly; a cut under reduced motion): never a dark sky
+    // after a stop, a win or an error
+    if (this.dayTurned || this.world.daylight() < 1) this.world.setDaylight(1, this.reduced ? 0 : 2.4);
   }
 }

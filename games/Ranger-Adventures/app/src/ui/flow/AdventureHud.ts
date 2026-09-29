@@ -27,7 +27,14 @@ export interface ChipCue {
   /** the arrow's turn (rad, relative to where he looks), or null: words only */
   angle: number | null;
   arrived?: boolean;
+  /** the sign before the words while there is no arrow: what he goes by (default 👂, a
+   *  sound to follow; 👣 prints to follow, 🤫 a quiet walk) */
+  glyph?: string;
 }
+
+/** Chip signs drawn dark (👣 is two grey soles): they sit on a light well, or the dark
+ *  chip would swallow them. */
+const DARK_GLYPHS = new Set(['👣']);
 
 export class AdventureHud {
   readonly el: HTMLDivElement;
@@ -46,6 +53,7 @@ export class AdventureHud {
     el.className = 'adventure-hud';
     el.innerHTML =
       `<div class="adv-vignette" aria-hidden="true"></div>` +
+      `<div class="adv-veil" role="status" aria-live="polite"><p class="adv-veil-text"></p></div>` +
       `<div class="adv-line p3-top" role="status" aria-live="polite" hidden>` +
       `<div class="p3-card"><div class="p3-row">` +
       `<p class="p3-text"></p>` +
@@ -95,9 +103,11 @@ export class AdventureHud {
     if (doel.textContent !== c.doel) doel.textContent = c.doel;
     if (cue.textContent !== c.cue) cue.textContent = c.cue;
     this.chip.classList.toggle('wf-arrived', !!c.arrived);
+    const sign = c.arrived ? '◎' : c.glyph ?? '👂';
+    glyph.classList.toggle('adv-glyph-light', (c.angle === null || !!c.arrived) && DARK_GLYPHS.has(sign));
     if (c.angle === null || c.arrived) {
       glyph.classList.add('adv-no-arrow');
-      glyph.textContent = c.arrived ? '◎' : '👂';
+      glyph.textContent = sign;
       glyph.style.transform = '';
       return;
     }
@@ -126,9 +136,46 @@ export class AdventureHud {
     });
   }
 
+  /** Time passes (the night goes by): a calm dark veil over the world with one line in
+   *  the middle, read aloud; null lifts it. The fade is CSS (a cut under reduced motion). */
+  veil(text: string | null): void {
+    const v = this.el.querySelector<HTMLElement>('.adv-veil')!;
+    if (text) {
+      v.querySelector('.adv-veil-text')!.textContent = text;
+      if (store.get().settings.voorlezen) narrator.speak(text);
+    }
+    v.classList.toggle('on', !!text);
+  }
+
   /** The binocular frame for a look (on/off; the fade is CSS, a cut under reduced motion). */
   binoculars(on: boolean): void {
     this.vignette.classList.toggle('on', on);
+  }
+
+  /** A long watch through the binoculars (the reekalf's hide): the picture is seen
+   *  through the glasses' two round lenses, their edges soft, the world round them
+   *  dimmed (never black); the lens itself does not zoom. Fades in and out (CSS; a cut
+   *  under reduced motion). */
+  watching(on: boolean): void {
+    let g = session.host.querySelector<SVGSVGElement>('.adv-glasses');
+    if (!g && on) {
+      // two overlapping round lenses cut out of a dim frame, their rims feathered (one
+      // SVG: 'slice' keeps the lenses round on every screen shape); it lies UNDER the
+      // mission's cards (a choice asked while he watches) and this HUD's line
+      const t = document.createElement('template');
+      t.innerHTML =
+        `<svg class="adv-glasses" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">` +
+        `<defs><filter id="adv-glasses-soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="26"/></filter>` +
+        `<mask id="adv-glasses-cut"><rect width="1600" height="1000" fill="#fff"/>` +
+        `<g filter="url(#adv-glasses-soft)"><circle cx="590" cy="500" r="430" fill="#000"/><circle cx="1010" cy="500" r="430" fill="#000"/></g>` +
+        `</mask></defs>` +
+        `<rect width="1600" height="1000" fill="rgb(22, 16, 9)" fill-opacity="0.78" mask="url(#adv-glasses-cut)"/></svg>`;
+      g = t.content.firstElementChild as SVGSVGElement;
+      const step = session.host.querySelector('.mission-step');
+      session.host.insertBefore(g, step ?? this.el);
+      void g.getBoundingClientRect(); // (laid out before it turns on: it fades in)
+    }
+    g?.classList.toggle('on', on);
   }
 
   /** The joystick while he walks himself (touch screens); gone while a beat holds him. */
@@ -149,6 +196,7 @@ export class AdventureHud {
   }
 
   dispose(): void {
+    session.host.querySelector('.adv-glasses')?.remove();
     this.walking(false);
     this.actionDone = null;
     this.el.remove();

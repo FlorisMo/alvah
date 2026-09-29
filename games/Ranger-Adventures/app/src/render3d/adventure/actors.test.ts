@@ -8,8 +8,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  wrap, turnToward, stepToward, followSpot, followSpeed, isRunning, trot, strideOf, rootDip, nearestAway,
+  wrap, turnToward, stepToward, followSpot, followSpeed, isRunning, trot, strideOf, rootDip, nearestAway, bodyLength,
 } from './actors-math.ts';
+import { SIZE } from '../AnimalScale.ts';
 
 test('turning is rate-limited and takes the short way', () => {
   assert.ok(Math.abs(turnToward(0, Math.PI / 2, 0.1) - 0.1) < 1e-9);
@@ -73,4 +74,15 @@ test('a frightened animal hides in the nearest cover that is not beside what fri
   assert.deepEqual(nearestAway(0, 0, spots), { x: 1, z: 0 });
   assert.deepEqual(nearestAway(0, 0, spots, { x: 1.2, z: 0, d: 1 }), { x: -2, z: 0 }, 'never next to the ranger');
   assert.equal(nearestAway(0, 0, [], undefined), null);
+});
+
+test('an animal is as long as the scale table says for its height (a roe about as long as it is tall)', () => {
+  assert.ok(Math.abs(bodyLength(SIZE.ree, SIZE.ree.h) - SIZE.ree.len) < 1e-9);
+  assert.ok(Math.abs(bodyLength(SIZE.reekalf, SIZE.reekalf.h) - SIZE.reekalf.len) < 1e-9);
+  assert.ok(bodyLength(SIZE.ree, 1.1) < 1.2, 'a roe is not a pig\'s 1.7 × its height long');
+  // the boars keep the proportion they always had (≈ 1.7 × their height)
+  for (const b of [SIZE.wildzwijn, SIZE.overloper, SIZE.frisling]) assert.ok(Math.abs(bodyLength(b, b.h) / b.h - 1.7) < 0.05);
+  assert.equal(bodyLength(undefined, 1), 1.7);
+  // a smaller one of its kind is shorter in the same proportion
+  assert.ok(Math.abs(bodyLength(SIZE.ree, 0.55) - SIZE.ree.len / 2) < 1e-9);
 });
