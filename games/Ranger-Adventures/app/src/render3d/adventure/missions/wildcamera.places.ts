@@ -71,6 +71,43 @@ export const JUNIPER = { ...at(5.9, 0.25), r: 0.7 } as const;
 export const THICKET_ENTRY: Spot = at(8.6, -1.0);
 export const THICKET_R = 1.9;
 
+/** The thicket's bushes (model, height m, where, turn; `r` its footprint's half-width, m):
+ *  the juniper (solid), the bramble and the bracken the animals walk through. */
+export const THICKET_BUSHES: readonly { id: string; h: number; at: Spot; yaw: number; r: number }[] = [
+  { id: 'prop-juniper-bush', h: 1.9, at: JUNIPER, yaw: 0.3, r: JUNIPER.r },
+  { id: 'prop-bramble', h: 1.05, at: at(4.5, -0.15), yaw: 1.2, r: 0.6 },
+  { id: 'prop-bramble', h: 0.95, at: at(6.9, -0.8), yaw: 2.9, r: 0.6 },
+  { id: 'prop-fern', h: 1.15, at: at(3.6, 0.35), yaw: 0.8, r: 0.5 },
+  { id: 'prop-fern', h: 1.0, at: at(7.3, -1.8), yaw: 2.2, r: 0.5 },
+];
+/** The sett's mound as it stands between the lens and what is behind it: its high front
+ *  half (m; measured off the model: ~0.63 m over its north half, ~1 m across). */
+export const SETT_MOUND = { h: 0.64, r: 0.55 } as const;
+
+/** The places' names, over the glade's middle and over the thicket (m up). */
+export const TAG_AT: Readonly<Record<'open' | 'hol', Spot & { y: number }>> = {
+  open: { ...GLADE, y: 1.45 },
+  hol: { ...at(4.8, -0.6), y: 2.35 },
+};
+
+/** The old tree stump at the thicket's front, before the sett (between it and the lens):
+ *  the nightjar's perch by day (m: its height; clear of every animal's way in and out). */
+export const NIGHTJAR_STUMP = { ...at(3.3, -3.95), h: 0.46, r: 0.3 } as const;
+
+/**
+ * Where the nightjar lands for the camera — it flies in, and the child must SEE it land:
+ * by day in the thicket on the old stump at its front, before the sett (a raised perch
+ * in the open, nothing between it and the lens; the camera on the pine sees it clear of
+ * the sett); at night in the glade on the sandy game trail at its edge (nightjars sit on
+ * warm sandy paths at night): a dark bird on pale sand, well away from the place's name.
+ * `lift`: how high its perch holds it (m; the home measures the stump's top where it
+ * lands, this is the stump's height).
+ */
+export const NIGHTJAR_AT: Readonly<Record<'open' | 'hol', Spot & { lift: number }>> = {
+  hol: { x: NIGHTJAR_STUMP.x, z: NIGHTJAR_STUMP.z, lift: NIGHTJAR_STUMP.h },
+  open: { ...at(-3.3, -1.5), lift: 0 },
+};
+
 /** The places table. */
 export const WILDCAMERA_PLACES = {
   marker: { ...MARKER, r: 2.4 },
@@ -134,11 +171,20 @@ export function trailB(): Spot[] {
  *  view): the glade's middle, or the thicket's foot; the badger at its sett's mouth.
  *  The entries lie outside the framed view (the forest beyond the glade; behind the
  *  bushes), so every animal walks in. */
-export interface AimSpot { at: Spot; from: Spot; yaw: number }
+export interface AimSpot { at: Spot; from: Spot; yaw: number; /** the nightjar: how high its perch holds it (m) */ lift?: number }
 
 export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
+  if (animal === 'nachtzwaluw') {
+    // it flies in (from the sky beyond the glade, or over the thicket) and lands on its
+    // perch: the stump over the sett, or the sandy trail in the glade
+    const n = NIGHTJAR_AT[bin];
+    const spot = { x: n.x, z: n.z };
+    // side-on to the child's view (its long shape and tail read), turned a touch toward
+    // it, its head toward the pine's side (three-quarters to the camera on the pine)
+    return { at: spot, from: bin === 'open' ? at(-10.5, -0.6) : THICKET_ENTRY, yaw: bin === 'open' ? Math.PI / 2 - 0.25 : -Math.PI / 2 + 0.25, lift: n.lift };
+  }
   if (bin === 'open') {
-    const spot = animal === 'nachtzwaluw' ? at(-3.9, -1.9) : animal === 'edelhert' ? at(-4.8, -1.6) : at(-4.4, -2.3);
+    const spot = animal === 'edelhert' ? at(-4.8, -1.6) : at(-4.4, -2.3);
     const from = at(-10.5, -0.6);
     return { at: spot, from, yaw: headingTo(spot, TREE) + 1.15 };
   }
@@ -151,7 +197,7 @@ export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
   }
   // at the thicket's foot, in front of its bushes and clear of the sett as the camera
   // sees it (an animal behind the mound would give a photo of the mound)
-  const spot = animal === 'edelhert' ? at(5.0, -0.95) : animal === 'nachtzwaluw' ? at(3.9, -1.2) : at(4.35, -1.05);
+  const spot = animal === 'edelhert' ? at(5.0, -0.95) : at(4.35, -1.05);
   return { at: spot, from: THICKET_ENTRY, yaw: headingTo(spot, TREE) - 1.1 };
 }
 

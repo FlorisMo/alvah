@@ -25,7 +25,8 @@ import { boxObstacle } from '../../CharacterController';
 import { SIZE } from '../../AnimalScale';
 import { crouchPose } from './wildcamera.pose';
 import {
-  WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, JUNIPER, trailA, trailB,
+  WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, JUNIPER, THICKET_BUSHES, TAG_AT, NIGHTJAR_AT, NIGHTJAR_STUMP,
+  trailA, trailB,
 } from './wildcamera.places';
 import type { Spot } from '../types';
 
@@ -263,6 +264,8 @@ export class WildcameraHome implements HomeDressing {
    *  bird on its log reads as one thing; a container at the origin) */
   readonly perch = new THREE.Group();
   private birdBody: THREE.Object3D | null = null;
+  /** how high the top of the thicket's stump stands where the nightjar lands on it (m) */
+  private stumpTop: number = NIGHTJAR_AT.hol.lift;
   private flight: { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; yaw: number; done: () => void } | null = null;
   private readonly spawned: { dispose(): void; update?(dt: number): void }[] = [];
   private readonly groundY: (x: number, z: number) => number;
@@ -321,10 +324,17 @@ export class WildcameraHome implements HomeDressing {
     tufts.name = 'glade-grass';
     const rnd = stream(41);
     const m = new THREE.Matrix4();
+    // (none on the sandy trail where the nightjar lands at night, nor between it and the
+    // lens: a dark bird on the path must never stand behind a tuft)
+    const perch = toLocal(CROSS, NIGHTJAR_AT.open);
+    const clear = (x: number, z: number): boolean => {
+      const q = toLocal(CROSS, { x, z });
+      return Math.hypot(q.u - perch.u, q.v - perch.v) < 0.6 || (Math.abs(q.u - perch.u) < 0.45 && q.v < perch.v && q.v > perch.v - 1.4);
+    };
     for (let i = 0; i < tufts.count; i++) {
       const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * GLADE_R * 0.95;
       const x = G.x + Math.cos(a) * r, z = G.z + Math.sin(a) * r * 0.8;
-      const h = 0.22 + rnd() * 0.18;
+      const h = (0.22 + rnd() * 0.18) * (clear(x, z) ? 0 : 1);
       m.compose(new THREE.Vector3(x, g(x, z) - 0.01, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd() * 6.28), new THREE.Vector3(h * 1.4, h, h * 1.4));
       tufts.setMatrixAt(i, m);
     }
@@ -347,17 +357,29 @@ export class WildcameraHome implements HomeDressing {
       });
       if (solid) env.obstacles.push({ x: p.x, z: p.z, r: solid });
     };
-    { const j = toLocal(CROSS, JUNIPER); bush('prop-juniper-bush', 1.9, j.u, j.v, 0.3, JUNIPER.r, true); }
-    bush('prop-bramble', 1.05, 4.5, -0.15, 1.2);
-    bush('prop-bramble', 0.95, 6.9, -0.8, 2.9);
-    bush('prop-fern', 1.15, 3.6, 0.35, 0.8);
-    bush('prop-fern', 1.0, 7.3, -1.8, 2.2);
+    for (const b of THICKET_BUSHES) {
+      const q = toLocal(CROSS, b.at);
+      bush(b.id, b.h, q.u, q.v, b.yaw, b.id === 'prop-juniper-bush' ? JUNIPER.r : 0, b.id === 'prop-juniper-bush');
+    }
     const sett = P.sett;
     void env.spawnPlant('prop-badger-sett', SIZE.dassenburcht.h).then((s) => {
       // its way in faces into the wood, away from the views (the badger sleeps inside by day)
       const r = add(s, sett.x, sett.z, SETT_FACE, -0.04);
       if (r) this.thicket.add(r);
     });
+    // the old stump at the thicket's front, before the sett: the nightjar's perch by day
+    // (its top measured where the bird lands on it)
+    const ns = NIGHTJAR_STUMP;
+    void env.spawnPlant('prop-tree-stump', ns.h).then((s) => {
+      const r = add(s, ns.x, ns.z, 2.2, -0.04);
+      if (!r) return;
+      this.thicket.add(r);
+      r.updateMatrixWorld(true);
+      const n = NIGHTJAR_AT.hol;
+      const hit = new THREE.Raycaster(new THREE.Vector3(n.x, g(n.x, n.z) + 3, n.z), new THREE.Vector3(0, -1, 0)).intersectObject(r, true)[0];
+      if (hit) this.stumpTop = hit.point.y - g(n.x, n.z);
+    });
+    env.obstacles.push({ x: ns.x, z: ns.z, r: ns.r });
 
     /* -- the fallen log the nightjar sits on at night (with the bird: one thing to click) -- */
     this.perch.name = 'nightjar-perch';
@@ -450,8 +472,8 @@ export class WildcameraHome implements HomeDressing {
     /* -- the places' names (shown while the camera is aimed) -- */
     this.tags = { open: nameTag('open plek', 1.5), hol: nameTag('het bosje', 1.5) };
     const tagAt = (p: Spot, y: number, t: THREE.Sprite): void => { t.position.set(p.x, g(p.x, p.z) + y, p.z); t.visible = false; this.group.add(t); };
-    tagAt(P.glade, 1.45, this.tags.open);
-    tagAt(atLocal(CROSS, 4.8, -0.6), 2.35, this.tags.hol);
+    tagAt(TAG_AT.open, TAG_AT.open.y, this.tags.open);
+    tagAt(TAG_AT.hol, TAG_AT.hol.y, this.tags.hol);
 
     /* -- the snare, the man in the photo, the nightjar -- */
     const sn = P.snare;
@@ -580,12 +602,13 @@ export class WildcameraHome implements HomeDressing {
 
   /** The camera trap's lens: where it is, and a camera looking from there at `p` (at
    *  `y` m over the ground) for a photograph `aspect` wide that frames `frameH` m of
-   *  height there (so a badger fills the picture as a stag does). */
-  photoCamera(p: Spot, y: number, aspect: number, frameH = 1.6): THREE.PerspectiveCamera {
+   *  height there (so a badger fills the picture as a stag does; never narrower than
+   *  `minFov`° — the nightjar's close-up zooms in further). */
+  photoCamera(p: Spot, y: number, aspect: number, frameH = 1.6, minFov = 18): THREE.PerspectiveCamera {
     const dir = new THREE.Vector3(Math.sin(this.aimNow), 0, Math.cos(this.aimNow));
     const lens = new THREE.Vector3(TREE.x, this.trap.position.y + 0.02, TREE.z).addScaledVector(dir, PINE.trunkR + CAM_DEPTH + 0.05);
     const d = Math.max(1, Math.hypot(p.x - lens.x, p.z - lens.z));
-    const fov = THREE.MathUtils.clamp((2 * Math.atan(frameH / 2 / d) * 180) / Math.PI, 18, 58);
+    const fov = THREE.MathUtils.clamp((2 * Math.atan(frameH / 2 / d) * 180) / Math.PI, minFov, 58);
     const cam = new THREE.PerspectiveCamera(fov, aspect, 0.1, 80);
     cam.position.copy(lens);
     cam.lookAt(p.x, this.groundY(p.x, p.z) + y, p.z);
@@ -660,6 +683,10 @@ export class WildcameraHome implements HomeDressing {
     this.flight = null;
     this.bird.visible = false;
   }
+
+  /** How high the nightjar's perch in a place holds it (m): the thicket's stump top, as
+   *  measured on the model; the sandy trail. */
+  nightjarLift(bin: 'open' | 'hol'): number { return bin === 'hol' ? this.stumpTop : NIGHTJAR_AT.open.lift; }
 
   /** Where the nightjar is now (its feet). */
   get birdAt(): THREE.Vector3 { return this.bird.position; }

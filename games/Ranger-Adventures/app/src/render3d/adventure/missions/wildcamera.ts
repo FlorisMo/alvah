@@ -84,8 +84,8 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   };
   /** A photograph from the camera on the pine, looking at `p` (`y` m up, `frameH` m of
    *  height in the picture), developed. */
-  const photograph = async (p: Spot, y: number, frameH: number, what: string, time: Photo['time'], prepare?: () => () => void): Promise<Photo | null> => {
-    const cam = home.photoCamera(p, y, 1.6, frameH);
+  const photograph = async (p: Spot, y: number, frameH: number, what: string, time: Photo['time'], prepare?: () => () => void, minFov?: number): Promise<Photo | null> => {
+    const cam = home.photoCamera(p, y, 1.6, frameH, minFov);
     const raw = await k.guard(k.world.snapshot(cam, 320, 200, () => {
       const a = home.photoPrep(time === 'nacht' ? 1 : time === 'ochtend' ? 1.35 : 1.9);
       const b = prepare?.();
@@ -111,12 +111,14 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   });
   /** An animal that comes again stands a little differently (a step nearer the camera,
    *  turned a little): no two photos the same, and never further into the bushes behind
-   *  it. The badger keeps to its spot by the sett. */
+   *  it. The badger keeps to its spot by the sett; the nightjar to its perch (it only
+   *  turns a little). */
   const seen = new Map<string, number>();
   const varied = (s: AimSpot, id: string): AimSpot => {
     const n = seen.get(id) ?? 0;
     seen.set(id, n + 1);
     if (!n || id === 'das') return s;
+    if (id === 'nachtzwaluw') return { ...s, yaw: s.yaw + (n % 2 ? 0.3 : -0.25) };
     const dx = CAMERA.x - s.at.x, dz = CAMERA.z - s.at.z, l = Math.hypot(dx, dz) || 1;
     const step = n % 2 ? 0.35 : 0.2;
     return { ...s, at: { x: s.at.x + (dx / l) * step, z: s.at.z + (dz / l) * step }, yaw: s.yaw + (n % 2 ? 0.5 : -0.45) };
@@ -128,7 +130,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     if (id === 'nachtzwaluw') {
       birdToken += 1;
       const from = home.bird.visible ? { x: home.birdAt.x, z: home.birdAt.z, y: home.birdAt.y - k.ctx.groundY(home.birdAt.x, home.birdAt.z) } : { ...s.from, y: 3.4 };
-      await k.guard(home.fly(from, { ...s.at, lift: 0 }, s.yaw, k.reduced, 2.2));
+      await k.guard(home.fly(from, { ...s.at, lift: s.lift ?? 0 }, s.yaw, k.reduced, 2.2));
       return;
     }
     const a = A[id as Walker];
@@ -145,10 +147,15 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   };
   const walkOut = (id: string, s: AimSpot): void => {
     if (id === 'nachtzwaluw') {
+      // it sits a moment on its perch after the click (as nightjars do: still), then
+      // lifts off and glides away the way it came
       const token = ++birdToken;
-      const p = home.birdAt;
-      void home.fly({ x: p.x, z: p.z, y: 0.2 }, { x: s.from.x, z: s.from.z, lift: 3.4 }, 0, k.reduced, 2.2)
-        .then(() => { if (token === birdToken) home.birdGone(); });
+      void k.wait(1.6).then(() => {
+        if (token !== birdToken) return;
+        const p = home.birdAt;
+        return home.fly({ x: p.x, z: p.z, y: p.y - k.ctx.groundY(p.x, p.z) + 0.2 }, { x: s.from.x, z: s.from.z, lift: 3.4 }, 0, k.reduced, 2.2)
+          .then(() => { if (token === birdToken) home.birdGone(); });
+      }).catch(() => {});
       return;
     }
     const a = A[id as Walker];
@@ -224,6 +231,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     },
     photo: async (item: WisselItem, bin: WisselBin) => {
       const s = varied(aimSpot(item.id, bin), item.id);
+      if (item.id === 'nachtzwaluw') s.lift = home.nightjarLift(bin); // (its perch, as the model stands)
       at.set(item.id, s);
       await walkIn(item.id, s);
       // a deer rests in the thicket at night: the roe lies down
@@ -237,7 +245,12 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       const walker = bird ? null : A[item.id as Walker];
       const h = bird ? 0.26 : walker!.height * (item.id === 'ree' && bin === 'hol' ? 0.5 : 1);
       const where = walker ? { x: walker.x, z: walker.z } : { x: home.birdAt.x, z: home.birdAt.z };
-      const p = await photograph(where, h * 0.5, Math.max(1.1, h * (h > 1 ? 1.6 : 2.3)), item.id, night ? 'nacht' : 'dag');
+      const lift = bird ? home.birdAt.y - k.ctx.groundY(where.x, where.z) : 0; // (on its perch)
+      // (the nightjar: a close-up of the bird on its perch — a small bird fills the
+      // picture, and what stands around its perch stays out of it)
+      const p = bird
+        ? await photograph(where, lift + h * 0.45, 0.72, item.id, night ? 'nacht' : 'dag', undefined, 8)
+        : await photograph(where, lift + h * 0.5, Math.max(1.1, h * (h > 1 ? 1.6 : 2.3)), item.id, night ? 'nacht' : 'dag');
       if (p) photos.add(p);
       // it heard the click: its head comes up, it looks at the camera a moment
       if (walker && !walker.lies) void walker.lookAt(() => ({ x: CAMERA.x, z: CAMERA.z, speed: 0 }), 1.4);
