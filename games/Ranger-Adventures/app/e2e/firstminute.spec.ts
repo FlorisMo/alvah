@@ -33,18 +33,28 @@ type Tag = { text: string; o: number; x: number; y: number; w: number; h: number
 
 test.use({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
 
-/** Record every line the game hands the voice (the speechSynthesis spy). */
+/** Record every line the game hands the voice (the speechSynthesis spy), and every line
+ *  Bram's strip shows (read each frame, so a line that came and went while the test was
+ *  busy is still seen, in order). */
 async function spyVoice(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const w = window as unknown as { __said: string[] };
+    const w = window as unknown as { __said: string[]; __strip: string[] };
     w.__said = [];
+    w.__strip = [];
     const orig = SpeechSynthesis.prototype.speak;
     SpeechSynthesis.prototype.speak = function (u: SpeechSynthesisUtterance) {
       w.__said.push(u.text);
       try { return orig.call(this, u); } catch { /* no voice in this browser */ }
     };
+    const watch = (): void => {
+      const line = document.querySelector('.speaker-strip .sp-line')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      if (line && w.__strip[w.__strip.length - 1] !== line) w.__strip.push(line);
+      requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
   });
 }
+const stripLines = (page: Page): Promise<string[]> => page.evaluate(() => (window as unknown as { __strip: string[] }).__strip.slice());
 const saidAll = (page: Page): Promise<string[]> => page.evaluate(() => (window as unknown as { __said: string[] }).__said.slice());
 const hint = (page: Page): Promise<Hint> => R<Hint>(page, 'r.hint()');
 
@@ -68,10 +78,9 @@ async function enterFresh(page: Page): Promise<void> {
   await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
 }
 
-/** Wait until Bram's strip shows `line` (and it is handed to the voice). */
+/** Wait until Bram's strip has shown `line` (and it was handed to the voice). */
 async function bramSays(page: Page, line: string, timeout = 20_000): Promise<void> {
-  await expect(page.locator('.speaker-strip .sp-line'), `Bram says "${line}"`).toHaveText(line, { timeout });
-  await expect(page.locator('.speaker-strip .sp-name')).toHaveText('Bram');
+  await expect.poll(async () => (await stripLines(page)).includes(line), { timeout, message: `Bram says "${line}" in his strip` }).toBe(true);
   await expect.poll(async () => (await saidAll(page)).includes(line), { timeout: 5_000, message: `"${line}" is read aloud` }).toBe(true);
 }
 
@@ -117,6 +126,7 @@ test('the first minute: Bram greets, walk and run are learned by doing, the hook
   const intro = BRAM.intro.map((l) => metNaam(l, naam));
   await bramSays(page, intro[0]);
   await snapShot(page, 'bram-1');
+  await expect(page.locator('.speaker-strip .sp-name')).toHaveText('Bram');
   const hb = await hint(page);
   expect(hb.active).toBe('bram');
   expect(hb.bram?.talking && hb.bram.mark, 'a speech mark floats over Bram while he talks').toBe(true);
@@ -129,6 +139,7 @@ test('the first minute: Bram greets, walk and run are learned by doing, the hook
   await snapShot(page, 'bram-2');
   await bramSays(page, intro[2]);
   await snapShot(page, 'bram-3');
+  expect((await stripLines(page)).slice(0, 3), 'his three lines, one at a time, in order').toEqual(intro);
 
   // -- the walk lesson: key caps, spoken, gone after walking a few metres
   const walk = page.locator('.lesson-strip.ls-lopen');

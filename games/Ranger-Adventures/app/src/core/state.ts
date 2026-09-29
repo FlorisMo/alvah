@@ -204,11 +204,16 @@ function load(): GameState {
   }
 }
 
+/** Set when the save still held the old one-off hint flags: the store writes the
+ *  migrated save back at once (so they are gone from `alvah-ef-v1` from this boot on). */
+let migratedOnLoad = false;
+
 /** The saved settings over the defaults. The old one-off hint flags become learned steps
  *  (core/lessons.migrateGeleerd) and are dropped, so they are never written back. */
 function loadSettings(saved: Partial<Settings> | undefined): Settings {
   const raw = (saved ?? {}) as Partial<Settings> & { wereldHintGezien?: boolean; tikHintGezien?: boolean; renHintGezien?: boolean };
   const { wereldHintGezien: _w, tikHintGezien: _t, renHintGezien: _r, ...rest } = raw;
+  if (_w !== undefined || _t !== undefined || _r !== undefined) migratedOnLoad = true;
   return { ...DEFAULT_SETTINGS, ...rest, geleerd: migrateGeleerd(raw) };
 }
 
@@ -229,6 +234,10 @@ type Listener = (state: GameState) => void;
 class Store {
   private state: GameState = load();
   private readonly listeners = new Set<Listener>();
+
+  constructor() {
+    if (migratedOnLoad) save(this.state); // the old hint flags leave the save now
+  }
 
   get(): GameState {
     return this.state;

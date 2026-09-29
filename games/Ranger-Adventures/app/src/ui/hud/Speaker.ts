@@ -44,6 +44,7 @@ let job: Job | null = null;
 let lineIdx = 0;
 let lineAt = 0;                         // when the current line started (ms)
 let doneAt = 0;                         // when it had been read and heard (ms; 0: not yet)
+let lineReadMs = 0;                     // its reading time (ms), worked out once a line
 let raf = 0;
 
 /** The drawn portrait of Bram: his green cap, his face, his uniform collar and badge. */
@@ -130,6 +131,7 @@ function startLine(): void {
   const text = job.lines[lineIdx];
   lineAt = performance.now();
   doneAt = 0;
+  lineReadMs = readingMs(text);
   const radio = (session.world?.wardenDistance() ?? 0) > RADIO_M;
   showStrip(text, radio);
   session.world?.setWardenTalking(true);
@@ -144,7 +146,7 @@ function tick(now: number): void {
   const t = now - lineAt;
   const synth = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
   const voiceBusy = !!synth && store.get().settings.voorlezen && (synth.speaking || synth.pending);
-  const read = readingMs(job.lines[lineIdx]);
+  const read = lineReadMs;
   // a line is done once it has been up its reading time and the voice is quiet (or it
   // kept going far too long); then a breath, then the next line
   if (!doneAt && t >= read && (!voiceBusy || t >= read + VOICE_CAP_MS)) doneAt = now;
