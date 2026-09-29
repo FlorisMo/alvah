@@ -143,15 +143,30 @@ export class AdventureHud {
     this.vignette.classList.toggle('on', on);
   }
 
-  /** A long watch through the binoculars (the reekalf's hide): the frame closes in
-   *  further than a look's, so the picture reads as seen through the glasses. */
+  /** A long watch through the binoculars (the reekalf's hide): the picture is seen
+   *  through the glasses' two round lenses, their edges soft, the world round them
+   *  dimmed (never black); the lens itself does not zoom. Fades in and out (CSS; a cut
+   *  under reduced motion). */
   watching(on: boolean): void {
-    const v = this.vignette;
-    if (on) v.classList.add('strong');
-    // (the closer frame stays while it fades out, then a look's frame is the soft one again)
-    else if (v.classList.contains('on')) v.addEventListener('transitionend', () => { if (!v.classList.contains('on')) v.classList.remove('strong'); }, { once: true });
-    else v.classList.remove('strong');
-    this.binoculars(on);
+    let g = session.host.querySelector<SVGSVGElement>('.adv-glasses');
+    if (!g && on) {
+      // two overlapping round lenses cut out of a dim frame, their rims feathered (one
+      // SVG: 'slice' keeps the lenses round on every screen shape); it lies UNDER the
+      // mission's cards (a choice asked while he watches) and this HUD's line
+      const t = document.createElement('template');
+      t.innerHTML =
+        `<svg class="adv-glasses" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">` +
+        `<defs><filter id="adv-glasses-soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="26"/></filter>` +
+        `<mask id="adv-glasses-cut"><rect width="1600" height="1000" fill="#fff"/>` +
+        `<g filter="url(#adv-glasses-soft)"><circle cx="590" cy="500" r="430" fill="#000"/><circle cx="1010" cy="500" r="430" fill="#000"/></g>` +
+        `</mask></defs>` +
+        `<rect width="1600" height="1000" fill="rgb(22, 16, 9)" fill-opacity="0.78" mask="url(#adv-glasses-cut)"/></svg>`;
+      g = t.content.firstElementChild as SVGSVGElement;
+      const step = session.host.querySelector('.mission-step');
+      session.host.insertBefore(g, step ?? this.el);
+      void g.getBoundingClientRect(); // (laid out before it turns on: it fades in)
+    }
+    g?.classList.toggle('on', on);
   }
 
   /** The joystick while he walks himself (touch screens); gone while a beat holds him. */
@@ -172,6 +187,7 @@ export class AdventureHud {
   }
 
   dispose(): void {
+    session.host.querySelector('.adv-glasses')?.remove();
     this.walking(false);
     this.actionDone = null;
     this.el.remove();
