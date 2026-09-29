@@ -3,7 +3,7 @@
  *
  * Every finished mission leaves a lasting, calm change at its marker that tells its
  * own ending: the frisling's sow and siblings root beside it, the reekalf's mother
- * stands with it again, the wildcamera hangs by the badger's burcht, the fox's cub
+ * stands with it again, the wildcamera hangs on its pine in the wood, the fox's cub
  * plays at the den, the winter herd grazes on the heath. A small flag with a check
  * stands at the marker's ring, so a finished place reads as "klaar" at a glance.
  *
@@ -59,8 +59,6 @@ export interface Piece {
   arrive?: boolean;
   /** false = a hind or a calf: the red-deer model without the stag's antlers */
   antlers?: false;
-  /** stands on a wooden stake this tall (m): a wildcamera strapped to its post */
-  stake?: number;
 }
 
 export interface Tableau {
@@ -96,13 +94,12 @@ export const TABLEAUS: Record<string, Tableau> = {
     pieces: [],
     flag: { a: -0.3, s: -1.4 },
   },
-  // "De camera bewaakt het bos." — the camera by the badger's burcht
+  // "De camera bewaakt het bos." — run 6: the camera hangs on its pine at the crossing
+  // in the wood (render3d/adventure/missions/wildcamera.home.ts), after a reload too; the
+  // marker's ring keeps the stump the camera lay on, and once it hangs, the "klaar" flag
   wildcamera: {
-    hero: 'das',
-    pieces: [
-      { id: 'prop-badger-sett', kind: 'prop', h: SIZE.dassenburcht.h, a: 1.7, s: -1.5, face: 'lens' },
-      { id: 'prop-wildlife-camera', kind: 'prop', h: SIZE.wildcamera.h, a: 1.0, s: 2.0, face: 'hero', stake: 0.75 },
-    ],
+    hero: '',
+    pieces: [],
     flag: { a: -0.4, s: -1.5 },
   },
   // "De kikker plonst terug het ven in." — frogs at home in the reeds
@@ -539,13 +536,7 @@ export class Progress {
         : await env.spawnPlant(p.id, h);
       if (!s) return;
       const root = s.root as THREE.Object3D;
-      if (p.stake) { // strapped to its post: the post stands on the ground, the prop on top
-        const post = woodenStake(p.stake);
-        root.add(post);
-        post.position.y = -p.stake / root.scale.y;
-        post.scale.setScalar(1 / root.scale.y);
-      }
-      const y = env.groundY(at.x, at.z) + (p.lift ?? 0) + (p.stake ?? 0);
+      const y = env.groundY(at.x, at.z) + (p.lift ?? 0);
       root.position.set(at.x, y, at.z);
       root.rotation.y = facing(p, frame, at);
       const l: Live = {
@@ -661,15 +652,6 @@ function facing(p: Piece, f: Frame, at: { x: number; z: number }): number {
   }
   if (p.face === 'lens' || p.face === undefined) return back;
   return back + p.face;
-}
-
-/** A slim wooden stake (m tall), feet at y=0: what a wildcamera is strapped to. */
-function woodenStake(h: number): THREE.Mesh {
-  const g = new THREE.CylinderGeometry(0.035, 0.045, h, 6);
-  g.translate(0, h / 2, 0);
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#6b513a', roughness: 1 }));
-  m.name = 'stake';
-  return m;
 }
 
 /**

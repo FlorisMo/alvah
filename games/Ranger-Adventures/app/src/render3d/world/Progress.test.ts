@@ -46,7 +46,7 @@ function box(h: number) {
 
 /** Run 6: the missions whose family LIVES at a home of its own (world/Residents.ts,
  *  render3d/adventure): their tableau is only the "klaar" flag at the marker. */
-const LIVES_AT_HOME = new Set(['frisling', 'ree-niet-aanraken']);
+const LIVES_AT_HOME = new Set(['frisling', 'ree-niet-aanraken', 'wildcamera']);
 /** A mission whose family still walks in to its marker (the classic tableau: a hind and
  *  her calf on the crossing). */
 const FAMILY = 'ecoduct';
@@ -124,9 +124,8 @@ test('a finished tableau stands on the ground within 6 m of its marker, around (
       const d = Math.hypot(c.position.x - m.x, c.position.z - m.z);
       assert.ok(d < 6 && d > 0.5, `${m.missionId}: ${c.name || 'piece'} ${d.toFixed(2)} m from the marker`);
       const lift = TABLEAUS[m.missionId].pieces.find((p) => p.lift)?.lift ?? 0;
-      const stake = TABLEAUS[m.missionId].pieces.find((p) => p.stake)?.stake ?? 0;
       const gap = c.position.y - groundY(c.position.x, c.position.z);
-      assert.ok([0, lift, stake].some((v) => Math.abs(gap - v) < 1e-6), `${m.missionId}: seated on the ground (gap ${gap})`);
+      assert.ok([0, lift].some((v) => Math.abs(gap - v) < 1e-6), `${m.missionId}: seated on the ground (gap ${gap})`);
       if (c.name !== 'klaar-flag') {
         assert.ok(!LIVES_AT_HOME.has(m.missionId), `${m.missionId}: only the flag (its family lives at its home)`);
         const lx = c.position.x - f.ox, lz = c.position.z - f.oz;

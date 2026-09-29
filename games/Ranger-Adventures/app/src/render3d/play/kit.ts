@@ -72,7 +72,9 @@ export function triggerActivityWin(): boolean {
 export interface PlayHint {
   /** Stable id of the thing to click (e.g. the animal or stone id). */
   id: string;
-  /** The object a player sees and clicks. */
+  /** The object a player sees and clicks. (Run 6: `target.userData.perch` = how high, m,
+   *  above the ground its perch holds it — a squirrel on its stump, a jay on its branch;
+   *  the probe checks it sits on that.) */
   target?: THREE.Object3D;
   /** Run 6 (the adventures): a perfect player WALKS there now, with the arrow keys or
    *  the stick, until he is within `r` m (world x/z). No `target`: nothing to click. */
@@ -266,11 +268,14 @@ function probePlayHint(): PlayHintProbe | null {
   const c = box.getCenter(new THREE.Vector3());
   const g = groundUnder(v.scene, c.x, c.z);
   const el = s.onScreen ? document.elementFromPoint(s.x, s.y) : null;
+  // (run 6) an animal on a perch (a squirrel on its stump, a jay on its branch) says how
+  // high above the ground its perch holds it: it must sit ON that, not float or sink
+  const perch = (hint.target.userData.perch as number | undefined) ?? 0;
   return {
     id: hint.id, x: r2(s.x), y: r2(s.y), onScreen: s.onScreen, firstHit,
     aboveGround: g !== null && box.max.y > g + 0.01,
     firstHitBy: first ? (firstHit ? hint.id : describeObject(first.object, v.scene)) : 'nothing',
-    bottomGap: g === null ? null : r2(box.min.y - g),
+    bottomGap: g === null ? null : r2(box.min.y - g - perch),
     reachesCanvas: el === v.canvas,
     blocker: el && el !== v.canvas ? describeElement(el) : null,
     parts: drawnWith(body),

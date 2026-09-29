@@ -12,6 +12,7 @@ import type { AdventureKit } from './kit';
 import type { HomeSpec } from './types';
 import { frislingAdventure } from './missions/frisling';
 import { reeAdventure } from './missions/ree';
+import { wildcameraAdventure } from './missions/wildcamera';
 
 export interface Adventure {
   /** the mission id */
@@ -38,6 +39,7 @@ export interface Adventure {
 const ADVENTURES: Readonly<Record<string, Adventure>> = {
   frisling: frislingAdventure,
   'ree-niet-aanraken': reeAdventure,
+  wildcamera: wildcameraAdventure,
 };
 
 /** The adventure a mission is played as, or null (the classic path). */

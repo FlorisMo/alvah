@@ -347,7 +347,8 @@ async function runAdventure(mission: Mission, adv: Adventure): Promise<void> {
   missionStop = null;
   setMissionView(null);
   clearOverlays();
-  showReward(mission, played, null, clueId, finale ? showSeasonFinale : resumePatrol);
+  // (the adventure's own photograph of its clue, when it took one: the camera trap's)
+  showReward(mission, played, null, clueId, finale ? showSeasonFinale : resumePatrol, kit.cluePhoto);
 }
 
 /** Every mission of the area is done. */
@@ -535,7 +536,7 @@ function showFact(step: Step, n: number, total: number): Promise<void> {
 }
 
 /* ------------------------------------------------------------- reward ---- */
-function showReward(mission: Mission, played: Engine[], skipped: string | null, clueId: string | null, then: () => void): void {
+function showReward(mission: Mission, played: Engine[], skipped: string | null, clueId: string | null, then: () => void, photo: string | null = null): void {
   const badges = Array.from(new Set(played)).map(badgeHtml).join('');
   const knap = mission.beloning.vaktermBadge
     ? `<p class="reward-knap">Knap woord: <b>${esc(mission.beloning.vaktermBadge.naam.replace(/^Knap woord:\s*/i, ''))}</b></p>`
@@ -574,7 +575,7 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
   });
   el.querySelector('.btn-start')?.addEventListener('click', () => {
     ra.stop();
-    if (clue) showWildcamCapture(clue, then);
+    if (clue) showWildcamCapture(clue, then, photo);
     else then();
   });
 }
@@ -583,15 +584,16 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
 /** The diegetic clue beat: a verhaalHaak mission completed on patrol is "vastgelegd
  *  op de wildcamera" — a calm snapshot card showing the new aanwijzing now on the
  *  prikbord. Two ways on: peek at the board, or walk straight on. */
-function showWildcamCapture(clue: Clue, then: () => void): void {
+function showWildcamCapture(clue: Clue, then: () => void, photo: string | null = null): void {
   narrator.stop();
   const line = clue.soort === 'camera' ? 'Vastgelegd op de wildcamera.' : 'Je maakt er een foto van.'; // child:B15: no wildcamera before you met one
-  const glyph = CLUE_GLYPH[clue.soort] ?? '📌';
+  // run 6: the camera trap's own photograph when the adventure took one, else the glyph
+  const glyph = photo ? `<img class="cb-shot" src="${photo}" alt="">` : CLUE_GLYPH[clue.soort] ?? '📌';
   const el = card(
     `<div class="wildcam boot-card-ish">` +
     `<p class="boot-kicker">📷 ${line}</p>` +
     `<h1 class="boot-title">Een nieuwe aanwijzing</h1>` +
-    `<div class="cb-clue found wildcam-shot">` +
+    `<div class="cb-clue found wildcam-shot${photo ? ' has-shot' : ''}">` +
     `<span class="cb-photo">${glyph}</span>` +
     `<span class="cb-clue-title"></span>` +
     `<span class="cb-clue-text"></span>` +
