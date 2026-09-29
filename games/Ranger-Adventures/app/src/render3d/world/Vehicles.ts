@@ -803,11 +803,12 @@ export class Vehicles {
    *  board, props, the other parked vehicle) plus the people. Rebuilt every frame into
    *  reused arrays and pooled circles, so driving makes no garbage (review PERF-2: it
    *  copied the whole obstacle list and made new objects per frame). The roaming
-   *  animals are not solids (run 6): see `yielding`. */
-  private solids(): Solid[] {
+   *  animals are not solids (run 6): see `yielding`. `skip`: circles to leave out (the
+   *  parked jeep, for a helicopter flying over its roof). */
+  private solids(skip: readonly Obstacle[] | null = null): Solid[] {
     const out = this.solidBuf;
     out.length = 0;
-    for (const o of this.obstacles) out.push(o);
+    for (const o of this.obstacles) if (!skip || !skip.includes(o)) out.push(o);
     this.poolUsed = 0;
     this.host.people(this.addPerson);
     return out;
@@ -1048,7 +1049,9 @@ export class Vehicles {
       this.heliSpeed = 0;
     }
     if (this.heliAltitude <= HELI_AIRBORNE_Y) { // low: the body collides like the jeep's
-      const solids = this.solids();
+      // …but once higher than the parked jeep's roof it flies over it (run 6: parked on
+      // the helicopter's way out, the jeep pushed it sideways at 2.4 m up)
+      const solids = this.solids(this.heliAltitude > SIZE.jeep.h ? this.jeepParked : null);
       const next = resolveBody(hp.x, hp.z, this.heliHeading, nx, nz, nh, HELI_BODY, this.joined(solids, this.zones(false)), this.limits);
       nx = next.x; nz = next.z; nh = next.heading;
     } else {                                     // over the treetops: only the rim bounds it
