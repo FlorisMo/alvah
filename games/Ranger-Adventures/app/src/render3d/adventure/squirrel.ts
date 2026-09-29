@@ -21,6 +21,7 @@
 
 import * as THREE from 'three';
 import { Actor, type ActorEnv, type Lead } from './actors';
+import { acornGeometry, acornMaterial } from './acorn';
 import {
   SQ, barkRadius, climbPlan, dashDirectPlan, dashPlan, digBob, dismountPlan, flick, hold, leapPlan, mountPlan, planTime,
   poseAt, sqStream, trunkPose, turn, wrap, type OnTrunk, type Segment, type SqPose, type Trunk,
@@ -75,6 +76,13 @@ export class Squirrel extends Actor {
   private breathPhase: number;
   /** a dig: the home throws a puff of earth (x, z) */
   onDig: ((x: number, z: number) => void) | null = null;
+  /** the acorn in its mouth (shown while it carries one; nibbled smaller as it eats) */
+  private readonly nut = new THREE.Mesh(acornGeometry(), acornMaterial());
+  private carrying = false;
+  private readonly mouth = new THREE.Vector3();
+  private readonly paws = new THREE.Vector3();
+  private eatFrom = -9;
+  private eatFor = 1;
 
   constructor(key: string, env: ActorEnv, opts: { height: number; trees: readonly SquirrelTree[]; seed?: number }) {
     super(key, 'eekhoorn', env, { height: opts.height, len: opts.height * 1.1 });
@@ -87,6 +95,9 @@ export class Squirrel extends Actor {
     this.gaitNode.position.set(0, 0, 0);
     this.shadow.scale.set(0.6, 1, 0.6);
     this.pose = { x: 0, z: 0, alt: 0, yaw: 0, pitch: 0, roll: 0, act: 'sit' };
+    this.nut.name = 'acorn-in-mouth';
+    this.nut.visible = false;
+    this.group.add(this.nut);
     void this.ready.then(() => this.dress());
   }
 
@@ -115,8 +126,31 @@ export class Squirrel extends Actor {
         mat.emissiveIntensity = 0.16;
       }
     });
-    // lift the model so its feet (the lowest points under the body, not the tail) stand on y=0
+    // the acorn goes in its mouth: just under its nose (the most forward point of its
+    // head), held crosswise in front of the fur; while it eats, a little lower, in its paws
+    if (this.hull.length) {
+      const top = this.hull.reduce((m, h) => Math.max(m, h.y), -Infinity);
+      const head = this.hull.filter((h) => h.y > top * 0.72);
+      const snout = head.reduce((a, h) => (h.z > a.z ? h : a), head[0]);
+      const frontAt = (y: number): number => this.hull.filter((h) => Math.abs(h.y - y) < top * 0.06).reduce((m, h) => Math.max(m, h.z), snout.z - 0.02);
+      const mouthY = snout.y - top * 0.06, pawsY = snout.y - top * 0.12;
+      this.mouth.set(0, mouthY, frontAt(mouthY) + 0.012);
+      this.paws.set(0, pawsY, frontAt(pawsY) + 0.014);
+      this.nut.position.copy(this.mouth);
+      this.nut.rotation.set(0, Math.PI / 2, 0);
+    }
   }
+
+  /** It carries an acorn in its mouth (on) or not (off). */
+  carry(on: boolean): void {
+    this.carrying = on;
+    this.nut.scale.setScalar(1);
+    this.nut.position.copy(this.mouth);
+    this.nut.visible = on;
+  }
+
+  /** Does it carry one now? */
+  get carries(): boolean { return this.carrying; }
 
   /** The tail bends back and up about its root in the vertex shader: a flick. */
   private bendTail(m: THREE.Mesh, box: THREE.Box3): void {
@@ -239,9 +273,16 @@ export class Squirrel extends Actor {
     ], { kind: 'ground' });
   }
 
-  /** Sit up and eat (nibbling an acorn held in its paws) for `secs`. */
-  eat(secs: number): Promise<boolean> {
-    return this.run([hold({ ...this.pose, pitch: 0, roll: 0, act: 'eat' }, secs, 'eat')], this.where);
+  /** Sit up and eat an acorn held in its paws for `secs`: it gets smaller bite by bite. */
+  async eat(secs: number): Promise<boolean> {
+    this.carry(true);
+    this.nut.position.copy(this.paws);
+    this.eatFrom = this.t;
+    this.eatFor = secs;
+    const ok = await this.run([hold({ ...this.pose, pitch: 0, roll: 0, act: 'eat' }, secs, 'eat')], this.where);
+    this.eatFrom = -9;
+    this.carry(false);
+    return ok;
   }
 
   /** Put it at (x, z) — on its branch when (x, z) is one of its trees. The first time
@@ -249,6 +290,8 @@ export class Squirrel extends Actor {
    *  it is somewhere else (the mission stopped, the story moved on), it RUNS there itself
    *  rather than popping from one spot to another (a cut only under reduced motion). */
   override place(x: number, z: number, yaw = this.yaw): void {
+    this.carry(false); // (a home laid out anew: whatever it carried is put away)
+    this.eatFrom = -9;
     const tree = this.nearestTree(x, z);
     const atTree = tree && Math.hypot(tree.trunk.x - x, tree.trunk.z - z) < 0.6 ? tree : null;
     // (the world being built, a reload: it is simply there — its own clock has hardly run)
@@ -382,7 +425,7 @@ export class Squirrel extends Actor {
     const toward = Math.atan2(to.trunk.x - a.x, to.trunk.z - a.z);
     plan.push(turn(a, toward));
     const landAng = Math.atan2(a.x - to.trunk.x, a.z - to.trunk.z); // the side facing it
-    const land = trunkPose(to.trunk, { ang: landAng, h: Math.max(0.9, to.branch.h - 0.5) }, true, 'climb');
+    const land = trunkPose(to.trunk, { ang: landAng, h: Math.max(0.8, to.branch.h - 0.45) }, true, 'climb');
     plan.push(...leapPlan({ ...a, yaw: toward, pitch: 0.4 }, land));
     plan.push(hold(land, 0.18, 'cling'));
     // round and up to its branch
@@ -620,6 +663,11 @@ export class Squirrel extends Actor {
         this.onDig(this.pose.x + Math.sin(this.pose.yaw) * 0.09, this.pose.z + Math.cos(this.pose.yaw) * 0.09);
       }
     }
+    // the acorn it eats gets smaller, a bite at a time (a cut under reduced motion: whole)
+    if (this.eatFrom > -9 && this.carrying) {
+      const u = Math.min(1, (this.t - this.eatFrom) / Math.max(0.1, this.eatFor));
+      this.nut.scale.setScalar(reduced ? 1 : 1 - 0.65 * Math.floor(u * 5) / 5);
+    }
     // the tail: a flick lifts it and lets it fall (still under reduced motion)
     this.tail.value = reduced ? 0 : flick(this.t - this.flickAt) * 0.55 + (this.pose.act === 'run' || this.pose.act === 'leap' ? -0.18 : 0);
     this.apply(reduced);
@@ -672,6 +720,12 @@ export class Squirrel extends Actor {
     const undo = SHADOW_Q.copy(this.group.quaternion).invert();
     this.shadow.quaternion.copy(undo).multiply(FLAT);
     this.shadow.position.set(p.x - x, g + 0.02 - y, p.z - z).applyQuaternion(undo);
+  }
+
+  override dispose(): void {
+    this.nut.geometry.dispose();
+    (this.nut.material as THREE.Material).dispose();
+    super.dispose();
   }
 
   override get doing(): string { return this.plan.length ? this.pose.act : this.life ? 'life' : this.watching ? 'watch' : 'sit'; }

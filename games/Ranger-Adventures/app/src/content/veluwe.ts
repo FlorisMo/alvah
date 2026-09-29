@@ -675,6 +675,7 @@ const MISSIE_EEKHOORN = {
      acorns and point them out when it forgets, call back its noisy neighbours. */
   avontuur: {
     simpel: {
+      daar: 'Kijk, daar zit de eekhoorn!',
       volg: 'Volg de eekhoorn.',
       chipEekhoorn: 'De eekhoorn',
       luister: 'luister goed',
@@ -686,7 +687,7 @@ const MISSIE_EEKHOORN = {
       routeWijs: 'Klik de plekjes op volgorde.',
       routeMis: 'Hier niet. Kijk nog een keer.',
       stapel: 'Hij brengt ze naar zijn stronk.',
-      buren: 'Kijk, de buren komen kijken.',
+      gaaiKomt: 'Kijk, de gaai wil de nootjes!',
       luisterBuren: 'Luister wie er roept.',
       naroepen: 'Roep ze na. Klik op de dieren.',
       groei: 'Goed zo! Nu nog een.',

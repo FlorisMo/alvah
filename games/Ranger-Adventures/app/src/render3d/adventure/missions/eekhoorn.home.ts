@@ -19,10 +19,11 @@ import { barkRadius, type Trunk } from '../squirrel-math';
 import type { SquirrelTree } from '../squirrel';
 import { SIZE } from '../../AnimalScale';
 import {
-  GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, SEEDLING_SPOT, SNAG, SPOT_SIZE, STUMP, TREE, WOODPECKER, EEKHOORN_PLACES,
+  GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, JAY_GROUND, SEEDLING_SPOT, SNAG, SPOT_SIZE, STUMP, TREE, WOODPECKER, EEKHOORN_PLACES,
   gladeSpots, type HomeTree,
 } from './eekhoorn.places';
 import { headingTo } from '../places';
+import { acornGeometry, acornMaterial } from '../acorn';
 
 /** The squirrel's view of a home tree: its trunk and its branch. */
 export function squirrelTree(t: HomeTree): SquirrelTree {
@@ -44,6 +45,24 @@ export interface Neighbour {
   at: THREE.Vector3;
 }
 
+/** A neighbour bird as the home moves it: where it sits now (`base`), where it sits
+ *  before the mission (`home`), a hop when it calls, a glide down, a flight away. */
+interface Bird {
+  o: THREE.Group;
+  base: THREE.Vector3;
+  baseYaw: number;
+  home: THREE.Vector3;
+  homeYaw: number;
+  kind: string;
+  hop: number;
+  seed: number;
+  /** its flight away (s into it; −1 = not flying, 99 = gone) */
+  fly: number;
+  /** a glide from one perch to another (the jay coming down to the store) */
+  glide: { from: THREE.Vector3; to: THREE.Vector3; yaw0: number; yaw1: number; t: number; dur: number } | null;
+  n: Neighbour;
+}
+
 /** How far (m) the ranger must have been from the glade before the seedling grows (out
  *  of sight behind the trees: back at the squirrel's first pine is far enough). */
 const AWAY_M = 16;
@@ -61,8 +80,11 @@ export class EekhoornHome implements HomeDressing {
   private readonly puffs: THREE.InstancedMesh;
   private readonly puff: { x: number; y: number; z: number; vx: number; vy: number; vz: number; t: number; s: number }[] = [];
   private readonly seedling: THREE.Mesh;
+  /** one acorn on the moss: the one being buried (it sinks in) or dug up (it comes out) */
+  private readonly nut: THREE.Mesh;
+  private nutMove: { x: number; z: number; y0: number; y1: number; t: number; dur: number } | null = null;
   private readonly spawned: { dispose(): void }[] = [];
-  private readonly birds: { o: THREE.Group; base: THREE.Vector3; baseYaw: number; kind: string; hop: number; seed: number; fly: number }[] = [];
+  private readonly birds: Bird[] = [];
   private readonly env: DressingEnv;
   private state: HomeState = 'before';
   /** the adventure finished just now: the seedling waits for a later visit */
@@ -125,14 +147,14 @@ export class EekhoornHome implements HomeDressing {
     void boxObstacle;
 
     /* -- the neighbours: the jay on its stub, the woodpecker on its pine -- */
-    const jay = TREE.jayPine.branch!;
-    const jr = barkRadius(squirrelTree(TREE.jayPine).trunk, jay.h) + jay.out * 0.75;
-    const jayAt = new THREE.Vector3(TREE.jayPine.x + Math.sin(jay.ang) * jr, g(TREE.jayPine.x, TREE.jayPine.z) + jay.h - 0.1, TREE.jayPine.z + Math.cos(jay.ang) * jr);
+    const jay = TREE.storePine.branch!;
+    const jr = barkRadius(squirrelTree(TREE.storePine).trunk, jay.h) + jay.out * 0.75;
+    const jayAt = new THREE.Vector3(TREE.storePine.x + Math.sin(jay.ang) * jr, g(TREE.storePine.x, TREE.storePine.z) + jay.h - 0.1, TREE.storePine.z + Math.cos(jay.ang) * jr);
     this.bird('gaai', 0.3, jayAt, headingTo({ x: jayAt.x, z: jayAt.z }, EEKHOORN_PLACES.callers) - 0.9);
     const wp = WOODPECKER.tree;
     // it clings round the side of the trunk (belly to the bark), so from the stand it is
     // seen side-on: its red cap, its green back, its tail braced on the bark
-    const wAng = headingTo(wp, EEKHOORN_PLACES.callers) + 1.25;
+    const wAng = WOODPECKER.ang;
     const wr = barkRadius(squirrelTree(wp).trunk, WOODPECKER.h) + 0.07;
     const wpAt = new THREE.Vector3(wp.x + Math.sin(wAng) * wr, g(wp.x, wp.z) + WOODPECKER.h, wp.z + Math.cos(wAng) * wr);
     this.bird('groene-specht', 0.42, wpAt, wAng + Math.PI, { clipBelow: -0.43 });
@@ -144,6 +166,12 @@ export class EekhoornHome implements HomeDressing {
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < 18; i++) this.puffs.setMatrixAt(i, zero);
     this.group.add(this.puffs);
+
+    /* -- the acorn being buried or dug up (one at a time) -- */
+    this.nut = new THREE.Mesh(acornGeometry(), acornMaterial());
+    this.nut.name = 'acorn-in-the-moss';
+    this.nut.visible = false;
+    this.group.add(this.nut);
 
     /* -- the seedling that grows at a forgotten spot (after, on a later visit) -- */
     const sp = gladeSpots()[SEEDLING_SPOT];
@@ -164,12 +192,12 @@ export class EekhoornHome implements HomeDressing {
     holder.position.copy(at);
     holder.rotation.y = yaw;
     this.group.add(holder);
-    const entry = { o: holder, base: at.clone(), baseYaw: yaw, kind: id, hop: 0, seed: this.birds.length * 2.1 + 0.4, fly: -1 };
-    this.birds.push(entry);
     const n: Neighbour = {
       id, object: holder, body: null, at: at.clone(),
       call: () => { entry.hop = 0.001; },
     };
+    const entry: Bird = { o: holder, base: at.clone(), baseYaw: yaw, home: at.clone(), homeYaw: yaw, kind: id, hop: 0, seed: this.birds.length * 2.1 + 0.4, fly: -1, glide: null, n };
+    this.birds.push(entry);
     this.neighbours.push(n);
     void this.env.spawnModel(id, { height: h, idle: false }).then((s) => {
       if (!s) return;
@@ -178,8 +206,12 @@ export class EekhoornHome implements HomeDressing {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
         for (const mat of [m.material].flat() as THREE.MeshStandardMaterial[]) {
-          // a raven is black: the model's pale body is darkened to a raven's gloss
-          if (id === 'raaf') { mat.color.set('#35343a'); mat.roughness = 0.55; }
+          // a raven is black: the model's pale body is darkened to a raven's gloss, with a
+          // cool sheen so it reads as a bird, not a hole, against the dark wood
+          if (id === 'raaf') { mat.color.set('#35343a'); mat.roughness = 0.55; mat.emissive.set('#34405a'); mat.emissiveIntensity = 0.55; }
+          // the colourful birds keep their colours in the shade of the trees: their own
+          // feathers glow a little (the jay's pink and blue, the woodpecker's green and red)
+          else if (mat.map) { mat.emissive.set('#ffffff'); mat.emissiveMap = mat.map; mat.emissiveIntensity = id === 'gaai' ? 0.32 : 0.22; }
           if (opts.clipBelow !== undefined) clipBelow(mat, opts.clipBelow);
         }
       });
@@ -190,11 +222,41 @@ export class EekhoornHome implements HomeDressing {
       }
       holder.add(r);
       n.body = r;
-      // it sits on a perch (a stub, the snag's top, the bark): how high above the ground
-      r.updateWorldMatrix(true, true);
-      r.userData.perch = new THREE.Box3().setFromObject(r).min.y - this.env.groundY(at.x, at.z);
+      this.perchOf(entry);
       this.spawned.push(s);
     });
+  }
+
+  /** How high above the ground its perch holds a bird (a stub, the snag's top, the bark,
+   *  a twig in the litter): the play-hint probe checks it sits on that. */
+  private perchOf(b: Bird): void {
+    const r = b.n.body;
+    if (!r) return;
+    r.updateWorldMatrix(true, true);
+    r.userData.perch = new THREE.Box3().setFromObject(r).min.y - this.env.groundY(b.base.x, b.base.z);
+  }
+
+  /** The jay comes for the acorns: down off its stub, a short glide to a twig in the leaf
+   *  litter right by the store (`secs` long; at once under reduced motion). */
+  jayDown(secs = 1.1): void {
+    const b = this.birds.find((q) => q.kind === 'gaai');
+    if (!b || b.fly >= 0) return;
+    const g = this.env.groundY(JAY_GROUND.x, JAY_GROUND.z);
+    const to = new THREE.Vector3(JAY_GROUND.x, g - 0.01, JAY_GROUND.z);
+    // it lands side-on to the ranger, its beak toward the acorns
+    const yaw1 = headingTo(JAY_GROUND, HEAP) - Math.PI / 2 + 0.35;
+    b.glide = { from: b.base.clone(), to, yaw0: b.baseYaw, yaw1, t: 0, dur: secs };
+  }
+
+  /** An acorn laid at (x, z) sinks into the moss over `secs` (the squirrel buries it). */
+  buryAcorn(x: number, z: number, secs: number): void { this.moveNut(x, z, 0.075, 0.01, secs); }
+  /** An acorn comes up out of the moss at (x, z) over `secs` (the squirrel digs it up). */
+  unearthAcorn(x: number, z: number, secs: number): void { this.moveNut(x, z, 0.01, 0.085, secs); }
+
+  private moveNut(x: number, z: number, y0: number, y1: number, secs: number): void {
+    this.nutMove = { x, z, y0, y1, t: 0, dur: Math.max(0.1, secs) };
+    this.nut.rotation.set(0.25, Math.random() * Math.PI * 2, 0);
+    this.nut.visible = true;
   }
 
   /** A puff of earth at (x, z): a few crumbs thrown up and out, falling back. */
@@ -237,11 +299,18 @@ export class EekhoornHome implements HomeDressing {
     for (const b of this.birds) {
       if (b.kind !== 'gaai') continue;
       b.fly = state === 'after' ? 99 : -1;
+      b.glide = null;
       b.o.visible = state !== 'after';
+      b.base.copy(b.home);
+      b.baseYaw = b.homeYaw;
+      b.n.at.copy(b.home);
       b.o.position.copy(b.base);
       b.o.rotation.set(0, b.baseYaw, 0);
+      this.perchOf(b);
     }
     this.seedling.visible = state === 'after' && !this.seedlingWaits;
+    this.nutMove = null;
+    this.nut.visible = false;
     this.field.clear();
   }
 
@@ -262,6 +331,7 @@ export class EekhoornHome implements HomeDressing {
     for (const b of this.birds) {
       if (b.fly >= 0 && b.fly < 99) { this.flyAway(b, dt, reduced); continue; }
       if (!b.o.visible) continue;
+      if (b.glide) { this.glideOn(b, dt, reduced); continue; }
       const look = reduced ? 0 : 0.35 * Math.sin(t * 0.45 + b.seed) * (Math.sin(t * 0.23 + b.seed * 3) > 0.2 ? 1 : 0.2);
       let lift = 0, tilt = 0;
       if (b.hop > 0) {
@@ -272,6 +342,14 @@ export class EekhoornHome implements HomeDressing {
       }
       b.o.position.set(b.base.x, b.base.y + lift, b.base.z);
       b.o.rotation.set(-tilt, b.baseYaw + look, 0, 'YXZ');
+    }
+    // the acorn being buried or dug up
+    if (this.nutMove) {
+      const n = this.nutMove;
+      n.t += dt;
+      const u = reduced ? 1 : Math.min(1, n.t / n.dur);
+      this.nut.position.set(n.x, this.env.groundY(n.x, n.z) + n.y0 + (n.y1 - n.y0) * u, n.z);
+      if (u >= 1) { this.nutMove = null; this.nut.visible = false; }
     }
     // the puffs of earth
     if (this.puff.length) {
@@ -298,8 +376,30 @@ export class EekhoornHome implements HomeDressing {
     }
   }
 
-  /** The jay's flight: a hop off the stub, then a rising curve away over the trees. */
-  private flyAway(b: { o: THREE.Group; base: THREE.Vector3; baseYaw: number; fly: number }, dt: number, reduced: boolean): void {
+  /** A glide down to another perch: off the stub, a low swoop, a flutter to land. */
+  private glideOn(b: Bird, dt: number, reduced: boolean): void {
+    const gl = b.glide!;
+    gl.t += dt;
+    const u = reduced ? 1 : Math.min(1, gl.t / gl.dur);
+    const e = u * u * (3 - 2 * u);
+    const sag = Math.sin(u * Math.PI) * 0.25; // a swoop: a little lower than the straight line, then up to land
+    b.o.position.set(gl.from.x + (gl.to.x - gl.from.x) * e, gl.from.y + (gl.to.y - gl.from.y) * e - sag * (1 - u) + Math.sin(u * Math.PI) * 0.12, gl.from.z + (gl.to.z - gl.from.z) * e);
+    const toward = Math.atan2(gl.to.x - gl.from.x, gl.to.z - gl.from.z);
+    // it flies facing the way it goes, and turns to its landing pose as it lands
+    const yaw = u < 0.75 ? gl.yaw0 + wrapA(toward - gl.yaw0) * Math.min(1, u * 5) : toward + wrapA(gl.yaw1 - toward) * ((u - 0.75) / 0.25);
+    b.o.rotation.set(u < 0.85 ? 0.3 : 0.3 * (1 - (u - 0.85) / 0.15), yaw, reduced ? 0 : 0.18 * Math.sin(gl.t * 26) * (1 - u), 'YXZ');
+    if (u >= 1) {
+      b.glide = null;
+      b.base.copy(gl.to);
+      b.baseYaw = gl.yaw1;
+      b.n.at.copy(gl.to);
+      b.hop = 0.001; // (a little hop as it lands)
+      this.perchOf(b);
+    }
+  }
+
+  /** The jay's flight: a hop off its perch, then a rising curve away over the trees. */
+  private flyAway(b: Bird, dt: number, reduced: boolean): void {
     b.fly += dt;
     const T = 2.6;
     if (reduced || b.fly >= T) { b.o.visible = false; b.fly = 99; return; }
@@ -321,9 +421,14 @@ export class EekhoornHome implements HomeDressing {
     (this.puffs.material as THREE.Material).dispose();
     this.seedling.geometry.dispose();
     (this.seedling.material as THREE.Material).dispose();
+    this.nut.geometry.dispose();
+    (this.nut.material as THREE.Material).dispose();
     this.group.removeFromParent();
   }
 }
+
+/** Wrap an angle to (−π, π]. */
+function wrapA(a: number): number { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
 /** Don't draw what of a model lies below `y` in its own (model) space. */
 function clipBelow(mat: THREE.MeshStandardMaterial, y: number): void {

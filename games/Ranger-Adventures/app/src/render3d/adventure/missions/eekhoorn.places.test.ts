@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_SPOT,
+  EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_SPOT, JAY_GROUND,
   GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, gladeSpots, eekhoornTreeClear, eekhoornClearings,
 } from './eekhoorn.places.ts';
 import { biomeAt, VEN_CENTER, VEN_SHORE_R } from '../../Biomes.ts';
@@ -103,7 +103,8 @@ test('the glade: seven look-alike spots in the PRINT_SPOTS layout, uniformly sca
     assert.ok(l.v > 0.6 && Math.abs(Math.atan2(l.u, l.v)) < (50 * Math.PI) / 180, `spot ${p.id} is ahead in the view`);
   }
   assert.ok(SEEDLING_SPOT >= 0 && SEEDLING_SPOT < s.length);
-  assert.equal(eekhoornClearings().length, s.length + 1);
+  // no fern grows through a spot
+  for (const p of s) assert.ok(eekhoornClearings().some((c) => dist(c, p) < 0.01 && c.r >= SPOT_SIZE), `spot ${p.id} is kept bare`);
   // the view includes the ranger's spot and looks past him at the spots
   assert.ok(GLADE_VIEW.include.some((q) => dist(q, P.stand) < 1e-9));
 });
@@ -117,13 +118,12 @@ test('the stands are clear: no trunk, no spot, no stump under the ranger', () =>
 });
 
 test('the callers: four distinct places, none behind a trunk, none under the oak\'s leaves', () => {
-  const jay = TREE.jayPine;
-  const jr = barkRadius(trunk(jay), jay.branch!.h) + jay.branch!.out * 0.75;
   const wp = WOODPECKER.tree;
-  const wAng = headingTo(wp, P.callers) + 1.25;
+  const wAng = WOODPECKER.ang;
   const perches = {
     eekhoorn: { x: STUMP.x, z: STUMP.z, y: STUMP.top + 0.15 },
-    gaai: { x: jay.x + Math.sin(jay.branch!.ang) * jr, z: jay.z + Math.cos(jay.branch!.ang) * jr, y: jay.branch!.h },
+    // (the jay has come down to the store: on a twig in the litter by the heap)
+    gaai: { x: JAY_GROUND.x, z: JAY_GROUND.z, y: 0.15 },
     'groene-specht': { x: wp.x + Math.sin(wAng) * barkRadius(trunk(wp), WOODPECKER.h), z: wp.z + Math.cos(wAng) * barkRadius(trunk(wp), WOODPECKER.h), y: WOODPECKER.h },
     raaf: { x: SNAG.x, z: SNAG.z, y: SNAG.h },
   };
@@ -142,6 +142,10 @@ test('the callers: four distinct places, none behind a trunk, none under the oak
     // the glade oak's crown (world/Crowns.ts: reach 0.65 × its height) keeps clear of it
     assert.ok(dist(TREE.gladeOak, p) > 0.65 * TREE.gladeOak.h, `${id} is out from under the oak's leaves`);
   }
+  // the jay (the nut thief) lands right by the store, off the spots, the squirrel's
+  // stump beside it
+  assert.ok(dist(JAY_GROUND, HEAP) < 0.8, 'the jay is at the acorns');
+  for (const p of gladeSpots()) assert.ok(dist(JAY_GROUND, p) > SPOT_SIZE, 'not on a caching spot');
   // the held view looks at them from the stand's side
   const l = toLocal({ x: CALLERS_VIEW.at.x, z: CALLERS_VIEW.at.z, heading: CALLERS_VIEW.heading }, P.callers);
   assert.ok(l.v < -2, 'the ranger stands in front of what the view looks at');
@@ -158,7 +162,7 @@ test('the scattered trees keep out of the glade, the lens and the room round eac
 test('the squirrel lives on its tree by the marker before, at its glade after', () => {
   const sq = EEKHOORN_RESIDENTS.find((r) => r.key === 'squirrel')!;
   assert.ok(sq.before && dist(sq.before, TREE.oak) < 0.01, 'on its tree by the marker');
-  assert.ok(sq.after && dist(sq.after, TREE.jayPine) < 0.01, 'at its glade after, in the pine by its store');
-  assert.ok(dist(TREE.jayPine, STUMP) < 3.5, 'its store is at the foot of that pine');
+  assert.ok(sq.after && dist(sq.after, TREE.storePine) < 0.01, 'at its glade after, in the pine by its store');
+  assert.ok(dist(TREE.storePine, STUMP) < 3.5, 'its store is at the foot of that pine');
   assert.ok(sq.voice && sq.voice.call === 'eekhoorn', 'it chatters');
 });

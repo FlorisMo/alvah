@@ -31,7 +31,7 @@ import { dist, headingTo } from '../places';
 import { TREE_BASE_H } from '../../world/Forest';
 import { EekhoornHome } from './eekhoorn.home';
 import {
-  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HOME_TREES, STUMP,
+  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HOME_TREES, INTRO_VIEW, JAY_GROUND, STUMP,
   eekhoornClearings, eekhoornTreeClear,
 } from './eekhoorn.places';
 
@@ -85,10 +85,20 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   };
   void fam;
 
-  // 0 · it sees him coming: up to its branch on the oak, and it chatters at him
+  // 0 · it sees him coming: up to its branch stub on its pine, and it chatters at him.
+  //     The one look of the mission: the lens turns to it over his shoulder, so the
+  //     child meets the squirrel he is going to follow; then the follow camera is back.
   k.beat = 'den';
   await k.guard(sq.goBranch(oak, faceMe(sq.branchPose(oak))));
+  await k.frame(INTRO_VIEW, { face: headingTo(k.ranger(), oak.trunk) });
+  k.say(c.daar);
   chatter();
+  await k.wait(1.5);
+  sq.flick();
+  await k.wait(1.1);
+  chatter();
+  await k.wait(1.2);
+  k.free();
 
   // 1 · "Volg de eekhoorn": tree to tree, it waits for him on a branch each time
   const hop = async (name: string, go: () => Promise<boolean>, to: { x: number; z: number }, line: string): Promise<void> => {
@@ -126,6 +136,10 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   await toStump;
   k.say(c.plekje);
   chatter();
+  // it takes an acorn from its store: it starts burying with one in its mouth
+  await k.guard(sq.goDash(HEAP_GRAB.x, HEAP_GRAB.z));
+  await k.guard(sq.sniffHere(0.35));
+  sq.carry(true);
 
   // 2 · it buries its acorns, one spot after another, and forgets them (corsi)
   /** Forgotten: back on its stump it looks this way and that, and chatters. */
@@ -139,17 +153,22 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   await routeBeat(k, 0, {
     view: GLADE_VIEW, stand: P.stand, field: home.field,
     lines: { kijk: c.routeKijk, wijs: c.routeWijs, mis: c.routeMis, goed: k.steps[0].skin.copy?.goed ?? c.routeWijs, vergeten: c.vergeten },
-    // the show: it dashes to each spot and digs an acorn in (the spot lit while it digs)
+    // the show: it dashes to each spot with an acorn in its mouth and digs it in (the
+    // spot lit while it digs; the acorn sinks into the moss in front of its nose)
     visit: async (s, light) => {
+      sq.carry(true);
       if (!(await sq.goDash(s.x, s.z))) return;
       light(true);
+      sq.carry(false);
+      const y = sq.now.yaw;
+      home.buryAcorn(s.x + Math.sin(y) * 0.07, s.z + Math.cos(y) * 0.07, 0.62);
       await sq.dig(0.72);
       light(false);
     },
     // a pick: it dashes there and sniffs — the right one it digs up, a wrong one it
     // shakes off (nothing there)
     // the show over, it runs back to its stump and forgets (recall is open at once)
-    shown: (first) => { if (first) void forget().catch(() => {}); },
+    shown: (first) => { if (first) { sq.carry(false); void forget().catch(() => {}); } },
     picked: async (s, res) => {
       if (res === 'reshow') {
         await sq.goDash(s.x, s.z);
@@ -160,15 +179,21 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
         await sq.look(y - 0.5, 0.15);
         return;
       }
-      await sq.goDash(s.x, s.z);
-      await sq.dig(0.5);
+      // the right spot: it digs, and the acorn comes up into its mouth
+      if (!(await sq.goDash(s.x, s.z))) return;
+      const y = sq.now.yaw;
+      home.unearthAcorn(s.x + Math.sin(y) * 0.07, s.z + Math.cos(y) * 0.07, 0.5);
+      if (!(await sq.dig(0.5))) return;
+      sq.carry(true);
       sq.flick();
     },
   });
 
-  // it piles the acorns by its stump: a happy run, and its store grows
+  // it brings the acorns back to its store: a happy run, and its store grows
   k.say(c.stapel);
-  await k.guard(sq.goDash(HEAP.x + 0.25, HEAP.z));
+  sq.carry(true);
+  await k.guard(sq.goDash(HEAP_GRAB.x, HEAP_GRAB.z));
+  sq.carry(false);
   await sq.dig(0.45);
   home.growHeap(4);
   if (settings.geluid) Sound.found();
@@ -178,21 +203,33 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   // 3 · the raaf: forgotten nuts grow into trees
   await k.fact(0);
 
-  // 4 · the neighbours come to see the store; call them back (simon)
-  k.say(c.buren);
+  k.beat = 'gaai';
+  // 4 · the jay (the nut thief) comes down for the store; the squirrel scolds it from its
+  //     stump, the neighbours call out, and he calls them back (simon). The lens turns
+  //     to the neighbours first, so he sees the jay come.
+  await k.walkRanger(P.callers.x, P.callers.z, 0.04);
+  await k.frame(CALLERS_VIEW, { face: P.callers.heading });
+  k.say(c.gaaiKomt);
+  home.jayDown();
+  await k.wait(1.2);
+  if (settings.geluid) Sound.callAt('gaai', JAY_GROUND.x, JAY_GROUND.z, listenerOf(k.world.camera));
+  await k.wait(0.9);
+  chatter(); // (the squirrel scolds it)
+  await k.wait(1.4);
   if (sq.body) sq.body.userData.perch = STUMP.top; // (it sits on its stump)
   const callers: Caller[] = [
     { id: 'eekhoorn', pick: sq.group, body: sq.body, at: () => ({ x: sq.x, z: sq.z }), act: (on) => { if (on) sq.called(); } },
     ...home.neighbours.map((n): Caller => ({ id: n.id, pick: n.object, body: n.body, at: () => ({ x: n.at.x, z: n.at.z }), act: (on) => { if (on) n.call(); } })),
   ];
   await callersBeat(k, 1, {
-    view: CALLERS_VIEW, stand: P.callers, callers,
+    view: null, callers,
     lines: { luister: c.luisterBuren, echo: c.naroepen, groei: c.groei, opnieuw: c.opnieuw, goed: c.goedBuren },
   });
   if (sq.body) delete sq.body.userData.perch;
   // the jay (the nut thief) gives up and flies off over the trees
   k.say(c.gaai);
-  if (settings.geluid) Sound.callAt('gaai', home.neighbours.find((n) => n.id === 'gaai')?.at.x ?? 0, home.neighbours.find((n) => n.id === 'gaai')?.at.z ?? 0, listenerOf(k.world.camera));
+  const jay = home.neighbours.find((n) => n.id === 'gaai');
+  if (settings.geluid && jay) Sound.callAt('gaai', jay.at.x, jay.at.z, listenerOf(k.world.camera));
   home.jayFlies();
   await k.wait(2.4);
 

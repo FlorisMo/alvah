@@ -22,6 +22,7 @@ import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { atLocal, headingTo, uniformLocal, type Frame } from '../places.ts';
+import { barkRadius } from '../squirrel-math.ts';
 
 /** The eekhoorn marker: the bos anchor it has always had (the test checks it). */
 export const MARKER: Spot = { x: 25.419167959680543, z: -41.89111958682353 };
@@ -74,42 +75,53 @@ const SPOTS_AT = { u: 1.35, v: -0.3 } as const;
 /** Each spot's size across (m): a mossy cushion with a little leaf litter. */
 export const SPOT_SIZE = 0.52;
 
-/** Where the ranger stands to watch the glade floor (the corsi), and where he steps to
- *  for the neighbours' calls (the simon): nearer to them, the view clear of every trunk. */
-const STAND = g(-0.55, -2.6);
-const CALLERS_STAND = g(-0.45, -2.9);
+/** Where the ranger stands to watch the glade floor (the corsi): at its left edge, by
+ *  the stump, so the lens sees him whole beside the spots, not the back of his head.
+ *  He stays there for the neighbours' calls (the simon): they are round the stump, a
+ *  few metres ahead of him, near enough to read. */
+const STAND = g(-1.55, -1.45);
+const CALLERS_STAND = g(-1.0, -3.1);
 
 /** The trees of the home (the forest draws them with its own; the scatter keeps clear). */
 export const HOME_TREES: readonly HomeTree[] = [
   // the squirrel's pine: its branch stub faces the marker (where the ranger comes from)
-  { ...OAK_AT, species: 'prop-pine-scots', h: 14, rotY: 0.9, branch: { ang: headingTo(OAK_AT, MARKER) - 0.5, h: 1.75, out: 0.3 } },
+  { ...OAK_AT, species: 'prop-pine-scots', h: 14, rotY: 0.9, branch: { ang: headingTo(OAK_AT, MARKER) - 0.5, h: 1.45, out: 0.3 } },
   // the way: each stub faces back along the way (where he follows from)
-  { ...PINE_A, species: 'prop-pine-scots', h: 13.5, rotY: 2.2, branch: { ang: headingTo(PINE_A, OAK_AT) + 0.35, h: 1.8, out: 0.28 } },
-  { ...PINE_B, species: 'prop-pine-scots', h: 12.4, rotY: 4.1, branch: { ang: headingTo(PINE_B, PINE_A) + 0.2, h: 1.95, out: 0.26 } },
-  { ...PINE_C, species: 'prop-pine-scots', h: 14.2, rotY: 5.3, branch: { ang: headingTo(PINE_C, PINE_A) - 0.35, h: 1.75, out: 0.28 } },
+  { ...PINE_A, species: 'prop-pine-scots', h: 13.5, rotY: 2.2, branch: { ang: headingTo(PINE_A, OAK_AT) + 0.35, h: 1.4, out: 0.28 } },
+  { ...PINE_B, species: 'prop-pine-scots', h: 12.4, rotY: 4.1, branch: { ang: headingTo(PINE_B, PINE_A) + 0.2, h: 1.55, out: 0.26 } },
+  { ...PINE_C, species: 'prop-pine-scots', h: 14.2, rotY: 5.3, branch: { ang: headingTo(PINE_C, PINE_A) - 0.35, h: 1.4, out: 0.28 } },
   // the glade's big oak, at its right side: the acorns come from it (its crown stays
   // clear of the neighbours on the left)
   { ...g(8.0, 2.6), species: 'prop-oak-tree', h: 11, rotY: 2.7, branch: { ang: headingTo(g(8.0, 2.6), g(0, 0)), h: 1.5, out: 0.34 } },
-  // the jay's pine (behind the stump): a dead stub it sits on, facing the ranger
-  { ...g(-1.85, 2.5), species: 'prop-pine-scots', h: 13, rotY: 1.3, branch: { ang: headingTo(g(-1.85, 2.5), CALLERS_STAND) + 0.3, h: 1.6, out: 0.34 } },
-  // the green woodpecker's pine (left of the stump)
-  { ...g(-3.0, 1.2), species: 'prop-pine-scots', h: 12, rotY: 3.3 },
+  // the pine by the store, left of the stump: the jay sits on its dead stub before the
+  // mission (it has an eye on the acorns), the green woodpecker clings lower down its
+  // side, and after the mission the squirrel lives in it (the stub is its branch then)
+  { ...g(-2.45, 1.7), species: 'prop-pine-scots', h: 12, rotY: 3.3, branch: { ang: headingTo(g(-2.45, 1.7), CALLERS_STAND) - 0.6, h: 1.75, out: 0.34 } },
 ];
 
 /** A home tree by its spot (for the tests and the script). */
 export const TREE = {
   oak: HOME_TREES[0], a: HOME_TREES[1], b: HOME_TREES[2], c: HOME_TREES[3],
-  gladeOak: HOME_TREES[4], jayPine: HOME_TREES[5], woodpeckerPine: HOME_TREES[6],
+  gladeOak: HOME_TREES[4], storePine: HOME_TREES[5],
 } as const;
 
 /** The stump with the acorn store (left of the spots), and the dead snag (the raven's). */
 export const STUMP = { ...g(-1.3, 0.8), h: 0.62, top: 0.6, r: 0.36 } as const;
 export const HEAP = { ...g(-0.75, 1.3), h: 0.2 } as const;
+/** Where the squirrel stands at its store to take an acorn or to add one (the heap's
+ *  side toward the spots). */
+export const HEAP_GRAB: Spot = g(-0.35, 0.95);
 /** The acorn store round the stump's foot: one cluster before, more as he piles them. */
 export const HEAP_SPOTS: readonly Spot[] = [g(-0.75, 1.3), g(-0.6, 0.95), g(-0.95, 1.55), g(-0.45, 1.3), g(-1.0, 1.15)];
-export const SNAG = { ...g(-0.15, 2.2), h: 1.95, rotY: 0.6 } as const;
-/** Where the woodpecker clings on its pine (1.3 m up, seen side-on from the ranger). */
-export const WOODPECKER = { tree: HOME_TREES[6], h: 1.2 } as const;
+export const SNAG = { ...g(0.35, 1.95), h: 1.75, rotY: 0.6 } as const;
+/** Where the jay lands by the store when it comes for the acorns (on a twig in the
+ *  leaf litter, right of the heap: the thief next to the loot). */
+export const JAY_GROUND: Spot = g(-0.2, 1.45);
+/** Where the woodpecker clings on its pine: 1.2 m up, on the side of the trunk that is
+ *  its edge as the lens sees it (`ang`: the heading from the trunk's axis out to it,
+ *  square to the lens), so it is seen in profile against the wood behind — its red cap,
+ *  its green back, its tail braced on the bark — never half behind the trunk. */
+export const WOODPECKER = { tree: HOME_TREES[5], h: 1.2, ang: headingTo(HOME_TREES[5], g(-1.0, -1.9)) + 1.5 } as const;
 
 /** Where the corsi's forgotten acorn grows into a seedling (after, on a later visit). */
 export const SEEDLING_SPOT = 6;
@@ -124,7 +136,7 @@ export const EEKHOORN_PLACES = {
   /** where the ranger stands to watch the glade floor, facing its spots */
   stand: { ...STAND, r: 1.6, heading: headingTo(STAND, g(SPOTS_AT.u, SPOTS_AT.v)) },
   /** where he steps to for the neighbours' calls, facing them */
-  callers: { ...CALLERS_STAND, r: 0.8, heading: headingTo(CALLERS_STAND, g(-1.45, 1.65)) },
+  callers: { ...CALLERS_STAND, r: 0.8, heading: headingTo(CALLERS_STAND, g(-1.0, 1.45)) },
   glade: { ...GLADE_AT, heading: GLADE_FRAME.heading },
   stump: { x: STUMP.x, z: STUMP.z },
   /** the home place: the ranger ends near it (golden step 8) */
@@ -139,21 +151,35 @@ export function gladeSpots(): (Spot & { id: number })[] {
   });
 }
 
+/** The one look at the start (design §3.6: an establishing look): the child meets the
+ *  squirrel on its branch stub. The lens stands off to the side of the marker ring,
+ *  where the stub points (so the squirrel is seen from the front, the trunk solid behind
+ *  it, and the ranger out of the picture, never his head in front of the lens). */
+const STUB_AT: Spot = (() => {
+  const t = HOME_TREES[0], b = t.branch!;
+  const r = barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, b.h) + b.out;
+  return { x: t.x + Math.sin(b.ang) * r, z: t.z + Math.cos(b.ang) * r };
+})();
+export const INTRO_VIEW = {
+  at: STUB_AT, heading: headingTo(OAK_AT, MARKER) - 1.0 + Math.PI,
+  halfW: 0.75, halfD: 0.4, tall: 1.95, pitchDeg: 8, insetTop: 104, insetBottom: 60,
+} as const;
+
 /** The framed views (design §3.6): the glade floor from above for the acorns (corsi),
  *  the stump in the picture too (where the squirrel sits when it forgets); and the
  *  neighbours on their perches, looking a little up, for the calls (simon). */
 export const GLADE_VIEW = {
   at: g(SPOTS_AT.u - 0.55, SPOTS_AT.v + 0.25), heading: GLADE_FRAME.heading + 0.1,
-  halfW: 2.2, halfD: 1.45, tall: 0.7, pitchDeg: 44, insetTop: 100, insetBottom: 10,
+  halfW: 2.2, halfD: 1.45, tall: 0.7, pitchDeg: 38, insetTop: 100, insetBottom: 10,
   include: [{ x: STAND.x, z: STAND.z, h: RANGER_STAND_HEIGHT }],
 } as const;
-/** The neighbours round the stump (its centre, for the view's aim). */
-const NEIGHBOURS_AT = g(-1.45, 1.65);
-/** (the ranger stands just behind the lens here: the neighbours fill the picture, seen
- *  as he sees them) */
+/** The neighbours round the stump (their middle, for the view's aim). */
+const NEIGHBOURS_AT = g(-1.0, 1.5);
+/** (the lens stands by the ranger: the four neighbours fill the picture, near enough to
+ *  read, seen as he sees them, looking a little up) */
 export const CALLERS_VIEW = {
   at: NEIGHBOURS_AT, heading: headingTo(CALLERS_STAND, NEIGHBOURS_AT),
-  halfW: 1.45, halfD: 1.0, tall: 2.45, pitchDeg: 3, insetTop: 104, insetBottom: 20,
+  halfW: 1.8, halfD: 0.7, tall: 2.15, pitchDeg: 3, insetTop: 60, insetBottom: 110,
 } as const;
 
 /** Who lives here: the squirrel, round its pine by the marker before; at its glade after,
@@ -162,7 +188,7 @@ export const EEKHOORN_RESIDENTS: readonly ResidentSpec[] = [
   {
     key: 'squirrel', animal: 'eekhoorn',
     before: { ...OAK_AT, idle: 'root', roam: 0 },
-    after: { x: TREE.jayPine.x, z: TREE.jayPine.z, idle: 'root', roam: 0 },
+    after: { x: TREE.storePine.x, z: TREE.storePine.z, idle: 'root', roam: 0 },
     voice: { call: 'eekhoorn', every: [5, 9], within: 9 },
   },
 ];
@@ -192,5 +218,11 @@ export function eekhoornClearings(): { x: number; z: number; r: number }[] {
   return [
     ...gladeSpots().map((s) => ({ x: s.x, z: s.z, r: 0.7 })),
     { x: STUMP.x, z: STUMP.z, r: 0.9 },
+    // the marker ring stays open (the child stands in it, looking at the squirrel's pine)
+    { x: MARKER.x, z: MARKER.z, r: 1.8 },
+    // the neighbours' corner: no fern in front of or behind the jay and the raven
+    { x: JAY_GROUND.x, z: JAY_GROUND.z, r: 1.0 },
+    { x: SNAG.x, z: SNAG.z, r: 1.3 },
+    { ...g(0.1, 3.1), r: 1.6 },
   ];
 }

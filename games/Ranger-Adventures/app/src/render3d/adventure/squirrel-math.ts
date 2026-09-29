@@ -330,7 +330,7 @@ export function dismountPlan(t: Trunk, at: OnTrunk, out = 0.35): Segment[] {
 export function leapPlan(a: SqPose, b: SqPose): Segment[] {
   const d = Math.hypot(b.x - a.x, b.z - a.z);
   const dur = Math.max(0.4, d / SQ.leap);
-  const apex = Math.min(0.9, 0.18 + d * 0.16);
+  const apex = Math.min(0.6, 0.12 + d * 0.12);
   const yaw = Math.atan2(b.x - a.x, b.z - a.z);
   return [{
     dur, len: d, act: 'leap',
