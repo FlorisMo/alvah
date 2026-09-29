@@ -30,7 +30,7 @@ import * as THREE from 'three';
 import {
   stepWalkWeight, stepRunWeight, dominantGait, strideGain, cycleRate, stepPhase, flightLift,
   gaitClockTimes, stanceTravel, clockTime, cadence,
-  FOOT_PLANTS, STANCE_SHARE, TURN_STEP_SPEED, WALK_GAIN, RUN_GAIN,
+  FOOT_PLANTS, STANCE_SHARE, TURN_STEP_SPEED, WALK_GAIN, WALK_GAIN_MIN, RUN_GAIN,
   type Gait, type GaitClock, type FootSample,
 } from './PlayerAnim.ts';
 import { plantsBetween } from '../core/footstep.ts';
@@ -51,10 +51,11 @@ const STRIDE_BONES: ReadonlyArray<readonly [RegExp, number]> = [
   [/^(Left|Right)ForeArm$/, 0],
 ];
 
-/** The stride gains each clip's ground table is measured at. */
-const TABLE_GAINS: readonly number[] = [1, 1.3, 1.6, 1.9];
+/** The stride gains each clip's ground table is measured at (the gain never drops
+ *  under the walk's floor). */
+const TABLE_GAINS: readonly number[] = [WALK_GAIN_MIN, 1.6, 1.9];
 /** Poses sampled over one loop when measuring a clip. */
-const SAMPLES = 96;
+const SAMPLES = 64;
 
 interface StrideBone {
   bone: THREE.Object3D;
@@ -225,7 +226,7 @@ export class PlayerRig {
       return out;
     };
     const design = sampleAt(designGain);
-    const strides = TABLE_GAINS.map((g) => [g, stanceTravel(sampleAt(g), loop, stance)] as const);
+    const strides = TABLE_GAINS.map((g) => [g, stanceTravel(g === designGain ? design : sampleAt(g), loop, stance)] as const);
     action.stop();
     tmp.uncacheRoot(model);
     model.updateMatrixWorld(true);

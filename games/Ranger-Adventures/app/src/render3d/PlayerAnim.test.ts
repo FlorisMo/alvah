@@ -194,8 +194,8 @@ test('the cycle turns so the planted foot is still: ground speed ÷ ground per c
 
 test("with the ranger's own clips a brisk walk and a run step at a child's pace, not a scurry", () => {
   // his clips as the rig measures them at 1.32 m (run 6, the planted ball of the foot)
-  const walk = clockWith([[1, 0.748], [1.3, 0.936], [1.6, 1.128], [1.9, 1.232]]);
-  const run = clockWith([[1, 1.533], [1.3, 1.906], [1.6, 2.179], [1.9, 2.23]], STANCE_SHARE.run);
+  const walk = clockWith([[1.3, 0.946], [1.6, 1.114], [1.9, 1.241]]);
+  const run = clockWith([[1.3, 1.866], [1.6, 2.178], [1.9, 2.285]], STANCE_SHARE.run);
   const walkSteps = cadence(cycleRate(WALK_SPEED, 0, walk, run));
   const runSteps = cadence(cycleRate(RUN_SPEED, 1, walk, run));
   assert.ok(walkSteps >= 2.8 && walkSteps <= 3.7, `walk at ${walkSteps.toFixed(2)} steps/s`);
