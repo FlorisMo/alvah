@@ -3,7 +3,7 @@
  * ree.places.ts): the MEADOW of tall pijpenstrootje the calf lies in (with the trial's
  * look-alikes: rust-brown dead bracken, a butterfly on a foxglove, a stonechat on a
  * stalk, a nightjar at the edge), the COPSE's junipers and bracken round the doe's bed
- * (its trees are the world forest's: `REE_HOME.trees`), the HIDE's juniper and fallen
+ * (its trees are the world forest's: the adventure's `trees`), the HIDE's juniper and fallen
  * log, and the wet POOL on the way there, whose water rings when a boot goes in.
  *
  * It stands before the mission and after it (a place, not a prop that vanishes). The
