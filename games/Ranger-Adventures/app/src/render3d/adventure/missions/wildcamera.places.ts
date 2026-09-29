@@ -321,8 +321,11 @@ const ROE_GRAZE = { ...at(-4.6, -1.8), yaw: VIEW_H + Math.PI / 2 + 0.4, idle: 'g
  *  the trees beyond the glade, the way the glade's animals come and go (out of the
  *  camera's view over the crossing; she comes back from there for the photos). */
 export const ROE_HIDEAWAY: Spot & { yaw: number } = { ...at(-10.5, -0.6), yaw: VIEW_H - Math.PI / 2 };
-/** How near the ranger comes before the grazing roe lifts her head and goes (m). */
-export const ROE_SHY_WITHIN = 11;
+/** How near the ranger comes before the grazing roe lifts her head and goes (m): on the
+ *  game trail a few steps before the crossing, but never from the reekalf's hide ~9.7 m
+ *  west of her (ree.places.ts), so she stays grazing while he watches the doe there and
+ *  never walks off toward him through the glasses. */
+export const ROE_SHY_WITHIN = 8.8;
 
 /**
  * Who lives here: the animals the camera photographs and the night callers — a red deer

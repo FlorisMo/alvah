@@ -19,6 +19,7 @@ import { anchorInBiome, biomeAt } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
 import { dist, headingTo, toLocal, segDist } from '../places.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
+import { REE_PLACES } from './ree.places.ts';
 import type { Spot } from '../types.ts';
 
 /** The other markers as the world places them (read with `__ranger.markers()`, 2026-09-29). */
@@ -248,4 +249,11 @@ test('before and after, the roe grazes in the glade (shy of him before); nobody 
   assert.ok(dist(ROE_HIDEAWAY, aimSpot('ree', 'open').from) < 0.01, 'she comes back from there for the photos');
   assert.ok(Math.abs(toLocal(v, ROE_HIDEAWAY).u) > CROSS_VIEW.halfW + 3, 'out of the view over the crossing');
   assert.ok(wildcameraTreeClearings().every((c) => dist(c, ROE_HIDEAWAY) > c.r - 0.5), 'in under the trees');
+  // the reekalf's hide lies west of her glade: while he keeps still there and watches that
+  // doe through his glasses, this roe grazes on (she never lifts her head at him and walks
+  // off toward him through the lenses), wherever she roams round her spot
+  const reach = (roe.before!.roam ?? 0.5) + ROE_SHY_WITHIN + 0.3;
+  for (const k of ['hide', 'hideLeave', 'poolEdge'] as const) {
+    assert.ok(dist(REE_PLACES[k], roe.before!) > reach, `the reekalf's ${k} is ${dist(REE_PLACES[k], roe.before!).toFixed(2)} m from her (> ${reach.toFixed(2)})`);
+  }
 });
