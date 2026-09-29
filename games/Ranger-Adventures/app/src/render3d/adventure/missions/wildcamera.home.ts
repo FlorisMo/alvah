@@ -25,7 +25,7 @@ import { boxObstacle } from '../../CharacterController';
 import { SIZE } from '../../AnimalScale';
 import { crouchPose } from './wildcamera.pose';
 import {
-  WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, trailA, trailB,
+  WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, trailA, trailB,
 } from './wildcamera.places';
 import type { Spot } from '../types';
 
@@ -354,8 +354,8 @@ export class WildcameraHome implements HomeDressing {
     bush('prop-fern', 1.0, 7.3, -1.8, 2.2);
     const sett = P.sett;
     void env.spawnPlant('prop-badger-sett', SIZE.dassenburcht.h).then((s) => {
-      // its way in faces into the thicket (the badger sleeps inside by day)
-      const r = add(s, sett.x, sett.z, CROSS.heading - 0.9, -0.04);
+      // its way in faces into the wood, away from the views (the badger sleeps inside by day)
+      const r = add(s, sett.x, sett.z, SETT_FACE, -0.04);
       if (r) this.thicket.add(r);
     });
 

@@ -12,7 +12,7 @@ import test from 'node:test';
 import {
   WILDCAMERA_PLACES as P, MARKER, TREE, CAMERA, CROSS, CROSS_VIEW, CALLER_SPOTS, LOG, PINE,
   WILDCAMERA_HOME, WILDCAMERA_RESIDENTS, AIM_AT, FAN_HALF, aimSpot, cameraAim, swivel, trailA, trailB,
-  wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW, VAL_VIEW,
+  wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW, VAL_VIEW, SETT_FACE,
 } from './wildcamera.places.ts';
 import { anchorInBiome, biomeAt } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
@@ -94,6 +94,10 @@ test('one view: the glade left, the thicket right, the camera pine between, the 
   // the other views are the ranger's side of what they show
   for (const [name, view] of [['trail', TRAIL_VIEW], ['strap', STRAP_VIEW], ['snare', SNARE_VIEW], ['to the snare', VAL_VIEW]] as const) {
     for (const q of view.include) assert.ok(toLocal({ x: view.at.x, z: view.at.z, heading: view.heading }, q).v < 1, `${name}: he stands in front of what it shows`);
+  }
+  // the sett's way in (a badger's face at its opening) faces away from every view of it
+  for (const [name, view] of [['crossing', CROSS_VIEW], ['trail', TRAIL_VIEW], ['strap', STRAP_VIEW], ['snare', SNARE_VIEW], ['to the snare', VAL_VIEW]] as const) {
+    assert.ok(Math.cos(SETT_FACE - view.heading) > 0.3, `${name}: the sett's opening faces away (${deg(wrap(SETT_FACE - view.heading))}°)`);
   }
   // the reunion is the crossing's own view, with him back beside his camera
   assert.deepEqual(REUNION_VIEW.include, CROSS_VIEW.include);

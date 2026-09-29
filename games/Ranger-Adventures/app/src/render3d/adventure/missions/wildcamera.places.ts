@@ -52,6 +52,10 @@ const GLADE = at(-4.4, -2.1);
 const THICKET = at(4.5, -1.5);
 /** The badger's sett: at the thicket's foot, on the tree's side. */
 const SETT = at(3.2, -2.25);
+/** Which way its way in faces (rad, rotation.y; the model's opening faces +z): south,
+ *  into the wood, away from every view the child has of it — the model has a badger's
+ *  face at its opening, and by day the badger sleeps inside. */
+export const SETT_FACE = VIEW_H + 0.3;
 /** Where the empty snare lies: on the second trail where it goes into the glade (where
  *  the deer come out to graze), a few steps from the pine. The camera sees it side-on,
  *  with the glade and the open heath behind: that is the morning photo. */
@@ -190,8 +194,9 @@ export const SNARE_VIEW = (() => {
  *  walks to it). */
 export const VAL_VIEW = (() => {
   const from = WILDCAMERA_PLACES.valStart, sn = WILDCAMERA_PLACES.snare;
+  // (from a little north of him, the lens's side: the sett behind the view's edge)
   return {
-    at: { x: sn.x + (from.x - sn.x) * 0.2, z: sn.z + (from.z - sn.z) * 0.2 }, heading: headingTo(from, sn),
+    at: { x: sn.x + (from.x - sn.x) * 0.2, z: sn.z + (from.z - sn.z) * 0.2 }, heading: headingTo(at(0.9, -3.4), sn),
     halfW: 1.6, halfD: 1.4, tall: 1.0, pitchDeg: 22, insetTop: 120, insetBottom: 40,
     include: [{ x: from.x, z: from.z, h: RANGER_STAND_HEIGHT }],
   } as const;
