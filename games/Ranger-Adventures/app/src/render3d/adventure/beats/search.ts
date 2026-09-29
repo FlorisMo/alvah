@@ -93,12 +93,10 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
   anchor.position.copy(backTop(body));
   body.add(anchor);
   // (the stems breathe in the breeze and quiver on a hint: the glimpse is looked for again
-  // whenever the hint is read, at most every 0.3 s)
+  // whenever the hint is read — only the tests read it — so the point it names is the one
+  // seen through the stems as they stand at that very moment)
   const blockers = [o.cover.group, ...o.decoys.map((d) => d.object)];
-  let lookedAt = -Infinity;
   const aim = (): void => {
-    if (k.now - lookedAt < 0.3) return;
-    lookedAt = k.now;
     const seen = glimpseOn(body, camera, blockers);
     if (seen) anchor.position.copy(body.worldToLocal(seen));
   };
