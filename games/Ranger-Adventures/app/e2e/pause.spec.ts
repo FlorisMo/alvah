@@ -37,30 +37,34 @@ test('pause: hub shell reaches prikbord + raaf + instellingen + badges over the 
 
   await enterWorld(page);
 
+  // the hub a player can press: a card that is easing away (session.leave, 160 ms) is
+  // still in the DOM, inert and without .ra-overlay, while the next one is already there
+  const hub = (sel: string) => page.locator(`.ra-overlay ${sel}`);
+
   // 1) open the pause hub from the HUD pill — the world SURVIVES (no leaveWorld).
   await page.locator('.explore-pause').click();
-  await expect(page.locator('.ph-back'), 'the pause hub opens').toBeVisible();
+  await expect(hub('.ph-back'), 'the pause hub opens').toBeVisible();
   expect(await hook(page, (r) => r.screen), 'world survives behind the hub').toBe('world');
   expect(await hook(page, (r) => r.pos()), 'world scene still live').not.toBeNull();
   await shot(page, 'pause-hub');
 
   // 2) instellingen reachable without leaveWorld; "Klaar" returns to the hub.
-  await page.locator('.ph-tweaks').click();
+  await hub('.ph-tweaks').click();
   await expect(page.locator('.tweaks'), 'Instellingen opens over the world').toBeVisible();
   expect(await hook(page, (r) => r.screen), 'world survives behind Instellingen').toBe('world');
   await page.getByRole('button', { name: 'Klaar' }).click();
-  await expect(page.locator('.ph-back'), 'back at the hub after Instellingen').toBeVisible();
+  await expect(hub('.ph-back'), 'back at the hub after Instellingen').toBeVisible();
 
   // 3) badges reachable without leaveWorld; its back returns to the hub.
-  await page.locator('.ph-badges').click();
+  await hub('.ph-badges').click();
   await expect(page.locator('.badge-row'), 'badges open over the world').toBeVisible();
   expect(await hook(page, (r) => r.screen), 'world survives behind badges').toBe('world');
   await page.getByRole('button', { name: 'Terug' }).click();
-  await expect(page.locator('.ph-back'), 'back at the hub after badges').toBeVisible();
+  await expect(hub('.ph-back'), 'back at the hub after badges').toBeVisible();
 
   // 4) prikbord folded into the hub (W2.4b): opens over the live world; its own
   //    "Verder op patrouille" returns to the world HUD.
-  await page.locator('.ph-prikbord').click();
+  await hub('.ph-prikbord').click();
   await expect(page.locator('.case-board'), 'the prikbord opens over the world').toBeVisible();
   expect(await hook(page, (r) => r.screen), 'world survives behind the prikbord').toBe('world');
   await page.getByRole('button', { name: 'Verder op patrouille' }).click();
@@ -69,7 +73,7 @@ test('pause: hub shell reaches prikbord + raaf + instellingen + badges over the 
   // 5) raaf-companion folded into the hub (W2.4b): reopen the hub, open the raaf;
   //    its "Terug naar de open plek" returns to the world HUD.
   await page.locator('.explore-pause').click();
-  await page.locator('.ph-companion').click();
+  await hub('.ph-companion').click();
   await expect(page.locator('.cabin'), 'the raaf-companion opens over the world').toBeVisible();
   expect(await hook(page, (r) => r.screen), 'world survives behind the raaf').toBe('world');
   await shot(page, 'pause-raaf');
