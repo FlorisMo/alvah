@@ -180,7 +180,7 @@ export class EekhoornHome implements HomeDressing {
     this.seedling = new THREE.Mesh(seedlingGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide }));
     this.seedling.name = 'oak-seedling';
     this.seedling.position.set(sp.x, g(sp.x, sp.z) + 0.01, sp.z);
-    this.seedling.scale.setScalar(1.5); // (≈ 0.27 m: a first-year oak, big enough to spot)
+    this.seedling.scale.setScalar(1.8); // (≈ 0.32 m: a young oak, big enough to spot from the glade's edge)
     this.seedling.visible = false;
     this.group.add(this.seedling);
   }
