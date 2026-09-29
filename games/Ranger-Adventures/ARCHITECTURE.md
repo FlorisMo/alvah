@@ -29,7 +29,8 @@ render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls
    world/Progress.ts    lasting per-mission tableau at a finished marker (onMissionComplete)
    world/Fauna.ts       Bram the warden (by the missiebord; turns to you when he speaks),
                         poacher, roaming animals
-   world/Markers.ts     mission markers, missiebord, sit-spot, proximity, wayfinding
+   world/Markers.ts     mission markers, missiebord, the hut's porch ring (once Bram told
+                        about the young raaf), sit-spot, proximity, wayfinding
    world/Vehicles.ts    jeep, helicopter + pads, dust
    world/Player.ts      the ranger rig, on-foot movement, footsteps
    world/CameraRig.ts   follow camera (told by the player's steering, never chasing), orbit,
@@ -49,6 +50,10 @@ render3d/engines/  one 3D view per mini-game (zoeken, corsi, dagnacht, simon, wi
 engines/           the pure game logic (scoring, sequences, rules); no three.js; unit-tested
 render2d/          the 2D floor per game (reduced motion / fallback)
 content/veluwe.ts  missions, steps, animals, texts (Dutch, AVI M3/E3)
+content/copy.ts    the copy deck: every word on the shared screens (HUD, cards, Pauze, hut,
+                   Instellingen); screens.ts the title + maker, mentor.ts Bram + the lessons.
+                   core/readlevel.test.ts lints all of it (≤7 words a sentence and a shown
+                   line, no dash, no hype, no surname, one cast)
 core/              state + persist (save data), input, vehicle/heli physics, skill, sound, …
 ```
 

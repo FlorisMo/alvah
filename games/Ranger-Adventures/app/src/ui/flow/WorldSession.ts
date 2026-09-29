@@ -17,6 +17,7 @@ import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import { loadGameAudio, setAmbientScene } from '../../core/calls';
 import { SAY, TITLE } from '../../content/screens';
+import { MISSIE, ONDERWEG } from '../../content/copy';
 import type { Biome } from '../../render3d/Biomes';
 import type { Stage } from '../../render3d/Stage';
 import { World, type WorldMarker } from '../../render3d/World';
@@ -32,7 +33,7 @@ import {
   pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, WORLDBEAT_ANIMAL_M, type WorldBeat,
 } from '../../core/worldbeat';
 import { setScreen, setMissionView, provideTitleReady } from '../../core/devhook';
-import { mountReadAloud, readScreenAloud } from '../ReadAloud';
+import { mountReadAloud, readScreenAloud, sentenceSegments } from '../ReadAloud';
 import { showAvatarCreator } from '../AvatarCreator';
 import { mountMissionPause, unmountMissionPause } from './MissionFlow';
 import { session, esc, card, plainCard, clearOverlays, menuOpen, fadeCut, kicker } from './session';
@@ -41,7 +42,7 @@ import { coarsePointer } from '../hud/device';
 import { wireWorldDevhook } from '../dev/wireDevhook';
 import {
   showExploreHud, disposeExploreHud, onApproach, onWayfind, onInteract, onBoardApproach,
-  tryOpenBoard, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
+  tryOpenBoard, onPorchApproach, tryOpenPorch, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
   setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint, beginGuide,
 } from '../hud/ExploreHud';
 import { armMissiebordBeat } from '../hud/Lessons';
@@ -181,6 +182,8 @@ function buildWorld(): World {
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
   // mission board overlay in-place.
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });
+  // run 6: the hut's porch ring (once Bram has told about the young raaf) opens the hut
+  world.setPorch({ onNear: onPorchApproach, onOpen: tryOpenPorch });
   // F-11: the calm world-rim cue ("Hier stopt het bos") through the one hint channel.
   world.setBoundaryHint(showBoundaryHint);
   // W6.4b2: the "Ken je roep" sit-spot by the vogelkijkhut.
@@ -323,7 +326,8 @@ function disarmBeat(): void {
   if (beatRaf) { cancelAnimationFrame(beatRaf); beatRaf = 0; }
 }
 
-/** A roaming ground animal close by and in the picture: its name ("vos"), or null. */
+/** A roaming ground animal close by and in the picture: its name ("vos", "wild zwijn"),
+ *  or null. */
 function animalInView(world: World): string | null {
   const p = world.pos();
   if (!p) return null;
@@ -335,7 +339,10 @@ function animalInView(world: World): string | null {
     if (a.id.startsWith('bird-') || Math.hypot(a.x - p.x, a.z - p.z) > reach) continue;
     const v = new Vector3(a.x, cam.position.y - 2, a.z).project(cam);
     // in the picture, and above the low beat card that will name it
-    if (v.z < 1 && Math.abs(v.x) < 0.85 && v.y > -0.3 && v.y < 0.9) return a.id.split('-')[1] ?? null; // animal-vos-fox → vos
+    if (v.z < 1 && Math.abs(v.x) < 0.85 && v.y > -0.3 && v.y < 0.9) {
+      const id = a.id.split('-')[1]; // animal-vos-fox → vos
+      return id ? Content.animal(id)?.naam ?? id : null; // wildzwijn → "wild zwijn"
+    }
   }
   return null;
 }
@@ -399,17 +406,16 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
   // low on the screen and without a scrim: the animal the impulse beat names is in view
   const el = card(
     `<div class="card worldbeat${low ? ' wb-low' : ''}">` +
-    kicker(low ? 'leaf' : 'compass', 'Onderweg') +
+    kicker(low ? 'leaf' : 'compass', ONDERWEG.kicker) +
     `<p class="wb-prompt"></p>` +
     `<div class="wb-opts" role="group">${opts}</div>` +
     `<p class="wb-feedback" role="status" aria-live="polite" hidden></p>` +
-    `<button class="ra-chip wb-skip" type="button" data-key="back">Even verder lopen</button>` +
+    `<button class="ra-chip wb-skip" type="button" data-key="back">${esc(ONDERWEG.verder)}</button>` +
     `</div>`,
     { scrim: !low },
   );
   const ra = mountReadAloud({
-    textEl: el.querySelector('.wb-prompt')!,
-    text: beat.prompt,
+    segments: sentenceSegments(el.querySelector<HTMLElement>('.wb-prompt')!, beat.prompt), // one sentence a line
     autoStart: store.get().settings.voorlezen,
   });
   const fb = el.querySelector<HTMLParagraphElement>('.wb-feedback');
@@ -422,7 +428,7 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
       if (optionCorrect(beat, i)) {
         btn.classList.add('wb-goed');
         if (store.get().settings.geluid) Sound.found();
-        const goed = beat.kind === 'blijf-op-pad' ? 'Knap, je blijft rustig.' : 'Goed onthouden, ranger!';
+        const goed = beat.kind === 'blijf-op-pad' ? ONDERWEG.goedRustig : ONDERWEG.goedOnthouden;
         if (fb) { fb.hidden = false; fb.textContent = goed; fb.className = 'wb-feedback wb-fb-goed'; }
         if (store.get().settings.voorlezen) narrator.speak(goed);
         btns.forEach((b) => (b.disabled = true));
@@ -430,8 +436,9 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
       } else {
         btn.classList.add('wb-bijna');
         if (store.get().settings.geluid) Sound.tryAgain();
-        if (fb) { fb.hidden = false; fb.textContent = 'Bijna! Blijf rustig — probeer nog eens.'; fb.className = 'wb-feedback wb-fb-bijna'; }
-        if (store.get().settings.voorlezen) narrator.speak('Bijna. Probeer nog eens.');
+        // what is shown is what is said
+        if (fb) { fb.hidden = false; fb.textContent = ONDERWEG.bijna; fb.className = 'wb-feedback wb-fb-bijna'; }
+        if (store.get().settings.voorlezen) narrator.speak(ONDERWEG.bijna);
         window.setTimeout(() => btn.classList.remove('wb-bijna'), 500);
       }
     });
@@ -492,7 +499,7 @@ export async function playRoepAtSitSpot(): Promise<void> {
   beginActivityScope();
   let stop: () => void = () => {};
   const stopped = new Promise<'STOP'>((res) => { stop = () => res('STOP'); });
-  mountMissionPause(() => { narrator.stop(); abortActivityScope(); unmountMissionPause(); stop(); }, 'Stop met luisteren');
+  mountMissionPause(() => { narrator.stop(); abortActivityScope(); unmountMissionPause(); stop(); }, MISSIE.stopLuisteren);
   try {
     await Promise.race([flat ? playRoep(host) : playRoep3d(world.ctx(host)), stopped]);
   } finally {

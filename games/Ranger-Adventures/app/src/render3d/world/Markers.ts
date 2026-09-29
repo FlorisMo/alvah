@@ -3,7 +3,8 @@
  *
  * One marker per mission (a halo ring, a floating name-tag and the mission's animal,
  * or a totem until its GLB streams in), the Missiebord at the spawn clearing (opens
- * the mission board) and the "Ken je roep" sit-spot bench. Owns their proximity
+ * the mission board), the hut's porch (opens the hut, once Bram has told about the
+ * young raaf) and the "Ken je roep" sit-spot bench. Owns their proximity
  * (which prompt the HUD shows), the interact dispatch, the wayfinding cue toward the
  * active mission (it follows the sand paths) and the lens-proximity fade of the
  * "go here" rings.
@@ -21,6 +22,7 @@ import { wayfind, bearing, distanceTo, SteadyCue, type WayCue } from '../Wayfind
 import { RouteGuide, RouteMap, arrivalSpot, openHeading } from '../Paths';
 import { VEN_CENTER } from '../Biomes';
 import { ROEP_COPY } from '../../engines/roep';
+import { TAG } from '../../content/copy';
 import { boxObstacle, obstacleGap, type MoveLimits, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { Labels } from './Labels';
@@ -89,6 +91,13 @@ export class Markers {
   nearSitSpot = false;
   private onSitSpotNear: (near: boolean) => void = () => {};
   private onSitSpotActivate: () => void = () => {};
+  // run 6 (FLOW P4): the hut's porch — a ring before its door and a tag, shown once Bram
+  // has told about the young raaf (`showPorch`). Its own proximity/interact path, like
+  // the board; kept OUT of `markers` (never a wayfinding goal).
+  private porch: { group: THREE.Group; pos: THREE.Vector3; label: THREE.Sprite; tag: string } | null = null;
+  nearPorch = false;
+  private onPorchNear: (near: boolean) => void = () => {};
+  private onPorchOpen: () => void = () => {};
   // D3.16: the diegetic "go here" halo rings (mission markers, the case-board, the
   // sit-spot). They are wayfinding UI (§3), so they FADE by the lens's proximity — a
   // collapsed close follow boom must never render one as a frame-filling hoop
@@ -278,7 +287,7 @@ export class Markers {
     board.add(ring);
     this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: boardAt.x, z: boardAt.z, base: 0.5, mesh: ring, glow: 0, pulse: 0 }); // D3.16
     // the board's tag reads from further than the rest (20 m): it is the hub of the clearing
-    const label = this.labels.make('Missiebord', '#f5c23b', { reach: 20 });
+    const label = this.labels.make(TAG.missiebord, '#f5c23b', { reach: 20 });
     this.boardLabel = label;
     label.position.y = 2.0;
     board.add(label);
@@ -293,6 +302,60 @@ export class Markers {
       if (totem) board.remove(totem);
       board.add(prepped); // keep the ring + label
     });
+  }
+
+  /**
+   * Run 6 (FLOW P4): the hut's porch — a halo ring on the ground in front of its door and a
+   * tag over it, hidden until `showPorch(true)` (Bram told about the young raaf, or the raaf
+   * lives there). `door`: the spot before the door, on the clearing side.
+   */
+  placePorch(door: { x: number; z: number }): void {
+    const at = new THREE.Vector3(door.x, 0, door.z);
+    at.y = this.groundY(at.x, at.z);
+    const group = new THREE.Group();
+    group.position.copy(at);
+    group.visible = false;
+    const ring = this.haloRing('#f5c23b', at.x, at.z, at.y, 0);
+    group.add(ring);
+    this.groundRings.push({ mat: ring.material as THREE.MeshBasicMaterial, x: at.x, z: at.z, base: 0.5, mesh: ring, glow: 0, pulse: 0 });
+    const label = this.labels.make(TAG.hut, '#f5c23b', { reach: 20 });
+    label.position.y = 2.0;
+    group.add(label);
+    this.scene.add(group);
+    this.porch = { group, pos: at.clone(), label, tag: TAG.hut };
+  }
+
+  /** Show (or hide) the porch ring and its tag; `tag`: the words on it (the raaf's name
+   *  once it lives there). Idempotent. */
+  showPorch(on: boolean, tag?: string): void {
+    const p = this.porch;
+    if (!p) return;
+    if (tag && tag !== p.tag) { p.tag = tag; this.labels.retitle(p.label, tag, '#f5c23b'); }
+    if (p.group.visible === on) return;
+    p.group.visible = on;
+    if (!on && this.nearPorch) { this.nearPorch = false; this.onPorchNear(false); }
+  }
+
+  /** The porch's ring and tag glow for `seconds` of being seen (Bram just told about it). */
+  glowPorch(seconds: number): void {
+    const p = this.porch;
+    if (!p) return;
+    this.labels.setGlow(p.label, seconds);
+    const r = this.groundRings.find((g) => g.x === p.pos.x && g.z === p.pos.z);
+    if (r) { r.glow = seconds; r.glowTag = p.label; }
+  }
+
+  /** Register the porch callbacks: `onNear` as the ranger enters/leaves its ring, `onOpen`
+   *  when he acts on it (the prompt or the interact key). */
+  setPorch(cbs: { onNear: (near: boolean) => void; onOpen: () => void }): void {
+    this.onPorchNear = cbs.onNear;
+    this.onPorchOpen = cbs.onOpen;
+  }
+
+  /** The porch for the dev hook: where it is, whether it shows and he stands in it. */
+  porchState(): { x: number; z: number; shown: boolean; near: boolean; tag: string } | null {
+    const p = this.porch;
+    return p ? { x: p.pos.x, z: p.pos.z, shown: p.group.visible, near: this.nearPorch, tag: p.tag } : null;
   }
 
   /**
@@ -454,12 +517,13 @@ export class Markers {
   }
 
   /** Whether the next mission's tag / the board's tag glows now (dev hook). */
-  glowState(): { next: boolean; board: boolean; beacon: boolean } {
+  glowState(): { next: boolean; board: boolean; beacon: boolean; porch: boolean } {
     const m = this.activeId ? this.list.find((k) => k.missionId === this.activeId) : null;
     return {
       next: !!m && this.labels.glowing(m.label),
       board: !!this.boardLabel && this.labels.glowing(this.boardLabel),
       beacon: !!this.beacon?.mesh.visible,
+      porch: !!this.porch && this.labels.glowing(this.porch.label),
     };
   }
 
@@ -572,6 +636,11 @@ export class Markers {
       const ns = Math.hypot(this.sitSpotPos.x - x, this.sitSpotPos.z - z) < NEAR_R;
       if (ns !== this.nearSitSpot) { this.nearSitSpot = ns; this.onSitSpotNear(ns); }
     }
+    const p = this.porch;
+    if (p) {
+      const np = p.group.visible && Math.hypot(p.pos.x - x, p.pos.z - z) < NEAR_R;
+      if (np !== this.nearPorch) { this.nearPorch = np; this.onPorchNear(np); }
+    }
   }
 
   /**
@@ -643,6 +712,7 @@ export class Markers {
    *  that order. False when the ranger stands at none of them. */
   interact(): boolean {
     if (this.nearBoard) { this.onBoardOpen(); return true; }
+    if (this.nearPorch) { this.onPorchOpen(); return true; }
     if (this.nearSitSpot) { this.onSitSpotActivate(); return true; }
     if (this.nearId) { this.onInteract(this.nearId); return true; }
     return false;
@@ -653,6 +723,7 @@ export class Markers {
   clearForVehicle(): void {
     if (this.nearId) { this.nearId = null; this.onApproach(null); this.syncLabels(); }
     if (this.nearBoard) { this.nearBoard = false; this.onBoardNear(false); }
+    if (this.nearPorch) { this.nearPorch = false; this.onPorchNear(false); }
   }
 
   /** How far every "go here" ring is in: 0 while the world is presented (the title, the
@@ -703,6 +774,7 @@ export class Markers {
   resetAfterActivity(): void {
     this.nearId = null;
     this.nearBoard = false;
+    this.nearPorch = false;
     this.nearSitSpot = false;
     this.lastWayKey = '';
   }

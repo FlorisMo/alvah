@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { R, walkTo, sleep, type P2, type Vehicle } from './golden-lib';
 import { BRAM, LES, BESTURING, metNaam } from '../src/content/mentor';
-import { ONBOARD_DRIVE } from '../src/core/onboarding';
+import { HUD } from '../src/content/copy';
 import { AREA_VELUWE } from '../src/content/veluwe';
 
 /**
@@ -310,7 +310,7 @@ test('a curious child drives off during the greeting: the hook and the chip come
   await page.keyboard.press('Enter');
   await expect.poll(async () => (await R<Vehicle>(page, 'r.vehicle()'))?.inVehicle, { timeout: 5_000, message: 'Enter gets him into the jeep' }).toBe(true);
   // the drive line teaches the same key as every other prompt, and "Stap uit" wears its cap
-  await expect(page.locator('.explore-drive-hint')).toContainText(ONBOARD_DRIVE.uit);
+  await expect(page.locator('.explore-drive-hint')).toContainText(HUD.rijden.uit);
   await expect(page.getByRole('button', { name: 'Stap uit' }).locator('.kcap-in')).toHaveText('Enter');
   await snapShot(page, 'in-jeep');
 
@@ -346,7 +346,7 @@ test('a curious child drives off during the greeting: the hook and the chip come
   await snapShot(page, 'out-run-lesson');
   // the drive line is read aloud too (queued behind Bram's line, never cutting it off)
   const said = await saidAll(page);
-  const drive = said.findIndex((l) => l.includes(ONBOARD_DRIVE.uit));
+  const drive = said.findIndex((l) => l.includes(HUD.rijden.uit));
   expect(drive, 'the drive line is read aloud').toBeGreaterThanOrEqual(0);
   expect(errors).toEqual([]);
 });
@@ -488,4 +488,75 @@ test.describe('on an iPad-size touch screen', () => {
     await bramSays(page, BRAM.haak.simpel[0], 15_000);
     await snapShot(page, 'hook');
   });
+});
+
+test('two missions done: Bram tells about the young raaf once, and the porch ring opens the hut by Enter or a click', async ({ page }, testInfo) => {
+  test.setTimeout(4 * 60_000);
+  shotsInto(testInfo, 'raaf');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
+  await spyVoice(page);
+  // a save with the first two missions done: the young raaf is still at the hut
+  await page.addInitScript((done: string[]) => {
+    if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: {
+      avatarGemaakt: true, voltooid: Object.fromEntries(done.map((id) => [id, true])),
+      settings: { geleerd: { bram: true, lopen: true, rennen: true, haak: true, kijken: true, missiebord: true, jeep: true } },
+    } }));
+  }, [missions[0].id, missions[1].id]);
+  await page.goto('/?dev=1');
+  await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 40_000 });
+  await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
+
+  // "Welkom terug", then the raaf: the ring on the hut's porch comes with his first line
+  type Porch = { x: number; z: number; shown: boolean; near: boolean; tag: string };
+  expect((await R<Porch>(page, 'r.porch()')).shown, 'no porch ring before Bram tells about it').toBe(false);
+  await bramSays(page, metNaam(BRAM.welkomTerug[0], naam));
+  await bramSays(page, BRAM.raaf[0]);
+  const porch = await R<Porch>(page, 'r.porch()');
+  expect(porch.shown, 'the porch ring shows as Bram points at the hut').toBe(true);
+  expect(porch.tag).toBe('Jonge raaf');
+  expect((await R<{ porch: boolean }>(page, 'r.glow()')).porch, 'its ring and tag glow').toBe(true);
+  await snapShot(page, 'raaf-line');
+  await bramSays(page, BRAM.raaf[1]);
+  await expect.poll(async () => (await hint(page)).learned.includes('raaf'), { timeout: 15_000 }).toBe(true);
+
+  // walk to the porch (real arrow keys): "Kijk in de hut" with its Enter cap, said aloud
+  await walkTo(page, porch, { stopDist: 1.0, timeout: 60_000 });
+  const look = page.getByRole('button', { name: 'Kijk in de hut' });
+  await expect(look).toBeVisible({ timeout: 8_000 });
+  await expect(look.locator('.kcap-in')).toHaveText('Enter');
+  await expect.poll(async () => (await saidAll(page)).includes('Kijk in de hut.'), { timeout: 5_000, message: 'the prompt says its words' }).toBe(true);
+  await snapShot(page, 'porch');
+  // Enter opens the hut: the same hut Pauze opens, its story read aloud line by line
+  const hut = page.locator('.ra-overlay .card.cabin'); // (a card that is leaving is no longer an overlay)
+  await page.keyboard.press('Enter');
+  await expect(hut).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator('.comp-title')).toHaveText('Een jonge raaf viel uit het nest.');
+  await expect.poll(async () => (await saidAll(page)).some((l) => l.includes('Een jonge raaf viel uit het nest. Hij is nog zwak.')), { timeout: 5_000 }).toBe(true);
+  await expect(page.locator('.opvang-kaart'), 'one thing at a time: the opvang opens once the raaf is in').toHaveCount(0);
+  await snapShot(page, 'hut');
+  // Esc goes back out; the ring is still there, and a click opens the hut again
+  await page.keyboard.press('Escape');
+  await expect(look).toBeVisible({ timeout: 8_000 });
+  await look.click();
+  await expect(hut).toBeVisible({ timeout: 8_000 });
+  // he takes the raaf in: the tag on the porch says its name from now on
+  await page.getByRole('button', { name: 'Kroa', exact: true }).click();
+  await page.getByRole('button', { name: 'Vang Kroa op' }).click();
+  await expect(page.locator('.opvang-kaart')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect.poll(async () => (await R<Porch>(page, 'r.porch()')).tag, { timeout: 5_000 }).toBe('Kroa');
+  await snapShot(page, 'kroa');
+
+  // once: a reload never tells it again
+  const said = (await saidAll(page)).filter((l) => l === BRAM.raaf[0]).length;
+  expect(said, 'the raaf line is said once').toBe(1);
+  await page.reload();
+  await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 40_000 });
+  await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 60_000 }).toBe('world');
+  await bramSays(page, metNaam(BRAM.welkomTerug[0], naam));
+  await sleep(page, 5_000);
+  expect(await stripLines(page), 'no raaf line after a reload').not.toContain(BRAM.raaf[0]);
+  expect((await R<Porch>(page, 'r.porch()')).shown, 'the porch ring stays: Kroa lives there').toBe(true);
+  expect(errors).toEqual([]);
 });

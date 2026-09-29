@@ -63,7 +63,7 @@ test('menus read aloud, the maker shows every choice, Enter presses Verder after
   const lastSwatch = page.locator('.av-swatch').last();
   expect(await lastSwatch.evaluate((el) => el.getBoundingClientRect().bottom <= (el.closest('.avatar-creator') as HTMLElement).getBoundingClientRect().bottom + 1),
     'the last eye colour is on screen').toBe(true);
-  await said(page, 'Maak je eigen ranger', 'the maker says what to do');
+  await said(page, 'Maak je ranger. Hoi, ranger Alvah!', 'the maker says its title and greets the ranger by name');
   await clearSpoken(page);
   await page.locator('.av-swatch[data-kenmerk="haar"]').nth(3).hover();
   await said(page, /Haar: /, 'a swatch says its own label when the mouse rests on it');
@@ -118,4 +118,36 @@ test('menus read aloud, the maker shows every choice, Enter presses Verder after
   await said(page, 'Daar is hij', 'the find card is read aloud');
   await page.keyboard.press('Enter');
   await expect(verder, 'Enter pressed "Verder"').toBeHidden({ timeout: 5_000 });
+});
+
+test.describe('on a tablet (touch, 1080×810)', () => {
+  test.use({ viewport: { width: 1080, height: 810 }, hasTouch: true, isMobile: true });
+
+  test('a tapped name chip says the new greeting whole; a tapped swatch says its label @readaloud', async ({ page }) => {
+    test.setTimeout(2 * 60_000);
+    await page.addInitScript(() => {
+      const w = window as unknown as { __said: string[] };
+      w.__said = [];
+      const orig = SpeechSynthesis.prototype.speak;
+      SpeechSynthesis.prototype.speak = function (u: SpeechSynthesisUtterance) { w.__said.push(u.text); try { return orig.call(this, u); } catch { /* no voice */ } };
+    });
+    await page.goto('/?dev=1');
+    await page.getByRole('button', { name: 'Begin', exact: true }).tap({ timeout: 40_000 });
+    await page.getByRole('button', { name: 'Dit is mijn ranger' }).waitFor({ state: 'visible', timeout: 30_000 });
+    await sleep(page, 1_500);
+    // a tap's mouseenter comes after the press: the chip's own label must not follow it
+    // (it would cut the greeting off 0.45 s in)
+    for (const naam of ['Sam', 'Bo']) {
+      await clearSpoken(page);
+      await page.getByRole('button', { name: naam, exact: true }).tap();
+      await sleep(page, 1_500);
+      expect(await spoken(page), `the ${naam} chip says only the new greeting`).toEqual([`Hoi, ranger ${naam}!`]);
+    }
+    // a swatch is quiet when pressed: on a tablet the tap is how its label is heard
+    await clearSpoken(page);
+    const swatch = page.locator('.av-swatch[data-kenmerk="haar"]').nth(2);
+    await swatch.tap();
+    await sleep(page, 1_500);
+    expect(await spoken(page), 'a tapped swatch says its label').toEqual([(await swatch.getAttribute('aria-label')) ?? '?']);
+  });
 });

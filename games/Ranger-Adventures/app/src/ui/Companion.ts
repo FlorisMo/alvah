@@ -23,6 +23,8 @@ import {
 } from '../core/companion';
 import { card, kicker } from './flow/session';
 import { icon } from './icons';
+import { mountReadAloud, type ReadAloudSegment, type ReadAloudHandle } from './ReadAloud';
+import { HUT, vul } from '../content/copy';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -36,11 +38,13 @@ const soortMark = (soort: string): string => icon(soort === 'raaf' ? 'raven' : '
 
 let onBack: () => void;
 // The back-button label. Default "Terug naar de hut" (the lodge caller); the
-// world pause-hub (W2.4b) passes "Terug naar de open plek" so the raaf screen
-// reads right when it overlays the LIVE world instead of the lodge.
-let backLabel = 'Terug naar de hut';
+// world pause-hub (W2.4b) and the hut's porch pass "Terug naar de open plek" so the
+// raaf screen reads right when it overlays the LIVE world instead of the lodge.
+let backLabel: string = HUT.terugHut;
+// the hut's words being read aloud now (stopped when it closes or is drawn again)
+let reading: ReadAloudHandle | null = null;
 
-export function showCabin(back: () => void, label = 'Terug naar de hut'): void {
+export function showCabin(back: () => void, label: string = HUT.terugHut): void {
   onBack = back;
   backLabel = label;
   render();
@@ -50,14 +54,29 @@ function speak(text: string): void {
   if (store.get().settings.voorlezen) narrator.speak(text);
 }
 
+/** One line of text per idea, each its own element (so it can light up as it is read). */
+function linesHtml(cls: string, lines: readonly string[]): string {
+  return `<p class="${cls}">${lines.map((l) => `<span class="comp-line">${esc(l)}</span>`).join('')}</p>`;
+}
+/** Those lines as read-aloud segments. */
+function lineSegs(root: HTMLElement, sel: string, lines: readonly string[]): ReadAloudSegment[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(`${sel} .comp-line`)).map((el, i) => ({ el, text: lines[i] ?? '' }));
+}
+
 /* ----------------------------------------------------------- cabin shell ---- */
-function render(): void {
+/** What the hut says as it opens: its name, then what is new (the raaf that needs help,
+ *  or the guest in the opvang), every line read aloud and lit up as it is said. */
+interface HutWords { segs: ReadAloudSegment[]; trail: string[] }
+
+/** Draw the hut. `quiet`: it does not read itself (something else is being said). */
+function render(quiet = false): void {
+  reading?.stop();
   narrator.stop();
   // the way back sits in the pinned footer: it never scrolls out of the card (breaker B3)
   const el = card(
     `<div class="card cabin">` +
-    kicker('raven', 'De ranger-hut') +
-    `<h1 class="boot-title">Jouw plekje</h1>` +
+    kicker('raven', HUT.kicker) +
+    `<h1 class="boot-title">${esc(HUT.titel)}</h1>` +
     `<div class="card-body"><div class="cabin-sections"></div></div>` +
     `<div class="card-foot">` +
     `<button class="ra-chip cabin-back" type="button" data-key="back">` +
@@ -67,27 +86,39 @@ function render(): void {
   );
 
   const sections = el.querySelector<HTMLDivElement>('.cabin-sections')!;
-  sections.appendChild(companionSection());
-  sections.appendChild(opvangSection());
+  const words: HutWords = { segs: [], trail: [] };
+  sections.appendChild(companionSection(words));
+  // one thing at a time: the opvang opens once the raaf is taken in (the hut's first job)
+  const s = store.get();
+  if (s.companion.rescued || s.rehab.active) sections.appendChild(opvangSection(words));
+  reading = mountReadAloud({
+    segments: [{ el: el.querySelector<HTMLElement>('.cabin .boot-title')!, text: HUT.titel, sentence: true }, ...words.segs],
+    trail: words.trail.join(' '),
+    autoStart: store.get().settings.voorlezen && !quiet,
+  });
 
-  el.querySelector('.cabin-back')?.addEventListener('click', () => { narrator.stop(); onBack(); });
+  el.querySelector('.cabin-back')?.addEventListener('click', () => { reading?.stop(); narrator.stop(); onBack(); });
 }
 
 /* ------------------------------------------------------- companion (perch) -- */
-function companionSection(): HTMLElement {
+function companionSection(words: HutWords): HTMLElement {
   const wrap = document.createElement('section');
   wrap.className = 'comp-card';
   const c = store.get().companion;
 
   if (!c.rescued) {
+    // what happened, one idea a line (the first as its heading)
+    const [kop, ...rest] = HUT.redding;
     wrap.innerHTML =
       `<div class="comp-rescue">` +
       `<div class="comp-perch"><span class="comp-sprite fase-baby" aria-hidden="true">${soortMark(c.soort)}</span></div>` +
-      `<p class="comp-title">Een jonge raaf is uit het nest gevallen.</p>` +
-      `<p class="comp-text">Hij is zwak en heeft hulp nodig. Wil je hem opvangen? Later wordt hij je vaste vriend.</p>` +
+      linesHtml('comp-title', [kop]) +
+      linesHtml('comp-text', rest) +
       `<div class="naam-grid"></div>` +
-      `<div class="ra-row"><button class="btn-start comp-rescue-btn" type="button" disabled>Kies eerst een naam</button></div>` +
+      `<div class="ra-row"><button class="btn-start comp-rescue-btn" type="button" disabled>${esc(HUT.kiesNaam)}</button></div>` +
       `</div>`;
+    words.segs.push(...lineSegs(wrap, '.comp-title', [kop]), ...lineSegs(wrap, '.comp-text', rest));
+    words.trail.push(`${HUT.kiesNaam}.`);
     const namen = (COMPANION_SOORTEN[c.soort] ?? COMPANION_SOORTEN.raaf).namen;
     const grid = wrap.querySelector<HTMLDivElement>('.naam-grid')!;
     let gekozen = '';
@@ -103,17 +134,17 @@ function companionSection(): HTMLElement {
         grid.querySelectorAll('.naam-knop').forEach((x) => x.classList.remove('gekozen'));
         nb.classList.add('gekozen');
         btn.disabled = false;
-        btn.textContent = `Vang ${n} op`;
+        btn.textContent = vul(HUT.vangOp, { raaf: n });
+        speak(n); // the name he picked, said back
       });
       grid.appendChild(nb);
     });
-    speak('Een jonge raaf heeft hulp nodig. Kies een naam.');
     btn.addEventListener('click', () => {
       if (!gekozen) return;
       Sound.found();
       store.rescueCompanion(gekozen);
-      speak(`${gekozen} is veilig. Verzorg hem goed.`);
-      render();
+      render(true);
+      speak(vul(HUT.zegVeilig, { raaf: gekozen }));
     });
     return wrap;
   }
@@ -124,25 +155,27 @@ function companionSection(): HTMLElement {
   const kunstjes = c.kunstjes
     .map((k: Kunstje) => `<span class="comp-kunstje">${esc(KUNSTJE_META[k].naam)}</span>`)
     .join('');
-  const mee = c.meeOpMissie ? `<p class="comp-mee">${esc(c.naam)} vliegt nu met je mee op missie.</p>` : '';
+  const mee = c.meeOpMissie ? `<p class="comp-mee">${esc(vul(HUT.meeOpMissie, { raaf: c.naam }))}</p>` : '';
 
   wrap.innerHTML =
     `<div class="comp-head">` +
     `<div class="comp-perch"><span class="comp-sprite fase-${esc(c.fase)}" aria-hidden="true">${soortMark(c.soort)}</span></div>` +
     `<div class="comp-meta">` +
-    `<div class="comp-name">${esc(c.naam || 'Je raaf')}</div>` +
+    `<div class="comp-name">${esc(raafNaam())}</div>` +
     `<div class="comp-fase">${esc(fase.label)} · ${esc(fase.kort)}</div>` +
     `<div class="bond-meter" aria-label="band ${bondPct} van 100"><span class="bm-heart">${icon('heart')}</span>` +
     `<span class="bm-track"><span class="bm-fill" style="width:${bondPct}%"></span></span></div>` +
     (kunstjes ? `<div class="comp-kunstjes">${kunstjes}</div>` : '') +
     `</div></div>` +
     mee +
-    `<div class="ra-row"><button class="btn-start comp-care-btn" type="button">Geef ${esc(c.naam || 'hem')} zorg</button></div>`;
+    `<div class="ra-row"><button class="btn-start comp-care-btn" type="button">${esc(vul(HUT.geefZorg, { raaf: raafNaam() }))}</button></div>`;
+  const meeEl = wrap.querySelector<HTMLElement>('.comp-mee');
+  if (meeEl) words.segs.push({ el: meeEl, text: meeEl.textContent ?? '' });
 
   wrap.querySelector('.comp-care-btn')?.addEventListener('click', () => {
     Sound.unlock();
     const stappen = ZORG_STAPPEN[c.fase];
-    runCare(stappen, c.naam || 'hem', (miss) => {
+    runCare(stappen, raafNaam(), (miss) => {
       const before = store.get().companion.fase;
       store.bondDelta(careBondDelta(miss.orderMiss, miss.knuffelMiss));
       const grew = store.get().companionGroei && store.get().companion.fase !== before;
@@ -156,44 +189,55 @@ function companionSection(): HTMLElement {
   return wrap;
 }
 
+/** The raaf's name ("Kroa"), or "Je raaf" before it has one. */
+function raafNaam(): string {
+  return store.get().companion.naam?.trim() || HUT.jeRaaf;
+}
+
 /** Fase-up celebration (positive growth, never a drop). */
 function celebrateGroei(fase: Fase): void {
   const c = store.get().companion;
   const meta = FASE_META[fase];
   const newKunstje = c.kunstjes.length ? KUNSTJE_META[c.kunstjes[c.kunstjes.length - 1]] : null;
-  const line = `${c.naam || 'Je raaf'} is gegroeid: ${meta.label}. ${fase !== 'baby' ? `${c.naam || 'Hij'} kan nu met je mee.` : ''}`;
+  const naam = raafNaam();
+  const lines = [vul(HUT.gegroeid, { raaf: naam, fase: meta.label }), ...(fase !== 'baby' ? [vul(HUT.kanMee, { raaf: naam })] : [])];
+  const kunstje = newKunstje ? [vul(HUT.nieuwKunstje, { kunstje: newKunstje.naam }), vul(newKunstje.uitleg, { raaf: naam })] : [];
   const el = card(
     `<div class="card card--narrow comp-groei">` +
-    kicker('heart', 'Je vriend groeit') +
+    kicker('heart', HUT.groeiKicker) +
     `<span class="comp-sprite big fase-${esc(fase)}" aria-hidden="true">${soortMark(c.soort)}</span>` +
     `<h1 class="boot-title">${esc(meta.label)}</h1>` +
-    `<p class="comp-text">${esc(line)}</p>` +
-    (newKunstje ? `<p class="comp-kunstje-new">Nieuw kunstje: <b>${esc(newKunstje.naam)}</b> — ${esc(newKunstje.uitleg.replace('{naam}', c.naam || 'Hij'))}</p>` : '') +
-    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button">Fijn!</button></div></div>` +
+    linesHtml('comp-text', lines) +
+    (kunstje.length ? linesHtml('comp-kunstje-new', kunstje) : '') +
+    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button">${esc(HUT.fijn)}</button></div></div>` +
     `</div>`,
   );
   if (store.get().settings.geluid) Sound.found();
-  speak(line);
+  const ra = mountReadAloud({
+    segments: [...lineSegs(el, '.comp-text', lines), ...lineSegs(el, '.comp-kunstje-new', kunstje)],
+    autoStart: store.get().settings.voorlezen,
+  });
   el.querySelector('.btn-start')?.addEventListener('click', () => {
-    narrator.stop();
+    ra.stop();
     store.clearCompanionGroei();
     render();
   });
 }
 
 /* --------------------------------------------------------- opvang (rehab) --- */
-function opvangSection(): HTMLElement {
+function opvangSection(words: HutWords): HTMLElement {
   const wrap = document.createElement('section');
   wrap.className = 'opvang-kaart';
   const rehab = store.get().rehab;
   const count = rehab.releasedCount > 0
-    ? `<span class="ok-count">${rehab.releasedCount} vrijgelaten</span>` : '';
+    ? `<span class="ok-count">${esc(vul(HUT.vrijgelaten, { n: rehab.releasedCount }))}</span>` : '';
 
   if (!rehab.active) {
     wrap.innerHTML =
-      `<div class="ok-head"><span class="ok-title">De opvang</span>${count}</div>` +
-      `<p class="ok-text">Soms heeft een dier even hulp nodig. Je verzorgt het en laat het weer vrij.</p>` +
-      `<div class="ra-row"><button class="ra-chip ok-haal" type="button">Kijk wie er is</button></div>`;
+      `<div class="ok-head"><span class="ok-title">${esc(HUT.opvang)}</span>${count}</div>` +
+      linesHtml('ok-text', HUT.opvangUitleg) +
+      `<div class="ra-row"><button class="ra-chip ok-haal" type="button">${esc(HUT.kijkWie)}</button></div>`;
+    words.segs.push(...lineSegs(wrap, '.ok-text', HUT.opvangUitleg));
     wrap.querySelector('.ok-haal')?.addEventListener('click', () => {
       Sound.unlock(); Sound.select();
       // deterministic pick (no Math.random in run-land): rotate by how many you've already released
@@ -206,35 +250,40 @@ function opvangSection(): HTMLElement {
 
   const dier = rehab.dier ?? 'das';
   const naam = Content.animal(dier)?.naam ?? dier;
+  const gast = [vul(HUT.gast, { gast: naam, reden: rehab.reden ?? 'moe' }), HUT.juisteZorg];
   wrap.innerHTML =
-    `<div class="ok-head"><span class="ok-title">De opvang</span>${count}</div>` +
+    `<div class="ok-head"><span class="ok-title">${esc(HUT.opvang)}</span>${count}</div>` +
     `<div class="ok-gast">` +
-    `<p class="ok-text">Een ${esc(naam)} is ${esc(rehab.reden ?? 'verzwakt')}. Geef de juiste zorg.</p>` +
-    `<div class="ra-row"><button class="btn-start ok-verzorg" type="button">Verzorg ${esc(naam)}</button></div>` +
+    linesHtml('ok-text', gast) +
+    `<div class="ra-row"><button class="btn-start ok-verzorg" type="button">${esc(vul(HUT.verzorgDe, { gast: naam }))}</button></div>` +
     `</div>`;
-  speak(`Een ${naam} is ${rehab.reden ?? 'verzwakt'}. Geef de juiste zorg.`);
+  words.segs.push(...lineSegs(wrap, '.ok-text', gast));
   wrap.querySelector('.ok-verzorg')?.addEventListener('click', () => {
     Sound.unlock();
-    runCare(ZORG_STAPPEN.baby, naam, () => showRelease(naam));
+    runCare(ZORG_STAPPEN.baby, `de ${naam}`, () => showRelease(naam));
   });
   return wrap;
 }
 
 /** The hopeful goodbye — release the guest, count it, never sad. */
 function showRelease(naam: string): void {
+  const titel = vul(HUT.vrij, { gast: naam });
   const el = card(
     `<div class="card card--narrow ok-vrij">` +
-    kicker('leaf', 'Sterk genoeg') +
+    kicker('leaf', HUT.vrijKicker) +
     `<span class="ok-vrij-art" aria-hidden="true">${icon('leaf')}</span>` +
-    `<h1 class="boot-title">${esc(naam)} is weer vrij</h1>` +
-    `<p class="comp-text">Hij is nu sterk genoeg. Je laat hem gaan — dat hoort erbij.</p>` +
-    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button">Dag, sterke vriend</button></div></div>` +
+    `<h1 class="boot-title">${esc(titel)}</h1>` +
+    linesHtml('comp-text', HUT.vrijRegels) +
+    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button">${esc(HUT.dag)}</button></div></div>` +
     `</div>`,
   );
   if (store.get().settings.geluid) Sound.found();
-  speak(`${naam} is weer sterk genoeg. Je laat hem vrij.`);
+  const ra = mountReadAloud({
+    segments: [{ el: el.querySelector<HTMLElement>('.ok-vrij .boot-title')!, text: titel, sentence: true }, ...lineSegs(el, '.comp-text', HUT.vrijRegels)],
+    autoStart: store.get().settings.voorlezen,
+  });
   el.querySelector('.btn-start')?.addEventListener('click', () => {
-    narrator.stop();
+    ra.stop();
     store.releaseRehab();
     render();
   });
@@ -257,14 +306,14 @@ function runCare(stappen: ZorgStap[], naam: string, done: (m: CareMiss) => void)
 
   const el = card(
     `<div class="card care-routine">` +
-    kicker('heart', 'Zorg op volgorde') +
-    `<h1 class="boot-title">Verzorg ${esc(naam)}</h1>` +
+    kicker('heart', HUT.zorgKicker) +
+    `<h1 class="boot-title">${esc(vul(HUT.verzorg, { wie: naam }))}</h1>` +
     `<div class="care-progress" aria-label="zorgstappen"></div>` +
     `<div class="care-grid"></div>` +
-    `<div class="care-msg tip" role="status">Doe de zorg op volgorde.</div>` +
+    `<div class="care-msg tip" role="status">${esc(HUT.zorgTip)}</div>` +
     // never a one-way door: Esc (or this) goes back to the hut, nothing is counted
     `<div class="card-foot"><button class="ra-chip care-back" type="button" data-key="back">` +
-    `<span class="ra-chip-ic">${icon('back')}</span><span class="ra-chip-tx">Terug</span></button></div>` +
+    `<span class="ra-chip-ic">${icon('back')}</span><span class="ra-chip-tx">${esc(HUT.terug)}</span></button></div>` +
     `</div>`,
   );
   el.querySelector('.care-back')?.addEventListener('click', () => { if (!finished) { narrator.stop(); render(); } });
@@ -272,6 +321,9 @@ function runCare(stappen: ZorgStap[], naam: string, done: (m: CareMiss) => void)
   const progress = el.querySelector<HTMLDivElement>('.care-progress')!;
   const grid = el.querySelector<HTMLDivElement>('.care-grid')!;
   const msg = el.querySelector<HTMLDivElement>('.care-msg')!;
+
+  // what the round is, said as it opens: its title and the rule
+  speak(`${vul(HUT.verzorg, { wie: naam })}. ${HUT.zorgTip}`);
 
   const setMsg = (kind: 'tip' | 'ok' | 'wait', text: string): void => {
     msg.className = `care-msg ${kind}`;
@@ -304,7 +356,7 @@ function runCare(stappen: ZorgStap[], naam: string, done: (m: CareMiss) => void)
         })
         .join('') +
       `<button class="care-step knuffel" type="button" data-knuffel="1">` +
-      `<span class="cs-ico" aria-hidden="true">${CARE_GLYPH.heart}</span><span class="cs-label">Knuffelen</span></button>`;
+      `<span class="cs-ico" aria-hidden="true">${CARE_GLYPH.heart}</span><span class="cs-label">${esc(HUT.knuffelen)}</span></button>`;
 
     grid.querySelectorAll<HTMLButtonElement>('.care-step').forEach((b) => {
       b.addEventListener('click', () => {
@@ -330,7 +382,7 @@ function runCare(stappen: ZorgStap[], naam: string, done: (m: CareMiss) => void)
         // care SKIN → log to the SAME skill records the engines use
         store.logSession(CARE_ENGINES.order, { trials: 1, correct: orderMiss > 0 ? 0 : 1 });
         store.logSession(CARE_ENGINES.inhibition, { trials: 1, correct: knuffelMiss > 0 ? 0 : 1 });
-        setMsg('ok', 'De zorg is klaar. Knap gedaan.');
+        setMsg('ok', HUT.zorgKlaar);
         window.setTimeout(() => done({ orderMiss, knuffelMiss }), 1100);
       } else {
         setMsg('ok', s.zin);
@@ -338,7 +390,7 @@ function runCare(stappen: ZorgStap[], naam: string, done: (m: CareMiss) => void)
     } else {
       if (store.get().settings.geluid) Sound.tryAgain();
       orderMiss += 1;
-      setMsg('wait', `Eerst: ${nn.label.toLowerCase()}.`);
+      setMsg('wait', vul(HUT.eerst, { stap: nn.label.toLowerCase() }));
     }
   };
 
@@ -346,7 +398,7 @@ function runCare(stappen: ZorgStap[], naam: string, done: (m: CareMiss) => void)
     if (finished) return;
     if (store.get().settings.geluid) Sound.tryAgain();
     knuffelMiss += 1;
-    setMsg('wait', `Niet te veel knuffelen. Geef ${naam} rust.`);
+    setMsg('wait', HUT.teVeel);
   };
 
   paint();

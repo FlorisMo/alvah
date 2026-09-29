@@ -18,6 +18,8 @@
  * in `ui/`.
  */
 
+import { ONDERWEG, vul } from '../content/copy.ts';
+
 /** Light cadence: at most one beat every Nth *completed-mission* patrol return. */
 export const WORLDBEAT_EVERY = 3;
 
@@ -58,20 +60,20 @@ export interface WorldBeatInput {
   heading: CoarseHeading | null;
 }
 
-// Short lines (≤ 7 words, child B14): the impulse beat names the animal he can SEE
-// (withAnimal), it never asks about one that is not there.
+// Short lines (≤ 7 words, child B14; the words are in content/copy.ts): the impulse beat
+// names the animal he can SEE (withAnimal), it never asks about one that is not there.
 const IMPULSE: WorldBeat = {
   kind: 'blijf-op-pad',
-  prompt: 'Een dier loopt weg. Wat doe jij?',
+  prompt: ONDERWEG.iemandWeg.join(' '),
   options: [
-    { label: 'Blijf op het pad', icon: 'boot', correct: true },
-    { label: 'Ren erachteraan', icon: 'paw', correct: false },
+    { label: ONDERWEG.blijf, icon: 'boot', correct: true },
+    { label: ONDERWEG.ren, icon: 'paw', correct: false },
   ],
 };
 
 /** The impulse beat about the animal in view: "Een vos loopt weg. Wat doe jij?". */
 export function withAnimal(beat: WorldBeat, naam: string): WorldBeat {
-  return beat.kind === 'blijf-op-pad' ? { ...beat, prompt: `Een ${naam} loopt weg. Wat doe jij?` } : beat;
+  return beat.kind === 'blijf-op-pad' ? { ...beat, prompt: vul(ONDERWEG.dierWeg.join(' '), { dier: naam }) } : beat;
 }
 
 /** A beat never lands on the reward cards (child B14): it waits until the ranger has
@@ -90,11 +92,11 @@ export function beatReady(beat: WorldBeat, walked: number, animalInView: boolean
 function wayfindBeat(heading: CoarseHeading): WorldBeat {
   return {
     kind: 'welke-kant',
-    prompt: 'Welke kant is je volgende missie?',
+    prompt: ONDERWEG.welkeKant,
     options: [
-      { label: 'Naar links', icon: 'arrow', turn: -90, key: 'ArrowLeft', correct: heading === 'links' },
-      { label: 'Rechtdoor', icon: 'arrow', turn: 0, key: 'ArrowUp', correct: heading === 'rechtdoor' },
-      { label: 'Naar rechts', icon: 'arrow', turn: 90, key: 'ArrowRight', correct: heading === 'rechts' },
+      { label: ONDERWEG.links, icon: 'arrow', turn: -90, key: 'ArrowLeft', correct: heading === 'links' },
+      { label: ONDERWEG.rechtdoor, icon: 'arrow', turn: 0, key: 'ArrowUp', correct: heading === 'rechtdoor' },
+      { label: ONDERWEG.rechts, icon: 'arrow', turn: 90, key: 'ArrowRight', correct: heading === 'rechts' },
     ],
   };
 }

@@ -17,6 +17,7 @@
  */
 
 import type { Engine } from './skill';
+import { RAAF_NAMEN, RAAF_FASE, RAAF_KUNSTJE, ZORG, GAST } from '../content/copy.ts';
 
 export type Fase = 'baby' | 'jong' | 'zelfstandig';
 export type Kunstje = 'scout' | 'gids';
@@ -34,21 +35,23 @@ export const COMPANION_SOORTEN: Record<string, SoortConfig> = {
   raaf: {
     soort: 'raaf', naam: 'raaf', roep: 'raaf',
     kunstjeBijFase: { jong: 'scout', zelfstandig: 'gids' },
-    namen: ['Kroa', 'Veer', 'Schaduw', 'Inktje'],
+    namen: [...RAAF_NAMEN],
   },
 };
 
 export const FASE_ORDER: readonly Fase[] = ['baby', 'jong', 'zelfstandig'];
 
+/** Each stage's threshold; its words live in the copy deck (content/copy.ts). */
 export const FASE_META: Record<Fase, { label: string; kort: string; drempel: number }> = {
-  baby:        { label: 'kuiken',       kort: 'Pas gered',          drempel: 0 },
-  jong:        { label: 'jonge raaf',   kort: 'Wordt sterk',        drempel: 40 },
-  zelfstandig: { label: 'vrije vriend', kort: 'Vliegt met je mee',  drempel: 75 },
+  baby:        { ...RAAF_FASE.baby,        drempel: 0 },
+  jong:        { ...RAAF_FASE.jong,        drempel: 40 },
+  zelfstandig: { ...RAAF_FASE.zelfstandig, drempel: 75 },
 };
 
+/** `uitleg` takes the raaf's name as `{raaf}`. */
 export const KUNSTJE_META: Record<Kunstje, { naam: string; uitleg: string; icon: string }> = {
-  scout: { naam: 'Scout', uitleg: '{naam} vliegt op en speurt met je mee.', icon: 'eye' },
-  gids:  { naam: 'Gids',  uitleg: '{naam} wijst je rustig de goede kant op.', icon: 'path' },
+  scout: { ...RAAF_KUNSTJE.scout, icon: 'eye' },
+  gids:  { ...RAAF_KUNSTJE.gids,  icon: 'path' },
 };
 
 export interface ZorgStap {
@@ -58,35 +61,35 @@ export interface ZorgStap {
   zin: string;
 }
 
-/** Care routine per fase — needs change as it grows (that change = flexibiliteit). */
+/** Care routine per fase — needs change as it grows (that change = flexibiliteit). The
+ *  words (the button, what the voice says) live in the copy deck. */
 export const ZORG_STAPPEN: Record<Fase, ZorgStap[]> = {
   baby: [
-    { id: 'warmte', label: 'Warm houden',  icon: 'flame', zin: 'Leg een zacht doekje om hem heen.' },
-    { id: 'voer',   label: 'Voeren',       icon: 'drop',  zin: 'Geef een klein beetje voer.' },
-    { id: 'rust',   label: 'Laten rusten', icon: 'moon',  zin: 'Laat hem rustig slapen.' },
-    { id: 'check',  label: 'Checken',      icon: 'check', zin: 'Kijk of het beter gaat.' },
+    { id: 'warmte', icon: 'flame', ...ZORG.warmte },
+    { id: 'voer',   icon: 'drop',  ...ZORG.voer },
+    { id: 'rust',   icon: 'moon',  ...ZORG.rust },
+    { id: 'check',  icon: 'check', ...ZORG.check },
   ],
   jong: [
-    { id: 'voer',   label: 'Voeren',        icon: 'drop',  zin: 'Nu wat groter voer.' },
-    { id: 'beweeg', label: 'Laten bewegen', icon: 'wing',  zin: 'Laat hem zijn vleugels strekken.' },
-    { id: 'check',  label: 'Checken',       icon: 'check', zin: 'Gaat het goed?' },
+    { id: 'voer',   icon: 'drop',  ...ZORG.voerGroot },
+    { id: 'beweeg', icon: 'wing',  ...ZORG.beweeg },
+    { id: 'check',  icon: 'check', ...ZORG.checkJong },
   ],
   zelfstandig: [
-    { id: 'oefen', label: 'Samen oefenen', icon: 'wing',  zin: 'Oefen samen het vliegen.' },
-    { id: 'check', label: 'Checken',       icon: 'check', zin: 'Hij wordt sterk en vrij.' },
+    { id: 'oefen', icon: 'wing',  ...ZORG.oefen },
+    { id: 'check', icon: 'check', ...ZORG.checkVrij },
   ],
 };
 
 export interface OpvangGast {
   dier: string;
   reden: string;
-  zin: string;
 }
 
 /** Rehab guests — existing animals only; non-graphic, always releasable. */
 export const OPVANG_GASTEN: OpvangGast[] = [
-  { dier: 'nachtzwaluw', reden: 'tegen een raam gevlogen', zin: 'Een nachtzwaluw is even de weg kwijt.' },
-  { dier: 'das',         reden: 'verzwakt gevonden',       zin: 'Een jonge das is moe en zwak.' },
+  { dier: 'nachtzwaluw', ...GAST.nachtzwaluw },
+  { dier: 'das',         ...GAST.das },
 ];
 
 export interface Companion {
