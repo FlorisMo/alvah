@@ -27,7 +27,14 @@ export interface ChipCue {
   /** the arrow's turn (rad, relative to where he looks), or null: words only */
   angle: number | null;
   arrived?: boolean;
+  /** the sign before the words while there is no arrow: what he goes by (default 👂, a
+   *  sound to follow; 👣 prints to follow, 🤫 a quiet walk) */
+  glyph?: string;
 }
+
+/** Chip signs drawn dark (👣 is two grey soles): they sit on a light well, or the dark
+ *  chip would swallow them. */
+const DARK_GLYPHS = new Set(['👣']);
 
 export class AdventureHud {
   readonly el: HTMLDivElement;
@@ -96,9 +103,11 @@ export class AdventureHud {
     if (doel.textContent !== c.doel) doel.textContent = c.doel;
     if (cue.textContent !== c.cue) cue.textContent = c.cue;
     this.chip.classList.toggle('wf-arrived', !!c.arrived);
+    const sign = c.arrived ? '◎' : c.glyph ?? '👂';
+    glyph.classList.toggle('adv-glyph-light', (c.angle === null || !!c.arrived) && DARK_GLYPHS.has(sign));
     if (c.angle === null || c.arrived) {
       glyph.classList.add('adv-no-arrow');
-      glyph.textContent = c.arrived ? '◎' : '👂';
+      glyph.textContent = sign;
       glyph.style.transform = '';
       return;
     }

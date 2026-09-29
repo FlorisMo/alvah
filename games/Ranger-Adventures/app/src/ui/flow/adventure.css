@@ -22,6 +22,8 @@
    words first, the arrow only once he seems lost */
 .adv-chip[hidden] { display: none; }
 .adv-chip .wf-glyph.adv-no-arrow { font-size: 22px; }
+/* a sign drawn dark (👣) sits on a light well, or the dark chip swallows it */
+.adv-chip .wf-glyph.adv-glyph-light { background: rgba(253, 246, 232, 0.9); }
 
 /* an action in the world ("Hang de camera op"): bottom centre, like a marker prompt */
 .adv-bottom {

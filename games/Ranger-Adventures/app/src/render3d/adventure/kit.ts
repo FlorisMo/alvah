@@ -57,7 +57,7 @@ export interface MissionWorld {
 export interface AdventureUi {
   say(text: string | null, opts?: { good?: boolean; queue?: boolean }): void;
   readonly current: string | null;
-  setChip(c: { doel: string; cue: string; angle: number | null; arrived?: boolean } | null): void;
+  setChip(c: { doel: string; cue: string; angle: number | null; arrived?: boolean; glyph?: string } | null): void;
   action(label: string | null): Promise<void>;
   binoculars(on: boolean): void;
   /** time passes: a calm veil over the world with one line (null lifts it) */
@@ -130,6 +130,8 @@ export interface WalkOpts {
   /** the chip: where he goes, in words, and the cue under it before the arrow shows */
   doel: string;
   cue?: string;
+  /** the chip's sign before the words (default 👂: a sound to follow; 👣 prints) */
+  glyph?: string;
   /** seconds without getting closer before the chip shows the arrow (default 20) */
   arrowAfter?: number;
   /** an animal that follows him (the piglet he leads): it keeps its gap, hides when he
@@ -479,6 +481,7 @@ export class AdventureKit {
         cue: arrow || waiting ? `${cue.richting} · ${cue.afstand}` : (o.cue ?? ''),
         angle: arrow || waiting ? cue.angle : null,
         arrived: d < r,
+        glyph: o.glyph,
       });
       o.tick?.(dt);
       if (!lead) return;
