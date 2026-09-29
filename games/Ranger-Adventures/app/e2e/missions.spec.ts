@@ -277,7 +277,9 @@ async function finish(log: Log, mission: Mission, then: 'patrol' | 'finale' = 'p
   if (await page.locator('.reunion-cap').isVisible().catch(() => false)) { await sleep(page, 1_000); await log.shot('reunion'); }
   // the reward card (an adventure tells its last fact after the reunion: read it on)
   const reward = await expect.poll(async () => {
-    if (await visible(page, /^Verder$/) && !(await uiText(page)).includes('Knap gedaan')) await click(log, /^Verder$/, 'the fact after the reunion');
+    // (a card that closes while the click lands is fine: on a loaded laptop a click on a
+    // card being replaced can outlast its timeout; the poll looks again)
+    if (await visible(page, /^Verder$/) && !(await uiText(page)).includes('Knap gedaan')) await click(log, /^Verder$/, 'the fact after the reunion', 5_000, 15_000).catch(() => {});
     return (await uiText(page)).includes('Knap gedaan');
   }, { timeout: 20_000 }).toBe(true).then(() => true, () => false);
   log.soft(reward, 'no reward card after the reunion');

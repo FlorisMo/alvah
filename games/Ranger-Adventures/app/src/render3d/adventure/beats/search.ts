@@ -90,9 +90,19 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
   const anchor = new THREE.Object3D();
   anchor.name = 'search-target';
   anchor.userData.hintAnchor = true;
-  const seen = glimpseOn(body, camera, [o.cover.group, ...o.decoys.map((d) => d.object)]);
-  anchor.position.copy(seen ? body.worldToLocal(seen) : backTop(body));
+  anchor.position.copy(backTop(body));
   body.add(anchor);
+  // (the stems breathe in the breeze and quiver on a hint: the glimpse is looked for again
+  // whenever the hint is read, at most every 0.3 s)
+  const blockers = [o.cover.group, ...o.decoys.map((d) => d.object)];
+  let lookedAt = -Infinity;
+  const aim = (): void => {
+    if (k.now - lookedAt < 0.3) return;
+    lookedAt = k.now;
+    const seen = glimpseOn(body, camera, blockers);
+    if (seen) anchor.position.copy(body.worldToLocal(seen));
+  };
+  aim();
   // the design's bar, measured: the cover round him stands at least twice his lying height
   if (o.lyingH) {
     const near = o.cover.stems.filter((s) => Math.hypot(s.x - o.target.x, s.z - o.target.z) < 0.9).map((s) => s.h).sort((a, b) => a - b);
@@ -113,7 +123,7 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
     o.cover.partAt(o.target.x, o.target.z, 0.45, 0.06, 0.6);
   };
   k.say(o.lines.zoek);
-  const unhint = k.hint(() => (found ? null : { id: 'target', target: anchor }));
+  const unhint = k.hint(() => { if (found) return null; aim(); return { id: 'target', target: anchor }; });
   const offHint = k.onTick((_dt, now) => {
     if (found) return;
     if (!hints && (misses >= 2 || now - t0 > (o.hintAfter ?? HINT_AFTER_S))) {
@@ -206,9 +216,10 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
 
 /**
  * The point of `body` a player sees best through the cover from `camera`: rays through
- * a grid over its upper half, and of those whose first hit (body, cover, decoys) is the
- * body, the one nearest the middle of what shows. World space; null when none gets
- * through.
+ * a grid over its upper half; of those whose first hit (body, cover, decoys) is the body,
+ * the one deepest inside what shows (most neighbours seen too: a stem swaying in the
+ * breeze does not cover it), nearest the middle on a tie. World space; null when no ray
+ * gets through.
  */
 function glimpseOn(body: THREE.Object3D, camera: THREE.Camera, cover: readonly THREE.Object3D[]): THREE.Vector3 | null {
   body.updateWorldMatrix(true, true);
@@ -218,19 +229,36 @@ function glimpseOn(body: THREE.Object3D, camera: THREE.Camera, cover: readonly T
   const targets = [body, ...cover];
   const inBody = (o: THREE.Object3D | null): boolean => { for (let p = o; p; p = p.parent) if (p === body) return true; return false; };
   const eye = camera.getWorldPosition(new THREE.Vector3());
-  const hits: THREE.Vector3[] = [];
+  const NI = 7, NJ = 5, KS = [0.7, 0.95];
+  const grid: (THREE.Vector3 | null)[] = [];
+  const at = (i: number, j: number, k: number): THREE.Vector3 | null =>
+    (i < 0 || j < 0 || i >= NI || j >= NJ ? null : grid[(k * NI + i) * NJ + j]);
   const p = new THREE.Vector3();
-  for (let i = 0; i <= 6; i++) {
-    for (let j = 0; j <= 4; j++) {
-      for (const k of [0.7, 0.95]) {
-        p.set(box.min.x + (box.max.x - box.min.x) * (i / 6), box.min.y + (box.max.y - box.min.y) * k, box.min.z + (box.max.z - box.min.z) * (j / 4));
+  KS.forEach((ky) => {
+    for (let i = 0; i < NI; i++) {
+      for (let j = 0; j < NJ; j++) {
+        p.set(box.min.x + (box.max.x - box.min.x) * (i / (NI - 1)), box.min.y + (box.max.y - box.min.y) * ky, box.min.z + (box.max.z - box.min.z) * (j / (NJ - 1)));
         ray.set(eye, p.clone().sub(eye).normalize());
         const first = ray.intersectObjects(targets, true).find((h) => h.object.visible && !h.object.userData.hitSphere);
-        if (first && inBody(first.object)) hits.push(first.point.clone());
+        grid.push(first && inBody(first.object) ? first.point.clone() : null);
       }
     }
-  }
+  });
+  const hits = grid.filter((g): g is THREE.Vector3 => !!g);
   if (!hits.length) return null;
   const mid = hits.reduce((a, b) => a.add(b), new THREE.Vector3()).multiplyScalar(1 / hits.length);
-  return hits.reduce((best, h) => (h.distanceTo(mid) < best.distanceTo(mid) ? h : best));
+  let best: THREE.Vector3 | null = null;
+  let bestScore = -1;
+  KS.forEach((_, k) => {
+    for (let i = 0; i < NI; i++) {
+      for (let j = 0; j < NJ; j++) {
+        const h = at(i, j, k);
+        if (!h) continue;
+        const inner = [at(i - 1, j, k), at(i + 1, j, k), at(i, j - 1, k), at(i, j + 1, k), at(i, j, 1 - k)].filter(Boolean).length;
+        const score = inner * 100 - h.distanceTo(mid);
+        if (score > bestScore) { bestScore = score; best = h; }
+      }
+    }
+  });
+  return best;
 }
