@@ -444,7 +444,8 @@ test('the next mission far on foot: Bram suggests the jeep once, and it glows un
   await walkTo(page, v, { stopDist: 0.3, until: (s) => s.jeepNear, timeout: 60_000 });
   await page.getByRole('button', { name: /Stap in de jeep/ }).click({ timeout: 20_000 });
   await expect.poll(async () => (await R<{ beacon: boolean }>(page, 'r.glow()')).beacon, { timeout: 4_000, message: 'the glow ends once he is in' }).toBe(false);
-  expect((await hint(page)).learned).toContain('jeep');
+  // learned once Bram's last line is done (it may still be up, or waiting on the voice, as he gets in)
+  await expect.poll(async () => (await hint(page)).learned, { timeout: 12_000, message: 'the jeep is learned' }).toContain('jeep');
   const count = (await saidAll(page)).filter((l) => l === BRAM.jeep[0]).length;
   expect(count, 'the jeep lines are said once').toBe(1);
 });
