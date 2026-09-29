@@ -443,11 +443,12 @@ export class Residents {
     }
   }
 
-  /** Every home's animals as movers (the jeep brakes for them; the seating probe tags them). */
-  movers(visit: (x: number, z: number, h: number) => void): void {
+  /** Every home's animals as movers (the jeep brakes for them; the seating probe tags
+   *  them), each with a steady id (`<mission>:<key>`, for a channel that tracks them). */
+  movers(visit: (x: number, z: number, h: number, id: string) => void): void {
     for (const home of this.homes.values()) {
       if (!home.group.visible) continue;
-      for (const a of home.actors.values()) if (a.group.visible) visit(a.x, a.z, a.height);
+      for (const a of home.actors.values()) if (a.group.visible) visit(a.x, a.z, a.height, `${home.spec.missionId}:${a.key}`);
     }
   }
 
