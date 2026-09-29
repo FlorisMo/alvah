@@ -86,12 +86,14 @@ export const TABLEAUS: Record<string, Tableau> = {
     hero: '',
     pieces: [],
   },
-  // payoff 'moeder-keert-terug': you left the calf alone, and its mother came back
+  // payoff 'moeder-keert-terug': you left the calf alone, and its mother came back —
+  // run 6: doe and calf LIVE at their copse (world/Residents.ts, adventure/missions/
+  // ree.places.ts), before and after; the marker's ring stays empty (the calf lies
+  // hidden in the tall grass, its mother grazes by the copse), and once the mission is
+  // done the "klaar" flag stands at it
   'ree-niet-aanraken': {
-    hero: 'reekalf',
-    pieces: [
-      { id: 'ree', kind: 'animal', a: 1.1, s: 1.35, face: 'hero', arrive: true },
-    ],
+    hero: '',
+    pieces: [],
     flag: { a: -0.3, s: -1.4 },
   },
   // "De camera bewaakt het bos." — the camera by the badger's burcht

@@ -10,6 +10,7 @@ import type { DressingBuilder, Residents } from '../world/Residents';
 import type { AdventureKit } from './kit';
 import type { HomeSpec } from './types';
 import { frislingAdventure } from './missions/frisling';
+import { reeAdventure } from './missions/ree';
 
 export interface Adventure {
   /** the mission id */
@@ -31,6 +32,7 @@ export interface Adventure {
 
 const ADVENTURES: Readonly<Record<string, Adventure>> = {
   frisling: frislingAdventure,
+  'ree-niet-aanraken': reeAdventure,
 };
 
 /** The adventure a mission is played as, or null (the classic path). */
