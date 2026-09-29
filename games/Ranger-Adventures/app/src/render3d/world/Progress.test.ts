@@ -46,7 +46,7 @@ function box(h: number) {
 
 /** Run 6: the missions whose family LIVES at a home of its own (world/Residents.ts,
  *  render3d/adventure): their tableau is only the "klaar" flag at the marker. */
-const LIVES_AT_HOME = new Set(['frisling']);
+const LIVES_AT_HOME = new Set(['frisling', 'wildcamera']);
 /** A mission whose family still walks in to its marker (the classic tableau). */
 const FAMILY = 'ree-niet-aanraken';
 

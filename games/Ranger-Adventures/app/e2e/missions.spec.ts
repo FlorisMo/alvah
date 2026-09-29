@@ -158,7 +158,11 @@ async function playSteps(log: Log, mission: Mission): Promise<void> {
   let clicks = 0; let answers = 0; let walks = 0; let lastBeat = '';
   const deadline = Date.now() + 9 * 60_000;
   const t0 = Date.now();
-  while (won.size < Object.keys(need).length && Date.now() < deadline) {
+  // an adventure may play on after its last step (a walk, an action, a card) until its
+  // reunion marks the mission done: the loop plays those beats too
+  const playingOn = async (): Promise<boolean> =>
+    !!(await R<{ beat: string } | null>(page, 'r.adventure()')) && !(await save(page))?.voltooid[mission.id];
+  while ((won.size < Object.keys(need).length || await playingOn()) && Date.now() < deadline) {
     const sv = await save(page);
     for (const ef of Object.keys(need)) {
       if (!won.has(ef) && sv && (sv.trials[ef] ?? 0) - (base[ef] ?? 0) >= need[ef]) {
@@ -168,7 +172,7 @@ async function playSteps(log: Log, mission: Mission): Promise<void> {
         lastProgress = Date.now();
       }
     }
-    if (won.size >= Object.keys(need).length) break;
+    if (won.size >= Object.keys(need).length && !await playingOn()) break;
     const view = await R<string | null>(page, 'r.missionView');
     if ((await R<string>(page, 'r.screen')) === 'world' && view === null) {
       ended ??= Date.now();

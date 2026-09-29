@@ -461,10 +461,13 @@ const MISSIE_NACHTRONDE = {
 };
 
 /* ============================================================
-   MISSIE 4 — De wildcamera  (bos · schemer · monitoring/Snapshot)
-   Engines: simon (geluid-echo) → wisselen (dag/nacht sorteren)
-   verhaalHaak 'camera': the camera also catches a shadowy figure +
-   an empty snare (non-graphic) → drops the season's second clue.
+   MISSIE 4 — De wildcamera  (bos · een wildwissel · dag en nacht)
+   Engines: wisselen (de camera richten, dag ↔ nacht) → simon (de nachtroepers)
+   verhaalHaak 'camera': the morning photo shows a calm grey man setting an
+   empty snare (non-graphic) → drops the season's second clue.
+   Run 6: an adventure in the world (render3d/adventure/missions/wildcamera.ts):
+   follow a game trail, strap the camera to a pine, aim it for each animal as
+   day turns into night, echo the night callers, find the snare in the photos.
    ============================================================ */
 const MISSIE_WILDCAMERA = {
   id: 'wildcamera',
@@ -477,19 +480,19 @@ const MISSIE_WILDCAMERA = {
   briefing: {
     simpel: [
       'Hoi ranger!',
-      'We hangen een camera in het bos.',
-      'Die maakt vanzelf foto’s van dieren.',
-      'Luister eerst wie er roept.',
-      'Sorteer dan dag-dieren en nacht-dieren.',
-      'Begin met luisteren.',
+      'Hier ligt een camera voor dieren.',
+      'Die maakt vanzelf foto’s.',
+      'Wie komt er ’s nachts langs?',
+      'Volg het paadje van de dieren.',
+      'Hang de camera aan een boom.',
     ],
     knap: [
       'Hoi ranger!',
-      'We plaatsen een wildcamera in het bos.',
-      'Zo zien we welke dieren hier leven.',
-      'Luister eerst goed wie er roept.',
-      'Sorteer dan dag-dieren en nacht-dieren.',
-      'Begin met luisteren.',
+      'Hier ligt een wildcamera.',
+      'Die maakt vanzelf foto’s van dieren.',
+      'Wie komt er ’s nachts langs?',
+      'Volg de wildwissel van de dieren.',
+      'Hang de camera bij de kruising.',
     ],
   },
   beloning: {
@@ -497,23 +500,61 @@ const MISSIE_WILDCAMERA = {
     vaktermBadge: { id: 'knap-wildcamera', naam: 'Knap woord: wildcamera' },
   },
   reunion: { sprite: 'das', tekst: 'De camera bewaakt het bos.' },
-  stappen: [
-    {
-      ef: 'simon',
-      skin: {
-        dier: 'das',
-        dieren: ['das', 'wildzwijn', 'ree', 'raaf'],
-        copy: {
-          instructie: 'Antwoord de dieren.',
-          luister: 'Luister wie er roept…',
-          echo: 'Doe ze na. Tik op de dieren.',
-          goed: 'Knap onthouden!',
-        },
-        feit: 'Een wildcamera maakt heel veel foto’s. Zo weet de ranger wie er leeft.',
-        feitDier: 'das',
-      },
-      moeilijkheid: { lengte: 'settings', tempo: 'settings' },
+  /* run 6: the adventure's words, one short line per beat (read aloud once) */
+  avontuur: {
+    simpel: {
+      pak: 'Hier ligt de camera.',
+      pakKnop: 'Pak de camera',
+      kijkPad: 'Kijk. Daar gaat het paadje.',
+      volg: 'Volg het paadje van de dieren.',
+      chipPad: 'Het dierenpaadje',
+      sporen: 'kijk naar de sporen',
+      hang: 'Hier kruisen twee paadjes.',
+      hangKnop: 'Hang de camera op',
+      hangt: 'Het rode lampje knippert.',
+      vraag: 'Waar kijkt de camera?',
+      komt_edelhert: 'Daar komt een hert.',
+      komt_ree: 'Daar komt een ree.',
+      komt_das: 'Daar komt een das.',
+      komt_nachtzwaluw: 'Daar komt een nachtzwaluw.',
+      komt_wildzwijn: 'Daar komt een wild zwijn.',
+      foto: 'Klik! Een mooie foto.',
+      leeg: 'Leeg. Het dier is daar nu niet.',
+      nacht: 'Het wordt nacht.',
+      dag: 'Het wordt dag.',
+      andersom: 'Nu is het andersom!',
+      donker: 'Het wordt donker in het bos.',
+      nachtKomt: 'Het is nacht. Wie komt er?',
+      groei: 'Goed zo! Nu komt er een bij.',
+      opnieuw: 'Luister nog een keer.',
+      slapen: 'De dieren gaan weer weg.',
+      ochtend: 'De volgende ochtend…',
+      fotos: 'Wat zag de camera?',
+      fotoKnop: 'Bekijk de foto’s',
+      fotoTitel: 'De foto’s van de camera',
+      man: 'Kijk! Een man zet een val.',
+      zoekVal: 'Zoek de val bij het paadje.',
+      chipVal: 'De val',
+      bijPad: 'bij het paadje',
+      valHier: 'Daar ligt de val.',
+      valKnop: 'Haal de val weg',
+      valWeg: 'Goed zo. De val is weg.',
     },
+    knap: {
+      pak: 'Hier ligt de wildcamera.',
+      kijkPad: 'Kijk. Daar gaat de wildwissel.',
+      volg: 'Volg de wildwissel.',
+      chipPad: 'De wildwissel',
+      hang: 'Hier kruisen twee wildwissels.',
+      man: 'Kijk! Een stroper zet een strik.',
+      zoekVal: 'Zoek de strik bij de wildwissel.',
+      chipVal: 'De strik',
+      valHier: 'Daar ligt de strik.',
+      valKnop: 'Haal de strik weg',
+      valWeg: 'Goed zo. De strik is weg.',
+    },
+  },
+  stappen: [
     {
       ef: 'wisselen',
       skin: {
@@ -522,15 +563,33 @@ const MISSIE_WILDCAMERA = {
         nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'],
         trials: 8,
         copy: {
-          instructie: 'Breng elk dier naar de goede plek.',
-          regel: 'Dag-dier → open plek. Nacht-dier → het hol.',
-          regelOm: 'Nu andersom! Volg het bordje.',
-          goed: 'Alle dieren op de goede plek!',
+          instructie: 'Richt de camera op elk dier.',
+          regel: 'Dag-dier → open plek. Nacht-dier → het bosje.',
+          regelOm: 'Nu is het andersom!',
+          goed: 'Alle dieren staan op de foto!',
         },
         feit: 'De das slaapt overdag in zijn burcht. ’s Nachts gaat hij op pad.',
         feitDier: 'das',
       },
+      // §6.1 wisselen knobs: rule-flip frequency + trial count
       moeilijkheid: { wissel: 'settings', trials: 8 },
+    },
+    {
+      ef: 'simon',
+      skin: {
+        dier: 'das',
+        // run 6: the night callers round the crossing
+        dieren: ['das', 'wildzwijn', 'ree', 'nachtzwaluw'],
+        copy: {
+          instructie: 'Luister wie er roept.',
+          luister: 'Luister wie er roept…',
+          echo: 'Doe ze na. Klik op de dieren.',
+          goed: 'Knap onthouden!',
+        },
+        feit: 'Een wildcamera maakt heel veel foto’s. Zo weet de ranger wie er leeft.',
+        feitDier: 'das',
+      },
+      moeilijkheid: { lengte: 'settings', tempo: 'settings' },
     },
   ],
 };
