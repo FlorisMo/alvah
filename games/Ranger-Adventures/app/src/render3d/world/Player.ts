@@ -61,10 +61,6 @@ const BACKPEDAL_FACING = (45 * Math.PI) / 180;
  *  per second per metre still to go (he arrives, never brakes on the spot). */
 const ARRIVE_EASE = 3;
 
-/** Moved further than this (m) between two of his own frames: someone else put him there
- *  (stepping out of the jeep, back from a mission), so he starts from standing. */
-const TELEPORT_M = 0.75;
-
 /** Who steered the ranger this frame. */
 type DriveMode = 'keys' | 'stick' | 'tap';
 
@@ -126,8 +122,6 @@ export class Player {
   // it his legs, his footsteps and rangerMotion(), all follow this one speed.
   private speedNow: SpeedRamp = { v: 0, a: 0 };
   private stickRunning = false; // the stick's run latch (hysteresis, core/input stickRun)
-  private lastX = 0;
-  private lastZ = 0;
   // W3.2 player animation: the mixer wrapper (idle/walk/run blended by speed, or a
   // procedural bob when the rigged GLB lacks clips). `groundSpeedNow` is the ranger's
   // post-collision ground speed (m/s), fed to the blend each frame.
@@ -135,6 +129,7 @@ export class Player {
   groundSpeedNow = 0;
   /** The stick's ring shows when he runs (the HUD wires it to the joystick). */
   stickRunFeedback: ((running: boolean) => void) | null = null;
+  private walkedThisFrame = false; // walk() ran this frame (else he rides or plays: the ring goes plain)
   // W4.7b surface-aware footsteps: a distance-carry cadence (fires every stride
   // of ground actually covered), gated on sound + speed + biome surface.
   // Locomotion feedback, so NOT reduced-motion gated (§3.4 exempts locomotion).
@@ -267,8 +262,6 @@ export class Player {
       this.turnVel = 0;
       this.camNow = null;
     }
-    // ...or put him somewhere else: he starts from standing there (no coasting on)
-    if (Math.hypot(rp.x - this.lastX, rp.z - this.lastZ) > TELEPORT_M) this.speedNow = { v: 0, a: 0 };
     const held = this.input?.held;
     const shift = this.input?.run ?? false;
     const keys = held && held.size > 0 ? held : null;
@@ -380,9 +373,8 @@ export class Player {
       rp.x = next.x;
       rp.z = next.z;
     }
-    this.lastX = rp.x;
-    this.lastZ = rp.z;
     this.stickRunFeedback?.(mode === 'stick' && this.stickRunning);
+    this.walkedThisFrame = true;
     // W3.2: the actual post-collision ground speed drives the idle↔walk crossfade;
     // a turn on the spot steps the feet too, and backing up plays the walk in reverse.
     this.groundSpeedNow = moved / Math.max(dt, 1e-4);
@@ -424,6 +416,10 @@ export class Player {
    *  holds still when seated): the gait blend, and a footstep each time a foot goes
    *  down. Locomotion: it animates in both motion modes (§3.4). */
   animate(dt: number, reduced: boolean): void {
+    // not on foot this frame (riding, a mission, a menu): he stands, so he starts from
+    // standing when he walks on, and the stick's ring goes plain
+    if (!this.walkedThisFrame) { this.speedNow = { v: 0, a: 0 }; this.stickRunning = false; this.stickRunFeedback?.(false); }
+    this.walkedThisFrame = false;
     const plants = this.rig.update(dt, this.groundSpeedNow, reduced);
     if (plants > 0 && this.groundSpeedNow >= MIN_STEP_SPEED) this.footstep();
   }
