@@ -372,7 +372,7 @@ function mountHelpChip(hud: HTMLElement | null): void {
   btn.textContent = '?';
   hud.appendChild(btn);
   hintState.helpChip = true;
-  btn.addEventListener('click', () => showTip('walk', onboardHint(false)));
+  btn.addEventListener('click', () => showTip('walk', `${onboardHint(false)} ${ONBOARD_RUN.keys}`)); // run 6: and how to run
 }
 
 /** Build + wire the virtual joystick (W1.3) into the freshly-rendered HUD; the old
