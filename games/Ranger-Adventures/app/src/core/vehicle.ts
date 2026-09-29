@@ -389,7 +389,7 @@ const WEDGE_EASE: readonly (readonly [number, number])[] = [
 ];
 
 /** A keep-out zone eases a body back out of it by at least this much (m) a frame. */
-const SOFT_EASE = 0.03;
+const SOFT_EASE = 0.01;
 
 /** Closer than this (m) to a solid's edge is resting against it, not pressing into it. */
 const TOUCH_EPS = 1e-4;
@@ -408,7 +408,7 @@ function pushOut(
   const sx = Math.sin(heading), sz = Math.cos(heading);
   // a keep-out zone eases the body back out a little a frame (as far as it stepped in, or
   // SOFT_EASE): a jeep turned on the spot with its nose in one is never shoved out of it
-  const soft = Math.max(SOFT_EASE, Math.hypot(x - fromX, z - fromZ));
+  let soft = Math.max(SOFT_EASE, Math.hypot(x - fromX, z - fromZ));   // all the zones together, this frame
   for (let pass = 0; pass < 4; pass++) {
     let pushed = false;
     for (const c of body) {
@@ -422,6 +422,7 @@ function pushOut(
           const d = Math.sqrt(d2), pen = Math.min(R - d, soft);
           if (pen <= TOUCH_EPS || d < 1e-6) continue;
           x += (dx / d) * pen; z += (dz / d) * pen;
+          soft -= pen;
           pushed = true;
           continue;
         }
