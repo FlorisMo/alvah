@@ -34,8 +34,10 @@ export function squirrelTree(t: HomeTree): SquirrelTree {
 /** A neighbour on its perch: the thing a child clicks in the call-back game. */
 export interface Neighbour {
   id: 'gaai' | 'groene-specht' | 'raaf';
-  /** what a player sees and clicks (the bird's holder) */
+  /** what a player clicks (the bird's holder) */
   object: THREE.Group;
+  /** the bird itself (its own materials: it lights up), once loaded */
+  body: THREE.Object3D | null;
   /** it calls: a hop and a flick of its tail (the beat lights it) */
   call(): void;
   /** where it sits (world) */
@@ -162,10 +164,11 @@ export class EekhoornHome implements HomeDressing {
     this.group.add(holder);
     const entry = { o: holder, base: at.clone(), baseYaw: yaw, kind: id, hop: 0, seed: this.birds.length * 2.1 + 0.4, fly: -1 };
     this.birds.push(entry);
-    this.neighbours.push({
-      id, object: holder, at: at.clone(),
+    const n: Neighbour = {
+      id, object: holder, body: null, at: at.clone(),
       call: () => { entry.hop = 0.001; },
-    });
+    };
+    this.neighbours.push(n);
     void this.env.spawnModel(id, { height: h, idle: false }).then((s) => {
       if (!s) return;
       const r = s.root as THREE.Object3D;
@@ -184,6 +187,7 @@ export class EekhoornHome implements HomeDressing {
         r.position.y -= 0.02;
       }
       holder.add(r);
+      n.body = r;
       this.spawned.push(s);
     });
   }

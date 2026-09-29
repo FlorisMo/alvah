@@ -28,6 +28,7 @@ import { routeBeat } from '../beats/route';
 import { callersBeat, type Caller } from '../beats/callers';
 import { Squirrel } from '../squirrel';
 import { dist, headingTo } from '../places';
+import { TREE_BASE_H } from '../../world/Forest';
 import { EekhoornHome } from './eekhoorn.home';
 import {
   CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HOME_TREES, STUMP,
@@ -42,8 +43,8 @@ export const eekhoornAdventure: Adventure = {
   id: 'eekhoorn',
   home: EEKHOORN_HOME,
   clearings: eekhoornClearings(),
-  trees: HOME_TREES,
-  treeClear: eekhoornTreeClear(),
+  trees: HOME_TREES.map((t) => ({ x: t.x, z: t.z, s: t.h / TREE_BASE_H[t.species], rotY: t.rotY, species: t.species })),
+  treeClearings: eekhoornTreeClear(),
   dressing: (env) => new EekhoornHome(env),
   actor: (spec, env, _height, dressing) => {
     if (spec.key !== 'squirrel' || !(dressing instanceof EekhoornHome)) return null;
@@ -176,8 +177,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   // 4 · the neighbours come to see the store; call them back (simon)
   k.say(c.buren);
   const callers: Caller[] = [
-    { id: 'eekhoorn', object: sq.group, call: () => sq.called() },
-    ...home.neighbours.map((n) => ({ id: n.id, object: n.object, call: () => n.call() })),
+    { id: 'eekhoorn', pick: sq.group, body: sq.body, at: () => ({ x: sq.x, z: sq.z }), act: (on) => { if (on) sq.called(); } },
+    ...home.neighbours.map((n): Caller => ({ id: n.id, pick: n.object, body: n.body, at: () => ({ x: n.at.x, z: n.at.z }), act: (on) => { if (on) n.call(); } })),
   ];
   await callersBeat(k, 1, {
     view: CALLERS_VIEW, stand: P.callers, callers,

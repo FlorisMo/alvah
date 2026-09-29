@@ -7,6 +7,7 @@
 
 import type { Mission } from '../../content/types';
 import type { DressingBuilder, ResidentBody, Residents } from '../world/Residents';
+import type { HomeTree } from '../World';
 import type { AdventureKit } from './kit';
 import type { HomeSpec } from './types';
 import { frislingAdventure } from './missions/frisling';
@@ -18,9 +19,10 @@ export interface Adventure {
   home: HomeSpec;
   /** ground the world's heath scatter leaves bare (mud, turned earth) */
   clearings?: readonly { x: number; z: number; r: number }[];
-  /** the home's own trees (the forest draws them), and ground its scattered trees keep clear of */
-  trees?: readonly { x: number; z: number; species: 'prop-oak-tree' | 'prop-pine-scots' | 'prop-birch-tree'; h: number; rotY: number }[];
-  treeClear?: readonly { x: number; z: number; r: number }[];
+  /** ground the forest's scattered trees keep clear of (a glade, a game trail) */
+  treeClearings?: readonly { x: number; z: number; r: number }[];
+  /** trees the home plants itself, as real forest trees (a camera pine) */
+  trees?: readonly HomeTree[];
   /** the home's THREE side, built with the world */
   dressing?: DressingBuilder;
   /** a resident's own body (a squirrel that climbs), instead of a walking animal's */
