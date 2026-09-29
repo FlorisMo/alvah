@@ -54,6 +54,10 @@ const BASIN_SIGMA = 14;
 /** Still-water surface height for the ven plane (sits inside the basin dip). */
 export const WATER_LEVEL = -1.4;
 
+/** Radius (m from VEN_CENTER) of the drawn water disc; where the ground inside it lies
+ *  under the surface is water nobody walks or drives into (World's `limits.blocked`). */
+export const VEN_WATER_R = 20;
+
 /**
  * How far the wet ven reaches out from `VEN_CENTER`: the water disc (radius 20) plus
  * a moss/reed shore ring. `biomeAt` forces `'ven'` inside this radius so the ground

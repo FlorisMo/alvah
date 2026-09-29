@@ -578,24 +578,38 @@ test('vehicle: nosed into the ven, a turn key swings the jeep free — reverse i
     } finally { for (const k of [...held]) await set(k, false); }
   };
   await drive({ x: 30, z: -8 }, 3);           // over the heath to the ven's west shore, by the reeds
-  const pinned = await drive(VEN, 0, true);   // then straight at the water until the shore stops it
-  expect(Math.hypot(pinned.x - VEN.x, pinned.z - VEN.z), 'the shore stopped it at the water').toBeLessThan(18);
+  const pinned = await drive(VEN, 0, true);   // then straight at the water until it stops short of it
+  expect(Math.hypot(pinned.x - VEN.x, pinned.z - VEN.z), 'it stopped by the water').toBeLessThan(20);
+  expect(pinned.contact, 'short of the water, never pressed against its edge (run 6)').toBe(false);
   await shot(page, 'vehicle-ven-pinned');
   for (const turn of ['ArrowLeft', 'ArrowRight']) {
-    await drive(VEN, 0, true);                // nose back in the reeds, pressed at the water
+    await drive(VEN, 0, true);                // nose back in the reeds, stopped short of the water
     const a = (await hook(page, (r) => r.vehicle()))!;
-    await hold(page, ['ArrowUp', turn], 3_000);
-    const b = (await hook(page, (r) => r.vehicle()))!;
-    const turned = Math.atan2(Math.sin(b.heading - a.heading), Math.cos(b.heading - a.heading));
-    expect(Math.abs(turned), `Up+${turn} at the shore turns the jeep (${turned.toFixed(2)} rad)`).toBeGreaterThan(0.4);
+    // the key swings it round on the spot at the calm pivot (≈ 0.6 rad/s) until a way
+    // lies open, then it drives on: here by the reeds that can take the long way round
+    await page.keyboard.down('ArrowUp'); await page.keyboard.down(turn);
+    let b = a, t0 = Date.now(), turnedAt3 = 0;
+    try {
+      while (Date.now() - t0 < 8_000) {
+        await page.waitForTimeout(150);
+        b = (await hook(page, (r) => r.vehicle()))!;
+        if (Date.now() - t0 < 3_000) turnedAt3 = Math.atan2(Math.sin(b.heading - a.heading), Math.cos(b.heading - a.heading));
+        if (Math.hypot(b.x - a.x, b.z - a.z) > 0.5) break;
+      }
+    } finally { await page.keyboard.up(turn); await page.keyboard.up('ArrowUp'); }
+    const turned = turnedAt3;
+    expect(Math.abs(turned), `Up+${turn} at the shore turns the jeep (${turned.toFixed(2)} rad in 3 s)`).toBeGreaterThan(0.4);
     expect(turn === 'ArrowLeft' ? turned > 0 : turned < 0, `toward ${turn}`).toBe(true);
     expect(Math.hypot(b.x - a.x, b.z - a.z), `Up+${turn}: and it drives on`).toBeGreaterThan(0.5);
-    // the nose stays on the bank: the ground under it is above the water's no-go line
-    const nose = await page.evaluate((v) => {
+    // the nose stays on the bank: where the drawn water is (inside its 20 m disc), the ground
+    // under the nose is above the water's no-go line
+    const nx = b.x + Math.sin(b.heading) * 1.9, nz = b.z + Math.cos(b.heading) * 1.9;
+    const nose = await page.evaluate(([x, z]) => {
       const r = (window as unknown as { __ranger: { groundAt(x: number, z: number): number } }).__ranger;
-      return r.groundAt(v.x + Math.sin(v.heading) * 1.9, v.z + Math.cos(v.heading) * 1.9);
-    }, b);
-    expect(nose, 'its nose never drives into the water').toBeGreaterThan(-1.4 + 0.1);
+      return r.groundAt(x, z);
+    }, [nx, nz]);
+    const inWater = Math.hypot(nx - VEN.x, nz - VEN.z) < 20 && nose < -1.4 + 0.1;
+    expect(inWater, `its nose never drives into the water (ground ${nose.toFixed(2)} at ${Math.hypot(nx - VEN.x, nz - VEN.z).toFixed(1)} m from the ven's middle)`).toBe(false);
   }
   await shot(page, 'vehicle-ven-free');
   await reportPageErrors(testInfo, errors);

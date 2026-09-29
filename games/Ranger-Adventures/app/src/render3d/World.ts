@@ -25,7 +25,7 @@
 import * as THREE from 'three';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { livePolicy } from './MotionMode';
-import { VEN_CENTER, WATER_LEVEL, type Biome } from './Biomes';
+import { VEN_CENTER, VEN_WATER_R, WATER_LEVEL, type Biome } from './Biomes';
 import { Terrain } from './world/Terrain';
 import { Sky } from './world/Sky';
 import { Labels } from './world/Labels';
@@ -161,15 +161,17 @@ export class World {
     // tree-line, resolveMove clamp, RIM_EASE/HINT bands, the camera rim clamp,
     // boundaryState), so this one value moves the whole edge in together.
     bound: 75,                                   // ground plane is 240² → trees at ~76 land on it
-    // off-limits = the submerged ven only (inside the water disc AND below the
-    // surface) — NOT a global height test, so dry relief troughs stay walkable.
+    // off-limits = the submerged ven only (inside the drawn water disc AND below the
+    // surface) — NOT a global height test, so dry relief troughs stay walkable. (Run 6: the
+    // test used an 18 m disc under the 20 m drawn one, so south of the ven, where the basin
+    // stays under the surface out to 20 m, a jeep drove into water it could see.)
     blocked: (x, z) => {
       const dx = x - VEN_CENTER.x, dz = z - VEN_CENTER.z;
-      return dx * dx + dz * dz < 18 * 18 && this.terrain.y(x, z) < WATER_LEVEL + 0.15;
+      return dx * dx + dz * dz < VEN_WATER_R * VEN_WATER_R && this.terrain.y(x, z) < WATER_LEVEL + 0.15;
     },
     // whether any of that water lies within r of (x, z): the jeep's look for the ven's
     // shore is skipped everywhere else
-    wetWithin: (x, z, r) => Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) < 18 + r,
+    wetWithin: (x, z, r) => Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) < VEN_WATER_R + r,
   };
 
   constructor(
