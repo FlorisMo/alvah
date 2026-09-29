@@ -19,9 +19,10 @@ import {
   MAX_WORDS_PER_SENTENCE, type LabeledText,
 } from './readlevel.ts';
 import { AREA_VELUWE, ANIMALS } from '../content/veluwe.ts';
-import { ONBOARD_HINT } from './onboarding.ts';
+import { ONBOARD_TIPS } from './onboarding.ts';
 import { ROEP_COPY, ROEP_VOGELS } from '../engines/roep.ts';
 import { SAY, TITLE, MAKER } from '../content/screens.ts';
+import { BRAM, LES, BESTURING, metNaam } from '../content/mentor.ts';
 
 // ---- 1. pure lint maths --------------------------------------------------
 
@@ -118,8 +119,8 @@ function readingCorpus(): LabeledText[] {
     (an.feiten ?? []).forEach((f: string, i: number) => push(`animal.${id}.feit[${i}]`, f));
     (an.veiligheid ?? []).forEach((f: string, i: number) => push(`animal.${id}.veilig[${i}]`, f));
   }
-  // W1.6 onboarding-hint copy (UI literals, one source of truth in onboarding.ts).
-  for (const k of Object.keys(ONBOARD_HINT)) push(`onboard.${k}`, (ONBOARD_HINT as any)[k]);
+  // the world's transient tips (onboarding.ts); the first minute's lessons are below (mentor.ts)
+  ONBOARD_TIPS.forEach((t, i) => push(`onboard.tip[${i}]`, t));
   // W6.4a "Ken je roep" — UI-copy + de roep-omschrijvingen van elke vogel.
   for (const k of Object.keys(ROEP_COPY)) push(`roep.${k}`, (ROEP_COPY as any)[k]);
   for (const v of ROEP_VOGELS) { push(`roep.vogel.${v.id}.naam`, v.naam); push(`roep.vogel.${v.id}.roep`, v.roep); }
@@ -129,6 +130,14 @@ function readingCorpus(): LabeledText[] {
   for (const k of ['naam', 'sub', 'begin'] as const) push(`title.${k}`, TITLE[k]);
   for (const k of ['titel', 'naam', 'klaar'] as const) push(`maker.${k}`, MAKER[k]);
   push('maker.groet', MAKER.groet('Alvah'));
+  // run 6: Bram's lines, the first minute's lessons and the "Zo speel je" card
+  for (const [beat, lines] of Object.entries(BRAM)) {
+    const all: string[] = typeof lines === 'string' ? [lines] : Array.isArray(lines) ? [...lines] : [...(lines as { simpel: readonly string[]; knap: readonly string[] }).simpel, ...(lines as { knap: readonly string[] }).knap];
+    all.forEach((l, i) => push(`bram.${beat}[${i}]`, metNaam(l, 'Alvah')));
+  }
+  for (const [id, l] of Object.entries(LES)) { push(`les.${id}.keys`, l.keys); push(`les.${id}.stick`, l.stick); }
+  push('besturing.zegKeys', BESTURING.zegKeys);
+  push('besturing.zegStick', BESTURING.zegStick);
   return E;
 }
 

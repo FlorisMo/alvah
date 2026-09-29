@@ -1,72 +1,87 @@
 /**
- * PlayerAnim.ts — the pure state machine for the ranger's locomotion animation
- * (WORLD-PLAN §5 / W3.2). The ranger GLB carries baked `idle` + `walk` clips
- * (staged by W3.1); this module decides how much of each to blend from the
- * player's ground speed, with a frame-rate-independent crossfade so 30/60/120
- * fps land on the same weight for the same elapsed time.
+ * PlayerAnim.ts — the pure gait maths behind the ranger's legs (WORLD-PLAN §5 / W3.2,
+ * run 6). The ranger GLB carries three baked clips: `idle` (one still pose), `walk` and
+ * `run`. This module decides, from his post-collision ground speed, how much of each
+ * to blend, how fast the one shared locomotion cycle turns, and how much wider than the
+ * clips his legs swing, so his feet stay planted at a brisk walk and a real run without
+ * his legs blurring. `PlayerRig` measures the clips and applies it to the mixer.
  *
- * THREE-free, DOM-free, deterministic — it sits in the pure-core unit-test spine
- * (like `FollowCam.ts`). The mixer/action wiring lives in `PlayerRig.ts`; this
- * module holds only the scalar blend maths so the crossfade is pinned without a
- * browser. The exp-damping factor is the SAME `dampFactor` the §1e camera and
- * position follow use, so the whole feel shares one smoothing guarantee.
+ * THREE-free, DOM-free, deterministic (unit-tested). Every ease is the SAME
+ * frame-rate-independent `dampFactor` the camera uses, so 30/60/120 fps agree.
+ * Locomotion is EXEMPT from the reduced-motion freeze (§3.4): a walking ranger
+ * animates in both motion modes, so nothing here takes a reduced flag.
  *
- * Locomotion is EXEMPT from the reduced-motion freeze (§3.4: "locomotion itself
- * always allowed") — a walking ranger animates in both motion modes. Only the
- * SECONDARY animal/ambient motion freezes. So this module never takes a reduced
- * flag: it maps speed → blend the same way always.
+ * What the clips need (run 6, measured at his game size through the game's prepModel):
+ *   - Their feet are slow for his speeds. The walk covers ~0.7 m of ground per cycle
+ *     (two 0.35 m steps); played at 2.2 m/s by cadence alone that is 6 steps a second, a
+ *     scurry. So the legs (and arms) swing wider about the clip's mean pose: the STRIDE
+ *     GAIN. Walking ~1.65× gives long ~0.65 m steps at ~3.3 steps/s; running ~1.3× gives
+ *     ~4.5 steps/s.
+ *   - A planted foot does not slide back at an even pace in the authored clips (the run's
+ *     starts slow and ends fast), so a cadence that is right on average still skates. A
+ *     GAIT CLOCK re-times each clip so the planted foot slides back evenly: the shared
+ *     phase maps to clip time so that the stance foot's travel is linear in phase.
+ *   - The clock also lines the two clips up: phase 0 is the left foot going down and 0.5
+ *     the right, in both, so walk and run blend without the feet double-stepping.
+ *   - The run clip's feet only skim the ground between steps; its flights get a small
+ *     lift so both feet leave the ground.
+ * The clips are measured when the rig loads (`gaitClock`, `stanceTravel`), not pinned,
+ * so a new ranger model keeps its feet planted.
  */
 
 import { dampFactor } from './play/kit-math.ts';
+import { WALK_SPEED, RUN_SPEED } from '../core/input.ts';
 
-/** Ground speed (m/s) above which the ranger is "walking" — below it he idles.
+/** Ground speed (m/s) above which the ranger is moving — below it he idles.
  *  Just under the tap-to-walk stop threshold so a real step always crosses it. */
 export const WALK_ENTER_SPEED = 0.2;
 
-/** Smooth-time of the idle↔walk crossfade (~0.12 s: quick but never a pop). */
+/** Smooth-time of the idle↔moving crossfade (~0.12 s: quick but never a pop). */
 export const BLEND_TAU = 0.12;
 
-/** Weight is the walk share in [0,1]; idle share is `1 − walk`. */
+/** Smooth-time of the walk↔run crossfade. The ground speed already ramps over ~0.3 s
+ *  (core/input SPEED_TAU); this only smooths collision jitter out of the blend. */
+export const RUN_BLEND_TAU = 0.08;
+
+/** Weight is the moving share in [0,1]; idle share is `1 − walk`. */
 export type WalkWeight = number;
 
-/** Ground speed (m/s) at which the walk clip plays at its natural authored rate
- *  (timeScale 1): its baked stride covers one authored step-length of ground per
- *  loop at this speed, so the feet plant with zero slip. Pinned near a human-walk
- *  cadence (~1.5 m/s) — just under the retuned foot speed (World `speed` ≈ 1.8),
- *  so a normal stride runs a touch above the authored rate rather than dragging
- *  the feet behind the ground (F-08). */
-export const STRIDE_MATCH_SPEED = 1.5;
+/** The run clip takes over across this band of ground speed (m/s): pure walk at the
+ *  walking speed, pure run well before the running speed. */
+export const RUN_BLEND_FROM = WALK_SPEED + 0.35;
+export const RUN_BLEND_TO = RUN_SPEED - 0.6;
 
-/** Clamp band for the stride playback rate: never freeze/reverse the feet at a
- *  near-stop slide, never smear them on a transient over-speed (F-08 comfort). */
-export const STRIDE_RATE_MIN = 0.4;
-export const STRIDE_RATE_MAX = 2.0;
+/** Stride gain at the walking speed: the legs swing this much wider than the clip. */
+export const WALK_GAIN = 1.85;
+/** The walk's stride gain never drops under this, even creeping: the authored walk
+ *  shuffles (its swinging foot brushes the ground); a little more swing lifts it. */
+export const WALK_GAIN_MIN = 1.3;
+/** Stride gain of the run. */
+export const RUN_GAIN = 1.3;
+
+/** The shared cycle: the left foot goes down at phase 0, the right at 0.5. */
+export const FOOT_PLANTS: readonly number[] = [0, 0.5];
+
+/** Share of each half-cycle a foot is planted: walking always (the switch is the other
+ *  foot's touchdown), running 60 %, then a flight. */
+export const STANCE_SHARE = { walk: 1, run: 0.6 } as const;
+
+/** How high the soles clear the ground at mid-flight in a full run (m). */
+export const RUN_FLIGHT_HEIGHT = 0.05;
+
+/** A turn on the spot steps the feet at this slow walk (m/s equivalent). */
+export const TURN_STEP_SPEED = 0.7;
+
+/** Phase steps in a gait clock's table. */
+export const CLOCK_STEPS = 128;
+
+const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
+
+/* ------------------------------------------------------------ blending -- */
 
 /**
- * The walk clip's playback rate (AnimationAction.timeScale) for a given ground
- * speed — TIED to the real post-collision speed so distance-per-stride-cycle
- * stays ≈ the clip's authored stride at ANY speed. This kills the foot-slip F-08
- * measured (the ranger covered ≈3 m per ≈1.1 s cycle, sliding the feet ~2.5×):
- * rate = speed / STRIDE_MATCH_SPEED, so a slide-around-a-pine slowdown eases the
- * cadence in lockstep and a full-speed stride cycles a touch faster. Clamped to a
- * comfortable band. Pure + deterministic, so it joins this module's unit spine.
- */
-export function strideRate(
-  speed: number,
-  ref: number = STRIDE_MATCH_SPEED,
-): number {
-  const r = speed / ref;
-  return r < STRIDE_RATE_MIN ? STRIDE_RATE_MIN : r > STRIDE_RATE_MAX ? STRIDE_RATE_MAX : r;
-}
-
-/**
- * Ease the walk weight toward its speed-driven target (1 when moving, 0 when
+ * Ease the moving weight toward its speed-driven target (1 when moving, 0 when
  * still) with frame-rate-independent exponential damping. Clamped to [0,1].
- *
- * dt-independence (pinned by the unit test): stepping to a fixed total time in
- * N steps lands on the same weight for any N, because lerping by
- * `1 − exp(−dt/τ)` leaves the remaining error at `exp(−ΣΔt/τ)` regardless of how
- * ΣΔt is split.
  */
 export function stepWalkWeight(
   cur: WalkWeight,
@@ -80,11 +95,204 @@ export function stepWalkWeight(
   return w < 0 ? 0 : w > 1 ? 1 : w;
 }
 
+/** The run clip's share for a ground speed: 0 walking, 1 running, smooth between. */
+export function runTarget(speed: number): number {
+  const t = clamp01((speed - RUN_BLEND_FROM) / (RUN_BLEND_TO - RUN_BLEND_FROM));
+  return t * t * (3 - 2 * t);
+}
+
+/** Ease the run weight toward `runTarget(speed)` (frame-rate independent, [0,1]). */
+export function stepRunWeight(cur: number, speed: number, dt: number, tau: number = RUN_BLEND_TAU): number {
+  return clamp01(cur + (runTarget(speed) - cur) * dampFactor(dt, tau));
+}
+
+/** The gait the dev hook reports: the dominant one of idle / walk / run. */
+export type Gait = 'idle' | 'walk' | 'run';
+
 /**
- * The dominant gait, for the dev-hook `clip()` report (and to pick which action's
- * time to expose). At exactly 0.5 the ranger is mid-crossfade — reported as walk
- * so the E2E sees `walk` the moment a held key has him actually moving.
+ * The dominant gait, for the dev-hook `clip()` report and `rangerMotion().running`.
+ * At exactly 0.5 the moving weight reports as moving, so the E2E sees `walk` the
+ * moment a held key has him actually moving.
  */
-export function dominantGait(walkWeight: WalkWeight): 'idle' | 'walk' {
-  return walkWeight >= 0.5 ? 'walk' : 'idle';
+export function dominantGait(walkWeight: WalkWeight, runWeight = 0): Gait {
+  if (walkWeight < 0.5) return 'idle';
+  return runWeight >= 0.5 ? 'run' : 'walk';
+}
+
+/* ---------------------------------------------------------- gait clock -- */
+
+/** One sampled pose of a clip: its time and how far forward (model +z, m) the ball of
+ *  each foot is. */
+export interface FootSample { t: number; zL: number; zR: number }
+
+/** A clip, measured: how the shared phase maps to its time, and the ground it covers. */
+export interface GaitClock {
+  /** The clip's seamless loop [start, end) in clip seconds (the authored clips hold
+   *  their first pose for a frame before the first key; that hold is left out). */
+  loop: readonly [number, number];
+  /** Clip time at phase k / CLOCK_STEPS, k = 0..CLOCK_STEPS (unwrapped, ascending). */
+  times: readonly number[];
+  /** Share of each half-cycle a foot is planted. */
+  stance: number;
+  /** Ground one cycle covers (m) with the planted foot still, per stride gain:
+   *  [gain, metres], ascending. */
+  strides: ReadonlyArray<readonly [number, number]>;
+}
+
+/** A foot's forward position at clip time `t` (wrapped into the loop), from samples
+ *  spaced evenly over the loop. */
+function zAt(samples: readonly FootSample[], loop: readonly [number, number], foot: 'zL' | 'zR', t: number): number {
+  const L = loop[1] - loop[0];
+  const n = samples.length;
+  let u = ((t - loop[0]) / L) % 1;
+  if (u < 0) u += 1;
+  const x = u * n;
+  const i = Math.floor(x) % n;
+  const f = x - Math.floor(x);
+  return samples[i][foot] + (samples[(i + 1) % n][foot] - samples[i][foot]) * f;
+}
+
+/** When each foot goes down: the clip time its ball is furthest forward (it starts
+ *  sliding back under him), the right one after the left within one loop. */
+export function touchdowns(samples: readonly FootSample[], loop: readonly [number, number]): { l: number; r: number } {
+  let l = samples[0], r = samples[0];
+  for (const s of samples) { if (s.zL > l.zL) l = s; if (s.zR > r.zR) r = s; }
+  const L = loop[1] - loop[0];
+  return { l: l.t, r: r.t <= l.t ? r.t + L : r.t };
+}
+
+/** The stance slice of a half cycle starting at `ta` and ending at `tb` (clip time). */
+const stanceEnd = (ta: number, tb: number, stance: number): number => ta + stance * (tb - ta);
+
+/**
+ * The phase → clip-time table of a clip's gait clock. The first half cycle is the left
+ * foot's (from its touchdown to the right's), the second the right's. Within a half, the
+ * planted slice (`stance` of it) is re-timed so the planted foot's ball slides back
+ * EVENLY with phase (the clip's own pace is uneven); a run's flight after it plays at an
+ * even pace. Unwrapped: entries ascend from the left touchdown over one loop.
+ */
+export function gaitClockTimes(
+  samples: readonly FootSample[],
+  loop: readonly [number, number],
+  stance: number,
+  steps: number = CLOCK_STEPS,
+): number[] {
+  const L = loop[1] - loop[0];
+  const td = touchdowns(samples, loop);
+  const halves: [number, number, 'zL' | 'zR'][] = [[td.l, td.r, 'zL'], [td.r, td.l + L, 'zR']];
+  const dt = L / (samples.length * 4); // search step: a quarter sample
+  const out: number[] = [];
+  for (let k = 0; k <= steps; k++) {
+    const phase = k / steps;
+    const h = phase < 0.5 ? 0 : 1;
+    const [ta, tb, foot] = halves[h];
+    const u = phase - h * 0.5; // position within the half, [0, 0.5]
+    const te = stanceEnd(ta, tb, stance);
+    const planted = stance * 0.5;
+    if (u >= planted) {
+      // a flight (or the very end of the half): even pace from the lift to the next touchdown
+      out.push(planted >= 0.5 ? tb : te + ((u - planted) / (0.5 - planted)) * (tb - te));
+      continue;
+    }
+    // planted: find when the ball has slid back its even share of the stance travel
+    const za = zAt(samples, loop, foot, ta), ze = zAt(samples, loop, foot, te);
+    const want = za + (u / planted) * (ze - za);
+    let t = ta, low = za, prevT = ta, prevLow = za;
+    while (t < te && low > want) {
+      prevT = t; prevLow = low;
+      t = Math.min(te, t + dt);
+      low = Math.min(low, zAt(samples, loop, foot, t)); // the running low: never back up
+    }
+    out.push(low <= want && prevLow > low ? prevT + ((prevLow - want) / (prevLow - low)) * (t - prevT) : t);
+  }
+  return out;
+}
+
+/** The ground one cycle covers (m) when the planted foot never slips: the backward
+ *  travel of each planted foot over its stance slice, over the share of the cycle
+ *  those slices take. */
+export function stanceTravel(samples: readonly FootSample[], loop: readonly [number, number], stance: number): number {
+  const L = loop[1] - loop[0];
+  const td = touchdowns(samples, loop);
+  const a = zAt(samples, loop, 'zL', td.l) - zAt(samples, loop, 'zL', stanceEnd(td.l, td.r, stance));
+  const b = zAt(samples, loop, 'zR', td.r) - zAt(samples, loop, 'zR', stanceEnd(td.r, td.l + L, stance));
+  return Math.max(0, (a + b) / stance);
+}
+
+/** Clip time for a phase in [0,1) on a gait clock (wrapped into its loop). */
+export function clockTime(clock: GaitClock, phase: number): number {
+  const p = phase - Math.floor(phase);
+  const x = p * (clock.times.length - 1);
+  const i = Math.min(clock.times.length - 2, Math.floor(x));
+  const t = clock.times[i] + (clock.times[i + 1] - clock.times[i]) * (x - i);
+  const [t0, t1] = clock.loop;
+  const L = t1 - t0;
+  let w = (t - t0) % L;
+  if (w < 0) w += L;
+  return t0 + w;
+}
+
+/** Ground one cycle of a clip covers (m) at stride gain `gain`: its measured table,
+ *  linearly interpolated, held flat past its ends. */
+export function clipStride(clock: GaitClock, gain: number): number {
+  const t = clock.strides;
+  if (gain <= t[0][0]) return t[0][1];
+  for (let i = 1; i < t.length; i++) {
+    const [g1, s1] = t[i];
+    if (gain <= g1) {
+      const [g0, s0] = t[i - 1];
+      return s0 + ((s1 - s0) * (gain - g0)) / (g1 - g0);
+    }
+  }
+  return t[t.length - 1][1];
+}
+
+/* ------------------------------------------------------ stride + cycle -- */
+
+/**
+ * How much wider than the clip the legs swing, for this speed and run share. The walk's
+ * gain grows with speed (a slow walk takes short steps, a brisk one long ones); the
+ * run's is fixed.
+ */
+export function strideGain(speed: number, runWeight: number): number {
+  const walk = WALK_GAIN_MIN + (WALK_GAIN - WALK_GAIN_MIN) * clamp01(Math.abs(speed) / WALK_SPEED);
+  return walk + (RUN_GAIN - walk) * clamp01(runWeight);
+}
+
+/**
+ * The shared cycle's rate (cycles per second) that keeps the planted foot still on the
+ * ground: ground speed ÷ the ground one cycle of the blended pose covers at this frame's
+ * stride gain. Never negative; 0 when standing. Without a run clock the walk covers all.
+ */
+export function cycleRate(speed: number, runWeight: number, walk: GaitClock, run: GaitClock | null): number {
+  const v = Math.abs(speed);
+  if (!(v > 0)) return 0;
+  const r = run ? clamp01(runWeight) : 0;
+  const g = strideGain(v, r);
+  const sw = clipStride(walk, g);
+  const stride = run ? sw + (clipStride(run, g) - sw) * r : sw;
+  return stride > 1e-6 ? v / stride : 0;
+}
+
+/** Footfalls per second (two per cycle): what the ear and eye count. */
+export function cadence(rate: number): number {
+  return 2 * rate;
+}
+
+/** Advance the normalized cycle phase (wrapped to [0,1)); backwards when backing up. */
+export function stepPhase(phase: number, rate: number, dt: number, backward = false): number {
+  const p = phase + (backward ? -1 : 1) * rate * Math.max(0, dt);
+  return p - Math.floor(p);
+}
+
+/** How high the lowest sole floats at this point of the cycle (m): the run's flight
+ *  arc (after each foot's planted share of its half), scaled by the run share; 0
+ *  (planted) otherwise. */
+export function flightLift(phase: number, runWeight: number, stance: number = STANCE_SHARE.run): number {
+  const r = clamp01(runWeight);
+  if (r === 0 || stance >= 1) return 0;
+  const u = (phase - Math.floor(phase)) % 0.5; // within the half
+  const a = stance * 0.5;
+  if (u <= a) return 0;
+  return RUN_FLIGHT_HEIGHT * r * Math.sin((Math.PI * (u - a)) / (0.5 - a));
 }

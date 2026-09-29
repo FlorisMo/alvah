@@ -46,6 +46,7 @@ import {
   type Avatar,
 } from './avatar';
 import { addVeldnotitie } from './veldnotitie';
+import { migrateGeleerd, type Geleerd } from './lessons';
 import {
   STORAGE_KEY,
   LEGACY_KEY,
@@ -68,8 +69,7 @@ export interface Settings {
   joystick: 'auto' | 'aan' | 'uit';  // on-screen joystick visibility (W1.3): auto = coarse pointer
   cameraDraaitMee: boolean;          // W1.5 rotating follow-cam: camera eases behind as you turn
   helikopter: boolean;               // W5.3 opt-in helicopter mode (default UIT; unavailable under reduced-motion)
-  wereldHintGezien: boolean;         // W1.6 first-world-entry control hint has been dismissed (step 1 of the P3.3 sequence)
-  tikHintGezien: boolean;            // P3.3 (F-06): the post-walk "tik op een dier" transient tip has shown once
+  geleerd: Geleerd;                  // run 6: the first minute's steps learned or told for good (core/lessons.ts); replaces wereldHintGezien/tikHintGezien
   kwaliteitTier: 'hoog' | 'laag';    // W7.2 adaptive quality tier — the last fps-probe verdict, persisted so a slow device boots light
   readSize: number;
   leading: number;
@@ -132,8 +132,7 @@ const DEFAULT_SETTINGS: Settings = {
   joystick: 'auto',
   cameraDraaitMee: true,
   helikopter: false,
-  wereldHintGezien: false,
-  tikHintGezien: false,
+  geleerd: {},
   kwaliteitTier: 'hoog',
   readSize: 28,
   leading: 1.7,
@@ -198,11 +197,24 @@ function load(): GameState {
       companionGroei: parsed.companionGroei ?? null,
       avatar: mergeAvatar(parsed.avatar),
       avatarGemaakt: parsed.avatarGemaakt ?? false,
-      settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
+      settings: loadSettings(parsed.settings),
     };
   } catch {
     return freshState();
   }
+}
+
+/** Set when the save still held the old one-off hint flags: the store writes the
+ *  migrated save back at once (so they are gone from `alvah-ef-v1` from this boot on). */
+let migratedOnLoad = false;
+
+/** The saved settings over the defaults. The old one-off hint flags become learned steps
+ *  (core/lessons.migrateGeleerd) and are dropped, so they are never written back. */
+function loadSettings(saved: Partial<Settings> | undefined): Settings {
+  const raw = (saved ?? {}) as Partial<Settings> & { wereldHintGezien?: boolean; tikHintGezien?: boolean; renHintGezien?: boolean };
+  const { wereldHintGezien: _w, tikHintGezien: _t, renHintGezien: _r, ...rest } = raw;
+  if (_w !== undefined || _t !== undefined || _r !== undefined) migratedOnLoad = true;
+  return { ...DEFAULT_SETTINGS, ...rest, geleerd: migrateGeleerd(raw) };
 }
 
 function save(state: GameState): void {
@@ -222,6 +234,10 @@ type Listener = (state: GameState) => void;
 class Store {
   private state: GameState = load();
   private readonly listeners = new Set<Listener>();
+
+  constructor() {
+    if (migratedOnLoad) save(this.state); // the old hint flags leave the save now
+  }
 
   get(): GameState {
     return this.state;
@@ -246,6 +262,12 @@ class Store {
 
   setSetting(patch: Partial<Settings>): void {
     this.commit({ ...this.state, settings: { ...this.state.settings, ...patch } });
+  }
+
+  /** A first-minute step is learned (a lesson done) or told (Bram's beat), for good. */
+  learn(id: keyof Geleerd): void {
+    if (this.state.settings.geleerd[id]) return;
+    this.setSetting({ geleerd: { ...this.state.settings.geleerd, [id]: true } });
   }
 
   go(screen: Screen): void {

@@ -128,6 +128,10 @@ export class World {
   // for `taskInView`, so a game-3D reframe that lands off the playfield / on a
   // backside is caught. Set in ctx(), cleared in endActivity(); null in free-roam.
   private activityFocus: { x: number; y: number; z: number } | null = null;
+  // run 6 (FLOW): how far (px) the player has dragged the view round (the look lesson),
+  // and whether the parked jeep glows (Bram suggested it)
+  private lookPx = 0;
+  private jeepGlow = false;
 
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
@@ -180,6 +184,8 @@ export class World {
       map: this.groundDetailOn ? Terrain.mottleTexture() : null,
     });
     this.scene.add(this.terrain.mesh);
+    // run 6: the tags read the solids (a building hides the tag behind it) and the ground
+    this.labels.setWorld({ obstacles: this.obstacles, groundY: (x, z) => this.terrain.y(x, z) });
     this.dressing = new Dressing({
       scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits, labels: this.labels,
     });
@@ -195,7 +201,7 @@ export class World {
       },
       {
         pointerBlocked: () => this.frozen || this.vehicles.inVehicle || this.vehicles.inHeli,
-        orbitDrag: (dx, dy) => this.cam.orbitDrag(dx, dy),
+        orbitDrag: (dx, dy) => { this.lookPx += Math.abs(dx) + Math.abs(dy); this.cam.orbitDrag(dx, dy); },
         tapTargets: () => this.tapTargets(),
         crossBiome: (here) => this.crossBiome(here),
       },
@@ -458,6 +464,11 @@ export class World {
     return this.player.groundSpeed();
   }
 
+  /** Dev-hook accessor (run 6): the ranger's gait and his soles (the foot-slip probe). */
+  playerGait(): ReturnType<Player['gait']> {
+    return this.player.gait();
+  }
+
   /** How the ranger moves right now: where he stands, his heading, his ground speed
    *  (m/s) and whether he runs. Live; the missions' animals and the dev hook read it. */
   rangerMotion(): RangerMotion {
@@ -492,9 +503,11 @@ export class World {
   }
 
   /** Register the on-screen joystick's live-vector source (W1.3). The HUD wires
-   *  it on world entry; pass null to clear. Fused with held keys each frame. */
-  setJoystick(source: (() => StickVector | null) | null): void {
+   *  it on world entry; pass null to clear. Fused with held keys each frame. `onRun`
+   *  hears whether the stick has him running (its ring shows it, run 6). */
+  setJoystick(source: (() => StickVector | null) | null, onRun: ((running: boolean) => void) | null = null): void {
     this.player.joystickSource = source;
+    this.player.stickRunFeedback = onRun;
   }
 
   /** Register the "Camera draait mee" setting source (W1.5). Read live each frame
@@ -729,11 +742,13 @@ export class World {
     this.progress.update(t, dt, reduced, this.camera, this.activityActive); // finished tableaus: reunion walks, idle breathing
 
     this.fauna.update(t, dt, reduced, this.camera); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
+    this.fauna.tendWarden(dt, rp, reduced); // run 6: Bram turns to the ranger while he speaks
 
-    // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
-    // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
-    // animates in both motion modes; only the procedural-bob fallback holds still.
-    this.player.rig.update(dt, this.player.groundSpeedNow, reduced);
+    // W3.2: the ranger's own locomotion animation (and his footsteps, on his feet).
+    // Locomotion is reduced-motion EXEMPT (§3.4) so the mixer always advances with real
+    // dt — a walking ranger animates in both motion modes; only the procedural-bob
+    // fallback holds still.
+    this.player.animate(dt, reduced);
 
     // ready once nothing the build asked for is still loading (two frames in a row, so a
     // model that swaps in after its load is in the scene) and every shader the scene needs
@@ -766,13 +781,12 @@ export class World {
     const st = this.sky.advance(dt, reduced); // clouds drift + the flyover bird sails
     this.dressing.animate(st, reduced); // grass wind wave + the ven water shimmer
 
-    // F-22: keep the occlusion-proof world/vehicle/POI name-tags distance-faded.
-    // Runs before the activity early-return so an open mission's Missiebord tag
-    // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity too.
-    this.labels.fade(this.camera, this.canvas.clientHeight);
+    this.tendBeacon();
 
-    // the activity owns proximity/wayfinding/camera; a presented shot owns the lens
-    if (this.frozen) { this.presenter.update(dt); return; }
+    // the activity owns proximity/wayfinding/camera; a presented shot owns the lens.
+    // F-22: the name-tags are faded here too, so an open mission's Missiebord tag
+    // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity.
+    if (this.frozen) { this.presenter.update(dt); this.fadeTags(rp, dt, reduced); return; }
 
     // W5.1 / W5.3b: "Stap in" near the parked jeep or helicopter (suppressed while riding)
     this.vehicles.updateProximity(rp.x, rp.z);
@@ -787,10 +801,18 @@ export class World {
 
     this.cam.place(reduced, dt, reduced);
     this.presenter.update(dt); // the ranger's turn back to the forest after a shot
+    this.fadeTags(rp, dt, reduced);
     // after a shot the tags and rings come in once the lens has settled behind him
     if (this.wordsIn < 1 && !this.cam.handingOver) {
       this.setWordsIn(reduced || lightMode() ? 1 : this.wordsIn + Math.min(dt, 0.05) / WORDS_IN_S);
     }
+  }
+
+  /** F-22 + run 6: the name-tags' per-frame pass (who shows, faded, never cut at the edge),
+   *  run once the lens stands where this frame draws it: a tag's box on screen is the one
+   *  the player sees, never last frame's (a turning view moved it by tens of px). */
+  private fadeTags(rp: THREE.Vector3, dt: number, reduced: boolean): void {
+    this.labels.fade(this.camera, { w: this.canvas.clientWidth, h: this.canvas.clientHeight }, rp, dt, reduced);
   }
 
   private setWordsIn(k: number): void {
@@ -868,6 +890,65 @@ export class World {
     const view = { camera: this.camera, ranger: { x: this.ranger.position.x, z: this.ranger.position.z } };
     return this.progress.complete(missionId, opts.fresh, livePolicy().reduced, view);
   }
+
+  // ---- run 6 (FLOW lane): Bram, the lessons, the glowing cues --------------------------
+  /** Bram speaks (he turns to the ranger, a speech mark over his head) or is quiet. */
+  setWardenTalking(on: boolean): void {
+    this.fauna.setWardenTalking(on);
+  }
+
+  /** How far the ranger is from Bram (m); Infinity before Bram stands. */
+  wardenDistance(): number {
+    const w = this.fauna.wardenPos();
+    if (!w) return Infinity;
+    return Math.hypot(w.x - this.ranger.position.x, w.z - this.ranger.position.z);
+  }
+
+  /** Bram for the dev hook (see Fauna.wardenState). */
+  wardenState(): ReturnType<Fauna['wardenState']> {
+    return this.fauna.wardenState(this.ranger.position);
+  }
+
+  /** How far (px) the player has dragged the view round so far (a mouse or a finger). */
+  lookedPx(): number {
+    return this.lookPx;
+  }
+
+  /** Bram named the next mission: its tag now shows from afar, and its ring and tag
+   *  glow for `seconds`. `false` holds it back again (until the hook, a fresh player). */
+  revealNext(on: boolean, seconds = 0): void {
+    this.pois.setNextRevealed(on);
+    if (on && seconds > 0) this.pois.glowActive(seconds);
+  }
+
+  /** The missiebord's ring and tag glow for `seconds`. */
+  glowBoard(seconds: number): void {
+    this.pois.glowBoard(seconds);
+  }
+
+  /** The parked jeep glows (a warm ring round it) until he gets in, or `false`. */
+  glowJeep(on: boolean): void {
+    this.jeepGlow = on;
+    const v = this.vehicles;
+    if (!on || !v.jeep || !v.jeepPos || v.inVehicle) { this.pois.setBeacon(null); return; }
+    this.pois.setBeacon({ x: v.jeepPos.x, z: v.jeepPos.z, r: 2.5 });
+  }
+
+  /** Where the glowing cues stand (the dev hook): the next mission, the board, the jeep. */
+  glowState(): { next: boolean; board: boolean; beacon: boolean } {
+    return this.pois.glowState();
+  }
+
+  /** Every name-tag drawn now: its words, opacity and box on screen (the dev hook). */
+  tagsOnScreen(): ReturnType<Labels['visibleTags']> {
+    return this.labels.visibleTags();
+  }
+
+  /** The jeep's glow ends once he gets in. */
+  private tendBeacon(): void {
+    if (this.jeepGlow && this.vehicles.inVehicle) this.glowJeep(false);
+  }
+  // ---- end run 6 -------------------------------------------------------------------
 
   /** The season's ontknoping (the poacher was reported): he stands by the warden now. */
   setSeasonResolved(on: boolean): void {

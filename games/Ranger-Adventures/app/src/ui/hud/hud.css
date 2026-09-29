@@ -1,0 +1,172 @@
+/* ============================================================
+   hud.css — the first minute's teaching slot (run 6, FLOW P2): Bram's speaker strip,
+   the lesson strip with its key caps, the key-cap component (.kcap, also the small
+   [Enter] cap on a world prompt's button), the "Zo speel je" card and the chip's
+   reveal. Loaded by ui/hud/Lessons.ts.
+
+   One teaching strip at a time, bottom centre, just above the one prompt slot
+   (`--prompt-h`, set by ExploreHud.arbitratePrompts). A warm paper card like the
+   maker's panel: dark words on light paper in the reading font, big enough for a
+   dyslexic reader. It never takes a tap (the world under it stays walkable).
+   ============================================================ */
+
+.explore-hud > .explore-teach {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + var(--prompt-h, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: min(92vw, 760px);
+  pointer-events: none;
+  transition: bottom var(--dur-quick) var(--ease-standard);
+}
+/* the teaching slot keeps its own entrance (the rest of the HUD waits for the glide) */
+.explore-hud--arriving > .explore-teach { animation: none; }
+@media (pointer: coarse) {
+  /* clear of the joystick (bottom left) and the "?" chip (bottom right) */
+  .explore-hud > .explore-teach { max-width: min(calc(100vw - 340px), 760px); }
+}
+
+/* ---- the card both strips share ---- */
+.speaker-strip,
+.lesson-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 26px 12px 12px;
+  border: 1px solid rgba(120, 96, 60, 0.2);
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%),
+    rgba(253, 252, 248, 0.95);
+  box-shadow: var(--shadow-lg);
+  color: var(--ink);
+  animation: teach-in 220ms var(--ease-out) both;
+  transition: opacity 160ms var(--ease-in), transform 160ms var(--ease-in);
+}
+.speaker-strip.sp-leaving,
+.lesson-strip.ls-leaving { opacity: 0; transform: translateY(6px); }
+.lesson-strip[hidden] { display: none; }
+@keyframes teach-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---- Bram speaks ---- */
+.sp-portrait {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 4px rgba(47, 91, 58, 0.35), var(--shadow-sm);
+}
+.sp-face { display: block; width: 64px; height: 64px; border-radius: 50%; }
+.sp-radio {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 28px;
+  height: 28px;
+  display: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+}
+.sp-on-radio .sp-radio { display: block; }
+.sp-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sp-name { font: 600 18px/1.1 var(--font-head); color: var(--green-mid); }
+/* the child's own reading size (Instellingen), kept to what fits one strip */
+.sp-line { font: 400 clamp(22px, var(--read-size, 28px), 32px)/1.35 var(--font-read); color: var(--ink); }
+.sp-line-in { animation: line-in 200ms var(--ease-out) both; }
+@keyframes line-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ---- a lesson: the keys (or the stick, a finger), the words, a ✓ when done ---- */
+.lesson-strip { padding: 12px 26px 12px 16px; }
+.ls-keys { flex: none; display: flex; align-items: center; color: #2b2418; transition: opacity var(--dur-quick); }
+.ls-text { font: 400 clamp(22px, var(--read-size, 28px), 32px)/1.35 var(--font-read); color: var(--ink); }
+.ls-icon { width: 52px; height: 52px; }
+.ls-check {
+  display: none;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green-mid);
+  color: #fff;
+  font: 700 22px/1 var(--font-read);
+}
+.ls-done .ls-check { display: grid; animation: teach-in 200ms var(--ease-out) both; }
+.ls-done .ls-keys { opacity: 0.45; }
+
+/* ---- key caps: a real key, drawn (lessons, the controls card, a prompt's Enter) ---- */
+.kcap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  border: 1.5px solid #cbbd9c;
+  border-bottom-width: 4px;
+  border-radius: 9px;
+  background: linear-gradient(#fffdf8, #f1ead9);
+  color: #2b2418;
+  font: 700 18px/1 var(--font-read);
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.kcap-wide { padding: 0 12px; }
+.kcap-icon { padding: 0 8px; }
+.kcap-cluster {
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  grid-template-rows: 36px 36px;
+  gap: 3px;
+}
+.kcap-cluster .kcap { min-width: 0; width: 36px; padding: 0; }
+.kcap-cluster .kcap:nth-child(1) { grid-row: 1; grid-column: 2; }
+.kcap-cluster .kcap:nth-child(2) { grid-row: 2; grid-column: 1; }
+.kcap-cluster .kcap:nth-child(3) { grid-row: 2; grid-column: 2; }
+.kcap-cluster .kcap:nth-child(4) { grid-row: 2; grid-column: 3; }
+.kcap-combo { display: inline-flex; align-items: center; gap: 6px; }
+.kcap-plus { font: 700 20px/1 var(--font-read); color: #6b5a3a; }
+/* the small [Enter] on a world prompt's button (laptop only) */
+.kcap.kcap-in {
+  height: 26px;
+  min-width: 0;
+  margin-left: 10px;
+  padding: 0 7px;
+  border-color: rgba(90, 61, 9, 0.38);
+  border-bottom-width: 3px;
+  border-radius: 7px;
+  background: rgba(255, 250, 235, 0.6);
+  color: #5a3d09;
+  font: 700 13px/1 var(--font-read);
+  vertical-align: 3px;
+}
+
+/* ---- "Zo speel je" (the "?" chip) ---- */
+.controls-card.boot-card-ish { width: min(92vw, 480px); gap: 14px; }
+.zs-list { width: 100%; margin: 4px 0 6px; padding: 0; list-style: none; display: grid; gap: 10px; }
+.zs-row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  align-items: center;
+  gap: 18px;
+  min-height: 56px;
+  padding: 8px 14px;
+  border-radius: 16px;
+  background: rgba(240, 245, 236, 0.8);
+}
+.zs-key { display: flex; justify-content: center; color: #2b2418; }
+.zs-wat { font: 600 24px/1.2 var(--font-read); color: var(--ink); text-align: left; }
+.zs-pic { display: block; }
+
+/* ---- the chip appears as Bram points at it: it slides in and glows a moment ---- */
+.explore-wayfind.wf-reveal { animation: wf-in 420ms var(--ease-out) both, wf-glow 1.4s ease-out 420ms 3; }
+@keyframes wf-in { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: none; } }
+@keyframes wf-glow {
+  0% { box-shadow: var(--shadow-md), 0 0 0 0 rgba(245, 194, 59, 0.75); }
+  100% { box-shadow: var(--shadow-md), 0 0 0 14px rgba(245, 194, 59, 0); }
+}
+.rm .explore-wayfind.wf-reveal { animation: none; box-shadow: var(--shadow-md), 0 0 0 4px rgba(245, 194, 59, 0.8); }

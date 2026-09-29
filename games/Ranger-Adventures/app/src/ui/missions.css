@@ -450,6 +450,7 @@
   background: rgba(20, 16, 12, 0.62);
   color: var(--paper);
   font: 500 15px/1.3 var(--font-body);
+  white-space: pre-line; /* a two-sentence tip keeps each sentence on its own line (≤7 words a line) */
   pointer-events: none;
 }
 .explore-prompt,
@@ -581,27 +582,6 @@
 }
 .mission-card.mc-klaar { background: rgba(236, 244, 232, 0.94); }
 
-/* ---- first-world-entry onboarding hint (W1.6): shows once, dismissed on the
-   ranger's first step. Centred above the ranger (at 46% it sat on his head),
-   dual-channel icon + words. ---- */
-.explore-onboard {
-  position: absolute;
-  left: 50%;
-  top: 27%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  max-width: 80vw;
-  padding: 14px 22px;
-  border-radius: var(--radius-pill);
-  background: rgba(20, 16, 12, 0.62);
-  color: var(--paper);
-  font: 600 20px/1.25 var(--font-body);
-  text-align: left;
-}
-.explore-onboard .ob-icon { font-size: 26px; line-height: 1; }
-
 /* ---- virtual joystick (W1.3): bottom-left, thumb ≥56 px, coarse-pointer default ---- */
 .rj-base {
   position: absolute;
@@ -629,6 +609,10 @@
   pointer-events: none; /* the base owns the pointer capture */
 }
 .rj-base.rj-active { background: rgba(20, 16, 12, 0.3); }
+/* run 6: pushed to the rim he runs, and the ring shows it: a warm, steady ring (no
+   pulse, no motion: a state, reduced-motion safe) */
+.rj-base.rj-run { border-color: #f5c23b; box-shadow: 0 0 0 5px rgba(245, 194, 59, 0.55); }
+.rj-base.rj-run .rj-thumb { border-color: #f5c23b; }
 /* the thumb re-centres with a soft ease on release; the drag itself is instant
    (transform set inline every move), and this transition is calm/tiny so it is
    reduced-motion-safe (locomotion feedback, not a camera move). */

@@ -8,10 +8,10 @@
 import type { World } from '../../render3d/World';
 import {
   providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot,
-  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGrounded, provideCam,
+  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGait, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
-  provideHeli, provideQuality, provideBoundary,
+  provideHeli, provideQuality, provideBoundary, provideTags,
 } from '../../core/devhook';
 import { triggerActivityWin } from '../../render3d/play/kit';
 
@@ -28,6 +28,7 @@ export function wireWorldDevhook(world: World): void {
   provideAvatar(() => world.avatarState());           // F-07: live ranger scale (measured bbox height)
   provideGroundSpeed(() => world.groundSpeed());      // F-08: live post-collision foot speed (m/s)
   provideMotion(() => world.rangerMotion());          // run 6: where he is, his heading, speed, running
+  provideGait(() => world.playerGait());              // run 6: his legs (clip, cadence, stride) + sole probe
   provideGrounded(() => world.groundedState());       // D1.2: feet on the rendered terrain
   provideCam(() => world.camState());                 // F-05 ⊕ F-18: the REAL render camera read-back
   provideActors(() => world.actorClips());            // W3.3: warden + poacher baked clips
@@ -44,5 +45,6 @@ export function wireWorldDevhook(world: World): void {
   provideVehicle(() => world.vehicleState());         // W5.1: drivable jeep
   provideHeli(() => world.heliState());               // W5.3b: opt-in helicopter
   provideQuality(() => world.qualityState());         // W7.2: adaptive quality tier
+  provideTags(() => world.tagsOnScreen(), () => world.glowState()); // run 6: the tags drawn, the glowing cues
   provideWinStep(() => triggerActivityWin());         // W2.3: E2E-only resolve of a 3D step
 }

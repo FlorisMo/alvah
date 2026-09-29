@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, recordMotion, motionFrames, pageNow } from './helpers';
 
 /**
  * Movement red-first E2E (WORLD-PLAN W0.4). The prep session's headless taps
@@ -95,6 +95,38 @@ test('movement: tap-to-walk moves the ranger ≥2 m @smoke', async ({ page }, te
   expect(walked.d, `the ranger should walk ≥2 m toward the tapped ground (walked ${walked.d.toFixed(2)} m in ${walked.frames} frames)`)
     .toBeGreaterThanOrEqual(2);
 
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Run 6: Shift held on the click runs him to the tapped ground (a real mouse click with
+ * a real Shift key), and he eases in to arrive there instead of braking on the spot.
+ */
+test('movement: a Shift-click runs him to the tapped ground, and he eases in to arrive', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await enterWorld(page);
+  await expect.poll(() => page.evaluate(() => (window as any).__ranger.clip()?.name ?? null), { timeout: 60_000 }).not.toBeNull();
+  await page.waitForTimeout(800);
+  await recordMotion(page);
+  const box = (await page.locator('canvas#scene').boundingBox())!;
+  const t0 = await pageNow(page);
+  await page.keyboard.down('Shift');
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.36);
+  await page.keyboard.up('Shift'); // the click remembers it: he keeps running there
+  await expect.poll(async () => (await motionFrames(page, t0)).some((f) => f.running), { timeout: 10_000, message: 'a Shift-click runs' }).toBe(true);
+  await expect.poll(async () => {
+    const fs = await motionFrames(page, t0);
+    return fs.length > 10 && fs.slice(-8).every((f) => f.speed < 0.05);
+  }, { timeout: 20_000, message: 'he arrives and stands' }).toBe(true);
+  const fs = await motionFrames(page, t0);
+  const top = Math.max(...fs.map((f) => f.speed));
+  expect(top, `he ran (top ${top.toFixed(2)} m/s)`).toBeGreaterThanOrEqual(3.8);
+  const jumps = fs.slice(1).map((f, i) => fs[i].speed - f.speed);
+  expect(Math.max(...jumps), 'arriving, he eases in: no frame drops his speed by more than 0.45 m/s').toBeLessThanOrEqual(0.45);
+  await shot(page, 'movement-shift-click-arrived');
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });

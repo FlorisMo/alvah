@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, recordMotion, motionFrames, pageNow, type MotionFrame } from './helpers';
 
 /**
  * Rotating follow-cam E2E (WORLD-PLAN W1.5). The camera eases behind the ranger
@@ -178,6 +178,85 @@ test('camera: a drag tips the view gently, a sideways drag never tips it, and th
   expect(await pitch(), 'dragged all the way down, the view still looks a little down').toBeGreaterThanOrEqual(5.5);
   await shot(page, 'camera-drag-tilt-floor');
 
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Run 6: running keeps the calm walking view. Two fresh saves go straight ahead from
+ * spawn, one walking (ArrowUp) and one running (Shift + ArrowUp); where each passes the
+ * same spots (6, 9 and 12 m out) the ranger's on-screen height and centre are the same
+ * within 4 %, the FOV never changes and the camera never rolls. Then, running and turning
+ * (Shift + ArrowUp + ArrowLeft), the view turns at most 150°/s.
+ */
+test('camera: running frames him like walking (same size and place), fixed FOV, roll 0, a calm turn', async ({ browser }, testInfo) => {
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  const SPOTS = [6, 9, 12];
+  const pass = async (runs: boolean): Promise<{ at: { hf: number; sx: number; sy: number }[]; frames: MotionFrame[]; rolls: number[]; yawRate: number }> => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    collectPageErrors(page, errors);
+    await enterWorld(page);
+    await expect.poll(() => page.evaluate(() => (window as any).__ranger.clip()?.name ?? null), { timeout: 60_000 }).not.toBeNull();
+    await page.waitForTimeout(1_000);
+    const p0 = (await hook(page, (r) => r.pos()))!;
+    await recordMotion(page);
+    const t0 = await pageNow(page);
+    const rolls: number[] = [];
+    if (runs) await page.keyboard.down('Shift');
+    await page.keyboard.down('ArrowUp');
+    for (let i = 0; i < 300; i++) {
+      rolls.push(await page.evaluate(() => (window as any).__ranger.vehicle().roll as number));
+      const p = (await hook(page, (r) => r.pos()))!;
+      if (Math.hypot(p.x - p0.x, p.z - p0.z) > SPOTS[SPOTS.length - 1] + 0.8) break;
+      await page.waitForTimeout(40);
+    }
+    await shot(page, runs ? 'camera-running' : 'camera-walking');
+    let yawRate = 0;
+    if (runs) {
+      // running and turning: the view follows at a calm rate
+      const t1 = await pageNow(page);
+      await page.keyboard.down('ArrowLeft');
+      await page.waitForTimeout(1_500);
+      await page.keyboard.up('ArrowLeft');
+      const turn = await motionFrames(page, t1);
+      // over 0.1 s windows: a single frame's rate is noise (this read-only recorder and the
+      // game share the frame, in either order, so one sample can span two game steps)
+      for (let i = 0, j = 0; i < turn.length; i++) {
+        while (j < turn.length && turn[j].t - turn[i].t < 100) j++;
+        if (j >= turn.length) break;
+        const d = Math.abs(Math.atan2(Math.sin(turn[j].yaw - turn[i].yaw), Math.cos(turn[j].yaw - turn[i].yaw)));
+        yawRate = Math.max(yawRate, (d / ((turn[j].t - turn[i].t) / 1000)) * 180 / Math.PI);
+      }
+    }
+    await page.keyboard.up('ArrowUp');
+    if (runs) await page.keyboard.up('Shift');
+    const frames = await motionFrames(page, t0);
+    const at = SPOTS.map((spot) => {
+      const near = frames.filter((f) => Math.abs(Math.hypot(f.x - p0.x, f.z - p0.z) - spot) < 0.3);
+      const avg = (k: 'hf' | 'sx' | 'sy'): number => near.reduce((a, f) => a + f[k], 0) / Math.max(1, near.length);
+      return { hf: avg('hf'), sx: avg('sx'), sy: avg('sy') };
+    });
+    await ctx.close();
+    return { at, frames, rolls, yawRate };
+  };
+  const walk = await pass(false);
+  const run = await pass(true);
+  const fovs = new Set([...walk.frames, ...run.frames].map((f) => f.fov));
+  expect(fovs.size, `the FOV never changes (${[...fovs].join(', ')})`).toBe(1);
+  expect(Math.max(...walk.rolls.concat(run.rolls).map(Math.abs)), 'the camera never rolls').toBeLessThan(1e-3);
+  expect(run.frames.some((f) => f.running), 'the second pass really ran').toBe(true);
+  SPOTS.forEach((spot, i) => {
+    const a = walk.at[i], b = run.at[i];
+    const note = `at ${spot} m: walking height ${(100 * a.hf).toFixed(1)} % of the screen at (${a.sx.toFixed(3)}, ${a.sy.toFixed(3)}), running ${(100 * b.hf).toFixed(1)} % at (${b.sx.toFixed(3)}, ${b.sy.toFixed(3)})`;
+    testInfo.annotations.push({ type: 'framing', description: note });
+    expect(Math.abs(b.hf - a.hf) / a.hf, `same size on screen, ${note}`).toBeLessThanOrEqual(0.04);
+    expect(Math.abs(b.sx - a.sx) / 2, `same place across, ${note}`).toBeLessThanOrEqual(0.04);
+    expect(Math.abs(b.sy - a.sy) / 2, `same place up/down, ${note}`).toBeLessThanOrEqual(0.04);
+  });
+  testInfo.annotations.push({ type: 'turn', description: `running and turning, the view turned at most ${run.yawRate.toFixed(0)}°/s` });
+  expect(run.yawRate, 'running and turning, the view turns calmly (≤ 150°/s)').toBeLessThanOrEqual(150);
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });

@@ -17,6 +17,9 @@ import { loadGameAudio } from '../../core/calls';
 import { setScreen, setMissionView } from '../../core/devhook';
 import { mountReadAloud, readScreenAloud } from '../ReadAloud';
 import { SAY } from '../../content/screens';
+import { BESTURING } from '../../content/mentor';
+import { joystickVisible } from '../../core/input';
+import { coarsePointer } from '../hud/device';
 import { missionIcon } from '../MissionIcon';
 import { showCabin } from '../Companion';
 import { showTweaks } from '../Tweaks';
@@ -92,6 +95,49 @@ export function showPauseHub(): void {
   el.querySelector('.ph-hoofdmenu')?.addEventListener('click', () => showTitle());
   el.querySelector('.ph-back')?.addEventListener('click', toWorld);
 }
+
+/* ---------------------------------------------------- zo speel je (?) ---- */
+/**
+ * Run 6: the "?" chip's small card, "Zo speel je": one key cap (or a drawn stick on a
+ * tablet) and one word per control, read aloud. Terug (Enter or Esc) goes back to the
+ * world, where nothing moved.
+ */
+export function showControls(): void {
+  narrator.stop();
+  const toWorld = (): void => showExploreHud(activeExploreTitel());
+  const stick = joystickVisible(store.get().settings.joystick, coarsePointer());
+  const rows = (stick ? BESTURING.stick : BESTURING.keys)
+    .map((r) => `<li class="zs-row"><span class="zs-key" aria-hidden="true">${controlGlyph(r.toets)}</span><span class="zs-wat">${esc(r.wat)}</span></li>`)
+    .join('');
+  const el = card(
+    `<div class="controls-card boot-card-ish">` +
+    `<h1 class="boot-title">${esc(BESTURING.titel)}</h1>` +
+    `<ul class="zs-list">${rows}</ul>` +
+    `<button class="btn-start zs-back" type="button" data-key="back">${esc(BESTURING.terug)}</button>` +
+    `</div>`,
+  );
+  readScreenAloud(el, { text: stick ? BESTURING.zegStick : BESTURING.zegKeys, autoStart: store.get().settings.voorlezen, anchor: '.zs-back' });
+  el.querySelector('.zs-back')?.addEventListener('click', toWorld);
+}
+
+/** The picture of a control on the "Zo speel je" card: key caps, or a drawn stick/finger. */
+function controlGlyph(toets: string): string {
+  switch (toets) {
+    case 'pijltjes': return '<span class="kcap-cluster kcap-cluster-sm"><span class="kcap kcap-up">↑</span><span class="kcap">←</span><span class="kcap">↓</span><span class="kcap">→</span></span>';
+    case 'Shift': return '<span class="kcap kcap-wide">⇧ Shift</span>';
+    case 'muis': return '<span class="kcap kcap-wide kcap-icon">' + ICON_MOUSE + '</span>';
+    case 'Enter': return '<span class="kcap kcap-wide">Enter ↵</span>';
+    case 'Esc': return '<span class="kcap">Esc</span>';
+    case 'stick': return ICON_STICK(false);
+    case 'stick ver': return ICON_STICK(true);
+    case 'veeg': return ICON_SWIPE;
+    default: return ICON_TAP;
+  }
+}
+const ICON_MOUSE = '<svg viewBox="0 0 48 48" width="30" height="30" focusable="false"><rect x="16" y="9" width="16" height="28" rx="8" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M24 9v9" stroke="currentColor" stroke-width="2.6"/><path d="M5 24h8M5 24l3-3M5 24l3 3M43 24h-8M43 24l-3-3M43 24l-3 3" fill="none" stroke="#c9901a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_STICK = (far: boolean): string => `<svg class="zs-pic" viewBox="0 0 48 48" width="52" height="52" focusable="false"><circle cx="24" cy="24" r="19" fill="rgba(20,16,12,.12)" stroke="currentColor" stroke-width="2.4"/><circle cx="${far ? 30 : 24}" cy="${far ? 12 : 21}" r="9" fill="#fdfcf8" stroke="currentColor" stroke-width="2.4"/>${far ? '<path d="M33 7l6-1-1 6" fill="none" stroke="#c9901a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>' : ''}</svg>`;
+const ICON_SWIPE = '<svg class="zs-pic" viewBox="0 0 48 48" width="52" height="52" focusable="false"><path d="M20 42V22a3 3 0 0 1 6 0v10l8 2a3 3 0 0 1 2 3l-1 5" fill="#fdfcf8" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M6 12h30M6 12l4-4M6 12l4 4M36 12l-4-4M36 12l-4 4" fill="none" stroke="#c9901a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_TAP = '<svg class="zs-pic" viewBox="0 0 48 48" width="52" height="52" focusable="false"><circle cx="23" cy="14" r="7" fill="none" stroke="#c9901a" stroke-width="2.4"/><path d="M20 44V16a3 3 0 0 1 6 0v12l8 2a3 3 0 0 1 2 3l-1 6" fill="#fdfcf8" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>';
 
 /* -------------------------------------------------------- missiebord ---- */
 /**

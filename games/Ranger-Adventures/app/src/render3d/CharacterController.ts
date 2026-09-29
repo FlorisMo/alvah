@@ -38,6 +38,9 @@ export interface Obstacle {
   /** Wave 2: a tree whose foliage the follow camera must keep out of (see CameraRig):
    *  its kind (the GLB id), its height and the ground under it. */
   crown?: { kind: string; h: number; y: number };
+  /** Run 6: a building's height (m) over the ground at its centre, so a name-tag behind
+   *  it hides (world/Labels.ts); a tag seen over its roof still shows. */
+  h?: number;
 }
 
 /** The ranger's clearance from a building wall (m). */

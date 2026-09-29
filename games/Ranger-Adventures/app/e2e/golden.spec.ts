@@ -157,6 +157,40 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     note(`ArrowUp 1.5 s: walked ${fwd.moved} m, ${fwd.dir}° off the camera's forward`);
     soft(fwd.dir !== null && Math.abs(fwd.dir) <= 30, `forward does not walk forward: ${fwd.dir}° off the camera's direction`);
 
+    // run 6: the walk is brisk and Shift + ArrowUp runs, the view as calm as walking
+    type Pace = { v: number; running: boolean; hf: number; fov: number };
+    const pace = async (ms: number): Promise<Pace[]> => {
+      const out: Pace[] = [];
+      const t0 = Date.now();
+      while (Date.now() - t0 < ms) {
+        out.push(await R<Pace>(page, '({ v: r.motion().speed, running: r.motion().running, hf: r.cam().avatarScreen.heightFrac, fov: r.cam().fov })'));
+        await sleep(page, 50);
+      }
+      return out;
+    };
+    const med = (xs: number[]): number => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? NaN;
+    let walkPace: Pace[] = []; let runPace: Pace[] = [];
+    await page.keyboard.down('ArrowUp');
+    try {
+      await sleep(page, 600);
+      walkPace = await pace(700);
+      await page.keyboard.down('Shift');
+      await sleep(page, 700);
+      runPace = await pace(900);
+      await shot(page, 'running');
+    } finally {
+      await page.keyboard.up('Shift');
+      await page.keyboard.up('ArrowUp');
+    }
+    const vWalk = med(walkPace.map((p) => p.v)); const vRun = med(runPace.map((p) => p.v));
+    const hWalk = med(walkPace.map((p) => p.hf)); const hRun = med(runPace.map((p) => p.hf));
+    note(`Shift + ArrowUp runs: ArrowUp walks ${r2(vWalk)} m/s, Shift + ArrowUp runs ${r2(vRun)} m/s (run gait ${runPace.every((p) => p.running) ? 'on' : 'off'}); on screen he stays ${Math.round(100 * hWalk)} % → ${Math.round(100 * hRun)} % tall`);
+    soft(vWalk >= 2.1 && vWalk <= 2.5, `the walk is not brisk: ${r2(vWalk)} m/s (want 2.1-2.5)`);
+    soft(vRun >= 3.8 && vRun <= 4.6, `Shift + ArrowUp does not run: ${r2(vRun)} m/s (want 3.8-4.6)`);
+    soft(runPace.every((p) => p.running), 'running, the run gait is not on (rangerMotion().running)');
+    soft(Math.abs(hRun - hWalk) / hWalk <= 0.06, `running changes his size on screen: ${Math.round(100 * hWalk)} % → ${Math.round(100 * hRun)} %`);
+    soft(new Set([...walkPace, ...runPace].map((p) => p.fov)).size === 1, 'the FOV changed while running');
+
     // GOAL 2: the maker's choices on the 3D ranger (seen from the follow camera)
     await sleep(page, 800);
     const look = await renderedLook(page, {
@@ -185,6 +219,28 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     soft(back.during + back.after <= 90, `back: the camera swings round to face the ranger (${back.during + back.after}°)`);
     soft(back.onScreen, 'back: the ranger left the screen');
     await shot(page, 'after-turn-keys');
+
+    // run 6 (FLOW P2): after Bram's greeting the run lesson shows the Shift key; he does
+    // what it says (Shift + ↑) and it goes, learned for good. Having run already (the pace
+    // check above runs during the greeting) counts: then it is learned by doing and skipped.
+    const runLesson = page.locator('.lesson-strip.ls-rennen');
+    const early = await R<{ learned: string[] } | null>(page, 'r.hint()');
+    if (early?.learned.includes('rennen')) {
+      note('the run lesson: learned by doing (he ran with Shift before it was due), so it is skipped');
+      await sleep(page, 1_000);
+      soft((await runLesson.count()) === 0, 'the run lesson showed although he had already run');
+    } else {
+      const shown = await runLesson.waitFor({ state: 'visible', timeout: 20_000 }).then(() => true, () => false);
+      soft(shown, 'no run lesson ([Shift] "Hou Shift vast. Dan ren je.") after Bram\'s greeting');
+      if (shown) await shot(page, 'run-lesson');
+      await page.keyboard.down('Shift');
+      let ran: Awaited<ReturnType<typeof holdKey>>;
+      try { ran = await holdKey(page, 'ArrowUp', 2_000); } finally { await page.keyboard.up('Shift'); }
+      note(`Shift + ↑ 2 s: moved ${ran.moved} m${shown ? ', the run lesson was up' : ''}`);
+      const gone = await runLesson.waitFor({ state: 'detached', timeout: 5_000 }).then(() => true, () => false);
+      const learned = await R<{ learned: string[] } | null>(page, 'r.hint()');
+      soft(gone && !!learned?.learned.includes('rennen'), `running did not finish the run lesson (still up: ${!gone}, learned: ${learned?.learned.join(',')})`);
+    }
     noNewErrors();
   });
 
@@ -216,16 +272,20 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const samples: (Vehicle & { contact: boolean })[] = [];
     await page.keyboard.down('KeyW');
     const t0 = Date.now();
+    let shifted = false;
     try {
       while (Date.now() - t0 < 3_000) {
         samples.push(await R<Vehicle & { contact: boolean }>(page, 'r.vehicle()'));
         if (samples.length === 20) await shot(page, 'jeep-driving');
+        // run 6: Shift runs on foot; in the jeep it does nothing
+        if (!shifted && Date.now() - t0 > 1_500) { shifted = true; await page.keyboard.down('Shift'); }
         await sleep(page, 100);
       }
-    } finally { await page.keyboard.up('KeyW'); }
+    } finally { await page.keyboard.up('KeyW'); await page.keyboard.up('Shift'); }
     const b = await R<Vehicle>(page, 'r.vehicle()');
     const moved = Math.hypot(b.x - a.x, b.z - a.z);
-    note(`hold W 3 s: the jeep moved ${r2(moved)} m, top speed ${r2(Math.max(...samples.map((s) => s.speed)))} m/s`);
+    note(`hold W 3 s: the jeep moved ${r2(moved)} m, top speed ${r2(Math.max(...samples.map((s) => s.speed)))} m/s (Shift held for the last 1.5 s)`);
+    soft(Math.max(...samples.map((s) => s.speed)) <= a.maxSpeed + 0.05, `Shift made the jeep faster than its top speed (${r2(Math.max(...samples.map((s) => s.speed)))} > ${a.maxSpeed} m/s)`);
     hard(moved >= 10, `holding W for 3 s moved the jeep only ${r2(moved)} m (want ≥ 10 m)`);
     soft(!samples.some((s) => s.contact), 'driving straight on from where the jeep is parked, it runs into something');
     const off = samples.filter((s) => !s.grounded || Math.abs(s.clearance) > 0.1);
@@ -320,6 +380,11 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
 
   // --------------------------------------------- 5. go to the first mission ----
   await step(5, async () => {
+    // run 6 (FLOW P2): the chip shows once Bram has told the hook (it follows the lessons)
+    const t5 = Date.now();
+    const chip = await page.locator('.explore-wayfind').waitFor({ state: 'visible', timeout: 30_000 }).then(() => true, () => false);
+    if (Date.now() - t5 > 500) note(`the chip came ${((Date.now() - t5) / 1000).toFixed(1)} s into this step (Bram's hook)`);
+    soft(chip, 'the chip never showed (Bram\'s hook did not come)');
     const hud = await uiText(page);
     const pointed = missions.find((m) => hud.includes(m.titel));
     soft(!!pointed, `the HUD names no mission to go to (HUD text: "${hud.replace(/\s+/g, ' ').slice(0, 120)}")`);

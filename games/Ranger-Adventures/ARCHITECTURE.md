@@ -12,7 +12,10 @@ main.ts ── boot veil + Stage (renderer, loop) ─► ui/Missions.ts → Worl
                             │
           ui/flow/WorldSession.ts   builds the World, runs free roam, returns from missions
           ui/flow/MissionFlow.ts    briefing → steps (mini-games) → reward → clue → back
-          ui/hud/ExploreHud.ts      pill, waypoint chip, ONE proximity prompt, hints
+          ui/hud/ExploreHud.ts      pill, waypoint chip, ONE proximity prompt, the "?" card
+          ui/hud/Lessons.ts         the first minute: Bram's beats + the lessons, one at a time
+                                    (rules: core/lessons.ts; words: content/mentor.ts)
+          ui/hud/Speaker.ts         Bram's speaker strip: one line at a time, read aloud
           ui/hub/Hub.ts             pause, missiebord, sporenboek (clue board), badges
           ui/keys.ts                Enter/Space = the one visible primary button, Esc = back
           ui/dev/wireDevhook.ts     connects window.__ranger read-backs
@@ -24,7 +27,8 @@ render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls
    world/Forest.ts      every tree: instanced real GLBs per distance level (Lod.ts), per-tree
                         occluder fade (only the crowns between camera and ranger fade)
    world/Progress.ts    lasting per-mission tableau at a finished marker (onMissionComplete)
-   world/Fauna.ts       warden, poacher, roaming animals
+   world/Fauna.ts       Bram the warden (by the missiebord; turns to you when he speaks),
+                        poacher, roaming animals
    world/Markers.ts     mission markers, missiebord, sit-spot, proximity, wayfinding
    world/Vehicles.ts    jeep, helicopter + pads, dust
    world/Player.ts      the ranger rig, on-foot movement, footsteps
@@ -34,7 +38,9 @@ render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls
    world/Presenter.ts   the title and the maker as shots of the spawn clearing (the world
                         frozen like an activity), glides between them, the ranger's turns
    RangerLook.ts        paints the avatar maker's choices onto the ranger GLB
-   world/Sky.ts, Labels.ts, props.ts, DevReadback.ts
+   world/Labels.ts      the name-tags: only the next mission / board / near ones, hidden
+                        behind buildings, never overlapping, faded at the screen edge
+   world/Sky.ts, props.ts, DevReadback.ts
                             │
 render3d/play/     the mini-game kit: stage.ts (a per-step staged patch), spawn.ts
                    (spawnModel/spawnPlant: the world's own GLB animals and plants),

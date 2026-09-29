@@ -26,6 +26,16 @@ import {
   wrapPi,
   TURN_RATE,
   TURN_DECEL_TAU,
+  isRunKey,
+  rampSpeed,
+  stickWalkShare,
+  stickRun,
+  WALK_SPEED,
+  RUN_SPEED,
+  SPEED_OMEGA,
+  STICK_WALK_FULL,
+  STICK_RUN_ON,
+  STICK_RUN_OFF,
   type MoveKey,
 } from './input.ts';
 
@@ -284,4 +294,58 @@ test('stickBackpedal only for a stick pulled (nearly) straight down', () => {
   assert.equal(stickBackpedal({ x: 0.3, y: -0.9 }), true);
   assert.equal(stickBackpedal({ x: 1, y: -0.2 }), false, 'sideways is a walk that way');
   assert.equal(stickBackpedal({ x: 0, y: 1 }), false);
+});
+
+/* ---- run 6: walk and run ---- */
+
+test('either Shift is the run key; it never moves him (no direction)', () => {
+  assert.equal(isRunKey('ShiftLeft'), true);
+  assert.equal(isRunKey('ShiftRight'), true);
+  assert.equal(isRunKey('KeyR'), false);
+  assert.equal(keyToMove('ShiftLeft'), null);
+  assert.equal(isInteractKey('ShiftLeft'), false);
+});
+
+test('the speeds: a brisk walk and a real run, both inside the design bands', () => {
+  assert.ok(WALK_SPEED >= 2.1 && WALK_SPEED <= 2.5, `walk ${WALK_SPEED}`);
+  assert.ok(RUN_SPEED >= 3.8 && RUN_SPEED <= 4.6, `run ${RUN_SPEED}`);
+});
+
+test('rampSpeed eases in ~0.3 s: no kick, no overshoot, lands exactly on 0, frame-rate independent', () => {
+  let s = { v: WALK_SPEED, a: 0 };
+  const dt = 1 / 60;
+  let t = 0, maxJump = 0;
+  const first = rampSpeed(s, RUN_SPEED, dt);
+  assert.ok(first.v - s.v < 0.08, `a gentle start (${(first.v - s.v).toFixed(3)} m/s in the first frame)`);
+  while (s.v < WALK_SPEED + 0.95 * (RUN_SPEED - WALK_SPEED)) {
+    const n = rampSpeed(s, RUN_SPEED, dt);
+    maxJump = Math.max(maxJump, n.v - s.v);
+    s = n; t += dt;
+  }
+  assert.ok(t > 0.25 && t < 0.4, `walk → run in ${t.toFixed(2)} s`);
+  assert.ok(maxJump < 0.2, `never a pop (largest frame step ${maxJump.toFixed(3)} m/s)`);
+  for (let i = 0; i < 120; i++) { s = rampSpeed(s, RUN_SPEED, dt); assert.ok(s.v <= RUN_SPEED + 1e-9, 'no overshoot'); }
+  for (let i = 0; i < 120; i++) { s = rampSpeed(s, 0, dt); assert.ok(s.v >= -1e-9, 'a stop never swings back'); }
+  assert.deepEqual(s, { v: 0, a: 0 }, 'a stop lands on 0');
+  const at = (fps: number): number => { let x = { v: 0, a: 0 }; for (let i = 0; i < fps / 10; i++) x = rampSpeed(x, WALK_SPEED, 1 / fps); return x.v; };
+  assert.ok(Math.abs(at(30) - at(120)) < 1e-6, 'the same speed at 30 and 120 fps');
+  assert.deepEqual(rampSpeed({ v: 1.5, a: 2 }, 3, 0), { v: 1.5, a: 2 }, 'dt 0 is a no-op');
+  assert.ok(SPEED_OMEGA > 10 && SPEED_OMEGA < 20);
+});
+
+test('the stick: a partial push walks slower, full walk from ~80 %, never negative', () => {
+  assert.equal(stickWalkShare(0), 0);
+  assert.ok(Math.abs(stickWalkShare(0.6) - 0.6 / STICK_WALK_FULL) < 1e-9);
+  assert.equal(stickWalkShare(STICK_WALK_FULL), 1);
+  assert.equal(stickWalkShare(1), 1);
+  assert.equal(stickWalkShare(-0.3), 0);
+});
+
+test('the stick runs at its rim, with hysteresis (no flicker on the rim)', () => {
+  assert.equal(stickRun(0.6, false), false);
+  assert.equal(stickRun(0.9, false), false, 'not yet at the rim');
+  assert.equal(stickRun(STICK_RUN_ON, false), true, 'the rim runs');
+  assert.equal(stickRun(0.9, true), true, 'a thumb easing off a little keeps running');
+  assert.equal(stickRun(STICK_RUN_OFF - 0.01, true), false, 'well back from the rim walks');
+  assert.ok(STICK_RUN_OFF < STICK_RUN_ON && STICK_WALK_FULL < STICK_RUN_OFF);
 });
