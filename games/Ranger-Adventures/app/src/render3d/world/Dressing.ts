@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { loadModel, prepModel } from '../Models';
-import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, VEN_SHORE_R, WATER_LEVEL, type Biome } from '../Biomes';
+import { BIOME_PALETTE, VEN_CENTER, VEN_REED_OUT, VEN_SHORE_R, VEN_WATER_R, WATER_LEVEL, type Biome } from '../Biomes';
 import { windSway } from '../Atmosphere';
 import { PATH_NODES, PATH_SEGMENTS, LANE_HALF, distanceToNetwork } from '../Paths';
 import { WATER_DEEP, WATER_SHALLOW, WATER_TREES, WATER_OPACITY, FRESNEL_POWER, WATER_F0, rippleAmp } from '../Water';
@@ -283,8 +283,7 @@ export class Dressing {
    * from `update()`. One mesh → one draw call, budget untouched (§3.4).
    */
   buildVenWater(): THREE.Mesh {
-    const RADIUS = 20;
-    const geo = new THREE.CircleGeometry(RADIUS, 48);
+    const geo = new THREE.CircleGeometry(VEN_WATER_R, 48);
     const mat = new THREE.ShaderMaterial({
       transparent: true,
       fog: true,
@@ -297,7 +296,7 @@ export class Dressing {
         uOpacity: { value: WATER_OPACITY },
         uFresnelPower: { value: FRESNEL_POWER },
         uF0: { value: WATER_F0 },
-        uRadius: { value: RADIUS },
+        uRadius: { value: VEN_WATER_R },
       }]),
       vertexShader: `
         #include <fog_pars_vertex>

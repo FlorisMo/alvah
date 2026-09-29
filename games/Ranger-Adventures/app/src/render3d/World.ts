@@ -25,7 +25,7 @@
 import * as THREE from 'three';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { livePolicy } from './MotionMode';
-import { VEN_CENTER, WATER_LEVEL, type Biome } from './Biomes';
+import { VEN_CENTER, VEN_WATER_R, WATER_LEVEL, type Biome } from './Biomes';
 import { Terrain } from './world/Terrain';
 import { Sky } from './world/Sky';
 import { Labels } from './world/Labels';
@@ -161,12 +161,17 @@ export class World {
     // tree-line, resolveMove clamp, RIM_EASE/HINT bands, the camera rim clamp,
     // boundaryState), so this one value moves the whole edge in together.
     bound: 75,                                   // ground plane is 240² → trees at ~76 land on it
-    // off-limits = the submerged ven only (inside the water disc AND below the
-    // surface) — NOT a global height test, so dry relief troughs stay walkable.
+    // off-limits = the submerged ven only (inside the drawn water disc AND below the
+    // surface) — NOT a global height test, so dry relief troughs stay walkable. (Run 6: the
+    // test used an 18 m disc under the 20 m drawn one, so south of the ven, where the basin
+    // stays under the surface out to 20 m, a jeep drove into water it could see.)
     blocked: (x, z) => {
       const dx = x - VEN_CENTER.x, dz = z - VEN_CENTER.z;
-      return dx * dx + dz * dz < 18 * 18 && this.terrain.y(x, z) < WATER_LEVEL + 0.15;
+      return dx * dx + dz * dz < VEN_WATER_R * VEN_WATER_R && this.terrain.y(x, z) < WATER_LEVEL + 0.15;
     },
+    // whether any of that water lies within r of (x, z): the jeep's look for the ven's
+    // shore is skipped everywhere else
+    wetWithin: (x, z, r) => Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) < VEN_WATER_R + r,
   };
 
   constructor(
@@ -215,15 +220,17 @@ export class World {
         seat: (seated) => this.player.rig.setSeated(seated),
         stopWalk: (x, z) => { this.player.target.set(x, 0, z); this.player.groundSpeedNow = 0; },
         intent: () => (this.menuOpen() ? { x: 0, y: 0 } : this.player.intent()),
+        controls: () => (this.menuOpen() ? { keys: null, stick: null } : this.player.controls()),
         follow: (yaw, snap) => { this.cam.followTargetYaw = yaw; if (snap) this.cam.followYaw = yaw; },
         recut: () => this.cam.place(true, 0, livePolicy().reduced),
         clearWalkPrompts: () => this.pois.clearForVehicle(),
         crossBiome: (here) => this.crossBiome(here),
-        nearestAnimalDist: (x, z) => this.fauna.nearestAnimalDist(x, z),
         camOffsets: () => ({ walk: this.cam.camOffset, vehicle: this.cam.camOffsetVehicle, heli: this.cam.camOffsetHeli }),
-        movers: (visit) => { // every frame: no allocation (review PERF-2)
-          for (const a of this.fauna.scenicActors) visit(a.group.position.x, a.group.position.z, 'person', a.height);
-          for (const a of this.fauna.ambient) if (a.id.startsWith('animal-')) visit(a.group.position.x, a.group.position.z, 'animal', a.h);
+        people: (visit) => { // every frame: no allocation (review PERF-2)
+          for (const a of this.fauna.scenicActors) visit(a.group.position.x, a.group.position.z);
+        },
+        animals: (visit) => { // the roaming ground animals (the birds glide overhead)
+          for (const a of this.fauna.ambient) if (a.wander) visit(a.id, a.group.position.x, a.group.position.z);
         },
         markers: () => this.pois.list,
       },
@@ -599,6 +606,11 @@ export class World {
   /** Dev-hook accessor (W4.1): every landmark's id + world x/z. */
   landmarkPositions(): { id: string; x: number; z: number }[] {
     return this.dressing.landmarkPositions();
+  }
+
+  /** Every static solid (dev hook, run 6): circles and the buildings' real footprints. */
+  obstacleList(): { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[] {
+    return this.obstacles.map((o) => (o.box ? { x: o.x, z: o.z, r: o.r, box: { ...o.box } } : { x: o.x, z: o.z, r: o.r }));
   }
 
   /** Dev-hook accessor (D1.5): the scatter + rim tree placements (world x/z + scale). */

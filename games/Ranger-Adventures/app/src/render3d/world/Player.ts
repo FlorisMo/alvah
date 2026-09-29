@@ -236,10 +236,20 @@ export class Player {
     this.input = null;
   }
 
-  /** The held keys + joystick as a screen vector (the jeep and heli read it). */
+  /** The held keys + joystick as a screen vector (the helicopter reads it). */
   intent(): { x: number; y: number } {
     const stick = this.joystickSource ? this.joystickSource() : null;
     return this.input ? screenVector(this.input.held, stick) : { x: 0, y: 0 };
+  }
+
+  /** The jeep's controls (run 6): the held keys as tank axes, so Up + Right is full gas
+   *  AND full steer (the fused screen vector made it 0.71 of each), and the touch stick
+   *  past its deadzone when no key is held. */
+  controls(): { keys: { turn: number; fwd: number } | null; stick: StickVector | null } {
+    const held = this.input?.held;
+    if (held && held.size > 0) return { keys: tankAxes(held), stick: null };
+    const raw = this.joystickSource ? this.joystickSource() : null;
+    return { keys: null, stick: raw && Math.hypot(raw.x, raw.y) >= JOYSTICK_DEADZONE ? raw : null };
   }
 
   /**

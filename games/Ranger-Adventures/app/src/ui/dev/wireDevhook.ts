@@ -9,7 +9,7 @@ import type { World } from '../../render3d/World';
 import {
   providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot,
   provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGait, provideGrounded, provideCam,
-  provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
+  provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, provideObstacles, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
   provideHeli, provideQuality, provideHint, provideBoundary,
 } from '../../core/devhook';
@@ -36,6 +36,7 @@ export function wireWorldDevhook(world: World): void {
   provideLandmarks(() => world.landmarkPositions());  // W4.1: fixed landmark beacons
   provideDressing(() => world.dressingPositions());   // W4.2: nature dressing props
   provideTreeSpots(() => world.treeSpotList());       // D1.5: scatter+rim tree placements
+  provideObstacles(() => world.obstacleList());       // run 6: every static solid, as the jeep sees it
   providePaths(() => world.pathNetwork());            // W4.3: sand-path network
   provideGroundDetail(() => world.groundDetailState()); // W4.4: procedural ground albedo
   provideLighting(() => world.lightingState());       // W4.5: golden-hour light + shadows
@@ -69,6 +70,7 @@ export function clearWorldDevhook(): void {
   provideLandmarks(null);
   provideDressing(null);
   provideTreeSpots(null);
+  provideObstacles(null);
   providePaths(null);
   provideGroundDetail(null);
   provideLighting(null);

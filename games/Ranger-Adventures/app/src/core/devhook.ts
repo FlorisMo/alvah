@@ -222,6 +222,10 @@ export interface RangerDevHook {
    *  steer a walk PAST a specific tree — putting it between the follow lens and the ranger — to
    *  reproduce the genuine crown occlusion the occluder-fade must clear. Null before ready. */
   treeSpots(): { x: number; z: number; s: number }[] | null;
+  /** Run 6: every static solid the walker and the vehicles meet (trunks, props, the
+   *  buildings' real footprints as `box`), so an offline repro of a drive sees exactly
+   *  what the jeep saw. Null before ready. */
+  obstacles(): { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[] | null;
   /** The sand-path network: route nodes (id + world x/z) + segment index pairs,
    *  or null before the hook/world is ready (W4.3). */
   paths(): { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] } | null;
@@ -270,7 +274,13 @@ export interface RangerDevHook {
     x: number; z: number; heading: number; headingUnwrapped: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean;
+    /** run 6: the id of the roaming animal the jeep is braking (or held) for — one in
+     *  its path — or null. An animal beside the track never slows it. */
+    yieldFor: string | null;
+    /** run 6: what held the jeep's speed back this frame: a solid ahead (a trunk, a
+     *  building, a person), the forest edge, an animal in its path; null = nothing, it
+     *  rolls as the gas asks (so "it slowed down" always has a named cause). */
+    brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null; dust: boolean;
     /** P1.5b: the jeep's live ground contact — its world Y and the clearance of that Y
      *  above the RENDERED surface right under it (the D1.2 ray truth), with `grounded`
      *  true when the ray hits AND the clearance sits in the jeep suspension band. The
@@ -419,6 +429,7 @@ const state = {
   landmarks: null as null | (() => { id: string; x: number; z: number }[]),
   dressing: null as null | (() => { id: string; x: number; z: number }[]),
   treeSpots: null as null | (() => { x: number; z: number; s: number }[]),
+  obstacles: null as null | (() => { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[]),
   paths: null as null | (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }),
   groundDetail: null as null | (() => { on: boolean; textured: boolean; tileRepeat: number }),
   lighting: null as null | (() => { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number }),
@@ -439,7 +450,9 @@ const state = {
     grounded: boolean; clearance: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
+    yieldFor: string | null; brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null; dust: boolean; driverHidden: boolean;
+    /** run 6: what the keys / stick asked the jeep for last frame */
+    intent?: { throttle: number; steer: number };
   } | null),
   heli: null as null | (() => {
     placed: boolean; available: boolean; optIn: boolean; near: boolean; inHeli: boolean; onPad: boolean;
@@ -652,6 +665,13 @@ export function provideTreeSpots(
   state.treeSpots = fn;
 }
 
+/** Register the static-solids source (the World's obstacle list). Run 6. */
+export function provideObstacles(
+  fn: (() => { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[]) | null,
+): void {
+  state.obstacles = fn;
+}
+
 /** Register the sand-path network source (the World's route graph). W4.3. */
 export function providePaths(
   fn: (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }) | null,
@@ -710,7 +730,9 @@ export function provideVehicle(
     grounded: boolean; clearance: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
+    yieldFor: string | null; brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null; dust: boolean; driverHidden: boolean;
+    /** run 6: what the keys / stick asked the jeep for last frame */
+    intent?: { throttle: number; steer: number };
   } | null) | null,
 ): void {
   state.vehicle = fn;
@@ -785,6 +807,7 @@ export function installDevHook(): boolean {
     landmarks: () => (state.landmarks ? state.landmarks() : null),
     dressing: () => (state.dressing ? state.dressing() : null),
     treeSpots: () => (state.treeSpots ? state.treeSpots() : null),
+    obstacles: () => (state.obstacles ? state.obstacles() : null),
     paths: () => (state.paths ? state.paths() : null),
     groundDetail: () => (state.groundDetail ? state.groundDetail() : null),
     lighting: () => (state.lighting ? state.lighting() : null),
