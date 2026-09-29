@@ -298,6 +298,7 @@ export class World {
     this.dressing.placeLandmarks();
     this.pois.placeSitSpot();
     this.dressing.placeNatureDressing();
+    this.dressing.addHomeTrees((opts.homes ?? []).flatMap((h) => h.spec.trees ?? [])); // run 6: a home's copse
     this.fauna.placeScenicActors();
     // people are solid: the ranger walks round the warden and the poacher (with a child's
     // bit of personal space), never through them

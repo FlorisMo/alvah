@@ -42,6 +42,11 @@
   background: radial-gradient(ellipse 72% 70% at 50% 50%, transparent 58%, rgba(40, 26, 12, 0.5) 92%);
 }
 .adv-vignette.on { opacity: 1; }
+/* a long watch through the binoculars (the reekalf's hide): the frame closes in further,
+   so the picture reads as seen through the glasses; still soft, still nothing to click */
+.adv-vignette.strong {
+  background: radial-gradient(ellipse 60% 62% at 50% 50%, transparent 64%, rgba(26, 18, 9, 0.5) 84%, rgba(26, 18, 9, 0.8) 100%);
+}
 
 /* the joystick during a walk (iPad): the explore HUD's own ring */
 .adventure-hud .rj-base { pointer-events: auto; }

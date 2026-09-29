@@ -54,7 +54,7 @@ export interface AdventureUi {
   readonly current: string | null;
   setChip(c: { doel: string; cue: string; angle: number | null; arrived?: boolean } | null): void;
   action(label: string | null): Promise<void>;
-  binoculars(on: boolean): void;
+  binoculars(on: boolean, strong?: boolean): void;
   walking(on: boolean): void;
 }
 
@@ -138,6 +138,9 @@ export interface WalkOpts {
   };
   /** extra per-frame work while he walks (a squeak getting louder ...) */
   tick?: (dt: number) => void;
+  /** he should walk QUIETLY (away from a calf lying in the grass): running says `line`
+   *  (and calls `onRun`) once per run; walking calmly again brings the walk's line back */
+  quiet?: { line: string; onRun?: () => void };
 }
 
 const WALK_HINT_R = 0.8; // golden walks until it is within this share of r
@@ -351,8 +354,11 @@ export class AdventureKit {
    * One calm LOOK at a place (design §3.6): the lens glides a little toward it and rises
    * (a soft binocular frame), holds `hold` s (Space or Enter ends it sooner), and glides
    * back to where it was; a cut each way under reduced motion. At most one per mission.
+   * `turn`: the ranger turns to face the place while the lens is on it (out of his own
+   * sight), and the lens glides back to behind him facing it — he ends up looking where
+   * the story goes on, instead of the way he came.
    */
-  async look(at: Spot & { y?: number }, line: string, hold = 2.5): Promise<void> {
+  async look(at: Spot & { y?: number }, line: string, hold = 2.5, opts: { turn?: boolean } = {}): Promise<void> {
     this.check();
     this.beat = 'look';
     this.ui.say(line);
@@ -383,7 +389,21 @@ export class AdventureKit {
       window.removeEventListener('keydown', onKey);
     }
     this.ui.binoculars(false);
-    move = makeReframe(cam, from, fromLook, this.reduced, 2.0, 0);
+    let back = from, backLook = fromLook;
+    if (opts.turn) {
+      // the lens's pose behind him, turned round him by as much as he turns to face it
+      const me = this.ranger();
+      const h = headingTo(me, at);
+      const d = h - Math.atan2(fromLook.x - from.x, fromLook.z - from.z);
+      const turnAbout = (p: THREE.Vector3): THREE.Vector3 => {
+        const dx = p.x - me.x, dz = p.z - me.z;
+        return new THREE.Vector3(me.x + dx * Math.cos(d) + dz * Math.sin(d), p.y, me.z - dx * Math.sin(d) + dz * Math.cos(d));
+      };
+      back = turnAbout(from);
+      backLook = turnAbout(fromLook);
+      this.world.faceRanger(h);
+    }
+    move = makeReframe(cam, back, backLook, this.reduced, 2.0, 0);
     this.held = { update: (dt) => move.update(dt), settled: false };
     await this.until(() => !!this.held?.settled);
     this.free();
@@ -421,10 +441,19 @@ export class AdventureKit {
     const rangerLead = (): { x: number; z: number; speed: number } => { const m = this.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
     if (lead) lead.actor.follow(rangerLead, gap);
     const unhint = this.hint(() => ({ id: `walk:${o.name}`, walk: { x: to.x, z: to.z, r: r * WALK_HINT_R } }));
+    let loud = false;
+    let hushFor = 0;
+    let runs = 0;
     const off = this.onTick((dt) => {
       const m = this.ranger();
       const d = dist(m, to);
       if (d < best - 1) { best = d; bestAt = this.clock; }
+      if (o.quiet) {
+        // a quiet walk: running gets the hush line once, a calm walk brings the goal back
+        const run = isRunning(m);
+        if (run && !loud) { loud = true; hushFor = 0; runs += 1; this.ui.say(o.quiet.line); o.quiet.onRun?.(); }
+        else if (loud) { hushFor = run ? 0 : hushFor + dt; if (hushFor > 1.6) { loud = false; this.ui.say(o.line); } }
+      }
       if (!arrow && this.clock - bestAt > arrowAfter) arrow = true;
       // the chip: the goal in words; the arrow and the way only as the fallback
       const goal = lead && waiting ? lead.actor : to;
@@ -481,6 +510,7 @@ export class AdventureKit {
       this.ui.setChip(null);
     }
     this.stats[`walk_${o.name}_s`] = Math.round(this.clock);
+    if (o.quiet) this.stats[`walk_${o.name}_runs`] = runs;
   }
 
   /* ---------------------------------------------------------------- misc ---- */

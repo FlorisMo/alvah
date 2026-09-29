@@ -144,6 +144,7 @@ export async function spawnModel(id: string, opts: SpawnOpts = {}): Promise<Spaw
     dispose: disposer(prepped),
     rigged: rig.clips.length > 0,
     clip: play,
+    rate: (k) => { if (mixer) mixer.timeScale = k; },
   };
 }
 

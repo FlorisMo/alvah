@@ -790,6 +790,26 @@ export class Dressing {
     this.addTreeFallback(groveTrees);
   }
 
+  /**
+   * Run 6: the trees of the missions' homes (a copse at the heath's edge where a roe doe
+   * grazes) join the forest like the grove trees: the same instanced GLB, its detail by
+   * distance, its crown fading for the lens, a solid trunk the ranger walks round.
+   * Called while the world is built, before the forest streams in.
+   */
+  addHomeTrees(trees: readonly { x: number; z: number; species: TreeSpecies; h?: number }[]): void {
+    const placed: TreePlacement[] = trees.map((t, i) => ({
+      x: t.x, y: this.groundY(t.x, t.z), z: t.z,
+      s: (t.h ?? TREE_BASE_H[t.species]) / TREE_BASE_H[t.species],
+      rotY: ((i + 3) * 2.39996) % (Math.PI * 2), species: t.species,
+    }));
+    for (const p of placed) {
+      this.obstacles.push({ x: p.x, z: p.z, r: 0.6 * Math.min(1.2, p.s), tree: true });
+      this.props.push({ id: p.species, x: p.x, z: p.z });
+    }
+    this.treePlacements.push(...placed);
+    this.addTreeFallback(placed);
+  }
+
   /** Procedural stand-in for the ranger-cabin (instant, before the GLB loads). */
   private proceduralCabin(): THREE.Group {
     const g = new THREE.Group();

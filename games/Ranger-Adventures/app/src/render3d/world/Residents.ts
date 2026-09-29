@@ -19,7 +19,7 @@
 
 import * as THREE from 'three';
 import type { Spawned, SpawnOpts } from '../play/types';
-import type { HomeSpec, HomeState, ResidentPose, ResidentSpec } from '../adventure/types';
+import type { HomeSpec, HomeState, ResidentPose, ResidentShy, ResidentSpec } from '../adventure/types';
 import { Actor } from '../adventure/actors';
 import { FarRest, restFar } from '../play/fade';
 import type { MoveLimits, Obstacle } from '../CharacterController';
@@ -101,8 +101,9 @@ interface Home {
   gen: number;
 }
 
-/** A resident's free-roam reaction to the ranger walking up. */
-interface Reaction { busy: boolean; away: boolean; cool: number }
+/** A resident's free-roam reaction to the ranger walking up (`hidden`, `gone`: a shy
+ *  one is in its cover, and how long the ranger has been away). */
+interface Reaction { busy: boolean; away: boolean; cool: number; hidden?: boolean; gone?: number }
 
 /** Within this (m) of the ranger a resident looks up at him (then roots on). */
 const NOTICE = 5;
@@ -147,7 +148,7 @@ export class Residents {
       const a = new Actor(r.key, r.animal, {
         parent: group, groundY: this.env.groundY, spawnModel: this.env.spawnModel,
         obstacles: this.env.obstacles, limits: this.env.limits, reduced: this.env.reduced,
-      }, { height: r.height ?? this.env.heightFor(r.animal) });
+      }, { height: r.height ?? this.env.heightFor(r.animal), len: r.len });
       actors.set(r.key, a);
       if (r.voice) home.voices.set(r.key, { next: 3 + Math.random() * 4, on: true });
     }
@@ -276,11 +277,13 @@ export class Residents {
     for (const r of home.spec.residents) {
       const a = home.actors.get(r.key);
       const pose = home.state === 'before' ? r.before : r.after;
-      if (!a || !pose || !a.group.visible || pose.idle === 'lie' || a.lies) continue;
+      const shy = r.shy?.find((q) => !q.state || q.state === home.state) ?? null;
+      if (!a || !pose || !a.group.visible || pose.idle === 'lie') continue;
       let st = home.reacting.get(r.key);
       if (!st) { st = { busy: false, away: false, cool: 0 }; home.reacting.set(r.key, st); }
       st.cool = Math.max(0, st.cool - dt);
-      if (st.busy) continue;
+      if (shy) { this.shyReact(home, a, pose, shy, st, dt, ranger); continue; }
+      if (a.lies || st.busy) continue;
       const gen = home.gen;
       const s = st;
       const still = (): boolean => home.gen === gen && !home.borrowed;
@@ -311,6 +314,38 @@ export class Residents {
           if (still()) this.idleAt(a, pose);
         });
       }
+    }
+  }
+
+  /**
+   * A shy resident (a roe doe at her copse): the ranger coming within `within` m makes
+   * her lift her head and look at him a moment, then walk calmly into her cover (and bed
+   * down there); once he has been further than `back` m for a few seconds she walks back
+   * out to her spot and grazes again. Never toward him, never a run.
+   */
+  private shyReact(home: Home, a: Actor, pose: ResidentPose, shy: ResidentShy, st: Reaction, dt: number, ranger: { x: number; z: number }): void {
+    const d = Math.hypot(a.x - ranger.x, a.z - ranger.z);
+    if (st.hidden) st.gone = d > shy.back ? (st.gone ?? 0) + dt : 0;
+    if (st.busy) return;
+    const gen = home.gen;
+    const still = (): boolean => home.gen === gen && !home.borrowed;
+    if (!st.hidden && d < shy.within) {
+      st.busy = true; st.hidden = true; st.gone = 0;
+      void a.lookAt(() => ({ x: this.rangerAt.x, z: this.rangerAt.z, speed: 0 }), 1.3)
+        .then((ok) => (ok && still() ? a.go(shy.to.x, shy.to.z, { speed: 'walk', face: shy.to.yaw }) : false))
+        .then(async (ok) => {
+          if (ok && still() && shy.lie) await a.lie(true);
+          if (ok && still()) a.idle();
+          st.busy = false;
+        });
+    } else if (st.hidden && (st.gone ?? 0) > (shy.after ?? 3)) {
+      st.busy = true;
+      void a.go(pose.x, pose.z, { speed: 'walk', face: pose.yaw }).then((ok) => {
+        st.busy = false;
+        if (!ok || !still()) return;
+        st.hidden = false;
+        this.idleAt(a, pose);
+      });
     }
   }
 

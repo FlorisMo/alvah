@@ -134,6 +134,8 @@ const CALLS: Record<string, CallSpec> = {
   // a sow's happy grunting when her piglet is back, higher and softer than her warning
   piep:       { freq: 980, dur: 0.13, type: 'sine', notes: [980, 1150], sweep: 1.45, peak: 0.12 },
   'knor-blij':{ freq: 165, dur: 0.16, type: 'sawtooth', rep: 4, knor: true, peak: 0.26 },
+  // a roe calf's thin "fiep" for its mother: high, short, soft
+  fiep:       { freq: 1320, dur: 0.11, type: 'sine', notes: [1320, 1240], sweep: 0.86, peak: 0.08 },
   raaf:       { freq: 280, dur: 0.34, type: 'sawtooth', rep: 2 },        // kroa — diep en laag
   das:        { freq: 240, dur: 0.28, type: 'triangle', rep: 2 },        // churr
   nachtzwaluw:{ freq: 600, dur: 0.6,  type: 'triangle', vibrato: 22 },   // ratel — churring trill
@@ -346,6 +348,12 @@ export const Sound = {
   dig(): void {
     noiseBurst(0.18, 'lowpass', 420, 0.7, 0.09);
     noiseBurst(0.14, 'bandpass', 1400, 0.8, 0.035, 0.07);
+  },
+  /** a boot in a shallow wet pool: a soft low plash and a few drips after it */
+  splash(): void {
+    noiseBurst(0.34, 'lowpass', 900, 0.8, 0.12);
+    noiseBurst(0.22, 'bandpass', 2100, 1.2, 0.05, 0.05);
+    for (let i = 0; i < 3; i++) noiseBurst(0.05, 'bandpass', 2600 + i * 500, 3, 0.025, 0.32 + i * 0.17);
   },
   /** a trail camera's soft shutter click */
   shutter(): void {

@@ -50,12 +50,44 @@ export interface ResidentSpec {
   animal: string;
   /** stand height (m); default: the scale table's (`heightFor`) */
   height?: number;
+  /** body length (m), when it is not a pig's ≈ 1.7 × its height (a roe is about as long
+   *  as it is tall: its contact shadow and its turning pivot) */
+  len?: number;
   /** where it is before the mission is done (null: not there yet) */
   before: ResidentPose | null;
   /** where it is once the mission is done (null: gone) */
   after: ResidentPose | null;
   /** a call it makes now and then while the ranger is near (spatial, calm) */
   voice?: ResidentVoice;
+  /** a SHY animal (free roam): it slips into cover when the ranger comes near, and
+   *  comes back out once he has gone (world/Residents.ts); per home state */
+  shy?: readonly ResidentShy[];
+}
+
+/**
+ * How a shy resident keeps its distance while nobody borrows it (a roe doe grazing at
+ * a copse): once the ranger is within `within` m it lifts its head, looks at him and
+ * walks calmly to `to` (into the copse; `lie`: it beds down there). Once he has been
+ * further than `back` m away for `after` s it walks back to its spot and idles again.
+ */
+export interface ResidentShy {
+  within: number;
+  back: number;
+  to: Spot & { yaw?: number };
+  lie?: boolean;
+  /** seconds he must be gone before it comes out (default 3) */
+  after?: number;
+  /** only in this home state (default: both) */
+  state?: 'before' | 'after';
+}
+
+/** A tree of a mission's home (a copse): it joins the world's forest — the same
+ *  instanced tree, its detail by distance, its crown fading for the lens, its trunk
+ *  solid (world/Dressing.addHomeTrees). */
+export interface HomeTree extends Spot {
+  species: 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
+  /** its height (m); default the scale table's grown tree */
+  h?: number;
 }
 
 export interface ResidentVoice {
@@ -78,6 +110,8 @@ export interface HomeSpec {
   /** the mission marker: where it stands (default: its landschap's anchor) and what
    *  stands in its ring ('none': an empty ring; the story's animal is elsewhere) */
   marker?: { at?: Spot; look: 'animal' | 'prop' | 'none' };
+  /** trees of the home (a copse at the heath's edge), built into the world's forest */
+  trees?: readonly HomeTree[];
 }
 
 /** The two states of a home: before the mission is done, and after. */

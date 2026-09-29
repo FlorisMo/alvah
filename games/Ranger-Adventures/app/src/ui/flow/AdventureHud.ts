@@ -126,9 +126,11 @@ export class AdventureHud {
     });
   }
 
-  /** The binocular frame for a look (on/off; the fade is CSS, a cut under reduced motion). */
-  binoculars(on: boolean): void {
+  /** The binocular frame for a look (on/off; the fade is CSS, a cut under reduced motion).
+   *  `strong`: a long watch through the glasses (the frame closes in further). */
+  binoculars(on: boolean, strong = false): void {
     this.vignette.classList.toggle('on', on);
+    if (on) this.vignette.classList.toggle('strong', strong);
   }
 
   /** The joystick while he walks himself (touch screens); gone while a beat holds him. */
