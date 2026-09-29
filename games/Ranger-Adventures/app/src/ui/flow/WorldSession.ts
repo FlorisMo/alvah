@@ -154,7 +154,7 @@ export function startExplore(): void {
   const homes = allAdventures().map((a) => {
     const m = area.missies.find((x) => x.id === a.id);
     if (m) a.bind?.(m);
-    return { spec: a.home, build: a.dressing, clearings: a.clearings, treeClearings: a.treeClearings, trees: a.trees };
+    return { spec: a.home, build: a.dressing, clearings: a.clearings, treeClearings: a.treeClearings, trees: a.trees, actor: a.actor };
   });
 
   // the active mission the wayfinding cue points to = the recommended next one

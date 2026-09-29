@@ -85,6 +85,86 @@ function printGeometry(): THREE.BufferGeometry {
   return g;
 }
 
+/** One mossy cushion on the forest floor, 1 m across before scaling (the squirrel's
+ *  caching spots): a low, soft dome of moss greens with a feathered rim, a few straw and
+ *  brown flecks of old leaves in it — look-alikes, nothing nameable. */
+function mossGeometry(seed: number): THREE.BufferGeometry {
+  const rnd = stream(seed);
+  const RINGS = 7, SEG = 30;
+  const P: number[] = [], C: number[] = [], I: number[] = [];
+  const deep = new THREE.Color('#34501f'), moss = new THREE.Color('#5c7d2c'), tip = new THREE.Color('#a3b852'), litter = new THREE.Color('#7a5a34');
+  P.push(0, 0.05, 0); C.push(moss.r, moss.g, moss.b);
+  const ph = [rnd() * 6.3, rnd() * 6.3, rnd() * 6.3];
+  const wave = (a: number): number => Math.sin(a * 2 + ph[0]) * 0.5 + Math.sin(a * 3 + ph[1]) * 0.3 + Math.sin(a * 5 + ph[2]) * 0.2;
+  for (let r = 1; r <= RINGS; r++) {
+    const k = r / RINGS;
+    for (let i = 0; i < SEG; i++) {
+      const a = (i / SEG) * Math.PI * 2;
+      const rr = 0.5 * k * (1 + wave(a) * 0.22 * k + (rnd() - 0.5) * 0.06);
+      // a soft, lumpy cushion (little tufts of moss), the rim sunk into the litter
+      const tuft = Math.max(0, Math.sin(a * 7 + ph[2] + k * 9) * Math.sin(a * 4 - ph[0] + k * 5));
+      const h = 0.06 * Math.cos(Math.min(1, k) * Math.PI / 2) ** 1.2 + (k < 1 ? rnd() * 0.012 + tuft * 0.012 : -0.008);
+      P.push(Math.cos(a) * rr, h, Math.sin(a) * rr);
+      const n = rnd();
+      const c = k >= 1 ? litter
+        : new THREE.Color().copy(deep).lerp(moss, 0.3 + 0.5 * (1 - k) + tuft * 0.3).lerp(n > 0.88 ? litter : tip, n > 0.88 ? 0.55 : n * 0.5 + tuft * 0.25);
+      C.push(c.r, c.g, c.b);
+    }
+  }
+  for (let i = 0; i < SEG; i++) I.push(0, 1 + ((i + 1) % SEG), 1 + i);
+  for (let r = 1; r < RINGS; r++) {
+    const a0 = 1 + (r - 1) * SEG, b0 = 1 + r * SEG;
+    for (let i = 0; i < SEG; i++) {
+      const i1 = (i + 1) % SEG;
+      I.push(a0 + i, a0 + i1, b0 + i, a0 + i1, b0 + i1, b0 + i);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3));
+  g.setIndex(I);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** An oak leaf lying on the ground (a flat, lobed oval), 1 m long before scaling. */
+function leafGeometry(): THREE.BufferGeometry {
+  const P: number[] = [];
+  const N = 12;
+  const at = (i: number): [number, number] => {
+    const a = (i / N) * Math.PI * 2;
+    const lobe = 1 + 0.18 * Math.cos(a * 5);
+    return [Math.sin(a) * 0.22 * lobe, Math.cos(a) * 0.5];
+  };
+  for (let i = 0; i < N; i++) {
+    const [x0, z0] = at(i), [x1, z1] = at(i + 1);
+    P.push(0, 0.01, 0, x1, 0, z1, x0, 0, z0);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/** A fleck of freshly scratched soil (where a squirrel just dug), flat, 1 m before scaling. */
+function fleckGeometry(): THREE.BufferGeometry {
+  const P: number[] = [];
+  const N = 9;
+  for (let i = 0; i < N; i++) {
+    const a0 = (i / N) * Math.PI * 2, a1 = ((i + 1) / N) * Math.PI * 2;
+    const r0 = 0.5 * (0.8 + 0.2 * Math.sin(i * 2.7)), r1 = 0.5 * (0.8 + 0.2 * Math.sin((i + 1) * 2.7));
+    P.push(0, 0, 0, Math.cos(a1) * r1, 0, Math.sin(a1) * r1, Math.cos(a0) * r0, 0, Math.sin(a0) * r0);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/** How the spots look: turned earth with trotter prints (the frisling's rooting field),
+ *  or mossy cushions in leaf litter where fresh soil shows once dug (the squirrel's glade). */
+export type PatchLook = 'earth' | 'moss';
+
 export interface PatchFieldOpts {
   parent: THREE.Object3D;
   groundY(x: number, z: number): number;
@@ -94,6 +174,8 @@ export interface PatchFieldOpts {
   /** which way the prints walk over each spot (a heading) */
   heading: number;
   seed: number;
+  /** how they look (default 'earth') */
+  look?: PatchLook;
 }
 
 export class PatchField {
@@ -123,9 +205,10 @@ export class PatchField {
     this.printOn = Array(n).fill(0); this.printWant = Array(n).fill(0);
     this.glow = Array(n).fill(0); this.glowWant = Array(n).fill(0);
     this.colorDirty = Array(n).fill(false);
-    const moundGeo = moundGeometry(o.seed);
-    const printGeo = printGeometry();
-    const printMat = new THREE.MeshStandardMaterial({ color: '#241710', roughness: 1, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+    const moss = o.look === 'moss';
+    const moundGeo = moss ? mossGeometry(o.seed) : moundGeometry(o.seed);
+    const printGeo = moss ? fleckGeometry() : printGeometry();
+    const printMat = new THREE.MeshStandardMaterial({ color: moss ? '#2e1f14' : '#241710', roughness: 1, transparent: true, opacity: moss ? 0.95 : 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
     this.prints = new THREE.InstancedMesh(printGeo, printMat, n * this.per);
     this.prints.name = 'patch-prints';
     this.prints.renderOrder = 2;
@@ -133,9 +216,9 @@ export class PatchField {
     this.mats.push(printMat);
     const rnd = stream(o.seed + 5);
     const q = new THREE.Quaternion(), e = new THREE.Euler();
-    const CLODS = 11;
-    const clodGeo = new THREE.DodecahedronGeometry(1, 0);
-    const clodMat = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true });
+    const CLODS = moss ? 9 : 11;
+    const clodGeo = moss ? leafGeometry() : new THREE.DodecahedronGeometry(1, 0);
+    const clodMat = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: !moss, side: moss ? THREE.DoubleSide : THREE.FrontSide });
     this.clods = new THREE.InstancedMesh(clodGeo, clodMat, n * CLODS);
     this.clods.name = 'patch-clods';
     this.clods.receiveShadow = true;
@@ -161,8 +244,25 @@ export class PatchField {
       mound.receiveShadow = true;
       this.mounds.push(mound);
       this.group.add(mound);
+      // (moss) old oak leaves lying round the cushion, brown to ochre
+      if (moss) {
+        const leafCol = [new THREE.Color('#8a5a2b'), new THREE.Color('#a4733a'), new THREE.Color('#6e4a26'), new THREE.Color('#9c8a4a')];
+        for (let k = 0; k < CLODS; k++) {
+          const a = rnd() * Math.PI * 2;
+          const rr = o.size * (0.42 + rnd() * 0.38);
+          const cx = s.x + Math.cos(a) * rr, cz = s.z + Math.sin(a) * rr;
+          const size = o.size * (0.12 + rnd() * 0.08);
+          ce.set((rnd() - 0.5) * 0.25, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.25);
+          cq.setFromEuler(ce);
+          cs.set(size, 1, size);
+          cv.set(cx, o.groundY(cx, cz) + 0.012, cz);
+          cm.compose(cv, cq, cs);
+          this.clods.setMatrixAt(i * CLODS + k, cm);
+          this.clods.setColorAt(i * CLODS + k, leafCol[Math.floor(rnd() * leafCol.length)]);
+        }
+      }
       // clods thrown out round the rim, and a few torn-up sods (grass side up)
-      for (let k = 0; k < CLODS; k++) {
+      for (let k = 0; k < (moss ? 0 : CLODS); k++) {
         const a = rnd() * Math.PI * 2;
         const turf = k < 3;
         const rr = o.size * (0.36 + rnd() * 0.3);
@@ -177,16 +277,20 @@ export class PatchField {
         this.clods.setMatrixAt(i * CLODS + k, cm);
         this.clods.setColorAt(i * CLODS + k, turf ? sod : earth[Math.floor(rnd() * earth.length)]);
       }
-      // its prints: a few trotter marks walking over it
+      // its prints: a few trotter marks walking over it (moss: flecks of fresh soil where
+      // it was dug, scattered in its middle)
       for (let k = 0; k < this.per; k++) {
         const t = (k / (this.per - 1) - 0.5) * o.size * 0.8;
         const side = k % 2 ? 0.07 : -0.07;
         const fx = Math.sin(o.heading), fz = Math.cos(o.heading);
-        const px = s.x + fx * t - fz * side, pz = s.z + fz * t + fx * side;
+        const fa = k * 2.4 + i, fr = moss ? o.size * (k ? 0.1 + 0.05 * (k % 3) : 0) : 0;
+        const px = moss ? s.x + Math.cos(fa) * fr : s.x + fx * t - fz * side;
+        const pz = moss ? s.z + Math.sin(fa) * fr : s.z + fz * t + fx * side;
+        const fs = moss ? o.size * (k ? 0.12 : 0.34) : 0.1;
         const pm = new THREE.Matrix4().compose(
-          new THREE.Vector3(px, o.groundY(px, pz) + 0.045, pz),
-          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), o.heading),
-          new THREE.Vector3(0.1, 1, 0.1),
+          new THREE.Vector3(px, o.groundY(px, pz) + (moss ? 0.058 : 0.045), pz),
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), moss ? fa : o.heading),
+          new THREE.Vector3(fs, 1, fs),
         );
         this.printBase.push(pm);
         this.prints.setMatrixAt(i * this.per + k, new THREE.Matrix4().makeScale(0, 0, 0));

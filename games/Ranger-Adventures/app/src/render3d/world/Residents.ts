@@ -20,7 +20,7 @@
 import * as THREE from 'three';
 import type { Spawned, SpawnOpts } from '../play/types';
 import type { HomeSpec, HomeState, ResidentPose, ResidentSpec } from '../adventure/types';
-import { Actor } from '../adventure/actors';
+import { Actor, type ActorEnv } from '../adventure/actors';
 import { FarRest, restFar } from '../play/fade';
 import type { MoveLimits, Obstacle } from '../CharacterController';
 import { Sound } from '../../core/sound';
@@ -57,12 +57,18 @@ export interface HomeDressing {
   /** per frame while the lens is near: `movers` = the home's animals now (and the
    *  ranger, `ranger: true`) */
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void;
-  /** the home's state changed (a replay puts it back before; a finish after) */
-  setState(state: HomeState): void;
+  /** the home's state changed (a replay puts it back before; a finish after). `fresh`:
+   *  it happens in front of the player (a stop, a finish), so it may change calmly
+   *  rather than at once (run 6, additive) */
+  setState(state: HomeState, fresh?: boolean): void;
   dispose(): void;
 }
 
 export type DressingBuilder = (env: DressingEnv) => HomeDressing;
+
+/** A resident's own body, when it is not a walking animal (a squirrel that runs up
+ *  trees): built for the resident `spec` with the actor env; null = the plain Actor. */
+export type ResidentBody = (spec: ResidentSpec, env: ActorEnv, height: number, dressing: HomeDressing | null) => Actor | null;
 
 export interface ResidentsEnv {
   scene: THREE.Scene;
@@ -132,8 +138,9 @@ export class Residents {
     this.env = env;
   }
 
-  /** Build a home: its dressing and its animals, in the before state. */
-  add(spec: HomeSpec, build?: DressingBuilder): void {
+  /** Build a home: its dressing and its animals, in the before state. `body` gives a
+   *  resident its own body (a climbing squirrel) instead of a walking animal's. */
+  add(spec: HomeSpec, build?: DressingBuilder, body?: ResidentBody): void {
     const group = new THREE.Group();
     group.name = `home-${spec.missionId}`;
     this.env.scene.add(group);
@@ -149,10 +156,12 @@ export class Residents {
       reacting: new Map(), gen: 0,
     };
     for (const r of spec.residents) {
-      const a = new Actor(r.key, r.animal, {
+      const aenv: ActorEnv = {
         parent: group, groundY: this.env.groundY, spawnModel: this.env.spawnModel,
         obstacles: this.env.obstacles, limits: this.env.limits, reduced: this.env.reduced,
-      }, { height: r.height ?? this.env.heightFor(r.animal) });
+      };
+      const height = r.height ?? this.env.heightFor(r.animal);
+      const a = body?.(r, aenv, height, dressing) ?? new Actor(r.key, r.animal, aenv, { height });
       actors.set(r.key, a);
       if (r.voice) home.voices.set(r.key, { next: 3 + Math.random() * 4, on: true });
     }
@@ -213,7 +222,7 @@ export class Residents {
     home.state = state;
     home.gen += 1;
     home.reacting.clear();
-    home.dressing?.setState(state);
+    home.dressing?.setState(state, walk);
     for (const r of home.spec.residents) {
       const a = home.actors.get(r.key)!;
       const pose = state === 'before' ? r.before : r.after;
@@ -230,7 +239,7 @@ export class Residents {
         this.takeCover(a, shy, walk);
         continue;
       }
-      if (walk && placed && far > 0.05 && far < WALK_HOME_MAX) {
+      if (walk && placed && far > 0.05 && far < (a.homeReach ?? WALK_HOME_MAX)) {
         void a.go(pose.x, pose.z, { speed: 'walk', face: pose.yaw ?? this.faceHome(home, pose) }).then((ok) => { if (ok) this.idleAt(a, pose); });
       } else {
         a.place(pose.x, pose.z, pose.yaw ?? this.faceHome(home, pose));
@@ -392,6 +401,7 @@ export class Residents {
       const speaking = typeof window !== 'undefined' && !!window.speechSynthesis?.speaking;
       if (!near || speaking || !geluid) { v.next = near ? 0.8 : 1.5; continue; }
       Sound.callAt(voice.call, a.x, a.z, listenerOf(camera));
+      a.called(); // (a squirrel flicks its tail as it chatters)
       v.next = voice.every[0] + Math.random() * (voice.every[1] - voice.every[0]);
     }
   }

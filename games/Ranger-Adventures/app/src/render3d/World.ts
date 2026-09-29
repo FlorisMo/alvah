@@ -48,10 +48,10 @@ import type { RangerMotion, WorldCtx } from './play/types';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
 import { cachedResource } from './Models';
 import { Progress } from './world/Progress';
-import { Residents, type DressingBuilder, type FrameView } from './world/Residents';
+import { Residents, type DressingBuilder, type FrameView, type ResidentBody } from './world/Residents';
 import { Stage } from './play/stage';
 import type { HomeSpec } from './adventure/types';
-import type { TreeSpecies } from './world/Forest';
+import type { TreeSpecies, TreeStub } from './world/Forest';
 
 export type { WorldMarker } from './world/Markers';
 
@@ -84,10 +84,13 @@ export interface WorldHome {
   treeClearings?: readonly { x: number; z: number; r: number }[];
   /** trees the home plants itself, as real forest trees (a camera tree) */
   trees?: readonly HomeTree[];
+  /** a resident's own body (a squirrel that climbs), instead of a walking animal's */
+  actor?: ResidentBody;
 }
 
-/** A tree a mission's home plants (world/Forest.ts draws it with the rest). */
-export interface HomeTree { x: number; z: number; s: number; rotY: number; species: TreeSpecies }
+/** A tree a mission's home plants (world/Forest.ts draws it with the rest), with the
+ *  dead branch stub an animal sits on if it has one (drawn and faded with its tree). */
+export interface HomeTree { x: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub }
 
 /**
  * Free what a torn-down world made on the GPU, and nothing the GLB cache owns. The world
@@ -332,7 +335,7 @@ export class World {
       scene: this.scene, lensFor: (v) => this.frameLens(v), groundY: (x, z) => this.terrain.y(x, z), spawnModel, spawnPlant, heightFor,
       obstacles: this.obstacles, limits: this.limits, reduced: () => livePolicy().reduced,
     });
-    for (const h of opts.homes ?? []) this.residents.add(h.spec, h.build);
+    for (const h of opts.homes ?? []) this.residents.add(h.spec, h.build, h.actor);
 
     this.readback = new DevReadback(
       {

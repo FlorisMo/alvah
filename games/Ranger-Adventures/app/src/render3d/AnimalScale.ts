@@ -108,6 +108,8 @@ export const SIZE = {
     why: 'a stonechat: 0.12-0.13 long' },
   'groene-specht': { group: 'birds', h: 0.26, real: [0.25, 0.33], model: 'bird-groene-specht', len: 0.18,
     why: 'a green woodpecker clinging upright: ≈ 0.3 long' },
+  gaai: { group: 'birds', h: 0.3, real: [0.26, 0.34], model: 'bird-gaai', len: 0.3,
+    why: 'a jay on its twig (the model carries the twig): the bird ≈ 0.2 tall, 0.34 long' },
   koolmees: { group: 'birds', h: 0.14, real: [0.12, 0.2], model: 'bird-koolmees', len: 0.17,
     why: 'a great tit: ≈ 0.14 long' },
   'wilde-eend': { group: 'birds', h: 0.36, real: [0.35, 0.45], model: 'bird-wilde-eend', len: 0.52,

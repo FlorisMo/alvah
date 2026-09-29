@@ -20,7 +20,8 @@ render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls
    world/Terrain.ts     THE ground: mesh, terrain.y(x,z), biome, intersectRay. One truth.
    world/Dressing.ts    grass + wind, water, paths, cabin, landmarks, props, collision list
    world/Forest.ts      every tree: instanced real GLBs per distance level (Lod.ts), per-tree
-                        occluder fade (only the crowns between camera and ranger fade)
+                        occluder fade (only the crowns between camera and ranger fade); a home
+                        tree's branch stub (TreeStub) is part of its tree: drawn and faded with it
    world/Progress.ts    lasting per-mission tableau at a finished marker (onMissionComplete)
    world/Fauna.ts       warden, poacher, roaming animals
    world/Markers.ts     mission markers, missiebord, sit-spot, proximity, wayfinding
@@ -82,7 +83,12 @@ adventure/cover.ts       CoverField: instanced true-scale bracken, moor-grass, h
                          calls) that rustles and parts; cover-math.ts: line of sight, glimpse
 adventure/decoys.ts      the zoeken look-alikes laid in a stand (dead bracken, a butterfly on a
                          foxglove, a stonechat, a nightjar): shared by the frisling and the ree
-adventure/patches.ts     PatchField: look-alike rooting patches (corsi spots) + prints
+adventure/patches.ts     PatchField: look-alike rooting patches (corsi spots) + prints, or
+                         mossy cushions in leaf litter (`look: 'moss'`, the squirrel's glade)
+adventure/squirrel.ts    Squirrel (an Actor): the static squirrel mesh brought to life — dash-
+                         stop-dash, spiral trunk runs, branch stubs, leaps, hiding round a
+                         trunk, digging, an acorn in its mouth; squirrel-math.ts: the pure plans
+                         (speeds, never at the lens, on the bark), squirrel.test.ts
 adventure/places.ts      frames, headings, local↔world (pure)
 adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: where it
                          happens), <id>.home.ts (the home's dressing), <id>.ts (the beats);

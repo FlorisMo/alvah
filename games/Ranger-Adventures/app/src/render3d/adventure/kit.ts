@@ -152,6 +152,10 @@ export interface WalkOpts {
   /** he should walk QUIETLY (away from a calf lying in the grass): running says `line`
    *  (and calls `onRun`) once per run; walking calmly again brings the walk's line back */
   quiet?: { line: string; onRun?: () => void };
+  /** a second way to be there, besides within `r` of `to` (the hint still walks to `to`):
+   *  e.g. right up at the bark on the side the squirrel hides, not only out at the spot
+   *  to see it from */
+  reached?: () => boolean;
 }
 
 const WALK_HINT_R = 0.8; // golden walks until it is within this share of r
@@ -480,7 +484,7 @@ export class AdventureKit {
         doel: lead && waiting ? (lead.waitLine ? this.copy.chipBig ?? o.doel : o.doel) : o.doel,
         cue: arrow || waiting ? `${cue.richting} · ${cue.afstand}` : (o.cue ?? ''),
         angle: arrow || waiting ? cue.angle : null,
-        arrived: d < r,
+        arrived: d < r || !!o.reached?.(),
         glyph: o.glyph,
       });
       o.tick?.(dt);
@@ -519,7 +523,7 @@ export class AdventureKit {
     try {
       await this.until(() => {
         const m = this.ranger();
-        if (dist(m, to) >= r) return false;
+        if (dist(m, to) >= r && !o.reached?.()) return false;
         if (!lead) return true;
         return !hiding && !waiting && dist(lead.actor, m) < gap + 1.6;
       });

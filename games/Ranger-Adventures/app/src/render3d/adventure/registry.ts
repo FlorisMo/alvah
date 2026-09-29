@@ -6,13 +6,14 @@
  */
 
 import type { Mission } from '../../content/types';
-import type { DressingBuilder, Residents } from '../world/Residents';
+import type { DressingBuilder, ResidentBody, Residents } from '../world/Residents';
 import type { HomeTree } from '../World';
 import type { AdventureKit } from './kit';
 import type { HomeSpec } from './types';
 import { frislingAdventure } from './missions/frisling';
 import { reeAdventure } from './missions/ree';
 import { wildcameraAdventure } from './missions/wildcamera';
+import { eekhoornAdventure } from './missions/eekhoorn';
 
 export interface Adventure {
   /** the mission id */
@@ -26,6 +27,8 @@ export interface Adventure {
   trees?: readonly HomeTree[];
   /** the home's THREE side, built with the world */
   dressing?: DressingBuilder;
+  /** a resident's own body (a squirrel that climbs), instead of a walking animal's */
+  actor?: ResidentBody;
   /** the mission's content, handed over before the world is built (its decoys ...) */
   bind?(mission: Mission): void;
   /** under the briefing card: get the world ready for this play (a trial's decoys) */
@@ -40,6 +43,7 @@ const ADVENTURES: Readonly<Record<string, Adventure>> = {
   frisling: frislingAdventure,
   'ree-niet-aanraken': reeAdventure,
   wildcamera: wildcameraAdventure,
+  eekhoorn: eekhoornAdventure,
 };
 
 /** The adventure a mission is played as, or null (the classic path). */
