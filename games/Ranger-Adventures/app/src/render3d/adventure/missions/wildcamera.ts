@@ -245,12 +245,11 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       const walker = bird ? null : A[item.id as Walker];
       const h = bird ? 0.26 : walker!.height * (item.id === 'ree' && bin === 'hol' ? 0.5 : 1);
       const where = walker ? { x: walker.x, z: walker.z } : { x: home.birdAt.x, z: home.birdAt.z };
-      const lift = bird ? home.birdAt.y - k.ctx.groundY(where.x, where.z) : 0; // (on its perch)
       // (the nightjar: a close-up of the bird on its perch — a small bird fills the
-      // picture, and what stands around its perch stays out of it)
+      // picture, and what stands round its perch, the sett, stays out of it)
       const p = bird
-        ? await photograph(where, lift + h * 0.45, 0.72, item.id, night ? 'nacht' : 'dag', undefined, 8)
-        : await photograph(where, lift + h * 0.5, Math.max(1.1, h * (h > 1 ? 1.6 : 2.3)), item.id, night ? 'nacht' : 'dag');
+        ? await photograph(where, home.birdAt.y - k.ctx.groundY(where.x, where.z) + h * 0.45, 0.72, item.id, night ? 'nacht' : 'dag', undefined, 8)
+        : await photograph(where, h * 0.5, Math.max(1.1, h * (h > 1 ? 1.6 : 2.3)), item.id, night ? 'nacht' : 'dag');
       if (p) photos.add(p);
       // it heard the click: its head comes up, it looks at the camera a moment
       if (walker && !walker.lies) void walker.lookAt(() => ({ x: CAMERA.x, z: CAMERA.z, speed: 0 }), 1.4);
