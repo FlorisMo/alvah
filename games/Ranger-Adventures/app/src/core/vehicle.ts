@@ -1445,6 +1445,12 @@ export interface JeepFrame extends JeepState {
   brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null;
 }
 
+/** A standing jeep whose turn is blocked eases back or aside this far (m) in a frame to
+ *  turn (a nose at the water and a tail on a trunk leave it only aside). */
+const TURN_EASE: readonly (readonly [number, number])[] = [
+  [0.005, 0], [0.01, 0], [0, 0.01], [0, -0.01], [0.01, 0.01], [0.01, -0.01], [0.02, 0], [0, 0.02], [0, -0.02],
+];
+
 /** No look of a jeep frame reaches further than this (m) from its body. */
 const NEAR_LOOK = 16;
 const nearWallBuf: Solid[] = [], nearSolidBuf: Solid[] = [];
@@ -1551,7 +1557,17 @@ export function jeepStep(
   const steer = comfortSteer(steerWant, speed, caps, floor);
   const st = driveStep(s.heading, { throttle: speed / caps.maxSpeed, steer }, dt, caps);
   // (6) the body against every solid and zone
-  const n = resolveBody(s.x, s.z, s.heading, s.x + st.dx, s.z + st.dz, st.heading, body, nearWalls, w.limits);
+  let n = resolveBody(s.x, s.z, s.heading, s.x + st.dx, s.z + st.dz, st.heading, body, nearWalls, w.limits);
+  // a standing jeep whose turn is blocked on every side (its nose at the water, its tail on
+  // a trunk): it eases back or aside a hair as it turns, so a held turn key always frees it
+  if (Math.abs(speed) < 0.05 && st.heading !== s.heading && n.heading === s.heading && want.throttle !== 0) {
+    const bx = -Math.sin(s.heading) * Math.sign(want.throttle), bz = -Math.cos(s.heading) * Math.sign(want.throttle);
+    const lx = -bz, lz = bx;                                          // aside
+    for (const [back, side] of TURN_EASE) {
+      const m = resolveBody(s.x, s.z, s.heading, s.x + bx * back + lx * side, s.z + bz * back + lz * side, st.heading, body, nearWalls, w.limits);
+      if (m.heading !== s.heading) { n = m; break; }
+    }
+  }
   const moved = ((n.x - s.x) * Math.sin(s.heading) + (n.z - s.z) * Math.cos(s.heading)) / dt;
   // pressed against something, the carried speed stays within the creep of what really
   // happened: pressed head-on it drops to the creep (no pent-up surge when it slides
