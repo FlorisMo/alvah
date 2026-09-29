@@ -96,6 +96,8 @@ export interface MotionFrame {
   gait: 'idle' | 'walk' | 'run' | null; cadence: number;
   /** the ball of each foot (left, right) and the rendered ground under it */
   balls: { x: number; y: number; z: number }[]; ground: number[];
+  /** how high each sole's lowest point (heel, ball or tip) is above that ground (m) */
+  lift: number[];
   /** the follow camera: FOV, the ranger's projected height share and centre */
   fov: number; hf: number; sx: number; sy: number; yaw: number;
 }
@@ -113,11 +115,15 @@ export async function recordMotion(page: Page): Promise<void> {
     const loop = (now: number): void => {
       const m = r.motion(), g = r.gait(), c = r.cam();
       if (m && c) {
-        const balls = (g?.soles ?? []).map((s: { toe: { x: number; y: number; z: number } }) => s.toe);
+        type P = { x: number; y: number; z: number };
+        const soles: { heel: P; toe: P; tip: P }[] = g?.soles ?? [];
+        const balls = soles.map((s) => s.toe);
+        const ground = balls.map((b) => r.groundAt(b.x, b.z) as number);
+        const lift = soles.map((s, k) => Math.min(s.heel.y, s.toe.y, s.tip.y) - ground[k]);
         rec.push({
           t: now, dt: (now - last) / 1000, x: m.x, z: m.z, speed: m.speed, running: m.running,
           gait: g?.name ?? null, cadence: g?.cadence ?? 0,
-          balls, ground: balls.map((b: { x: number; z: number }) => r.groundAt(b.x, b.z)),
+          balls, ground, lift,
           fov: c.fov, hf: c.avatarScreen.heightFrac, sx: c.avatarScreen.x, sy: c.avatarScreen.y, yaw: c.yaw,
         });
       }

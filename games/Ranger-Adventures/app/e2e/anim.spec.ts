@@ -130,6 +130,11 @@ test('anim: the run clip plays when he runs, and the planted foot does not skate
     expect(sr.frames, 'the run has planted frames to judge').toBeGreaterThan(10);
     expect(sw.slip, `walking, the planted foot slips ${(100 * sw.slip).toFixed(1)} % of his speed (≤ 25 %)`).toBeLessThanOrEqual(0.25);
     expect(sr.slip, `running, the planted foot slips ${(100 * sr.slip).toFixed(1)} % of his speed (≤ 25 %)`).toBeLessThanOrEqual(0.25);
+    // a run has flights: both soles off the ground; a walk never leaves it
+    const air = (fs: typeof run): number => fs.filter((f) => f.lift.length === 2 && f.lift[0] > 0.02 && f.lift[1] > 0.02).length / Math.max(1, fs.length);
+    testInfo.annotations.push({ type: 'flight', description: `both feet off the ground: walking ${(100 * air(walk)).toFixed(0)} % of frames, running ${(100 * air(run)).toFixed(0)} %` });
+    expect(air(run), 'running, both feet leave the ground mid-stride (≥ 10 % of frames)').toBeGreaterThanOrEqual(0.1);
+    expect(air(walk), 'walking, a foot is always on the ground').toBe(0);
   } finally {
     await page.keyboard.up('Shift');
     await page.keyboard.up('ArrowUp');
