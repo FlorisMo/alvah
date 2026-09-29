@@ -11,8 +11,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   WILDCAMERA_PLACES as P, MARKER, TREE, CAMERA, CROSS, CROSS_VIEW, CALLER_SPOTS, LOG, PINE,
-  WILDCAMERA_HOME, WILDCAMERA_RESIDENTS, aimSpot, cameraAim, swivel, trailA, trailB,
-  wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW,
+  WILDCAMERA_HOME, WILDCAMERA_RESIDENTS, AIM_AT, FAN_HALF, aimSpot, cameraAim, swivel, trailA, trailB,
+  wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW, VAL_VIEW,
 } from './wildcamera.places.ts';
 import { anchorInBiome, biomeAt } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
@@ -63,9 +63,16 @@ test('the wildwissel runs from the marker ring to the pine; the second trail fro
   const b = trailB();
   assert.ok(Math.min(...b.map((p) => dist(p, P.glade))) < 0.01 && Math.min(...b.map((p) => dist(p, P.thicket))) < 0.01);
   assert.ok(Math.min(...b.map((p) => dist(p, TREE))) < 1.2, 'the two trails cross at the pine');
-  // the snare lies on the wildwissel he came in on, a step from where he takes it away
-  const onA = Math.min(...a.slice(1).map((p, i) => segDist(P.snare, a[i], p)));
-  assert.ok(onA < 0.35, `the snare lies on the trail (${onA.toFixed(2)} m)`);
+  // the snare lies on the trail into the glade (where the deer come out to graze), a
+  // step from where he takes it away
+  const onB = Math.min(...b.slice(1).map((p, i) => segDist(P.snare, b[i], p)));
+  assert.ok(onB < 0.35, `the snare lies on the trail (${onB.toFixed(2)} m)`);
+  assert.ok(dist(P.snare, P.glade) < P.glade.r + 0.6 && dist(P.snare, P.glade) > 1.2, 'at the glade\'s edge');
+  // the camera on the pine sees it side-on, with the glade behind: a turn it can make
+  assert.ok(Math.abs(swivel(P.snare)) < (80 * Math.PI) / 180, `a swivel of ${deg(swivel(P.snare))}°`);
+  // from where he sets off to it, nothing stands between him and the snare: not the pine
+  assert.ok(segDist(TREE, P.valStart, P.snare) > PINE.trunkR + 0.5, 'the pine is not in the way');
+  assert.ok(segDist(TREE, P.watch, P.valStart) > PINE.trunkR + 0.4, 'he steps round in front of it');
   const reach = dist(P.snare, P.snareApproach);
   assert.ok(reach > 0.7 && reach < 1.4, `he stands a step from it (${reach.toFixed(2)} m)`);
   assert.ok(Math.abs(wrap(headingTo(P.snareApproach, P.snare) - P.snareApproach.heading!)) < 0.01, 'facing it');
@@ -85,9 +92,11 @@ test('one view: the glade left, the thicket right, the camera pine between, the 
   const reach = dist(P.strap, CAMERA);
   assert.ok(reach > 0.5 && reach < 1, `he straps it on within reach (${reach.toFixed(2)} m), beside it, not in front of the lens`);
   // the other views are the ranger's side of what they show
-  for (const [name, view] of [['trail', TRAIL_VIEW], ['strap', STRAP_VIEW], ['snare', SNARE_VIEW], ['reunion', REUNION_VIEW]] as const) {
+  for (const [name, view] of [['trail', TRAIL_VIEW], ['strap', STRAP_VIEW], ['snare', SNARE_VIEW], ['to the snare', VAL_VIEW]] as const) {
     for (const q of view.include) assert.ok(toLocal({ x: view.at.x, z: view.at.z, heading: view.heading }, q).v < 1, `${name}: he stands in front of what it shows`);
   }
+  // the reunion is the crossing's own view, with him back beside his camera
+  assert.deepEqual(REUNION_VIEW.include, CROSS_VIEW.include);
 });
 
 test('the animals the camera photographs walk in from out of view, and the thicket\'s never stand behind the sett', () => {
@@ -96,7 +105,7 @@ test('the animals the camera photographs walk in from out of view, and the thick
     for (const bin of ['open', 'hol'] as const) {
       const s = aimSpot(animal, bin);
       const place = bin === 'open' ? P.glade : P.thicket;
-      assert.ok(dist(s.at, place) < (bin === 'open' ? P.glade.r : P.thicket.r + 0.6), `${animal} in the ${bin} place`);
+      if (!(animal === 'das' && bin === 'hol')) assert.ok(dist(s.at, place) < (bin === 'open' ? P.glade.r : P.thicket.r + 0.6), `${animal} in the ${bin} place`);
       if (animal !== 'das') assert.ok(Math.abs(toLocal(v, s.from).u) > CROSS_VIEW.halfW - 0.2 || toLocal(v, s.from).v > 2.5, `${animal} comes in from out of view`);
       if (bin === 'hol' && animal !== 'das') {
         // as the camera sees it: well clear of the sett's mound
@@ -105,9 +114,20 @@ test('the animals the camera photographs walk in from out of view, and the thick
       }
     }
   }
-  // the badger by day: at its sett's mouth, coming out from behind the mound
+  // the badger by day: out of its sett onto the open ground at its side — clear of the
+  // mound for the camera on the pine, and in front of it for the lens
   const das = aimSpot('das', 'hol');
-  assert.ok(dist(das.at, P.sett) < 1 && dist(das.from, P.sett) < 0.6);
+  assert.ok(dist(das.at, P.sett) < 1.5 && dist(das.from, P.sett) < 0.6, 'at its sett, out of it');
+  const dasOff = Math.abs(wrap(cameraAim(das.at) - cameraAim(P.sett)));
+  assert.ok(dasOff > (16 * Math.PI) / 180, `the badger is ${deg(dasOff)}° off its sett for the camera`);
+  assert.ok(toLocal(v, das.at).v < toLocal(v, P.sett).v, 'nearer the lens than its sett');
+  // every animal the camera photographs stands where its fan of view lies
+  for (const animal of ['edelhert', 'ree', 'das', 'wildzwijn', 'nachtzwaluw']) {
+    for (const bin of ['open', 'hol'] as const) {
+      const off = Math.abs(wrap(cameraAim(aimSpot(animal, bin).at) - cameraAim(AIM_AT[bin])));
+      assert.ok(off < FAN_HALF, `${animal} (${bin}) is ${deg(off)}° off where the camera looks`);
+    }
+  }
 });
 
 test('the four night callers: at their own spots round the crossing, all in the one view, well apart', () => {
@@ -120,7 +140,8 @@ test('the four night callers: at their own spots round the crossing, all in the 
     assert.ok(Math.abs(l.u) < CROSS_VIEW.halfW && l.v > -CROSS_VIEW.halfD - 2 && l.v < CROSS_VIEW.halfD + 1, `${id} is in the view`);
     for (const o of ids) if (o !== id) assert.ok(dist(CALLER_SPOTS[id].at, CALLER_SPOTS[o].at) > 1.6, `${id} and ${o} stand apart`);
   }
-  assert.ok(dist(CALLER_SPOTS.das.at, P.sett) < 1, 'the badger at its sett');
+  assert.ok(dist(CALLER_SPOTS.das.at, P.sett) < 1.5, 'the badger at its sett');
+  assert.ok(toLocal(v, CALLER_SPOTS.das.at).u < toLocal(v, P.sett).u - 0.8, 'beside its mound (not in front of it: grey on grey)');
   assert.ok(dist(CALLER_SPOTS.nachtzwaluw.at, LOG) < 0.01, 'the nightjar on its log');
   assert.ok(dist(CALLER_SPOTS.ree.at, P.glade) < 1.6, 'the roe at the glade');
 });

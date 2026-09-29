@@ -54,7 +54,7 @@ export function develop(src: HTMLCanvasElement, time: Photo['time'], clock: stri
     }
   }
   const mean = cnt ? sum / cnt : 0.4;
-  const gain = Math.min(2.6, Math.max(1, (time === 'nacht' ? 0.3 : 0.42) / Math.max(0.02, mean)));
+  const gain = Math.min(2.6, Math.max(1, (time === 'nacht' ? 0.3 : time === 'ochtend' ? 0.36 : 0.42) / Math.max(0.02, mean)));
   const K = 1.35 * gain, norm = 1 - Math.exp(-K);
   const expose = (v: number): number => (255 * (1 - Math.exp(-(v / 255) * K))) / norm;
   for (let y = 0; y < H; y++) {

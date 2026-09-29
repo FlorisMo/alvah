@@ -23,8 +23,9 @@ import { grassTuftGeometry, grassMaterial, heightFor } from '../../play/spawn';
 import { nameTag, disposeTag } from '../../play/stage';
 import { boxObstacle } from '../../CharacterController';
 import { SIZE } from '../../AnimalScale';
+import { crouchPose } from './wildcamera.pose';
 import {
-  WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, trailA, trailB,
+  WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, trailA, trailB,
 } from './wildcamera.places';
 import type { Spot } from '../types';
 
@@ -32,9 +33,28 @@ import type { Spot } from '../types';
 const CAM_H = SIZE.wildcamera.h;
 /** How far its lens sits in front of its back (m), at CAM_H (the model is 1.29 : 1.6). */
 const CAM_DEPTH = CAM_H * (1.29 / 1.6);
-/** The camera's fan of view on the ground: its half-angle (rad) and reach (m). */
-const FAN_HALF = 0.36;
+/** The camera's fan of view on the ground: its reach (m); its half-angle is the places'. */
 const FAN_REACH = 5.4;
+
+/** A soft round glow (white in the middle, fading out): the red light's halo, so a
+ *  1 cm light on a camera reads from across the crossing. */
+let glowTex: THREE.CanvasTexture | null = null;
+function glowTexture(): THREE.CanvasTexture {
+  if (glowTex) return glowTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.22, 'rgba(255,255,255,0.85)');
+  grad.addColorStop(0.5, 'rgba(255,255,255,0.25)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  glowTex = new THREE.CanvasTexture(c);
+  glowTex.colorSpace = THREE.SRGBColorSpace;
+  return glowTex;
+}
 
 /** The animal prints in the trails: an atlas of three kinds (64 px cells). */
 type PrintKind = 0 | 1 | 2; // 0 a deer's slot, 1 a wild boar's, 2 a badger's
@@ -204,6 +224,8 @@ export class WildcameraHome implements HomeDressing {
   readonly trap = new THREE.Group();
   private readonly trapBody = new THREE.Group();
   private readonly led: THREE.Mesh;
+  /** the red light's soft halo (it blinks with the light) */
+  private readonly ledGlow: THREE.Sprite;
   private readonly ir: THREE.Mesh;
   private readonly strap: THREE.Mesh;
   /** the ground the camera sees: a soft fan from its lens */
@@ -231,8 +253,10 @@ export class WildcameraHome implements HomeDressing {
   /** the empty snare by the trail (the morning) */
   private snare: THREE.Object3D | null = null;
   private snareWanted = false;
-  /** the man in the morning photo (only ever in that one picture) */
+  /** the man in the morning photo (only ever in that one picture), crouched: how far
+   *  his crouch sinks him */
   private poacher: THREE.Object3D | null = null;
+  private poacherDrop = 0;
   /** the nightjar: it flies in and lands, so the home moves it */
   readonly bird = new THREE.Group();
   /** the log it sits on at night, and the bird: what a click on the nightjar finds (the
@@ -366,6 +390,13 @@ export class WildcameraHome implements HomeDressing {
     this.ir = new THREE.Mesh(new THREE.CircleGeometry(0.055, 18), new THREE.MeshBasicMaterial({ color: '#9b2c2c', transparent: true, opacity: 0, depthWrite: false }));
     this.ir.position.set(0, 0.02, CAM_DEPTH * 0.5 + 0.006);
     this.led.raycast = () => {};
+    this.ledGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), color: '#ff4a3a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    this.ledGlow.scale.setScalar(0.11);
+    this.ledGlow.position.copy(this.led.position).z += 0.01;
+    this.ledGlow.raycast = () => {};
+    this.trapBody.add(this.ledGlow);
     this.ir.raycast = () => {};
     this.trapBody.add(this.led, this.ir);
     this.group.add(this.trap);
@@ -431,6 +462,7 @@ export class WildcameraHome implements HomeDressing {
       this.snare = r;
     });
     void env.spawnModel('figure-poacher', { height: SIZE.stroper.h, idle: false }).then((s) => {
+      if (s) this.poacherDrop = crouchPose(s.root as THREE.Object3D); // (posed at the origin, unturned)
       const r = add(s, sn.x, sn.z, 0);
       if (r) r.visible = false;
       this.poacher = r;
@@ -542,23 +574,43 @@ export class WildcameraHome implements HomeDressing {
   }
 
   /** For a photograph's one render: the words over the places and the camera's fan are
-   *  not in the picture. Returns how to put them back. */
-  photoPrep(): () => void {
+   *  not in the picture, and by day the sky's fill is `fill`× as bright (the camera meters
+   *  on the animal: a deer against the low sun comes out in its colours, not black).
+   *  Returns how to put it all back. */
+  photoPrep(fill = 1): () => void {
     const was = [this.tags.open.visible, this.tags.hol.visible, this.fan.visible];
     this.tags.open.visible = this.tags.hol.visible = this.fan.visible = false;
-    return () => { [this.tags.open.visible, this.tags.hol.visible, this.fan.visible] = was; };
+    const hemis = fill !== 1 ? this.skyFill() : [];
+    const i0 = hemis.map((h) => h.intensity);
+    for (const h of hemis) h.intensity *= fill;
+    return () => {
+      [this.tags.open.visible, this.tags.hol.visible, this.fan.visible] = was;
+      hemis.forEach((h, i) => { h.intensity = i0[i]; });
+    };
   }
 
-  /** For the morning photo's one render: the man stands by the snare, bent over it,
-   *  seen from the side. Returns how to take him out again. */
+  /** The world's sky fill (its hemisphere light), found once. */
+  private hemis: THREE.HemisphereLight[] | null = null;
+  private skyFill(): THREE.HemisphereLight[] {
+    if (this.hemis?.length) return this.hemis;
+    let top: THREE.Object3D = this.group;
+    while (top.parent) top = top.parent;
+    const out: THREE.HemisphereLight[] = [];
+    top.traverse((o) => { if ((o as THREE.HemisphereLight).isHemisphereLight) out.push(o as THREE.HemisphereLight); });
+    this.hemis = out;
+    return out;
+  }
+
+  /** For the morning photo's one render: the man crouches by the snare, looking down
+   *  at it, seen from the side. Returns how to take him out again. */
   poacherIn(): () => void {
     const r = this.poacher;
     if (!r) return () => {};
     const sn = P.snare;
     const side = headingTo(sn, CAMERA) + Math.PI / 2; // side-on to the camera
-    const at = atLocal({ x: sn.x, z: sn.z, heading: side }, 0, -0.42);
-    r.position.set(at.x, this.groundY(at.x, at.z), at.z);
-    r.rotation.set(0.32, side, 0, 'YXZ'); // bent forward over the snare
+    const at = atLocal({ x: sn.x, z: sn.z, heading: side }, 0, -0.5);
+    r.position.set(at.x, this.groundY(at.x, at.z) - this.poacherDrop, at.z);
+    r.rotation.set(0, side, 0);
     const wasSnare = this.snare?.visible ?? false;
     if (this.snare) this.snare.visible = true;
     r.visible = true;
@@ -571,6 +623,7 @@ export class WildcameraHome implements HomeDressing {
     this.bird.visible = true;
     const a = new THREE.Vector3(from.x, this.groundY(from.x, from.z) + (from.y ?? 3.2), from.z);
     const b = new THREE.Vector3(to.x, this.groundY(to.x, to.z) + (to.lift ?? 0), to.z);
+    this.bird.userData.perch = to.lift ?? 0; // (how high its log holds it: the play-hint probe)
     this.flight?.done();
     return new Promise((done) => {
       this.flight = { from: a, to: b, t: reduced ? 1 : 0, dur: secs, yaw, done };
@@ -649,10 +702,13 @@ export class WildcameraHome implements HomeDressing {
     // the red light: a slow blink after the mission, a steady quick one while it watches
     const ledMat = this.led.material as THREE.MeshBasicMaterial;
     this.ledFlash = Math.max(0, this.ledFlash - dt);
-    const on = this.blink === 'rec' ? Math.sin(this.clock * Math.PI * 2 * 0.9) > 0.2
+    const on = this.blink === 'rec' ? (this.clock % 1.1) < 0.55
       : this.blink === 'idle' ? (this.clock % 3.2) < 0.18 : false;
-    ledMat.opacity = this.ledFlash > 0 ? 1 : on ? 0.95 : 0.12;
+    const lit = this.ledFlash > 0 ? 1 : on ? 0.95 : 0.12;
+    ledMat.opacity = lit;
     this.led.visible = this.blink !== 'off' || this.ledFlash > 0;
+    (this.ledGlow.material as THREE.SpriteMaterial).opacity = lit > 0.5 ? lit : 0;
+    this.ledGlow.visible = this.led.visible && lit > 0.5 && this.trap.visible;
     // the infrared ring: a soft glow that fades
     const irMat = this.ir.material as THREE.MeshBasicMaterial;
     this.irFlash = Math.max(0, this.irFlash - dt * 1.6);
@@ -688,6 +744,7 @@ export class WildcameraHome implements HomeDressing {
     this.strap.geometry.dispose();
     (this.strap.material as THREE.Material).dispose();
     for (const o of [this.led, this.ir, ...this.zones]) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
+    (this.ledGlow.material as THREE.Material).dispose();
     this.group.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh && (mesh.name === 'wildwissel' || mesh.name === 'wildwissel-prints')) {
