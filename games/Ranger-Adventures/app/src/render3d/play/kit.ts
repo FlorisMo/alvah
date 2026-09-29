@@ -73,7 +73,10 @@ export interface PlayHint {
   /** Stable id of the thing to click (e.g. the animal or stone id). */
   id: string;
   /** The object a player sees and clicks. */
-  target: THREE.Object3D;
+  target?: THREE.Object3D;
+  /** Run 6 (the adventures): a perfect player WALKS there now, with the arrow keys or
+   *  the stick, until he is within `r` m (world x/z). No `target`: nothing to click. */
+  walk?: { x: number; z: number; r: number };
 }
 
 let activeHint: (() => PlayHint | null) | null = null;
@@ -230,6 +233,11 @@ function drawnWith(root: THREE.Object3D): string[] {
 function probePlayHint(): PlayHintProbe | null {
   const hint = currentPlayHint();
   if (!hint) return null;
+  if (hint.walk || !hint.target) {
+    // a walk hint: nothing to click, a place to walk to (golden walks it with the keys)
+    return { id: hint.id, x: -1, y: -1, onScreen: false, firstHit: false, aboveGround: false,
+      firstHitBy: null, bottomGap: null, reachesCanvas: false, blocker: null, parts: [], walk: hint.walk ?? null };
+  }
   const v = liveView();
   let root = hint.target;
   while (root.parent) root = root.parent;
@@ -674,12 +682,14 @@ export function spoorTrail(
   ax: number, az: number, bx: number, bz: number, legs: number,
   groundY: (x: number, z: number) => number,
   opacity = 1,
+  size = 1, // run 6: a piglet's trotters are smaller than a grown boar's hooves
+  perLeg = 3,
 ): { group: THREE.Group; dispose: () => void } {
-  const n = Math.max(6, Math.round(legs) * 3);
+  const n = Math.max(6, Math.round(legs) * perLeg);
   const pts = trailPoints(ax, az, bx, bz, n);
   const len = Math.hypot(bx - ax, bz - az) || 1;
   const dx = (bx - ax) / len, dz = (bz - az) / len;
-  const geo = new THREE.PlaneGeometry(0.17, 0.2);
+  const geo = new THREE.PlaneGeometry(0.17 * size, 0.2 * size);
   geo.rotateX(-Math.PI / 2); // lie flat, the print's toes pointing along −z
   const mat = new THREE.MeshStandardMaterial({
     map: hoofTexture(), transparent: true, opacity, depthWrite: false, roughness: 1,
@@ -693,7 +703,7 @@ export function spoorTrail(
   const heading = Math.atan2(-dx, -dz); // yaw that points the print's −z along the walk
   pts.forEach((p, i) => {
     const side = i % 2 === 0 ? 1 : -1;
-    const x = p.x + -dz * 0.1 * side, z = p.z + dx * 0.1 * side;
+    const x = p.x + -dz * 0.1 * size * side, z = p.z + dx * 0.1 * size * side;
     const ahead = groundY(x + dx * 0.12, z + dz * 0.12);
     const behind = groundY(x - dx * 0.12, z - dz * 0.12);
     const pitch = Math.atan2(ahead - behind, 0.24);

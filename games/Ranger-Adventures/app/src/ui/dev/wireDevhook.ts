@@ -11,8 +11,9 @@ import {
   provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
-  provideHeli, provideQuality, provideHint, provideBoundary,
+  provideHeli, provideQuality, provideHint, provideBoundary, provideMissionPlaces, provideResidents,
 } from '../../core/devhook';
+import { adventureFor } from '../../render3d/adventure/registry';
 import { triggerActivityWin } from '../../render3d/play/kit';
 
 /** Expose the live world's read-backs on the dev hook. */
@@ -45,6 +46,8 @@ export function wireWorldDevhook(world: World): void {
   provideHeli(() => world.heliState());               // W5.3b: opt-in helicopter
   provideQuality(() => world.qualityState());         // W7.2: adaptive quality tier
   provideWinStep(() => triggerActivityWin());         // W2.3: E2E-only resolve of a 3D step
+  provideMissionPlaces((id) => { const p = adventureFor(id)?.home.places; return p ? { ...p } : null; }); // run 6
+  provideResidents(() => world.residents.read(), () => world.residents.moverSpots()); // run 6: the homes
 }
 
 /** Drop every world read-back (the world is gone). */
@@ -77,4 +80,6 @@ export function clearWorldDevhook(): void {
   provideHeli(null);
   provideQuality(null);
   provideHint(null);
+  provideMissionPlaces(null);
+  provideResidents(null, null);
 }

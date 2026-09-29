@@ -77,6 +77,18 @@ export interface Briefing {
   knap?: string[];
 }
 
+/**
+ * Run 6: the words of a mission's in-world ADVENTURE (render3d/adventure): one short
+ * objective line per beat (≤ 7 words a sentence, AVI M3/E3, read aloud), the chip's
+ * names for where to go, the feedback lines. `simpel` is the default; `knap` holds
+ * the same keys with the "knappe woorden" (frisling, rotte ...) for when that setting
+ * is on. Device words ("Klik") are turned into "Tik" on a touch screen by the flow.
+ */
+export interface AvontuurCopy {
+  simpel: Readonly<Record<string, string>>;
+  knap?: Readonly<Record<string, string>>;
+}
+
 export interface Mission {
   id: string;
   titel: string;
@@ -90,6 +102,8 @@ export interface Mission {
   beloning: Beloning;
   reunion?: { sprite?: string; tekst?: string };
   stappen: Step[];
+  /** run 6: the adventure's words (a mission played in the world with the ranger's body) */
+  avontuur?: AvontuurCopy;
 }
 
 export interface Clue {

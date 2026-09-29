@@ -78,14 +78,13 @@ export interface Tableau {
  * and the hinds at their own rows.
  */
 export const TABLEAUS: Record<string, Tableau> = {
-  // "De zeug knort blij. Haar big is terug." — the frisling home with its rotte
+  // "De moeder knort blij. Haar big is terug." — run 6: the rotte LIVES at its wallow
+  // (world/Residents.ts, adventure/missions/frisling.places.ts), before and after; the
+  // marker's ring stays empty (the piglet is hidden in the bracken, you hear him), and
+  // once he is home the "klaar" flag stands at it
   frisling: {
-    hero: 'frisling',
-    pieces: [
-      { id: 'wildzwijn', kind: 'animal', h: SIZE.wildzwijn.h, a: 1.3, s: -1.9, face: 'hero', arrive: true }, // the sow
-      { id: 'frisling', kind: 'animal', a: 0.6, s: -1.05, face: 1.2, arrive: true },              // a sibling
-      { id: 'frisling', kind: 'animal', a: 1.9, s: -0.9, face: -0.9, arrive: true },              // and another
-    ],
+    hero: '',
+    pieces: [],
   },
   // payoff 'moeder-keert-terug': you left the calf alone, and its mother came back
   'ree-niet-aanraken': {
@@ -412,8 +411,13 @@ export class Progress {
     }
     if (!fresh || reduced) { this.settle(b); return; }
     // away from the marker nobody would see it: the family waits out of sight and
-    // comes home the first time the ranger comes to look (update)
-    if (!here) { if (b.live.some((l) => l.held)) b.later = true; return; }
+    // comes home the first time the ranger comes to look (update); the "klaar" flag
+    // rises at once (an adventure is finished where its family lives, not at the ring)
+    if (!here) {
+      if (b.live.some((l) => l.held)) b.later = true;
+      if (!b.flag.visible) { b.flag.visible = true; b.flag.userData.rise = 0; }
+      return;
+    }
     this.startReunion(b);
     await new Promise<void>((resolve) => this.waiters.push({ until: this.clock + REUNION_S, resolve }));
   }

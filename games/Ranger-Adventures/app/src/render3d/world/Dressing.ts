@@ -110,6 +110,9 @@ export class Dressing {
   // The furthest-out radius any LOW ground-tuft (heather/marram) landed at — reported on
   // the dev hook's boundary read-back.
   scatterMax = 0;
+  // Run 6: ground a mission's home keeps bare (a wallow's mud, a rooting field's turned
+  // earth): no scattered heather or grass grows through it. Set before the scatter.
+  clearings: readonly { x: number; z: number; r: number }[] = [];
   // P1.3 tree canopy: the instant cone/cylinder stand-ins (dropped once the Forest is
   // ready) and every tree placement: the bos scatter, the rim tree-line and the grove
   // trees of the nature dressing. The camera rig tests its crowns against these.
@@ -596,6 +599,7 @@ export class Dressing {
       if (distanceToNetwork(x, z) < LANE_HALF + 0.6) continue;  // the paths stay bare sand
       if (PADS.some((p) => Math.hypot(x - p.x, z - p.z) < PAD_RADIUS + 0.9)) continue; // nothing grows through a helipad (breaker B9)
       if (LANDMARK_FEET.some((o) => obstacleGap(o, x, z) < 0.3)) continue;       // ...nor through a landmark's floor
+      if (this.clearings.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) continue; // ...nor through a mission home's mud
       const h = hash2(gx, gz, seed + 2);
       if (!keep(x, z, h)) continue;
       if (r > this.scatterMax) this.scatterMax = r;                // furthest low plant (dev hook)

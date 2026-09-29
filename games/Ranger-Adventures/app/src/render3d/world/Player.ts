@@ -148,6 +148,9 @@ export class Player {
   // back inward. `onBoundary` fires on the rising edge — once per approach.
   atBoundary = false;
   onBoundary: () => void = () => {};
+  // Run 6: an adventure's framed beat: the keys, the stick and a tap on the ground do
+  // nothing; a programmatic target (World.walkRangerTo) still walks him
+  inputLocked = false;
   // click-vs-drag discriminator (F-17 §3 seam): a pointer that travels past DRAG_PX is a
   // camera drag (tap-to-walk suppressed); a cleaner press taps (walks to the release
   // point). ~6 px per the finding — precise on a mouse, forgiving of a small touch jitter.
@@ -250,9 +253,9 @@ export class Player {
       this.turnVel = 0;
       this.camNow = null;
     }
-    const held = this.input?.held;
+    const held = this.inputLocked ? null : this.input?.held;
     const keys = held && held.size > 0 ? held : null;
-    const raw = this.joystickSource ? this.joystickSource() : null;
+    const raw = this.joystickSource && !this.inputLocked ? this.joystickSource() : null;
     const stick = !keys && raw && Math.hypot(raw.x, raw.y) >= JOYSTICK_DEADZONE ? raw : null;
     const dxT = this.target.x - rp.x, dzT = this.target.z - rp.z;
     const tapDist = Math.hypot(dxT, dzT);

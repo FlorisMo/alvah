@@ -358,7 +358,21 @@ export interface RangerDevHook {
    *  vertices `along` the world direction (dx,dz) and `across` it, in m. A vehicle that
    *  drives along (dx,dz) and faces that way is longer along than across. */
   shapeAt(x: number, z: number, dx: number, dz: number): { id: string; along: number; across: number } | null;
+  /* ---- run 6: the in-world adventures (render3d/adventure). Read-only. ---- */
+  /** The adventure running now: its mission, the beat it is at ('walk:cover', 'search',
+   *  'route', 'choice:aaien', 'reunion' ...), the step indices logged so far (each once),
+   *  the objective line on screen, and measured numbers (the cover's height against the
+   *  hidden animal's, the reunion gap ...). Null when none runs. */
+  adventure(): AdventureReadout | null;
+  /** A mission's authored places (world x/z [+ r, heading]) when it is an adventure. */
+  missionPlaces(id: string): Record<string, { x: number; z: number; r?: number; heading?: number }> | null;
+  /** The missions' homes: their state and their animals (world/Residents.ts). */
+  residents(): ResidentsReadout | null;
 }
+
+export type AdventureReadout = { mission: string; beat: string; stepsLogged: number[]; line: string | null; stats: Record<string, number> };
+export type ResidentsReadout = { missionId: string; state: 'before' | 'after'; borrowed: boolean;
+  actors: { key: string; animal: string; x: number; z: number; lying: boolean; visible: boolean; doing: string }[] }[];
 
 /** `__ranger.playHint()` (see the field doc). */
 export type PlayHintProbe = {
@@ -369,6 +383,9 @@ export type PlayHintProbe = {
   /** the geometry types the target is drawn with ('BufferGeometry' = a loaded model;
    *  'CapsuleGeometry', 'SphereGeometry'... = a primitive stand-in) */
   parts: string[];
+  /** run 6: a WALK hint (an adventure's walk beat): walk to (x, z) until within r m;
+   *  there is nothing to click (x, y = −1). Absent / null for a click hint. */
+  walk?: { x: number; z: number; r: number } | null;
 };
 
 /** One entry of `__ranger.seating()`. */
@@ -441,6 +458,10 @@ const state = {
   frames: null as null | (() => number),
   renderMode: null as null | (() => { light: boolean; renderer: string | null }),
   probes: null as null | GoldenProbes,
+  adventure: null as null | (() => AdventureReadout | null),
+  missionPlaces: null as null | ((id: string) => Record<string, { x: number; z: number; r?: number; heading?: number }> | null),
+  residents: null as null | (() => ResidentsReadout),
+  residentSpots: null as null | (() => { x: number; z: number }[]),
 };
 
 /** The THREE-side golden-path measurements, registered by `render3d/play/kit.ts`. */
@@ -492,8 +513,29 @@ export function selfMovers(): { player: { x: number; z: number } | null; ambient
   const riding = !!(state.vehicle?.()?.inVehicle || state.heli?.()?.inHeli);
   return {
     player: state.pos && !riding ? state.pos() : null,
-    ambient: state.ambient ? state.ambient().map((a) => ({ x: a.x, z: a.z })) : [],
+    // the roaming animals, and (run 6) the animals living at the missions' homes: they
+    // root and shuffle by themselves, so a before/after compare leaves them out
+    ambient: [
+      ...(state.ambient ? state.ambient().map((a) => ({ x: a.x, z: a.z })) : []),
+      ...(state.residentSpots ? state.residentSpots() : []),
+    ],
   };
+}
+
+/** Run 6: register the running adventure's read (null when none runs). */
+export function provideAdventure(fn: (() => AdventureReadout | null) | null): void {
+  state.adventure = fn;
+}
+
+/** Run 6: register the adventures' places table read. */
+export function provideMissionPlaces(fn: ((id: string) => Record<string, { x: number; z: number; r?: number; heading?: number }> | null) | null): void {
+  state.missionPlaces = fn;
+}
+
+/** Run 6: register the homes' read and where their animals stand (the mover tag). */
+export function provideResidents(read: (() => ResidentsReadout) | null, spots: (() => { x: number; z: number }[]) | null): void {
+  state.residents = read;
+  state.residentSpots = spots;
 }
 
 /** Current screen the player is on. */
@@ -781,6 +823,9 @@ export function installDevHook(): boolean {
     screenOf: (x, y, z) => (state.probes ? state.probes.screenOf(x, y, z) : null),
     seating: (x, z, r) => (state.probes ? state.probes.seating(x, z, r) : null),
     shapeAt: (x, z, dx, dz) => (state.probes ? state.probes.shapeAt(x, z, dx, dz) : null),
+    adventure: () => (state.adventure ? state.adventure() : null),
+    missionPlaces: (id) => (state.missionPlaces ? state.missionPlaces(id) : null),
+    residents: () => (state.residents ? state.residents() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

@@ -103,3 +103,35 @@ test('the words match the picture: a lying animal is posed lying, a fleeing one 
   }
   assert.deepEqual(bad, []);
 });
+
+/* ---- run 6: the adventures' words (render3d/adventure): one short line per beat ---- */
+
+test('every adventure line reads at M3/E3 (≤7 words a sentence); the plain lines use no jargon', () => {
+  const bad: string[] = [];
+  let lines = 0;
+  for (const m of AREA_VELUWE.missies) {
+    const a = (m as { avontuur?: { simpel: Record<string, string>; knap?: Record<string, string> } }).avontuur;
+    if (!a) continue;
+    for (const [k, t] of Object.entries(a.simpel)) {
+      lines += 1;
+      for (const i of lintText(t)) bad.push(`${m.id}.avontuur.${k}: "${i.sentence}" [${i.words}]`);
+      for (const w of jargonIn(t)) bad.push(`${m.id}.avontuur.${k}: jargon "${w}" in a plain line`);
+    }
+    for (const [k, t] of Object.entries(a.knap ?? {})) {
+      for (const i of lintText(t)) bad.push(`${m.id}.avontuur.knap.${k}: "${i.sentence}" [${i.words}]`);
+      assert.ok(k in a.simpel, `${m.id}.avontuur.knap.${k} has a plain twin`);
+    }
+  }
+  assert.ok(lines >= 10, 'the frisling adventure has its words');
+  assert.deepEqual(bad, []);
+});
+
+test('the frisling rounds come in the order the adventure meets them: aaien, dragen, voeren, zeug, pad', () => {
+  const m = AREA_VELUWE.missies.find((x) => x.id === 'frisling')!;
+  const encs = (m.stappen.find((s) => s.ef === 'dagnacht')!.skin as { encounters: EncFull[] }).encounters;
+  assert.deepEqual(encs.map((e) => e.id), ['aaien', 'dragen', 'voeren', 'zeug', 'pad']);
+  const voeren = encs.find((e) => e.id === 'voeren')!;
+  assert.equal(voeren.dier, 'overloper', 'the family\'s yearling sniffs the bag');
+  assert.ok(/jong zwijn/.test(voeren.vraag) && !jargonIn(voeren.vraag).length);
+  assert.ok(encs.filter((e) => e.flip).length === 1 && encs[encs.length - 1].flip, 'the flip comes last: now GO');
+});

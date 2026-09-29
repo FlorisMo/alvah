@@ -236,8 +236,11 @@ export class Fauna {
     // walk/graze clips]. Their size is the scale table's (`AnimalScale.ts`).
     const GROUND: { id: string; hx: number; hz: number; r: number; baked: boolean }[] = [
       { id: 'animal-ree-roedeer', hx: 26, hz: 26, r: 6, baked: true },   // bos/heide edge
-      { id: 'animal-vos-fox', hx: -30, hz: -10, r: 7, baked: true },     // heide, west
-      { id: 'animal-eekhoorn-squirrel', hx: -24, hz: -24, r: 3, baked: false }, // near trees
+      // run 6: the fox and the squirrel roam clear of the frisling's home (its wallow and
+      // rooting field lie on the heath west of the clearing: adventure/missions/
+      // frisling.places.ts); a squirrel belongs by the trees, not on the open heath
+      { id: 'animal-vos-fox', hx: -42, hz: -2, r: 6, baked: true },     // heide, far west
+      { id: 'animal-eekhoorn-squirrel', hx: 4, hz: -11, r: 3, baked: false }, // under the grove by the spawn→watchtower path
       { id: 'animal-wildzwijn-boar', hx: 10, hz: 36, r: 6, baked: false },     // heide, south
     ];
     GROUND.forEach((a, i) => {
