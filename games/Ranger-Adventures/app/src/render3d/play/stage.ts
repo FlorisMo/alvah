@@ -36,6 +36,16 @@ export interface StageSpec {
   /** screen px the DOM card covers at the top / bottom — the patch frames between them */
   insetTop?: number;
   insetBottom?: number;
+  /**
+   * Run 6 (the adventures): frame a spot IN the world instead of searching a patch in
+   * front of the ranger — the patch centre is (x, z), its depth axis runs along
+   * `heading`, and the fit (pitch, insets, the free band) is the same. `include` are
+   * things that must be in the picture too (the ranger in a lower corner, an animal
+   * beside him): their feet and their tops join the box the lens backs off to fit.
+   */
+  anchor?: { x: number; z: number; heading: number; include?: readonly { x: number; z: number; h: number }[] };
+  /** the screen size to fit for (default: the canvas as it is now) */
+  viewport?: { w: number; h: number };
 }
 
 const V = (x = 0, y = 0, z = 0): THREE.Vector3 => new THREE.Vector3(x, y, z);
@@ -74,7 +84,8 @@ export class Stage {
     this.ctx = ctx;
     this.scene = ctx.scene as THREE.Scene;
     this.spec = {
-      tall: 1, pitchDeg: 30, insetTop: 0, insetBottom: 0, ...spec,
+      tall: 1, pitchDeg: 30, insetTop: 0, insetBottom: 0, anchor: undefined as unknown as NonNullable<StageSpec['anchor']>,
+      viewport: undefined as unknown as NonNullable<StageSpec['viewport']>, ...spec,
     };
     // remember where the follow camera stood and which way it looked (at the ranger)
     // before the reframe takes it
@@ -96,6 +107,18 @@ export class Stage {
 
   private plan(): void {
     const ctx = this.ctx;
+    const anchor = this.spec.anchor;
+    if (anchor) {
+      // an authored world spot (an adventure's beat): frame it from its heading, no search
+      const f = V(Math.sin(anchor.heading), 0, Math.cos(anchor.heading));
+      const fit = this.fitAt(V(anchor.x, 0, anchor.z), f);
+      this.fwd.copy(f);
+      this.right.set(-f.z, 0, f.x);
+      this.centre.copy(fit.P);
+      this.cam.copy(fit.cam);
+      this.look.copy(fit.look);
+      return;
+    }
     this.tall = this.tallBoxes();
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const R = V(ctx.player.x, 0, ctx.player.z);
@@ -150,8 +173,8 @@ export class Stage {
     const { halfW, halfD, tall, pitchDeg, insetTop, insetBottom } = this.spec;
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const rect = ctx.canvas.getBoundingClientRect();
-    const H = rect.height || 800;
-    const W = rect.width || 1280;
+    const H = this.spec.viewport?.h || rect.height || 800;
+    const W = this.spec.viewport?.w || rect.width || 1280;
     const yTop = 1 - (2 * (insetTop + 12)) / H;
     const yBot = -1 + (2 * (insetBottom + 12)) / H;
     const xLim = 1 - 24 / W * 2;
@@ -167,6 +190,12 @@ export class Stage {
         pts.push(g, g.clone().setY(g.y + tall));
       }
     }
+    const include: THREE.Vector3[] = [];
+    for (const t of this.spec.anchor?.include ?? []) { // (run 6) what must be in the picture too
+      const g = V(t.x, ctx.groundY(t.x, t.z), t.z);
+      pts.push(g, g.clone().setY(g.y + t.h));
+      include.push(g.clone().setY(g.y + t.h * 0.5));
+    }
     const tmp = new THREE.PerspectiveCamera(camera.fov, W / H, 0.1, 400);
     const pitch = (pitchDeg * Math.PI) / 180;
     const dir = f.clone().multiplyScalar(Math.cos(pitch)).setY(-Math.sin(pitch)); // lens → aim
@@ -178,6 +207,8 @@ export class Stage {
       for (let k = 0; k < 4; k++) {
         const look = P.clone().setY(P.y + lift);
         tmp.position.copy(look).addScaledVector(dir, -dist);
+        // (run 6) the ranger it must show stands well in FRONT of the lens, never under it
+        if (include.some((q) => q.clone().sub(tmp.position).dot(dir) < 1.6)) break;
         tmp.up.set(0, 1, 0);
         tmp.lookAt(look);
         tmp.updateMatrixWorld(true);

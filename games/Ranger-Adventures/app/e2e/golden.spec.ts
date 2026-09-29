@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { AREA_VELUWE } from '../src/content/veluwe';
 import { HAAR_OPTIES, OUTFIT_OPTIES } from '../src/core/avatar';
 import {
-  R, SEAT_TOLERANCE, budget, clickButton, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
+  R, SEAT_TOLERANCE, MAX_DRAW_CALLS, budget, clickButton, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
   sleep, snap, soft, step, uiText, under, visibleButtons, walkQuality, walkTo, worldChange, worldSamples, wrap,
   type Heli, type Hint, type P2, type Seat, type Vehicle,
 } from './golden-lib';
@@ -48,7 +48,7 @@ test.afterEach(async ({}, testInfo) => {
 });
 
 test('golden path: title → ranger → walk → jeep + heli → mission 1 by real clicks → reward → reload @golden', async ({ page }, testInfo: TestInfo) => {
-  test.setTimeout(10 * 60_000);
+  test.setTimeout(14 * 60_000); // run 6: mission 1 is an adventure in the world now (walks, a search, a route ...)
   shotDir = path.join(testInfo.project.outputDir, 'golden');
   fs.rmSync(shotDir, { recursive: true, force: true });
   fs.mkdirSync(shotDir, { recursive: true });
@@ -119,6 +119,40 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     note(`ArrowUp 1.5 s: walked ${fwd.moved} m, ${fwd.dir}° off the camera's forward`);
     soft(fwd.dir !== null && Math.abs(fwd.dir) <= 30, `forward does not walk forward: ${fwd.dir}° off the camera's direction`);
 
+    // run 6: the walk is brisk and Shift + ArrowUp runs, the view as calm as walking
+    type Pace = { v: number; running: boolean; hf: number; fov: number };
+    const pace = async (ms: number): Promise<Pace[]> => {
+      const out: Pace[] = [];
+      const t0 = Date.now();
+      while (Date.now() - t0 < ms) {
+        out.push(await R<Pace>(page, '({ v: r.motion().speed, running: r.motion().running, hf: r.cam().avatarScreen.heightFrac, fov: r.cam().fov })'));
+        await sleep(page, 50);
+      }
+      return out;
+    };
+    const med = (xs: number[]): number => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? NaN;
+    let walkPace: Pace[] = []; let runPace: Pace[] = [];
+    await page.keyboard.down('ArrowUp');
+    try {
+      await sleep(page, 600);
+      walkPace = await pace(700);
+      await page.keyboard.down('Shift');
+      await sleep(page, 700);
+      runPace = await pace(900);
+      await shot(page, 'running');
+    } finally {
+      await page.keyboard.up('Shift');
+      await page.keyboard.up('ArrowUp');
+    }
+    const vWalk = med(walkPace.map((p) => p.v)); const vRun = med(runPace.map((p) => p.v));
+    const hWalk = med(walkPace.map((p) => p.hf)); const hRun = med(runPace.map((p) => p.hf));
+    note(`Shift + ArrowUp runs: ArrowUp walks ${r2(vWalk)} m/s, Shift + ArrowUp runs ${r2(vRun)} m/s (run gait ${runPace.every((p) => p.running) ? 'on' : 'off'}); on screen he stays ${Math.round(100 * hWalk)} % → ${Math.round(100 * hRun)} % tall`);
+    soft(vWalk >= 2.1 && vWalk <= 2.5, `the walk is not brisk: ${r2(vWalk)} m/s (want 2.1-2.5)`);
+    soft(vRun >= 3.8 && vRun <= 4.6, `Shift + ArrowUp does not run: ${r2(vRun)} m/s (want 3.8-4.6)`);
+    soft(runPace.every((p) => p.running), 'running, the run gait is not on (rangerMotion().running)');
+    soft(Math.abs(hRun - hWalk) / hWalk <= 0.06, `running changes his size on screen: ${Math.round(100 * hWalk)} % → ${Math.round(100 * hRun)} %`);
+    soft(new Set([...walkPace, ...runPace].map((p) => p.fov)).size === 1, 'the FOV changed while running');
+
     // GOAL 2: the maker's choices on the 3D ranger (seen from the follow camera)
     await sleep(page, 800);
     const look = await renderedLook(page, {
@@ -178,16 +212,20 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const samples: (Vehicle & { contact: boolean })[] = [];
     await page.keyboard.down('KeyW');
     const t0 = Date.now();
+    let shifted = false;
     try {
       while (Date.now() - t0 < 3_000) {
         samples.push(await R<Vehicle & { contact: boolean }>(page, 'r.vehicle()'));
         if (samples.length === 20) await shot(page, 'jeep-driving');
+        // run 6: Shift runs on foot; in the jeep it does nothing
+        if (!shifted && Date.now() - t0 > 1_500) { shifted = true; await page.keyboard.down('Shift'); }
         await sleep(page, 100);
       }
-    } finally { await page.keyboard.up('KeyW'); }
+    } finally { await page.keyboard.up('KeyW'); await page.keyboard.up('Shift'); }
     const b = await R<Vehicle>(page, 'r.vehicle()');
     const moved = Math.hypot(b.x - a.x, b.z - a.z);
-    note(`hold W 3 s: the jeep moved ${r2(moved)} m, top speed ${r2(Math.max(...samples.map((s) => s.speed)))} m/s`);
+    note(`hold W 3 s: the jeep moved ${r2(moved)} m, top speed ${r2(Math.max(...samples.map((s) => s.speed)))} m/s (Shift held for the last 1.5 s)`);
+    soft(Math.max(...samples.map((s) => s.speed)) <= a.maxSpeed + 0.05, `Shift made the jeep faster than its top speed (${r2(Math.max(...samples.map((s) => s.speed)))} > ${a.maxSpeed} m/s)`);
     hard(moved >= 10, `holding W for 3 s moved the jeep only ${r2(moved)} m (want ≥ 10 m)`);
     soft(!samples.some((s) => s.contact), 'driving straight on from where the jeep is parked, it runs into something');
     const off = samples.filter((s) => !s.grounded || Math.abs(s.clearance) > 0.1);
@@ -291,12 +329,39 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const m = all?.find((x) => x.missionId === missionId);
     hard(!!m, `markers() has no marker for mission "${missionId}"`);
     marker = { x: m.x, z: m.z };
-    const w = await walkTo(page, marker, { until: (s) => s.near === missionId, timeout: 120_000 });
+    // run 6: while he walks up, which of the mission's animals living at its home come on
+    // screen (from the heli pad the family's wallow lies on the way, not past the marker)
+    const onWay = new Set<string>();
+    let walking = true;
+    const watching = (async () => {
+      while (walking) {
+        const keys = await R<string[] | null>(page, `(() => { const h = (r.residents() ?? []).find((x) => x.missionId === ${JSON.stringify(missionId)}); if (!h) return []; return h.actors.filter((a) => a.visible && a.key !== 'lost' && r.screenOf(a.x, (r.groundAt(a.x, a.z) ?? 0) + 0.35, a.z)?.onScreen).map((a) => a.key); })()`).catch(() => null);
+        for (const k of keys ?? []) onWay.add(k);
+        await sleep(page, 400);
+      }
+    })();
+    const w = await walkTo(page, marker, { until: (s) => s.near === missionId, timeout: 120_000 }).finally(() => { walking = false; });
+    await watching;
     walkQuality(w, `walk to "${missionId}"`);
     hard(w.res === 'until', `walking with the arrow keys never reached the "${missionId}" marker (${w.res} at ${r2(w.end.x)}, ${r2(w.end.z)}; marker at ${r2(marker.x)}, ${r2(marker.z)})`);
     await sleep(page, 1_000);
     await shot(page, 'at-marker');
     await budget(page, 'at the marker');
+    // run 6: an adventure's animals LIVE at its home, in view as he walks up (never out of nowhere)
+    const home = await R<{ state: string; actors: { key: string; x: number; z: number; visible: boolean }[] }[] | null>(page, 'r.residents()');
+    const fam = home?.find((h) => (h as unknown as { missionId: string }).missionId === missionId);
+    if (fam) {
+      const seen: string[] = [];
+      for (const a of fam.actors.filter((x) => x.visible && x.key !== 'lost')) {
+        const g = (await R<number | null>(page, `r.groundAt(${a.x}, ${a.z})`)) ?? 0;
+        const sc = await R<{ onScreen: boolean } | null>(page, `r.screenOf(${a.x}, ${g + 0.35}, ${a.z})`);
+        if (sc?.onScreen) seen.push(a.key);
+      }
+      note(`the family at its home: ${seen.join(', ') || 'none'} on screen from the marker; ${[...onWay].join(', ') || 'none'} seen on the way`);
+      const both = new Set([...seen, ...onWay]);
+      soft(both.has('sow') && both.size >= 3, `walking up to the marker the family is never in view (on screen at the marker: ${seen.join(', ') || 'none'}; on the way: ${[...onWay].join(', ') || 'none'})`);
+      soft(!fam.actors.some((a) => a.key === 'lost' && Math.hypot(a.x - marker.x, a.z - marker.z) < 2), 'the lost piglet stands in the marker ring (he should be hidden, heard)');
+    }
     seatsBefore = await worldSamples(page, marker, SEAT_RADIUS, 3);
     // The ranger stands at the marker, so the probe must see him there and tag him as the
     // player: otherwise step 7 would count his own steps as the world reacting.
@@ -335,55 +400,88 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const plan = mission.stappen.map((s) => s.ef as string);
     note(`"${mission.titel}": ${plan.join(' → ')}`);
     const base = (await save(page))?.trials ?? {};
-    type GameLog = { hints: number; clicks: number; answers: number; offScreen: string[]; hidden: string[]; buried: string[]; unseated: string[]; blocked: string[]; standIns: string[] };
+    // run 6: an adventure plays its steps as beats in the world, interleaved (the choices of
+    // one step before and after another's route): "won" = EVERY step's trial count went up
+    const need: Record<string, number> = {};
+    for (const ef of plan) need[ef] = (need[ef] ?? 0) + 1;
+    const wonOf = (sv: { trials: Record<string, number> } | null, ef: string): boolean => !!sv && (sv.trials[ef] ?? 0) - (base[ef] ?? 0) >= need[ef];
+    // an encounter card is answered by matching its question against the encounters of ANY step
+    const encounters = mission.stappen.flatMap((st) => ((st.skin as { encounters?: { vraag: string; opties: { label: string; goed: boolean }[] }[] }).encounters ?? []));
+    type GameLog = { hints: number; clicks: number; answers: number; walks: number; offScreen: string[]; hidden: string[]; buried: string[]; unseated: string[]; blocked: string[]; standIns: string[] };
     const logs: Record<string, GameLog> = {};
+    const log = (k: string): GameLog => (logs[k] ??= { hints: 0, clicks: 0, answers: 0, walks: 0, offScreen: [], hidden: [], buried: [], unseated: [], blocked: [], standIns: [] });
     const served2d = new Set<string>();
-    let idx = 0;
+    const won = new Set<string>();
     let lastProgress = Date.now();
-    let firstShot = true;
     let ended: number | null = null;
-    const deadline = Date.now() + 6 * 60_000;
-    const opening = async (ef: string): Promise<void> => {
-      if (!firstShot) return;
-      firstShot = false;
-      await shot(page, `${ef}-start`);
-      await budget(page, `during ${ef}`);
-    };
-    while (idx < plan.length && Date.now() < deadline) {
-      const ef = plan[idx];
-      const g = (logs[ef] ??= { hints: 0, clicks: 0, answers: 0, offScreen: [], hidden: [], buried: [], unseated: [], blocked: [], standIns: [] });
-      const animal = (mission.stappen[idx].skin as { dier?: string }).dier; // this step's target is an animal
-      // won? (the engine resolved: its skill record counted the trials)
+    let lastBeat = '';
+    let beats = 0;
+    let maxCalls = 0;
+    let stats: Record<string, number> = {};
+    const t6 = Date.now();
+    const deadline = Date.now() + 9 * 60_000;
+    const animalOf = (ef: string): string | undefined => (mission.stappen.find((s) => s.ef === ef)?.skin as { dier?: string } | undefined)?.dier;
+    while (won.size < Object.keys(need).length && Date.now() < deadline) {
       const sv = await save(page);
-      if (sv && (sv.trials[ef] ?? 0) > (base[ef] ?? 0)) {
-        note(`${ef}: won with ${g.clicks} mouse click(s) on 3D targets${g.answers ? ` and ${g.answers} answer button(s)` : ''}`);
-        await shot(page, `${ef}-won`);
-        idx += 1; firstShot = true; lastProgress = Date.now();
-        continue;
+      for (const ef of Object.keys(need)) {
+        if (!won.has(ef) && wonOf(sv, ef)) {
+          won.add(ef); lastProgress = Date.now();
+          const g = log(ef);
+          note(`${ef}: won${g.clicks ? ` with ${g.clicks} mouse click(s) on 3D targets` : ''}${g.answers ? ` and ${g.answers} answer button(s)` : ''}`);
+          await shot(page, `${ef}-won`);
+        }
+      }
+      if (won.size >= Object.keys(need).length) break;
+      const adv = await R<{ beat: string; stats: Record<string, number> } | null>(page, 'r.adventure()');
+      if (adv) stats = { ...stats, ...adv.stats };
+      const calls = await R<number | null>(page, 'r.drawCalls()');
+      if (calls !== null) maxCalls = Math.max(maxCalls, calls);
+      if (adv && adv.beat !== lastBeat) { // one screenshot per beat, once the lens has settled
+        lastBeat = adv.beat;
+        beats += 1;
+        await sleep(page, 1_200);
+        await shot(page, `beat-${adv.beat.replace(/[^a-z0-9]+/gi, '-')}`);
+        await budget(page, `at the "${adv.beat}" beat`);
       }
       const view = await R<string | null>(page, 'r.missionView');
       if ((await R<string>(page, 'r.screen')) === 'world' && view === null) {
         ended ??= Date.now();
-        hard(Date.now() - ended < 3_000, `the mission ended during "${ef}" without it being won (back in the free world)`);
+        hard(Date.now() - ended < 3_000, `the mission ended (back in the free world) before every step was won (won: ${[...won].join(', ') || 'none'})`);
       } else ended = null;
-      if (view === '2d' && !served2d.has(ef)) { served2d.add(ef); soft(false, `${ef} is served as a flat 2D panel, not in the 3D world`); }
+      if (view === '2d') for (const ef of plan) if (!won.has(ef) && !served2d.has(ef)) { served2d.add(ef); soft(false, `${ef} is served as a flat 2D panel, not in the 3D world`); }
       if (Date.now() - lastProgress > 45_000) {
-        await shot(page, `${ef}-stuck`);
-        hard(false, `${ef}: stuck for 45 s — no play hint (does the engine call registerPlayHint?), no known answer, no Verder button (visible buttons: ${await visibleButtons(page)})`);
+        await shot(page, 'stuck');
+        hard(false, `stuck for 45 s at "${lastBeat}" — no play hint, no known answer, no Verder or action button (visible buttons: ${await visibleButtons(page)})`);
       }
+      const ef = plan.find((e) => !won.has(e)) ?? plan[0];
 
-      // (a) a 3D target: click where the engine says a perfect player clicks next
+      // (a0) a walk: the ranger walks there with the arrow keys (the adventure's walk hint)
       const first = await R<Hint | null>(page, 'r.playHint()');
+      if (first?.walk) {
+        const g = log(`walk`);
+        const w = await walkTo(page, { x: first.walk.x, z: first.walk.z }, {
+          stopDist: first.walk.r, timeout: 90_000,
+          stopWhen: async () => (await R<Hint | null>(page, 'r.playHint()'))?.id !== first.id,
+        });
+        g.walks += 1;
+        walkQuality(w, `walk "${first.id}"`);
+        hard(w.res === 'arrived' || w.res === 'until', `walking to "${first.id}" with the arrow keys got ${w.res} at (${r2(w.end.x)}, ${r2(w.end.z)})`);
+        lastProgress = Date.now();
+        continue;
+      }
+      // (a) a 3D target: click where the engine says a perfect player clicks next
       if (first) {
-        await opening(ef);
         let h = first; // let a camera move settle: the target must hold still under the mouse
         for (let i = 0; i < 15; i++) {
           await sleep(page, 150);
           const h2 = await R<Hint | null>(page, 'r.playHint()');
-          if (!h2 || h2.id !== h.id) break;
+          if (!h2 || h2.id !== h.id || h2.walk) break;
           const still = Math.hypot(h2.x - h.x, h2.y - h.y) < 3; h = h2;
           if (still) break;
         }
+        if (h.walk) continue;
+        const key = adv?.beat ?? ef;
+        const g = log(key);
         g.hints += 1;
         if (!h.onScreen) g.offScreen.push(h.id);
         if (!h.firstHit) g.hidden.push(`"${h.id}" behind ${h.firstHitBy}`);
@@ -391,8 +489,9 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
         if (h.bottomGap !== null && Math.abs(h.bottomGap) > SEAT_TOLERANCE) g.unseated.push(`"${h.id}" ${h.bottomGap > 0 ? '+' : ''}${h.bottomGap} m`);
         if (!h.reachesCanvas) g.blocked.push(`"${h.id}" under ${h.blocker}`);
         // GOAL 6: the same real animal models as the world, not primitive stand-ins
-        if (animal && h.parts.length && h.parts.every((t) => t !== 'BufferGeometry')) g.standIns.push(`the ${animal} "${h.id}" is ${h.parts.join(' + ')}`);
-        hard(h.onScreen, `${ef}: the target "${h.id}" is off-screen (${h.x}, ${h.y}); a player cannot click it`);
+        const animal = animalOf(ef);
+        if (animal && h.id === 'target' && h.parts.length && h.parts.every((t) => t !== 'BufferGeometry')) g.standIns.push(`the ${animal} "${h.id}" is ${h.parts.join(' + ')}`);
+        hard(h.onScreen, `${key}: the target "${h.id}" is off-screen (${h.x}, ${h.y}); a player cannot click it`);
         const before = { id: h.id, text: await uiText(page), trials: JSON.stringify((await save(page))?.trials) };
         await page.mouse.click(h.x, h.y);
         g.clicks += 1;
@@ -400,51 +499,61 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
           const h3 = await R<Hint | null>(page, 'r.playHint()');
           return h3?.id !== before.id || (await uiText(page)) !== before.text || JSON.stringify((await save(page))?.trials) !== before.trials;
         }, { timeout: 10_000 }).toBe(true).then(() => true, () => false); // a click reacts within a frame or two; 4 s ran out in missions.spec at load ~80
-        hard(reacted, `${ef}: a real mouse click on "${h.id}" at (${h.x}, ${h.y}) did nothing` +
+        hard(reacted, `${key}: a real mouse click on "${h.id}" at (${h.x}, ${h.y}) did nothing` +
           (h.reachesCanvas ? '' : ` — the click lands on ${h.blocker}, not on the 3D scene`));
         lastProgress = Date.now();
         continue;
       }
 
       // (b) a choice round with DOM buttons (dagnacht): the right answer is the option
-      //     marked goed:true in the mission content (veluwe.ts step.skin.encounters),
-      //     picked by matching the question the card shows
-      const skin = mission.stappen[idx].skin as { encounters?: { vraag: string; opties: { label: string; goed: boolean }[] }[] };
-      if (skin.encounters?.length) {
-        const text = await uiText(page);
-        const enc = skin.encounters.find((e) => text.includes(e.vraag));
-        const right = enc?.opties.find((o) => o.goed)?.label;
-        const btn = right ? page.getByRole('button', { name: right, exact: true }).filter({ visible: true }).first() : null;
-        if (enc && right && btn && await btn.isVisible().catch(() => false) && await btn.isEnabled().catch(() => false)) {
-          await opening(ef);
-          await clickButton(page, right, `${ef} answer`);
-          g.answers += 1;
-          await expect.poll(async () => !(await uiText(page)).includes(enc.vraag), { timeout: 8_000 }).toBe(true).catch(() => {});
-          lastProgress = Date.now();
-          continue;
-        }
+      //     marked goed:true in the mission content, picked by matching the question the
+      //     card shows against the encounters of ANY step (run 6: they interleave)
+      const text = await uiText(page);
+      const enc = encounters.find((e) => text.includes(e.vraag));
+      const right = enc?.opties.find((o) => o.goed)?.label;
+      const btn = right ? page.getByRole('button', { name: right, exact: true }).filter({ visible: true }).first() : null;
+      if (enc && right && btn && await btn.isVisible().catch(() => false) && await btn.isEnabled().catch(() => false)) {
+        await clickButton(page, right, `${adv?.beat ?? ef} answer`);
+        log('dagnacht').answers += 1;
+        await expect.poll(async () => !(await uiText(page)).includes(enc.vraag), { timeout: 8_000 }).toBe(true).catch(() => {});
+        lastProgress = Date.now();
+        continue;
       }
 
-      // (c) a card to close: the find card, the raaf's fact
+      // (c) a card to close (a found card, the raaf's fact), or an action in the world
       if (await page.getByRole('button', { name: /^(Verder|Klaar)$/ }).filter({ visible: true }).count()) {
-        await clickButton(page, /^(Verder|Klaar)$/, `${ef} card`);
+        await clickButton(page, /^(Verder|Klaar)$/, `${adv?.beat ?? ef} card`);
         await sleep(page, 400);
         lastProgress = Date.now();
         continue;
       }
-      await sleep(page, 250); // a sequence is being shown: watch it, like a player
+      const act = page.locator('.adv-action').filter({ visible: true }).first();
+      if (await act.isVisible().catch(() => false)) {
+        const label = (await act.innerText()).trim();
+        await clickButton(page, label, `${adv?.beat ?? ef} action`);
+        lastProgress = Date.now();
+        continue;
+      }
+      await sleep(page, 250); // a sequence is being shown, an animal walks: watch it, like a player
     }
-    for (const [ef, g] of Object.entries(logs)) {
-      if (g.answers) note(`${ef}: answers taken from the content (the option marked goed, matched by the question on screen)`);
+    note(`the mission took ${((Date.now() - t6) / 1000).toFixed(0)} s for golden (${beats} beats); draw calls peaked at ${maxCalls}`);
+    for (const [key, g] of Object.entries(logs)) {
+      if (g.answers) note(`${key}: answers taken from the content (the option marked goed, matched by the question on screen)`);
       if (!g.hints) continue;
-      soft(g.offScreen.length === 0, `${ef}: ${g.offScreen.length}/${g.hints} hinted targets off-screen`);
-      soft(g.hidden.length === 0, `${ef}: ${g.hidden.length}/${g.hints} targets hidden, the first thing the ray hits is something else: ${[...new Set(g.hidden)].slice(0, 3).join('; ')}`);
-      soft(g.buried.length === 0, `${ef}: ${g.buried.length}/${g.hints} targets entirely under the rendered ground`);
-      soft(g.unseated.length === 0, `${ef}: targets not standing on the ground (±${SEAT_TOLERANCE * 100} cm): ${[...new Set(g.unseated)].slice(0, 3).join('; ')}`);
-      soft(g.blocked.length === 0, `${ef}: a click on the target lands on a DOM element: ${[...new Set(g.blocked)].slice(0, 2).join('; ')}`);
-      soft(g.standIns.length === 0, `${ef}: a primitive stand-in, not the real animal model: ${[...new Set(g.standIns)].slice(0, 2).join('; ')}`);
+      soft(g.offScreen.length === 0, `${key}: ${g.offScreen.length}/${g.hints} hinted targets off-screen`);
+      soft(g.hidden.length === 0, `${key}: ${g.hidden.length}/${g.hints} targets hidden, the first thing the ray hits is something else: ${[...new Set(g.hidden)].slice(0, 3).join('; ')}`);
+      soft(g.buried.length === 0, `${key}: ${g.buried.length}/${g.hints} targets entirely under the rendered ground`);
+      soft(g.unseated.length === 0, `${key}: targets not standing on the ground (±${SEAT_TOLERANCE * 100} cm): ${[...new Set(g.unseated)].slice(0, 3).join('; ')}`);
+      soft(g.blocked.length === 0, `${key}: a click on the target lands on a DOM element: ${[...new Set(g.blocked)].slice(0, 2).join('; ')}`);
+      soft(g.standIns.length === 0, `${key}: a primitive stand-in, not the real animal model: ${[...new Set(g.standIns)].slice(0, 2).join('; ')}`);
     }
-    hard(idx >= plan.length, `won ${idx}/${plan.length} mini-games before the time ran out (stuck in ${plan[idx]})`);
+    // run 6: the design's bar, measured (design run6-missions §3.9)
+    if (stats.cover_ratio !== undefined) {
+      note(`the hidden animal lies ${stats.lying_h} m high in cover ${stats.cover_h} m tall (×${stats.cover_ratio})`);
+      soft(stats.cover_ratio >= 2, `the cover is only ${stats.cover_ratio}× the hidden animal's lying height (want ≥ 2)`);
+    }
+    soft(maxCalls < MAX_DRAW_CALLS, `draw calls peaked at ${maxCalls} during the mission (budget < ${MAX_DRAW_CALLS})`);
+    hard(won.size >= Object.keys(need).length, `won ${won.size}/${Object.keys(need).length} mini-games before the time ran out (not won: ${plan.filter((e) => !won.has(e)).join(', ')})`);
     noNewErrors();
   });
 
@@ -464,7 +573,9 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const text = (await uiText(page)).toLowerCase();
     soft(text.includes(mission.titel.toLowerCase()), `no reward card naming "${mission.titel}"`);
     let clue = false;
-    for (let i = 0; i < 8; i++) { // click through to the world like a player: prefer "back to patrol"
+    // click through to the world like a player: prefer "back to patrol" (an adventure's
+    // ending may first take one calm look at something in the world: wait it out)
+    for (const tR = Date.now(); Date.now() - tR < 45_000;) {
       if (await page.getByRole('button', { name: /Verder op patrouille/ }).filter({ visible: true }).count()) {
         await clickButton(page, /Verder op patrouille/, 'reward');
       } else if (await page.getByRole('button', { name: /Kijk wat je vond|Bekijk de wildcamera/ }).filter({ visible: true }).count()) {
@@ -475,6 +586,20 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
         await clickButton(page, /^(Verder|Klaar)$/, 'reward');
       } else if ((await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null) break;
       await sleep(page, 700);
+    }
+    // run 6: an adventure's reunion happens at the family's home: the young ends by its mother
+    const places = await R<Record<string, P2> | null>(page, `r.missionPlaces(${JSON.stringify(missionId)})`);
+    const fam = (await R<{ missionId: string; state: string; actors: { key: string; x: number; z: number }[] }[] | null>(page, 'r.residents()'))
+      ?.find((h) => h.missionId === missionId);
+    if (places?.home && fam) {
+      const sow = fam.actors.find((a) => a.key === 'sow'), young = fam.actors.find((a) => a.key === 'lost');
+      if (sow && young) {
+        const gap = Math.hypot(sow.x - young.x, sow.z - young.z);
+        note(`at the home: the young ${r2(gap)} m from its mother, ${r2(Math.hypot(young.x - places.home.x, young.z - places.home.z))} m from the home place`);
+        soft(gap <= 2, `after the reunion the young stands ${r2(gap)} m from its mother (want ≤ 2 m)`);
+        soft(Math.hypot(young.x - places.home.x, young.z - places.home.z) < 3, 'the young is home at the wallow');
+        soft(fam.state === 'after', `the home is in its "after" state (it is "${fam.state}")`);
+      }
     }
     const hook = 'verhaalHaak' in mission ? mission.verhaalHaak : null; // the last mission has a payoff instead
     if (hook) soft(clue, `mission "${mission.id}" carries a clue (${hook}) but no clue card was offered`);
@@ -499,9 +624,13 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     await shot(page, 'back-in-world');
     const s = await snap(page);
     hard(!!s.p, 'no ranger position after the mission');
-    const dist = Math.hypot(s.p.x - marker.x, s.p.z - marker.z);
-    note(`the ranger stands ${r2(dist)} m from the finished marker`);
+    const places = await R<Record<string, P2> | null>(page, `r.missionPlaces(${JSON.stringify(missionId)})`);
+    const dM = Math.hypot(s.p.x - marker.x, s.p.z - marker.z);
+    const dH = places?.home ? Math.hypot(s.p.x - places.home.x, s.p.z - places.home.z) : Infinity;
+    const dist = Math.min(dM, dH);
+    note(`the ranger stands ${r2(dM)} m from the finished marker${places?.home ? `, ${r2(dH)} m from the mission's home` : ''}`);
     soft(dist <= 12, `back in the world ${r2(dist)} m away from the mission (teleported?)`);
+    // after a reload the family still lives at its home, in its after state (checked below)
     soft(!!s.g?.grounded, 'back in the world the ranger is not on the ground');
     const hud = await uiText(page);
     const offered = missions.find((m) => m.id !== missionId && hud.includes(m.titel));
@@ -528,6 +657,8 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     hard(!!sv?.voltooid[missionId], `after a reload mission "${missionId}" is no longer done`);
     await sleep(page, 2_500);
     await shot(page, 'after-reload');
+    const famR = (await R<{ missionId: string; state: string }[] | null>(page, 'r.residents()'))?.find((h) => h.missionId === missionId);
+    if (famR) soft(famR.state === 'after', `after a reload the family's home is in its "${famR.state}" state (want "after")`);
     const hud2 = await uiText(page);
     const offered2 = missions.find((m) => m.id !== missionId && hud2.includes(m.titel));
     soft(!!offered2 && (!offered || offered2.id === offered.id), `after a reload the HUD offers "${offered2?.titel ?? 'nothing'}"${offered ? ` instead of "${offered.titel}"` : ''}`);

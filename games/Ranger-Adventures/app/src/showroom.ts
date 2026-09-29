@@ -17,7 +17,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { assetUrl } from './core/assets.ts';
 // Pure, THREE-free canonical stand-height table (W3.7a) — the SAME source of
 // truth the live world reads, so `?scale=true` shows real relative sizes.
-import { standHeightFor } from './render3d/AnimalScale.ts';
+import { sizeRow } from './render3d/AnimalScale.ts';
 // W3.7b dossier look: the SAME coat-tint / eye-recipe / posture the live world
 // applies, so `?dress=true` shows the corrected cast (before = the raw pack look).
 import { applyEyes } from './render3d/EyeMaterial.ts';
@@ -106,10 +106,11 @@ function normalize(obj: THREE.Object3D, id: string): { top: number } {
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   // Default: fit the tallest DIMENSION to NORM (every tile the same size).
-  // True-scale: fit the model's HEIGHT to its canonical dossier stand height,
-  // matching `prepModel` in the live world; models with no dossier size
-  // (props/vehicles/birds) fall back to NORM auto-scale.
-  const stand = TRUE_SCALE ? standHeightFor(id) : null;
+  // True-scale: fit the cast's HEIGHT (people, animals, birds) to the scale table,
+  // matching `prepModel` in the live world; props, vehicles and trees (metres to tens
+  // of metres) keep the NORM auto-scale so they fit their tile.
+  const row = TRUE_SCALE ? sizeRow(id) : null;
+  const stand = row && (row.group === 'people' || row.group === 'animals' || row.group === 'birds') ? row.h : null;
   const s = stand !== null
     ? stand / (size.y || 1)
     : NORM / (Math.max(size.x, size.y, size.z) || 1);

@@ -34,6 +34,7 @@ import * as THREE from 'three';
 import type { Spawned, SpawnOpts } from '../play/types';
 import { fadeable, FarRest, setOpacity } from '../play/fade.ts';
 import { gaitFor, motionAt, REST, type MotionRecipe } from '../ProceduralMotion.ts';
+import { SIZE } from '../AnimalScale.ts';
 
 /* ------------------------------------------------------------ the tableaus ---- */
 
@@ -73,18 +74,17 @@ export interface Tableau {
 
 /**
  * The ending of every mission, from its content (veluwe.ts: `reunion`, `payoff`) and
- * the story canon (VISION §4a/§5). Sizes: the world's canonical ones (AnimalScale),
- * the young at their own size.
+ * the story canon (VISION §4a/§5). Sizes: the scale table's (AnimalScale), the young
+ * and the hinds at their own rows.
  */
 export const TABLEAUS: Record<string, Tableau> = {
-  // "De zeug knort blij. Haar big is terug." — the frisling home with its rotte
+  // "De moeder knort blij. Haar big is terug." — run 6: the rotte LIVES at its wallow
+  // (world/Residents.ts, adventure/missions/frisling.places.ts), before and after; the
+  // marker's ring stays empty (the piglet is hidden in the bracken, you hear him), and
+  // once he is home the "klaar" flag stands at it
   frisling: {
-    hero: 'frisling',
-    pieces: [
-      { id: 'wildzwijn', kind: 'animal', h: 0.8, a: 1.3, s: -1.9, face: 'hero', arrive: true },   // the sow
-      { id: 'frisling', kind: 'animal', a: 0.6, s: -1.05, face: 1.2, arrive: true },              // a sibling
-      { id: 'frisling', kind: 'animal', a: 1.9, s: -0.9, face: -0.9, arrive: true },              // and another
-    ],
+    hero: '',
+    pieces: [],
   },
   // payoff 'moeder-keert-terug': you left the calf alone, and its mother came back
   'ree-niet-aanraken': {
@@ -98,8 +98,8 @@ export const TABLEAUS: Record<string, Tableau> = {
   wildcamera: {
     hero: 'das',
     pieces: [
-      { id: 'prop-badger-sett', kind: 'prop', h: 0.7, a: 1.7, s: -1.5, face: 'lens' },
-      { id: 'prop-wildlife-camera', kind: 'prop', h: 0.3, a: 1.0, s: 2.0, face: 'hero', stake: 0.75 },
+      { id: 'prop-badger-sett', kind: 'prop', h: SIZE.dassenburcht.h, a: 1.7, s: -1.5, face: 'lens' },
+      { id: 'prop-wildlife-camera', kind: 'prop', h: SIZE.wildcamera.h, a: 1.0, s: 2.0, face: 'hero', stake: 0.75 },
     ],
     flag: { a: -0.4, s: -1.5 },
   },
@@ -107,8 +107,8 @@ export const TABLEAUS: Record<string, Tableau> = {
   ven: {
     hero: 'heikikker',
     pieces: [
-      { id: 'prop-reeds', kind: 'prop', h: 1.1, a: 1.2, s: -1.3, face: 'lens' },
-      { id: 'prop-reeds', kind: 'prop', h: 0.9, a: 1.5, s: 1.1, face: 1.4 },
+      { id: 'prop-reeds', kind: 'prop', h: SIZE.lisdodde.h, a: 1.2, s: -1.3, face: 'lens' },
+      { id: 'prop-reeds', kind: 'prop', h: SIZE.lisdodde.vary[0], a: 1.5, s: 1.1, face: 1.4 },
       { id: 'heikikker', kind: 'animal', a: 0.7, s: -0.7, face: 'hero', arrive: true },
     ],
   },
@@ -116,34 +116,34 @@ export const TABLEAUS: Record<string, Tableau> = {
   ecoduct: {
     hero: 'edelhert',
     pieces: [
-      { id: 'edelhert', kind: 'animal', h: 1.3, a: 1.5, s: -2.0, face: 1.4, arrive: true, antlers: false },
-      { id: 'edelhert', kind: 'animal', h: 0.85, a: 0.9, s: -1.3, face: 1.4, arrive: true, antlers: false },
+      { id: 'edelhert', kind: 'animal', h: SIZE.hinde.h, a: 1.5, s: -2.0, face: 1.4, arrive: true, antlers: false },
+      { id: 'edelhert', kind: 'animal', h: SIZE.hertenkalf.h, a: 0.9, s: -1.3, face: 1.4, arrive: true, antlers: false },
     ],
   },
   // "De nachtzwaluw blijft rustig op het nest." — a quiet zone, fenced off
   stuifzand: {
     hero: 'nachtzwaluw',
     pieces: [
-      { id: 'prop-wooden-fence', kind: 'prop', h: 0.7, a: 1.4, s: -1.1, face: 0.5 },
-      { id: 'prop-wooden-fence', kind: 'prop', h: 0.7, a: 1.4, s: 1.1, face: -0.5 },
-      { id: 'prop-heather-winter', kind: 'prop', h: 0.4, a: 0.5, s: 1.6, face: 'lens' },
+      { id: 'prop-wooden-fence', kind: 'prop', h: SIZE.hek.h, a: 1.4, s: -1.1, face: 0.5 },
+      { id: 'prop-wooden-fence', kind: 'prop', h: SIZE.hek.h, a: 1.4, s: 1.1, face: -0.5 },
+      { id: 'prop-heather-winter', kind: 'prop', h: SIZE.winterhei.h, a: 0.5, s: 1.6, face: 'lens' },
     ],
   },
   // payoff 'nachtronde': the night was kept safe — a calm dawn on the log
   nachtronde: {
     hero: 'edelhert',
     pieces: [
-      { id: 'prop-fallen-log', kind: 'prop', h: 0.5, a: 1.3, s: 1.9, face: 1.3 },
-      { id: 'raaf', kind: 'animal', a: 1.3, s: 1.9, lift: 0.42, face: 'lens' },
-      { id: 'prop-mushrooms', kind: 'prop', h: 0.3, a: 0.6, s: -1.6, face: 'lens' },
+      { id: 'prop-fallen-log', kind: 'prop', h: SIZE.boomstam.h, a: 1.3, s: 1.9, face: 1.3 },
+      { id: 'raaf', kind: 'animal', a: 1.3, s: 1.9, lift: 0.84 * SIZE.boomstam.h, face: 'lens' }, // on the log's back
+      { id: 'prop-mushrooms', kind: 'prop', h: SIZE.paddenstoelen.h, a: 0.6, s: -1.6, face: 'lens' },
     ],
   },
   // "Alle nootjes terug." — the winter store by the stump, and a friend
   eekhoorn: {
     hero: 'eekhoorn',
     pieces: [
-      { id: 'prop-tree-stump', kind: 'prop', h: 0.55, a: 1.4, s: -1.5, face: 'lens' },
-      { id: 'prop-acorn-cluster', kind: 'prop', h: 0.22, a: 0.7, s: -1.2, face: 'lens' },
+      { id: 'prop-tree-stump', kind: 'prop', h: SIZE.stronk.h, a: 1.4, s: -1.5, face: 'lens' },
+      { id: 'prop-acorn-cluster', kind: 'prop', h: SIZE.eikels.h, a: 0.7, s: -1.2, face: 'lens' },
       { id: 'eekhoorn', kind: 'animal', a: 0.8, s: 1.2, face: 'hero', arrive: true },
     ],
   },
@@ -151,8 +151,8 @@ export const TABLEAUS: Record<string, Tableau> = {
   vos: {
     hero: 'vos',
     pieces: [
-      { id: 'vos', kind: 'den', h: 0.45, a: 1.9, s: 1.5, face: -0.5 },
-      { id: 'vos', kind: 'animal', h: 0.3, a: 1.1, s: 2.5, face: 'hero', arrive: true },
+      { id: 'vos', kind: 'den', h: SIZE.vossenhol.h, a: 1.9, s: 1.5, face: -0.5 },
+      { id: 'vos', kind: 'animal', h: SIZE['vos-welp'].h, a: 1.1, s: 2.5, face: 'hero', arrive: true },
     ],
     flag: { a: -0.3, s: -1.4 },
   },
@@ -160,10 +160,10 @@ export const TABLEAUS: Record<string, Tableau> = {
   herstel: {
     hero: 'edelhert',
     pieces: [
-      { id: 'edelhert', kind: 'animal', h: 1.3, a: 1.4, s: -2.1, face: 1.3, arrive: true, antlers: false },
-      { id: 'edelhert', kind: 'animal', h: 0.85, a: 0.8, s: -1.4, face: 1.3, arrive: true, antlers: false },
-      { id: 'prop-snow-mound', kind: 'prop', h: 0.35, a: 2.0, s: 1.8, face: 'lens' },
-      { id: 'prop-snow-mound', kind: 'prop', h: 0.25, a: 2.6, s: -0.6, face: 1 },
+      { id: 'edelhert', kind: 'animal', h: SIZE.hinde.h, a: 1.4, s: -2.1, face: 1.3, arrive: true, antlers: false },
+      { id: 'edelhert', kind: 'animal', h: SIZE.hertenkalf.h, a: 0.8, s: -1.4, face: 1.3, arrive: true, antlers: false },
+      { id: 'prop-snow-mound', kind: 'prop', h: SIZE.sneeuwhoop.vary[1], a: 2.0, s: 1.8, face: 'lens' },
+      { id: 'prop-snow-mound', kind: 'prop', h: SIZE.sneeuwhoop.vary[0], a: 2.6, s: -0.6, face: 1 },
     ],
   },
 };
@@ -411,8 +411,13 @@ export class Progress {
     }
     if (!fresh || reduced) { this.settle(b); return; }
     // away from the marker nobody would see it: the family waits out of sight and
-    // comes home the first time the ranger comes to look (update)
-    if (!here) { if (b.live.some((l) => l.held)) b.later = true; return; }
+    // comes home the first time the ranger comes to look (update); the "klaar" flag
+    // rises at once (an adventure is finished where its family lives, not at the ring)
+    if (!here) {
+      if (b.live.some((l) => l.held)) b.later = true;
+      if (!b.flag.visible) { b.flag.visible = true; b.flag.userData.rise = 0; }
+      return;
+    }
     this.startReunion(b);
     await new Promise<void>((resolve) => this.waiters.push({ until: this.clock + REUNION_S, resolve }));
   }
@@ -527,14 +532,11 @@ export class Progress {
     const live: Live[] = [];
     await Promise.all(plans.map(async ({ p, h, at }, i) => {
       if (!at) return;
-      const s = p.kind === 'animal' ? await env.spawnModel(p.id, { height: h })
+      const s = p.kind === 'animal' ? await env.spawnModel(p.id, { height: h, antlers: p.antlers })
         : p.kind === 'den' ? earthDen(h)
         : await env.spawnPlant(p.id, h);
       if (!s) return;
       const root = s.root as THREE.Object3D;
-      if (p.antlers === false) {
-        root.traverse((o) => { if (/horn|antler|gewei/i.test(o.name)) o.visible = false; });
-      }
       if (p.stake) { // strapped to its post: the post stands on the ground, the prop on top
         const post = woodenStake(p.stake);
         root.add(post);

@@ -8,11 +8,12 @@
 import type { World } from '../../render3d/World';
 import {
   providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot,
-  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideGrounded, provideCam,
+  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGait, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
-  provideHeli, provideQuality, provideHint, provideBoundary,
+  provideHeli, provideQuality, provideHint, provideBoundary, provideMissionPlaces, provideResidents,
 } from '../../core/devhook';
+import { adventureFor } from '../../render3d/adventure/registry';
 import { triggerActivityWin } from '../../render3d/play/kit';
 
 /** Expose the live world's read-backs on the dev hook. */
@@ -27,6 +28,8 @@ export function wireWorldDevhook(world: World): void {
   provideClip(() => world.playerClip());              // W3.2: the ranger's active locomotion clip
   provideAvatar(() => world.avatarState());           // F-07: live ranger scale (measured bbox height)
   provideGroundSpeed(() => world.groundSpeed());      // F-08: live post-collision foot speed (m/s)
+  provideMotion(() => world.rangerMotion());          // run 6: where he is, his heading, speed, running
+  provideGait(() => world.playerGait());              // run 6: his legs (clip, cadence, stride) + sole probe
   provideGrounded(() => world.groundedState());       // D1.2: feet on the rendered terrain
   provideCam(() => world.camState());                 // F-05 ⊕ F-18: the REAL render camera read-back
   provideActors(() => world.actorClips());            // W3.3: warden + poacher baked clips
@@ -44,6 +47,8 @@ export function wireWorldDevhook(world: World): void {
   provideHeli(() => world.heliState());               // W5.3b: opt-in helicopter
   provideQuality(() => world.qualityState());         // W7.2: adaptive quality tier
   provideWinStep(() => triggerActivityWin());         // W2.3: E2E-only resolve of a 3D step
+  provideMissionPlaces((id) => { const p = adventureFor(id)?.home.places; return p ? { ...p } : null; }); // run 6
+  provideResidents(() => world.residents.read(), () => world.residents.moverSpots()); // run 6: the homes
 }
 
 /** Drop every world read-back (the world is gone). */
@@ -58,6 +63,8 @@ export function clearWorldDevhook(): void {
   provideClip(null);
   provideAvatar(null);
   provideGroundSpeed(null);
+  provideMotion(null);
+  provideGait(null);
   provideGrounded(null);
   provideCam(null);
   provideActors(null);
@@ -75,4 +82,6 @@ export function clearWorldDevhook(): void {
   provideHeli(null);
   provideQuality(null);
   provideHint(null);
+  provideMissionPlaces(null);
+  provideResidents(null, null);
 }

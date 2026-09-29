@@ -26,6 +26,7 @@ import { lodGeometries, lodMaterial } from '../Lod';
 import { heathCover } from '../GroundDetail';
 import { groundMaterial } from '../GroundMaterial';
 import { PADS, PAD_RADIUS } from './Vehicles';
+import { SIZE, spreadAt, type SizeKey } from '../AnimalScale';
 
 export { TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
 
@@ -40,24 +41,38 @@ const TREE_SCATTER_MIX: readonly TreeSpecies[] = ['prop-pine-scots', 'prop-pine-
 const NATURE_TREES = new Set<string>(['prop-pine-scots', 'prop-oak-tree', 'prop-birch-tree']);
 
 /**
- * W4.1 landmarks: [dev-hook id, GLB model, world x/z, target Y-height (m), footprint half
- * extents at that height (its own x/z, measured off the loaded models: a solid rectangle
- * turned with the landmark, wave 2), optional beacon label]. The watchtower is
- * deliberately the farthest — the W4.1 E2E walks spawn→watchtower. Each one faces the
- * clearing (rotation.y = atan2(−x, −z)).
+ * W4.1 landmarks: [dev-hook id, GLB model, world x/z, its row in the scale table, the
+ * footprint's half extents PER METRE of height (its own x/z, measured off the loaded
+ * models: a solid rectangle turned with the landmark, wave 2), optional beacon label].
+ * The watchtower is deliberately the farthest — the W4.1 E2E walks spawn→watchtower.
+ * Each one faces the clearing (rotation.y = atan2(−x, −z)).
  */
 const LANDMARKS: readonly {
-  id: string; model: string; x: number; z: number; height: number; foot: [number, number]; label?: string;
+  id: string; model: string; x: number; z: number; size: SizeKey; foot: [number, number]; label?: string;
 }[] = [
-  { id: 'prop-fire-watchtower', model: 'prop-fire-watchtower', x: 37, z: -37, height: 9, foot: [1.78, 1.86], label: 'Uitkijktoren' },
-  { id: 'prop-bird-hide', model: 'prop-bird-hide', x: 26, z: -11, height: 2.8, foot: [1.61, 1.49], label: 'Vogelkijkhut' },
-  { id: 'prop-ecoduct', model: 'prop-ecoduct', x: -70, z: 6, height: 6, foot: [7.74, 7.8], label: 'Ecoduct' },
-  { id: 'prop-boa-post', model: 'prop-boa-post', x: -56, z: -20, height: 3, foot: [2.18, 2.13], label: 'BOA-post' },
-  { id: 'prop-signpost', model: 'prop-signpost', x: 9, z: -8, height: 1.7, foot: [0.83, 0.29] },
-  { id: 'prop-signpost-west', model: 'prop-signpost', x: -16, z: 10, height: 1.7, foot: [0.83, 0.29] },
+  { id: 'prop-fire-watchtower', model: 'prop-fire-watchtower', x: 37, z: -37, size: 'uitkijktoren', foot: [0.198, 0.207], label: 'Uitkijktoren' },
+  { id: 'prop-bird-hide', model: 'prop-bird-hide', x: 26, z: -11, size: 'vogelkijkhut', foot: [0.575, 0.532], label: 'Vogelkijkhut' },
+  { id: 'prop-ecoduct', model: 'prop-ecoduct', x: -70, z: 6, size: 'ecoduct', foot: [1.29, 1.3], label: 'Ecoduct' },
+  { id: 'prop-boa-post', model: 'prop-boa-post', x: -56, z: -20, size: 'boa-post', foot: [0.727, 0.71], label: 'BOA-post' },
+  { id: 'prop-signpost', model: 'prop-signpost', x: 9, z: -8, size: 'wegwijzer', foot: [0.488, 0.171] },
+  { id: 'prop-signpost-west', model: 'prop-signpost', x: -16, z: 10, size: 'wegwijzer', foot: [0.488, 0.171] },
 ];
+/** A landmark's height (m) and footprint half extents (m) at that height. */
+const landmarkSize = (lm: typeof LANDMARKS[number]): { h: number; fx: number; fz: number } => {
+  const h = SIZE[lm.size].h;
+  return { h, fx: lm.foot[0] * h, fz: lm.foot[1] * h };
+};
 /** The landmarks' footprints: no plant grows inside one (no grass through a floor). */
-const LANDMARK_FEET: readonly Obstacle[] = LANDMARKS.map((lm) => boxObstacle(lm.x, lm.z, lm.foot[0], lm.foot[1], Math.atan2(-lm.x, -lm.z)));
+const LANDMARK_FEET: readonly Obstacle[] = LANDMARKS.map((lm) => { const f = landmarkSize(lm); return boxObstacle(lm.x, lm.z, f.fx, f.fz, Math.atan2(-lm.x, -lm.z)); });
+
+/** The heather dome's height above the ground at scale 1 (world/Plants.heatherGeometry):
+ *  a field's rendered heather height divided by it is the dome's vertical scale. */
+const HEATHER_DOME_H = 0.27;
+
+/** The ranger cabin by the spawn clearing, and its footprint's half extents per metre of
+ *  its height (the GLB, porch included). */
+export const CABIN_AT = { x: -6.5, z: -6 } as const;
+const CABIN_FOOT: readonly [number, number] = [0.657, 0.633];
 
 /** The forest beyond the rim's material (Terrain.buildFarForest), made once a session. */
 let farMat: THREE.MeshLambertMaterial | null = null;
@@ -95,6 +110,9 @@ export class Dressing {
   // The furthest-out radius any LOW ground-tuft (heather/marram) landed at — reported on
   // the dev hook's boundary read-back.
   scatterMax = 0;
+  // Run 6: ground a mission's home keeps bare (a wallow's mud, a rooting field's turned
+  // earth): no scattered heather or grass grows through it. Set before the scatter.
+  clearings: readonly { x: number; z: number; r: number }[] = [];
   // P1.3 tree canopy: the instant cone/cylinder stand-ins (dropped once the Forest is
   // ready) and every tree placement: the bos scatter, the rim tree-line and the grove
   // trees of the nature dressing. The camera rig tests its crowns against these.
@@ -212,7 +230,10 @@ export class Dressing {
     // hut BESIDE the back-turned ranger (see the rotation.y = π spawn) for the F-07
     // proportion shot AND the F-09 hub in the first frame. Sun from −x/+z still
     // throws the cabin shadow −z AWAY from the lit spawn. Its door faces spawn (below).
-    const cabinAt = new THREE.Vector3(-4.2, 0, -4);
+    // Run 6: at its true size (4.5 m, a door the warden walks through) it stands further
+    // out, (−6.5, −6): the same bearing from the lens, as big in the first frame, and its
+    // turned footprint (x ≤ −2.4) keeps even further off the x≈0 lane.
+    const cabinAt = new THREE.Vector3(CABIN_AT.x, 0, CABIN_AT.z);
     cabinAt.y = this.groundY(cabinAt.x, cabinAt.z);
     this.cabinPos = cabinAt.clone(); // F-09: hub-in-frustum test reads this
     const cabin = new THREE.Group();
@@ -220,12 +241,13 @@ export class Dressing {
     cabin.rotation.y = Math.atan2(-cabinAt.x, -cabinAt.z); // face the spawn point
     cabin.add(this.proceduralCabin());
     this.scene.add(cabin);
-    // wave 2: the cabin's real footprint (the GLB at 3 m tall, porch included: 3.9 × 3.8 m),
-    // turned with it, so the ranger cannot step onto the porch (the old r = 2 circle let him)
-    this.obstacles.push(boxObstacle(cabinAt.x, cabinAt.z, 1.97, 1.9, cabin.rotation.y));
+    // wave 2: the cabin's real footprint (porch included: 1.31 × 1.27 of its height,
+    // measured off the GLB), turned with it, so the ranger cannot step onto the porch
+    const H = SIZE.boshut.h;
+    this.obstacles.push(boxObstacle(cabinAt.x, cabinAt.z, CABIN_FOOT[0] * H, CABIN_FOOT[1] * H, cabin.rotation.y));
     void loadModel('prop-ranger-cabin').then((m) => {
       if (!m) return;
-      const prepped = prepModel(m, 3.0);
+      const prepped = prepModel(m, H);
       enableCast(prepped); // W4.5: the spawn cabin is a hero prop near the player
       cabin.remove(...cabin.children);
       cabin.add(prepped);
@@ -483,25 +505,25 @@ export class Dressing {
     const heather = this.gridSpots('heide', 2.3 * thin, 11, (x, z, h) => heathCover(x, z) > 0.32 + h * 0.3);
     this.addField('heide-heather', heatherGeometry(5), plantMaterial(), heather.map((p, i) => ({
       x: p.x, y: this.groundY(p.x, p.z), z: p.z,
-      s: 0.75 + p.h * 0.7, sy: 0.7 + p.h * 0.6, rotY: i * 2.39996,
+      s: 0.75 + p.h * 0.7, sy: spreadAt('struikhei', p.h) / HEATHER_DOME_H, rotY: i * 2.39996,
       tint: up.setRGB(0.9 + p.h * 0.2, 0.9 + ((i * 7) % 5) * 0.03, 0.9 + p.h * 0.15).clone(),
     })), 50, 0, { geometry: heatherGeometry(5, 60), from: 16 });
     const heideGrass = this.gridSpots('heide', 3.1 * thin, 23, (x, z, h) => heathCover(x, z) < 0.55 + h * 0.2);
     this.addField('heide-grass', tuftGeometry({ blades: 16, seed: 3, root: '#5f5a30', tip: '#d2bd7e', lean: 0.32 }), plantMaterial(),
-      heideGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.45 + p.h * 0.35, rotY: i * 1.7, phase: (i % 7) * 0.9 })), 40, 0.8);
+      heideGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: spreadAt('heidegras', p.h), rotY: i * 1.7, phase: (i % 7) * 0.9 })), 40, 0.8);
     // stuifzand: helmgras tussocks, grey-green to straw, full sway in the open
     const marram = this.gridSpots('stuifzand', 2.9 * thin, 37, (_x, _z, h) => h < 0.62);
     this.addField('stuifzand-helmgras', tuftGeometry({ blades: 22, seed: 5, root: '#6c7552', tip: '#dccf9e', lean: 0.24, width: 0.03 }), plantMaterial(),
-      marram.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.45, rotY: i * 2.1, phase: (i % 7) * 0.9 })), 48, 1);
+      marram.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: spreadAt('helmgras', p.h), rotY: i * 2.1, phase: (i % 7) * 0.9 })), 48, 1);
     // the ven sector away from the water is wet heath: pijpenstrootje tussocks and
     // pinker dopheide between them
     const dryVen = (x: number, z: number): boolean => Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) > VEN_SHORE_R + 1;
     const wetGrass = this.gridSpots('ven', 2.6 * thin, 61, (x, z, h) => dryVen(x, z) && h < 0.7);
     this.addField('ven-pijpenstrootje', tuftGeometry({ blades: 18, seed: 7, root: '#5c6536', tip: '#cdbd82', lean: 0.34 }), plantMaterial(),
-      wetGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.5 + p.h * 0.4, rotY: i * 1.9, phase: (i % 7) * 0.9 })), 40, 0.8);
+      wetGrass.map((p, i) => ({ x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: spreadAt('pijpenstrootje', p.h), rotY: i * 1.9, phase: (i % 7) * 0.9 })), 40, 0.8);
     const dopheide = this.gridSpots('ven', 3.4 * thin, 67, (x, z, h) => dryVen(x, z) && heathCover(x, z) > 0.45 + h * 0.3);
     this.addField('ven-dopheide', heatherGeometry(9), plantMaterial(), dopheide.map((p, i) => ({
-      x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.5, sy: 0.6 + p.h * 0.4, rotY: i * 2.39996,
+      x: p.x, y: this.groundY(p.x, p.z), z: p.z, s: 0.6 + p.h * 0.5, sy: spreadAt('dopheide', p.h) / HEATHER_DOME_H, rotY: i * 2.39996,
       tint: new THREE.Color(1.02, 0.9, 1.0),
     })), 44, 0, { geometry: heatherGeometry(9, 60), from: 16 });
     // the GLB plants stream in: ferns under the bos trees, lisdodde round the ven
@@ -516,7 +538,7 @@ export class Dressing {
       const [geo, far] = lodGeometries('prop-fern@1', prepModel(fern, 1), [2000, 600]);
       const spots = this.gridSpots('bos', 4.2 * thin, 53, (_x, _z, h) => h < 0.45);
       if (geo && far) this.addField('bos-varen', geo, lodMaterial(), spots.map((p, i) => ({
-        x: p.x, y: this.groundY(p.x, p.z) - 0.02, z: p.z, s: 0.55 + p.h * 0.5, rotY: i * 2.39996,
+        x: p.x, y: this.groundY(p.x, p.z) - 0.02, z: p.z, s: spreadAt('adelaarsvaren', p.h), rotY: i * 2.39996,
         // late-summer bracken in the shade: olive, some already turning bronze
         tint: new THREE.Color(0.72 + p.h * 0.25, 0.68 + p.h * 0.08, 0.42),
       })), 40, 0, { geometry: far, from: 14 });
@@ -535,7 +557,7 @@ export class Dressing {
       const z = bz + Math.sin(ang) * rad;
       const gy = this.groundY(x, z);
       if (gy < WATER_LEVEL - 0.3 || gy > WATER_LEVEL + 1.0) continue; // keep the reed belt right at the shore
-      spots.push({ x, y: gy - 0.03, z, s: 1.3 + (i % 4) * 0.18, rotY: ang * 3.1, phase: (i % 5) * 1.3 });
+      spots.push({ x, y: gy - 0.03, z, s: spreadAt('lisdodde', (i % 4) / 3), rotY: ang * 3.1, phase: (i % 5) * 1.3 });
     }
     void thin;
     this.addField('ven-lisdodde', geo, lodMaterial(), spots, 62, 0.7);
@@ -577,6 +599,7 @@ export class Dressing {
       if (distanceToNetwork(x, z) < LANE_HALF + 0.6) continue;  // the paths stay bare sand
       if (PADS.some((p) => Math.hypot(x - p.x, z - p.z) < PAD_RADIUS + 0.9)) continue; // nothing grows through a helipad (breaker B9)
       if (LANDMARK_FEET.some((o) => obstacleGap(o, x, z) < 0.3)) continue;       // ...nor through a landmark's floor
+      if (this.clearings.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) continue; // ...nor through a mission home's mud
       const h = hash2(gx, gz, seed + 2);
       if (!keep(x, z, h)) continue;
       if (r > this.scatterMax) this.scatterMax = r;                // furthest low plant (dev hook)
@@ -636,6 +659,7 @@ export class Dressing {
    */
   placeLandmarks(): void {
     for (const lm of LANDMARKS) {
+      const f = landmarkSize(lm);
       const at = new THREE.Vector3(lm.x, this.groundY(lm.x, lm.z), lm.z);
       const group = new THREE.Group();
       group.position.copy(at);
@@ -643,15 +667,15 @@ export class Dressing {
       group.add(proceduralTotem(lm.label ? '#c8a36a' : '#8a7a5a')); // instant stand-in
       if (lm.label) {
         const label = this.labels.make(lm.label, '#e8d6a8');
-        label.position.y = lm.height * 0.55 + 1.4;
+        label.position.y = f.h * 0.55 + 1.4;
         group.add(label);
       }
       this.scene.add(group);
-      this.obstacles.push(boxObstacle(lm.x, lm.z, lm.foot[0], lm.foot[1], group.rotation.y));
+      this.obstacles.push(boxObstacle(lm.x, lm.z, f.fx, f.fz, group.rotation.y));
       this.landmarks.push({ id: lm.id, x: lm.x, z: lm.z });
       void loadModel(lm.model).then((m) => {
         if (!m) return;
-        const prepped = prepModel(m, lm.height);
+        const prepped = prepModel(m, f.h);
         if (lm.id === 'prop-ecoduct') {
           // a green wildlife bridge, not a grey block (parent B11): its bare concrete slab
           // is painted as soil and plants, and the slab's 0.3 m edge is sunk into the heath
@@ -680,31 +704,36 @@ export class Dressing {
    * deterministic; a procedural totem stands in until each GLB streams in.
    */
   placeNatureDressing(): void {
-    // per-model stand height (m, prepModel target) + collision radius (0 = none)
+    // per-model height (m: its row in the scale table) + collision radius (0 = none).
+    // The grove trees stand at their grown base height (their own slight variety below).
     const SPEC: Record<string, { h: number; collide: number }> = {
-      'prop-pine-scots': { h: 5.5, collide: 0.7 },
-      'prop-oak-tree': { h: 5.0, collide: 0.7 },
-      'prop-birch-tree': { h: 5.5, collide: 0.7 },
-      'prop-tree-stump': { h: 0.7, collide: 0.5 },
-      'prop-fallen-log': { h: 0.7, collide: 0.7 },
-      'prop-dead-snag': { h: 3.5, collide: 0.6 },
-      'prop-boulder': { h: 1.1, collide: 0.9 },
-      'prop-juniper-bush': { h: 1.1, collide: 0.7 },
-      'prop-mushrooms': { h: 0.35, collide: 0 },
-      'prop-fern': { h: 0.6, collide: 0 },
-      'prop-foxglove': { h: 0.8, collide: 0 },
-      'prop-reeds': { h: 1.1, collide: 0 },
+      'prop-pine-scots': { h: SIZE.den.h, collide: 0.7 },
+      'prop-oak-tree': { h: SIZE.eik.h, collide: 0.7 },
+      'prop-birch-tree': { h: SIZE.berk.h, collide: 0.7 },
+      'prop-tree-stump': { h: SIZE.stronk.h, collide: 0.5 },
+      'prop-fallen-log': { h: SIZE.boomstam.h, collide: 0.7 },
+      'prop-dead-snag': { h: SIZE['dode-boom'].h, collide: 0.6 },
+      'prop-boulder': { h: SIZE.kei.h, collide: 0.9 },
+      'prop-juniper-bush': { h: SIZE.jeneverbes.h, collide: 1.0 },
+      'prop-mushrooms': { h: SIZE.paddenstoelen.h, collide: 0 },
+      'prop-fern': { h: SIZE.adelaarsvaren.h, collide: 0 },
+      'prop-foxglove': { h: SIZE.vingerhoedskruid.h, collide: 0 },
+      'prop-reeds': { h: SIZE.lisdodde.h, collide: 0 },
     };
     // [model, x, z] — curated + validated placements per §4.
     const PLACES: [string, number, number][] = [
-      // Watchtower bos grove (POI 37,-37): trees + a real forest floor
-      ['prop-pine-scots', 33, -40], ['prop-oak-tree', 41, -40], ['prop-birch-tree', 34, -33],
+      // Watchtower bos grove (POI 37,-37): trees + a real forest floor. Run 6: grown, the
+      // trees stand far enough out that no crown reaches into the tower (a spreading oak
+      // would need ~10 m, so pines and a birch).
+      ['prop-pine-scots', 31.5, -41.5], ['prop-pine-scots', 42.5, -42], ['prop-birch-tree', 44.5, -45],
       ['prop-tree-stump', 31, -37], ['prop-mushrooms', 46, -42], ['prop-fern', 30, -42],
-      ['prop-dead-snag', 44, -42], ['prop-fallen-log', 35, -43],
-      // Ecoduct approach grove (POI -70,6)
-      ['prop-pine-scots', -64, 10], ['prop-birch-tree', -66, 1], ['prop-pine-scots', -73, 12], ['prop-fern', -61, 4],
-      // BOA-post trees (POI -56,-20)
-      ['prop-oak-tree', -51, -24], ['prop-birch-tree', -60, -15],
+      ['prop-dead-snag', 45.5, -40.5], ['prop-fallen-log', 35, -43],
+      // Ecoduct approach grove (POI -70,6): beside the bridge, out of its footprint (grown
+      // trees would stand through its deck)
+      ['prop-pine-scots', -63, 18.5], ['prop-birch-tree', -66, -6.5], ['prop-pine-scots', -70.5, 18.5], ['prop-fern', -61, 4],
+      // BOA-post trees (POI -56,-20): birches, whose crowns start above its roof and clear
+      // helipad B's rotor
+      ['prop-birch-tree', -51, -24], ['prop-birch-tree', -60, -15],
       // Bird-hide + ven shore reeds (POI 26,-11, basin 46,-19 dry shore)
       ['prop-fern', 23, -14], ['prop-reeds', 33, -8], ['prop-reeds', 38, -4], ['prop-reeds', 43, -2],
       ['prop-reeds', 30, -13], ['prop-reeds', 49, -2], ['prop-reeds', 56, -35],
@@ -721,7 +750,7 @@ export class Dressing {
       if (NATURE_TREES.has(model)) {
         // a grove tree joins the forest: the same instanced GLB, its detail and its fade
         const species = model as TreeSpecies;
-        groveTrees.push({ x, y: this.groundY(x, z), z, s: spec.h / TREE_BASE_H[species], rotY: (i * 2.39996) % (Math.PI * 2), species });
+        groveTrees.push({ x, y: this.groundY(x, z), z, s: (spec.h / TREE_BASE_H[species]) * (0.9 + (i % 3) * 0.06), rotY: (i * 2.39996) % (Math.PI * 2), species });
         this.obstacles.push({ x, z, r: spec.collide });
         this.props.push({ id: model, x, z });
         return;
@@ -734,9 +763,10 @@ export class Dressing {
       this.scene.add(group);
       // small dressing is not drawn once the fog has it (a 12k-triangle mushroom at 60 m
       // is a few grey pixels): low plants from 36 m, logs, stumps and boulders from 50 m
-      if (spec.h <= 1.1) this.farProps.push({ group, x, z, far: spec.collide > 0 ? 50 : 36 });
+      if (spec.h <= 1.8) this.farProps.push({ group, x, z, far: spec.collide > 0 ? 50 : 36 });
       if (model === 'prop-fallen-log') {
-        this.obstacles.push(boxObstacle(x, z, 1.09, 0.32, group.rotation.y)); // a log is long, not round
+        // a log is long, not round: its footprint (half 1.56 × 0.46 of its height, the GLB)
+        this.obstacles.push(boxObstacle(x, z, 1.56 * spec.h, 0.46 * spec.h, group.rotation.y));
       } else if (spec.collide > 0) {
         // a real tree also tells the follow camera where its foliage is (never a lens in the leaves)
         const crown = model === 'prop-pine-scots' || model === 'prop-oak-tree' || model === 'prop-birch-tree'
@@ -775,6 +805,7 @@ export class Dressing {
     );
     roof.position.y = 2.3; roof.rotation.y = Math.PI / 4;
     g.add(wall, roof);
+    g.scale.setScalar(SIZE.boshut.h / 2.8); // the stand-in stands as tall as the cabin
     return g;
   }
 

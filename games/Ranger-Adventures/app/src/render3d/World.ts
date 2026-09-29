@@ -44,12 +44,39 @@ import { store } from '../core/state';
 import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, bootTier, coarsePointer, lightMode, pixelRatioFor, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import type { WayCue } from './Wayfinding';
-import type { WorldCtx } from './play/types';
+import type { RangerMotion, WorldCtx } from './play/types';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
 import { cachedResource } from './Models';
 import { Progress } from './world/Progress';
+import { Residents, type DressingBuilder, type FrameView } from './world/Residents';
+import { Stage } from './play/stage';
+import type { HomeSpec } from './adventure/types';
 
 export type { WorldMarker } from './world/Markers';
+
+/**
+ * Run 6 · the in-world adventure mode (design §3.3): while a mission with an adventure
+ * plays, the world stays LIVE (walking, the follow camera, fauna, sky, the homes'
+ * animals) but offers nothing else: no marker or vehicle prompt, no marker labels, no
+ * wayfinding (the adventure's own HUD points), the interact key does nothing for them.
+ * `input` 'locked' ignores the keys, the stick and a tap on the ground (a
+ * `walkRangerTo` target still walks him; the canvas pointer belongs to the adventure's
+ * picking); `camera` 'held' leaves the lens to the adventure (its framed beats), and
+ * handing it back to 'follow' eases from where it was (a cut under reduced motion).
+ */
+export interface MissionMode {
+  missionId: string;
+  input: 'free' | 'locked';
+  camera: 'follow' | 'held';
+}
+
+/** A mission's home, built with the world (world/Residents.ts). */
+export interface WorldHome {
+  spec: HomeSpec;
+  build?: DressingBuilder;
+  /** ground its mud / turned earth keeps bare of the heath scatter */
+  clearings?: readonly { x: number; z: number; r: number }[];
+}
 
 /**
  * Free what a torn-down world made on the GPU, and nothing the GLB cache owns. The world
@@ -136,6 +163,13 @@ export class World {
   // for `taskInView`, so a game-3D reframe that lands off the playfield / on a
   // backside is caught. Set in ctx(), cleared in endActivity(); null in free-roam.
   private activityFocus: { x: number; y: number; z: number } | null = null;
+  // Run 6: the adventure mode (see MissionMode), the per-frame hooks an adventure
+  // registers, and a programmatic walk the adventure asked for (walkRangerTo).
+  private mode: MissionMode | null = null;
+  private readonly frameFns = new Set<(dt: number, t: number) => void>();
+  private walkGoal: { x: number; z: number; near: number; done: (ok: boolean) => void } | null = null;
+  /** the animals that live at the missions' homes, and the homes (world/Residents.ts) */
+  readonly residents: Residents;
 
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
@@ -177,6 +211,7 @@ export class World {
     activeId: string | null = null,
     onBiome: (biome: Biome) => void = () => {},
     onInteract: (missionId: string) => void = () => {},
+    opts: { homes?: readonly WorldHome[] } = {},
   ) {
     this.canvas = canvas;
     this.onBiome = onBiome;
@@ -191,6 +226,7 @@ export class World {
     this.dressing = new Dressing({
       scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits, labels: this.labels,
     });
+    this.dressing.clearings = (opts.homes ?? []).flatMap((h) => h.clearings ?? []);
     this.fauna = new Fauna({ scene: this.scene, terrain: this.terrain });
     this.pois = new Markers(
       { scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, labels: this.labels, limits: this.limits },
@@ -202,7 +238,7 @@ export class World {
         terrain: this.terrain, obstacles: this.obstacles, limits: this.limits,
       },
       {
-        pointerBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
+        pointerBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli || this.player.inputLocked,
         orbitDrag: (dx, dy) => this.cam.orbitDrag(dx, dy),
         tapTargets: () => this.tapTargets(),
         crossBiome: (here) => this.crossBiome(here),
@@ -224,6 +260,7 @@ export class World {
         movers: (visit) => { // every frame: no allocation (review PERF-2)
           for (const a of this.fauna.scenicActors) visit(a.group.position.x, a.group.position.z, 'person', a.height);
           for (const a of this.fauna.ambient) if (a.id.startsWith('animal-')) visit(a.group.position.x, a.group.position.z, 'animal', a.h);
+          this.residents?.movers((x, z, h) => visit(x, z, 'animal', h)); // the homes' animals too
         },
         markers: () => this.pois.list,
       },
@@ -239,6 +276,7 @@ export class World {
           for (const m of this.pois.list) { const p = m.group.position; visit(p.x, p.y, p.z, 1.0); }
           for (const a of this.fauna.scenicActors) { const p = a.group.position; visit(p.x, p.y, p.z, a.height); }
           for (const a of this.fauna.ambient) if (!a.glide) { const p = a.group.position; visit(p.x, p.y, p.z, a.h); }
+          this.residents?.movers((x, z, h) => visit(x, this.terrain.y(x, z), z, h));
         },
       },
     );
@@ -274,6 +312,12 @@ export class World {
       markers: () => this.markers.map((m) => ({ missionId: m.missionId, x: m.pos.x, z: m.pos.z, group: m.group })),
       actors: () => this.fauna.scenicActors.map((a) => a.group.position),
     });
+    // the missions' homes: their dressing and their animals, before (or after) each mission
+    this.residents = new Residents({
+      scene: this.scene, lensFor: (v) => this.frameLens(v), groundY: (x, z) => this.terrain.y(x, z), spawnModel, spawnPlant, heightFor,
+      obstacles: this.obstacles, limits: this.limits, reduced: () => livePolicy().reduced,
+    });
+    for (const h of opts.homes ?? []) this.residents.add(h.spec, h.build);
 
     this.readback = new DevReadback(
       {
@@ -300,7 +344,7 @@ export class World {
    * what the action is (open the mission briefing).
    */
   private tryInteract(): void {
-    if (this.activityActive || this.menuOpen()) return;
+    if (this.activityActive || this.menuOpen() || this.mode) return; // an adventure offers nothing else
     // W5.1/W5.3b: the jeep + helicopter own the interact key while riding and when
     // standing beside a parked one — they win over the hub/marker affordances.
     if (this.vehicles.interact()) return;
@@ -459,6 +503,17 @@ export class World {
     return this.player.groundSpeed();
   }
 
+  /** Dev-hook accessor (run 6): the ranger's gait and his soles (the foot-slip probe). */
+  playerGait(): ReturnType<Player['gait']> {
+    return this.player.gait();
+  }
+
+  /** How the ranger moves right now: where he stands, his heading, his ground speed
+   *  (m/s) and whether he runs. Live; the missions' animals and the dev hook read it. */
+  rangerMotion(): RangerMotion {
+    return this.player.motion();
+  }
+
   /** Dev-hook accessor (F-07): the player ranger's live rendered height (m). */
   avatarState(): { height: number } | null {
     return this.player.avatarState();
@@ -487,9 +542,11 @@ export class World {
   }
 
   /** Register the on-screen joystick's live-vector source (W1.3). The HUD wires
-   *  it on world entry; pass null to clear. Fused with held keys each frame. */
-  setJoystick(source: (() => StickVector | null) | null): void {
+   *  it on world entry; pass null to clear. Fused with held keys each frame. `onRun`
+   *  hears whether the stick has him running (its ring shows it, run 6). */
+  setJoystick(source: (() => StickVector | null) | null, onRun: ((running: boolean) => void) | null = null): void {
     this.player.joystickSource = source;
+    this.player.stickRunFeedback = onRun;
   }
 
   /** Register the "Camera draait mee" setting source (W1.5). Read live each frame
@@ -513,6 +570,10 @@ export class World {
     this.dressing.setCanopyOpacity(1);
     this.player.setAvatarOpacity(1);
     this.player.dispose(); // pointer seam + keys
+    this.frameFns.clear();
+    this.walkGoal?.done(false);
+    this.walkGoal = null;
+    this.residents.dispose();
     this.canvas.removeEventListener('wheel', this.cam.onWheel); // F-16 dolly zoom
     Sound.engineStop(); // W5.2: never leak the engine loop past teardown
     disposeScene(this.scene);
@@ -627,6 +688,116 @@ export class World {
     return true;
   }
 
+  /* ------------------------------------------------ run 6: the adventure mode ---- */
+
+  /** Enter, change or leave (null) the adventure mode (see `MissionMode`). */
+  setMissionMode(m: MissionMode | null): void {
+    const was = this.mode;
+    this.mode = m;
+    const lock = !!m && m.input === 'locked';
+    // locking the input drops any walk he was still doing on his own (a tap target)
+    if (lock && !this.player.inputLocked && !this.walkGoal) this.player.target.copy(this.ranger.position).setY(0);
+    this.player.inputLocked = lock;
+    if (m && !was) {
+      // the marker's ring and its name step away for the whole adventure; no prompt stays up
+      this.pois.setLabelsVisible(false);
+      this.pois.hideForActivity(m.missionId);
+      this.pois.clearForVehicle();
+      this.vehicles.updateProximity(Infinity, Infinity);
+    }
+    if (!m && was) {
+      this.walkGoal?.done(false);
+      this.walkGoal = null;
+      this.player.target.copy(this.ranger.position).setY(0);
+      this.pois.setLabelsVisible(true);
+      this.pois.hideForActivity(null);
+      this.pois.resetAfterActivity(); // the next frame re-fires the prompts + the cue
+    }
+    // a held lens handed back to the follow camera eases from where it was (a cut when reduced)
+    if (was?.camera === 'held' && (!m || m.camera === 'follow')) this.cam.handOver(livePolicy().reduced);
+  }
+
+  /** The adventure mode now, or null. */
+  missionMode(): MissionMode | null {
+    return this.mode;
+  }
+
+  /**
+   * Walk the ranger to (x, z) at his walking pace, as a tap on the ground would (round
+   * trees, never into the ven), stopping `stop` m short of it. Works while the input is
+   * locked. Resolves true on arrival, false when stopped or given up (blocked).
+   */
+  walkRangerTo(x: number, z: number, stop = 0.25): Promise<boolean> {
+    this.walkGoal?.done(false);
+    const rp = this.ranger.position;
+    const dx = x - rp.x, dz = z - rp.z, d = Math.hypot(dx, dz);
+    const k = d > stop ? (d - stop) / d : 0;
+    this.player.walkTarget(rp.x + dx * k, rp.z + dz * k);
+    return new Promise((done) => {
+      this.walkGoal = { x: this.player.target.x, z: this.player.target.z, near: 0.12, done };
+    });
+  }
+
+  /** Stop a walk the adventure asked for (he stands where he is). */
+  stopRanger(): void {
+    this.player.target.copy(this.ranger.position).setY(0);
+    this.walkGoal?.done(false);
+    this.walkGoal = null;
+  }
+
+  private checkWalkGoal(): void {
+    const g = this.walkGoal;
+    if (!g) return;
+    const rp = this.ranger.position;
+    const t = this.player.target;
+    const arrived = Math.hypot(rp.x - g.x, rp.z - g.z) < g.near;
+    const gaveUp = !arrived && Math.hypot(t.x - rp.x, t.z - rp.z) < 0.05; // the tap-walk gave up (blocked)
+    if (arrived || gaveUp) { this.walkGoal = null; g.done(arrived); }
+  }
+
+  /** Turn the ranger to face a heading (rad) at once — he stands still (a framed beat's
+   *  start; the follow camera does not move for it). */
+  faceRanger(heading: number): void {
+    this.ranger.rotation.y = heading;
+  }
+
+  /** Run `fn(dt, t)` every frame (inside the world's update, after the animals moved)
+   *  until the returned unsubscribe is called. */
+  onFrame(fn: (dt: number, t: number) => void): () => void {
+    this.frameFns.add(fn);
+    return () => { this.frameFns.delete(fn); };
+  }
+
+  /** Is a menu card over the world (the ranger held by it)? */
+  menuShown(): boolean {
+    return this.menuOpen();
+  }
+
+  /** The heading (rad) the lens looks along on the ground. */
+  lensHeading(): number {
+    const d = this.camera.getWorldDirection(new THREE.Vector3());
+    return Math.atan2(d.x, d.z);
+  }
+
+  /** Where the lens stands for a framed view of a world spot (a Stage fit with an anchor;
+   *  on a 1280×800 screen unless `viewport`), without moving it. */
+  frameLens(v: FrameView, viewport = { w: 1280, h: 800 }): { cam: THREE.Vector3; look: THREE.Vector3 } {
+    const ctx: WorldCtx = {
+      scene: this.scene, camera: this.camera, cameraRig: this.camera, approachedModel: null,
+      activitySpot: { x: v.at.x, y: this.terrain.y(v.at.x, v.at.z), z: v.at.z },
+      groundY: (x, z) => this.terrain.y(x, z), isClear: () => true,
+      player: { x: this.ranger.position.x, z: this.ranger.position.z, yaw: this.ranger.rotation.y },
+      rangerMotion: () => this.player.motion(), setFocus: () => {}, spawnModel, spawnPlant,
+      raycaster: this.raycaster, canvas: this.canvas, prompt: document.body, reducedMotion: false,
+    };
+    const st = new Stage(ctx, {
+      halfW: v.halfW, halfD: v.halfD, tall: v.tall ?? 1, pitchDeg: v.pitchDeg ?? 34,
+      insetTop: v.insetTop ?? 96, insetBottom: v.insetBottom ?? 16,
+      anchor: { x: v.at.x, z: v.at.z, heading: v.heading, include: v.include }, viewport,
+    });
+    return { cam: st.cam.clone(), look: st.look.clone() };
+  }
+
   /** Re-point the wayfinding cue at another mission (e.g. after one is completed). */
   setActiveMission(id: string | null): void {
     this.pois.setActiveMission(id);
@@ -663,19 +834,25 @@ export class World {
       this.vehicles.driveJeep(dt);
     } else if (!this.activityActive && !this.menuOpen()) {
       // on foot: tank keys, the stick or a tap-walk move the ranger, and his steering
-      // tells the follow camera what to do (world/Player.walk → CameraRig.steer).
-      this.cam.steer(this.player.walk(dt, this.cam.viewFrame()));
+      // tells the follow camera what to do (world/Player.walk → CameraRig.steer). In an
+      // adventure the same walk (the keys only while its input is free), and a held
+      // lens is the adventure's.
+      const steer = this.player.walk(dt, this.cam.viewFrame());
+      if (this.mode?.camera !== 'held') this.cam.steer(steer);
     }
+    this.checkWalkGoal();
 
     this.pois.animate(t, dt, reduced); // each mission marker's animal (secondary motion)
     this.progress.update(t, dt, reduced, this.camera, this.activityActive); // finished tableaus: reunion walks, idle breathing
 
     this.fauna.update(t, dt, reduced, this.camera); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
+    this.residents.update(t, dt, this.camera, rp);  // run 6: the missions' homes and their animals
 
-    // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
-    // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
-    // animates in both motion modes; only the procedural-bob fallback holds still.
-    this.player.rig.update(dt, this.player.groundSpeedNow, reduced);
+    // W3.2: the ranger's own locomotion animation (and his footsteps, on his feet).
+    // Locomotion is reduced-motion EXEMPT (§3.4) so the mixer always advances with real
+    // dt — a walking ranger animates in both motion modes; only the procedural-bob
+    // fallback holds still.
+    this.player.animate(dt, reduced);
 
     // W7.2: measure fps and step the quality tier down/up with hysteresis.
     this.probeQuality(dt);
@@ -697,7 +874,15 @@ export class World {
     // (clipped in Run A's 22-mission-3d) keeps its close-up full opacity too.
     this.labels.fade(this.camera, this.canvas.clientHeight);
 
+    for (const fn of this.frameFns) fn(dt, t); // an adventure's per-frame beat (its lens, its animals, its checks)
+
     if (this.activityActive) return; // the activity owns proximity/wayfinding/camera
+    if (this.mode) {
+      // an adventure: nothing to offer but the adventure (no prompts, no wayfinding);
+      // the follow camera, unless the adventure holds the lens
+      if (this.mode.camera === 'follow') this.cam.place(reduced, dt, reduced);
+      return;
+    }
 
     // W5.1 / W5.3b: "Stap in" near the parked jeep or helicopter (suppressed while riding)
     this.vehicles.updateProximity(rp.x, rp.z);
@@ -742,6 +927,7 @@ export class World {
       groundY: (x, z) => this.groundSnapY(x, z),
       isClear: (x, z, r) => this.playClear(x, z, r),
       player: { x: this.ranger.position.x, z: this.ranger.position.z, yaw: this.ranger.rotation.y },
+      rangerMotion: () => this.player.motion(),
       setFocus: (x, y, z) => { this.activityFocus = { x, y, z }; },
       spawnModel,
       spawnPlant,
@@ -777,6 +963,7 @@ export class World {
    *  (world/Progress.ts). `fresh` plays the calm reunion; resolves once it has played. */
   onMissionComplete(missionId: string, opts: { fresh: boolean }): Promise<void> {
     this.pois.setFinished(missionId);
+    this.residents.setState(missionId, 'after', opts.fresh); // (a borrowed home is its adventure's)
     if (opts.fresh) this.pois.hideForActivity(null); // the marker's animal is back for its reunion
     const view = { camera: this.camera, ranger: { x: this.ranger.position.x, z: this.ranger.position.z } };
     return this.progress.complete(missionId, opts.fresh, livePolicy().reduced, view);

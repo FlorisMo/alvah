@@ -15,7 +15,9 @@ import { shot, collectPageErrors, reportPageErrors } from './helpers';
 interface Hook {
   screen: string;
   pos(): { x: number; z: number } | null;
+  clip(): { name: string; time: number } | null;
   footsteps(): { count: number; surface: 'zand' | 'gras' | null } | null;
+  gait(): { cadence: number } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -95,6 +97,42 @@ test('footsteps: the sound gate holds — no footsteps when geluid is off', asyn
   const after = await hook(page, (r) => r.footsteps());
   expect(after!.count, 'sound off → footsteps gated, count stays 0 despite walking').toBe(0);
 
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Run 6: the footsteps follow the feet, so they quicken when he runs. Walking, then
+ * running (Shift), the footsteps heard per second match his legs' cadence and come
+ * clearly quicker running (≥ 15 % more per second).
+ */
+test('footsteps: they follow his feet and quicken when he runs', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await enterWorld(page);
+  await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 60_000, message: 'the ranger rig attaches' }).not.toBeNull();
+  const rate = async (ms: number): Promise<{ perS: number; cadence: number }> => {
+    const a = await page.evaluate(() => ({ n: (window as any).__ranger.footsteps().count as number, t: performance.now() }));
+    await page.waitForTimeout(ms);
+    const b = await page.evaluate(() => ({ n: (window as any).__ranger.footsteps().count as number, t: performance.now(), c: (window as any).__ranger.gait().cadence as number }));
+    return { perS: (b.n - a.n) / ((b.t - a.t) / 1000), cadence: b.c };
+  };
+  await page.keyboard.down('ArrowUp');
+  try {
+    await page.waitForTimeout(700);
+    const walk = await rate(2000);
+    await page.keyboard.down('Shift');
+    await page.waitForTimeout(700);
+    const run = await rate(2000);
+    testInfo.annotations.push({ type: 'footsteps', description: `walk ${walk.perS.toFixed(2)}/s (legs ${walk.cadence.toFixed(2)}), run ${run.perS.toFixed(2)}/s (legs ${run.cadence.toFixed(2)})` });
+    expect(Math.abs(walk.perS - walk.cadence), `walking footsteps (${walk.perS.toFixed(2)}/s) follow the legs (${walk.cadence.toFixed(2)}/s)`).toBeLessThan(0.8);
+    expect(Math.abs(run.perS - run.cadence), `running footsteps (${run.perS.toFixed(2)}/s) follow the legs (${run.cadence.toFixed(2)}/s)`).toBeLessThan(0.8);
+    expect(run.perS, 'running quickens the footsteps').toBeGreaterThan(walk.perS * 1.15);
+  } finally {
+    await page.keyboard.up('Shift');
+    await page.keyboard.up('ArrowUp');
+  }
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });

@@ -138,9 +138,8 @@ export interface RangerDevHook {
   clip(): { name: string; time: number } | null;
   /** The player ranger's LIVE world bounding-box height (m), measured from the
    *  real posed mesh — the honest scale signal the scale assert reads. Alvah is
-   *  a CHILD (P1.6a), so his idle band is now child-scale (avatar.height ∈
-   *  [1.1, 1.35]), a clear head shorter than the ~1.8 m warden — NOT the old
-   *  ~1.7 m adult. It is the measured render size, NOT the normalization target,
+   *  a real 8-year-old (run 6: 1.32 m, render3d/AnimalScale), a head and a half
+   *  under the 1.8 m warden. It is the measured render size, NOT the normalization target,
    *  so the telemetry can never mask a mis-scaled rig (AUDIT-FINDINGS §4: pixels
    *  are the court of appeal). Null before the hook/world is ready. */
   avatar(): { height: number } | null;
@@ -151,6 +150,15 @@ export interface RangerDevHook {
    *  that slid the feet ~2.5× per stride. 0 while standing or in an in-place
    *  activity; null before the hook/world is ready. */
   groundSpeed(): number | null;
+  /** How the ranger moves right now (World.rangerMotion): where he stands, the way he
+   *  faces (rad), his post-collision ground speed (m/s) and whether he runs. Null
+   *  before the world is up. */
+  motion(): { x: number; z: number; heading: number; speed: number; running: boolean } | null;
+  /** The ranger's legs (run 6): which clip leads (idle/walk/run), the shared cycle phase
+   *  (left foot down at 0, right at 0.5), footfalls per second, the run share, the stride
+   *  gain, and his soles in world metres (heel, ball, tip per foot, left first: the
+   *  foot-slip probe). Null before the world is up. */
+  gait(): GaitRead | null;
   /** D1.2 locomotion ground-truth (P1.5a asserts it across the walkable world): is the
    *  ranger's Y actually ON the RENDERED terrain surface, not through it? `grounded` is
    *  true when a down-ray hits the terrain under him AND his feet sit in the on-foot
@@ -301,7 +309,7 @@ export interface RangerDevHook {
    *  `helpChip` is whether the laptop "?" re-show chip is mounted. The capture assert
    *  reads `active` = 'walk' with the tracker held back to prove ONE hint at entry,
    *  and that it advances on the first step. Null before the world/hook is ready. */
-  hint(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
+  hint(): { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
   /** RUN-3 P4.6 (F-11): the world-rim state — `bound` (the move-limit radius, m),
    *  the ranger's live `dist` from world centre, and `atRim` (he is pressed against
    *  the rim heading outward, so the calm "Hier stopt het bos" cue has fired). The
@@ -355,7 +363,21 @@ export interface RangerDevHook {
    *  vertices `along` the world direction (dx,dz) and `across` it, in m. A vehicle that
    *  drives along (dx,dz) and faces that way is longer along than across. */
   shapeAt(x: number, z: number, dx: number, dz: number): { id: string; along: number; across: number } | null;
+  /* ---- run 6: the in-world adventures (render3d/adventure). Read-only. ---- */
+  /** The adventure running now: its mission, the beat it is at ('walk:cover', 'search',
+   *  'route', 'choice:aaien', 'reunion' ...), the step indices logged so far (each once),
+   *  the objective line on screen, and measured numbers (the cover's height against the
+   *  hidden animal's, the reunion gap ...). Null when none runs. */
+  adventure(): AdventureReadout | null;
+  /** A mission's authored places (world x/z [+ r, heading]) when it is an adventure. */
+  missionPlaces(id: string): Record<string, { x: number; z: number; r?: number; heading?: number }> | null;
+  /** The missions' homes: their state and their animals (world/Residents.ts). */
+  residents(): ResidentsReadout | null;
 }
+
+export type AdventureReadout = { mission: string; beat: string; stepsLogged: number[]; line: string | null; stats: Record<string, number> };
+export type ResidentsReadout = { missionId: string; state: 'before' | 'after'; borrowed: boolean;
+  actors: { key: string; animal: string; x: number; z: number; lying: boolean; visible: boolean; doing: string }[] }[];
 
 /** `__ranger.playHint()` (see the field doc). */
 export type PlayHintProbe = {
@@ -366,6 +388,9 @@ export type PlayHintProbe = {
   /** the geometry types the target is drawn with ('BufferGeometry' = a loaded model;
    *  'CapsuleGeometry', 'SphereGeometry'... = a primitive stand-in) */
   parts: string[];
+  /** run 6: a WALK hint (an adventure's walk beat): walk to (x, z) until within r m;
+   *  there is nothing to click (x, y = −1). Absent / null for a click hint. */
+  walk?: { x: number; z: number; r: number } | null;
 };
 
 /** One entry of `__ranger.seating()`. */
@@ -376,6 +401,17 @@ export type SeatProbe = { id: string; x: number; y: number; z: number; gap: numb
 // value, proving the site served the freshly-built app.js, not a stale cache).
 const VERSION = '2.1.0-ship';
 
+type XYZ = { x: number; y: number; z: number };
+/** The ranger's gait read (World.playerGait). */
+export interface GaitRead {
+  name: 'idle' | 'walk' | 'run';
+  phase: number;
+  cadence: number;
+  run: number;
+  gain: number;
+  soles: { heel: XYZ; toe: XYZ; tip: XYZ }[];
+}
+
 const state = {
   screen: 'title' as Screen,
   missionView: null as MissionView,
@@ -385,6 +421,8 @@ const state = {
   clip: null as null | (() => { name: string; time: number } | null),
   avatar: null as null | (() => { height: number } | null),
   groundSpeed: null as null | (() => number | null),
+  motion: null as null | (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null),
+  gait: null as null | (() => GaitRead | null),
   grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
@@ -428,7 +466,7 @@ const state = {
     pads: { x: number; z: number }[];
   } | null),
   quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
-  hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
+  hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
   boundary: null as null | (() => { bound: number; dist: number; atRim: boolean; scatterMax: number } | null),
   // golden-path probes: the Stage's live view + renderer (main.ts) and the THREE-side
   // measurements (kit.ts). Kept `unknown` so this module stays three.js-free.
@@ -437,6 +475,10 @@ const state = {
   frames: null as null | (() => number),
   renderMode: null as null | (() => { light: boolean; renderer: string | null }),
   probes: null as null | GoldenProbes,
+  adventure: null as null | (() => AdventureReadout | null),
+  missionPlaces: null as null | ((id: string) => Record<string, { x: number; z: number; r?: number; heading?: number }> | null),
+  residents: null as null | (() => ResidentsReadout),
+  residentSpots: null as null | (() => { x: number; z: number }[]),
 };
 
 /** The THREE-side golden-path measurements, registered by `render3d/play/kit.ts`. */
@@ -488,8 +530,29 @@ export function selfMovers(): { player: { x: number; z: number } | null; ambient
   const riding = !!(state.vehicle?.()?.inVehicle || state.heli?.()?.inHeli);
   return {
     player: state.pos && !riding ? state.pos() : null,
-    ambient: state.ambient ? state.ambient().map((a) => ({ x: a.x, z: a.z })) : [],
+    // the roaming animals, and (run 6) the animals living at the missions' homes: they
+    // root and shuffle by themselves, so a before/after compare leaves them out
+    ambient: [
+      ...(state.ambient ? state.ambient().map((a) => ({ x: a.x, z: a.z })) : []),
+      ...(state.residentSpots ? state.residentSpots() : []),
+    ],
   };
+}
+
+/** Run 6: register the running adventure's read (null when none runs). */
+export function provideAdventure(fn: (() => AdventureReadout | null) | null): void {
+  state.adventure = fn;
+}
+
+/** Run 6: register the adventures' places table read. */
+export function provideMissionPlaces(fn: ((id: string) => Record<string, { x: number; z: number; r?: number; heading?: number }> | null) | null): void {
+  state.missionPlaces = fn;
+}
+
+/** Run 6: register the homes' read and where their animals stand (the mover tag). */
+export function provideResidents(read: (() => ResidentsReadout) | null, spots: (() => { x: number; z: number }[]) | null): void {
+  state.residents = read;
+  state.residentSpots = spots;
 }
 
 /** Current screen the player is on. */
@@ -532,6 +595,16 @@ export function provideAvatar(fn: (() => { height: number } | null) | null): voi
  *  in m/s). Pass null to clear (F-08). */
 export function provideGroundSpeed(fn: (() => number | null) | null): void {
   state.groundSpeed = fn;
+}
+
+/** Register the ranger's gait + sole probe read (World.playerGait). Pass null to clear. */
+export function provideGait(fn: (() => GaitRead | null) | null): void {
+  state.gait = fn;
+}
+
+/** Register the ranger's live motion read (World.rangerMotion). Pass null to clear. */
+export function provideMotion(fn: (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null) | null): void {
+  state.motion = fn;
 }
 
 /** Register the live real-camera read-back source (the World's `camState`, read
@@ -708,7 +781,7 @@ export function provideQuality(
 /** Register the RUN-3 P3.3 onboarding-hint state source (the explore HUD). Pass
  *  null to clear (F-06/F-15). */
 export function provideHint(
-  fn: (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null) | null,
+  fn: (() => { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null) | null,
 ): void {
   state.hint = fn;
 }
@@ -739,6 +812,8 @@ export function installDevHook(): boolean {
     clip: () => (state.clip ? state.clip() : null),
     avatar: () => (state.avatar ? state.avatar() : null),
     groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
+    motion: () => (state.motion ? state.motion() : null),
+    gait: () => (state.gait ? state.gait() : null),
     grounded: () => (state.grounded ? state.grounded() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),
@@ -771,6 +846,9 @@ export function installDevHook(): boolean {
     screenOf: (x, y, z) => (state.probes ? state.probes.screenOf(x, y, z) : null),
     seating: (x, z, r) => (state.probes ? state.probes.seating(x, z, r) : null),
     shapeAt: (x, z, dx, dz) => (state.probes ? state.probes.shapeAt(x, z, dx, dz) : null),
+    adventure: () => (state.adventure ? state.adventure() : null),
+    missionPlaces: (id) => (state.missionPlaces ? state.missionPlaces(id) : null),
+    residents: () => (state.residents ? state.residents() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

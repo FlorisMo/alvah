@@ -14,7 +14,7 @@ import * as THREE from 'three';
 import { loadModel, loadRig, prepModel } from '../Models';
 import { standHeightFor } from '../AnimalScale';
 import { applyEyes } from '../EyeMaterial';
-import { applyCoat, applyPosture } from '../AnimalDress';
+import { applyCoat, applyPattern, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
 import { livePolicy } from '../MotionMode';
 import { mergeColourSplits } from './merge';
@@ -25,6 +25,7 @@ import type { SpawnOpts, Spawned } from './types';
  *  `bird-<id>` manifest convention). */
 const ANIMAL_MODEL: Record<string, string> = {
   wildzwijn: 'animal-wildzwijn-boar',
+  overloper: 'animal-wildzwijn-boar',
   frisling: 'animal-frisling-piglet',
   big: 'animal-frisling-piglet',
   das: 'animal-das-badger',
@@ -39,25 +40,15 @@ const ANIMAL_MODEL: Record<string, string> = {
   vos: 'animal-vos-fox',
   wolf: 'animal-wolf',
   heideblauwtje: 'animal-heideblauwtje-butterfly',
+  hinde: 'animal-edelhert-reddeer',
+  hertenkalf: 'animal-edelhert-reddeer',
+  'vos-welp': 'animal-vos-fox',
 };
 
-/** Stand heights (m) for what `AnimalScale` has no dossier size for: the young
- *  animals a mission is about, and the birds (standing height, beak to toe). The two
- *  length/wingspan creatures a child must still be able to SEE in a search game get a
- *  small floor (a 7 cm frog is ~10 px from the lens). */
-const PLAY_HEIGHT: Record<string, number> = {
-  reekalf: 0.62,
-  'animal-raaf-raven': 0.4,
-  'bird-koekoek': 0.24,
-  'bird-merel': 0.2,
-  'bird-roodborsttapuit': 0.15,
-  'bird-groene-specht': 0.26,
-  'bird-koolmees': 0.14,
-  'bird-wilde-eend': 0.36,
-  'animal-nachtzwaluw-nightjar': 0.17,
-  'animal-heikikker-frog': 0.12,
-  'animal-heideblauwtje-butterfly': 0.028,
-};
+/** The antler meshes of the red-deer model (`Stag_Horns`), and the red deer that
+ *  carry none (the stag's model with them hidden). */
+const ANTLERS = /horn|antler|gewei/i;
+const NO_ANTLERS = new Set(['hinde', 'hertenkalf']);
 
 /** The GLB id for a content animal id (or a manifest id passed straight through). */
 export function modelFor(id: string): string {
@@ -66,11 +57,11 @@ export function modelFor(id: string): string {
   return `bird-${id}`;
 }
 
-/** The size (m) a game stages a content animal at: a young-animal/bird table first,
- *  then the world's canonical `AnimalScale` stand height, else a calm 0.5 m. */
+/** The size (m) a game stages a content animal at: its own row in the scale table
+ *  (`AnimalScale`: the young, the birds, a hind), else its model's default row, else
+ *  a calm 0.5 m. */
 export function heightFor(id: string): number {
-  const glb = modelFor(id);
-  return PLAY_HEIGHT[id] ?? PLAY_HEIGHT[glb] ?? standHeightFor(glb) ?? 0.5;
+  return standHeightFor(id) ?? standHeightFor(modelFor(id)) ?? 0.5;
 }
 
 /** Give every mesh in `root` its own clone of its material(s); returns the clones. */
@@ -109,32 +100,6 @@ function disposer(root: THREE.Object3D, extra: THREE.BufferGeometry[] = []): () 
 }
 
 /**
- * prepModel puts a RIGGED model's lowest BONE at y=0 (its size is read from the
- * skeleton, F-07), but hooves and paws reach a few cm below their last joint, so a
- * staged deer sank ~5 cm into the ground. Measure the posed skinned mesh itself and
- * lift the model onto its soles. The mission markers' animals (world/Markers.ts) stand
- * the same way.
- */
-export function standOnSoles(wrapper: THREE.Group): void {
-  wrapper.updateMatrixWorld(true);
-  let minY = Infinity;
-  let skinned = false;
-  const box = new THREE.Box3();
-  wrapper.traverse((o) => {
-    const sk = o as THREE.SkinnedMesh;
-    if (!sk.isSkinnedMesh) return;
-    skinned = true;
-    sk.computeBoundingBox();
-    if (sk.boundingBox) minY = Math.min(minY, box.copy(sk.boundingBox).applyMatrix4(sk.matrixWorld).min.y);
-  });
-  // a static mesh: the calm posture (head low, AnimalDress) can tip its snout below
-  // the hooves prepModel stood on the ground — stand it on its lowest point again
-  if (!skinned) minY = box.setFromObject(wrapper).min.y;
-  const inner = wrapper.children[0];
-  if (inner && Number.isFinite(minY) && Math.abs(minY) < 0.3) inner.position.y -= minY;
-}
-
-/**
  * Load one of the world's animals, dressed exactly as the world dresses it, at its
  * canonical size (or `opts.height`). Animated rigs play their calm idle clip (frozen
  * on its first frame under reduced-motion). Resolves null when the model is absent.
@@ -144,9 +109,14 @@ export async function spawnModel(id: string, opts: SpawnOpts = {}): Promise<Spaw
   const rig = await loadRig(glb);
   if (!rig) return null;
   ownMaterials(rig.group);
+  // a hind or a calf is the stag's model without its antlers: hidden BEFORE it is
+  // sized, so the body (not the antler tips) takes the height
+  if (opts.antlers === false || NO_ANTLERS.has(id)) rig.group.traverse((o) => { if (ANTLERS.test(o.name)) o.visible = false; });
   const prepped = prepModel(rig.group, opts.height ?? heightFor(id));
   applyEyes(prepped, glb, { dusk: false });
   applyCoat(prepped, glb);
+  if (id !== glb) applyCoat(prepped, id); // a young one's own coat (a reddish yearling on the boar's model)
+  applyPattern(prepped, glb);             // the piglet's striped pyjamas
   applyPosture(prepped, glb);
   applyCalmPose(prepped, glb);
   mergeColourSplits(prepped); // one draw call per animal, not one per colour
@@ -168,7 +138,6 @@ export async function spawnModel(id: string, opts: SpawnOpts = {}): Promise<Spaw
     play('idle');
     (mixer as THREE.AnimationMixer | null)?.update(0);
   }
-  standOnSoles(prepped);
   return {
     root: prepped,
     update: (dt) => { if (mixer && !livePolicy().reduced) mixer.update(dt); },

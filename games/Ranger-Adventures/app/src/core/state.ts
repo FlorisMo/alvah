@@ -70,6 +70,7 @@ export interface Settings {
   helikopter: boolean;               // W5.3 opt-in helicopter mode (default UIT; unavailable under reduced-motion)
   wereldHintGezien: boolean;         // W1.6 first-world-entry control hint has been dismissed (step 1 of the P3.3 sequence)
   tikHintGezien: boolean;            // P3.3 (F-06): the post-walk "tik op een dier" transient tip has shown once
+  renHintGezien: boolean;            // run 6: the one-off "Houd Shift in om te rennen" tip has shown (or he ran by himself)
   kwaliteitTier: 'hoog' | 'laag';    // W7.2 adaptive quality tier — the last fps-probe verdict, persisted so a slow device boots light
   readSize: number;
   leading: number;
@@ -134,6 +135,7 @@ const DEFAULT_SETTINGS: Settings = {
   helikopter: false,
   wereldHintGezien: false,
   tikHintGezien: false,
+  renHintGezien: false,
   kwaliteitTier: 'hoog',
   readSize: 28,
   leading: 1.7,

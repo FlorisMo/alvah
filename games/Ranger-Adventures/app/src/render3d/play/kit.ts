@@ -73,7 +73,10 @@ export interface PlayHint {
   /** Stable id of the thing to click (e.g. the animal or stone id). */
   id: string;
   /** The object a player sees and clicks. */
-  target: THREE.Object3D;
+  target?: THREE.Object3D;
+  /** Run 6 (the adventures): a perfect player WALKS there now, with the arrow keys or
+   *  the stick, until he is within `r` m (world x/z). No `target`: nothing to click. */
+  walk?: { x: number; z: number; r: number };
 }
 
 let activeHint: (() => PlayHint | null) | null = null;
@@ -230,6 +233,11 @@ function drawnWith(root: THREE.Object3D): string[] {
 function probePlayHint(): PlayHintProbe | null {
   const hint = currentPlayHint();
   if (!hint) return null;
+  if (hint.walk || !hint.target) {
+    // a walk hint: nothing to click, a place to walk to (golden walks it with the keys)
+    return { id: hint.id, x: -1, y: -1, onScreen: false, firstHit: false, aboveGround: false,
+      firstHitBy: null, bottomGap: null, reachesCanvas: false, blocker: null, parts: [], walk: hint.walk ?? null };
+  }
   const v = liveView();
   let root = hint.target;
   while (root.parent) root = root.parent;
@@ -370,31 +378,32 @@ function probeShapeAt(x: number, z: number, dx: number, dz: number): { id: strin
   const len = Math.hypot(dx, dz);
   if (!v || len < 1e-6) return null;
   const ux = dx / len; const uz = dz / len;
-  let best: Placed | null = null; let bestArea = 0;
-  for (const p of placedThings(v, x, z, 2.5)) {
-    if (p.moves === 'player') continue; // the ranger standing by it is not the thing
-    const area = (p.box.max.x - p.box.min.x) * (p.box.max.z - p.box.min.z);
-    if (area > bestArea) { bestArea = area; best = p; }
+  // biggest first; a thing drawn only as instances (a wheel-track trail, a plant patch)
+  // has no single shape to measure, so the next biggest is the one (run 6: it made the
+  // jeep's shape read null wherever the drive ended beside one)
+  const things = placedThings(v, x, z, 2.5).filter((p) => p.moves !== 'player') // the ranger standing by it is not the thing
+    .map((p) => ({ p, area: (p.box.max.x - p.box.min.x) * (p.box.max.z - p.box.min.z) }))
+    .sort((a, b) => b.area - a.area);
+  const at = new THREE.Vector3();
+  for (const { p: best } of things) {
+    let a0 = Infinity; let a1 = -Infinity; let c0 = Infinity; let c1 = -Infinity;
+    best.o.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || m.userData.hitSphere || !shownInTree(m) || (m as THREE.InstancedMesh).isInstancedMesh) return;
+      const pos = m.geometry.attributes.position;
+      if (!pos) return;
+      const stride = Math.max(1, Math.floor(pos.count / 4000));
+      for (let i = 0; i < pos.count; i += stride) {
+        at.fromBufferAttribute(pos, i);
+        if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).applyBoneTransform(i, at);
+        at.applyMatrix4(m.matrixWorld);
+        const a = at.x * ux + at.z * uz; const c = -at.x * uz + at.z * ux;
+        a0 = Math.min(a0, a); a1 = Math.max(a1, a); c0 = Math.min(c0, c); c1 = Math.max(c1, c);
+      }
+    });
+    if (Number.isFinite(a0)) return { id: describeObject(best.o, v.scene), along: r2(a1 - a0), across: r2(c1 - c0) };
   }
-  if (!best) return null;
-  let a0 = Infinity; let a1 = -Infinity; let c0 = Infinity; let c1 = -Infinity;
-  const p = new THREE.Vector3();
-  best.o.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh || m.userData.hitSphere || !shownInTree(m) || (m as THREE.InstancedMesh).isInstancedMesh) return;
-    const pos = m.geometry.attributes.position;
-    if (!pos) return;
-    const stride = Math.max(1, Math.floor(pos.count / 4000));
-    for (let i = 0; i < pos.count; i += stride) {
-      p.fromBufferAttribute(pos, i);
-      if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).applyBoneTransform(i, p);
-      p.applyMatrix4(m.matrixWorld);
-      const a = p.x * ux + p.z * uz; const c = -p.x * uz + p.z * ux;
-      a0 = Math.min(a0, a); a1 = Math.max(a1, a); c0 = Math.min(c0, c); c1 = Math.max(c1, c);
-    }
-  });
-  if (!Number.isFinite(a0)) return null;
-  return { id: describeObject(best.o, v.scene), along: r2(a1 - a0), across: r2(c1 - c0) };
+  return null;
 }
 
 provideGoldenProbes({
@@ -674,12 +683,14 @@ export function spoorTrail(
   ax: number, az: number, bx: number, bz: number, legs: number,
   groundY: (x: number, z: number) => number,
   opacity = 1,
+  size = 1, // run 6: a piglet's trotters are smaller than a grown boar's hooves
+  perLeg = 3,
 ): { group: THREE.Group; dispose: () => void } {
-  const n = Math.max(6, Math.round(legs) * 3);
+  const n = Math.max(6, Math.round(legs) * perLeg);
   const pts = trailPoints(ax, az, bx, bz, n);
   const len = Math.hypot(bx - ax, bz - az) || 1;
   const dx = (bx - ax) / len, dz = (bz - az) / len;
-  const geo = new THREE.PlaneGeometry(0.17, 0.2);
+  const geo = new THREE.PlaneGeometry(0.17 * size, 0.2 * size);
   geo.rotateX(-Math.PI / 2); // lie flat, the print's toes pointing along −z
   const mat = new THREE.MeshStandardMaterial({
     map: hoofTexture(), transparent: true, opacity, depthWrite: false, roughness: 1,
@@ -693,7 +704,7 @@ export function spoorTrail(
   const heading = Math.atan2(-dx, -dz); // yaw that points the print's −z along the walk
   pts.forEach((p, i) => {
     const side = i % 2 === 0 ? 1 : -1;
-    const x = p.x + -dz * 0.1 * side, z = p.z + dx * 0.1 * side;
+    const x = p.x + -dz * 0.1 * size * side, z = p.z + dx * 0.1 * size * side;
     const ahead = groundY(x + dx * 0.12, z + dz * 0.12);
     const behind = groundY(x - dx * 0.12, z - dz * 0.12);
     const pitch = Math.atan2(ahead - behind, 0.24);

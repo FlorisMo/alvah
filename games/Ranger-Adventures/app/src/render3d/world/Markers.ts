@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { loadModel, loadRig, prepModel } from '../Models';
+import { SIZE } from '../AnimalScale';
 import { anchorInBiome, biomeAt, type Biome } from '../Biomes';
 import { applyEyes } from '../EyeMaterial';
 import { applyCoat, applyPosture } from '../AnimalDress';
@@ -24,7 +25,6 @@ import { boxObstacle, obstacleGap, type MoveLimits, type Obstacle } from '../Cha
 import type { Terrain } from './Terrain';
 import { Labels } from './Labels';
 import { proceduralTotem } from './props';
-import { standOnSoles } from '../play/spawn';
 import { mergeColourSplits } from '../play/merge';
 import { FarRest, restFar } from '../play/fade';
 
@@ -35,6 +35,11 @@ export interface WorldMarker {
   height: number;           // target world height for the model
   color: string;            // totem / accent colour
   biome?: Biome;            // the mission's landschap → anchor the marker in it
+  /** run 6: where it stands, when its adventure authored the place (else its landschap's anchor) */
+  at?: { x: number; z: number };
+  /** run 6: what stands in its ring — its animal (default), or nothing at all ('none': the
+   *  story's animal is elsewhere, hidden; the ring and its name still say "go here") */
+  look?: 'animal' | 'prop' | 'none';
 }
 
 /** Within this distance (m) of a marker, the board or the sit-spot its prompt shows. */
@@ -169,6 +174,7 @@ export class Markers {
         const ang = (i / N) * Math.PI * 2;
         x = Math.cos(ang) * 9; z = Math.sin(ang) * 9;
       }
+      if (mk.at) { x = mk.at.x; z = mk.at.z; } // an adventure authored its marker's place
       const group = new THREE.Group();
       group.position.set(x, this.groundY(x, z), z);
 
@@ -183,7 +189,7 @@ export class Markers {
       label.position.y = 1.9;
       group.add(label);
 
-      group.add(proceduralTotem(mk.color)); // instant stand-in
+      if (mk.look !== 'none') group.add(proceduralTotem(mk.color)); // instant stand-in
       this.scene.add(group);
       const entry = {
         group, pos: group.position.clone(), missionId: mk.missionId,
@@ -194,7 +200,7 @@ export class Markers {
       };
       this.list.push(entry);
 
-      if (mk.modelId) {
+      if (mk.modelId && mk.look !== 'none') {
         void loadRig(mk.modelId).then((rig) => {
           if (!rig) return;
           const prepped = prepModel(rig.group, mk.height);
@@ -210,7 +216,6 @@ export class Markers {
           // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
           applyCalmPose(prepped, mk.modelId);
           mergeColourSplits(prepped); // one draw call per animal, not one per colour
-          standOnSoles(prepped); // on its hooves (or its lowest point), not in the ground
           // drop the totem (keep the ring), add the real animal
           const totem = group.children.find((c) => c.userData.totem);
           if (totem) group.remove(totem);
@@ -274,7 +279,7 @@ export class Markers {
     this.boardPos = boardAt.clone();
     void loadModel('prop-case-board').then((m) => {
       if (!m) return;
-      const prepped = prepModel(m, 1.8);
+      const prepped = prepModel(m, SIZE.missiebord.h);
       const totem = board.children.find((c) => c.userData.totem);
       if (totem) board.remove(totem);
       board.add(prepped); // keep the ring + label

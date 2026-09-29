@@ -50,7 +50,81 @@ const COAT_TINT: Record<string, CoatTint> = {
   // CC0 fox reads dark-brown; dossier: "oranjebruin, rood tot bruingrijs" (rufous).
   // Lerp 60% toward rufous — corrects the hue but keeps the pack's shading.
   'animal-vos-fox': { color: '#c0561f', strength: 0.6 },
+  // run 6: a yearling wild boar (overloper) staged on the boar's model — a CONTENT id,
+  // not a GLB: the young lose their stripes and turn "roodbruin" before going dark
+  // (3d-animal-animation-research §B2b), so last year's young reads reddish beside the sow.
+  overloper: { color: '#8a4f2a', strength: 0.5 },
 };
+
+/**
+ * Run 6: a procedural coat PATTERN laid over a model's own texture, for an animal whose
+ * model contradicts the dossier in its markings, not its hue. The one today: the
+ * frisling GLB reads as a white domestic piglet with brown blotches, while a wild-boar
+ * piglet wears its "pyjama" — "okerkleurig/zwartbruin met overlangse goudgele strepen
+ * (van voor naar achter over de rug)" (research/3d-animal-animation-research.md §B2b).
+ * The search beat depends on it: a child glimpses stripes between the stems.
+ *
+ * Coordinates are the model's own (its geometry box): `u` 0 at the tail → 1 at the
+ * snout, `vy` 0 at the hooves → 1 at the top of the back, `theta` the angle round the
+ * body's long axis (0 = the spine, ±π/2 the flanks, ±π the belly).
+ */
+export interface CoatPattern {
+  kind: 'stripes';
+  /** the dark ochre-brown between the stripes, the golden stripes, the dark legs and snout, the paler belly */
+  base: string; stripe: string; dark: string; belly: string;
+  /** the head: its texture's light and dark kept (eyes, ears), tinted this brown */
+  head: string;
+  /** light stripes per flank, from the spine down to the belly */
+  perSide: number;
+  /** share of each band that is the light stripe */
+  duty: number;
+  /** the striped stretch of the body (u: from the rump to the neck) */
+  from: number; to: number;
+  /** where the body's long axis runs, as a share of the height (vy) */
+  axis: number;
+  /** below this height (vy) are the legs */
+  legs: number;
+  /** +1: the snout is at +z of the model (the world's convention); −1 at −z */
+  headAt: 1 | -1;
+}
+
+const PATTERN: Record<string, CoatPattern> = {
+  'animal-frisling-piglet': {
+    kind: 'stripes', base: '#6b4629', stripe: '#d8b872', dark: '#3a271a', belly: '#9c7b58', head: '#7a5433',
+    perSide: 4, duty: 0.4, from: 0.14, to: 0.74, axis: 0.64, legs: 0.36, headAt: 1,
+  },
+};
+
+/** The coat pattern for a model id, or null (the model's own markings stand). Pure. */
+export function patternFor(id: string | null | undefined): CoatPattern | null {
+  return id ? PATTERN[id] ?? null : null;
+}
+
+/** Which part of a pattern a point of the coat is. Pure — the shader draws the same. */
+export function patternAt(p: CoatPattern, u: number, vy: number, theta: number): 'stripe' | 'base' | 'belly' | 'dark' | 'head' {
+  if (vy < p.legs) return 'dark';
+  if (u > 0.93) return 'dark';                       // the snout's disc
+  if (u > p.to + 0.04) return 'head';
+  const a = Math.abs(theta);
+  if (a > 2.25) return 'belly';
+  if (u < p.from || u > p.to) return 'base';
+  // bands round the body: the spine (band 0) dark, light stripes at bands 1..perSide
+  const band = (a / 2.25) * (p.perSide + 0.5);
+  const k = Math.round(band);
+  return k >= 1 && k <= p.perSide && Math.abs(band - k) < p.duty / 2 ? 'stripe' : 'base';
+}
+
+/** A model-space point's pattern coordinates (see CoatPattern): `u` along the body
+ *  (tail 0 → snout 1), `vy` up (hooves 0 → back 1), `a` = |theta| round the long axis. */
+export function coatCoords(p: CoatPattern, x: number, y: number, z: number,
+  box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }): { u: number; vy: number; a: number } {
+  const lz = box.max.z - box.min.z || 1, ly = box.max.y - box.min.y || 1;
+  const u = p.headAt === 1 ? (z - box.min.z) / lz : (box.max.z - z) / lz;
+  const vy = (y - box.min.y) / ly;
+  const yc = box.min.y + p.axis * ly;
+  const xc = (box.min.x + box.max.x) / 2;
+  return { u, vy, a: Math.abs(Math.atan2(x - xc, y - yc)) };
+}
 
 /**
  * Posture flags. Head-low / snuffling species get a subtle forward pitch; alert

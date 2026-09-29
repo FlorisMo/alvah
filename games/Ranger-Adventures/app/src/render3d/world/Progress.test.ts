@@ -44,9 +44,17 @@ function box(h: number) {
   return { root, update: () => {}, dispose: () => root.removeFromParent(), rigged: false, clip: (n: string) => { clips.push(n); }, clips };
 }
 
+/** Run 6: the missions whose family LIVES at a home of its own (world/Residents.ts,
+ *  render3d/adventure): their tableau is only the "klaar" flag at the marker. */
+const LIVES_AT_HOME = new Set(['frisling']);
+/** A mission whose family still walks in to its marker (the classic tableau). */
+const FAMILY = 'ree-niet-aanraken';
+
 function world(extra: Partial<ProgressEnv> = {}) {
   const scene = new THREE.Scene();
-  const markers = AREA_VELUWE.missies.map((m, i) => {
+  // (the missions with a tableau first: the first marker stands at (30, 0))
+  const ordered = [...AREA_VELUWE.missies.filter((m) => !LIVES_AT_HOME.has(m.id)), ...AREA_VELUWE.missies.filter((m) => LIVES_AT_HOME.has(m.id))];
+  const markers = ordered.map((m, i) => {
     const a = (i / AREA_VELUWE.missies.length) * Math.PI * 2;
     const group = new THREE.Group();
     const x = Math.cos(a) * 30, z = Math.sin(a) * 30;
@@ -79,12 +87,14 @@ test('every mission ends in its own tableau, with the animal it is about at its 
   for (const m of AREA_VELUWE.missies) {
     const t = TABLEAUS[m.id];
     assert.ok(t, `mission ${m.id} has a finished tableau`);
+    if (LIVES_AT_HOME.has(m.id)) continue;
     assert.ok(t.pieces.length >= 1, `${m.id}: something gathers at the marker`);
     assert.ok(heroOf(m.id, m.dier).length > 0, `${m.id}: a hero animal`);
   }
-  // mission 1 is about the frisling: a piglet at the marker, its sow + siblings around it
-  assert.equal(heroOf('frisling', 'wildzwijn'), 'frisling');
-  assert.deepEqual(TABLEAUS.frisling.pieces.map((p) => p.id).sort(), ['frisling', 'frisling', 'wildzwijn']);
+  // run 6: the frisling's rotte lives at its wallow; its marker ring stays empty (the
+  // piglet is hidden in the bracken, you hear him) and gets only the "klaar" flag
+  assert.equal(heroOf('frisling', 'wildzwijn'), '');
+  assert.deepEqual(TABLEAUS.frisling.pieces, []);
   assert.equal(heroOf('ree-niet-aanraken', 'ree'), 'reekalf');
 });
 
@@ -113,6 +123,7 @@ test('a finished tableau stands on the ground within 6 m of its marker, around (
       const gap = c.position.y - groundY(c.position.x, c.position.z);
       assert.ok([0, lift, stake].some((v) => Math.abs(gap - v) < 1e-6), `${m.missionId}: seated on the ground (gap ${gap})`);
       if (c.name !== 'klaar-flag') {
+        assert.ok(!LIVES_AT_HOME.has(m.missionId), `${m.missionId}: only the flag (its family lives at its home)`);
         const lx = c.position.x - f.ox, lz = c.position.z - f.oz;
         const a = lx * f.dx + lz * f.dz, s = -lx * f.dz + lz * f.dx;
         assert.ok(!(a < 0.6 && Math.abs(s) < 1.0), `${m.missionId}: not between the lens and the marker's animal`);
@@ -138,8 +149,9 @@ test('the pieces keep out of water, trunks, other markers and the story people',
   const water = (x: number, z: number): boolean => x > 31.5; // everything beyond the marker is the ven
   const trunk = { x: 30.8, z: -1.9, r: 0.6, tree: true };
   const w = world({ blocked: water, obstacles: [trunk], actors: () => [{ x: 29, z: 2 }] });
-  await w.progress.complete(AREA_VELUWE.missies[0].id, false, false); // marker 0 stands at (30, 0)
-  const g = w.scene.getObjectByName(`progress-${AREA_VELUWE.missies[0].id}`)!;
+  const id0 = w.markers[0].missionId; // marker 0 stands at (30, 0)
+  await w.progress.complete(id0, false, false);
+  const g = w.scene.getObjectByName(`progress-${id0}`)!;
   assert.ok(g.children.length >= 2, 'the flag and at least one piece found room');
   for (const c of g.children) {
     assert.ok(!water(c.position.x, c.position.z), `${c.name} is not in the water`);
@@ -151,24 +163,24 @@ test('the pieces keep out of water, trunks, other markers and the story people',
 
 test('a finished family keeps a later game patch off it, except for its own replay', async () => {
   const w = world();
-  await w.progress.complete('frisling', false, false);
-  const g = w.scene.getObjectByName('progress-frisling')!;
+  await w.progress.complete(FAMILY, false, false);
+  const g = w.scene.getObjectByName(`progress-${FAMILY}`)!;
   const p = g.children[1].position;
   assert.equal(w.progress.blocks(p.x, p.z, 0.2, null), true);
-  assert.equal(w.progress.blocks(p.x, p.z, 0.2, 'frisling'), false);
+  assert.equal(w.progress.blocks(p.x, p.z, 0.2, FAMILY), false);
   assert.equal(w.progress.blocks(p.x + 40, p.z, 0.2, null), false);
 });
 
 test('the reunion: the family walks calmly in and the flag rises; the promise resolves after it', async () => {
   const w = world();
-  const m = w.markers.find((k) => k.missionId === 'frisling')!;
+  const m = w.markers.find((k) => k.missionId === FAMILY)!;
   let done = false;
-  const run = w.progress.complete('frisling', true, false, lens(m, { x: 0, z: 0 })).then(() => { done = true; });
+  const run = w.progress.complete(FAMILY, true, false, lens(m, { x: 0, z: 0 })).then(() => { done = true; });
   await new Promise((r) => setTimeout(r, 0)); // the build (spawns) resolves
   await new Promise((r) => setTimeout(r, 0));
-  const g = w.scene.getObjectByName('progress-frisling')!;
+  const g = w.scene.getObjectByName(`progress-${FAMILY}`)!;
   const flag = g.getObjectByName('klaar-flag')!;
-  const target = w.progress.state().find((s) => s.missionId === 'frisling')!.pieces;
+  const target = w.progress.state().find((s) => s.missionId === FAMILY)!.pieces;
   // at the start: the flag is flat, the arriving animals stand further out than their spot
   assert.ok(flag.scale.y < 0.05);
   const starts = g.children.filter((c) => c.name !== 'klaar-flag').map((c) => Math.hypot(c.position.x - m.x, c.position.z - m.z));
@@ -243,42 +255,42 @@ test('a reunion gathers IN the picture: seen from behind the ranger, and when he
 test('finished at the missiebord: the family stands at its OWN marker and comes home when the ranger comes to look', async () => {
   // the reload layout, for comparison
   const ref = world();
-  await ref.progress.complete('frisling', false, false);
-  const home = ref.progress.state().find((s) => s.missionId === 'frisling')!.pieces;
+  await ref.progress.complete(FAMILY, false, false);
+  const home = ref.progress.state().find((s) => s.missionId === FAMILY)!.pieces;
 
   const w = world();
-  const m = w.markers.find((k) => k.missionId === 'frisling')!;
+  const m = w.markers.find((k) => k.missionId === FAMILY)!;
   // the board: the ranger stands far from the marker, the lens looks away from it
   const board = { x: m.x * 0.1, z: m.z * 0.1 };
   assert.ok(Math.hypot(board.x - m.x, board.z - m.z) > HERE_R);
   const view = lens({ x: board.x - m.x * 0.2, z: board.z - m.z * 0.2 }, board, 0);
   const t0 = Date.now();
-  await w.progress.complete('frisling', true, false, view);
+  await w.progress.complete(FAMILY, true, false, view);
   assert.ok(Date.now() - t0 < 500, 'nothing to wait for at the board: the reward follows the caption');
-  const g = w.scene.getObjectByName('progress-frisling')!;
+  const g = w.scene.getObjectByName(`progress-${FAMILY}`)!;
   const flag = g.getObjectByName('klaar-flag')!;
   const pieces = () => g.children.filter((c) => c.name !== 'klaar-flag');
   // laid out at its marker, exactly as a reload lays it out
-  const at = w.progress.state().find((s) => s.missionId === 'frisling')!.pieces;
+  const at = w.progress.state().find((s) => s.missionId === FAMILY)!.pieces;
   assert.deepEqual(at.map((p) => [p.id, +p.x.toFixed(6), +p.z.toFixed(6)]), home.map((p) => [p.id, +p.x.toFixed(6), +p.z.toFixed(6)]));
   for (const p of at) assert.ok(Math.hypot(p.x - m.x, p.z - m.z) < 6, `${p.id} stands at its marker`);
-  // nobody saw it yet: the family waits out of sight while the lens is elsewhere (or a game plays)
-  tick(w.progress, 1, false, view.camera);
-  assert.ok(!flag.visible && pieces().every((c) => !c.visible), 'waiting out of sight');
+  // the "klaar" flag rises at once (run 6: an adventure is finished where its family lives);
+  // the family waits out of sight while the lens is elsewhere (or a game plays)
+  tick(w.progress, 1.2, false, view.camera);
+  assert.ok(flag.visible && Math.abs(flag.scale.y - 1) < 1e-6, 'the flag stands');
+  assert.ok(pieces().every((c) => !c.visible), 'waiting out of sight');
   const atMarker = lens(m, { x: 0, z: 0 });
   tick(w.progress, 1, false, atMarker.camera, true);
   assert.ok(pieces().every((c) => !c.visible), 'never during a game');
-  // the ranger walks up to the marker: the flag rises and the family walks calmly in
+  // the ranger walks up to the marker: the family walks calmly in
   tick(w.progress, 0.5, false, atMarker.camera);
-  assert.ok(flag.visible && flag.scale.y < 1, 'the flag is rising');
   const mid = pieces().map((c) => Math.hypot(c.position.x - m.x, c.position.z - m.z));
   tick(w.progress, REUNION_S, false, atMarker.camera);
-  assert.ok(Math.abs(flag.scale.y - 1) < 1e-6, 'the flag stands');
   pieces().forEach((c, i) => {
     assert.ok(c.visible);
     assert.ok(Math.hypot(c.position.x - at[i].x, c.position.z - at[i].z) < 1e-6, `${at[i].id} is home`);
     const d = Math.hypot(c.position.x - m.x, c.position.z - m.z);
-    if (TABLEAUS.frisling.pieces[i].arrive) assert.ok(mid[i] > d + 0.2, `${at[i].id} walked in`);
+    if (TABLEAUS[FAMILY].pieces[i].arrive) assert.ok(mid[i] > d + 0.2, `${at[i].id} walked in`);
   });
 });
 

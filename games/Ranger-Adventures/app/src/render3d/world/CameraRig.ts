@@ -18,9 +18,10 @@
  */
 
 import * as THREE from 'three';
-import { dampFactor } from '../play/kit-math';
+import { dampFactor, easeInOut, lerpAngle, reframeSeconds, yawPitch, aimDir } from '../play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW, FOLLOW_TAU, FOLLOW_MAX_RATE } from '../FollowCam';
 import { livePolicy } from '../MotionMode';
+import { WALK_SPEED } from '../../core/input';
 import { segmentEntry, segmentCrosses, obstacleGap, obstacleSpan, type MoveLimits, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { TREE_BASE_H, type Dressing } from './Dressing';
@@ -229,6 +230,10 @@ export class CameraRig {
   // with it). place() picks by the ride.
   readonly camOffsetVehicle = new THREE.Vector3(0, 4.5, 9);
   readonly camOffsetHeli = new THREE.Vector3(0, 6, 13);
+  // Run 6: a held lens handed back (an adventure's framed beat ends): the follow view
+  // takes over from where the lens was, position and aim on one smoothstep curve, never
+  // turning faster than ~90°/s (kit makeReframe's rule). null = no hand-over running.
+  private blend: { t: number; dur: number; pos: THREE.Vector3; yaw: number; pitch: number } | null = null;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly terrain: Terrain;
   private readonly obstacles: Obstacle[];
@@ -301,6 +306,21 @@ export class CameraRig {
     } else {
       this.followTargetYaw = this.followYaw; // hold: nothing on foot swings the view
     }
+  }
+
+  /**
+   * Run 6: the lens was somewhere else (an adventure held it): take it back calmly. The
+   * follow bearing becomes the way the lens looks now (so the follow view comes from the
+   * same side — a short glide, never round the ranger), and the lens eases from where it
+   * is to the follow pose on one curve. Under reduced motion the next placement cuts.
+   */
+  handOver(reduced: boolean): void {
+    const dir = this.camera.getWorldDirection(new THREE.Vector3());
+    const yaw = Math.atan2(dir.x, dir.z);
+    this.followYaw = this.followTargetYaw = yaw;
+    this.orbitYaw = this.orbitTargetYaw = 0;
+    this.extOff.set(0, 0, 0);
+    this.blend = reduced ? null : { t: 0, dur: 0, pos: this.camera.position.clone(), ...yawPitch(dir.x, dir.y, dir.z) };
   }
 
   /** The "Camera draait mee" setting source (W1.5). Read live each frame
@@ -526,7 +546,11 @@ export class CameraRig {
       }
       this.extOff.set(0, 0, 0);
     } else {
-      this.pivot.lerp(rp, dampFactor(dt, walk ? this.PIVOT_TAU : this.PIVOT_TAU_VEHICLE));
+      // run 6: running, the pivot trails him by the same ~0.33 m as walking (its smooth-time
+      // shortens as his pace passes a walk), so a run never shrinks him on screen
+      const pace = this.player.pace;
+      const pivotTau = !walk ? this.PIVOT_TAU_VEHICLE : pace > WALK_SPEED ? (this.PIVOT_TAU * WALK_SPEED) / pace : this.PIVOT_TAU;
+      this.pivot.lerp(rp, dampFactor(dt, pivotTau));
       this.boomNow += (dist - this.boomNow) * dampFactor(dt, dist < this.boomNow ? this.BOOM_IN_TAU : this.BOOM_OUT_TAU);
       if (this.boomNow > wall) {
         // a wall the look-ahead did not see coming: the lens never goes into it; it comes
@@ -564,6 +588,7 @@ export class CameraRig {
     const ahead = Math.max(this.aheadNow, rise / Math.tan(this.PITCH_MAX) - this.boomNow);
     if (ahead > 0) { this._look.x += s * ahead; this._look.z += c * ahead; }
     this.camera.lookAt(this._look.x, this._look.y + aimH, this._look.z);
+    if (this.blend) this.stepBlend(snap ? Infinity : dt);
     // F-05 fade rail: when the lens has to come right up to him (his back to a wall) he
     // fades OUT rather than smear his interior across the lens; the view then looks over
     // where he stands. Solid or gone, never half: a half-faded head seen from close
@@ -606,6 +631,27 @@ export class CameraRig {
     // the ground "go here" rings fade by the lens's proximity (both branches: a ring faded
     // on foot restores once a vehicle cam pulls the lens far away)
     this.host.afterPlace();
+  }
+
+  /** The hand-over (see `handOver`): from the held pose to the follow pose placed this
+   *  frame, position and aim on one smoothstep curve. */
+  private stepBlend(dt: number): void {
+    const b = this.blend!;
+    const to = this.camera.position.clone();
+    const d1 = this.camera.getWorldDirection(new THREE.Vector3());
+    const a1 = yawPitch(d1.x, d1.y, d1.z);
+    if (b.dur === 0) {
+      const d0 = aimDir(b.yaw, b.pitch);
+      b.dur = reframeSeconds(1.1, (d1.angleTo(new THREE.Vector3(d0.x, d0.y, d0.z)) * 180) / Math.PI);
+    }
+    b.t = Math.min(1, b.t + dt / b.dur);
+    if (b.t >= 1) { this.blend = null; this.lastSet.copy(to); return; }
+    const e = easeInOut(b.t);
+    this.camera.position.lerpVectors(b.pos, to, e);
+    const d = aimDir(lerpAngle(b.yaw, a1.yaw, e), b.pitch + (a1.pitch - b.pitch) * e);
+    this.camera.up.set(0, 1, 0);
+    this.camera.lookAt(this.camera.position.x + d.x, this.camera.position.y + d.y, this.camera.position.z + d.z);
+    this.lastSet.copy(this.camera.position); // (the next frame must not read this as someone else's move)
   }
 
   /** Reduced motion: hold the bearing while the steering's target still turns, then cut
