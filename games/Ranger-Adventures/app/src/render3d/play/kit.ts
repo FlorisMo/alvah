@@ -370,31 +370,32 @@ function probeShapeAt(x: number, z: number, dx: number, dz: number): { id: strin
   const len = Math.hypot(dx, dz);
   if (!v || len < 1e-6) return null;
   const ux = dx / len; const uz = dz / len;
-  let best: Placed | null = null; let bestArea = 0;
-  for (const p of placedThings(v, x, z, 2.5)) {
-    if (p.moves === 'player') continue; // the ranger standing by it is not the thing
-    const area = (p.box.max.x - p.box.min.x) * (p.box.max.z - p.box.min.z);
-    if (area > bestArea) { bestArea = area; best = p; }
+  // biggest first; a thing drawn only as instances (a wheel-track trail, a plant patch)
+  // has no single shape to measure, so the next biggest is the one (run 6: it made the
+  // jeep's shape read null wherever the drive ended beside one)
+  const things = placedThings(v, x, z, 2.5).filter((p) => p.moves !== 'player') // the ranger standing by it is not the thing
+    .map((p) => ({ p, area: (p.box.max.x - p.box.min.x) * (p.box.max.z - p.box.min.z) }))
+    .sort((a, b) => b.area - a.area);
+  const at = new THREE.Vector3();
+  for (const { p: best } of things) {
+    let a0 = Infinity; let a1 = -Infinity; let c0 = Infinity; let c1 = -Infinity;
+    best.o.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || m.userData.hitSphere || !shownInTree(m) || (m as THREE.InstancedMesh).isInstancedMesh) return;
+      const pos = m.geometry.attributes.position;
+      if (!pos) return;
+      const stride = Math.max(1, Math.floor(pos.count / 4000));
+      for (let i = 0; i < pos.count; i += stride) {
+        at.fromBufferAttribute(pos, i);
+        if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).applyBoneTransform(i, at);
+        at.applyMatrix4(m.matrixWorld);
+        const a = at.x * ux + at.z * uz; const c = -at.x * uz + at.z * ux;
+        a0 = Math.min(a0, a); a1 = Math.max(a1, a); c0 = Math.min(c0, c); c1 = Math.max(c1, c);
+      }
+    });
+    if (Number.isFinite(a0)) return { id: describeObject(best.o, v.scene), along: r2(a1 - a0), across: r2(c1 - c0) };
   }
-  if (!best) return null;
-  let a0 = Infinity; let a1 = -Infinity; let c0 = Infinity; let c1 = -Infinity;
-  const p = new THREE.Vector3();
-  best.o.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh || m.userData.hitSphere || !shownInTree(m) || (m as THREE.InstancedMesh).isInstancedMesh) return;
-    const pos = m.geometry.attributes.position;
-    if (!pos) return;
-    const stride = Math.max(1, Math.floor(pos.count / 4000));
-    for (let i = 0; i < pos.count; i += stride) {
-      p.fromBufferAttribute(pos, i);
-      if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).applyBoneTransform(i, p);
-      p.applyMatrix4(m.matrixWorld);
-      const a = p.x * ux + p.z * uz; const c = -p.x * uz + p.z * ux;
-      a0 = Math.min(a0, a); a1 = Math.max(a1, a); c0 = Math.min(c0, c); c1 = Math.max(c1, c);
-    }
-  });
-  if (!Number.isFinite(a0)) return null;
-  return { id: describeObject(best.o, v.scene), along: r2(a1 - a0), across: r2(c1 - c0) };
+  return null;
 }
 
 provideGoldenProbes({
