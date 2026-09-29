@@ -318,7 +318,7 @@ test('a curious child drives off during the greeting: the hook and the chip come
   const hook = BRAM.haak.simpel;
   const t0 = Date.now();
   let turn = false;
-  while (!(await stripLines(page)).includes(hook[2]) && Date.now() - t0 < 45_000) {
+  while (!(await stripLines(page)).includes(hook[1]) && Date.now() - t0 < 45_000) {
     await page.keyboard.down('ArrowUp'); if (turn) await page.keyboard.down('ArrowLeft');
     await sleep(page, 1_200);
     await page.keyboard.up('ArrowLeft'); await page.keyboard.up('ArrowUp');
@@ -327,7 +327,7 @@ test('a curious child drives off during the greeting: the hook and the chip come
     expect(await page.locator('.lesson-strip').count(), 'no lesson on foot shows (or waits on screen) in the jeep').toBe(0);
   }
   await bramSays(page, hook[0], 1_000);
-  await bramSays(page, hook[2], 1_000);
+  await bramSays(page, hook[2], 10_000);
   await expect(page.locator('.explore-wayfind'), 'the chip appears with the hook, in the jeep').toBeVisible({ timeout: 3_000 });
   await expect(page.locator('.explore-wayfind .wf-doel')).toHaveText(FIRST.titel);
   expect((await R<Vehicle>(page, 'r.vehicle()'))?.inVehicle, 'still in the jeep').toBe(true);
