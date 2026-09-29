@@ -1,11 +1,13 @@
 /**
  * eekhoorn.home.ts — the squirrel's home in the world, built with the world (the THREE
- * half of eekhoorn.places.ts): the dead branch stubs it sits on (on its pine, on the
- * pines of its way), its GLADE — seven look-alike mossy cushions in the oak leaves where
+ * half of eekhoorn.places.ts): its GLADE — seven look-alike mossy cushions in the oak leaves where
  * it buries acorns, a stump with its store of acorns, a dead snag — and its neighbours:
  * the jay on a stub of the pine by the store (it glides down to the acorns when they are
  * piled), the green woodpecker clinging to the same pine, the raven on top of the snag.
- * The trees themselves are forest trees (the world draws them). Plus the acorn being
+ * The trees themselves are forest trees (the world draws them), and so are the dead
+ * branch stubs it sits on (on its pine, on the pines of its way): each is part of its
+ * tree (eekhoorn.places `branchStub`), so it fades with it when the lens looks through
+ * the tree, never hanging solid in the air (review, 2026-09-29). Plus the acorn being
  * buried or dug up, and the little puffs of earth the squirrel throws as it digs.
  *
  * It stands before the mission and after it. After, the store is a bigger heap, the jay
@@ -78,7 +80,6 @@ export class EekhoornHome implements HomeDressing {
   private readonly heap: (THREE.Object3D | undefined)[] = [];
   private heapShown = 1;
   private readonly heapK: number[] = HEAP_SPOTS.map((_, i) => (i === 0 ? 1 : 0));
-  private readonly stubs: THREE.Mesh;
   private readonly puffs: THREE.InstancedMesh;
   private readonly puff: { x: number; y: number; z: number; vx: number; vy: number; vz: number; t: number; s: number }[] = [];
   private readonly seedling: THREE.Mesh;
@@ -99,11 +100,6 @@ export class EekhoornHome implements HomeDressing {
     this.group.name = 'eekhoorn-home';
     env.parent.add(this.group);
     const g = env.groundY;
-
-    /* -- the branch stubs: short dead limbs sticking out of the bark (one mesh) -- */
-    this.stubs = new THREE.Mesh(stubGeometry(HOME_TREES, g), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
-    this.stubs.name = 'branch-stubs';
-    this.group.add(this.stubs);
 
     /* -- the glade: seven look-alike mossy cushions in the oak leaves -- */
     this.field = new PatchField({ parent: this.group, groundY: g, spots: gladeSpots(), size: SPOT_SIZE, heading: GLADE_FRAME.heading, seed: 41, look: 'moss' });
@@ -428,8 +424,6 @@ export class EekhoornHome implements HomeDressing {
   dispose(): void {
     this.field.dispose();
     for (const s of this.spawned) s.dispose();
-    this.stubs.geometry.dispose();
-    (this.stubs.material as THREE.Material).dispose();
     this.puffs.dispose();
     this.puffs.geometry.dispose();
     (this.puffs.material as THREE.Material).dispose();
@@ -453,34 +447,6 @@ function clipBelow(mat: THREE.MeshStandardMaterial, y: number): void {
   };
   mat.customProgramCacheKey = () => `clip-below-${y}`;
   mat.needsUpdate = true;
-}
-
-/** The dead branch stubs of the home trees: short, tapered limbs out of the bark, a
- *  little upward, the colour of their tree's bark. One geometry. */
-function stubGeometry(trees: readonly HomeTree[], g: (x: number, z: number) => number): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  for (const t of trees) {
-    if (!t.branch) continue;
-    const b = t.branch;
-    const trunk: Trunk = { x: t.x, z: t.z, H: t.h, species: t.species };
-    const r0 = barkRadius(trunk, b.h);
-    const len = b.out + 0.12 + r0 * 0.3;
-    const oak = t.species === 'prop-oak-tree';
-    const cyl = new THREE.CylinderGeometry(oak ? 0.045 : 0.03, oak ? 0.07 : 0.05, len, 7, 1);
-    cyl.translate(0, len / 2, 0);
-    cyl.rotateX(Math.PI / 2 - 0.12); // lying out along +z, tipped a little up
-    cyl.rotateY(b.ang);
-    const start = r0 * 0.7; // rooted inside the bark
-    cyl.translate(t.x + Math.sin(b.ang) * start, g(t.x, t.z) + b.h - (oak ? 0.06 : 0.045), t.z + Math.cos(b.ang) * start);
-    const col = new THREE.Color(oak ? '#5d5448' : '#6a4632');
-    const n = cyl.attributes.position.count;
-    const c = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { c[i * 3] = col.r; c[i * 3 + 1] = col.g; c[i * 3 + 2] = col.b; }
-    cyl.setAttribute('color', new THREE.BufferAttribute(c, 3));
-    parts.push(cyl.toNonIndexed());
-    cyl.dispose();
-  }
-  return mergeFlat(parts);
 }
 
 /** A tiny oak seedling: a thin stem and a few lobed leaves (green), ~0.2 m. */

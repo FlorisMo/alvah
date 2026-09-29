@@ -24,6 +24,7 @@ import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { atLocal, headingTo, uniformLocal, type Frame } from '../places.ts';
 import { barkRadius } from '../squirrel-math.ts';
+import type { TreeStub } from '../../world/Forest.ts';
 
 /** The eekhoorn marker: the bos anchor it has always had (the test checks it). */
 export const MARKER: Spot = { x: 25.419167959680543, z: -41.89111958682353 };
@@ -99,6 +100,28 @@ export const HOME_TREES: readonly HomeTree[] = [
   // side, and after the mission the squirrel lives in it (the stub is its branch then)
   { ...g(-2.45, 1.7), species: 'prop-pine-scots', h: 12, rotY: 3.3, branch: { ang: headingTo(g(-2.45, 1.7), CALLERS_STAND) - 0.6, h: 1.75, out: 0.34 } },
 ];
+
+/**
+ * A home tree's branch stub as the forest draws it (part of its tree: it fades with it):
+ * a short dead limb rooted inside the bark, reaching `out` past the bark and a little
+ * more, a little upward, its top where the squirrel's feet are (`branch.h`), the colour
+ * of its tree's bark. None for a tree without a branch.
+ */
+export function branchStub(t: HomeTree): TreeStub | undefined {
+  const b = t.branch;
+  if (!b) return undefined;
+  const r0 = barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, b.h);
+  const oak = t.species === 'prop-oak-tree';
+  const r = oak ? 0.07 : 0.05;
+  return {
+    ang: b.ang,
+    y: b.h - (oak ? 0.06 : 0.045),
+    start: r0 * 0.7,
+    len: b.out + 0.12 + r0 * 0.3,
+    r,
+    color: oak ? '#5d5448' : '#6a4632',
+  };
+}
 
 /** A home tree by its spot (for the tests and the script). */
 export const TREE = {

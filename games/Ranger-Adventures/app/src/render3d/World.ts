@@ -51,7 +51,7 @@ import { Progress } from './world/Progress';
 import { Residents, type DressingBuilder, type FrameView, type ResidentBody } from './world/Residents';
 import { Stage } from './play/stage';
 import type { HomeSpec } from './adventure/types';
-import type { TreeSpecies } from './world/Forest';
+import type { TreeSpecies, TreeStub } from './world/Forest';
 
 export type { WorldMarker } from './world/Markers';
 
@@ -88,8 +88,9 @@ export interface WorldHome {
   actor?: ResidentBody;
 }
 
-/** A tree a mission's home plants (world/Forest.ts draws it with the rest). */
-export interface HomeTree { x: number; z: number; s: number; rotY: number; species: TreeSpecies }
+/** A tree a mission's home plants (world/Forest.ts draws it with the rest), with the
+ *  dead branch stub an animal sits on if it has one (drawn and faded with its tree). */
+export interface HomeTree { x: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub }
 
 /**
  * Free what a torn-down world made on the GPU, and nothing the GLB cache owns. The world

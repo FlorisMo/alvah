@@ -37,7 +37,7 @@ import { TREE_BASE_H } from '../../world/Forest';
 import { EekhoornHome, type Neighbour } from './eekhoorn.home';
 import {
   CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HOME_TREES, JAY_GROUND, STUMP, HIDE_SEEN_AT, hideSide, introView,
-  eekhoornClearings, eekhoornTreeClear,
+  branchStub, eekhoornClearings, eekhoornTreeClear,
 } from './eekhoorn.places';
 
 /** The squirrel's size (m, sitting up with its tail): the upper end of a red squirrel,
@@ -48,7 +48,8 @@ export const eekhoornAdventure: Adventure = {
   id: 'eekhoorn',
   home: EEKHOORN_HOME,
   clearings: eekhoornClearings(),
-  trees: HOME_TREES.map((t) => ({ x: t.x, z: t.z, s: t.h / TREE_BASE_H[t.species], rotY: t.rotY, species: t.species })),
+  // the forest draws them, each with its branch stub (it fades with its tree)
+  trees: HOME_TREES.map((t) => ({ x: t.x, z: t.z, s: t.h / TREE_BASE_H[t.species], rotY: t.rotY, species: t.species, stub: branchStub(t) })),
   treeClearings: eekhoornTreeClear(),
   dressing: (env) => new EekhoornHome(env),
   actor: (spec, env, _height, dressing) => {

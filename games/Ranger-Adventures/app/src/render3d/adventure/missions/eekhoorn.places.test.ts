@@ -12,8 +12,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_AT, JAY_GROUND,
-  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, HIDE_SEEN_AT, gladeSpots, eekhoornTreeClear, eekhoornClearings, hideSide,
+  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, HIDE_SEEN_AT, gladeSpots, eekhoornTreeClear, eekhoornClearings, hideSide, branchStub,
 } from './eekhoorn.places.ts';
+import { STUB_TILT } from '../../world/Forest.ts';
 import { biomeAt, VEN_CENTER, VEN_SHORE_R } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
 import { dist, headingTo, toLocal, segDist } from '../places.ts';
@@ -192,4 +193,23 @@ test('the squirrel lives on its tree by the marker before, at its glade after', 
   assert.ok(sq.after && dist(sq.after, TREE.storePine) < 0.01, 'at its glade after, in the pine by its store');
   assert.ok(dist(TREE.storePine, STUMP) < 3.5, 'its store is at the foot of that pine');
   assert.ok(sq.voice && sq.voice.call === 'eekhoorn', 'it chatters');
+});
+
+test('each home tree\'s branch stub is part of its tree: rooted in the bark, out past the squirrel\'s seat, its top at the branch', () => {
+  let n = 0;
+  for (const [i, t] of HOME_TREES.entries()) {
+    const s = branchStub(t);
+    if (!t.branch) { assert.equal(s, undefined, `tree-${i} has no branch, so no stub`); continue; }
+    n++;
+    assert.ok(s, `tree-${i} has its stub`);
+    const b = t.branch;
+    const bark = barkRadius(trunk(t), b.h);
+    assert.equal(s.ang, b.ang, `tree-${i}: it points the branch's way`);
+    assert.ok(s.start < bark * 0.95, `tree-${i}: rooted inside the bark (${s.start.toFixed(3)} < ${bark.toFixed(3)} m)`);
+    const past = s.start + s.len * Math.cos(STUB_TILT) - bark;
+    assert.ok(past >= b.out + 0.08, `tree-${i}: it reaches ${past.toFixed(2)} m out of the bark (the seat is ${b.out} m out)`);
+    assert.ok(Math.abs(s.y + s.r - b.h) < 0.015, `tree-${i}: its top at the branch height (${(s.y + s.r).toFixed(3)} vs ${b.h})`);
+    assert.ok(s.r > 0.03 && s.r < 0.09, `tree-${i}: a limb, not a log (${s.r} m)`);
+  }
+  assert.equal(n, HOME_TREES.length, 'every home tree has a branch');
 });

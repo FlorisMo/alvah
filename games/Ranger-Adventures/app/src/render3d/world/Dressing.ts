@@ -20,7 +20,7 @@ import type { TierParams } from '../../core/quality';
 import { buildFarForest, buildPathGeometry, farCanopyTexture, type Terrain } from './Terrain';
 import type { Labels } from './Labels';
 import { enableCast, naturaliseConcrete, proceduralTotem } from './props';
-import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
+import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies, type TreeStub } from './Forest';
 import { PlantField, heatherGeometry, plantMaterial, tuftGeometry, type PlantSpot } from './Plants';
 import { lodGeometries, lodMaterial } from '../Lod';
 import { heathCover } from '../GroundDetail';
@@ -115,8 +115,9 @@ export class Dressing {
   clearings: readonly { x: number; z: number; r: number }[] = [];
   /** run 6: ground a mission's home keeps free of the scattered trees (a glade, a trail) */
   treeClearings: readonly { x: number; z: number; r: number }[] = [];
-  /** run 6: trees a mission's home plants itself (a camera tree), drawn with the forest */
-  homeTrees: readonly { x: number; z: number; s: number; rotY: number; species: TreeSpecies }[] = [];
+  /** run 6: trees a mission's home plants itself (a camera tree), drawn with the forest,
+   *  each with its branch stub if it has one (a squirrel's perch: it fades with its tree) */
+  homeTrees: readonly { x: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub }[] = [];
   // P1.3 tree canopy: the instant cone/cylinder stand-ins (dropped once the Forest is
   // ready) and every tree placement: the bos scatter, the rim tree-line and the grove
   // trees of the nature dressing. The camera rig tests its crowns against these.
@@ -400,7 +401,7 @@ export class Dressing {
       species: TREE_SCATTER_MIX[i % TREE_SCATTER_MIX.length],
     }));
     // run 6: the trees a mission's home plants (a camera tree at a crossing)
-    for (const t of this.homeTrees) placed.push({ x: t.x, y: this.groundY(t.x, t.z), z: t.z, s: t.s, rotY: t.rotY, species: t.species });
+    for (const t of this.homeTrees) placed.push({ x: t.x, y: this.groundY(t.x, t.z), z: t.z, s: t.s, rotY: t.rotY, species: t.species, stub: t.stub });
     // a soft collision circle around each trunk (the ranger slides around it).
     // D3.16: tag it a TREE so the all-occluder sightline test (propBlocksSightline)
     // skips it — the whole tree is the camera's fadeable crown (world/Crowns.ts), so
