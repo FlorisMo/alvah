@@ -329,7 +329,19 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const m = all?.find((x) => x.missionId === missionId);
     hard(!!m, `markers() has no marker for mission "${missionId}"`);
     marker = { x: m.x, z: m.z };
-    const w = await walkTo(page, marker, { until: (s) => s.near === missionId, timeout: 120_000 });
+    // run 6: while he walks up, which of the mission's animals living at its home come on
+    // screen (from the heli pad the family's wallow lies on the way, not past the marker)
+    const onWay = new Set<string>();
+    let walking = true;
+    const watching = (async () => {
+      while (walking) {
+        const keys = await R<string[] | null>(page, `(() => { const h = (r.residents() ?? []).find((x) => x.missionId === ${JSON.stringify(missionId)}); if (!h) return []; return h.actors.filter((a) => a.visible && a.key !== 'lost' && r.screenOf(a.x, (r.groundAt(a.x, a.z) ?? 0) + 0.35, a.z)?.onScreen).map((a) => a.key); })()`).catch(() => null);
+        for (const k of keys ?? []) onWay.add(k);
+        await sleep(page, 400);
+      }
+    })();
+    const w = await walkTo(page, marker, { until: (s) => s.near === missionId, timeout: 120_000 }).finally(() => { walking = false; });
+    await watching;
     walkQuality(w, `walk to "${missionId}"`);
     hard(w.res === 'until', `walking with the arrow keys never reached the "${missionId}" marker (${w.res} at ${r2(w.end.x)}, ${r2(w.end.z)}; marker at ${r2(marker.x)}, ${r2(marker.z)})`);
     await sleep(page, 1_000);
@@ -345,8 +357,9 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
         const sc = await R<{ onScreen: boolean } | null>(page, `r.screenOf(${a.x}, ${g + 0.35}, ${a.z})`);
         if (sc?.onScreen) seen.push(a.key);
       }
-      note(`the family at its home: ${seen.join(', ') || 'none'} on screen from the marker`);
-      soft(seen.includes('sow') && seen.length >= 3, `at the marker the family is not in view (on screen: ${seen.join(', ') || 'none'})`);
+      note(`the family at its home: ${seen.join(', ') || 'none'} on screen from the marker; ${[...onWay].join(', ') || 'none'} seen on the way`);
+      const both = new Set([...seen, ...onWay]);
+      soft(both.has('sow') && both.size >= 3, `walking up to the marker the family is never in view (on screen at the marker: ${seen.join(', ') || 'none'}; on the way: ${[...onWay].join(', ') || 'none'})`);
       soft(!fam.actors.some((a) => a.key === 'lost' && Math.hypot(a.x - marker.x, a.z - marker.z) < 2), 'the lost piglet stands in the marker ring (he should be hidden, heard)');
     }
     seatsBefore = await worldSamples(page, marker, SEAT_RADIUS, 3);
@@ -560,7 +573,9 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     const text = (await uiText(page)).toLowerCase();
     soft(text.includes(mission.titel.toLowerCase()), `no reward card naming "${mission.titel}"`);
     let clue = false;
-    for (let i = 0; i < 8; i++) { // click through to the world like a player: prefer "back to patrol"
+    // click through to the world like a player: prefer "back to patrol" (an adventure's
+    // ending may first take one calm look at something in the world: wait it out)
+    for (const tR = Date.now(); Date.now() - tR < 45_000;) {
       if (await page.getByRole('button', { name: /Verder op patrouille/ }).filter({ visible: true }).count()) {
         await clickButton(page, /Verder op patrouille/, 'reward');
       } else if (await page.getByRole('button', { name: /Kijk wat je vond|Bekijk de wildcamera/ }).filter({ visible: true }).count()) {
