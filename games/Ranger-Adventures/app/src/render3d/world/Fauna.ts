@@ -154,6 +154,9 @@ export class Fauna {
         restFar(a.group, a.rest.step(Math.hypot(g.x - camera.position.x, g.z - camera.position.z), dt, reduced));
       }
       if (a.wander && a.wild) {
+        // its loop moved clear of the world's solids, once everything is placed (placement,
+        // not motion: also under reduced motion)
+        if (!a.audited) this.auditLoop(a);
         // frozen under reduced motion, wherever it stands (the jeep's give-way brake keeps it safe)
         if (reduced) { a.mixer?.update(0); continue; }
         this.stepRoamer(a, t, dt, threats);
@@ -171,7 +174,6 @@ export class Fauna {
    *  its legs follow the ground it really covered. */
   private stepRoamer(a: AmbientEntry, t: number, dt: number, threats: Threats): void {
     const w = a.wild!;
-    if (!a.audited) this.auditLoop(a);
     this.gatherNear(a, threats);
     wildStep(w, a.tm!, a.r, threats, a.world!, Math.min(dt, 0.1));
     a.group.position.set(w.x, this.groundY(w.x, w.z), w.z);
@@ -232,6 +234,8 @@ export class Fauna {
     a.wander = cleared;
     const at = wanderAt(cleared, w.loopT);
     w.x = at.x; w.z = at.z; w.facing = at.facing; w.gx = at.x; w.gz = at.z;
+    a.group.position.set(at.x, this.groundY(at.x, at.z), at.z);
+    a.group.rotation.y = at.facing + a.faceOffset;
   }
 
   // What a roamer meets this frame, gathered into reused buffers (no garbage): the solids
@@ -442,8 +446,7 @@ export class Fauna {
         phase: (i * 0.27) % 1,       // desync the loops
         angle: i * 1.1,              // rotate each loop differently
       };
-      const t0 = wander.phase * wander.period;
-      const at = wanderAt(wander, t0);
+      const at = wanderAt(wander, 0); // its own loop clock starts at 0 (the phase desyncs them)
       const group = new THREE.Group();
       group.position.set(at.x, this.groundY(at.x, at.z), at.z);
       group.rotation.y = at.facing;
@@ -531,7 +534,7 @@ export class Fauna {
   ambientState(): {
     id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null;
     mode: string | null; speed: number; gait: string | null; facing: number; r: number; threat: string | null;
-    loop: { x: number; z: number; r: number } | null;
+    loop: { x: number; z: number; r: number; angle: number } | null;
   }[] {
     return this.ambient.map((a) => {
       const w = Math.max(a.walkW, a.grazeW, a.idleW);
@@ -545,7 +548,7 @@ export class Fauna {
         mode: a.wild?.mode ?? null, speed: a.wild?.moved ?? 0, gait: a.wild?.gait ?? null,
         facing: a.group.rotation.y, r: a.r, threat: a.wild?.threat ?? null,
         // its roam loop after the audit (home and radius)
-        loop: a.wild && a.wander ? { x: a.wander.homeX, z: a.wander.homeZ, r: a.wander.radius } : null,
+        loop: a.wild && a.wander ? { x: a.wander.homeX, z: a.wander.homeZ, r: a.wander.radius, angle: a.wander.angle } : null,
       };
     });
   }

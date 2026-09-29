@@ -56,6 +56,7 @@ interface Run {
   modes: Set<string>;
   sideways: number;       // frames it moved more than 25° off its facing
   toward: number;         // frames it moved toward the jeep while making way
+  stuck: number;          // longest stretch (s) it stood still while making way
   state: WildState;
 }
 
@@ -65,7 +66,7 @@ interface Run {
  * ground. The jeep's path prediction is the real `predictJeep`, in a world without
  * animals, refreshed every 0.1 s as the World does.
  */
-function driveAt(ax: number, az: number, opts: { blocked?: (x: number, z: number) => boolean; tm?: typeof REE; r?: number; secs?: number; faceTo?: number; speed0?: number } = {}): Run {
+function driveAt(ax: number, az: number, opts: { blocked?: (x: number, z: number) => boolean; tm?: typeof REE; r?: number; secs?: number; faceTo?: number; speed0?: number; steer?: number } = {}): Run {
   const tm = opts.tm ?? REE, r = opts.r ?? REE_R;
   const home: LoopPoint = { x: ax, z: az, facing: opts.faceTo ?? Math.PI / 2, moving: false };
   const s = newWildState(home, 0);
@@ -74,12 +75,13 @@ function driveAt(ax: number, az: number, opts: { blocked?: (x: number, z: number
   const animal: YieldAnimal & { x: number; z: number } = { id: 'ree', x: ax, z: az, r };
   const path = new Float64Array(PATH_N * PATH_STRIDE);
   let pathN = 0, predictIn = 0;
-  const run: Run = { noticedAt: Infinity, minGap: Infinity, minSpeedAtFull: Infinity, yielded: false, backInRoam: Infinity, modes: new Set(), sideways: 0, toward: 0, state: s };
+  const run: Run = { noticedAt: Infinity, minGap: Infinity, minSpeedAtFull: Infinity, yielded: false, backInRoam: Infinity, modes: new Set(), sideways: 0, toward: 0, stuck: 0, state: s };
+  let stillYield = 0;
   let full = j.speed >= 5.99, passedAt = -1;
   const secs = opts.secs ?? 25;
   for (let t = 0; t < secs; t += DT) {
-    const passed = j.z > az + 4;
-    const want = { throttle: passed ? 0 : 1, steer: 0 };
+    const passed = opts.steer ? false : j.z > az + 4;
+    const want = { throttle: passed ? 0 : 1, steer: opts.steer ?? 0 };
     animal.x = s.x; animal.z = s.z;
     const f = jeepStep(j, want, DT, JEEP_CAPS, emptyJeepWorld([animal]));
     j = f;
@@ -101,6 +103,8 @@ function driveAt(ax: number, az: number, opts: { blocked?: (x: number, z: number
       }
     }
     run.modes.add(s.mode);
+    stillYield = s.mode === 'yield' && s.moved < 0.05 ? stillYield + DT : 0;
+    run.stuck = Math.max(run.stuck, stillYield);
     const gap = bodyGap(j, s.x, s.z, r);
     run.minGap = Math.min(run.minGap, gap);
     if (s.mode !== 'roam' && run.noticedAt === Infinity) run.noticedAt = gap;
@@ -190,12 +194,12 @@ test('it never crosses the jeep\'s path to get away: off-centre, it goes out on 
 
 /** Walk (or run) the ranger straight at a grazing animal from `from` m, as a player holding a
  *  key, and read the distances at which it looks up, moves off, and the closest he got. */
-function walkAt(from: number, speed: number, running: boolean, secs = 12): { lookAt: number; awayAt: number; min: number; modes: string[]; toward: number } {
+function walkAt(from: number, speed: number, running: boolean, secs = 12): { lookAt: number; awayAt: number; min: number; modes: string[]; toward: number; farthest: number } {
   const home: LoopPoint = { x: 0, z: 0, facing: Math.PI / 2, moving: false };
   const s = newWildState(home, 0);
   const world = openWorld(home);
   const rg: RangerRead = { x: 0, z: -from, heading: 0, speed, running };
-  let lookAt = -1, awayAt = -1, min = Infinity, toward = 0;
+  let lookAt = -1, awayAt = -1, min = Infinity, toward = 0, farthest = 0;
   const modes: string[] = [];
   for (let t = 0; t < secs; t += DT) {
     // he walks at where it is now (a child following it), stopping when he bumps into it
@@ -208,13 +212,14 @@ function walkAt(from: number, speed: number, running: boolean, secs = 12): { loo
     wildStep(s, REE, REE_R, { ranger: rg, jeep: null }, world, DT);
     const d2 = Math.hypot(s.x - rg.x, s.z - rg.z);
     min = Math.min(min, d2);
+    farthest = Math.max(farthest, Math.hypot(s.x, s.z));
     if (s.mode !== 'roam' && lookAt < 0) lookAt = d2;
     if (s.mode === 'away' && awayAt < 0) awayAt = d2;
     if (modes[modes.length - 1] !== s.mode) modes.push(s.mode);
     const mx = s.x - x0, mz = s.z - z0, m = Math.hypot(mx, mz);
     if (m > 1e-3 && (mx * (rg.x - s.x) + mz * (rg.z - s.z)) / (m * d2) > 0.3) toward++;
   }
-  return { lookAt, awayAt, min, modes, toward };
+  return { lookAt, awayAt, min, modes, toward, farthest };
 }
 
 test('on foot: walking calmly at the ree it looks up at 5-6 m, steps away at 3-4 m and never lets him within 1.5 m', () => {
@@ -228,7 +233,7 @@ test('on foot: walking calmly at the ree it looks up at 5-6 m, steps away at 3-4
 test('on foot: running at the ree it moves off from about 8 m, and he never catches it', () => {
   const r = walkAt(16, 4.2, true);
   assert.ok(r.awayAt >= 7 && r.awayAt <= 9, `it moved off at ${r.awayAt.toFixed(2)} m`);
-  assert.ok(r.min >= 3, `he never got near (closest ${r.min.toFixed(2)} m)`);
+  assert.ok(r.min >= 1.5, `he never caught up (closest ${r.min.toFixed(2)} m)`);
   assert.equal(r.toward, 0);
 });
 
@@ -294,4 +299,41 @@ test('predictJeep: the path the jeep will drive, from now, a pose every 0.1 s', 
   assert.ok(Math.abs(out[(n - 1) * PATH_STRIDE + 1] - 6 * 0.1 * (n - 1)) < 0.2, 'at 6 m/s straight on');
   const turning = predictJeep({ x: 0, z: 0, heading: 0, speed: 6, contact: false, braked: false }, { throttle: 1, steer: 1 }, JEEP_CAPS, emptyJeepWorld([]), out);
   assert.ok(out[(turning - 1) * PATH_STRIDE] < -2, 'a right turn key curves it to the right (−x at heading 0)');
+});
+
+test('a jeep circling with the wheel held: the animal on its arc sees the curve coming, never stands stuck, and the jeep never brakes', () => {
+  for (const th of [150, 180, 215]) {
+    const a = (th * Math.PI) / 180;
+    // held right at 6 m/s the jeep circles about (−10, 0) (radius ~10 m): the animal stands on
+    // that circle 26-38 m of arc ahead (it comes into the jeep's horizon as the jeep comes round)
+    const run = driveAt(-10 + 10 * Math.cos(a), 10 * Math.sin(a), { steer: 1, secs: 20, faceTo: (th * 7) % 6 });
+    assert.equal(run.yielded, false, `${th}°: the jeep never had to brake for it`);
+    assert.ok(run.minGap >= 0.8, `${th}°: never within 0.8 m (${run.minGap.toFixed(2)})`);
+    assert.ok(run.stuck <= 1.2, `${th}°: making way it never stood stuck (${run.stuck.toFixed(2)} s)`);
+    assert.equal(run.sideways, 0, `${th}°: along its facing`);
+  }
+});
+
+test('a boy who stands still near it: it watches him a moment, then grazes on, and its loop never walks it up to him', () => {
+  // its loop leads straight toward where he stands
+  const loop = (t: number): LoopPoint => ({ x: 0, z: Math.min(4, t * 0.5), facing: 0, moving: t < 8 });
+  const world: WildWorld = { free: () => true, move: (_a, _b, tx, tz, o) => { o.x = tx; o.z = tz; }, loop, loopLeg: 8 };
+  const s = newWildState(loop(0), 0);
+  const rg: RangerRead = { x: 0, z: 8.6, heading: Math.PI, speed: 0, running: false };
+  let alertS = 0, closest = Infinity;
+  for (let t = 0; t < 20; t += DT) {
+    wildStep(s, REE, REE_R, { ranger: rg, jeep: null }, world, DT);
+    if (s.mode === 'alert') alertS += DT;
+    closest = Math.min(closest, Math.hypot(s.x - rg.x, s.z - rg.z));
+  }
+  assert.equal(s.mode, 'roam', 'it grazes on');
+  assert.ok(alertS < REE.watch + 1.5, `it watched him ${alertS.toFixed(1)} s`);
+  assert.ok(closest >= REE.flight + 1, `its loop never brought it within ${closest.toFixed(2)} m of him`);
+});
+
+test('chased hard for half a minute, it circles its home ground instead of being carried off across the world', () => {
+  const r = walkAt(16, 4.2, true, 30);
+  assert.ok(r.min >= 1.5, `he never got within 1.5 m, even as it turned back round (closest ${r.min.toFixed(2)} m)`);
+  assert.ok(r.farthest <= 26, `it stayed within ${r.farthest.toFixed(1)} m of its home`);
+  assert.equal(r.toward, 0);
 });

@@ -372,10 +372,12 @@ export function planYield(
   keepOut(n, x, z, r, need);
   const ux = koIdx >= 0 ? koFx : Math.sin(j.heading), uz = koIdx >= 0 ? koFz : Math.cos(j.heading);
   const lx = uz * side, lz = -ux * side;           // toward its side of the path
+  const jx = j.x - x, jz = j.z - z, jl = Math.hypot(jx, jz) || 1;
   let best = Infinity;
   for (const deg of YIELD_ANGLES) {
     const b = (deg * Math.PI) / 180;               // 0 = straight out, + = out and ahead
     const mx = lx * Math.cos(b) + ux * Math.sin(b), mz = lz * Math.cos(b) + uz * Math.sin(b);
+    if ((mx * jx + mz * jz) / jl > 0.05) continue;  // never a run toward where the jeep is
     const turn = Math.abs(wrapPi(Math.atan2(mx, mz) - facing));
     for (let len = 1.5; len <= 9.01; len += 0.75) {
       const gx = x + mx * len, gz = z + mz * len;
@@ -419,12 +421,13 @@ const rangerView: RangerView = { d: Infinity, closing: 0, look: false, flee: fal
 
 /**
  * How the animal at (x, z) sees the ranger on foot: how near he is, how fast he comes at it,
- * whether it looks up and whether it moves away. `wary` = it is already alert or moving off
- * (hysteresis: it lets him go a metre and a half further before it relaxes). A ranger
- * standing still, or walking past without coming at it, is no reason to look up; one closer
- * than its flight distance always is. Returns a reused object.
+ * whether it looks up and whether it moves away. `wary` = it is already alert or moving off,
+ * `fleeing` = moving off from him (hysteresis: it lets him come a metre and a half further
+ * off before it relaxes, and it keeps going while he keeps coming). A ranger standing still,
+ * or walking past without coming at it, is no reason to look up; one closer than its flight
+ * distance always is. Returns a reused object.
  */
-export function readRanger(x: number, z: number, tm: Temperament, rg: RangerRead | null, wary: boolean): RangerView {
+export function readRanger(x: number, z: number, tm: Temperament, rg: RangerRead | null, wary: boolean, fleeing = false): RangerView {
   const v = rangerView;
   v.d = Infinity; v.closing = 0; v.look = false; v.flee = false;
   if (!rg) return v;
@@ -437,20 +440,25 @@ export function readRanger(x: number, z: number, tm: Temperament, rg: RangerRead
   const runs = rg.running && v.closing > 1;
   const alert = runs ? tm.runAlert : tm.alert;
   const flight = runs ? tm.runFlight : tm.flight;
-  v.flee = d < flight || d < tm.near + 0.5;
-  v.look = v.flee || (d < alert + hyst && (v.closing > 0.25 || wary)) || d < tm.flight + 0.8 + hyst;
+  v.flee = d < flight + (fleeing && v.closing > 0.3 ? 1.5 : 0) || d < tm.near + 0.5;
+  // it looks up when he comes at it, or moves about close by; a boy who stands still is
+  // watched for a moment (`watch`) and then it grazes on (calm ranger, calm animals)
+  const moving = Math.abs(rg.speed) > 0.2;
+  v.look = v.flee || (d < alert + hyst && (v.closing > 0.25 || (wary && moving && v.closing > -0.25))) || (moving && d < tm.flight + 0.8 + hyst);
   return v;
 }
 
 /**
  * Where to step away from something at (fx, fz) (the ranger, a jeep that stands by it): a
  * spot `want` metres from it, roughly away from it (never past it), on open ground, along a
- * straight run; the least turn from where the animal faces, the most directly away. Null
- * when it is cornered. Writes into `out`.
+ * straight run; the least turn from where the animal faces, the most directly away. With
+ * `home` (its loop), a long chase curves round its home ground instead of carrying it off
+ * across the world (a gentle leash beyond `LEASH` m). False when it is cornered. Writes
+ * into `out`.
  */
 export function planAway(
   x: number, z: number, facing: number, r: number, fx: number, fz: number, want: number, world: WildWorld,
-  out: { x: number; z: number },
+  out: { x: number; z: number }, home: { x: number; z: number } | null = null,
 ): boolean {
   const d = Math.hypot(x - fx, z - fz);
   const base = d > 1e-6 ? Math.atan2(x - fx, z - fz) : facing;
@@ -462,12 +470,20 @@ export function planAway(
     const gx = x + mx * len, gz = z + mz * len;
     if (Math.hypot(gx - fx, gz - fz) < d + len * 0.45) continue; // it must really gain distance
     if (!runFree(x, z, mx, mz, len, r, world)) continue;
-    const cost = Math.abs(deg) * 0.02 + Math.abs(wrapPi(a - facing)) * 0.35;
+    let cost = Math.abs(deg) * 0.02 + Math.abs(wrapPi(a - facing)) * 0.35;
+    if (home) {
+      const far = (px: number, pz: number): number => Math.max(0, Math.hypot(px - home.x, pz - home.z) - LEASH);
+      cost += LEASH_PULL * (far(gx, gz) ** 2 - far(x, z) ** 2);
+    }
     if (cost < best) { best = cost; out.x = gx; out.z = gz; }
   }
   return best < Infinity;
 }
 const AWAY_ANGLES = [0, 20, -20, 40, -40, 60, -60, 80, -80];
+/** Beyond this far (m) from its loop a chased animal's way off bends back round its home… */
+const LEASH = 8;
+/** …the more the further out (cost per m² further out). */
+const LEASH_PULL = 0.03;
 
 /* ------------------------------------------------------------------ one step -- */
 
@@ -484,6 +500,9 @@ const ACCEL = 1.6, ACCEL_QUICK = 5, BRAKE = 3, BRAKE_QUICK = 6;
 /** Watching, it turns its body to what it watches only when that is this far (rad) off its
  *  facing (the head does the rest), and it faces within this before it stops turning. */
 const WATCH_TURN = 0.9, WATCH_SETTLE = 0.2;
+/** Grazing near a boy who stands still, its loop never brings it nearer than its flight
+ *  distance plus this (m). */
+const KEEP_ROOM = 1.2;
 /** It walks back to its loop a little brisker than it roams (× its walk). */
 const RETURN_PACE = 1.2;
 /** A plan is looked at again this often (s) while the threat is on. */
@@ -501,7 +520,7 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
   const J = readJeep(s.x, s.z, r, th.jeep);
   const jKind = J.kind, jLat = J.lat, jTti = J.tti;
   const wary = s.mode === 'alert' || s.mode === 'away' || s.mode === 'yield';
-  const R = readRanger(s.x, s.z, tm, th.ranger, wary);
+  const R = readRanger(s.x, s.z, tm, th.ranger, wary, s.mode === 'away' && s.threat === 'ranger');
 
   // ---- decide ----
   if (jKind === 'path' && th.jeep) {
@@ -547,15 +566,16 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
     // while he keeps coming the goal is kept ahead of it, so it walks on instead of stopping
     if (s.mode !== 'away' || s.replan <= 0 || goalLeft < 1.5) {
       s.replan = REPLAN;
-      if (planAway(s.x, s.z, s.facing, r, rg.x, rg.z, far, world, out2)) {
+      if (planAway(s.x, s.z, s.facing, r, rg.x, rg.z, far, world, out2, world.loop(s.loopT))) {
         if (s.mode !== 'away') setMode(s, 'away');
         s.gx = out2.x; s.gz = out2.z;
       } else if (s.mode !== 'away') setMode(s, 'alert');
     }
-    // keep pace with him: never let him gain on it, walk when he comes calmly
-    const base = runs ? tm.trot : tm.step;
-    const squeeze = clamp((tm.flight - R.d) / Math.max(0.1, tm.flight - tm.near), 0, 1); // 0 at flight → 1 at near
-    s.pace = clamp(Math.max(base, R.closing + 0.6 + squeeze * 0.8), tm.step, tm.top);
+    // keep its distance: at his own pace when he follows it (a walker's 2.2 m/s is its
+    // trot), quicker the closer he is, a calm step when he stands
+    // (a calm walker never makes it bound: a quick trot at most; a runner or the jeep may)
+    const flight = runs ? tm.runFlight : tm.flight;
+    s.pace = clamp(R.closing + (flight - R.d) * 1.5 + 0.3, tm.step, runs ? tm.top : tm.trot + 0.3);
   } else if (s.mode === 'yield' || s.mode === 'away') {
     // the threat has passed or eased: finish the move, then stand and watch
     if (th.jeep && jKind !== 'none') { s.quiet = 0; s.lookX = th.jeep.x; s.lookZ = th.jeep.z; }
@@ -576,7 +596,10 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
     if (s.mode === 'alert' && s.quiet >= tm.watch) {
       s.threat = null;
       const L = world.loop(s.loopT);
-      if (Math.hypot(L.x - s.x, L.z - s.z) < ON_LOOP) setMode(s, 'roam');
+      // back on its loop, or its way back leads up to a boy standing there: it grazes where
+      // it is (roam waits for him to go, see the move), else it walks back
+      const nearHim = th.ranger !== null && Math.hypot(L.x - th.ranger.x, L.z - th.ranger.z) < tm.flight + KEEP_ROOM;
+      if (Math.hypot(L.x - s.x, L.z - s.z) < ON_LOOP || nearHim) setMode(s, 'roam');
       else { setMode(s, 'return'); s.gx = L.x; s.gz = L.z; s.stuck = 0; }
     }
   }
@@ -587,10 +610,21 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
     case 'roam': {
       const L = world.loop(s.loopT);
       const L2 = world.loop(s.loopT + dt);
-      s.loopT += dt;
+      // a boy standing near its loop: it grazes where it is rather than walk its loop up to
+      // him (its clock waits), and roams on once he has gone
+      const rg = th.ranger;
+      if (rg) {
+        const next = Math.hypot(L2.x - rg.x, L2.z - rg.z);
+        if (next < tm.flight + KEEP_ROOM && next <= Math.hypot(L.x - rg.x, L.z - rg.z) + 1e-9) {
+          s.speed = approach(s.speed, 0, BRAKE, BRAKE, dt);
+          if (s.speed > 0.01) stepAlong(s, world, dt);
+          break;
+        }
+      }
       const ex = L.x - s.x, ez = L.z - s.z;
       const lag = Math.hypot(ex, ez);
-      if (lag > OFF_LOOP) { setMode(s, 'return'); s.gx = L.x; s.gz = L.z; s.stuck = 0; s.loopT -= dt; break; }
+      if (lag > OFF_LOOP) { setMode(s, 'return'); s.gx = L.x; s.gz = L.z; s.stuck = 0; break; }
+      s.loopT += dt;
       // feed-forward the loop's own motion, and close the gap to it; at a grazing stop it
       // stands where it stopped (a few cm off the loop point is never worth a sideways step)
       const lx = (L2.x - L.x) / dt, lz = (L2.z - L.z) / dt;

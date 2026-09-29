@@ -394,7 +394,7 @@ export type PlayHintProbe = {
 export type AmbientRead = {
   id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null;
   mode?: string | null; speed?: number; gait?: string | null; facing?: number; r?: number; threat?: string | null;
-  loop?: { x: number; z: number; r: number } | null;
+  loop?: { x: number; z: number; r: number; angle: number } | null;
 };
 
 /** One entry of `__ranger.seating()`. */
