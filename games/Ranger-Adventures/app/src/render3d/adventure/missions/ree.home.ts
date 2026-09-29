@@ -18,7 +18,7 @@ import type { HomeState } from '../types';
 import { CoverField } from '../cover';
 import { backPoints, openWindow, standClumps, visibleShare, type Clump, type V3 } from '../cover-math';
 import { StandDecoys, decoyClumps, type Decoy, type DecoyAt } from '../decoys';
-import { groundDecal } from '../decal';
+import { groundDecal, groundStrip } from '../decal';
 import { atLocal, dist, segDist, stream, toLocal } from '../places';
 import { heightFor } from '../../play/spawn';
 import { lyingHeight, LEG_SHARE } from '../../play/pose';
@@ -29,12 +29,15 @@ import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
 import {
   juniperR, REE_PLACES, MEADOW, MEADOW_FRAME, COPSE_FRAME, CALF_SPOT, SEARCH_VIEW, JUNIPERS, COPSE_TREES, DOE_BED, CALF_BED, COPSE_GAP,
-  HIDE_JUNIPER, HIDE_LOG, POOL, POOL_FRAME, MEET, onMeadow,
+  HIDE_JUNIPER, HIDE_LOG, POOL, POOL_FRAME, MEET, WISSEL_HALF, onMeadow, wisselLine,
 } from './ree.places';
 
 /** The sky overhead that a small pool mirrors when it is seen from above (the ven, seen
  *  across, mirrors the hazy horizon and the far trees instead). */
 const POOL_SKY = '#7d949a';
+
+/** Her wissel's worn sand: paler than the heath's peat, so the path reads from the ring. */
+const WISSEL_SAND = '#a8957a';
 
 /** The drops a boot throws up in the pool. */
 const DROPS = 9;
@@ -230,6 +233,12 @@ export class ReeHome implements HomeDressing {
       this.spawned.push(s);
     });
     env.obstacles.push(boxObstacle(HIDE_LOG.x, HIDE_LOG.z, HIDE_LOG.half, 0.24, HIDE_LOG.turn, 0.25));
+
+    /* -- her wissel: the path her hooves wore through the heath, ring to tall grass -- */
+    const wissel = groundStrip(g, wisselLine(), WISSEL_HALF, WISSEL_SAND, { layer: 1, wobble: 0.28, seed: 5, feather: true });
+    wissel.renderOrder = -1; // under the marker ring's halo where it crosses it
+    this.group.add(wissel);
+    this.made.push(wissel);
 
     /* -- the wet pool: a muddy rim, dark still water that takes the sky's light -- */
     const pool = (rx: number, rz: number, color: string, o: Parameters<typeof groundDecal>[7]): void => {

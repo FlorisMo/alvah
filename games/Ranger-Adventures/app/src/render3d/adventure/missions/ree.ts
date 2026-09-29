@@ -105,13 +105,17 @@ async function story(k: AdventureKit): Promise<void> {
     void doe.go(graze.x, graze.z, { speed: 'walk', face: graze.yaw }).then((ok) => { if (ok) doe.root(graze.x, graze.z, 0.4); });
   } else doe.root(graze.x, graze.z, 0.4);
 
+  // her fresh slots on her wissel, dark in its pale sand so they read from the ring (the
+  // zoeken spoor leg sets how many and how clear); they are there as the card goes
+  const spoor = buildSpoor(store.difficulty('zoeken'));
+  const trail = slotTrail();
+  k.own(spoorTrail(trail.from.x, trail.from.z, trail.to.x, trail.to.z, spoor.legs, g, 0.4 + 0.6 * spoor.helderheid, 1.0, 5,
+    { slot: true, fadeFrom: 0.85 }).group);
+
   // 1 · one calm look at the mother, grazing by the copse
   await k.look({ x: graze.x, z: graze.z, y: g(graze.x, graze.z) + 0.6 }, c.kijk, 2.5, { turn: true });
 
-  // 2 · her small prints lead to the meadow; walking up, he sees her slip into the copse
-  const spoor = buildSpoor(store.difficulty('zoeken'));
-  const trail = slotTrail();
-  k.own(spoorTrail(trail.from.x, trail.from.z, trail.to.x, trail.to.z, spoor.legs, g, 0.35 + 0.5 * spoor.helderheid, 0.34, 5).group);
+  // 2 · her slots lead to the meadow; walking up, he sees her slip into the copse
   let slipping: Promise<void> | null = null;
   const slipAway = async (): Promise<void> => {
     await doe.lookAt(me, 1.4);                   // she lifts her head and looks at him
@@ -122,7 +126,7 @@ async function story(k: AdventureKit): Promise<void> {
   // she notices him the moment he sets off (or comes near her)
   const setOff = { ...k.ranger() };
   await k.walk({
-    name: 'meadow', to: P.meadowApproach, r: 1.4, line: c.volg, doel: c.chipGras, cue: c.sporen,
+    name: 'meadow', to: P.meadowApproach, r: 1.4, line: c.volg, doel: c.chipGras, cue: c.sporen, glyph: '👣',
     tick: () => {
       const m = k.ranger();
       if (!slipping && (dist(m, setOff) > 1.2 || dist(m, doe) < 9)) slipping = slipAway();
@@ -212,7 +216,7 @@ async function story(k: AdventureKit): Promise<void> {
   k.world.faceRanger(headingTo(k.ranger(), POOL));
   const hush = { line: c.sst, onRun: (): void => { void calf.lookAt(me, 1.6); call('fiep', calf.x, calf.z); } };
   // (the walk ends at the pool's near edge: he stops before the water, running or not)
-  await k.walk({ name: 'pool', to: P.poolEdge, r: 1.2, line: c.stil, doel: c.chipHut, cue: c.zacht, quiet: hush });
+  await k.walk({ name: 'pool', to: P.poolEdge, r: 1.2, line: c.stil, doel: c.chipHut, cue: c.zacht, glyph: '🤫', quiet: hush });
 
   // 9 · at the pool's edge: round it, not through it (rustkracht 4)
   k.beat = 'pool:walk';
@@ -241,7 +245,7 @@ async function story(k: AdventureKit): Promise<void> {
   });
 
   // 10 · on to the hide, quietly
-  await k.walk({ name: 'hide', to: P.hide, r: 1.0, line: c.verstop, doel: c.chipHut, cue: c.zacht, quiet: hush });
+  await k.walk({ name: 'hide', to: P.hide, r: 1.0, line: c.verstop, doel: c.chipHut, cue: c.zacht, glyph: '🤫', quiet: hush });
 
   // 11 · watch: through his binoculars the lens moves toward the meadow; the bracken at
   // the copse's gap stirs, and the mother steps out where she went in

@@ -13,7 +13,7 @@ import {
   REE_PLACES as P, REE_RESIDENTS, REE_HOME, MARKER, MEADOW, MEADOW_FRAME, CALF_SPOT, CALF_AT, COPSE_FRAME, COPSE_GAP,
   DOE_BED, JUNIPERS, COPSE_TREES, HIDE_FRAME, HIDE_JUNIPER, HIDE_LOG, POOL, POOL_ROUND, POOL_IN,
   SEARCH_VIEW, CALF_VIEW, POOL_VIEW, WATCH_VIEW, onMeadow, reeClearings, slotTrail, calfBolt, drinkSpot, inMeadow, alongLog,
-  juniperR, MEET, leaveView,
+  juniperR, MEET, leaveView, wisselLine, WISSEL_HALF,
 } from './ree.places.ts';
 import {
   FRISLING_PLACES, hideClumps, fieldSpots, cluePosts, bootPrints,
@@ -123,6 +123,18 @@ test('the calf lies in the meadow where the trial says (content doel 48, 60), th
   const t = slotTrail();
   assert.ok(dist(t.to, CALF_SPOT) > 2, `the prints end ${dist(t.to, CALF_SPOT).toFixed(1)} m from the calf`);
   assert.ok(dist(t.from, MARKER) < 1.5 && dist(t.to, P.meadowApproach) < 1, 'from the ring to the meadow');
+  // ...on her wissel: a trodden path through the ring that stops in the meadow's fringe
+  const w = wisselLine();
+  const onWissel = (p: { x: number; z: number }): number => Math.min(...w.slice(1).map((q, i) => segDist(p, w[i], q)));
+  for (const k of [0, 0.25, 0.5, 0.75, 1]) {
+    const p = { x: t.from.x + (t.to.x - t.from.x) * k, z: t.from.z + (t.to.z - t.from.z) * k };
+    assert.ok(onWissel(p) < WISSEL_HALF * 0.6, `her prints lie on her path (${onWissel(p).toFixed(2)} m off it)`);
+  }
+  assert.ok(onWissel(MARKER) < 0.2, 'the path runs through the ring');
+  assert.ok(dist(w[w.length - 1], CALF_SPOT) > 1.8, `the path stops ${dist(w[w.length - 1], CALF_SPOT).toFixed(1)} m short of the calf`);
+  const end = inMeadow(w[w.length - 1]);
+  assert.ok(end.v < -MEADOW.halfD, 'it stops before the meadow\'s tall grass, in its fringe');
+  for (const p of w) assert.ok(distanceToNetwork(p.x, p.z) > LANE_HALF + WISSEL_HALF, 'off the world\'s sand paths');
   assert.ok(dist(P.meadowApproach, CALF_SPOT) > 2.4, 'the search starts from the meadow\'s edge');
   // a startled calf bolts a few metres to the side, stays in the meadow, never at him
   const b = calfBolt();
@@ -246,7 +258,10 @@ test('clear of the other missions, the frisling\'s home, the paths, the props an
   for (const p of everything().filter((q) => q.name !== 'marker')) {
     assert.ok(dist(p, MARKER) > 2.5 + p.r, `${p.name} keeps off the marker ring`);
   }
-  assert.equal(reeClearings().length, 2);
+  // the meadow, the pool, and the heather worn off along her wissel
+  const cl = reeClearings();
+  assert.equal(cl.length, 2 + wisselLine().length);
+  for (const p of wisselLine()) assert.ok(cl.some((c) => dist(c, p) < c.r - WISSEL_HALF), 'no heather on her path');
 });
 
 test('who lives here: the doe by the copse and her calf in the grass; after, the two together', () => {

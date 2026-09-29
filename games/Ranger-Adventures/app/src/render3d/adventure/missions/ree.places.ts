@@ -273,19 +273,52 @@ export const REE_HOME: HomeSpec = {
   marker: { look: 'none' },
 };
 
+/* ------------------------------------------------------------- her wissel ---- */
+
+/** Half the width (m) of the doe's trodden path. */
+export const WISSEL_HALF = 0.24;
+/** How far (m) it runs on behind the ring (away from the meadow), and into the grass. */
+const WISSEL_BACK = 1.5;
+const WISSEL_IN = 0.9;
+
+/**
+ * The doe's trodden path across the heath (a roe's "wissel"): from the heath behind the
+ * marker ring, through the ring, to the meadow's near edge, where it runs into the tall
+ * grass (it stops there, never on to the calf). It lies there all along, before the
+ * mission and after it: lighter sand where her hooves wore the heather away, with a
+ * gentle bend in it. Her fresh prints on it (`slotTrail`) are what he follows.
+ */
+export function wisselLine(): Spot[] {
+  const a = toward(MARKER, meadowApproach, -WISSEL_BACK);
+  const b = toward(meadowApproach, MEADOW_AT, WISSEL_IN);
+  const L = dist(a, b);
+  const d = { x: (b.x - a.x) / L, z: (b.z - a.z) / L };
+  const N = 16;
+  return Array.from({ length: N + 1 }, (_, i) => {
+    const t = i / N;
+    const side = 0.09 * Math.sin(t * Math.PI * 2); // a gentle S: straight at its ends and its middle
+    return { x: a.x + d.x * L * t - d.z * side, z: a.z + d.z * L * t + d.x * side };
+  });
+}
+
 /** Ground the world's heather scatter leaves bare: the meadow (tall grass grows there,
- *  not heather cushions) and the wet pool. */
+ *  not heather cushions), the wet pool, and a strip along her wissel (worn bare). */
 export function reeClearings(): { x: number; z: number; r: number }[] {
+  const line = wisselLine();
+  const strip: { x: number; z: number; r: number }[] = [];
+  for (let i = 0; i < line.length; i += 1) strip.push({ ...line[i], r: WISSEL_HALF + 0.45 });
   return [
     { x: MEADOW_AT.x, z: MEADOW_AT.z, r: MEADOW.halfW + 0.3 },
     { x: POOL.x, z: POOL.z, r: POOL.halfW + 0.5 },
+    ...strip,
   ];
 }
 
-/** The doe's small prints ("prenten") from the marker ring to the meadow's near edge:
- *  where she walked; they end at the meadow, never at the calf. */
+/** The doe's small prints ("prenten") on her wissel, from the far side of the marker
+ *  ring (so the ring stands on them) to the meadow's near edge: where she walked; they
+ *  end at the meadow, never at the calf. */
 export function slotTrail(): { from: Spot; to: Spot } {
-  return { from: toward(MARKER, meadowApproach, 0.9), to: toward(meadowApproach, MEADOW_AT, 0.55) };
+  return { from: toward(MARKER, meadowApproach, -0.8), to: toward(meadowApproach, MEADOW_AT, 0.55) };
 }
 
 /** The calf's bolt spots for a wrong answer: a few metres to the side (never toward the
