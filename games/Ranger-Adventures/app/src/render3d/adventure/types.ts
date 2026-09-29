@@ -50,9 +50,6 @@ export interface ResidentSpec {
   animal: string;
   /** stand height (m); default: the scale table's (`heightFor`) */
   height?: number;
-  /** body length (m), when it is not a pig's ≈ 1.7 × its height (a roe is about as long
-   *  as it is tall: its contact shadow and its turning pivot) */
-  len?: number;
   /** where it is before the mission is done (null: not there yet) */
   before: ResidentPose | null;
   /** where it is once the mission is done (null: gone) */

@@ -250,7 +250,7 @@ export const WATCH_VIEW = {
  * (and step into it together when he comes close).
  */
 export const REE_RESIDENTS: readonly ResidentSpec[] = [
-  { key: 'doe', animal: 'ree', len: SIZE.ree.len,
+  { key: 'doe', animal: 'ree',
     before: { ...GRAZE, yaw: headingTo(GRAZE, MARKER) + Math.PI / 2, idle: 'graze', roam: 0.5 },
     after: { ...MEET, yaw: headingTo(MEET, CALF_SPOT) + 0.3, idle: 'graze', roam: 0.4 },
     // before: she slips into the copse when he comes within 8 m; after (with her calf) she
@@ -259,7 +259,7 @@ export const REE_RESIDENTS: readonly ResidentSpec[] = [
       { within: 8, back: 13, to: DOE_BED, lie: true, state: 'before' },
       { within: 4, back: 7, to: DOE_BED, lie: true, state: 'after', after: 4 },
     ] },
-  { key: 'calf', animal: 'reekalf', len: SIZE.reekalf.len,
+  { key: 'calf', animal: 'reekalf',
     before: { ...CALF_SPOT, yaw: CALF_SPOT.yaw, idle: 'lie', roam: 0 },
     after: { ...atLocal({ ...MEET, heading: headingTo(MEET, CALF_SPOT) + 0.3 }, -0.65, -0.45), yaw: headingTo(MEET, CALF_SPOT) - 0.2, idle: 'graze', roam: 0.3 },
     shy: [{ within: 4, back: 7, to: CALF_BED, lie: true, state: 'after', after: 4 }] },

@@ -19,7 +19,7 @@
 
 import * as THREE from 'three';
 import type { Spawned, SpawnOpts } from '../play/types';
-import type { HomeSpec, HomeState, ResidentPose, ResidentShy, ResidentSpec } from '../adventure/types';
+import type { HomeSpec, HomeState, ResidentPose, ResidentSpec } from '../adventure/types';
 import { Actor } from '../adventure/actors';
 import { FarRest, restFar } from '../play/fade';
 import type { MoveLimits, Obstacle } from '../CharacterController';
@@ -101,6 +101,9 @@ interface Home {
   gen: number;
 }
 
+/** How a shy resident keeps its distance (adventure/types.ts `ResidentShy`). */
+type Shy = NonNullable<ResidentSpec['shy']>[number];
+
 /** A resident's free-roam reaction to the ranger walking up (`hidden`, `gone`: a shy
  *  one is in its cover, and how long the ranger has been away). */
 interface Reaction { busy: boolean; away: boolean; cool: number; hidden?: boolean; gone?: number }
@@ -148,7 +151,7 @@ export class Residents {
       const a = new Actor(r.key, r.animal, {
         parent: group, groundY: this.env.groundY, spawnModel: this.env.spawnModel,
         obstacles: this.env.obstacles, limits: this.env.limits, reduced: this.env.reduced,
-      }, { height: r.height ?? this.env.heightFor(r.animal), len: r.len });
+      }, { height: r.height ?? this.env.heightFor(r.animal) });
       actors.set(r.key, a);
       if (r.voice) home.voices.set(r.key, { next: 3 + Math.random() * 4, on: true });
     }
@@ -217,6 +220,15 @@ export class Residents {
       if (!pose) { a.idle(); continue; }
       const far = Math.hypot(pose.x - a.x, pose.z - a.z);
       const placed = a.x !== 0 || a.z !== 0;
+      // a shy one with the ranger near its spot (a mission stopped beside her copse) keeps
+      // to (or slips into) its cover, and comes out once he has gone — never out and
+      // straight back in
+      const shy = r.shy?.find((q) => !q.state || q.state === state);
+      if (shy && placed && Math.hypot(pose.x - this.rangerAt.x, pose.z - this.rangerAt.z) < shy.within) {
+        home.reacting.set(r.key, { busy: false, away: false, cool: 0, hidden: true, gone: 0 });
+        this.takeCover(a, shy, walk);
+        continue;
+      }
       if (walk && placed && far > 0.05 && far < WALK_HOME_MAX) {
         void a.go(pose.x, pose.z, { speed: 'walk', face: pose.yaw ?? this.faceHome(home, pose) }).then((ok) => { if (ok) this.idleAt(a, pose); });
       } else {
@@ -224,6 +236,19 @@ export class Residents {
         this.idleAt(a, pose);
       }
     }
+  }
+
+  /** A shy one into its cover (a calm walk, or at once), bedding down there if it does. */
+  private takeCover(a: Actor, shy: Shy, walk: boolean): void {
+    const to = shy.to;
+    const d = Math.hypot(to.x - a.x, to.z - a.z);
+    if (d < 0.3) { if (shy.lie && !a.lies) void a.lie(true); return; }
+    if (walk && d < WALK_HOME_MAX) {
+      void a.go(to.x, to.z, { speed: 'walk', face: to.yaw }).then((ok) => { if (ok && shy.lie) void a.lie(true); });
+      return;
+    }
+    a.place(to.x, to.z, to.yaw ?? a.yaw);
+    if (shy.lie) void a.lie(true); else a.idle();
   }
 
   private faceHome(home: Home, p: ResidentPose): number {
@@ -323,7 +348,7 @@ export class Residents {
    * down there); once he has been further than `back` m for a few seconds she walks back
    * out to her spot and grazes again. Never toward him, never a run.
    */
-  private shyReact(home: Home, a: Actor, pose: ResidentPose, shy: ResidentShy, st: Reaction, dt: number, ranger: { x: number; z: number }): void {
+  private shyReact(home: Home, a: Actor, pose: ResidentPose, shy: Shy, st: Reaction, dt: number, ranger: { x: number; z: number }): void {
     const d = Math.hypot(a.x - ranger.x, a.z - ranger.z);
     if (st.hidden) st.gone = d > shy.back ? (st.gone ?? 0) + dt : 0;
     if (st.busy) return;

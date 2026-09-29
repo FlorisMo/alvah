@@ -28,8 +28,9 @@ import { resolveMove, type MoveLimits, type Obstacle } from '../CharacterControl
 import { gaitFor, motionAt, REST } from '../ProceduralMotion';
 import { modelFor } from '../play/spawn';
 import {
-  stepToward, followSpot, followSpeed, trot, strideOf, rootDip, turnToward, wrap, type Pose,
+  stepToward, followSpot, followSpeed, trot, strideOf, rootDip, turnToward, wrap, bodyLength, type Pose,
 } from './actors-math';
+import { SIZE } from '../AnimalScale';
 
 /** What an actor needs from the world. */
 export interface ActorEnv {
@@ -119,7 +120,8 @@ export class Actor {
     this.animal = animal;
     this.env = env;
     this.height = opts.height;
-    this.len = opts.len ?? opts.height * 1.7;
+    // (its length from the scale table: a roe is about as long as it is tall)
+    this.len = opts.len ?? bodyLength((SIZE as Record<string, { h: number; len?: number }>)[animal], opts.height);
     this.pace = PACE[animal] ?? PACE_DEFAULT;
     this.recipe = gaitFor(modelFor(animal));
     this.group.name = `actor-${key}`;
