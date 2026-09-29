@@ -127,9 +127,14 @@ test('keyboard: Shift + ArrowUp runs, ArrowUp walks briskly, backing up and Shif
   expect(vRun).toBeLessThanOrEqual(4.6);
   expect(run.every((f) => f.running && f.gait === 'run'), 'the run gait is on (rangerMotion().running)').toBe(true);
   const rampIn = await motionFrames(page, tShift, t);
-  const reach = rampIn.find((f) => f.speed >= vWalk + 0.9 * (vRun - vWalk));
+  // timed from his first faster frame: on a loaded laptop the key itself can reach the page
+  // late (seen once: 1.5 s), which says nothing about how he speeds up
+  const onset = rampIn.find((f) => f.speed > vWalk + 0.05);
+  expect(onset, 'Shift speeds him up').toBeTruthy();
+  const reach = rampIn.find((f) => f.t >= onset!.t && f.speed >= vWalk + 0.9 * (vRun - vWalk));
   expect(reach, 'he reaches running speed').toBeTruthy();
-  expect((reach!.t - tShift) / 1000, 'within about a third of a second (≤ 0.6 s)').toBeLessThanOrEqual(0.6);
+  testInfo.annotations.push({ type: 'run-up', description: `Shift reached the game after ${((onset!.t - tShift) / 1000).toFixed(2)} s; walk → run took ${((reach!.t - onset!.t) / 1000).toFixed(2)} s` });
+  expect((reach!.t - onset!.t) / 1000, 'from his first faster step, up to speed within about a third of a second (≤ 0.6 s)').toBeLessThanOrEqual(0.6);
   expect(jumps(rampIn), 'never a pop: no frame changes his speed by more than 0.35 m/s').toBeLessThanOrEqual(0.35);
   await shot(page, 'keyboard-running');
 
