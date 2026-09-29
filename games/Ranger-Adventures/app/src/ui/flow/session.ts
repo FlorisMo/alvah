@@ -52,6 +52,8 @@ export function fadeCut(move: () => void, then: () => void): void {
   session.host.appendChild(veil);
   requestAnimationFrame(() => veil.classList.add('on'));
   window.setTimeout(() => {
+    // what was on screen goes while the dip hides it: no card fades out over the new place
+    session.host.querySelectorAll('.ra-overlay, .ra-leaving').forEach((n) => n.remove());
     move();
     // two frames so the world draws the new place under the dip before it lifts
     requestAnimationFrame(() => requestAnimationFrame(() => {
