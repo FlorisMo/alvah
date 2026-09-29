@@ -608,12 +608,12 @@ export class World {
     return this.dressing.landmarkPositions();
   }
 
-  /** Dev-hook accessor (D1.5): the scatter + rim tree placements (world x/z + scale). */
   /** Every static solid (dev hook, run 6): circles and the buildings' real footprints. */
   obstacleList(): { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[] {
     return this.obstacles.map((o) => (o.box ? { x: o.x, z: o.z, r: o.r, box: { ...o.box } } : { x: o.x, z: o.z, r: o.r }));
   }
 
+  /** Dev-hook accessor (D1.5): the scatter + rim tree placements (world x/z + scale). */
   treeSpotList(): { x: number; z: number; s: number }[] {
     return this.dressing.treeSpotList();
   }
