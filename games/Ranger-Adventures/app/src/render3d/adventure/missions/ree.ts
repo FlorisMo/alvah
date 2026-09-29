@@ -129,12 +129,13 @@ async function story(k: AdventureKit): Promise<void> {
     },
   });
   slipping ??= slipAway();
-  // he stops at the meadow's edge and watches her go in (the search's view holds still:
-  // she is out of sight before it starts)
+  // he stops at the meadow's edge while she slips in (he saw her go on his way here; the
+  // search's view holds still, so she is out of sight before it starts: in the copse by
+  // her bed, behind its juniper, need not wait for her to lie down)
   k.beat = 'meadow:watch';
   k.lockFollow();
   k.world.stopRanger();
-  await k.until(() => doe.lies, 9);
+  await k.until(() => doe.lies || dist(doe, DOE_BED) < 1.2, 9);
 
   // 3 · find the calf in the tall grass (zoeken)
   await searchBeat(k, 0, {
