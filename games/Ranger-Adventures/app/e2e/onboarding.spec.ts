@@ -65,3 +65,54 @@ test('onboarding: first-entry hint shows, dismisses on first step, seen-flag per
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });
+
+/**
+ * Run 6: once per save, after his first ~15 m on foot, the one-tip channel teaches the
+ * run: "Houd Shift in om te rennen." on screen and read aloud (the words the voice gets,
+ * from a hook on speechSynthesis.speak). It never comes back after a reload.
+ */
+test('onboarding: after his first metres the Shift tip shows once and reads aloud', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await page.addInitScript(() => {
+    const w = window as unknown as { __said: string[] };
+    w.__said = [];
+    const synth = window.speechSynthesis;
+    if (synth) {
+      const orig = synth.speak.bind(synth);
+      synth.speak = (u: SpeechSynthesisUtterance) => { w.__said.push(u.text); try { orig(u); } catch { /* no voice */ } };
+    }
+  });
+  await enterWorld(page);
+  const TIP = 'Houd Shift in om te rennen.';
+  const start = (await hook(page, (r) => r.pos()))!;
+  const tip = page.locator('.explore-tip', { hasText: TIP });
+  await page.keyboard.down('ArrowUp');
+  try {
+    // the walk hint seals at the first step and the tap tip shows first; the run tip only
+    // once he has walked ~15 m and the tap tip has gone
+    await expect(tip, 'the run tip shows after his first metres').toBeVisible({ timeout: 25_000 });
+  } finally {
+    await page.keyboard.up('ArrowUp');
+  }
+  const p = (await hook(page, (r) => r.pos()))!;
+  expect(Math.hypot(p.x - start.x, p.z - start.z), 'not before ~15 m on foot').toBeGreaterThanOrEqual(13);
+  await shot(page, 'onboarding-run-tip');
+  const said = await page.evaluate(() => (window as unknown as { __said: string[] }).__said.slice());
+  expect(said.some((t) => t.includes(TIP)), 'the run tip is read aloud').toBe(true);
+  const blob = await page.evaluate(() => localStorage.getItem('alvah-ef-v1'));
+  expect(blob ?? '').toContain('"renHintGezien":true');
+
+  // a reload never shows it again
+  await page.reload();
+  await page.getByRole('button', { name: 'Begin' }).click();
+  await expect.poll(() => hook(page, (r) => r.screen), { timeout: 30_000 }).toBe('world');
+  await page.keyboard.down('ArrowUp');
+  await page.waitForTimeout(9_000);
+  await page.keyboard.up('ArrowUp');
+  await expect(page.locator('.explore-tip', { hasText: TIP }), 'once per save').toHaveCount(0);
+
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});

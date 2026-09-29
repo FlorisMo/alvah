@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { shot, collectPageErrors, reportPageErrors } from './helpers';
+import { shot, collectPageErrors, reportPageErrors, recordMotion, pageNow, motionFrames, median, type MotionFrame } from './helpers';
 
 /**
  * Keyboard walking E2E (WORLD-PLAN W1.2). Holding a movement key drives the
@@ -14,6 +14,7 @@ import { shot, collectPageErrors, reportPageErrors } from './helpers';
 interface Hook {
   screen: string;
   pos(): { x: number; z: number } | null;
+  clip(): { name: string; time: number } | null;
 }
 function hook<T>(page: Page, fn: (r: Hook) => T): Promise<T | null> {
   return page.evaluate((body) => {
@@ -80,6 +81,99 @@ test('keyboard: WASD drives the same walk (KeyW moves the ranger ≥2 m)', async
   expect(start, 'pos() available once in world').not.toBeNull();
 
   await walkWith(page, 'KeyW', start!);
+
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * Run 6: a brisk walk and a real run, with real keys. ArrowUp walks a steady 2.1-2.5 m/s;
+ * Shift + ArrowUp runs a steady 3.8-4.6 m/s (the run gait on); letting go of Shift eases
+ * back to a walk without a pop; Shift + ArrowDown backs up at the walking back-up speed
+ * and never runs; Shift + a turn key never runs; Shift alone never moves him. Speeds are
+ * read every rendered frame (dev hook, read only) while the keys are held.
+ */
+test('keyboard: Shift + ArrowUp runs, ArrowUp walks briskly, backing up and Shift alone never run', async ({ page }, testInfo) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await enterWorld(page);
+  await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 60_000, message: 'the ranger rig attaches' }).not.toBeNull();
+  await recordMotion(page);
+  const hold = async (ms: number): Promise<void> => { await page.waitForTimeout(ms); };
+  const window = async (from: number): Promise<MotionFrame[]> => motionFrames(page, from);
+  const jumps = (fs: MotionFrame[]): number => fs.slice(1).reduce((m, f, i) => Math.max(m, Math.abs(f.speed - fs[i].speed)), 0);
+
+  // walk: ArrowUp 2 s → a steady brisk walk
+  await page.keyboard.down('ArrowUp');
+  await hold(1000);
+  let t = await pageNow(page);
+  await hold(1000);
+  const walk = await window(t);
+  const vWalk = median(walk.map((f) => f.speed));
+  expect(vWalk, `ArrowUp walks a steady 2.1-2.5 m/s (median ${vWalk.toFixed(2)})`).toBeGreaterThanOrEqual(2.1);
+  expect(vWalk).toBeLessThanOrEqual(2.5);
+  expect(walk.every((f) => !f.running), 'walking is not running').toBe(true);
+
+  // run: + Shift → up to speed in about a third of a second, then steady
+  const tShift = await pageNow(page);
+  await page.keyboard.down('Shift');
+  await hold(1000);
+  t = await pageNow(page);
+  await hold(1000);
+  const run = await window(t);
+  const vRun = median(run.map((f) => f.speed));
+  expect(vRun, `Shift + ArrowUp runs a steady 3.8-4.6 m/s (median ${vRun.toFixed(2)})`).toBeGreaterThanOrEqual(3.8);
+  expect(vRun).toBeLessThanOrEqual(4.6);
+  expect(run.every((f) => f.running && f.gait === 'run'), 'the run gait is on (rangerMotion().running)').toBe(true);
+  const rampIn = await motionFrames(page, tShift, t);
+  const reach = rampIn.find((f) => f.speed >= vWalk + 0.9 * (vRun - vWalk));
+  expect(reach, 'he reaches running speed').toBeTruthy();
+  expect((reach!.t - tShift) / 1000, 'within about a third of a second (≤ 0.6 s)').toBeLessThanOrEqual(0.6);
+  expect(jumps(rampIn), 'never a pop: no frame changes his speed by more than 0.35 m/s').toBeLessThanOrEqual(0.35);
+  await shot(page, 'keyboard-running');
+
+  // let go of Shift → eases back to the walk
+  const tUnshift = await pageNow(page);
+  await page.keyboard.up('Shift');
+  await hold(1000);
+  const back2walk = await window(tUnshift);
+  const tail = back2walk.filter((f) => f.t > tUnshift + 600);
+  expect(median(tail.map((f) => f.speed)), 'releasing Shift walks again').toBeLessThanOrEqual(2.5);
+  expect(tail.every((f) => !f.running), 'the run gait is off').toBe(true);
+  expect(jumps(back2walk), 'easing back never pops').toBeLessThanOrEqual(0.35);
+  await page.keyboard.up('ArrowUp');
+  await hold(800);
+
+  // Shift + ArrowDown: backs up at the walking back-up speed, never runs
+  t = await pageNow(page);
+  await page.keyboard.down('Shift');
+  await page.keyboard.down('ArrowDown');
+  await hold(1500);
+  await page.keyboard.up('ArrowDown');
+  const backUp = (await window(t)).filter((f) => f.t > t + 700);
+  const vBack = median(backUp.map((f) => f.speed));
+  expect(vBack, `backing up with Shift held stays at the back-up speed (median ${vBack.toFixed(2)})`).toBeLessThanOrEqual(0.6 * 2.5);
+  expect(vBack, 'but it does back up').toBeGreaterThan(0.8);
+  expect(backUp.every((f) => !f.running), 'backing up never runs').toBe(true);
+
+  // Shift + a turn key: turns on the spot, never runs
+  await hold(600);
+  t = await pageNow(page);
+  await page.keyboard.down('ArrowLeft');
+  await hold(900);
+  await page.keyboard.up('ArrowLeft');
+  const turn = await window(t);
+  expect(turn.every((f) => !f.running), 'turning on the spot never runs').toBe(true);
+  expect(Math.max(...turn.map((f) => f.speed)), 'turning on the spot does not walk away').toBeLessThan(0.5);
+
+  // Shift alone: never moves him
+  await hold(400);
+  const p0 = await hook(page, (r) => r.pos());
+  await hold(900);
+  await page.keyboard.up('Shift');
+  const p1 = await hook(page, (r) => r.pos());
+  expect(Math.hypot(p1!.x - p0!.x, p1!.z - p0!.z), 'Shift alone never moves him').toBeLessThan(0.02);
 
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);

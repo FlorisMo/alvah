@@ -82,3 +82,86 @@ export async function keySteer(page: Page): Promise<(dx: number, dz: number, yaw
     return want;
   };
 }
+
+/* ------------------------------------------------------------ run 6: motion trace -- */
+
+/** One rendered frame of the ranger on foot, as the dev hook reads it (run 6). */
+export interface MotionFrame {
+  /** page time (ms) and the frame's length (s) */
+  t: number; dt: number;
+  x: number; z: number;
+  /** post-collision ground speed (m/s) and whether the run gait is on */
+  speed: number; running: boolean;
+  /** the gait read: which clip leads, footfalls per second */
+  gait: 'idle' | 'walk' | 'run' | null; cadence: number;
+  /** the ball of each foot (left, right) and the rendered ground under it */
+  balls: { x: number; y: number; z: number }[]; ground: number[];
+  /** the follow camera: FOV, the ranger's projected height share and centre */
+  fov: number; hf: number; sx: number; sy: number; yaw: number;
+}
+
+/**
+ * Start recording `MotionFrame`s every rendered frame (a rAF loop in the page that only
+ * READS `window.__ranger`). Idempotent. Pair with `motionFrames` and `pageNow`.
+ */
+export async function recordMotion(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __motionRec?: unknown[]; __ranger: any };
+    if (w.__motionRec) return;
+    const rec: unknown[] = []; w.__motionRec = rec;
+    const r = w.__ranger; let last = performance.now();
+    const loop = (now: number): void => {
+      const m = r.motion(), g = r.gait(), c = r.cam();
+      if (m && c) {
+        const balls = (g?.soles ?? []).map((s: { toe: { x: number; y: number; z: number } }) => s.toe);
+        rec.push({
+          t: now, dt: (now - last) / 1000, x: m.x, z: m.z, speed: m.speed, running: m.running,
+          gait: g?.name ?? null, cadence: g?.cadence ?? 0,
+          balls, ground: balls.map((b: { x: number; z: number }) => r.groundAt(b.x, b.z)),
+          fov: c.fov, hf: c.avatarScreen.heightFrac, sx: c.avatarScreen.x, sy: c.avatarScreen.y, yaw: c.yaw,
+        });
+      }
+      last = now;
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+}
+
+/** The page's clock (ms), to mark a window of the motion trace. */
+export function pageNow(page: Page): Promise<number> {
+  return page.evaluate(() => performance.now());
+}
+
+/** The recorded frames with `from ≤ t ≤ to` (page ms; `to` defaults to now). */
+export function motionFrames(page: Page, from: number, to = Infinity): Promise<MotionFrame[]> {
+  return page.evaluate(({ from, to }) => ((window as unknown as { __motionRec?: MotionFrame[] }).__motionRec ?? [])
+    .filter((f) => f.t >= from && f.t <= to), { from, to });
+}
+
+/** The median of some numbers (NaN when empty). */
+export function median(xs: number[]): number {
+  if (!xs.length) return NaN;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
+
+/**
+ * Planted-foot slip over a window, as a share of his ground speed: every frame the ball
+ * of the lower foot is within 2.5 cm of the rendered ground (its stance), how fast it
+ * moves over the ground (m/s), averaged, ÷ his mean ground speed. 0 = the foot stays put.
+ */
+export function plantedSlip(frames: MotionFrame[]): { slip: number; frames: number } {
+  let sum = 0, n = 0;
+  for (let i = 1; i < frames.length; i++) {
+    const a = frames[i - 1], b = frames[i];
+    if (a.balls.length < 2 || b.balls.length < 2 || !(b.dt > 0)) continue;
+    const hA = a.balls.map((p, k) => p.y - a.ground[k]), hB = b.balls.map((p, k) => p.y - b.ground[k]);
+    const k = hB[0] <= hB[1] ? 0 : 1;
+    if (hB[k] > 0.025 || hA[k] > 0.025) continue;
+    sum += Math.hypot(b.balls[k].x - a.balls[k].x, b.balls[k].z - a.balls[k].z) / b.dt;
+    n++;
+  }
+  const v = frames.reduce((s, f) => s + f.speed, 0) / Math.max(1, frames.length);
+  return { slip: n && v > 0 ? sum / n / v : NaN, frames: n };
+}
