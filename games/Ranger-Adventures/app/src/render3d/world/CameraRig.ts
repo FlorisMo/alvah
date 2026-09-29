@@ -633,6 +633,36 @@ export class CameraRig {
     this.host.afterPlace();
   }
 
+  /**
+   * Run 6: while an adventure HOLDS the lens (a framed beat in the wood), the trees still
+   * fade the way they do for the follow camera: every tree whose crown is round the lens,
+   * or stands between the lens and what it frames (`focus`: the framed spots) or the
+   * ranger in front of it, fades — an opacity change, never a camera move; the others
+   * ease back solid (at once under reduced motion). Without it a held view in the forest
+   * froze whatever fade the walk left, and a crown in front of the lens stayed solid.
+   */
+  fadeHeld(dt: number, reduced: boolean, focus: readonly { x: number; y: number; z: number }[]): void {
+    const lp = this.camera.position;
+    const rp = this.player.group.position;
+    const dir = this.camera.getWorldDirection(this._probe);
+    const aims: { x: number; y: number; z: number }[] = [...focus];
+    // the ranger, when the lens looks at him (a framed beat keeps him in the picture)
+    if ((rp.x - lp.x) * dir.x + (rp.y - lp.y) * dir.y + (rp.z - lp.z) * dir.z > 0.5) {
+      aims.push({ x: rp.x, y: rp.y + this.player.avatarTopY, z: rp.z }, { x: rp.x, y: rp.y + this.camLookH, z: rp.z });
+    }
+    let reach = 4;
+    for (const a of aims) reach = Math.max(reach, Math.hypot(a.x - lp.x, a.z - lp.z) + 2);
+    this.gatherNear(lp.x, lp.z, reach);
+    this.fadeTargets.clear();
+    for (const k of this.nearCrowns) {
+      if (k.tree < 0) continue;
+      const inside = insideCrown(k, lp.x, lp.y, lp.z, this.CROWN_INSIDE_MARGIN);
+      if (!inside && !aims.some((a) => blocksLine(k, lp.x, lp.y, lp.z, a.x, a.y, a.z))) continue;
+      this.fadeTargets.set(k.tree, inside ? this.CANOPY_FADE_BURIED : this.CANOPY_FADE_MIN);
+    }
+    this.dressing.fadeOccluders(this.fadeTargets, reduced ? 1 : dampFactor(dt, this.CANOPY_RELEASE_TAU));
+  }
+
   /** The hand-over (see `handOver`): from the held pose to the follow pose placed this
    *  frame, position and aim on one smoothstep curve. */
   private stepBlend(dt: number): void {
