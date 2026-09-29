@@ -7,9 +7,10 @@
  * Shift cap; the stick pushed far), each gone once he has done it; then Bram tells the
  * hook and only then does the chip top-left show the way to the first mission, whose
  * ring and tag glow. Standing still a while brings the look lesson once. Later, once
- * each: the missiebord beat after the first finished mission, the jeep beat when the
- * next mission is far away on foot. A returning player hears "Welkom terug" once a
- * session.
+ * each: the missiebord beat after the first finished mission, the raaf beat once two
+ * missions are done (the hut's porch gets its ring: "Kijk in de hut"), the jeep beat when
+ * the next mission is far away on foot (never once he has driven it himself). A
+ * returning player hears "Welkom terug" once a session.
  *
  * Nothing here takes the keys (the strips are part of the see-through explore HUD). The
  * state lives here, outside the DOM: the HUD is drawn afresh after every menu and the
@@ -23,7 +24,7 @@ import { Content } from '../../content/registry';
 import { joystickVisible } from '../../core/input';
 import { prefersReducedMotion } from '../../core/reduced-motion';
 import {
-  nextStep, hookPending, learnedByDoing, lessonDone, lessonTimedOut, cutByRide,
+  nextStep, hookPending, learnedByDoing, lessonDone, lessonTimedOut, cutByRide, raafDue,
   JEEP_BEAT, type LessonId, type StepId, type Progress, type GuideState,
 } from '../../core/lessons';
 import { BRAM, LES, metNaam } from '../../content/mentor';
@@ -46,6 +47,7 @@ let started = false;
 let sessionStarted = false; // play began once this page load (a trip to the title and back is the same visit)
 let startAt = 0;            // the first step waits for the glide into play (ms)
 let gapUntil = 0;           // a breath between two steps (ms)
+let quietSince = 0;         // when the next step first waited for the voice to be quiet (ms)
 let raf = 0;
 let lastT = 0;
 // the step on screen now: a lesson (with how long it has shown and how far he walked
@@ -55,6 +57,7 @@ let current:
   | { kind: 'beat'; id: Exclude<StepId, LessonId>; from: number; saying: boolean }
   | null = null;
 let chipShown = false;      // the chip has been revealed this session
+let porchShown = false;     // Bram pointed at the hut this session (before it is saved as told)
 // the teaching slot in the HUD (bottom centre, above the prompt) and the lesson strip in it
 let slot: HTMLElement | null = null;
 let lessonEl: HTMLElement | null = null;
@@ -94,6 +97,12 @@ export function armMissiebordBeat(): void {
 export function chipHeld(): boolean {
   if (chipShown) return false;
   return hookPending({ geleerd: store.get().settings.geleerd, hookRelevant: hookRelevant() });
+}
+
+/** The hut's porch ring shows: Bram has told about the young raaf, or it lives there. */
+export function porchOpen(): boolean {
+  const s = store.get();
+  return porchShown || !!s.settings.geleerd.raaf || s.companion.rescued;
 }
 
 /** Put the strips back into a freshly drawn HUD (after a menu): the lesson on screen
@@ -151,6 +160,8 @@ function tick(now: number): void {
   } else stillS = 0;
   const g = store.get().settings.geleerd;
   for (const id of learnedByDoing(g, progress)) store.learn(id);
+  // he found the jeep and drove it himself: Bram never has to suggest it
+  if (!g.jeep && world.vehicleState()?.inVehicle) store.learn('jeep');
 
   if (lessonEl) lessonEl.hidden = !onFoot; // the drive / flight lines own the bottom then (a ✓ fading out)
   if (!free || now < startAt) return;
@@ -178,7 +189,22 @@ function tick(now: number): void {
   }
   if (now < gapUntil) return;
   const step = nextStep(guideState(onFoot));
-  if (step) startStep(step);
+  if (!step) { quietSince = 0; return; }
+  // never over another voice (a prompt saying its words, a screen read aloud): the next
+  // step waits for it to finish, a few seconds at most
+  if (voiceBusy()) {
+    if (!quietSince) quietSince = now;
+    if (now - quietSince < QUIET_WAIT_MS) return;
+  }
+  quietSince = 0;
+  startStep(step);
+}
+
+/** The next step waits at most this long for another voice to finish (ms). */
+const QUIET_WAIT_MS = 4000;
+function voiceBusy(): boolean {
+  const synth = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
+  return !!synth && store.get().settings.voorlezen && (synth.speaking || synth.pending);
 }
 
 /** Where the guide stands, for the pure rules (core/lessons.nextStep). */
@@ -188,6 +214,7 @@ function guideState(onFoot: boolean): GuideState {
     returning, welkomSaid, rennenShown, kijkenShown,
     hookRelevant: hookRelevant(),
     missiebordArmed,
+    raafDue: raafDue(store.get().voltooid, store.get().companion.rescued),
     onFoot,
     jeepFar: onFoot && jeepFar(),
     stillS,
@@ -244,6 +271,7 @@ function linesOf(id: Exclude<StepId, LessonId>): string[] {
     case 'bram': return BRAM.intro.map((l) => metNaam(l, n));
     case 'haak': return [...(store.get().settings.jargon ? BRAM.haak.knap : BRAM.haak.simpel)];
     case 'missiebord': return BRAM.missiebord.map((l) => metNaam(l, n));
+    case 'raaf': return [...BRAM.raaf];
     case 'jeep': return [...BRAM.jeep];
   }
 }
@@ -252,8 +280,9 @@ function linesOf(id: Exclude<StepId, LessonId>): string[] {
 function sayBeat(c: { kind: 'beat'; id: Exclude<StepId, LessonId>; from: number; saying: boolean }): void {
   // a beat cut off by a menu or a mission is moot when it is picked up again if what it
   // was about is past: the jeep once he sits in it, the hook once the first mission is done
-  const moot = (c.id === 'jeep' && !!session.world?.vehicleState()?.inVehicle) || (c.id === 'haak' && !hookRelevant());
-  if (moot) { store.learn(c.id as 'jeep' | 'haak'); finishStep(performance.now()); return; }
+  const moot = (c.id === 'jeep' && !!session.world?.vehicleState()?.inVehicle) || (c.id === 'haak' && !hookRelevant())
+    || (c.id === 'raaf' && store.get().companion.rescued);
+  if (moot) { store.learn(c.id as 'jeep' | 'haak' | 'raaf'); finishStep(performance.now()); return; }
   const lines = linesOf(c.id);
   c.saying = true;
   void say(lines.slice(c.from), {
@@ -263,6 +292,8 @@ function sayBeat(c: { kind: 'beat'; id: Exclude<StepId, LessonId>; from: number;
       if (c.id === 'haak' && at === lines.length - 1) revealChip();
       if (c.id === 'missiebord' && at === lines.length - 1) session.world?.glowBoard(8);
       if (c.id === 'jeep' && at === lines.length - 1) session.world?.glowJeep(true);
+      // "Bij de hut zit een jonge raaf.": the hut's porch gets its ring and tag, glowing
+      if (c.id === 'raaf' && at === 0) revealPorch();
     },
   }).then((r) => {
     if (current !== c) return;
@@ -283,6 +314,13 @@ function revealChip(): void {
   const strip = session.host.querySelector<HTMLElement>('.explore-wayfind');
   if (strip) { strip.hidden = false; strip.classList.add('wf-reveal'); }
   session.world?.revealNext(true, 6);
+}
+
+/** The hut's porch ring and its tag appear, and glow a while (Bram points at the hut). */
+function revealPorch(): void {
+  porchShown = true;
+  session.world?.showPorch(true);
+  session.world?.glowPorch(10);
 }
 
 /* --------------------------------------------------------- the lesson strip ---- */

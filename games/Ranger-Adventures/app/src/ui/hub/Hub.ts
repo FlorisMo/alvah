@@ -18,6 +18,7 @@ import { setScreen, setMissionView } from '../../core/devhook';
 import { mountReadAloud, readScreenAloud, speakButtonHtml } from '../ReadAloud';
 import { SAY } from '../../content/screens';
 import { BESTURING } from '../../content/mentor';
+import { HUB, vul } from '../../content/copy';
 import { joystickVisible } from '../../core/input';
 import { coarsePointer } from '../hud/device';
 import { missionIcon } from '../MissionIcon';
@@ -46,8 +47,8 @@ export function showTitle(): void {
 /** The raaf link reflects the companion: rescue prompt → friend's name. */
 function cabinLabel(): string {
   const c = store.get().companion;
-  if (!c.rescued) return 'Help de jonge raaf'; // parent:B13
-  return `Verzorg ${c.naam || 'je raaf'}`;
+  if (!c.rescued) return HUB.raafHelp; // parent:B13
+  return vul(HUB.raafZorg, { raaf: c.naam || HUB.jeRaaf });
 }
 
 /** Found/total clue count shown on the prikbord link. */
@@ -72,18 +73,18 @@ export function showPauseHub(): void {
     `<span class="ra-chip-tx">${words}</span>${extra}</button>`;
   const el = card(
     `<div class="card pause-hub">` +
-    kicker('pause', 'Pauze') +
-    `<h1 class="boot-title">Wat wil je doen?</h1>` +
+    kicker('pause', HUB.pauze) +
+    `<h1 class="boot-title">${esc(HUB.vraag)}</h1>` +
     `<div class="hub-tiles">` +
-    tile('ph-prikbord', 'book', 'Open je sporenboek', cluesBadge()) +
+    tile('ph-prikbord', 'book', esc(HUB.boek), cluesBadge()) +
     tile('ph-companion', 'raven', esc(cabinLabel())) +
-    tile('ph-badges', 'badge', 'Bekijk je breinkracht-badges') +
-    tile('ph-tweaks', 'gear', 'Instellingen') +
+    tile('ph-badges', 'badge', esc(HUB.badges)) +
+    tile('ph-tweaks', 'gear', esc(HUB.instellingen)) +
     `</div>` +
     `<div class="card-foot">` +
-    `<div class="ra-row"><button class="btn-start ph-back" type="button" data-key="back">Terug naar de open plek</button></div>` +
+    `<div class="ra-row"><button class="btn-start ph-back" type="button" data-key="back">${esc(HUB.terug)}</button></div>` +
     `<button class="ra-chip ph-hoofdmenu" type="button"><span class="ra-chip-ic">${icon('home')}</span>` +
-    `<span class="ra-chip-tx">Naar het hoofdmenu</span></button>` +
+    `<span class="ra-chip-tx">${esc(HUB.hoofdmenu)}</span></button>` +
     `</div>` +
     `</div>`,
   );
@@ -91,7 +92,7 @@ export function showPauseHub(): void {
   readScreenAloud(el, { text: SAY.pauze, autoStart: voor, items: '.ra-chip', hover: voor });
   el.querySelector('.ph-prikbord')?.addEventListener('click', () => showCaseBoard());
   el.querySelector('.ph-companion')?.addEventListener('click', () =>
-    showCabin(toWorld, 'Terug naar de open plek'));
+    showCabin(toWorld, HUB.terug));
   el.querySelector('.ph-badges')?.addEventListener('click', () => showBadges(showPauseHub));
   el.querySelector('.ph-tweaks')?.addEventListener('click', () => showTweaks(showPauseHub));
   el.querySelector('.ph-hoofdmenu')?.addEventListener('click', () => showTitle());
@@ -155,10 +156,10 @@ export function showMissionBoard(): void {
   const cards = area.missies
     .map((m) => {
       const engines = Array.from(new Set(m.stappen.map((s) => s.ef as Engine))).filter((e) => SKILL_META[e]);
-      const klaar = done[m.id] ? `<span class="mc-done" aria-label="voltooid">${icon('check')}</span>` : '';
+      const klaar = done[m.id] ? `<span class="mc-done" aria-label="${esc(HUB.voltooid)}">${icon('check')}</span>` : '';
       // the recommended mission: first unfinished in story order (the chip points at it too)
       const isNext = m.id === next;
-      const nu = isNext ? `<span class="mc-next-tag">Nu doen</span>` : '';
+      const nu = isNext ? `<span class="mc-next-tag">${esc(HUB.nuDoen)}</span>` : '';
       return (
         `<button class="mission-card${isNext ? ' mc-next' : ''}${done[m.id] ? ' mc-klaar' : ''}" type="button" data-id="${esc(m.id)}"${isNext ? ' data-key="primary"' : ''}>` +
         nu +
@@ -173,12 +174,12 @@ export function showMissionBoard(): void {
 
   const el = plainCard(
     `<div class="mission-board">` +
-    kicker('pin', `Het missiebord · ${area.naam}`) +
-    `<h1 class="boot-title">Kies een missie</h1>` +
+    kicker('pin', vul(HUB.bord, { gebied: area.naam })) +
+    `<h1 class="boot-title">${esc(HUB.kies)}</h1>` +
     `<div class="mb-scroll"><div class="mission-grid">${cards}</div></div>` +
     `<button class="ra-chip mb-back" type="button" data-key="back">` +
     `<span class="ra-chip-ic">${icon('back')}</span>` +
-    `<span class="ra-chip-tx">Terug naar de open plek</span></button>` +
+    `<span class="ra-chip-tx">${esc(HUB.terug)}</span></button>` +
     `</div>`,
   );
   el.querySelectorAll<HTMLButtonElement>('.mission-card').forEach((b) => {
@@ -224,7 +225,7 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
         `<div class="cb-clue${isF ? ' found' : ''}">` +
         `<span class="cb-pin" aria-hidden="true"></span>` +
         `<span class="cb-photo">${icon(isF ? CLUE_ICON[c.soort] ?? 'photo' : 'unknown')}</span>` +
-        `<span class="cb-clue-title">${esc(isF ? c.titel : 'Nog niet gevonden')}</span>` +
+        `<span class="cb-clue-title">${esc(isF ? c.titel : HUB.nietGevonden)}</span>` +
         (isF ? `<span class="cb-clue-text">${esc(c.tekst)}</span>` : '') +
         `</div>`
       );
@@ -237,7 +238,7 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
   const gotN = notities.filter((n) => collected[n.id]);
   const veldStrip = notities.length
     ? `<div class="cb-veld">` +
-      `<p class="cb-veld-head">${icon('leaf')}<span>Veldnotities · ${gotN.length}/${notities.length}</span></p>` +
+      `<p class="cb-veld-head">${icon('leaf')}<span>${esc(vul(HUB.veldnotities, { n: gotN.length, m: notities.length }))}</span></p>` +
       (gotN.length
         ? gotN
             .map((n, i) =>
@@ -248,30 +249,30 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
               `</div>`,
             )
             .join('')
-        : `<p class="cb-note muted">Speel een missie in de wereld. Wist-je-datjes komen hier.</p>`) +
+        : `<p class="cb-note muted">${esc(HUB.geenNotities)}</p>`) +
       `</div>`
     : '';
 
-  const count = gemeld ? 'opgelost' : `${found.size}/${clues.length}`;
+  const count = gemeld ? HUB.opgelost : `${found.size}/${clues.length}`;
   const note = gemeld
-    ? `<p class="cb-note ok">De stroper is gestopt. De heide en het ven groeien weer terug.</p>`
+    ? `<p class="cb-note ok">${HUB.gestopt.map((l) => `<span class="cb-note-line">${esc(l)}</span>`).join(' ')}</p>`
     : laatste
       ? `<p class="cb-note">${esc(laatste.tekst)}</p>`
-      : `<p class="cb-note muted">Los missies op. Aanwijzingen komen hier.</p>`;
+      : `<p class="cb-note muted">${esc(HUB.geenSporen)}</p>`;
   // Enter always moves on (child B7): the pinned footer carries the primary. With every
   // clue found that is "Volg het spoor" (the way to the ontknoping), and walking on is
   // the quiet way back; otherwise "Verder op patrouille" itself is the primary.
   const resolve = allFound && !gemeld;
-  const onLabel = back === resumePatrol ? 'Verder op patrouille' : 'Verder';
+  const onLabel = esc(back === resumePatrol ? HUB.verderPatrouille : HUB.verder);
   const foot = resolve
-    ? `<div class="ra-row"><button class="btn-start cb-resolve" type="button">${icon('footprints')}Volg het spoor</button></div>` +
+    ? `<div class="ra-row"><button class="btn-start cb-resolve" type="button">${icon('footprints')}${esc(HUB.volgSpoor)}</button></div>` +
       `<button class="ra-chip cb-back" type="button" data-key="back">${onLabel}</button>`
     : `<div class="ra-row"><button class="btn-start cb-back" type="button" data-key="back">${onLabel}</button></div>`;
 
   const el = card(
     `<div class="card card--wide case-board">` +
-    kicker('book', `Je sporenboek · ${chapter?.naam ?? ''} · ${count}`) +
-    `<h1 class="boot-title">Wat is hier aan de hand?</h1>` +
+    kicker('book', vul(HUB.boekKicker, { hoofdstuk: chapter?.naam ?? '', telling: count })) +
+    `<h1 class="boot-title">${esc(HUB.boekVraag)}</h1>` +
     `<div class="card-body">` +
     `<div class="cb-cork">${board}</div>` +
     note +
@@ -280,10 +281,18 @@ export function showCaseBoard(back: () => void = resumePatrol): void {
     `<div class="card-foot">${foot}</div>` +
     `</div>`,
   );
-  // Only the latest-clue note is read aloud (and karaoke-highlighted).
-  const noteEl = !gemeld && laatste ? el.querySelector<HTMLElement>('.cb-note') : null;
+  // What the book is, then the note under the clues (the latest clue, or where they will
+  // come, or the happy end) is read aloud, karaoke-highlighted
+  const noteEl = el.querySelector<HTMLElement>('.cb-note');
+  const noteText = gemeld ? HUB.gestopt.join(' ') : laatste ? laatste.tekst : HUB.geenSporen;
   const ra = noteEl
-    ? mountReadAloud({ textEl: noteEl, text: laatste!.tekst, autoStart: store.get().settings.voorlezen })
+    ? mountReadAloud({
+      lead: HUB.zegBoek,
+      segments: gemeld
+        ? Array.from(noteEl.querySelectorAll<HTMLElement>('.cb-note-line')).map((l, i) => ({ el: l, text: HUB.gestopt[i] }))
+        : [{ el: noteEl, text: noteText }],
+      autoStart: store.get().settings.voorlezen,
+    })
     : null;
   el.querySelector('.cb-back')?.addEventListener('click', () => {
     ra?.stop();
@@ -313,10 +322,10 @@ export function showOntknoping(idx: number, done: () => void): void {
   const last = idx === beats.length - 1;
   const el = card(
     `<div class="card card--narrow ontknoping">` +
-    kicker('footprints', `Op het spoor · ${idx + 1}/${beats.length}`) +
+    kicker('footprints', vul(HUB.opHetSpoor, { n: idx + 1, m: beats.length })) +
     `<p class="ont-text"></p>` +
     `<div class="card-foot"><div class="ra-row">${speakButtonHtml()}` +
-    `<button class="btn-start" type="button">${last ? 'Klaar' : 'Verder'}</button></div></div>` +
+    `<button class="btn-start" type="button">${esc(last ? HUB.klaar : HUB.verder)}</button></div></div>` +
     `</div>`,
   );
   const ra = mountReadAloud({
@@ -356,16 +365,20 @@ export function showBadges(back: () => void): void {
   // the knappe woorden earned on missions (each reward card names one)
   const woorden = Object.values(store.get().knapWoorden).map((w) => w.naam);
   const knap = woorden.length
-    ? `<p class="kw-head">Knappe woorden · ${woorden.length}</p>` +
+    ? `<p class="kw-head">${esc(vul(HUB.knappeWoorden, { n: woorden.length }))}</p>` +
       `<div class="knap-woorden">${woorden.map((w) => `<span class="knap-woord">${esc(w)}</span>`).join('')}</div>`
     : '';
   const el = card(
     `<div class="card badge-wall">` +
-    kicker('badge', 'Jouw breinkracht') +
-    `<h1 class="boot-title">Badges</h1>` +
+    kicker('badge', HUB.breinkracht) +
+    `<h1 class="boot-title">${esc(HUB.badgesTitel)}</h1>` +
     `<div class="card-body"><div class="badge-row">${wall}</div>${knap}</div>` +
-    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button" data-key="back">Terug</button></div></div>` +
+    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button" data-key="back">${esc(HUB.terugKort)}</button></div></div>` +
     `</div>`,
   );
-  el.querySelector('.btn-start')?.addEventListener('click', back);
+  // what the wall is, and each badge says its name and step on hover or focus (child:B12)
+  const voor = store.get().settings.voorlezen;
+  const ra = readScreenAloud(el, { text: HUB.zegBadges, autoStart: voor, items: '.badge', hover: voor,
+    itemText: (b) => `${b.querySelector('.badge-name')?.textContent ?? ''}: ${b.querySelector('.badge-tier')?.textContent ?? ''}` });
+  el.querySelector('.btn-start')?.addEventListener('click', () => { ra.stop(); back(); });
 }

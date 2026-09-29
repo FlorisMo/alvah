@@ -28,6 +28,8 @@ import {
 import { setScreen } from '../core/devhook';
 import { readScreenAloud } from './ReadAloud';
 import { SAY, MAKER } from '../content/screens';
+import { metNaam } from '../content/mentor';
+import { ALGEMEEN } from '../content/copy';
 import type { World, Focus } from '../render3d/World';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -89,7 +91,7 @@ export function showAvatarCreator(ui: HTMLElement, world: World, done: () => voi
     `<div class="av-naam">` +
     `<label class="av-naam-veld"><span class="av-naam-cap">${esc(MAKER.naam)}</span>` +
     `<input class="av-naam-input" type="text" inputmode="text" maxlength="${MAX_NAAM}" ` +
-    `autocomplete="off" spellcheck="false" value="${esc(av.naam)}" aria-label="Je rangernaam"/></label>` +
+    `autocomplete="off" spellcheck="false" value="${esc(av.naam)}" aria-label="${esc(ALGEMEEN.jeNaam)}"/></label>` +
     `<div class="av-naam-chips">${chips}</div>` +
     `</div>` +
     `<div class="av-groups">${KENMERKEN.map((k) => groupHtml(k, av)).join('')}</div>` +
@@ -116,6 +118,8 @@ export function showAvatarCreator(ui: HTMLElement, world: World, done: () => voi
       input.value = naam;
       store.setAvatar({ naam });
       paintGreet();
+      // the new greeting, said: "Hoi, ranger Bo!"
+      if (store.get().settings.voorlezen) narrator.speak(greet.textContent ?? '');
     });
   });
 
@@ -155,7 +159,10 @@ export function showAvatarCreator(ui: HTMLElement, world: World, done: () => voi
   // child:B12: said once, 🔊 beside the button says it again; a swatch or name chip
   // says its own label ("Haar: Rood") when the mouse rests on it or it is focused
   const voor = store.get().settings.voorlezen;
-  const ra = readScreenAloud(el, { text: SAY.maker, anchor: '.av-klaar', autoStart: voor, items: '.av-swatch, .av-naam-chip', hover: voor });
+  const ra = readScreenAloud(el, {
+    text: () => metNaam(SAY.maker, rangerNaam(store.get().avatar)), anchor: '.av-klaar', autoStart: voor,
+    items: '.av-swatch, .av-naam-chip', hover: voor,
+  });
 
   el.querySelector('.av-klaar')?.addEventListener('click', () => {
     Sound.found();

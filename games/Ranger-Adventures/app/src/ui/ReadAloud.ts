@@ -22,7 +22,9 @@ import './readaloud.css';
 import { narrator } from '../core/narrator';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { buildWordClock, activeWordAt, type WordClock } from '../core/wordclock';
+import { zinnen } from '../core/readlevel';
 import { icon } from './icons';
+import { ALGEMEEN } from '../content/copy';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -180,6 +182,14 @@ export function mountReadAloud(opts: ReadAloudOptions): ReadAloudHandle {
   return { speak, stop };
 }
 
+/** A text on a card, one sentence a line (so every line shown is ≤ 7 words, one idea
+ *  each: run 6): the lines go into `host` and come back as segments, lit up as said. */
+export function sentenceSegments(host: HTMLElement, text: string): ReadAloudSegment[] {
+  const parts = zinnen(text);
+  host.innerHTML = parts.map(() => '<span class="zin"></span>').join(' ');
+  return Array.from(host.querySelectorAll<HTMLElement>('.zin')).map((el, i) => ({ el, text: parts[i] }));
+}
+
 /** A waiting line shows this long before the voice reaches its first word (ms). */
 const REVEAL_LEAD_MS = 220;
 
@@ -188,7 +198,7 @@ const REVEAL_LEAD_MS = 220;
 /** The 🔊 "Lees voor" button's markup: the drawn speaker (an emoji renders as a grey
  *  blob on some systems), named by its label, never by its picture. */
 export function speakButtonHtml(cls = 'ra-speak'): string {
-  return `<button class="${cls}" type="button" aria-label="Lees voor">${icon('speaker')}</button>`;
+  return `<button class="${cls}" type="button" aria-label="${ALGEMEEN.leesVoor}">${icon('speaker')}</button>`;
 }
 
 
@@ -202,7 +212,7 @@ export function speakButtonBeside(target: Element | null): HTMLButtonElement | n
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'ra-say';
-  btn.setAttribute('aria-label', 'Lees voor');
+  btn.setAttribute('aria-label', ALGEMEEN.leesVoor);
   btn.innerHTML = icon('speaker');
   const row = target.parentElement.classList.contains('ra-row') || target.parentElement.classList.contains('ra-say-row')
     ? target.parentElement
@@ -216,8 +226,9 @@ export function speakButtonBeside(target: Element | null): HTMLButtonElement | n
 }
 
 export interface ScreenAloudOptions {
-  /** What the screen says: its heading and what the primary action does. */
-  text: string;
+  /** What the screen says: its heading and what the primary action does (a function when
+   *  it changes while the screen is up, e.g. the maker's greeting with the name). */
+  text: string | (() => string);
   /** The element the 🔊 sits beside (default: the screen's primary button). */
   anchor?: string;
   /** Say it once as the screen opens (the caller passes the `voorlezen` setting). */
@@ -228,6 +239,9 @@ export interface ScreenAloudOptions {
   itemText?: (item: HTMLElement) => string;
   hover?: boolean;
 }
+
+/** After the first press, how long a screen waits to see whether that press took it away. */
+const FIRST_PRESS_MS = 250;
 
 /** How long the mouse rests on an item before it is read (no chatter while moving). */
 const HOVER_DWELL_MS = 450;
@@ -265,7 +279,7 @@ function itemWords(item: HTMLElement): string {
 export function readScreenAloud(el: HTMLElement, opts: ScreenAloudOptions): ReadAloudHandle {
   const target = el.querySelector(opts.anchor ?? '[data-key="primary"], .btn-start');
   const btn = speakButtonBeside(target);
-  const speak = (): void => narrator.speak(opts.text);
+  const speak = (): void => narrator.speak(typeof opts.text === 'function' ? opts.text() : opts.text);
   btn?.addEventListener('click', (e) => { e.stopPropagation(); speak(); });
   if (opts.items && opts.hover) {
     const say = (item: HTMLElement): void => {
@@ -287,8 +301,24 @@ export function readScreenAloud(el: HTMLElement, opts: ScreenAloudOptions): Read
       item.addEventListener('focus', () => { if (item.matches(':focus-visible')) say(item); });
     });
   }
-  // a browser only lets a page speak after the player has touched it (the first boot)
+  // a browser only lets a page speak after the player has touched it (the first boot):
+  // then the screen speaks at his first click or key, unless that press took it away
+  // (Begin), and the next screen speaks for itself
   const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }) : null;
-  if (opts.autoStart && nav?.userActivation?.hasBeenActive !== false) speak();
-  return { speak, stop: () => { cancelHoverRead(); narrator.stop(); } };
+  let waitFirst: (() => void) | null = null;
+  if (opts.autoStart && nav?.userActivation?.hasBeenActive === false) {
+    const first = (): void => {
+      forget();
+      window.setTimeout(() => { if (el.isConnected && !/--leaving\b/.test(el.className)) speak(); }, FIRST_PRESS_MS);
+    };
+    const forget = (): void => {
+      window.removeEventListener('pointerdown', first, true);
+      window.removeEventListener('keydown', first, true);
+      waitFirst = null;
+    };
+    window.addEventListener('pointerdown', first, true);
+    window.addEventListener('keydown', first, true);
+    waitFirst = forget;
+  } else if (opts.autoStart) speak();
+  return { speak, stop: () => { waitFirst?.(); cancelHoverRead(); narrator.stop(); } };
 }

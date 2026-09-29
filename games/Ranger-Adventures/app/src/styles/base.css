@@ -313,3 +313,6 @@ body {
     transition-duration: .001ms !important;
   }
 }
+
+/* a text on a card, one sentence a line (MissionFlow lineSegments): one idea per line */
+.zin { display: block; }

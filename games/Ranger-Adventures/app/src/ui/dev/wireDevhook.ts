@@ -7,7 +7,7 @@
 
 import type { World } from '../../render3d/World';
 import {
-  providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot,
+  providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, providePorch,
   provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGait, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
@@ -24,6 +24,7 @@ export function wireWorldDevhook(world: World): void {
   provideBoard(() => world.boardState());
   provideBoundary(() => world.boundaryState());       // F-11: world-rim clamp + "Hier stopt het bos" cue
   provideSitSpot(() => world.sitSpotState());         // W6.4b2: "Ken je roep" sit-spot proximity
+  providePorch(() => world.porchState());             // run 6: the hut's porch ring (the raaf)
   provideClip(() => world.playerClip());              // W3.2: the ranger's active locomotion clip
   provideAvatar(() => world.avatarState());           // F-07: live ranger scale (measured bbox height)
   provideGroundSpeed(() => world.groundSpeed());      // F-08: live post-collision foot speed (m/s)

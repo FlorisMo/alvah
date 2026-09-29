@@ -76,6 +76,15 @@ const CABIN_FOOT: readonly [number, number] = [0.657, 0.633];
 /** Its height (m): the yard's flowers and its open porch scale with it. */
 const CABIN_H = SIZE.boshut.h;
 
+/** The spot before the cabin's door, out on the clearing (run 6: the porch ring where the
+ *  hut is entered). The cabin faces the spawn point and its porch reaches the front of its
+ *  footprint; `out` m further lies the spot. It stays inside the open yard (YARD_OPEN). */
+export function cabinDoorSpot(out = 1.4): { x: number; z: number } {
+  const d = Math.hypot(CABIN_AT.x, CABIN_AT.z);
+  const r = CABIN_FOOT[1] * CABIN_H + out;
+  return { x: CABIN_AT.x - (CABIN_AT.x / d) * r, z: CABIN_AT.z - (CABIN_AT.z / d) * r };
+}
+
 /** The cabin's yard: the grassy clearing round the spawn, crossed by the sand tracks (the
  *  heath's own plant fields start where it ends: gridSpots). */
 const YARD_R = 9;

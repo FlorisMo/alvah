@@ -1,20 +1,13 @@
 /**
- * onboarding.test.ts — the pure W1.6 first-world-entry hint copy is device-aware
- * and stays in the M3/E3 reading norm. Run:
+ * onboarding.test.ts — the device-aware wording rule (`forPointer`). The tips' words are
+ * linted with the whole copy deck in core/readlevel.test.ts. Run:
  * `node --experimental-strip-types --test src/core/onboarding.test.ts`
  */
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { forPointer, ONBOARD_TIPS } from './onboarding.ts';
+import { forPointer } from './onboarding.ts';
 import { countWords } from './readlevel.ts';
-
-test('the transient tips (boundary + drive) stay ≤7 words (P3.3)', () => {
-  for (const line of ONBOARD_TIPS) {
-    assert.ok(countWords(line) <= 7, `"${line}" should be ≤7 words`);
-    assert.ok(line.trim().length > 0);
-  }
-});
 
 test('forPointer: touch keeps "Tik", a mouse reads "Klik" (same word count)', () => {
   const TAP = 'Tik op een ring om te spelen.';

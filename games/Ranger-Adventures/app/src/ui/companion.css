@@ -194,3 +194,4 @@
   .naam-knop, .care-step, .care-dot, .bm-fill { transition: none; }
   .naam-knop.gekozen, .care-step.next, .care-dot.next { transform: none; }
 }
+.comp-line { display: block; }

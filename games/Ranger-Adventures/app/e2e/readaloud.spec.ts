@@ -63,7 +63,7 @@ test('menus read aloud, the maker shows every choice, Enter presses Verder after
   const lastSwatch = page.locator('.av-swatch').last();
   expect(await lastSwatch.evaluate((el) => el.getBoundingClientRect().bottom <= (el.closest('.avatar-creator') as HTMLElement).getBoundingClientRect().bottom + 1),
     'the last eye colour is on screen').toBe(true);
-  await said(page, 'Maak je eigen ranger', 'the maker says what to do');
+  await said(page, 'Maak je ranger. Hoi, ranger Alvah!', 'the maker says its title and greets the ranger by name');
   await clearSpoken(page);
   await page.locator('.av-swatch[data-kenmerk="haar"]').nth(3).hover();
   await said(page, /Haar: /, 'a swatch says its own label when the mouse rests on it');

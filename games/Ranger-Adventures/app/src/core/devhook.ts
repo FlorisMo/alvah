@@ -190,6 +190,9 @@ export interface RangerDevHook {
   /** The "Ken je roep" sit-spot bench: world position + live proximity, for E2E
    *  (W6.4b2). */
   sitSpot(): { x: number; z: number; near: boolean } | null;
+  /** Run 6 (FLOW P4): the hut's porch ring — where, whether it shows, whether the ranger
+   *  stands in it, the words on its tag. */
+  porch(): PorchState | null;
   /** Win the active 3D mission step via its genuine resolve path; true if one
    *  was pending. Drives the two-mission-chain E2E deterministically (W2.3). */
   winStep(): boolean;
@@ -323,7 +326,7 @@ export interface RangerDevHook {
   tags(): TagOnScreen[] | null;
   /** Run 6 (FLOW P2): which "go here" cues glow now: the next mission's ring + tag, the
    *  missiebord's, the ring round the parked jeep. */
-  glow(): { next: boolean; board: boolean; beacon: boolean } | null;
+  glow(): GlowState | null;
   /* ---- golden-path probes (e2e/golden.spec.ts). Read-only: they measure what the
    * player SEES (the camera + scene the Stage rendered this frame), never resolve a
    * step. The THREE-side maths lives in render3d/play/kit.ts ("test play hint"). ---- */
@@ -370,6 +373,8 @@ export interface RangerDevHook {
 }
 
 /** `__ranger.tags()` (see the field doc). */
+export type GlowState = { next: boolean; board: boolean; beacon: boolean; porch: boolean };
+export type PorchState = { x: number; z: number; shown: boolean; near: boolean; tag: string };
 export type TagOnScreen = { text: string; o: number; x: number; y: number; w: number; h: number; glow: boolean; d: number; always: boolean };
 
 /** `__ranger.hint()` (see the field doc). */
@@ -429,6 +434,7 @@ const state = {
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
   board: null as null | (() => { x: number; z: number; near: boolean; inFrustum: boolean } | null),
   sitSpot: null as null | (() => { x: number; z: number; near: boolean } | null),
+  porch: null as null | (() => PorchState | null),
   winStep: null as null | (() => boolean),
   titleReady: null as null | (() => boolean),
   actors: null as null | (() => { id: string; height: number; clip: { name: string; time: number } | null }[]),
@@ -469,7 +475,7 @@ const state = {
   hint: null as null | (() => HintState | null),
   boundary: null as null | (() => { bound: number; dist: number; atRim: boolean; scatterMax: number } | null),
   tags: null as null | (() => TagOnScreen[]),
-  glow: null as null | (() => { next: boolean; board: boolean; beacon: boolean }),
+  glow: null as null | (() => GlowState),
   // golden-path probes: the Stage's live view + renderer (main.ts) and the THREE-side
   // measurements (kit.ts). Kept `unknown` so this module stays three.js-free.
   renderView: null as null | (() => unknown),
@@ -625,6 +631,11 @@ export function provideSitSpot(
   state.sitSpot = fn;
 }
 
+/** Register the hut's porch source (the World). Pass null to clear (run 6, FLOW P4). */
+export function providePorch(fn: (() => PorchState | null) | null): void {
+  state.porch = fn;
+}
+
 /** Register the "win the active 3D step" driver (the mission runner). W2.3. */
 export function provideWinStep(fn: (() => boolean) | null): void {
   state.winStep = fn;
@@ -766,7 +777,7 @@ export function provideHint(
 /** Register the run-6 name-tag and glow read-backs (the World). */
 export function provideTags(
   tags: (() => TagOnScreen[]) | null,
-  glow: (() => { next: boolean; board: boolean; beacon: boolean }) | null,
+  glow: (() => GlowState) | null,
 ): void {
   state.tags = tags;
   state.glow = glow;
@@ -806,6 +817,7 @@ export function installDevHook(): boolean {
     markers: () => (state.markers ? state.markers() : null),
     board: () => (state.board ? state.board() : null),
     sitSpot: () => (state.sitSpot ? state.sitSpot() : null),
+    porch: () => (state.porch ? state.porch() : null),
     winStep: () => (state.winStep ? state.winStep() : false),
     titleReady: () => (state.titleReady ? state.titleReady() : false),
     actors: () => (state.actors ? state.actors() : null),

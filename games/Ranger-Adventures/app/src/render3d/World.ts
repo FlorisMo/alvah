@@ -30,7 +30,7 @@ import { VEN_CENTER, WATER_LEVEL, type Biome } from './Biomes';
 import { Terrain } from './world/Terrain';
 import { Sky } from './world/Sky';
 import { Labels } from './world/Labels';
-import { Dressing } from './world/Dressing';
+import { Dressing, cabinDoorSpot } from './world/Dressing';
 import { Fauna } from './world/Fauna';
 import { Markers, type WorldMarker } from './world/Markers';
 import { Vehicles } from './world/Vehicles';
@@ -266,6 +266,7 @@ export class World {
     this.pois.placeMarkers(markers);
     this.dressing.placeCabin();
     this.pois.placeBoard();
+    this.pois.placePorch(cabinDoorSpot()); // run 6: the hut's door ring (hidden until the raaf is told)
     this.dressing.placeLandmarks();
     this.pois.placeSitSpot();
     this.dressing.placeNatureDressing();
@@ -377,6 +378,28 @@ export class World {
    *  the boundary hint joining the one sequenced hint system (BUILD-PLAN §3). */
   setBoundaryHint(cb: () => void): void {
     this.player.onBoundary = cb;
+  }
+
+  /** Run 6 (FLOW P4): the hut's porch ring — `onNear` as the ranger enters/leaves it,
+   *  `onOpen` when he acts on it (the prompt or the interact key): the hut opens. */
+  setPorch(cbs: { onNear: (near: boolean) => void; onOpen: () => void }): void {
+    this.pois.setPorch(cbs);
+  }
+
+  /** Show the porch ring and its tag (Bram told about the young raaf, or it lives there);
+   *  `tag`: the words over it. */
+  showPorch(on: boolean, tag?: string): void {
+    this.pois.showPorch(on, tag);
+  }
+
+  /** The porch's ring and tag glow for `seconds` of being seen. */
+  glowPorch(seconds: number): void {
+    this.pois.glowPorch(seconds);
+  }
+
+  /** Dev-hook accessor: the porch ring (where, shown, whether he stands in it, its tag). */
+  porchState(): ReturnType<Markers['porchState']> {
+    return this.pois.porchState();
   }
 
   /** Dev-hook accessor (W6.4b2): the sit-spot's world position + whether the ranger
@@ -939,7 +962,7 @@ export class World {
   }
 
   /** Where the glowing cues stand (the dev hook): the next mission, the board, the jeep. */
-  glowState(): { next: boolean; board: boolean; beacon: boolean } {
+  glowState(): ReturnType<Markers['glowState']> {
     return this.pois.glowState();
   }
 

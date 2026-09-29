@@ -11,7 +11,7 @@ import { store } from '../../core/state';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { joystickVisible } from '../../core/input';
-import { ONBOARD_BOUNDARY, ONBOARD_DRIVE } from '../../core/onboarding';
+import { HUD, HUB, HUT, TAG, vul } from '../../content/copy';
 import { provideHint, type HintState } from '../../core/devhook';
 import { ROEP_COPY } from '../../engines/roep';
 import type { WayCue } from '../../render3d/Wayfinding';
@@ -20,9 +20,10 @@ import { coarsePointer } from './device';
 import { session, esc, plainCard } from '../flow/session';
 import { icon } from '../icons';
 import { showBriefing, goToMission } from '../flow/MissionFlow';
-import { playRoepAtSitSpot, nextMissionId } from '../flow/WorldSession';
+import { playRoepAtSitSpot, nextMissionId, activeExploreTitel } from '../flow/WorldSession';
 import { showPauseHub, showMissionBoard, showControls } from '../hub/Hub';
-import { startGuide, stopGuide, mountGuide, chipHeld, guideSnapshot } from './Lessons';
+import { showCabin } from '../Companion';
+import { startGuide, stopGuide, mountGuide, chipHeld, guideSnapshot, porchOpen } from './Lessons';
 import { speaking } from './Speaker';
 
 // the on-screen joystick (W1.3) lives inside the explore HUD; re-created each
@@ -58,7 +59,7 @@ export function showExploreHud(activeTitel: string | null): void {
   const veld = activeTitel
     ? `<div class="explore-wayfind" role="status" aria-live="polite"${held ? ' hidden' : ''}>` +
       `<span class="wf-glyph" aria-hidden="true">${icon('arrow')}</span>` +
-      `<span class="wf-text"><b class="wf-doel">${esc(activeTitel)}</b><span class="wf-cue">zoek het spoor…</span></span>` +
+      `<span class="wf-text"><b class="wf-doel">${esc(activeTitel)}</b><span class="wf-cue">${esc(HUD.chipZoek)}</span></span>` +
       `</div>`
     : '';
   // every mission done: no way to point any more — the chip says the season is done
@@ -66,15 +67,16 @@ export function showExploreHud(activeTitel: string | null): void {
   const klaar = allDone
     ? `<div class="explore-klaar" role="status">` +
       `<span class="wf-glyph" aria-hidden="true">${icon('check')}</span>` +
-      `<span class="wf-text"><b class="wf-doel">Alle missies klaar</b><span class="wf-cue">loop rustig rond</span></span>` +
+      `<span class="wf-text"><b class="wf-doel">${esc(HUD.allesKlaar)}</b><span class="wf-cue">${esc(HUD.allesKlaarCue)}</span></span>` +
       `</div>`
     : '';
   const el = plainCard(
     `<div class="explore-hud">` +
-    `<button class="ra-pill explore-pause" type="button" data-key="pause">${icon('pause')}<span>Pauze</span></button>` +
+    `<button class="ra-pill explore-pause" type="button" data-key="pause">${icon('pause')}<span>${esc(HUD.pauze)}</span></button>` +
     veld + klaar +
     `<div class="explore-prompt" hidden></div>` +
     `<div class="explore-hub-prompt" hidden></div>` +
+    `<div class="explore-porch-prompt" hidden></div>` +
     `<div class="explore-sit-prompt" hidden></div>` +
     `<div class="explore-vehicle-prompt" hidden></div>` +
     `<div class="explore-heli-prompt" hidden></div>` +
@@ -88,6 +90,8 @@ export function showExploreHud(activeTitel: string | null): void {
   // a fresh chip gets its cue at once, from where the ranger stands, instead of
   // "zoek het spoor…" until he has walked a step (parent B12)
   world?.setActiveMission(nextMissionId());
+  // the hut's porch ring, once Bram has told about the raaf (or the raaf lives there)
+  world?.showPorch(porchOpen(), porchTag());
   el.querySelector('.explore-pause')?.addEventListener('click', () => showPauseHub());
   const hud = el.querySelector<HTMLElement>('.explore-hud');
   mountJoystick(hud);
@@ -96,12 +100,16 @@ export function showExploreHud(activeTitel: string | null): void {
   provideHint(hintSnapshot);
   // The World only re-fires its onNear callbacks on a proximity CHANGE, so a fresh
   // HUD re-surfaces whatever the ranger is already standing at.
+  redrawing = true;
   onApproach(world?.nearMission() ?? null);
   if (world?.boardState()?.near) onBoardApproach(true);
+  if (world?.porchState()?.near) onPorchApproach(true);
   if (world?.sitSpotState()?.near) onSitSpotApproach(true);
   renderVehiclePrompt();
   heliPromptKey = '';
   renderHeliPrompt();
+  redrawing = false;
+  arbitratePrompts();
   setHeliCockpit(world?.heliState()?.inHeli ?? false);
 }
 
@@ -113,7 +121,7 @@ export function showExploreHud(activeTitel: string | null): void {
  *  parked jeep or helicopter only when he stands in none of them: standing in the
  *  missiebord's ring he gets "Bekijk het missiebord" even with the jeep parked beside it
  *  (breaker B4, parent B8). In a vehicle, only getting out (or landing). */
-const FOOT_ORDER = ['.explore-prompt', '.explore-hub-prompt', '.explore-sit-prompt', '.explore-vehicle-prompt', '.explore-heli-prompt'];
+const FOOT_ORDER = ['.explore-prompt', '.explore-hub-prompt', '.explore-porch-prompt', '.explore-sit-prompt', '.explore-vehicle-prompt', '.explore-heli-prompt'];
 const RIDING_ORDER = ['.explore-vehicle-prompt', '.explore-heli-prompt'];
 
 function arbitratePrompts(): void {
@@ -126,6 +134,11 @@ function arbitratePrompts(): void {
     const slot = session.host.querySelector<HTMLElement>(sel);
     if (slot) { slot.hidden = sel !== show; if (!slot.hidden) shownH = slot.offsetHeight; }
   }
+  // the prompt that shows says its words (the first time it comes up here); while the HUD
+  // is drawn afresh (after a menu) the slots fill one by one: that is no new prompt
+  const shown = show ? session.host.querySelector<HTMLElement>(`${show} button`) : null;
+  if (shown) sayPrompt(shown);
+  else if (!redrawing) promptSaid = '';
   // the teaching strip (Bram, a lesson) sits just above the one prompt on screen
   session.host.querySelector<HTMLElement>('.explore-hud')?.style.setProperty('--prompt-h', `${shownH ? shownH + 14 : 0}px`);
 }
@@ -137,15 +150,40 @@ function enterCap(): string {
   return coarsePointer() ? '' : ' <span class="kcap kcap-in" aria-hidden="true">Enter</span>';
 }
 
+/** Every new line is read aloud: a prompt says its words as it comes up (the button's
+ *  name, without the key cap). Not again while it stays up, nor when he steps out of the
+ *  ring and straight back in (a short rest per prompt); never over Bram, whose line it
+ *  waits for. The helicopter's prompts say their own line (renderHeliPrompt). */
+let promptSaid = '';
+let redrawing = false;
+const promptSaidAt = new Map<string, number>();
+const PROMPT_REST_MS = 12_000;
+function sayPrompt(btn: HTMLElement): void {
+  // the helicopter says its own lines; getting out of the jeep is in the drive line
+  if (btn.closest('.explore-heli-prompt') || btn.classList.contains('explore-vehicle-exit')) return;
+  const words = (btn.getAttribute('aria-label') ?? buttonWords(btn)).trim();
+  if (!words || words === promptSaid) return;
+  promptSaid = words;
+  const now = performance.now();
+  if (now - (promptSaidAt.get(words) ?? -Infinity) < PROMPT_REST_MS) return;
+  promptSaidAt.set(words, now);
+  if (!store.get().settings.voorlezen) return;
+  const line = `${words}.`;
+  if (speaking()) narrator.queue(line); else narrator.speak(line);
+}
+/** A button's words: its text without the pictures and key caps beside it. */
+function buttonWords(btn: HTMLElement): string {
+  const copy = btn.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+  return (copy.textContent ?? '').replace(/\s+/g, ' ');
+}
+
 /* ----------------------------------------------------------- vehicles ---- */
 /** How to drive / fly and how to get out: a short line (≤ 7 words) shown with the
  *  vehicle's own button, device-aware like the walk hint. On a laptop the keys are drawn
  *  as key caps (the words say what they do). */
 const cap = (k: string): string => `<span class="kcap kcap-sm" aria-hidden="true">${k}</span>`;
-const DRIVE_KEYS_HTML = `${cap('↑')} gas · ${cap('↓')} rem · ${cap('←')}${cap('→')} sturen`;
-const DRIVE_OUT_KEYS = ONBOARD_DRIVE.uit;
-const FLY_KEYS = 'Vlieg met de pijltjes.';
-const LANDING = 'De helikopter landt.';
+const DRIVE_KEYS_HTML = `${cap('↑')} ${HUD.rijden.gas} · ${cap('↓')} ${HUD.rijden.rem} · ${cap('←')}${cap('→')} ${HUD.rijden.sturen}`;
 
 function stickShown(): boolean {
   return joystickVisible(store.get().settings.joystick, coarsePointer());
@@ -159,13 +197,13 @@ export function renderVehiclePrompt(): void {
   const v = session.world?.vehicleState() ?? null;
   if (!v || (!v.near && !v.inVehicle)) prompt.innerHTML = '';
   else if (v.inVehicle) {
-    const lines = stickShown() ? [esc(ONBOARD_DRIVE.stick)] : [DRIVE_KEYS_HTML, esc(DRIVE_OUT_KEYS)];
+    const lines = stickShown() ? [esc(HUD.rijden.stick)] : [DRIVE_KEYS_HTML, esc(HUD.rijden.uit)];
     prompt.innerHTML =
       `<p class="explore-heli-hint explore-drive-hint">${lines.join('<br>')}</p>` +
-      `<button class="btn-start explore-vehicle-exit" type="button">${icon('jeep')}Stap uit${enterCap()}</button>`;
+      `<button class="btn-start explore-vehicle-exit" type="button">${icon('jeep')}${esc(HUD.uit)}${enterCap()}</button>`;
     prompt.querySelector('.explore-vehicle-exit')?.addEventListener('click', () => session.world?.exitVehicle());
   } else {
-    prompt.innerHTML = `<button class="btn-start explore-vehicle-enter" type="button">${icon('jeep')}Stap in de jeep${enterCap()}</button>`;
+    prompt.innerHTML = `<button class="btn-start explore-vehicle-enter" type="button">${icon('jeep')}${esc(HUD.jeepIn)}${enterCap()}</button>`;
     prompt.querySelector('.explore-vehicle-enter')?.addEventListener('click', () => session.world?.enterVehicle());
   }
   arbitratePrompts();
@@ -182,7 +220,8 @@ export function renderHeliPrompt(): void {
   if (!prompt) return;
   const h = session.world?.heliState() ?? null;
   const cue = h?.padCue ?? null;
-  const where = cue ? `${cue.glyph} Helipad ${cue.richting} · ${Math.max(5, Math.round(cue.distance / 5) * 5)} m` : '';
+  const padM = cue ? Math.max(5, Math.round(cue.distance / 5) * 5) : 0;
+  const where = cue ? `${cue.glyph} ${vul(HUD.helipad, { richting: cue.richting, m: padM })}` : '';
   // Debounce: this runs every frame inside the heli (via setHeliVignette); rebuild the DOM
   // only when the affordance changes. While flying only the pad line's words change —
   // they are updated in place, so the "Land" button under a moving finger stays put.
@@ -199,28 +238,29 @@ export function renderHeliPrompt(): void {
   }
   heliPromptKey = key;
   const hint = (text: string, cls = ''): string => `<p class="explore-heli-hint${cls}">${esc(text)}</p>`;
-  const button = (cls: string, label: string): string => `<button class="btn-start ${cls}" type="button">${icon('helicopter')}${label}</button>`;
+  const button = (cls: string, label: string): string => `<button class="btn-start ${cls}" type="button">${icon('helicopter')}${esc(label)}${enterCap()}</button>`;
   let say = ''; // what is read aloud as this line appears (verifier V3: the heli lines were never spoken)
   if (key === 'none') prompt.innerHTML = '';
   else if (key === 'ground') {
-    say = stickShown() ? 'Sleep de stick om te vliegen.' : FLY_KEYS;
-    prompt.innerHTML = hint(say) + button('explore-heli-exit', 'Stap uit');
+    say = stickShown() ? HUD.vliegen.stick : HUD.vliegen.keys;
+    prompt.innerHTML = hint(say) + button('explore-heli-exit', HUD.uit);
   } else if (key === 'landing') {
-    say = LANDING;
+    say = HUD.landt;
     prompt.innerHTML = hint(say);
   } else if (key === 'land') {
-    say = 'Land hier.';
-    prompt.innerHTML = button('explore-heli-land', 'Land hier');
+    say = HUD.zegLandHier;
+    prompt.innerHTML = button('explore-heli-land', HUD.landHier);
   } else if (key === 'fly') {
     // spoken without the arrow glyph: "Helipad achter je, 35 meter." (the chip's words
     // keep changing in flight; only its first reading is spoken, not every 5 m)
-    say = cue ? `Helipad ${cue.richting}, ${Math.max(5, Math.round(cue.distance / 5) * 5)} meter.` : '';
-    prompt.innerHTML = hint(where, ' explore-heli-where') + button('explore-heli-land', 'Land op de helipad');
+    say = cue ? vul(HUD.zegHelipad, { richting: cue.richting, m: padM }) : '';
+    prompt.innerHTML = hint(where, ' explore-heli-where') + button('explore-heli-land', HUD.landPad);
   } else if (key === 'enter') {
-    prompt.innerHTML = button('explore-heli-enter', 'Stap in de helikopter');
+    say = `${HUD.heliIn}.`;
+    prompt.innerHTML = button('explore-heli-enter', HUD.heliIn);
   } else {
     // near, but withheld: reduced-motion (toggle on) or the toggle is UIT
-    say = key === 'reduced' ? 'De helikopter blijft nu aan de grond.' : 'Zet de helikopter aan bij Instellingen.';
+    say = key === 'reduced' ? HUD.heliRust : HUD.heliUit;
     prompt.innerHTML = hint(say);
   }
   // spoken once per state: a HUD re-render (after Pauze) resets heliPromptKey, not this.
@@ -279,14 +319,14 @@ export function showDriveHint(): void {
   if (driveHintSpoken) return;
   driveHintSpoken = true;
   if (!store.get().settings.voorlezen) return;
-  const line = stickShown() ? ONBOARD_DRIVE.stick : `${ONBOARD_DRIVE.keys} ${DRIVE_OUT_KEYS}`;
+  const line = stickShown() ? HUD.rijden.stick : `${HUD.rijden.keys} ${HUD.rijden.uit}`;
   // Bram talking: after his line, never over it (his strip waits for the voice)
   if (speaking()) narrator.queue(line); else narrator.speak(line);
 }
 
 /** F-11: the calm world-boundary cue, through the same one-tip channel. */
 export function showBoundaryHint(): void {
-  showTip('boundary', ONBOARD_BOUNDARY);
+  showTip('boundary', HUD.rand);
 }
 
 /** The "?" chip, bottom right: it opens the small "Zo speel je" card (key caps on a
@@ -340,7 +380,7 @@ export function onWayfind(cue: WayCue | null): void {
     if (!cue.arrived) arrowTurn += Math.atan2(Math.sin(cue.angle - arrowTurn), Math.cos(cue.angle - arrowTurn));
     glyph.style.transform = cue.arrived ? '' : `rotate(${arrowTurn.toFixed(3)}rad)`;
   }
-  const words = cue.arrived ? 'je bent er' : `${cue.richting} · ${cue.afstand}`;
+  const words = cue.arrived ? HUD.chipEr : `${cue.richting} · ${cue.afstand}`;
   if (cueEl && cueEl.textContent !== words) cueEl.textContent = words;
   strip.classList.toggle('wf-arrived', cue.arrived);
 }
@@ -355,14 +395,15 @@ export function onApproach(missionId: string | null): void {
   const m = missionId ? area.missies.find((mm) => mm.id === missionId) : null;
   if (!m) prompt.innerHTML = '';
   else if (!store.get().voltooid[m.id]) {
-    prompt.innerHTML = `<button class="btn-start explore-play" type="button">Speel mee: ${esc(m.titel)}${enterCap()}</button>`;
+    prompt.innerHTML = `<button class="btn-start explore-play" type="button">${esc(vul(HUD.speelMee, { titel: m.titel }))}${enterCap()}</button>`;
   } else {
     // a finished mission: the big button leads ON to the next one (child B6); playing
     // this one again is a quiet second choice, never what Space or Enter does
     const next = area.missies.find((mm) => mm.id === nextMissionId()) ?? null;
     prompt.innerHTML =
-      (next ? `<button class="btn-start explore-next" type="button">Volgende: ${esc(next.titel)}${enterCap()}</button>` : '') +
-      `<button class="ra-chip explore-play explore-replay" type="button">Speel nog eens: ${esc(m.titel)}</button>`;
+      (next ? `<button class="btn-start explore-next" type="button">${esc(vul(HUD.volgende, { titel: next.titel }))}${enterCap()}</button>` : '') +
+      // two short lines: "Speel nog eens:" over the title (a long title stays ≤ 7 words a line)
+      `<button class="ra-chip explore-play explore-replay" type="button"><span class="rp-lead">${esc(HUD.nogEens)}</span> <span class="rp-titel">${esc(m.titel)}</span></button>`;
     prompt.querySelector('.explore-next')?.addEventListener('click', () => { if (next) goToMission(next); });
   }
   prompt.querySelector('.explore-play')?.addEventListener('click', () => {
@@ -388,7 +429,7 @@ export function onBoardApproach(near: boolean): void {
   if (!prompt) return;
   if (!near) prompt.innerHTML = '';
   else {
-    prompt.innerHTML = `<button class="btn-start explore-board-open" type="button">Bekijk het missiebord${enterCap()}</button>`;
+    prompt.innerHTML = `<button class="btn-start explore-board-open" type="button">${esc(HUD.missiebord)}${enterCap()}</button>`;
     prompt.querySelector('.explore-board-open')?.addEventListener('click', tryOpenBoard);
   }
   arbitratePrompts();
@@ -399,6 +440,33 @@ export function tryOpenBoard(): void {
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-hub-prompt');
   if (!prompt || prompt.hidden) return;
   showMissionBoard();
+}
+
+/** The hut's porch (run 6, FLOW P4): once Bram has told about the young raaf, a ring on
+ *  the porch; standing in it, "Kijk in de hut" opens the hut (the raaf, the opvang). */
+export function onPorchApproach(near: boolean): void {
+  const prompt = session.host.querySelector<HTMLDivElement>('.explore-porch-prompt');
+  if (!prompt) return;
+  if (!near) prompt.innerHTML = '';
+  else {
+    prompt.innerHTML = `<button class="btn-start explore-porch-open" type="button">${icon('raven')}${esc(HUD.hut)}${enterCap()}</button>`;
+    prompt.querySelector('.explore-porch-open')?.addEventListener('click', tryOpenPorch);
+  }
+  arbitratePrompts();
+}
+
+/** Guarded entry to the hut (button tap OR the interact key): the same hut Pauze opens. */
+export function tryOpenPorch(): void {
+  const prompt = session.host.querySelector<HTMLDivElement>('.explore-porch-prompt');
+  if (!prompt || prompt.hidden || !prompt.childElementCount) return;
+  // its way back leads out onto the clearing
+  showCabin(() => showExploreHud(activeExploreTitel()), HUB.terug);
+}
+
+/** The porch tag: the raaf's name once it lives there, before that who waits inside. */
+function porchTag(): string {
+  const c = store.get().companion;
+  return c.rescued ? (c.naam?.trim() || HUT.jeRaaf) : TAG.hut;
 }
 
 /** The "Ken je roep" sit-spot affordance (W6.4b2). */

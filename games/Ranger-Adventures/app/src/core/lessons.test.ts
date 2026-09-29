@@ -8,14 +8,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   nextStep, hookPending, learnedByDoing, lessonDone, lessonTimedOut, migrateGeleerd, readingMs, cutByRide,
-  LESSON, type GuideState,
+  raafDue, LESSON, type GuideState,
 } from './lessons.ts';
 import { BRAM, LES, BESTURING, metNaam } from '../content/mentor.ts';
 import { countWords } from './readlevel.ts';
 
 const fresh = (over: Partial<GuideState> = {}): GuideState => ({
   geleerd: {}, returning: false, welkomSaid: false, rennenShown: false, kijkenShown: false,
-  hookRelevant: true, missiebordArmed: false, onFoot: true, jeepFar: false, stillS: 0, prompting: false,
+  hookRelevant: true, missiebordArmed: false, raafDue: false, onFoot: true, jeepFar: false, stillS: 0, prompting: false,
   progress: { walkedM: 0, runS: 0, lookPx: 0 },
   ...over,
 });
@@ -95,6 +95,20 @@ test('later beats: the missiebord after the first mission, the jeep when far, th
   assert.equal(nextStep(fresh({ geleerd: all, stillS: LESSON.kijken.stillS, prompting: true })), null, 'never over a prompt');
   assert.equal(nextStep(fresh({ geleerd: all, stillS: 60, kijkenShown: true })), null, 'once a session');
   assert.equal(lessonDone('kijken', { walkedM: 0, runS: 0, lookPx: LESSON.kijken.donePx }), true);
+});
+
+test('the young raaf: Bram tells about it once two missions are done, after the missiebord, before the jeep', () => {
+  const all = { bram: true, lopen: true, rennen: true, haak: true };
+  assert.equal(nextStep(fresh({ geleerd: all, raafDue: true })), 'raaf');
+  assert.equal(nextStep(fresh({ geleerd: all, raafDue: true, missiebordArmed: true })), 'missiebord', 'the missiebord first');
+  assert.equal(nextStep(fresh({ geleerd: all, raafDue: true, jeepFar: true })), 'raaf', 'then the raaf, the jeep after');
+  assert.equal(nextStep(fresh({ geleerd: { ...all, raaf: true }, raafDue: true })), null, 'once for good');
+  assert.equal(nextStep(fresh({ returning: true, geleerd: all, raafDue: true })), 'welkom', 'welkom terug comes first');
+  assert.equal(nextStep(fresh({ returning: true, welkomSaid: true, geleerd: all, raafDue: true })), 'raaf');
+  assert.equal(raafDue({ frisling: true }, false), false);
+  assert.equal(raafDue({ frisling: true, 'ree-niet-aanraken': true }, false), true);
+  assert.equal(raafDue({ frisling: true, 'ree-niet-aanraken': true }, true), false, 'already taken in');
+  assert.equal(raafDue({ frisling: true, ven: false }, false), false, 'only missions that are done count');
 });
 
 test('the old save flags become learned steps', () => {
