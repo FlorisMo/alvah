@@ -39,9 +39,10 @@ export interface Decoy {
 export interface DecoyAt extends Spot { d: Distractor }
 
 /** The low clumps of rust-brown dead bracken the 'bush' decoys are: add them to the
- *  stand's clumps before its CoverField is built. */
-export function decoyClumps(at: readonly DecoyAt[]): Clump[] {
-  return at.filter((q) => q.d.k === 'bush').map((q) => ({ x: q.x, z: q.z, kind: 'dead' as const, size: 1, decoy: q.d.id }));
+ *  stand's clumps before its CoverField is built. `size`: bigger in cover that is taller
+ *  than bracken's, so the brown still shows through it. */
+export function decoyClumps(at: readonly DecoyAt[], size = 1): Clump[] {
+  return at.filter((q) => q.d.k === 'bush').map((q) => ({ x: q.x, z: q.z, kind: 'dead' as const, size, decoy: q.d.id }));
 }
 
 /** The decoys of one stand: built with the home, alive while the lens is near. */

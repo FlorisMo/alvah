@@ -77,11 +77,16 @@ adventure/actors.ts      Actor: calm behaviours (idle, root, go, follow, look, s
                          procedural trot for static GLBs; actors-math.ts is the pure part
 adventure/cover.ts       CoverField: instanced true-scale bracken, moor-grass, heather (3 draw
                          calls) that rustles and parts; cover-math.ts: line of sight, glimpse
+adventure/decoys.ts      the zoeken look-alikes laid in a stand (dead bracken, a butterfly on a
+                         foxglove, a stonechat, a nightjar): shared by the frisling and the ree
 adventure/patches.ts     PatchField: look-alike rooting patches (corsi spots) + prints
 adventure/places.ts      frames, headings, local↔world (pure)
 adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: where it
-                         happens), <id>.home.ts (the home's dressing), <id>.ts (the beats)
-world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release
+                         happens), <id>.home.ts (the home's dressing), <id>.ts (the beats);
+                         frisling (the wallow) and ree (the copse, the meadow, the hide)
+world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
+                         a `shy` resident slips into cover when he comes near (per state);
+                         a home's `trees` join the world forest (Dressing.addHomeTrees)
 ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip, action button
 ```
 
@@ -95,10 +100,14 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
 - *the lens*: `await k.frame({ at, heading, halfW, halfD, pitchDeg, include }, { face })`
   holds a framed view (a Stage fit at a world anchor, the ranger's spot among `include`),
   eased, ≤ 90°/s, a cut under reduced motion; `k.free()` gives the follow camera back with a
-  blended hand-over; `await k.look(spot, line)` is one calm look (binoculars) and back.
-- *walking*: `await k.walk({ name, to, r, line, doel, lead })` — the child walks himself;
-  the chip names the goal in words, the arrow only after ~20 s without progress; with
-  `lead` an actor follows and hides when he runs. `await k.walkRanger(x, z)` walks him
+  blended hand-over; `await k.look(spot, line, hold, { turn })` is one calm look
+  (binoculars) and back (`turn`: he ends facing it); `k.ui.binoculars(on, strong)` is the
+  glasses' frame for a long watch (the ree's hide).
+- *walking*: `await k.walk({ name, to, r, line, doel, lead, quiet })` — the child walks
+  himself; the chip names the goal in words, the arrow only after ~20 s without progress;
+  with `lead` an actor follows and hides when he runs; with `quiet` running says its line.
+- *the animals' bodies*: a rigged model (the roe) plays its own walk/graze/idle clips, the
+  procedural trot is for the static meshes (the boar, the piglet). `await k.walkRanger(x, z)` walks him
   (input locked) to a framed beat's spot.
 - *beats*: `searchBeat(k, step, …)`, `routeBeat(k, step, …)`, `choiceRun(k, step).ask(id,
   { show, wrong, right })` then `.done()`; `await k.fact(i)` shows the raaf's card.

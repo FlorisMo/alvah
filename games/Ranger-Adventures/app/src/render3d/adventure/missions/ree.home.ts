@@ -147,7 +147,9 @@ export class ReeHome implements HomeDressing {
       if (dist(p, MEET) < 1.9 || segDist(p, REE_PLACES.hide, MEET) < 0.9) continue;
       meadow.push({ ...p, kind: 'grass', size: 0.8 + rnd() * 0.3 });
     }
-    const clumps: Clump[] = [...meadow, ...decoyClumps(decoyAt)];
+    // (the dead bracken look-alikes stand a little taller than in the frisling's bracken:
+    // their rust-brown must show between the tall grass like the calf's back does)
+    const clumps: Clump[] = [...meadow, ...decoyClumps(decoyAt, 1.45)];
 
     /* -- the copse: bracken round the junipers and the trunks, her bed kept free -- */
     const junipers = JUNIPERS.map((j) => ({ ...atLocal(COPSE_FRAME, j.u, j.v), h: j.h, turn: j.turn }));
