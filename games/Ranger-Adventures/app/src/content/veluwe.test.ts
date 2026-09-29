@@ -127,14 +127,28 @@ test('every adventure line reads at M3/E3 (≤7 words a sentence); the plain lin
   assert.deepEqual(bad, []);
 });
 
-test('the squirrel adventure asks for a tap in the Tik form: an iPad reads "Tik", a mouse "Klik"', () => {
-  const m = AREA_VELUWE.missies.find((x) => x.id === 'eekhoorn')!;
-  const a = (m as { avontuur?: { simpel: Record<string, string>; knap?: Record<string, string> } }).avontuur!;
-  const all = { ...a.simpel, ...a.knap };
-  for (const [k, t] of Object.entries(all)) assert.ok(!/\bklik/i.test(t), `eekhoorn.avontuur.${k} is written with "Tik" (the device rule turns it into "Klik"): "${t}"`);
-  for (const k of ['routeWijs', 'wieWonen', 'naroepen']) {
-    assert.match(forPointer(all[k], false), /\bTik\b/, `${k} on a touch screen`);
-    assert.match(forPointer(all[k], true), /\bKlik\b/, `${k} with a mouse`);
+test('a line that asks for a tap is written in the Tik form: an iPad reads "Tik", a mouse "Klik" (the device rule)', () => {
+  // every mission's words: the adventure lines and every step's copy ("Klik!" is the
+  // camera's own sound, not an instruction)
+  const bad: string[] = [];
+  for (const m of AREA_VELUWE.missies) {
+    const a = (m as { avontuur?: { simpel: Record<string, string>; knap?: Record<string, string> } }).avontuur;
+    const lines: [string, string][] = [
+      ...Object.entries(a?.simpel ?? {}).map(([k, v]): [string, string] => [`avontuur.${k}`, v]),
+      ...Object.entries(a?.knap ?? {}).map(([k, v]): [string, string] => [`avontuur.knap.${k}`, v]),
+      ...m.stappen.flatMap((st, i) => Object.entries((st.skin as { copy?: Record<string, unknown> }).copy ?? {})
+        .filter((e): e is [string, string] => typeof e[1] === 'string').map(([k, v]): [string, string] => [`stappen[${i}].copy.${k}`, v])),
+    ];
+    for (const [k, v] of lines) if (/\bklik\b(?!!)/i.test(v)) bad.push(`${m.id}.${k}: "${v}"`);
+  }
+  assert.deepEqual(bad, []);
+  const says = (id: string, k: string): string => {
+    const a = (AREA_VELUWE.missies.find((x) => x.id === id) as { avontuur?: { simpel: Record<string, string> } }).avontuur!;
+    return a.simpel[k];
+  };
+  for (const [id, k] of [['eekhoorn', 'routeWijs'], ['eekhoorn', 'wieWonen'], ['eekhoorn', 'naroepen'], ['frisling', 'zoek'], ['frisling', 'routeWijs'], ['ree-niet-aanraken', 'zoek']]) {
+    assert.match(forPointer(says(id, k), false), /\bTik\b/, `${id}.${k} on a touch screen`);
+    assert.match(forPointer(says(id, k), true), /\bKlik\b/, `${id}.${k} with a mouse`);
   }
 });
 
