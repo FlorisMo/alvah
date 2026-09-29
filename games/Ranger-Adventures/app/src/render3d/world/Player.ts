@@ -101,6 +101,9 @@ export interface PlayerHost {
   tapTargets(): TapTarget[];
   /** The ambience follows the biome underfoot. */
   crossBiome(biome: Biome): void;
+  /** Visit what moves on its own and that he walks round (the roaming animals, run 6):
+   *  centre and the room he keeps from it. Called every step: it must not allocate. */
+  movers?(visit: (x: number, z: number, r: number) => void): void;
 }
 
 export class Player {
@@ -374,7 +377,7 @@ export class Player {
       } else if (rNow < bound - RIM_HINT - 6) {
         this.atBoundary = false; // hysteresis: re-arm once well back inside the rim
       }
-      const next = resolveMove(rp.x, rp.z, wantX, wantZ, this.obstacles, this.limits);
+      const next = this.resolveStep(rp.x, rp.z, wantX, wantZ);
       moved = Math.hypot(next.x - rp.x, next.z - rp.z);
       // a tap-walk pressed against a wall gives up instead of treading on the spot
       if (mode === 'tap' && moved < step * 0.15) {
@@ -422,6 +425,35 @@ export class Player {
       if (fs.steps > 0) this.footstep();
     }
     return out;
+  }
+
+  // run 6: the roaming animals join his step as soft obstacles for that one call (pooled
+  // circles pushed onto the shared list and taken off again: no copy, no garbage)
+  private readonly moverPool: Obstacle[] = [];
+  private moversUsed = 0;
+  private moverX = 0;
+  private moverZ = 0;
+  private readonly addMover = (x: number, z: number, r: number): void => {
+    // only one he is clear of: stepping out of the jeep beside one never shoves him
+    if (Math.hypot(this.moverX - x, this.moverZ - z) < r) return;
+    const o = this.moverPool[this.moversUsed] ?? (this.moverPool[this.moversUsed] = { x: 0, z: 0, r: 0 });
+    this.moversUsed++;
+    o.x = x; o.z = z; o.r = r;
+    this.obstacles.push(o);
+  };
+
+  /** His step from (fx, fz) toward (tx, tz), slid round the world's solids and the roaming
+   *  animals: he never walks through one. */
+  private resolveStep(fx: number, fz: number, tx: number, tz: number): { x: number; z: number } {
+    const n0 = this.obstacles.length;
+    this.moversUsed = 0;
+    this.moverX = fx; this.moverZ = fz;
+    this.host.movers?.(this.addMover);
+    try {
+      return resolveMove(fx, fz, tx, tz, this.obstacles, this.limits);
+    } finally {
+      this.obstacles.length = n0;
+    }
   }
 
   /** One frame of his legs (after the step, every frame, also while riding: the rig

@@ -36,6 +36,7 @@ import {
   flyStep, heliVignette, heliAvailable, heliRamp, landingAltitude,
   HELI_CRUISE_HEIGHT, HELI_PAD_HEIGHT, HELI_CAPS, HELI_ROLL, HELI_BODY,
 } from '../../core/heli';
+import { predictJeep, PATH_DT, PATH_N, PATH_STRIDE, type JeepRead } from '../../core/wildlife';
 import { Sound } from '../../core/sound';
 import { store } from '../../core/state';
 import type { Terrain } from './Terrain';
@@ -126,7 +127,7 @@ const PERSON_R = 0.45;   // the warden, the poacher
 // A mission marker is a keep-out zone for vehicles: the jeep bends round it and parks
 // ≥ 6 m from the marker (audit veh-09 / B3: a jeep parked on or by a marker hid its
 // prompt, sat in the mini-game's stage and collapsed the walk camera).
-const MARKER_R = 5.2;
+export const MARKER_R = 5.2;
 // A roaming animal's footprint for the give-way brake: half its nose-to-tail length
 // (the scale table), so a boar met broadside or end-on is both covered.
 const animalR = (id: string): number => Math.max(0.2, (sizeRow(id)?.len ?? 1) / 2);
@@ -182,6 +183,14 @@ export class Vehicles {
   private vehicleSpeed = 0;               // the controller's carried signed speed (m/s)
   private jeepMoved = 0;                  // the speed it really moved at along its heading (m/s)
   private yieldFor: string | null = null; // run 6: the animal the jeep is braking for
+  private jeepYawRate = 0;                // run 6: how fast it turned last frame (rad/s, + = left)
+  // run 6 (wildlife): where the jeep will be over the next seconds if the driver keeps doing
+  // what he does (core/wildlife predictJeep), looked at again every PATH_DT: the roaming
+  // animals see it coming along the path it will really drive, bends included
+  private readonly jeepPath = new Float64Array(PATH_N * PATH_STRIDE);
+  private jeepPathN = 0;
+  private predictIn = 0;
+  private readonly jeepRead: JeepRead = { x: 0, z: 0, heading: 0, speed: 0, yawRate: 0, path: null, pathN: 0 };
   private brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null = null; // run 6: what held its speed back
   private intent = { throttle: 0, steer: 0 };     // run 6: what the keys / stick asked for last frame
   private onJeepNear: (near: boolean) => void = () => {};
@@ -563,6 +572,23 @@ export class Vehicles {
 
   /* -------------------------------------------------------- read-backs ---- */
 
+  /** Run 6 (wildlife): the jeep as the roaming animals see it — where it is, the way it
+   *  faces, how fast it rolls (signed) and turns — or null when nobody drives it (parked,
+   *  it is only a solid). One reused object: read it before the next frame. */
+  jeepThreat(): JeepRead | null {
+    if (!this.inVehicle || !this.jeepPos) return null;
+    const r = this.jeepRead;
+    r.x = this.jeepPos.x; r.z = this.jeepPos.z; r.heading = this.jeepHeading;
+    r.speed = this.jeepMoved; r.yawRate = this.jeepYawRate;
+    r.path = this.jeepPath; r.pathN = this.jeepPathN;
+    return r;
+  }
+
+  /** The two helipads (their centres): keep-out ground for the roaming animals too. */
+  pads(): readonly { readonly x: number; readonly z: number }[] {
+    return this.helipads;
+  }
+
   /** Dev-hook accessor (W5.1): the jeep's live state — placement, proximity, driving,
    *  pose, ground contact, speed (what it really moves at), the caps, the camera
    *  offset + comfort invariants (fixed FOV, roll 0), dust, and the driver: seated
@@ -765,6 +791,9 @@ export class Vehicles {
     if (this.inVehicle || this.inHeli || !this.jeep || !this.jeepPos) return;
     this.inVehicle = true;
     this.jeepHeadingUnwrapped = 0;
+    this.jeepYawRate = 0;
+    this.jeepPathN = 0;
+    this.predictIn = 0;
     this.vehicleSpeed = 0;
     this.jeepMoved = 0;
     this.jeepContact = false;
@@ -838,6 +867,11 @@ export class Vehicles {
     return this.jeepWorldObj ??= { solids: this.solidBuf, zones: this.zoneBuf, walls: this.allBuf, animals: this.animalBuf, limits: this.limits };
   }
   private jeepWorldObj: JeepWorld | null = null;
+  // the same world with no animals in it: the path the jeep would drive, for the animals
+  private get predictWorld(): JeepWorld {
+    return this.predictWorldObj ??= { solids: this.solidBuf, zones: this.zoneBuf, walls: this.allBuf, animals: [], limits: this.limits };
+  }
+  private predictWorldObj: JeepWorld | null = null;
   private readonly pool: Solid[] = [];
   private poolUsed = 0;
   private pooled(x: number, z: number, r: number, soft = false): Solid {
@@ -907,7 +941,9 @@ export class Vehicles {
       { x: jp.x, z: jp.z, heading: this.jeepHeading, speed: this.vehicleSpeed, contact: this.jeepContact, braked: this.jeepBraked },
       want, dt, caps, this.jeepWorld,
     );
-    this.jeepHeadingUnwrapped += Math.atan2(Math.sin(f.heading - this.jeepHeading), Math.cos(f.heading - this.jeepHeading));
+    const turned = Math.atan2(Math.sin(f.heading - this.jeepHeading), Math.cos(f.heading - this.jeepHeading));
+    this.jeepHeadingUnwrapped += turned;
+    this.jeepYawRate = turned / dt;
     this.jeepHeading = f.heading;
     jp.x = f.x; jp.z = f.z;
     this.jeepContact = f.contact;
@@ -917,6 +953,15 @@ export class Vehicles {
     this.yieldFor = f.yieldFor;
     this.brake = f.brake;
     const moved = f.moved;
+    // the path it will drive if the keys stay as they are, for the animals (a world without
+    // them: they must not see the jeep braking for themselves)
+    if ((this.predictIn -= dt) <= 0) {
+      this.predictIn = PATH_DT;
+      this.jeepPathN = predictJeep(
+        { x: jp.x, z: jp.z, heading: this.jeepHeading, speed: this.vehicleSpeed, contact: this.jeepContact, braked: this.jeepBraked },
+        want, caps, this.predictWorld, this.jeepPath,
+      );
+    }
     // (4) the wheels on the drawn ground: height + pitch + roll ease in (a damped
     // suspension glide — research §4.5 — never a hard per-frame snap)
     const wc = wheelContact(jp.x, jp.z, this.jeepHeading, this.groundAt);
