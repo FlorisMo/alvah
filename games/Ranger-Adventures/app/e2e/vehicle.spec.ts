@@ -21,7 +21,7 @@ interface Vehicle {
   x: number; z: number; y: number; heading: number;
   speed: number; maxSpeed: number; turnRate: number;
   camDist: number; camHeight: number; fov: number; roll: number;
-  yieldFor: string | null; dust: boolean; contact: boolean;
+  yieldFor: string | null; brake: 'solid' | 'edge' | 'animal' | null; dust: boolean; contact: boolean;
   clearance: number; grounded: boolean; driverSeated: boolean; markerDist: number;
 }
 interface Animal { id: string; x: number; z: number; h: number }
@@ -471,7 +471,7 @@ test('vehicle: a tree stops the jeep softly — its body never enters the trunk,
   const atTree = stop!;
   await shot(page, 'vehicle-at-tree');
   expect(minGap, 'the jeep body never drives into the trunk').toBeGreaterThan(-0.05);
-  expect(bodyGap(atTree, trunk), 'it came to rest AT the trunk').toBeLessThan(0.5);
+  expect(bodyGap(atTree, trunk), `it came to rest AT the trunk (it stopped ${bodyGap(atTree, trunk).toFixed(2)} m short, braked for: ${atTree.brake ?? 'nothing'}${atTree.yieldFor ? ` ${atTree.yieldFor}` : ''})`).toBeLessThan(0.5);
   expect(jolt, 'no crash: it slows down before it touches').toBe(0);
 
   // it never gets stuck: gas + a turn key swings it free along the trunk. A child tries

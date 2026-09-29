@@ -865,7 +865,11 @@ export function jeepStep(
   let yieldFor: string | null = null, braked = false;
   let brake: JeepFrame['brake'] = null;
   if (dir !== 0) {
-    const give = yieldBrake(s.x, s.z, s.heading, dir, pathCurvature(steerWant, speed, dir, caps), body, w.animals, s.speed, dt);
+    // along the arc it is about to drive, and straight ahead too: a steer that flickers
+    // between keys (or lets go) must never hide an animal in front of its nose
+    const arc = yieldBrake(s.x, s.z, s.heading, dir, pathCurvature(steerWant, speed, dir, caps), body, w.animals, s.speed, dt);
+    const line = yieldBrake(s.x, s.z, s.heading, dir, 0, body, w.animals, s.speed, dt);
+    const give = line.cap < arc.cap ? line : arc;
     const edge = rimSpeedCap(rimFree(s.x, s.z, s.heading, dir, lim));
     let stop = Math.min(edge, give.cap);
     // standing still, it sets off only when the forest edge or the animal ahead leaves
