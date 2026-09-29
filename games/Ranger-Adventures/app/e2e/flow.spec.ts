@@ -76,7 +76,8 @@ async function chip(page: Page): Promise<{ turn: number | null; cue: string; gly
     if (!strip || strip.hidden) return null;
     const g = strip.querySelector<HTMLElement>('.wf-glyph');
     const m = /rotate\(([-\d.]+)rad\)/.exec(g?.style.transform ?? '');
-    return { turn: m ? Number(m[1]) : null, cue: strip.querySelector('.wf-cue')?.textContent ?? '', glyph: g?.textContent ?? '' };
+    // the drawn arrow turns; arrived, it is a target (`wf-arrived`)
+    return { turn: m ? Number(m[1]) : null, cue: strip.querySelector('.wf-cue')?.textContent ?? '', glyph: strip.classList.contains('wf-arrived') ? '◎' : '↑' };
   });
 }
 

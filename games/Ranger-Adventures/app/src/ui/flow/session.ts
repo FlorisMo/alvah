@@ -12,6 +12,7 @@ import type { World } from '../../render3d/World';
 import { store } from '../../core/state';
 import { rangerNaam } from '../../core/avatar';
 import { prefersReducedMotion } from '../../core/reduced-motion';
+import { icon, type IconName } from '../icons';
 
 export const session: { host: HTMLElement; stage: Stage; world: World | null } = {
   host: null as unknown as HTMLElement,
@@ -36,22 +37,25 @@ export function menuOpen(): boolean {
 }
 
 /**
- * A calm cut to somewhere else in the world: the screen fades to the warm paper colour,
- * `move` runs while it is covered, `then` opens what comes next, and the colour fades
- * away again (a plain cut under reduced motion: `.rm *` has no transitions). Never a
- * camera glide across the map, so nothing moves in front of a motion-sensitive player.
+ * A calm cut to somewhere else in the world: a short warm dip (a soft golden vignette
+ * over the picture, never one flat colour), `move` runs while it is deepest, `then` opens
+ * what comes next, and the dip lifts. About half a second in all. Never a camera glide
+ * across the map, so nothing moves in front of a motion-sensitive player. Under reduced
+ * motion it is a plain cut: the move and what comes next in the same frame, no dip.
  */
 export function fadeCut(move: () => void, then: () => void): void {
-  const ms = prefersReducedMotion() ? 0 : FADE_MS;
   session.host.querySelector('.ra-fade')?.remove();
+  if (prefersReducedMotion()) { move(); then(); return; }
   const veil = document.createElement('div');
   veil.className = 'ra-fade';
   veil.setAttribute('aria-hidden', 'true');
   session.host.appendChild(veil);
   requestAnimationFrame(() => veil.classList.add('on'));
   window.setTimeout(() => {
+    // what was on screen goes while the dip hides it: no card fades out over the new place
+    session.host.querySelectorAll('.ra-overlay, .ra-leaving').forEach((n) => n.remove());
     move();
-    // two frames so the world draws the new place under the veil before it lifts
+    // two frames so the world draws the new place under the dip before it lifts
     requestAnimationFrame(() => requestAnimationFrame(() => {
       then();
       session.host.appendChild(veil); // keep it on top of the card `then` opened
@@ -59,25 +63,54 @@ export function fadeCut(move: () => void, then: () => void): void {
       // (a keyboard player's Enter on "Ga op pad" was swallowed by the fading veil)
       veil.classList.remove('on');
       veil.classList.add('lifting');
-      window.setTimeout(() => veil.remove(), ms + 40);
+      window.setTimeout(() => veil.remove(), FADE_OUT_MS + 40);
     }));
-  }, ms + 40);
+  }, FADE_IN_MS + 20);
 }
 
-/** How long (ms) a fadeCut takes each way. */
-const FADE_MS = 380;
+/** How long (ms) the dip takes to deepen and to lift (base.css .ra-fade). */
+const FADE_IN_MS = 220;
+const FADE_OUT_MS = 280;
 
+/** Take every card and overlay away. A card over the world eases out (140 ms) while
+ *  what comes next is already there: it stops being a menu (`menuOpen`) and a click
+ *  target at once (`inert`), so nothing waits for its fade. Under reduced motion, and
+ *  for anything that is not a card (the HUD, a game's own prompt), it is gone at once. */
 export function clearOverlays(): void {
-  session.host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
+  session.host.querySelectorAll<HTMLElement>('.ra-overlay').forEach(leave);
 }
+
+/** Ease one card (or a card's own layer) away, or remove it at once. */
+export function leave(el: HTMLElement): void {
+  if (prefersReducedMotion() || el.parentElement !== session.host || !el.querySelector('.card, .mission-board, .reunion-cap')) { el.remove(); return; }
+  el.classList.remove('ra-overlay');
+  el.classList.add('ra-leaving');
+  el.setAttribute('inert', '');
+  el.setAttribute('aria-hidden', 'true');
+  window.setTimeout(() => el.remove(), LEAVE_MS);
+}
+const LEAVE_MS = 160; // the card's 140 ms fade (tokens --dur-card-out), and a frame
 
 /** Swap the current overlay for a new card. Every over-world modal card gets the ONE
- *  shared static scrim behind it (`.ra-scrim::before`, F-29) unless it opts out. */
+ *  shared scrim behind it (`.ra-scrim::before`, F-29) unless it opts out. The dim fades
+ *  in with the first card and stays put from one card to the next (never a flicker). */
 export function card(html: string, opts: { scrim?: boolean } = {}): HTMLDivElement {
+  const dimmed = !!session.host.querySelector(':scope > .ra-overlay.ra-scrim');
   clearOverlays();
   const el = document.createElement('div');
   el.className = 'ra-overlay';
-  if (opts.scrim !== false) el.classList.add('ra-scrim');
+  if (opts.scrim !== false) {
+    el.classList.add('ra-scrim');
+    if (dimmed) {
+      el.classList.add('ra-scrim--held');
+      // the card going away leaves its dim to this one (two would darken the world), and
+      // goes quickly, before this one comes (missions.css: the swap)
+      session.host.querySelectorAll(':scope > .ra-leaving.ra-scrim').forEach((n) => {
+        n.classList.remove('ra-scrim');
+        n.classList.add('ra-leaving--swap');
+      });
+    }
+  }
   el.innerHTML = html;
   session.host.appendChild(el);
   return el;
@@ -87,4 +120,9 @@ export function card(html: string, opts: { scrim?: boolean } = {}): HTMLDivEleme
  *  full-screen mission board (which paints the shared --modal-scrim itself). */
 export function plainCard(html: string): HTMLDivElement {
   return card(html, { scrim: false });
+}
+
+/** A card's kicker: its drawn icon and its words. */
+export function kicker(ic: IconName | null, words: string): string {
+  return `<p class="boot-kicker">${ic ? icon(ic) : ''}<span>${esc(words)}</span></p>`;
 }

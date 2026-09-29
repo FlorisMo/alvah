@@ -21,11 +21,12 @@ import { narrator } from '../core/narrator';
 import { setReducedMotionOverride } from '../core/reduced-motion';
 import { applyReadingPrefs, READ_SIZE, LEADING } from '../core/reading-prefs';
 import { applyAmbient } from '../core/calls';
+import { card, clearOverlays, kicker } from './flow/session';
+import { icon } from './icons';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-let host: HTMLElement;
 let onBack: () => void;
 
 /** Each on/off Tweak: a label, a one-line hint, and an optional side-effect. */
@@ -74,14 +75,9 @@ const JOYSTICK: { id: Settings['joystick']; label: string }[] = [
 // a small calm accent palette (the gold default + heath/forest/water/warm)
 const ACCENTEN = ['#f5c23b', '#9a6aa8', '#5d7340', '#4a6b78', '#d9b89a'];
 
-export function showTweaks(ui: HTMLElement, back: () => void): void {
-  host = ui;
+export function showTweaks(back: () => void): void {
   onBack = back;
   render();
-}
-
-function clearOverlays(): void {
-  host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
 }
 
 function select(): void {
@@ -142,7 +138,7 @@ function accentHtml(): string {
   const sw = ACCENTEN.map(
     (c) => `<button class="tw-acc${c === cur ? ' sel' : ''}" type="button" role="radio" ` +
       `aria-checked="${c === cur}" data-acc="${esc(c)}" style="background:${esc(c)}" ` +
-      `aria-label="Accentkleur"><span class="tw-acc-tick" aria-hidden="true">✓</span></button>`,
+      `aria-label="Accentkleur"><span class="tw-acc-tick">${icon('check')}</span></button>`,
   ).join('');
   return (
     `<div class="tw-field"><span class="tw-field-label">Accentkleur</span>` +
@@ -152,15 +148,12 @@ function accentHtml(): string {
 
 function render(): void {
   narrator.stop();
-  clearOverlays();
   const s = store.get().settings;
 
-  const el = document.createElement('div');
-  el.className = 'ra-overlay';
-  el.innerHTML =
-    // "Klaar" sits in a pinned footer: never below the fold at 1280×800 (breaker B3)
-    `<div class="tweaks boot-card-ish has-foot">` +
-    `<p class="boot-kicker">Instellingen</p>` +
+  // "Klaar" sits in the pinned footer: never below the fold at 1280×800 (breaker B3)
+  const el = card(
+    `<div class="card card--narrow tweaks">` +
+    kicker('gear', 'Instellingen') +
     `<h1 class="boot-title">Maak het van jou</h1>` +
     `<div class="card-body">` +
     `<div class="tw-list">` +
@@ -179,8 +172,8 @@ function render(): void {
     `<div class="card-foot"><div class="ra-row">` +
     `<button class="btn-start tw-back" type="button" data-key="back">Klaar</button>` +
     `</div></div>` +
-    `</div>`;
-  host.appendChild(el);
+    `</div>`,
+  );
 
   // ---- toggles ----
   el.querySelectorAll<HTMLButtonElement>('.tw-toggle').forEach((b) => {

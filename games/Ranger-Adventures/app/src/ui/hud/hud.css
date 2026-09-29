@@ -37,12 +37,10 @@
   align-items: center;
   gap: 16px;
   padding: 12px 26px 12px 12px;
-  border: 1px solid rgba(120, 96, 60, 0.2);
+  border: 1px solid var(--paper-edge);
   border-radius: 22px;
-  background:
-    radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%),
-    rgba(253, 252, 248, 0.95);
-  box-shadow: var(--shadow-lg);
+  background: var(--paper-grain), var(--paper-card);
+  box-shadow: var(--card-shadow);
   color: var(--ink);
   animation: teach-in 220ms var(--ease-out) both;
   transition: opacity 160ms var(--ease-in), transform 160ms var(--ease-in);
@@ -116,6 +114,8 @@
   box-sizing: border-box;
 }
 .kcap-wide { padding: 0 12px; }
+/* a small cap inside a line of words (the drive keys, an Onderweg option) */
+.kcap.kcap-sm { min-width: 28px; height: 28px; padding: 0 6px; border-bottom-width: 3px; border-radius: 7px; font-size: 15px; vertical-align: 1px; }
 .kcap-icon { padding: 0 8px; }
 .kcap-cluster {
   display: grid;
@@ -146,7 +146,7 @@
 }
 
 /* ---- "Zo speel je" (the "?" chip) ---- */
-.controls-card.boot-card-ish { width: min(92vw, 480px); gap: 14px; }
+.controls-card { gap: 14px; }
 .zs-list { width: 100%; margin: 4px 0 6px; padding: 0; list-style: none; display: grid; gap: 10px; }
 .zs-row {
   display: grid;

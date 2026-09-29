@@ -55,6 +55,10 @@ export type { Shot, Focus } from './world/Presenter';
 
 /** How long the follow rig takes to take the lens over from a presented shot (s). */
 const HANDOVER_S = 2.2;
+/** A game or the bird bench gives the lens back (s): one calm move from wherever it left
+ *  it (a stopped game never glided home) to the follow view — its heading too, not only
+ *  its place, so the view never swings round in a frame. */
+const ACTIVITY_HANDOVER_S = 1.1;
 /** Once it has, the name-tags and the "go here" rings come in over this long (s). */
 const WORDS_IN_S = 0.4;
 /** The boot veil waits at most this long for the models (ms; software GL: shorter). */
@@ -975,7 +979,7 @@ export class World {
     this.pois.hideForActivity(null);
     this.pois.resetAfterActivity();   // fresh proximity + cue re-fire (re-surfaces the hub prompt)
     if (livePolicy().reduced) this.cam.place(true, 0, true); // reduced → cut back
-    // otherwise the next update() frame eases the lens back into place.
+    else this.cam.handover(ACTIVITY_HANDOVER_S); // otherwise one eased move back into place
   }
 
 }

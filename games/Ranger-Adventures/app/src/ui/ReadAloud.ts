@@ -20,7 +20,9 @@
 
 import './readaloud.css';
 import { narrator } from '../core/narrator';
+import { prefersReducedMotion } from '../core/reduced-motion';
 import { buildWordClock, activeWordAt, type WordClock } from '../core/wordclock';
+import { icon } from './icons';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -34,6 +36,13 @@ function tokenize(text: string): string[] {
 export interface ReadAloudSegment {
   el: HTMLElement;
   text: string;
+  /** Run 6: the line appears as the voice reaches it (a field note written as it is
+   *  read). It keeps its place while it waits, so nothing on the card moves. Without a
+   *  voice to follow (voorlezen off), under reduced motion, or once stopped: all shown. */
+  reveal?: boolean;
+  /** Spoken as a sentence of its own (a title shown without a full stop): the voice
+   *  pauses after it instead of running on into the next line. */
+  sentence?: boolean;
 }
 
 export interface ReadAloudHandle {
@@ -77,8 +86,10 @@ export function mountReadAloud(opts: ReadAloudOptions): ReadAloudHandle {
   // word (idx < leadCount) simply has no span → it's spoken, never highlighted.
   const leadCount = tokenize(opts.lead ?? '').length;
   const spans: (HTMLElement | undefined)[] = [];
+  const starts: number[] = []; // each segment's first token (global index)
   let running = leadCount;
   for (const seg of segments) {
+    starts.push(running);
     const tokens = tokenize(seg.text);
     seg.el.innerHTML = tokens
       .map((tok, i) => `<span class="ra-word" data-i="${running + i}">${esc(tok)}</span>`)
@@ -89,7 +100,9 @@ export function mountReadAloud(opts: ReadAloudOptions): ReadAloudHandle {
     running += tokens.length;
   }
   // Joined exactly as the spans concatenate (single spaces) → identical tokens.
-  const fullText = [opts.lead, ...segments.map((s) => s.text), opts.trail]
+  const spoken = (seg: ReadAloudSegment): string =>
+    seg.sentence && !/[.!?…]\s*$/.test(seg.text) ? `${seg.text.trim()}.` : seg.text;
+  const fullText = [opts.lead, ...segments.map(spoken), opts.trail]
     .map((t) => (t ?? '').trim())
     .filter(Boolean)
     .join(' ');
@@ -104,6 +117,15 @@ export function mountReadAloud(opts: ReadAloudOptions): ReadAloudHandle {
     current = -1;
   };
 
+  // the lines still waiting for the voice (run 6: `reveal`)
+  const waiting = new Set<number>();
+  const showLine = (k: number): void => {
+    if (!waiting.delete(k)) return;
+    segments[k].el.classList.remove('ra-line-wait');
+    segments[k].el.classList.add('ra-line-in');
+  };
+  const showAll = (): void => { for (const k of [...waiting]) showLine(k); };
+
   const setActive = (idx: number): void => {
     if (idx === current) return;
     if (current >= 0) spans[current]?.classList.remove('is-spoken');
@@ -113,49 +135,61 @@ export function mountReadAloud(opts: ReadAloudOptions): ReadAloudHandle {
 
   const tick = (now: number): void => {
     if (!clock) return;
-    setActive(activeWordAt(clock, now - startMs));
-    if (now - startMs >= clock.totalMs) {
+    const t = now - startMs;
+    setActive(activeWordAt(clock, t));
+    // a waiting line appears a breath before the voice reaches its first word
+    for (const k of waiting) if (t >= (clock.words[starts[k]]?.startMs ?? 0) - REVEAL_LEAD_MS) showLine(k);
+    if (t >= clock.totalMs) {
       clearHighlight();
+      showAll();
       raf = 0;
       return; // clock done — speech may trail a touch, but the highlight rests
     }
     raf = requestAnimationFrame(tick);
   };
 
-  const stop = (): void => {
+  const halt = (): void => {
     if (raf) cancelAnimationFrame(raf);
     raf = 0;
     narrator.stop();
     clearHighlight();
   };
+  const stop = (): void => { halt(); showAll(); };
 
   const speak = (): void => {
-    stop();
+    halt();
     if (!fullText) return;
     narrator.speak(fullText);
     // The clock is tuned to the narrator's calm ~0.96 rate (wordclock.ts), so
     // build at the default rate — no double-scaling.
     clock = buildWordClock(fullText);
     const hasRaf = typeof requestAnimationFrame === 'function' && typeof performance !== 'undefined';
-    if (!hasRaf || clock.totalMs <= 0) return; // speech still happens; just no karaoke
+    if (!hasRaf || clock.totalMs <= 0) { showAll(); return; } // speech still happens; just no karaoke
     startMs = performance.now();
     raf = requestAnimationFrame(tick);
   };
 
   opts.speakBtn?.addEventListener('click', speak);
+  // lines written as they are read: only when the voice reads them now, and never
+  // under reduced motion (then every line is simply there)
+  if (opts.autoStart && !prefersReducedMotion()) {
+    segments.forEach((seg, k) => { if (seg.reveal) { waiting.add(k); seg.el.classList.add('ra-line-wait'); } });
+  }
   if (opts.autoStart) speak();
 
   return { speak, stop };
 }
 
+/** A waiting line shows this long before the voice reaches its first word (ms). */
+const REVEAL_LEAD_MS = 220;
+
 /* ------------------------------------------------------ a screen read aloud ---- */
 
-/** The 🔊 as a drawn line icon (an emoji renders as a grey blob on some systems). */
-const SPEAKER_SVG =
-  '<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false" fill="none" ' +
-  'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
-  '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor" fill-opacity=".18"/>' +
-  '<path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.3 6.4a8 8 0 0 1 0 11.2"/></svg>';
+/** The 🔊 "Lees voor" button's markup: the drawn speaker (an emoji renders as a grey
+ *  blob on some systems), named by its label, never by its picture. */
+export function speakButtonHtml(cls = 'ra-speak'): string {
+  return `<button class="${cls}" type="button" aria-label="Lees voor">${icon('speaker')}</button>`;
+}
 
 
 /**
@@ -169,7 +203,7 @@ export function speakButtonBeside(target: Element | null): HTMLButtonElement | n
   btn.type = 'button';
   btn.className = 'ra-say';
   btn.setAttribute('aria-label', 'Lees voor');
-  btn.innerHTML = SPEAKER_SVG;
+  btn.innerHTML = icon('speaker');
   const row = target.parentElement.classList.contains('ra-row') || target.parentElement.classList.contains('ra-say-row')
     ? target.parentElement
     : null;

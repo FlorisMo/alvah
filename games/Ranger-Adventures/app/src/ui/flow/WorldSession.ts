@@ -35,7 +35,9 @@ import { setScreen, setMissionView, provideTitleReady } from '../../core/devhook
 import { mountReadAloud, readScreenAloud } from '../ReadAloud';
 import { showAvatarCreator } from '../AvatarCreator';
 import { mountMissionPause, unmountMissionPause } from './MissionFlow';
-import { session, esc, card, plainCard, clearOverlays, menuOpen, fadeCut } from './session';
+import { session, esc, card, plainCard, clearOverlays, menuOpen, fadeCut, kicker } from './session';
+import { icon } from '../icons';
+import { coarsePointer } from '../hud/device';
 import { wireWorldDevhook } from '../dev/wireDevhook';
 import {
   showExploreHud, disposeExploreHud, onApproach, onWayfind, onInteract, onBoardApproach,
@@ -361,31 +363,49 @@ function watchBeat(): void {
 }
 
 /* --------------------------------------------------- world-EF micro-beat ---- */
+/** The key that picks option `i` of `n` on a keyboard: the direction beat's own arrows
+ *  (←, ↑, →), else left and right for a pair. */
+function optionKey(beat: WorldBeat, i: number): string | null {
+  const o = beat.options[i];
+  if (o.key) return o.key;
+  if (beat.options.length === 2) return i === 0 ? 'ArrowLeft' : 'ArrowRight';
+  return null;
+}
+const KEY_CAP: Record<string, string> = { ArrowLeft: '←', ArrowUp: '↑', ArrowRight: '→' };
+
 /** A calm, skippable open-world EF beat between missions (impulse-resist or
  *  wayfinding-recall). Never-scary, never game-over: a wrong tap gives a soft
  *  "probeer nog eens" and re-presents the SAME beat; "Even verder" always lets
- *  the child walk on. Dual-channel (colour + glyph + words + read-aloud), ≥56px. */
+ *  the child walk on. Dual-channel (colour + a drawn icon + words + read-aloud), ≥56px.
+ *  Keyboard: the arrow keys light up an option (on the direction beat ← ↑ → pick
+ *  "Naar links", "Rechtdoor", "Naar rechts"; a pair takes ← and →), Enter chooses it
+ *  (Enter with nothing lit lights the first), Esc walks on. */
 function showWorldBeat(beat: WorldBeat, done: () => void): void {
   narrator.stop();
-  const kicker = beat.kind === 'blijf-op-pad' ? '🌿 Onderweg' : '🧭 Onderweg';
+  const low = beat.kind === 'blijf-op-pad';
+  const caps = !coarsePointer(); // key caps on a laptop; a tablet has no arrow keys
   const opts = beat.options
-    .map((o, i) =>
-      `<button class="wb-opt" type="button" data-i="${i}">` +
-      `<span class="wb-glyph" aria-hidden="true">${esc(o.glyph)}</span>` +
-      `<span class="wb-label">${esc(o.label)}</span>` +
-      `</button>`,
-    )
+    .map((o, i) => {
+      const k = optionKey(beat, i);
+      return (
+        `<button class="wb-opt" type="button" data-i="${i}">` +
+        `<span class="wb-glyph" style="--turn:${o.turn ?? 0}deg">${icon(o.icon)}</span>` +
+        `<span class="wb-label">${esc(o.label)}</span>` +
+        (caps && k ? `<span class="kcap kcap-in wb-cap" aria-hidden="true">${KEY_CAP[k]}</span>` : '') +
+        `</button>`
+      );
+    })
     .join('');
   // low on the screen and without a scrim: the animal the impulse beat names is in view
   const el = card(
-    `<div class="worldbeat boot-card-ish${beat.kind === 'blijf-op-pad' ? ' wb-low' : ''}">` +
-    `<p class="boot-kicker">${kicker}</p>` +
+    `<div class="card worldbeat${low ? ' wb-low' : ''}">` +
+    kicker(low ? 'leaf' : 'compass', 'Onderweg') +
     `<p class="wb-prompt"></p>` +
-    `<div class="wb-opts">${opts}</div>` +
+    `<div class="wb-opts" role="group">${opts}</div>` +
     `<p class="wb-feedback" role="status" aria-live="polite" hidden></p>` +
-    `<button class="ra-text-btn wb-skip" type="button" data-key="back">Even verder lopen</button>` +
+    `<button class="ra-chip wb-skip" type="button" data-key="back">Even verder lopen</button>` +
     `</div>`,
-    { scrim: beat.kind !== 'blijf-op-pad' },
+    { scrim: !low },
   );
   const ra = mountReadAloud({
     textEl: el.querySelector('.wb-prompt')!,
@@ -393,8 +413,9 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
     autoStart: store.get().settings.voorlezen,
   });
   const fb = el.querySelector<HTMLParagraphElement>('.wb-feedback');
-  const finish = (): void => { ra.stop(); done(); };
-  el.querySelectorAll<HTMLButtonElement>('.wb-opt').forEach((btn) => {
+  const btns = Array.from(el.querySelectorAll<HTMLButtonElement>('.wb-opt'));
+  const finish = (): void => { ra.stop(); window.removeEventListener('keydown', onKey, true); done(); };
+  btns.forEach((btn) => {
     btn.addEventListener('click', () => {
       ra.stop();
       const i = Number(btn.dataset.i);
@@ -404,7 +425,7 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
         const goed = beat.kind === 'blijf-op-pad' ? 'Knap, je blijft rustig.' : 'Goed onthouden, ranger!';
         if (fb) { fb.hidden = false; fb.textContent = goed; fb.className = 'wb-feedback wb-fb-goed'; }
         if (store.get().settings.voorlezen) narrator.speak(goed);
-        el.querySelectorAll<HTMLButtonElement>('.wb-opt').forEach((b) => (b.disabled = true));
+        btns.forEach((b) => (b.disabled = true));
         window.setTimeout(finish, 900);
       } else {
         btn.classList.add('wb-bijna');
@@ -416,6 +437,35 @@ function showWorldBeat(beat: WorldBeat, done: () => void): void {
     });
   });
   el.querySelector('.wb-skip')?.addEventListener('click', finish);
+
+  // the keyboard: a visible focus the arrow keys move, Enter chooses (ui/keys.ts presses
+  // a focused button itself; this lights one up and catches an Enter with none lit)
+  const light = (i: number): void => {
+    btns.forEach((b, k) => b.classList.toggle('is-focus', k === i));
+    btns[i]?.focus();
+  };
+  function onKey(e: KeyboardEvent): void {
+    if (!el.classList.contains('ra-overlay')) { window.removeEventListener('keydown', onKey, true); return; } // the card went
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const at = btns.findIndex((b) => b === document.activeElement);
+    if (e.code in KEY_CAP || e.code === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.repeat) return; // an arrow still held from walking never picks
+      const direct = btns.findIndex((_, i) => optionKey(beat, i) === e.code);
+      const back = e.code === 'ArrowLeft' || e.code === 'ArrowUp';
+      light(direct >= 0 ? direct : at < 0 ? 0 : Math.max(0, Math.min(btns.length - 1, at + (back ? -1 : 1))));
+      return;
+    }
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') && !e.defaultPrevented) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.repeat) return;
+      if (at >= 0) btns[at].click();
+      else light(0);
+    }
+  }
+  window.addEventListener('keydown', onKey, true);
 }
 
 /**
