@@ -14,6 +14,8 @@
  * mission far away on foot, the jeep near). A returning player hears `welkom` once a
  * session. Walking or running before a lesson shows counts: a lesson already done is
  * skipped. Learned steps are saved (settings.geleerd), so a reload never repeats them.
+ * Riding the jeep or the heli, the lessons on foot wait (a lesson on screen ends unlearned,
+ * `cutByRide`) and the rest goes on: the hook and the chip never wait for him to get out.
  */
 
 /** A step you learn by doing. */
@@ -87,13 +89,27 @@ export function nextStep(s: GuideState): StepId | null {
   const g = s.geleerd;
   if (s.returning && !s.welkomSaid) return 'welkom';
   if (!s.returning && !g.bram) return 'bram';
-  if (!g.lopen && !lessonDone('lopen', s.progress)) return s.onFoot ? 'lopen' : null;
-  if (!g.rennen && !s.rennenShown && !lessonDone('rennen', s.progress)) return s.onFoot ? 'rennen' : null;
+  // the lessons on foot wait while he rides (the jeep, the heli): what comes after them
+  // goes on, so Bram's hook and the chip never wait for him to get out
+  if (s.onFoot && !g.lopen && !lessonDone('lopen', s.progress)) return 'lopen';
+  if (s.onFoot && !g.rennen && !s.rennenShown && !lessonDone('rennen', s.progress)) return 'rennen';
   if (hookPending(s)) return 'haak';
   if (s.missiebordArmed && !g.missiebord) return 'missiebord';
   if (!g.jeep && s.onFoot && s.jeepFar) return 'jeep';
   if (!g.kijken && !s.kijkenShown && !lessonDone('kijken', s.progress) && s.onFoot && !s.prompting && s.stillS >= LESSON.kijken.stillS) return 'kijken';
   return null;
+}
+
+/** He got into the jeep or the heli while lesson `id` was on screen: it ends without being
+ *  learned (the drive lines own the bottom of the screen, and the queue goes on to the
+ *  hook), and it did not have its chance, so it may show again once he is on foot. */
+export function cutByRide(
+  id: LessonId, s: Pick<GuideState, 'rennenShown' | 'kijkenShown'>,
+): Pick<GuideState, 'rennenShown' | 'kijkenShown'> {
+  return {
+    rennenShown: id === 'rennen' ? false : s.rennenShown,
+    kijkenShown: id === 'kijken' ? false : s.kijkenShown,
+  };
 }
 
 /** The lessons done by doing this session that are not saved as learned yet. */

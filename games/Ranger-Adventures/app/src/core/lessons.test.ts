@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  nextStep, hookPending, learnedByDoing, lessonDone, lessonTimedOut, migrateGeleerd, readingMs,
+  nextStep, hookPending, learnedByDoing, lessonDone, lessonTimedOut, migrateGeleerd, readingMs, cutByRide,
   LESSON, type GuideState,
 } from './lessons.ts';
 import { BRAM, LES, BESTURING, metNaam } from '../content/mentor.ts';
@@ -42,6 +42,34 @@ test('the run lesson never blocks: it gives way after 12 s or 25 m, and the hook
   assert.equal(lessonTimedOut('rennen', 2, 25), true);
   assert.equal(lessonTimedOut('lopen', 999, 0), false, 'the walk lesson waits: it is the one thing he needs');
   assert.equal(nextStep(fresh({ geleerd: { bram: true, lopen: true }, rennenShown: true })), 'haak');
+});
+
+test('riding the jeep or the heli: the lessons on foot wait, the hook and the chip do not', () => {
+  // he got in during Bram's greeting, before he had walked 3 m: the hook comes while he drives
+  assert.equal(nextStep(fresh({ geleerd: { bram: true }, onFoot: false })), 'haak');
+  assert.equal(nextStep(fresh({ geleerd: { bram: true, lopen: true }, onFoot: false })), 'haak');
+  // told the hook while driving: nothing more while he rides
+  assert.equal(nextStep(fresh({ geleerd: { bram: true, haak: true }, onFoot: false })), null);
+  // on foot again, what he has not learned yet comes back, in order
+  assert.equal(nextStep(fresh({ geleerd: { bram: true, haak: true } })), 'lopen');
+  assert.equal(nextStep(fresh({ geleerd: { bram: true, lopen: true, haak: true } })), 'rennen');
+  // Bram's greeting itself is never skipped for the ride (he can listen while he drives)
+  assert.equal(nextStep(fresh({ onFoot: false })), 'bram');
+});
+
+test('a lesson on screen when he gets in ends unlearned, the queue goes on, and it comes back on foot', () => {
+  // the run lesson was up (rennenShown) when he got into the jeep
+  const cut = cutByRide('rennen', { rennenShown: true, kijkenShown: true });
+  assert.deepEqual(cut, { rennenShown: false, kijkenShown: true }, 'only the cut lesson may show again');
+  const riding = fresh({ geleerd: { bram: true, lopen: true }, onFoot: false, ...cut });
+  assert.equal(nextStep(riding), 'haak', 'the cut lesson no longer holds the hook back');
+  assert.equal(nextStep({ ...riding, geleerd: { ...riding.geleerd, haak: true }, onFoot: true }), 'rennen', 'on foot the run lesson comes back');
+  // without the cut the run lesson that was shown would never come back this session
+  assert.equal(nextStep(fresh({ geleerd: { bram: true, lopen: true, haak: true }, rennenShown: true })), null);
+  // the look lesson, cut the same way, may come back once he stands still on foot again
+  const look = cutByRide('kijken', { rennenShown: true, kijkenShown: true });
+  assert.deepEqual(look, { rennenShown: true, kijkenShown: false });
+  assert.equal(nextStep(fresh({ geleerd: { bram: true, lopen: true, rennen: true, haak: true }, stillS: LESSON.kijken.stillS, ...look })), 'kijken');
 });
 
 test('the chip waits for the hook, and only for the first mission', () => {

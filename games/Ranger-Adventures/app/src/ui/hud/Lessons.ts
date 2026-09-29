@@ -23,7 +23,7 @@ import { Content } from '../../content/registry';
 import { joystickVisible } from '../../core/input';
 import { prefersReducedMotion } from '../../core/reduced-motion';
 import {
-  nextStep, hookPending, learnedByDoing, lessonDone, lessonTimedOut,
+  nextStep, hookPending, learnedByDoing, lessonDone, lessonTimedOut, cutByRide,
   JEEP_BEAT, type LessonId, type StepId, type Progress, type GuideState,
 } from '../../core/lessons';
 import { BRAM, LES, metNaam } from '../../content/mentor';
@@ -152,13 +152,18 @@ function tick(now: number): void {
   const g = store.get().settings.geleerd;
   for (const id of learnedByDoing(g, progress)) store.learn(id);
 
-  if (lessonEl) lessonEl.hidden = !onFoot; // the drive / flight lines own the bottom then
+  if (lessonEl) lessonEl.hidden = !onFoot; // the drive / flight lines own the bottom then (a ✓ fading out)
   if (!free || now < startAt) return;
 
   // the step on screen
   if (current?.kind === 'lesson') {
     const c = current;
-    if (c.doneAt) {
+    if (!onFoot && !c.doneAt) {
+      // he got into the jeep or the heli: the lesson ends unlearned (it comes back on
+      // foot) and the queue goes on, so the hook and the chip come while he drives
+      ({ rennenShown, kijkenShown } = cutByRide(c.id, { rennenShown, kijkenShown }));
+      finishStep(now);
+    } else if (c.doneAt) {
       if (now - c.doneAt > 700) finishStep(now);
     } else if (lessonDone(c.id, progress)) {
       store.learn(c.id);
