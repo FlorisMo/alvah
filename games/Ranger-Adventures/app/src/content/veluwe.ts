@@ -660,7 +660,7 @@ const VERHAALBOOG_VELUWE = {
               titel: 'Vreemde sporen', tekst: 'Iemand knipte het hek stuk. In het zand staan grote voetstappen.',
               seizoenNa: 'zomer', hoofdstukNa: 2 },
     camera: { id: 'camera', soort: 'camera', hoofdstuk: 2, seizoen: 'zomer',
-              titel: 'Op de foto', tekst: 'Op de foto staat een man. Hij zet een val. De val is nog leeg.',
+              titel: 'Op de foto', tekst: 'Er staat een man op. Hij zet een val. De val is nog leeg.',
               seizoenNa: 'herfst', hoofdstukNa: 3 },
     band:   { id: 'band',   soort: 'band',   hoofdstuk: 3, seizoen: 'herfst',
               titel: 'Autosporen', tekst: 'Een auto reed weg bij het ven.',
