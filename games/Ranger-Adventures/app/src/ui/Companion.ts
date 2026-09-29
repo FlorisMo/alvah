@@ -262,8 +262,12 @@ function runCare(stappen: ZorgStap[], naam: string, done: (m: CareMiss) => void)
     `<div class="care-progress" aria-label="zorgstappen"></div>` +
     `<div class="care-grid"></div>` +
     `<div class="care-msg tip" role="status">Doe de zorg op volgorde.</div>` +
+    // never a one-way door: Esc (or this) goes back to the hut, nothing is counted
+    `<div class="card-foot"><button class="ra-chip care-back" type="button" data-key="back">` +
+    `<span class="ra-chip-ic">${icon('back')}</span><span class="ra-chip-tx">Terug</span></button></div>` +
     `</div>`,
   );
+  el.querySelector('.care-back')?.addEventListener('click', () => { if (!finished) { narrator.stop(); render(); } });
 
   const progress = el.querySelector<HTMLDivElement>('.care-progress')!;
   const grid = el.querySelector<HTMLDivElement>('.care-grid')!;
