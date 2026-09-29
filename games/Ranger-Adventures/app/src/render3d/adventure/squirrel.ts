@@ -390,6 +390,8 @@ export class Squirrel extends Actor {
     return plan;
   }
 
+  private ontoBranchFrom(tree: SquirrelTree): Segment[] { return this.ontoBranch(tree); }
+
   /** From the bark under a branch out onto it, then sit up facing `face`. */
   private ontoBranch(tree: SquirrelTree, face?: number): Segment[] {
     const b = tree.branch;
@@ -527,10 +529,31 @@ export class Squirrel extends Actor {
     let perch: Perch;
     const here = this.where;
     if (here.kind === 'branch' && here.tree === tree) {
-      if (this.lifeStep % 3 !== 2) {
+      // its day round the tree: sit and look, a run down and round the trunk and back up,
+      // sit again, down to forage at the tree's foot
+      const what = this.lifeStep % 4;
+      if (what === 0 || what === 2) {
         // sit a while, looking round now and then
         const p = this.pose;
-        plan.push(hold(p, 1.6 + r * 2.4, 'sit'), turn(p, tree.branch.ang + (this.rnd() - 0.5) * 1.6), hold({ ...p, act: 'sit' }, 1 + this.rnd() * 2, 'sit'));
+        plan.push(hold(p, 1.2 + r * 1.6, 'sit'), turn(p, tree.branch.ang + (this.rnd() - 0.5) * 1.6), hold({ ...p, act: 'sit' }, 0.8 + this.rnd() * 1.4, 'sit'));
+        perch = here;
+      } else if (what === 1) {
+        // a run down the bark and round the trunk, a pause head-down, and back up round it
+        const b = tree.branch;
+        const under = { ang: b.ang, h: b.h - 0.12 };
+        const s0 = this.pose;
+        const on = trunkPose(tree.trunk, under, false, 'climb');
+        plan.push({ dur: 0.3, len: 0.4, act: 'climb', at: (u) => {
+          const e = u * u * (3 - 2 * u);
+          return { x: s0.x + (on.x - s0.x) * e, z: s0.z + (on.z - s0.z) * e, alt: s0.alt + (on.alt - s0.alt) * e, yaw: s0.yaw + wrap(on.yaw - s0.yaw) * e, pitch: on.pitch * e, roll: e > 0.5 ? Math.PI : 0, act: 'climb' };
+        } });
+        const low = { ang: b.ang + (this.rnd() < 0.5 ? -1 : 1) * (1.6 + this.rnd() * 1.2), h: 0.55 + this.rnd() * 0.3 };
+        plan.push(...climbPlan(tree.trunk, under, low, 0));
+        plan.push(hold(trunkPose(tree.trunk, low, false, 'cling'), 0.7 + this.rnd() * 0.8, 'cling'));
+        const turnUp = trunkPose(tree.trunk, low, true, 'cling');
+        plan.push({ dur: 0.22, len: 0, act: 'cling', at: (u) => ({ ...turnUp, roll: Math.PI * (1 - u) }) });
+        plan.push(...climbPlan(tree.trunk, low, under, 1));
+        plan.push(...this.ontoBranchFrom(tree));
         perch = here;
       } else {
         // down to forage: two or three spots at the tree's foot (its front side)

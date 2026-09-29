@@ -6,7 +6,7 @@
  * north left alone.
  *
  * Seen by a child walking up from the clearing: the marker ring in the wood, and right
- * past it the squirrel's OAK, the squirrel running up and down it. The squirrel leads
+ * past it the squirrel's PINE, the squirrel running up and down it. The squirrel leads
  * him off to the left, tree to tree: down its oak and over the forest floor to a first
  * pine (it waits on a branch stub there), a leap to the next pine and on to a third
  * (it waits again), then over the ground into its GLADE: an open patch of forest floor
@@ -14,7 +14,7 @@
  * of acorns, a big oak at the side, and round it the neighbours' trees — a pine the jay
  * sits in, a dead snag the raven sits on, a pine the green woodpecker clings to.
  *
- *   marker ── oak ── (dash) ── pine A · wait ── (leap) ── pine B ── (leap) ── pine C · wait
+ *   marker ── pine ── (dash) ── pine A · wait ── (leap) ── pine B ── (leap) ── pine C · wait
  *                                                                       └── (dash) ── the glade
  */
 
@@ -41,16 +41,20 @@ export interface HomeTree extends Spot {
 
 /* ------------------------------------------------------------ the route ---- */
 
-/** The way the ranger walks up to the marker (from the clearing): the squirrel's oak
- *  stands a little ahead of him, to the left, so it is in view as he arrives. */
+/** The way the ranger walks up to the marker (from the clearing): the squirrel's tree
+ *  stands a little ahead of him, to the left, so it is in view as he arrives. It is a
+ *  Scots pine (a red squirrel's home on the Veluwe): its crown starts high, so the lens
+ *  sees the whole trunk and the squirrel on it solid — an oak's low leaf dome hangs
+ *  between the lens and a child standing near it, and the forest fades such a tree to a
+ *  ghost. The acorns come from the big oak at its glade. */
 const ARRIVE: Frame = { x: MARKER.x, z: MARKER.z, heading: headingTo({ x: 0, z: 0 }, MARKER) };
-/** The squirrel's oak, right past the marker ring (its crown over the ring). */
+/** The squirrel's pine, right past the marker ring. */
 const OAK_AT: Spot = atLocal(ARRIVE, -1.5, 2.5);
 
-/** The glade frame: the way runs from the oak along its depth axis (`v`) into the glade,
+/** The glade frame: the way runs from its pine along its depth axis (`v`) into the glade,
  *  whose middle is its origin; `u` runs across (right +, seen along the way). */
 export const GLADE_FRAME: Frame = (() => {
-  const dir = Math.atan2(-0.66, -0.75); // from the oak off to the child's left, into the wood
+  const dir = Math.atan2(-0.66, -0.75); // from its pine off to the child's left, into the wood
   const o = { x: OAK_AT.x + Math.sin(dir) * 19.5, z: OAK_AT.z + Math.cos(dir) * 19.5 };
   return { x: o.x, z: o.z, heading: dir };
 })();
@@ -77,8 +81,8 @@ const CALLERS_STAND = g(-0.45, -2.9);
 
 /** The trees of the home (the forest draws them with its own; the scatter keeps clear). */
 export const HOME_TREES: readonly HomeTree[] = [
-  // the squirrel's oak: its branch stub faces the marker (where the ranger comes from)
-  { ...OAK_AT, species: 'prop-oak-tree', h: 11.2, rotY: 0.9, branch: { ang: headingTo(OAK_AT, MARKER) - 0.75, h: 1.75, out: 0.3 } },
+  // the squirrel's pine: its branch stub faces the marker (where the ranger comes from)
+  { ...OAK_AT, species: 'prop-pine-scots', h: 14, rotY: 0.9, branch: { ang: headingTo(OAK_AT, MARKER) - 0.5, h: 1.75, out: 0.3 } },
   // the way: each stub faces back along the way (where he follows from)
   { ...PINE_A, species: 'prop-pine-scots', h: 13.5, rotY: 2.2, branch: { ang: headingTo(PINE_A, OAK_AT) + 0.35, h: 1.8, out: 0.28 } },
   { ...PINE_B, species: 'prop-pine-scots', h: 12.4, rotY: 4.1, branch: { ang: headingTo(PINE_B, PINE_A) + 0.2, h: 1.95, out: 0.26 } },

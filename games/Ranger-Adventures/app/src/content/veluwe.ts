@@ -649,7 +649,7 @@ const MISSIE_EEKHOORN = {
     // oak, and where it goes (its hiding place in the wood)
     simpel: [
       'Hoi ranger!',
-      'Zie je de eekhoorn in de eik?',
+      'Zie je de eekhoorn in de boom?',
       'Hij gaat nootjes verstoppen.',
       'Volg hem naar zijn plekje.',
       'Kijk goed waar hij ze stopt.',
@@ -657,7 +657,7 @@ const MISSIE_EEKHOORN = {
     ],
     knap: [
       'Hoi ranger!',
-      'Zie je de eekhoorn in de eik?',
+      'Zie je de eekhoorn in de boom?',
       'Hij legt een wintervoorraad aan.',
       'Volg hem naar zijn plekje.',
       'Onthoud de volgorde van de plekjes.',

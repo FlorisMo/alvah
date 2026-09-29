@@ -38,14 +38,16 @@ const everything = (): { name: string; x: number; z: number }[] => [
   ...HEAP_SPOTS.map((h, i) => ({ name: `heap-${i}`, ...h })),
 ];
 
-test('the marker stays where the world puts it; the squirrel\'s oak is in view as the child walks up', () => {
+test('the marker stays where the world puts it; the squirrel\'s tree is in view as the child walks up', () => {
   assert.ok(Math.abs(MARKER.x - 25.419) < 0.01 && Math.abs(MARKER.z + 41.891) < 0.01);
   const d = dist(MARKER, TREE.oak);
-  assert.ok(d > 2.2 && d < 4, `the oak stands by the ring (${d.toFixed(1)} m)`);
+  assert.ok(d > 2.2 && d < 4, `its tree stands by the ring (${d.toFixed(1)} m)`);
+  // a pine: its crown starts high above the lens (an oak's low leaf dome would fade to a ghost)
+  assert.equal(TREE.oak.species, 'prop-pine-scots');
   // walking in from the clearing, the oak lies ahead (within 45° of the way in)
   const walkIn = headingTo({ x: 0, z: 0 }, MARKER);
   const off = Math.abs(Math.atan2(Math.sin(headingTo(MARKER, TREE.oak) - walkIn), Math.cos(headingTo(MARKER, TREE.oak) - walkIn)));
-  assert.ok(off < Math.PI / 4, `the oak is ${(off * 180 / Math.PI).toFixed(0)}° off the way in: in view`);
+  assert.ok(off < Math.PI / 4, `its tree is ${(off * 180 / Math.PI).toFixed(0)}° off the way in: in view`);
   // its branch stub points toward the ring's side (the squirrel sits facing the child)
   const b = TREE.oak.branch!;
   const toRing = headingTo(TREE.oak, MARKER);
@@ -153,9 +155,9 @@ test('the scattered trees keep out of the glade, the lens and the room round eac
   assert.ok(inside(P.stand) && inside(P.callers));
 });
 
-test('the squirrel lives on its oak before, at its glade after', () => {
+test('the squirrel lives on its tree by the marker before, at its glade after', () => {
   const sq = EEKHOORN_RESIDENTS.find((r) => r.key === 'squirrel')!;
-  assert.ok(sq.before && dist(sq.before, TREE.oak) < 0.01, 'on its oak by the marker');
+  assert.ok(sq.before && dist(sq.before, TREE.oak) < 0.01, 'on its tree by the marker');
   assert.ok(sq.after && dist(sq.after, TREE.gladeOak) < 0.01, 'at its glade after');
   assert.ok(sq.voice && sq.voice.call === 'eekhoorn', 'it chatters');
 });
