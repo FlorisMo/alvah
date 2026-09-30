@@ -639,6 +639,12 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
       note(`the hidden animal lies ${stats.lying_h} m high in cover ${stats.cover_h} m tall (×${stats.cover_ratio})`);
       soft(stats.cover_ratio >= 2, `the cover is only ${stats.cover_ratio}× the hidden animal's lying height (want ≥ 2)`);
     }
+    // run 6 polish: the follow and the lead home are real walks (the way he walked them),
+    // and the two body moments were kept still (golden plays a perfect player: it waits)
+    if (stats.walk_field_m !== undefined) {
+      note(`followed the squeak ${stats.walk_cover_m ?? '?'} m, led the piglet home ${stats.walk_field_m} m; kept still (reaches: aaien ${stats.still_aaien ?? '?'}, zeug ${stats.still_zeug ?? '?'})`);
+      soft(stats.walk_field_m >= 25, `leading the piglet home is only ${stats.walk_field_m} m of walking (want ≥ 25)`);
+    }
     soft(maxCalls < MAX_DRAW_CALLS, `draw calls peaked at ${maxCalls} during the mission (budget < ${MAX_DRAW_CALLS})`);
     hard(won.size >= Object.keys(need).length, `won ${won.size}/${Object.keys(need).length} mini-games before the time ran out (not won: ${plan.filter((e) => !won.has(e)).join(', ')})`);
     noNewErrors();
