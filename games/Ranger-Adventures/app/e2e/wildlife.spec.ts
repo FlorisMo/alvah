@@ -15,9 +15,12 @@ import { hookR, stagingPoint, driveTo, jeepRests, type P2 } from './drive-lib';
  * sends it off early, and nobody walks through anybody. Nothing strafes, runs toward the
  * jeep, or enters a marker's ground, a solid, the water or the forest edge.
  *
- * The roamers graze between junipers, a boulder and the parked helicopter, so each drive
- * first lines up where a straight run through one of the animal's grazing stops is clear
- * (e2e/drive-lib), then waits for it to graze there, like a child picking a way in.
+ * The ree grazes on open drift sand straight on from where the jeep is parked: its drives start
+ * right there, a child boarding and steering at it. The boar and the fox graze far off between
+ * bushes, so their drives first line up where a straight run through one of their grazing
+ * stops is clear (e2e/drive-lib), then wait for them to graze there, like a child picking a
+ * way in. And the chase: a child steering the jeep AT the ree the whole way, which is exactly
+ * what Alvah will do — it keeps to one side of the bonnet and never zig-zags across it.
  */
 
 type Roamer = {
@@ -114,25 +117,31 @@ function manners(frames: Frame[], world: World, r: number): { sideways: number; 
 }
 
 /**
- * Line up on a clear run through one of the roamer's grazing stops, wait for it to graze
- * there, then drive at it like a child: W and the turn keys aimed at it until 24 m out,
- * then W alone, straight on past it; let go, and watch it go back to grazing.
+ * Drive at the roamer like a child: W and the turn keys aimed at it until 24 m out, then W
+ * alone, straight on past it; let go, and watch it go back to grazing. The ree is driven at
+ * from where the jeep is parked; far-off roamers (`staged`) are first lined up on: a clear run
+ * through one of their grazing stops, waiting for them to graze there.
  */
-async function driveStraightAt(page: Page, id: string, name: string): Promise<void> {
+async function driveStraightAt(page: Page, id: string, name: string, staged: boolean): Promise<void> {
   await enterWorld(page);
   await boardJeep(page);
   const a0 = await roamer(page, id);
-  const L = a0.loop;
-  const stops = [0, 1, 2, 3].map((i) => ({ x: L.x + Math.cos(L.angle + (i * Math.PI) / 2) * L.r, z: L.z + Math.sin(L.angle + (i * Math.PI) / 2) * L.r }));
-  const v0 = await hookR<P2>(page, 'r.vehicle()');
-  const stage = await stagingPoint(page, L, v0, { back: 36, beyond: 10, room: 1.6, stops, need: 2 });
-  expect(stage, `${name}: a clear run-up through two of its grazing stops`).not.toBeNull();
-  await driveTo(page, stage!.A, 3, 60_000, 7);
-  await jeepRests(page);
-  await expect.poll(async () => {
-    const a = await roamer(page, id);
-    return a.mode === 'roam' && a.speed < 0.02 && stage!.through.some((s) => Math.hypot(stops[s].x - a.x, stops[s].z - a.z) < 0.8);
-  }, { timeout: 150_000, intervals: [250], message: `${name} grazes at a stop the run-up is clear through` }).toBe(true);
+  if (staged) {
+    const L = a0.loop;
+    const stops = [0, 1, 2, 3].map((i) => ({ x: L.x + Math.cos(L.angle + (i * Math.PI) / 2) * L.r, z: L.z + Math.sin(L.angle + (i * Math.PI) / 2) * L.r }));
+    const v0 = await hookR<P2>(page, 'r.vehicle()');
+    const stage = await stagingPoint(page, L, v0, { back: 36, beyond: 10, room: 1.6, stops, need: 2 });
+    expect(stage, `${name}: a clear run-up through two of its grazing stops`).not.toBeNull();
+    await driveTo(page, stage!.A, 3, 60_000, 7);
+    await jeepRests(page);
+    await expect.poll(async () => {
+      const a = await roamer(page, id);
+      return a.mode === 'roam' && a.speed < 0.02 && stage!.through.some((s) => Math.hypot(stops[s].x - a.x, stops[s].z - a.z) < 0.8);
+    }, { timeout: 150_000, intervals: [250], message: `${name} grazes at a stop the run-up is clear through` }).toBe(true);
+  } else {
+    await expect.poll(async () => { const a = await roamer(page, id); return a.mode === 'roam' && a.speed < 0.02; },
+      { timeout: 150_000, intervals: [250], message: `${name} grazes` }).toBe(true);
+  }
 
   const world = await worldOf(page);
   await recStart(page, id);
@@ -194,11 +203,11 @@ async function driveStraightAt(page: Page, id: string, name: string): Promise<vo
   expect(m.trespass, 'it kept off every marker\'s ground, pad, solid, the water and the forest edge').toEqual([]);
 }
 
-test('wildlife: driven straight at the ree, it bounds off the track early and the jeep keeps its speed (run 6)', async ({ page }, testInfo) => {
+test('wildlife: driven straight at the ree from where the jeep is parked, it bounds off the track early and the jeep keeps its speed (run 6)', async ({ page }, testInfo) => {
   test.setTimeout(300_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
-  await driveStraightAt(page, 'animal-ree-roedeer', 'ree');
+  await driveStraightAt(page, 'animal-ree-roedeer', 'ree', false);
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });
@@ -207,7 +216,7 @@ test('wildlife: driven straight at the boar, it trots aside and the jeep keeps i
   test.setTimeout(300_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
-  await driveStraightAt(page, 'animal-wildzwijn-boar', 'boar');
+  await driveStraightAt(page, 'animal-wildzwijn-boar', 'boar', true);
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });
@@ -216,7 +225,84 @@ test('wildlife: driven straight at the fox, it lopes aside and the jeep keeps it
   test.setTimeout(300_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
-  await driveStraightAt(page, 'animal-vos-fox', 'fox');
+  await driveStraightAt(page, 'animal-vos-fox', 'fox', true);
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+/**
+ * How a chased roamer moved over a recording: the times its own sideways motion across the
+ * jeep's current line reversed while it was within 14 m in front of the bonnet (a zig-zag
+ * across the nose; counted per pass: it forgets the side once it has been out of that stretch
+ * for a second), the closest the jeep's body came, and how long the jeep's give-way brake
+ * acted.
+ */
+function chaseRead(frames: Frame[], r: number): { reversals: number; closest: number; brakeS: number; worst: string } {
+  let reversals = 0, last = 0, outFor = 0, closest = Infinity, brakeS = 0, worst = '';
+  for (let i = 1; i < frames.length; i++) {
+    const p = frames[i - 1], q = frames[i];
+    if (!p.a || !q.a || !q.v || !p.v) continue;
+    const dt = (q.t - p.t) / 1000;
+    if (dt <= 0) continue;
+    if (q.v.y) brakeS += dt;
+    const gap = gapOf(q.v, q.a, r);
+    if (gap < closest) { closest = gap; worst = `jeep (${q.v.x.toFixed(1)}, ${q.v.z.toFixed(1)}) at ${q.v.sp.toFixed(2)} m/s, animal (${q.a.x.toFixed(1)}, ${q.a.z.toFixed(1)}) ${q.a.mode}`; }
+    const fx = Math.sin(q.v.h), fz = Math.cos(q.v.h);
+    const ahead = (q.a.x - q.v.x) * fx + (q.a.z - q.v.z) * fz;
+    const across = ((q.a.x - p.a.x) * fz - (q.a.z - p.a.z) * fx) / dt;   // its own speed across the jeep's line
+    if (ahead > 0 && ahead < 14) {
+      outFor = 0;
+      if (Math.abs(across) > 0.8) { if (last && Math.sign(across) !== last) reversals++; last = Math.sign(across); }
+    } else if ((outFor += dt) > 1) last = 0;
+  }
+  return { reversals, closest, brakeS, worst };
+}
+
+test('wildlife: a child steering the jeep AT the ree the whole way — it keeps to one side and never zig-zags across the bonnet (run 6)', async ({ page }, testInfo) => {
+  test.setTimeout(300_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await enterWorld(page);
+  await boardJeep(page);
+  const id = 'animal-ree-roedeer';
+  await expect.poll(async () => { const a = await roamer(page, id); return a.mode === 'roam' && a.speed < 0.02; },
+    { timeout: 150_000, intervals: [250], message: 'the ree grazes' }).toBe(true);
+  const world = await worldOf(page);
+  const r = (await roamer(page, id)).r;
+  await recStart(page, id);
+  const held = new Set<string>();
+  const set = async (k: string, on: boolean): Promise<void> => {
+    if (on && !held.has(k)) { await page.keyboard.down(k); held.add(k); } else if (!on && held.has(k)) { await page.keyboard.up(k); held.delete(k); }
+  };
+  // W held (off only for a sharp turn at speed, as a child does) and A/D at it, all the way,
+  // for 14 s: past it, round, and at it again
+  let shots = 0, firstYield = 0, near = false;
+  const t0 = Date.now();
+  try {
+    while (Date.now() - t0 < 14_000) {
+      const v = await hookR<{ x: number; z: number; heading: number; speed: number }>(page, 'r.vehicle()');
+      const a = await roamer(page, id);
+      const e = wrap(Math.atan2(a.x - v.x, a.z - v.z) - v.heading);
+      await set('KeyW', !(Math.abs(e) > 0.9 && v.speed > 2.5));
+      await set('KeyA', e > 0.08);
+      await set('KeyD', e < -0.08);
+      if (a.mode === 'yield' && !firstYield) firstYield = Date.now();
+      if (firstYield && shots < 4 && Date.now() - firstYield >= shots * 500) await shot(page, `wildlife-chase-${++shots}`);
+      if (!near && Math.hypot(a.x - v.x, a.z - v.z) < 7) { near = true; await shot(page, 'wildlife-chase-5-closest'); }
+      await page.waitForTimeout(40);
+    }
+  } finally { for (const k of [...held]) await page.keyboard.up(k); }
+  await shot(page, 'wildlife-chase-6-after');
+  const frames = await recStop(page);
+  const c = chaseRead(frames, r);
+  const m = manners(frames, world, r);
+  console.log(`[wildlife] chasing the ree with the keys for 14 s: reversals across the bonnet ${c.reversals}; closest ${c.closest.toFixed(2)} m (${c.worst}); the jeep's give-way brake acted ${c.brakeS.toFixed(1)} s; sideways ${m.sideways}, toward ${m.toward}, trespass ${m.trespass.join(', ') || 'none'}`);
+  expect(firstYield, 'the ree made way').toBeGreaterThan(0);
+  expect(c.reversals, 'it never zig-zagged across the jeep\'s nose').toBe(0);
+  expect(c.closest, 'the jeep\'s body never came within 0.8 m of it').toBeGreaterThanOrEqual(0.8);
+  expect(m.sideways, 'it only ever moved along its facing').toBe(0);
+  expect(m.toward, 'making way it never moved toward the jeep').toBe(0);
+  expect(m.trespass).toEqual([]);
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });

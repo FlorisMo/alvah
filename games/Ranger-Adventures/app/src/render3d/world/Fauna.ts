@@ -248,6 +248,14 @@ export class Fauna {
   private readonly nearBox: NonNullable<Obstacle['box']>[] = [];
   private nearUsed = 0;
   private gatherR = 0;
+  // the roamer being gathered for (read by `nearZone`, one callback for every roamer and frame)
+  private gatherX = 0;
+  private gatherZ = 0;
+  private gatherReach = 0;
+  private readonly nearZone = (x: number, z: number, r: number): void => {
+    const R = this.gatherReach + r;
+    if ((x - this.gatherX) ** 2 + (z - this.gatherZ) ** 2 <= R * R) this.near.push(this.pooledObstacle(x, z, r + this.gatherR));
+  };
 
   private pooledObstacle(x: number, z: number, r: number, box?: Obstacle['box'], grow = 0): Obstacle {
     const i = this.nearUsed++;

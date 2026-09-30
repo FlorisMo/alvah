@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
-import { stagingPoint, driveTo, jeepRests } from './drive-lib';
 
 /**
  * Drivable-jeep E2E (WORLD-PLAN W5.1). The ranger walks up to the parked jeep,
@@ -258,16 +257,8 @@ test('vehicle: under reduced motion the ree holds still, and driven at it the je
   await enterWorld(page);
   await walkToJeep(page);
   await enterJeep(page);
-  // line up first on a run to it that no bush or rock stands in (the ree grazes between
-  // junipers and a boulder): a child picks a clear way in
-  const ree0 = (await hook(page, (r) => r.ambient()))!.find((a) => a.id === 'animal-ree-roedeer')!;
-  const v0 = (await hook(page, (r) => r.vehicle()))!;
-  const stage = await stagingPoint(page, ree0, v0, { back: 24, beyond: 2, room: 1.3 });
-  expect(stage, 'a clear run-up to the ree').not.toBeNull();
-  await driveTo(page, stage!.A, 2.5, 60_000, 4);
-  await jeepRests(page);
-
-  // A child steering the jeep at the ree with the arrow keys, full gas all the way. The
+  // A child steering the jeep at the ree with the arrow keys, full gas all the way, from
+  // where the jeep is parked (the ree grazes on open drift sand straight on from it). The
   // jeep must never touch it and must come to a gentle stop in front of it (the old calm
   // rule held the jeep to a 2 m/s crawl whenever ANY animal was within 8 m, and the ree
   // shoved it).
