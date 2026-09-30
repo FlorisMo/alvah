@@ -240,7 +240,14 @@ export class CameraRig {
   // Run 6: a held lens handed back (an adventure's framed beat ends): the follow view
   // takes over from where the lens was, position and aim on one smoothstep curve, never
   // turning faster than ~90°/s (kit makeReframe's rule). null = no hand-over running.
+  // It and `handoff` (below) never run together: starting one ends the other.
   private blend: { t: number; dur: number; pos: THREE.Vector3; yaw: number; pitch: number } | null = null;
+  // A presented shot (world/Presenter.ts: the title, the ranger maker) hands the lens to
+  // this rig as ONE move: for `dur` seconds the rig's own pose is blended in from where
+  // the shot left the lens (eased, yaw the short way, roll 0). The rig runs underneath,
+  // so a ranger who walks off mid-glide is followed; a cut under reduced motion.
+  private handoff: { pos: THREE.Vector3; yaw: number; pitch: number; t: number; dur: number } | null = null;
+  private readonly _dir = new THREE.Vector3();
   private readonly camera: THREE.PerspectiveCamera;
   private readonly terrain: Terrain;
   private readonly obstacles: Obstacle[];
@@ -327,7 +334,31 @@ export class CameraRig {
     this.followYaw = this.followTargetYaw = yaw;
     this.orbitYaw = this.orbitTargetYaw = 0;
     this.extOff.set(0, 0, 0);
+    this.handoff = null; // one hand-over at a time
     this.blend = reduced ? null : { t: 0, dur: 0, pos: this.camera.position.clone(), ...yawPitch(dir.x, dir.y, dir.z) };
+  }
+
+  /** Start the take-over from a presented shot: the lens is where the shot left it now,
+   *  and over `seconds` it becomes this rig's own view (see `handoff`). */
+  handover(seconds: number): void {
+    const d = this.camera.getWorldDirection(this._dir);
+    const a = yawPitch(d.x, d.y, d.z);
+    this.handoff = { pos: this.camera.position.clone(), yaw: a.yaw, pitch: a.pitch, t: 0, dur: seconds };
+    this.blend = null; // one hand-over at a time
+  }
+
+  /** The take-over from a presented shot is still moving the lens. */
+  get handingOver(): boolean {
+    return this.handoff !== null;
+  }
+
+  /** A fresh start at the spawn (back from the title): the bearing straight behind a
+   *  ranger heading `yaw`, no look-around. */
+  reset(yaw: number): void {
+    this.followYaw = this.followTargetYaw = this.rmLastTarget = yaw;
+    this.orbitYaw = this.orbitTargetYaw = this.orbitTilt = this.orbitTargetTilt = 0;
+    this.handoff = null;
+    this.blend = null;
   }
 
   /** The "Camera draait mee" setting source (W1.5). Read live each frame
@@ -645,6 +676,7 @@ export class CameraRig {
     this.dressing.fadeOccluders(this.fadeTargets, release);
     this.viewClearState = (!blocked || this.dressing.canopyOpacity <= this.CANOPY_SEE_THROUGH) &&
       this.terrainClearState && !solidTree;
+    if (this.handoff) this.blendHandoff(dt, reduced);
     // the ground "go here" rings fade by the lens's proximity (both branches: a ring faded
     // on foot restores once a vehicle cam pulls the lens far away)
     this.host.afterPlace();
@@ -699,6 +731,24 @@ export class CameraRig {
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(this.camera.position.x + d.x, this.camera.position.y + d.y, this.camera.position.z + d.z);
     this.lastSet.copy(this.camera.position); // (the next frame must not read this as someone else's move)
+  }
+
+  /** The take-over from a presented shot (`handover`): this frame's view is the rig's own
+   *  pose blended in from the shot's, eased; `lastSet` follows, so the rig never reads the
+   *  blend as someone else moving its lens. */
+  private blendHandoff(dt: number, reduced: boolean): void {
+    const h = this.handoff!;
+    h.t += Math.min(dt, 0.05);
+    if (reduced || h.t >= h.dur) { this.handoff = null; return; }
+    const e = easeInOut(h.t / h.dur);
+    const d = this.camera.getWorldDirection(this._dir);
+    const to = yawPitch(d.x, d.y, d.z);
+    const p = this.camera.position;
+    p.set(h.pos.x + (p.x - h.pos.x) * e, h.pos.y + (p.y - h.pos.y) * e, h.pos.z + (p.z - h.pos.z) * e);
+    const a = aimDir(lerpAngle(h.yaw, to.yaw, e), h.pitch + (to.pitch - h.pitch) * e);
+    this.camera.up.set(0, 1, 0); // roll 0, always
+    this.camera.lookAt(p.x + a.x, p.y + a.y, p.z + a.z);
+    this.lastSet.copy(p);
   }
 
   /** Reduced motion: hold the bearing while the steering's target still turns, then cut

@@ -14,7 +14,7 @@ test('budgets: overlay ABSENT on plain boot (no ?dev flag)', async ({ page }, te
   collectPageErrors(page, errors);
 
   await page.goto('/');
-  await expect(page.locator('.boot-title')).toBeVisible();
+  await expect(page.locator('.title-mark')).toBeVisible({ timeout: 60_000 });
 
   // No overlay in the DOM at all — the gate is construction-time, not CSS.
   await expect(page.locator('.budgets')).toHaveCount(0);
@@ -35,7 +35,7 @@ test('budgets: overlay PRESENT with ?dev=1', async ({ page }, testInfo) => {
   collectPageErrors(page, errors);
 
   await page.goto('/?dev=1');
-  await expect(page.locator('.boot-title')).toBeVisible();
+  await expect(page.locator('.title-mark')).toBeVisible({ timeout: 60_000 });
 
   const overlay = page.locator('.budgets');
   await expect(overlay).toHaveCount(1);

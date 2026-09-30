@@ -23,42 +23,69 @@ export interface ModelEntry { file: string; category: string; bytes?: number; tr
 export interface LoadedRig { group: THREE.Group; clips: THREE.AnimationClip[] }
 
 let manifest: Record<string, ModelEntry> | null = null;
+let manifestLoad: Promise<Record<string, ModelEntry>> | null = null;
 const cache = new Map<string, GLTF>();
-// What a cached GLB owns (geometries, materials, textures): every clone shares it, so a
-// teardown (World.dispose) must never free it (the title's clones stop drawing).
-const owned = new WeakSet<object>();
-export const cachedResource = (res: object): boolean => owned.has(res);
+const loading = new Map<string, Promise<GLTF | null>>();
 
-export async function loadManifest(): Promise<Record<string, ModelEntry>> {
-  if (manifest) return manifest;
-  try {
-    const res = await fetch(assetUrl('/models/manifest.json'));
-    manifest = res.ok ? await res.json() : {};
-  } catch {
-    manifest = {};
-  }
-  return manifest!;
+// How many fetches (the manifest, a GLB and its decode) are still on their way. The
+// boot veil waits for this to reach zero (World.ready), so the first frame a player
+// sees is never a stand-in waiting for its model.
+let inFlight = 0;
+export const loadsInFlight = (): number => inFlight;
+async function counted<T>(work: () => Promise<T>): Promise<T> {
+  inFlight++;
+  try { return await work(); } finally { inFlight--; }
+}
+/** Count work that turns loaded models into the world (the forest's tree levels) as a
+ *  load too: the world is not ready while it runs. */
+export function whileLoading<T>(work: Promise<T>): Promise<T> {
+  return counted(() => work);
+}
+
+export function loadManifest(): Promise<Record<string, ModelEntry>> {
+  if (manifest) return Promise.resolve(manifest);
+  if (!manifestLoad) draco.preload(); // the decoder downloads alongside the list, not after the first model
+  manifestLoad ??= counted(async () => {
+    try {
+      const res = await fetch(assetUrl('/models/manifest.json'));
+      manifest = res.ok ? await res.json() : {};
+    } catch {
+      manifest = {};
+    }
+    return manifest!;
+  });
+  return manifestLoad;
 }
 
 export function hasModel(id: string): boolean {
   return !!manifest && !!manifest[id];
 }
 
-/** Load (and cache) the full GLTF for an id. null if absent or it fails to parse. */
+/** Load (and cache) the full GLTF for an id: one fetch + decode per id, however many
+ *  ask for it at once. null if absent or it fails to parse. */
 async function loadGLTF(id: string): Promise<GLTF | null> {
-  const m = await loadManifest();
-  const e = m[id];
-  if (!e) return null;
-  if (!cache.has(id)) {
-    try {
-      const gltf = await loader.loadAsync(assetUrl(`/models/${e.file}`));
-      gltf.scene.traverse((o) => { const m = o as THREE.Mesh; for (const r of [m.geometry, ...[m.material ?? []].flat()]) if (r) { owned.add(r); for (const v of Object.values(r)) if ((v as THREE.Texture)?.isTexture) owned.add(v); } });
-      cache.set(id, gltf);
-    } catch {
-      return null;
-    }
+  const hit = cache.get(id);
+  if (hit) return hit;
+  let pending = loading.get(id);
+  if (!pending) {
+    pending = counted(async () => {
+      // with the manifest in hand (main.ts fetches it at boot) the fetch starts NOW, not
+      // after the synchronous world build the loads are asked for in
+      const e = (manifest ?? await loadManifest())[id];
+      if (!e) return null;
+      try {
+        const gltf = await loader.loadAsync(assetUrl(`/models/${e.file}`));
+        cache.set(id, gltf);
+        return gltf;
+      } catch {
+        return null;
+      } finally {
+        loading.delete(id);
+      }
+    });
+    loading.set(id, pending);
   }
-  return cache.get(id)!;
+  return pending;
 }
 
 /** Load (and cache) a model by id, returning a fresh clone. null if absent. */

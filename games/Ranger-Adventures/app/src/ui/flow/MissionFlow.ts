@@ -15,6 +15,7 @@ import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import { prefersReducedMotion } from '../../core/reduced-motion';
+import { zinnen } from '../../core/readlevel';
 import { capturedClue } from '../../core/patrol';
 import { setScreen, setMissionView } from '../../core/devhook';
 import { resolveViewMode, variantFor } from '../../render3d/play/ViewMode';
@@ -25,15 +26,20 @@ import { playRoute } from '../../render2d/RouteView';
 import { playSimon } from '../../render2d/SimonView';
 import { playDanger } from '../../render2d/DangerView';
 import { playWissel } from '../../render2d/WisselView';
-import { mountReadAloud, readScreenAloud, speakButtonBeside } from '../ReadAloud';
+import { mountReadAloud, readScreenAloud, speakButtonBeside, speakButtonHtml, sentenceSegments } from '../ReadAloud';
 import { SAY } from '../../content/screens';
+import { MENTOR_NAAM } from '../../content/mentor';
+import { MISSIE, HUT, vul } from '../../content/copy';
 import { deviceText } from '../hud/device';
-import { session, esc, naam, card, clearOverlays, fadeCut } from './session';
+import { BRAM_PORTRAIT } from '../hud/Speaker';
+import { missionIcon } from '../MissionIcon';
+import { icon, CLUE_ICON } from '../icons';
+import { session, esc, naam, card, clearOverlays, fadeCut, kicker, leave } from './session';
 import {
   resumePatrol, notePatrolCompletion, activeExploreTitel, tellWorldMissionDone, holdWorld, releaseWorld,
 } from './WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
-import { showCaseBoard, showOntknoping, badgeHtml, CLUE_GLYPH } from '../hub/Hub';
+import { showCaseBoard, showOntknoping, badgeHtml } from '../hub/Hub';
 import { adventureFor, type Adventure } from '../../render3d/adventure/registry';
 import { AdventureKit, Aborted } from '../../render3d/adventure/kit';
 import { provideAdventure } from '../../core/devhook';
@@ -91,6 +97,11 @@ export function goToMission(mission: Mission): void {
 }
 
 /* ------------------------------------------------------------ briefing ---- */
+/** The landscape as a word on a card: "heide" → "Heide". */
+function landschapNaam(l: string): string {
+  return l ? l[0].toUpperCase() + l.slice(1) : l;
+}
+
 /** The mission entry card: a diegetic *veldnotitie* (field note), so launching a
  *  mission never feels like leaving the world. */
 export function showBriefing(mission: Mission): void {
@@ -109,29 +120,34 @@ export function showBriefing(mission: Mission): void {
   };
   const jargon = store.get().settings.jargon;
   const lines = (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
+  const shown = lines.flatMap(zinnen); // one sentence a line: every line on the page ≤ 7 words
 
-  // "Ga op pad" and "Nog even rondkijken" sit in a pinned footer: at 800×600 the way
-  // back used to fall below the card (breaker note)
+  // Bram's field note: his portrait and name, the mission's picture and title, the lines
+  // written as they are read. "Ga op pad" and "Nog even rondkijken" sit in the pinned
+  // footer: at 800×600 the way back used to fall below the card (breaker note)
   const el = card(
-    `<div class="briefing veldnotitie boot-card-ish has-foot">` +
-    `<p class="boot-kicker">Veldnotitie · ${esc(mission.landschap)}</p>` +
-    `<h1 class="boot-title">${esc(mission.titel)}</h1>` +
+    `<div class="card briefing veldnotitie">` +
+    `<div class="vn-head"><span class="vn-bram">${BRAM_PORTRAIT}</span>` +
+    kicker(null, vul(MISSIE.veldnotitie, { bram: MENTOR_NAAM, landschap: landschapNaam(mission.landschap) })) + `</div>` +
+    `<div class="vn-title">${missionIcon(mission, 'mc-icon--big')}<h1 class="boot-title">${esc(mission.titel)}</h1></div>` +
     `<div class="card-body">` +
-    `<div class="briefing-lines">${lines.map((_, i) => `<p class="briefing-line" data-line="${i}"></p>`).join('')}</div>` +
+    `<div class="briefing-lines">${shown.map((_, i) => `<p class="briefing-line" data-line="${i}"></p>`).join('')}</div>` +
     `</div>` +
     `<div class="card-foot">` +
-    `<div class="ra-row">` +
-    `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
-    `<button class="btn-start" type="button">Ga op pad</button>` +
-    `</div>` +
-    `<button class="ra-text-btn briefing-back" type="button" data-key="back">Nog even rondkijken</button>` +
+    `<div class="ra-row">${speakButtonHtml()}<button class="btn-start" type="button">${esc(MISSIE.gaOpPad)}</button></div>` +
+    `<button class="ra-chip briefing-back" type="button" data-key="back">${esc(MISSIE.rondkijken)}</button>` +
     `</div>` +
     `</div>`,
   );
   const lineEls = Array.from(el.querySelectorAll<HTMLElement>('.briefing-line'));
+  // the title lights up as it is read, then each line is written as the voice reaches it
+  // (the first is there at once: the page is never empty)
   const ra = mountReadAloud({
-    lead: `Ranger ${naam()}. ${mission.titel}.`,
-    segments: lines.map((l, i) => ({ el: lineEls[i], text: l })),
+    lead: vul(MISSIE.zegAan, { naam: naam() }),
+    segments: [
+      { el: el.querySelector<HTMLElement>('.vn-title .boot-title')!, text: mission.titel, sentence: true },
+      ...shown.map((l, i) => ({ el: lineEls[i], text: l, reveal: i > 0 })),
+    ],
     speakBtn: el.querySelector('.ra-speak'),
     autoStart: store.get().settings.voorlezen,
   });
@@ -370,20 +386,20 @@ function showReunion(mission: Mission, moment?: Promise<void>): Promise<void> {
   const tekst = mission.reunion?.tekst ?? '';
   const el = card(
     `<div class="reunion-cap" role="status">` +
-    `<p class="boot-kicker">Missie klaar · ${esc(mission.titel)}</p>` +
+    kicker('check', vul(MISSIE.klaar, { titel: mission.titel })) +
     (tekst ? `<p class="reunion-text"></p>` : '') +
     `</div>`,
     { scrim: false },
   );
   el.classList.add('explore-overlay'); // the world shows through; nothing to click here
   const textEl = el.querySelector<HTMLElement>('.reunion-text');
-  const ra = textEl ? mountReadAloud({ textEl, text: tekst, autoStart: store.get().settings.voorlezen }) : null;
+  const ra = textEl ? mountReadAloud({ segments: sentenceSegments(textEl, tekst), autoStart: store.get().settings.voorlezen }) : null;
   const inWorld = tellWorldMissionDone(mission.id, true);
   const read = new Promise<void>((r) => window.setTimeout(r, REUNION_MIN_MS));
   const cap = new Promise<void>((r) => window.setTimeout(r, moment ? REUNION_MAX_MS + 4000 : REUNION_MAX_MS)); // a slow model load never holds the reward
   // an adventure's own reunion (the family together again in the world) plays under the line
   const all = Promise.all([inWorld, read, moment?.catch(() => {})]).then(() => {});
-  return Promise.race([all, cap]).then(() => { ra?.stop(); el.remove(); });
+  return Promise.race([all, cap]).then(() => { ra?.stop(); leave(el); }); // (the line eases out)
 }
 
 /** The reunion line stays up at least this long (reading time), at most that long. */
@@ -404,21 +420,21 @@ export function showSeasonFinale(): void {
   const vb = Content.verhaalboog(Content.activeArea().id);
   const regels = vb?.finale?.regels ?? [];
   const el = card(
-    `<div class="reward finale boot-card-ish">` +
-    `<p class="boot-kicker">${esc(vb?.finale?.kicker ?? 'Seizoen klaar')}</p>` +
-    `<h1 class="boot-title">${esc(vb?.finale?.titel ?? 'Het is weer veilig.')}</h1>` +
-    `<div class="briefing-lines">${regels.map((_, i) => `<p class="briefing-line" data-line="${i}"></p>`).join('')}</div>` +
-    `<div class="ra-row">` +
-    `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
-    `<button class="btn-start" type="button">Verder op patrouille</button>` +
-    `</div>` +
+    `<div class="card finale">` +
+    kicker('leaf', vb?.finale?.kicker ?? MISSIE.seizoenKlaar) +
+    `<h1 class="boot-title">${esc(vb?.finale?.titel ?? MISSIE.veilig)}</h1>` +
+    `<div class="card-body"><div class="briefing-lines">${regels.map((_, i) => `<p class="briefing-line" data-line="${i}"></p>`).join('')}</div></div>` +
+    `<div class="card-foot"><div class="ra-row">${speakButtonHtml()}<button class="btn-start" type="button">${esc(MISSIE.verderPatrouille)}</button></div></div>` +
     `</div>`,
   );
   if (store.get().settings.geluid) Sound.found();
   const lineEls = Array.from(el.querySelectorAll<HTMLElement>('.briefing-line'));
+  // the title lights up as it is read, the lines come as the voice reaches them
   const ra = mountReadAloud({
-    lead: `${vb?.finale?.titel ?? ''}`,
-    segments: regels.map((l, i) => ({ el: lineEls[i], text: l })),
+    segments: [
+      { el: el.querySelector<HTMLElement>('.finale .boot-title')!, text: vb?.finale?.titel ?? MISSIE.veilig, sentence: true },
+      ...regels.map((l, i) => ({ el: lineEls[i], text: l, reveal: i > 0 })),
+    ],
     speakBtn: el.querySelector('.ra-speak'),
     autoStart: store.get().settings.voorlezen,
   });
@@ -428,12 +444,12 @@ export function showSeasonFinale(): void {
 /* ------------------------------------------------ in-mission pause (F-26) ---- */
 /** What the pause card's stop does, and what it says (the mission's, or the bench's). */
 let pauseStop: () => void = () => stopMission();
-let pauseStopLabel = 'Stop de missie';
+let pauseStopLabel: string = MISSIE.stop;
 
 /** A persistent Pauze chip for the whole in-world mission. NOT a `.ra-overlay`, so
  *  the engine's own prompt swaps never remove it; `unmountMissionPause` clears it.
  *  The bird bench mounts the same chip with its own stop (breaker B5). */
-export function mountMissionPause(stop: () => void = stopMission, stopLabel = 'Stop de missie'): void {
+export function mountMissionPause(stop: () => void = stopMission, stopLabel: string = MISSIE.stop): void {
   unmountMissionPause();
   pauseStop = stop;
   pauseStopLabel = stopLabel;
@@ -441,7 +457,7 @@ export function mountMissionPause(stop: () => void = stopMission, stopLabel = 'S
   el.className = 'ra-pill mission-pause';
   el.type = 'button';
   el.dataset.key = 'pause';
-  el.textContent = '⏸ Pauze';
+  el.innerHTML = `${icon('pause')}<span>${esc(MISSIE.pauze)}</span>`;
   el.addEventListener('click', showMissionPause);
   session.host.appendChild(el);
   missionPauseEl = el;
@@ -450,7 +466,15 @@ export function mountMissionPause(stop: () => void = stopMission, stopLabel = 'S
 export function unmountMissionPause(): void {
   missionPauseEl?.remove();
   missionPauseEl = null;
-  session.host.querySelector('.mission-pause-menu')?.remove();
+  closeMissionPauseCard();
+}
+
+/** The pause card eases out (it stops holding the ranger and the mission at once). */
+function closeMissionPauseCard(): void {
+  const menu = session.host.querySelector<HTMLElement>('.mission-pause-menu');
+  if (!menu) return;
+  menu.classList.remove('mission-pause-menu');
+  leave(menu);
 }
 
 /** The calm pause card over a running mission. Its own container (not `card()`):
@@ -460,21 +484,22 @@ function showMissionPause(): void {
   narrator.stop();
   session.host.querySelector('.mission-pause-menu')?.remove();
   const el = document.createElement('div');
-  el.className = 'mission-pause-menu';
+  el.className = 'mission-pause-menu ra-scrim';
   el.innerHTML =
-    `<div class="reward boot-card-ish">` +
-    `<p class="boot-kicker">Pauze</p>` +
-    `<h1 class="boot-title">Wat wil je doen?</h1>` +
-    `<div class="lodge-links">` +
-    `<button class="ra-chip mp-stop" type="button"><span class="ra-chip-ic" aria-hidden="true">🚩</span>` +
+    `<div class="card card--narrow pause-card">` +
+    kicker('pause', MISSIE.pauze) +
+    `<h1 class="boot-title">${esc(MISSIE.pauzeVraag)}</h1>` +
+    `<div class="card-foot">` +
+    `<div class="ra-row"><button class="btn-start mp-resume" type="button" data-key="back">${esc(MISSIE.gaVerder)}</button></div>` +
+    `<button class="ra-chip mp-stop" type="button"><span class="ra-chip-ic">${icon('flag')}</span>` +
     `<span class="ra-chip-tx">${esc(pauseStopLabel)}</span></button>` +
     `</div>` +
-    `<button class="btn-start mp-resume" type="button" data-key="back">Ga verder</button>` +
     `</div>`;
   session.host.appendChild(el);
   const voor = store.get().settings.voorlezen; // child:B12
-  readScreenAloud(el, { text: SAY.missiePauze, anchor: '.mp-resume', autoStart: voor, items: '.ra-chip', hover: voor });
-  el.querySelector('.mp-resume')?.addEventListener('click', () => el.remove());
+  const stop = pauseStopLabel.charAt(0).toLowerCase() + pauseStopLabel.slice(1); // the card says what its buttons do
+  readScreenAloud(el, { text: vul(SAY.missiePauze, { stop }), anchor: '.mp-resume', autoStart: voor, items: '.ra-chip', hover: voor });
+  el.querySelector('.mp-resume')?.addEventListener('click', closeMissionPauseCard);
   el.querySelector('.mp-stop')?.addEventListener('click', () => pauseStop());
 }
 
@@ -504,30 +529,29 @@ function abandonMission(): void {
 }
 
 /* ------------------------------------------------------------- fact ---- */
-/** The companion raaf's spoken name: the rescued-and-named raaf, else "de raaf". */
-function raafNaam(): string {
-  return store.get().companion.naam?.trim() || 'de raaf';
+/** The rescued raaf's name ("Kroa"), or null while no raaf has been rescued yet. */
+function raafNaam(): string | null {
+  const c = store.get().companion;
+  return c.rescued ? c.naam?.trim() || HUT.jeRaaf : null;
 }
 
-/** W6.3a: the "Wist je dat" beat, delivered diegetically — the raaf tells you the
- *  fact on location. */
+/** W6.3a: the "Wist je dat" beat between two steps. Once the raaf is rescued (and named)
+ *  it is the raaf who tells it ("Kroa vertelt · 1/3"); before that nobody pretends to:
+ *  "Wist je dat? · 1/3" (a raaf you never met cannot talk to you). */
 function showFact(step: Step, n: number, total: number): Promise<void> {
   return new Promise((resolve) => {
     const feit = String(step.skin.feit ?? '');
     const raaf = raafNaam();
     const el = card(
-      `<div class="fact boot-card-ish fact--raaf">` +
-      `<span class="fact-raaf" aria-hidden="true">🐦‍⬛</span>` +
-      `<p class="boot-kicker">${esc(raaf)} vertelt · ${n}/${total}</p>` +
+      `<div class="card card--narrow fact${raaf ? ' fact--raaf' : ''}">` +
+      `<span class="fact-mark">${icon(raaf ? 'raven' : 'bulb')}</span>` +
+      kicker(null, raaf ? vul(MISSIE.feitRaaf, { raaf, n, m: total }) : vul(MISSIE.feit, { n, m: total })) +
       `<p class="fact-text"></p>` +
-      `<div class="ra-row">` +
-      `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
-      `<button class="btn-start" type="button">Verder</button>` +
-      `</div></div>`,
+      `<div class="card-foot"><div class="ra-row">${speakButtonHtml()}<button class="btn-start" type="button">${esc(MISSIE.verder)}</button></div></div>` +
+      `</div>`,
     );
     const ra = mountReadAloud({
-      textEl: el.querySelector('.fact-text')!,
-      text: feit,
+      segments: sentenceSegments(el.querySelector<HTMLElement>('.fact-text')!, feit),
       speakBtn: el.querySelector('.ra-speak'),
       autoStart: store.get().settings.voorlezen,
     });
@@ -537,14 +561,15 @@ function showFact(step: Step, n: number, total: number): Promise<void> {
 
 /* ------------------------------------------------------------- reward ---- */
 function showReward(mission: Mission, played: Engine[], skipped: string | null, clueId: string | null, then: () => void, photo: string | null = null): void {
-  const badges = Array.from(new Set(played)).map(badgeHtml).join('');
-  const knap = mission.beloning.vaktermBadge
-    ? `<p class="reward-knap">Knap woord: <b>${esc(mission.beloning.vaktermBadge.naam.replace(/^Knap woord:\s*/i, ''))}</b></p>`
+  // the breinkrachten this mission trained ease in one after the other
+  const badges = Array.from(new Set(played)).map((e, i) => badgeHtml(e, i)).join('');
+  const knapNaam = mission.beloning.vaktermBadge?.naam.replace(/^Knap woord:\s*/i, '') ?? '';
+  const knap = knapNaam
+    ? `<p class="reward-knap"><span class="rk-label">${esc(MISSIE.knapWoord)}</span><b class="rk-word">${esc(knapNaam)}</b></p>`
     : '';
   const note = skipped
-    ? `<p class="boot-sub reward-note">De stap “${esc(skipped)}” komt eraan.</p>`
+    ? `<p class="boot-sub reward-note">${esc(vul(MISSIE.stapKomt, { stap: skipped }))}</p>`
     : '';
-  const reunion = mission.reunion?.tekst ? `<p class="boot-sub">${esc(mission.reunion.tekst)}</p>` : '';
 
   // a verhaalHaak mission pins a clue → the "vastgelegd op de wildcamera → prikbord"
   // beat sits between the reward and patrol.
@@ -552,24 +577,26 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
     ? Content.clues(Content.activeArea().id).find((c) => c.id === clueId) ?? null
     : null;
 
-  const lof = `Knap gedaan, ${naam()}!`;
-  const backLabel = clue ? 'Kijk wat je vond' : then === resumePatrol ? 'Verder op patrouille' : 'Verder'; // child:B15
+  const lof = vul(MISSIE.lof, { naam: naam() });
+  const backLabel = clue ? MISSIE.kijkWatJeVond : then === resumePatrol ? MISSIE.verderPatrouille : MISSIE.verder; // child:B15
   const el = card(
-    `<div class="reward boot-card-ish">` +
-    `<p class="boot-kicker">Missie klaar · ${esc(mission.titel)}</p>` +
+    `<div class="card reward">` +
+    `<div class="rw-pic">${missionIcon(mission, 'mc-icon--big')}<span class="rw-check">${icon('check')}</span></div>` +
+    kicker(null, vul(MISSIE.klaar, { titel: mission.titel })) +
     `<h1 class="boot-title reward-lof"></h1>` +
-    reunion +
     `<div class="badge-row">${badges}</div>` +
     knap +
     note +
-    `<button class="btn-start" type="button">${backLabel}</button>` +
+    `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button">${backLabel}</button></div></div>` +
     `</div>`,
   );
   if (store.get().settings.geluid) Sound.found();
+  // "Missie klaar!" first: what happened, then the praise, then the knap woord
   const ra = mountReadAloud({
+    lead: MISSIE.zegKlaar,
     textEl: el.querySelector('.reward-lof')!,
     text: lof,
-    trail: mission.beloning.vaktermBadge ? `Knap woord: ${mission.beloning.vaktermBadge.naam.replace(/^Knap woord:\s*/i, '')}.` : '',
+    trail: knapNaam ? vul(MISSIE.zegKnapWoord, { woord: knapNaam }) : '',
     speakBtn: speakButtonBeside(el.querySelector('.btn-start')), // 🔊 to hear it again (child:B12)
     autoStart: store.get().settings.voorlezen,
   });
@@ -582,36 +609,43 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
 
 /* ------------------------------------------------- wildcamera → prikbord ---- */
 /** The diegetic clue beat: a verhaalHaak mission completed on patrol is "vastgelegd
- *  op de wildcamera" — a calm snapshot card showing the new aanwijzing now on the
- *  prikbord. Two ways on: peek at the board, or walk straight on. */
+ *  op de wildcamera" — a calm snapshot card showing the new aanwijzing, now in the
+ *  sporenboek. The first one also says where that book is (Pauze), so the sporenboek is
+ *  introduced when it first has something in it. Every line on the card is read aloud.
+ *  Two ways on: peek at the book, or walk straight on. Run 6: `photo`, the camera
+ *  trap's own photograph when the adventure took one, is taped in place of the icon. */
 function showWildcamCapture(clue: Clue, then: () => void, photo: string | null = null): void {
   narrator.stop();
-  const line = clue.soort === 'camera' ? 'Vastgelegd op de wildcamera.' : 'Je maakt er een foto van.'; // child:B15: no wildcamera before you met one
-  // run 6: the camera trap's own photograph when the adventure took one, else the glyph
-  const glyph = photo ? `<img class="cb-shot" src="${photo}" alt="">` : CLUE_GLYPH[clue.soort] ?? '📌';
+  const line = clue.soort === 'camera' ? MISSIE.clueCamera : MISSIE.clueFoto; // child:B15: no wildcamera before you met one
+  const first = Content.cluesFound(Content.activeArea().id, store.get().voltooid).size <= 1;
   const el = card(
-    `<div class="wildcam boot-card-ish">` +
-    `<p class="boot-kicker">📷 ${line}</p>` +
-    `<h1 class="boot-title">Een nieuwe aanwijzing</h1>` +
-    `<div class="cb-clue found wildcam-shot${photo ? ' has-shot' : ''}">` +
-    `<span class="cb-photo">${glyph}</span>` +
-    `<span class="cb-clue-title"></span>` +
-    `<span class="cb-clue-text"></span>` +
+    `<div class="card wildcam">` +
+    kicker(clue.soort === 'camera' ? 'camera' : 'photo', line) +
+    `<h1 class="boot-title">${esc(MISSIE.clueTitel)}</h1>` +
+    `<div class="card-body">` +
+    `<figure class="clue-photo${photo ? ' has-shot' : ''}"><span class="clue-tape" aria-hidden="true"></span>` +
+    `<span class="clue-pic">${photo ? `<img class="cb-shot" src="${photo}" alt="">` : icon(CLUE_ICON[clue.soort] ?? 'photo')}</span>` +
+    `<figcaption><span class="cb-clue-title"></span><span class="cb-clue-text"></span></figcaption></figure>` +
+    `<p class="clue-where">${icon('book')}<span class="cw-lines"><span class="cw-boek"></span>` +
+    (first ? `<span class="cw-waar"></span>` : '') + `</span></p>` +
     `</div>` +
-    `<p class="boot-sub">Hij zit nu in je sporenboek.</p>` +
     // Enter walks on (child B7): "Verder" is the primary, the sporenboek a quiet side step
-    `<div class="ra-row">` +
-    `<button class="ra-speak" type="button" aria-label="Lees voor">🔊</button>` +
-    `<button class="btn-start wc-patrol" type="button" data-key="back">${then === resumePatrol ? 'Verder op patrouille' : 'Verder'}</button>` +
+    `<div class="card-foot">` +
+    `<div class="ra-row">${speakButtonHtml()}` +
+    `<button class="btn-start wc-patrol" type="button" data-key="back">${esc(then === resumePatrol ? MISSIE.verderPatrouille : MISSIE.verder)}</button></div>` +
+    `<button class="ra-chip wc-board" type="button"><span class="ra-chip-ic">${icon('book')}</span><span class="ra-chip-tx">${esc(MISSIE.bekijkBoek)}</span></button>` +
     `</div>` +
-    `<button class="ra-text-btn wc-board" type="button">Bekijk je sporenboek</button>` +
     `</div>`,
   );
+  const waar = el.querySelector<HTMLElement>('.cw-waar');
   const ra = mountReadAloud({
     lead: line,
     segments: [
-      { el: el.querySelector('.cb-clue-title')!, text: clue.titel },
-      { el: el.querySelector('.cb-clue-text')!, text: clue.tekst },
+      { el: el.querySelector<HTMLElement>('.wildcam .boot-title')!, text: MISSIE.clueTitel, sentence: true },
+      { el: el.querySelector('.cb-clue-title')!, text: clue.titel, sentence: true },
+      ...sentenceSegments(el.querySelector<HTMLElement>('.cb-clue-text')!, clue.tekst),
+      { el: el.querySelector<HTMLElement>('.cw-boek')!, text: MISSIE.clueBoek },
+      ...(waar ? [{ el: waar, text: MISSIE.clueWaar }] : []),
     ],
     speakBtn: el.querySelector('.ra-speak'),
     autoStart: store.get().settings.voorlezen,

@@ -18,6 +18,8 @@
  * in `ui/`.
  */
 
+import { ONDERWEG, vul } from '../content/copy.ts';
+
 /** Light cadence: at most one beat every Nth *completed-mission* patrol return. */
 export const WORLDBEAT_EVERY = 3;
 
@@ -25,11 +27,17 @@ export const WORLDBEAT_EVERY = 3;
 export type CoarseHeading = 'links' | 'rechtdoor' | 'rechts';
 export type WorldBeatKind = 'blijf-op-pad' | 'welke-kant';
 
+/** The drawn icon of an option (ui/icons.ts draws it; never an emoji). */
+export type WorldBeatIcon = 'boot' | 'paw' | 'arrow';
+
 export interface WorldBeatOption {
   label: string;
   /** Dual-channel **shape** cue (paired with a colour in the DOM layer) so the
-   *  feedback never rides on colour alone. */
-  glyph: string;
+   *  feedback never rides on colour alone: a drawn icon, turned by `turn` degrees. */
+  icon: WorldBeatIcon;
+  turn?: number;
+  /** The arrow key that picks it on a keyboard (the direction beat's ←, ↑, →). */
+  key?: 'ArrowLeft' | 'ArrowUp' | 'ArrowRight';
   correct: boolean;
 }
 
@@ -52,20 +60,20 @@ export interface WorldBeatInput {
   heading: CoarseHeading | null;
 }
 
-// Short lines (≤ 7 words, child B14): the impulse beat names the animal he can SEE
-// (withAnimal), it never asks about one that is not there.
+// Short lines (≤ 7 words, child B14; the words are in content/copy.ts): the impulse beat
+// names the animal he can SEE (withAnimal), it never asks about one that is not there.
 const IMPULSE: WorldBeat = {
   kind: 'blijf-op-pad',
-  prompt: 'Een dier loopt weg. Wat doe jij?',
+  prompt: ONDERWEG.iemandWeg.join(' '),
   options: [
-    { label: 'Blijf op het pad', glyph: '🥾', correct: true },
-    { label: 'Ren erachteraan', glyph: '🐾', correct: false },
+    { label: ONDERWEG.blijf, icon: 'boot', correct: true },
+    { label: ONDERWEG.ren, icon: 'paw', correct: false },
   ],
 };
 
 /** The impulse beat about the animal in view: "Een vos loopt weg. Wat doe jij?". */
 export function withAnimal(beat: WorldBeat, naam: string): WorldBeat {
-  return beat.kind === 'blijf-op-pad' ? { ...beat, prompt: `Een ${naam} loopt weg. Wat doe jij?` } : beat;
+  return beat.kind === 'blijf-op-pad' ? { ...beat, prompt: vul(ONDERWEG.dierWeg.join(' '), { dier: naam }) } : beat;
 }
 
 /** A beat never lands on the reward cards (child B14): it waits until the ranger has
@@ -84,11 +92,11 @@ export function beatReady(beat: WorldBeat, walked: number, animalInView: boolean
 function wayfindBeat(heading: CoarseHeading): WorldBeat {
   return {
     kind: 'welke-kant',
-    prompt: 'Welke kant is je volgende missie?',
+    prompt: ONDERWEG.welkeKant,
     options: [
-      { label: 'Naar links', glyph: '←', correct: heading === 'links' },
-      { label: 'Rechtdoor', glyph: '↑', correct: heading === 'rechtdoor' },
-      { label: 'Naar rechts', glyph: '→', correct: heading === 'rechts' },
+      { label: ONDERWEG.links, icon: 'arrow', turn: -90, key: 'ArrowLeft', correct: heading === 'links' },
+      { label: ONDERWEG.rechtdoor, icon: 'arrow', turn: 0, key: 'ArrowUp', correct: heading === 'rechtdoor' },
+      { label: ONDERWEG.rechts, icon: 'arrow', turn: 90, key: 'ArrowRight', correct: heading === 'rechts' },
     ],
   };
 }

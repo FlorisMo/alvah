@@ -90,7 +90,7 @@
 .wc-review-foot .btn-start[hidden] { display: none; }
 
 /* the clue card after the mission: the camera trap's own photograph of the man and his
-   snare (MissionFlow.showWildcamCapture), in place of the camera icon */
-.wildcam-shot.has-shot { max-width: 340px; }
-.wildcam-shot.has-shot .cb-photo { width: 100%; height: auto; background: none; }
-.cb-shot { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 10px; box-shadow: var(--shadow-md); }
+   snare (MissionFlow.showWildcamCapture), taped into the card in place of the camera icon */
+.clue-photo.has-shot { width: min(100%, 340px); }
+.clue-photo.has-shot .clue-pic { height: auto; background: none; }
+.cb-shot { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 4px; }

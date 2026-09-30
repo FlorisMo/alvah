@@ -1,22 +1,6 @@
 /* ============================================================
-   readaloud.css — the 🔊 "Lees voor" button the shared helper puts beside a
-   screen's primary action or heading (ReadAloud.ts `readScreenAloud`, child:B12).
-   Loaded by the helper itself, so it also styles the title card at boot (before
-   the missions stylesheet is loaded). Same look as the briefing's .ra-speak.
+   readaloud.css — the row the 🔊 "Lees voor" button makes when the helper puts it
+   beside a screen's primary action or heading (ReadAloud.ts `readScreenAloud`,
+   child:B12). The button itself is base.css's `.ra-say` (the same as `.ra-speak`).
    ============================================================ */
 .ra-say-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
-.ra-say {
-  flex: none;
-  width: var(--tap-min, 56px);
-  height: var(--tap-min, 56px);
-  border: none;
-  border-radius: 999px;
-  background: var(--green-soft, #e8f1e2);
-  color: var(--green, #2f6b3a);
-  font-size: 24px;
-  line-height: 1;
-  cursor: pointer;
-  transition: transform var(--dur-quick, .15s) ease, background var(--dur-quick, .15s);
-}
-.ra-say:hover { transform: translateY(-2px); background: var(--green-line, #cfe0c5); }
-.ra-say:focus-visible { outline: 3px solid var(--spel-sun, #f5c23b); outline-offset: 2px; }

@@ -1,10 +1,12 @@
 /**
- * WorldSession.ts — the free-roam world's life cycle: build it (`startExplore`),
- * return to it after a mission or a menu (`resumePatrol`), and tear it down
- * (`leaveWorld`). Also the two in-world beats that are not missions: the calm
- * world-EF micro-beat between missions and "Ken je roep" at the bird bench.
- *
- * The world is the front door: Begin → (first boot: make your ranger) → here.
+ * WorldSession.ts — the one world's life cycle. It is built ONCE, at boot, behind the
+ * veil (`bootWorld`), and shown as the title (world/Presenter.ts: the title and the
+ * ranger maker are shots of the real spawn clearing). Begin glides into the maker (a
+ * first-time player) or straight into play (`enterPlay`); Pauze → "Naar het hoofdmenu"
+ * glides back up to the title (`returnToTitle`). The world is never torn down.
+ * Also here: coming back from a mission or a menu (`resumePatrol`) and the two
+ * in-world beats that are not missions: the calm world-EF micro-beat between missions
+ * and "Ken je roep" at the bird bench.
  */
 
 import type { Engine } from '../../core/skill';
@@ -14,6 +16,8 @@ import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import { loadGameAudio, setAmbientScene } from '../../core/calls';
+import { SAY, TITLE } from '../../content/screens';
+import { MISSIE, ONDERWEG } from '../../content/copy';
 import type { Biome } from '../../render3d/Biomes';
 import type { Stage } from '../../render3d/Stage';
 import { World, type WorldMarker } from '../../render3d/World';
@@ -29,16 +33,20 @@ import { Vector3 } from 'three';
 import {
   pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, WORLDBEAT_ANIMAL_M, type WorldBeat,
 } from '../../core/worldbeat';
-import { setScreen, setMissionView } from '../../core/devhook';
-import { mountReadAloud } from '../ReadAloud';
+import { setScreen, setMissionView, provideTitleReady } from '../../core/devhook';
+import { mountReadAloud, readScreenAloud, sentenceSegments } from '../ReadAloud';
+import { showAvatarCreator } from '../AvatarCreator';
 import { mountMissionPause, unmountMissionPause } from './MissionFlow';
-import { session, esc, card, clearOverlays, menuOpen } from './session';
-import { wireWorldDevhook, clearWorldDevhook } from '../dev/wireDevhook';
+import { session, esc, card, plainCard, clearOverlays, menuOpen, fadeCut, kicker } from './session';
+import { icon } from '../icons';
+import { coarsePointer } from '../hud/device';
+import { wireWorldDevhook } from '../dev/wireDevhook';
 import {
   showExploreHud, disposeExploreHud, onApproach, onWayfind, onInteract, onBoardApproach,
-  tryOpenBoard, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
-  setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint,
+  tryOpenBoard, onPorchApproach, tryOpenPorch, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
+  setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint, beginGuide,
 } from '../hud/ExploreHud';
+import { armMissiebordBeat } from '../hud/Lessons';
 
 // Light world-EF seasoning: count in-world mission completions this session so the
 // pure `pickWorldBeat` cadence (every Nth return) stays rare. `lastBeatTick` dedups
@@ -94,15 +102,6 @@ function webglOk(): boolean {
   return webgl;
 }
 
-/** Boot entry (main.ts): unlock audio inside the Begin gesture, then load the world. */
-export function startWorld(ui: HTMLElement, st: Stage): void {
-  session.host = ui;
-  session.stage = st;
-  Sound.unlock();
-  void loadGameAudio();
-  startExplore();
-}
-
 /** The mission the game recommends next: the first unfinished one in story order.
  *  The wayfinding chip points at it and the missiebord marks it. Null when all done. */
 export function nextMissionId(): string | null {
@@ -115,18 +114,41 @@ export function activeExploreTitel(): string | null {
   return Content.activeArea().missies.find((m) => m.id === id)?.titel ?? null;
 }
 
-/** Tear the world down (title screen, or a stopped mission's rebuild). */
-export function leaveWorld(): void {
-  held = false;
-  disarmBeat();
-  disposeExploreHud();
-  const { world, stage } = session;
-  if (world) { world.dispose(); session.world = null; stage.exitWorld(); }
-  clearWorldDevhook();
+/* -------------------------------------------------------- the one world ---- */
+// the season tints the ambience bed; taken from the story's current chapter at boot
+let seizoen: string | undefined;
+
+/**
+ * Boot (main.ts): build the world behind the veil and show it as the title. The veil
+ * lifts once the world is ready (every model it asked for has arrived, or a cap), so the
+ * first thing a player sees is the finished clearing, never a stand-in.
+ */
+export function bootWorld(ui: HTMLElement, st: Stage, veil: { lift: () => void }): void {
+  session.host = ui;
+  session.stage = st;
+  const world = buildWorld();
+  world.present('title');
+  setScreen('title');
+  setMissionView(null);
+  let titleUp = false;
+  provideTitleReady(() => titleUp && world.ready());
+  // the AudioContext is slow to make (up to ~2 s under load): make it now, behind the
+  // veil, so the Begin tap only resumes it and the glide starts at once
+  const idle = (window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+  if (idle) idle(() => Sound.prepare(), { timeout: 1500 });
+  else window.setTimeout(() => Sound.prepare(), 300);
+  const wait = (): void => {
+    if (!world.ready()) { requestAnimationFrame(wait); return; }
+    showTitleCard({ afterVeil: true });
+    veil.lift();
+    titleUp = true;
+  };
+  wait();
 }
 
-/* ----------------------------------------------------- 3D free-roam ---- */
-export function startExplore(): void {
+/** The world, built once: the markers, the callbacks the HUD listens on, the finished
+ *  missions' lasting tableaus, handed to the Stage. */
+function buildWorld(): World {
   const area = Content.activeArea();
   const markers: WorldMarker[] = area.missies.map((m) => {
     const ef = m.stappen[0]?.ef as Engine | undefined;
@@ -159,16 +181,12 @@ export function startExplore(): void {
 
   // the active mission the wayfinding cue points to = the recommended next one
   const done = store.get().voltooid;
-  const active = nextMissionId();
-
-  // the season tints the ambience bed; take it from the story's current chapter so
-  // the world matches the arc moment.
-  const seizoen = Content.currentChapter(area.id, done)?.seizoen;
+  seizoen = Content.currentChapter(area.id, done)?.seizoen;
   const onBiome = (b: Biome) => setAmbientScene(b, seizoen);
 
   const { stage } = session;
   const world = new World(
-    stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, active,
+    stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, nextMissionId(),
     onBiome, onInteract, { homes },
   );
   session.world = world;
@@ -179,8 +197,10 @@ export function startExplore(): void {
   // a menu card over the world (Pauze, the missiebord, a briefing ...) holds him still
   world.setMenuGate(menuOpen);
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
-  // mission board overlay in-place (no leaveWorld).
+  // mission board overlay in-place.
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });
+  // run 6: the hut's porch ring (once Bram has told about the young raaf) opens the hut
+  world.setPorch({ onNear: onPorchApproach, onOpen: tryOpenPorch });
   // F-11: the calm world-rim cue ("Hier stopt het bos") through the one hint channel.
   world.setBoundaryHint(showBoundaryHint);
   // W6.4b2: the "Ken je roep" sit-spot by the vogelkijkhut.
@@ -197,22 +217,94 @@ export function startExplore(): void {
     onFrame: (v) => setHeliVignette(v),
     optIn: () => store.get().settings.helikopter,
   });
-  // start the bed on the spawn clearing (heide) before the first crossing fires
-  setAmbientScene('heide', seizoen);
   stage.enterWorld(world);
   for (const m of area.missies) if (done[m.id]) void tellWorldMissionDone(m.id, false);
   if (store.get().arc.gemeld) world.setSeasonResolved(true);
+  wireWorldDevhook(world);
+  return world;
+}
+
+/**
+ * The title block over the sky of the real clearing: the name, one line of story, 🔊
+ * and Begin (a click or Enter). Begin unlocks the sound inside the gesture (iOS), then
+ * glides down to the ranger: into the maker the first time, straight into play after.
+ */
+function showTitleCard(opts: { after?: number; afterVeil?: boolean } = {}): void {
+  const el = plainCard(
+    `<div class="title-block">` +
+    `<h1 class="title-mark">${esc(TITLE.naam)}</h1>` +
+    `<p class="title-sub">${esc(TITLE.sub)}</p>` +
+    `<div class="ra-row title-row"><button class="btn-start title-begin" type="button">${esc(TITLE.begin)}</button></div>` +
+    `</div>`,
+  );
+  el.classList.add('title-overlay');
+  if (opts.afterVeil) el.classList.add('title-overlay--after-veil'); // the veil's name stays
+  // back from Pauze the camera is still rising to the title: the words wait for the sky
+  if (opts.after) {
+    el.querySelectorAll<HTMLElement>('.title-block > *').forEach((w, i) => w.style.setProperty('animation-delay', `${(opts.after ?? 0) + i * 160}ms`));
+  }
+  const ra = readScreenAloud(el, { text: SAY.title, autoStart: store.get().settings.voorlezen }); // child:B12
+  el.querySelector('.title-begin')?.addEventListener('click', () => {
+    // iOS: the AudioContext (made behind the veil) must be resumed inside the tap, before
+    // anything awaits
+    Sound.unlock();
+    void loadGameAudio();
+    ra.stop();
+    el.className = 'title-overlay title-overlay--leaving'; // not a menu any more: the glide starts at once
+    el.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    window.setTimeout(() => el.remove(), prefersReducedMotion() ? 0 : 320);
+    if (store.get().avatarGemaakt) enterPlay(true);
+    else showAvatarCreator(session.host, session.world!, () => enterPlay(false));
+  }, { once: true });
+}
+
+/** From the title or the maker into play: the follow camera takes the lens over from the
+ *  shot in one move, the ranger turns to the forest, the HUD and the sound come in. The
+ *  player can walk at once. Then the first minute: Bram greets a new boswachter (or
+ *  welcomes a `returning` one back) and the lessons follow (ui/hud/Lessons.ts). */
+export function enterPlay(returning: boolean): void {
+  const world = session.world;
+  if (!world) return;
+  world.present(null);
+  setAmbientScene('heide', seizoen);
   setScreen('world');
   setMissionView(null);
-  wireWorldDevhook(world);
-  showExploreHud(area.missies.find((m) => m.id === active)?.titel ?? null);
+  showExploreHud(activeExploreTitel());
+  // the HUD comes in as the glide settles, not over the moving picture; then the class
+  // goes, or every prompt that appears later (a slot shown again restarts its animation)
+  // would wait a second and fade in behind the ring he already stands in
+  const hud = session.host.querySelector('.explore-hud');
+  hud?.classList.add('explore-hud--arriving');
+  window.setTimeout(() => hud?.classList.remove('explore-hud--arriving'), 1_700);
+  beginGuide(returning);
+}
+
+/**
+ * Pauze → "Naar het hoofdmenu": a soft fade, the ranger back on the spawn clearing (out
+ * of any vehicle), the camera rising from behind him to the title, the title block back.
+ * The same world, never rebuilt; Begin glides back in.
+ */
+export function returnToTitle(): void {
+  const world = session.world;
+  if (!world) return;
+  narrator.stop();
+  held = false;
+  disarmBeat();
+  fadeCut(() => {
+    clearOverlays();
+    disposeExploreHud();
+    world.resetToSpawn();
+    world.present('title', false);
+    setScreen('title');
+    setMissionView(null);
+  }, () => showTitleCard({ after: prefersReducedMotion() ? 0 : 900 }));
 }
 
 /** Resume free-roam after an in-world mission or menu: keep the world loaded,
  *  re-point the wayfinding cue at the next thing to do and restore the explore HUD. */
 export function resumePatrol(): void {
   const world = session.world;
-  if (!world) { startExplore(); return; }
+  if (!world) return;
   releaseWorld();
   setScreen('world');
   setMissionView(null);
@@ -228,6 +320,8 @@ export function resumePatrol(): void {
     armBeat(patrolTick);
   }
   showExploreHud(titel);
+  // back from a finished mission: Bram points at the missiebord (once, after the first)
+  if (patrolTick > 0) armMissiebordBeat();
 }
 
 /* ------------------------------------------------ the armed world-EF beat ---- */
@@ -250,7 +344,8 @@ function disarmBeat(): void {
   if (beatRaf) { cancelAnimationFrame(beatRaf); beatRaf = 0; }
 }
 
-/** A roaming ground animal close by and in the picture: its name ("vos"), or null. */
+/** A roaming ground animal close by and in the picture: its name ("vos", "wild zwijn"),
+ *  or null. */
 function animalInView(world: World): string | null {
   const p = world.pos();
   if (!p) return null;
@@ -262,7 +357,10 @@ function animalInView(world: World): string | null {
     if (a.id.startsWith('bird-') || Math.hypot(a.x - p.x, a.z - p.z) > reach) continue;
     const v = new Vector3(a.x, cam.position.y - 2, a.z).project(cam);
     // in the picture, and above the low beat card that will name it
-    if (v.z < 1 && Math.abs(v.x) < 0.85 && v.y > -0.3 && v.y < 0.9) return a.id.split('-')[1] ?? null; // animal-vos-fox → vos
+    if (v.z < 1 && Math.abs(v.x) < 0.85 && v.y > -0.3 && v.y < 0.9) {
+      const id = a.id.split('-')[1]; // animal-vos-fox → vos
+      return id ? Content.animal(id)?.naam ?? id : null; // wildzwijn → "wild zwijn"
+    }
   }
   return null;
 }
@@ -290,61 +388,109 @@ function watchBeat(): void {
 }
 
 /* --------------------------------------------------- world-EF micro-beat ---- */
+/** The key that picks option `i` of `n` on a keyboard: the direction beat's own arrows
+ *  (←, ↑, →), else left and right for a pair. */
+function optionKey(beat: WorldBeat, i: number): string | null {
+  const o = beat.options[i];
+  if (o.key) return o.key;
+  if (beat.options.length === 2) return i === 0 ? 'ArrowLeft' : 'ArrowRight';
+  return null;
+}
+const KEY_CAP: Record<string, string> = { ArrowLeft: '←', ArrowUp: '↑', ArrowRight: '→' };
+
 /** A calm, skippable open-world EF beat between missions (impulse-resist or
  *  wayfinding-recall). Never-scary, never game-over: a wrong tap gives a soft
  *  "probeer nog eens" and re-presents the SAME beat; "Even verder" always lets
- *  the child walk on. Dual-channel (colour + glyph + words + read-aloud), ≥56px. */
+ *  the child walk on. Dual-channel (colour + a drawn icon + words + read-aloud), ≥56px.
+ *  Keyboard: the arrow keys light up an option (on the direction beat ← ↑ → pick
+ *  "Naar links", "Rechtdoor", "Naar rechts"; a pair takes ← and →), Enter chooses it
+ *  (Enter with nothing lit lights the first), Esc walks on. */
 function showWorldBeat(beat: WorldBeat, done: () => void): void {
   narrator.stop();
-  const kicker = beat.kind === 'blijf-op-pad' ? '🌿 Onderweg' : '🧭 Onderweg';
+  const low = beat.kind === 'blijf-op-pad';
+  const caps = !coarsePointer(); // key caps on a laptop; a tablet has no arrow keys
   const opts = beat.options
-    .map((o, i) =>
-      `<button class="wb-opt" type="button" data-i="${i}">` +
-      `<span class="wb-glyph" aria-hidden="true">${esc(o.glyph)}</span>` +
-      `<span class="wb-label">${esc(o.label)}</span>` +
-      `</button>`,
-    )
+    .map((o, i) => {
+      const k = optionKey(beat, i);
+      return (
+        `<button class="wb-opt" type="button" data-i="${i}">` +
+        `<span class="wb-glyph" style="--turn:${o.turn ?? 0}deg">${icon(o.icon)}</span>` +
+        `<span class="wb-label">${esc(o.label)}</span>` +
+        (caps && k ? `<span class="kcap kcap-in wb-cap" aria-hidden="true">${KEY_CAP[k]}</span>` : '') +
+        `</button>`
+      );
+    })
     .join('');
   // low on the screen and without a scrim: the animal the impulse beat names is in view
   const el = card(
-    `<div class="worldbeat boot-card-ish${beat.kind === 'blijf-op-pad' ? ' wb-low' : ''}">` +
-    `<p class="boot-kicker">${kicker}</p>` +
+    `<div class="card worldbeat${low ? ' wb-low' : ''}">` +
+    kicker(low ? 'leaf' : 'compass', ONDERWEG.kicker) +
     `<p class="wb-prompt"></p>` +
-    `<div class="wb-opts">${opts}</div>` +
+    `<div class="wb-opts" role="group">${opts}</div>` +
     `<p class="wb-feedback" role="status" aria-live="polite" hidden></p>` +
-    `<button class="ra-text-btn wb-skip" type="button" data-key="back">Even verder lopen</button>` +
+    `<button class="ra-chip wb-skip" type="button" data-key="back">${esc(ONDERWEG.verder)}</button>` +
     `</div>`,
-    { scrim: beat.kind !== 'blijf-op-pad' },
+    { scrim: !low },
   );
   const ra = mountReadAloud({
-    textEl: el.querySelector('.wb-prompt')!,
-    text: beat.prompt,
+    segments: sentenceSegments(el.querySelector<HTMLElement>('.wb-prompt')!, beat.prompt), // one sentence a line
     autoStart: store.get().settings.voorlezen,
   });
   const fb = el.querySelector<HTMLParagraphElement>('.wb-feedback');
-  const finish = (): void => { ra.stop(); done(); };
-  el.querySelectorAll<HTMLButtonElement>('.wb-opt').forEach((btn) => {
+  const btns = Array.from(el.querySelectorAll<HTMLButtonElement>('.wb-opt'));
+  const finish = (): void => { ra.stop(); window.removeEventListener('keydown', onKey, true); done(); };
+  btns.forEach((btn) => {
     btn.addEventListener('click', () => {
       ra.stop();
       const i = Number(btn.dataset.i);
       if (optionCorrect(beat, i)) {
         btn.classList.add('wb-goed');
         if (store.get().settings.geluid) Sound.found();
-        const goed = beat.kind === 'blijf-op-pad' ? 'Knap, je blijft rustig.' : 'Goed onthouden, ranger!';
+        const goed = beat.kind === 'blijf-op-pad' ? ONDERWEG.goedRustig : ONDERWEG.goedOnthouden;
         if (fb) { fb.hidden = false; fb.textContent = goed; fb.className = 'wb-feedback wb-fb-goed'; }
         if (store.get().settings.voorlezen) narrator.speak(goed);
-        el.querySelectorAll<HTMLButtonElement>('.wb-opt').forEach((b) => (b.disabled = true));
+        btns.forEach((b) => (b.disabled = true));
         window.setTimeout(finish, 900);
       } else {
         btn.classList.add('wb-bijna');
         if (store.get().settings.geluid) Sound.tryAgain();
-        if (fb) { fb.hidden = false; fb.textContent = 'Bijna! Blijf rustig — probeer nog eens.'; fb.className = 'wb-feedback wb-fb-bijna'; }
-        if (store.get().settings.voorlezen) narrator.speak('Bijna. Probeer nog eens.');
+        // what is shown is what is said
+        if (fb) { fb.hidden = false; fb.textContent = ONDERWEG.bijna; fb.className = 'wb-feedback wb-fb-bijna'; }
+        if (store.get().settings.voorlezen) narrator.speak(ONDERWEG.bijna);
         window.setTimeout(() => btn.classList.remove('wb-bijna'), 500);
       }
     });
   });
   el.querySelector('.wb-skip')?.addEventListener('click', finish);
+
+  // the keyboard: a visible focus the arrow keys move, Enter chooses (ui/keys.ts presses
+  // a focused button itself; this lights one up and catches an Enter with none lit)
+  const light = (i: number): void => {
+    btns.forEach((b, k) => b.classList.toggle('is-focus', k === i));
+    btns[i]?.focus();
+  };
+  function onKey(e: KeyboardEvent): void {
+    if (!el.classList.contains('ra-overlay')) { window.removeEventListener('keydown', onKey, true); return; } // the card went
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const at = btns.findIndex((b) => b === document.activeElement);
+    if (e.code in KEY_CAP || e.code === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.repeat) return; // an arrow still held from walking never picks
+      const direct = btns.findIndex((_, i) => optionKey(beat, i) === e.code);
+      const back = e.code === 'ArrowLeft' || e.code === 'ArrowUp';
+      light(direct >= 0 ? direct : at < 0 ? 0 : Math.max(0, Math.min(btns.length - 1, at + (back ? -1 : 1))));
+      return;
+    }
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') && !e.defaultPrevented) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.repeat) return;
+      if (at >= 0) btns[at].click();
+      else light(0);
+    }
+  }
+  window.addEventListener('keydown', onKey, true);
 }
 
 /**
@@ -371,7 +517,7 @@ export async function playRoepAtSitSpot(): Promise<void> {
   beginActivityScope();
   let stop: () => void = () => {};
   const stopped = new Promise<'STOP'>((res) => { stop = () => res('STOP'); });
-  mountMissionPause(() => { narrator.stop(); abortActivityScope(); unmountMissionPause(); stop(); }, 'Stop met luisteren');
+  mountMissionPause(() => { narrator.stop(); abortActivityScope(); unmountMissionPause(); stop(); }, MISSIE.stopLuisteren);
   try {
     await Promise.race([flat ? playRoep(host) : playRoep3d(world.ctx(host)), stopped]);
   } finally {

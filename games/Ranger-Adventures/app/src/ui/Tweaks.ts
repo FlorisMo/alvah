@@ -21,11 +21,14 @@ import { narrator } from '../core/narrator';
 import { setReducedMotionOverride } from '../core/reduced-motion';
 import { applyReadingPrefs, READ_SIZE, LEADING } from '../core/reading-prefs';
 import { applyAmbient } from '../core/calls';
+import { card, clearOverlays, kicker } from './flow/session';
+import { icon } from './icons';
+import { readScreenAloud } from './ReadAloud';
+import { INSTELLINGEN as T } from '../content/copy';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-let host: HTMLElement;
 let onBack: () => void;
 
 /** Each on/off Tweak: a label, a one-line hint, and an optional side-effect. */
@@ -36,52 +39,41 @@ interface ToggleDef {
   effect?: (on: boolean) => void;
 }
 const TOGGLES: ToggleDef[] = [
-  { key: 'geluid', label: 'Geluid', hint: 'Tonen en dierengeluiden', effect: () => applyAmbient() },
-  { key: 'voorlezen', label: 'Voorlezen', hint: 'De ranger leest de tekst voor' },
-  {
-    key: 'reducedMotion', label: 'Rustige beweging', hint: 'De camera springt zacht, niet zwierend',
-    effect: (on) => setReducedMotionOverride(on ? true : null),
-  },
-  { key: 'cameraDraaitMee', label: 'Camera draait mee', hint: 'De camera draait met je mee' },
+  { key: 'geluid', ...T.geluid, effect: () => applyAmbient() },
+  { key: 'voorlezen', ...T.voorlezen },
+  { key: 'reducedMotion', ...T.rustig, effect: (on) => setReducedMotionOverride(on ? true : null) },
+  { key: 'cameraDraaitMee', ...T.draaitMee },
   // W5.3 opt-in helicopter (default UIT; withheld under "Rustige beweging"). No
   // `effect`: World reads the toggle live each frame via `heliOptInSource`
   // (Missions.setHeli), so flipping it here makes the aircraft enterable with no
   // restart — the P1.5c "enable in Instellingen AND enter" path.
-  { key: 'helikopter', label: 'Helikopter', hint: 'Vlieg rustig over de Veluwe' },
-  {
-    key: 'leesFont', label: 'Leesletter', hint: 'Extra duidelijke letters',
-    effect: () => applyReadingPrefs(store.get().settings),
-  },
-  { key: 'jargon', label: 'Knappe woorden', hint: 'Echte natuurwoorden zoals frisling en ven' },
-  { key: 'autoMoeilijk', label: 'Vanzelf passend', hint: 'Het spel groeit met jou mee' },
-  { key: 'force2d', label: 'Platte weergave', hint: 'Speel altijd op de rustige platte vlakte' },
+  { key: 'helikopter', ...T.helikopter },
+  { key: 'leesFont', ...T.leesletter, effect: () => applyReadingPrefs(store.get().settings) },
+  { key: 'jargon', ...T.knap },
+  { key: 'autoMoeilijk', ...T.passend },
+  { key: 'force2d', ...T.plat },
 ];
 
 // consequence severity (§3: default MILD; Floris can dial up) — three calm steps
 const ERNST: { id: Settings['gevolgErnst']; label: string }[] = [
-  { id: 'assist', label: 'Heel rustig' },
-  { id: 'mild', label: 'Rustig' },
-  { id: 'stevig', label: 'Spannender' },
+  { id: 'assist', label: T.ernst.assist },
+  { id: 'mild', label: T.ernst.mild },
+  { id: 'stevig', label: T.ernst.stevig },
 ];
 
 // on-screen joystick (W1.3): default follows the pointer (touch → aan, laptop → uit)
 const JOYSTICK: { id: Settings['joystick']; label: string }[] = [
-  { id: 'auto', label: 'Vanzelf' },
-  { id: 'aan', label: 'Altijd' },
-  { id: 'uit', label: 'Nooit' },
+  { id: 'auto', label: T.stickKeus.auto },
+  { id: 'aan', label: T.stickKeus.aan },
+  { id: 'uit', label: T.stickKeus.uit },
 ];
 
 // a small calm accent palette (the gold default + heath/forest/water/warm)
 const ACCENTEN = ['#f5c23b', '#9a6aa8', '#5d7340', '#4a6b78', '#d9b89a'];
 
-export function showTweaks(ui: HTMLElement, back: () => void): void {
-  host = ui;
+export function showTweaks(back: () => void): void {
   onBack = back;
   render();
-}
-
-function clearOverlays(): void {
-  host.querySelectorAll('.ra-overlay').forEach((n) => n.remove());
 }
 
 function select(): void {
@@ -96,7 +88,7 @@ function toggleHtml(d: ToggleDef): string {
     `<span class="tw-toggle-text"><span class="tw-toggle-label">${esc(d.label)}</span>` +
     `<span class="tw-toggle-hint">${esc(d.hint)}</span></span>` +
     `<span class="tw-switch" aria-hidden="true"><span class="tw-knob"></span>` +
-    `<span class="tw-state">${on ? 'aan' : 'uit'}</span></span>` +
+    `<span class="tw-state">${on ? T.aan : T.uit}</span></span>` +
     `</button>`
   );
 }
@@ -120,8 +112,8 @@ function segHtml(): string {
       `aria-checked="${o.id === cur}" data-ernst="${o.id}">${esc(o.label)}</button>`,
   ).join('');
   return (
-    `<div class="tw-field"><span class="tw-field-label">Hoe spannend</span>` +
-    `<div class="tw-seg" role="radiogroup" aria-label="Hoe spannend">${btns}</div></div>`
+    `<div class="tw-field"><span class="tw-field-label">${esc(T.spannend)}</span>` +
+    `<div class="tw-seg" role="radiogroup" aria-label="${esc(T.spannend)}">${btns}</div></div>`
   );
 }
 
@@ -132,8 +124,8 @@ function joystickHtml(): string {
       `aria-checked="${o.id === cur}" data-joy="${o.id}">${esc(o.label)}</button>`,
   ).join('');
   return (
-    `<div class="tw-field"><span class="tw-field-label">Loopstick op het scherm</span>` +
-    `<div class="tw-seg" role="radiogroup" aria-label="Loopstick op het scherm">${btns}</div></div>`
+    `<div class="tw-field"><span class="tw-field-label">${esc(T.stick)}</span>` +
+    `<div class="tw-seg" role="radiogroup" aria-label="${esc(T.stick)}">${btns}</div></div>`
   );
 }
 
@@ -142,34 +134,31 @@ function accentHtml(): string {
   const sw = ACCENTEN.map(
     (c) => `<button class="tw-acc${c === cur ? ' sel' : ''}" type="button" role="radio" ` +
       `aria-checked="${c === cur}" data-acc="${esc(c)}" style="background:${esc(c)}" ` +
-      `aria-label="Accentkleur"><span class="tw-acc-tick" aria-hidden="true">✓</span></button>`,
+      `aria-label="${esc(T.kleur)}"><span class="tw-acc-tick">${icon('check')}</span></button>`,
   ).join('');
   return (
-    `<div class="tw-field"><span class="tw-field-label">Accentkleur</span>` +
-    `<div class="tw-accents" role="radiogroup" aria-label="Accentkleur">${sw}</div></div>`
+    `<div class="tw-field"><span class="tw-field-label">${esc(T.kleur)}</span>` +
+    `<div class="tw-accents" role="radiogroup" aria-label="${esc(T.kleur)}">${sw}</div></div>`
   );
 }
 
 function render(): void {
   narrator.stop();
-  clearOverlays();
   const s = store.get().settings;
 
-  const el = document.createElement('div');
-  el.className = 'ra-overlay';
-  el.innerHTML =
-    // "Klaar" sits in a pinned footer: never below the fold at 1280×800 (breaker B3)
-    `<div class="tweaks boot-card-ish has-foot">` +
-    `<p class="boot-kicker">Instellingen</p>` +
-    `<h1 class="boot-title">Maak het van jou</h1>` +
+  // "Klaar" sits in the pinned footer: never below the fold at 1280×800 (breaker B3)
+  const el = card(
+    `<div class="card card--narrow tweaks">` +
+    kicker('gear', T.kicker) +
+    `<h1 class="boot-title">${esc(T.titel)}</h1>` +
     `<div class="card-body">` +
     `<div class="tw-list">` +
     TOGGLES.map(toggleHtml).join('') +
-    sliderHtml('readSize', 'Tekstgrootte', READ_SIZE.min, READ_SIZE.max, READ_SIZE.step, s.readSize,
+    sliderHtml('readSize', T.tekst, READ_SIZE.min, READ_SIZE.max, READ_SIZE.step, s.readSize,
       (n) => `${Math.round(n)}px`) +
-    sliderHtml('leading', 'Regelafstand', LEADING.min, LEADING.max, LEADING.step, s.leading,
+    sliderHtml('leading', T.regels, LEADING.min, LEADING.max, LEADING.step, s.leading,
       (n) => n.toFixed(1)) +
-    sliderHtml('ambient', 'Omgevingsgeluid', 0, 1, 0.05, s.ambient,
+    sliderHtml('ambient', T.bos, 0, 1, 0.05, s.ambient,
       (n) => `${Math.round(n * 100)}%`) +
     segHtml() +
     joystickHtml() +
@@ -177,10 +166,10 @@ function render(): void {
     `</div>` +
     `</div>` +
     `<div class="card-foot"><div class="ra-row">` +
-    `<button class="btn-start tw-back" type="button" data-key="back">Klaar</button>` +
+    `<button class="btn-start tw-back" type="button" data-key="back">${esc(T.klaar)}</button>` +
     `</div></div>` +
-    `</div>`;
-  host.appendChild(el);
+    `</div>`,
+  );
 
   // ---- toggles ----
   el.querySelectorAll<HTMLButtonElement>('.tw-toggle').forEach((b) => {
@@ -191,7 +180,7 @@ function render(): void {
       b.classList.toggle('on', next);
       b.setAttribute('aria-checked', String(next));
       const state = b.querySelector('.tw-state');
-      if (state) state.textContent = next ? 'aan' : 'uit';
+      if (state) state.textContent = next ? T.aan : T.uit;
       TOGGLES.find((d) => d.key === key)?.effect?.(next);
       select();
     });
@@ -257,7 +246,18 @@ function render(): void {
     });
   });
 
+  // what the screen is, and each switch says what it does on hover or focus (child:B12)
+  const voor = s.voorlezen;
+  const ra = readScreenAloud(el, {
+    text: T.zeg, anchor: '.tw-back', autoStart: voor, items: '.tw-toggle', hover: voor,
+    itemText: (b) => {
+      const d = TOGGLES.find((t) => t.key === b.dataset.key);
+      return d ? `${d.label}. ${d.hint}.` : '';
+    },
+  });
+
   el.querySelector('.tw-back')?.addEventListener('click', () => {
+    ra.stop();
     clearOverlays();
     onBack();
   });

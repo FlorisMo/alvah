@@ -407,7 +407,7 @@ test('the season finale: the last mission ends the season, then the world is cal
     await click(log, 'Verder op patrouille', 'finale');
     await worldReacted(log, last, marker, before);
     // the calm, free world: nothing to point at any more, the ranger walks on
-    const hud = await uiText(page);
+    const hud = (await uiText(page)).replace(/\s+/g, ' '); // (the replay chip puts its title on a line of its own)
     log.soft(!missions.some((m) => hud.includes(m.titel) && !hud.includes(`Speel nog eens: ${m.titel}`)), 'no mission is offered any more (all done)');
     log.soft(await page.locator('.explore-klaar').isVisible().catch(() => false), 'the HUD says the season is done ("Alle missies klaar")');
     const p0 = (await snap(page)).p!;

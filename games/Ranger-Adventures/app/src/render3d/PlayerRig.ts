@@ -105,10 +105,31 @@ function meanRotation(clip: THREE.AnimationClip, boneName: string, fallback: THR
   return new THREE.Quaternion(sum.x, sum.y, sum.z, sum.w).normalize();
 }
 
+/**
+ * The ranger GLB's baked `idle` is a 0.3 s held pose with the arms out stiffly, palms up
+ * (an A-pose), which the ranger maker shows big and every standing frame shows small. It is
+ * relaxed once here, at the root, on top of whatever the mixer blended: each upper arm turns
+ * down to his side (about its local Y, mirrored left/right) and a little forward (local X),
+ * by the idle's share of the blend, so the walk's own arm swing is untouched. Found by
+ * looking at the maker portrait; a rig without these bones is left alone.
+ */
+const ARM_REST: Readonly<Record<'LeftArm' | 'RightArm', readonly [number, number]>> = {
+  LeftArm: [0.95, 0.35],   // [down (local Y, rad), forward (local X, rad)]
+  RightArm: [-0.95, 0.35],
+};
+/** A standing breath (secondary motion, off under reduced motion): the chest rises and
+ *  settles this far (rad) about the upper spine, once every BREATH_S seconds. */
+const BREATH_RAD = 0.018;
+const BREATH_S = 3.6;
+
 const _q = new THREE.Quaternion();
 const _d = new THREE.Quaternion();
 const _v = new THREE.Vector3();
 const _m = new THREE.Matrix4();
+const _qi = new THREE.Quaternion();
+const _qx = new THREE.Quaternion();
+const _x = new THREE.Vector3(1, 0, 0);
+const _y = new THREE.Vector3(0, 1, 0);
 
 export class PlayerRig {
   private mixer: THREE.AnimationMixer | null = null;
@@ -143,6 +164,13 @@ export class PlayerRig {
   // steps the feet at a slow walk instead of sliding round in the idle pose.
   private backward = false;
   private turning = false;
+  // the idle's relaxed arms and its breath (see ARM_REST): each bone, the turn added on top
+  // of the mixed pose (none for the chest: its breath), and the mixed pose it was added to.
+  // The mixer only rewrites a bone whose mixed value CHANGED since the last frame (three's
+  // PropertyMixer), and the idle is a held pose, so the turn is taken off again before each
+  // mixer update: added every frame on top of itself it would pile up.
+  private rest: { bone: THREE.Object3D; q: THREE.Quaternion | null; mixed: THREE.Quaternion; on: boolean }[] = [];
+  private breathT = 0;
 
   /**
    * Drive `model` from its baked clips. Needs an idle-ish and a walk-ish clip; the run
@@ -187,6 +215,13 @@ export class PlayerRig {
     this.walk.play().setEffectiveWeight(0);
     this.walk.timeScale = 0;
     if (this.run) { this.run.play().setEffectiveWeight(0); this.run.timeScale = 0; }
+    this.rest = [];
+    model.traverse((o) => {
+      if (!(o as THREE.Bone).isBone) return;
+      const turn = ARM_REST[o.name as keyof typeof ARM_REST];
+      const q = turn ? new THREE.Quaternion().setFromAxisAngle(_y, turn[0]).multiply(_qx.setFromAxisAngle(_x, turn[1])) : null;
+      if (turn || o.name === 'Spine01') this.rest.push({ bone: o, q, mixed: new THREE.Quaternion(), on: false });
+    });
   }
 
   /**
@@ -241,6 +276,7 @@ export class PlayerRig {
     this.model = null;
     this.strideBones = [];
     this.soles = [];
+    this.rest = [];
     this.proc = obj;
   }
 
@@ -302,10 +338,12 @@ export class PlayerRig {
         this.run.setEffectiveWeight(moving * r);
         this.run.time = clockTime(this.runClock, this.phase);
       }
+      for (const rb of this.rest) if (rb.on) { rb.bone.quaternion.copy(rb.mixed); rb.on = false; } // back to the mixed pose
       this.mixer.update(dt);
       // the stride: legs and arms swing wider than the clip at speed (1 = as authored)
       this.gain = 1 + (strideGain(stepping, r) - 1) * moving;
       this.swing(this.gain, r);
+      this.relax(1 - moving, dt, reduced);
       this.stand(r);
       return plants;
     }
@@ -321,6 +359,19 @@ export class PlayerRig {
       }
     }
     return 0;
+  }
+
+  /** On top of this frame's mixed pose (the mixer wrote every bone just now): the idle's
+   *  arms down at his sides and, standing, a slow breath, both by the idle's weight `w`. */
+  private relax(w: number, dt: number, reduced: boolean): void {
+    this.breathT = reduced ? 0 : (this.breathT + dt) % BREATH_S;
+    const breath = Math.sin((this.breathT / BREATH_S) * Math.PI * 2) * BREATH_RAD * w;
+    for (const r of this.rest) {
+      r.mixed.copy(r.bone.quaternion);
+      r.on = true;
+      if (r.q) r.bone.quaternion.multiply(_q.slerpQuaternions(_qi, r.q, w));
+      else r.bone.quaternion.multiply(_q.setFromAxisAngle(_x, breath)); // the chest
+    }
   }
 
   /** Swing the stride bones wider about their mean pose (walk and run means blended by

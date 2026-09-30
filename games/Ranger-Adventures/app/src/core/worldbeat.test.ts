@@ -49,8 +49,8 @@ test('every beat exposes exactly one calm-correct option', () => {
     const beat = pickWorldBeat({ patrolTick: WORLDBEAT_EVERY * occ, heading: H });
     assert.ok(beat);
     assert.equal(beat.options.filter((o) => o.correct).length, 1, `occ ${occ}: one correct`);
-    // dual-channel: every option carries a shape glyph, not colour alone
-    assert.ok(beat.options.every((o) => o.glyph.length > 0));
+    // dual-channel: every option carries a drawn shape, not colour alone
+    assert.ok(beat.options.every((o) => o.icon.length > 0));
   }
 });
 

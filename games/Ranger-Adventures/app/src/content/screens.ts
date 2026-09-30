@@ -1,13 +1,31 @@
 /**
- * screens.ts — what each menu screen says aloud (child:B12): its heading and what to
- * do next. Read by `ui/ReadAloud.readScreenAloud` on the title, the ranger maker,
- * Pauze and the missiebord. AVI M3/E3, at most 7 words a sentence (linted with the
- * rest of the copy in core/readlevel.test.ts).
+ * screens.ts — the front door's words and what each menu screen says aloud (child:B12):
+ * its heading and what to do next. Read by `ui/ReadAloud.readScreenAloud` on the title,
+ * the ranger maker, Pauze and the missiebord. AVI M3/E3, at most 7 words a sentence
+ * (linted with the rest of the copy in core/readlevel.test.ts).
  */
+
+/** The title over the real clearing (and the boot veil's name). */
+export const TITLE = {
+  naam: 'Ranger van de Veluwe',
+  sub: 'Word de nieuwe boswachter.',
+  begin: 'Begin',
+} as const;
+
+/** The ranger maker. `groet` takes the chosen name. */
+export const MAKER = {
+  titel: 'Maak je ranger',
+  groet: (naam: string): string => `Hoi, ranger ${naam}!`,
+  naam: 'Je naam',
+  klaar: 'Dit is mijn ranger',
+} as const;
+
 export const SAY = {
-  title: 'Word boswachter. Help de dieren van de Veluwe. Druk op Begin.',
-  maker: 'Maak je eigen ranger. Kies een naam. Kies hoe je eruitziet. Klaar? Druk op: dit is mijn ranger.',
+  title: 'Ranger van de Veluwe. Word de nieuwe boswachter. Druk op Begin.',
+  /** `{naam}`: the ranger's name, as the greeting on the panel says it. */
+  maker: 'Maak je ranger. Hoi, ranger {naam}! Kies je naam en je kleuren. Klaar? Druk op: Dit is mijn ranger.',
   pauze: 'Pauze. Wat wil je doen? Of ga terug naar de open plek.',
-  missiePauze: 'Pauze. Wil je verder? Of stop je de missie?',
+  /** `{stop}`: what the stop button says ("stop de missie", "stop met luisteren"). */
+  missiePauze: 'Pauze. Wat wil je doen? Ga verder of {stop}.',
   bord: 'Het missiebord. Kies een missie.',
 } as const;

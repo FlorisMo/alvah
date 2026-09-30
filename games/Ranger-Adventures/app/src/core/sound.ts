@@ -2,8 +2,10 @@
  * sound.ts — minimal WebAudio cues for dual-channel feedback (colour + sound;
  * Alvah profile, BUILD-PLAN §3 / memory: never colour alone). A small placeholder
  * for the full recipe set in prototype/sound.jsx, ported later. Callers gate on
- * settings.geluid. AudioContext is created lazily and resumed on first use (the
- * triggering tap satisfies the autoplay-unlock rule).
+ * settings.geluid. The AudioContext is made behind the boot veil (`prepare`: it waits
+ * suspended) and resumed inside the first tap (`unlock`: the autoplay rule, iOS too).
+ * Making it inside the Begin tap held the picture for up to ~2 s: the constructor is
+ * slow. Made lazily if nothing prepared it.
  */
 
 import { fadeInCurve, fadeOutCurve, callWindow, callGain, placeCall } from './audiofade';
@@ -11,8 +13,10 @@ import { fadeInCurve, fadeOutCurve, callWindow, callGain, placeCall } from './au
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
 let ctx: AudioContext | null = null;
+let primed = false; // a sound has been started inside a tap (older iOS needs one)
 
-function ac(): AudioContext | null {
+/** The context, made if there is none yet (suspended until a tap resumes it). */
+function made(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   try {
     if (!ctx) {
@@ -20,11 +24,19 @@ function ac(): AudioContext | null {
       if (!Ctor) return null;
       ctx = new Ctor();
     }
-    if (ctx.state === 'suspended') void ctx.resume();
     return ctx;
   } catch {
     return null;
   }
+}
+
+function ac(): AudioContext | null {
+  const c = made();
+  // before any tap the browser keeps it suspended: the promise just waits (never an error)
+  if (c && c.state === 'suspended') {
+    try { void (c.resume() as Promise<void> | undefined)?.catch(() => {}); } catch { /* an old WebKit */ }
+  }
+  return c;
 }
 
 /**
@@ -227,9 +239,23 @@ function playCall(id: string, out?: AudioNode): number {
 }
 
 export const Sound = {
-  /** lazily unlock/resume the AudioContext from a user gesture (iOS rule) */
+  /** Make the AudioContext before any tap, while nothing moves on screen (the boot veil):
+   *  it waits suspended until `unlock`. */
+  prepare(): void {
+    made();
+  },
+  /** Resume the AudioContext from a user gesture (the autoplay rule, iOS too); the first
+   *  time also start a silent sample, which older iOS needs to let sound out. */
   unlock(): void {
-    ac();
+    const a = ac();
+    if (!a || primed) return;
+    try {
+      const s = a.createBufferSource();
+      s.buffer = a.createBuffer(1, 1, 22050);
+      s.connect(a.destination);
+      s.start(0);
+      primed = true;
+    } catch { /* no sound is fine */ }
   },
   /** success "sings" — a gentle rising two-note */
   found(): void {

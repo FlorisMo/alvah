@@ -61,6 +61,10 @@ const BACKPEDAL_FACING = (45 * Math.PI) / 180;
  *  it) lets him walk out rather than shoving him; any less, and it holds him. */
 const OVERLAP_FREE = 0.1;
 
+/** Where every game starts: the ranger on the spawn clearing, facing the forest (−z),
+ *  his back to the follow lens. The title and the maker are shots around this spot. */
+export const SPAWN = { x: 0, z: 0, heading: Math.PI } as const;
+
 /** A tap-walk eases in over its last stretch: he goes no faster than this many metres
  *  per second per metre still to go (he arrives, never brakes on the spot). */
 const ARRIVE_EASE = 3;
@@ -219,7 +223,9 @@ export class Player {
     // drops the 180° about-face the first forward press used to trigger. The follow
     // bearing already starts at π (FIXED_FOLLOW_YAW), so the lens is behind him from
     // frame one; loadRealRanger clears only the children, never this rotation.
-    this.group.rotation.y = Math.PI;
+    this.group.position.set(SPAWN.x, this.terrain.y(SPAWN.x, SPAWN.z), SPAWN.z); // feet on the drawn ground from frame one
+    this.group.rotation.y = SPAWN.heading;
+    this.target.set(SPAWN.x, 0, SPAWN.z);
     this.measureAvatar(); // F-05: seed the camera rails off the stand-in's size
   }
 
@@ -235,15 +241,6 @@ export class Player {
   /** Start listening to the movement keys; `onInteract` is the interact key (Space). */
   listenKeys(onInteract: () => void): void {
     this.input = attachInput(window, { onInteract });
-  }
-
-  dispose(): void {
-    this.canvas.removeEventListener('pointerdown', this.onPointerDown); // F-17
-    window.removeEventListener('pointermove', this.onPointerMove);
-    window.removeEventListener('pointerup', this.onPointerUp);
-    window.removeEventListener('pointercancel', this.onPointerUp);
-    this.input?.dispose();
-    this.input = null;
   }
 
   /** The held keys + joystick as a screen vector (the helicopter reads it). */
@@ -730,6 +727,11 @@ export class Player {
     //    along a grid line — the centre-column click at spawn — still lands)
     const p = this.terrain.intersectRay(this.raycaster.ray);
     if (p) this.target.set(p.x, 0, p.z);
+  }
+
+  /** The player steered him this frame (keys, the stick or a tap-walk). */
+  get steering(): boolean {
+    return this.drive !== null;
   }
 
   /** How fast he is going on foot (m/s, the smooth ramped pace; backing up counts too):

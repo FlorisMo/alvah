@@ -1,17 +1,17 @@
 /**
- * wireDevhook.ts — connects a live World to the `?dev=1` read-back hook
- * (`window.__ranger`, core/devhook.ts) and disconnects it again. Read-only state for
+ * wireDevhook.ts — connects the live World (built once, at boot) to the `?dev=1`
+ * read-back hook (`window.__ranger`, core/devhook.ts). Read-only state for
  * the browser tests; the one write (`winStep`) is the E2E shortcut the golden-path
  * test must never use.
  */
 
 import type { World } from '../../render3d/World';
 import {
-  providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot,
+  providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, providePorch,
   provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGait, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, provideObstacles, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
-  provideHeli, provideQuality, provideHint, provideBoundary, provideMissionPlaces, provideResidents,
+  provideHeli, provideQuality, provideBoundary, provideTags, provideMissionPlaces, provideResidents,
 } from '../../core/devhook';
 import { adventureFor } from '../../render3d/adventure/registry';
 import { triggerActivityWin } from '../../render3d/play/kit';
@@ -25,6 +25,7 @@ export function wireWorldDevhook(world: World): void {
   provideBoard(() => world.boardState());
   provideBoundary(() => world.boundaryState());       // F-11: world-rim clamp + "Hier stopt het bos" cue
   provideSitSpot(() => world.sitSpotState());         // W6.4b2: "Ken je roep" sit-spot proximity
+  providePorch(() => world.porchState());             // run 6: the hut's porch ring (the raaf)
   provideClip(() => world.playerClip());              // W3.2: the ranger's active locomotion clip
   provideAvatar(() => world.avatarState());           // F-07: live ranger scale (measured bbox height)
   provideGroundSpeed(() => world.groundSpeed());      // F-08: live post-collision foot speed (m/s)
@@ -47,43 +48,8 @@ export function wireWorldDevhook(world: World): void {
   provideVehicle(() => world.vehicleState());         // W5.1: drivable jeep
   provideHeli(() => world.heliState());               // W5.3b: opt-in helicopter
   provideQuality(() => world.qualityState());         // W7.2: adaptive quality tier
+  provideTags(() => world.tagsOnScreen(), () => world.glowState()); // run 6: the tags drawn, the glowing cues
   provideWinStep(() => triggerActivityWin());         // W2.3: E2E-only resolve of a 3D step
   provideMissionPlaces((id) => { const p = adventureFor(id)?.home.places; return p ? { ...p } : null; }); // run 6
   provideResidents(() => world.residents.read(), () => world.residents.moverSpots()); // run 6: the homes
-}
-
-/** Drop every world read-back (the world is gone). */
-export function clearWorldDevhook(): void {
-  providePos(null);
-  provideCameraYaw(null);
-  provideNearId(null);
-  provideMarkers(null);
-  provideBoard(null);
-  provideBoundary(null);
-  provideSitSpot(null);
-  provideClip(null);
-  provideAvatar(null);
-  provideGroundSpeed(null);
-  provideMotion(null);
-  provideGait(null);
-  provideGrounded(null);
-  provideCam(null);
-  provideActors(null);
-  provideAmbient(null);
-  provideLandmarks(null);
-  provideDressing(null);
-  provideTreeSpots(null);
-  provideObstacles(null);
-  providePaths(null);
-  provideGroundDetail(null);
-  provideLighting(null);
-  provideSky(null);
-  provideFootsteps(null);
-  provideWater(null);
-  provideVehicle(null);
-  provideHeli(null);
-  provideQuality(null);
-  provideHint(null);
-  provideMissionPlaces(null);
-  provideResidents(null, null);
 }

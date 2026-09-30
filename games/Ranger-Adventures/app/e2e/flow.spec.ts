@@ -76,7 +76,8 @@ async function chip(page: Page): Promise<{ turn: number | null; cue: string; gly
     if (!strip || strip.hidden) return null;
     const g = strip.querySelector<HTMLElement>('.wf-glyph');
     const m = /rotate\(([-\d.]+)rad\)/.exec(g?.style.transform ?? '');
-    return { turn: m ? Number(m[1]) : null, cue: strip.querySelector('.wf-cue')?.textContent ?? '', glyph: g?.textContent ?? '' };
+    // the drawn arrow turns; arrived, it is a target (`wf-arrived`)
+    return { turn: m ? Number(m[1]) : null, cue: strip.querySelector('.wf-cue')?.textContent ?? '', glyph: strip.classList.contains('wf-arrived') ? '◎' : '↑' };
   });
 }
 
@@ -274,7 +275,7 @@ test('the raaf hut and Instellingen keep their way back on screen, and Esc leave
     return r.bottom <= innerHeight && !!hit && (hit === el || el.contains(hit));
   }, sel);
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: /Vang je raaf op/ }).click();
+  await page.getByRole('button', { name: /Help de jonge raaf|Verzorg/ }).click();
   expect(await clickable('.cabin-back'), 'the raaf hut\'s way back is clipped').toBe(true);
   await shot(page, 'raaf-hut');
   await page.keyboard.press('Escape');

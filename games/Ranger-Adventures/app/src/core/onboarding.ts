@@ -1,63 +1,15 @@
 /**
- * onboarding.ts — first-world-entry hint copy (WORLD-PLAN W1.6). Pure and
- * framework-free so the explore HUD (Missions.ts) and the readlevel corpus test
- * share ONE source of truth for the strings. Device-aware: when the on-screen
- * joystick is shown the player is told to drag the stick, otherwise to use the
- * arrow keys. Both lines stay inside the M3/E3 reading norm (≤7 words).
+ * onboarding.ts — the device-aware wording rule (`forPointer`): one rule for the whole
+ * game, so a laptop never tells the player to tap. Pure and framework-free. The words
+ * themselves live in the content layer: the first minute's lessons in content/mentor.ts,
+ * the world's tips (the rim, driving) in content/copy.ts (run 6).
  */
-
-/** The two hint lines, keyed by the input affordance that is actually present. */
-export const ONBOARD_HINT = {
-  stick: 'Sleep de stick om te lopen.',
-  keys: 'Loop met de pijltjes.',
-} as const;
-
-/** Pick the hint for the active input: the joystick line when the on-screen
- *  stick is shown, else the arrow-keys line. */
-export function onboardHint(stickShown: boolean): string {
-  return stickShown ? ONBOARD_HINT.stick : ONBOARD_HINT.keys;
-}
-
-/** The SECOND onboarding hint (RUN-3 P3.3 · F-06): a short "tap an animal" tip,
- *  shown as a brief transient only AFTER the ranger has learned to walk — so the
- *  first world frame carries ONE hint (the control line), never a stack of three.
- *  Replaces the old 16-word toast; stays inside the M3/E3 ≤7-word norm. */
-// child:B11: the tip names the real action (a mission starts at its marker ring; a
-// roaming animal is not clickable), so it never promises what does not happen.
-export const ONBOARD_TAP = 'Loop naar een ring om te spelen.';
-
-/** The calm world-boundary cue (F-11): shown through this SAME one-tip channel
- *  when the ranger heads past the last content. The visible rim + gentle stop that
- *  trigger it land in P4.6; the copy + read-aloud join the hint system here. */
-export const ONBOARD_BOUNDARY = 'Hier stopt het bos.';
-
-/** The drive hint, shown when the ranger first gets into the jeep this session
- *  (players did not know how to drive). Device-aware like the walk hint. */
-export const ONBOARD_DRIVE = {
-  stick: 'Sleep de stick om te rijden.',
-  keys: 'Rijd met de pijltjes.',
-} as const;
-
-// ---- run 6 (FEEL lane): the run tip ---------------------------------------------
-/** How to run, taught once per save after his first metres on foot (the HUD's one-tip
- *  channel, read aloud). Device-aware like the walk hint. */
-export const ONBOARD_RUN = {
-  stick: 'Duw de stick ver om te rennen.',
-  keys: 'Houd Shift in om te rennen.',
-} as const;
-
-/** He has walked this far (m) on foot when the run tip shows. */
-export const RUN_TIP_AFTER_M = 15;
-// ---- end run 6 ------------------------------------------------------------------
-
-/** Every transient onboarding tip, for the reading-norm test (≤7 words each). */
-export const ONBOARD_TIPS = [ONBOARD_TAP, ONBOARD_BOUNDARY, ONBOARD_DRIVE.stick, ONBOARD_DRIVE.keys, ONBOARD_RUN.stick, ONBOARD_RUN.keys] as const;
 
 /**
  * Device-aware wording: every hint is written for touch ("Tik op een dier"); on a
- * mouse device the same line says "Klik op een dier". ONE rule for the whole game,
- * so the laptop never tells the player to tap. Only the verb before op/de/het/een
- * changes (never the "tik tik" of a bird call), and the word count stays the same.
+ * mouse device the same line says "Klik op een dier". Only the verb before
+ * op/de/het/een changes (never the "tik tik" of a bird call), and the word count stays
+ * the same.
  */
 export function forPointer(text: string, mouse: boolean): string {
   if (!mouse) return text;

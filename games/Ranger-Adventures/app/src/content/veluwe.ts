@@ -440,9 +440,10 @@ const MISSIE_NACHTRONDE = {
   status: 'actief',
   payoff: 'nachtronde',
   kort: 'Het wordt avond. Luister naar de dieren. Breng ze op hun plek.',
+  // Bram's field note (run 6): what he saw and what he asks, no "Hoi ranger!" (the voice
+  // already says "Ranger Alvah." before the title)
   briefing: {
     simpel: [
-      'Hoi ranger!',
       'Het wordt avond op de Veluwe.',
       'De dieren roepen in het donker.',
       'Luister goed en doe ze na.',
@@ -450,7 +451,6 @@ const MISSIE_NACHTRONDE = {
       'Begin met luisteren.',
     ],
     knap: [
-      'Hoi ranger!',
       'Het schemert op de Veluwe.',
       'Het edelhert burlt. De raaf roept kroa.',
       'Luister goed en doe ze na.',
@@ -653,20 +653,17 @@ const MISSIE_ECODUCT = {
   kort: 'Controleer het ecoduct. Steken de dieren veilig over?',
   briefing: {
     simpel: [
-      'Hoi ranger!',
       'Een ecoduct is een brug voor dieren.',
       'Zo steken ze veilig over de weg.',
-      'Kijk goed wie er oversteekt.',
-      'Onthoud de weg die ze liepen.',
-      'Laat de weg zien.',
+      'Gaat dat goed? Kijk jij even?',
+      'Onthoud de weg die ze lopen.',
+      'Wijs daarna de weg terug.',
     ],
     knap: [
-      'Hoi ranger!',
       'Een ecoduct is een brug voor dieren.',
       'Zo steken ze veilig over de snelweg.',
       'Kijk in welke volgorde ze oversteken.',
       'Wijs daarna de weg terug.',
-      'Laat de weg zien.',
     ],
   },
   beloning: {
@@ -840,7 +837,7 @@ const MISSIE_EEKHOORN = {
    VERHAALBOOG — one season on the Veluwe (HANDOFF §6.4 / §7.3 / plan §13.4)
    Data-driven: missions tagged verhaalHaak drop a clue; the case-board
    in the cabin renders them; finding them moves the season forward and
-   resolves hopefully (report to the BOA → restoration). Kid-safe: every
+   resolves hopefully (you tell Bram, the BOA → restoration). Kid-safe: every
    tense beat is one short sentence, off-screen, non-graphic, never sad.
    ============================================================ */
 const VERHAALBOOG_VELUWE = {
@@ -851,7 +848,7 @@ const VERHAALBOOG_VELUWE = {
               titel: 'Vreemde sporen', tekst: 'Iemand knipte het hek stuk. In het zand staan grote voetstappen.',
               seizoenNa: 'zomer', hoofdstukNa: 2 },
     camera: { id: 'camera', soort: 'camera', hoofdstuk: 2, seizoen: 'zomer',
-              titel: 'Op de foto', tekst: 'Op de foto staat een man. Hij zet een val. De val is nog leeg.',
+              titel: 'Op de foto', tekst: 'Er staat een man op. Hij zet een val. De val is nog leeg.',
               seizoenNa: 'herfst', hoofdstukNa: 3 },
     band:   { id: 'band',   soort: 'band',   hoofdstuk: 3, seizoen: 'herfst',
               titel: 'Autosporen', tekst: 'Een auto reed weg bij het ven.',
@@ -867,7 +864,7 @@ const VERHAALBOOG_VELUWE = {
   // hopeful resolution once all three clues are found (diegetic, on the case-board)
   ontknoping: [
     { id: 'volg',    tekst: 'Je legt de foto’s naast de sporen.' },
-    { id: 'meld',    tekst: 'Je belt de politie van het bos.' },
+    { id: 'meld',    tekst: 'Je vertelt het aan Bram.' },
     { id: 'herstel', tekst: 'De stroper stopt. De heide en het ven groeien terug.' },
   ],
   // the season ends when every mission is done: one calm card, then free play in a
@@ -898,18 +895,18 @@ const MISSIE_VOS = {
   landschap: 'bos',
   dier: 'vos',
   status: 'actief',
-  kort: 'Een vos kift bij zijn hol. Luister naar de dieren. Doe ze na.',
+  kort: 'Een vos keft bij zijn hol. Luister naar de dieren. Doe ze na.',
   briefing: {
     simpel: [
-      'Hoi ranger!',
       'Bij het hol woont een vos.',
-      'Hij roept naar de andere dieren.',
+      'Hij keft naar de andere dieren.',
+      'Ze roepen allemaal terug.',
       'Luister goed en doe ze na.',
       'Begin met luisteren.',
     ],
     knap: [
-      'Hoi ranger!',
-      'Een vos kift bij zijn hol.',
+      'Bij het hol woont een vos.',
+      'Hij keft naar zijn buren.',
       'Ree, raaf en das roepen terug.',
       'Luister goed en doe ze na.',
       'Begin met luisteren.',
@@ -954,14 +951,12 @@ const MISSIE_VEN = {
   kort: 'Een heikikker zit verstopt bij het ven. Vind hem en blijf rustig.',
   briefing: {
     simpel: [
-      'Hoi ranger!',
       'Bij het ven zit een kleine kikker.',
       'Hij is goed verstopt in het riet.',
-      'Zoek hem eerst.',
-      'En blijf rustig bij het water.',
+      'Kun jij hem vinden?',
+      'Blijf rustig bij het water.',
     ],
     knap: [
-      'Hoi ranger!',
       'In het ven zit een heikikker.',
       'Hij verstopt zich tussen het riet.',
       'Zoek hem en blijf rustig.',
@@ -1037,14 +1032,12 @@ const MISSIE_STUIFZAND = {
   kort: 'Een nachtzwaluw broedt op het kale zand. Vind hem en sorteer de dieren.',
   briefing: {
     simpel: [
-      'Hoi ranger!',
       'Op het kale zand zit een vogel.',
       'Hij lijkt precies op het zand.',
       'Zoek hem heel goed.',
       'Daarna sorteer je de dieren.',
     ],
     knap: [
-      'Hoi ranger!',
       'Op het stuifzand broedt een nachtzwaluw.',
       'Hij is bijna niet te zien.',
       'Zoek hem en sorteer dan de dieren.',
@@ -1117,16 +1110,14 @@ const MISSIE_HERSTEL = {
   kort: 'Het is winter. Leid de kudde veilig. Hou je aan de regels.',
   briefing: {
     simpel: [
-      'Hoi ranger!',
       'Het is koud op de heide.',
-      'De stroper is gemeld bij de boswachter.',
+      'De stroper is gemeld bij Bram.',
       'Nu mag alles weer rustig groeien.',
       'Leid de kudde langs de veilige weg.',
     ],
     knap: [
-      'Hoi ranger!',
       'Het is winter op de Veluwe.',
-      'De stroper is gemeld bij de BOA.',
+      'De stroper is gemeld bij Bram.',
       'De heide en het ven herstellen zich.',
       'Leid de kudde langs de veilige route.',
     ],

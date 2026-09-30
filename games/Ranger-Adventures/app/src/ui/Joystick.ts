@@ -19,6 +19,7 @@
  */
 
 import { joystickVector, type StickVector } from '../core/input';
+import { HUD } from '../content/copy';
 
 export class Joystick {
   /** The root element — the caller mounts this into the explore HUD. */
@@ -34,7 +35,7 @@ export class Joystick {
   constructor() {
     const base = document.createElement('div');
     base.className = 'rj-base';
-    base.setAttribute('aria-label', 'Loopstick: sleep om te lopen');
+    base.setAttribute('aria-label', HUD.stick);
     base.style.touchAction = 'none';
     const thumb = document.createElement('div');
     thumb.className = 'rj-thumb';

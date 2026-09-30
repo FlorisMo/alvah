@@ -8,10 +8,13 @@
  *                  in the world / during a mission (`data-key="pause"`).
  *
  * Only a button the player can actually see counts: on screen, enabled, and not
- * covered by another layer. A button focused with Tab keeps the key (keyboard users).
- * The layer listens in the capture phase and stops a key it handled, so one key
- * press is always one action (the world's own Space/Enter handler never also fires).
- * Space inside a text field still types a space.
+ * covered by another layer. A button the player moved to WITH A KEY (Tab, the maker's
+ * or Onderweg's arrows) keeps the key; a button he clicked or tapped does not, so a
+ * click on a swatch and then Enter is "Dit is mijn ranger", not the swatch again.
+ * (`:focus-visible` cannot tell these apart here: the Enter keydown itself makes the
+ * clicked button match it.) The layer listens in the capture phase and stops a key it
+ * handled, so one key press is always one action (the world's own Space/Enter handler
+ * never also fires). Space inside a text field still types a space.
  */
 
 const PRIMARY = '[data-key="primary"], .btn-start';
@@ -19,11 +22,17 @@ const BACK = '[data-key="back"]';
 const PAUSE = '[data-key="pause"]';
 
 let root: HTMLElement | null = null;
+/** The last input was a key other than Enter/Space (true) or a pointer press (false). */
+let lastInputKey = false;
+/** The element that got focus while the last input was a key: the one that keeps Enter. */
+let keyFocused: EventTarget | null = null;
 
 export function installKeys(ui: HTMLElement): void {
   if (root) return;
   root = ui;
   window.addEventListener('keydown', onKey, { capture: true });
+  window.addEventListener('pointerdown', () => { lastInputKey = false; }, { capture: true });
+  document.addEventListener('focusin', (e) => { keyFocused = lastInputKey ? e.target : null; }, { capture: true });
 }
 
 /** The screen layer an element belongs to: its ancestor that is a direct child of the UI root. */
@@ -76,12 +85,13 @@ function handled(e: KeyboardEvent): void {
 function onKey(e: KeyboardEvent): void {
   if (e.altKey || e.ctrlKey || e.metaKey) return;
   const confirm = e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space';
+  if (!confirm) lastInputKey = true; // runs before a screen's own arrow handler moves the focus
   if (confirm) {
     if (e.code === 'Space' && isTextField(e.target)) { e.stopPropagation(); return; } // type the space
-    // a button focused by keyboard (Tab) keeps its own key
+    // a button moved to with a key (Tab, the arrows) keeps its own key; a clicked one does not
     const focused = document.activeElement;
-    const target = focused instanceof HTMLElement && root?.contains(focused)
-      && focused.matches('button:focus-visible') && usable(focused, false)
+    const target = focused instanceof HTMLElement && root?.contains(focused) && focused === keyFocused
+      && focused.matches('button') && usable(focused, false)
       ? focused
       : find(PRIMARY, true);
     if (!target) return; // nothing to press: the world may still use the key

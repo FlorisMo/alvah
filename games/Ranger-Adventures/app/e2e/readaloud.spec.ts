@@ -43,25 +43,27 @@ test('menus read aloud, the maker shows every choice, Enter presses Verder after
   const begin = page.getByRole('button', { name: 'Begin', exact: true });
   await begin.waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByRole('button', { name: 'Lees voor' }).first().click();
-  await said(page, 'Word boswachter', 'the title 🔊 reads the title aloud');
+  await said(page, 'Word de nieuwe boswachter', 'the title 🔊 reads the title aloud');
   await begin.click();
 
   // --- the maker: all four groups on screen at 1280×800, no scrolling needed (child:B8)
   const klaar = page.getByRole('button', { name: 'Dit is mijn ranger' });
   await klaar.waitFor({ state: 'visible', timeout: 30_000 });
   await sleep(page, 600);
+  const panel = page.locator('.avatar-creator');
+  expect(await panel.evaluate((el) => el.scrollHeight <= el.clientHeight + 1), 'the maker panel does not scroll').toBe(true);
   for (const g of ['Huid', 'Haar', 'Ranger-jas', 'Ogen']) {
     const inView = await page.locator('.av-legend', { hasText: g }).evaluate((el) => {
       const r = el.getBoundingClientRect();
-      const main = (el.closest('.av-main') as HTMLElement).getBoundingClientRect();
-      return r.top >= main.top - 1 && r.bottom <= main.bottom + 1 && r.bottom <= innerHeight;
+      const box = (el.closest('.avatar-creator') as HTMLElement).getBoundingClientRect();
+      return r.top >= box.top - 1 && r.bottom <= box.bottom + 1 && r.bottom <= innerHeight;
     });
     expect(inView, `the maker shows "${g}" without scrolling`).toBe(true);
   }
   const lastSwatch = page.locator('.av-swatch').last();
-  expect(await lastSwatch.evaluate((el) => el.getBoundingClientRect().bottom <= (el.closest('.av-main') as HTMLElement).getBoundingClientRect().bottom + 1),
+  expect(await lastSwatch.evaluate((el) => el.getBoundingClientRect().bottom <= (el.closest('.avatar-creator') as HTMLElement).getBoundingClientRect().bottom + 1),
     'the last eye colour is on screen').toBe(true);
-  await said(page, 'Maak je eigen ranger', 'the maker says what to do');
+  await said(page, 'Maak je ranger. Hoi, ranger Alvah!', 'the maker says its title and greets the ranger by name');
   await clearSpoken(page);
   await page.locator('.av-swatch[data-kenmerk="haar"]').nth(3).hover();
   await said(page, /Haar: /, 'a swatch says its own label when the mouse rests on it');
@@ -116,4 +118,36 @@ test('menus read aloud, the maker shows every choice, Enter presses Verder after
   await said(page, 'Daar is hij', 'the find card is read aloud');
   await page.keyboard.press('Enter');
   await expect(verder, 'Enter pressed "Verder"').toBeHidden({ timeout: 5_000 });
+});
+
+test.describe('on a tablet (touch, 1080×810)', () => {
+  test.use({ viewport: { width: 1080, height: 810 }, hasTouch: true, isMobile: true });
+
+  test('a tapped name chip says the new greeting whole; a tapped swatch says its label @readaloud', async ({ page }) => {
+    test.setTimeout(2 * 60_000);
+    await page.addInitScript(() => {
+      const w = window as unknown as { __said: string[] };
+      w.__said = [];
+      const orig = SpeechSynthesis.prototype.speak;
+      SpeechSynthesis.prototype.speak = function (u: SpeechSynthesisUtterance) { w.__said.push(u.text); try { return orig.call(this, u); } catch { /* no voice */ } };
+    });
+    await page.goto('/?dev=1');
+    await page.getByRole('button', { name: 'Begin', exact: true }).tap({ timeout: 40_000 });
+    await page.getByRole('button', { name: 'Dit is mijn ranger' }).waitFor({ state: 'visible', timeout: 30_000 });
+    await sleep(page, 1_500);
+    // a tap's mouseenter comes after the press: the chip's own label must not follow it
+    // (it would cut the greeting off 0.45 s in)
+    for (const naam of ['Sam', 'Bo']) {
+      await clearSpoken(page);
+      await page.getByRole('button', { name: naam, exact: true }).tap();
+      await sleep(page, 1_500);
+      expect(await spoken(page), `the ${naam} chip says only the new greeting`).toEqual([`Hoi, ranger ${naam}!`]);
+    }
+    // a swatch is quiet when pressed: on a tablet the tap is how its label is heard
+    await clearSpoken(page);
+    const swatch = page.locator('.av-swatch[data-kenmerk="haar"]').nth(2);
+    await swatch.tap();
+    await sleep(page, 1_500);
+    expect(await spoken(page), 'a tapped swatch says its label').toEqual([(await swatch.getAttribute('aria-label')) ?? '?']);
+  });
 });

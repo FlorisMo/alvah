@@ -190,15 +190,16 @@ export interface RangerDevHook {
   /** The "Ken je roep" sit-spot bench: world position + live proximity, for E2E
    *  (W6.4b2). */
   sitSpot(): { x: number; z: number; near: boolean } | null;
+  /** Run 6 (FLOW P4): the hut's porch ring — where, whether it shows, whether the ranger
+   *  stands in it, the words on its tag. */
+  porch(): PorchState | null;
   /** Win the active 3D mission step via its genuine resolve path; true if one
    *  was pending. Drives the two-mission-chain E2E deterministically (W2.3). */
   winStep(): boolean;
-  /** D3.17: true once the composed TITLE has swapped its real hero props (cabin + tree line +
-   *  prikbord) in over the instant primitive stand-ins — the title reads at FULL fidelity, never
-   *  the low-poly cone/faceted backdrop. False while only the stand-in is up (fresh boot mid-dress,
-   *  or a world→title round-trip mid-re-dress). The capture HOLDS the title snap until this is true
-   *  so a composed title is never shot on its low-LOD stand-in world (fresh `d17-titlereturn-17`).
-   *  Reads the Stage directly, so it is meaningful on the title screen regardless of the world. */
+  /** True once the title is up over a READY world: the boot veil has lifted (every model
+   *  the world asked for has arrived, or the cap passed) and the title block is shown.
+   *  The title is a shot of the live world (world/Presenter.ts), so this is also true on
+   *  a return from Pauze. Read it to wait for the title, never to skip it. */
   titleReady(): boolean;
   /** The scenic story-arc actors (warden + poacher) with their measured rendered
    *  stand-height `height` (m) + live baked-clip {name, time}, or null before the
@@ -315,14 +316,14 @@ export interface RangerDevHook {
    *  the E2E assert the fps probe exposes a tier and its knobs are consistent.
    *  Null before the world is live. */
   quality(): { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null;
-  /** RUN-3 P3.3 (F-06/F-15/F-11): the ONE sequenced onboarding-hint state. `active`
-   *  is the SINGLE hint on screen now — 'walk' (the entry control line), 'tap' (the
-   *  post-walk "tik op een dier" transient), 'boundary' (the P4.6 rim cue), or null.
-   *  `walkSeen`/`tapSeen` are the persisted one-time flags (state.ts, no new key);
-   *  `helpChip` is whether the laptop "?" re-show chip is mounted. The capture assert
-   *  reads `active` = 'walk' with the tracker held back to prove ONE hint at entry,
-   *  and that it advances on the first step. Null before the world/hook is ready. */
-  hint(): { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
+  /** Run 6 (FLOW P2): the first minute (ui/hud/Lessons.ts). `active` is the ONE step on
+   *  screen — a lesson ('lopen' walk, 'rennen' run, 'kijken' look round) or one of Bram's
+   *  beats ('bram' the greeting, 'haak' the hook, 'welkom', 'missiebord', 'jeep') — or
+   *  null; `speaking`/`line` what Bram says now; `learned` the steps saved for good
+   *  (settings.geleerd); `chip` whether the way-chip may show (false until the hook);
+   *  `tip` the one transient tip on screen ('boundary') or null; `helpChip` whether the
+   *  "?" chip is there. Null before the world/hook is ready. */
+  hint(): HintState | null;
   /** RUN-3 P4.6 (F-11): the world-rim state — `bound` (the move-limit radius, m),
    *  the ranger's live `dist` from world centre, and `atRim` (he is pressed against
    *  the rim heading outward, so the calm "Hier stopt het bos" cue has fired). The
@@ -333,6 +334,12 @@ export interface RangerDevHook {
    *  band and none floats at head height in the edge frame. Null before the hook is
    *  ready. */
   boundary(): { bound: number; dist: number; atRim: boolean; scatterMax: number } | null;
+  /** Run 6 (FLOW P2): every name-tag drawn now — its words, opacity and box on screen in
+   *  CSS px — so a test can prove no two overlap and none is cut at the edge. */
+  tags(): TagOnScreen[] | null;
+  /** Run 6 (FLOW P2): which "go here" cues glow now: the next mission's ring + tag, the
+   *  missiebord's, the ring round the parked jeep. */
+  glow(): GlowState | null;
   /* ---- golden-path probes (e2e/golden.spec.ts). Read-only: they measure what the
    * player SEES (the camera + scene the Stage rendered this frame), never resolve a
    * step. The THREE-side maths lives in render3d/play/kit.ts ("test play hint"). ---- */
@@ -391,6 +398,21 @@ export interface RangerDevHook {
 export type AdventureReadout = { mission: string; beat: string; stepsLogged: number[]; line: string | null; stats: Record<string, number> };
 export type ResidentsReadout = { missionId: string; state: 'before' | 'after'; borrowed: boolean;
   actors: { key: string; animal: string; x: number; z: number; lying: boolean; visible: boolean; doing: string }[] }[];
+
+/** `__ranger.tags()` (see the field doc). */
+export type GlowState = { next: boolean; board: boolean; beacon: boolean; porch: boolean };
+export type PorchState = { x: number; z: number; shown: boolean; near: boolean; tag: string };
+export type TagOnScreen = { text: string; o: number; x: number; y: number; w: number; h: number; glow: boolean; d: number; always: boolean };
+
+/** `__ranger.hint()` (see the field doc). */
+export type HintState = {
+  active: string | null; speaking: boolean; line: string | null; learned: string[]; chip: boolean;
+  tip: string | null; helpChip: boolean; returning: boolean;
+  progress: { walkedM: number; runS: number; lookPx: number };
+  /** Bram: where he stands, his height, whether he talks (and shows the speech mark),
+   *  how far (rad) he turns away from facing the ranger. */
+  bram: { x: number; z: number; h: number; talking: boolean; mark: boolean; offRanger: number } | null;
+};
 
 /** `__ranger.playHint()` (see the field doc). */
 export type PlayHintProbe = {
@@ -452,6 +474,7 @@ const state = {
   markers: null as null | (() => { x: number; z: number; missionId: string }[]),
   board: null as null | (() => { x: number; z: number; near: boolean; inFrustum: boolean } | null),
   sitSpot: null as null | (() => { x: number; z: number; near: boolean } | null),
+  porch: null as null | (() => PorchState | null),
   winStep: null as null | (() => boolean),
   titleReady: null as null | (() => boolean),
   actors: null as null | (() => { id: string; height: number; clip: { name: string; time: number } | null }[]),
@@ -492,8 +515,10 @@ const state = {
     pads: { x: number; z: number }[];
   } | null),
   quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
-  hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
+  hint: null as null | (() => HintState | null),
   boundary: null as null | (() => { bound: number; dist: number; atRim: boolean; scatterMax: number } | null),
+  tags: null as null | (() => TagOnScreen[]),
+  glow: null as null | (() => GlowState),
   // golden-path probes: the Stage's live view + renderer (main.ts) and the THREE-side
   // measurements (kit.ts). Kept `unknown` so this module stays three.js-free.
   renderView: null as null | (() => unknown),
@@ -674,13 +699,18 @@ export function provideSitSpot(
   state.sitSpot = fn;
 }
 
+/** Register the hut's porch source (the World). Pass null to clear (run 6, FLOW P4). */
+export function providePorch(fn: (() => PorchState | null) | null): void {
+  state.porch = fn;
+}
+
 /** Register the "win the active 3D step" driver (the mission runner). W2.3. */
 export function provideWinStep(fn: (() => boolean) | null): void {
   state.winStep = fn;
 }
 
-/** Register the D3.17 title-fidelity-ready source (the Stage's `titleReady()`). Always live —
- *  it reads the Stage, which owns the title backdrop regardless of the world screen. */
+/** Register the title-ready source (WorldSession.bootWorld: the world is ready and the
+ *  title block has been shown). */
 export function provideTitleReady(fn: (() => boolean) | null): void {
   state.titleReady = fn;
 }
@@ -816,9 +846,18 @@ export function provideQuality(
 /** Register the RUN-3 P3.3 onboarding-hint state source (the explore HUD). Pass
  *  null to clear (F-06/F-15). */
 export function provideHint(
-  fn: (() => { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null) | null,
+  fn: (() => HintState | null) | null,
 ): void {
   state.hint = fn;
+}
+
+/** Register the run-6 name-tag and glow read-backs (the World). */
+export function provideTags(
+  tags: (() => TagOnScreen[]) | null,
+  glow: (() => GlowState) | null,
+): void {
+  state.tags = tags;
+  state.glow = glow;
 }
 
 /** Register the RUN-3 P4.6 world-rim state source (the World). Pass null to clear (F-11). */
@@ -855,6 +894,7 @@ export function installDevHook(): boolean {
     markers: () => (state.markers ? state.markers() : null),
     board: () => (state.board ? state.board() : null),
     sitSpot: () => (state.sitSpot ? state.sitSpot() : null),
+    porch: () => (state.porch ? state.porch() : null),
     winStep: () => (state.winStep ? state.winStep() : false),
     titleReady: () => (state.titleReady ? state.titleReady() : false),
     actors: () => (state.actors ? state.actors() : null),
@@ -874,6 +914,8 @@ export function installDevHook(): boolean {
     quality: () => (state.quality ? state.quality() : null),
     hint: () => (state.hint ? state.hint() : null),
     boundary: () => (state.boundary ? state.boundary() : null),
+    tags: () => (state.tags ? state.tags() : null),
+    glow: () => (state.glow ? state.glow() : null),
     playHint: () => (state.probes ? state.probes.playHint() : null),
     tris: () => (state.tris ? state.tris() : null),
     frames: () => (state.frames ? state.frames() : null),

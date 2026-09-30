@@ -77,6 +77,18 @@ export function lintText(text: string, max: number = MAX_WORDS_PER_SENTENCE): Re
   return issues;
 }
 
+/**
+ * Een tekst als regels om te TONEN: één zin per regel, met de leestekens erbij ("De
+ * moeder knort blij. Haar big is terug." → twee regels). Zo is elke getoonde regel ook
+ * ≤ 7 woorden zodra elke zin dat is: één idee per regel (run 6). Een regel zonder
+ * leesteken aan het eind blijft zoals hij is.
+ */
+export function zinnen(text: string): string[] {
+  const t = (text ?? '').replace(/\s+/g, ' ').trim();
+  if (!t) return [];
+  return (t.match(/[^.!?…]+(?:[.!?…]+["”’'»)]*|$)/g) ?? [t]).map((s) => s.trim()).filter(Boolean);
+}
+
 export interface LabeledText {
   /** Waar de tekst vandaan komt (missie-id + veld), voor een leesbare faalmelding. */
   label: string;

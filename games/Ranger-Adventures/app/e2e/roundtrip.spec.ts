@@ -3,15 +3,14 @@ import { R, sleep } from './golden-lib';
 
 /**
  * The title round trip (Pauze → "Naar het hoofdmenu" → Begin), played with real clicks,
- * three times over:
- *  - the title looks the same as at boot: its ranger, cabin and tree line are still
- *    drawn (they share their GPU buffers with the world's clones of the same GLBs, and
- *    a world teardown that freed them left the title with trees and a stray shadow only:
- *    parent:B9);
- *  - the world's GPU memory does not grow per trip (World.dispose freed only geometry,
- *    so every trip kept 22-36 more textures: LEAK-1 / breaker:B8).
- * Reduced motion holds the title camera and the ranger's idle still, so the boot title
- * and the returned title are the same picture.
+ * three times over. The title is a shot of the one live world (world/Presenter.ts), so:
+ *  - it is the SAME world instance every time: nothing is torn down or rebuilt, and the
+ *    GPU memory stays flat per trip (a rebuild leaked 22-36 textures a trip: LEAK-1);
+ *  - the title looks the same as at boot: the ranger back on the spawn clearing, his
+ *    cabin beside him (parent:B9 lost them on a return);
+ *  - the title block sits over the sky and never covers the ranger.
+ * Reduced motion holds the title's drift, the animals and the ranger's idle still, so the
+ * boot title and the returned title are the same picture.
  */
 
 test.use({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
@@ -22,8 +21,8 @@ const mem = (page: Page): Promise<Mem> => page.evaluate(() => {
   return { tex: info.memory.textures, geo: info.memory.geometries };
 });
 
-/** The left of the title (the cabin and the ranger; both title cards sit to its right). */
-const LEFT = { x: 0, y: 220, width: 360, height: 520 };
+/** The lower half of the title: the ranger on the track, his cabin, the missiebord. */
+const LOWER = { x: 0, y: 380, width: 1280, height: 400 };
 
 /** Mean absolute difference (0-255) between two same-size PNG screenshots, per 40 px block
  *  (a missing cabin or ranger moves whole blocks; a pixel of anti-aliasing does not). */
@@ -53,10 +52,18 @@ function blockDiff(page: Page, a: Buffer, b: Buffer): Promise<number> {
 
 async function inWorld(page: Page): Promise<void> {
   await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<unknown>(page, 'r.pos()')) !== null, { timeout: 60_000 }).toBe(true);
-  await sleep(page, 4_000); // the rigs, the forest and the name-tags stream in
+  await sleep(page, 2_500); // the glide into play has ended
 }
 
-test('title round trip: the title keeps its ranger and cabin, and the world frees what it made', async ({ page, context }) => {
+/** The title block's bottom edge stays above the ranger's head (px from the top). */
+async function titleClearOfRanger(page: Page): Promise<{ blockBottom: number; rangerTop: number }> {
+  const box = await page.locator('.title-block').boundingBox();
+  const c = await R<{ avatarScreen: { y: number; heightFrac: number } } | null>(page, 'r.cam()');
+  const rangerTop = c ? ((1 - (c.avatarScreen.y + c.avatarScreen.heightFrac)) / 2) * 800 : 0;
+  return { blockBottom: box ? box.y + box.height : 800, rangerTop };
+}
+
+test('title round trip: the same world, the same title, the ranger back home', async ({ page, context }) => {
   test.setTimeout(4 * 60_000);
   await context.addInitScript(() => {
     if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: { avatarGemaakt: true, settings: { wereldHintGezien: true, tikHintGezien: true } } }));
@@ -65,10 +72,12 @@ test('title round trip: the title keeps its ranger and cabin, and the world free
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/?dev=1');
-  // a player who looks at the title first: it dresses fully before Begin (the case that broke)
-  await expect.poll(() => R<boolean>(page, 'r.titleReady()'), { timeout: 30_000, message: 'the title dresses itself' }).toBe(true);
-  await sleep(page, 500);
-  const boot = await page.screenshot({ clip: LEFT, path: test.info().outputPath('title-boot-left.png') });
+  await expect.poll(() => R<boolean>(page, 'r.titleReady()'), { timeout: 30_000, message: 'the veil lifts onto the title' }).toBe(true);
+  await page.evaluate(() => { (window as unknown as { __bootWorld: unknown }).__bootWorld = (window as unknown as { __stage: { world: unknown } }).__stage.world; });
+  await sleep(page, 800);
+  const boot = await page.screenshot({ clip: LOWER, path: test.info().outputPath('title-boot-lower.png') });
+  const clear0 = await titleClearOfRanger(page);
+  expect(clear0.blockBottom, `the title block (bottom ${clear0.blockBottom} px) stays above the ranger (top ${clear0.rangerTop} px)`).toBeLessThan(clear0.rangerTop);
   await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 30_000 });
   await inWorld(page);
 
@@ -78,21 +87,23 @@ test('title round trip: the title keeps its ranger and cabin, and the world free
     await page.getByRole('button', { name: /Naar het hoofdmenu/ }).click();
     await expect.poll(() => R<string>(page, 'r.screen')).toBe('title');
     await expect.poll(() => R<boolean>(page, 'r.titleReady()'), { timeout: 30_000 }).toBe(true);
-    await sleep(page, 800);
-    const back = await page.screenshot({ clip: LEFT, path: test.info().outputPath(`title-trip-${trip}-left.png`) });
+    await expect(page.getByRole('button', { name: 'Begin', exact: true })).toBeVisible();
+    await sleep(page, 1_000);
+    const same = await page.evaluate(() => (window as unknown as { __bootWorld: unknown }).__bootWorld === (window as unknown as { __stage: { world: unknown } }).__stage.world);
+    expect(same, `trip ${trip}: the title is the same world, never rebuilt`).toBe(true);
+    expect(await R<{ x: number; z: number }>(page, 'r.pos()'), `trip ${trip}: the ranger is back on the spawn`).toEqual({ x: 0, z: 0 });
+    const back = await page.screenshot({ clip: LOWER, path: test.info().outputPath(`title-trip-${trip}-lower.png`) });
     if (trip === 1) await page.screenshot({ path: test.info().outputPath('title-after-round-trip.png') });
     const diff = await blockDiff(page, boot, back);
-    // measured: 0-1 when the title is whole, 28 when its ranger and cabin are gone (B9)
-    expect(diff, `trip ${trip}: the title's left side (cabin, ranger) looks as at boot (block difference ${diff.toFixed(1)})`).toBeLessThan(8);
-    // the in-app title card sits where the boot card sits (bottom centre), not mid-screen
-    const card = await page.locator('.ra-title-card').boundingBox();
-    expect(card && card.y + card.height > 800 * 0.8, 'the title card sits low, like the boot card').toBe(true);
+    expect(diff, `trip ${trip}: the title (ranger, cabin, missiebord) looks as at boot (block difference ${diff.toFixed(1)})`).toBeLessThan(8);
+    const clear = await titleClearOfRanger(page);
+    expect(clear.blockBottom, `trip ${trip}: the title block stays above the ranger`).toBeLessThan(clear.rangerTop);
     await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 30_000 });
     await inWorld(page);
     world.push(await mem(page));
   }
-  const grew = world.slice(1).map((m) => m.tex - world[1].tex);
+  const grew = world.slice(1).map((m) => m.tex - world[0].tex);
   expect(Math.max(...grew), `world textures per trip stay flat: ${world.map((m) => m.tex).join(' → ')}`).toBeLessThanOrEqual(4);
-  expect(world[3].geo - world[1].geo, `world geometries per trip stay flat: ${world.map((m) => m.geo).join(' → ')}`).toBeLessThanOrEqual(8);
+  expect(world[3].geo - world[0].geo, `world geometries per trip stay flat: ${world.map((m) => m.geo).join(' → ')}`).toBeLessThanOrEqual(8);
   expect(errors).toEqual([]);
 });

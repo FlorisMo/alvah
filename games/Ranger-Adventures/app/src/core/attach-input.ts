@@ -26,7 +26,7 @@ export interface InputHandle {
   readonly held: ReadonlySet<MoveKey>;
   /** Shift is held: a forward walk runs. */
   readonly run: boolean;
-  /** Detach every listener (call from `World.dispose`). */
+  /** Detach every listener. */
   dispose(): void;
 }
 
