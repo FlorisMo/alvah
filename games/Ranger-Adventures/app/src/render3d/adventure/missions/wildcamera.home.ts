@@ -575,11 +575,12 @@ export class WildcameraHome implements HomeDressing {
     zone(atLocal(CROSS, 4.9, -0.8), 2.1, 2.0, this.thicket, 'thicket-zone');
 
     /* -- the places' names, each with the mark of the animals it is for now (shown while
-          the camera is aimed; the marks swap when the rule flips) -- */
+          the camera is aimed; the marks swap when the rule flips). Each is part of its
+          place: a click on the words "open plek" picks the open plek -- */
     this.tags = { open: markTag('open plek', 'dag', TAG_W), hol: markTag('het bosje', 'nacht', TAG_W) };
-    const tagAt = (p: Spot, y: number, t: THREE.Sprite): void => { t.position.set(p.x, g(p.x, p.z) + y, p.z); t.visible = false; this.group.add(t); };
-    tagAt(TAG_AT.open, TAG_AT.open.y, this.tags.open);
-    tagAt(TAG_AT.hol, TAG_AT.hol.y, this.tags.hol);
+    const tagAt = (p: Spot, y: number, t: THREE.Sprite, place: THREE.Group): void => { t.position.set(p.x, g(p.x, p.z) + y, p.z); t.visible = false; place.add(t); };
+    tagAt(TAG_AT.open, TAG_AT.open.y, this.tags.open, this.glade);
+    tagAt(TAG_AT.hol, TAG_AT.hol.y, this.tags.hol, this.thicket);
 
     /* -- by the wildwissel up from the crossing: a juniper and a foxglove, the snare's spot
           between them in a tuft of grass (a small thing: it rests by its own spot) -- */
