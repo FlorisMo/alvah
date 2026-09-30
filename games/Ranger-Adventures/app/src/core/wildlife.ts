@@ -431,7 +431,7 @@ export function planYield(
     for (let len = 1.5; len <= 9.01; len += 0.75) {
       const gx = x + mx * len, gz = z + mz * len;
       if (!clearOfPath(n, j, gx, gz, r, need + JEEP_STAND_OFF, side)) continue;
-      if (runFree(x, z, mx, mz, len, r, world)) {
+      if (runFree(x, z, mx, mz, len, r, world, j)) {
         // the least turn, mostly out (a little ahead), the shortest run, round its home ground,
         // never into a corner
         const cost = (chased ? turn * 0.5 + Math.abs(deg) * 0.03 : turn + Math.abs(deg - 20) * 0.02) + len * 0.12 + leash(home, x, z, gx, gz)
@@ -468,7 +468,7 @@ function bearAway(
       const b = (deg * Math.PI) / 180;
       const mx = fanLx * Math.cos(b) + fanUx * Math.sin(b), mz = fanLz * Math.cos(b) + fanUz * Math.sin(b);
       if ((mx * jx + mz * jz) / jl > 0.05) continue;
-      if (!runFree(x, z, mx, mz, BEAR_RUN, r, world)) continue;
+      if (!runFree(x, z, mx, mz, BEAR_RUN, r, world, j)) continue;
       const gx = x + mx * BEAR_RUN, gz = z + mz * BEAR_RUN;
       keepOut(n, gx, gz, r, 0);
       const room = Math.min(koGap, 6);
@@ -487,18 +487,33 @@ const BEAR_ANGLES = [[0, 10, 20, 30, -10], [45, 60, 75]];
 /** …this far (m) at a time, looked at again as the jeep turns. */
 const BEAR_RUN = 5;
 /** A run out of the jeep's way is best with this much (m) open ground on beyond it… */
-const OPEN_BEYOND = 4;
+const OPEN_BEYOND = 8;
 /** …and one that leads into a corner costs this much more. */
 const CORNER_COST = 0.8;
 
 /** Every half metre of the straight run from (x, z) along (mx, mz) for `len` m is open
  *  ground for radius r (its own first half metre is not tested: it stands there). */
-function runFree(x: number, z: number, mx: number, mz: number, len: number, r: number, world: WildWorld): boolean {
+function runFree(x: number, z: number, mx: number, mz: number, len: number, r: number, world: WildWorld, jeep: JeepRead | null = null): boolean {
+  // beside a jeep it never runs along its body: `JEEP_KEEP` from it (or, already nearer, never nearer)
+  const keep = jeep ? Math.min(JEEP_KEEP, jeepGap(jeep, x, z, r) - 0.05) : -Infinity;
   for (let d = Math.min(0.5, len); d <= len + 1e-6; d += 0.5) {
     if (!world.free(x + mx * d, z + mz * d, r)) return false;
+    if (jeep && jeepGap(jeep, x + mx * d, z + mz * d, r) < keep) return false;
   }
   return world.free(x + mx * len, z + mz * len, r);
 }
+
+/** Body to body (m) from the jeep to a footprint of radius r at (x, z). */
+function jeepGap(j: JeepRead, x: number, z: number, r: number): number {
+  const fx = Math.sin(j.heading), fz = Math.cos(j.heading);
+  let g = Infinity;
+  for (const c of JEEP_BODY) g = Math.min(g, Math.hypot(x - (j.x + fx * c.along), z - (j.z + fz * c.along)) - c.r - r);
+  return g;
+}
+/** A run out of the jeep's way keeps this far (m) from its body. */
+const JEEP_KEEP = 0.8;
+/** Stepping away from a jeep nearer than this (m, body to body), it trots. */
+const JEEP_CLOSE = 1.2;
 
 /* ---------------------------------------------------------------- the ranger -- */
 
@@ -554,7 +569,7 @@ export function readRanger(x: number, z: number, tm: Temperament, rg: RangerRead
  */
 export function planAway(
   x: number, z: number, facing: number, r: number, fx: number, fz: number, want: number, world: WildWorld,
-  out: { x: number; z: number }, home: { x: number; z: number } | null = null,
+  out: { x: number; z: number }, home: { x: number; z: number } | null = null, jeep: JeepRead | null = null,
 ): boolean {
   const d = Math.hypot(x - fx, z - fz);
   const base = d > 1e-6 ? Math.atan2(x - fx, z - fz) : facing;
@@ -565,7 +580,7 @@ export function planAway(
     const mx = Math.sin(a), mz = Math.cos(a);
     const gx = x + mx * len, gz = z + mz * len;
     if (Math.hypot(gx - fx, gz - fz) < d + len * 0.45) continue; // it must really gain distance
-    if (!runFree(x, z, mx, mz, len, r, world)) continue;
+    if (!runFree(x, z, mx, mz, len, r, world, jeep)) continue;
     const cost = Math.abs(deg) * 0.02 + Math.abs(wrapPi(a - facing)) * 0.35 + leash(home, x, z, gx, gz);
     if (cost < best) { best = cost; out.x = gx; out.z = gz; }
   }
@@ -602,6 +617,8 @@ const ACCEL = 1.6, ACCEL_QUICK = 5, BRAKE = 3, BRAKE_QUICK = 6;
 /** Watching, it turns its body to what it watches only when that is this far (rad) off its
  *  facing (the head does the rest), and it faces within this before it stops turning. */
 const WATCH_TURN = 0.9, WATCH_SETTLE = 0.2;
+/** …and starts that turn only once it has (almost) stopped (m/s). */
+const WATCH_STILL = 0.3;
 /** Grazing near a boy who stands still, its loop never brings it nearer than its flight
  *  distance plus this (m). */
 const KEEP_ROOM = 1.2;
@@ -749,10 +766,13 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
         if (planYield(s.x, s.z, s.facing, r, j, sd, world, out2, home)) { ok = true; s.side = sd; }
         else if (planYield(s.x, s.z, s.facing, r, j, -sd, world, out2, home)) { ok = true; s.side = -sd; }
       }
-      if (!ok) ok = planAway(s.x, s.z, s.facing, r, j.x, j.z, JEEP_REACH + JEEP_NEAR + 1.5, world, out2);
-      if (ok) { setMode(s, 'away'); s.gx = out2.x; s.gz = out2.z; s.pace = tm.step; }
+      if (!ok) ok = planAway(s.x, s.z, s.facing, r, j.x, j.z, JEEP_REACH + JEEP_NEAR + 1.5, world, out2, null, j);
+      if (ok) { setMode(s, 'away'); s.gx = out2.x; s.gz = out2.z; }
       else setMode(s, 'alert');
     }
+    // a calm step; a trot while it is right by the jeep's body (a jeep pressed on something
+    // swings its nose on the spot when he steers: it is never swept up by it)
+    s.pace = J.gap < JEEP_CLOSE ? tm.trot : tm.step;
   } else if (R.flee && th.ranger) {
     const rg = th.ranger;
     s.threat = 'ranger';
@@ -840,12 +860,14 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
       break;
     }
     case 'alert': {
-      s.speed = approach(s.speed, 0, BRAKE, BRAKE, dt);
+      // it pulls up where it is (a quick stop from a trot or a bound, along the way it faces)…
+      s.speed = approach(s.speed, 0, BRAKE_QUICK, BRAKE_QUICK, dt);
       if (s.speed > 0.01) stepAlong(s, world, dt);
       const want = Math.atan2(s.lookX - s.x, s.lookZ - s.z);
-      // the body turns to what it watches only when that is well off to its side, calmly,
-      // and then all the way round (never a restless follow of every step)
-      if (Math.abs(wrapPi(want - s.facing)) > WATCH_TURN) s.watchTurn = true;
+      // …and only then turns to look: its body turns to what it watches when that is well off
+      // to its side, calmly, and then all the way round (never a restless follow of every step,
+      // never a turn while it still runs, which would carry it toward what it watches)
+      if (s.speed < WATCH_STILL && Math.abs(wrapPi(want - s.facing)) > WATCH_TURN) s.watchTurn = true;
       if (s.watchTurn) {
         turnToward(s, want, tm.turn * 0.8, dt);
         if (Math.abs(wrapPi(want - s.facing)) < WATCH_SETTLE) s.watchTurn = false;
