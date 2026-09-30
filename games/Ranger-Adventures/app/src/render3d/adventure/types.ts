@@ -98,6 +98,10 @@ export interface HomeSpec {
   /** the mission marker: where it stands (default: its landschap's anchor) and what
    *  stands in its ring ('none': an empty ring; the story's animal is elsewhere) */
   marker?: { at?: Spot; look: 'animal' | 'prop' | 'none' };
+  /** a home spread over ground (a cover stand 40 m from the wallow): far off it rests
+   *  (world/Residents.ts) only once the lens is far from its centre AND from each of
+   *  these, so what lies out there stays drawn while he is near it */
+  spread?: readonly Spot[];
 }
 
 /** The two states of a home: before the mission is done, and after. */
