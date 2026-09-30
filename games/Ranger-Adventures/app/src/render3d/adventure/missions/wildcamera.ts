@@ -63,9 +63,10 @@ export const wildcameraAdventure: Adventure = {
 
 type Walker = 'edelhert' | 'ree' | 'das' | 'wildzwijn';
 
-/** How fast each animal comes into view (m/s): a brisk walk, never a dash (the round is
- *  lively: from a right click to the next animal's card takes ~3 s). */
-const PACE: Record<string, number> = { edelhert: 1.9, ree: 1.8, das: 1.15, wildzwijn: 1.6 };
+/** How fast each animal comes into view (m/s): a brisk walk (the badger's quick trot),
+ *  never a dash (the round is lively: from a right click to the next animal's card takes
+ *  ~2-5 s, the badger's way into the glade the longest). */
+const PACE: Record<string, number> = { edelhert: 1.9, ree: 1.8, das: 1.45, wildzwijn: 1.6 };
 /** The nightjar's flight into view and away (s). */
 const FLY_S = 1.6;
 
@@ -451,13 +452,18 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   k.stats.snare_gone = 1;
   await k.wait(1.8);
 
-  /* 12 · back to his camera on the pine (he walks it himself, turned the way back) */
+  /* 12 · back to his camera on the pine (he walks it himself, turned the way back): he is
+          there once he is by the pine, whichever side he comes to it */
   k.world.faceRanger(headingTo(k.ranger(), P.handBack));
-  await k.walk({ name: 'terug', to: P.handBack, r: P.handBack.r, line: c.terug, doel: c.chipCamera, cue: c.bijBoom, glyph: 'camera' });
+  await k.walk({
+    name: 'terug', to: P.handBack, r: P.handBack.r, reached: () => dist(k.ranger(), CAMERA) < 3.2,
+    line: c.terug, doel: c.chipCamera, cue: c.bijBoom, glyph: 'camera',
+  });
 
   /* 13 · the camera guards the wood: on the open crossing, a step out from his camera, he
-          looks at the glade; a roe comes in from the trees and grazes there; click. He is
-          handed back where he stands (the follow camera free behind him) */
+          looks across it at the glade; a roe comes in from the trees and grazes there;
+          click. He is handed back where he stands (the follow camera takes over from the
+          crossing's view: his first step into it passes the pine) */
   const roe = WILDCAMERA_HOME.residents.find((r) => r.key === 'ree')!.after!;
   k.beat = 'reunion:walk';
   await k.walkRanger(P.handBack.x, P.handBack.z, 0.05);

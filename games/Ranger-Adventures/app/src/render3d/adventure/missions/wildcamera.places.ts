@@ -133,9 +133,11 @@ export const WILDCAMERA_PLACES = {
   strap: { ...at(0.62, -0.62), r: 0.3, heading: headingTo(at(0.62, -0.62), CAMERA) },
   /** where he stands while the camera watches: beside the pine, a step back from its face */
   watch: { ...at(1.15, 0.2), r: 0.3, heading: VIEW_H },
-  /** the end, handed back: a step out on the open crossing (clear of the pine and the
-   *  thicket's bushes), facing the glade, where the roe grazes again */
-  handBack: { ...at(0.8, -2.4), r: 1.4, heading: headingTo(at(0.8, -2.4), GLADE) },
+  /** the end, handed back: a step out on the open crossing beside the wildwissel (clear
+   *  of the pine, the thicket's bushes, the log and the stump), facing the glade, where the
+   *  roe grazes again. Off the pine's line: the follow camera keeps the crossing's view
+   *  (it looks south, over the pine), and his first step into it passes the trunk */
+  handBack: { ...at(1.6, -2.4), r: 1.4, heading: headingTo(at(1.6, -2.4), GLADE) },
   glade: { ...GLADE, r: GLADE_R },
   thicket: { ...THICKET, r: THICKET_R },
   sett: { ...SETT },

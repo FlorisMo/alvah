@@ -117,13 +117,22 @@ test('handed back: a step out on the open crossing, facing the glade, the follow
   assert.ok(dist(h, TREE) > 2, `clear of the pine (${dist(h, TREE).toFixed(2)} m)`);
   for (const b of THICKET_BUSHES) assert.ok(dist(h, b.at) > b.r + 2, `clear of the thicket's ${b.id}`);
   assert.ok(Math.abs(wrap(headingTo(h, P.glade) - h.heading!)) < 0.01, 'facing the glade');
-  // the follow camera stands ~4.6 m behind him: nothing solid between it and him, no bush
-  // over it, no forest tree (the thicket's own clear ground)
-  const back = { x: h.x - Math.sin(h.heading!) * 4.6, z: h.z - Math.cos(h.heading!) * 4.6 };
+  // the follow camera takes over from the reunion's view: it keeps that view's bearing
+  // (south over the crossing) at ~4.6 m. Nothing solid between it and him, no bush over
+  // it, no forest tree (the crossing's own clear ground)
+  const vh = REUNION_VIEW.heading;
+  const back = { x: h.x - Math.sin(vh) * 4.6, z: h.z - Math.cos(vh) * 4.6 };
   assert.ok(segDist(TREE, back, h) > PINE.trunkR + 1, 'the pine is not between');
   for (const b of THICKET_BUSHES) assert.ok(dist(back, b.at) > b.r + 0.8 && segDist(b.at, back, h) > b.r + 0.2, `the ${b.id} is not over the lens or between`);
-  assert.ok(segDist(P.sett, back, h) > SETT_MOUND.r || true, '(the sett mound is lower than the boom)');
+  assert.ok(segDist(LOG, back, h) > 0.4, 'the log is not between');
   assert.ok(wildcameraTreeClearings().some((c) => dist(c, back) < c.r - 0.5), 'no forest tree where the lens stands');
+  // his first step into the view (the Up key walks into the screen) passes the pine with
+  // room to spare: never into its trunk, the camera on it in his face
+  const ahead = { x: h.x + Math.sin(vh) * 4, z: h.z + Math.cos(vh) * 4 };
+  assert.ok(segDist(TREE, h, ahead) > PINE.trunkR + 0.8, `the pine beside his way (${segDist(TREE, h, ahead).toFixed(2)} m)`);
+  assert.ok(segDist(LOG, h, ahead) > 0.8 && segDist(P.sett, h, ahead) > SETT_MOUND.r + 0.5, 'the log and the sett beside it too');
+  // no solid thing right at his side (the lens swings round him when he turns)
+  assert.ok(dist(h, LOG) > 3 && dist(h, NIGHTJAR_STUMP) > 2 && dist(h, JUNIPER) > 3, 'the log, the stump and the juniper a few steps off');
   // and it is where the reunion's view has him
   assert.ok(REUNION_VIEW.include.some((q) => dist(q, h) < 1e-9), 'the reunion frames him there');
 });
