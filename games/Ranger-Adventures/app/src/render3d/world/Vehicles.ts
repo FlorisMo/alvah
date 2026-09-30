@@ -496,9 +496,13 @@ export class Vehicles {
    *  pass from the start, so a fade changes a number and a depth write, never a shader). */
   private setJeepOpacity(o: number): void {
     this.jeepOpacity = o;
+    const ghost = o < 1;
     this.jeep?.traverse((n) => {
       const mesh = n as THREE.Mesh;
       if (!mesh.isMesh) return;
+      if (mesh.userData.jeepShell) { mesh.visible = ghost; return; }
+      // faded, it draws after its depth shell (see fadeable); solid, among the others
+      mesh.renderOrder = ghost ? 2 : 0;
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
         const orig = (m.userData as { jeepFade?: { o: number; d: boolean } }).jeepFade;
         if (!orig) continue;
@@ -508,13 +512,25 @@ export class Vehicles {
     });
   }
 
+  /** The jeep's depth shell (fadeable): depth only, a hair behind its own surface. */
+  private static readonly SHELL = new THREE.MeshBasicMaterial({
+    colorWrite: false, depthWrite: true, transparent: true, side: THREE.DoubleSide, // (the jeep is double-sided)
+    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+  });
+
   /** Give the jeep model its own materials, ready to fade (setJeepOpacity): blended from
    *  the start (a solid jeep writes depth and has opacity 1, so it looks the same), so the
-   *  first fade compiles nothing. */
+   *  first fade compiles nothing. And a depth SHELL per mesh (run 6 polish): while the jeep
+   *  is faded, the shell writes its depth first (renderOrder 1, after everything else
+   *  blended) and the jeep draws after it (2), so only its NEAREST surface is blended: one
+   *  glassy jeep he reads through, not every seat, wheel and bar inside it stacked on top
+   *  of each other (that stack hid him as well as a solid jeep). One extra draw call, only
+   *  while faded; drawn once when the model arrives, so its shader is ready before the
+   *  first fade. Never hit by a ray. */
   private static fadeable(prepped: THREE.Object3D): void {
-    prepped.traverse((n) => {
-      const mesh = n as THREE.Mesh;
-      if (!mesh.isMesh) return;
+    const meshes: THREE.Mesh[] = [];
+    prepped.traverse((n) => { if ((n as THREE.Mesh).isMesh) meshes.push(n as THREE.Mesh); });
+    for (const mesh of meshes) {
       const own = (m: THREE.Material): THREE.Material => {
         const c = m.clone();
         c.userData.jeepFade = { o: c.opacity, d: c.depthWrite };
@@ -522,7 +538,14 @@ export class Vehicles {
         return c;
       };
       mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
-    });
+      const shell = new THREE.Mesh(mesh.geometry, Vehicles.SHELL);
+      shell.userData.jeepShell = true;
+      shell.renderOrder = 1;
+      shell.castShadow = shell.receiveShadow = false;
+      shell.raycast = () => {};
+      shell.onAfterRender = () => { if (!mesh.renderOrder) shell.visible = false; }; // (its first draw compiled it)
+      mesh.add(shell);
+    }
   }
 
   /**
