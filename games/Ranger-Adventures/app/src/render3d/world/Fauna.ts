@@ -276,10 +276,8 @@ export class Fauna {
       if (dx * dx + dz * dz > R * R) continue;
       near.push(this.pooledObstacle(o.x, o.z, o.r + grow, o.box, grow));
     }
-    this.zones((x, z, r) => {
-      const R = reach + r;
-      if ((x - w.x) ** 2 + (z - w.z) ** 2 <= R * R) near.push(this.pooledObstacle(x, z, r + a.r));
-    });
+    this.gatherX = w.x; this.gatherZ = w.z; this.gatherReach = reach;
+    this.zones(this.nearZone);
     // the ranger on foot and a driven jeep: never walked through (unless it already stands
     // well inside one — the ranger stepped out of the jeep beside it — so it is never shoved)
     const rg = threats.ranger;
@@ -433,7 +431,10 @@ export class Fauna {
     // ground roamers: [id, home x/z, loop radius, whether the GLB carries baked
     // walk/graze clips]. Their size is the scale table's (`AnimalScale.ts`).
     const GROUND: { id: string; hx: number; hz: number; r: number; baked: boolean }[] = [
-      { id: 'animal-ree-roedeer', hx: 26, hz: 26, r: 6, baked: true },   // bos/heide edge
+      // run 6: out on the open drift sand east of the parked jeep (27-38 m straight on from it,
+      // nothing solid within 4 m of any grazing stop), no longer in the pocket between two
+      // junipers, a boulder and the helipad that a child could not drive into
+      { id: 'animal-ree-roedeer', hx: 44, hz: 12, r: 6, baked: true },
       { id: 'animal-vos-fox', hx: -30, hz: -10, r: 7, baked: true },     // heide, west
       { id: 'animal-eekhoorn-squirrel', hx: -24, hz: -24, r: 3, baked: false }, // near trees
       { id: 'animal-wildzwijn-boar', hx: 10, hz: 36, r: 6, baked: false },     // heide, south

@@ -923,36 +923,45 @@ export function wrapPi(a: number): number {
  * last part of every cycle, nose up rising and down falling, level where it leaves and meets
  * the ground (so no hoof ever dips into it); a static
  * model's walk and trot are a small bob (≤ 2 cm) and rock; a squirrel hops. All small and
- * calm (never a jolt); `lift` ≥ 0 always, so nothing sinks into the ground.
+ * calm (never a jolt); `lift` ≥ 0 always, so nothing sinks into the ground. Returns a reused
+ * object (read it before the next call: no garbage per frame).
  */
 export function strideBody(kind: 'bound' | 'trot' | 'walk' | 'hop' | 'still', cycle: number, v: number): { lift: number; pitch: number } {
   const u = cycle - Math.floor(cycle);
+  const o = strideOut;
+  o.lift = 0; o.pitch = 0;
   switch (kind) {
     case 'bound': {
       const air = 0.72;
-      if (u >= air) return { lift: 0, pitch: 0 };
+      if (u >= air) break;
       const w = u / air;
       const H = clamp(0.12 + (v - 2.8) * 0.12, 0.12, 0.34);
       // nose up rising, down falling, level on the ground: the hooves never dip below it
-      return { lift: H * Math.sin(Math.PI * w), pitch: 0.09 * Math.sin(2 * Math.PI * w) };
+      o.lift = H * Math.sin(Math.PI * w); o.pitch = 0.09 * Math.sin(2 * Math.PI * w);
+      break;
     }
     case 'hop': {
       const air = 0.6;
-      if (u >= air) return { lift: 0, pitch: 0 };
+      if (u >= air) break;
       const w = u / air;
       const H = clamp(0.03 + v * 0.02, 0.03, 0.08);
-      return { lift: H * Math.sin(Math.PI * w), pitch: 0.12 * Math.sin(2 * Math.PI * w) };
+      o.lift = H * Math.sin(Math.PI * w); o.pitch = 0.12 * Math.sin(2 * Math.PI * w);
+      break;
     }
     case 'trot': {
       const a = 0.012 + Math.min(0.008, v * 0.003);
-      return { lift: a * (0.5 - 0.5 * Math.cos(4 * Math.PI * u)), pitch: 0.025 * Math.sin(2 * Math.PI * u) };
+      o.lift = a * (0.5 - 0.5 * Math.cos(4 * Math.PI * u)); o.pitch = 0.025 * Math.sin(2 * Math.PI * u);
+      break;
     }
     case 'walk':
-      return { lift: 0.006 * (0.5 - 0.5 * Math.cos(4 * Math.PI * u)), pitch: 0.012 * Math.sin(2 * Math.PI * u) };
+      o.lift = 0.006 * (0.5 - 0.5 * Math.cos(4 * Math.PI * u)); o.pitch = 0.012 * Math.sin(2 * Math.PI * u);
+      break;
     default:
-      return { lift: 0, pitch: 0 };
+      break;
   }
+  return o;
 }
+const strideOut = { lift: 0, pitch: 0 };
 
 /** How far (m) one stride carries each gait (the cycle above advances by distance / this). */
 export function strideLength(kind: 'bound' | 'trot' | 'walk' | 'hop' | 'still', v: number): number {
