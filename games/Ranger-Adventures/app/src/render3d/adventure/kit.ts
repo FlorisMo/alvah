@@ -34,7 +34,7 @@ import { walkPace } from '../world/Player';
 import type { Actor } from './actors';
 import type { AdventureRead, Place, Places, Spot } from './types';
 import type { IconName } from '../../ui/icons';
-import { dist, headingTo } from './places';
+import { atLocal, dist, headingTo } from './places';
 
 /** The world as an adventure drives it (World implements it; a test can fake it). */
 export interface MissionWorld {
@@ -115,8 +115,9 @@ export interface FrameSpec {
   pitchDeg?: number;
   insetTop?: number;
   insetBottom?: number;
-  /** things that must be in the picture too (the ranger, an animal) */
-  include?: readonly { x: number; z: number; h: number }[];
+  /** things that must be in the picture too (the ranger, an animal); `r`: how wide it
+   *  is round its middle (m) — his shoulders both in the picture, never cut by its edge */
+  include?: readonly { x: number; z: number; h: number; r?: number }[];
   /** seconds of the eased move (≥ ~90°/s turns: longer for a big turn) */
   seconds?: number;
 }
@@ -152,6 +153,10 @@ export interface WalkOpts {
     /** his walk at the animal's pace while he leads it (m/s): a careful walk, so they stay
      *  together; running is his own choice, and the animal hides */
     pace?: number;
+    /** it trots at his SIDE (m, + right, − left) instead of trailing `gap` m behind him:
+     *  the follow lens behind him sees it beside his legs, never at its own feet at the
+     *  bottom edge of the picture (`gap` is then how close it keeps to that spot) */
+    side?: number;
   };
   /** extra per-frame work while he walks (a squeak getting louder ...) */
   tick?: (dt: number) => void;
@@ -326,7 +331,12 @@ export class AdventureKit {
    *  ranger stands (within 1.2 m) is taken where he really stands. */
   lensFor(f: FrameSpec): { cam: THREE.Vector3; look: THREE.Vector3; stage: Stage } {
     const me = this.ranger();
-    const include = f.include?.map((q) => (dist(q, me) < 1.2 ? { ...q, x: me.x, z: me.z } : q));
+    const right = { x: -Math.cos(f.heading), z: Math.sin(f.heading) }; // (the frame's u axis)
+    const include = f.include?.flatMap((q) => {
+      const p = dist(q, me) < 1.2 ? { ...q, x: me.x, z: me.z } : q;
+      const r = q.r ?? 0;
+      return r > 0 ? [-r, r].map((u) => ({ x: p.x + right.x * u, z: p.z + right.z * u, h: p.h })) : [{ x: p.x, z: p.z, h: p.h }];
+    });
     const spec: StageSpec = {
       halfW: f.halfW, halfD: f.halfD, tall: f.tall ?? 1, pitchDeg: f.pitchDeg ?? 34,
       insetTop: f.insetTop ?? 96, insetBottom: f.insetBottom ?? 16,
@@ -471,7 +481,12 @@ export class AdventureKit {
     let told = false;
     let waiting = false;
     const gap = lead?.gap ?? 2;
-    const rangerLead = (): { x: number; z: number; speed: number } => { const m = this.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
+    const rangerLead = (): { x: number; z: number; speed: number } => {
+      const m = this.ranger();
+      if (!lead?.side) return { x: m.x, z: m.z, speed: m.speed };
+      const at = atLocal({ x: m.x, z: m.z, heading: m.heading }, lead.side, -0.25); // (beside his legs, a little back)
+      return { x: at.x, z: at.z, speed: m.speed };
+    };
     if (lead) lead.actor.follow(rangerLead, gap);
     if (lead?.pace) walkPace.cap = lead.pace;
     // the way he really walked (m): a test checks the design's bar against it

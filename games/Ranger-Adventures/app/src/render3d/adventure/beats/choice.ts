@@ -54,9 +54,9 @@ export interface AskOpts {
 export interface StillOpts {
   /** the one objective line: what to hold (≤ 7 words, read aloud; the 🔊 repeats it) */
   line: string;
-  /** HANDS still: a click or a tap ON this (the piglet) is a hand reaching for it; any
-   *  other click does nothing */
-  hands?: THREE.Object3D;
+  /** HANDS still: a click or a tap ON this (the piglet, read at the click: lying or
+   *  standing, the body shown now) is a hand reaching for it; any other click does nothing */
+  hands?: THREE.Object3D | (() => THREE.Object3D | null);
   /** FEET still: a step key (arrows, WASD) or a tap on the world (on the scene itself,
    *  never on a button or the line) is a step toward them. His own input is locked
    *  meanwhile (a framed beat). */
@@ -169,7 +169,11 @@ export class ChoiceRun {
     };
     const onDown = (e: PointerEvent): void => {
       if (k.world.menuShown()) return;
-      if (o.hands) { if (e.target === canvas && onAnimal(e, o.hands)) reached = true; return; }
+      if (o.hands) {
+        const body = typeof o.hands === 'function' ? o.hands() : o.hands;
+        if (body && e.target === canvas && onAnimal(e, body)) reached = true;
+        return;
+      }
       if (o.feet && e.target === canvas) reached = true; // (a tap on the world: never a button, the line, the chip)
     };
     const onKey = (e: KeyboardEvent): void => {
