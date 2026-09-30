@@ -8,11 +8,20 @@
  *  - The JEEP, judged from where it will be over the next few seconds (its distance, speed,
  *    heading and turn: the path its body sweeps, `readJeep`). An animal in that path lifts
  *    its head, turns and trots — the ree bounds, low — off the track to the side it is
- *    already on (dead centre: away from the jeep's turn), toward open ground (`planYield`),
- *    stops a little way off and watches the jeep pass, then drifts back to grazing. It
- *    leaves the path before the jeep's own give-way brake (`core/vehicle.yieldBrake`) needs
- *    to act; if it cannot get away (no open ground on its side), it stands still and the
- *    brake stops the jeep in front of it. It never crosses the jeep's path to get away.
+ *    already on (dead centre: away from the jeep's turn; far off, the side with open ground
+ *    toward its home), toward open ground (`planYield`), stops a little way off and watches
+ *    the jeep pass, then drifts back to grazing. It leaves the path before the jeep's own
+ *    give-way brake (`core/vehicle.yieldBrake`) needs to act; if it cannot get away (no open
+ *    ground on its side), it stands still and the brake stops the jeep in front of it.
+ *  - A child who STEERS AT it (run 6 review round 2: it zig-zagged across the bonnet). Its side
+ *    is judged against the jeep's current line and kept for the whole encounter: it never
+ *    crosses in front of the bonnet. While the nose points at it, it bounds straight out off
+ *    that line (`bearAway` when nothing on its side is clear: the path of the keys he holds
+ *    wraps round it), a steady gait, round its home ground and never into a corner (the
+ *    water's edge, a marker's ground, the forest edge); the brake may act, nothing touches.
+ *  - A jeep it made way for and now watches moves it again only when that jeep really comes
+ *    (1.5 m closer by its own motion): a jeep stuck on a rock with the keys held is watched,
+ *    never fled again and again; one that stands right by it, it steps calmly out of the way of.
  *  - The RANGER on foot (`World.rangerMotion()`). Walking calmly he may come close: it looks
  *    up when he comes at it (`alert`), steps away when he is close (`flight`), and never
  *    lets him nearer than `near` — it keeps pace with him. Running at it, it trots off
