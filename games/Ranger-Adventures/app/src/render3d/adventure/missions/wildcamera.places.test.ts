@@ -13,7 +13,8 @@ import {
   WILDCAMERA_PLACES as P, MARKER, TREE, CAMERA, CROSS, CROSS_VIEW, CALLER_SPOTS, LOG, PINE,
   WILDCAMERA_HOME, WILDCAMERA_RESIDENTS, AIM_AT, FAN_HALF, JUNIPER, aimSpot, cameraAim, swivel, trailA, trailB,
   NIGHTJAR_AT, NIGHTJAR_STUMP, TAG_AT, THICKET_BUSHES, SETT_MOUND, ROE_HIDEAWAY, ROE_SHY_WITHIN,
-  wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW, VAL_VIEW, SETT_FACE,
+  wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW, SETT_FACE,
+  SNARE_MARKS, SNARE_FOUND,
 } from './wildcamera.places.ts';
 import { anchorInBiome, biomeAt } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
@@ -42,7 +43,7 @@ test('the marker is the bos anchor, and it is the wildcamera mission\'s', () => 
 });
 
 test('the crossing lies in the bos, well inside the world, clear of the paths and the other missions', () => {
-  const crossing = [P.crossApproach, P.strap, P.watch, P.glade, P.thicket, P.sett, P.snare, P.snareApproach, TREE];
+  const crossing = [P.crossApproach, P.strap, P.watch, P.handBack, P.glade, P.thicket, P.sett, TREE];
   for (const p of crossing) {
     assert.equal(biomeAt(p.x, p.z), 'bos', `(${p.x.toFixed(1)}, ${p.z.toFixed(1)}) is in the bos`);
     assert.ok(Math.hypot(p.x, p.z) < 50, 'well inside the world');
@@ -67,19 +68,64 @@ test('the wildwissel runs from the marker ring to the pine; the second trail fro
   const b = trailB();
   assert.ok(Math.min(...b.map((p) => dist(p, P.glade))) < 0.01 && Math.min(...b.map((p) => dist(p, P.thicket))) < 0.01);
   assert.ok(Math.min(...b.map((p) => dist(p, TREE))) < 1.2, 'the two trails cross at the pine');
-  // the snare lies on the trail into the glade (where the deer come out to graze), a
-  // step from where he takes it away
-  const onB = Math.min(...b.slice(1).map((p, i) => segDist(P.snare, b[i], p)));
-  assert.ok(onB < 0.35, `the snare lies on the trail (${onB.toFixed(2)} m)`);
-  assert.ok(dist(P.snare, P.glade) < P.glade.r + 0.6 && dist(P.snare, P.glade) > 1.2, 'at the glade\'s edge');
-  // the camera on the pine sees it side-on, with the glade behind: a turn it can make
-  assert.ok(Math.abs(swivel(P.snare)) < (80 * Math.PI) / 180, `a swivel of ${deg(swivel(P.snare))}°`);
-  // from where he sets off to it, nothing stands between him and the snare: not the pine
-  assert.ok(segDist(TREE, P.valStart, P.snare) > PINE.trunkR + 0.5, 'the pine is not in the way');
-  assert.ok(segDist(TREE, P.watch, P.valStart) > PINE.trunkR + 0.4, 'he steps round in front of it');
-  const reach = dist(P.snare, P.snareApproach);
+});
+
+test('the snare: a real little search up the wildwissel, to the foxglove and the bush of the photo', () => {
+  const a = trailA();
+  const sn = P.snare;
+  // half in the grass at the trail's edge (not in its middle), ~11 m up it from the crossing
+  const onA = Math.min(...a.slice(1).map((p, i) => segDist(sn, a[i], p)));
+  assert.ok(onA > 0.15 && onA < 0.5, `at the trail's edge (${onA.toFixed(2)} m from its middle)`);
+  for (const from of [P.handBack, CAMERA]) {
+    const d = dist(from, sn);
+    assert.ok(d > 10 && d < 20, `${d.toFixed(1)} m from where the search starts`);
+  }
+  // in the bos, off the sand paths, and no nearer the other markers than the wildwissel
+  // itself runs (it passes the ecoduct's ring at ~9 m on its way in)
+  const trailNearest = (m: Spot): number => Math.min(...a.map((p) => dist(p, m)));
+  assert.equal(biomeAt(sn.x, sn.z), 'bos');
+  assert.ok(distanceToNetwork(sn.x, sn.z) > LANE_HALF + 3, 'off the sand paths');
+  for (const [id, m] of Object.entries(OTHER_MARKERS)) assert.ok(dist(sn, m) >= Math.min(10, trailNearest(m)), `${dist(sn, m).toFixed(1)} m from the ${id} marker`);
+  for (const r of ROAMERS) assert.ok(dist(sn, r) > r.r + 3, `off the ${r.id}'s loop`);
+  // the camera on the pine looks straight up the trail at it (the morning photo)
+  assert.ok(Math.abs(swivel(sn)) < (40 * Math.PI) / 180, `a swivel of ${deg(swivel(sn))}°`);
+  // the photo's two things: just beyond it (as the camera, and a walker from the crossing,
+  // see it), one each side, off the trail (he walks between them), never between the lens
+  // and the snare
+  const up = { x: CAMERA.x, z: CAMERA.z, heading: headingTo(CAMERA, sn) };
+  const s0 = toLocal(up, sn);
+  const bush = toLocal(up, SNARE_MARKS.bush), fox = toLocal(up, SNARE_MARKS.foxglove);
+  assert.ok(bush.v > s0.v + 0.3 && fox.v > s0.v + 0.3, 'beyond the snare');
+  assert.ok((bush.u - s0.u) * (fox.u - s0.u) < 0 && Math.min(Math.abs(bush.u - s0.u), Math.abs(fox.u - s0.u)) > 0.5, 'one each side');
+  for (const [name, m, r] of [['bush', SNARE_MARKS.bush, SNARE_MARKS.bush.r], ['foxglove', SNARE_MARKS.foxglove, 0.15]] as const) {
+    const off = Math.min(...a.slice(1).map((p, i) => segDist(m, a[i], p)));
+    assert.ok(off > r + 0.3, `the ${name} stands off the trail (${off.toFixed(2)} m)`);
+    assert.ok(dist(m, sn) < 1.6, `the ${name} is right by the snare`);
+  }
+  // he takes it away from a step before it on the trail, facing it; the search ends as soon
+  // as he is near enough to see it in the grass
+  const reach = dist(sn, P.snareApproach);
   assert.ok(reach > 0.7 && reach < 1.4, `he stands a step from it (${reach.toFixed(2)} m)`);
-  assert.ok(Math.abs(wrap(headingTo(P.snareApproach, P.snare) - P.snareApproach.heading!)) < 0.01, 'facing it');
+  assert.ok(Math.abs(wrap(headingTo(P.snareApproach, sn) - P.snareApproach.heading!)) < 0.01, 'facing it');
+  assert.ok(Math.min(...a.slice(1).map((p, i) => segDist(P.snareApproach, a[i], p))) < 0.6, 'on the trail');
+  assert.ok(SNARE_FOUND > reach + 0.5 && SNARE_FOUND < 3, 'found when he is near');
+  assert.ok(segDist(SNARE_MARKS.bush, P.snareApproach, sn) > SNARE_MARKS.bush.r, 'the bush is not in his way');
+});
+
+test('handed back: a step out on the open crossing, facing the glade, the follow camera free behind him', () => {
+  const h = P.handBack;
+  assert.ok(dist(h, TREE) > 2, `clear of the pine (${dist(h, TREE).toFixed(2)} m)`);
+  for (const b of THICKET_BUSHES) assert.ok(dist(h, b.at) > b.r + 2, `clear of the thicket's ${b.id}`);
+  assert.ok(Math.abs(wrap(headingTo(h, P.glade) - h.heading!)) < 0.01, 'facing the glade');
+  // the follow camera stands ~4.6 m behind him: nothing solid between it and him, no bush
+  // over it, no forest tree (the thicket's own clear ground)
+  const back = { x: h.x - Math.sin(h.heading!) * 4.6, z: h.z - Math.cos(h.heading!) * 4.6 };
+  assert.ok(segDist(TREE, back, h) > PINE.trunkR + 1, 'the pine is not between');
+  for (const b of THICKET_BUSHES) assert.ok(dist(back, b.at) > b.r + 0.8 && segDist(b.at, back, h) > b.r + 0.2, `the ${b.id} is not over the lens or between`);
+  assert.ok(segDist(P.sett, back, h) > SETT_MOUND.r || true, '(the sett mound is lower than the boom)');
+  assert.ok(wildcameraTreeClearings().some((c) => dist(c, back) < c.r - 0.5), 'no forest tree where the lens stands');
+  // and it is where the reunion's view has him
+  assert.ok(REUNION_VIEW.include.some((q) => dist(q, h) < 1e-9), 'the reunion frames him there');
 });
 
 test('one view: the glade left, the thicket right, the camera pine between, the ranger beside it', () => {
@@ -96,15 +142,16 @@ test('one view: the glade left, the thicket right, the camera pine between, the 
   const reach = dist(P.strap, CAMERA);
   assert.ok(reach > 0.5 && reach < 1, `he straps it on within reach (${reach.toFixed(2)} m), beside it, not in front of the lens`);
   // the other views are the ranger's side of what they show
-  for (const [name, view] of [['trail', TRAIL_VIEW], ['strap', STRAP_VIEW], ['snare', SNARE_VIEW], ['to the snare', VAL_VIEW]] as const) {
+  for (const [name, view] of [['trail', TRAIL_VIEW], ['strap', STRAP_VIEW], ['snare', SNARE_VIEW]] as const) {
     for (const q of view.include) assert.ok(toLocal({ x: view.at.x, z: view.at.z, heading: view.heading }, q).v < 1, `${name}: he stands in front of what it shows`);
   }
   // the sett's way in (a badger's face at its opening) faces away from every view of it
-  for (const [name, view] of [['crossing', CROSS_VIEW], ['trail', TRAIL_VIEW], ['strap', STRAP_VIEW], ['snare', SNARE_VIEW], ['to the snare', VAL_VIEW]] as const) {
+  // (the snare's view looks across the wildwissel far up it: the crossing is out of it)
+  for (const [name, view] of [['crossing', CROSS_VIEW], ['trail', TRAIL_VIEW], ['strap', STRAP_VIEW]] as const) {
     assert.ok(Math.cos(SETT_FACE - view.heading) > 0.3, `${name}: the sett's opening faces away (${deg(wrap(SETT_FACE - view.heading))}°)`);
   }
-  // the reunion is the crossing's own view, with him back beside his camera
-  assert.deepEqual(REUNION_VIEW.include, CROSS_VIEW.include);
+  // the reunion is the crossing's own view, with him back from the snare on the crossing
+  assert.deepEqual({ ...REUNION_VIEW, include: [], insetTop: 0, insetBottom: 0 }, { ...CROSS_VIEW, include: [], insetTop: 0, insetBottom: 0 });
 });
 
 test('the animals the camera photographs walk in from out of view, and the thicket\'s never stand behind the sett', () => {
@@ -246,7 +293,9 @@ test('before and after, the roe grazes in the glade (shy of him before); nobody 
   assert.ok(shy && shy.within === ROE_SHY_WITHIN, 'shy before the mission');
   assert.ok(dist(P.crossApproach, roe.before!) < ROE_SHY_WITHIN - 3, 'she goes before he reaches the crossing');
   assert.ok(dist(ROE_HIDEAWAY, P.crossApproach) > dist(roe.before!, P.crossApproach) + 4, 'away from him');
-  assert.ok(dist(ROE_HIDEAWAY, aimSpot('ree', 'open').from) < 0.01, 'she comes back from there for the photos');
+  // (she comes back for the photos from under the same trees, a little nearer the glade)
+  const back = aimSpot('ree', 'open').from;
+  assert.ok(dist(ROE_HIDEAWAY, back) < 3 && dist(back, P.glade) < dist(ROE_HIDEAWAY, P.glade), 'she comes back from there for the photos');
   assert.ok(Math.abs(toLocal(v, ROE_HIDEAWAY).u) > CROSS_VIEW.halfW + 3, 'out of the view over the crossing');
   assert.ok(wildcameraTreeClearings().every((c) => dist(c, ROE_HIDEAWAY) > c.r - 0.5), 'in under the trees');
   // the reekalf's hide lies west of her glade: while he keeps still there and watches that

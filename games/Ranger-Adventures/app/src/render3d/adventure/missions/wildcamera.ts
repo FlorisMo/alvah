@@ -28,12 +28,12 @@ import { Sound } from '../../../core/sound';
 import { applyAmbient } from '../../../core/calls';
 import { aimBeat, type AimWorld } from '../beats/aim';
 import { callersBeat, type Caller } from '../beats/callers';
-import { headingTo } from '../places';
+import { dist, headingTo } from '../places';
 import type { Spot } from '../types';
 import { WildcameraHome } from './wildcamera.home';
 import { PhotoStrip, develop, type Photo } from './wildcamera.photos';
 import {
-  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, SNARE_VIEW, VAL_VIEW, STRAP_VIEW, CALLER_SPOTS, LOG,
+  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, SNARE_VIEW, STRAP_VIEW, CALLER_SPOTS, LOG, SNARE_FOUND,
   AIM_AT, CAMERA, ROE_HIDEAWAY, ROE_SHY_WITHIN, aimSpot, cameraAim, wildcameraClearings, wildcameraTreeClearings, wildcameraTrees,
   type AimSpot,
 } from './wildcamera.places';
@@ -61,8 +61,11 @@ export const wildcameraAdventure: Adventure = {
 
 type Walker = 'edelhert' | 'ree' | 'das' | 'wildzwijn';
 
-/** How fast each animal comes into view (m/s): a calm walk, never a dash. */
-const PACE: Record<string, number> = { edelhert: 1.35, ree: 1.25, das: 0.9, wildzwijn: 1.05 };
+/** How fast each animal comes into view (m/s): a brisk walk, never a dash (the round is
+ *  lively: from a right click to the next animal's card takes ~3 s). */
+const PACE: Record<string, number> = { edelhert: 1.9, ree: 1.8, das: 1.15, wildzwijn: 1.6 };
+/** The nightjar's flight into view and away (s). */
+const FLY_S = 1.6;
 
 
 /** The camera's clock on the photos: evening, night, first light. */
@@ -136,7 +139,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     if (id === 'nachtzwaluw') {
       birdToken += 1;
       const from = home.bird.visible ? { x: home.birdAt.x, z: home.birdAt.z, y: home.birdAt.y - k.ctx.groundY(home.birdAt.x, home.birdAt.z) } : { ...s.from, y: 3.4 };
-      await k.guard(home.fly(from, { ...s.at, lift: s.lift ?? 0 }, s.yaw, k.reduced, 2.2));
+      await k.guard(home.fly(from, { ...s.at, lift: s.lift ?? 0 }, s.yaw, k.reduced, FLY_S));
       return;
     }
     const a = A[id as Walker];
@@ -148,7 +151,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     // still about from its last photo (in the other place): it crosses along the trail
     // past the pine at a trot, and the camera waits for it to get there
     const far = Math.hypot(s.at.x - a.x, s.at.z - a.z);
-    const pace = far > 6 ? Math.min(1.6, (PACE[id] ?? 1.1) * 1.35) : PACE[id] ?? 1.1;
+    const pace = far > 6 ? Math.min(2.2, (PACE[id] ?? 1.1) * 1.3) : PACE[id] ?? 1.1;
     const came = await k.guard(Promise.race([a.go(s.at.x, s.at.z, { speed: pace, face: s.yaw }), k.wait(far / pace + 5).then(() => false)]));
     if (!came && Math.hypot(s.at.x - a.x, s.at.z - a.z) > 0.8) k.stats.aim_late = (k.stats.aim_late ?? 0) + 1; // (dev read: it never got there)
   };
@@ -157,10 +160,10 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       // it sits a moment on its perch after the click (as nightjars do: still), then
       // lifts off and glides away the way it came
       const token = ++birdToken;
-      void k.wait(1.6).then(() => {
+      void k.wait(1.2).then(() => {
         if (token !== birdToken) return;
         const p = home.birdAt;
-        return home.fly({ x: p.x, z: p.z, y: p.y - k.ctx.groundY(p.x, p.z) + 0.2 }, { x: s.from.x, z: s.from.z, lift: 3.4 }, 0, k.reduced, 2.2)
+        return home.fly({ x: p.x, z: p.z, y: p.y - k.ctx.groundY(p.x, p.z) + 0.2 }, { x: s.from.x, z: s.from.z, lift: 3.4 }, 0, k.reduced, FLY_S)
           .then(() => { if (token === birdToken) home.birdGone(); });
       }).catch(() => {});
       return;
@@ -169,7 +172,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     const t = (leaving.get(id) ?? 0) + 1;
     leaving.set(id, t);
     const bin = shotAt.get(id);
-    if (bin) walkingOff.set(id, { bin, until: k.now + 4 });
+    if (bin) walkingOff.set(id, { bin, until: k.now + 2.2 });
     if (a.lies) void a.lie(false);
     void a.go(s.from.x, s.from.z, { speed: PACE[id] ?? 1.1 }).then((ok) => {
       if (leaving.get(id) === t) walkingOff.delete(id);
@@ -257,21 +260,22 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       open: { pick: home.glade, hint: home.gladeHint },
       hol: { pick: home.thicket, hint: home.thicketHint },
     },
-    begin: () => { roeOut(); home.showTags(true); home.showFan(true); },
+    begin: () => { roeOut(); home.setMarks(false, false); home.showTags(true); home.showFan(true); },
     end: () => { home.showTags(false); home.showFan(false); },
     look: async (bin) => {
       home.aim(cameraAim(AIM_AT[bin]), k.reduced);
       await k.until(() => !home.aiming, 3);
     },
-    photo: async (item: WisselItem, bin: WisselBin) => {
+    photo: async (item: WisselItem, bin: WisselBin, looked: Promise<void>) => {
       const s = varied(aimSpot(item.id, bin), item.id);
       if (item.id === 'nachtzwaluw') s.lift = home.nightjarLift(bin); // (its perch, as the model stands)
       at.set(item.id, s);
       shotAt.set(item.id, bin);
-      await walkIn(item.id, s);
+      // it sets off while the camera still turns to the place; the shutter waits for both
+      await Promise.all([walkIn(item.id, s), looked]);
       // a deer rests in the thicket at night: the roe lies down
       if (item.id === 'ree' && bin === 'hol') await k.guard(A.ree.lie(true));
-      await k.wait(0.35);
+      await k.wait(0.12);
       const night = k.world.daylight() < 0.5;
       shutter(night);
       // framed on the animal where it stands (the camera triggers on it): its middle, a
@@ -287,9 +291,9 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
         : await photograph(where, h * 0.5, Math.max(1.1, h * (h > 1 ? 1.6 : 2.3)), item.id, night ? 'nacht' : 'dag');
       if (p) photos.add(p);
       // it heard the click: its head comes up, it looks at the camera a moment
-      if (walker && !walker.lies) void walker.lookAt(() => ({ x: CAMERA.x, z: CAMERA.z, speed: 0 }), 1.4);
+      if (walker && !walker.lies) void walker.lookAt(() => ({ x: CAMERA.x, z: CAMERA.z, speed: 0 }), 1.0);
       k.stats.photos = photos.photos.length;
-      await k.wait(0.6);
+      await k.wait(0.4);
     },
     empty: async (bin) => {
       const night = k.world.daylight() < 0.5;
@@ -301,8 +305,19 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     leave: (item) => { const s = at.get(item.id); if (s) walkOut(item.id, s); },
     leaving: (bin) => [...walkingOff.values()].some((w) => w.bin === bin && k.now < w.until),
     turn: async (to) => {
-      k.daylight(to === 'night' ? 0 : 1, 2.2);
-      await k.wait(2.4);
+      // the sky turns (the camera's light turns to its infrared glow as the dusk passes,
+      // home.setNight), and half way the two places' signs turn over to their new marks
+      k.daylight(to === 'night' ? 0 : 1, 2.4);
+      await k.wait(1.0);
+      home.setMarks(to === 'night', !k.reduced);
+      if (settings.geluid) Sound.select();
+      await k.wait(1.6);
+    },
+    miss: () => {
+      // a press beside both places: the camera shakes a calm "no", tick-tick
+      if (!home.shake(k.reduced) || !settings.geluid) return;
+      Sound.step();
+      void k.wait(0.2).then(() => Sound.step()).catch(() => {});
     },
   };
   await aimBeat(k, 0, {
@@ -388,8 +403,9 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   k.daylight(0.3, 0);
   home.aim(cameraAim(P.snare), true);
   await k.wait(0.2);
-  // (framed on the man crouched at the wire: his height, a little more)
-  const man = await photograph(P.snare, 0.62, 2.1, 'man', 'ochtend', () => home.poacherIn());
+  // (framed on the man crouched at the wire up the trail: his height, a little more, with
+  // the foxglove and the bush beside him: the camera zooms in on him as on the nightjar)
+  const man = await photograph(P.snare, 0.62, 2.1, 'man', 'ochtend', () => home.poacherIn(), 11);
   if (man) photos.photos.push(man);
   k.cluePhoto = man?.url ?? null;
   await k.wait(1.4);
@@ -410,13 +426,19 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   /* 10 · the raaf: the camera tells the ranger who lives here */
   await k.fact(1);
 
-  /* 11 · the snare by the trail: take it away (he steps onto the glade's trail first and
-          the lens looks along it from behind him, so the follow camera goes that way) */
-  await k.walkRanger(P.valStart.x, P.valStart.z, 0.05);
-  k.world.faceRanger(P.valStart.heading);
-  await k.frame(VAL_VIEW, { face: P.valStart.heading });
-  await k.wait(0.8);
-  await k.walk({ name: 'val', to: P.snareApproach, r: P.snareApproach.r, line: c.zoekVal, doel: c.chipVal, cue: c.bijPad });
+  /* 11 · the snare: the photo showed the man at it by a foxglove and a bush on the game
+          trail. He looks for it himself, from where he stands by his camera: up the
+          wildwissel the way he came in (the camera on the pine still looks that way), to
+          that foxglove and that bush, where it lies half in the grass. The chip names it;
+          the arrow comes only after ~20 s without getting nearer. (He steps out from beside
+          the pine onto the open crossing first, turned to the glade: the lens stays behind
+          him there, looking over the crossing, and the snare is out of sight behind it) */
+  await k.walkRanger(P.handBack.x, P.handBack.z, 0.05);
+  k.world.faceRanger(P.handBack.heading);
+  await k.walk({
+    name: 'val', to: P.snareApproach, r: P.snareApproach.r, reached: () => dist(k.ranger(), P.snare) < SNARE_FOUND,
+    line: c.zoekVal, doel: c.chipVal, cue: c.bijPad, glyph: 'photo',
+  });
   k.beat = 'val';
   await k.walkRanger(P.snareApproach.x, P.snareApproach.z, 0.05);
   await k.frame(SNARE_VIEW, { face: P.snareApproach.heading });
@@ -427,12 +449,17 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   k.stats.snare_gone = 1;
   await k.wait(1.8);
 
-  /* 12 · the camera guards the wood: he steps back to his camera by the pine, and a roe
-          comes along the trail that is safe now, into the glade; click */
+  /* 12 · back to his camera on the pine (he walks it himself, turned the way back) */
+  k.world.faceRanger(headingTo(k.ranger(), P.handBack));
+  await k.walk({ name: 'terug', to: P.handBack, r: P.handBack.r, line: c.terug, doel: c.chipCamera, cue: c.bijBoom, glyph: 'camera' });
+
+  /* 13 · the camera guards the wood: on the open crossing, a step out from his camera, he
+          looks at the glade; a roe comes in from the trees and grazes there; click. He is
+          handed back where he stands (the follow camera free behind him) */
   const roe = WILDCAMERA_HOME.residents.find((r) => r.key === 'ree')!.after!;
-  await k.frame(REUNION_VIEW, { face: headingTo(k.ranger(), P.watch) });
-  await k.walkRanger(P.watch.x, P.watch.z, 0.05);
-  k.world.faceRanger(headingTo(P.watch, P.glade));
+  k.beat = 'reunion:walk';
+  await k.walkRanger(P.handBack.x, P.handBack.z, 0.05);
+  await k.frame(REUNION_VIEW, { face: P.handBack.heading });
   await k.reunion(async () => {
     const from = aimSpot('ree', 'open').from;
     const a = A.ree;

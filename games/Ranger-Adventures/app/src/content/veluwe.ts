@@ -579,6 +579,9 @@ const MISSIE_WILDCAMERA = {
       valHier: 'Daar ligt de val.',
       valKnop: 'Haal de val weg',
       valWeg: 'Goed zo. De val is weg.',
+      terug: 'Loop terug naar je camera.',
+      chipCamera: 'Je camera',
+      bijBoom: 'bij de grote boom',
     },
     knap: {
       pak: 'Hier ligt de wildcamera.',
@@ -592,6 +595,8 @@ const MISSIE_WILDCAMERA = {
       valHier: 'Daar ligt de strik.',
       valKnop: 'Haal de strik weg',
       valWeg: 'Goed zo. De strik is weg.',
+      terug: 'Loop terug naar de wildcamera.',
+      chipCamera: 'De wildcamera',
     },
   },
   stappen: [

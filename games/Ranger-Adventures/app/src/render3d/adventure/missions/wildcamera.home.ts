@@ -20,13 +20,13 @@ import type { HomeState } from '../types';
 import { groundDecal } from '../decal';
 import { atLocal, dist, headingTo, stream, toLocal } from '../places';
 import { grassTuftGeometry, grassMaterial, heightFor } from '../../play/spawn';
-import { nameTag, disposeTag } from '../../play/stage';
+import { disposeTag } from '../../play/stage';
 import { boxObstacle } from '../../CharacterController';
 import { SIZE } from '../../AnimalScale';
 import { crouchPose } from './wildcamera.pose';
 import {
   WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, JUNIPER, THICKET_BUSHES, TAG_AT, NIGHTJAR_AT, NIGHTJAR_STUMP,
-  trailA, trailB,
+  SNARE_MARKS, trailA, trailB,
 } from './wildcamera.places';
 import type { Spot } from '../types';
 
@@ -36,6 +36,14 @@ const CAM_H = SIZE.wildcamera.h;
 const CAM_DEPTH = CAM_H * (1.29 / 1.6);
 /** The camera's fan of view on the ground: its reach (m); its half-angle is the places'. */
 const FAN_REACH = 5.4;
+/** The places' name-tags: how wide (m), and how long a turn of their marks takes (s: a
+ *  sign turning over, edge-on half way). */
+const TAG_W = 1.9;
+const TAG_TURN_S = 0.7;
+/** The camera's "no" (a press beside both places): a short sweep over and back on its
+ *  strap — how long (s) and how far each way (rad). */
+const NOD_S = 0.46;
+const NOD_RAD = 0.24;
 
 /** A soft round glow (white in the middle, fading out): the red light's halo, so a
  *  1 cm light on a camera reads from across the crossing. */
@@ -55,6 +63,79 @@ function glowTexture(): THREE.CanvasTexture {
   glowTex = new THREE.CanvasTexture(c);
   glowTex.colorSpace = THREE.SRGBColorSpace;
   return glowTex;
+}
+
+/** Which animals a place is for under the rule shown now: a sun (day animals) or a moon
+ *  (night animals), the same marks the card's rule chips and tags carry. */
+type Mark = 'dag' | 'nacht';
+
+/**
+ * A place's name over the world with its day/night mark in front: the name-tag's dark
+ * pill (play/stage `nameTag`), and a round badge before the words, a drawn sun on the
+ * card's day yellow or a drawn moon on its night blue. Drawn into `canvas` (redrawn when
+ * the mark turns: one texture, `needsUpdate`).
+ */
+function drawMarkTag(canvas: HTMLCanvasElement, text: string, mark: Mark): void {
+  const g = canvas.getContext('2d')!;
+  g.clearRect(0, 0, canvas.width, canvas.height);
+  g.font = '600 64px Inter, system-ui, sans-serif';
+  g.textBaseline = 'middle';
+  const badge = 84; // the badge's width, with its gap
+  const tw = g.measureText(text).width;
+  const w = Math.min(500, tw + 56 + badge);
+  const x = (512 - w) / 2, y = 20, h = 88, r = 26;
+  g.fillStyle = 'rgba(28,24,18,0.78)';
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+  g.fill();
+  // the badge: the card's aim-tag colours (wildcamera.css .aim-tag.dag / .nacht)
+  const cx = x + 22 + 32, cy = 64;
+  g.fillStyle = mark === 'dag' ? '#f6d77a' : '#3f4f86';
+  g.beginPath(); g.arc(cx, cy, 33, 0, Math.PI * 2); g.fill();
+  g.lineCap = 'round';
+  if (mark === 'dag') {
+    // a sun: a disc and eight short rays, in the day tag's dark brown
+    g.fillStyle = g.strokeStyle = '#3b2a0c';
+    g.lineWidth = 5;
+    g.beginPath(); g.arc(cx, cy, 11, 0, Math.PI * 2); g.fill();
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      g.beginPath();
+      g.moveTo(cx + Math.cos(a) * 17, cy + Math.sin(a) * 17);
+      g.lineTo(cx + Math.cos(a) * 24, cy + Math.sin(a) * 24);
+      g.stroke();
+    }
+  } else {
+    // a moon: a crescent (a disc with a disc cut out), in the night tag's pale white
+    g.fillStyle = '#f3f1ff';
+    g.beginPath();
+    g.arc(cx - 2, cy, 19, 0, Math.PI * 2);
+    g.arc(cx + 8, cy - 7, 16, 0, Math.PI * 2, true);
+    g.fill('evenodd');
+  }
+  g.fillStyle = '#fff';
+  g.textAlign = 'left';
+  g.fillText(text, x + 28 + badge - 6, 66);
+}
+
+/** A place's marked name-tag (a sprite; `disposeTag` frees it). */
+function markTag(text: string, mark: Mark, width: number): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 128;
+  drawMarkTag(canvas, text, mark);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false, transparent: true }));
+  sprite.scale.set(width, width / 4, 1);
+  sprite.renderOrder = 5;
+  sprite.userData.text = text;
+  return sprite;
 }
 
 /** The animal prints in the trails: an atlas of three kinds (64 px cells). */
@@ -241,6 +322,16 @@ export class WildcameraHome implements HomeDressing {
   private blink: 'off' | 'idle' | 'rec' = 'off';
   private irFlash = 0;
   private ledFlash = 0;
+  /** night: the red light gives way to the soft infrared glow round the lens */
+  private irMode = false;
+  private irOn = 0;
+  private readonly irGlow: THREE.Sprite;
+  /** the "no": time left (s), and the sweep it adds to where the camera looks (rad) */
+  private nod = 0;
+  private nodOff = 0;
+  /** the places' marks: which each shows, and a turn under way (0 → 1) */
+  private marks: { open: Mark; hol: Mark } = { open: 'dag', hol: 'nacht' };
+  private markTurn: { t: number; to: { open: Mark; hol: Mark }; swapped: boolean } | null = null;
   /** the places' names, over the glade and the thicket (only while the camera is aimed) */
   readonly tags: { open: THREE.Sprite; hol: THREE.Sprite };
   /** the two places as a click finds them (the glade's ground, grass and flowers; the
@@ -251,8 +342,9 @@ export class WildcameraHome implements HomeDressing {
   gladeHint: THREE.Object3D;
   thicketHint: THREE.Object3D;
   private readonly zones: THREE.Mesh[] = [];
-  /** the empty snare by the trail (the morning) */
+  /** the empty snare by the trail (the morning), and the grass it lies half in */
   private snare: THREE.Object3D | null = null;
+  private snareGrass: THREE.InstancedMesh | null = null;
   private snareWanted = false;
   /** the man in the morning photo (only ever in that one picture), crouched: how far
    *  his crouch sinks him */
@@ -422,6 +514,16 @@ export class WildcameraHome implements HomeDressing {
     this.ledGlow.position.copy(this.led.position).z += 0.01;
     this.ledGlow.raycast = () => {};
     this.trapBody.add(this.ledGlow);
+    // the infrared glow at night: a dim deep-red halo round the lens (so it reads from
+    // across the crossing, as the red light does by day)
+    this.irGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), color: '#d8322a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0,
+    }));
+    this.irGlow.scale.setScalar(0.3);
+    this.irGlow.position.set(0, 0.02, CAM_DEPTH * 0.5 + 0.02);
+    this.irGlow.visible = false;
+    this.irGlow.raycast = () => {};
+    this.trapBody.add(this.irGlow);
     this.ir.raycast = () => {};
     this.trapBody.add(this.led, this.ir);
     this.group.add(this.trap);
@@ -472,11 +574,45 @@ export class WildcameraHome implements HomeDressing {
     zone(P.glade, GLADE_R + 0.2, 1.3, this.glade, 'glade-zone');
     zone(atLocal(CROSS, 4.9, -0.8), 2.1, 2.0, this.thicket, 'thicket-zone');
 
-    /* -- the places' names (shown while the camera is aimed) -- */
-    this.tags = { open: nameTag('open plek', 1.5), hol: nameTag('het bosje', 1.5) };
+    /* -- the places' names, each with the mark of the animals it is for now (shown while
+          the camera is aimed; the marks swap when the rule flips) -- */
+    this.tags = { open: markTag('open plek', 'dag', TAG_W), hol: markTag('het bosje', 'nacht', TAG_W) };
     const tagAt = (p: Spot, y: number, t: THREE.Sprite): void => { t.position.set(p.x, g(p.x, p.z) + y, p.z); t.visible = false; this.group.add(t); };
     tagAt(TAG_AT.open, TAG_AT.open.y, this.tags.open);
     tagAt(TAG_AT.hol, TAG_AT.hol.y, this.tags.hol);
+
+    /* -- by the wildwissel up from the crossing: a juniper and a foxglove, the snare's spot
+          between them in a tuft of grass (a small thing: it rests by its own spot) -- */
+    const spot = env.detail(P.snare);
+    const mk = SNARE_MARKS;
+    void env.spawnPlant('prop-juniper-bush', mk.bush.h).then((s) => { const r = add(s, mk.bush.x, mk.bush.z, mk.bush.yaw); if (r) spot.add(r); });
+    env.obstacles.push({ x: mk.bush.x, z: mk.bush.z, r: mk.bush.r });
+    void env.spawnPlant('prop-foxglove', SIZE.vingerhoedskruid.h * 0.85).then((s) => { const r = add(s, mk.foxglove.x, mk.foxglove.z, mk.foxglove.yaw); if (r) spot.add(r); });
+    // the grass the snare lies half in: tufts round it, thickest behind and beside it (as
+    // he comes up the trail), a few low ones in front: the wire loop shows between them
+    // from close by, never from down the trail
+    {
+      const sp = P.snare;
+      const tuft = new THREE.InstancedMesh(grassTuftGeometry(14, 5), grassMaterial(), 16);
+      tuft.name = 'snare-grass';
+      const rt = stream(53);
+      const toCam = Math.atan2(CAMERA.x - sp.x, CAMERA.z - sp.z);
+      const m4 = new THREE.Matrix4();
+      for (let i = 0; i < tuft.count; i++) {
+        // round it, but never right on the loop, and the side toward the trail's lens kept low
+        const a = (i / tuft.count) * Math.PI * 2 + rt() * 0.3;
+        const rr = 0.2 + rt() * 0.28;
+        const x = sp.x + Math.sin(a) * rr, z = sp.z + Math.cos(a) * rr;
+        const front = Math.cos(a - toCam); // 1: between the snare and the way he comes
+        const h = (front > 0.55 ? 0.16 : 0.3) + rt() * 0.12;
+        m4.compose(new THREE.Vector3(x, g(x, z) - 0.01, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rt() * 6.28), new THREE.Vector3(h * 1.3, h, h * 1.3));
+        tuft.setMatrixAt(i, m4);
+      }
+      tuft.instanceMatrix.needsUpdate = true;
+      tuft.raycast = () => {};
+      spot.add(tuft);
+      this.snareGrass = tuft;
+    }
 
     /* -- the snare, the man in the photo, the nightjar -- */
     const sn = P.snare;
@@ -572,6 +708,8 @@ export class WildcameraHome implements HomeDressing {
     m.color.set('#fff0b8').lerp(new THREE.Color('#aebfff'), Math.min(1, Math.max(0, k)));
     this.fanPeak = 0.42 - 0.2 * Math.min(1, Math.max(0, k));
     m.opacity = this.fanPeak * this.fanOn;
+    // (past the middle of the dusk the camera sees by infrared: its red light goes out)
+    this.irMode = k > 0.5;
   }
   private fanPeak = 0.42;
   /** the camera settling on its strap (0 → 1) */
@@ -585,6 +723,41 @@ export class WildcameraHome implements HomeDressing {
 
   /** The infrared ring glows softly (a caller at night): 0..1. */
   glowIr(k: number): void { this.irFlash = Math.max(this.irFlash, k); }
+
+  /** A press beside both places: the camera on its strap gives a calm "no" — a short
+   *  sweep over and back, its light blinks once (under reduced motion only the blink).
+   *  False while it turns (a "no" never stacks on a look or on itself). */
+  shake(reduced: boolean): boolean {
+    if (this.aimT < 1 || this.nod > 0 || !this.trap.visible) return false;
+    this.ledFlash = 0.16;
+    if (this.irMode) this.irFlash = Math.max(this.irFlash, 0.6);
+    if (!reduced) this.nod = NOD_S;
+    return true;
+  }
+
+  /** The places' marks for the rule now: by day the glade is for the day animals (a sun)
+   *  and the thicket for the night animals (a moon); flipped, the other way round. With
+   *  `turn` the two signs turn over (edge-on half way, the new mark on the way back). */
+  setMarks(flipped: boolean, turn: boolean): void {
+    const to = { open: (flipped ? 'nacht' : 'dag') as Mark, hol: (flipped ? 'dag' : 'nacht') as Mark };
+    if (to.open === this.marks.open && !this.markTurn) return;
+    if (!turn) { this.markTurn = null; this.drawMarks(to); return; }
+    this.markTurn = { t: 0, to, swapped: false };
+  }
+
+  private drawMarks(to: { open: Mark; hol: Mark }): void {
+    this.marks = to;
+    for (const key of ['open', 'hol'] as const) {
+      const t = this.tags[key];
+      const tex = t.material.map as THREE.CanvasTexture;
+      drawMarkTag(tex.image as HTMLCanvasElement, t.userData.text as string, to[key]);
+      tex.needsUpdate = true;
+      t.scale.x = TAG_W;
+    }
+  }
+
+  /** The places' marks now (the dev read). */
+  get placeMarks(): { open: Mark; hol: Mark } { return { ...this.marks }; }
 
   /** The places' names over the glade and the thicket (and the ground a click on either
    *  counts on): while the camera is being aimed. */
@@ -659,8 +832,12 @@ export class WildcameraHome implements HomeDressing {
     r.rotation.set(0, side, 0);
     const wasSnare = this.snare?.visible ?? false;
     if (this.snare) this.snare.visible = true;
+    // (he kneels in the grass to set the wire: it lies flat round the loop at dawn, so the
+    // camera sees the snare at his hands; the grass stands up again by the morning)
+    const grass = this.snareGrass, wasGrass = grass?.visible ?? false;
+    if (grass) grass.visible = false;
     r.visible = true;
-    return () => { r.visible = false; if (this.snare) this.snare.visible = wasSnare; };
+    return () => { r.visible = false; if (this.snare) this.snare.visible = wasSnare; if (grass) grass.visible = wasGrass; };
   }
 
   /** The nightjar flies from `from` to `to` (landing there on the ground, or at `lift` m
@@ -728,6 +905,9 @@ export class WildcameraHome implements HomeDressing {
     this.fanWant = this.fanOn = 0;
     this.fan.visible = false;
     this.setNight(0);
+    this.irOn = 0;
+    this.nod = this.nodOff = 0;
+    this.setMarks(false, false);
     this.showTags(false);
     this.showSnare(false);
     this.birdGone();
@@ -761,6 +941,26 @@ export class WildcameraHome implements HomeDressing {
       this.trap.rotation.y = this.aimNow;
       this.layFan();
     }
+    // …and shakes its "no": one soft sweep over and back, easing out
+    if (this.nod > 0) {
+      this.nod = Math.max(0, this.nod - dt);
+      const p = 1 - this.nod / NOD_S;
+      this.nodOff = Math.sin(p * Math.PI * 2) * NOD_RAD * (1 - 0.35 * p);
+      if (this.nod === 0) this.nodOff = 0;
+      this.trap.rotation.y = this.aimNow + this.nodOff;
+      // (its fan on the ground brightens a little as it sweeps: the "no" is seen there)
+      (this.fan.material as THREE.MeshBasicMaterial).opacity = this.fanPeak * this.fanOn * (1 + 0.7 * Math.sin(p * Math.PI));
+      this.layFan();
+    }
+    // the places' signs turn over to their new marks
+    const mt = this.markTurn;
+    if (mt) {
+      mt.t = Math.min(1, mt.t + dt / TAG_TURN_S);
+      if (mt.t >= 0.5 && !mt.swapped) { mt.swapped = true; this.drawMarks(mt.to); }
+      const edge = Math.abs(Math.cos(mt.t * Math.PI)); // 1 → 0 (edge-on) → 1
+      for (const key of ['open', 'hol'] as const) this.tags[key].scale.x = TAG_W * Math.max(0.04, edge);
+      if (mt.t >= 1) { this.markTurn = null; for (const key of ['open', 'hol'] as const) this.tags[key].scale.x = TAG_W; }
+    }
     // the fan fades in and out
     if (this.fanOn !== this.fanWant) {
       this.fanOn = reduced ? this.fanWant : this.fanOn + Math.sign(this.fanWant - this.fanOn) * Math.min(Math.abs(this.fanWant - this.fanOn), dt * 2.5);
@@ -771,18 +971,27 @@ export class WildcameraHome implements HomeDressing {
     // the red light: a slow blink after the mission, a steady quick one while it watches
     const ledMat = this.led.material as THREE.MeshBasicMaterial;
     this.ledFlash = Math.max(0, this.ledFlash - dt);
+    // (at night it sees by infrared: the red light goes out and the ring round the lens
+    // glows a soft deep red, breathing slowly; it fades over as the dusk passes)
+    const ir = this.irMode && this.blink === 'rec';
+    this.irOn = reduced ? (ir ? 1 : 0) : Math.max(0, Math.min(1, this.irOn + (ir ? dt : -dt) / 0.8));
     const on = this.blink === 'rec' ? (this.clock % 1.1) < 0.55
       : this.blink === 'idle' ? (this.clock % 3.2) < 0.18 : false;
-    const lit = this.ledFlash > 0 ? 1 : on ? 0.95 : 0.12;
+    const lit = this.ledFlash > 0 ? 1 : (on ? 0.95 : 0.12) * (1 - this.irOn);
     ledMat.opacity = lit;
-    this.led.visible = this.blink !== 'off' || this.ledFlash > 0;
+    this.led.visible = (this.blink !== 'off' || this.ledFlash > 0) && lit > 0.02;
     (this.ledGlow.material as THREE.SpriteMaterial).opacity = lit > 0.5 ? lit : 0;
     this.ledGlow.visible = this.led.visible && lit > 0.5 && this.trap.visible;
-    // the infrared ring: a soft glow that fades
+    // the infrared ring: its steady night glow, and a brighter flash that fades
     const irMat = this.ir.material as THREE.MeshBasicMaterial;
     this.irFlash = Math.max(0, this.irFlash - dt * 1.6);
-    irMat.opacity = this.irFlash * 0.8;
-    this.ir.visible = this.irFlash > 0.01;
+    const breathe = this.irOn * (0.5 + (reduced ? 0 : 0.12 * Math.sin(this.clock * 2.2)));
+    const irK = Math.max(this.irFlash * 0.8, breathe);
+    irMat.opacity = irK;
+    this.ir.visible = irK > 0.01;
+    const irGlowMat = this.irGlow.material as THREE.SpriteMaterial;
+    irGlowMat.opacity = Math.min(1, irK * 1.3);
+    this.irGlow.visible = irK > 0.01 && this.trap.visible;
     this.stepFlight(dt);
     void this.state;
   }
@@ -791,12 +1000,13 @@ export class WildcameraHome implements HomeDressing {
   private layFan(): void {
     const pos = this.fan.geometry.attributes.position as THREE.BufferAttribute;
     const SEG = 16, RINGS = 6;
-    const ox = TREE.x + Math.sin(this.aimNow) * (PINE.trunkR + CAM_DEPTH);
-    const oz = TREE.z + Math.cos(this.aimNow) * (PINE.trunkR + CAM_DEPTH);
+    const look = this.aimNow + this.nodOff;
+    const ox = TREE.x + Math.sin(look) * (PINE.trunkR + CAM_DEPTH);
+    const oz = TREE.z + Math.cos(look) * (PINE.trunkR + CAM_DEPTH);
     for (let r = 0; r <= RINGS; r++) {
       const reach = 0.3 + (FAN_REACH - 0.3) * (r / RINGS);
       for (let i = 0; i <= SEG; i++) {
-        const a = this.aimNow - FAN_HALF + (2 * FAN_HALF * i) / SEG;
+        const a = look - FAN_HALF + (2 * FAN_HALF * i) / SEG;
         const x = ox + Math.sin(a) * reach, z = oz + Math.cos(a) * reach;
         pos.setXYZ(r * (SEG + 1) + i, x, this.groundY(x, z) + 0.05, z);
       }
@@ -813,7 +1023,10 @@ export class WildcameraHome implements HomeDressing {
     this.strap.geometry.dispose();
     (this.strap.material as THREE.Material).dispose();
     for (const o of [this.led, this.ir, ...this.zones]) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
+    this.snareGrass?.geometry.dispose();
+    this.snareGrass?.removeFromParent();
     (this.ledGlow.material as THREE.Material).dispose();
+    (this.irGlow.material as THREE.Material).dispose();
     this.group.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (mesh.isMesh && (mesh.name === 'wildwissel' || mesh.name === 'wildwissel-prints')) {
