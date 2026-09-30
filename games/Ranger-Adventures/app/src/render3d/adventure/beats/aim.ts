@@ -15,7 +15,11 @@
  * What the child sees is the mission's (`AimWorld`): the camera turning on its strap,
  * the animal walking into view there, the shutter and the photo, the empty photo, the
  * sky turning. The card at the bottom shows the animal that comes (its picture, its
- * name, its ☀/🌙 tag), the question, and the rule.
+ * name, its ☀/🌙 tag), the question, and the rule. A press beside both places gets a
+ * calm "no" from the camera (it is no pick: the core only ever hears a place). The flip
+ * is the round's peak: the card makes way, the day turns (the sky, the places' marks,
+ * the camera's light), and only then comes the new rule, said outright, with the next
+ * animal.
  */
 
 import * as THREE from 'three';
@@ -44,8 +48,9 @@ export interface AimWorld {
   end(): void;
   /** turn the camera to look at the place (resolves when it looks there) */
   look(bin: WisselBin): Promise<void>;
-  /** the right place: the animal walks in there and is photographed */
-  photo(item: WisselItem, bin: WisselBin): Promise<void>;
+  /** the right place: the animal walks in there (it sets off at once, while the camera
+   *  still turns: `looked` resolves when it looks there) and is photographed */
+  photo(item: WisselItem, bin: WisselBin, looked: Promise<void>): Promise<void>;
   /** the wrong place: an empty photo */
   empty(bin: WisselBin): Promise<void>;
   /** the animal of the photo before walks off (the next one comes) */
@@ -53,8 +58,11 @@ export interface AimWorld {
   /** an animal photographed at this place is still walking off through it (a perfect
    *  player waits for it to go before he aims there again: the play hint waits too) */
   leaving?(bin: WisselBin): boolean;
-  /** the day turns (the rule flipped): the sky fades to night or back to day */
+  /** the day turns (the rule flipped): the sky fades to night or back to day, and the
+   *  world shows the new rule (the places' day/night marks swap); resolves when it has */
   turn(to: 'night' | 'day'): Promise<void>;
+  /** a press beside both places: the camera shakes a calm "no" (no pick, no photo) */
+  miss?(): void;
 }
 
 export interface AimOpts {
@@ -74,7 +82,7 @@ export interface AimOpts {
     /** the day turns: "Het wordt nacht." / "Het wordt dag." */
     nacht: string;
     dag: string;
-    /** the rule flipped: "Nu is het andersom!" */
+    /** the rule flipped: "Nu is het andersom!" (the card's banner, then the rule said) */
     andersom: string;
     /** all done: the step's own goed line */
     goed: string;
@@ -109,10 +117,10 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
     const [c1, c2] = aim.chips;
     const komt = o.lines.komt(item.id);
     card = anchoredPrompt(k.host,
-      `<div class="p3-bottom aim3d">` +
+      `<div class="p3-bottom aim3d${flip ? ' aim-flipped' : ''}">` +
       (toast ? `<div class="p3-toast ${toast.kind}" role="status">${esc(toast.text)}</div>` : '') +
       `<div class="p3-card">` +
-      (flip ? `<p class="p3-flip">${esc(flip)}</p>` : '') +
+      (flip ? `<p class="p3-flip aim-flip">${esc(flip)}</p>` : '') +
       `<div class="p3-row">` +
       `<span class="aim-pic" aria-hidden="true">${animalIcon(item.id)}</span>` +
       `<div class="p3-lines"><p class="p3-text">${esc(komt)}</p><p class="p3-sub">${esc(o.lines.vraag)}</p></div>` +
@@ -124,6 +132,14 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
       k.signal);
     const said = `${komt} ${cue.woord}. ${o.lines.vraag}`;
     card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(flip ? `${flip} ${aim.rule} ${said}` : said));
+  };
+  /** The card makes way for the world (the flip): only its one line stays, small. */
+  const turning = (line: string): void => {
+    card = anchoredPrompt(k.host,
+      `<div class="p3-bottom aim3d aim-turning"><div class="p3-card"><div class="p3-row">` +
+      `<p class="p3-flip aim-flip">${esc(line)}</p>${SPEAK_BTN}` +
+      `</div></div></div>`, k.signal);
+    card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(line));
   };
   const say = (item: WisselItem): string => `${o.lines.komt(item.id)} ${dagOfNacht(item.dag).woord}. ${o.lines.vraag}`;
 
@@ -145,9 +161,17 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
     // the words of the pick before ("Leeg…", "Klik!…") go: they are not about this one
     card?.querySelector('.p3-toast')?.remove();
     const s = aim.pick(bin);
+    const pickedAt = k.now;
+    /** (dev read: seconds from a right click to the next animal's card, the longest) */
+    const timed = (): void => {
+      const t = Math.round((k.now - pickedAt) * 10) / 10;
+      k.stats.aim_card_s = t;
+      k.stats.aim_card_max_s = Math.max(k.stats.aim_card_max_s ?? 0, t);
+    };
     void (async () => {
-      await w.look(bin);
+      const looked = w.look(bin);
       if (s.shot === 'empty') {
+        await looked;
         if (settings.geluid) Sound.tryAgain();
         await w.empty(bin);
         k.stats.aim_wrong = (k.stats.aim_wrong ?? 0) + 1;
@@ -156,24 +180,31 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
         busy = false;
         return;
       }
-      await w.photo(item, bin);
+      await w.photo(item, bin, looked);
       k.beat = `aim:${aim.run.index}`;
       if (settings.geluid) Sound.correct();
       if (s.done) { finished(); return; }
       const next = aim.current!;
       if (s.turn) {
+        // the peak of the round: the card makes way and the world turns (the sky, the
+        // places' day/night marks, the camera's light) under one line, "Het wordt nacht.";
+        // then the card comes back with the new rule said outright, and the next animal
+        k.beat = 'aim:turn';
         const turnLine = s.turn === 'night' ? o.lines.nacht : o.lines.dag;
-        const flip = `${turnLine} ${o.lines.andersom}`;
         w.leave(item);
+        turning(turnLine);
+        speak(turnLine);
         if (settings.geluid) Sound.select();
-        show(next, flip, null);
-        speak(flip);
         await w.turn(s.turn);
-        queue(aim.rule); // the NEW rule, said outright (two channels: the sky and the words)
+        show(next, o.lines.andersom, null);
+        k.stats.aim_turn_s = Math.round((k.now - pickedAt) * 10) / 10;
+        speak(`${o.lines.andersom} ${aim.rule}`); // the NEW rule, said outright
         queue(say(next));
+        k.beat = `aim:${aim.run.index}`;
         k.stats.aim_turns = (k.stats.aim_turns ?? 0) + 1;
       } else {
         show(next, null, { kind: 'ok', text: o.lines.foto });
+        timed();
         w.leave(item);
         speak(`${o.lines.foto} ${say(next)}`);
       }
@@ -181,10 +212,16 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
     })().catch(() => {});
   };
 
+  /** a press beside both places: the camera's calm "no" (only while it waits for a pick) */
+  const onMiss = (): void => {
+    if (!ready || busy || !aim.current) return;
+    k.stats.aim_miss = (k.stats.aim_miss ?? 0) + 1;
+    w.miss?.();
+  };
   const targets = (['open', 'hol'] as const).map((b) => ({ id: b, object: w.places[b].pick }));
   const teardown = pick3d({
     canvas: k.ctx.canvas, camera: k.world.camera, raycaster: k.ctx.raycaster as THREE.Raycaster,
-    targets, onPick, signal: k.signal,
+    targets, onPick, onMiss, signal: k.signal,
   });
   try {
     const first = aim.current!;

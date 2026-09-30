@@ -56,6 +56,18 @@
 .aim3d .aim-tag.nacht { background: #3f4f86; color: #f3f1ff; }
 .aim3d .p3-chip { font-size: 18px; padding: 8px 14px; }
 
+/* the flip, the round's peak: while the day turns only its one line stays, a small
+   card in the middle (the world has the stage); then the card comes back with the
+   new rule, "Nu is het andersom!" big over it and the new rule's chips lit */
+.aim3d.aim-turning .p3-card { width: auto; padding: 8px 10px 8px 26px; }
+.aim3d.aim-turning .p3-flip { background: none; padding: 0; font: 700 28px/1.2 var(--font-read); }
+.aim3d .p3-flip.aim-flip { font: 700 24px/1.2 var(--font-read); padding: 8px 22px; }
+.aim3d.aim-flipped .p3-chip {
+  background: var(--spel-sun-glow);
+  border-color: var(--spel-sun);
+  font-weight: 700;
+}
+
 /* the morning's look through the photos: a card over the world */
 .wc-review-wrap { display: grid; place-items: center; }
 .wc-review {
