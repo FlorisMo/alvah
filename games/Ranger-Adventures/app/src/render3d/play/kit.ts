@@ -487,6 +487,9 @@ export interface Pick3dOptions {
   raycaster: THREE.Raycaster;
   targets: Pick3dTarget[];
   onPick: (id: string) => void;
+  /** a press on the canvas that hits none of the targets (optional: the wildcamera's
+   *  camera shakes a calm "no"); never called for a pick */
+  onMiss?: () => void;
   /** the game's own abort signal (`Stage.signal`): a stop removes the listener */
   signal: AbortSignal | null;
 }
@@ -536,7 +539,7 @@ export function addHitSphere(
  * disposes the hit-spheres.
  */
 export function pick3d(opts: Pick3dOptions): () => void {
-  const { canvas, camera, raycaster, targets, onPick, signal } = opts;
+  const { canvas, camera, raycaster, targets, onPick, onMiss, signal } = opts;
   if (signal?.aborted) return () => {}; // a stopped game takes no more picks
   const viewportH = canvas.getBoundingClientRect().height || 800;
   const spheres = targets.map((t) => addHitSphere(t.object, camera, viewportH));
@@ -570,6 +573,7 @@ export function pick3d(opts: Pick3dOptions): () => void {
       });
     }
     if (best) onPick((best as { id: string }).id);
+    else onMiss?.();
   };
   // F-26: bind to the game's abort scope so "Stop de missie" removes this canvas
   // listener even when the engine's own teardown never runs (aborted mid-step).

@@ -12,8 +12,8 @@
  * juniper and bracken with the badger's sett at its foot (where the night animals sleep
  * by day). The camera hangs on the pine, facing the crossing.
  *
- *   marker ── (the wildwissel, ~20 m) ── the crossing: glade ◄── camera pine ──► thicket
- *                                                             (the sett, the snare)
+ *   marker ── (the wildwissel, ~20 m: the snare, by a foxglove and a bush) ── the crossing:
+ *             glade ◄── camera pine ──► thicket (the sett)
  *
  * The views look SOUTH over the crossing (the ven, the markers and the path behind the
  * lens): `u` runs east (screen right), `v` south (away from the lens).
@@ -22,7 +22,7 @@
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import { anchorInBiome } from '../../Biomes.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
-import { atLocal, headingTo, type Frame } from '../places.ts';
+import { atLocal, headingTo, toward, type Frame } from '../places.ts';
 
 /** The wildcamera marker: the bos's first anchor (Biomes.anchorInBiome('bos', 22)). */
 export const MARKER: Spot = anchorInBiome('bos', 22);
@@ -56,12 +56,26 @@ const SETT = at(3.2, -2.25);
  *  into the wood, away from every view the child has of it — the model has a badger's
  *  face at its opening, and by day the badger sleeps inside. */
 export const SETT_FACE = VIEW_H + 0.3;
-/** Where the empty snare lies: on the second trail where it goes into the glade (where
- *  the deer come out to graze), a few steps from the pine. The camera sees it side-on,
- *  with the glade and the open heath behind: that is the morning photo. */
-const SNARE = at(-2.55, -1.35);
+/** Where the empty snare lies: half in the grass at the edge of the wildwissel, ~11 m up
+ *  it from the crossing (the way he came in), with a foxglove and a juniper bush just
+ *  beyond it. The camera on the pine looks straight up the trail and sees the man
+ *  crouched there with those two beside him: that is the morning photo, and it is what
+ *  the child goes looking for (from the crossing it is out of sight, in the grass). On
+ *  the trail's segment (11.1, -20.4) → (12.7, -17.5), a little to its west side. */
+const SNARE: Spot = { x: 11.05, z: -19.8 };
+/** The two things by it the photo shows (m: a juniper, as the thicket's, and a foxglove,
+ *  as the glade's): just beyond the snare as the camera and a walker from the crossing
+ *  see it, one each side of the trail, so the pair reads from down the trail. */
+export const SNARE_MARKS = {
+  bush: { x: 10.2, z: -19.0, h: 1.35, r: 0.5, yaw: 0.9 },
+  foxglove: { x: 12.25, z: -19.4, yaw: 2.1 },
+} as const;
 
 export const GLADE_R = 2.3;
+
+/** Where the glade's animals step in from for the camera: under the trees just beyond
+ *  the glade's edge, off the view's left side (the way the shy roe went, a little nearer). */
+export const GLADE_ENTRY: Spot = at(-9.0, -0.8);
 
 /** The thicket's one solid bush (its juniper; the brambles and bracken the animals walk
  *  through), and where the animals come into the thicket from, out of view: along the
@@ -119,16 +133,18 @@ export const WILDCAMERA_PLACES = {
   strap: { ...at(0.62, -0.62), r: 0.3, heading: headingTo(at(0.62, -0.62), CAMERA) },
   /** where he stands while the camera watches: beside the pine, a step back from its face */
   watch: { ...at(1.15, 0.2), r: 0.3, heading: VIEW_H },
-  /** after the photos he steps out in front of the pine onto the trail to the glade, and
-   *  looks along it (the pine no longer between him and the snare) */
-  valStart: { ...at(0.75, -1.05), r: 0.3, heading: headingTo(at(0.75, -1.05), at(-2.55, -1.35)) },
+  /** the end, handed back: a step out on the open crossing beside the wildwissel (clear
+   *  of the pine, the thicket's bushes, the log and the stump), facing the glade, where the
+   *  roe grazes again. Off the pine's line: the follow camera keeps the crossing's view
+   *  (it looks south, over the pine), and his first step into it passes the trunk */
+  handBack: { ...at(1.6, -2.4), r: 1.4, heading: headingTo(at(1.6, -2.4), GLADE) },
   glade: { ...GLADE, r: GLADE_R },
   thicket: { ...THICKET, r: THICKET_R },
   sett: { ...SETT },
   snare: { ...SNARE },
-  /** where he stands to take the snare away: a step from it on the pine's side (toward
-   *  the lens), facing it */
-  snareApproach: { ...at(-1.75, -1.85), r: 0.8, heading: headingTo(at(-1.75, -1.85), SNARE) },
+  /** where he stands to take the snare away: on the trail a step before it, coming up
+   *  from the crossing, facing it (the walk ends as soon as he is near: `SNARE_FOUND`) */
+  snareApproach: { ...toward(SNARE, CAMERA, 0.9), r: 1.2, heading: headingTo(toward(SNARE, CAMERA, 0.9), SNARE) },
   /** a few steps along the wildwissel out of the marker ring: he steps onto it, facing
    *  the wood (far enough from the stump that the follow camera behind him has room) */
   trailStart: { x: 12.95, z: -17.35, r: 0.3, heading: 0 },
@@ -172,8 +188,8 @@ export function trailB(): Spot[] {
 
 /** Where an animal the camera photographs stands in a place (and comes from, out of
  *  view): the glade's middle, or the thicket's foot; the badger at its sett's mouth.
- *  The entries lie outside the framed view (the forest beyond the glade; behind the
- *  bushes), so every animal walks in. */
+ *  The entries lie just outside the framed view (under the trees beyond the glade's
+ *  edge; behind the bushes), so every animal walks in, and soon. */
 export interface AimSpot { at: Spot; from: Spot; yaw: number; /** the nightjar: how high its perch holds it (m) */ lift?: number }
 
 export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
@@ -188,7 +204,7 @@ export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
   }
   if (bin === 'open') {
     const spot = animal === 'edelhert' ? at(-4.8, -1.6) : at(-4.4, -2.3);
-    const from = at(-10.5, -0.6);
+    const from = GLADE_ENTRY;
     return { at: spot, from, yaw: headingTo(spot, TREE) + 1.15 };
   }
   if (animal === 'das') {
@@ -230,32 +246,26 @@ export const CROSS_VIEW = {
 } as const;
 
 /** The reunion: the crossing's own view (the pine with its camera, the glade where a roe
- *  steps in in the morning light along the trail that is safe now), with the ranger back
- *  beside his camera. */
-export const REUNION_VIEW = { ...CROSS_VIEW, insetTop: 150, insetBottom: 40 } as const;
+ *  steps in in the morning light), with the ranger back from the snare, a step out on the
+ *  open crossing (where he is handed back). */
+export const REUNION_VIEW = {
+  ...CROSS_VIEW, insetTop: 150, insetBottom: 40,
+  include: [{ x: WILDCAMERA_PLACES.handBack.x, z: WILDCAMERA_PLACES.handBack.z, h: RANGER_STAND_HEIGHT }],
+} as const;
 
-/** The snare: close by, from the side, the ranger at it (the action "Haal de val weg"). */
+/** He has found the snare when he comes this near it (m): he sees it in the grass there. */
+export const SNARE_FOUND = 2.3;
+
+/** The snare: close by, from the side, the ranger at it (the action "Haal de val weg"):
+ *  from the trail's east side, looking across it (the foxglove and the bush beside it). */
 export const SNARE_VIEW = (() => {
   const sn = WILDCAMERA_PLACES.snare, me = WILDCAMERA_PLACES.snareApproach;
   const mid = { x: (sn.x + me.x) / 2, z: (sn.z + me.z) / 2 };
-  const side = atLocal({ ...mid, heading: VIEW_H }, 1.6, -2.6); // from the lens's side: the glade behind
+  const side = { x: mid.x + 2.4, z: mid.z - 1.1 };
   return {
     at: mid, heading: headingTo(side, mid),
     halfW: 1.5, halfD: 1.2, tall: 1.4, pitchDeg: 26, insetTop: 120, insetBottom: 120,
     include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT }],
-  } as const;
-})();
-
-/** After the photos: from behind him on the trail in front of the pine, along it into
- *  the glade, to the snare lying on it (the follow camera takes over from there as he
- *  walks to it). */
-export const VAL_VIEW = (() => {
-  const from = WILDCAMERA_PLACES.valStart, sn = WILDCAMERA_PLACES.snare;
-  // (from a little north of him, the lens's side: the sett behind the view's edge)
-  return {
-    at: { x: sn.x + (from.x - sn.x) * 0.2, z: sn.z + (from.z - sn.z) * 0.2 }, heading: headingTo(at(0.9, -3.4), sn),
-    halfW: 1.6, halfD: 1.4, tall: 1.0, pitchDeg: 22, insetTop: 120, insetBottom: 40,
-    include: [{ x: from.x, z: from.z, h: RANGER_STAND_HEIGHT }],
   } as const;
 })();
 
@@ -291,6 +301,8 @@ export function wildcameraTreeClearings(): { x: number; z: number; r: number }[]
     { ...TREE, r: 3.6 },
     { ...at(0.4, -4.2), r: 3.4 },
     { ...at(0.5, -7.2), r: 2.6 },
+    // the snare's spot with its bush and foxglove
+    { ...SNARE, r: 2.4 },
   ];
   for (const p of trailA()) out.push({ x: p.x, z: p.z, r: 1.4 });
   return out;
@@ -303,8 +315,12 @@ export function wildcameraClearings(): { x: number; z: number; r: number }[] {
     { ...GLADE, r: GLADE_R + 0.4 },
     { ...THICKET, r: THICKET_R + 0.5 },
     { ...at(0.3, -0.9), r: 1.8 },
+    // the snare's spot (its own grass) and the camera's line up the trail to it (no
+    // bracken between the lens and the man in the morning photo)
+    { ...SNARE, r: 1.6 },
   ];
   for (const p of [...trailA(), ...trailB()]) out.push({ x: p.x, z: p.z, r: 0.7 });
+  for (let i = 1; i < 8; i++) out.push({ ...toward(CAMERA, SNARE, (i / 8) * Math.hypot(SNARE.x - CAMERA.x, SNARE.z - CAMERA.z)), r: 0.6 });
   return out;
 }
 
