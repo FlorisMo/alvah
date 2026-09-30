@@ -153,8 +153,20 @@ export interface WildState {
   /** what it watches (alert) */
   lookX: number;
   lookZ: number;
-  /** the side of the jeep's path it makes way to (+1 = the jeep's left, −1 its right; 0 none) */
+  /** the side of the jeep's current line it makes way to (+1 = the jeep's left, −1 its right;
+   *  0 = it has not made way). Chosen once per encounter and kept until it roams again: it
+   *  never crosses in front of the bonnet to the other side, however the driver steers */
   side: number;
+  /** it bears away without a clear spot to stand (the jeep steers at it): at its top speed */
+  bear: boolean;
+  /** it has made way for the jeep someone drives now (until he climbs out) */
+  madeWay: boolean;
+  /** how far (m) that jeep has come at it by its own motion since it last settled to watch
+   *  (never less than 0: backing off banks nothing; its own walk back is not counted) */
+  closed: number;
+  /** where that jeep was last frame (NaN: nobody drove) */
+  jx: number;
+  jz: number;
   /** seconds since the last threat */
   quiet: number;
   /** seconds without progress on its way back */
@@ -173,8 +185,8 @@ export interface WildState {
 export function newWildState(at: LoopPoint, loopT: number): WildState {
   return {
     x: at.x, z: at.z, facing: at.facing, speed: 0, moved: 0, turning: 0, mode: 'roam', gait: 'still',
-    inMode: 0, loopT, gx: at.x, gz: at.z, lookX: at.x, lookZ: at.z, side: 0, quiet: 99, stuck: 0,
-    replan: 0, threat: null, watchTurn: false, pace: 0,
+    inMode: 0, loopT, gx: at.x, gz: at.z, lookX: at.x, lookZ: at.z, side: 0, bear: false, madeWay: false, closed: 0, jx: NaN, jz: NaN,
+    quiet: 99, stuck: 0, replan: 0, threat: null, watchTurn: false, pace: 0,
   };
 }
 
@@ -269,19 +281,18 @@ function poses(j: JeepRead): number {
 }
 
 // module scratch for `keepOut` (no garbage)
-let koGap = Infinity, koLat = 0, koIdx = -1, koHit = -1, koFx = 0, koFz = 1;
+let koGap = Infinity, koHit = -1;
 /**
  * How close (m) the point (x, z) comes to the ground the jeep will cover: its body at every
  * predicted pose, each with the stretch its give-way brake looks along straight ahead (the
  * distance it would need to stop softly from that speed), measured from the jeep's widest
- * side to the point's own footprint `r` (`koGap`; < 0 = it touches). `koLat` = the side of
- * the jeep it lies on at the nearest pose (+ = the jeep's left), `koIdx` that pose,
- * `koFx`/`koFz` the way the jeep moves there, `koHit` the first pose whose ground comes
- * within `need` of it (−1 none). Poses whose body has already passed the point are skipped.
+ * side to the point's own footprint `r` (`koGap`; < 0 = it touches). `koHit` = the first
+ * pose whose ground comes within `need` of it (−1 none). Poses whose body has already passed
+ * the point are skipped.
  */
 function keepOut(n: number, x: number, z: number, r: number, need: number): void {
   const P = posesOf;
-  koGap = Infinity; koLat = 0; koIdx = -1; koHit = -1;
+  koGap = Infinity; koHit = -1;
   for (let i = 0; i < n; i++) {
     const o = i * PATH_STRIDE;
     const h = P[o + 2], v = P[o + 3];
@@ -295,8 +306,20 @@ function keepOut(n: number, x: number, z: number, r: number, need: number): void
     const a = along < lo ? lo : along > hi ? hi : along;
     const gap = Math.hypot(dx - fx * a, dz - fz * a) - JEEP_HALF - r;
     if (gap < need && koHit < 0) koHit = i;
-    if (gap < koGap) { koGap = gap; koIdx = i; koLat = dx * fz - dz * fx; koFx = fx * dir; koFz = fz * dir; }
+    if (gap < koGap) koGap = gap;
   }
+}
+
+// module scratch for `lineOf` (no garbage)
+let lnLat = 0;
+/**
+ * How far (x, z) lies across the jeep's CURRENT line (its centre and heading, not the path it
+ * may curve along): `lnLat` m (+ = its left). The side an animal keeps to is judged here: a path predicted with the wheel turned
+ * at the animal wraps round it, and its side of that curve points across the jeep's nose.
+ */
+function lineOf(j: JeepRead, x: number, z: number): void {
+  const fx = Math.sin(j.heading), fz = Math.cos(j.heading);
+  lnLat = (x - j.x) * fz - (z - j.z) * fx;
 }
 
 /** What an animal makes of a driven jeep this frame. */
@@ -304,7 +327,7 @@ export interface JeepView {
   /** 'path': it is in (or about to be in) the ground the jeep will cover; 'near': the jeep
    *  stands or crawls right by it; 'watch': the jeep comes by, worth watching; 'none' */
   kind: 'none' | 'watch' | 'near' | 'path';
-  /** the side of the jeep it is on (+ = its left; 0 = dead centre) */
+  /** how far (m) it stands off the jeep's current line (+ = its left; 0 = dead ahead) */
   lat: number;
   /** seconds until the jeep's ground reaches it (Infinity when it is not coming) */
   tti: number;
@@ -340,28 +363,42 @@ export function readJeep(x: number, z: number, r: number, j: JeepRead | null): J
     return v;
   }
   keepOut(n, x, z, r, need);
-  v.lat = koLat;
+  lineOf(j, x, z);
+  v.lat = lnLat;
   if (koHit >= 0) { v.kind = 'path'; v.tti = koHit * PATH_DT; return v; }
   if (koGap < JEEP_WATCH) v.kind = 'watch';
   return v;
 }
 
 /** Whether (x, z) lies clear of the ground the jeep will cover by at least `need` (m) of
- *  footprint gap, on `side` of it (never across its path). Call `poses` first. */
-function clearOfPath(n: number, x: number, z: number, r: number, need: number, side: number): boolean {
+ *  footprint gap, and on `side` of the jeep's current line. Call `poses` first. */
+function clearOfPath(n: number, j: JeepRead, x: number, z: number, r: number, need: number, side: number): boolean {
   keepOut(n, x, z, r, need);
-  return koHit < 0 && (koIdx < 0 || koLat * side >= 0);
+  if (koHit >= 0) return false;
+  lineOf(j, x, z);
+  return lnLat * side > 0;
 }
 
 const out2 = { x: 0, z: 0 };
 
+// the frame the runs out of the jeep's way are laid in: straight out to `side` of its
+// current line (`fanLx`/`fanLz`) and the way it moves (`fanUx`/`fanUz`)
+let fanLx = 0, fanLz = 0, fanUx = 0, fanUz = 1;
+function fanOf(j: JeepRead, side: number): void {
+  const fx = Math.sin(j.heading), fz = Math.cos(j.heading);
+  const dir = j.speed < -0.05 ? -1 : 1;
+  fanUx = fx * dir; fanUz = fz * dir;
+  fanLx = fz * side; fanLz = -fx * side;
+}
+
 /**
- * Where to make way for the jeep: a spot off the ground it will cover, on `side` (+1 = the
- * jeep's left), `JEEP_CLEAR + JEEP_STAND_OFF` beyond the brake's corridor, reached along a
- * straight run that stays on open ground (`world.free`) and never crosses to the jeep's
- * other side. The run goes out and a little ahead (away from the jeep), the way a deer
- * leaves a track, and as short as will do; it prefers the least turn from where the animal
- * faces. False when there is no open way out on that side. Writes into `out`.
+ * Where to make way for the jeep: a spot off the ground it will cover, on `side` of its
+ * current line (+1 = the jeep's left), `JEEP_CLEAR + JEEP_STAND_OFF` beyond the brake's
+ * corridor, reached along a straight run that stays on open ground (`world.free`) and goes
+ * out to that side (never across the jeep's nose). The run goes out and a little ahead
+ * (away from the jeep), the way a deer leaves a track, and as short as will do; it prefers
+ * the least turn from where the animal faces. False when there is no such spot (no open
+ * ground, or the jeep's path curves round to that side). Writes into `out`.
  */
 export function planYield(
   x: number, z: number, facing: number, r: number, j: JeepRead, side: number, world: WildWorld,
@@ -369,19 +406,17 @@ export function planYield(
 ): boolean {
   const n = poses(j);
   const need = YIELD_MARGIN + JEEP_CLEAR;
-  keepOut(n, x, z, r, need);
-  const ux = koIdx >= 0 ? koFx : Math.sin(j.heading), uz = koIdx >= 0 ? koFz : Math.cos(j.heading);
-  const lx = uz * side, lz = -ux * side;           // toward its side of the path
+  fanOf(j, side);
   const jx = j.x - x, jz = j.z - z, jl = Math.hypot(jx, jz) || 1;
   let best = Infinity;
   for (const deg of YIELD_ANGLES) {
     const b = (deg * Math.PI) / 180;               // 0 = straight out, + = out and ahead
-    const mx = lx * Math.cos(b) + ux * Math.sin(b), mz = lz * Math.cos(b) + uz * Math.sin(b);
+    const mx = fanLx * Math.cos(b) + fanUx * Math.sin(b), mz = fanLz * Math.cos(b) + fanUz * Math.sin(b);
     if ((mx * jx + mz * jz) / jl > 0.05) continue;  // never a run toward where the jeep is
     const turn = Math.abs(wrapPi(Math.atan2(mx, mz) - facing));
     for (let len = 1.5; len <= 9.01; len += 0.75) {
       const gx = x + mx * len, gz = z + mz * len;
-      if (!clearOfPath(n, gx, gz, r, need + JEEP_STAND_OFF, side)) continue;
+      if (!clearOfPath(n, j, gx, gz, r, need + JEEP_STAND_OFF, side)) continue;
       if (runFree(x, z, mx, mz, len, r, world)) {
         // the least turn, mostly out (a little ahead), the shortest run
         const cost = turn + Math.abs(deg - 20) * 0.02 + len * 0.12;
@@ -392,8 +427,43 @@ export function planYield(
   }
   return best < Infinity;
 }
-/** The run out of the jeep's path: straight out (0°) to well ahead (70°), and a touch back. */
-const YIELD_ANGLES = [0, 15, 25, 35, 50, 65, 75, -12];
+/** The run out of the jeep's way: straight out (0°) to well ahead (50°), and a touch back.
+ *  Never further ahead: a jeep turning after it would soon point along its run. */
+const YIELD_ANGLES = [0, 15, 25, 35, 50, -12];
+
+/**
+ * No spot on its side is clear (the driver steers at it, so the path he would drive wraps
+ * round it): it bears away all the same, out to `side` of the jeep's current line and a
+ * little ahead, `BEAR_RUN` m along open ground, the way that leaves it the most room from the
+ * ground the jeep will cover. Replanned as the jeep turns, it curves on round to that side,
+ * never back across the nose. False when no way out on that side is open (it then stands,
+ * and the jeep's give-way brake stops the jeep). Writes into `out`.
+ */
+function bearAway(
+  x: number, z: number, facing: number, r: number, j: JeepRead, side: number, world: WildWorld,
+  out: { x: number; z: number },
+): boolean {
+  const n = poses(j);
+  fanOf(j, side);
+  const jx = j.x - x, jz = j.z - z, jl = Math.hypot(jx, jz) || 1;
+  let best = -Infinity;
+  for (const deg of BEAR_ANGLES) {
+    const b = (deg * Math.PI) / 180;
+    const mx = fanLx * Math.cos(b) + fanUx * Math.sin(b), mz = fanLz * Math.cos(b) + fanUz * Math.sin(b);
+    if ((mx * jx + mz * jz) / jl > 0.05) continue;
+    if (!runFree(x, z, mx, mz, BEAR_RUN, r, world)) continue;
+    const gx = x + mx * BEAR_RUN, gz = z + mz * BEAR_RUN;
+    keepOut(n, gx, gz, r, 0);
+    const room = Math.min(koGap, 6);
+    const score = room - Math.abs(wrapPi(Math.atan2(mx, mz) - facing)) * 0.5 - Math.abs(deg - 10) * 0.01;
+    if (score > best) { best = score; out.x = gx; out.z = gz; }
+  }
+  return best > -Infinity;
+}
+/** Bearing away: straight out from the jeep's line, give or take a little. */
+const BEAR_ANGLES = [0, 10, 20, 30, -10];
+/** …this far (m) at a time, looked at again as the jeep turns. */
+const BEAR_RUN = 5;
 
 /** Every half metre of the straight run from (x, z) along (mx, mz) for `len` m is open
  *  ground for radius r (its own first half metre is not tested: it stands there). */
@@ -508,7 +578,20 @@ const KEEP_ROOM = 1.2;
 /** It walks back to its loop a little brisker than it roams (× its walk). */
 const RETURN_PACE = 1.2;
 /** A plan is looked at again this often (s) while the threat is on. */
-const REPLAN = 0.3;
+const REPLAN = 0.25;
+/** Its side of the jeep's line changes only once it stands this far (m) on the other side
+ *  (the jeep's line swung right past it): wholly beside the other half of the bonnet. */
+const SIDE_SWAP = JEEP_HALF;
+/** Having made way for a jeep it watches it, and makes way again only once that jeep has come
+ *  this much (m) closer by its own motion since it settled (and its path reaches it). */
+const REYIELD_CLOSE = 1.5;
+
+/** Its goal is still good while the jeep comes: on its side of the jeep's current line, and
+ *  (unless it bears away: no spot is clear) off the ground the jeep will cover. */
+function goalHolds(s: WildState, r: number, j: JeepRead): boolean {
+  if (s.bear) { lineOf(j, s.gx, s.gz); return lnLat * s.side > 0; }
+  return clearOfPath(poses(j), j, s.gx, s.gz, r, YIELD_MARGIN + JEEP_CLEAR, s.side);
+}
 
 /**
  * One frame of one animal: read the jeep and the ranger, pick the mode, steer and move.
@@ -520,9 +603,29 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
   s.inMode += dt;
   s.replan -= dt;
   const J = readJeep(s.x, s.z, r, th.jeep);
-  const jKind = J.kind, jLat = J.lat, jTti = J.tti;
+  const jLat = J.lat, jTti = J.tti;
   const wary = s.mode === 'alert' || s.mode === 'away' || s.mode === 'yield';
   const R = readRanger(s.x, s.z, tm, th.ranger, wary, s.mode === 'away' && s.threat === 'ranger');
+
+  // ---- the jeep it knows ----
+  // it made way for this jeep, settled and watches it: it moves again only when the jeep really
+  // comes, its path reaching it AND the jeep itself having come `REYIELD_CLOSE` closer. Until
+  // then its path is only worth watching (standing) or ignoring (grazing, walking back): a jeep
+  // revving against a rock with the keys held never sends it off again and again
+  const jt = th.jeep;
+  if (!jt) { s.madeWay = false; s.closed = 0; s.jx = s.jz = Number.NaN; }
+  else {
+    // where the jeep really went this frame, toward the animal
+    if (!Number.isNaN(s.jx)) {
+      const dx = s.x - jt.x, dz = s.z - jt.z, d = Math.hypot(dx, dz) || 1;
+      s.closed = Math.max(0, s.closed + ((jt.x - s.jx) * dx + (jt.z - s.jz) * dz) / d);
+    }
+    s.jx = jt.x; s.jz = jt.z;
+  }
+  let jKind = J.kind;
+  if (s.madeWay && s.closed < REYIELD_CLOSE && s.mode !== 'yield' && (jKind === 'path' || jKind === 'watch')) {
+    jKind = s.mode === 'alert' ? 'watch' : 'none';
+  }
 
   // ---- decide ----
   if (jKind === 'path' && th.jeep) {
@@ -530,22 +633,26 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
     s.threat = 'jeep';
     s.quiet = 0;
     s.lookX = j.x; s.lookZ = j.z;
-    // the side it is already on; near the middle, away from the jeep's turn, else the side
-    // it faces (a deer facing across the track goes on across; kept once chosen)
-    if (s.mode !== 'yield' || s.side === 0) s.side = yieldSide(jLat, j, s.facing);
-    if (s.mode !== 'yield' || s.replan <= 0 || !clearOfPath(poses(j), s.gx, s.gz, r, YIELD_MARGIN + JEEP_CLEAR, s.side)) {
+    // its side of the jeep's CURRENT line, chosen once for the encounter: the side it is
+    // already on; near the middle, away from the jeep's turn, else the side it faces. Kept
+    // however the driver steers (a pursuing driver's path wraps round it, and its side of
+    // that curve points back across the nose). Only when the jeep's line has swung right past
+    // it, so that it stands wholly beside the bonnet's other half, is that its side.
+    if (s.side === 0) s.side = yieldSide(jLat, j, s.facing);
+    else if (jLat * s.side < -SIDE_SWAP) s.side = -s.side;
+    if (s.mode !== 'yield' || s.replan <= 0 || !goalHolds(s, r, j)) {
       s.replan = REPLAN;
-      let ok = planYield(s.x, s.z, s.facing, r, j, s.side, world, out2);
-      // dead centre with no way out on that side: the other side is just as close
-      if (!ok && Math.abs(jLat) < 0.6) { s.side = -s.side; ok = planYield(s.x, s.z, s.facing, r, j, s.side, world, out2); }
-      if (ok) { setMode(s, 'yield'); s.gx = out2.x; s.gz = out2.z; }
+      if (planYield(s.x, s.z, s.facing, r, j, s.side, world, out2)) { setMode(s, 'yield'); s.bear = false; s.gx = out2.x; s.gz = out2.z; }
+      else if (bearAway(s.x, s.z, s.facing, r, j, s.side, world, out2)) { setMode(s, 'yield'); s.bear = true; s.gx = out2.x; s.gz = out2.z; }
       else setMode(s, 'alert');                    // nowhere to go: it stands, the jeep brakes
+      s.madeWay = true;
     }
     if (s.mode === 'yield') {
-      // fast enough to be clear of the corridor well before the jeep's ground reaches it
-      const need = Math.max(0, jeepCorridor(r) + JEEP_CLEAR - Math.abs(jLat));
+      // fast enough to be clear of the corridor well before the jeep's ground reaches it; bearing
+      // away from a jeep that steers at it, at its top speed
+      const need = Math.max(0, jeepCorridor(r) + JEEP_CLEAR - jLat * s.side);
       const urgent = (need / Math.max(0.5, jTti - 0.4)) * 1.6;
-      s.pace = clamp(Math.max(urgent, Math.abs(j.speed) > 4.2 && tm.bounds ? (tm.trot + tm.top) / 2 : tm.trot), tm.trot, tm.top);
+      s.pace = s.bear ? tm.top : clamp(Math.max(urgent, Math.abs(j.speed) > 4.2 && tm.bounds ? (tm.trot + tm.top) / 2 : tm.trot), tm.trot, tm.top);
     }
   } else if (jKind === 'near' && th.jeep) {
     s.threat = 'jeep';
@@ -605,6 +712,9 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
       else { setMode(s, 'return'); s.gx = L.x; s.gz = L.z; s.stuck = 0; }
     }
   }
+
+  // it settles to watch: from here the jeep must really come at it before it moves again
+  if (s.mode === 'alert' && s.inMode === 0) s.closed = 0;
 
   // ---- move ----
   const x0 = s.x, z0 = s.z, f0 = s.facing;
@@ -757,7 +867,9 @@ function setMode(s: WildState, m: WildMode): void {
   if (s.mode === m) return;
   s.mode = m;
   s.inMode = 0;
-  if (m !== 'alert' && m !== 'yield') s.side = 0;
+  // the encounter is over once it roams (or walks back to its loop): a jeep coming again is a
+  // new one, its side chosen afresh
+  if (m === 'roam' || m === 'return') { s.side = 0; s.bear = false; }
   if (m === 'roam') s.threat = null;
   s.watchTurn = false;
 }

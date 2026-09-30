@@ -359,3 +359,131 @@ test('walking back to its loop past a boy who stands on the way, it goes round h
   assert.ok(closest >= REE.flight, `it kept ${closest.toFixed(2)} m from him`);
   assert.equal(s.mode, 'roam', 'and it is back on its loop, grazing');
 });
+
+/** A roamer's species row and footprint radius (half its length in the scale table). */
+const SPECIES: readonly (readonly [string, number])[] = [['animal-ree-roedeer', REE_R], ['animal-wildzwijn-boar', 0.735], ['animal-vos-fox', 0.54]];
+
+/**
+ * A child chasing a grazing animal with the jeep: W held all the way and A/D at it like keys
+ * (steer toward it whenever it is more than `dead` rad off the nose, the keys looked at every
+ * `sample` s, until it is `until` m ahead), the real jeep and its give-way brake, 60 Hz. Counts
+ * the times the animal's own sideways motion across the jeep's current line reverses while it
+ * is within 14 m in front of the bonnet (a zig-zag across the nose), the closest the body came,
+ * and how long the jeep's brake acted.
+ */
+function pursue(id: string, r: number, ax: number, az: number, face: number, keys: { dead: number; sample: number; until: number }): { reversals: number; minGap: number; braked: number } {
+  const tm = TEMPERAMENT[id];
+  const home: LoopPoint = { x: ax, z: az, facing: face, moving: false };
+  const s = newWildState(home, 0);
+  const world = openWorld(home);
+  let j: JeepState = { x: 0, z: 0, heading: 0, speed: 6, contact: false, braked: false };
+  const animal: YieldAnimal & { x: number; z: number } = { id, x: ax, z: az, r };
+  const path = new Float64Array(PATH_N * PATH_STRIDE);
+  let pathN = 0, predictIn = 0, lookIn = 0, want = { throttle: 1, steer: 0 };
+  let reversals = 0, lastSide = 0, minGap = Infinity, braked = 0, px = ax, pz = az;
+  for (let t = 0; t < 12; t += DT) {
+    if ((lookIn -= DT) <= 0) {
+      lookIn = keys.sample;
+      const off = Math.atan2(Math.sin(Math.atan2(s.x - j.x, s.z - j.z) - j.heading), Math.cos(Math.atan2(s.x - j.x, s.z - j.z) - j.heading));
+      const ahead = (s.x - j.x) * Math.sin(j.heading) + (s.z - j.z) * Math.cos(j.heading);
+      want = { throttle: 1, steer: ahead > keys.until && Math.abs(off) > keys.dead ? -Math.sign(off) : 0 };
+    }
+    animal.x = s.x; animal.z = s.z;
+    const f = jeepStep(j, want, DT, JEEP_CAPS, emptyJeepWorld([animal]));
+    const yawRate = Math.atan2(Math.sin(f.heading - j.heading), Math.cos(f.heading - j.heading)) / DT;
+    j = f;
+    if (f.yieldFor) braked += DT;
+    if ((predictIn -= DT) <= 0) { predictIn = 0.1; pathN = predictJeep(j, want, JEEP_CAPS, emptyJeepWorld([]), path); }
+    wildStep(s, tm, r, { ranger: null, jeep: { x: j.x, z: j.z, heading: j.heading, speed: f.moved, yawRate, path, pathN } }, world, DT);
+    const fx = Math.sin(j.heading), fz = Math.cos(j.heading);
+    const across = ((s.x - px) * fz - (s.z - pz) * fx) / DT;   // its own speed across the jeep's line (+ = to its left)
+    const ahead = (s.x - j.x) * fx + (s.z - j.z) * fz;
+    px = s.x; pz = s.z;
+    if (ahead > 0 && ahead < 14 && Math.abs(across) > 0.8) {
+      if (lastSide && Math.sign(across) !== lastSide) reversals++;
+      lastSide = Math.sign(across);
+    }
+    minGap = Math.min(minGap, bodyGap(j, s.x, s.z, r));
+  }
+  return { reversals, minGap, braked };
+}
+
+test('a child steering the jeep at it the whole way: it bears away on one side of the jeep\'s line, never zig-zags across the bonnet, and nothing comes within 0.8 m', () => {
+  const styles = [
+    { dead: 0.08, sample: DT, until: 3 },     // keys every frame, off the wheel once it is close
+    { dead: 0.02, sample: 0.05, until: 0 },   // a quick eye, steering at it all the way
+  ];
+  for (const [id, r] of SPECIES) for (const keys of styles) for (const ax of [0, 0.5, -1.5, 3]) for (const face of [0, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+    const run = pursue(id, r, ax, 34, face, keys);
+    const at = `${id} from x ${ax}, facing ${Math.round((face * 180) / Math.PI)}°, keys ${keys.sample.toFixed(2)} s`;
+    assert.equal(run.reversals, 0, `${at}: it zig-zagged across the jeep's nose ${run.reversals} times`);
+    assert.ok(run.minGap >= 0.8, `${at}: the body came within ${run.minGap.toFixed(2)} m`);
+    assert.ok(run.braked < 4, `${at}: the jeep's brake acted ${run.braked.toFixed(1)} s`);
+  }
+});
+
+/**
+ * A jeep pressed on a rock with W held and the wheel turned at the animal, as a child does:
+ * every `period` s it creeps a hand's width in a spurt (up to 1 m/s) and its nose swings toward
+ * the animal as far as the rock lets it, then it sits pressed again. Creeping, the path it would
+ * drive with the keys held breaks free and runs on (`predictJeep` in the open); pressed, it
+ * stands. After `stuck` s it breaks free for real and drives at the animal (the real jeep).
+ */
+function stuckOnARock(id: string, r: number, ax: number, az: number, period: number, swing: number, stuck: number): { yieldsStuck: number; turnedStuck: number; yieldsFree: number; minGapFree: number } {
+  const tm = TEMPERAMENT[id];
+  const home: LoopPoint = { x: ax, z: az, facing: 1, moving: false };
+  const s = newWildState(home, 0);
+  const world = openWorld(home);
+  const path = new Float64Array(PATH_N * PATH_STRIDE);
+  let pathN = 0, predictIn = 0, steer = 0, h = 0, x = 0, z = 0, last = s.mode;
+  let yieldsStuck = 0, turnedStuck = 0, yieldsFree = 0, minGapFree = Infinity;
+  let j: JeepState | null = null;
+  const animal: YieldAnimal & { x: number; z: number } = { id, x: ax, z: az, r };
+  for (let t = 0; t < stuck + 8; t += DT) {
+    const f0 = s.facing;
+    let read: JeepRead;
+    if (t < stuck) {
+      const k = Math.floor(t / period), u = t / period - k, spurt = u < 0.3;
+      const off = Math.atan2(Math.sin(Math.atan2(s.x - x, s.z - z) - h), Math.cos(Math.atan2(s.x - x, s.z - z) - h));
+      if (u < DT / period) steer = Math.abs(off) > 0.08 ? -Math.sign(off) : 0;
+      const speed = spurt ? Math.sin((u / 0.3) * Math.PI) : 0;
+      const h1 = spurt ? Math.max(-swing, Math.min(swing, h - steer * 0.6 * DT)) : h;
+      const yawRate = (h1 - h) / DT;
+      h = h1; x = Math.sin(h) * 0.3; z = 0.05 * speed;
+      if ((predictIn -= DT) <= 0) {
+        predictIn = 0.1;
+        if (spurt) pathN = predictJeep({ x, z, heading: h, speed, contact: true, braked: false }, { throttle: 1, steer }, JEEP_CAPS, emptyJeepWorld([]), path);
+        else { path[0] = x; path[1] = z; path[2] = h; path[3] = 0; pathN = 1; }
+      }
+      read = { x, z, heading: h, speed, yawRate, path, pathN };
+    } else {
+      // free at last: full gas and the wheel at it, the real jeep and its give-way brake
+      j ??= { x, z, heading: h, speed: 0, contact: false, braked: false };
+      const off = Math.atan2(Math.sin(Math.atan2(s.x - j.x, s.z - j.z) - j.heading), Math.cos(Math.atan2(s.x - j.x, s.z - j.z) - j.heading));
+      const want = { throttle: 1, steer: Math.abs(off) > 0.08 ? -Math.sign(off) : 0 };
+      animal.x = s.x; animal.z = s.z;
+      const f = jeepStep(j, want, DT, JEEP_CAPS, emptyJeepWorld([animal]));
+      const yawRate = Math.atan2(Math.sin(f.heading - j.heading), Math.cos(f.heading - j.heading)) / DT;
+      j = f;
+      if ((predictIn -= DT) <= 0) { predictIn = 0.1; pathN = predictJeep(j, want, JEEP_CAPS, emptyJeepWorld([]), path); }
+      read = { x: j.x, z: j.z, heading: j.heading, speed: f.moved, yawRate, path, pathN };
+      minGapFree = Math.min(minGapFree, bodyGap(j, s.x, s.z, r));
+    }
+    wildStep(s, tm, r, { ranger: null, jeep: read }, world, DT);
+    if (t < stuck) turnedStuck += Math.abs(Math.atan2(Math.sin(s.facing - f0), Math.cos(s.facing - f0)));
+    if (s.mode === 'yield' && last !== 'yield') { if (t < stuck) yieldsStuck++; else yieldsFree++; }
+    last = s.mode;
+  }
+  return { yieldsStuck, turnedStuck: (turnedStuck * 180) / Math.PI, yieldsFree, minGapFree };
+}
+
+test('a jeep stuck on a rock with the keys held: the animal makes way once and watches, never restless; when the jeep really comes it makes way again', () => {
+  for (const [id, r] of SPECIES) for (const [ax, az] of [[0, 9], [2, 8.8], [-2.5, 8.6], [4, 8]]) for (const [period, swing] of [[0.9, 0.5], [1.25, 0.6], [1.8, 0.8]]) {
+    const run = stuckOnARock(id, r, ax, az, period, swing, 12.5);
+    const at = `${id} at (${ax}, ${az}), a creep every ${period} s`;
+    assert.ok(run.yieldsStuck <= 2, `${at}: it made way ${run.yieldsStuck} times for a jeep that never came (at most once more than the first)`);
+    assert.ok(run.turnedStuck <= 360, `${at}: its body turned ${Math.round(run.turnedStuck)}° in 12.5 s (no pivoting back and forth)`);
+    assert.ok(run.yieldsFree >= 1 || run.minGapFree >= 3, `${at}: the jeep drove at it and it did not make way`);
+    assert.ok(run.minGapFree >= 0.8, `${at}: the jeep that came came within ${run.minGapFree.toFixed(2)} m`);
+  }
+});
