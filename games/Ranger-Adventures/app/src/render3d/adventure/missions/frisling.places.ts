@@ -49,6 +49,9 @@ const WALLOW_AT: Spot = { x: -26, z: -24 };
  *  (target + decoys, 0..100) lands on it through `patchLocal(x, y, halfW, halfD)`, the
  *  same mapping the 3D zoeken always used. */
 export const STAND = { halfW: 2.1, halfD: 1.5 } as const;
+/** How much of the lost piglet's back the stems let the search's lens see: a small
+ *  glimpse of stripes (the run 6 playtest found him in ~2 s at 0.3). */
+export const SEARCH_GLIMPSE = 0.18;
 /** How far out from the stand's centre the ranger stops to search it (m). */
 const STAND_BACK = 2.9;
 
@@ -214,6 +217,8 @@ export function frislingClearings(): { x: number; z: number; r: number }[] {
   return [
     { x: WALLOW_AT.x, z: WALLOW_AT.z, r: Math.max(WALLOW.halfW, WALLOW.halfD) + 0.9 },
     ...fieldSpots().map((s) => ({ x: s.x, z: s.z, r: 0.95 })),
+    // where he and the piglet stand to watch the route: no tuft hides the piglet there
+    { x: FIELD_SIDE.x, z: FIELD_SIDE.z, r: 0.8 }, { x: fieldApproach.x, z: fieldApproach.z, r: 0.6 },
   ];
 }
 

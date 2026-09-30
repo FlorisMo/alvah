@@ -165,7 +165,7 @@ test('the rooting field: seven look-alike spots in the PRINT_SPOTS layout, unifo
     const l = toLocal({ x: lens.x, z: lens.z, heading: P.fieldApproach.heading! }, p);
     assert.ok(l.v > 2 && Math.abs(Math.atan2(l.u, l.v)) < (35 * Math.PI) / 180, `spot ${p.id} is ahead in the view`);
   }
-  assert.deepEqual(frislingClearings().length, 1 + s.length);
+  assert.deepEqual(frislingClearings().length, 1 + s.length + 2);
 });
 
 test('the lost piglet lies in the stand where the trial says (content doel 52, 58), the decoys round him', () => {

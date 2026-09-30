@@ -46,7 +46,7 @@ const LEAD_PACE = 1.5;
 import { FrislingHome } from './frisling.home';
 import {
   FRISLING_HOME, FRISLING_PLACES as P, MARKER, SEARCH_VIEW, FIELD_VIEW, FIELD_SIDE, WALLOW_VIEW,
-  frislingClearings, hideClumps, clueGap, fieldSpots,
+  frislingClearings, hideClumps, clueGap, fieldSpots, SEARCH_GLIMPSE,
 } from './frisling.places';
 import type { Distractor } from '../../../content/types';
 
@@ -129,7 +129,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // 3 · find him (zoeken)
   await searchBeat(k, 0, {
     view: SEARCH_VIEW, stand: P.coverApproach, cover: home.cover, target: lost, call: 'piep',
-    lyingH: lyingHeight(heightFor('frisling'), LEG_SHARE.frisling),
+    lyingH: lyingHeight(heightFor('frisling'), LEG_SHARE.frisling), glimpse: SEARCH_GLIMPSE,
     decoys: home.decoys.map((d) => ({ id: d.id, object: d.object, x: d.x, z: d.z, poke: (f) => home.poke(d, f) })),
     lines: { zoek: c.zoek, mis: c.mis, hint: c.hint, gevonden: k.steps[0].skin.copy?.goed ?? c.zoek },
   });
@@ -249,10 +249,12 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // (no card now: the lens comes a little closer, to her and her piglets, him at the side)
   k.beat = 'zeug:frame';
   const zt = k.ranger();
+  const zh = headingTo(zt, sowHome);
   await k.frame({
-    at: toward(sowHome, zt, 1.1), heading: headingTo(zt, sowHome) - 0.3,
-    halfW: 1.7, halfD: 1.3, tall: 0.95, pitchDeg: 18, insetTop: 110, insetBottom: 36,
-    include: [{ x: zt.x, z: zt.z, h: 1.32 }],
+    at: toward(sowHome, zt, 1.0), heading: zh - 0.22,
+    halfW: 1.4, halfD: 1.1, tall: 0.95, pitchDeg: 16, insetTop: 110, insetBottom: 36,
+    // (his shoulders both: he stands in the picture, never cut by its edge)
+    include: [-0.35, 0.35].map((u) => ({ ...atLocal({ x: zt.x, z: zt.z, heading: zh }, u, 0), h: 1.32 })),
   });
   await rust.still('zeug', {
     line: c.staStil, feet: true,
@@ -296,9 +298,9 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const rr = k.ranger();
   const sowAt = { x: A.sow.x, z: A.sow.z };
   const reunionView = (s: number): FrameSpec => ({
-    at: toward(sowAt, rr, 0.9), heading: headingTo(rr, sowAt) + 0.5 * s,
-    halfW: 1.35, halfD: 1.1, tall: 0.9, pitchDeg: 18, insetTop: 170, insetBottom: 24,
-    include: [{ x: rr.x, z: rr.z, h: 1.32 }, { x: lost.x, z: lost.z, h: 0.3 }],
+    at: toward(sowAt, rr, 0.5), heading: headingTo(rr, sowAt) + 0.45 * s,
+    halfW: 1.05, halfD: 0.85, tall: 0.85, pitchDeg: 15, insetTop: 170, insetBottom: 20,
+    include: [{ x: rr.x, z: rr.z, h: 1.32 }],
   });
   // from the side where no patch of the rooting field lies right under the lens
   const clutter = (s: number): number => {
