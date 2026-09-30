@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 
-interface Solid { transparent: boolean; opacity: number; depthWrite: boolean }
+interface Solid { transparent: boolean; opacity: number; depthWrite: boolean; forceSinglePass: boolean }
 
 /**
  * Every material under `root`, made fadeable: each remembers how it was drawn, so a
@@ -28,7 +28,7 @@ export function fadeable(root: THREE.Object3D, own = false): THREE.Material[] {
     const mine = own ? list.map((m) => (m.userData.fadeOwn === mesh.uuid ? m : ownCopy(m, mesh.uuid))) : list;
     if (own && mine.some((m, i) => m !== list[i])) mesh.material = Array.isArray(mesh.material) ? mine : mine[0];
     for (const m of mine) {
-      m.userData.solid ??= { transparent: m.transparent, opacity: m.opacity, depthWrite: m.depthWrite } satisfies Solid;
+      m.userData.solid ??= { transparent: m.transparent, opacity: m.opacity, depthWrite: m.depthWrite, forceSinglePass: m.forceSinglePass } satisfies Solid;
       out.push(m);
     }
   });
@@ -51,6 +51,10 @@ export function setOpacity(mats: THREE.Material[], k: number): void {
     if (m.transparent !== transparent) { m.transparent = transparent; m.needsUpdate = true; }
     m.opacity = was.opacity * k;
     m.depthWrite = done ? was.depthWrite : k > 0.6;
+    // while it fades, one pass: a see-through double-sided material (a fern, a tussock) is
+    // otherwise drawn twice, back faces then front, so a fading home cost twice its draw
+    // calls just when a wide view already held several (run 6 integration)
+    m.forceSinglePass = done ? was.forceSinglePass ?? false : true;
   }
 }
 
@@ -84,6 +88,9 @@ export class FarRest {
   }
 }
 
+/** Below this share of its opacity a fading piece is not drawn (see `restFar`). */
+const DRAWN_FROM = 0.05;
+
 /**
  * Draw a whole piece at `k` (from `FarRest`): fully at 1, see-through while it fades,
  * not drawn at all (it rests) at 0. Cheap when nothing changes. The piece's own
@@ -93,6 +100,8 @@ export function restFar(root: THREE.Object3D, k: number): void {
   const was = (root.userData.farK as number | undefined) ?? 1;
   if (k === was) return;
   root.userData.farK = k;
-  root.visible = k > 0;
-  if (k > 0) setOpacity(fadeable(root, true), k);
+  // the last few hundredths of a fade are not drawn either: nobody sees a piece at 3 %,
+  // and a whole home drawn for them is a dozen draw calls in a view that has none spare
+  root.visible = k >= DRAWN_FROM;
+  if (root.visible) setOpacity(fadeable(root, true), k);
 }

@@ -121,6 +121,11 @@ export class Markers {
   private ringsShown = 1; // 0..1: how far every ring is in (0 on the title and in the maker)
   private readonly RING_FADE_NEAR = 2.2; // lens ≤ this from a ring ⇒ fully faded (it's under/around the ranger)
   private readonly RING_FADE_FAR = 4.2;  // lens ≥ this ⇒ full "go here" opacity (normal approach/standing boom ~4.6 m)
+  // run 6 (integration): far off, a ring on the ground is a sliver a few px high and a draw
+  // call a wide view over the homes cannot spare; it eases out between these (m from the
+  // lens). A glowing ring (the one to go to now) shows at any distance.
+  private readonly RING_REST_FULL = 36;
+  private readonly RING_REST_GONE = 44;
   private activeId: string | null = null;     // the mission the wayfinding cue points to
   private labelsOn = true;                     // false while an in-place activity runs (W6.1)
   private lastWayKey = '';                     // debounce identical cues (no DOM churn)
@@ -415,7 +420,9 @@ export class Markers {
     geo.computeBoundingSphere();
     return new THREE.Mesh(
       geo,
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false }),
+      // one pass: a see-through double-sided material is otherwise drawn twice (back faces,
+      // then front), and a flat ring on the ground has only the one side to show
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, forceSinglePass: true }),
     );
   }
 
@@ -793,20 +800,23 @@ export class Markers {
    * §2.5 GATE-D2), so it caps/hides at close range instead of reading as a giant hoop. The
    * normal approach + standing boom (~4.6 m behind the ranger who stands ON the ring) sits
    * beyond FAR, so the "go here" cue is untouched while walking up; only a lens driven
-   * right on top of a ring fades it. A pure per-material opacity write, guarded on change —
-   * no geometry/draw-call change (<150 holds), deterministic so RM frames stay frozen.
+   * right on top of a ring fades it. A pure per-material opacity write, guarded on change
+   * (a ring faded right out is not drawn), deterministic so RM frames stay frozen.
    */
   fadeRings(camera: THREE.Camera): void {
     const cx = camera.position.x, cz = camera.position.z;
     this.lens.x = cx; this.lens.z = cz; this.lens.seen = true; // (the far marker animals rest by it: animate)
     if (this.groundRings.length === 0) return;
     const span = this.RING_FADE_FAR - this.RING_FADE_NEAR;
+    const farSpan = this.RING_REST_GONE - this.RING_REST_FULL;
     for (const r of this.groundRings) {
       const d = Math.hypot(cx - r.x, cz - r.z);
-      const k = Math.max(0, Math.min(1, (d - this.RING_FADE_NEAR) / span));
+      const far = r.glow > 0 ? 1 : Math.max(0, Math.min(1, (this.RING_REST_GONE - d) / farSpan));
+      const k = Math.max(0, Math.min(1, (d - this.RING_FADE_NEAR) / span)) * far;
       const base = r.glow > 0 ? Math.max(r.base, 0.62 + 0.33 * r.pulse) : r.base; // run 6: a glowing ring
       const o = base * k * this.ringsShown;
       if (r.mat.opacity !== o) r.mat.opacity = o;
+      r.mat.visible = o > 0; // a ring faded right out is not drawn at all (a draw call saved)
     }
   }
 

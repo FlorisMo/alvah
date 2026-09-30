@@ -332,6 +332,7 @@ export class Residents {
       for (const a of home.actors.values()) {
         if (!a.group.visible) continue;
         a.update(dt, t);
+        a.shadowFor(Math.hypot(a.x - lx, a.z - lz)); // a far animal's contact shadow rests
         movers.push({ x: a.x, z: a.z, moving: a.speed > 0.15 });
       }
       // the ranger pushes through the cover too

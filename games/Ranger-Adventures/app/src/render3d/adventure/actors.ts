@@ -79,6 +79,12 @@ const PACE_DEFAULT = { walk: 0.6, trot: 1.2, turn: 3 };
 
 let nextPhase = 0.7;
 
+/** Its contact shadow is full within this far (m) of the lens and gone beyond `SHADOW_GONE_M`
+ *  (the soft disc is a few px from there; the same reach as a home's small things,
+ *  world/Residents DETAIL_NEAR/FAR). */
+const SHADOW_FULL_M = 22;
+const SHADOW_GONE_M = 28;
+
 export class Actor {
   readonly key: string;
   readonly animal: string;
@@ -115,6 +121,7 @@ export class Actor {
   private readonly recipe;
   private disposed = false;
   protected readonly shadow: THREE.Mesh;
+  private readonly shadowBase: number;
   private readonly len: number;
   /** what frees its coat (a calf's spots) */
   private readonly undress: (() => void)[] = [];
@@ -137,6 +144,7 @@ export class Actor {
     this.shadow.position.y = 0.02;
     this.shadow.scale.set(0.75, 1, 1); // a longish pool under a long body
     this.group.add(this.shadow);
+    this.shadowBase = (this.shadow.material as THREE.MeshBasicMaterial).opacity;
     env.parent.add(this.group);
     this.ready = this.load();
   }
@@ -410,6 +418,17 @@ export class Actor {
   private seat(): void {
     this.group.position.set(this.x, this.env.groundY(this.x, this.z), this.z);
     this.group.rotation.y = this.yaw;
+  }
+
+  /** Run 6 (integration): its contact shadow by the lens's distance `d` (m), eased out
+   *  between SHADOW_FULL_M and SHADOW_GONE_M and then not drawn at all: a view over
+   *  several homes cannot spare a draw call per far animal for a disc a few px wide. */
+  shadowFor(d: number): void {
+    const k = Math.max(0, Math.min(1, (SHADOW_GONE_M - d) / (SHADOW_GONE_M - SHADOW_FULL_M)));
+    const m = this.shadow.material as THREE.MeshBasicMaterial;
+    const o = this.shadowBase * k;
+    if (m.opacity !== o) m.opacity = o;
+    m.visible = k > 0;
   }
 
   dispose(): void {

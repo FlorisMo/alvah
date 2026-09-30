@@ -277,6 +277,9 @@ export class Labels {
       tag.vis = reduced ? target : tag.vis + (target - tag.vis) * Math.min(1, dt * EASE_PER_S);
       if (tag.vis < 0.004) tag.vis = 0;
       mat.opacity = tag.vis * tag.edge * this.shown;
+      // a tag nobody sees is not drawn: most tags are out (only the next mission and what
+      // is near show), and each drawn sprite is a draw call even at opacity 0
+      mat.visible = mat.opacity > 0;
     }
   }
 
