@@ -47,14 +47,19 @@
 .aim3d .aim-pic .ai-svg { width: 48px; height: 48px; }
 .aim3d .aim-tag {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border-radius: var(--radius-pill);
   font: 700 18px/1.1 var(--font-body);
   white-space: nowrap;
 }
+/* the drawn sun and moon (beats/aim-pics.ts) in the tag and the rule chips */
+.aim3d .aim-ic { flex: none; width: 20px; height: 20px; }
 .aim3d .aim-tag.dag { background: #f6d77a; color: #3b2a0c; }
 .aim3d .aim-tag.nacht { background: #3f4f86; color: #f3f1ff; }
-.aim3d .p3-chip { font-size: 18px; padding: 8px 14px; }
+.aim3d .p3-chip { font-size: 18px; padding: 8px 14px; display: inline-flex; align-items: center; gap: 6px; }
 
 /* the flip, the round's peak: while the day turns only its one line stays, a small
    card in the middle (the world has the stage); then the card comes back with the

@@ -14,8 +14,8 @@
  *
  * What the child sees is the mission's (`AimWorld`): the camera turning on its strap,
  * the animal walking into view there, the shutter and the photo, the empty photo, the
- * sky turning. The card at the bottom shows the animal that comes (its picture, its
- * name, its ☀/🌙 tag), the question, and the rule. A press beside both places gets a
+ * sky turning. The card at the bottom shows the animal that comes (its drawn picture,
+ * its name, its day/night tag with a drawn sun or moon), the question, and the rule. A press beside both places gets a
  * calm "no" from the camera (it is no pick: the core only ever hears a place). The flip
  * is the round's peak: the card makes way, the day turns (the sky, the places' marks,
  * the camera's light), and only then comes the new rule, said outright, with the next
@@ -29,7 +29,7 @@ import type { BeatSummary } from '../../../core/skill';
 import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
 import { Sound } from '../../../core/sound';
-import { animalIcon } from '../../../render2d/animalIcon';
+import { aimPicture, dayNightIcon } from './aim-pics';
 import { anchoredPrompt, clearPlayHint, pick3d, SPEAK_BTN } from '../../play/kit';
 import type { AdventureKit, FrameSpec } from '../kit';
 import type { Place } from '../types';
@@ -110,6 +110,12 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
   const speak = (t: string): void => { if (settings.voorlezen) narrator.speak(t); };
   const queue = (t: string): void => { if (settings.voorlezen) narrator.queue(t); };
 
+  /** A rule chip ("☀️ Dag-dier → open plek") with its drawn sun or moon for the emoji. */
+  const chip = (c: string): string => {
+    const dag = c.startsWith(dagOfNacht(true).icoon);
+    const icoon = dagOfNacht(dag).icoon;
+    return `<span class="p3-chip">${dayNightIcon(dag)}${esc(c.startsWith(icoon) ? c.slice(icoon.length).trim() : c)}</span>`;
+  };
   /** The card: the animal that comes (picture, name, tag), the question, the rule. */
   let card: HTMLDivElement | null = null;
   const show = (item: WisselItem, flip: string | null, toast: { kind: 'ok' | 'gevolg'; text: string } | null): void => {
@@ -122,12 +128,12 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
       `<div class="p3-card">` +
       (flip ? `<p class="p3-flip aim-flip">${esc(flip)}</p>` : '') +
       `<div class="p3-row">` +
-      `<span class="aim-pic" aria-hidden="true">${animalIcon(item.id)}</span>` +
+      `<span class="aim-pic" aria-hidden="true">${aimPicture(item.id)}</span>` +
       `<div class="p3-lines"><p class="p3-text">${esc(komt)}</p><p class="p3-sub">${esc(o.lines.vraag)}</p></div>` +
-      `<span class="aim-tag ${item.dag ? 'dag' : 'nacht'}">${esc(`${cue.icoon} ${cue.woord}`)}</span>` +
+      `<span class="aim-tag ${item.dag ? 'dag' : 'nacht'}">${dayNightIcon(item.dag)}${esc(cue.woord)}</span>` +
       `${SPEAK_BTN}` +
       `</div>` +
-      `<div class="p3-chips" aria-label="De regel"><span class="p3-chip">${esc(c1)}</span><span class="p3-chip">${esc(c2)}</span></div>` +
+      `<div class="p3-chips" aria-label="De regel">${chip(c1)}${chip(c2)}</div>` +
       `</div></div>`,
       k.signal);
     const said = `${komt} ${cue.woord}. ${o.lines.vraag}`;
