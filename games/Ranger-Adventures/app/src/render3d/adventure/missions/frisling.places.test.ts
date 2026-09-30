@@ -76,7 +76,7 @@ test('every place is dry heath (or the dry meadow across the trail) inside the w
 test('the story reads from the marker: the family 10-14 m on, the squeak far off to the side', () => {
   const w = dist(MARKER, P.wallow), c = dist(MARKER, P.cover);
   assert.ok(w >= 10 && w <= 14, `the wallow is ${w.toFixed(1)} m from the marker`);
-  assert.ok(c >= 26 && c <= 36, `the stand is ${c.toFixed(1)} m from the marker`);
+  assert.ok(c >= 30 && c <= 39, `the stand is ${c.toFixed(1)} m from the marker`);
   // walking up from the clearing (spawn → marker), the wallow lies ahead, the stand to the side
   const walkIn = headingTo({ x: 0, z: 0 }, MARKER);
   const off = (p: { x: number; z: number }): number => {
@@ -91,13 +91,14 @@ test('the story reads from the marker: the family 10-14 m on, the squeak far off
   assert.ok(dist(P.cover, P.field) + dist(P.field, P.wallow) < dist(P.cover, P.wallow) * 1.25, 'the field is on the way home');
 });
 
-test('a real follow and a real lead home: ~30 m after the squeak, ≥ 26 m back with the family ahead', () => {
+test('a real follow and a real lead home: ~34 m after the squeak, ≥ 30 m back with the family ahead', () => {
   // the follow: from the ring to where he searches the stand (the prints, the squeak)
   const follow = dist(MARKER, P.coverApproach);
-  assert.ok(follow >= 15 && follow <= 31, `the follow is ${follow.toFixed(1)} m`);
-  // the lead: from the stand to where he watches the route, one straight walk
+  assert.ok(follow >= 15 && follow <= 36, `the follow is ${follow.toFixed(1)} m`);
+  // the lead: from the stand to where he watches the route, one straight walk of ≥ 30 m
+  // however close to the goal he stops (the walk ends within 1 m of it)
   const lead = dist(P.coverApproach, P.fieldApproach);
-  assert.ok(lead >= 26, `the lead home is ${lead.toFixed(1)} m`);
+  assert.ok(lead - 1 >= 29.5, `the lead home is ${lead.toFixed(1)} m`);
   // walking it, the family at the wallow is ahead (within ±25° of the way, the follow
   // camera behind him sees it) all along, and in its last 15 m most of all
   const h = headingTo(P.coverApproach, P.fieldApproach);

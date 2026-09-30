@@ -4,12 +4,12 @@
  * The rotte (the sow, last year's young, three striped piglets) roots at its wallow,
  * 13 m past the empty marker ring, all along. A thin squeak you can place comes from a
  * stand of bracken across the trail, in the meadow. After one calm look at the family,
- * the ranger follows faint piglet prints ~30 m to the stand (the prints end at the stand,
+ * the ranger follows faint piglet prints ~34 m to the stand (the prints end at the stand,
  * never at the piglet; the squeak carries that far, louder as he comes), and finds him
  * lying flat in it — a glimpse of stripes between the stems (ZOEKEN). The piglet squeaks
  * right in front of him: he keeps his HANDS still (RUSTKRACHT 1, played with the body: a
  * click on the piglet is a hand reaching, and he scoots deeper), and does not carry him
- * (RUSTKRACHT 2, a card). He leads him home ~26 m at a careful walk, the family ahead
+ * (RUSTKRACHT 2, a card). He leads him home ~31 m at a careful walk, the family ahead
  * all the way (run, and he dives into the nearest clump beside the way), to the rooting
  * field, where he walks the group's route back over look-alike patches of turned earth,
  * the piglet sniffing each one (CORSI). On to the wallow: the yearling comes to sniff his
@@ -38,8 +38,8 @@ import { listenerOf } from '../../world/Residents';
 import { atLocal, dist, headingTo, toLocal, toward, dirOf } from '../places';
 
 /** How far the lost piglet's squeak carries while he follows it (m): from the ring
- *  across the trail to the stand, ~30 m (softly at first, louder as he comes). */
-const FOLLOW_REACH = 40;
+ *  across the trail to the stand, ~37 m (softly at first, louder as he comes). */
+const FOLLOW_REACH = 46;
 /** His careful walk while he leads the piglet home (m/s): the piglet's own calm trot,
  *  so they stay together (a brisk walk is 2.2 m/s; running is still his to choose). */
 const LEAD_PACE = 1.5;
@@ -100,7 +100,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const me = (): { x: number; z: number; speed: number } => { const m = k.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
   const hides = [...hideClumps(), ...home.cover.clumps.filter((q) => q.kind !== 'dead')].map((q) => ({ x: q.x, z: q.z }));
   const lead = {
-    actor: lost, gap: 2, hide: hides,
+    // (at his left side, a little back: in the picture beside his legs as they walk)
+    actor: lost, gap: 0.4, side: -0.8, hide: hides,
     runLine: c.nietRennen, backLine: c.terugKomen, waitLine: c.wacht, pace: LEAD_PACE,
     onHide: (s: { x: number; z: number }): void => {
       call('piep', lost);
@@ -110,6 +111,13 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     onOut: (): void => call('piep', lost),
   };
   fam.voice('lost', false);
+  /** How many patches of the rooting field would lie right in front of a framed lens (a
+   *  view at the wallow is taken from the side where none clutters the picture). */
+  const fieldClutter = (f: FrameSpec): number => {
+    const { cam, look } = k.lensFor(f);
+    const fx = look.x - cam.x, fz = look.z - cam.z;
+    return fieldSpots().filter((q) => (q.x - cam.x) * fx + (q.z - cam.z) * fz > 0 && Math.hypot(q.x - cam.x, q.z - cam.z) < 5).length;
+  };
 
   // 1 · one calm look at the family, rooting at its wallow
   await k.look({ x: P.wallow.x, z: P.wallow.z }, c.kijk);
@@ -143,8 +151,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const lay = { x: lost.x, z: lost.z };
   const deeper = (n: number): { x: number; z: number } => // (never further than one scoot)
     atLocal({ ...lay, heading: headingTo(k.ranger(), lay) }, n % 2 ? -0.15 : 0.15, 0.5);
-  const body = lost.body;
-  if (!body) throw new Error('[frisling] the lost piglet has no body');
+  if (!lost.body) throw new Error('[frisling] the lost piglet has no body');
+  if (!lost.lies) void lost.lie(true); // (pressed flat where he was found: he gets up only once calm)
   k.beat = 'aaien:frame';
   await k.frame({
     at: toward(lay, deeper(0), 0.25), heading: SEARCH_VIEW.heading, halfW: 1.0, halfD: 0.95, tall: 0.55, pitchDeg: 46,
@@ -152,7 +160,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   });
   let reaches = 0;
   await rust.still('aaien', {
-    line: c.raakNiet, mis: c.schrok, hands: body,
+    line: c.raakNiet, mis: c.schrok, hands: () => lost.body,
     // he lies squeaking; a moment in, he peeks at him and squeaks again (the hand wants to go)
     show: () => call('piep', lost),
     tempt: () => { call('piep', lost); void lost.lookAt(me, 1.6); },
@@ -163,6 +171,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
       await lost.go(to.x, to.z, { speed: 'trot' });
       await lost.lie(true);
       await k.wait(0.9);
+      // he peeks out: the fronds over his head part again (the moment comes back, he in it)
+      home.cover.partAt(to.x, to.z, 0.8, 0.7, 40);
       await lost.lookAt(me, 1.2);
     },
   });
@@ -193,7 +203,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     },
   });
 
-  // 7 · lead him home to the rooting field, calmly: ~26 m, his family ahead all the way
+  // 7 · lead him home to the rooting field, calmly: ~31 m, his family ahead all the way
   await k.walk({ name: 'field', to: P.fieldApproach, r: 1.0, line: c.leid, doel: c.chipWroet, glyph: 'boot', lead });
   k.say(c.routeKijk); // (the route's own words from here, never the walk's)
 
@@ -250,12 +260,12 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   k.beat = 'zeug:frame';
   const zt = k.ranger();
   const zh = headingTo(zt, sowHome);
-  await k.frame({
-    at: toward(sowHome, zt, 1.0), heading: zh - 0.22,
-    halfW: 1.4, halfD: 1.1, tall: 0.95, pitchDeg: 16, insetTop: 110, insetBottom: 36,
-    // (his shoulders both: he stands in the picture, never cut by its edge)
-    include: [-0.35, 0.35].map((u) => ({ ...atLocal({ x: zt.x, z: zt.z, heading: zh }, u, 0), h: 1.32 })),
+  const zeugView = (s: number): FrameSpec => ({
+    at: toward(sowHome, zt, 1.0), heading: zh + 0.22 * s,
+    halfW: 1.15, halfD: 0.9, tall: 0.95, pitchDeg: 16, insetTop: 110, insetBottom: 36,
+    include: [{ x: zt.x, z: zt.z, h: 1.32, r: 0.4 }], // (his shoulders both: never cut by the edge)
   });
+  await k.frame(zeugView(fieldClutter(zeugView(-1)) <= fieldClutter(zeugView(1)) ? -1 : 1));
   await rust.still('zeug', {
     line: c.staStil, feet: true,
     show: () => { void sow.lookAt(me); call('wildzwijn', sow); },
@@ -300,15 +310,9 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const reunionView = (s: number): FrameSpec => ({
     at: toward(sowAt, rr, 0.5), heading: headingTo(rr, sowAt) + 0.45 * s,
     halfW: 1.05, halfD: 0.85, tall: 0.85, pitchDeg: 15, insetTop: 170, insetBottom: 20,
-    include: [{ x: rr.x, z: rr.z, h: 1.32 }],
+    include: [{ x: rr.x, z: rr.z, h: 1.32, r: 0.4 }],
   });
-  // from the side where no patch of the rooting field lies right under the lens
-  const clutter = (s: number): number => {
-    const { cam, look } = k.lensFor(reunionView(s));
-    const fx = look.x - cam.x, fz = look.z - cam.z;
-    return fieldSpots().filter((q) => (q.x - cam.x) * fx + (q.z - cam.z) * fz > 0 && Math.hypot(q.x - cam.x, q.z - cam.z) < 5).length;
-  };
-  await k.frame(reunionView(clutter(-1) < clutter(1) ? -1 : 1));
+  await k.frame(reunionView(fieldClutter(reunionView(-1)) < fieldClutter(reunionView(1)) ? -1 : 1));
 
   // 14 · the reunion at the wallow: he trots to his mother, she sniffs him, happy grunts
   const after = FRISLING_HOME.residents.find((r) => r.key === 'lost')!.after!;

@@ -11,19 +11,20 @@
  * across the sand of the west trail in the long grass of the meadow, a STAND of bracken
  * and pijpenstrootje the squeak comes from.
  *
- *   marker ── (follow the squeak + faint prints, ~30 m, over the trail) ── the stand
+ *   marker ── (follow the squeak + faint prints, ~34 m, over the trail) ── the stand
  *                                                                 (search, two holds)
- *   the stand ── (lead him home, ~26 m back over the trail, the family ahead) ──┐
+ *   the stand ── (lead him home, ~31 m back over the trail, the family ahead) ──┐
  *                                                        rooting field (the route, corsi)
  *                                              │ walk on (~5 m, the yearling comes)
  *                                           wallow (three choices, the reunion)
  *
  * Run 6 polish: the stand lay 8 m from the ring and the way home was 5 m (the lead was
  * over before it began). The marker, the field and the wallow stay where they were; the
- * stand moved as far as the ground allows: every way from the ring to a stand and on to
- * the field is at most the follow + the 7.4 m from the ring to the field, the heath east
- * of the ring ends at the forest (a stand there leads home with the family off to the
- * side), so it lies north, where leading him home walks straight at his family.
+ * stand moved north, where leading him home walks straight at his family. The lead home
+ * is the heart of the mission, so it got its ≥ 30 m: a way from the ring to a stand and on
+ * to the field is at most the follow + the 7.4 m from the ring to the field, and the heath
+ * east of the ring (where a stand would give both a short follow and a long lead) ends at
+ * the forest and the spawn clearing, so the follow is ~34 m (the squeak carries that far).
  */
 
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
@@ -36,9 +37,9 @@ import { approachOf, atLocal, dist, headingTo, toLocal, uniformLocal, type Frame
  *  The marker stays where it always stood; the test checks the anchor still lands here. */
 export const MARKER: Spot = { x: -15.556349186104043, z: -15.556349186104047 };
 /** The centre of the cover stand the lost piglet lies in: in the meadow's long grass,
- *  20 m north of the west trail (open grassland, no tree within 25 m, dry: the ven's
+ *  ~24 m north of the west trail (open grassland, no tree within 25 m, dry: the ven's
  *  water lies 70 m east). */
-const STAND_AT: Spot = { x: -25.7, z: 16 };
+const STAND_AT: Spot = { x: -25.7, z: 20.4 };
 /** The centre of the rooting field (the corsi spots). */
 const FIELD_AT: Spot = { x: -24, z: -16 };
 /** The centre of the wallow (zoel), the rotte's home. */
@@ -207,7 +208,7 @@ export const FRISLING_HOME: HomeSpec = {
   places: FRISLING_PLACES,
   residents: FRISLING_RESIDENTS,
   marker: { look: 'none' },
-  // the stand lies 40 m from the wallow: the home stays drawn while he is near either
+  // the stand lies 44 m from the wallow: the home stays drawn while he is near either
   spread: [STAND_AT],
 };
 
