@@ -159,8 +159,9 @@ export interface VehicleHost {
    *  Called every frame: it must not allocate (review PERF-2). */
   people(visit: (x: number, z: number) => void): void;
   /** Visit the roaming ground animals (id + where they are now): never solid for a
-   *  vehicle, the jeep gives way to them. Called every frame: it must not allocate. */
-  animals(visit: (id: string, x: number, z: number) => void): void;
+   *  vehicle, the jeep gives way to them. `size`: the scale-table key when `id` is not
+   *  one (a home's animal, `<mission>:<key>`). Called every frame: it must not allocate. */
+  animals(visit: (id: string, x: number, z: number, size?: string) => void): void;
   /** The mission markers (read every frame: the live list, not a copy). */
   markers(): readonly { readonly pos: { readonly x: number; readonly z: number } }[];
 }
@@ -889,10 +890,10 @@ export class Vehicles {
   private readonly addPerson = (x: number, z: number): void => {
     this.solidBuf.push(this.pooled(x, z, PERSON_R));
   };
-  private readonly addAnimal = (id: string, x: number, z: number): void => {
+  private readonly addAnimal = (id: string, x: number, z: number, size?: string): void => {
     const a = this.animalPool[this.animalsUsed] ?? (this.animalPool[this.animalsUsed] = { id: '', x: 0, z: 0, r: 0 });
     this.animalsUsed++;
-    if (a.id !== id) { a.id = id; a.r = animalR(id); }
+    if (a.id !== id) { a.id = id; a.r = animalR(size ?? id); }
     a.x = x; a.z = z;
     this.animalBuf.push(a);
   };

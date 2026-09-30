@@ -295,7 +295,8 @@ export class World {
         },
         animals: (visit) => { // the roaming ground animals (the birds glide overhead)
           for (const a of this.fauna.ambient) if (a.wander) visit(a.id, a.group.position.x, a.group.position.z);
-          this.residents?.movers((x, z, _h, id) => visit(id, x, z)); // the homes' animals too (the jeep gives way to them)
+          // the homes' animals too: the jeep gives way to them, sized by their scale-table row
+          this.residents?.movers((x, z, _h, id, animal) => visit(id, x, z, animal));
         },
         markers: () => this.pois.list,
       },

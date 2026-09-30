@@ -119,6 +119,8 @@ interface Home {
   /** bumped whenever the home is laid out, borrowed or given back: a reaction still
    *  running from before leaves the animal alone */
   gen: number;
+  /** each resident's steady mover id (`<mission>:<key>`), made once */
+  ids: Map<string, string>;
 }
 
 /** How a shy resident keeps its distance (adventure/types.ts `ResidentShy`). */
@@ -181,7 +183,7 @@ export class Residents {
       spec, group, details, dressing, actors, state: 'before', borrowed: false,
       rest: new FarRest(REST_NEAR, REST_FAR), voices: new Map(),
       centre: spec.places.home ?? spec.places.marker ?? { x: 0, z: 0 },
-      reacting: new Map(), gen: 0,
+      reacting: new Map(), gen: 0, ids: new Map(),
     };
     for (const r of spec.residents) {
       const aenv: ActorEnv = {
@@ -191,6 +193,7 @@ export class Residents {
       const height = r.height ?? this.env.heightFor(r.animal);
       const a = body?.(r, aenv, height, dressing) ?? new Actor(r.key, r.animal, aenv, { height });
       actors.set(r.key, a);
+      home.ids.set(r.key, `${spec.missionId}:${r.key}`);
       if (r.voice) home.voices.set(r.key, { next: 3 + Math.random() * 4, on: true });
     }
     this.homes.set(spec.missionId, home);
@@ -443,12 +446,14 @@ export class Residents {
     }
   }
 
-  /** Every home's animals as movers (the jeep brakes for them; the seating probe tags
-   *  them), each with a steady id (`<mission>:<key>`, for a channel that tracks them). */
-  movers(visit: (x: number, z: number, h: number, id: string) => void): void {
+  /** Every home's animals as movers (the jeep gives way to them; the seating probe tags
+   *  them), each with a steady id (`<mission>:<key>`, for a channel that tracks them) and
+   *  its content animal id (the scale table's key: its size). Called every frame by the
+   *  jeep: it does not allocate. */
+  movers(visit: (x: number, z: number, h: number, id: string, animal: string) => void): void {
     for (const home of this.homes.values()) {
       if (!home.group.visible) continue;
-      for (const a of home.actors.values()) if (a.group.visible) visit(a.x, a.z, a.height, `${home.spec.missionId}:${a.key}`);
+      for (const [key, a] of home.actors) if (a.group.visible) visit(a.x, a.z, a.height, home.ids.get(key)!, a.animal);
     }
   }
 
