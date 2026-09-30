@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  GRAZE_FRAC, glideAt, wanderAt, type GlideConfig, type WanderConfig,
+  GRAZE_FRAC, clearLoop, glideAt, loopPeriod, wanderAt, type GlideConfig, type WanderConfig,
 } from './AmbientPaths.ts';
 
 const WANDER: WanderConfig = { homeX: 12, homeZ: -8, radius: 6, period: 20, phase: 0.15, angle: 0.7 };
@@ -82,4 +82,48 @@ test('glideAt is deterministic', () => {
   for (const t of [0, 5.5, 11.1, 26.0]) {
     assert.deepEqual(glideAt(GLIDE, t), glideAt(GLIDE, t));
   }
+});
+
+test('wanderAt turns calmly toward the next waypoint while it grazes: its facing never snaps', () => {
+  const cfg: WanderConfig = { ...WANDER, period: loopPeriod(WANDER.radius, 0.95) };
+  let prev = wanderAt(cfg, 0).facing;
+  let most = 0;
+  for (let i = 1; i < 4000; i++) {
+    const f = wanderAt(cfg, (i * cfg.period) / 4000).facing;
+    const d = Math.abs(Math.atan2(Math.sin(f - prev), Math.cos(f - prev)));
+    most = Math.max(most, d / (cfg.period / 4000));
+    prev = f;
+  }
+  assert.ok(most < 1.2, `it turns at most ${most.toFixed(2)} rad/s (was a 90° snap at each waypoint)`);
+});
+
+test('loopPeriod: a leg is strode at the walk asked for at most (its clip never skates)', () => {
+  for (const peak of [0.7, 0.95]) {
+    const cfg: WanderConfig = { ...WANDER, period: loopPeriod(WANDER.radius, peak) };
+    let top = 0;
+    let prev = wanderAt(cfg, 0);
+    for (let i = 1; i < 6000; i++) {
+      const t = (i * cfg.period) / 6000;
+      const cur = wanderAt(cfg, t);
+      top = Math.max(top, Math.hypot(cur.x - prev.x, cur.z - prev.z) / (cfg.period / 6000));
+      prev = cur;
+    }
+    assert.ok(top <= peak * 1.02 && top >= peak * 0.9, `peak ${peak}: strides at most ${top.toFixed(3)} m/s`);
+  }
+});
+
+test('clearLoop: a clear loop stays; one across a rock turns, then moves its home, never onto the rock', () => {
+  const free = () => true;
+  assert.deepEqual(clearLoop(WANDER, free), WANDER, 'nothing in the way: the loop is kept');
+  // a rock 4 m from home, on the loop's first leg
+  const rock = { x: WANDER.homeX + 4.2, z: WANDER.homeZ + 1.5, r: 1.6 };
+  const ok = (x: number, z: number) => Math.hypot(x - rock.x, z - rock.z) > rock.r;
+  const moved = clearLoop(WANDER, ok);
+  for (let i = 0; i <= 400; i++) {
+    const s = wanderAt(moved, (i * moved.period) / 400);
+    assert.ok(ok(s.x, s.z), `the moved loop stays off the rock (t ${i})`);
+  }
+  // hemmed in on every side: a smaller loop at its own home
+  const tight = clearLoop(WANDER, (x, z) => Math.hypot(x - 100, z) > 1);
+  assert.ok(tight.radius <= WANDER.radius);
 });

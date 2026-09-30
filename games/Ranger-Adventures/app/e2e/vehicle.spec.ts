@@ -246,26 +246,29 @@ test('vehicle: reduced-motion caps speed ~3 m/s and halves the turn-rate', async
  *  the scale table; the jeep reads the same row). */
 const REE_R = 0.56;
 
-test('vehicle: driven at a grazing ree, the jeep gives way — a smooth stop short of it, never a touch (run 6)', async ({ page }, testInfo) => {
+test('vehicle: under reduced motion the ree holds still, and driven at it the jeep gives way — a smooth stop short of it, never a touch (run 6)', async ({ page }, testInfo) => {
   test.setTimeout(150_000);
   const errors: string[] = [];
   collectPageErrors(page, errors);
+  // Reduced motion freezes the animals (secondary motion), so the ree cannot step aside
+  // (e2e/wildlife.spec: with motion on it does, long before the jeep needs to brake): the
+  // jeep's own give-way brake is what keeps it safe here.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await enterWorld(page);
   await walkToJeep(page);
   await enterJeep(page);
-
-  // A child steering the jeep at the ree with the arrow keys, full gas all the way. The
-  // ree roams its loop with graze stops; the jeep must never touch it and must come to a
-  // gentle stop in front of it once it stands in its path (the old calm rule held the
-  // jeep to a 2 m/s crawl whenever ANY animal was within 8 m, and the ree shoved it).
+  // A child steering the jeep at the ree with the arrow keys, full gas all the way, from
+  // where the jeep is parked (the ree grazes on open drift sand straight on from it). The
+  // jeep must never touch it and must come to a gentle stop in front of it (the old calm
+  // rule held the jeep to a 2 m/s crawl whenever ANY animal was within 8 m, and the ree
+  // shoved it).
   const down = new Set<string>();
   const setKey = async (k: string, on: boolean): Promise<void> => {
     if (on && !down.has(k)) { await page.keyboard.down(k); down.add(k); }
     else if (!on && down.has(k)) { await page.keyboard.up(k); down.delete(k); }
   };
-  // the closest the jeep DROVE up to the ree while it grazed (samples where the jeep rolls
-  // and the ree stands); a ree walking its blind loop into the jeep is the next package's
-  // (wildlife: the animals will step aside) — the jeep cannot brake for what walks into it
+  // the closest the jeep DROVE up to the ree while it stood (samples where the jeep rolls
+  // and the ree stands)
   let minGap = Infinity, worst = '', gave = false, held: Vehicle | null = null, heldAt = 0, top = 0, jolt = 0;
   let prev: (Vehicle & { t: number }) | null = null;
   let reePrev: { x: number; z: number; t: number } | null = null;
@@ -297,7 +300,7 @@ test('vehicle: driven at a grazing ree, the jeep gives way — a smooth stop sho
   } finally {
     for (const k of [...down]) await page.keyboard.up(k);
   }
-  expect(top, 'it drove there at speed (no crawl near animals)').toBeGreaterThan(4);
+  expect(top, 'it drove there at its reduced-motion speed (no crawl near animals)').toBeGreaterThan(2.5);
   expect(minGap, `the jeep never drove within 0.8 m of the grazing ree (closest: ${worst})`).toBeGreaterThanOrEqual(0.8);
   expect(jolt, 'no crash stop: the speed never dropped faster than a firm brake').toBe(0);
 

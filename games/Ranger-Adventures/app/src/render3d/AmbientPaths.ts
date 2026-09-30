@@ -51,6 +51,22 @@ export interface GlideState {
 const LEGS = 4;
 /** Fraction of each leg spent paused at the waypoint grazing (the rest strides). */
 export const GRAZE_FRAC = 0.42;
+/** The last part of that pause (a fraction of the leg) in which it turns, calmly, toward the
+ *  next waypoint: it never snaps round (run 6: the facing jumped 90° at every waypoint). */
+export const TURN_FRAC = 0.14;
+/** smoothstep's top speed is this many times its average: a leg's peak speed. */
+const PEAK_OVER_MEAN = 1.5;
+
+/**
+ * The loop period (s) at which an animal strides its legs at `peak` m/s at most (run 6: the
+ * old 22-34 s loops strode 2.6-4 m/s under a walk clip that covers ~0.6 m/s, so the feet
+ * skated; a real deer walks ~1 m/s and grazes between).
+ */
+export function loopPeriod(radius: number, peak: number): number {
+  const leg = radius * Math.SQRT2;                  // the chord between two waypoints 90° apart
+  const striding = leg / (peak / PEAK_OVER_MEAN);   // seconds on the move per leg
+  return (LEGS * striding) / (1 - GRAZE_FRAC);
+}
 
 /** Positive fractional part (so a negative phase still wraps cleanly). */
 function frac(x: number): number {
@@ -71,8 +87,9 @@ function waypoint(cfg: WanderConfig, i: number): { x: number; z: number } {
 /**
  * Ground-animal wander: which leg we are on, how far along, and whether we are
  * striding or grazing. During the graze window the animal sits AT the current
- * waypoint (moving=false) already turned toward the next; then it eases across to
- * the next waypoint (moving=true).
+ * waypoint (moving=false), still facing the way it came, and over the window's last
+ * `TURN_FRAC` it turns calmly toward the next waypoint; then it eases across to the
+ * next waypoint (moving=true).
  */
 export function wanderAt(cfg: WanderConfig, t: number): WanderState {
   const u = frac(t / cfg.period + cfg.phase); // 0..1 around the whole loop
@@ -83,7 +100,10 @@ export function wanderAt(cfg: WanderConfig, t: number): WanderState {
   const b = waypoint(cfg, (leg + 1) % LEGS);
   const facing = Math.atan2(b.x - a.x, b.z - a.z); // toward the next waypoint
   if (f < GRAZE_FRAC) {
-    return { x: a.x, z: a.z, facing, moving: false };
+    const p = waypoint(cfg, (leg + LEGS - 1) % LEGS);
+    const came = Math.atan2(a.x - p.x, a.z - p.z);  // the way it arrived
+    const w = smooth(Math.min(1, Math.max(0, (f - (GRAZE_FRAC - TURN_FRAC)) / TURN_FRAC)));
+    return { x: a.x, z: a.z, facing: came + wrap(facing - came) * w, moving: false };
   }
   const g = smooth((f - GRAZE_FRAC) / (1 - GRAZE_FRAC));
   return {
@@ -92,6 +112,47 @@ export function wanderAt(cfg: WanderConfig, t: number): WanderState {
     facing,
     moving: true,
   };
+}
+
+/**
+ * The loop moved clear of what it must not cross (run 6 audit): `ok(x, z)` says whether a
+ * point of the loop is open ground for the animal (no trunk, bush, rock, wall, water, marker
+ * ground, helipad, rim). Every leg is walked every 0.4 m. Tried in this order, the first
+ * that keeps every leg on open ground wins: the loop turned about its home (in sixteenths
+ * of a turn), then its home moved a few metres (rings of 2-7 m, eight ways), then a smaller
+ * loop. The original loop comes back when it was clear. If nothing fits, the smallest loop
+ * tried at its own home is returned (a sliding step still keeps it off every solid).
+ */
+export function clearLoop(cfg: WanderConfig, ok: (x: number, z: number) => boolean): WanderConfig {
+  for (const k of [1, 0.85, 0.7, 0.55]) {
+    for (const shift of [0, 2, 3.5, 5, 7]) {
+      for (let d = 0; d < (shift ? 8 : 1); d++) {
+        const hx = cfg.homeX + Math.sin((d * Math.PI) / 4) * shift, hz = cfg.homeZ + Math.cos((d * Math.PI) / 4) * shift;
+        for (let i = 0; i < 16; i++) {
+          const turn = ((i % 2 ? -1 : 1) * Math.ceil(i / 2) * Math.PI) / 8; // 0, +⅛, −⅛, +¼ …
+          const c: WanderConfig = { ...cfg, homeX: hx, homeZ: hz, radius: cfg.radius * k, angle: cfg.angle + turn };
+          if (loopClear(c, ok)) return c;
+        }
+      }
+    }
+  }
+  return { ...cfg, radius: cfg.radius * 0.55 };
+}
+
+function loopClear(cfg: WanderConfig, ok: (x: number, z: number) => boolean): boolean {
+  for (let i = 0; i < LEGS; i++) {
+    const a = waypoint(cfg, i), b = waypoint(cfg, (i + 1) % LEGS);
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.4));
+    for (let j = 0; j < n; j++) if (!ok(a.x + ((b.x - a.x) * j) / n, a.z + ((b.z - a.z) * j) / n)) return false;
+  }
+  return true;
+}
+
+/** Wrap an angle to (−π, π]. */
+function wrap(a: number): number {
+  const t = Math.PI * 2;
+  const r = ((a % t) + t) % t;
+  return r > Math.PI ? r - t : r;
 }
 
 /** Bird glide: a slow horizontal circle with a gentle vertical undulation. */

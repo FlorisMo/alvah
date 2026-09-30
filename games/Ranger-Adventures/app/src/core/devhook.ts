@@ -209,8 +209,9 @@ export interface RangerDevHook {
   /** The ambient wildlife (roaming animals + gliding birds): id + live world x/z
    *  + applied canonical stand height `h` (W3.7a) + dominant baked clip
    *  {name, time} (null for the procedural/bird cast), or null before the
-   *  hook/world is ready (W3.6). */
-  ambient(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] | null;
+   *  hook/world is ready (W3.6). Run 6: each roamer's mode, speed, gait, facing, radius
+   *  and threat (`AmbientRead`). */
+  ambient(): AmbientRead[] | null;
   /** The fixed landmark props (watchtower, ecoduct, bird-hide, BOA post,
    *  signposts): id + world x/z, for E2E spawn→watchtower navigation (W4.1). */
   landmarks(): { id: string; x: number; z: number }[] | null;
@@ -386,6 +387,16 @@ export type PlayHintProbe = {
   parts: string[];
 };
 
+/** One entry of `__ranger.ambient()`: a roaming animal or a gliding bird. Run 6 adds what
+ *  a roamer is doing (`mode`: roam / alert / away / yield / return, null for a bird), how
+ *  fast it really moves (m/s), its legs (`gait`: still / walk / trot / bound), the way it
+ *  faces (rad), its footprint radius (m) and what it reacts to (`threat`: jeep / ranger). */
+export type AmbientRead = {
+  id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null;
+  mode?: string | null; speed?: number; gait?: string | null; facing?: number; r?: number; threat?: string | null;
+  loop?: { x: number; z: number; r: number; angle: number } | null;
+};
+
 /** One entry of `__ranger.seating()`. */
 export type SeatProbe = { id: string; x: number; y: number; z: number; gap: number; sig: string; moves?: 'player' | 'ambient' };
 
@@ -425,7 +436,7 @@ const state = {
   winStep: null as null | (() => boolean),
   titleReady: null as null | (() => boolean),
   actors: null as null | (() => { id: string; height: number; clip: { name: string; time: number } | null }[]),
-  ambient: null as null | (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]),
+  ambient: null as null | (() => AmbientRead[]),
   landmarks: null as null | (() => { id: string; x: number; z: number }[]),
   dressing: null as null | (() => { id: string; x: number; z: number }[]),
   treeSpots: null as null | (() => { x: number; z: number; s: number }[]),
@@ -639,7 +650,7 @@ export function provideActors(
 
 /** Register the ambient-wildlife source (the World's roaming animals + birds). W3.6. */
 export function provideAmbient(
-  fn: (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]) | null,
+  fn: (() => AmbientRead[]) | null,
 ): void {
   state.ambient = fn;
 }

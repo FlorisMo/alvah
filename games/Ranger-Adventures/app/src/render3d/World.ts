@@ -32,7 +32,7 @@ import { Labels } from './world/Labels';
 import { Dressing } from './world/Dressing';
 import { Fauna } from './world/Fauna';
 import { Markers, type WorldMarker } from './world/Markers';
-import { Vehicles } from './world/Vehicles';
+import { Vehicles, MARKER_R, PAD_RADIUS } from './world/Vehicles';
 import { Player, type TapTarget } from './world/Player';
 import { CameraRig } from './world/CameraRig';
 import { DevReadback } from './world/DevReadback';
@@ -45,6 +45,7 @@ import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, bootTier, coarsePointer, lightMode, pixelRatioFor, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import type { WayCue } from './Wayfinding';
 import type { RangerMotion, WorldCtx } from './play/types';
+import type { RangerRead, Threats } from '../core/wildlife';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
 import { cachedResource } from './Models';
 import { Progress } from './world/Progress';
@@ -196,7 +197,15 @@ export class World {
     this.dressing = new Dressing({
       scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits, labels: this.labels,
     });
-    this.fauna = new Fauna({ scene: this.scene, terrain: this.terrain });
+    // the roaming animals slide round the world's solids and keep off the mission markers'
+    // ground and the helipads (run 6: they see the jeep and the ranger coming)
+    this.fauna = new Fauna({
+      scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits,
+      zones: (visit) => {
+        for (const m of this.pois.list) visit(m.pos.x, m.pos.z, MARKER_R);
+        for (const p of this.vehicles.pads()) visit(p.x, p.z, PAD_RADIUS + 0.3);
+      },
+    });
     this.pois = new Markers(
       { scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, labels: this.labels, limits: this.limits },
       { onApproach, onInteract, onWayfind }, activeId,
@@ -211,6 +220,7 @@ export class World {
         orbitDrag: (dx, dy) => this.cam.orbitDrag(dx, dy),
         tapTargets: () => this.tapTargets(),
         crossBiome: (here) => this.crossBiome(here),
+        movers: (visit) => this.fauna.visitRoamers(visit), // he walks round the roaming animals (run 6)
       },
     );
     this.vehicles = new Vehicles(
@@ -599,7 +609,7 @@ export class World {
   }
 
   /** Dev-hook accessor (W3.6): each ambient creature's id + live world x/z + height + clip. */
-  ambientState(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] {
+  ambientState(): ReturnType<Fauna['ambientState']> {
     return this.fauna.ambientState();
   }
 
@@ -695,7 +705,9 @@ export class World {
     this.pois.animate(t, dt, reduced); // each mission marker's animal (secondary motion)
     this.progress.update(t, dt, reduced, this.camera, this.activityActive); // finished tableaus: reunion walks, idle breathing
 
-    this.fauna.update(t, dt, reduced, this.camera); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
+    // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds; run 6: the roamers
+    // see the ranger on foot and a driven jeep coming
+    this.fauna.update(t, dt, reduced, this.camera, this.threats(dt));
 
     // W3.2: the ranger's own locomotion animation (and his footsteps, on his feet).
     // Locomotion is reduced-motion EXEMPT (§3.4) so the mixer always advances with real
@@ -737,6 +749,32 @@ export class World {
     this.pois.updateWayfinding(rp.x, rp.z, this.ranger.rotation.y);
 
     this.cam.place(reduced, dt, reduced);
+  }
+
+  // Run 6 (wildlife): what the roaming animals react to, rebuilt each frame in reused objects.
+  private readonly threatNow: Threats = { ranger: null, jeep: null };
+  private readonly rangerNow: RangerRead = { x: 0, z: 0, heading: 0, speed: 0, running: false };
+  private rangerLast = { x: Number.NaN, z: Number.NaN };
+  /** The ranger on foot (his real velocity this frame: backing up and tap-walks included;
+   *  a cut such as a mission's step-in is no speed) and the jeep while someone drives it. */
+  private threats(dt: number): Threats {
+    const th = this.threatNow;
+    const rp = this.ranger.position;
+    const last = this.rangerLast;
+    if (!this.vehicles.inVehicle && !this.vehicles.inHeli) {
+      const r = this.rangerNow;
+      const vx = Number.isNaN(last.x) || dt <= 0 ? 0 : (rp.x - last.x) / dt;
+      const vz = Number.isNaN(last.z) || dt <= 0 ? 0 : (rp.z - last.z) / dt;
+      const sp = Math.hypot(vx, vz);
+      r.x = rp.x; r.z = rp.z;
+      r.speed = sp > 8 ? 0 : sp;
+      r.heading = r.speed > 0.05 ? Math.atan2(vx, vz) : this.ranger.rotation.y;
+      r.running = this.player.rig.running;
+      th.ranger = r;
+    } else th.ranger = null;
+    last.x = rp.x; last.z = rp.z;
+    th.jeep = this.vehicles.jeepThreat();
+    return th;
   }
 
   // ctx() (below) reads the ranger's position straight off the World.
