@@ -21,28 +21,68 @@ export interface WisselTrial {
   flipEvery: number;   // flip the rule every N correct sorts
 }
 
-/** Build a shuffled day/night queue + resolve the flip cadence. */
+/** Build a shuffled day/night queue + resolve the flip cadence. Half day, half night
+ *  animals; of each kind every animal comes once before any comes again (a set of six
+ *  shows every night animal), and never the same animal twice in a row (a queue that
+ *  repeats itself is a flat round). */
 export function buildWisselTrial(skin: Skin, diff: Settings, rng: () => number = Math.random): WisselTrial {
   const dag = skin.dagDieren?.length ? skin.dagDieren : ['edelhert', 'ree'];
   const nacht = skin.nachtDieren?.length ? skin.nachtDieren : ['das', 'nachtzwaluw', 'wildzwijn'];
   const totaal = Math.max(4, skin.trials ?? 8);
 
+  const nextDag = deck(dag, rng);
+  const nextNacht = deck(nacht, rng);
   const pool: WisselItem[] = [];
   for (let i = 0; i < totaal; i++) {
     const fromDag = i % 2 === 0;
-    const arr = fromDag ? dag : nacht;
-    pool.push({ id: arr[Math.floor(rng() * arr.length)], dag: fromDag });
-  }
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
+    pool.push({ id: fromDag ? nextDag() : nextNacht(), dag: fromDag });
   }
 
   // higher wisselFreq → flips more often (every 2); lower → calmer (every 6)
   const freq = diff.wisselFreq ?? 0.4;
   const flipEvery = Math.max(2, Math.round(2 + (1 - freq) * 4));
 
-  return { queue: pool, flipEvery };
+  return { queue: spread(pool, rng), flipEvery };
+}
+
+/** Draw animals from `ids` like cards from a shuffled deck: each once before any comes
+ *  again (the deck is shuffled anew when it runs out). */
+function deck(ids: readonly string[], rng: () => number): () => string {
+  let bag: string[] = [];
+  return () => {
+    if (!bag.length) {
+      bag = [...ids];
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+    }
+    return bag.pop()!;
+  };
+}
+
+/** The items in a random order with never the same animal twice in a row (whenever the
+ *  mix allows it: no animal fills more than half the queue). Each next item is drawn at
+ *  random from the ones that keep the rest placeable. */
+function spread(items: readonly WisselItem[], rng: () => number): WisselItem[] {
+  const left = [...items];
+  const out: WisselItem[] = [];
+  /** can `rest` still be laid out with no two alike in a row, after one `last`? */
+  const placeable = (rest: readonly WisselItem[], last: string | undefined): boolean => {
+    const n = rest.length;
+    const count = new Map<string, number>();
+    for (const it of rest) count.set(it.id, (count.get(it.id) ?? 0) + 1);
+    for (const [id, c] of count) if (c > (id === last ? Math.floor(n / 2) : Math.ceil(n / 2))) return false;
+    return true;
+  };
+  while (left.length) {
+    const last = out[out.length - 1]?.id;
+    const ok = left.map((_, i) => i).filter((i) => left[i].id !== last && placeable(left.filter((_, j) => j !== i), left[i].id));
+    const from = ok.length ? ok : left.map((_, i) => i); // (a mix that cannot be spread: as it comes)
+    const i = from[Math.floor(rng() * from.length)];
+    out.push(left.splice(i, 1)[0]);
+  }
+  return out;
 }
 
 /** The two place names in a rule line "Dag-dier → X. Nacht-dier → Y." */
