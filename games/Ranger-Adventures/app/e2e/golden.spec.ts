@@ -663,8 +663,18 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     hard(!!(await save(page))?.voltooid[missionId], `after the last mini-game the mission was never marked done (visible buttons: ${await visibleButtons(page)})`);
     await sleep(page, 800);
     await shot(page, 'reward');
-    const text = (await uiText(page)).toLowerCase();
-    soft(text.includes(mission.titel.toLowerCase()), `no reward card naming "${mission.titel}"`);
+    // the line over the reunion names the mission, and after the raaf's last card the
+    // reward card does: a player reads one of them (one snapshot raced the reunion's end
+    // under load — it soft-failed now and then while both were there)
+    let named = false;
+    for (const tN = Date.now(); Date.now() - tN < 30_000;) {
+      if ((await uiText(page)).toLowerCase().includes(mission.titel.toLowerCase())) { named = true; break; }
+      if (await page.getByRole('button', { name: /^(Verder|Klaar)$/ }).filter({ visible: true }).count()) {
+        await clickButton(page, /^(Verder|Klaar)$/, 'last fact card');
+      }
+      await sleep(page, 400);
+    }
+    soft(named, `no reward card naming "${mission.titel}"`);
     let clue = false;
     // click through to the world like a player: prefer "back to patrol" (an adventure's
     // ending may first take one calm look at something in the world: wait it out)
