@@ -161,9 +161,12 @@ test('sight: a trunk hides a squirrel behind it, even one whose body sticks out 
   assert.equal(lineClear(eye, round(60), up, 0.12), true, 'round the side: seen');
   assert.equal(lineClear(eye, round(180), up, 0.12), false, 'straight behind: hidden');
   // (2026-09-30, played: 133° round, its middle 0.59 m out, the line to it grazed the bark
-  // 0.41 m from the axis; nothing of it showed on the screen)
-  assert.equal(lineClear(eye, round(133, 0.59), up), true, 'its middle only just grazes past…');
-  assert.equal(lineClear(eye, round(133, 0.59), up, 0.12), false, '…so it counts as hidden');
+  // 0.41 m from the axis — past the median bark — yet nothing of it showed on the screen:
+  // the ridged outline reaches further out, and hides it)
+  assert.equal(lineClear(eye, round(133, 0.59), up), false, 'just past the bark\'s edge, behind its ridges: hidden');
+  // (…while on the near side, clinging among the ridges, it is in view)
+  assert.equal(lineClear(eye, round(20, r + 0.08), up), true, 'on the near side, among the ridges: seen');
+  assert.equal(lineClear(eye, round(160, r + 0.08), up), false, 'on the far side, among the ridges: hidden');
   // over the top of a short upright (the boy's head) it is seen
   const body = [{ x: 3, z: 0, y0: 0, y1: 1.45, r: () => 0.22 }];
   assert.equal(lineClear(eye, { x: 0, y: 1.3, z: 0 }, body, 0.12), true, 'over his head');

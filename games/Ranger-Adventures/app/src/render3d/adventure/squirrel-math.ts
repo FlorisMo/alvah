@@ -395,21 +395,36 @@ export interface P3 { x: number; y: number; z: number }
  *  from its axis it reaches at height y. */
 export interface Upright { x: number; z: number; y0: number; y1: number; r: (y: number) => number }
 
-/** An upright trunk as a line of sight meets it: the bark's measured radius up the tree,
- *  its foot on the ground at `ground`. */
+/**
+ * How far a trunk's bark reaches out from its axis where it hides what is behind it, as a
+ * fraction of the tree's height: its outline, the furthest trunk vertex (the low-poly
+ * bark is ridged, so its outline is well outside the median radius the squirrel clings
+ * at — the same measure world/Crowns.ts gives the camera). Played 2026-09-30: a squirrel
+ * clinging just past the median bark's edge was "in view" by the median and hidden on
+ * the screen by the ridges.
+ */
+const TRUNK_REACH: Readonly<Record<TrunkSpecies, number>> = { 'prop-pine-scots': 0.04, 'prop-oak-tree': 0.075, 'prop-birch-tree': 0.045 };
+
+/** An upright trunk as a line of sight meets it: out to its ridged outline up the tree
+ *  (never less than the bark's measured radius), its foot on the ground at `ground`. */
 export function trunkUpright(t: Trunk, ground: number): Upright {
-  return { x: t.x, z: t.z, y0: ground - 0.5, y1: ground + t.H, r: (y) => barkRadius(t, Math.max(0, y - ground)) };
+  const reach = TRUNK_REACH[t.species] * t.H;
+  return { x: t.x, z: t.z, y0: ground - 0.5, y1: ground + t.H, r: (y) => Math.max(reach, barkRadius(t, Math.max(0, y - ground))) };
 }
 
 /** Is the straight line from `eye` to `at` clear of every upright, by at least `pad` m?
  *  Each is met where the line passes nearest its axis, at the height the line has there.
  *  (`at` is the middle of a body: a line that only just grazes past the bark to it sees
- *  a sliver at most — `pad` asks for most of the body in view.) */
+ *  a sliver at most — `pad` asks for most of the body in view.) When the line comes
+ *  nearest an upright at its very end, `at` is on the side of it that faces the eye (a
+ *  squirrel on the near side of the bark, among its ridges): that upright hides nothing. */
 export function lineClear(eye: P3, at: P3, uprights: readonly Upright[], pad = 0): boolean {
   const dx = at.x - eye.x, dz = at.z - eye.z;
   const l2 = dx * dx + dz * dz;
   for (const u of uprights) {
-    const t = l2 < 1e-9 ? 1 : Math.max(0, Math.min(1, ((u.x - eye.x) * dx + (u.z - eye.z) * dz) / l2));
+    const raw = l2 < 1e-9 ? 1 : ((u.x - eye.x) * dx + (u.z - eye.z) * dz) / l2;
+    if (raw >= 1) continue;
+    const t = Math.max(0, raw);
     const y = eye.y + (at.y - eye.y) * t;
     if (y < u.y0 || y > u.y1) continue;
     if (Math.hypot(eye.x + dx * t - u.x, eye.z + dz * t - u.z) < u.r(y) + pad) return false;

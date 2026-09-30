@@ -12,8 +12,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_AT, JAY_GROUND,
-  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, SEE_D, WAIT_H, HIDE, gladeSpots, eekhoornTreeClear, eekhoornClearings, branchStub,
-  seatOf, watchSpot, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo,
+  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, SEE_D, SEEN_X, WAIT_H, HIDE, gladeSpots, eekhoornTreeClear, eekhoornClearings, branchStub,
+  seatOf, watchSpot, WATCH_R, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo,
 } from './eekhoorn.places.ts';
 import { STUB_TILT } from '../../world/Forest.ts';
 import { biomeAt, VEN_CENTER, VEN_SHORE_R } from '../../Biomes.ts';
@@ -99,13 +99,15 @@ test('the follow: 3-4 hops over 15-25 m, a dash, two leaps, a dash into the glad
 /** The follow lens behind him (world/CameraRig: 2.4 m up, 4.6 m back) looking the way
  *  he walks, and what hides a squirrel from it: the home's trunks and his own body. */
 const LENS = { up: 2.4, back: 4.6 };
-const HFOV = Math.atan(Math.tan((55 / 2) * Math.PI / 180) * 1.6) * 0.92; // (55° lens at 1280×800, a margin)
+const HFOV = Math.atan(Math.tan((55 / 2) * Math.PI / 180) * 1.6 * 0.98); // (55° lens at 1280×800: the whole picture)
+/** …and the part of it where he has SEEN it: well inside, not at the edge */
+const HFOV_SEEN = Math.atan(Math.tan((55 / 2) * Math.PI / 180) * 1.6 * SEEN_X);
 function lensSees(me: { x: number; z: number }, heading: number, sq: { x: number; z: number; y: number }): boolean {
   const eye = { x: me.x - Math.sin(heading) * LENS.back, y: LENS.up, z: me.z - Math.cos(heading) * LENS.back };
   const body: Upright = { x: me.x, z: me.z, y0: 0, y1: RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 };
   const ups = [...HOME_TREES.map((t) => trunkUpright(trunk(t), 0)), body];
   const off = Math.atan2(Math.sin(headingTo(eye, sq) - heading), Math.cos(headingTo(eye, sq) - heading));
-  return Math.abs(off) < HFOV && lineClear(eye, sq, ups, 0.12);
+  return Math.abs(off) < HFOV_SEEN && lineClear(eye, sq, ups, 0.12);
 }
 
 test('the follow: from where he walks up, the squirrel on its low stub sits in the lens, over his shoulder', () => {
@@ -121,7 +123,7 @@ test('the follow: from where he walks up, the squirrel on its low stub sits in t
     const sq = { ...seat, y: t.branch!.h + 0.15 };
     assert.ok(dist(w, seat) < SEE_D - 0.4, `the spot is within ${SEE_D} m of it (${dist(w, seat).toFixed(2)} m)`);
     // a perfect player walks the hint: straight, round a trunk in the way by a spot beside it
-    let me = { ...from }, heading = headingTo(me, w), seen = false, legsN = 0;
+    let me = { ...from }, heading = headingTo(me, w), seen = false, legsN = 0, atSpot: boolean | null = null;
     while (dist(me, w) > 0.05 && legsN < 4) {
       const to = wayTo(me, w);
       legsN += 1;
@@ -132,8 +134,12 @@ test('the follow: from where he walks up, the squirrel on its low stub sits in t
       for (let i = 1; i <= n; i++) {
         me = { x: a.x + (to.x - a.x) * (i / n), z: a.z + (to.z - a.z) * (i / n) };
         if (dist(me, seat) <= SEE_D && lensSees(me, heading, sq)) seen = true;
+        // (golden stops as soon as it is within the hint's radius of the spot: from there
+        // it must see it too, or it would wait there for ever)
+        if (atSpot === null && to === w && dist(me, w) <= WATCH_R) atSpot = lensSees(me, heading, sq);
       }
     }
+    assert.equal(atSpot, true, `where golden stops, within ${WATCH_R} m of the spot, it is in the lens`);
     assert.ok(legsN <= 3, `at most two spots beside a trunk on the way (${legsN})`);
     assert.ok(seen, 'within SEE_D of it, it is in the lens');
     assert.ok(lensSees(me, heading, sq), 'at the spot, it is in the lens');
@@ -145,64 +151,115 @@ test('the follow: from where he walks up, the squirrel on its low stub sits in t
   }
 });
 
-test('hide-and-seek at pine C: he walks about half round, it slips round at most twice, calmly, and the lens then sees it', () => {
+/** The squirrel clinging to the bark of `t` at heading `ang`, `h` m up, as a lens sees
+ *  it: points on its body (out from the bark, across it, up it). */
+function clingPoints(t: typeof HOME_TREES[number], ang: number, h: number): { x: number; y: number; z: number }[] {
+  const r = barkRadius(trunk(t), h);
+  const out: { x: number; y: number; z: number }[] = [];
+  for (const o of [0.03, 0.1, 0.17]) for (const side of [-0.06, 0, 0.06]) for (const up of [0.05, 0.25]) {
+    const a = ang + side / (r + o);
+    out.push({ x: t.x + Math.sin(a) * (r + o), y: h + up, z: t.z + Math.cos(a) * (r + o) });
+  }
+  return out;
+}
+/** How many of those points a lens (turned `camH`, 4.6 m behind him) sees (`hf`: in the
+ *  whole picture, or well inside it). */
+function lensSeesOf(me: { x: number; z: number }, camH: number, pts: { x: number; y: number; z: number }[], hf = HFOV): number {
+  const eye = { x: me.x - Math.sin(camH) * LENS.back, y: LENS.up, z: me.z - Math.cos(camH) * LENS.back };
+  const body: Upright = { x: me.x, z: me.z, y0: 0, y1: RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 };
+  const ups = [...HOME_TREES.map((t) => trunkUpright(trunk(t), 0)), body];
+  return pts.filter((p) => Math.abs(Math.atan2(Math.sin(headingTo(eye, p) - camH), Math.cos(headingTo(eye, p) - camH))) < hf && lineClear(eye, p, ups)).length;
+}
+/** …at least half of them well inside the picture (the game's "seen": then he has found it). */
+function lensSeesHalf(me: { x: number; z: number }, camH: number, pts: { x: number; y: number; z: number }[]): boolean {
+  return lensSeesOf(me, camH, pts, HFOV_SEEN) >= pts.length / 2;
+}
+
+test('hide-and-seek at pine C: it keeps the trunk between them, slips round once or twice before the lens sees it, never faster than he walks; he walks about half round, then it is in view', () => {
   const c = TREE.c;
   const cR = barkRadius(trunk(c), HIDE.h);
   const clear = eekhoornTreeClear();
   // he comes up from pine A's side and stops where he sees it on its stub (anywhere within
   // SEE_D of it, on open ground); then he follows the hint (a perfect player walks
-  // straight at 2.2 m/s); it clings across the trunk from him
+  // straight at 2.2 m/s, reading the hint anew within 1 m of it) and the follow lens
+  // turns after him (≤ 1.6 rad/s)
   const seat = seatOf(c);
   const from = headingTo(c, TREE.a);
   let starts = 0;
+  const wrapA = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
   for (let k = -6; k <= 6; k++) for (const d of [1.8, 2.4, 3, 3.6]) {
     let me = { x: c.x + Math.sin(from + k * 0.17) * d, z: c.z + Math.cos(from + k * 0.17) * d };
     if (dist(me, seat) > SEE_D || HOME_TREES.some((o) => dist(o, me) < trunkClear(o))) continue;
     starts += 1;
-    let sqAng = hideStart(c, me, STUMP);
-    // it starts out of his sight: past the bark's edge as he sees it, with room for its body
-    const off0 = Math.abs(Math.atan2(Math.sin(sqAng - headingTo(c, me)), Math.cos(sqAng - headingTo(c, me))));
-    assert.ok(off0 > Math.acos(cR / d) + 0.6, `it hides across the trunk (${(off0 * 180 / Math.PI).toFixed(0)}°)`);
-    let left: number = HIDE.shifts;
-    let slipping = 0; // s still slipping
     let heading = headingTo(me, c);
+    let camH = heading;
+    const eyeAt = (): { x: number; z: number } => ({ x: me.x - Math.sin(camH) * LENS.back, z: me.z - Math.cos(camH) * LENS.back });
+    let sqAng = hideStart(c, [me, eyeAt()], STUMP);
+    // it starts out of the lens's sight, and out of his
+    assert.equal(lensSeesHalf(me, camH, clingPoints(c, sqAng, HIDE.h)), false, 'hidden at first');
+    const off0 = Math.abs(wrapA(sqAng - headingTo(c, me)));
+    assert.ok(off0 > Math.acos(cR / d) + 0.6, `it hides across the trunk from him too (${(off0 * 180 / Math.PI).toFixed(0)}°)`);
+    let slips = 0;
+    let hiding = true;
+    let slipping = 0; // s still slipping
     let round = 0; let found = false;
     let goal = roundStep(c, me, sqAng);
     const dt = 0.05;
     for (let t = 0; t < 40 && !found; t += dt) {
-      if (dist(me, goal) < 0.7) goal = roundStep(c, me, sqAng); // (golden reads the hint anew on arrival)
+      if (dist(me, goal) < 1.0) goal = roundStep(c, me, sqAng); // (golden reads the hint anew on arrival)
       const dd = dist(me, goal);
       if (dd > 0.05) {
         // (each straight piece clears every trunk)
-        for (const o of HOME_TREES) assert.ok(segDist(o, me, goal) > trunkClear(o) - 0.3, 'the way round clears the trunks');
+        for (const [i, o] of HOME_TREES.entries()) assert.ok(segDist(o, me, goal) > trunkClear(o) - 0.3, `the way round clears the trunks (tree ${i}: ${segDist(o, me, goal).toFixed(2)} from ${k}/${d})`);
         heading = headingTo(me, goal);
         const s = Math.min(dd, 2.2 * dt);
         const b0 = headingTo(c, me);
         me = { x: me.x + Math.sin(heading) * s, z: me.z + Math.cos(heading) * s };
-        round += Math.abs(Math.atan2(Math.sin(headingTo(c, me) - b0), Math.cos(headingTo(c, me) - b0)));
+        round += Math.abs(wrapA(headingTo(c, me) - b0));
       }
+      camH += Math.max(-1.6 * dt, Math.min(1.6 * dt, wrapA(heading - camH)));
       if (slipping > 0) { slipping -= dt; continue; }
-      const next = hideShift(sqAng, headingTo(c, me), left);
-      if (next !== null) {
-        const secs = slipSecs(sqAng, next);
-        // never a dart: about as fast round the bark as he goes round it
-        assert.ok(Math.abs(Math.atan2(Math.sin(next - sqAng), Math.cos(next - sqAng))) / secs <= HIDE.rate + 1e-9);
-        assert.ok((Math.abs(Math.atan2(Math.sin(next - sqAng), Math.cos(next - sqAng))) * (cR + 0.1)) / secs < SQ.climb);
-        slipping = secs; sqAng = next; left -= 1;
-        continue;
+      const pts = clingPoints(c, sqAng, HIDE.h);
+      if (hiding && (round >= HIDE.round || slips >= HIDE.most)) hiding = false;
+      if (hiding) {
+        // (a bit of it showing past the bark in his view sends it round too)
+        const next = hideShift(sqAng, [headingTo(c, me), headingTo(c, eyeAt())], lensSeesOf(me, camH, pts) > 0);
+        if (next !== null) {
+          const secs = slipSecs(sqAng, next);
+          // never a dart: about as fast round the bark as he goes round it
+          assert.ok(Math.abs(wrapA(next - sqAng)) / secs <= HIDE.rate + 1e-9);
+          assert.ok((Math.abs(wrapA(next - sqAng)) * (cR + 0.1)) / secs < SQ.climb);
+          // a real move round the bark, and before the lens sees it
+          assert.ok(Math.abs(wrapA(next - sqAng)) > 0.3, `a real slip (${(Math.abs(wrapA(next - sqAng)) * 180 / Math.PI).toFixed(0)}°)`);
+          assert.equal(lensSeesHalf(me, camH, pts), false, 'it slips away before it is seen');
+          slipping = secs; sqAng = next; slips += 1;
+          continue;
+        }
       }
-      const sq = { x: c.x + Math.sin(sqAng) * (cR + 0.2), y: HIDE.h + 0.15, z: c.z + Math.cos(sqAng) * (cR + 0.2) };
-      found = lensSees(me, heading, sq);
+      found = !hiding && lensSeesHalf(me, camH, pts);
     }
     assert.ok(found, `found from ${k}/${d}`);
-    assert.ok(left >= 0 && left < HIDE.shifts, `it slipped round ${HIDE.shifts - left}×`);
-    assert.ok(round > 2.4, `he walked ${(round * 180 / Math.PI).toFixed(0)}° round the tree before he saw it`);
-    assert.ok(round < 5.2, `…but not round and round (${(round * 180 / Math.PI).toFixed(0)}°)`);
+    assert.ok(slips >= 1 && slips <= HIDE.most, `it slipped round ${slips}×`);
+    assert.ok(round > 2.5, `he walked ${(round * 180 / Math.PI).toFixed(0)}° round the tree before he saw it`);
+    assert.ok(round < 4.4, `…but not round and round (${(round * 180 / Math.PI).toFixed(0)}°)`);
     // round the tree is open ground (no stray forest tree)
     assert.ok(clear.some((q) => dist(q, me) < q.r), 'no stray forest tree there');
     assert.equal(biomeAt(me.x, me.z), 'bos');
   }
   assert.ok(starts >= 12, `${starts} ways up to it tried`);
+});
+
+test('hide-and-seek: right up at the bark on its side (where a child steering at its chatter ends up) he is by it; round the side he is not', () => {
+  const c = TREE.c;
+  const wrapA = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+  const at = (ang: number): { x: number; z: number } => ({ x: c.x + Math.sin(ang) * (barkRadius(trunk(c), HIDE.h) + 0.1), z: c.z + Math.cos(ang) * (barkRadius(trunk(c), HIDE.h) + 0.1) });
+  const hug = (ang: number): { x: number; z: number } => ({ x: c.x + Math.sin(ang) * trunkClear(c), z: c.z + Math.cos(ang) * trunkClear(c) });
+  const near = (me: { x: number; z: number }, sqAng: number): boolean => dist(me, at(sqAng)) < HIDE.near && Math.abs(wrapA(headingTo(c, me) - sqAng)) < HIDE.nearAng;
+  for (let a = -Math.PI; a < Math.PI; a += 0.3) {
+    assert.ok(near(hug(a), a), 'pressed against the bark in front of it');
+    assert.ok(near(hug(a + 0.4), a), '…or a little beside it');
+    assert.ok(!near(hug(a + Math.PI / 2), a), 'a quarter round the trunk from it: not by it');
+  }
 });
 
 test('the glade: seven look-alike spots in the PRINT_SPOTS layout, uniformly scaled, all in one view', () => {

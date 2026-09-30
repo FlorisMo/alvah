@@ -168,12 +168,20 @@ export function seatOf(t: HomeTree): Spot {
 }
 
 /** How near (m) he comes to the squirrel waiting on its stub before it runs on: close
- *  enough that it reads as an animal through the follow lens (≈ 30 px at 1280×800). */
-export const SEE_D = 3;
+ *  enough that it reads as an animal through the follow lens (≈ 33 px tall at 1280×800
+ *  at this distance, ≈ 40 px at the spot to see it from). */
+export const SEE_D = 2.6;
+/** He has SEEN it when most of it is well inside the picture — within this much of the
+ *  half-width from the middle (0.7: the middle 70 % of the screen; at the very edge it is
+ *  there, but a child has not seen it yet) — and not behind a trunk or his own body. */
+export const SEEN_X = 0.7;
 /** The spot to see it from (golden's walk hint): out along its stub a little to the side,
  *  so it sits over his shoulder, not straight over his head, and nothing is between. */
-const WATCH_D = 2.3;
+const WATCH_D = 1.9;
 const WATCH_TURN = 0.3;
+/** Near enough the spot to see it from (golden's walk hint radius): there he is close,
+ *  whatever SEE_D says (WATCH_D + WATCH_R stays within ~3 m of it). */
+export const WATCH_R = 1.0;
 export function watchSpot(t: HomeTree): Spot {
   const s = seatOf(t), a = t.branch!.ang + WATCH_TURN;
   return { x: s.x + Math.sin(a) * WATCH_D, z: s.z + Math.cos(a) * WATCH_D };
@@ -277,30 +285,61 @@ export function wayTo(me: Spot, goal: Spot): Spot {
 /* --------------------------------------------------------- hide-and-seek ---- */
 
 /** Hide-and-seek round pine C: a red squirrel keeps the trunk between itself and whoever
- *  comes near. It clings `h` m up the bark straight across the trunk from him; when he
- *  has walked round far enough that it would soon be seen (`shiftAt` rad off its side) it
- *  slips round again to `to` rad from him — at most `shifts` times, calmly (`rate` rad/s
- *  round the bark: about as fast as he goes round it walking), then it stays and he
- *  finds it. So he walks about half round the tree. */
-export const HIDE = { h: 1.05, shiftAt: 1.85, to: 2.5, shifts: 2, rate: 1.1 } as const;
+ *  comes near — him, and his eye (the follow lens behind him, which swings round as he
+ *  turns). It clings `h` m up the bark on the side of the trunk farthest from both. When
+ *  one of them comes round within `keepAt` rad of it (its body is thick beside a pine's
+ *  trunk, so that is well before it shows), or a bit of it already peeks out in his
+ *  view, it slips round to the farthest side again — a real move (`gain` rad further
+ *  from them at least), never faster than he walks (`rate` rad/s round the bark: under
+ *  1 m/s). Once he has walked `round` rad round the tree (or it slipped `most` times) it
+ *  stays, and he finds it as he comes round — in his view, or right by it (within `near`
+ *  m of it, within `nearAng` rad of its side of the tree) with a bit of it showing. So he
+ *  walks about half round the tree, and it slips once or twice. */
+export const HIDE = { h: 1.05, keepAt: 1.9, gain: 0.6, round: 2.2, most: 3, rate: 1.8, near: 1.4, nearAng: 0.9 } as const;
 
-/** Where it first hides (a heading from the trunk's axis): across the trunk from him,
- *  turned a little toward `toward` (its glade), so the short way round goes that way. */
-export function hideStart(trunk: Spot, me: Spot, toward: Spot): number {
-  const him = headingTo(trunk, me);
-  const a = him + Math.PI - 0.3, b = him + Math.PI + 0.3;
-  const at = (h: number): Spot => ({ x: trunk.x + Math.sin(h) * 2, z: trunk.z + Math.cos(h) * 2 });
-  return dist(at(a), toward) < dist(at(b), toward) ? a : b;
+/** Never on the side of pine C that faces a close neighbour (pine B, 3.2 m off): he could
+ *  not stand there to see it, and the way round would run into that trunk. */
+const HIDE_TREE = HOME_TREES[3];
+const HIDE_AVOID = HOME_TREES.filter((t) => t !== HIDE_TREE && dist(t, HIDE_TREE) < 4.5).map((t) => headingTo(HIDE_TREE, t));
+const AVOID_HALF = 0.65;
+const allowed = (a: number): boolean => HIDE_AVOID.every((b) => Math.abs(wrapA(a - b)) >= AVOID_HALF);
+
+/** How far round the trunk (rad) the nearest of `eyes` (headings from its axis) is from `a`. */
+function margin(a: number, eyes: readonly number[]): number {
+  return Math.min(...eyes.map((e) => Math.abs(wrapA(a - e))));
 }
 
-/** He has come round toward it (`him`: his heading from the trunk): where it slips to
- *  now, or null when it stays (not near enough round yet, or no slip left). It always
- *  goes on the way it was (away from him). */
-export function hideShift(sqAng: number, him: number, left: number): number | null {
-  if (left <= 0) return null;
-  const off = wrapA(sqAng - him);
-  if (Math.abs(off) >= HIDE.shiftAt) return null;
-  return him + Math.sign(off || 1) * HIDE.to;
+/** The side of the trunk farthest from all `eyes` (headings from its axis; off a
+ *  neighbour's side), the one nearer `from` when two are as good. */
+export function hideFrom(eyes: readonly number[], from: number): number {
+  let best = from, score = -1;
+  for (let i = 0; i < 144; i++) {
+    const a = (i / 144) * Math.PI * 2 - Math.PI;
+    if (!allowed(a)) continue;
+    const m = margin(a, eyes) - Math.abs(wrapA(a - from)) * 0.02;
+    if (m > score) { score = m; best = a; }
+  }
+  return best;
+}
+
+/** Where it first hides (a heading from the trunk's axis): across the trunk from him and
+ *  his eye (`eyes`), the side toward `toward` (its glade) when that is as good. */
+export function hideStart(trunk: Spot, eyes: readonly Spot[], toward: Spot): number {
+  const a = hideFrom(eyes.map((e) => headingTo(trunk, e)), headingTo(trunk, toward));
+  // (a little toward its glade: the short way round to it goes that way)
+  const b = a + Math.sign(wrapA(headingTo(trunk, toward) - a) || 1) * 0.25;
+  return allowed(b) ? b : a;
+}
+
+/** He or his eye has come round toward it (`eyes`: their headings from the trunk), or
+ *  (`peek`) a bit of it shows in his view: where it slips to now, or null when it stays
+ *  (none of them near enough round yet and unseen, or no side farther from them). */
+export function hideShift(sqAng: number, eyes: readonly number[], peek = false): number | null {
+  const m = margin(sqAng, eyes);
+  if (m >= HIDE.keepAt && !peek) return null;
+  const to = hideFrom(eyes, sqAng);
+  // (a peek always sends it round; otherwise only a real move is worth a slip)
+  return peek || margin(to, eyes) - m >= HIDE.gain ? to : null;
 }
 
 /** How long a slip round the bark from `a` to `b` takes (s). */
@@ -312,16 +351,17 @@ export function slipSecs(a: number, b: number): number {
  *  the tree `OUT_R` m out, at most `ROUND_STEP` rad at a time, the short way toward where
  *  it clings; once he is out on its side, in toward the trunk to `IN_R` m (walking at the
  *  tree, the follow lens behind him looks at it). */
-const OUT_R = 3.6;
+const OUT_R = 3.0;
 const IN_R = 2.3;
 const ROUND_STEP = 1.05;
 const ON_ITS_SIDE = 0.3;
 export function roundStep(t: HomeTree, me: Spot, sqAng: number): Spot {
   const him = headingTo(t, me);
   const off = wrapA(sqAng - him);
-  if (Math.abs(off) <= ON_ITS_SIDE) return { x: t.x + Math.sin(sqAng) * IN_R, z: t.z + Math.cos(sqAng) * IN_R };
+  if (Math.abs(off) <= ON_ITS_SIDE) return wayTo(me, { x: t.x + Math.sin(sqAng) * IN_R, z: t.z + Math.cos(sqAng) * IN_R });
   const a = him + Math.sign(off) * Math.min(ROUND_STEP, Math.abs(off));
-  return { x: t.x + Math.sin(a) * OUT_R, z: t.z + Math.cos(a) * OUT_R };
+  // (round a neighbour's trunk in the way, too)
+  return wayTo(me, { x: t.x + Math.sin(a) * OUT_R, z: t.z + Math.cos(a) * OUT_R });
 }
 
 /** Who lives here: the squirrel, round its pine by the marker before; at its glade after,

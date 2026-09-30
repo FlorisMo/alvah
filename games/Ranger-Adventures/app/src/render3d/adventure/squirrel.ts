@@ -119,9 +119,17 @@ export class Squirrel extends Actor {
       const pos = m.geometry.attributes.position;
       const step = Math.max(1, Math.floor(pos.count / 260));
       const toGroup = new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld);
-      for (let i = 0; i < pos.count; i += step) this.hull.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(toGroup));
       m.geometry.computeBoundingBox();
       geoBox = m.geometry.boundingBox!.clone();
+      // (its body without the bushy tail: the tail sits behind its root, −z in the mesh)
+      const tailFrom = geoBox.min.z + (geoBox.max.z - geoBox.min.z) * 0.36;
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i += step) {
+        v.fromBufferAttribute(pos, i);
+        const g = v.clone().applyMatrix4(toGroup);
+        this.hull.push(g);
+        if (v.z >= tailFrom) this.torso.push(g);
+      }
       this.bendTail(m, geoBox);
       // a touch of warm light in its fur (the low sun catching it), so the small red
       // squirrel reads against the dark bark and the brown forest floor
@@ -202,6 +210,22 @@ export class Squirrel extends Actor {
 
   /** Where it is now (its feet, its turn). */
   get now(): SqPose { return { ...this.pose }; }
+
+  /** A dozen points on its body (its head and trunk, not its tail), in the world, as it is
+   *  drawn now: what the player sees of it (how much of it a trunk hides). Empty until its
+   *  mesh is in. */
+  bodyPoints(n = 12): THREE.Vector3[] {
+    const from = this.torso.length ? this.torso : this.hull;
+    if (!from.length) return [];
+    while (this.probe.length < Math.min(n, from.length)) this.probe.push(new THREE.Vector3());
+    this.group.updateWorldMatrix(true, false);
+    const step = from.length / this.probe.length;
+    this.probe.forEach((p, i) => p.copy(from[Math.floor(i * step)]).applyMatrix4(this.group.matrixWorld));
+    return this.probe;
+  }
+  private readonly probe: THREE.Vector3[] = [];
+  /** the hull's points on its head and body (not the tail) */
+  private readonly torso: THREE.Vector3[] = [];
 
   /** On a trunk or branch right now? */
   get up(): boolean { const w = this.where; return w.kind === 'trunk' || w.kind === 'branch'; }
