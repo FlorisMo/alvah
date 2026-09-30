@@ -19,7 +19,7 @@ import { buildDagnachtTrial, DagnachtRun, type DagnachtTrial, type Encounter } f
 import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
 import { Sound } from '../../../core/sound';
-import { anchoredPrompt, clearPlayHint } from '../../play/kit';
+import { anchoredPrompt, clearPlayHint, SPEAK_BTN } from '../../play/kit';
 import type { AdventureKit } from '../kit';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -119,7 +119,7 @@ export class ChoiceRun {
       `<div class="p3-bottom dag3d">` +
         `<div class="p3-card">` +
         `<div class="p3-row"><p class="p3-text">${esc(enc.vraag)}</p>` +
-        `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button></div>` +
+        `${SPEAK_BTN}</div>` +
         regels + flip +
         `<div class="p3-choices">` +
         order.map((i) => `<button class="p3-choice" data-i="${i}" type="button">${esc(enc.opties[i].label)}</button>`).join('') +

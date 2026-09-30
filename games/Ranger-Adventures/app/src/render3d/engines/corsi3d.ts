@@ -28,7 +28,7 @@ import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin, registerPlayHint,
+  Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin, registerPlayHint, SPEAK_BTN,
 } from '../play/kit';
 import { patchLocal } from '../play/kit-math';
 import { Stage } from '../play/stage';
@@ -92,7 +92,7 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         ctx.prompt,
         `<div class="p3-bottom"><div class="p3-card"><div class="p3-row">` +
           `<p class="p3-text">${esc(text)}</p>` +
-          `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+          `${SPEAK_BTN}` +
           `</div></div></div>`,
         stage.signal,
       );

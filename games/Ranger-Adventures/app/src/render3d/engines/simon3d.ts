@@ -30,7 +30,7 @@ import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin, registerPlayHint,
+  Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin, registerPlayHint, SPEAK_BTN,
 } from '../play/kit';
 import { Stage, nameTag } from '../play/stage';
 import { heightFor } from '../play/spawn';
@@ -97,7 +97,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         `<div class="p3-bottom"><div class="p3-card"><div class="p3-row">` +
           `<p class="p3-text">${esc(text)}</p>` +
           (dots ? `<p class="p3-dots" aria-hidden="true"></p>` : '') +
-          `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+          `${SPEAK_BTN}` +
           `</div></div></div>`,
         stage.signal,
       );

@@ -21,6 +21,8 @@
 import * as THREE from 'three';
 import { aimDir, easeInOut, lerpAngle, reframeSeconds, tapHitRadius, trailPoints, yawPitch } from './kit-math';
 import { skinnedRenderBox } from '../Models';
+import { icon } from '../../ui/icons';
+import { ALGEMEEN } from '../../content/copy';
 
 /* ------------------------------------------------------ test win channel ---- */
 
@@ -875,3 +877,8 @@ export function contactShadow(radius: number): THREE.Mesh {
   mesh.renderOrder = 2;           // over the terrain, under the forms
   return mesh;
 }
+
+/** The 🔊 "Lees voor" button on a mini-game's or an adventure's card: the drawn speaker
+ *  of the game's one icon set (ui/icons.ts), as on every other screen. An emoji draws
+ *  differently on every system (a grey blob on some) and a speech engine may read it. */
+export const SPEAK_BTN = `<button class="p3-speak" type="button" aria-label="${ALGEMEEN.leesVoor}">${icon('speaker')}</button>`;

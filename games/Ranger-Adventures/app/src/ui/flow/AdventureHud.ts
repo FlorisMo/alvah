@@ -18,6 +18,8 @@ import { joystickVisible } from '../../core/input';
 import { Joystick } from '../Joystick';
 import { coarsePointer } from '../hud/device';
 import { session, esc } from './session';
+import { speakButtonHtml } from '../ReadAloud';
+import { icon, type IconName } from '../icons';
 
 export interface ChipCue {
   /** what he walks to ("De big", "De modderpoel") */
@@ -27,14 +29,11 @@ export interface ChipCue {
   /** the arrow's turn (rad, relative to where he looks), or null: words only */
   angle: number | null;
   arrived?: boolean;
-  /** the sign before the words while there is no arrow: what he goes by (default 👂, a
-   *  sound to follow; 👣 prints to follow, 🤫 a quiet walk) */
-  glyph?: string;
+  /** the sign before the words while there is no arrow: what he goes by, drawn from the
+   *  game's icon set (default 'ear', a sound to follow; 'footprints' prints to follow,
+   *  'boot' a quiet walk) */
+  glyph?: IconName;
 }
-
-/** Chip signs drawn dark (👣 is two grey soles): they sit on a light well, or the dark
- *  chip would swallow them. */
-const DARK_GLYPHS = new Set(['👣']);
 
 export class AdventureHud {
   readonly el: HTMLDivElement;
@@ -57,10 +56,10 @@ export class AdventureHud {
       `<div class="adv-line p3-top" role="status" aria-live="polite" hidden>` +
       `<div class="p3-card"><div class="p3-row">` +
       `<p class="p3-text"></p>` +
-      `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+      speakButtonHtml('p3-speak') +
       `</div></div></div>` +
       `<div class="explore-wayfind adv-chip" hidden>` +
-      `<span class="wf-glyph adv-no-arrow" aria-hidden="true">·</span>` +
+      `<span class="wf-glyph adv-no-arrow" aria-hidden="true"></span>` +
       `<span class="wf-text"><b class="wf-doel"></b><span class="wf-cue"></span></span>` +
       `</div>` +
       `<div class="adv-bottom" hidden></div>`;
@@ -103,16 +102,14 @@ export class AdventureHud {
     if (doel.textContent !== c.doel) doel.textContent = c.doel;
     if (cue.textContent !== c.cue) cue.textContent = c.cue;
     this.chip.classList.toggle('wf-arrived', !!c.arrived);
-    const sign = c.arrived ? '◎' : c.glyph ?? '👂';
-    glyph.classList.toggle('adv-glyph-light', (c.angle === null || !!c.arrived) && DARK_GLYPHS.has(sign));
+    const sign: IconName = c.arrived ? 'target' : c.angle === null ? c.glyph ?? 'ear' : 'arrow';
+    if (glyph.dataset.ic !== sign) { glyph.dataset.ic = sign; glyph.innerHTML = icon(sign); }
     if (c.angle === null || c.arrived) {
       glyph.classList.add('adv-no-arrow');
-      glyph.textContent = sign;
       glyph.style.transform = '';
       return;
     }
     glyph.classList.remove('adv-no-arrow');
-    if (glyph.textContent !== '↑') glyph.textContent = '↑';
     this.arrowTurn += Math.atan2(Math.sin(c.angle - this.arrowTurn), Math.cos(c.angle - this.arrowTurn));
     glyph.style.transform = `rotate(${this.arrowTurn.toFixed(3)}rad)`;
   }

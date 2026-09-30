@@ -20,7 +20,7 @@ import type { BeatSummary } from '../../../core/skill';
 import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
 import { Sound } from '../../../core/sound';
-import { Glow, anchoredPrompt, clearPlayHint, pick3d } from '../../play/kit';
+import { Glow, anchoredPrompt, clearPlayHint, pick3d, SPEAK_BTN } from '../../play/kit';
 import { listenerOf } from '../../world/Residents';
 import type { AdventureKit, FrameSpec } from '../kit';
 import type { Place } from '../types';
@@ -87,7 +87,7 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
       `<div class="p3-bottom"><div class="p3-card"><div class="p3-row">` +
       `<p class="p3-text">${esc(text)}</p>` +
       (dots ? `<p class="p3-dots" aria-hidden="true"></p>` : '') +
-      `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+      `${SPEAK_BTN}` +
       `</div></div></div>`, k.signal);
     card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(text));
     progress();

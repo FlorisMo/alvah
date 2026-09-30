@@ -126,7 +126,7 @@ async function story(k: AdventureKit): Promise<void> {
   // she notices him the moment he sets off (or comes near her)
   const setOff = { ...k.ranger() };
   await k.walk({
-    name: 'meadow', to: P.meadowApproach, r: 1.4, line: c.volg, doel: c.chipGras, cue: c.sporen, glyph: '👣',
+    name: 'meadow', to: P.meadowApproach, r: 1.4, line: c.volg, doel: c.chipGras, cue: c.sporen, glyph: 'footprints',
     tick: () => {
       const m = k.ranger();
       if (!slipping && (dist(m, setOff) > 1.2 || dist(m, doe) < 9)) slipping = slipAway();
@@ -216,7 +216,7 @@ async function story(k: AdventureKit): Promise<void> {
   k.world.faceRanger(headingTo(k.ranger(), POOL));
   const hush = { line: c.sst, onRun: (): void => { void calf.lookAt(me, 1.6); call('fiep', calf.x, calf.z); } };
   // (the walk ends at the pool's near edge: he stops before the water, running or not)
-  await k.walk({ name: 'pool', to: P.poolEdge, r: 1.2, line: c.stil, doel: c.chipHut, cue: c.zacht, glyph: '🤫', quiet: hush });
+  await k.walk({ name: 'pool', to: P.poolEdge, r: 1.2, line: c.stil, doel: c.chipHut, cue: c.zacht, glyph: 'boot', quiet: hush });
 
   // 9 · at the pool's edge: round it, not through it (rustkracht 4)
   k.beat = 'pool:walk';
@@ -245,7 +245,7 @@ async function story(k: AdventureKit): Promise<void> {
   });
 
   // 10 · on to the hide, quietly
-  await k.walk({ name: 'hide', to: P.hide, r: 1.0, line: c.verstop, doel: c.chipHut, cue: c.zacht, glyph: '🤫', quiet: hush });
+  await k.walk({ name: 'hide', to: P.hide, r: 1.0, line: c.verstop, doel: c.chipHut, cue: c.zacht, glyph: 'boot', quiet: hush });
 
   // 11 · watch: the lens turns toward the meadow and he watches through his binoculars;
   // the bracken at the copse's gap stirs, and the mother steps out where she went in

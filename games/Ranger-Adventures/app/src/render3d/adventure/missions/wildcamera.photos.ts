@@ -11,6 +11,7 @@
 import './wildcamera.css';
 import { narrator } from '../../../core/narrator';
 import { store } from '../../../core/state';
+import { SPEAK_BTN } from '../../play/kit';
 
 export interface Photo {
   url: string;
@@ -198,7 +199,7 @@ export class PhotoStrip {
       `<div class="wc-big"><img alt=""></div>` +
       `<div class="wc-review-row">${this.photos.map((p, i) => `<img class="wc-mini" data-i="${i}" src="${p.url}" alt="">`).join('')}</div>` +
       `<div class="wc-review-foot"><p class="wc-review-line" aria-live="polite"></p>` +
-      `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+      `${SPEAK_BTN}` +
       `<button class="btn-start wc-verder" type="button" hidden>${esc(button)}</button></div>` +
       `</div>`;
     this.el.parentElement?.appendChild(card);

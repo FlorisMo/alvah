@@ -26,7 +26,7 @@ import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
 import { Sound } from '../../../core/sound';
 import { animalIcon } from '../../../render2d/animalIcon';
-import { anchoredPrompt, clearPlayHint, pick3d } from '../../play/kit';
+import { anchoredPrompt, clearPlayHint, pick3d, SPEAK_BTN } from '../../play/kit';
 import type { AdventureKit, FrameSpec } from '../kit';
 import type { Place } from '../types';
 import { AimRun } from './aim-math';
@@ -117,7 +117,7 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
       `<span class="aim-pic" aria-hidden="true">${animalIcon(item.id)}</span>` +
       `<div class="p3-lines"><p class="p3-text">${esc(komt)}</p><p class="p3-sub">${esc(o.lines.vraag)}</p></div>` +
       `<span class="aim-tag ${item.dag ? 'dag' : 'nacht'}">${esc(`${cue.icoon} ${cue.woord}`)}</span>` +
-      `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+      `${SPEAK_BTN}` +
       `</div>` +
       `<div class="p3-chips" aria-label="De regel"><span class="p3-chip">${esc(c1)}</span><span class="p3-chip">${esc(c2)}</span></div>` +
       `</div></div>`,
@@ -204,7 +204,7 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
   card = anchoredPrompt(k.host,
     `<div class="p3-bottom aim3d"><div class="p3-card"><div class="p3-row">` +
     `<p class="p3-text">${esc(o.lines.goed)}</p>` +
-    `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+    `${SPEAK_BTN}` +
     `</div></div></div>`, k.signal);
   card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(o.lines.goed));
   speak(o.lines.goed);

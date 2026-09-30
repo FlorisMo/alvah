@@ -32,7 +32,7 @@ import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  anchoredPrompt, contactShadow, registerActivityWin, registerPlayHint,
+  anchoredPrompt, contactShadow, registerActivityWin, registerPlayHint, SPEAK_BTN,
 } from '../play/kit';
 import { Stage } from '../play/stage';
 import { heightFor } from '../play/spawn';
@@ -340,7 +340,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
         `<div class="p3-bottom dag3d">` +
           `<div class="p3-card">` +
           `<div class="p3-row"><p class="p3-text">${esc(enc.vraag)}</p>` +
-          `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button></div>` +
+          `${SPEAK_BTN}</div>` +
           regels + flip +
           `<div class="p3-choices">` +
           order.map((i) => `<button class="p3-choice" data-i="${i}" type="button">${esc(enc.opties[i].label)}</button>`).join('') +

@@ -31,7 +31,7 @@ import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
   Glow, anchoredPrompt, contactShadow, pick3d, registerActivityWin,
-  registerPlayHint, spoorTrail,
+  registerPlayHint, spoorTrail, SPEAK_BTN,
 } from '../play/kit';
 import { highlightPulse, patchLocal } from '../play/kit-math';
 import { Stage } from '../play/stage';
@@ -123,7 +123,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       `<div class="p3-top"><div class="p3-card"><div class="p3-row">` +
         `<div class="p3-lines"><p class="p3-text">${esc(instructie)}</p>` +
         `<p class="p3-sub">${esc(spoorTxt)}</p></div>` +
-        `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button>` +
+        `${SPEAK_BTN}` +
         `</div></div></div>`,
       stage.signal,
     );
@@ -339,7 +339,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
         `<div class="p3-bottom zoeken-found"><div class="p3-card">` +
           `<p class="p3-sub">${esc(kicker)}</p>` +
           `<div class="p3-row"><p class="p3-text">${esc(goedTxt)}</p>` +
-          `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button></div>` +
+          `${SPEAK_BTN}</div>` +
           `<button class="p3-btn" type="button" data-key="primary">Verder</button>` +
           `</div></div>`,
         stage.signal,

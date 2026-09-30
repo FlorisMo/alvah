@@ -27,10 +27,11 @@ import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
-  Glow, anchoredPrompt, pick3d, registerActivityWin, registerPlayHint,
+  Glow, anchoredPrompt, pick3d, registerActivityWin, registerPlayHint, SPEAK_BTN,
 } from '../play/kit';
 import { Stage, nameTag } from '../play/stage';
 import { heightFor, materialsOf } from '../play/spawn';
+import { icon } from '../../ui/icons';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -103,9 +104,9 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
         ctx.prompt,
         `<div class="p3-bottom roep3d"><div class="p3-card">` +
           `<div class="p3-row"><p class="p3-text">${esc(text)}</p>` +
-          `<button class="p3-speak" type="button" aria-label="Lees voor">🔊</button></div>` +
+          `${SPEAK_BTN}</div>` +
           (roep
-            ? `<button class="p3-call" type="button" aria-label="Speel de roep"><span aria-hidden="true">🔊</span><span>${esc(roep)}</span></button>`
+            ? `<button class="p3-call" type="button" aria-label="Speel de roep">${icon('speaker')}<span>${esc(roep)}</span></button>`
             : '') +
           `</div></div>`,
         stage.signal,

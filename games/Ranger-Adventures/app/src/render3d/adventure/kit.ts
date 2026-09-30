@@ -32,6 +32,7 @@ import { ARRIVE_RADIUS, cue as cueAt, wayfind } from '../Wayfinding';
 import { isRunning, nearestAway } from './actors-math';
 import type { Actor } from './actors';
 import type { AdventureRead, Place, Places, Spot } from './types';
+import type { IconName } from '../../ui/icons';
 import { dist, headingTo } from './places';
 
 /** The world as an adventure drives it (World implements it; a test can fake it). */
@@ -57,7 +58,7 @@ export interface MissionWorld {
 export interface AdventureUi {
   say(text: string | null, opts?: { good?: boolean; queue?: boolean }): void;
   readonly current: string | null;
-  setChip(c: { doel: string; cue: string; angle: number | null; arrived?: boolean; glyph?: string } | null): void;
+  setChip(c: { doel: string; cue: string; angle: number | null; arrived?: boolean; glyph?: IconName } | null): void;
   action(label: string | null): Promise<void>;
   binoculars(on: boolean): void;
   /** time passes: a calm veil over the world with one line (null lifts it) */
@@ -130,8 +131,9 @@ export interface WalkOpts {
   /** the chip: where he goes, in words, and the cue under it before the arrow shows */
   doel: string;
   cue?: string;
-  /** the chip's sign before the words (default 👂: a sound to follow; 👣 prints) */
-  glyph?: string;
+  /** the chip's sign before the words, from the game's icon set (default 'ear': a sound
+   *  to follow; 'footprints' prints; 'boot' a quiet walk) */
+  glyph?: IconName;
   /** seconds without getting closer before the chip shows the arrow (default 20) */
   arrowAfter?: number;
   /** an animal that follows him (the piglet he leads): it keeps its gap, hides when he
