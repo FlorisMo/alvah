@@ -214,8 +214,10 @@ export const PATH_STRIDE = 4;
 export const JEEP_CLEAR = 1.2;
 /** …and when it makes way it stands this much (m) further out still, to watch it pass. */
 export const JEEP_STAND_OFF = 1.1;
-/** A driven jeep this close (m, body to body) that barely moves: the animal steps away. */
+/** A driven jeep this close (m, body to body) that barely moves: the animal steps away… */
 export const JEEP_NEAR = 3;
+/** …or this close, when it grazes or walks back to its loop, calm. */
+export const JEEP_NEAR_CALM = 2;
 /** A jeep whose path comes within this (m) of an animal is watched (head up). */
 export const JEEP_WATCH = 9;
 
@@ -260,15 +262,15 @@ export function predictJeep(s: JeepState, want: DriveInput, caps: DriveCaps, w: 
   return n;
 }
 
-// a jeep read without a prediction: its heading and turn, extended at its speed
+// a jeep read without a prediction: its heading and turn `yaw` (rad/s), extended at its speed
 const arcBuf = new Float64Array(PATH_N * PATH_STRIDE);
-function arcPath(j: JeepRead): number {
+function arcPath(j: JeepRead, yaw: number): number {
   let x = j.x, z = j.z, h = j.heading;
   for (let i = 0; i < PATH_N; i++) {
     const o = i * PATH_STRIDE;
     arcBuf[o] = x; arcBuf[o + 1] = z; arcBuf[o + 2] = h; arcBuf[o + 3] = j.speed;
     x += Math.sin(h) * j.speed * PATH_DT; z += Math.cos(h) * j.speed * PATH_DT;
-    h += j.yawRate * PATH_DT;
+    h += yaw * PATH_DT;
   }
   return PATH_N;
 }
@@ -277,7 +279,14 @@ let posesOf: Float64Array = arcBuf;
 function poses(j: JeepRead): number {
   if (j.path && j.pathN > 1) { posesOf = j.path; return j.pathN; }
   posesOf = arcBuf;
-  return arcPath(j);
+  return arcPath(j, j.yawRate);
+}
+/** Point `posesOf` at the jeep's CURRENT line (its heading held); returns how many. A driver
+ *  who steers at the animal comes on along wherever it goes: the path his keys would drive
+ *  just now wraps round it and says nothing, getting off this line is what counts. */
+function linePoses(j: JeepRead): number {
+  posesOf = arcBuf;
+  return arcPath(j, 0);
 }
 
 // module scratch for `keepOut` (no garbage)
@@ -331,9 +340,11 @@ export interface JeepView {
   lat: number;
   /** seconds until the jeep's ground reaches it (Infinity when it is not coming) */
   tti: number;
+  /** body to body (m), now: the jeep's nearest circle to its footprint */
+  gap: number;
 }
 
-const jeepView: JeepView = { kind: 'none', lat: 0, tti: Infinity };
+const jeepView: JeepView = { kind: 'none', lat: 0, tti: Infinity, gap: Infinity };
 
 /** A jeep this still (m/s now, and m over its whole predicted path) is standing. */
 function standing(j: JeepRead, n: number): boolean {
@@ -350,16 +361,15 @@ function standing(j: JeepRead, n: number): boolean {
  */
 export function readJeep(x: number, z: number, r: number, j: JeepRead | null): JeepView {
   const v = jeepView;
-  v.kind = 'none'; v.lat = 0; v.tti = Infinity;
+  v.kind = 'none'; v.lat = 0; v.tti = Infinity; v.gap = Infinity;
   if (!j) return v;
+  // body to body, now
+  const fx = Math.sin(j.heading), fz = Math.cos(j.heading);
+  for (const c of JEEP_BODY) v.gap = Math.min(v.gap, Math.hypot(x - (j.x + fx * c.along), z - (j.z + fz * c.along)) - c.r - r);
   const n = poses(j);
   const need = YIELD_MARGIN + JEEP_CLEAR;
   if (standing(j, n)) {
-    // body to body, now
-    const fx = Math.sin(j.heading), fz = Math.cos(j.heading);
-    let gap = Infinity;
-    for (const c of JEEP_BODY) gap = Math.min(gap, Math.hypot(x - (j.x + fx * c.along), z - (j.z + fz * c.along)) - c.r - r);
-    if (gap < JEEP_NEAR) v.kind = 'near';
+    if (v.gap < JEEP_NEAR) v.kind = 'near';
     return v;
   }
   keepOut(n, x, z, r, need);
@@ -397,14 +407,18 @@ function fanOf(j: JeepRead, side: number): void {
  * corridor, reached along a straight run that stays on open ground (`world.free`) and goes
  * out to that side (never across the jeep's nose). The run goes out and a little ahead
  * (away from the jeep), the way a deer leaves a track, and as short as will do; it prefers
- * the least turn from where the animal faces. False when there is no such spot (no open
- * ground, or the jeep's path curves round to that side). Writes into `out`.
+ * the least turn from where the animal faces. With `home` (its loop) a long chase bends back
+ * round its home ground, and a run with open ground beyond it beats one into a corner (the
+ * water's edge, the forest edge). `chased` (the jeep's nose points at it): straight out, the
+ * quickest way off a line a driver keeps turning after it, never a long run on ahead of the
+ * bonnet. False when there is no such spot (no open ground, or the jeep's path curves round to
+ * that side). Writes into `out`.
  */
 export function planYield(
   x: number, z: number, facing: number, r: number, j: JeepRead, side: number, world: WildWorld,
-  out: { x: number; z: number },
+  out: { x: number; z: number }, home: { x: number; z: number } | null = null, chased = false,
 ): boolean {
-  const n = poses(j);
+  const n = chased ? linePoses(j) : poses(j);
   const need = YIELD_MARGIN + JEEP_CLEAR;
   fanOf(j, side);
   const jx = j.x - x, jz = j.z - z, jl = Math.hypot(jx, jz) || 1;
@@ -418,8 +432,10 @@ export function planYield(
       const gx = x + mx * len, gz = z + mz * len;
       if (!clearOfPath(n, j, gx, gz, r, need + JEEP_STAND_OFF, side)) continue;
       if (runFree(x, z, mx, mz, len, r, world)) {
-        // the least turn, mostly out (a little ahead), the shortest run
-        const cost = turn + Math.abs(deg - 20) * 0.02 + len * 0.12;
+        // the least turn, mostly out (a little ahead), the shortest run, round its home ground,
+        // never into a corner
+        const cost = (chased ? turn * 0.5 + Math.abs(deg) * 0.03 : turn + Math.abs(deg - 20) * 0.02) + len * 0.12 + leash(home, x, z, gx, gz)
+          + (runFree(x, z, mx, mz, len + OPEN_BEYOND, r, world) ? 0 : CORNER_COST);
         if (cost < best) { best = cost; out.x = gx; out.z = gz; }
       }
       break;                                        // the shortest clear run of this heading
@@ -441,29 +457,39 @@ const YIELD_ANGLES = [0, 15, 25, 35, 50, -12];
  */
 function bearAway(
   x: number, z: number, facing: number, r: number, j: JeepRead, side: number, world: WildWorld,
-  out: { x: number; z: number },
+  out: { x: number; z: number }, home: { x: number; z: number } | null, chased: boolean,
 ): boolean {
-  const n = poses(j);
+  const n = chased ? linePoses(j) : poses(j);
   fanOf(j, side);
   const jx = j.x - x, jz = j.z - z, jl = Math.hypot(jx, jz) || 1;
-  let best = -Infinity;
-  for (const deg of BEAR_ANGLES) {
-    const b = (deg * Math.PI) / 180;
-    const mx = fanLx * Math.cos(b) + fanUx * Math.sin(b), mz = fanLz * Math.cos(b) + fanUz * Math.sin(b);
-    if ((mx * jx + mz * jz) / jl > 0.05) continue;
-    if (!runFree(x, z, mx, mz, BEAR_RUN, r, world)) continue;
-    const gx = x + mx * BEAR_RUN, gz = z + mz * BEAR_RUN;
-    keepOut(n, gx, gz, r, 0);
-    const room = Math.min(koGap, 6);
-    const score = room - Math.abs(wrapPi(Math.atan2(mx, mz) - facing)) * 0.5 - Math.abs(deg - 10) * 0.01;
-    if (score > best) { best = score; out.x = gx; out.z = gz; }
+  for (const fan of BEAR_ANGLES) {
+    let best = -Infinity;
+    for (const deg of fan) {
+      const b = (deg * Math.PI) / 180;
+      const mx = fanLx * Math.cos(b) + fanUx * Math.sin(b), mz = fanLz * Math.cos(b) + fanUz * Math.sin(b);
+      if ((mx * jx + mz * jz) / jl > 0.05) continue;
+      if (!runFree(x, z, mx, mz, BEAR_RUN, r, world)) continue;
+      const gx = x + mx * BEAR_RUN, gz = z + mz * BEAR_RUN;
+      keepOut(n, gx, gz, r, 0);
+      const room = Math.min(koGap, 6);
+      const score = room - Math.abs(wrapPi(Math.atan2(mx, mz) - facing)) * 0.5 - (chased ? Math.abs(deg) * 0.03 : Math.abs(deg - 10) * 0.01)
+        - leash(home, x, z, gx, gz) - (runFree(x, z, mx, mz, BEAR_RUN + OPEN_BEYOND, r, world) ? 0 : CORNER_COST);
+      if (score > best) { best = score; out.x = gx; out.z = gz; }
+    }
+    if (best > -Infinity) return true;
   }
-  return best > -Infinity;
+  return false;
 }
-/** Bearing away: straight out from the jeep's line, give or take a little. */
-const BEAR_ANGLES = [0, 10, 20, 30, -10];
+/** Bearing away: straight out from the jeep's line, give or take a little; only when all of
+ *  that is shut (the water's edge on its side) on along it, well ahead of the jeep — still its
+ *  own side, never across. */
+const BEAR_ANGLES = [[0, 10, 20, 30, -10], [45, 60, 75]];
 /** …this far (m) at a time, looked at again as the jeep turns. */
 const BEAR_RUN = 5;
+/** A run out of the jeep's way is best with this much (m) open ground on beyond it… */
+const OPEN_BEYOND = 4;
+/** …and one that leads into a corner costs this much more. */
+const CORNER_COST = 0.8;
 
 /** Every half metre of the straight run from (x, z) along (mx, mz) for `len` m is open
  *  ground for radius r (its own first half metre is not tested: it stands there). */
@@ -540,11 +566,7 @@ export function planAway(
     const gx = x + mx * len, gz = z + mz * len;
     if (Math.hypot(gx - fx, gz - fz) < d + len * 0.45) continue; // it must really gain distance
     if (!runFree(x, z, mx, mz, len, r, world)) continue;
-    let cost = Math.abs(deg) * 0.02 + Math.abs(wrapPi(a - facing)) * 0.35;
-    if (home) {
-      const far = (px: number, pz: number): number => Math.max(0, Math.hypot(px - home.x, pz - home.z) - LEASH);
-      cost += LEASH_PULL * (far(gx, gz) ** 2 - far(x, z) ** 2);
-    }
+    const cost = Math.abs(deg) * 0.02 + Math.abs(wrapPi(a - facing)) * 0.35 + leash(home, x, z, gx, gz);
     if (cost < best) { best = cost; out.x = gx; out.z = gz; }
   }
   return best < Infinity;
@@ -554,6 +576,14 @@ const AWAY_ANGLES = [0, 20, -20, 40, -40, 60, -60, 80, -80];
 const LEASH = 8;
 /** …the more the further out (cost per m² further out). */
 const LEASH_PULL = 0.03;
+/** What a run from (x, z) to (gx, gz) costs in leaving its home ground (`LEASH`, `LEASH_PULL`;
+ *  none without a home, or within `LEASH` of it). */
+function leash(home: { x: number; z: number } | null, x: number, z: number, gx: number, gz: number): number {
+  if (!home) return 0;
+  const a = Math.max(0, Math.hypot(gx - home.x, gz - home.z) - LEASH);
+  const b = Math.max(0, Math.hypot(x - home.x, z - home.z) - LEASH);
+  return LEASH_PULL * (a * a - b * b);
+}
 
 /* ------------------------------------------------------------------ one step -- */
 
@@ -579,6 +609,11 @@ const KEEP_ROOM = 1.2;
 const RETURN_PACE = 1.2;
 /** A plan is looked at again this often (s) while the threat is on. */
 const REPLAN = 0.25;
+/** Making way from a jeep that keeps coming, its goal is laid on again once it is this close
+ *  (m): easing into it would slow it below its pace. */
+const GOAL_KEEP = 2.5;
+/** Its pace making way eases down no quicker than this (m/s per s). */
+const PACE_EASE = 0.8;
 /** Its side of the jeep's line changes only once it stands this far (m) on the other side
  *  (the jeep's line swung right past it: wholly beside the other half of the bonnet)… */
 const SIDE_SWAP = JEEP_HALF;
@@ -589,11 +624,23 @@ const SIDE_SWAP_TIME = 0.5;
  *  this much (m) closer by its own motion since it settled (and its path reaches it). */
 const REYIELD_CLOSE = 1.5;
 
+/** The jeep, moving, points at (x, z): its current line passes within the corridor it keeps
+ *  out of, ahead of it and within the distance its path looks along. */
+function aimedAt(x: number, z: number, r: number, j: JeepRead): boolean {
+  if (Math.abs(j.speed) < 1) return false;
+  const dir = j.speed < 0 ? -1 : 1;
+  const fx = Math.sin(j.heading) * dir, fz = Math.cos(j.heading) * dir;
+  const ahead = (x - j.x) * fx + (z - j.z) * fz;
+  if (ahead <= 0 || ahead > Math.abs(j.speed) * JEEP_HORIZON + JEEP_REACH) return false;
+  return Math.abs((x - j.x) * fz - (z - j.z) * fx) < jeepCorridor(r) + JEEP_CLEAR;
+}
+
 /** Its goal is still good while the jeep comes: on its side of the jeep's current line, and
- *  (unless it bears away: no spot is clear) off the ground the jeep will cover. */
-function goalHolds(s: WildState, r: number, j: JeepRead): boolean {
+ *  (unless it bears away: no spot is clear) off the ground the jeep will cover (`chased`: off
+ *  its current line). */
+function goalHolds(s: WildState, r: number, j: JeepRead, chased: boolean): boolean {
   if (s.bear) { lineOf(j, s.gx, s.gz); return lnLat * s.side > 0; }
-  return clearOfPath(poses(j), j, s.gx, s.gz, r, YIELD_MARGIN + JEEP_CLEAR, s.side);
+  return clearOfPath(chased ? linePoses(j) : poses(j), j, s.gx, s.gz, r, YIELD_MARGIN + JEEP_CLEAR, s.side);
 }
 
 /**
@@ -629,6 +676,20 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
   if (s.madeWay && s.closed < REYIELD_CLOSE && s.mode !== 'yield' && (jKind === 'path' || jKind === 'watch')) {
     jKind = s.mode === 'alert' ? 'watch' : 'none';
   }
+  // a jeep that stands close by, whatever its keys say (its brake holds it in front of an
+  // animal with nowhere to go on its side, the gas still held), it steps calmly away from, as
+  // from any jeep standing that close: never a stand-off for as long as he holds the key. That
+  // jeep cannot move off at it: its brake holds it while the animal is before its nose
+  let heldNear = false;
+  if ((jKind === 'path' || jKind === 'watch') && th.jeep && Math.abs(th.jeep.speed) < 0.3 && J.gap < JEEP_NEAR) { jKind = 'near'; heldNear = true; }
+  // grazing or walking back, a calm animal lets a standing jeep be nearer before it steps off
+  // (never a walk home that brushes the edge, a step away, a walk home…)
+  if (jKind === 'near' && (s.mode === 'roam' || s.mode === 'return') && J.gap >= JEEP_NEAR_CALM) jKind = 'none';
+
+  // making way from a jeep whose driver steers it at the animal, it keeps going while the jeep's
+  // nose points at it, even when the path he would drive with the keys he holds just now bends
+  // off it (a child weaves as he steers): never a stop in front of a jeep that keeps coming
+  if (jKind !== 'path' && s.mode === 'yield' && th.jeep && aimedAt(s.x, s.z, r, th.jeep)) jKind = 'path';
 
   // ---- decide ----
   if (jKind === 'path' && th.jeep) {
@@ -643,35 +704,54 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
     // carries on to its side if it is across long before the jeep is there (a driver's aim
     // wobbles by metres far out, and a zig back would be worse); only if the jeep would be on
     // it first is its side where it now stands, never a dash across the nose
-    if (s.side === 0) s.side = yieldSide(jLat, j, s.facing);
+    if (s.side === 0) s.side = chooseSide(s, tm, r, j, jLat, world);
     else if (jLat * s.side < -SIDE_SWAP) {
       const ahead = Math.abs((s.x - j.x) * Math.sin(j.heading) + (s.z - j.z) * Math.cos(j.heading));
       const across = (jeepCorridor(r) + JEEP_CLEAR - jLat * s.side) / tm.top;
       if (across > SIDE_SWAP_TIME * (ahead / Math.max(1, Math.abs(j.speed)))) s.side = -s.side;
     }
-    if (s.mode !== 'yield' || s.replan <= 0 || !goalHolds(s, r, j)) {
+    // while the jeep keeps coming its goal is laid on ahead of it before it would have to ease
+    // into it: a steady trot or bound, never a slow-down and a new start every few metres
+    const chased = aimedAt(s.x, s.z, r, j);
+    if (s.mode !== 'yield' || s.replan <= 0 || !goalHolds(s, r, j, chased) || Math.hypot(s.gx - s.x, s.gz - s.z) < GOAL_KEEP) {
       s.replan = REPLAN;
-      if (planYield(s.x, s.z, s.facing, r, j, s.side, world, out2)) { setMode(s, 'yield'); s.bear = false; s.gx = out2.x; s.gz = out2.z; }
-      else if (bearAway(s.x, s.z, s.facing, r, j, s.side, world, out2)) { setMode(s, 'yield'); s.bear = true; s.gx = out2.x; s.gz = out2.z; }
+      const home = world.loop(s.loopT);
+      if (planYield(s.x, s.z, s.facing, r, j, s.side, world, out2, home, chased)) { setMode(s, 'yield'); s.bear = false; s.gx = out2.x; s.gz = out2.z; }
+      else if (bearAway(s.x, s.z, s.facing, r, j, s.side, world, out2, home, chased)) { setMode(s, 'yield'); s.bear = true; s.gx = out2.x; s.gz = out2.z; }
       else setMode(s, 'alert');                    // nowhere to go: it stands, the jeep brakes
       s.madeWay = true;
     }
     if (s.mode === 'yield') {
-      // fast enough to be clear of the corridor well before the jeep's ground reaches it; bearing
-      // away from a jeep that steers at it, at its top speed
+      // fast enough to be clear of the corridor well before the jeep's ground reaches it; a ree
+      // bounds from a jeep at speed; bearing away from a jeep that steers at it, at its top
+      // speed. Quicker at once, slower only gently (a jeep braking and gassing behind it never
+      // makes it switch between a trot and a bound)
       const need = Math.max(0, jeepCorridor(r) + JEEP_CLEAR - jLat * s.side);
       const urgent = (need / Math.max(0.5, jTti - 0.4)) * 1.6;
-      s.pace = s.bear ? tm.top : clamp(Math.max(urgent, Math.abs(j.speed) > 4.2 && tm.bounds ? (tm.trot + tm.top) / 2 : tm.trot), tm.trot, tm.top);
+      const base = tm.bounds ? tm.trot + ((tm.top - tm.trot) / 2) * clamp((Math.abs(j.speed) - 2.5) / 2, 0, 1) : tm.trot;
+      const want = s.bear ? tm.top : clamp(Math.max(urgent, base), tm.trot, tm.top);
+      s.pace = s.inMode === 0 || want >= s.pace ? want : Math.max(want, s.pace - PACE_EASE * dt);
     }
   } else if (jKind === 'near' && th.jeep) {
+    const j = th.jeep;
     s.threat = 'jeep';
     s.quiet = 0;
-    s.lookX = th.jeep.x; s.lookZ = th.jeep.z;
+    s.lookX = j.x; s.lookZ = j.z;
     if (s.mode !== 'away' || s.replan <= 0) {
       s.replan = REPLAN * 3;
-      if (planAway(s.x, s.z, s.facing, r, th.jeep.x, th.jeep.z, JEEP_REACH + JEEP_NEAR + 1.5, world, out2)) {
-        setMode(s, 'away'); s.gx = out2.x; s.gz = out2.z; s.pace = tm.step;
-      } else setMode(s, 'alert');
+      // held by its brake with the keys still down, the jeep would drive on the moment the way
+      // is clear: it steps out of that way, to its own side (else the other: the jeep cannot
+      // move while it is before its nose), never on down the jeep's line for it to follow
+      let ok = false;
+      if (heldNear) {
+        const sd = s.side || yieldSide(jLat, j, s.facing);
+        const home = world.loop(s.loopT);
+        if (planYield(s.x, s.z, s.facing, r, j, sd, world, out2, home)) { ok = true; s.side = sd; }
+        else if (planYield(s.x, s.z, s.facing, r, j, -sd, world, out2, home)) { ok = true; s.side = -sd; }
+      }
+      if (!ok) ok = planAway(s.x, s.z, s.facing, r, j.x, j.z, JEEP_REACH + JEEP_NEAR + 1.5, world, out2);
+      if (ok) { setMode(s, 'away'); s.gx = out2.x; s.gz = out2.z; s.pace = tm.step; }
+      else setMode(s, 'alert');
     }
   } else if (R.flee && th.ranger) {
     const rg = th.ranger;
@@ -826,7 +906,7 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
   }
   s.moved = Math.hypot(s.x - x0, s.z - z0) / dt;
   s.turning = wrapPi(s.facing - f0) / dt;
-  s.gait = gaitOf(s.moved, tm);
+  s.gait = gaitOf(s.moved, tm, s.gait);
   return s;
 }
 
@@ -852,13 +932,53 @@ export function viaRound(x: number, z: number, gx: number, gz: number, cx: numbe
   return true;
 }
 
-/** Which legs it moves at this speed. */
-export function gaitOf(v: number, tm: Temperament): WildGait {
+/** Which legs it moves at this speed. With `prev` (its legs last frame), a gait holds until the
+ *  speed is clearly out of it (a bound goes on to 0.35 m/s under where it starts, a trot to
+ *  0.2 m/s under), so a speed on the edge never flickers between two. */
+export function gaitOf(v: number, tm: Temperament, prev: WildGait = 'still'): WildGait {
   if (v < 0.05) return 'still';
-  if (tm.bounds && v >= tm.trot + 0.45) return 'bound';
-  if (v >= Math.max(tm.step + 0.25, tm.trot * 0.7)) return 'trot';
+  if (tm.bounds && v >= tm.trot + (prev === 'bound' ? 0.1 : 0.45)) return 'bound';
+  if (v >= Math.max(tm.step + 0.25, tm.trot * 0.7) - (prev === 'trot' || prev === 'bound' ? 0.2 : 0)) return 'trot';
   return 'walk';
 }
+
+/**
+ * The side of the jeep's line it makes way to for this encounter: the side it is on
+ * (`yieldSide`), unless the jeep is still far enough off for it to be across comfortably (the
+ * same test as a swap) and the other side is clearly the better ground — more open ground
+ * straight out (not the water's edge or the forest edge a chase would corner it in) and toward
+ * the middle of its home ground. Once chosen it keeps it.
+ */
+function chooseSide(s: WildState, tm: Temperament, r: number, j: JeepRead, lat: number, world: WildWorld): number {
+  const own = yieldSide(lat, j, s.facing);
+  const ahead = Math.abs((s.x - j.x) * Math.sin(j.heading) + (s.z - j.z) * Math.cos(j.heading));
+  const across = (jeepCorridor(r) + JEEP_CLEAR + Math.abs(lat)) / tm.top;
+  if (across > SIDE_SWAP_TIME * (ahead / Math.max(1, Math.abs(j.speed)))) return own;
+  // the middle of its home ground: its loop's four stops
+  let cx = 0, cz = 0;
+  for (let k = 0; k < 4; k++) { const L = world.loop(s.loopT + k * world.loopLeg); cx += L.x / 4; cz += L.z / 4; }
+  const ground = (side: number): number => {
+    fanOf(j, side);
+    let open = 0;
+    for (const deg of SIDE_LOOK) {
+      const b = (deg * Math.PI) / 180;
+      const mx = fanLx * Math.cos(b) + fanUx * Math.sin(b), mz = fanLz * Math.cos(b) + fanUz * Math.sin(b);
+      let len = 0;
+      while (len < SIDE_OPEN && runFree(s.x, s.z, mx, mz, len + 2, r, world)) len += 2;
+      open = Math.max(open, len);
+    }
+    fanOf(j, side);
+    const gx = s.x + fanLx * 8, gz = s.z + fanLz * 8;
+    return open + 0.4 * (Math.hypot(s.x - cx, s.z - cz) - Math.hypot(gx - cx, gz - cz));
+  };
+  return ground(-own) > ground(own) + SIDE_BETTER ? -own : own;
+}
+/** Choosing its side, it looks this far (m) straight out along it (the way it runs from a
+ *  driver who steers after it: a run on ahead along a shore would be a corner later)… */
+const SIDE_OPEN = 20;
+const SIDE_LOOK = [0];
+/** …and takes the other side only when that is this much (m of open ground) better. */
+const SIDE_BETTER = 3;
 
 /** Which side of the jeep's path to make way to (+1 = the jeep's left): the side it is on,
  *  unless it stands near the middle — then away from the jeep's turn, else the side it faces

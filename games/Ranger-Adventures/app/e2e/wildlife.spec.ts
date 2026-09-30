@@ -232,10 +232,10 @@ test('wildlife: driven straight at the fox, it lopes aside and the jeep keeps it
 
 /**
  * How a chased roamer moved over a recording: the times its own sideways motion across the
- * jeep's current line reversed while it was within 14 m in front of the bonnet (a zig-zag
- * across the nose; counted per pass: it forgets the side once it has been out of that stretch
- * for a second), the closest the jeep's body came, and how long the jeep's give-way brake
- * acted.
+ * jeep's current line reversed while it was within 14 m in front of the rolling jeep's bonnet
+ * (a zig-zag across the nose; counted per pass: it forgets the side once it has been out of
+ * that stretch, or the jeep has stood, for a second), the closest the jeep's body came, and
+ * how long the jeep's give-way brake acted.
  */
 function chaseRead(frames: Frame[], r: number): { reversals: number; closest: number; brakeS: number; worst: string } {
   let reversals = 0, last = 0, outFor = 0, closest = Infinity, brakeS = 0, worst = '';
@@ -250,7 +250,7 @@ function chaseRead(frames: Frame[], r: number): { reversals: number; closest: nu
     const fx = Math.sin(q.v.h), fz = Math.cos(q.v.h);
     const ahead = (q.a.x - q.v.x) * fx + (q.a.z - q.v.z) * fz;
     const across = ((q.a.x - p.a.x) * fz - (q.a.z - p.a.z) * fx) / dt;   // its own speed across the jeep's line
-    if (ahead > 0 && ahead < 14) {
+    if (ahead > 0 && ahead < 14 && Math.abs(q.v.sp) >= 1) {
       outFor = 0;
       if (Math.abs(across) > 0.8) { if (last && Math.sign(across) !== last) reversals++; last = Math.sign(across); }
     } else if ((outFor += dt) > 1) last = 0;

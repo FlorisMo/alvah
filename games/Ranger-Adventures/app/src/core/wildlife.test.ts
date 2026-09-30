@@ -80,7 +80,7 @@ function driveAt(ax: number, az: number, opts: { blocked?: (x: number, z: number
   let full = j.speed >= 5.99, passedAt = -1;
   const secs = opts.secs ?? 25;
   for (let t = 0; t < secs; t += DT) {
-    const passed = opts.steer ? false : j.z > az + 4;
+    const passed = opts.steer ? false : j.z > s.z + 4;         // past where it is now
     const want = { throttle: passed ? 0 : 1, steer: opts.steer ?? 0 };
     animal.x = s.x; animal.z = s.z;
     const f = jeepStep(j, want, DT, JEEP_CAPS, emptyJeepWorld([animal]));
@@ -183,6 +183,9 @@ test('an animal with nowhere to go on its side stands still, and the jeep stops 
   assert.equal(run.yielded, true, 'the jeep braked for it');
   assert.ok(run.minGap >= 0.6, `and stopped short of it (gap ${run.minGap.toFixed(2)} m)`);
   assert.equal(run.toward, 0);
+  // the jeep stands in front of it, the gas still held: it does not stand there staring for
+  // as long as he holds the key, it steps calmly away (on down the lane)
+  assert.ok(run.modes.has('away'), 'it stepped away from the jeep that stood in front of it');
 });
 
 test('it never crosses the jeep\'s path to get away: off-centre, it goes out on its own side', () => {
@@ -507,5 +510,28 @@ test('a jeep stuck on a rock with the keys held: the animal makes way once and w
     assert.ok(run.turnedStuck <= 360, `${at}: its body turned ${Math.round(run.turnedStuck)}° in 12.5 s (no pivoting back and forth)`);
     assert.ok(run.yieldsFree >= 1 || run.minGapFree >= 3, `${at}: the jeep drove at it and it did not make way`);
     assert.ok(run.minGapFree >= 0.8, `${at}: the jeep that came came within ${run.minGapFree.toFixed(2)} m`);
+  }
+});
+
+test('walking back to its loop past a jeep that stands with a driver in it, it goes round and never steps off again and again', () => {
+  // its loop point lies 14 m on, the jeep stands (nose across its way) half-way
+  const home: LoopPoint = { x: 0, z: 14, facing: 0, moving: false };
+  const world: WildWorld = { free: () => true, move: (_a, _b, tx, tz, o) => { o.x = tx; o.z = tz; }, loop: () => home, loopLeg: 10 };
+  for (const lat of [0, 1.5, -2.5]) {
+    const s = newWildState({ x: 0, z: 0, facing: 0, moving: false }, 0);
+    s.mode = 'return'; s.gx = 0; s.gz = 14; s.madeWay = true;
+    const path = new Float64Array(PATH_N * PATH_STRIDE);
+    path[0] = lat; path[1] = 7; path[2] = Math.PI / 2; path[3] = 0;
+    const jeep: JeepRead = { x: lat, z: 7, heading: Math.PI / 2, speed: 0, yawRate: 0, path, pathN: 1 };
+    let aways = 0, last = s.mode, minGap = Infinity;
+    for (let t = 0; t < 40; t += DT) {
+      wildStep(s, REE, REE_R, { ranger: null, jeep }, world, DT);
+      if (s.mode === 'away' && last !== 'away') aways++;
+      last = s.mode;
+      minGap = Math.min(minGap, bodyGap({ x: jeep.x, z: jeep.z, heading: jeep.heading, speed: 0, contact: false, braked: false }, s.x, s.z, REE_R));
+    }
+    assert.ok(aways <= 1, `jeep ${lat} m off its way: it stepped away ${aways} times`);
+    assert.ok(minGap >= 1.2, `jeep ${lat} m off its way: it came within ${minGap.toFixed(2)} m of it`);
+    assert.equal(s.mode, 'roam', `jeep ${lat} m off its way: it is back on its loop, grazing`);
   }
 });

@@ -128,7 +128,13 @@ export class Fauna {
     this.terrain = env.terrain;
     this.obstacles = env.obstacles ?? [];
     this.limits = env.limits ?? { bound: 75 };
-    this.roamLimits = { bound: this.limits.bound - RIM_KEEP, blocked: this.limits.blocked };
+    // a roamer's feet keep off the whole drawn water (its dry rim under the reeds too), not only
+    // off the ground below the surface: no bound or skid ever carries one onto the ven's edge
+    const L = this.limits;
+    this.roamLimits = {
+      bound: L.bound - RIM_KEEP,
+      blocked: L.wetWithin ? (x, z) => L.wetWithin!(x, z, this.gatherR) || !!L.blocked?.(x, z) : L.blocked,
+    };
     this.zones = env.zones ?? (() => {});
   }
 
@@ -304,15 +310,15 @@ export class Fauna {
   }
 
   /** Open ground for the gathered roamer at (x, z), with `margin` m to spare: clear of the
-   *  gathered solids and zones (already grown by its size), of the water by its length and
-   *  inside the forest edge's band. */
+   *  gathered solids and zones (already grown by its size), of the water by its length (the
+   *  whole drawn water, its dry rim under the reeds too: a chased deer never ends up on the
+   *  ven's edge) and inside the forest edge's band. */
   private freeAt(x: number, z: number, margin: number): boolean {
     const L = this.limits;
     if (Math.hypot(x, z) > L.bound - RIM_KEEP) return false;
     const q = this.gatherR + 0.6;
-    if (L.blocked && (!L.wetWithin || L.wetWithin(x, z, q + 1))) {
-      if (L.blocked(x, z) || L.blocked(x + q, z) || L.blocked(x - q, z) || L.blocked(x, z + q) || L.blocked(x, z - q)) return false;
-    }
+    if (L.wetWithin) { if (L.wetWithin(x, z, q)) return false; }
+    else if (L.blocked && (L.blocked(x, z) || L.blocked(x + q, z) || L.blocked(x - q, z) || L.blocked(x, z + q) || L.blocked(x, z - q))) return false;
     for (const o of this.near) if (obstacleGap(o, x, z, margin) <= 0) return false;
     return true;
   }
