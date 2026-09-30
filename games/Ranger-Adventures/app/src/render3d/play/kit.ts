@@ -183,6 +183,14 @@ function seenBox(root: THREE.Object3D, out: THREE.Box3): THREE.Box3 {
     if (sk.isSkinnedMesh || (m as THREE.InstancedMesh).isInstancedMesh) {
       (m as THREE.SkinnedMesh).computeBoundingBox();
       part.copy((m as THREE.SkinnedMesh).boundingBox!);
+    } else if (tipped(m)) {
+      // a part tipped over (a sow rooting nose-down): its box, tipped with it, reaches
+      // below the ground at a corner no vertex is near, so its own vertices are measured
+      const pos = m.geometry.attributes.position;
+      part.makeEmpty();
+      for (let i = 0; i < pos.count; i++) part.expandByPoint(seenV.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld));
+      out.union(part);
+      return;
     } else {
       if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
       part.copy(m.geometry.boundingBox!);
@@ -190,6 +198,13 @@ function seenBox(root: THREE.Object3D, out: THREE.Box3): THREE.Box3 {
     out.union(part.applyMatrix4(m.matrixWorld));
   });
   return out;
+}
+const seenV = new THREE.Vector3();
+
+/** Its up axis leans off the world's up (more than ~0.5°): tipped, not only turned. */
+function tipped(m: THREE.Object3D): boolean {
+  const e = m.matrixWorld.elements;
+  return e[5] / Math.hypot(e[4], e[5], e[6]) < 0.99996;
 }
 
 function toScreen(v: LiveView, p: THREE.Vector3): { x: number; y: number; onScreen: boolean; ndc: THREE.Vector3 } {
