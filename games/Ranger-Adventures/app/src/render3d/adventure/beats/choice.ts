@@ -12,15 +12,27 @@
  * gets a reaction in the world the script plays (`wrong` / `right`) — calm, never
  * toward the camera. The card holds the ranger still while it is up (it is a card
  * over the world).
+ *
+ * Run 6 polish: an encounter can also be played with the BODY (`still`): no card, no
+ * buttons, no countdown — one read-aloud line says what to hold ("Raak hem niet aan",
+ * "Sta heel stil"), the animal right in front of him tempts him, and his own hand (a
+ * click on the piglet) or his own feet (a step key, a tap on the world) are the impulse.
+ * The same `DagnachtRun`, in the same content order (beats/hold-math.ts maps reaches and
+ * time onto its `choose`): the trials stay five, the summary is the one the 2D floor
+ * logs for the same answers, and the floor still plays all five as cards.
  */
 
+import * as THREE from 'three';
 import '../../play/play3d.css';
 import { buildDagnachtTrial, DagnachtRun, type DagnachtTrial, type Encounter } from '../../../engines/dagnacht';
 import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
 import { Sound } from '../../../core/sound';
+import { zinnen } from '../../../core/readlevel';
 import { anchoredPrompt, clearPlayHint, SPEAK_BTN } from '../../play/kit';
+import { tapHitRadius } from '../../play/kit-math';
 import type { AdventureKit } from '../kit';
+import { HoldCore, HOLD_S, HOLD_SILENT_S, readSeconds } from './hold-math';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -37,6 +49,31 @@ export interface AskOpts {
    *  the card when it comes back (what happened first, then the words for it) */
   walks?: boolean;
 }
+
+/** A rustkracht moment played with the body (`ChoiceRun.still`). */
+export interface StillOpts {
+  /** the one objective line: what to hold (≤ 7 words, read aloud; the 🔊 repeats it) */
+  line: string;
+  /** HANDS still: a click or a tap ON this (the piglet) is a hand reaching for it; any
+   *  other click does nothing */
+  hands?: THREE.Object3D;
+  /** FEET still: a step key (arrows, WASD) or a tap on the world (not on a button) is a
+   *  step toward them. His own input is locked meanwhile (a framed beat). */
+  feet?: boolean;
+  /** what the reach did, said after the animal's reaction (default: the encounter's gevolg) */
+  mis?: string;
+  /** shown with the line: the animal turns up (a look, a sound) */
+  show?: () => void;
+  /** the temptation, a moment into every hold (he peeks at him and squeaks again) */
+  tempt?: () => void;
+  /** a reach: what the animal does (awaited before the line and the hold come back) */
+  wrong?: () => Promise<unknown> | void;
+  /** held: what happens next (awaited before `still` resolves) */
+  right?: () => Promise<unknown> | void;
+}
+
+/** The keys that would take a step (as the ree's watch reads them). */
+const STEP_KEYS = /^(Arrow(Up|Down|Left|Right)|Key[WASD])$/;
 
 export class ChoiceRun {
   readonly trial: DagnachtTrial;
@@ -93,6 +130,102 @@ export class ChoiceRun {
       }
       await this.k.guard(Promise.all([this.toast('gevolg', enc.gevolg ?? 'Wacht even. Probeer het anders.', 2400), Promise.resolve(o.wrong?.())]));
     }
+  }
+
+  /**
+   * Play encounter `id` (next in content order) with the BODY: the line says what to hold,
+   * the animal tempts him, and he keeps still until it calms (~4 s after the line was
+   * read). A reach — `hands`: a click on the animal; `feet`: a step key or a tap on the
+   * world — is the wrong answer (`choose(false)`, marked once): the animal reacts calmly,
+   * a short line says so, and the same moment comes back. Never a fail. A full hold is
+   * the right answer: the good line (the content's uitleg), then `right`. No play hint
+   * while it lasts (a perfect player does nothing: golden simply waits).
+   */
+  async still(id: string, o: StillOpts): Promise<void> {
+    const enc = this.current;
+    if (!enc || enc.id !== id) throw new Error(`[adventure] choice "${id}" asked out of order (next: ${enc?.id ?? 'none'})`);
+    const k = this.k;
+    k.check();
+    k.beat = `still:${id}`;
+    clearPlayHint();
+    const unhint = k.hint(() => null); // (nothing to click: a stale walk hint must not survive into it)
+    const settings = store.get().settings;
+    const core = new HoldCore(settings.voorlezen ? HOLD_S : HOLD_SILENT_S, (goed) => { this.run.choose(goed); });
+    const canvas = k.ctx.canvas;
+    const camera = k.world.camera;
+    const ray = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    let reached = false;
+    /** a click on the animal (its body, or within a child's fingertip of it: ≥ 56 px round) */
+    const onAnimal = (e: PointerEvent, target: THREE.Object3D): boolean => {
+      const r = canvas.getBoundingClientRect();
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      if (ray.intersectObject(target, true).some((h) => h.object.visible && !h.object.userData.hitSphere)) return true;
+      const c = new THREE.Box3().setFromObject(target).getCenter(new THREE.Vector3());
+      const rad = tapHitRadius(camera.position.distanceTo(c), (camera.fov * Math.PI) / 180, r.height || 800, 0.16);
+      return ray.ray.distanceToPoint(c) <= rad;
+    };
+    const onDown = (e: PointerEvent): void => {
+      if (k.world.menuShown()) return;
+      if (o.hands) { if (e.target === canvas && onAnimal(e, o.hands)) reached = true; return; }
+      if (o.feet && !(e.target as Element | null)?.closest?.('button, a, input, [role="button"]')) reached = true;
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (o.feet && !e.repeat && STEP_KEYS.test(e.code) && !k.world.menuShown()) reached = true;
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey);
+    o.show?.();
+    try {
+      for (;;) {
+        // the line (read aloud once: after a reach it comes back as a new line), and its read
+        k.say(o.line);
+        let read = false;
+        void this.readOut(o.line).then(() => { read = true; });
+        await k.until(() => reached || read);
+        if (!reached) {
+          core.begin(k.now);
+          let tempted = false;
+          await k.until(() => {
+            if (!tempted && core.seconds - core.left(k.now) > 1.1) { tempted = true; o.tempt?.(); }
+            return reached || core.tick(k.now);
+          });
+        }
+        if (!reached) break; // held
+        // a reach: marked once, the animal reacts, the words for it, the same moment again
+        core.impulse();
+        k.stats[`still_${id}`] = core.impulses;
+        if (settings.geluid) Sound.tryAgain();
+        k.say(null);
+        await k.guard(Promise.resolve(o.wrong?.()));
+        const mis = o.mis ?? enc.gevolg ?? 'Wacht even. Probeer het anders.';
+        k.say(mis);
+        await this.readOut(mis, 1.6);
+        reached = false; // (a reach while it reacted, or while its line was said, was the same one)
+        core.again();
+      }
+    } finally {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey);
+      unhint();
+    }
+    k.stats[`still_${id}`] = core.impulses;
+    if (settings.geluid) Sound.correct();
+    const good = enc.uitleg ?? 'Rustig zo.';
+    k.say(good, { good: true });
+    await this.readOut(good, 1.6);
+    await k.guard(Promise.resolve(o.right?.()));
+  }
+
+  /** A line's read: the voice done with it (when voorlezen is on) and never quicker than a
+   *  calm read (280 ms a word, at least `min` s); mission time, stopped by a stop. */
+  private async readOut(line: string, min = 0): Promise<void> {
+    const k = this.k;
+    const calm = k.wait(Math.max(min, readSeconds(line)));
+    if (!store.get().settings.voorlezen) { await calm; return; }
+    const words = line.split(/\s+/).length;
+    await Promise.all([calm, k.guard(narrator.quiet(words * 700 + 2000))]);
   }
 
   /** Every encounter passed: log the run (once). */
@@ -160,7 +293,11 @@ export class ChoiceRun {
       const t = document.createElement('div');
       t.className = `p3-toast ${kind}`;
       t.setAttribute('role', 'status');
-      t.textContent = text;
+      // one sentence a line (each ≤ 7 words): never eight words side by side
+      for (const [i, z] of zinnen(text).entries()) {
+        if (i) t.appendChild(document.createElement('br'));
+        t.appendChild(document.createTextNode(z));
+      }
       col.insertBefore(t, col.firstChild);
     }
     if (store.get().settings.voorlezen) narrator.speak(text);
