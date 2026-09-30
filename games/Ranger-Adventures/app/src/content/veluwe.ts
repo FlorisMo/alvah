@@ -112,10 +112,10 @@ const MISSIE_FRISLING = {
   verhaalHaak: 'spoor',     // §6.4: bringing the frisling home, you spot a cut fence + odd tracks
   kort: 'Een klein zwijntje is zijn groep kwijt. Breng hem veilig terug.',
   briefing: {
+    // (no "Hoi ranger!": the voice already says "Ranger <naam>." before the title)
     // run 6: the briefing names what the child can already hear and see in the world:
     // the squeak, and the group rooting at the mud
     simpel: [
-      'Hoi ranger!',
       'Hoor je dat? Er piept iets.',
       'Een kleine big is zijn groep kwijt.',
       'Hij is bang en alleen.',
@@ -123,7 +123,6 @@ const MISSIE_FRISLING = {
       'Kun jij hem terugbrengen?',
     ],
     knap: [
-      'Hoi ranger!',
       'Hoor je dat? Er piept iets.',
       'Een frisling is zijn rotte kwijt.',
       'Dat is een jong wild zwijn.',
@@ -290,10 +289,10 @@ const MISSIE_REE = {
   payoff: 'moeder-keert-terug',         // inverted: you LEAVE the kalf; the mother returns
   kort: 'Een reekalf ligt alleen. Leer waarom je het met rust laat.',
   briefing: {
+    // (no "Hoi ranger!": the voice already says "Ranger <naam>." before the title)
     // run 6: the briefing names what the child can already see in the world: the
     // mother grazing by the copse (so the calf is not lost at all)
     simpel: [
-      'Hoi ranger!',
       'Een wandelaar belde ons op.',
       'Hij zag een reekalf, helemaal alleen.',
       'Is het verdwaald? Dat denkt hij.',
@@ -301,7 +300,6 @@ const MISSIE_REE = {
       'Zoek het kalf. Niet aanraken!',
     ],
     knap: [
-      'Hoi ranger!',
       'Een wandelaar belde ons op.',
       'Hij zag een reekalf, helemaal alleen.',
       'Is het verdwaald? Dat denkt hij.',
@@ -521,8 +519,8 @@ const MISSIE_WILDCAMERA = {
   verhaalHaak: 'camera',
   kort: 'Hang de wildcamera op. Wie loopt ’s nachts door het bos?',
   briefing: {
+    // (no "Hoi ranger!": the voice already says "Ranger <naam>." before the title)
     simpel: [
-      'Hoi ranger!',
       'Hier ligt een camera voor dieren.',
       'Die maakt vanzelf foto’s.',
       'Wie komt er ’s nachts langs?',
@@ -530,7 +528,6 @@ const MISSIE_WILDCAMERA = {
       'Hang de camera aan een boom.',
     ],
     knap: [
-      'Hoi ranger!',
       'Hier ligt een wildcamera.',
       'Die maakt vanzelf foto’s van dieren.',
       'Wie komt er ’s nachts langs?',
@@ -629,7 +626,7 @@ const MISSIE_WILDCAMERA = {
           echo: 'Doe ze na. Tik op de dieren.',
           goed: 'Knap onthouden!',
         },
-        feit: 'Een wildcamera maakt heel veel foto’s. Zo weet de ranger wie er leeft.',
+        feit: 'Een wildcamera maakt heel veel foto’s. Zo weet jij wie er leeft.',
         feitDier: 'das',
       },
       moeilijkheid: { lengte: 'settings', tempo: 'settings' },
@@ -735,10 +732,10 @@ const MISSIE_EEKHOORN = {
   status: 'actief',
   kort: 'De eekhoorn verstopt nootjes. Help hem ze terug te vinden.',
   briefing: {
+    // (no "Hoi ranger!": the voice already says "Ranger <naam>." before the title)
     // run 6: the briefing names what the child sees at the marker: the squirrel on its
     // oak, and where it goes (its hiding place in the wood)
     simpel: [
-      'Hoi ranger!',
       'Zie je de eekhoorn in de boom?',
       'Hij gaat nootjes verstoppen.',
       'Volg hem naar zijn plekje.',
@@ -746,7 +743,6 @@ const MISSIE_EEKHOORN = {
       'Straks vergeet hij het. Help hem dan.',
     ],
     knap: [
-      'Hoi ranger!',
       'Zie je de eekhoorn in de boom?',
       'Hij legt een wintervoorraad aan.',
       'Volg hem naar zijn plekje.',
