@@ -44,14 +44,19 @@ const LIFT = 0.12;
  * built while the lens holds, never mid-call). While it glows, a model that has its own
  * (dark, baked) emissive map lends that slot to its colour texture — a texture swap, no
  * new shader — and gets it back the moment the glow ends, so at rest every animal looks
- * exactly as it did; a model without one glows in its own base colour, and a merged one
- * (the roe: its colours in its vertices) in its vertex colours. The light is strongest
+ * exactly as it did; a textured part without one (the roe's coat) takes its colour
+ * texture as its emissive map when the beat begins (its emissive shows nothing at rest);
+ * an untextured one glows in its own base colour, and a merged one (the roe's other
+ * parts: their colours in their vertices) in its vertex colours. The light is strongest
  * where it faces the lens, so it keeps its shape. `clear` hands every material back as
  * it was.
  */
 export class WarmGlow {
   private readonly mats: {
     mat: THREE.MeshStandardMaterial; emissive: THREE.Color; intensity: number; map: THREE.Texture | null;
+    /** its emissive map while the glow is off (its own, or its colour texture when its
+     *  own emissive shows nothing at rest) */
+    rest: THREE.Texture | null;
     compile: THREE.Material['onBeforeCompile']; key: THREE.Material['customProgramCacheKey'];
   }[] = [];
   private readonly color = new THREE.Color();
@@ -67,7 +72,12 @@ export class WarmGlow {
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
         const mat = m as THREE.MeshStandardMaterial;
         if (!mat.isMeshStandardMaterial || this.mats.some((e) => e.mat === mat)) continue;
-        const e = { mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity, map: mat.emissiveMap, compile: mat.onBeforeCompile, key: mat.customProgramCacheKey };
+        const e = { mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity, map: mat.emissiveMap, rest: mat.emissiveMap, compile: mat.onBeforeCompile, key: mat.customProgramCacheKey };
+        // a textured part with no emissive map of its own (the roe's coat): its colour
+        // texture goes in as the emissive map now, with the rim — its emissive shows
+        // nothing at rest, so it looks as it did, and while it glows it glows in its own
+        // coat, not one flat colour
+        if (!mat.emissiveMap && mat.map && (mat.emissiveIntensity === 0 || mat.emissive.getHex() === 0)) { mat.emissiveMap = mat.map; e.rest = mat.map; }
         this.mats.push(e);
         const rim = this.rim, rimColor = this.rimColor;
         mat.onBeforeCompile = function (shader, renderer) {
@@ -102,7 +112,7 @@ export class WarmGlow {
     this.rim.value = on ? level : 0;
     this.rimColor.value.copy(this.color);
     for (const e of this.mats) {
-      if (!on) { e.mat.emissive.copy(e.emissive); e.mat.emissiveIntensity = e.intensity; e.mat.emissiveMap = e.map; continue; }
+      if (!on) { e.mat.emissive.copy(e.emissive); e.mat.emissiveIntensity = e.intensity; e.mat.emissiveMap = e.rest; continue; }
       if (e.map && e.mat.map) e.mat.emissiveMap = e.mat.map;
       // its own colour (texture × base colour) in the warm light, lifted only a touch: a
       // black raven stays a dark bird (the rim rings it), never a pale cut-out
