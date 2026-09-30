@@ -32,15 +32,22 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 const CALL = '#ffd98a';  // the warm light of a call
 const OK = '#8fd6a0';    // a right echo
 const WRONG = '#e8a27a'; // a wrong echo (soft, warm)
+/** How far a call lifts a dark animal's own colour toward white (0..1): a touch. */
+const LIFT = 0.12;
 
 /**
  * A calling animal lights up in its OWN colours: its real materials take a warm light
  * (the emissive reads the colour texture and the base colour, tinted warm, so the jay
  * stays a jay and the badger a badger), and a warm rim rings its outline (so a black
  * raven lights up too, its feathers still its own) — never a flat cream cut-out. The
- * colour texture goes in as the emissive map, and the rim into the shader, once, when
- * the beat begins (a shader variant per material, built while the lens holds, never
- * mid-call); `clear` hands every material back as it was.
+ * rim goes into the shader once, when the beat begins (a shader variant per material,
+ * built while the lens holds, never mid-call). While it glows, a model that has its own
+ * (dark, baked) emissive map lends that slot to its colour texture — a texture swap, no
+ * new shader — and gets it back the moment the glow ends, so at rest every animal looks
+ * exactly as it did; a model without one glows in its own base colour, and a merged one
+ * (the roe: its colours in its vertices) in its vertex colours. The light is strongest
+ * where it faces the lens, so it keeps its shape. `clear` hands every material back as
+ * it was.
  */
 export class WarmGlow {
   private readonly mats: {
@@ -62,15 +69,25 @@ export class WarmGlow {
         if (!mat.isMeshStandardMaterial || this.mats.some((e) => e.mat === mat)) continue;
         const e = { mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity, map: mat.emissiveMap, compile: mat.onBeforeCompile, key: mat.customProgramCacheKey };
         this.mats.push(e);
-        if (mat.map) mat.emissiveMap = mat.map;
         const rim = this.rim, rimColor = this.rimColor;
         mat.onBeforeCompile = function (shader, renderer) {
           e.compile.call(this, shader, renderer);
           shader.uniforms.uCallRim = rim;
           shader.uniforms.uCallRimColor = rimColor;
+          // (only while it glows: at rest the block is skipped and it looks as it did)
           shader.fragmentShader = 'uniform float uCallRim;\nuniform vec3 uCallRimColor;\n' + shader.fragmentShader.replace('#include <emissivemap_fragment>',
-            '#include <emissivemap_fragment>\n{ float callEdge = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);\n' +
-            '  totalEmissiveRadiance += uCallRimColor * (uCallRim * pow(callEdge, 2.0)); }');
+            '#include <emissivemap_fragment>\nif (uCallRim > 0.0) {\n' +
+            '  float callFace = clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);\n' +
+            // a model whose colours are in its vertices (a merged one, the roe): its own
+            // colours in the light too, lifted a little like the base colour
+            '  #if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )\n' +
+            `  totalEmissiveRadiance *= vColor.rgb + (1.0 - vColor.rgb) * ${LIFT.toFixed(2)};\n` +
+            '  #endif\n' +
+            // lit toward the lens, softer where it turns away: its shape, never a flat fill;
+            // and a warm ring on its very outline only (a dark raven glows at its edge and
+            // stays a dark bird inside it)
+            '  totalEmissiveRadiance *= 0.5 + 0.5 * callFace;\n' +
+            '  totalEmissiveRadiance += uCallRimColor * (uCallRim * 1.3 * smoothstep(0.55, 0.95, 1.0 - callFace));\n}');
         };
         mat.customProgramCacheKey = function () { return `${e.key.call(this)}|call-rim`; };
         mat.needsUpdate = true;
@@ -85,11 +102,12 @@ export class WarmGlow {
     this.rim.value = on ? level : 0;
     this.rimColor.value.copy(this.color);
     for (const e of this.mats) {
-      if (!on) { e.mat.emissive.copy(e.emissive); e.mat.emissiveIntensity = e.intensity; continue; }
-      // its own colour (texture × base colour), lifted a little so a dark bird still
-      // shows its feathers, in the warm light
+      if (!on) { e.mat.emissive.copy(e.emissive); e.mat.emissiveIntensity = e.intensity; e.mat.emissiveMap = e.map; continue; }
+      if (e.map && e.mat.map) e.mat.emissiveMap = e.mat.map;
+      // its own colour (texture × base colour) in the warm light, lifted only a touch: a
+      // black raven stays a dark bird (the rim rings it), never a pale cut-out
       const c = e.mat.color;
-      e.mat.emissive.copy(this.tmp.setRGB(c.r + (1 - c.r) * 0.3, c.g + (1 - c.g) * 0.3, c.b + (1 - c.b) * 0.3).multiply(this.color));
+      e.mat.emissive.copy(this.tmp.setRGB(c.r + (1 - c.r) * LIFT, c.g + (1 - c.g) * LIFT, c.b + (1 - c.b) * LIFT).multiply(this.color));
       e.mat.emissiveIntensity = level;
     }
   }
