@@ -29,8 +29,8 @@ import type { MoveLimits, Obstacle } from '../CharacterController';
 import { resolveMove } from '../CharacterController';
 import { wayfind, type WayCue } from '../Wayfinding';
 import {
-  driveCaps, driveIntent, vehicleDt, jeepStep, resolveBody, wheelContact, bodyReach,
-  JEEP_BODY, type BodyCircle, type Solid, type YieldAnimal, type JeepWorld,
+  driveCaps, driveIntent, vehicleDt, jeepStep, resolveBody, wheelContact, bodyReach, bodyOverlap, bodyWet, parkOutOf,
+  JEEP_BODY, type BodyCircle, type Solid, type YieldAnimal, type JeepWorld, type HomePlace,
 } from '../../core/vehicle';
 import {
   flyStep, heliVignette, heliAvailable, heliRamp, landingAltitude,
@@ -72,6 +72,11 @@ const JEEP_SINK_TOL = 0.5;
 const JEEP_AIR_TOL = 1.0;
 // A walker keeps this much extra room from a parked vehicle's footprint circles.
 const WALKER_ROOM = 0.3;
+/** Run 6 polish: why the jeep stands with the gas on (the HUD's line): animals it gives way
+ *  to, something solid (a trunk, a wall, the water), the forest edge. */
+export type JeepStall = 'dieren' | 'vast' | 'rand';
+/** …said once it has stood this long (s) with the gas held. */
+const STALL_S = 2;
 
 // W5.3b helicopter: the pad-proximity radius that surfaces "Stap in de helikopter",
 // and how close (horizontally) it must be to a pad for "Land hier".
@@ -201,6 +206,11 @@ export class Vehicles {
   private intent = { throttle: 0, steer: 0 };     // run 6: what the keys / stick asked for last frame
   private onJeepNear: (near: boolean) => void = () => {};
   private onVehicleChange: (inVehicle: boolean) => void = () => {};
+  // run 6 polish: held back with the gas on — why (tendStall), once it has stood STALL_S
+  private stallWhy: JeepStall | null = null;
+  private stallFor = 0;
+  private stallShown: JeepStall | null = null;
+  private onStall: (why: JeepStall | null) => void = () => {};
   // W5.3b helicopter (opt-in, withheld under reduced-motion). States while the ranger
   // is inside: resting on the ground (`airborne` false: after boarding and after a
   // landing — any push lifts off, "Stap uit" gets out), flying, and landing (the
@@ -312,10 +322,35 @@ export class Vehicles {
   }
 
   /** Register the jeep HUD callbacks (W5.1): `onNear` while walking up to / away from
-   *  the parked jeep, `onChange(inVehicle)` on climbing in / stepping out. */
-  setVehicle(cbs: { onNear: (near: boolean) => void; onChange: (inVehicle: boolean) => void }): void {
+   *  the parked jeep, `onChange(inVehicle)` on climbing in / stepping out, `onStall(why)`
+   *  when the gas is held but something holds the jeep back (run 6 polish; null: moving
+   *  again, or the gas let go). */
+  setVehicle(cbs: { onNear: (near: boolean) => void; onChange: (inVehicle: boolean) => void; onStall?: (why: JeepStall | null) => void }): void {
     this.onJeepNear = cbs.onNear;
     this.onVehicleChange = cbs.onChange;
+    this.onStall = cbs.onStall ?? (() => {});
+  }
+
+  /** Run 6 polish: the gas held, and the jeep standing because something holds it back
+   *  (an animal it gives way to, a solid, the forest edge): after STALL_S the HUD says why,
+   *  in one line (onStall). A child held W for 20 s at the frisling family and nothing
+   *  said why the jeep stood. It moves again, or the gas is let go: the line goes. */
+  private tendStall(throttle: number, dt: number): void {
+    const held = throttle > 0.3 && Math.abs(this.jeepMoved) < 0.15;
+    const why: JeepStall | null = !held ? null
+      : this.brake === 'animal' || this.yieldFor ? 'dieren'
+      : this.brake === 'edge' ? 'rand'
+      : this.brake || this.jeepContact ? 'vast' : null;
+    this.stallFor = why && why === this.stallWhy ? this.stallFor + dt : 0;
+    this.stallWhy = why;
+    const show = why && (this.stallFor >= STALL_S || this.stallShown === why) ? why : null;
+    if (show !== this.stallShown) { this.stallShown = show; this.onStall(show); }
+  }
+
+  /** Clear the stall line (climbing in or out). */
+  private clearStall(): void {
+    this.stallWhy = null; this.stallFor = 0;
+    if (this.stallShown) { this.stallShown = null; this.onStall(null); }
   }
 
   /** Register the helicopter HUD callbacks (W5.3b): `onNear`, `onChange(inHeli)`,
@@ -488,6 +523,39 @@ export class Vehicles {
       };
       mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
     });
+  }
+
+  /**
+   * Run 6 polish: before a mission is played as an adventure, under its briefing card: a
+   * jeep he left in that mission's home (by its places, on the walks between them, in the
+   * pictures looked from them: core/vehicle.parkOutOf) would stand in its framed shots and
+   * in the family's way. It is parked again, at once, on the side he came from: just out
+   * of the home behind its `marker`, facing out (else the nearest spot out of it): open
+   * ground with room round it for him to walk, off the water, the helipads and every
+   * marker's ground, not on a slope. Never while he drives. True when it moved.
+   */
+  parkOutOfHome(places: readonly HomePlace[], marker?: { x: number; z: number }): boolean {
+    if (this.inVehicle || !this.jeep || !this.jeepPos) return false;
+    const solids = this.solids(this.jeepParked);
+    const zones = this.zones(true);
+    const roomy = JEEP_BODY.map((c) => ({ along: c.along, r: c.r + WALKER_ROOM }));
+    const bound = this.limits.bound - bodyReach(JEEP_BODY) - 2;
+    const blocked = (x: number, z: number): boolean => !!this.limits.blocked?.(x, z);
+    const clear = (x: number, z: number, h: number): boolean => {
+      if (Math.hypot(x, z) > bound || bodyWet(x, z, h, JEEP_BODY, blocked)) return false;
+      if (bodyOverlap(x, z, h, roomy, solids) > 0 || bodyOverlap(x, z, h, JEEP_BODY, zones) > 0) return false;
+      const wc = wheelContact(x, z, h, (gx, gz) => this.groundY(gx, gz));
+      return Math.abs(wc.pitch) < 0.2 && Math.abs(wc.roll) < 0.2;
+    };
+    const to = parkOutOf(this.jeepPos.x, this.jeepPos.z, this.jeepHeading, JEEP_BODY, places, clear, marker);
+    if (!to) return false;
+    this.unpark(this.jeepParked);
+    this.jeepPos.set(to.x, this.groundY(to.x, to.z), to.z);
+    this.jeepHeading = to.heading;
+    this.settleJeep();
+    this.jeepParked = this.park(to.x, to.z, this.jeepHeading, JEEP_BODY);
+    if (this.nearJeep) { this.nearJeep = false; this.onJeepNear(false); }
+    return true;
   }
 
   /** Rest the jeep's four wheels on the drawn ground at its current x/z + heading. */
@@ -885,6 +953,7 @@ export class Vehicles {
     this.unpark(this.jeepParked);
     this.jeepParked = [];
     if (this.jeepOpacity < 1) this.setJeepOpacity(1); // he drives a solid jeep
+    this.clearStall();
     this.host.seat(true);               // F-31: a still `sit`, never idle/walk, while riding
     this.seatRider(this.jeep, JEEP_SEAT);
     this.host.clearWalkPrompts();
@@ -909,6 +978,7 @@ export class Vehicles {
     this.jeepParked = this.park(this.jeepPos.x, this.jeepPos.z, h, JEEP_BODY);
     this.nearJeep = true;               // standing right beside it → "Stap in" again
     this.yieldFor = null;
+    this.clearStall();
     this.dustEmitting = false;
     Sound.engineStop();
     this.onVehicleChange(false);
@@ -1036,6 +1106,7 @@ export class Vehicles {
     this.jeepMoved = f.moved;
     this.yieldFor = f.yieldFor;
     this.brake = f.brake;
+    this.tendStall(want.throttle, dt);
     const moved = f.moved;
     // the path it will drive if the keys stay as they are, for the animals (a world without
     // them: they must not see the jeep braking for themselves)

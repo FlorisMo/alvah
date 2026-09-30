@@ -33,7 +33,7 @@ import { Labels } from './world/Labels';
 import { Dressing, cabinDoorSpot } from './world/Dressing';
 import { Fauna } from './world/Fauna';
 import { Markers, type WorldMarker } from './world/Markers';
-import { Vehicles, MARKER_R, PAD_RADIUS } from './world/Vehicles';
+import { Vehicles, MARKER_R, PAD_RADIUS, type JeepStall } from './world/Vehicles';
 import { Player, SPAWN, type TapTarget } from './world/Player';
 import { CameraRig } from './world/CameraRig';
 import { Presenter, type Shot, type Focus } from './world/Presenter';
@@ -48,6 +48,7 @@ import { loadsInFlight } from './Models';
 import type { WayCue } from './Wayfinding';
 import type { RangerMotion, WorldCtx } from './play/types';
 import type { RangerRead, Threats } from '../core/wildlife';
+import type { HomePlace } from '../core/vehicle';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
 import { Progress } from './world/Progress';
 import { Residents, type DressingBuilder, type FrameView, type ResidentBody } from './world/Residents';
@@ -515,8 +516,9 @@ export class World {
   /** Register the drivable-jeep HUD callbacks (W5.1): `onNear(true|false)` as the
    *  ranger enters/leaves the parked jeep's radius (while walking), and
    *  `onChange(inVehicle)` when he climbs in / steps out. The HUD swaps its
-   *  "Stap in" / "Stap uit" affordance from the live `vehicleState()`. */
-  setVehicle(cbs: { onNear: (near: boolean) => void; onChange: (inVehicle: boolean) => void }): void {
+   *  "Stap in" / "Stap uit" affordance from the live `vehicleState()`; `onStall(why)`:
+   *  the gas held but the jeep held back (run 6 polish), null when that is over. */
+  setVehicle(cbs: { onNear: (near: boolean) => void; onChange: (inVehicle: boolean) => void; onStall?: (why: JeepStall | null) => void }): void {
     this.vehicles.setVehicle(cbs);
   }
 
@@ -560,6 +562,13 @@ export class World {
   /** W5.1: climb into the parked jeep (no-op unless standing beside it). */
   enterVehicle(): void {
     this.vehicles.enterVehicle();
+  }
+
+  /** Run 6 polish: under a mission's briefing card, the parked jeep is taken out of that
+   *  mission's home (its places), so it never stands in the adventure's pictures or its
+   *  walks: it waits behind the `marker` (Vehicles.parkOutOfHome). True when it moved. */
+  parkJeepOutOf(places: readonly HomePlace[], marker?: { x: number; z: number }): boolean {
+    return this.vehicles.parkOutOfHome(places, marker);
   }
 
   /** W5.1: step out of the jeep beside it, back to walking (no-op unless driving). */
