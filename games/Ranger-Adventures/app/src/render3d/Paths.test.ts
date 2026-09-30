@@ -34,11 +34,11 @@ const nodeOf = (id: string) => PATH_NODES.findIndex((n) => n.id === id);
  *  rotation.y = atan2(−x, −z)), and the submerged ven (World.limits.blocked). */
 const facing = (x: number, z: number): number => Math.atan2(-x, -z);
 const BUILDINGS: Obstacle[] = [
-  boxObstacle(-4.2, -4, 1.97, 1.9, facing(-4.2, -4)),   // the ranger cabin
-  boxObstacle(37, -37, 1.78, 1.86, facing(37, -37)),    // the fire watchtower
-  boxObstacle(26, -11, 1.61, 1.49, facing(26, -11)),    // the vogelkijkhut
+  boxObstacle(-6.5, -6, 2.96, 2.85, facing(-6.5, -6)),  // the ranger cabin (4.5 m, run 6)
+  boxObstacle(37, -37, 2.77, 2.9, facing(37, -37)),     // the fire watchtower (14 m)
+  boxObstacle(26, -11, 1.73, 1.6, facing(26, -11)),     // the vogelkijkhut (3 m)
   boxObstacle(-70, 6, 7.74, 7.8, facing(-70, 6)),       // the ecoduct
-  boxObstacle(-56, -20, 2.18, 2.13, facing(-56, -20)),  // the BOA post
+  boxObstacle(-56, -20, 2.4, 2.34, facing(-56, -20)),   // the BOA post (3.3 m)
 ];
 const VEN: Obstacle = { x: 46, z: -19, r: 18 };
 const SOLIDS = [...BUILDINGS, VEN];
@@ -110,9 +110,18 @@ test('a route takes the trail when it is worth it, and goes straight when it is 
   // out past the watchtower: along the spawn→watchtower trail
   const far = planRoute(0, 0, tower.x + 4, tower.z - 8, MAP);
   assert.ok(far.onSand.some(Boolean), 'the far goal is reached along the trail');
-  // the frisling, off to the south-west with no trail its way: straight across
-  const fris = planRoute(3, 3, -15.56, -15.56, MAP);
-  assert.ok(!fris.onSand.some(Boolean), 'no detour onto a trail that leads elsewhere');
+  // the frisling, off to the south-west with no trail its way: no detour onto a trail
+  // that leads elsewhere (a few metres of the clearing's own spoke toward it is fine)
+  const G = { x: -15.56, z: -15.56 };
+  const fris = planRoute(3, 3, G.x, G.z, MAP);
+  let sand = 0;
+  fris.pts.slice(1).forEach((q, k) => {
+    if (!fris.onSand[k]) return;
+    const p = fris.pts[k];
+    sand += Math.hypot(q.x - p.x, q.z - p.z);
+    assert.ok(Math.hypot(q.x - G.x, q.z - G.z) < Math.hypot(p.x - G.x, p.z - G.z), 'no trail leg that leads away from the frisling');
+  });
+  assert.ok(sand < 5, `no detour onto a trail that leads elsewhere (${sand.toFixed(1)} m of trail)`);
 });
 
 test('no leg of a route off the sand runs through a building or the ven', () => {

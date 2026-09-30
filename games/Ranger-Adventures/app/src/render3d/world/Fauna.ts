@@ -3,27 +3,86 @@
  *
  * The two story humans (the BOA warden by the report board, the poacher off in the
  * trees) and the ambient wildlife: four animals roaming gentle wander loops and two
- * birds gliding overhead. None are markers and none collide; each gets a soft blob
- * shadow. Their motion is secondary, so it freezes at rest under reduced-motion.
+ * birds gliding overhead. None are markers; each gets a soft blob shadow. Their motion
+ * is secondary, so it freezes at rest under reduced-motion.
+ *
+ * Run 6 (FEEL, wildlife): the four roamers notice the jeep and the ranger (core/wildlife):
+ * each walks its loop on its own clock, lifts its head at the jeep coming and trots — the
+ * ree bounds, low — off its path, watches it pass and walks back to its loop; on foot the
+ * ranger may walk up close, and a run sends them off early. They move along their facing
+ * (never sideways), slide round every trunk, wall, person, the jeep and the ranger, and
+ * keep off the water, the mission markers' ground, the helipads and the forest edge. The
+ * ranger walks round them in turn (`visitRoamers`); the jeep gives way to them.
  */
 
 import * as THREE from 'three';
-import { loadModel, loadRig, prepModel, skinnedRenderBox } from '../Models';
-import { standHeightFor, ADULT_REFERENCE_HEIGHT } from '../AnimalScale';
+import { loadModel, loadRig, prepModel, renderedHeight } from '../Models';
+import { SIZE, sizeRow, standHeightFor } from '../AnimalScale';
 import { applyEyes } from '../EyeMaterial';
 import { applyCoat, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
 import { gaitFor, motionAt, type MotionRecipe } from '../ProceduralMotion';
-import { glideAt, wanderAt, type GlideConfig, type WanderConfig } from '../AmbientPaths';
+import { clearLoop, glideAt, loopPeriod, wanderAt, type GlideConfig, type WanderConfig } from '../AmbientPaths';
 import { dampFactor } from '../play/kit-math';
 import { mergeColourSplits } from '../play/merge';
 import { FarRest, restFar } from '../play/fade';
+import { obstacleGap, resolveMove, type MoveLimits, type Obstacle } from '../CharacterController';
+import {
+  newWildState, strideBody, strideLength, temperamentFor, wildStep, RANGER_BODY,
+  type Temperament, type Threats, type WildState, type WildWorld,
+} from '../../core/wildlife';
+import { JEEP_BODY } from '../../core/vehicle';
 import type { Terrain } from './Terrain';
 
 /** Far off in the golden-hour fog a roaming animal calmly fades out and rests (not
  *  drawn): the same edge as the mission markers' animals. */
 const ROAM_REST_NEAR = 50;
 const ROAM_REST_FAR = 56;
+
+/** Nothing to react to (no ranger on foot, nobody drives). */
+const NO_THREATS: Threats = { ranger: null, jeep: null };
+/** A roamer keeps this far (m) inside the world's move bound: the forest edge's band. */
+const RIM_KEEP = 9;
+/** Already this far (m) inside the ranger's or the jeep's circle, a roamer walks out of it
+ *  freely (never shoved); any less and the circle holds it. */
+const OVERLAP_FREE = 0.1;
+/** A roam loop keeps this much room (m) from every solid, marker ground and pad. */
+const LOOP_ROOM = 1.2;
+/** What a roamer looks at around it each frame (m): trunks, walls, marker ground. */
+const NEAR_LOOK = 12;
+/** A baked walk clip's ground speed at its own rate (m/s), measured off the planted hooves
+ *  at the scale table's size: the legs match the ground at rate = speed / this… */
+const CLIP_STRIDE: Record<string, number> = { 'animal-ree-roedeer': 0.62, 'animal-vos-fox': 0.36 };
+/** …but never faster than this many times its own rate (a quicker patter reads as
+ *  scurrying; a trotting fox's short-legged clip glides a little instead). */
+const CLIP_RATE_MAX = 3.2;
+/** The static meshes' stride: the squirrel hops, the boar walks and trots. */
+const HOPS = new Set(['animal-eekhoorn-squirrel']);
+
+/** One ambient creature (a ground roamer or a gliding bird). */
+interface AmbientEntry {
+  id: string; group: THREE.Group; phase: number;
+  wander: WanderConfig | null;   // ground animals roam this loop
+  glide: GlideConfig | null;     // birds sail this overhead orbit
+  faceOffset: number;            // per-GLB forward correction (tuned in W3.7)
+  recipe: MotionRecipe;          // procedural idle bob (procedural cast only)
+  anim: THREE.Group | null;      // the prepped wrapper to drive procedurally
+  mixer: THREE.AnimationMixer | null;
+  walk: THREE.AnimationAction | null;   // baked stride clip
+  graze: THREE.AnimationAction | null;  // baked rest/graze clip
+  idle: THREE.AnimationAction | null;   // baked head-up clip: it watches (run 6)
+  walkW: number; grazeW: number; idleW: number; // eased crossfade weights
+  h: number;                            // applied canonical stand height (W3.7a)
+  rest: FarRest;                        // far off in the fog it rests (not drawn)
+  // run 6 (wildlife): a ground roamer's own mind and body
+  wild: WildState | null;               // where it is, its mode, its own loop clock
+  tm: Temperament | null;               // how it reacts (core/wildlife TEMPERAMENT)
+  r: number;                            // its footprint radius: half its length (scale table)
+  world: WildWorld | null;              // the world it moves in (free ground, a sliding step, its loop)
+  body: THREE.Group | null;             // the prepped model: a bound's arc, a trot's bob
+  cycle: number;                        // strides taken (the bob and the bound follow the ground)
+  audited: boolean;                     // its loop was moved clear of the world's solids
+}
 
 export class Fauna {
   // W3.3 scenic actors: the warden (BOA) + poacher stand at fixed world spots and
@@ -34,28 +93,15 @@ export class Fauna {
   readonly scenicActors: {
     id: string; group: THREE.Group;
     mixer: THREE.AnimationMixer | null; action: THREE.AnimationAction | null;
-    height: number;  // P1.6a: the actor's measured rendered stand-height (m) — the
-                     // mature-human reference the child ranger is judged against
+    height: number;  // the actor's measured rendered height (m): the grown-up the
+                     // boy is judged against
   }[] = [];
   // W3.6 ambient wildlife: a few animals roam gentle wander loops (baked walk↔graze
   // clips via the mixer for the W3.5-staged cast, improved procedural bob elsewhere)
   // and two birds glide overhead on spline loops. All are pure set-dressing — no
   // markers, no collision, kept out of `markers`. Their motion is SECONDARY, so it
   // freezes at the rest pose under reduced-motion (like the animals + scenic actors).
-  readonly ambient: {
-    id: string; group: THREE.Group; phase: number;
-    wander: WanderConfig | null;   // ground animals roam this loop
-    glide: GlideConfig | null;     // birds sail this overhead orbit
-    faceOffset: number;            // per-GLB forward correction (tuned in W3.7)
-    recipe: MotionRecipe;          // procedural idle bob (procedural cast only)
-    anim: THREE.Group | null;      // the prepped wrapper to drive procedurally
-    mixer: THREE.AnimationMixer | null;
-    walk: THREE.AnimationAction | null;   // baked stride clip
-    graze: THREE.AnimationAction | null;  // baked rest/graze clip
-    walkW: number; grazeW: number;        // eased crossfade weights
-    h: number;                            // applied canonical stand height (W3.7a)
-    rest: FarRest;                        // far off in the fog it rests (not drawn)
-  }[] = [];
+  readonly ambient: AmbientEntry[] = [];
   blobCount = 0;
   // the season's ontknoping (the poacher was reported): he no longer lurks in the trees
   // but stands calmly by the BOA warden — the reformed poacher of the canon (VISION §4a)
@@ -64,10 +110,32 @@ export class Fauna {
   private static blobTex: THREE.Texture | null = null;
   private readonly scene: THREE.Scene;
   private readonly terrain: Terrain;
+  private readonly obstacles: readonly Obstacle[];
+  private readonly limits: MoveLimits;
+  private readonly roamLimits: MoveLimits;
+  private readonly zones: (visit: (x: number, z: number, r: number) => void) => void;
 
-  constructor(env: { scene: THREE.Scene; terrain: Terrain }) {
+  constructor(env: {
+    scene: THREE.Scene; terrain: Terrain;
+    /** the world's solids (trunks, walls, people, parked vehicles): a roamer slides round them */
+    obstacles?: readonly Obstacle[];
+    /** the world's bound and its water */
+    limits?: MoveLimits;
+    /** the ground a roamer keeps off (mission markers, helipads): centre + radius */
+    zones?: (visit: (x: number, z: number, r: number) => void) => void;
+  }) {
     this.scene = env.scene;
     this.terrain = env.terrain;
+    this.obstacles = env.obstacles ?? [];
+    this.limits = env.limits ?? { bound: 75 };
+    // a roamer's feet keep off the whole drawn water (its dry rim under the reeds too), not only
+    // off the ground below the surface: no bound or skid ever carries one onto the ven's edge
+    const L = this.limits;
+    this.roamLimits = {
+      bound: L.bound - RIM_KEEP,
+      blocked: L.wetWithin ? (x, z) => L.wetWithin!(x, z, this.gatherR) || !!L.blocked?.(x, z) : L.blocked,
+    };
+    this.zones = env.zones ?? (() => {});
   }
 
   /** The drawn ground height (the one ground truth, world/Terrain.ts). */
@@ -77,8 +145,9 @@ export class Fauna {
 
   /** Per frame: the scenic actors play their clips and the ambient animals roam /
    *  glide. All SECONDARY motion, so it freezes under reduced-motion. With the lens
-   *  (`camera`), a roamer far off in the fog rests. */
-  update(t: number, dt: number, reduced: boolean, camera?: THREE.Camera): void {
+   *  (`camera`), a roamer far off in the fog rests. `threats`: the ranger on foot and a
+   *  driven jeep, which the roamers see coming (run 6). */
+  update(t: number, dt: number, reduced: boolean, camera?: THREE.Camera, threats: Threats = NO_THREATS): void {
     // W3.3: the warden + poacher play their baked clips. Secondary motion, so the
     // clip freezes at the rest pose under reduced-motion (same rule as the animals).
     for (const a of this.scenicActors) a.mixer?.update(reduced ? 0 : dt);
@@ -93,30 +162,171 @@ export class Fauna {
         const g = a.group.position;
         restFar(a.group, a.rest.step(Math.hypot(g.x - camera.position.x, g.z - camera.position.z), dt, reduced));
       }
-      if (a.wander) {
+      if (a.wander && a.wild) {
+        // its loop moved clear of the world's solids, once everything is placed (placement,
+        // not motion: also under reduced motion)
+        if (!a.audited) this.auditLoop(a);
+        // frozen under reduced motion, wherever it stands (the jeep's give-way brake keeps it safe)
         if (reduced) { a.mixer?.update(0); continue; }
-        const st = wanderAt(a.wander, t);
-        a.group.position.set(st.x, this.groundY(st.x, st.z), st.z);
-        a.group.rotation.y = st.facing + a.faceOffset;
-        if (a.mixer) {
-          const k = dampFactor(dt, 0.25); // ease the walk↔graze crossfade (shared factor)
-          a.walkW += ((st.moving ? 1 : 0) - a.walkW) * k;
-          a.grazeW += ((st.moving ? 0 : 1) - a.grazeW) * k;
-          a.walk?.setEffectiveWeight(a.walkW);
-          a.graze?.setEffectiveWeight(a.grazeW);
-          a.mixer.update(dt);
-        } else if (a.anim) {
-          const d = motionAt(a.recipe, t, a.phase);
-          a.anim.position.set(d.dx, d.dy, 0);
-          a.anim.rotation.set(0, d.rotY, d.rotZ);
-          a.anim.scale.set(1, d.scaleY, 1);
-        }
+        this.stepRoamer(a, t, dt, threats);
       } else if (a.glide && !reduced) {
         const st = glideAt(a.glide, t);
         a.group.position.set(st.x, st.y, st.z);
         a.group.rotation.y = st.facing + a.faceOffset;
       }
     }
+  }
+
+  /* ------------------------------------------------------- run 6: roamers -- */
+
+  /** One frame of a roamer: it reads the jeep and the ranger, moves (core/wildlife), and
+   *  its legs follow the ground it really covered. */
+  private stepRoamer(a: AmbientEntry, t: number, dt: number, threats: Threats): void {
+    const w = a.wild!;
+    this.gatherNear(a, threats);
+    wildStep(w, a.tm!, a.r, threats, a.world!, Math.min(dt, 0.1));
+    a.group.position.set(w.x, this.groundY(w.x, w.z), w.z);
+    a.group.rotation.y = w.facing + a.faceOffset;
+    this.animateRoamer(a, t, dt);
+  }
+
+  /** The legs and body: baked clips crossfade walk (moving) / idle (watching, head up) /
+   *  graze, the walk played at the rate that matches the ground; a ree's bound adds a low
+   *  arc; the static boar and squirrel bob, trot and hop with the ground they cover. */
+  private animateRoamer(a: AmbientEntry, t: number, dt: number): void {
+    const w = a.wild!;
+    const v = w.moved;
+    const moving = v > 0.05 || Math.abs(w.turning) > 0.5;
+    const kind = a.mixer ? (w.gait === 'bound' ? 'bound' : 'still')
+      : !moving ? 'still' : HOPS.has(a.id) ? 'hop' : w.gait === 'trot' || w.gait === 'bound' ? 'trot' : 'walk';
+    a.cycle += (v * dt) / strideLength(kind, v);
+    const k = dampFactor(dt, 0.2);
+    a.walkW += ((moving ? 1 : 0) - a.walkW) * k;
+    const watching = !moving && (w.mode === 'alert' || w.threat !== null);
+    a.idleW += ((watching && a.idle ? 1 : 0) - a.idleW) * k;
+    a.grazeW += ((!moving && !(watching && a.idle) ? 1 : 0) - a.grazeW) * k;
+    const off = strideBody(kind, a.cycle, v);
+    if (a.mixer) {
+      a.walk?.setEffectiveWeight(a.walkW);
+      a.graze?.setEffectiveWeight(a.grazeW);
+      a.idle?.setEffectiveWeight(a.idleW);
+      if (a.walk) {
+        const stride = CLIP_STRIDE[a.id] ?? 0.6;
+        const dur = a.walk.getClip().duration;
+        // bounding: one leg cycle per bound; else the rate whose stride matches the ground
+        // (a turn on the spot steps the feet round)
+        const rate = kind === 'bound' ? (dur * v) / strideLength('bound', v) : Math.max(v, Math.abs(w.turning) * 0.3) / stride;
+        a.walk.timeScale = Math.min(CLIP_RATE_MAX, Math.max(0.6, rate));
+      }
+      a.mixer.update(dt);
+      if (a.body) { a.body.position.y = off.lift; a.body.rotation.x = -off.pitch; }
+    } else if (a.anim) {
+      // breathing while it stands, the stride's bob while it moves (a crossfade, no pop);
+      // a rocking body lifts a hair so its ends never dip into the ground
+      const d = motionAt(a.recipe, t, a.phase);
+      const m = a.walkW;
+      const lift = off.lift + Math.abs(off.pitch) * a.r * 0.5;
+      a.anim.position.set(d.dx * (1 - m), d.dy * (1 - m) + lift * m, 0);
+      a.anim.rotation.set(-off.pitch * m, d.rotY * (1 - m), d.rotZ * (1 - m));
+      a.anim.scale.set(1, 1 + (d.scaleY - 1) * (1 - m), 1);
+    }
+  }
+
+  /** The first frame, with every solid, marker and pad placed: move its loop clear of them
+   *  (AmbientPaths.clearLoop; the home stays) and stand it on it. */
+  private auditLoop(a: AmbientEntry): void {
+    a.audited = true;
+    const w = a.wild!;
+    this.gatherNear(a, NO_THREATS, true);
+    // it grazes in the open: its loop keeps a good metre from every solid and zone
+    const cleared = clearLoop(a.wander!, (x, z) => this.freeAt(x, z, LOOP_ROOM));
+    a.wander = cleared;
+    const at = wanderAt(cleared, w.loopT);
+    w.x = at.x; w.z = at.z; w.facing = at.facing; w.gx = at.x; w.gz = at.z;
+    a.group.position.set(at.x, this.groundY(at.x, at.z), at.z);
+    a.group.rotation.y = at.facing + a.faceOffset;
+  }
+
+  // What a roamer meets this frame, gathered into reused buffers (no garbage): the solids
+  // near it grown by its size, the marker and pad ground, and the ranger and the jeep.
+  private readonly near: Obstacle[] = [];
+  private readonly nearPool: Obstacle[] = [];
+  private readonly nearBox: NonNullable<Obstacle['box']>[] = [];
+  private nearUsed = 0;
+  private gatherR = 0;
+  // the roamer being gathered for (read by `nearZone`, one callback for every roamer and frame)
+  private gatherX = 0;
+  private gatherZ = 0;
+  private gatherReach = 0;
+  private readonly nearZone = (x: number, z: number, r: number): void => {
+    const R = this.gatherReach + r;
+    if ((x - this.gatherX) ** 2 + (z - this.gatherZ) ** 2 <= R * R) this.near.push(this.pooledObstacle(x, z, r + this.gatherR));
+  };
+
+  private pooledObstacle(x: number, z: number, r: number, box?: Obstacle['box'], grow = 0): Obstacle {
+    const i = this.nearUsed++;
+    const o = this.nearPool[i] ?? (this.nearPool[i] = { x: 0, z: 0, r: 0 });
+    o.x = x; o.z = z; o.r = r;
+    if (box) {
+      const b = this.nearBox[i] ?? (this.nearBox[i] = { hx: 0, hz: 0, rot: 0, pad: 0 });
+      b.hx = box.hx; b.hz = box.hz; b.rot = box.rot; b.pad = box.pad + grow;
+      o.box = b;
+    } else o.box = undefined;
+    return o;
+  }
+
+  private gatherNear(a: AmbientEntry, threats: Threats, all = false): void {
+    const w = a.wild!;
+    const near = this.near;
+    near.length = 0;
+    this.nearUsed = 0;
+    this.gatherR = a.r;
+    const reach = all ? Infinity : NEAR_LOOK;
+    // its body is longer than a child's: every solid is kept this much further off
+    const grow = Math.max(0, a.r * 0.6 - 0.2);
+    for (const o of this.obstacles) {
+      const R = reach + o.r;
+      const dx = o.x - w.x, dz = o.z - w.z;
+      if (dx * dx + dz * dz > R * R) continue;
+      near.push(this.pooledObstacle(o.x, o.z, o.r + grow, o.box, grow));
+    }
+    this.gatherX = w.x; this.gatherZ = w.z; this.gatherReach = reach;
+    this.zones(this.nearZone);
+    // the ranger on foot and a driven jeep: never walked through (unless it already stands
+    // well inside one — the ranger stepped out of the jeep beside it — so it is never shoved)
+    const rg = threats.ranger;
+    if (rg) {
+      const R = RANGER_BODY + a.r;
+      if (Math.hypot(rg.x - w.x, rg.z - w.z) >= R - OVERLAP_FREE) near.push(this.pooledObstacle(rg.x, rg.z, R));
+    }
+    const j = threats.jeep;
+    if (j) {
+      const fx = Math.sin(j.heading), fz = Math.cos(j.heading);
+      for (const c of JEEP_BODY) {
+        const cx = j.x + fx * c.along, cz = j.z + fz * c.along, R = c.r + a.r * 0.8;
+        if (Math.hypot(cx - w.x, cz - w.z) >= R - OVERLAP_FREE) near.push(this.pooledObstacle(cx, cz, R));
+      }
+    }
+  }
+
+  /** Open ground for the gathered roamer at (x, z), with `margin` m to spare: clear of the
+   *  gathered solids and zones (already grown by its size), of the water by its length (the
+   *  whole drawn water, its dry rim under the reeds too: a chased deer never ends up on the
+   *  ven's edge) and inside the forest edge's band. */
+  private freeAt(x: number, z: number, margin: number): boolean {
+    const L = this.limits;
+    if (Math.hypot(x, z) > L.bound - RIM_KEEP) return false;
+    const q = this.gatherR + 0.6;
+    if (L.wetWithin) { if (L.wetWithin(x, z, q)) return false; }
+    else if (L.blocked && (L.blocked(x, z) || L.blocked(x + q, z) || L.blocked(x - q, z) || L.blocked(x, z + q) || L.blocked(x, z - q))) return false;
+    for (const o of this.near) if (obstacleGap(o, x, z, margin) <= 0) return false;
+    return true;
+  }
+
+  /** The ground roamers where they are now, for the ranger's step: he walks round them
+   *  (`r` = the room he keeps from each centre). No allocation. */
+  visitRoamers(visit: (x: number, z: number, r: number) => void): void {
+    for (const a of this.ambient) if (a.wild) visit(a.group.position.x, a.group.position.z, a.r + RANGER_BODY);
   }
 
   /** W4.5: a soft radial blob texture (dark centre → transparent rim), baked once
@@ -164,11 +374,10 @@ export class Fauna {
    * clear; neither pushes a collision circle or joins `markers` (pure dressing).
    */
   placeScenicActors(): void {
-    // P1.6a: mature humans stand at the adult reference (~1.8 m), so the ≈1.2 m
-    // child ranger reads a clear head-and-shoulders shorter beside the warden.
+    // grown men at their true heights (AnimalScale), a head and a half above the boy
     const ACTORS: { id: string; x: number; z: number; height: number }[] = [
-      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: ADULT_REFERENCE_HEIGHT }, // the BOA by the report board
-      { id: 'figure-poacher', x: -11.5, z: 8.5, height: ADULT_REFERENCE_HEIGHT },  // a distant figure in the trees
+      { id: 'ranger-warden-boa', x: 6.4, z: 4.4, height: SIZE.boa.h },   // the BOA by the report board
+      { id: 'figure-poacher', x: -11.5, z: 8.5, height: SIZE.stroper.h }, // a distant figure in the trees
     ];
     for (const a of ACTORS) {
       const group = new THREE.Group();
@@ -184,16 +393,10 @@ export class Fauna {
         applyEyes(prepped, a.id, { dusk: false });
         applyCalmPose(prepped, a.id); // §B never-scary: bias the poacher into a calm rest shape
         group.add(prepped);
-        // P1.6a: expose the actor's MEASURED rendered stand-height (skinnedRenderBox
-        // — the same honest bone-extent `measureAvatar` reads for the ranger), NEVER
-        // the normalization target. Doc §8.7 / D1.7: a hook reports what RENDERS, so
-        // the child-vs-adult pair assert (Alvah < 0.75 × the warden) can never be
-        // faked by a mis-scaled adult reporting the constant it was asked for.
-        // `entry.height` keeps the target (`a.height`) as the pre-load fallback, and
-        // the geometry-box fallback covers a rig with no skeleton to measure.
-        const rbox = skinnedRenderBox(prepped) ?? new THREE.Box3().setFromObject(prepped);
-        const measuredY = rbox.getSize(new THREE.Vector3()).y;
-        if (Number.isFinite(measuredY) && measuredY > 0) entry.height = measuredY;
+        // expose the actor's MEASURED rendered height (Models.renderedHeight, the same
+        // read as the ranger's), never the target it was asked for: a hook reports what
+        // renders. `entry.height` keeps the target as the pre-load fallback.
+        entry.height = renderedHeight(prepped) ?? entry.height;
         if (rig.clips.length) {
           const mixer = new THREE.AnimationMixer(prepped);
           const clip = rig.clips.find((c) => /idle|rest|stand|breath/i.test(c.name)) ?? rig.clips[0];
@@ -240,34 +443,47 @@ export class Fauna {
    */
   placeAmbientLife(): void {
     // ground roamers: [id, home x/z, loop radius, whether the GLB carries baked
-    // walk/graze clips]. Target height now comes from the canonical dossier
-    // stand-height table (W3.7a, `AnimalScale.ts`) — one source of truth so the
-    // world and the showroom true-scale mode read the SAME relative sizes.
+    // walk/graze clips]. Their size is the scale table's (`AnimalScale.ts`).
     const GROUND: { id: string; hx: number; hz: number; r: number; baked: boolean }[] = [
-      { id: 'animal-ree-roedeer', hx: 26, hz: 26, r: 6, baked: true },   // bos/heide edge
+      // run 6: out on the open drift sand east of the parked jeep (27-38 m straight on from it,
+      // nothing solid within 4 m of any grazing stop), no longer in the pocket between two
+      // junipers, a boulder and the helipad that a child could not drive into
+      { id: 'animal-ree-roedeer', hx: 44, hz: 12, r: 6, baked: true },
       { id: 'animal-vos-fox', hx: -30, hz: -10, r: 7, baked: true },     // heide, west
       { id: 'animal-eekhoorn-squirrel', hx: -24, hz: -24, r: 3, baked: false }, // near trees
       { id: 'animal-wildzwijn-boar', hx: 10, hz: 36, r: 6, baked: false },     // heide, south
     ];
     GROUND.forEach((a, i) => {
-      const h = standHeightFor(a.id) ?? 0.9; // dossier canonical (W3.7a)
+      const h = standHeightFor(a.id) ?? 0.9; // the scale table (AnimalScale)
+      const tm = temperamentFor(a.id);        // how it walks and how close it lets you come (run 6)
       const wander: WanderConfig = {
         homeX: a.hx, homeZ: a.hz, radius: a.r,
-        period: 22 + i * 4,          // each roams at a slightly different pace
+        // its legs stride at its calm walk at most (run 6: the old 22-34 s loops strode
+        // 2.6-4 m/s and the feet skated); a little each to desync the paces
+        period: loopPeriod(a.r, tm.walk) * (1 + i * 0.06),
         phase: (i * 0.27) % 1,       // desync the loops
         angle: i * 1.1,              // rotate each loop differently
       };
+      const at = wanderAt(wander, 0); // its own loop clock starts at 0 (the phase desyncs them)
       const group = new THREE.Group();
-      group.position.set(a.hx, this.groundY(a.hx, a.hz), a.hz);
+      group.position.set(at.x, this.groundY(at.x, at.z), at.z);
+      group.rotation.y = at.facing;
       this.scene.add(group);
       this.addBlobShadow(group, Math.max(0.35, h * 0.7)); // W4.5: blob under each roamer
-      const entry = {
+      const entry: AmbientEntry = {
         id: a.id, group, phase: i * 1.7,
-        wander, glide: null as GlideConfig | null, faceOffset: 0,
+        wander, glide: null, faceOffset: 0,
         recipe: gaitFor(a.id),
-        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
-        walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 1, h, rest: new FarRest(ROAM_REST_NEAR, ROAM_REST_FAR),
+        anim: null, mixer: null, walk: null, graze: null, idle: null,
+        walkW: 0, grazeW: 1, idleW: 0, h, rest: new FarRest(ROAM_REST_NEAR, ROAM_REST_FAR),
+        wild: newWildState(at, 0), tm, r: Math.max(0.2, (sizeRow(a.id)?.len ?? 1) / 2),
+        world: null, body: null, cycle: 0, audited: false,
+      };
+      entry.world = {
+        free: (x, z) => this.freeAt(x, z, 0.1),
+        move: (fx, fz, tx, tz, out) => { const p = resolveMove(fx, fz, tx, tz, this.near, this.roamLimits); out.x = p.x; out.z = p.z; },
+        loop: (t) => wanderAt(entry.wander!, t),
+        loopLeg: wander.period / 4,
       };
       this.ambient.push(entry);
       void loadRig(a.id).then((rig) => {
@@ -279,14 +495,17 @@ export class Fauna {
         applyCalmPose(prepped, a.id); // §B never-scary rest-pose bias
         mergeColourSplits(prepped);   // one draw call per animal, not one per colour
         group.add(prepped);
+        entry.body = prepped;
         if (a.baked && rig.clips.length) {
-          // crossfade the baked walk (striding) against graze (paused) by `moving`;
-          // both play from frame one, weights eased each frame in update().
+          // crossfade the baked walk (moving) against graze (grazing) and idle (head up,
+          // watching: run 6); all play from frame one, weights eased each frame
           const mixer = new THREE.AnimationMixer(prepped);
           const walkClip = rig.clips.find((c) => /walk/i.test(c.name)) ?? rig.clips[0];
-          const grazeClip = rig.clips.find((c) => /graze|eat|idle|rest/i.test(c.name)) ?? rig.clips[0];
+          const grazeClip = rig.clips.find((c) => /graze|eat/i.test(c.name)) ?? rig.clips.find((c) => /idle|rest/i.test(c.name)) ?? rig.clips[0];
+          const idleClip = rig.clips.find((c) => /idle|rest|stand/i.test(c.name) && c !== grazeClip) ?? null;
           entry.walk = mixer.clipAction(walkClip); entry.walk.play(); entry.walk.setEffectiveWeight(0);
           entry.graze = mixer.clipAction(grazeClip); entry.graze.play(); entry.graze.setEffectiveWeight(1);
+          if (idleClip) { entry.idle = mixer.clipAction(idleClip); entry.idle.play(); entry.idle.setEffectiveWeight(0); }
           entry.mixer = mixer;
         } else {
           // no baked clips → the improved procedural bob drives this wrapper (the
@@ -300,8 +519,8 @@ export class Fauna {
     // the houtduif circles lower + tighter). Birds are static GLBs → the glide IS
     // the motion; they hold the calm-pose gate (no diving, no flapping panic).
     const BIRDS: { id: string; h: number; cx: number; cz: number; r: number; height: number; period: number; phase: number; bob: number }[] = [
-      { id: 'bird-buizerd', h: 0.9, cx: 4, cz: 0, r: 44, height: 24, period: 30, phase: 0, bob: 1.6 },
-      { id: 'bird-houtduif', h: 0.5, cx: -18, cz: 8, r: 26, height: 16, period: 22, phase: 0.5, bob: 1.1 },
+      { id: 'bird-buizerd', h: SIZE.buizerd.h, cx: 4, cz: 0, r: 44, height: 24, period: 30, phase: 0, bob: 1.6 },
+      { id: 'bird-houtduif', h: SIZE.houtduif.h, cx: -18, cz: 8, r: 26, height: 16, period: 22, phase: 0.5, bob: 1.1 },
     ];
     BIRDS.forEach((b, i) => {
       const glide: GlideConfig = { cx: b.cx, cz: b.cz, radius: b.r, height: b.height, bob: b.bob, period: b.period, phase: b.phase };
@@ -309,13 +528,13 @@ export class Fauna {
       const g0 = glideAt(glide, 0);
       group.position.set(g0.x, g0.y, g0.z);
       this.scene.add(group);
-      const entry = {
+      const entry: AmbientEntry = {
         id: b.id, group, phase: i * 2.1,
-        wander: null as WanderConfig | null, glide, faceOffset: 0,
+        wander: null, glide, faceOffset: 0,
         recipe: gaitFor(b.id),
-        anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
-        walk: null as THREE.AnimationAction | null, graze: null as THREE.AnimationAction | null,
-        walkW: 0, grazeW: 0, h: b.h, rest: new FarRest(ROAM_REST_NEAR, ROAM_REST_FAR),
+        anim: null, mixer: null, walk: null, graze: null, idle: null,
+        walkW: 0, grazeW: 0, idleW: 0, h: b.h, rest: new FarRest(ROAM_REST_NEAR, ROAM_REST_FAR),
+        wild: null, tm: null, r: 0, world: null, body: null, cycle: 0, audited: true,
       };
       this.ambient.push(entry);
       void loadModel(b.id).then((m) => {
@@ -330,26 +549,25 @@ export class Fauna {
   /** Dev-hook accessor (W3.6): each ambient creature's id + live world x/z + its
    *  dominant baked clip {name, time} (null for the procedural + bird cast). Lets
    *  the E2E assert ≥2 animals are present AND a baked mixer clock advances. */
-  ambientState(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] {
+  ambientState(): {
+    id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null;
+    mode: string | null; speed: number; gait: string | null; facing: number; r: number; threat: string | null;
+    loop: { x: number; z: number; r: number; angle: number } | null;
+  }[] {
     return this.ambient.map((a) => {
-      const dom = a.mixer ? (a.walkW >= a.grazeW ? a.walk : a.graze) : null;
+      const w = Math.max(a.walkW, a.grazeW, a.idleW);
+      const dom = a.mixer ? (w === a.walkW ? a.walk : w === a.idleW && a.idle ? a.idle : a.graze) : null;
       return {
         id: a.id, x: a.group.position.x, z: a.group.position.z,
         h: a.h, // applied canonical stand height (W3.7a) — E2E asserts the live ordering
         clip: dom ? { name: dom.getClip().name, time: dom.time } : null,
+        // run 6: what it is doing (roam / alert / away / yield / return), how fast it really
+        // moves (m/s), its legs, the way it faces, its footprint radius, what it reacts to
+        mode: a.wild?.mode ?? null, speed: a.wild?.moved ?? 0, gait: a.wild?.gait ?? null,
+        facing: a.group.rotation.y, r: a.r, threat: a.wild?.threat ?? null,
+        // its roam loop after the audit (home and radius)
+        loop: a.wild && a.wander ? { x: a.wander.homeX, z: a.wander.homeZ, r: a.wander.radius, angle: a.wander.angle } : null,
       };
     });
-  }
-
-  /** W5.2: distance to the nearest wandering ground animal from a world point
-   *  (birds glide overhead → excluded). `Infinity` when none roam. */
-  nearestAnimalDist(x: number, z: number): number {
-    let best = Infinity;
-    for (const a of this.ambient) {
-      if (!a.wander) continue;
-      const d = Math.hypot(a.group.position.x - x, a.group.position.z - z);
-      if (d < best) best = d;
-    }
-    return best;
   }
 }

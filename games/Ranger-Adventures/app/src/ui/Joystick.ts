@@ -6,6 +6,8 @@
  * `World.update` call site (no second movement code path).
  *
  * One draggable ring, bottom-left, thumb ≥ 56 px (the frozen tap-target floor).
+ * Pushed most of the way he walks at full speed; pushed to the rim he runs, and the
+ * ring lights up warm to show it (run 6: `setRunning`, fed by the Player).
  * Pointer events only (works for touch, pen and mouse alike); `setPointerCapture`
  * keeps the drag glued to this element even when the finger slides past the ring,
  * so there are NO window-level listeners to leak. `touch-action: none` stops the
@@ -27,6 +29,7 @@ export class Joystick {
   private cx = 0;
   private cy = 0;
   private radius = 1;
+  private running = false;
 
   constructor() {
     const base = document.createElement('div');
@@ -49,6 +52,14 @@ export class Joystick {
   /** The live screen-space intent, or null while the thumb rests (keyboard wins). */
   vector(): StickVector | null {
     return this.current;
+  }
+
+  /** Run 6: the ring lights up while the stick has him running (pushed to its rim).
+   *  A class toggle, only on a change: no per-frame DOM writes. */
+  setRunning(running: boolean): void {
+    if (running === this.running) return;
+    this.running = running;
+    this.el.classList.toggle('rj-run', running);
   }
 
   /** Show/hide the joystick (driven by the settings + coarse-pointer decision). */

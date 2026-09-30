@@ -86,6 +86,69 @@ export function isInteractKey(code: string): boolean {
   return code === 'Space' || code === 'Enter' || code === 'NumpadEnter';
 }
 
+/**
+ * The run keys (run 6): either Shift. Held together with a walk key he runs; alone
+ * it does nothing (it is a modifier, never a move), and it is never preventDefault-ed.
+ */
+export function isRunKey(code: string): boolean {
+  return code === 'ShiftLeft' || code === 'ShiftRight';
+}
+
+/* --------------------------------------------------------- walk and run -- */
+/*
+ * How fast the ranger goes on foot (run 6, Floris: "walking is very slow now"). One
+ * ramped ground speed feeds his step, his legs, his footsteps and rangerMotion().
+ * A real 8-year-old hurrying along walks briskly; with Shift (or the stick pushed to
+ * its rim) he runs. The jeep (6 m/s) stays the fast way round.
+ */
+
+/** Walking speed (m/s): brisk (was 1.8). */
+export const WALK_SPEED = 2.2;
+/** Running speed (m/s): Shift held, or the stick at its rim. */
+export const RUN_SPEED = 4.2;
+/** Stiffness of the ground-speed ramp (rad/s): a critically damped ease, 95 % of any
+ *  change done in ~0.32 s, with no kick at its start and no overshoot, so starting,
+ *  stopping and the walk↔run switch never pop. He coasts 2v/ω after a release (0.3 m
+ *  walking, 0.55 m running). */
+export const SPEED_OMEGA = 15;
+/** The stick walks at full walking speed from this share of its travel on. */
+export const STICK_WALK_FULL = 0.8;
+/** The stick runs once pushed to this share of its travel (its rim)… */
+export const STICK_RUN_ON = 0.95;
+/** …and keeps running until it comes back under this share (hysteresis: a thumb
+ *  resting on the rim never flickers between walk and run). */
+export const STICK_RUN_OFF = 0.88;
+
+/** Share of the walking speed a stick push of magnitude `m` (0..1) asks for. */
+export function stickWalkShare(m: number): number {
+  return m <= 0 ? 0 : m >= STICK_WALK_FULL ? 1 : m / STICK_WALK_FULL;
+}
+
+/** Whether a stick push of magnitude `m` runs, given whether it ran last frame. */
+export function stickRun(m: number, wasRunning: boolean): boolean {
+  return m >= (wasRunning ? STICK_RUN_OFF : STICK_RUN_ON);
+}
+
+/** The ramped ground speed: `v` (m/s) and how fast it is changing, `a` (m/s²). */
+export interface SpeedRamp { v: number; a: number }
+
+/**
+ * One frame of the ramped ground speed: a critically damped ease of `s.v` toward
+ * `target` (m/s), solved exactly (frame-rate independent for a held target): it
+ * starts gently, never overshoots, and lands exactly on 0 when stopping, so a
+ * standing ranger reads 0, never a creeping 1e-9.
+ */
+export function rampSpeed(s: SpeedRamp, target: number, dt: number, omega: number = SPEED_OMEGA): SpeedRamp {
+  if (!(dt > 0)) return s;
+  const e = s.v - target;
+  const k = Math.exp(-omega * dt);
+  const t1 = (s.a + omega * e) * dt;
+  const v = target + (e + t1) * k;
+  const a = (s.a - omega * t1) * k;
+  if (target === 0 && Math.abs(v) < 1e-3 && Math.abs(a) < 0.05) return { v: 0, a: 0 };
+  return { v, a };
+}
+
 /** Clamp a 2-vector to a maximum magnitude, preserving direction. */
 function clampMagnitude(x: number, y: number, max: number): StickVector {
   const m = Math.hypot(x, y);

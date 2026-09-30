@@ -138,9 +138,8 @@ export interface RangerDevHook {
   clip(): { name: string; time: number } | null;
   /** The player ranger's LIVE world bounding-box height (m), measured from the
    *  real posed mesh — the honest scale signal the scale assert reads. Alvah is
-   *  a CHILD (P1.6a), so his idle band is now child-scale (avatar.height ∈
-   *  [1.1, 1.35]), a clear head shorter than the ~1.8 m warden — NOT the old
-   *  ~1.7 m adult. It is the measured render size, NOT the normalization target,
+   *  a real 8-year-old (run 6: 1.32 m, render3d/AnimalScale), a head and a half
+   *  under the 1.8 m warden. It is the measured render size, NOT the normalization target,
    *  so the telemetry can never mask a mis-scaled rig (AUDIT-FINDINGS §4: pixels
    *  are the court of appeal). Null before the hook/world is ready. */
   avatar(): { height: number } | null;
@@ -151,6 +150,15 @@ export interface RangerDevHook {
    *  that slid the feet ~2.5× per stride. 0 while standing or in an in-place
    *  activity; null before the hook/world is ready. */
   groundSpeed(): number | null;
+  /** How the ranger moves right now (World.rangerMotion): where he stands, the way he
+   *  faces (rad), his post-collision ground speed (m/s) and whether he runs. Null
+   *  before the world is up. */
+  motion(): { x: number; z: number; heading: number; speed: number; running: boolean } | null;
+  /** The ranger's legs (run 6): which clip leads (idle/walk/run), the shared cycle phase
+   *  (left foot down at 0, right at 0.5), footfalls per second, the run share, the stride
+   *  gain, and his soles in world metres (heel, ball, tip per foot, left first: the
+   *  foot-slip probe). Null before the world is up. */
+  gait(): GaitRead | null;
   /** D1.2 locomotion ground-truth (P1.5a asserts it across the walkable world): is the
    *  ranger's Y actually ON the RENDERED terrain surface, not through it? `grounded` is
    *  true when a down-ray hits the terrain under him AND his feet sit in the on-foot
@@ -201,8 +209,9 @@ export interface RangerDevHook {
   /** The ambient wildlife (roaming animals + gliding birds): id + live world x/z
    *  + applied canonical stand height `h` (W3.7a) + dominant baked clip
    *  {name, time} (null for the procedural/bird cast), or null before the
-   *  hook/world is ready (W3.6). */
-  ambient(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] | null;
+   *  hook/world is ready (W3.6). Run 6: each roamer's mode, speed, gait, facing, radius
+   *  and threat (`AmbientRead`). */
+  ambient(): AmbientRead[] | null;
   /** The fixed landmark props (watchtower, ecoduct, bird-hide, BOA post,
    *  signposts): id + world x/z, for E2E spawn→watchtower navigation (W4.1). */
   landmarks(): { id: string; x: number; z: number }[] | null;
@@ -214,6 +223,10 @@ export interface RangerDevHook {
    *  steer a walk PAST a specific tree — putting it between the follow lens and the ranger — to
    *  reproduce the genuine crown occlusion the occluder-fade must clear. Null before ready. */
   treeSpots(): { x: number; z: number; s: number }[] | null;
+  /** Run 6: every static solid the walker and the vehicles meet (trunks, props, the
+   *  buildings' real footprints as `box`), so an offline repro of a drive sees exactly
+   *  what the jeep saw. Null before ready. */
+  obstacles(): { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[] | null;
   /** The sand-path network: route nodes (id + world x/z) + segment index pairs,
    *  or null before the hook/world is ready (W4.3). */
   paths(): { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] } | null;
@@ -262,7 +275,13 @@ export interface RangerDevHook {
     x: number; z: number; heading: number; headingUnwrapped: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean;
+    /** run 6: the id of the roaming animal the jeep is braking (or held) for — one in
+     *  its path — or null. An animal beside the track never slows it. */
+    yieldFor: string | null;
+    /** run 6: what held the jeep's speed back this frame: a solid ahead (a trunk, a
+     *  building, a person), the forest edge, an animal in its path; null = nothing, it
+     *  rolls as the gas asks (so "it slowed down" always has a named cause). */
+    brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null; dust: boolean;
     /** P1.5b: the jeep's live ground contact — its world Y and the clearance of that Y
      *  above the RENDERED surface right under it (the D1.2 ray truth), with `grounded`
      *  true when the ray hits AND the clearance sits in the jeep suspension band. The
@@ -301,7 +320,7 @@ export interface RangerDevHook {
    *  `helpChip` is whether the laptop "?" re-show chip is mounted. The capture assert
    *  reads `active` = 'walk' with the tracker held back to prove ONE hint at entry,
    *  and that it advances on the first step. Null before the world/hook is ready. */
-  hint(): { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
+  hint(): { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null;
   /** RUN-3 P4.6 (F-11): the world-rim state — `bound` (the move-limit radius, m),
    *  the ranger's live `dist` from world centre, and `atRim` (he is pressed against
    *  the rim heading outward, so the calm "Hier stopt het bos" cue has fired). The
@@ -368,6 +387,16 @@ export type PlayHintProbe = {
   parts: string[];
 };
 
+/** One entry of `__ranger.ambient()`: a roaming animal or a gliding bird. Run 6 adds what
+ *  a roamer is doing (`mode`: roam / alert / away / yield / return, null for a bird), how
+ *  fast it really moves (m/s), its legs (`gait`: still / walk / trot / bound), the way it
+ *  faces (rad), its footprint radius (m) and what it reacts to (`threat`: jeep / ranger). */
+export type AmbientRead = {
+  id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null;
+  mode?: string | null; speed?: number; gait?: string | null; facing?: number; r?: number; threat?: string | null;
+  loop?: { x: number; z: number; r: number; angle: number } | null;
+};
+
 /** One entry of `__ranger.seating()`. */
 export type SeatProbe = { id: string; x: number; y: number; z: number; gap: number; sig: string; moves?: 'player' | 'ambient' };
 
@@ -375,6 +404,17 @@ export type SeatProbe = { id: string; x: number; y: number; z: number; gap: numb
 // deployed bundle is identifiable (the preview + live E2E assert this exact
 // value, proving the site served the freshly-built app.js, not a stale cache).
 const VERSION = '2.1.0-ship';
+
+type XYZ = { x: number; y: number; z: number };
+/** The ranger's gait read (World.playerGait). */
+export interface GaitRead {
+  name: 'idle' | 'walk' | 'run';
+  phase: number;
+  cadence: number;
+  run: number;
+  gain: number;
+  soles: { heel: XYZ; toe: XYZ; tip: XYZ }[];
+}
 
 const state = {
   screen: 'title' as Screen,
@@ -385,6 +425,8 @@ const state = {
   clip: null as null | (() => { name: string; time: number } | null),
   avatar: null as null | (() => { height: number } | null),
   groundSpeed: null as null | (() => number | null),
+  motion: null as null | (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null),
+  gait: null as null | (() => GaitRead | null),
   grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
@@ -394,10 +436,11 @@ const state = {
   winStep: null as null | (() => boolean),
   titleReady: null as null | (() => boolean),
   actors: null as null | (() => { id: string; height: number; clip: { name: string; time: number } | null }[]),
-  ambient: null as null | (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]),
+  ambient: null as null | (() => AmbientRead[]),
   landmarks: null as null | (() => { id: string; x: number; z: number }[]),
   dressing: null as null | (() => { id: string; x: number; z: number }[]),
   treeSpots: null as null | (() => { x: number; z: number; s: number }[]),
+  obstacles: null as null | (() => { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[]),
   paths: null as null | (() => { nodes: { id: string; x: number; z: number }[]; segments: [number, number][] }),
   groundDetail: null as null | (() => { on: boolean; textured: boolean; tileRepeat: number }),
   lighting: null as null | (() => { shadowMap: boolean; sunCastsShadow: boolean; rangerCastsShadow: boolean; blobShadows: number }),
@@ -418,7 +461,9 @@ const state = {
     grounded: boolean; clearance: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
+    yieldFor: string | null; brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null; dust: boolean; driverHidden: boolean;
+    /** run 6: what the keys / stick asked the jeep for last frame */
+    intent?: { throttle: number; steer: number };
   } | null),
   heli: null as null | (() => {
     placed: boolean; available: boolean; optIn: boolean; near: boolean; inHeli: boolean; onPad: boolean;
@@ -428,7 +473,7 @@ const state = {
     pads: { x: number; z: number }[];
   } | null),
   quality: null as null | (() => { tier: 'hoog' | 'laag'; pixelRatio: number; vegetationScale: number } | null),
-  hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
+  hint: null as null | (() => { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null),
   boundary: null as null | (() => { bound: number; dist: number; atRim: boolean; scatterMax: number } | null),
   // golden-path probes: the Stage's live view + renderer (main.ts) and the THREE-side
   // measurements (kit.ts). Kept `unknown` so this module stays three.js-free.
@@ -534,6 +579,16 @@ export function provideGroundSpeed(fn: (() => number | null) | null): void {
   state.groundSpeed = fn;
 }
 
+/** Register the ranger's gait + sole probe read (World.playerGait). Pass null to clear. */
+export function provideGait(fn: (() => GaitRead | null) | null): void {
+  state.gait = fn;
+}
+
+/** Register the ranger's live motion read (World.rangerMotion). Pass null to clear. */
+export function provideMotion(fn: (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null) | null): void {
+  state.motion = fn;
+}
+
 /** Register the live real-camera read-back source (the World's `camState`, read
  *  off the actual render camera after the frame update). Pass null to clear
  *  (F-05 ⊕ F-18). */
@@ -595,7 +650,7 @@ export function provideActors(
 
 /** Register the ambient-wildlife source (the World's roaming animals + birds). W3.6. */
 export function provideAmbient(
-  fn: (() => { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[]) | null,
+  fn: (() => AmbientRead[]) | null,
 ): void {
   state.ambient = fn;
 }
@@ -619,6 +674,13 @@ export function provideTreeSpots(
   fn: (() => { x: number; z: number; s: number }[]) | null,
 ): void {
   state.treeSpots = fn;
+}
+
+/** Register the static-solids source (the World's obstacle list). Run 6. */
+export function provideObstacles(
+  fn: (() => { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[]) | null,
+): void {
+  state.obstacles = fn;
 }
 
 /** Register the sand-path network source (the World's route graph). W4.3. */
@@ -679,7 +741,9 @@ export function provideVehicle(
     grounded: boolean; clearance: number;
     speed: number; maxSpeed: number; turnRate: number;
     camDist: number; camHeight: number; fov: number; roll: number;
-    nearAnimal: boolean; dust: boolean; driverHidden: boolean;
+    yieldFor: string | null; brake: 'solid' | 'edge' | 'water' | 'dead-end' | 'animal' | null; dust: boolean; driverHidden: boolean;
+    /** run 6: what the keys / stick asked the jeep for last frame */
+    intent?: { throttle: number; steer: number };
   } | null) | null,
 ): void {
   state.vehicle = fn;
@@ -708,7 +772,7 @@ export function provideQuality(
 /** Register the RUN-3 P3.3 onboarding-hint state source (the explore HUD). Pass
  *  null to clear (F-06/F-15). */
 export function provideHint(
-  fn: (() => { active: 'walk' | 'tap' | 'boundary' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null) | null,
+  fn: (() => { active: 'walk' | 'tap' | 'boundary' | 'run' | null; walkSeen: boolean; tapSeen: boolean; helpChip: boolean } | null) | null,
 ): void {
   state.hint = fn;
 }
@@ -739,6 +803,8 @@ export function installDevHook(): boolean {
     clip: () => (state.clip ? state.clip() : null),
     avatar: () => (state.avatar ? state.avatar() : null),
     groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
+    motion: () => (state.motion ? state.motion() : null),
+    gait: () => (state.gait ? state.gait() : null),
     grounded: () => (state.grounded ? state.grounded() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),
@@ -752,6 +818,7 @@ export function installDevHook(): boolean {
     landmarks: () => (state.landmarks ? state.landmarks() : null),
     dressing: () => (state.dressing ? state.dressing() : null),
     treeSpots: () => (state.treeSpots ? state.treeSpots() : null),
+    obstacles: () => (state.obstacles ? state.obstacles() : null),
     paths: () => (state.paths ? state.paths() : null),
     groundDetail: () => (state.groundDetail ? state.groundDetail() : null),
     lighting: () => (state.lighting ? state.lighting() : null),

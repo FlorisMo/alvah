@@ -82,16 +82,12 @@ export async function loadRig(id: string): Promise<LoadedRig | null> {
 }
 
 /**
- * F-07: the world-space extent of a rig's SKELETON — the size that actually
- * renders. A skinned mesh is drawn by its bones, and on the ranger GLB the bones
- * are ~94× the mesh's own geometry units (mesh geometry ≈ 0.9, skeleton ≈ 85 in
- * armature-local space). `Box3.setFromObject` measures the bind-pose GEOMETRY
- * box, so it read 1.7 m for a skeleton that drove a ~170 m rendered giant — the
- * F-07 murk that filled the follow lens and was mis-graded "fixed" six times
- * (`avatar.height` = 1.7 was an F-18-class telemetry lie). Bone world positions
- * are pose-independent (they carry the scale, not the animation), so this reveals
- * the true render size at bind pose, on a detached clone, or live. Returns null
- * when `root` has no skinned mesh, so static props fall back to the geometry box.
+ * F-07: the world-space extent of a rig's SKELETON (its bone joints). Cheap (a few
+ * dozen bones), so the per-frame reads use it for WHERE a rig is: the camera's
+ * ranger centre, the pick hit-spheres. It is NOT how tall a rig is: the head above
+ * the top joint and the soles under the lowest one are left out (every rig drew
+ * 6-8 % taller than this box, run 6); `renderedBox` measures that. Returns null when
+ * `root` has no skinned mesh.
  */
 export function skinnedRenderBox(root: THREE.Object3D): THREE.Box3 | null {
   root.updateWorldMatrix(true, true);
@@ -109,32 +105,66 @@ export function skinnedRenderBox(root: THREE.Object3D): THREE.Box3 | null {
   return found && !box.isEmpty() ? box : null;
 }
 
+const _v = new THREE.Vector3();
+
 /**
- * Normalize a loaded group: scale so its tallest dimension ≈ targetHeight, and
- * drop it so its feet sit at y=0, centered on x/z. Returns the wrapper to place.
+ * The world-space box of what `root` DRAWS: every visible mesh, vertex by vertex, a
+ * skinned mesh with its bones applied (three's `getVertexPosition` skins each vertex,
+ * r184), a static mesh through its own transform. This is the size a screenshot shows,
+ * head, hooves, ears, tail and antlers included; hidden parts (a hind's antlers) are
+ * left out. Pose-dependent for a rig: measured on a fresh clone it is the bind pose
+ * (the stag's idle clip lowers his head 20 %, so a clip pose is no stable size).
+ * A few ms for a 22k-vertex rig, so it is for sizing and "how tall is it" reads, not
+ * for every frame. Empty when nothing visible is drawn.
+ */
+export function renderedBox(root: THREE.Object3D, target = new THREE.Box3()): THREE.Box3 {
+  // updateMatrixWorld, not updateWorldMatrix: only the former refreshes a skinned mesh's
+  // bindMatrixInverse, and a stale one scales every skinned vertex by the old transform
+  root.parent?.updateWorldMatrix(true, false);
+  root.updateMatrixWorld(true);
+  target.makeEmpty();
+  root.traverseVisible((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || (mesh as unknown as THREE.InstancedMesh).isInstancedMesh) return;
+    const pos = mesh.geometry?.getAttribute('position');
+    if (!pos) return;
+    for (let i = 0; i < pos.count; i++) {
+      mesh.getVertexPosition(i, _v).applyMatrix4(mesh.matrixWorld);
+      target.expandByPoint(_v);
+    }
+  });
+  return target;
+}
+
+/** A model's rendered height (m) as it stands now (`renderedBox`), or null when it
+ *  draws nothing. The one "how tall is it" read: the dev hook's avatar() and actors(),
+ *  the camera rails' head height, the title ranger. */
+export function renderedHeight(root: THREE.Object3D): number | null {
+  const h = renderedBox(root).getSize(_v).y;
+  return Number.isFinite(h) && h > 0 ? h : null;
+}
+
+/**
+ * Normalize a loaded group to `targetHeight` m of RENDERED height (`renderedBox`, so a
+ * rig's head and soles count: sized by its bones it drew 6-8 % taller than asked and
+ * stood 1.5-4 cm in the ground, run 6), its soles at y=0 and centred on x/z off the
+ * same box. Height is the y extent: a tail, ears or antlers count when they rise above
+ * the back. Returns the wrapper to place.
  */
 export function prepModel(group: THREE.Group, targetHeight: number): THREE.Group {
-  // F-07: a RIGGED GLB renders at the extent of its SKELETON, not its mesh
-  // geometry — so measure the bones (`skinnedRenderBox`), never the bind-pose
-  // `Box3.setFromObject` box, which read 1.7 m for a bone-driven ~170 m giant.
-  // Static props have no skeleton → null → the plain geometry box (correct AND
-  // pose-independent for them) keeps every non-rigged call site byte-identical.
-  group.updateWorldMatrix(true, true);
-  const skel = skinnedRenderBox(group);
-  const box = skel ?? new THREE.Box3().setFromObject(group);
-  const size = box.getSize(new THREE.Vector3());
-  const tallest = Math.max(size.y, 0.0001);
-  const scale = targetHeight / tallest;
-  group.scale.setScalar(scale);
+  const box = renderedBox(group);
+  const tall = box.max.y - box.min.y;
+  if (tall > 1e-6) group.scale.multiplyScalar(targetHeight / tall);
 
-  // recompute after scaling (skeleton for a rig, geometry for a prop), then drop
-  // the feet to y=0 and centre x/z off the SAME measure.
-  group.updateWorldMatrix(true, true);
-  const box2 = (skel && skinnedRenderBox(group)) || new THREE.Box3().setFromObject(group);
-  const center = box2.getCenter(new THREE.Vector3());
-  group.position.x -= center.x;
-  group.position.z -= center.z;
-  group.position.y -= box2.min.y;
+  // measure again after scaling (exact whatever a rig's bind mode), then stand it on
+  // its soles and centre x/z off the SAME measure
+  const box2 = renderedBox(group);
+  if (!box2.isEmpty()) {
+    const center = box2.getCenter(new THREE.Vector3());
+    group.position.x -= center.x;
+    group.position.z -= center.z;
+    group.position.y -= box2.min.y;
+  }
 
   group.traverse((o) => {
     const mesh = o as THREE.Mesh;

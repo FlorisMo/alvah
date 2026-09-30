@@ -8,8 +8,8 @@
 import type { World } from '../../render3d/World';
 import {
   providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot,
-  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideGrounded, provideCam,
-  provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, providePaths,
+  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGait, provideGrounded, provideCam,
+  provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, provideObstacles, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
   provideHeli, provideQuality, provideHint, provideBoundary,
 } from '../../core/devhook';
@@ -27,6 +27,8 @@ export function wireWorldDevhook(world: World): void {
   provideClip(() => world.playerClip());              // W3.2: the ranger's active locomotion clip
   provideAvatar(() => world.avatarState());           // F-07: live ranger scale (measured bbox height)
   provideGroundSpeed(() => world.groundSpeed());      // F-08: live post-collision foot speed (m/s)
+  provideMotion(() => world.rangerMotion());          // run 6: where he is, his heading, speed, running
+  provideGait(() => world.playerGait());              // run 6: his legs (clip, cadence, stride) + sole probe
   provideGrounded(() => world.groundedState());       // D1.2: feet on the rendered terrain
   provideCam(() => world.camState());                 // F-05 ⊕ F-18: the REAL render camera read-back
   provideActors(() => world.actorClips());            // W3.3: warden + poacher baked clips
@@ -34,6 +36,7 @@ export function wireWorldDevhook(world: World): void {
   provideLandmarks(() => world.landmarkPositions());  // W4.1: fixed landmark beacons
   provideDressing(() => world.dressingPositions());   // W4.2: nature dressing props
   provideTreeSpots(() => world.treeSpotList());       // D1.5: scatter+rim tree placements
+  provideObstacles(() => world.obstacleList());       // run 6: every static solid, as the jeep sees it
   providePaths(() => world.pathNetwork());            // W4.3: sand-path network
   provideGroundDetail(() => world.groundDetailState()); // W4.4: procedural ground albedo
   provideLighting(() => world.lightingState());       // W4.5: golden-hour light + shadows
@@ -58,6 +61,8 @@ export function clearWorldDevhook(): void {
   provideClip(null);
   provideAvatar(null);
   provideGroundSpeed(null);
+  provideMotion(null);
+  provideGait(null);
   provideGrounded(null);
   provideCam(null);
   provideActors(null);
@@ -65,6 +70,7 @@ export function clearWorldDevhook(): void {
   provideLandmarks(null);
   provideDressing(null);
   provideTreeSpots(null);
+  provideObstacles(null);
   providePaths(null);
   provideGroundDetail(null);
   provideLighting(null);

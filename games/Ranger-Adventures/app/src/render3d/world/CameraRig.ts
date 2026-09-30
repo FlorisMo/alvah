@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { dampFactor } from '../play/kit-math';
 import { dampedYaw, wrapAngle, FIXED_FOLLOW_YAW, FOLLOW_TAU, FOLLOW_MAX_RATE } from '../FollowCam';
 import { livePolicy } from '../MotionMode';
+import { WALK_SPEED } from '../../core/input';
 import { segmentEntry, segmentCrosses, obstacleGap, obstacleSpan, type MoveLimits, type Obstacle } from '../CharacterController';
 import type { Terrain } from './Terrain';
 import { TREE_BASE_H, type Dressing } from './Dressing';
@@ -40,6 +41,10 @@ export interface CameraRigHost {
    *  roaming animals): `visit` gets its feet and its height. The view keeps them out of
    *  the line to the ranger. (A visitor, so the per-frame search allocates nothing.) */
   creatures(visit: (x: number, y: number, z: number, h: number) => void): void;
+  /** Run 6: what the jeep's chase lens keeps out of besides the solids: the parked
+   *  helicopter's whole reach (its rotor overhangs the body circles it collides with).
+   *  `visit` gets a centre and a radius; it must not allocate. */
+  lensKeepOut(visit: (x: number, z: number, r: number) => void): void;
 }
 
 /** A creature standing on the ground: its feet and its height (m). */
@@ -116,6 +121,9 @@ export class CameraRig {
   private readonly BOOM_AHEAD = [1 / 3, 2 / 3, 1]; // …and the boom, at these shares of it
   private readonly _probe = new THREE.Vector3();
   private wasWalk = true;
+  private lastBearing = 0;                   // the chase bearing last frame (its swing rate)
+  private readonly KEEP_OUT_LEAD = 0.6;      // s: the jeep lens looks this far ahead along its swing…
+  private readonly KEEP_OUT_LEAD_MAX = 0.6;  // rad: …at most this far round
   private readonly HUG_ANGLE = (60 * Math.PI) / 180;
   // The view never tips down steeper than this (child B4, parent B4: a lens craned up
   // over his head showed only his hair). With no room behind him the lens comes in close,
@@ -481,6 +489,13 @@ export class CameraRig {
       this.gatherNear(rp.x, rp.z, off.z + 4);
       const b0 = this.bearing();
       const ux = -Math.sin(b0), uz = -Math.cos(b0);
+      // how fast the boom swings round (a standing jeep pivots at ~0.6 rad/s): the lens
+      // starts in before a keep-out disc it is swinging toward, so it eases in rather than
+      // stepping in once the line touches it
+      const swing = this.wasWalk || snap || first || !(dt > 0) ? 0 : wrapAngle(b0 - this.lastBearing) / dt;
+      this.lastBearing = b0;
+      const lead = Math.max(-this.KEEP_OUT_LEAD_MAX, Math.min(this.KEEP_OUT_LEAD_MAX, swing * this.KEEP_OUT_LEAD));
+      const vx = -Math.sin(b0 + lead), vz = -Math.cos(b0 + lead);
       // the jeep's chase lens stays inside the lens ring at the rim (among the first rim
       // trees at most, which fade), and its boom pulls in before a hut / prop / person
       // behind it instead of burying the lens in that solid (its own collision circle is
@@ -490,10 +505,13 @@ export class CameraRig {
       let min = this.HELI_MIN_BOOM;
       if (inVehicle) {
         frac = Math.min(this.rimFraction(rp.x, rp.z, ux * dist, uz * dist),
-          this.boomClearFraction(rp.x, rp.z, ux * dist, uz * dist, this.CAM_PROBE_R, true, true));
+          this.boomClearFraction(rp.x, rp.z, ux * dist, uz * dist, this.CAM_PROBE_R, true, true),
+          this.keepOutFraction(rp.x, rp.z, ux * dist, uz * dist, this.CAM_PROBE_R),
+          this.keepOutFraction(rp.x, rp.z, vx * dist, vz * dist, this.CAM_PROBE_R));
         min = JEEP_COLLIDE + this.camera.near + 0.3;
         const len = Math.max(dist, this.boomNow);
-        wall = Math.max(min, len * this.boomClearFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE, true, true));
+        wall = Math.max(min, len * Math.min(this.boomClearFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE, true, true),
+          this.keepOutFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE)));
       }
       dist = Math.max(Math.min(min, dist), dist * frac);
       // a shorter boom keeps the chase's pitch (never a dive onto the roof), above the roof
@@ -526,7 +544,11 @@ export class CameraRig {
       }
       this.extOff.set(0, 0, 0);
     } else {
-      this.pivot.lerp(rp, dampFactor(dt, walk ? this.PIVOT_TAU : this.PIVOT_TAU_VEHICLE));
+      // run 6: running, the pivot trails him by the same ~0.33 m as walking (its smooth-time
+      // shortens as his pace passes a walk), so a run never shrinks him on screen
+      const pace = this.player.pace;
+      const pivotTau = !walk ? this.PIVOT_TAU_VEHICLE : pace > WALK_SPEED ? (this.PIVOT_TAU * WALK_SPEED) / pace : this.PIVOT_TAU;
+      this.pivot.lerp(rp, dampFactor(dt, pivotTau));
       this.boomNow += (dist - this.boomNow) * dampFactor(dt, dist < this.boomNow ? this.BOOM_IN_TAU : this.BOOM_OUT_TAU);
       if (this.boomNow > wall) {
         // a wall the look-ahead did not see coming: the lens never goes into it; it comes
@@ -915,6 +937,25 @@ export class CameraRig {
       if (t < best) best = t;
     }
     return best;
+  }
+
+  // keepOutFraction's cast, kept in fields so its visitor is bound once (no garbage)
+  private readonly koDisc: Obstacle = { x: 0, z: 0, r: 0 };
+  private koOx = 0; private koOz = 0; private koDx = 0; private koDz = 0; private koProbe = 0; private koBest = 1;
+  private readonly visitKeepOut = (x: number, z: number, r: number): void => {
+    const o = this.koDisc;
+    o.x = x; o.z = z; o.r = r;
+    const t = segmentEntry(o, this.koOx, this.koOz, this.koDx, this.koDz, this.koProbe);
+    if (t < this.koBest) this.koBest = t;
+  };
+
+  /** boomClearFraction for the host's keep-out discs (`lensKeepOut`: the parked
+   *  helicopter's reach): 1 = the boom stays out of every one. */
+  private keepOutFraction(ox: number, oz: number, dx: number, dz: number, probe: number): number {
+    if (dx * dx + dz * dz < 1e-6) return 1;
+    this.koOx = ox; this.koOz = oz; this.koDx = dx; this.koDz = dz; this.koProbe = probe; this.koBest = 1;
+    this.host.lensKeepOut(this.visitKeepOut);
+    return this.koBest;
   }
 
   /**

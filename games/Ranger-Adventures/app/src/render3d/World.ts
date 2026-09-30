@@ -25,14 +25,14 @@
 import * as THREE from 'three';
 import { prefersReducedMotion } from '../core/reduced-motion';
 import { livePolicy } from './MotionMode';
-import { VEN_CENTER, WATER_LEVEL, type Biome } from './Biomes';
+import { VEN_CENTER, VEN_WATER_R, WATER_LEVEL, type Biome } from './Biomes';
 import { Terrain } from './world/Terrain';
 import { Sky } from './world/Sky';
 import { Labels } from './world/Labels';
 import { Dressing } from './world/Dressing';
 import { Fauna } from './world/Fauna';
 import { Markers, type WorldMarker } from './world/Markers';
-import { Vehicles } from './world/Vehicles';
+import { Vehicles, MARKER_R, PAD_RADIUS } from './world/Vehicles';
 import { Player, type TapTarget } from './world/Player';
 import { CameraRig } from './world/CameraRig';
 import { DevReadback } from './world/DevReadback';
@@ -44,7 +44,8 @@ import { store } from '../core/state';
 import type { CamState } from '../core/devhook';
 import { FpsProbe, nextTier, bootTier, coarsePointer, lightMode, pixelRatioFor, QUALITY_TIERS, type QualityTier } from '../core/quality';
 import type { WayCue } from './Wayfinding';
-import type { WorldCtx } from './play/types';
+import type { RangerMotion, WorldCtx } from './play/types';
+import type { RangerRead, Threats } from '../core/wildlife';
 import { spawnModel, spawnPlant, heightFor } from './play/spawn';
 import { cachedResource } from './Models';
 import { Progress } from './world/Progress';
@@ -161,12 +162,17 @@ export class World {
     // tree-line, resolveMove clamp, RIM_EASE/HINT bands, the camera rim clamp,
     // boundaryState), so this one value moves the whole edge in together.
     bound: 75,                                   // ground plane is 240² → trees at ~76 land on it
-    // off-limits = the submerged ven only (inside the water disc AND below the
-    // surface) — NOT a global height test, so dry relief troughs stay walkable.
+    // off-limits = the submerged ven only (inside the drawn water disc AND below the
+    // surface) — NOT a global height test, so dry relief troughs stay walkable. (Run 6: the
+    // test used an 18 m disc under the 20 m drawn one, so south of the ven, where the basin
+    // stays under the surface out to 20 m, a jeep drove into water it could see.)
     blocked: (x, z) => {
       const dx = x - VEN_CENTER.x, dz = z - VEN_CENTER.z;
-      return dx * dx + dz * dz < 18 * 18 && this.terrain.y(x, z) < WATER_LEVEL + 0.15;
+      return dx * dx + dz * dz < VEN_WATER_R * VEN_WATER_R && this.terrain.y(x, z) < WATER_LEVEL + 0.15;
     },
+    // whether any of that water lies within r of (x, z): the jeep's look for the ven's
+    // shore is skipped everywhere else
+    wetWithin: (x, z, r) => Math.hypot(x - VEN_CENTER.x, z - VEN_CENTER.z) < VEN_WATER_R + r,
   };
 
   constructor(
@@ -191,7 +197,15 @@ export class World {
     this.dressing = new Dressing({
       scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits, labels: this.labels,
     });
-    this.fauna = new Fauna({ scene: this.scene, terrain: this.terrain });
+    // the roaming animals slide round the world's solids and keep off the mission markers'
+    // ground and the helipads (run 6: they see the jeep and the ranger coming)
+    this.fauna = new Fauna({
+      scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, limits: this.limits,
+      zones: (visit) => {
+        for (const m of this.pois.list) visit(m.pos.x, m.pos.z, MARKER_R);
+        for (const p of this.vehicles.pads()) visit(p.x, p.z, PAD_RADIUS + 0.3);
+      },
+    });
     this.pois = new Markers(
       { scene: this.scene, terrain: this.terrain, obstacles: this.obstacles, labels: this.labels, limits: this.limits },
       { onApproach, onInteract, onWayfind }, activeId,
@@ -206,6 +220,7 @@ export class World {
         orbitDrag: (dx, dy) => this.cam.orbitDrag(dx, dy),
         tapTargets: () => this.tapTargets(),
         crossBiome: (here) => this.crossBiome(here),
+        movers: (visit) => this.fauna.visitRoamers(visit), // he walks round the roaming animals (run 6)
       },
     );
     this.vehicles = new Vehicles(
@@ -215,15 +230,17 @@ export class World {
         seat: (seated) => this.player.rig.setSeated(seated),
         stopWalk: (x, z) => { this.player.target.set(x, 0, z); this.player.groundSpeedNow = 0; },
         intent: () => (this.menuOpen() ? { x: 0, y: 0 } : this.player.intent()),
+        controls: () => (this.menuOpen() ? { keys: null, stick: null } : this.player.controls()),
         follow: (yaw, snap) => { this.cam.followTargetYaw = yaw; if (snap) this.cam.followYaw = yaw; },
         recut: () => this.cam.place(true, 0, livePolicy().reduced),
         clearWalkPrompts: () => this.pois.clearForVehicle(),
         crossBiome: (here) => this.crossBiome(here),
-        nearestAnimalDist: (x, z) => this.fauna.nearestAnimalDist(x, z),
         camOffsets: () => ({ walk: this.cam.camOffset, vehicle: this.cam.camOffsetVehicle, heli: this.cam.camOffsetHeli }),
-        movers: (visit) => { // every frame: no allocation (review PERF-2)
-          for (const a of this.fauna.scenicActors) visit(a.group.position.x, a.group.position.z, 'person', a.height);
-          for (const a of this.fauna.ambient) if (a.id.startsWith('animal-')) visit(a.group.position.x, a.group.position.z, 'animal', a.h);
+        people: (visit) => { // every frame: no allocation (review PERF-2)
+          for (const a of this.fauna.scenicActors) visit(a.group.position.x, a.group.position.z);
+        },
+        animals: (visit) => { // the roaming ground animals (the birds glide overhead)
+          for (const a of this.fauna.ambient) if (a.wander) visit(a.id, a.group.position.x, a.group.position.z);
         },
         markers: () => this.pois.list,
       },
@@ -235,6 +252,7 @@ export class World {
         mode: () => ({ inVehicle: this.vehicles.inVehicle, inHeli: this.vehicles.inHeli }),
         inputBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
         afterPlace: () => this.pois.fadeRings(this.camera),
+        lensKeepOut: (visit) => this.vehicles.visitHeliReach(visit), // run 6: the parked heli's rotor
         creatures: (visit) => { // what stands on the ground, for the clear view (marker animals ~1 m, as the dev hook reads them)
           for (const m of this.pois.list) { const p = m.group.position; visit(p.x, p.y, p.z, 1.0); }
           for (const a of this.fauna.scenicActors) { const p = a.group.position; visit(p.x, p.y, p.z, a.height); }
@@ -459,6 +477,17 @@ export class World {
     return this.player.groundSpeed();
   }
 
+  /** Dev-hook accessor (run 6): the ranger's gait and his soles (the foot-slip probe). */
+  playerGait(): ReturnType<Player['gait']> {
+    return this.player.gait();
+  }
+
+  /** How the ranger moves right now: where he stands, his heading, his ground speed
+   *  (m/s) and whether he runs. Live; the missions' animals and the dev hook read it. */
+  rangerMotion(): RangerMotion {
+    return this.player.motion();
+  }
+
   /** Dev-hook accessor (F-07): the player ranger's live rendered height (m). */
   avatarState(): { height: number } | null {
     return this.player.avatarState();
@@ -487,9 +516,11 @@ export class World {
   }
 
   /** Register the on-screen joystick's live-vector source (W1.3). The HUD wires
-   *  it on world entry; pass null to clear. Fused with held keys each frame. */
-  setJoystick(source: (() => StickVector | null) | null): void {
+   *  it on world entry; pass null to clear. Fused with held keys each frame. `onRun`
+   *  hears whether the stick has him running (its ring shows it, run 6). */
+  setJoystick(source: (() => StickVector | null) | null, onRun: ((running: boolean) => void) | null = null): void {
     this.player.joystickSource = source;
+    this.player.stickRunFeedback = onRun;
   }
 
   /** Register the "Camera draait mee" setting source (W1.5). Read live each frame
@@ -579,13 +610,18 @@ export class World {
   }
 
   /** Dev-hook accessor (W3.6): each ambient creature's id + live world x/z + height + clip. */
-  ambientState(): { id: string; x: number; z: number; h: number; clip: { name: string; time: number } | null }[] {
+  ambientState(): ReturnType<Fauna['ambientState']> {
     return this.fauna.ambientState();
   }
 
   /** Dev-hook accessor (W4.1): every landmark's id + world x/z. */
   landmarkPositions(): { id: string; x: number; z: number }[] {
     return this.dressing.landmarkPositions();
+  }
+
+  /** Every static solid (dev hook, run 6): circles and the buildings' real footprints. */
+  obstacleList(): { x: number; z: number; r: number; box?: { hx: number; hz: number; rot: number; pad: number } }[] {
+    return this.obstacles.map((o) => (o.box ? { x: o.x, z: o.z, r: o.r, box: { ...o.box } } : { x: o.x, z: o.z, r: o.r }));
   }
 
   /** Dev-hook accessor (D1.5): the scatter + rim tree placements (world x/z + scale). */
@@ -670,12 +706,15 @@ export class World {
     this.pois.animate(t, dt, reduced); // each mission marker's animal (secondary motion)
     this.progress.update(t, dt, reduced, this.camera, this.activityActive); // finished tableaus: reunion walks, idle breathing
 
-    this.fauna.update(t, dt, reduced, this.camera); // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds
+    // W3.3 warden + poacher clips, W3.6 roaming animals + gliding birds; run 6: the roamers
+    // see the ranger on foot and a driven jeep coming
+    this.fauna.update(t, dt, reduced, this.camera, this.threats(dt));
 
-    // W3.2: the ranger's own locomotion animation. Locomotion is reduced-motion
-    // EXEMPT (§3.4) so the mixer always advances with real dt — a walking ranger
-    // animates in both motion modes; only the procedural-bob fallback holds still.
-    this.player.rig.update(dt, this.player.groundSpeedNow, reduced);
+    // W3.2: the ranger's own locomotion animation (and his footsteps, on his feet).
+    // Locomotion is reduced-motion EXEMPT (§3.4) so the mixer always advances with real
+    // dt — a walking ranger animates in both motion modes; only the procedural-bob
+    // fallback holds still.
+    this.player.animate(dt, reduced);
 
     // W7.2: measure fps and step the quality tier down/up with hysteresis.
     this.probeQuality(dt);
@@ -713,6 +752,32 @@ export class World {
     this.cam.place(reduced, dt, reduced);
   }
 
+  // Run 6 (wildlife): what the roaming animals react to, rebuilt each frame in reused objects.
+  private readonly threatNow: Threats = { ranger: null, jeep: null };
+  private readonly rangerNow: RangerRead = { x: 0, z: 0, heading: 0, speed: 0, running: false };
+  private rangerLast = { x: Number.NaN, z: Number.NaN };
+  /** The ranger on foot (his real velocity this frame: backing up and tap-walks included;
+   *  a cut such as a mission's step-in is no speed) and the jeep while someone drives it. */
+  private threats(dt: number): Threats {
+    const th = this.threatNow;
+    const rp = this.ranger.position;
+    const last = this.rangerLast;
+    if (!this.vehicles.inVehicle && !this.vehicles.inHeli) {
+      const r = this.rangerNow;
+      const vx = Number.isNaN(last.x) || dt <= 0 ? 0 : (rp.x - last.x) / dt;
+      const vz = Number.isNaN(last.z) || dt <= 0 ? 0 : (rp.z - last.z) / dt;
+      const sp = Math.hypot(vx, vz);
+      r.x = rp.x; r.z = rp.z;
+      r.speed = sp > 8 ? 0 : sp;
+      r.heading = r.speed > 0.05 ? Math.atan2(vx, vz) : this.ranger.rotation.y;
+      r.running = this.player.rig.running;
+      th.ranger = r;
+    } else th.ranger = null;
+    last.x = rp.x; last.z = rp.z;
+    th.jeep = this.vehicles.jeepThreat();
+    return th;
+  }
+
   // ctx() (below) reads the ranger's position straight off the World.
   private get ranger(): THREE.Group { return this.player.group; }
   // ctx() (below) reads the marker list and the nearest marker straight off the World.
@@ -742,6 +807,7 @@ export class World {
       groundY: (x, z) => this.groundSnapY(x, z),
       isClear: (x, z, r) => this.playClear(x, z, r),
       player: { x: this.ranger.position.x, z: this.ranger.position.z, yaw: this.ranger.rotation.y },
+      rangerMotion: () => this.player.motion(),
       setFocus: (x, y, z) => { this.activityFocus = { x, y, z }; },
       spawnModel,
       spawnPlant,
