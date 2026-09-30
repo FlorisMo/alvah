@@ -21,6 +21,10 @@ import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
  * board.spec / interact.spec (the follow-cam rotates, so each tick maps the
  * desired WORLD direction back into screen keys via the inverse of
  * `resolveInput`'s rotation).
+ *
+ * Run 6: De verdwaalde frisling, Het reekalf, De wildcamera and De verstopte nootjes play
+ * as in-world adventures (their own real-input tests: golden, missions.spec); `winStep()`
+ * resolves the classic in-place steps, so this spec plays classic missions.
  */
 
 interface Hook {
@@ -144,7 +148,7 @@ test('chain: two world-first missions back to back, no lodge visit, both 3D + pe
 
   // ---- MISSION 1: a full zoeken-mission (zoeken + dagnacht) from the hub ----
   await walkToBoard(page);
-  await startMissionFromBoard(page, 'ree-niet-aanraken');
+  await startMissionFromBoard(page, 'ven'); // De kikker in het ven: zoeken + dagnacht
   await completeMissionInPlace(page);
   await shot(page, 'chain-mission1-reward');
   await returnToPatrol(page);
@@ -156,7 +160,7 @@ test('chain: two world-first missions back to back, no lodge visit, both 3D + pe
 
   // ---- MISSION 2: walk back to the hub and start a second mission in-place ----
   await walkToBoard(page);
-  await startMissionFromBoard(page, 'frisling');
+  await startMissionFromBoard(page, 'stuifzand'); // Het stille zand: zoeken first
   await expect
     .poll(() => hook(page, (r) => r.missionView), { timeout: 20_000, message: 'second mission resolves 3D' })
     .toBe('3d');

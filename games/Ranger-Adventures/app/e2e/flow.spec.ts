@@ -116,12 +116,20 @@ async function followChip(page: Page, target: string, timeout = 90_000): Promise
   return { arrived, changes: Math.max(0, words.length - 1), away, words };
 }
 
-/** Play the running mission's steps with real clicks until it is marked done. */
+/** Play the running mission's steps with real clicks until it is marked done. An
+ *  adventure (run 6) also walks: to its walk hint with the arrow keys, and its action
+ *  in the world is a button. */
 async function playToTheEnd(page: Page, id: string): Promise<void> {
   const mission = byId(id);
   const t0 = Date.now();
-  while (!(await save(page))?.voltooid[id] && Date.now() - t0 < 4 * 60_000) {
+  while (!(await save(page))?.voltooid[id] && Date.now() - t0 < 6 * 60_000) {
     const h = await R<Hint | null>(page, 'r.playHint()');
+    if (h?.walk) {
+      await walkTo(page, { x: h.walk.x, z: h.walk.z }, {
+        stopDist: h.walk.r, timeout: 60_000, stopWhen: async () => (await R<Hint | null>(page, 'r.playHint()'))?.id !== h.id,
+      });
+      continue;
+    }
     if (h?.onScreen) {
       let s = h;
       for (let i = 0; i < 12; i++) { // let a camera move settle
@@ -142,6 +150,8 @@ async function playToTheEnd(page: Page, id: string): Promise<void> {
     }
     const card = page.getByRole('button', { name: /^(Verder|Klaar)$/ }).filter({ visible: true }).first();
     if (await card.isVisible().catch(() => false)) { await card.click(); await sleep(page, 400); continue; }
+    const act = page.locator('.adv-action').filter({ visible: true }).first(); // an adventure's action in the world
+    if (await act.isVisible().catch(() => false)) { await act.click().catch(() => {}); await sleep(page, 400); continue; }
     await sleep(page, 250);
   }
   expect(!!(await save(page))?.voltooid[id], `the mission "${id}" was never won`).toBe(true);
@@ -205,9 +215,12 @@ test('Stop de missie keeps the marker; the replay is won, Enter walks on, the ch
   await page.getByRole('button', { name: 'Ga op pad' }).click();
   await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 15_000 }).not.toBeNull();
   await playToTheEnd(page, 'frisling');
-  // only Enter from the reward on: it always moves on, never a dead end (child B7)
+  // only Enter from the reward on: it always moves on, never a dead end (child B7). Run 6:
+  // the adventure plays on a little after it is won (the reunion, a last fact, a look at
+  // the cut fence), so Enter is pressed for as long as that takes, not a fixed ten times
   let presses = 0;
-  while (presses < 10) {
+  const tEnter = Date.now();
+  while (Date.now() - tEnter < 60_000) {
     if ((await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null
       && await page.locator('.explore-hud').isVisible().catch(() => false)) break;
     await page.keyboard.press('Enter');
@@ -220,7 +233,9 @@ test('Stop de missie keeps the marker; the replay is won, Enter walks on, the ch
   expect(c?.cue ?? '', 'the chip waits for a step before it points').not.toContain('zoek het spoor');
   expect(c?.cue ?? '').toMatch(/ m$|je bent er/);
   await shot(page, 'back-in-world');
-  // the big button leads on; playing it again is a quiet choice (child B6)
+  // the big button leads on; playing it again is a quiet choice (child B6). Run 6: the
+  // frisling's adventure ends at the family's wallow, so he walks back to its marker first
+  await walkTo(page, marker, { stopDist: 1.5, until: (s) => s.near === 'frisling' });
   const next = page.locator('.explore-prompt .btn-start');
   await expect(next).toHaveText(/Volgende: Het reekalf in het gras/);
   await expect(page.locator('.explore-prompt .explore-replay')).not.toHaveClass(/btn-start/);

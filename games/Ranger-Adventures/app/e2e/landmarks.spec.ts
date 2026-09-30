@@ -98,7 +98,11 @@ test('landmarks: the ranger walks spawn→watchtower, draw calls stay < 150', as
   expect(startDist, 'watchtower is a real walk from spawn').toBeGreaterThan(20);
   await shot(page, 'landmarks-at-spawn');
 
-  // walk to the watchtower — arrive within ~4 m (its collision radius is 1.8 m).
+  // walk to the watchtower — arrive within ~4 m (its collision radius is 1.8 m). It stands
+  // on the ven's north-west shore, so like a child he goes round the water: first to the
+  // dry heath west of the tower (the straight line from the spawn ends in the ven when the
+  // run starts him facing the forest, run 6), then up to it
+  await walkTo(page, tower.x - 11, tower.z - 5, 3);
   const endDist = await walkTo(page, tower.x, tower.z, 4);
   await shot(page, 'landmarks-at-watchtower');
   expect(endDist, 'ranger reached the watchtower').toBeLessThanOrEqual(4);

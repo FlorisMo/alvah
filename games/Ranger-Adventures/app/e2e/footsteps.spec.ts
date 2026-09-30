@@ -120,11 +120,13 @@ test('footsteps: they follow his feet and quicken when he runs', async ({ page }
   };
   await page.keyboard.down('ArrowUp');
   try {
+    // 4 s windows: a footstep count is whole, and over 2 s one step more or less moved the
+    // rate by 0.5/s, as much as the difference being measured (walk 3.6/s, run 4.5/s)
     await page.waitForTimeout(700);
-    const walk = await rate(2000);
+    const walk = await rate(4000);
     await page.keyboard.down('Shift');
     await page.waitForTimeout(700);
-    const run = await rate(2000);
+    const run = await rate(4000);
     testInfo.annotations.push({ type: 'footsteps', description: `walk ${walk.perS.toFixed(2)}/s (legs ${walk.cadence.toFixed(2)}), run ${run.perS.toFixed(2)}/s (legs ${run.cadence.toFixed(2)})` });
     expect(Math.abs(walk.perS - walk.cadence), `walking footsteps (${walk.perS.toFixed(2)}/s) follow the legs (${walk.cadence.toFixed(2)}/s)`).toBeLessThan(0.8);
     expect(Math.abs(run.perS - run.cadence), `running footsteps (${run.perS.toFixed(2)}/s) follow the legs (${run.cadence.toFixed(2)}/s)`).toBeLessThan(0.8);

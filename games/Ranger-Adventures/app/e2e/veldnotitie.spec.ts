@@ -4,7 +4,7 @@ import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 /**
  * W6.3b — the collectible veldnotitie. Playing a mission IN THE WORLD pins each
  * "Wist je dat"-fact as a veldnotitie on the case-board (prikbord), persisted in
- * the ranger namespace. This walks the frisling mission from its marker, plays
+ * the ranger namespace. This walks the ven mission from its marker, plays
  * it (its fact beats collect the notes), returns to patrol, then opens the
  * prikbord from the pause hub and asserts a collected veldnotitie is pinned —
  * with its real fact text and a non-zero count — and that it round-tripped to
@@ -13,6 +13,10 @@ import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
  * Navigation + step-winning reuse the proven friction/W6.1 marker path; the
  * dev-only `__ranger.winStep()` hook drives each variant's genuine resolve path,
  * so only input modality is shortcut, never runtime state.
+ *
+ * Run 6: De verdwaalde frisling plays as an in-world adventure (real-input tests: golden,
+ * missions.spec); `winStep()` resolves the classic in-place steps, so this plays De kikker
+ * in het ven.
  */
 
 interface Hook {
@@ -96,7 +100,7 @@ async function playToReward(page: Page): Promise<void> {
 }
 
 /** From the reward card, return to the open plek (handling the wildcamera-capture
- *  + world-beat detours frisling's verhaalHaak triggers). */
+ *  + world-beat detours a verhaalHaak mission triggers). */
 async function returnToPatrol(page: Page): Promise<void> {
   await expect(page.locator('.reward')).toBeVisible();
   const patrol = page.getByRole('button', { name: 'Verder op patrouille' });
@@ -115,8 +119,8 @@ test('veldnotitie: an in-world fact is pinned to the prikbord and persisted', as
   collectPageErrors(page, errors);
 
   await enterWorld(page);
-  await walkToMarker(page, 'frisling');
-  await startFromMarker(page, 'frisling');
+  await walkToMarker(page, 'ven');
+  await startFromMarker(page, 'ven');
   await playToReward(page);
   await returnToPatrol(page);
 

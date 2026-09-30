@@ -4,14 +4,18 @@ import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
 /**
  * W6.3a — the biology beat between two steps, and who tells it (run 6). Before a
  * raaf has been rescued nobody pretends one talks to you: the card says "Wist je
- * dat? · 1/3". Rescued and named in the hut (Pauze → "Help de jonge raaf"), the raaf
- * tells it: `.fact--raaf`, kicker "Kroa vertelt · 1/3", the fact read aloud.
+ * dat? · 1/2". Rescued and named in the hut (Pauze → "Help de jonge raaf"), the raaf
+ * tells it: `.fact--raaf`, kicker "Kroa vertelt · 1/2", the fact read aloud.
  *
- * Navigation reuses the proven friction/W6.1 marker path: walk to the frisling
- * marker, open the veldnotitie with Space, play in place. frisling carries fact
- * beats between its beats (biggetjes-pyjama, zwijn-reukzin). Winning steps uses
+ * Navigation reuses the proven friction/W6.1 marker path: walk to the ven
+ * marker, open the veldnotitie with Space, play in place. ven carries fact
+ * beats between its beats. Winning steps uses
  * the dev-only `__ranger.winStep()` hook — the variant runs its OWN genuine
  * resolve path, so only input modality is shortcut, never runtime state.
+ *
+ * Run 6: De verdwaalde frisling plays as an in-world adventure (real-input tests: golden,
+ * missions.spec); `winStep()` resolves the classic in-place steps, so this plays De kikker
+ * in het ven, which carries a fact beat after each of its two steps.
  */
 
 interface Hook {
@@ -113,15 +117,15 @@ test('raaf fact: "Wist je dat?" until the raaf is rescued, then the raaf tells i
   collectPageErrors(page, errors);
 
   await enterWorld(page);
-  await walkToMarker(page, 'frisling');
-  await startFromMarker(page, 'frisling');
+  await walkToMarker(page, 'ven');
+  await startFromMarker(page, 'ven');
   await expect
     .poll(() => hook(page, (r) => r.missionView), { timeout: 20_000, message: 'mission resolves 3D in-place' })
     .toBe('3d');
 
   // no raaf yet: a plain "Wist je dat?" card, no raaf frame
   await firstFact(page);
-  await expect(page.locator('.fact .boot-kicker')).toHaveText('Wist je dat? · 1/3');
+  await expect(page.locator('.fact .boot-kicker')).toHaveText('Wist je dat? · 1/2');
   await expect(page.locator('.fact--raaf')).toHaveCount(0);
   await shot(page, 'fact-wist-je-dat');
   await finishMission(page);
@@ -135,12 +139,12 @@ test('raaf fact: "Wist je dat?" until the raaf is rescued, then the raaf tells i
   await expect(page.locator('.explore-hud')).toBeVisible();
 
   // play it again at the marker: now Kroa tells the fact
-  await page.getByRole('button', { name: /Speel nog eens: De verdwaalde frisling/ }).click();
+  await page.getByRole('button', { name: /Speel nog eens: De kikker in het ven/ }).click();
   await page.getByRole('button', { name: 'Ga op pad' }).click();
   await firstFact(page);
   const raafFact = page.locator('.fact--raaf');
   await expect(raafFact).toBeVisible();
-  await expect(raafFact.locator('.boot-kicker')).toHaveText('Kroa vertelt · 1/3');
+  await expect(raafFact.locator('.boot-kicker')).toHaveText('Kroa vertelt · 1/2');
   const factText = (await raafFact.locator('.fact-text').textContent())?.trim() ?? '';
   expect(factText.length, 'the raaf speaks a real fact').toBeGreaterThan(10);
   await shot(page, 'raaf-fact');

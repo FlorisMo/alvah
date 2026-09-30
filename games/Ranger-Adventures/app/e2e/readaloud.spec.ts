@@ -108,14 +108,30 @@ test('menus read aloud, the maker shows every choice, Enter presses Verder after
   const afterClick = await spoken(page);
   expect(afterClick.length, `only the briefing is said after the click, got ${JSON.stringify(afterClick)}`).toBe(1);
   await page.getByRole('button', { name: 'Ga op pad' }).click();
+  // run 6: the frisling is an adventure in the world: he walks after the squeak (a walk
+  // hint: the arrow keys) until the search offers the piglet to click
   let hint: Hint | null = null;
-  await expect.poll(async () => (hint = await R<Hint | null>(page, 'r.playHint()')) !== null, { timeout: 30_000, message: 'the zoeken game offers a target' }).toBe(true);
+  const t0 = Date.now();
+  while (Date.now() - t0 < 90_000) {
+    hint = await R<Hint | null>(page, 'r.playHint()');
+    if (hint?.walk) {
+      const id = hint.id;
+      await walkTo(page, { x: hint.walk.x, z: hint.walk.z }, { stopDist: hint.walk.r, timeout: 60_000, stopWhen: async () => (await R<Hint | null>(page, 'r.playHint()'))?.id !== id });
+      continue;
+    }
+    if (hint?.onScreen) break;
+    await sleep(page, 250);
+  }
+  expect(hint?.onScreen && !hint.walk, 'the search offers the piglet to click').toBe(true);
   await sleep(page, 800);
   hint = await R<Hint | null>(page, 'r.playHint()');
+  await clearSpoken(page);
   await page.mouse.click(hint!.x, hint!.y);
-  const verder = page.locator('.zoeken-found .p3-btn');
-  await expect(verder, 'the find card').toBeVisible({ timeout: 5_000 });
-  await said(page, 'Daar is hij', 'the find card is read aloud');
+  await said(page, 'Daar is hij', 'the find is read aloud');
+  // the fact after the find: its "Verder" is the screen's primary, so Enter presses it
+  // even though the last thing he did was click the world (FLOW keys.ts)
+  const verder = page.locator('.fact .btn-start');
+  await expect(verder, 'the fact card after the find').toBeVisible({ timeout: 15_000 });
   await page.keyboard.press('Enter');
   await expect(verder, 'Enter pressed "Verder"').toBeHidden({ timeout: 5_000 });
 });

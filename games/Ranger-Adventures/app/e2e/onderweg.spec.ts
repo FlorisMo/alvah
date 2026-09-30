@@ -51,6 +51,12 @@ const lit = (page: Page): Promise<string | null> => page.evaluate(() => {
  *  way on. `again`: "Speel nog eens" (the quiet chip under "Volgende: …"). */
 async function playFirst(page: Page, again: boolean): Promise<void> {
   const titel = FIRST.titel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (again) {
+    // run 6: the frisling's adventure ends at the family's wallow, a few steps from its
+    // marker: he walks back to the marker to play it again
+    const m = (await R<(P2 & { missionId: string })[]>(page, 'r.markers()')).find((x) => x.missionId === FIRST.id)!;
+    await walkTo(page, m, { stopDist: 1.5, timeout: 60_000, until: (sn) => sn.near === FIRST.id });
+  }
   await page.getByRole('button', { name: new RegExp(`${again ? 'Speel nog eens' : 'Speel mee'}: ${titel}`) }).click({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Ga op pad' }).click({ timeout: 15_000 });
   await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 15_000 }).not.toBeNull();

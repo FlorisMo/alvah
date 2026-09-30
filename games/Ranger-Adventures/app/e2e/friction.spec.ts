@@ -6,9 +6,11 @@ import { walkTo } from './golden-lib';
  * In-world mission friction audit (WORLD-PLAN W6.1). Walks the ranger to a real
  * world MARKER, opens the veldnotitie with the interact key (Space — the laptop
  * twin of tapping "Speel mee"), and plays the mission through EVERY beat in
- * place, screenshotting each one. Two missions cover all five EF engines from a
- * marker entry:
- *   - `frisling`      → zoeken → corsi → dagnacht
+ * place, screenshotting each one. Three classic missions cover all five EF engines
+ * from a marker entry (run 6: the frisling plays as an in-world adventure, audited by
+ * golden and missions.spec):
+ *   - `ven`           → zoeken → dagnacht
+ *   - `ecoduct`       → corsi  → dagnacht
  *   - `nachtronde`    → simon  → wisselen
  * Together: zoeken, corsi, dagnacht, simon, wisselen — the full EF five, each
  * driven from the open world with no lodge visit.
@@ -126,12 +128,14 @@ async function returnToPatrol(page: Page): Promise<void> {
   await expect(page.locator('.explore-hud'), 'back on the open plek').toBeVisible();
 }
 
-// Two missions cover the EF five from marker entries; each is its own test so a
+// Three missions cover the EF five from marker entries; each is its own test so a
 // full walk-to-marker + multi-beat play stays inside one Playwright timeout on
 // SwiftShader (a single test with both walks overran). Together they audit
-// zoeken/corsi/dagnacht (frisling) + simon/wisselen (nachtronde).
+// zoeken/dagnacht (ven), corsi/dagnacht (ecoduct) + simon/wisselen (nachtronde). Run 6: the
+// frisling plays as an in-world adventure, audited by golden and missions.spec instead.
 const AUDIT = [
-  { mission: 'frisling', engines: 'zoeken/corsi/dagnacht', beats: 3 },
+  { mission: 'ven', engines: 'zoeken/dagnacht', beats: 2 },
+  { mission: 'ecoduct', engines: 'corsi/dagnacht', beats: 2 },
   { mission: 'nachtronde', engines: 'simon/wisselen', beats: 2 },
 ] as const;
 
