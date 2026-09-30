@@ -164,7 +164,16 @@ test('camera: a drag tips the view gently, a sideways drag never tips it, and th
     await page.mouse.up();
     await page.waitForTimeout(700); // the tilt eases in
   };
-  const p0 = await pitch();
+  // run 6 (FLOW): play starts with one glide from the maker's shot to the follow view; the
+  // tilt is measured from where the lens has come to rest, not part-way through that glide
+  // (under load the glide takes longer and 1.5 s was not enough)
+  let p0 = await pitch();
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(250);
+    const p = await pitch();
+    if (Math.abs(p - p0) < 0.05) break;
+    p0 = p;
+  }
   await drag(0, -60);
   const p1 = await pitch();
   expect(p1 - p0, `a 60 px drag up tips the view a little (${p0.toFixed(1)}° → ${p1.toFixed(1)}°)`).toBeGreaterThan(1);

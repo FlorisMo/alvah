@@ -135,8 +135,11 @@ export class Stage {
       for (const deg of stageHeadings()) {
         const f = look0.clone().applyAxisAngle(V(0, 1, 0), (deg * Math.PI) / 180);
         const fit = this.fitAlong(R, f, extra);
-        const bad = this.violations(fit.P, f, fit.cam);
-        const score = bad * 100 + Math.abs(deg) / 180 + extra / 10;
+        const { bad, backdrop } = this.violations(fit.P, f, fit.cam);
+        // the backdrop is the lighter rule: it breaks a tie between two headings, it never
+        // outweighs the turn (run 6 integration: by the ven, a backdrop a few samples
+        // busier straight ahead swung the lens 160° round to the dry heath behind him)
+        const score = (bad - backdrop) * 100 + backdrop + Math.abs(deg) / 180 + extra / 10;
         if (!best || score < best.score) best = { score, f, P: fit.P, cam: fit.cam, look: fit.look };
         if (bad < 0.01) break search;
       }
@@ -237,12 +240,14 @@ export class Stage {
     return { P, cam: bestFit.cam, look: bestFit.look };
   }
 
-  /** How many clearance rules a candidate breaks (0 = a good stage). */
-  private violations(P: THREE.Vector3, f: THREE.Vector3, cam: THREE.Vector3): number {
+  /** How many clearance rules a candidate breaks (`bad`, 0 = a good stage), and how much
+   *  of that is the backdrop's lighter rule. */
+  private violations(P: THREE.Vector3, f: THREE.Vector3, cam: THREE.Vector3): { bad: number; backdrop: number } {
     const ctx = this.ctx;
     const { halfW, halfD } = this.spec;
     const right = V(-f.z, 0, f.x);
     let bad = 0;
+    let backdrop = 0;
     // the patch itself (+ a small rim) is free
     for (let u = -halfW - 0.3; u <= halfW + 0.31; u += 0.7) {
       for (let v = -halfD - 0.3; v <= halfD + 0.31; v += 0.7) {
@@ -255,7 +260,7 @@ export class Stage {
     for (let u = -halfW - 1; u <= halfW + 1.01; u += 1.0) {
       for (let v = halfD + 0.9; v <= halfD + 7; v += 1.2) {
         const x = P.x + right.x * u + f.x * v, z = P.z + right.z * u + f.z * v;
-        if (!ctx.isClear(x, z, 0.4)) bad += v < halfD + 3.5 ? 0.3 : 0.1;
+        if (!ctx.isClear(x, z, 0.4)) backdrop += v < halfD + 3.5 ? 0.3 : 0.1;
       }
     }
     // the wedge the lens sees on its way down to the patch (the lower frame corners)
@@ -293,7 +298,7 @@ export class Stage {
         if (ctx.groundY(x, z) > y) { bad += 2; break; }
       }
     }
-    return bad;
+    return { bad: bad + backdrop, backdrop };
   }
 
   /**
