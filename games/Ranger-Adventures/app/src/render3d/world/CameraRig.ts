@@ -276,7 +276,13 @@ export class CameraRig {
   // takes over from where the lens was, position and aim on one smoothstep curve, never
   // turning faster than ~90°/s (kit makeReframe's rule). null = no hand-over running.
   // It and `handoff` (below) never run together: starting one ends the other.
-  private blend: { t: number; dur: number; pos: THREE.Vector3; yaw: number; pitch: number } | null = null;
+  private blend: { t: number; dur: number; pos: THREE.Vector3; yaw: number; pitch: number; lift: number } | null = null;
+  // run 6 polish: a hand-over glide that would pass within BLEND_CLEAR of him rises over
+  // him on its way (by up to BLEND_LIFT_MAX), clearing his head and the cover round him by
+  // BLEND_OVER
+  private readonly BLEND_CLEAR = 2;
+  private readonly BLEND_OVER = 1.2;
+  private readonly BLEND_LIFT_MAX = 4;
   // A presented shot (world/Presenter.ts: the title, the ranger maker) hands the lens to
   // this rig as ONE move: for `dur` seconds the rig's own pose is blended in from where
   // the shot left the lens (eased, yaw the short way, roll 0). The rig runs underneath,
@@ -371,7 +377,7 @@ export class CameraRig {
     this.orbitYaw = this.orbitTargetYaw = 0;
     this.extOff.set(0, 0, 0);
     this.handoff = null; // one hand-over at a time
-    this.blend = reduced ? null : { t: 0, dur: 0, pos: this.camera.position.clone(), ...yawPitch(dir.x, dir.y, dir.z) };
+    this.blend = reduced ? null : { t: 0, dur: 0, pos: this.camera.position.clone(), ...yawPitch(dir.x, dir.y, dir.z), lift: 0 };
   }
 
   /** Start the take-over from a presented shot: the lens is where the shot left it now,
@@ -831,10 +837,23 @@ export class CameraRig {
       const d0 = aimDir(b.yaw, b.pitch);
       b.dur = reframeSeconds(1.1, (d1.angleTo(new THREE.Vector3(d0.x, d0.y, d0.z)) * 180) / Math.PI);
     }
+    // a held view that looked away from him (through his binoculars at the ree hide)
+    // hands back to the view behind him on its far side: the straight glide went right
+    // through him and the hide's bracken (0.4 s of leaves, run 6 polish). A glide that
+    // passes within BLEND_CLEAR of him rises over him and the cover round him instead
+    // (measured each frame against where the follow view settles; it only ever grows)
+    const rp = this.player.group.position;
+    const dx = to.x - b.pos.x, dz = to.z - b.pos.z, l2 = dx * dx + dz * dz;
+    const k = l2 < 1e-6 ? 0 : Math.max(0, Math.min(1, ((rp.x - b.pos.x) * dx + (rp.z - b.pos.z) * dz) / l2));
+    if (k > 0.15 && k < 0.85 && Math.hypot(b.pos.x + dx * k - rp.x, b.pos.z + dz * k - rp.z) < this.BLEND_CLEAR) {
+      const need = rp.y + this.player.avatarTopY + this.BLEND_OVER - (b.pos.y + (to.y - b.pos.y) * k);
+      b.lift = Math.max(b.lift, Math.min(this.BLEND_LIFT_MAX, Math.max(0, need) / Math.sin(Math.PI * k)));
+    }
     b.t = Math.min(1, b.t + dt / b.dur);
     if (b.t >= 1) { this.blend = null; this.lastSet.copy(to); return; }
     const e = easeInOut(b.t);
     this.camera.position.lerpVectors(b.pos, to, e);
+    this.camera.position.y += Math.sin(Math.PI * e) * b.lift;
     const d = aimDir(lerpAngle(b.yaw, a1.yaw, e), b.pitch + (a1.pitch - b.pitch) * e);
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(this.camera.position.x + d.x, this.camera.position.y + d.y, this.camera.position.z + d.z);
