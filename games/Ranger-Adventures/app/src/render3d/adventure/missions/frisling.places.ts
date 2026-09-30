@@ -2,32 +2,43 @@
  * frisling.places.ts — where "De verdwaalde frisling" happens in the world, and who
  * lives there (THREE-free; `frisling.places.test.ts` pins it). Chosen by looking at the
  * world (design run6-missions §4.1): the heide west of the clearing, open ground, the
- * west trail a few metres south, the ree and herstel markers ≥ 8 m away.
+ * west trail across it, the ree and herstel markers ≥ 8 m away.
  *
- * Seen by a child walking up from the clearing (heading north-west, the camera behind
+ * Seen by a child walking up from the clearing (heading south-west, the camera behind
  * him): the empty marker ring ahead; beyond it, 13 m out and a little left, the family
- * rooting at its muddy WALLOW; to the left and a little back, a STAND of bracken and
- * pijpenstrootje the squeak comes from; between the stand and the wallow the ROOTING
- * FIELD, seven look-alike patches of turned earth where the group went home.
+ * rooting at its muddy WALLOW, and between the ring and the wallow the ROOTING FIELD,
+ * seven look-alike patches of turned earth where the group went home. Off to his right,
+ * across the sand of the west trail in the long grass of the meadow, a STAND of bracken
+ * and pijpenstrootje the squeak comes from.
  *
- *   marker ── (follow the squeak, ~9 m) ── cover stand (search, two choices)
- *                                              │ lead him (~5 m)
- *                                          rooting field (the route, corsi)
+ *   marker ── (follow the squeak + faint prints, ~30 m, over the trail) ── the stand
+ *                                                                 (search, two holds)
+ *   the stand ── (lead him home, ~26 m back over the trail, the family ahead) ──┐
+ *                                                        rooting field (the route, corsi)
  *                                              │ walk on (~5 m, the yearling comes)
  *                                           wallow (three choices, the reunion)
+ *
+ * Run 6 polish: the stand lay 8 m from the ring and the way home was 5 m (the lead was
+ * over before it began). The marker, the field and the wallow stay where they were; the
+ * stand moved as far as the ground allows: every way from the ring to a stand and on to
+ * the field is at most the follow + the 7.4 m from the ring to the field, the heath east
+ * of the ring ends at the forest (a stand there leads home with the family off to the
+ * side), so it lies north, where leading him home walks straight at his family.
  */
 
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { patchLocal } from '../../play/kit-math.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
-import { approachOf, atLocal, headingTo, toLocal, toward, uniformLocal, type Frame } from '../places.ts';
+import { approachOf, atLocal, dist, headingTo, toLocal, uniformLocal, type Frame } from '../places.ts';
 
 /** The frisling marker: the heide's first anchor (Biomes.anchorInBiome('heide', 22)).
  *  The marker stays where it always stood; the test checks the anchor still lands here. */
 export const MARKER: Spot = { x: -15.556349186104043, z: -15.556349186104047 };
-/** The centre of the cover stand the lost piglet lies in. */
-const STAND_AT: Spot = { x: -20, z: -8 };
+/** The centre of the cover stand the lost piglet lies in: in the meadow's long grass,
+ *  20 m north of the west trail (open grassland, no tree within 25 m, dry: the ven's
+ *  water lies 70 m east). */
+const STAND_AT: Spot = { x: -25.7, z: 16 };
 /** The centre of the rooting field (the corsi spots). */
 const FIELD_AT: Spot = { x: -24, z: -16 };
 /** The centre of the wallow (zoel), the rotte's home. */
@@ -45,13 +56,17 @@ const STAND_BACK = 2.9;
  *  view; the ranger stops `FIELD_BACK` m out from its centre to watch the route. */
 export const FIELD_SCALE = 0.078;
 const FIELD_BACK = 3.3;
+/** The side the ranger comes to the field from to watch the route: its north-east, the
+ *  way the group went home (where the stand used to be; kept when the stand moved, so the
+ *  field's layout and its view are the ones every run so far played). */
+const FIELD_FROM: Spot = { x: -20, z: -8 };
 
 /** The wallow's mud (half-sizes, m) and where the ranger stops by it. */
 export const WALLOW = { halfW: 1.8, halfD: 1.35 } as const;
 const WALLOW_TALK = 4.8;   // the three choices: the yearling comes to him here
 
 const coverApproach = approachOf(STAND_AT, MARKER, STAND_BACK, 1.3);
-const fieldApproach = approachOf(FIELD_AT, STAND_AT, FIELD_BACK, 1.2);
+const fieldApproach = approachOf(FIELD_AT, FIELD_FROM, FIELD_BACK, 1.2);
 const wallowTalk = approachOf(WALLOW_AT, FIELD_AT, WALLOW_TALK, 1.2);
 /** "Loop rustig door": he walks on along the way, past the wallow (to its side), and so
  *  gives the family room — never into it. */
@@ -94,27 +109,37 @@ export function fieldSpots(): (Spot & { id: number })[] {
   });
 }
 
-/** Loose clumps of cover along the way home (bracken + pijpenstrootje), where a
- *  frightened piglet can dive in: two between the stand and the field, three between
- *  the field and the wallow, and the wallow's own bracken rim behind it. */
+/** The clumps beside the way home, from the stand to the field: [share of the way,
+ *  metres to its side (+ right, walking home), size]. Alternately left and right, never
+ *  on the way (a child walks it straight), clear of the sand of the west trail; the last
+ *  ones stand where the family is in sight and running is tempting. */
+const LEAD_CLUMPS: readonly (readonly [number, number, number])[] = [
+  [0.16, 2.2, 0.9], [0.34, -2.3, 0.85], [0.5, 2.1, 0.9], [0.6, -2.2, 0.8], [0.82, 2.3, 0.9], [0.93, -2.1, 0.8],
+];
+
+/** Loose clumps of cover a frightened piglet can dive into: beside the way home from
+ *  the stand to the field (LEAD_CLUMPS), three between the field and the wallow, and the
+ *  wallow's own bracken rim behind it. */
 export function hideClumps(): (Spot & { size: number })[] {
   const out: (Spot & { size: number })[] = [];
   const a = coverApproach, f = fieldApproach;
-  // between the stand and the field, beside the way (never on it)
-  const mid = toward(a, f, 2.4);
-  const h = headingTo(a, f);
-  out.push({ ...atLocal({ x: mid.x, z: mid.z, heading: h }, -1.7, 0), size: 0.9 });
-  out.push({ ...atLocal({ x: f.x, z: f.z, heading: h }, 1.9, -0.8), size: 0.8 });
+  // beside the way home (never on it)
+  const way: Frame = { x: a.x, z: a.z, heading: headingTo(a, f) };
+  const len = dist(a, f);
+  for (const [t, u, size] of LEAD_CLUMPS) out.push({ ...atLocal(way, u, t * len), size });
   // between the field and the wallow
   out.push({ ...atLocal(WALLOW_FRAME, -1.9, -5.3), size: 0.9 });
   out.push({ ...atLocal(WALLOW_FRAME, 3.2, -4.0), size: 0.85 });
   out.push({ ...atLocal(WALLOW_FRAME, 2.6, -1.8), size: 0.8 });
   // the wallow's rim: bracken behind the mud, away from where the ranger comes
-  for (const [u, v, s] of [[-2.4, 1.7, 1], [-0.8, 2.3, 1.1], [0.9, 2.2, 1], [2.5, 1.4, 0.9]] as const) {
-    out.push({ ...atLocal(WALLOW_FRAME, u, v), size: s });
+  for (const [u, v, sz] of [[-2.4, 1.7, 1], [-0.8, 2.3, 1.1], [0.9, 2.2, 1], [2.5, 1.4, 0.9]] as const) {
+    out.push({ ...atLocal(WALLOW_FRAME, u, v), size: sz });
   }
   return out;
 }
+
+/** How many of `hideClumps()` stand beside the way home (the first ones). */
+export const LEAD_CLUMP_COUNT = LEAD_CLUMPS.length;
 
 /** The fallen log at the wallow (a pig's scratching post), in the wallow frame. */
 export const WALLOW_LOG = { u: 2.3, v: 0.4, turn: 1.2 } as const;
@@ -147,10 +172,13 @@ export const SEARCH_VIEW = {
   halfW: 2.35, halfD: 1.7, tall: 1.05, pitchDeg: 40, insetTop: 100, insetBottom: 12,
   include: [{ x: coverApproach.x, z: coverApproach.z, h: RANGER_STAND_HEIGHT }],
 } as const;
+/** Where the piglet stands while the ranger watches the route: at his left, a little
+ *  ahead, both of them looking over the field (in the route's picture with him). */
+export const FIELD_SIDE: Spot = atLocal({ x: fieldApproach.x, z: fieldApproach.z, heading: fieldApproach.heading! }, -1.0, 0.35);
 export const FIELD_VIEW = {
-  at: { x: FIELD_AT.x, z: FIELD_AT.z }, heading: FIELD_FRAME.heading + 0.4,
-  halfW: 3.1, halfD: 2.2, tall: 0.5, pitchDeg: 50, insetTop: 100, insetBottom: 14,
-  include: [{ x: fieldApproach.x, z: fieldApproach.z, h: RANGER_STAND_HEIGHT }],
+  at: { x: FIELD_AT.x, z: FIELD_AT.z }, heading: FIELD_FRAME.heading + 0.3,
+  halfW: 3.1, halfD: 2.2, tall: 0.5, pitchDeg: 46, insetTop: 100, insetBottom: 56,
+  include: [{ x: fieldApproach.x, z: fieldApproach.z, h: RANGER_STAND_HEIGHT }, { x: FIELD_SIDE.x, z: FIELD_SIDE.z, h: 0.45 }],
 } as const;
 export const WALLOW_VIEW = {
   at: atLocal(WALLOW_FRAME, 0.3, -1.6), heading: WALLOW_FRAME.heading - 0.38,
@@ -176,6 +204,8 @@ export const FRISLING_HOME: HomeSpec = {
   places: FRISLING_PLACES,
   residents: FRISLING_RESIDENTS,
   marker: { look: 'none' },
+  // the stand lies 40 m from the wallow: the home stays drawn while he is near either
+  spread: [STAND_AT],
 };
 
 /** Ground the world's heather and grass scatter leaves bare: the wallow's mud and the
