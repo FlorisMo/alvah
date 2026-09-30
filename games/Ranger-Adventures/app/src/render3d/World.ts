@@ -103,6 +103,9 @@ const HANDOVER_S = 2.2;
  *  it (a stopped game never glided home) to the follow view — its heading too, not only
  *  its place, so the view never swings round in a frame. */
 const ACTIVITY_HANDOVER_S = 1.1;
+/** Run 6 polish: climbing into or out of the jeep (or the helicopter) glides the view at
+ *  least this long (CameraRig.handover fits it to a longer move); a cut under reduced motion. */
+const VEHICLE_GLIDE_S = 1.1;
 /** Once it has, the name-tags and the "go here" rings come in over this long (s). */
 const WORDS_IN_S = 0.4;
 /** The boot veil waits at most this long for the models (ms; software GL: shorter). */
@@ -290,7 +293,14 @@ export class World {
         intent: () => (this.menuOpen() ? { x: 0, y: 0 } : this.player.intent()),
         controls: () => (this.menuOpen() ? { keys: null, stick: null } : this.player.controls()),
         follow: (yaw, snap) => { this.cam.followTargetYaw = yaw; if (snap) this.cam.followYaw = yaw; },
-        recut: () => this.cam.place(true, 0, livePolicy().reduced),
+        // climbing in or out: the view glides from the walk view to the chase view and back
+        // (eased, the short way round, fitted to the move); a cut under reduced motion (and
+        // in the light mode, whose few frames a second would make a glide a slide show)
+        recut: () => {
+          const reduced = livePolicy().reduced;
+          if (!reduced && !lightMode() && this.cam.placedOnce) this.cam.handover(VEHICLE_GLIDE_S, true);
+          this.cam.place(true, 0, reduced);
+        },
         clearWalkPrompts: () => this.pois.clearForVehicle(),
         crossBiome: (here) => this.crossBiome(here),
         camOffsets: () => ({ walk: this.cam.camOffset, vehicle: this.cam.camOffsetVehicle, heli: this.cam.camOffsetHeli }),
@@ -313,6 +323,8 @@ export class World {
         inputBlocked: () => this.frozen || this.vehicles.inVehicle || this.vehicles.inHeli,
         afterPlace: () => this.pois.fadeRings(this.camera),
         lensKeepOut: (visit) => this.vehicles.visitHeliReach(visit), // run 6: the parked heli's rotor
+        parkedJeep: () => this.vehicles.parkedJeep(),                 // run 6 polish: it fades, never folds the lens
+        fadeJeep: (target, release) => this.vehicles.fadeJeep(target, release),
         creatures: (visit) => { // what stands on the ground, for the clear view (marker animals ~1 m, as the dev hook reads them)
           for (const m of this.pois.list) { const p = m.group.position; visit(p.x, p.y, p.z, 1.0); }
           for (const a of this.fauna.scenicActors) { const p = a.group.position; visit(p.x, p.y, p.z, a.height); }
@@ -350,7 +362,8 @@ export class World {
     this.fauna.placeScenicActors();
     // people are solid: the ranger walks round the warden and the poacher (with a child's
     // bit of personal space), never through them
-    for (const a of this.fauna.scenicActors) this.obstacles.push({ x: a.group.position.x, z: a.group.position.z, r: 1.1 });
+    // (`h`: a lens passes over a grown-up's head, never through him; a tag hides behind him)
+    for (const a of this.fauna.scenicActors) this.obstacles.push({ x: a.group.position.x, z: a.group.position.z, r: 1.1, h: a.height });
     this.fauna.placeAmbientLife();
     this.vehicles.placeJeep();
     this.vehicles.placeHelipads();
