@@ -144,9 +144,8 @@ async function start(log: Log, mission: Mission): Promise<void> {
  *  an adventure plays its steps as beats in the world, interleaved — walk hints are walked
  *  with the arrow keys, an encounter is answered from ANY step of the mission, an action
  *  button is pressed, and "won" = every step's trial count went up. A beat that takes no
- *  input (a body moment: keep still) is simply waited out. `onBeat` (a test that plays a
- *  beat its own way) runs once when an adventure beat begins. */
-async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<boolean>, onBeat?: (beat: string) => Promise<void>): Promise<void> {
+ *  input (a body moment: keep still) is simply waited out. */
+async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<boolean>): Promise<void> {
   const page = log.page;
   const plan = mission.stappen.map((s) => s.ef as string);
   log.note(`steps: ${plan.join(' → ')}`);
@@ -192,7 +191,6 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
       lastBeat = adv.beat;
       await sleep(page, 1_000);
       await log.shot(`beat-${adv.beat.replace(/[^a-z0-9]+/gi, '-')}`);
-      if (onBeat) { await onBeat(adv.beat); lastProgress = Date.now(); continue; }
     }
     // (a0) a walk hint: walk there with the arrow keys, until the hint changes
     const h0 = await R<Hint | null>(page, 'r.playHint()');
@@ -560,12 +558,12 @@ test('frisling: a hand at the piglet and a step toward the sow are gentle reache
     const before = await dagnacht();
     await start(log, mission);
     const reached: string[] = [];
-    await playSteps(log, mission, undefined, async (beat) => {
-      if (beat !== 'still:aaien' && beat !== 'still:zeug') return;
-      // the moment is up: its line (no card, no buttons), and nothing to click (no hint)
-      await expect.poll(async () => (await adv())?.line ?? '', { timeout: 10_000 }).toMatch(beat === 'still:aaien' ? /Raak hem niet aan/ : /Sta heel stil/);
-      log.soft((await page.locator('button.p3-choice').filter({ visible: true }).count()) === 0, `${beat}: no answer buttons`);
-      log.soft((await R<unknown>(page, 'r.playHint()')) === null, `${beat}: no play hint (a perfect player keeps still)`);
+    /** One body moment played wrong once, then kept still: acts as soon as it begins (the
+     *  line is up with the beat; the hold is over ~6 s later, so a player loop busy with
+     *  a screenshot under load could miss it). */
+    const reach = async (beat: string, line: string | null): Promise<void> => {
+      const want = beat === 'still:aaien' ? /Raak hem niet aan/ : /Sta heel stil/;
+      log.soft(want.test(line ?? ''), `${beat}: its line is up ("${line}")`);
       if (beat === 'still:aaien') {
         // a hand reaches for him: a real click on the piglet
         const lost = await actor('lost');
@@ -585,12 +583,35 @@ test('frisling: a hand at the piglet and a step toward the sow are gentle reache
         const between = await expect.poll(async () => { const s = await actor('sow'); return !!s && !!sow && Math.hypot(s.x - sow.x, s.z - sow.z) > 0.2; }, { timeout: 6_000 }).toBe(true).then(() => true, () => false);
         log.soft(between, 'the sow steps between');
       }
+      // no card, no buttons, nothing to click (a perfect player keeps still)
+      log.soft((await page.locator('button.p3-choice').filter({ visible: true }).count()) === 0, `${beat}: no answer buttons`);
+      log.soft((await R<unknown>(page, 'r.playHint()')) === null, `${beat}: no play hint`);
       reached.push(beat);
       await log.shot(`${beat.replace(':', '-')}-reached`);
       // a gentle line says what happened, and the same moment comes back
-      await expect.poll(async () => (await adv())?.line ?? '', { timeout: 15_000, message: `${beat}: the moment comes back` })
-        .toMatch(beat === 'still:aaien' ? /Raak hem niet aan/ : /Sta heel stil/);
-    });
+      await expect.poll(async () => (await adv())?.line ?? '', { timeout: 15_000, message: `${beat}: the moment comes back` }).toMatch(want);
+      await log.shot(`${beat.replace(':', '-')}-again`);
+    };
+    let playing = true;
+    let failed: unknown = null;
+    const watcher = (async () => {
+      const done = new Set<string>();
+      while (playing) {
+        const a = await adv().catch(() => null);
+        if (a && (a.beat === 'still:aaien' || a.beat === 'still:zeug') && !done.has(a.beat)) {
+          done.add(a.beat);
+          await reach(a.beat, a.line).catch((e) => { failed ??= e; });
+        }
+        await sleep(page, 100);
+      }
+    })();
+    try {
+      await playSteps(log, mission);
+    } finally {
+      playing = false;
+      await watcher;
+    }
+    if (failed) throw failed;
     await finish(log, mission);
     log.hard(reached.length === 2, `both moments were played wrong once (${reached.join(', ')})`);
     const after = await dagnacht();
