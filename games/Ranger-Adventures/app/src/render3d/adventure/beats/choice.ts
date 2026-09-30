@@ -57,8 +57,9 @@ export interface StillOpts {
   /** HANDS still: a click or a tap ON this (the piglet) is a hand reaching for it; any
    *  other click does nothing */
   hands?: THREE.Object3D;
-  /** FEET still: a step key (arrows, WASD) or a tap on the world (not on a button) is a
-   *  step toward them. His own input is locked meanwhile (a framed beat). */
+  /** FEET still: a step key (arrows, WASD) or a tap on the world (on the scene itself,
+   *  never on a button or the line) is a step toward them. His own input is locked
+   *  meanwhile (a framed beat). */
   feet?: boolean;
   /** what the reach did, said after the animal's reaction (default: the encounter's gevolg) */
   mis?: string;
@@ -169,7 +170,7 @@ export class ChoiceRun {
     const onDown = (e: PointerEvent): void => {
       if (k.world.menuShown()) return;
       if (o.hands) { if (e.target === canvas && onAnimal(e, o.hands)) reached = true; return; }
-      if (o.feet && !(e.target as Element | null)?.closest?.('button, a, input, [role="button"]')) reached = true;
+      if (o.feet && e.target === canvas) reached = true; // (a tap on the world: never a button, the line, the chip)
     };
     const onKey = (e: KeyboardEvent): void => {
       if (o.feet && !e.repeat && STEP_KEYS.test(e.code) && !k.world.menuShown()) reached = true;
