@@ -20,7 +20,7 @@ import type { BeatSummary } from '../../../core/skill';
 import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
 import { Sound } from '../../../core/sound';
-import { Glow, anchoredPrompt, clearPlayHint, pick3d, SPEAK_BTN } from '../../play/kit';
+import { anchoredPrompt, clearPlayHint, pick3d, SPEAK_BTN } from '../../play/kit';
 import { listenerOf } from '../../world/Residents';
 import type { AdventureKit, FrameSpec } from '../kit';
 import type { Place } from '../types';
@@ -32,6 +32,84 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 const CALL = '#ffd98a';  // the warm light of a call
 const OK = '#8fd6a0';    // a right echo
 const WRONG = '#e8a27a'; // a wrong echo (soft, warm)
+
+/**
+ * A calling animal lights up in its OWN colours: its real materials take a warm light
+ * (the emissive reads the colour texture and the base colour, tinted warm, so the jay
+ * stays a jay and the badger a badger), and a warm rim rings its outline (so a black
+ * raven lights up too, its feathers still its own) — never a flat cream cut-out. The
+ * colour texture goes in as the emissive map, and the rim into the shader, once, when
+ * the beat begins (a shader variant per material, built while the lens holds, never
+ * mid-call); `clear` hands every material back as it was.
+ */
+export class WarmGlow {
+  private readonly mats: {
+    mat: THREE.MeshStandardMaterial; emissive: THREE.Color; intensity: number; map: THREE.Texture | null;
+    compile: THREE.Material['onBeforeCompile']; key: THREE.Material['customProgramCacheKey'];
+  }[] = [];
+  private readonly color = new THREE.Color();
+  private readonly tmp = new THREE.Color();
+  private readonly rim = { value: 0 };
+  private readonly rimColor = { value: new THREE.Color() };
+
+  constructor(root: THREE.Object3D, color: THREE.ColorRepresentation = CALL) {
+    this.color.set(color);
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || mesh.userData.hitSphere || mesh.userData.hintAnchor) return;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const mat = m as THREE.MeshStandardMaterial;
+        if (!mat.isMeshStandardMaterial || this.mats.some((e) => e.mat === mat)) continue;
+        const e = { mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity, map: mat.emissiveMap, compile: mat.onBeforeCompile, key: mat.customProgramCacheKey };
+        this.mats.push(e);
+        if (mat.map) mat.emissiveMap = mat.map;
+        const rim = this.rim, rimColor = this.rimColor;
+        mat.onBeforeCompile = function (shader, renderer) {
+          e.compile.call(this, shader, renderer);
+          shader.uniforms.uCallRim = rim;
+          shader.uniforms.uCallRimColor = rimColor;
+          shader.fragmentShader = 'uniform float uCallRim;\nuniform vec3 uCallRimColor;\n' + shader.fragmentShader.replace('#include <emissivemap_fragment>',
+            '#include <emissivemap_fragment>\n{ float callEdge = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);\n' +
+            '  totalEmissiveRadiance += uCallRimColor * (uCallRim * pow(callEdge, 2.0)); }');
+        };
+        mat.customProgramCacheKey = function () { return `${e.key.call(this)}|call-rim`; };
+        mat.needsUpdate = true;
+      }
+    });
+  }
+
+  /** Light it `level` (0 = as it was), warm, or in `color` (a right echo's green). */
+  set(level: number, color?: THREE.ColorRepresentation): void {
+    if (color !== undefined) this.color.set(color);
+    const on = level > 0.001;
+    this.rim.value = on ? level : 0;
+    this.rimColor.value.copy(this.color);
+    for (const e of this.mats) {
+      if (!on) { e.mat.emissive.copy(e.emissive); e.mat.emissiveIntensity = e.intensity; continue; }
+      // its own colour (texture × base colour), lifted a little so a dark bird still
+      // shows its feathers, in the warm light
+      const c = e.mat.color;
+      e.mat.emissive.copy(this.tmp.setRGB(c.r + (1 - c.r) * 0.3, c.g + (1 - c.g) * 0.3, c.b + (1 - c.b) * 0.3).multiply(this.color));
+      e.mat.emissiveIntensity = level;
+    }
+  }
+
+  /** Hand every material back as it was. */
+  clear(): void {
+    this.rim.value = 0;
+    for (const e of this.mats) {
+      e.mat.emissive.copy(e.emissive);
+      e.mat.emissiveIntensity = e.intensity;
+      e.mat.emissiveMap = e.map;
+      e.mat.onBeforeCompile = e.compile;
+      e.mat.customProgramCacheKey = e.key;
+      e.mat.needsUpdate = true;
+    }
+  }
+}
+
+/** How bright a call lights its animal (its own colours, so brighter than a flat fill). */
+export const CALL_GLOW = 0.95;
 
 /** One animal that calls. */
 export interface Caller {
@@ -75,8 +153,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   if (o.view) await k.frame(o.view, { face: o.stand?.heading });
   k.say(null);
 
-  const glows = new Map<string, Glow>();
-  for (const c of o.callers) if (c.body) glows.set(c.id, new Glow(c.body, CALL));
+  const glows = new Map<string, WarmGlow>();
+  for (const c of o.callers) if (c.body) glows.set(c.id, new WarmGlow(c.body, CALL));
   const light = (id: string, level: number, color = CALL): void => { glows.get(id)?.set(level, color); };
   const quiet = (): void => { for (const c of o.callers) { light(c.id, 0); c.act?.(false); } };
 
@@ -121,7 +199,7 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
       if (token !== listenToken) return;
       const c = byId.get(beat.id)!;
       quiet();
-      light(beat.id, 0.65);
+      light(beat.id, CALL_GLOW);
       c.act?.(true);
       o.onCall?.(beat.id);
       callFrom(beat.id);
@@ -139,7 +217,7 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   let finished!: () => void;
   const complete = new Promise<void>((r) => { finished = r; });
   const flash = (id: string, color: string, secs: number): void => {
-    light(id, color === WRONG ? 0.6 : 0.45, color);
+    light(id, color === WRONG ? 0.8 : 0.7, color);
     void k.wait(secs).then(() => { if (phase !== 'listen') light(id, 0); }).catch(() => {});
   };
   const onPick = (id: string): void => {
@@ -154,13 +232,13 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
     if (res === 'complete') {
       phase = 'done';
       callFrom(id);
-      light(id, 0.45, OK);
+      light(id, 0.7, OK);
       finished();
       return;
     }
     if (res === 'grow') {
       phase = 'listen';
-      light(id, 0.45, OK);
+      light(id, 0.7, OK);
       if (settings.geluid) Sound.correct();
       banner(o.lines.groei, false);
       speak(o.lines.groei);
