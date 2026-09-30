@@ -13,7 +13,7 @@ import test from 'node:test';
 import {
   EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_AT, JAY_GROUND,
   GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, SEE_D, SEEN_X, WAIT_H, HIDE, gladeSpots, eekhoornTreeClear, eekhoornClearings, branchStub,
-  seatOf, watchSpot, WATCH_R, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo,
+  seatOf, watchSpot, WATCH_R, SEAT_STOP, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo,
 } from './eekhoorn.places.ts';
 import { STUB_TILT } from '../../world/Forest.ts';
 import { biomeAt, VEN_CENTER, VEN_SHORE_R } from '../../Biomes.ts';
@@ -102,10 +102,16 @@ const LENS = { up: 2.4, back: 4.6 };
 const HFOV = Math.atan(Math.tan((55 / 2) * Math.PI / 180) * 1.6 * 0.98); // (55° lens at 1280×800: the whole picture)
 /** …and the part of it where he has SEEN it: well inside, not at the edge */
 const HFOV_SEEN = Math.atan(Math.tan((55 / 2) * Math.PI / 180) * 1.6 * SEEN_X);
+/** The home's trunks that can hide something from that eye: not the ones between the eye
+ *  and him (the follow camera fades those: world/CameraRig) — and his own body. */
+function hiders(eye: { x: number; y: number; z: number }, me: { x: number; z: number }): Upright[] {
+  const body: Upright = { x: me.x, z: me.z, y0: 0, y1: RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 };
+  return [...HOME_TREES.map((t) => trunkUpright(trunk(t), 0))
+    .filter((u) => lineClear(eye, { ...me, y: RANGER_STAND_HEIGHT }, [u]) && lineClear(eye, { ...me, y: 0.9 }, [u])), body];
+}
 function lensSees(me: { x: number; z: number }, heading: number, sq: { x: number; z: number; y: number }): boolean {
   const eye = { x: me.x - Math.sin(heading) * LENS.back, y: LENS.up, z: me.z - Math.cos(heading) * LENS.back };
-  const body: Upright = { x: me.x, z: me.z, y0: 0, y1: RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 };
-  const ups = [...HOME_TREES.map((t) => trunkUpright(trunk(t), 0)), body];
+  const ups = hiders(eye, me);
   const off = Math.atan2(Math.sin(headingTo(eye, sq) - heading), Math.cos(headingTo(eye, sq) - heading));
   return Math.abs(off) < HFOV_SEEN && lineClear(eye, sq, ups, 0.12);
 }
@@ -123,7 +129,7 @@ test('the follow: from where he walks up, the squirrel on its low stub sits in t
     const sq = { ...seat, y: t.branch!.h + 0.15 };
     assert.ok(dist(w, seat) < SEE_D - 0.4, `the spot is within ${SEE_D} m of it (${dist(w, seat).toFixed(2)} m)`);
     // a perfect player walks the hint: straight, round a trunk in the way by a spot beside it
-    let me = { ...from }, heading = headingTo(me, w), seen = false, legsN = 0, atSpot: boolean | null = null;
+    let me = { ...from }, heading = headingTo(me, w), seen = false, legsN = 0, atSpot: { x: number; z: number; h: number } | null = null;
     while (dist(me, w) > 0.05 && legsN < 4) {
       const to = wayTo(me, w);
       legsN += 1;
@@ -134,12 +140,22 @@ test('the follow: from where he walks up, the squirrel on its low stub sits in t
       for (let i = 1; i <= n; i++) {
         me = { x: a.x + (to.x - a.x) * (i / n), z: a.z + (to.z - a.z) * (i / n) };
         if (dist(me, seat) <= SEE_D && lensSees(me, heading, sq)) seen = true;
-        // (golden stops as soon as it is within the hint's radius of the spot: from there
-        // it must see it too, or it would wait there for ever)
-        if (atSpot === null && to === w && dist(me, w) <= WATCH_R) atSpot = lensSees(me, heading, sq);
+        // (golden stops as soon as it is within the hint's radius of the spot)
+        if (atSpot === null && to === w && dist(me, w) <= WATCH_R) atSpot = { ...me, h: heading };
       }
     }
-    assert.equal(atSpot, true, `where golden stops, within ${WATCH_R} m of the spot, it is in the lens`);
+    // …and from there the hint walks it on toward its seat, to SEAT_STOP short of it: on
+    // that way, within SEE_D of it, it is in the lens (or golden would wait for ever)
+    assert.ok(atSpot, 'golden reaches the spot');
+    {
+      const h = headingTo(atSpot, seat);
+      let onSeen = false;
+      for (let p = { x: atSpot.x, z: atSpot.z }; dist(p, seat) > SEAT_STOP; p = { x: p.x + Math.sin(h) * 0.05, z: p.z + Math.cos(h) * 0.05 }) {
+        if (dist(p, seat) <= SEE_D && lensSees(p, h, sq)) onSeen = true;
+      }
+      assert.ok(onSeen, `walking on from the spot toward it, it is in the lens within ${SEE_D} m`);
+      assert.ok(lensSees({ x: seat.x - Math.sin(h) * SEAT_STOP, z: seat.z - Math.cos(h) * SEAT_STOP }, h, sq), 'where the hint stops him, it is in the lens (over his shoulder)');
+    }
     assert.ok(legsN <= 3, `at most two spots beside a trunk on the way (${legsN})`);
     assert.ok(seen, 'within SEE_D of it, it is in the lens');
     assert.ok(lensSees(me, heading, sq), 'at the spot, it is in the lens');
@@ -166,8 +182,7 @@ function clingPoints(t: typeof HOME_TREES[number], ang: number, h: number): { x:
  *  whole picture, or well inside it). */
 function lensSeesOf(me: { x: number; z: number }, camH: number, pts: { x: number; y: number; z: number }[], hf = HFOV): number {
   const eye = { x: me.x - Math.sin(camH) * LENS.back, y: LENS.up, z: me.z - Math.cos(camH) * LENS.back };
-  const body: Upright = { x: me.x, z: me.z, y0: 0, y1: RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 };
-  const ups = [...HOME_TREES.map((t) => trunkUpright(trunk(t), 0)), body];
+  const ups = hiders(eye, me);
   return pts.filter((p) => Math.abs(Math.atan2(Math.sin(headingTo(eye, p) - camH), Math.cos(headingTo(eye, p) - camH))) < hf && lineClear(eye, p, ups)).length;
 }
 /** …at least half of them well inside the picture (the game's "seen": then he has found it). */

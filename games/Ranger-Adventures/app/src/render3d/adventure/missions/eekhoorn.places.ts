@@ -168,9 +168,13 @@ export function seatOf(t: HomeTree): Spot {
 }
 
 /** How near (m) he comes to the squirrel waiting on its stub before it runs on: close
- *  enough that it reads as an animal through the follow lens (≈ 33 px tall at 1280×800
- *  at this distance, ≈ 40 px at the spot to see it from). */
-export const SEE_D = 2.6;
+ *  enough that it reads as an animal through the follow lens (≈ 35 px tall at 1280×800,
+ *  more as he comes closer). */
+export const SEE_D = 2.2;
+/** Where golden's walk hint stops him short of its seat once he is at the spot to see it
+ *  from and it sits there (m): walking on at it, the lens turns to it, it comes within
+ *  SEE_D, and it is still over his shoulder, not behind his head. */
+export const SEAT_STOP = 1.7;
 /** He has SEEN it when most of it is well inside the picture — within this much of the
  *  half-width from the middle (0.7: the middle 70 % of the screen; at the very edge it is
  *  there, but a child has not seen it yet) — and not behind a trunk or his own body. */
@@ -179,8 +183,7 @@ export const SEEN_X = 0.7;
  *  so it sits over his shoulder, not straight over his head, and nothing is between. */
 const WATCH_D = 1.6;
 const WATCH_TURN = 0.3;
-/** Near enough the spot to see it from (golden's walk hint radius): there he is close,
- *  whatever SEE_D says (WATCH_D + WATCH_R stays within ~3 m of it). */
+/** Near enough the spot to see it from (golden's walk hint radius). */
 export const WATCH_R = 1.0;
 export function watchSpot(t: HomeTree): Spot {
   const s = seatOf(t), a = t.branch!.ang + WATCH_TURN;

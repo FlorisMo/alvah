@@ -39,7 +39,7 @@ import { TREE_BASE_H } from '../../world/Forest';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale';
 import { EekhoornHome, type Neighbour } from './eekhoorn.home';
 import {
-  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HIDE, HOME_TREES, JAY_GROUND, SEE_D, SEEN_X, STUMP, WATCH_R, TREE, introView,
+  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HIDE, HOME_TREES, JAY_GROUND, SEAT_STOP, SEE_D, SEEN_X, STUMP, WATCH_R, TREE, introView,
   branchStub, eekhoornClearings, eekhoornTreeClear, hideShift, hideStart, roundStep, seatOf, slipSecs, watchSpot, wayTo, type HomeTree,
 } from './eekhoorn.places';
 
@@ -132,13 +132,16 @@ async function meetNeighbours(k: AdventureKit, home: EekhoornHome, geluid: boole
 /** Where the squirrel is to the player, right now, through the live lens: `seen` = at
  *  least half of its body (a dozen points on its head and trunk, each a line of sight
  *  from the lens) in front of the lens, well inside the picture (not at its edge, under
- *  the line card at the top) and not hidden by a trunk of its home or by his own body;
+ *  the line card at the top) and not hidden by a trunk of its home (one the camera fades
+ *  because it stands between the lens and him hides nothing) or by his own body;
  *  `glimpse` = a bit of it shows anywhere in the picture; `px` = how tall it is on the
  *  screen, tail and ears and all. */
 interface Sight { seen: boolean; glimpse: boolean; px: number }
 
 const V1 = new THREE.Vector3();
 const V2 = new THREE.Vector3();
+const V3 = new THREE.Vector3();
+const V4 = new THREE.Vector3();
 const BOX = new THREE.Box3();
 function sightOf(k: AdventureKit, sq: Squirrel, trees: readonly SquirrelTree[]): Sight {
   const pts = sq.bodyPoints();
@@ -148,7 +151,11 @@ function sightOf(k: AdventureKit, sq: Squirrel, trees: readonly SquirrelTree[]):
   cam.updateMatrixWorld();
   const me = k.ranger();
   const g = k.ctx.groundY(me.x, me.z);
-  const ups: Upright[] = trees.map((t) => trunkUpright(t.trunk, k.ctx.groundY(t.trunk.x, t.trunk.z)));
+  // (a trunk between the lens and him is faded by the follow camera — world/CameraRig,
+  // his head or his chest behind it — and he is seen through it: so is the squirrel)
+  const head = V3.set(me.x, g + RANGER_STAND_HEIGHT, me.z), chest = V4.set(me.x, g + 0.9, me.z);
+  const ups: Upright[] = trees.map((t) => trunkUpright(t.trunk, k.ctx.groundY(t.trunk.x, t.trunk.z)))
+    .filter((u) => lineClear(cam.position, head, [u]) && lineClear(cam.position, chest, [u]));
   ups.push({ x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 });
   let open = 0, well = 0;
   for (const p of pts) {
@@ -229,9 +236,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     void there.then((ok) => { if (!ok) return; arrived = true; sitFrom = k.now; sq.glow(true); void sq.lookAt(me); chatter(); }).catch(() => {});
     const spot = watchSpot(t);
     const hint = seeHint(k, name, () => {
-      // (at the spot to see it from but looking the other way — he came round another way
-      // — the way is on toward it: walking at it turns him, and the lens, to it)
-      if (arrived && dist(k.ranger(), spot) <= WATCH_R && !sight().seen) return { ...seatOf(t), r: 1.2 };
+      // (at the spot to see it from, with it on its stub: the way is on toward it — walking
+      // at it turns him, and the lens, to it, and brings him within SEE_D)
+      if (arrived && dist(k.ranger(), spot) <= WATCH_R) return { ...seatOf(t), r: SEAT_STOP };
       return wayTo(k.ranger(), spot);
     });
     try {
@@ -246,11 +253,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
           const far = dist(k.ranger(), sq) > 9;
           if (far && !toldWait) { toldWait = true; k.say(c.wacht); } else if (!far && toldWait && dist(k.ranger(), sq) < 6) { toldWait = false; k.say(line); }
         },
-        // (close: within SEE_D of it, or at the spot to see it from — where the hint
-        // brings a perfect player — and it well in his view)
-        // (and it sits up on its stub a moment first, even when he is there before it: it
-        // waits for him, looking at him)
-        reached: () => arrived && k.now - sitFrom >= SIT && (dist(k.ranger(), sq) <= SEE_D || dist(k.ranger(), spot) <= WATCH_R) && measure().seen,
+        // (close: within SEE_D of it, and it well in his view — and it sits up on its stub
+        // a moment first, even when he is there before it: it waits for him, looking at him)
+        reached: () => arrived && k.now - sitFrom >= SIT && dist(k.ranger(), sq) <= SEE_D && measure().seen,
       });
     } finally {
       hint.off();
