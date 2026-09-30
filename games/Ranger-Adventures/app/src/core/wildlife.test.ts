@@ -280,9 +280,12 @@ test('the gait follows the speed; a bound is a low arc that lands on its hooves 
   assert.equal(gaitOf(3.6, TEMPERAMENT['animal-vos-fox']), 'trot', 'only the ree bounds');
   for (const kind of ['bound', 'hop', 'trot', 'walk'] as const) {
     let top = 0, ground = 0;
+    // the ree's hooves stand 0.4 m fore and aft of its middle, a squirrel's 0.1 m
+    const reach = kind === 'bound' ? 0.4 : kind === 'hop' ? 0.1 : 0;
     for (let c = 0; c < 3; c += 0.01) {
-      const b = strideBody(kind, c, kind === 'bound' ? 4.6 : 2.5);
+      const b = strideBody(kind, c, kind === 'bound' ? 4.6 : kind === 'hop' ? 0.5 : 2.5);
       assert.ok(b.lift >= 0, `${kind}: never below the ground`);
+      assert.ok(b.lift - Math.abs(b.pitch) * reach >= -1e-9, `${kind}: its pitch never dips a hoof into the ground (at ${c.toFixed(2)})`);
       assert.ok(Math.abs(b.pitch) <= 0.13, `${kind}: a calm pitch`);
       top = Math.max(top, b.lift);
       if (b.lift < 1e-6) ground++;
@@ -336,4 +339,23 @@ test('chased hard for half a minute, it circles its home ground instead of being
   assert.ok(r.min >= 1.5, `he never got within 1.5 m, even as it turned back round (closest ${r.min.toFixed(2)} m)`);
   assert.ok(r.farthest <= 26, `it stayed within ${r.farthest.toFixed(1)} m of its home`);
   assert.equal(r.toward, 0);
+});
+
+test('walking back to its loop past a boy who stands on the way, it goes round him at a distance, never up to him and off again', () => {
+  // its loop point lies 12 m on, straight through where he stands
+  const home: LoopPoint = { x: 0, z: 12, facing: 0, moving: false };
+  const world: WildWorld = { free: () => true, move: (_a, _b, tx, tz, o) => { o.x = tx; o.z = tz; }, loop: () => home, loopLeg: 10 };
+  const s = newWildState({ x: 0, z: 0, facing: 0, moving: false }, 0);
+  s.mode = 'return'; s.gx = 0; s.gz = 12;
+  const rg: RangerRead = { x: 0.3, z: 6, heading: 0, speed: 0, running: false };
+  let closest = Infinity, flees = 0, last = s.mode;
+  for (let t = 0; t < 30; t += DT) {
+    wildStep(s, REE, REE_R, { ranger: rg, jeep: null }, world, DT);
+    closest = Math.min(closest, Math.hypot(s.x - rg.x, s.z - rg.z));
+    if (s.mode === 'away' && last !== 'away') flees++;
+    last = s.mode;
+  }
+  assert.equal(flees, 0, 'it never had to step away from him');
+  assert.ok(closest >= REE.flight, `it kept ${closest.toFixed(2)} m from him`);
+  assert.equal(s.mode, 'roam', 'and it is back on its loop, grazing');
 });

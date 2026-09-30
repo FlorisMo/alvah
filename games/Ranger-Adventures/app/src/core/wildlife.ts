@@ -657,10 +657,17 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
     case 'yield':
     case 'return': {
       const quick = s.mode !== 'return';
-      const dx = s.gx - s.x, dz = s.gz - s.z;
+      // walking back, it goes round a boy (or a jeep) standing on its way at a respectful
+      // distance, never straight up to him (and off again, and back, and off again)
+      let tgx = s.gx, tgz = s.gz;
+      if (!quick) {
+        if (th.ranger && viaRound(s.x, s.z, s.gx, s.gz, th.ranger.x, th.ranger.z, tm.flight + KEEP_ROOM, via)) { tgx = via.x; tgz = via.z; }
+        else if (th.jeep && Math.abs(th.jeep.speed) < 0.3 && viaRound(s.x, s.z, s.gx, s.gz, th.jeep.x, th.jeep.z, JEEP_REACH + JEEP_NEAR + r + 0.3, via)) { tgx = via.x; tgz = via.z; }
+      }
+      const dx = tgx - s.x, dz = tgz - s.z;
       const dist = Math.hypot(dx, dz);
       const pace = s.mode === 'return' ? tm.walk * RETURN_PACE : s.pace;
-      if (dist < (s.mode === 'return' ? ON_LOOP : 0.05)) {
+      if (tgx === s.gx && tgz === s.gz && dist < (s.mode === 'return' ? ON_LOOP : 0.05)) {
         s.speed = approach(s.speed, 0, BRAKE_QUICK, BRAKE_QUICK, dt);
         if (s.speed > 0.01) stepAlong(s, world, dt);
         if (s.mode === 'return') {
@@ -687,7 +694,7 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
       stepAlong(s, world, dt);
       if (s.mode === 'return') {
         // no way back (a jeep parked on the loop): make for the next waypoint instead
-        const prog = (Math.hypot(s.gx - x0, s.gz - z0) - Math.hypot(s.gx - s.x, s.gz - s.z)) / dt;
+        const prog = (Math.hypot(tgx - x0, tgz - z0) - Math.hypot(tgx - s.x, tgz - s.z)) / dt;
         s.stuck = prog < 0.05 && align > 0.5 ? s.stuck + dt : 0;
         if (s.stuck > 2.5) {
           s.loopT = (Math.floor(s.loopT / world.loopLeg) + 1) * world.loopLeg;
@@ -702,6 +709,28 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
   s.turning = wrapPi(s.facing - f0) / dt;
   s.gait = gaitOf(s.moved, tm);
   return s;
+}
+
+const via = { x: 0, z: 0 };
+/**
+ * Whether the straight walk from (x, z) to (gx, gz) passes within `R` of (cx, cz) (someone
+ * standing on the way); if so, `out` gets a spot on the far side of him along the walk's
+ * side, `R` + a little out, to walk to first. Pure.
+ */
+export function viaRound(x: number, z: number, gx: number, gz: number, cx: number, cz: number, R: number, out: { x: number; z: number }): boolean {
+  const dx = gx - x, dz = gz - z, L2 = dx * dx + dz * dz;
+  if (L2 < 1e-6) return false;
+  const t = ((cx - x) * dx + (cz - z) * dz) / L2;
+  if (t <= 0 || t >= 1) return false;               // he is not between it and where it goes
+  const px = x + dx * t, pz = z + dz * t;
+  let nx = px - cx, nz = pz - cz;
+  if (nx * nx + nz * nz >= R * R) return false;     // it passes him far enough off
+  let nl = Math.hypot(nx, nz);
+  if (nl < 1e-3) { nx = -dz; nz = dx; nl = Math.hypot(nx, nz); } // dead on: either side
+  // the spot beside him, level with him along the walk, out on its side
+  out.x = cx + (nx / nl) * (R + 0.4);
+  out.z = cz + (nz / nl) * (R + 0.4);
+  return true;
 }
 
 /** Which legs it moves at this speed. */
@@ -770,7 +799,8 @@ export function wrapPi(a: number): number {
  * The whole-body lift and pitch a stride adds (the legs themselves are the clip's, or none
  * on a static model): `cycle` = strides taken (it grows with the ground covered), `v` = its
  * speed. A ree's bound is a low arc (≤ 0.34 m) that lands on its hooves (lift 0) for the
- * last part of every cycle, nose up on the take-off and down on the landing; a static
+ * last part of every cycle, nose up rising and down falling, level where it leaves and meets
+ * the ground (so no hoof ever dips into it); a static
  * model's walk and trot are a small bob (≤ 2 cm) and rock; a squirrel hops. All small and
  * calm (never a jolt); `lift` ≥ 0 always, so nothing sinks into the ground.
  */
@@ -782,14 +812,15 @@ export function strideBody(kind: 'bound' | 'trot' | 'walk' | 'hop' | 'still', cy
       if (u >= air) return { lift: 0, pitch: 0 };
       const w = u / air;
       const H = clamp(0.12 + (v - 2.8) * 0.12, 0.12, 0.34);
-      return { lift: H * Math.sin(Math.PI * w), pitch: 0.1 * Math.cos(Math.PI * w) };
+      // nose up rising, down falling, level on the ground: the hooves never dip below it
+      return { lift: H * Math.sin(Math.PI * w), pitch: 0.09 * Math.sin(2 * Math.PI * w) };
     }
     case 'hop': {
       const air = 0.6;
       if (u >= air) return { lift: 0, pitch: 0 };
       const w = u / air;
       const H = clamp(0.03 + v * 0.02, 0.03, 0.08);
-      return { lift: H * Math.sin(Math.PI * w), pitch: 0.12 * Math.cos(Math.PI * w) };
+      return { lift: H * Math.sin(Math.PI * w), pitch: 0.12 * Math.sin(2 * Math.PI * w) };
     }
     case 'trot': {
       const a = 0.012 + Math.min(0.008, v * 0.003);
