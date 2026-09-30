@@ -159,7 +159,8 @@ export class CameraRig {
   // walks away from it; a solid closer than that stands beside him, and coming in front
   // of it would put the lens in his head: the side slide dodges it instead). Only the
   // lens ITSELF standing in a solid is a hard limit (`wall`), and even that pulls the
-  // lens in at most WALL_STEP a frame. The lens sees each solid's BODY: a circle's
+  // lens in at most WALL_RATE; a TURN that would sweep the lens into a wall faster than
+  // the boom may come in waits for it (the bearing yields). The lens sees each solid's BODY: a circle's
   // keep-out ring is the walker's (he keeps WALK_CLEAR of his own room from it), a
   // building by its bare walls, a solid of known height only up to its top (the lens
   // passes over the board, a boulder, a juniper); the trees and the parked jeep fade.
@@ -169,7 +170,8 @@ export class CameraRig {
   private readonly OVER_CLEAR = 0.3;   // a lens this far above a solid's top passes over it
   private readonly BOOM_IN_RATE = 4;   // m/s: the fastest the walk boom dollies in…
   private readonly BOOM_OUT_RATE = 3;  // …and out
-  private readonly WALL_STEP = 0.3;    // m a frame the hard limit may pull the lens in
+  private readonly WALL_RATE = 8;      // m/s the hard limit may pull the lens in (his walk carrying it into a wall)
+  private prevWalkBearing: number | null = null; // the walk lens's bearing last frame (a turn yields to a wall)
   private readonly nearBodies: Obstacle[] = []; // this frame's solids as the walk lens sees them
   private readonly bodyPool: Obstacle[] = [];
   private readonly bodyTop: number[] = [];      // …and each one's top (world y; Infinity: unknown, a wall)
@@ -616,8 +618,8 @@ export class CameraRig {
       this.terrainClearState = need <= this.MAX_TERRAIN_LIFT;
     }
     this.wasWalk = walk;
-    const bearing = this.bearing();
-    const s = Math.sin(bearing), c = Math.cos(bearing);
+    let bearing = this.bearing();
+    let s = Math.sin(bearing), c = Math.cos(bearing);
     // The lens hangs off a smoothed PIVOT (his spot) on a smoothed boom (length + eye
     // height) at the follow BEARING. The bearing is already eased, so the view turns
     // exactly as much as the bearing does. The boom pulls in and lets out calmly, and
@@ -640,17 +642,46 @@ export class CameraRig {
       const pace = this.player.pace;
       const pivotTau = !walk ? this.PIVOT_TAU_VEHICLE : pace > WALK_SPEED ? (this.PIVOT_TAU * WALK_SPEED) / pace : this.PIVOT_TAU;
       this.pivot.lerp(rp, dampFactor(dt, pivotTau));
+      const boomBefore = this.boomNow;
       let step = (dist - this.boomNow) * dampFactor(dt, dist < this.boomNow ? this.BOOM_IN_TAU : this.BOOM_OUT_TAU);
       if (walk) step = Math.max(-this.BOOM_IN_RATE * dt, Math.min(this.BOOM_OUT_RATE * dt, step)); // a calm dolly, never a lurch
       this.boomNow += step;
       // on foot the one hard limit is the lens ITSELF in a solid (see NEAR_FLOOR): a solid
       // the look-ahead did not see coming (he turned right beside it)
-      if (walk) wall = this.lensWall(s, c);
+      if (walk) {
+        wall = this.lensWall(s, c);
+        // …and a turn never sweeps the lens into a wall faster than the calm dolly comes
+        // in: the follow bearing YIELDS (it turns only as far as the boom can follow this
+        // frame, and catches up as the boom comes in). With his back to the cabin, turning
+        // on the spot swept the lens along its wall so fast that the hard limit pulled it
+        // in at 20 m/s, 2 m to 0.4 m in five frames (run 6 polish). A player's own drag,
+        // and a wall his walk carries the lens into (the pivot), keep the hard limit.
+        const floor = Math.max(this.MIN_BOOM, boomBefore - this.BOOM_IN_RATE * dt);
+        if (wall < floor - 0.1 && this.prevWalkBearing !== null && !reduced && !this.player.dragging) {
+          const from = this.prevWalkBearing, turn = wrapAngle(bearing - from);
+          const clear = (f: number): boolean => { const b = from + turn * f; return !this.lensInWall(Math.sin(b), Math.cos(b), floor); };
+          if (Math.abs(turn) > 1e-5 && clear(0)) {
+            let lo = 0, hi = 1;
+            for (let i = 0; i < 6; i++) { const m = (lo + hi) / 2; if (clear(m)) lo = m; else hi = m; }
+            this.followYaw = wrapAngle(this.followYaw - turn * (1 - lo));
+            bearing = wrapAngle(from + turn * lo);
+            s = Math.sin(bearing); c = Math.cos(bearing);
+            wall = this.lensWall(s, c);
+          }
+        }
+        // and a boom letting out never lets out INTO a solid: it waits where it is (else,
+        // pressed against the cabin, it let out a few cm, met the wall, was pulled in, let
+        // out again: the view shook 0.1 m every frame)
+        if (step > 0 && this.lensInWall(s, c, this.boomNow) && !this.lensInWall(s, c, boomBefore)) {
+          this.boomNow = boomBefore;
+          wall = this.lensWall(s, c);
+        }
+      }
       if (this.boomNow > wall) {
         // the lens never stays in it: it comes in, along the view (the eye comes down with
         // it), so the view does not tip, it only steps closer, on foot never faster than
-        // WALL_STEP a frame (the chase lens: at once, as ever)
-        const to = walk ? Math.max(wall, this.boomNow - this.WALL_STEP) : wall;
+        // WALL_RATE (the chase lens: at once, as ever)
+        const to = walk ? Math.max(wall, this.boomNow - this.WALL_RATE * dt) : wall;
         const aim = walk ? this.camLookH : this.camIdleLookH;
         this.eyeNow = aim + (this.eyeNow - aim) * (to / this.boomNow);
         this.boomNow = to;
@@ -663,6 +694,7 @@ export class CameraRig {
       }
       this.extOff.multiplyScalar(1 - dampFactor(dt, 0.3));
     }
+    this.prevWalkBearing = walk && !snap ? bearing : null;
     this.lensAt(this.camDesired, s, c).add(this.extOff);
     this.camera.position.copy(this.camDesired);
     this.lastSet.copy(this.camDesired);
@@ -864,13 +896,16 @@ export class CameraRig {
    *  (NEAR_FLOOR); the old limit was where the LINE to him first met a solid, and a jeep's
    *  flank turning into that line beside him put the lens in his head in one frame. */
   private lensWall(s: number, c: number): number {
-    const b0 = this.boomNow, k = this.sideNow, p = this.pivot, aim = this.camLookH;
-    const rp = this.player.group.position;
-    for (let d = b0; d > this.MIN_BOOM; d -= 0.1) {
-      const y = p.y + aim + (this.eyeNow - aim) * (d / b0);
-      if (!this.lensInBody(p.x - s * d - c * k * d, y, p.z - c * d + s * k * d, this.LENS_PROBE, rp)) return d;
-    }
+    for (let d = this.boomNow; d > this.MIN_BOOM; d -= 0.1) if (!this.lensInWall(s, c, d)) return d;
     return this.MIN_BOOM;
+  }
+
+  /** Would the walk lens at boom `d` on bearing (s, c) (this frame's pivot, side slide,
+   *  the eye along the view) stand within LENS_PROBE of a solid's body? */
+  private lensInWall(s: number, c: number, d: number): boolean {
+    const b0 = this.boomNow, k = this.sideNow, p = this.pivot, aim = this.camLookH;
+    const y = p.y + aim + (this.eyeNow - aim) * (d / b0);
+    return this.lensInBody(p.x - s * d - c * k * d, y, p.z - c * d + s * k * d, this.LENS_PROBE, this.player.group.position);
   }
 
   /** How well a lens there shows him, for the clear-view search (1 = a good distance,
