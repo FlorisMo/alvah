@@ -30,6 +30,7 @@ import { Stage, type StageSpec } from '../play/stage';
 import { makeReframe, registerPlayHint, clearPlayHint } from '../play/kit';
 import { ARRIVE_RADIUS, cue as cueAt, wayfind } from '../Wayfinding';
 import { isRunning, nearestAway } from './actors-math';
+import { walkPace } from '../world/Player';
 import type { Actor } from './actors';
 import type { AdventureRead, Place, Places, Spot } from './types';
 import type { IconName } from '../../ui/icons';
@@ -148,6 +149,9 @@ export interface WalkOpts {
     /** called when it hides / comes out (a rustle, a squeak) */
     onHide?: (spot: Spot) => void;
     onOut?: () => void;
+    /** his walk at the animal's pace while he leads it (m/s): a careful walk, so they stay
+     *  together; running is his own choice, and the animal hides */
+    pace?: number;
   };
   /** extra per-frame work while he walks (a squeak getting louder ...) */
   tick?: (dt: number) => void;
@@ -161,6 +165,11 @@ export interface WalkOpts {
 }
 
 const WALK_HINT_R = 0.8; // golden walks until it is within this share of r
+/** The animal he leads waits where it is once he is this far off (m) — a long walk away,
+ *  not a few running steps: after a run it comes out of its clump and trots after him —
+ *  and follows again once he is back within `LEAD_BACK_M`. */
+const LEAD_WAIT_M = 20;
+const LEAD_BACK_M = 5;
 
 export class AdventureKit {
   readonly mission: Mission;
@@ -464,12 +473,21 @@ export class AdventureKit {
     const gap = lead?.gap ?? 2;
     const rangerLead = (): { x: number; z: number; speed: number } => { const m = this.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
     if (lead) lead.actor.follow(rangerLead, gap);
-    const unhint = this.hint(() => ({ id: `walk:${o.name}`, walk: { x: to.x, z: to.z, r: r * WALK_HINT_R } }));
+    if (lead?.pace) walkPace.cap = lead.pace;
+    // the way he really walked (m): a test checks the design's bar against it
+    let walked = 0;
+    let was = this.ranger();
+    // (a perfect player walks to the goal; when the animal he leads waits for him, back to it)
+    const unhint = this.hint(() => (lead && waiting
+      ? { id: `walk:${o.name}:back`, walk: { x: lead.actor.x, z: lead.actor.z, r: LEAD_BACK_M * 0.7 } }
+      : { id: `walk:${o.name}`, walk: { x: to.x, z: to.z, r: r * WALK_HINT_R } }));
     let loud = false;
     let hushFor = 0;
     let runs = 0;
     const off = this.onTick((dt) => {
       const m = this.ranger();
+      walked += Math.min(1, dist(m, was)); // (a jump — a cut — is not a walk)
+      was = m;
       const d = dist(m, to);
       if (d < best - 1) { best = d; bestAt = this.clock; }
       if (o.quiet) {
@@ -498,7 +516,7 @@ export class AdventureKit {
       // the animal he leads: hides when he runs, comes out when he walks calmly again
       const a = lead.actor;
       const run = isRunning(m);
-      const far = dist(a, m) > 14;
+      const far = dist(a, m) > LEAD_WAIT_M;
       if (run && !hiding) {
         const spot = nearestAway(a.x, a.z, lead.hide ?? [], { x: m.x, z: m.z, d: 1.5 });
         if (spot) {
@@ -520,7 +538,7 @@ export class AdventureKit {
         waiting = true; // he walked off: the animal waits where it is
         a.idle();
         if (lead.waitLine) this.ui.say(lead.waitLine);
-      } else if (waiting && dist(a, m) < 5) {
+      } else if (waiting && dist(a, m) < LEAD_BACK_M) {
         waiting = false;
         a.follow(rangerLead, gap);
         this.ui.say(o.line);
@@ -537,8 +555,10 @@ export class AdventureKit {
       off();
       unhint();
       this.ui.setChip(null);
+      if (lead?.pace) walkPace.cap = null;
     }
     this.stats[`walk_${o.name}_s`] = Math.round(this.clock);
+    this.stats[`walk_${o.name}_m`] = Math.round(walked * 10) / 10;
     if (o.quiet) this.stats[`walk_${o.name}_runs`] = runs;
   }
 
@@ -591,6 +611,7 @@ export class AdventureKit {
   dispose(state: 'before' | 'after'): void {
     if (this.disposed) return;
     this.disposed = true;
+    walkPace.cap = null; // (a stop in the middle of a lead: his own walk back)
     for (const off of this.offs) off();
     this.ticks.clear();
     clearPlayHint();
