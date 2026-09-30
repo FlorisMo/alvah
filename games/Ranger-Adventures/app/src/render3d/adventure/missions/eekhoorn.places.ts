@@ -22,7 +22,7 @@
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
-import { atLocal, headingTo, uniformLocal, type Frame } from '../places.ts';
+import { atLocal, dist, headingTo, segDist, uniformLocal, type Frame } from '../places.ts';
 import { barkRadius } from '../squirrel-math.ts';
 import type { TreeStub } from '../../world/Forest.ts';
 
@@ -84,14 +84,20 @@ export const SPOT_SIZE = 0.52;
 const STAND = g(-1.55, -1.45);
 const CALLERS_STAND = g(-1.0, -3.1);
 
+/** How high the two stubs it waits on stand (m, their top): low, about the boy's
+ *  shoulder (he is 1.32 m), so the squirrel sitting up there faces him eye to eye. */
+export const WAIT_H = 1.1;
+
 /** The trees of the home (the forest draws them with its own; the scatter keeps clear). */
 export const HOME_TREES: readonly HomeTree[] = [
   // the squirrel's pine: its branch stub faces the marker (where the ranger comes from)
   { ...OAK_AT, species: 'prop-pine-scots', h: 14, rotY: 0.9, branch: { ang: headingTo(OAK_AT, MARKER) - 0.5, h: 1.45, out: 0.3 } },
-  // the way: each stub faces back along the way (where he follows from)
-  { ...PINE_A, species: 'prop-pine-scots', h: 13.5, rotY: 2.2, branch: { ang: headingTo(PINE_A, OAK_AT) + 0.35, h: 1.4, out: 0.28 } },
+  // the way: each stub faces back along the way (where he follows from). The two it
+  // waits on (A, C) are LOW (WAIT_H): sitting up there it looks him in the eye, over his
+  // shoulder in the follow camera (on the ground in front of him his own body hides it)
+  { ...PINE_A, species: 'prop-pine-scots', h: 13.5, rotY: 2.2, branch: { ang: headingTo(PINE_A, OAK_AT) + 0.35, h: WAIT_H, out: 0.28 } },
   { ...PINE_B, species: 'prop-pine-scots', h: 12.4, rotY: 4.1, branch: { ang: headingTo(PINE_B, PINE_A) + 0.2, h: 1.55, out: 0.26 } },
-  { ...PINE_C, species: 'prop-pine-scots', h: 14.2, rotY: 5.3, branch: { ang: headingTo(PINE_C, PINE_A) - 0.35, h: 1.4, out: 0.28 } },
+  { ...PINE_C, species: 'prop-pine-scots', h: 14.2, rotY: 5.3, branch: { ang: headingTo(PINE_C, PINE_A) - 0.35, h: WAIT_H, out: 0.28 } },
   // the glade's big oak, at its right side: the acorns come from it (its crown stays
   // clear of the neighbours on the left)
   { ...g(8.0, 2.6), species: 'prop-oak-tree', h: 11, rotY: 2.7, branch: { ang: headingTo(g(8.0, 2.6), g(0, 0)), h: 1.5, out: 0.34 } },
@@ -152,13 +158,35 @@ export const WOODPECKER = { tree: HOME_TREES[5], h: 1.2, ang: headingTo(HOME_TRE
  *  helped find are all back in the store: this one was forgotten long before). */
 export const SEEDLING_AT: Spot = g(1.6, 1.6);
 
+/* ------------------------------------------------------- the follow's waits ---- */
+
+/** Where the squirrel sits up on a tree's stub (world x/z; its feet at `branch.h`). */
+export function seatOf(t: HomeTree): Spot {
+  const b = t.branch!;
+  const r = barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, b.h) + b.out;
+  return { x: t.x + Math.sin(b.ang) * r, z: t.z + Math.cos(b.ang) * r };
+}
+
+/** How near (m) he comes to the squirrel waiting on its stub before it runs on: close
+ *  enough that it reads as an animal through the follow lens (≈ 30 px at 1280×800). */
+export const SEE_D = 3;
+/** The spot to see it from (golden's walk hint): out along its stub a little to the side,
+ *  so it sits over his shoulder, not straight over his head, and nothing is between. */
+const WATCH_D = 2.3;
+const WATCH_TURN = 0.3;
+export function watchSpot(t: HomeTree): Spot {
+  const s = seatOf(t), a = t.branch!.ang + WATCH_TURN;
+  return { x: s.x + Math.sin(a) * WATCH_D, z: s.z + Math.cos(a) * WATCH_D };
+}
+
 /** The places table. */
 export const EEKHOORN_PLACES = {
   marker: { ...MARKER, r: 2.4 },
   oak: { ...OAK_AT },
-  /** the waits of the follow: he comes within 4 m of the squirrel on its branch */
-  hopA: { ...PINE_A, r: 4 },
-  hopC: { ...PINE_C, r: 4 },
+  /** the waits of the follow: where he sees the squirrel on its low stub from (it runs
+   *  on once he is within SEE_D m of it and it is in his view) */
+  hopA: { ...watchSpot(HOME_TREES[1]), r: SEE_D },
+  hopC: { ...watchSpot(HOME_TREES[3]), r: SEE_D },
   /** where the ranger stands to watch the glade floor, facing its spots */
   stand: { ...STAND, r: 1.6, heading: headingTo(STAND, g(SPOTS_AT.u, SPOTS_AT.v)) },
   /** where he steps to for the neighbours' calls, facing them */
@@ -219,26 +247,81 @@ export const CALLERS_VIEW = {
   halfW: 1.8, halfD: 0.7, tall: 2.15, pitchDeg: 3, insetTop: 60, insetBottom: 110,
 } as const;
 
-/** Where round a trunk (a heading from its axis) the squirrel hides from the ranger at
- *  `me`: about 110° round from him (out of his sight behind the bark, and the way round
- *  to see it passes the trunk with room to spare), on the side nearer `toward` (its glade). */
-export function hideSide(trunk: { x: number; z: number }, me: { x: number; z: number }, toward: { x: number; z: number }): number {
-  const him = headingTo(trunk, me);
-  const a = him + Math.PI - 1.2, b = him + Math.PI + 1.2;
-  const at = (h: number): { x: number; z: number } => ({ x: trunk.x + Math.sin(h) * 2, z: trunk.z + Math.cos(h) * 2 });
-  return Math.hypot(at(a).x - toward.x, at(a).z - toward.z) < Math.hypot(at(b).x - toward.x, at(b).z - toward.z) ? a : b;
+const wrapA = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+
+/** The trunk's collider plus the boy and a margin (world/Dressing: 0.6 m per 12.5 m of
+ *  tree; the boy ≈ 0.3 m round). */
+export function trunkClear(t: HomeTree): number { return (0.6 * t.h) / 12.5 + 0.3 + 0.25; }
+
+/** The next spot on a straight way to `goal` (golden's walk hint: a perfect player walks
+ *  straight): `goal` itself, or — when a home tree's trunk stands in the way — the spot
+ *  where his way just grazes past that trunk (a tangent), or, right by it, a step round
+ *  it toward the goal. */
+export function wayTo(me: Spot, goal: Spot): Spot {
+  let block: HomeTree | null = null, bt = Infinity;
+  for (const t of HOME_TREES) {
+    if (segDist(t, me, goal) >= trunkClear(t) - 0.15) continue;
+    const along = (t.x - me.x) * (goal.x - me.x) + (t.z - me.z) * (goal.z - me.z);
+    if (along < bt) { bt = along; block = t; }
+  }
+  if (!block) return goal;
+  const r = trunkClear(block) + 0.35;
+  const th = headingTo(block, me);
+  const toGoal = wrapA(headingTo(block, goal) - th);
+  const d = dist(me, block);
+  const tangent = d > r + 0.05 ? Math.acos(r / d) : 0;
+  const a = th + Math.sign(toGoal || 1) * Math.max(tangent, Math.min(0.9, Math.abs(toGoal)));
+  return { x: block.x + Math.sin(a) * r, z: block.z + Math.cos(a) * r };
 }
 
-/** How far out from the trunk's axis (m) the ranger stands to see it there. */
-export const HIDE_SEEN_AT = 2.8;
+/* --------------------------------------------------------- hide-and-seek ---- */
 
-/** Does the ranger at `me` see the squirrel hiding round the trunk at heading `hideAt`?
- *  Anywhere on its side of the tree (within ~50° of it), from right up at the bark (a
- *  child walks up to the chatter) out to a little past the spot to see it from. From
- *  the way he came (110° round), the bark is between them. */
-export function seesHidden(trunk: { x: number; z: number }, hideAt: number, me: { x: number; z: number }): boolean {
-  const off = Math.abs(Math.atan2(Math.sin(headingTo(trunk, me) - hideAt), Math.cos(headingTo(trunk, me) - hideAt)));
-  return off < 0.9 && Math.hypot(me.x - trunk.x, me.z - trunk.z) < HIDE_SEEN_AT + 1.2;
+/** Hide-and-seek round pine C: a red squirrel keeps the trunk between itself and whoever
+ *  comes near. It clings `h` m up the bark straight across the trunk from him; when he
+ *  has walked round far enough that it would soon be seen (`shiftAt` rad off its side) it
+ *  slips round again to `to` rad from him — at most `shifts` times, calmly (`rate` rad/s
+ *  round the bark: about as fast as he goes round it walking), then it stays and he
+ *  finds it. So he walks about half round the tree. */
+export const HIDE = { h: 1.05, shiftAt: 1.85, to: 2.5, shifts: 2, rate: 1.1 } as const;
+
+/** Where it first hides (a heading from the trunk's axis): across the trunk from him,
+ *  turned a little toward `toward` (its glade), so the short way round goes that way. */
+export function hideStart(trunk: Spot, me: Spot, toward: Spot): number {
+  const him = headingTo(trunk, me);
+  const a = him + Math.PI - 0.3, b = him + Math.PI + 0.3;
+  const at = (h: number): Spot => ({ x: trunk.x + Math.sin(h) * 2, z: trunk.z + Math.cos(h) * 2 });
+  return dist(at(a), toward) < dist(at(b), toward) ? a : b;
+}
+
+/** He has come round toward it (`him`: his heading from the trunk): where it slips to
+ *  now, or null when it stays (not near enough round yet, or no slip left). It always
+ *  goes on the way it was (away from him). */
+export function hideShift(sqAng: number, him: number, left: number): number | null {
+  if (left <= 0) return null;
+  const off = wrapA(sqAng - him);
+  if (Math.abs(off) >= HIDE.shiftAt) return null;
+  return him + Math.sign(off || 1) * HIDE.to;
+}
+
+/** How long a slip round the bark from `a` to `b` takes (s). */
+export function slipSecs(a: number, b: number): number {
+  return Math.max(0.55, Math.abs(wrapA(b - a)) / HIDE.rate);
+}
+
+/** Golden's walk hint round the tree (a perfect player walks straight, then looks): round
+ *  the tree `OUT_R` m out, at most `ROUND_STEP` rad at a time, the short way toward where
+ *  it clings; once he is out on its side, in toward the trunk to `IN_R` m (walking at the
+ *  tree, the follow lens behind him looks at it). */
+const OUT_R = 3.6;
+const IN_R = 2.3;
+const ROUND_STEP = 1.05;
+const ON_ITS_SIDE = 0.3;
+export function roundStep(t: HomeTree, me: Spot, sqAng: number): Spot {
+  const him = headingTo(t, me);
+  const off = wrapA(sqAng - him);
+  if (Math.abs(off) <= ON_ITS_SIDE) return { x: t.x + Math.sin(sqAng) * IN_R, z: t.z + Math.cos(sqAng) * IN_R };
+  const a = him + Math.sign(off) * Math.min(ROUND_STEP, Math.abs(off));
+  return { x: t.x + Math.sin(a) * OUT_R, z: t.z + Math.cos(a) * OUT_R };
 }
 
 /** Who lives here: the squirrel, round its pine by the marker before; at its glade after,
@@ -268,6 +351,8 @@ export function eekhoornTreeClear(): { x: number; z: number; r: number }[] {
     // behind the stands, where the lens holds its views
     { ...g(0.6, -6), r: 4.2 },
     ...HOME_TREES.map((t) => ({ x: t.x, z: t.z, r: 3.2 })),
+    // round pine C, where he walks round it (hide-and-seek), a wider ring
+    { ...PINE_C, r: 4.6 },
   ];
 }
 

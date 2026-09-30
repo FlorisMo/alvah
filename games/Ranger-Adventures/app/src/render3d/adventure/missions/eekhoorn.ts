@@ -21,23 +21,26 @@
  * Steps (content, the EF contract): 0 corsi · 1 simon, each logged once.
  */
 
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import type { AdventureKit } from '../kit';
-import { Glow, clearPlayHint, pick3d } from '../../play/kit';
+import { clearPlayHint, pick3d } from '../../play/kit';
 import type { Adventure } from '../registry';
 import type { ResidentGroup } from '../../world/Residents';
 import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
 import { listenerOf } from '../../world/Residents';
 import { routeBeat } from '../beats/route';
-import { callersBeat, type Caller } from '../beats/callers';
-import { Squirrel } from '../squirrel';
+import { CALL_GLOW, WarmGlow, callersBeat, type Caller } from '../beats/callers';
+import { Squirrel, type SquirrelTree } from '../squirrel';
+import { lineClear, trunkUpright, wrap, type Upright } from '../squirrel-math';
 import { dist, headingTo } from '../places';
+import type { Spot } from '../types';
 import { TREE_BASE_H } from '../../world/Forest';
+import { RANGER_STAND_HEIGHT } from '../../AnimalScale';
 import { EekhoornHome, type Neighbour } from './eekhoorn.home';
 import {
-  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HOME_TREES, JAY_GROUND, STUMP, HIDE_SEEN_AT, hideSide, introView,
-  branchStub, eekhoornClearings, eekhoornTreeClear, seesHidden,
+  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, HIDE, HOME_TREES, JAY_GROUND, SEE_D, STUMP, TREE, introView,
+  branchStub, eekhoornClearings, eekhoornTreeClear, hideShift, hideStart, roundStep, slipSecs, watchSpot, wayTo, type HomeTree,
 } from './eekhoorn.places';
 
 /** The squirrel's size (m, sitting up with its tail): the upper end of a red squirrel,
@@ -83,7 +86,7 @@ async function meetNeighbours(k: AdventureKit, home: EekhoornHome, geluid: boole
   const c = k.copy;
   const names: Record<Neighbour['id'], string> = { gaai: c.isGaai, 'groene-specht': c.isSpecht, raaf: c.isRaaf };
   const left = new Set<string>(home.neighbours.map((n) => n.id));
-  const glows = new Map<string, Glow>(home.neighbours.filter((n) => n.body).map((n) => [n.id, new Glow(n.body!, '#ffd98a')]));
+  const glows = new Map<string, WarmGlow>(home.neighbours.filter((n) => n.body).map((n) => [n.id, new WarmGlow(n.body!)]));
   let busy = false;
   k.say(c.wieWonen);
   let finished!: () => void;
@@ -93,7 +96,7 @@ async function meetNeighbours(k: AdventureKit, home: EekhoornHome, geluid: boole
     if (!n || busy) return;
     busy = true;
     left.delete(id);
-    glows.get(id)?.set(0.6);
+    glows.get(id)?.set(CALL_GLOW);
     n.call();
     k.say(names[n.id]);
     if (geluid) Sound.callAt(n.id, n.at.x, n.at.z, listenerOf(k.world.camera));
@@ -123,6 +126,51 @@ async function meetNeighbours(k: AdventureKit, home: EekhoornHome, geluid: boole
   await k.wait(0.6);
 }
 
+/** Where the squirrel is to the player, right now, through the live lens: `seen` = in
+ *  front of the lens, inside the picture (under the line card at the top), and not hidden
+ *  by a trunk of its home or by his own body; `px` = how tall it is on the screen. */
+interface Sight { seen: boolean; px: number }
+const BOX = new THREE.Box3();
+const V1 = new THREE.Vector3();
+const V2 = new THREE.Vector3();
+const V3 = new THREE.Vector3();
+function sightOf(k: AdventureKit, sq: Squirrel, trees: readonly SquirrelTree[]): Sight {
+  const body = sq.body;
+  const cam = k.world.camera as THREE.PerspectiveCamera;
+  if (!body || !sq.group.visible) return { seen: false, px: 0 };
+  BOX.setFromObject(body);
+  const c = BOX.getCenter(V1);
+  const h = k.ctx.canvas.clientHeight || 800;
+  cam.updateMatrixWorld();
+  // in front of the lens
+  if (V2.copy(c).applyMatrix4(cam.matrixWorldInverse).z > -0.3) return { seen: false, px: 0 };
+  const top = V2.set(c.x, BOX.max.y, c.z).project(cam).y;
+  const bot = V3.set(c.x, BOX.min.y, c.z).project(cam).y;
+  const px = Math.abs(top - bot) * 0.5 * h;
+  const at = V3.copy(c).project(cam);
+  const y = (1 - at.y) * 0.5 * h;
+  if (Math.abs(at.x) > 0.94 || y < 100 || y > h - 16) return { seen: false, px };
+  const me = k.ranger();
+  const g = k.ctx.groundY(me.x, me.z);
+  const ups: Upright[] = trees.map((t) => trunkUpright(t.trunk, k.ctx.groundY(t.trunk.x, t.trunk.z)));
+  ups.push({ x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 });
+  return { seen: lineClear(cam.position, c, ups, SIGHT_PAD), px };
+}
+/** Most of it in view: the line to its middle passes a trunk (or him) by this much (m). */
+const SIGHT_PAD = 0.12;
+
+/** A walk that ends on what he SEES (not where he stands) gets its own play hint for
+ *  golden: a spot a perfect player walks to straight, with a real radius, read anew each
+ *  time he gets there. It replaces the walk's own hint on the walk's first tick, under
+ *  its own id (so a reader still holding the walk's own sees it change). */
+function seeHint(k: AdventureKit, name: string, spot: () => Spot): { tick(): void; off(): void } {
+  let off: (() => void) | null = null;
+  return {
+    tick: () => { off ??= k.hint(() => ({ id: `walk:${name}:see`, walk: { ...spot(), r: 0.7 } })); },
+    off: () => { off?.(); off = null; },
+  };
+}
+
 /** The adventure, beat by beat. */
 async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq: Squirrel): Promise<void> {
   const c = k.copy;
@@ -137,14 +185,20 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     sq.called();
   };
   void fam;
+  const sight = (): Sight => sightOf(k, sq, home.trees);
+  /** the stats a playtest reads (`__ranger.adventure().stats`): how tall it is now (px) */
+  const measure = (): Sight => { const s = sight(); k.stats.sq_px = Math.round(s.px); k.stats.sq_seen = s.seen ? 1 : 0; return s; };
 
   // 0 · it sees him coming: up to its branch stub on its pine, and it chatters at him.
-  //     The one look of the mission: the lens turns to it over his shoulder, so the
-  //     child meets the squirrel he is going to follow; then the follow camera is back.
+  //     The one look of the mission: the lens turns to it over his shoulder (while it
+  //     runs up to its stub), so the child meets the squirrel he is going to follow;
+  //     then the follow camera is back.
   k.beat = 'den';
-  await k.guard(sq.goBranch(oak, faceMe(sq.branchPose(oak))));
+  const up = k.guard(sq.goBranch(oak, faceMe(sq.branchPose(oak))));
   await k.frame(introView(k.ranger()), { face: headingTo(k.ranger(), oak.trunk) });
+  await up;
   k.say(c.daar);
+  k.stats.den_px = Math.round(measure().px);
   chatter();
   await k.wait(1.5);
   sq.flick();
@@ -153,60 +207,116 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   await k.wait(1.2);
   // (out of the picture he turns the way the squirrel will go: the follow camera comes
   // back behind him looking there, and the keys walk him after it)
-  k.world.faceRanger(headingTo(k.ranger(), pineA.trunk));
+  k.world.faceRanger(headingTo(k.ranger(), wayTo(k.ranger(), watchSpot(TREE.a))));
   k.free();
 
-  // 1 · "Volg de eekhoorn": tree to tree, it waits for him on a branch each time
-  const hop = async (name: string, go: () => Promise<boolean>, to: { x: number; z: number }, line: string): Promise<void> => {
+  // 1 · "Volg de eekhoorn": tree to tree. At each stop it sits up on a LOW stub on his
+  //     side of the pine (about his shoulder: over it in the follow lens, never behind
+  //     his head), faces him, flicks its tail and chatters, a warm light on its outline;
+  //     it runs on only once he has come close (within SEE_D) and it is in his view.
+  const hop = async (name: string, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
     k.say(line);
     const there = k.guard(go());
     let arrived = false;
     let toldWait = false;
-    void there.then(() => { arrived = true; void sq.lookAt(me); chatter(); }).catch(() => {});
-    await k.walk({
-      name, to: { ...to, r: 4 }, r: 4, line, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 18,
-      // while he waits for the ranger it chatters now and then (a sound to follow); when
-      // the ranger wanders off, the line says so once
-      tick: () => {
-        if (!arrived) return;
-        if (k.now - lastChatter > 3.2) chatter();
-        const far = dist(k.ranger(), sq) > 9;
-        if (far && !toldWait) { toldWait = true; k.say(c.wacht); } else if (!far && toldWait && dist(k.ranger(), sq) < 6) { toldWait = false; k.say(line); }
-      },
-    });
-    await there; // (he may be quicker than the squirrel: it gets there first)
+    void there.then((ok) => { if (!ok) return; arrived = true; sq.glow(true); void sq.lookAt(me); chatter(); }).catch(() => {});
+    const spot = watchSpot(t);
+    const hint = seeHint(k, name, () => wayTo(k.ranger(), spot));
+    try {
+      await k.walk({
+        name, to: spot, r: 0.01, line, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 18,
+        // while it waits for the ranger it chatters now and then (a sound to follow); when
+        // the ranger wanders off, the line says so once
+        tick: () => {
+          hint.tick();
+          if (!arrived) return;
+          if (k.now - lastChatter > 3.2) chatter();
+          const far = dist(k.ranger(), sq) > 9;
+          if (far && !toldWait) { toldWait = true; k.say(c.wacht); } else if (!far && toldWait && dist(k.ranger(), sq) < 6) { toldWait = false; k.say(line); }
+        },
+        reached: () => arrived && dist(k.ranger(), sq) <= SEE_D && measure().seen,
+      });
+    } finally {
+      hint.off();
+    }
+    k.stats[`${name}_px`] = Math.round(measure().px);
+    await there;
+    // it saw him come: a chatter and a flick, and it is off
+    chatter();
+    await k.wait(0.45);
+    sq.flick();
+    await k.wait(0.45);
+    sq.glow(false);
   };
-  await hop('pijn-1', () => sq.goBranch(pineA, headingTo(pineA.trunk, oak.trunk)), pineA.trunk, c.volg);
+  await hop('pijn-1', () => sq.goBranch(pineA, headingTo(pineA.trunk, oak.trunk)), TREE.a, c.volg);
   await hop('pijn-3', async () => {
     // a leap to the next pine and another to the third, then it waits there
     if (!(await sq.goLeap(pineB))) return false;
     await k.wait(0.25);
     return sq.goLeap(pineC, headingTo(pineC.trunk, pineA.trunk));
-  }, pineC.trunk, c.weer);
+  }, TREE.c, c.weer);
 
-  // it plays hide-and-seek: as he comes up it scurries round the trunk to the far side
-  // (as red squirrels do), and he walks round the tree to find it — its chatter from
-  // behind the bark tells him where. Round the side, not straight behind (the way round
-  // passes the trunk), on the side toward its glade. He has found it once he stands on
-  // its side of the tree: out at the spot to see it from (where the hint walks), or right
-  // up at the bark beside it (where a child steering at its chatter ends up).
+  // it plays hide-and-seek: it slips off its stub round the trunk, straight across it from
+  // him (as red squirrels do), and as he walks round it slips round again, keeping the
+  // bark between them — twice at most, calmly, never quicker than he goes round — and its
+  // chatter from behind the bark tells him where. So he walks about half round the pine.
+  // He has found it the moment it is in his view (the live lens: on the screen, no trunk
+  // and not his own body between): then it comes down to him.
   k.beat = 'verstop';
-  const hideAt = hideSide(pineC.trunk, k.ranger(), STUMP);
-  const hidden = k.guard(sq.goRound(pineC, { ang: hideAt, h: 1.1 }));
-  hidden.catch(() => {});
-  const round = { x: pineC.trunk.x + Math.sin(hideAt) * HIDE_SEEN_AT, z: pineC.trunk.z + Math.cos(hideAt) * HIDE_SEEN_AT };
-  await k.wait(0.6);
-  await k.walk({
-    name: 'om-de-boom', to: round, r: 1.2, line: c.waarIsHij, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 14,
-    tick: () => { if (k.now - lastChatter > 3.4) chatter(); },
-    reached: () => seesHidden(pineC.trunk, hideAt, k.ranger()),
-  });
-  await hidden;
-  // found: he stops (a moment with the keys resting), it pours down the bark and pops up
-  // on the ground in front of him, wherever he looks (in the follow camera's view), sits
-  // up facing him and chatters
+  const cT = TREE.c;
+  let sqAng = hideStart(pineC.trunk, k.ranger(), STUMP);
+  let left: number = HIDE.shifts;
+  let slipping = 0;
+  const slip = (ang: number, secs?: number): void => {
+    const token = ++slipping;
+    void k.guard(sq.goRound(pineC, { ang, h: HIDE.h }, secs)).then(() => { if (slipping === token) slipping = 0; }, () => {});
+  };
+  slip(sqAng, slipSecs(headingTo(pineC.trunk, sq), sqAng) * 0.6);
+  chatter();
+  k.say(c.waarIsHij);
+  await k.until(() => slipping === 0, 3);
+  k.stats.hide_shifts = 0;
+  let lastB = headingTo(pineC.trunk, k.ranger());
+  let walked = 0;
+  const step = { ...roundStep(cT, k.ranger(), sqAng) };
+  const hint = seeHint(k, 'om-de-boom', () => roundStep(cT, k.ranger(), sqAng));
+  try {
+    await k.walk({
+      name: 'om-de-boom', to: step, r: 0.01, line: c.waarIsHij, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 14,
+      tick: () => {
+        hint.tick();
+        const mb = headingTo(pineC.trunk, k.ranger());
+        walked += Math.abs(wrap(mb - lastB));
+        lastB = mb;
+        Object.assign(step, roundStep(cT, k.ranger(), sqAng)); // (the chip's way, if he needs it)
+        if (!slipping) {
+          const next = hideShift(sqAng, mb, left);
+          if (next !== null) {
+            left -= 1;
+            k.stats.hide_shifts += 1;
+            slip(next, slipSecs(sqAng, next));
+            sqAng = next;
+            chatter();
+          }
+        }
+        if (k.now - lastChatter > 2.6) chatter();
+      },
+      reached: () => measure().seen,
+    });
+  } finally {
+    hint.off();
+  }
+  // found: in the very frame it came into his view
+  k.say(c.gevonden);
+  k.stats.found_px = Math.round(measure().px);
+  k.stats.hide_round = Math.round((walked * 180) / Math.PI);
+  sq.called();
+  if (settings.geluid) Sound.callAt('eekhoorn', sq.x, sq.z, listenerOf(k.world.camera));
+  lastChatter = k.now;
+  // he stops (a moment with the keys resting); it pours straight down the bark on its side
+  // (in his view) and pops up on the ground in front of him, sits up facing him, chatters
   k.lockFollow();
-  await k.until(() => k.ranger().speed < 0.1, 1.5);
+  await k.until(() => k.ranger().speed < 0.1 && !slipping, 1.5);
   const m = k.ranger();
   const ahead = m.heading; // (where he looks: the follow camera looks there too)
   // (ahead of him but off to the side away from the tree, on the open floor: straight
@@ -216,8 +326,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   const side = Math.sin(toTree - ahead) >= 0 ? -1 : 1;
   const popAt = ahead + side * 0.75;
   const pop = { x: m.x + Math.sin(popAt) * 1.8, z: m.z + Math.cos(popAt) * 1.8 };
-  k.say(c.gevonden);
-  await k.guard(sq.run(sq.dashTo(pop.x, pop.z, headingTo(pop, m))));
+  await k.guard(sq.run(sq.dashTo(pop.x, pop.z, headingTo(pop, m), sqAng)));
   chatter();
   await k.wait(0.7);
   sq.flick();
@@ -228,8 +337,15 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   const stumpFace = headingTo(STUMP, P.stand);
   const toStump = k.guard(sq.goStump(STUMP.x, STUMP.z, STUMP.top, STUMP.r, stumpFace));
   toStump.catch(() => {}); // (a stop during the walk: the walk throws, this one is let go)
-  await k.walk({ name: 'open-plek', to: P.stand, r: 1.6, line: c.weer, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 18 });
+  // (on its stump it waits for him: it chatters now and then, the warm light on its outline)
+  let onStump = false;
+  void toStump.then((ok) => { if (ok) { onStump = true; sq.glow(true); chatter(); } }, () => {});
+  await k.walk({
+    name: 'open-plek', to: P.stand, r: 1.6, line: c.weer, doel: c.chipEekhoorn, cue: c.luister, arrowAfter: 18,
+    tick: () => { if (onStump && k.now - lastChatter > 3.2) chatter(); if (onStump) measure(); },
+  });
   await toStump;
+  sq.glow(false);
   k.say(c.plekje);
   chatter();
   // it takes an acorn from its store: it starts burying with one in its mouth
