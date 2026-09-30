@@ -366,26 +366,36 @@ const SPECIES: readonly (readonly [string, number])[] = [['animal-ree-roedeer', 
 /**
  * A child chasing a grazing animal with the jeep: W held all the way and A/D at it like keys
  * (steer toward it whenever it is more than `dead` rad off the nose, the keys looked at every
- * `sample` s, until it is `until` m ahead), the real jeep and its give-way brake, 60 Hz. Counts
- * the times the animal's own sideways motion across the jeep's current line reverses while it
- * is within 14 m in front of the bonnet (a zig-zag across the nose), the closest the body came,
- * and how long the jeep's brake acted.
+ * `sample` s from what he saw `lag` s before, until it is `until` m ahead), the real jeep and
+ * its give-way brake, 60 Hz, from `speed0` m/s. Counts the times the animal's own sideways
+ * motion across the jeep's current line reverses while it is within `zone` m in front of the
+ * bonnet (a zig-zag across the nose; it forgets the side once it has been out of that stretch
+ * for a second), the closest the body came, and how long the jeep's brake acted.
  */
-function pursue(id: string, r: number, ax: number, az: number, face: number, keys: { dead: number; sample: number; until: number }): { reversals: number; minGap: number; braked: number } {
+function pursue(
+  id: string, r: number, ax: number, az: number, face: number,
+  keys: { dead: number; sample: number; until: number; lag?: number }, speed0 = 6, zone = 30,
+): { reversals: number; minGap: number; braked: number } {
   const tm = TEMPERAMENT[id];
   const home: LoopPoint = { x: ax, z: az, facing: face, moving: false };
   const s = newWildState(home, 0);
   const world = openWorld(home);
-  let j: JeepState = { x: 0, z: 0, heading: 0, speed: 6, contact: false, braked: false };
+  let j: JeepState = { x: 0, z: 0, heading: 0, speed: speed0, contact: false, braked: false };
   const animal: YieldAnimal & { x: number; z: number } = { id, x: ax, z: az, r };
   const path = new Float64Array(PATH_N * PATH_STRIDE);
   let pathN = 0, predictIn = 0, lookIn = 0, want = { throttle: 1, steer: 0 };
-  let reversals = 0, lastSide = 0, minGap = Infinity, braked = 0, px = ax, pz = az;
+  let reversals = 0, lastSide = 0, outFor = 0, minGap = Infinity, braked = 0, px = ax, pz = az;
+  const seen: { t: number; off: number; ahead: number }[] = [];
   for (let t = 0; t < 12; t += DT) {
+    seen.push({
+      t,
+      off: Math.atan2(Math.sin(Math.atan2(s.x - j.x, s.z - j.z) - j.heading), Math.cos(Math.atan2(s.x - j.x, s.z - j.z) - j.heading)),
+      ahead: (s.x - j.x) * Math.sin(j.heading) + (s.z - j.z) * Math.cos(j.heading),
+    });
+    while (seen.length > 1 && seen[1].t <= t - (keys.lag ?? 0)) seen.shift();
     if ((lookIn -= DT) <= 0) {
       lookIn = keys.sample;
-      const off = Math.atan2(Math.sin(Math.atan2(s.x - j.x, s.z - j.z) - j.heading), Math.cos(Math.atan2(s.x - j.x, s.z - j.z) - j.heading));
-      const ahead = (s.x - j.x) * Math.sin(j.heading) + (s.z - j.z) * Math.cos(j.heading);
+      const { off, ahead } = seen[0];
       want = { throttle: 1, steer: ahead > keys.until && Math.abs(off) > keys.dead ? -Math.sign(off) : 0 };
     }
     animal.x = s.x; animal.z = s.z;
@@ -399,16 +409,20 @@ function pursue(id: string, r: number, ax: number, az: number, face: number, key
     const across = ((s.x - px) * fz - (s.z - pz) * fx) / DT;   // its own speed across the jeep's line (+ = to its left)
     const ahead = (s.x - j.x) * fx + (s.z - j.z) * fz;
     px = s.x; pz = s.z;
-    if (ahead > 0 && ahead < 14 && Math.abs(across) > 0.8) {
-      if (lastSide && Math.sign(across) !== lastSide) reversals++;
-      lastSide = Math.sign(across);
-    }
+    if (ahead > 0 && ahead < zone) {
+      outFor = 0;
+      if (Math.abs(across) > 0.8) {
+        if (lastSide && Math.sign(across) !== lastSide) reversals++;
+        lastSide = Math.sign(across);
+      }
+    } else if ((outFor += DT) > 1) lastSide = 0;
     minGap = Math.min(minGap, bodyGap(j, s.x, s.z, r));
   }
   return { reversals, minGap, braked };
 }
 
 test('a child steering the jeep at it the whole way: it bears away on one side of the jeep\'s line, never zig-zags across the bonnet, and nothing comes within 0.8 m', () => {
+  // at full speed, straight at it
   const styles = [
     { dead: 0.08, sample: DT, until: 3 },     // keys every frame, off the wheel once it is close
     { dead: 0.02, sample: 0.05, until: 0 },   // a quick eye, steering at it all the way
@@ -419,6 +433,14 @@ test('a child steering the jeep at it the whole way: it bears away on one side o
     assert.equal(run.reversals, 0, `${at}: it zig-zagged across the jeep's nose ${run.reversals} times`);
     assert.ok(run.minGap >= 0.8, `${at}: the body came within ${run.minGap.toFixed(2)} m`);
     assert.ok(run.braked < 4, `${at}: the jeep's brake acted ${run.braked.toFixed(1)} s`);
+  }
+  // from the parked jeep, the animal off to one side, a child whose keys lag his eye: he swings
+  // the nose past it and back (the line sweeps metres past it far out: it must not zig back)
+  for (const [id, r] of SPECIES) for (const bearing of [-0.45, -0.25, 0.25, 0.45]) for (const dist of [26, 38]) for (const face of [0, Math.PI / 2, -Math.PI / 2]) {
+    const run = pursue(id, r, Math.sin(bearing) * dist, Math.cos(bearing) * dist, face, { dead: 0.05, sample: 0.08, until: 0, lag: 0.15 }, 0);
+    const at = `${id} from rest, ${Math.round((bearing * 180) / Math.PI)}° off, ${dist} m, facing ${Math.round((face * 180) / Math.PI)}°`;
+    assert.equal(run.reversals, 0, `${at}: it zig-zagged across the jeep's nose ${run.reversals} times`);
+    assert.ok(run.minGap >= 0.8, `${at}: the body came within ${run.minGap.toFixed(2)} m`);
   }
 });
 

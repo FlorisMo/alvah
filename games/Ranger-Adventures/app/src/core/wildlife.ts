@@ -580,8 +580,11 @@ const RETURN_PACE = 1.2;
 /** A plan is looked at again this often (s) while the threat is on. */
 const REPLAN = 0.25;
 /** Its side of the jeep's line changes only once it stands this far (m) on the other side
- *  (the jeep's line swung right past it): wholly beside the other half of the bonnet. */
+ *  (the jeep's line swung right past it: wholly beside the other half of the bonnet)… */
 const SIDE_SWAP = JEEP_HALF;
+/** …and it could not get across to its side (at its top speed) within this share of the time
+ *  the jeep takes to come level with it. */
+const SIDE_SWAP_TIME = 0.5;
 /** Having made way for a jeep it watches it, and makes way again only once that jeep has come
  *  this much (m) closer by its own motion since it settled (and its path reaches it). */
 const REYIELD_CLOSE = 1.5;
@@ -636,10 +639,16 @@ export function wildStep(s: WildState, tm: Temperament, r: number, th: Threats, 
     // its side of the jeep's CURRENT line, chosen once for the encounter: the side it is
     // already on; near the middle, away from the jeep's turn, else the side it faces. Kept
     // however the driver steers (a pursuing driver's path wraps round it, and its side of
-    // that curve points back across the nose). Only when the jeep's line has swung right past
-    // it, so that it stands wholly beside the bonnet's other half, is that its side.
+    // that curve points back across the nose). When the jeep's line swings right past it, it
+    // carries on to its side if it is across long before the jeep is there (a driver's aim
+    // wobbles by metres far out, and a zig back would be worse); only if the jeep would be on
+    // it first is its side where it now stands, never a dash across the nose
     if (s.side === 0) s.side = yieldSide(jLat, j, s.facing);
-    else if (jLat * s.side < -SIDE_SWAP) s.side = -s.side;
+    else if (jLat * s.side < -SIDE_SWAP) {
+      const ahead = Math.abs((s.x - j.x) * Math.sin(j.heading) + (s.z - j.z) * Math.cos(j.heading));
+      const across = (jeepCorridor(r) + JEEP_CLEAR - jLat * s.side) / tm.top;
+      if (across > SIDE_SWAP_TIME * (ahead / Math.max(1, Math.abs(j.speed)))) s.side = -s.side;
+    }
     if (s.mode !== 'yield' || s.replan <= 0 || !goalHolds(s, r, j)) {
       s.replan = REPLAN;
       if (planYield(s.x, s.z, s.facing, r, j, s.side, world, out2)) { setMode(s, 'yield'); s.bear = false; s.gx = out2.x; s.gz = out2.z; }
