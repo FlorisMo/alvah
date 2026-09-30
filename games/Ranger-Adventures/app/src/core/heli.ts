@@ -194,6 +194,13 @@ export const HELI_BODY: readonly BodyCircle[] = [
   { along: -2.2, r: 0.6 },
 ];
 
+/** How far the helicopter reaches from its centre, seen from above (m): the rotor tips,
+ *  3.2-3.3 m up, reach 2.95 from the centre; the body and tail below them 2.8 (measured
+ *  off the 3.3 m model). The jeep's chase lens keeps out of this whole disc round the
+ *  parked helicopter, not only its body circles: the lens rides at the rotor's height,
+ *  and tucked in beside the cabin it looked out from under a blade. */
+export const HELI_REACH = 2.95;
+
 /**
  * Whether the helicopter may be entered at all. It is OPT-IN (Instellingen, default
  * UIT) AND withheld entirely under reduced-motion — flight is the one mode too

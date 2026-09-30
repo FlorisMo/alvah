@@ -34,7 +34,7 @@ import {
 } from '../../core/vehicle';
 import {
   flyStep, heliVignette, heliAvailable, heliRamp, landingAltitude,
-  HELI_CRUISE_HEIGHT, HELI_PAD_HEIGHT, HELI_CAPS, HELI_ROLL, HELI_BODY,
+  HELI_CRUISE_HEIGHT, HELI_PAD_HEIGHT, HELI_CAPS, HELI_ROLL, HELI_BODY, HELI_REACH,
 } from '../../core/heli';
 import { predictJeep, PATH_DT, PATH_N, PATH_STRIDE, type JeepRead } from '../../core/wildlife';
 import { Sound } from '../../core/sound';
@@ -587,6 +587,12 @@ export class Vehicles {
   /** The two helipads (their centres): keep-out ground for the roaming animals too. */
   pads(): readonly { readonly x: number; readonly z: number }[] {
     return this.helipads;
+  }
+
+  /** Run 6: the parked helicopter's whole reach from above (its centre, HELI_REACH: the
+   *  rotor tips), for the jeep's chase lens; nothing while someone flies it. */
+  visitHeliReach(visit: (x: number, z: number, r: number) => void): void {
+    if (this.heliPos && !this.inHeli) visit(this.heliPos.x, this.heliPos.z, HELI_REACH);
   }
 
   /** Dev-hook accessor (W5.1): the jeep's live state — placement, proximity, driving,

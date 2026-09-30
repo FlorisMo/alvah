@@ -252,6 +252,7 @@ export class World {
         mode: () => ({ inVehicle: this.vehicles.inVehicle, inHeli: this.vehicles.inHeli }),
         inputBlocked: () => this.activityActive || this.vehicles.inVehicle || this.vehicles.inHeli,
         afterPlace: () => this.pois.fadeRings(this.camera),
+        lensKeepOut: (visit) => this.vehicles.visitHeliReach(visit), // run 6: the parked heli's rotor
         creatures: (visit) => { // what stands on the ground, for the clear view (marker animals ~1 m, as the dev hook reads them)
           for (const m of this.pois.list) { const p = m.group.position; visit(p.x, p.y, p.z, 1.0); }
           for (const a of this.fauna.scenicActors) { const p = a.group.position; visit(p.x, p.y, p.z, a.height); }

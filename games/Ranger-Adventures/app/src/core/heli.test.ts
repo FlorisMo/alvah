@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   climbStep, flyStep, heliVignette, heliAvailable,
   HELI_CRUISE_HEIGHT, HELI_PAD_HEIGHT, HELI_MAX_CLIMB_RATE, HELI_CAPS,
-  HELI_ROLL, HELI_VIGNETTE_MAX, HELI_HOVER_EPS, HELI_BODY,
+  HELI_ROLL, HELI_VIGNETTE_MAX, HELI_HOVER_EPS, HELI_BODY, HELI_REACH,
 } from './heli.ts';
 
 const near = (a: number, b: number, eps = 1e-9): boolean => Math.abs(a - b) < eps;
@@ -128,4 +128,11 @@ test('heli: its footprint fits the 3.3 m model (run 6): covers the body, not muc
     assert.ok(cover(along) >= w - 0.15, `at ${along} m the body (±${w}) sticks out of the footprint (±${cover(along).toFixed(2)})`);
     assert.ok(cover(along) <= w + 0.45, `at ${along} m the footprint (±${cover(along).toFixed(2)}) is far wider than the body (±${w})`);
   }
+});
+
+test('heli: its reach from above holds the whole body and the rotor tips (the jeep lens keeps out of it)', () => {
+  for (const c of HELI_BODY) assert.ok(Math.abs(c.along) + c.r <= HELI_REACH, `a body circle (along ${c.along}, r ${c.r}) reaches past HELI_REACH`);
+  for (const [along, w] of [[-2.75, 0.16], [2.25, 0.5]] as const) assert.ok(Math.hypot(along, w) <= HELI_REACH, `the body at ${along} m reaches past HELI_REACH`);
+  assert.ok(HELI_REACH >= 2.95, 'the rotor tips reach 2.95 m from the centre (measured)');
+  assert.ok(HELI_REACH <= 3.2, 'the reach is the helicopter, not its whole pad (3.2)');
 });

@@ -242,3 +242,61 @@ test('camera at the edges: past the cabin, the jeep at the rim, turning round on
   await reportPageErrors(info, errors);
   expect(errors).toEqual([]);
 });
+
+test('camera at the edges: the jeep turning on the spot beside the parked helicopter keeps its lens out from under the rotor', async ({ page }, info) => {
+  // run 6 (FEEL close): a child's first drive — W alone from where the jeep is parked
+  // eases round the helicopter's pad and stops at the boulder behind it; turning right
+  // there swung the chase lens in beside the helicopter's cabin, under a rotor blade (the
+  // 3.3 m helicopter's rotor overhangs the body circles the boom pulled in for), and then
+  // stepped it 4 m closer in one frame. Now the lens keeps out of the helicopter's whole
+  // reach from above and eases in as it swings toward it.
+  test.setTimeout(3 * 60_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await page.goto('/?dev=1');
+  await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Dit is mijn ranger' }).click({ timeout: 60_000 });
+  await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 90_000 }).toBe('world');
+  await sleep(page, 2_000);
+  const jeep = await R<P2>(page, 'r.vehicle()');
+  await walkTo(page, jeep, { stopDist: 1, timeout: 40_000, until: (s) => s.jeepNear });
+  await page.keyboard.press('Space');
+  await expect.poll(() => R<boolean>(page, 'r.vehicle().inVehicle'), { timeout: 5_000 }).toBe(true);
+  // W alone until it stands (the boulder behind the pad)
+  await page.keyboard.down('ArrowUp');
+  const t0 = Date.now();
+  try {
+    await sleep(page, 2_000);
+    while (Date.now() - t0 < 10_000 && (await R<number>(page, 'r.vehicle().speed')) > 0.05) await sleep(page, 100);
+    const heli = await R<P2>(page, 'r.heli()');
+    const v = await R<P2>(page, 'r.vehicle()');
+    const gap = Math.hypot(v.x - heli.x, v.z - heli.z);
+    expect(gap, `W alone from its home stops the jeep beside the parked helicopter (${gap.toFixed(1)} m from it)`).toBeLessThan(9);
+    // …then turn right on the spot, W still held: the lens swings round toward the helicopter
+    await page.evaluate(() => {
+      const w = window as unknown as { __heliGap: number[]; __heliOn: boolean; __ranger: { cam(): { x: number; z: number } | null; heli(): { x: number; z: number } | null } };
+      w.__heliGap = []; w.__heliOn = true;
+      const tick = (): void => {
+        if (!w.__heliOn) return;
+        const c = w.__ranger.cam(); const h = w.__ranger.heli();
+        if (c && h) w.__heliGap.push(Math.hypot(c.x - h.x, c.z - h.z));
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await startTrace(page);
+    await hold(page, ['ArrowRight'], 2_500);
+  } finally { await page.keyboard.up('ArrowUp'); }
+  await sleep(page, 1_000);
+  const turn = await stopTrace(page);
+  const gaps = await page.evaluate(() => { const w = window as unknown as { __heliGap: number[]; __heliOn: boolean }; w.__heliOn = false; return w.__heliGap; });
+  await shot(page, 'edges-jeep-turned-beside-the-helicopter');
+  const closest = Math.min(...gaps);
+  test.info().annotations.push({ type: 'camera', description: `beside the helicopter: the lens came within ${closest.toFixed(2)} m of its centre over ${gaps.length} frames` });
+  // HELI_REACH (core/heli.ts): the rotor tips reach 2.95 m from its centre
+  expect.soft(closest, `the chase lens never goes under the helicopter's rotor (closest ${closest.toFixed(2)} m from its centre)`).toBeGreaterThanOrEqual(2.95);
+  calm(turn, 'the jeep turning on the spot beside the helicopter');
+
+  await reportPageErrors(info, errors);
+  expect(errors).toEqual([]);
+});
