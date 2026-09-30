@@ -38,9 +38,11 @@ export function buildWisselTrial(skin: Skin, diff: Settings, rng: () => number =
     pool.push({ id: fromDag ? nextDag() : nextNacht(), dag: fromDag });
   }
 
-  // higher wisselFreq → flips more often (every 2); lower → calmer (every 6)
+  // higher wisselFreq → flips more often (every 2); lower → calmer (every 6); and at
+  // least a third of the round comes after the first flip (a short round of six flips
+  // after the fourth: the switch is a real part of it, never its last animal)
   const freq = diff.wisselFreq ?? 0.4;
-  const flipEvery = Math.max(2, Math.round(2 + (1 - freq) * 4));
+  const flipEvery = Math.min(Math.max(2, Math.round(2 + (1 - freq) * 4)), Math.max(2, totaal - Math.ceil(totaal / 3)));
 
   return { queue: spread(pool, rng), flipEvery };
 }

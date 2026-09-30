@@ -186,3 +186,14 @@ test('buildWisselTrial: a lively queue — every night animal in a set, never th
     }
   }
 });
+
+test('buildWisselTrial: a short round flips early enough that a third of it comes after the flip', () => {
+  const six = { dagDieren: ['edelhert', 'ree'], nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'], trials: 6 } as Skin;
+  const eight = { ...six, trials: 8 } as Skin;
+  // a first-level child (wisselFreq 0.25) and the default slider (0.4): the six flip after the 4th
+  for (const f of [0.1, 0.25, 0.4]) assert.equal(buildWisselTrial(six, { wisselFreq: f } as Settings, rng(3)).flipEvery, 4);
+  assert.equal(buildWisselTrial(six, { wisselFreq: 1 } as Settings, rng(3)).flipEvery, 2, 'a quick switcher still flips every 2');
+  // the eight keep their cadence (5 at the first level, 4 at the default)
+  assert.equal(buildWisselTrial(eight, { wisselFreq: 0.25 } as Settings, rng(3)).flipEvery, 5);
+  assert.equal(buildWisselTrial(eight, { wisselFreq: 0.4 } as Settings, rng(3)).flipEvery, 4);
+});
