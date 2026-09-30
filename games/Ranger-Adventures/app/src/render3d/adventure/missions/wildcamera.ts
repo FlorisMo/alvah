@@ -12,9 +12,11 @@
  * night the badger comes out of its sett, a wild boar out of the bushes, a roe to the
  * glade's edge, a nightjar onto a log; they call, and he calls them back in order
  * (SIMON). The night passes. In the morning he looks through the photos: the animals
- * he aimed for, and on the last one a man setting a snare by the trail. He finds the
- * empty snare and takes it away. A roe steps into the glade; the camera clicks: it
- * guards the wood. The camera stays on its pine.
+ * he aimed for, and on the last one a man setting a snare by a foxglove and a bush. He
+ * looks for it himself, up the game trail the way he came, finds the empty snare half in
+ * the grass by that foxglove and that bush, takes it away and walks back to his camera.
+ * A roe steps into the glade; the camera clicks: it guards the wood. He is handed back
+ * on the open crossing. The camera stays on its pine.
  *
  * Steps (content, the EF contract): 0 wisselen · 1 simon, each logged once.
  */
