@@ -35,6 +35,11 @@ export interface WorldMarker {
   height: number;           // target world height for the model
   color: string;            // totem / accent colour
   biome?: Biome;            // the mission's landschap → anchor the marker in it
+  /** run 6: where it stands, when its adventure authored the place (else its landschap's anchor) */
+  at?: { x: number; z: number };
+  /** run 6: what stands in its ring — its animal (default), or nothing at all ('none': the
+   *  story's animal is elsewhere, hidden; the ring and its name still say "go here") */
+  look?: 'animal' | 'prop' | 'none';
 }
 
 /** Within this distance (m) of a marker, the board or the sit-spot its prompt shows. */
@@ -169,6 +174,7 @@ export class Markers {
         const ang = (i / N) * Math.PI * 2;
         x = Math.cos(ang) * 9; z = Math.sin(ang) * 9;
       }
+      if (mk.at) { x = mk.at.x; z = mk.at.z; } // an adventure authored its marker's place
       const group = new THREE.Group();
       group.position.set(x, this.groundY(x, z), z);
 
@@ -183,7 +189,7 @@ export class Markers {
       label.position.y = 1.9;
       group.add(label);
 
-      group.add(proceduralTotem(mk.color)); // instant stand-in
+      if (mk.look !== 'none') group.add(proceduralTotem(mk.color)); // instant stand-in
       this.scene.add(group);
       const entry = {
         group, pos: group.position.clone(), missionId: mk.missionId,
@@ -194,7 +200,7 @@ export class Markers {
       };
       this.list.push(entry);
 
-      if (mk.modelId) {
+      if (mk.modelId && mk.look !== 'none') {
         void loadRig(mk.modelId).then((rig) => {
           if (!rig) return;
           const prepped = prepModel(rig.group, mk.height);

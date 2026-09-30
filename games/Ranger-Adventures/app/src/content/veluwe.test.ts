@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AREA_VELUWE, VERHAALBOOG_VELUWE } from './veluwe.ts';
 import { lintText } from '../core/readlevel.ts';
+import { forPointer } from '../core/onboarding.ts';
 
 type Enc = { id: string; vraag: string; uitleg?: string; gevolg?: string; opties: { label: string; goed: boolean }[] };
 
@@ -102,4 +103,61 @@ test('the words match the picture: a lying animal is posed lying, a fleeing one 
       bad.push(`${m}.${e.id}: it runs off (${e.reactie}), but the words do not say so`);
   }
   assert.deepEqual(bad, []);
+});
+
+/* ---- run 6: the adventures' words (render3d/adventure): one short line per beat ---- */
+
+test('every adventure line reads at M3/E3 (≤7 words a sentence); the plain lines use no jargon', () => {
+  const bad: string[] = [];
+  let lines = 0;
+  for (const m of AREA_VELUWE.missies) {
+    const a = (m as { avontuur?: { simpel: Record<string, string>; knap?: Record<string, string> } }).avontuur;
+    if (!a) continue;
+    for (const [k, t] of Object.entries(a.simpel)) {
+      lines += 1;
+      for (const i of lintText(t)) bad.push(`${m.id}.avontuur.${k}: "${i.sentence}" [${i.words}]`);
+      for (const w of jargonIn(t)) bad.push(`${m.id}.avontuur.${k}: jargon "${w}" in a plain line`);
+    }
+    for (const [k, t] of Object.entries(a.knap ?? {})) {
+      for (const i of lintText(t)) bad.push(`${m.id}.avontuur.knap.${k}: "${i.sentence}" [${i.words}]`);
+      assert.ok(k in a.simpel, `${m.id}.avontuur.knap.${k} has a plain twin`);
+    }
+  }
+  assert.ok(lines >= 10, 'the frisling adventure has its words');
+  assert.deepEqual(bad, []);
+});
+
+test('a line that asks for a tap is written in the Tik form: an iPad reads "Tik", a mouse "Klik" (the device rule)', () => {
+  // every mission's words: the adventure lines and every step's copy ("Klik!" is the
+  // camera's own sound, not an instruction)
+  const bad: string[] = [];
+  for (const m of AREA_VELUWE.missies) {
+    const a = (m as { avontuur?: { simpel: Record<string, string>; knap?: Record<string, string> } }).avontuur;
+    const lines: [string, string][] = [
+      ...Object.entries(a?.simpel ?? {}).map(([k, v]): [string, string] => [`avontuur.${k}`, v]),
+      ...Object.entries(a?.knap ?? {}).map(([k, v]): [string, string] => [`avontuur.knap.${k}`, v]),
+      ...m.stappen.flatMap((st, i) => Object.entries((st.skin as { copy?: Record<string, unknown> }).copy ?? {})
+        .filter((e): e is [string, string] => typeof e[1] === 'string').map(([k, v]): [string, string] => [`stappen[${i}].copy.${k}`, v])),
+    ];
+    for (const [k, v] of lines) if (/\bklik\b(?!!)/i.test(v)) bad.push(`${m.id}.${k}: "${v}"`);
+  }
+  assert.deepEqual(bad, []);
+  const says = (id: string, k: string): string => {
+    const a = (AREA_VELUWE.missies.find((x) => x.id === id) as { avontuur?: { simpel: Record<string, string> } }).avontuur!;
+    return a.simpel[k];
+  };
+  for (const [id, k] of [['eekhoorn', 'routeWijs'], ['eekhoorn', 'wieWonen'], ['eekhoorn', 'naroepen'], ['frisling', 'zoek'], ['frisling', 'routeWijs'], ['ree-niet-aanraken', 'zoek']]) {
+    assert.match(forPointer(says(id, k), false), /\bTik\b/, `${id}.${k} on a touch screen`);
+    assert.match(forPointer(says(id, k), true), /\bKlik\b/, `${id}.${k} with a mouse`);
+  }
+});
+
+test('the frisling rounds come in the order the adventure meets them: aaien, dragen, voeren, zeug, pad', () => {
+  const m = AREA_VELUWE.missies.find((x) => x.id === 'frisling')!;
+  const encs = (m.stappen.find((s) => s.ef === 'dagnacht')!.skin as { encounters: EncFull[] }).encounters;
+  assert.deepEqual(encs.map((e) => e.id), ['aaien', 'dragen', 'voeren', 'zeug', 'pad']);
+  const voeren = encs.find((e) => e.id === 'voeren')!;
+  assert.equal(voeren.dier, 'overloper', 'the family\'s yearling sniffs the bag');
+  assert.ok(/jong zwijn/.test(voeren.vraag) && !jargonIn(voeren.vraag).length);
+  assert.ok(encs.filter((e) => e.flip).length === 1 && encs[encs.length - 1].flip, 'the flip comes last: now GO');
 });

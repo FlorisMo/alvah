@@ -103,7 +103,9 @@ export type Cam = { x: number; y: number; z: number; yaw: number; viewClear: boo
 export type Snap = { p: P2 | null; c: Cam | null; g: { grounded: boolean; clearance: number } | null; near: string | null;
   jeepNear: boolean; heliNear: boolean; screen: string; view: string | null; t: number };
 export type Hint = { id: string; x: number; y: number; onScreen: boolean; firstHit: boolean; aboveGround: boolean;
-  firstHitBy: string | null; bottomGap: number | null; reachesCanvas: boolean; blocker: string | null; parts: string[] };
+  firstHitBy: string | null; bottomGap: number | null; reachesCanvas: boolean; blocker: string | null; parts: string[];
+  /** run 6: an adventure's WALK hint — walk there with the arrow keys (nothing to click) */
+  walk?: { x: number; z: number; r: number } | null };
 export type Seat = { id: string; x: number; y: number; z: number; gap: number; sig: string; moves?: 'player' | 'ambient' };
 export type Vehicle = { placed: boolean; near: boolean; inVehicle: boolean; x: number; z: number; y: number;
   grounded: boolean; clearance: number; speed: number; fov: number; roll: number;
@@ -235,8 +237,10 @@ export type WalkStats = { res: 'arrived' | 'until' | 'stuck' | 'timeout'; ms: nu
  * sample also records: feet on the rendered ground, a tree blocking the view, the
  * camera swinging round in front of him, and how fast the camera turns.
  */
-export async function walkTo(page: Page, goal: P2, opts: { stopDist?: number; until?: (s: Snap) => boolean; timeout?: number } = {}): Promise<WalkStats> {
-  const { stopDist = 1.2, until, timeout = 90_000 } = opts;
+export async function walkTo(page: Page, goal: P2, opts: { stopDist?: number; until?: (s: Snap) => boolean; timeout?: number;
+  /** checked every loop (≈ 0.15 s): true stops the walk ('until') — e.g. an adventure's walk hint changed */
+  stopWhen?: () => Promise<boolean> } = {}): Promise<WalkStats> {
+  const { stopDist = 1.2, until, timeout = 90_000, stopWhen } = opts;
   const held = new Set<string>();
   const setKeys = async (want: Set<string>): Promise<void> => {
     for (const k of [...held]) if (!want.has(k)) { await page.keyboard.up(k); held.delete(k); }
@@ -252,6 +256,7 @@ export async function walkTo(page: Page, goal: P2, opts: { stopDist?: number; un
       if (!s.p || !s.c) { await sleep(page, 150); continue; }
       st.end = s.p;
       if (until?.(s)) { st.res = 'until'; break; }
+      if (stopWhen && await stopWhen()) { st.res = 'until'; break; }
       const dx = goal.x - s.p.x; const dz = goal.z - s.p.z; const d = Math.hypot(dx, dz);
       if (d < stopDist) { st.res = 'arrived'; break; }
       st.samples += 1;

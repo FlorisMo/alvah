@@ -45,6 +45,15 @@ const ANIMALS = {
     geluid: 'tjikt', toonVeilig: true,
     feiten: ['De eekhoorn verstopt nootjes. Soms vergeet hij er een. Daar groeit een boom uit.'],
   },
+  /* run 6: the squirrel's tree neighbours (De verstopte nootjes) */
+  gaai: {
+    id: 'gaai', naam: 'gaai', simpelWoord: 'gaai', geluid: 'krijst', toonVeilig: true,
+    feiten: ['De gaai verstopt ook eikels. Soms pikt hij er een.'],
+  },
+  'groene-specht': {
+    id: 'groene-specht', naam: 'groene specht', simpelWoord: 'specht', geluid: 'lacht', toonVeilig: true,
+    feiten: ['De groene specht lacht hard. Hij eet graag mieren.'],
+  },
   das: {
     id: 'das', naam: 'das', simpelWoord: 'das',
     vaktermen: { huis: 'burcht' }, geluid: 'snuift', toonVeilig: true,
@@ -103,21 +112,23 @@ const MISSIE_FRISLING = {
   verhaalHaak: 'spoor',     // §6.4: bringing the frisling home, you spot a cut fence + odd tracks
   kort: 'Een klein zwijntje is zijn groep kwijt. Breng hem veilig terug.',
   briefing: {
+    // run 6: the briefing names what the child can already hear and see in the world:
+    // the squeak, and the group rooting at the mud
     simpel: [
       'Hoi ranger!',
+      'Hoor je dat? Er piept iets.',
       'Een kleine big is zijn groep kwijt.',
-      'Hij is nog maar net geboren.',
       'Hij is bang en alleen.',
+      'Zijn groep is bij de modderpoel.',
       'Kun jij hem terugbrengen?',
-      'Zoek hem eerst in het gras.',
     ],
     knap: [
       'Hoi ranger!',
+      'Hoor je dat? Er piept iets.',
       'Een frisling is zijn rotte kwijt.',
       'Dat is een jong wild zwijn.',
-      'Hij is bang en alleen.',
+      'De rotte is bij de modderpoel.',
       'Breng hem terug naar de groep.',
-      'Zoek hem eerst in het gras.',
     ],
   },
   beloning: {
@@ -125,6 +136,46 @@ const MISSIE_FRISLING = {
     vaktermBadge: { id: 'knap-frisling', naam: 'Knap woord: frisling' },
   },
   reunion: { tekst: 'De moeder knort blij. Haar big is terug.' },
+  /* run 6: De verdwaalde frisling as an adventure in the world (render3d/adventure/
+     missions/frisling.ts): follow the squeak, find him in the bracken, lead him home
+     along the group's route, keep calm with the family. One line per beat. */
+  avontuur: {
+    simpel: {
+      kijk: 'Daar is zijn groep.',
+      volg: 'Volg het gepiep.',
+      chipPiep: 'Het gepiep',
+      luister: 'luister goed',
+      zoek: 'Waar is de big? Tik op hem.',
+      mis: 'Hier niet. Zoek verder.',
+      hint: 'Hoor je hem piepen?',
+      leid: 'Loop rustig. Hij loopt mee.',
+      chipWroet: 'De wroetplek',
+      nietRennen: 'Niet rennen. Dan schrikt hij.',
+      terugKomen: 'Rustig maar. Daar komt hij.',
+      wacht: 'De big wacht op je.',
+      chipBig: 'De big',
+      routeKijk: 'Kijk goed welke weg de groep liep.',
+      routeWijs: 'Wijs de weg. Tik op de plekken.',
+      routeMis: 'Hier niet. Kijk nog een keer.',
+      breng: 'Breng hem naar de modderpoel.',
+      chipModder: 'De modderpoel',
+      komt: 'Er komt een jong zwijn.',
+      moeder: 'De moeder kijkt naar jou.',
+      hek: 'Kijk. Het hek is stuk.',
+    },
+    knap: {
+      kijk: 'Daar is zijn rotte.',
+      zoek: 'Waar is de frisling? Tik op hem.',
+      hint: 'Hoor je de frisling piepen?',
+      wacht: 'De frisling wacht op je.',
+      chipBig: 'De frisling',
+      routeKijk: 'Kijk goed welke weg de rotte liep.',
+      breng: 'Breng hem naar de zoel.',
+      chipModder: 'De zoel',
+      komt: 'Daar komt een overloper.',
+      moeder: 'De zeug kijkt naar jou.',
+    },
+  },
   stappen: [
     {
       ef: 'zoeken',
@@ -183,6 +234,22 @@ const MISSIE_FRISLING = {
             uitleg: 'Goed. Hij moet naar zijn moeder ruiken.',
             gevolg: 'Hij schrikt en rent weg.',
             reactie: 'flee', eikelKost: 2, terug: 0.5 },
+          { id: 'dragen', subject: 'frisling', dier: 'wildzwijn',
+            vraag: 'De big is moe. Hij loopt langzaam.',
+            vraagKnap: 'De frisling is moe. Hij loopt langzaam.',
+            opties: [{ label: 'Draag hem', goed: false }, { label: 'Loop rustig mee', goed: true }],
+            uitleg: 'Goed. Hij loopt zelf. Jij wijst de weg.',
+            gevolg: 'Hij schrikt en loopt weg. Hij loopt liever zelf.',
+            reactie: 'flee', eikelKost: 1, terug: 0.7 },
+          // run 6: at the wallow it is the family's yearling (last year's young) that
+          // comes to sniff the ranger's bag
+          { id: 'voeren', subject: 'zwijn-honger', dier: 'overloper',
+            vraag: 'Een jong zwijn snuffelt aan je tas.',
+            vraagKnap: 'De overloper snuffelt aan je tas.',
+            opties: [{ label: 'Geef een koekje', goed: false }, { label: 'Niet voeren', goed: true }],
+            uitleg: 'Goed. Een zwijn zoekt zelf eten.',
+            gevolg: 'Nu wil hij steeds meer. Dat is niet goed.',
+            reactie: 'swarm', eikelKost: 3, terug: 0.6 },
           { id: 'zeug', subject: 'wildzwijn', dier: 'wildzwijn',
             vraag: 'De moeder staat bij haar biggen.',
             vraagKnap: 'De zeug staat bij haar biggen.',
@@ -191,25 +258,11 @@ const MISSIE_FRISLING = {
             gevolg: 'De moeder knort hard. Ze wil rust.',
             gevolgKnap: 'De zeug knort hard. Ze wil rust.',
             reactie: 'rear', eikelKost: 2, terug: 0.4 },
-          { id: 'voeren', subject: 'zwijn-honger', dier: 'wildzwijn',
-            vraag: 'Een hongerig zwijn snuffelt aan je tas.',
-            opties: [{ label: 'Geef een koekje', goed: false }, { label: 'Niet voeren', goed: true }],
-            uitleg: 'Goed. Een zwijn zoekt zelf eten.',
-            gevolg: 'Nu wil hij steeds meer. Dat is niet goed.',
-            reactie: 'swarm', eikelKost: 3, terug: 0.6 },
-          { id: 'dragen', subject: 'frisling', dier: 'wildzwijn',
-            vraag: 'De big is moe. Hij loopt langzaam.',
-            vraagKnap: 'De frisling is moe. Hij loopt langzaam.',
-            opties: [{ label: 'Draag hem', goed: false }, { label: 'Loop rustig mee', goed: true }],
-            uitleg: 'Goed. Hij loopt zelf. Jij wijst de weg.',
-            gevolg: 'Hij schrikt en loopt weg. Hij loopt liever zelf.',
-            reactie: 'flee', eikelKost: 1, terug: 0.7 },
           { id: 'pad', subject: 'rotte', dier: 'wildzwijn', flip: true,
             vraag: 'Daar is de groep! Het pad is vrij.',
             vraagKnap: 'Daar is de rotte! Het pad is vrij.',
             opties: [{ label: 'Blijf staan', goed: false }, { label: 'Loop rustig door', goed: true }],
-            uitleg: 'Precies. De big is weer bij de groep.',
-            uitlegKnap: 'Precies. De frisling is weer bij de rotte.',
+            uitleg: 'Goed zo. Geef de big de ruimte.',
             gevolg: 'Je wacht te lang. De groep loopt verder.',
             gevolgKnap: 'Je wacht te lang. De rotte loopt verder.',
             reactie: 'recede', eikelKost: 0, terug: 0.8 },
@@ -237,21 +290,23 @@ const MISSIE_REE = {
   payoff: 'moeder-keert-terug',         // inverted: you LEAVE the kalf; the mother returns
   kort: 'Een reekalf ligt alleen. Leer waarom je het met rust laat.',
   briefing: {
+    // run 6: the briefing names what the child can already see in the world: the
+    // mother grazing by the copse (so the calf is not lost at all)
     simpel: [
       'Hoi ranger!',
-      'Er ligt een reekalf in het gras.',
-      'Het is helemaal alleen.',
-      'Maar de moeder is dichtbij.',
-      'Kijk goed. Niet aanraken.',
-      'Zoek het kalf eerst in het gras.',
+      'Een wandelaar belde ons op.',
+      'Hij zag een reekalf, helemaal alleen.',
+      'Is het verdwaald? Dat denkt hij.',
+      'Maar kijk: de moeder eet vlakbij.',
+      'Zoek het kalf. Niet aanraken!',
     ],
     knap: [
       'Hoi ranger!',
-      'Een reekalf ligt in het gras.',
-      'Het "drukt zich" heel stil.',
-      'De reegeit is vlakbij. Dat is de moeder.',
-      'Kijk goed. Niet aanraken.',
-      'Zoek het kalf eerst in het gras.',
+      'Een wandelaar belde ons op.',
+      'Hij zag een reekalf, helemaal alleen.',
+      'Is het verdwaald? Dat denkt hij.',
+      'De reegeit graast vlakbij. Dat is mama.',
+      'Zoek het kalf. Niet aanraken!',
     ],
   },
   beloning: {
@@ -259,6 +314,38 @@ const MISSIE_REE = {
     vaktermBadge: { id: 'knap-reegeit', naam: 'Knap woord: reegeit' },
   },
   reunion: { sprite: 'ree', tekst: 'De moeder is terug bij haar kalf.' },
+  /* run 6: Het reekalf in het gras as an adventure in the world (render3d/adventure/
+     missions/ree.ts): the mother seen at the copse, her prints to the tall grass, the
+     calf found and left alone, a quiet walk to the hide, and the mother coming back.
+     One line per beat. */
+  avontuur: {
+    simpel: {
+      kijk: 'Kijk. Daar eet de moeder.',
+      volg: 'Volg de sporen naar het gras.',
+      chipGras: 'Het hoge gras',
+      sporen: 'kijk naar de sporen',
+      weg: 'Ze loopt de struiken in.',
+      zoek: 'Waar ligt het kalf? Tik op het kalf.',
+      mis: 'Hier niet. Zoek verder.',
+      hint: 'Het kalf piept zacht. Zie je het?',
+      stil: 'Loop stil naar de schuilplek.',
+      chipHut: 'De schuilplek',
+      zacht: 'loop, niet rennen',
+      sst: 'Sst. Loop stil.',
+      verstop: 'Verstop je bij de struik.',
+      wacht: 'Wacht stil. Kijk naar de struiken.',
+      staStil: 'Sta stil. Anders schrikt ze.',
+      daar: 'Daar is de moeder!',
+      ruikt: 'Ze ruikt aan haar kalf.',
+    },
+    knap: {
+      kijk: 'Kijk. Daar graast de reegeit.',
+      volg: 'Volg haar prenten naar het gras.',
+      sporen: 'kijk naar de prenten',
+      weg: 'De reegeit loopt de struiken in.',
+      daar: 'Daar is de reegeit!',
+    },
+  },
   stappen: [
     {
       ef: 'zoeken',
@@ -322,8 +409,8 @@ const MISSIE_REE = {
             gevolg: 'Plons! Dat maakt veel lawaai.',
             reactie: 'mud', eikelKost: 1, terug: 0.7 },
           { id: 'moeder', subject: 'pad-veilig', flip: true,
-            vraag: 'De moeder komt eraan. Het pad is vrij.',
-            vraagKnap: 'De reegeit komt eraan. Het pad is vrij.',
+            vraag: 'De moeder is terug. Het pad is vrij.',
+            vraagKnap: 'De reegeit is terug. Het pad is vrij.',
             opties: [{ label: 'Blijf staan', goed: false }, { label: 'Loop rustig weg', goed: true }],
             uitleg: 'Precies. Geef ze samen de ruimte.',
             gevolg: 'Je staat te dichtbij. De moeder loopt weg.',
@@ -417,10 +504,13 @@ const MISSIE_NACHTRONDE = {
 };
 
 /* ============================================================
-   MISSIE 4 — De wildcamera  (bos · schemer · monitoring/Snapshot)
-   Engines: simon (geluid-echo) → wisselen (dag/nacht sorteren)
-   verhaalHaak 'camera': the camera also catches a shadowy figure +
-   an empty snare (non-graphic) → drops the season's second clue.
+   MISSIE 4 — De wildcamera  (bos · een wildwissel · dag en nacht)
+   Engines: wisselen (de camera richten, dag ↔ nacht) → simon (de nachtroepers)
+   verhaalHaak 'camera': the morning photo shows a calm grey man setting an
+   empty snare (non-graphic) → drops the season's second clue.
+   Run 6: an adventure in the world (render3d/adventure/missions/wildcamera.ts):
+   follow a game trail, strap the camera to a pine, aim it for each animal as
+   day turns into night, echo the night callers, find the snare in the photos.
    ============================================================ */
 const MISSIE_WILDCAMERA = {
   id: 'wildcamera',
@@ -433,19 +523,19 @@ const MISSIE_WILDCAMERA = {
   briefing: {
     simpel: [
       'Hoi ranger!',
-      'We hangen een camera in het bos.',
-      'Die maakt vanzelf foto’s van dieren.',
-      'Luister eerst wie er roept.',
-      'Sorteer dan dag-dieren en nacht-dieren.',
-      'Begin met luisteren.',
+      'Hier ligt een camera voor dieren.',
+      'Die maakt vanzelf foto’s.',
+      'Wie komt er ’s nachts langs?',
+      'Volg het paadje van de dieren.',
+      'Hang de camera aan een boom.',
     ],
     knap: [
       'Hoi ranger!',
-      'We plaatsen een wildcamera in het bos.',
-      'Zo zien we welke dieren hier leven.',
-      'Luister eerst goed wie er roept.',
-      'Sorteer dan dag-dieren en nacht-dieren.',
-      'Begin met luisteren.',
+      'Hier ligt een wildcamera.',
+      'Die maakt vanzelf foto’s van dieren.',
+      'Wie komt er ’s nachts langs?',
+      'Volg de wildwissel van de dieren.',
+      'Hang de camera bij de kruising.',
     ],
   },
   beloning: {
@@ -453,23 +543,61 @@ const MISSIE_WILDCAMERA = {
     vaktermBadge: { id: 'knap-wildcamera', naam: 'Knap woord: wildcamera' },
   },
   reunion: { sprite: 'das', tekst: 'De camera bewaakt het bos.' },
-  stappen: [
-    {
-      ef: 'simon',
-      skin: {
-        dier: 'das',
-        dieren: ['das', 'wildzwijn', 'ree', 'raaf'],
-        copy: {
-          instructie: 'Antwoord de dieren.',
-          luister: 'Luister wie er roept…',
-          echo: 'Doe ze na. Tik op de dieren.',
-          goed: 'Knap onthouden!',
-        },
-        feit: 'Een wildcamera maakt heel veel foto’s. Zo weet de ranger wie er leeft.',
-        feitDier: 'das',
-      },
-      moeilijkheid: { lengte: 'settings', tempo: 'settings' },
+  /* run 6: the adventure's words, one short line per beat (read aloud once) */
+  avontuur: {
+    simpel: {
+      pak: 'Hier ligt de camera.',
+      pakKnop: 'Pak de camera',
+      kijkPad: 'Kijk. Daar gaat het paadje.',
+      volg: 'Volg het paadje van de dieren.',
+      chipPad: 'Het dierenpaadje',
+      sporen: 'kijk naar de sporen',
+      hang: 'Hier kruisen twee paadjes.',
+      hangKnop: 'Hang de camera op',
+      hangt: 'Het rode lampje knippert.',
+      vraag: 'Waar kijkt de camera?',
+      komt_edelhert: 'Daar komt een hert.',
+      komt_ree: 'Daar komt een ree.',
+      komt_das: 'Daar komt een das.',
+      komt_nachtzwaluw: 'Daar komt een nachtzwaluw.',
+      komt_wildzwijn: 'Daar komt een wild zwijn.',
+      foto: 'Klik! Een mooie foto.',
+      leeg: 'Leeg. Het dier is daar nu niet.',
+      nacht: 'Het wordt nacht.',
+      dag: 'Het wordt dag.',
+      andersom: 'Nu is het andersom!',
+      donker: 'Het wordt donker in het bos.',
+      nachtKomt: 'Het is nacht. Wie komt er?',
+      groei: 'Goed zo! Nu komt er een bij.',
+      opnieuw: 'Luister nog een keer.',
+      slapen: 'De dieren gaan weer weg.',
+      ochtend: 'De volgende ochtend…',
+      fotos: 'Wat zag de camera?',
+      fotoKnop: 'Bekijk de foto’s',
+      fotoTitel: 'De foto’s van de camera',
+      man: 'Kijk! Een man zet een val.',
+      zoekVal: 'Zoek de val bij het paadje.',
+      chipVal: 'De val',
+      bijPad: 'bij het paadje',
+      valHier: 'Daar ligt de val.',
+      valKnop: 'Haal de val weg',
+      valWeg: 'Goed zo. De val is weg.',
     },
+    knap: {
+      pak: 'Hier ligt de wildcamera.',
+      kijkPad: 'Kijk. Daar gaat de wildwissel.',
+      volg: 'Volg de wildwissel.',
+      chipPad: 'De wildwissel',
+      hang: 'Hier kruisen twee wildwissels.',
+      man: 'Kijk! Een stroper zet een strik.',
+      zoekVal: 'Zoek de strik bij de wildwissel.',
+      chipVal: 'De strik',
+      valHier: 'Daar ligt de strik.',
+      valKnop: 'Haal de strik weg',
+      valWeg: 'Goed zo. De strik is weg.',
+    },
+  },
+  stappen: [
     {
       ef: 'wisselen',
       skin: {
@@ -478,15 +606,33 @@ const MISSIE_WILDCAMERA = {
         nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'],
         trials: 8,
         copy: {
-          instructie: 'Breng elk dier naar de goede plek.',
-          regel: 'Dag-dier → open plek. Nacht-dier → het hol.',
-          regelOm: 'Nu andersom! Volg het bordje.',
-          goed: 'Alle dieren op de goede plek!',
+          instructie: 'Richt de camera op elk dier.',
+          regel: 'Dag-dier → open plek. Nacht-dier → het bosje.',
+          regelOm: 'Nu is het andersom!',
+          goed: 'Alle dieren staan op de foto!',
         },
         feit: 'De das slaapt overdag in zijn burcht. ’s Nachts gaat hij op pad.',
         feitDier: 'das',
       },
+      // §6.1 wisselen knobs: rule-flip frequency + trial count
       moeilijkheid: { wissel: 'settings', trials: 8 },
+    },
+    {
+      ef: 'simon',
+      skin: {
+        dier: 'das',
+        // run 6: the night callers round the crossing
+        dieren: ['das', 'wildzwijn', 'ree', 'nachtzwaluw'],
+        copy: {
+          instructie: 'Luister wie er roept.',
+          luister: 'Luister wie er roept…',
+          echo: 'Doe ze na. Tik op de dieren.',
+          goed: 'Knap onthouden!',
+        },
+        feit: 'Een wildcamera maakt heel veel foto’s. Zo weet de ranger wie er leeft.',
+        feitDier: 'das',
+      },
+      moeilijkheid: { lengte: 'settings', tempo: 'settings' },
     },
   ],
 };
@@ -592,36 +738,77 @@ const MISSIE_EEKHOORN = {
   status: 'actief',
   kort: 'De eekhoorn verstopt nootjes. Help hem ze terug te vinden.',
   briefing: {
+    // run 6: the briefing names what the child sees at the marker: the squirrel on its
+    // oak, and where it goes (its hiding place in the wood)
     simpel: [
       'Hoi ranger!',
-      'De eekhoorn verstopt nootjes.',
-      'Straks vergeet hij waar ze liggen.',
+      'Zie je de eekhoorn in de boom?',
+      'Hij gaat nootjes verstoppen.',
+      'Volg hem naar zijn plekje.',
       'Kijk goed waar hij ze stopt.',
-      'Wijs daarna de plekjes terug.',
-      'Laat de weg zien.',
+      'Straks vergeet hij het. Help hem dan.',
     ],
     knap: [
       'Hoi ranger!',
-      'De eekhoorn legt een wintervoorraad aan.',
-      'Hij verstopt nootjes door het hele bos.',
+      'Zie je de eekhoorn in de boom?',
+      'Hij legt een wintervoorraad aan.',
+      'Volg hem naar zijn plekje.',
       'Onthoud de volgorde van de plekjes.',
-      'Wijs ze daarna in volgorde terug.',
-      'Laat de weg zien.',
+      'Straks vergeet hij het. Help hem dan.',
     ],
   },
   beloning: {
     badgeId: 'nootjes-vinder', badgeNaam: 'Nootjes-vinder',
     vaktermBadge: { id: 'knap-wintervoorraad', naam: 'Knap woord: wintervoorraad' },
   },
-  reunion: { sprite: 'eekhoorn', tekst: 'Alle nootjes terug. Knap gedaan.' },
+  // (the squirrel sits on its stump and eats one: the ending the child sees)
+  reunion: { sprite: 'eekhoorn', tekst: 'Alle nootjes terug. Hij eet er een op.' },
+  /* run 6: De verstopte nootjes as an adventure in the world (render3d/adventure/
+     missions/eekhoorn.ts): follow the squirrel tree to tree, watch where it buries its
+     acorns and point them out when it forgets, call back its noisy neighbours. */
+  avontuur: {
+    simpel: {
+      daar: 'Kijk, daar zit de eekhoorn!',
+      volg: 'Volg de eekhoorn.',
+      chipEekhoorn: 'De eekhoorn',
+      luister: 'luister goed',
+      wacht: 'Hij wacht op jou.',
+      weer: 'Daar gaat hij weer!',
+      waarIsHij: 'Waar is hij? Loop om de boom.',
+      gevonden: 'Gevonden! Hij speelt verstoppertje.',
+      plekje: 'Hier is zijn plekje.',
+      routeKijk: 'Kijk waar hij de nootjes stopt.',
+      vergeten: 'Oei, hij weet het niet meer!',
+      routeWijs: 'Tik de plekjes op volgorde.',
+      routeMis: 'Hier niet. Kijk nog een keer.',
+      stapel: 'Hij brengt ze naar zijn stronk.',
+      wieWonen: 'Wie woont hier nog meer? Tik op elk dier.',
+      isGaai: 'Dat is de gaai.',
+      isSpecht: 'Dat is de groene specht.',
+      isRaaf: 'Dat is de raaf.',
+      gaaiKomt: 'Kijk, de gaai wil de nootjes!',
+      roepMee: 'Roep mee, dan gaat hij weg.',
+      luisterBuren: 'Luister wie er roept.',
+      naroepen: 'Roep ze na. Tik op de dieren.',
+      groei: 'Goed zo! Nu nog een.',
+      opnieuw: 'Luister nog een keer.',
+      goedBuren: 'Knap onthouden!',
+      gaai: 'De gaai vliegt weg.',
+    },
+    knap: {
+      routeKijk: 'Kijk waar hij zijn voorraad verstopt.',
+      stapel: 'Hij brengt ze naar zijn wintervoorraad.',
+    },
+  },
   stappen: [
     {
       ef: 'corsi',
       skin: {
         copy: {
+          // (the adventure frames it as the squirrel forgetting where it buried them)
           instructie: 'Onthoud waar de nootjes liggen.',
           toon: 'Kijk waar de eekhoorn ze verstopt…',
-          terug: 'Wijs de plekjes terug.',
+          terug: 'Hij vergeet het. Wijs de plekjes aan.',
           goed: 'Alle nootjes gevonden!',
         },
         feit: 'De eekhoorn vergeet soms een nootje. Daar groeit dan een boom uit.',
@@ -633,9 +820,10 @@ const MISSIE_EEKHOORN = {
       ef: 'simon',
       skin: {
         dier: 'eekhoorn',
-        dieren: ['eekhoorn', 'raaf', 'ree', 'das'],
+        // run 6: the squirrel's noisy tree neighbours (the jay is the nut thief)
+        dieren: ['eekhoorn', 'gaai', 'groene-specht', 'raaf'],
         copy: {
-          instructie: 'Antwoord de dieren in het bos.',
+          instructie: 'Antwoord de buren van de eekhoorn.',
           luister: 'Luister wie er roept…',
           echo: 'Doe ze na. Tik op de dieren.',
           goed: 'Knap onthouden!',

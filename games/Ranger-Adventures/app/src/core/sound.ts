@@ -6,7 +6,7 @@
  * triggering tap satisfies the autoplay-unlock rule).
  */
 
-import { fadeInCurve, fadeOutCurve, callWindow, callGain } from './audiofade';
+import { fadeInCurve, fadeOutCurve, callWindow, callGain, placeCall } from './audiofade';
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 
@@ -33,10 +33,10 @@ function ac(): AudioContext | null {
  * `Math.random`) and shaped by a biquad so sand reads muffled (lowpass) and
  * grass reads as a soft brighter swish (bandpass).
  */
-function noiseBurst(dur: number, filter: BiquadFilterType, cutoff: number, q: number, peak: number): void {
+function noiseBurst(dur: number, filter: BiquadFilterType, cutoff: number, q: number, peak: number, delay = 0, dest?: AudioNode): void {
   const a = ac();
   if (!a) return;
-  const t0 = a.currentTime;
+  const t0 = a.currentTime + delay;
   const n = Math.max(1, Math.floor(a.sampleRate * dur));
   const buf = a.createBuffer(1, n, a.sampleRate);
   const d = buf.getChannelData(0);
@@ -55,18 +55,19 @@ function noiseBurst(dur: number, filter: BiquadFilterType, cutoff: number, q: nu
   gain.gain.value = peak;
   src.connect(filt);
   filt.connect(gain);
-  gain.connect(a.destination);
+  gain.connect(dest ?? a.destination);
   src.start(t0);
 }
 
-function tone(freq: number, start: number, dur: number, type: OscillatorType, peak: number, dest?: AudioNode): void {
+function tone(freq: number, start: number, dur: number, type: OscillatorType, peak: number, dest?: AudioNode, sweep = 1): void {
   const a = ac();
   if (!a) return;
   const t0 = a.currentTime + start;
   const osc = a.createOscillator();
   const gain = a.createGain();
   osc.type = type;
-  osc.frequency.value = freq;
+  osc.frequency.setValueAtTime(freq, t0);
+  if (sweep !== 1) osc.frequency.exponentialRampToValueAtTime(freq * sweep, t0 + dur);
   gain.gain.setValueAtTime(0.0001, t0);
   gain.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
@@ -123,12 +124,18 @@ function knor(freq: number, start: number, dur: number, peak: number, dest: Audi
 // `notes` (when present) plays that pitch SEQUENCE instead of `rep` copies of
 // `freq` — the way to synth a call with distinct successive pitches (koekoek's
 // hoog→laag, koolmees' ti-ta-ti-ta) so "Ken je roep" (W6.4) is learnable by ear.
-interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[]; knor?: boolean }
+interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[]; knor?: boolean; sweep?: number; peak?: number }
 const CALLS: Record<string, CallSpec> = {
   edelhert:   { freq: 150, dur: 0.7,  type: 'sawtooth', vibrato: 6 },   // burlen — deep bellow
   ree:        { freq: 420, dur: 0.22, type: 'square',   rep: 2 },        // blaf — short bark
   wildzwijn:  { freq: 120, dur: 0.3,  type: 'sawtooth', rep: 2, knor: true }, // knor-knor — a soft grunt
   frisling:   { freq: 520, dur: 0.18, type: 'square',   rep: 3 },        // piglet squeak
+  // run 6 (the adventures): a lost piglet's thin squeak, "wiek-wiek", rising, soft — and
+  // a sow's happy grunting when her piglet is back, higher and softer than her warning
+  piep:       { freq: 980, dur: 0.13, type: 'sine', notes: [980, 1150], sweep: 1.45, peak: 0.12 },
+  'knor-blij':{ freq: 165, dur: 0.16, type: 'sawtooth', rep: 4, knor: true, peak: 0.26 },
+  // a roe calf's thin "fiep" for its mother: high, short, soft
+  fiep:       { freq: 1320, dur: 0.11, type: 'sine', notes: [1320, 1240], sweep: 0.86, peak: 0.08 },
   raaf:       { freq: 280, dur: 0.34, type: 'sawtooth', rep: 2 },        // kroa — diep en laag
   das:        { freq: 240, dur: 0.28, type: 'triangle', rep: 2 },        // churr
   nachtzwaluw:{ freq: 600, dur: 0.6,  type: 'triangle', vibrato: 22 },   // ratel — churring trill
@@ -175,12 +182,12 @@ function stopCurrentCall(a: AudioContext): void {
   } catch { /* already stopped */ }
 }
 
-function playCall(id: string): number {
+function playCall(id: string, out?: AudioNode): number {
   const a = ac();
   if (!a) return 0.3;
   stopCurrentCall(a); // one animal at a time: a new call gently ends the last one
   const bus = a.createGain();
-  bus.connect(a.destination);
+  bus.connect(out ?? a.destination);
   const sample = sampleBuffers.get(id);
   if (sample) {
     const t0 = a.currentTime;
@@ -206,13 +213,13 @@ function playCall(id: string): number {
   notes.forEach((freq, i) => {
     const start = i * (spec.dur + gap);
     if (spec.knor) {
-      knor(freq * (i % 2 ? 0.92 : 1), start, spec.dur, 0.4, bus);
+      knor(freq * (i % 2 ? 0.92 : 1), start, spec.dur, spec.peak ?? 0.4, bus);
     } else if (spec.vibrato) {
       // a small warble for the trilling/bellowing/singing calls
       tone(freq, start, spec.dur, spec.type, 0.16, bus);
       tone(freq * 1.04, start + 0.03, spec.dur, spec.type, 0.08, bus);
     } else {
-      tone(freq, start, spec.dur, spec.type, 0.16, bus);
+      tone(freq, start, spec.dur, spec.type, spec.peak ?? 0.16, bus, spec.sweep ?? 1);
     }
   });
   currentCall = { bus, sources: [] };
@@ -309,6 +316,55 @@ export const Sound = {
   /** play an animal's call; returns its duration (s) so the caller can time the sequence */
   call(id: string): number {
     return playCall(id);
+  },
+  /**
+   * An animal's call from where it is in the world (run 6): panned by its bearing from
+   * the listener (the lens: where it stands and the heading it looks along), at most
+   * ±0.8, and softer further away — full within 3 m, soft at 15 m, silent past 25 m.
+   * One call at a time, like `call`. Returns its duration (s), 0 when out of earshot.
+   */
+  callAt(id: string, x: number, z: number, listener: { x: number; z: number; yaw: number }): number {
+    const a = ac();
+    if (!a) return 0;
+    const { pan, gain } = placeCall(x, z, listener);
+    if (gain <= 0.01) return 0;
+    const g = a.createGain();
+    g.gain.value = gain;
+    const p = typeof a.createStereoPanner === 'function' ? a.createStereoPanner() : null;
+    if (p) { p.pan.value = pan; g.connect(p); p.connect(a.destination); } else g.connect(a.destination);
+    return playCall(id, g);
+  },
+  /** leaves and stems moving: a short, soft, band-passed rustle */
+  rustle(): void {
+    noiseBurst(0.32, 'bandpass', 2600, 0.7, 0.07);
+    noiseBurst(0.12, 'highpass', 4800, 0.5, 0.025, 0.09);
+    noiseBurst(0.1, 'highpass', 4200, 0.5, 0.02, 0.2);
+  },
+  /** a boot in a shallow wet pool: a soft low plash and a few drips after it */
+  splash(): void {
+    noiseBurst(0.34, 'lowpass', 900, 0.8, 0.12);
+    noiseBurst(0.22, 'bandpass', 2100, 1.2, 0.05, 0.05);
+    for (let i = 0; i < 3; i++) noiseBurst(0.05, 'bandpass', 2600 + i * 500, 3, 0.025, 0.32 + i * 0.17);
+  },
+  /** a snout at the ground: three quick, soft sniffs */
+  sniff(): void {
+    for (let i = 0; i < 3; i++) noiseBurst(0.06, 'highpass', 1700, 0.6, 0.05, i * 0.13);
+  },
+  /** turned earth: a low soft thud and a crumble */
+  dig(): void {
+    noiseBurst(0.18, 'lowpass', 420, 0.7, 0.09);
+    noiseBurst(0.14, 'bandpass', 1400, 0.8, 0.035, 0.07);
+  },
+  /** a strap pulled tight round a trunk, and the buckle's click */
+  strap(): void {
+    noiseBurst(0.26, 'bandpass', 1800, 1.2, 0.05);
+    noiseBurst(0.03, 'highpass', 3200, 0.8, 0.06, 0.3);
+    tone(900, 0.31, 0.03, 'triangle', 0.06);
+  },
+  /** a trail camera's soft shutter click */
+  shutter(): void {
+    noiseBurst(0.03, 'highpass', 3000, 0.7, 0.06);
+    noiseBurst(0.04, 'bandpass', 2000, 0.9, 0.05, 0.07);
   },
   /** the duration (s) of an animal's call — for scheduling the listen phase */
   callDur(id: string): number {

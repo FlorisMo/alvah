@@ -14,7 +14,7 @@ import * as THREE from 'three';
 import { loadModel, loadRig, prepModel } from '../Models';
 import { standHeightFor } from '../AnimalScale';
 import { applyEyes } from '../EyeMaterial';
-import { applyCoat, applyPosture } from '../AnimalDress';
+import { applyCoat, applyPattern, applyPosture } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
 import { livePolicy } from '../MotionMode';
 import { mergeColourSplits } from './merge';
@@ -25,6 +25,7 @@ import type { SpawnOpts, Spawned } from './types';
  *  `bird-<id>` manifest convention). */
 const ANIMAL_MODEL: Record<string, string> = {
   wildzwijn: 'animal-wildzwijn-boar',
+  overloper: 'animal-wildzwijn-boar',
   frisling: 'animal-frisling-piglet',
   big: 'animal-frisling-piglet',
   das: 'animal-das-badger',
@@ -114,6 +115,8 @@ export async function spawnModel(id: string, opts: SpawnOpts = {}): Promise<Spaw
   const prepped = prepModel(rig.group, opts.height ?? heightFor(id));
   applyEyes(prepped, glb, { dusk: false });
   applyCoat(prepped, glb);
+  if (id !== glb) applyCoat(prepped, id); // a young one's own coat (a reddish yearling on the boar's model)
+  applyPattern(prepped, glb);             // the piglet's striped pyjamas
   applyPosture(prepped, glb);
   applyCalmPose(prepped, glb);
   mergeColourSplits(prepped); // one draw call per animal, not one per colour
@@ -141,6 +144,7 @@ export async function spawnModel(id: string, opts: SpawnOpts = {}): Promise<Spaw
     dispose: disposer(prepped),
     rigged: rig.clips.length > 0,
     clip: play,
+    rate: (k) => { if (mixer) mixer.timeScale = k; },
   };
 }
 

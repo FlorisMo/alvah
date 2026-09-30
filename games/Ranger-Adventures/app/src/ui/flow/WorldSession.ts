@@ -23,6 +23,7 @@ import { prefersReducedMotion } from '../../core/reduced-motion';
 import { clearActivityWin, clearPlayHint, beginActivityScope, abortActivityScope } from '../../render3d/play/kit';
 import { modelFor, heightFor } from '../../render3d/play/spawn';
 import { heroOf } from '../../render3d/world/Progress';
+import { adventureFor, allAdventures } from '../../render3d/adventure/registry';
 import { nextPatrolTarget } from '../../core/patrol';
 import { Vector3 } from 'three';
 import {
@@ -130,19 +131,30 @@ export function startExplore(): void {
   const markers: WorldMarker[] = area.missies.map((m) => {
     const ef = m.stappen[0]?.ef as Engine | undefined;
     // the animal the mission is about stands at its marker, at its real size: the
-    // frisling (not a grown boar), the reekalf, the frog in the reeds
+    // frisling (not a grown boar), the reekalf, the frog in the reeds — unless the mission
+    // is an adventure whose story's animal is elsewhere (run 6: the ring stays empty)
     const hero = heroOf(m.id, m.dier);
+    const look = adventureFor(m.id)?.home.marker;
     const BIOMES = ['heide', 'bos', 'stuifzand', 'ven'] as const;
     const biome = (BIOMES as readonly string[]).includes(m.landschap)
       ? (m.landschap as typeof BIOMES[number]) : undefined;
     return {
       missionId: m.id,
       titel: m.titel,
-      modelId: hero ? modelFor(hero) : null,
+      modelId: hero && look?.look !== 'none' ? modelFor(hero) : null,
       height: heightFor(hero),
       color: (ef && SKILL_META[ef]?.kleur) || '#f5c23b',
       biome,
+      at: look?.at,
+      look: look?.look,
     };
+  });
+  // run 6: the adventures' homes (a wallow and its family, a stand of bracken ...) are
+  // built with the world, before or after their mission
+  const homes = allAdventures().map((a) => {
+    const m = area.missies.find((x) => x.id === a.id);
+    if (m) a.bind?.(m);
+    return { spec: a.home, build: a.dressing, clearings: a.clearings, treeClearings: a.treeClearings, trees: a.trees, actor: a.actor };
   });
 
   // the active mission the wayfinding cue points to = the recommended next one
@@ -157,7 +169,7 @@ export function startExplore(): void {
   const { stage } = session;
   const world = new World(
     stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, active,
-    onBiome, onInteract,
+    onBiome, onInteract, { homes },
   );
   session.world = world;
   // W4.5: hand the world the shared renderer so it can turn on the hero shadow map.

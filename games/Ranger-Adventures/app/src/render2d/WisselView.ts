@@ -12,7 +12,7 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
-import { buildWisselTrial, WisselRun, dagOfNacht, regelAndersom } from '../engines/wisselen';
+import { buildWisselTrial, WisselRun, dagOfNacht, placeNames, regelAndersom } from '../engines/wisselen';
 import { animalIcon } from './animalIcon';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
@@ -35,6 +35,8 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
     const regelOm = copy.regelOm ?? 'Nu andersom!';
     // after a flip the sign states the NEW mapping outright, as in 3D
     const regelOmgekeerd = regelAndersom(regelDag);
+    // the two places are named by the mission's own rule ("het hol", "het bosje" …), as in 3D
+    const naam = placeNames(regelDag);
 
     let busy = false;
     const timers: number[] = [];
@@ -52,9 +54,9 @@ export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> 
       `<div class="wissel-sky"></div>` +
       `<div class="wissel-sign"><span class="ws-flag"></span><span class="ws-rule"></span></div>` +
       `<div class="wissel-stage">` +
-      `<button class="wissel-bin bin-open" type="button" aria-label="open plek"><span class="bin-ico">☀️</span><span class="bin-label">open plek</span></button>` +
+      `<button class="wissel-bin bin-open" type="button" aria-label="${esc(naam.open)}"><span class="bin-ico">☀️</span><span class="bin-label">${esc(naam.open)}</span></button>` +
       `<div class="wissel-center"></div>` +
-      `<button class="wissel-bin bin-hol" type="button" aria-label="het hol"><span class="bin-ico">🌙</span><span class="bin-label">het hol</span></button>` +
+      `<button class="wissel-bin bin-hol" type="button" aria-label="${esc(naam.hol)}"><span class="bin-ico">🌙</span><span class="bin-label">${esc(naam.hol)}</span></button>` +
       `</div>` +
       `<div class="wissel-progress" aria-hidden="true"></div>` +
       `</div>`;

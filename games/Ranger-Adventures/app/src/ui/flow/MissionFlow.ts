@@ -34,6 +34,10 @@ import {
 } from './WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
 import { showCaseBoard, showOntknoping, badgeHtml, CLUE_GLYPH } from '../hub/Hub';
+import { adventureFor, type Adventure } from '../../render3d/adventure/registry';
+import { AdventureKit, Aborted } from '../../render3d/adventure/kit';
+import { provideAdventure } from '../../core/devhook';
+import { AdventureHud } from './AdventureHud';
 
 type PlayFn = (host: HTMLElement, step: Step) => Promise<BeatSummary>;
 const ENGINE_VIEWS: Partial<Record<string, PlayFn>> = {
@@ -90,6 +94,19 @@ export function goToMission(mission: Mission): void {
 /** The mission entry card: a diegetic *veldnotitie* (field note), so launching a
  *  mission never feels like leaving the world. */
 export function showBriefing(mission: Mission): void {
+  // Run 6: a mission played as an adventure gets its world ready while this card covers
+  // it (a trial's look-alikes in the stand; a replay puts the lost one back where he hid)
+  const adv = adventureNow(mission);
+  const world = session.world;
+  if (adv && world) {
+    if (store.get().voltooid[mission.id]) world.residents.setState(mission.id, 'before');
+    adv.prepare?.(world, mission);
+  }
+  const unprepare = (): void => {
+    if (!adv || !world) return;
+    adv.unprepare?.(world, mission);
+    if (store.get().voltooid[mission.id]) world.residents.setState(mission.id, 'after');
+  };
   const jargon = store.get().settings.jargon;
   const lines = (jargon && mission.briefing.knap?.length ? mission.briefing.knap : mission.briefing.simpel) ?? [];
 
@@ -118,12 +135,34 @@ export function showBriefing(mission: Mission): void {
     speakBtn: el.querySelector('.ra-speak'),
     autoStart: store.get().settings.voorlezen,
   });
-  el.querySelector('.briefing-back')?.addEventListener('click', () => { ra.stop(); resumePatrol(); });
+  el.querySelector('.briefing-back')?.addEventListener('click', () => { ra.stop(); unprepare(); resumePatrol(); });
   el.querySelector('.btn-start')?.addEventListener('click', () => { ra.stop(); void runMission(mission); });
+}
+
+/** The adventure this mission is played as NOW, or null for the classic path: only in a
+ *  live 3D world with WebGL, not on the 2D floors (Tweaks "altijd 2D"), not under
+ *  reduced motion (the classic path's cuts and 2D floors serve that player). */
+function adventureNow(mission: Mission): Adventure | null {
+  const adv = adventureFor(mission.id);
+  if (!adv || !session.world || !WEBGL_OK) return null;
+  if (store.get().settings.force2d || prefersReducedMotion()) return null;
+  return adv;
+}
+
+/** The adventure's words as this player reads them: the knappe woorden when that
+ *  setting is on, "Tik" instead of "Klik" on a touch screen. */
+function avontuurCopy(mission: Mission): Record<string, string> {
+  const a = mission.avontuur;
+  if (!a) return {};
+  const out: Record<string, string> = { ...a.simpel, ...(store.get().settings.jargon ? a.knap ?? {} : {}) };
+  for (const k of Object.keys(out)) out[k] = deviceText(out[k]);
+  return out;
 }
 
 /* ---------------------------------------------------------- play loop ---- */
 async function runMission(mission: Mission): Promise<void> {
+  const adv = adventureNow(mission);
+  if (adv && session.world) { await runAdventure(mission, adv); return; }
   const played: Engine[] = [];
   let skipped: string | null = null;
   setScreen('mission');
@@ -225,6 +264,93 @@ async function runMission(mission: Mission): Promise<void> {
   showReward(mission, played, skipped, clueId, finale ? showSeasonFinale : resumePatrol);
 }
 
+/* ------------------------------------------------------ the adventure ---- */
+/**
+ * Run 6 (design §3): the mission played as an ADVENTURE in the live world. The same
+ * steps as the classic path (each `stappen[i]` logged exactly once, through
+ * `store.logSession`), the same facts as veldnotities, the same reunion line, reward,
+ * clue and world state — but the beats happen where the ranger walks: the world is not
+ * held (`holdWorld`), it is put in the adventure mode by the kit. The dev hook says
+ * screen 'mission' and missionView '3d' the whole time, walking beats included.
+ * "Stop de missie" works from every beat: the script unwinds, the animals go back
+ * where they were, and he stands in free roam where he stood.
+ */
+async function runAdventure(mission: Mission, adv: Adventure): Promise<void> {
+  const world = session.world!;
+  const played: Engine[] = [];
+  clearOverlays(); // the briefing goes: the world is the picture now
+  setScreen('mission');
+  setMissionView('3d');
+  stopRequested = false;
+  missionStop = null;
+  const stopped = new Promise<'STOP'>((res) => { missionStop = () => res('STOP'); });
+  mountMissionPause();
+  const signal = beginActivityScope();
+  const facts = mission.stappen.filter((st) => st.skin.feit).length;
+  let factN = 0;
+  let clueId: string | null = null;
+  let finale = false;
+  const host = document.createElement('div');
+  host.className = 'mission-step';
+  session.host.appendChild(host);
+  const ui = new AdventureHud();
+  const kit = new AdventureKit({
+    mission, places: adv.home.places, copy: avontuurCopy(mission), steps: mission.stappen.map(stepForView),
+    world, ctx: world.ctx(host), ui, signal, host,
+    hooks: {
+      log: (i, summary) => {
+        const ef = mission.stappen[i].ef as Engine;
+        store.logSession(ef, summary);
+        played.push(ef);
+      },
+      fact: async (i) => {
+        const st = mission.stappen[i];
+        if (!st.skin.feit) return;
+        store.collectVeldnotitie(Content.veldnotitieId(mission.id, i)); // W6.3b: a veldnotitie
+        await showFact(st, ++factN, facts);
+        clearOverlays();
+      },
+      reunion: async (play) => {
+        // won: from here on it is the ending (the pause chip goes, as on the classic path)
+        unmountMissionPause();
+        missionStop = null;
+        const area = Content.activeArea();
+        const before = Content.cluesFound(area.id, store.get().voltooid);
+        const seasonBefore = seasonDone();
+        const knap = mission.beloning.vaktermBadge;
+        store.markMissionDone(mission.id, knap ? { id: knap.id, naam: knap.naam.replace(/^Knap woord:\s*/i, '') } : undefined);
+        notePatrolCompletion();
+        clueId = capturedClue(mission, true, before);
+        finale = !seasonBefore && seasonDone();
+        await showReunion(mission, play());
+      },
+      paused: () => !!session.host.querySelector('.mission-pause-menu'),
+    },
+  });
+  provideAdventure(() => kit.read());
+  let won = false;
+  try {
+    const r = await Promise.race([adv.play(kit).then(() => 'DONE' as const), stopped]);
+    won = r === 'DONE' && !stopRequested;
+  } catch (e) {
+    if (!(e instanceof Aborted)) console.error('[adventure] stopped by an error', e); // never a dead end: back to free roam
+  } finally {
+    provideAdventure(null);
+    kit.dispose(store.get().voltooid[mission.id] ? 'after' : 'before');
+    ui.dispose();
+    clearActivityWin();
+    clearPlayHint();
+    host.remove();
+  }
+  if (!won) { abandonMission(); return; }
+  unmountMissionPause();
+  missionStop = null;
+  setMissionView(null);
+  clearOverlays();
+  // (the adventure's own photograph of its clue, when it took one: the camera trap's)
+  showReward(mission, played, null, clueId, finale ? showSeasonFinale : resumePatrol, kit.cluePhoto);
+}
+
 /** Every mission of the area is done. */
 function seasonDone(): boolean {
   const done = store.get().voltooid;
@@ -239,7 +365,7 @@ function seasonDone(): boolean {
  * happened, read aloud. The camera stays where it is; under reduced motion the family
  * simply stands there. Then the reward card. Never longer than a few seconds.
  */
-function showReunion(mission: Mission): Promise<void> {
+function showReunion(mission: Mission, moment?: Promise<void>): Promise<void> {
   narrator.stop();
   const tekst = mission.reunion?.tekst ?? '';
   const el = card(
@@ -254,8 +380,10 @@ function showReunion(mission: Mission): Promise<void> {
   const ra = textEl ? mountReadAloud({ textEl, text: tekst, autoStart: store.get().settings.voorlezen }) : null;
   const inWorld = tellWorldMissionDone(mission.id, true);
   const read = new Promise<void>((r) => window.setTimeout(r, REUNION_MIN_MS));
-  const cap = new Promise<void>((r) => window.setTimeout(r, REUNION_MAX_MS)); // a slow model load never holds the reward
-  return Promise.race([Promise.all([inWorld, read]).then(() => {}), cap]).then(() => { ra?.stop(); });
+  const cap = new Promise<void>((r) => window.setTimeout(r, moment ? REUNION_MAX_MS + 4000 : REUNION_MAX_MS)); // a slow model load never holds the reward
+  // an adventure's own reunion (the family together again in the world) plays under the line
+  const all = Promise.all([inWorld, read, moment?.catch(() => {})]).then(() => {});
+  return Promise.race([all, cap]).then(() => { ra?.stop(); el.remove(); });
 }
 
 /** The reunion line stays up at least this long (reading time), at most that long. */
@@ -408,7 +536,7 @@ function showFact(step: Step, n: number, total: number): Promise<void> {
 }
 
 /* ------------------------------------------------------------- reward ---- */
-function showReward(mission: Mission, played: Engine[], skipped: string | null, clueId: string | null, then: () => void): void {
+function showReward(mission: Mission, played: Engine[], skipped: string | null, clueId: string | null, then: () => void, photo: string | null = null): void {
   const badges = Array.from(new Set(played)).map(badgeHtml).join('');
   const knap = mission.beloning.vaktermBadge
     ? `<p class="reward-knap">Knap woord: <b>${esc(mission.beloning.vaktermBadge.naam.replace(/^Knap woord:\s*/i, ''))}</b></p>`
@@ -447,7 +575,7 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
   });
   el.querySelector('.btn-start')?.addEventListener('click', () => {
     ra.stop();
-    if (clue) showWildcamCapture(clue, then);
+    if (clue) showWildcamCapture(clue, then, photo);
     else then();
   });
 }
@@ -456,15 +584,16 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
 /** The diegetic clue beat: a verhaalHaak mission completed on patrol is "vastgelegd
  *  op de wildcamera" — a calm snapshot card showing the new aanwijzing now on the
  *  prikbord. Two ways on: peek at the board, or walk straight on. */
-function showWildcamCapture(clue: Clue, then: () => void): void {
+function showWildcamCapture(clue: Clue, then: () => void, photo: string | null = null): void {
   narrator.stop();
   const line = clue.soort === 'camera' ? 'Vastgelegd op de wildcamera.' : 'Je maakt er een foto van.'; // child:B15: no wildcamera before you met one
-  const glyph = CLUE_GLYPH[clue.soort] ?? '📌';
+  // run 6: the camera trap's own photograph when the adventure took one, else the glyph
+  const glyph = photo ? `<img class="cb-shot" src="${photo}" alt="">` : CLUE_GLYPH[clue.soort] ?? '📌';
   const el = card(
     `<div class="wildcam boot-card-ish">` +
     `<p class="boot-kicker">📷 ${line}</p>` +
     `<h1 class="boot-title">Een nieuwe aanwijzing</h1>` +
-    `<div class="cb-clue found wildcam-shot">` +
+    `<div class="cb-clue found wildcam-shot${photo ? ' has-shot' : ''}">` +
     `<span class="cb-photo">${glyph}</span>` +
     `<span class="cb-clue-title"></span>` +
     `<span class="cb-clue-text"></span>` +

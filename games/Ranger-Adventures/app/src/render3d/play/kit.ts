@@ -72,8 +72,13 @@ export function triggerActivityWin(): boolean {
 export interface PlayHint {
   /** Stable id of the thing to click (e.g. the animal or stone id). */
   id: string;
-  /** The object a player sees and clicks. */
-  target: THREE.Object3D;
+  /** The object a player sees and clicks. (Run 6: `target.userData.perch` = how high, m,
+   *  above the ground its perch holds it — a squirrel on its stump, a jay on its branch;
+   *  the probe checks it sits on that.) */
+  target?: THREE.Object3D;
+  /** Run 6 (the adventures): a perfect player WALKS there now, with the arrow keys or
+   *  the stick, until he is within `r` m (world x/z). No `target`: nothing to click. */
+  walk?: { x: number; z: number; r: number };
 }
 
 let activeHint: (() => PlayHint | null) | null = null;
@@ -230,6 +235,11 @@ function drawnWith(root: THREE.Object3D): string[] {
 function probePlayHint(): PlayHintProbe | null {
   const hint = currentPlayHint();
   if (!hint) return null;
+  if (hint.walk || !hint.target) {
+    // a walk hint: nothing to click, a place to walk to (golden walks it with the keys)
+    return { id: hint.id, x: -1, y: -1, onScreen: false, firstHit: false, aboveGround: false,
+      firstHitBy: null, bottomGap: null, reachesCanvas: false, blocker: null, parts: [], walk: hint.walk ?? null };
+  }
   const v = liveView();
   let root = hint.target;
   while (root.parent) root = root.parent;
@@ -258,11 +268,14 @@ function probePlayHint(): PlayHintProbe | null {
   const c = box.getCenter(new THREE.Vector3());
   const g = groundUnder(v.scene, c.x, c.z);
   const el = s.onScreen ? document.elementFromPoint(s.x, s.y) : null;
+  // (run 6) an animal on a perch (a squirrel on its stump, a jay on its branch) says how
+  // high above the ground its perch holds it: it must sit ON that, not float or sink
+  const perch = (hint.target.userData.perch as number | undefined) ?? 0;
   return {
     id: hint.id, x: r2(s.x), y: r2(s.y), onScreen: s.onScreen, firstHit,
     aboveGround: g !== null && box.max.y > g + 0.01,
     firstHitBy: first ? (firstHit ? hint.id : describeObject(first.object, v.scene)) : 'nothing',
-    bottomGap: g === null ? null : r2(box.min.y - g),
+    bottomGap: g === null ? null : r2(box.min.y - g - perch),
     reachesCanvas: el === v.canvas,
     blocker: el && el !== v.canvas ? describeElement(el) : null,
     parts: drawnWith(body),
@@ -664,6 +677,48 @@ function hoofTexture(): THREE.Texture {
   return tex;
 }
 
+/** A roe's slot pressed into trodden sand: two narrow cleaves, pointed toward the way
+ *  she walked, dark where the hoof went in, a thin pale rim of pushed-up sand round
+ *  them (a trail that must read from a few metres off on a light path: dark on light).
+ *  Baked once, like the hoof print. */
+let _slotTex: THREE.Texture | null = null;
+function slotTexture(): THREE.Texture {
+  if (_slotTex) return _slotTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const W = 12; // a cleave's half width (px): a slot is a broad heart, not two slivers
+  const cleave = (x: number, lean: number): void => {
+    g.beginPath();
+    g.moveTo(x + lean, 6);                                        // the pointed toe (the canvas top: the way she went)
+    g.bezierCurveTo(x + lean + W * 0.9, 14, x + W, 36, x + W * 0.7, 52);
+    g.bezierCurveTo(x + W * 0.4, 60, x - W * 0.4, 60, x - W * 0.7, 52); // the round heel
+    g.bezierCurveTo(x - W, 36, x + lean - W * 0.9, 14, x + lean, 6);
+    g.closePath();
+  };
+  for (const [x, lean] of [[20, 5], [44, -5]] as const) {
+    cleave(x, lean);
+    g.lineWidth = 7;
+    g.strokeStyle = 'rgba(226,204,160,0.55)';
+    g.stroke();
+    g.fillStyle = 'rgba(52,34,20,0.96)';
+    g.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _slotTex = tex;
+  return tex;
+}
+
+/** How a trail's prints look (all optional: the default is the boar family's light
+ *  hoof print, smallest at the start). */
+export interface SpoorLook {
+  /** a roe's dark slot pressed into sand instead of the light hoof print */
+  slot?: boolean;
+  /** the first print's size next to the last (0..1, default 0.55: fainter toward the start) */
+  fadeFrom?: number;
+}
+
 /**
  * The "Volg het spoor" trail: hoof prints walking along the ground from (ax,az) to
  * (bx,bz), `legs` stretches of three steps each (the zoeken spoor difficulty axis),
@@ -675,15 +730,18 @@ export function spoorTrail(
   ax: number, az: number, bx: number, bz: number, legs: number,
   groundY: (x: number, z: number) => number,
   opacity = 1,
+  size = 1, // run 6: a piglet's trotters are smaller than a grown boar's hooves
+  perLeg = 3,
+  look: SpoorLook = {},
 ): { group: THREE.Group; dispose: () => void } {
-  const n = Math.max(6, Math.round(legs) * 3);
+  const n = Math.max(6, Math.round(legs) * perLeg);
   const pts = trailPoints(ax, az, bx, bz, n);
   const len = Math.hypot(bx - ax, bz - az) || 1;
   const dx = (bx - ax) / len, dz = (bz - az) / len;
-  const geo = new THREE.PlaneGeometry(0.17, 0.2);
+  const geo = new THREE.PlaneGeometry(0.17 * size, 0.2 * size);
   geo.rotateX(-Math.PI / 2); // lie flat, the print's toes pointing along −z
   const mat = new THREE.MeshStandardMaterial({
-    map: hoofTexture(), transparent: true, opacity, depthWrite: false, roughness: 1,
+    map: look.slot ? slotTexture() : hoofTexture(), transparent: true, opacity, depthWrite: false, roughness: 1,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });
   const marks = new THREE.InstancedMesh(geo, mat, pts.length);
@@ -694,14 +752,15 @@ export function spoorTrail(
   const heading = Math.atan2(-dx, -dz); // yaw that points the print's −z along the walk
   pts.forEach((p, i) => {
     const side = i % 2 === 0 ? 1 : -1;
-    const x = p.x + -dz * 0.1 * side, z = p.z + dx * 0.1 * side;
+    const x = p.x + -dz * 0.1 * size * side, z = p.z + dx * 0.1 * size * side;
     const ahead = groundY(x + dx * 0.12, z + dz * 0.12);
     const behind = groundY(x - dx * 0.12, z - dz * 0.12);
     const pitch = Math.atan2(ahead - behind, 0.24);
     e.set(pitch, heading, 0, 'YXZ');
     q.setFromEuler(e);
     pos.set(x, groundY(x, z) + 0.035, z);
-    const fade = 0.55 + 0.45 * p.u;
+    const f0 = look.fadeFrom ?? 0.55;
+    const fade = f0 + (1 - f0) * p.u;
     m.compose(pos, q, new THREE.Vector3(fade, 1, fade));
     marks.setMatrixAt(i, m);
   });

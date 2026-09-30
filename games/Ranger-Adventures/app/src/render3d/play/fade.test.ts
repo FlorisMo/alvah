@@ -35,3 +35,13 @@ test('FarRest: out beyond far, back within near, a calm fade between, a cut unde
   assert.equal(r.step(53, 5, false), 1, 'between the edges it stays drawn');
   assert.equal(r.step(70, 0.016, true), 0, 'reduced motion: a cut');
 });
+
+test('FarRest.hold: a resting piece is drawn at once (a borrowed home), and fades out calmly once it is far again', () => {
+  const r = new FarRest(40, 46);
+  assert.equal(r.step(60, 0.016, false), 0, 'resting far off');
+  r.hold();
+  assert.equal(r.step(0, 0.016, false), 1, 'held: drawn, never fading in from its rest');
+  const out = r.step(60, FAR_FADE_S / 2, false);
+  assert.ok(out > 0.4 && out < 0.6, 'given back far off: a calm fade out, not a blink');
+  assert.equal(r.step(60, FAR_FADE_S, false), 0);
+});

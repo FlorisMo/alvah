@@ -167,6 +167,9 @@ export class Player {
   // back inward. `onBoundary` fires on the rising edge — once per approach.
   atBoundary = false;
   onBoundary: () => void = () => {};
+  // Run 6: an adventure's framed beat: the keys, the stick and a tap on the ground do
+  // nothing; a programmatic target (World.walkRangerTo) still walks him
+  inputLocked = false;
   // click-vs-drag discriminator (F-17 §3 seam): a pointer that travels past DRAG_PX is a
   // camera drag (tap-to-walk suppressed); a cleaner press taps (walks to the release
   // point). ~6 px per the finding — precise on a mouse, forgiving of a small touch jitter.
@@ -279,10 +282,10 @@ export class Player {
       this.turnVel = 0;
       this.camNow = null;
     }
-    const held = this.input?.held;
-    const shift = this.input?.run ?? false;
+    const held = this.inputLocked ? null : this.input?.held;
+    const shift = !this.inputLocked && (this.input?.run ?? false);
     const keys = held && held.size > 0 ? held : null;
-    const raw = this.joystickSource ? this.joystickSource() : null;
+    const raw = this.joystickSource && !this.inputLocked ? this.joystickSource() : null;
     const stick = !keys && raw && Math.hypot(raw.x, raw.y) >= JOYSTICK_DEADZONE ? raw : null;
     const dxT = this.target.x - rp.x, dzT = this.target.z - rp.z;
     const tapDist = Math.hypot(dxT, dzT);
@@ -695,6 +698,13 @@ export class Player {
   /** Tap-to-walk: raycast the tapped marker / hub / vehicle / ground and set the walk
    *  target. Called ONLY for a clean click (onPointerUp with no drag) so a look-around
    *  never relocates the ranger (F-17). Pick order unchanged from the pre-seam handler. */
+  /** A walk the game asks for (a mission's beat): to (x, z) at his walking pace, as a
+   *  tap would, never a run left over from a Shift-click. */
+  walkTarget(x: number, z: number): void {
+    this.tapRun = false;
+    this.target.set(x, 0, z);
+  }
+
   private walkToPointer(e: PointerEvent): void {
     this.tapRun = e.shiftKey;
     const rect = this.canvas.getBoundingClientRect();

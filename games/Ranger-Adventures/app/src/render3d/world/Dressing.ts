@@ -20,7 +20,7 @@ import type { TierParams } from '../../core/quality';
 import { buildFarForest, buildPathGeometry, farCanopyTexture, type Terrain } from './Terrain';
 import type { Labels } from './Labels';
 import { enableCast, naturaliseConcrete, proceduralTotem } from './props';
-import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies } from './Forest';
+import { Forest, TREE_BASE_H, type TreePlacement, type TreeSpecies, type TreeStub } from './Forest';
 import { PlantField, heatherGeometry, plantMaterial, tuftGeometry, type PlantSpot } from './Plants';
 import { lodGeometries, lodMaterial } from '../Lod';
 import { heathCover } from '../GroundDetail';
@@ -110,6 +110,14 @@ export class Dressing {
   // The furthest-out radius any LOW ground-tuft (heather/marram) landed at — reported on
   // the dev hook's boundary read-back.
   scatterMax = 0;
+  // Run 6: ground a mission's home keeps bare (a wallow's mud, a rooting field's turned
+  // earth): no scattered heather or grass grows through it. Set before the scatter.
+  clearings: readonly { x: number; z: number; r: number }[] = [];
+  /** run 6: ground a mission's home keeps free of the scattered trees (a glade, a trail) */
+  treeClearings: readonly { x: number; z: number; r: number }[] = [];
+  /** run 6: trees a mission's home plants itself (a camera tree), drawn with the forest,
+   *  each with its branch stub if it has one (a squirrel's perch: it fades with its tree) */
+  homeTrees: readonly { x: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub }[] = [];
   // P1.3 tree canopy: the instant cone/cylinder stand-ins (dropped once the Forest is
   // ready) and every tree placement: the bos scatter, the rim tree-line and the grove
   // trees of the nature dressing. The camera rig tests its crowns against these.
@@ -383,13 +391,16 @@ export class Dressing {
    *  the soft trunk collisions, and drop the instant cone stand-in — the real GLBs
    *  swap in via buildForest. */
   private scatterPines(budget: number): void {
-    const spots = this.candidates(budget * 4, 'bos');
+    const spots = this.candidates(budget * 4, 'bos')
+      .filter((p) => !this.treeClearings.some((c) => Math.hypot(p.x - c.x, p.z - c.z) < c.r)); // a home's glade stays open
     const placed: TreePlacement[] = spots.map(({ x, z, i }) => ({
       x, y: this.groundY(x, z), z,
       s: 0.85 + (i % 5) * 0.11,                     // 0.85–1.29 height variety
       rotY: (i * 2.39996) % (Math.PI * 2),          // golden-angle spin, no two alike
       species: TREE_SCATTER_MIX[i % TREE_SCATTER_MIX.length],
     }));
+    // run 6: the trees a mission's home plants (a camera tree at a crossing)
+    for (const t of this.homeTrees) placed.push({ x: t.x, y: this.groundY(t.x, t.z), z: t.z, s: t.s, rotY: t.rotY, species: t.species, stub: t.stub });
     // a soft collision circle around each trunk (the ranger slides around it).
     // D3.16: tag it a TREE so the all-occluder sightline test (propBlocksSightline)
     // skips it — the whole tree is the camera's fadeable crown (world/Crowns.ts), so
@@ -595,6 +606,7 @@ export class Dressing {
       if (distanceToNetwork(x, z) < LANE_HALF + 0.6) continue;  // the paths stay bare sand
       if (PADS.some((p) => Math.hypot(x - p.x, z - p.z) < PAD_RADIUS + 0.9)) continue; // nothing grows through a helipad (breaker B9)
       if (LANDMARK_FEET.some((o) => obstacleGap(o, x, z) < 0.3)) continue;       // ...nor through a landmark's floor
+      if (this.clearings.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) continue; // ...nor through a mission home's mud
       const h = hash2(gx, gz, seed + 2);
       if (!keep(x, z, h)) continue;
       if (r > this.scatterMax) this.scatterMax = r;                // furthest low plant (dev hook)

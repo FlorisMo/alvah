@@ -30,7 +30,10 @@ single bug, dead end or confusing moment**:
    where to go, and starting it is one obvious action.
 6. **Play its mini-games** (zoeken, corsi, rustkracht): they happen *in the same 3D world*
    with the *same real animal models*, a child understands what to do, and they can be
-   played and won with real mouse clicks.
+   played and won with real mouse clicks. Since run 6 the first mission is one adventure
+   with the ranger's own body: follow the squeak, find the piglet in the bracken, lead him
+   home along the group's route and keep calm with his family (walks with the keys, finds
+   and choices with the mouse).
 7. **Finish the mission**: reward, clue, and the world *visibly reacts* (progress is felt).
 8. **Back in the free world** at a sensible spot, the next mission is offered, progress
    survives a page reload.

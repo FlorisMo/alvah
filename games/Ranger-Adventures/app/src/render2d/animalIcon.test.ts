@@ -38,3 +38,10 @@ test('the ree never shares the red deer picture (child:B13)', () => {
   const icons = ['edelhert', 'ree', 'wildzwijn', 'raaf', 'das', 'vos', 'eekhoorn'].map(animalIcon);
   assert.equal(new Set(icons).size, icons.length, 'every simon caller has its own picture');
 });
+
+test('the squirrel and its tree neighbours each have their own picture (run 6: De verstopte nootjes)', () => {
+  const ids = ['eekhoorn', 'gaai', 'groene-specht', 'raaf'];
+  const icons = ids.map(animalIcon);
+  for (const [i, id] of ids.entries()) assert.notEqual(icons[i], '🐾', id);
+  assert.equal(new Set(icons).size, ids.length);
+});

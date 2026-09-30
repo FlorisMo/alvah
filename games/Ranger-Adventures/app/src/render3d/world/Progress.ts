@@ -3,7 +3,7 @@
  *
  * Every finished mission leaves a lasting, calm change at its marker that tells its
  * own ending: the frisling's sow and siblings root beside it, the reekalf's mother
- * stands with it again, the wildcamera hangs by the badger's burcht, the fox's cub
+ * stands with it again, the wildcamera hangs on its pine in the wood, the fox's cub
  * plays at the den, the winter herd grazes on the heath. A small flag with a check
  * stands at the marker's ring, so a finished place reads as "klaar" at a glance.
  *
@@ -59,8 +59,6 @@ export interface Piece {
   arrive?: boolean;
   /** false = a hind or a calf: the red-deer model without the stag's antlers */
   antlers?: false;
-  /** stands on a wooden stake this tall (m): a wildcamera strapped to its post */
-  stake?: number;
 }
 
 export interface Tableau {
@@ -78,30 +76,30 @@ export interface Tableau {
  * and the hinds at their own rows.
  */
 export const TABLEAUS: Record<string, Tableau> = {
-  // "De zeug knort blij. Haar big is terug." — the frisling home with its rotte
+  // "De moeder knort blij. Haar big is terug." — run 6: the rotte LIVES at its wallow
+  // (world/Residents.ts, adventure/missions/frisling.places.ts), before and after; the
+  // marker's ring stays empty (the piglet is hidden in the bracken, you hear him), and
+  // once he is home the "klaar" flag stands at it
   frisling: {
-    hero: 'frisling',
-    pieces: [
-      { id: 'wildzwijn', kind: 'animal', h: SIZE.wildzwijn.h, a: 1.3, s: -1.9, face: 'hero', arrive: true }, // the sow
-      { id: 'frisling', kind: 'animal', a: 0.6, s: -1.05, face: 1.2, arrive: true },              // a sibling
-      { id: 'frisling', kind: 'animal', a: 1.9, s: -0.9, face: -0.9, arrive: true },              // and another
-    ],
+    hero: '',
+    pieces: [],
   },
-  // payoff 'moeder-keert-terug': you left the calf alone, and its mother came back
+  // payoff 'moeder-keert-terug': you left the calf alone, and its mother came back —
+  // run 6: doe and calf LIVE at their copse (world/Residents.ts, adventure/missions/
+  // ree.places.ts), before and after; the marker's ring stays empty (the calf lies
+  // hidden in the tall grass, its mother grazes by the copse), and once the mission is
+  // done the "klaar" flag stands at it
   'ree-niet-aanraken': {
-    hero: 'reekalf',
-    pieces: [
-      { id: 'ree', kind: 'animal', a: 1.1, s: 1.35, face: 'hero', arrive: true },
-    ],
+    hero: '',
+    pieces: [],
     flag: { a: -0.3, s: -1.4 },
   },
-  // "De camera bewaakt het bos." — the camera by the badger's burcht
+  // "De camera bewaakt het bos." — run 6: the camera hangs on its pine at the crossing
+  // in the wood (render3d/adventure/missions/wildcamera.home.ts), after a reload too; the
+  // marker's ring keeps the stump the camera lay on, and once it hangs, the "klaar" flag
   wildcamera: {
-    hero: 'das',
-    pieces: [
-      { id: 'prop-badger-sett', kind: 'prop', h: SIZE.dassenburcht.h, a: 1.7, s: -1.5, face: 'lens' },
-      { id: 'prop-wildlife-camera', kind: 'prop', h: SIZE.wildcamera.h, a: 1.0, s: 2.0, face: 'hero', stake: 0.75 },
-    ],
+    hero: '',
+    pieces: [],
     flag: { a: -0.4, s: -1.5 },
   },
   // "De kikker plonst terug het ven in." — frogs at home in the reeds
@@ -139,14 +137,12 @@ export const TABLEAUS: Record<string, Tableau> = {
       { id: 'prop-mushrooms', kind: 'prop', h: SIZE.paddenstoelen.h, a: 0.6, s: -1.6, face: 'lens' },
     ],
   },
-  // "Alle nootjes terug." — the winter store by the stump, and a friend
+  // "Alle nootjes terug." — run 6: the squirrel LIVES on its oak by the marker and takes
+  // the ranger to its glade (world/Residents.ts, adventure/missions/eekhoorn.places.ts);
+  // its store by the stump stays there, and the "klaar" flag stands at the marker
   eekhoorn: {
-    hero: 'eekhoorn',
-    pieces: [
-      { id: 'prop-tree-stump', kind: 'prop', h: SIZE.stronk.h, a: 1.4, s: -1.5, face: 'lens' },
-      { id: 'prop-acorn-cluster', kind: 'prop', h: SIZE.eikels.h, a: 0.7, s: -1.2, face: 'lens' },
-      { id: 'eekhoorn', kind: 'animal', a: 0.8, s: 1.2, face: 'hero', arrive: true },
-    ],
+    hero: '',
+    pieces: [],
   },
   // "De vos is gerust. Hij draaft terug naar zijn hol." — the den, and a cub
   vos: {
@@ -412,8 +408,13 @@ export class Progress {
     }
     if (!fresh || reduced) { this.settle(b); return; }
     // away from the marker nobody would see it: the family waits out of sight and
-    // comes home the first time the ranger comes to look (update)
-    if (!here) { if (b.live.some((l) => l.held)) b.later = true; return; }
+    // comes home the first time the ranger comes to look (update); the "klaar" flag
+    // rises at once (an adventure is finished where its family lives, not at the ring)
+    if (!here) {
+      if (b.live.some((l) => l.held)) b.later = true;
+      if (!b.flag.visible) { b.flag.visible = true; b.flag.userData.rise = 0; }
+      return;
+    }
     this.startReunion(b);
     await new Promise<void>((resolve) => this.waiters.push({ until: this.clock + REUNION_S, resolve }));
   }
@@ -533,13 +534,7 @@ export class Progress {
         : await env.spawnPlant(p.id, h);
       if (!s) return;
       const root = s.root as THREE.Object3D;
-      if (p.stake) { // strapped to its post: the post stands on the ground, the prop on top
-        const post = woodenStake(p.stake);
-        root.add(post);
-        post.position.y = -p.stake / root.scale.y;
-        post.scale.setScalar(1 / root.scale.y);
-      }
-      const y = env.groundY(at.x, at.z) + (p.lift ?? 0) + (p.stake ?? 0);
+      const y = env.groundY(at.x, at.z) + (p.lift ?? 0);
       root.position.set(at.x, y, at.z);
       root.rotation.y = facing(p, frame, at);
       const l: Live = {
@@ -655,15 +650,6 @@ function facing(p: Piece, f: Frame, at: { x: number; z: number }): number {
   }
   if (p.face === 'lens' || p.face === undefined) return back;
   return back + p.face;
-}
-
-/** A slim wooden stake (m tall), feet at y=0: what a wildcamera is strapped to. */
-function woodenStake(h: number): THREE.Mesh {
-  const g = new THREE.CylinderGeometry(0.035, 0.045, h, 6);
-  g.translate(0, h / 2, 0);
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#6b513a', roughness: 1 }));
-  m.name = 'stake';
-  return m;
 }
 
 /**
