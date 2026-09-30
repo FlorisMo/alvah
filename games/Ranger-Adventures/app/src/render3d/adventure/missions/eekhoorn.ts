@@ -46,6 +46,9 @@ import {
 /** The squirrel's size (m, sitting up with its tail): the upper end of a red squirrel,
  *  so a child reads it on a trunk a few metres off. */
 const SQUIRREL_H = 0.3;
+/** At each stop of the follow it sits up on its stub at least this long (s) before it runs
+ *  on — then a chatter and a flick (~1 s): a clear "it waits for me", even at a run. */
+const SIT = 1.2;
 
 export const eekhoornAdventure: Adventure = {
   id: 'eekhoorn',
@@ -221,8 +224,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     k.say(line);
     const there = k.guard(go());
     let arrived = false;
+    let sitFrom = 0;
     let toldWait = false;
-    void there.then((ok) => { if (!ok) return; arrived = true; sq.glow(true); void sq.lookAt(me); chatter(); }).catch(() => {});
+    void there.then((ok) => { if (!ok) return; arrived = true; sitFrom = k.now; sq.glow(true); void sq.lookAt(me); chatter(); }).catch(() => {});
     const spot = watchSpot(t);
     const hint = seeHint(k, name, () => {
       // (at the spot to see it from but looking the other way — he came round another way
@@ -244,7 +248,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
         },
         // (close: within SEE_D of it, or at the spot to see it from — where the hint
         // brings a perfect player — and it well in his view)
-        reached: () => arrived && (dist(k.ranger(), sq) <= SEE_D || dist(k.ranger(), spot) <= WATCH_R) && measure().seen,
+        // (and it sits up on its stub a moment first, even when he is there before it: it
+        // waits for him, looking at him)
+        reached: () => arrived && k.now - sitFrom >= SIT && (dist(k.ranger(), sq) <= SEE_D || dist(k.ranger(), spot) <= WATCH_R) && measure().seen,
       });
     } finally {
       hint.off();

@@ -177,7 +177,7 @@ export const SEE_D = 2.6;
 export const SEEN_X = 0.7;
 /** The spot to see it from (golden's walk hint): out along its stub a little to the side,
  *  so it sits over his shoulder, not straight over his head, and nothing is between. */
-const WATCH_D = 1.9;
+const WATCH_D = 1.6;
 const WATCH_TURN = 0.3;
 /** Near enough the spot to see it from (golden's walk hint radius): there he is close,
  *  whatever SEE_D says (WATCH_D + WATCH_R stays within ~3 m of it). */
