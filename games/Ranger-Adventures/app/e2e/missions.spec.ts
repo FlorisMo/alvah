@@ -277,7 +277,8 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
   // run 7: the frisling's lead home is a straight walk at the piglet's pace (1.5 m/s)
   if (mission.id === 'frisling' && stats.walk_field_line !== undefined) {
     const lead = stats.walk_field_line;
-    log.note(`the lead home is ${lead} m: walked ${stats.walk_field_m} m in ${stats.walk_field_dur} s (the piglet dived ${stats.walk_field_dives ?? 0}×)`);
+    log.note(`the lead home is ${lead} m: walked ${stats.walk_field_m} m in ${stats.walk_field_dur} s (the piglet dived ${stats.walk_field_dives ?? 0}×, waited ${stats.walk_field_waits ?? 0}×)`);
+    log.soft(!stats.walk_field_waits && !stats.walk_field_dives, `walking calmly, the piglet fell behind and waited ${stats.walk_field_waits ?? 0}× (dived ${stats.walk_field_dives ?? 0}×)`);
     log.soft(stats.walk_field_m <= lead * 1.6, `the lead took ${stats.walk_field_m} m of walking for ${lead} m (want ≤ 1.6×)`);
     log.soft(stats.walk_field_dur <= (lead / 1.5) * 1.6, `the lead took ${stats.walk_field_dur} s for ${lead} m (want ≤ ${((lead / 1.5) * 1.6).toFixed(1)} s)`);
   }

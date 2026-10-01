@@ -657,7 +657,8 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
       // short): its straight line, the way walked and the time from the first step
       const lead = stats.walk_field_line;
       if (lead !== undefined) {
-        note(`the lead home is ${r2(lead)} m: walked ${stats.walk_field_m} m in ${stats.walk_field_dur ?? '?'} s (the piglet dived ${stats.walk_field_dives ?? 0}×)`);
+        note(`the lead home is ${r2(lead)} m: walked ${stats.walk_field_m} m in ${stats.walk_field_dur ?? '?'} s (the piglet dived ${stats.walk_field_dives ?? 0}×, waited ${stats.walk_field_waits ?? 0}×)`);
+        soft(!stats.walk_field_waits && !stats.walk_field_dives, `walking calmly, the piglet fell behind and waited ${stats.walk_field_waits ?? 0}× (dived ${stats.walk_field_dives ?? 0}×): the walk hint flipped back to him`);
         soft(lead < 20 || stats.walk_field_m >= 25, `leading the piglet home is only ${stats.walk_field_m} m of walking (want ≥ 25)`);
         soft(stats.walk_field_m <= lead * 1.6, `the lead took ${stats.walk_field_m} m of walking for ${r2(lead)} m (want ≤ 1.6×)`);
         if (stats.walk_field_dur !== undefined) soft(stats.walk_field_dur <= (lead / 1.5) * 1.6, `the lead took ${stats.walk_field_dur} s for ${r2(lead)} m (want ≤ ${r2((lead / 1.5) * 1.6)} s)`);

@@ -686,6 +686,7 @@ export class AdventureKit {
         }
       } else if (far && !waiting) {
         waiting = true; // he walked off: the animal waits where it is
+        this.stats[`walk_${o.name}_waits`] = (this.stats[`walk_${o.name}_waits`] ?? 0) + 1; // (run 7: a test's measure)
         a.idle();
         if (lead.waitLine) this.ui.say(lead.waitLine);
       } else if (waiting && dist(a, m) < LEAD_BACK_M) {
