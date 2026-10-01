@@ -61,7 +61,12 @@ function wear(mat: THREE.MeshStandardMaterial): Worn {
   // it looks as it did, and while it glows it glows in its own coat, not one flat colour
   if (!mat.emissiveMap && mat.map && (mat.emissiveIntensity === 0 || mat.emissive.getHex() === 0)) { mat.emissiveMap = mat.map; e.rest = mat.map; }
   const { rim, rimColor } = e;
-  const compile = mat.onBeforeCompile, key = mat.customProgramCacheKey;
+  // its own program key, read BEFORE the wrapper goes on: a material without a key of its
+  // own is keyed by its onBeforeCompile's source — read after, that is this wrapper's, the
+  // same for every worn material, and the renderer shares one program per key (the
+  // woodpecker, whose faded copy has its clip shader but not its key, drew the jay's
+  // program: its cut-away perch block showed as a yellow lump under it, 2026-10-01)
+  const compile = mat.onBeforeCompile, key = mat.customProgramCacheKey();
   mat.onBeforeCompile = function (shader, renderer) {
     compile.call(this, shader, renderer);
     shader.uniforms.uCallRim = rim;
@@ -81,7 +86,7 @@ function wear(mat: THREE.MeshStandardMaterial): Worn {
       '  totalEmissiveRadiance *= 0.5 + 0.5 * callFace;\n' +
       '  totalEmissiveRadiance += uCallRimColor * (uCallRim * 1.3 * smoothstep(0.55, 0.95, 1.0 - callFace));\n}');
   };
-  mat.customProgramCacheKey = function () { return `${key.call(this)}|call-rim`; };
+  mat.customProgramCacheKey = () => `${key}|call-rim`;
   mat.needsUpdate = true;
   WORN.set(mat, e);
   return e;

@@ -118,3 +118,24 @@ test('lit, a black bird stays black (its rim does the work) and a light one keep
   // (a mid grey lifts half the touch: 0.5 → 0.53)
   assert.ok(Math.abs(grey.mat.emissive.r - 0.53 * warm.r) < 1e-6, `grey ${grey.mat.emissive.r / warm.r}`);
 });
+
+test('two lit animals with different shaders of their own never share a program (the key names the inner shader)', () => {
+  // the woodpecker's perch is cut away by its own shader; its faded copy keeps that shader
+  // but has no key of its own (play/fade.ts copies onBeforeCompile only), so its key is the
+  // shader's source — read after the rim's wrapper went on, every lit animal had the same
+  // key and the renderer drew the woodpecker with the jay's program (2026-10-01)
+  const clip = animal();
+  clip.mat.onBeforeCompile = (shader) => { shader.fragmentShader = shader.fragmentShader.replace('void main() {', 'void main() {\n  if (vModelY < uClipY) discard;'); };
+  const jay = animal();
+  new WarmGlow(clip.root).set(CALL_GLOW);
+  new WarmGlow(jay.root).set(CALL_GLOW);
+  const a = compile(clip.mat), b = compile(jay.mat);
+  assert.ok(a.frag.includes('discard'), 'its own shader stays in');
+  assert.ok(!b.frag.includes('discard'));
+  assert.notEqual(a.key, b.key, 'its own program');
+  // (and a material with a key of its own keeps it, the rim added)
+  const keyed = animal();
+  keyed.mat.customProgramCacheKey = () => 'clip-below--0.43';
+  new WarmGlow(keyed.root).clear();
+  assert.equal(keyed.mat.customProgramCacheKey(), 'clip-below--0.43|call-rim');
+});
