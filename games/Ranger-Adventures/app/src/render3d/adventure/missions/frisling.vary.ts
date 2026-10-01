@@ -45,7 +45,7 @@ export const wantsEdge = (d: DecoyKind): boolean => d.animal === 'nachtzwaluw';
  * the history: `va`). `lastWay`: the way of his last frisling play (`lastWayOf`): never
  * the same way twice in a row. `decoys`: the trial's look-alikes, in trial order.
  */
-export function frislingVariant(play: Play, lastWay: WayId | null, decoys: readonly DecoyKind[]): FrislingVariant {
+export function frislingVariant(play: Play, lastWay: WayId | null, decoys: readonly DecoyKind[], lastFams: readonly string[] = []): FrislingVariant {
   const ways = WAY_IDS.filter((w) => w !== lastWay);
   const way = play.fork('way').pick(ways);
   const w = WAYS[way];
@@ -53,12 +53,14 @@ export function frislingVariant(play: Play, lastWay: WayId | null, decoys: reado
   const pose = play.fork('pose').int(0, 2) as 0 | 1 | 2;
   // the look-alikes: a shuffled order of the stand's spots (assignSpots)
   const decoySpots = assignSpots(play.fork('decoys').shuffle(w.decoySpots.map((_, i) => i)), w.decoySpots, decoys);
-  const family = play.fork('family').int(0, FAMILY_LAYOUTS.length - 1) as 0 | 1 | 2;
+  // the family's layout: never one of his last two plays' (three plays in a row, three
+  // different mornings at the mud)
+  const fams = FAMILY_LAYOUTS.map((_, i) => i).filter((i) => !lastFams.slice(0, 2).includes(FAMILY_LAYOUTS[i].id));
+  const family = play.fork('family').pick(fams.length ? fams : FAMILY_LAYOUTS.map((_, i) => i)) as 0 | 1 | 2;
   const lk = play.fork('leeuwerik');
   const leeuwerik = lk.chance(0.5) ? lk.int(0, w.walkSpots.length - 1) : null;
   play.note('way', way);
-  play.note('nook', nook);
-  play.note('pose', pose);
+  play.note('nook', `${nook}/${pose}`); // (the nook, and how he lies in it)
   play.note('fam', FAMILY_LAYOUTS[family].id);
   return { way, nook, pose, decoySpots, family, leeuwerik };
 }
@@ -79,6 +81,28 @@ export function assignSpots(order: readonly number[], spots: readonly DecoySpot[
     if (s === undefined) throw new Error(`[frisling] more look-alikes (${decoys.length}) than spots on a stand (${spots.length})`);
     out[i] = s;
   });
+  return out;
+}
+
+/** The family layouts (ids) of his newest frisling plays, newest first, one per play (by
+ *  its seed): the plays started in this page session (`started`, oldest first: a play
+ *  stopped early may have left no beat) before the history's (`BeatLog.va`, 'fam:boom'). */
+export function recentFams(history: readonly { m: string; sd?: number; va?: string }[], started: readonly { sd: number; fam: string }[] = []): string[] {
+  const seen = new Set<number>();
+  const out: string[] = [];
+  for (let i = started.length - 1; i >= 0; i--) {
+    if (seen.has(started[i].sd)) continue;
+    seen.add(started[i].sd);
+    out.push(started[i].fam);
+  }
+  for (let i = history.length - 1; i >= 0; i--) {
+    const h = history[i];
+    if (h.m !== 'frisling' || !h.va || (h.sd !== undefined && seen.has(h.sd))) continue;
+    const m = /(?:^|,)fam:([a-z]+)/.exec(h.va);
+    if (!m) continue;
+    if (h.sd !== undefined) seen.add(h.sd);
+    out.push(m[1]);
+  }
   return out;
 }
 

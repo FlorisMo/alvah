@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { newPlay } from '../../../core/play.ts';
-import { frislingVariant, lastWayOf, wantsEdge, type DecoyKind } from './frisling.vary.ts';
+import { frislingVariant, lastWayOf, recentFams, wantsEdge, type DecoyKind } from './frisling.vary.ts';
 import { FAMILY_LAYOUTS, WAYS, WAY_IDS, type WayId } from './frisling.places.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import { buildDagnachtTrial } from '../../../engines/dagnacht.ts';
@@ -31,7 +31,7 @@ test('the same seed gives the same play; its choices are noted on the play', () 
     const play = newPlay('frisling', seed, 1);
     const v = frislingVariant(play, null, DECOYS);
     assert.equal(play.variant.way, v.way);
-    assert.equal(play.variant.nook, v.nook);
+    assert.equal(play.variant.nook, `${v.nook}/${v.pose}`);
     assert.equal(play.variant.fam, FAMILY_LAYOUTS[v.family].id);
   }
 });
@@ -75,6 +75,33 @@ test('never the same way twice in a row', () => {
     const both = new Set(Array.from({ length: 60 }, (_, s) => variant(s, last).way));
     assert.equal(both.size, 2, `after ${last} both other ways come`);
   }
+});
+
+test('the family never lies the way it did in his last two plays: three plays in a row, three layouts', () => {
+  for (let seed = 0; seed < 200; seed++) {
+    const a = frislingVariant(newPlay('frisling', seed, 1), null, DECOYS);
+    const b = frislingVariant(newPlay('frisling', seed + 1, 2), a.way, DECOYS, [FAMILY_LAYOUTS[a.family].id]);
+    const c = frislingVariant(newPlay('frisling', seed + 2, 3), b.way, DECOYS, [FAMILY_LAYOUTS[b.family].id, FAMILY_LAYOUTS[a.family].id]);
+    assert.equal(new Set([a.family, b.family, c.family]).size, 3, `seeds ${seed}..${seed + 2}`);
+    assert.equal(new Set([a.way, b.way]).size, 2);
+    assert.notEqual(b.way, c.way);
+  }
+  // after only one play, both others can come
+  const after = new Set(Array.from({ length: 60 }, (_, s) => frislingVariant(newPlay('frisling', s, 2), null, DECOYS, ['rand']).family));
+  assert.deepEqual([...after].sort(), [0, 2]);
+});
+
+test('the recent family layouts: this session\'s plays first, then the history\'s, one per play', () => {
+  assert.deepEqual(recentFams([]), []);
+  const h = [
+    { m: 'frisling', sd: 5, va: 'way:wei,nook:1/0,fam:rand' },
+    { m: 'frisling', sd: 5, va: 'way:wei,nook:1/0,fam:rand' },
+    { m: 'ree-niet-aanraken', sd: 6, va: 'fam:boom' },
+    { m: 'frisling', sd: 7, va: 'rare:ekster,way:berk,nook:0/2,fam:modder' },
+  ];
+  assert.deepEqual(recentFams(h), ['modder', 'rand']);
+  // a play stopped early (no beat logged) still counts, newest first
+  assert.deepEqual(recentFams(h, [{ sd: 7, fam: 'modder' }, { sd: 8, fam: 'boom' }]), ['boom', 'modder', 'rand']);
 });
 
 test('the last way is read from the history: the newest frisling beat\'s variant', () => {

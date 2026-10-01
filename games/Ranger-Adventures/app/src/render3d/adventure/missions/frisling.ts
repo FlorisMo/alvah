@@ -46,7 +46,8 @@ import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
   frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, type Way, type WayId,
 } from './frisling.places';
-import { frislingVariant, lastWayOf, type FrislingVariant } from './frisling.vary';
+import { frislingVariant, lastWayOf, recentFams, type FrislingVariant } from './frisling.vary';
+import { buildDagnachtTrial } from '../../../engines/dagnacht';
 
 /** How far the lost piglet's squeak carries while he follows it (m): from the ring to
  *  any way's stand, ~35-38 m (softly at first, louder as he comes). */
@@ -69,6 +70,10 @@ let contentDecoys: readonly Distractor[] = [];
  *  set out on in this page session (a stopped play leaves no beat in the history). */
 let current: FrislingVariant | null = null;
 let lastStarted: WayId | null = null;
+/** The plays he set out on in this page session (their seed and family layout). */
+const startedFams: { sd: number; fam: string }[] = [];
+/** The calm moments' order as the history notes it: one letter each ('advzp'). */
+const rustCode = (ids: readonly string[]): string => ids.map((id) => id[0]).join('');
 
 /** The young birches the home plants at its stands (real forest trees). */
 const BIRCHES = WAY_IDS.flatMap((id) => WAYS[id].trees.map((t) => ({
@@ -96,9 +101,13 @@ export const frislingAdventure: Adventure = {
     const home = homeOf(world);
     if (!home) return;
     const trial = buildZoekenTrial(mission.stappen[0].skin, store.difficulty('zoeken'));
-    const last = lastStarted ?? lastWayOf(store.get().geschiedenis);
-    const v = frislingVariant(play, last, trial.decoys.map((d) => ({ k: d.k, animal: d.animal })));
+    const history = store.get().geschiedenis;
+    const last = lastStarted ?? lastWayOf(history);
+    const v = frislingVariant(play, last, trial.decoys.map((d) => ({ k: d.k, animal: d.animal })), recentFams(history, startedFams));
     current = v;
+    // the order the calm moments will come in (the trial the script and the 2D floor build
+    // from the play's 'dagnacht' fork): noted, so the history says what he played
+    play.note('rust', rustCode(buildDagnachtTrial(mission.stappen[2].skin, store.difficulty('dagnacht'), play.fork('dagnacht').rng).encounters.map((e) => e.id)));
     home.lay(v.way, { nook: v.nook, pose: v.pose, trial: trial.decoys, spots: v.decoySpots, glimpse: store.knobs('zoeken').glimpse });
     useWay(v.way);
     const lie = nookAt(v.way, v.nook, v.pose);
@@ -120,6 +129,7 @@ export const frislingAdventure: Adventure = {
     const home = fam.dressing as FrislingHome;
     const v = current ?? fallbackVariant(k);
     lastStarted = v.way;
+    startedFams.push({ sd: k.play.seed, fam: FAMILY_LAYOUTS[v.family].id });
     home.holdClue = true; // the clue waits for its moment: after the reunion, under the raaf's card
     try {
       await story(k, fam, home, v);
@@ -185,7 +195,13 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const knobs = k.knobs('zoeken');
   // (a little over a piglet's true trotter, 7 cm, so the trail reads from the follow lens
   // 5-6 m off: at true size the first prints were specks of 6-8 px, run 7 played)
-  k.own(spoorPath(way.follow, k.ctx.groundY, { opacity: 0.35 + 0.5 * knobs.trailClarity, size: 0.62, spacing: 0.95, crisp: CRISP_PRINTS }).group);
+  // (from just ahead of him and a step to his left — wherever by the ring he set out —
+  // joining the way: the first, crisp prints lie beside his feet in the picture, never
+  // hidden behind his own back from the lens behind him, nor off by the ring where he
+  // does not look)
+  const off = k.ranger();
+  const trail = [atLocal({ x: off.x, z: off.z, heading: headingTo(off, way.follow[1]) }, -0.75, 0.9), ...way.follow.slice(1)];
+  k.own(spoorPath(trail, k.ctx.groundY, { opacity: 0.35 + 0.5 * knobs.trailClarity, size: 0.62, spacing: 0.95, crisp: CRISP_PRINTS }).group);
   fam.voice('lost', true, FOLLOW_REACH);
   await k.walk({
     name: 'cover', to: way.coverApproach, r: 1.5, line: v.way === 'steen' ? c.boog : c.volg, doel: c.chipPiep, cue: c.luister,

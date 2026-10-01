@@ -798,7 +798,7 @@ export function spoorTrail(
 /**
  * Run 7: a trail of the same prints along a WAY (a polyline round what lies between), a
  * pair every `spacing` m, from `points[0]` to the last point. The first `crisp` prints are
- * crisp (full opacity, 1.25× size: where the trail starts reads at once), the rest at
+ * crisp (full opacity, 1.45× size: where the trail starts reads at once), the rest at
  * `opacity` (the tracking knob's clarity), growing a little toward the end. Two draw calls.
  */
 export function spoorPath(
@@ -843,7 +843,7 @@ export function spoorPath(
     e.set(Math.atan2(ahead - behind, 0.24), Math.atan2(-p.dx, -p.dz), 0, 'YXZ');
     q.setFromEuler(e);
     pos.set(x, groundY(x, z) + 0.035, z);
-    const s = i < crisp ? 1.25 : 0.85 + 0.15 * p.u;
+    const s = i < crisp ? 1.45 : 0.85 + 0.15 * p.u;
     m.compose(pos, q, new THREE.Vector3(s, 1, s));
     if (i < crisp) meshes[0].setMatrixAt(i, m); else meshes[1].setMatrixAt(i - crisp, m);
   });
