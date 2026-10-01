@@ -22,7 +22,11 @@
 
 import * as THREE from 'three';
 import type { Mission, Step } from '../../content/types';
-import type { BeatSummary } from '../../core/skill';
+import type { BeatSummary, Engine, EngineKnobs } from '../../core/skill';
+import { store } from '../../core/state';
+import { newPlay, type Play } from '../../core/play';
+import { ontdekking, type Ontdekking } from '../../content/ontdekkingen';
+import type { MoodId } from '../Moods';
 import type { RangerMotion, WorldCtx } from '../play/types';
 import type { Residents, ResidentGroup } from '../world/Residents';
 import type { MissionMode } from '../World';
@@ -53,6 +57,9 @@ export interface MissionWorld {
   daylight(): number;
   /** a photograph of the world through `cam` (taken inside the next frame, never shown) */
   snapshot(cam: THREE.Camera, w: number, h: number, prepare?: () => (() => void) | void): Promise<HTMLCanvasElement | null>;
+  /** run 7 (§4.5): the session's mood and the one on screen; put the world in a mood */
+  mood(): { session: MoodId; now: MoodId };
+  setMood(id: MoodId, seconds?: number): void;
 }
 
 /** The adventure's HUD (ui/flow/AdventureHud.ts implements it). */
@@ -80,6 +87,8 @@ export interface FlowHooks {
   reunion(play: () => Promise<void>): Promise<void>;
   /** the pause card is up (the mission clock stands still) */
   paused(): boolean;
+  /** run 7 (§4.4): a NEW discovery's calm reveal (queued; it waits for a quiet moment) */
+  reveal?(o: Ontdekking): void;
 }
 
 export interface KitOptions {
@@ -98,6 +107,12 @@ export interface KitOptions {
   signal: AbortSignal;
   /** where a beat's cards mount (a choice card, a found card) */
   host: HTMLElement;
+  /** run 7 (§4.1): this play's variety, drawn at the briefing (default: a play over seed 0) */
+  play?: Play;
+  /** run 7 (§4.5): this play's mood (default: the one on screen) */
+  mood?: MoodId;
+  /** run 7 (§4.4): this play's rare visitor for this home, rolled at the briefing */
+  rare?: Ontdekking | null;
 }
 
 /** "Stop de missie" — the script unwinds. */
@@ -218,6 +233,15 @@ export class AdventureKit {
   private dayTurned = false;
   /** a photograph that belongs with the mission's clue (the reward's clue card shows it) */
   cluePhoto: string | null = null;
+  /** Run 7 (§4.1): THIS play's variety. Draw every choice from a fork of it, one per
+   *  decision (`k.play.fork('hide').pick(SPOTS)`), and note it (`k.play.note('hide', id)`):
+   *  never `Math.random`. */
+  readonly play: Play;
+  /** Run 7 (§4.5): the mood this play stands in (the end hands the session's back). */
+  readonly mood: MoodId;
+  private readonly rareRow: Ontdekking | null;
+  /** what he discovered in this play (seen or heard; new or not) */
+  private readonly found = new Set<string>();
 
   constructor(o: KitOptions) {
     this.mission = o.mission;
@@ -231,6 +255,9 @@ export class AdventureKit {
     this.signal = o.signal;
     this.host = o.host;
     this.reduced = o.ctx.reducedMotion;
+    this.play = o.play ?? newPlay(o.mission.id, 0, 1);
+    this.mood = o.mood ?? o.world.mood().now;
+    this.rareRow = o.rare ?? null;
     this.abortP = new Promise<never>((_, reject) => {
       if (o.signal.aborted) reject(new Aborted());
       o.signal.addEventListener('abort', () => reject(new Aborted()), { once: true });
@@ -297,6 +324,42 @@ export class AdventureKit {
 
   /** Which steps are logged. */
   get stepsLogged(): readonly number[] { return this.logged; }
+
+  /* ------------------------------------------- run 7: variety, growth, finds ---- */
+
+  /** The live level of a breinkracht (1..6): where its beat starts (design §4.2). */
+  level(engine: Engine): number { return store.level(engine); }
+
+  /** The knobs a breinkracht's beat reads now: the SAME knobs its 2D floor reads. A home
+   *  maps them onto its world; it never invents its own difficulty number (§4.2). */
+  knobs<E extends Engine>(engine: E): EngineKnobs[E] { return store.knobs(engine); }
+
+  /**
+   * He saw or heard it (design §4.4): call when the thing was really in his picture (on
+   * screen, ≥ ~40 px, ≥ 1 s) or its call reached him — never as a prize. Recorded in the
+   * save at once; a NEW one gets one calm reveal at a quiet moment (`quiet`: none).
+   * Returns whether it was new. Once a play: a second call for the same id in this play
+   * records nothing (safe to call from a tick). An id missing from content/ontdekkingen.ts
+   * is a bug: it warns and records nothing.
+   */
+  discover(id: string, opts: { quiet?: boolean } = {}): boolean {
+    const row = ontdekking(id);
+    if (!row) { console.warn(`[adventure] k.discover: no discovery "${id}" in content/ontdekkingen.ts`); return false; }
+    if (this.found.has(id)) return false; // (once a play: "times seen" counts plays, not frames)
+    this.found.add(id);
+    const fresh = store.discover(id);
+    if (fresh && !opts.quiet) this.hooks.reveal?.(row);
+    return fresh;
+  }
+
+  /** THIS play's rare visitor for this home (rolled at the briefing, §4.4), or null. Show
+   *  it in the world; call `discover(its id)` once he really saw or heard it. */
+  rare(): Ontdekking | null { return this.rareRow; }
+
+  /** Did he discover a rare of this home in this play (the pity counter resets)? */
+  get gotRare(): boolean {
+    return [...this.found].some((id) => { const r = ontdekking(id); return r?.soort === 'zeldzaam' && r.home === this.mission.id; });
+  }
 
   /** The raaf tells step `i`'s fact (a card over the world; the ranger holds still). */
   async fact(i: number): Promise<void> {
@@ -698,5 +761,9 @@ export class AdventureKit {
     // the golden hour comes back (calmly; a cut under reduced motion): never a dark sky
     // after a stop, a win or an error
     if (this.dayTurned || this.world.daylight() < 1) this.world.setDaylight(1, this.reduced ? 0 : 2.4);
+    // run 7: a play in its own mood hands the session's mood back (calmly; a cut under
+    // reduced motion), won or stopped
+    const m = this.world.mood();
+    if (m.now !== m.session) this.world.setMood(m.session, this.reduced ? 0 : 2.4);
   }
 }

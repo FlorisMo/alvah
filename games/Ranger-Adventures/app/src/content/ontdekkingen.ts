@@ -1,0 +1,103 @@
+/**
+ * ontdekkingen.ts — what Alvah can discover, in one table (run 7, design
+ * `state/foundation/design.md` §4.4): the animals of each home he saw or heard, a track, a
+ * find, the wildcamera's photos, a few rare ones, and the small surprises of the open
+ * world ('wereld'). What he found goes into his veldgids in the hut; what is still out
+ * there shows as a grey silhouette with its one hint line.
+ *
+ * A discovery is WHAT HE SAW OR HEARD (a home calls `k.discover(id)` when the thing was
+ * really in his picture or its call reached him), never a prize. The animal a mission
+ * helped (`geholpen`) is recorded quietly when that mission is won, whichever way it was
+ * played (the world, the classic stage or the 2D floor).
+ *
+ * Rules (linted by core/readlevel.test.ts): `naam` plain, with its article, no knappe
+ * woorden (they go in `naamKnap`); `hint` one line of at most 7 words, read aloud; first
+ * names only. Each home ends up with ≥ 4 rows and ≥ 1 `zeldzaam` (§4.7). Every lane adds
+ * its home's rows in its OWN block below, so lanes never edit the same lines.
+ *
+ * Pure data (the node tests read it directly): type-only imports.
+ */
+
+import type { IconName } from '../ui/icons';
+import type { MoodId } from '../render3d/Moods';
+
+/** dier: an animal he saw or heard · zeldzaam: a rare visitor · spoor: a track or a trace ·
+ *  vondst: something he found · foto: one of the wildcamera's photographs */
+export type OntdekSoort = 'dier' | 'zeldzaam' | 'spoor' | 'vondst' | 'foto';
+
+export interface Ontdekking {
+  /** '<home>.<thing>': 'frisling.zeug', 'wereld.buizerd' */
+  id: string;
+  /** a mission id, or 'wereld' (the open world) */
+  home: string;
+  soort: OntdekSoort;
+  /** plain, with its article: 'de big' */
+  naam: string;
+  /** with the knappe woorden (only when that setting is on): 'de frisling' */
+  naamKnap?: string;
+  /** what is still out there, ≤ 7 words, read aloud: 'Wie tikt er op een boom?' */
+  hint: string;
+  /** the GLB id of its picture in the veldgids (a real model) */
+  model?: string;
+  /** a drawn icon when there is no model (a print, a feather) */
+  icon?: IconName;
+  /** only in these moods (a nightjar at dusk) */
+  stemming?: MoodId[];
+  /** the animal this home's mission helped: recorded quietly when the mission is won */
+  geholpen?: boolean;
+}
+
+/* ------------------------------------------------------- frisling (the wallow) ---- */
+const FRISLING: Ontdekking[] = [
+  { id: 'frisling.frisling', home: 'frisling', soort: 'dier', naam: 'de big', naamKnap: 'de frisling',
+    hint: 'Wie verstopt zich in de varens?', model: 'animal-frisling-piglet', geholpen: true },
+  // the frisling lane adds its rows here (the sow, the group's prints, a rare visitor ...)
+];
+
+/* --------------------------------------------- ree-niet-aanraken (the meadow) ---- */
+const REE: Ontdekking[] = [
+  { id: 'ree-niet-aanraken.reekalf', home: 'ree-niet-aanraken', soort: 'dier', naam: 'het reekalf',
+    hint: 'Wie ligt heel stil in het gras?', model: 'animal-ree-roedeer', geholpen: true },
+  // the ree lane adds its rows here
+];
+
+/* ------------------------------------------------ wildcamera (the crossing) ---- */
+const WILDCAMERA: Ontdekking[] = [
+  { id: 'wildcamera.das', home: 'wildcamera', soort: 'dier', naam: 'de das',
+    hint: 'Wie snuffelt er in de nacht?', model: 'animal-das-badger', geholpen: true },
+  // the wildcamera lane adds its rows here (the trap's photos: soort 'foto' ...)
+];
+
+/* ------------------------------------------------------ eekhoorn (the pines) ---- */
+const EEKHOORN: Ontdekking[] = [
+  { id: 'eekhoorn.eekhoorn', home: 'eekhoorn', soort: 'dier', naam: 'de eekhoorn',
+    hint: 'Wie verstopt nootjes onder het mos?', model: 'animal-eekhoorn-squirrel', geholpen: true },
+  // the eekhoorn lane adds its rows here
+];
+
+/* ------------------------------------------------------------- the new homes ---- */
+// the adventures lane adds a block per new adventure here (the ven first)
+
+/* ------------------------------------------------- wereld (the open world) ---- */
+const WERELD: Ontdekking[] = [
+  { id: 'wereld.buizerd', home: 'wereld', soort: 'dier', naam: 'de buizerd',
+    hint: 'Wie cirkelt hoog boven de hei?', model: 'bird-buizerd' },
+  // the veldgids package adds the free-roam surprises here
+];
+
+export const ONTDEKKINGEN: readonly Ontdekking[] = [...FRISLING, ...REE, ...WILDCAMERA, ...EEKHOORN, ...WERELD];
+
+/** One row by id, or undefined. */
+export function ontdekking(id: string): Ontdekking | undefined {
+  return ONTDEKKINGEN.find((o) => o.id === id);
+}
+
+/** The rows of one home ('wereld' for the open world). */
+export function ontdekkingenVan(home: string): Ontdekking[] {
+  return ONTDEKKINGEN.filter((o) => o.home === home);
+}
+
+/** Its name as this player reads it: with the knappe woorden only when that setting is on. */
+export function naamVan(o: Ontdekking, jargon: boolean): string {
+  return jargon && o.naamKnap ? o.naamKnap : o.naam;
+}

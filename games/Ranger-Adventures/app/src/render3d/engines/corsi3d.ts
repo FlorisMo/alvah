@@ -22,6 +22,7 @@ import * as THREE from 'three';
 import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
+import type { Play } from '../../core/play';
 import type { WorldCtx, Play3dEngine } from '../play/types';
 import { buildCorsiTrial, CorsiRun } from '../../engines/corsi';
 import { store } from '../../core/state';
@@ -56,7 +57,7 @@ interface StoneFx {
   color: string;
 }
 
-export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
+export function playCorsi3d(ctx: WorldCtx, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const raycaster = ctx.raycaster as THREE.Raycaster;
@@ -66,7 +67,7 @@ export function playCorsi3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     // SAME engine logic as the 2D view (construct parity §1f).
     const diff = store.difficulty('corsi');
-    const trial = buildCorsiTrial(diff);
+    const trial = buildCorsiTrial(diff, play?.fork('corsi').rng); // run 7: the play's route (as its 2D twin)
     const run = new CorsiRun(trial.sequence);
 
     const instructie = (settings.jargon && copy.instructieKnap) || copy.instructie || 'Onthoud de weg.';

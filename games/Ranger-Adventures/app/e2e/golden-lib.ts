@@ -39,9 +39,23 @@ export function soft(ok: boolean, msg: string): boolean {
   return ok;
 }
 
-/** Flow check: the player is blocked here, so the run stops. */
+/** Flow check: the player is blocked here, so the run stops. Once a play's seed is known
+ *  (run 7) the message ends with the URL that replays it. */
 export function hard(ok: boolean, msg: string): asserts ok {
-  if (!ok) throw new Error(`[golden ${current.n}. ${current.step}] ${msg}`);
+  if (!ok) throw new Error(`[golden ${current.n}. ${current.step}] ${msg}${replayTail()}`);
+}
+
+/* run 7: every play draws its variety from one seed (core/play.ts); a failing run says it */
+let replaySeed: number | null = null;
+/** The seed of the play the run is in now (its hard failures print the replay URL). */
+export function setReplaySeed(seed: number | null): void { replaySeed = seed; }
+/** ' · replay: /?dev=1&seed=<n>' once a play's seed is known, else ''. */
+export function replayTail(seed: number | null = replaySeed): string {
+  return seed === null ? '' : ` · replay: /?dev=1&seed=${seed}`;
+}
+/** The current (or last) play's seed (`__ranger.play()`), or null before any briefing. */
+export async function playSeed(page: Page): Promise<number | null> {
+  return (await R<{ seed: number } | null>(page, 'r.play ? r.play() : null').catch(() => null))?.seed ?? null;
 }
 
 /** Record a finding under another step's row (e.g. avatar colours, measured later). */

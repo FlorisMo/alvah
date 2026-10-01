@@ -297,6 +297,13 @@ export const INSTELLINGEN = {
   zeg: 'Instellingen. Maak het van jou.',
 } as const;
 
+/* ------------------------------------------------- run 7: a new discovery ---- */
+/** The calm card under the top chips when he saw or heard something new (ui/hud/Reveal.ts):
+ *  this line, then the thing's name (content/ontdekkingen.ts), read aloud once. */
+export const REVEAL = {
+  nieuw: 'Nieuw in je veldgids!',
+} as const;
+
 /* ------------------------------------------------------------- general ---- */
 export const ALGEMEEN = {
   leesVoor: 'Lees voor',

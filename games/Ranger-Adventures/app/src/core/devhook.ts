@@ -393,7 +393,21 @@ export interface RangerDevHook {
   missionPlaces(id: string): Record<string, { x: number; z: number; r?: number; heading?: number }> | null;
   /** The missions' homes: their state and their animals (world/Residents.ts). */
   residents(): ResidentsReadout | null;
+  /* ---- run 7: variety, growth, discovery, moods (design §4.6). Read-only. ---- */
+  /** The current (or last) play: its mission, seed, play number and what it chose. */
+  play(): PlayReadout | null;
+  /** The beat history (oldest first): what was played, at which level, from which play. */
+  history(): unknown[] | null;
+  /** Per breinkracht: its level now, the best, lifetime trials, the floor, and the knobs its
+   *  views read now. */
+  skills(): Record<string, { level: number; best: number; trials: number; floor: number; knobs: unknown }> | null;
+  /** What he discovered (ids, in the order found) and the per-home rare counters. */
+  discoveries(): { found: string[]; rareCounts: Record<string, number> } | null;
+  /** The session's mood and the one on screen. */
+  mood(): { session: string; now: string } | null;
 }
+
+export type PlayReadout = { missionId: string; seed: number; n: number; variant: Record<string, string | number> };
 
 export type AdventureReadout = { mission: string; beat: string; stepsLogged: number[]; line: string | null; stats: Record<string, number> };
 export type ResidentsReadout = { missionId: string; state: 'before' | 'after'; borrowed: boolean;
@@ -530,6 +544,11 @@ const state = {
   missionPlaces: null as null | ((id: string) => Record<string, { x: number; z: number; r?: number; heading?: number }> | null),
   residents: null as null | (() => ResidentsReadout),
   residentSpots: null as null | (() => { x: number; z: number }[]),
+  play: null as null | (() => PlayReadout | null),
+  history: null as null | (() => unknown[]),
+  skills: null as null | (() => Record<string, { level: number; best: number; trials: number; floor: number; knobs: unknown }>),
+  discoveries: null as null | (() => { found: string[]; rareCounts: Record<string, number> }),
+  mood: null as null | (() => { session: string; now: string }),
 };
 
 /** The THREE-side golden-path measurements, registered by `render3d/play/kit.ts`. */
@@ -604,6 +623,27 @@ export function provideMissionPlaces(fn: ((id: string) => Record<string, { x: nu
 export function provideResidents(read: (() => ResidentsReadout) | null, spots: (() => { x: number; z: number }[]) | null): void {
   state.residents = read;
   state.residentSpots = spots;
+}
+
+/** Run 7: register the current (or last) play's read (ui/flow/MissionFlow.ts). */
+export function providePlay(fn: (() => PlayReadout | null) | null): void {
+  state.play = fn;
+}
+
+/** Run 7: register the save's reads (the history, the skills, the discoveries). */
+export function provideGrowth(p: {
+  history: () => unknown[];
+  skills: () => Record<string, { level: number; best: number; trials: number; floor: number; knobs: unknown }>;
+  discoveries: () => { found: string[]; rareCounts: Record<string, number> };
+} | null): void {
+  state.history = p?.history ?? null;
+  state.skills = p?.skills ?? null;
+  state.discoveries = p?.discoveries ?? null;
+}
+
+/** Run 7: register the world's mood read. */
+export function provideMood(fn: (() => { session: string; now: string }) | null): void {
+  state.mood = fn;
 }
 
 /** Current screen the player is on. */
@@ -927,6 +967,11 @@ export function installDevHook(): boolean {
     adventure: () => (state.adventure ? state.adventure() : null),
     missionPlaces: (id) => (state.missionPlaces ? state.missionPlaces(id) : null),
     residents: () => (state.residents ? state.residents() : null),
+    play: () => (state.play ? state.play() : null),
+    history: () => (state.history ? state.history() : null),
+    skills: () => (state.skills ? state.skills() : null),
+    discoveries: () => (state.discoveries ? state.discoveries() : null),
+    mood: () => (state.mood ? state.mood() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

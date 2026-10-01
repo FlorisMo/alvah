@@ -78,3 +78,18 @@ export function stream(seed: number): () => number {
   let s = seed >>> 0;
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
+
+/** A framed view on the ground as `k.frame` takes it: its middle, the way it looks, and
+ *  half its width (across) and depth (along the heading), in m. */
+export interface FrameArea { at: Spot; heading: number; halfW: number; halfD: number }
+
+/**
+ * Run 7 (design §4.7): how far off the middle of a framed view a spot lies, in the frame's
+ * own axes (`toLocal`): max(|u| / halfW, |v| / halfD). 0 = dead centre, 1 = at its edge,
+ * > 1 outside. A home pins every hiding place "never dead centre of the picture" with it
+ * (≥ 0.25).
+ */
+export function offCentre(frame: FrameArea, p: Spot): number {
+  const { u, v } = toLocal({ x: frame.at.x, z: frame.at.z, heading: frame.heading }, p);
+  return Math.max(Math.abs(u) / Math.max(1e-6, frame.halfW), Math.abs(v) / Math.max(1e-6, frame.halfD));
+}

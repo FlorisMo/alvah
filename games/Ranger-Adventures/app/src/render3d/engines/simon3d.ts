@@ -23,6 +23,7 @@ import * as THREE from 'three';
 import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
+import type { Play } from '../../core/play';
 import type { WorldCtx, Play3dEngine } from '../play/types';
 import { buildSimonTrial, randomCaller, SimonRun } from '../../engines/simon';
 import { store } from '../../core/state';
@@ -55,7 +56,7 @@ interface CallerFx {
   color: string;
 }
 
-export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
+export function playSimon3d(ctx: WorldCtx, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const raycaster = ctx.raycaster as THREE.Raycaster;
@@ -66,7 +67,8 @@ export function playSimon3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // SAME engine logic as the 2D view (construct parity §1f).
     const diff = store.difficulty('simon');
     const trial = buildSimonTrial(step.skin, diff);
-    const run = new SimonRun(trial.target, () => randomCaller(trial.dieren));
+    const rng = play?.fork('simon').rng; // run 7: the play's callers (as its 2D twin)
+    const run = new SimonRun(trial.target, () => randomCaller(trial.dieren, rng));
 
     const instructie = copy.instructie ?? 'De dieren roepen. Doe ze na.';
     const luister = copy.luister ?? 'Luister naar de dieren…';

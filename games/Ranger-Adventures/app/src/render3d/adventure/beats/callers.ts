@@ -65,7 +65,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   k.beat = 'callers';
   const settings = store.get().settings;
   const trial = buildSimonTrial(k.steps[step].skin, store.difficulty('simon'));
-  const run = new SimonRun(trial.target, () => randomCaller(trial.dieren));
+  const rng = k.play.fork('simon').rng; // run 7: the play's callers (its 2D twin draws the same)
+  const run = new SimonRun(trial.target, () => randomCaller(trial.dieren, rng));
   const byId = new Map(o.callers.map((c) => [c.id, c]));
   const missing = trial.dieren.filter((id) => !byId.has(id));
   if (missing.length) throw new Error(`[adventure] no caller for ${missing.join(', ')}`);

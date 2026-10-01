@@ -170,3 +170,49 @@
   100% { box-shadow: var(--shadow-md), 0 0 0 14px rgba(245, 194, 59, 0); }
 }
 .rm .explore-wayfind.wf-reveal { animation: none; box-shadow: var(--shadow-md), 0 0 0 4px rgba(245, 194, 59, 0.8); }
+
+/* ------------------------------------------------------------------------
+   Run 7: "Nieuw in je veldgids!" (ui/hud/Reveal.ts) — a small paper card under the
+   top chips (the Pauze pill and the chip under it), the chip's look. One at a time, ~4 s,
+   a soft fade in and out (a cut under reduced motion). It never takes a tap: only its
+   🔊 does (56 px). Never a .ra-overlay, so it is never a menu.
+   ------------------------------------------------------------------------ */
+#ui > .reveal {
+  position: absolute;
+  left: 16px;
+  top: calc(max(16px, env(safe-area-inset-top)) + 144px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 8px 8px 8px 10px;
+  border: 1px solid var(--paper-edge);
+  border-radius: 22px;
+  background: var(--paper-chip);
+  color: var(--ink);
+  box-shadow: var(--chip-shadow);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity var(--dur-slow) var(--ease-soft), transform var(--dur-slow) var(--ease-soft);
+}
+#ui > .reveal.rv-in { opacity: 1; transform: none; }
+#ui > .reveal.rv-out { opacity: 0; transform: none; }
+.reveal .rv-pic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--green-mid);
+  color: #fff;
+}
+.reveal .rv-pic .ic { width: 28px; height: 28px; stroke-width: 2.2; }
+/* a rare one: the picture gets the soft gold of the badges */
+.reveal--rare .rv-pic { background: var(--spel-sun); color: #5a3d09; box-shadow: 0 0 0 3px rgba(245, 194, 59, 0.35); }
+.reveal .rv-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.reveal .rv-kicker { font: 600 15px/1.25 var(--font-body); color: var(--ink-soft); }
+.reveal .rv-name { font: 700 20px/1.25 var(--font-body); color: var(--green-deep); }
+.reveal .rv-speak { pointer-events: auto; margin-left: 4px; }

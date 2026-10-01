@@ -12,7 +12,10 @@ import {
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, provideObstacles, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
   provideHeli, provideQuality, provideBoundary, provideTags, provideMissionPlaces, provideResidents,
+  provideGrowth, provideMood,
 } from '../../core/devhook';
+import { store } from '../../core/state';
+import { EF_ENGINES, floorLevel } from '../../core/skill';
 import { adventureFor } from '../../render3d/adventure/registry';
 import { triggerActivityWin } from '../../render3d/play/kit';
 
@@ -52,4 +55,18 @@ export function wireWorldDevhook(world: World): void {
   provideWinStep(() => triggerActivityWin());         // W2.3: E2E-only resolve of a 3D step
   provideMissionPlaces((id) => { const p = adventureFor(id)?.home.places; return p ? { ...p } : null; }); // run 6
   provideResidents(() => world.residents.read(), () => world.residents.moverSpots()); // run 6: the homes
+  provideMood(() => world.mood());                    // run 7: the session's mood, the one on screen
+  // run 7: his growth and his finds, straight from the save (copies: reading never writes)
+  provideGrowth({
+    history: () => store.get().geschiedenis.map((b) => ({ ...b })),
+    skills: () => Object.fromEntries(EF_ENGINES.map((e) => {
+      const r = store.get().skill[e];
+      return [e, { level: r.level, best: r.best, trials: r.trials, floor: Math.round(floorLevel(r.trials) * 1000) / 1000, knobs: store.knobs(e) }];
+    })),
+    discoveries: () => {
+      const s = store.get();
+      const found = Object.entries(s.ontdekt).sort((a, b) => a[1].t - b[1].t).map(([id]) => id);
+      return { found, rareCounts: { ...s.zeldzaam } };
+    },
+  });
 }
