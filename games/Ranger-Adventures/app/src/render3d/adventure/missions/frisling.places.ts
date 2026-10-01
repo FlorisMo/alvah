@@ -299,7 +299,9 @@ const BERK = ((): Way => {
     nest: atLocal(frame, 2.45, 1.2),
     walkSpots: [{ x: -13.9, z: -8.5 }, { x: -6.2, z: 9.2 }],
     cover: { seed: 151, bracken: 0.15, grass: 0.4 },
-    trees: [{ ...atLocal(frame, 2.6, 2.4), h: 9.5, rotY: 1.9 }],
+    // (behind the stand, beyond the search picture's top edge: from the follow a white beacon
+    // over the bracken, never a dark trunk across the picture's corner)
+    trees: [{ ...atLocal(frame, 0.8, 4.2), h: 9.5, rotY: 1.9 }],
   };
 })();
 
