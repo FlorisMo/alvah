@@ -331,8 +331,8 @@ export const GROEI_PANEEL = {
   nu: 'Nu',
   best: 'Best',
   week: 'Deze week',
-  maat: 'Beste reeks',
-  zoektijd: 'Zoektijd',
+  /** what he played at his best: the longest echo or route, the time to a find, the longest hold */
+  maat: 'Wat lukt',
   nogNiet: 'Nog niet gespeeld.',
   seconden: '{s} s',
 } as const;

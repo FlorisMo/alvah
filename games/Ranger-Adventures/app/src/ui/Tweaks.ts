@@ -24,7 +24,9 @@ import { applyAmbient } from '../core/calls';
 import { card, clearOverlays, kicker } from './flow/session';
 import { icon } from './icons';
 import { readScreenAloud } from './ReadAloud';
-import { INSTELLINGEN as T } from '../content/copy';
+import { INSTELLINGEN as T, GROEI_PANEEL as G, vul } from '../content/copy';
+import { growthSummary, type GrowthRow } from '../core/growth';
+import { SKILL_META } from '../core/skill';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -142,6 +144,26 @@ function accentHtml(): string {
   );
 }
 
+/** Run 7 (design §5.9): the grown-ups' "Groei" panel, collapsed at the bottom: per
+ *  breinkracht the level now, the best, the beats this week and what he played at his best
+ *  (core/growth.ts). Plain text; never shown to the child anywhere else. */
+function groeiHtml(): string {
+  const s = store.get();
+  const rows = growthSummary(s.geschiedenis, s.skill, Date.now());
+  const num = (v: number): string => v.toFixed(1).replace('.', ',');
+  const maat = (r: GrowthRow): string =>
+    r.span != null ? String(r.span)
+      : r.findS != null ? vul(G.seconden, { s: num(r.findS) })
+        : r.holdS != null ? vul(G.seconden, { s: num(r.holdS) })
+          : '·';
+  const body = rows.some((r) => r.beats > 0)
+    ? `<table class="tw-groei-tabel"><thead><tr><th>${esc(G.kracht)}</th><th>${esc(G.nu)}</th><th>${esc(G.best)}</th><th>${esc(G.week)}</th><th>${esc(G.maat)}</th></tr></thead><tbody>` +
+      rows.map((r) => `<tr data-engine="${r.engine}"><td>${esc(SKILL_META[r.engine].naam)}</td><td>${num(r.level)}</td><td>${num(r.best)}</td><td>${r.week}</td><td>${esc(maat(r))}</td></tr>`).join('') +
+      `</tbody></table>`
+    : `<p class="tw-groei-leeg">${esc(G.nogNiet)}</p>`;
+  return `<details class="tw-groei"><summary>${esc(G.titel)}</summary><p class="tw-groei-uitleg">${esc(G.uitleg)}</p>${body}</details>`;
+}
+
 function render(): void {
   narrator.stop();
   const s = store.get().settings;
@@ -163,6 +185,7 @@ function render(): void {
     segHtml() +
     joystickHtml() +
     accentHtml() +
+    groeiHtml() +
     `</div>` +
     `</div>` +
     `<div class="card-foot"><div class="ra-row">` +

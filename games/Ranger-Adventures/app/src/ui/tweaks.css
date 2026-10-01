@@ -124,3 +124,19 @@
 }
 .tw-acc-tick .ic { width: 26px; height: 26px; stroke-width: 3; }
 .tw-acc.sel .tw-acc-tick { display: flex; }
+
+/* ---- run 7: the grown-ups' growth panel, collapsed at the bottom ---- */
+.tw-groei { margin-top: 6px; border-top: 1px solid var(--green-line); padding-top: 4px; }
+.tw-groei > summary {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  cursor: pointer;
+  font: 700 18px/1.2 var(--font-body);
+  color: var(--green-deep);
+}
+.tw-groei-uitleg, .tw-groei-leeg { margin: 0 0 8px; font: 500 16px/1.4 var(--font-body); color: var(--ink-soft); }
+.tw-groei-tabel { width: 100%; border-collapse: collapse; font: 500 16px/1.3 var(--font-body); color: var(--ink); }
+.tw-groei-tabel th { text-align: left; font-weight: 700; color: var(--green-mid); padding: 4px 6px; border-bottom: 1px solid var(--green-line); }
+.tw-groei-tabel td { padding: 5px 6px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.tw-groei-tabel td:not(:first-child), .tw-groei-tabel th:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
