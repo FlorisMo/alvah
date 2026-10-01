@@ -256,14 +256,18 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // body — a step key or a tap on the world is a step toward her piglets)
   const sow = A.sow;
   const sowHome = { x: sow.x, z: sow.z };
-  // (no card now: the lens comes a little closer, to her and her piglets, him at the side)
+  // (no card now: the lens comes round to their side, low, the two of them facing each
+  // other across the picture — her head coming up and her stare at him read, him whole
+  // at the side. Over his shoulder she stood ~9 m from the lens, ~55 px tall: played
+  // 2026-10-01)
   k.beat = 'zeug:frame';
   const zt = k.ranger();
   const zh = headingTo(zt, sowHome);
+  const zd = dist(zt, sowHome);
   const zeugView = (s: number): FrameSpec => ({
-    at: toward(sowHome, zt, 1.0), heading: zh + 0.22 * s,
-    halfW: 1.15, halfD: 0.9, tall: 0.95, pitchDeg: 16, insetTop: 110, insetBottom: 36,
-    include: [{ x: zt.x, z: zt.z, h: 1.32, r: 0.4 }], // (his shoulders both: never cut by the edge)
+    at: toward(zt, sowHome, zd * 0.55), heading: zh + 1.25 * s,
+    halfW: zd * 0.5 + 0.6, halfD: 0.8, tall: 1.0, pitchDeg: 12, insetTop: 110, insetBottom: 30,
+    include: [{ x: zt.x, z: zt.z, h: 1.32, r: 0.4 }, { x: sowHome.x, z: sowHome.z, h: 0.9 }], // (his shoulders both: never cut by the edge)
   });
   await k.frame(zeugView(fieldClutter(zeugView(-1)) <= fieldClutter(zeugView(1)) ? -1 : 1));
   await rust.still('zeug', {
