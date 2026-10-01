@@ -41,6 +41,9 @@ export interface Obstacle {
   /** Run 6: a building's height (m) over the ground at its centre, so a name-tag behind
    *  it hides (world/Labels.ts); a tag seen over its roof still shows. */
   h?: number;
+  /** Run 6: what is DRAWN there (a radius, m), when `r` is wider: a person's body inside
+   *  the personal space the walker keeps (the dev read's clear line tests the body). */
+  body?: number;
 }
 
 /** The ranger's clearance from a building wall (m). */

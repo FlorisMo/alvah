@@ -38,6 +38,7 @@ export interface ReadbackHost {
 
 export class DevReadback {
   private readonly _camPose = new THREE.Vector3();  // scratch: camera world forward
+  private readonly animalPos = new THREE.Vector3(); // scratch: where a marker's animal stands
   private readonly _camBox = new THREE.Box3();       // scratch: ranger bbox for pose reads
   private readonly camera: THREE.PerspectiveCamera;
   private readonly terrain: Terrain;
@@ -190,7 +191,7 @@ export class DevReadback {
     const viewClear = this.host.activityActive()
       ? true
       : this.cam.viewClearState
-        && (aloft || !this.propBlocksSightline(cam.position.x, cam.position.z, rp.x, rp.z))
+        && (aloft || !this.propBlocksSightline(cam.position.x, cam.position.y, cam.position.z, rp.x, rp.y + this.player.avatarTopY, rp.z))
         && !this.animalBlocksSightline(cam.position.x, cam.position.y, cam.position.z, rp.x, rp.y, rp.z);
     // D1.7: the RENDERED body opacity read off the shared materials — NOT the
     // `avatarOpacity` intent field, which lied 1 over an invisible ranger on the
@@ -364,9 +365,14 @@ export class DevReadback {
    * circles that CONTAIN the ranger's foot (the prop he stands at) are skipped so a POI
    * never self-reports occluded. Trees are skipped (their crown fade already handles
    * them, and the frozen view-clear spec walks past trunks expecting viewClear=true).
+   * Run 6: a thing with a height (`h`: a person, the missiebord, a marker's stag) hides
+   * him only where the line to his HEAD passes below its top (the walk lens passes over a
+   * grown-up's head and over low props), and a person by his body (`body`), not by the
+   * personal space the walker keeps round him: golden's "view blocked" read a lens passing
+   * beside the warden as blocked while the pixels showed the boy whole.
    * Deterministic (no allocation) so the idle-stability pose holds frame to frame.
    */
-  private propBlocksSightline(cx: number, cz: number, ax: number, az: number): boolean {
+  private propBlocksSightline(cx: number, cy: number, cz: number, ax: number, headY: number, az: number): boolean {
     const dx = ax - cx, dz = az - cz;
     const len2 = dx * dx + dz * dz;
     if (len2 < 1e-6) return false; // lens on top of him
@@ -375,10 +381,19 @@ export class DevReadback {
       if (this.vehicles.seeThrough(o)) continue;   // the parked jeep, faded like a tree (run 6 polish)
       if (obstacleGap(o, ax, az) + (o.box ? o.box.pad : 0) <= 0) continue; // the prop the ranger stands at — not an occluder
       // behind the lens or at/behind the ranger (t outside 0.05–0.95) is a backdrop; a box by its real rectangle,
-      // the parked jeep by its body (its collision circles hold the walker's room too)
-      if (segmentCrosses(this.vehicles.parkedBody(o) ?? o, cx, cz, ax, az, 0.05, 0.95)) return true;
+      // the parked jeep by its body (its collision circles hold the walker's room too), a person by his body
+      const shape = this.vehicles.parkedBody(o) ?? (o.body !== undefined ? this.bodyOf(o) : o);
+      if (!segmentCrosses(shape, cx, cz, ax, az, 0.05, 0.95)) continue;
+      if (o.h === undefined) return true;
+      const t = Math.min(1, Math.max(0, ((o.x - cx) * dx + (o.z - cz) * dz) / len2));
+      if (cy + (headY - cy) * t < this.terrain.y(o.x, o.z) + o.h) return true; // (the line to his head passes below its top)
     }
     return false;
+  }
+  private readonly body: Obstacle = { x: 0, z: 0, r: 0 };
+  private bodyOf(o: Obstacle): Obstacle {
+    this.body.x = o.x; this.body.z = o.z; this.body.r = o.body ?? o.r;
+    return this.body;
   }
 
   /**
@@ -412,8 +427,12 @@ export class DevReadback {
       const cyc = g.y + h * 0.5;                   // centre at mid-height above the creature's own ground
       return near(g.x, cyc, g.z, R, aimHead) || near(g.x, cyc, g.z, R, aimChest);
     };
-    for (const m of this.pois.list) { if (test(m.group.position, 1.0)) return true; }
-    for (const a of this.fauna.scenicActors) { if (test(a.group.position, a.height)) return true; }
+    // (a marker's animal stands beside its ring: tested where it stands, at its own height;
+    // the warden and the poacher are solid people, read by their body and height above)
+    for (const m of this.pois.list) {
+      const a = m.animalAt;
+      if (a && test(this.animalPos.set(a.x, this.terrain.y(a.x, a.z), a.z), a.h)) return true;
+    }
     for (const a of this.fauna.ambient) {
       if (a.glide) continue;                        // birds gliding overhead never cross a follow sightline
       if (test(a.group.position, a.h)) return true;

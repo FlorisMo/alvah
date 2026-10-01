@@ -364,7 +364,7 @@ export class World {
     // people are solid: the ranger walks round the warden and the poacher (with a child's
     // bit of personal space), never through them
     // (`h`: a lens passes over a grown-up's head, never through him; a tag hides behind him)
-    for (const a of this.fauna.scenicActors) this.obstacles.push({ x: a.group.position.x, z: a.group.position.z, r: 1.1, h: a.height });
+    for (const a of this.fauna.scenicActors) this.obstacles.push({ x: a.group.position.x, z: a.group.position.z, r: 1.1, h: a.height, body: 0.3 });
     this.fauna.placeAmbientLife();
     this.vehicles.placeJeep();
     this.vehicles.placeHelipads();

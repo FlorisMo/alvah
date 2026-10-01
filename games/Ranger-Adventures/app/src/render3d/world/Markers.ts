@@ -83,7 +83,7 @@ export class Markers {
     finished: boolean;                 // the mission is done: the tag reads "✓ <titel>"
     anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
     model: THREE.Group | null;         // the loaded animal (fades out far off in the fog)
-    animalAt: { x: number; z: number; r: number } | null; // where its animal stands, beside the ring
+    animalAt: { x: number; z: number; r: number; h: number } | null; // where its animal stands, beside the ring (and how tall)
     rest: FarRest;
     mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
   }[] = [];
@@ -230,7 +230,7 @@ export class Markers {
       group.add(label);
 
       // its animal (or the stand-in until it loads): beside the ring, side-on to the clearing
-      let animalAt: { x: number; z: number; r: number } | null = null;
+      let animalAt: { x: number; z: number; r: number; h: number } | null = null;
       const stand = new THREE.Group();
       if (mk.look !== 'none') {
         const len = mk.len ?? mk.height * 1.7;
@@ -256,7 +256,7 @@ export class Markers {
         stand.rotation.y = yaw;
         stand.add(proceduralTotem(mk.color)); // instant stand-in
         group.add(stand);
-        animalAt = { x: ax, z: az, r: Math.max(0.3, len * 0.5) };
+        animalAt = { x: ax, z: az, r: Math.max(0.3, len * 0.5), h: mk.height };
         if (len >= SOLID_LEN) this.obstacles.push({ ...boxObstacle(ax, az, 0.13 * len, 0.45 * len, yaw), h: mk.height * 0.7 });
       }
       this.scene.add(group);
