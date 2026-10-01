@@ -155,7 +155,8 @@ function groeiHtml(): string {
     r.span != null ? String(r.span)
       : r.findS != null ? vul(G.seconden, { s: num(r.findS) })
         : r.holdS != null ? vul(G.seconden, { s: num(r.holdS) })
-          : '·';
+          : r.sorts != null ? String(r.sorts)
+            : '·';
   const body = rows.some((r) => r.beats > 0)
     ? `<table class="tw-groei-tabel"><thead><tr><th>${esc(G.kracht)}</th><th>${esc(G.nu)}</th><th>${esc(G.best)}</th><th>${esc(G.week)}</th><th>${esc(G.maat)}</th></tr></thead><tbody>` +
       rows.map((r) => `<tr data-engine="${r.engine}"><td>${esc(SKILL_META[r.engine].naam)}</td><td>${num(r.level)}</td><td>${num(r.best)}</td><td>${r.week}</td><td>${esc(maat(r))}</td></tr>`).join('') +

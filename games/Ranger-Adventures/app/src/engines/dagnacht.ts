@@ -98,7 +98,9 @@ export function buildDagnachtTrial(skin: Skin, diff: DagnachtDiff, rng?: () => n
  * `rng`. Rules: a flip is never the first moment (the "no" habit is built first: a flip
  * that would open the trial swaps with the first calm moment of its slot); the trial keeps
  * a flip when the pool has one; at most `maxFlips` flips (two from band 4, when content
- * offers two). Encounters in no slot of the plan come last, in content order.
+ * offers two). Encounters in no slot of the plan come last, in content order. (A flip moves
+ * only inside its own slot, so a home's `nextIn(slot)` stays true: give the plan's first
+ * slot a calm moment, or its flip opens the trial.)
  */
 export function rustOrder(all: readonly Encounter[], plan: readonly RustPlanSlot[], rng: () => number, maxFlips = 1): Encounter[] {
   const shuffle = <T>(xs: T[]): T[] => {

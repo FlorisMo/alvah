@@ -24,16 +24,18 @@ test('per breinkracht: the level now, the best, the beats this week and ever', (
   assert.equal(rows.find((r) => r.engine === 'zoeken')!.week, 0);
 });
 
-test('what he played at his best: the longest clean echo, the median find over the last ten, the longest hold', () => {
+test('what he played at his best: the longest clean echo, the median find over the last ten, the longest hold, the longest clean aim round', () => {
   const h: BeatLog[] = [
     beat('simon', 5, { sp: 4, st: 2 }), beat('simon', 1, { sp: 5, st: 3 }), beat('simon', 0, { sp: 0, st: 3 }),
     ...[30, 12, 8, 6, 5, 4, 4, 3, 3, 2, 2].map((s, i) => beat('zoeken', 11 - i, { s, ms: 0 })),
     beat('dagnacht', 2, { h: 3 }), beat('dagnacht', 1, { h: 4.5 }),
+    beat('wisselen', 3, { n: 6, c: 6 }), beat('wisselen', 1, { n: 8, c: 7 }),
   ];
   const rows = growthSummary(h, blankSkillSet(), NOW);
   assert.equal(rows.find((r) => r.engine === 'simon')!.span, 5);
   assert.equal(rows.find((r) => r.engine === 'zoeken')!.findS, 4, 'the median of the last ten (the 30 s one is older)');
   assert.equal(rows.find((r) => r.engine === 'dagnacht')!.holdS, 4.5);
+  assert.equal(rows.find((r) => r.engine === 'wisselen')!.sorts, 6, 'the longest round sorted all right first time (8 had a wrong one)');
   assert.equal(rows.find((r) => r.engine === 'corsi')!.span, undefined, 'never played: nothing to say');
 });
 
