@@ -159,12 +159,13 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const call = (id: string, a: Actor): void => { if (settings.geluid) Sound.callAt(id, a.x, a.z, listener()); };
   const me = (): { x: number; z: number; speed: number } => { const m = k.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
   /** After a framed moment (he faced the animal at his side) he turns for `to` and takes a
-   *  first calm step that way: the lens comes back behind him facing the way he goes. */
+   *  first calm step that way, and the lens comes round behind him facing the way he goes. */
   const setOff = async (to: { x: number; z: number }): Promise<void> => {
     const r = k.ranger();
     if (dist(r, to) < 2.5) return;
     const step = toward(r, to, 0.8);
     await k.walkRanger(step.x, step.z, 0.1);
+    await k.behind();
   };
   /** an animal back at its place in this play's layout, doing what it does there */
   const atHome = (a: Actor, pose: ResidentPose): void => { if (pose.idle === 'stand') a.idle(); else a.root(pose.x, pose.z, pose.roam ?? 0.5); };

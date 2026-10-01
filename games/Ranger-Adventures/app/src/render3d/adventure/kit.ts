@@ -567,6 +567,28 @@ export class AdventureKit {
     this.free();
   }
 
+  /**
+   * Run 7: the lens comes round BEHIND him — where the walk camera stands, looking the way
+   * he faces — on an arc about him (≤ 90° a second; a cut under reduced motion). After a
+   * framed moment (he turned to an animal at his side) a walk then starts with the view
+   * the way he goes, not the way the moment's picture looked.
+   */
+  async behind(): Promise<void> {
+    this.check();
+    const cam = this.world.camera;
+    const me = this.ranger();
+    const g = this.ctx.groundY(me.x, me.z);
+    const f = { x: Math.sin(me.heading), z: Math.cos(me.heading) };
+    const to = new THREE.Vector3(me.x - f.x * 4.6, 0, me.z - f.z * 4.6);
+    to.y = Math.max(g + 2.4, this.ctx.groundY(to.x, to.z) + 1.4);
+    const look = new THREE.Vector3(me.x + f.x * 1.6, g + 0.9, me.z + f.z * 1.6);
+    this.world.setMissionMode({ missionId: this.mission.id, input: 'locked', camera: 'held' });
+    this.ui.walking(false);
+    const move = orbitReframe(cam, me, to, look, this.reduced, 1.0);
+    this.held = { update: (dt) => move.update(dt), settled: false };
+    await this.until(() => !!this.held?.settled);
+  }
+
   /* -------------------------------------------------------------- walking ---- */
 
   /**
