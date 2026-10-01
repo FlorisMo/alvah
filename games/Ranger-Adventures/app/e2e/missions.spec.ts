@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { AREA_VELUWE } from '../src/content/veluwe';
 import {
-  R, save, sleep, snap, uncovered, visibleButtons, walkTo, worldChange, worldSamples,
+  R, playSeed, replayTail, save, sleep, snap, uncovered, visibleButtons, walkTo, worldChange, worldSamples,
   MAX_DRAW_CALLS, SEAT_TOLERANCE, type Hint, type P2, type Seat,
 } from './golden-lib';
 
@@ -45,6 +45,8 @@ type Skin = { dier?: string; encounters?: { vraag: string; opties: { label: stri
 class Log {
   readonly notes: string[] = [];
   private n = 0;
+  /** run 7: the seed of the play running now (a hard failure prints its replay URL) */
+  seed: number | null = null;
   constructor(readonly page: Page, readonly dir: string) {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
@@ -58,7 +60,7 @@ class Log {
   }
   /** The player is blocked here: stop. */
   hard(ok: boolean, msg: string): asserts ok {
-    if (!ok) { this.notes.push(`✗✗ ${msg}`); throw new Error(msg); }
+    if (!ok) { const m = `${msg}${replayTail(this.seed)}`; this.notes.push(`✗✗ ${m}`); throw new Error(m); }
   }
   async shot(name: string): Promise<void> {
     this.n += 1;
@@ -138,6 +140,9 @@ async function start(log: Log, mission: Mission): Promise<void> {
   log.soft((await uiText(page)).toLowerCase().includes(mission.titel.toLowerCase()), 'the briefing names the mission');
   await click(log, 'Ga op pad', 'briefing');
   await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 10_000, message: 'the mission never started' }).not.toBeNull();
+  // run 7: the play's seed (its variety), so a failing run can be replayed
+  log.seed = await playSeed(page);
+  if (log.seed !== null) log.note(`seed ${log.seed}`);
 }
 
 /** Every step, with real input, until each one is won (golden.spec step 6's player). Run 6:
@@ -707,6 +712,8 @@ test('a mission picked on the missiebord: played at its OWN marker (the pick bri
     });
     await click(log, 'Ga op pad', 'briefing');
     await expect.poll(() => R<string | null>(page, 'r.missionView'), { timeout: 10_000, message: 'the mission never started' }).not.toBeNull();
+    log.seed = await playSeed(page);
+    if (log.seed !== null) log.note(`seed ${log.seed}`);
     await playSteps(log, mission);
     await finish(log, mission);
     await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null,

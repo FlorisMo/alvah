@@ -177,3 +177,69 @@ after; `Residents.lay` walks them back or cuts out of view); one short line per 
 same question again; `__ranger` reads only. `missions/<id>.places.ts` is chosen by
 looking at the world and pinned by its test (dry heath, clear of paths, props, roamers and
 the other markers).
+
+## Run 7: variety, growth, discovery
+
+Every play of a mission is drawn from **one seed**, so no two plays are alike and any play
+can be replayed; each breinkracht reads its difficulty from **knobs** that the 2D floor and
+the world share; what he sees and hears goes into his **veldgids**; and the world stands in
+a **mood** (time of day, weather). The contract (design: `design/run7-foundation.md` §4):
+
+```
+core/play.ts         Play { seed, missionId, n, rng(), pick, shuffle, chance, between, int,
+                     fork(label), note(k, v), variant }; newPlay, nextPlaySeed (?seed=N → the
+                     page session's plays are N, N+1, …), compactVariant
+core/skill.ts        knobsFor(engine, level) / knobsFromDifficulty: ZoekKnobs · SpanKnobs (corsi,
+                     simon) · RustKnobs (dagnacht) · WisselKnobs; BeatSummary's optional span,
+                     start, rounds, eased, misses, seconds, hinted, impulses, holdS, switches …
+core/state.ts        save fields geschiedenis (BeatLog[], newest 400), ontdekt, zeldzaam,
+                     gespeeld, sfeer; store.logBeat(e, summary, { missionId, view, play }),
+                     level(e), knobs(e), discover(id), notePlay, rareEnd, noteSession;
+                     hydrate(parsed): any older save loads, new fields defaulted
+core/discover.ts     rollRare (a seeded chance, the pity rule: a rare within ~3 won plays)
+content/ontdekkingen.ts  ONTDEKKINGEN: { id '<home>.<thing>', home, soort (dier · zeldzaam ·
+                     spoor · vondst · foto), naam, naamKnap?, hint (≤ 7 words), model? | icon?,
+                     stemming?, geholpen? } — one block per home, each lane writes its own
+render3d/Moods.ts    MoodId (gouden-uur · ochtendnevel · zonnig · bewolkt · schemer), playMood
+ui/hud/Reveal.ts     "Nieuw in je veldgids!" under the top chips, one at a time, read aloud,
+                     only at a quiet moment (ui/hud/reveal-queue.ts: the pure rules)
+```
+
+**The flow** (`ui/flow/MissionFlow.ts`): every briefing draws a play (`drawPlay`: the
+session's next seed, `n` = plays started + 1, the play's mood, the rare roll) BEFORE the
+home's `prepare(world, mission, play)` runs under the card; "Ga op pad" counts it
+(`gespeeld`) and plays it; "Nog even rondkijken" drops it. Every logged beat goes through
+`store.logBeat` with its play and view: `'world'` (an adventure), `'stage'` (a classic 3D
+engine) or `'2d'` (a floor); the hut's care game logs `'2d'` without a play. The 2D floors
+and the classic stages draw their corsi route, simon callers and wissel queue from
+`play.fork('<engine>')`, as the world's beats will (the same seed, the same trial). A won
+mission records its helped animal (`geholpen`) quietly, and the home's rare counter moves.
+
+**The kit adds** (`k` in `play(k)`, all additive):
+
+- `k.play` — this play's variety. Draw every choice from its own fork and note it:
+  `const spot = k.play.fork('hide').pick(SPOTS); k.play.note('hide', spot.id)`. A home never
+  calls `Math.random`; a fork's stream depends only on the seed and its label.
+- `k.level(e)` / `k.knobs(e)` — where a breinkracht starts and the knobs its beat reads (the
+  same knobs as its 2D floor). Map them onto the world (more fronds part for a bigger
+  `glimpse`); never invent a difficulty number in a home.
+- `k.discover(id, { quiet? })` — he really saw it (on screen, big enough, long enough) or
+  heard it: recorded at once, a new one gets one calm reveal at the next quiet beat (a walk,
+  a look, the ending). Returns whether it was new. `k.rare()` — this play's rare visitor for
+  the home (rolled at the briefing), or null: show it, and discover it once he saw it.
+- `k.mood` — the mood this play stands in (`world.mood()`: the session's and the one on
+  screen; `Adventure.moods: { allow, perPlay }` lets a home ask for its own light); the end
+  of the play hands the session's mood back.
+
+**A home's recipe** (each game lane): (1) choose places by looking at the world and pin each
+variant in `<id>.places.ts` + its test: dry, clear (`World.playClear`), inside its home, the
+target partly visible from the framed view, and off centre (`offCentre(frame, p) ≥ 0.25`,
+`adventure/places.ts`); (2) draw every choice from a fork of `k.play` and note it, laying
+this play's version in `prepare(world, mission, play)`; (3) build trials from
+`k.knobs(engine)` and the play's fork; (4) `k.discover(id)` when the thing was really seen or
+heard, show `k.rare()` when set; (5) add the home's rows to `content/ontdekkingen.ts` (≥ 4,
+≥ 1 `zeldzaam`); (6) optionally `moods` on the Adventure.
+
+**Dev and tests** (read-only): `?dev=1&seed=N` replays a session's plays; `__ranger.play()`,
+`history()`, `skills()`, `discoveries()`, `mood()`. Golden and `missions.spec` note each
+play's seed and end a hard failure with `replay: /?dev=1&seed=<n>`.

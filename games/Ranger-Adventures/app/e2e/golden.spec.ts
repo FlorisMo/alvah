@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { AREA_VELUWE } from '../src/content/veluwe';
 import { HAAR_OPTIES, OUTFIT_OPTIES } from '../src/core/avatar';
 import {
-  R, SEAT_TOLERANCE, MAX_DRAW_CALLS, budget, calmGlide, clickButton, endGlide, hard, holdKey, markTimedOut, note, noteOnce, r2, renderTable, renderedLook, save, setShotDir, shot,
+  R, SEAT_TOLERANCE, MAX_DRAW_CALLS, budget, calmGlide, clickButton, endGlide, hard, holdKey, markTimedOut, note, noteOnce, playSeed, r2, renderTable, renderedLook, save, setReplaySeed, setShotDir, shot,
   sleep, snap, soft, startGlide, step, uiText, under, visibleButtons, walkQuality, walkTo, worldChange, worldSamples, wrap,
   type Heli, type Hint, type P2, type Seat, type Vehicle,
 } from './golden-lib';
@@ -477,6 +477,9 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     }
     await expect.poll(started, { timeout: 10_000, message: 'the mission never started (missionView stayed null)' }).toBe(true);
     note(`the mission started after ${clicks} click(s)`);
+    // run 7: the play's seed (its variety): a hard failure from here on prints its replay URL
+    const seed = await playSeed(page);
+    if (seed !== null) { setReplaySeed(seed); note(`seed ${seed} (replay: /?dev=1&seed=${seed})`); }
     soft(clicks <= 2, `starting the mission took ${clicks} clicks`);
     noNewErrors();
   });
