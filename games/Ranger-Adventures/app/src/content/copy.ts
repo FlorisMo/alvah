@@ -318,8 +318,9 @@ export const GROEI = {
   nogEenWeg: 'Kijk, nog een weg.',
   /** look again (a reshow, or silently a shorter route) */
   kijkNogEens: 'Kijk nog een keer.',
-  /** the reward card: a breinkracht crossed a whole step */
+  /** the reward card: a breinkracht crossed a whole step (one line, however many grew) */
   groeit: 'Je {kracht} groeit.',
+  groeien: 'Je breinkrachten groeien.',
 } as const;
 
 /** The grown-ups' growth panel at the bottom of Instellingen (design §5.9): plain words,

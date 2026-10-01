@@ -630,7 +630,7 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
   // run 7 (design §5.8): a breinkracht that grew a whole step in this mission gets a soft
   // rising mark on its badge and one calm line, read aloud once. Down is never shown.
   const grown = trained.filter((e) => store.get().recentGroei.includes(e));
-  const groeiLines = grown.map((e) => vul(GROEI.groeit, { kracht: SKILL_META[e].naam }));
+  const groeiLines = grown.length > 1 ? [GROEI.groeien] : grown.map((e) => vul(GROEI.groeit, { kracht: SKILL_META[e].naam }));
   const groei = groeiLines.length
     ? `<div class="reward-groei">${groeiLines.map((l) => `<p class="rg-line"><span class="rg-mark" aria-hidden="true">${icon('arrow')}</span>${esc(l)}</p>`).join('')}</div>`
     : '';
