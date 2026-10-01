@@ -838,7 +838,9 @@ export function makeReframe(
         aim1 = yawPitch(d1.x, d1.y, d1.z);
         dur = reframeSeconds(seconds, (d0.angleTo(d1) * 180) / Math.PI);
       }
-      t = Math.min(1, t + dt / dur);
+      // (a long frame — a hitch at a home's edge, a photo's render — moves it at most one
+      // calm 20 fps frame's worth: the lens never jumps ahead, as CameraRig.place clamps)
+      t = Math.min(1, t + Math.min(dt, 0.05) / dur);
       if (t >= 1) { hold(); return true; }
       const e = easeInOut(t);
       camera.position.lerpVectors(from, to, e);
