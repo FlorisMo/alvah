@@ -57,6 +57,12 @@ export interface Skin {
   encounters?: unknown[];
   metgezel?: string;
   trials?: number;
+  /** run 7 (corsi, simon): the story's cap on the rounds of a span beat (the squirrel's two
+   *  mouthfuls); the 2D floor reads the same skin */
+  rondes?: number;
+  /** run 7 (dagnacht): the calm moments' slots in story order (engines/dagnacht.ts
+   *  `rustOrder`): per slot how many of its encounters come and whether they are shuffled */
+  rustPlan?: { slot: string; pick?: number; shuffle?: boolean }[];
   [key: string]: unknown;
 }
 

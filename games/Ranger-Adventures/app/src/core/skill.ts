@@ -265,8 +265,10 @@ export interface ZoekKnobs { lookAlikes: number; glimpse: number; hintAfterS: nu
  *  to, how many sequences a beat plays. */
 export interface SpanKnobs { start: number; max: number; rounds: number }
 /** Rustkracht: seconds of stillness a body moment wants after its line, temptations during
- *  one hold, how long he may wait at a go-moment, the calmer choosing window. */
-export interface RustKnobs { holdS: number; tempts: number; goWaitS: number; slowmo: boolean }
+ *  one hold, how long he may wait at a go-moment, the calmer choosing window, and how many
+ *  "now it is allowed" moments may come in one beat (two only from band 4, when content
+ *  offers two). */
+export interface RustKnobs { holdS: number; tempts: number; goWaitS: number; slowmo: boolean; flips: number }
 /** Wisselkracht: the aim round's length, right sorts before the rule turns, how many turns. */
 export interface WisselKnobs { sorts: number; flipEvery: number; flips: number }
 export interface EngineKnobs { zoeken: ZoekKnobs; corsi: SpanKnobs; simon: SpanKnobs; dagnacht: RustKnobs; wisselen: WisselKnobs }
@@ -283,7 +285,7 @@ export const KNOB_TABLES = {
   },
   simon: { start: [2, 3, 3, 4, 4, 5], rounds: [3, 3, 4, 4, 4, 4], max: 7 },
   corsi: { start: [3, 3, 4, 4, 5, 5], rounds: [2, 2, 2, 3, 3, 3], max: 6 },
-  dagnacht: { holdS: [3, 3.5, 4, 4.5, 5, 6], tempts: [1, 1, 2, 2, 3, 3], goWaitS: [9, 8, 7, 6, 5, 5] },
+  dagnacht: { holdS: [3, 3.5, 4, 4.5, 5, 6], tempts: [1, 1, 2, 2, 3, 3], goWaitS: [9, 8, 7, 6, 5, 5], flips: [1, 1, 1, 2, 2, 2] },
   wisselen: { sorts: [6, 6, 8, 8, 10, 10], flipEvery: [4, 4, 3, 3, 3, 2], flips: [1, 1, 1, 2, 2, 2] },
 } as const;
 
@@ -305,7 +307,7 @@ export function knobsFor<E extends Engine>(engine: E, level: number): EngineKnob
       case 'simon':
         return { start: T.simon.start[i], max: T.simon.max, rounds: T.simon.rounds[i] };
       case 'dagnacht':
-        return { holdS: T.dagnacht.holdS[i], tempts: T.dagnacht.tempts[i], goWaitS: T.dagnacht.goWaitS[i], slowmo: i + 1 < 3 };
+        return { holdS: T.dagnacht.holdS[i], tempts: T.dagnacht.tempts[i], goWaitS: T.dagnacht.goWaitS[i], slowmo: i + 1 < 3, flips: T.dagnacht.flips[i] };
       case 'wisselen':
         return { sorts: T.wisselen.sorts[i], flipEvery: T.wisselen.flipEvery[i], flips: T.wisselen.flips[i] };
       default:
@@ -361,7 +363,7 @@ export function knobsFromDifficulty<E extends Engine>(engine: E, diff: Difficult
         return { start: n, max: n, rounds: 3 };
       }
       case 'dagnacht':
-        return { holdS: 4, tempts: 1, goWaitS: 8, slowmo: !!diff.slowmo };
+        return { holdS: 4, tempts: 1, goWaitS: 8, slowmo: !!diff.slowmo, flips: 1 };
       case 'wisselen': {
         const freq = diff.wisselFreq ?? 0.4;
         return { sorts: 8, flipEvery: Math.max(2, Math.round(2 + (1 - freq) * 4)), flips: 1 };

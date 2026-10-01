@@ -28,6 +28,8 @@ import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
 import type { WorldCtx, Play3dEngine } from '../play/types';
 import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/dagnacht';
+import type { Play } from '../../core/play';
+import { looseRng } from '../../core/play';
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
@@ -94,14 +96,15 @@ function pathRibbon(stage: Stage, v0: number, v1: number, width: number): THREE.
   return mesh;
 }
 
-export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
+export function playDagnacht3d(ctx: WorldCtx, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const reduced = ctx.reducedMotion;
     const settings = store.get().settings;
 
-    // SAME engine logic as the 2D view (construct parity §1f).
-    const diff = store.difficulty('dagnacht');
-    const trial = buildDagnachtTrial(step.skin, { ...diff, reducedMotion: reduced } as typeof diff);
+    // SAME engine logic as the 2D view (construct parity §1f); run 7: this play's order
+    const trial = buildDagnachtTrial(step.skin, { jargon: settings.jargon, reducedMotion: reduced, ...store.knobs('dagnacht') },
+      play ? play.fork('dagnacht').rng : looseRng('dagnacht'));
+    const sides = play ? play.fork('knoppen').rng : looseRng('knoppen');
     const run = new DagnachtRun(trial.encounters.length);
     const instructie = step.skin.copy?.instructie ?? 'Blijf rustig. Maak de goede keuze.';
 
@@ -334,7 +337,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> 
         : '';
       const flip = enc.flip ? `<p class="p3-flip">Nu mag het wél</p>` : '';
       // shuffle the two slots so position never cues the answer (as the 2D view)
-      const order = Math.random() < 0.5 ? [0, 1] : [1, 0];
+      const order = sides() < 0.5 ? [0, 1] : [1, 0];
       const card = anchoredPrompt(
         ctx.prompt,
         `<div class="p3-bottom dag3d">` +

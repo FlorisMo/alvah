@@ -42,10 +42,10 @@ test('corsi: the route starts at 3 and grows to 5; two rounds, three from band 4
   for (let b = 2; b <= 6; b++) assert.ok(knobsFor('corsi', b).start - knobsFor('corsi', b - 1).start <= 1);
 });
 
-test('dagnacht: longer holds, more temptation, a shorter wait at a go-moment; slow-mo below band 3', () => {
-  const holdS = [3, 3.5, 4, 4.5, 5, 6], tempts = [1, 1, 2, 2, 3, 3], goWaitS = [9, 8, 7, 6, 5, 5];
+test('dagnacht: longer holds, more temptation, a shorter wait at a go-moment; slow-mo below band 3; two flips from band 4', () => {
+  const holdS = [3, 3.5, 4, 4.5, 5, 6], tempts = [1, 1, 2, 2, 3, 3], goWaitS = [9, 8, 7, 6, 5, 5], flips = [1, 1, 1, 2, 2, 2];
   for (let b = 1; b <= 6; b++) {
-    assert.deepEqual(knobsFor('dagnacht', b), { holdS: holdS[b - 1], tempts: tempts[b - 1], goWaitS: goWaitS[b - 1], slowmo: b < 3 }, `band ${b}`);
+    assert.deepEqual(knobsFor('dagnacht', b), { holdS: holdS[b - 1], tempts: tempts[b - 1], goWaitS: goWaitS[b - 1], slowmo: b < 3, flips: flips[b - 1] }, `band ${b}`);
   }
 });
 
@@ -72,7 +72,7 @@ test('the manual settings (automatisch off): no growth inside a beat, fixed roun
   assert.ok(Math.abs(z.glimpse - 0.4) < 1e-9, 'glimpse = 1 − haze');
   assert.deepEqual(knobsFromDifficulty('corsi', manual), { start: 4, max: 4, rounds: 2 });
   assert.deepEqual(knobsFromDifficulty('simon', manual), { start: 3, max: 3, rounds: 3 });
-  assert.deepEqual(knobsFromDifficulty('dagnacht', manual), { holdS: 4, tempts: 1, goWaitS: 8, slowmo: true });
+  assert.deepEqual(knobsFromDifficulty('dagnacht', manual), { holdS: 4, tempts: 1, goWaitS: 8, slowmo: true, flips: 1 });
   assert.deepEqual(knobsFromDifficulty('wisselen', manual), { sorts: 8, flipEvery: 4, flips: 1 });
 });
 
