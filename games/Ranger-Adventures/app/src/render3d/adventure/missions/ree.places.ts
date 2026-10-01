@@ -161,16 +161,15 @@ const POOL_AT: Spot = toward(calfTalk, HIDE_AT, dist(calfTalk, HIDE_AT) * 0.6);
 export const POOL = { ...POOL_AT, halfW: 1.45, halfD: 0.95, heading: headingTo(calfTalk, HIDE_AT) } as const;
 /** The pool's frame: `v` along the way to the hide, `u` across it. */
 export const POOL_FRAME: Frame = { x: POOL.x, z: POOL.z, heading: POOL.heading };
-/** Where he stops at the pool's near edge (the choice), and the way round it (walked
- *  on the right answer: along its side, to its far edge). */
+/** The pool's near edge (where a boot that went into the water steps back out to), and
+ *  the way round it (a perfect player's: along its side, to its far edge — the walk's
+ *  hint; a child chooses his own way, and a boot in the water plashes). */
 const poolEdge: Place = { ...atLocal(POOL_FRAME, 0, -(POOL.halfD + 0.55)), r: 1.9, heading: POOL.heading };
 export const POOL_ROUND: readonly Spot[] = [
   atLocal(POOL_FRAME, POOL.halfW + 0.75, -0.35),
   atLocal(POOL_FRAME, POOL.halfW + 0.55, POOL.halfD + 0.45),
   atLocal(POOL_FRAME, 0.2, POOL.halfD + 0.9),
 ];
-/** "Recht erdoor": the step he takes into the pool (and back out). */
-export const POOL_IN: Spot = atLocal(POOL_FRAME, 0, -0.4);
 
 const hide: Place = { ...HIDE_AT, r: 0.7, heading: HIDE_FRAME.heading };
 /** "Loop rustig weg": his quiet steps back out of the hide, away from the family. */
@@ -182,13 +181,13 @@ export const REE_PLACES = {
   /** the meadow's centre, and where the ranger stands to search it */
   meadow: { ...MEADOW_AT, heading: meadowApproach.heading },
   meadowApproach,
-  /** where he stands by the calf for the three choices */
+  /** where he stands by the calf (his hands still, twice; then one card) */
   calfTalk,
   /** the copse's centre, her gap, and where she grazes */
   copse: { ...COPSE_AT, heading: COPSE_FRAME.heading },
   gap: { ...COPSE_GAP },
   graze: { ...GRAZE },
-  /** the pool's near edge (its choice) */
+  /** the pool's near edge (a boot in the water steps back out to it) */
   poolEdge,
   /** the hide, and his quiet steps away from it */
   hide,
@@ -228,12 +227,6 @@ export function leaveView(at: Spot): {
   };
 }
 
-/** The pool: the lens behind him, the water in front (its choice, a splash, the way round). */
-export const POOL_VIEW = {
-  at: { x: POOL.x, z: POOL.z }, heading: POOL.heading + 0.35,
-  halfW: 2.3, halfD: 1.4, tall: 0.6, pitchDeg: 32, insetTop: 40, insetBottom: 290,
-  include: [{ x: poolEdge.x, z: poolEdge.z, h: RANGER_STAND_HEIGHT }],
-} as const;
 /** The watch from the hide (binoculars): the lens moves toward the meadow and holds the
  *  copse's gap and the calf in one picture; the doe's way back runs across it. */
 export const WATCH_VIEW = {

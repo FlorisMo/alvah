@@ -5,19 +5,23 @@
  * past the empty marker ring, all along. A walker phoned in about a calf lying alone:
  * lost? After one calm look at the mother, the ranger follows her small prints to a
  * meadow of tall grass — and she lifts her head and slips into the copse. He finds the
- * spotted calf pressed flat in the grass (ZOEKEN), and leaves it be: no stroking, no
- * picking it up, no hand at its nose (RUSTKRACHT 1-3; a wrong answer makes it bolt a few
- * metres and drop again, or the mother bark from the copse). He walks away quietly to a
- * hide — running gets "Sst" — round a wet pool, not through it (RUSTKRACHT 4). From the
- * hide, through his binoculars, the doe steps out of the copse where she went in, looks
- * round, walks to her calf; it stands and she noses it. The path is free: he walks away
- * quietly (RUSTKRACHT 5, the flip) and the calf drinks. Doe and calf stay at the copse.
+ * spotted calf pressed flat in the grass (ZOEKEN), and leaves it be — with his HANDS:
+ * it lies at his boots and he keeps them still while it peeps, and again while it sniffs
+ * toward his hand (RUSTKRACHT 1-2, no card: a click on it is a hand reaching — it bolts a
+ * few metres and drops again, or the mother barks from the copse — and the moment comes
+ * back); then one card, is it lost? No: he steps quietly away (RUSTKRACHT 3). He sneaks
+ * off himself to a hide ~11 m off — running gets "Sst" — with a wet pool across the way:
+ * round it, not through it, with his FEET (RUSTKRACHT 4: a boot in the water plashes,
+ * the calf's head comes up, he steps back out). From the hide, through his binoculars,
+ * the doe steps out of the copse where she went in, looks round, walks to her calf; it
+ * stands and she noses it. The path is free: he walks away quietly (RUSTKRACHT 5, the
+ * flip, a card) and the calf drinks. Doe and calf stay at the copse.
  *
  * Steps (content, the EF contract): 0 zoeken · 1 dagnacht, each logged once.
  */
 
 import type { Distractor, Mission } from '../../../content/types';
-import type { AdventureKit } from '../kit';
+import type { AdventureKit, FrameSpec } from '../kit';
 import type { Adventure } from '../registry';
 import type { Actor } from '../actors';
 import { store } from '../../../core/state';
@@ -29,14 +33,14 @@ import { lyingHeight, LEG_SHARE } from '../../play/pose';
 import { searchBeat } from '../beats/search';
 import { choiceRun } from '../beats/choice';
 import { listenerOf } from '../../world/Residents';
-import { dist, headingTo, toward } from '../places';
+import { dist, headingTo, toLocal, toward } from '../places';
 import { backPoints, openWindow } from '../cover-math';
 import { SIZE } from '../../AnimalScale';
 import { TREE_BASE_H } from '../../world/Forest';
 import { ReeHome } from './ree.home';
 import {
-  REE_HOME, REE_PLACES as P, REE_RESIDENTS, COPSE_TREES, CALF_SPOT, COPSE_GAP, DOE_BED, MEET, POOL, POOL_IN, POOL_ROUND,
-  SEARCH_VIEW, CALF_VIEW, POOL_VIEW, WATCH_VIEW, reeClearings, slotTrail, calfBolt, drinkSpot, leaveView,
+  REE_HOME, REE_PLACES as P, REE_RESIDENTS, COPSE_TREES, CALF_SPOT, COPSE_GAP, DOE_BED, MEET, POOL, POOL_FRAME, POOL_ROUND,
+  SEARCH_VIEW, CALF_VIEW, WATCH_VIEW, reeClearings, slotTrail, calfBolt, drinkSpot, leaveView,
 } from './ree.places';
 
 const MISSION = 'ree-niet-aanraken';
@@ -151,7 +155,7 @@ async function story(k: AdventureKit): Promise<void> {
   // 4 · the raaf: a calf smells of almost nothing
   await k.fact(0);
 
-  // 5-7 · by the calf: leave it be (rustkracht 1-3)
+  // 5-7 · by the calf: leave it be (rustkracht 1-3: hands still twice, then one card)
   const rust = choiceRun(k, 1);
   k.beat = 'calf:walk';
   await k.walkRanger(P.calfTalk.x, P.calfTalk.z, 0.05);  // up to it, calmly, through the grass
@@ -166,8 +170,13 @@ async function story(k: AdventureKit): Promise<void> {
     home.cover.partAt(at.x, at.z, 0.85, 0.7, 120);
   };
   uncover(calf);
+  // (no card now: the lens comes close over his shoulder, the calf in the middle of the
+  // picture where it lies — after a bolt, where it dropped — the line over the sky)
+  const calfClose = (): FrameSpec => ({
+    at: { x: calf.x, z: calf.z }, heading: CALF_VIEW.heading, halfW: 1.0, halfD: 0.9, tall: 0.5, pitchDeg: 46, insetTop: 130, insetBottom: 90,
+  });
   k.beat = 'calf:frame';
-  await k.frame(CALF_VIEW, { face: P.calfTalk.heading });
+  await k.frame(calfClose(), { face: P.calfTalk.heading });
   // a wrong answer startles it: it jumps up, bolts a few metres to the side (never at
   // him, never at the lens) and drops flat in the grass again
   const bed0 = { x: CALF_SPOT.x, z: CALF_SPOT.z };
@@ -181,7 +190,29 @@ async function story(k: AdventureKit): Promise<void> {
     await go(calf, there.x, there.z, { speed: 'trot', face });
     await k.guard(calf.lie(true));
   };
-  await rust.ask('aai', { wrong: () => bolt(false) });
+  // HANDS STILL: it lies at his boots and peeps; a click on it is a hand reaching to stroke it
+  await rust.still('aai', {
+    line: c.raakNiet, hands: () => calf.body,
+    show: () => call('fiep', calf.x, calf.z),
+    // a moment in, it lifts its head and peeps at him again (the hand wants to go)
+    tempt: () => { call('fiep', calf.x, calf.z); void calf.lookAt(me, 1.6); },
+    wrong: () => bolt(false),
+  });
+  // …and still, while it stretches its nose toward his hand (a click: his hand at its nose)
+  await k.frame(calfClose()); // (where it lies now: it may have bolted)
+  await rust.still('geur', {
+    line: c.snuffelt, hands: () => calf.body,
+    show: () => { void calf.lookAt(me, 2.4); },
+    tempt: () => { void calf.lookAt(me, 1.8); if (settings.geluid) Sound.rustle(); },
+    // his hand at its nose: from the copse a short bark — the mother noticed; the calf
+    // presses flatter and looks toward her
+    wrong: async () => {
+      call('ree', DOE_BED.x, DOE_BED.z);
+      home.cover.rustle(home.gapClump, 0.12);
+      await k.guard(calf.lookAt(() => ({ x: DOE_BED.x, z: DOE_BED.z, speed: 0 }), 2.2));
+    },
+  });
+  await k.frame(CALF_VIEW); // (room for the card at the bottom again)
   await rust.ask('oppakken', {
     wrong: () => bolt(true),
     // "stil weglopen": he steps back from it, quietly, and turns to it again
@@ -194,19 +225,11 @@ async function story(k: AdventureKit): Promise<void> {
       k.world.faceRanger(headingTo(k.ranger(), calf));
     },
   });
-  await rust.ask('geur', {
-    // his hand at its nose: from the copse a short bark — the mother noticed; the calf
-    // presses flatter and looks toward her
-    wrong: async () => {
-      call('ree', DOE_BED.x, DOE_BED.z);
-      home.cover.rustle(home.gapClump, 0.12);
-      await k.guard(calf.lookAt(() => ({ x: DOE_BED.x, z: DOE_BED.z, speed: 0 }), 2.2));
-    },
-  });
 
-  // 8 · he turns away from the calf and takes his first quiet steps toward the pool, the
-  // lens swinging round behind him (then the way ahead is in view); then he walks on
-  // himself, quietly, to the hide; a wet pool lies across the way
+  // 8-10 · he turns away from the calf and takes his first quiet steps toward the pool,
+  // the lens swinging round behind him (then the way ahead is in view); then he sneaks
+  // on himself, quietly, ~11 m to the hide, a wet pool across the way: round it, not
+  // through it (rustkracht 4, with his FEET — the encounter's own words, no card)
   k.beat = 'calf:leave';
   const r8 = k.ranger();
   const first = toward(r8, POOL, 1.4);
@@ -215,37 +238,46 @@ async function story(k: AdventureKit): Promise<void> {
   await swing;
   k.world.faceRanger(headingTo(k.ranger(), POOL));
   const hush = { line: c.sst, onRun: (): void => { void calf.lookAt(me, 1.6); call('fiep', calf.x, calf.z); } };
-  // (the walk ends at the pool's near edge: he stops before the water, running or not)
-  await k.walk({ name: 'pool', to: P.poolEdge, r: 1.2, line: c.stil, doel: c.chipHut, cue: c.zacht, glyph: 'boot', quiet: hush });
-
-  // 9 · at the pool's edge: round it, not through it (rustkracht 4)
-  k.beat = 'pool:walk';
-  await k.walkRanger(P.poolEdge.x, P.poolEdge.z, 0.05);
-  k.beat = 'pool:frame';
-  await k.frame(POOL_VIEW, { face: POOL.heading });
-  await rust.ask('modder', {
-    // straight through: the card makes way, he steps in, and the moment his boot is in
-    // the water a plash, rings and drops; off in the grass the calf lifts its head; he
-    // steps back out, and the card comes back under "Plons!"
-    walks: true,
-    wrong: async () => {
-      const walkIn = k.walkRanger(POOL_IN.x, POOL_IN.z, 0.05);
-      // (the pool plashes by itself as his boot goes in: ree.home.ts)
-      await k.until(() => { const r = k.ranger(); return home.inWater(r.x, r.z); }, 3);
-      void calf.lookAt(me, 2.2);
-      await walkIn;
-      await k.wait(1.0);
-      await k.walkRanger(P.poolEdge.x, P.poolEdge.z, 0.05);
-      k.world.faceRanger(POOL.heading);
-    },
-    // round it, quietly, along its side
-    right: async () => {
-      for (const p of POOL_ROUND) await k.walkRanger(p.x, p.z, 0.12);
+  const modder = rust.current!; // (the pool's encounter, next in content order: its own words)
+  let warned = false, past = false, wading = false, lineBack = -1;
+  /** a boot in the water: the pool plashes by itself (ree.home.ts), off in the grass the
+   *  calf lifts its head, the words for it; he steps back out, and walks on himself */
+  const plash = async (): Promise<void> => {
+    rust.answer('modder', false); // (the run marks it once, however often he wades in)
+    if (settings.geluid) Sound.tryAgain();
+    k.lockFollow();
+    void calf.lookAt(me, 2.2);
+    k.say(modder.gevolg ?? c.sst);
+    await k.wait(1.4);
+    await k.walkRanger(P.poolEdge.x, P.poolEdge.z, 0.05);
+    k.world.faceRanger(POOL.heading);
+    await k.wait(0.4);
+    k.free();
+    k.say(c.stil);
+    wading = false;
+  };
+  await k.walk({
+    name: 'hide', to: P.hide, r: 1.0, line: c.stil, doel: c.chipHut, cue: c.zacht, glyph: 'boot', quiet: hush,
+    via: POOL_ROUND, // (a perfect player's way: round the pool)
+    tick: () => {
+      if (wading) return;
+      if (past) { if (lineBack > 0 && k.now > lineBack) { lineBack = -1; k.say(c.verstop); } return; }
+      const r = k.ranger();
+      const l = toLocal(POOL_FRAME, r);
+      // coming up to it, the pool is named (once): the choice is his feet's
+      if (!warned && (l.u / (POOL.halfW + 2.2)) ** 2 + (l.v / (POOL.halfD + 2.2)) ** 2 < 1) { warned = true; k.say(modder.vraag); }
+      if (home.inWater(r.x, r.z)) { wading = true; void plash().catch(() => {}); return; }
+      // past its far edge, dry: round it — the good words, then the walk's own
+      if (l.v > POOL.halfD + 0.3) {
+        past = true;
+        rust.answer('modder', true);
+        if (settings.geluid) Sound.correct();
+        k.say(modder.uitleg ?? c.verstop, { good: true });
+        lineBack = k.now + 2.8;
+      }
     },
   });
-
-  // 10 · on to the hide, quietly
-  await k.walk({ name: 'hide', to: P.hide, r: 1.0, line: c.verstop, doel: c.chipHut, cue: c.zacht, glyph: 'boot', quiet: hush });
+  if (!past) rust.answer('modder', true); // (he came to the hide some other way round: dry)
 
   // 11 · watch: the lens turns toward the meadow and he watches through his binoculars;
   // the bracken at the copse's gap stirs, and the mother steps out where she went in

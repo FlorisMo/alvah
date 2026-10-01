@@ -19,7 +19,8 @@
  * click on the piglet) or his own feet (a step key, a tap on the world) are the impulse.
  * The same `DagnachtRun`, in the same content order (beats/hold-math.ts maps reaches and
  * time onto its `choose`): the trials stay five, the summary is the one the 2D floor
- * logs for the same answers, and the floor still plays all five as cards.
+ * logs for the same answers, and the floor still plays all five as cards. An encounter
+ * can also be answered by a WALK (`answer`: the ree's pool, round it or through it).
  */
 
 import * as THREE from 'three';
@@ -233,6 +234,18 @@ export class ChoiceRun {
     if (!store.get().settings.voorlezen) { await calm; return; }
     const words = line.split(/\s+/).length;
     await Promise.all([calm, k.guard(narrator.quiet(words * 700 + 2000))]);
+  }
+
+  /**
+   * Answer encounter `id` (next in content order) from the WORLD — what his feet did on
+   * a walk (the ree's pool: a boot in the water, or round it dry), not a card: `false`
+   * marks it (the run counts the encounter once, however often), `true` passes it. The
+   * mission plays the reaction and says the encounter's own words (`current`).
+   */
+  answer(id: string, goed: boolean): void {
+    const enc = this.current;
+    if (!enc || enc.id !== id) throw new Error(`[adventure] choice "${id}" answered out of order (next: ${enc?.id ?? 'none'})`);
+    this.run.choose(goed);
   }
 
   /** Every encounter passed: log the run (once). */

@@ -11,8 +11,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   REE_PLACES as P, REE_RESIDENTS, REE_HOME, MARKER, MEADOW, MEADOW_FRAME, CALF_SPOT, CALF_AT, COPSE_FRAME, COPSE_GAP,
-  DOE_BED, JUNIPERS, COPSE_TREES, HIDE_FRAME, HIDE_JUNIPER, HIDE_LOG, POOL, POOL_ROUND, POOL_IN,
-  SEARCH_VIEW, CALF_VIEW, POOL_VIEW, WATCH_VIEW, onMeadow, reeClearings, slotTrail, calfBolt, drinkSpot, inMeadow, alongLog,
+  DOE_BED, JUNIPERS, COPSE_TREES, HIDE_FRAME, HIDE_JUNIPER, HIDE_LOG, POOL, POOL_ROUND,
+  SEARCH_VIEW, CALF_VIEW, WATCH_VIEW, onMeadow, reeClearings, slotTrail, calfBolt, drinkSpot, inMeadow, alongLog,
   juniperR, MEET, leaveView, wisselLine, WISSEL_HALF,
 } from './ree.places.ts';
 import {
@@ -20,7 +20,7 @@ import {
 } from './frisling.places.ts';
 import { anchorInBiome, biomeAt, VEN_CENTER } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
-import { atLocal, dist, headingTo, segDist, toLocal } from '../places.ts';
+import { atLocal, dist, headingTo, segDist, toLocal, toward } from '../places.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import { SIZE } from '../../AnimalScale.ts';
 
@@ -219,7 +219,7 @@ test('the walks are free: no bush, log or trunk on his way', () => {
   const legs: [string, { x: number; z: number }, { x: number; z: number }][] = [
     ['marker→meadow', MARKER, P.meadowApproach],
     ['meadow→calf', P.meadowApproach, P.calfTalk],
-    ['calf→pool', P.calfTalk, P.poolEdge],
+    ['calf→round', P.calfTalk, POOL_ROUND[0]],
     ['pool edge→round', P.poolEdge, POOL_ROUND[0]],
     ['round', POOL_ROUND[0], POOL_ROUND[1]],
     ['round→far edge', POOL_ROUND[1], POOL_ROUND[2]],
@@ -233,15 +233,22 @@ test('the walks are free: no bush, log or trunk on his way', () => {
   const l0 = toLocal(HIDE_FRAME, alongLog(-1)), l1 = toLocal(HIDE_FRAME, alongLog(1));
   assert.ok(Math.abs(l0.v - l1.v) < 0.05 && Math.abs(l0.u - l1.u) > 1.5, 'the log lies across');
   assert.ok(Math.min(l0.u, l1.u) > 0 && l0.v > 0.8, 'in front of him, to the right');
-  // the way round keeps out of the water; "recht erdoor" goes in
-  for (const p of POOL_ROUND) {
+  // the way round (the walk's hint, walked straight from point to point, from the calf)
+  // keeps out of the water; the straight way from the calf to the hide goes through it
+  const wet = (p: { x: number; z: number }): number => {
     const l = toLocal({ x: POOL.x, z: POOL.z, heading: POOL.heading }, p);
-    assert.ok((l.u / POOL.halfW) ** 2 + (l.v / POOL.halfD) ** 2 > 1.2, 'round it, not in it');
+    return (l.u / POOL.halfW) ** 2 + (l.v / POOL.halfD) ** 2;
+  };
+  const way = [P.calfTalk, ...POOL_ROUND, P.hide];
+  for (let i = 1; i < way.length; i++) {
+    for (let t = 0; t <= 1; t += 0.05) {
+      const p = { x: way[i - 1].x + (way[i].x - way[i - 1].x) * t, z: way[i - 1].z + (way[i].z - way[i - 1].z) * t };
+      assert.ok(wet(p) > 1.2, `round it, not in it (leg ${i}, ${wet(p).toFixed(2)})`);
+    }
   }
-  const li = toLocal({ x: POOL.x, z: POOL.z, heading: POOL.heading }, POOL_IN);
-  assert.ok((li.u / POOL.halfW) ** 2 + (li.v / POOL.halfD) ** 2 < 0.5, 'straight through is in the water');
+  assert.ok(wet(toward(P.calfTalk, P.hide, dist(P.calfTalk, P.hide) * 0.6)) < 0.5, 'straight through is in the water');
   const le = toLocal({ x: POOL.x, z: POOL.z, heading: POOL.heading }, P.poolEdge);
-  assert.ok(le.v < -POOL.halfD, 'he stops at its near edge');
+  assert.ok(le.v < -POOL.halfD, 'a boot steps back out to its near edge');
 });
 
 test('clear of the other missions, the frisling\'s home, the paths, the props and the roaming animals', () => {
@@ -289,7 +296,7 @@ test('who lives here: the doe by the copse and her calf in the grass; after, the
 });
 
 test('the framed views look at their place from the ranger\'s side, with him in the picture', () => {
-  for (const [name, v, stand] of [['search', SEARCH_VIEW, P.meadowApproach], ['pool', POOL_VIEW, P.poolEdge]] as const) {
+  for (const [name, v, stand] of [['search', SEARCH_VIEW, P.meadowApproach]] as const) {
     assert.ok(v.include.some((q) => dist(q, stand) < 1e-9), `${name}: the ranger's spot is in the picture`);
     const l = toLocal({ x: v.at.x, z: v.at.z, heading: v.heading }, stand);
     assert.ok(l.v < -0.3, `${name}: he stands in front of what the view looks at`);
