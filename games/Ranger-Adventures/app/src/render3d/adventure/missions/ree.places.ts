@@ -135,9 +135,11 @@ function poolOn(a: Spot, b: Spot, at: number, side: 1 | -1, leg: number): PoolSp
     ...f, side, leg,
     edge: { ...atLocal(f, 0, -(POOL.halfD + 0.55)), r: 1.9, heading: f.heading },
     round: [
-      atLocal(f, side * (POOL.halfW + 0.75), -0.35),
-      atLocal(f, side * (POOL.halfW + 0.55), POOL.halfD + 0.45),
-      atLocal(f, side * 0.2, POOL.halfD + 0.9),
+      // (a stride clear of the water all the way round: a child steering with the arrow
+      // keys swings a little wide of the line)
+      atLocal(f, side * (POOL.halfW + 1.15), -0.6),
+      atLocal(f, side * (POOL.halfW + 0.95), POOL.halfD + 0.7),
+      atLocal(f, side * 0.3, POOL.halfD + 1.25),
     ],
   };
 }
