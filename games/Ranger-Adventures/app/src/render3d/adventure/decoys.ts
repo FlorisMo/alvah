@@ -130,15 +130,19 @@ export class StandDecoys {
         stalk.rotation.z = 0.06;
         holder.add(stalk);
         this.made.push(stalk);
+        // (the stalk leans a little: its tip, where the bird's feet are)
+        const tip = { x: -Math.sin(stalk.rotation.z) * stalkH, y: Math.cos(stalk.rotation.z) * stalkH };
         if (low) {
           // the seed head the bird sits on: a pale, rough tuft just under its feet
           const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.035, 0).scale(1, 1.6, 1), new THREE.MeshStandardMaterial({ color: '#d8c58f', roughness: 1 }));
-          head.position.set(Math.sin(0.06) * -stalkH, stalkH - 0.045, 0);
+          head.position.set(tip.x, tip.y - 0.045, 0);
           holder.add(head);
           this.made.push(head);
         }
         void env.spawnModel(q.d.animal ?? 'roodborsttapuit', { idle: false }).then((s) => {
-          const r = add(s, stalkH - 0.01);
+          // (run 7 'frond': its feet on the seed head itself, never hovering beside it)
+          const r = add(s, low ? tip.y - 0.01 : stalkH - 0.01);
+          if (r && low) r.position.x = tip.x;
           if (r) this.birds.push({ o: r, base: r.position.clone(), kind: 'perch', t: 0 });
         });
       }
