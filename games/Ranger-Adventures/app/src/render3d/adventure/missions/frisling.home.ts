@@ -38,9 +38,11 @@ import { assignSpots, type DecoyKind } from './frisling.vary';
 
 export type { Decoy } from '../decoys';
 
-/** How far a stand of bracken is drawn from its own spot (m): a home's reach — a 1 m tall
- *  stand out on its own never pops in in open view. */
-const STAND_REACH = { near: 40, far: 46, own: true } as const;
+/** How far a stand of bracken is drawn from its own spot (m): it fades in calmly (0.9 s)
+ *  once the lens is within 30 m and rests beyond 36 m — never a pop, and never ~40 000
+ *  triangles for a stand nobody looks at (three stands lie 33-40 m from the wallow and the
+ *  marker, where the world's triangles are tightest). */
+const STAND_REACH = { near: 30, far: 36, own: true } as const;
 
 /** One way's stand: its own cover (three draw calls), its look-alikes, resting by its own
  *  distance (and, while a play goes another way, by that distance still). */
