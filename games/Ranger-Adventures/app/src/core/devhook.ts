@@ -407,11 +407,12 @@ export interface RangerDevHook {
   mood(): { session: string; now: string } | null;
   /** Run 7 (moods): every dressed animal in the picture: its model id, where it stands, its
    *  distance from the lens, its screen box, and points of its own surface the lens sees
-   *  (CSS px) — sample a screenshot there to read how bright the animal is drawn. */
+   *  (CSS px) — sample a screenshot there to read how bright the animal is drawn — and how
+   *  many of its cells a name tag covers (`covered`, not in `pts`). */
   animals(): AnimalSeenReadout[] | null;
 }
 
-export type AnimalSeenReadout = { id: string; x: number; y: number; z: number; dist: number; box: [number, number, number, number]; onScreen: boolean; pts: [number, number][] };
+export type AnimalSeenReadout = { id: string; x: number; y: number; z: number; dist: number; box: [number, number, number, number]; onScreen: boolean; pts: [number, number][]; covered: number };
 
 export type PlayReadout = { missionId: string; seed: number; n: number; variant: Record<string, string | number> };
 

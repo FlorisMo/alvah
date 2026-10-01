@@ -37,7 +37,7 @@ const OUT = 'test-results/moods';
 const P10_MIN = 22;
 const MEDIAN_MIN = 40;
 
-type Seen = { id: string; x: number; z: number; dist: number; box: [number, number, number, number]; onScreen: boolean; pts: [number, number][] };
+type Seen = { id: string; x: number; z: number; dist: number; box: [number, number, number, number]; onScreen: boolean; pts: [number, number][]; covered: number };
 type SkyMood = { now: string; from: string; fade: number; sunElevation: number; sunPending: boolean; fogNear: number; fogFar: number; wind: number };
 
 function dir(...parts: string[]): string {
@@ -218,8 +218,9 @@ for (const mood of MOODS) {
           let at = await a.where(page);
           expect(at, `${a.name} is in the world`).not.toBeNull();
           // a clear view from ~D m (the lens stands ~4.4 m behind him); when a name tag or a
-          // card hides part of it from there (the far red deer behind the frisling's tag showed
-          // only its dark antlers), the next spot round it — the view that shows the most of it
+          // card hides part of it from there (the far red deer stood behind the frisling's tag,
+          // whose dark pill read as a dark animal), the next spot round it — the view that
+          // shows the most of it
           const spots = await vantages(page, at!, await R<P2>(page, 'r.pos()'), Math.max(1.5, D - 4.4));
           let it: Seen | undefined;
           let png: Buffer | null = null;
@@ -234,8 +235,8 @@ for (const mood of MOODS) {
             const seen = all.filter((x) => x.id === a.model).sort((p, q) => Math.hypot(p.x - at!.x, p.z - at!.z) - Math.hypot(q.x - at!.x, q.z - at!.z))[0];
             if (!seen) continue;
             const shot = await page.screenshot();
-            const raw = seen.pts.length;
-            seen.pts = await onCanvas(page, seen.pts);
+            const raw = seen.pts.length + (seen.covered ?? 0); // (a tag drawn in the world covers `covered`)
+            seen.pts = await onCanvas(page, seen.pts);           // (a card or chip on the page)
             const k = raw ? seen.pts.length / raw : 0;
             if (k > share) { share = k; it = seen; png = shot; }
             if (raw >= 8 && k >= 0.8) break;

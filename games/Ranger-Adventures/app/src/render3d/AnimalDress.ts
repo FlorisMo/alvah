@@ -288,6 +288,9 @@ export interface AnimalSeen {
   /** points of its own surface that the lens sees (CSS px): sample the picture there to
    *  read the animal's own pixels, never the ground or sky round it */
   pts: [number, number][];
+  /** how many of its sampled cells a name tag drawn over the world covers (they are not in
+   *  `pts`): a test that wants the whole animal looks from somewhere else */
+  covered: number;
 }
 
 const seenBox = new THREE.Box3();
@@ -308,6 +311,15 @@ function hides(hit: THREE.Intersection): boolean {
   const mat = (Array.isArray(o.material) ? o.material[hit.face?.materialIndex ?? 0] : o.material) as THREE.Material | undefined;
   if (!mat || !mat.visible || mat.colorWrite === false) return false;
   return !(mat.transparent && (!mat.depthWrite || mat.opacity < 0.35));
+}
+
+/** Is this hit a name tag drawn over the world (a sprite that ignores depth, world/Labels.ts):
+ *  wherever it stands along the ray, it is what the picture shows there? */
+function drawnOver(hit: THREE.Intersection): boolean {
+  const o = hit.object as THREE.Sprite;
+  if (!o.isSprite || !shown(o)) return false;
+  const mat = o.material;
+  return mat.visible && mat.depthTest === false && mat.opacity >= 0.35;
 }
 
 function under(o: THREE.Object3D, root: THREE.Object3D): boolean {
@@ -351,6 +363,7 @@ export function animalsSeen(scene: THREE.Scene, camera: THREE.Camera, w: number,
     }
     const [, , onScreen] = toScreen(c);
     const pts: [number, number][] = [];
+    let covered = 0;
     if (onScreen) {
       // its own pixels: a grid over its screen box, a ray from the lens through each cell,
       // kept where this animal is the first thing the ray meets; then the rim is eroded
@@ -365,8 +378,11 @@ export function animalsSeen(scene: THREE.Scene, camera: THREE.Camera, w: number,
         ndc.set((sx / w) * 2 - 1, -((sy / h) * 2 - 1));
         seenRay.setFromCamera(ndc, camera);
         seenRay.far = Infinity;
-        const hit = seenRay.intersectObjects(scene.children, true).find(hides);
-        if (hit && under(hit.object, root)) hitAt[j * nx + i] = 1;
+        const hits = seenRay.intersectObjects(scene.children, true);
+        const hit = hits.find(hides);
+        if (!hit || !under(hit.object, root)) continue;
+        if (hits.some(drawnOver)) { covered++; continue; } // (a name tag over it: not its pixel)
+        hitAt[j * nx + i] = 1;
       }
       const inner: [number, number][] = [], all: [number, number][] = [];
       for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
@@ -383,7 +399,7 @@ export function animalsSeen(scene: THREE.Scene, camera: THREE.Camera, w: number,
     const at = root.getWorldPosition(new THREE.Vector3());
     out.push({
       id: root.userData.animal as string, x: at.x, y: at.y, z: at.z, dist: c.distanceTo(camAt),
-      box: [Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1)], onScreen, pts,
+      box: [Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1)], onScreen, pts, covered,
     });
   }
   return out;
