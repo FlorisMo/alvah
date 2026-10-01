@@ -112,6 +112,9 @@ export function showBriefing(mission: Mission): void {
   if (adv && world) {
     if (store.get().voltooid[mission.id]) world.residents.setState(mission.id, 'before');
     adv.prepare?.(world, mission);
+    // a jeep he parked in this home would stand in its pictures and the family's way: it
+    // is parked just outside it as the card comes up (never during play)
+    world.parkJeepOutOf(Object.values(adv.home.places), adv.home.places.marker);
   }
   const unprepare = (): void => {
     if (!adv || !world) return;

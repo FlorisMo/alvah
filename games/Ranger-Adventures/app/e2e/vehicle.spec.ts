@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { shot, collectPageErrors, reportPageErrors, keySteer } from './helpers';
+import { HUD } from '../src/content/copy';
 
 /**
  * Drivable-jeep E2E (WORLD-PLAN W5.1). The ranger walks up to the parked jeep,
@@ -294,9 +295,13 @@ test('vehicle: under reduced motion the ree holds still, and driven at it the je
       await setKey('ArrowRight', e < -0.1);
       await page.waitForTimeout(60);
     }
-    await shot(page, 'vehicle-gives-way-to-the-ree');
     expect(gave, 'driving at the ree, the jeep braked for it (vehicle().yieldFor names it)').toBe(true);
     expect(held, 'and came to a stop in front of it, the gas still held').not.toBeNull();
+    // run 6 polish: standing ~2 s with the gas held, the key card says why, in one line
+    // (a child held W for 20 s at the frisling family and nothing said why the jeep stood)
+    await expect(page.locator('.explore-drive-why'), 'held back by an animal with the gas on, the key card says why')
+      .toHaveText(HUD.rijden.dieren, { timeout: 5_000 });
+    await shot(page, 'vehicle-gives-way-to-the-ree');
   } finally {
     for (const k of [...down]) await page.keyboard.up(k);
   }

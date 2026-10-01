@@ -1695,3 +1695,104 @@ export function wheelContact(
     roll: Math.atan2(left - right, 2 * halfTrack),
   };
 }
+
+/* ------------------------------------------------ the jeep out of a home (run 6) ---- */
+
+/** A place of a mission's home: a spot, and the way the ranger looks from it (its
+ *  framed pictures look that way too) when it has one. */
+export interface HomePlace { x: number; z: number; heading?: number }
+
+/** The ground a home plays on, as the parked jeep keeps out of it: HOME_NEAR round every
+ *  place, HOME_PATH either side of the walk between two places at most HOME_LINK apart. */
+export const HOME_NEAR = 7;
+export const HOME_PATH = 4;
+export const HOME_LINK = 25;
+/** A place with a heading is looked from: its picture's lens stands about VIEW_BACK behind
+ *  it and sees VIEW_HALF either side of the heading, out to VIEW_REACH. */
+const VIEW_BACK = 8;
+const VIEW_HALF = (40 * Math.PI) / 180; // (the lens's half-width at 1280×800: FOV 55°, aspect 1.6)
+const VIEW_REACH = 24;
+/** Where the jeep is parked again: on rings round the mission's marker, PARK_NEAR to
+ *  PARK_FAR from it (it waits where the adventure starts, behind the lenses that look into
+ *  the home from there), else round the spot he left it, up to PARK_REACH. */
+export const PARK_NEAR = HOME_NEAR + 2;
+export const PARK_FAR = 22;
+export const PARK_REACH = 15;
+
+/** Distance from (px, pz) to the segment a–b. */
+function segGap(px: number, pz: number, ax: number, az: number, bx: number, bz: number): number {
+  const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz;
+  const t = l2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / l2));
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
+}
+
+/**
+ * How far (m) the body at pose (x, z, heading) stands out of a home's ground (its places
+ * and the walks between them; < 0: in it). `views`: also out of every picture looked from
+ * a place with a heading (a cone from a lens behind the place): -1 when it stands in one.
+ */
+export function homeGap(
+  x: number, z: number, heading: number, body: readonly BodyCircle[], places: readonly HomePlace[], views = false,
+): number {
+  const fx = Math.sin(heading), fz = Math.cos(heading);
+  let gap = Infinity;
+  for (const c of body) {
+    const cx = x + fx * c.along, cz = z + fz * c.along;
+    for (let i = 0; i < places.length; i++) {
+      const p = places[i];
+      gap = Math.min(gap, Math.hypot(cx - p.x, cz - p.z) - c.r - HOME_NEAR);
+      for (let j = i + 1; j < places.length; j++) {
+        const q = places[j];
+        if (Math.hypot(q.x - p.x, q.z - p.z) <= HOME_LINK) gap = Math.min(gap, segGap(cx, cz, p.x, p.z, q.x, q.z) - c.r - HOME_PATH);
+      }
+      if (!views || p.heading === undefined) continue;
+      const hx = Math.sin(p.heading), hz = Math.cos(p.heading);
+      const vx = cx - (p.x - hx * VIEW_BACK), vz = cz - (p.z - hz * VIEW_BACK);
+      const along = vx * hx + vz * hz, across = Math.abs(vx * hz - vz * hx);
+      if (along > 0 && along < VIEW_REACH && across - c.r < along * Math.tan(VIEW_HALF)) gap = Math.min(gap, -1);
+    }
+  }
+  return gap;
+}
+
+/**
+ * Where to park the jeep (at x, z, heading, left in a mission's home) again, before the
+ * mission is played, and which way it faces. The adventure's pictures look into its home
+ * from the side the ranger comes from (its marker) and onward, so the jeep waits on that
+ * side: round the `marker`, on rings a metre apart (PARK_NEAR…PARK_FAR) and 24 bearings,
+ * the far side from the home's middle first, facing out; its body out of the home's
+ * ground and out of every picture looked from a place (homeGap), and `clear` (open
+ * ground, nothing solid, no water: the caller's world). Else the nearest such spot round
+ * where he left it (≤ PARK_REACH), out of the pictures if it can be. Null: it stands out
+ * of the home and its pictures already, or no spot is free.
+ */
+export function parkOutOf(
+  x: number, z: number, heading: number, body: readonly BodyCircle[], places: readonly HomePlace[],
+  clear: (x: number, z: number, heading: number) => boolean, marker?: { x: number; z: number },
+): { x: number; z: number; heading: number } | null {
+  if (!places.length || homeGap(x, z, heading, body, places, true) >= 0) return null;
+  let mx = 0, mz = 0, n = 0;
+  for (const p of places) { if (marker && p.x === marker.x && p.z === marker.z) continue; mx += p.x; mz += p.z; n++; }
+  mx /= Math.max(1, n); mz /= Math.max(1, n);
+  const search = (ox: number, oz: number, r0: number, r1: number, away: number, face: (a: number) => number, views: boolean) => {
+    let best: { x: number; z: number; heading: number } | null = null, bestScore = Infinity;
+    for (let r = r0; r <= r1; r++) {
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        const score = r + 4 * (1 - Math.cos(a - away));
+        if (score >= bestScore) continue;
+        const cx = ox + Math.sin(a) * r, cz = oz + Math.cos(a) * r, h = face(a);
+        if (homeGap(cx, cz, h, body, places, views) < 0.5 || !clear(cx, cz, h)) continue;
+        best = { x: cx, z: cz, heading: h }; bestScore = score;
+      }
+    }
+    return best;
+  };
+  if (marker) {
+    const away = Math.atan2(marker.x - mx, marker.z - mz);
+    const at = search(marker.x, marker.z, PARK_NEAR, PARK_FAR, away, (a) => a, true);
+    if (at) return at;
+  }
+  const out = Math.atan2(x - mx, z - mz);
+  return search(x, z, 1, PARK_REACH, out, () => heading, true) ?? search(x, z, 1, PARK_REACH, out, () => heading, false);
+}
