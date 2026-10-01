@@ -103,10 +103,18 @@ function webglOk(): boolean {
   return webgl;
 }
 
+/** The story order (run 6, decision 4): the missions played as adventures with his own
+ *  body come first — the ones Alvah meets first (after the wildcamera the squirrel, not
+ *  the ven's staged patch) — then the others in the area's order. The missiebord lists
+ *  them so; the world's markers keep the area's layout. */
+export function storyOrder<T extends { id: string }>(missies: readonly T[]): T[] {
+  return [...missies.filter((m) => adventureFor(m.id)), ...missies.filter((m) => !adventureFor(m.id))];
+}
+
 /** The mission the game recommends next: the first unfinished one in story order.
  *  The wayfinding chip points at it and the missiebord marks it. Null when all done. */
 export function nextMissionId(): string | null {
-  return nextPatrolTarget(Content.activeArea().missies, store.get().voltooid);
+  return nextPatrolTarget(storyOrder(Content.activeArea().missies), store.get().voltooid);
 }
 
 /** The title the wayfinding chip shows (the recommended mission), or null. */

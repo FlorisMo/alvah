@@ -247,7 +247,7 @@ test('Stop de missie keeps the marker; the replay is won, Enter walks on, the ch
 
 test('a mission picked on the missiebord is played at its own marker, by the water, and Enter starts it at once @flow', async ({ page }) => {
   test.setTimeout(3 * 60_000);
-  await seed(page, ['frisling', 'ree-niet-aanraken', 'wildcamera']); // "Nu doen": the frog by the ven
+  await seed(page, ['frisling', 'ree-niet-aanraken', 'wildcamera', 'eekhoorn']); // "Nu doen": the frog by the ven
   await boot(page);
   const board = (await R<P2>(page, 'r.board()'))!;
   await walkTo(page, board, { stopDist: 1.6 });

@@ -28,7 +28,7 @@ import { showTweaks } from '../Tweaks';
 import { session, esc, card, plainCard, kicker } from '../flow/session';
 import { icon, CLUE_ICON, type IconName } from '../icons';
 import { goToMission, unmountMissionPause } from '../flow/MissionFlow';
-import { returnToTitle, resumePatrol, activeExploreTitel, nextMissionId } from '../flow/WorldSession';
+import { returnToTitle, resumePatrol, activeExploreTitel, nextMissionId, storyOrder } from '../flow/WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
 
 /* ---------------------------------------------------------------- title ---- */
@@ -154,7 +154,7 @@ export function showMissionBoard(): void {
   const area = Content.activeArea();
   const done = store.get().voltooid;
   const next = nextMissionId();
-  const cards = area.missies
+  const cards = storyOrder(area.missies)
     .map((m) => {
       const engines = Array.from(new Set(m.stappen.map((s) => s.ef as Engine))).filter((e) => SKILL_META[e]);
       const klaar = done[m.id] ? `<span class="mc-done" aria-label="${esc(HUB.voltooid)}">${icon('check')}</span>` : '';

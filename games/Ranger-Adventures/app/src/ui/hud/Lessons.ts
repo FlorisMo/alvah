@@ -30,6 +30,7 @@ import {
 import { BRAM, LES, metNaam } from '../../content/mentor';
 import { mountReadAloud } from '../ReadAloud';
 import { session, naam, menuOpen } from '../flow/session';
+import { nextMissionId } from '../flow/WorldSession';
 import { coarsePointer } from './device';
 import { say, cancelSpeaker, mountSpeaker, speaking, speakerLine } from './Speaker';
 
@@ -238,8 +239,8 @@ function jeepFar(): boolean {
   const v = world?.vehicleState();
   if (!world || !v?.placed || v.inVehicle) return false;
   const p = world.pos();
-  const next = Content.activeArea().missies.find((m) => !store.get().voltooid[m.id]);
-  const mk = next ? world.markerPositions().find((m) => m.missionId === next.id) : null;
+  const next = nextMissionId();
+  const mk = next ? world.markerPositions().find((m) => m.missionId === next) : null;
   if (!mk) return false;
   return Math.hypot(mk.x - p.x, mk.z - p.z) > JEEP_BEAT.missionM && Math.hypot(v.x - p.x, v.z - p.z) <= JEEP_BEAT.jeepM;
 }
