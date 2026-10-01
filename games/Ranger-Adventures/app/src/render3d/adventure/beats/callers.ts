@@ -25,119 +25,13 @@ import { listenerOf } from '../../world/Residents';
 import type { AdventureKit, FrameSpec } from '../kit';
 import type { Place } from '../types';
 import { listenPlan } from './callers-math';
+import { CALL, CALL_GLOW, WarmGlow } from './callers-glow';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-const CALL = '#ffd98a';  // the warm light of a call
 const OK = '#8fd6a0';    // a right echo
 const WRONG = '#e8a27a'; // a wrong echo (soft, warm)
-/** How far a call lifts a dark animal's own colour toward white (0..1): a touch. */
-const LIFT = 0.12;
-
-/**
- * A calling animal lights up in its OWN colours: its real materials take a warm light
- * (the emissive reads the colour texture and the base colour, tinted warm, so the jay
- * stays a jay and the badger a badger), and a warm rim rings its outline (so a black
- * raven lights up too, its feathers still its own) — never a flat cream cut-out. The
- * rim goes into the shader once, when the beat begins (a shader variant per material,
- * built while the lens holds, never mid-call). While it glows, a model that has its own
- * (dark, baked) emissive map lends that slot to its colour texture — a texture swap, no
- * new shader — and gets it back the moment the glow ends, so at rest every animal looks
- * exactly as it did; a textured part without one (the roe's coat) takes its colour
- * texture as its emissive map when the beat begins (its emissive shows nothing at rest);
- * an untextured one glows in its own base colour, and a merged one (the roe's other
- * parts: their colours in their vertices) in its vertex colours. The light is strongest
- * where it faces the lens, so it keeps its shape. `clear` hands every material back as
- * it was.
- */
-export class WarmGlow {
-  private readonly mats: {
-    mat: THREE.MeshStandardMaterial; emissive: THREE.Color; intensity: number; map: THREE.Texture | null;
-    /** its emissive map while the glow is off (its own, or its colour texture when its
-     *  own emissive shows nothing at rest) */
-    rest: THREE.Texture | null;
-    compile: THREE.Material['onBeforeCompile']; key: THREE.Material['customProgramCacheKey'];
-  }[] = [];
-  private readonly color = new THREE.Color();
-  private readonly tmp = new THREE.Color();
-  private readonly rim = { value: 0 };
-  private readonly rimColor = { value: new THREE.Color() };
-
-  constructor(root: THREE.Object3D, color: THREE.ColorRepresentation = CALL) {
-    this.color.set(color);
-    root.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh || mesh.userData.hitSphere || mesh.userData.hintAnchor) return;
-      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-        const mat = m as THREE.MeshStandardMaterial;
-        if (!mat.isMeshStandardMaterial || this.mats.some((e) => e.mat === mat)) continue;
-        const e = { mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity, map: mat.emissiveMap, rest: mat.emissiveMap, compile: mat.onBeforeCompile, key: mat.customProgramCacheKey };
-        // a textured part with no emissive map of its own (the roe's coat): its colour
-        // texture goes in as the emissive map now, with the rim — its emissive shows
-        // nothing at rest, so it looks as it did, and while it glows it glows in its own
-        // coat, not one flat colour
-        if (!mat.emissiveMap && mat.map && (mat.emissiveIntensity === 0 || mat.emissive.getHex() === 0)) { mat.emissiveMap = mat.map; e.rest = mat.map; }
-        this.mats.push(e);
-        const rim = this.rim, rimColor = this.rimColor;
-        mat.onBeforeCompile = function (shader, renderer) {
-          e.compile.call(this, shader, renderer);
-          shader.uniforms.uCallRim = rim;
-          shader.uniforms.uCallRimColor = rimColor;
-          // (only while it glows: at rest the block is skipped and it looks as it did)
-          shader.fragmentShader = 'uniform float uCallRim;\nuniform vec3 uCallRimColor;\n' + shader.fragmentShader.replace('#include <emissivemap_fragment>',
-            '#include <emissivemap_fragment>\nif (uCallRim > 0.0) {\n' +
-            '  float callFace = clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);\n' +
-            // a model whose colours are in its vertices (a merged one, the roe): its own
-            // colours in the light too, lifted a little like the base colour
-            '  #if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )\n' +
-            `  totalEmissiveRadiance *= vColor.rgb + (1.0 - vColor.rgb) * ${LIFT.toFixed(2)};\n` +
-            '  #endif\n' +
-            // lit toward the lens, softer where it turns away: its shape, never a flat fill;
-            // and a warm ring on its very outline only (a dark raven glows at its edge and
-            // stays a dark bird inside it)
-            '  totalEmissiveRadiance *= 0.5 + 0.5 * callFace;\n' +
-            '  totalEmissiveRadiance += uCallRimColor * (uCallRim * 1.3 * smoothstep(0.55, 0.95, 1.0 - callFace));\n}');
-        };
-        mat.customProgramCacheKey = function () { return `${e.key.call(this)}|call-rim`; };
-        mat.needsUpdate = true;
-      }
-    });
-  }
-
-  /** Light it `level` (0 = as it was), warm, or in `color` (a right echo's green). */
-  set(level: number, color?: THREE.ColorRepresentation): void {
-    if (color !== undefined) this.color.set(color);
-    const on = level > 0.001;
-    this.rim.value = on ? level : 0;
-    this.rimColor.value.copy(this.color);
-    for (const e of this.mats) {
-      if (!on) { e.mat.emissive.copy(e.emissive); e.mat.emissiveIntensity = e.intensity; e.mat.emissiveMap = e.rest; continue; }
-      if (e.map && e.mat.map) e.mat.emissiveMap = e.mat.map;
-      // its own colour (texture × base colour) in the warm light, lifted only a touch: a
-      // black raven stays a dark bird (the rim rings it), never a pale cut-out
-      const c = e.mat.color;
-      e.mat.emissive.copy(this.tmp.setRGB(c.r + (1 - c.r) * LIFT, c.g + (1 - c.g) * LIFT, c.b + (1 - c.b) * LIFT).multiply(this.color));
-      e.mat.emissiveIntensity = level;
-    }
-  }
-
-  /** Hand every material back as it was. */
-  clear(): void {
-    this.rim.value = 0;
-    for (const e of this.mats) {
-      e.mat.emissive.copy(e.emissive);
-      e.mat.emissiveIntensity = e.intensity;
-      e.mat.emissiveMap = e.map;
-      e.mat.onBeforeCompile = e.compile;
-      e.mat.customProgramCacheKey = e.key;
-      e.mat.needsUpdate = true;
-    }
-  }
-}
-
-/** How bright a call lights its animal (its own colours, so brighter than a flat fill). */
-export const CALL_GLOW = 0.95;
 
 /** One animal that calls. */
 export interface Caller {
@@ -292,24 +186,31 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
     canvas: k.ctx.canvas, camera: k.world.camera, raycaster: k.ctx.raycaster as THREE.Raycaster,
     targets: o.callers.map((c) => ({ id: c.id, object: c.pick })), onPick, signal: k.signal,
   });
+  let summary: BeatSummary;
   try {
-    run.begin();
-    await listen(o.lines.luister);
-    await k.guard(complete);
+    try {
+      run.begin();
+      await listen(o.lines.luister);
+      await k.guard(complete);
+    } finally {
+      teardown();
+      unhint();
+      clearPlayHint();
+      listenToken += 1;
+    }
+    summary = run.summary();
+    k.log(step, summary);
+    if (settings.geluid) Sound.found();
+    banner(o.lines.goed, false);
+    speak(o.lines.goed);
+    await k.wait(1.8);
   } finally {
-    teardown();
-    unhint();
-    clearPlayHint();
-    listenToken += 1;
+    // every way out — the sequence echoed, or a stop in the middle of a call or in the
+    // breath after it — hands each animal back as it was (its homes stay in the world:
+    // the next play's glow finds it unlit, its shader as it was, the bird down on its log)
+    quiet();
+    for (const g of glows.values()) g.clear();
   }
-  const summary = run.summary();
-  k.log(step, summary);
-  if (settings.geluid) Sound.found();
-  banner(o.lines.goed, false);
-  speak(o.lines.goed);
-  await k.wait(1.8);
-  quiet();
-  for (const g of glows.values()) g.clear();
   (card as HTMLDivElement | null)?.remove();
   return summary;
 }

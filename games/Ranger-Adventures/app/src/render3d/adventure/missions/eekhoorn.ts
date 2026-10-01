@@ -30,7 +30,8 @@ import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
 import { listenerOf } from '../../world/Residents';
 import { routeBeat } from '../beats/route';
-import { CALL_GLOW, WarmGlow, callersBeat, type Caller } from '../beats/callers';
+import { callersBeat, type Caller } from '../beats/callers';
+import { CALL_GLOW, WarmGlow } from '../beats/callers-glow';
 import { Squirrel, type SquirrelTree } from '../squirrel';
 import { lineClear, trunkUpright, wrap, type Upright } from '../squirrel-math';
 import { dist, headingTo } from '../places';
@@ -488,11 +489,14 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     { id: 'eekhoorn', pick: sq.group, body: sq.body, at: () => ({ x: sq.x, z: sq.z }), act: (on) => { if (on) sq.called(); } },
     ...home.neighbours.map((n): Caller => ({ id: n.id, pick: n.object, body: n.body, at: () => ({ x: n.at.x, z: n.at.z }), act: (on) => { if (on) n.call(); } })),
   ];
-  await callersBeat(k, 1, {
-    view: null, callers,
-    lines: { luister: c.luisterBuren, echo: c.naroepen, groei: c.groei, opnieuw: c.opnieuw, goed: c.goedBuren },
-  });
-  if (sq.body) delete sq.body.userData.perch;
+  try {
+    await callersBeat(k, 1, {
+      view: null, callers,
+      lines: { luister: c.luisterBuren, echo: c.naroepen, groei: c.groei, opnieuw: c.opnieuw, goed: c.goedBuren },
+    });
+  } finally {
+    if (sq.body) delete sq.body.userData.perch; // (a stop too: it runs home off its stump)
+  }
   // the jay (the nut thief) gives up and flies off over the trees
   k.say(c.gaai);
   const jay = home.neighbours.find((n) => n.id === 'gaai');
