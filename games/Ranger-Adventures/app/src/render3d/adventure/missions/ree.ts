@@ -51,9 +51,8 @@ import { ReeHome, SEARCH_GLIMPSE } from './ree.home';
 import { drawReePlay, lastReeVariants, VARIANT_KEY, type CalfMoment, type ReePlay } from './ree.variety';
 import {
   REE_HOME, REE_LAYOUTS, COPSE_TREES, CALF_DOELEN, POOL, reeClearings, slotTrail, calfAt, calfTalkOf, calfBolt, calfView,
-  drinkSpot, leaveView, poolSides, type PoolSpot, type ReeLayout,
+  drinkSpot, leaveView, poolSides, walkVia, type PoolSpot, type ReeLayout,
 } from './ree.places';
-import type { Spot } from '../types';
 
 const MISSION = 'ree-niet-aanraken';
 
@@ -183,7 +182,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   const poolIn = p.pool === 'in' ? feetAtPool(k, rust, home, pool, 'meadow') : null;
   await k.walk({
     name: 'meadow', to: l.search, r: 1.4, line: c.volg, doel: c.chipGras, cue: c.sporen, glyph: 'footprints',
-    via: viaOf([l.wissel[1]], poolIn ? { at: pool.leg, round: pool.round } : null),
+    via: walkVia(l, 'meadow', poolIn ? pool : null),
     tick: () => {
       const m = k.ranger();
       if (!slipping && (dist(m, setOff) > 1.2 || dist(m, doe) < 9)) slipping = slipAway();
@@ -258,7 +257,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
       // presses flatter and looks toward her
       wrong: async () => {
         call('ree', l.bed.x, l.bed.z);
-        home.cover.rustle(home.gapClump(l), 0.12);
+        home.rustleGap(l, 0.12);
         await k.guard(calf.lookAt(() => ({ x: l.bed.x, z: l.bed.z, speed: 0 }), 2.2));
       },
     }),
@@ -309,7 +308,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   await k.walk({
     name: 'hide', to: l.hide, r: 1.0, line: c.stil, doel: c.chipHut, cue: c.zacht, glyph: 'boot', quiet: hush,
     // (a perfect player's way: round the grass, and round the pool when it lies here)
-    via: viaOf(l.way.slice(0, -1), poolOut ? { at: pool.leg, round: pool.round } : null),
+    via: walkVia(l, 'hide', poolOut ? pool : null),
     tick: () => {
       if (poolOut) { poolOut.tick(); return; }
       if (lineBack < 0 && dist(k.ranger(), l.hide) < 4) { lineBack = 1; k.say(c.verstop); }
@@ -339,7 +338,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
     // standing, she turns her head up to the hide; lying in her bed in her cover, the
     // bracken by her stirs (she heard it, out of sight)
     if (!doe.lies) void doe.lookAt(() => hide, 1.8);
-    else home.cover.rustle(home.gapClump(l), 0.06);
+    else home.rustleGap(l, 0.06);
   };
   const onKey = (e: KeyboardEvent): void => { if (STEP_KEYS.test(e.code)) startle(); };
   const onTap = (e: PointerEvent): void => { if (!(e.target as Element | null)?.closest?.('button')) startle(); };
@@ -372,7 +371,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
     }
     await k.wait(2.6);
     await still();
-    home.cover.rustle(home.gapClump(l), 0.16);
+    home.rustleGap(l, 0.16);
     if (settings.geluid) Sound.rustle();
     await k.wait(1.3);
     await walkOn(l.gap.x, l.gap.z);
@@ -444,14 +443,6 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   k.ui.watching(false);
   // 14 · the raaf: a mother leaves her calf alone for a while; that keeps it safe
   await k.fact(1);
-}
-
-/** A perfect player's way (golden's hint): `points` in turn, with the pool's way round
- *  put in before point `at` (its leg's end) when the pool lies on this walk. */
-function viaOf(points: readonly Spot[], pool: { at: number; round: readonly Spot[] } | null): Spot[] {
-  if (!pool) return [...points];
-  const at = Math.max(0, Math.min(points.length, pool.at));
-  return [...points.slice(0, at), ...pool.round, ...points.slice(at)];
 }
 
 /**

@@ -15,7 +15,7 @@ import test from 'node:test';
 import {
   REE_PLACES as P, REE_RESIDENTS, REE_HOME, REE_LAYOUTS, LAYOUTS, MARKER, STAND, FRINGE, SEARCH_RING, POOL, COPSE_FRAME, COPSE_SIZE,
   COPSE, THICKET, HOME_REACH, COPSE_TREES, CALF_DOELEN, DOE_BED, CALF_HOME, onStand, calfAt, calfTalkOf, calfBolt, calfView, leaveView, drinkSpot,
-  inStand, reeClearings, slotTrail, wisselLine, juniperR, poolsOf, poolSides, WISSEL_HALF, type ReeLayout, type PoolSpot,
+  inStand, reeClearings, slotTrail, wisselLine, juniperR, poolsOf, poolSides, walkVia, WISSEL_HALF, type ReeLayout, type PoolSpot,
 } from './ree.places.ts';
 import { FRISLING_PLACES, hideClumps, fieldSpots, cluePosts, bootPrints } from './frisling.places.ts';
 import { WILDCAMERA_PLACES, WILDCAMERA_RESIDENTS, ROE_SHY_WITHIN, wildcameraClearings } from './wildcamera.places.ts';
@@ -379,6 +379,29 @@ test('the walks are free: no bush, log or trunk on his way, and round the pool s
       for (const s of LAYOUTS) assert.ok(inGrass(s, p) > 1.15, `${l.id}: the ${k} pool is out of ${s.id}'s grass`);
       for (const s of S) assert.ok(dist(p, s) > POOL.halfW + s.r + 0.3, `${l.id}: the ${k} pool is clear of the solids`);
     }
+  }
+});
+
+test('a perfect player\'s way (golden\'s hint) walks round this play\'s pool, in order, dry', () => {
+  for (const l of LAYOUTS) for (const k of poolSides(l)) {
+    const pool = l.pools[k]!;
+    const walk = k === 'in' ? 'meadow' : 'hide';
+    // from where the walk starts, through its via, to its goal
+    const starts = walk === 'meadow' ? [l.wissel[0]] : CALF_DOELEN.map((d) => calfTalkOf(l, calfAt(l, d)));
+    const goal = walk === 'meadow' ? l.search : l.hide;
+    const via = walkVia(l, walk, pool);
+    const at = via.findIndex((q) => dist(q, pool.round[0]) < 1e-9);
+    assert.ok(at >= 0 && pool.round.every((q, i) => dist(via[at + i], q) < 1e-9), `${l.id} ${k}: the way round is in the hint`);
+    for (const s of starts) {
+      const line = [s, ...via, goal];
+      for (let i = 1; i < line.length; i++) for (let t = 0; t <= 1; t += 0.05) {
+        const q = { x: line[i - 1].x + (line[i].x - line[i - 1].x) * t, z: line[i - 1].z + (line[i].z - line[i - 1].z) * t };
+        assert.ok(wet(pool, q) > 1.0, `${l.id} ${k}: the hint's way runs through the pool (leg ${i}, ${wet(pool, q).toFixed(2)})`);
+      }
+    }
+    // the other walk's way leaves the pool out (it is not there this play)
+    const other = walkVia(l, walk === 'meadow' ? 'hide' : 'meadow', null);
+    assert.ok(other.every((q) => !pool.round.some((r) => dist(q, r) < 1e-9)), `${l.id} ${k}: only one walk goes round it`);
   }
 });
 

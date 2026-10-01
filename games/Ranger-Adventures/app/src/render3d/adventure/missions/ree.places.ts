@@ -299,7 +299,7 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     poolIn: { leg: 1, at: 0.5, side: 1 }, poolOut: { leg: 2, at: 0.62, side: -1 },
     way: [{ u: -3.4, v: -0.2 }, { u: -1.0, v: 3.1 }],
     hide: { x: -2.0, z: -44.0 }, leave: { u: 1.0, v: -1.0 }, hideJuniper: { u: -1.4, v: 0.3 }, hideLog: { u: -0.9, v: 1.1 },
-    watchMid: 0.45, watchHalfW: 2.8,
+    watchMid: 0.55, watchHalfW: 2.8,
   }),
   C: build({
     id: 'C', stand: { x: -21.0, z: -49.0 }, look: deg(-90), corner: 1, bend: { x: -20.5, z: -38.8 },
@@ -515,6 +515,27 @@ export function poolsOf(l: ReeLayout): PoolSpot[] {
 /** The sides a layout's pool may lie on (`ree.variety.ts` draws from them). */
 export function poolSides(l: ReeLayout): ('in' | 'out')[] {
   return l.pools.out ? ['in', 'out'] : ['in'];
+}
+
+/**
+ * A perfect player's way on one of the two walks (golden's hint, `k.walk`'s `via`): the
+ * points he walks through in turn before the walk's goal — on her path the bend (the goal
+ * is his search spot), on his way to the hide back out of the grass and round it (the
+ * goal is the hide) — with the pool's way round put in on the leg it lies across when it
+ * lies on this walk (`pool`: this play's pool, or null when it lies on the other walk).
+ */
+export function walkVia(l: ReeLayout, walk: 'meadow' | 'hide', pool: PoolSpot | null): Spot[] {
+  // the walk's points from its start (the ring, or where he leaves the grass) to its goal;
+  // a pool on leg k lies between points k and k + 1, so its way round goes in before k + 1
+  const all = walk === 'meadow' ? [...l.wissel] : [...l.way];
+  const inner = all.slice(1, -1);
+  const out: Spot[] = walk === 'meadow' ? [] : [all[0]];
+  inner.forEach((p, i) => {
+    if (pool && pool.leg === i) out.push(...pool.round);
+    out.push(p);
+  });
+  if (pool && pool.leg === all.length - 2) out.push(...pool.round);
+  return out;
 }
 
 /** Frame-local position of a spot in a layout's stand frame (for the tests). */
