@@ -33,7 +33,7 @@ import { routeBeat } from '../beats/route';
 import { callersBeat, type Caller } from '../beats/callers';
 import { CALL_GLOW, WarmGlow } from '../beats/callers-glow';
 import { Squirrel, type SquirrelTree } from '../squirrel';
-import { barkRadius, lineClear, trunkUpright, wrap, type Upright } from '../squirrel-math';
+import { barkRadius, lineClear, trunkFadeUpright, trunkUpright, wrap, type Upright } from '../squirrel-math';
 import { dist, headingTo } from '../places';
 import type { Spot } from '../types';
 import { TREE_BASE_H } from '../../world/Forest';
@@ -136,18 +136,25 @@ async function meetNeighbours(k: AdventureKit, home: EekhoornHome, geluid: boole
  *  the line card at the top) and not hidden by a trunk of its home (one the camera fades
  *  because it stands between the lens and him hides nothing) or by his own body;
  *  `glimpse` = a bit of it shows anywhere in the picture; `px` = how tall it is on the
- *  screen, tail and ears and all. `near`: he is right at it, under it — his own head in
- *  front of it in the lens hides nothing from HIM, and a trunk hides it only behind its
- *  bark (a squirrel on its stub at the very edge of its trunk in the picture shows past
- *  the ridged outline, played 2026-10-01). */
+ *  screen, tail and ears and all.
+ *  The mode: 'see' (finding it) counts a trunk out to its ridged outline, so a squirrel
+ *  is found only once it is truly in view. 'near': he is right at it, under it — his own
+ *  head in front of it in the lens hides nothing from HIM, and a trunk hides it only
+ *  behind its bark (a squirrel on its stub at the very edge of its trunk in the picture
+ *  shows past the ridged outline, played 2026-10-01). 'peek' (while it HIDES): a trunk
+ *  hides it only behind its bark and the picture's very edge counts — any of it that
+ *  could show sends it round the bark (played 2026-10-01: by the ridged outline a
+ *  squirrel sitting 80 px tall beside the near trunk, at the screen's left edge, was
+ *  "hidden", and 'Waar is hij?' asked for a squirrel in plain view). */
 interface Sight { seen: boolean; glimpse: boolean; px: number }
+type SightMode = 'see' | 'near' | 'peek';
 
 const V1 = new THREE.Vector3();
 const V2 = new THREE.Vector3();
 const V3 = new THREE.Vector3();
 const V4 = new THREE.Vector3();
 const BOX = new THREE.Box3();
-function sightOf(k: AdventureKit, sq: Squirrel, trees: readonly SquirrelTree[], near = false): Sight {
+function sightOf(k: AdventureKit, sq: Squirrel, trees: readonly SquirrelTree[], mode: SightMode = 'see'): Sight {
   const pts = sq.bodyPoints();
   const cam = k.world.camera as THREE.PerspectiveCamera;
   if (!pts.length || !sq.body || !sq.group.visible) return { seen: false, glimpse: false, px: 0 };
@@ -158,18 +165,22 @@ function sightOf(k: AdventureKit, sq: Squirrel, trees: readonly SquirrelTree[], 
   // (a trunk between the lens and him is faded by the follow camera — world/CameraRig,
   // his head or his chest behind it — and he is seen through it: so is the squirrel)
   const head = V3.set(me.x, g + RANGER_STAND_HEIGHT, me.z), chest = V4.set(me.x, g + 0.9, me.z);
-  const ups: Upright[] = trees.map((t) => {
+  const ups: Upright[] = trees.filter((t) => {
+    const f = trunkFadeUpright(t.trunk, k.ctx.groundY(t.trunk.x, t.trunk.z)); // (the camera's own fade decision)
+    return lineClear(cam.position, head, [f]) && lineClear(cam.position, chest, [f]);
+  }).map((t) => {
     const ground = k.ctx.groundY(t.trunk.x, t.trunk.z);
     const u = trunkUpright(t.trunk, ground);
-    return near ? { ...u, r: (y: number) => barkRadius(t.trunk, Math.max(0, y - ground)) } : u;
-  }).filter((u) => lineClear(cam.position, head, [u]) && lineClear(cam.position, chest, [u]));
-  if (!near) ups.push({ x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 });
+    return mode !== 'see' ? { ...u, r: (y: number) => barkRadius(t.trunk, Math.max(0, y - ground)) } : u;
+  });
+  if (mode !== 'near') ups.push({ x: me.x, z: me.z, y0: g - 0.2, y1: g + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 });
+  const edge = mode === 'peek' ? 1 : 0.98;
   let open = 0, well = 0;
   for (const p of pts) {
     if (V1.copy(p).applyMatrix4(cam.matrixWorldInverse).z > -0.3) continue; // (behind the lens)
     const s = V1.copy(p).project(cam);
     const y = (1 - s.y) * 0.5 * h;
-    if (Math.abs(s.x) > 0.98 || y < 96 || y > h - 8 || !lineClear(cam.position, p, ups)) continue;
+    if (Math.abs(s.x) > edge || y < 96 || y > h - (mode === 'peek' ? 0 : 8) || !lineClear(cam.position, p, ups)) continue;
     open += 1;
     if (Math.abs(s.x) <= SEEN_X && y >= 110 && y <= h - 70) well += 1;
   }
@@ -208,6 +219,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   const sight = (): Sight => sightOf(k, sq, home.trees);
   /** the stats a playtest reads (`__ranger.adventure().stats`): how tall it is now (px) */
   const measure = (): Sight => { const s = sight(); k.stats.sq_px = Math.round(s.px); k.stats.sq_seen = s.seen ? 1 : 0; return s; };
+  /** while it hides: could any of it show in his picture, edge and all? (the stats too) */
+  const peeks = (): boolean => { measure(); const p = sightOf(k, sq, home.trees, 'peek').glimpse; k.stats.sq_peek = p ? 1 : 0; return p; };
 
   // 0 · it sees him coming: up to its branch stub on its pine, and it chatters at him.
   //     The one look of the mission: the lens turns to it over his shoulder (while it
@@ -269,7 +282,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
         reached: () => {
           if (!arrived || k.now - sitFrom < SIT) return false;
           const d = dist(k.ranger(), sq);
-          return (d <= SEE_D && measure().seen) || (d <= AT_IT && sightOf(k, sq, home.trees, true).glimpse);
+          return (d <= SEE_D && measure().seen) || (d <= AT_IT && sightOf(k, sq, home.trees, 'near').glimpse);
         },
       });
     } finally {
@@ -332,7 +345,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
         if (!slipping && !hid) {
           // (he kept walking while it slipped off its stub: it hides anew across from where
           // his eye is now, until it is out of sight — only then does the game begin)
-          if (measure().glimpse) { sqAng = hideStart(pineC.trunk, [k.ranger(), lens()], STUMP); slip(sqAng, 0.6); } else hid = true;
+          if (peeks()) { sqAng = hideStart(pineC.trunk, [k.ranger(), lens()], STUMP); slip(sqAng, 0.6); } else hid = true;
         } else if (!slipping && hiding) {
           // he has been round far enough: it stays where it is and lets him find it
           if (walked >= HIDE.round || k.stats.hide_shifts >= HIDE.most) hiding = false;
@@ -340,7 +353,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
             // it slips round when he (or his eye, the lens) comes round toward it — or the
             // moment a bit of it peeks out past the bark in his view (the tail: a clue,
             // not a find)
-            const next = hideShift(sqAng, [mb, headingTo(pineC.trunk, lens())], measure().glimpse);
+            const next = hideShift(sqAng, [mb, headingTo(pineC.trunk, lens())], peeks());
             if (next !== null) {
               k.stats.hide_shifts += 1;
               slip(next, slipSecs(sqAng, next));

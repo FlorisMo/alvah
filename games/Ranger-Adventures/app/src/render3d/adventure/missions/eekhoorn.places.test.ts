@@ -20,7 +20,7 @@ import { biomeAt, VEN_CENTER, VEN_SHORE_R } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
 import { dist, headingTo, toLocal, segDist } from '../places.ts';
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
-import { SQ, barkRadius, lineClear, trunkUpright, type Trunk, type Upright } from '../squirrel-math.ts';
+import { SQ, barkRadius, lineClear, trunkFadeUpright, trunkUpright, type Trunk, type Upright } from '../squirrel-math.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
 
 /** The other missions' markers as the world places them (`__ranger.markers()`, 2026-09-29). */
@@ -106,8 +106,10 @@ const HFOV_SEEN = Math.atan(Math.tan((55 / 2) * Math.PI / 180) * 1.6 * SEEN_X);
  *  and him (the follow camera fades those: world/CameraRig) — and his own body. */
 function hiders(eye: { x: number; y: number; z: number }, me: { x: number; z: number }): Upright[] {
   const body: Upright = { x: me.x, z: me.z, y0: 0, y1: RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 };
-  return [...HOME_TREES.map((t) => trunkUpright(trunk(t), 0))
-    .filter((u) => lineClear(eye, { ...me, y: RANGER_STAND_HEIGHT }, [u]) && lineClear(eye, { ...me, y: 0.9 }, [u])), body];
+  return [...HOME_TREES.filter((t) => {
+    const f = trunkFadeUpright(trunk(t), 0); // (the camera's own fade decision)
+    return lineClear(eye, { ...me, y: RANGER_STAND_HEIGHT }, [f]) && lineClear(eye, { ...me, y: 0.9 }, [f]);
+  }).map((t) => trunkUpright(trunk(t), 0)), body];
 }
 function lensSees(me: { x: number; z: number }, heading: number, sq: { x: number; z: number; y: number }): boolean {
   const eye = { x: me.x - Math.sin(heading) * LENS.back, y: LENS.up, z: me.z - Math.cos(heading) * LENS.back };

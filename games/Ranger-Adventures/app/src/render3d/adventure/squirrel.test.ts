@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   SQ, barkRadius, climbPlan, dashDirectPlan, dashPath, dashPlan, dismountPlan, flick, leapPlan, lineClear, mountPlan,
-  planTime, poseAt, sqStream, topSpeeds, trunkPose, trunkUpright, type Segment, type SqPose, type Trunk,
+  planTime, poseAt, sqStream, topSpeeds, trunkOutline, trunkPose, trunkUpright, type Segment, type SqPose, type Trunk,
 } from './squirrel-math.ts';
 
 const pine: Trunk = { x: 3, z: -2, H: 13, species: 'prop-pine-scots' };
@@ -167,6 +167,13 @@ test('sight: a trunk hides a squirrel behind it, even one whose body sticks out 
   // (…while on the near side, clinging among the ridges, it is in view)
   assert.equal(lineClear(eye, round(20, r + 0.08), up), true, 'on the near side, among the ridges: seen');
   assert.equal(lineClear(eye, round(160, r + 0.08), up), false, 'on the far side, among the ridges: hidden');
+  // (2026-10-01, played: sitting at the trunk's edge a metre up, its middle 0.5 m out, it
+  // was in plain view — the outline there is the bark's at that height, not the root
+  // flare's: the line passing 0.5 m from the axis is clear)
+  const side = round(100, 0.5); // (a little past the side: the line passes 0.49 m from the axis)
+  side.y = 1.05;
+  assert.ok(trunkOutline(t, 1.05) < 0.45 && trunkOutline(t, 0.1) > 0.7, 'the outline follows the trunk up: a root flare, then the bark');
+  assert.equal(lineClear(eye, side, up), true, 'at the trunk\'s edge, past its outline: seen');
   // over the top of a short upright (the boy's head) it is seen
   const body = [{ x: 3, z: 0, y0: 0, y1: 1.45, r: () => 0.22 }];
   assert.equal(lineClear(eye, { x: 0, y: 1.3, z: 0 }, body, 0.12), true, 'over his head');

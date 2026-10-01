@@ -396,20 +396,50 @@ export interface P3 { x: number; y: number; z: number }
 export interface Upright { x: number; z: number; y0: number; y1: number; r: (y: number) => number }
 
 /**
- * How far a trunk's bark reaches out from its axis where it hides what is behind it, as a
- * fraction of the tree's height: its outline, the furthest trunk vertex (the low-poly
- * bark is ridged, so its outline is well outside the median radius the squirrel clings
- * at — the same measure world/Crowns.ts gives the camera). Played 2026-09-30: a squirrel
- * clinging just past the median bark's edge was "in view" by the median and hidden on
- * the screen by the ridges.
+ * How far a trunk's bark reaches out from its axis where it hides what is behind it, up
+ * the tree, as fractions of the tree's height: its OUTLINE at that height, the furthest
+ * trunk vertex (the low-poly bark is ridged, so its outline lies outside the median
+ * radius the squirrel clings at) — measured off the tree GLBs as the forest draws them,
+ * per 2 % of the height, 2026-10-01 (rows: [share of the height, reach]; between two
+ * rows the larger, so it is never less than the bark that shows). Played 2026-09-30: a
+ * squirrel clinging just past the median bark's edge was "in view" by the median and
+ * hidden on the screen by the ridges. Played 2026-10-01: one reach for the whole trunk
+ * (its root flare's, 0.04 of a pine's height) hid a squirrel sitting in plain view at
+ * the trunk's edge a metre up, where the bark reaches 0.03.
  */
-const TRUNK_REACH: Readonly<Record<TrunkSpecies, number>> = { 'prop-pine-scots': 0.04, 'prop-oak-tree': 0.075, 'prop-birch-tree': 0.045 };
+export const TRUNK_OUTLINE: Readonly<Record<TrunkSpecies, readonly (readonly [number, number])[]>> = {
+  'prop-oak-tree': [[0, 0.143], [0.02, 0.112], [0.04, 0.084], [0.06, 0.073], [0.08, 0.057], [0.14, 0.06]],
+  'prop-pine-scots': [[0, 0.082], [0.02, 0.056], [0.04, 0.036], [0.06, 0.03], [0.16, 0.029], [0.24, 0.027], [0.32, 0.031], [0.44, 0.03]],
+  'prop-birch-tree': [[0, 0.036], [0.02, 0.031], [0.1, 0.029], [0.14, 0.031], [0.18, 0.038], [0.3, 0.051], [0.32, 0.056]],
+};
 
-/** An upright trunk as a line of sight meets it: out to its ridged outline up the tree
+/** The trunk's outline (m out from its axis) at `h` m up it. */
+export function trunkOutline(t: Trunk, h: number): number {
+  const rows = TRUNK_OUTLINE[t.species];
+  const f = Math.max(0, h / t.H);
+  for (let i = 1; i < rows.length; i++) if (f < rows[i][0]) return Math.max(rows[i - 1][1], rows[i][1]) * t.H;
+  return rows[rows.length - 1][1] * t.H;
+}
+
+/**
+ * How far out (a share of the tree's height) the follow camera counts a trunk as standing
+ * between the lens and him — and FADES it (world/Crowns.ts's trunk measure: the whole
+ * trunk's furthest vertex, root flare and all). A trunk that near the line from the lens
+ * to his head or his chest is see-through: it hides nothing behind it. (This is the fade's
+ * reach, not what the bark hides: `trunkUpright`.)
+ */
+const TRUNK_FADE: Readonly<Record<TrunkSpecies, number>> = { 'prop-pine-scots': 0.04, 'prop-oak-tree': 0.075, 'prop-birch-tree': 0.045 };
+
+/** A trunk as the camera's fade decision sees it (see TRUNK_FADE). */
+export function trunkFadeUpright(t: Trunk, ground: number): Upright {
+  const reach = TRUNK_FADE[t.species] * t.H;
+  return { x: t.x, z: t.z, y0: ground - 0.5, y1: ground + t.H, r: (y) => Math.max(reach, barkRadius(t, Math.max(0, y - ground))) };
+}
+
+/** An upright trunk as a line of sight meets it: out to its ridged outline at each height
  *  (never less than the bark's measured radius), its foot on the ground at `ground`. */
 export function trunkUpright(t: Trunk, ground: number): Upright {
-  const reach = TRUNK_REACH[t.species] * t.H;
-  return { x: t.x, z: t.z, y0: ground - 0.5, y1: ground + t.H, r: (y) => Math.max(reach, barkRadius(t, Math.max(0, y - ground))) };
+  return { x: t.x, z: t.z, y0: ground - 0.5, y1: ground + t.H, r: (y) => { const h = Math.max(0, y - ground); return Math.max(trunkOutline(t, h), barkRadius(t, h)); } };
 }
 
 /** Is the straight line from `eye` to `at` clear of every upright, by at least `pad` m?
