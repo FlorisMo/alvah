@@ -53,7 +53,7 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
   k.check();
   k.beat = 'route';
   const settings = store.get().settings;
-  const trial = buildCorsiTrial(store.difficulty('corsi'));
+  const trial = buildCorsiTrial(store.difficulty('corsi'), k.play.fork('corsi').rng); // run 7: the play's route (its 2D twin draws the same)
   const run = new CorsiRun(trial.sequence);
   await k.walkRanger(o.stand.x, o.stand.z, 0.04);
   await k.frame(o.view, { face: o.stand.heading });

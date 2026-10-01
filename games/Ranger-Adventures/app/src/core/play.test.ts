@@ -92,3 +92,23 @@ test('the dev seed param: ?seed=N, else none', () => {
   assert.equal(parseSeedParam('?seed='), null);
   assert.equal(parseSeedParam('?seed=abc'), null);
 });
+
+test('one play, one trial: every view that draws from the same fork builds the same route, callers and queue', async () => {
+  const { buildCorsiTrial } = await import('../engines/corsi.ts');
+  const { randomCaller } = await import('../engines/simon.ts');
+  const { buildWisselTrial } = await import('../engines/wisselen.ts');
+  const diff = { routeLengte: 5, wisselFreq: 0.4 } as never;
+  const skin = { dagDieren: ['edelhert', 'ree'], nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'], trials: 6 } as never;
+  const views = (seed: number) => {
+    const play = newPlay('wildcamera', seed, 1); // (the 2D floor, the classic stage and the world's beat each take play.fork(engine))
+    const rng = play.fork('simon').rng;
+    return {
+      route: buildCorsiTrial(diff, play.fork('corsi').rng).sequence,
+      callers: Array.from({ length: 6 }, () => randomCaller(['ree', 'das', 'wildzwijn', 'nachtzwaluw'], rng)),
+      queue: buildWisselTrial(skin, diff, play.fork('wisselen').rng).queue.map((q) => q.id),
+    };
+  };
+  assert.deepEqual(views(4242), views(4242), 'a replayed play: the same trials');
+  const differ = [1, 2, 3, 4, 5].filter((s) => JSON.stringify(views(s)) !== JSON.stringify(views(4242))).length;
+  assert.equal(differ, 5, 'another play: other trials');
+});
