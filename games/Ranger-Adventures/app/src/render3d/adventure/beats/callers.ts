@@ -189,6 +189,7 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
     flash(id, WRONG, 0.65);
     if (settings.geluid) Sound.tryAgain();
     k.stats.callers_wrong = (k.stats.callers_wrong ?? 0) + 1;
+    k.stats.callers_len = run.sequence.length; // (a dev read: an ease is one shorter)
     banner(o.lines.opnieuw, false);
     speak(o.lines.opnieuw);
     void k.wait(1.5).then(() => listen(null)).catch(() => {});

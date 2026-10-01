@@ -274,7 +274,8 @@ export interface WisselKnobs { sorts: number; flipEvery: number; flips: number }
 export interface EngineKnobs { zoeken: ZoekKnobs; corsi: SpanKnobs; simon: SpanKnobs; dagnacht: RustKnobs; wisselen: WisselKnobs }
 
 /** The knob tables, one row per band 1..6 (design §5.2-5.5). Variety never touches these:
- *  only the level moves them. */
+ *  only the level moves them. The first step (band 1 → 2, his first easy win) changes
+ *  something he plays in every breinkracht, so the calm "groeit" is never an empty one. */
 export const KNOB_TABLES = {
   zoeken: {
     lookAlikes: [4, 5, 5, 6, 7, 8],
@@ -284,9 +285,12 @@ export const KNOB_TABLES = {
     trailClarity: [0.95, 0.85, 0.72, 0.60, 0.50, 0.40],
   },
   simon: { start: [2, 3, 3, 4, 4, 5], rounds: [3, 3, 4, 4, 4, 4], max: 7 },
-  corsi: { start: [3, 3, 4, 4, 5, 5], rounds: [2, 2, 2, 3, 3, 3], max: 6 },
+  // (band 2 starts the route at 4, not the design table's 3: an easy first route, 3 then 4
+  // clean, would otherwise play exactly the same next time; design §3 plays it so)
+  corsi: { start: [3, 4, 4, 4, 5, 5], rounds: [2, 2, 2, 3, 3, 3], max: 6 },
   dagnacht: { holdS: [3, 3.5, 4, 4.5, 5, 6], tempts: [1, 1, 2, 2, 3, 3], goWaitS: [9, 8, 7, 6, 5, 5], flips: [1, 1, 1, 2, 2, 2] },
-  wisselen: { sorts: [6, 6, 8, 8, 10, 10], flipEvery: [4, 4, 3, 3, 3, 2], flips: [1, 1, 1, 2, 2, 2] },
+  // (band 2 turns the rule after 3, not the design table's 4: the first step must be felt)
+  wisselen: { sorts: [6, 6, 8, 8, 10, 10], flipEvery: [4, 3, 3, 3, 3, 2], flips: [1, 1, 1, 2, 2, 2] },
 } as const;
 
 /** The knobs of a breinkracht at a level (1..6): its band's row. The same knobs the 2D floor,

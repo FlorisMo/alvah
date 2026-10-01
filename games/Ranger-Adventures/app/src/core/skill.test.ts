@@ -35,8 +35,8 @@ test('simon: the echo starts at 2, then 3 once 2 came easily; never two calls an
   assert.ok(knobsFor('simon', 1).rounds >= 3);
 });
 
-test('corsi: the route starts at 3 and grows to 5; two rounds, three from band 4', () => {
-  const start = [3, 3, 4, 4, 5, 5], rounds = [2, 2, 2, 3, 3, 3];
+test('corsi: the route starts at 3, at 4 after an easy first route, grows to 5; two rounds, three from band 4', () => {
+  const start = [3, 4, 4, 4, 5, 5], rounds = [2, 2, 2, 3, 3, 3];
   for (let b = 1; b <= 6; b++) assert.deepEqual(knobsFor('corsi', b), { start: start[b - 1], max: 6, rounds: rounds[b - 1] }, `band ${b}`);
   // (no jump of three spots between two bands: the old table went 3 → 6)
   for (let b = 2; b <= 6; b++) assert.ok(knobsFor('corsi', b).start - knobsFor('corsi', b - 1).start <= 1);
@@ -50,9 +50,25 @@ test('dagnacht: longer holds, more temptation, a shorter wait at a go-moment; sl
 });
 
 test('wisselen: more sorts, the turn sooner, two turns from band 4', () => {
-  const sorts = [6, 6, 8, 8, 10, 10], flipEvery = [4, 4, 3, 3, 3, 2], flips = [1, 1, 1, 2, 2, 2];
+  const sorts = [6, 6, 8, 8, 10, 10], flipEvery = [4, 3, 3, 3, 3, 2], flips = [1, 1, 1, 2, 2, 2];
   for (let b = 1; b <= 6; b++) {
     assert.deepEqual(knobsFor('wisselen', b), { sorts: sorts[b - 1], flipEvery: flipEvery[b - 1], flips: flips[b - 1] }, `band ${b}`);
+  }
+});
+
+test('his first easy win changes what he plays next time, in every breinkracht (never an empty "groeit")', () => {
+  const EASY: Record<(typeof EF_ENGINES)[number], BeatSummary> = {
+    zoeken: { trials: 1, correct: 1, misses: 0, seconds: 3, hinted: false },
+    corsi: { trials: 2, correct: 2, span: 4, start: 3, rounds: 2, eased: 0, firstClean: true },
+    simon: { trials: 3, correct: 3, span: 4, start: 2, rounds: 3, eased: 0, firstClean: true },
+    dagnacht: { trials: 5, correct: 5, impulses: 0 },
+    wisselen: { trials: 6, correct: 6, switches: 1, switchErrors: 0 },
+  };
+  for (const e of EF_ENGINES) {
+    // an easy beat is a whole step: level 1 → 2
+    const after = updateSkill(undefined, EASY[e], e).level;
+    assert.equal(bandOf(after), 2, e);
+    assert.notDeepEqual(knobsFor(e, after), knobsFor(e, 1), `${e}: band 2 plays like band 1`);
   }
 });
 
