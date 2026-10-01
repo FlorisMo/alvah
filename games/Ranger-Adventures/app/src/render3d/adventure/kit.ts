@@ -338,12 +338,14 @@ export class AdventureKit {
    * He saw or heard it (design §4.4): call when the thing was really in his picture (on
    * screen, ≥ ~40 px, ≥ 1 s) or its call reached him — never as a prize. Recorded in the
    * save at once; a NEW one gets one calm reveal at a quiet moment (`quiet`: none).
-   * Returns whether it was new. An id missing from content/ontdekkingen.ts is a bug: it
-   * warns and records nothing.
+   * Returns whether it was new. Once a play: a second call for the same id in this play
+   * records nothing (safe to call from a tick). An id missing from content/ontdekkingen.ts
+   * is a bug: it warns and records nothing.
    */
   discover(id: string, opts: { quiet?: boolean } = {}): boolean {
     const row = ontdekking(id);
     if (!row) { console.warn(`[adventure] k.discover: no discovery "${id}" in content/ontdekkingen.ts`); return false; }
+    if (this.found.has(id)) return false; // (once a play: "times seen" counts plays, not frames)
     this.found.add(id);
     const fresh = store.discover(id);
     if (fresh && !opts.quiet) this.hooks.reveal?.(row);
