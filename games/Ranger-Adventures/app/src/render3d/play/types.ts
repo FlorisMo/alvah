@@ -16,6 +16,7 @@
 
 import type { BeatSummary, Engine } from '../../core/skill';
 import type { Step } from '../../content/types';
+import type { Play } from '../../core/play';
 
 /**
  * The live-world handle a 3D engine view renders into. Supplied by the mission
@@ -119,9 +120,10 @@ export interface Spawned {
  * The 3D play contract — the exact twin of the 2D `PlayFn`, but handed a live
  * `WorldCtx` so it plays in-place. Consumes the same frozen trial builder and
  * MUST resolve the same `BeatSummary` as its 2D twin (proven by the per-engine
- * parity test, §0a).
+ * parity test, §0a). Run 7: `play` is the mission's play (its forks draw the trial, the
+ * same draws as the 2D twin's).
  */
-export type Play3dFn = (ctx: WorldCtx, step: Step) => Promise<BeatSummary>;
+export type Play3dFn = (ctx: WorldCtx, step: Step, play?: Play) => Promise<BeatSummary>;
 
 /**
  * A registered 3D engine variant. `rmSafe` marks a variant whose reduced-motion

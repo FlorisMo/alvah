@@ -35,6 +35,7 @@ import { AVATAR_KENMERKEN, KENMERK_LABEL, NAAM_SUGGESTIES } from './avatar.ts';
 import { SKILL_META, tierFor } from './skill.ts';
 import { FASE_META, KUNSTJE_META, ZORG_STAPPEN, OPVANG_GASTEN, COMPANION_SOORTEN } from './companion.ts';
 import { pickWorldBeat, withAnimal } from './worldbeat.ts';
+import { ONTDEKKINGEN } from '../content/ontdekkingen.ts';
 
 // ---- 1. pure lint maths --------------------------------------------------
 
@@ -254,6 +255,13 @@ function readingCorpus(): Entry[] {
   for (const [k, meta] of Object.entries(KUNSTJE_META)) push(`raaf.kunstje.${k}`, COPY.vul(meta.uitleg, SAMPLE), true);
   for (const [f, stappen] of Object.entries(ZORG_STAPPEN)) stappen.forEach((st) => { push(`zorg.${f}.${st.id}`, st.label, true); push(`zorg.${f}.${st.id}.zin`, st.zin, true); });
   COMPANION_SOORTEN.raaf.namen.forEach((n, i) => push(`raaf.naam[${i}]`, n, true));
+  // run 7: the veldgids (content/ontdekkingen.ts): each name and hint line is shown on one
+  // line and read aloud
+  for (const o of ONTDEKKINGEN) {
+    push(`ontdekking.${o.id}.naam`, o.naam, true);
+    push(`ontdekking.${o.id}.naamKnap`, o.naamKnap, true);
+    push(`ontdekking.${o.id}.hint`, o.hint, true);
+  }
   for (const tick of [3, 6]) {
     const b = pickWorldBeat({ patrolTick: tick, heading: 'links' });
     if (!b) continue;
@@ -302,4 +310,18 @@ test('one cast: the warden is Bram everywhere, never "de BOA" or the police', ()
   assert.equal(bad.length, 0, `the warden has one name, Bram:${bad.join('')}`);
   // and a raaf is never named like a ranger (the player could be called that)
   for (const n of COPY.RAAF_NAMEN) assert.ok(!NAAM_SUGGESTIES.includes(n), `${n} is a raaf name and a ranger name`);
+});
+
+test('run 7: a discovery\'s plain name carries no knap woord (those live in naamKnap)', () => {
+  // the knappe woorden of the game: every mission's knap-woord badge and the animals' vaktermen
+  // (minus the words an animal's plain name already uses: 'reekalf' is the ree's simpelWoord)
+  const animals = Object.values(ANIMALS as Record<string, { naam: string; simpelWoord?: string; vaktermen?: Record<string, string> }>);
+  const plain = new Set(animals.flatMap((a) => [a.simpelWoord ?? '', ...a.naam.split(/\s+/)].map((w) => w.toLowerCase())));
+  const knap = new Set<string>([
+    ...MISSIONS.map((m) => String(m.beloning?.vaktermBadge?.naam ?? '').replace(/^Knap woord:\s*/i, '').toLowerCase()).filter(Boolean),
+    ...animals.flatMap((a) => Object.values(a.vaktermen ?? {}).map((w) => w.toLowerCase())),
+  ].filter((w) => !plain.has(w)));
+  assert.ok(knap.has('frisling'), 'the list knows the knappe woorden');
+  const bad = ONTDEKKINGEN.filter((o) => o.naam.toLowerCase().split(/\s+/).some((w) => knap.has(w))).map((o) => `\n  ${o.id}: "${o.naam}"`);
+  assert.equal(bad.length, 0, `a knap woord in a plain name:${bad.join('')}`);
 });

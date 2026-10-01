@@ -10,6 +10,8 @@ import type { DressingBuilder, ResidentBody, Residents } from '../world/Resident
 import type { HomeTree } from '../World';
 import type { AdventureKit } from './kit';
 import type { HomeSpec } from './types';
+import type { Play } from '../../core/play';
+import type { MoodId } from '../Moods';
 import { frislingAdventure } from './missions/frisling';
 import { reeAdventure } from './missions/ree';
 import { wildcameraAdventure } from './missions/wildcamera';
@@ -31,12 +33,18 @@ export interface Adventure {
   actor?: ResidentBody;
   /** the mission's content, handed over before the world is built (its decoys ...) */
   bind?(mission: Mission): void;
-  /** under the briefing card: get the world ready for this play (a trial's decoys) */
-  prepare?(world: { residents: Residents }, mission: Mission): void;
+  /** under the briefing card: get the world ready for this play (a trial's decoys). Run 7:
+   *  `play` is THIS play's variety (drawn at the briefing, design §4.1): lay this play's
+   *  hiding spot, route, order … from its forks here */
+  prepare?(world: { residents: Residents }, mission: Mission, play: Play): void;
   /** the briefing was left without playing: undo `prepare` (still under the card) */
   unprepare?(world: { residents: Residents }, mission: Mission): void;
   /** the script: the beats, in the world */
   play(k: AdventureKit): Promise<void>;
+  /** run 7 (design §4.5): the light this home plays in — only these moods (`allow`; the
+   *  session's mood when it is one of them, else one drawn from them), and/or a new one
+   *  each play (`perPlay`). Default: the session's mood. */
+  moods?: { allow?: readonly MoodId[]; perPlay?: boolean };
 }
 
 const ADVENTURES: Readonly<Record<string, Adventure>> = {

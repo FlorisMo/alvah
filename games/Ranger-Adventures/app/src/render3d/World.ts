@@ -54,6 +54,7 @@ import { Progress } from './world/Progress';
 import { Residents, type DressingBuilder, type FrameView, type ResidentBody } from './world/Residents';
 import { Stage } from './play/stage';
 import type { HomeSpec } from './adventure/types';
+import { DEFAULT_MOOD, type MoodId } from './Moods';
 import type { TreeSpecies, TreeStub } from './world/Forest';
 
 export type { WorldMarker } from './world/Markers';
@@ -197,6 +198,10 @@ export class World {
   // and whether the parked jeep glows (Bram suggested it)
   private lookPx = 0;
   private jeepGlow = false;
+  // run 7 (design §4.5): the session's mood and the one on screen. In `contracts` only the
+  // golden hour exists: setMood records the id (the `moods` package draws and shows them)
+  private moodSession: MoodId = DEFAULT_MOOD;
+  private moodNow: MoodId = DEFAULT_MOOD;
 
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
@@ -406,6 +411,9 @@ export class World {
     this.player.listenPointer(); // F-17 click-vs-drag seam: tap-to-walk or drag-orbit
     canvas.addEventListener('wheel', this.cam.onWheel, { passive: false }); // F-16 dolly zoom
     this.player.listenKeys(() => this.tryInteract());
+    // run 7: this visit's mood (the world is built once per page load). `contracts`: always
+    // the golden hour; the `moods` package draws it (never the last session's)
+    store.noteSession(this.moodSession);
   }
 
   /**
@@ -940,6 +948,20 @@ export class World {
   /** The time of day now (1 = the golden hour). */
   daylight(): number {
     return this.sky.daylight.now;
+  }
+
+  /** Run 7 (design §4.5): the session's mood (the light this visit stands in) and the one
+   *  on screen now (a play's mood, while a mission plays in it). */
+  mood(): { session: MoodId; now: MoodId } {
+    return { session: this.moodSession, now: this.moodNow };
+  }
+
+  /** Run 7: put the world in a mood (a crossfade of ~`seconds`; a cut under reduced
+   *  motion). `contracts`: only the golden hour exists, so this records the id and the
+   *  picture stays as it is; the `moods` package makes it show. */
+  setMood(id: MoodId, seconds?: number): void {
+    void seconds;
+    this.moodNow = id;
   }
 
   /**

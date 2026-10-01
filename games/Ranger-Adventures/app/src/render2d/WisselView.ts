@@ -10,6 +10,7 @@
 import './wissel.css';
 import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
+import type { Play } from '../core/play';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
 import { buildWisselTrial, WisselRun, dagOfNacht, placeNames, regelAndersom } from '../engines/wisselen';
@@ -20,12 +21,12 @@ import { Sound } from '../core/sound';
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-export function playWissel(host: HTMLElement, step: Step): Promise<BeatSummary> {
+export function playWissel(host: HTMLElement, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const settings = store.get().settings;
     const diff = store.difficulty('wisselen');
     const copy = step.skin.copy ?? {};
-    const trial = buildWisselTrial(step.skin, diff);
+    const trial = buildWisselTrial(step.skin, diff, play?.fork('wisselen').rng); // run 7: the play's queue
     const run = new WisselRun(trial);
     const reduced = settings.reducedMotion;
 

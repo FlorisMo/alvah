@@ -44,8 +44,14 @@ import { adventureFor, type Adventure } from '../../render3d/adventure/registry'
 import { AdventureKit, Aborted } from '../../render3d/adventure/kit';
 import { provideAdventure } from '../../core/devhook';
 import { AdventureHud } from './AdventureHud';
+import { newPlay, nextPlaySeed, type Play } from '../../core/play';
+import { rollRare } from '../../core/discover';
+import { ONTDEKKINGEN, ontdekkingenVan, type Ontdekking } from '../../content/ontdekkingen';
+import { playMood, type MoodId } from '../../render3d/Moods';
+import { providePlay } from '../../core/devhook';
+import { revealDiscovery, setRevealGate } from '../hud/Reveal';
 
-type PlayFn = (host: HTMLElement, step: Step) => Promise<BeatSummary>;
+type PlayFn = (host: HTMLElement, step: Step, play?: Play) => Promise<BeatSummary>;
 const ENGINE_VIEWS: Partial<Record<string, PlayFn>> = {
   zoeken: playZoeken, corsi: playRoute, simon: playSimon, dagnacht: playDanger, wisselen: playWissel,
 };
@@ -96,6 +102,37 @@ export function goToMission(mission: Mission): void {
   fadeCut(() => { clearOverlays(); world.bringRangerTo(mission.id); }, () => showBriefing(mission));
 }
 
+/* ------------------------------------------------------- run 7: the play ---- */
+/** A play drawn at the briefing (design §4.1): its variety, the mood it stands in, and
+ *  its rare visitor for this home. "Ga op pad" plays it; "Nog even rondkijken" drops it;
+ *  every briefing draws a new one. */
+interface Drawn { play: Play; mood: MoodId; rare: Ontdekking | null }
+
+/** The current (or last) play, for `__ranger.play()`. */
+let lastPlay: Play | null = null;
+providePlay(() => (lastPlay ? { missionId: lastPlay.missionId, seed: lastPlay.seed, n: lastPlay.n, variant: { ...lastPlay.variant } } : null));
+
+/** Draw this briefing's play: the session's next seed, this mission's play number, the
+ *  mood (the session's unless the home asks otherwise), the rare roll. */
+function drawPlay(mission: Mission, adv: Adventure | null): Drawn {
+  const s = store.get();
+  const play = newPlay(mission.id, nextPlaySeed(), (s.gespeeld[mission.id] ?? 0) + 1);
+  const session_ = session.world?.mood().session ?? 'gouden-uur';
+  const mood = playMood(session_, adv?.moods, play);
+  const rare = rollRare({ home: mission.id, play, table: ONTDEKKINGEN, found: s.ontdekt, counts: s.zeldzaam, mood });
+  if (rare) play.note('rare', rare.id.slice(rare.id.indexOf('.') + 1)); // (a home's prepare may read it)
+  lastPlay = play;
+  return { play, mood, rare };
+}
+
+/** The animals this mission helped are in his veldgids once it is won (quietly: the
+ *  reward card says the rest), whichever way it was played. */
+function recordHelped(mission: Mission, kit: AdventureKit | null): void {
+  for (const o of ontdekkingenVan(mission.id).filter((r) => r.geholpen)) {
+    if (kit) kit.discover(o.id, { quiet: true }); else store.discover(o.id);
+  }
+}
+
 /* ------------------------------------------------------------ briefing ---- */
 /** The landscape as a word on a card: "heide" → "Heide". */
 function landschapNaam(l: string): string {
@@ -109,14 +146,19 @@ export function showBriefing(mission: Mission): void {
   // it (a trial's look-alikes in the stand; a replay puts the lost one back where he hid)
   const adv = adventureNow(mission);
   const world = session.world;
+  // run 7: this play is drawn here, before the home lays it out under the card
+  const drawn = drawPlay(mission, adv);
+  if (world && drawn.mood !== world.mood().now) world.setMood(drawn.mood, 0); // (a cut: the card covers it)
   if (adv && world) {
     if (store.get().voltooid[mission.id]) world.residents.setState(mission.id, 'before');
-    adv.prepare?.(world, mission);
+    adv.prepare?.(world, mission, drawn.play);
     // a jeep he parked in this home would stand in its pictures and the family's way: it
     // is parked just outside it as the card comes up (never during play)
     world.parkJeepOutOf(Object.values(adv.home.places), adv.home.places.marker);
   }
+  drawn.play.note('mood', drawn.mood);
   const unprepare = (): void => {
+    if (world && world.mood().now !== world.mood().session) world.setMood(world.mood().session, 0);
     if (!adv || !world) return;
     adv.unprepare?.(world, mission);
     if (store.get().voltooid[mission.id]) world.residents.setState(mission.id, 'after');
@@ -155,7 +197,7 @@ export function showBriefing(mission: Mission): void {
     autoStart: store.get().settings.voorlezen,
   });
   el.querySelector('.briefing-back')?.addEventListener('click', () => { ra.stop(); unprepare(); resumePatrol(); });
-  el.querySelector('.btn-start')?.addEventListener('click', () => { ra.stop(); void runMission(mission); });
+  el.querySelector('.btn-start')?.addEventListener('click', () => { ra.stop(); store.notePlay(mission.id); void runMission(mission, drawn); });
 }
 
 /** The adventure this mission is played as NOW, or null for the classic path: only in a
@@ -179,9 +221,10 @@ function avontuurCopy(mission: Mission): Record<string, string> {
 }
 
 /* ---------------------------------------------------------- play loop ---- */
-async function runMission(mission: Mission): Promise<void> {
+async function runMission(mission: Mission, drawn: Drawn): Promise<void> {
   const adv = adventureNow(mission);
-  if (adv && session.world) { await runAdventure(mission, adv); return; }
+  if (adv && session.world) { await runAdventure(mission, adv, drawn); return; }
+  const { play } = drawn;
   const played: Engine[] = [];
   let skipped: string | null = null;
   setScreen('mission');
@@ -193,6 +236,7 @@ async function runMission(mission: Mission): Promise<void> {
   const stopped = new Promise<'STOP'>((res) => { missionStop = () => res('STOP'); });
   const raceStop = <T>(p: Promise<T>): Promise<T | 'STOP'> => Promise.race([p, stopped]);
   mountMissionPause();
+  setRevealGate(() => false); // run 7: no reveal over a classic mission (its cards, its games)
   // the raaf counts its facts (1/3, 2/3, 3/3), not the steps
   const facts = mission.stappen.filter((st) => st.skin.feit).length;
   let factN = 0;
@@ -206,8 +250,8 @@ async function runMission(mission: Mission): Promise<void> {
   const home = cam ? { pos: cam.position.clone(), look: cam.position.clone().add(cam.getWorldDirection(new Vector3())) } : null;
   for (let i = 0; i < mission.stappen.length; i++) {
     const step = mission.stappen[i];
-    const play = ENGINE_VIEWS[step.ef];
-    if (!play) { skipped = step.ef; break; }
+    const view = ENGINE_VIEWS[step.ef];
+    if (!view) { skipped = step.ef; break; }
     clearOverlays();
     const world = session.world;
     // The ONE branch (§1f): play the step in-place when the world is live AND a
@@ -242,9 +286,9 @@ async function runMission(mission: Mission): Promise<void> {
         (ctx.scene as Scene).add(stepStage);
         // between two games the lens stays on the play view (one calm move to the next)
         const keepView = i < mission.stappen.length - 1;
-        result = await raceStop(variant.play({ ...ctx, scene: stepStage, keepView, home }, stepForView(step)));
+        result = await raceStop(variant.play({ ...ctx, scene: stepStage, keepView, home }, stepForView(step), play));
       } else {
-        result = await raceStop(play(stepHost, stepForView(step)));
+        result = await raceStop(view(stepHost, stepForView(step), play));
       }
     } finally {
       clearActivityWin(); // W2.3: no win closure outlives its step
@@ -253,7 +297,8 @@ async function runMission(mission: Mission): Promise<void> {
       stepHost.remove();
     }
     if (result === 'STOP' || stopRequested) { abandonMission(); return; }
-    store.logSession(step.ef as Engine, result);
+    // run 7: into the history with the play and the view (the classic 3D stage, or the 2D floor)
+    store.logBeat(step.ef as Engine, result, { missionId: mission.id, view: mode === '3d' && world ? 'stage' : '2d', play });
     played.push(step.ef as Engine);
     if (step.skin.feit) {
       // W6.3b: playing in the world pins the fact as a collectible veldnotitie.
@@ -264,6 +309,7 @@ async function runMission(mission: Mission): Promise<void> {
   }
   unmountMissionPause();
   missionStop = null;
+  setRevealGate(null);
   // no mini-game view is live any more: the reunion, reward, clue and sporenboek are
   // cards over the (still held) world, so the dev hook no longer says '3d' (breaker note)
   setMissionView(null);
@@ -275,6 +321,8 @@ async function runMission(mission: Mission): Promise<void> {
   const seasonBefore = seasonDone();
   const knap = mission.beloning.vaktermBadge;
   store.markMissionDone(mission.id, knap ? { id: knap.id, naam: knap.naam.replace(/^Knap woord:\s*/i, '') } : undefined);
+  recordHelped(mission, null); // run 7: the animal it helped is in his veldgids
+  store.rareEnd(mission.id, false);
   notePatrolCompletion();
   const clueId = capturedClue(mission, true, before);
   // this completion finishes the season: the finale follows the reward (and the clue)
@@ -294,7 +342,7 @@ async function runMission(mission: Mission): Promise<void> {
  * "Stop de missie" works from every beat: the script unwinds, the animals go back
  * where they were, and he stands in free roam where he stood.
  */
-async function runAdventure(mission: Mission, adv: Adventure): Promise<void> {
+async function runAdventure(mission: Mission, adv: Adventure, drawn: Drawn): Promise<void> {
   const world = session.world!;
   const played: Engine[] = [];
   clearOverlays(); // the briefing goes: the world is the picture now
@@ -316,12 +364,14 @@ async function runAdventure(mission: Mission, adv: Adventure): Promise<void> {
   const kit = new AdventureKit({
     mission, places: adv.home.places, copy: avontuurCopy(mission), steps: mission.stappen.map(stepForView),
     world, ctx: world.ctx(host), ui, signal, host,
+    play: drawn.play, mood: drawn.mood, rare: drawn.rare,
     hooks: {
       log: (i, summary) => {
         const ef = mission.stappen[i].ef as Engine;
-        store.logSession(ef, summary);
+        store.logBeat(ef, summary, { missionId: mission.id, view: 'world', play: drawn.play });
         played.push(ef);
       },
+      reveal: (o) => revealDiscovery(o),
       fact: async (i) => {
         const st = mission.stappen[i];
         if (!st.skin.feit) return;
@@ -338,6 +388,7 @@ async function runAdventure(mission: Mission, adv: Adventure): Promise<void> {
         const seasonBefore = seasonDone();
         const knap = mission.beloning.vaktermBadge;
         store.markMissionDone(mission.id, knap ? { id: knap.id, naam: knap.naam.replace(/^Knap woord:\s*/i, '') } : undefined);
+        recordHelped(mission, kit); // run 7: the animal it helped is in his veldgids (quietly)
         notePatrolCompletion();
         clueId = capturedClue(mission, true, before);
         finale = !seasonBefore && seasonDone();
@@ -347,6 +398,8 @@ async function runAdventure(mission: Mission, adv: Adventure): Promise<void> {
     },
   });
   provideAdventure(() => kit.read());
+  // run 7: a new discovery's reveal waits for a calm beat (a walk, a look, the ending)
+  setRevealGate(() => /^(walk:|look|reunion)/.test(kit.beat));
   let won = false;
   try {
     const r = await Promise.race([adv.play(kit).then(() => 'DONE' as const), stopped]);
@@ -354,6 +407,9 @@ async function runAdventure(mission: Mission, adv: Adventure): Promise<void> {
   } catch (e) {
     if (!(e instanceof Aborted)) console.error('[adventure] stopped by an error', e); // never a dead end: back to free roam
   } finally {
+    setRevealGate(null);
+    // the home's rare counter (the pity rule): reset by a rare he saw, one up after a win
+    store.rareEnd(mission.id, kit.gotRare, won);
     provideAdventure(null);
     kit.dispose(store.get().voltooid[mission.id] ? 'after' : 'before');
     ui.dispose();
@@ -524,6 +580,7 @@ function stopMission(): void {
  *  they were, and shows the HUD again. */
 function abandonMission(): void {
   missionStop = null;
+  setRevealGate(null);
   clearOverlays();
   releaseWorld();
   setScreen('world');

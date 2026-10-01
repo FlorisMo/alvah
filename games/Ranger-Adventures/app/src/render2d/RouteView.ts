@@ -8,6 +8,7 @@
 import './route.css';
 import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
+import type { Play } from '../core/play';
 import { store } from '../core/state';
 import { buildCorsiTrial, CorsiRun, PRINT_SPOTS } from '../engines/corsi';
 import { narrator } from '../core/narrator';
@@ -16,12 +17,12 @@ import { Sound } from '../core/sound';
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-export function playRoute(host: HTMLElement, step: Step): Promise<BeatSummary> {
+export function playRoute(host: HTMLElement, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const settings = store.get().settings;
     const diff = store.difficulty('corsi');
     const copy = step.skin.copy ?? {};
-    const trial = buildCorsiTrial(diff);
+    const trial = buildCorsiTrial(diff, play?.fork('corsi').rng); // run 7: the play's route (the world's twin draws the same)
 
     const tonen = copy.toon ?? 'Kijk goed welke weg de groep liep…';
     const terug = copy.terug ?? 'Wijs de weg terug.';

@@ -25,6 +25,7 @@ import * as THREE from 'three';
 import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
+import type { Play } from '../../core/play';
 import type { WorldCtx, Play3dEngine } from '../play/types';
 import { buildWisselTrial, WisselRun, placeNames, regelAndersom, dagOfNacht, type WisselBin } from '../../engines/wisselen';
 import { store } from '../../core/state';
@@ -167,7 +168,7 @@ function animalTag(naam: string, dag: boolean, width = 1.0): THREE.Sprite {
   return sprite;
 }
 
-export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
+export function playWissel3d(ctx: WorldCtx, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const raycaster = ctx.raycaster as THREE.Raycaster;
@@ -177,7 +178,7 @@ export function playWissel3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     // SAME engine logic as the 2D view (construct parity §1f).
     const diff = store.difficulty('wisselen');
-    const trial = buildWisselTrial(step.skin, diff);
+    const trial = buildWisselTrial(step.skin, diff, play?.fork('wisselen').rng); // run 7: the play's queue (as its 2D twin)
     const run = new WisselRun(trial);
 
     const instructie = copy.instructie ?? 'Breng elk dier naar de goede plek.';

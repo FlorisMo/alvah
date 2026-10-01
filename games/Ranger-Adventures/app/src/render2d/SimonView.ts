@@ -10,6 +10,7 @@
 import './simon.css';
 import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
+import type { Play } from '../core/play';
 import { store } from '../core/state';
 import { Content } from '../content/registry';
 import { buildSimonTrial, randomCaller, SimonRun } from '../engines/simon';
@@ -20,7 +21,7 @@ import { Sound } from '../core/sound';
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
+export function playSimon(host: HTMLElement, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const settings = store.get().settings;
     const diff = store.difficulty('simon');
@@ -36,7 +37,8 @@ export function playSimon(host: HTMLElement, step: Step): Promise<BeatSummary> {
     // Shared pure core (parity with the 3D twin, §1f): it owns the growing
     // sequence, the echo index, the wrong count + the final BeatSummary; this
     // view only renders + plays the calls + paces the listen/echo loop.
-    const run = new SimonRun(trial.target, () => randomCaller(trial.dieren));
+    const rng = play?.fork('simon').rng; // run 7: the play's callers
+    const run = new SimonRun(trial.target, () => randomCaller(trial.dieren, rng));
     let phase: 'intro' | 'listen' | 'echo' | 'pause' | 'done' = 'intro';
     const timers: number[] = [];
     const after = (ms: number, fn: () => void): void => { timers.push(window.setTimeout(() => { if (panel.isConnected) fn(); }, ms)); }; // a stopped step's panel is gone: its timers stand down
