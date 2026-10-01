@@ -139,13 +139,18 @@ export interface WalkOpts {
   /** seconds without getting closer before the chip shows the arrow (default 20) */
   arrowAfter?: number;
   /** an animal that follows him (the piglet he leads): it keeps its gap, hides when he
-   *  runs (`hide`: the cover it dives into), and the walk waits for it */
+   *  runs (`hide`: the cover it dives into: one in his picture, by it), and stays hidden
+   *  until he has walked calmly back to it — a run never gains him a metre; the walk
+   *  waits for it */
   lead?: {
     actor: Actor;
     gap?: number;
     hide?: readonly Spot[];
+    /** said on EVERY run (why it hid) */
     runLine?: string;
     backLine?: string;
+    /** said when it waits for him: he walked far off, or he is calm again but away from
+     *  the clump it hides in (and the chip points to it) */
     waitLine?: string;
     /** called when it hides / comes out (a rustle, a squeak) */
     onHide?: (spot: Spot) => void;
@@ -163,6 +168,9 @@ export interface WalkOpts {
   /** he should walk QUIETLY (away from a calf lying in the grass): running says `line`
    *  (and calls `onRun`) once per run; walking calmly again brings the walk's line back */
   quiet?: { line: string; onRun?: () => void };
+  /** the way a perfect player walks (golden's hint only): these points in turn, round
+   *  what is to be walked round (the ree's pool), each until he comes within 1 m of it */
+  via?: readonly Spot[];
   /** a second way to be there, besides within `r` of `to` (the hint still walks to `to`):
    *  e.g. right up at the bark on the side the squirrel hides, not only out at the spot
    *  to see it from */
@@ -171,10 +179,15 @@ export interface WalkOpts {
 
 const WALK_HINT_R = 0.8; // golden walks until it is within this share of r
 /** The animal he leads waits where it is once he is this far off (m) — a long walk away,
- *  not a few running steps: after a run it comes out of its clump and trots after him —
- *  and follows again once he is back within `LEAD_BACK_M`. */
+ *  not a few running steps — and follows again once he is back within `LEAD_BACK_M`.
+ *  After a run it hides in its clump until he is calm AND back within `LEAD_BACK_M`. */
 const LEAD_WAIT_M = 20;
 const LEAD_BACK_M = 5;
+/** How long (s) he walks calmly before the animal he leads trusts him again. */
+const LEAD_CALM_S = 1.4;
+/** The clump a frightened animal dives into is at most this far from it (m). */
+const LEAD_DIVE_M = 8;
+const DIVE_V = new THREE.Vector3();
 
 export class AdventureKit {
   readonly mission: Mission;
@@ -461,8 +474,9 @@ export class AdventureKit {
    * without getting closer does it show the arrow and the way (the fallback, never the
    * first cue). A walk hint tells golden where a perfect player walks now. Walking far
    * away is never a fail: the chip points back. With `lead`, an animal follows him: it
-   * hides when he runs (the line once) and comes out when he walks calmly; the walk
-   * waits for it.
+   * hides when he runs (into a clump he sees, with the line, every run) and comes out
+   * once he walks calmly back to it, so running never gains him a metre; the walk waits
+   * for it.
    */
   async walk(o: WalkOpts): Promise<void> {
     this.check();
@@ -492,10 +506,15 @@ export class AdventureKit {
     // the way he really walked (m): a test checks the design's bar against it
     let walked = 0;
     let was = this.ranger();
-    // (a perfect player walks to the goal; when the animal he leads waits for him, back to it)
-    const unhint = this.hint(() => (lead && waiting
-      ? { id: `walk:${o.name}:back`, walk: { x: lead.actor.x, z: lead.actor.z, r: LEAD_BACK_M * 0.7 } }
-      : { id: `walk:${o.name}`, walk: { x: to.x, z: to.z, r: r * WALK_HINT_R } }));
+    // (a perfect player walks to the goal — round what `via` names; when the animal he
+    // leads waits for him, back to it)
+    let viaI = 0;
+    const unhint = this.hint(() => {
+      if (lead && (waiting || hiding)) return { id: `walk:${o.name}:back`, walk: { x: lead.actor.x, z: lead.actor.z, r: LEAD_BACK_M * 0.7 } };
+      const v = o.via?.[viaI];
+      if (v) return { id: `walk:${o.name}:via${viaI}`, walk: { x: v.x, z: v.z, r: 0.7 } };
+      return { id: `walk:${o.name}`, walk: { x: to.x, z: to.z, r: r * WALK_HINT_R } };
+    });
     let loud = false;
     let hushFor = 0;
     let runs = 0;
@@ -505,6 +524,7 @@ export class AdventureKit {
       was = m;
       const d = dist(m, to);
       if (d < best - 1) { best = d; bestAt = this.clock; }
+      while (o.via && viaI < o.via.length && dist(m, o.via[viaI]) < 1.0) viaI += 1;
       if (o.quiet) {
         // a quiet walk: running gets the hush line once, a calm walk brings the goal back
         const run = isRunning(m);
@@ -513,41 +533,50 @@ export class AdventureKit {
       }
       if (!arrow && this.clock - bestAt > arrowAfter) arrow = true;
       // the chip: the goal in words; the arrow and the way only as the fallback
-      const goal = lead && waiting ? lead.actor : to;
+      // (the animal he leads waits for him — he walked off, or it hides and he is calm
+      // again but away from it: the chip names it and points to it)
+      const lost = waiting || (!!hiding && calmFor > LEAD_CALM_S);
+      const goal = lead && lost ? lead.actor : to;
       const here = d < r || !!o.reached?.();
       const raw = wayfind(m.x, m.z, m.heading, goal.x, goal.z);
       // (within a marker's arrive radius of the goal but not yet at this walk's own: the
       // way and the metres still, never "je bent er" while nothing happens)
       const cue = raw.arrived && !(goal === to && here) ? cueAt(raw.angle, ARRIVE_RADIUS) : raw;
       this.ui.setChip({
-        doel: lead && waiting ? (lead.waitLine ? this.copy.chipBig ?? o.doel : o.doel) : o.doel,
-        cue: arrow || waiting ? `${cue.richting} · ${cue.afstand}` : (o.cue ?? ''),
-        angle: arrow || waiting ? cue.angle : null,
+        doel: lead && lost ? (lead.waitLine ? this.copy.chipBig ?? o.doel : o.doel) : o.doel,
+        cue: arrow || lost ? `${cue.richting} · ${cue.afstand}` : (o.cue ?? ''),
+        angle: arrow || lost ? cue.angle : null,
         arrived: here,
         glyph: o.glyph,
       });
       o.tick?.(dt);
       if (!lead) return;
-      // the animal he leads: hides when he runs, comes out when he walks calmly again
+      // the animal he leads: hides when he runs — into a clump in his picture, so he sees
+      // it dive — and comes out only once he is calm again AND back by it
       const a = lead.actor;
       const run = isRunning(m);
       const far = dist(a, m) > LEAD_WAIT_M;
       if (run && !hiding) {
-        const spot = nearestAway(a.x, a.z, lead.hide ?? [], { x: m.x, z: m.z, d: 1.5 });
+        const spot = this.diveSpot(a, m, lead.hide ?? []);
         if (spot) {
           hiding = spot;
+          told = false;
           void a.go(spot.x, spot.z, { speed: 'trot' }).then((ok) => { if (ok && hiding === spot) void a.lie(true); });
           lead.onHide?.(spot);
-          if (!told && lead.runLine) { told = true; this.ui.say(lead.runLine); }
+          if (lead.runLine) this.ui.say(lead.runLine); // (every run: why it hid)
+          this.stats[`walk_${o.name}_dives`] = (this.stats[`walk_${o.name}_dives`] ?? 0) + 1;
         }
         calmFor = 0;
       } else if (hiding) {
         calmFor = run ? 0 : calmFor + dt;
-        if (calmFor > 1.4) {
+        if (calmFor > LEAD_CALM_S && dist(a, m) < LEAD_BACK_M) {
           hiding = null;
           a.follow(rangerLead, gap);
           lead.onOut?.();
           this.ui.say(lead.backLine ?? o.line, { good: true });
+        } else if (calmFor > LEAD_CALM_S && !told) {
+          told = true; // calm again, but away from it: it waits in its clump for him
+          if (lead.waitLine) this.ui.say(lead.waitLine);
         }
       } else if (far && !waiting) {
         waiting = true; // he walked off: the animal waits where it is
@@ -575,6 +604,23 @@ export class AdventureKit {
     this.stats[`walk_${o.name}_s`] = Math.round(this.clock);
     this.stats[`walk_${o.name}_m`] = Math.round(walked * 10) / 10;
     if (o.quiet) this.stats[`walk_${o.name}_runs`] = runs;
+  }
+
+  /** The clump a frightened animal he leads dives into: the nearest to it (within
+   *  LEAD_DIVE_M, and not at his feet) that is in his picture — so the child sees it
+   *  bolt in (a dive behind the follow camera was only a line and a squeak) — else the
+   *  nearest one away from him. */
+  private diveSpot(a: { x: number; z: number }, m: { x: number; z: number }, spots: readonly Spot[]): Spot | null {
+    const cam = this.world.camera;
+    cam.updateMatrixWorld();
+    const seen = spots.filter((s) => {
+      if (dist(s, m) < 1.5 || dist(s, a) > LEAD_DIVE_M) return false;
+      DIVE_V.set(s.x, this.ctx.groundY(s.x, s.z) + 0.25, s.z);
+      if (DIVE_V.clone().applyMatrix4(cam.matrixWorldInverse).z > -1) return false; // (behind the lens)
+      DIVE_V.project(cam);
+      return Math.abs(DIVE_V.x) < 0.85 && DIVE_V.y > -0.85 && DIVE_V.y < 0.6;
+    });
+    return nearestAway(a.x, a.z, seen) ?? nearestAway(a.x, a.z, spots, { x: m.x, z: m.z, d: 1.5 });
   }
 
   /* ---------------------------------------------------------------- misc ---- */
