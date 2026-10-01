@@ -26,6 +26,7 @@ import { playRoep } from '../../render2d/RoepView';
 import { prefersReducedMotion } from '../../core/reduced-motion';
 import { clearActivityWin, clearPlayHint, beginActivityScope, abortActivityScope } from '../../render3d/play/kit';
 import { modelFor, heightFor } from '../../render3d/play/spawn';
+import { SIZE } from '../../render3d/AnimalScale';
 import { heroOf } from '../../render3d/world/Progress';
 import { adventureFor, allAdventures } from '../../render3d/adventure/registry';
 import { nextPatrolTarget } from '../../core/patrol';
@@ -165,6 +166,7 @@ function buildWorld(): World {
       titel: m.titel,
       modelId: hero && look?.look !== 'none' ? modelFor(hero) : null,
       height: heightFor(hero),
+      len: (SIZE as Record<string, { len?: number }>)[hero]?.len,
       color: (ef && SKILL_META[ef]?.kleur) || '#f5c23b',
       biome,
       at: look?.at,

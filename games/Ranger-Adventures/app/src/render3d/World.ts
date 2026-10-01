@@ -372,7 +372,7 @@ export class World {
     this.progress = new Progress({
       scene: this.scene, groundY: (x, z) => this.terrain.y(x, z), spawnModel, spawnPlant, heightFor,
       obstacles: this.obstacles, blocked: (x, z) => !!this.limits.blocked?.(x, z),
-      markers: () => this.markers.map((m) => ({ missionId: m.missionId, x: m.pos.x, z: m.pos.z, group: m.group })),
+      markers: () => this.markers.map((m) => ({ missionId: m.missionId, x: m.pos.x, z: m.pos.z, group: m.group, animal: m.animalAt })),
       actors: () => this.fauna.scenicActors.map((a) => a.group.position),
     });
     // the missions' homes: their dressing and their animals, before (or after) each mission

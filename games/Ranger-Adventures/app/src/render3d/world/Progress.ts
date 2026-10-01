@@ -287,8 +287,9 @@ export interface ProgressEnv {
   obstacles: readonly { x: number; z: number; r: number; tree?: boolean }[];
   /** off-limits ground (the ven's water) */
   blocked(x: number, z: number): boolean;
-  /** every mission marker: where it stands and its scene group (hidden with it) */
-  markers(): readonly { missionId: string; x: number; z: number; group: THREE.Object3D }[];
+  /** every mission marker: where it stands, its scene group (hidden with it), and where
+   *  its own animal stands (beside the ring: Markers' BESIDE_OUT), if it has one */
+  markers(): readonly { missionId: string; x: number; z: number; group: THREE.Object3D; animal?: { x: number; z: number; r: number } | null }[];
   /** the two story people (the warden, the poacher) — nobody stands in them */
   actors(): readonly { x: number; z: number }[];
   spawnModel(id: string, opts?: SpawnOpts): Promise<Spawned | null>;
@@ -482,7 +483,7 @@ export class Progress {
 
   private async build(
     missionId: string, t: Tableau, frame: Frame,
-    marker: { x: number; z: number; group: THREE.Object3D }, hidden: boolean, view: ReunionView | null,
+    marker: { x: number; z: number; group: THREE.Object3D; animal?: { x: number; z: number; r: number } | null }, hidden: boolean, view: ReunionView | null,
   ): Promise<Built | null> {
     const env = this.env;
     const markerGroup = marker.group;
@@ -493,7 +494,8 @@ export class Progress {
       spotFree(env, missionId, frame, x, z, r)
       && !this.blocks(x, z, r, missionId) // a neighbour's family keeps its place
       && spots.every((p) => Math.hypot(p.x - x, p.z - z) >= p.r + r)
-      && Math.hypot(x - marker.x, z - marker.z) >= 0.55 + r // the marker's own animal keeps its spot
+      && Math.hypot(x - marker.x, z - marker.z) >= 0.55 + r // the ring's middle stays free
+      && (!marker.animal || Math.hypot(x - marker.animal.x, z - marker.animal.z) >= marker.animal.r + r) // its own animal keeps its spot
       && level(env.groundY, x, z, Math.max(0.3, r));
     // a reunion is laid out in the picture; if nothing in reach is, then anywhere free
     const seen = (h: number) => (x: number, z: number, r: number): boolean =>
@@ -536,7 +538,7 @@ export class Progress {
       const root = s.root as THREE.Object3D;
       const y = env.groundY(at.x, at.z) + (p.lift ?? 0);
       root.position.set(at.x, y, at.z);
-      root.rotation.y = facing(p, frame, at);
+      root.rotation.y = facing(p, frame, at, marker.animal ?? null);
       const l: Live = {
         piece: p, root, spawned: s, x: at.x, z: at.z, y,
         recipe: p.kind === 'animal' ? gaitFor(modelKey(p.id)) : gaitFor(null),
@@ -642,10 +644,11 @@ function modelKey(id: string): string {
   return m[id] ?? `animal-${id}`;
 }
 
-function facing(p: Piece, f: Frame, at: { x: number; z: number }): number {
+function facing(p: Piece, f: Frame, at: { x: number; z: number }, hero: { x: number; z: number } | null): number {
   const back = yawToward(-f.dx, -f.dz); // looking back down the approach, at the lens
   if (p.face === 'hero') {
-    const hx = f.ox - at.x, hz = f.oz - at.z;
+    // (at the marker's own animal, beside the ring; else at the ring's middle)
+    const hx = (hero?.x ?? f.ox) - at.x, hz = (hero?.z ?? f.oz) - at.z;
     return Math.hypot(hx, hz) < 1e-3 ? back : yawToward(hx, hz);
   }
   if (p.face === 'lens' || p.face === undefined) return back;

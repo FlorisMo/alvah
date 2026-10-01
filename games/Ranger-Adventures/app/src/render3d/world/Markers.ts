@@ -42,7 +42,20 @@ export interface WorldMarker {
   /** run 6: what stands in its ring — its animal (default), or nothing at all ('none': the
    *  story's animal is elsewhere, hidden; the ring and its name still say "go here") */
   look?: 'animal' | 'prop' | 'none';
+  /** its animal's body length (m, the scale table's), so it stands clear of the ring */
+  len?: number;
 }
+
+/** Run 6, true size: a marker's animal stands BESIDE its ring, never in it. The ring is
+ *  where the ranger stands to start the mission, and a 2.25 m stag in its middle had the
+ *  1.32 m boy standing inside its body. It stands just beyond the ring as seen from the
+ *  clearing (where every walk to it comes from), side-on, its middle this far out (m)
+ *  plus a share of its length: a stag's near flank ~1.7 m from the ring's middle, a frog
+ *  or a fox just outside the ring. */
+const BESIDE_OUT = 1.75;
+const BESIDE_PER_LEN = 0.12;
+/** An animal this long (m) or longer is a solid (the walker and the camera go round it). */
+const SOLID_LEN = 1.5;
 
 /** Within this distance (m) of a marker, the board or the sit-spot its prompt shows. */
 const NEAR_R = 2.4;
@@ -70,6 +83,7 @@ export class Markers {
     finished: boolean;                 // the mission is done: the tag reads "✓ <titel>"
     anim: THREE.Group | null;          // the prepped model wrapper to drive procedurally
     model: THREE.Group | null;         // the loaded animal (fades out far off in the fog)
+    animalAt: { x: number; z: number; r: number } | null; // where its animal stands, beside the ring
     rest: FarRest;
     mixer: THREE.AnimationMixer | null; // set instead when a real animated GLB is staged
   }[] = [];
@@ -215,14 +229,43 @@ export class Markers {
       label.position.y = 1.9;
       group.add(label);
 
-      if (mk.look !== 'none') group.add(proceduralTotem(mk.color)); // instant stand-in
+      // its animal (or the stand-in until it loads): beside the ring, side-on to the clearing
+      let animalAt: { x: number; z: number; r: number } | null = null;
+      const stand = new THREE.Group();
+      if (mk.look !== 'none') {
+        const len = mk.len ?? mk.height * 1.7;
+        const out = BESIDE_OUT + BESIDE_PER_LEN * len;
+        // (away from the clearing; turned round the ring, never to its near side, when a
+        // trunk or a prop stands there: a stag never stands in a pine)
+        const away = Math.hypot(x, z) > 1 ? Math.atan2(x, z) : Math.PI;
+        const fits = (a: number): boolean => {
+          const ax = x + Math.sin(a) * out, az = z + Math.cos(a) * out, yaw = a + Math.PI / 2;
+          if (this.limits?.blocked?.(ax, az)) return false;
+          for (const k of [-0.45, 0, 0.45]) {
+            const px = ax + Math.sin(yaw) * k * len, pz = az + Math.cos(yaw) * k * len;
+            for (const o of this.obstacles) if (obstacleGap(o, px, pz) < 0.2) return false;
+          }
+          return true;
+        };
+        const turns = [0, 0.45, -0.45, 0.9, -0.9, 1.35, -1.35, 1.8, -1.8];
+        const ang = away + (turns.find((t) => fits(away + t)) ?? 0);
+        const dx = Math.sin(ang), dz = Math.cos(ang);
+        const ax = x + dx * out, az = z + dz * out;
+        const yaw = ang + Math.PI / 2;
+        stand.position.set(dx * out, this.groundY(ax, az) - group.position.y, dz * out);
+        stand.rotation.y = yaw;
+        stand.add(proceduralTotem(mk.color)); // instant stand-in
+        group.add(stand);
+        animalAt = { x: ax, z: az, r: Math.max(0.3, len * 0.5) };
+        if (len >= SOLID_LEN) this.obstacles.push({ ...boxObstacle(ax, az, 0.13 * len, 0.45 * len, yaw), h: mk.height * 0.7 });
+      }
       this.scene.add(group);
       const entry = {
         group, pos: group.position.clone(), missionId: mk.missionId,
         recipe: gaitFor(mk.modelId), phase: i * 1.7, label, titel: mk.titel,
         ring: ring.material as THREE.MeshBasicMaterial, finished: false,
         anim: null as THREE.Group | null, mixer: null as THREE.AnimationMixer | null,
-        model: null as THREE.Group | null, rest: new FarRest(ANIMAL_REST_NEAR, ANIMAL_REST_FAR),
+        model: null as THREE.Group | null, animalAt, rest: new FarRest(ANIMAL_REST_NEAR, ANIMAL_REST_FAR),
       };
       this.list.push(entry);
 
@@ -242,10 +285,10 @@ export class Markers {
           // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
           applyCalmPose(prepped, mk.modelId);
           mergeColourSplits(prepped); // one draw call per animal, not one per colour
-          // drop the totem (keep the ring), add the real animal
-          const totem = group.children.find((c) => c.userData.totem);
-          if (totem) group.remove(totem);
-          group.add(prepped);
+          // drop the totem (keep the ring), add the real animal where it stood
+          const totem = stand.children.find((c) => c.userData.totem);
+          if (totem) stand.remove(totem);
+          stand.add(prepped);
           entry.model = prepped;
           if (rig.clips.length) {
             // prefer the real baked rig: play a calm idle (or the first clip)
