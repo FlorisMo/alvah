@@ -325,6 +325,7 @@ const MISSIE_REE = {
   avontuur: {
     simpel: {
       kijk: 'Kijk. Daar eet de moeder.',
+      kijkLoopt: 'Kijk. Daar loopt de moeder.',
       volg: 'Volg de sporen naar het gras.',
       chipGras: 'Het hoge gras',
       sporen: 'kijk naar de sporen',
@@ -349,6 +350,7 @@ const MISSIE_REE = {
     },
     knap: {
       kijk: 'Kijk. Daar graast de reegeit.',
+      kijkLoopt: 'Kijk. Daar loopt de reegeit.',
       volg: 'Volg haar prenten naar het gras.',
       sporen: 'kijk naar de prenten',
       weg: 'De reegeit loopt de struiken in.',

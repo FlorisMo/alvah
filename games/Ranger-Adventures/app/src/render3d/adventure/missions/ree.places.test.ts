@@ -309,13 +309,16 @@ test('her bed is out of sight: a bush, a trunk or the copse\'s bracken between i
     for (const t of COPSE_TREES) assert.ok(dist(t, l.bed) > 1.0 && dist(t, l.gap) > 1.0, `${l.id}: trunks keep off her bed and her gap`);
     // her ways: from where she grazes straight into her bed (she slips in), and out of it
     // through her gap to the meeting place: round every bush and trunk
+    const out = [l.bed, ...[...l.bedWay].reverse(), l.gap];
     const ways: [string, Spot, Spot][] = [
       ...l.graze.map((g, i): [string, Spot, Spot] => [`graze ${i}→${l.slip.length > 1 ? 'gap' : 'bed'}`, g, l.slip[0]]),
       ...l.slip.slice(1).map((q, i): [string, Spot, Spot] => [`slip ${i}`, l.slip[i], q]),
-      ['bed→gap', l.bed, l.gap], ['gap→meet', l.gap, l.meet],
+      ...out.slice(1).map((q, i): [string, Spot, Spot] => [`bed→gap ${i}`, out[i], q]), ['gap→meet', l.gap, l.meet],
     ];
+    assert.deepEqual(l.slip.slice(-1 - l.bedWay.length, -1), [...l.bedWay], `${l.id}: she slips in the way she comes out`);
     for (const [name, a, z] of ways) {
-      for (const j of js) assert.ok(segDist(j, a, z) > juniperR(j.h) + 0.05, `${l.id}: ${name} keeps off a juniper (${segDist(j, a, z).toFixed(2)} m)`);
+      // (with room for her turning: she walks round a bush, never into it and stuck)
+      for (const j of js) assert.ok(segDist(j, a, z) > juniperR(j.h) + (l.cover === COPSE ? 0.05 : 0.4), `${l.id}: ${name} keeps off a juniper (${segDist(j, a, z).toFixed(2)} m)`);
       for (const t of COPSE_TREES) assert.ok(segDist(t, a, z) > 0.75, `${l.id}: ${name} keeps off a trunk (${segDist(t, a, z).toFixed(2)} m)`);
     }
     // and her way to the calf runs out on open heath, never through another stand

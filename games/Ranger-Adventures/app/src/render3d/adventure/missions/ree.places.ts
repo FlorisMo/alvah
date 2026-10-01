@@ -167,8 +167,12 @@ export interface ReeLayout {
   cover: Cover;
   gap: Spot;
   bed: Spot & { yaw: number };
-  /** her way from where she grazes into her bed (she slips in): straight, or by her gap */
+  /** her way from where she grazes into her bed (she slips in): straight, or by her gap
+   *  and on between its bushes (`bedWay`) */
   slip: readonly Spot[];
+  /** the points between her gap and her bed, gap side first (a thicket's bushes stand
+   *  close: she winds between them, never brushing one); she walks out the same way */
+  bedWay: readonly Spot[];
   /** where she grazes as the play begins (one of two, seen from the ring) */
   graze: readonly [Spot & { yaw: number }, Spot & { yaw: number }];
   /** where mother and calf meet: open heath just out of the grass, toward her gap */
@@ -202,6 +206,8 @@ interface LayoutDef {
    *  offset; `slipVia`: she slips in by her gap (a juniper stands on the straight way) */
   cover?: Cover;
   gap: { u: number; v: number }; bed: { u: number; v: number; yaw: number }; slipVia?: boolean;
+  /** the points between her gap and her bed (cover frame), gap side first */
+  bedWay?: readonly { u: number; v: number }[];
   graze: readonly [Spot, Spot];
   /** the pools: `in` at a share along her wissel's leg (0 ring→bend, 1 bend→search), `out`
    *  at a share along his way's leg `leg` (0: search spot → its first point …) */
@@ -236,6 +242,7 @@ function build(d: LayoutDef): ReeLayout {
   const cover = d.cover ?? COPSE;
   const gap = atLocal(cover.frame, d.gap.u, d.gap.v);
   const bed = { ...atLocal(cover.frame, d.bed.u, d.bed.v), yaw: cover.frame.heading + d.bed.yaw };
+  const bedWay = (d.bedWay ?? []).map((q) => atLocal(cover.frame, q.u, q.v));
   const meet = toward(d.stand, gap, FRINGE.a * 1.2 + 0.9);
   const graze = d.graze.map((g) => ({ ...g, yaw: headingTo(g, MARKER) + Math.PI / 2 })) as unknown as ReeLayout['graze'];
   const hide0 = d.hide;
@@ -247,7 +254,7 @@ function build(d: LayoutDef): ReeLayout {
   const ol = d.poolOut ? way.slice(d.poolOut.leg, d.poolOut.leg + 2) : [];
   const log = { ...atLocal(hf, d.hideLog.u, d.hideLog.v), turn: hf.heading, half: 0.85 };
   return {
-    id: d.id, frame, search, wissel, cover, gap, bed, slip: d.slipVia ? [gap, bed] : [bed], graze, meet,
+    id: d.id, frame, search, wissel, cover, gap, bed, slip: d.slipVia ? [gap, ...bedWay, bed] : [bed], bedWay, graze, meet,
     pools: {
       in: poolOn(wl[0], wl[1], d.poolIn.at, d.poolIn.side, d.poolIn.leg),
       ...(d.poolOut ? { out: poolOn(ol[0], ol[1], d.poolOut.at, d.poolOut.side, d.poolOut.leg) } : {}),
@@ -305,8 +312,8 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
   }),
   C: build({
     id: 'C', stand: { x: -21.0, z: -49.0 }, look: deg(-90), corner: 1, bend: { x: -20.5, z: -38.8 },
-    cover: THICKET, gap: { u: 0, v: 1.7 }, bed: { u: -1.4, v: -0.6, yaw: Math.PI * 0.5 }, slipVia: true,
-    graze: [{ x: -24.1, z: -46.5 }, { x: -24.9, z: -45.0 }],
+    cover: THICKET, gap: { u: 0, v: 1.7 }, bed: { u: -1.4, v: -0.6, yaw: Math.PI * 0.5 }, slipVia: true, bedWay: [{ u: 0, v: 0.2 }],
+    graze: [{ x: -24.1, z: -46.5 }, { x: -24.0, z: -44.6 }],
     poolIn: { leg: 1, at: 0.5, side: 1 }, poolOut: { leg: 0, at: 0.5, side: 1 },
     way: [],
     hide: { x: -25.0, z: -37.5 }, leave: { u: 2.8, v: -1.8 }, hideJuniper: { u: -1.45, v: 0.25 }, hideLog: { u: -0.95, v: 1.1 },

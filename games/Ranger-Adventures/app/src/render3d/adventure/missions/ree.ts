@@ -27,6 +27,7 @@
  * Steps (content, the EF contract): 0 zoeken · 1 dagnacht, each logged once.
  */
 
+import * as THREE from 'three';
 import type { Distractor, Mission } from '../../../content/types';
 import type { AdventureKit } from '../kit';
 import type { Adventure } from '../registry';
@@ -47,6 +48,7 @@ import { ARRIVE_RADIUS, bearing, cue as cueAt } from '../../Wayfinding';
 import { backPoints, openWindow } from '../cover-math';
 import { SIZE } from '../../AnimalScale';
 import { TREE_BASE_H } from '../../world/Forest';
+import { heightAt } from '../../Biomes';
 import { ReeHome, SEARCH_GLIMPSE } from './ree.home';
 import { drawReePlay, lastReeVariants, VARIANT_KEY, type CalfMoment, type ReePlay } from './ree.variety';
 import {
@@ -75,6 +77,21 @@ function doelenOf(m: Mission): readonly { x: number; y: number }[] {
 
 let contentDecoys: readonly Distractor[] = [];
 
+/** The doe's brisk walk (m/s: her walk is 0.8) when her cover lies far across the heath. */
+const BRISK = 1.25;
+
+/** How far (m) the doe walks to this morning's graze spot under the briefing card (beyond
+ *  it, the walk would hold up the first look: she is put there where nobody sees it). */
+const DOE_WALK_M = 6;
+
+/** Is (x, z) in the picture beside the briefing card (the card covers the middle of it)?
+ *  (`heightAt`: the pure terrain height; only to aim the check, nothing stands on it) */
+function besideCard(cam: THREE.Camera, at: { x: number; z: number }): boolean {
+  const v = new THREE.Vector3(at.x, heightAt(at.x, at.z) + 0.7, at.z).project(cam);
+  if (v.z > 1 || Math.abs(v.x) > 1.08 || Math.abs(v.y) > 1.08) return false; // off screen
+  return !(Math.abs(v.x) < 0.42 && Math.abs(v.y) < 0.8); // under the card: hidden
+}
+
 /** This play's morning, drawn and laid under the briefing card (`prepare`). */
 let drawn: { seed: number; play: ReePlay } | null = null;
 
@@ -93,7 +110,14 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Ree
   home.layPlay({ layout: l, calf, pool: p.pool, decoys: trial.decoys.map((d) => d.id), glimpse: SEARCH_GLIMPSE });
   const g = l.graze[p.graze];
   world.residents.repose(MISSION, 'calf', 'before', { x: calf.x, z: calf.z, yaw: calf.yaw, idle: 'lie', roam: 0 });
-  world.residents.repose(MISSION, 'doe', 'before', { x: g.x, z: g.z, yaw: g.yaw, idle: 'graze', roam: 0.5 }, { walk: true, cover: l.bed });
+  // the doe grazes by this morning's cover: she walks there, unless it lies across the
+  // heath (her thicket is ~19 m from her copse) and neither where she is nor where she
+  // goes shows beside the briefing card: then she is simply there when the card goes
+  const doe = world.residents.read().find((h) => h.missionId === MISSION)?.actors.find((a) => a.key === 'doe');
+  const cam = (world as { camera?: THREE.Camera }).camera;
+  const far = !!doe && Math.hypot(doe.x - g.x, doe.z - g.z) > DOE_WALK_M;
+  const unseen = !!doe && !!cam && !besideCard(cam, doe) && !besideCard(cam, g);
+  world.residents.repose(MISSION, 'doe', 'before', { x: g.x, z: g.z, yaw: g.yaw, idle: 'graze', roam: 0.5 }, { walk: !(far && unseen), cover: l.bed });
   drawn = { seed: play.seed, play: p };
   return p;
 }
@@ -166,8 +190,10 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
       { slot: true, fadeFrom: 0.85 }).group);
   }
 
-  // 1 · one calm look at the mother, grazing by her cover
-  await k.look({ x: doe.x, z: doe.z, y: g(doe.x, doe.z) + 0.6 }, c.kijk, 2.5, { turn: true });
+  // 1 · one calm look at the mother, grazing by her cover (or, this morning's cover
+  // lying across the heath, still on her way there)
+  const walking = dist(doe, graze) > 2;
+  await k.look({ x: doe.x, z: doe.z, y: g(doe.x, doe.z) + 0.6 }, walking ? c.kijkLoopt ?? c.kijk : c.kijk, 2.5, { turn: true });
 
   // 2 · her slots lead along her path to the grass; walking up, he sees her slip into her
   // cover (the pool may lie across her path: round it, not through it)
@@ -175,7 +201,11 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   const slipAway = async (): Promise<void> => {
     await doe.lookAt(me, 1.4);                   // she lifts her head and looks at him
     if (k.beat === 'walk:meadow' || k.beat === 'meadow:watch') k.say(c.weg);
-    for (const s of l.slip) if (!(await doe.go(s.x, s.z, { speed: 'walk', face: s === l.bed ? l.bed.yaw : undefined }))) return;
+    // (from far off — her thicket lies across the heath — she walks briskly to her gap)
+    for (const s of l.slip) {
+      const speed = s === l.slip[0] && dist(doe, s) > 8 ? BRISK : 'walk';
+      if (!(await doe.go(s.x, s.z, { speed, face: s === l.bed ? l.bed.yaw : undefined }))) return;
+    }
     await doe.lie(true);                         // she beds down in the bracken
   };
   const setOff = { ...k.ranger() };
@@ -197,7 +227,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   k.beat = 'meadow:watch';
   k.lockFollow();
   k.world.stopRanger();
-  await k.until(() => doe.lies || dist(doe, l.bed) < 1.2, 9);
+  await k.until(() => doe.lies || dist(doe, l.bed) < 1.2, 12);
 
   // 3 · find the calf in the tall grass (zoeken)
   const lyH = lyingHeight(heightFor('reekalf'), LEG_SHARE.reekalf);
@@ -374,7 +404,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
     home.rustleGap(l, 0.16);
     if (settings.geluid) Sound.rustle();
     await k.wait(1.3);
-    await walkOn(l.gap.x, l.gap.z);
+    for (const q of [...[...l.bedWay].reverse(), l.gap]) await walkOn(q.x, q.z); // (out between her bushes)
     k.say(c.daar);
     // in the gap she stops and tests the air; a step out, two calm bites of grass
     await k.guard(doe.lookAt(() => ({ x: meet.x, z: meet.z, speed: 0 }), 1.3));
