@@ -20,7 +20,7 @@
 
 import type { Play } from '../core/play';
 import { EXPOSURE, SKY_STOPS, toneMappedHex } from './Atmosphere.ts';
-import { lightAt, lightOn, mixHex, type LightSet } from './Daylight.ts';
+import { lightAt, lightOn, luminance, mixHex, type LightSet } from './Daylight.ts';
 
 /** The golden hour (today's look), a misty morning, a bright day, an overcast afternoon, a
  *  soft dusk. Never dark, stormy or scary. */
@@ -88,7 +88,7 @@ export const MOODS: Readonly<Record<MoodId, Mood>> = {
   // the golden hour: EXACTLY today's (Lighting.GOLDEN_HOUR, Atmosphere.SKY_STOPS, fog 22/90)
   'gouden-uur': mood({
     id: 'gouden-uur',
-    light: { hemiSky: '#b4c6e0', hemiGround: '#8a6b4a', hemiI: 0.85, key: '#ffc080', keyI: 2.1, fill: '#fff0dc', fillI: 1.3 },
+    light: { hemiSky: '#b4c6e0', hemiGround: '#8a6b4a', hemiI: 0.85, key: '#ffc080', keyI: 2.1, fill: '#fff0dc', fillI: 1.45 },
     sky: SKY_STOPS, fogNear: 22, fogFar: 90, keyAt: { ...GOLDEN_KEY }, glow: 0.22, warm: 0.85, shadow: 1, wind: 1,
   }),
   // a misty morning: a pale gold low sun, a brighter neutral fill, the mist close (the far
@@ -102,7 +102,7 @@ export const MOODS: Readonly<Record<MoodId, Mood>> = {
   // a bright day: a white sun higher up, a clear blue sky, a long clear view, a breeze
   zonnig: mood({
     id: 'zonnig',
-    light: { hemiSky: '#a8c6ee', hemiGround: '#8c7656', hemiI: 0.9, key: '#fff4e2', keyI: 2.0, fill: '#f2f4fc', fillI: 1.15 },
+    light: { hemiSky: '#a8c6ee', hemiGround: '#8c7656', hemiI: 0.9, key: '#fff4e2', keyI: 2.0, fill: '#f2f4fc', fillI: 1.35 },
     sky: [[0, '#5f93d6'], [0.3, '#84ade0'], [0.55, '#a7c5e8'], [0.75, '#c2d6ea'], [0.9, '#d3e0ea'], [1, '#dae4ea']],
     fogNear: 30, fogFar: 110, keyAt: keyAtElevation(52), glow: 0.12, warm: 0, shadow: 1, wind: 1.25,
   }),
@@ -154,6 +154,12 @@ export function mixMood(a: Mood, b: Mood, t: number): Omit<Mood, 'id' | 'sky' | 
  *  wildcamera's): `lightAt` over the mood's own set. Pure. */
 export function moodLightAt(id: MoodId, night: LightSet, k: number): LightSet & { night: number } {
   return lightAt(MOODS[id].light, night, k);
+}
+
+/** The light on an animal's side AWAY from the sun (what made distant animals black): the
+ *  hemisphere fill on a flank (half sky, half ground) plus the animal fill. Pure. */
+export function shadeOn(s: LightSet): number {
+  return luminance(mixHex(s.hemiSky, s.hemiGround, 0.5)) * s.hemiI + (s.fill ? luminance(s.fill) * (s.fillI ?? 0) : 0);
 }
 
 /** A mood's light on a standing animal, as a share of the golden hour's (≥ 0.85: never dark). */

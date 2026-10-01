@@ -41,7 +41,8 @@ export function dressAnimal(root: THREE.Object3D, id: string | null, opts: Dress
   applyPosture(root, id);
   applyCalmPose(root, id); // a one-time rest-pose bias (not motion)
   if (opts.merge !== false) mergeColourSplits(root);
-  if (isAnimalModel(id)) lightAnimal(root, id);
+  if (!isAnimalModel(id)) return; // (a person staged by a home keeps its own light)
+  lightAnimal(root, id);
   root.userData.animal = id;
 }
 

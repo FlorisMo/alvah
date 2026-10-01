@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MOOD_IDS, MOODS, DEFAULT_MOOD, isMood, playMood, sessionMood, parseMoodParam, mixMood, moodLightAt,
-  lightShare, keyAtElevation, keyElevation, lastMoodAt, type MoodId,
+  lightShare, keyAtElevation, keyElevation, lastMoodAt, shadeOn, type MoodId,
 } from './Moods.ts';
 import { newPlay } from '../core/play.ts';
 import { EXPOSURE, SKY_STOPS, toneMappedHex } from './Atmosphere.ts';
@@ -43,9 +43,10 @@ test('never dark: every mood keeps at least 0.85× the golden hour\'s light on a
   for (const id of MOOD_IDS) {
     const k = lightShare(id);
     assert.ok(k >= 0.85, `${id}: ${Math.round(k * 100)} % of the golden hour's light`);
-    // the animals' own fill: never less than the golden hour's
-    const m = MOODS[id].light;
-    assert.ok(luminance(m.fill) * m.fillI >= luminance(MOODS['gouden-uur'].light.fill) * MOODS['gouden-uur'].light.fillI * 0.85 - 1e-9, `${id}: the animal fill holds`);
+    // an animal's side away from the sun: never darker than 0.85× the golden hour's (the
+    // hemisphere on a flank + the animal fill; moods.spec measures the pixels)
+    const sh = shadeOn(MOODS[id].light) / shadeOn(MOODS['gouden-uur'].light);
+    assert.ok(sh >= 0.85, `${id}: the shaded side keeps ${Math.round(sh * 100)} % of the golden hour's light`);
     // a calm sky: no near-black or storm-grey stop, the horizon the lightest part
     for (const [, c] of MOODS[id].sky) assert.ok(luminance(c) > 0.15, `${id}: ${c} is not a dark sky`);
     assert.ok(luminance(MOODS[id].light.fog) > 0.45, `${id}: the haze is light (${MOODS[id].light.fog})`);

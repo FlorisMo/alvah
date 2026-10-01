@@ -31,7 +31,7 @@ import { heroOf } from '../../render3d/world/Progress';
 import { adventureFor, allAdventures } from '../../render3d/adventure/registry';
 import { nextPatrolTarget } from '../../core/patrol';
 import { sessionSeed } from '../../core/play';
-import { parseMoodParam, sessionMood, type MoodId } from '../../render3d/Moods';
+import { isMood, parseMoodParam, sessionMood, type MoodId } from '../../render3d/Moods';
 import { Vector3 } from 'three';
 import {
   pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, WORLDBEAT_ANIMAL_M, type WorldBeat,
@@ -306,6 +306,18 @@ export function enterPlay(returning: boolean): void {
   hud?.classList.add('explore-hud--arriving');
   window.setTimeout(() => hud?.classList.remove('explore-hud--arriving'), 1_700);
   beginGuide(returning);
+  devFade(world);
+}
+
+let devFaded = false;
+/** Dev only (`?dev=1&fade=<id>`): a few seconds into play the world crossfades into that
+ *  mood, once — how e2e/moods.spec watches a crossfade while no home asks for one. */
+function devFade(world: World): void {
+  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+  const to = q?.has('dev') ? q.get('fade') : null;
+  if (devFaded || !isMood(to)) return;
+  devFaded = true;
+  window.setTimeout(() => world.setMood(to), 3_000);
 }
 
 /**
