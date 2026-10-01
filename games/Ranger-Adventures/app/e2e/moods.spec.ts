@@ -301,29 +301,52 @@ for (const mood of MOODS) {
       }
       expect(hint, `the frisling's search beat (visible: ${await visibleButtons(page)})`).not.toBeNull();
       await sleep(page, 2_000); // the lens settles on the stand
-      const all = (await R<Seen[] | null>(page, 'r.animals()')) ?? [];
-      const h = (await R<Hint | null>(page, 'r.playHint()')) ?? hint!;
-      const piglet = all.filter((x) => x.id === 'animal-frisling-piglet' && x.onScreen)
-        .sort((p, q) => Math.hypot((p.box[0] + p.box[2]) / 2 - h.x, (p.box[1] + p.box[3]) / 2 - h.y) - Math.hypot((q.box[0] + q.box[2]) / 2 - h.x, (q.box[1] + q.box[3]) / 2 - h.y))[0];
-      const png = await page.screenshot({ path: path.join(d, 'frisling-search.png') });
-      if (piglet) piglet.pts = await onCanvas(page, piglet.pts);
-      if (piglet && piglet.pts.length >= 3) {
-        const own = await lumas(png, piglet.pts);
-        // what is round it: a ring one box wide around its screen box
-        const [x0, y0, x1, y1] = piglet.box;
-        const w = Math.max(8, x1 - x0), hh = Math.max(8, y1 - y0);
-        const ring: [number, number][] = [];
-        for (let y = y0 - hh; y <= y1 + hh; y += Math.max(1, hh / 8)) for (let x = x0 - w; x <= x1 + w; x += Math.max(1, w / 8)) {
-          if (x >= x0 && x <= x1 && y >= y0 && y <= y1) continue;
-          if (x >= 0 && y >= 0 && x < 1280 && y < 800) ring.push([x, y]);
+      // six frames 0.4 s apart, pooled: the bracken sways, and one frame shows only ~50 px
+      // of the piglet (a single frame's median moved by ±6 between runs)
+      const own: number[] = [], round: number[] = [];
+      let frame: number[] = [];
+      for (let f = 0; f < 6; f++) {
+        const all = (await R<Seen[] | null>(page, 'r.animals()')) ?? [];
+        const h = (await R<Hint | null>(page, 'r.playHint()')) ?? hint!;
+        const piglet = all.filter((x) => x.id === 'animal-frisling-piglet' && x.onScreen)
+          .sort((p, q) => Math.hypot((p.box[0] + p.box[2]) / 2 - h.x, (p.box[1] + p.box[3]) / 2 - h.y) - Math.hypot((q.box[0] + q.box[2]) / 2 - h.x, (q.box[1] + q.box[3]) / 2 - h.y))[0];
+        const png = await page.screenshot(f === 0 ? { path: path.join(d, 'frisling-search.png') } : {});
+        if (f === 0) {
+          // the whole picture's light (the world only: not the card or the chips over it)
+          const grid: [number, number][] = [];
+          for (let y = 0; y < 800; y += 8) for (let x = 0; x < 1280; x += 8) grid.push([x, y]);
+          frame = await lumas(png, await onCanvas(page, grid));
         }
-        const round = await lumas(png, ring);
+        if (piglet) {
+          own.push(...await lumas(png, await onCanvas(page, piglet.pts)));
+          // what is round it: a ring one box wide around its screen box
+          const [x0, y0, x1, y1] = piglet.box;
+          const w = Math.max(8, x1 - x0), hh = Math.max(8, y1 - y0);
+          const ring: [number, number][] = [];
+          for (let y = y0 - hh; y <= y1 + hh; y += Math.max(1, hh / 8)) for (let x = x0 - w; x <= x1 + w; x += Math.max(1, w / 8)) {
+            if (x >= x0 && x <= x1 && y >= y0 && y <= y1) continue;
+            if (x >= 0 && y >= 0 && x < 1280 && y < 800) ring.push([x, y]);
+          }
+          round.push(...await lumas(png, ring));
+        }
+        await sleep(page, 400);
+      }
+      own.sort((p, q) => p - q); round.sort((p, q) => p - q);
+      const fm = pct(frame, 0.5);
+      rows.push(`frisling search: the picture's median ${fm} (p10 ${pct(frame, 0.1)}, p90 ${pct(frame, 0.9)}) · seed ${(await R<{ seed: number } | null>(page, 'r.play()'))?.seed}`);
+      // never dark: the dusk's search once stood at 41, the wildcamera's night at 35, the
+      // other moods 64-91
+      expect.soft(fm, `${mood}: the search view is not dark`).toBeGreaterThanOrEqual(55);
+      if (own.length >= 12) {
         const a = pct(own, 0.5), b = pct(round, 0.5);
         const contrast = Math.abs(a - b) / Math.max(1, a + b);
-        rows.push(`frisling search: the piglet's own pixels median ${a} (p10 ${pct(own, 0.1)}, ${own.length} px) · round it ${b} · contrast ${contrast.toFixed(2)} · seed ${(await R<{ seed: number } | null>(page, 'r.play()'))?.seed}`);
-        expect.soft(pct(own, 0.5), `${mood}: the hidden piglet is not a black shape`).toBeGreaterThanOrEqual(MEDIAN_MIN);
+        rows.push(`frisling search: the piglet's own pixels median ${a} (p10 ${pct(own, 0.1)}, ${own.length} px over 6 frames) · round it ${b} · contrast ${contrast.toFixed(3)} · own/round ${(a / Math.max(1, b)).toFixed(2)}`);
+        expect.soft(a, `${mood}: the hidden piglet is not a black shape`).toBeGreaterThanOrEqual(MEDIAN_MIN);
+        // no mood makes the search easier: the dusk's animal fill once lit the piglet at 1.49×
+        // the bracken round it (the other moods 0.92-1.03×)
+        expect.soft(a / Math.max(1, b), `${mood}: the hidden piglet does not glow against its bracken`).toBeLessThanOrEqual(1.25);
       } else {
-        rows.push(`frisling search: the piglet shows ${piglet?.pts.length ?? 0} px of itself`);
+        rows.push(`frisling search: the piglet shows ${own.length} px of itself over 6 frames`);
       }
       rows.push(`frisling search: draw calls ${await R<number | null>(page, 'r.drawCalls()')}`);
       console.log(`[moods] ${mood} homes:\n  ${rows.join('\n  ')}`);

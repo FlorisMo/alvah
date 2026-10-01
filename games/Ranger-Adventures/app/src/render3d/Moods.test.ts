@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MOOD_IDS, MOODS, DEFAULT_MOOD, isMood, playMood, sessionMood, parseMoodParam, mixMood, moodLightAt,
-  lightShare, keyAtElevation, keyElevation, lastMoodAt, shadeOn, type MoodId,
+  lightShare, groundShare, glowShare, keyAtElevation, keyElevation, lastMoodAt, shadeOn, type MoodId,
 } from './Moods.ts';
 import { newPlay } from '../core/play.ts';
 import { EXPOSURE, SKY_STOPS, toneMappedHex } from './Atmosphere.ts';
@@ -51,6 +51,28 @@ test('never dark: every mood keeps at least 0.85× the golden hour\'s light on a
     for (const [, c] of MOODS[id].sky) assert.ok(luminance(c) > 0.15, `${id}: ${c} is not a dark sky`);
     assert.ok(luminance(MOODS[id].light.fog) > 0.45, `${id}: the haze is light (${MOODS[id].light.fog})`);
   }
+});
+
+test('never dark on the ground either: the sun\'s height counts', () => {
+  // a low sun lights a flank fully but the ground only by sin(elevation): the dusk once kept
+  // 0.89× the golden hour's light on an animal and 0.61× on the ground, and its search view
+  // (frame median sRGB luma 41) looked almost like the wildcamera's night (35)
+  for (const id of MOOD_IDS) {
+    const k = groundShare(id);
+    assert.ok(k >= 0.85, `${id}: ${Math.round(k * 100)} % of the golden hour's light on the ground (sun at ${keyElevation(MOODS[id].keyAt).toFixed(0)}°)`);
+  }
+  assert.equal(groundShare('gouden-uur'), 1);
+});
+
+test('no mood makes a search easier: an animal never glows against its ground', () => {
+  // the animal fill lifts a coat's shaded side; against a dim ground it made the dusk's
+  // hidden piglet stand out (its pixels 1.49× the bracken round it, the other moods
+  // 0.92-1.03×): its share of the ground light stays at most the golden hour's (+10 %)
+  for (const id of MOOD_IDS) {
+    const k = glowShare(id);
+    assert.ok(k <= 1.1, `${id}: an animal's shaded side ${k.toFixed(2)}× the golden hour's against its ground`);
+  }
+  assert.equal(glowShare('gouden-uur'), 1);
 });
 
 test('the fog never comes closer than 22 m, and meets the sky at the horizon', () => {

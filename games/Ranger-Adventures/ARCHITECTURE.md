@@ -204,7 +204,11 @@ render3d/Moods.ts    MoodId (gouden-uur · ochtendnevel · zonnig · bewolkt · 
                      its LightSet (hemisphere, key, fog colour = the sky's horizon through the
                      tone curve, the animal fill), sky stops, fog range (never nearer than
                      22 m), the sun's place, shadow strength, wind; sessionMood (a visit:
-                     the golden hour first, then never the last one), playMood, lastMoodAt
+                     the golden hour first, then never the last one), playMood, lastMoodAt.
+                     Never dark, pinned: ≥ 0.85× the golden hour's light on an animal
+                     (lightShare) and on the ground (groundShare: the sun's height counts),
+                     and no animal glows against its ground (glowShare ≤ 1.1: a mood makes
+                     no search easier)
 world/Sky.ts         shows a mood and crossfades to the next (a second dome only while it
                      fades; a cut under reduced motion); the sun moves only with a cut
                      (`setMood(id, 0)`: the briefing card); the wildcamera's night

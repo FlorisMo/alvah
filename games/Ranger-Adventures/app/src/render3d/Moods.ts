@@ -5,9 +5,12 @@
  * Every visit the world may stand in a different light: the golden hour (today's look, the
  * first visit of every save), a misty morning, a bright day, an overcast afternoon or a soft
  * dusk. Never dark, stormy or scary: no rain, no thunder, no flicker; every mood keeps at
- * least 0.85× the golden hour's light on a standing animal (`lightOn`), the fog never closer
- * than 22 m (a framed beat's targets are ≤ 15 m away), and every animal gets a fill of its
- * own (`fill`/`fillI`, AnimalDress.ts) so its side away from the sun never goes black.
+ * least 0.85× the golden hour's light on a standing animal (`lightOn`) and on the ground
+ * (`groundLight`: a low sun lights the ground only by the sine of its height), the fog never
+ * closer than 22 m (a framed beat's targets are ≤ 15 m away), and every animal gets a fill
+ * of its own (`fill`/`fillI`, AnimalDress.ts) so its side away from the sun never goes black,
+ * but never so much that it glows against its ground (`glowShare`: no mood makes a search
+ * easier).
  *
  * A mood is a LightSet (the hemisphere fill, the key, the fog colour, the animal fill), the
  * sky's colour stops (zenith → horizon; the fog colour IS the horizon stop through the tone
@@ -114,13 +117,16 @@ export const MOODS: Readonly<Record<MoodId, Mood>> = {
     sky: [[0, '#aab3bc'], [0.3, '#bec5cb'], [0.55, '#ced1d3'], [0.75, '#d7d8d7'], [0.9, '#dcdbd7'], [1, '#dedcd7']],
     fogNear: 24, fogFar: 80, keyAt: keyAtElevation(45), glow: 0.03, warm: 0, shadow: 0.4, wind: 1.4,
   }),
-  // a soft dusk: a low rose-amber sun, a cool lilac fill, a rose-to-blue sky, a stronger
-  // animal fill (the low sun lights little of a coat)
+  // a soft dusk: a low rose-amber sun (the lowest of the five, 20°: long shadows), a cool
+  // lilac fill, a rose-to-blue sky. Both lights are strong, so the ground keeps the golden
+  // hour's light (at 14° with a weaker fill the frisling's search view stood at a frame
+  // median of 41, the wildcamera's night at 35: a dusk search looked like the night); the
+  // animal fill no stronger than the other moods' (more made the hidden piglet glow)
   schemer: mood({
     id: 'schemer',
-    light: { hemiSky: '#aaa8dc', hemiGround: '#735e5e', hemiI: 1.15, key: '#ffae86', keyI: 2.0, fill: '#ecdcf2', fillI: 1.7 },
+    light: { hemiSky: '#aaa8dc', hemiGround: '#735e5e', hemiI: 1.9, key: '#ffae86', keyI: 2.6, fill: '#ecdcf2', fillI: 1.35 },
     sky: [[0, '#5d76b4'], [0.3, '#8b8ec6'], [0.55, '#bf9fc1'], [0.75, '#e5aeac'], [0.9, '#f1b797'], [1, '#f3bb94']],
-    fogNear: 22, fogFar: 75, keyAt: keyAtElevation(14), glow: 0.3, warm: 0.9, shadow: 0.85, wind: 1,
+    fogNear: 22, fogFar: 75, keyAt: keyAtElevation(20), glow: 0.3, warm: 0.9, shadow: 0.85, wind: 1,
   }),
 };
 
@@ -165,6 +171,28 @@ export function shadeOn(s: LightSet): number {
 /** A mood's light on a standing animal, as a share of the golden hour's (≥ 0.85: never dark). */
 export function lightShare(id: MoodId): number {
   return lightOn(MOODS[id].light) / lightOn(MOODS['gouden-uur'].light);
+}
+
+/** The light on the GROUND in a mood: the sky fill from above plus the key as high as the
+ *  sun stands (a low sun lights a flank fully but the ground only by sin(elevation)). Pure. */
+export function groundLight(id: MoodId): number {
+  const m = MOODS[id];
+  return luminance(m.light.hemiSky) * m.light.hemiI
+    + luminance(m.light.key) * m.light.keyI * Math.sin((keyElevation(m.keyAt) * Math.PI) / 180);
+}
+
+/** A mood's light on the ground, as a share of the golden hour's (≥ 0.85: never dark: a
+ *  search at dusk once looked almost like the night, 0.61). */
+export function groundShare(id: MoodId): number {
+  return groundLight(id) / groundLight('gouden-uur');
+}
+
+/** How an animal's side away from the sun stands against the ground it hides in, as a share
+ *  of the golden hour's: above 1 it glows against its ground (an easier search), below 1 it
+ *  sinks into it. A mood must make no search easier (design decision 1). Pure. */
+export function glowShare(id: MoodId): number {
+  const g = MOODS['gouden-uur'].light;
+  return (shadeOn(MOODS[id].light) / groundLight(id)) / (shadeOn(g) / groundLight('gouden-uur'));
 }
 
 /* ---------------------------------------------------- which mood, when ---- */
