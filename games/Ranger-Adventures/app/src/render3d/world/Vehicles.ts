@@ -237,6 +237,7 @@ export class Vehicles {
   private heliClimbRate = 0;
   private heliVignetteVal = 0;
   private readonly helipads: { x: number; z: number }[] = [];
+  private readonly padMeshes: THREE.Object3D[] = [];
   private readonly beacons: THREE.Object3D[] = [];
   private onHeliNear: (near: boolean) => void = () => {};
   private onHeliChange: (inHeli: boolean) => void = () => {};
@@ -627,7 +628,9 @@ export class Vehicles {
   placeHelipads(): void {
     const tex = Vehicles.helipadTexture();
     for (const p of PADS) {
-      this.scene.add(this.makeHelipad(p.x, p.z, tex));
+      const pad = this.makeHelipad(p.x, p.z, tex);
+      this.scene.add(pad);
+      this.padMeshes.push(pad);
       const beacon = Vehicles.makeBeacon();
       beacon.position.set(p.x, this.groundY(p.x, p.z), p.z);
       beacon.visible = true;                // warm-up; then shown only while flying: "land here"
@@ -755,6 +758,18 @@ export class Vehicles {
   /** The two helipads (their centres): keep-out ground for the roaming animals too. */
   pads(): readonly { readonly x: number; readonly z: number }[] {
     return this.helipads;
+  }
+
+  /** Run 6: for one render of a camera trap's photograph (World.snapshot), the ranger's
+   *  own machines step out of the picture — the jeep, the helicopter, their pads, beacons
+   *  and dust: the trap photographs the wild (the poacher's morning photo, the story's
+   *  clue, looked straight up the trail at the parked helicopter: "he came by
+   *  helicopter"). Returns how to put them back. */
+  outOfPicture(): () => void {
+    const all = [this.jeep, this.heli, this.dust, ...this.padMeshes, ...this.beacons].filter((o): o is THREE.Object3D => !!o);
+    const was = all.map((o) => o.visible);
+    for (const o of all) o.visible = false;
+    return () => { all.forEach((o, i) => { o.visible = was[i]; }); };
   }
 
   /** Run 6: the parked helicopter's whole reach from above (its centre, HELI_REACH: the

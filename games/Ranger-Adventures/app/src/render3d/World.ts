@@ -941,7 +941,8 @@ export class World {
    * of it ever reaches the screen): the renderer draws the view into a corner of the
    * canvas and it is copied out at once; the frame then draws over it. `prepare` may put
    * something in the picture for that one render (it returns how to take it out again).
-   * Resolves null without a renderer.
+   * A trap photographs the wild: the ranger's own jeep and helicopter are never in it
+   * (`Vehicles.outOfPicture`). Resolves null without a renderer.
    */
   snapshot(cam: THREE.Camera, w: number, h: number, prepare?: () => (() => void) | void): Promise<HTMLCanvasElement | null> {
     return new Promise((done) => this.shots.push({ cam, w, h, prepare, done }));
@@ -953,6 +954,7 @@ export class World {
       const job = this.shots.shift()!;
       if (!r) { job.done(null); continue; }
       const undo = job.prepare?.();
+      const machines = this.vehicles.outOfPicture();
       const out = document.createElement('canvas');
       out.width = job.w;
       out.height = job.h;
@@ -976,6 +978,7 @@ export class World {
         r.setScissor(sc);
         r.setScissorTest(scOn);
       } finally {
+        machines();
         if (typeof undo === 'function') undo();
       }
       job.done(out);
