@@ -318,7 +318,8 @@ export class Sky {
   /** A fade's next frame (eased); at its end the next mood is the sky, and a waiting one starts. */
   private stepMood(dt: number, reduced: boolean): void {
     if (this.moodT >= 1) return;
-    this.moodT = reduced ? 1 : Math.min(1, this.moodT + dt / this.moodDur);
+    // (a long frame on a busy machine never jumps the light: at most 1/20 s of fade a frame)
+    this.moodT = reduced ? 1 : Math.min(1, this.moodT + Math.min(dt, 0.05) / this.moodDur);
     if (this.moodT >= 1) {
       this.moodFrom = this.moodTo;
       paintDome(this.dome, this.moodTo);

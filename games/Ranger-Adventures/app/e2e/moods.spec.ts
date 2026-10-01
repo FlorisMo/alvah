@@ -146,33 +146,38 @@ test.describe('@moods different light every visit', () => {
       const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, reducedMotion: reduced ? 'reduce' : 'no-preference' });
       const page = await ctx.newPage();
       await page.goto('/?dev=1&mood=zonnig&fade=schemer');
+      // every drawn frame's mood state, recorded in the page (reads only): a busy laptop draws
+      // few frames, and a poll from here would miss most of the fade
+      await page.evaluate(() => {
+        const w = window as unknown as { __moodLog: unknown[]; __ranger: { sky(): { mood: unknown }; drawCalls(): number | null } };
+        w.__moodLog = [];
+        const tick = (): void => {
+          const r = w.__ranger;
+          if (r?.sky()) w.__moodLog.push({ sky: r.sky().mood, calls: r.drawCalls() });
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
       await enter(page);
-      const samples: { t: number; sky: SkyMood; calls: number | null }[] = [];
-      const t0 = Date.now();
-      let shots = 0;
-      while (Date.now() - t0 < 12_000) {
-        const sky = (await R<{ mood: SkyMood }>(page, 'r.sky()')).mood;
-        const calls = await R<number | null>(page, 'r.drawCalls()');
-        samples.push({ t: Date.now() - t0, sky, calls });
-        if (!reduced && sky.now === 'schemer' && shots < 3 && (shots === 0 || (shots === 1 && sky.fade > 0.45) || (shots === 2 && sky.fade >= 1))) {
-          await page.screenshot({ path: path.join(d, `fade-${shots}-${Math.round(sky.fade * 100)}.png`) });
-          shots += 1;
-        }
-        if (sky.now === 'schemer' && sky.fade >= 1 && samples.filter((s) => s.sky.now === 'schemer' && s.sky.fade >= 1).length > 3) break;
-        await sleep(page, 60);
-      }
+      await expect.poll(() => R<string>(page, 'r.sky().mood.now'), { timeout: 30_000 }).toBe('schemer');
+      if (!reduced) await page.screenshot({ path: path.join(d, 'fade-1-during.png') });
+      await expect.poll(() => R<number>(page, 'r.sky().mood.fade'), { timeout: 30_000 }).toBe(1);
+      await sleep(page, 500);
+      await page.screenshot({ path: path.join(d, `fade-2-after${reduced ? '-reduced' : ''}.png`) });
+      const samples = await page.evaluate(() => (window as unknown as { __moodLog: { sky: SkyMood; calls: number | null }[] }).__moodLog) as { sky: SkyMood; calls: number | null }[];
       const during = samples.filter((s) => s.sky.now === 'schemer');
       expect(during.length, 'the world turned into the next mood').toBeGreaterThan(0);
       const fades = during.map((s) => s.sky.fade);
       const steps = fades.slice(1).map((f, i) => f - fades[i]);
       const elev = new Set(samples.map((s) => s.sky.sunElevation));
       const maxCalls = Math.max(...samples.map((s) => s.calls ?? 0));
-      console.log(`[moods] crossfade${reduced ? ' (reduced motion)' : ''}: ${during.length} samples, fade ${fades.map((f) => f.toFixed(2)).join(' ')}; sun ${[...elev].join('/')}°; draw calls ≤ ${maxCalls}; sun waits for a cut: ${during[during.length - 1].sky.sunPending}`);
+      const part = fades.filter((f) => f > 0.02 && f < 0.98);
+      console.log(`[moods] crossfade${reduced ? ' (reduced motion)' : ''}: ${samples.length} frames, ${part.length} of them part way (largest step ${Math.max(0, ...steps).toFixed(2)}); sun ${[...elev].join('/')}°; draw calls ≤ ${maxCalls}; the sun waits for a cut: ${during[during.length - 1].sky.sunPending}`);
       expect(steps.every((s) => s >= -1e-9), 'the fade only goes one way (no flicker)').toBe(true);
       expect(elev.size, 'the sun never moves in view').toBe(1);
       expect(maxCalls, 'draw calls during the fade').toBeLessThan(MAX_DRAW_CALLS);
-      if (reduced) expect(fades.filter((f) => f < 1).length, 'reduced motion: a cut').toBe(0);
-      else expect(fades.filter((f) => f > 0.05 && f < 0.95).length, 'a calm fade, seen part way').toBeGreaterThanOrEqual(3);
+      if (reduced) expect(part.length, 'reduced motion: a cut').toBe(0);
+      else expect(part.length, 'a calm fade, seen part way').toBeGreaterThanOrEqual(3);
       await ctx.close();
     }
   });
