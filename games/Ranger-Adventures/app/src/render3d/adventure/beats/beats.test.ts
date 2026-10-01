@@ -22,7 +22,7 @@ const QUEUE: WisselItem[] = [
   { id: 'edelhert', dag: true }, { id: 'das', dag: false }, { id: 'ree', dag: true },
   { id: 'nachtzwaluw', dag: false }, { id: 'wildzwijn', dag: false }, { id: 'ree', dag: true },
 ];
-const TRIAL: WisselTrial = { queue: QUEUE, flipEvery: 2 };
+const TRIAL: WisselTrial = { queue: QUEUE, flipEvery: 2, flips: 2 }; // (run 7: a turn to night and one back, as from band 4)
 
 test('the wildcamera\'s places are "open plek" and "het bosje", said by its rule', () => {
   assert.deepEqual(placeNames(REGEL), { open: 'open plek', hol: 'het bosje' });
@@ -75,7 +75,7 @@ test('the aim scores exactly what the shared core scores, for any taps', () => {
   }
   const aim = new AimRun(TRIAL, REGEL);
   for (const b of p) aim.pick(b);
-  assert.deepEqual(aim.summary(), { trials: 1, correct: 1 });
+  assert.deepEqual(aim.summary(), { trials: 6, correct: 6, switches: 2, switchErrors: 0 });
 });
 
 test('the callers call in the sequence\'s order, each at least 0.65 s, calm gaps; the core scores as ever', () => {

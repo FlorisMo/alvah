@@ -16,6 +16,7 @@
  */
 
 import type { BeatSummary } from '../core/skill';
+import { looseRng } from '../core/play.ts';
 
 export interface RoepVogel {
   id: string;
@@ -114,7 +115,7 @@ export class RoepRun {
   private lastDir = 0;
   private reversalCount = 0;
 
-  constructor(trial: RoepTrial, rng: () => number = Math.random) {
+  constructor(trial: RoepTrial, rng: () => number = looseRng('roep')) {
     this.vogels = trial.vogels;
     this.ronden = Math.max(1, trial.ronden);
     this.afleidersNu = clampInt(trial.startAfleiders, 1, this.vogels.length - 1);
