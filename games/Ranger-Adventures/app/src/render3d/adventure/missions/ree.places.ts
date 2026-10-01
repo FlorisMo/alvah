@@ -307,7 +307,7 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     graze: [{ x: -24.1, z: -46.5 }, { x: -24.9, z: -45.0 }],
     poolIn: { leg: 1, at: 0.5, side: 1 }, poolOut: { leg: 0, at: 0.5, side: 1 },
     way: [],
-    hide: { x: -24.0, z: -39.8 }, leave: { u: 1.4, v: -0.8 }, hideJuniper: { u: -1.45, v: 0.25 }, hideLog: { u: -0.95, v: 1.1 },
+    hide: { x: -25.0, z: -37.5 }, leave: { u: 2.8, v: -1.8 }, hideJuniper: { u: -1.45, v: 0.25 }, hideLog: { u: -0.95, v: 1.1 },
     watchMid: 0.5, watchHalfW: 2.8,
   }),
 };
@@ -384,7 +384,7 @@ export function drinkSpot(doe: Spot & { yaw: number }, len: number, side: 1 | -1
 /** Where the family lives after (mother and calf graze together out on the heath between
  *  the stands, south-west of the copse): within their walking reach (`HOME_REACH`) of
  *  every layout's meeting place, so after the reunion they walk there, never a cut. */
-const HOME: Spot = { x: -11.5, z: -41.8 };
+const HOME: Spot = { x: -12.0, z: -44.0 };
 
 /** The places table: the marker and the home, and every layout's places under its letter
  *  (`A.search`, `B.hide` …: the jeep is parked out of all of them). `hide`, `hideLeave`

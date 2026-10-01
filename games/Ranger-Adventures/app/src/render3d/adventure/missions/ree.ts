@@ -50,7 +50,7 @@ import { TREE_BASE_H } from '../../world/Forest';
 import { ReeHome, SEARCH_GLIMPSE } from './ree.home';
 import { drawReePlay, lastReeVariants, VARIANT_KEY, type CalfMoment, type ReePlay } from './ree.variety';
 import {
-  REE_HOME, REE_LAYOUTS, COPSE_TREES, CALF_DOELEN, POOL, reeClearings, slotTrail, calfAt, calfTalkOf, calfBolt, calfView,
+  REE_HOME, REE_LAYOUTS, REE_RESIDENTS, COPSE_TREES, CALF_DOELEN, POOL, reeClearings, slotTrail, calfAt, calfTalkOf, calfBolt, calfView,
   drinkSpot, leaveView, poolSides, walkVia, type PoolSpot, type ReeLayout,
 } from './ree.places';
 
@@ -440,6 +440,11 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
     await k.wait(4.8);
   });
   k.stats.reunion_gap = Math.round(dist(calf, doe) * 100) / 100;
+  // they set off home together across the heath, the calf at her pace (he sees them go
+  // while the raaf talks; where they met lies up to ~14 m from their home)
+  const after = Object.fromEntries(REE_RESIDENTS.map((r) => [r.key, r.after!]));
+  void doe.go(after.doe.x, after.doe.z, { speed: 'walk', face: after.doe.yaw });
+  void calf.go(after.calf.x, after.calf.z, { speed: 0.8, face: after.calf.yaw });
   k.ui.watching(false);
   // 14 · the raaf: a mother leaves her calf alone for a while; that keeps it safe
   await k.fact(1);

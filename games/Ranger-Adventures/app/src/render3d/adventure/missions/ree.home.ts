@@ -26,6 +26,7 @@ import { StandDecoys, decoyClumps, type Decoy, type DecoyAt } from '../decoys';
 import { groundDecal, groundStrip } from '../decal';
 import { atLocal, dist, segDist, stream, toLocal } from '../places';
 import { heightFor } from '../../play/spawn';
+import { lodGeometries, lodMaterial } from '../../Lod';
 import { lyingHeight, LEG_SHARE } from '../../play/pose';
 import { boxObstacle } from '../../CharacterController';
 import { SIZE } from '../../AnimalScale';
@@ -51,6 +52,15 @@ const DROPS = 9;
 /** The juniper's shape: taller than the world's round bush, and slimmer. */
 const JUNIPER_TALL = 1.25;
 const JUNIPER_SLIM = 0.82;
+
+/** Beyond this far (m) from the lens a juniper or a log draws its light copy. */
+const FAR_COPY_M = 16;
+/** The light copies' triangles (the real juniper has ~12.4k, the log ~11k). */
+const FAR_JUNIPER_TRIS = 1800;
+const FAR_LOG_TRIS = 1200;
+/** The light copies lose the model's normal-map shading: this brings their colour back
+ *  to the real one's apparent tone (as the forest's far trees, world/Forest LOD_TONE). */
+const FAR_TONE = 0.86;
 
 /** The leaves of a tussock in a stand that is not this play's (a whole one has 52). */
 const LIGHT_BLADES = 20;
@@ -146,9 +156,9 @@ export interface ReeLaid {
 /** The reekalf home, as the adventure uses it. */
 export class ReeHome implements HomeDressing {
   readonly group = new THREE.Group();
-  /** each stand's tall grass (and the rushes at its pools) is its own field, and so is
-   *  each cover's bracken: a field out of the picture is not drawn (one field over all
-   *  three stands drew every stand whenever one was in view) */
+  /** each stand's tall grass is its own field, and the covers' bracken one more (the
+   *  rushes at each pool in the field nearest it): a field out of the picture is not
+   *  drawn (one field over all three stands drew every stand whenever one was in view) */
   private readonly standCovers = new Map<ReeLayoutId, CoverField>();
   private readonly coverFields = new Map<Cover, CoverField>();
   /** the stems a lens at the search's eye sees the calf's back past (stats) */
@@ -167,6 +177,10 @@ export class ReeHome implements HomeDressing {
   /** every stand's stems as they were built (a play's glimpse window is opened from these) */
   private readonly built = new Map<ReeLayoutId, { h: number; lx: number; lz: number; r: number }[]>();
   private readonly spawned: { dispose(): void }[] = [];
+  /** the far copies' material (vertex colours, its own: a home's rest fades it) and the
+   *  height each kind's copy was baked at */
+  private readonly farMat = lodMaterial().clone();
+  private readonly farRef = new Map<string, number>();
   private readonly made: THREE.Mesh[] = [];
   private readonly rings: Ring[] = [];
   private readonly ringMat: THREE.MeshBasicMaterial;
@@ -190,7 +204,10 @@ export class ReeHome implements HomeDressing {
     const rnd = stream(41);
     /** each stand's clumps, and each cover's */
     const standClumps_ = new Map<ReeLayoutId, Clump[]>();
-    const coverClumps = new Map<Cover, Clump[]>([[COPSE, []], [THICKET, []]]);
+    // (the copse's and the thicket's bracken are one field: the thicket is small, and a
+    // field of its own would cost three more draw calls wherever both are in view)
+    const bracken: Clump[] = [];
+    const coverClumps = new Map<Cover, Clump[]>([[COPSE, bracken], [THICKET, bracken]]);
     const decoysAt = new Map<ReeLayoutId, DecoyAt[]>();
 
     /* -- the stands: tall pijpenstrootje tussocks, a ring round every calf spot -- */
@@ -285,7 +302,8 @@ export class ReeHome implements HomeDressing {
       if (tussock) this.fullTussock.set(l.id, tussock.geometry);
       this.built.set(l.id, field.stems.map((s) => ({ h: s.h, lx: s.lx, lz: s.lz, r: s.r })));
     });
-    [COPSE, THICKET].forEach((c, i) => this.coverFields.set(c, new CoverField({ parent: this.group, groundY: g, clumps: coverClumps.get(c)!, seed: 31 + i * 7 })));
+    const brackenField = new CoverField({ parent: this.group, groundY: g, clumps: bracken, seed: 31 });
+    for (const c of [COPSE, THICKET]) this.coverFields.set(c, brackenField);
     for (const l of LAYOUTS) {
       this.gapClumps.set(l.id, this.coverFields.get(l.cover)!.nearestClump(l.gap.x, l.gap.z, (c) => c.kind !== 'grass')?.i ?? 0);
     }
@@ -302,7 +320,7 @@ export class ReeHome implements HomeDressing {
       // a Veluwe juniper grows up more than out: the world's round bush, drawn slimmer
       void env.spawnPlant('prop-juniper-bush', h / JUNIPER_TALL).then((s) => {
         if (!s) return;
-        const r = s.root as THREE.Object3D;
+        const r = this.withFarCopy(s.root as THREE.Object3D, 'prop-juniper-bush', h, FAR_JUNIPER_TRIS);
         r.position.set(x, g(x, z) - 0.03, z);
         r.rotation.y = turn;
         r.scale.multiply(new THREE.Vector3(JUNIPER_SLIM, JUNIPER_TALL, JUNIPER_SLIM));
@@ -319,7 +337,7 @@ export class ReeHome implements HomeDressing {
       const log = l.hideLog;
       void env.spawnPlant('prop-fallen-log', SIZE.boomstam.h * 0.9).then((s) => {
         if (!s) return;
-        const r = s.root as THREE.Object3D;
+        const r = this.withFarCopy(s.root as THREE.Object3D, 'prop-fallen-log', SIZE.boomstam.h * 0.9, FAR_LOG_TRIS);
         r.position.set(log.x, g(log.x, log.z) - 0.04, log.z);
         r.rotation.y = log.turn;
         this.group.add(r);
@@ -427,6 +445,31 @@ export class ReeHome implements HomeDressing {
     for (const [id, w] of this.wissels) w.visible = id === l.id;
   }
 
+  /**
+   * A solid piece (a juniper, a log) with a light copy for afar: the world's load-time
+   * simplifier (Lod.ts, as the forest's far trees) bakes the model once per kind, and a
+   * THREE.LOD draws the real model within `FAR_COPY_M` of the lens and the copy beyond
+   * (eight junipers and three logs cost ~140k triangles in a view across the heath).
+   * `h`: this piece's height (the copy was baked at the first one's; it scales with it).
+   */
+  private withFarCopy(root: THREE.Object3D, kind: string, h: number, tris: number): THREE.Object3D {
+    const key = `ree:${kind}`;
+    if (!this.farRef.has(key)) this.farRef.set(key, h);
+    const [geo] = lodGeometries(key, root, [tris]);
+    if (!geo) return root;
+    if (!geo.userData.toned) {
+      const col = geo.attributes.color as THREE.BufferAttribute;
+      for (let i = 0; i < col.array.length; i++) (col.array as Float32Array)[i] *= FAR_TONE;
+      geo.userData.toned = true;
+    }
+    const lod = new THREE.LOD();
+    lod.addLevel(root, 0);
+    const far = new THREE.Mesh(geo, this.farMat);
+    far.scale.setScalar(h / this.farRef.get(key)!);
+    lod.addLevel(far, FAR_COPY_M, 0.1);
+    return lod;
+  }
+
   /** The played stand's tall grass (the search's cover: its glimpse, the calf's stems). */
   get cover(): CoverField { return this.standCovers.get(this.laid.layout.id)!; }
 
@@ -474,7 +517,7 @@ export class ReeHome implements HomeDressing {
 
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void {
     for (const f of this.standCovers.values()) f.update(dt, t, reduced, movers);
-    for (const f of this.coverFields.values()) f.update(dt, t, reduced, movers);
+    for (const f of new Set(this.coverFields.values())) f.update(dt, t, reduced, movers);
     // a boot in the pool plashes (whoever's, whenever: a mission's wrong answer or a walk
     // straight through it): a plash going in, rings at every step while he wades on
     const me = movers.find((m) => m.ranger);
@@ -527,7 +570,8 @@ export class ReeHome implements HomeDressing {
       f.dispose();
     }
     this.lightTussock.dispose();
-    for (const f of this.coverFields.values()) f.dispose();
+    this.farMat.dispose();
+    for (const f of new Set(this.coverFields.values())) f.dispose();
     for (const s of this.stands.values()) s.dispose();
     for (const s of this.spawned) s.dispose();
     for (const m of this.made) { m.geometry.dispose(); (m.material as THREE.Material).dispose(); }
