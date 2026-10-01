@@ -13,7 +13,7 @@ import test from 'node:test';
 import {
   EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, WOODPECKER, SEEDLING_AT, JAY_GROUND,
   GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, SEE_D, SEEN_X, WAIT_H, HIDE, gladeSpots, eekhoornTreeClear, eekhoornClearings, branchStub,
-  seatOf, watchSpot, WATCH_R, SEAT_STOP, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo,
+  seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo,
 } from './eekhoorn.places.ts';
 import { STUB_TILT } from '../../world/Forest.ts';
 import { biomeAt, VEN_CENTER, VEN_SHORE_R } from '../../Biomes.ts';
@@ -164,6 +164,37 @@ test('the follow: from where he walks up, the squirrel on its low stub sits in t
   for (const [t, from] of [[TREE.a, P.marker], [TREE.c, watchSpot(TREE.a)]] as const) {
     const back = headingTo(t, from);
     assert.ok(Math.abs(Math.atan2(Math.sin(t.branch!.ang - back), Math.cos(t.branch!.ang - back))) < 0.7);
+  }
+});
+
+test('the follow: a child who walks straight at the squirrel till the trunk stops him is right at it, and it shows past his head', () => {
+  // (played 2026-10-01: steering at it by keys, he ended 0.7-0.9 m from it, its ears over
+  // his hair in the lens, and nothing happened — his own body hid it from "seen")
+  for (const t of [TREE.a, TREE.c]) {
+    const seat = seatOf(t);
+    const sq = { ...seat, y: t.branch!.h + 0.15 };
+    const stop = trunkClear(t) - 0.25; // (the trunk's collider and the boy: where it stops him)
+    // from anywhere on its side of the tree (within a quarter turn of where its stub points)
+    for (let off = -1.5; off <= 1.5 + 1e-9; off += 0.1) {
+      const a = t.branch!.ang + off;
+      let me = { x: seat.x + Math.sin(a) * 4, z: seat.z + Math.cos(a) * 4 };
+      const h = headingTo(me, seat);
+      while (dist(me, t) > stop && dist(me, seat) > 0.05) me = { x: me.x + Math.sin(h) * 0.02, z: me.z + Math.cos(h) * 0.02 };
+      assert.ok(dist(me, seat) <= AT_IT, `from ${off.toFixed(1)} rad he stops ${dist(me, seat).toFixed(2)} m from it (≤ ${AT_IT})`);
+      // the lens behind him — straight behind, or still swinging round after him (up to
+      // ~35° off) — sees a bit of it past the bark (his head in front of it does not count;
+      // at the trunk's edge in the picture it shows past the bark, not past the ridges)
+      const body = [-0.07, 0, 0.07].flatMap((dx) => [0.05, 0.2].map((up) => ({ x: sq.x + Math.cos(t.branch!.ang) * dx, y: t.branch!.h + up, z: sq.z - Math.sin(t.branch!.ang) * dx })));
+      for (const swing of [-0.6, -0.3, 0, 0.3, 0.6]) {
+        const ch = h + swing;
+        const eye = { x: me.x - Math.sin(ch) * LENS.back, y: LENS.up, z: me.z - Math.cos(ch) * LENS.back };
+        const bark: Upright[] = hiders(eye, me).slice(0, -1).map((u) => {
+          const tr = HOME_TREES.find((o) => o.x === u.x && o.z === u.z)!;
+          return { ...u, r: (y: number) => barkRadius(trunk(tr), Math.max(0, y)) };
+        });
+        assert.ok(body.some((b) => lineClear(eye, b, bark)), `from ${off.toFixed(1)} rad, the lens ${swing} rad round: a bit of it shows past the bark`);
+      }
+    }
   }
 });
 

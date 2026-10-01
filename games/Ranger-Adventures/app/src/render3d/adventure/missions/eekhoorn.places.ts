@@ -175,6 +175,11 @@ export const SEE_D = 2.2;
  *  from and it sits there (m): walking on at it, the lens turns to it, it comes within
  *  SEE_D, and it is still over his shoulder, not behind his head. */
 export const SEAT_STOP = 1.7;
+/** Right at it (m): he walked up to the squirrel on its stub — under it, the trunk
+ *  stopping him — and that counts as soon as a bit of it shows in the picture: his own
+ *  head in front of it in the lens behind him hides nothing from HIM (hide-and-seek's
+ *  `near` rule). Walking straight at it, the trunk stops him well inside this. */
+export const AT_IT = 1.6;
 /** He has SEEN it when most of it is well inside the picture — within this much of the
  *  half-width from the middle (0.7: the middle 70 % of the screen; at the very edge it is
  *  there, but a child has not seen it yet) — and not behind a trunk or his own body. */
