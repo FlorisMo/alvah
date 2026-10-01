@@ -223,7 +223,8 @@ export function playSimon3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Bea
      *  (so every right click visibly counts, even when the same animal calls twice) */
     function showProgress(): void {
       const el = ctx.prompt.querySelector('.p3-dots');
-      if (el) el.textContent = run.sequence.map((_, i) => (i < run.echoIndex ? '●' : '○')).join('\u2009'); // (a thin space: seven dots still fit beside the line)
+      if (el) el.textContent = run.sequence.map((_, i) => (i < run.echoIndex ? '●' : '○')).join('\u2009');
+      el?.classList.toggle('p3-dots--long', run.sequence.length > 5); // (smaller from six: seven still fit beside the line)
     }
 
     function startEcho(): void {

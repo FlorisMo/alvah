@@ -105,7 +105,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   };
   const progress = (): void => {
     const el = card?.querySelector('.p3-dots');
-    if (el) el.textContent = run.sequence.map((_, i) => (i < run.echoIndex ? '●' : '○')).join('\u2009'); // (a thin space: seven dots still fit beside the line)
+    if (el) el.textContent = run.sequence.map((_, i) => (i < run.echoIndex ? '●' : '○')).join('\u2009');
+    el?.classList.toggle('p3-dots--long', run.sequence.length > 5); // (smaller from six: seven still fit beside the line)
   };
   const speak = (t: string): void => { if (settings.voorlezen) narrator.speak(t); };
   const callFrom = (id: string): number => {
