@@ -257,7 +257,7 @@ export class Markers {
         stand.add(proceduralTotem(mk.color)); // instant stand-in
         group.add(stand);
         animalAt = { x: ax, z: az, r: Math.max(0.3, len * 0.5), h: mk.height };
-        if (len >= SOLID_LEN) this.obstacles.push({ ...boxObstacle(ax, az, 0.13 * len, 0.45 * len, yaw), h: mk.height * 0.7 });
+        if (len >= SOLID_LEN) this.obstacles.push({ ...boxObstacle(ax, az, 0.13 * len, 0.45 * len, yaw), h: mk.height * 0.7, marker: mk.missionId });
       }
       this.scene.add(group);
       const entry = {

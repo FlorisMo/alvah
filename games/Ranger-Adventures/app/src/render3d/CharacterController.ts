@@ -44,6 +44,9 @@ export interface Obstacle {
   /** Run 6: what is DRAWN there (a radius, m), when `r` is wider: a person's body inside
    *  the personal space the walker keeps (the dev read's clear line tests the body). */
   body?: number;
+  /** Run 6: the mission whose marker animal this is (it stands beside its ring): it steps
+   *  away with its marker while that mission's game runs, so the game may use its ground. */
+  marker?: string;
 }
 
 /** The ranger's clearance from a building wall (m). */

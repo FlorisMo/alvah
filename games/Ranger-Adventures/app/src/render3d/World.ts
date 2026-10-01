@@ -77,6 +77,10 @@ export interface MissionMode {
   focus?: readonly { x: number; y: number; z: number }[];
 }
 
+/** How far round a home's own ground (its clearings, m) its dressing reaches: the
+ *  bushes and look-alikes laid round a glade or a thicket. */
+const HOME_MARGIN = 1.5;
+
 /** A mission's home, built with the world (world/Residents.ts). */
 export interface WorldHome {
   spec: HomeSpec;
@@ -197,6 +201,9 @@ export class World {
   // soft-collision blockers (pine trunks) + the kinematic move limits — the
   // ranger slides around trees, can't wade into the ven, can't leave the world.
   private readonly obstacles: Obstacle[] = [];
+  /** Run 6: the adventures' homes, by mission — their glades, mud and turned earth (their
+   *  `clearings`): another mission's staged game is never laid into them (playClear) */
+  private homeGround: { missionId: string; x: number; z: number; r: number }[] = [];
   private readonly limits: MoveLimits = {
     // F-11 (P4.6 rim re-judge): the calm forest edge sits at 75 m, NOT the old 116 m.
     // The Meshy ranger rig is a ~85-unit SKELETON scaled ×0.02 (bind-pose mesh geometry
@@ -259,6 +266,7 @@ export class World {
     this.dressing.clearings = (opts.homes ?? []).flatMap((h) => h.clearings ?? []);
     this.dressing.treeClearings = (opts.homes ?? []).flatMap((h) => h.treeClearings ?? []);
     this.dressing.homeTrees = (opts.homes ?? []).flatMap((h) => h.trees ?? []);
+    this.homeGround = (opts.homes ?? []).flatMap((h) => (h.clearings ?? []).map((c) => ({ missionId: h.spec.missionId, x: c.x, z: c.z, r: c.r })));
     // the roaming animals slide round the world's solids and keep off the mission markers'
     // ground and the helipads (run 6: they see the jeep and the ranger coming)
     this.fauna = new Fauna({
@@ -1222,11 +1230,18 @@ export class World {
   /** A mini-game patch is free at (x,z) within `r` m: dry land (not the ven), outside
    *  every solid prop (a tree's CROWN, not just its trunk; the cabin's porch, not just
    *  its walk-around circle), and clear of the other missions' animals and the two
-   *  people. The approached marker is exempt: the stage hides it while the game runs. */
+   *  people, and off another mission's home (its glade, its mud, the bushes round them:
+   *  the nachtronde's den was laid in the wildcamera's thicket, half behind its bush). The
+   *  approached marker is exempt, its animal beside the ring too: the stage hides them
+   *  while the game runs. */
   private playClear(x: number, z: number, r: number, except: string | null = this.nearId): boolean {
     if (this.limits.blocked?.(x, z)) return false;
     if (this.progress.blocks(x, z, r, except)) return false; // a finished mission's family stays out of a game
+    for (const c of this.homeGround) {
+      if (c.missionId !== except && Math.hypot(c.x - x, c.z - z) < c.r + HOME_MARGIN + r) return false;
+    }
     for (const o of this.obstacles) {
+      if (o.marker !== undefined && o.marker === except) continue;
       const reach = o.r + (o.tree ? 1.6 : o.r >= 1.5 ? 1.0 : 0);
       if (Math.hypot(o.x - x, o.z - z) < reach + r) return false;
     }
