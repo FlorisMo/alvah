@@ -251,10 +251,14 @@ test('hide-and-seek at pine C: it keeps the trunk between them, slips round once
     let round = 0; let found = false;
     let goal = roundStep(c, me, sqAng);
     const dt = 0.05;
+    // (golden walks until it is within the hint's radius, then reads the hint anew — and
+    // stands, when the new one is within its radius too: 2026-10-01 it stood 10 min on
+    // its side of the tree, facing along the trunk, the lens beside the bark)
+    const stopAt = (g: { r?: number }): number => g.r ?? WATCH_R;
     for (let t = 0; t < 40 && !found; t += dt) {
-      if (dist(me, goal) < 1.0) goal = roundStep(c, me, sqAng); // (golden reads the hint anew on arrival)
+      if (dist(me, goal) < stopAt(goal)) goal = roundStep(c, me, sqAng);
       const dd = dist(me, goal);
-      if (dd > 0.05) {
+      if (dd >= stopAt(goal)) {
         // (each straight piece clears every trunk)
         for (const [i, o] of HOME_TREES.entries()) assert.ok(segDist(o, me, goal) > trunkClear(o) - 0.3, `the way round clears the trunks (tree ${i}: ${segDist(o, me, goal).toFixed(2)} from ${k}/${d})`);
         heading = headingTo(me, goal);

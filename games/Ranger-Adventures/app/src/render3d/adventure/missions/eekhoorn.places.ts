@@ -358,18 +358,29 @@ export function slipSecs(a: number, b: number): number {
 /** Golden's walk hint round the tree (a perfect player walks straight, then looks): round
  *  the tree `OUT_R` m out, at most `ROUND_STEP` rad at a time, the short way toward where
  *  it clings; once he is out on its side, in toward the trunk to `IN_R` m (walking at the
- *  tree, the follow lens behind him looks at it). */
+ *  tree, the follow lens behind him looks at it) — all the way in (`IN_STOP`), and from
+ *  right by that spot a step further in to `IN_NEAR`: he must walk AT the tree. Golden
+ *  stops within a hint's radius, and a step in that was within it already left him
+ *  standing on its side, still facing along the trunk from his walk round, the lens
+ *  beside the bark where the squirrel clings on the trunk's edge in the picture, counted
+ *  hidden — for good (4 of 13 plays, 2026-10-01). */
 const OUT_R = 3.0;
 const IN_R = 2.3;
+const IN_NEAR = 1.6;
+const IN_STOP = 0.5;
 const ROUND_STEP = 1.05;
 const ON_ITS_SIDE = 0.3;
-export function roundStep(t: HomeTree, me: Spot, sqAng: number): Spot {
+export function roundStep(t: HomeTree, me: Spot, sqAng: number): Spot & { r?: number } {
   const him = headingTo(t, me);
   const off = wrapA(sqAng - him);
-  if (Math.abs(off) <= ON_ITS_SIDE) return wayTo(me, { x: t.x + Math.sin(sqAng) * IN_R, z: t.z + Math.cos(sqAng) * IN_R });
   const a = him + Math.sign(off) * Math.min(ROUND_STEP, Math.abs(off));
-  // (round a neighbour's trunk in the way, too)
-  return wayTo(me, { x: t.x + Math.sin(a) * OUT_R, z: t.z + Math.cos(a) * OUT_R });
+  const out = { x: t.x + Math.sin(a) * OUT_R, z: t.z + Math.cos(a) * OUT_R };
+  // (round a neighbour's trunk in the way, too) — unless he is on its side, or so near it
+  // that the step round would not move him at all (within a hint's radius): then in
+  if (Math.abs(off) > ON_ITS_SIDE && dist(me, out) >= WATCH_R + 0.2) return wayTo(me, out);
+  const at = (d: number): Spot => ({ x: t.x + Math.sin(sqAng) * d, z: t.z + Math.cos(sqAng) * d });
+  const d = dist(me, at(IN_R)) < IN_STOP + 0.4 ? IN_NEAR : IN_R;
+  return { ...wayTo(me, at(d)), r: IN_STOP };
 }
 
 /** Who lives here: the squirrel, round its pine by the marker before; at its glade after,
