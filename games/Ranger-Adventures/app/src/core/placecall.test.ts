@@ -19,3 +19,12 @@ test('a squeak you can place: left/right by its bearing, louder when near', () =
   let prev = 2;
   for (let d = 1; d < 26; d += 1) { const g = placeCall(0, d, L).gain; assert.ok(g <= prev + 1e-12); prev = g; }
 });
+
+test('a call a story wants followed from far off carries its reach (the piglet across the meadow)', () => {
+  const L = { x: 0, z: 0, yaw: 0 };
+  assert.deepEqual(placeCall(0, 15, L, 25), placeCall(0, 15, L), 'the default reach is the 25 m it always was');
+  assert.ok(placeCall(0, 34, L, 40).gain > 0.08, 'heard (softly) 34 m off with a 40 m reach');
+  assert.equal(placeCall(0, 41, L, 40).gain, 0, 'silent past its reach');
+  assert.ok(placeCall(0, 10, L, 40).gain > placeCall(0, 30, L, 40).gain, 'louder as he comes near');
+  assert.deepEqual(placeCall(-5, 20, L, 40).pan, placeCall(-5, 20, L).pan, 'placed left/right the same');
+});

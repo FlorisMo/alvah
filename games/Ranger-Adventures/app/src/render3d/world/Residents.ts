@@ -97,8 +97,10 @@ export interface ResidentGroup {
   missionId: string;
   actors: Readonly<Record<string, Actor>>;
   dressing: HomeDressing | null;
-  /** switch a resident's calls on or off while it is borrowed (a squeak to follow) */
-  voice(key: string, on: boolean): void;
+  /** switch a resident's calls on or off while it is borrowed (a squeak to follow);
+   *  `far` (m): meanwhile it calls while he is that far off and is heard that far (a
+   *  squeak he follows across a meadow), instead of its free-roam reach */
+  voice(key: string, on: boolean, far?: number): void;
 }
 
 interface Home {
@@ -112,7 +114,7 @@ interface Home {
   state: HomeState;
   borrowed: boolean;
   rest: FarRest;
-  voices: Map<string, { next: number; on: boolean }>;
+  voices: Map<string, { next: number; on: boolean; far: number | null }>;
   centre: { x: number; z: number };
   /** free roam: how each animal is reacting to the ranger (see `react`) */
   reacting: Map<string, Reaction>;
@@ -194,7 +196,7 @@ export class Residents {
       const a = body?.(r, aenv, height, dressing) ?? new Actor(r.key, r.animal, aenv, { height });
       actors.set(r.key, a);
       home.ids.set(r.key, `${spec.missionId}:${r.key}`);
-      if (r.voice) home.voices.set(r.key, { next: 3 + Math.random() * 4, on: true });
+      if (r.voice) home.voices.set(r.key, { next: 3 + Math.random() * 4, on: true, far: null });
     }
     this.homes.set(spec.missionId, home);
     this.lay(home, 'before', false);
@@ -237,7 +239,7 @@ export class Residents {
       missionId,
       actors: Object.fromEntries(home.actors),
       dressing: home.dressing,
-      voice: (key, on) => { const v = home.voices.get(key); if (v) { v.on = on; if (on) v.next = Math.min(v.next, 1.2); } },
+      voice: (key, on, far) => { const v = home.voices.get(key); if (v) { v.on = on; v.far = on ? far ?? null : null; if (on) v.next = Math.min(v.next, 1.2); } },
     };
   }
 
@@ -246,7 +248,7 @@ export class Residents {
     const home = this.homes.get(missionId);
     if (!home) return;
     home.borrowed = false;
-    for (const v of home.voices.values()) v.on = true;
+    for (const v of home.voices.values()) { v.on = true; v.far = null; }
     this.lay(home, state, fresh && !this.env.reduced());
   }
 
@@ -320,7 +322,8 @@ export class Residents {
       // (a borrowed home counts as near — it is where the mission plays — so it is drawn
       // however far the lens, and once given back it fades out calmly if it is far, never
       // blinks from a rest it had before the mission)
-      const d = home.borrowed ? 0 : Math.hypot(home.centre.x - lx, home.centre.z - lz);
+      // (a home spread over ground rests only once the lens is far from all of it)
+      const d = home.borrowed ? 0 : (home.spec.spread ?? []).reduce((m, s) => Math.min(m, Math.hypot(s.x - lx, s.z - lz)), Math.hypot(home.centre.x - lx, home.centre.z - lz));
       const k = home.rest.step(d, dt, reduced);
       restFar(home.group, k);
       for (const q of home.details) {
@@ -437,11 +440,11 @@ export class Residents {
       if (!v.on) continue;
       v.next -= dt;
       if (v.next > 0) continue;
-      const near = Math.hypot(a.x - ranger.x, a.z - ranger.z) <= voice.within;
+      const near = Math.hypot(a.x - ranger.x, a.z - ranger.z) <= (v.far ?? voice.within);
       // never over a spoken line: try again in a moment
       const speaking = typeof window !== 'undefined' && !!window.speechSynthesis?.speaking;
       if (!near || speaking || !geluid) { v.next = near ? 0.8 : 1.5; continue; }
-      Sound.callAt(voice.call, a.x, a.z, listenerOf(camera));
+      Sound.callAt(voice.call, a.x, a.z, listenerOf(camera), v.far ?? undefined);
       a.called(); // (a squirrel flicks its tail as it chatters)
       v.next = voice.every[0] + Math.random() * (voice.every[1] - voice.every[0]);
     }

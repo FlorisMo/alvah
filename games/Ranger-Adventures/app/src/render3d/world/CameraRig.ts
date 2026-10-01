@@ -45,6 +45,13 @@ export interface CameraRigHost {
    *  helicopter's whole reach (its rotor overhangs the body circles it collides with).
    *  `visit` gets a centre and a radius; it must not allocate. */
   lensKeepOut(visit: (x: number, z: number, r: number) => void): void;
+  /** Run 6 polish: the PARKED jeep, for the walk lens: its body circles as they stand in
+   *  the collision list (the walker's keep-out ring, `room` wider than the body) and its
+   *  roof (world y); null while it is driven or not placed. The walk boom never pulls in
+   *  for it (he stands right beside it to board it): it fades while it stands between the
+   *  lens and him, as a tree does (`fadeJeep`: attack at once, release eased by `release`). */
+  parkedJeep(): { circles: readonly Obstacle[]; room: number; roof: number } | null;
+  fadeJeep(target: number, release: number): void;
 }
 
 /** A creature standing on the ground: its feet and its height (m). */
@@ -140,13 +147,41 @@ export class CameraRig {
   private readonly EYES_FRAC = 0.9;
   private readonly AHEAD_TAU = 0.35;
   private aheadNow = 0;          // how far ahead of him the view aims now (m; eased)
-  // The fade rail (place): he fades out when the lens comes within his radius + HIDE_IN of
-  // his body, and back in past his radius + HIDE_OUT, over AVATAR_FADE_TAU.
+  // The hide rail (place): he is hidden when the lens comes within his radius + HIDE_IN of
+  // his body, and shown again past his radius + HIDE_OUT: at once, both ways.
   private readonly HIDE_IN = 0.35;
   private readonly HIDE_OUT = 0.5;
-  private readonly AVATAR_FADE_TAU = 0.08;
   private avatarHidden = false;
   private readonly MIN_BOOM = 0.05;
+  // Run 6 polish (the fold): what the walk boom keeps out of, and how. A solid merely IN
+  // THE LINE to him never moves the lens at once: the boom eases in before it (never
+  // faster than BOOM_IN_RATE), and only when it stands at least NEAR_FLOOR from him (he
+  // walks away from it; a solid closer than that stands beside him, and coming in front
+  // of it would put the lens in his head: the side slide dodges it instead). Only the
+  // lens ITSELF standing in a solid is a hard limit (`wall`), and even that pulls the
+  // lens in at most WALL_RATE; a TURN that would sweep the lens into a wall faster than
+  // the boom may come in waits for it (the bearing yields). The lens sees each solid's BODY: a circle's
+  // keep-out ring is the walker's (he keeps WALK_CLEAR of his own room from it), a
+  // building by its bare walls, a solid of known height only up to its top (the lens
+  // passes over the board, a boulder, a juniper); the trees and the parked jeep fade.
+  private readonly WALK_CLEAR = 0.3;
+  private readonly NEAR_FLOOR = 1.4;
+  private readonly LENS_PROBE = 0.2;   // the lens point's own room from a solid's body (the hard limit)
+  private readonly OVER_CLEAR = 0.3;   // a lens this far above a solid's top passes over it
+  private readonly BOOM_IN_RATE = 4;   // m/s: the fastest the walk boom dollies in…
+  private readonly BOOM_OUT_RATE = 3;  // …and out
+  private readonly WALL_RATE = 8;      // m/s the hard limit may pull the lens in (his walk carrying it into a wall)
+  private prevWalkBearing: number | null = null; // the walk lens's bearing last frame (a turn yields to a wall)
+  private readonly nearBodies: Obstacle[] = []; // this frame's solids as the walk lens sees them
+  private readonly bodyPool: Obstacle[] = [];
+  private readonly bodyTop: number[] = [];      // …and each one's top (world y; Infinity: unknown, a wall)
+  private bodyCount = 0;
+  // the parked jeep fades like a tree when it stands between the lens and him (JEEP_FADE),
+  // gone when the lens stands in it; it stays faded JEEP_HOLD after the line cleared, so a
+  // line that grazes it does not flicker it
+  private readonly JEEP_FADE = 0.25;
+  private readonly JEEP_HOLD = 0.8;
+  private jeepClearFor = Infinity;
   private get headRoom(): number { return this.player.avatarRadius + 1.2; }
   // The world rim: the lens may stand this far outside the walk bound, among the rim
   // trees (they fade like any tree in the way), so a ranger at the edge who turns round
@@ -187,7 +222,7 @@ export class CameraRig {
   private gatherX = 0;
   private gatherZ = 0;
   private gatherReach = 0;
-  private readonly sol = { dist: 0, eye: 0, lift: 0, terrainClear: true, lensInCrown: false, cost: 0, wall: Infinity };
+  private readonly sol = { dist: 0, eye: 0, lift: 0, terrainClear: true, lensInCrown: false, cost: 0 };
   private pitchTan = 0;          // this frame's view pitch (settled + the player's tilt), as a tangent
   private readonly _look = new THREE.Vector3();
   // F-16 laptop dolly zoom: the player-set WALK boom distance (m, horizontal). Starts at
@@ -241,12 +276,19 @@ export class CameraRig {
   // takes over from where the lens was, position and aim on one smoothstep curve, never
   // turning faster than ~90°/s (kit makeReframe's rule). null = no hand-over running.
   // It and `handoff` (below) never run together: starting one ends the other.
-  private blend: { t: number; dur: number; pos: THREE.Vector3; yaw: number; pitch: number } | null = null;
+  private blend: { t: number; dur: number; pos: THREE.Vector3; yaw: number; pitch: number; lift: number } | null = null;
+  // run 6 polish: a hand-over glide that would pass within BLEND_CLEAR of him rises over
+  // him on its way (by up to BLEND_LIFT_MAX), clearing his head and the cover round him by
+  // BLEND_OVER
+  private readonly BLEND_CLEAR = 2;
+  private readonly BLEND_OVER = 1.2;
+  private readonly BLEND_LIFT_MAX = 4;
   // A presented shot (world/Presenter.ts: the title, the ranger maker) hands the lens to
   // this rig as ONE move: for `dur` seconds the rig's own pose is blended in from where
   // the shot left the lens (eased, yaw the short way, roll 0). The rig runs underneath,
   // so a ranger who walks off mid-glide is followed; a cut under reduced motion.
   private handoff: { pos: THREE.Vector3; yaw: number; pitch: number; t: number; dur: number } | null = null;
+  private readonly GLIDE_SPEED = 7.5; // m/s: a fitted glide's lens never travels faster than this at its peak
   private readonly _dir = new THREE.Vector3();
   private readonly camera: THREE.PerspectiveCamera;
   private readonly terrain: Terrain;
@@ -335,16 +377,24 @@ export class CameraRig {
     this.orbitYaw = this.orbitTargetYaw = 0;
     this.extOff.set(0, 0, 0);
     this.handoff = null; // one hand-over at a time
-    this.blend = reduced ? null : { t: 0, dur: 0, pos: this.camera.position.clone(), ...yawPitch(dir.x, dir.y, dir.z) };
+    this.blend = reduced ? null : { t: 0, dur: 0, pos: this.camera.position.clone(), ...yawPitch(dir.x, dir.y, dir.z), lift: 0 };
   }
 
   /** Start the take-over from a presented shot: the lens is where the shot left it now,
-   *  and over `seconds` it becomes this rig's own view (see `handoff`). */
-  handover(seconds: number): void {
+   *  and over `seconds` it becomes this rig's own view (see `handoff`). `fit` (climbing
+   *  into the jeep or the helicopter, stepping out, run 6 polish): at least `seconds`, and
+   *  longer for a long move (the view turns ≤ ~90°/s, reframeSeconds; the lens travels
+   *  ≤ GLIDE_SPEED), measured against the first pose the rig places. Reduced motion: a cut. */
+  handover(seconds: number, fit = false): void {
     const d = this.camera.getWorldDirection(this._dir);
     const a = yawPitch(d.x, d.y, d.z);
-    this.handoff = { pos: this.camera.position.clone(), yaw: a.yaw, pitch: a.pitch, t: 0, dur: seconds };
+    this.handoff = { pos: this.camera.position.clone(), yaw: a.yaw, pitch: a.pitch, t: 0, dur: fit ? -seconds : seconds };
     this.blend = null; // one hand-over at a time
+  }
+
+  /** Whether the rig has placed the lens yet (a glide needs a lens to start from). */
+  get placedOnce(): boolean {
+    return this.placed;
   }
 
   /** The take-over from a presented shot is still moving the lens. */
@@ -521,13 +571,12 @@ export class CameraRig {
           const t = this.LOOKAHEAD * f;
           this._probe.copy(rp).addScaledVector(this.vel, t);
           this._probe.y = this.terrain.y(this._probe.x, this._probe.z);
-          cap = Math.min(cap, this.solveWalk(wrapAngle(base + this.player.turnRate * t), this.sideNow, this._probe, Infinity, true).dist);
+          cap = Math.min(cap, this.solveWalk(wrapAngle(base + this.player.turnRate * t), this.sideNow, this._probe, Infinity, true, true).dist);
         }
       }
-      const sol = this.solveWalk(base, this.sideNow, rp, cap);
+      const sol = this.solveWalk(base, this.sideNow, rp, cap, false, !(snap || reframe));
       dist = sol.dist;
       eye = sol.eye;
-      wall = sol.wall;
       this.terrainLiftState = sol.lift;
       this.terrainClearState = sol.terrainClear;
     } else {
@@ -575,8 +624,8 @@ export class CameraRig {
       this.terrainClearState = need <= this.MAX_TERRAIN_LIFT;
     }
     this.wasWalk = walk;
-    const bearing = this.bearing();
-    const s = Math.sin(bearing), c = Math.cos(bearing);
+    let bearing = this.bearing();
+    let s = Math.sin(bearing), c = Math.cos(bearing);
     // The lens hangs off a smoothed PIVOT (his spot) on a smoothed boom (length + eye
     // height) at the follow BEARING. The bearing is already eased, so the view turns
     // exactly as much as the bearing does. The boom pulls in and lets out calmly, and
@@ -599,14 +648,49 @@ export class CameraRig {
       const pace = this.player.pace;
       const pivotTau = !walk ? this.PIVOT_TAU_VEHICLE : pace > WALK_SPEED ? (this.PIVOT_TAU * WALK_SPEED) / pace : this.PIVOT_TAU;
       this.pivot.lerp(rp, dampFactor(dt, pivotTau));
-      this.boomNow += (dist - this.boomNow) * dampFactor(dt, dist < this.boomNow ? this.BOOM_IN_TAU : this.BOOM_OUT_TAU);
+      const boomBefore = this.boomNow;
+      let step = (dist - this.boomNow) * dampFactor(dt, dist < this.boomNow ? this.BOOM_IN_TAU : this.BOOM_OUT_TAU);
+      if (walk) step = Math.max(-this.BOOM_IN_RATE * dt, Math.min(this.BOOM_OUT_RATE * dt, step)); // a calm dolly, never a lurch
+      this.boomNow += step;
+      // on foot the one hard limit is the lens ITSELF in a solid (see NEAR_FLOOR): a solid
+      // the look-ahead did not see coming (he turned right beside it)
+      if (walk) {
+        wall = this.lensWall(s, c);
+        // …and a turn never sweeps the lens into a wall faster than the calm dolly comes
+        // in: the follow bearing YIELDS (it turns only as far as the boom can follow this
+        // frame, and catches up as the boom comes in). With his back to the cabin, turning
+        // on the spot swept the lens along its wall so fast that the hard limit pulled it
+        // in at 20 m/s, 2 m to 0.4 m in five frames (run 6 polish). A player's own drag,
+        // and a wall his walk carries the lens into (the pivot), keep the hard limit.
+        const floor = Math.max(this.MIN_BOOM, boomBefore - this.BOOM_IN_RATE * dt);
+        if (wall < floor - 0.1 && this.prevWalkBearing !== null && !reduced && !this.player.dragging) {
+          const from = this.prevWalkBearing, turn = wrapAngle(bearing - from);
+          const clear = (f: number): boolean => { const b = from + turn * f; return !this.lensInWall(Math.sin(b), Math.cos(b), floor); };
+          if (Math.abs(turn) > 1e-5 && clear(0)) {
+            let lo = 0, hi = 1;
+            for (let i = 0; i < 6; i++) { const m = (lo + hi) / 2; if (clear(m)) lo = m; else hi = m; }
+            this.followYaw = wrapAngle(this.followYaw - turn * (1 - lo));
+            bearing = wrapAngle(from + turn * lo);
+            s = Math.sin(bearing); c = Math.cos(bearing);
+            wall = this.lensWall(s, c);
+          }
+        }
+        // and a boom letting out never lets out INTO a solid: it waits where it is (else,
+        // pressed against the cabin, it let out a few cm, met the wall, was pulled in, let
+        // out again: the view shook 0.1 m every frame)
+        if (step > 0 && this.lensInWall(s, c, this.boomNow) && !this.lensInWall(s, c, boomBefore)) {
+          this.boomNow = boomBefore;
+          wall = this.lensWall(s, c);
+        }
+      }
       if (this.boomNow > wall) {
-        // a wall the look-ahead did not see coming: the lens never goes into it; it comes
-        // in to it at once, but along the view (the eye comes down with it), so the view
-        // does not tip, it only steps closer
+        // the lens never stays in it: it comes in, along the view (the eye comes down with
+        // it), so the view does not tip, it only steps closer, on foot never faster than
+        // WALL_RATE (the chase lens: at once, as ever)
+        const to = walk ? Math.max(wall, this.boomNow - this.WALL_RATE * dt) : wall;
         const aim = walk ? this.camLookH : this.camIdleLookH;
-        this.eyeNow = aim + (this.eyeNow - aim) * (wall / this.boomNow);
-        this.boomNow = wall;
+        this.eyeNow = aim + (this.eyeNow - aim) * (to / this.boomNow);
+        this.boomNow = to;
       }
       this.eyeNow += (eye - this.eyeNow) * dampFactor(dt, eye > this.eyeNow ? this.EYE_UP_TAU : this.EYE_DOWN_TAU);
       // someone else moved the lens since the last frame (a mini-game's reframe): ease
@@ -616,6 +700,7 @@ export class CameraRig {
       }
       this.extOff.multiplyScalar(1 - dampFactor(dt, 0.3));
     }
+    this.prevWalkBearing = walk && !snap ? bearing : null;
     this.lensAt(this.camDesired, s, c).add(this.extOff);
     this.camera.position.copy(this.camDesired);
     this.lastSet.copy(this.camDesired);
@@ -638,19 +723,16 @@ export class CameraRig {
     this.camera.lookAt(this._look.x, this._look.y + aimH, this._look.z);
     if (this.blend) this.stepBlend(snap ? Infinity : dt);
     // F-05 fade rail: when the lens has to come right up to him (his back to a wall) he
-    // fades OUT rather than smear his interior across the lens; the view then looks over
-    // where he stands. Solid or gone, never half: a half-faded head seen from close
-    // behind shows his face and eyes inside his hair. The switch has a little hysteresis
-    // and a quick dissolve (a cut under reduced motion or on a snap).
+    // is hidden rather than smear his interior across the lens; the view then looks over
+    // where he stands. Solid or gone, never half, and never in between for a frame: even
+    // a quick dissolve showed his see-through face and hands from inside his head (run 6
+    // polish). The switch has a little hysteresis.
     const lp = this.camera.position;
     if (walk) {
       const d = this.bodyDist(Math.hypot(lp.x - rp.x, lp.z - rp.z), lp.y - rp.y);
       const r = this.player.avatarRadius;
       this.avatarHidden = d < r + (this.avatarHidden ? this.HIDE_OUT : this.HIDE_IN);
-      const target = this.avatarHidden ? 0 : 1;
-      const now = this.player.avatarOpacity;
-      const o = snap || first ? target : now + (target - now) * dampFactor(dt, this.AVATAR_FADE_TAU);
-      this.player.setAvatarOpacity(Math.abs(o - target) < 0.02 ? target : o);
+      this.player.setAvatarOpacity(this.avatarHidden ? 0 : 1);
     } else if (this.player.avatarOpacity !== 1) this.player.setAvatarOpacity(1); // never leave the driver faded
     // The occluder fade + the honest clear-line read, for the walk AND the chase cams:
     // every tree between the lens and him (his head and his chest; the vehicle's body and
@@ -677,9 +759,41 @@ export class CameraRig {
     this.viewClearState = (!blocked || this.dressing.canopyOpacity <= this.CANOPY_SEE_THROUGH) &&
       this.terrainClearState && !solidTree;
     if (this.handoff) this.blendHandoff(dt, reduced);
+    this.fadeParkedJeep(walk, dt, reduced || snap);
     // the ground "go here" rings fade by the lens's proximity (both branches: a ring faded
     // on foot restores once a vehicle cam pulls the lens far away)
     this.host.afterPlace();
+  }
+
+  /**
+   * Run 6 polish: the parked jeep, for the walk lens, is like a tree. He stands right
+   * beside it to board it and steps out beside it, so a lens that came in front of it
+   * would stand in his head (the fold): the boom never comes in for it. While its body
+   * stands between the lens and him it fades to JEEP_FADE, gone while the lens stands in
+   * it or right over it; solid again, eased, once the line has been clear JEEP_HOLD (a
+   * cut under reduced motion). Driven: solid.
+   */
+  private fadeParkedJeep(walk: boolean, dt: number, cut: boolean): void {
+    const jeep = this.host.parkedJeep();
+    if (!jeep) return;
+    let target = 1;
+    if (walk) {
+      const lp = this.camera.position, rp = this.player.group.position;
+      const dx = rp.x - lp.x, dz = rp.z - lp.z, len2 = dx * dx + dz * dz;
+      let inside = false, between = false;
+      for (const o of jeep.circles) {
+        const r = Math.max(0.05, o.r - jeep.room);
+        if (lp.y < jeep.roof + this.OVER_CLEAR && Math.hypot(lp.x - o.x, lp.z - o.z) < r + 0.5) inside = true;
+        if (len2 < 1e-6) continue;
+        // (the same line the dev hook's clear-line read tests, a little wider)
+        const t = ((o.x - lp.x) * dx + (o.z - lp.z) * dz) / len2;
+        if (t <= 0.02 || t >= 0.98) continue;
+        if (Math.hypot(o.x - (lp.x + dx * t), o.z - (lp.z + dz * t)) <= r + 0.15) between = true;
+      }
+      this.jeepClearFor = inside || between ? 0 : this.jeepClearFor + dt;
+      target = inside ? 0 : this.jeepClearFor < this.JEEP_HOLD ? this.JEEP_FADE : 1;
+    }
+    this.host.fadeJeep(target, cut ? 1 : dampFactor(dt, this.CANOPY_RELEASE_TAU));
   }
 
   /**
@@ -723,10 +837,23 @@ export class CameraRig {
       const d0 = aimDir(b.yaw, b.pitch);
       b.dur = reframeSeconds(1.1, (d1.angleTo(new THREE.Vector3(d0.x, d0.y, d0.z)) * 180) / Math.PI);
     }
+    // a held view that looked away from him (through his binoculars at the ree hide)
+    // hands back to the view behind him on its far side: the straight glide went right
+    // through him and the hide's bracken (0.4 s of leaves, run 6 polish). A glide that
+    // passes within BLEND_CLEAR of him rises over him and the cover round him instead
+    // (measured each frame against where the follow view settles; it only ever grows)
+    const rp = this.player.group.position;
+    const dx = to.x - b.pos.x, dz = to.z - b.pos.z, l2 = dx * dx + dz * dz;
+    const k = l2 < 1e-6 ? 0 : Math.max(0, Math.min(1, ((rp.x - b.pos.x) * dx + (rp.z - b.pos.z) * dz) / l2));
+    if (k > 0.15 && k < 0.85 && Math.hypot(b.pos.x + dx * k - rp.x, b.pos.z + dz * k - rp.z) < this.BLEND_CLEAR) {
+      const need = rp.y + this.player.avatarTopY + this.BLEND_OVER - (b.pos.y + (to.y - b.pos.y) * k);
+      b.lift = Math.max(b.lift, Math.min(this.BLEND_LIFT_MAX, Math.max(0, need) / Math.sin(Math.PI * k)));
+    }
     b.t = Math.min(1, b.t + dt / b.dur);
     if (b.t >= 1) { this.blend = null; this.lastSet.copy(to); return; }
     const e = easeInOut(b.t);
     this.camera.position.lerpVectors(b.pos, to, e);
+    this.camera.position.y += Math.sin(Math.PI * e) * b.lift;
     const d = aimDir(lerpAngle(b.yaw, a1.yaw, e), b.pitch + (a1.pitch - b.pitch) * e);
     this.camera.up.set(0, 1, 0);
     this.camera.lookAt(this.camera.position.x + d.x, this.camera.position.y + d.y, this.camera.position.z + d.z);
@@ -738,12 +865,18 @@ export class CameraRig {
    *  blend as someone else moving its lens. */
   private blendHandoff(dt: number, reduced: boolean): void {
     const h = this.handoff!;
-    h.t += Math.min(dt, 0.05);
-    if (reduced || h.t >= h.dur) { this.handoff = null; return; }
-    const e = easeInOut(h.t / h.dur);
     const d = this.camera.getWorldDirection(this._dir);
     const to = yawPitch(d.x, d.y, d.z);
     const p = this.camera.position;
+    if (h.dur < 0) {
+      // fit the glide to the move: the smoothstep's top speed is 1.5× the average
+      const d0 = aimDir(h.yaw, h.pitch);
+      const turn = (Math.acos(Math.max(-1, Math.min(1, d0.x * d.x + d0.y * d.y + d0.z * d.z))) * 180) / Math.PI;
+      h.dur = Math.max(-h.dur, reframeSeconds(0, turn), (1.5 * h.pos.distanceTo(p)) / this.GLIDE_SPEED);
+    }
+    h.t += Math.min(dt, 0.05);
+    if (reduced || h.t >= h.dur) { this.handoff = null; return; }
+    const e = easeInOut(h.t / h.dur);
     p.set(h.pos.x + (p.x - h.pos.x) * e, h.pos.y + (p.y - h.pos.y) * e, h.pos.z + (p.z - h.pos.z) * e);
     const a = aimDir(lerpAngle(h.yaw, to.yaw, e), h.pitch + (to.pitch - h.pitch) * e);
     this.camera.up.set(0, 1, 0); // roll 0, always
@@ -774,6 +907,24 @@ export class CameraRig {
   private bodyDist(hd: number, up: number): number {
     const dy = up > this.player.avatarTopY ? up - this.player.avatarTopY : up < 0 ? -up : 0;
     return Math.hypot(hd, dy);
+  }
+
+  /** The walk lens's hard limit: the longest boom, up to the eased one, at which the lens
+   *  (this frame's pivot, bearing (s, c), side slide, the eye along the view) stands out of
+   *  every solid's body by LENS_PROBE. A solid merely between the lens and him is no limit
+   *  (NEAR_FLOOR); the old limit was where the LINE to him first met a solid, and a jeep's
+   *  flank turning into that line beside him put the lens in his head in one frame. */
+  private lensWall(s: number, c: number): number {
+    for (let d = this.boomNow; d > this.MIN_BOOM; d -= 0.1) if (!this.lensInWall(s, c, d)) return d;
+    return this.MIN_BOOM;
+  }
+
+  /** Would the walk lens at boom `d` on bearing (s, c) (this frame's pivot, side slide,
+   *  the eye along the view) stand within LENS_PROBE of a solid's body? */
+  private lensInWall(s: number, c: number, d: number): boolean {
+    const b0 = this.boomNow, k = this.sideNow, p = this.pivot, aim = this.camLookH;
+    const y = p.y + aim + (this.eyeNow - aim) * (d / b0);
+    return this.lensInBody(p.x - s * d - c * k * d, y, p.z - c * d + s * k * d, this.LENS_PROBE, this.player.group.position);
   }
 
   /** How well a lens there shows him, for the clear-view search (1 = a good distance,
@@ -857,6 +1008,49 @@ export class CameraRig {
     this.creatureCount = 0;
     this.gatherX = x; this.gatherZ = z; this.gatherReach = reach;
     this.host.creatures(this.visitCreature);
+    // the walk lens's solids: each one's body (a circle without the walker's room, a box
+    // by its bare walls as the casts already measure it), not the trees (they fade), not
+    // the parked jeep (it fades too)
+    const jeep = this.host.parkedJeep();
+    this.bodyCount = 0;
+    for (const o of this.nearSolids) {
+      if (this.isTree(o) || (jeep && jeep.circles.includes(o))) continue;
+      let b = this.bodyPool[this.bodyCount];
+      if (!b) { b = { x: 0, z: 0, r: 0 }; this.bodyPool.push(b); }
+      b.x = o.x; b.z = o.z; b.box = o.box;
+      b.r = o.box ? o.r : Math.max(0.05, o.r - this.WALK_CLEAR);
+      const h = o.crown ? o.crown.y + o.crown.h : o.h !== undefined ? this.terrain.y(o.x, o.z) + o.h : Infinity;
+      this.bodyTop[this.bodyCount] = h;
+      this.nearBodies[this.bodyCount++] = b;
+    }
+    this.nearBodies.length = this.bodyCount;
+  }
+
+  /** The fraction of the walk boom (origin ox,oz; vector dx,dz) clear before a probe of
+   *  radius `probe` round the line meets a solid's body (boomClearFraction for the walk
+   *  lens's solids: see gatherNear). 1 = nothing in the way. */
+  private bodyEntry(ox: number, oz: number, dx: number, dz: number, probe: number): number {
+    if (dx * dx + dz * dz < 1e-6) return 1;
+    let best = 1;
+    for (const o of this.nearBodies) {
+      const t = segmentEntry(o, ox, oz, dx, dz, o.box ? probe - o.box.pad : probe);
+      if (t < best) best = t;
+    }
+    return best;
+  }
+
+  /** Does a lens at (x, y, z) stand within `probe` of a solid's body (below its top +
+   *  OVER_CLEAR: over a low one it passes)? A solid round his own feet (the prop he stands
+   *  at) never counts. */
+  private lensInBody(x: number, y: number, z: number, probe: number, rp: THREE.Vector3): boolean {
+    for (let i = 0; i < this.bodyCount; i++) {
+      const o = this.nearBodies[i];
+      if (y >= this.bodyTop[i] + this.OVER_CLEAR) continue;
+      const pad = o.box ? o.box.pad : 0;
+      if (obstacleGap(o, rp.x, rp.z, -pad) < 0) continue;
+      if (obstacleGap(o, x, z, -pad) < probe) return true;
+    }
+    return false;
   }
 
   /** gatherNear's creature visitor (bound once: no per-frame closure). */
@@ -903,7 +1097,7 @@ export class CameraRig {
    * `cap`: a shorter boom wanted already (the one where he is heading). `solidsOnly`: only
    * `dist` as the solids and the rim leave it (the look-ahead's question), nothing else.
    */
-  private solveWalk(b: number, k: number, rp: THREE.Vector3, cap = Infinity, solidsOnly = false): CameraRig['sol'] {
+  private solveWalk(b: number, k: number, rp: THREE.Vector3, cap = Infinity, solidsOnly = false, stayBeyond = false): CameraRig['sol'] {
     const out = this.sol;
     const s = Math.sin(b), c = Math.cos(b);
     // the lens per metre of boom: back along the bearing, and k to the screen's right
@@ -912,25 +1106,26 @@ export class CameraRig {
     const pitch = Math.max(this.PITCH_MIN, Math.min(this.PITCH_MAX, this.basePitch() + this.orbitTilt));
     this.pitchTan = Math.tan(pitch);
     const minDist = Math.min(want, this.MIN_BOOM); // no room behind him: the lens comes in close
-    // the boom reaches as far as the player's zoom until the LINE to him would pass through
-    // a solid (a thin cast: a corner it merely grazes is no reason to come in), then the
-    // lens itself keeps CAM_PROBE_R clear of every solid; the trees are left to the fade
-    // (world/Crowns.ts has their trunks too), so the boom never pumps past each trunk
-    const frac = Math.min(this.boomClearFraction(rp.x, rp.z, ux * want, uz * want, this.WALL_PROBE, true, true),
-      this.rimFraction(rp.x, rp.z, ux * want, uz * want));
-    let dist = Math.max(minDist, Math.min(cap, want * frac));
-    while (dist > minDist && !this.lensClear(rp.x + ux * dist, rp.z + uz * dist)) dist = Math.max(minDist, dist - 0.15);
+    // the boom reaches as far as the player's zoom (and the lens ring at the rim). A solid's
+    // body IN THE LINE to him (a thin cast: a corner it merely grazes is no reason to come
+    // in) brings it in before that solid, but only one standing NEAR_FLOOR or further from
+    // him: closer, it stands beside him, and the side slide dodges it (see NEAR_FLOOR).
+    // Then the lens itself keeps CAM_PROBE_R clear of every solid's body (or passes over a
+    // low one). The trees are left to the fade (world/Crowns.ts has their trunks too), and
+    // so are their LEAVES: a boom that came in out of each crown made him twice as big
+    // under every oak by the path, walking or running (run 6 polish, the run pump).
+    let dist = want * this.rimFraction(rp.x, rp.z, ux * want, uz * want);
+    // (`stayBeyond`, the lens as it is placed now: a solid that came into the line between
+    // the lens and him (he walked on past it) is passed over or dodged, never pulled
+    // through: the boom does not come in for it)
+    const inLine = want * this.bodyEntry(rp.x, rp.z, ux * want, uz * want, this.WALL_PROBE);
+    if (inLine >= this.NEAR_FLOOR && !(stayBeyond && this.boomNow > inLine + this.CAM_PROBE_R)) dist = Math.min(dist, inLine);
+    dist = Math.max(minDist, Math.min(cap, dist));
+    while (dist > minDist && !this.lensClear(rp.x + ux * dist, rp.y + this.eyeFor(dist, rp, ux, uz), rp.z + uz * dist, rp)) dist = Math.max(minDist, dist - 0.15);
     if (solidsOnly) { out.dist = dist; return out; } // (the look-ahead only asks how far the solids let it)
-    const len = Math.max(want, this.boomNow);
-    out.wall = Math.max(minDist, len * this.boomClearFraction(rp.x, rp.z, ux * len, uz * len, this.WALL_PROBE, true, true));
-    // never a lens in the leaves: step the boom in until it is out of every crown
-    // (not below 35 % of the zoom: then the fade has to carry it)
-    let lensInCrown = this.lensInCrown(rp.x + ux * dist, rp.y + this.eyeFor(dist, rp, ux, uz), rp.z + uz * dist, 0.3, null);
-    if (lensInCrown) {
-      for (let d = dist - 0.3; d >= Math.max(minDist, want * 0.35); d -= 0.3) {
-        if (!this.lensInCrown(rp.x + ux * d, rp.y + this.eyeFor(d, rp, ux, uz), rp.z + uz * d, 0.3, null)) { dist = d; lensInCrown = false; break; }
-      }
-    }
+    const ex = rp.x + ux * dist, ey = rp.y + this.eyeFor(dist, rp, ux, uz), ez = rp.z + uz * dist;
+    const lensInCrown = this.lensInCrown(ex, ey, ez, 0.3, false);            // an unfadeable tree: never a lens there
+    const lensInLeaves = !lensInCrown && this.lensInCrown(ex, ey, ez, 0.3, true); // a forest tree: it fades
     // keep the WHOLE lens→ranger sightline above the rendered terrain, not just the lens
     // above the ground under itself (a clearance lift only, deterministic)
     let eye = this.eyeFor(dist, rp, ux, uz);
@@ -950,6 +1145,7 @@ export class CameraRig {
     let cost = (want - dist) / want;                                   // prefer the full boom
     cost += 3 * (1 - this.opacityAt(dist * Math.hypot(1, k), eye));    // …and never so short he fades
     if (lensInCrown) cost += 3;
+    else if (lensInLeaves) cost += 0.5; // the forest fades round the lens, but clear air is nicer
     if (!out.terrainClear) cost += 2;
     if (this.solidBetween(lx, lz, rp.x, rp.z)) cost += 4;              // a building / prop / person in the line
     if (this.solidHugsLens(lx, lz)) cost += 0.8;                        // …or right beside the lens, filling a side of the frame
@@ -988,14 +1184,10 @@ export class CameraRig {
     return false;
   }
 
-  /** Does the lens at (x, z) keep CAM_PROBE_R from every building, prop and person (not
-   *  the trees: they fade)? A building by its real walls, not its elbow-room pad. */
-  private lensClear(x: number, z: number): boolean {
-    for (const o of this.nearSolids) {
-      if (this.isTree(o)) continue;
-      if ((o.box ? obstacleGap(o, x, z, -o.box.pad) : obstacleGap(o, x, z)) < this.CAM_PROBE_R) return false;
-    }
-    return true;
+  /** Does the walk lens at (x, y, z) keep CAM_PROBE_R from every solid's body (see
+   *  gatherNear: not the trees, not the parked jeep; over a low one it passes)? */
+  private lensClear(x: number, y: number, z: number, rp: THREE.Vector3): boolean {
+    return !this.lensInBody(x, y, z, this.CAM_PROBE_R, rp);
   }
 
   /** A building, prop or person (not a tree) in the line from the lens to him on the

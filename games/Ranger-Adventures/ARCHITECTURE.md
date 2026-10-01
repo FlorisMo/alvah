@@ -134,13 +134,18 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   watch through the glasses' two round lenses (the ree's hide; under the cards, no zoom).
 - *walking*: `await k.walk({ name, to, r, line, doel, lead, quiet })` — the child walks
   himself; the chip names the goal in words, the arrow only after ~20 s without progress;
-  with `lead` an actor follows and hides when he runs; with `quiet` running says its line.
+  with `lead` an actor follows (at his `side` if given, his walk capped at its `pace`) and
+  hides when he runs; with `quiet` running says its line. An `include` with `r` keeps both
+  his shoulders in a framed view.
 - *the animals' bodies*: a rigged model (the roe) plays its own walk/graze/idle clips, the
   procedural trot is for the static meshes (the boar, the piglet). `await k.walkRanger(x, z)` walks him
   (input locked) to a framed beat's spot.
 - *beats*: `searchBeat(k, step, …)`, `routeBeat(k, step, …)`, `choiceRun(k, step).ask(id,
   { show, wrong, right, walks })` then `.done()` (`walks`: the wrong answer's reaction walks
-  the ranger, so the card makes way first and its line follows); `await k.fact(i)` shows the raaf's card.
+  the ranger, so the card makes way first and its line follows); `.still(id, { line, hands |
+  feet, tempt, wrong, right })` plays an encounter with the BODY instead of a card (keep your
+  hands off the animal, or your feet still: a reach is the wrong answer, the same moment comes
+  back; the pure core is `beats/hold-math.ts`); `await k.fact(i)` shows the raaf's card.
 - *the world*: `await k.act(label, line)` — one action button in the world (Space presses
   it); `k.daylight(k01, s)` turns the day (1 golden hour … 0 a readable blue night,
   world/Sky.ts + Daylight.ts; the end of the adventure hands the golden hour back);

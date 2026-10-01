@@ -29,8 +29,8 @@ import type { MoveLimits, Obstacle } from '../CharacterController';
 import { resolveMove } from '../CharacterController';
 import { wayfind, type WayCue } from '../Wayfinding';
 import {
-  driveCaps, driveIntent, vehicleDt, jeepStep, resolveBody, wheelContact, bodyReach,
-  JEEP_BODY, type BodyCircle, type Solid, type YieldAnimal, type JeepWorld,
+  driveCaps, driveIntent, vehicleDt, jeepStep, resolveBody, wheelContact, bodyReach, bodyOverlap, bodyWet, parkOutOf,
+  JEEP_BODY, type BodyCircle, type Solid, type YieldAnimal, type JeepWorld, type HomePlace,
 } from '../../core/vehicle';
 import {
   flyStep, heliVignette, heliAvailable, heliRamp, landingAltitude,
@@ -72,6 +72,11 @@ const JEEP_SINK_TOL = 0.5;
 const JEEP_AIR_TOL = 1.0;
 // A walker keeps this much extra room from a parked vehicle's footprint circles.
 const WALKER_ROOM = 0.3;
+/** Run 6 polish: why the jeep stands with the gas on (the HUD's line): animals it gives way
+ *  to, something solid (a trunk, a wall, the water), the forest edge. */
+export type JeepStall = 'dieren' | 'vast' | 'rand';
+/** …said once it has stood this long (s) with the gas held. */
+const STALL_S = 2;
 
 // W5.3b helicopter: the pad-proximity radius that surfaces "Stap in de helikopter",
 // and how close (horizontally) it must be to a pad for "Land hier".
@@ -179,6 +184,11 @@ export class Vehicles {
   private jeepContact = false;            // the body touched a solid this frame
   private jeepBraked = false;             // a brake held it back while the gas was on
   private jeepParked: Obstacle[] = [];    // its footprint circles while parked
+  // run 6 polish: the parked jeep as the walk lens sees it (CameraRig.parkedJeep; one
+  // object, refreshed where it parks) and how see-through it is now (it fades like a tree
+  // while it stands between the lens and him on foot)
+  private readonly jeepBody = { circles: [] as readonly Obstacle[], room: WALKER_ROOM, roof: 0 };
+  private jeepOpacity = 1;
   inVehicle = false;
   nearJeep = false;
   private vehicleSpeed = 0;               // the controller's carried signed speed (m/s)
@@ -196,6 +206,11 @@ export class Vehicles {
   private intent = { throttle: 0, steer: 0 };     // run 6: what the keys / stick asked for last frame
   private onJeepNear: (near: boolean) => void = () => {};
   private onVehicleChange: (inVehicle: boolean) => void = () => {};
+  // run 6 polish: held back with the gas on — why (tendStall), once it has stood STALL_S
+  private stallWhy: JeepStall | null = null;
+  private stallFor = 0;
+  private stallShown: JeepStall | null = null;
+  private onStall: (why: JeepStall | null) => void = () => {};
   // W5.3b helicopter (opt-in, withheld under reduced-motion). States while the ranger
   // is inside: resting on the ground (`airborne` false: after boarding and after a
   // landing — any push lifts off, "Stap uit" gets out), flying, and landing (the
@@ -307,10 +322,35 @@ export class Vehicles {
   }
 
   /** Register the jeep HUD callbacks (W5.1): `onNear` while walking up to / away from
-   *  the parked jeep, `onChange(inVehicle)` on climbing in / stepping out. */
-  setVehicle(cbs: { onNear: (near: boolean) => void; onChange: (inVehicle: boolean) => void }): void {
+   *  the parked jeep, `onChange(inVehicle)` on climbing in / stepping out, `onStall(why)`
+   *  when the gas is held but something holds the jeep back (run 6 polish; null: moving
+   *  again, or the gas let go). */
+  setVehicle(cbs: { onNear: (near: boolean) => void; onChange: (inVehicle: boolean) => void; onStall?: (why: JeepStall | null) => void }): void {
     this.onJeepNear = cbs.onNear;
     this.onVehicleChange = cbs.onChange;
+    this.onStall = cbs.onStall ?? (() => {});
+  }
+
+  /** Run 6 polish: the gas held, and the jeep standing because something holds it back
+   *  (an animal it gives way to, a solid, the forest edge): after STALL_S the HUD says why,
+   *  in one line (onStall). A child held W for 20 s at the frisling family and nothing
+   *  said why the jeep stood. It moves again, or the gas is let go: the line goes. */
+  private tendStall(throttle: number, dt: number): void {
+    const held = throttle > 0.3 && Math.abs(this.jeepMoved) < 0.15;
+    const why: JeepStall | null = !held ? null
+      : this.brake === 'animal' || this.yieldFor ? 'dieren'
+      : this.brake === 'edge' ? 'rand'
+      : this.brake || this.jeepContact ? 'vast' : null;
+    this.stallFor = why && why === this.stallWhy ? this.stallFor + dt : 0;
+    this.stallWhy = why;
+    const show = why && (this.stallFor >= STALL_S || this.stallShown === why) ? why : null;
+    if (show !== this.stallShown) { this.stallShown = show; this.onStall(show); }
+  }
+
+  /** Clear the stall line (climbing in or out). */
+  private clearStall(): void {
+    this.stallWhy = null; this.stallFor = 0;
+    if (this.stallShown) { this.stallShown = null; this.onStall(null); }
   }
 
   /** Register the helicopter HUD callbacks (W5.3b): `onNear`, `onChange(inHeli)`,
@@ -416,6 +456,131 @@ export class Vehicles {
     }
   }
 
+  /** Run 6 polish: the parked jeep for the walk lens (its keep-out circles, the walker's
+   *  room in them, its roof), or null while it is driven or not placed. */
+  parkedJeep(): { circles: readonly Obstacle[]; room: number; roof: number } | null {
+    if (this.inVehicle || !this.jeepPos || !this.jeepParked.length) return null;
+    this.jeepBody.circles = this.jeepParked;
+    this.jeepBody.roof = this.jeepPos.y + SIZE.jeep.h;
+    return this.jeepBody;
+  }
+
+  /** Run 6 polish: fade the parked jeep toward `target` (1 = solid): down at once, back up
+   *  by `release` a frame (the walk lens's occluder fade, as the trees do). */
+  fadeJeep(target: number, release: number): void {
+    const now = this.jeepOpacity;
+    let o = target <= now ? target : now + (target - now) * release;
+    if (Math.abs(o - target) < 0.01) o = target;
+    if (o !== now) this.setJeepOpacity(o);
+  }
+
+  /** Is this collision circle the parked jeep, faded so he reads through it? (The dev
+   *  hook's clear-line read skips it then, as it skips a faded tree.) */
+  seeThrough(o: Obstacle): boolean {
+    return this.jeepOpacity <= 0.5 && this.jeepParked.includes(o);
+  }
+
+  /** The parked jeep's BODY circle for one of its collision circles (the collision circle
+   *  holds the walker's room too), or null when `o` is not the parked jeep: what hides him
+   *  on the dev hook's clear-line read. */
+  parkedBody(o: Obstacle): Obstacle | null {
+    const i = this.jeepParked.indexOf(o);
+    if (i < 0) return null;
+    const b = (this.jeepBodies[i] ??= { x: 0, z: 0, r: 0 });
+    b.x = o.x; b.z = o.z; b.r = o.r - WALKER_ROOM;
+    return b;
+  }
+  private readonly jeepBodies: Obstacle[] = [];
+
+  /** Set the jeep's opacity: only its own materials (fadeable(): drawn in the blended
+   *  pass from the start, so a fade changes a number and a depth write, never a shader). */
+  private setJeepOpacity(o: number): void {
+    this.jeepOpacity = o;
+    const ghost = o < 1;
+    this.jeep?.traverse((n) => {
+      const mesh = n as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (mesh.userData.jeepShell) { mesh.visible = ghost; return; }
+      // faded, it draws after its depth shell (see fadeable); solid, among the others
+      mesh.renderOrder = ghost ? 2 : 0;
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const orig = (m.userData as { jeepFade?: { o: number; d: boolean } }).jeepFade;
+        if (!orig) continue;
+        m.opacity = orig.o * o;
+        m.depthWrite = o >= 1 ? orig.d : false;
+      }
+    });
+  }
+
+  /** The jeep's depth shell (fadeable): depth only, a hair behind its own surface. */
+  private static readonly SHELL = new THREE.MeshBasicMaterial({
+    colorWrite: false, depthWrite: true, transparent: true, side: THREE.DoubleSide, // (the jeep is double-sided)
+    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+  });
+
+  /** Give the jeep model its own materials, ready to fade (setJeepOpacity): blended from
+   *  the start (a solid jeep writes depth and has opacity 1, so it looks the same), so the
+   *  first fade compiles nothing. And a depth SHELL per mesh (run 6 polish): while the jeep
+   *  is faded, the shell writes its depth first (renderOrder 1, after everything else
+   *  blended) and the jeep draws after it (2), so only its NEAREST surface is blended: one
+   *  glassy jeep he reads through, not every seat, wheel and bar inside it stacked on top
+   *  of each other (that stack hid him as well as a solid jeep). One extra draw call, only
+   *  while faded; drawn once when the model arrives, so its shader is ready before the
+   *  first fade. Never hit by a ray. */
+  private static fadeable(prepped: THREE.Object3D): void {
+    const meshes: THREE.Mesh[] = [];
+    prepped.traverse((n) => { if ((n as THREE.Mesh).isMesh) meshes.push(n as THREE.Mesh); });
+    for (const mesh of meshes) {
+      const own = (m: THREE.Material): THREE.Material => {
+        const c = m.clone();
+        c.userData.jeepFade = { o: c.opacity, d: c.depthWrite };
+        c.transparent = true;
+        return c;
+      };
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
+      const shell = new THREE.Mesh(mesh.geometry, Vehicles.SHELL);
+      shell.userData.jeepShell = true;
+      shell.renderOrder = 1;
+      shell.castShadow = shell.receiveShadow = false;
+      shell.raycast = () => {};
+      shell.onAfterRender = () => { if (!mesh.renderOrder) shell.visible = false; }; // (its first draw compiled it)
+      mesh.add(shell);
+    }
+  }
+
+  /**
+   * Run 6 polish: before a mission is played as an adventure, under its briefing card: a
+   * jeep he left in that mission's home (by its places, on the walks between them, in the
+   * pictures looked from them: core/vehicle.parkOutOf) would stand in its framed shots and
+   * in the family's way. It is parked again, at once, on the side he came from: just out
+   * of the home behind its `marker`, facing out (else the nearest spot out of it): open
+   * ground with room round it for him to walk, off the water, the helipads and every
+   * marker's ground, not on a slope. Never while he drives. True when it moved.
+   */
+  parkOutOfHome(places: readonly HomePlace[], marker?: { x: number; z: number }): boolean {
+    if (this.inVehicle || !this.jeep || !this.jeepPos) return false;
+    const solids = this.solids(this.jeepParked);
+    const zones = this.zones(true);
+    const roomy = JEEP_BODY.map((c) => ({ along: c.along, r: c.r + WALKER_ROOM }));
+    const bound = this.limits.bound - bodyReach(JEEP_BODY) - 2;
+    const blocked = (x: number, z: number): boolean => !!this.limits.blocked?.(x, z);
+    const clear = (x: number, z: number, h: number): boolean => {
+      if (Math.hypot(x, z) > bound || bodyWet(x, z, h, JEEP_BODY, blocked)) return false;
+      if (bodyOverlap(x, z, h, roomy, solids) > 0 || bodyOverlap(x, z, h, JEEP_BODY, zones) > 0) return false;
+      const wc = wheelContact(x, z, h, (gx, gz) => this.groundY(gx, gz));
+      return Math.abs(wc.pitch) < 0.2 && Math.abs(wc.roll) < 0.2;
+    };
+    const to = parkOutOf(this.jeepPos.x, this.jeepPos.z, this.jeepHeading, JEEP_BODY, places, clear, marker);
+    if (!to) return false;
+    this.unpark(this.jeepParked);
+    this.jeepPos.set(to.x, this.groundY(to.x, to.z), to.z);
+    this.jeepHeading = to.heading;
+    this.settleJeep();
+    this.jeepParked = this.park(to.x, to.z, this.jeepHeading, JEEP_BODY);
+    if (this.nearJeep) { this.nearJeep = false; this.onJeepNear(false); }
+    return true;
+  }
+
   /** Rest the jeep's four wheels on the drawn ground at its current x/z + heading. */
   private settleJeep(): void {
     if (!this.jeep || !this.jeepPos) return;
@@ -445,9 +610,11 @@ export class Vehicles {
     void loadModel('vehicle-ranger-jeep').then((m) => {
       if (!m) return;
       const prepped = Vehicles.prepVehicle(m, SIZE.jeep.h);
+      Vehicles.fadeable(prepped); // its own materials: it fades on its own (fadeJeep)
       const totem = group.children.find((c) => c.userData.totem);
       if (totem) group.remove(totem);
       group.add(prepped);
+      if (this.jeepOpacity < 1) this.setJeepOpacity(this.jeepOpacity);
     });
     this.initDust(); // W5.2: the jeep's dust cloud (hidden until it drives)
   }
@@ -808,6 +975,8 @@ export class Vehicles {
     this.yieldFor = null;
     this.unpark(this.jeepParked);
     this.jeepParked = [];
+    if (this.jeepOpacity < 1) this.setJeepOpacity(1); // he drives a solid jeep
+    this.clearStall();
     this.host.seat(true);               // F-31: a still `sit`, never idle/walk, while riding
     this.seatRider(this.jeep, JEEP_SEAT);
     this.host.clearWalkPrompts();
@@ -832,6 +1001,7 @@ export class Vehicles {
     this.jeepParked = this.park(this.jeepPos.x, this.jeepPos.z, h, JEEP_BODY);
     this.nearJeep = true;               // standing right beside it → "Stap in" again
     this.yieldFor = null;
+    this.clearStall();
     this.dustEmitting = false;
     Sound.engineStop();
     this.onVehicleChange(false);
@@ -959,6 +1129,7 @@ export class Vehicles {
     this.jeepMoved = f.moved;
     this.yieldFor = f.yieldFor;
     this.brake = f.brake;
+    this.tendStall(want.throttle, dt);
     const moved = f.moved;
     // the path it will drive if the keys stay as they are, for the animals (a world without
     // them: they must not see the jeep braking for themselves)

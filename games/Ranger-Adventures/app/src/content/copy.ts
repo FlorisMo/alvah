@@ -54,6 +54,10 @@ export const HUD = {
     keys: 'Rijd met de pijltjes.',
     stick: 'Sleep de stick om te rijden.',
     uit: 'Stap uit met Enter.',
+    /** Why the jeep stands while he holds the gas (run 6 polish): animals in its way,
+     *  or something it cannot drive through (the forest edge says HUD.rand). */
+    dieren: 'Daar zijn dieren. Rij eromheen.',
+    vast: 'Hier kan de jeep niet door.',
   },
   vliegen: { keys: 'Vlieg met de pijltjes.', stick: 'Sleep de stick om te vliegen.' },
   landt: 'De helikopter landt.',

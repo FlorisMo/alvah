@@ -639,6 +639,12 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
       note(`the hidden animal lies ${stats.lying_h} m high in cover ${stats.cover_h} m tall (×${stats.cover_ratio})`);
       soft(stats.cover_ratio >= 2, `the cover is only ${stats.cover_ratio}× the hidden animal's lying height (want ≥ 2)`);
     }
+    // run 6 polish: the follow and the lead home are real walks (the way he walked them),
+    // and the two body moments were kept still (golden plays a perfect player: it waits)
+    if (stats.walk_field_m !== undefined) {
+      note(`followed the squeak ${stats.walk_cover_m ?? '?'} m, led the piglet home ${stats.walk_field_m} m; kept still (reaches: aaien ${stats.still_aaien ?? '?'}, zeug ${stats.still_zeug ?? '?'})`);
+      soft(stats.walk_field_m >= 25, `leading the piglet home is only ${stats.walk_field_m} m of walking (want ≥ 25)`);
+    }
     soft(maxCalls < MAX_DRAW_CALLS, `draw calls peaked at ${maxCalls} during the mission (budget < ${MAX_DRAW_CALLS})`);
     hard(won.size >= Object.keys(need).length, `won ${won.size}/${Object.keys(need).length} mini-games before the time ran out (not won: ${plan.filter((e) => !won.has(e)).join(', ')})`);
     noNewErrors();
@@ -657,8 +663,18 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     hard(!!(await save(page))?.voltooid[missionId], `after the last mini-game the mission was never marked done (visible buttons: ${await visibleButtons(page)})`);
     await sleep(page, 800);
     await shot(page, 'reward');
-    const text = (await uiText(page)).toLowerCase();
-    soft(text.includes(mission.titel.toLowerCase()), `no reward card naming "${mission.titel}"`);
+    // the line over the reunion names the mission, and after the raaf's last card the
+    // reward card does: a player reads one of them (one snapshot raced the reunion's end
+    // under load — it soft-failed now and then while both were there)
+    let named = false;
+    for (const tN = Date.now(); Date.now() - tN < 30_000;) {
+      if ((await uiText(page)).toLowerCase().includes(mission.titel.toLowerCase())) { named = true; break; }
+      if (await page.getByRole('button', { name: /^(Verder|Klaar)$/ }).filter({ visible: true }).count()) {
+        await clickButton(page, /^(Verder|Klaar)$/, 'last fact card');
+      }
+      await sleep(page, 400);
+    }
+    soft(named, `no reward card naming "${mission.titel}"`);
     let clue = false;
     // click through to the world like a player: prefer "back to patrol" (an adventure's
     // ending may first take one calm look at something in the world: wait it out)

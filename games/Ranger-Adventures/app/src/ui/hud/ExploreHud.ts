@@ -16,6 +16,7 @@ import { BESTURING } from '../../content/mentor';
 import { provideHint, type HintState } from '../../core/devhook';
 import { ROEP_COPY } from '../../engines/roep';
 import type { WayCue } from '../../render3d/Wayfinding';
+import type { JeepStall } from '../../render3d/world/Vehicles';
 import { Joystick } from '../Joystick';
 import { coarsePointer } from './device';
 import { session, esc, plainCard } from '../flow/session';
@@ -190,15 +191,37 @@ function stickShown(): boolean {
   return joystickVisible(store.get().settings.joystick, coarsePointer());
 }
 
+/** Run 6 polish: why the jeep stands while he holds the gas (Vehicles.tendStall), or
+ *  null; the key card says it in one line, read aloud once (not again for the same
+ *  reason within STALL_REPEAT_MS). */
+let driveStall: JeepStall | null = null;
+const stallSaidAt: Partial<Record<JeepStall, number>> = {};
+const STALL_REPEAT_MS = 20_000;
+function stallLine(why: JeepStall): string {
+  return why === 'dieren' ? HUD.rijden.dieren : why === 'rand' ? HUD.rand : HUD.rijden.vast;
+}
+export function setDriveStall(why: JeepStall | null): void {
+  if (why === driveStall) return;
+  driveStall = why;
+  renderVehiclePrompt();
+  if (!why || !store.get().settings.voorlezen) return;
+  const now = performance.now();
+  if (now - (stallSaidAt[why] ?? -Infinity) < STALL_REPEAT_MS) return;
+  stallSaidAt[why] = now;
+  if (speaking()) narrator.queue(stallLine(why)); else narrator.speak(stallLine(why));
+}
+
 /** W5.1: the jeep affordance — "Stap in de jeep" beside the parked jeep; while
- *  driving the controls line and "Stap uit". Reads the live `vehicleState()`. */
+ *  driving the controls line and "Stap uit" (or, held back with the gas on, why).
+ *  Reads the live `vehicleState()`. */
 export function renderVehiclePrompt(): void {
   const prompt = session.host.querySelector<HTMLDivElement>('.explore-vehicle-prompt');
   if (!prompt) return;
   const v = session.world?.vehicleState() ?? null;
   if (!v || (!v.near && !v.inVehicle)) prompt.innerHTML = '';
   else if (v.inVehicle) {
-    const lines = stickShown() ? [esc(HUD.rijden.stick)] : [DRIVE_KEYS_HTML, esc(HUD.rijden.uit)];
+    const lines = driveStall ? [`<span class="explore-drive-why">${esc(stallLine(driveStall))}</span>`]
+      : stickShown() ? [esc(HUD.rijden.stick)] : [DRIVE_KEYS_HTML, esc(HUD.rijden.uit)];
     prompt.innerHTML =
       `<p class="explore-heli-hint explore-drive-hint">${lines.join('<br>')}</p>` +
       `<button class="btn-start explore-vehicle-exit" type="button">${icon('jeep')}${esc(HUD.uit)}${enterCap()}</button>`;

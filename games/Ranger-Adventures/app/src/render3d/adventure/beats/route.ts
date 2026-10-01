@@ -155,12 +155,16 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
     void walk.then(() => { busy = false; });
   };
   canvas.addEventListener('pointerdown', onDown, { signal: k.signal });
+  let over = false;
   try {
     await show(true);
     await k.guard(complete);
+    over = true;
   } finally {
     canvas.removeEventListener('pointerdown', onDown);
     unhint();
+    // stopped mid-show ("Stop de missie"): no spot stays lit with its prints in the world
+    if (!over) field.clear();
   }
   const summary = run.summary();
   k.log(step, summary);

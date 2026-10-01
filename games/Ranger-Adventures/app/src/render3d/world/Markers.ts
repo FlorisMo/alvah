@@ -303,7 +303,8 @@ export class Markers {
     label.position.y = 2.0;
     board.add(label);
     this.scene.add(board);
-    this.obstacles.push(boxObstacle(boardAt.x, boardAt.z, 0.83, 0.24, board.rotation.y)); // its real footprint (wave 2)
+    // its real footprint (wave 2) and its height (run 6 polish: the walk lens passes over it)
+    this.obstacles.push({ ...boxObstacle(boardAt.x, boardAt.z, 0.83, 0.24, board.rotation.y), h: SIZE.missiebord.h });
     this.boardGroup = board;
     this.boardPos = boardAt.clone();
     void loadModel('prop-case-board').then((m) => {

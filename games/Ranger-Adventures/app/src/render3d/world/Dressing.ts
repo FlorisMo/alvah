@@ -860,12 +860,14 @@ export class Dressing {
       if (spec.h <= 1.8) this.farProps.push({ group, x, z, far: spec.collide > 0 ? 50 : 36 });
       if (model === 'prop-fallen-log') {
         // a log is long, not round: its footprint (half 1.56 × 0.46 of its height, the GLB)
-        this.obstacles.push(boxObstacle(x, z, 1.56 * spec.h, 0.46 * spec.h, group.rotation.y));
+        this.obstacles.push({ ...boxObstacle(x, z, 1.56 * spec.h, 0.46 * spec.h, group.rotation.y), h: spec.h });
       } else if (spec.collide > 0) {
         // a real tree also tells the follow camera where its foliage is (never a lens in the leaves)
         const crown = model === 'prop-pine-scots' || model === 'prop-oak-tree' || model === 'prop-birch-tree'
           ? { kind: model, h: spec.h, y: at.y } : undefined;
-        this.obstacles.push({ x, z, r: spec.collide, crown });
+        // (`h`: how tall it stands, run 6 polish: the walk lens passes over a boulder or a
+        // juniper, never through it)
+        this.obstacles.push({ x, z, r: spec.collide, crown, h: spec.h });
       }
       this.props.push({ id: model, x, z });
       void loadModel(model).then((m) => {

@@ -44,7 +44,7 @@ import { wireWorldDevhook } from '../dev/wireDevhook';
 import {
   showExploreHud, disposeExploreHud, onApproach, onWayfind, onInteract, onBoardApproach,
   tryOpenBoard, onPorchApproach, tryOpenPorch, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
-  setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint, beginGuide,
+  setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint, setDriveStall, beginGuide,
 } from '../hud/ExploreHud';
 import { armMissiebordBeat } from '../hud/Lessons';
 
@@ -209,6 +209,7 @@ function buildWorld(): World {
   world.setVehicle({
     onNear: () => renderVehiclePrompt(),
     onChange: (inVehicle) => { renderVehiclePrompt(); if (inVehicle) showDriveHint(); },
+    onStall: (why) => setDriveStall(why), // run 6 polish: held back with the gas on, says why
   });
   // W5.3b: the opt-in helicopter; the optIn source is read live (Instellingen toggle).
   world.setHeli({

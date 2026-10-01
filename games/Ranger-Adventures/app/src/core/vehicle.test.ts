@@ -929,3 +929,36 @@ test('brakeCap: the gentle stop, a steady firmer one when something appears clos
   const s = solidBrake(0, 0, 0, 1, 0, JEEP_BODY, [{ x: 0, z: 5, r: 0.6 }], 6, 6);
   assert.ok(s.cap < 6 && near(s.free, 5 - 0.6 - 1.9, 0.01), `a trunk dead ahead: the brake sees it ${s.free.toFixed(2)} m off`);
 });
+
+import { homeGap, parkOutOf, PARK_REACH, PARK_NEAR, PARK_FAR, type HomePlace } from './vehicle.ts';
+
+test('the jeep out of a home: left in it, it waits by the marker, out of the home and its pictures, on clear ground', () => {
+  // a home like the frisling's: a marker, a stand looked at from its approach, a wallow
+  // looked at from its own (the pictures look away from the marker, into the home)
+  const marker = { x: 0, z: 0 };
+  const places: HomePlace[] = [
+    marker,
+    { x: -4, z: 8 }, { x: -2.5, z: 5.5, heading: Math.atan2(-1.5, 2.5) },
+    { x: -10, z: 16 }, { x: -9, z: 11, heading: Math.atan2(-1, 5) },
+  ];
+  assert.ok(homeGap(-10, 18, 0, JEEP_BODY, places) < 0, 'parked by the wallow it stands in the home');
+  assert.equal(parkOutOf(30, 0, 0, JEEP_BODY, places, () => true, marker), null, 'far out of the home it stays where it is');
+  assert.ok(homeGap(-11, 26, 0, JEEP_BODY, places) >= 0 && parkOutOf(-11, 26, 0, JEEP_BODY, places, () => true, marker),
+    'out of the home but in the back of its pictures, it is parked by the marker too');
+  const to = parkOutOf(-10, 18, 0, JEEP_BODY, places, () => true, marker)!;
+  assert.ok(to, 'a spot is found');
+  const d = Math.hypot(to.x - marker.x, to.z - marker.z);
+  assert.ok(d >= PARK_NEAR - 1e-9 && d <= PARK_FAR + 1e-9, `it waits ${d.toFixed(1)} m from the marker`);
+  assert.ok(to.z < 0, `on the far side of the marker from the home (${to.x.toFixed(1)}, ${to.z.toFixed(1)})`);
+  assert.ok(homeGap(to.x, to.z, to.heading, JEEP_BODY, places, true) >= 0.5, 'out of the home and out of every picture looked from a place');
+  assert.ok(Math.cos(to.heading - Math.atan2(to.x, to.z)) > 0.9, 'facing out, away from the home');
+  // a solid on the best spots: the next clear one
+  const blocked = (x: number, z: number): boolean => Math.hypot(x - to.x, z - to.z) > 3;
+  const next = parkOutOf(-10, 18, 0, JEEP_BODY, places, blocked, marker)!;
+  assert.ok(next && Math.hypot(next.x - to.x, next.z - to.z) > 3, 'a spot on blocked ground is never picked');
+  // no marker given: the nearest spot round where he left it
+  const near = parkOutOf(-10, 18, 0, JEEP_BODY, places, () => true)!;
+  assert.ok(near && Math.hypot(near.x + 10, near.z - 18) <= PARK_REACH + 1e-9 && homeGap(near.x, near.z, 0, JEEP_BODY, places) >= 0.5,
+    'without a marker: out of the home within reach of where he left it');
+  assert.equal(parkOutOf(-10, 18, 0, JEEP_BODY, places, () => false, marker), null, 'no clear ground anywhere: it stays');
+});

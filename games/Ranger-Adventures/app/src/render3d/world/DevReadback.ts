@@ -372,9 +372,11 @@ export class DevReadback {
     if (len2 < 1e-6) return false; // lens on top of him
     for (const o of this.obstacles) {
       if (this.cam.isTree(o)) continue;            // a tree's trunk — the tree fades (CameraRig, world/Crowns.ts)
+      if (this.vehicles.seeThrough(o)) continue;   // the parked jeep, faded like a tree (run 6 polish)
       if (obstacleGap(o, ax, az) + (o.box ? o.box.pad : 0) <= 0) continue; // the prop the ranger stands at — not an occluder
-      // behind the lens or at/behind the ranger (t outside 0.05–0.95) is a backdrop; a box by its real rectangle
-      if (segmentCrosses(o, cx, cz, ax, az, 0.05, 0.95)) return true;
+      // behind the lens or at/behind the ranger (t outside 0.05–0.95) is a backdrop; a box by its real rectangle,
+      // the parked jeep by its body (its collision circles hold the walker's room too)
+      if (segmentCrosses(this.vehicles.parkedBody(o) ?? o, cx, cz, ax, az, 0.05, 0.95)) return true;
     }
     return false;
   }
