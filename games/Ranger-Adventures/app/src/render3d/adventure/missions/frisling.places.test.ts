@@ -1,21 +1,22 @@
 /**
  * frisling.places.test.ts — where "De verdwaalde frisling" happens is chosen by looking
  * at the world; this pins that it stays a good place (design run6-missions §3.4, §4.1):
- * dry, on the heath, inside the world, clear of the paths, the props and the other
- * markers, at the right distances from each other, and the rooting field's seven
+ * dry, on the heath (the stand in the meadow across the trail), inside the world, clear
+ * of the paths, the props and the other markers, at the right distances from each other
+ * (a real follow, a real lead home with the family ahead), and the rooting field's seven
  * look-alike spots in one view. Run: `npm test`.
  */
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  FRISLING_PLACES as P, FRISLING_RESIDENTS, MARKER, STAND, STAND_FRAME, FIELD_FRAME, WALLOW, WALLOW_FRAME, LOST_SPOT,
-  fieldSpots, hideClumps, frislingClearings, onStand, SEARCH_VIEW, FIELD_VIEW, WALLOW_VIEW,
+  FRISLING_PLACES as P, FRISLING_RESIDENTS, FRISLING_HOME, MARKER, STAND, STAND_FRAME, FIELD_FRAME, WALLOW, WALLOW_FRAME, LOST_SPOT,
+  fieldSpots, hideClumps, frislingClearings, onStand, SEARCH_VIEW, FIELD_VIEW, WALLOW_VIEW, LEAD_CLUMP_COUNT,
   cluePosts, clueGap, bootPrints, CLUE_FRAME,
 } from './frisling.places.ts';
 import { anchorInBiome, biomeAt, VEN_CENTER } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
-import { dist, headingTo, toLocal, atLocal } from '../places.ts';
+import { dist, headingTo, toLocal, atLocal, segDist } from '../places.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 
@@ -26,8 +27,13 @@ const OTHER_MARKERS = {
   herstel: { x: -34.999270825785885, z: -19.36623457627458 },
   wildcamera: { x: 15.556349186104047, z: -15.556349186104043 },
 };
-/** The world's props near the frisling home (world/Dressing.placeNatureDressing) + their solid radius. */
-const PROPS = [{ x: -10, z: -22, r: 0 }, { x: -20, z: -28, r: 0.9 }, { x: -6, z: -30, r: 0 }];
+/** The world's props near the frisling home (world/Dressing.placeNatureDressing, the
+ *  landmarks) + their solid radius: the foxgloves, the boulder, and in the meadow the west
+ *  signpost and the mushrooms (`__ranger.dressing()`/`obstacles()`, 2026-09-30). */
+const PROPS = [{ x: -10, z: -22, r: 0 }, { x: -20, z: -28, r: 0.9 }, { x: -6, z: -30, r: 0 }, { x: -16, z: 10, r: 1.2 }, { x: -19, z: 14, r: 0 }];
+/** Every tree near the meadow and the heath west of the clearing (`__ranger.treeSpots()`,
+ *  2026-09-30: none within 25 m of the stand; the nearest stand west of the boa post). */
+const TREES = [{ x: -51, z: -24 }];
 /** The roaming animals' wander loops (world/Fauna.placeAmbientLife): home + radius. */
 const ROAMERS = [
   { id: 'vos', x: -42, z: -2, r: 6 },
@@ -55,18 +61,22 @@ test('the marker is where the world puts it (the heide anchor)', () => {
   assert.equal(AREA_VELUWE.missies[0].id, 'frisling');
 });
 
-test('every place is dry heath inside the world', () => {
+/** The stand and the first clumps of the way home lie in the meadow north of the west
+ *  trail: the compass sector the world calls 'ven', grassland here, 70 m from its water. */
+const inMeadow = (p: { x: number; z: number }): boolean => biomeAt(p.x, p.z) === 'ven' && p.z > -6 && Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) > 60;
+
+test('every place is dry heath (or the dry meadow across the trail) inside the world', () => {
   for (const p of everything()) {
-    assert.equal(biomeAt(p.x, p.z), 'heide', `${p.name} is on the heath`);
+    assert.ok(biomeAt(p.x, p.z) === 'heide' || inMeadow(p), `${p.name} is on the heath or the dry meadow (${biomeAt(p.x, p.z)})`);
     assert.ok(Math.hypot(p.x, p.z) < 60, `${p.name} is well inside the world`);
     assert.ok(Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) > 25, `${p.name} is far from the ven`);
   }
 });
 
-test('the story reads from the marker: the family 10-14 m on, the squeak 7-10 m to the side', () => {
+test('the story reads from the marker: the family 10-14 m on, the squeak far off to the side', () => {
   const w = dist(MARKER, P.wallow), c = dist(MARKER, P.cover);
   assert.ok(w >= 10 && w <= 14, `the wallow is ${w.toFixed(1)} m from the marker`);
-  assert.ok(c >= 7 && c <= 10, `the stand is ${c.toFixed(1)} m from the marker`);
+  assert.ok(c >= 30 && c <= 39, `the stand is ${c.toFixed(1)} m from the marker`);
   // walking up from the clearing (spawn → marker), the wallow lies ahead, the stand to the side
   const walkIn = headingTo({ x: 0, z: 0 }, MARKER);
   const off = (p: { x: number; z: number }): number => {
@@ -81,12 +91,52 @@ test('the story reads from the marker: the family 10-14 m on, the squeak 7-10 m 
   assert.ok(dist(P.cover, P.field) + dist(P.field, P.wallow) < dist(P.cover, P.wallow) * 1.25, 'the field is on the way home');
 });
 
+test('a real follow and a real lead home: ~34 m after the squeak, ≥ 30 m back with the family ahead', () => {
+  // the follow: from the ring to where he searches the stand (the prints, the squeak)
+  const follow = dist(MARKER, P.coverApproach);
+  assert.ok(follow >= 15 && follow <= 36, `the follow is ${follow.toFixed(1)} m`);
+  // the lead: from the stand to where he watches the route, one straight walk of ≥ 30 m
+  // however close to the goal he stops (the walk ends within 1 m of it)
+  const lead = dist(P.coverApproach, P.fieldApproach);
+  assert.ok(lead - 1 >= 29.5, `the lead home is ${lead.toFixed(1)} m`);
+  // walking it, the family at the wallow is ahead (within ±25° of the way, the follow
+  // camera behind him sees it) all along, and in its last 15 m most of all
+  const h = headingTo(P.coverApproach, P.fieldApproach);
+  for (let t = 0; t <= 1.001; t += 0.1) {
+    const at = { x: P.coverApproach.x + (P.fieldApproach.x - P.coverApproach.x) * t, z: P.coverApproach.z + (P.fieldApproach.z - P.coverApproach.z) * t };
+    let d = headingTo(at, P.wallow) - h;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    assert.ok(Math.abs(d) < (25 * Math.PI) / 180, `at ${(t * 100).toFixed(0)}% of the way home the family is ${(d * 180 / Math.PI).toFixed(0)}° off ahead`);
+  }
+  // at least four clumps BESIDE the way (never on it: a child walks it straight), on both
+  // sides, two of them in its last 15 m where running is tempting
+  const beside = hideClumps().slice(0, LEAD_CLUMP_COUNT);
+  assert.ok(beside.length >= 4);
+  let left = 0, right = 0, late = 0;
+  for (const c of beside) {
+    const off = segDist(c, P.coverApproach, P.fieldApproach);
+    assert.ok(off > 1.6 && off < 3, `a clump ${off.toFixed(1)} m beside the way`);
+    const l = toLocal({ ...P.coverApproach, heading: h }, c);
+    if (l.u > 0) right += 1; else left += 1;
+    if (lead - l.v < 15) late += 1;
+  }
+  assert.ok(left >= 2 && right >= 2 && late >= 2, `clumps left ${left}, right ${right}, in the last 15 m ${late}`);
+  // the free-roam squeak is heard near the stand (the trail by it), never at the spawn
+  // clearing where Bram's first minute plays
+  const voice = FRISLING_RESIDENTS.find((r) => r.key === 'lost')!.voice!;
+  assert.ok(dist(P.cover, { x: 0, z: 0 }) > voice.within + 3, 'the squeak is not heard at the clearing');
+  // a stand this far from the wallow keeps the home drawn when he is near it (Residents)
+  assert.ok(FRISLING_HOME.spread?.some((s) => dist(s, P.cover) < 1), 'the home reaches out to its stand');
+});
+
 test('clear of the other missions, the paths, the props and the roaming animals', () => {
   for (const p of everything()) {
     for (const [id, m] of Object.entries(OTHER_MARKERS)) {
       assert.ok(dist(p, m) >= 8 + p.r - 0.5, `${p.name} keeps 8 m from the ${id} marker (${dist(p, m).toFixed(1)})`);
     }
     for (const q of PROPS) assert.ok(dist(p, q) > q.r + p.r + 0.3, `${p.name} is not on a prop at (${q.x}, ${q.z})`);
+    for (const q of TREES) assert.ok(dist(p, q) > p.r + 2, `${p.name} is not at a tree at (${q.x}, ${q.z})`);
     for (const a of ROAMERS) assert.ok(dist(p, a) > a.r + p.r + 2, `${p.name} is off the ${a.id}'s wander loop`);
   }
   // the stand, the field, the wallow and the loose clumps keep off the sand paths
@@ -116,7 +166,7 @@ test('the rooting field: seven look-alike spots in the PRINT_SPOTS layout, unifo
     const l = toLocal({ x: lens.x, z: lens.z, heading: P.fieldApproach.heading! }, p);
     assert.ok(l.v > 2 && Math.abs(Math.atan2(l.u, l.v)) < (35 * Math.PI) / 180, `spot ${p.id} is ahead in the view`);
   }
-  assert.deepEqual(frislingClearings().length, 1 + s.length);
+  assert.deepEqual(frislingClearings().length, 1 + s.length + 2);
 });
 
 test('the lost piglet lies in the stand where the trial says (content doel 52, 58), the decoys round him', () => {

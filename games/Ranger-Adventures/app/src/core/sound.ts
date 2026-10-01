@@ -346,13 +346,14 @@ export const Sound = {
   /**
    * An animal's call from where it is in the world (run 6): panned by its bearing from
    * the listener (the lens: where it stands and the heading it looks along), at most
-   * ±0.8, and softer further away — full within 3 m, soft at 15 m, silent past 25 m.
+   * ±0.8, and softer further away — full within 3 m, soft at 15 m, silent past 25 m
+   * (past `reach` m: a call a story wants followed from far off carries further).
    * One call at a time, like `call`. Returns its duration (s), 0 when out of earshot.
    */
-  callAt(id: string, x: number, z: number, listener: { x: number; z: number; yaw: number }): number {
+  callAt(id: string, x: number, z: number, listener: { x: number; z: number; yaw: number }, reach = 25): number {
     const a = ac();
     if (!a) return 0;
-    const { pan, gain } = placeCall(x, z, listener);
+    const { pan, gain } = placeCall(x, z, listener, reach);
     if (gain <= 0.01) return 0;
     const g = a.createGain();
     g.gain.value = gain;

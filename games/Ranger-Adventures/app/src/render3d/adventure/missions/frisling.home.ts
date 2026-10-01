@@ -31,7 +31,7 @@ import { CutFence } from './frisling.clue';
 import { SIZE } from '../../AnimalScale';
 import {
   FRISLING_PLACES, STAND, STAND_FRAME, WALLOW, WALLOW_FRAME, WALLOW_LOG, FIELD_FRAME, LOST_SPOT, SEARCH_VIEW,
-  fieldSpots, hideClumps, onStand, MARKER,
+  fieldSpots, hideClumps, onStand, MARKER, SEARCH_GLIMPSE,
 } from './frisling.places';
 
 export type { Decoy } from '../decoys';
@@ -104,7 +104,7 @@ export class FrislingHome implements HomeDressing {
     this.searchEye = lens.cam;
     const lyH = lyingHeight(heightFor('frisling'), LEG_SHARE.frisling);
     const back = backPoints(lost.x, g(lost.x, lost.z), lost.z, lost.yaw, SIZE.frisling.len, lyH);
-    const changed = openWindow(this.cover.stems, lens.cam, back, 0.3);
+    const changed = openWindow(this.cover.stems, lens.cam, back, SEARCH_GLIMPSE);
     this.cover.refresh();
     this.glimpse = { share: visibleShare(back, lens.cam, this.cover.stems), changed: changed.length };
 

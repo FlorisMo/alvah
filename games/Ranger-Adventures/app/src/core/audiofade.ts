@@ -141,15 +141,18 @@ export function callGain(w: Pick<CallWindow, 'loud' | 'peak'>, targetDb = CALL_T
 /**
  * Where a call sounds from (pure): `pan` in [−0.8, 0.8] (+ = to the right of where the
  * listener looks) and `gain` in [0, 1] by distance — full within 3 m, ≈ 0.25 at 15 m,
- * nothing past 25 m. The listener looks along (sin yaw, cos yaw).
+ * nothing past 25 m. The listener looks along (sin yaw, cos yaw). `reach` (run 6 polish,
+ * default 25 m) stretches that curve: a call a story wants him to follow from far off
+ * (the lost piglet's squeak, ~30 m across the meadow) carries `reach` m, softly.
  */
-export function placeCall(x: number, z: number, listener: { x: number; z: number; yaw: number }): { pan: number; gain: number } {
+export function placeCall(x: number, z: number, listener: { x: number; z: number; yaw: number }, reach = 25): { pan: number; gain: number } {
   const dx = x - listener.x, dz = z - listener.z;
   const d = Math.hypot(dx, dz);
   const fx = Math.sin(listener.yaw), fz = Math.cos(listener.yaw);
   const right = d > 1e-6 ? (-fz * dx + fx * dz) / d : 0;
   const pan = Math.max(-0.8, Math.min(0.8, right * 0.8));
-  const near = d <= 3 ? 1 : 1 / (1 + Math.pow((d - 3) / 6, 1.6));
-  const edge = Math.max(0, Math.min(1, (25 - d) / 5));
+  const k = d * (25 / Math.max(1, reach)); // (the distance on the 25 m curve)
+  const near = k <= 3 ? 1 : 1 / (1 + Math.pow((k - 3) / 6, 1.6));
+  const edge = Math.max(0, Math.min(1, (25 - k) / 5));
   return { pan, gain: near * edge };
 }

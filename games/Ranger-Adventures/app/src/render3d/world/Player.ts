@@ -65,6 +65,11 @@ const OVERLAP_FREE = 0.1;
  *  his back to the follow lens. The title and the maker are shots around this spot. */
 export const SPAWN = { x: 0, z: 0, heading: Math.PI } as const;
 
+/** Run 6 polish: a careful walk while he leads a young animal home (the frisling at his
+ *  heels): an adventure caps his WALK at the animal's pace for that walk (m/s; null = his
+ *  own brisk walk). Running is never capped: it is his to choose (and the animal hides). */
+export const walkPace: { cap: number | null } = { cap: null };
+
 /** A tap-walk eases in over its last stretch: he goes no faster than this many metres
  *  per second per metre still to go (he arrives, never brakes on the spot). */
 const ARRIVE_EASE = 3;
@@ -345,7 +350,8 @@ export class Player {
     // how fast he wants to go (+ along his heading, − backing up), eased in and out: a
     // start, a stop and the walk↔run switch take ~0.3 s, and a released key coasts him a
     // short way on (0.3 m walking, 0.55 m running) instead of stopping dead
-    let want = speedK === 0 ? 0 : back ? -WALK_SPEED * speedK : run ? RUN_SPEED : WALK_SPEED * speedK;
+    const walk = walkPace.cap === null ? WALK_SPEED : Math.min(WALK_SPEED, walkPace.cap);
+    let want = speedK === 0 ? 0 : back ? -WALK_SPEED * speedK : run ? RUN_SPEED : walk * speedK;
     if (mode === 'tap') want = Math.min(want, Math.max(0.3, tapDist * ARRIVE_EASE)); // arrive, don't brake
     this.speedNow = rampSpeed(this.speedNow, want, dt);
     back = this.speedNow.v < 0;

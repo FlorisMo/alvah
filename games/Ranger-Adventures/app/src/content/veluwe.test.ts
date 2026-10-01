@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AREA_VELUWE, VERHAALBOOG_VELUWE } from './veluwe.ts';
-import { lintText } from '../core/readlevel.ts';
+import { countWords, lintText } from '../core/readlevel.ts';
 import { forPointer } from '../core/onboarding.ts';
 
 type Enc = { id: string; vraag: string; uitleg?: string; gevolg?: string; opties: { label: string; goed: boolean }[] };
@@ -27,6 +27,24 @@ test('every rustkracht round reads at M3/E3 (≤7 words a sentence, choices of �
         assert.equal(e.opties.filter((o) => o.goed).length, 1, `${m.id}.${e.id}: exactly one right choice`);
       }
       for (const r of skin.regels ?? []) for (const i of lintText(r)) long.push(`${m.id} rule "${i.sentence}"`);
+    }
+  }
+  assert.deepEqual(long, []);
+});
+
+test('a round\'s question is ONE shown line on its card (the 2D floor, the 3D stage, the adventure): ≤ 7 words in all', () => {
+  // (lintText counts per sentence; a card shows the whole question on one line, so two
+  // short sentences can still put eight words side by side: "Daar is de groep! Het pad
+  // is vrij." did, run 6 playtest)
+  const long: string[] = [];
+  for (const m of AREA_VELUWE.missies) {
+    for (const st of m.stappen) {
+      for (const e of ((st.skin as { encounters?: (Enc & { vraagKnap?: string })[] }).encounters ?? [])) {
+        for (const k of ['vraag', 'vraagKnap'] as const) {
+          const t = e[k];
+          if (t && countWords(t) > 7) long.push(`${m.id}.${e.id}.${k}: "${t}" [${countWords(t)}]`);
+        }
+      }
     }
   }
   assert.deepEqual(long, []);
