@@ -43,7 +43,7 @@ import { searchBeat } from '../beats/search';
 import { choiceRun, type ChoiceRun } from '../beats/choice';
 import { listenerOf } from '../../world/Residents';
 import { dist, headingTo, toLocal, toward } from '../places';
-import { wayfind } from '../../Wayfinding';
+import { ARRIVE_RADIUS, bearing, cue as cueAt } from '../../Wayfinding';
 import { backPoints, openWindow } from '../cover-math';
 import { SIZE } from '../../AnimalScale';
 import { TREE_BASE_H } from '../../world/Forest';
@@ -489,11 +489,13 @@ function feetAtPool(k: AdventureKit, rust: ChoiceRun, home: ReeHome, pool: PoolS
       if (!warned && (l.u / (POOL.halfW + 2.2)) ** 2 + (l.v / (POOL.halfD + 2.2)) ** 2 < 1) { warned = true; k.say(enc.vraag); }
       if (home.inWater(r.x, r.z)) { wading = true; void plash().catch(() => {}); return; }
       if (plashes >= 2) {
-        // (after the second plash the chip names the way round and points along it)
-        const v = pool.round[Math.min(pool.round.length - 1, nextRound)];
-        if (dist(v, r) < 1.0) nextRound += 1;
-        const cue = wayfind(r.x, r.z, r.heading, v.x, v.z);
-        k.ui.setChip({ doel: c.chipRond ?? c.chipHut, cue: `${cue.richting} · ${cue.afstand}`, angle: cue.angle, glyph: 'boot' });
+        // (after the second plash the chip names the way round and points along it: at
+        // the next point of it still a stride ahead, the metres to its far end; never
+        // "je bent er" before he is past the water)
+        while (nextRound < pool.round.length - 1 && dist(pool.round[nextRound], r) < 1.2) nextRound += 1;
+        const v = pool.round[nextRound], end = pool.round[pool.round.length - 1];
+        const at = cueAt(bearing(r.x, r.z, r.heading, v.x, v.z), Math.max(ARRIVE_RADIUS, dist(r, end)));
+        k.ui.setChip({ doel: c.chipRond ?? c.chipHut, cue: `${at.richting} · ${at.afstand}`, angle: at.angle, glyph: 'boot' });
       }
       // past its far edge, dry: round it — the good words, then the walk's own
       if (l.v > POOL.halfD + 0.3 && Math.abs(l.u) < POOL.halfW + 3) {
