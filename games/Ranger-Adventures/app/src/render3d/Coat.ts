@@ -27,6 +27,9 @@
 export interface CoatTint {
   color: string;    // target coat hex (dossier-true)
   strength: number; // 0..1 lerp of the body material colour toward `color`
+  /** only the model's materials with these names (its coat), when its other parts (antlers,
+   *  a pale rump) are already true; unset: every material but the eyes */
+  only?: readonly string[];
 }
 
 /** Posture stance cue for a species: a forward (nose-down) pitch in radians. */
@@ -54,6 +57,11 @@ const COAT_TINT: Record<string, CoatTint> = {
   // not a GLB: the young lose their stripes and turn "roodbruin" before going dark
   // (3d-animal-animation-research §B2b), so last year's young reads reddish beside the sow.
   overloper: { color: '#8a4f2a', strength: 0.5 },
+  // run 7 (moods): the CC0 red deer's coat ('Material', its body) is an olive taupe that
+  // reads grey-brown in the world's light; dossier: "zomer roestig/roodbruin"
+  // (research/animal-visual-accuracy.md, Edelhert). Its near-black antlers ('Material.001')
+  // and its pale neck and rump stay its own.
+  'animal-edelhert-reddeer': { color: '#8a4b2c', strength: 0.55, only: ['Material'] },
 };
 
 /**
@@ -141,7 +149,7 @@ export function coatTintFor(id: string | null | undefined): CoatTint | null {
   if (!id) return null;
   const t = COAT_TINT[id];
   if (!t) return null;
-  return { color: t.color, strength: clamp(t.strength, 0, 1) };
+  return { color: t.color, strength: clamp(t.strength, 0, 1), ...(t.only ? { only: [...t.only] } : {}) };
 }
 
 /**

@@ -157,6 +157,7 @@ export function applyCoat(root: THREE.Object3D, id: string | null): number {
     mesh.material = mats.map((m) => {
       const src = m as THREE.Material & { color?: THREE.Color; name?: string };
       if (!src.color || EYE_NAME.test(src.name ?? '')) return m;
+      if (tint.only && !tint.only.includes(src.name ?? '')) return m; // (only its coat)
       const clone = src.clone() as THREE.Material & { color: THREE.Color };
       clone.color.copy(src.color).lerp(target, tint.strength);
       n++;

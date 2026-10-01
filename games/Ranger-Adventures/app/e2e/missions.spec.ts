@@ -781,6 +781,9 @@ test('De wildcamera: stopped in the night, the golden hour comes back and the ca
     const t0 = Date.now();
     await expect.poll(() => daylight(page), { timeout: 8_000, message: 'the golden hour comes back after a stop' }).toBe(1);
     log.note(`the golden hour was back ${((Date.now() - t0) / 1000).toFixed(1)} s after the stop`);
+    // run 7 (moods): the night hands back the visit's own mood (RANGER_MOOD plays it in one)
+    const md = await R<{ session: string; now: string } | null>(page, 'r.mood()');
+    log.soft(!md || md.now === md.session, `the visit's mood is back after the night (${md?.now}; the visit's: ${md?.session})`);
     await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null,
       { timeout: 8_000, message: 'back in free roam' }).toBe(true);
     await sleep(page, 1_000);
