@@ -8,16 +8,23 @@
  * sniffs, finds nothing, and the route shows again exactly as the core says.
  *
  * Construct parity (§6): the SAME `buildCorsiTrial` and the SAME pure `CorsiRun`
- * (`tap` → advance / complete / reshow) as the 2D floor, the spots in the PRINT_SPOTS
- * layout scaled uniformly, the same `{ trials: 1, correct }` summary, logged once.
- * Nothing interleaves a running sequence.
+ * (`tap` → advance / next / replay / ease / complete) as the 2D floor, the spots in the
+ * PRINT_SPOTS layout scaled uniformly, the same summary, logged once. Nothing interleaves
+ * a running sequence.
+ *
+ * Run 7 (`adaptive`, design §5.2): ROUNDS from the knobs (`k.knobs('corsi')`; a skin's
+ * `rondes` caps them for its story): after a route walked back a new route shows ("Kijk,
+ * nog een weg."), one longer when the last was clean; a wrong spot shows the route again,
+ * a second one silently a shorter route. The animal's `visit` show is every round's first
+ * show; a reshow after a wrong spot is the spots glowing, as always.
  */
 
 import * as THREE from 'three';
 import type { BeatSummary } from '../../../core/skill';
 import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
-import { buildCorsiTrial, CorsiRun } from '../../../engines/corsi';
+import { GROEI } from '../../../content/copy';
+import { buildCorsiTrial, CorsiRun, type SpanResult } from '../../../engines/corsi';
 import type { AdventureKit, FrameSpec } from '../kit';
 import type { Actor } from '../actors';
 import type { PatchField } from '../patches';
@@ -30,18 +37,30 @@ export interface RouteOpts {
   field: PatchField;
   /** the animal that goes to each spot he picks and sniffs it */
   walker?: Actor;
-  /** `vergeten`: said after the first show, before `wijs` (the squirrel forgot) */
-  lines: { kijk: string; wijs: string; mis: string; goed: string; vergeten?: string };
-  /** Run 6 (the squirrel): the FIRST show is an animal's visits — `visit` goes to the
-   *  spot and calls `light(true)` while it is there (it digs), `light(false)` as it
+  /** `vergeten`: said after a visit show, before `wijs` (the squirrel forgot); `nogEen`
+   *  (run 7, default `GROEI.nogEenWeg`): a new round's route is shown */
+  lines: { kijk: string; wijs: string; mis: string; goed: string; vergeten?: string; nogEen?: string };
+  /** Run 6 (the squirrel): each round's FIRST show is an animal's visits — `visit` goes to
+   *  the spot and calls `light(true)` while it is there (it digs), `light(false)` as it
    *  leaves; the beat waits for each visit, one spot at a time. A reshow (after a wrong
    *  pick) is the spots glowing in order, as always. */
   visit?: (spot: { id: number; x: number; z: number }, light: (on: boolean) => void) => Promise<void>;
   /** Run 6: the feedback to a pick, instead of the walker sniffing and the ranger walking
-   *  after it: resolves when the next pick may come (short: an animal's quick dash). */
-  picked?: (spot: { id: number; x: number; z: number }, res: 'advance' | 'complete' | 'reshow') => Promise<void>;
+   *  after it: resolves when the next pick may come (short: an animal's quick dash).
+   *  Run 7 (additive): `next` = a right spot that ends a round (a new route comes);
+   *  `reshow` = a wrong spot (the route again, or silently a shorter one). */
+  picked?: (spot: { id: number; x: number; z: number }, res: RoutePick) => Promise<void>;
   /** Run 6: a show just ended (recall is open): `first` = the animal's own visits */
   shown?: (first: boolean) => void;
+}
+
+/** What a pick was, for the home's own feedback (`picked`). */
+export type RoutePick = 'advance' | 'next' | 'complete' | 'reshow';
+
+/** The span core's answer as a home's feedback reads it (a replay and an ease look alike:
+ *  an ease is never shown). */
+function pickOf(res: SpanResult): RoutePick {
+  return res === 'replay' || res === 'ease' ? 'reshow' : res;
 }
 
 /** Show timings (s): each spot lit, dark between two, a breath before the first. */
@@ -53,8 +72,8 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
   k.check();
   k.beat = 'route';
   const settings = store.get().settings;
-  const trial = buildCorsiTrial(store.difficulty('corsi'), k.play.fork('corsi').rng); // run 7: the play's route (its 2D twin draws the same)
-  const run = new CorsiRun(trial.sequence);
+  const trial = buildCorsiTrial(k.steps[step].skin, k.knobs('corsi'));
+  const run = new CorsiRun(trial, k.play.fork('corsi').rng); // run 7: the play's routes (its 2D twin draws the same)
   await k.walkRanger(o.stand.x, o.stand.z, 0.04);
   await k.frame(o.view, { face: o.stand.heading });
   const field = o.field;
@@ -62,19 +81,23 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
   const canvas = k.ctx.canvas;
   let phase: 'show' | 'recall' | 'done' = 'show';
   let busy = false;
-  k.stats.route_length = trial.sequence.length;
+  run.begin();
+  k.stats.route_length = run.sequence.length;
+  k.stats.route_rounds = trial.knobs.rounds;
+  k.stats.route_round = 1;
 
-  /** The route, one spot at a time (the mission clock: it waits while paused). The
+  /** The route, one spot at a time (the mission clock: it waits while paused). A round's
    *  first show may be an animal's visits (`visit`); a reshow is the spots glowing. */
-  let shows = 0;
-  const show = async (say: boolean): Promise<void> => {
+  let shownRound = 0;
+  const show = async (say: string | null): Promise<void> => {
     phase = 'show';
     field.clear();
-    if (say) k.say(o.lines.kijk);
+    if (say) k.say(say);
     await k.wait(LEAD_S);
-    const visits = o.visit && shows === 0;
-    shows += 1;
-    for (const id of trial.sequence) {
+    const visits = !!o.visit && shownRound !== run.round;
+    shownRound = run.round;
+    const seq = [...run.sequence]; // this round's route (an ease draws a new, shorter one)
+    for (const id of seq) {
       const i = field.spots.findIndex((s) => s.id === id);
       if (visits) {
         await k.guard(o.visit!(field.spots[i], (on) => { field.show(i, on); if (on && settings.geluid) Sound.dig(); }));
@@ -137,12 +160,13 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
     if (o.walker && !o.picked) void o.walker.sniff(s.x, s.z, 1.2);
     const me = k.ranger();
     const d = Math.hypot(s.x - me.x, s.z - me.z);
-    const walk = o.picked ? o.picked(s, res).catch(() => {}) : d > 1.6 ? k.walkRanger(s.x, s.z, 1.25).catch(() => false) : Promise.resolve(true);
-    if (res === 'reshow') {
+    const walk = o.picked ? o.picked(s, pickOf(res)).catch(() => {}) : d > 1.6 ? k.walkRanger(s.x, s.z, 1.25).catch(() => false) : Promise.resolve(true);
+    if (res === 'replay' || res === 'ease') {
+      // a wrong spot: the route again ('replay'), or silently a shorter one ('ease')
       field.mark(i, 'wrong');
       if (settings.geluid) { Sound.sniff(); Sound.tryAgain(); }
       k.say(o.lines.mis);
-      void walk.then(() => k.wait(1.2)).then(() => { busy = false; return show(false); }).catch(() => {});
+      void walk.then(() => k.wait(1.2)).then(() => { busy = false; return show(null); }).catch(() => {});
       return;
     }
     field.mark(i, 'ok');
@@ -152,12 +176,25 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
       void walk.then(() => { busy = false; finished(); });
       return;
     }
+    if (res === 'next') {
+      // the round's route is walked back: a new route (one longer after a clean one)
+      phase = 'show';
+      k.stats.route_round = run.round;
+      k.stats.route_length = run.sequence.length;
+      if (settings.geluid) Sound.correct();
+      // (he walked after the animal to the last spot: back to where he watches, so he never
+      // stands in front of the new route)
+      const back = (): Promise<unknown> => (o.picked || Math.hypot(k.ranger().x - o.stand.x, k.ranger().z - o.stand.z) < 0.8
+        ? Promise.resolve() : k.walkRanger(o.stand.x, o.stand.z, 0.04).catch(() => false));
+      void walk.then(() => k.wait(0.5)).then(back).then(() => { busy = false; return show(o.lines.nogEen ?? GROEI.nogEenWeg); }).catch(() => {});
+      return;
+    }
     void walk.then(() => { busy = false; });
   };
   canvas.addEventListener('pointerdown', onDown, { signal: k.signal });
   let over = false;
   try {
-    await show(true);
+    await show(o.lines.kijk);
     await k.guard(complete);
     over = true;
   } finally {
@@ -169,6 +206,7 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
   const summary = run.summary();
   k.log(step, summary);
   k.stats.route_wrong = run.wrongCount;
+  k.stats.route_span = summary.span ?? 0;
   if (settings.geluid) Sound.found();
   k.say(o.lines.goed, { good: true });
   await k.wait(1.8);

@@ -25,6 +25,8 @@ import type { Step } from '../../content/types';
 import type { Play } from '../../core/play';
 import type { WorldCtx, Play3dEngine } from '../play/types';
 import { buildCorsiTrial, CorsiRun } from '../../engines/corsi';
+import { looseRng } from '../../core/play';
+import { GROEI } from '../../content/copy';
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
@@ -65,10 +67,10 @@ export function playCorsi3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Bea
     const settings = store.get().settings;
     const copy = step.skin.copy ?? {};
 
-    // SAME engine logic as the 2D view (construct parity §1f).
-    const diff = store.difficulty('corsi');
-    const trial = buildCorsiTrial(diff, play?.fork('corsi').rng); // run 7: the play's route (as its 2D twin)
-    const run = new CorsiRun(trial.sequence);
+    // SAME engine logic as the 2D view (construct parity §1f); run 7: rounds from the knobs,
+    // the play's routes (as its 2D twin)
+    const trial = buildCorsiTrial(step.skin, store.knobs('corsi'));
+    const run = new CorsiRun(trial, play ? play.fork('corsi').rng : looseRng('corsi'));
 
     const instructie = (settings.jargon && copy.instructieKnap) || copy.instructie || 'Onthoud de weg.';
     const tonen = copy.toon ?? 'Kijk goed welke weg de groep liep…';
@@ -170,21 +172,22 @@ export function playCorsi3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Bea
     /** Start the route once the stones stand AND the camera is still (never mid-move). */
     function maybeStart(): void {
       if (phase !== 'wait' || !loaded || !settled) return;
+      run.begin();
       showSequence(true);
     }
 
     /** Show the route. `sayIt`: say "Kijk goed…" after the line being said (never
      *  cutting the instruction off); a re-show after "Kijk nog een keer." says nothing. */
-    function showSequence(sayIt: boolean): void {
+    function showSequence(sayIt: boolean, line: string = tonen): void {
       clearTimers();
       phase = 'show';
       allDark();
-      banner(tonen);
-      if (sayIt && settings.voorlezen) narrator.queue(tonen);
+      banner(line);
+      if (sayIt && settings.voorlezen) narrator.queue(line);
       const on = reduced ? 620 : 700;   // how long a stone stays lit
       const gap = 300;                  // dark between two stones, so each is its own beat
       let t = 1100;
-      trial.sequence.forEach((id) => {
+      [...run.sequence].forEach((id) => {
         after(t, () => {
           allDark();
           const f = fx.get(id);
@@ -209,18 +212,26 @@ export function playCorsi3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Bea
       const id = parseInt(idStr, 10);
       const res = run.tap(id);
       const f = fx.get(id);
-      if (res === 'reshow') {
+      if (res === 'replay' || res === 'ease') {
+        // a wrong stone: the route again, or silently a shorter one
         if (settings.geluid) Sound.tryAgain();
         phase = 'show'; // freeze taps during the re-show
         allDark();
         if (f) { f.level = 0.8; f.lift = 0.4; f.color = WRONG; }
-        banner('Kijk nog een keer.');
-        speak('Kijk nog een keer.');
+        banner(GROEI.kijkNogEens);
+        speak(GROEI.kijkNogEens);
         after(1000, () => showSequence(false));
       } else {
         if (settings.geluid) Sound.step();
         if (f) { f.level = 0.3; f.lift = 0; f.color = OK; }
         if (res === 'complete') finish();
+        else if (res === 'next') {
+          // the route walked back: a new route (one longer after a clean one)
+          phase = 'show';
+          if (settings.geluid) Sound.correct();
+          speak(GROEI.nogEenWeg);
+          after(1000, () => showSequence(false, GROEI.nogEenWeg));
+        }
       }
     }
 

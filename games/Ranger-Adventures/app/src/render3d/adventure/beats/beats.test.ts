@@ -11,6 +11,8 @@ import { AimRun, ruleChips } from './aim-math.ts';
 import { listenPlan } from './callers-math.ts';
 import { WisselRun, placeNames, regelAndersom, type WisselBin, type WisselItem, type WisselTrial } from '../../../engines/wisselen.ts';
 import { SimonRun } from '../../../engines/simon.ts';
+import { knobsFor } from '../../../core/skill.ts';
+import { newPlay } from '../../../core/play.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 
 const WC = AREA_VELUWE.missies.find((m) => m.id === 'wildcamera')!;
@@ -84,10 +86,9 @@ test('the callers call in the sequence\'s order, each at least 0.65 s, calm gaps
   assert.ok(listenPlan(['das'], () => 1, true)[0].gap > plan[0].gap, 'a little longer under reduced motion');
   const dieren = WC.stappen.find((s) => s.ef === 'simon')!.skin.dieren!;
   assert.deepEqual([...dieren], ['das', 'wildzwijn', 'ree', 'nachtzwaluw'], 'the night callers');
-  let i = 0;
-  const run = new SimonRun(3, () => dieren[(i++ * 3) % 4]);
-  const seq = run.begin();
-  for (const id of seq) run.tap(id);
-  for (const id of run.sequence) run.tap(id);
-  assert.deepEqual(run.summary(), { trials: 1, correct: 1 });
+  // run 7: the echo plays rounds from the knobs (a first game: 2 → 3 → 4), all clean
+  const run = new SimonRun(knobsFor('simon', 1), dieren, newPlay('wildcamera', 5, 1).fork('simon').rng);
+  run.begin();
+  while (!run.finished) for (const id of [...run.sequence]) run.tap(id);
+  assert.deepEqual(run.summary(), { trials: 3, correct: 3, span: 4, start: 2, rounds: 3, eased: 0, firstClean: true });
 });

@@ -1,124 +1,114 @@
 /**
- * corsi3d.parity.test.ts — the seeded construct-parity test for the diegetic 3D
- * "corsi" variant (BUILD-PLAN §1f/§4 acceptance, §9e). Run:
+ * corsi3d.parity.test.ts — construct parity for Geheugenkracht (run 7 `adaptive`, design
+ * §5.7): the 2D floor (`render2d/RouteView`), the classic 3D stage (`render3d/engines/corsi3d`)
+ * and the world's route beat (`adventure/beats/route`) all build the route the same way —
+ * `buildCorsiTrial(skin, knobs)` + `new CorsiRun(trial, play.fork('corsi').rng)` over the
+ * seven PRINT_SPOTS — so the same knobs, seed and taps give the same routes and the same
+ * summary. Pinned three ways: (1) each view's source builds it exactly so and never draws
+ * from `Math.random`; (2) for seeds 1..20 and scripted players (perfect, one wrong, two
+ * wrongs in one round, wrongs in two rounds) a 2D-built and a world-built run agree spot for
+ * spot; (3) both match an INDEPENDENT reference model of the rules.
  *   node --experimental-strip-types --test src/render3d/engines/corsi3d.parity.test.ts
- *
- * Parity is guaranteed BY CONSTRUCTION: both `render2d/RouteView` (2D) and
- * `render3d/engines/corsi3d` (3D) drive the same pure `CorsiRun` core + the same
- * `buildCorsiTrial`. This test pins that core's frozen contract — the exact rule
- * the 2D twin has always used — so the two views can never silently diverge in
- * WHAT they score:
- *   trials  = 1 (always one route per beat),
- *   correct = 1 ONLY when the route was recalled with no wrong tap.
- * A wrong tap is RECOVERABLE: it's counted once and recall restarts from the start
- * (the route is re-shown, never game-over). Deterministic.
  */
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildCorsiTrial, CorsiRun } from '../../engines/corsi.ts';
-import type { Settings } from '../../core/state.ts';
+import { readFileSync } from 'node:fs';
+import { buildCorsiTrial, CorsiRun, PRINT_SPOTS } from '../../engines/corsi.ts';
+import { knobsFor, type BeatSummary, type SpanKnobs } from '../../core/skill.ts';
+import { newPlay } from '../../core/play.ts';
+import type { Skin } from '../../content/types.ts';
 
-/** A seeded deterministic rng (mulberry32) so `buildCorsiTrial` is reproducible. */
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+const SKIN = {} as Skin;
+
+function build(knobs: SpanKnobs, seed: number, skin: Skin = SKIN): CorsiRun {
+  return new CorsiRun(buildCorsiTrial(skin, knobs), newPlay('frisling', seed, 1).fork('corsi').rng);
 }
 
-/** Reference scorer — an INDEPENDENT re-implementation of the frozen 2D rule
- *  (correct = recalled with zero wrong taps), used to cross-check the shared core.
- *  Mirrors real play: feed taps until the route is fully recalled. */
-function reference(sequence: number[], taps: number[]): { trials: number; correct: number } {
-  let idx = 0, wrong = 0;
-  for (const t of taps) {
-    if (idx >= sequence.length) break;
-    if (t === sequence[idx]) idx += 1;
-    else { wrong += 1; idx = 0; }
+/** A scripted player: in round r it first taps a wrong spot `wrongs[r]` times, then walks the
+ *  route back right. Returns every route it was shown. */
+function play(run: CorsiRun, wrongs: readonly number[]): { shown: number[][]; summary: BeatSummary } {
+  const shown: number[][] = [];
+  run.begin();
+  let r = 0;
+  while (!run.finished) {
+    shown.push([...run.sequence]);
+    for (let i = 0; i < (wrongs[r] ?? 0); i++) {
+      run.tap(PRINT_SPOTS.find((s) => s.id !== run.expected)!.id);
+      shown.push([...run.sequence]);
+    }
+    let res = run.tap(run.expected);
+    while (res === 'advance') res = run.tap(run.expected);
+    r += 1;
   }
-  return { trials: 1, correct: wrong === 0 ? 1 : 0 };
+  return { shown, summary: run.summary() };
 }
 
-/** Drive the SHARED core the way both views do (tap by spot id until complete). */
-function drive(sequence: number[], taps: number[]): { trials?: number; correct?: number } {
-  const run = new CorsiRun(sequence);
-  for (const t of taps) {
-    if (run.finished) break;
-    run.tap(t);
+/** INDEPENDENT reference of the span rules (design §5.2). */
+function reference(k: SpanKnobs, wrongs: readonly number[]): BeatSummary {
+  let len = k.start, played = 0, clean = 0, longest = 0, eased = 0;
+  let first: boolean | null = null;
+  for (let r = 0; ; r++) {
+    let strikes = 0;
+    for (let i = 0; i < (wrongs[r] ?? 0); i++) {
+      strikes += 1;
+      if (strikes === 2) { strikes = 0; eased += 1; len = Math.max(2, len - 1); }
+    }
+    played += 1;
+    const ok = !(wrongs[r] ?? 0);
+    if (first === null) first = ok;
+    if (ok) { clean += 1; longest = Math.max(longest, len); }
+    if (played >= k.rounds || (ok && len >= k.max)) break;
+    if (ok) len = Math.min(k.max, len + 1);
   }
-  return run.summary();
+  return { trials: played, correct: clean, span: longest, start: k.start, rounds: played, eased, firstClean: first ?? false };
 }
 
-const SEQ = [3, 1, 4, 2]; // a fixed route fixture (4 spots)
+const SCRIPTS: Record<string, number[]> = {
+  perfect: [],
+  'one wrong': [1],
+  'two wrongs in one round': [2],
+  'wrongs in two rounds': [1, 1],
+  'a late struggle': [0, 2, 3],
+};
 
-test('perfect recall → correct 1, trials 1, and matches the reference', () => {
-  const taps = [...SEQ];
-  const s = drive(SEQ, taps);
-  assert.equal(s.trials, 1);
-  assert.equal(s.correct, 1);
-  assert.deepEqual(s, reference(SEQ, taps));
+test('each view builds the route the same way, from the knobs and the play (never Math.random)', () => {
+  const src = (p: string): string => readFileSync(new URL(p, import.meta.url), 'utf8');
+  for (const [name, s] of [
+    ['2D RouteView', src('../../render2d/RouteView.ts')],
+    ['3D corsi3d', src('./corsi3d.ts')],
+    ['world route', src('../adventure/beats/route.ts')],
+  ] as const) {
+    assert.match(s, /buildCorsiTrial\(step\.skin|buildCorsiTrial\(k\.steps\[step\]\.skin/, `${name}: the trial from its skin`);
+    assert.match(s, /knobs\('corsi'\)/, `${name}: the level's knobs`);
+    assert.match(s, /new CorsiRun\(trial, [^)]*fork\('corsi'\)\.rng/, `${name}: the run from the play's fork`);
+    assert.doesNotMatch(s, /Math\.random/, `${name}: no Math.random`);
+  }
 });
 
-test('one wrong tap → correct 0 (recoverable), matches the reference', () => {
-  // tap wrong first, then recall the whole route correctly
-  const taps = [9, ...SEQ];
-  const s = drive(SEQ, taps);
-  assert.equal(s.correct, 0);
-  assert.equal(s.trials, 1);
-  assert.deepEqual(s, reference(SEQ, taps));
+test('seeds 1..20 × scripts × bands: the 2D-built and the world-built route agree spot for spot, and match the reference', () => {
+  for (let band = 1; band <= 6; band++) {
+    const knobs = knobsFor('corsi', band);
+    for (let seed = 1; seed <= 20; seed++) {
+      for (const [name, wrongs] of Object.entries(SCRIPTS)) {
+        const a = play(build(knobs, seed), wrongs);
+        const b = play(build(knobs, seed), wrongs);
+        assert.deepEqual(a, b, `band ${band} seed ${seed} ${name}: 2D vs world`);
+        assert.deepEqual(a.summary, reference(knobs, wrongs), `band ${band} seed ${seed} ${name}: reference`);
+        for (const route of a.shown) assert.equal(new Set(route).size, route.length, 'no spot twice in a route');
+      }
+    }
+  }
 });
 
-test('a wrong tap restarts recall from the beginning (not from where it failed)', () => {
-  const run = new CorsiRun(SEQ);
-  assert.equal(run.expected, 3);
-  assert.equal(run.tap(3), 'advance');
-  assert.equal(run.expected, 1);
-  assert.equal(run.tap(7), 'reshow'); // wrong
-  assert.equal(run.recallIndex, 0, 'recall index reset to the start');
-  assert.equal(run.expected, 3, 'must tap the first spot again');
-  assert.equal(run.wrongCount, 1);
+test('a fresh save walks a route of 3, then a new one of 4; a practised save starts at 4 with 3 rounds', () => {
+  const fresh = play(build(knobsFor('corsi', 1), 11), []);
+  assert.deepEqual(fresh.shown.map((s) => s.length), [3, 4]);
+  assert.notDeepEqual(fresh.shown[1].slice(0, 3), fresh.shown[0], 'each round a new route (not the old one plus a spot)');
+  assert.deepEqual(play(build(knobsFor('corsi', 4.2), 11), []).shown.map((s) => s.length), [4, 5, 6]);
 });
 
-test('the last correct tap completes the route (and only then)', () => {
-  const run = new CorsiRun(SEQ);
-  assert.equal(run.tap(3), 'advance');
-  assert.equal(run.tap(1), 'advance');
-  assert.equal(run.tap(4), 'advance');
-  assert.equal(run.finished, false);
-  assert.equal(run.tap(2), 'complete');
-  assert.equal(run.finished, true);
-});
-
-test('stubborn retries stay recoverable and never score negative', () => {
-  // wrong on every spot once before getting the route clean
-  const taps = [9, 3, 9, 3, 1, 9, 3, 1, 4, 9, 3, 1, 4, 2];
-  const s = drive(SEQ, taps);
-  assert.equal(s.trials, 1);
-  assert.equal(s.correct, 0);
-  assert.ok((s.correct ?? -1) >= 0);
-  assert.deepEqual(s, reference(SEQ, taps));
-});
-
-test('deterministic — same route + same taps yields the same summary', () => {
-  const taps = [3, 9, 3, 1, 4, 2];
-  assert.deepEqual(drive(SEQ, taps), drive(SEQ, taps));
-});
-
-test('buildCorsiTrial route length follows difficulty, clamped 3..6, seeded-stable', () => {
-  const mk = (routeLengte: number, seed: number) =>
-    buildCorsiTrial({ routeLengte } as Settings, rng(seed));
-  assert.equal(mk(3, 1).sequence.length, 3);
-  assert.equal(mk(5, 1).sequence.length, 5);
-  assert.equal(mk(1, 1).sequence.length, 3, 'floor at 3');
-  assert.equal(mk(99, 1).sequence.length, 6, 'cap at 6');
-  // every id is a real, distinct spot from the layout
-  const t = mk(6, 42);
-  assert.equal(new Set(t.sequence).size, t.sequence.length);
-  for (const id of t.sequence) assert.ok(t.spots.some((sp) => sp.id === id));
-  // seeded determinism
-  assert.deepEqual(mk(5, 7).sequence, mk(5, 7).sequence);
+test('a skin may cap the rounds for its story (rondes)', () => {
+  const capped = play(build(knobsFor('corsi', 5), 3, { rondes: 2 } as Skin), []);
+  assert.deepEqual(capped.shown.map((s) => s.length), [5, 6]);
 });

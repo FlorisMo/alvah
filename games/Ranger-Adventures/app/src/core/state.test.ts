@@ -111,8 +111,34 @@ test('the store: a beat goes into the history and the skill record, as before', 
   assert.equal(store.level('dagnacht'), store.get().skill.dagnacht.level);
   assert.deepEqual(store.knobs('dagnacht'), knobsFor('dagnacht', store.level('dagnacht')));
   store.setSetting({ autoMoeilijk: false, routeLengte: 5 });
-  assert.deepEqual(store.knobs('corsi'), { start: 5, max: 5, rounds: 1 }, 'automatisch off: the manual setting');
+  assert.deepEqual(store.knobs('corsi'), { start: 5, max: 5, rounds: 2 }, 'automatisch off: the manual setting (no growth, fixed rounds)');
   store.setSetting({ autoMoeilijk: true });
+});
+
+test('the store: a span beat is judged by its engine; a whole step marks the reward card (run 7 adaptive)', () => {
+  store.resetSkill();
+  // the owner's example: a first echo game 2 → 3 → 4, all clean → won easily → simon starts at 3
+  store.logBeat('simon', { trials: 3, correct: 3, span: 4, start: 2, rounds: 3, eased: 0, firstClean: true }, { missionId: 'wildcamera', view: 'world', play: null });
+  let s = store.get();
+  assert.equal(s.skill.simon.level, 2);
+  assert.equal(s.skill.simon.beats, 1);
+  assert.deepEqual(s.recentGroei, ['simon'], 'a whole step: the reward card says it grows');
+  assert.equal(store.knobs('simon').start, 3, 'the next echo starts at 3');
+  const log = s.geschiedenis.at(-1)!;
+  assert.deepEqual([log.e, log.lv, log.n, log.c, log.sp, log.st], ['simon', 1, 3, 3, 4, 2]);
+  // a hard one: half a step down, silently, never under one step below his best
+  store.clearGroei();
+  store.logBeat('simon', { trials: 3, correct: 1, span: 3, start: 3, rounds: 3, eased: 2, firstClean: false }, { missionId: 'eekhoorn', view: 'world', play: null });
+  s = store.get();
+  assert.equal(s.skill.simon.level, 1.5);
+  assert.equal(s.skill.simon.best, 2);
+  assert.deepEqual(s.recentGroei, [], 'down is never marked');
+  store.logBeat('simon', { trials: 3, correct: 0, span: 0, start: 2, rounds: 3, eased: 3, firstClean: false }, { missionId: 'eekhoorn', view: 'world', play: null });
+  assert.equal(store.get().skill.simon.level, 1, 'the floor: one step under his best (2 → 1)');
+  // the hut's care game (a binary summary) still moves the old staircase
+  store.logSession('corsi', { trials: 1, correct: 1 });
+  assert.equal(store.get().skill.corsi.level, 1.34);
+  store.resetSkill();
 });
 
 test('the store: a discovery is new once; plays and rare counters count; a session is noted', () => {
