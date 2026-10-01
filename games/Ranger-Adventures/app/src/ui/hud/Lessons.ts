@@ -185,7 +185,10 @@ function tick(now: number): void {
     return;
   }
   if (current?.kind === 'beat') {
-    if (!current.saying) sayBeat(current);
+    // he got into the jeep while Bram still suggests it: the rest is moot ("Pak de jeep
+    // maar!" over a ride he already took, and again when he stepped out)
+    if (current.id === 'jeep' && !onFoot && current.saying) cancelSpeaker();
+    else if (!current.saying) sayBeat(current);
     return;
   }
   if (now < gapUntil) return;
@@ -282,7 +285,7 @@ function linesOf(id: Exclude<StepId, LessonId>): string[] {
 function sayBeat(c: { kind: 'beat'; id: Exclude<StepId, LessonId>; from: number; saying: boolean }): void {
   // a beat cut off by a menu or a mission is moot when it is picked up again if what it
   // was about is past: the jeep once he sits in it, the hook once the first mission is done
-  const moot = (c.id === 'jeep' && !!session.world?.vehicleState()?.inVehicle) || (c.id === 'haak' && !hookRelevant())
+  const moot = (c.id === 'jeep' && (!!session.world?.vehicleState()?.inVehicle || !!store.get().settings.geleerd.jeep)) || (c.id === 'haak' && !hookRelevant())
     || (c.id === 'raaf' && store.get().companion.rescued);
   if (moot) { store.learn(c.id as 'jeep' | 'haak' | 'raaf'); finishStep(performance.now()); return; }
   const lines = linesOf(c.id);
