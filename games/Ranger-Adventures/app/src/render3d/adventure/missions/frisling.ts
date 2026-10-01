@@ -158,11 +158,20 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const listener = (): { x: number; z: number; yaw: number } => listenerOf(k.world.camera);
   const call = (id: string, a: Actor): void => { if (settings.geluid) Sound.callAt(id, a.x, a.z, listener()); };
   const me = (): { x: number; z: number; speed: number } => { const m = k.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
+  /** After a framed moment (he faced the animal at his side) he turns for `to` and takes a
+   *  first calm step that way: the lens comes back behind him facing the way he goes. */
+  const setOff = async (to: { x: number; z: number }): Promise<void> => {
+    const r = k.ranger();
+    if (dist(r, to) < 2.5) return;
+    const step = toward(r, to, 0.8);
+    await k.walkRanger(step.x, step.z, 0.1);
+  };
   /** an animal back at its place in this play's layout, doing what it does there */
   const atHome = (a: Actor, pose: ResidentPose): void => { if (pose.idle === 'stand') a.idle(); else a.root(pose.x, pose.z, pose.roam ?? 0.5); };
   const lead = {
-    // (at his left side, a little back: in the picture beside his legs as they walk)
-    actor: lost, gap: 0.4, side: -0.8, hide: home.hideSpots(),
+    // (at his left side, a little back: in the picture beside his legs as they walk —
+    // never in the line from the lens to him, or the lens would keep side-stepping it)
+    actor: lost, gap: 0.4, side: -1.15, hide: home.hideSpots(),
     runLine: c.nietRennen, backLine: c.terugKomen, waitLine: c.wacht, pace: LEAD_PACE,
     onHide: (s: { x: number; z: number }): void => {
       call('piep', lost);
@@ -263,6 +272,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   if (s1) await weg(s1, 'stand');
 
   // 7 · lead him home to the rooting field, calmly, his family ahead all the way
+  await setOff(way.fieldApproach);
   await k.walk({ name: 'field', to: way.fieldApproach, r: 1.0, line: c.leid, doel: c.chipWroet, glyph: 'boot', lead });
   k.say(c.routeKijk); // (the route's own words from here, never the walk's)
 
@@ -280,6 +290,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   if (s2) await weg(s2, 'field');
 
   // 10 · on to the wallow, the piglet at his heels
+  await setOff(way.toWallow[0] ?? way.wallowTalk);
   await k.walk({ name: 'wallow', to: way.wallowTalk, r: 1.5, line: c.breng, doel: c.chipModder, glyph: 'boot', lead, via: way.toWallow });
 
   // 11 · at the mud (s3): the sow's stare and the free path, in the drawn order
