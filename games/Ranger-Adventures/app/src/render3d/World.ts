@@ -55,6 +55,7 @@ import { Residents, type DressingBuilder, type FrameView, type ResidentBody } fr
 import { Stage } from './play/stage';
 import type { HomeSpec } from './adventure/types';
 import { DEFAULT_MOOD, type MoodId } from './Moods';
+import { MOOD_FADE_S } from './world/Sky';
 import type { TreeSpecies, TreeStub } from './world/Forest';
 
 export type { WorldMarker } from './world/Markers';
@@ -251,12 +252,15 @@ export class World {
     activeId: string | null = null,
     onBiome: (biome: Biome) => void = () => {},
     onInteract: (missionId: string) => void = () => {},
-    opts: { homes?: readonly WorldHome[] } = {},
+    opts: { homes?: readonly WorldHome[]; mood?: MoodId } = {},
   ) {
     this.canvas = canvas;
     this.onBiome = onBiome;
 
-    this.sky = new Sky(this.scene); // golden-hour sky, fog, hemisphere fill + the hero-shadow sun
+    // run 7: the visit's mood (WorldSession draws it before the title shows: the golden hour
+    // on a save's first visit)
+    this.moodSession = this.moodNow = opts.mood ?? DEFAULT_MOOD;
+    this.sky = new Sky(this.scene, this.moodSession); // the mood's sky, fog, hemisphere fill + the hero-shadow sun
 
     this.terrain = new Terrain({
       detail: this.groundDetailOn,
@@ -411,9 +415,6 @@ export class World {
     this.player.listenPointer(); // F-17 click-vs-drag seam: tap-to-walk or drag-orbit
     canvas.addEventListener('wheel', this.cam.onWheel, { passive: false }); // F-16 dolly zoom
     this.player.listenKeys(() => this.tryInteract());
-    // run 7: this visit's mood (the world is built once per page load). `contracts`: always
-    // the golden hour; the `moods` package draws it (never the last session's)
-    store.noteSession(this.moodSession);
   }
 
   /**
@@ -956,12 +957,13 @@ export class World {
     return { session: this.moodSession, now: this.moodNow };
   }
 
-  /** Run 7: put the world in a mood (a crossfade of ~`seconds`; a cut under reduced
-   *  motion). `contracts`: only the golden hour exists, so this records the id and the
-   *  picture stays as it is; the `moods` package makes it show. */
-  setMood(id: MoodId, seconds?: number): void {
-    void seconds;
+  /** Run 7: put the world in a mood (world/Sky.ts: a crossfade of ~`seconds`, 2.5 s by
+   *  default; a cut with 0 or under reduced motion). A cut is for a moment a card covers
+   *  the world: it also puts the sun where this mood has it (a crossfade never moves it). */
+  setMood(id: MoodId, seconds: number = MOOD_FADE_S): void {
     this.moodNow = id;
+    this.sky.setMood(id, seconds);
+    if (seconds <= 0) this.sky.settleSun();
   }
 
   /**
@@ -1128,7 +1130,7 @@ export class World {
     // is off, so a frozen clock stills every effect together (comfort §C). Runs
     // every frame (even during an in-place activity) so the sky keeps breathing.
     const st = this.sky.advance(dt, reduced); // clouds drift + the flyover bird sails
-    this.dressing.animate(st, reduced); // grass wind wave + the ven water shimmer
+    this.dressing.animate(st, reduced, this.sky.wind); // grass wind wave (the mood's breeze) + the ven water shimmer
 
     this.tendBeacon();
 

@@ -1,30 +1,50 @@
 /**
- * world/Sky.ts — the sky, the golden-hour light and the slow ambient clock.
+ * world/Sky.ts — the sky, the light of the mood the world stands in, and the slow ambient
+ * clock.
  *
- * The baked golden-hour sky + fog, the shared hemisphere fill, the warm sun with its
- * tight hero shadow frustum that follows the ranger, the drifting cloud shade on the
- * ground and the ~12 s bird flyover. `skyTime` is the ambient clock every secondary motion reads
- * (wind in the grass, the water shimmer); it only advances when reduced-motion is off,
- * so all of it freezes together (comfort §C).
+ * The baked sky + fog, the shared hemisphere fill, the sun with its tight hero shadow
+ * frustum that follows the ranger, the drifting cloud shade on the ground and the ~12 s
+ * bird flyover. `skyTime` is the ambient clock every secondary motion reads (wind in the
+ * grass, the water shimmer); it only advances when reduced-motion is off, so all of it
+ * freezes together (comfort §C).
+ *
+ * Run 7 (moods): the light is a MOOD (render3d/Moods.ts: the golden hour, a misty morning, a
+ * bright day, an overcast afternoon, a soft dusk). `setMood` crossfades the lights, the fog's
+ * colour and range, the animals' fill and the sky (a second dome laid over the first while
+ * it fades: one draw call more, only then); a cut under reduced motion. The sun's place is
+ * part of a mood but never moves in view: a crossfade keeps it, and it changes at the next
+ * cut (a card over the world, `setMood(…, 0)`). The wildcamera's night (`setDaylight`) mixes
+ * from whatever mood is on screen and back.
  */
 
 import * as THREE from 'three';
-import { SKY_STOPS, cloudOffset, cloudShadeShader, windSway, flyoverAt, type Flyover } from '../Atmosphere';
-import { GOLDEN_HOUR, addGoldenHourHemi, makeGoldenHourSun, makeSkyDome } from '../Lighting';
+import { cloudOffset, cloudShadeShader, windSway, flyoverAt, type Flyover } from '../Atmosphere';
+import { GOLDEN_HOUR, addGoldenHourHemi, bakeGoldenHourSky, makeGoldenHourSun, makeSkyDome } from '../Lighting';
 import { DaylightFade, DAYLIGHT_FADE_S, MOON_DIR, NIGHT_STOPS, lightAt, nightSet, type LightSet } from '../Daylight';
+import { DEFAULT_MOOD, MOODS, keyElevation, mixMood, type Mood, type MoodId } from '../Moods';
+import { setAnimalFill } from '../AnimalDress';
 
-const SKY_LOW = GOLDEN_HOUR.fogColor; // shared golden-hour horizon + fog colour (P1.1)
-
-/** The golden hour's lights (Lighting.GOLDEN_HOUR), as the day↔night mix reads them. */
-const DAY_SET: LightSet = {
-  fog: SKY_LOW,
-  hemiSky: `#${new THREE.Color(GOLDEN_HOUR.skyColor).getHexString()}`,
-  hemiGround: `#${new THREE.Color(GOLDEN_HOUR.groundColor).getHexString()}`,
-  hemiI: GOLDEN_HOUR.fillIntensity,
-  key: `#${new THREE.Color(GOLDEN_HOUR.keyColor).getHexString()}`,
-  keyI: GOLDEN_HOUR.keyIntensity,
-};
 const NIGHT_SET: LightSet = nightSet(GOLDEN_HOUR.exposure);
+
+/** How long (s) one mood takes to turn into the next: calm, never a snap. */
+export const MOOD_FADE_S = 2.5;
+
+/** Each mood's sky ramp, baked once a session (never per frame). */
+const ramps = new Map<MoodId, THREE.Texture>();
+function rampOf(m: Mood): THREE.Texture {
+  let t = ramps.get(m.id);
+  if (!t) { t = bakeGoldenHourSky(m.sky); ramps.set(m.id, t); }
+  return t;
+}
+
+/** The dome's look for a mood (its ramp, its sun's colour, glow and warmth). */
+function paintDome(dome: THREE.Mesh, m: Mood): void {
+  const u = (dome.material as THREE.ShaderMaterial).uniforms;
+  u.uRamp.value = rampOf(m);
+  (u.uSun.value as THREE.Color).set(m.light.key);
+  u.uGlow.value = m.glow;
+  u.uWarm.value = m.warm;
+}
 
 /**
  * Run 6 (the wildcamera's day↔night): the night sky as a second dome over the golden one,
@@ -140,6 +160,8 @@ export class Sky {
   // stays the CLOSEST props and the light DIRECTION never changes (static, no day
   // cycle). Moving animals get cheap blob shadows instead (no shadow-map cost).
   readonly sun: THREE.DirectionalLight;
+  // the sun's offset from the ranger (its direction is the light's): the mood's `keyAt`,
+  // changed only with a cut (run 7)
   private readonly sunOffset = new THREE.Vector3(-9, 7, 4);
   // W4.6 "Lucht + adem": all SECONDARY ambient motion (drifting cloud shadows,
   // grass wind wave, bird flyover). `skyTime` advances ONLY when reduced-motion is
@@ -157,17 +179,37 @@ export class Sky {
   private readonly fog: THREE.Fog;
   private readonly background: THREE.Color;
   private readonly nightDome: THREE.Mesh;
+  // run 7: the mood on screen (`moodFrom`), the one it is turning into (`moodTo`, `moodT`
+  // 0..1 of the way over `moodDur` s), one more waiting its turn (a fade is never cut short:
+  // that would jump), the domes that show them, and whether the sun still stands where an
+  // earlier mood put it (it moves only with a cut)
+  private moodFrom: Mood;
+  private moodTo: Mood;
+  private moodT = 1;
+  private moodDur = MOOD_FADE_S;
+  private moodQueued: { m: Mood; s: number } | null = null;
+  private readonly dome: THREE.Mesh;
+  private readonly nextDome: THREE.Mesh;
+  private keyMood: Mood;
+  private windK = 1;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, mood: MoodId = DEFAULT_MOOD) {
     this.scene = scene;
-    // P1.1: the SHARED golden-hour sky (Lighting.makeSkyDome over Atmosphere.SKY_STOPS),
+    const m = MOODS[mood];
+    this.moodFrom = this.moodTo = this.keyMood = m;
+    // P1.1: the SHARED sky (Lighting.makeSkyDome; the golden hour's over Atmosphere.SKY_STOPS),
     // the same dome the title stands under — one sky. It is laid on the view's elevation,
     // so its horizon band IS the fog colour at the horizon: distant hills and the rim
     // dissolve into the sky there instead of showing a pale band under it.
-    this.background = new THREE.Color(SKY_LOW);
+    this.background = new THREE.Color(m.light.fog);
     scene.background = this.background;
-    scene.add(makeSkyDome());
-    this.fog = new THREE.Fog(new THREE.Color(SKY_LOW), 22, 90);
+    this.dome = makeSkyDome({ ramp: rampOf(m) });
+    scene.add(this.dome);
+    // run 7: the next mood's sky, laid over this one only while it fades in (hidden: no draw call)
+    this.nextDome = makeSkyDome({ ramp: rampOf(m), overlay: true });
+    this.nextDome.visible = false;
+    scene.add(this.nextDome);
+    this.fog = new THREE.Fog(new THREE.Color(m.light.fog), m.fogNear, m.fogFar);
     scene.fog = this.fog;
     this.nightDome = makeNightDome();
     scene.add(this.nightDome);
@@ -195,6 +237,104 @@ export class Sky {
     scene.add(sun);
     scene.add(sun.target); // the shadow camera aims here; moved with the ranger
     this.sun = sun;
+    this.cutMood(m); // the visit's mood, before anything is drawn
+  }
+
+  /* ----------------------------------------------------------- run 7: moods ---- */
+
+  /**
+   * Put the world in a mood over `seconds` (~2.5 s, calm; a cut with 0 or under reduced
+   * motion). A fade that is still running finishes first (the next one waits its turn), so
+   * nothing ever jumps. The sun keeps its place through a fade and moves at the next cut.
+   */
+  setMood(id: MoodId, seconds = MOOD_FADE_S): void {
+    const m = MOODS[id];
+    if (seconds <= 0) { this.cutMood(m); return; }
+    if (this.moodT < 1) {
+      if (m !== this.moodTo) this.moodQueued = { m, s: seconds };
+      else this.moodQueued = null;
+      return;
+    }
+    this.moodQueued = null;
+    if (m === this.moodTo) return;
+    this.moodFrom = this.moodTo;
+    this.moodTo = m;
+    this.moodT = 0;
+    this.moodDur = Math.max(0.001, seconds);
+    paintDome(this.nextDome, m);
+    this.applyLight();
+  }
+
+  /** The mood on screen (the one a fade is turning into), and whether one is fading. */
+  get mood(): { now: MoodId; fading: boolean } {
+    return { now: this.moodTo.id, fading: this.moodT < 1 };
+  }
+
+  /** How much the grass sways now (× the golden hour's): the mood's breeze. */
+  get wind(): number {
+    return this.windK;
+  }
+
+  /** At once: the mood, its sky and its sun (a new world, a card over the world). */
+  private cutMood(m: Mood): void {
+    this.moodFrom = this.moodTo = this.keyMood = m;
+    this.moodT = 1;
+    this.moodQueued = null;
+    paintDome(this.dome, m);
+    this.nextDome.visible = false;
+    this.sunOffset.set(m.keyAt.x, m.keyAt.y, m.keyAt.z);
+    const dir = this.sunOffset.clone().normalize();
+    for (const d of [this.dome, this.nextDome]) ((d.material as THREE.ShaderMaterial).uniforms.uSunDir.value as THREE.Vector3).copy(dir);
+    this.followSun(this.sun.target.position.x, this.sun.target.position.z);
+    this.applyLight();
+  }
+
+  /** The light on screen now: the mood (or the mix of two while one fades into the next),
+   *  then the wildcamera's night over it. */
+  private applyLight(): void {
+    const e = this.moodT * this.moodT * (3 - 2 * this.moodT);
+    const day = this.moodT >= 1 ? this.moodTo : { ...this.moodTo, ...mixMood(this.moodFrom, this.moodTo, e) };
+    const L = lightAt(day.light, NIGHT_SET, this.daylightFade.value);
+    this.hemi.color.set(L.hemiSky);
+    this.hemi.groundColor.set(L.hemiGround);
+    this.hemi.intensity = L.hemiI;
+    this.sun.color.set(L.key);
+    this.sun.intensity = L.keyI;
+    this.sun.shadow.intensity = day.shadow;
+    this.fog.color.set(L.fog);
+    this.fog.near = day.fogNear;
+    this.fog.far = day.fogFar;
+    this.background.set(L.fog);
+    setAnimalFill(L.fill ?? '#000000', L.fillI ?? 0);
+    this.windK = day.wind;
+    // the sky: the next mood's dome over this one while it fades in
+    const fading = this.moodT < 1;
+    this.nextDome.visible = fading;
+    (this.nextDome.material as THREE.ShaderMaterial).uniforms.uAlpha.value = e;
+    this.nightDome.visible = L.night > 0.002;
+    (this.nightDome.material as THREE.ShaderMaterial).uniforms.uAlpha.value = L.night;
+  }
+
+  /** A fade's next frame (eased); at its end the next mood is the sky, and a waiting one starts. */
+  private stepMood(dt: number, reduced: boolean): void {
+    if (this.moodT >= 1) return;
+    this.moodT = reduced ? 1 : Math.min(1, this.moodT + dt / this.moodDur);
+    if (this.moodT >= 1) {
+      this.moodFrom = this.moodTo;
+      paintDome(this.dome, this.moodTo);
+    }
+    this.applyLight();
+    if (this.moodT >= 1 && this.moodQueued) {
+      const q = this.moodQueued;
+      this.moodQueued = null;
+      this.setMood(q.m.id, reduced ? 0 : q.s);
+    }
+  }
+
+  /** A card covers the world: a sun still standing where an earlier mood put it goes to
+   *  this mood's place now (a cut nobody sees). */
+  settleSun(): void {
+    if (this.keyMood !== this.moodTo && this.moodT >= 1) this.cutMood(this.moodTo);
   }
 
   /**
@@ -276,7 +416,7 @@ export class Sky {
    * does when a mission ends or is stopped).
    */
   setDaylight(k: number, seconds = DAYLIGHT_FADE_S): void {
-    if (seconds <= 0) { this.daylightFade.cut(k); this.applyDaylight(); return; }
+    if (seconds <= 0) { this.daylightFade.cut(k); this.applyLight(); return; }
     this.daylightFade.set(k, seconds);
   }
 
@@ -285,24 +425,12 @@ export class Sky {
     return { now: this.daylightFade.value, target: this.daylightFade.target };
   }
 
-  private applyDaylight(): void {
-    const L = lightAt(DAY_SET, NIGHT_SET, this.daylightFade.value);
-    this.hemi.color.set(L.hemiSky);
-    this.hemi.groundColor.set(L.hemiGround);
-    this.hemi.intensity = L.hemiI;
-    this.sun.color.set(L.key);
-    this.sun.intensity = L.keyI;
-    this.fog.color.set(L.fog);
-    this.background.set(L.fog);
-    this.nightDome.visible = L.night > 0.002;
-    (this.nightDome.material as THREE.ShaderMaterial).uniforms.uAlpha.value = L.night;
-  }
-
   /** W4.6: advance the ambient clock (frozen under reduced-motion) and drift the cloud
    *  shade + sail the flyover bird. Runs every frame, even during an in-place
    *  activity, so the sky keeps breathing. Returns the clock for the wind + water. */
   advance(dt: number, reduced: boolean): number {
-    if (this.daylightFade.step(dt, reduced)) this.applyDaylight(); // run 6: the day turns (a cut when reduced)
+    if (this.daylightFade.step(dt, reduced)) this.applyLight(); // run 6: the day turns (a cut when reduced)
+    this.stepMood(dt, reduced);                                  // run 7: a mood turns into the next (a cut when reduced)
     if (!reduced) this.skyTime += dt;
     const st = this.skyTime;
     if (this.cloudReceivers > 0) {
@@ -330,11 +458,16 @@ export class Sky {
     windSample: number;
     flyover: { x: number; y: number; z: number; visible: boolean } | null;
     daylight: number;
+    mood: { now: MoodId; from: MoodId; fade: number; sunElevation: number; sunPending: boolean; fogNear: number; fogFar: number; wind: number };
   } {
     const f = this.lastFlyover;
     return {
       daylight: this.daylightFade.value,
-      gradientStops: SKY_STOPS.length,
+      mood: {
+        now: this.moodTo.id, from: this.moodFrom.id, fade: this.moodT, sunElevation: Math.round(keyElevation(this.sunOffset) * 10) / 10,
+        sunPending: this.keyMood !== this.moodTo, fogNear: this.fog.near, fogFar: this.fog.far, wind: this.windK,
+      },
+      gradientStops: this.moodTo.sky.length,
       cloudDrift: this.cloudReceivers > 0,
       windMeshes,
       skyTime: this.skyTime,

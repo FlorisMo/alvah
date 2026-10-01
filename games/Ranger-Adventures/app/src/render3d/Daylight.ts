@@ -25,6 +25,9 @@ export interface LightSet {
   /** the key light: the low sun, or the moon */
   key: string;
   keyI: number;
+  /** run 7: the animals' own fill (AnimalDress.ts), colour and intensity */
+  fill?: string;
+  fillI?: number;
 }
 
 /** The night sky from the zenith (0) to the horizon (1): deep blue overhead, a soft
@@ -50,6 +53,8 @@ export function nightSet(exposure: number): LightSet {
     hemiI: 1.05,
     key: '#b9c9f4',       // a pale moon
     keyI: 0.95,
+    fill: '#b4c4ee',      // run 7: the animals keep a cool moonlit fill (never black shapes)
+    fillI: 1.2,
   };
 }
 
@@ -67,7 +72,7 @@ export function lightAt(day: LightSet, night: LightSet, k: number): LightSet & {
   if (d >= 1) return { ...day, night: 0 };
   if (d <= 0) return { ...night, night: 1 };
   const t = 1 - d; // how far into the night
-  return {
+  const out: LightSet & { night: number } = {
     fog: mixHex(day.fog, night.fog, t),
     hemiSky: mixHex(day.hemiSky, night.hemiSky, t),
     hemiGround: mixHex(day.hemiGround, night.hemiGround, t),
@@ -76,6 +81,11 @@ export function lightAt(day: LightSet, night: LightSet, k: number): LightSet & {
     keyI: day.keyI + (night.keyI - day.keyI) * t,
     night: t,
   };
+  if (day.fill && night.fill) {
+    out.fill = mixHex(day.fill, night.fill, t);
+    out.fillI = (day.fillI ?? 0) + ((night.fillI ?? 0) - (day.fillI ?? 0)) * t;
+  }
+  return out;
 }
 
 /** The relative luminance of a css hex colour (0..1, sRGB → linear). */

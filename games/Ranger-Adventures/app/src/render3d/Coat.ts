@@ -153,3 +153,43 @@ export function postureFor(id: string | null | undefined): Posture {
   if (!p) return { pitch: 0, headLow: false };
   return { pitch: clamp(p.pitch, 0, POSTURE_MAX_PITCH), headLow: p.headLow };
 }
+
+/* ------------------------------------------------- run 7: how an animal is lit ---- */
+
+/**
+ * Run 7 (moods, the named fix "distant animals render almost black"): every animal is
+ * drawn MATTE. The CC0 quadrupeds (red deer, roe, fox, wolf) came with metalness 0.4 and
+ * roughness 0.41 and the world has no environment map, so 40 % of their colour was thrown
+ * away for a reflection of nothing; fur is never glossy. Roughness at least this, metalness 0.
+ */
+export const MATTE_ROUGHNESS = 0.75;
+
+/** An animal's roughness: its own, but never glossier than fur (≤ 1). Pure. */
+export function matteRoughness(r: number): number {
+  return clamp(Number.isFinite(r) ? r : 1, MATTE_ROUGHNESS, 1);
+}
+
+/** The ceiling of an albedo lift: past this a dark animal stops reading as itself. */
+export const ALBEDO_LIFT_MAX = 2.2;
+
+/**
+ * Albedo lifts: species whose own colour is so dark that its side away from the low sun
+ * reads as a black cut-out in the world's light (measured, moods.spec). The boar's texture
+ * averages sRGB 66/53/48 (≈ 0.05 linear); the dossier's "donkere borstelige vacht, van
+ * bijna zwart tot bruin" stays: lifted it reads dark grey-brown, still brown, never grey (a
+ * multiply keeps the hue). Sparse like the tints: only what the measurement shows.
+ */
+const ALBEDO_LIFT: Record<string, number> = {
+  'animal-wildzwijn-boar': 2.2,
+};
+
+/** How much an animal's colour is lifted (1 = its own). Pure. */
+export function albedoLiftFor(id: string | null | undefined): number {
+  const k = id ? ALBEDO_LIFT[id] : undefined;
+  return k ? clamp(k, 1, ALBEDO_LIFT_MAX) : 1;
+}
+
+/** Is this a model the animal light dresses (an animal or a bird; never a person)? */
+export function isAnimalModel(id: string | null | undefined): boolean {
+  return !!id && /^(animal|bird)-/.test(id);
+}
