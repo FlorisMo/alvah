@@ -106,6 +106,23 @@ export interface BeatSummary {
   trials?: number;
   correct?: number;
   success?: boolean;
+  /* run 7 (additive): what was played, for the history (BeatLog) and the adaptive cores */
+  /** corsi, simon: the longest sequence echoed cleanly; its first length; sequences played;
+   *  how often a round was eased (silently) */
+  span?: number;
+  start?: number;
+  rounds?: number;
+  eased?: number;
+  /** zoeken: wrong taps, seconds to the find, a hint was given */
+  misses?: number;
+  seconds?: number;
+  hinted?: boolean;
+  /** dagnacht: reaches in a body moment, the longest hold (s) */
+  impulses?: number;
+  holdS?: number;
+  /** wisselen: rule turns played, wrong sorts right after a turn */
+  switches?: number;
+  switchErrors?: number;
 }
 
 /**
@@ -183,6 +200,68 @@ export function knobsForLevel(engine: Engine, level: number): DifficultyKnobs {
     default:
       return {};
   }
+}
+
+/* ------------------------------------------------- run 7: the knobs (§4.2) ---- */
+
+/** Speurkracht: how many look-alikes come with the animal, how much of it shows through its
+ *  cover from the framed view (0..1), seconds before the first diegetic hint, and the
+ *  tracking leg (prints to follow, how clear they are 0..1). */
+export interface ZoekKnobs { lookAlikes: number; glimpse: number; hintAfterS: number; trailLegs: number; trailClarity: number }
+/** Geheugenkracht and Echokracht: the first sequence's length, the longest a beat may grow
+ *  to, how many sequences a beat plays. */
+export interface SpanKnobs { start: number; max: number; rounds: number }
+/** Rustkracht: seconds of stillness a body moment wants after its line, temptations during
+ *  one hold, how long he may wait at a go-moment, the calmer choosing window. */
+export interface RustKnobs { holdS: number; tempts: number; goWaitS: number; slowmo: boolean }
+/** Wisselkracht: the aim round's length, right sorts before the rule turns, how many turns. */
+export interface WisselKnobs { sorts: number; flipEvery: number; flips: number }
+export interface EngineKnobs { zoeken: ZoekKnobs; corsi: SpanKnobs; simon: SpanKnobs; dagnacht: RustKnobs; wisselen: WisselKnobs }
+
+/**
+ * The knobs an engine's view reads, from the old difficulty fields (a level's
+ * `knobsForLevel`, or the manual settings with "automatisch" off). Run 7 `contracts`: the
+ * numbers are TODAY's behaviour — what the builders and views already do with those fields
+ * (`buildZoekenTrial`'s afleiders + 2, `buildSpoor`, `buildCorsiTrial`'s one route,
+ * `SimonRun` from 2 up to its target, `HOLD_S`, `buildWisselTrial`'s flip cadence). The
+ * `adaptive` package replaces the tables; the names stay.
+ */
+export function knobsFromDifficulty<E extends Engine>(engine: E, diff: DifficultyKnobs): EngineKnobs[E] {
+  const k = ((): EngineKnobs[Engine] => {
+    switch (engine) {
+      case 'zoeken':
+        return {
+          lookAlikes: (diff.afleiders ?? 4) + 2,
+          glimpse: 0.3,
+          hintAfterS: 14,
+          trailLegs: Math.max(2, Math.min(5, Math.round(diff.spoorLengte ?? 3))),
+          trailClarity: Math.max(0.25, Math.min(1, diff.spoorHelderheid ?? 0.7)),
+        };
+      case 'corsi': {
+        const n = Math.trunc(Math.max(3, Math.min(diff.routeLengte ?? 4, 6)));
+        return { start: n, max: n, rounds: 1 };
+      }
+      case 'simon': {
+        const target = Math.max(2, Math.min(diff.simonLengte ?? 3, 6));
+        return { start: 2, max: target, rounds: Math.max(1, Math.ceil(target) - 1) };
+      }
+      case 'dagnacht':
+        return { holdS: 4, tempts: 1, goWaitS: 8, slowmo: !!diff.slowmo };
+      case 'wisselen': {
+        const freq = diff.wisselFreq ?? 0.4;
+        return { sorts: 8, flipEvery: Math.max(2, Math.round(2 + (1 - freq) * 4)), flips: 1 };
+      }
+      default:
+        throw new Error(`[skill] no knobs for ${String(engine)}`);
+    }
+  })();
+  return k as EngineKnobs[E];
+}
+
+/** The knobs of a breinkracht at a level (1..6): the same knobs the 2D floor and the world
+ *  read (design §4.2). A game maps them onto its world; it never invents its own number. */
+export function knobsFor<E extends Engine>(engine: E, level: number): EngineKnobs[E] {
+  return knobsFromDifficulty(engine, knobsForLevel(engine, level));
 }
 
 /** Deep-merge a persisted skill set onto a fresh one (migration-safe). */

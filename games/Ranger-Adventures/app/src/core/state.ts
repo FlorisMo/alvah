@@ -24,7 +24,10 @@ import {
   type SkillSet,
   type SkillRecord,
   type BeatSummary,
-} from './skill';
+  knobsFor,
+  knobsFromDifficulty,
+  type EngineKnobs,
+} from './skill.ts';
 import {
   blankCompanion,
   blankRehab,
@@ -38,21 +41,24 @@ import {
   type Rehab,
   type Fase,
   type OpvangGast,
-} from './companion';
+} from './companion.ts';
 import {
   blankAvatar,
   mergeAvatar,
   applyAvatar,
   type Avatar,
-} from './avatar';
-import { addVeldnotitie } from './veldnotitie';
-import { migrateGeleerd, type Geleerd } from './lessons';
+} from './avatar.ts';
+import { addVeldnotitie } from './veldnotitie.ts';
+import { migrateGeleerd, type Geleerd } from './lessons.ts';
 import {
   STORAGE_KEY,
   LEGACY_KEY,
   readRangerPartial,
   writeRangerRoot,
-} from './persist';
+} from './persist.ts';
+import { compactVariant, type Play } from './play.ts';
+import { nextRareCount } from './discover.ts';
+import { isMood, type MoodId } from '../render3d/Moods.ts';
 
 export type Screen =
   | 'map' | 'cabin' | 'transport' | 'travel' | 'briefing' | 'world' | 'reunion' | 'complete';
@@ -109,6 +115,72 @@ export interface GameState {
   avatar: Avatar;                    // the player-ranger identity (naam threads into copy/voice)
   avatarGemaakt: boolean;            // has the ranger been made? (gates the boot creator)
   settings: Settings;
+  /* ---- run 7 (design §4.3-4.5): all additive, defaulted in hydrate() for an older save ---- */
+  geschiedenis: BeatLog[];           // every logged beat, newest last, at most HISTORY_MAX: his growth over weeks
+  ontdekt: Record<string, { t: number; n: number }>; // discoveries (content/ontdekkingen ids): first time, times seen
+  zeldzaam: Record<string, number>;  // per home: won plays since its last rare (the pity rule, core/discover.ts)
+  gespeeld: Record<string, number>;  // per mission: plays started ("Ga op pad"); a play's n is this + 1
+  sfeer: { laatste: MoodId | null; sessies: number }; // the last session's mood, sessions so far
+}
+
+/** One logged beat (design §4.3): what was played, at which level, from which play. ~150
+ *  bytes; the history keeps the newest HISTORY_MAX. */
+export interface BeatLog {
+  /** Date.now() */
+  t: number;
+  e: Engine;
+  /** the mission id ('' for the hut) */
+  m: string;
+  /** the adventure, the classic 3D stage, or the 2D floor */
+  w: 'world' | 'stage' | '2d';
+  /** the level it started at (2 decimals) */
+  lv: number;
+  /** trials, correct */
+  n: number;
+  c: number;
+  /** span, start (corsi, simon); misses, seconds (zoeken); the longest hold in s (dagnacht) */
+  sp?: number;
+  st?: number;
+  ms?: number;
+  s?: number;
+  h?: number;
+  /** the play's seed (0 outside a mission) */
+  sd: number;
+  /** the play's variant, compact ('hide:b,order:2,mood:gouden-uur') */
+  va?: string;
+}
+
+/** The history keeps this many beats (~60 KB): months of play. */
+export const HISTORY_MAX = 400;
+
+/** Where a beat was played and in which play (`store.logBeat`). */
+export interface BeatMeta {
+  missionId: string;
+  view: BeatLog['w'];
+  play: Play | null;
+}
+
+const r2 = (v: number): number => Math.round(v * 100) / 100;
+
+/** The history entry for a beat (pure: `level` is the record's level BEFORE the update). */
+export function beatLog(engine: Engine, summary: BeatSummary, meta: BeatMeta, level: number, now: number): BeatLog {
+  const n = Math.max(1, summary.trials ?? 1);
+  const c = summary.correct != null ? summary.correct : (summary.success ? n : 0);
+  const log: BeatLog = { t: now, e: engine, m: meta.missionId, w: meta.view, lv: r2(level), n, c, sd: meta.play?.seed ?? 0 };
+  if (summary.span != null) log.sp = summary.span;
+  if (summary.start != null) log.st = summary.start;
+  if (summary.misses != null) log.ms = summary.misses;
+  if (summary.seconds != null) log.s = Math.round(summary.seconds * 10) / 10;
+  if (summary.holdS != null) log.h = Math.round(summary.holdS * 10) / 10;
+  const va = meta.play ? compactVariant(meta.play.variant) : undefined;
+  if (va) log.va = va;
+  return log;
+}
+
+/** The history with one more beat, the oldest dropped past `max`. */
+export function appendBeat(history: readonly BeatLog[], log: BeatLog, max = HISTORY_MAX): BeatLog[] {
+  const next = [...history, log];
+  return next.length > max ? next.slice(next.length - max) : next;
 }
 
 /** Season-arc state. Which clues are found is derived from completed verhaalHaak
@@ -171,34 +243,62 @@ function freshState(): GameState {
     avatar: blankAvatar(),
     avatarGemaakt: false,
     settings: { ...DEFAULT_SETTINGS },
+    geschiedenis: [],
+    ontdekt: {},
+    zeldzaam: {},
+    gespeeld: {},
+    sfeer: { laatste: null, sessies: 0 },
   };
 }
 
 export const DEFAULT_STATE: GameState = freshState();
 
+/** A plain object from the save, or {} (a missing or broken field never breaks a load). */
+function record<T>(v: unknown): Record<string, T> {
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, T>) : {};
+}
+
+/**
+ * A parsed save (any age) over a fresh state: every field an older save lacks gets its
+ * default, every field it has is kept (migration-safe, additive). Pure: `load()` reads
+ * localStorage and hands the parsed `ranger` namespace here.
+ */
+export function hydrate(parsed: Partial<GameState> | null): GameState {
+  if (!parsed) return freshState();
+  const sfeer = record<unknown>(parsed.sfeer);
+  return {
+    ...freshState(),
+    ...parsed,
+    skill: mergeSkill(parsed.skill),
+    voltooid: parsed.voltooid ?? {},
+    veldnotities: parsed.veldnotities ?? {},
+    recentGroei: parsed.recentGroei ?? [],
+    knapWoorden: parsed.knapWoorden ?? {},
+    arc: { gemeld: false, ...(parsed.arc ?? {}) },
+    companion: mergeCompanion(parsed.companion),
+    rehab: mergeRehab(parsed.rehab),
+    companionGroei: parsed.companionGroei ?? null,
+    avatar: mergeAvatar(parsed.avatar),
+    avatarGemaakt: parsed.avatarGemaakt ?? false,
+    settings: loadSettings(parsed.settings),
+    // run 7
+    geschiedenis: Array.isArray(parsed.geschiedenis) ? parsed.geschiedenis.slice(-HISTORY_MAX) : [],
+    ontdekt: record(parsed.ontdekt),
+    zeldzaam: record(parsed.zeldzaam),
+    gespeeld: record(parsed.gespeeld),
+    sfeer: {
+      laatste: isMood(sfeer.laatste) ? sfeer.laatste : null,
+      sessies: typeof sfeer.sessies === 'number' && sfeer.sessies >= 0 ? Math.floor(sfeer.sessies) : 0,
+    },
+  };
+}
+
 function load(): GameState {
   try {
-    const parsed = readRangerPartial(
+    return hydrate(readRangerPartial(
       localStorage.getItem(STORAGE_KEY),
       localStorage.getItem(LEGACY_KEY),
-    ) as Partial<GameState> | null;
-    if (!parsed) return freshState();
-    return {
-      ...freshState(),
-      ...parsed,
-      skill: mergeSkill(parsed.skill),
-      voltooid: parsed.voltooid ?? {},
-      veldnotities: parsed.veldnotities ?? {},
-      recentGroei: parsed.recentGroei ?? [],
-      knapWoorden: parsed.knapWoorden ?? {},
-      arc: { gemeld: false, ...(parsed.arc ?? {}) },
-      companion: mergeCompanion(parsed.companion),
-      rehab: mergeRehab(parsed.rehab),
-      companionGroei: parsed.companionGroei ?? null,
-      avatar: mergeAvatar(parsed.avatar),
-      avatarGemaakt: parsed.avatarGemaakt ?? false,
-      settings: loadSettings(parsed.settings),
-    };
+    ) as Partial<GameState> | null);
   } catch {
     return freshState();
   }
@@ -344,17 +444,67 @@ class Store {
     this.commit({ ...this.state, rehab: applyReleaseRehab(this.state.rehab) });
   }
 
-  /** An engine finished a beat → feed its skill record (drives staircase + badges). */
-  logSession(engine: Engine, summary: BeatSummary): void {
+  /**
+   * Run 7 (design §4.3): an engine finished a beat → it goes into the history (what was
+   * played, at which level, in which play and view), then feeds its skill record exactly
+   * as before (drives the staircase + badges). One commit.
+   */
+  logBeat(engine: Engine, summary: BeatSummary, meta: BeatMeta): void {
     const skill: SkillSet = { ...this.state.skill };
     const before = (skill[engine] ?? blankSkill()).level;
+    const geschiedenis = appendBeat(this.state.geschiedenis, beatLog(engine, summary, meta, before, Date.now()));
     const updated = updateSkill(skill[engine], summary);
     skill[engine] = updated;
     const grew = updated.level > before + 1e-3;
     const recentGroei = grew
       ? Array.from(new Set<Engine>([...this.state.recentGroei, engine]))
       : this.state.recentGroei;
-    this.commit({ ...this.state, skill, recentGroei });
+    this.commit({ ...this.state, skill, recentGroei, geschiedenis });
+  }
+
+  /** A beat outside a mission (the hut's care game): logged as a 2D beat without a play. */
+  logSession(engine: Engine, summary: BeatSummary): void {
+    this.logBeat(engine, summary, { missionId: '', view: '2d', play: null });
+  }
+
+  /** Run 7 (§4.2): the live level of a breinkracht (where its next beat starts). */
+  level(engine: Engine): number {
+    return (this.state.skill[engine] ?? blankSkill()).level;
+  }
+
+  /** Run 7 (§4.2): the knobs its views read now; with "automatisch" off, the manual settings. */
+  knobs<E extends Engine>(engine: E): EngineKnobs[E] {
+    const s = this.state;
+    return s.settings.autoMoeilijk ? knobsFor(engine, this.level(engine)) : knobsFromDifficulty(engine, s.settings);
+  }
+
+  /** Run 7 (§4.4): he saw or heard it. Recorded (first time, times seen); true when new. */
+  discover(id: string): boolean {
+    const was = this.state.ontdekt[id];
+    const ontdekt = { ...this.state.ontdekt, [id]: { t: was?.t ?? Date.now(), n: (was?.n ?? 0) + 1 } };
+    this.commit({ ...this.state, ontdekt });
+    return !was;
+  }
+
+  /** Run 7: a play of this mission starts ("Ga op pad"). Returns how many plays it has now. */
+  notePlay(missionId: string): number {
+    const n = (this.state.gespeeld[missionId] ?? 0) + 1;
+    this.commit({ ...this.state, gespeeld: { ...this.state.gespeeld, [missionId]: n } });
+    return n;
+  }
+
+  /** Run 7: a play of a home ended: its rare counter (the pity rule, core/discover.ts) goes
+   *  back to 0 when he discovered a rare of that home in it, one up when it was won. */
+  rareEnd(home: string, gotRare: boolean, won = true): void {
+    const was = this.state.zeldzaam[home] ?? 0;
+    const next = nextRareCount(was, { won, gotRare });
+    if (next === was && home in this.state.zeldzaam) return;
+    this.commit({ ...this.state, zeldzaam: { ...this.state.zeldzaam, [home]: next } });
+  }
+
+  /** Run 7 (§4.5): a session began in this mood (once per page load). */
+  noteSession(mood: MoodId): void {
+    this.commit({ ...this.state, sfeer: { laatste: mood, sessies: this.state.sfeer.sessies + 1 } });
   }
 
   /** Child-/frustration-driven ease: lower the live level a touch (silent, never the best). */
