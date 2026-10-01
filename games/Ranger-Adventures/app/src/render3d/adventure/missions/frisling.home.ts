@@ -178,7 +178,8 @@ export class FrislingHome implements HomeDressing {
     /* -- the rooting fields: seven look-alike patches of turned earth each (small things) -- */
     const field = (f: FieldId, seed: number): PatchField => {
       const fr = fieldFrame(f);
-      return new PatchField({ parent: env.detail(fr), groundY: g, spots: fieldSpotsOf(f), size: 0.95, heading: fr.heading + Math.PI, seed });
+      // (at rest the seven mounds are one draw: both fields are often in view at once)
+      return new PatchField({ parent: env.detail(fr), groundY: g, spots: fieldSpotsOf(f), size: 0.95, heading: fr.heading + Math.PI, seed, instancedRest: true });
     };
     this.fields = { N: field('N', 23), S: field('S', 29) };
 
