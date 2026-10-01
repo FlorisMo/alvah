@@ -17,9 +17,10 @@
  * sky turning. The card at the bottom shows the animal that comes (its drawn picture,
  * its name, its day/night tag with a drawn sun or moon), the question, and the rule. A press beside both places gets a
  * calm "no" from the camera (it is no pick: the core only ever hears a place). The flip
- * is the round's peak: the card makes way, the day turns (the sky, the places' marks,
- * the camera's light), and only then comes the new rule, said outright, with the next
- * animal.
+ * is the round's peak: the card makes way, the day turns (the sky, the camera's light),
+ * and only then comes the new rule, said outright, with the next animal. The places'
+ * own marks (a sun on the glade, a moon on the thicket) stay as they are, as the 2D
+ * floor's bins do: after the flip a day animal goes to the moon's place — the switch.
  */
 
 import * as THREE from 'three';
@@ -58,8 +59,8 @@ export interface AimWorld {
   /** an animal photographed at this place is still walking off through it (a perfect
    *  player waits for it to go before he aims there again: the play hint waits too) */
   leaving?(bin: WisselBin): boolean;
-  /** the day turns (the rule flipped): the sky fades to night or back to day, and the
-   *  world shows the new rule (the places' day/night marks swap); resolves when it has */
+  /** the day turns (the rule flipped): the sky fades to night or back to day (the
+   *  places keep their marks: the rule turned, not the places); resolves when it has */
   turn(to: 'night' | 'day'): Promise<void>;
   /** a press beside both places: the camera shakes a calm "no" (no pick, no photo) */
   miss?(): void;
@@ -193,7 +194,7 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
       const next = aim.current!;
       if (s.turn) {
         // the peak of the round: the card makes way and the world turns (the sky, the
-        // places' day/night marks, the camera's light) under one line, "Het wordt nacht.";
+        // camera's light) under one line, "Het wordt nacht.";
         // then the card comes back with the new rule said outright, and the next animal
         k.beat = 'aim:turn';
         const turnLine = s.turn === 'night' ? o.lines.nacht : o.lines.dag;

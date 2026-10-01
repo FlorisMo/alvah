@@ -263,7 +263,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       open: { pick: home.glade, hint: home.gladeHint },
       hol: { pick: home.thicket, hint: home.thicketHint },
     },
-    begin: () => { roeOut(); home.setMarks(false, false); home.showTags(true); home.showFan(true); },
+    begin: () => { roeOut(); home.showTags(true); home.showFan(true); },
     end: () => { home.showTags(false); home.showFan(false); },
     look: async (bin) => {
       home.aim(cameraAim(AIM_AT[bin]), k.reduced);
@@ -309,10 +309,9 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     leaving: (bin) => [...walkingOff.values()].some((w) => w.bin === bin && k.now < w.until),
     turn: async (to) => {
       // the sky turns (the camera's light turns to its infrared glow as the dusk passes,
-      // home.setNight), and half way the two places' signs turn over to their new marks
+      // home.setNight); the places keep their sun and moon: the rule turned, not they
       k.daylight(to === 'night' ? 0 : 1, 2.4);
       await k.wait(1.0);
-      home.setMarks(to === 'night', !k.reduced);
       if (settings.geluid) Sound.select();
       await k.wait(1.6);
     },

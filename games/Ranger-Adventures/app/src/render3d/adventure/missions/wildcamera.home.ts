@@ -36,10 +36,8 @@ const CAM_H = SIZE.wildcamera.h;
 const CAM_DEPTH = CAM_H * (1.29 / 1.6);
 /** The camera's fan of view on the ground: its reach (m); its half-angle is the places'. */
 const FAN_REACH = 5.4;
-/** The places' name-tags: how wide (m), and how long a turn of their marks takes (s: a
- *  sign turning over, edge-on half way). */
+/** The places' name-tags: how wide (m). */
 const TAG_W = 1.9;
-const TAG_TURN_S = 0.7;
 /** The camera's "no" (a press beside both places): a short sweep over and back on its
  *  strap — how long (s) and how far each way (rad). */
 const NOD_S = 0.46;
@@ -65,15 +63,17 @@ function glowTexture(): THREE.CanvasTexture {
   return glowTex;
 }
 
-/** Which animals a place is for under the rule shown now: a sun (day animals) or a moon
- *  (night animals), the same marks the card's rule chips and tags carry. */
+/** What a place IS, the same mark for the whole round: the sunny open glade a sun, the
+ *  dark thicket a moon — as the 2D floor's bins (render2d/WisselView: ☀️ open plek,
+ *  🌙 het hol) and the card's day/night tags draw them. They never turn with the rule:
+ *  after "Nu is het andersom!" a day animal goes to the moon's place, the switch itself
+ *  (a sign that swapped with the rule only asked him to match its icon). */
 type Mark = 'dag' | 'nacht';
 
 /**
  * A place's name over the world with its day/night mark in front: the name-tag's dark
  * pill (play/stage `nameTag`), and a round badge before the words, a drawn sun on the
- * card's day yellow or a drawn moon on its night blue. Drawn into `canvas` (redrawn when
- * the mark turns: one texture, `needsUpdate`).
+ * card's day yellow or a drawn moon on its night blue. Drawn into `canvas` once.
  */
 function drawMarkTag(canvas: HTMLCanvasElement, text: string, mark: Mark): void {
   const g = canvas.getContext('2d')!;
@@ -134,7 +134,6 @@ function markTag(text: string, mark: Mark, width: number): THREE.Sprite {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false, transparent: true }));
   sprite.scale.set(width, width / 4, 1);
   sprite.renderOrder = 5;
-  sprite.userData.text = text;
   return sprite;
 }
 
@@ -329,9 +328,6 @@ export class WildcameraHome implements HomeDressing {
   /** the "no": time left (s), and the sweep it adds to where the camera looks (rad) */
   private nod = 0;
   private nodOff = 0;
-  /** the places' marks: which each shows, and a turn under way (0 → 1) */
-  private marks: { open: Mark; hol: Mark } = { open: 'dag', hol: 'nacht' };
-  private markTurn: { t: number; to: { open: Mark; hol: Mark }; swapped: boolean } | null = null;
   /** the places' names, over the glade and the thicket (only while the camera is aimed) */
   readonly tags: { open: THREE.Sprite; hol: THREE.Sprite };
   /** the two places as a click finds them (the glade's ground, grass and flowers; the
@@ -574,9 +570,10 @@ export class WildcameraHome implements HomeDressing {
     zone(P.glade, GLADE_R + 0.2, 1.3, this.glade, 'glade-zone');
     zone(atLocal(CROSS, 4.9, -0.8), 2.1, 2.0, this.thicket, 'thicket-zone');
 
-    /* -- the places' names, each with the mark of the animals it is for now (shown while
-          the camera is aimed; the marks swap when the rule flips). Each is part of its
-          place: a click on the words "open plek" picks the open plek -- */
+    /* -- the places' names, each with its mark (a sun on the glade, a moon on the
+          thicket: what the place is, never which animals go there now), shown while the
+          camera is aimed. Each is part of its place: a click on the words "open plek"
+          picks the open plek -- */
     this.tags = { open: markTag('open plek', 'dag', TAG_W), hol: markTag('het bosje', 'nacht', TAG_W) };
     const tagAt = (p: Spot, y: number, t: THREE.Sprite, place: THREE.Group): void => { t.position.set(p.x, g(p.x, p.z) + y, p.z); t.visible = false; place.add(t); };
     tagAt(TAG_AT.open, TAG_AT.open.y, this.tags.open, this.glade);
@@ -736,30 +733,6 @@ export class WildcameraHome implements HomeDressing {
     return true;
   }
 
-  /** The places' marks for the rule now: by day the glade is for the day animals (a sun)
-   *  and the thicket for the night animals (a moon); flipped, the other way round. With
-   *  `turn` the two signs turn over (edge-on half way, the new mark on the way back). */
-  setMarks(flipped: boolean, turn: boolean): void {
-    const to = { open: (flipped ? 'nacht' : 'dag') as Mark, hol: (flipped ? 'dag' : 'nacht') as Mark };
-    if (to.open === this.marks.open && !this.markTurn) return;
-    if (!turn) { this.markTurn = null; this.drawMarks(to); return; }
-    this.markTurn = { t: 0, to, swapped: false };
-  }
-
-  private drawMarks(to: { open: Mark; hol: Mark }): void {
-    this.marks = to;
-    for (const key of ['open', 'hol'] as const) {
-      const t = this.tags[key];
-      const tex = t.material.map as THREE.CanvasTexture;
-      drawMarkTag(tex.image as HTMLCanvasElement, t.userData.text as string, to[key]);
-      tex.needsUpdate = true;
-      t.scale.x = TAG_W;
-    }
-  }
-
-  /** The places' marks now (the dev read). */
-  get placeMarks(): { open: Mark; hol: Mark } { return { ...this.marks }; }
-
   /** The places' names over the glade and the thicket (and the ground a click on either
    *  counts on): while the camera is being aimed. */
   showTags(on: boolean): void {
@@ -908,7 +881,6 @@ export class WildcameraHome implements HomeDressing {
     this.setNight(0);
     this.irOn = 0;
     this.nod = this.nodOff = 0;
-    this.setMarks(false, false);
     this.showTags(false);
     this.showSnare(false);
     this.birdGone();
@@ -952,15 +924,6 @@ export class WildcameraHome implements HomeDressing {
       // (its fan on the ground brightens a little as it sweeps: the "no" is seen there)
       (this.fan.material as THREE.MeshBasicMaterial).opacity = this.fanPeak * this.fanOn * (1 + 0.7 * Math.sin(p * Math.PI));
       this.layFan();
-    }
-    // the places' signs turn over to their new marks
-    const mt = this.markTurn;
-    if (mt) {
-      mt.t = Math.min(1, mt.t + dt / TAG_TURN_S);
-      if (mt.t >= 0.5 && !mt.swapped) { mt.swapped = true; this.drawMarks(mt.to); }
-      const edge = Math.abs(Math.cos(mt.t * Math.PI)); // 1 → 0 (edge-on) → 1
-      for (const key of ['open', 'hol'] as const) this.tags[key].scale.x = TAG_W * Math.max(0.04, edge);
-      if (mt.t >= 1) { this.markTurn = null; for (const key of ['open', 'hol'] as const) this.tags[key].scale.x = TAG_W; }
     }
     // the fan fades in and out
     if (this.fanOn !== this.fanWant) {
