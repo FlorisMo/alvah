@@ -187,7 +187,9 @@ export class ChoiceRun {
         // the line (read aloud once: after a reach it comes back as a new line), and its read
         k.say(o.line);
         let read = false;
-        void this.readOut(o.line).then(() => { read = true; });
+        // (a stop while it is read rejects the read: the wait below unwinds the moment, so
+        // the read itself must not throw a second, uncaught "adventure stopped")
+        void this.readOut(o.line).then(() => { read = true; }, () => {});
         await k.until(() => reached || read);
         if (!reached) {
           core.begin(k.now);
