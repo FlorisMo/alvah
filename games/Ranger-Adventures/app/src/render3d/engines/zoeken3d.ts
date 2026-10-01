@@ -25,7 +25,7 @@ import type { BeatSummary } from '../../core/skill';
 import type { Step, Distractor } from '../../content/types';
 import type { WorldCtx, Play3dEngine } from '../play/types';
 import type { Play } from '../../core/play';
-import { buildZoekenTrial, buildSpoor, zoekSummary } from '../../engines/zoeken';
+import { buildZoekenTrial, buildSpoor, zoekArea, zoekSummary } from '../../engines/zoeken';
 import { store } from '../../core/state';
 import { looseRng } from '../../core/play';
 import { Content } from '../../content/registry';
@@ -104,7 +104,8 @@ export function playZoeken3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Be
     // play's look-alikes and places (the 2D field draws the same)
     const knobs = store.knobs('zoeken');
     const skin = step.skin;
-    const trial = buildZoekenTrial(skin, knobs, play ? play.fork('zoeken').rng : looseRng('zoeken'));
+    const trial = buildZoekenTrial(skin, knobs, play ? play.fork('zoeken').rng : looseRng('zoeken'),
+      play ? zoekArea(play.missionId, play.n) : undefined); // (somewhere else every play)
     const spoor = buildSpoor(knobs);
     const instructie =
       settings.jargon && skin.copy?.instructieKnap

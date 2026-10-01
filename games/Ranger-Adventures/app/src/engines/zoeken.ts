@@ -9,6 +9,7 @@
 
 import type { Skin, Distractor } from '../content/types';
 import type { BeatSummary, ZoekKnobs } from '../core/skill';
+import { hash32 } from '../core/play.ts';
 
 export interface ZoekenTrial {
   target: { x: number; y: number };
@@ -38,11 +39,12 @@ function zoekKnobsOf(k: ZoekKnobs | OldZoekDiff): Pick<ZoekKnobs, 'lookAlikes' |
  * look-alikes come (`lookAlikes`, capped by the skin's list), how much of the animal shows
  * (`glimpse`) and when the first hint comes (`hintAfterS`). With the play's `rng` it also
  * draws WHICH look-alikes come (one of each kind first, so every play's set is as mixed) and,
- * for the 2D field, WHERE everything lies (`zoekLayout`: the animal never in the middle).
+ * for the 2D field, WHERE everything lies (`zoekLayout`: the animal never in the middle; with
+ * `area` (`zoekArea(play.missionId, play.n)`) in another part of the field every play).
  * Without an `rng` (a seed-less caller) the skin's authored set and places, as before.
  * Variety never changes a knob: only the level does.
  */
-export function buildZoekenTrial(skin: Skin, knobs: ZoekKnobs | OldZoekDiff, rng?: () => number): ZoekenTrial {
+export function buildZoekenTrial(skin: Skin, knobs: ZoekKnobs | OldZoekDiff, rng?: () => number, area?: number): ZoekenTrial {
   const k = zoekKnobsOf(knobs);
   const all: Distractor[] = skin.distractors ?? [{ id: 'd1', x: 24, y: 44, k: 'bush', animal: 'struik' }];
   const count = Math.max(Math.min(3, all.length), Math.min(Math.round(k.lookAlikes), all.length));
@@ -52,7 +54,7 @@ export function buildZoekenTrial(skin: Skin, knobs: ZoekKnobs | OldZoekDiff, rng
     return { target: skin.doel ?? { x: 52, y: 58 }, decoys: all.slice(0, count), glimpse, haze, lensSterkte: haze, hintAfterS: k.hintAfterS };
   }
   const picked = pickDecoys(all, count, rng);
-  const lay = zoekLayout(picked.length, rng);
+  const lay = zoekLayout(picked.length, rng, area);
   return {
     target: lay.target,
     decoys: picked.map((d, i) => ({ ...d, x: lay.spots[i].x, y: lay.spots[i].y })),
@@ -86,18 +88,47 @@ export const OFF_CENTRE = 15;
 /** No two things lie closer than this (% units). */
 export const SPACING = 12;
 
+/** The 2D field's six AREAS round its middle (60° each, clockwise from the right). */
+export const AREAS = 6;
+/** The order a mission's plays visit the areas: two plays in a row never lie in the same
+ *  area or a neighbouring one (each step is at least two areas round). */
+const AREA_ORDER = [0, 2, 4, 1, 5, 3] as const;
+/** Degrees kept free at each side of an area, so two areas' spots never touch. */
+const AREA_MARGIN = 8;
+
+/** Where play `n` of `missionId` hides the animal on the 2D field (pure): its area. The
+ *  plays of a mission walk `AREA_ORDER` from a start of their own, so the animal lies
+ *  somewhere else every play — the spot inside the area is the play's seed. */
+export function zoekArea(missionId: string, n: number): number {
+  const i = (((Math.floor(n) - 1) % AREAS) + AREAS) % AREAS;
+  return (AREA_ORDER[i] + hash32(0, `area:${missionId}`)) % AREAS;
+}
+
+/** A seeded spot in `area`: off the middle (≥ OFF_CENTRE + 2), inside `FIELD`. */
+function spotIn(area: number, rng: () => number): { x: number; y: number } {
+  const deg = area * 60 + AREA_MARGIN + rng() * (60 - 2 * AREA_MARGIN);
+  const dx = Math.cos((deg * Math.PI) / 180), dy = Math.sin((deg * Math.PI) / 180);
+  // as far as the field reaches that way (a ray from the middle to the FIELD box)
+  const reach = (d: number, lo: number, hi: number): number => (d > 1e-6 ? (hi - 50) / d : d < -1e-6 ? (lo - 50) / d : Infinity);
+  const far = Math.min(reach(dx, FIELD.x0, FIELD.x1), reach(dy, FIELD.y0, FIELD.y1)) - 1;
+  const near = OFF_CENTRE + 2;
+  const r = near + rng() * Math.max(0, far - near);
+  return { x: Math.round(50 + dx * r), y: Math.round(50 + dy * r) };
+}
+
 /**
  * A seeded layout of the 2D field (pure): the animal's spot at least `OFF_CENTRE` from the
- * middle, `n` look-alike spots, everything at least `SPACING` apart, all inside `FIELD`.
+ * middle (in `area` when given: `zoekArea`), `n` look-alike spots, everything at least
+ * `SPACING` apart, all inside `FIELD`.
  */
-export function zoekLayout(n: number, rng: () => number): { target: { x: number; y: number }; spots: { x: number; y: number }[] } {
+export function zoekLayout(n: number, rng: () => number, area?: number): { target: { x: number; y: number }; spots: { x: number; y: number }[] } {
   const at = (): { x: number; y: number } => ({
     x: Math.round(FIELD.x0 + rng() * (FIELD.x1 - FIELD.x0)),
     y: Math.round(FIELD.y0 + rng() * (FIELD.y1 - FIELD.y0)),
   });
   const placed: { x: number; y: number }[] = [];
   const free = (p: { x: number; y: number }, gap: number): boolean => placed.every((q) => Math.hypot(p.x - q.x, p.y - q.y) >= gap);
-  let target = at();
+  let target = area != null ? spotIn(((Math.floor(area) % AREAS) + AREAS) % AREAS, rng) : at();
   for (let i = 0; i < 400 && Math.hypot(target.x - 50, target.y - 50) < OFF_CENTRE; i++) target = at();
   placed.push(target);
   const spots: { x: number; y: number }[] = [];

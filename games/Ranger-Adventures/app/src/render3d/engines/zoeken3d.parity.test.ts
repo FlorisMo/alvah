@@ -15,7 +15,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { buildZoekenTrial, buildSpoor, zoekSummary, pickDecoys, OFF_CENTRE, SPACING, FIELD } from '../../engines/zoeken.ts';
+import { buildZoekenTrial, buildSpoor, zoekSummary, pickDecoys, zoekArea, OFF_CENTRE, SPACING, FIELD, AREAS } from '../../engines/zoeken.ts';
 import { knobsFor, knobsForLevel, judgeBeat } from '../../core/skill.ts';
 import { newPlay } from '../../core/play.ts';
 import type { Skin, Distractor } from '../../content/types.ts';
@@ -67,6 +67,30 @@ test('the 2D layout: the animal never in the middle, nothing on top of another, 
     }
   }
   assert.ok(targets.size > 250, 'the animal lies somewhere else almost every play');
+});
+
+test('plays in a row: the animal lies in another part of the field every play, never a neighbouring one', () => {
+  const sector = (p: { x: number; y: number }): number => Math.floor((((Math.atan2(p.y - 50, p.x - 50) * 180) / Math.PI + 360) % 360) / 60);
+  for (const id of AREA_VELUWE.missies.map((m) => m.id)) {
+    let last: { x: number; y: number } | null = null;
+    for (let n = 1; n <= 13; n++) {
+      const area = zoekArea(id, n);
+      // a fresh seed every play (as the briefing draws it), the area from the play's number
+      const t = buildZoekenTrial(FRISLING, knobsFor('zoeken', 1 + (n % 6)), newPlay(id, 9000 + n * 7, n).fork('zoeken').rng, area);
+      assert.equal(sector(t.target), area, `${id} play ${n}: the animal at ${t.target.x},${t.target.y} lies in its area ${area}`);
+      assert.ok(Math.hypot(t.target.x - 50, t.target.y - 50) >= OFF_CENTRE + 1, `${id} play ${n}: off the middle`);
+      assert.ok(t.target.x >= FIELD.x0 && t.target.x <= FIELD.x1 && t.target.y >= FIELD.y0 && t.target.y <= FIELD.y1, `${id} play ${n}: inside`);
+      if (last) {
+        const d = Math.abs(zoekArea(id, n) - zoekArea(id, n - 1));
+        assert.ok(Math.min(d, AREAS - d) >= 2, `${id} plays ${n - 1} → ${n}: areas ${zoekArea(id, n - 1)} → ${area} are neighbours`);
+        assert.ok(Math.hypot(t.target.x - last.x, t.target.y - last.y) >= 15, `${id} play ${n}: ${Math.hypot(t.target.x - last.x, t.target.y - last.y).toFixed(1)} from the last play's spot`);
+      }
+      last = t.target;
+    }
+  }
+  // the same play replays the same spot (a reviewer's ?seed=N)
+  assert.deepEqual(buildZoekenTrial(FRISLING, knobsFor('zoeken', 2), newPlay('frisling', 5, 3).fork('zoeken').rng, zoekArea('frisling', 3)),
+    buildZoekenTrial(FRISLING, knobsFor('zoeken', 2), newPlay('frisling', 5, 3).fork('zoeken').rng, zoekArea('frisling', 3)));
 });
 
 test('which look-alikes: one of each kind first (every play as mixed), varied over plays', () => {

@@ -17,7 +17,7 @@ import type { Play } from '../core/play';
 import { store } from '../core/state';
 import { looseRng } from '../core/play';
 import { Content } from '../content/registry';
-import { buildZoekenTrial, zoekSummary } from '../engines/zoeken';
+import { buildZoekenTrial, zoekArea, zoekSummary } from '../engines/zoeken';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -32,7 +32,8 @@ export function playZoeken(host: HTMLElement, step: Step, play?: Play): Promise<
     const settings = store.get().settings;
     const skin = step.skin;
     // run 7: this play's look-alikes and places (the world's twin draws the same set)
-    const trial = buildZoekenTrial(skin, store.knobs('zoeken'), play ? play.fork('zoeken').rng : looseRng('zoeken'));
+    const trial = buildZoekenTrial(skin, store.knobs('zoeken'), play ? play.fork('zoeken').rng : looseRng('zoeken'),
+      play ? zoekArea(play.missionId, play.n) : undefined); // (somewhere else every play)
     const dier = skin.dier ? Content.animal(skin.dier) : null;
 
     const instructie =
