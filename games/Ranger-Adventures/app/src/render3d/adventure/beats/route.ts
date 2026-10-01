@@ -26,6 +26,7 @@ import { Sound } from '../../../core/sound';
 import { GROEI } from '../../../content/copy';
 import { buildCorsiTrial, CorsiRun, type SpanResult } from '../../../engines/corsi';
 import type { AdventureKit, FrameSpec } from '../kit';
+import { routeStop } from './route-math';
 import type { Actor } from '../actors';
 import type { PatchField } from '../patches';
 import type { Place } from '../types';
@@ -160,7 +161,12 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
     if (o.walker && !o.picked) void o.walker.sniff(s.x, s.z, 1.2);
     const me = k.ranger();
     const d = Math.hypot(s.x - me.x, s.z - me.z);
-    const walk = o.picked ? o.picked(s, pickOf(res)).catch(() => {}) : d > 1.6 ? k.walkRanger(s.x, s.z, 1.25).catch(() => false) : Promise.resolve(true);
+    // run 7: he stops beside the spot where he hides no spot from the lens (the route shows
+    // again, or a new one comes, while he stands there); none: he stays where he is
+    const stop = !o.picked && d > 1.6
+      ? routeStop({ spot: s, from: me, spots: field.spots, eye: camera.position, groundY: (x, z) => k.ctx.groundY(x, z) })
+      : null;
+    const walk = o.picked ? o.picked(s, pickOf(res)).catch(() => {}) : stop ? k.walkRanger(stop.x, stop.z, 0.04).catch(() => false) : Promise.resolve(true);
     if (res === 'replay' || res === 'ease') {
       // a wrong spot: the route again ('replay'), or silently a shorter one ('ease')
       field.mark(i, 'wrong');
