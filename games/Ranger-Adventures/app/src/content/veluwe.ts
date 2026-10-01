@@ -249,7 +249,9 @@ const MISSIE_FRISLING = {
           { id: 'voeren', subject: 'zwijn-honger', dier: 'overloper',
             vraag: 'Een jong zwijn snuffelt aan je tas.',
             vraagKnap: 'De overloper snuffelt aan je tas.',
-            opties: [{ label: 'Geef een koekje', goed: false }, { label: 'Niet voeren', goed: true }],
+            // (the right answer is what he DOES, never the rule chip's own words: a child
+            // keeps the rule, he does not match the card's text to it)
+            opties: [{ label: 'Geef een koekje', goed: false }, { label: 'Hou je tas dicht', goed: true }],
             uitleg: 'Goed. Een zwijn zoekt zelf eten.',
             gevolg: 'Nu wil hij steeds meer. Dat is niet goed.',
             reactie: 'swarm', eikelKost: 3, terug: 0.6 },
