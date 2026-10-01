@@ -579,6 +579,9 @@ const MISSIE_WILDCAMERA = {
       valHier: 'Daar ligt de val.',
       valKnop: 'Haal de val weg',
       valWeg: 'Goed zo. De val is weg.',
+      terug: 'Loop terug naar je camera.',
+      chipCamera: 'Je camera',
+      bijBoom: 'bij de grote boom',
     },
     knap: {
       pak: 'Hier ligt de wildcamera.',
@@ -592,6 +595,8 @@ const MISSIE_WILDCAMERA = {
       valHier: 'Daar ligt de strik.',
       valKnop: 'Haal de strik weg',
       valWeg: 'Goed zo. De strik is weg.',
+      terug: 'Loop terug naar de wildcamera.',
+      chipCamera: 'De wildcamera',
     },
   },
   stappen: [
@@ -601,7 +606,9 @@ const MISSIE_WILDCAMERA = {
         dier: 'das',
         dagDieren: ['edelhert', 'ree'],
         nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'],
-        trials: 8,
+        // run 6 polish: six photos (each night animal once, never one twice in a row):
+        // a short, lively round with the flip to night as its peak
+        trials: 6,
         copy: {
           instructie: 'Richt de camera op elk dier.',
           regel: 'Dag-dier → open plek. Nacht-dier → het bosje.',
@@ -612,7 +619,7 @@ const MISSIE_WILDCAMERA = {
         feitDier: 'das',
       },
       // §6.1 wisselen knobs: rule-flip frequency + trial count
-      moeilijkheid: { wissel: 'settings', trials: 8 },
+      moeilijkheid: { wissel: 'settings', trials: 6 },
     },
     {
       ef: 'simon',

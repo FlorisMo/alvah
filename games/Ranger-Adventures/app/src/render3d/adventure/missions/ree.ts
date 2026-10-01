@@ -252,19 +252,11 @@ async function story(k: AdventureKit): Promise<void> {
   k.beat = 'watch:walk';
   await k.walkRanger(P.hide.x, P.hide.z, 0.05);
   k.beat = 'watch';
-  // he turns to the copse first and only then lifts his glasses: the turn sweeps past the
-  // wildcamera's glade next door, and the roe grazing there must never be the deer in his
-  // lenses just before the mother comes
-  await k.frame(WATCH_VIEW, { face: P.hide.heading });
-  k.ui.watching(true);
-  k.say(c.wacht);
-  calf.idle();
-  if (!doe.lies && dist(doe, DOE_BED) > 0.5) { // (a stop and a replay: she is in her bed)
-    await go(doe, DOE_BED.x, DOE_BED.z, { speed: 'walk', face: DOE_BED.yaw });
-  }
-  // while she comes he must keep STILL (a roe hears everything): a step key or a tap on
-  // the world and she freezes, head up, staring at the hide ("Sta stil"); once he has
-  // been still a little while she goes on. Never a fail: it only makes her wait.
+  // from the first moment of the watch he must keep STILL (a roe hears everything): a step
+  // key or a tap on the world and she freezes, head up, staring at the hide ("Sta stil");
+  // once he has been still a little while she goes on. Never a fail: it only makes her
+  // wait. (Listening from here, before the lens turns and she walks to her bed: a key in
+  // the watch's first seconds is answered like every later one.)
   const hide = { x: P.hide.x, z: P.hide.z, speed: 0 };
   let movedAt = -99;
   const startle = (): void => {
@@ -274,7 +266,10 @@ async function story(k: AdventureKit): Promise<void> {
     k.stats.watch_moves = (k.stats.watch_moves ?? 0) + 1;
     k.say(c.staStil);
     if (settings.geluid) Sound.rustle();
+    // standing, she turns her head up to the hide; lying in her bed behind the juniper,
+    // the bracken by her stirs (she heard it, out of sight)
     if (!doe.lies) void doe.lookAt(() => hide, 1.8);
+    else home.cover.rustle(home.gapClump, 0.06);
   };
   const onKey = (e: KeyboardEvent): void => { if (STEP_KEYS.test(e.code)) startle(); };
   const onTap = (e: PointerEvent): void => { if (!(e.target as Element | null)?.closest?.('button')) startle(); };
@@ -295,6 +290,16 @@ async function story(k: AdventureKit): Promise<void> {
     }
   };
   try {
+    // he turns to the copse first and only then lifts his glasses: the turn sweeps past the
+    // wildcamera's glade next door, and the roe grazing there must never be the deer in his
+    // lenses just before the mother comes
+    await k.frame(WATCH_VIEW, { face: P.hide.heading });
+    k.ui.watching(true);
+    if (k.now - movedAt >= STILL_S) k.say(c.wacht); // (a step in the turn: "Sta stil" stays up)
+    calf.idle();
+    if (!doe.lies && dist(doe, DOE_BED) > 0.5) { // (a stop and a replay: she is in her bed)
+      await walkOn(DOE_BED.x, DOE_BED.z, { face: DOE_BED.yaw });
+    }
     await k.wait(2.6);
     await still();
     home.cover.rustle(home.gapClump, 0.16);

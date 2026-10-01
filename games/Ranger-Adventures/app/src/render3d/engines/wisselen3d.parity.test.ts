@@ -167,3 +167,33 @@ test('buildWisselTrial: flipEvery follows wisselFreq (more freq → flips sooner
   const b = buildWisselTrial(skin, { wisselFreq: 0.4 } as Settings, rng(7));
   assert.deepEqual(a.queue, b.queue);
 });
+
+test('buildWisselTrial: a lively queue — every night animal in a set, never the same animal twice in a row', () => {
+  // the wildcamera's six (3 day, 3 night): each night animal exactly once, both day animals
+  const six = { dagDieren: ['edelhert', 'ree'], nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'], trials: 6 } as Skin;
+  // the classic eight (4 day, 4 night) of the other missions: every animal at least once
+  const eight = { dagDieren: ['ree', 'eekhoorn'], nachtDieren: ['nachtzwaluw', 'das', 'wildzwijn'], trials: 8 } as Skin;
+  for (let seed = 1; seed <= 400; seed++) {
+    for (const skin of [six, eight]) {
+      const { queue } = buildWisselTrial(skin, { wisselFreq: 0.4 } as Settings, rng(seed));
+      const ids = queue.map((q) => q.id);
+      assert.equal(queue.length, skin.trials, 'the length follows skin.trials');
+      assert.equal(queue.filter((q) => q.dag).length, skin.trials! / 2, 'half day, half night animals');
+      for (const q of queue) assert.equal(q.dag, skin.dagDieren!.includes(q.id), `${q.id} is sorted by its own kind`);
+      for (let i = 1; i < ids.length; i++) assert.notEqual(ids[i], ids[i - 1], `seed ${seed}: ${ids.join(' ')} repeats at ${i}`);
+      for (const id of [...skin.dagDieren!, ...skin.nachtDieren!]) assert.ok(ids.includes(id), `seed ${seed}: ${id} comes by`);
+      if (skin === six) for (const id of skin.nachtDieren!) assert.equal(ids.filter((x) => x === id).length, 1, `seed ${seed}: ${id} once`);
+    }
+  }
+});
+
+test('buildWisselTrial: a short round flips early enough that a third of it comes after the flip', () => {
+  const six = { dagDieren: ['edelhert', 'ree'], nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'], trials: 6 } as Skin;
+  const eight = { ...six, trials: 8 } as Skin;
+  // a first-level child (wisselFreq 0.25) and the default slider (0.4): the six flip after the 4th
+  for (const f of [0.1, 0.25, 0.4]) assert.equal(buildWisselTrial(six, { wisselFreq: f } as Settings, rng(3)).flipEvery, 4);
+  assert.equal(buildWisselTrial(six, { wisselFreq: 1 } as Settings, rng(3)).flipEvery, 2, 'a quick switcher still flips every 2');
+  // the eight keep their cadence (5 at the first level, 4 at the default)
+  assert.equal(buildWisselTrial(eight, { wisselFreq: 0.25 } as Settings, rng(3)).flipEvery, 5);
+  assert.equal(buildWisselTrial(eight, { wisselFreq: 0.4 } as Settings, rng(3)).flipEvery, 4);
+});
