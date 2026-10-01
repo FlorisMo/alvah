@@ -29,8 +29,9 @@ export const BRAM = {
   },
   /** The first time the next mission is far away on foot and the jeep is near. */
   jeep: ['Dat is ver lopen.', 'Pak de jeep maar!'],
-  /** Back in the world after the first finished mission. */
-  missiebord: ['Er is nog meer werk, {naam}.', 'Kijk maar op het missiebord.'],
+  /** Back in the world after the first finished mission: the next one is where the chip
+   *  points (one next step, never two), and the board lists them all. */
+  missiebord: ['Er is nog meer werk, {naam}.', 'Volg de pijl linksboven.', 'Alle missies staan op het missiebord.'],
   /** After the second finished mission (wired with the porch ring, FLOW P4). */
   raaf: ['Bij de hut zit een jonge raaf.', 'Kun jij hem helpen?'],
   /** A returning player, once a session; he adds who he is if they never met. */
