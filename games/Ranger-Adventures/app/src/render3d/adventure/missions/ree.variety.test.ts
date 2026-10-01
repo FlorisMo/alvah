@@ -5,7 +5,7 @@
  * Seeds a reviewer can type (`/?dev=1&seed=N`: the session's first play is seed N, and
  * with an empty history it is this play):
  *
- *   seed  9 → A, pool in      seed  8 → A, pool out
+ *   seed  9 → A, pool in      (A's way to the hide has no room for it: always in)
  *   seed  3 → B, pool in      seed  1 → B, pool out
  *   seed  4 → C, pool in      seed  2 → C, pool out
  *
@@ -19,9 +19,15 @@ import { newPlay } from '../../../core/play.ts';
 import {
   CALF_MOMENTS, CALF_SPOTS, REE_LAYOUT_IDS, drawReePlay, lastReeVariants, parseReeVariant, reeOrder, reeVariant, type ReePlay,
 } from './ree.variety.ts';
+import { REE_LAYOUTS, poolSides } from './ree.places.ts';
 
 const MISSION = 'ree-niet-aanraken';
 const play = (seed: number) => newPlay(MISSION, seed, 1);
+/** The sides a layout's pool may lie on (ree.ts draws with them: A's way to the hide has
+ *  no room for it, so A's pool is always on her path). */
+const sides = (id: ReePlay['layout']) => poolSides(REE_LAYOUTS[id]);
+/** A play as ree.ts draws it. */
+const draw = (seed: number, history: readonly string[] = [], spot?: number): ReePlay => drawReePlay(play(seed), history, spot, sides);
 
 /** A valid play: five encounters, each once, the flip last, the calf's three together,
  *  the pool first or fourth; the variant says it all back. */
@@ -43,17 +49,18 @@ function valid(p: ReePlay): void {
 /** A session of plays as "Speel nog eens" plays them: each sees the plays before it. */
 function session(seed: number, n: number): ReePlay[] {
   const out: ReePlay[] = [];
-  for (let i = 0; i < n; i++) out.push(drawReePlay(play(seed + i), out.map((p) => p.variant)));
+  for (let i = 0; i < n; i++) out.push(draw(seed + i, out.map((p) => p.variant)));
   return out;
 }
 
 test('every seed gives a valid play, and the same seed and history give the same play', () => {
   for (let s = 0; s < 500; s++) {
-    const p = drawReePlay(play(s));
+    const p = draw(s);
     valid(p);
-    assert.deepEqual(drawReePlay(play(s)), p);
+    assert.deepEqual(draw(s), p);
+    assert.ok(sides(p.layout).includes(p.pool), `seed ${s}: the pool lies where ${p.layout} has room for it`);
     const h = ['A01-in-ago', 'B30-out-goa'];
-    assert.deepEqual(drawReePlay(play(s), h), drawReePlay(play(s), h));
+    assert.deepEqual(draw(s, h), draw(s, h));
   }
 });
 
@@ -76,7 +83,7 @@ test('three plays in a row are three layouts, three spots and three orders of th
 test('over 300 seeds every layout, spot, graze spot, pool side and order comes', () => {
   const seen = { layout: new Set<string>(), spot: new Set<number>(), graze: new Set<number>(), pool: new Set<string>(), order: new Set<string>() };
   for (let s = 0; s < 300; s++) {
-    const p = drawReePlay(play(s));
+    const p = draw(s);
     seen.layout.add(p.layout); seen.spot.add(p.spot); seen.graze.add(p.graze); seen.pool.add(p.pool); seen.order.add(p.order.join());
   }
   assert.equal(seen.layout.size, 3);
@@ -87,7 +94,7 @@ test('over 300 seeds every layout, spot, graze spot, pool side and order comes',
 });
 
 test('a spot the trial drew is the spot; the order puts the pool first or fourth', () => {
-  for (let s = 0; s < 40; s++) for (let k = 0; k < CALF_SPOTS; k++) assert.equal(drawReePlay(play(s), [], k).spot, k);
+  for (let s = 0; s < 40; s++) for (let k = 0; k < CALF_SPOTS; k++) assert.equal(draw(s, [], k).spot, k);
   assert.deepEqual(reeOrder('in', ['geur', 'aai', 'oppakken']), ['modder', 'geur', 'aai', 'oppakken', 'moeder']);
   assert.deepEqual(reeOrder('out', ['geur', 'aai', 'oppakken']), ['geur', 'aai', 'oppakken', 'modder', 'moeder']);
   assert.equal(reeVariant({ layout: 'B', spot: 2, graze: 1, pool: 'in', calf: ['geur', 'aai', 'oppakken'] }), 'B21-in-gao');
@@ -106,23 +113,23 @@ test('the last variants come from the beat history: one per play, oldest first, 
   ];
   assert.deepEqual(lastReeVariants(h, MISSION), ['A01-in-ago', 'C30-out-goa', 'B21-in-gao']);
   // with that history the next play is never C or B
-  for (let s = 0; s < 50; s++) assert.equal(drawReePlay(play(s), lastReeVariants(h, MISSION)).layout, 'A');
+  for (let s = 0; s < 50; s++) assert.equal(draw(s, lastReeVariants(h, MISSION)).layout, 'A');
 });
 
 /** The seeds in this file's header: what `/?dev=1&seed=N` plays first (empty history). */
 const SEED_TABLE: readonly { seed: number; layout: string; pool: 'in' | 'out' }[] = [
-  { seed: 9, layout: 'A', pool: 'in' }, { seed: 8, layout: 'A', pool: 'out' },
+  { seed: 9, layout: 'A', pool: 'in' },
   { seed: 3, layout: 'B', pool: 'in' }, { seed: 1, layout: 'B', pool: 'out' },
   { seed: 4, layout: 'C', pool: 'in' }, { seed: 2, layout: 'C', pool: 'out' },
 ];
 
-test('the pinned seeds reach every layout × pool', () => {
+test('the pinned seeds reach every layout × pool side it has room for', () => {
   const cells = new Set<string>();
   for (const r of SEED_TABLE) {
-    const p = drawReePlay(play(r.seed));
+    const p = draw(r.seed);
     assert.equal(p.layout, r.layout, `seed ${r.seed}`);
     assert.equal(p.pool, r.pool, `seed ${r.seed}`);
     cells.add(`${p.layout}-${p.pool}`);
   }
-  assert.equal(cells.size, 6);
+  assert.equal(cells.size, Object.values(REE_LAYOUTS).reduce((n, l) => n + poolSides(l).length, 0));
 });

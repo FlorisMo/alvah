@@ -8,7 +8,8 @@
  * from, her trodden path there, the hide he watches from), the calf lies in one of four
  * spots in it (never the middle of the picture), the doe grazes at one of two spots, the
  * wet pool lies on her path or on his way to the hide, and the three calm moments by the
- * calf come in a drawn order. All of it is drawn from the play's seed (`k.play`, one fork
+ * calf come in a drawn order (a layout whose way to the hide has no room for the pool has
+ * it on her path). All of it is drawn from the play's seed (`k.play`, one fork
  * per decision), so a play can be replayed (`?dev=1&seed=N`), and none of it changes how
  * hard a breinkracht is (decision 1: the stands are the same size, the lens the same
  * distance and angle, the spots equally readable; difficulty moves only with the level).
@@ -100,16 +101,18 @@ function fresh<T>(play: Pick<Play, 'pick'>, all: readonly T[], recent: readonly 
  * calf order the last two plays' orders, the pool never three times the same in a row.
  * `spot`: the zoeken trial's target when the trial builder drew it (then it is used).
  */
-export function drawReePlay(play: Pick<Play, 'fork'>, lastVariants: readonly string[] = [], spot?: number): ReePlay {
+export function drawReePlay(play: Pick<Play, 'fork'>, lastVariants: readonly string[] = [], spot?: number,
+  poolSides: (layout: ReeLayoutId) => readonly ('in' | 'out')[] = () => ['in', 'out']): ReePlay {
   const last = lastVariants.map(parseReeVariant).filter((x): x is NonNullable<typeof x> => !!x).slice(-2);
   const layout = fresh(play.fork('ree-plek'), REE_LAYOUT_IDS, last.map((l) => l.layout));
   const spots = Array.from({ length: CALF_SPOTS }, (_, i) => i);
   const s = spot !== undefined && spot >= 0 && spot < CALF_SPOTS ? spot : fresh(play.fork('ree-kalf'), spots, last.map((l) => l.spot));
   const graze = play.fork('ree-graas').pick([0, 1] as const);
   const poolPlay = play.fork('ree-poel');
-  const pool: 'in' | 'out' = last.length === 2 && last[0].pool === last[1].pool
-    ? (last[1].pool === 'in' ? 'out' : 'in')
-    : poolPlay.pick(['in', 'out'] as const);
+  const sides = poolSides(layout);
+  const pool: 'in' | 'out' = sides.length < 2 ? sides[0] ?? 'in'
+    : last.length === 2 && last[0].pool === last[1].pool ? (last[1].pool === 'in' ? 'out' : 'in')
+      : poolPlay.pick(['in', 'out'] as const);
   const orders = permutations(CALF_MOMENTS);
   const calf = fresh(play.fork('ree-rust'), orders, last.map((l) => l.calf), (a, b) => a.join() === b.join());
   const p = { layout, spot: s, graze, pool, calf };
