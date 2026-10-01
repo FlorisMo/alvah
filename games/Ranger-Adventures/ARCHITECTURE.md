@@ -92,7 +92,9 @@ adventure/beats/         search.ts (zoeken), route.ts (corsi), choice.ts (rustkr
                          (wisselen: aim a camera at one of two named places), callers.ts (simon:
                          animals at their own spots call, he calls back): the SAME trial builders
                          + pure runs as the 2D floor, played in the world (aim-math/callers-math:
-                         the pure mapping, beats.test.ts)
+                         the pure mapping, beats.test.ts); callers-glow.ts: a caller's warm light
+                         in its own colours, its rim's shader on a material once however many
+                         glows reach it (callers-glow.test.ts)
 adventure/actors.ts      Actor: calm behaviours (idle, root, go, follow, look, sniff, lie) + a
                          procedural trot for static GLBs; actors-math.ts is the pure part
 adventure/cover.ts       CoverField: instanced true-scale bracken, moor-grass, heather (3 draw

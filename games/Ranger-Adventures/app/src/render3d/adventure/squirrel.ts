@@ -71,6 +71,10 @@ export class Squirrel extends Actor {
   private digFrom = -9;
   private digPuffs = -1;
   private readonly tail = { value: 0 };
+  /** a soft warm rim round its outline (0..1): it waits for him, over there (the fur's own
+   *  colours stay; only the edge catches a warm light) */
+  private readonly rim = { value: 0 };
+  private rimTo = 0;
   /** a few points of the mesh (group space, at rest): its lowest point touches the ground */
   private hull: THREE.Vector3[] = [];
   private breathPhase: number;
@@ -115,9 +119,17 @@ export class Squirrel extends Actor {
       const pos = m.geometry.attributes.position;
       const step = Math.max(1, Math.floor(pos.count / 260));
       const toGroup = new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld);
-      for (let i = 0; i < pos.count; i += step) this.hull.push(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(toGroup));
       m.geometry.computeBoundingBox();
       geoBox = m.geometry.boundingBox!.clone();
+      // (its body without the bushy tail: the tail sits behind its root, −z in the mesh)
+      const tailFrom = geoBox.min.z + (geoBox.max.z - geoBox.min.z) * 0.36;
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i += step) {
+        v.fromBufferAttribute(pos, i);
+        const g = v.clone().applyMatrix4(toGroup);
+        this.hull.push(g);
+        if (v.z >= tailFrom) this.torso.push(g);
+      }
       this.bendTail(m, geoBox);
       // a touch of warm light in its fur (the low sun catching it), so the small red
       // squirrel reads against the dark bark and the brown forest floor
@@ -176,8 +188,14 @@ export class Squirrel extends Actor {
         shader.vertexShader = head + shader.vertexShader
           .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed = sqBend(transformed);')
           .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n{ float w = smoothstep(uHinge.z, uHinge.z - uSpan, position.z); float a = uTail * w; float c = cos(a), s = sin(a); objectNormal.yz = vec2(c * objectNormal.y - s * objectNormal.z, s * objectNormal.y + c * objectNormal.z); }');
+        // the rim: a warm light on the edge of its outline, where the fur turns away from
+        // the lens (its own colours inside stay as they are)
+        shader.uniforms.uRim = this.rim;
+        shader.fragmentShader = 'uniform float uRim;\n' + shader.fragmentShader.replace('#include <emissivemap_fragment>',
+          '#include <emissivemap_fragment>\n{ float sqEdge = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);\n' +
+          '  totalEmissiveRadiance += vec3(1.0, 0.72, 0.38) * (uRim * 0.9 * pow(sqEdge, 2.0)); }');
       };
-      mat.customProgramCacheKey = () => 'squirrel-tail';
+      mat.customProgramCacheKey = () => 'squirrel-tail-rim';
       mat.needsUpdate = true;
     }
   }
@@ -192,6 +210,22 @@ export class Squirrel extends Actor {
 
   /** Where it is now (its feet, its turn). */
   get now(): SqPose { return { ...this.pose }; }
+
+  /** A dozen points on its body (its head and trunk, not its tail), in the world, as it is
+   *  drawn now: what the player sees of it (how much of it a trunk hides). Empty until its
+   *  mesh is in. */
+  bodyPoints(n = 12): THREE.Vector3[] {
+    const from = this.torso.length ? this.torso : this.hull;
+    if (!from.length) return [];
+    while (this.probe.length < Math.min(n, from.length)) this.probe.push(new THREE.Vector3());
+    this.group.updateWorldMatrix(true, false);
+    const step = from.length / this.probe.length;
+    this.probe.forEach((p, i) => p.copy(from[Math.floor(i * step)]).applyMatrix4(this.group.matrixWorld));
+    return this.probe;
+  }
+  private readonly probe: THREE.Vector3[] = [];
+  /** the hull's points on its head and body (not the tail) */
+  private readonly torso: THREE.Vector3[] = [];
 
   /** On a trunk or branch right now? */
   get up(): boolean { const w = this.where; return w.kind === 'trunk' || w.kind === 'branch'; }
@@ -245,14 +279,15 @@ export class Squirrel extends Actor {
   /** Round its trunk to `at` (from its branch or the bark of that tree): a quick scurry
    *  round the bark at about the same height — hiding on the far side of the tree from
    *  someone, as red squirrels do. From anywhere else: up the trunk to `at`. */
-  goRound(tree: SquirrelTree, at: OnTrunk): Promise<boolean> {
+  goRound(tree: SquirrelTree, at: OnTrunk, secs?: number): Promise<boolean> {
     const w = this.where;
     if ((w.kind !== 'branch' && w.kind !== 'trunk') || w.tree !== tree) return this.goTrunk(tree, at);
     const plan: Segment[] = [];
     let from: OnTrunk;
     if (w.kind === 'branch') { plan.push(this.offBranch(tree)); from = { ang: tree.branch.ang, h: tree.branch.h - 0.12 }; }
     else from = w.at;
-    plan.push(...climbPlan(tree.trunk, from, at, 0));
+    // (`secs`: a calm slip round, no quicker than that — hide-and-seek keeps his pace)
+    plan.push(...climbPlan(tree.trunk, from, at, 0, secs));
     plan.push(hold(trunkPose(tree.trunk, at, true, 'cling'), 0.1, 'cling'));
     return this.run(plan, { kind: 'trunk', tree, at });
   }
@@ -274,6 +309,9 @@ export class Squirrel extends Actor {
     return this.run([turn(p, yaw), hold({ ...p, yaw }, hold1, p.act === 'cling' ? 'cling' : 'sit')], this.where);
   }
   private perchAfter: Perch | null = null;
+
+  /** The warm rim round its outline on (it waits for him: easy to spot) or off. */
+  glow(on: boolean): void { this.rimTo = on ? 1 : 0; }
 
   /** A tail flick (with a chatter, a find, a call). */
   flick(): void { if (!this.env.reduced()) this.flickAt = this.t; }
@@ -486,8 +524,10 @@ export class Squirrel extends Actor {
     return { x: tree.trunk.x + Math.sin(b.ang) * r, z: tree.trunk.z + Math.cos(b.ang) * r, alt: b.h, yaw: face ?? b.ang, pitch: 0, roll: 0, act: 'sit' };
   }
 
-  /** Down off its tree to the ground at the trunk's foot (nothing when it is on the ground). */
-  downPlan(): Segment[] {
+  /** Down off its tree to the ground at the trunk's foot (nothing when it is on the ground).
+   *  `side`: straight down the bark on that side (a heading from the trunk's axis) — where
+   *  he sees it — instead of a little spiral round. */
+  downPlan(side?: number): Segment[] {
     const p = this.where;
     if (p.kind === 'ground') return [];
     if (p.kind === 'stump') {
@@ -500,7 +540,7 @@ export class Squirrel extends Actor {
     const plan: Segment[] = [];
     if (p.kind === 'branch') plan.push(this.offBranch(tree)); // back off the branch onto the bark, head down
     // head first down the bark, round toward where it goes next (a little spiral)
-    const downAng = at.ang + (this.rnd() < 0.5 ? -1 : 1) * (0.6 + this.rnd() * 0.8);
+    const downAng = side ?? at.ang + (this.rnd() < 0.5 ? -1 : 1) * (0.6 + this.rnd() * 0.8);
     plan.push(...climbPlan(tree.trunk, at, { ang: downAng, h: 0.25 }, 0));
     plan.push(...dismountPlan(tree.trunk, { ang: downAng, h: 0.25 }));
     return plan;
@@ -522,9 +562,10 @@ export class Squirrel extends Actor {
     return plan;
   }
 
-  /** Dash (on the ground) to (x, z), down off its tree first; `lens` bends it round. */
-  dashTo(x: number, z: number, face?: number): Segment[] {
-    const plan = [...this.downPlan()];
+  /** Dash (on the ground) to (x, z), down off its tree first (on `side` of the trunk, when
+   *  given); `lens` bends it round. */
+  dashTo(x: number, z: number, face?: number, side?: number): Segment[] {
+    const plan = [...this.downPlan(side)];
     plan.push(...dashPlan(poseAtEnd(plan, this.pose), x, z, this.rnd, this.lens(), this.avoid()));
     if (face !== undefined) plan.push(turn(poseAtEnd(plan, this.pose), face));
     return plan;
@@ -688,6 +729,8 @@ export class Squirrel extends Actor {
       const u = Math.min(1, (this.t - this.eatFrom) / Math.max(0.1, this.eatFor));
       this.nut.scale.setScalar(reduced ? 1 : 1 - 0.65 * Math.floor(u * 5) / 5);
     }
+    // the rim eases on and off (a cut under reduced motion)
+    this.rim.value = reduced ? this.rimTo : this.rim.value + (this.rimTo - this.rim.value) * Math.min(1, dt * 3);
     // the tail: a flick lifts it and lets it fall (still under reduced motion)
     this.tail.value = reduced ? 0 : flick(this.t - this.flickAt) * 0.55 + (this.pose.act === 'run' || this.pose.act === 'leap' ? -0.18 : 0);
     this.apply(reduced);

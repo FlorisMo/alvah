@@ -10,8 +10,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  SQ, barkRadius, climbPlan, dashDirectPlan, dashPath, dashPlan, dismountPlan, flick, leapPlan, mountPlan,
-  planTime, poseAt, sqStream, topSpeeds, trunkPose, type Segment, type SqPose, type Trunk,
+  SQ, barkRadius, climbPlan, dashDirectPlan, dashPath, dashPlan, dismountPlan, flick, leapPlan, lineClear, mountPlan,
+  planTime, poseAt, sqStream, topSpeeds, trunkPose, trunkUpright, type Segment, type SqPose, type Trunk,
 } from './squirrel-math.ts';
 
 const pine: Trunk = { x: 3, z: -2, H: 13, species: 'prop-pine-scots' };
@@ -149,4 +149,26 @@ test('a tail flick: a quick lift and a softer fall, then still', () => {
   let top = 0, at = 0;
   for (let s = 0; s < 0.42; s += 0.01) { const f = flick(s); if (f > top) { top = f; at = s; } assert.ok(f >= 0 && f <= 1); }
   assert.ok(top > 0.95 && at < 0.2, 'up fast, down slower');
+});
+
+test('sight: a trunk hides a squirrel behind it, even one whose body sticks out past the bark', () => {
+  const t: Trunk = { x: 0, z: 0, H: 14, species: 'prop-pine-scots' };
+  const up = [trunkUpright(t, 0)];
+  const r = barkRadius(t, 1.2);
+  const eye = { x: 7, y: 2.4, z: 0 };
+  const round = (deg: number, out = r + 0.2) => ({ x: Math.cos((deg * Math.PI) / 180) * out, y: 1.2, z: Math.sin((deg * Math.PI) / 180) * out });
+  assert.equal(lineClear(eye, round(0), up, 0.12), true, 'on the near side: seen');
+  assert.equal(lineClear(eye, round(60), up, 0.12), true, 'round the side: seen');
+  assert.equal(lineClear(eye, round(180), up, 0.12), false, 'straight behind: hidden');
+  // (2026-09-30, played: 133° round, its middle 0.59 m out, the line to it grazed the bark
+  // 0.41 m from the axis — past the median bark — yet nothing of it showed on the screen:
+  // the ridged outline reaches further out, and hides it)
+  assert.equal(lineClear(eye, round(133, 0.59), up), false, 'just past the bark\'s edge, behind its ridges: hidden');
+  // (…while on the near side, clinging among the ridges, it is in view)
+  assert.equal(lineClear(eye, round(20, r + 0.08), up), true, 'on the near side, among the ridges: seen');
+  assert.equal(lineClear(eye, round(160, r + 0.08), up), false, 'on the far side, among the ridges: hidden');
+  // over the top of a short upright (the boy's head) it is seen
+  const body = [{ x: 3, z: 0, y0: 0, y1: 1.45, r: () => 0.22 }];
+  assert.equal(lineClear(eye, { x: 0, y: 1.3, z: 0 }, body, 0.12), true, 'over his head');
+  assert.equal(lineClear(eye, { x: 0, y: 0.15, z: 0 }, body, 0.12), false, 'on the ground behind him: his body hides it');
 });

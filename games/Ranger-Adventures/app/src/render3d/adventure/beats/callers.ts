@@ -20,16 +20,16 @@ import type { BeatSummary } from '../../../core/skill';
 import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
 import { Sound } from '../../../core/sound';
-import { Glow, anchoredPrompt, clearPlayHint, pick3d, SPEAK_BTN } from '../../play/kit';
+import { anchoredPrompt, clearPlayHint, pick3d, SPEAK_BTN } from '../../play/kit';
 import { listenerOf } from '../../world/Residents';
 import type { AdventureKit, FrameSpec } from '../kit';
 import type { Place } from '../types';
 import { listenPlan } from './callers-math';
+import { CALL, CALL_GLOW, WarmGlow } from './callers-glow';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-const CALL = '#ffd98a';  // the warm light of a call
 const OK = '#8fd6a0';    // a right echo
 const WRONG = '#e8a27a'; // a wrong echo (soft, warm)
 
@@ -75,8 +75,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   if (o.view) await k.frame(o.view, { face: o.stand?.heading });
   k.say(null);
 
-  const glows = new Map<string, Glow>();
-  for (const c of o.callers) if (c.body) glows.set(c.id, new Glow(c.body, CALL));
+  const glows = new Map<string, WarmGlow>();
+  for (const c of o.callers) if (c.body) glows.set(c.id, new WarmGlow(c.body, CALL));
   const light = (id: string, level: number, color = CALL): void => { glows.get(id)?.set(level, color); };
   const quiet = (): void => { for (const c of o.callers) { light(c.id, 0); c.act?.(false); } };
 
@@ -121,7 +121,7 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
       if (token !== listenToken) return;
       const c = byId.get(beat.id)!;
       quiet();
-      light(beat.id, 0.65);
+      light(beat.id, CALL_GLOW);
       c.act?.(true);
       o.onCall?.(beat.id);
       callFrom(beat.id);
@@ -139,7 +139,7 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   let finished!: () => void;
   const complete = new Promise<void>((r) => { finished = r; });
   const flash = (id: string, color: string, secs: number): void => {
-    light(id, color === WRONG ? 0.6 : 0.45, color);
+    light(id, color === WRONG ? 0.8 : 0.7, color);
     void k.wait(secs).then(() => { if (phase !== 'listen') light(id, 0); }).catch(() => {});
   };
   const onPick = (id: string): void => {
@@ -154,13 +154,13 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
     if (res === 'complete') {
       phase = 'done';
       callFrom(id);
-      light(id, 0.45, OK);
+      light(id, 0.7, OK);
       finished();
       return;
     }
     if (res === 'grow') {
       phase = 'listen';
-      light(id, 0.45, OK);
+      light(id, 0.7, OK);
       if (settings.geluid) Sound.correct();
       banner(o.lines.groei, false);
       speak(o.lines.groei);
@@ -186,24 +186,31 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
     canvas: k.ctx.canvas, camera: k.world.camera, raycaster: k.ctx.raycaster as THREE.Raycaster,
     targets: o.callers.map((c) => ({ id: c.id, object: c.pick })), onPick, signal: k.signal,
   });
+  let summary: BeatSummary;
   try {
-    run.begin();
-    await listen(o.lines.luister);
-    await k.guard(complete);
+    try {
+      run.begin();
+      await listen(o.lines.luister);
+      await k.guard(complete);
+    } finally {
+      teardown();
+      unhint();
+      clearPlayHint();
+      listenToken += 1;
+    }
+    summary = run.summary();
+    k.log(step, summary);
+    if (settings.geluid) Sound.found();
+    banner(o.lines.goed, false);
+    speak(o.lines.goed);
+    await k.wait(1.8);
   } finally {
-    teardown();
-    unhint();
-    clearPlayHint();
-    listenToken += 1;
+    // every way out — the sequence echoed, or a stop in the middle of a call or in the
+    // breath after it — hands each animal back as it was (its homes stay in the world:
+    // the next play's glow finds it unlit, its shader as it was, the bird down on its log)
+    quiet();
+    for (const g of glows.values()) g.clear();
   }
-  const summary = run.summary();
-  k.log(step, summary);
-  if (settings.geluid) Sound.found();
-  banner(o.lines.goed, false);
-  speak(o.lines.goed);
-  await k.wait(1.8);
-  quiet();
-  for (const g of glows.values()) g.clear();
   (card as HTMLDivElement | null)?.remove();
   return summary;
 }

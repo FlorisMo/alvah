@@ -274,14 +274,15 @@ export function trunkPose(t: Trunk, at: OnTrunk, headUp: boolean, act: SqAct = '
 /**
  * A spiral run along the bark from `a` to `b` (round the trunk by the short or the long
  * way: `turns` extra half-turns), head first: head up going up, head down coming down.
+ * `minDur`: never quicker than that (a calm slip round, hide-and-seek).
  */
-export function climbPlan(t: Trunk, a: OnTrunk, b: OnTrunk, halfTurns = 0): Segment[] {
+export function climbPlan(t: Trunk, a: OnTrunk, b: OnTrunk, halfTurns = 0, minDur: number = SQ.minBurst): Segment[] {
   const up = b.h >= a.h;
   let da = wrap(b.ang - a.ang);
   if (halfTurns) da += Math.sign(da || 1) * halfTurns * Math.PI;
   const rMid = barkRadius(t, (a.h + b.h) / 2) + SQ.clear;
   const len = Math.hypot(b.h - a.h, da * rMid);
-  const dur = Math.max(SQ.minBurst, len / SQ.climb);
+  const dur = Math.max(minDur, len / SQ.climb);
   return [{
     dur, len, act: 'climb',
     at: (u) => {
@@ -382,6 +383,53 @@ export function topSpeeds(plan: readonly Segment[]): { run: number; climb: numbe
     else if (g.act === 'leap') out.leap = Math.max(out.leap, v);
   }
   return out;
+}
+
+/* ---------------------------------------------------------------- sight ---- */
+
+/** A point in the world (m, world y up). */
+export interface P3 { x: number; y: number; z: number }
+
+/** Something upright that hides what is behind it: a trunk (its bark's radius changes up
+ *  it), the ranger's body. It stands from `y0` to `y1` (world y); `r(y)` is how far out
+ *  from its axis it reaches at height y. */
+export interface Upright { x: number; z: number; y0: number; y1: number; r: (y: number) => number }
+
+/**
+ * How far a trunk's bark reaches out from its axis where it hides what is behind it, as a
+ * fraction of the tree's height: its outline, the furthest trunk vertex (the low-poly
+ * bark is ridged, so its outline is well outside the median radius the squirrel clings
+ * at — the same measure world/Crowns.ts gives the camera). Played 2026-09-30: a squirrel
+ * clinging just past the median bark's edge was "in view" by the median and hidden on
+ * the screen by the ridges.
+ */
+const TRUNK_REACH: Readonly<Record<TrunkSpecies, number>> = { 'prop-pine-scots': 0.04, 'prop-oak-tree': 0.075, 'prop-birch-tree': 0.045 };
+
+/** An upright trunk as a line of sight meets it: out to its ridged outline up the tree
+ *  (never less than the bark's measured radius), its foot on the ground at `ground`. */
+export function trunkUpright(t: Trunk, ground: number): Upright {
+  const reach = TRUNK_REACH[t.species] * t.H;
+  return { x: t.x, z: t.z, y0: ground - 0.5, y1: ground + t.H, r: (y) => Math.max(reach, barkRadius(t, Math.max(0, y - ground))) };
+}
+
+/** Is the straight line from `eye` to `at` clear of every upright, by at least `pad` m?
+ *  Each is met where the line passes nearest its axis, at the height the line has there.
+ *  (`at` is the middle of a body: a line that only just grazes past the bark to it sees
+ *  a sliver at most — `pad` asks for most of the body in view.) When the line comes
+ *  nearest an upright at its very end, `at` is on the side of it that faces the eye (a
+ *  squirrel on the near side of the bark, among its ridges): that upright hides nothing. */
+export function lineClear(eye: P3, at: P3, uprights: readonly Upright[], pad = 0): boolean {
+  const dx = at.x - eye.x, dz = at.z - eye.z;
+  const l2 = dx * dx + dz * dz;
+  for (const u of uprights) {
+    const raw = l2 < 1e-9 ? 1 : ((u.x - eye.x) * dx + (u.z - eye.z) * dz) / l2;
+    if (raw >= 1) continue;
+    const t = Math.max(0, raw);
+    const y = eye.y + (at.y - eye.y) * t;
+    if (y < u.y0 || y > u.y1) continue;
+    if (Math.hypot(eye.x + dx * t - u.x, eye.z + dz * t - u.z) < u.r(y) + pad) return false;
+  }
+  return true;
 }
 
 /* ------------------------------------------------------------ the flick ---- */
