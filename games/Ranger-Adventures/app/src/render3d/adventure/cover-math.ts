@@ -108,30 +108,54 @@ export function backPoints(x: number, y: number, z: number, yaw: number, len: nu
  * made SMALLER (a young frond, a stooping tussock; never removed: the stand keeps its
  * look), again and again until enough shows. Returns the indices it changed. Pure: the
  * stems are edited in place (`h` shrinks, `h0` keeps the built height).
+ *
+ * Run 7: `max` (default: no limit, as before) is the share it must not pass — a step that
+ * would uncover more is taken gentler, or on another plant, so every hiding spot shows
+ * the same glimpse for the same knob (the search's difficulty never depends on where he
+ * lies). When no step lands under `max` it takes the first one, as before.
  */
-export function openWindow(stems: Stem[], eye: V3, pts: readonly V3[], min = 0.3): number[] {
+export function openWindow(stems: Stem[], eye: V3, pts: readonly V3[], min = 0.3, max = Infinity): number[] {
   const changed = new Set<number>();
   const centre = pts[Math.floor(pts.length / 2)];
-  for (let guard = 0; guard < 40 && visibleShare(pts, eye, stems) < min; guard++) {
+  // a frond shrinks whole (a young frond: its blade blocks at any height); a tussock
+  // stoops (lower, as wide): the line to the back rises over it
+  const shrink = (i: number, k: number): void => {
+    const s = stems[i];
+    s.h0 ??= s.h;
+    s.h *= k;
+    if (s.kind === 'frond') { s.lx *= k; s.lz *= k; s.r *= k; } else s.r *= k === 0.74 ? 0.92 : 1 - (1 - k) * 0.31;
+    changed.add(i);
+  };
+  for (let guard = 0; guard < 60 && visibleShare(pts, eye, stems) < min; guard++) {
     // the points nearest the middle of the back first: a window over the animal
     const order = [...pts].sort((p, q) => Math.hypot(p.x - centre.x, p.z - centre.z) - Math.hypot(q.x - centre.x, q.z - centre.z));
-    let did = false;
+    let first: number | null = null;
+    let took = false;
     for (const p of order) {
       const bl = blockersOf(eye, p, stems);
       if (!bl.length) continue;
       bl.sort((i, j) => Math.hypot(stems[i].x - p.x, stems[i].z - p.z) - Math.hypot(stems[j].x - p.x, stems[j].z - p.z));
-      const s = stems[bl[0]];
-      s.h0 ??= s.h;
-      // a frond shrinks whole (a young frond: its blade blocks at any height); a tussock
-      // stoops (lower, as wide): the line to the back rises over it
-      const k = 0.74;
-      s.h *= k;
-      if (s.kind === 'frond') { s.lx *= k; s.lz *= k; s.r *= k; } else s.r *= 0.92;
-      changed.add(bl[0]);
-      did = true;
-      break;
+      if (max === Infinity) { shrink(bl[0], 0.74); took = true; break; }
+      first ??= bl[0];
+      // (run 7: a gentler step on this plant, or the next plant, when a full one shows too much)
+      for (const i of bl) {
+        const s = stems[i];
+        const was = { h: s.h, lx: s.lx, lz: s.lz, r: s.r, h0: s.h0, had: changed.has(i) };
+        for (const k of [0.74, 0.86, 0.93, 0.965]) {
+          shrink(i, k);
+          if (visibleShare(pts, eye, stems) <= max) { took = true; break; }
+          s.h = was.h; s.lx = was.lx; s.lz = was.lz; s.r = was.r;
+          if (was.h0 === undefined) delete s.h0; else s.h0 = was.h0;
+          if (!was.had) changed.delete(i);
+        }
+        if (took) break;
+      }
+      if (took) break;
     }
-    if (!did) break;
+    if (!took) {
+      if (first === null) break;
+      shrink(first, 0.74); // (no step stays under max: the first one, as before)
+    }
   }
   return [...changed];
 }
@@ -175,5 +199,95 @@ export function standClumps(frame: Frame, a: number, b: number, spacing: number,
       out.push({ ...atLocal(frame, u, vv), kind, size: 0.85 + rnd() * 0.3 });
     }
   }
+  return out;
+}
+
+/* ------------------------------------------------------------ the plants ---- */
+
+/** How a grown plant is drawn beyond the maths' stem (cover.ts reads it). */
+export interface StemLook {
+  /** its width scale (a tussock's, a heather cushion's; a frond scales whole by `h`) */
+  s: number;
+  /** its height as built (the draw's y scale) */
+  sy: number;
+  /** a droop toward the ground (a dead frond), rad */
+  pitch: number;
+  /** its colour tint (r, g, b), or none */
+  tint: readonly [number, number, number] | null;
+  /** its breeze phase (rad) */
+  phase: number;
+}
+
+/**
+ * The plants of a field of cover, grown from its clumps the one way the world grows them
+ * (cover.ts builds its instances from exactly these): per clump a tussock and fronds, a
+ * low mound of dead rust-brown fronds for a 'dead' clump, now and then a heather cushion.
+ * Deterministic from `seed`; pure, so a places test measures the glimpse of the stand the
+ * world will draw (run 7: moved here from CoverField's constructor, unchanged).
+ */
+export function growStems(clumps: readonly Clump[], seed: number, groundY: (x: number, z: number) => number): { stems: Stem[]; looks: StemLook[] } {
+  const rnd = stream(seed);
+  const stems: Stem[] = [];
+  const looks: StemLook[] = [];
+  const add = (kind: PlantKind, clump: number, x: number, z: number, h: number, yaw: number, extra: { s?: number; pitch?: number; tint?: readonly [number, number, number] } = {}): void => {
+    const y = groundY(x, z) - 0.02;
+    const reach = kind === 'frond' ? 0.55 * h : 0;
+    stems.push({
+      kind, x, y, z, h, clump, yaw,
+      lx: Math.sin(yaw) * reach, lz: Math.cos(yaw) * reach,
+      r: kind === 'frond' ? 0.2 * h : kind === 'tussock' ? 0.3 * h : 0.38 * (extra.s ?? 1),
+    });
+    looks.push({ s: extra.s ?? h, sy: h, pitch: extra.pitch ?? 0, tint: extra.tint ?? null, phase: rnd() * Math.PI * 2 });
+  };
+  clumps.forEach((c, ci) => {
+    const s = c.size;
+    const turn = rnd() * Math.PI * 2;
+    if (c.kind === 'dead') {
+      // a low mound of rust-brown dead fronds, drooping
+      for (let k = 0; k < 4; k++) {
+        const a = turn + k * 1.7;
+        const h = (0.55 + rnd() * 0.12) * s;
+        const pitch = 0.28 + rnd() * 0.12;
+        const m = 0.9 + rnd() * 0.2;
+        add('frond', ci, c.x + Math.cos(a) * 0.08, c.z + Math.sin(a) * 0.08, h, a + 0.4, { pitch, tint: [1.75 * m, 0.72 * m, 0.5 * m] });
+      }
+      return;
+    }
+    if (c.kind === 'mix' || c.kind === 'grass') {
+      const h = (0.58 + rnd() * 0.26) * s;
+      add('tussock', ci, c.x, c.z, h, turn, { s: (0.62 + rnd() * 0.22) * s });
+      if (c.kind === 'grass' && rnd() < 0.5) {
+        const a = turn + 2.2;
+        add('tussock', ci, c.x + Math.cos(a) * 0.3 * s, c.z + Math.sin(a) * 0.3 * s, (0.5 + rnd() * 0.2) * s, a, { s: 0.55 * s });
+      }
+    }
+    if (c.kind === 'mix' || c.kind === 'bracken') {
+      const n = c.kind === 'bracken' ? 5 : 3;
+      for (let k = 0; k < n; k++) {
+        const a = turn + (k / n) * Math.PI * 2 + rnd() * 0.6;
+        const off = 0.1 + rnd() * 0.14;
+        const h = (0.88 + rnd() * 0.3) * s;
+        const yaw = a + (rnd() - 0.5) * 0.8;
+        const tint: [number, number, number] = [0.92 + rnd() * 0.16, 0.92 + rnd() * 0.16, 0.9 + rnd() * 0.1];
+        add('frond', ci, c.x + Math.cos(a) * off, c.z + Math.sin(a) * off, h, yaw, { tint });
+      }
+    }
+    if (rnd() < 0.12) add('heath', ci, c.x + 0.3, c.z - 0.2, 0.4 * s, turn, { s: 0.8 * s });
+  });
+  return { stems, looks };
+}
+
+/** Every stem back to its built height (a window opened for another spot is closed):
+ *  `built` holds the stems as `growStems` grew them. Pure: edits `stems` in place;
+ *  returns the indices it changed. */
+export function resetStems(stems: Stem[], built: readonly Stem[]): number[] {
+  const out: number[] = [];
+  stems.forEach((s, i) => {
+    const b = built[i];
+    if (s.h0 === undefined && s.h === b.h && s.r === b.r) return;
+    s.h = b.h; s.lx = b.lx; s.lz = b.lz; s.r = b.r;
+    delete s.h0;
+    out.push(i);
+  });
   return out;
 }

@@ -26,6 +26,7 @@ import * as THREE from 'three';
 import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
+import type { Play } from '../../core/play';
 import type { WorldCtx, Play3dEngine } from '../play/types';
 import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/dagnacht';
 import { store } from '../../core/state';
@@ -94,14 +95,14 @@ function pathRibbon(stage: Stage, v0: number, v1: number, width: number): THREE.
   return mesh;
 }
 
-export function playDagnacht3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
+export function playDagnacht3d(ctx: WorldCtx, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const reduced = ctx.reducedMotion;
     const settings = store.get().settings;
 
     // SAME engine logic as the 2D view (construct parity §1f).
     const diff = store.difficulty('dagnacht');
-    const trial = buildDagnachtTrial(step.skin, { ...diff, reducedMotion: reduced } as typeof diff);
+    const trial = buildDagnachtTrial(step.skin, { ...diff, reducedMotion: reduced } as typeof diff, play?.fork('dagnacht').rng); // run 7: the play's order (as its 2D twin)
     const run = new DagnachtRun(trial.encounters.length);
     const instructie = step.skin.copy?.instructie ?? 'Blijf rustig. Maak de goede keuze.';
 

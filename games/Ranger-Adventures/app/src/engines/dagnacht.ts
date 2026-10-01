@@ -35,7 +35,16 @@ export interface Encounter {
   flip?: boolean;
   terug?: number;                  // lost ground on a wrong choice (encounter units)
   eikelKost?: number;              // eikels spilled on a wrong choice
+  /** run 7 (design foundation §5.4): the story slot it belongs to ('big', 'weg', 'thuis'):
+   *  a skin's `rustPlan` orders the slots, and the encounters inside one slot are drawn
+   *  in a seeded order */
+  slot?: string;
 }
+
+/** Run 7 (design foundation §5.4): one slot of a skin's calm-moment plan, in story order:
+ *  `pick` how many of its encounters come (default all), `shuffle` their order (default
+ *  true). */
+export interface RustPlanSlot { slot: string; pick?: number; shuffle?: boolean }
 
 const FALLBACK: Encounter[] = [
   { id: 'x', subject: 'adder', vraag: 'Pas op. Blijf uit de buurt.',
@@ -50,11 +59,52 @@ export interface DagnachtTrial {
   slowmo: boolean;                 // calmer choosing window (support while learning)
 }
 
-/** Resolve the encounter list + the slow-mo support window. */
-export function buildDagnachtTrial(skin: Skin, diff: Settings): DagnachtTrial {
-  const authored = (skin.encounters as Encounter[] | undefined)?.length
+/**
+ * The order the calm moments come in (run 7, design foundation §5.4). No `rustPlan` on the
+ * skin, or no `rng`: the content order (the classic missions, a seed-less call). With a
+ * plan: its slots in plan order, each slot's encounters drawn (`pick`) and shuffled by the
+ * seed; encounters of no planned slot follow in content order. A flip is never the first
+ * (the "no" habit is built first), and a pool with a flip keeps one. Pure: the 2D floor,
+ * the classic stage and the world call it with the same play's fork ('dagnacht'), so they
+ * play the same order.
+ */
+export function rustOrder(authored: readonly Encounter[], plan: readonly RustPlanSlot[] | undefined, rng?: () => number): Encounter[] {
+  if (!plan?.length || !rng) return [...authored];
+  const out: Encounter[] = [];
+  const planned = new Set(plan.map((p) => p.slot));
+  for (const p of plan) {
+    let pool = authored.filter((e) => e.slot === p.slot);
+    if (p.shuffle !== false || (p.pick ?? pool.length) < pool.length) {
+      pool = [...pool];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+    }
+    const n = Math.max(0, Math.min(pool.length, p.pick ?? pool.length));
+    let take = pool.slice(0, n);
+    // a pool with a flip keeps one (the flip is what makes it an inhibition task)
+    const flip = pool.find((e) => e.flip);
+    if (flip && n > 0 && !take.some((e) => e.flip)) take = [...take.slice(0, n - 1), flip];
+    // a drawn subset keeps the order it was shuffled into; an unshuffled slot its content order
+    if (p.shuffle === false) take.sort((a, b) => authored.indexOf(a) - authored.indexOf(b));
+    out.push(...take);
+  }
+  out.push(...authored.filter((e) => !e.slot || !planned.has(e.slot)));
+  // never a flip first
+  if (out[0]?.flip) {
+    const i = out.findIndex((e) => !e.flip);
+    if (i > 0) out.unshift(...out.splice(i, 1));
+  }
+  return out;
+}
+
+/** Resolve the encounter list + the slow-mo support window. Run 7: `rng` (the play's
+ *  'dagnacht' fork) draws the order of a skin with a `rustPlan` (`rustOrder`). */
+export function buildDagnachtTrial(skin: Skin, diff: Settings, rng?: () => number): DagnachtTrial {
+  const authored = rustOrder((skin.encounters as Encounter[] | undefined)?.length
     ? (skin.encounters as Encounter[])
-    : FALLBACK;
+    : FALLBACK, skin.rustPlan as readonly RustPlanSlot[] | undefined, rng);
   // "knappe woorden" on: the lines with the real terms; off (default): the plain lines
   const encounters = diff.jargon
     ? authored.map((e) => ({ ...e, vraag: e.vraagKnap ?? e.vraag, uitleg: e.uitlegKnap ?? e.uitleg, gevolg: e.gevolgKnap ?? e.gevolg }))

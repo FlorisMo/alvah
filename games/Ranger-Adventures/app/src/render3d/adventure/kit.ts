@@ -192,6 +192,43 @@ export interface WalkOpts {
   reached?: () => boolean;
 }
 
+/**
+ * Run 7: a calm move of the lens round `about` (the ranger) to the pose `to`/`lookAt`: its
+ * bearing from him, its distance and its height eased together (an arc, never a straight
+ * line through him), its aim turned with it; ≥ `seconds`, and slow enough that neither the
+ * arc nor the aim turns more than 90° a second. A cut under reduced motion.
+ */
+function orbitReframe(camera: THREE.PerspectiveCamera, about: Spot, to: THREE.Vector3, lookAt: THREE.Vector3, reduced: boolean, seconds: number): { update: (dt: number) => boolean } {
+  let start: { r: number; phi: number; y: number; yaw: number; pitch: number } | null = null;
+  let end: { r: number; phi: number; y: number; yaw: number; pitch: number } | null = null;
+  let dPhi = 0, dYaw = 0, dur = seconds, t = 0;
+  const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+  const aimOf = (d: THREE.Vector3): { yaw: number; pitch: number } => ({ yaw: Math.atan2(d.x, d.z), pitch: Math.asin(Math.max(-1, Math.min(1, d.y / (d.length() || 1)))) });
+  const poseOf = (p: THREE.Vector3, d: THREE.Vector3) => ({ r: Math.hypot(p.x - about.x, p.z - about.z), phi: Math.atan2(p.x - about.x, p.z - about.z), y: p.y, ...aimOf(d) });
+  const hold = (): void => { camera.position.copy(to); camera.up.set(0, 1, 0); camera.lookAt(lookAt); };
+  return {
+    update(dt: number): boolean {
+      if (reduced) { hold(); return true; }
+      if (!start || !end) {
+        start = poseOf(camera.position, camera.getWorldDirection(new THREE.Vector3()));
+        end = poseOf(to, lookAt.clone().sub(to));
+        dPhi = wrap(end.phi - start.phi);
+        dYaw = wrap(end.yaw - start.yaw);
+        dur = Math.max(seconds, Math.abs(dPhi) / (Math.PI / 2), Math.abs(dYaw) / (Math.PI / 2));
+      }
+      t = Math.min(1, t + Math.min(dt, 0.05) / dur);
+      if (t >= 1) { hold(); return true; }
+      const e = t * t * (3 - 2 * t);
+      const phi = start.phi + dPhi * e, r = start.r + (end.r - start.r) * e;
+      camera.position.set(about.x + Math.sin(phi) * r, start.y + (end.y - start.y) * e, about.z + Math.cos(phi) * r);
+      const yaw = start.yaw + dYaw * e, pitch = start.pitch + (end.pitch - start.pitch) * e;
+      camera.up.set(0, 1, 0); // roll = 0 always
+      camera.lookAt(camera.position.x + Math.sin(yaw) * Math.cos(pitch), camera.position.y + Math.sin(pitch), camera.position.z + Math.cos(yaw) * Math.cos(pitch));
+      return false;
+    },
+  };
+}
+
 const WALK_HINT_R = 0.8; // golden walks until it is within this share of r
 /** The animal he leads waits where it is once he is this far off (m) — a long walk away,
  *  not a few running steps — and follows again once he is back within `LEAD_BACK_M`.
@@ -475,9 +512,11 @@ export class AdventureKit {
    * back to where it was; a cut each way under reduced motion. At most one per mission.
    * `turn`: the ranger turns to face the place while the lens is on it (out of his own
    * sight), and the lens glides back to behind him facing it — he ends up looking where
-   * the story goes on, instead of the way he came.
+   * the story goes on, instead of the way he came. Run 7 `face`: he turns to THIS heading
+   * instead (the way a squeak comes from), and the lens comes round behind him on an arc
+   * about him (never a straight line through him), at most 90° a second.
    */
-  async look(at: Spot & { y?: number }, line: string, hold = 2.5, opts: { turn?: boolean } = {}): Promise<void> {
+  async look(at: Spot & { y?: number }, line: string, hold = 2.5, opts: { turn?: boolean; face?: number } = {}): Promise<void> {
     this.check();
     this.beat = 'look';
     this.ui.say(line);
@@ -509,10 +548,10 @@ export class AdventureKit {
     }
     this.ui.binoculars(false);
     let back = from, backLook = fromLook;
-    if (opts.turn) {
+    const me = this.ranger();
+    if (opts.turn || opts.face !== undefined) {
       // the lens's pose behind him, turned round him by as much as he turns to face it
-      const me = this.ranger();
-      const h = headingTo(me, at);
+      const h = opts.face ?? headingTo(me, at);
       const d = h - Math.atan2(fromLook.x - from.x, fromLook.z - from.z);
       const turnAbout = (p: THREE.Vector3): THREE.Vector3 => {
         const dx = p.x - me.x, dz = p.z - me.z;
@@ -522,7 +561,7 @@ export class AdventureKit {
       backLook = turnAbout(fromLook);
       this.world.faceRanger(h);
     }
-    move = makeReframe(cam, back, backLook, this.reduced, 2.0, 0);
+    move = opts.face !== undefined ? orbitReframe(cam, me, back, backLook, this.reduced, 2.0) : makeReframe(cam, back, backLook, this.reduced, 2.0, 0);
     this.held = { update: (dt) => move.update(dt), settled: false };
     await this.until(() => !!this.held?.settled);
     this.free();

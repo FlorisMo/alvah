@@ -1,0 +1,118 @@
+/**
+ * frisling.vary.test.ts — what changes every play of the frisling is drawn from the play's
+ * seed alone (design frisling §5.1): the same seed gives the same play; every way, nook,
+ * pose, family layout and look-alike spot can come; the same way never comes twice in a
+ * row; and the seed table a reviewer replays (`?dev=1&seed=N` on a fresh save) gives the
+ * three ways. Run: `npm test`.
+ */
+
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { newPlay } from '../../../core/play.ts';
+import { frislingVariant, lastWayOf, wantsEdge, type DecoyKind } from './frisling.vary.ts';
+import { FAMILY_LAYOUTS, WAYS, WAY_IDS, type WayId } from './frisling.places.ts';
+import { AREA_VELUWE } from '../../../content/veluwe.ts';
+import { buildDagnachtTrial } from '../../../engines/dagnacht.ts';
+import type { Skin } from '../../../content/types.ts';
+
+const MISSION = AREA_VELUWE.missies.find((m) => m.id === 'frisling')!;
+/** The trial's look-alikes as the world lays them (every one the content has: the most). */
+const DECOYS: DecoyKind[] = (MISSION.stappen[0].skin.distractors ?? []).map((d) => ({ k: d.k, animal: d.animal }));
+
+/** The seed table: on a fresh save (`?dev=1&seed=N`, the frisling's first play) these
+ *  seeds draw these ways. Listed in every builder's report. */
+export const SEED_TABLE: Readonly<Record<WayId, number>> = { wei: 1, steen: 2, berk: 4 };
+
+const variant = (seed: number, last: WayId | null = null, n = 1) => frislingVariant(newPlay('frisling', seed, n), last, DECOYS);
+
+test('the same seed gives the same play; its choices are noted on the play', () => {
+  for (let seed = 0; seed < 40; seed++) {
+    assert.deepEqual(variant(seed), variant(seed));
+    const play = newPlay('frisling', seed, 1);
+    const v = frislingVariant(play, null, DECOYS);
+    assert.equal(play.variant.way, v.way);
+    assert.equal(play.variant.nook, v.nook);
+    assert.equal(play.variant.fam, FAMILY_LAYOUTS[v.family].id);
+  }
+});
+
+test('every way, nook, pose, family layout and look-alike spot can come', () => {
+  const seen = { way: new Set<string>(), nook: new Map<WayId, Set<number>>(), pose: new Set<number>(), family: new Set<number>(), spot: new Map<WayId, Set<number>>(), leeuwerik: new Set<string>() };
+  for (let seed = 0; seed < 600; seed++) {
+    const v = variant(seed);
+    seen.way.add(v.way);
+    (seen.nook.get(v.way) ?? seen.nook.set(v.way, new Set()).get(v.way)!).add(v.nook);
+    seen.pose.add(v.pose);
+    seen.family.add(v.family);
+    for (const s of v.decoySpots) (seen.spot.get(v.way) ?? seen.spot.set(v.way, new Set()).get(v.way)!).add(s);
+    seen.leeuwerik.add(String(v.leeuwerik));
+  }
+  assert.equal(seen.way.size, 3);
+  for (const id of WAY_IDS) {
+    assert.equal(seen.nook.get(id)!.size, WAYS[id].nooks.length, `every ${id} nook comes`);
+    assert.equal(seen.spot.get(id)!.size, WAYS[id].decoySpots.length, `every ${id} look-alike spot is used`);
+  }
+  assert.equal(seen.pose.size, 3);
+  assert.equal(seen.family.size, FAMILY_LAYOUTS.length);
+  assert.ok(seen.leeuwerik.has('null') && seen.leeuwerik.size >= 3, 'a woodlark sometimes, from either spot');
+});
+
+test('the look-alikes each get their own spot; the nightjar lies at the stand\'s edge', () => {
+  for (let seed = 0; seed < 200; seed++) {
+    const v = variant(seed);
+    assert.equal(v.decoySpots.length, DECOYS.length);
+    assert.equal(new Set(v.decoySpots).size, DECOYS.length, 'one spot each');
+    DECOYS.forEach((d, i) => { if (wantsEdge(d)) assert.ok(WAYS[v.way].decoySpots[v.decoySpots[i]].edge, 'the nightjar at an edge spot'); });
+  }
+  // fewer look-alikes (a lower level): the same rule, the first spots of the same order
+  const few = frislingVariant(newPlay('frisling', 9, 1), null, DECOYS.slice(0, 4));
+  assert.equal(few.decoySpots.length, 4);
+});
+
+test('never the same way twice in a row', () => {
+  for (const last of WAY_IDS) {
+    for (let seed = 0; seed < 200; seed++) assert.notEqual(variant(seed, last).way, last);
+    const both = new Set(Array.from({ length: 60 }, (_, s) => variant(s, last).way));
+    assert.equal(both.size, 2, `after ${last} both other ways come`);
+  }
+});
+
+test('the last way is read from the history: the newest frisling beat\'s variant', () => {
+  assert.equal(lastWayOf([]), null);
+  assert.equal(lastWayOf([{ m: 'ree-niet-aanraken', va: 'way:steen' }]), null);
+  assert.equal(lastWayOf([
+    { m: 'frisling', va: 'rare:ekster,way:steen,nook:2' },
+    { m: 'frisling', va: 'way:berk,nook:0,pose:1,fam:rand,mood:gouden-uur' },
+    { m: 'wildcamera', va: 'way:wei' },
+  ]), 'berk');
+  assert.equal(lastWayOf([{ m: 'frisling' }, { m: 'frisling', va: 'nook:1' }]), null);
+});
+
+test('the seed table: a fresh save\'s first play draws each way', () => {
+  for (const id of WAY_IDS) assert.equal(variant(SEED_TABLE[id]).way, id, `seed ${SEED_TABLE[id]} draws ${id}`);
+});
+
+test('the calm moments: one seeded order for the world and the 2D floor, the lying piglet first, the flip never first', () => {
+  const skin = MISSION.stappen[2].skin as Skin;
+  const diff = { slowmo: false } as never;
+  const orders = new Set<string>();
+  for (let seed = 0; seed < 200; seed++) {
+    // the world (ChoiceRun) and the 2D floor (DangerView) and the classic stage each build
+    // the trial from the play's 'dagnacht' fork: the same seed, the same order
+    const world = buildDagnachtTrial(skin, diff, newPlay('frisling', seed, 1).fork('dagnacht').rng).encounters.map((e) => e.id);
+    const floor = buildDagnachtTrial(skin, diff, newPlay('frisling', seed, 1).fork('dagnacht').rng).encounters.map((e) => e.id);
+    assert.deepEqual(world, floor);
+    assert.equal(world.length, 5);
+    assert.equal(world[0], 'aaien');
+    assert.deepEqual([...world.slice(1, 3)].sort(), ['dragen', 'voeren']);
+    assert.deepEqual([...world.slice(3)].sort(), ['pad', 'zeug']);
+    orders.add(world.join(','));
+    // drawing the variant first never moves the order (its own forks)
+    const play = newPlay('frisling', seed, 1);
+    frislingVariant(play, null, DECOYS);
+    assert.deepEqual(buildDagnachtTrial(skin, diff, play.fork('dagnacht').rng).encounters.map((e) => e.id), world);
+  }
+  assert.equal(orders.size, 4, `all four orders come (${[...orders].join(' | ')})`);
+  // no seed: the content order, as the classic missions always played
+  assert.deepEqual(buildDagnachtTrial(skin, diff).encounters.map((e) => e.id), ['aaien', 'dragen', 'voeren', 'zeug', 'pad']);
+});

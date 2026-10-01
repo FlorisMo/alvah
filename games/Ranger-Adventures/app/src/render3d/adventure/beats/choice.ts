@@ -49,6 +49,9 @@ export interface AskOpts {
    *  still, so the card makes way while it plays, and the consequence line stands over
    *  the card when it comes back (what happened first, then the words for it) */
   walks?: boolean;
+  /** run 7: the card's question in other words (the same encounter met elsewhere: the
+   *  piglet himself at the bag, not the yearling); default: the encounter's own */
+  vraag?: string;
 }
 
 /** A rustkracht moment played with the body (`ChoiceRun.still`). */
@@ -88,13 +91,26 @@ export class ChoiceRun {
     this.k = k;
     this.step = step;
     const diff = store.difficulty('dagnacht');
-    this.trial = buildDagnachtTrial(k.steps[step].skin, { ...diff, reducedMotion: k.reduced } as typeof diff);
+    // run 7: a skin with a rustPlan plays its calm moments in the order the play's seed
+    // draws (the 2D floor and the classic stage draw the same from the same fork)
+    this.trial = buildDagnachtTrial(k.steps[step].skin, { ...diff, reducedMotion: k.reduced } as typeof diff, k.play.fork('dagnacht').rng);
     this.run = new DagnachtRun(this.trial.encounters.length);
   }
 
   /** The encounter the run is at now. */
   get current(): Encounter | null {
     return this.run.finished ? null : this.trial.encounters[this.run.index];
+  }
+
+  /** Run 7 (design foundation §5.4): the next encounter of the trial, whatever its id (a
+   *  skin with a rustPlan draws its order), or null once every one was passed. */
+  next(): Encounter | null { return this.current; }
+
+  /** Run 7: the next encounter if it belongs to `slot`, else null — a home plays its calm
+   *  moments slot by slot, each at its station: `for (let e; (e = rust.nextIn('weg'));) …` */
+  nextIn(slot: string): Encounter | null {
+    const e = this.current;
+    return e && e.slot === slot ? e : null;
   }
 
   /** Ask encounter `id` (it must be the next in content order) until it is answered right. */
@@ -109,7 +125,7 @@ export class ChoiceRun {
     const settings = store.get().settings;
     let note: string | null = null;
     for (;;) {
-      const goed = await this.present(enc, note);
+      const goed = await this.present(o.vraag ? { ...enc, vraag: o.vraag } : enc, note);
       note = null;
       if (goed) {
         this.run.choose(true);

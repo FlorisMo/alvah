@@ -57,6 +57,10 @@ export interface Skin {
   encounters?: unknown[];
   metgezel?: string;
   trials?: number;
+  /** run 7 (design foundation §5.4, dagnacht): the calm moments' story slots in order; per
+   *  slot how many of its encounters come (default all) and whether their order is drawn
+   *  from the play's seed (default true). No plan: the content order. */
+  rustPlan?: { slot: string; pick?: number; shuffle?: boolean }[];
   [key: string]: unknown;
 }
 

@@ -11,6 +11,7 @@
 import './danger.css';
 import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
+import type { Play } from '../core/play';
 import { store } from '../core/state';
 import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../engines/dagnacht';
 import { subjectView } from './animalIcon';
@@ -20,11 +21,12 @@ import { Sound } from '../core/sound';
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
-export function playDanger(host: HTMLElement, step: Step): Promise<BeatSummary> {
+export function playDanger(host: HTMLElement, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const settings = store.get().settings;
     const diff = store.difficulty('dagnacht');
-    const trial = buildDagnachtTrial(step.skin, { ...diff, reducedMotion: settings.reducedMotion } as typeof diff);
+    // run 7: the play's order of the calm moments (a skin with a rustPlan; the world's twin draws the same)
+    const trial = buildDagnachtTrial(step.skin, { ...diff, reducedMotion: settings.reducedMotion } as typeof diff, play?.fork('dagnacht').rng);
     const copy = step.skin.copy ?? {};
     const reduced = settings.reducedMotion;
     const slowmo = trial.slowmo && !reduced;
