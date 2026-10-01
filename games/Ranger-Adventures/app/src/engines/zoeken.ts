@@ -8,24 +8,116 @@
  */
 
 import type { Skin, Distractor } from '../content/types';
-import type { Settings } from '../core/state';
+import type { BeatSummary, ZoekKnobs } from '../core/skill';
 
 export interface ZoekenTrial {
   target: { x: number; y: number };
   decoys: Distractor[];
-  lensSterkte: number;   // 0..1 search-haze strength (higher = harder to see)
+  /** how much of the animal shows through its cover (0..1, the level's `glimpse`) */
+  glimpse: number;
+  /** the search haze over the animal = 1 − glimpse (the 2D field's grass over it, the
+   *  classic lens edge); `lensSterkte` is the same number for an older reader */
+  haze: number;
+  lensSterkte: number;
+  /** seconds before the first hint (or two misses) */
+  hintAfterS: number;
 }
 
-/** Build one zoeken trial: difficulty trims how many of the skin's decoys appear. */
-export function buildZoekenTrial(skin: Skin, diff: Settings): ZoekenTrial {
+/** The older difficulty fields an earlier reader passes instead of the knobs. */
+type OldZoekDiff = { afleiders?: number; lensSterkte?: number };
+
+/** The knobs from either form (run 7 readers pass `ZoekKnobs`; an older one its settings). */
+function zoekKnobsOf(k: ZoekKnobs | OldZoekDiff): Pick<ZoekKnobs, 'lookAlikes' | 'glimpse' | 'hintAfterS'> {
+  if ('lookAlikes' in k && typeof k.lookAlikes === 'number') return k as ZoekKnobs;
+  const old = k as OldZoekDiff;
+  return { lookAlikes: (old.afleiders ?? 4) + 2, glimpse: Math.max(0.1, Math.min(0.6, 1 - (old.lensSterkte ?? 0.6))), hintAfterS: 14 };
+}
+
+/**
+ * Build one zoeken trial (run 7 `adaptive`, design §5.3): the level's knobs say HOW MANY
+ * look-alikes come (`lookAlikes`, capped by the skin's list), how much of the animal shows
+ * (`glimpse`) and when the first hint comes (`hintAfterS`). With the play's `rng` it also
+ * draws WHICH look-alikes come (one of each kind first, so every play's set is as mixed) and,
+ * for the 2D field, WHERE everything lies (`zoekLayout`: the animal never in the middle).
+ * Without an `rng` (a seed-less caller) the skin's authored set and places, as before.
+ * Variety never changes a knob: only the level does.
+ */
+export function buildZoekenTrial(skin: Skin, knobs: ZoekKnobs | OldZoekDiff, rng?: () => number): ZoekenTrial {
+  const k = zoekKnobsOf(knobs);
   const all: Distractor[] = skin.distractors ?? [{ id: 'd1', x: 24, y: 44, k: 'bush', animal: 'struik' }];
-  const want = (diff.afleiders ?? 4) + 2;
-  const count = Math.max(3, Math.min(want, all.length));
+  const count = Math.max(Math.min(3, all.length), Math.min(Math.round(k.lookAlikes), all.length));
+  const glimpse = Math.max(0.05, Math.min(0.95, k.glimpse));
+  const haze = Math.round((1 - glimpse) * 100) / 100;
+  if (!rng) {
+    return { target: skin.doel ?? { x: 52, y: 58 }, decoys: all.slice(0, count), glimpse, haze, lensSterkte: haze, hintAfterS: k.hintAfterS };
+  }
+  const picked = pickDecoys(all, count, rng);
+  const lay = zoekLayout(picked.length, rng);
   return {
-    target: skin.doel ?? { x: 52, y: 58 },
-    decoys: all.slice(0, count),
-    lensSterkte: diff.lensSterkte ?? 0.6,
+    target: lay.target,
+    decoys: picked.map((d, i) => ({ ...d, x: lay.spots[i].x, y: lay.spots[i].y })),
+    glimpse, haze, lensSterkte: haze, hintAfterS: k.hintAfterS,
   };
+}
+
+/** `count` look-alikes from `all`, seeded: first one of each kind (a dead frond, a bird, a
+ *  butterfly …: every play's set as mixed as the list allows), then the rest at random.
+ *  Returned in the list's own order. */
+export function pickDecoys(all: readonly Distractor[], count: number, rng: () => number): Distractor[] {
+  const pick = <T>(xs: T[]): T => xs.splice(Math.floor(rng() * xs.length), 1)[0];
+  const left = [...all];
+  const kinds = [...new Set(all.map((d) => d.k))];
+  const chosen = new Set<Distractor>();
+  while (kinds.length && chosen.size < count) {
+    const kind = pick(kinds);
+    const of = left.filter((d) => d.k === kind);
+    const d = of[Math.floor(rng() * of.length)];
+    chosen.add(d);
+    left.splice(left.indexOf(d), 1);
+  }
+  while (left.length && chosen.size < count) chosen.add(pick(left));
+  return all.filter((d) => chosen.has(d));
+}
+
+/** The 2D field's room (% of the field): clear of its rounded edges. */
+export const FIELD = { x0: 12, x1: 88, y0: 20, y1: 84 } as const;
+/** The animal never lies within this distance of the field's middle (% units). */
+export const OFF_CENTRE = 15;
+/** No two things lie closer than this (% units). */
+export const SPACING = 12;
+
+/**
+ * A seeded layout of the 2D field (pure): the animal's spot at least `OFF_CENTRE` from the
+ * middle, `n` look-alike spots, everything at least `SPACING` apart, all inside `FIELD`.
+ */
+export function zoekLayout(n: number, rng: () => number): { target: { x: number; y: number }; spots: { x: number; y: number }[] } {
+  const at = (): { x: number; y: number } => ({
+    x: Math.round(FIELD.x0 + rng() * (FIELD.x1 - FIELD.x0)),
+    y: Math.round(FIELD.y0 + rng() * (FIELD.y1 - FIELD.y0)),
+  });
+  const placed: { x: number; y: number }[] = [];
+  const free = (p: { x: number; y: number }, gap: number): boolean => placed.every((q) => Math.hypot(p.x - q.x, p.y - q.y) >= gap);
+  let target = at();
+  for (let i = 0; i < 400 && Math.hypot(target.x - 50, target.y - 50) < OFF_CENTRE; i++) target = at();
+  placed.push(target);
+  const spots: { x: number; y: number }[] = [];
+  for (let j = 0; j < n; j++) {
+    let p = at();
+    // (a crowded field relaxes the spacing a little rather than stacking two things)
+    for (let i = 0, gap = SPACING; !free(p, gap); i++) {
+      p = at();
+      if (i % 200 === 199) gap -= 1;
+    }
+    placed.push(p);
+    spots.push(p);
+  }
+  return { target, spots };
+}
+
+/** What a search was (design §5.3): one find; a miss is a wrong tap on a look-alike; the
+ *  seconds to the find; whether a hint was needed. The same in 2D and in the world. */
+export function zoekSummary(o: { misses: number; seconds: number; hinted: boolean }): BeatSummary {
+  return { trials: 1, correct: scoreZoeken(o.misses), misses: o.misses, seconds: Math.round(o.seconds * 10) / 10, hinted: o.hinted };
 }
 
 /** The tracking leg (3D enrichment, §3d): a spoor of clue legs leading to the hide
@@ -37,12 +129,15 @@ export interface Spoor {
   helderheid: number;  // 0..1 trail clarity (1 = crisp tracks, lower = fainter → harder to follow)
 }
 
-/** Build the tracking-leg spec from the SEPARATE spoor axes. Clamped to a calm,
- *  child-sized range (2..5 legs) so the trail reads as tracking, not tedium. */
-export function buildSpoor(diff: Settings): Spoor {
+/** Build the tracking-leg spec from the SEPARATE spoor axes (the level's `trailLegs` and
+ *  `trailClarity`; an older reader passes its spoorLengte / spoorHelderheid). Clamped to a
+ *  calm, child-sized range (2..5 legs) so the trail reads as tracking, not tedium. */
+export function buildSpoor(k: Pick<ZoekKnobs, 'trailLegs' | 'trailClarity'> | { spoorLengte?: number; spoorHelderheid?: number }): Spoor {
+  const legs = 'trailLegs' in k ? k.trailLegs : k.spoorLengte;
+  const helder = 'trailClarity' in k ? k.trailClarity : k.spoorHelderheid;
   return {
-    legs: Math.max(2, Math.min(5, Math.round(diff.spoorLengte ?? 3))),
-    helderheid: Math.max(0.25, Math.min(1, diff.spoorHelderheid ?? 0.7)),
+    legs: Math.max(2, Math.min(5, Math.round(legs ?? 3))),
+    helderheid: Math.max(0.25, Math.min(1, helder ?? 0.7)),
   };
 }
 

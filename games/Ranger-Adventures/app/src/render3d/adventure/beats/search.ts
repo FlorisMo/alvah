@@ -11,17 +11,22 @@
  * summary, logged once through the kit. The trail that led here ended at the stand,
  * never at the animal. The view holds still.
  *
- * Hints are diegetic and late (after 14 s or two misses): he squeaks where he lies and
- * the stems over him quiver; much later they lean aside a little. Every click gets a
+ * Hints are diegetic and late (after `hintAfterS` or two misses): he squeaks where he lies
+ * and the stems over him quiver; much later they lean aside a little. Every click gets a
  * sound and a reaction within a frame: a decoy clump rustles and parts (nothing there),
  * a bird flits, the plain cover rustles, and a find parts the stems over him.
+ *
+ * Run 7 (`adaptive`, design §5.3): how much of him shows (`glimpse`) and when the first
+ * hint comes (`hintAfterS`) are the level's knobs (`k.knobs('zoeken')`) unless the home
+ * passes its own mapping; the summary is the 2D floor's `zoekSummary` (misses, seconds to
+ * the find, whether a hint was needed), so the judgement is the same in both.
  */
 
 import * as THREE from 'three';
 import type { BeatSummary } from '../../../core/skill';
 import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
-import { scoreZoeken } from '../../../engines/zoeken';
+import { zoekSummary } from '../../../engines/zoeken';
 import { tapHitRadius } from '../../play/kit-math';
 import { backPoints, openWindow, visibleShare } from '../cover-math';
 import { backTop } from '../../play/pose';
@@ -51,24 +56,27 @@ export interface SearchOpts {
   /** the animal's call (a hint from where it lies) */
   call?: string;
   lines: { zoek: string; mis: string; hint: string; gevonden: string };
-  /** seconds before the first hint (the design's 14 s), and misses before it */
+  /** seconds before the first hint (run 7 default: the level's `hintAfterS`); two misses
+   *  bring it sooner */
   hintAfter?: number;
   /** the animal's height lying down (m): the cover round it must stand twice that */
   lyingH?: number;
-  /** how much of its back the stems let the lens see (default 0.3: a glimpse); less is
-   *  a harder find */
+  /** how much of its back the stems let the lens see (run 7 default: the level's
+   *  `glimpse`); less is a harder find */
   glimpse?: number;
 }
 
 export interface SearchResult { summary: BeatSummary; misses: number; seconds: number }
-
-const HINT_AFTER_S = 14;
 
 /** Play the search (zoeken, step `step`). Resolves once he is found and it is logged. */
 export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): Promise<SearchResult> {
   k.check();
   k.beat = 'search';
   const settings = store.get().settings;
+  const knobs = k.knobs('zoeken');
+  const glimpse = o.glimpse ?? knobs.glimpse;
+  const hintAfter = o.hintAfter ?? knobs.hintAfterS;
+  k.stats.search_hint_after = hintAfter;
   // he stands where the view was planned for, facing the stand; the lens moves once
   await k.walkRanger(o.stand.x, o.stand.z, 0.04);
   // the glimpse window was opened for the planned lens (a 1280×800 screen); on another
@@ -79,7 +87,7 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
     const g = k.ctx.groundY(o.target.x, o.target.z);
     const back = backPoints(o.target.x, g, o.target.z, o.target.yaw, o.lyingH * 2.7, o.lyingH);
     const drawn = o.cover.stems.map((s) => s.h);
-    const more = openWindow(o.cover.stems, lens, back, o.glimpse ?? 0.3);
+    const more = openWindow(o.cover.stems, lens, back, glimpse);
     if (more.length) o.cover.settle(more, 1.1, drawn);
     k.stats.glimpse = Math.round(visibleShare(back, lens, o.cover.stems) * 100) / 100;
   }
@@ -127,7 +135,7 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
   const unhint = k.hint(() => { if (found) return null; aim(); return { id: 'target', target: anchor }; });
   const offHint = k.onTick((_dt, now) => {
     if (found) return;
-    if (!hints && (misses >= 2 || now - t0 > (o.hintAfter ?? HINT_AFTER_S))) {
+    if (!hints && (misses >= 2 || now - t0 > hintAfter)) {
       hints = 1; nextHint = now;
       k.say(o.lines.hint);
     }
@@ -201,7 +209,7 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
   }
   // found: the stems part over him, he lifts his head and squeaks
   const seconds = k.now - t0;
-  const summary: BeatSummary = { trials: 1, correct: scoreZoeken(misses) };
+  const summary: BeatSummary = zoekSummary({ misses, seconds, hinted: hints > 0 });
   k.log(step, summary);
   k.stats.search_misses = misses;
   k.stats.search_seconds = Math.round(seconds);

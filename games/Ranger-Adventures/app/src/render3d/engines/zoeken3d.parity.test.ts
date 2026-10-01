@@ -1,142 +1,116 @@
 /**
- * zoeken3d.parity.test.ts — the seeded construct-parity test for the diegetic 3D
- * "zoeken" variant (visual search / sustained attention; BUILD-PLAN §1f/§4, §9e).
- * Run:
+ * zoeken3d.parity.test.ts — construct parity for Speurkracht (run 7 `adaptive`, design
+ * §5.3, §5.7): the 2D field (`render2d/ZoekenView`), the classic 3D stage
+ * (`render3d/engines/zoeken3d`) and the world's search (`adventure/beats/search`) read the
+ * same knobs — how many look-alikes, how much of the animal shows (glimpse = 1 − haze), when
+ * the hint comes — and score a find the same way (`zoekSummary`: one find, a miss is a tap
+ * on a look-alike, the seconds, whether a hint was needed). The 2D field and the classic
+ * stage build the SAME trial from the same play fork (which look-alikes, where). Pinned:
+ * (1) each view's source reads them so, never `Math.random`; (2) seeds 1..20 × bands: the
+ * same trial twice, the count the knob's, the layout's rules; (3) the summary matches an
+ * INDEPENDENT reference and the judgement.
  *   node --experimental-strip-types --test src/render3d/engines/zoeken3d.parity.test.ts
- *
- * Parity is guaranteed BY CONSTRUCTION: both `render2d/ZoekenView` (2D) and
- * `render3d/engines/zoeken3d` (3D) build the trial with the SAME `buildZoekenTrial`
- * and score it with the SAME `scoreZoeken(misses)` rule. This test pins that frozen
- * contract so the two views can never silently diverge in WHAT they measure:
- *   trials  = 1 (always one search per beat),
- *   correct = 1 ONLY when the still target was found with zero wrong taps (misses).
- * A miss is RECOVERABLE — it costs the perfect score but is never game-over; the
- * child still finds the target and continues.
- *
- * The 3D variant ALSO lays a `spoor` tracking leg in front of the search. That is a
- * SEPARATE difficulty axis (§3d reskin discipline = vary ONE axis): tuning the trail
- * sets the region/approach but must NEVER change the decoy set or the target. The
- * "separate-axis invariant" tests below prove exactly that.
  */
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildZoekenTrial, buildSpoor, scoreZoeken } from '../../engines/zoeken.ts';
-import { knobsForLevel } from '../../core/skill.ts';
-import type { Settings } from '../../core/state.ts';
+import { readFileSync } from 'node:fs';
+import { buildZoekenTrial, buildSpoor, zoekSummary, pickDecoys, OFF_CENTRE, SPACING, FIELD } from '../../engines/zoeken.ts';
+import { knobsFor, knobsForLevel, judgeBeat } from '../../core/skill.ts';
+import { newPlay } from '../../core/play.ts';
 import type { Skin, Distractor } from '../../content/types.ts';
+import { AREA_VELUWE } from '../../content/veluwe.ts';
 
-/** A seeded deterministic rng (mulberry32) — buildZoekenTrial is deterministic, but
- *  this keeps the helper shape identical to the other parity tests + exercises that
- *  the trial does NOT secretly consume randomness. */
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+const FRISLING = AREA_VELUWE.missies.find((m) => m.id === 'frisling')!.stappen[0].skin as Skin;
+
+function build(seed: number, band: number, skin: Skin = FRISLING) {
+  return buildZoekenTrial(skin, knobsFor('zoeken', band), newPlay('frisling', seed, 1).fork('zoeken').rng);
 }
 
-/** Reference scorer — an INDEPENDENT re-implementation of the frozen 2D rule
- *  (clean find = 1, any miss = 0), used to cross-check the shared `scoreZoeken`. */
-function referenceScore(taps: ('hit' | 'miss')[]): { trials: number; correct: number } {
-  let misses = 0;
-  for (const t of taps) {
-    if (t === 'miss') misses += 1;
-    else break; // the first hit is the target → the search ends
+test('each view reads the knobs and the play, scores with the shared summary (never Math.random)', () => {
+  const src = (p: string): string => readFileSync(new URL(p, import.meta.url), 'utf8');
+  for (const [name, s] of [['2D ZoekenView', src('../../render2d/ZoekenView.ts')], ['3D zoeken3d', src('./zoeken3d.ts')]] as const) {
+    assert.match(s, /buildZoekenTrial\(skin, (store\.knobs\('zoeken'\)|knobs), [^)]*fork\('zoeken'\)\.rng/, `${name}: the trial from the knobs and the play's fork`);
+    assert.match(s, /zoekSummary\(/, `${name}: the shared summary`);
+    assert.doesNotMatch(s, /Math\.random/, `${name}: no Math.random`);
   }
-  return { trials: 1, correct: misses === 0 ? 1 : 0 };
-}
-
-/** Drive the SHARED scorer the way both views do: count misses before the find. */
-function drive(taps: ('hit' | 'miss')[]): { trials: number; correct: number } {
-  let misses = 0;
-  for (const t of taps) {
-    if (t === 'miss') misses += 1;
-    else break;
-  }
-  return { trials: 1, correct: scoreZoeken(misses) };
-}
-
-const DECOYS: Distractor[] = [
-  { id: 'd1', x: 20, y: 30, k: 'bush', animal: 'struik' },
-  { id: 'd2', x: 40, y: 50, k: 'bird', animal: 'raaf' },
-  { id: 'd3', x: 60, y: 35, k: 'butterfly', animal: 'heideblauwtje' },
-  { id: 'd4', x: 70, y: 60, k: 'bush', animal: 'struik' },
-  { id: 'd5', x: 30, y: 70, k: 'bird', animal: 'wilde-eend' },
-  { id: 'd6', x: 55, y: 25, k: 'bush', animal: 'struik' },
-];
-const SKIN: Skin = { dier: 'ree', doel: { x: 52, y: 58 }, distractors: DECOYS };
-const base = (over: Partial<Settings>): Settings => ({ afleiders: 4, lensSterkte: 0.6, spoorLengte: 3, spoorHelderheid: 0.7, ...over }) as Settings;
-
-test('scoring: clean find → correct 1, trials 1, matches the reference', () => {
-  const taps: ('hit' | 'miss')[] = ['hit'];
-  assert.deepEqual(drive(taps), { trials: 1, correct: 1 });
-  assert.deepEqual(drive(taps), referenceScore(taps));
+  const world = src('../adventure/beats/search.ts');
+  assert.match(world, /k\.knobs\('zoeken'\)/, 'world search: the knobs');
+  assert.match(world, /zoekSummary\(/, 'world search: the shared summary');
+  assert.doesNotMatch(world, /Math\.random/);
 });
 
-test('scoring: a miss before the find → correct 0 (recoverable), matches the reference', () => {
-  const taps: ('hit' | 'miss')[] = ['miss', 'miss', 'hit'];
-  assert.deepEqual(drive(taps), { trials: 1, correct: 0 });
-  assert.deepEqual(drive(taps), referenceScore(taps));
-  assert.ok(drive(taps).correct >= 0, 'never negative — never game-over');
-});
-
-test('scoring: the same scoreZoeken rule the 2D + 3D views both import is the only judge', () => {
-  // (parity by construction) — both views call scoreZoeken(misses); pin its table.
-  assert.equal(scoreZoeken(0), 1);
-  assert.equal(scoreZoeken(1), 0);
-  assert.equal(scoreZoeken(7), 0);
-});
-
-test('buildZoekenTrial: difficulty trims the decoy count (afleiders+2), floor 3, cap = available', () => {
-  assert.equal(buildZoekenTrial(SKIN, base({ afleiders: 1 })).decoys.length, 3, '1+2=3');
-  assert.equal(buildZoekenTrial(SKIN, base({ afleiders: 2 })).decoys.length, 4, '2+2=4');
-  assert.equal(buildZoekenTrial(SKIN, base({ afleiders: 4 })).decoys.length, 6, 'capped at the 6 available');
-  assert.equal(buildZoekenTrial(SKIN, base({ afleiders: 0 })).decoys.length, 3, 'floor at 3');
-});
-
-test('buildZoekenTrial: target + lensSterkte pass through unchanged', () => {
-  const t = buildZoekenTrial(SKIN, base({ lensSterkte: 0.42 }));
-  assert.deepEqual(t.target, { x: 52, y: 58 });
-  assert.equal(t.lensSterkte, 0.42);
-});
-
-test('SEPARATE-AXIS INVARIANT: changing the spoor axes never changes the decoys or the target', () => {
-  const ref = buildZoekenTrial(SKIN, base({ afleiders: 3, lensSterkte: 0.5 }));
-  for (const spoorLengte of [2, 3, 4, 5, 99]) {
-    for (const spoorHelderheid of [0.25, 0.5, 0.95]) {
-      const t = buildZoekenTrial(SKIN, base({ afleiders: 3, lensSterkte: 0.5, spoorLengte, spoorHelderheid }));
-      assert.equal(t.decoys.length, ref.decoys.length, 'decoy set is invariant to the trail');
-      assert.deepEqual(t.decoys, ref.decoys);
-      assert.deepEqual(t.target, ref.target, 'target is invariant to the trail');
-      assert.equal(t.lensSterkte, ref.lensSterkte);
+test('seeds 1..20 × bands: the same trial for the same play; the knob says how many look-alikes, how much shows, when the hint comes', () => {
+  for (let band = 1; band <= 6; band++) {
+    const k = knobsFor('zoeken', band);
+    for (let seed = 1; seed <= 20; seed++) {
+      const a = build(seed, band), b = build(seed, band);
+      assert.deepEqual(a, b, `band ${band} seed ${seed}: 2D vs the classic stage`);
+      assert.equal(a.decoys.length, Math.min(k.lookAlikes, FRISLING.distractors!.length), 'the count is the knob\'s');
+      assert.equal(a.glimpse, k.glimpse);
+      assert.ok(Math.abs(a.haze - (1 - k.glimpse)) < 1e-9, 'haze = 1 − glimpse');
+      assert.equal(a.hintAfterS, k.hintAfterS);
     }
   }
 });
 
-test('buildSpoor: legs clamp to a calm 2..5, helderheid clamps to 0.25..1', () => {
-  assert.deepEqual(buildSpoor(base({ spoorLengte: 1, spoorHelderheid: 2 })), { legs: 2, helderheid: 1 });
-  assert.deepEqual(buildSpoor(base({ spoorLengte: 99, spoorHelderheid: -1 })), { legs: 5, helderheid: 0.25 });
-  assert.deepEqual(buildSpoor(base({ spoorLengte: 4, spoorHelderheid: 0.6 })), { legs: 4, helderheid: 0.6 });
+test('the 2D layout: the animal never in the middle, nothing on top of another, all inside the field', () => {
+  const targets = new Set<string>();
+  for (let seed = 1; seed <= 300; seed++) {
+    const t = build(seed, 1 + (seed % 6));
+    targets.add(`${t.target.x},${t.target.y}`);
+    assert.ok(Math.hypot(t.target.x - 50, t.target.y - 50) >= OFF_CENTRE, `seed ${seed}: the animal at ${t.target.x},${t.target.y}`);
+    const all = [t.target, ...t.decoys];
+    for (const p of all) assert.ok(p.x >= FIELD.x0 && p.x <= FIELD.x1 && p.y >= FIELD.y0 && p.y <= FIELD.y1, `seed ${seed}: inside`);
+    for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+      assert.ok(Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y) >= SPACING - 2, `seed ${seed}: two things ${Math.hypot(all[i].x - all[j].x, all[i].y - all[j].y).toFixed(1)} apart`);
+    }
+  }
+  assert.ok(targets.size > 250, 'the animal lies somewhere else almost every play');
 });
 
-test('knobsForLevel zoeken: search + tracking axes both scale, decoys never shrink as the trail grows', () => {
-  // higher level → MORE decoys (harder search) AND a longer/fainter trail; the two
-  // axes move together off one skill level but stay independent knobs.
-  const easy = knobsForLevel('zoeken', 1);
-  const hard = knobsForLevel('zoeken', 5);
-  assert.ok((hard.afleiders ?? 0) >= (easy.afleiders ?? 0), 'search gets more decoys with skill');
-  assert.ok((hard.spoorLengte ?? 0) >= (easy.spoorLengte ?? 0), 'trail gets longer with skill');
-  assert.ok((hard.spoorHelderheid ?? 1) <= (easy.spoorHelderheid ?? 1), 'trail gets fainter with skill');
-  assert.ok((easy.spoorLengte ?? 0) >= 2 && (hard.spoorLengte ?? 0) <= 5, 'legs stay in the calm band');
+test('which look-alikes: one of each kind first (every play as mixed), varied over plays', () => {
+  const sets = new Set<string>();
+  for (let seed = 1; seed <= 60; seed++) {
+    const ds = build(seed, 1).decoys;
+    sets.add(ds.map((d) => d.id).join());
+    assert.deepEqual([...new Set(ds.map((d) => d.k))].sort(), ['bird', 'bush', 'butterfly'], `seed ${seed}: a bush, a bird and the butterfly`);
+  }
+  assert.ok(sets.size >= 8, `${sets.size} different sets`);
+  const one: Distractor[] = [{ id: 'a', x: 1, y: 1, k: 'bush' }];
+  assert.deepEqual(pickDecoys(one, 4, () => 0.5).map((d) => d.id), ['a'], 'capped by the list');
 });
 
-test('deterministic — same skin + same settings yields the same trial + spoor', () => {
-  const s = base({ afleiders: 3, spoorLengte: 4 });
-  assert.deepEqual(buildZoekenTrial(SKIN, s), buildZoekenTrial(SKIN, s));
-  assert.deepEqual(buildSpoor(s), buildSpoor(s));
-  void rng; // trial consumes no randomness — determinism is structural
+test('a seed-less caller gets the skin\'s authored set and places (an older reader), from either knob form', () => {
+  const t = buildZoekenTrial(FRISLING, knobsFor('zoeken', 1));
+  assert.deepEqual(t.target, FRISLING.doel);
+  assert.deepEqual(t.decoys, FRISLING.distractors!.slice(0, 4));
+  const old = buildZoekenTrial(FRISLING, { ...knobsForLevel('zoeken', 3) });
+  assert.equal(old.decoys.length, knobsFor('zoeken', 3).lookAlikes, 'the older fields read the same table');
+  assert.ok(Math.abs(old.glimpse - knobsFor('zoeken', 3).glimpse) < 1e-9);
+});
+
+/** INDEPENDENT reference of the find's summary (design §5.3). */
+function reference(misses: number, seconds: number, hinted: boolean) {
+  return { trials: 1, correct: misses === 0 ? 1 : 0, misses, seconds, hinted };
+}
+
+test('the summary: one find, a miss is a tap on a look-alike; judged easy, fine, steady or hard', () => {
+  for (const [m, s, h, judged] of [
+    [0, 3, false, 'easy'], [0, 8, false, 'easy'], [0, 12.4, false, 'fine'], [1, 5, false, 'steady'], [2, 9, true, 'hard'], [0, 20, true, 'hard'],
+  ] as const) {
+    const got = zoekSummary({ misses: m, seconds: s, hinted: h });
+    assert.deepEqual(got, reference(m, s, h));
+    assert.equal(judgeBeat('zoeken', got), judged, `${m} misses, ${s} s, hint ${h}`);
+  }
+  assert.equal(zoekSummary({ misses: 0, seconds: 3.04, hinted: false }).seconds, 3, 'tenths of a second');
+});
+
+test('the trail: legs and clarity from the knobs (or the older fields), a calm 2..5', () => {
+  for (let b = 1; b <= 6; b++) {
+    const k = knobsFor('zoeken', b);
+    assert.deepEqual(buildSpoor(k), { legs: k.trailLegs, helderheid: k.trailClarity });
+    assert.deepEqual(buildSpoor(knobsForLevel('zoeken', b)), { legs: k.trailLegs, helderheid: k.trailClarity });
+  }
+  assert.deepEqual(buildSpoor({ spoorLengte: 9, spoorHelderheid: 0 }), { legs: 5, helderheid: 0.25 });
 });
