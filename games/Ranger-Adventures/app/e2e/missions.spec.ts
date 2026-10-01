@@ -94,7 +94,8 @@ const uiText = (page: Page): Promise<string> => page.evaluate(() => document.get
 /** Begin → the ranger maker (a fresh save) → the world. */
 async function boot(log: Log): Promise<void> {
   const page = log.page;
-  await page.goto('/?dev=1');
+  // run 7: RANGER_SEED replays a session's plays (?seed=N: the first play draws N)
+  await page.goto(process.env.RANGER_SEED ? `/?dev=1&seed=${process.env.RANGER_SEED}` : '/?dev=1');
   await click(log, 'Begin', 'title', 30_000, 30_000); // the title may still be dressing itself
   const maker = page.getByRole('button', { name: 'Dit is mijn ranger' });
   // (its click builds the world inside the handler: on a busy machine that takes a while)
@@ -162,6 +163,7 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
   const won = new Set<string>();
   let lastProgress = Date.now(); let ended: number | null = null;
   let clicks = 0; let answers = 0; let walks = 0; let lastBeat = '';
+  let stats: Record<string, number> = {};
   const deadline = Date.now() + 9 * 60_000;
   const t0 = Date.now();
   // an adventure may play on after its last step (a walk, an action, a card) until its
@@ -189,7 +191,8 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
       await log.shot('stuck');
       log.hard(false, `stuck for 45 s at "${lastBeat}" (visible: ${await visibleButtons(page)})`);
     }
-    const adv = await R<{ beat: string } | null>(page, 'r.adventure()');
+    const adv = await R<{ beat: string; stats?: Record<string, number> } | null>(page, 'r.adventure()');
+    if (adv?.stats) stats = adv.stats; // (run 7: the walks' own measures)
     const calls = await R<number | null>(page, 'r.drawCalls()');
     if (calls !== null && calls >= MAX_DRAW_CALLS) bad.push(`draw calls ${calls} at "${adv?.beat ?? view}"`);
     if (adv && adv.beat !== lastBeat) {
@@ -226,6 +229,12 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
       if (!h.aboveGround) bad.push(`${key}: "${h.id}" under the ground`);
       if (h.bottomGap !== null && Math.abs(h.bottomGap) > SEAT_TOLERANCE) bad.push(`${key}: "${h.id}" ${h.bottomGap} m off the ground`);
       log.hard(h.onScreen, `${key}: the target "${h.id}" is off-screen`);
+      // run 7: a hidden animal is never in the middle of the search picture
+      if (adv?.beat === 'search' && h.id === 'target') {
+        const off = Math.hypot(h.x - 640, h.y - 400);
+        log.note(`the search's target lies ${off.toFixed(0)} px from the middle of the picture`);
+        if (mission.id === 'frisling') log.soft(off >= 120, `the piglet lies ${off.toFixed(0)} px from the middle of the search picture (want ≥ 120)`);
+      }
       const before = { id: h.id, text: await uiText(page), trials: JSON.stringify((await save(page))?.trials) };
       await page.mouse.click(h.x, h.y);
       clicks += 1;
@@ -265,6 +274,13 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
     await sleep(page, 250); // a sequence is being shown, an animal walks: watch it
   }
   log.note(`played in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
+  // run 7: the frisling's lead home is a straight walk at the piglet's pace (1.5 m/s)
+  if (mission.id === 'frisling' && stats.walk_field_line !== undefined) {
+    const lead = stats.walk_field_line;
+    log.note(`the lead home is ${lead} m: walked ${stats.walk_field_m} m in ${stats.walk_field_dur} s (the piglet dived ${stats.walk_field_dives ?? 0}×)`);
+    log.soft(stats.walk_field_m <= lead * 1.6, `the lead took ${stats.walk_field_m} m of walking for ${lead} m (want ≤ 1.6×)`);
+    log.soft(stats.walk_field_dur <= (lead / 1.5) * 1.6, `the lead took ${stats.walk_field_dur} s for ${lead} m (want ≤ ${((lead / 1.5) * 1.6).toFixed(1)} s)`);
+  }
   log.soft(bad.length === 0, `targets a player could not see or reach: ${[...new Set(bad)].slice(0, 4).join('; ')}`);
   log.hard(won.size >= Object.keys(need).length, `won ${won.size}/${Object.keys(need).length} steps before the time ran out`);
 }

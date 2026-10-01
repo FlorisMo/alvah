@@ -85,8 +85,10 @@ export const frislingAdventure: Adventure = {
   trees: BIRCHES,
   dressing: (env) => new FrislingHome(env, contentDecoys),
   bind(mission) { contentDecoys = distractorsOf(mission); },
-  // run 7 (design foundation §4.5): every play in its own light
-  moods: { perPlay: true },
+  // run 7 (design foundation §4.5, frisling §5.10): every play in its own light — but a
+  // save's first frisling (no play started yet) stands in the session's light, so his very
+  // first time looks like the world he just walked through
+  get moods() { return (store.get().gespeeld.frisling ?? 0) > 0 ? { perPlay: true } : undefined; },
 
   /** Under the briefing card: this play's way, the nook he lies in, the look-alikes, the
    *  family's layout at the mud (frisling.vary.ts, from the play's seed). */
@@ -124,8 +126,12 @@ export const frislingAdventure: Adventure = {
     } finally {
       home.holdClue = false; // (stopped: the home shows what its state says)
       current = null;
-      // the family and the lost one go back to their own places on release (a calm walk)
+      // the family and the lost one go back to their own places on release (a calm walk;
+      // a lost one stopped in a far stand is put back in his own nook out of sight), and the
+      // home is free roam's again: run 6's stand with its look-alikes, the prints north
       k.world.residents.layout('frisling', null);
+      home.layDefault(store.knobs('zoeken').glimpse);
+      useWay(DEFAULT_WAY);
     }
   },
 };

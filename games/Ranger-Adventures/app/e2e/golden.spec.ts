@@ -76,7 +76,8 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
   await step(1, async () => {
     const t0 = Date.now();
     expectedLoads += 1;
-    await page.goto('/?dev=1');
+    // run 7: RANGER_SEED replays a session's plays (?seed=N: the first play draws N)
+    await page.goto(process.env.RANGER_SEED ? `/?dev=1&seed=${process.env.RANGER_SEED}` : '/?dev=1');
     const begin = page.getByRole('button', { name: 'Begin', exact: true });
     const up = await begin.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true, () => false);
     hard(up, 'no "Begin" button within 30 s');
@@ -582,6 +583,12 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
         const animal = animalOf(ef);
         if (animal && h.id === 'target' && h.parts.length && h.parts.every((t) => t !== 'BufferGeometry')) g.standIns.push(`the ${animal} "${h.id}" is ${h.parts.join(' + ')}`);
         hard(h.onScreen, `${key}: the target "${h.id}" is off-screen (${h.x}, ${h.y}); a player cannot click it`);
+        // run 7: the hidden piglet is never in the middle of the search picture
+        if (adv?.beat === 'search' && h.id === 'target') {
+          const off = Math.hypot(h.x - 640, h.y - 400);
+          note(`the search's target lies ${Math.round(off)} px from the middle of the picture`);
+          soft(off >= 120, `the hidden animal lies ${Math.round(off)} px from the middle of the search picture (want ≥ 120)`);
+        }
         const before = { id: h.id, text: await uiText(page), trials: JSON.stringify((await save(page))?.trials) };
         await page.mouse.click(h.x, h.y);
         g.clicks += 1;
@@ -646,7 +653,15 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
     // and the two body moments were kept still (golden plays a perfect player: it waits)
     if (stats.walk_field_m !== undefined) {
       note(`followed the squeak ${stats.walk_cover_m ?? '?'} m, led the piglet home ${stats.walk_field_m} m; kept still (reaches: aaien ${stats.still_aaien ?? '?'}, zeug ${stats.still_zeug ?? '?'})`);
-      soft(stats.walk_field_m >= 25, `leading the piglet home is only ${stats.walk_field_m} m of walking (want ≥ 25)`);
+      // run 7: a lead is a straight walk at the piglet's pace (1.5 m/s; the steen way's is
+      // short): its straight line, the way walked and the time from the first step
+      const lead = stats.walk_field_line;
+      if (lead !== undefined) {
+        note(`the lead home is ${r2(lead)} m: walked ${stats.walk_field_m} m in ${stats.walk_field_dur ?? '?'} s (the piglet dived ${stats.walk_field_dives ?? 0}×)`);
+        soft(lead < 20 || stats.walk_field_m >= 25, `leading the piglet home is only ${stats.walk_field_m} m of walking (want ≥ 25)`);
+        soft(stats.walk_field_m <= lead * 1.6, `the lead took ${stats.walk_field_m} m of walking for ${r2(lead)} m (want ≤ 1.6×)`);
+        if (stats.walk_field_dur !== undefined) soft(stats.walk_field_dur <= (lead / 1.5) * 1.6, `the lead took ${stats.walk_field_dur} s for ${r2(lead)} m (want ≤ ${r2((lead / 1.5) * 1.6)} s)`);
+      }
     }
     soft(maxCalls < MAX_DRAW_CALLS, `draw calls peaked at ${maxCalls} during the mission (budget < ${MAX_DRAW_CALLS})`);
     hard(won.size >= Object.keys(need).length, `won ${won.size}/${Object.keys(need).length} mini-games before the time ran out (not won: ${plan.filter((e) => !won.has(e)).join(', ')})`);

@@ -605,9 +605,12 @@ export class AdventureKit {
     };
     if (lead) lead.actor.follow(rangerLead, gap);
     if (lead?.pace) walkPace.cap = lead.pace;
-    // the way he really walked (m): a test checks the design's bar against it
+    // the way he really walked (m), the straight way it asked (m) and how long it took from
+    // his first step (s): a test checks the design's bar against them
     let walked = 0;
+    let began: number | null = null;
     let was = this.ranger();
+    const line = dist(was, to);
     // (a perfect player walks to the goal — round what `via` names; when the animal he
     // leads waits for him, back to it)
     let viaI = 0;
@@ -623,6 +626,7 @@ export class AdventureKit {
     const off = this.onTick((dt) => {
       const m = this.ranger();
       walked += Math.min(1, dist(m, was)); // (a jump — a cut — is not a walk)
+      if (began === null && walked > 0.3) began = this.clock;
       was = m;
       const d = dist(m, to);
       if (d < best - 1) { best = d; bestAt = this.clock; }
@@ -705,6 +709,9 @@ export class AdventureKit {
     }
     this.stats[`walk_${o.name}_s`] = Math.round(this.clock);
     this.stats[`walk_${o.name}_m`] = Math.round(walked * 10) / 10;
+    // (run 7: the lead's bar is its straight line at the animal's pace)
+    this.stats[`walk_${o.name}_line`] = Math.round(line * 10) / 10;
+    this.stats[`walk_${o.name}_dur`] = Math.round((this.clock - (began ?? this.clock)) * 10) / 10;
     if (o.quiet) this.stats[`walk_${o.name}_runs`] = runs;
   }
 
