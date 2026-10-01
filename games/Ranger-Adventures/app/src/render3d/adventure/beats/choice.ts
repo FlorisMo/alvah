@@ -25,7 +25,7 @@
 
 import * as THREE from 'three';
 import '../../play/play3d.css';
-import { buildDagnachtTrial, DagnachtRun, type DagnachtTrial, type Encounter } from '../../../engines/dagnacht';
+import { playDagnachtTrial, DagnachtRun, type DagnachtTrial, type Encounter } from '../../../engines/dagnacht';
 import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
 import { Sound } from '../../../core/sound';
@@ -92,8 +92,8 @@ export class ChoiceRun {
     this.step = step;
     const diff = store.difficulty('dagnacht');
     // run 7: a skin with a rustPlan plays its calm moments in the order the play's seed
-    // draws (the 2D floor and the classic stage draw the same from the same fork)
-    this.trial = buildDagnachtTrial(k.steps[step].skin, { ...diff, reducedMotion: k.reduced } as typeof diff, k.play.fork('dagnacht').rng);
+    // draws, never his last two plays' (the 2D floor and the classic stage draw the same)
+    this.trial = playDagnachtTrial(k.steps[step].skin, { ...diff, reducedMotion: k.reduced } as typeof diff, k.play, store.get().geschiedenis);
     this.run = new DagnachtRun(this.trial.encounters.length);
   }
 

@@ -13,7 +13,7 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import type { Play } from '../core/play';
 import { store } from '../core/state';
-import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../engines/dagnacht';
+import { playDagnachtTrial, DagnachtRun, type Encounter } from '../engines/dagnacht';
 import { subjectView } from './animalIcon';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
@@ -26,7 +26,7 @@ export function playDanger(host: HTMLElement, step: Step, play?: Play): Promise<
     const settings = store.get().settings;
     const diff = store.difficulty('dagnacht');
     // run 7: the play's order of the calm moments (a skin with a rustPlan; the world's twin draws the same)
-    const trial = buildDagnachtTrial(step.skin, { ...diff, reducedMotion: settings.reducedMotion } as typeof diff, play?.fork('dagnacht').rng);
+    const trial = playDagnachtTrial(step.skin, { ...diff, reducedMotion: settings.reducedMotion } as typeof diff, play, store.get().geschiedenis);
     const copy = step.skin.copy ?? {};
     const reduced = settings.reducedMotion;
     const slowmo = trial.slowmo && !reduced;

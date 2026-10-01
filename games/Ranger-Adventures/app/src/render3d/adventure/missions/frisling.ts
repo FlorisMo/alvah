@@ -47,7 +47,7 @@ import {
   frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, type Way, type WayId,
 } from './frisling.places';
 import { frislingVariant, lastWayOf, recentFams, type FrislingVariant } from './frisling.vary';
-import { buildDagnachtTrial } from '../../../engines/dagnacht';
+import { playDagnachtTrial } from '../../../engines/dagnacht';
 
 /** How far the lost piglet's squeak carries while he follows it (m): from the ring to
  *  any way's stand, ~35-38 m (softly at first, louder as he comes). */
@@ -72,8 +72,6 @@ let current: FrislingVariant | null = null;
 let lastStarted: WayId | null = null;
 /** The plays he set out on in this page session (their seed and family layout). */
 const startedFams: { sd: number; fam: string }[] = [];
-/** The calm moments' order as the history notes it: one letter each ('advzp'). */
-const rustCode = (ids: readonly string[]): string => ids.map((id) => id[0]).join('');
 
 /** The young birches the home plants at its stands (real forest trees). */
 const BIRCHES = WAY_IDS.flatMap((id) => WAYS[id].trees.map((t) => ({
@@ -105,9 +103,9 @@ export const frislingAdventure: Adventure = {
     const last = lastStarted ?? lastWayOf(history);
     const v = frislingVariant(play, last, trial.decoys.map((d) => ({ k: d.k, animal: d.animal })), recentFams(history, startedFams));
     current = v;
-    // the order the calm moments will come in (the trial the script and the 2D floor build
-    // from the play's 'dagnacht' fork): noted, so the history says what he played
-    play.note('rust', rustCode(buildDagnachtTrial(mission.stappen[2].skin, store.difficulty('dagnacht'), play.fork('dagnacht').rng).encounters.map((e) => e.id)));
+    // the order the calm moments will come in (the very trial the script builds later):
+    // noted now, before the light's note, so the history always says what he played
+    playDagnachtTrial(mission.stappen[2].skin, store.difficulty('dagnacht'), play, history);
     home.lay(v.way, { nook: v.nook, pose: v.pose, trial: trial.decoys, spots: v.decoySpots, glimpse: store.knobs('zoeken').glimpse });
     useWay(v.way);
     const lie = nookAt(v.way, v.nook, v.pose);

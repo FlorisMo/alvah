@@ -68,8 +68,17 @@ export interface DagnachtTrial {
  * the classic stage and the world call it with the same play's fork ('dagnacht'), so they
  * play the same order.
  */
-export function rustOrder(authored: readonly Encounter[], plan: readonly RustPlanSlot[] | undefined, rng?: () => number): Encounter[] {
+export function rustOrder(authored: readonly Encounter[], plan: readonly RustPlanSlot[] | undefined, rng?: () => number, avoid: readonly string[] = []): Encounter[] {
   if (!plan?.length || !rng) return [...authored];
+  // (run 7: never an order in `avoid` — his last plays' — while another can come: drawn
+  // again from the same stream, so the same seed and the same history give the same order)
+  let out = drawRustOrder(authored, plan, rng);
+  for (let t = 0; t < 24 && avoid.includes(rustCode(out.map((e) => e.id))); t++) out = drawRustOrder(authored, plan, rng);
+  return out;
+}
+
+/** One draw of a plan's order from the stream (`rustOrder`). */
+function drawRustOrder(authored: readonly Encounter[], plan: readonly RustPlanSlot[], rng: () => number): Encounter[] {
   const out: Encounter[] = [];
   const planned = new Set(plan.map((p) => p.slot));
   for (const p of plan) {
@@ -99,12 +108,33 @@ export function rustOrder(authored: readonly Encounter[], plan: readonly RustPla
   return out;
 }
 
+/** A calm-moment order as the history keeps it (the play's note 'rust'): one letter per
+ *  encounter, in order ('advzp'). */
+export const rustCode = (ids: readonly string[]): string => ids.map((id) => id.charAt(0)).join('');
+
+/** The calm-moment orders of his last `n` OTHER plays of a mission (newest first), as their
+ *  beats noted them in the history (`BeatLog.va` 'rust:advzp'; one per play, by its seed). */
+export function recentRust(history: readonly { m: string; sd?: number; va?: string }[], missionId: string, seed: number, n = 2): string[] {
+  const out: string[] = [];
+  const seen = new Set<number>();
+  for (let i = history.length - 1; i >= 0 && out.length < n; i--) {
+    const h = history[i];
+    if (h.m !== missionId || !h.va || h.sd === seed || (h.sd !== undefined && seen.has(h.sd))) continue;
+    const m = /(?:^|,)rust:([a-z]+)/.exec(h.va);
+    if (!m) continue;
+    if (h.sd !== undefined) seen.add(h.sd);
+    out.push(m[1]);
+  }
+  return out;
+}
+
 /** Resolve the encounter list + the slow-mo support window. Run 7: `rng` (the play's
- *  'dagnacht' fork) draws the order of a skin with a `rustPlan` (`rustOrder`). */
-export function buildDagnachtTrial(skin: Skin, diff: Settings, rng?: () => number): DagnachtTrial {
+ *  'dagnacht' fork) draws the order of a skin with a `rustPlan` (`rustOrder`), never one
+ *  in `avoid`. */
+export function buildDagnachtTrial(skin: Skin, diff: Settings, rng?: () => number, avoid: readonly string[] = []): DagnachtTrial {
   const authored = rustOrder((skin.encounters as Encounter[] | undefined)?.length
     ? (skin.encounters as Encounter[])
-    : FALLBACK, skin.rustPlan as readonly RustPlanSlot[] | undefined, rng);
+    : FALLBACK, skin.rustPlan as readonly RustPlanSlot[] | undefined, rng, avoid);
   // "knappe woorden" on: the lines with the real terms; off (default): the plain lines
   const encounters = diff.jargon
     ? authored.map((e) => ({ ...e, vraag: e.vraagKnap ?? e.vraag, uitleg: e.uitlegKnap ?? e.uitleg, gevolg: e.gevolgKnap ?? e.gevolg }))
@@ -115,6 +145,25 @@ export function buildDagnachtTrial(skin: Skin, diff: Settings, rng?: () => numbe
     metgezel: skin.metgezel ?? 'frisling',
     slowmo: (diff.slowmo ?? false) && !diff.reducedMotion,
   };
+}
+
+/** What a play needs to draw its trial (core/play's Play). */
+interface PlayLike { readonly missionId: string; readonly seed: number; fork(label: string): { rng(): number }; note(key: string, value: string | number): void }
+
+/**
+ * Run 7: the trial THIS PLAY plays — every path builds it so (the world's ChoiceRun, the 2D
+ * floor, the classic stage): a skin with a `rustPlan` draws its calm moments' order from the
+ * play's 'dagnacht' fork, never the order of his last two plays of this mission (the
+ * history: three plays in a row, three orders), and notes it on the play ('rust'), so the
+ * history says what he played and the next play can tell. No play: the content order.
+ */
+export function playDagnachtTrial(skin: Skin, diff: Settings, play: PlayLike | null | undefined, history: readonly { m: string; sd?: number; va?: string }[]): DagnachtTrial {
+  if (!play) return buildDagnachtTrial(skin, diff);
+  const planned = !!(skin.rustPlan as readonly RustPlanSlot[] | undefined)?.length;
+  const fork = play.fork('dagnacht');
+  const trial = buildDagnachtTrial(skin, diff, () => fork.rng(), planned ? recentRust(history, play.missionId, play.seed) : []);
+  if (planned) play.note('rust', rustCode(trial.encounters.map((e) => e.id)));
+  return trial;
 }
 
 /**

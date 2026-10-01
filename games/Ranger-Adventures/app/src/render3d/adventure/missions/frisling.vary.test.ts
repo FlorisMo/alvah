@@ -12,7 +12,7 @@ import { newPlay } from '../../../core/play.ts';
 import { frislingVariant, lastWayOf, recentFams, wantsEdge, type DecoyKind } from './frisling.vary.ts';
 import { FAMILY_LAYOUTS, WAYS, WAY_IDS, type WayId } from './frisling.places.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
-import { buildDagnachtTrial } from '../../../engines/dagnacht.ts';
+import { buildDagnachtTrial, playDagnachtTrial, recentRust, rustCode } from '../../../engines/dagnacht.ts';
 import type { Skin } from '../../../content/types.ts';
 
 const MISSION = AREA_VELUWE.missies.find((m) => m.id === 'frisling')!;
@@ -142,4 +142,46 @@ test('the calm moments: one seeded order for the world and the 2D floor, the lyi
   assert.equal(orders.size, 4, `all four orders come (${[...orders].join(' | ')})`);
   // no seed: the content order, as the classic missions always played
   assert.deepEqual(buildDagnachtTrial(skin, diff).encounters.map((e) => e.id), ['aaien', 'dragen', 'voeren', 'zeug', 'pad']);
+});
+
+test('the calm moments never come in the order of his last two plays: the world and the 2D floor still play the same', () => {
+  const skin = MISSION.stappen[2].skin as Skin;
+  const diff = { slowmo: false } as never;
+  for (let start = 0; start < 60; start++) {
+    // a save's history, play after play (every beat carries its play's variant)
+    const history: { m: string; sd: number; va?: string }[] = [];
+    const orders: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const seed = start * 7 + i;
+      // the world (ChoiceRun, and the home's prepare before it) and the 2D floor each build it
+      const world = newPlay('frisling', seed, i + 1);
+      const floor = newPlay('frisling', seed, i + 1);
+      const w = playDagnachtTrial(skin, diff, world, history).encounters.map((e) => e.id);
+      const f = playDagnachtTrial(skin, diff, floor, history).encounters.map((e) => e.id);
+      assert.deepEqual(w, f, 'the same play, the same history: the same order in both paths');
+      assert.equal(world.variant.rust, rustCode(w), 'the order is noted on the play');
+      // (the play's own beats, logged before its dagnacht step, never count against it)
+      history.push({ m: 'frisling', sd: seed, va: `way:wei,rust:${world.variant.rust}` });
+      assert.deepEqual(playDagnachtTrial(skin, diff, newPlay('frisling', seed, i + 1), history).encounters.map((e) => e.id), w);
+      orders.push(rustCode(w));
+    }
+    assert.equal(new Set(orders.slice(0, 3)).size, 3, `three plays in a row, three orders (${orders.join(' ')})`);
+    assert.equal(new Set(orders.slice(1, 4)).size, 3);
+    for (const o of orders) assert.match(o, /^a[dv]{2}[zp]{2}$/);
+  }
+  // no play (an old caller): the content order, nothing noted
+  assert.deepEqual(playDagnachtTrial(skin, diff, null, []).encounters.map((e) => e.id), ['aaien', 'dragen', 'voeren', 'zeug', 'pad']);
+});
+
+test('the orders of his last plays are read from the history, one per play, never this play\'s own', () => {
+  const h = [
+    { m: 'frisling', sd: 1, va: 'way:wei,rust:advzp' },
+    { m: 'frisling', sd: 1, va: 'way:wei,rust:advzp' },
+    { m: 'ree-niet-aanraken', sd: 2, va: 'rust:abc' },
+    { m: 'frisling', sd: 3, va: 'way:berk' },
+    { m: 'frisling', sd: 4, va: 'way:steen,rust:avdpz' },
+  ];
+  assert.deepEqual(recentRust(h, 'frisling', 9), ['avdpz', 'advzp']);
+  assert.deepEqual(recentRust(h, 'frisling', 4), ['advzp']);
+  assert.deepEqual(recentRust([], 'frisling', 1), []);
 });

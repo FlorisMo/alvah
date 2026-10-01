@@ -28,7 +28,7 @@ import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
 import type { Play } from '../../core/play';
 import type { WorldCtx, Play3dEngine } from '../play/types';
-import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/dagnacht';
+import { playDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/dagnacht';
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
@@ -102,7 +102,7 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step, play?: Play): Promise<
 
     // SAME engine logic as the 2D view (construct parity §1f).
     const diff = store.difficulty('dagnacht');
-    const trial = buildDagnachtTrial(step.skin, { ...diff, reducedMotion: reduced } as typeof diff, play?.fork('dagnacht').rng); // run 7: the play's order (as its 2D twin)
+    const trial = playDagnachtTrial(step.skin, { ...diff, reducedMotion: reduced } as typeof diff, play, store.get().geschiedenis); // run 7: the play's order (as its 2D twin)
     const run = new DagnachtRun(trial.encounters.length);
     const instructie = step.skin.copy?.instructie ?? 'Blijf rustig. Maak de goede keuze.';
 
