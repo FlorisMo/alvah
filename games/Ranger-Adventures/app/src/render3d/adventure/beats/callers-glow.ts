@@ -1,11 +1,15 @@
 /**
  * beats/callers-glow.ts — the light a calling animal takes (beats/callers.ts, the
  * eekhoorn neighbours): its OWN colours in a warm light, a warm rim on its outline. Kept
- * apart from the beat (it needs only three) so its one hard rule is pinned by a node test
- * (callers-glow.test.ts): a material carries the rim's shader once, however many glows
- * reach it — a beat that was stopped before it handed its animals back never leaves a
- * second rim on the next one (the shader would declare the rim twice and the animal
- * would not be drawn at all).
+ * apart from the beat (it needs only three) so its hard rule is pinned by a node test
+ * (callers-glow.test.ts): a material gets the rim's shader ONCE, for good, with ONE set
+ * of rim uniforms that every later glow on it drives. Two ways that broke (2026-10-01):
+ * a beat stopped mid-call left its wrapper on, the next glow wrapped it again, the shader
+ * declared the rim twice and the animal was not drawn at all; and a glow that unwrapped
+ * the material when it ended let the next one wrap it anew with the very same program
+ * key — the renderer keeps a compiled program per material and key and does not run the
+ * new wrapper, so the program kept reading the first glow's (dead) uniforms: on a replay
+ * the roe lit up as a flat cream cut-out and the neighbours had no rim.
  */
 
 import * as THREE from 'three';
@@ -20,44 +24,46 @@ export const CALL_GLOW = 0.95;
  *  Every other caller's base colour is white (its colours are in its texture): unlifted. */
 const LIFT = 0.12;
 
-/** A material a glow has put its rim on: how it was before any glow touched it (handed
- *  back by `clear`), its emissive map while the glow is off, its rim's uniforms (the
- *  shader reads these, one set per material) and the glow that has it now. */
+/** A material that carries the rim's shader (for good, once a glow reached it): how it
+ *  looked before any glow (its look at rest, given back whenever no call lights it), its
+ *  emissive map at rest, the rim's uniforms (the compiled shader reads these — the same
+ *  ones for every glow on it) and the glow that lights it now. */
 interface Worn {
   mat: THREE.MeshStandardMaterial;
   emissive: THREE.Color;
   intensity: number;
+  /** its own emissive map (a model with a baked one lends it to its colour texture while lit) */
   map: THREE.Texture | null;
   rest: THREE.Texture | null;
-  compile: THREE.Material['onBeforeCompile'];
-  key: THREE.Material['customProgramCacheKey'];
   rim: { value: number };
   rimColor: { value: THREE.Color };
-  /** (null: handed back — no glow touches it any more) */
+  /** (null: none — it is at rest) */
   owner: WarmGlow | null;
 }
 
-/** Every material that carries the rim now: a second glow on it takes this one over
- *  (never a second wrapper). Weak: a material that is thrown away is forgotten. */
+/** Every material that carries the rim's shader: a later glow on it drives the same
+ *  uniforms (never a second wrapper, never a new one). Weak: a material that is thrown
+ *  away is forgotten. */
 const WORN = new WeakMap<THREE.Material, Worn>();
 
-/** Does `mat` carry a call's rim right now? (the tests) */
+/** Does `mat` carry the rim's shader? (the tests) */
 export function wearsRim(mat: THREE.Material): boolean { return WORN.has(mat); }
 
-/** Put the rim's shader on `mat` (once), and remember how it was. */
-function wear(mat: THREE.MeshStandardMaterial, owner: WarmGlow): Worn {
+/** Put the rim's shader on `mat` — once, for good: idle (rim 0) it looks exactly as it
+ *  did — and remember how it looked. */
+function wear(mat: THREE.MeshStandardMaterial): Worn {
   const e: Worn = {
     mat, emissive: mat.emissive.clone(), intensity: mat.emissiveIntensity, map: mat.emissiveMap, rest: mat.emissiveMap,
-    compile: mat.onBeforeCompile, key: mat.customProgramCacheKey,
-    rim: { value: 0 }, rimColor: { value: new THREE.Color() }, owner,
+    rim: { value: 0 }, rimColor: { value: new THREE.Color() }, owner: null,
   };
   // a textured part with no emissive map of its own (the roe's coat): its colour texture
   // goes in as the emissive map now, with the rim — its emissive shows nothing at rest, so
   // it looks as it did, and while it glows it glows in its own coat, not one flat colour
   if (!mat.emissiveMap && mat.map && (mat.emissiveIntensity === 0 || mat.emissive.getHex() === 0)) { mat.emissiveMap = mat.map; e.rest = mat.map; }
   const { rim, rimColor } = e;
+  const compile = mat.onBeforeCompile, key = mat.customProgramCacheKey;
   mat.onBeforeCompile = function (shader, renderer) {
-    e.compile.call(this, shader, renderer);
+    compile.call(this, shader, renderer);
     shader.uniforms.uCallRim = rim;
     shader.uniforms.uCallRimColor = rimColor;
     // (only while it glows: at rest the block is skipped and it looks as it did)
@@ -75,8 +81,9 @@ function wear(mat: THREE.MeshStandardMaterial, owner: WarmGlow): Worn {
       '  totalEmissiveRadiance *= 0.5 + 0.5 * callFace;\n' +
       '  totalEmissiveRadiance += uCallRimColor * (uCallRim * 1.3 * smoothstep(0.55, 0.95, 1.0 - callFace));\n}');
   };
-  mat.customProgramCacheKey = function () { return `${e.key.call(this)}|call-rim`; };
+  mat.customProgramCacheKey = function () { return `${key.call(this)}|call-rim`; };
   mat.needsUpdate = true;
+  WORN.set(mat, e);
   return e;
 }
 
@@ -94,8 +101,9 @@ function rest(e: Worn): void {
  * stays a jay and the badger a badger), and a warm rim rings its outline (so a black
  * raven lights up too, its feathers still its own) — never a flat cream cut-out. The
  * rim goes into the shader once, when the first glow reaches the material (a shader
- * variant per material, built while the lens holds, never mid-call); a later glow on the
- * same material — a beat begun again after a stop — takes it over as it is. While it
+ * variant per material, built while the lens holds, never mid-call), and stays there,
+ * idle at rest; a later glow on the same material — the next beat, a replay, a beat
+ * begun again after a stop — drives the same rim, through the same program. While it
  * glows, a model that has its own (dark, baked) emissive map lends that slot to its
  * colour texture — a texture swap, no new shader — and gets it back the moment the glow
  * ends, so at rest every animal looks exactly as it did; a textured part without one (the
@@ -103,7 +111,7 @@ function rest(e: Worn): void {
  * emissive shows nothing at rest); an untextured one glows in its own base colour, and a
  * merged one (the roe's other parts: their colours in their vertices) in its vertex
  * colours. The light is strongest where it faces the lens, so it keeps its shape.
- * `clear` hands every material back as it was before any glow.
+ * `clear` gives every material its look at rest back.
  */
 export class WarmGlow {
   private readonly mats: Worn[] = [];
@@ -118,9 +126,10 @@ export class WarmGlow {
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
         const mat = m as THREE.MeshStandardMaterial;
         if (!mat.isMeshStandardMaterial) continue;
-        let e = WORN.get(mat);
-        if (!e) { e = wear(mat, this); WORN.set(mat, e); }
-        else if (e.owner !== this) { e.owner = this; rest(e); } // (left on by a glow that never cleared: dark again, under this one)
+        const e = WORN.get(mat) ?? wear(mat);
+        // (a glow that never cleared — its beat stopped mid-call — left it lit: at rest
+        // again, under this one)
+        if (e.owner !== this) { if (e.owner) rest(e); e.owner = this; }
         if (!this.mats.includes(e)) this.mats.push(e);
       }
     });
@@ -146,19 +155,13 @@ export class WarmGlow {
     }
   }
 
-  /** Hand every material back as it was before any glow touched it. */
+  /** Every material at rest again, as it looked before any glow (its rim idle in its
+   *  shader, ready for the next glow — no recompile). */
   clear(): void {
     for (const e of this.mats) {
       if (e.owner !== this) continue;
-      e.rim.value = 0;
-      e.mat.emissive.copy(e.emissive);
-      e.mat.emissiveIntensity = e.intensity;
-      e.mat.emissiveMap = e.map;
-      e.mat.onBeforeCompile = e.compile;
-      e.mat.customProgramCacheKey = e.key;
-      e.mat.needsUpdate = true;
+      rest(e);
       e.owner = null;
-      WORN.delete(e.mat);
     }
   }
 }
