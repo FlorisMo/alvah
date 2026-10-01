@@ -4,6 +4,96 @@
 > it was verified. Goal and steps: [GOAL.md](GOAL.md).
 > ✅ works · 🟡 works with problems · ❌ blocks the player
 
+## 2026-10-01 14:00: after run 6 (run6/integration, code at fca89f3; played by hand on a fresh save + screenshots looked at)
+
+**The golden path is ALL GREEN, and the first four missions are now games played in the
+world with the ranger's own body** (walks with the keys, finds and picks with the mouse,
+"keep still" moments instead of answer cards). All checks ran on fca89f3, 11:03-11:23:
+`npm run golden` printed "ALL GREEN: the golden path plays start to finish" (1 passed,
+4.0 min). All ten missions pass at their real markers (`e2e/missions.spec.ts`: "18 passed
+(13.6m)"). Deploy smoke the CI way (`CI=1 npm run e2e:smoke`): "4 passed (1.3m)". iPad
+engine (`npm run e2e:webkit`): "4 passed (21.7s)". `npm run gate`: "# pass 681 # fail 0",
+then "4 passed (17.6s)". Root `npm run build`: "[build] Complete!" (21 pages).
+
+Played by hand at 1280×800 with real keys and mouse, fresh save, ~25 min, 0 page errors,
+draw calls ≤ 105 (the two playtesters saw peaks of 112 and 121; the cap is 150):
+
+| # | Step | Status | What a player experiences |
+|---|------|--------|---------------------------|
+| 1 | Opening screen | ✅ | The spawn clearing at golden hour under the title; Enter presses *Begin*. |
+| 2 | Make your ranger | ✅ | Skin, hair, jacket, eyes show on the 3D ranger. He is a real 8-year-old: 1.32 m beside Bram and the poacher (1.8 m); animals and plants at true size. |
+| 3 | Walk the world | ✅ | Bram greets him by name, then the lessons are learned by doing (arrows, Shift). Walking 2.0-2.2 m/s, Shift runs 4.1-4.2 m/s (iPad: the stick at its rim); the lens stays ~5 m behind, FOV 55, no bob, no snap. A marker's animal stands beside its ring, never in it. |
+| 4 | Jeep / helicopter | ✅ | Animals see the jeep coming and trot aside; it brakes for them and never touches one (driven at a roaming boar: it trotted off, closest 4.0 m). Bram suggests the jeep once when the next mission is far, and is quiet once he sits in it. Heli flies to a pad and lands. |
+| 5 | Go to mission 1 | ✅ | Bram's hook brings the chip; Enter at the ring starts it. |
+| 6 | Mission 1 games | ✅ | *De verdwaalde frisling*, one adventure (below). |
+| 7 | Finish mission | ✅ | Reward with three breinkrachten, the cut-fence clue; the family of six stays at the wallow. |
+| 8 | Back in the world | ✅ | By the family; Bram: "Volg de pijl linksboven." while the chip points to the reekalf (one next step); the story order is the four adventures first. Reload keeps all four homes "after". |
+
+The four redesigned missions, as played:
+
+- **De verdwaalde frisling** (~2-2.5 min, zoeken · corsi · rustkracht). One look at the
+  family; follow the squeak ~32 m to a bracken stand; click the piglet's stripes (a miss:
+  "Hier niet. Zoek verder."). Hands still while he squeaks (a click is a hand reaching: he
+  scoots deeper, the moment comes back). Card: carry him, or walk with him. Lead him home
+  ~31 m: Shift makes him dive into a clump ("Niet rennen. Dan schrikt hij." on every run)
+  and he waits until you walk calmly back ("De big wacht op je." → "Rustig maar. Daar komt
+  hij."), so a run never gains a metre. Watch the group's route over the rooting field and
+  point it back. The yearling sniffs your bag (card: "Hou je tas dicht"). The sow looks at
+  you, framed from their side so her stare reads: feet still (a step: she grunts and steps
+  between). Card "Het pad is vrij" (the flip: now "Blijf staan" is the wrong answer, and
+  the group shuffles on: "Je wacht te lang.").
+  Reunion. 3 cards left, 2 body moments, ~45 s of walking.
+- **Het reekalf in het gras** (~1.5-2 min, zoeken · rustkracht). Look at the doe, follow
+  her slots, she slips into the copse; find the calf flat in the tall grass. Hands still
+  twice by the calf (it peeps; it stretches its nose to your hand): a click makes it bolt
+  and drop again, or the doe barks from the copse. One card (lost? → "Stil weglopen").
+  Sneak ~11 m to the hide with a wet pool across the way: walking into it plashes ("Plons!
+  Dat maakt veel lawaai."), he steps back out; round it: "Rustig eromheen." Watch through
+  the binoculars (a step key: "Sta stil. Anders schrikt ze."); the doe steps out and noses
+  her calf; card "Loop rustig weg"; the calf drinks. 2 cards of 5 encounters.
+- **De wildcamera** (~2 min, wisselen · simon). Take the camera, follow the animal path
+  ~12 m, hang it on the pine. Aim it at *open plek* (a sun sign) or *het bosje* (a moon
+  sign) for six animals; after four the day turns to night and "Nu is het andersom!": the
+  signs stay, so a night animal now goes to the sun's place, a real switch (a wrong place:
+  "Leeg. Het dier is daar nu niet."). Night: the roe, the nightjar, the badger and the boar
+  call from their spots; call them back. Morning: the trap's photo shows a man setting a
+  snare (no jeep or helicopter in it); find the snare by the photo's foxglove and bush.
+- **De verstopte nootjes** (eekhoorn, ~2-2.5 min, corsi · simon). The squirrel
+  chatters from its stub; follow it tree to tree (it waits). Hide-and-seek: walk round the
+  pine; whenever any of it could show it slips round the bark; found only once it is in
+  view. Watch where it buries its nuts and point them back when it forgets. Meet the jay,
+  the green woodpecker and the raven; call along so the jay leaves.
+
+How verified: the checks above (their tails), golden's 38 screenshots and the ten
+missions' screenshots looked at, and a hand play of the first screens, walk/run, the jeep
+at a boar, and all four missions with mistakes (a miss, a wrong card, a run while leading,
+a reach at the calf, a boot in the pool, a step in the watch, the old rule after the flip),
+judged from screenshots.
+
+Still open (for the next run):
+- Little varies between plays: the piglet and the calf lie in the same spot every time,
+  dead centre of the search view (found in ~2 s), and the rustkracht cards come in the
+  same order. The corsi routes, the callers and the aim round's animals are drawn anew.
+- The six later missions are still staged mini-game patches. The nachtronde's raaf stood
+  behind a pine in 1 of 3 `missions.spec` runs; after the last fix (no staged game on
+  another home's ground) the final run was clean, but the stage still tests its sightlines
+  only to the patch's front row, so a caller at its back edge could still hide.
+- Frisling: the follow starts facing the family and the first prints are faint; "pad" is
+  still a card. After a reach the piglet is a sliver in the bracken; the stonechat decoy
+  reads as a black stick from above; the yearling walks through the mossy log.
+- Ree: the watch holds one line ~16 s; the reunion is small and far.
+- Wildcamera: "Daar komt een hert." before any animal shows (it walks in on the pick); four
+  one-button actions. In both callers rounds a first play ends after two calls (level 1).
+- Eekhoorn: the first wait is a small squirrel ~9 m off and its stops read 15-25 px;
+  "Gevonden!" with it ~25 px; one leap starts out of frame.
+- Jeep: boarding from its front swings the lens ~168°. Home animals ignore the jeep (only a
+  stall line). Running looks like walking (same framing, no dust or arm swing).
+- Load: triangles reach ~0.94-0.99M of 1M where several homes are in view; frames of
+  100-330 ms at a home's edge and at each trap photo, measured only under heavy laptop load.
+- Small polish left: the 2D floors' emoji (simon, wisselen), some consequence lines run to
+  two lines, the heli view blocked in 1 of 11 golden samples.
+- The full `npm run e2e` (~22 min) was not run.
+
 ## 2026-09-27 13:50: after wave 4 (merged main; played + screenshots looked at)
 
 **The golden path is ALL GREEN: 8 of 8 steps pass, no quality failures**

@@ -84,6 +84,10 @@ live and WebGL works, and neither "altijd 2D" nor reduced motion is on (those ke
 classic 2D floors, same content, same logging). `MissionFlow.runAdventure` runs it; the
 adventure never touches save data: it logs each `Mission.stappen` step **exactly once**
 through the flow's hooks (`log`, `fact`, `reunion`), so the EF contract is unchanged.
+The story order (`WorldSession.storyOrder`) puts the missions with an entry first: the
+wayfinding chip, Bram's next step and the missiebord's "Nu doen" follow it; the markers
+keep the area's layout. A home's clearings are its own ground: no other mission's staged
+patch is laid there (`World.playClear`).
 
 ```
 adventure/registry.ts    Adventure { id, home, clearings?, dressing?, bind?, prepare?, unprepare?, play(kit) }
@@ -110,7 +114,10 @@ adventure/squirrel.ts    Squirrel (an Actor): the static squirrel mesh brought t
 adventure/places.ts      frames, headings, local↔world (pure)
 adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: where it
                          happens), <id>.home.ts (the home's dressing), <id>.ts (the beats);
-                         frisling (the wallow) and ree (the copse, the meadow, the hide)
+                         frisling (the wallow), ree (the copse, the meadow, the hide),
+                         wildcamera (the crossing, the glade, the thicket, the snare; its
+                         trap photos in wildcamera.photos.ts) and eekhoorn (the pines, the
+                         moss glade, the neighbours): the four missions met first
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          a `shy` resident slips into cover when he comes near (per state);
                          a home rests beyond 40-46 m, its small things (`env.detail(at)`:
@@ -132,11 +139,14 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   blended hand-over; `await k.look(spot, line, hold, { turn })` is one calm look
   (binoculars) and back (`turn`: he ends facing it); `k.ui.watching(on)` draws a long
   watch through the glasses' two round lenses (the ree's hide; under the cards, no zoom).
-- *walking*: `await k.walk({ name, to, r, line, doel, lead, quiet })` — the child walks
-  himself; the chip names the goal in words, the arrow only after ~20 s without progress;
-  with `lead` an actor follows (at his `side` if given, his walk capped at its `pace`) and
-  hides when he runs; with `quiet` running says its line. An `include` with `r` keeps both
-  his shoulders in a framed view.
+- *walking*: `await k.walk({ name, to, r, line, doel, lead, quiet, tick, via })` — the child
+  walks himself; the chip names the goal in words, the arrow only after ~20 s without
+  progress; with `lead` an actor follows (at his `side` if given, his walk capped at its
+  `pace`); when he runs it dives into a clump in his picture, its line on every run, and
+  stays there until he has walked calmly back to it (a run never gains a metre); with
+  `quiet` running says its line; `tick` runs each frame of the walk (the ree's pool reads
+  his feet there); `via` names the way a perfect player walks round something (golden's
+  hint only). An `include` with `r` keeps both his shoulders in a framed view.
 - *the animals' bodies*: a rigged model (the roe) plays its own walk/graze/idle clips, the
   procedural trot is for the static meshes (the boar, the piglet). `await k.walkRanger(x, z)` walks him
   (input locked) to a framed beat's spot.
@@ -145,7 +155,10 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   the ranger, so the card makes way first and its line follows); `.still(id, { line, hands |
   feet, tempt, wrong, right })` plays an encounter with the BODY instead of a card (keep your
   hands off the animal, or your feet still: a reach is the wrong answer, the same moment comes
-  back; the pure core is `beats/hold-math.ts`); `await k.fact(i)` shows the raaf's card.
+  back; the pure core is `beats/hold-math.ts`); `.answer(id, goed)` answers the next
+  encounter from what his feet did on a walk (the ree's pool: a boot in the water, or round
+  it dry), the same `DagnachtRun` trial; `await k.fact(i)` shows the raaf's card. The 2D
+  floor plays every encounter as a card, in the same content order.
 - *the world*: `await k.act(label, line)` — one action button in the world (Space presses
   it); `k.daylight(k01, s)` turns the day (1 golden hour … 0 a readable blue night,
   world/Sky.ts + Daylight.ts; the end of the adventure hands the golden hour back);

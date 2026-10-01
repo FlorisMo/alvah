@@ -39,7 +39,9 @@ single bug, dead end or confusing moment**:
    survives a page reload.
 
 After that: the other nine missions and the remaining mini-games (simon, wisselen, roep)
-reach the same bar.
+reach the same bar. Since run 6 the three missions met next (the reekalf, the wildcamera,
+the eekhoorn) are adventures in the world too, so the first four use all five
+breinkrachten; the six after them are still staged mini-game patches.
 
 ## Priorities
 
