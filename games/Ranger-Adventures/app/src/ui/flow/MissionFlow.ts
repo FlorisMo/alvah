@@ -119,6 +119,9 @@ function drawPlay(mission: Mission, adv: Adventure | null): Drawn {
   const play = newPlay(mission.id, nextPlaySeed(), (s.gespeeld[mission.id] ?? 0) + 1);
   const session_ = session.world?.mood().session ?? 'gouden-uur';
   const mood = playMood(session_, adv?.moods, play, lastMoodAt(s.geschiedenis, mission.id));
+  // first in the play's variant, so the history's short line always keeps it (a home's
+  // `perPlay` reads the home's last mood back from there)
+  play.note('mood', mood);
   const rare = rollRare({ home: mission.id, play, table: ONTDEKKINGEN, found: s.ontdekt, counts: s.zeldzaam, mood });
   if (rare) play.note('rare', rare.id.slice(rare.id.indexOf('.') + 1)); // (a home's prepare may read it)
   lastPlay = play;
@@ -157,7 +160,6 @@ export function showBriefing(mission: Mission): void {
     // is parked just outside it as the card comes up (never during play)
     world.parkJeepOutOf(Object.values(adv.home.places), adv.home.places.marker);
   }
-  drawn.play.note('mood', drawn.mood);
   const unprepare = (): void => {
     if (world && world.mood().now !== world.mood().session) world.setMood(world.mood().session, 0);
     if (!adv || !world) return;

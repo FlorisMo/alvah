@@ -218,22 +218,29 @@ for (const mood of MOODS) {
           let at = await a.where(page);
           expect(at, `${a.name} is in the world`).not.toBeNull();
           // a clear view from ~D m (the lens stands ~4.4 m behind him); when a name tag or a
-          // card hides it from there, the next spot round it
+          // card hides part of it from there (the far red deer behind the frisling's tag showed
+          // only its dark antlers), the next spot round it — the view that shows the most of it
           const spots = await vantages(page, at!, await R<P2>(page, 'r.pos()'), Math.max(1.5, D - 4.4));
           let it: Seen | undefined;
           let png: Buffer | null = null;
-          for (const spot of spots.slice(0, 3)) {
+          let share = -1;
+          for (const spot of spots.slice(0, 4)) {
             await walkTo(page, spot, { stopDist: 1.0, timeout: 120_000 });
             at = await a.where(page);
             await face(page, at!);
             await sleep(page, 900);
             at = await a.where(page); // (a roamer walks on: read it again)
             const all = (await R<Seen[] | null>(page, 'r.animals()')) ?? [];
-            it = all.filter((x) => x.id === a.model).sort((p, q) => Math.hypot(p.x - at!.x, p.z - at!.z) - Math.hypot(q.x - at!.x, q.z - at!.z))[0];
-            png = await page.screenshot({ path: path.join(d, `${a.name.split(' ')[0]}-${D}.png`) });
-            if (it) it.pts = await onCanvas(page, it.pts);
-            if (it && it.pts.length >= 8) break;
+            const seen = all.filter((x) => x.id === a.model).sort((p, q) => Math.hypot(p.x - at!.x, p.z - at!.z) - Math.hypot(q.x - at!.x, q.z - at!.z))[0];
+            if (!seen) continue;
+            const shot = await page.screenshot();
+            const raw = seen.pts.length;
+            seen.pts = await onCanvas(page, seen.pts);
+            const k = raw ? seen.pts.length / raw : 0;
+            if (k > share) { share = k; it = seen; png = shot; }
+            if (raw >= 8 && k >= 0.8) break;
           }
+          if (png) fs.writeFileSync(path.join(d, `${a.name.split(' ')[0]}-${D}.png`), png);
           if (!it || !png || it.pts.length < 4) {
             rows.push(`${a.name} @${D}: not in the picture (${it ? `${it.dist.toFixed(1)} m, ${it.pts.length} px seen` : 'none'})`);
             expect.soft(false, `${mood}: ${a.name} at ~${D} m is not in the picture`).toBe(true);
