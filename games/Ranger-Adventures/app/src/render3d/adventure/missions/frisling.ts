@@ -46,7 +46,7 @@ import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
   frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, type Way, type WayId,
 } from './frisling.places';
-import { frislingVariant, lastWayOf, recentFams, type FrislingVariant } from './frisling.vary';
+import { frislingVariant, lastWayOf, recentFams, recentWays, type FrislingVariant } from './frisling.vary';
 import { playDagnachtTrial } from '../../../engines/dagnacht';
 
 /** How far the lost piglet's squeak carries while he follows it (m): from the ring to
@@ -66,12 +66,11 @@ function distractorsOf(m: Mission | undefined): readonly Distractor[] {
 }
 
 let contentDecoys: readonly Distractor[] = [];
-/** This play's frisling (laid under the briefing card), and the way of the last one he
- *  set out on in this page session (a stopped play leaves no beat in the history). */
+/** This play's frisling (laid under the briefing card). */
 let current: FrislingVariant | null = null;
-let lastStarted: WayId | null = null;
-/** The plays he set out on in this page session (their seed and family layout). */
-const startedFams: { sd: number; fam: string }[] = [];
+/** The plays he set out on in this page session (their seed, way and family layout): a
+ *  play stopped early may have left no beat in the history. */
+const started: { sd: number; way: WayId; fam: string }[] = [];
 
 /** The young birches the home plants at its stands (real forest trees). */
 const BIRCHES = WAY_IDS.flatMap((id) => WAYS[id].trees.map((t) => ({
@@ -100,8 +99,7 @@ export const frislingAdventure: Adventure = {
     if (!home) return;
     const trial = buildZoekenTrial(mission.stappen[0].skin, store.difficulty('zoeken'));
     const history = store.get().geschiedenis;
-    const last = lastStarted ?? lastWayOf(history);
-    const v = frislingVariant(play, last, trial.decoys.map((d) => ({ k: d.k, animal: d.animal })), recentFams(history, startedFams));
+    const v = frislingVariant(play, recentWays(history, started), trial.decoys.map((d) => ({ k: d.k, animal: d.animal })), recentFams(history, started));
     current = v;
     // the order the calm moments will come in (the very trial the script builds later):
     // noted now, before the light's note, so the history always says what he played
@@ -126,8 +124,7 @@ export const frislingAdventure: Adventure = {
     const fam = k.borrow();
     const home = fam.dressing as FrislingHome;
     const v = current ?? fallbackVariant(k);
-    lastStarted = v.way;
-    startedFams.push({ sd: k.play.seed, fam: FAMILY_LAYOUTS[v.family].id });
+    started.push({ sd: k.play.seed, way: v.way, fam: FAMILY_LAYOUTS[v.family].id });
     home.holdClue = true; // the clue waits for its moment: after the reunion, under the raaf's card
     try {
       await story(k, fam, home, v);

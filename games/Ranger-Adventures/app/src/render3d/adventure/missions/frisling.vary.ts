@@ -45,8 +45,11 @@ export const wantsEdge = (d: DecoyKind): boolean => d.animal === 'nachtzwaluw';
  * the history: `va`). `lastWay`: the way of his last frisling play (`lastWayOf`): never
  * the same way twice in a row. `decoys`: the trial's look-alikes, in trial order.
  */
-export function frislingVariant(play: Play, lastWay: WayId | null, decoys: readonly DecoyKind[], lastFams: readonly string[] = []): FrislingVariant {
-  const ways = WAY_IDS.filter((w) => w !== lastWay);
+export function frislingVariant(play: Play, lastWays: WayId | null | readonly string[], decoys: readonly DecoyKind[], lastFams: readonly string[] = []): FrislingVariant {
+  // the way: never one of his last two plays' (three plays in a row, three ways); just
+  // after one play, either other way
+  const recent = (lastWays === null ? [] : typeof lastWays === 'string' ? [lastWays] : lastWays).slice(0, 2);
+  const ways = WAY_IDS.filter((w) => !recent.includes(w));
   const way = play.fork('way').pick(ways);
   const w = WAYS[way];
   const nook = play.fork('nook').int(0, w.nooks.length - 1);
@@ -88,17 +91,29 @@ export function assignSpots(order: readonly number[], spots: readonly DecoySpot[
  *  its seed): the plays started in this page session (`started`, oldest first: a play
  *  stopped early may have left no beat) before the history's (`BeatLog.va`, 'fam:boom'). */
 export function recentFams(history: readonly { m: string; sd?: number; va?: string }[], started: readonly { sd: number; fam: string }[] = []): string[] {
+  return recentOf('fam', history, started);
+}
+
+/** The ways of his newest frisling plays, newest first, one per play (as `recentFams`). */
+export function recentWays(history: readonly { m: string; sd?: number; va?: string }[], started: readonly { sd: number; way: string }[] = []): string[] {
+  return recentOf('way', history, started);
+}
+
+/** A variant key's values ('way', 'fam') of his newest frisling plays, newest first, one per
+ *  play (by its seed): this page session's started plays first, then the history's. */
+function recentOf<K extends 'way' | 'fam'>(key: K, history: readonly { m: string; sd?: number; va?: string }[], started: readonly ({ sd: number } & Record<K, string>)[]): string[] {
   const seen = new Set<number>();
   const out: string[] = [];
   for (let i = started.length - 1; i >= 0; i--) {
     if (seen.has(started[i].sd)) continue;
     seen.add(started[i].sd);
-    out.push(started[i].fam);
+    out.push(started[i][key]);
   }
+  const re = new RegExp(`(?:^|,)${key}:([a-z]+)`);
   for (let i = history.length - 1; i >= 0; i--) {
     const h = history[i];
     if (h.m !== 'frisling' || !h.va || (h.sd !== undefined && seen.has(h.sd))) continue;
-    const m = /(?:^|,)fam:([a-z]+)/.exec(h.va);
+    const m = re.exec(h.va);
     if (!m) continue;
     if (h.sd !== undefined) seen.add(h.sd);
     out.push(m[1]);
