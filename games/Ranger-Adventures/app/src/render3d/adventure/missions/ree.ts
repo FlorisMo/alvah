@@ -93,7 +93,7 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Ree
   home.layPlay({ layout: l, calf, pool: p.pool, decoys: trial.decoys.map((d) => d.id), glimpse: SEARCH_GLIMPSE });
   const g = l.graze[p.graze];
   world.residents.repose(MISSION, 'calf', 'before', { x: calf.x, z: calf.z, yaw: calf.yaw, idle: 'lie', roam: 0 });
-  world.residents.repose(MISSION, 'doe', 'before', { x: g.x, z: g.z, yaw: g.yaw, idle: 'graze', roam: 0.5 }, { walk: true });
+  world.residents.repose(MISSION, 'doe', 'before', { x: g.x, z: g.z, yaw: g.yaw, idle: 'graze', roam: 0.5 }, { walk: true, cover: l.bed });
   drawn = { seed: play.seed, play: p };
   return p;
 }

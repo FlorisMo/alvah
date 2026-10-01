@@ -125,6 +125,8 @@ interface Home {
   ids: Map<string, string>;
   /** run 7: a play's own spots for its residents (`repose`), per state, over the spec's */
   poses: Map<string, Partial<Record<HomeState, ResidentPose>>>;
+  /** run 7: a play's own cover for a shy resident (`repose` opts.cover), per state */
+  covers: Map<string, Partial<Record<HomeState, Shy['to']>>>;
 }
 
 /** How a shy resident keeps its distance (adventure/types.ts `ResidentShy`). */
@@ -187,7 +189,7 @@ export class Residents {
       spec, group, details, dressing, actors, state: 'before', borrowed: false,
       rest: new FarRest(REST_NEAR, REST_FAR), voices: new Map(),
       centre: spec.places.home ?? spec.places.marker ?? { x: 0, z: 0 },
-      reacting: new Map(), gen: 0, ids: new Map(), poses: new Map(),
+      reacting: new Map(), gen: 0, ids: new Map(), poses: new Map(), covers: new Map(),
     };
     for (const r of spec.residents) {
       const aenv: ActorEnv = {
@@ -235,15 +237,25 @@ export class Residents {
    * (under the briefing card: a calf lying hidden in tall grass). A stop then lays it back
    * here, where the play had it, never at a spot from another play.
    */
-  repose(missionId: string, key: string, state: HomeState, pose: ResidentPose, opts: { walk?: boolean } = {}): void {
+  repose(missionId: string, key: string, state: HomeState, pose: ResidentPose, opts: { walk?: boolean; cover?: Shy['to'] } = {}): void {
     const home = this.homes.get(missionId);
     const r = home?.spec.residents.find((q) => q.key === key);
     if (!home || !r) return;
     home.poses.set(key, { ...home.poses.get(key), [state]: pose });
+    // (a shy one slips into THIS play's cover, never one across the heath: a cover too far
+    // to walk to was a jump)
+    if (opts.cover) home.covers.set(key, { ...home.covers.get(key), [state]: opts.cover });
     if (home.borrowed || home.state !== state) return;
     home.gen += 1;
     home.reacting.delete(key);
     this.layOne(home, r, state, !!opts.walk && !this.env.reduced());
+  }
+
+  /** A shy resident's rule in a state, with this play's cover (`repose`) as its `to`. */
+  private shyOf(home: Home, r: ResidentSpec, state: HomeState): Shy | null {
+    const shy = r.shy?.find((q) => !q.state || q.state === state) ?? null;
+    const to = home.covers.get(r.key)?.[state];
+    return shy && to ? { ...shy, to } : shy;
   }
 
   /** A resident's pose in a state: this play's (`repose`), else its spec's. */
@@ -299,7 +311,7 @@ export class Residents {
     // a shy one with the ranger near its spot (a mission stopped beside her copse) keeps
     // to (or slips into) its cover, and comes out once he has gone — never out and
     // straight back in
-    const shy = r.shy?.find((q) => !q.state || q.state === state);
+    const shy = this.shyOf(home, r, state);
     if (shy && placed && Math.hypot(pose.x - this.rangerAt.x, pose.z - this.rangerAt.z) < shy.within) {
       home.reacting.set(r.key, { busy: false, away: false, cool: 0, hidden: true, gone: 0 });
       this.takeCover(a, shy, walk);
@@ -386,7 +398,7 @@ export class Residents {
     for (const r of home.spec.residents) {
       const a = home.actors.get(r.key);
       const pose = this.poseOf(home, r, home.state);
-      const shy = r.shy?.find((q) => !q.state || q.state === home.state) ?? null;
+      const shy = this.shyOf(home, r, home.state);
       if (!a || !pose || !a.group.visible || pose.idle === 'lie') continue;
       let st = home.reacting.get(r.key);
       if (!st) { st = { busy: false, away: false, cool: 0 }; home.reacting.set(r.key, st); }
