@@ -199,8 +199,8 @@ export class World {
   // and whether the parked jeep glows (Bram suggested it)
   private lookPx = 0;
   private jeepGlow = false;
-  // run 7 (design §4.5): the session's mood and the one on screen. In `contracts` only the
-  // golden hour exists: setMood records the id (the `moods` package draws and shows them)
+  // run 7 (design §4.5): the session's mood (drawn before the title shows) and the one on
+  // screen (a play's own, while it stands in one; world/Sky.ts shows it)
   private moodSession: MoodId = DEFAULT_MOOD;
   private moodNow: MoodId = DEFAULT_MOOD;
 

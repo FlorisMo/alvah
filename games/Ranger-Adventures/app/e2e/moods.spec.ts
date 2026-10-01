@@ -54,6 +54,28 @@ async function lumas(png: Buffer, pts: [number, number][]): Promise<number[]> {
     return 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
   }).sort((a, b) => a - b);
 }
+/** Only the points where the picture is the world: not under a name tag, a chip, a card or
+ *  any other piece of the page drawn over the canvas (they let the mouse through, so this
+ *  looks at what they paint: a background, text, an image). */
+async function onCanvas(page: Page, pts: [number, number][]): Promise<[number, number][]> {
+  return page.evaluate((pts) => {
+    const vw = innerWidth, vh = innerHeight;
+    const rects: DOMRect[] = [];
+    for (const el of Array.from(document.body.querySelectorAll<HTMLElement>('*'))) {
+      if (el.id === 'scene' || el.closest('#scene')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1 || r.width * r.height > vw * vh * 0.5) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.05) continue;
+      const bg = cs.backgroundColor.match(/[\d.]+/g)?.map(Number) ?? [];
+      const paints = (bg.length === 4 ? bg[3] > 0.05 : bg.length === 3) || cs.backgroundImage !== 'none'
+        || Array.from(el.childNodes).some((n) => n.nodeType === 3 && (n.textContent ?? '').trim() !== '')
+        || /^(IMG|SVG|CANVAS|VIDEO)$/i.test(el.tagName);
+      if (paints) rects.push(r);
+    }
+    return pts.filter(([x, y]) => !rects.some((r) => x >= r.left - 1 && x <= r.right + 1 && y >= r.top - 1 && y <= r.bottom + 1));
+  }, pts);
+}
 const pct = (xs: number[], q: number): number => xs.length ? Math.round(xs[Math.min(xs.length - 1, Math.floor(xs.length * q))]) : NaN;
 
 /** Begin (and the ranger maker on a fresh save) → the world. */
@@ -81,9 +103,9 @@ async function face(page: Page, at: P2, tol = 5): Promise<void> {
   }
 }
 
-/** A spot `back` m out from `at` with nothing solid between (trunks, bushes, the cabin:
- *  `__ranger.obstacles()`), inside the world, nearest to `from`. */
-async function vantage(page: Page, at: P2, from: P2, back: number): Promise<P2> {
+/** Spots `back` m out from `at` with nothing solid between (trunks, bushes, the cabin:
+ *  `__ranger.obstacles()`), inside the world, nearest to `from` first. */
+async function vantages(page: Page, at: P2, from: P2, back: number): Promise<P2[]> {
   return page.evaluate(({ at, from, back }) => {
     type O = { x: number; z: number; r: number; box?: { hx: number; hz: number } };
     const obs = (window as unknown as { __ranger: { obstacles(): O[] } }).__ranger.obstacles();
@@ -95,17 +117,17 @@ async function vantage(page: Page, at: P2, from: P2, back: number): Promise<P2> 
         return Math.hypot(o.x - (a.x + dx * k), o.z - (a.z + dz * k)) - rr > 0.5;
       });
     };
-    let best: { x: number; z: number } | null = null, cost = Infinity;
+    const out: { x: number; z: number; c: number }[] = [];
     for (let i = 0; i < 24; i++) {
       const ang = (i / 24) * Math.PI * 2;
       const A = { x: at.x + Math.sin(ang) * back, z: at.z + Math.cos(ang) * back };
       if (Math.hypot(A.x, A.z) > 58 || !clear(A)) continue;
-      const c = Math.hypot(A.x - from.x, A.z - from.z);
-      if (c < cost) { cost = c; best = A; }
+      out.push({ ...A, c: Math.hypot(A.x - from.x, A.z - from.z) });
     }
-    if (best) return best;
+    out.sort((p, q) => p.c - q.c);
+    if (out.length) return out.map(({ x, z }) => ({ x, z }));
     const dx = at.x - from.x, dz = at.z - from.z, l = Math.hypot(dx, dz) || 1;
-    return { x: at.x - (dx / l) * back, z: at.z - (dz / l) * back };
+    return [{ x: at.x - (dx / l) * back, z: at.z - (dz / l) * back }];
   }, { at, from, back });
 }
 
@@ -195,17 +217,24 @@ for (const mood of MOODS) {
         for (const D of [40, 20]) {
           let at = await a.where(page);
           expect(at, `${a.name} is in the world`).not.toBeNull();
-          // a clear view from ~D m (the lens stands ~4.4 m behind him)
-          const spot = await vantage(page, at!, await R<P2>(page, 'r.pos()'), Math.max(1.5, D - 4.4));
-          await walkTo(page, spot, { stopDist: 1.0, timeout: 120_000 });
-          at = await a.where(page);
-          await face(page, at!);
-          await sleep(page, 900);
-          at = await a.where(page); // (a roamer walks on: read it again)
-          const all = (await R<Seen[] | null>(page, 'r.animals()')) ?? [];
-          const it = all.filter((x) => x.id === a.model).sort((p, q) => Math.hypot(p.x - at!.x, p.z - at!.z) - Math.hypot(q.x - at!.x, q.z - at!.z))[0];
-          const png = await page.screenshot({ path: path.join(d, `${a.name.split(' ')[0]}-${D}.png`) });
-          if (!it || it.pts.length < 4) {
+          // a clear view from ~D m (the lens stands ~4.4 m behind him); when a name tag or a
+          // card hides it from there, the next spot round it
+          const spots = await vantages(page, at!, await R<P2>(page, 'r.pos()'), Math.max(1.5, D - 4.4));
+          let it: Seen | undefined;
+          let png: Buffer | null = null;
+          for (const spot of spots.slice(0, 3)) {
+            await walkTo(page, spot, { stopDist: 1.0, timeout: 120_000 });
+            at = await a.where(page);
+            await face(page, at!);
+            await sleep(page, 900);
+            at = await a.where(page); // (a roamer walks on: read it again)
+            const all = (await R<Seen[] | null>(page, 'r.animals()')) ?? [];
+            it = all.filter((x) => x.id === a.model).sort((p, q) => Math.hypot(p.x - at!.x, p.z - at!.z) - Math.hypot(q.x - at!.x, q.z - at!.z))[0];
+            png = await page.screenshot({ path: path.join(d, `${a.name.split(' ')[0]}-${D}.png`) });
+            if (it) it.pts = await onCanvas(page, it.pts);
+            if (it && it.pts.length >= 8) break;
+          }
+          if (!it || !png || it.pts.length < 4) {
             rows.push(`${a.name} @${D}: not in the picture (${it ? `${it.dist.toFixed(1)} m, ${it.pts.length} px seen` : 'none'})`);
             expect.soft(false, `${mood}: ${a.name} at ~${D} m is not in the picture`).toBe(true);
             continue;
@@ -269,6 +298,7 @@ for (const mood of MOODS) {
       const piglet = all.filter((x) => x.id === 'animal-frisling-piglet' && x.onScreen)
         .sort((p, q) => Math.hypot((p.box[0] + p.box[2]) / 2 - h.x, (p.box[1] + p.box[3]) / 2 - h.y) - Math.hypot((q.box[0] + q.box[2]) / 2 - h.x, (q.box[1] + q.box[3]) / 2 - h.y))[0];
       const png = await page.screenshot({ path: path.join(d, 'frisling-search.png') });
+      if (piglet) piglet.pts = await onCanvas(page, piglet.pts);
       if (piglet && piglet.pts.length >= 3) {
         const own = await lumas(png, piglet.pts);
         // what is round it: a ring one box wide around its screen box
