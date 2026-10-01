@@ -55,6 +55,8 @@ const JUNIPER_SLIM = 0.82;
 
 /** Beyond this far (m) from the lens a juniper or a log draws its light copy. */
 const FAR_COPY_M = 16;
+/** The light copies are made this long (ms) after the home is built, one per idle moment. */
+const FAR_COPY_AFTER_MS = 4000;
 /** The light copies' triangles (the real juniper has ~12.4k, the log ~11k). */
 const FAR_JUNIPER_TRIS = 1800;
 const FAR_LOG_TRIS = 1200;
@@ -181,6 +183,9 @@ export class ReeHome implements HomeDressing {
    *  height each kind's copy was baked at */
   private readonly farMat = lodMaterial().clone();
   private readonly farRef = new Map<string, number>();
+  private readonly farJobs: (() => void)[] = [];
+  private farPending = false;
+  private disposed = false;
   private readonly made: THREE.Mesh[] = [];
   private readonly rings: Ring[] = [];
   private readonly ringMat: THREE.MeshBasicMaterial;
@@ -455,19 +460,40 @@ export class ReeHome implements HomeDressing {
   private withFarCopy(root: THREE.Object3D, kind: string, h: number, tris: number): THREE.Object3D {
     const key = `ree:${kind}`;
     if (!this.farRef.has(key)) this.farRef.set(key, h);
-    const [geo] = lodGeometries(key, root, [tris]);
-    if (!geo) return root;
-    if (!geo.userData.toned) {
-      const col = geo.attributes.color as THREE.BufferAttribute;
-      for (let i = 0; i < col.array.length; i++) (col.array as Float32Array)[i] *= FAR_TONE;
-      geo.userData.toned = true;
-    }
     const lod = new THREE.LOD();
     lod.addLevel(root, 0);
-    const far = new THREE.Mesh(geo, this.farMat);
-    far.scale.setScalar(h / this.farRef.get(key)!);
-    lod.addLevel(far, FAR_COPY_M, 0.1);
+    // (the copy is made a while after the world is built, at an idle moment: simplifying
+    // a model costs ~0.1-0.2 s, and the title must not wait for it)
+    this.farJobs.push(() => {
+      const [geo] = lodGeometries(key, root, [tris]);
+      if (!geo) return;
+      if (!geo.userData.toned) {
+        const col = geo.attributes.color as THREE.BufferAttribute;
+        for (let i = 0; i < col.array.length; i++) (col.array as Float32Array)[i] *= FAR_TONE;
+        geo.userData.toned = true;
+      }
+      const far = new THREE.Mesh(geo, this.farMat);
+      far.scale.setScalar(h / this.farRef.get(key)!);
+      lod.addLevel(far, FAR_COPY_M, 0.1);
+    });
+    this.nextFarJob(FAR_COPY_AFTER_MS);
     return lod;
+  }
+
+  /** Run the next far copy at an idle moment (one at a time). */
+  private nextFarJob(after = 0): void {
+    if (this.farPending || this.disposed) return;
+    this.farPending = true;
+    setTimeout(() => {
+      const idle = (globalThis as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
+      const run = (): void => {
+        this.farPending = false;
+        if (this.disposed) return;
+        this.farJobs.shift()?.();
+        if (this.farJobs.length) this.nextFarJob(50);
+      };
+      if (idle) idle(run, { timeout: 2000 }); else run();
+    }, after);
   }
 
   /** The played stand's tall grass (the search's cover: its glimpse, the calf's stems). */
@@ -564,6 +590,7 @@ export class ReeHome implements HomeDressing {
   }
 
   dispose(): void {
+    this.disposed = true;
     for (const [id, f] of this.standCovers) {
       const tussock = f.meshes.find((m) => m.name === 'cover-tussock');
       if (tussock) tussock.geometry = this.fullTussock.get(id)!; // (the field disposes its own)
