@@ -123,6 +123,8 @@ interface Home {
   gen: number;
   /** each resident's steady mover id (`<mission>:<key>`), made once */
   ids: Map<string, string>;
+  /** run 7: a play's own spots for its residents (`repose`), per state, over the spec's */
+  poses: Map<string, Partial<Record<HomeState, ResidentPose>>>;
 }
 
 /** How a shy resident keeps its distance (adventure/types.ts `ResidentShy`). */
@@ -185,7 +187,7 @@ export class Residents {
       spec, group, details, dressing, actors, state: 'before', borrowed: false,
       rest: new FarRest(REST_NEAR, REST_FAR), voices: new Map(),
       centre: spec.places.home ?? spec.places.marker ?? { x: 0, z: 0 },
-      reacting: new Map(), gen: 0, ids: new Map(),
+      reacting: new Map(), gen: 0, ids: new Map(), poses: new Map(),
     };
     for (const r of spec.residents) {
       const aenv: ActorEnv = {
@@ -194,6 +196,7 @@ export class Residents {
       };
       const height = r.height ?? this.env.heightFor(r.animal);
       const a = body?.(r, aenv, height, dressing) ?? new Actor(r.key, r.animal, aenv, { height });
+      if (r.reach !== undefined) a.homeReach = r.reach; // (run 7: it walks this far to a new spot)
       actors.set(r.key, a);
       home.ids.set(r.key, `${spec.missionId}:${r.key}`);
       if (r.voice) home.voices.set(r.key, { next: 3 + Math.random() * 4, on: true, far: null });
@@ -222,6 +225,30 @@ export class Residents {
     const home = this.homes.get(missionId);
     if (!home || home.borrowed) return;
     this.lay(home, state, fresh && !this.env.reduced());
+  }
+
+  /**
+   * Run 7 (additive): lay a resident's spot in one of its home's states anew, for THIS play
+   * (the calf in the stand the play drew, the doe at the graze spot it drew): it holds over
+   * the spec's pose until the next call. When the home is in that state and nobody borrows
+   * it, the resident goes there now: `walk` = a calm walk (within its reach), else at once
+   * (under the briefing card: a calf lying hidden in tall grass). A stop then lays it back
+   * here, where the play had it, never at a spot from another play.
+   */
+  repose(missionId: string, key: string, state: HomeState, pose: ResidentPose, opts: { walk?: boolean } = {}): void {
+    const home = this.homes.get(missionId);
+    const r = home?.spec.residents.find((q) => q.key === key);
+    if (!home || !r) return;
+    home.poses.set(key, { ...home.poses.get(key), [state]: pose });
+    if (home.borrowed || home.state !== state) return;
+    home.gen += 1;
+    home.reacting.delete(key);
+    this.layOne(home, r, state, !!opts.walk && !this.env.reduced());
+  }
+
+  /** A resident's pose in a state: this play's (`repose`), else its spec's. */
+  private poseOf(home: Home, r: ResidentSpec, state: HomeState): ResidentPose | null {
+    return home.poses.get(r.key)?.[state] ?? (state === 'before' ? r.before : r.after);
   }
 
   /** Lend a home's animals to an adventure (they stop idling on their own). */
@@ -258,28 +285,31 @@ export class Residents {
     home.gen += 1;
     home.reacting.clear();
     home.dressing?.setState(state, walk);
-    for (const r of home.spec.residents) {
-      const a = home.actors.get(r.key)!;
-      const pose = state === 'before' ? r.before : r.after;
-      a.group.visible = !!pose;
-      if (!pose) { a.idle(); continue; }
-      const far = Math.hypot(pose.x - a.x, pose.z - a.z);
-      const placed = a.x !== 0 || a.z !== 0;
-      // a shy one with the ranger near its spot (a mission stopped beside her copse) keeps
-      // to (or slips into) its cover, and comes out once he has gone — never out and
-      // straight back in
-      const shy = r.shy?.find((q) => !q.state || q.state === state);
-      if (shy && placed && Math.hypot(pose.x - this.rangerAt.x, pose.z - this.rangerAt.z) < shy.within) {
-        home.reacting.set(r.key, { busy: false, away: false, cool: 0, hidden: true, gone: 0 });
-        this.takeCover(a, shy, walk);
-        continue;
-      }
-      if (walk && placed && far > 0.05 && far < (a.homeReach ?? WALK_HOME_MAX)) {
-        void a.go(pose.x, pose.z, { speed: 'walk', face: pose.yaw ?? this.faceHome(home, pose) }).then((ok) => { if (ok) this.idleAt(a, pose); });
-      } else {
-        a.place(pose.x, pose.z, pose.yaw ?? this.faceHome(home, pose));
-        this.idleAt(a, pose);
-      }
+    for (const r of home.spec.residents) this.layOne(home, r, state, walk);
+  }
+
+  /** Put one animal of a home at its spot in `state`: a calm walk, or at once. */
+  private layOne(home: Home, r: ResidentSpec, state: HomeState, walk: boolean): void {
+    const a = home.actors.get(r.key)!;
+    const pose = this.poseOf(home, r, state);
+    a.group.visible = !!pose;
+    if (!pose) { a.idle(); return; }
+    const far = Math.hypot(pose.x - a.x, pose.z - a.z);
+    const placed = a.x !== 0 || a.z !== 0;
+    // a shy one with the ranger near its spot (a mission stopped beside her copse) keeps
+    // to (or slips into) its cover, and comes out once he has gone — never out and
+    // straight back in
+    const shy = r.shy?.find((q) => !q.state || q.state === state);
+    if (shy && placed && Math.hypot(pose.x - this.rangerAt.x, pose.z - this.rangerAt.z) < shy.within) {
+      home.reacting.set(r.key, { busy: false, away: false, cool: 0, hidden: true, gone: 0 });
+      this.takeCover(a, shy, walk);
+      return;
+    }
+    if (walk && placed && far > 0.05 && far < (a.homeReach ?? WALK_HOME_MAX)) {
+      void a.go(pose.x, pose.z, { speed: 'walk', face: pose.yaw ?? this.faceHome(home, pose) }).then((ok) => { if (ok) this.idleAt(a, pose); });
+    } else {
+      a.place(pose.x, pose.z, pose.yaw ?? this.faceHome(home, pose));
+      this.idleAt(a, pose);
     }
   }
 
@@ -355,7 +385,7 @@ export class Residents {
   private react(home: Home, dt: number, ranger: { x: number; z: number }): void {
     for (const r of home.spec.residents) {
       const a = home.actors.get(r.key);
-      const pose = home.state === 'before' ? r.before : r.after;
+      const pose = this.poseOf(home, r, home.state);
       const shy = r.shy?.find((q) => !q.state || q.state === home.state) ?? null;
       if (!a || !pose || !a.group.visible || pose.idle === 'lie') continue;
       let st = home.reacting.get(r.key);
