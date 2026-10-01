@@ -91,14 +91,16 @@ const visible = async (page: Page, name: RegExp | string): Promise<boolean> =>
 
 const uiText = (page: Page): Promise<string> => page.evaluate(() => document.getElementById('ui')?.innerText ?? '');
 
-/** Run 7 (moods): `RANGER_MOOD=<id>` plays every mission in that mood (`?mood=`); unset,
- *  a fresh save's first visit: the golden hour. */
+/** Run 7: `RANGER_SEED=N` replays a session's plays from seed N (`?seed=`: the first play
+ *  draws N; unset, a fresh seed); `RANGER_MOOD=<id>` plays every mission in that mood
+ *  (`?mood=`; unset, a fresh save's first visit: the golden hour). */
+const SEED = process.env.RANGER_SEED ? `&seed=${process.env.RANGER_SEED}` : '';
 const MOOD = process.env.RANGER_MOOD ? `&mood=${encodeURIComponent(process.env.RANGER_MOOD)}` : '';
 
 /** Begin → the ranger maker (a fresh save) → the world. */
 async function boot(log: Log): Promise<void> {
   const page = log.page;
-  await page.goto(`/?dev=1${MOOD}`);
+  await page.goto(`/?dev=1${SEED}${MOOD}`);
   await click(log, 'Begin', 'title', 30_000, 30_000); // the title may still be dressing itself
   const maker = page.getByRole('button', { name: 'Dit is mijn ranger' });
   // (its click builds the world inside the handler: on a busy machine that takes a while)
