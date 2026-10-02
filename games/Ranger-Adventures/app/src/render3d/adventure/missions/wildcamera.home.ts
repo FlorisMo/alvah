@@ -363,8 +363,6 @@ export class WildcameraHome implements HomeDressing {
   readonly perch = new THREE.Group();
   /** how high the top of the thicket's stump stands where the nightjar lands on it (m) */
   private stumpTop: number = NIGHTJAR_AT.hol.lift;
-  /** run 7: how high the top of the far bramble stands where the jay lands on it (m) */
-  private brambleTop: number = JAY_AT.hol.lift;
   /** run 7: the animal standing on the crossing while he decides, as a click finds it (an
    *  invisible box round it: a click on it is no choice of a place) */
   readonly visitor: THREE.Mesh;
@@ -431,9 +429,12 @@ export class WildcameraHome implements HomeDressing {
     // (none on the sandy trail where the nightjar lands at night, nor between it and the
     // lens: a dark bird on the path must never stand behind a tuft)
     const perch = toLocal(CROSS, NIGHTJAR_AT.open);
+    // (run 7: nor round the jay's spot on the sunny patch, nor between it and the lens)
+    const jaySpot = toLocal(CROSS, JAY_AT.open);
     const clear = (x: number, z: number): boolean => {
       const q = toLocal(CROSS, { x, z });
-      return Math.hypot(q.u - perch.u, q.v - perch.v) < 0.6 || (Math.abs(q.u - perch.u) < 0.45 && q.v < perch.v && q.v > perch.v - 1.4);
+      return Math.hypot(q.u - perch.u, q.v - perch.v) < 0.6 || (Math.abs(q.u - perch.u) < 0.45 && q.v < perch.v && q.v > perch.v - 1.4)
+        || Math.hypot(q.u - jaySpot.u, q.v - jaySpot.v) < 0.55 || (Math.abs(q.u - jaySpot.u) < 0.4 && q.v < jaySpot.v && q.v > jaySpot.v - 1.2);
     };
     for (let i = 0; i < tufts.count; i++) {
       const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * GLADE_R * 0.95;
@@ -451,26 +452,19 @@ export class WildcameraHome implements HomeDressing {
     /* -- the thicket: bramble, juniper, bracken; the sett at its foot -- */
     // (only the juniper is solid: the animals come and go through the rest, as through bracken)
     this.thicketHint = this.thicket;
-    const bush = (id: string, h: number, u: number, v: number, yaw: number, solid = 0, hint = false, jay = false): void => {
+    const bush = (id: string, h: number, u: number, v: number, yaw: number, solid = 0, hint = false): void => {
       const p = atLocal(CROSS, u, v);
       void env.spawnPlant(id, h).then((s) => {
         const r = add(s, p.x, p.z, yaw);
         if (!r) return;
         this.thicket.add(r);
         if (hint) this.thicketHint = r;
-        if (jay) {
-          // (the jay sits on top of this bramble: where its leaves are, measured)
-          r.updateMatrixWorld(true);
-          const j = JAY_AT.hol;
-          const hit = new THREE.Raycaster(new THREE.Vector3(j.x, g(j.x, j.z) + 3, j.z), new THREE.Vector3(0, -1, 0)).intersectObject(r, true)[0];
-          if (hit) this.brambleTop = Math.max(0.3, hit.point.y - g(j.x, j.z) - 0.04);
-        }
       });
       if (solid) env.obstacles.push({ x: p.x, z: p.z, r: solid });
     };
     for (const b of THICKET_BUSHES) {
       const q = toLocal(CROSS, b.at);
-      bush(b.id, b.h, q.u, q.v, b.yaw, b.id === 'prop-juniper-bush' ? JUNIPER.r : 0, b.id === 'prop-juniper-bush', b === THICKET_BUSHES[2]);
+      bush(b.id, b.h, q.u, q.v, b.yaw, b.id === 'prop-juniper-bush' ? JUNIPER.r : 0, b.id === 'prop-juniper-bush');
     }
     const sett = P.sett;
     void env.spawnPlant('prop-badger-sett', SIZE.dassenburcht.h).then((s) => {
@@ -863,6 +857,16 @@ export class WildcameraHome implements HomeDressing {
     });
   }
 
+  /** Run 7: a bird waiting on the crossing while he decides: the jay hops now and then, the
+   *  nightjar shifts on its feet (a small bird draws the eye by moving). Off: still. */
+  birdFidget(id: BirdId | null): void {
+    for (const b of Object.values(this.birds)) if (b.body) { b.body.position.y = 0; b.body.rotation.y = 0; }
+    this.fidget = id;
+    this.fidgetT = 0;
+  }
+  private fidget: BirdId | null = null;
+  private fidgetT = 0;
+
   /** A bird calls: it lifts a little on its perch (and settles again). */
   birdHop(on: boolean, id: BirdId = 'nachtzwaluw'): void { const body = this.birds[id].body; if (body) body.position.y = on ? 0.05 : 0; }
 
@@ -880,9 +884,9 @@ export class WildcameraHome implements HomeDressing {
    *  measured on the model; the sandy trail. */
   nightjarLift(bin: 'open' | 'hol'): number { return bin === 'hol' ? this.stumpTop : NIGHTJAR_AT.open.lift; }
 
-  /** Run 7: how high a bird's perch in a place holds it (m): the nightjar's stump or trail,
-   *  the jay's bramble top (measured) or the glade's grass. */
-  birdLift(id: BirdId, bin: 'open' | 'hol'): number { return id === 'gaai' ? (bin === 'hol' ? this.brambleTop : JAY_AT.open.lift) : this.nightjarLift(bin); }
+  /** Run 7: how high a bird's perch in a place holds it (m): the nightjar's stump or trail;
+   *  the jay hops on the ground. */
+  birdLift(id: BirdId, bin: 'open' | 'hol'): number { return id === 'gaai' ? JAY_AT[bin].lift : this.nightjarLift(bin); }
 
   /** The nightjar's old stump's top (m; the night choir's second perch). */
   get stumpLift(): number { return this.stumpTop; }
@@ -947,6 +951,7 @@ export class WildcameraHome implements HomeDressing {
     this.showTags(false);
     this.showSnare(false);
     this.birdGone();
+    this.birdFidget(null);
     this.showVisitor(null);
     if (this.poacher) this.poacher.visible = false;
   }
@@ -1022,6 +1027,16 @@ export class WildcameraHome implements HomeDressing {
     this.irGlow.visible = irK > 0.01 && this.trap.visible;
     this.stepFlight('nachtzwaluw', dt);
     this.stepFlight('gaai', dt);
+    // a waiting bird: a little hop (the jay) or a small turn (the nightjar) every ~1.6 s
+    if (this.fidget && !reduced) {
+      const b = this.birds[this.fidget];
+      this.fidgetT += dt;
+      const ph = this.fidgetT % 1.6;
+      if (b.body && !b.flight) {
+        if (this.fidget === 'gaai') b.body.position.y = ph < 0.32 ? Math.sin((ph / 0.32) * Math.PI) * 0.06 : 0;
+        else b.body.rotation.y = Math.sin(this.fidgetT * 1.2) * 0.22;
+      }
+    }
     void this.state;
   }
 

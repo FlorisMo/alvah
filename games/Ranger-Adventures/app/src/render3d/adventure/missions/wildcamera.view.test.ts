@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { heightAt as groundY } from '../../Biomes.ts';
 import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import {
-  CROSS, CROSS_VIEW, CALLER_SLOTS, ENTRY, EXIT, JUNIPER, LOG, NIGHTJAR_STUMP, PINE, SETT_MOUND, SKY, STOPS, SLOT_CLASH, SLOT_IDS, THICKET_BUSHES, TREE,
+  CROSS, CROSS_VIEW, CALLER_SLOTS, ENTRY, EXIT, JUNIPER, LOG, NIGHTJAR_STUMP, PINE, SETT_MOUND, SKY, STOPS, SLOT_CLASH, SLOT_IDS, TAG_AT, THICKET_BUSHES, TREE,
   WILDCAMERA_PLACES as P, arrivalPath, type SlotId, type StopId,
 } from './wildcamera.places.ts';
 import { legalLayouts } from './wildcamera.variety.ts';
@@ -136,6 +136,34 @@ test('every stop a visitor waits at: in the picture, off its middle, unhidden, c
     // nothing solid between it and the lens
     const hid = hidden(s, big.h, big.len);
     assert.ok(hid === 0, `${id}: ${Math.round(hid * 100)} % of a deer hidden`);
+  }
+});
+
+/** Does an animal standing at `p` (side-on along the view, `len` long, `h` tall, ~0.6 m
+ *  wide) stand between the lens and the world point `q` (`y` m over the ground)? */
+function covers(p: Spot, len: number, h: number, q: Spot, y: number): boolean {
+  const cam = lens.position;
+  const qy = groundY(q.x, q.z) + y;
+  const pl = toLocal(CROSS, p);
+  for (let t = 0.02; t < 0.995; t += 0.005) {
+    const x = cam.x + (q.x - cam.x) * t, z = cam.z + (q.z - cam.z) * t, yy = cam.y + (qy - cam.y) * t;
+    const l = toLocal(CROSS, { x, z });
+    if (Math.abs(l.u - pl.u) < len / 2 + 0.1 && Math.abs(l.v - pl.v) < 0.35 && yy - groundY(x, z) < h + 0.05) return true;
+  }
+  return false;
+}
+
+test('a visitor at a stop never stands between the lens and a place: its name, its sunny patch, its juniper', () => {
+  const targets: [string, Spot, number][] = [
+    ['the glade\'s sunny patch', P.glade, 0.05], ['the glade\'s name', TAG_AT.open, TAG_AT.open.y],
+    ['the juniper', JUNIPER, 0.95], ['the thicket\'s name', TAG_AT.hol, TAG_AT.hol.y],
+  ];
+  // the biggest that comes (the stag, antlers and all), and the others
+  for (const animal of ['edelhert', 'hinde', 'ree', 'wildzwijn', 'vos', 'das']) {
+    const z = (SIZE as Record<string, { h: number; len?: number }>)[animal];
+    for (const [id, s] of Object.entries(STOPS)) {
+      for (const [what, q, y] of targets) assert.ok(!covers(s, z.len ?? 1, z.h, q, y), `a ${animal} at ${id} hides ${what}`);
+    }
   }
 });
 

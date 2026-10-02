@@ -116,7 +116,10 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          happens), <id>.home.ts (the home's dressing), <id>.ts (the beats);
                          frisling (the wallow), ree (the copse, the meadow, the hide),
                          wildcamera (the crossing, the glade, the thicket, the snare; its
-                         trap photos in wildcamera.photos.ts) and eekhoorn (the pines, the
+                         trap photos in wildcamera.photos.ts; run 7: wildcamera.variety.ts
+                         draws how each visitor comes (side + stop) and the night choir's
+                         spots from the play, wildcamera.view.test.ts pins what the lens
+                         sees of every stop and every night) and eekhoorn (the pines, the
                          moss glade, the neighbours): the four missions met first
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          a `shy` resident slips into cover when he comes near (per state);

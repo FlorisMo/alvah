@@ -343,11 +343,14 @@ test('the evening\'s visitors: two stops each side, an in-lane and an out-lane t
   void SIDE_OF;
 });
 
-test('the jay: on the glade\'s sunny patch by day, on top of its own bramble with the rule turned', () => {
+test('the jay: on the glade\'s sunny patch by day, at the thicket\'s foot with the rule turned', () => {
   assert.ok(dist(JAY_AT.open, P.glade) < 1.0 && JAY_AT.open.lift === 0, 'in the glade');
-  assert.ok(dist(JAY_AT.hol, THICKET_BUSHES[2].at) < 1e-9 && THICKET_BUSHES[2].id === 'prop-bramble', 'on the far bramble');
+  assert.ok(dist(JAY_AT.hol, P.thicket) < P.thicket.r && JAY_AT.hol.lift === 0, 'on the ground at the thicket');
+  // in front of the bushes (between them and the camera on the pine), never behind one
+  for (const b of THICKET_BUSHES) assert.ok(segDist(b.at, CAMERA, JAY_AT.hol) > b.r * 0.6, `the ${b.id} is not between it and the camera`);
+  assert.ok(segDist(P.sett, CAMERA, JAY_AT.hol) > SETT_MOUND.r, 'nor the sett');
   assert.ok(dist(JAY_AT.hol, NIGHTJAR_STUMP) > 2, 'never the nightjar\'s stump');
-  assert.ok(Math.abs(wrap(cameraAim(JAY_AT.hol) - cameraAim(AIM_AT.hol))) < FAN_HALF, 'in the camera\'s fan');
+  for (const bin of ['open', 'hol'] as const) assert.ok(Math.abs(wrap(cameraAim(JAY_AT[bin]) - cameraAim(AIM_AT[bin]))) < FAN_HALF - 0.05, `${bin}: in the camera's fan`);
 });
 
 test('the ground: the glade, the thicket and the trail keep clear of trees; the pine is planted', () => {

@@ -258,7 +258,7 @@ export const SIDE_OF: Readonly<Record<'open' | 'hol', Side>> = { open: 'left', h
 export type StopId = 'l' | 'lf' | 'r' | 'rf';
 export const STOPS: Readonly<Record<StopId, Spot & { side: Side }>> = {
   l: { ...at(-2.2, -1.2), side: 'left' },
-  lf: { ...at(-2.8, -3.9), side: 'left' },
+  lf: { ...at(-1.9, -2.35), side: 'left' },
   r: { ...at(2.4, -1.25), side: 'right' },
   rf: { ...at(1.8, -3.6), side: 'right' },
 };
@@ -299,12 +299,12 @@ export const SKY: Readonly<Record<Side, Spot & { y: number }>> = {
 };
 
 /** The jay (run 7: a day bird): by day it hops on the glade's sunny patch; with the rule
- *  turned it sits in the thicket on top of its far bramble (its own perch: the nightjar
- *  keeps the old stump). `lift`: how high its perch holds it (m; the home measures the
- *  bramble's top where it lands). */
+ *  turned it hops on the trodden ground at the thicket's foot, in front of its bramble
+ *  (jays feed on the ground under the bushes; the nightjar keeps the old stump). On the
+ *  ground the camera on the pine sees it whole: on top of a bramble the leaves hid it. */
 export const JAY_AT: Readonly<Record<'open' | 'hol', Spot & { lift: number }>> = {
   open: { ...at(-4.15, -1.85), lift: 0 },
-  hol: { ...THICKET_BUSHES[2].at, lift: THICKET_BUSHES[2].h * 0.82 },
+  hol: { ...at(4.45, -1.35), lift: 0 },
 };
 
 /**

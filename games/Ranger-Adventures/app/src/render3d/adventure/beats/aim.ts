@@ -239,11 +239,13 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
         k.beat = `aim:${aim.run.index}`;
         k.stats.aim_turns = (k.stats.aim_turns ?? 0) + 1;
       } else if (w.arrive) {
-        // the photo's words now; the next card once the next animal stands there
+        // the photo's words now, on a card that makes way (the last animal's question is
+        // done); the next card once the next animal stands there
         w.leave(item);
-        if (settings.voorlezen) narrator.speak(o.lines.foto);
+        turning(o.lines.foto);
+        speak(o.lines.foto);
         await k.guard(arriving);
-        show(next, null, { kind: 'ok', text: o.lines.foto });
+        show(next, null, null);
         timed();
         queue(say(next));
       } else {

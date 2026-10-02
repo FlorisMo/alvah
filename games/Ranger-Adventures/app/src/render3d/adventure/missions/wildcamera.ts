@@ -156,7 +156,6 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   /** side-on to the lens at a stop, facing on the way it came (turned a touch to the lens) */
   const sideOn = (side: 'left' | 'right'): number => (side === 'left' ? Math.PI / 2 - 0.22 : -Math.PI / 2 + 0.22);
   let reached: { side: 'left' | 'right' | null; at: Promise<void> } = { side: null, at: Promise.resolve() };
-  let nowLook: WisselBin = 'open';
   const sizeOf = (id: string): { len: number; h: number } => {
     const z = (SIZE as Record<string, { h: number; len?: number }>)[id];
     const k15 = isBird(id) ? 1.5 : 1;
@@ -182,10 +181,12 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       await k.guard(home.fly(from, { x: stop.x, z: stop.z, lift: 0 }, yaw, k.reduced, FLY_S * 1.2, id));
     } else {
       const w = A[id as Walker];
+      // (the shy roe of the glade, gone under the trees out of view: she comes in like the
+      // rest; still on her way there, in view, she turns back from where she is)
+      const fresh = !w.group.visible || (id === 'ree' && !roeTaken && Math.hypot(w.x - ROE_HIDEAWAY.x, w.z - ROE_HIDEAWAY.z) < 1.5);
       if (id === 'ree') roeTaken = true;
       if (w.lies) await k.guard(w.lie(false));
       const path = arrivalPath(a.stop);
-      const fresh = !w.group.visible;
       if (fresh) {
         w.place(path[0].x, path[0].z, headingTo(path[0], path[1]));
         w.group.visible = true;
@@ -203,6 +204,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     standing.yaw = yaw;
     const sz = sizeOf(id);
     home.showVisitor(standing.at, sz.len, sz.h, yaw);
+    home.birdFidget(isBird(id) ? id : null);
     k.stats.aim_arrive_s = Math.round((k.now - t0) * 10) / 10;
     k.stats.aim_arrivals = (k.stats.aim_arrivals ?? 0) + 1;
   };
@@ -226,7 +228,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     const a = A[id as Walker];
     const t = (leaving.get(id) ?? 0) + 1;
     leaving.set(id, t);
-    walkingOff.set(id, { bin, until: k.now + 2.4 });
+    walkingOff.set(id, { bin, until: k.now + 4.0 }); // (its walk off out of the place: the hint waits, never longer)
     // (it looks up at the camera a moment first: the click)
     void k.wait(id === 'das' ? 0.4 : 0.6).then(async () => {
       if (leaving.get(id) !== t) return;
@@ -321,9 +323,8 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       hol: { pick: home.thicket, hint: home.thicketHint },
     },
     begin: () => { roeOut(); home.showTags(true); home.showFan(true); },
-    end: () => { home.showTags(false); home.showFan(false); home.showVisitor(null); },
+    end: () => { home.showTags(false); home.showFan(false); home.showVisitor(null); home.birdFidget(null); },
     look: async (bin) => {
-      nowLook = bin;
       home.aim(cameraAim(AIM_AT[bin]), k.reduced);
       await k.until(() => !home.aiming, 3);
     },
@@ -343,6 +344,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       at.set(id, s);
       shotAt.set(id, bin);
       home.showVisitor(null);
+      home.birdFidget(null);
       standing.at = null;
       // (a newcomer from this place's side waits until this one is nearly there: its way in
       // passes the place, and this one walks off out the back of it after its photo)
@@ -424,7 +426,6 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       void k.wait(0.2).then(() => Sound.step()).catch(() => {});
     },
   };
-  void nowLook;
   await aimBeat(k, 0, {
     view: CROSS_VIEW, stand: P.watch, world: aimWorld,
     lines: {
