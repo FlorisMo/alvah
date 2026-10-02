@@ -516,9 +516,10 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
           break;
         case 'out': {
           for (const q of [...[...l.bedWay].reverse(), l.gap]) await walkOn(q.x, q.z); // (out between her bushes)
-          // …and a few steps on out onto the heath, clear of her cover's edge, before she stops
-          const next = way[1];
-          if (dist(l.gap, next) > 2.4) { const q = toward(l.gap, next, 1.3); await walkOn(q.x, q.z); }
+          // …and on out into the open, clear of her cover's bushes, before she stops: to the
+          // point of her way (or a few steps toward the meeting place)
+          const q = e.to === 1 ? way[1] : toward(l.gap, meet, Math.min(1.3, dist(l.gap, meet) * 0.5));
+          await walkOn(q.x, q.z);
           break;
         }
         case 'walk': {

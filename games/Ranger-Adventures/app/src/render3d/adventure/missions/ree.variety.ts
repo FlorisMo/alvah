@@ -221,7 +221,7 @@ export interface WatchEvent {
    *  gap, `walk`: to the point `to` of her way in the watch) */
   s: number;
   /** a walk's goal: 1 = the point of her way between her gap and the meeting place
-   *  (layouts with one), 2 = the meeting place */
+   *  (layouts with one: she walks `out` to it), 2 = the meeting place */
   to?: 1 | 2;
   /** what she turns her head to (a listen, a look) */
   cue?: WatchCue;
@@ -248,12 +248,12 @@ export const WATCH_S = { rustle: 3.0, listen: 3.6, bite: 2.4, look: 2.4, call: 3
 
 /**
  * The watch, drawn from the play's seed (design §6.7; pure, ree.variety.test.ts): the bracken
- * at her gap stirs, she steps out, stops and listens (the first of the level's `pauses`),
- * walks on (by the point of her way when the layout has one, `way` 2) with her small acts
- * in a seeded order (1-2 bites of grass, a look round, more listening pauses), then at the
- * meeting place a look at the hide (the last pause, when she pauses three times), her soft
- * call toward the grass where her calf lies, the calf rising and coming to her, and her
- * nose at it. The number of pauses is the level's, never the seed's; the seed picks the
+ * at her gap stirs, she steps out into the open (to the point of her way when the layout has
+ * one, `way` 2), stops and listens (the first of the level's `pauses`), her small acts in a
+ * seeded order (1-2 bites of grass, a look round, more listening pauses), a look at the
+ * hide there or at the meeting place (the last pause, when she pauses three times), and at
+ * the meeting place her soft call toward the grass where her calf lies, the calf rising and
+ * coming to her, and her nose at it. The number of pauses is the level's, never the seed's; the seed picks the
  * order, the lines and the timing. ~25-35 s with her walks.
  */
 export function watchScript(play: Pick<Play, 'fork'>, o: { pauses: number; way: 1 | 2 }): WatchEvent[] {
@@ -265,8 +265,9 @@ export function watchScript(play: Pick<Play, 'fork'>, o: { pauses: number; way: 
   const look = (cue: 'rond' | 'hut'): WatchEvent => ({ act: 'look', s: j(WATCH_S.look), cue, line: line(WATCH_LINES[cue]) });
   const out: WatchEvent[] = [
     { act: 'rustle', s: j(WATCH_S.rustle), line: line(WATCH_LINES.rustle) },
-    { act: 'out', s: 0, line: WATCH_LINES.out[0] },
-    // in her gap she stops and tests the air: the first pause, toward a rustle in the heather
+    // out of her gap and a few steps on, out in the open (by the point of her way when the
+    // layout has one), where she stops and tests the air: the first pause, toward a rustle
+    { act: 'out', s: 0, line: WATCH_LINES.out[0], ...(o.way === 2 ? { to: 1 as const } : {}) },
     listen('ritsel'),
   ];
   // her small acts on the way, in a seeded order: 1-2 bites and a look round, so many as
@@ -280,33 +281,31 @@ export function watchScript(play: Pick<Play, 'fork'>, o: { pauses: number; way: 
   for (let i = 0; i < bites; i++) middle.push({ act: 'bite', s: j(WATCH_S.bite), line: biteLines[i % biteLines.length] });
   if (rond) middle.push(look('rond'));
   if (pauses >= 2) middle.push(listen(rnd.pick(['ritsel', 'rond'] as const)));
-  // (the bites stay together: one line, two bites)
+  // (the bites stay together; a second pause never straight after the first)
   const pieces = rnd.shuffle(middle.filter((e) => e.act !== 'bite'));
-  const at = rnd.int(0, pieces.length);
+  const firstPause = (e: WatchEvent | undefined): boolean => e?.act === 'listen';
+  let at = rnd.int(0, pieces.length);
+  if (at > 0 && firstPause(pieces[0])) at = 0;
   const ordered = [...pieces.slice(0, at), ...middle.filter((e) => e.act === 'bite'), ...pieces.slice(at)];
-  // half of them by the point of her way (when the layout has one), the rest at the meeting place
-  if (o.way === 2) {
-    // (never between her two bites)
-    const cuts = Array.from({ length: ordered.length - 1 }, (_, i) => i + 1).filter((i) => !(ordered[i - 1].act === 'bite' && ordered[i].act === 'bite'));
-    const half = ordered.length / 2;
-    const k = cuts.reduce((a, b) => (Math.abs(b - half) < Math.abs(a - half) ? b : a), cuts[0] ?? 1);
-    out.push({ act: 'walk', s: 0, to: 1 }, ...ordered.slice(0, k), { act: 'walk', s: 0, to: 2 }, ...ordered.slice(k));
-  } else {
-    out.push({ act: 'walk', s: 0, to: 2 }, ...ordered);
-  }
-  // at the meeting place: a look at the hide (the last pause when she pauses three times):
-  // stil! Then she turns to the grass where her calf lies and calls it softly
-  out.push(pauses >= 3 ? listen('hut') : look('hut'));
+  // where she stopped (by the point of her way), then on to the meeting place; a layout
+  // without such a point: at the meeting place
+  // a look at the hide (the last pause when she pauses three times): stil! — before she
+  // walks on to the meeting place or once she is there (seeded)
+  const hut = pauses >= 3 ? listen('hut') : look('hut');
+  const early = rnd.chance(0.5);
+  if (o.way === 2) out.push(...ordered, ...(early ? [hut] : []), { act: 'walk', s: 0, to: 2 }, ...(early ? [] : [hut]));
+  else out.push({ act: 'walk', s: 0, to: 2 }, ...ordered, hut);
+  // at the meeting place she turns to the grass where her calf lies and calls it softly
   out.push(
     { act: 'call', s: j(WATCH_S.call), cue: 'gras', line: WATCH_LINES.call[0] },
     { act: 'calf', s: 0, line: WATCH_LINES.calf[0] },
     { act: 'sniff', s: j(WATCH_S.sniff), line: WATCH_LINES.sniff[0] },
   );
-  // a line every ~4-5 s, never a chatter: the small acts (a bite, a look round, a look at
-  // the grass) say theirs only when the line up has stood a while; the others always do
+  // a line every ~4 s, never a chatter: a look round says its line only when the line up
+  // has stood a while; the other acts always do
   let t = 0, said = 0;
   for (const e of out) {
-    const small = e.act === 'bite' || (e.act === 'look' && e.cue === 'rond');
+    const small = e.act === 'look' && e.cue === 'rond';
     if (small && e.line && t - said < WATCH_QUIET_S) delete e.line;
     if (e.line) said = t;
     t += e.act === 'out' || e.act === 'walk' ? WATCH_WALK_S : e.act === 'calf' ? 3 : e.s;

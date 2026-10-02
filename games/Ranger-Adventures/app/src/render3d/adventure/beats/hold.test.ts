@@ -243,3 +243,17 @@ test('go: a card and the feet log the same summary for the same answers', () => 
   for (const g of [true, true, true, true, false, true]) cards.choose(g);
   assert.deepEqual(run.summary(), cards.summary());
 });
+
+test('go: away is counted from where he first stood — after walking up to them, the way back to there is not yet away', () => {
+  const { core, calls } = goRig(30);
+  core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  const w = walk(core, 0, 3, 1.4, -1);
+  assert.equal(w.verdict, 'wrong', 'he walked 1.5 m up to them');
+  core.again();
+  core.begin(w.at + 3, { x: w.x, z: 0 }, { x: -8, z: 0 });
+  assert.equal(core.tick(w.at + 3.1, { x: w.x, z: 0, speed: 0, running: false }, { x: -8, z: 0 }), null, 'no second wrong at once where he stands');
+  const back = walk(core, w.at + 3.1, 8, 1.4, 1, false, w.x);
+  assert.equal(back.verdict, 'right');
+  assert.ok(Math.abs(back.x - GO_AWAY_M) < 0.05, `right 4 m from the hide, not 4 m from where he turned (${back.x.toFixed(2)})`);
+  assert.deepEqual(calls, [false, true]);
+});

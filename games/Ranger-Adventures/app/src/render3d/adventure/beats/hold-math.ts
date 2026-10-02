@@ -224,17 +224,21 @@ export class GoCore {
     this.choose = choose;
   }
 
-  /** The line has been read (mission time `now`): the clock runs. `from`: where he stood
-   *  when the line came (a step taken while it was read counts toward going away);
-   *  `family`: where the animals are. */
-  begin(now: number, from: GoSpot, family: GoSpot): void {
+  /** The line has been read (mission time `now`): the clock runs. `at`: where he stood
+   *  when the line came (a step taken while it was read counts toward going away), or,
+   *  when the moment comes back, where he is now; `family`: where the animals are. "Away"
+   *  is always counted from where he stood the first time (the hide: a walk up to them and
+   *  back is no walk away), "closer" from the nearest he has stood to them since. */
+  begin(now: number, at: GoSpot, family: GoSpot): void {
     if (this.phase !== 'read') return;
+    const near = Math.hypot(at.x - family.x, at.z - family.z);
+    if (!this.begun) { this.from = { x: at.x, z: at.z }; this.near0 = near; this.begun = true; }
+    else this.near0 = Math.min(this.near0, near);
     this.phase = 'go';
-    this.from = { x: from.x, z: from.z };
-    this.near0 = Math.hypot(from.x - family.x, from.z - family.z);
     this.idle = 0;
     this.last = now;
   }
+  private begun = false;
 
   /** Per frame: where he is and how he moves, where the animals are. 'right' once he has
    *  walked away (`choose(true)`), 'wrong' when he stood too long or came closer

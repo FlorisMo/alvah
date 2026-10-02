@@ -368,22 +368,27 @@ export class ChoiceRun {
       readLine();
       reacting = false;
     };
+    const tick = (): void => {
+      if (reacting) return;
+      if (core.phase === 'read' && read) core.begin(k.now, from, o.family());
+      const m = k.ranger();
+      if (core.tick(k.now, { x: m.x, z: m.z, speed: m.speed, running: isRunning(m) }, o.family()) === 'wrong') {
+        reacting = true;
+        void react(core.why ?? 'stay').catch(() => {});
+      }
+    };
     const walk = k.walk({
-      name: `go-${id}`, to: o.to, r: 0.05, line: o.line, doel: o.doel, cue: o.cue, glyph: o.glyph, via: o.via,
-      quiet: { line: o.hush },
-      reached: () => core.phase === 'done',
-      tick: () => {
-        if (reacting) return;
-        if (core.phase === 'read' && read) core.begin(k.now, from, o.family());
-        const m = k.ranger();
-        if (core.tick(k.now, { x: m.x, z: m.z, speed: m.speed, running: isRunning(m) }, o.family()) === 'wrong') {
-          reacting = true;
-          void react(core.why ?? 'stay').catch(() => {});
-        }
-      },
+      name: `go-${id}`, to: o.to, r: 0.6, line: o.line, doel: o.doel, cue: o.cue, glyph: o.glyph, via: o.via,
+      quiet: { line: o.hush }, reached: () => core.phase === 'done', tick,
     });
     k.beat = `go:${id}`; // (a moment, not a walk: a discovery's reveal waits)
     await walk;
+    // (there before his feet were judged — he walked on while the animals reacted or the
+    // line was read: it is judged where he stands, as soon as it may be)
+    if (core.phase !== 'done') {
+      const unhint = k.hint(() => ({ id: `walk:go-${id}:there`, walk: { x: o.to.x, z: o.to.z, r: 0.5 } }));
+      try { await k.until(() => { tick(); return core.phase === 'done'; }); } finally { unhint(); }
+    }
     // (answered: he stops where he is, the good words, then what follows)
     k.lockFollow();
     k.world.stopRanger();

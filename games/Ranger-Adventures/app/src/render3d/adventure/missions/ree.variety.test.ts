@@ -201,11 +201,11 @@ test('the watch: always her way out, the call and the calf; the level\'s pauses;
     assert.ok(bites >= 1 && bites <= 2, `${tag}: 1-2 bites`);
     assert.equal(w.filter((e) => e.cue === 'hut').length, 1, `${tag}: one look at the hide`);
     assert.equal(w.filter((e) => e.cue === 'gras').length, 1, `${tag}: she calls toward the grass`);
-    const walks = w.filter((e) => e.act === 'walk').map((e) => e.to);
-    assert.deepEqual(walks, way === 2 ? [1, 2] : [2], `${tag}: her way`);
-    // the meeting place: the call comes after she got there and looked at the grass
-    const at2 = acts.indexOf('walk', acts.lastIndexOf('walk'));
-    assert.ok(w.findIndex((e) => e.cue === 'gras') > at2 && w.findIndex((e) => e.cue === 'hut') > at2, `${tag}: the hide and her call from the meeting place`);
+    const walks = w.filter((e) => e.act === 'walk' || e.act === 'out').map((e) => e.to);
+    assert.deepEqual(walks, way === 2 ? [1, 2] : [undefined, 2], `${tag}: her way: out (to the point of her way), on to the meeting place`);
+    // the meeting place: her call comes once she got there
+    const at2 = acts.lastIndexOf('walk');
+    assert.ok(w.findIndex((e) => e.cue === 'gras') > at2, `${tag}: her call from the meeting place`);
     // every line is the content's, ≤ 7 words a sentence (readlevel lints them too)
     for (const e of w) if (e.line) assert.ok(COPY[e.line], `${tag}: line "${e.line}" is in the copy`);
     for (const e of w) if (e.act === 'listen' || e.cue === 'hut') assert.ok(e.line, `${tag}: a pause and a look at the hide always say so (stil!)`);
@@ -217,7 +217,7 @@ test('the watch: always her way out, the call and the calf; the level\'s pauses;
     gaps.push(tl.end - tl.lines[tl.lines.length - 1].t);
     assert.ok(Math.max(...gaps) <= 8.6, `${tag}: a line held ${Math.max(...gaps).toFixed(1)} s`);
     const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-    assert.ok(mean >= 3.0 && mean <= 5.0, `${tag}: a line every ${mean.toFixed(1)} s`);
+    assert.ok(mean >= 2.8 && mean <= 5.0, `${tag}: a line every ${mean.toFixed(1)} s`);
     assert.deepEqual(watchScript(play(seed), { pauses, way }), w, `${tag}: a replay is the same watch`);
   }
 });

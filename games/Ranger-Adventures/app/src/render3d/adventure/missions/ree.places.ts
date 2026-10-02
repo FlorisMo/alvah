@@ -357,8 +357,9 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     poolIn: { leg: 1, at: 0.5, side: 1 }, poolOut: { leg: 2, at: 0.62, side: -1 },
     way: [{ u: -3.4, v: -0.2 }, { u: -1.0, v: 3.1 }],
     hide: { x: -2.0, z: -44.0 }, leave: { u: 1.0, v: -1.0 }, hideJuniper: { u: -1.4, v: 0.3 }, hideLog: { u: -0.9, v: 1.1 },
-    // (her way out of the copse's south gap to the meeting place runs 5 m across the watch)
-    watchMid: 0.55, watchHalfW: 2.8,
+    // (her way out of the copse's south gap to the meeting place runs 5 m across the watch:
+    // she stops halfway)
+    watchMid: 0.55, watchHalfW: 2.8, watchVia: { u: -0.3, v: 0.35 },
     // (north along the forest's edge, past his hide's juniper on its forest side)
     out: { x: -1.6, z: -39.0 }, outVia: [{ x: -0.95, z: -42.5 }],
   }),
