@@ -5,8 +5,8 @@
  * The rotte (the sow, last year's young, three striped piglets) lives at its wallow, 13 m
  * past the empty marker ring. A thin squeak you can place comes from one of THREE WAYS
  * this play (frisling.vary.ts, from the play's seed, never the same way twice in a row):
- * north across the trail into the meadow (wei), south past the family and the big stone
- * to the forest edge (steen), north-east to a lone birch in the meadow (berk). After one
+ * north across the trail into the meadow (wei), round the rooting field and the family's
+ * far side to the forest edge (steen), north-east to a lone birch in the meadow (berk). After one
  * calm look at the family the ranger turns the way the squeak comes from and follows
  * small trotter prints (crisp at the ring, fainter on) to that way's stand, and finds the
  * piglet lying flat in one of its nooks — a glimpse of stripes between the stems, never in
@@ -421,7 +421,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     }, { face: toY });
     k.say(c.komt);
     k.beat = 'field:yearling';
-    // (round the fence's end and the big stone when the field lies south)
+    // (round the family's west side and the fence's west end when the field lies south)
     for (const p of yearlingWay(way, from, side)) await yearling.go(p.x, p.z, { speed: 1.1 });
     await yearling.go(side.x, side.z, { speed: 1.1, face: headingTo(side, r) });
     void yearling.sniff(r.x, r.z, 30, 1.25); // at his bag, never closer than 1.2 m
@@ -532,8 +532,9 @@ function walkRound(k: AdventureKit, sow: Actor, home: ResidentPose, call: (id: s
 }
 
 /** The yearling's way between the wallow and a field station: to the south field round
- *  the log's end and the fence's (the points from the wallow south; reversed coming back). */
-const YEARLING_SOUTH: readonly { x: number; z: number }[] = [{ x: -22.6, z: -24.4 }, { x: -21.6, z: -31.3 }];
+ *  the mud's west side and the fence's west end (the points from the wallow south;
+ *  reversed coming back). */
+const YEARLING_SOUTH: readonly { x: number; z: number }[] = [{ x: -31.0, z: -25.6 }, { x: -33.0, z: -29.8 }];
 function yearlingWay(way: Way, from: { x: number; z: number }, to: { x: number; z: number }): { x: number; z: number }[] {
   if (way.field !== 'S') return [];
   return from.z > to.z ? [...YEARLING_SOUTH] : [...YEARLING_SOUTH].reverse();

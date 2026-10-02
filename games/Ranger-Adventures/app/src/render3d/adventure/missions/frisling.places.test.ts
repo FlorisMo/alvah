@@ -118,8 +118,11 @@ const inMeadow = (p: { x: number; z: number }): boolean => biomeAt(p.x, p.z) ===
 test('every place of every way is dry heath (or the dry meadow across the trail) inside the world', () => {
   for (const p of everything()) {
     assert.ok(biomeAt(p.x, p.z) === 'heide' || inMeadow(p), `${p.name} is on the heath or the dry meadow (${biomeAt(p.x, p.z)})`);
-    // (a stand's young birch is a forest tree at the forest's edge: the forest reaches 70 m)
-    assert.ok(Math.hypot(p.x, p.z) < (/tree/.test(p.name) ? 64 : 60), `${p.name} is well inside the world (${Math.hypot(p.x, p.z).toFixed(1)} m out)`);
+    // (a stand's young birch is a forest tree at the forest's edge: the forest reaches 70 m;
+    // steen's bracken stands at the heath's south-west rim, where the heath runs on to the
+    // forest at ~70 m and the world's bound is 75 m: its far rim may reach 61 m)
+    const out = /tree/.test(p.name) ? 64 : /^steen\.(stand-rim|nest)/.test(p.name) ? 61 : 60;
+    assert.ok(Math.hypot(p.x, p.z) < out, `${p.name} is well inside the world (${Math.hypot(p.x, p.z).toFixed(1)} m out)`);
     assert.ok(Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) > 25, `${p.name} is far from the ven`);
   }
 });
@@ -151,12 +154,14 @@ test('the story reads from the marker: the family 10-14 m on', () => {
 
 for (const id of WAY_IDS) {
   const w = WAYS[id];
-  test(`${id}: a real follow (25-42 m from the ring) round the family, the prints to the stand's edge`, () => {
+  test(`${id}: a real follow (25-42 m from the ring; steen's round the field and the family 46) round the family, the prints to the stand's edge`, () => {
     const follow = w.follow;
     assert.ok(dist(follow[0], MARKER) < 1.2, 'the prints start at the ring');
     assert.ok(dist(follow[follow.length - 1], w.stand) < STAND.halfD + 1.5, 'and end at the stand\'s edge');
     const len = lengthOf([MARKER, ...follow.slice(1, -1), w.coverApproach]);
-    assert.ok(len >= 25 && len <= 42, `the follow is ${len.toFixed(1)} m`);
+    // (steen: the long follow past the family, design §5.2 — round the north field and the
+    // family's west side, the roe's mornings south of the wallow left to the roe)
+    assert.ok(len >= 25 && len <= (id === 'steen' ? 46 : 42), `the follow is ${len.toFixed(1)} m`);
     // never at the piglet: the trail ends ≥ 1.2 m from every nook
     for (let n = 0; n < w.nooks.length; n++) assert.ok(dist(follow[follow.length - 1], nookAt(id, n, 0)) > 1.2, `the trail ends off nook ${n}`);
     // it passes the family at a calm distance, the ree's ring and the solids round
@@ -169,6 +174,13 @@ for (const id of WAY_IDS) {
       assert.ok(polyDist(q, path) > keep, `the follow passes the ${q.name} at ${polyDist(q, path).toFixed(1)} m`);
     }
     for (const c of cluePosts()) assert.ok(polyDist(c, path) > 1.5, 'the follow keeps off the fence line');
+    // the prints pass the herstel's marker (the winterronde), never through its ring
+    assert.ok(polyDist(OTHER_MARKERS.herstel, path) >= 3, `and 3 m from the herstel's ring (${polyDist(OTHER_MARKERS.herstel, path).toFixed(1)})`);
+    // they never run over a rooting field's turned earth, nor through the wallow's bracken
+    for (const s of [...fieldSpotsOf('N'), ...fieldSpotsOf('S')]) assert.ok(polyDist(s, path) > 1.2, `the prints keep off the rooted patch at (${s.x.toFixed(1)}, ${s.z.toFixed(1)}) (${polyDist(s, path).toFixed(2)} m)`);
+    for (const c of wallowClumps()) assert.ok(polyDist(c, path) > 1.2, `the prints keep off the wallow's bracken (${polyDist(c, path).toFixed(2)} m)`);
+    // and off the roe's ground: her pools (water and rushes), her trodden paths, her stands
+    for (const c of reeClearings()) assert.ok(polyDist(c, path) > c.r + 1, `the prints keep off the roe's ground (${(polyDist(c, path) - c.r).toFixed(2)} m)`);
   });
 
   test(`${id}: following the prints never comes near the sow — in every family layout, from anywhere by the ring`, () => {

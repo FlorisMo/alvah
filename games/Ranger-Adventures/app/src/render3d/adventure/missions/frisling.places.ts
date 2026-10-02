@@ -16,8 +16,9 @@
  *
  *   wei    north, across the sand trail into the meadow (run 6's stand); the long lead
  *          home to the rooting field, seen from its north-west
- *   steen  south, past the family and the big stone, to bracken at the forest edge; a
- *          short lead to the SOUTH rooting field, then on to the wallow from the south-east
+ *   steen  west round the north field and down the family's far side, then south over
+ *          the open heath to bracken at the forest edge; a short lead to the SOUTH rooting
+ *          field, then home past the family's west side to the wallow's north
  *   berk   north-east, to a lone birch in the meadow, past the cabin; the long lead
  *          home to the rooting field, seen from its east
  *
@@ -60,9 +61,13 @@ const WALLOW_TALK = 4.8;
  *  `berk` from its east — two views of the same board. */
 const FIELD_N_AT: Spot = { x: -24, z: -16 };
 export const FIELD_FRAME: Frame = { x: FIELD_N_AT.x, z: FIELD_N_AT.z, heading: approachOf(FIELD_N_AT, { x: -20, z: -8 }, 3.3).heading! };
-/** The south rooting field (`steen`): beyond the wallow's fence, on the open heath. */
-const FIELD_S_AT: Spot = { x: -26.5, z: -36.3 };
-export const FIELD_S_FRAME: Frame = { x: FIELD_S_AT.x, z: FIELD_S_AT.z, heading: headingTo({ x: -25.6, z: -46.3 }, FIELD_S_AT) };
+/** The south rooting field (`steen`): out on the open heath south-west of the wallow, seen
+ *  from its east-north-east (he turns to it at the end of the lead home). Run 7 round 3:
+ *  the roe's mornings took the heath south of the wallow (ree:variety), so steen's ground
+ *  moved west of them, between the herstel's ground and the world's south-west rim. */
+const FIELD_S_AT: Spot = { x: -36.8, z: -34.3 };
+const FIELD_S_LOOK = -1.99; // the way he looks at it (rad): west-south-west
+export const FIELD_S_FRAME: Frame = { x: FIELD_S_AT.x, z: FIELD_S_AT.z, heading: FIELD_S_LOOK };
 export type FieldId = 'N' | 'S';
 /** A field's board frame. */
 export const fieldFrame = (f: FieldId): Frame => (f === 'N' ? FIELD_FRAME : FIELD_S_FRAME);
@@ -89,8 +94,8 @@ export function wallowLog(): Obstacle {
 }
 
 /** The wallow's rim: bracken behind the mud, away from where the ranger comes (the
- *  wallow frame), and three clumps between the north field and the wallow. Run 7: the
- *  south rim keeps a gap where `steen` comes up from the south-east. */
+ *  wallow frame), and three clumps between the north field and the wallow. (The south rim
+ *  keeps the gap run 7's first `steen` came up through from the south-east.) */
 const WALLOW_CLUMPS: readonly (readonly [number, number, number])[] = [
   [-3.6, -4.4, 0.9], [3.2, -4.0, 0.85], [2.6, -1.8, 0.8],
   [-2.4, 1.7, 1], [-0.8, 2.3, 1.1], [-2.95, 0.15, 0.9],
@@ -241,18 +246,20 @@ const WEI = ((): Way => {
  *  what the game asks is never told off. */
 export const SOW_NOTICE_M = 4;
 
-/* -- steen: south, past the family and the big stone, to the forest edge -- */
+/* -- steen: round the north field and the family's west side, south to the heath's rim -- */
 const STEEN = ((): Way => {
-  const stand: Spot = { x: -23, z: -52.8 };
-  // the follow: round the family (the wallow's east side, 6.4 m from the sow at her log),
-  // between the fence's end and the big stone, south over the open heath beside the south
-  // field
-  const follow0: Spot[] = [{ x: -18.2, z: -24.2 }, { x: -17.9, z: -30.0 }, { x: -21.3, z: -37 }, { x: -22.1, z: -44.5 }];
+  const stand: Spot = { x: -36.42, z: -46.11 };
+  // the follow (run 7 round 3: the roe's mornings took the heath between the wallow and
+  // her marker, the only way south on the family's east side): west along the north
+  // field's far edge, round the family's west side (6.6 m from the mud, between it and the
+  // herstel's ring), then south over the open heath to the bracken at the forest edge
+  const follow0: Spot[] = [{ x: -25.8, z: -11.7 }, { x: -29.6, z: -16.4 }, { x: -32.6, z: -22.1 }, { x: -33.0, z: -30.5 }];
   const { frame, coverApproach } = standAt(stand, follow0[follow0.length - 1]);
-  const fieldApproach = approachOf(FIELD_S_AT, { x: -25.6, z: -46.3 }, 3.3, 1.2);
+  const fieldApproach = approachOf(FIELD_S_AT, atLocal(FIELD_S_FRAME, 0, -6), 3.3, 1.2);
   const fieldSide = sideOf(fieldApproach);
-  // up from the south field, round the fence's east end, to the wallow's south-east
-  const wallowTalk: Place = (() => { const p = { x: -23.25, z: -27.75 }; return { ...p, r: 1.3, heading: headingTo(p, WALLOW_AT) }; })();
+  // home from the south field round the family's other side (west of the mud, by the
+  // fence's west end), to where wei and berk come home too: the wallow's north-north-east
+  const wallowTalk = WALLOW_TALK_N;
   return {
     id: 'steen', stand, frame, coverApproach,
     follow: [toward(MARKER, follow0[0], 0.9), ...follow0, toward(coverApproach, stand, 0.6)],
@@ -266,14 +273,14 @@ const STEEN = ((): Way => {
       { u: 0.15, v: -0.95, edge: true }, { u: -0.65, v: 1.45, edge: true }, { u: 0.05, v: -0.3 },
     ],
     searchView: searchViewOf(frame, coverApproach, -0.42),
-    leadClumps: leadClumpsOf(coverApproach, fieldApproach, [[0.22, 2.1, 0.9], [0.4, -2.2, 0.85], [0.62, 2.2, 0.8], [0.8, -2.1, 0.9]]),
+    leadClumps: leadClumpsOf(coverApproach, fieldApproach, [[0.25, -2.0, 0.9], [0.17, 1.85, 0.85], [0.5, -1.75, 0.8], [0.35, 2.4, 0.9]]),
     field: 'S', fieldApproach, fieldSide, fieldView: fieldViewOf('S', fieldApproach, fieldSide, 0.3),
-    toWallow: [{ x: -21.6, z: -31.3 }],
-    wallowTalk, wallowGive: { x: -22.3, z: -25.7, r: 0.6, heading: headingTo({ x: -22.3, z: -25.7 }, WALLOW_AT) }, wallowView: wallowViewOf(wallowTalk, 0.38),
-    nest: atLocal(frame, -2.4, 1.2),
-    walkSpots: [{ x: -24.3, z: -35.5 }, { x: -21.2, z: -44 }],
-    cover: { seed: 113, bracken: 0.45, grass: 0.15 },
-    trees: [{ ...atLocal(frame, -1.6, 3.4), h: 5.5, rotY: 2.3 }],
+    toWallow: [{ x: -33.6, z: -23.1 }],
+    wallowTalk, wallowGive: giveOf(wallowTalk, -1.9, 1.1), wallowView: wallowViewOf(wallowTalk),
+    nest: atLocal(frame, 2.4, 1.2),
+    walkSpots: [{ x: -32.7, z: -34.0 }, { x: -32.9, z: -41.0 }],
+    cover: { seed: 115, bracken: 0.45, grass: 0.15 },
+    trees: [{ ...atLocal(frame, -1.34, 3.4), h: 5.5, rotY: 2.3 }],
   };
 })();
 
