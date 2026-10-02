@@ -47,7 +47,7 @@
   justify-content: center;
   gap: 12px;
 }
-.vg-grid > .vg-entry { flex: 0 0 196px; }
+.vg-grid > .vg-entry { flex: 0 0 190px; }
 .vg-grid.vg-turn { animation: vg-turn var(--dur-base) var(--ease-out) both; }
 @keyframes vg-turn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -58,7 +58,8 @@
   align-items: center;
   gap: 6px;
   min-height: 188px;
-  padding: 10px 10px 12px;
+  min-width: 0;
+  padding: 10px 8px 12px;
   border: 2px solid rgba(47, 107, 70, 0.14);
   border-radius: 18px;
   background: #f8f1e2; /* = portrait.ts PORTRAIT_BG: the picture has no edge */
@@ -74,13 +75,13 @@
 .vg-pic {
   display: grid;
   place-items: center;
-  width: 176px;
+  width: 100%;
+  max-width: 176px;
   height: 120px;
-  max-width: 100%;
   border-radius: 12px;
   overflow: hidden;
 }
-.vg-img { display: block; width: 176px; height: 120px; max-width: 100%; object-fit: contain; user-select: none; }
+.vg-img { display: block; width: 100%; height: 120px; object-fit: contain; user-select: none; }
 .vg-ic { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(236, 243, 231, 0.95); color: var(--green-deep); }
 .vg-ic .ic { width: 34px; height: 34px; }
 .is-missing .vg-ic { background: rgba(196, 184, 163, 0.35); color: #b0a48e; }
@@ -107,7 +108,8 @@
 .vg-entry.is-rare.is-found { border-style: solid; border-color: var(--spel-sun); box-shadow: 0 0 0 3px rgba(245, 194, 59, 0.3); }
 
 /* a photograph: a white print with a soft shadow */
-.vg-entry.is-foto .vg-pic { background: #fff; padding: 6px 6px 14px; box-sizing: content-box; border-radius: 4px; box-shadow: 0 2px 8px rgba(40, 28, 10, 0.18); rotate: -1.5deg; }
+.vg-entry.is-foto .vg-pic { background: #fff; padding: 6px 6px 14px; box-sizing: border-box; height: 134px; border-radius: 4px; box-shadow: 0 2px 8px rgba(40, 28, 10, 0.18); rotate: -1.5deg; }
+.vg-entry.is-foto .vg-img { height: 100%; }
 
 /* new since he last looked: a small sun tag */
 .vg-new {
@@ -131,6 +133,11 @@
   font: 700 14px/1.3 var(--font-body);
 }
 
+/* a shorter screen (an iPad held flat): a little less paper round each picture */
+@media (max-height: 860px) {
+  .vg-entry { min-height: 172px; padding-top: 8px; }
+  .vg-pic, .vg-img { height: 108px; }
+}
 @media (max-width: 640px) {
   .ra-chip.vg-nav { width: 56px; height: 56px; min-height: 56px; }
   .vg-grid > .vg-entry { flex-basis: 150px; }

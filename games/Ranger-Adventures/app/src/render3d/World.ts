@@ -200,6 +200,8 @@ export class World {
   private readonly surprises: Surprises;
   /** …and when the game says free roam is on (WorldSession: no lesson, no briefing) */
   private surpriseFree: () => boolean = () => false;
+  private surpriseFreeNow = false;
+  private surpriseAsk = 0;
   // run 6 (FLOW): how far (px) the player has dragged the view round (the look lesson),
   // and whether the parked jeep glows (Bram suggested it)
   private lookPx = 0;
@@ -1112,8 +1114,11 @@ export class World {
     // run 7 (veldgids): the open world's small surprises, in free roam only (on foot or in the
     // jeep; never in a mission, a game, the helicopter or before the world is up); a menu
     // card holds them still
+    // (the game's own word on free roam is asked a few times a second, not every frame)
+    this.surpriseAsk -= dt;
+    if (this.surpriseAsk <= 0) { this.surpriseAsk = 0.25; this.surpriseFreeNow = this.surpriseFree(); }
     this.surprises.update(dt, {
-      free: this.readyAt !== null && !this.mode && !this.frozen && !this.vehicles.inHeli && this.surpriseFree(),
+      free: this.readyAt !== null && !this.mode && !this.frozen && !this.vehicles.inHeli && this.surpriseFreeNow,
       paused: this.menuOpen(),
       ranger: { x: rp.x, z: rp.z, running: this.player.rig.running },
       onFoot: !this.vehicles.inVehicle && !this.vehicles.inHeli,
