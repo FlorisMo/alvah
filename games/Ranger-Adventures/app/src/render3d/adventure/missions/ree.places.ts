@@ -190,8 +190,17 @@ export interface ReeLayout {
   hideLog: Spot & { turn: number; half: number };
   /** "Loop rustig weg": his quiet steps back out of the hide, away from the family */
   hideLeave: Place;
-  /** the views: the search over the stand (him in a lower corner), the watch from the hide */
-  views: { search: ViewSpec; watch: ViewSpec };
+  /** run 7 (ree-growth): her way in the watch between her gap and the meeting place (a
+   *  point she wanders by, out on open heath in the watch's picture) */
+  watchWay: readonly Spot[];
+  /** run 7 (ree-growth): "Mama is terug. Loop stil weg.": where he walks to himself, away
+   *  from the family (golden's hint, the chip's goal; facing back toward them), and the way
+   *  there round his hide's bush */
+  wayOut: Place;
+  outWay: readonly Spot[];
+  /** the views: the search over the stand (him in a lower corner), the watch from the hide,
+   *  the reunion through his glasses (run 7: mother and calf big, side-on) */
+  views: { search: ViewSpec; watch: ViewSpec; reunion: ViewSpec };
 }
 
 /** What a layout is made from (the rest follows). */
@@ -224,6 +233,12 @@ interface LayoutDef {
   hideJuniper: { u: number; v: number }; hideLog: { u: number; v: number };
   /** the watch view's middle (a share from her gap to the meet) and its size */
   watchMid: number; watchHalfW: number;
+  /** run 7: the point she wanders by in the watch (the watch view's frame: u across, + to
+   *  the right, v away from the hide) */
+  watchVia: { u: number; v: number };
+  /** run 7: where he walks away to (world), the way there round his hide's bush, and the
+   *  reunion lens's turn (deg) off the line from there to the meeting place */
+  out: Spot; outVia?: readonly Spot[]; reunionTurn?: number;
 }
 
 /** The search view (the owner's fix: the old lens looked steeply down on the top of his
@@ -264,6 +279,9 @@ function build(d: LayoutDef): ReeLayout {
     hideJuniper: { ...atLocal(hf, d.hideJuniper.u, d.hideJuniper.v), h: SIZE.jeneverbes.h * 1.1 },
     hideLog: log,
     hideLeave: { ...atLocal(hf, d.leave?.u ?? 0.2, d.leave?.v ?? -1.5), r: 0.5, heading: hf.heading },
+    watchWay: [atLocal({ ...mid, heading: hf.heading }, d.watchVia.u, d.watchVia.v)],
+    wayOut: { ...d.out, r: 1.0, heading: headingTo(d.out, meet) },
+    outWay: [...(d.outVia ?? [])],
     views: {
       search: {
         at: atLocal(frame, 0, SEARCH_LENS.back), heading: d.look + d.corner * SEARCH_LENS.turn + th * 0.5,
@@ -272,8 +290,35 @@ function build(d: LayoutDef): ReeLayout {
         include: [{ x: search.x, z: search.z, h: RANGER_STAND_HEIGHT, r: SEARCH_LENS.r }],
       },
       watch: { at: mid, heading: hf.heading, halfW: d.watchHalfW, halfD: 1.4, tall: SIZE.ree.h + 0.3, pitchDeg: 12, insetTop: 110, insetBottom: 220 },
+      reunion: reunionView(meet, headingTo(d.out, meet) + ((d.reunionTurn ?? 0) * Math.PI) / 180),
     },
   };
+}
+
+/** The reunion's lens (run 7, design §6.7): through his glasses, mother and calf big in the
+ *  picture: a low lens (~3 m off: the closest a framed view stands) looking along `heading`
+ *  at the meeting place, the doe side-on, the reunion's line over them (a high inset). */
+export const REUNION_LENS = { halfW: 1.2, halfD: 0.55, tall: 1.3, pitchDeg: 9, insetTop: 150, insetBottom: 70, beyond: 0.35 } as const;
+
+function reunionView(meet: Spot, heading: number): ViewSpec {
+  const L = REUNION_LENS;
+  return {
+    at: { x: meet.x + Math.sin(heading) * L.beyond, z: meet.z + Math.cos(heading) * L.beyond }, heading,
+    halfW: L.halfW, halfD: L.halfD, tall: L.tall, pitchDeg: L.pitchDeg, insetTop: L.insetTop, insetBottom: L.insetBottom, seconds: 1.6,
+  };
+}
+
+/** How the doe stands at the reunion: side-on to its lens, facing on along her way from her
+ *  gap (the way she was going), her calf drinking at the flank toward the lens. */
+export function reunionPose(l: ReeLayout): { yaw: number; side: 1 | -1 } {
+  const h = l.views.reunion.heading;
+  const a = h + Math.PI / 2, b = h - Math.PI / 2;
+  const way = headingTo(l.gap, l.meet);
+  const yaw = Math.cos(a - way) >= Math.cos(b - way) ? a : b;
+  // her right flank (+u of her own frame) faces the lens when the lens lies to her right
+  const lens = { x: l.meet.x - Math.sin(h) * 3, z: l.meet.z - Math.cos(h) * 3 };
+  const side: 1 | -1 = toLocal({ x: l.meet.x, z: l.meet.z, heading: yaw }, lens).u > 0 ? 1 : -1;
+  return { yaw, side };
 }
 
 const deg = (d: number): number => (d * Math.PI) / 180;
@@ -300,7 +345,9 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     poolIn: { leg: 0, at: 0.45, side: -1 },
     way: [{ u: -4.07, v: 0.65 }, { u: -0.1, v: 3.76 }],
     hide: { x: -7.5, z: -26.5 }, hideJuniper: { u: 1.6, v: 0.0 }, hideLog: { u: 1.45, v: 1.2 },
-    watchMid: 0.5, watchHalfW: 2.8,
+    watchMid: 0.5, watchHalfW: 2.8, watchVia: { u: -0.9, v: 1.5 },
+    // (back toward the marker ring, the way he came that morning)
+    out: { x: -13.6, z: -24.1 }, reunionTurn: 10,
   }),
   B: build({
     id: 'B', stand: { x: -8.5, z: -51.0 }, look: deg(135), corner: 1, bend: { x: -21.0, z: -39.5 },
@@ -309,7 +356,9 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     poolIn: { leg: 1, at: 0.5, side: 1 }, poolOut: { leg: 2, at: 0.62, side: -1 },
     way: [{ u: -3.4, v: -0.2 }, { u: -1.0, v: 3.1 }],
     hide: { x: -2.0, z: -44.0 }, leave: { u: 1.0, v: -1.0 }, hideJuniper: { u: -1.4, v: 0.3 }, hideLog: { u: -0.9, v: 1.1 },
-    watchMid: 0.55, watchHalfW: 2.8,
+    watchMid: 0.55, watchHalfW: 2.8, watchVia: { u: -0.2, v: 0.9 },
+    // (north along the forest's edge, past his hide's juniper on its forest side)
+    out: { x: -1.6, z: -39.0 }, outVia: [{ x: -0.95, z: -42.5 }],
   }),
   C: build({
     id: 'C', stand: { x: -21.0, z: -49.0 }, look: deg(-90), corner: 1, bend: { x: -20.5, z: -38.8 },
@@ -318,7 +367,9 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     poolIn: { leg: 1, at: 0.5, side: 1 }, poolOut: { leg: 0, at: 0.5, side: 1 },
     way: [],
     hide: { x: -25.0, z: -37.5 }, leave: { u: 2.8, v: -1.8 }, hideJuniper: { u: -1.45, v: 0.25 }, hideLog: { u: -0.95, v: 1.1 },
-    watchMid: 0.5, watchHalfW: 2.8,
+    watchMid: 0.5, watchHalfW: 2.8, watchVia: { u: 0.5, v: 1.6 },
+    // (north-east, toward the family's home side of the heath)
+    out: { x: -19.2, z: -35.6 },
   }),
 };
 
@@ -350,13 +401,28 @@ export function calfTalkOf(l: ReeLayout, calf: Spot): Place {
   return { ...p, r: 0.4, heading: headingTo(p, calf) };
 }
 
-/** Where a startled calf bolts to: a metre and a half to the side (never toward him or
- *  the lens, never out of the grass), and back from there. */
+/** Where a startled calf bolts to: a metre and a half to the side ACROSS the close view's
+ *  picture (run 7: sideways on screen, a little away from the lens: never toward him or the
+ *  lens, never out of the grass, never cut by the picture's bottom edge), and back from
+ *  there. Of the two sides, the one farther from him that stays deeper in the grass. */
 export function calfBolt(l: ReeLayout, calf: Spot, from: Spot): Spot {
-  const f = { x: calf.x, z: calf.z, heading: headingTo(from, calf) };
-  const lu = toLocal(l.frame, calf).u;
-  const s = lu > 0 ? -1 : 1; // toward the stand's middle across: it stays in the grass
-  return atLocal(f, s * 1.35, 0.45);
+  const v = calfView(l, calf, { ...from, r: 0.4, heading: headingTo(from, calf) });
+  const f = { x: calf.x, z: calf.z, heading: v.heading };
+  const inGrass = (p: Spot): boolean => { const q = toLocal(l.frame, p); return Math.abs(q.u) <= STAND.halfW + 0.25 && Math.abs(q.v) <= STAND.halfD + 0.25; };
+  // a metre and a third round the calf: away from him, never toward the lens (up the
+  // picture or across it), in the grass; of those the most sideways on screen
+  let best: Spot | null = null, bestU = -1;
+  for (const r of [1.35, 1.25]) {
+    for (let i = 0; i < 72; i++) {
+      const a = (i / 72) * Math.PI * 2;
+      const u = Math.sin(a) * r, w = Math.cos(a) * r;
+      const p = atLocal(f, u, w);
+      if (w < -0.05 || dist(p, from) < dist(calf, from) + 0.15 || !inGrass(p)) continue;
+      if (Math.abs(u) > bestU) { bestU = Math.abs(u); best = p; }
+    }
+    if (best) return best;
+  }
+  return atLocal(f, 0, 1.35); // (straight up the picture: always away from the lens)
 }
 
 /** The view by the calf (the calm moments): from beside him, low (40° where it was 52°),
@@ -412,6 +478,7 @@ export const REE_PLACES: Readonly<Record<string, Place>> = (() => {
     if (l.pools.out) t[`${l.id}.poolOut`] = { ...l.pools.out.edge };
     t[`${l.id}.hide`] = l.hide;
     t[`${l.id}.hideLeave`] = l.hideLeave;
+    t[`${l.id}.wayOut`] = l.wayOut;
   }
   const a = REE_LAYOUTS.A;
   t.hide = a.hide;

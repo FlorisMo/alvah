@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   REE_PLACES as P, REE_RESIDENTS, REE_HOME, REE_LAYOUTS, LAYOUTS, MARKER, STAND, FRINGE, SEARCH_RING, POOL, COPSE_FRAME, COPSE_SIZE,
-  COPSE, THICKET, HOME_REACH, COPSE_TREES, CALF_DOELEN, DOE_BED, CALF_HOME, onStand, calfAt, calfTalkOf, calfBolt, calfView, leaveView, drinkSpot,
+  COPSE, THICKET, HOME_REACH, COPSE_TREES, CALF_DOELEN, DOE_BED, CALF_HOME, onStand, calfAt, calfTalkOf, calfBolt, calfView, leaveView, drinkSpot, reunionPose,
   inStand, reeClearings, slotTrail, wisselLine, juniperR, poolsOf, poolSides, walkVia, WISSEL_HALF, type ReeLayout, type PoolSpot,
 } from './ree.places.ts';
 import { FRISLING_PLACES, hideClumps, fieldSpots, cluePosts, bootPrints } from './frisling.places.ts';
@@ -23,6 +23,7 @@ import { anchorInBiome, biomeAt, VEN_CENTER } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
 import { atLocal, dist, headingTo, segDist, toLocal, toward } from '../places.ts';
 import { patchLocal } from '../../play/kit-math.ts';
+import { GO_AWAY_M } from '../beats/hold-math.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import { SIZE } from '../../AnimalScale.ts';
 import type { Spot } from '../types.ts';
@@ -507,4 +508,83 @@ test('the framed views look at their place from the ranger\'s side, with him in 
   // the search views: he stands off to one side of every stand (a lower corner of the
   // picture: ree.view.test.ts measures it)
   for (const l of LAYOUTS) assert.ok(Math.abs(inStand(l, l.search).u) > 2, `${l.id}: he stands to one side`);
+});
+
+test('run 7: "Loop stil weg" — his way out leads away from the family, free, to open heath near the marker or their home', () => {
+  const S = solids();
+  for (const l of LAYOUTS) {
+    const w = l.wayOut;
+    const way = [l.hide, ...l.outWay, w];
+    const m = length(way);
+    // (a walk of 5-10 m: the moment is answered after 4 m away; B's hide stands at the forest's
+    // edge with the copse beside it, so its way out is the shortest)
+    assert.ok(m >= 5 && m <= 10, `${l.id}: his way out is ${m.toFixed(1)} m`);
+    assert.ok(dist(w, l.meet) >= dist(l.hide, l.meet) + 2, `${l.id}: it leads away from the family (${dist(l.hide, l.meet).toFixed(1)} → ${dist(w, l.meet).toFixed(1)} m)`);
+    // walked 4 m along it (the moment's "away", GoCore), he is clearly farther from them
+    let left = GO_AWAY_M, at4: Spot = w;
+    for (let i = 1; i < way.length; i++) {
+      const seg = dist(way[i - 1], way[i]);
+      if (seg >= left) { at4 = toward(way[i - 1], way[i], left); break; }
+      left -= seg;
+    }
+    assert.ok(dist(at4, l.hide) >= GO_AWAY_M - 0.6 && dist(at4, l.meet) >= dist(l.hide, l.meet) + 0.8, `${l.id}: 4 m along his way out he is ${dist(at4, l.meet).toFixed(1)} m from them`);
+    // every point of it at least as far from the family as the hide, and 4 m on, 0.5 m farther
+    for (let i = 1; i < way.length; i++) for (const k of [0, 0.25, 0.5, 0.75, 1]) {
+      const p = toward(way[i - 1], way[i], dist(way[i - 1], way[i]) * k);
+      assert.ok(dist(p, l.meet) >= dist(l.hide, l.meet) - 0.3, `${l.id}: his way out never leads toward them`);
+      for (const s of S) assert.ok(segDist(s, way[i - 1], way[i]) > s.r + 0.15, `${l.id}: his way out passes a solid`);
+      for (const s of LAYOUTS) assert.ok(inGrass(s, p) > 1.05, `${l.id}: his way out keeps out of ${s.id}'s grass`);
+      for (const c of COVERS) assert.ok(inCover(c, p) > 1.05, `${l.id}: his way out keeps out of the bracken`);
+      for (const s of LAYOUTS) for (const q of poolsOf(s)) assert.ok(wet(q, p) > 1.3, `${l.id}: his way out keeps out of a pool`);
+      assert.equal(biomeAt(p.x, p.z), 'heide', `${l.id}: his way out is on the heath`);
+    }
+    const end = Math.min(dist(w, P.home), dist(w, MARKER));
+    assert.ok(end <= 12, `${l.id}: he ends ${end.toFixed(1)} m from the marker or their home`);
+    assert.ok(P[`${l.id}.wayOut`] && dist(P[`${l.id}.wayOut`], w) < 1e-9, `${l.id}.wayOut is in the places table`);
+    assert.ok(Math.abs(w.heading! - headingTo(w, l.meet)) < 1e-9, `${l.id}: at his way out he faces back toward them`);
+  }
+});
+
+test('run 7: the watch — she wanders by a point out on open heath in the picture, never toward the lens', () => {
+  const js = juniperSpots();
+  for (const l of LAYOUTS) {
+    const wv = { ...l.views.watch.at, heading: l.views.watch.heading };
+    const way = [l.gap, ...l.watchWay, l.meet];
+    assert.ok(l.watchWay.length >= 1, `${l.id}: a point to wander by`);
+    assert.ok(length(way) >= 3.2, `${l.id}: her walk in the watch is ${length(way).toFixed(1)} m`);
+    for (const p of l.watchWay) {
+      const q = toLocal(wv, p);
+      assert.ok(Math.abs(q.u) <= l.views.watch.halfW - 0.4 && Math.abs(q.v) <= l.views.watch.halfD + 0.3, `${l.id}: the point is in the watch's picture (u ${q.u.toFixed(1)}, v ${q.v.toFixed(1)})`);
+      assert.ok(dist(p, l.hide) >= Math.min(dist(l.gap, l.hide), dist(l.meet, l.hide)) - 0.4, `${l.id}: she never walks toward the lens`);
+      assert.equal(biomeAt(p.x, p.z), 'heide');
+    }
+    for (let i = 1; i < way.length; i++) {
+      for (const j of js) assert.ok(segDist(j, way[i - 1], way[i]) > juniperR(j.h) + 0.25, `${l.id}: her way in the watch keeps off a juniper`);
+      for (const t of COPSE_TREES) assert.ok(segDist(t, way[i - 1], way[i]) > 0.9, `${l.id}: her way in the watch keeps off a trunk`);
+      for (const k of [0, 0.25, 0.5, 0.75, 1]) {
+        const p = toward(way[i - 1], way[i], dist(way[i - 1], way[i]) * k);
+        for (const s of LAYOUTS) assert.ok(inGrass(s, p) > 1.0, `${l.id}: her way in the watch keeps out of ${s.id}'s grass`);
+        if (i > 1 || k > 0.3) for (const c of COVERS) assert.ok(inCover(c, p) > 1.0, `${l.id}: out on the heath, out of the bracken`);
+      }
+    }
+  }
+});
+
+test('run 7: the reunion looks at them from his side, away from the clearing and the wildcamera\'s glade', () => {
+  const half = Math.atan(Math.tan((27.5 * Math.PI) / 180) * 1.6);
+  for (const l of LAYOUTS) {
+    const v = l.views.reunion;
+    assert.ok(dist(v.at, l.meet) < 0.6, `${l.id}: the reunion frames the meeting place`);
+    assert.ok(off(v.heading, headingTo(l.wayOut, l.meet)) <= (20 * Math.PI) / 180, `${l.id}: it looks from where he stands`);
+    const cabin = off(v.heading, headingTo(v.at, { x: 0, z: 0 }));
+    assert.ok(cabin > half + 0.35, `${l.id}: the clearing is out of the reunion's picture`);
+    for (const k of ['glade', 'home'] as const) assert.ok(off(v.heading, headingTo(l.meet, WILDCAMERA_PLACES[k])) > half + 0.2, `${l.id}: the wildcamera's ${k} is out of it`);
+    const roe = WILDCAMERA_RESIDENTS.find((r) => r.key === 'ree')!.before!;
+    assert.ok(off(v.heading, headingTo(l.meet, roe)) > half + 0.2, `${l.id}: the wildcamera's roe is out of the reunion`);
+    // the doe side-on to it, facing on along her way from her gap; her calf on the lens's side
+    const { yaw, side } = reunionPose(l);
+    assert.ok(Math.abs(Math.cos(yaw - v.heading)) < 1e-9, `${l.id}: side-on`);
+    assert.ok(Math.cos(yaw - headingTo(l.gap, l.meet)) >= -1e-9, `${l.id}: she faces on, not back into her cover`);
+    assert.ok(side === 1 || side === -1);
+  }
 });
