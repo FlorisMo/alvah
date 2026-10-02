@@ -177,10 +177,12 @@ export function trailA(): Spot[] {
 }
 
 /** The second game trail: out of the glade, past the pine's face, into the thicket
- *  (where the animals go between cover and grazing). */
+ *  (where the animals go between cover and grazing). (Run 7: one line from the glade to
+ *  the thicket; it used to run out to the snare up the wildwissel and back, a V of two
+ *  extra trails toward the lens since the snare moved there.) */
 export function trailB(): Spot[] {
   return [
-    at(-7.4, -1.4), at(-5.6, -2.0), GLADE, at(-3.3, -1.5), SNARE, at(-1.3, -1.1), at(0, -1.0), at(1.8, -1.25), at(3.6, -1.45), THICKET, at(6.4, -0.6),
+    at(-7.4, -1.4), at(-5.6, -2.0), GLADE, at(-3.3, -1.5), at(-2.2, -1.25), at(-1.3, -1.1), at(0, -1.0), at(1.8, -1.25), at(3.6, -1.45), THICKET, at(6.4, -0.6),
   ];
 }
 
@@ -193,6 +195,19 @@ export function trailB(): Spot[] {
 export interface AimSpot { at: Spot; from: Spot; yaw: number; /** the nightjar: how high its perch holds it (m) */ lift?: number }
 
 export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
+  if (animal === 'gaai') {
+    // run 7: a jay by day on the glade's sunny patch (it hops there); with the rule turned
+    // in the thicket, on top of its far bramble (its own perch, never the nightjar's stump)
+    const n = JAY_AT[bin];
+    return { at: { x: n.x, z: n.z }, from: bin === 'open' ? at(-10.5, -0.2) : at(10.0, -1.6), yaw: bin === 'open' ? Math.PI / 2 - 0.35 : -Math.PI / 2 + 0.35, lift: n.lift };
+  }
+  if (animal === 'vos') {
+    // run 7: a fox by day curled up at the thicket's foot (in front of its bramble, clear of
+    // the sett for the camera); with the rule turned out in the glade, by its sunny patch
+    if (bin === 'open') { const spot = at(-3.95, -2.45); return { at: spot, from: GLADE_ENTRY, yaw: headingTo(spot, TREE) + 1.25 }; }
+    const spot = at(4.05, -1.0);
+    return { at: spot, from: THICKET_ENTRY, yaw: headingTo(spot, TREE) - 1.25 };
+  }
   if (animal === 'nachtzwaluw') {
     // it flies in (from the sky beyond the glade, or over the thicket) and lands on its
     // perch: the stump over the sett, or the sandy trail in the glade
@@ -202,8 +217,10 @@ export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
     // it, its head toward the pine's side (three-quarters to the camera on the pine)
     return { at: spot, from: bin === 'open' ? at(-10.5, -0.6) : THICKET_ENTRY, yaw: bin === 'open' ? Math.PI / 2 - 0.25 : -Math.PI / 2 + 0.25, lift: n.lift };
   }
+  // (a red deer, stag or hind, is the big one: it stands a little further back)
+  const big = animal === 'edelhert' || animal === 'hinde';
   if (bin === 'open') {
-    const spot = animal === 'edelhert' ? at(-4.8, -1.6) : at(-4.4, -2.3);
+    const spot = big ? at(-4.8, -1.6) : at(-4.4, -2.3);
     const from = GLADE_ENTRY;
     return { at: spot, from, yaw: headingTo(spot, TREE) + 1.15 };
   }
@@ -216,24 +233,111 @@ export function aimSpot(animal: string, bin: 'open' | 'hol'): AimSpot {
   }
   // at the thicket's foot, in front of its bushes and clear of the sett as the camera
   // sees it (an animal behind the mound would give a photo of the mound)
-  const spot = animal === 'edelhert' ? at(5.0, -0.95) : at(4.35, -1.05);
+  const spot = big ? at(5.0, -0.95) : at(4.35, -1.05);
   return { at: spot, from: THICKET_ENTRY, yaw: headingTo(spot, TREE) - 1.1 };
 }
 
-/** The four night callers round the crossing (design §4.3 beat 4): the badger at its
- *  sett, the wild boar by the bushes, the roe at the glade's edge, the nightjar on a
- *  fallen log — all four in the one view, well apart on screen. `from`: where each comes
- *  in from when night falls (the sett's mouth, behind the thicket, the forest beyond the
- *  glade, the sky). */
-export const CALLER_SPOTS: Readonly<Record<string, { at: Spot; from: Spot; yaw: number }>> = {
-  das: { at: at(2.0, -2.75), from: at(3.35, -2.05), yaw: VIEW_H + Math.PI - 0.6 },
-  wildzwijn: { at: at(4.8, -2.7), from: THICKET_ENTRY, yaw: VIEW_H + Math.PI + 0.9 },
-  ree: { at: at(-4.7, -1.0), from: at(-10.5, -0.6), yaw: VIEW_H + Math.PI - 1.2 },
-  nachtzwaluw: { at: at(-1.9, -3.4), from: at(-6, -9), yaw: VIEW_H + Math.PI / 2 },
-};
-
 /** The fallen log the nightjar sits on (between the glade and the pine, near the lens). */
 export const LOG = { ...at(-1.9, -3.4), turn: 0.35, h: 0.38 } as const;
+
+/* ------------------------------------------- run 7: who comes, and how ---- */
+
+/** Which way a visitor comes onto the crossing: out of the trees beyond the glade (left),
+ *  or past the thicket (right). */
+export type Side = 'left' | 'right';
+/** The side each place lies on. */
+export const SIDE_OF: Readonly<Record<'open' | 'hol', Side>> = { open: 'left', hol: 'right' };
+
+/** Where a visitor stops on the crossing before he aims the camera (design run 7 §6.2):
+ *  it walks in and stands there side-on to the lens, so he sees it before he decides.
+ *  Two each side of the pine, off the middle of the picture (the pine, the camera and the
+ *  ranger are there), outside both places (a stop in the glade would already say where it
+ *  goes), clear of the log, the sett, the stumps and the ranger. A visitor stops at one of
+ *  its side's two: `l` on the trail left of the pine, `lf` a step nearer the lens; `r` on
+ *  the trail right of the pine, `rb` a step back from it. Pinned in the places test. */
+export type StopId = 'l' | 'lf' | 'r' | 'rf';
+export const STOPS: Readonly<Record<StopId, Spot & { side: Side }>> = {
+  l: { ...at(-2.2, -1.2), side: 'left' },
+  lf: { ...at(-2.8, -3.9), side: 'left' },
+  r: { ...at(2.4, -1.25), side: 'right' },
+  rf: { ...at(1.8, -3.6), side: 'right' },
+};
+export const STOPS_OF: Readonly<Record<Side, readonly StopId[]>> = { left: ['l', 'lf'], right: ['r', 'rf'] };
+
+/** Out of view on each side: where a visitor comes in from, and the way it comes (its
+ *  in-lane): from the left past the glade's front (where the picture is narrowest: the
+ *  shortest walk in), from the right between the thicket's foot and the sett. The
+ *  walk-off (out-lane) of a photographed animal goes the other way round: out the back of
+ *  the glade under its trees, out the back of the thicket through its bramble. So a
+ *  newcomer and an animal walking off on the same side never meet. */
+export const ENTRY: Readonly<Record<Side, Spot>> = { left: at(-8.9, -3.3), right: at(9.2, -2.2) };
+/** The in-lane's turns to each stop (between the entry and the stop): past the glade's
+ *  front, or between the thicket's foot and the sett (to the front stop on through the gap
+ *  between the sett and the old stump). */
+const IN_VIA: Readonly<Record<StopId, readonly Spot[]>> = {
+  l: [at(-4.8, -3.65)], lf: [at(-4.8, -3.65)], r: [at(5.6, -2.05), at(4.0, -1.45)], rf: [at(5.4, -2.55), at(2.9, -3.2)],
+};
+export const EXIT: Readonly<Record<Side, Spot>> = { left: at(-11.2, 0.6), right: at(9.0, -0.2) };
+
+/** A visitor's way in: from out of view on its side to its stop (world points). */
+export function arrivalPath(stop: StopId): Spot[] {
+  const s = STOPS[stop];
+  return [ENTRY[s.side], ...IN_VIA[stop], { x: s.x, z: s.z }];
+}
+
+/** A photographed animal's way off: from where it stood to out of view on its place's
+ *  side (world points); the badger by its sett goes back into it. */
+export function exitPath(bin: 'open' | 'hol', from: Spot, animal = ''): Spot[] {
+  if (animal === 'das' && bin === 'hol') return [{ x: from.x, z: from.z }, aimSpot('das', 'hol').from];
+  return [{ x: from.x, z: from.z }, EXIT[SIDE_OF[bin]]];
+}
+
+/** A bird's flight in and out: from the sky beyond its side (m up), and away again. */
+export const SKY: Readonly<Record<Side, Spot & { y: number }>> = {
+  left: { ...at(-10.5, -0.4), y: 3.4 },
+  right: { ...at(10.0, -1.4), y: 3.4 },
+};
+
+/** The jay (run 7: a day bird): by day it hops on the glade's sunny patch; with the rule
+ *  turned it sits in the thicket on top of its far bramble (its own perch: the nightjar
+ *  keeps the old stump). `lift`: how high its perch holds it (m; the home measures the
+ *  bramble's top where it lands). */
+export const JAY_AT: Readonly<Record<'open' | 'hol', Spot & { lift: number }>> = {
+  open: { ...at(-4.15, -1.85), lift: 0 },
+  hol: { ...THICKET_BUSHES[2].at, lift: THICKET_BUSHES[2].h * 0.82 },
+};
+
+/**
+ * The night choir's spots (run 7, design §6.4): eight places round the crossing, each
+ * with the animals that may call from it — the badger beside its sett (left or right of
+ * the mound), the nightjar on the fallen log or on the old stump, the walkers (the roe,
+ * the boar, the fox) at the glade's back edge or in front of it, by the bushes or in front of the
+ * juniper. `from`: where it walks (or flies) in from. A night's layout puts its four
+ * callers in four of them; two spots too near each other on the screen are never used
+ * in one night (`SLOT_CLASH`, pinned with the lens in the places test).
+ */
+export type SlotId = 'sett-l' | 'sett-r' | 'log' | 'stump' | 'glade-edge' | 'glade-front' | 'bushes' | 'juniper';
+export interface CallerSlot { id: SlotId; at: Spot; from: Spot & { y?: number }; animals: readonly string[]; yaw: number; lift?: number }
+const WALKERS = ['ree', 'wildzwijn', 'vos'] as const;
+const SETT_MOUTH = at(3.35, -2.05);
+export const CALLER_SLOTS: Readonly<Record<SlotId, CallerSlot>> = {
+  'sett-l': { id: 'sett-l', at: at(2.0, -2.75), from: SETT_MOUTH, animals: ['das'], yaw: VIEW_H + Math.PI - 0.6 },
+  'sett-r': { id: 'sett-r', at: at(4.3, -2.75), from: SETT_MOUTH, animals: ['das'], yaw: VIEW_H + Math.PI + 0.7 },
+  log: { id: 'log', at: { x: LOG.x, z: LOG.z }, from: { ...at(-6, -9), y: 4 }, animals: ['nachtzwaluw'], yaw: VIEW_H + Math.PI / 2, lift: LOG.h * 0.9 },
+  stump: { id: 'stump', at: { x: NIGHTJAR_STUMP.x, z: NIGHTJAR_STUMP.z }, from: { ...at(9, -8), y: 4 }, animals: ['nachtzwaluw'], yaw: -Math.PI / 2 + 0.25, lift: NIGHTJAR_STUMP.h },
+  'glade-edge': { id: 'glade-edge', at: at(-4.7, -1.0), from: at(-10.5, -0.6), animals: WALKERS, yaw: VIEW_H + Math.PI - 1.2 },
+  'glade-front': { id: 'glade-front', at: at(-2.6, -4.2), from: at(-10.5, -4.4), animals: WALKERS, yaw: VIEW_H + Math.PI - 1.45 },
+  bushes: { id: 'bushes', at: at(4.8, -2.7), from: at(9.2, -2.2), animals: WALKERS, yaw: VIEW_H + Math.PI + 0.9 },
+  juniper: { id: 'juniper', at: at(5.2, -0.9), from: at(9.4, -1.1), animals: WALKERS, yaw: VIEW_H + Math.PI + 1.15 },
+};
+export const SLOT_IDS = Object.keys(CALLER_SLOTS) as SlotId[];
+/** Two spots never used in one night: too near each other on the screen (< 120 px at
+ *  1280×800) or in the world (< 1.6 m), or one hiding a small animal behind the other from
+ *  the lens (a fox at the juniper behind a roe by the bushes). The view test measures every
+ *  other pair in every night the drawer can make. */
+export const SLOT_CLASH: readonly (readonly [SlotId, SlotId])[] = [
+  ['sett-r', 'bushes'], ['sett-r', 'stump'], ['bushes', 'stump'], ['stump', 'juniper'], ['bushes', 'juniper'], ['log', 'glade-front'], ['sett-r', 'juniper'],
+];
 
 /* ------------------------------------------------------------ the views ---- */
 
@@ -355,6 +459,9 @@ export const ROE_SHY_WITHIN = 8.8;
 const nobody = (key: string, animal: string): ResidentSpec => ({ key, animal, before: null, after: null });
 export const WILDCAMERA_RESIDENTS: readonly ResidentSpec[] = [
   nobody('edelhert', 'edelhert'),
+  // run 7: the evening's other visitors (out in the wood until they come)
+  nobody('hinde', 'hinde'),
+  nobody('vos', 'vos'),
   { key: 'ree', animal: 'ree', before: ROE_GRAZE, after: ROE_GRAZE,
     // (in free roam before the mission, too: she steps in under the trees when he comes)
     shy: [{ within: ROE_SHY_WITHIN, back: ROE_SHY_WITHIN + 5, to: { ...at(-8.6, -0.9), yaw: ROE_HIDEAWAY.yaw }, state: 'before' }] },

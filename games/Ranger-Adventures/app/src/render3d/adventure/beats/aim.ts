@@ -37,6 +37,8 @@ import type { Place } from '../types';
 import { AimRun } from './aim-math';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+/** run 7: the pick id of the animal standing on the crossing (no place) */
+const VISITOR = '__visitor';
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 
 /** What the mission does in the world for the aim beat. */
@@ -64,6 +66,18 @@ export interface AimWorld {
   turn(to: 'night' | 'day'): Promise<void>;
   /** a press beside both places: the camera shakes a calm "no" (no pick, no photo) */
   miss?(): void;
+  /** run 7 (additive; without it the beat plays as before): the animal comes FIRST. Called
+   *  for each animal of the queue (`index`: its place in it) as soon as it is next — the
+   *  first before the first card, the next one at the right click before it (in parallel
+   *  with that photo) — and awaited before its card shows: it walks (or flies) in and
+   *  stands where he sees it, and he decides by watching it. No hint, no pick until then.
+   *  `turn`: the day turns before its card (the card then carries the new rule, taller). */
+  arrive?(item: WisselItem, index: number, turn?: 'night' | 'day'): Promise<void>;
+  /** run 7 (additive): the animal that stands on the crossing while he decides, as a pick
+   *  target (an invisible proxy round it): a click on it is no choice (the click would
+   *  otherwise go through it to a place behind it); `touch` is its calm reaction */
+  visitor?: THREE.Object3D;
+  touch?(item: WisselItem): void;
 }
 
 export interface AimOpts {
@@ -76,6 +90,9 @@ export interface AimOpts {
     vraag: string;
     /** the animal comes: "Daar komt een hert." (by animal id) */
     komt: (id: string) => string;
+    /** run 7 (additive): the card's first line once the animal stands there: "Kijk, een
+     *  vos." (only with `world.arrive`; else `komt`) */
+    kijk?: (id: string) => string;
     /** a right photo: "Klik! Een mooie foto." */
     foto: string;
     /** an empty photo: "Leeg. Het dier is daar nu niet." */
@@ -105,6 +122,8 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
   k.stats.aim_flip_every = trial.flipEvery;
   k.stats.aim_flips = trial.flips ?? 1;
   const w = o.world;
+  /** the card's first line for an animal: what he sees (it stands there), or what comes */
+  const first = (id: string): string => (w.arrive && o.lines.kijk ? o.lines.kijk(id) : o.lines.komt(id));
 
   await k.walkRanger(o.stand.x, o.stand.z, 0.04);
   await k.frame(o.view, { face: o.stand.heading });
@@ -125,7 +144,7 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
   const show = (item: WisselItem, flip: string | null, toast: { kind: 'ok' | 'gevolg'; text: string } | null): void => {
     const cue = dagOfNacht(item.dag);
     const [c1, c2] = aim.chips;
-    const komt = o.lines.komt(item.id);
+    const komt = first(item.id);
     card = anchoredPrompt(k.host,
       `<div class="p3-bottom aim3d${flip ? ' aim-flipped' : ''}">` +
       (toast ? `<div class="p3-toast ${toast.kind}" role="status">${esc(toast.text)}</div>` : '') +
@@ -151,7 +170,7 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
       `</div></div></div>`, k.signal);
     card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(line));
   };
-  const say = (item: WisselItem): string => `${o.lines.komt(item.id)} ${dagOfNacht(item.dag).woord}. ${o.lines.vraag}`;
+  const say = (item: WisselItem): string => `${first(item.id)} ${dagOfNacht(item.dag).woord}. ${o.lines.vraag}`;
 
   let busy = true;
   let ready = false;
@@ -166,6 +185,7 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
   const onPick = (id: string): void => {
     const item = aim.current;
     if (!ready || busy || !item) return; // (the pause card covers the canvas: no click gets here)
+    if (id === VISITOR) { w.touch?.(item); return; } // (the animal itself: no choice)
     const bin = id as WisselBin;
     busy = true;
     // the words of the pick before ("Leeg…", "Klik!…") go: they are not about this one
@@ -190,6 +210,11 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
         busy = false;
         return;
       }
+      // (run 7: the next animal comes while this one is photographed; the world says when
+      // it sets off, and its card waits for it)
+      const next0 = s.done ? undefined : aim.current;
+      const arriving = next0 && w.arrive ? w.arrive(next0, aim.run.index, s.turn ?? undefined) : Promise.resolve();
+      arriving.catch(() => {});
       await w.photo(item, bin, looked);
       k.beat = `aim:${aim.run.index}`;
       if (settings.geluid) Sound.correct();
@@ -206,12 +231,21 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
         speak(turnLine);
         if (settings.geluid) Sound.select();
         await w.turn(s.turn);
+        await k.guard(arriving);
         show(next, o.lines.andersom, null);
         k.stats.aim_turn_s = Math.round((k.now - pickedAt) * 10) / 10;
         speak(`${o.lines.andersom} ${aim.rule}`); // the NEW rule, said outright
         queue(say(next));
         k.beat = `aim:${aim.run.index}`;
         k.stats.aim_turns = (k.stats.aim_turns ?? 0) + 1;
+      } else if (w.arrive) {
+        // the photo's words now; the next card once the next animal stands there
+        w.leave(item);
+        if (settings.voorlezen) narrator.speak(o.lines.foto);
+        await k.guard(arriving);
+        show(next, null, { kind: 'ok', text: o.lines.foto });
+        timed();
+        queue(say(next));
       } else {
         show(next, null, { kind: 'ok', text: o.lines.foto });
         timed();
@@ -228,15 +262,24 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
     k.stats.aim_miss = (k.stats.aim_miss ?? 0) + 1;
     w.miss?.();
   };
-  const targets = (['open', 'hol'] as const).map((b) => ({ id: b, object: w.places[b].pick }));
+  const targets = (['open', 'hol'] as const).map((b) => ({ id: b as string, object: w.places[b].pick }));
+  if (w.visitor) targets.push({ id: VISITOR, object: w.visitor });
   const teardown = pick3d({
     canvas: k.ctx.canvas, camera: k.world.camera, raycaster: k.ctx.raycaster as THREE.Raycaster,
     targets, onPick, onMiss, signal: k.signal,
   });
   try {
-    const first = aim.current!;
-    show(first, null, null);
-    speak(`${aim.rule} ${say(first)}`);
+    const lead = aim.current!;
+    // (run 7: the first animal walks in before its card, while the rule is said)
+    if (w.arrive) {
+      speak(aim.rule);
+      await k.guard(w.arrive(lead, 0));
+      show(lead, null, null);
+      queue(say(lead));
+    } else {
+      show(lead, null, null);
+      speak(`${aim.rule} ${say(lead)}`);
+    }
     ready = true;
     busy = false;
     await k.guard(complete);

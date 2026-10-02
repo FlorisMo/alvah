@@ -20,7 +20,7 @@ import * as THREE from 'three';
 /** Belly line per animal, as a share of its standing height (legs below it) — measured
  *  on the world's models: the piglet's body starts at ~40 % of its height, the roe
  *  deer's at ~50 % (a vertex-height histogram, 2026-09-27). */
-export const LEG_SHARE: Record<string, number> = { frisling: 0.42, big: 0.42, reekalf: 0.5, ree: 0.5 };
+export const LEG_SHARE: Record<string, number> = { frisling: 0.42, big: 0.42, reekalf: 0.5, ree: 0.5, vos: 0.46 }; // (run 7: the fox curls up in the thicket, the wildcamera)
 /** How much of the leg length stays visible once folded under the body. */
 const KEEP = 0.16;
 
