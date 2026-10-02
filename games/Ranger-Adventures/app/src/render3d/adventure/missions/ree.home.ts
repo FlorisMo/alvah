@@ -57,7 +57,7 @@ const JUNIPER_SLIM = 0.82;
  *  `FAR_COPY_M` its lightest (a view across the heath holds the copse's, the thicket's and
  *  the hides' eight junipers and three logs: drawn whole they were ~140k triangles, a
  *  quarter of the home's share of the hide walks and the watch turn, review r1). */
-const MID_COPY_M = 7.5;
+const MID_COPY_M = 6;
 const FAR_COPY_M = 16;
 /** The light copies are made this long (ms) after the home is built, one per idle moment. */
 const FAR_COPY_AFTER_MS = 4000;
