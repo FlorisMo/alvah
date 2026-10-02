@@ -35,6 +35,7 @@ import { Fauna } from './world/Fauna';
 import { Markers, type WorldMarker } from './world/Markers';
 import { Vehicles, MARKER_R, PAD_RADIUS, type JeepStall } from './world/Vehicles';
 import { Player, SPAWN, type TapTarget } from './world/Player';
+import type { DustHeart } from './world/Dust';
 import { CameraRig, DIP_TURN } from './world/CameraRig';
 import { Presenter, type Shot, type Focus } from './world/Presenter';
 import { DevReadback } from './world/DevReadback';
@@ -650,6 +651,12 @@ export class World {
   /** Dev-hook accessor (run 6): the ranger's gait and his soles (the foot-slip probe). */
   playerGait(): ReturnType<Player['gait']> {
     return this.player.gait();
+  }
+
+  /** Dev-hook accessor (run 7 feel): the heels' or the jeep's dust, its strongest puff's
+   *  heart on screen before and after the cloud is drawn (world/Dust.ts DustCloud.probe). */
+  dustHeart(which: 'heels' | 'jeep'): DustHeart | null {
+    return which === 'jeep' ? this.vehicles.dustHeart() : this.player.dustHeart();
   }
 
   /** How the ranger moves right now: where he stands, his heading, his ground speed

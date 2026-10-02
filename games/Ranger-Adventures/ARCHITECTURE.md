@@ -33,7 +33,8 @@ render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls
    world/Markers.ts     mission markers, missiebord, the hut's porch ring (once Bram told
                         about the young raaf), sit-spot, proximity, wayfinding
    world/Vehicles.ts    jeep, helicopter + pads, the jeep's dust (world/Dust.ts: one Points
-                        cloud, hidden while no puff lives; the ranger's heels have their own)
+                        cloud, hidden while no puff lives, lit like the ground and drawn through
+                        the tone curve, colour space and fog; the ranger's heels have their own)
    world/Player.ts      the ranger rig, on-foot movement, footsteps; running he leans and
                         pumps his arms (PlayerAnim.runLook, laid on the run clip by
                         PlayerRig) and his heels kick up dust on sand (none under reduced motion)

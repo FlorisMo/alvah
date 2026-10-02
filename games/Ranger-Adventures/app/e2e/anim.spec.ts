@@ -198,3 +198,60 @@ test('anim: running on sand kicks up a little dust at his heels — never walkin
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });
+
+/** One dust pixel read (devhook `dustHeart`): the colour at the strongest puff's heart just
+ *  before its cloud is drawn and just after, in one frame. */
+interface DustHeart { before: [number, number, number]; after: [number, number, number]; alpha: number; x: number; y: number }
+
+test('anim: the heel dust reads as dust in every mood — a puff is a touch lighter than its sand, never a glowing dot, never yellower (run 7)', async ({ page }, testInfo) => {
+  test.setTimeout(8 * 60_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  const lum = (c: readonly number[]): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const notes: string[] = [];
+  for (const mood of ['gouden-uur', 'ochtendnevel', 'zonnig', 'bewolkt', 'schemer']) {
+    await page.goto(`/?dev=1&mood=${mood}`);
+    await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 60_000 });
+    await page.getByRole('button', { name: 'Dit is mijn ranger' }).click({ timeout: 60_000 });
+    await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 90_000 }).toBe('world');
+    await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 60_000, message: 'the ranger rig attaches' }).toBe('idle');
+    // the open drift sand east of the jeep, facing on along it
+    const from = { x: 20, z: 6 }, to = { x: 50, z: 8 }, d = Math.hypot(to.x - from.x, to.z - from.z);
+    await walkTo(page, from, { stopDist: 0.8, timeout: 60_000 });
+    await walkTo(page, { x: from.x + ((to.x - from.x) * 2.5) / d, z: from.z + ((to.z - from.z) * 2.5) / d }, { stopDist: 0.6, timeout: 30_000 });
+    await page.waitForTimeout(500);
+    // run on it with the real keys, reading the strongest puff's heart as it goes
+    const hearts: DustHeart[] = [];
+    await page.keyboard.down('Shift');
+    await page.keyboard.down('ArrowUp');
+    const t0 = Date.now();
+    while (Date.now() - t0 < 2_600) {
+      const h = await R<DustHeart | null>(page, "r.dustHeart('heels')");
+      if (h && !hearts.some((x) => x.x === h.x && x.y === h.y && x.alpha === h.alpha)) hearts.push(h);
+      await page.waitForTimeout(40);
+    }
+    await shot(page, `anim-dust-${mood}`);
+    await page.keyboard.up('ArrowUp');
+    await page.keyboard.up('Shift');
+    // the puffs over the open sand: what lay there before the dust was drawn is the lit sand
+    // (within 10% of the median), not his shadow or his boot, and the puff drew over it
+    const bl = hearts.map((h) => lum(h.before)).sort((a, b) => a - b);
+    const sand = bl[Math.floor(bl.length / 2)] ?? 0;
+    const over = hearts.filter((h) => Math.abs(lum(h.before) - sand) <= 0.1 * sand && h.after.some((c, i) => c !== h.before[i]));
+    const lift = over.map((h) => lum(h.after) - lum(h.before)).sort((a, b) => a - b);
+    const typical = lift[Math.floor(lift.length / 2)] ?? NaN;
+    const overlap = lift[Math.floor(lift.length * 0.9)] ?? NaN, worst = lift[lift.length - 1] ?? NaN;
+    const yellower = Math.min(...over.map((h) => h.after[2] / h.after[0] - h.before[2] / h.before[0]));
+    const note = `${mood}: ${over.length}/${hearts.length} puffs over the lit sand (lum ${Math.round(sand)}), a puff's heart +${typical.toFixed(1)} levels (where puffs overlap +${overlap.toFixed(1)}, the most +${worst.toFixed(1)}), blue/red ${yellower >= 0 ? '+' : ''}${yellower.toFixed(3)} against the sand`;
+    notes.push(note);
+    console.log(note);
+    expect.soft(over.length, `a run on the drift sand kicks up puffs over the open sand — ${note}`).toBeGreaterThanOrEqual(4);
+    expect.soft(typical, `a puff's heart is at most about 25 levels lighter than its sand (dust, not a glowing dot) — ${note}`).toBeLessThanOrEqual(25);
+    expect.soft(overlap, `…and nine in ten stay within about 30 even where two or three puffs overlap — ${note}`).toBeLessThanOrEqual(32);
+    expect.soft(yellower, `a puff is no more yellow than its sand (blue/red not more than 0.05 below it) — ${note}`).toBeGreaterThanOrEqual(-0.05);
+    await page.evaluate(() => localStorage.clear()); // the next mood starts from a fresh save
+  }
+  testInfo.annotations.push({ type: 'dust', description: notes.join(' · ') });
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});

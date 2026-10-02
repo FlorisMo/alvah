@@ -9,7 +9,7 @@ import type * as THREE from 'three';
 import type { World } from '../../render3d/World';
 import {
   providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, providePorch,
-  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGait, provideGrounded, provideCam,
+  provideWinStep, provideClip, provideAvatar, provideGroundSpeed, provideMotion, provideGait, provideDustHeart, provideGrounded, provideCam,
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, provideObstacles, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
   provideHeli, provideQuality, provideBoundary, provideTags, provideMissionPlaces, provideResidents,
@@ -36,6 +36,7 @@ export function wireWorldDevhook(world: World): void {
   provideGroundSpeed(() => world.groundSpeed());      // F-08: live post-collision foot speed (m/s)
   provideMotion(() => world.rangerMotion());          // run 6: where he is, his heading, speed, running
   provideGait(() => world.playerGait());              // run 6: his legs (clip, cadence, stride) + sole probe
+  provideDustHeart((which) => world.dustHeart(which)); // run 7 (feel): a dust puff's heart on screen, before/after
   provideGrounded(() => world.groundedState());       // D1.2: feet on the rendered terrain
   provideCam(() => world.camState());                 // F-05 ⊕ F-18: the REAL render camera read-back
   provideActors(() => world.actorClips());            // W3.3: warden + poacher baked clips

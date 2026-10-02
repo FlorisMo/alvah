@@ -5,15 +5,13 @@
  * never become a blob over the picture (audit veh-02). The jeep kicks it up behind its rear
  * wheels (W5.2, world/Vehicles.ts) and, run 7, the ranger's heels on sand when he runs
  * (world/Player.ts). The owner decides where and when a puff starts (and never under
- * reduced motion: dust is secondary motion); the cloud ages, drifts and draws them.
+ * reduced motion: dust is secondary motion); the cloud ages, drifts and draws them, lit like
+ * the ground under it (DUST_ALBEDO).
  */
 
 import * as THREE from 'three';
-import { MOODS, keyElevation } from '../Moods';
 
 export interface DustLook {
-  /** a puff's colour */
-  color: string;
   /** its width (m) when it starts and when it has faded */
   from: number;
   to: number;
@@ -24,28 +22,45 @@ export interface DustLook {
 }
 
 /** The jeep's dust (W5.2): a light haze, 0.45 → 1.3 m, gone within 2.5 m of the lens. */
-export const JEEP_DUST: DustLook = { color: '#ebdfc4', from: 0.45, to: 1.3, alpha: 0.4, near: [2.5, 6] };
+export const JEEP_DUST: DustLook = { from: 0.45, to: 1.3, alpha: 0.4, near: [2.5, 6] };
 
-/** The light on the ground (per channel, linear): the sky fill from above plus the key as
- *  high as the sun stands (cf. Moods.groundLight). */
-function groundLight(out: THREE.Color, sky: THREE.Color, skyI: number, key: THREE.Color, keyI: number, sinUp: number): THREE.Color {
-  return out.copy(sky).multiplyScalar(skyI).add(_k.copy(key).multiplyScalar(keyI * Math.max(0, sinUp)));
+/** What dust is made of: pale sand (linear rgb). A puff is lit like the flat ground it came
+ *  off and goes through the picture's own tone curve, output colour space and fog, so in
+ *  every mood it stands to its sand the way it does in the golden hour: a touch lighter and
+ *  a touch less yellow (anim.spec reads it: a puff's heart about 7-16 levels over the sand),
+ *  never a glowing dot. Its numbers top 1 because a puff floats in the light (it takes the
+ *  low sun on its side too, the ground only by the sine of the sun's height). In the golden
+ *  hour it is within a few levels of the cream the jeep's dust always was. */
+export const DUST_ALBEDO: readonly [number, number, number] = [1.1, 1.0, 0.56];
+
+/** A dev read (the dust's pixel check, anim.spec): the colour on screen (0..255) at the heart
+ *  of the cloud's strongest puff, read in ONE frame just before the cloud is drawn (the ground
+ *  there) and just after (that ground with the dust over it); `alpha` is that puff's own
+ *  opacity at its heart, and (x, y) the drawing-buffer pixel. */
+export interface DustHeart {
+  before: [number, number, number];
+  after: [number, number, number];
+  alpha: number;
+  x: number;
+  y: number;
 }
-const _k = new THREE.Color();
-const _l = new THREE.Color();
-const _v = new THREE.Vector3();
-/** …in the golden hour, the light every puff's `color` was chosen in. */
-const GOLDEN = (() => {
-  const m = MOODS['gouden-uur'];
-  return groundLight(new THREE.Color(), new THREE.Color(m.light.hemiSky), m.light.hemiI, new THREE.Color(m.light.key), m.light.keyI,
-    Math.sin((keyElevation(m.keyAt) * Math.PI) / 180));
-})();
 
-const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-/** A channel's tint: the light's brightness `L` (as a share of the golden hour's) with only a
- *  little of its colour (`r`: the channel's own share): the golden hour's key is deep orange,
- *  so a straight per-channel share turned a misty morning's dust mint. */
-const tint = (r: number, L: number): number => Math.min(1.25, Math.max(0.3, L * Math.pow(r / L, 0.4)));
+const _v = new THREE.Vector3();
+const _k = new THREE.Color();
+const _px = new Uint8Array(9 * 4);
+/** The mean colour (0..255) of the 3 × 3 drawing-buffer pixels around (x, y) (GL: y up),
+ *  as drawn so far this frame. Dev reads only: it stalls the GPU. */
+function readRGB(renderer: THREE.WebGLRenderer, x: number, y: number): [number, number, number] {
+  const gl = renderer.getContext();
+  gl.readPixels(x - 1, y - 1, 3, 3, gl.RGBA, gl.UNSIGNED_BYTE, _px);
+  const out: [number, number, number] = [0, 0, 0];
+  for (let i = 0; i < 9; i++) for (let c = 0; c < 3; c++) out[c] += _px[i * 4 + c] / 9;
+  return out.map((v) => Math.round(v * 10) / 10) as [number, number, number];
+}
+const smooth = (a: number, b: number, x: number): number => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 export class DustCloud {
   readonly points: THREE.Points;
@@ -73,17 +88,18 @@ export class DustCloud {
     geo.setAttribute('aSoil', new THREE.BufferAttribute(this.soil, 1));
     // the look rides in uniforms, so every cloud draws with ONE shader program (the heels'
     // cloud costs no second compile)
-    const uniforms = {
-      uColor: { value: new THREE.Color(look.color) }, uScale: { value: 700 },
-      uNear: { value: new THREE.Vector2(look.near[0], look.near[1]) },
-      uSize: { value: new THREE.Vector2(look.from, look.to) },
-      uAlpha: { value: look.alpha },
-    };
     const mat = new THREE.ShaderMaterial({
-      uniforms,
+      uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+        uColor: { value: new THREE.Color() }, uScale: { value: 700 },
+        uNear: { value: new THREE.Vector2(look.near[0], look.near[1]) },
+        uSize: { value: new THREE.Vector2(look.from, look.to) },
+        uAlpha: { value: look.alpha },
+      }]),
       transparent: true,
       depthWrite: false,
+      fog: true,
       vertexShader: `
+        #include <fog_pars_vertex>
         uniform float uScale;
         uniform vec2 uNear;
         uniform vec2 uSize;
@@ -95,18 +111,19 @@ export class DustCloud {
           float life = max(aLife, 0.0001);
           float f = clamp(aAge / life, 0.0, 1.0);
           float alive = step(0.0001, aLife) * (1.0 - step(aLife, aAge));
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          float depth = max(-mv.z, 0.5);
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          float depth = max(-mvPosition.z, 0.5);
           // fade in fast, out slowly; and away near the lens: never a blob over the screen
           float near = smoothstep(uNear.x, uNear.y, depth);
           vAlpha = smoothstep(0.0, 0.15, f) * (1.0 - f) * alive * near * aSoil;
           float metres = mix(uSize.x, uSize.y, f);
           gl_PointSize = clamp(metres * uScale / depth, 1.0, 72.0);
-          gl_Position = projectionMatrix * mv;
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
         }
       `,
       fragmentShader: `
-        precision mediump float;
+        #include <fog_pars_fragment>
         uniform vec3 uColor;
         uniform float uAlpha;
         varying float vAlpha;
@@ -116,16 +133,21 @@ export class DustCloud {
           float soft = exp(-3.5 * r2) * (1.0 - r2);
           float a = max(soft, 0.0) * vAlpha * uAlpha; // a light haze, not a cloud
           if (a <= 0.003) discard;
+          // lit like the ground (uColor, linear), then the picture's own tone curve, output
+          // colour space and fog, in the order three draws the ground in
           gl_FragColor = vec4(uColor, a);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          #include <fog_fragment>
         }
       `,
     });
+    const uniforms = mat.uniforms;
     const pts = new THREE.Points(geo, mat);
-    // run 7 (feel): a puff is lifted ground, so it takes the light the ground has now (the
-    // mood, a crossfade, the wildcamera's night) as a share of the golden hour's, the light
-    // its colour was chosen in: unchanged in the golden hour, never a cream spot glowing at
-    // dusk or in the mist. Lit by the scene's hemisphere fill and its sun, found once.
-    const base = new THREE.Color(look.color);
+    // run 7 (feel): a puff is lifted sand, so it is lit like the flat ground it came off: its
+    // albedo times the light on that ground now (the hemisphere fill from above plus the sun
+    // as high as it stands; the mood, a crossfade, the wildcamera's night), the same Lambert
+    // three lights the ground with. Found once: the scene's hemisphere fill and its sun.
     let hemi: THREE.HemisphereLight | null = null, sun: THREE.DirectionalLight | null = null;
     pts.frustumCulled = false; // puffs live in world space, not around the origin
     pts.visible = true;        // drawn once while the world loads (its shader compiles then); update hides it
@@ -138,19 +160,57 @@ export class DustCloud {
           if (d.isDirectionalLight && (!sun || (d.castShadow && !sun.castShadow))) sun = d;
         });
       }
+      const c = uniforms.uColor.value as THREE.Color;
       if (hemi && sun) {
         const s = sun as THREE.DirectionalLight, h = hemi as THREE.HemisphereLight;
-        const up = _v.subVectors(s.position, s.target.position).normalize().y;
-        groundLight(_l, h.color, h.intensity, s.color, s.intensity, up);
-        const L = lum(_l) / lum(GOLDEN);
-        uniforms.uColor.value.setRGB(base.r * tint(_l.r / GOLDEN.r, L), base.g * tint(_l.g / GOLDEN.g, L), base.b * tint(_l.b / GOLDEN.b, L));
+        const up = Math.max(0, _v.subVectors(s.position, s.target.position).normalize().y);
+        c.copy(h.color).multiplyScalar(h.intensity).add(_k.copy(s.color).multiplyScalar(s.intensity * up));
+        c.setRGB((c.r * DUST_ALBEDO[0]) / Math.PI, (c.g * DUST_ALBEDO[1]) / Math.PI, (c.b * DUST_ALBEDO[2]) / Math.PI);
       }
       renderer.getDrawingBufferSize(size);
       const fov = (cam as THREE.PerspectiveCamera).fov ?? 55;
       uniforms.uScale.value = size.y / (2 * Math.tan((fov * Math.PI) / 360));
+      if (this.probeWanted) this.probeAt = this.readHeart(renderer, cam, size, look);
+    };
+    pts.onAfterRender = (renderer) => {
+      const at = this.probeAt;
+      if (!at) return;
+      this.probeAt = null;
+      this.probeWanted = false;
+      this.heart = { ...at, after: readRGB(renderer, at.x, at.y) };
     };
     scene.add(pts);
     this.points = pts;
+  }
+
+  /* ------------------------------------------------- the dev pixel read ---- */
+
+  private probeWanted = false;
+  private probeAt: Omit<DustHeart, 'after'> | null = null;
+  private heart: DustHeart | null = null;
+
+  /** Dev read (DustHeart): the last measurement, and ask for a new one the next frame the
+   *  cloud is drawn with a puff on screen. Costs nothing until asked. */
+  probe(): DustHeart | null {
+    this.probeWanted = true;
+    return this.heart;
+  }
+
+  /** The strongest live puff's heart on screen and the colour there before the cloud draws. */
+  private readHeart(renderer: THREE.WebGLRenderer, cam: THREE.Camera, size: THREE.Vector2, look: DustLook): Omit<DustHeart, 'after'> | null {
+    let best = -1, alpha = 0;
+    for (let i = 0; i < this.n; i++) {
+      if (this.life[i] <= 0 || this.age[i] >= this.life[i]) continue;
+      const f = this.age[i] / this.life[i];
+      _v.set(this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2]).applyMatrix4(cam.matrixWorldInverse);
+      const a = smooth(0, 0.15, f) * (1 - f) * this.soil[i] * smooth(look.near[0], look.near[1], Math.max(-_v.z, 0.5)) * look.alpha;
+      if (a > alpha) { alpha = a; best = i; }
+    }
+    if (best < 0) return null;
+    _v.set(this.pos[best * 3], this.pos[best * 3 + 1], this.pos[best * 3 + 2]).project(cam);
+    if (Math.abs(_v.x) > 0.98 || Math.abs(_v.y) > 0.98 || _v.z > 1) return null;
+    const x = Math.round(((_v.x + 1) / 2) * size.x), y = Math.round(((_v.y + 1) / 2) * size.y);
+    return { before: readRGB(renderer, x, y), alpha, x, y };
   }
 
   /** A deterministic 0..1 (LCG) for scatter — no `Math.random`, stable frames. */

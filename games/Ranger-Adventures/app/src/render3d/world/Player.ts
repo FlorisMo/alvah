@@ -33,7 +33,7 @@ import { store } from '../../core/state';
 import type { Terrain } from './Terrain';
 import type { RangerMotion } from '../play/types';
 import { enableCast } from './props';
-import { DustCloud, type DustLook } from './Dust';
+import { DustCloud, type DustLook, type DustHeart } from './Dust';
 import { trackSand } from '../Paths';
 
 // F-11 world rim: a calm pine tree-line rings the playable area at the move bound
@@ -78,9 +78,10 @@ const ARRIVE_EASE = 3;
 
 /** Run 7 (feel): the little puffs his heels kick up running on sand: smaller than the
  *  jeep's (0.22 → 0.7 m), whole from 2.6 m off the lens (he runs ~5 m in front of it), and
- *  short-lived, so a run leaves a light trail behind him that settles at once (lit like the
- *  ground, world/Dust.ts: at dusk or in the mist it is dust, not a glowing spot). */
-const HEEL_DUST: DustLook = { color: '#efe4c8', from: 0.22, to: 0.7, alpha: 0.75, near: [1, 2.6] };
+ *  short-lived, so a run leaves a light trail behind him that settles at once. A light haze
+ *  (as faint as the jeep's), lit like the sand it came off (world/Dust.ts): dust in every
+ *  mood, never a glowing dot. */
+const HEEL_DUST: DustLook = { from: 0.22, to: 0.7, alpha: 0.4, near: [1, 2.6] };
 const HEEL_DUST_N = 16;
 
 /** Who steered the ranger this frame. */
@@ -824,6 +825,12 @@ export class Player {
   gait(): { name: Gait; phase: number; cadence: number; run: number; gain: number; soles: SoleProbe[]; dust: { puffs: number; drawn: boolean } } {
     // run 7 (feel): + the puffs his heels have kicked up, and whether their cloud is drawn now
     return { ...this.rig.gait(), soles: this.rig.soleProbe(), dust: { puffs: this.dustPuffs, drawn: this.dust.points.visible } };
+  }
+
+  /** Dev read (run 7 feel): his heel dust's strongest puff on screen, before and after the
+   *  cloud is drawn (DustCloud.probe). */
+  dustHeart(): DustHeart | null {
+    return this.dust.probe();
   }
 
   /** The ranger's active locomotion clip for the dev hook (null when procedural). */

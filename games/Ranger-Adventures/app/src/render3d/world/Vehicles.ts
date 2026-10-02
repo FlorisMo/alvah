@@ -22,7 +22,7 @@
 
 import * as THREE from 'three';
 import { livePolicy } from '../MotionMode';
-import { DustCloud, JEEP_DUST } from './Dust';
+import { DustCloud, JEEP_DUST, type DustHeart } from './Dust';
 import { loadModel, prepModel } from '../Models';
 import { SIZE, sizeRow } from '../AnimalScale';
 import type { Biome } from '../Biomes';
@@ -1412,6 +1412,12 @@ export class Vehicles {
       dust.emit(px, this.groundY(px, pz) + 0.15, pz, lx * spread - fx * 0.3, rise, lz * spread - fz * 0.3,
         0.9 + dust.rand() * 0.6, shows[biome]);
     }
+  }
+
+  /** Dev read (run 7 feel): the jeep dust's strongest puff on screen, before and after the
+   *  cloud is drawn (DustCloud.probe). */
+  dustHeart(): DustHeart | null {
+    return this.dust?.probe() ?? null;
   }
 
   /** W5.2: age every live puff, drift it, and hide the cloud once none survive (so an
