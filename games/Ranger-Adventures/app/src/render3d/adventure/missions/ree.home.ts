@@ -62,8 +62,8 @@ const FAR_COPY_M = 16;
 /** The light copies are made this long (ms) after the home is built, one per idle moment. */
 const FAR_COPY_AFTER_MS = 4000;
 /** The copies' triangles, near and far (the real juniper has ~12.4k, the log ~11k). */
-const MID_JUNIPER_TRIS = 3600;
-const MID_LOG_TRIS = 2600;
+const MID_JUNIPER_TRIS = 2600;
+const MID_LOG_TRIS = 1800;
 const FAR_JUNIPER_TRIS = 1800;
 const FAR_LOG_TRIS = 1200;
 /** The light copies lose the model's normal-map shading: this brings their colour back
@@ -72,7 +72,10 @@ const FAR_TONE = 0.86;
 
 /** The leaves of a tussock in a stand that is not this play's (a whole one has 52; a
  *  stand not played is only ever seen across the heath, 10-25 m off). */
-const LIGHT_BLADES = 8;
+const LIGHT_BLADES = 5;
+/** …and in the played stand once he has left the calf (from then on it is seen from the
+ *  hide, 8-12 m off: the search and the calm moments always see it whole). */
+const LEFT_BLADES = 26;
 
 /** The share of the calf's back the search's lens glimpses between the stems (run 7: P1's
  *  fixed value; the level's knob from ree-growth on). */
@@ -147,8 +150,8 @@ function poolWater(): THREE.ShaderMaterial {
 interface Ring { mesh: THREE.Mesh; t: number; delay: number; max: number }
 
 /** One pool spot: its meshes (the muddy rim, the mud, the water) and the rushes at its rim
- *  (clumps of the cover field nearest to it). */
-interface PoolBuilt { spot: PoolSpot; field: CoverField; meshes: THREE.Mesh[]; rushes: number[] }
+ *  (a small field of their own). */
+interface PoolBuilt { spot: PoolSpot; meshes: THREE.Mesh[]; rushes: CoverField }
 
 /** What a play lays (ree.ts `prepare`). */
 export interface ReeLaid {
@@ -165,7 +168,7 @@ export interface ReeLaid {
 /** The reekalf home, as the adventure uses it. */
 export class ReeHome implements HomeDressing {
   readonly group = new THREE.Group();
-  /** each stand's tall grass is its own field, and the covers' bracken one more (the
+  /** each stand's tall grass is its own field, and each cover's bracken one more (the
    *  rushes at each pool in the field nearest it): a field out of the picture is not
    *  drawn (one field over all three stands drew every stand whenever one was in view) */
   private readonly standCovers = new Map<ReeLayoutId, CoverField>();
@@ -182,6 +185,7 @@ export class ReeHome implements HomeDressing {
   /** a stand that is not this play's draws its tussocks lighter (fewer leaves each: it is
    *  only ever seen across the heath this play); the played stand is always whole */
   private readonly fullTussock = new Map<ReeLayoutId, THREE.BufferGeometry>();
+  private readonly leftTussock = new Map<ReeLayoutId, THREE.BufferGeometry>();
   private readonly lightTussock = moorGrassGeometry(29, LIGHT_BLADES);
   /** every stand's stems as they were built (a play's glimpse window is opened from these) */
   private readonly built = new Map<ReeLayoutId, { h: number; lx: number; lz: number; r: number }[]>();
@@ -216,10 +220,10 @@ export class ReeHome implements HomeDressing {
     const rnd = stream(41);
     /** each stand's clumps, and each cover's */
     const standClumps_ = new Map<ReeLayoutId, Clump[]>();
-    // (the copse's and the thicket's bracken are one field: the thicket is small, and a
-    // field of its own would cost three more draw calls wherever both are in view)
-    const bracken: Clump[] = [];
-    const coverClumps = new Map<Cover, Clump[]>([[COPSE, bracken], [THICKET, bracken]]);
+    // (the copse's and the thicket's bracken are a field each: one field over both reached
+    // 16 m round and was drawn in every view across the heath, the thicket's with the
+    // copse's; each on its own is drawn only when it is in the picture)
+    const coverClumps = new Map<Cover, Clump[]>([[COPSE, []], [THICKET, []]]);
     const decoysAt = new Map<ReeLayoutId, DecoyAt[]>();
 
     /* -- the stands: tall pijpenstrootje tussocks, a ring round every calf spot -- */
@@ -281,22 +285,14 @@ export class ReeHome implements HomeDressing {
     beds.push(...thicketBeds);
     brackenOf(THICKET, 71, []);
 
-    /* -- rushes at every pool spot's rim (not in the water, not on his way round): in
-       the field nearest to it (a field is drawn only while it is in the picture: one
-       that reached across the heath to a far pool would be drawn from everywhere) -- */
-    const rushStart = new Map<string, { field: ReeLayoutId | Cover; from: number; to: number }>();
-    const fieldAt = (p: { x: number; z: number }): ReeLayoutId | Cover => {
-      const all: [ReeLayoutId | Cover, number][] = [
-        ...LAYOUTS.map((q): [ReeLayoutId, number] => [q.id, dist(p, q.frame)]),
-        ...[COPSE, THICKET].map((c): [Cover, number] => [c, dist(p, c.frame)]),
-      ];
-      return all.sort((a, b) => a[1] - b[1])[0][0];
-    };
+    /* -- rushes at every pool spot's rim (not in the water, not on his way round): a
+       small field of their own, drawn only where this play's pool lies (in a stand's
+       field they stretched it out to the pool, so the stand was drawn wherever its pool
+       was in the picture) -- */
+    const rushClumps = new Map<string, Clump[]>();
     for (const l of LAYOUTS) for (const [k, p] of [['in', l.pools.in], ['out', l.pools.out]] as const) {
       if (!p) continue;
-      const field = fieldAt(p);
-      const clumps = typeof field === 'string' ? standClumps_.get(field)! : coverClumps.get(field)!;
-      const from = clumps.length;
+      const clumps: Clump[] = [];
       for (let i = 0; i < 9; i++) {
         const a = (i / 9) * Math.PI * 2 + 0.35;
         if (Math.cos(a) * p.side > 0.55) continue; // the side he walks round stays clear
@@ -304,7 +300,7 @@ export class ReeHome implements HomeDressing {
         if (Math.abs(toLocal(p, q).u) < 0.7) continue; // his straight way in and out
         clumps.push({ ...q, kind: 'grass', size: 0.72 + rnd() * 0.15 });
       }
-      rushStart.set(`${l.id}.${k}`, { field, from, to: clumps.length });
+      rushClumps.set(`${l.id}.${k}`, clumps);
     }
 
     LAYOUTS.forEach((l, i) => {
@@ -312,10 +308,12 @@ export class ReeHome implements HomeDressing {
       this.standCovers.set(l.id, field);
       const tussock = field.meshes.find((m) => m.name === 'cover-tussock');
       if (tussock) this.fullTussock.set(l.id, tussock.geometry);
+      this.leftTussock.set(l.id, moorGrassGeometry(29 + i * 7, LEFT_BLADES));
       this.built.set(l.id, field.stems.map((s) => ({ h: s.h, lx: s.lx, lz: s.lz, r: s.r })));
     });
-    const brackenField = new CoverField({ parent: this.group, groundY: g, clumps: bracken, seed: 31 });
-    for (const c of [COPSE, THICKET]) this.coverFields.set(c, brackenField);
+    for (const [c, seed] of [[COPSE, 31], [THICKET, 37]] as const) {
+      this.coverFields.set(c, new CoverField({ parent: this.group, groundY: g, clumps: coverClumps.get(c)!, seed }));
+    }
     for (const l of LAYOUTS) {
       this.gapClumps.set(l.id, this.coverFields.get(l.cover)!.nearestClump(l.gap.x, l.gap.z, (c) => c.kind !== 'grass')?.i ?? 0);
     }
@@ -387,9 +385,9 @@ export class ReeHome implements HomeDressing {
       (water.material as THREE.Material).dispose();
       water.material = poolWater();
       for (const m of meshes) { m.visible = false; this.group.add(m); this.made.push(m); }
-      const rr = rushStart.get(`${l.id}.${k}`)!;
-      const rushes = Array.from({ length: rr.to - rr.from }, (_, i) => rr.from + i);
-      this.pools.set(`${l.id}.${k}`, { spot: p, field: typeof rr.field === 'string' ? this.standCovers.get(rr.field)! : this.coverFields.get(rr.field)!, meshes, rushes });
+      const rushes = new CoverField({ parent: this.group, groundY: g, clumps: rushClumps.get(`${l.id}.${k}`)!, seed: 43 });
+      rushes.group.visible = false;
+      this.pools.set(`${l.id}.${k}`, { spot: p, meshes, rushes });
     }
     // what a boot in the water makes: rings spreading one after the other, and a few
     // drops thrown up that fall back (calm and small: a plash, not a splash)
@@ -452,7 +450,7 @@ export class ReeHome implements HomeDressing {
     const on = `${l.id}.${p.pool}`;
     for (const [k, b] of this.pools) {
       for (const m of b.meshes) m.visible = k === on;
-      for (const c of b.rushes) b.field.showClump(c, k === on);
+      b.rushes.group.visible = k === on;
     }
     for (const [id, w] of this.wissels) w.visible = id === l.id;
   }
@@ -505,6 +503,28 @@ export class ReeHome implements HomeDressing {
     }, after);
   }
 
+  /**
+   * He has left the calf: the played stand is seen from afar from now on (the hide, the
+   * watch), and once it is out of the picture (`cam`) its tussocks are drawn with half
+   * their leaves — never while it shows (a stand that thins in view is a pop), never
+   * before the calm moments are done (the search's cover stays whole). The next play lays
+   * it whole again. Returns whether it is thinned now.
+   */
+  thinWhenUnseen(cam: THREE.Camera): boolean {
+    const id = this.laid.layout.id;
+    const tussock = this.cover.meshes.find((m) => m.name === 'cover-tussock');
+    if (!tussock) return true;
+    if (tussock.geometry === this.leftTussock.get(id)) return true;
+    const v = new THREE.Vector3();
+    const shows = this.cover.stems.some((st) => [0, st.h].some((dy) => {
+      v.set(st.x, st.y + dy, st.z).project(cam);
+      return v.z < 1 && Math.abs(v.x) < 1.08 && Math.abs(v.y) < 1.08;
+    }));
+    if (shows) return false;
+    tussock.geometry = this.leftTussock.get(id)!;
+    return true;
+  }
+
   /** The played stand's tall grass (the search's cover: its glimpse, the calf's stems). */
   get cover(): CoverField { return this.standCovers.get(this.laid.layout.id)!; }
 
@@ -553,6 +573,7 @@ export class ReeHome implements HomeDressing {
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void {
     for (const f of this.standCovers.values()) f.update(dt, t, reduced, movers);
     for (const f of new Set(this.coverFields.values())) f.update(dt, t, reduced, movers);
+    for (const b of this.pools.values()) if (b.rushes.group.visible) b.rushes.update(dt, t, reduced, movers);
     // a boot in the pool plashes (whoever's, whenever: a mission's wrong answer or a walk
     // straight through it): a plash going in, rings at every step while he wades on
     const me = movers.find((m) => m.ranger);
@@ -606,8 +627,10 @@ export class ReeHome implements HomeDressing {
       f.dispose();
     }
     this.lightTussock.dispose();
+    for (const g of this.leftTussock.values()) g.dispose();
     this.farMat.dispose();
     for (const f of new Set(this.coverFields.values())) f.dispose();
+    for (const b of this.pools.values()) b.rushes.dispose();
     for (const s of this.stands.values()) s.dispose();
     for (const s of this.spawned) s.dispose();
     for (const m of this.made) { m.geometry.dispose(); (m.material as THREE.Material).dispose(); }

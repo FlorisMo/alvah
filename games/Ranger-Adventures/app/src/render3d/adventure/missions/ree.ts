@@ -335,11 +335,14 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   const hush = { line: c.sst, onRun: (): void => { void calf.lookAt(me, 1.6); call('fiep', calf.x, calf.z); } };
   const poolOut = p.pool === 'out' ? feetAtPool(k, rust, home, pool, 'hide') : null;
   let lineBack = -1;
+  // (from here on the grass is seen from afar: drawn lighter once it is out of the picture)
+  let thinned = false;
   await k.walk({
     name: 'hide', to: l.hide, r: 1.0, line: c.stil, doel: c.chipHut, cue: c.zacht, glyph: 'boot', quiet: hush,
     // (a perfect player's way: round the grass, and round the pool when it lies here)
     via: walkVia(l, 'hide', poolOut ? pool : null),
     tick: () => {
+      if (!thinned) thinned = home.thinWhenUnseen(k.world.camera);
       if (poolOut) { poolOut.tick(); return; }
       if (lineBack < 0 && dist(k.ranger(), l.hide) < 4) { lineBack = 1; k.say(c.verstop); }
     },
