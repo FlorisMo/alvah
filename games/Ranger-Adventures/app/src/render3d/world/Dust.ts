@@ -71,14 +71,22 @@ export class DustCloud {
     geo.setAttribute('aAge', new THREE.BufferAttribute(this.age, 1));
     geo.setAttribute('aLife', new THREE.BufferAttribute(this.life, 1));
     geo.setAttribute('aSoil', new THREE.BufferAttribute(this.soil, 1));
-    const f = (x: number): string => x.toFixed(3);
-    const uniforms = { uColor: { value: new THREE.Color(look.color) }, uScale: { value: 700 } };
+    // the look rides in uniforms, so every cloud draws with ONE shader program (the heels'
+    // cloud costs no second compile)
+    const uniforms = {
+      uColor: { value: new THREE.Color(look.color) }, uScale: { value: 700 },
+      uNear: { value: new THREE.Vector2(look.near[0], look.near[1]) },
+      uSize: { value: new THREE.Vector2(look.from, look.to) },
+      uAlpha: { value: look.alpha },
+    };
     const mat = new THREE.ShaderMaterial({
       uniforms,
       transparent: true,
       depthWrite: false,
       vertexShader: `
         uniform float uScale;
+        uniform vec2 uNear;
+        uniform vec2 uSize;
         attribute float aAge;
         attribute float aLife;
         attribute float aSoil;
@@ -90,9 +98,9 @@ export class DustCloud {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           float depth = max(-mv.z, 0.5);
           // fade in fast, out slowly; and away near the lens: never a blob over the screen
-          float near = smoothstep(${f(look.near[0])}, ${f(look.near[1])}, depth);
+          float near = smoothstep(uNear.x, uNear.y, depth);
           vAlpha = smoothstep(0.0, 0.15, f) * (1.0 - f) * alive * near * aSoil;
-          float metres = mix(${f(look.from)}, ${f(look.to)}, f);
+          float metres = mix(uSize.x, uSize.y, f);
           gl_PointSize = clamp(metres * uScale / depth, 1.0, 72.0);
           gl_Position = projectionMatrix * mv;
         }
@@ -100,12 +108,13 @@ export class DustCloud {
       fragmentShader: `
         precision mediump float;
         uniform vec3 uColor;
+        uniform float uAlpha;
         varying float vAlpha;
         void main() {
           vec2 d = gl_PointCoord - vec2(0.5);
           float r2 = dot(d, d) * 4.0;          // 0 at the centre, 1 at the rim
           float soft = exp(-3.5 * r2) * (1.0 - r2);
-          float a = max(soft, 0.0) * vAlpha * ${f(look.alpha)}; // a light haze, not a cloud
+          float a = max(soft, 0.0) * vAlpha * uAlpha; // a light haze, not a cloud
           if (a <= 0.003) discard;
           gl_FragColor = vec4(uColor, a);
         }
