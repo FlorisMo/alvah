@@ -9,6 +9,7 @@
  */
 
 import * as THREE from 'three';
+import { MOODS, keyElevation } from '../Moods';
 
 export interface DustLook {
   /** a puff's colour */
@@ -24,6 +25,27 @@ export interface DustLook {
 
 /** The jeep's dust (W5.2): a light haze, 0.45 → 1.3 m, gone within 2.5 m of the lens. */
 export const JEEP_DUST: DustLook = { color: '#ebdfc4', from: 0.45, to: 1.3, alpha: 0.4, near: [2.5, 6] };
+
+/** The light on the ground (per channel, linear): the sky fill from above plus the key as
+ *  high as the sun stands (cf. Moods.groundLight). */
+function groundLight(out: THREE.Color, sky: THREE.Color, skyI: number, key: THREE.Color, keyI: number, sinUp: number): THREE.Color {
+  return out.copy(sky).multiplyScalar(skyI).add(_k.copy(key).multiplyScalar(keyI * Math.max(0, sinUp)));
+}
+const _k = new THREE.Color();
+const _l = new THREE.Color();
+const _v = new THREE.Vector3();
+/** …in the golden hour, the light every puff's `color` was chosen in. */
+const GOLDEN = (() => {
+  const m = MOODS['gouden-uur'];
+  return groundLight(new THREE.Color(), new THREE.Color(m.light.hemiSky), m.light.hemiI, new THREE.Color(m.light.key), m.light.keyI,
+    Math.sin((keyElevation(m.keyAt) * Math.PI) / 180));
+})();
+
+const lum = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+/** A channel's tint: the light's brightness `L` (as a share of the golden hour's) with only a
+ *  little of its colour (`r`: the channel's own share): the golden hour's key is deep orange,
+ *  so a straight per-channel share turned a misty morning's dust mint. */
+const tint = (r: number, L: number): number => Math.min(1.25, Math.max(0.3, L * Math.pow(r / L, 0.4)));
 
 export class DustCloud {
   readonly points: THREE.Points;
@@ -90,10 +112,30 @@ export class DustCloud {
       `,
     });
     const pts = new THREE.Points(geo, mat);
+    // run 7 (feel): a puff is lifted ground, so it takes the light the ground has now (the
+    // mood, a crossfade, the wildcamera's night) as a share of the golden hour's, the light
+    // its colour was chosen in: unchanged in the golden hour, never a cream spot glowing at
+    // dusk or in the mist. Lit by the scene's hemisphere fill and its sun, found once.
+    const base = new THREE.Color(look.color);
+    let hemi: THREE.HemisphereLight | null = null, sun: THREE.DirectionalLight | null = null;
     pts.frustumCulled = false; // puffs live in world space, not around the origin
     pts.visible = true;        // drawn once while the world loads (its shader compiles then); update hides it
     const size = new THREE.Vector2();
-    pts.onBeforeRender = (renderer, _scene, cam) => {
+    pts.onBeforeRender = (renderer, sc, cam) => {
+      if (!hemi || !sun) {
+        sc.traverse((o) => {
+          if (!hemi && (o as THREE.HemisphereLight).isHemisphereLight) hemi = o as THREE.HemisphereLight;
+          const d = o as THREE.DirectionalLight;
+          if (d.isDirectionalLight && (!sun || (d.castShadow && !sun.castShadow))) sun = d;
+        });
+      }
+      if (hemi && sun) {
+        const s = sun as THREE.DirectionalLight, h = hemi as THREE.HemisphereLight;
+        const up = _v.subVectors(s.position, s.target.position).normalize().y;
+        groundLight(_l, h.color, h.intensity, s.color, s.intensity, up);
+        const L = lum(_l) / lum(GOLDEN);
+        uniforms.uColor.value.setRGB(base.r * tint(_l.r / GOLDEN.r, L), base.g * tint(_l.g / GOLDEN.g, L), base.b * tint(_l.b / GOLDEN.b, L));
+      }
       renderer.getDrawingBufferSize(size);
       const fov = (cam as THREE.PerspectiveCamera).fov ?? 55;
       uniforms.uScale.value = size.y / (2 * Math.tan((fov * Math.PI) / 360));

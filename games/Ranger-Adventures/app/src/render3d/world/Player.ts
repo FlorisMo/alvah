@@ -78,7 +78,8 @@ const ARRIVE_EASE = 3;
 
 /** Run 7 (feel): the little puffs his heels kick up running on sand: smaller than the
  *  jeep's (0.22 → 0.7 m), whole from 2.6 m off the lens (he runs ~5 m in front of it), and
- *  short-lived, so a run leaves a light trail behind him that settles at once. */
+ *  short-lived, so a run leaves a light trail behind him that settles at once (lit like the
+ *  ground, world/Dust.ts: at dusk or in the mist it is dust, not a glowing spot). */
 const HEEL_DUST: DustLook = { color: '#efe4c8', from: 0.22, to: 0.7, alpha: 0.75, near: [1, 2.6] };
 const HEEL_DUST_N = 16;
 
