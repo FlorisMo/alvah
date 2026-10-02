@@ -79,10 +79,26 @@ const EEKHOORN: Ontdekking[] = [
 // the adventures lane adds a block per new adventure here (the ven first)
 
 /* ------------------------------------------------- wereld (the open world) ---- */
+// The free roam's small surprises (render3d/world/Surprises.ts stages them, one at a time):
+// each is met by seeing it (on screen, big enough, long enough) or hearing its call close by.
+// The tiny birds are heard far more than seen, as in a real wood. The two rare ones only
+// come in their own light (`stemming`): the stag at the forest edge in the morning mist or
+// at dusk, the badger at dusk. No wolf, no adder: nothing that could scare.
 const WERELD: Ontdekking[] = [
   { id: 'wereld.buizerd', home: 'wereld', soort: 'dier', naam: 'de buizerd',
     hint: 'Wie cirkelt hoog boven de hei?', model: 'bird-buizerd' },
-  // the veldgids package adds the free-roam surprises here
+  { id: 'wereld.specht', home: 'wereld', soort: 'dier', naam: 'de specht', naamKnap: 'de grote bonte specht',
+    hint: 'Wie tikt er op een boom?', model: 'bird-grote-bonte-specht' },
+  { id: 'wereld.koekoek', home: 'wereld', soort: 'dier', naam: 'de koekoek',
+    hint: 'Wie roept zijn eigen naam?', model: 'bird-koekoek', stemming: ['ochtendnevel', 'gouden-uur'] },
+  { id: 'wereld.winterkoning', home: 'wereld', soort: 'dier', naam: 'het winterkoninkje', naamKnap: 'de winterkoning',
+    hint: 'Wie is klein maar zingt heel hard?', model: 'bird-winterkoning' },
+  { id: 'wereld.roodborst', home: 'wereld', soort: 'dier', naam: 'het roodborstje', naamKnap: 'de roodborst',
+    hint: 'Wie hupt een stukje met je mee?', model: 'bird-roodborst' },
+  { id: 'wereld.edelhert', home: 'wereld', soort: 'zeldzaam', naam: 'het edelhert',
+    hint: 'Wie draagt een gewei in de mist?', model: 'animal-edelhert-reddeer', stemming: ['ochtendnevel', 'schemer'] },
+  { id: 'wereld.das', home: 'wereld', soort: 'zeldzaam', naam: 'de das',
+    hint: 'Wie waggelt in de schemer voorbij?', model: 'animal-das-badger', stemming: ['schemer'] },
 ];
 
 export const ONTDEKKINGEN: readonly Ontdekking[] = [...FRISLING, ...REE, ...WILDCAMERA, ...EEKHOORN, ...WERELD];

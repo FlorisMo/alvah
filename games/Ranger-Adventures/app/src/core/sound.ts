@@ -136,7 +136,7 @@ function knor(freq: number, start: number, dur: number, peak: number, dest: Audi
 // `notes` (when present) plays that pitch SEQUENCE instead of `rep` copies of
 // `freq` — the way to synth a call with distinct successive pitches (koekoek's
 // hoog→laag, koolmees' ti-ta-ti-ta) so "Ken je roep" (W6.4) is learnable by ear.
-interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[]; knor?: boolean; sweep?: number; peak?: number }
+interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[]; knor?: boolean; sweep?: number; peak?: number; drum?: number }
 const CALLS: Record<string, CallSpec> = {
   edelhert:   { freq: 150, dur: 0.7,  type: 'sawtooth', vibrato: 6 },   // burlen — deep bellow
   ree:        { freq: 420, dur: 0.22, type: 'square',   rep: 2 },        // blaf — short bark
@@ -164,6 +164,10 @@ const CALLS: Record<string, CallSpec> = {
   roodborsttapuit:{ freq: 1650, dur: 0.05, type: 'square', notes: [1650, 1650] },             // tik tik — twee steentjes
   'groene-specht':{ freq: 760, dur: 0.12, type: 'triangle', notes: [820, 760, 700, 650] },    // kju-kju — een lachje
   koolmees:      { freq: 1150, dur: 0.11, type: 'square',  notes: [1150, 820, 1150, 820] },    // ti-ta ti-ta — een pompje
+  // run 7 (the open world's surprises): the buzzard's mew, "piieeuw", a soft falling
+  // whistle twice; the great spotted woodpecker's drumming, a quick soft roll of knocks
+  buizerd:       { freq: 1650, dur: 0.78, type: 'sine', rep: 2, sweep: 0.62, peak: 0.07 },
+  specht:        { freq: 1300, dur: 0.75, type: 'triangle', drum: 15, peak: 0.09 },
 };
 const DEFAULT_CALL: CallSpec = { freq: 440, dur: 0.3, type: 'sine', rep: 2 };
 
@@ -197,6 +201,22 @@ function stopCurrentCall(a: AudioContext): void {
   } catch { /* already stopped */ }
 }
 
+/** A woodpecker's drumming: `spec.drum` soft knocks in `spec.dur` s, a little quicker in
+ *  the middle and fading at the end (filtered noise for the wood, a short low tone for the
+ *  trunk). No Math.random: the knocks are evenly shaped. */
+function drumRoll(spec: CallSpec, bus: AudioNode): void {
+  const n = spec.drum ?? 12;
+  const peak = spec.peak ?? 0.08;
+  let t = 0;
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1);
+    const g = peak * (1 - 0.55 * u);
+    noiseBurst(0.026, 'bandpass', spec.freq, 2.4, g, t, bus);
+    tone(spec.freq * 0.32, t, 0.035, 'triangle', g * 0.5, bus);
+    t += (spec.dur / n) * (1.12 - 0.3 * Math.sin(Math.PI * u)); // quicker in the middle of the roll
+  }
+}
+
 function playCall(id: string, out?: AudioNode): number {
   const a = ac();
   if (!a) return 0.3;
@@ -221,6 +241,11 @@ function playCall(id: string, out?: AudioNode): number {
     return dur;
   }
   const spec = CALLS[id] ?? DEFAULT_CALL;
+  if (spec.drum) {
+    drumRoll(spec, bus);
+    currentCall = { bus, sources: [] };
+    return spec.dur;
+  }
   const gap = spec.dur * 0.45;
   // a pitch SEQUENCE (koekoek/koolmees/…) plays each note in turn; otherwise `rep`
   // copies of the one pitch (with a small warble when `vibrato` is set).
@@ -264,6 +289,13 @@ export const Sound = {
   found(): void {
     tone(660, 0, 0.16, 'sine', 0.18);
     tone(880, 0.12, 0.22, 'sine', 0.18);
+  },
+  /** run 7: something new in his veldgids — a soft high two-note chime, much quieter than
+   *  `found` (it comes in the open world, never as a prize) */
+  reveal(): void {
+    tone(1047, 0, 0.42, 'sine', 0.05);
+    tone(1568, 0.16, 0.6, 'sine', 0.04);
+    tone(3136, 0.16, 0.3, 'sine', 0.008); // (a faint shimmer on the second note)
   },
   /** a single warm confirm note (round complete, not yet finished) */
   correct(): void {
@@ -401,6 +433,7 @@ export const Sound = {
     const sample = sampleBuffers.get(id);
     if (sample) return sample.dur;
     const spec = CALLS[id] ?? DEFAULT_CALL;
+    if (spec.drum) return spec.dur;
     const count = spec.notes?.length ?? spec.rep ?? 1;
     return count * (spec.dur + spec.dur * 0.45);
   },

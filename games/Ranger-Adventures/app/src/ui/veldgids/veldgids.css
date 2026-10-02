@@ -1,0 +1,156 @@
+/* ============================================================
+   The veldgids (run 7): his field guide over the live world. Run 6's card (paper, serif
+   title, one sun button, quiet chips), one page per place: ◀ the place ▶, a row of dots
+   (a picture of how much he found), a grid of tiles. A found tile: the real model's
+   picture on the tile's own paper, its name; a rare one a soft gold rim; a new one a
+   small sun tag. A tile still to find: the grey shape, its hint line and a speaker.
+   ============================================================ */
+
+.card.veldgids { width: min(calc(100vw - 32px), 900px); gap: 8px; padding-top: 20px; }
+
+.vg-head {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+.vg-title { text-align: center; min-width: 0; }
+.ra-chip.vg-nav {
+  width: 64px;
+  height: 64px;
+  min-height: 64px;
+  padding: 0;
+  border-radius: 50%;
+}
+.ra-chip.vg-nav .ic { width: 30px; height: 30px; stroke-width: 2.4; }
+.ra-chip.vg-nav[hidden] { display: inline-flex; visibility: hidden; }
+
+/* how much of the page he found: a picture, never a number */
+.vg-dots { display: flex; justify-content: center; gap: 8px; min-height: 14px; margin-bottom: 2px; }
+.vg-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--green-line);
+  box-sizing: border-box;
+}
+.vg-dot.on { background: var(--green-mid); border-color: var(--green-mid); }
+.vg-dot.rare { border-color: rgba(214, 160, 30, 0.7); }
+.vg-dot.rare.on { background: var(--spel-sun); border-color: #d6a01e; }
+
+.veldgids .card-body { padding: 4px 4px 8px; }
+.vg-grid {
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px 12px;
+  padding-top: 8px; /* (room for a "nieuw" tag on a first-row tile's edge) */
+}
+.vg-grid > .vg-entry { flex: 0 0 190px; }
+.vg-grid.vg-turn { animation: vg-turn var(--dur-base) var(--ease-out) both; }
+@keyframes vg-turn { from { opacity: 0; } to { opacity: 1; } }
+
+.vg-entry {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 188px;
+  min-width: 0;
+  padding: 10px 8px 12px;
+  border: 2px solid rgba(47, 107, 70, 0.14);
+  border-radius: 18px;
+  background: #f8f1e2; /* = portrait.ts PORTRAIT_BG: the picture has no edge */
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--dur-quick), background var(--dur-quick);
+}
+.vg-entry:hover { border-color: rgba(47, 107, 70, 0.4); }
+.vg-entry:focus-visible { outline: 3px solid var(--spel-sun); outline-offset: 2px; }
+
+.vg-pic {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 176px;
+  height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.vg-img { display: block; width: 100%; height: 120px; object-fit: contain; user-select: none; }
+.vg-ic { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: rgba(236, 243, 231, 0.95); color: var(--green-deep); }
+.vg-ic .ic { width: 34px; height: 34px; }
+.is-missing .vg-ic { background: rgba(196, 184, 163, 0.35); color: #b0a48e; }
+
+.vg-name { font: 700 19px/1.2 var(--font-body); color: var(--green-deep); }
+.vg-hint { font: 600 16px/1.3 var(--font-body); color: var(--ink-soft); text-wrap: balance; padding: 0 2px; }
+/* the speaker of a hint: in the picture's top corner (it can be heard: point or tap) */
+.vg-hear {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(236, 243, 231, 0.95);
+  color: var(--green);
+}
+.vg-hear .ic { width: 20px; height: 20px; }
+
+/* a rare one: a soft gold rim (still to find: a dashed one, the place for something special) */
+.vg-entry.is-rare { border-color: rgba(214, 160, 30, 0.55); border-style: dashed; }
+.vg-entry.is-rare.is-found { border-style: solid; border-color: var(--spel-sun); box-shadow: 0 0 0 3px rgba(245, 194, 59, 0.3); }
+
+/* a photograph: a white print with a soft shadow */
+.vg-entry.is-foto .vg-pic { background: #fff; padding: 6px 6px 14px; box-sizing: border-box; height: 134px; border-radius: 4px; box-shadow: 0 2px 8px rgba(40, 28, 10, 0.18); rotate: -1.5deg; }
+.vg-entry.is-foto .vg-img { height: 100%; }
+
+/* new since he last looked: a small sun tag on the tile's top edge (never over its picture) */
+.vg-new {
+  position: absolute;
+  top: -10px;
+  right: 10px;
+  box-shadow: 0 1px 3px rgba(90, 61, 9, 0.25);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--spel-sun);
+  color: #5a3d09;
+  font: 700 14px/1.3 var(--font-body);
+}
+
+/* the Pauze tile and the hut's chip: a small sun tag when something in the gids is new */
+.vg-tile-new {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--spel-sun);
+  color: #5a3d09;
+  font: 700 14px/1.3 var(--font-body);
+}
+
+/* a shorter screen (an iPad held flat): a little less paper round each picture */
+@media (max-height: 860px) {
+  .vg-entry { min-height: 172px; padding-top: 8px; }
+  .vg-pic, .vg-img { height: 108px; }
+}
+@media (max-width: 640px) {
+  .ra-chip.vg-nav { width: 56px; height: 56px; min-height: 56px; }
+  .vg-grid > .vg-entry { flex-basis: 150px; }
+  .vg-pic, .vg-img { width: 140px; height: 96px; }
+}
+.rm .vg-grid.vg-turn { animation: none; }
+
+/* Pauze has five tiles since the veldgids joined: the last one stands centred on its row */
+.hub-tiles > .hub-tile:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: calc(50% - 6px); }
+
+/* the hut's foot: its way back and the veldgids side by side (one line each; a narrow
+   screen puts them under each other) */
+.cabin-foot-row { flex-wrap: wrap; }
+.cabin-foot-row .ra-chip { white-space: nowrap; }

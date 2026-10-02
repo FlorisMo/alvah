@@ -30,6 +30,7 @@ import { icon, CLUE_ICON, type IconName } from '../icons';
 import { goToMission, unmountMissionPause } from '../flow/MissionFlow';
 import { returnToTitle, resumePatrol, activeExploreTitel, nextMissionId, storyOrder } from '../flow/WorldSession';
 import { showExploreHud } from '../hud/ExploreHud';
+import { showVeldgids, gidsTag } from '../veldgids/Veldgids';
 
 /* ---------------------------------------------------------------- title ---- */
 /**
@@ -78,6 +79,8 @@ export function showPauseHub(): void {
     `<h1 class="boot-title">${esc(HUB.vraag)}</h1>` +
     `<div class="hub-tiles">` +
     tile('ph-prikbord', 'book', esc(HUB.boek), cluesBadge()) +
+    // run 7: his veldgids (a small "nieuw" tag when something in it is new; never a count)
+    tile('ph-veldgids', 'veldgids', esc(HUB.veldgids), gidsTag()) +
     tile('ph-companion', 'raven', esc(cabinLabel())) +
     tile('ph-badges', 'badge', esc(HUB.badges)) +
     tile('ph-tweaks', 'gear', esc(HUB.instellingen)) +
@@ -92,6 +95,7 @@ export function showPauseHub(): void {
   const voor = store.get().settings.voorlezen; // child:B12: the menu reads aloud, each choice on hover/focus
   readScreenAloud(el, { text: SAY.pauze, autoStart: voor, items: '.ra-chip', hover: voor });
   el.querySelector('.ph-prikbord')?.addEventListener('click', () => showCaseBoard());
+  el.querySelector('.ph-veldgids')?.addEventListener('click', () => showVeldgids(showPauseHub));
   el.querySelector('.ph-companion')?.addEventListener('click', () =>
     showCabin(toWorld, HUB.terug));
   el.querySelector('.ph-badges')?.addEventListener('click', () => showBadges(showPauseHub));
