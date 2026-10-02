@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { shot, collectPageErrors, reportPageErrors, recordMotion, pageNow, motionFrames, median, plantedSlip } from './helpers';
+import { R, walkTo, type P2 } from './golden-lib';
 
 /**
  * Player-animation E2E (WORLD-PLAN W3.2). The W3.1-staged ranger rig carries
@@ -141,6 +142,59 @@ test('anim: the run clip plays when he runs, and the planted foot does not skate
   }
   await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 10_000 }).toBe('idle');
 
+  await reportPageErrors(testInfo, errors);
+  expect(errors).toEqual([]);
+});
+
+test('anim: running on sand kicks up a little dust at his heels — never walking, never off the sand, never under reduced motion (run 7)', async ({ page }, testInfo) => {
+  test.setTimeout(4 * 60_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await page.goto('/?dev=1');
+  await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 60_000 });
+  await page.getByRole('button', { name: 'Dit is mijn ranger' }).click({ timeout: 60_000 });
+  await expect.poll(() => R<string>(page, 'r.screen'), { timeout: 90_000 }).toBe('world');
+  await expect.poll(() => hook(page, (r) => r.clip()?.name ?? null), { timeout: 60_000, message: 'the ranger rig attaches' }).toBe('idle');
+  const puffs = (): Promise<number> => R<number>(page, 'r.gait().dust.puffs');
+  /** Hold ArrowUp (and Shift) for `ms`: how many puffs his heels kicked up meanwhile. */
+  const go = async (ms: number, run: boolean): Promise<number> => {
+    const p0 = await puffs();
+    if (run) await page.keyboard.down('Shift');
+    await page.keyboard.down('ArrowUp');
+    await page.waitForTimeout(ms);
+    await page.keyboard.up('ArrowUp');
+    if (run) await page.keyboard.up('Shift');
+    return (await puffs()) - p0;
+  };
+  /** Walk to `from` and a few steps on toward `to`, so he stands facing the way. */
+  const face = async (from: P2, to: P2): Promise<void> => {
+    await walkTo(page, from, { stopDist: 0.8, timeout: 60_000 });
+    const d = Math.hypot(to.x - from.x, to.z - from.z);
+    await walkTo(page, { x: from.x + ((to.x - from.x) * 2.5) / d, z: from.z + ((to.z - from.z) * 2.5) / d }, { stopDist: 0.6, timeout: 30_000 });
+    await page.waitForTimeout(500);
+  };
+  // from the spawn into the forest (−z): heather, then the forest floor — no sand
+  const offSand = await go(2_500, true);
+  // the open drift sand east of the jeep: walking, then running
+  const from = { x: 20, z: 6 }, to = { x: 50, z: 8 };
+  await face(from, to);
+  const walking = await go(1_800, false);
+  await face(from, to);
+  const running = await go(1_800, true);
+  const drawn = await R<boolean>(page, 'r.gait().dust.drawn');
+  await shot(page, 'anim-run-dust');
+  // the same run under reduced motion (read live): no dust at all
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await face(from, to);
+  const reduced = await go(1_800, true);
+  const note = `puffs: running off the sand ${offSand}, walking on sand ${walking}, running on sand ${running} (drawn ${drawn}), running on sand under reduced motion ${reduced}`;
+  testInfo.annotations.push({ type: 'dust', description: note });
+  console.log(note);
+  expect.soft(running, `running on sand kicks up dust at his heels (two puffs a footfall) — ${note}`).toBeGreaterThanOrEqual(8);
+  expect.soft(drawn, `…and its little cloud is drawn — ${note}`).toBe(true);
+  expect.soft(walking, `walking kicks up none — ${note}`).toBe(0);
+  expect.soft(offSand, `off the sand none — ${note}`).toBe(0);
+  expect.soft(reduced, `under reduced motion none — ${note}`).toBe(0);
   await reportPageErrors(testInfo, errors);
   expect(errors).toEqual([]);
 });

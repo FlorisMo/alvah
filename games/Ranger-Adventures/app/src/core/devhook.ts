@@ -476,6 +476,9 @@ export interface GaitRead {
   run: number;
   gain: number;
   soles: { heel: XYZ; toe: XYZ; tip: XYZ }[];
+  /** run 7 (feel): the puffs his heels have kicked up running on sand, and whether their
+   *  cloud is drawn now */
+  dust: { puffs: number; drawn: boolean };
 }
 
 const state = {
