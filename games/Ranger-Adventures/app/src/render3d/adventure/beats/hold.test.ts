@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { HoldCore, HOLD_S, HOLD_SILENT_S, RustTempo, readSeconds } from './hold-math.ts';
+import { GoCore, GO_AWAY_M, HoldCore, HOLD_S, HOLD_SILENT_S, RustTempo, readSeconds } from './hold-math.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { newPlay } from '../../../core/play.ts';
 import { DagnachtRun } from '../../../engines/dagnacht.ts';
@@ -124,4 +124,122 @@ test('run 7: temptations come at seeded moments, never in the first 1.1 s, one p
   const a = new RustTempo(knobsFor('dagnacht', 5), false, newPlay('t', 9, 1).fork('rust').rng).temptsFor(5);
   const b = new RustTempo(knobsFor('dagnacht', 5), false, newPlay('t', 9, 1).fork('rust').rng).temptsFor(5);
   assert.deepEqual(a, b, 'a replayed play: the same moments');
+});
+
+/* ---------------------------------------------------------- run 7: go ---- */
+
+/** A go moment over a real run (the flip is the last of five): the four before it right. */
+function goRig(waitS = 9): { core: GoCore; run: DagnachtRun; calls: boolean[] } {
+  const run = new DagnachtRun(5);
+  for (let i = 0; i < 4; i++) run.choose(true);
+  const calls: boolean[] = [];
+  const core = new GoCore({ waitS }, (goed) => { calls.push(goed); run.choose(goed); });
+  return { core, run, calls };
+}
+/** He walks from (0, 0) along +x at `v` m/s for `s` seconds from `t0` (60 frames a second);
+ *  the animals stand 8 m off on −x. Returns the first verdict and when. */
+function walk(core: GoCore, t0: number, s: number, v: number, dir = 1, running = false, from = 0): { verdict: string | null; at: number; x: number } {
+  const fam = { x: -8, z: 0 };
+  let x = from;
+  for (let i = 1; i <= Math.round(s * 60); i++) {
+    x += (dir * v) / 60;
+    const r = core.tick(t0 + i / 60, { x, z: 0, speed: v, running }, fam);
+    if (r) return { verdict: r, at: t0 + i / 60, x };
+  }
+  return { verdict: null, at: t0 + s, x };
+}
+
+test('go: nothing is judged while the line is read; walking 4 m away at a walk is choose(true), once', () => {
+  const { core, run, calls } = goRig();
+  assert.equal(core.tick(1, { x: 9, z: 0, speed: 1, running: false }, { x: -8, z: 0 }), null, 'the line is still read');
+  core.begin(2, { x: 0, z: 0 }, { x: -8, z: 0 });
+  const w = walk(core, 2, 6, 1.6);
+  assert.equal(w.verdict, 'right');
+  assert.ok(Math.abs(w.x - GO_AWAY_M) < 0.05, `right as he is 4 m away (${w.x.toFixed(2)})`);
+  assert.equal(core.tick(99, { x: 0, z: 0, speed: 0, running: false }, { x: -8, z: 0 }), null, 'done stays done');
+  assert.deepEqual(calls, [true]);
+  assert.ok(run.finished);
+  assert.deepEqual(run.summary(), { trials: 5, correct: 5, impulses: 0 });
+});
+
+test('go: standing still for the wait is the old rule ("Blijf staan"): choose(false), the moment comes back', () => {
+  const { core, run, calls } = goRig(6);
+  core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  let t = 0, r: string | null = null;
+  while (!r && t < 20) { t += 1 / 60; r = core.tick(t, { x: 0, z: 0, speed: 0, running: false }, { x: -8, z: 0 }); }
+  assert.equal(r, 'wrong');
+  assert.ok(Math.abs(t - 6) < 0.05, `after the level's wait (${t.toFixed(2)} s)`);
+  assert.equal(core.phase, 'react');
+  assert.equal(core.tick(t + 1, { x: 30, z: 0, speed: 1, running: false }, { x: -8, z: 0 }), null, 'nothing while the animals react');
+  core.again();
+  core.begin(t + 2, { x: 0, z: 0 }, { x: -8, z: 0 });
+  assert.equal(walk(core, t + 2, 5, 1.4).verdict, 'right', 'then he walks away');
+  assert.deepEqual(calls, [false, true]);
+  assert.deepEqual(run.summary(), { trials: 5, correct: 4, impulses: 1 }, 'marked once: the encounter is not never-wronged');
+});
+
+test('go: turning on the spot and shuffling count as standing; a walk that stops halfway runs the clock on', () => {
+  const { core } = goRig(5);
+  core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  // 3 s shuffling within his spot at a walking pace, then 2 m away, then he stops
+  let t = 0;
+  for (; t < 3; t += 1 / 60) assert.equal(core.tick(t, { x: 0.5 * Math.sin(t * 4), z: 0, speed: 1, running: false }, { x: -8, z: 0 }), null);
+  const w = walk(core, t, 1.3, 1.5, 1, false, 0);
+  assert.equal(w.verdict, null, 'walking: no verdict yet');
+  let r: string | null = null, s = w.at;
+  while (!r && s < w.at + 10) { s += 1 / 60; r = core.tick(s, { x: w.x, z: 0, speed: 0, running: false }, { x: -8, z: 0 }); }
+  assert.equal(r, 'wrong');
+  // (3 s on the spot and the first metre of his walk, ~0.7 s, were standing: 5 − 3.7 s)
+  assert.ok(s - w.at < 1.6 && s - w.at > 1.1, `the 3 s on the spot counted: wrong ~1.3 s after he stopped (${(s - w.at).toFixed(2)})`);
+});
+
+test('go: walking 1.5 m toward the animals is wrong at once; sideways is neither', () => {
+  const a = goRig();
+  a.core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  const w = walk(a.core, 0, 3, 1.4, -1);
+  assert.equal(w.verdict, 'wrong');
+  assert.ok(Math.abs(w.x + 1.5) < 0.05, `1.5 m closer (${w.x.toFixed(2)})`);
+  const b = goRig(30);
+  b.core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  let r: string | null = null;
+  for (let i = 1; i <= 180 && !r; i++) r = b.core.tick(i / 60, { x: 0, z: (i / 60) * 1.2, speed: 1.2, running: false }, { x: -8, z: 0 });
+  assert.equal(r, null, '3.6 m sideways: not yet 4 m, never closer');
+});
+
+test('go: running counts as neither — no step of it is judged, no second of it is standing', () => {
+  const { core, calls } = goRig(2);
+  core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  assert.equal(walk(core, 0, 4, 3.5, 1, true).verdict, null, 'running 14 m away: nothing yet');
+  assert.equal(walk(core, 4, 4, 3.5, -1, true, 14).verdict, null, 'running right back at them: nothing either');
+  // he slows to a walk where he is (back at the start: not away) and then stands: the 8 s of running were no standing
+  let r: string | null = null, t = 8;
+  while (!r && t < 14) { t += 1 / 60; r = core.tick(t, { x: 0, z: 0, speed: 0, running: false }, { x: -8, z: 0 }); }
+  assert.equal(r, 'wrong');
+  assert.ok(t - 8 > 1.9, `only the standing counted (${(t - 8).toFixed(2)} s)`);
+  assert.deepEqual(calls, [false]);
+});
+
+test('go: away but closer is not away — he must end farther from the animals than he stood', () => {
+  const { core } = goRig(30);
+  core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  // 4.5 m round them on a circle of radius 8: the same distance, never farther
+  let r: string | null = null;
+  for (let i = 1; i <= 240 && !r; i++) {
+    const a = (i / 240) * 0.6;
+    r = core.tick(i / 60, { x: -8 + 8 * Math.cos(a), z: 8 * Math.sin(a), speed: 1, running: false }, { x: -8, z: 0 });
+  }
+  assert.equal(r, null);
+});
+
+test('go: a card and the feet log the same summary for the same answers', () => {
+  const { core, run } = goRig(4);
+  core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  let t = 0, r: string | null = null;
+  while (!r) { t += 1 / 60; r = core.tick(t, { x: 0, z: 0, speed: 0, running: false }, { x: -8, z: 0 }); }
+  core.again();
+  core.begin(t, { x: 0, z: 0 }, { x: -8, z: 0 });
+  walk(core, t, 5, 1.4);
+  const cards = new DagnachtRun(5);
+  for (const g of [true, true, true, true, false, true]) cards.choose(g);
+  assert.deepEqual(run.summary(), cards.summary());
 });
