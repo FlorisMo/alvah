@@ -32,11 +32,18 @@ render3d/World.ts  (≈700 lines) the composer: builds the world/ modules, calls
                         poacher, roaming animals
    world/Markers.ts     mission markers, missiebord, the hut's porch ring (once Bram told
                         about the young raaf), sit-spot, proximity, wayfinding
-   world/Vehicles.ts    jeep, helicopter + pads, dust
-   world/Player.ts      the ranger rig, on-foot movement, footsteps
+   world/Vehicles.ts    jeep, helicopter + pads, the jeep's dust (world/Dust.ts: one Points
+                        cloud, hidden while no puff lives, lit like the ground and drawn through
+                        the tone curve, colour space and fog; the ranger's heels have their own)
+   world/Player.ts      the ranger rig, on-foot movement, footsteps; running he leans and
+                        pumps his arms (PlayerAnim.runLook, laid on the run clip by
+                        PlayerRig) and his heels kick up dust on sand (none under reduced motion)
    world/CameraRig.ts   follow camera (told by the player's steering, never chasing), orbit,
                         clear-view search, occluder-fade decision, reframes, the hand-over
-                        from a presented shot
+                        from a presented shot; climbing into or out of a vehicle glides
+                        (≤ 90°/s) unless the view would turn more than DIP_TURN (90°, the jeep
+                        boarded from its front): then World.ride dips the warm veil
+                        (ui/flow/session.dipCut), he climbs in under it and the view cuts
    world/Presenter.ts   the title and the maker as shots of the spawn clearing (the world
                         frozen like an activity), glides between them, the ranger's turns
    RangerLook.ts        paints the avatar maker's choices onto the ranger GLB

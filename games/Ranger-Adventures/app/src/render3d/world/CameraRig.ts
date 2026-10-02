@@ -59,6 +59,12 @@ export interface Creature { x: number; y: number; z: number; h: number }
 
 const DEG = Math.PI / 180;
 
+/** Run 7 (feel): a hand-over that would turn the view further than this (climbing into the
+ *  jeep from its front turned it ~170° round the jeep) is not a glide but a soft dip-cut
+ *  (World.ride): a motion-sensitive child never watches the world swing round. Up to it the
+ *  glide stays (never faster than ~90°/s, `handover`). */
+export const DIP_TURN = 90 * DEG;
+
 export class CameraRig {
   private readonly camDesired = new THREE.Vector3();
   // The lens model (place): a smoothed pivot + boom length + eye height at the eased
@@ -390,6 +396,13 @@ export class CameraRig {
     const a = yawPitch(d.x, d.y, d.z);
     this.handoff = { pos: this.camera.position.clone(), yaw: a.yaw, pitch: a.pitch, t: 0, dur: fit ? -seconds : seconds };
     this.blend = null; // one hand-over at a time
+  }
+
+  /** Run 7 (feel): how far (rad, 0…π) the view turns to look along `bearing` (a heading)
+   *  from where the lens looks now: what a hand-over to that bearing would sweep. */
+  turnTo(bearing: number): number {
+    const d = this.camera.getWorldDirection(this._dir);
+    return Math.abs(wrapAngle(bearing - Math.atan2(d.x, d.z)));
   }
 
   /** Whether the rig has placed the lens yet (a glide needs a lens to start from). */

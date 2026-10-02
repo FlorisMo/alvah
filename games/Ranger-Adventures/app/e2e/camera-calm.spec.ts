@@ -25,9 +25,10 @@ import { shot, collectPageErrors, reportPageErrors } from './helpers';
 test.use({ viewport: { width: 1280, height: 800 } }); // the laptop comes first
 
 /** One rendered frame: time (ms), the lens, its aim, FOV, lens → ranger distance, how
- *  solid he is drawn, his on-screen height share, in the jeep, his feet, running. */
+ *  solid he is drawn, his on-screen height share, in the jeep, his feet, running, and (run
+ *  7) how far the world's soft dip (`.ra-dip`, World.ride) is up over the picture. */
 type Frame = { t: number; x: number; y: number; z: number; yaw: number; pitch: number; fov: number; dist: number;
-  op: number; hf: number; jeep: boolean; px: number; pz: number; run: boolean };
+  op: number; hf: number; jeep: boolean; px: number; pz: number; run: boolean; veil: number };
 
 async function enterWorld(page: Page): Promise<void> {
   await page.goto('/?dev=1');
@@ -52,9 +53,11 @@ async function startTrace(page: Page): Promise<void> {
       const t = w.__stage?.clock?.oldTime ?? performance.now();
       const r = w.__ranger;
       const c = r.cam(); const p = r.pos();
+      const dip = document.querySelector<HTMLElement>('.ra-dip');
       if (c && p) {
         w.__calm.push({ t, x: c.x, y: c.y, z: c.z, yaw: c.yaw, pitch: c.pitch, fov: c.fov, dist: c.dist, op: c.avatarOpacity,
-          hf: c.avatarScreen.heightFrac, jeep: !!r.vehicle()?.inVehicle, px: p.x, pz: p.z, run: !!r.motion()?.running });
+          hf: c.avatarScreen.heightFrac, jeep: !!r.vehicle()?.inVehicle, px: p.x, pz: p.z, run: !!r.motion()?.running,
+          veil: dip ? Number(getComputedStyle(dip).opacity) : 0 });
       }
       requestAnimationFrame(tick);
     };
@@ -281,6 +284,84 @@ test('calm camera: under reduced motion climbing in and stepping out are each on
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await enterWorld(page);
   await boardAndStepOut(page, true);
+  await reportPageErrors(info, errors);
+  expect(errors).toEqual([]);
+});
+
+/** Run 7 (feel): how the view turns while he climbs in, as the player sees it: the fastest
+ *  turn over any 100 ms the dip is not up (°/s), the frames that jump over 6° while it IS up
+ *  (the cut it hides), and how long the dip was over the picture at all (s). */
+function climb(f: Frame[]): { seenRate: number; hiddenCuts: number; seenJumps: number; veilMax: number; veilSecs: number } {
+  let seenRate = 0, hiddenCuts = 0, seenJumps = 0, veilMax = 0, v0 = -1, v1 = -1;
+  for (let i = 0; i < f.length; i++) {
+    veilMax = Math.max(veilMax, f[i].veil);
+    if (f[i].veil > 0.02) { if (v0 < 0) v0 = f[i].t; v1 = f[i].t; }
+    if (i > 0 && between(f[i - 1], f[i]).turn > 6) {
+      if (Math.max(f[i - 1].veil, f[i].veil) >= 0.5) hiddenCuts += 1; else seenJumps += 1;
+    }
+    let j = i;
+    while (j < f.length && f[j].t - f[i].t < 100) j += 1;
+    if (j >= f.length) continue;
+    if (f.slice(i, j + 1).some((r) => r.veil >= 0.5)) continue;
+    seenRate = Math.max(seenRate, between(f[i], f[j]).turn / ((f[j].t - f[i].t) / 1000));
+  }
+  return { seenRate: Math.round(seenRate), hiddenCuts, seenJumps, veilMax: Math.round(veilMax * 100) / 100, veilSecs: v0 < 0 ? 0 : (v1 - v0) / 1000 };
+}
+
+/** Walk to 7 m in front of the parked jeep, then up to its nose until it offers "Stap in":
+ *  he faces it, so the chase view behind it looks the other way. The turn (°) it would make. */
+async function toTheJeepsFront(page: Page): Promise<number> {
+  const v = await R<P2 & { heading: number }>(page, 'r.vehicle()');
+  await walkTo(page, { x: v.x + Math.sin(v.heading) * 7, z: v.z + Math.cos(v.heading) * 7 }, { stopDist: 0.8, timeout: 60_000 });
+  await walkTo(page, v, { stopDist: 0.3, until: (s) => s.jeepNear, timeout: 60_000 });
+  await sleep(page, 1_500); // he stands; the view rests behind him
+  const yaw = (await R<{ yaw: number }>(page, 'r.cam()')).yaw - Math.PI; // (the hook's yaw is the legacy one: + π)
+  let d = v.heading - yaw;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return Math.abs(d) * 180 / Math.PI;
+}
+
+test('calm camera: climbing into the jeep from its front never swings the view round it — one soft dip-cut, a plain cut under reduced motion (run 7)', async ({ page }, info) => {
+  test.setTimeout(6 * 60_000);
+  const errors: string[] = [];
+  collectPageErrors(page, errors);
+  await enterWorld(page);
+  for (const reduced of [false, true]) {
+    const tag = reduced ? 'reduced motion' : 'full motion';
+    if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' }); // (read live, every frame)
+    const turn = await toTheJeepsFront(page);
+    await startTrace(page);
+    await sleep(page, 300);
+    const t0 = await page.evaluate(() => performance.now());
+    await page.getByRole('button', { name: /Stap in de jeep/ }).click();
+    await expect.poll(() => R<boolean>(page, 'r.vehicle().inVehicle'), { timeout: 5_000 }).toBe(true);
+    await sleep(page, 2_500);
+    await shot(page, `calm-board-front-${reduced ? 'reduced' : 'dip'}`);
+    const f = (await stopTrace(page)).filter((r) => r.t >= t0 - 100);
+    const c = climb(f);
+    const t = transition(f, t0);
+    const note = `${tag}: from the front (a ${turn.toFixed(0)}° turn): ${JSON.stringify(c)}, ${t.jumps} cuts, lens → ${f[f.length - 1].dist.toFixed(2)} m`;
+    info.annotations.push({ type: 'camera', description: note });
+    console.log(note);
+    expect.soft(turn, `${tag}: he stood at the jeep's front (the chase view looks the other way) — ${note}`).toBeGreaterThan(110);
+    expect.soft(f[f.length - 1].dist, `${tag}: aboard, the view is the chase view — ${note}`).toBeGreaterThan(7);
+    expect.soft([...new Set(f.map((r) => Math.round(r.fov * 100) / 100))], `${tag}: the FOV is 55 on every frame — ${note}`).toEqual([55]);
+    if (reduced) {
+      expect.soft(c.veilMax, `${tag}: no dip at all — ${note}`).toBe(0);
+      expect.soft(t.jumps, `${tag}: one clean cut — ${note}`).toBe(1);
+      expect.soft(t.moved, `${tag}: …and nothing glides round it — ${note}`).toBeLessThanOrEqual(2);
+    } else {
+      expect.soft(c.seenRate, `${tag}: the view the player sees never turns faster than 90°/s — ${note}`).toBeLessThanOrEqual(90);
+      expect.soft(c.seenJumps, `${tag}: no frame he can see snaps the view — ${note}`).toBe(0);
+      expect.soft(c.hiddenCuts, `${tag}: the turn is one cut, under the dip — ${note}`).toBe(1);
+      expect.soft(c.veilMax, `${tag}: the dip comes all the way up — ${note}`).toBeGreaterThan(0.9);
+      expect.soft(c.veilSecs, `${tag}: …and is gone again within about half a second — ${note}`).toBeLessThan(0.9);
+    }
+    await page.getByRole('button', { name: /Stap uit/ }).click();
+    await expect.poll(() => R<boolean>(page, 'r.vehicle().inVehicle'), { timeout: 5_000 }).toBe(false);
+    await sleep(page, 1_500);
+  }
   await reportPageErrors(info, errors);
   expect(errors).toEqual([]);
 });

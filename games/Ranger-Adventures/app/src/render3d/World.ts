@@ -35,7 +35,8 @@ import { Fauna } from './world/Fauna';
 import { Markers, type WorldMarker } from './world/Markers';
 import { Vehicles, MARKER_R, PAD_RADIUS, type JeepStall } from './world/Vehicles';
 import { Player, SPAWN, type TapTarget } from './world/Player';
-import { CameraRig } from './world/CameraRig';
+import type { DustHeart } from './world/Dust';
+import { CameraRig, DIP_TURN } from './world/CameraRig';
 import { Presenter, type Shot, type Focus } from './world/Presenter';
 import { DevReadback } from './world/DevReadback';
 import type { MoveLimits, Obstacle } from './CharacterController';
@@ -169,6 +170,11 @@ export class World {
   // a menu card over the live world (Pauze, the missiebord, a briefing, the sporenboek):
   // the ranger stands still behind it and a jeep or helicopter gets no input
   private menuOpen: () => boolean = () => false;
+  // run 7 (feel): the UI's soft dip (the warm veil fadeCut uses), for a climb into or out of
+  // a vehicle that would turn the view more than DIP_TURN (`ride`); null: a plain cut
+  private dip: ((move: () => void, then: () => void) => void) | null = null;
+  private dipping = false;  // a dip is on its way in: he stands, the keys wait
+  private rideCut = false;  // the climb under the dip cuts the view (no glide)
   // the title and the ranger maker are shots of this world (world/Presenter.ts): while
   // one is up the world is frozen like an activity, and the presenter owns the lens
   private readonly presenter: Presenter;
@@ -316,7 +322,7 @@ export class World {
         // in the light mode, whose few frames a second would make a glide a slide show)
         recut: () => {
           const reduced = livePolicy().reduced;
-          if (!reduced && !lightMode() && this.cam.placedOnce) this.cam.handover(VEHICLE_GLIDE_S, true);
+          if (!reduced && !lightMode() && this.cam.placedOnce && !this.rideCut) this.cam.handover(VEHICLE_GLIDE_S, true);
           this.cam.place(true, 0, reduced);
         },
         clearWalkPrompts: () => this.pois.clearForVehicle(),
@@ -424,9 +430,12 @@ export class World {
    * what the action is (open the mission briefing).
    */
   private tryInteract(): void {
-    if (this.frozen || this.menuOpen() || this.mode) return; // an adventure offers nothing else
+    if (this.frozen || this.menuOpen() || this.mode || this.dipping) return; // an adventure offers nothing else
     // W5.1/W5.3b: the jeep + helicopter own the interact key while riding and when
-    // standing beside a parked one — they win over the hub/marker affordances.
+    // standing beside a parked one — they win over the hub/marker affordances. Climbing
+    // in or stepping out changes the view (run 7: a big turn is a soft dip-cut, `ride`).
+    const view = this.vehicles.interactView();
+    if (view !== null) { this.ride(view, () => this.vehicles.interact()); return; }
     if (this.vehicles.interact()) return;
     // then the spawn case-board hub (W2.2), the sit-spot (W6.4b2), a mission marker.
     this.pois.interact();
@@ -476,6 +485,32 @@ export class World {
   /** The UI's "a menu card is over the world" test, read each frame (see `menuOpen`). */
   setMenuGate(fn: () => boolean): void {
     this.menuOpen = fn;
+  }
+
+  /** Run 7 (feel): the UI's soft dip for a cut inside the world (ui/flow/session.dipCut):
+   *  `move` runs while the veil is deepest, `then` once the new view is drawn under it. */
+  setDip(fn: ((move: () => void, then: () => void) => void) | null): void {
+    this.dip = fn;
+  }
+
+  /**
+   * Run 7 (feel): climb into or out of a vehicle (`act`), the view ending up looking along
+   * `view`. Today's glide (CameraRig.handover: eased, never faster than ~90°/s) when that
+   * turns the view at most DIP_TURN; a bigger turn (the jeep boarded from its front swung
+   * the lens ~170° round it) is a soft dip-cut instead: the warm veil comes up, he climbs in
+   * under it, the view cuts (`rideCut`) and the veil lifts, so nothing swings in front of a
+   * motion-sensitive child. Reduced motion and the light mode keep their plain cut (recut);
+   * a no-op `act` (`view` null) just runs. He stands and the keys wait while the veil comes.
+   */
+  private ride(view: number | null, act: () => void): void {
+    if (this.dipping) return;
+    const dip = this.dip;
+    if (view === null || !dip || livePolicy().reduced || lightMode() || !this.cam.placedOnce || this.cam.turnTo(view) <= DIP_TURN) { act(); return; }
+    this.dipping = true;
+    dip(() => {
+      this.rideCut = true;
+      try { act(); } finally { this.rideCut = false; }
+    }, () => { this.dipping = false; });
   }
 
   /** Register the spawn case-board hub callbacks (W2.2): `onNear(true|false)` as the
@@ -558,7 +593,7 @@ export class World {
 
   /** W5.3b: lift off from the pad (no-op unless beside the parked heli and available). */
   enterHeli(): void {
-    this.vehicles.enterHeli();
+    this.ride(this.vehicles.viewAfter('heli-in'), () => this.vehicles.enterHeli());
   }
 
   /** W5.3b: land — the autopilot sets it down on the nearest helipad. */
@@ -568,7 +603,7 @@ export class World {
 
   /** W5.3b: step out of the helicopter resting on the ground (no-op in the air). */
   exitHeli(): void {
-    this.vehicles.exitHeli();
+    this.ride(this.vehicles.viewAfter('heli-out'), () => this.vehicles.exitHeli());
   }
 
   /** Dev-hook accessor (W5.1): the drivable jeep's live state (null before it is placed). */
@@ -578,7 +613,7 @@ export class World {
 
   /** W5.1: climb into the parked jeep (no-op unless standing beside it). */
   enterVehicle(): void {
-    this.vehicles.enterVehicle();
+    this.ride(this.vehicles.viewAfter('jeep-in'), () => this.vehicles.enterVehicle());
   }
 
   /** Run 6 polish: under a mission's briefing card, the parked jeep is taken out of that
@@ -590,7 +625,7 @@ export class World {
 
   /** W5.1: step out of the jeep beside it, back to walking (no-op unless driving). */
   exitVehicle(): void {
-    this.vehicles.exitVehicle();
+    this.ride(this.vehicles.viewAfter('jeep-out'), () => this.vehicles.exitVehicle());
   }
 
   /** Dev-hook accessor (W1.4): every marker's world position, for E2E navigation. */
@@ -616,6 +651,12 @@ export class World {
   /** Dev-hook accessor (run 6): the ranger's gait and his soles (the foot-slip probe). */
   playerGait(): ReturnType<Player['gait']> {
     return this.player.gait();
+  }
+
+  /** Dev-hook accessor (run 7 feel): the heels' or the jeep's dust, its strongest puff's
+   *  heart on screen before and after the cloud is drawn (world/Dust.ts DustCloud.probe). */
+  dustHeart(which: 'heels' | 'jeep'): DustHeart | null {
+    return which === 'jeep' ? this.vehicles.dustHeart() : this.player.dustHeart();
   }
 
   /** How the ranger moves right now: where he stands, his heading, his ground speed
@@ -1076,7 +1117,7 @@ export class World {
     } else if (!this.frozen && this.vehicles.inVehicle) {
       // W5.1: arcade drive mode owns movement while the ranger is in the jeep.
       this.vehicles.driveJeep(dt);
-    } else if (!this.frozen && !this.menuOpen()) {
+    } else if (!this.frozen && !this.menuOpen() && !this.dipping) {
       // on foot: tank keys, the stick or a tap-walk move the ranger, and his steering
       // tells the follow camera what to do (world/Player.walk → CameraRig.steer). In an
       // adventure the same walk (the keys only while its input is free), and a held

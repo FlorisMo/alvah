@@ -355,6 +355,9 @@ export class Sky {
   buildCloudShadows(): void {
     const map = { value: cloudTexture() };
     const off = this.cloudOff;
+    // run 7 (feel): the same two uniforms for a shader that samples the shade itself (the
+    // dust, world/Dust.ts: a puff under a cloud is shaded like the sand under it)
+    this.scene.userData.cloudShade = { map, off };
     this.scene.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
