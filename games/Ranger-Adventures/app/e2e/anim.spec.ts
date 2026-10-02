@@ -205,13 +205,16 @@ test('anim: running on sand kicks up a little dust at his heels — never walkin
  *  before its cloud is drawn and just after, in one frame. */
 interface DustHeart { before: [number, number, number]; after: [number, number, number]; alpha: number; x: number; y: number }
 
-test('anim: the heel dust reads as dust in every mood — a puff is a touch lighter than its sand, never a glowing dot, never yellower (run 7)', async ({ page }, testInfo) => {
+test('anim: the heel dust reads as dust in every mood — a puff is a touch lighter than its sand, never a glowing dot, never yellower (run 7)', async ({ browser }, testInfo) => {
   test.setTimeout(8 * 60_000);
   const errors: string[] = [];
-  collectPageErrors(page, errors);
   const lum = (c: readonly number[]): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   const notes: string[] = [];
   for (const mood of ['gouden-uur', 'ochtendnevel', 'zonnig', 'bewolkt', 'schemer']) {
+    // each mood in a fresh context: a fresh save (the page writes its save as it leaves)
+    const ctx = await browser.newContext({ baseURL: testInfo.project.use.baseURL, viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    collectPageErrors(page, errors);
     await page.goto(`/?dev=1&mood=${mood}`);
     await page.getByRole('button', { name: 'Begin', exact: true }).click({ timeout: 60_000 });
     await page.getByRole('button', { name: 'Dit is mijn ranger' }).click({ timeout: 60_000 });
@@ -253,7 +256,7 @@ test('anim: the heel dust reads as dust in every mood — a puff is a touch ligh
     expect.soft(typical, `a puff's heart is at most about 25 levels lighter than its sand (dust, not a glowing dot) — ${note}`).toBeLessThanOrEqual(25);
     expect.soft(overlap, `…and nine in ten stay within about 30 even where two or three puffs overlap — ${note}`).toBeLessThanOrEqual(32);
     expect.soft(yellower, `a puff is no more yellow than its sand (blue/red not more than 0.05 below it) — ${note}`).toBeGreaterThanOrEqual(-0.05);
-    await page.evaluate(() => localStorage.clear()); // the next mood starts from a fresh save
+    await ctx.close();
   }
   testInfo.annotations.push({ type: 'dust', description: notes.join(' · ') });
   await reportPageErrors(testInfo, errors);
