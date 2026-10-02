@@ -252,7 +252,9 @@ export class Surprises {
         // the buzzard's low circle: over open ground ahead (not the forest), never a home's
         for (const p of groundSpots(v, spec.dist, fork)) {
           if (terrain.biome(p.x, p.z) === 'bos') continue;
-          return { x: p.x, z: p.z, y: terrain.y(p.x, p.z) + LOW_Y, facing: 0 };
+          const y = terrain.y(p.x, p.z) + LOW_Y;
+          if (this.hidden(p.x, y, p.z, null)) continue; // (not behind the crowns: where he sees it)
+          return { x: p.x, z: p.z, y, facing: 0 };
         }
         return null;
       }
