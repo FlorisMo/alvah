@@ -91,11 +91,16 @@ const visible = async (page: Page, name: RegExp | string): Promise<boolean> =>
 
 const uiText = (page: Page): Promise<string> => page.evaluate(() => document.getElementById('ui')?.innerText ?? '');
 
+/** Run 7: `RANGER_SEED=N` replays a session's plays from seed N (`?seed=`: the first play
+ *  draws N; unset, a fresh seed); `RANGER_MOOD=<id>` plays every mission in that mood
+ *  (`?mood=`; unset, a fresh save's first visit: the golden hour). */
+const SEED = process.env.RANGER_SEED ? `&seed=${process.env.RANGER_SEED}` : '';
+const MOOD = process.env.RANGER_MOOD ? `&mood=${encodeURIComponent(process.env.RANGER_MOOD)}` : '';
+
 /** Begin → the ranger maker (a fresh save) → the world. */
 async function boot(log: Log): Promise<void> {
   const page = log.page;
-  // run 7: RANGER_SEED replays a session's plays (?seed=N: the first play draws N)
-  await page.goto(process.env.RANGER_SEED ? `/?dev=1&seed=${process.env.RANGER_SEED}` : '/?dev=1');
+  await page.goto(`/?dev=1${SEED}${MOOD}`);
   await click(log, 'Begin', 'title', 30_000, 30_000); // the title may still be dressing itself
   const maker = page.getByRole('button', { name: 'Dit is mijn ranger' });
   // (its click builds the world inside the handler: on a busy machine that takes a while)
@@ -794,6 +799,9 @@ test('De wildcamera: stopped in the night, the golden hour comes back and the ca
     const t0 = Date.now();
     await expect.poll(() => daylight(page), { timeout: 8_000, message: 'the golden hour comes back after a stop' }).toBe(1);
     log.note(`the golden hour was back ${((Date.now() - t0) / 1000).toFixed(1)} s after the stop`);
+    // run 7 (moods): the night hands back the visit's own mood (RANGER_MOOD plays it in one)
+    const md = await R<{ session: string; now: string } | null>(page, 'r.mood()');
+    log.soft(!md || md.now === md.session, `the visit's mood is back after the night (${md?.now}; the visit's: ${md?.session})`);
     await expect.poll(async () => (await R<string>(page, 'r.screen')) === 'world' && (await R<string | null>(page, 'r.missionView')) === null,
       { timeout: 8_000, message: 'back in free roam' }).toBe(true);
     await sleep(page, 1_000);

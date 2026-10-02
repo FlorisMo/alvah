@@ -5,6 +5,7 @@
  * test must never use.
  */
 
+import type * as THREE from 'three';
 import type { World } from '../../render3d/World';
 import {
   providePos, provideCameraYaw, provideNearId, provideMarkers, provideBoard, provideSitSpot, providePorch,
@@ -12,8 +13,9 @@ import {
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, provideObstacles, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
   provideHeli, provideQuality, provideBoundary, provideTags, provideMissionPlaces, provideResidents,
-  provideGrowth, provideMood,
+  provideGrowth, provideMood, provideAnimals, renderView,
 } from '../../core/devhook';
+import { animalsSeen } from '../../render3d/AnimalDress';
 import { store } from '../../core/state';
 import { EF_ENGINES, floorLevel } from '../../core/skill';
 import { adventureFor } from '../../render3d/adventure/registry';
@@ -56,6 +58,11 @@ export function wireWorldDevhook(world: World): void {
   provideMissionPlaces((id) => { const p = adventureFor(id)?.home.places; return p ? { ...p } : null; }); // run 6
   provideResidents(() => world.residents.read(), () => world.residents.moverSpots()); // run 6: the homes
   provideMood(() => world.mood());                    // run 7: the session's mood, the one on screen
+  provideAnimals(() => {                              // run 7: the animals in the picture (read-only)
+    const v = renderView() as { scene?: THREE.Scene; camera?: THREE.Camera } | null;
+    const canvas = document.getElementById('scene') as HTMLCanvasElement | null;
+    return v?.scene && v.camera && canvas ? animalsSeen(v.scene, v.camera, canvas.clientWidth, canvas.clientHeight) : [];
+  });
   // run 7: his growth and his finds, straight from the save (copies: reading never writes)
   provideGrowth({
     history: () => store.get().geschiedenis.map((b) => ({ ...b })),

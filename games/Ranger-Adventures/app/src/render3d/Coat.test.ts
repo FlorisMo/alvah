@@ -26,9 +26,9 @@ function rgb(hex: string): { r: number; g: number; b: number } {
   return { r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16) };
 }
 
-test('coat tint is sparse: only the confirmed vos contradiction is corrected', () => {
+test('coat tint is sparse: only the confirmed vos and red deer contradictions are corrected', () => {
   const tinted = ALL.filter((id) => coatTintFor(id) !== null);
-  assert.deepEqual(tinted, ['animal-vos-fox'], 'no speculative retints beyond the vos');
+  assert.deepEqual(tinted, ['animal-vos-fox', 'animal-edelhert-reddeer'], 'no speculative retints beyond the vos and the red deer');
   assert.equal(coatTintFor(null), null);
   assert.equal(coatTintFor('animal-ree-roedeer'), null, 'the dossier-matching cast is untouched');
 });
@@ -38,6 +38,15 @@ test('the vos tint is rufous/orange and keeps its shading (strength < 1)', () =>
   const c = rgb(t.color);
   assert.ok(c.r > c.g && c.g > c.b, `vos tint ${t.color} must read rufous (r>g>b)`);
   assert.ok(t.strength > 0 && t.strength < 1, 'a partial lerp keeps the pack shading');
+});
+
+test('the red deer is red-brown (dossier: zomer roestig/roodbruin) on its coat only', () => {
+  const t = coatTintFor('animal-edelhert-reddeer')!;
+  const c = rgb(t.color);
+  assert.ok(c.r > c.g * 1.5 && c.g > c.b, `red deer tint ${t.color} must read red-brown`);
+  assert.ok(t.strength > 0 && t.strength < 1, 'a partial lerp keeps the pack shading');
+  assert.deepEqual(t.only, ['Material'], 'its body only: the antlers and the pale rump stay its own');
+  assert.equal(coatTintFor('animal-vos-fox')!.only, undefined, 'the fox: every body material');
 });
 
 test('posture: head-low species pitch forward, alert/level species stay upright', () => {

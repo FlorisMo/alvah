@@ -14,9 +14,7 @@ import * as THREE from 'three';
 import { loadModel, loadRig, prepModel } from '../Models';
 import { SIZE } from '../AnimalScale';
 import { anchorInBiome, biomeAt, type Biome } from '../Biomes';
-import { applyEyes } from '../EyeMaterial';
-import { applyCoat, applyPosture } from '../AnimalDress';
-import { applyCalmPose } from '../CalmPoseRig';
+import { dressAnimal } from '../AnimalDress';
 import { gaitFor, motionAt, REST, type MotionRecipe } from '../ProceduralMotion';
 import { wayfind, bearing, distanceTo, SteadyCue, type WayCue } from '../Wayfinding';
 import { RouteGuide, RouteMap, arrivalSpot, openHeading } from '../Paths';
@@ -27,7 +25,6 @@ import { boxObstacle, obstacleGap, type MoveLimits, type Obstacle } from '../Cha
 import type { Terrain } from './Terrain';
 import { Labels } from './Labels';
 import { proceduralTotem } from './props';
-import { mergeColourSplits } from '../play/merge';
 import { FarRest, restFar } from '../play/fade';
 
 export interface WorldMarker {
@@ -273,18 +270,9 @@ export class Markers {
         void loadRig(mk.modelId).then((rig) => {
           if (!rig) return;
           const prepped = prepModel(rig.group, mk.height);
-          // §1e eye system per species (catchlight + clearcoat cornea + pupil +
-          // iris parallax); golden-hour world ⇒ dusk off (eyeshine stays calm).
-          applyEyes(prepped, mk.modelId, { dusk: false }); // parallax reads the live policy (no restart)
-          // W3.7b dossier: coat-tint correction (only for a confirmed contradiction,
-          // e.g. the CC0 vos) + a subtle head-low posture for snuffling species.
-          applyCoat(prepped, mk.modelId);
-          applyPosture(prepped, mk.modelId);
-          // §B never-scary calm-pose: a static rest-pose bias (ears/tail/head into the
-          // calm shape). Best-effort — a single-mesh Meshy animal with no named bones is
-          // left untouched. Not motion (one-time nudge), so reduced-motion does not apply.
-          applyCalmPose(prepped, mk.modelId);
-          mergeColourSplits(prepped); // one draw call per animal, not one per colour
+          // the world's one dressing (AnimalDress.dressAnimal): eyes, the dossier coat,
+          // a head-low stance for the snuffling species, the calm pose, one draw call
+          dressAnimal(prepped, mk.modelId);
           // drop the totem (keep the ring), add the real animal where it stood
           const totem = stand.children.find((c) => c.userData.totem);
           if (totem) stand.remove(totem);

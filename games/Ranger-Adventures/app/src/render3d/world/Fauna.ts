@@ -19,12 +19,11 @@ import * as THREE from 'three';
 import { loadModel, loadRig, prepModel, renderedHeight } from '../Models';
 import { SIZE, sizeRow, standHeightFor } from '../AnimalScale';
 import { applyEyes } from '../EyeMaterial';
-import { applyCoat, applyPosture } from '../AnimalDress';
+import { dressAnimal } from '../AnimalDress';
 import { applyCalmPose } from '../CalmPoseRig';
 import { gaitFor, motionAt, type MotionRecipe } from '../ProceduralMotion';
 import { clearLoop, glideAt, loopPeriod, wanderAt, type GlideConfig, type WanderConfig } from '../AmbientPaths';
 import { dampFactor } from '../play/kit-math';
-import { mergeColourSplits } from '../play/merge';
 import { FarRest, restFar } from '../play/fade';
 import { obstacleGap, resolveMove, type MoveLimits, type Obstacle } from '../CharacterController';
 import {
@@ -593,11 +592,7 @@ export class Fauna {
       void loadRig(a.id).then((rig) => {
         if (!rig) return;
         const prepped = prepModel(rig.group, h);
-        applyEyes(prepped, a.id, { dusk: false });
-        applyCoat(prepped, a.id);     // W3.7b: dossier coat-tint correction (vos rufous)
-        applyPosture(prepped, a.id);  // W3.7b: head-low stance for snuffling species
-        applyCalmPose(prepped, a.id); // §B never-scary rest-pose bias
-        mergeColourSplits(prepped);   // one draw call per animal, not one per colour
+        dressAnimal(prepped, a.id); // the world's one dressing (eyes, coat, stance, calm pose, one draw call)
         group.add(prepped);
         entry.body = prepped;
         if (a.baked && rig.clips.length) {
@@ -644,7 +639,7 @@ export class Fauna {
       void loadModel(b.id).then((m) => {
         if (!m) return;
         const prepped = prepModel(m, b.h);
-        applyCalmPose(prepped, b.id);
+        dressAnimal(prepped, b.id, { eyes: false, merge: false });
         group.add(prepped);
       });
     });

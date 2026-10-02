@@ -122,6 +122,8 @@ export class Dressing {
   // and `uAmp` (0 under reduced-motion → waveless) each frame.
   private waterMat: THREE.ShaderMaterial | null = null;
   private lastWindT = NaN;                       // skip redundant wind re-uploads
+  private windK = 1;                             // run 7: the mood's breeze (Sky.wind)
+  private lastWindK = 1;
   // tall grasses that catch the wind (marram + reed): their instanced mesh + the
   // per-blade base transform, re-tilted each frame by windSway.
   readonly windMeshes: {
@@ -224,7 +226,8 @@ export class Dressing {
 
   /** Per frame, on the ambient clock: the grasses lean in the wind and the ven water
    *  shimmers (W4.8: its ripple amplitude is exactly 0 under reduced-motion). */
-  animate(skyTime: number, reduced: boolean): void {
+  animate(skyTime: number, reduced: boolean, wind = 1): void {
+    this.windK = wind; // run 7: the mood's breeze (× the golden hour's sway)
     this.applyWind(skyTime);
     if (this.waterMat) {
       this.waterMat.uniforms.uTime.value = skyTime;
@@ -708,12 +711,13 @@ export class Dressing {
    * unchanged (reduced-motion → one still pose, no redundant GPU uploads).
    */
   private applyWind(t: number): void {
-    if (t === this.lastWindT) return;
+    if (t === this.lastWindT && this.windK === this.lastWindK) return;
     this.lastWindT = t;
+    this.lastWindK = this.windK;
     for (const wm of this.windMeshes) {
       for (let k = 0; k < wm.items.length; k++) {
         const it = wm.items[k];
-        Dressing._e.set(0, 0, windSway(t, it.phase) * wm.strength);
+        Dressing._e.set(0, 0, windSway(t, it.phase) * wm.strength * this.windK);
         Dressing._q.setFromEuler(Dressing._e);
         if (it.rotY) Dressing._q.multiply(Dressing._r.setFromAxisAngle(Dressing._up, it.rotY)); // lean, then its own turn
         Dressing._p.set(it.x, it.y, it.z);
