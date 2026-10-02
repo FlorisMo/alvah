@@ -90,7 +90,7 @@ export function turnPage(i: number, step: number, count: number): number {
 export const WHERE_REVEALS = 3;
 
 /**
- * Should a reveal add "Hij zit onder Pauze."? Only while he has never looked at his gids
+ * Should a reveal add "Je veldgids zit onder Pauze."? Only while he has never looked at his gids
  * (nothing in it has `g`) and fewer than WHERE_REVEALS reveals have shown (`r`): the first
  * reveal ever says it, and the next two too if he has not gone to look.
  */

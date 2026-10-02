@@ -267,9 +267,9 @@ function wireSurprises(world: World): void {
   world.setSurprises({
     free: () => !!session.host.querySelector('.explore-hud') && !session.host.querySelector('.ra-overlay .briefing')
       && guideSnapshot().active === null,
-    met: (id) => {
+    met: (id, how) => {
       const row = ontdekking(`wereld.${id}`);
-      if (row && store.discover(row.id)) revealDiscovery(row);
+      if (row && store.discover(row.id)) revealDiscovery(row, { heard: how === 'heard' });
     },
     done: (id, met) => {
       if (met) store.rareEnd('wereld', ontdekking(`wereld.${id}`)?.soort === 'zeldzaam');

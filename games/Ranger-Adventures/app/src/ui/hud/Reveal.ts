@@ -3,8 +3,8 @@
  * `state/foundation/design.md` §4.4; the `veldgids` package polishes it, §7.3).
  *
  * A small paper card under the top chips (the Pauze pill and the chip under it): the
- * thing's picture, "Nieuw in je veldgids!" and its name, read aloud once, a 🔊 to hear it
- * again; ~4 s, then it goes. One at a time, at a QUIET moment only (core: reveal-queue.ts):
+ * thing's picture, "Nieuw in je veldgids!" (for a bird he only heard: "Dat hoorde je!")
+ * and its name, read aloud once, a 🔊 to hear it again; ~4 s, then it goes. One at a time, at a QUIET moment only (core: reveal-queue.ts):
  * the world is played (the explore or adventure HUD is up), no card or menu, nobody
  * speaking (the narrator, Bram), the first minute's teaching slot idle, and inside a
  * mission only while the mission says its beat is calm (`setRevealGate`: a walk, a look,
@@ -54,13 +54,17 @@ function quietNow(): boolean {
 /** The reveal on screen is still saying its words (it stays until it has: §7.3). */
 let saying = false;
 
-const queue = new RevealQueue<Ontdekking>({ now: () => performance.now(), quiet: quietNow, holding: () => saying && voiceBusy() });
+/** One waiting reveal: the discovery, and whether he met it by its sound alone. */
+interface Item { id: string; o: Ontdekking; heard: boolean }
+
+const queue = new RevealQueue<Item>({ now: () => performance.now(), quiet: quietNow, holding: () => saying && voiceBusy() });
 
 /** A NEW discovery: its reveal waits for a quiet moment, then shows once. Its picture is
- *  made now (the real model, ui/veldgids/portrait.ts), so it is ready when the moment comes. */
-export function revealDiscovery(o: Ontdekking): void {
+ *  made now (the real model, ui/veldgids/portrait.ts), so it is ready when the moment comes.
+ *  `heard`: he met it by its call (a bird he heard): the card says "Dat hoorde je!". */
+export function revealDiscovery(o: Ontdekking, opts: { heard?: boolean } = {}): void {
   if (o.model) void portrait(o.model);
-  queue.push(o);
+  queue.push({ id: o.id, o, heard: !!opts.heard });
   if (!raf) raf = requestAnimationFrame(tick);
 }
 
@@ -75,7 +79,7 @@ export function setRevealGate(fn: (() => boolean) | null): void {
 function tick(): void {
   raf = 0;
   const step = queue.tick();
-  if (step?.kind === 'show') show(step.item);
+  if (step?.kind === 'show') show(step.item.o, step.item.heard);
   else if (step?.kind === 'hide') hide();
   if (queue.current || queue.waiting) raf = requestAnimationFrame(tick);
 }
@@ -86,20 +90,23 @@ function nameLine(o: Ontdekking): string {
   return n.charAt(0).toUpperCase() + n.slice(1);
 }
 
-function show(o: Ontdekking): void {
+function show(o: Ontdekking, heard: boolean): void {
   hide(true);
   const name = nameLine(o);
   // the first reveals say where the veldgids is, until he has gone to look (§7.1)
   const where = revealSaysWhere(store.get().ontdekt);
-  const line = `${REVEAL.nieuw} ${name}.${where ? ` ${REVEAL.waar}` : ''}`;
+  // a bird he met by its call: the card says what made the sound
+  const kicker = heard ? REVEAL.gehoord : REVEAL.nieuw;
+  const line = `${kicker} ${name}.${where ? ` ${REVEAL.waar}` : ''}`;
   const pic = o.model ? portraitNow(o.model) : null;
   const card = document.createElement('div');
   card.className = `reveal${o.soort === 'zeldzaam' ? ' reveal--rare' : ''}${pic ? ' reveal--pic' : ''}`;
   card.setAttribute('role', 'status');
   card.dataset.id = o.id;
+  if (heard) card.dataset.heard = '1';
   card.innerHTML =
     `<span class="rv-pic" aria-hidden="true">${pic ? picHtml(pic.found) : icon(o.icon ?? SOORT_ICON[o.soort])}</span>` +
-    `<span class="rv-text"><span class="rv-kicker">${esc(REVEAL.nieuw)}</span><b class="rv-name">${esc(name)}</b>` +
+    `<span class="rv-text"><span class="rv-kicker">${esc(kicker)}</span><b class="rv-name">${esc(name)}</b>` +
     (where ? `<span class="rv-where">${esc(REVEAL.waar)}</span>` : '') + `</span>` +
     `<button class="ra-speak rv-speak" type="button" aria-label="${esc(ALGEMEEN.leesVoor)}">${icon('speaker')}</button>`;
   card.querySelector('.rv-speak')?.addEventListener('click', () => narrator.speak(line));

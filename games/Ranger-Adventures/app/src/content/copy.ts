@@ -306,8 +306,12 @@ export const INSTELLINGEN = {
  *  this line, then the thing's name (content/ontdekkingen.ts), read aloud once. */
 export const REVEAL = {
   nieuw: 'Nieuw in je veldgids!',
-  /** Under the first reveals, until he has opened his veldgids once: where it is. */
-  waar: 'Hij zit onder Pauze.',
+  /** In its place for a bird he met by its call (the woodpecker's drum, the cuckoo's call):
+   *  the card says what made the sound, so it never seems to come from nothing. */
+  gehoord: 'Dat hoorde je!',
+  /** Under the first reveals, until he has opened his veldgids once: where it is (it names
+   *  the gids: right after an animal's name, "Hij" would read as the animal). */
+  waar: 'Je veldgids zit onder Pauze.',
 } as const;
 
 /* ---------------------------------------------- run 7: the veldgids ---- */

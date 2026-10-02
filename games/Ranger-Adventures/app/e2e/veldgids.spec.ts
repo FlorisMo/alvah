@@ -158,14 +158,18 @@ test('a free-roam walk meets the seed\'s surprise: a calm reveal, read aloud, th
   const dc = await R<number>(page, 'r.drawCalls()');
   expect(dc, 'draw calls with a surprise in view').toBeLessThan(MAX_DRAW_CALLS);
 
-  // its reveal: calm, the real animal's picture, its name, where the gids is, read aloud once
+  // its reveal: calm, the real animal's picture, its name, where the gids is, read aloud
+  // once; met by its mew alone, the card says he heard it
   const reveal = page.locator('#ui > .reveal');
   await expect(reveal).toHaveAttribute('data-id', 'wereld.buizerd', { timeout: 30_000 });
-  await expect(reveal).toContainText(REVEAL.nieuw);
+  const how = await R<string | null>(page, 'r.surprise()?.log?.[0]?.met ?? null');
+  const kicker = how === 'heard' ? REVEAL.gehoord : REVEAL.nieuw;
+  await expect(reveal.locator('.rv-kicker')).toHaveText(kicker);
   await expect(reveal).toContainText('De buizerd');
   await expect(reveal.locator('.rv-where')).toHaveText(REVEAL.waar);
+  expect(REVEAL.waar, 'the where-line names the gids (never "Hij": that reads as the animal)').toMatch(/^Je veldgids /);
   await expect(reveal.locator('img.rv-img'), 'the real model as its picture').toBeVisible({ timeout: 10_000 });
-  await said(page, `${REVEAL.nieuw} De buizerd. ${REVEAL.waar}`, 'the reveal is read aloud', 10_000);
+  await said(page, `${kicker} De buizerd. ${REVEAL.waar}`, 'the reveal is read aloud', 10_000);
   expect(await reveal.evaluate((el) => getComputedStyle(el).pointerEvents), 'never in the way of a click').toBe('none');
   // only one at a time
   expect(await page.locator('#ui > .reveal').count()).toBe(1);
