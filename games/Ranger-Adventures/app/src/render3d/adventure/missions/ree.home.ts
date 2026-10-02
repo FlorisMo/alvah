@@ -10,10 +10,11 @@
  *
  * It stands before the mission and after it (a place, not a prop that vanishes). Run 7:
  * every play lays its own morning under the briefing card (`layPlay`): the grass of every
- * stand stands as built again, the calf's stand opens a small window over its back for
- * the search's lens (cover-math `openWindow`: its spotted back glimpsed between the stems,
- * never more), the trial's look-alikes stand in that stand, the pool lies on this play's
- * way and her path is worn where this play's prints run.
+ * stand stands as built again, the calf's stand is fitted to the level's share of its back
+ * for the search's lens (ree.window.ts `fitWindow`: a small window opened over it, or its
+ * tussocks a little fuller where the grass showed more), the trial's look-alikes stand in
+ * that stand, the pool lies on this play's way and her path is worn where this play's
+ * prints run.
  */
 
 import * as THREE from 'three';
@@ -21,7 +22,8 @@ import type { Distractor } from '../../../content/types';
 import type { DressingEnv, HomeDressing } from '../../world/Residents';
 import type { HomeState } from '../types';
 import { CoverField, moorGrassGeometry } from '../cover';
-import { backPoints, openWindow, standClumps, visibleShare, type Clump, type Stem, type V3 } from '../cover-math';
+import { backPoints, standClumps, visibleShare, type Clump, type V3 } from '../cover-math';
+import { fitWindow } from './ree.window';
 import { StandDecoys, decoyClumps, type Decoy, type DecoyAt } from '../decoys';
 import { groundDecal, groundStrip } from '../decal';
 import { atLocal, dist, segDist, stream, toLocal } from '../places';
@@ -80,36 +82,6 @@ const LEFT_BLADES = 26;
 /** The share of the calf's back the search's lens glimpses between the stems in free roam,
  *  before any play (a play lays the level's: `k.knobs('zoeken').glimpse`, fitted). */
 export const SEARCH_GLIMPSE = 0.35;
-
-/**
- * The glimpse window, fitted to the level's share (run 7): `openWindow` opens it in coarse
- * steps (a stem to 74 % at a time) and may show half again as much of the calf as the level
- * asks; here each stem it lowered is given back toward its built height as far as the share
- * stays at least `min`. So a practised ranger sees about the level's share of the calf, a
- * fresh one about his: the same exercise, the knob honoured (`stats.glimpse`).
- */
-export function fitWindow(stems: Stem[], built: readonly { h: number; lx: number; lz: number; r: number }[], eye: V3, pts: readonly V3[], min: number): number[] {
-  const changed = openWindow(stems, eye, pts, min);
-  for (const i of [...changed].reverse()) {
-    const s = stems[i], b = built[i];
-    if (!b) continue;
-    const low = { h: s.h, lx: s.lx, lz: s.lz, r: s.r };
-    const set = (t: number): void => {
-      s.h = low.h + (b.h - low.h) * t; s.lx = low.lx + (b.lx - low.lx) * t;
-      s.lz = low.lz + (b.lz - low.lz) * t; s.r = low.r + (b.r - low.r) * t;
-    };
-    let lo = 0, hi = 1;
-    set(1);
-    if (visibleShare(pts, eye, stems) >= min) continue; // (it was not needed at all)
-    for (let k = 0; k < 7; k++) {
-      const mid = (lo + hi) / 2;
-      set(mid);
-      if (visibleShare(pts, eye, stems) >= min) lo = mid; else hi = mid;
-    }
-    set(lo);
-  }
-  return changed.filter((i) => stems[i].h < (built[i]?.h ?? Infinity) - 1e-6);
-}
 
 /** The tussocks close round every spot a calf may lie in (u, v off the spot in its stand's
  *  frame, size): one arching over its rump. Every spot gets the same ring, so the cover
@@ -470,7 +442,7 @@ export class ReeHome implements HomeDressing {
     const lyH = lyingHeight(heightFor('reekalf'), LEG_SHARE.reekalf);
     const back = backPoints(p.calf.x, g(p.calf.x, p.calf.z), p.calf.z, p.calf.yaw, SIZE.reekalf.len, lyH);
     const cover = this.cover;
-    const changed = fitWindow(cover.stems, this.built.get(l.id)!, lens.cam, back, p.glimpse);
+    const changed = fitWindow(cover.stems, this.built.get(l.id)!, lens.cam, back, p.glimpse, { x: p.calf.x, y: g(p.calf.x, p.calf.z), z: p.calf.z });
     cover.refresh();
     this.glimpse = { share: visibleShare(back, lens.cam, cover.stems), changed: changed.length };
     // the look-alikes: this trial's in the played stand; elsewhere only the dead bracken
