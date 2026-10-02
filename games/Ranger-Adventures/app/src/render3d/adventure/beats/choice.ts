@@ -83,6 +83,20 @@ export interface StillOpts {
 /** The keys that would take a step (as the ree's watch reads them). */
 const STEP_KEYS = /^(Arrow(Up|Down|Left|Right)|Key[WASD])$/;
 
+/** Run 7 (additive): how a rustkracht run is built. */
+export interface ChoiceRunOpts {
+  /** the encounters in THIS play's order (ids; a mission's drawn order, e.g. the ree's pool
+   *  first or fourth): the same encounters, the same DagnachtRun, another order. Ids it
+   *  does not name keep their content order after it. Default: content order. */
+  order?: readonly string[];
+}
+
+/** The encounters in `order` (by id), the rest after them in content order. */
+export function inOrder(encounters: readonly Encounter[], order: readonly string[]): Encounter[] {
+  const named = order.map((id) => encounters.find((e) => e.id === id)).filter((e): e is Encounter => !!e);
+  return [...named, ...encounters.filter((e) => !named.includes(e))];
+}
+
 export class ChoiceRun {
   readonly trial: DagnachtTrial;
   private readonly run: DagnachtRun;
@@ -93,13 +107,15 @@ export class ChoiceRun {
   private readonly sides: () => number;
   private logged = false;
 
-  constructor(k: AdventureKit, step: number) {
+  constructor(k: AdventureKit, step: number, opts: ChoiceRunOpts = {}) {
     this.k = k;
     this.step = step;
     const settings = store.get().settings;
     const knobs = k.knobs('dagnacht');
     // run 7: this play's order of the calm moments (its 2D twin draws the same)
     this.trial = buildDagnachtTrial(k.steps[step].skin, { jargon: settings.jargon, reducedMotion: k.reduced, ...knobs }, k.play.fork('dagnacht').rng);
+    // (a mission that draws its own order, the ree's: the same encounters in that order)
+    if (opts.order) this.trial = { ...this.trial, encounters: inOrder(this.trial.encounters, opts.order) };
     this.run = new DagnachtRun(this.trial.encounters.length);
     this.tempo = new RustTempo(knobs, !settings.voorlezen, k.play.fork('rust').rng);
     this.sides = k.play.fork('knoppen').rng;
@@ -359,7 +375,8 @@ export class ChoiceRun {
   }
 }
 
-/** A rustkracht run over step `step`, asked encounter by encounter. */
-export function choiceRun(k: AdventureKit, step: number): ChoiceRun {
-  return new ChoiceRun(k, step);
+/** A rustkracht run over step `step`, asked encounter by encounter (`opts.order`: this
+ *  play's order; default content order). */
+export function choiceRun(k: AdventureKit, step: number, opts: ChoiceRunOpts = {}): ChoiceRun {
+  return new ChoiceRun(k, step, opts);
 }

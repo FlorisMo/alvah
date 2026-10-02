@@ -156,7 +156,9 @@ async function start(log: Log, mission: Mission): Promise<void> {
  *  with the arrow keys, an encounter is answered from ANY step of the mission, an action
  *  button is pressed, and "won" = every step's trial count went up. A beat that takes no
  *  input (a body moment: keep still) is simply waited out. */
-async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<boolean>): Promise<void> {
+async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<boolean>,
+  /** run 7 (additive): looks on at every turn of the loop (a mission's own soft checks) */
+  observe?: (adv: { beat: string; stats: Record<string, number> } | null) => Promise<void>): Promise<void> {
   const page = log.page;
   const plan = mission.stappen.map((s) => s.ef as string);
   log.note(`steps: ${plan.join(' → ')}`);
@@ -195,7 +197,8 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
       await log.shot('stuck');
       log.hard(false, `stuck for 45 s at "${lastBeat}" (visible: ${await visibleButtons(page)})`);
     }
-    const adv = await R<{ beat: string } | null>(page, 'r.adventure()');
+    const adv = await R<{ beat: string; stats: Record<string, number> } | null>(page, 'r.adventure()');
+    if (observe) await observe(adv);
     const calls = await R<number | null>(page, 'r.drawCalls()');
     if (calls !== null && calls >= MAX_DRAW_CALLS) bad.push(`draw calls ${calls} at "${adv?.beat ?? view}"`);
     if (adv && adv.beat !== lastBeat) {
@@ -336,8 +339,12 @@ async function worldReacted(log: Log, mission: Mission, marker: P2, before: Seat
   const near = (q: P2): boolean => !!s.p && Math.hypot(s.p.x - q.x, s.p.z - q.z) < 12;
   log.soft(near(marker) || (!!home && near(home)), 'back in the world near the marker (or the mission\'s home)');
   // run 6: an adventure's family lives at its home, in its after state, together there
-  const fam = await homeOf(page, mission.id);
+  let fam = await homeOf(page, mission.id);
   if (fam && home) {
+    // (run 7: a family that met far from its home this play walks there calmly once the
+    // mission is done: it gets the time a walk takes, ≤ 25 s, before it is judged)
+    const away = (f: Home): Home['actors'] => f.actors.filter((a) => a.visible && Math.hypot(a.x - home.x, a.z - home.z) > 4);
+    for (let i = 0; i < 50 && away(fam).length; i++) { await sleep(page, 500); fam = (await homeOf(page, mission.id)) ?? fam; }
     const members = fam.actors.filter((a) => a.visible);
     const far = members.filter((a) => Math.hypot(a.x - home.x, a.z - home.z) > 4);
     log.note(`its home: "${fam.state}", ${members.length} animal(s) there`);
@@ -348,6 +355,55 @@ async function worldReacted(log: Log, mission: Mission, marker: P2, before: Seat
   log.soft(hud.includes(`Speel nog eens: ${mission.titel}`) || hud.includes('Pauze'), 'the explore HUD is back');
   const calls = await R<number | null>(page, 'r.drawCalls()');
   log.soft(calls !== null && calls < MAX_DRAW_CALLS, `draw calls back in the world: ${calls}`);
+}
+
+/**
+ * Run 7 (the reekalf, design state/ree §2): soft checks of a play's own morning — where the
+ * calf lies in the search's picture (never in the middle: its hint point outside the
+ * central box, under the objective line, clear of the edges), how much of its back shows,
+ * how high the search's lens hangs, and that the walks to the grass and to the hide are
+ * walks. Read while it plays (the stats are gone once it ends).
+ */
+function reeWatch(log: Log): { observe: (adv: { beat: string; stats: Record<string, number> } | null) => Promise<void>; report: () => void } {
+  const page = log.page;
+  let target: { x: number; y: number } | null = null;
+  let lens: number | null = null;
+  let stats: Record<string, number> = {};
+  let variant = '';
+  return {
+    async observe(adv) {
+      if (!adv) return;
+      stats = adv.stats;
+      if (!variant) variant = String((await R<{ variant?: Record<string, string> } | null>(page, 'r.play ? r.play() : null'))?.variant?.ree ?? '');
+      if (adv.beat !== 'search' || target) return;
+      // (before the player clicks: wait for the framed view to settle on the target)
+      let h: Hint | null = null;
+      for (let i = 0; i < 30 && !target; i++) {
+        const h2 = await R<Hint | null>(page, 'r.playHint()');
+        if (h2 && !h2.walk && h && h2.id === h.id && Math.hypot(h2.x - h.x, h2.y - h.y) < 2) target = { x: h2.x, y: h2.y };
+        h = h2 && !h2.walk ? h2 : null;
+        if (!target) await sleep(page, 200);
+      }
+      if (!target) return;
+      const cam = await R<{ x: number; y: number; z: number } | null>(page, 'r.cam()');
+      if (cam) lens = cam.y - (await R<number>(page, `r.groundAt(${cam.x}, ${cam.z})`));
+    },
+    report() {
+      log.note(`ree: morning ${variant || '?'}; calf hint at ${target ? `(${Math.round(target.x)}, ${Math.round(target.y)})` : '?'}; lens ${lens?.toFixed(2) ?? '?'} m over the ground; glimpse ${stats.glimpse}; walks ${stats.walk_meadow_m} m to the grass, ${stats.walk_hide_m} m to the hide`);
+      log.soft(!!target, 'ree: the search\'s target was seen');
+      if (target) {
+        const dx = Math.abs(target.x - 640), dy = Math.abs(target.y - 400);
+        log.soft(dx >= 160 || dy >= 110, `ree: the calf lies in the middle of the search's picture (${Math.round(target.x)}, ${Math.round(target.y)})`);
+        log.soft(target.y >= 120 && target.x >= 90 && target.x <= 1190 && target.y <= 710, `ree: the calf lies under the objective line or at an edge (${Math.round(target.x)}, ${Math.round(target.y)})`);
+      }
+      log.soft(stats.glimpse >= 0.25 && stats.glimpse <= 0.6, `ree: the calf's glimpse is ${stats.glimpse} (0.25-0.6)`);
+      // (the frisling's search lens hangs 3.8 m over the ground; the ree's at that height
+      // stands 4.2 m from his head, where the old one stood 3 m from it and looked down on it)
+      log.soft(lens !== null && lens <= 4.1, `ree: the search's lens hangs ${lens?.toFixed(2)} m over the ground`);
+      log.soft(stats.walk_meadow_m >= 9, `ree: the walk to the grass is ${stats.walk_meadow_m} m`);
+      log.soft(stats.walk_hide_m >= 11, `ree: the walk to the hide is ${stats.walk_hide_m} m`);
+    },
+  };
 }
 
 function outDir(info: TestInfo, id: string): string {
@@ -370,7 +426,9 @@ for (const mission of missions) {
       const fam = await homeOf(page, mission.id);
       if (fam) log.soft(fam.state === 'before' && fam.actors.some((a) => a.visible), `the story's animals are in the world before the mission (${fam.state})`);
       await start(log, mission);
-      await playSteps(log, mission);
+      const watch = mission.id === 'ree-niet-aanraken' ? reeWatch(log) : null;
+      await playSteps(log, mission, undefined, watch?.observe);
+      watch?.report();
       await finish(log, mission);
       await worldReacted(log, mission, marker, before);
       log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
