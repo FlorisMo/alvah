@@ -44,9 +44,9 @@ import { atLocal, dist, headingTo, toLocal, toward, dirOf } from '../places';
 import { FrislingHome } from './frisling.home';
 import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
-  frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, type Way, type WayId,
+  frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, type Way,
 } from './frisling.places';
-import { drawFrisling, frislingVariant, lastWayOf, type FrislingVariant } from './frisling.vary';
+import { drawFrisling, frislingVariant, recentPlays, type FrislingVariant, type PastPlay } from './frisling.vary';
 
 /** How far the lost piglet's squeak carries while he follows it (m): from the ring to
  *  any way's stand, ~35-38 m (softly at first, louder as he comes). */
@@ -65,9 +65,9 @@ function distractorsOf(m: Mission | undefined): readonly Distractor[] {
 let contentDecoys: readonly Distractor[] = [];
 /** This play's frisling (laid under the briefing card). */
 let current: FrislingVariant | null = null;
-/** The plays he set out on in this page session (their seed, way and family layout): a
- *  play stopped early may have left no beat in the history. */
-const started: { sd: number; way: WayId; fam: string }[] = [];
+/** The plays he set out on in this page session (their seed, way, family layout and nook):
+ *  a play stopped early may have left no beat in the history. */
+const started: PastPlay[] = [];
 
 /** The young birches the home plants at its stands (real forest trees). */
 const BIRCHES = WAY_IDS.flatMap((id) => WAYS[id].trees.map((t) => ({
@@ -120,7 +120,7 @@ export const frislingAdventure: Adventure = {
     const fam = k.borrow();
     const home = fam.dressing as FrislingHome;
     const v = current ?? fallbackVariant(k);
-    started.push({ sd: k.play.seed, way: v.way, fam: FAMILY_LAYOUTS[v.family].id });
+    started.push({ sd: k.play.seed, way: v.way, fam: FAMILY_LAYOUTS[v.family].id, nook: v.nook });
     home.holdClue = true; // the clue waits for its moment: after the reunion, under the raaf's card
     try {
       await story(k, fam, home, v);
@@ -139,7 +139,7 @@ export const frislingAdventure: Adventure = {
 
 /** A play laid without a briefing (a test, a dev start): drawn now from the kit's play. */
 function fallbackVariant(k: AdventureKit): FrislingVariant {
-  const v = frislingVariant(k.play, lastWayOf(store.get().geschiedenis), []);
+  const v = frislingVariant(k.play, recentPlays(store.get().geschiedenis, started), []);
   return { ...v, way: DEFAULT_WAY, nook: 0, pose: 0 };
 }
 

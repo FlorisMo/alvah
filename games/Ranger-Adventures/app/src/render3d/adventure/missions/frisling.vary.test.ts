@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { compactVariant, newPlay } from '../../../core/play.ts';
-import { drawFrisling, frislingVariant, lastWayOf, recentFams, recentWays, wantsEdge, type DecoyKind } from './frisling.vary.ts';
+import { drawFrisling, frislingVariant, recentFams, recentPlays, recentWays, wantsEdge, type DecoyKind, type PastPlay } from './frisling.vary.ts';
 import { FAMILY_LAYOUTS, WAYS, WAY_IDS, type WayId } from './frisling.places.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import { buildDagnachtTrial, playDagnachtTrial, recentRust, rustCode } from '../../../engines/dagnacht.ts';
@@ -25,13 +25,16 @@ const DECOYS: DecoyKind[] = (MISSION.stappen[0].skin.distractors ?? []).map((d) 
  *  seeds draw these ways. Listed in every builder's report. */
 export const SEED_TABLE: Readonly<Record<WayId, number>> = { wei: 1, steen: 2, berk: 4 };
 
-const variant = (seed: number, last: WayId | null = null, n = 1) => frislingVariant(newPlay('frisling', seed, n), last, DECOYS);
+const variant = (seed: number, last: WayId | null = null, n = 1) => frislingVariant(newPlay('frisling', seed, n), last ? [{ way: last }] : [], DECOYS);
+/** Earlier plays, newest first, as `recentPlays` gives them. */
+const past = (...plays: { way: string; family?: number; nook?: number }[]): PastPlay[] =>
+  plays.map((p) => ({ way: p.way, ...(p.family !== undefined ? { fam: FAMILY_LAYOUTS[p.family].id } : {}), ...(p.nook !== undefined ? { nook: p.nook } : {}) }));
 
 test('the same seed gives the same play; its choices are noted on the play', () => {
   for (let seed = 0; seed < 40; seed++) {
     assert.deepEqual(variant(seed), variant(seed));
     const play = newPlay('frisling', seed, 1);
-    const v = frislingVariant(play, null, DECOYS);
+    const v = frislingVariant(play, [], DECOYS);
     assert.equal(play.variant.way, `${v.way}/${FAMILY_LAYOUTS[v.family].id}`, 'the way and the family, one note');
     assert.equal(play.variant.nook, `${v.nook}/${v.pose}`);
     assert.deepEqual(Object.keys(play.variant), ['way', 'nook'], 'the nook noted last');
@@ -67,7 +70,7 @@ test('the look-alikes each get their own spot; the nightjar lies at the stand\'s
     DECOYS.forEach((d, i) => { if (wantsEdge(d)) assert.ok(WAYS[v.way].decoySpots[v.decoySpots[i]].edge, 'the nightjar at an edge spot'); });
   }
   // fewer look-alikes (a lower level): the same rule, the first spots of the same order
-  const few = frislingVariant(newPlay('frisling', 9, 1), null, DECOYS.slice(0, 4));
+  const few = frislingVariant(newPlay('frisling', 9, 1), [], DECOYS.slice(0, 4));
   assert.equal(few.decoySpots.length, 4);
 });
 
@@ -81,14 +84,14 @@ test('never the same way twice in a row', () => {
 
 test('three plays in a row: three ways and three family layouts (never one of his last two plays\')', () => {
   for (let seed = 0; seed < 200; seed++) {
-    const a = frislingVariant(newPlay('frisling', seed, 1), null, DECOYS);
-    const b = frislingVariant(newPlay('frisling', seed + 1, 2), [a.way], DECOYS, [FAMILY_LAYOUTS[a.family].id]);
-    const c = frislingVariant(newPlay('frisling', seed + 2, 3), [b.way, a.way], DECOYS, [FAMILY_LAYOUTS[b.family].id, FAMILY_LAYOUTS[a.family].id]);
+    const a = frislingVariant(newPlay('frisling', seed, 1), [], DECOYS);
+    const b = frislingVariant(newPlay('frisling', seed + 1, 2), past(a), DECOYS);
+    const c = frislingVariant(newPlay('frisling', seed + 2, 3), past(b, a), DECOYS);
     assert.equal(new Set([a.family, b.family, c.family]).size, 3, `seeds ${seed}..${seed + 2}: families`);
     assert.equal(new Set([a.way, b.way, c.way]).size, 3, `seeds ${seed}..${seed + 2}: ways`);
   }
   // after only one play, both others can come
-  const after = new Set(Array.from({ length: 60 }, (_, s) => frislingVariant(newPlay('frisling', s, 2), null, DECOYS, ['rand']).family));
+  const after = new Set(Array.from({ length: 60 }, (_, s) => frislingVariant(newPlay('frisling', s, 2), past({ way: 'wei', family: 1 }), DECOYS).family));
   assert.deepEqual([...after].sort(), [0, 2]);
 });
 
@@ -115,15 +118,32 @@ test('the recent family layouts: this session\'s plays first, then the history\'
   assert.deepEqual(recentFams(h, [{ sd: 7, fam: 'modder' }, { sd: 8, fam: 'boom' }]), ['boom', 'modder', 'rand']);
 });
 
-test('the last way is read from the history: the newest frisling beat\'s variant', () => {
-  assert.equal(lastWayOf([]), null);
-  assert.equal(lastWayOf([{ m: 'ree-niet-aanraken', va: 'way:steen' }]), null);
-  assert.equal(lastWayOf([
-    { m: 'frisling', va: 'rare:ekster,way:steen/boom,nook:2/0' },
-    { m: 'frisling', va: 'mood:gouden-uur,rust:advzp,way:berk/rand,nook:0/1' },
-    { m: 'wildcamera', va: 'way:wei' },
-  ]), 'berk');
-  assert.equal(lastWayOf([{ m: 'frisling' }, { m: 'frisling', va: 'nook:1' }]), null);
+test('his earlier plays are read back from the history: way, family and nook, whatever the history kept', () => {
+  assert.deepEqual(recentPlays([]), []);
+  assert.deepEqual(recentPlays([{ m: 'ree-niet-aanraken', va: 'way:steen' }]), []);
+  assert.deepEqual(recentPlays([
+    { m: 'frisling', sd: 1, va: 'rare:ekster,way:steen/boom,nook:2/0' },
+    { m: 'frisling', sd: 2, va: 'mood:ochtendnevel,rare:ekster,rust:advzp,way:berk/rand' }, // (the nook cut)
+    { m: 'wildcamera', sd: 3, va: 'way:wei' },
+    { m: 'frisling', sd: 4 }, { m: 'frisling', sd: 5, va: 'nook:1' },
+  ]), [{ sd: 2, way: 'berk', fam: 'rand' }, { sd: 1, way: 'steen', fam: 'boom', nook: 2 }]);
+});
+
+test('a way that comes again hides him in another nook than the last time that way came', () => {
+  for (const id of WAY_IDS) {
+    for (let n = 0; n < WAYS[id].nooks.length; n++) {
+      const seen = new Set<number>();
+      for (let seed = 0; seed < 120; seed++) {
+        // the way two plays ago was this one, with this nook: the last play went another way
+        const other = WAY_IDS.find((w) => w !== id)!;
+        const v = frislingVariant(newPlay('frisling', seed, 5), past({ way: other, family: 0, nook: 0 }, { way: id, family: 1, nook: n }, { way: other, family: 2 }), DECOYS);
+        if (v.way !== id) continue;
+        assert.notEqual(v.nook, n, `${id}: nook ${n} twice in a row on this way (seed ${seed})`);
+        seen.add(v.nook);
+      }
+      assert.equal(seen.size, WAYS[id].nooks.length - 1, `${id} after nook ${n}: every other nook comes`);
+    }
+  }
 });
 
 test('the seed table: a fresh save\'s first play draws each way', () => {
@@ -147,7 +167,7 @@ test('the calm moments: one seeded order for the world and the 2D floor, the lyi
     orders.add(world.join(','));
     // drawing the variant first never moves the order (its own forks)
     const play = newPlay('frisling', seed, 1);
-    frislingVariant(play, null, DECOYS);
+    frislingVariant(play, [], DECOYS);
     assert.deepEqual(buildDagnachtTrial(skin, diff, play.fork('dagnacht').rng).encounters.map((e) => e.id), world);
   }
   assert.equal(orders.size, 4, `all four orders come (${[...orders].join(' | ')})`);
@@ -200,7 +220,7 @@ test('the orders of his last plays are read from the history, one per play, neve
 /** One play as the game plays it, into a save's history: the briefing notes the light (and
  *  a rare visitor), the home notes the calm order, then the way and the family, the nook
  *  last; every beat of the play carries the variant compacted to the history's 60 chars. */
-function playInto(history: { m: string; sd: number; va?: string }[], seed: number, n: number, o: { mood?: string; rare?: string } = {}): { way: string; fam: string; rust: string; va: string } {
+function playInto(history: { m: string; sd: number; va?: string }[], seed: number, n: number, o: { mood?: string; rare?: string } = {}): { way: string; fam: string; nook: number; rust: string; va: string } {
   const play = newPlay('frisling', seed, n);
   play.note('mood', o.mood ?? MOOD_IDS[seed % MOOD_IDS.length]);
   if (o.rare) play.note('rare', o.rare);
@@ -210,7 +230,7 @@ function playInto(history: { m: string; sd: number; va?: string }[], seed: numbe
   const trial = playDagnachtTrial(skin, { slowmo: false } as never, play, history);
   const va = compactVariant(play.variant)!;
   for (let b = 0; b < 3; b++) history.push({ m: 'frisling', sd: play.seed, va }); // (zoeken, corsi, dagnacht)
-  return { way: v.way, fam: FAMILY_LAYOUTS[v.family].id, rust: rustCode(trial.encounters.map((e) => e.id)), va };
+  return { way: v.way, fam: FAMILY_LAYOUTS[v.family].id, nook: v.nook, rust: rustCode(trial.encounters.map((e) => e.id)), va };
 }
 
 test('thirty plays in a row: never the same way twice, no fixed cycle, every way meets every family (review r1: a save locked into one three-play cycle)', () => {
@@ -225,6 +245,9 @@ test('thirty plays in a row: never the same way twice, no fixed cycle, every way
       assert.notEqual(ways[i], ways[i - 1], `never the same way twice in a row (${label})`);
       assert.notEqual(plays[i].fam, plays[i - 1].fam, `never the same family layout twice in a row (${label})`);
       assert.ok(!recentRust(history.slice(0, i * 3), 'frisling', start + i).includes(plays[i].rust), `never the calm order of his last two plays (${label})`);
+      // a way that comes again: another nook than the last time (when the history kept it)
+      const prev = plays.slice(0, i).reverse().find((p) => p.way === ways[i]);
+      if (prev && prev.va.includes(',nook:')) assert.notEqual(plays[i].nook, prev.nook, `${ways[i]} again, the same nook (${label})`);
     }
     // from the fourth play on, the ways are no fixed three-play cycle (nor is the family)
     assert.ok(ways.slice(3).some((w, i) => w !== ways[i]), `the ways are not period 3 from play 4 (${label})`);

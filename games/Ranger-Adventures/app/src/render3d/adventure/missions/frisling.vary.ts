@@ -52,9 +52,9 @@ type Beat = { m: string; sd?: number; va?: string };
  * (`frislingVariant`). In this order the history's 60 characters always keep what the next
  * play reads back, after the light and a rare visitor the briefing noted.
  */
-export function drawFrisling(play: Play, history: readonly Beat[], started: readonly { sd: number; way: string; fam: string }[], calm: { skin: Skin; diff: Settings }, decoys: readonly DecoyKind[]): FrislingVariant {
+export function drawFrisling(play: Play, history: readonly Beat[], started: readonly PastPlay[], calm: { skin: Skin; diff: Settings }, decoys: readonly DecoyKind[]): FrislingVariant {
   playDagnachtTrial(calm.skin, calm.diff, play, history);
-  return frislingVariant(play, recentWays(history, started), decoys, recentFams(history, started));
+  return frislingVariant(play, recentPlays(history, started), decoys);
 }
 
 /** How much likelier the way he has not had for longest is, from his fourth play on, than
@@ -64,9 +64,8 @@ export const LONGEST_WEIGHT = 2;
 /**
  * Draw this play's frisling from its seed. Every decision has its own fork (adding one
  * later never moves the others) and is noted on the play (it travels with every beat into
- * the history: `va`). `lastWays` / `lastFams`: the ways and family layouts of his newest
- * frisling plays, newest first (`recentWays`, `recentFams`). `decoys`: the trial's
- * look-alikes, in trial order.
+ * the history: `va`). `past`: his newest frisling plays, newest first (`recentPlays`).
+ * `decoys`: the trial's look-alikes, in trial order.
  *
  * The rotation (run 7 review r1: both 'never one of the last two' locked a save into one
  * fixed three-play cycle for good, each way always with the same family): in a save's
@@ -75,25 +74,27 @@ export const LONGEST_WEIGHT = 2;
  * on, only the LAST play's way never comes again at once, the way he has not had for
  * longest a little likelier (`LONGEST_WEIGHT`), and only the last play's family layout
  * never comes again at once, drawn from its own fork: no cycle, and every way meets every
- * family.
+ * family. And when a way comes again the piglet never lies in the nook he lay in the last
+ * time that way came: a way he knows still hides him somewhere new.
  *
  * Notes: the way and the family as ONE short note ('way:steen/modder'), the nook LAST
  * ('nook:3/1'): the history keeps a play's variant to 60 characters, and the light and a
  * rare visitor are noted before the home lays its play (the caller notes the calm order,
  * 'rust', before this), so what the next play reads back always fits.
  */
-export function frislingVariant(play: Play, lastWays: WayId | null | readonly string[], decoys: readonly DecoyKind[], lastFams: readonly string[] = []): FrislingVariant {
-  const recent = lastWays === null ? [] : typeof lastWays === 'string' ? [lastWays] : lastWays;
-  const way = drawWay(play.fork('way'), recent);
+export function frislingVariant(play: Play, past: readonly PastPlay[], decoys: readonly DecoyKind[]): FrislingVariant {
+  const way = drawWay(play.fork('way'), past.map((p) => p.way));
   const w = WAYS[way];
-  const nook = play.fork('nook').int(0, w.nooks.length - 1);
+  // the nook: any but the one he found him in the last time this way came
+  const before = past.find((p) => p.way === way)?.nook;
+  const nook = play.fork('nook').pick(w.nooks.map((_, i) => i).filter((i) => i !== before));
   const pose = play.fork('pose').int(0, 2) as 0 | 1 | 2;
   // the look-alikes: a shuffled order of the stand's spots (assignSpots)
   const decoySpots = assignSpots(play.fork('decoys').shuffle(w.decoySpots.map((_, i) => i)), w.decoySpots, decoys);
   // the family's layout: never his last play's (in his first three, never one of his last
   // two: three different mornings at the mud), from its own fork, whatever the way
   const ids = FAMILY_LAYOUTS.map((l) => l.id as string);
-  const family = ids.indexOf(play.fork('family').pick(freshOf(ids, lastFams))) as 0 | 1 | 2;
+  const family = ids.indexOf(play.fork('family').pick(freshOf(ids, past.flatMap((p) => (p.fam ? [p.fam] : []))))) as 0 | 1 | 2;
   const lk = play.fork('leeuwerik');
   const leeuwerik = lk.chance(0.5) ? lk.int(0, w.walkSpots.length - 1) : null;
   play.note('way', `${way}/${FAMILY_LAYOUTS[family].id}`);
@@ -140,49 +141,40 @@ export function assignSpots(order: readonly number[], spots: readonly DecoySpot[
   return out;
 }
 
-/** The family layouts (ids) of his newest frisling plays, newest first, one per play (by
- *  its seed): the plays started in this page session (`started`, oldest first: a play
- *  stopped early may have left no beat) before the history's (`BeatLog.va`,
- *  'way:steen/boom'). */
-export function recentFams(history: readonly { m: string; sd?: number; va?: string }[], started: readonly { sd: number; fam: string }[] = []): string[] {
-  return recentOf('fam', history, started);
-}
+/** One of his earlier frisling plays, as the next one reads it back: its seed, its way,
+ *  and (when the history kept them) its family layout and nook. */
+export interface PastPlay { sd?: number; way: string; fam?: string; nook?: number }
 
-/** The ways of his newest frisling plays, newest first, one per play (as `recentFams`). */
-export function recentWays(history: readonly { m: string; sd?: number; va?: string }[], started: readonly { sd: number; way: string }[] = []): string[] {
-  return recentOf('way', history, started);
-}
-
-/** A variant key's values ('way', 'fam') of his newest frisling plays, newest first, one per
- *  play (by its seed): this page session's started plays first, then the history's. */
-function recentOf<K extends 'way' | 'fam'>(key: K, history: readonly { m: string; sd?: number; va?: string }[], started: readonly ({ sd: number } & Record<K, string>)[]): string[] {
+/** His newest frisling plays, newest first, one per play (by its seed): the plays started
+ *  in this page session (`started`, oldest first: a play stopped early may have left no
+ *  beat) before the history's (`BeatLog.va`, 'way:steen/boom,nook:3/1'). */
+export function recentPlays(history: readonly Beat[], started: readonly PastPlay[] = []): PastPlay[] {
   const seen = new Set<number>();
-  const out: string[] = [];
+  const out: PastPlay[] = [];
   for (let i = started.length - 1; i >= 0; i--) {
-    if (seen.has(started[i].sd)) continue;
-    seen.add(started[i].sd);
-    out.push(started[i][key]);
+    const s = started[i];
+    if (s.sd !== undefined) { if (seen.has(s.sd)) continue; seen.add(s.sd); }
+    out.push(s);
   }
-  // ('way:steen/boom': the way, then the family layout)
-  const re = key === 'way' ? /(?:^|,)way:([a-z]+)/ : /(?:^|,)way:[a-z]+\/([a-z]+)/;
   for (let i = history.length - 1; i >= 0; i--) {
     const h = history[i];
     if (h.m !== 'frisling' || !h.va || (h.sd !== undefined && seen.has(h.sd))) continue;
-    const m = re.exec(h.va);
+    // ('way:steen/boom': the way, then the family layout; 'nook:3/1': the nook, then the pose)
+    const m = /(?:^|,)way:([a-z]+)(?:\/([a-z]+))?/.exec(h.va);
     if (!m) continue;
     if (h.sd !== undefined) seen.add(h.sd);
-    out.push(m[1]);
+    const n = /(?:^|,)nook:(\d+)/.exec(h.va);
+    out.push({ sd: h.sd, way: m[1], ...(m[2] ? { fam: m[2] } : {}), ...(n ? { nook: Number(n[1]) } : {}) });
   }
   return out;
 }
 
-/** The way of his newest frisling play in the history (`BeatLog.va`, 'way:steen,…'), or null. */
-export function lastWayOf(history: readonly { m: string; va?: string }[]): WayId | null {
-  for (let i = history.length - 1; i >= 0; i--) {
-    const h = history[i];
-    if (h.m !== 'frisling' || !h.va) continue;
-    const m = /(?:^|,)way:([a-z]+)/.exec(h.va);
-    if (m && (WAY_IDS as readonly string[]).includes(m[1])) return m[1] as WayId;
-  }
-  return null;
+/** The ways of his newest frisling plays, newest first, one per play (`recentPlays`). */
+export function recentWays(history: readonly Beat[], started: readonly PastPlay[] = []): string[] {
+  return recentPlays(history, started).map((p) => p.way);
+}
+
+/** The family layouts of his newest frisling plays, newest first (`recentPlays`). */
+export function recentFams(history: readonly Beat[], started: readonly PastPlay[] = []): string[] {
+  return recentPlays(history, started).flatMap((p) => (p.fam ? [p.fam] : []));
 }
