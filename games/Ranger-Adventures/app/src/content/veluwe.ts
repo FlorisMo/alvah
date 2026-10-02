@@ -79,7 +79,7 @@ const ANIMALS = {
   /* run 7: the red deer's hind (the wildcamera's evening visitors): no antlers */
   hinde: {
     id: 'hinde', naam: 'hinde', simpelWoord: 'hert', geluid: 'blaft zacht', toonVeilig: true,
-    feiten: ['Een hinde is een vrouwtjeshert. Zij heeft geen gewei.'],
+    feiten: ['Een hinde heeft geen gewei.'],
   },
   raaf: {
     id: 'raaf', naam: 'raaf', simpelWoord: 'raaf',
