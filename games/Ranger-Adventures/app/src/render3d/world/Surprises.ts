@@ -121,8 +121,8 @@ const BADGER_WALK = 0.5;  // m/s
 const LOW_R = 7;
 const LOW_Y = 4.6;
 const LOW_PERIOD = 15;
-/** The robin he left this far (m) behind its spot (he ran, or turned and walked back past
- *  it) stays there: it flies off its own way. */
+/** The robin he left this far (m) behind (it could not keep up round a bush, or he turned
+ *  and walked off the other way) stays there: it flies off its own way. */
 const ROBIN_LOST_M = 7;
 
 interface Active {
@@ -658,8 +658,7 @@ export class Surprises {
     const v = this.viewer(f);
     const at = g.position;
     const me = f.ranger;
-    const want = robinSpot(v, v.yaw, b.side, b.lat, b.along);
-    if (Math.hypot(want.x - at.x, want.z - at.z) > ROBIN_LOST_M) return 'lost';
+    if (Math.hypot(me.x - at.x, me.z - at.z) > ROBIN_LOST_M) return 'lost';
     let spot: { x: number; z: number } | null = null;
     for (const [side, lat, along] of [[b.side, b.lat, b.along], [b.side, b.lat + 0.6, b.along], [b.side, b.lat, b.along - 0.7], [-b.side, b.lat, b.along], [-b.side, b.lat + 0.6, b.along]]) {
       const p = robinSpot(v, v.yaw, side, lat, along);
