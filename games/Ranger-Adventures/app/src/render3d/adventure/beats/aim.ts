@@ -97,10 +97,13 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
   const settings = store.get().settings;
   const skin = k.steps[step].skin;
   const regel = skin.copy?.regel ?? 'Dag-dier → open plek. Nacht-dier → het hol.';
-  const trial = buildWisselTrial(skin, store.difficulty('wisselen'), k.play.fork('wisselen').rng); // run 7: the play's queue (its 2D twin draws the same)
+  // run 7: the level's knobs (how many animals, when the rule turns, how often: a turn back
+  // to day from band 4) and the play's queue (its 2D twin draws the same)
+  const trial = buildWisselTrial(skin, k.knobs('wisselen'), k.play.fork('wisselen').rng);
   const aim = new AimRun(trial, regel);
   k.stats.aim_animals = trial.queue.length;
   k.stats.aim_flip_every = trial.flipEvery;
+  k.stats.aim_flips = trial.flips ?? 1;
   const w = o.world;
 
   await k.walkRanger(o.stand.x, o.stand.z, 0.04);

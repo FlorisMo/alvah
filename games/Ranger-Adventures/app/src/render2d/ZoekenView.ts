@@ -4,14 +4,20 @@
  * resolves with the BeatSummary the skill system needs. Accessibility baked in:
  * read-aloud, ≥56px tap targets, dual-channel (colour + scale/sound) feedback.
  * The 3D in-world version (Phase 4) will reuse the same engine + BeatSummary.
+ * Run 7 (`adaptive`): the trial comes from the level's knobs and the play's fork — which
+ * look-alikes and how many, where everything lies (never the animal in the middle), how
+ * much of it shows through the grass (haze = 1 − glimpse) and when the hint comes (its ring
+ * breathes softly after `hintAfterS` or two misses), as the world's search reads them.
  */
 
 import './zoeken.css';
 import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
+import type { Play } from '../core/play';
 import { store } from '../core/state';
+import { looseRng } from '../core/play';
 import { Content } from '../content/registry';
-import { buildZoekenTrial, scoreZoeken } from '../engines/zoeken';
+import { buildZoekenTrial, zoekArea, zoekSummary } from '../engines/zoeken';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
 
@@ -21,12 +27,13 @@ function esc(s: string): string {
 }
 
 /** Play one zoeken trial for `step`; resolves when the child taps "Verder". */
-export function playZoeken(host: HTMLElement, step: Step): Promise<BeatSummary> {
+export function playZoeken(host: HTMLElement, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const settings = store.get().settings;
-    const diff = store.difficulty('zoeken');
     const skin = step.skin;
-    const trial = buildZoekenTrial(skin, diff);
+    // run 7: this play's look-alikes and places (the world's twin draws the same set)
+    const trial = buildZoekenTrial(skin, store.knobs('zoeken'), play ? play.fork('zoeken').rng : looseRng('zoeken'),
+      play ? zoekArea(play.missionId, play.n) : undefined); // (somewhere else every play)
     const dier = skin.dier ? Content.animal(skin.dier) : null;
 
     const instructie =
@@ -37,6 +44,8 @@ export function playZoeken(host: HTMLElement, step: Step): Promise<BeatSummary> 
 
     let misses = 0;
     let done = false;
+    let hinted = false;
+    const t0 = performance.now();
 
     const panel = document.createElement('div');
     panel.className = 'zoeken';
@@ -51,6 +60,7 @@ export function playZoeken(host: HTMLElement, step: Step): Promise<BeatSummary> 
     host.appendChild(panel);
 
     const field = panel.querySelector('.zoeken-field') as HTMLDivElement;
+    field.style.setProperty('--haze', String(trial.haze)); // the grass over the animal
     const speakBtn = panel.querySelector('.zoeken-speak') as HTMLButtonElement;
     speakBtn.addEventListener('click', () => narrator.speak(instructie));
 
@@ -72,16 +82,25 @@ export function playZoeken(host: HTMLElement, step: Step): Promise<BeatSummary> 
     target.style.left = `${trial.target.x}%`;
     target.style.top = `${trial.target.y}%`;
     target.setAttribute('aria-label', dier?.naam ?? 'het dier');
-    target.innerHTML = `<span class="tell"></span><span class="body"></span>`;
+    target.innerHTML = `<span class="tell"></span><span class="body"></span><span class="cover" aria-hidden="true"></span>`;
     target.addEventListener('click', onFound);
     field.appendChild(target);
 
     // attempt auto read-aloud (the Start tap that opened this counts as the gesture)
     if (settings.voorlezen) narrator.speak(instructie);
 
+    // the hint: after a calm wait, or two misses, its ring breathes softly where it lies
+    const hint = (): void => {
+      if (done || hinted) return;
+      hinted = true;
+      target.classList.add('hint');
+    };
+    const hintTimer = window.setTimeout(() => { if (panel.isConnected) hint(); }, trial.hintAfterS * 1000);
+
     function onMiss(btn: HTMLButtonElement, naam: string): void {
       if (done) return;
       misses += 1;
+      if (misses >= 2) hint();
       if (settings.geluid) Sound.tryAgain();
       btn.classList.remove('miss');
       requestAnimationFrame(() => btn.classList.add('miss'));
@@ -101,9 +120,11 @@ export function playZoeken(host: HTMLElement, step: Step): Promise<BeatSummary> 
     function onFound(): void {
       if (done) return;
       done = true;
+      window.clearTimeout(hintTimer);
+      const summary = zoekSummary({ misses, seconds: (performance.now() - t0) / 1000, hinted });
       if (settings.geluid) Sound.found();
+      target.classList.remove('hint');
       target.classList.add('found');
-      const correct = scoreZoeken(misses);
 
       const closeup = document.createElement('div');
       closeup.className = 'zoeken-closeup';
@@ -127,7 +148,7 @@ export function playZoeken(host: HTMLElement, step: Step): Promise<BeatSummary> 
       verder.addEventListener('click', () => {
         narrator.stop();
         panel.remove();
-        resolve({ trials: 1, correct });
+        resolve(summary);
       });
     }
   });

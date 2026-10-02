@@ -18,6 +18,7 @@ import { store } from '../core/state';
 import { buildRoepTrial, RoepRun, ROEP_COPY, type RoepVogel } from '../engines/roep';
 import { animalIcon } from './animalIcon';
 import { narrator } from '../core/narrator';
+import { looseRng } from '../core/play';
 import { Sound } from '../core/sound';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -28,7 +29,7 @@ export function playRoep(host: HTMLElement): Promise<BeatSummary> {
     const settings = store.get().settings;
     const reduced = settings.reducedMotion;
     const trial = buildRoepTrial();
-    const run = new RoepRun(trial, () => Math.random());
+    const run = new RoepRun(trial, looseRng('roep')); // (the bird bench is no play: a session stream)
     const byId = new Map<string, RoepVogel>(trial.vogels.map((v) => [v.id, v]));
 
     let phase: 'intro' | 'kies' | 'pauze' | 'done' = 'intro';

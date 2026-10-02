@@ -304,6 +304,40 @@ export const REVEAL = {
   nieuw: 'Nieuw in je veldgids!',
 } as const;
 
+/* ------------------------------------------- run 7: a breinkracht grows ---- */
+/** The words of the rounds inside a beat (the echo, the route) and of a breinkracht that
+ *  grew. Up is said calmly; an ease is never said (it plays as a replay, with its line). */
+export const GROEI = {
+  /** the echo grew: the same calls plus one */
+  erbij: 'Goed zo! Nu komt er een bij.',
+  /** a new echo of the same length */
+  rondje: 'Nog een rondje. Luister goed.',
+  /** listen again (a replay, or silently an easier one) */
+  nogEens: 'Luister nog een keer.',
+  /** the route: a new route to remember */
+  nogEenWeg: 'Kijk, nog een weg.',
+  /** look again (a reshow, or silently a shorter route) */
+  kijkNogEens: 'Kijk nog een keer.',
+  /** the reward card: a breinkracht crossed a whole step (one line, however many grew) */
+  groeit: 'Je {kracht} groeit.',
+  groeien: 'Je breinkrachten groeien.',
+} as const;
+
+/** The grown-ups' growth panel at the bottom of Instellingen (design §5.9): plain words,
+ *  never shown to the child anywhere else. */
+export const GROEI_PANEEL = {
+  titel: 'Groei',
+  uitleg: 'Voor grote mensen: zo groeien de breinkrachten.',
+  kracht: 'Kracht',
+  nu: 'Nu',
+  best: 'Best',
+  week: 'Deze week',
+  /** what he played at his best: the longest echo or route, the time to a find, the longest hold */
+  maat: 'Wat lukt',
+  nogNiet: 'Nog niet gespeeld.',
+  seconden: '{s} s',
+} as const;
+
 /* ------------------------------------------------------------- general ---- */
 export const ALGEMEEN = {
   leesVoor: 'Lees voor',

@@ -29,6 +29,7 @@ import type { Play } from '../../core/play';
 import type { WorldCtx, Play3dEngine } from '../play/types';
 import { buildWisselTrial, WisselRun, placeNames, regelAndersom, dagOfNacht, type WisselBin } from '../../engines/wisselen';
 import { store } from '../../core/state';
+import { looseRng } from '../../core/play';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
@@ -176,9 +177,9 @@ export function playWissel3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Be
     const settings = store.get().settings;
     const copy = step.skin.copy ?? {};
 
-    // SAME engine logic as the 2D view (construct parity §1f).
-    const diff = store.difficulty('wisselen');
-    const trial = buildWisselTrial(step.skin, diff, play?.fork('wisselen').rng); // run 7: the play's queue (as its 2D twin)
+    // SAME engine logic as the 2D view (construct parity §1f); run 7: the level's knobs and
+    // the play's queue (as its 2D twin)
+    const trial = buildWisselTrial(step.skin, store.knobs('wisselen'), play ? play.fork('wisselen').rng : looseRng('wisselen'));
     const run = new WisselRun(trial);
 
     const instructie = copy.instructie ?? 'Breng elk dier naar de goede plek.';

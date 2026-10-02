@@ -258,6 +258,42 @@ this play's version in `prepare(world, mission, play)`; (3) build trials from
 heard, show `k.rare()` when set; (5) add the home's rows to `content/ontdekkingen.ts` (≥ 4,
 ≥ 1 `zeldzaam`); (6) optionally `moods` on the Adventure.
 
+**Difficulty that grows** (package `adaptive`, design §5): the level (1-6) of each
+breinkracht picks a ROW of its knob table (`KNOB_TABLES`, `knobsFor(engine, level)`, band =
+`floor(level)`); a finished beat is judged by its own engine (`judgeBeat`: easy +1.0, fine
++0.34, steady 0, hard −0.5 silently) and never drops under `best − 1`. The span engines
+(simon, corsi) are judged by what he echoed CLEANLY: easy = round 1 clean and a clean echo
+past the start; fine = round 1 clean, or past the start after a slip in round 1; steady = a
+slip, then back to the start but not past it; hard = never a clean echo of the start length
+(a first-round slip is not a drop). A summary without
+the engine's own fields (the hut's care game) keeps the old ±0.34 staircase. A level that
+crosses a whole number marks the engine for the reward card's calm "Je … groeit." Inside a
+beat the pure cores adapt, identically on the 2D floor, the classic stage and the world:
+
+```
+engines/span.ts      SpanRun<T>(knobs, next): ROUNDS for simon and corsi (SimonRun, CorsiRun
+                     wrap it): clean → one longer (the same calls plus one for simon, a fresh
+                     route for corsi), rescued → as long, 1st wrong → replay, 2nd → a fresh one
+                     one shorter (silent 'ease'); always ends on his own echo. skin.rondes caps
+                     the rounds for a story
+engines/zoeken.ts    buildZoekenTrial(skin, knobs, rng): which look-alikes (count = lookAlikes),
+                     the 2D layout (never within 15 % of the centre), haze = 1 − glimpse;
+                     zoekSummary({ misses, seconds, hinted })
+engines/dagnacht.ts  buildDagnachtTrial(skin, diff, rng) + rustOrder: skin.rustPlan [{ slot,
+                     pick?, shuffle? }] over Encounter.slot (a flip never first, ≥ 1 kept, two
+                     only from band 4); no plan = content order. ChoiceRun.next() / nextIn(slot)
+beats/hold-math.ts   RustTempo: holdS from the band, −0.5 s after a reach (≥ 2.5), +0.5 s after
+                     two clean holds (≤ band + 1), seeded temptations (never in the first 1.1 s)
+engines/wisselen.ts  buildWisselTrial(skin, knobs, rng): sorts (skin.trials caps), flipEvery,
+                     flips (a turn back to day from band 4, its gap one longer after a switch
+                     error); summary { sorts, right first time, switches, switchErrors }
+core/growth.ts       growthSummary(history, skill, now): the grown-ups' Groei panel (Instellingen)
+```
+
+A home reads `k.knobs(e)` (the beats do so by default: `searchBeat`'s `glimpse` and
+`hintAfter`, `routeBeat`/`callersBeat` rounds, `choice.still`'s hold) and never invents a
+number; the views' parity is pinned per engine in `render3d/engines/*.parity.test.ts`.
+
 **Dev and tests** (read-only): `?dev=1&seed=N` replays a session's plays; `?mood=<id>` forces
 the visit's mood (`&fade=<id>`: a crossfade into another a few seconds into play);
 `__ranger.play()`, `history()`, `skills()`, `discoveries()`, `mood()`, `sky().mood` (the fade,

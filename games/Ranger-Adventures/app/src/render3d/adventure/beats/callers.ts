@@ -5,17 +5,23 @@
  * them back by clicking them in the same order.
  *
  * Construct parity (§6): the SAME `buildSimonTrial` and the SAME pure `SimonRun`
- * (`begin` → `tap`: advance / grow / complete / replay) as the 2D floor and the 3D
- * stage, so the same `{ trials: 1, correct }` summary, logged once through the kit.
- * Four callers with a distinct call and a distinct place, ALL visible during listening
- * and echoing (the lens holds still); the light-up and the call come together (so it
- * plays muted too); the sequence grows; a wrong click replays the SAME sequence. No
- * other beat runs in between.
+ * (`begin` → `tap`: advance / next / replay / ease / complete) as the 2D floor and the 3D
+ * stage, so the same summary, logged once through the kit. Four callers with a distinct
+ * call and a distinct place, ALL visible during listening and echoing (the lens holds
+ * still); the light-up and the call come together (so it plays muted too). No other beat
+ * runs in between.
+ *
+ * Run 7 (`adaptive`, design §5.2): the echo plays ROUNDS from the knobs (`k.knobs('simon')`:
+ * 2 → 3 → 4 the first time, starting at 3 once 2 came easily …): after a clean echo the
+ * same calls plus one ("Goed zo! Nu komt er een bij."), after a rescued one a new echo as
+ * long ("Nog een rondje."), a wrong click replays the SAME sequence and a second one plays a
+ * shorter one silently (the same "nog een keer" line). It always ends on his own echo.
  */
 
 import * as THREE from 'three';
 import '../../play/play3d.css';
-import { buildSimonTrial, randomCaller, SimonRun } from '../../../engines/simon';
+import { buildSimonTrial, SimonRun } from '../../../engines/simon';
+import { GROEI } from '../../../content/copy';
 import type { BeatSummary } from '../../../core/skill';
 import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
@@ -54,7 +60,9 @@ export interface CallersOpts {
   view: FrameSpec | null;
   stand?: Place;
   callers: readonly Caller[];
-  lines: { luister: string; echo: string; goed: string; groei: string; opnieuw: string };
+  /** `groei`: the echo grew (the same calls plus one); `rondje`: a new echo as long (run 7,
+   *  default `GROEI.rondje`); `opnieuw`: a replay, or silently an easier one */
+  lines: { luister: string; echo: string; goed: string; groei: string; opnieuw: string; rondje?: string };
   /** each call (the camera's infrared blinks with it) */
   onCall?(id: string): void;
 }
@@ -64,13 +72,15 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   k.check();
   k.beat = 'callers';
   const settings = store.get().settings;
-  const trial = buildSimonTrial(k.steps[step].skin, store.difficulty('simon'));
-  const rng = k.play.fork('simon').rng; // run 7: the play's callers (its 2D twin draws the same)
-  const run = new SimonRun(trial.target, () => randomCaller(trial.dieren, rng));
+  const trial = buildSimonTrial(k.steps[step].skin, k.knobs('simon'));
+  // run 7: the play's callers (its 2D twin draws the same), in rounds from the knobs
+  const run = new SimonRun(trial.knobs, trial.dieren, k.play.fork('simon').rng);
   const byId = new Map(o.callers.map((c) => [c.id, c]));
   const missing = trial.dieren.filter((id) => !byId.has(id));
   if (missing.length) throw new Error(`[adventure] no caller for ${missing.join(', ')}`);
-  k.stats.callers_target = trial.target;
+  k.stats.callers_start = trial.knobs.start;
+  k.stats.callers_rounds = trial.knobs.rounds;
+  k.stats.callers_target = trial.knobs.max;
 
   if (o.stand) await k.walkRanger(o.stand.x, o.stand.z, 0.04);
   if (o.view) await k.frame(o.view, { face: o.stand?.heading });
@@ -95,7 +105,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   };
   const progress = (): void => {
     const el = card?.querySelector('.p3-dots');
-    if (el) el.textContent = run.sequence.map((_, i) => (i < run.echoIndex ? '●' : '○')).join(' ');
+    if (el) el.textContent = run.sequence.map((_, i) => (i < run.echoIndex ? '●' : '○')).join('\u2009');
+    el?.classList.toggle('p3-dots--long', run.sequence.length > 5); // (smaller from six: seven still fit beside the line)
   };
   const speak = (t: string): void => { if (settings.voorlezen) narrator.speak(t); };
   const callFrom = (id: string): number => {
@@ -156,23 +167,30 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
       phase = 'done';
       callFrom(id);
       light(id, 0.7, OK);
+      k.stats.callers_span = run.summary().span ?? 0;
       finished();
       return;
     }
-    if (res === 'grow') {
+    if (res === 'next') {
+      // a round echoed: the same calls plus one after a clean echo, else a new one as long
       phase = 'listen';
       light(id, 0.7, OK);
       if (settings.geluid) Sound.correct();
-      banner(o.lines.groei, false);
-      speak(o.lines.groei);
+      const line = run.grew ? o.lines.groei : o.lines.rondje ?? GROEI.rondje;
+      k.stats.callers_round = run.round;
+      k.stats.callers_len = run.sequence.length;
+      banner(line, false);
+      speak(line);
       void k.wait(1.3).then(() => listen(null)).catch(() => {});
       return;
     }
-    // a wrong click: recoverable — the SAME sequence again
+    // a wrong click: recoverable — the SAME sequence again ('replay'), or after a second one
+    // silently a shorter one ('ease'): the same words, the same calm listen
     phase = 'listen';
     flash(id, WRONG, 0.65);
     if (settings.geluid) Sound.tryAgain();
     k.stats.callers_wrong = (k.stats.callers_wrong ?? 0) + 1;
+    k.stats.callers_len = run.sequence.length; // (a dev read: an ease is one shorter)
     banner(o.lines.opnieuw, false);
     speak(o.lines.opnieuw);
     void k.wait(1.5).then(() => listen(null)).catch(() => {});
@@ -191,6 +209,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   try {
     try {
       run.begin();
+      k.stats.callers_round = 1;
+      k.stats.callers_len = run.sequence.length;
       await listen(o.lines.luister);
       await k.guard(complete);
     } finally {
