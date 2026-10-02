@@ -91,7 +91,9 @@ export interface SurpriseReadout {
   clock: number;
   next: number;
   count: number;
-  active: null | { id: SurpriseId; x: number; y: number; z: number; age: number; state: string; met: string | null; px: number; dist: number; onScreen: boolean };
+  active: null | { id: SurpriseId; x: number; y: number; z: number; age: number; state: string; met: string | null; px: number; dist: number; onScreen: boolean;
+    /** the draw calls it adds while drawn (its meshes; the buzzard is the world's own glider: 0) */
+    calls: number };
   log: { id: SurpriseId; at: number; met: string | null }[];
 }
 
@@ -190,7 +192,7 @@ export class Surprises {
       clock: Math.round(this.clock * 10) / 10,
       next: Number.isNaN(this.next) ? -1 : Math.round(this.next * 10) / 10,
       count: this.log.length,
-      active: a && p ? { id: a.spec.id, x: p.x, y: p.y, z: p.z, age: Math.round(a.age * 10) / 10, state: a.state, met: a.met, px: Math.round(a.px), dist: Math.round(a.dist * 10) / 10, onScreen: a.onScreen } : null,
+      active: a && p ? { id: a.spec.id, x: p.x, y: p.y, z: p.z, age: Math.round(a.age * 10) / 10, state: a.state, met: a.met, px: Math.round(a.px), dist: Math.round(a.dist * 10) / 10, onScreen: a.onScreen, calls: drawCallsOf(a.group) } : null,
       log: this.log.map((l) => ({ ...l })),
     };
   }
@@ -422,7 +424,9 @@ export class Surprises {
       group.add(sp.root as THREE.Object3D);
       group.position.set(p.x, p.y, p.z);
       group.rotation.y = p.facing;
-      if (spec.plek === 'grond') this.addBlob(group, spec.id === 'edelhert' ? 0.9 : 0.4);
+      // a soft shadow under the badger (≤ 2 draw calls each: the stag's model is two already,
+      // and far off in the mist or the dusk light a shadow under him does not read)
+      if (spec.id === 'das') this.addBlob(group, 0.4);
       group.userData.surprise = spec.id;
       this.env.scene.add(group);
       restFar(group, f.reduced ? 1 : 0.0001);
@@ -554,15 +558,7 @@ export class Surprises {
         }
         break;
       }
-      case 'specht': {
-        // a drumming roll: the head knocks (a small quick nod) while the roll sounds
-        const body = a.sp?.root as THREE.Object3D | undefined;
-        if (body && !f.reduced) {
-          const drumming = g?.userData.drumUntil && a.age < (g.userData.drumUntil as number);
-          body.rotation.x = drumming ? Math.sin(a.age * 2 * Math.PI * 18) * 0.06 : 0;
-        }
-        break;
-      }
+      // (the woodpecker clings still and drums: its roll is heard, never a quick shake on screen)
       default: break;
     }
     // its call, now and then (never over a spoken line), panned from where it is
@@ -593,7 +589,6 @@ export class Surprises {
     // (a drumming or a cuckoo carries: it may sound a little past HEARD_M, softly; it counts
     // as heard only within HEARD_M of him)
     const dur = Sound.callAt(spec.call!.id, at.x, at.z, listenerOf(this.env.camera), CALL_REACH);
-    if (spec.id === 'specht' && a.group) a.group.userData.drumUntil = a.age + Math.max(0.5, dur);
     // heard: its call reached him (Sound.callAt plays it only within reach of the lens)
     if (dur > 0 && a.dist <= HEARD_M) this.meet(a, 'heard');
   }
@@ -698,6 +693,13 @@ export class Surprises {
 }
 
 interface Placed { x: number; z: number; y: number; facing: number; dir?: { x: number; z: number }; tree?: TreePlacement }
+
+/** How many draw calls a group adds (each visible mesh, each of its materials). */
+function drawCallsOf(g: THREE.Object3D | null): number {
+  let n = 0;
+  g?.traverseVisible((o) => { const m = o as THREE.Mesh; if (m.isMesh) n += Array.isArray(m.material) ? m.material.length : 1; });
+  return n;
+}
 
 /** `from` turned toward `to` by at most `max` rad. */
 function turnTo(from: number, to: number, max: number): number {
