@@ -84,6 +84,13 @@ export function cloudUv(x: number, z: number, off: { x: number; y: number }): { 
   return { u: x / CLOUD_TILE_M + CLOUD_PHASE + off.x, v: -z / CLOUD_TILE_M + CLOUD_PHASE + off.y };
 }
 
+/** The same coordinate as GLSL, for a `vec4` world position named `world` and the drift
+ *  uniform `uCloudOff`: the ground's shader (`cloudShadeShader`) and the dust's
+ *  (world/Dust.ts, a puff shaded by the cloud over it) both read it. Pure. */
+export function cloudUvGlsl(world: string): string {
+  return `vec2(${world}.x, -${world}.z) * ${(1 / CLOUD_TILE_M).toFixed(6)} + ${CLOUD_PHASE.toFixed(2)} + uCloudOff`;
+}
+
 /**
  * Patch a lit three.js shader (MeshStandardMaterial) so the drifting cloud shade falls ON
  * THE GROUND: the texture dims the SUN's light (the direct terms) at the fragment's world
@@ -109,14 +116,13 @@ export function cloudShadeShader(vertex: string, fragment: string): { vertex: st
   need(vertex, '#include <begin_vertex>');
   need(fragment, '#include <common>');
   need(fragment, '#include <lights_fragment_end>');
-  const k = (1 / CLOUD_TILE_M).toFixed(6);
   return {
     vertex: vertex
       .replace('#include <common>', '#include <common>\nuniform vec2 uCloudOff;\nvarying vec2 vCloudUv;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         {
           vec4 cloudWorld = modelMatrix * vec4(transformed, 1.0);
-          vCloudUv = vec2(cloudWorld.x, -cloudWorld.z) * ${k} + ${CLOUD_PHASE.toFixed(2)} + uCloudOff;
+          vCloudUv = ${cloudUvGlsl('cloudWorld')};
         }`),
     fragment: fragment
       .replace('#include <common>', '#include <common>\nuniform sampler2D uCloudMap;\nvarying vec2 vCloudUv;')

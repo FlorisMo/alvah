@@ -40,7 +40,7 @@ import { setScreen, setMissionView, provideTitleReady } from '../../core/devhook
 import { mountReadAloud, readScreenAloud, sentenceSegments } from '../ReadAloud';
 import { showAvatarCreator } from '../AvatarCreator';
 import { mountMissionPause, unmountMissionPause } from './MissionFlow';
-import { session, esc, card, plainCard, clearOverlays, menuOpen, fadeCut, kicker } from './session';
+import { session, esc, card, plainCard, clearOverlays, menuOpen, fadeCut, dipCut, kicker } from './session';
 import { icon } from '../icons';
 import { coarsePointer } from '../hud/device';
 import { wireWorldDevhook } from '../dev/wireDevhook';
@@ -224,6 +224,8 @@ function buildWorld(): World {
   world.setCameraFollow(() => store.get().settings.cameraDraaitMee);
   // a menu card over the world (Pauze, the missiebord, a briefing ...) holds him still
   world.setMenuGate(menuOpen);
+  // run 7 (feel): a climb into the jeep that would swing the view round it dips instead
+  world.setDip(dipCut);
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
   // mission board overlay in-place.
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });

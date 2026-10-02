@@ -22,6 +22,7 @@
 
 import * as THREE from 'three';
 import { livePolicy } from '../MotionMode';
+import { DustCloud, JEEP_DUST, type DustHeart } from './Dust';
 import { loadModel, prepModel } from '../Models';
 import { SIZE, sizeRow } from '../AnimalScale';
 import type { Biome } from '../Biomes';
@@ -251,15 +252,10 @@ export class Vehicles {
   // puffs kicked up low behind the rear wheels. World-sized points (a puff is ~0.4 →
   // 1.1 m wide wherever it is), clamped on screen and faded near the lens, so the dust
   // can never become a blob over the screen (audit veh-02). Off under reduced-motion.
-  private dust: THREE.Points | null = null;
-  private dustPos: Float32Array | null = null;
-  private dustVel: Float32Array | null = null;
-  private dustAge: Float32Array | null = null;
-  private dustLife: Float32Array | null = null;
-  private dustSoil: Float32Array | null = null;   // N strengths: pale sand shows most, dark heath least
-  private dustNext = 0;
+  // (world/Dust.ts; run 7: the ranger's heels on sand kick up their own)
+  private dust: DustCloud | null = null;
+  private dustNext = 0;                   // puffs started (they alternate the two rear wheels)
   private dustDebt = 0;                   // fractional puffs owed (emission is per second)
-  private dustSeed = 0x9e3779b1;
   dustEmitting = false;
   private static readonly DUST_N = 48;
   // Draw the dust and the pad beacons for the first frames (all invisible: no live puffs,
@@ -301,6 +297,41 @@ export class Vehicles {
     if (this.nearJeep) { this.enterVehicle(); return true; }
     if (this.nearHeli) { this.enterHeli(); return true; }
     return false;
+  }
+
+  /** Run 7 (feel): the bearing the view will look along once the interact key has climbed
+   *  in or stepped out (`viewAfter`), or null when the key does neither here (nothing near,
+   *  or the helicopter in the air: it lands). The world reads it BEFORE the key acts, to
+   *  choose between today's glide and a soft dip-cut for a big turn (World.ride). */
+  interactView(): number | null {
+    if (this.inVehicle) return this.viewAfter('jeep-out');
+    if (this.inHeli) return this.viewAfter('heli-out');
+    if (this.nearJeep) return this.viewAfter('jeep-in');
+    if (this.nearHeli) return this.viewAfter('heli-in');
+    return null;
+  }
+
+  /** Run 7 (feel): the bearing the view looks along once `act` is done, or null when it
+   *  would do nothing now. Climbing into the jeep the chase view looks the way it points,
+   *  and so does the walk view behind him as he steps out beside it; the helicopter's
+   *  chase view sits a little to its side, and out of it he faces the clearing. */
+  viewAfter(act: 'jeep-in' | 'jeep-out' | 'heli-in' | 'heli-out'): number | null {
+    const free = !this.inVehicle && !this.inHeli;
+    switch (act) {
+      case 'jeep-in': return free && this.jeep && this.jeepPos ? this.jeepHeading : null;
+      case 'jeep-out': return this.inVehicle ? this.jeepHeading : null;
+      case 'heli-in': return free && this.heli && this.heliPos && heliAvailable(this.heliOptInSource(), livePolicy().reduced)
+        ? this.heliHeading + HELI_CHASE_YAW : null;
+      case 'heli-out': return this.inHeli && !this.heliAirborne && this.heliPos ? this.heliExitFace() : null;
+    }
+  }
+
+  /** Out of the helicopter he looks toward the clearing, not along the flight: the way back
+   *  to the world lies ahead of him, and at his size the helicopter would otherwise stand in
+   *  the walk camera's way as he turns home past it. */
+  private heliExitFace(): number {
+    const hp = this.heliPos;
+    return hp ? Math.atan2(-hp.x, -hp.z) : this.heliHeading;
   }
 
   /** Walking near a parked jeep surfaces "Stap in" (W5.1), near the parked heli "Stap in
@@ -766,7 +797,7 @@ export class Vehicles {
    *  clue, looked straight up the trail at the parked helicopter: "he came by
    *  helicopter"). Returns how to put them back. */
   outOfPicture(): () => void {
-    const all = [this.jeep, this.heli, this.dust, ...this.padMeshes, ...this.beacons].filter((o): o is THREE.Object3D => !!o);
+    const all = [this.jeep, this.heli, this.dust?.points, ...this.padMeshes, ...this.beacons].filter((o): o is THREE.Object3D => !!o);
     const was = all.map((o) => o.visible);
     for (const o of all) o.visible = false;
     return () => { all.forEach((o, i) => { o.visible = was[i]; }); };
@@ -1242,10 +1273,7 @@ export class Vehicles {
     const h = this.heliHeading;
     this.heliAltitude = HELI_PAD_HEIGHT;
     this.heliPos.y = this.groundY(this.heliPos.x, this.heliPos.z);
-    // out of the helicopter he looks toward the clearing, not along the flight: the way
-    // back to the world lies ahead of him, and at his size the helicopter would otherwise
-    // stand in the walk camera's way as he turns home past it
-    const face = Math.atan2(-this.heliPos.x, -this.heliPos.z);
+    const face = this.heliExitFace(); // toward the clearing
     this.stepOut(this.heliPos.x, this.heliPos.z, h, HELI_STEP_OUT, HELI_BODY, face);
     this.host.follow(face, true);
     this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
@@ -1353,83 +1381,18 @@ export class Vehicles {
 
   /* --------------------------------------------------------------- dust ---- */
 
-  /** W5.2: the dust pool (1 draw call, hidden while idle). Points are sized in METRES
-   *  (`uScale` = the lens's pixels per metre at 1 m, set per render), clamped on screen
-   *  and faded out near the lens, so a puff reads as a low wisp at any distance. */
+  /** W5.2: the dust pool (1 draw call, hidden while idle; world/Dust.ts). Points are sized
+   *  in METRES, clamped on screen and faded out near the lens, so a puff reads as a low wisp
+   *  at any distance. */
   private initDust(): void {
-    const N = Vehicles.DUST_N;
-    this.dustPos = new Float32Array(N * 3);
-    this.dustVel = new Float32Array(N * 3);
-    this.dustAge = new Float32Array(N);
-    this.dustLife = new Float32Array(N); // all 0 → every slot starts dead
-    this.dustSoil = new Float32Array(N);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(this.dustPos, 3));
-    geo.setAttribute('aAge', new THREE.BufferAttribute(this.dustAge, 1));
-    geo.setAttribute('aLife', new THREE.BufferAttribute(this.dustLife, 1));
-    geo.setAttribute('aSoil', new THREE.BufferAttribute(this.dustSoil, 1));
-    const uniforms = { uColor: { value: new THREE.Color('#ebdfc4') }, uScale: { value: 700 } };
-    const mat = new THREE.ShaderMaterial({
-      uniforms,
-      transparent: true,
-      depthWrite: false,
-      vertexShader: `
-        uniform float uScale;
-        attribute float aAge;
-        attribute float aLife;
-        attribute float aSoil;
-        varying float vAlpha;
-        void main() {
-          float life = max(aLife, 0.0001);
-          float f = clamp(aAge / life, 0.0, 1.0);
-          float alive = step(0.0001, aLife) * (1.0 - step(aLife, aAge));
-          vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          float depth = max(-mv.z, 0.5);
-          // fade in fast, out slowly; and away near the lens: never a blob over the screen
-          float near = smoothstep(2.5, 6.0, depth);
-          vAlpha = smoothstep(0.0, 0.15, f) * (1.0 - f) * alive * near * aSoil;
-          float metres = mix(0.45, 1.3, f);
-          gl_PointSize = clamp(metres * uScale / depth, 1.0, 72.0);
-          gl_Position = projectionMatrix * mv;
-        }
-      `,
-      fragmentShader: `
-        precision mediump float;
-        uniform vec3 uColor;
-        varying float vAlpha;
-        void main() {
-          vec2 d = gl_PointCoord - vec2(0.5);
-          float r2 = dot(d, d) * 4.0;          // 0 at the centre, 1 at the rim
-          float soft = exp(-3.5 * r2) * (1.0 - r2);
-          float a = max(soft, 0.0) * vAlpha * 0.4; // a light haze, not a cloud
-          if (a <= 0.003) discard;
-          gl_FragColor = vec4(uColor, a);
-        }
-      `,
-    });
-    const pts = new THREE.Points(geo, mat);
-    pts.frustumCulled = false; // particles live in world space, not around the origin
-    pts.visible = true; // warm-up (all puffs dead: nothing shows); updateDust hides it
-    const size = new THREE.Vector2();
-    pts.onBeforeRender = (renderer, _scene, cam) => {
-      renderer.getDrawingBufferSize(size);
-      const fov = (cam as THREE.PerspectiveCamera).fov ?? 55;
-      uniforms.uScale.value = size.y / (2 * Math.tan((fov * Math.PI) / 360));
-    };
-    this.scene.add(pts);
-    this.dust = pts;
-  }
-
-  /** A deterministic 0..1 (LCG) for dust scatter — no `Math.random`, stable frames. */
-  private dustRand(): number {
-    this.dustSeed = (this.dustSeed * 1103515245 + 12345) & 0x7fffffff;
-    return this.dustSeed / 0x7fffffff;
+    this.dust = new DustCloud(this.scene, Vehicles.DUST_N, JEEP_DUST);
   }
 
   /** W5.2: puffs off the two REAR wheels, low on the ground, at a rate that follows
    *  the pace and the ground (sand kicks up most, heather and forest floor less). */
   private emitDust(dt: number, pace: number): void {
-    if (!this.jeepPos || !this.dustPos || !this.dustVel || !this.dustAge || !this.dustLife || !this.dustSoil) return;
+    const dust = this.dust;
+    if (!this.jeepPos || !dust) return;
     const soil: Record<Biome, number> = { stuifzand: 1, heide: 0.55, bos: 0.35, ven: 0.3 };
     const shows: Record<Biome, number> = { stuifzand: 1, heide: 0.45, bos: 0.35, ven: 0.35 }; // on dark ground a pale puff stands out: fainter
     const jp = this.jeepPos;
@@ -1440,47 +1403,29 @@ export class Vehicles {
     this.dustDebt += dt * 34 * pace * soil[biome];
     while (this.dustDebt >= 1) {
       this.dustDebt -= 1;
-      const i = this.dustNext;
-      this.dustNext = (this.dustNext + 1) % Vehicles.DUST_N;
-      const side = i % 2 ? 0.72 : -0.72;        // alternate the two rear wheels
-      const back = 1.25 + this.dustRand() * 0.3;
-      const px = jp.x - fx * back + lx * (side + (this.dustRand() - 0.5) * 0.2);
-      const pz = jp.z - fz * back + lz * (side + (this.dustRand() - 0.5) * 0.2);
-      this.dustPos[i * 3] = px;
-      this.dustPos[i * 3 + 1] = this.groundY(px, pz) + 0.15;
-      this.dustPos[i * 3 + 2] = pz;
-      const spread = (this.dustRand() - 0.5) * 0.5;
-      this.dustVel[i * 3] = lx * spread - fx * 0.3;
-      this.dustVel[i * 3 + 1] = 0.12 + this.dustRand() * 0.18; // a low, slow rise
-      this.dustVel[i * 3 + 2] = lz * spread - fz * 0.3;
-      this.dustAge[i] = 0;
-      this.dustLife[i] = 0.9 + this.dustRand() * 0.6;
-      this.dustSoil[i] = shows[biome];
+      const side = this.dustNext++ % 2 ? 0.72 : -0.72; // alternate the two rear wheels
+      const back = 1.25 + dust.rand() * 0.3;
+      const px = jp.x - fx * back + lx * (side + (dust.rand() - 0.5) * 0.2);
+      const pz = jp.z - fz * back + lz * (side + (dust.rand() - 0.5) * 0.2);
+      const spread = (dust.rand() - 0.5) * 0.5;
+      const rise = 0.12 + dust.rand() * 0.18; // a low, slow rise
+      dust.emit(px, this.groundY(px, pz) + 0.15, pz, lx * spread - fx * 0.3, rise, lz * spread - fz * 0.3,
+        0.9 + dust.rand() * 0.6, shows[biome]);
     }
+  }
+
+  /** Dev read (run 7 feel): the jeep dust's strongest puff on screen, before and after the
+   *  cloud is drawn (DustCloud.probe). */
+  dustHeart(): DustHeart | null {
+    return this.dust?.probe() ?? null;
   }
 
   /** W5.2: age every live puff, drift it, and hide the cloud once none survive (so an
    *  idle jeep costs no draw call). */
   updateDust(dt: number): void {
-    if (!this.dust || !this.dustPos || !this.dustVel || !this.dustAge || !this.dustLife) return;
-    const step = vehicleDt(dt);
-    let anyAlive = false;
-    for (let i = 0; i < Vehicles.DUST_N; i++) {
-      if (this.dustLife[i] <= 0) continue;
-      const age = this.dustAge[i] + step;
-      if (age >= this.dustLife[i]) { this.dustLife[i] = 0; this.dustAge[i] = age; continue; }
-      this.dustAge[i] = age;
-      this.dustPos[i * 3] += this.dustVel[i * 3] * step;
-      this.dustPos[i * 3 + 1] += this.dustVel[i * 3 + 1] * step;
-      this.dustPos[i * 3 + 2] += this.dustVel[i * 3 + 2] * step;
-      anyAlive = true;
-    }
-    const g = this.dust.geometry;
-    (g.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
-    (g.getAttribute('aAge') as THREE.BufferAttribute).needsUpdate = true;
-    (g.getAttribute('aLife') as THREE.BufferAttribute).needsUpdate = true;
-    (g.getAttribute('aSoil') as THREE.BufferAttribute).needsUpdate = true;
+    if (!this.dust) return;
+    const anyAlive = this.dust.update(vehicleDt(dt));
     if (this.warmFrames > 0 && --this.warmFrames === 0 && !this.inHeli) for (const b of this.beacons) b.visible = false;
-    this.dust.visible = anyAlive || this.warmFrames > 0;
+    this.dust.points.visible = anyAlive || this.warmFrames > 0;
   }
 }

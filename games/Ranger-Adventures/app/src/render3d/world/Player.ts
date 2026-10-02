@@ -33,6 +33,8 @@ import { store } from '../../core/state';
 import type { Terrain } from './Terrain';
 import type { RangerMotion } from '../play/types';
 import { enableCast } from './props';
+import { DustCloud, type DustLook, type DustHeart } from './Dust';
+import { trackSand } from '../Paths';
 
 // F-11 world rim: a calm pine tree-line rings the playable area at the move bound
 // (`limits.bound`, 75 m) so walking outward meets a visible forest edge, never the
@@ -73,6 +75,14 @@ export const walkPace: { cap: number | null } = { cap: null };
 /** A tap-walk eases in over its last stretch: he goes no faster than this many metres
  *  per second per metre still to go (he arrives, never brakes on the spot). */
 const ARRIVE_EASE = 3;
+
+/** Run 7 (feel): the little puffs his heels kick up running on sand: smaller than the
+ *  jeep's (0.22 → 0.7 m), whole from 2.6 m off the lens (he runs ~5 m in front of it), and
+ *  short-lived, so a run leaves a light trail behind him that settles at once. A light haze
+ *  (as faint as the jeep's), lit like the sand it came off (world/Dust.ts): dust in every
+ *  mood, never a glowing dot. */
+const HEEL_DUST: DustLook = { from: 0.22, to: 0.7, alpha: 0.4, near: [1, 2.6] };
+const HEEL_DUST_N = 16;
 
 /** Who steered the ranger this frame. */
 type DriveMode = 'keys' | 'stick' | 'tap';
@@ -142,6 +152,10 @@ export class Player {
   // procedural bob when the rigged GLB lacks clips). `groundSpeedNow` is the ranger's
   // post-collision ground speed (m/s), fed to the blend each frame.
   readonly rig = new PlayerRig();
+  // run 7 (feel): the puffs his heels kick up running on sand (one draw call while any lives)
+  private readonly dust: DustCloud;
+  private dustPuffs = 0; // puffs started (the dev hook's read)
+  private dustWarm = 3;  // drawn (empty) for the first frames, so its shader compiles while the world loads
   groundSpeedNow = 0;
   /** The stick's ring shows when he runs (the HUD wires it to the joystick). */
   stickRunFeedback: ((running: boolean) => void) | null = null;
@@ -214,6 +228,7 @@ export class Player {
     this.obstacles = env.obstacles;
     this.limits = env.limits;
     this.host = host;
+    this.dust = new DustCloud(env.scene, HEEL_DUST_N, HEEL_DUST, 0x2545f491);
   }
 
   /** Put the instant stand-in in the world at spawn, back to the follow lens. */
@@ -477,7 +492,35 @@ export class Player {
     this.walkedThisFrame = false;
     const plants = this.rig.update(dt, this.groundSpeedNow, reduced);
     if (plants > 0 && this.groundSpeedNow >= MIN_STEP_SPEED) this.footstep();
+    // run 7 (feel): running on sand, each foot that goes down kicks up a little dust behind
+    // his heel (secondary motion: none under reduced motion)
+    if (plants > 0 && !reduced && this.rig.running) this.kickDust();
+    this.dust.points.visible = this.dust.update(Math.min(dt, 0.05)) || this.dustWarm-- > 0;
   }
+
+  /** Run 7 (feel): two small puffs at the heel of the foot that just went down, drifting
+   *  back and up a little, as strong as the ground is sandy (the drift sand, the sand tracks;
+   *  none on heather or the forest floor). */
+  private kickDust(): void {
+    const p = this.group.position;
+    const sand = Math.max(this.hereBiome === 'stuifzand' ? 1 : 0, trackSand(p.x, p.z));
+    if (sand < 0.1) return;
+    const sole = this.rig.soleProbe()[this.rig.footDown];
+    if (!sole) return;
+    const h = this.group.rotation.y;
+    const fx = Math.sin(h), fz = Math.cos(h); // forward
+    const d = this.dust;
+    for (let k = 0; k < 2; k++) {
+      const side = (d.rand() - 0.5) * 0.3;
+      const back = 0.5 + d.rand() * 0.4;
+      const x = sole.heel.x - fx * 0.06, z = sole.heel.z - fz * 0.06;
+      d.emit(x, this.terrain.y(x, z) + 0.05, z, -fx * back + fz * side, 0.14 + d.rand() * 0.16, -fz * back - fx * side,
+        0.55 + d.rand() * 0.3, sand);
+      this.dustPuffs += 1;
+    }
+  }
+
+
 
   /** A footstep with the timbre of the ground underfoot, brisker running; gated on the
    *  sound setting (the count only moves when one is heard). */
@@ -779,8 +822,15 @@ export class Player {
   /** Dev-hook accessor (run 6): his gait (which clip leads, the cycle phase, footfalls
    *  per second, the run share, the stride gain) and his soles in world metres (heel,
    *  ball, tip per foot: the foot-slip probe). */
-  gait(): { name: Gait; phase: number; cadence: number; run: number; gain: number; soles: SoleProbe[] } {
-    return { ...this.rig.gait(), soles: this.rig.soleProbe() };
+  gait(): { name: Gait; phase: number; cadence: number; run: number; gain: number; soles: SoleProbe[]; dust: { puffs: number; drawn: boolean } } {
+    // run 7 (feel): + the puffs his heels have kicked up, and whether their cloud is drawn now
+    return { ...this.rig.gait(), soles: this.rig.soleProbe(), dust: { puffs: this.dustPuffs, drawn: this.dust.points.visible } };
+  }
+
+  /** Dev read (run 7 feel): his heel dust's strongest puff on screen, before and after the
+   *  cloud is drawn (DustCloud.probe). */
+  dustHeart(): DustHeart | null {
+    return this.dust.probe();
   }
 
   /** The ranger's active locomotion clip for the dev hook (null when procedural). */

@@ -159,6 +159,11 @@ export interface RangerDevHook {
    *  gain, and his soles in world metres (heel, ball, tip per foot, left first: the
    *  foot-slip probe). Null before the world is up. */
   gait(): GaitRead | null;
+  /** Run 7 (feel): the dust's pixel check. The colour on screen at the heart of the
+   *  strongest puff of the heels' (or the jeep's) dust, read in ONE frame just before that
+   *  cloud is drawn and just after. Each call returns the last measurement (null before the
+   *  first) and asks for a new one the next frame a puff of that cloud is on screen. */
+  dustHeart(which: 'heels' | 'jeep'): DustHeartRead | null;
   /** D1.2 locomotion ground-truth (P1.5a asserts it across the walkable world): is the
    *  ranger's Y actually ON the RENDERED terrain surface, not through it? `grounded` is
    *  true when a down-ray hits the terrain under him AND his feet sit in the on-foot
@@ -476,6 +481,20 @@ export interface GaitRead {
   run: number;
   gain: number;
   soles: { heel: XYZ; toe: XYZ; tip: XYZ }[];
+  /** run 7 (feel): the puffs his heels have kicked up running on sand, and whether their
+   *  cloud is drawn now */
+  dust: { puffs: number; drawn: boolean };
+}
+
+/** Run 7 (feel): one dust pixel read (devhook `dustHeart`, world/Dust.ts DustHeart): the
+ *  colour (0..255) before and after the cloud is drawn, the puff's own opacity at its heart,
+ *  and the drawing-buffer pixel. */
+export interface DustHeartRead {
+  before: [number, number, number];
+  after: [number, number, number];
+  alpha: number;
+  x: number;
+  y: number;
 }
 
 const state = {
@@ -489,6 +508,7 @@ const state = {
   groundSpeed: null as null | (() => number | null),
   motion: null as null | (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null),
   gait: null as null | (() => GaitRead | null),
+  dustHeart: null as null | ((which: 'heels' | 'jeep') => DustHeartRead | null),
   grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
@@ -704,6 +724,11 @@ export function provideGroundSpeed(fn: (() => number | null) | null): void {
 /** Register the ranger's gait + sole probe read (World.playerGait). Pass null to clear. */
 export function provideGait(fn: (() => GaitRead | null) | null): void {
   state.gait = fn;
+}
+
+/** Register the dust's pixel read (World.dustHeart; run 7 feel). Pass null to clear. */
+export function provideDustHeart(fn: ((which: 'heels' | 'jeep') => DustHeartRead | null) | null): void {
+  state.dustHeart = fn;
 }
 
 /** Register the ranger's live motion read (World.rangerMotion). Pass null to clear. */
@@ -941,6 +966,7 @@ export function installDevHook(): boolean {
     groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
     motion: () => (state.motion ? state.motion() : null),
     gait: () => (state.gait ? state.gait() : null),
+    dustHeart: (which) => (state.dustHeart ? state.dustHeart(which) : null),
     grounded: () => (state.grounded ? state.grounded() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),

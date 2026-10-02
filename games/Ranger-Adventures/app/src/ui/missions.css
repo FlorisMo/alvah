@@ -39,7 +39,9 @@
    missiebord, back to the title). A short warm dip, never one flat colour: a golden
    glow with warm edges over the picture, deepest for a couple of frames while the
    world moves under it. Under reduced motion there is no dip at all (a plain cut). */
-.ra-fade {
+/* run 7 (feel) flow/session.dipCut: the same dip for a cut inside the world (climbing
+   into the jeep from its front), not a menu: the world holds the ranger itself */
+.ra-fade, .ra-dip {
   position: absolute;
   inset: 0;
   z-index: 50;
@@ -48,10 +50,10 @@
   opacity: 0;
   transition: opacity 220ms var(--ease-in);
 }
-.ra-fade.on { opacity: 1; }
-.ra-fade.lifting { transition: opacity 280ms var(--ease-out); }
+.ra-fade.on, .ra-dip.on { opacity: 1; }
+.ra-fade.lifting, .ra-dip.lifting { transition: opacity 280ms var(--ease-out); }
 /* lifting: the card under it already takes clicks and keys (`#ui` outranks `#ui > *`) */
-#ui .ra-fade.lifting { pointer-events: none; }
+#ui .ra-fade.lifting, #ui .ra-dip.lifting { pointer-events: none; }
 
 /* ---- karaoke read-aloud (ui/ReadAloud.ts): the word being spoken gets a calm,
    non-flashing highlight; lines written as they are read wait, keeping their place ---- */
