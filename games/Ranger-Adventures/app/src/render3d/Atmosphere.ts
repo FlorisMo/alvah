@@ -20,6 +20,10 @@
  * no browser. Everything is deterministic — no Math.random / Date.now.
  */
 
+/** The renderer's exposure for the ACES curve: one for every screen and every mood (Stage
+ *  owns the one renderer; Lighting.GOLDEN_HOUR.exposure and the moods' fog read it). */
+export const EXPOSURE = 1.08;
+
 /** The golden-hour sky from the zenith (0) down to the horizon (1): a pale, cool
  *  blue overhead warming through cream and gold into the peach haze the fog is made
  *  of, so distant hills and trees dissolve into the sky exactly at the horizon.

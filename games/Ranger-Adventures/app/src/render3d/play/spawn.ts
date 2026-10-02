@@ -13,9 +13,7 @@
 import * as THREE from 'three';
 import { loadModel, loadRig, prepModel } from '../Models';
 import { standHeightFor } from '../AnimalScale';
-import { applyEyes } from '../EyeMaterial';
-import { applyCoat, applyPattern, applyPosture } from '../AnimalDress';
-import { applyCalmPose } from '../CalmPoseRig';
+import { dressAnimal } from '../AnimalDress';
 import { livePolicy } from '../MotionMode';
 import { mergeColourSplits } from './merge';
 import type { SpawnOpts, Spawned } from './types';
@@ -113,13 +111,9 @@ export async function spawnModel(id: string, opts: SpawnOpts = {}): Promise<Spaw
   // sized, so the body (not the antler tips) takes the height
   if (opts.antlers === false || NO_ANTLERS.has(id)) rig.group.traverse((o) => { if (ANTLERS.test(o.name)) o.visible = false; });
   const prepped = prepModel(rig.group, opts.height ?? heightFor(id));
-  applyEyes(prepped, glb, { dusk: false });
-  applyCoat(prepped, glb);
-  if (id !== glb) applyCoat(prepped, id); // a young one's own coat (a reddish yearling on the boar's model)
-  applyPattern(prepped, glb);             // the piglet's striped pyjamas
-  applyPosture(prepped, glb);
-  applyCalmPose(prepped, glb);
-  mergeColourSplits(prepped); // one draw call per animal, not one per colour
+  // the world's one dressing (eyes, coat, a young one's own coat, the piglet's stripes,
+  // stance, calm pose, one draw call)
+  dressAnimal(prepped, glb, { coat: id });
   let mixer: THREE.AnimationMixer | null = null;
   let current: THREE.AnimationAction | null = null;
   const CLIP: Record<string, RegExp> = { idle: /idle|rest|stand|breath/i, walk: /walk/i, graze: /graze|eat/i };
