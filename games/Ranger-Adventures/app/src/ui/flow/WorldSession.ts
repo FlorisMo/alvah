@@ -40,7 +40,7 @@ import { setScreen, setMissionView, provideTitleReady } from '../../core/devhook
 import { mountReadAloud, readScreenAloud, sentenceSegments } from '../ReadAloud';
 import { showAvatarCreator } from '../AvatarCreator';
 import { mountMissionPause, unmountMissionPause } from './MissionFlow';
-import { session, esc, card, plainCard, clearOverlays, menuOpen, fadeCut, kicker } from './session';
+import { session, esc, card, plainCard, clearOverlays, menuOpen, fadeCut, dipCut, kicker } from './session';
 import { icon } from '../icons';
 import { coarsePointer } from '../hud/device';
 import { wireWorldDevhook } from '../dev/wireDevhook';
@@ -49,7 +49,9 @@ import {
   tryOpenBoard, onPorchApproach, tryOpenPorch, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
   setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint, setDriveStall, beginGuide,
 } from '../hud/ExploreHud';
-import { armMissiebordBeat } from '../hud/Lessons';
+import { armMissiebordBeat, guideSnapshot } from '../hud/Lessons';
+import { revealDiscovery } from '../hud/Reveal';
+import { ontdekking } from '../../content/ontdekkingen';
 
 // Light world-EF seasoning: count in-world mission completions this session so the
 // pure `pickWorldBeat` cadence (every Nth return) stays rare. `lastBeatTick` dedups
@@ -224,6 +226,8 @@ function buildWorld(): World {
   world.setCameraFollow(() => store.get().settings.cameraDraaitMee);
   // a menu card over the world (Pauze, the missiebord, a briefing ...) holds him still
   world.setMenuGate(menuOpen);
+  // run 7 (feel): a climb into the jeep that would swing the view round it dips instead
+  world.setDip(dipCut);
   // W2.2: the spawn case-board is the mission hub — walking up to it opens the
   // mission board overlay in-place.
   world.setBoard({ onNear: onBoardApproach, onOpen: tryOpenBoard });
@@ -247,10 +251,36 @@ function buildWorld(): World {
     optIn: () => store.get().settings.helikopter,
   });
   stage.enterWorld(world);
+  wireSurprises(world);
   for (const m of area.missies) if (done[m.id]) void tellWorldMissionDone(m.id, false);
   if (store.get().arc.gemeld) world.setSeasonResolved(true);
   wireWorldDevhook(world);
   return world;
+}
+
+/**
+ * Run 7 (veldgids): the open world's small surprises (render3d/world/Surprises.ts). Free
+ * roam as the game sees it: he is in the world with its HUD up, the first minute's lesson
+ * slot is idle and no briefing waits (a mission is the world's own check). What he meets
+ * (seen or heard) goes into his veldgids at once (`wereld.<id>`); a new one gets its reveal
+ * at the next quiet moment; each one met moves the open world's rare counter.
+ */
+function wireSurprises(world: World): void {
+  world.setSurprises({
+    free: () => !!session.host.querySelector('.explore-hud') && !session.host.querySelector('.ra-overlay .briefing')
+      && guideSnapshot().active === null,
+    met: (id, how) => {
+      const row = ontdekking(`wereld.${id}`);
+      if (row && store.discover(row.id)) revealDiscovery(row, { heard: how === 'heard' });
+    },
+    done: (id, met) => {
+      if (met) store.rareEnd('wereld', ontdekking(`wereld.${id}`)?.soort === 'zeldzaam');
+    },
+    found: () => store.get().ontdekt,
+    sinceRare: () => store.get().zeldzaam.wereld ?? 0,
+    mood: () => world.mood().now,
+    sound: () => store.get().settings.geluid,
+  });
 }
 
 /**

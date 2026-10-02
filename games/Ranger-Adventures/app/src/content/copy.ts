@@ -150,6 +150,8 @@ export const HUB = {
   raafZorg: 'Verzorg {raaf}',
   jeRaaf: 'je raaf',
   badges: 'Bekijk je breinkracht-badges',
+  /** Run 7: the veldgids's tile. */
+  veldgids: 'Open je veldgids',
   instellingen: 'Instellingen',
   terug: 'Terug naar de open plek',
   hoofdmenu: 'Naar het hoofdmenu',
@@ -195,6 +197,8 @@ export const HUB = {
 export const HUT = {
   kicker: 'De ranger-hut',
   titel: 'Jouw plekje',
+  /** Run 7: the veldgids lies in the hut too. */
+  veldgids: 'Je veldgids',
   terugHut: 'Terug naar de hut',
   terug: 'Terug',
   /** The raaf before it has a name. */
@@ -302,6 +306,41 @@ export const INSTELLINGEN = {
  *  this line, then the thing's name (content/ontdekkingen.ts), read aloud once. */
 export const REVEAL = {
   nieuw: 'Nieuw in je veldgids!',
+  /** In its place for a bird he met by its call (the woodpecker's drum, the cuckoo's call):
+   *  the card says what made the sound, so it never seems to come from nothing. */
+  gehoord: 'Dat hoorde je!',
+  /** Under the first reveals, until he has opened his veldgids once: where it is (it names
+   *  the gids: right after an animal's name, "Hij" would read as the animal). */
+  waar: 'Je veldgids zit onder Pauze.',
+} as const;
+
+/* ---------------------------------------------- run 7: the veldgids ---- */
+/** The field guide (ui/veldgids/Veldgids.ts): one page per place, what he saw or heard
+ *  there, and a grey shape with one hint line for what is still out there. Never a count. */
+export const VELDGIDS = {
+  kicker: 'Je veldgids',
+  /** The pages: a place in words, never a mission's name (a new home without a line here
+   *  shows its mission's title). */
+  plek: {
+    frisling: 'Bij de modderpoel',
+    'ree-niet-aanraken': 'In het hoge gras',
+    wildcamera: 'Bij het dierenpad',
+    eekhoorn: 'Tussen de dennen',
+    ven: 'Bij het ven',
+    wereld: 'Overal op de Veluwe',
+  } as Readonly<Record<string, string>>,
+  /** The ◀ ▶ buttons (their names: said on hover and by a screen reader). */
+  vorige: 'Vorige bladzijde',
+  volgende: 'Volgende bladzijde',
+  terug: 'Terug',
+  /** The small tag on a thing he has not looked at in the gids yet. */
+  nieuw: 'nieuw',
+  /** A rare one's tag. */
+  zeldzaam: 'zeldzaam',
+  /** What the gids says as it opens, before the page's place. */
+  zegOpen: 'Je veldgids.',
+  /** A page with nothing found yet: what the grey shapes are. */
+  zegLeeg: 'Wie zie of hoor jij hier?',
 } as const;
 
 /* ------------------------------------------- run 7: a breinkracht grows ---- */

@@ -118,6 +118,18 @@ export const SIZE = {
     why: 'a buzzard gliding, wings spread: wingspan 1.1-1.3 (the model is 1.7× as wide as high)' },
   houtduif: { group: 'birds', h: 0.38, real: [0.33, 0.4], model: 'bird-houtduif', len: 0.43,
     why: 'a wood pigeon in flight: ≈ 0.4 long' },
+  // run 7: the open world's small surprises (world/Surprises.ts): the tree birds a little
+  // over true size, heard more than seen as in a real wood; the robin, who hops along
+  // beside him to be SEEN, shown big enough for that
+  'grote-bonte-specht': { group: 'birds', h: 0.3, real: [0.22, 0.27], model: 'bird-grote-bonte-specht', len: 0.14,
+    readable: 'a 24 cm woodpecker on a trunk 15 m off is a few pixels: shown ≈ 1.25× so its black, white and red read',
+    why: 'a great spotted woodpecker clinging upright to a trunk: 0.22-0.26 long, tail braced' },
+  winterkoning: { group: 'birds', h: 0.12, real: [0.06, 0.09], model: 'bird-winterkoning', len: 0.15,
+    readable: 'a 10 cm wren is a speck at play distance: shown ≈ 1.5× so a child can spot it hopping',
+    why: 'a wren, tail cocked: 0.09-0.10 long, a tiny round bird' },
+  roodborst: { group: 'birds', h: 0.26, real: [0.09, 0.12], model: 'bird-roodborst', len: 0.36,
+    readable: 'a 14 cm robin hopping beside him (≈ 5.5 m from the walk lens) is ~20 px: shown ≈ 2.3× so he sees it hop and its red breast reads (its hint promises a bird he sees)',
+    why: 'a robin standing: ≈ 0.14 long, about 0.1 high' },
 
   // ── vehicles ─────────────────────────────────────────────────────────────
   jeep: { group: 'vehicles', h: 1.9, real: [1.8, 2.05], model: 'vehicle-ranger-jeep', len: 3.65,

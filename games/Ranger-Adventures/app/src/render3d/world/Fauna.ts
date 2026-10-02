@@ -81,7 +81,26 @@ interface AmbientEntry {
   body: THREE.Group | null;             // the prepped model: a bound's arc, a trot's bob
   cycle: number;                        // strides taken (the bob and the bound follow the ground)
   audited: boolean;                     // its loop was moved clear of the world's solids
+  // run 7 (veldgids): a gliding bird the open world's surprises bring down low (world/Surprises.ts)
+  swoop?: Swoop | null;
 }
+
+/** Run 7: a glider coming down to circle low over a spot, and back up (Fauna.swoop). */
+interface Swoop {
+  cx: number; cz: number; y: number; r: number; period: number;
+  /** on its way back up, the low circle drifts off this way (m/s): it climbs away, never over him */
+  drift?: { x: number; z: number };
+  /** 0 its own high orbit … 1 the low circle, eased toward `target` */
+  w: number; target: number;
+  /** its angle on the circle (rad, unwrapped): one angle for both circles, so the way down is a smooth spiral */
+  ang: number;
+}
+/** How long (s) the way down (and back up) takes. */
+const SWOOP_S = 9;
+/** How fast (m/s) the low circle drifts off as the glider climbs back. */
+const SWOOP_DRIFT = 4;
+/** How fast (rad/s) a swooping glider turns to the way it really flies. */
+const SWOOP_TURN = 2.4;
 
 /** Where Bram, the warden, stands: beside the missiebord (run 6, FLOW). */
 export const WARDEN_AT = { x: 3.9, z: -5.0 } as const;
@@ -186,10 +205,72 @@ export class Fauna {
         if (reduced) { a.mixer?.update(0); continue; }
         this.stepRoamer(a, t, dt, threats);
       } else if (a.glide && !reduced) {
+        if (a.swoop) { this.stepSwoop(a, t, dt); continue; }
         const st = glideAt(a.glide, t);
         a.group.position.set(st.x, st.y, st.z);
         a.group.rotation.y = st.facing + a.faceOffset;
       }
+    }
+  }
+
+  /* ------------------------------------------------ run 7: a glider comes low -- */
+
+  /**
+   * Run 7 (veldgids): the open world's buzzard surprise. The gliding bird `id` comes down
+   * in a slow spiral to circle low round (cx, cz) at height `y` (world m), radius `r`, one
+   * turn in `period` s; `null` sends it back up to its own orbit, where its clock takes
+   * over from wherever it is (never a jump). Secondary motion: frozen under reduced motion.
+   */
+  swoop(id: string, low: { cx: number; cz: number; y: number; r: number; period: number } | null, away?: { x: number; z: number }): void {
+    const a = this.ambient.find((e) => e.id === id && e.glide);
+    if (!a?.glide) return;
+    if (!low) {
+      if (a.swoop) { a.swoop.target = 0; if (away) a.swoop.drift = { x: away.x * SWOOP_DRIFT, z: away.z * SWOOP_DRIFT }; }
+      return;
+    }
+    const g = a.glide;
+    const ang = a.swoop?.ang ?? (Math.atan2(a.group.position.z - g.cz, a.group.position.x - g.cx));
+    a.swoop = { ...low, w: a.swoop?.w ?? 0, target: 1, ang };
+  }
+
+  /** Run 7: a gliding bird's group (where it is now), or null. */
+  glider(id: string): THREE.Group | null {
+    return this.ambient.find((e) => e.id === id && e.glide)?.group ?? null;
+  }
+
+  /** Run 7: how far down a glider is (0 its own orbit … 1 the low circle). */
+  swoopShare(id: string): number {
+    return this.ambient.find((e) => e.id === id && e.glide)?.swoop?.w ?? 0;
+  }
+
+  /** One frame of a swooping glider: one angle round both circles, the centre, radius and
+   *  height eased between them; it faces the way it really flies. */
+  private stepSwoop(a: AmbientEntry, t: number, dt: number): void {
+    const sw = a.swoop!, g = a.glide!;
+    if (sw.drift) { sw.cx += sw.drift.x * dt; sw.cz += sw.drift.z * dt; }
+    const step = Math.min(1, dt / SWOOP_S);
+    sw.w += Math.sign(sw.target - sw.w) * Math.min(Math.abs(sw.target - sw.w), step);
+    const e = sw.w * sw.w * (3 - 2 * sw.w);
+    const high = (Math.PI * 2) / g.period, low = (Math.PI * 2) / sw.period;
+    sw.ang += (high + (low - high) * e) * dt;
+    const cx = g.cx + (sw.cx - g.cx) * e, cz = g.cz + (sw.cz - g.cz) * e, r = g.radius + (sw.r - g.radius) * e;
+    const yHigh = g.height + Math.sin(sw.ang * 2) * g.bob;
+    const yLow = sw.y + Math.sin(sw.ang * 2) * 0.3;
+    const x = cx + Math.cos(sw.ang) * r, z = cz + Math.sin(sw.ang) * r;
+    const p = a.group.position;
+    const dx = x - p.x, dz = z - p.z;
+    if (dx * dx + dz * dz > 1e-8) {
+      const want = Math.atan2(dx, dz) + a.faceOffset;
+      let d = want - a.group.rotation.y;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      a.group.rotation.y += Math.sign(d) * Math.min(Math.abs(d), SWOOP_TURN * dt);
+    }
+    p.set(x, yHigh + (yLow - yHigh) * e, z);
+    if (sw.target === 0 && sw.w <= 0) {
+      // back on its own orbit: its own clock goes on from this angle
+      const u = sw.ang / (Math.PI * 2) - t / g.period;
+      g.phase = u - Math.floor(u);
+      a.swoop = null;
     }
   }
 

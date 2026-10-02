@@ -296,3 +296,80 @@ export function flightLift(phase: number, runWeight: number, stance: number = ST
   if (u <= a) return 0;
   return RUN_FLIGHT_HEIGHT * r * Math.sin((Math.PI * (u - a)) / (0.5 - a));
 }
+
+/* ------------------------------------------------------- the run's look -- */
+
+/**
+ * Run 7 (feel): what makes a run read as a run at the follow distance, laid on top of the
+ * run clip by its share (the walk is untouched). From 5 m behind him the authored run looked
+ * like the walk: upright, and its arms held out sideways with the forearms folded in (a
+ * flap, not a pump), so from behind nothing swung. A child running leans into it and pumps
+ * his arms: elbows bent about square, swinging forward and back with the opposite leg, the
+ * elbow coming out past his back on each back swing. Angles in radians, at a full run.
+ */
+export const RUN_FEEL = {
+  /** the body leans forward from the hips… */
+  lean: 0.16,
+  /** …and the neck takes this share of it back, so he still looks where he runs */
+  headBack: 0.6,
+  /** the upper arms hang this far out from his sides (seen past his back) */
+  armOut: 0.45,
+  /** how far each upper arm swings forward and back of its centre with the stride */
+  armSwing: 0.8,
+  /** the centre of that swing, a little forward of hanging straight down */
+  armBias: 0.05,
+  /** the elbow bend: the forearm this far up from the line of the upper arm… */
+  elbow: 1.4,
+  /** …but never higher than this from straight down (a hand thrown up beside his head read
+   *  as a wave, not a run) */
+  foreMax: 1.75,
+  /** the hands come in toward his middle by this much (of the forearm's length) */
+  handIn: 0.42,
+} as const;
+
+/** A direction in HIS frame: +x his left, +y up, +z forward. */
+export type Dir3 = readonly [number, number, number];
+
+/** The run's look for one frame (see RUN_FEEL): the lean and the neck's share back (rad),
+ *  where each upper arm and forearm points, and how much of the clip's arm that replaces. */
+export interface RunLook {
+  lean: number; neck: number;
+  /** 0..1: how far the arms are turned to the pumping pose (the run's share) */
+  arms: number;
+  upperL: Dir3; foreL: Dir3; upperR: Dir3; foreR: Dir3;
+}
+
+const unit = (x: number, y: number, z: number): Dir3 => {
+  const l = Math.hypot(x, y, z) || 1;
+  return [x / l, y / l, z / l];
+};
+
+/** One arm of the pump (`side` +1 his left, −1 his right) at swing angle `a` (rad, +
+ *  forward): the upper arm hangs RUN_FEEL.armOut out from his side, swung about the axis
+ *  across him; the forearm bends forward and up from it by RUN_FEEL.elbow in the same plane,
+ *  the hand in toward his middle. */
+export function pumpArm(side: 1 | -1, a: number): { upper: Dir3; fore: Dir3 } {
+  const o = RUN_FEEL.armOut;
+  const upper = unit(side * Math.sin(o), -Math.cos(o) * Math.cos(a), Math.cos(o) * Math.sin(a));
+  const e = Math.min(a + RUN_FEEL.elbow, RUN_FEEL.foreMax); // the forearm, bent on forward from the upper arm's swing
+  const fore = unit(side * (Math.sin(o) - RUN_FEEL.handIn), -Math.cos(o) * Math.cos(e), Math.cos(o) * Math.sin(e));
+  return { upper, fore };
+}
+
+/** The run's look at this point of the cycle for a run share `run` (0..1: the moving weight
+ *  times the run weight). The arms swing with the opposite leg: at 0 the left foot goes
+ *  down (the left leg forward), so the right arm is forward and the left one back; at 0.5
+ *  the other way round. Everything grows with the share, so the walk ↔ run blend stays
+ *  smooth and a walk is exactly the clip. */
+export function runLook(phase: number, run: number): RunLook {
+  const r = clamp01(run);
+  const c = Math.cos(2 * Math.PI * phase);
+  const L = pumpArm(1, RUN_FEEL.armBias - RUN_FEEL.armSwing * c);
+  const R = pumpArm(-1, RUN_FEEL.armBias + RUN_FEEL.armSwing * c);
+  return {
+    lean: RUN_FEEL.lean * r,
+    neck: RUN_FEEL.lean * RUN_FEEL.headBack * r,
+    arms: r,
+    upperL: L.upper, foreL: L.fore, upperR: R.upper, foreR: R.fore,
+  };
+}

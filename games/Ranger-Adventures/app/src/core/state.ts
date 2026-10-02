@@ -119,7 +119,7 @@ export interface GameState {
   settings: Settings;
   /* ---- run 7 (design §4.3-4.5): all additive, defaulted in hydrate() for an older save ---- */
   geschiedenis: BeatLog[];           // every logged beat, newest last, at most HISTORY_MAX: his growth over weeks
-  ontdekt: Record<string, { t: number; n: number }>; // discoveries (content/ontdekkingen ids): first time, times seen
+  ontdekt: Record<string, Ontdekt>; // discoveries (content/ontdekkingen ids): first time, times seen (+ seen in the gids, revealed)
   zeldzaam: Record<string, number>;  // per home: won plays since its last rare (the pity rule, core/discover.ts)
   gespeeld: Record<string, number>;  // per mission: plays started ("Ga op pad"); a play's n is this + 1
   sfeer: { laatste: MoodId | null; sessies: number }; // the last session's mood, sessions so far
@@ -151,6 +151,11 @@ export interface BeatLog {
   /** the play's variant, compact ('hide:b,order:2,mood:gouden-uur') */
   va?: string;
 }
+
+/** One discovery in the save: the first time (Date.now) and how many plays or meetings saw it;
+ *  `g` once he has looked at it in his veldgids (its "nieuw" dot goes), `r` once its reveal
+ *  showed (the first reveals tell where the veldgids is). Both optional: an older save loads. */
+export interface Ontdekt { t: number; n: number; g?: 1; r?: 1 }
 
 /** The history keeps this many beats (~60 KB): months of play. */
 export const HISTORY_MAX = 400;
@@ -485,9 +490,26 @@ class Store {
   /** Run 7 (§4.4): he saw or heard it. Recorded (first time, times seen); true when new. */
   discover(id: string): boolean {
     const was = this.state.ontdekt[id];
-    const ontdekt = { ...this.state.ontdekt, [id]: { t: was?.t ?? Date.now(), n: (was?.n ?? 0) + 1 } };
+    const ontdekt = { ...this.state.ontdekt, [id]: { ...was, t: was?.t ?? Date.now(), n: (was?.n ?? 0) + 1 } };
     this.commit({ ...this.state, ontdekt });
     return !was;
+  }
+
+  /** Run 7 (veldgids): he looked at these discoveries in his veldgids (their "nieuw" dot goes).
+   *  Ids he has not discovered, or already looked at, change nothing. */
+  markGezien(ids: readonly string[]): void {
+    const fresh = ids.filter((id) => this.state.ontdekt[id] && !this.state.ontdekt[id].g);
+    if (!fresh.length) return;
+    const ontdekt = { ...this.state.ontdekt };
+    for (const id of fresh) ontdekt[id] = { ...ontdekt[id], g: 1 };
+    this.commit({ ...this.state, ontdekt });
+  }
+
+  /** Run 7 (veldgids): this discovery's reveal showed. */
+  markRevealed(id: string): void {
+    const was = this.state.ontdekt[id];
+    if (!was || was.r) return;
+    this.commit({ ...this.state, ontdekt: { ...this.state.ontdekt, [id]: { ...was, r: 1 } } });
   }
 
   /** Run 7: a play of this mission starts ("Ga op pad"). Returns how many plays it has now. */

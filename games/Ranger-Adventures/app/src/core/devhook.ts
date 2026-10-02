@@ -159,6 +159,11 @@ export interface RangerDevHook {
    *  gain, and his soles in world metres (heel, ball, tip per foot, left first: the
    *  foot-slip probe). Null before the world is up. */
   gait(): GaitRead | null;
+  /** Run 7 (feel): the dust's pixel check. The colour on screen at the heart of the
+   *  strongest puff of the heels' (or the jeep's) dust, read in ONE frame just before that
+   *  cloud is drawn and just after. Each call returns the last measurement (null before the
+   *  first) and asks for a new one the next frame a puff of that cloud is on screen. */
+  dustHeart(which: 'heels' | 'jeep'): DustHeartRead | null;
   /** D1.2 locomotion ground-truth (P1.5a asserts it across the walkable world): is the
    *  ranger's Y actually ON the RENDERED terrain surface, not through it? `grounded` is
    *  true when a down-ray hits the terrain under him AND his feet sit in the on-foot
@@ -410,6 +415,10 @@ export interface RangerDevHook {
    *  (CSS px) — sample a screenshot there to read how bright the animal is drawn — and how
    *  many of its cells a name tag covers (`covered`, not in `pts`). */
   animals(): AnimalSeenReadout[] | null;
+  /** Run 7 (veldgids): the open world's small surprises: the free-roam clock (s), when the
+   *  next may come, the one out there now (where, its state, met as 'seen' or 'heard', how
+   *  big in the picture), and the visit's list so far. Read-only: it never brings one. */
+  surprise(): unknown | null;
 }
 
 export type AnimalSeenReadout = { id: string; x: number; y: number; z: number; dist: number; box: [number, number, number, number]; onScreen: boolean; pts: [number, number][]; covered: number };
@@ -476,6 +485,20 @@ export interface GaitRead {
   run: number;
   gain: number;
   soles: { heel: XYZ; toe: XYZ; tip: XYZ }[];
+  /** run 7 (feel): the puffs his heels have kicked up running on sand, and whether their
+   *  cloud is drawn now */
+  dust: { puffs: number; drawn: boolean };
+}
+
+/** Run 7 (feel): one dust pixel read (devhook `dustHeart`, world/Dust.ts DustHeart): the
+ *  colour (0..255) before and after the cloud is drawn, the puff's own opacity at its heart,
+ *  and the drawing-buffer pixel. */
+export interface DustHeartRead {
+  before: [number, number, number];
+  after: [number, number, number];
+  alpha: number;
+  x: number;
+  y: number;
 }
 
 const state = {
@@ -489,6 +512,7 @@ const state = {
   groundSpeed: null as null | (() => number | null),
   motion: null as null | (() => { x: number; z: number; heading: number; speed: number; running: boolean } | null),
   gait: null as null | (() => GaitRead | null),
+  dustHeart: null as null | ((which: 'heels' | 'jeep') => DustHeartRead | null),
   grounded: null as null | (() => { grounded: boolean; clearance: number; analyticGap: number } | null),
   cam: null as null | (() => CamState | null),
   nearId: null as null | (() => string | null),
@@ -557,6 +581,7 @@ const state = {
   discoveries: null as null | (() => { found: string[]; rareCounts: Record<string, number> }),
   mood: null as null | (() => { session: string; now: string }),
   animals: null as null | (() => AnimalSeenReadout[]),
+  surprise: null as null | (() => unknown),
 };
 
 /** The THREE-side golden-path measurements, registered by `render3d/play/kit.ts`. */
@@ -654,6 +679,11 @@ export function provideMood(fn: (() => { session: string; now: string }) | null)
   state.mood = fn;
 }
 
+/** Run 7 (veldgids): register the surprises read (render3d/world/Surprises.ts). */
+export function provideSurprise(fn: (() => unknown) | null): void {
+  state.surprise = fn;
+}
+
 /** Run 7 (moods): register the dressed-animals read (render3d/AnimalDress.animalsSeen). */
 export function provideAnimals(fn: (() => AnimalSeenReadout[]) | null): void {
   state.animals = fn;
@@ -704,6 +734,11 @@ export function provideGroundSpeed(fn: (() => number | null) | null): void {
 /** Register the ranger's gait + sole probe read (World.playerGait). Pass null to clear. */
 export function provideGait(fn: (() => GaitRead | null) | null): void {
   state.gait = fn;
+}
+
+/** Register the dust's pixel read (World.dustHeart; run 7 feel). Pass null to clear. */
+export function provideDustHeart(fn: ((which: 'heels' | 'jeep') => DustHeartRead | null) | null): void {
+  state.dustHeart = fn;
 }
 
 /** Register the ranger's live motion read (World.rangerMotion). Pass null to clear. */
@@ -941,6 +976,7 @@ export function installDevHook(): boolean {
     groundSpeed: () => (state.groundSpeed ? state.groundSpeed() : null),
     motion: () => (state.motion ? state.motion() : null),
     gait: () => (state.gait ? state.gait() : null),
+    dustHeart: (which) => (state.dustHeart ? state.dustHeart(which) : null),
     grounded: () => (state.grounded ? state.grounded() : null),
     cam: () => (state.cam ? state.cam() : null),
     nearId: () => (state.nearId ? state.nearId() : null),
@@ -985,6 +1021,7 @@ export function installDevHook(): boolean {
     skills: () => (state.skills ? state.skills() : null),
     discoveries: () => (state.discoveries ? state.discoveries() : null),
     mood: () => (state.mood ? state.mood() : null),
+    surprise: () => (state.surprise ? state.surprise() : null),
     animals: () => (state.animals ? state.animals() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;

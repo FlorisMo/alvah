@@ -5,7 +5,8 @@ import {
   runTarget, stepRunWeight, strideGain, cycleRate, cadence, stepPhase, flightLift,
   touchdowns, gaitClockTimes, stanceTravel, clockTime, clipStride,
   WALK_GAIN, WALK_GAIN_MIN, RUN_GAIN, STANCE_SHARE, RUN_FLIGHT_HEIGHT, CLOCK_STEPS, FOOT_PLANTS,
-  type FootSample, type GaitClock,
+  runLook, pumpArm, RUN_FEEL,
+  type FootSample, type GaitClock, type Dir3,
 } from './PlayerAnim.ts';
 import { WALK_SPEED, RUN_SPEED } from '../core/input.ts';
 
@@ -225,4 +226,53 @@ test('flightLift: planted in the stance, an arc in the flight, nothing walking',
   assert.ok(Math.abs(flightLift(mid, 0.5) - RUN_FLIGHT_HEIGHT / 2) < 1e-9, 'scaled by the run share');
   assert.equal(flightLift(mid, 0), 0, 'a walk never leaves the ground');
   assert.equal(flightLift(mid, 1, 1), 0, 'a clip planted all the time never flies');
+});
+
+// ── run 7 (feel): the run's look ─────────────────────────────────────────────
+
+const deg = (r: number): number => (r * 180) / Math.PI;
+const angle = (a: Dir3, b: Dir3): number => Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1] + a[2] * b[2])));
+const fromDown = (d: Dir3): number => angle(d, [0, -1, 0]);
+
+test("walking the run look is nothing: no lean, the clip's arms (a walk is exactly the clip)", () => {
+  for (const p of [0, 0.25, 0.5, 0.75]) {
+    const l = runLook(p, 0);
+    assert.equal(l.lean, 0);
+    assert.equal(l.neck, 0);
+    assert.equal(l.arms, 0);
+  }
+  const half = runLook(0.3, 0.5), full = runLook(0.3, 1);
+  assert.ok(Math.abs(half.lean - full.lean / 2) < 1e-9, 'the lean grows with the run share (a smooth blend)');
+  assert.ok(full.neck > 0 && full.neck < full.lean, 'the neck takes part of the lean back: he looks where he runs');
+});
+
+test('running, the arms swing with the OPPOSITE leg: the left foot goes down at 0 with the right arm forward', () => {
+  const at0 = runLook(0, 1), at5 = runLook(0.5, 1);
+  assert.ok(at0.upperR[2] > 0.3 && at0.upperL[2] < -0.3, `at 0 the right upper arm is forward, the left back: ${at0.upperR} / ${at0.upperL}`);
+  assert.ok(at5.upperL[2] > 0.3 && at5.upperR[2] < -0.3, `at 0.5 the other way round: ${at5.upperL} / ${at5.upperR}`);
+  // the two arms mirror each other half a cycle apart
+  for (const p of [0, 0.1, 0.3, 0.45, 0.7, 0.9]) {
+    const a = runLook(p, 1), b = runLook(p + 0.5 - Math.floor(p + 0.5), 1);
+    for (const [l, r] of [[a.upperL, b.upperR], [a.foreL, b.foreR]] as const) {
+      assert.ok(Math.abs(l[0] + r[0]) < 1e-9 && Math.abs(l[1] - r[1]) < 1e-9 && Math.abs(l[2] - r[2]) < 1e-9, `mirror at ${p}: ${l} vs ${r}`);
+    }
+  }
+});
+
+test('a pumping arm: out from his side, the elbow bent, the hand never thrown up beside his head', () => {
+  for (let i = 0; i < 64; i++) {
+    const l = runLook(i / 64, 1);
+    for (const [side, up, fore] of [[1, l.upperL, l.foreL], [-1, l.upperR, l.foreR]] as const) {
+      for (const d of [up, fore]) assert.ok(Math.abs(Math.hypot(...d) - 1) < 1e-9, 'unit directions');
+      assert.ok(up[0] * side > 0.3, `the upper arm hangs out from his side (his elbow shows past his back): ${up}`);
+      assert.ok(up[1] < -0.5, `the upper arm points down, never up: ${up}`);
+      const bend = deg(angle(up, fore));
+      assert.ok(bend > 45 && bend < 110, `the elbow is bent (${bend.toFixed(0)}°), never straight`);
+      assert.ok(fromDown(fore) <= RUN_FEEL.foreMax + 1e-9, `the forearm never above ${deg(RUN_FEEL.foreMax).toFixed(0)}° from straight down (${deg(fromDown(fore)).toFixed(0)}°)`);
+      assert.ok(fore[0] * side < up[0] * side, 'the hand comes in from the elbow, toward his middle');
+    }
+  }
+  // the swing: forward and back of hanging straight down, about the same each way
+  const fwd = pumpArm(1, RUN_FEEL.armBias + RUN_FEEL.armSwing), back = pumpArm(1, RUN_FEEL.armBias - RUN_FEEL.armSwing);
+  assert.ok(fwd.upper[2] > 0.5 && back.upper[2] < -0.5, `the elbow goes well forward and well back: ${fwd.upper} / ${back.upper}`);
 });

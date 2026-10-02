@@ -29,9 +29,9 @@
 import * as THREE from 'three';
 import {
   stepWalkWeight, stepRunWeight, dominantGait, strideGain, cycleRate, stepPhase, flightLift,
-  gaitClockTimes, stanceTravel, clockTime, cadence,
+  gaitClockTimes, stanceTravel, clockTime, cadence, runLook,
   FOOT_PLANTS, STANCE_SHARE, TURN_STEP_SPEED, WALK_GAIN, WALK_GAIN_MIN, RUN_GAIN,
-  type Gait, type GaitClock, type FootSample,
+  type Gait, type GaitClock, type FootSample, type RunLook, type Dir3,
 } from './PlayerAnim.ts';
 import { plantsBetween } from '../core/footstep.ts';
 
@@ -64,6 +64,13 @@ interface StrideBone {
   runMean: THREE.Quaternion;
   share: number;
 }
+
+/** Run 7 (feel): the bones the run's look bends (`runLook`), each with its pose before the
+ *  bend, handed back before the next mixer update (as the idle's rest is: the mixer only
+ *  rewrites a bone whose mixed value changed, so a bend laid on a held pose would pile up). */
+interface FeelBone { bone: THREE.Object3D; q: THREE.Quaternion; on: boolean }
+type FeelName = 'spine' | 'neck' | 'LeftArm' | 'RightArm' | 'LeftForeArm' | 'RightForeArm' | 'LeftHand' | 'RightHand';
+const FEEL_BONES: readonly FeelName[] = ['neck', 'LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm', 'LeftHand', 'RightHand'];
 
 /** One tracked point of a sole: a skinned vertex (its mesh + index). */
 interface SolePoint { mesh: THREE.SkinnedMesh; index: number }
@@ -130,6 +137,13 @@ const _qi = new THREE.Quaternion();
 const _qx = new THREE.Quaternion();
 const _x = new THREE.Vector3(1, 0, 0);
 const _y = new THREE.Vector3(0, 1, 0);
+const _mi = new THREE.Quaternion();  // the model's world turn, inverted (run 7 feel)
+const _pq = new THREE.Quaternion();
+const _pqi = new THREE.Quaternion();
+const _rq = new THREE.Quaternion();
+const _va = new THREE.Vector3();
+const _vb = new THREE.Vector3();
+const _vt = new THREE.Vector3();
 
 export class PlayerRig {
   private mixer: THREE.AnimationMixer | null = null;
@@ -171,6 +185,8 @@ export class PlayerRig {
   // mixer update: added every frame on top of itself it would pile up.
   private rest: { bone: THREE.Object3D; q: THREE.Quaternion | null; mixed: THREE.Quaternion; on: boolean }[] = [];
   private breathT = 0;
+  // run 7 (feel): the bones the run's look bends, by name (a rig without one skips that bend)
+  private feel: Partial<Record<FeelName, FeelBone>> = {};
 
   /**
    * Drive `model` from its baked clips. Needs an idle-ish and a walk-ish clip; the run
@@ -215,6 +231,19 @@ export class PlayerRig {
     this.walk.play().setEffectiveWeight(0);
     this.walk.timeScale = 0;
     if (this.run) { this.run.play().setEffectiveWeight(0); this.run.timeScale = 0; }
+    this.feel = {};
+    if (this.run) {
+      const feel = (o: THREE.Object3D): FeelBone => ({ bone: o, q: new THREE.Quaternion(), on: false });
+      model.traverse((o) => {
+        if ((o as THREE.Bone).isBone && (FEEL_BONES as readonly string[]).includes(o.name)) this.feel[o.name as FeelName] = feel(o);
+      });
+      // the lean bends the whole back: at the spine's ROOT, the bone below the neck whose
+      // parent is the hips (this rig counts Spine02 → Spine01 → Spine upward; others the
+      // other way), never one fixed name
+      let b: THREE.Object3D | null = this.feel.neck?.bone ?? null;
+      while (b?.parent && !/hips/i.test(b.parent.name)) b = b.parent;
+      if (b?.parent && b !== this.feel.neck?.bone) this.feel.spine = feel(b);
+    }
     this.rest = [];
     model.traverse((o) => {
       if (!(o as THREE.Bone).isBone) return;
@@ -277,6 +306,7 @@ export class PlayerRig {
     this.strideBones = [];
     this.soles = [];
     this.rest = [];
+    this.feel = {};
     this.proc = obj;
   }
 
@@ -339,10 +369,14 @@ export class PlayerRig {
         this.run.time = clockTime(this.runClock, this.phase);
       }
       for (const rb of this.rest) if (rb.on) { rb.bone.quaternion.copy(rb.mixed); rb.on = false; } // back to the mixed pose
+      for (const k in this.feel) { const f = this.feel[k as FeelName]!; if (f.on) { f.bone.quaternion.copy(f.q); f.on = false; } }
       this.mixer.update(dt);
       // the stride: legs and arms swing wider than the clip at speed (1 = as authored)
       this.gain = 1 + (strideGain(stepping, r) - 1) * moving;
+      // run 7 (feel): and a run reads as a run: the lean and the pumping arms (the run clip
+      // kicks his heels up behind him itself)
       this.swing(this.gain, r);
+      this.runFeel(runLook(this.phase, moving * r));
       this.relax(1 - moving, dt, reduced);
       this.stand(r);
       return plants;
@@ -372,6 +406,52 @@ export class PlayerRig {
       if (r.q) r.bone.quaternion.multiply(_q.slerpQuaternions(_qi, r.q, w));
       else r.bone.quaternion.multiply(_q.setFromAxisAngle(_x, breath)); // the chest
     }
+  }
+
+  /** Run 7 (feel): lay the run's look (`runLook`) on this frame's pose, in HIS frame (the
+   *  model faces +z, his left is +x) turned into each bone's own, so nothing about this
+   *  rig's bone axes is pinned: the body leans forward from the spine's root and the neck
+   *  takes part of it back, and each arm is turned (by the run's share) to the pumping
+   *  pose: the upper arm, then the forearm, aimed where `runLook` says they point. Each
+   *  bone's pose before is kept (`feel`) and handed back before the next mixer update. */
+  private runFeel(look: RunLook): void {
+    if (!this.model || look.arms <= 1e-3) return;
+    this.model.getWorldQuaternion(_mi).invert();
+    const f = this.feel;
+    this.bendAbout(f.spine, _x, look.lean);
+    this.bendAbout(f.neck, _x, -look.neck);
+    this.aim(f.LeftArm, f.LeftForeArm, look.upperL, look.arms);
+    this.aim(f.LeftForeArm, f.LeftHand, look.foreL, look.arms);
+    this.aim(f.RightArm, f.RightForeArm, look.upperR, look.arms);
+    this.aim(f.RightForeArm, f.RightHand, look.foreR, look.arms);
+  }
+
+  /** Turn a bone by `q`, a turn in the model's own frame about the bone's pivot (P⁻¹·q·P in
+   *  the bone's parent's frame, P the parent's turn in the model's frame). */
+  private turnBy(fb: FeelBone, q: THREE.Quaternion): void {
+    if (!fb.bone.parent) return;
+    if (!fb.on) { fb.q.copy(fb.bone.quaternion); fb.on = true; }
+    fb.bone.parent.getWorldQuaternion(_pq).premultiply(_mi);
+    fb.bone.quaternion.premultiply(_pqi.copy(_pq).invert().multiply(q).multiply(_pq));
+  }
+
+  /** Turn a bone by `angle` about `axis`, an axis of the model's own frame. */
+  private bendAbout(fb: FeelBone | undefined, axis: THREE.Vector3, angle: number): void {
+    if (!fb || Math.abs(angle) < 1e-5) return;
+    this.turnBy(fb, _rq.setFromAxisAngle(axis, angle));
+  }
+
+  /** Turn a bone so the line to its `child` points `to` (his frame), `w` of the way (the
+   *  shortest turn: the limb's own twist stays the clip's). */
+  private aim(fb: FeelBone | undefined, child: FeelBone | undefined, to: Dir3, w: number): void {
+    if (!fb || !child) return;
+    fb.bone.getWorldPosition(_va);
+    child.bone.getWorldPosition(_vb);
+    _vb.sub(_va).applyQuaternion(_mi);
+    if (_vb.lengthSq() < 1e-12) return;
+    _rq.setFromUnitVectors(_vb.normalize(), _vt.set(to[0], to[1], to[2]));
+    if (w < 1) _rq.slerp(_qi, 1 - w);
+    this.turnBy(fb, _rq);
   }
 
   /** Swing the stride bones wider about their mean pose (walk and run means blended by
@@ -436,6 +516,12 @@ export class PlayerRig {
     };
     for (const s of this.soles) out.push({ heel: at(s.heel), toe: at(s.toe), tip: at(s.tip) });
     return out;
+  }
+
+  /** Run 7 (feel): the foot that went down last (0 left, 1 right): the left goes down at
+   *  phase 0, the right at 0.5 (the dust his heels kick up comes from it). */
+  get footDown(): 0 | 1 {
+    return this.phase < 0.5 ? 0 : 1;
   }
 
   /** The run gait is on (his pace has the run leading the blend, with or without a run
