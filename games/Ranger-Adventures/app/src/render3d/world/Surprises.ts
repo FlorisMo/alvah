@@ -259,6 +259,7 @@ export class Surprises {
     let staged = false;
     try {
       for (const spec of now) {
+        if (spec.plek === 'mee' && f.ranger.running) continue; // (a robin never comes to a running boy)
         const placed = await this.place(spec, v, fork.fork(`place:${spec.id}`));
         if (!this.free) break; // (a mission began meanwhile)
         if (placed && await this.stage(spec, placed, fork, f)) { staged = true; this.dueAt = Number.NaN; break; }
