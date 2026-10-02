@@ -30,6 +30,8 @@ import { SIZE } from '../../render3d/AnimalScale';
 import { heroOf } from '../../render3d/world/Progress';
 import { adventureFor, allAdventures } from '../../render3d/adventure/registry';
 import { nextPatrolTarget } from '../../core/patrol';
+import { sessionSeed } from '../../core/play';
+import { isMood, parseMoodParam, sessionMood, type MoodId } from '../../render3d/Moods';
 import { Vector3 } from 'three';
 import {
   pickWorldBeat, optionCorrect, coarseHeading, withAnimal, beatReady, WORLDBEAT_ANIMAL_M, type WorldBeat,
@@ -155,6 +157,22 @@ export function bootWorld(ui: HTMLElement, st: Stage, veil: { lift: () => void }
   wait();
 }
 
+/**
+ * Run 7 (moods): the light this visit stands in, drawn once per page load before the world
+ * (and so the title) is built: the golden hour on a save's first visit, then one of the five
+ * from the session's seed, never the last visit's; `?mood=<id>` forces it (dev, tests). The
+ * save remembers it (`sfeer`), so the next visit draws another.
+ */
+function visitMood(): MoodId {
+  const { sfeer } = store.get();
+  const mood = sessionMood({
+    sessions: sfeer.sessies, last: sfeer.laatste, seed: sessionSeed(),
+    forced: typeof location !== 'undefined' ? parseMoodParam(location.search) : null,
+  });
+  store.noteSession(mood);
+  return mood;
+}
+
 /** The world, built once: the markers, the callbacks the HUD listens on, the finished
  *  missions' lasting tableaus, handed to the Stage. */
 function buildWorld(): World {
@@ -197,7 +215,7 @@ function buildWorld(): World {
   const { stage } = session;
   const world = new World(
     stage.renderer.domElement as HTMLCanvasElement, markers, onApproach, onWayfind, nextMissionId(),
-    onBiome, onInteract, { homes },
+    onBiome, onInteract, { homes, mood: visitMood() },
   );
   session.world = world;
   // W4.5: hand the world the shared renderer so it can turn on the hero shadow map.
@@ -288,6 +306,18 @@ export function enterPlay(returning: boolean): void {
   hud?.classList.add('explore-hud--arriving');
   window.setTimeout(() => hud?.classList.remove('explore-hud--arriving'), 1_700);
   beginGuide(returning);
+  devFade(world);
+}
+
+let devFaded = false;
+/** Dev only (`?dev=1&fade=<id>`): a few seconds into play the world crossfades into that
+ *  mood, once — how e2e/moods.spec watches a crossfade while no home asks for one. */
+function devFade(world: World): void {
+  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+  const to = q?.has('dev') ? q.get('fade') : null;
+  if (devFaded || !isMood(to)) return;
+  devFaded = true;
+  window.setTimeout(() => world.setMood(to), 3_000);
 }
 
 /**

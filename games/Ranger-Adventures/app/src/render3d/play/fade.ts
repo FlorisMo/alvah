@@ -38,6 +38,10 @@ export function fadeable(root: THREE.Object3D, own = false): THREE.Material[] {
 function ownCopy(m: THREE.Material, owner: string): THREE.Material {
   const c = m.clone();
   c.onBeforeCompile = m.onBeforeCompile; // (eye shaders keep their hooks)
+  // …and their program key: without it the copy is keyed by its hook's source, which a
+  // wrapper (the animal light, a call glow) shares with every other wrapped material, and
+  // the renderer would draw this one with another's program (run 7)
+  if (Object.prototype.hasOwnProperty.call(m, 'customProgramCacheKey')) c.customProgramCacheKey = m.customProgramCacheKey;
   c.userData = { ...m.userData, fadeOwn: owner };
   return c;
 }
