@@ -9,10 +9,14 @@
  * not met yet first (so a new player meets new things), never the same twice in a row, a
  * rare one now and then (a seeded chance, and surely after RARE_PITY_W surprises without
  * one) but only in its own light (the stag in the mist or at dusk, the badger at dusk).
- * It stands 12-30 m off inside his picture, never on the line he walks along, never in a
- * mission's home, and it never comes toward the lens. He meets it when he SEES it (on
- * screen, ≥ SEEN_PX, within SEEN_M, for SEEN_S on end) or HEARS its call (within 25 m:
- * Sound.callAt's reach). Pure: no THREE, no DOM; the seed and the world come in.
+ * One he has not met yet comes before any he knows: the director waits for a place for it
+ * (FRESH_WAIT_S at most), so a return visit meets something new. It stands inside his
+ * picture (a bird met by its call may sit anywhere within hearing: its call turns him),
+ * never on the line he walks along, never in a mission's home, and it never comes toward
+ * the lens; the robin hops along beside him. He meets it when he SEES it (on screen,
+ * ≥ SEEN_PX, within SEEN_M, for SEEN_S on end) or HEARS its call (within 25 m:
+ * Sound.callAt's reach; never the robin, who is there to be seen). Pure: no THREE, no DOM;
+ * the seed and the world come in.
  */
 
 import type { Play } from '../../core/play';
@@ -42,9 +46,24 @@ export interface SurpriseSpec {
   moves?: boolean;
   /** a model (GLB id) of its own; the buzzard is the world's own glider (world/Fauna.ts) */
   model: string | null;
+  /** met only by SEEING it: its call alone is no meeting (the robin: its hint promises a
+   *  bird that hops along with him, so a song with nothing to see would break it) */
+  seenOnly?: boolean;
   /** its moods: its row's in content/ontdekkingen.ts (the one table says it) */
   stemming?: readonly MoodId[];
 }
+
+/** The robin keeps beside the line he walks along: this far (m) to his side… */
+export const ROBIN_SIDE: readonly [number, number] = [2.1, 2.6];
+/** …about level with him (m along where the lens looks: + ahead of him, − behind), where
+ *  the walk lens (4.6 m behind him, 2.4 m up) sees it big enough: in the picture's lower
+ *  half, ≥ SEEN_PX, never under his feet and never coming toward the lens. */
+export const ROBIN_ALONG: readonly [number, number] = [-0.4, 0.5];
+/** It never comes nearer him than this (m): it goes, calmly, when he walks right at it. */
+export const ROBIN_SHY_M = 1.5;
+/** One hop (m) and one flutter (m: when it fell behind, a low flight to catch up). */
+export const ROBIN_HOP_M = 0.55;
+export const ROBIN_FLUTTER_M = 2.2;
 
 type Base = Omit<SurpriseSpec, 'rare' | 'stemming'>;
 const BASE: readonly Base[] = [
@@ -52,7 +71,7 @@ const BASE: readonly Base[] = [
   { id: 'specht', plek: 'stam', dist: [11, 22], call: { id: 'specht', every: [4.5, 7] }, stayS: 40, model: 'bird-grote-bonte-specht' },
   { id: 'koekoek', plek: 'kroon', dist: [12, 22], call: { id: 'koekoek', every: [5, 8] }, stayS: 40, model: 'bird-koekoek' },
   { id: 'winterkoning', plek: 'voet', dist: [9, 17], call: { id: 'winterkoning', every: [6, 9] }, stayS: 36, model: 'bird-winterkoning' },
-  { id: 'roodborst', plek: 'mee', dist: [5, 7], call: { id: 'roodborst', every: [6, 10] }, stayS: 30, onFoot: true, moves: true, model: 'bird-roodborst' },
+  { id: 'roodborst', plek: 'mee', dist: [ROBIN_SIDE[0], 2.7], call: { id: 'roodborst', every: [6, 10] }, stayS: 32, onFoot: true, moves: true, seenOnly: true, model: 'bird-roodborst' },
   { id: 'edelhert', plek: 'grond', dist: [22, 30], call: null, stayS: 30, model: 'animal-edelhert-reddeer' },
   { id: 'das', plek: 'grond', dist: [6.5, 8.5], call: null, stayS: 28, model: 'animal-das-badger' },
 ];
@@ -139,9 +158,29 @@ export function surpriseOrder(c: Choice, fork: Play, specs: readonly SurpriseSpe
   return [...out.filter((s) => !shown.includes(s.id)), ...out.filter((s) => shown.includes(s.id))];
 }
 
-/** A visit tries this many times (RETRY_S apart) for one it has not shown yet before it
- *  shows one again. */
-export const FRESH_TRIES = 3;
+/** A surprise he has NOT met yet (and that fits the light) comes before any he knows: when
+ *  it has no place where he is now, the director waits for it, trying again RETRY_S apart
+ *  as he walks, at most this long (s) past the moment the next one was due. Then one he
+ *  knows may come, so a walk never goes empty for long (a return visit meets new things). */
+export const FRESH_WAIT_S = 60;
+/** One already out there this visit comes again only after this long (s) without a place
+ *  for another (a visit shows new things first). */
+export const AGAIN_WAIT_S = 15;
+
+/**
+ * Which of `order` (surpriseOrder's) may be tried now, `waited` s after the next one was
+ * due: the ones he has not met that are not out there yet this visit, alone, while the
+ * director still waits for them (< FRESH_WAIT_S); else the ones not out there yet this
+ * visit (< AGAIN_WAIT_S); else all, in order.
+ */
+export function tryNow(order: readonly SurpriseSpec[], c: { found: Readonly<Record<string, unknown>>; shown: readonly SurpriseId[]; waited: number }): SurpriseSpec[] {
+  const shown = (s: SurpriseSpec): boolean => c.shown.includes(s.id);
+  const fresh = order.filter((s) => !c.found[`wereld.${s.id}`] && !shown(s));
+  if (fresh.length > 0 && c.waited < FRESH_WAIT_S) return fresh;
+  const unshown = order.filter((s) => !shown(s));
+  if (unshown.length > 0 && c.waited < AGAIN_WAIT_S) return unshown;
+  return [...order];
+}
 
 /* ------------------------------------------------------------ where ---- */
 
@@ -168,7 +207,8 @@ export function inCone(v: Viewer, x: number, z: number, cone = CONE): boolean {
   const b = Math.abs(bearing(v, x, z));
   if (b > cone || b < CONE_MIN) return false;
   const d = Math.hypot(x - v.x, z - v.z);
-  return d * Math.sin(b) >= OFF_PATH_M; // (beside the line he walks along, never on it)
+  // (beside the line he walks along, never on it; behind him there is no line to keep off)
+  return b >= Math.PI / 2 || d * Math.sin(b) >= OFF_PATH_M;
 }
 
 /** Seeded candidate spots for an open-ground surprise: inside the cone, `dist` m off. */
@@ -184,15 +224,22 @@ export function groundSpots(v: Viewer, dist: readonly [number, number], fork: Pl
   return out;
 }
 
-/** The trees (or other perches) a surprise may use: inside the cone, `dist` m off, those
- *  in the picture first, each group in a seeded order. */
+/** A bird met by its call may sit at any bearing within hearing (its call, panned from
+ *  where it is, makes him turn and look): ALL_ROUND as the cone. */
+export const ALL_ROUND = Math.PI;
+
+/** The trees (or other perches) a surprise may use: inside the cone, `dist` m off; those
+ *  in the picture first, then those at its edge (CONE_WIDE), then the rest; each group in
+ *  a seeded order. */
 export function treeChoices<T extends { x: number; z: number }>(v: Viewer, trees: readonly T[], dist: readonly [number, number], fork: Play, cone = CONE): T[] {
   const ok = trees.filter((t) => {
     const d = Math.hypot(t.x - v.x, t.z - v.z);
     return d >= dist[0] && d <= dist[1] && inCone(v, t.x, t.z, cone);
   });
   const inPicture = ok.filter((t) => inCone(v, t.x, t.z));
-  return [...fork.shuffle(inPicture), ...fork.shuffle(ok.filter((t) => !inPicture.includes(t)))];
+  const atEdge = ok.filter((t) => !inPicture.includes(t) && inCone(v, t.x, t.z, CONE_WIDE));
+  const rest = ok.filter((t) => !inPicture.includes(t) && !atEdge.includes(t));
+  return [...fork.shuffle(inPicture), ...fork.shuffle(atEdge), ...fork.shuffle(rest)];
 }
 
 /**
@@ -254,7 +301,7 @@ export const LEAVE_FAR_M = 45;
 
 /** How near (m) he may come before it goes on its way (calmly: it never flees in a hurry). */
 export const SHY_M: Record<SurpriseId, number> = {
-  buizerd: 0, specht: 6, koekoek: 6, winterkoning: 4, roodborst: 2.6, edelhert: 14, das: 4,
+  buizerd: 0, specht: 6, koekoek: 6, winterkoning: 4, roodborst: ROBIN_SHY_M, edelhert: 14, das: 4,
 };
 
 /** Should it go now? (up too long, he is far off, or he came too near) */
@@ -264,13 +311,37 @@ export function shouldGo(s: SurpriseSpec, age: number, dist: number): boolean {
   return SHY_M[s.id] > 0 && dist < SHY_M[s.id];
 }
 
-/** The robin's next hop target: toward him while he is more than `far` away, stopping
- *  `keep` m short of him; never nearer than `keep` (null: it stays where it is). */
-export function robinHop(robin: { x: number; z: number }, ranger: { x: number; z: number }, keep = 3.4, far = 5.5, hop = 0.7): { x: number; z: number } | null {
-  const dx = ranger.x - robin.x, dz = ranger.z - robin.z;
+/* ------------------------------------------------------------ the robin ---- */
+
+/** Close enough to its spot (m): it stays, turns to look at him. */
+const ROBIN_NEAR_M = 0.45;
+
+/** Where the robin would like to be: beside him at `side` (−1 left, +1 right of the lens's
+ *  view), `lat` m off his line, `along` m along the view. */
+export function robinSpot(ranger: { x: number; z: number }, yaw: number, side: number, lat: number, along: number): { x: number; z: number } {
+  const fx = Math.sin(yaw), fz = Math.cos(yaw); // where the lens looks
+  const rx = -fz, rz = fx;                       // its right (y up: forward × up)
+  return { x: ranger.x + rx * side * lat + fx * along, z: ranger.z + rz * side * lat + fz * along };
+}
+
+/**
+ * The robin's next hop toward its spot: a hop of ≤ ROBIN_HOP_M, a flutter of ≤ ROBIN_FLUTTER_M
+ * when it is far behind, or null (near enough: it stays). Never a hop that lands nearer him
+ * than ROBIN_SHY_M.
+ */
+export function robinHop(robin: { x: number; z: number }, spot: { x: number; z: number }, ranger: { x: number; z: number }): { x: number; z: number; flutter: boolean } | null {
+  const dx = spot.x - robin.x, dz = spot.z - robin.z;
   const d = Math.hypot(dx, dz);
-  if (d <= far) return null;
-  const step = Math.min(hop, d - keep);
-  if (step <= 0.05) return null;
-  return { x: robin.x + (dx / d) * step, z: robin.z + (dz / d) * step };
+  if (d <= ROBIN_NEAR_M) return null;
+  const flutter = d > ROBIN_HOP_M * 3;
+  const step = Math.min(d, flutter ? ROBIN_FLUTTER_M : ROBIN_HOP_M);
+  const to = { x: robin.x + (dx / d) * step, z: robin.z + (dz / d) * step, flutter };
+  if (Math.hypot(to.x - ranger.x, to.z - ranger.z) < ROBIN_SHY_M + 0.2) return null;
+  return to;
+}
+
+/** How big (px, its larger side) a thing `size` m long stands `d` m from a lens of vertical
+ *  field `fovDeg` in a picture `h` px high. */
+export function pxAt(size: number, d: number, fovDeg: number, h: number): number {
+  return (size / (2 * d * Math.tan((fovDeg * Math.PI) / 360))) * h;
 }
