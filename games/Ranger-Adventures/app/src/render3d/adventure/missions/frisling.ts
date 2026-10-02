@@ -40,11 +40,11 @@ import { searchBeat } from '../beats/search';
 import { routeBeat } from '../beats/route';
 import { choiceRun, type ChoiceRun } from '../beats/choice';
 import { listenerOf } from '../../world/Residents';
-import { atLocal, dist, headingTo, toLocal, toward, dirOf } from '../places';
+import { atLocal, dist, headingTo, toward, dirOf } from '../places';
 import { FrislingHome } from './frisling.home';
 import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
-  frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, type Way,
+  frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, outSpotOf, besideView, sideBySideView, type Way,
 } from './frisling.places';
 import { drawFrisling, frislingVariant, recentPlays, type FrislingVariant, type PastPlay } from './frisling.vary';
 
@@ -258,12 +258,11 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   }
 
   // 6 · he gets up, tired, and comes out to him, to his side (away from the way home:
-  // walking on, the ranger leads and the piglet follows, never walks into him)
+  // walking on, the ranger leads and the piglet follows, never walks into him; on steen
+  // the side whose close pictures look away from the roe's home)
   await lost.lie(false);
   const r1 = k.ranger();
-  const facing = { x: r1.x, z: r1.z, heading: headingTo(r1, P.cover) };
-  const pigSide = toLocal(facing, way.fieldApproach).u >= 0 ? -1 : 1;
-  const edge = atLocal(facing, 1.15 * pigSide, 0.15);
+  const edge = outSpotOf(way, r1);
   await lost.go(edge.x, edge.z, { speed: 'walk', face: headingTo(edge, r1) });
   void lost.lookAt(me, 3);
   // the first calm moment on the way home, here at the stand (s1)
@@ -361,14 +360,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   async function dragen(run: ChoiceRun, looked: { x: number; z: number }): Promise<void> {
     const r = k.ranger();
     const pig = { x: lost.x, z: lost.z };
-    const facingH = headingTo(r, looked);
-    const side = toLocal({ x: r.x, z: r.z, heading: facingH }, pig).u >= 0 ? 1 : -1;
     k.beat = 'dragen:frame';
-    await k.frame({
-      at: { x: (r.x + pig.x) / 2, z: (r.z + pig.z) / 2 }, heading: facingH - 0.35 * side,
-      halfW: 1.1, halfD: 0.6, tall: 1.3, pitchDeg: 22, insetTop: 40, insetBottom: 300,
-      include: [{ x: r.x, z: r.z, h: 1.32 }, { x: pig.x, z: pig.z, h: 0.3 }],
-    }, { face: headingTo(r, pig) });
+    await k.frame(sideBySideView(r, pig, looked), { face: headingTo(r, pig) });
     await run.ask('dragen', {
       // picked up: a squeal, he trots off, stops, and comes back to him
       wrong: async () => {
@@ -386,11 +379,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   async function voerenPiglet(run: ChoiceRun): Promise<void> {
     const r = k.ranger();
     k.beat = 'voeren:frame';
-    await k.frame({
-      at: { x: (r.x + lost.x) / 2, z: (r.z + lost.z) / 2 }, heading: headingTo(r, lost) - 0.35,
-      halfW: 1.1, halfD: 0.6, tall: 1.3, pitchDeg: 22, insetTop: 40, insetBottom: 300,
-      include: [{ x: r.x, z: r.z, h: 1.32 }, { x: lost.x, z: lost.z, h: 0.3 }],
-    });
+    await k.frame(besideView(r, { x: lost.x, z: lost.z }));
     void lost.sniff(r.x, r.z, 30, 0.5); // (his snout at the bag on his hip)
     call('piep', lost);
     await run.ask('voeren', {

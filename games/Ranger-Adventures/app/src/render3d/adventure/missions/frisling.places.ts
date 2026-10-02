@@ -153,6 +153,10 @@ export interface Way {
   cover: { seed: number; bracken: number; grass: number };
   /** young trees the home plants at the stand (Adventure.trees) */
   trees: readonly (Spot & { h: number; rotY: number })[];
+  /** the side (+1 his right, −1 his left, facing the stand) the found piglet comes out to,
+   *  where the way home lies straight behind him (otherwise: away from the way home) —
+   *  chosen so the close pictures at the stand look away from a neighbour's home */
+  outSide?: 1 | -1;
 }
 
 /** A stand's frame and the spot he searches it from, arriving from `from`. */
@@ -282,6 +286,10 @@ const STEEN = ((): Way => {
     walkSpots: [{ x: -32.7, z: -34.0 }, { x: -32.9, z: -41.0 }],
     cover: { seed: 115, bracken: 0.45, grass: 0.15 },
     trees: [{ ...atLocal(frame, -1.34, 3.4), h: 5.5, rotY: 2.3 }],
+    // (the way home lies straight behind him: the piglet comes out on his west side, so
+    // the close pictures at the stand look out over the heath's rim, never east over the
+    // roe's mornings to her home)
+    outSide: -1,
   };
 })();
 
@@ -325,6 +333,39 @@ export const WAYS: Readonly<Record<WayId, Way>> = { wei: WEI, steen: STEEN, berk
 
 /** The way the home is laid out for when no play is on (free roam): run 6's stand. */
 export const DEFAULT_WAY: WayId = 'wei';
+
+/* ------------------------------------- the close pictures on the way home ---- */
+
+/** Where the found piglet comes out to, beside him (`r`, facing the stand) — to the side
+ *  away from the way home, so walking on he leads and the piglet follows; on a way whose
+ *  way home lies straight behind him, the way's own `outSide`. */
+export function outSpotOf(way: Way, r: Spot): Spot & { side: 1 | -1 } {
+  const facing: Frame = { x: r.x, z: r.z, heading: headingTo(r, way.stand) };
+  const side: 1 | -1 = way.outSide ?? (toLocal(facing, way.fieldApproach).u >= 0 ? -1 : 1);
+  return { ...atLocal(facing, 1.15 * side, 0.15), side };
+}
+
+/** The close picture of him and a piglet beside him (his bag at its snout: 'voeren' at
+ *  the stand), looking past the piglet. */
+export function besideView(r: Spot, pig: Spot): WayView {
+  return {
+    at: { x: (r.x + pig.x) / 2, z: (r.z + pig.z) / 2 }, heading: headingTo(r, pig) - 0.35,
+    halfW: 1.1, halfD: 0.6, tall: 1.3, pitchDeg: 22, insetTop: 40, insetBottom: 300,
+    include: [{ x: r.x, z: r.z, h: 1.32 }, { x: pig.x, z: pig.z, h: 0.3 }],
+  };
+}
+
+/** The close picture for 'dragen': the two of them side by side, what he looked at (the
+ *  stand, the field) behind, turned a little away from the piglet's side. */
+export function sideBySideView(r: Spot, pig: Spot, looked: Spot): WayView {
+  const facingH = headingTo(r, looked);
+  const side = toLocal({ x: r.x, z: r.z, heading: facingH }, pig).u >= 0 ? 1 : -1;
+  return {
+    at: { x: (r.x + pig.x) / 2, z: (r.z + pig.z) / 2 }, heading: facingH - 0.35 * side,
+    halfW: 1.1, halfD: 0.6, tall: 1.3, pitchDeg: 22, insetTop: 40, insetBottom: 300,
+    include: [{ x: r.x, z: r.z, h: 1.32 }, { x: pig.x, z: pig.z, h: 0.3 }],
+  };
+}
 
 /* ---------------------------------------------------- the places table ---- */
 

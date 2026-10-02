@@ -16,7 +16,7 @@ import {
   FRISLING_PLACES as P, FRISLING_RESIDENTS, FRISLING_HOME, MARKER, STAND, STAND_FRAME, FIELD_FRAME, WALLOW, WALLOW_FRAME, LOST_SPOT,
   fieldSpots, fieldSpotsOf, hideClumps, frislingClearings, SEARCH_VIEW, FIELD_VIEW, WALLOW_VIEW, LEAD_CLUMP_COUNT,
   cluePosts, clueGap, bootPrints, CLUE_FRAME, WAYS, WAY_IDS, FAMILY_LAYOUTS, nookAt, decoyAt, placesFor, useWay, wallowLog,
-  wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, type WayId, type Way, type WayView,
+  wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, outSpotOf, besideView, sideBySideView, type WayId, type Way, type WayView,
 } from './frisling.places.ts';
 import { anchorInBiome, biomeAt, heightAt, VEN_CENTER } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
@@ -24,7 +24,7 @@ import { dist, headingTo, toLocal, atLocal, segDist, offCentre } from '../places
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { obstacleGap } from '../../CharacterController.ts';
-import { REE_PLACES, reeClearings } from './ree.places.ts';
+import { REE_PLACES, reeClearings, LAYOUTS as REE_LAYOUTS, COPSE_TREES } from './ree.places.ts';
 import { fitFrame, screenOf } from '../../play/frame-fit.ts';
 import { growStems, openWindow, visibleShare, backPoints } from '../cover-math.ts';
 import { SIZE, RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
@@ -514,3 +514,34 @@ test('the clue: a cut fence past the wallow, boot prints through its gap, clear 
     for (const q of posts) assert.ok(dist(r.after!, q) > 2, `${r.key} keeps off the fence`);
   }
 });
+
+/** The roe's home as a lens would see it (her places, her stands, pools and paths, the
+ *  junipers and trees of each morning's cover: the home next door, whose doe and calf
+ *  rest there, ~30 draw calls in a picture), and any other marker close by. */
+function neighbours(from: { x: number; z: number }): { name: string; x: number; z: number }[] {
+  const out: { name: string; x: number; z: number }[] = [];
+  for (const [k, q] of Object.entries(REE_PLACES)) out.push({ name: `ree.${k}`, x: q.x, z: q.z });
+  for (const c of reeClearings()) out.push({ name: 'ree.ground', x: c.x, z: c.z });
+  for (const l of REE_LAYOUTS) for (const j of l.cover.junipers) out.push({ name: `ree.${l.id}.juniper`, x: j.x, z: j.z });
+  for (const t of COPSE_TREES) out.push({ name: 'ree.copse-tree', x: t.x, z: t.z });
+  for (const [k, q] of Object.entries(OTHER_MARKERS)) if (dist(q, from) < 12) out.push({ name: `marker ${k}`, ...q });
+  return out;
+}
+
+for (const id of WAY_IDS) {
+  const w = WAYS[id];
+  test(`${id}: the close pictures at the stand (the piglet out beside him: voeren, dragen) show no neighbour's home`, () => {
+    const r = w.coverApproach;
+    const pig = outSpotOf(w, r);
+    // (the piglet comes out beside him, away from the way home or to the way's own side)
+    assert.ok(Math.abs(dist(pig, r) - 1.16) < 0.05, `the piglet stands beside him (${dist(pig, r).toFixed(2)} m)`);
+    for (const [name, v] of [['voeren', besideView(r, pig)], ['dragen', sideBySideView(r, pig, w.stand)]] as const) {
+      const lens = lensOf(v);
+      for (const q of neighbours(r)) {
+        const c = project(q, 0.6, lens);
+        const inPic = c.ahead && c.x > -40 && c.x < W + 40 && c.y > -40 && c.y < H + 40;
+        assert.ok(!inPic, `${name}: ${q.name} at (${q.x.toFixed(1)}, ${q.z.toFixed(1)}), ${dist(q, r).toFixed(1)} m off, is out of the picture (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);
+      }
+    }
+  });
+}
