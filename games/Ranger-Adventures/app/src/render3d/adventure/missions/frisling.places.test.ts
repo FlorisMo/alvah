@@ -16,7 +16,7 @@ import {
   FRISLING_PLACES as P, FRISLING_RESIDENTS, FRISLING_HOME, MARKER, STAND, STAND_FRAME, FIELD_FRAME, WALLOW, WALLOW_FRAME, LOST_SPOT,
   fieldSpots, fieldSpotsOf, hideClumps, frislingClearings, SEARCH_VIEW, FIELD_VIEW, WALLOW_VIEW, LEAD_CLUMP_COUNT,
   cluePosts, clueGap, bootPrints, CLUE_FRAME, WAYS, WAY_IDS, FAMILY_LAYOUTS, nookAt, decoyAt, placesFor, useWay, wallowLog,
-  wallowClumps, standCover, standSeed, spotTag, type WayId, type Way, type WayView,
+  wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, type WayId, type Way, type WayView,
 } from './frisling.places.ts';
 import { anchorInBiome, biomeAt, heightAt, VEN_CENTER } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
@@ -161,12 +161,6 @@ for (const id of WAY_IDS) {
     for (let n = 0; n < w.nooks.length; n++) assert.ok(dist(follow[follow.length - 1], nookAt(id, n, 0)) > 1.2, `the trail ends off nook ${n}`);
     // it passes the family at a calm distance, the ree's ring and the solids round
     const path = [MARKER, ...follow.slice(1, -1), w.coverApproach];
-    for (let t = 0; t < 1; t += 0.02) {
-      const i = Math.min(path.length - 2, Math.floor(t * (path.length - 1)));
-      const k = t * (path.length - 1) - i;
-      const p = { x: path[i].x + (path[i + 1].x - path[i].x) * k, z: path[i].z + (path[i + 1].z - path[i].z) * k };
-      void p;
-    }
     assert.ok(polyDist(P.wallow, path) >= 6.5, `the follow keeps 6.5 m from the wallow (${polyDist(P.wallow, path).toFixed(1)})`);
     // (≥ 3 m: the big stone stands 5.1 m from the ree's ring, and the way south passes between them)
     assert.ok(polyDist(OTHER_MARKERS['ree-niet-aanraken'], path) >= 3, `and 3 m from the ree's ring (${polyDist(OTHER_MARKERS['ree-niet-aanraken'], path).toFixed(1)})`);
@@ -175,6 +169,22 @@ for (const id of WAY_IDS) {
       assert.ok(polyDist(q, path) > keep, `the follow passes the ${q.name} at ${polyDist(q, path).toFixed(1)} m`);
     }
     for (const c of cluePosts()) assert.ok(polyDist(c, path) > 1.5, 'the follow keeps off the fence line');
+  });
+
+  test(`${id}: following the prints never comes near the sow — in every family layout, from anywhere by the ring`, () => {
+    // (review r1: on steen the sow at her log stood 5.6 m from the way, against a 5 m
+    // notice, and a child doing what the game asked was told 'Niet zo dichtbij')
+    const via = w.follow.slice(1, -1);
+    for (const l of FAMILY_LAYOUTS) {
+      const sow = l.poses.sow;
+      const keep = SOW_NOTICE_M + 1.5 + (sow.roam ?? 0);
+      assert.ok(polyDist(sow, [MARKER, ...via, w.coverApproach]) >= keep, `${l.id}: the way passes the sow at ${polyDist(sow, [MARKER, ...via, w.coverApproach]).toFixed(2)} m (want ≥ ${keep.toFixed(2)})`);
+      // he sets out from wherever he stood at the ring (its prompt reaches 2.4 m)
+      for (let a = 0; a < 16; a++) {
+        const from = { x: MARKER.x + 2.4 * Math.cos((a * Math.PI) / 8), z: MARKER.z + 2.4 * Math.sin((a * Math.PI) / 8) };
+        assert.ok(polyDist(sow, [from, ...via]) >= keep, `${l.id}: from the ring at ${a * 22.5}° the way passes the sow at ${polyDist(sow, [from, ...via]).toFixed(2)} m`);
+      }
+    }
   });
 
   test(`${id}: a real lead home with the family ahead, clumps beside it to dive into`, () => {

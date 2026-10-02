@@ -235,12 +235,19 @@ const WEI = ((): Way => {
   };
 })();
 
+/** On `steen` the follow passes the family: a child who walks within this of the sow makes
+ *  her lift her head ('Niet zo dichtbij. De moeder kijkt.'). The way the prints go keeps
+ *  ≥ 1.5 m more than this from her in every family layout (frisling.places.test.ts): doing
+ *  what the game asks is never told off. */
+export const SOW_NOTICE_M = 4;
+
 /* -- steen: south, past the family and the big stone, to the forest edge -- */
 const STEEN = ((): Way => {
   const stand: Spot = { x: -23, z: -52.8 };
-  // the follow: round the family (the wallow's east side), between the fence's end and the
-  // big stone, south over the open heath beside the south field
-  const follow0: Spot[] = [{ x: -19.0, z: -24.4 }, { x: -17.6, z: -29.5 }, { x: -21.3, z: -37 }, { x: -22.1, z: -44.5 }];
+  // the follow: round the family (the wallow's east side, 6.4 m from the sow at her log),
+  // between the fence's end and the big stone, south over the open heath beside the south
+  // field
+  const follow0: Spot[] = [{ x: -18.2, z: -24.2 }, { x: -17.9, z: -30.0 }, { x: -21.3, z: -37 }, { x: -22.1, z: -44.5 }];
   const { frame, coverApproach } = standAt(stand, follow0[follow0.length - 1]);
   const fieldApproach = approachOf(FIELD_S_AT, { x: -25.6, z: -46.3 }, 3.3, 1.2);
   const fieldSide = sideOf(fieldApproach);

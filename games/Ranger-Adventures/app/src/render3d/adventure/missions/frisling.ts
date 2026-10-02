@@ -44,7 +44,7 @@ import { atLocal, dist, headingTo, toLocal, toward, dirOf } from '../places';
 import { FrislingHome } from './frisling.home';
 import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
-  frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, type Way, type WayId,
+  frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, type Way, type WayId,
 } from './frisling.places';
 import { drawFrisling, frislingVariant, lastWayOf, type FrislingVariant } from './frisling.vary';
 
@@ -56,8 +56,6 @@ const FOLLOW_REACH = 46;
 const LEAD_PACE = 1.5;
 /** The first prints from the ring: crisp, so where the trail starts reads at once. */
 const CRISP_PRINTS = 4;
-/** On `steen` the follow passes the family: within this of the sow she lifts her head. */
-const SOW_NOTICE_M = 5;
 
 /** The content's zoeken decoys of this mission (the stands show them in free roam). */
 function distractorsOf(m: Mission | undefined): readonly Distractor[] {
@@ -504,9 +502,10 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
 
 /**
  * The walk-round on `steen` (unmeasured, design §5.5): while he follows the squeak past
- * the family, coming within ~5 m of the sow makes her lift her head and watch him go
- * (once per approach, with a soft grunt and one line); she never moves toward him or the
- * lens. Once he is past them the follow's own line comes back. Nothing is logged.
+ * the family, coming within `SOW_NOTICE_M` of the sow makes her lift her head and watch him
+ * go (once per approach, with a soft grunt and one line); she never moves toward him or the
+ * lens. Once he is well away from her again the walk-round's line comes back, and once he
+ * is past them the follow's own. Nothing is logged.
  */
 function walkRound(k: AdventureKit, sow: Actor, home: ResidentPose, call: (id: string, a: Actor) => void): (dt: number) => void {
   let near = false;
@@ -524,6 +523,7 @@ function walkRound(k: AdventureKit, sow: Actor, home: ResidentPose, call: (id: s
       k.say(k.copy.teDichtbij);
     } else if (near && d > SOW_NOTICE_M + 2) {
       near = false;
+      if (!past) k.say(k.copy.boog); // (he gave her room: the way round them again)
     }
     if (!past && dist(m, P.wallow) > 10 && m.z < -31) { past = true; k.say(k.copy.volg); }
   };
