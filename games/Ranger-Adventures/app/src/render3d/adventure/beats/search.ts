@@ -64,6 +64,9 @@ export interface SearchOpts {
   /** how much of its back the stems let the lens see (run 7 default: the level's
    *  `glimpse`); less is a harder find */
   glimpse?: number;
+  /** run 7 (ree-growth, additive): the animal's length (m) the glimpse is measured along
+   *  (default 2.7 × its lying height, the piglet's) */
+  len?: number;
 }
 
 export interface SearchResult { summary: BeatSummary; misses: number; seconds: number }
@@ -85,7 +88,7 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
   if (o.lyingH) {
     const lens = k.lensFor(o.view).cam;
     const g = k.ctx.groundY(o.target.x, o.target.z);
-    const back = backPoints(o.target.x, g, o.target.z, o.target.yaw, o.lyingH * 2.7, o.lyingH);
+    const back = backPoints(o.target.x, g, o.target.z, o.target.yaw, o.len ?? o.lyingH * 2.7, o.lyingH);
     const drawn = o.cover.stems.map((s) => s.h);
     const more = openWindow(o.cover.stems, lens, back, glimpse);
     if (more.length) o.cover.settle(more, 1.1, drawn);

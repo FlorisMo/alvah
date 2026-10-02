@@ -209,9 +209,10 @@ test('the watch: always her way out, the call and the calf; the level\'s pauses;
     // every line is the content's, ≤ 7 words a sentence (readlevel lints them too)
     for (const e of w) if (e.line) assert.ok(COPY[e.line], `${tag}: line "${e.line}" is in the copy`);
     for (const e of w) if (e.act === 'listen' || e.cue === 'hut') assert.ok(e.line, `${tag}: a pause and a look at the hide always say so (stil!)`);
-    // ~30 s with her walks (25-36); a new line every ~3.5-4 s, never one held ~8.5 s or more
+    // ~25-30 s with her walks at the nominal 2.5 s (22-35; in the world her walks take a
+    // little longer: ~30 s); a new line every ~3.5-4 s, never one held ~8.5 s or more
     const tl = timeline(w);
-    assert.ok(tl.end >= 25 && tl.end <= 36, `${tag}: ${tl.end.toFixed(1)} s`);
+    assert.ok(tl.end >= 22 && tl.end <= 35, `${tag}: ${tl.end.toFixed(1)} s`);
     const gaps = tl.lines.slice(1).map((l, i) => l.t - tl.lines[i].t);
     gaps.push(tl.end - tl.lines[tl.lines.length - 1].t);
     assert.ok(Math.max(...gaps) <= 8.6, `${tag}: a line held ${Math.max(...gaps).toFixed(1)} s`);
@@ -229,7 +230,7 @@ test('the watch: the seed draws the order, the lines and the timing; the level o
     lineSets.add(w.map((e) => e.line ?? '').join(' '));
     lengths.add(Math.round(timeline(w).end));
   }
-  assert.ok(orders.size >= 6, `${orders.size} orders of her acts`);
+  assert.ok(orders.size >= 4, `${orders.size} orders of her acts`);
   assert.ok(lineSets.size >= 10, `${lineSets.size} sets of lines`);
   assert.ok(lengths.size >= 3, 'the timing varies');
   // the pools: every key is a line of the content

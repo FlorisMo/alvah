@@ -244,7 +244,7 @@ export const WATCH_LINES = {
 } as const;
 
 /** How long each act lasts (s), before the seed's jitter (±12 %). */
-export const WATCH_S = { rustle: 3.0, listen: 3.9, bite: 2.7, look: 2.4, call: 2.6, sniff: 2.8 } as const;
+export const WATCH_S = { rustle: 3.0, listen: 3.6, bite: 2.4, look: 2.4, call: 3.2, sniff: 2.4 } as const;
 
 /**
  * The watch, drawn from the play's seed (design §6.7; pure, ree.variety.test.ts): the bracken
@@ -270,15 +270,15 @@ export function watchScript(play: Pick<Play, 'fork'>, o: { pauses: number; way: 
     listen('ritsel'),
   ];
   // her small acts on the way, in a seeded order: 1-2 bites and a look round, so many as
-  // the pauses leave room for (the watch stays ~30 s at every level): one pause: two bites
-  // and a look; two: the middle pause and two bites, or one and a look; three: the middle
-  // pause and a bite
-  const bites = pauses === 1 ? 2 : pauses === 3 ? 1 : rnd.pick([1, 2]);
+  // the pauses leave room for (the watch stays ~30 s at every level): one pause: two bites,
+  // or a bite and a look round; more: the middle pause and a bite
+  const rond = pauses === 1 && rnd.chance(0.5);
+  const bites = pauses === 1 && !rond ? 2 : 1;
   const middle: WatchEvent[] = [];
   // (two bites: both of the pool's lines, in a seeded order)
   const biteLines = rnd.shuffle(WATCH_LINES.bite);
   for (let i = 0; i < bites; i++) middle.push({ act: 'bite', s: j(WATCH_S.bite), line: biteLines[i % biteLines.length] });
-  if (pauses === 1 || (pauses === 2 && bites === 1)) middle.push(look('rond'));
+  if (rond) middle.push(look('rond'));
   if (pauses >= 2) middle.push(listen(rnd.pick(['ritsel', 'rond'] as const)));
   // (the bites stay together: one line, two bites)
   const pieces = rnd.shuffle(middle.filter((e) => e.act !== 'bite'));

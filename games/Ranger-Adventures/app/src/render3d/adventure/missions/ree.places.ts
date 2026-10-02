@@ -191,7 +191,8 @@ export interface ReeLayout {
   /** "Loop rustig weg": his quiet steps back out of the hide, away from the family */
   hideLeave: Place;
   /** run 7 (ree-growth): her way in the watch between her gap and the meeting place (a
-   *  point she wanders by, out on open heath in the watch's picture) */
+   *  point she wanders by, out on open heath in the watch's picture; none where her gap and
+   *  the meeting place lie far apart already) */
   watchWay: readonly Spot[];
   /** run 7 (ree-growth): "Mama is terug. Loop stil weg.": where he walks to himself, away
    *  from the family (golden's hint, the chip's goal; facing back toward them), and the way
@@ -235,7 +236,7 @@ interface LayoutDef {
   watchMid: number; watchHalfW: number;
   /** run 7: the point she wanders by in the watch (the watch view's frame: u across, + to
    *  the right, v away from the hide) */
-  watchVia: { u: number; v: number };
+  watchVia?: { u: number; v: number };
   /** run 7: where he walks away to (world), the way there round his hide's bush, and the
    *  reunion lens's turn (deg) off the line from there to the meeting place */
   out: Spot; outVia?: readonly Spot[]; reunionTurn?: number;
@@ -279,7 +280,7 @@ function build(d: LayoutDef): ReeLayout {
     hideJuniper: { ...atLocal(hf, d.hideJuniper.u, d.hideJuniper.v), h: SIZE.jeneverbes.h * 1.1 },
     hideLog: log,
     hideLeave: { ...atLocal(hf, d.leave?.u ?? 0.2, d.leave?.v ?? -1.5), r: 0.5, heading: hf.heading },
-    watchWay: [atLocal({ ...mid, heading: hf.heading }, d.watchVia.u, d.watchVia.v)],
+    watchWay: d.watchVia ? [atLocal({ ...mid, heading: hf.heading }, d.watchVia.u, d.watchVia.v)] : [],
     wayOut: { ...d.out, r: 1.0, heading: headingTo(d.out, meet) },
     outWay: [...(d.outVia ?? [])],
     views: {
@@ -356,7 +357,8 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     poolIn: { leg: 1, at: 0.5, side: 1 }, poolOut: { leg: 2, at: 0.62, side: -1 },
     way: [{ u: -3.4, v: -0.2 }, { u: -1.0, v: 3.1 }],
     hide: { x: -2.0, z: -44.0 }, leave: { u: 1.0, v: -1.0 }, hideJuniper: { u: -1.4, v: 0.3 }, hideLog: { u: -0.9, v: 1.1 },
-    watchMid: 0.55, watchHalfW: 2.8, watchVia: { u: -0.2, v: 0.9 },
+    // (her way out of the copse's south gap to the meeting place runs 5 m across the watch)
+    watchMid: 0.55, watchHalfW: 2.8,
     // (north along the forest's edge, past his hide's juniper on its forest side)
     out: { x: -1.6, z: -39.0 }, outVia: [{ x: -0.95, z: -42.5 }],
   }),

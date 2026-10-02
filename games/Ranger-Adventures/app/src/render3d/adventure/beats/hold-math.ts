@@ -211,6 +211,8 @@ export class GoCore {
   wrongs = 0;
   /** seconds he has stood since this round's line was read */
   idle = 0;
+  /** why it last went wrong: he stood too long, or he came closer */
+  why: 'stay' | 'closer' | null = null;
   readonly rule: GoRule;
   private from: GoSpot = { x: 0, z: 0 };
   private near0 = 0;
@@ -243,7 +245,7 @@ export class GoCore {
     this.last = now;
     if (me.running) return null; // (neither: "Sst. Loop stil.")
     const near = Math.hypot(me.x - family.x, me.z - family.z);
-    if (near <= this.near0 - this.rule.closer) return this.wrong();
+    if (near <= this.near0 - this.rule.closer) return this.wrong('closer');
     const moved = Math.hypot(me.x - this.from.x, me.z - this.from.z);
     if (moved >= this.rule.away && near >= this.near0 + this.rule.farther) {
       this.phase = 'done';
@@ -252,7 +254,7 @@ export class GoCore {
     }
     if (moved < this.rule.stay || me.speed < GO_STILL_V) {
       this.idle += dt;
-      if (this.idle >= this.rule.waitS) return this.wrong();
+      if (this.idle >= this.rule.waitS) return this.wrong('stay');
     }
     return null;
   }
@@ -262,8 +264,9 @@ export class GoCore {
     if (this.phase === 'react') this.phase = 'read';
   }
 
-  private wrong(): 'wrong' {
+  private wrong(why: 'stay' | 'closer'): 'wrong' {
     this.wrongs += 1;
+    this.why = why;
     this.phase = 'react';
     this.choose(false);
     return 'wrong';

@@ -550,8 +550,7 @@ test('run 7: the watch — she wanders by a point out on open heath in the pictu
   for (const l of LAYOUTS) {
     const wv = { ...l.views.watch.at, heading: l.views.watch.heading };
     const way = [l.gap, ...l.watchWay, l.meet];
-    assert.ok(l.watchWay.length >= 1, `${l.id}: a point to wander by`);
-    assert.ok(length(way) >= 3.2, `${l.id}: her walk in the watch is ${length(way).toFixed(1)} m`);
+    assert.ok(length(way) >= 3.2 && length(way) <= 6, `${l.id}: her walk in the watch is ${length(way).toFixed(1)} m`);
     for (const p of l.watchWay) {
       const q = toLocal(wv, p);
       assert.ok(Math.abs(q.u) <= l.views.watch.halfW - 0.4 && Math.abs(q.v) <= l.views.watch.halfD + 0.3, `${l.id}: the point is in the watch's picture (u ${q.u.toFixed(1)}, v ${q.v.toFixed(1)})`);
