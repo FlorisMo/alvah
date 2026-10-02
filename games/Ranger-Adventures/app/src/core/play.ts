@@ -166,3 +166,15 @@ export function nextPlaySeed(): number {
   drawn += 1;
   return s;
 }
+
+const loose = new Map<string, number>();
+
+/** Run 7 `adaptive`: a stream for a choice that belongs to no play (a view opened without
+ *  one, the hut, the bird bench): seeded from the session's seed and `label`, the k-th call
+ *  for a label its own stream. So even these never call `Math.random`, and a `?seed=N`
+ *  session replays them too. */
+export function looseRng(label: string): () => number {
+  const k = loose.get(label) ?? 0;
+  loose.set(label, k + 1);
+  return mulberry32(hash32((sessionSeed() + k) >>> 0, `loose:${label}`));
+}

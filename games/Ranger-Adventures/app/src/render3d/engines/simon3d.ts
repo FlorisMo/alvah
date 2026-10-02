@@ -3,9 +3,9 @@
  * working memory), played IN the world (3D-IMMERSION-PLAN §3).
  *
  * Construct parity (frozen, §1f): it consumes the SAME `buildSimonTrial` builder
- * and drives the SAME pure `SimonRun` core as the 2D `playSimon`, so it emits the
- * IDENTICAL `BeatSummary` (`{ trials: 1, correct }`, correct = 1 only when the whole
- * growing sequence is echoed with no wrong tap). 3D changes ONLY staging + input.
+ * and drives the SAME pure `SimonRun` core as the 2D `playSimon` (run 7: rounds on the
+ * span core from the knobs and the play's fork), so it emits the IDENTICAL `BeatSummary`.
+ * 3D changes ONLY staging + input.
  *
  * 2026-09-26 staging: the callers are the world's own animals (edelhert, ree, wild
  * zwijn, raaf, das, vos, eekhoorn …) at their real size, in a calm row on a patch in
@@ -25,8 +25,10 @@ import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
 import type { Play } from '../../core/play';
 import type { WorldCtx, Play3dEngine } from '../play/types';
-import { buildSimonTrial, randomCaller, SimonRun } from '../../engines/simon';
+import { buildSimonTrial, SimonRun } from '../../engines/simon';
 import { store } from '../../core/state';
+import { looseRng } from '../../core/play';
+import { GROEI } from '../../content/copy';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
@@ -64,11 +66,9 @@ export function playSimon3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Bea
     const settings = store.get().settings;
     const copy = step.skin.copy ?? {};
 
-    // SAME engine logic as the 2D view (construct parity §1f).
-    const diff = store.difficulty('simon');
-    const trial = buildSimonTrial(step.skin, diff);
-    const rng = play?.fork('simon').rng; // run 7: the play's callers (as its 2D twin)
-    const run = new SimonRun(trial.target, () => randomCaller(trial.dieren, rng));
+    // SAME engine logic as the 2D view (construct parity §1f); run 7: the play's callers
+    const trial = buildSimonTrial(step.skin, store.knobs('simon'));
+    const run = new SimonRun(trial.knobs, trial.dieren, play ? play.fork('simon').rng : looseRng('simon'));
 
     const instructie = copy.instructie ?? 'De dieren roepen. Doe ze na.';
     const luister = copy.luister ?? 'Luister naar de dieren…';
@@ -223,7 +223,8 @@ export function playSimon3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Bea
      *  (so every right click visibly counts, even when the same animal calls twice) */
     function showProgress(): void {
       const el = ctx.prompt.querySelector('.p3-dots');
-      if (el) el.textContent = run.sequence.map((_, i) => (i < run.echoIndex ? '●' : '○')).join(' ');
+      if (el) el.textContent = run.sequence.map((_, i) => (i < run.echoIndex ? '●' : '○')).join('\u2009');
+      el?.classList.toggle('p3-dots--long', run.sequence.length > 5); // (smaller from six: seven still fit beside the line)
     }
 
     function startEcho(): void {
@@ -244,19 +245,20 @@ export function playSimon3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Bea
       } else if (res === 'complete') {
         if (f) { f.level = 0.45; f.lift = 0.5; f.color = OK; }
         finish();
-      } else if (res === 'grow') {
-        phase = 'listen'; // a full echo below target — celebrate, then the longer row
+      } else if (res === 'next') {
+        phase = 'listen'; // a round echoed: one more caller after a clean one, else a new one as long
+        const line = run.grew ? GROEI.erbij : GROEI.rondje;
         if (f) { f.level = 0.45; f.lift = 0.5; f.color = OK; }
         if (settings.geluid) Sound.correct();
-        banner('Goed onthouden!');
-        speak('Goed onthouden!');
-        after(1200, () => listen('speak'));
-      } else { // 'replay' — a wrong click, recoverable: the SAME sequence again
+        banner(line);
+        speak(line);
+        after(1300, () => listen('none'));
+      } else { // 'replay' (the SAME sequence) or 'ease' (silently a shorter one): recoverable
         phase = 'listen';
         if (f) { f.level = 0.6; f.lift = 0.3; f.color = WRONG; after(650, () => { f.level = 0; f.lift = 0; f.color = CALL; }); }
         if (settings.geluid) Sound.tryAgain();
-        banner('Luister nog een keer.');
-        speak('Luister nog een keer.');
+        banner(GROEI.nogEens);
+        speak(GROEI.nogEens);
         after(1400, () => listen('none'));
       }
     }

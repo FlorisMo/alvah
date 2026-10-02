@@ -29,7 +29,8 @@ import { playWissel } from '../../render2d/WisselView';
 import { mountReadAloud, readScreenAloud, speakButtonBeside, speakButtonHtml, sentenceSegments } from '../ReadAloud';
 import { SAY } from '../../content/screens';
 import { MENTOR_NAAM } from '../../content/mentor';
-import { MISSIE, HUT, vul } from '../../content/copy';
+import { MISSIE, HUT, GROEI, vul } from '../../content/copy';
+import { SKILL_META } from '../../core/skill';
 import { deviceText } from '../hud/device';
 import { BRAM_PORTRAIT } from '../hud/Speaker';
 import { missionIcon } from '../MissionIcon';
@@ -230,6 +231,7 @@ async function runMission(mission: Mission, drawn: Drawn): Promise<void> {
   const { play } = drawn;
   const played: Engine[] = [];
   let skipped: string | null = null;
+  store.clearGroei(); // run 7: the reward card says what grew in THIS mission
   setScreen('mission');
   // ONE stop promise for the whole mission — every await below races it, so a stop
   // from any point (a running step OR a between-steps fact) bails at the next
@@ -348,6 +350,7 @@ async function runMission(mission: Mission, drawn: Drawn): Promise<void> {
 async function runAdventure(mission: Mission, adv: Adventure, drawn: Drawn): Promise<void> {
   const world = session.world!;
   const played: Engine[] = [];
+  store.clearGroei(); // run 7: the reward card says what grew in THIS mission
   clearOverlays(); // the briefing goes: the world is the picture now
   setScreen('mission');
   setMissionView('3d');
@@ -625,7 +628,16 @@ function showFact(step: Step, n: number, total: number): Promise<void> {
 /* ------------------------------------------------------------- reward ---- */
 function showReward(mission: Mission, played: Engine[], skipped: string | null, clueId: string | null, then: () => void, photo: string | null = null): void {
   // the breinkrachten this mission trained ease in one after the other
-  const badges = Array.from(new Set(played)).map((e, i) => badgeHtml(e, i)).join('');
+  const trained = Array.from(new Set(played));
+  const badges = trained.map((e, i) => badgeHtml(e, i)).join('');
+  // run 7 (design §5.8): a breinkracht that grew a whole step in this mission gets a soft
+  // rising mark on its badge and one calm line, read aloud once. Down is never shown.
+  const grown = trained.filter((e) => store.get().recentGroei.includes(e));
+  const groeiLines = grown.length > 1 ? [GROEI.groeien] : grown.map((e) => vul(GROEI.groeit, { kracht: SKILL_META[e].naam }));
+  const groei = groeiLines.length
+    ? `<div class="reward-groei">${groeiLines.map((l) => `<p class="rg-line"><span class="rg-mark" aria-hidden="true">${icon('arrow')}</span>${esc(l)}</p>`).join('')}</div>`
+    : '';
+  store.clearGroei();
   const knapNaam = mission.beloning.vaktermBadge?.naam.replace(/^Knap woord:\s*/i, '') ?? '';
   const knap = knapNaam
     ? `<p class="reward-knap"><span class="rk-label">${esc(MISSIE.knapWoord)}</span><b class="rk-word">${esc(knapNaam)}</b></p>`
@@ -648,18 +660,30 @@ function showReward(mission: Mission, played: Engine[], skipped: string | null, 
     kicker(null, vul(MISSIE.klaar, { titel: mission.titel })) +
     `<h1 class="boot-title reward-lof"></h1>` +
     `<div class="badge-row">${badges}</div>` +
+    groei +
     knap +
     note +
     `<div class="card-foot"><div class="ra-row"><button class="btn-start" type="button">${backLabel}</button></div></div>` +
     `</div>`,
   );
+  // the badge of a breinkracht that grew rises softly (once; it simply stands there under
+  // reduced motion)
+  el.querySelectorAll<HTMLElement>('.badge-row .badge').forEach((b, i) => {
+    if (!grown.includes(trained[i])) return;
+    b.classList.add('badge--groeit');
+    const mark = document.createElement('span');
+    mark.className = 'badge-groei';
+    mark.setAttribute('aria-hidden', 'true');
+    mark.innerHTML = icon('arrow');
+    b.querySelector('.badge-disc')?.appendChild(mark);
+  });
   if (store.get().settings.geluid) Sound.found();
-  // "Missie klaar!" first: what happened, then the praise, then the knap woord
+  // "Missie klaar!" first: what happened, then the praise, then what grew, then the knap woord
   const ra = mountReadAloud({
     lead: MISSIE.zegKlaar,
     textEl: el.querySelector('.reward-lof')!,
     text: lof,
-    trail: knapNaam ? vul(MISSIE.zegKnapWoord, { woord: knapNaam }) : '',
+    trail: [...groeiLines, knapNaam ? vul(MISSIE.zegKnapWoord, { woord: knapNaam }) : ''].filter(Boolean).join(' '),
     speakBtn: speakButtonBeside(el.querySelector('.btn-start')), // 🔊 to hear it again (child:B12)
     autoStart: store.get().settings.voorlezen,
   });

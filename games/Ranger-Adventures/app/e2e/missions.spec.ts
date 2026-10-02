@@ -526,24 +526,39 @@ async function play2dFloor(log: Log): Promise<boolean> {
     return true;
   }
   if (await vis('.zoeken-target')) { await page.locator('.zoeken-target').click(); return true; }
-  if (await vis('.route-intro .btn-start')) {
-    await page.locator('.route-intro .btn-start').click();
+  // run 7: the route plays rounds (a new route shows by itself after one is walked back):
+  // the intro starts the first; every route shown is watched in full, then clicked back,
+  // until the route's panel is gone
+  if (await vis('.route-intro .btn-start')) await page.locator('.route-intro .btn-start').click();
+  else if (!(await page.locator('.route-spot').count())) return false;
+  const spotsNow = (): Promise<{ act: number; enabled: boolean; gone: boolean }> => page.evaluate(() => {
+    const spots = [...document.querySelectorAll<HTMLButtonElement>('.route-spot')];
+    return { act: spots.findIndex((b) => b.classList.contains('active')), enabled: spots.some((b) => !b.disabled), gone: !spots.length };
+  });
+  for (let round = 1; round <= 8; round++) {
     const order: number[] = [];
     const t0 = Date.now();
     while (Date.now() - t0 < 25_000) {
-      const s = await page.evaluate(() => {
-        const spots = [...document.querySelectorAll<HTMLButtonElement>('.route-spot')];
-        return { act: spots.findIndex((b) => b.classList.contains('active')), enabled: spots.some((b) => !b.disabled) };
-      });
+      const s = await spotsNow();
+      if (s.gone) return true;
       if (s.act >= 0 && order[order.length - 1] !== s.act) order.push(s.act);
-      if (s.enabled) break;
+      if (s.enabled && order.length) break;
       await sleep(page, 40);
     }
     for (const i of order) { await page.locator('.route-spot').nth(i).click(); await sleep(page, 300); }
-    log.note(`corsi 2D: watched and clicked back ${order.length} stones`);
-    return true;
+    log.note(`corsi 2D: round ${round}: watched and clicked back ${order.length} stones`);
+    // the next route starts by itself (or the panel says "goed" and goes)
+    const t1 = Date.now();
+    let next = false;
+    while (Date.now() - t1 < 6_000) {
+      const s = await spotsNow();
+      if (s.gone) return true;
+      if (s.act >= 0) { next = true; break; }
+      await sleep(page, 40);
+    }
+    if (!next) return true;
   }
-  return false;
+  return true;
 }
 
 test('reduced motion: mission 1 on the 2D floors with real clicks, and its reunion is a cut @missions', async ({ page }, info) => {

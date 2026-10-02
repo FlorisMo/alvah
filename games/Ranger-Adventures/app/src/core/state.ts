@@ -19,6 +19,8 @@ import {
   mergeSkill,
   updateSkill,
   knobsForLevel,
+  grewBand,
+  skillFloor,
   SKILL_MIN,
   type Engine,
   type SkillSet,
@@ -105,7 +107,7 @@ export interface GameState {
   eikels: number;                    // acorns collected (cosmetic reward)
   voltooid: Record<string, boolean>; // per-mission completion map
   veldnotities: Record<string, boolean>; // W6.3b: collected "Wist je dat" veldnotitie ids (content-derived)
-  recentGroei: Engine[];             // engines that grew this mission (for the celebration)
+  recentGroei: Engine[];             // engines whose level crossed a whole number (a step he feels): the reward card's calm "groeit", cleared when shown
   skill: SkillSet;                   // per-engine skill record — drives difficulty + badges
   knapWoorden: Record<string, { naam: string }>; // earned "knap-woord" badges
   arc: ArcState;                     // season/poacher arc — found clues are DERIVED from voltooid
@@ -445,17 +447,19 @@ class Store {
   }
 
   /**
-   * Run 7 (design §4.3): an engine finished a beat → it goes into the history (what was
-   * played, at which level, in which play and view), then feeds its skill record exactly
-   * as before (drives the staircase + badges). One commit.
+   * Run 7 (design §4.3, §5.1): an engine finished a beat → it goes into the history (what
+   * was played, at which level, in which play and view), then its skill record is judged by
+   * its own engine (core/skill.ts `updateSkill`: an easy win a whole step up, a hard one
+   * half a step down, silently, never under the floor). A level that crossed a whole number
+   * marks the engine for the reward card's calm "groeit". One commit.
    */
   logBeat(engine: Engine, summary: BeatSummary, meta: BeatMeta): void {
     const skill: SkillSet = { ...this.state.skill };
     const before = (skill[engine] ?? blankSkill()).level;
     const geschiedenis = appendBeat(this.state.geschiedenis, beatLog(engine, summary, meta, before, Date.now()));
-    const updated = updateSkill(skill[engine], summary);
+    const updated = updateSkill(skill[engine], summary, engine);
     skill[engine] = updated;
-    const grew = updated.level > before + 1e-3;
+    const grew = grewBand(before, updated.level);
     const recentGroei = grew
       ? Array.from(new Set<Engine>([...this.state.recentGroei, engine]))
       : this.state.recentGroei;
@@ -507,11 +511,12 @@ class Store {
     this.commit({ ...this.state, sfeer: { laatste: mood, sessies: this.state.sfeer.sessies + 1 } });
   }
 
-  /** Child-/frustration-driven ease: lower the live level a touch (silent, never the best). */
+  /** Child-/frustration-driven ease: lower the live level a touch (silent, never the best,
+   *  never under the floor: one step under his best). */
   easeEngine(engine: Engine): void {
     const skill: SkillSet = { ...this.state.skill };
     const rec: SkillRecord = { ...(skill[engine] ?? blankSkill()) };
-    rec.level = Math.max(1, rec.level - 0.5);
+    rec.level = Math.max(skillFloor(rec.best), rec.level - 0.5);
     skill[engine] = rec;
     this.commit({ ...this.state, skill });
   }

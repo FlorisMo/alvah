@@ -12,6 +12,7 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import type { Play } from '../core/play';
 import { store } from '../core/state';
+import { looseRng } from '../core/play';
 import { Content } from '../content/registry';
 import { buildWisselTrial, WisselRun, dagOfNacht, placeNames, regelAndersom } from '../engines/wisselen';
 import { animalIcon } from './animalIcon';
@@ -24,9 +25,9 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 export function playWissel(host: HTMLElement, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const settings = store.get().settings;
-    const diff = store.difficulty('wisselen');
     const copy = step.skin.copy ?? {};
-    const trial = buildWisselTrial(step.skin, diff, play?.fork('wisselen').rng); // run 7: the play's queue
+    // run 7: the level's knobs (how many, when the rule turns, how often) and the play's queue
+    const trial = buildWisselTrial(step.skin, store.knobs('wisselen'), play ? play.fork('wisselen').rng : looseRng('wisselen'));
     const run = new WisselRun(trial);
     const reduced = settings.reducedMotion;
 
@@ -129,8 +130,8 @@ export function playWissel(host: HTMLElement, step: Step, play?: Play): Promise<
           flag.textContent = 'Bordje draait!';
           sign.classList.add('flipping');
           if (settings.geluid) Sound.select();
-          say(regelOm); // "Nu andersom!" + the new rule, before the next animal
-          say(regelOmgekeerd, true);
+          say(regelOm); // "Nu andersom!" + the new rule (run 7: back again after a second turn), before the next animal
+          say(ruleNow(), true);
           after(reduced ? 700 : 1400, () => { flag.textContent = ''; sign.classList.remove('flipping'); });
         }
         renderAnimal(res === 'flip');
