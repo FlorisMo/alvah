@@ -11,7 +11,8 @@
  * The search: the calf never in the middle of the picture (outside the central box), below
  * the objective line, clear of the edges, as big in every (layout, spot) (±30 %); the boy
  * whole and small in a lower corner, seen from behind and beside, the far rim of the grass
- * in the picture; no pool in its foreground. By the calf: the calf big, the boy beside it, never over it.
+ * in the picture; no pool in its foreground; the doe in her bed out of the picture or
+ * behind a juniper (a second deer in it is what a child would click). By the calf: the calf big, the boy beside it, never over it.
  */
 
 import assert from 'node:assert/strict';
@@ -20,21 +21,24 @@ import * as THREE from 'three';
 import { heightAt as groundY } from '../../Biomes.ts';
 import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import { toward } from '../places.ts';
+import { backPoints } from '../cover-math.ts';
+import { lyingHeight, LEG_SHARE } from '../../play/pose.ts';
 import {
   LAYOUTS, CALF_DOELEN, COPSE, THICKET, COPSE_TREES, FRINGE, POOL, STAND, calfAt, calfTalkOf, calfView, juniperR, poolsOf, type ViewSpec,
 } from './ree.places.ts';
 
 const W = 1280, H = 800, FOV = 55;
 
-/** The pure replica of `Stage.fitAt` for an anchored view (play/stage.ts). */
-function fitLens(f: ViewSpec): THREE.PerspectiveCamera {
+/** The pure replica of `Stage.fitAt` for an anchored view (play/stage.ts), on a `w` × `h`
+ *  screen (the laptop's by default). */
+function fitLens(f: ViewSpec, w = W, h = H): THREE.PerspectiveCamera {
   const tall = f.tall, pitch = (f.pitchDeg * Math.PI) / 180;
   const right = { x: -Math.cos(f.heading), z: Math.sin(f.heading) };
   const include = (f.include ?? []).flatMap((q) => ((q.r ?? 0) > 0 ? [-q.r!, q.r!].map((u) => ({ x: q.x + right.x * u, z: q.z + right.z * u, h: q.h })) : [q]));
   const fv = new THREE.Vector3(Math.sin(f.heading), 0, Math.cos(f.heading));
   const rv = new THREE.Vector3(-fv.z, 0, fv.x);
   const P = new THREE.Vector3(f.at.x, groundY(f.at.x, f.at.z), f.at.z);
-  const yTop = 1 - (2 * (f.insetTop + 12)) / H, yBot = -1 + (2 * (f.insetBottom + 12)) / H, xLim = 1 - (24 / W) * 2;
+  const yTop = 1 - (2 * (f.insetTop + 12)) / h, yBot = -1 + (2 * (f.insetBottom + 12)) / h, xLim = 1 - (24 / w) * 2;
   const pts: THREE.Vector3[] = [];
   for (const u of [-f.halfW, 0, f.halfW]) for (const v of [-f.halfD, f.halfD]) {
     const g = P.clone().addScaledVector(rv, u).addScaledVector(fv, v);
@@ -47,7 +51,7 @@ function fitLens(f: ViewSpec): THREE.PerspectiveCamera {
     pts.push(g, g.clone().setY(g.y + t.h));
     inc.push(g.clone().setY(g.y + t.h * 0.5));
   }
-  const cam = new THREE.PerspectiveCamera(FOV, W / H, 0.1, 400);
+  const cam = new THREE.PerspectiveCamera(FOV, w / h, 0.1, 400);
   const dir = fv.clone().multiplyScalar(Math.cos(pitch)).setY(-Math.sin(pitch));
   const ndc = new THREE.Vector3();
   let best: { cam: THREE.Vector3; look: THREE.Vector3 } | null = null;
@@ -71,9 +75,9 @@ function fitLens(f: ViewSpec): THREE.PerspectiveCamera {
 }
 
 /** Screen px of a world point (and whether it is in front of the lens). */
-function px(cam: THREE.Camera, x: number, y: number, z: number): { x: number; y: number; front: boolean } {
+function px(cam: THREE.Camera, x: number, y: number, z: number, w = W, h = H): { x: number; y: number; front: boolean } {
   const v = new THREE.Vector3(x, y, z).project(cam);
-  return { x: ((v.x + 1) / 2) * W, y: ((1 - v.y) / 2) * H, front: v.z < 1 };
+  return { x: ((v.x + 1) / 2) * w, y: ((1 - v.y) / 2) * h, front: v.z < 1 };
 }
 
 /** The calf lying: its back's middle (the height a glimpse is seen at) and its length. */
@@ -139,6 +143,48 @@ test('the search: the calf never in the middle of the picture, as big in every s
   }
   const med = [...lens].sort((a, b) => a - b)[Math.floor(lens.length / 2)];
   for (const len of lens) assert.ok(Math.abs(len - med) / med <= 0.3, `its back is ${len.toFixed(0)} px long (median ${med.toFixed(0)}): ±30 %`);
+});
+
+/** The screens the search is framed on: the laptop's, an iPad's held across, and a wide
+ *  screen's (a doe out of the picture only at the laptop's edge would show on it). */
+const SCREENS: readonly (readonly [number, number])[] = [[W, H], [1024, 768], [1920, 1080]];
+
+/** The dense body of a juniper (the world's bush drawn slim and tall, ree.home.ts: ~0.75 ×
+ *  its height across): an upright ellipsoid round its middle, a third smaller than the
+ *  bush's outline, so a line through it is a line the bush's needles stop. */
+function inJuniper(q: THREE.Vector3, j: { x: number; z: number; h: number }): boolean {
+  const gy = groundY(j.x, j.z);
+  const r = 0.377 * j.h * 0.7, half = 0.5 * j.h * 0.85;
+  return ((q.x - j.x) ** 2 + (q.z - j.z) ** 2) / (r * r) + (q.y - (gy + j.h / 2)) ** 2 / (half * half) < 1;
+}
+
+test('the search: the doe lying in her bed is out of the picture, or a juniper stands on every line to her', () => {
+  // (review r1: in the thicket morning a second deer lay in the picture above the calf's
+  // grass, between two junipers, and a child looking for the calf clicks her)
+  const lyH = lyingHeight(SIZE.ree.h, LEG_SHARE.ree);
+  const junipers = [...COPSE.junipers, ...THICKET.junipers, ...LAYOUTS.map((q) => q.hideJuniper)];
+  const seen: string[] = [];
+  for (const l of LAYOUTS) for (const [w, h] of SCREENS) {
+    const cam = fitLens(l.views.search, w, h);
+    const b = l.bed, g = groundY(b.x, b.z);
+    // her back (its middle line and both flanks, rump to withers) and her raised head
+    const head = { x: b.x + Math.sin(b.yaw) * SIZE.ree.len * 0.5, y: g + lyH, z: b.z + Math.cos(b.yaw) * SIZE.ree.len * 0.5 };
+    const body = [...backPoints(b.x, g, b.z, b.yaw, SIZE.ree.len, lyH), head];
+    let shown = 0;
+    for (const p of body) {
+      const s = px(cam, p.x, p.y, p.z, w, h);
+      if (!s.front || s.x < 0 || s.x > w || s.y < 0 || s.y > h) continue; // out of the picture
+      const P = new THREE.Vector3(p.x, p.y, p.z);
+      let hid = false;
+      for (let i = 1; i < 80 && !hid; i++) {
+        const q = cam.position.clone().lerp(P, i / 80);
+        hid = junipers.some((j) => inJuniper(q, j));
+      }
+      if (!hid) shown++;
+    }
+    if (shown) seen.push(`${l.id} (${w}×${h}): ${shown} of ${body.length} points`);
+  }
+  assert.deepEqual(seen, [], `the doe in her bed shows in the search's picture: ${seen.join('; ')}`);
 });
 
 test('the search: he stands whole and small in a lower corner, the far rim of the grass in the picture, no pool in its foreground', () => {

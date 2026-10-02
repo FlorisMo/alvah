@@ -163,7 +163,8 @@ export interface ReeLayout {
   /** her trodden path: the ring, one bend, his search spot (the prints lie on it) */
   wissel: readonly Spot[];
   /** her cover this morning (the copse, or a thicket of her own), the gap she goes in and
-   *  out by, and her bed behind it (out of sight) */
+   *  out by, and her bed behind it (out of sight: from the hide, and from the search's lens
+   *  a juniper stands on every line to her lying back — ree.view.test.ts) */
   cover: Cover;
   gap: Spot;
   bed: Spot & { yaw: number };
@@ -293,7 +294,7 @@ export const THICKET: Cover = {
 export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
   A: build({
     id: 'A', stand: { x: -14.6, z: -36.4 }, look: deg(60), corner: 1, bend: { x: -21.0, z: -37.0 },
-    gap: { u: 0, v: 2.4 }, bed: { u: 2.2, v: -0.25, yaw: Math.PI * 0.6 },
+    gap: { u: 0, v: 2.4 }, bed: { u: 1.3, v: 0, yaw: Math.PI * 0.85 },
     graze: [inCopse(-3.3, 1.2), inCopse(-4.4, 0.4)],
     // (no pool on his way to the hide: that way passes the marker and the look at her)
     poolIn: { leg: 0, at: 0.45, side: -1 },
@@ -312,7 +313,7 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
   }),
   C: build({
     id: 'C', stand: { x: -21.0, z: -49.0 }, look: deg(-90), corner: 1, bend: { x: -20.5, z: -38.8 },
-    cover: THICKET, gap: { u: 0, v: 1.7 }, bed: { u: -1.4, v: -0.6, yaw: Math.PI * 0.5 }, slipVia: true, bedWay: [{ u: 0, v: 0.2 }],
+    cover: THICKET, gap: { u: 0, v: 1.7 }, bed: { u: -1.7, v: -0.5, yaw: 0 }, slipVia: true, bedWay: [{ u: 0, v: 0 }],
     graze: [{ x: -24.1, z: -46.5 }, { x: -24.0, z: -44.6 }],
     poolIn: { leg: 1, at: 0.5, side: 1 }, poolOut: { leg: 0, at: 0.5, side: 1 },
     way: [],
