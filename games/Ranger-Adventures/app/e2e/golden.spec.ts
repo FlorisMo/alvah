@@ -662,6 +662,8 @@ test('golden path: title → ranger → walk → jeep + heli → mission 1 by re
         soft(lead < 20 || stats.walk_field_m >= 25, `leading the piglet home is only ${stats.walk_field_m} m of walking (want ≥ 25)`);
         soft(stats.walk_field_m <= lead * 1.6, `the lead took ${stats.walk_field_m} m of walking for ${r2(lead)} m (want ≤ 1.6×)`);
         if (stats.walk_field_dur !== undefined) soft(stats.walk_field_dur <= (lead / 1.5) * 1.6, `the lead took ${stats.walk_field_dur} s for ${r2(lead)} m (want ≤ ${r2((lead / 1.5) * 1.6)} s)`);
+        // following the squeak the way the prints go never comes near the sow (steen passes them)
+        soft(!stats.walkround_notice, `following the hints, the sow noticed him ${stats.walkround_notice}× ('Niet zo dichtbij')`);
       }
     }
     soft(maxCalls < MAX_DRAW_CALLS, `draw calls peaked at ${maxCalls} during the mission (budget < ${MAX_DRAW_CALLS})`);

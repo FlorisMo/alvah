@@ -286,6 +286,8 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
     log.soft(!stats.walk_field_waits && !stats.walk_field_dives, `walking calmly, the piglet fell behind and waited ${stats.walk_field_waits ?? 0}× (dived ${stats.walk_field_dives ?? 0}×)`);
     log.soft(stats.walk_field_m <= lead * 1.6, `the lead took ${stats.walk_field_m} m of walking for ${lead} m (want ≤ 1.6×)`);
     log.soft(stats.walk_field_dur <= (lead / 1.5) * 1.6, `the lead took ${stats.walk_field_dur} s for ${lead} m (want ≤ ${((lead / 1.5) * 1.6).toFixed(1)} s)`);
+    // following the squeak the way the prints go never comes near the sow (steen passes them)
+    log.soft(!stats.walkround_notice, `following the hints, the sow noticed him ${stats.walkround_notice}× ('Niet zo dichtbij')`);
   }
   log.soft(bad.length === 0, `targets a player could not see or reach: ${[...new Set(bad)].slice(0, 4).join('; ')}`);
   log.hard(won.size >= Object.keys(need).length, `won ${won.size}/${Object.keys(need).length} steps before the time ran out`);

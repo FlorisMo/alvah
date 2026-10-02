@@ -74,8 +74,9 @@ export const LONGEST_WEIGHT = 2;
  * on, only the LAST play's way never comes again at once, the way he has not had for
  * longest a little likelier (`LONGEST_WEIGHT`), and only the last play's family layout
  * never comes again at once, drawn from its own fork: no cycle, and every way meets every
- * family. And when a way comes again the piglet never lies in the nook he lay in the last
- * time that way came: a way he knows still hides him somewhere new.
+ * family. And when a way comes again, the piglet never lies in the nook he lay in the last
+ * time that way came, nor does the family lie the way it lay then: a way he knows still
+ * hides him somewhere new and finds the family otherwise.
  *
  * Notes: the way and the family as ONE short note ('way:steen/modder'), the nook LAST
  * ('nook:3/1'): the history keeps a play's variant to 60 characters, and the light and a
@@ -91,10 +92,14 @@ export function frislingVariant(play: Play, past: readonly PastPlay[], decoys: r
   const pose = play.fork('pose').int(0, 2) as 0 | 1 | 2;
   // the look-alikes: a shuffled order of the stand's spots (assignSpots)
   const decoySpots = assignSpots(play.fork('decoys').shuffle(w.decoySpots.map((_, i) => i)), w.decoySpots, decoys);
-  // the family's layout: never his last play's (in his first three, never one of his last
-  // two: three different mornings at the mud), from its own fork, whatever the way
+  // the family's layout, from its own fork: never his last play's (in his first three,
+  // never one of his last two: three different mornings at the mud), and never the one it
+  // had the last time this way came (a way he knows finds the family otherwise again)
   const ids = FAMILY_LAYOUTS.map((l) => l.id as string);
-  const family = ids.indexOf(play.fork('family').pick(freshOf(ids, past.flatMap((p) => (p.fam ? [p.fam] : []))))) as 0 | 1 | 2;
+  let fams = freshOf(ids, past.flatMap((p) => (p.fam ? [p.fam] : [])));
+  const famBefore = past.find((p) => p.way === way)?.fam;
+  if (fams.length > 1 && famBefore) fams = fams.filter((f) => f !== famBefore);
+  const family = ids.indexOf(play.fork('family').pick(fams)) as 0 | 1 | 2;
   const lk = play.fork('leeuwerik');
   const leeuwerik = lk.chance(0.5) ? lk.int(0, w.walkSpots.length - 1) : null;
   play.note('way', `${way}/${FAMILY_LAYOUTS[family].id}`);

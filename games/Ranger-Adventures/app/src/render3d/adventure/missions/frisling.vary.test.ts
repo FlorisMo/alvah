@@ -248,6 +248,7 @@ test('thirty plays in a row: never the same way twice, no fixed cycle, every way
       // a way that comes again: another nook than the last time (when the history kept it)
       const prev = plays.slice(0, i).reverse().find((p) => p.way === ways[i]);
       if (prev && prev.va.includes(',nook:')) assert.notEqual(plays[i].nook, prev.nook, `${ways[i]} again, the same nook (${label})`);
+      if (prev) assert.notEqual(plays[i].fam, prev.fam, `${ways[i]} again, the family lies as it did then (${label})`);
     }
     // from the fourth play on, the ways are no fixed three-play cycle (nor is the family)
     assert.ok(ways.slice(3).some((w, i) => w !== ways[i]), `the ways are not period 3 from play 4 (${label})`);
