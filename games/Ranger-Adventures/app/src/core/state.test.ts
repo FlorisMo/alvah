@@ -132,3 +132,16 @@ test('the store: a discovery is new once; plays and rare counters count; a sessi
   store.noteSession('gouden-uur');
   assert.deepEqual(store.get().sfeer, { laatste: 'gouden-uur', sessies: n + 1 });
 });
+
+test('the store (veldgids): seen in the gids and revealed are kept on the discovery, a new meeting keeps them', () => {
+  store.discover('wereld.specht');
+  store.markGezien(['wereld.specht', 'nope.nope']);
+  assert.equal(store.get().ontdekt['wereld.specht'].g, 1);
+  assert.equal(store.get().ontdekt['nope.nope'], undefined, 'only what he discovered');
+  store.markRevealed('wereld.specht');
+  assert.equal(store.get().ontdekt['wereld.specht'].r, 1);
+  store.discover('wereld.specht');
+  assert.deepEqual({ ...store.get().ontdekt['wereld.specht'], t: 0 }, { t: 0, n: 2, g: 1, r: 1 }, 'met again: counted, the flags stay');
+  // an older save's discovery (no flags) loads as it was
+  assert.deepEqual(hydrate({ ontdekt: { 'wereld.buizerd': { t: 1, n: 1 } } }).ontdekt, { 'wereld.buizerd': { t: 1, n: 1 } });
+});
