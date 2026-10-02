@@ -224,8 +224,30 @@ render3d/AnimalDress.ts  dressAnimal(root, id): THE way every animal is dressed 
                      Fauna's roamers and birds, Markers' heroes): eyes, coat, stance, calm
                      pose, one draw call, then the animal light: matte, a dark coat lifted
                      (Coat.ts), and the mood's animal fill on the side away from the sun
-ui/hud/Reveal.ts     "Nieuw in je veldgids!" under the top chips, one at a time, read aloud,
-                     only at a quiet moment (ui/hud/reveal-queue.ts: the pure rules)
+ui/hud/Reveal.ts     "Nieuw in je veldgids!" ("Dat hoorde je!" for a bird he met by its call)
+                     under the top chips, one at a time, read aloud, only at a quiet moment
+                     (ui/hud/reveal-queue.ts: the pure rules); the real animal's picture, a
+                     soft chime, a calm fade; the first reveals add "Je veldgids zit onder
+                     Pauze." until he has opened his gids; one cut short comes back, one
+                     still speaking stays
+ui/veldgids/         the veldgids (Pauze's fifth tile, the hut's chip): Veldgids.ts a page per
+                     place in story order and "Overal" last (◀ ▶ and the arrow keys, round
+                     and round), a found thing's picture and name (a rare one's gold rim, a
+                     "nieuw" tag until seen: `ontdekt[id].g`), a grey shape + its hint (read
+                     on a pointer's rest, a tap) for what is still out there, dots for how
+                     much he found (never a number); gids-math.ts the pages (pure, tested);
+                     portrait.ts the real model drawn once into a small picture inside a
+                     world frame (like a camera trap's photo), kept in memory, never saved
+world/Surprises.ts   the open world's small surprises (wereld.*: buizerd, specht, koekoek,
+                     winterkoning, roodborst; rare: edelhert, das): free roam only, one at a
+                     time ≥ 45 s apart, from the visit's seed; one he has not met comes
+                     before any he knows (the director waits ≤ 60 s for a place for it), 12-30
+                     m off in his picture (a call-met bird on any tree within hearing, the
+                     picture first), the robin hopping along beside him; never in a home,
+                     never toward the lens; met = seen (≥ 40 px, ≤ 35 m, 1 s) or heard (its
+                     call ≤ 25 m; never the robin, who is there to be seen);
+                     the buzzard is Fauna's own glider (`swoop`); surprises-math.ts the rules
+                     (pure, tested); WorldSession wires it to the save and the reveal
 ```
 
 **The flow** (`ui/flow/MissionFlow.ts`): every briefing draws a play (`drawPlay`: the
@@ -303,7 +325,8 @@ number; the views' parity is pinned per engine in `render3d/engines/*.parity.tes
 
 **Dev and tests** (read-only): `?dev=1&seed=N` replays a session's plays; `?mood=<id>` forces
 the visit's mood (`&fade=<id>`: a crossfade into another a few seconds into play);
-`__ranger.play()`, `history()`, `skills()`, `discoveries()`, `mood()`, `sky().mood` (the fade,
+`__ranger.play()`, `history()`, `skills()`, `discoveries()`, `surprise()` (the open world's
+surprise out there now, where, met how; the visit's list), `mood()`, `sky().mood` (the fade,
 the sun, the fog range), `animals()` (every dressed animal in the picture with points of its
 own surface, for `e2e/moods.spec.ts`: readable at 20 and 40 m in every mood). Golden and
 `missions.spec` note each play's seed and end a hard failure with `replay: /?dev=1&seed=<n>`.

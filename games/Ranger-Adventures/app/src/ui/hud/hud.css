@@ -194,11 +194,11 @@
   box-shadow: var(--chip-shadow);
   pointer-events: none;
   opacity: 0;
-  transform: translateY(-4px);
-  transition: opacity var(--dur-slow) var(--ease-soft), transform var(--dur-slow) var(--ease-soft);
+  /* a calm fade, nothing moves (the veldgids package, §7.3) */
+  transition: opacity var(--dur-slow) var(--ease-soft);
 }
-#ui > .reveal.rv-in { opacity: 1; transform: none; }
-#ui > .reveal.rv-out { opacity: 0; transform: none; }
+#ui > .reveal.rv-in { opacity: 1; }
+#ui > .reveal.rv-out { opacity: 0; transition-duration: var(--dur-base); }
 .reveal .rv-pic {
   flex: none;
   display: grid;
@@ -216,3 +216,9 @@
 .reveal .rv-kicker { font: 600 15px/1.25 var(--font-body); color: var(--ink-soft); }
 .reveal .rv-name { font: 700 20px/1.25 var(--font-body); color: var(--green-deep); }
 .reveal .rv-speak { pointer-events: auto; margin-left: 4px; }
+/* run 7 (veldgids): the real model's picture, on the veldgids's own paper */
+.reveal--pic .rv-pic { width: 88px; height: 60px; border-radius: 14px; background: #f8f1e2; box-shadow: inset 0 0 0 1px var(--paper-edge); overflow: hidden; }
+.reveal--pic.reveal--rare .rv-pic { background: #f8f1e2; box-shadow: 0 0 0 3px var(--spel-sun); }
+.reveal .rv-img { display: block; width: 88px; height: 60px; object-fit: contain; }
+/* the first reveals: where the veldgids is */
+.reveal .rv-where { font: 600 16px/1.3 var(--font-body); color: var(--green-mid); }

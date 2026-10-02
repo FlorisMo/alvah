@@ -25,6 +25,7 @@ import { card, kicker } from './flow/session';
 import { icon } from './icons';
 import { mountReadAloud, type ReadAloudSegment, type ReadAloudHandle } from './ReadAloud';
 import { HUT, vul } from '../content/copy';
+import { showVeldgids, gidsTag } from './veldgids/Veldgids';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -78,10 +79,13 @@ function render(quiet = false): void {
     kicker('raven', HUT.kicker) +
     `<h1 class="boot-title">${esc(HUT.titel)}</h1>` +
     `<div class="card-body"><div class="cabin-sections"></div></div>` +
-    `<div class="card-foot">` +
+    `<div class="card-foot"><div class="ra-row cabin-foot-row">` +
+    // run 7: his veldgids lies in the hut too
+    `<button class="ra-chip cabin-gids" type="button">` +
+    `<span class="ra-chip-ic">${icon('veldgids')}</span><span class="ra-chip-tx">${esc(HUT.veldgids)}</span>${gidsTag()}</button>` +
     `<button class="ra-chip cabin-back" type="button" data-key="back">` +
     `<span class="ra-chip-ic">${icon('back')}</span><span class="ra-chip-tx">${esc(backLabel)}</span></button>` +
-    `</div>` +
+    `</div></div>` +
     `</div>`,
   );
 
@@ -98,6 +102,7 @@ function render(quiet = false): void {
   });
 
   el.querySelector('.cabin-back')?.addEventListener('click', () => { reading?.stop(); narrator.stop(); onBack(); });
+  el.querySelector('.cabin-gids')?.addEventListener('click', () => { reading?.stop(); showVeldgids(() => render()); });
 }
 
 /* ------------------------------------------------------- companion (perch) -- */
