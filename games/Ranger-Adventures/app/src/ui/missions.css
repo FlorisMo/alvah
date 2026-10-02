@@ -164,6 +164,31 @@
 .badge-tier { font: 600 13px/1 var(--font-body); color: var(--ink-soft); }
 .badge-bar { width: 72px; height: 6px; border-radius: var(--radius-pill); background: rgba(0, 0, 0, 0.12); overflow: hidden; }
 .badge-bar > span { display: block; height: 100%; background: var(--bk); border-radius: var(--radius-pill); }
+/* run 7: a breinkracht that grew a whole step in this mission: a soft rising mark on its
+   badge and one calm line under the row (down is never shown) */
+.badge--groeit .badge-disc { position: relative; }
+.badge-groei {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--green-mid);
+  color: #fff;
+  box-shadow: 0 0 0 2px #fdf8ec;
+  animation: groei-rise 900ms var(--ease-out) both;
+  animation-delay: calc(760ms + var(--i, 0) * 200ms);
+}
+.badge-groei .ic { width: 16px; height: 16px; stroke-width: 3; filter: none; }
+@keyframes groei-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.rm .badge-groei { animation: none; }
+.reward-groei { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 2px 0; }
+.rg-line { display: inline-flex; align-items: center; gap: 8px; margin: 0; font: 600 19px/1.25 var(--font-read); color: var(--green-deep); }
+.rg-mark { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(236, 243, 231, 0.95); color: var(--green-mid); }
+.rg-mark .ic { width: 14px; height: 14px; stroke-width: 3; }
 .kw-head { margin: 8px 0 0; font: 700 16px/1.2 var(--font-body); color: var(--green-mid); }
 .knap-woorden { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .knap-woord { padding: 7px 14px; border-radius: var(--radius-pill); background: #fff; border: 1px solid var(--green-line); color: var(--green-deep); font: 700 18px/1.2 var(--font-read); }

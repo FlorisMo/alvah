@@ -24,8 +24,10 @@ import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step, Distractor } from '../../content/types';
 import type { WorldCtx, Play3dEngine } from '../play/types';
-import { buildZoekenTrial, buildSpoor, scoreZoeken } from '../../engines/zoeken';
+import type { Play } from '../../core/play';
+import { buildZoekenTrial, buildSpoor, zoekArea, zoekSummary } from '../../engines/zoeken';
 import { store } from '../../core/state';
+import { looseRng } from '../../core/play';
 import { Content } from '../../content/registry';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
@@ -44,9 +46,6 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 /** Half-size of the search patch (m): the 2D field laid on the ground. */
 const HALF_W = 2.1;
 const HALF_D = 1.5;
-/** Seconds of searching before the gentle hint glow (or two misses). */
-const HINT_AFTER_S = 14;
-
 /** The one you search for: the YOUNG animal of the mission ("Zoek de big"). */
 const TARGET_OF: Record<string, string> = { wildzwijn: 'frisling', ree: 'reekalf' };
 
@@ -63,14 +62,15 @@ function decoyPlant(d: Distractor, i: number): { id: string; h: number } {
 
 /**
  * The kijker (verrekijker) vignette: a soft warm binocular frame over the 3D view
- * while the child searches. The search haze (`lensSterkte`) IS the lens edge.
+ * while the child searches. The search haze (run 7: `1 − glimpse`, harder at a higher
+ * level — it ran the wrong way before) IS the lens edge.
  * pointer-events:none so it never blocks picking. Returns a remover (also bound to
  * the activity-abort scope so "Stop de missie" never leaks it onto the hub).
  */
-function makeKijker(canvas: HTMLElement, lensSterkte: number, signal: AbortSignal | null): () => void {
+function makeKijker(canvas: HTMLElement, haze: number, signal: AbortSignal | null): () => void {
   const parent = canvas.parentElement;
   if (!parent) return () => {};
-  const edge = (0.28 + Math.max(0, Math.min(1, lensSterkte)) * 0.2).toFixed(2); // 0.28..0.48 opacity
+  const edge = (0.28 + Math.max(0, Math.min(1, haze)) * 0.2).toFixed(2); // 0.28..0.48 opacity
   const v = document.createElement('div');
   v.className = 'kijker-vignette';
   v.setAttribute('aria-hidden', 'true');
@@ -93,18 +93,20 @@ function fallbackForm(h: number, color: string): THREE.Group {
   return g;
 }
 
-export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
+export function playZoeken3d(ctx: WorldCtx, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const raycaster = ctx.raycaster as THREE.Raycaster;
     const reduced = ctx.reducedMotion;
     const settings = store.get().settings;
 
-    // SAME engine logic as the 2D view (construct parity).
-    const diff = store.difficulty('zoeken');
+    // SAME engine logic as the 2D view (construct parity); run 7: the level's knobs and this
+    // play's look-alikes and places (the 2D field draws the same)
+    const knobs = store.knobs('zoeken');
     const skin = step.skin;
-    const trial = buildZoekenTrial(skin, diff);
-    const spoor = buildSpoor(diff);
+    const trial = buildZoekenTrial(skin, knobs, play ? play.fork('zoeken').rng : looseRng('zoeken'),
+      play ? zoekArea(play.missionId, play.n) : undefined); // (somewhere else every play)
+    const spoor = buildSpoor(knobs);
     const instructie =
       settings.jargon && skin.copy?.instructieKnap
         ? skin.copy.instructieKnap
@@ -114,7 +116,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
     // ---- the patch in front of the ranger + the one calm reframe ----
     const stage = new Stage(ctx, { halfW: HALF_W, halfD: HALF_D, tall: 0.7, pitchDeg: 32, insetTop: 116, insetBottom: 8 });
     const reframe = stage.reframe();
-    const removeKijker = makeKijker(ctx.canvas, trial.lensSterkte, stage.signal);
+    const removeKijker = makeKijker(ctx.canvas, trial.haze, stage.signal);
 
     // ---- accessible prompt (all words + read-aloud here) ----
     const spoorTxt = 'Volg het spoor naar de schuilplek.';
@@ -150,7 +152,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
       last = now;
       if (reframe.update(dt)) settled = true;
       stage.update(dt);
-      if (ready && !done && !hint && target && (misses >= 2 || (now - t0) / 1000 > HINT_AFTER_S)) {
+      if (ready && !done && !hint && target && (misses >= 2 || (now - t0) / 1000 > trial.hintAfterS)) {
         hint = new Glow(target, '#ffd98a'); // the gentle hint, only after a calm wait
       }
       if (hint && !done) hint.set(highlightPulse(now / 1000, reduced).emissive * 0.4); // a soft breath, steady when reduced
@@ -322,8 +324,9 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
 
     function onFound(): void {
       done = true;
+      // identical scoring to playZoeken (the shared summary: misses, seconds, a hint needed)
+      const summary = zoekSummary({ misses, seconds: (performance.now() - t0) / 1000, hinted: !!hint });
       if (settings.geluid) Sound.found();
-      const correct = scoreZoeken(misses); // identical scoring to playZoeken (shared rule)
       // a faint warm "gevonden" light that keeps the animal's own colours (a strong glow
       // turned the striped piglet white, child:B13)
       if (target) { hint?.clear(); hint = new Glow(target, '#ffc46b'); hint.set(0.07); }
@@ -358,7 +361,7 @@ export function playZoeken3d(ctx: WorldCtx, step: Step): Promise<BeatSummary> {
           trail?.dispose();
           stage.dispose();
           for (const f of freeTarget) f();
-          resolve({ trials: 1, correct });
+          resolve(summary);
         });
       }, { once: true });
     }

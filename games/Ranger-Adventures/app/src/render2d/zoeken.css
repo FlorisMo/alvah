@@ -153,6 +153,26 @@
 .zoeken-target.found .tell { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 .zoeken-target.found .body { transform: scale(1.18); }
 
+/* run 7: the grass over the animal — blades with gaps, the gaps its glimpse (1 − haze): the
+   same knob the world's cover reads. Found: the grass parts. */
+.zoeken-target .cover {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 52px; height: 34px;
+  transform: translate(-50%, -54%);
+  border-radius: 40% 40% 30% 30%;
+  background: repeating-linear-gradient(84deg,
+    rgba(84, 110, 50, 0.96) 0 calc(7px * var(--haze, 0.6)),
+    transparent calc(7px * var(--haze, 0.6)) 7px);
+  pointer-events: none;
+  transition: opacity var(--dur-base);
+}
+.zoeken-target.found .cover { opacity: 0; }
+/* the hint: its ring breathes softly where it lies (steady under reduced motion) */
+.zoeken-target.hint .tell { opacity: 0.55; transform: translate(-50%, -50%) scale(0.85); animation: zoeken-breathe 2.4s ease-in-out infinite; }
+@keyframes zoeken-breathe { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.7; } }
+.rm .zoeken-target.hint .tell { animation: none; opacity: 0.55; }
+
 /* miss feedback — dual channel: colour (red) + motion (shake). Under
    reduced-motion the shake is removed but the colour still reads. */
 .zoeken-decoy.miss::before { background: var(--red-warn); }

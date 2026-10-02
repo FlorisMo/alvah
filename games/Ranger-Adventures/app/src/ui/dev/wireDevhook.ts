@@ -17,7 +17,7 @@ import {
 } from '../../core/devhook';
 import { animalsSeen } from '../../render3d/AnimalDress';
 import { store } from '../../core/state';
-import { EF_ENGINES, floorLevel } from '../../core/skill';
+import { EF_ENGINES, skillFloor, bandOf } from '../../core/skill';
 import { adventureFor } from '../../render3d/adventure/registry';
 import { triggerActivityWin } from '../../render3d/play/kit';
 
@@ -69,7 +69,7 @@ export function wireWorldDevhook(world: World): void {
     history: () => store.get().geschiedenis.map((b) => ({ ...b })),
     skills: () => Object.fromEntries(EF_ENGINES.map((e) => {
       const r = store.get().skill[e];
-      return [e, { level: r.level, best: r.best, trials: r.trials, floor: Math.round(floorLevel(r.trials) * 1000) / 1000, knobs: store.knobs(e) }];
+      return [e, { level: r.level, best: r.best, band: bandOf(r.level), floor: Math.round(skillFloor(r.best) * 1000) / 1000, beats: r.beats, trials: r.trials, knobs: store.knobs(e) }];
     })),
     discoveries: () => {
       const s = store.get();

@@ -24,6 +24,7 @@ import type { BeatSummary } from '../../core/skill';
 import type { WorldCtx } from '../play/types';
 import { buildRoepTrial, RoepRun, ROEP_COPY, type RoepDiff, type RoepVogel } from '../../engines/roep';
 import { store } from '../../core/state';
+import { looseRng } from '../../core/play';
 import { narrator } from '../../core/narrator';
 import { Sound } from '../../core/sound';
 import {
@@ -80,7 +81,7 @@ export function playRoep3d(ctx: WorldCtx, diff: RoepDiff = {}): Promise<BeatSumm
 
     // SAME engine logic as the 2D view (construct parity §1f).
     const trial = buildRoepTrial(diff);
-    const run = new RoepRun(trial, () => Math.random());
+    const run = new RoepRun(trial, looseRng('roep')); // (the bird bench is no play: a session stream, as its 2D twin)
     const byId = new Map<string, RoepVogel>(trial.vogels.map((v) => [v.id, v]));
 
     const n = trial.vogels.length;
