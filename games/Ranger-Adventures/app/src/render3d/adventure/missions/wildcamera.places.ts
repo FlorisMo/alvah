@@ -326,7 +326,7 @@ export const CALLER_SLOTS: Readonly<Record<SlotId, CallerSlot>> = {
   log: { id: 'log', at: { x: LOG.x, z: LOG.z }, from: { ...at(-6, -9), y: 4 }, animals: ['nachtzwaluw'], yaw: VIEW_H + Math.PI / 2, lift: LOG.h * 0.9 },
   stump: { id: 'stump', at: { x: NIGHTJAR_STUMP.x, z: NIGHTJAR_STUMP.z }, from: { ...at(9, -8), y: 4 }, animals: ['nachtzwaluw'], yaw: -Math.PI / 2 + 0.25, lift: NIGHTJAR_STUMP.h },
   'glade-edge': { id: 'glade-edge', at: at(-4.7, -1.0), from: at(-10.5, -0.6), animals: WALKERS, yaw: VIEW_H + Math.PI - 1.2 },
-  'glade-front': { id: 'glade-front', at: at(-2.6, -4.2), from: at(-10.5, -4.4), animals: WALKERS, yaw: VIEW_H + Math.PI - 1.45 },
+  'glade-front': { id: 'glade-front', at: at(-3.3, -4.2), from: at(-10.5, -4.4), animals: WALKERS, yaw: VIEW_H + Math.PI - 1.45 },
   bushes: { id: 'bushes', at: at(4.8, -2.7), from: at(9.2, -2.2), animals: WALKERS, yaw: VIEW_H + Math.PI + 0.9 },
   juniper: { id: 'juniper', at: at(5.2, -0.9), from: at(9.4, -1.1), animals: WALKERS, yaw: VIEW_H + Math.PI + 1.15 },
 };
@@ -336,7 +336,7 @@ export const SLOT_IDS = Object.keys(CALLER_SLOTS) as SlotId[];
  *  the lens (a fox at the juniper behind a roe by the bushes). The view test measures every
  *  other pair in every night the drawer can make. */
 export const SLOT_CLASH: readonly (readonly [SlotId, SlotId])[] = [
-  ['sett-r', 'bushes'], ['sett-r', 'stump'], ['bushes', 'stump'], ['stump', 'juniper'], ['bushes', 'juniper'], ['log', 'glade-front'], ['sett-r', 'juniper'],
+  ['sett-r', 'bushes'], ['sett-r', 'stump'], ['bushes', 'stump'], ['stump', 'juniper'], ['bushes', 'juniper'], ['sett-r', 'juniper'],
 ];
 
 /* ------------------------------------------------------------ the views ---- */
