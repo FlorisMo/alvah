@@ -50,6 +50,9 @@ export interface ResidentSpec {
   animal: string;
   /** stand height (m); default: the scale table's (`heightFor`) */
   height?: number;
+  /** run 7 (additive): how far (m) it walks calmly to a new spot of its home instead of
+   *  being laid there at once (Residents: default 9 m) — a home whose plays lay it far apart */
+  reach?: number;
   /** where it is before the mission is done (null: not there yet) */
   before: ResidentPose | null;
   /** where it is once the mission is done (null: gone) */
