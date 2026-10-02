@@ -9,15 +9,19 @@
  *
  * The director's rules are pure (surprises-math.ts): only in free roam (WorldSession says
  * when: no mission, no briefing, no first-minute lesson, no menu, not in the helicopter),
- * one at a time, ≥ 45 s apart, drawn from the visit's seed (`?seed=N` replays a visit), the
- * ones he has not met first. It stages its animal 12-30 m off inside his picture, never on
- * the line he walks along, never in a mission's home, never coming toward the lens; it
- * fades in and out (a cut under reduced motion, where only the still ones come). He meets
- * it when he SEES it (on screen ≥ 40 px within 35 m for a second) or HEARS its call
- * (within 25 m): WorldSession records `wereld.<id>` and its reveal waits for a quiet
- * moment. It goes when he walks 45 m off, comes too near, or after its time (≤ 60 s),
- * and never blocks a walk: nothing it stages is solid, and a jeep gives way to the two
- * that walk. ≤ 2 draw calls each.
+ * one at a time, ≥ 45 s apart, drawn from the visit's seed (`?seed=N` replays a visit). One
+ * he has not met comes before any he knows: when it has no place where he is, the director
+ * waits for it as he walks (≤ a minute), so a return visit meets something new. It stages
+ * its animal 12-30 m off inside his picture (a bird met by its call on any tree within
+ * hearing, the picture first: its call turns him), never on the line he walks along, never
+ * in a mission's home, never coming toward the lens; the robin flies in beside him and
+ * hops along with him, big enough to see. It fades in and out (a cut under reduced motion,
+ * where only the still ones come). He meets it when he SEES it (on screen ≥ 40 px within
+ * 35 m for a second) or HEARS its call (within 25 m; never the robin, who is there to be
+ * seen): WorldSession records `wereld.<id>` and its reveal waits for a quiet moment ("Dat
+ * hoorde je!" for one he heard). It goes when he walks 45 m off, comes too near, or after
+ * its time (≤ 60 s), and never blocks a walk: nothing it stages is solid, and a jeep gives
+ * way to the two that walk. ≤ 2 draw calls each.
  */
 
 import * as THREE from 'three';
@@ -96,6 +100,8 @@ export interface SurpriseReadout {
   active: null | { id: SurpriseId; x: number; y: number; z: number; age: number; state: string; met: string | null; px: number; dist: number; onScreen: boolean;
     /** in the picture but hidden by the ground, a trunk or leaves */
     hidden: boolean;
+    /** the tree it is on or by (its species), if any */
+    tree: string | null;
     /** the draw calls it adds while drawn (its meshes; the buzzard is the world's own glider: 0) */
     calls: number };
   log: { id: SurpriseId; at: number; met: string | null }[];
@@ -208,7 +214,7 @@ export class Surprises {
       next: Number.isNaN(this.next) ? -1 : Math.round(this.next * 10) / 10,
       waited: Number.isNaN(this.dueAt) ? -1 : Math.round((this.clock - this.dueAt) * 10) / 10,
       count: this.log.length,
-      active: a && p ? { id: a.spec.id, x: p.x, y: p.y, z: p.z, age: Math.round(a.age * 10) / 10, state: a.state, met: a.met, px: Math.round(a.px), dist: Math.round(a.dist * 10) / 10, onScreen: a.onScreen, hidden: a.occluded, calls: drawCallsOf(a.group) } : null,
+      active: a && p ? { id: a.spec.id, x: p.x, y: p.y, z: p.z, age: Math.round(a.age * 10) / 10, state: a.state, met: a.met, px: Math.round(a.px), dist: Math.round(a.dist * 10) / 10, onScreen: a.onScreen, hidden: a.occluded, tree: a.tree?.species ?? null, calls: drawCallsOf(a.group) } : null,
       log: this.log.map((l) => ({ ...l })),
     };
   }
