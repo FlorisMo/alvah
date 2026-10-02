@@ -1,16 +1,22 @@
 /**
- * dagnacht.ts — EF engine "dagnacht" (inhibition / impulse control, Stroop-like),
- * the render-agnostic task logic ported from prototype/step-danger.jsx. Each
+ * dagnacht.ts — EF engine "dagnacht" (Rustkracht: inhibition / impulse control,
+ * Stroop-like), the render-agnostic task logic ported from prototype/step-danger.jsx. Each
  * encounter tempts an impulse (aai / pak / voer / recht-erdoor) the child must
  * inhibit in favour of the ranger rule; one encounter FLIPS so it stays a real
  * inhibition task, not "always say no". A wrong choice has a recoverable
  * consequence (the animal reacts, ground + a few eikels are lost) — never a
  * game-over. Difficulty knob: slowmo (a calmer choosing window while learning).
+ *
+ * Run 7 (`adaptive`, design §5.4): content can vary WHICH calm moments come and in which
+ * ORDER: an encounter may name its `slot` (a station of the story), a skin its `rustPlan`
+ * (the slots in story order; per slot how many to draw, shuffled or not). The trial's
+ * order is drawn from the play's fork: a flip ("now it is allowed") never comes first,
+ * the trial keeps one when the pool has one, two only from band 4 (`knobs.flips`). No
+ * plan (or no rng): content order, as always. The 2D floor plays the same order.
  */
 
 import type { Skin } from '../content/types';
-import type { Settings } from '../core/state';
-import type { BeatSummary } from '../core/skill';
+import type { BeatSummary, RustKnobs } from '../core/skill';
 
 export interface EncounterOption {
   label: string;
@@ -33,18 +39,12 @@ export interface Encounter {
   gevolgKnap?: string;
   reactie?: string;                // 'flee' | 'rear' | 'swarm' | 'mud' | 'recede'
   flip?: boolean;
+  /** run 7: the story's station this moment belongs to (a skin's `rustPlan` orders the
+   *  slots and draws within each) */
+  slot?: string;
   terug?: number;                  // lost ground on a wrong choice (encounter units)
   eikelKost?: number;              // eikels spilled on a wrong choice
-  /** run 7 (design foundation §5.4): the story slot it belongs to ('big', 'weg', 'thuis'):
-   *  a skin's `rustPlan` orders the slots, and the encounters inside one slot are drawn
-   *  in a seeded order */
-  slot?: string;
 }
-
-/** Run 7 (design foundation §5.4): one slot of a skin's calm-moment plan, in story order:
- *  `pick` how many of its encounters come (default all), `shuffle` their order (default
- *  true). */
-export interface RustPlanSlot { slot: string; pick?: number; shuffle?: boolean }
 
 const FALLBACK: Encounter[] = [
   { id: 'x', subject: 'adder', vraag: 'Pas op. Blijf uit de buurt.',
@@ -59,44 +59,37 @@ export interface DagnachtTrial {
   slowmo: boolean;                 // calmer choosing window (support while learning)
 }
 
+/** One slot of a skin's rust plan: the story's station, how many of its encounters come
+ *  (default all), whether their order is shuffled (default true). */
+export interface RustPlanSlot { slot: string; pick?: number; shuffle?: boolean }
+
+/** What the trial reads besides the skin: the reading words (knappe woorden), the calmer
+ *  window and how many flips may come (the level's knobs), reduced motion. The manual
+ *  Settings fit it too (an older reader). */
+export type DagnachtDiff = { jargon?: boolean; reducedMotion?: boolean } & Partial<Pick<RustKnobs, 'slowmo' | 'flips'>>;
+
 /**
- * The order the calm moments come in (run 7, design foundation §5.4). No `rustPlan` on the
- * skin, or no `rng`: the content order (the classic missions, a seed-less call). With a
- * plan: its slots in plan order, each slot's encounters drawn (`pick`) and shuffled by the
- * seed; encounters of no planned slot follow in content order. A flip is never the first
- * (the "no" habit is built first), and a pool with a flip keeps one. Pure: the 2D floor,
- * the classic stage and the world call it with the same play's fork ('dagnacht'), so they
- * play the same order.
+ * Resolve the encounters (in this play's order) + the slow-mo support window. With the
+ * skin's `rustPlan` and a seeded `rng` (the play's `fork('dagnacht')`) the order is drawn
+ * (`rustOrder`); else content order. The 2D floor, the classic stage and the world's
+ * choices all build it here from the same fork, so the same seed gives the same order.
  */
-export function rustOrder(authored: readonly Encounter[], plan: readonly RustPlanSlot[] | undefined, rng?: () => number): Encounter[] {
-  if (!plan?.length || !rng) return [...authored];
-  const out: Encounter[] = [];
-  const planned = new Set(plan.map((p) => p.slot));
-  for (const p of plan) {
-    let pool = authored.filter((e) => e.slot === p.slot);
-    if (p.shuffle !== false || (p.pick ?? pool.length) < pool.length) {
-      pool = [...pool];
-      for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
-      }
-    }
-    const n = Math.max(0, Math.min(pool.length, p.pick ?? pool.length));
-    let take = pool.slice(0, n);
-    // a pool with a flip keeps one (the flip is what makes it an inhibition task)
-    const flip = pool.find((e) => e.flip);
-    if (flip && n > 0 && !take.some((e) => e.flip)) take = [...take.slice(0, n - 1), flip];
-    // a drawn subset keeps the order it was shuffled into; an unshuffled slot its content order
-    if (p.shuffle === false) take.sort((a, b) => authored.indexOf(a) - authored.indexOf(b));
-    out.push(...take);
-  }
-  out.push(...authored.filter((e) => !e.slot || !planned.has(e.slot)));
-  // never a flip first
-  if (out[0]?.flip) {
-    const i = out.findIndex((e) => !e.flip);
-    if (i > 0) out.unshift(...out.splice(i, 1));
-  }
-  return out;
+export function buildDagnachtTrial(skin: Skin, diff: DagnachtDiff, rng?: () => number): DagnachtTrial {
+  const authored = (skin.encounters as Encounter[] | undefined)?.length
+    ? (skin.encounters as Encounter[])
+    : FALLBACK;
+  const plan = skin.rustPlan;
+  const ordered = plan?.length && rng ? rustOrder(authored, plan, rng, diff.flips ?? 1) : authored;
+  // "knappe woorden" on: the lines with the real terms; off (default): the plain lines
+  const encounters = diff.jargon
+    ? ordered.map((e) => ({ ...e, vraag: e.vraagKnap ?? e.vraag, uitleg: e.uitlegKnap ?? e.uitleg, gevolg: e.gevolgKnap ?? e.gevolg }))
+    : [...ordered];
+  return {
+    encounters,
+    regels: skin.regels ?? [],
+    metgezel: skin.metgezel ?? 'frisling',
+    slowmo: (diff.slowmo ?? false) && !diff.reducedMotion,
+  };
 }
 
 /** A calm-moment order as the history keeps it (the play's note 'rust'): one letter per
@@ -119,43 +112,25 @@ export function recentRust(history: readonly { m: string; sd?: number; va?: stri
   return out;
 }
 
-/** Resolve the encounter list + the slow-mo support window. Run 7: `rng` (the play's
- *  'dagnacht' fork) draws the order of a skin with a `rustPlan` (`rustOrder`). */
-export function buildDagnachtTrial(skin: Skin, diff: Settings, rng?: () => number): DagnachtTrial {
-  const authored = rustOrder((skin.encounters as Encounter[] | undefined)?.length
-    ? (skin.encounters as Encounter[])
-    : FALLBACK, skin.rustPlan as readonly RustPlanSlot[] | undefined, rng);
-  // "knappe woorden" on: the lines with the real terms; off (default): the plain lines
-  const encounters = diff.jargon
-    ? authored.map((e) => ({ ...e, vraag: e.vraagKnap ?? e.vraag, uitleg: e.uitlegKnap ?? e.uitleg, gevolg: e.gevolgKnap ?? e.gevolg }))
-    : authored;
-  return {
-    encounters,
-    regels: skin.regels ?? [],
-    metgezel: skin.metgezel ?? 'frisling',
-    slowmo: (diff.slowmo ?? false) && !diff.reducedMotion,
-  };
-}
-
 /** What a play needs to draw its trial (core/play's Play). */
 interface PlayLike { readonly missionId: string; readonly seed: number; fork(label: string): { rng(): number }; note(key: string, value: string | number): void }
 
 /**
- * Run 7: the trial THIS PLAY plays — every path builds it so (the world's ChoiceRun, the 2D
- * floor, the classic stage): a skin with a `rustPlan` draws its calm moments' order from the
- * play's 'dagnacht' fork, never the order of his last two plays of this mission (the
- * history: three plays in a row, three orders), and notes it on the play ('rust'), so the
- * history says what he played and the next play can tell. No play: the content order.
+ * Run 7 (frisling ways): the trial THIS PLAY plays, a thin wrapper over
+ * `buildDagnachtTrial` that every path builds through (the world's ChoiceRun, the 2D
+ * floor, the classic stage): a skin with a `rustPlan` draws its order from the play's
+ * 'dagnacht' fork, and while that order is one of his last two plays' of this mission (the
+ * history) it is drawn again from the same stream — three plays in a row, three orders;
+ * the same seed and the same history give the same order on every path. The order is noted
+ * on the play ('rust'), so the history says what he played and the next play can tell. No
+ * play: drawn from `loose` (a stream of no play, `looseRng`), or the content order.
  */
-export function playDagnachtTrial(skin: Skin, diff: Settings, play: PlayLike | null | undefined, history: readonly { m: string; sd?: number; va?: string }[]): DagnachtTrial {
-  if (!play) return buildDagnachtTrial(skin, diff);
-  const planned = !!(skin.rustPlan as readonly RustPlanSlot[] | undefined)?.length;
+export function playDagnachtTrial(skin: Skin, diff: DagnachtDiff, play: PlayLike | null | undefined, history: readonly { m: string; sd?: number; va?: string }[], loose?: () => number): DagnachtTrial {
+  if (!play) return buildDagnachtTrial(skin, diff, loose);
   const fork = play.fork('dagnacht');
   const rng = (): number => fork.rng();
   let trial = buildDagnachtTrial(skin, diff, rng);
-  if (!planned) return trial;
-  // never an order of his last two plays while another can come: drawn again from the
-  // same stream, so the same seed and the same history give the same order on every path
+  if (!skin.rustPlan?.length) return trial;
   const avoid = recentRust(history, play.missionId, play.seed);
   const code = (t: DagnachtTrial): string => rustCode(t.encounters.map((e) => e.id));
   for (let t = 0; t < 24 && avoid.includes(code(trial)); t++) trial = buildDagnachtTrial(skin, diff, rng);
@@ -164,20 +139,65 @@ export function playDagnachtTrial(skin: Skin, diff: Settings, play: PlayLike | n
 }
 
 /**
- * DagnachtRun — the pure sequencing + scoring core shared by BOTH the 2D
- * (`render2d/DangerView`) and the diegetic 3D (`render3d/engines/dagnacht3d`)
- * views, so the two emit an IDENTICAL `BeatSummary` for the same trial + the same
- * choice sequence (construct parity, BUILD-PLAN §1f). It models exactly the frozen
- * inhibition task: walk the encounters in order; a correct choice advances to the
- * next encounter; a wrong choice is RECOVERABLE — it marks the encounter and
- * re-presents it (never a game-over). The score is the count of encounters that
- * were never answered wrong; `trials` is always the encounter total. No THREE, no
- * DOM, no timing — pure, so the seeded parity test runs under `node --test`.
+ * The calm moments of one play, in order (pure, seeded; design §5.4): the plan's slots in
+ * story order, each slot's encounters drawn (`pick`, default all) and shuffled (default) by
+ * `rng`. Rules: a flip is never the first moment (the "no" habit is built first: a flip
+ * that would open the trial swaps with the first calm moment of its slot); the trial keeps
+ * a flip when the pool has one; at most `maxFlips` flips (two from band 4, when content
+ * offers two). Encounters in no slot of the plan come last, in content order. (A flip moves
+ * only inside its own slot, so a home's `nextIn(slot)` stays true: give the plan's first
+ * slot a calm moment, or its flip opens the trial.)
+ */
+export function rustOrder(all: readonly Encounter[], plan: readonly RustPlanSlot[], rng: () => number, maxFlips = 1): Encounter[] {
+  const shuffle = <T>(xs: T[]): T[] => {
+    for (let i = xs.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [xs[i], xs[j]] = [xs[j], xs[i]];
+    }
+    return xs;
+  };
+  const named = new Set(plan.map((p) => p.slot));
+  const pools = plan.map((p) => all.filter((e) => e.slot === p.slot));
+  const slots: Encounter[][] = plan.map((p, i) => {
+    const pool = pools[i];
+    return shuffle([...pool]).slice(0, Math.max(0, Math.min(pool.length, p.pick ?? pool.length)));
+  });
+  // the trial keeps a flip when the pool has one: the first slot that left its flip out
+  // takes it in place of its last drawn moment
+  if (!slots.some((xs) => xs.some((e) => e.flip))) {
+    const i = pools.findIndex((pool, j) => slots[j].length > 0 && pool.some((e) => e.flip));
+    if (i >= 0) slots[i][slots[i].length - 1] = pools[i].find((e) => e.flip)!;
+  }
+  // a slot that keeps content order: its drawn moments as content has them
+  plan.forEach((p, i) => { if (p.shuffle === false) slots[i] = pools[i].filter((e) => slots[i].includes(e)); });
+  slots.push(all.filter((e) => !e.slot || !named.has(e.slot)));
+  // at most `maxFlips` flips (two only from band 4): the later ones go
+  let flips = 0;
+  const kept = slots.map((xs) => xs.filter((e) => !e.flip || ++flips <= Math.max(1, maxFlips)));
+  // never a flip first: it swaps with the first calm moment of its slot
+  const first = kept.find((xs) => xs.length);
+  if (first && first[0].flip) {
+    const j = first.findIndex((e) => !e.flip);
+    if (j > 0) [first[0], first[j]] = [first[j], first[0]];
+  }
+  return kept.flat();
+}
+
+/**
+ * DagnachtRun — the pure sequencing + scoring core shared by the 2D floor
+ * (`render2d/DangerView`), the classic 3D stage (`render3d/engines/dagnacht3d`) and the
+ * world's choices (`adventure/beats/choice`), so all emit an IDENTICAL `BeatSummary` for the
+ * same trial + the same choices (construct parity). It walks the trial's encounters in
+ * order; a correct choice advances; a wrong choice is RECOVERABLE — it marks the encounter
+ * and re-presents it (never a game-over). `trials` = the encounters, `correct` = those
+ * never answered wrong, `impulses` = every wrong choice however often (a wrong card, a hand
+ * reaching in a body moment). No THREE, no DOM, no timing.
  */
 export class DagnachtRun {
   private idx = 0;
   private readonly wrong = new Set<number>();
   private readonly total: number;
+  private reaches = 0;
 
   constructor(total: number) { this.total = total; }
 
@@ -186,6 +206,9 @@ export class DagnachtRun {
 
   /** every encounter has been passed */
   get finished(): boolean { return this.idx >= this.total; }
+
+  /** wrong choices so far, however often on one encounter */
+  get impulses(): number { return this.reaches; }
 
   /**
    * Record a choice on the current encounter. A good choice advances to the next
@@ -196,11 +219,12 @@ export class DagnachtRun {
     if (this.finished) return 'advance';
     if (goed) { this.idx += 1; return 'advance'; }
     this.wrong.add(this.idx);
+    this.reaches += 1;
     return 'retry';
   }
 
-  /** the parity-frozen summary: trials = total, correct = encounters never-wronged. */
+  /** trials = the encounters, correct = encounters never answered wrong, impulses = wrong choices. */
   summary(): BeatSummary {
-    return { trials: this.total, correct: Math.max(0, this.total - this.wrong.size) };
+    return { trials: this.total, correct: Math.max(0, this.total - this.wrong.size), impulses: this.reaches };
   }
 }

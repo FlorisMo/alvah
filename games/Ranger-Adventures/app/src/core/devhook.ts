@@ -400,7 +400,7 @@ export interface RangerDevHook {
   history(): unknown[] | null;
   /** Per breinkracht: its level now, the best, lifetime trials, the floor, and the knobs its
    *  views read now. */
-  skills(): Record<string, { level: number; best: number; trials: number; floor: number; knobs: unknown }> | null;
+  skills(): Record<string, { level: number; best: number; band: number; floor: number; beats: number; trials: number; knobs: unknown }> | null;
   /** What he discovered (ids, in the order found) and the per-home rare counters. */
   discoveries(): { found: string[]; rareCounts: Record<string, number> } | null;
   /** The session's mood and the one on screen. */
@@ -553,7 +553,7 @@ const state = {
   residentSpots: null as null | (() => { x: number; z: number }[]),
   play: null as null | (() => PlayReadout | null),
   history: null as null | (() => unknown[]),
-  skills: null as null | (() => Record<string, { level: number; best: number; trials: number; floor: number; knobs: unknown }>),
+  skills: null as null | (() => Record<string, { level: number; best: number; band: number; floor: number; beats: number; trials: number; knobs: unknown }>),
   discoveries: null as null | (() => { found: string[]; rareCounts: Record<string, number> }),
   mood: null as null | (() => { session: string; now: string }),
   animals: null as null | (() => AnimalSeenReadout[]),
@@ -641,7 +641,7 @@ export function providePlay(fn: (() => PlayReadout | null) | null): void {
 /** Run 7: register the save's reads (the history, the skills, the discoveries). */
 export function provideGrowth(p: {
   history: () => unknown[];
-  skills: () => Record<string, { level: number; best: number; trials: number; floor: number; knobs: unknown }>;
+  skills: () => Record<string, { level: number; best: number; band: number; floor: number; beats: number; trials: number; knobs: unknown }>;
   discoveries: () => { found: string[]; rareCounts: Record<string, number> };
 } | null): void {
   state.history = p?.history ?? null;

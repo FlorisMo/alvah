@@ -21,6 +21,12 @@
  * time onto its `choose`): the trials stay five, the summary is the one the 2D floor
  * logs for the same answers, and the floor still plays all five as cards. An encounter
  * can also be answered by a WALK (`answer`: the ree's pool, round it or through it).
+ *
+ * Run 7 (`adaptive`, design §5.4): the order of the moments is this play's (a skin's
+ * `rustPlan`, drawn from `k.play.fork('dagnacht')`, exactly as the 2D floor draws it): a
+ * home plays them with `next()` / `nextIn(slot)` instead of naming them in content order.
+ * A body moment's hold and its temptations come from the level's knobs and grow or ease
+ * inside the beat (`RustTempo`); the summary carries the longest hold (`holdS`).
  */
 
 import * as THREE from 'three';
@@ -33,7 +39,7 @@ import { zinnen } from '../../../core/readlevel';
 import { anchoredPrompt, clearPlayHint, SPEAK_BTN } from '../../play/kit';
 import { tapHitRadius } from '../../play/kit-math';
 import type { AdventureKit } from '../kit';
-import { HoldCore, HOLD_S, HOLD_SILENT_S, readSeconds } from './hold-math';
+import { HoldCore, RustTempo, readSeconds } from './hold-math';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -85,16 +91,22 @@ export class ChoiceRun {
   private readonly run: DagnachtRun;
   private readonly k: AdventureKit;
   private readonly step: number;
+  private readonly tempo: RustTempo;
+  /** the two answers' places on a card (position never cues the answer; seeded) */
+  private readonly sides: () => number;
   private logged = false;
 
   constructor(k: AdventureKit, step: number) {
     this.k = k;
     this.step = step;
-    const diff = store.difficulty('dagnacht');
-    // run 7: a skin with a rustPlan plays its calm moments in the order the play's seed
-    // draws, never his last two plays' (the 2D floor and the classic stage draw the same)
-    this.trial = playDagnachtTrial(k.steps[step].skin, { ...diff, reducedMotion: k.reduced } as typeof diff, k.play, store.get().geschiedenis);
+    const settings = store.get().settings;
+    const knobs = k.knobs('dagnacht');
+    // run 7: this play's order of the calm moments, never his last two plays' (its 2D twin
+    // and the classic stage draw the same)
+    this.trial = playDagnachtTrial(k.steps[step].skin, { jargon: settings.jargon, reducedMotion: k.reduced, ...knobs }, k.play, store.get().geschiedenis);
     this.run = new DagnachtRun(this.trial.encounters.length);
+    this.tempo = new RustTempo(knobs, !settings.voorlezen, k.play.fork('rust').rng);
+    this.sides = k.play.fork('knoppen').rng;
   }
 
   /** The encounter the run is at now. */
@@ -102,12 +114,14 @@ export class ChoiceRun {
     return this.run.finished ? null : this.trial.encounters[this.run.index];
   }
 
-  /** Run 7 (design foundation §5.4): the next encounter of the trial, whatever its id (a
-   *  skin with a rustPlan draws its order), or null once every one was passed. */
-  next(): Encounter | null { return this.current; }
+  /** Run 7: the next calm moment of this play's order (whatever its id), or null once all
+   *  are passed. A home plays it with `ask(e.id)`, `still(e.id)` or `answer(e.id)`. */
+  next(): Encounter | null {
+    return this.current;
+  }
 
-  /** Run 7: the next encounter if it belongs to `slot`, else null — a home plays its calm
-   *  moments slot by slot, each at its station: `for (let e; (e = rust.nextIn('weg'));) …` */
+  /** Run 7: the next moment when it belongs to `slot`, else null — a home plays its
+   *  stations slot by slot: `for (let e; (e = rust.nextIn('thuis')); ) await play(e)`. */
   nextIn(slot: string): Encounter | null {
     const e = this.current;
     return e && e.slot === slot ? e : null;
@@ -168,7 +182,8 @@ export class ChoiceRun {
     clearPlayHint();
     const unhint = k.hint(() => null); // (nothing to click: a stale walk hint must not survive into it)
     const settings = store.get().settings;
-    const core = new HoldCore(settings.voorlezen ? HOLD_S : HOLD_SILENT_S, (goed) => { this.run.choose(goed); });
+    const tempo = this.tempo;
+    const core = new HoldCore(tempo.seconds, (goed) => { this.run.choose(goed); });
     const canvas = k.ctx.canvas;
     const camera = k.world.camera;
     const ray = new THREE.Raycaster();
@@ -209,16 +224,21 @@ export class ChoiceRun {
         void this.readOut(o.line).then(() => { read = true; }, () => {});
         await k.until(() => reached || read);
         if (!reached) {
-          core.begin(k.now);
-          let tempted = false;
+          // the hold: as long as the tempo wants now; the animal tempts him at its moments
+          core.begin(k.now, tempo.seconds);
+          k.stats.hold_s = core.seconds;
+          const tempts = tempo.temptsFor(core.seconds);
+          let next = 0;
           await k.until(() => {
-            if (!tempted && core.seconds - core.left(k.now) > 1.1) { tempted = true; o.tempt?.(); }
+            while (next < tempts.length && core.seconds - core.left(k.now) >= tempts[next]) { next += 1; o.tempt?.(); }
             return reached || core.tick(k.now);
           });
         }
         if (!reached) break; // held
         // a reach: marked once, the animal reacts, the words for it, the same moment again
+        // (the next hold silently a little shorter)
         core.impulse();
+        tempo.reached();
         k.stats[`still_${id}`] = core.impulses;
         if (settings.geluid) Sound.tryAgain();
         k.say(null);
@@ -235,6 +255,7 @@ export class ChoiceRun {
       unhint();
     }
     k.stats[`still_${id}`] = core.impulses;
+    tempo.held(core.seconds, core.impulses === 0);
     if (settings.geluid) Sound.correct();
     const good = enc.uitleg ?? 'Rustig zo.';
     k.say(good, { good: true });
@@ -264,12 +285,14 @@ export class ChoiceRun {
     this.run.choose(goed);
   }
 
-  /** Every encounter passed: log the run (once). */
+  /** Every encounter passed: log the run (once), with the longest hold when he held one. */
   done(): void {
     if (this.logged) return;
     if (!this.run.finished) throw new Error('[adventure] rustkracht logged before every encounter was passed');
     this.logged = true;
-    this.k.log(this.step, this.run.summary());
+    const summary = this.run.summary();
+    if (this.tempo.longest > 0) summary.holdS = this.tempo.longest;
+    this.k.log(this.step, summary);
   }
 
   private card: HTMLDivElement | null = null;
@@ -282,7 +305,7 @@ export class ChoiceRun {
       ? `<div class="p3-chips" aria-label="Ranger-regels">${this.trial.regels.map((r) => `<span class="p3-chip">${esc(r)}</span>`).join('')}</div>`
       : '';
     const flip = enc.flip ? `<p class="p3-flip">Nu mag het wél</p>` : '';
-    const order = Math.random() < 0.5 ? [0, 1] : [1, 0]; // position never cues the answer
+    const order = this.sides() < 0.5 ? [0, 1] : [1, 0]; // position never cues the answer
     const card = anchoredPrompt(
       this.k.host,
       `<div class="p3-bottom dag3d">` +

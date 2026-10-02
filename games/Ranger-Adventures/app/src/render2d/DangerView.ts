@@ -6,6 +6,8 @@
  * "Terug naar de groep" is lost, and a few collected eikels spill (persisted to
  * store.eikels). Never a game-over. Accessibility: read-aloud, ≥56px choices,
  * dual-channel feedback, slow-mo choosing window while still learning.
+ * Run 7: the moments come in this play's order (a skin's `rustPlan`, drawn from the
+ * play's fork as the world draws it); every moment is a card here (the floor).
  */
 
 import './danger.css';
@@ -13,6 +15,7 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import type { Play } from '../core/play';
 import { store } from '../core/state';
+import { looseRng } from '../core/play';
 import { playDagnachtTrial, DagnachtRun, type Encounter } from '../engines/dagnacht';
 import { subjectView } from './animalIcon';
 import { narrator } from '../core/narrator';
@@ -24,9 +27,11 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 export function playDanger(host: HTMLElement, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const settings = store.get().settings;
-    const diff = store.difficulty('dagnacht');
-    // run 7: the play's order of the calm moments (a skin with a rustPlan; the world's twin draws the same)
-    const trial = playDagnachtTrial(step.skin, { ...diff, reducedMotion: settings.reducedMotion } as typeof diff, play, store.get().geschiedenis);
+    // run 7: this play's order of the calm moments (the world's twin draws the same; never
+    // the order of his last two plays of this mission)
+    const trial = playDagnachtTrial(step.skin, { jargon: settings.jargon, reducedMotion: settings.reducedMotion, ...store.knobs('dagnacht') },
+      play, store.get().geschiedenis, play ? undefined : looseRng('dagnacht'));
+    const sides = play ? play.fork('knoppen').rng : looseRng('knoppen');
     const copy = step.skin.copy ?? {};
     const reduced = settings.reducedMotion;
     const slowmo = trial.slowmo && !reduced;
@@ -102,7 +107,7 @@ export function playDanger(host: HTMLElement, step: Step, play?: Play): Promise<
       const sv = subjectView(enc.subject, enc.dier, settings.jargon);
       subject.innerHTML = `<span class="subj-icon" aria-hidden="true">${sv.icon}</span><span class="subj-label">${esc(sv.label)}</span>`;
       // shuffle the two option slots so position never cues the answer
-      const order = Math.random() < 0.5 ? [0, 1] : [1, 0];
+      const order = sides() < 0.5 ? [0, 1] : [1, 0];
       options.innerHTML = order
         .map((i) => `<button class="choice-opt" data-i="${i}" type="button"><span class="opt-label">${esc(enc.opties[i].label)}</span></button>`)
         .join('');

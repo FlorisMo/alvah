@@ -15,8 +15,7 @@
 
 import type { Play } from '../../../core/play.ts';
 import type { Skin } from '../../../content/types.ts';
-import type { Settings } from '../../../core/state.ts';
-import { playDagnachtTrial } from '../../../engines/dagnacht.ts';
+import { playDagnachtTrial, type DagnachtDiff } from '../../../engines/dagnacht.ts';
 import { FAMILY_LAYOUTS, WAYS, WAY_IDS, type DecoySpot, type WayId } from './frisling.places.ts';
 
 export type { WayId } from './frisling.places.ts';
@@ -52,7 +51,7 @@ type Beat = { m: string; sd?: number; va?: string };
  * (`frislingVariant`). In this order the history's 60 characters always keep what the next
  * play reads back, after the light and a rare visitor the briefing noted.
  */
-export function drawFrisling(play: Play, history: readonly Beat[], started: readonly PastPlay[], calm: { skin: Skin; diff: Settings }, decoys: readonly DecoyKind[]): FrislingVariant {
+export function drawFrisling(play: Play, history: readonly Beat[], started: readonly PastPlay[], calm: { skin: Skin; diff: DagnachtDiff }, decoys: readonly DecoyKind[]): FrislingVariant {
   playDagnachtTrial(calm.skin, calm.diff, play, history);
   return frislingVariant(play, recentPlays(history, started), decoys);
 }

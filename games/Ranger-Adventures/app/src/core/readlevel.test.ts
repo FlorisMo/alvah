@@ -163,6 +163,7 @@ const SAMPLE: Record<string, string | number> = {
   hoofdstuk: 'Kraamtijd', telling: '1/3', n: 10, m: 12, woord: 'wintervoorraad', stap: 'wisselen',
   richting: 'achter je', dier: 'wild zwijn', gast: 'nachtzwaluw', reden: LONGEST(OPVANG_GASTEN.map((g) => g.reden)),
   fase: LONGEST(Object.values(FASE_META).map((f) => f.label)), kunstje: 'Scout', stop: 'stop met luisteren', aantal: 'negen',
+  kracht: 'Geheugenkracht', s: 12, // run 7: the reward's "Je {kracht} groeit.", the Groei panel's seconds
 };
 
 interface Entry extends LabeledText { shown: boolean }

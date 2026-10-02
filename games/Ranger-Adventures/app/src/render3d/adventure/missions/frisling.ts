@@ -94,11 +94,13 @@ export const frislingAdventure: Adventure = {
   prepare(world, mission, play) {
     const home = homeOf(world);
     if (!home) return;
-    const trial = buildZoekenTrial(mission.stappen[0].skin, store.difficulty('zoeken'));
+    // the look-alikes: how many from the level's knobs, which from the play (the 2D floor
+    // draws the same set from the same seed)
+    const trial = buildZoekenTrial(mission.stappen[0].skin, store.knobs('zoeken'), play.fork('zoeken').rng);
     // the calm moments' order (noted first: the history keeps 60 characters), the way, the
     // family, the nook (frisling.vary.ts)
     const v = drawFrisling(play, store.get().geschiedenis, started,
-      { skin: mission.stappen[2].skin, diff: store.difficulty('dagnacht') }, trial.decoys.map((d) => ({ k: d.k, animal: d.animal })));
+      { skin: mission.stappen[2].skin, diff: { ...store.knobs('dagnacht') } }, trial.decoys.map((d) => ({ k: d.k, animal: d.animal })));
     current = v;
     home.lay(v.way, { nook: v.nook, pose: v.pose, trial: trial.decoys, spots: v.decoySpots, glimpse: store.knobs('zoeken').glimpse });
     useWay(v.way);

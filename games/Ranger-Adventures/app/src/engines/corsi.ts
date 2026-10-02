@@ -1,13 +1,20 @@
 /**
- * corsi.ts — EF engine "corsi" (visuospatial sequence memory), the
- * render-agnostic task logic ported from prototype/step-route.jsx. A sequence
- * of footprint spots lights up; the child taps them back in order. Difficulty
- * (routeLengte) sets the sequence length. The render layer runs the
- * show→recall state machine and reports the BeatSummary.
+ * corsi.ts — EF engine "corsi" (Geheugenkracht: visuospatial sequence memory), the
+ * render-agnostic task logic. A route of look-alike spots lights up; the child taps it back
+ * in order. The render layer runs the show → recall loop and reports the BeatSummary.
+ *
+ * Run 7 (`adaptive`, design §5.2): the beat is a few ROUNDS on the shared span core
+ * (engines/span.ts): the first route is `knobs.start` long, each clean recall brings a new,
+ * one-longer route, a rescued one a new route of the same length, two wrong taps a shorter
+ * one (silently); it always ends on a route he walked back himself.
  */
 
-import type { Settings } from '../core/state';
-import type { BeatSummary } from '../core/skill';
+import type { Skin } from '../content/types';
+import type { SpanKnobs } from '../core/skill';
+import { looseRng } from '../core/play.ts';
+import { SpanRun, type SpanSupplier } from './span.ts';
+
+export type { SpanResult } from './span.ts';
 
 export interface CorsiSpot {
   id: number;
@@ -15,7 +22,7 @@ export interface CorsiSpot {
   y: number;
 }
 
-/** Fixed footprint layout (the "route" the herd walked). */
+/** Fixed footprint layout (the "route" the herd walked): seven look-alike spots. */
 export const PRINT_SPOTS: readonly CorsiSpot[] = [
   { id: 0, x: 18, y: 72 }, { id: 1, x: 34, y: 46 }, { id: 2, x: 50, y: 66 },
   { id: 3, x: 60, y: 36 }, { id: 4, x: 74, y: 58 }, { id: 5, x: 86, y: 34 },
@@ -24,73 +31,49 @@ export const PRINT_SPOTS: readonly CorsiSpot[] = [
 
 export interface CorsiTrial {
   spots: readonly CorsiSpot[];
-  sequence: number[]; // ordered spot ids to show then recall
+  /** the beat's span knobs (max capped by the seven spots; `skin.rondes` caps the rounds) */
+  knobs: SpanKnobs;
 }
 
-/** Pick a shuffled sub-sequence; length grows with difficulty (3..6). */
-export function buildCorsiTrial(diff: Settings, rng: () => number = Math.random): CorsiTrial {
-  const n = Math.max(3, Math.min(diff.routeLengte ?? 4, 6));
-  const ids = PRINT_SPOTS.map((s) => s.id);
-  for (let i = ids.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-  }
-  return { spots: PRINT_SPOTS, sequence: ids.slice(0, n) };
+/** The spots and the knobs this beat plays: a skin's `rondes` caps the rounds for its story
+ *  (the squirrel's two mouthfuls); the 2D floor reads the same skin. */
+export function buildCorsiTrial(skin: Skin, knobs: SpanKnobs): CorsiTrial {
+  const rondes = typeof skin.rondes === 'number' && skin.rondes >= 1 ? Math.floor(skin.rondes) : Infinity;
+  const max = Math.min(knobs.max, PRINT_SPOTS.length);
+  return {
+    spots: PRINT_SPOTS,
+    knobs: { start: Math.min(knobs.start, max), max, rounds: Math.max(1, Math.min(knobs.rounds, rondes)) },
+  };
+}
+
+/** The routes' supplier (pure, seeded): every round a fresh route over the seven spots with
+ *  no spot twice, never the same route as the round before. */
+export function corsiNext(spots: readonly CorsiSpot[], rng: () => number = looseRng('corsi')): SpanSupplier<number> {
+  const route = (len: number): number[] => {
+    const ids = spots.map((s) => s.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    return ids.slice(0, len);
+  };
+  return (len, prev) => {
+    let r = route(len);
+    for (let tries = 0; tries < 6 && prev && r.join() === prev.join(); tries++) r = route(len);
+    return r;
+  };
 }
 
 /**
- * CorsiRun — the pure recall + scoring core shared by BOTH the 2D
- * (`render2d/RouteView`) and the diegetic 3D (`render3d/engines/corsi3d`) views,
- * so the two emit an IDENTICAL `BeatSummary` for the same trial + the same tap
- * sequence (construct parity, BUILD-PLAN §1f). It models exactly the frozen
- * visuospatial task: after the route is shown, the child taps the spots back in
- * order. A tap on the expected spot advances; the last one completes the route. A
- * wrong tap is RECOVERABLE — it's counted once, the route is re-shown and recall
- * restarts from the beginning (never a game-over). The score is binary, exactly as
- * the 2D twin has always scored it: `correct` = 1 only when the route was recalled
- * with NO wrong tap; `trials` is always 1. No THREE, no DOM, no timing — pure, so
- * the seeded parity test runs under `node --test`.
+ * CorsiRun — the route's core, shared by the 2D floor (`render2d/RouteView`), the classic 3D
+ * stage (`render3d/engines/corsi3d`) and the world's route beat (`adventure/beats/route`):
+ * the span core over the seven spots, fed by the play's fork. Same knobs + seed + taps →
+ * the same summary everywhere.
  */
-export class CorsiRun {
-  private readonly sequence: number[];
-  private idx = 0;
-  private wrongs = 0;
-  private done = false;
-
-  constructor(sequence: number[]) { this.sequence = sequence.slice(); }
-
-  /** how many spots have been recalled correctly in the current pass (0..length) */
-  get recallIndex(): number { return this.idx; }
-
-  /** the spot id the player must tap next */
-  get expected(): number { return this.sequence[this.idx]; }
-
-  /** the whole route has been recalled */
-  get finished(): boolean { return this.done; }
-
-  /** total wrong taps so far (drives the binary score) */
-  get wrongCount(): number { return this.wrongs; }
-
-  /**
-   * Tap a spot id. The expected spot advances recall (`'advance'`), or finishes
-   * the route when it was the last (`'complete'`). Any other spot is a wrong tap:
-   * counted once, recall restarts from the start so the route is re-shown
-   * (`'reshow'`) — recoverable, never game-over.
-   */
-  tap(id: number): 'advance' | 'complete' | 'reshow' {
-    if (this.done) return 'complete';
-    if (id === this.sequence[this.idx]) {
-      this.idx += 1;
-      if (this.idx >= this.sequence.length) { this.done = true; return 'complete'; }
-      return 'advance';
-    }
-    this.wrongs += 1;
-    this.idx = 0; // recall restarts after the route is re-shown
-    return 'reshow';
+export class CorsiRun extends SpanRun<number> {
+  constructor(trial: CorsiTrial, rng: () => number) {
+    super(trial.knobs, corsiNext(trial.spots, rng));
   }
-
-  /** the parity-frozen summary: trials = 1, correct = 1 iff recalled with no wrong tap. */
-  summary(): BeatSummary {
-    return { trials: 1, correct: this.wrongs === 0 ? 1 : 0 };
-  }
+  /** how many spots of this round's route he walked back right in this pass */
+  get recallIndex(): number { return this.echoIndex; }
 }

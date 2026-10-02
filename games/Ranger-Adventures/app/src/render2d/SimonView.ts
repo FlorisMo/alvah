@@ -12,8 +12,10 @@ import type { Step } from '../content/types';
 import type { BeatSummary } from '../core/skill';
 import type { Play } from '../core/play';
 import { store } from '../core/state';
+import { looseRng } from '../core/play';
 import { Content } from '../content/registry';
-import { buildSimonTrial, randomCaller, SimonRun } from '../engines/simon';
+import { GROEI } from '../content/copy';
+import { buildSimonTrial, SimonRun } from '../engines/simon';
 import { animalIcon } from './animalIcon';
 import { narrator } from '../core/narrator';
 import { Sound } from '../core/sound';
@@ -24,9 +26,8 @@ const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
 export function playSimon(host: HTMLElement, step: Step, play?: Play): Promise<BeatSummary> {
   return new Promise<BeatSummary>((resolve) => {
     const settings = store.get().settings;
-    const diff = store.difficulty('simon');
     const copy = step.skin.copy ?? {};
-    const trial = buildSimonTrial(step.skin, diff);
+    const trial = buildSimonTrial(step.skin, store.knobs('simon'));
     const reduced = settings.reducedMotion;
 
     const instructie = copy.instructie ?? 'De dieren roepen. Doe ze na.';
@@ -34,11 +35,10 @@ export function playSimon(host: HTMLElement, step: Step, play?: Play): Promise<B
     const echoTxt = copy.echo ?? 'Doe ze na. Tik de dieren.';
     const goed = copy.goed ?? 'Knap onthouden!';
 
-    // Shared pure core (parity with the 3D twin, §1f): it owns the growing
-    // sequence, the echo index, the wrong count + the final BeatSummary; this
-    // view only renders + plays the calls + paces the listen/echo loop.
-    const rng = play?.fork('simon').rng; // run 7: the play's callers
-    const run = new SimonRun(trial.target, () => randomCaller(trial.dieren, rng));
+    // Shared pure core (parity with the 3D twin, §1f): it owns the rounds, the
+    // sequence, the echo index + the final BeatSummary; this view only renders +
+    // plays the calls + paces the listen/echo loop. Run 7: the play's callers.
+    const run = new SimonRun(trial.knobs, trial.dieren, play ? play.fork('simon').rng : looseRng('simon'));
     let phase: 'intro' | 'listen' | 'echo' | 'pause' | 'done' = 'intro';
     const timers: number[] = [];
     const after = (ms: number, fn: () => void): void => { timers.push(window.setTimeout(() => { if (panel.isConnected) fn(); }, ms)); }; // a stopped step's panel is gone: its timers stand down
@@ -151,19 +151,19 @@ export function playSimon(host: HTMLElement, step: Step, play?: Play): Promise<B
       // by the words, and a call never sounds over "Luister nog een keer"
       if (res === 'advance') { if (settings.geluid) Sound.call(id); return; }
       if (res === 'complete') { finish(); return; }
-      if (res === 'grow') {
-        phase = 'pause';
-        for (const bb of btns.values()) bb.disabled = true;
+      phase = 'pause';
+      for (const bb of btns.values()) bb.disabled = true;
+      if (res === 'next') {
+        // a new round: one more caller after a clean echo, else a new one as long
+        const line = run.grew ? GROEI.erbij : GROEI.rondje;
         if (settings.geluid) Sound.correct();
-        banner.textContent = 'Goed onthouden!';
-        say('Goed onthouden!');
-        after(1100, () => listen(true));
-      } else { // 'replay' — wrong tap, recoverable: replay the SAME sequence
-        phase = 'pause';
-        for (const bb of btns.values()) bb.disabled = true;
+        banner.textContent = line;
+        say(line);
+        after(1300, () => listen(false));
+      } else { // 'replay' (the SAME sequence) or 'ease' (silently a shorter one): one line for both
         if (settings.geluid) Sound.tryAgain();
-        banner.textContent = 'Luister nog een keer.';
-        say('Luister nog een keer.');
+        banner.textContent = GROEI.nogEens;
+        say(GROEI.nogEens);
         after(1300, () => listen(false));
       }
     }

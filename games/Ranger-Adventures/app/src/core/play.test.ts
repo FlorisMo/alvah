@@ -94,16 +94,17 @@ test('the dev seed param: ?seed=N, else none', () => {
 });
 
 test('one play, one trial: every view that draws from the same fork builds the same route, callers and queue', async () => {
-  const { buildCorsiTrial } = await import('../engines/corsi.ts');
+  const { buildCorsiTrial, CorsiRun } = await import('../engines/corsi.ts');
   const { randomCaller } = await import('../engines/simon.ts');
   const { buildWisselTrial } = await import('../engines/wisselen.ts');
+  const { knobsFor } = await import('./skill.ts');
   const diff = { routeLengte: 5, wisselFreq: 0.4 } as never;
   const skin = { dagDieren: ['edelhert', 'ree'], nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'], trials: 6 } as never;
   const views = (seed: number) => {
     const play = newPlay('wildcamera', seed, 1); // (the 2D floor, the classic stage and the world's beat each take play.fork(engine))
     const rng = play.fork('simon').rng;
     return {
-      route: buildCorsiTrial(diff, play.fork('corsi').rng).sequence,
+      route: [...new CorsiRun(buildCorsiTrial(skin, knobsFor('corsi', 5)), play.fork('corsi').rng).begin()],
       callers: Array.from({ length: 6 }, () => randomCaller(['ree', 'das', 'wildzwijn', 'nachtzwaluw'], rng)),
       queue: buildWisselTrial(skin, diff, play.fork('wisselen').rng).queue.map((q) => q.id),
     };

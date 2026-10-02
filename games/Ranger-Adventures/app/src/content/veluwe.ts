@@ -629,8 +629,10 @@ const MISSIE_WILDCAMERA = {
         dagDieren: ['edelhert', 'ree'],
         nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'],
         // run 6 polish: six photos (each night animal once, never one twice in a row):
-        // a short, lively round with the flip to night as its peak
-        trials: 6,
+        // a short, lively round with the flip to night as its peak. Run 7: the most a round
+        // may have; the level's knobs say how many (6 at first, 8 from band 3 with a turn
+        // back to day from band 4, 10 from band 5)
+        trials: 10,
         copy: {
           instructie: 'Richt de camera op elk dier.',
           regel: 'Dag-dier → open plek. Nacht-dier → het bosje.',
@@ -641,7 +643,7 @@ const MISSIE_WILDCAMERA = {
         feitDier: 'das',
       },
       // §6.1 wisselen knobs: rule-flip frequency + trial count
-      moeilijkheid: { wissel: 'settings', trials: 6 },
+      moeilijkheid: { wissel: 'settings', trials: 10 },
     },
     {
       ef: 'simon',
