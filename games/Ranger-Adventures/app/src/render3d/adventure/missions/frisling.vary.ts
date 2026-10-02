@@ -14,6 +14,9 @@
  */
 
 import type { Play } from '../../../core/play.ts';
+import type { Skin } from '../../../content/types.ts';
+import type { Settings } from '../../../core/state.ts';
+import { playDagnachtTrial } from '../../../engines/dagnacht.ts';
 import { FAMILY_LAYOUTS, WAYS, WAY_IDS, type DecoySpot, type WayId } from './frisling.places.ts';
 
 export type { WayId } from './frisling.places.ts';
@@ -39,33 +42,83 @@ export interface DecoyKind { k: string; animal?: string }
 /** Does this decoy want an edge spot (a nightjar pressed to a bare patch)? */
 export const wantsEdge = (d: DecoyKind): boolean => d.animal === 'nachtzwaluw';
 
+/** A beat of the save's history, as the variant reads it back. */
+type Beat = { m: string; sd?: number; va?: string };
+
+/**
+ * This play as the home lays it under the briefing card (`prepare`): the order the calm
+ * moments will come in first (the very trial the script, the 2D floor and the classic stage
+ * build from the play: noted 'rust'), then the way, the family and the nook
+ * (`frislingVariant`). In this order the history's 60 characters always keep what the next
+ * play reads back, after the light and a rare visitor the briefing noted.
+ */
+export function drawFrisling(play: Play, history: readonly Beat[], started: readonly { sd: number; way: string; fam: string }[], calm: { skin: Skin; diff: Settings }, decoys: readonly DecoyKind[]): FrislingVariant {
+  playDagnachtTrial(calm.skin, calm.diff, play, history);
+  return frislingVariant(play, recentWays(history, started), decoys, recentFams(history, started));
+}
+
+/** How much likelier the way he has not had for longest is, from his fourth play on, than
+ *  the other way that may come (never the last play's): a gentle 2 : 1, never forced. */
+export const LONGEST_WEIGHT = 2;
+
 /**
  * Draw this play's frisling from its seed. Every decision has its own fork (adding one
  * later never moves the others) and is noted on the play (it travels with every beat into
- * the history: `va`). `lastWay`: the way of his last frisling play (`lastWayOf`): never
- * the same way twice in a row. `decoys`: the trial's look-alikes, in trial order.
+ * the history: `va`). `lastWays` / `lastFams`: the ways and family layouts of his newest
+ * frisling plays, newest first (`recentWays`, `recentFams`). `decoys`: the trial's
+ * look-alikes, in trial order.
+ *
+ * The rotation (run 7 review r1: both 'never one of the last two' locked a save into one
+ * fixed three-play cycle for good, each way always with the same family): in a save's
+ * first three plays the way and the family are each never one of his last two plays' —
+ * his first three plays are three ways and three mornings at the mud. From the fourth play
+ * on, only the LAST play's way never comes again at once, the way he has not had for
+ * longest a little likelier (`LONGEST_WEIGHT`), and only the last play's family layout
+ * never comes again at once, drawn from its own fork: no cycle, and every way meets every
+ * family.
+ *
+ * Notes: the way and the family as ONE short note ('way:steen/modder'), the nook LAST
+ * ('nook:3/1'): the history keeps a play's variant to 60 characters, and the light and a
+ * rare visitor are noted before the home lays its play (the caller notes the calm order,
+ * 'rust', before this), so what the next play reads back always fits.
  */
 export function frislingVariant(play: Play, lastWays: WayId | null | readonly string[], decoys: readonly DecoyKind[], lastFams: readonly string[] = []): FrislingVariant {
-  // the way: never one of his last two plays' (three plays in a row, three ways); just
-  // after one play, either other way
-  const recent = (lastWays === null ? [] : typeof lastWays === 'string' ? [lastWays] : lastWays).slice(0, 2);
-  const ways = WAY_IDS.filter((w) => !recent.includes(w));
-  const way = play.fork('way').pick(ways);
+  const recent = lastWays === null ? [] : typeof lastWays === 'string' ? [lastWays] : lastWays;
+  const way = drawWay(play.fork('way'), recent);
   const w = WAYS[way];
   const nook = play.fork('nook').int(0, w.nooks.length - 1);
   const pose = play.fork('pose').int(0, 2) as 0 | 1 | 2;
   // the look-alikes: a shuffled order of the stand's spots (assignSpots)
   const decoySpots = assignSpots(play.fork('decoys').shuffle(w.decoySpots.map((_, i) => i)), w.decoySpots, decoys);
-  // the family's layout: never one of his last two plays' (three plays in a row, three
-  // different mornings at the mud)
-  const fams = FAMILY_LAYOUTS.map((_, i) => i).filter((i) => !lastFams.slice(0, 2).includes(FAMILY_LAYOUTS[i].id));
-  const family = play.fork('family').pick(fams.length ? fams : FAMILY_LAYOUTS.map((_, i) => i)) as 0 | 1 | 2;
+  // the family's layout: never his last play's (in his first three, never one of his last
+  // two: three different mornings at the mud), from its own fork, whatever the way
+  const ids = FAMILY_LAYOUTS.map((l) => l.id as string);
+  const family = ids.indexOf(play.fork('family').pick(freshOf(ids, lastFams))) as 0 | 1 | 2;
   const lk = play.fork('leeuwerik');
   const leeuwerik = lk.chance(0.5) ? lk.int(0, w.walkSpots.length - 1) : null;
-  play.note('way', way);
-  play.note('nook', `${nook}/${pose}`); // (the nook, and how he lies in it)
-  play.note('fam', FAMILY_LAYOUTS[family].id);
+  play.note('way', `${way}/${FAMILY_LAYOUTS[family].id}`);
+  play.note('nook', `${nook}/${pose}`); // (the nook, and how he lies in it: last, it may be cut)
   return { way, nook, pose, decoySpots, family, leeuwerik };
+}
+
+/** The ids that may come after `recent` (newest first): in his first three plays (fewer
+ *  than three known) never one of the last two, after that never the last one only. */
+function freshOf(ids: readonly string[], recent: readonly string[]): string[] {
+  const shut = recent.slice(0, recent.length < ids.length ? 2 : 1);
+  const open = ids.filter((id) => !shut.includes(id));
+  return open.length ? open : [...ids];
+}
+
+/** This play's way (`frislingVariant`): uniform among the open ways in his first three
+ *  plays (the seed table holds); from the fourth on, of the two open ways the one he has
+ *  not had for longest is `LONGEST_WEIGHT` times likelier. */
+function drawWay(fork: Play, recent: readonly string[]): WayId {
+  const open = freshOf(WAY_IDS, recent) as WayId[];
+  if (recent.length < WAY_IDS.length || open.length < 2) return fork.pick(open);
+  const age = (id: WayId): number => { const i = recent.indexOf(id); return i < 0 ? Infinity : i; };
+  const [a, b] = age(open[0]) >= age(open[1]) ? [open[0], open[1]] : [open[1], open[0]];
+  if (age(a) === age(b)) return fork.pick(open);
+  return fork.rng() < LONGEST_WEIGHT / (LONGEST_WEIGHT + 1) ? a : b;
 }
 
 /** Which spot each look-alike takes, from an `order` of the stand's spots: the nightjar
@@ -89,7 +142,8 @@ export function assignSpots(order: readonly number[], spots: readonly DecoySpot[
 
 /** The family layouts (ids) of his newest frisling plays, newest first, one per play (by
  *  its seed): the plays started in this page session (`started`, oldest first: a play
- *  stopped early may have left no beat) before the history's (`BeatLog.va`, 'fam:boom'). */
+ *  stopped early may have left no beat) before the history's (`BeatLog.va`,
+ *  'way:steen/boom'). */
 export function recentFams(history: readonly { m: string; sd?: number; va?: string }[], started: readonly { sd: number; fam: string }[] = []): string[] {
   return recentOf('fam', history, started);
 }
@@ -109,7 +163,8 @@ function recentOf<K extends 'way' | 'fam'>(key: K, history: readonly { m: string
     seen.add(started[i].sd);
     out.push(started[i][key]);
   }
-  const re = new RegExp(`(?:^|,)${key}:([a-z]+)`);
+  // ('way:steen/boom': the way, then the family layout)
+  const re = key === 'way' ? /(?:^|,)way:([a-z]+)/ : /(?:^|,)way:[a-z]+\/([a-z]+)/;
   for (let i = history.length - 1; i >= 0; i--) {
     const h = history[i];
     if (h.m !== 'frisling' || !h.va || (h.sd !== undefined && seen.has(h.sd))) continue;

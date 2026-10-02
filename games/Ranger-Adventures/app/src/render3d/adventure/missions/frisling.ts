@@ -46,8 +46,7 @@ import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
   frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, type Way, type WayId,
 } from './frisling.places';
-import { frislingVariant, lastWayOf, recentFams, recentWays, type FrislingVariant } from './frisling.vary';
-import { playDagnachtTrial } from '../../../engines/dagnacht';
+import { drawFrisling, frislingVariant, lastWayOf, type FrislingVariant } from './frisling.vary';
 
 /** How far the lost piglet's squeak carries while he follows it (m): from the ring to
  *  any way's stand, ~35-38 m (softly at first, louder as he comes). */
@@ -98,12 +97,11 @@ export const frislingAdventure: Adventure = {
     const home = homeOf(world);
     if (!home) return;
     const trial = buildZoekenTrial(mission.stappen[0].skin, store.difficulty('zoeken'));
-    const history = store.get().geschiedenis;
-    const v = frislingVariant(play, recentWays(history, started), trial.decoys.map((d) => ({ k: d.k, animal: d.animal })), recentFams(history, started));
+    // the calm moments' order (noted first: the history keeps 60 characters), the way, the
+    // family, the nook (frisling.vary.ts)
+    const v = drawFrisling(play, store.get().geschiedenis, started,
+      { skin: mission.stappen[2].skin, diff: store.difficulty('dagnacht') }, trial.decoys.map((d) => ({ k: d.k, animal: d.animal })));
     current = v;
-    // the order the calm moments will come in (the very trial the script builds later):
-    // noted now, before the light's note, so the history always says what he played
-    playDagnachtTrial(mission.stappen[2].skin, store.difficulty('dagnacht'), play, history);
     home.lay(v.way, { nook: v.nook, pose: v.pose, trial: trial.decoys, spots: v.decoySpots, glimpse: store.knobs('zoeken').glimpse });
     useWay(v.way);
     const lie = nookAt(v.way, v.nook, v.pose);
