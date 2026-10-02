@@ -70,6 +70,32 @@ export function fadeCut(move: () => void, then: () => void): void {
   }, FADE_IN_MS + 20);
 }
 
+/**
+ * Run 7 (feel): the same warm dip for a cut INSIDE the world (World.ride: climbing into the
+ * jeep from its front would swing the view ~170° round it). `move` runs while it is deepest,
+ * `then` once the world has drawn the new view under it, and the dip lifts. Unlike fadeCut
+ * it is no menu (`menuOpen` stays false: a line Bram is reading goes on, the world holds the
+ * ranger itself) and it takes nothing off the screen. Under reduced motion a plain cut.
+ */
+export function dipCut(move: () => void, then: () => void): void {
+  session.host.querySelector('.ra-dip')?.remove();
+  if (prefersReducedMotion()) { move(); then(); return; }
+  const veil = document.createElement('div');
+  veil.className = 'ra-dip';
+  veil.setAttribute('aria-hidden', 'true');
+  session.host.appendChild(veil);
+  requestAnimationFrame(() => veil.classList.add('on'));
+  window.setTimeout(() => {
+    move();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      then();
+      veil.classList.remove('on');
+      veil.classList.add('lifting');
+      window.setTimeout(() => veil.remove(), FADE_OUT_MS + 40);
+    }));
+  }, FADE_IN_MS + 20);
+}
+
 /** How long (ms) the dip takes to deepen and to lift (base.css .ra-fade). */
 const FADE_IN_MS = 220;
 const FADE_OUT_MS = 280;

@@ -303,6 +303,41 @@ export class Vehicles {
     return false;
   }
 
+  /** Run 7 (feel): the bearing the view will look along once the interact key has climbed
+   *  in or stepped out (`viewAfter`), or null when the key does neither here (nothing near,
+   *  or the helicopter in the air: it lands). The world reads it BEFORE the key acts, to
+   *  choose between today's glide and a soft dip-cut for a big turn (World.ride). */
+  interactView(): number | null {
+    if (this.inVehicle) return this.viewAfter('jeep-out');
+    if (this.inHeli) return this.viewAfter('heli-out');
+    if (this.nearJeep) return this.viewAfter('jeep-in');
+    if (this.nearHeli) return this.viewAfter('heli-in');
+    return null;
+  }
+
+  /** Run 7 (feel): the bearing the view looks along once `act` is done, or null when it
+   *  would do nothing now. Climbing into the jeep the chase view looks the way it points,
+   *  and so does the walk view behind him as he steps out beside it; the helicopter's
+   *  chase view sits a little to its side, and out of it he faces the clearing. */
+  viewAfter(act: 'jeep-in' | 'jeep-out' | 'heli-in' | 'heli-out'): number | null {
+    const free = !this.inVehicle && !this.inHeli;
+    switch (act) {
+      case 'jeep-in': return free && this.jeep && this.jeepPos ? this.jeepHeading : null;
+      case 'jeep-out': return this.inVehicle ? this.jeepHeading : null;
+      case 'heli-in': return free && this.heli && this.heliPos && heliAvailable(this.heliOptInSource(), livePolicy().reduced)
+        ? this.heliHeading + HELI_CHASE_YAW : null;
+      case 'heli-out': return this.inHeli && !this.heliAirborne && this.heliPos ? this.heliExitFace() : null;
+    }
+  }
+
+  /** Out of the helicopter he looks toward the clearing, not along the flight: the way back
+   *  to the world lies ahead of him, and at his size the helicopter would otherwise stand in
+   *  the walk camera's way as he turns home past it. */
+  private heliExitFace(): number {
+    const hp = this.heliPos;
+    return hp ? Math.atan2(-hp.x, -hp.z) : this.heliHeading;
+  }
+
   /** Walking near a parked jeep surfaces "Stap in" (W5.1), near the parked heli "Stap in
    *  de helikopter" (W5.3b). Suppressed while riding either one. */
   updateProximity(x: number, z: number): void {
@@ -1242,10 +1277,7 @@ export class Vehicles {
     const h = this.heliHeading;
     this.heliAltitude = HELI_PAD_HEIGHT;
     this.heliPos.y = this.groundY(this.heliPos.x, this.heliPos.z);
-    // out of the helicopter he looks toward the clearing, not along the flight: the way
-    // back to the world lies ahead of him, and at his size the helicopter would otherwise
-    // stand in the walk camera's way as he turns home past it
-    const face = Math.atan2(-this.heliPos.x, -this.heliPos.z);
+    const face = this.heliExitFace(); // toward the clearing
     this.stepOut(this.heliPos.x, this.heliPos.z, h, HELI_STEP_OUT, HELI_BODY, face);
     this.host.follow(face, true);
     this.heliSpeed = 0; this.heliClimbRate = 0; this.heliVignetteVal = 0;
