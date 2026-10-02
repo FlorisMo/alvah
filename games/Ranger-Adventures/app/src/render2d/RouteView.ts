@@ -156,6 +156,7 @@ export function playRoute(host: HTMLElement, step: Step, play?: Play): Promise<B
         busy = true;
         for (const bb of spotEls.values()) bb.disabled = true;
         if (settings.geluid) Sound.correct();
+        banner.textContent = GROEI.nogEenWeg; // the words on screen are the words read aloud
         say(GROEI.nogEenWeg);
         after(900, () => showSequence(GROEI.nogEenWeg));
       }

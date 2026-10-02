@@ -229,6 +229,7 @@ export function playCorsi3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Bea
           // the route walked back: a new route (one longer after a clean one)
           phase = 'show';
           if (settings.geluid) Sound.correct();
+          banner(GROEI.nogEenWeg); // the words on screen are the words read aloud
           speak(GROEI.nogEenWeg);
           after(1000, () => showSequence(false, GROEI.nogEenWeg));
         }
