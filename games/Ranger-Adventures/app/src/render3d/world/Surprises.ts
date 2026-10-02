@@ -36,7 +36,7 @@ import type { Fauna } from './Fauna';
 import type { MoodId } from '../Moods';
 import {
   surpriseOrder, tryNow, firstAt, nextAfter, RETRY_S, groundSpots, treeChoices, awayFrom, acrossFrom, CONE, ALL_ROUND,
-  SeenMeter, groundHides, shouldGo, robinSpot, robinHop, bearing, HEARD_M, ROBIN_SIDE, ROBIN_ALONG,
+  SeenMeter, groundHides, shouldGo, robinSpot, robinHop, bearing, HEARD_M, ROBIN_SIDE, ROBIN_ALONG, ROBIN_FLUTTER_M, ROBIN_SHY_M,
   type SurpriseId, type SurpriseSpec, type Viewer,
 } from './surprises-math';
 
@@ -94,6 +94,8 @@ export interface SurpriseReadout {
   waited: number;
   count: number;
   active: null | { id: SurpriseId; x: number; y: number; z: number; age: number; state: string; met: string | null; px: number; dist: number; onScreen: boolean;
+    /** in the picture but hidden by the ground, a trunk or leaves */
+    hidden: boolean;
     /** the draw calls it adds while drawn (its meshes; the buzzard is the world's own glider: 0) */
     calls: number };
   log: { id: SurpriseId; at: number; met: string | null }[];
@@ -113,6 +115,9 @@ const BADGER_WALK = 0.5;  // m/s
 const LOW_R = 7;
 const LOW_Y = 4.6;
 const LOW_PERIOD = 15;
+/** The robin he left this far (m) behind its spot (he ran, or turned and walked back past
+ *  it) stays there: it flies off its own way. */
+const ROBIN_LOST_M = 7;
 
 interface Active {
   spec: SurpriseSpec;
@@ -150,6 +155,9 @@ interface Active {
   tree: TreePlacement | null;
   /** the robin: its side of him (±1), how far off his line and along it it likes to be */
   beside: { side: number; lat: number; along: number } | null;
+  /** the robin's rhythm: the rest (s) it takes before its next hop (a look round once it
+   *  is level with him again) */
+  rest: number;
   /** its model's own box (in its group's space): how big it stands in the picture */
   box: THREE.Box3 | null;
   state: string;
@@ -200,7 +208,7 @@ export class Surprises {
       next: Number.isNaN(this.next) ? -1 : Math.round(this.next * 10) / 10,
       waited: Number.isNaN(this.dueAt) ? -1 : Math.round((this.clock - this.dueAt) * 10) / 10,
       count: this.log.length,
-      active: a && p ? { id: a.spec.id, x: p.x, y: p.y, z: p.z, age: Math.round(a.age * 10) / 10, state: a.state, met: a.met, px: Math.round(a.px), dist: Math.round(a.dist * 10) / 10, onScreen: a.onScreen, calls: drawCallsOf(a.group) } : null,
+      active: a && p ? { id: a.spec.id, x: p.x, y: p.y, z: p.z, age: Math.round(a.age * 10) / 10, state: a.state, met: a.met, px: Math.round(a.px), dist: Math.round(a.dist * 10) / 10, onScreen: a.onScreen, hidden: a.occluded, calls: drawCallsOf(a.group) } : null,
       log: this.log.map((l) => ({ ...l })),
     };
   }
@@ -469,6 +477,7 @@ export class Surprises {
       meter: new SeenMeter(), met: null, callIn: spec.call ? fork.between(1.2, 2.6) : Infinity, fork,
       dir: p.dir ?? null, stand: 0, home: { x: p.x, z: p.z }, hop: null, perchY: p.y, px: 0, dist: 0, onScreen: false,
       occludedAt: -1, occluded: false, state: 'in', tree: p.tree ?? null, box, beside: p.beside ?? null,
+      rest: 0.5,
     };
     // the robin flies in: a short low glide down to its spot from his side, outward
     if (group && p.beside && !f.reduced) {
@@ -529,7 +538,7 @@ export class Surprises {
 
   /** What it does while it is there. */
   private live(a: Active, dt: number, f: SurpriseFrame): void {
-    const { terrain, ground } = this.env;
+    const { terrain } = this.env;
     const g = a.group;
     a.state = a.fade < 1 && g ? 'in' : 'there';
     switch (a.spec.id) {
@@ -573,18 +582,27 @@ export class Surprises {
           // it keeps beside him: a hop toward its spot when he walked on (a short flutter
           // when it fell behind), a little rest between hops; else it stands and looks at him
           a.stand += dt;
-          const v = this.viewer(f);
-          const spot = robinSpot(v, v.yaw, a.beside.side, a.beside.lat, a.beside.along);
-          const next = a.stand > 0.08 ? robinHop(g.position, spot, f.ranger) : null;
-          if (next && ground(next.x, next.z, 0.15) && !this.env.homeNear(next.x, next.z, 1.5)) {
+          // (he comes nearer: it hops aside to its spot beside his line at once)
+          const near = Math.hypot(g.position.x - f.ranger.x, g.position.z - f.ranger.z) < ROBIN_SHY_M + 0.6;
+          const next = a.stand > (near ? 0 : a.rest) ? this.robinNext(a, g, f) : null;
+          if (next === 'lost') { this.leave(a, false); break; }
+          if (next) {
             const d = Math.hypot(next.x - g.position.x, next.z - g.position.z);
-            a.hop = { fx: g.position.x, fz: g.position.z, tx: next.x, tz: next.z, t: 0, dur: next.flutter ? 0.32 + d * 0.06 : 0.2, lift: next.flutter ? 0.32 : 0.07 };
+            a.hop = { fx: g.position.x, fz: g.position.z, tx: next.x, tz: next.z, t: 0, dur: next.flutter ? 0.3 + d * 0.06 : 0.17, lift: next.flutter ? 0.3 : 0.07 };
             g.rotation.y = Math.atan2(next.x - g.position.x, next.z - g.position.z);
             const body = a.sp?.root as THREE.Object3D | undefined;
             if (body) body.rotation.x = 0;
+            // it hops up to its spot, then stops a moment to look round at him
+            const left = this.robinLeft(a, f, next);
+            a.rest = left <= 0.9 ? a.fork.between(0.3, 0.6) : 0.03;
           } else {
-            a.state = 'there';
-            g.rotation.y = turnTo(g.rotation.y, Math.atan2(f.ranger.x - g.position.x, f.ranger.z - g.position.z) + a.beside.side * 0.5, dt * 3);
+            if (a.state !== 'no spot' && a.state !== 'no way') a.state = 'there';
+            // it stands turned three-quarters to the lens, looking up at him: its red breast
+            // shows (a quick bird's turn)
+            const cam = this.env.camera.position;
+            const toLens = Math.atan2(cam.x - g.position.x, cam.z - g.position.z);
+            const toHim = Math.atan2(f.ranger.x - g.position.x, f.ranger.z - g.position.z);
+            g.rotation.y = turnTo(g.rotation.y, toLens + 0.4 * Math.atan2(Math.sin(toHim - toLens), Math.cos(toHim - toLens)), dt * 9);
             // a robin's bob: a little dip now and then while it stands
             const body = a.sp?.root as THREE.Object3D | undefined;
             if (body) body.rotation.x = Math.max(0, Math.sin(a.age * 2.3)) ** 8 * 0.35;
@@ -622,6 +640,51 @@ export class Surprises {
     if (a.spec.call && a.callIn <= 0 && a.fade >= 0.5) this.call(a);
   }
 
+  /**
+   * The robin's next hop (null: it stays; 'lost': he left it far behind). Toward its spot
+   * beside him; a spot in a bush or a stone moves out or back along his side, else to his
+   * other side (it hops round him); a hop into a bush goes a little to either side of it,
+   * or flutters straight over to the spot.
+   */
+  private robinNext(a: Active, g: THREE.Group, f: SurpriseFrame): { x: number; z: number; flutter: boolean } | 'lost' | null {
+    const b = a.beside!;
+    const v = this.viewer(f);
+    const at = g.position;
+    const me = f.ranger;
+    const want = robinSpot(v, v.yaw, b.side, b.lat, b.along);
+    if (Math.hypot(want.x - at.x, want.z - at.z) > ROBIN_LOST_M) return 'lost';
+    let spot: { x: number; z: number } | null = null;
+    for (const [side, lat, along] of [[b.side, b.lat, b.along], [b.side, b.lat + 0.6, b.along], [b.side, b.lat, b.along - 0.7], [-b.side, b.lat, b.along], [-b.side, b.lat + 0.6, b.along]]) {
+      const p = robinSpot(v, v.yaw, side, lat, along);
+      if (this.robinMay(p.x, p.z)) { spot = p; b.side = side; break; }
+    }
+    if (!spot) { a.state = 'no spot'; return null; }
+    const next = robinHop(at, spot, me);
+    if (!next) return null;
+    if (this.robinMay(next.x, next.z)) return next;
+    const dx = next.x - at.x, dz = next.z - at.z;
+    for (const turn of [0.6, -0.6, 1.1, -1.1]) {
+      const c = Math.cos(turn), sn = Math.sin(turn);
+      const x = at.x + dx * c + dz * sn, z = at.z - dx * sn + dz * c;
+      if (this.robinMay(x, z) && Math.hypot(x - me.x, z - me.z) >= ROBIN_SHY_M) return { x, z, flutter: next.flutter };
+    }
+    if (Math.hypot(spot.x - at.x, spot.z - at.z) <= ROBIN_FLUTTER_M * 1.6 && Math.hypot(spot.x - me.x, spot.z - me.z) >= ROBIN_SHY_M) return { x: spot.x, z: spot.z, flutter: true };
+    a.state = 'no way';
+    return null;
+  }
+
+  /** How far (m) the robin will still be from its spot beside him once it lands at `at`. */
+  private robinLeft(a: Active, f: SurpriseFrame, at: { x: number; z: number }): number {
+    const v = this.viewer(f);
+    const spot = robinSpot(v, v.yaw, a.beside!.side, a.beside!.lat, a.beside!.along);
+    return Math.hypot(spot.x - at.x, spot.z - at.z);
+  }
+
+  /** May the robin land at (x, z)? Free open ground, out of a mission's home. */
+  private robinMay(x: number, z: number): boolean {
+    return this.env.ground(x, z, 0.15) && !this.env.homeNear(x, z, 1.5);
+  }
+
   /** It walks `step` m along `dir`, on the ground; a blocked way ends its visit. */
   private walk(g: THREE.Group, dir: { x: number; z: number }, step: number, r: number, dt: number, blocked: () => void): void {
     // it turns its calm way first (a stag standing side-on turns away), then walks on
@@ -656,9 +719,9 @@ export class Surprises {
     const at = this.where(a).clone();
     at.y += a.spec.plek === 'lucht' ? 0 : a.size * 0.4;
     const ndc = at.clone().project(cam);
-    a.px = this.pxOf(a, at);
     const inFront = ndc.z > -1 && ndc.z < 1;
     const onScreen = inFront && Math.abs(ndc.x) <= 0.96 && Math.abs(ndc.y) <= 0.96;
+    a.px = onScreen ? this.pxOf(a, at) : 0; // (off the picture it has no size in it)
     // hidden by the ground or a trunk (looked at a few times a second)
     if (onScreen && a.age - a.occludedAt > 0.2) {
       a.occludedAt = a.age;

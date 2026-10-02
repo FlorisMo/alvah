@@ -247,14 +247,17 @@ test('the robin hops along beside him, big enough to see, never under his feet',
   assert.ok(Math.abs(h.z - (-1 + ROBIN_HOP_M)) < 1e-9 && !h.flutter, 'a hop');
   const fl = robinHop({ x: 2.3, z: -5 }, { x: 2.3, z: 0 }, me)!;
   assert.ok(fl.flutter && Math.abs(fl.z - (-5 + ROBIN_FLUTTER_M)) < 1e-9, 'a flutter to catch up');
-  assert.equal(robinHop({ x: -1.4, z: 0.2 }, { x: 1.4, z: 0 }, me), null, 'never a hop past his feet');
-  let at = { x: -2.3, z: -6 };
-  for (let i = 0; i < 40; i++) {
-    const n = robinHop(at, { x: -2.3, z: 0 }, me);
-    if (!n) break;
-    assert.ok(Math.hypot(n.x, n.z) >= ROBIN_SHY_M, 'never nearer him than ROBIN_SHY_M');
-    at = n;
+  // to its spot from anywhere, round him (never over his feet), never nearer him than ROBIN_SHY_M
+  for (const [from, spot] of [[{ x: -2.3, z: -6 }, { x: -2.3, z: 0 }], [{ x: -2.4, z: 0.3 }, { x: 2.3, z: 0 }], [{ x: 0.2, z: 3 }, { x: 0.1, z: -2.4 }]] as const) {
+    let at: { x: number; z: number } = from;
+    for (let i = 0; i < 60; i++) {
+      const n = robinHop(at, spot, me);
+      if (!n) break;
+      assert.ok(Math.hypot(n.x, n.z) >= ROBIN_SHY_M, 'never nearer him than ROBIN_SHY_M');
+      assert.ok(Math.hypot(n.x - at.x, n.z - at.z) <= ROBIN_FLUTTER_M + 1e-9, 'one hop or flutter at a time');
+      at = n;
+    }
+    assert.ok(Math.hypot(at.x - spot.x, at.z - spot.z) < 0.5, `it got to its spot from ${JSON.stringify(from)}`);
   }
-  assert.ok(Math.hypot(at.x + 2.3, at.z) < 0.5, 'it got to its spot');
-  assert.ok(SHY_M.roodborst === ROBIN_SHY_M && ROBIN_SHY_M < ROBIN_SIDE[0], 'it does not leave from its own spot');
+  assert.ok(SHY_M.roodborst < ROBIN_SHY_M && ROBIN_SHY_M < ROBIN_SIDE[0], 'it does not leave from its own spot: it hops aside, and flies off only when he walks right onto it');
 });

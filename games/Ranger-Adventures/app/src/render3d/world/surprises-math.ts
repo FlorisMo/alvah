@@ -54,15 +54,19 @@ export interface SurpriseSpec {
 }
 
 /** The robin keeps beside the line he walks along: this far (m) to his side… */
-export const ROBIN_SIDE: readonly [number, number] = [2.1, 2.6];
-/** …about level with him (m along where the lens looks: + ahead of him, − behind), where
- *  the walk lens (4.6 m behind him, 2.4 m up) sees it big enough: in the picture's lower
- *  half, ≥ SEEN_PX, never under his feet and never coming toward the lens. */
-export const ROBIN_ALONG: readonly [number, number] = [-0.4, 0.5];
-/** It never comes nearer him than this (m): it goes, calmly, when he walks right at it. */
+export const ROBIN_SIDE: readonly [number, number] = [1.9, 2.4];
+/** …about level with him, a little ahead (m along where the lens looks: + ahead of him),
+ *  where the walk lens (4.6 m behind him, 2.4 m up) sees it big enough: in the picture's
+ *  lower half, ≥ SEEN_PX, never under his feet and never coming toward the lens; a robin
+ *  that fell a hop or two behind is still in the picture. */
+export const ROBIN_ALONG: readonly [number, number] = [0.2, 0.9];
+/** It never lands nearer him than this (m); when he comes nearer, it hops aside to its
+ *  spot beside his line at once… */
 export const ROBIN_SHY_M = 1.5;
+/** …and only when he walks right onto it (this near, m) does it fly off. */
+export const ROBIN_GO_M = 1.0;
 /** One hop (m) and one flutter (m: when it fell behind, a low flight to catch up). */
-export const ROBIN_HOP_M = 0.55;
+export const ROBIN_HOP_M = 0.6;
 export const ROBIN_FLUTTER_M = 2.2;
 
 type Base = Omit<SurpriseSpec, 'rare' | 'stemming'>;
@@ -71,7 +75,7 @@ const BASE: readonly Base[] = [
   { id: 'specht', plek: 'stam', dist: [11, 22], call: { id: 'specht', every: [4.5, 7] }, stayS: 40, model: 'bird-grote-bonte-specht' },
   { id: 'koekoek', plek: 'kroon', dist: [12, 22], call: { id: 'koekoek', every: [5, 8] }, stayS: 40, model: 'bird-koekoek' },
   { id: 'winterkoning', plek: 'voet', dist: [9, 17], call: { id: 'winterkoning', every: [6, 9] }, stayS: 36, model: 'bird-winterkoning' },
-  { id: 'roodborst', plek: 'mee', dist: [ROBIN_SIDE[0], 2.7], call: { id: 'roodborst', every: [6, 10] }, stayS: 32, onFoot: true, moves: true, seenOnly: true, model: 'bird-roodborst' },
+  { id: 'roodborst', plek: 'mee', dist: [ROBIN_SIDE[0], 2.6], call: { id: 'roodborst', every: [6, 10] }, stayS: 32, onFoot: true, moves: true, seenOnly: true, model: 'bird-roodborst' },
   { id: 'edelhert', plek: 'grond', dist: [22, 30], call: null, stayS: 30, model: 'animal-edelhert-reddeer' },
   { id: 'das', plek: 'grond', dist: [6.5, 8.5], call: null, stayS: 28, model: 'animal-das-badger' },
 ];
@@ -301,7 +305,7 @@ export const LEAVE_FAR_M = 45;
 
 /** How near (m) he may come before it goes on its way (calmly: it never flees in a hurry). */
 export const SHY_M: Record<SurpriseId, number> = {
-  buizerd: 0, specht: 6, koekoek: 6, winterkoning: 4, roodborst: ROBIN_SHY_M, edelhert: 14, das: 4,
+  buizerd: 0, specht: 6, koekoek: 6, winterkoning: 4, roodborst: ROBIN_GO_M, edelhert: 14, das: 4,
 };
 
 /** Should it go now? (up too long, he is far off, or he came too near) */
@@ -326,18 +330,28 @@ export function robinSpot(ranger: { x: number; z: number }, yaw: number, side: n
 
 /**
  * The robin's next hop toward its spot: a hop of ≤ ROBIN_HOP_M, a flutter of ≤ ROBIN_FLUTTER_M
- * when it is far behind, or null (near enough: it stays). Never a hop that lands nearer him
- * than ROBIN_SHY_M.
+ * when it is far behind, or null (near enough: it stays). Its spot on his other side: it
+ * goes round him, never landing nearer him than ROBIN_SHY_M.
  */
 export function robinHop(robin: { x: number; z: number }, spot: { x: number; z: number }, ranger: { x: number; z: number }): { x: number; z: number; flutter: boolean } | null {
   const dx = spot.x - robin.x, dz = spot.z - robin.z;
   const d = Math.hypot(dx, dz);
   if (d <= ROBIN_NEAR_M) return null;
-  const flutter = d > ROBIN_HOP_M * 3;
+  const flutter = d > ROBIN_HOP_M * 2;
   const step = Math.min(d, flutter ? ROBIN_FLUTTER_M : ROBIN_HOP_M);
   const to = { x: robin.x + (dx / d) * step, z: robin.z + (dz / d) * step, flutter };
-  if (Math.hypot(to.x - ranger.x, to.z - ranger.z) < ROBIN_SHY_M + 0.2) return null;
-  return to;
+  // round him: a hop that would land too near him goes along a circle round him instead
+  const keep = ROBIN_SHY_M + 0.25;
+  if (Math.hypot(to.x - ranger.x, to.z - ranger.z) < keep) {
+    const r0 = Math.max(keep, Math.hypot(robin.x - ranger.x, robin.z - ranger.z));
+    const a0 = Math.atan2(robin.x - ranger.x, robin.z - ranger.z);
+    const as = Math.atan2(spot.x - ranger.x, spot.z - ranger.z);
+    const da = Math.atan2(Math.sin(as - a0), Math.cos(as - a0));
+    const turn = Math.sign(da || 1) * Math.min(Math.abs(da), step / r0);
+    to.x = ranger.x + Math.sin(a0 + turn) * r0;
+    to.z = ranger.z + Math.cos(a0 + turn) * r0;
+  }
+  return Math.hypot(to.x - robin.x, to.z - robin.z) > 0.05 ? to : null;
 }
 
 /** How big (px, its larger side) a thing `size` m long stands `d` m from a lens of vertical
