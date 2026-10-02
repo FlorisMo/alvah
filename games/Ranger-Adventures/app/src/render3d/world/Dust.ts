@@ -10,6 +10,7 @@
  */
 
 import * as THREE from 'three';
+import { cloudUvGlsl } from '../Atmosphere';
 
 export interface DustLook {
   /** its width (m) when it starts and when it has faded */
@@ -57,6 +58,10 @@ function readRGB(renderer: THREE.WebGLRenderer, x: number, y: number): [number, 
   for (let i = 0; i < 9; i++) for (let c = 0; c < 3; c++) out[c] += _px[i * 4 + c] / 9;
   return out.map((v) => Math.round(v * 10) / 10) as [number, number, number];
 }
+/** `out` = the light `e` (linear irradiance) on dust: × DUST_ALBEDO / π (three's Lambert). */
+function lit(out: THREE.Color, e: THREE.Color): void {
+  out.setRGB((e.r * DUST_ALBEDO[0]) / Math.PI, (e.g * DUST_ALBEDO[1]) / Math.PI, (e.b * DUST_ALBEDO[2]) / Math.PI);
+}
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -90,7 +95,9 @@ export class DustCloud {
     // cloud costs no second compile)
     const mat = new THREE.ShaderMaterial({
       uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-        uColor: { value: new THREE.Color() }, uScale: { value: 700 },
+        uSky: { value: new THREE.Color() }, uSun: { value: new THREE.Color() },
+        uCloudMap: { value: null }, uCloudOff: { value: new THREE.Vector2() }, uCloudOn: { value: 0 },
+        uScale: { value: 700 },
         uNear: { value: new THREE.Vector2(look.near[0], look.near[1]) },
         uSize: { value: new THREE.Vector2(look.from, look.to) },
         uAlpha: { value: look.alpha },
@@ -103,6 +110,8 @@ export class DustCloud {
         uniform float uScale;
         uniform vec2 uNear;
         uniform vec2 uSize;
+        uniform vec2 uCloudOff;
+        varying vec2 vCloudUv;
         attribute float aAge;
         attribute float aLife;
         attribute float aSoil;
@@ -119,23 +128,31 @@ export class DustCloud {
           float metres = mix(uSize.x, uSize.y, f);
           gl_PointSize = clamp(metres * uScale / depth, 1.0, 72.0);
           gl_Position = projectionMatrix * mvPosition;
+          vec4 world = modelMatrix * vec4(position, 1.0);
+          vCloudUv = ${cloudUvGlsl('world')};
           #include <fog_vertex>
         }
       `,
       fragmentShader: `
         #include <fog_pars_fragment>
-        uniform vec3 uColor;
+        uniform vec3 uSky;
+        uniform vec3 uSun;
+        uniform sampler2D uCloudMap;
+        uniform float uCloudOn;
         uniform float uAlpha;
         varying float vAlpha;
+        varying vec2 vCloudUv;
         void main() {
           vec2 d = gl_PointCoord - vec2(0.5);
           float r2 = dot(d, d) * 4.0;          // 0 at the centre, 1 at the rim
           float soft = exp(-3.5 * r2) * (1.0 - r2);
           float a = max(soft, 0.0) * vAlpha * uAlpha; // a light haze, not a cloud
           if (a <= 0.003) discard;
-          // lit like the ground (uColor, linear), then the picture's own tone curve, output
+          // lit like the ground under it (linear): the sky fill, and the sun as the drifting
+          // cloud shade lets it through there; then the picture's own tone curve, output
           // colour space and fog, in the order three draws the ground in
-          gl_FragColor = vec4(uColor, a);
+          vec3 shade = mix(vec3(1.0), texture2D(uCloudMap, vCloudUv).rgb, uCloudOn);
+          gl_FragColor = vec4(uSky + uSun * shade, a);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
           #include <fog_fragment>
@@ -146,8 +163,9 @@ export class DustCloud {
     const pts = new THREE.Points(geo, mat);
     // run 7 (feel): a puff is lifted sand, so it is lit like the flat ground it came off: its
     // albedo times the light on that ground now (the hemisphere fill from above plus the sun
-    // as high as it stands; the mood, a crossfade, the wildcamera's night), the same Lambert
-    // three lights the ground with. Found once: the scene's hemisphere fill and its sun.
+    // as high as it stands and as the cloud shade lets it through; the mood, a crossfade, the
+    // wildcamera's night), the same Lambert three lights the ground with. Found once: the
+    // scene's hemisphere fill, its sun and the cloud shade's uniforms (world/Sky.ts).
     let hemi: THREE.HemisphereLight | null = null, sun: THREE.DirectionalLight | null = null;
     pts.frustumCulled = false; // puffs live in world space, not around the origin
     pts.visible = true;        // drawn once while the world loads (its shader compiles then); update hides it
@@ -160,12 +178,17 @@ export class DustCloud {
           if (d.isDirectionalLight && (!sun || (d.castShadow && !sun.castShadow))) sun = d;
         });
       }
-      const c = uniforms.uColor.value as THREE.Color;
       if (hemi && sun) {
         const s = sun as THREE.DirectionalLight, h = hemi as THREE.HemisphereLight;
         const up = Math.max(0, _v.subVectors(s.position, s.target.position).normalize().y);
-        c.copy(h.color).multiplyScalar(h.intensity).add(_k.copy(s.color).multiplyScalar(s.intensity * up));
-        c.setRGB((c.r * DUST_ALBEDO[0]) / Math.PI, (c.g * DUST_ALBEDO[1]) / Math.PI, (c.b * DUST_ALBEDO[2]) / Math.PI);
+        lit(uniforms.uSky.value as THREE.Color, _k.copy(h.color).multiplyScalar(h.intensity));
+        lit(uniforms.uSun.value as THREE.Color, _k.copy(s.color).multiplyScalar(s.intensity * up));
+      }
+      const cs = sc.userData.cloudShade as { map: { value: THREE.Texture }; off: { value: THREE.Vector2 } } | undefined;
+      if (cs) {
+        uniforms.uCloudMap.value = cs.map.value;
+        (uniforms.uCloudOff.value as THREE.Vector2).copy(cs.off.value);
+        uniforms.uCloudOn.value = 1;
       }
       renderer.getDrawingBufferSize(size);
       const fov = (cam as THREE.PerspectiveCamera).fov ?? 55;
