@@ -165,6 +165,11 @@ const MISSIE_FRISLING = {
       komt: 'Er komt een jong zwijn.',
       staStil: 'De moeder kijkt. Sta heel stil.',
       hek: 'Kijk. Het hek is stuk.',
+      // run 7: the way south passes the family (unmeasured: never logged)
+      boog: 'Loop met een boog om de groep.',
+      teDichtbij: 'Niet zo dichtbij. De moeder kijkt.',
+      // run 7: the hungry one at his bag may be the piglet himself (the card in knap words)
+      voerenBig: 'Een jong zwijn snuffelt aan je tas.',
     },
     knap: {
       kijk: 'Daar is zijn rotte.',
@@ -177,6 +182,9 @@ const MISSIE_FRISLING = {
       chipModder: 'De zoel',
       komt: 'Daar komt een overloper.',
       staStil: 'De zeug kijkt. Sta heel stil.',
+      boog: 'Loop met een boog om de rotte.',
+      teDichtbij: 'Niet zo dichtbij. De zeug kijkt.',
+      voerenBig: 'De frisling snuffelt aan je tas.',
     },
   },
   stappen: [
@@ -229,15 +237,21 @@ const MISSIE_FRISLING = {
            draag, voer, loop erheen); the ranger keeps the rule. 'flip' = the
            encounter where the safe action is to GO: the path to the rotte is free. */
         regels: ['Niet aanraken', 'Niet voeren'],
+        /* run 7: the calm moments come in a drawn order each play (the 2D floor plays the
+           same order from the same seed): first the lying piglet (big), then on the way
+           home the tired piglet and the hungry one in either order (weg), then at the
+           mud the sow's stare and the free path in either order (thuis; the flip is
+           never first) */
+        rustPlan: [{ slot: 'big' }, { slot: 'weg' }, { slot: 'thuis' }],
         encounters: [
-          { id: 'aaien', subject: 'frisling', dier: 'wildzwijn', pose: 'ligt',
+          { id: 'aaien', slot: 'big', subject: 'frisling', dier: 'wildzwijn', pose: 'ligt',
             vraag: 'De big piept zacht in het gras.',
             vraagKnap: 'De frisling piept zacht in het gras.',
             opties: [{ label: 'Aai hem', goed: false }, { label: 'Laat hem liggen', goed: true }],
             uitleg: 'Goed. Hij moet naar zijn moeder ruiken.',
             gevolg: 'Hij schrikt en rent weg.',
             reactie: 'flee', eikelKost: 2, terug: 0.5 },
-          { id: 'dragen', subject: 'frisling', dier: 'wildzwijn',
+          { id: 'dragen', slot: 'weg', subject: 'frisling', dier: 'wildzwijn',
             vraag: 'De big is moe. Hij loopt langzaam.',
             vraagKnap: 'De frisling is moe. Hij loopt langzaam.',
             opties: [{ label: 'Draag hem', goed: false }, { label: 'Loop rustig mee', goed: true }],
@@ -246,7 +260,7 @@ const MISSIE_FRISLING = {
             reactie: 'flee', eikelKost: 1, terug: 0.7 },
           // run 6: at the wallow it is the family's yearling (last year's young) that
           // comes to sniff the ranger's bag
-          { id: 'voeren', subject: 'zwijn-honger', dier: 'overloper',
+          { id: 'voeren', slot: 'weg', subject: 'zwijn-honger', dier: 'overloper',
             vraag: 'Een jong zwijn snuffelt aan je tas.',
             vraagKnap: 'De overloper snuffelt aan je tas.',
             // (the right answer is what he DOES, never the rule chip's own words: a child
@@ -255,7 +269,7 @@ const MISSIE_FRISLING = {
             uitleg: 'Goed. Een zwijn zoekt zelf eten.',
             gevolg: 'Nu wil hij steeds meer. Dat is niet goed.',
             reactie: 'swarm', eikelKost: 3, terug: 0.6 },
-          { id: 'zeug', subject: 'wildzwijn', dier: 'wildzwijn',
+          { id: 'zeug', slot: 'thuis', subject: 'wildzwijn', dier: 'wildzwijn',
             vraag: 'De moeder staat bij haar biggen.',
             vraagKnap: 'De zeug staat bij haar biggen.',
             opties: [{ label: 'Loop naar de biggen', goed: false }, { label: 'Hou afstand', goed: true }],
@@ -263,7 +277,7 @@ const MISSIE_FRISLING = {
             gevolg: 'De moeder knort hard. Ze wil rust.',
             gevolgKnap: 'De zeug knort hard. Ze wil rust.',
             reactie: 'rear', eikelKost: 2, terug: 0.4 },
-          { id: 'pad', subject: 'rotte', dier: 'wildzwijn', flip: true,
+          { id: 'pad', slot: 'thuis', subject: 'rotte', dier: 'wildzwijn', flip: true,
             vraag: 'Kijk, de groep! Het pad is vrij.',
             vraagKnap: 'Kijk, de rotte! Het pad is vrij.',
             opties: [{ label: 'Blijf staan', goed: false }, { label: 'Loop rustig door', goed: true }],

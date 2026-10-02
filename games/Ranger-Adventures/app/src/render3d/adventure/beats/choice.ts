@@ -31,7 +31,7 @@
 
 import * as THREE from 'three';
 import '../../play/play3d.css';
-import { buildDagnachtTrial, DagnachtRun, type DagnachtTrial, type Encounter } from '../../../engines/dagnacht';
+import { playDagnachtTrial, DagnachtRun, type DagnachtTrial, type Encounter } from '../../../engines/dagnacht';
 import { store } from '../../../core/state';
 import { narrator } from '../../../core/narrator';
 import { Sound } from '../../../core/sound';
@@ -55,6 +55,9 @@ export interface AskOpts {
    *  still, so the card makes way while it plays, and the consequence line stands over
    *  the card when it comes back (what happened first, then the words for it) */
   walks?: boolean;
+  /** run 7: the card's question in other words (the same encounter met elsewhere: the
+   *  piglet himself at the bag, not the yearling); default: the encounter's own */
+  vraag?: string;
 }
 
 /** A rustkracht moment played with the body (`ChoiceRun.still`). */
@@ -112,8 +115,9 @@ export class ChoiceRun {
     this.step = step;
     const settings = store.get().settings;
     const knobs = k.knobs('dagnacht');
-    // run 7: this play's order of the calm moments (its 2D twin draws the same)
-    this.trial = buildDagnachtTrial(k.steps[step].skin, { jargon: settings.jargon, reducedMotion: k.reduced, ...knobs }, k.play.fork('dagnacht').rng);
+    // run 7: this play's order of the calm moments, never his last two plays' (its 2D twin
+    // and the classic stage draw the same)
+    this.trial = playDagnachtTrial(k.steps[step].skin, { jargon: settings.jargon, reducedMotion: k.reduced, ...knobs }, k.play, store.get().geschiedenis);
     // (a mission that draws its own order, the ree's: the same encounters in that order)
     if (opts.order) this.trial = { ...this.trial, encounters: inOrder(this.trial.encounters, opts.order) };
     this.run = new DagnachtRun(this.trial.encounters.length);
@@ -151,7 +155,7 @@ export class ChoiceRun {
     const settings = store.get().settings;
     let note: string | null = null;
     for (;;) {
-      const goed = await this.present(enc, note);
+      const goed = await this.present(o.vraag ? { ...enc, vraag: o.vraag } : enc, note);
       note = null;
       if (goed) {
         this.run.choose(true);

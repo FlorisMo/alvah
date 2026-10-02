@@ -92,6 +92,52 @@ export function buildDagnachtTrial(skin: Skin, diff: DagnachtDiff, rng?: () => n
   };
 }
 
+/** A calm-moment order as the history keeps it (the play's note 'rust'): one letter per
+ *  encounter, in order ('advzp'). */
+export const rustCode = (ids: readonly string[]): string => ids.map((id) => id.charAt(0)).join('');
+
+/** The calm-moment orders of his last `n` OTHER plays of a mission (newest first), as their
+ *  beats noted them in the history (`BeatLog.va` 'rust:advzp'; one per play, by its seed). */
+export function recentRust(history: readonly { m: string; sd?: number; va?: string }[], missionId: string, seed: number, n = 2): string[] {
+  const out: string[] = [];
+  const seen = new Set<number>();
+  for (let i = history.length - 1; i >= 0 && out.length < n; i--) {
+    const h = history[i];
+    if (h.m !== missionId || !h.va || h.sd === seed || (h.sd !== undefined && seen.has(h.sd))) continue;
+    const m = /(?:^|,)rust:([a-z]+)/.exec(h.va);
+    if (!m) continue;
+    if (h.sd !== undefined) seen.add(h.sd);
+    out.push(m[1]);
+  }
+  return out;
+}
+
+/** What a play needs to draw its trial (core/play's Play). */
+interface PlayLike { readonly missionId: string; readonly seed: number; fork(label: string): { rng(): number }; note(key: string, value: string | number): void }
+
+/**
+ * Run 7 (frisling ways): the trial THIS PLAY plays, a thin wrapper over
+ * `buildDagnachtTrial` that every path builds through (the world's ChoiceRun, the 2D
+ * floor, the classic stage): a skin with a `rustPlan` draws its order from the play's
+ * 'dagnacht' fork, and while that order is one of his last two plays' of this mission (the
+ * history) it is drawn again from the same stream — three plays in a row, three orders;
+ * the same seed and the same history give the same order on every path. The order is noted
+ * on the play ('rust'), so the history says what he played and the next play can tell. No
+ * play: drawn from `loose` (a stream of no play, `looseRng`), or the content order.
+ */
+export function playDagnachtTrial(skin: Skin, diff: DagnachtDiff, play: PlayLike | null | undefined, history: readonly { m: string; sd?: number; va?: string }[], loose?: () => number): DagnachtTrial {
+  if (!play) return buildDagnachtTrial(skin, diff, loose);
+  const fork = play.fork('dagnacht');
+  const rng = (): number => fork.rng();
+  let trial = buildDagnachtTrial(skin, diff, rng);
+  if (!skin.rustPlan?.length) return trial;
+  const avoid = recentRust(history, play.missionId, play.seed);
+  const code = (t: DagnachtTrial): string => rustCode(t.encounters.map((e) => e.id));
+  for (let t = 0; t < 24 && avoid.includes(code(trial)); t++) trial = buildDagnachtTrial(skin, diff, rng);
+  play.note('rust', code(trial));
+  return trial;
+}
+
 /**
  * The calm moments of one play, in order (pure, seeded; design §5.4): the plan's slots in
  * story order, each slot's encounters drawn (`pick`, default all) and shuffled (default) by
