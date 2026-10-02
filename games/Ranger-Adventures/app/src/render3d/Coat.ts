@@ -27,6 +27,9 @@
 export interface CoatTint {
   color: string;    // target coat hex (dossier-true)
   strength: number; // 0..1 lerp of the body material colour toward `color`
+  /** only the model's materials with these names (its coat), when its other parts (antlers,
+   *  a pale rump) are already true; unset: every material but the eyes */
+  only?: readonly string[];
 }
 
 /** Posture stance cue for a species: a forward (nose-down) pitch in radians. */
@@ -54,6 +57,11 @@ const COAT_TINT: Record<string, CoatTint> = {
   // not a GLB: the young lose their stripes and turn "roodbruin" before going dark
   // (3d-animal-animation-research §B2b), so last year's young reads reddish beside the sow.
   overloper: { color: '#8a4f2a', strength: 0.5 },
+  // run 7 (moods): the CC0 red deer's coat ('Material', its body) is an olive taupe that
+  // reads grey-brown in the world's light; dossier: "zomer roestig/roodbruin"
+  // (research/animal-visual-accuracy.md, Edelhert). Its near-black antlers ('Material.001')
+  // and its pale neck and rump stay its own.
+  'animal-edelhert-reddeer': { color: '#8a4b2c', strength: 0.55, only: ['Material'] },
 };
 
 /**
@@ -141,7 +149,7 @@ export function coatTintFor(id: string | null | undefined): CoatTint | null {
   if (!id) return null;
   const t = COAT_TINT[id];
   if (!t) return null;
-  return { color: t.color, strength: clamp(t.strength, 0, 1) };
+  return { color: t.color, strength: clamp(t.strength, 0, 1), ...(t.only ? { only: [...t.only] } : {}) };
 }
 
 /**
@@ -152,4 +160,44 @@ export function postureFor(id: string | null | undefined): Posture {
   const p = id ? POSTURE[id] : undefined;
   if (!p) return { pitch: 0, headLow: false };
   return { pitch: clamp(p.pitch, 0, POSTURE_MAX_PITCH), headLow: p.headLow };
+}
+
+/* ------------------------------------------------- run 7: how an animal is lit ---- */
+
+/**
+ * Run 7 (moods, the named fix "distant animals render almost black"): every animal is
+ * drawn MATTE. The CC0 quadrupeds (red deer, roe, fox, wolf) came with metalness 0.4 and
+ * roughness 0.41 and the world has no environment map, so 40 % of their colour was thrown
+ * away for a reflection of nothing; fur is never glossy. Roughness at least this, metalness 0.
+ */
+export const MATTE_ROUGHNESS = 0.75;
+
+/** An animal's roughness: its own, but never glossier than fur (≤ 1). Pure. */
+export function matteRoughness(r: number): number {
+  return clamp(Number.isFinite(r) ? r : 1, MATTE_ROUGHNESS, 1);
+}
+
+/** The ceiling of an albedo lift: past this a dark animal stops reading as itself. */
+export const ALBEDO_LIFT_MAX = 2.2;
+
+/**
+ * Albedo lifts: species whose own colour is so dark that its side away from the low sun
+ * reads as a black cut-out in the world's light (measured, moods.spec). The boar's texture
+ * averages sRGB 66/53/48 (≈ 0.05 linear); the dossier's "donkere borstelige vacht, van
+ * bijna zwart tot bruin" stays: lifted it reads dark grey-brown, still brown, never grey (a
+ * multiply keeps the hue). Sparse like the tints: only what the measurement shows.
+ */
+const ALBEDO_LIFT: Record<string, number> = {
+  'animal-wildzwijn-boar': 2.2,
+};
+
+/** How much an animal's colour is lifted (1 = its own). Pure. */
+export function albedoLiftFor(id: string | null | undefined): number {
+  const k = id ? ALBEDO_LIFT[id] : undefined;
+  return k ? clamp(k, 1, ALBEDO_LIFT_MAX) : 1;
+}
+
+/** Is this a model the animal light dresses (an animal or a bird; never a person)? */
+export function isAnimalModel(id: string | null | undefined): boolean {
+  return !!id && /^(animal|bird)-/.test(id);
 }

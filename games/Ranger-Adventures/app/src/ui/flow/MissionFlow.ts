@@ -48,7 +48,7 @@ import { AdventureHud } from './AdventureHud';
 import { newPlay, nextPlaySeed, type Play } from '../../core/play';
 import { rollRare } from '../../core/discover';
 import { ONTDEKKINGEN, ontdekkingenVan, type Ontdekking } from '../../content/ontdekkingen';
-import { playMood, type MoodId } from '../../render3d/Moods';
+import { lastMoodAt, playMood, type MoodId } from '../../render3d/Moods';
 import { providePlay } from '../../core/devhook';
 import { revealDiscovery, setRevealGate } from '../hud/Reveal';
 
@@ -119,7 +119,10 @@ function drawPlay(mission: Mission, adv: Adventure | null): Drawn {
   const s = store.get();
   const play = newPlay(mission.id, nextPlaySeed(), (s.gespeeld[mission.id] ?? 0) + 1);
   const session_ = session.world?.mood().session ?? 'gouden-uur';
-  const mood = playMood(session_, adv?.moods, play);
+  const mood = playMood(session_, adv?.moods, play, lastMoodAt(s.geschiedenis, mission.id));
+  // first in the play's variant, so the history's short line always keeps it (a home's
+  // `perPlay` reads the home's last mood back from there)
+  play.note('mood', mood);
   const rare = rollRare({ home: mission.id, play, table: ONTDEKKINGEN, found: s.ontdekt, counts: s.zeldzaam, mood });
   if (rare) play.note('rare', rare.id.slice(rare.id.indexOf('.') + 1)); // (a home's prepare may read it)
   lastPlay = play;
@@ -149,7 +152,8 @@ export function showBriefing(mission: Mission): void {
   const world = session.world;
   // run 7: this play is drawn here, before the home lays it out under the card
   const drawn = drawPlay(mission, adv);
-  if (world && drawn.mood !== world.mood().now) world.setMood(drawn.mood, 0); // (a cut: the card covers it)
+  // (a cut: the card covers it; it also puts a sun a crossfade left behind in its place)
+  if (world) world.setMood(drawn.mood, 0);
   if (adv && world) {
     if (store.get().voltooid[mission.id]) world.residents.setState(mission.id, 'before');
     adv.prepare?.(world, mission, drawn.play);
@@ -157,7 +161,6 @@ export function showBriefing(mission: Mission): void {
     // is parked just outside it as the card comes up (never during play)
     world.parkJeepOutOf(Object.values(adv.home.places), adv.home.places.marker);
   }
-  drawn.play.note('mood', drawn.mood);
   const unprepare = (): void => {
     if (world && world.mood().now !== world.mood().session) world.setMood(world.mood().session, 0);
     if (!adv || !world) return;

@@ -405,7 +405,14 @@ export interface RangerDevHook {
   discoveries(): { found: string[]; rareCounts: Record<string, number> } | null;
   /** The session's mood and the one on screen. */
   mood(): { session: string; now: string } | null;
+  /** Run 7 (moods): every dressed animal in the picture: its model id, where it stands, its
+   *  distance from the lens, its screen box, and points of its own surface the lens sees
+   *  (CSS px) — sample a screenshot there to read how bright the animal is drawn — and how
+   *  many of its cells a name tag covers (`covered`, not in `pts`). */
+  animals(): AnimalSeenReadout[] | null;
 }
+
+export type AnimalSeenReadout = { id: string; x: number; y: number; z: number; dist: number; box: [number, number, number, number]; onScreen: boolean; pts: [number, number][]; covered: number };
 
 export type PlayReadout = { missionId: string; seed: number; n: number; variant: Record<string, string | number> };
 
@@ -549,6 +556,7 @@ const state = {
   skills: null as null | (() => Record<string, { level: number; best: number; band: number; floor: number; beats: number; trials: number; knobs: unknown }>),
   discoveries: null as null | (() => { found: string[]; rareCounts: Record<string, number> }),
   mood: null as null | (() => { session: string; now: string }),
+  animals: null as null | (() => AnimalSeenReadout[]),
 };
 
 /** The THREE-side golden-path measurements, registered by `render3d/play/kit.ts`. */
@@ -644,6 +652,11 @@ export function provideGrowth(p: {
 /** Run 7: register the world's mood read. */
 export function provideMood(fn: (() => { session: string; now: string }) | null): void {
   state.mood = fn;
+}
+
+/** Run 7 (moods): register the dressed-animals read (render3d/AnimalDress.animalsSeen). */
+export function provideAnimals(fn: (() => AnimalSeenReadout[]) | null): void {
+  state.animals = fn;
 }
 
 /** Current screen the player is on. */
@@ -972,6 +985,7 @@ export function installDevHook(): boolean {
     skills: () => (state.skills ? state.skills() : null),
     discoveries: () => (state.discoveries ? state.discoveries() : null),
     mood: () => (state.mood ? state.mood() : null),
+    animals: () => (state.animals ? state.animals() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;
   return true;

@@ -200,7 +200,23 @@ core/discover.ts     rollRare (a seeded chance, the pity rule: a rare within ~3 
 content/ontdekkingen.ts  ONTDEKKINGEN: { id '<home>.<thing>', home, soort (dier · zeldzaam ·
                      spoor · vondst · foto), naam, naamKnap?, hint (≤ 7 words), model? | icon?,
                      stemming?, geholpen? } — one block per home, each lane writes its own
-render3d/Moods.ts    MoodId (gouden-uur · ochtendnevel · zonnig · bewolkt · schemer), playMood
+render3d/Moods.ts    MoodId (gouden-uur · ochtendnevel · zonnig · bewolkt · schemer); MOODS: per mood
+                     its LightSet (hemisphere, key, fog colour = the sky's horizon through the
+                     tone curve, the animal fill), sky stops, fog range (never nearer than
+                     22 m), the sun's place, shadow strength, wind; sessionMood (a visit:
+                     the golden hour first, then never the last one), playMood, lastMoodAt.
+                     Never dark, pinned: ≥ 0.85× the golden hour's light on an animal
+                     (lightShare) and on the ground (groundShare: the sun's height counts),
+                     and no animal glows against its ground (glowShare ≤ 1.1: a mood makes
+                     no search easier)
+world/Sky.ts         shows a mood and crossfades to the next (a second dome only while it
+                     fades; a cut under reduced motion); the sun moves only with a cut
+                     (`setMood(id, 0)`: the briefing card); the wildcamera's night
+                     (`setDaylight`) mixes from whichever mood is on screen
+render3d/AnimalDress.ts  dressAnimal(root, id): THE way every animal is dressed (spawn.ts,
+                     Fauna's roamers and birds, Markers' heroes): eyes, coat, stance, calm
+                     pose, one draw call, then the animal light: matte, a dark coat lifted
+                     (Coat.ts), and the mood's animal fill on the side away from the sun
 ui/hud/Reveal.ts     "Nieuw in je veldgids!" under the top chips, one at a time, read aloud,
                      only at a quiet moment (ui/hud/reveal-queue.ts: the pure rules)
 ```
@@ -228,8 +244,10 @@ mission records its helped animal (`geholpen`) quietly, and the home's rare coun
   a look, the ending). Returns whether it was new. `k.rare()` — this play's rare visitor for
   the home (rolled at the briefing), or null: show it, and discover it once he saw it.
 - `k.mood` — the mood this play stands in (`world.mood()`: the session's and the one on
-  screen; `Adventure.moods: { allow, perPlay }` lets a home ask for its own light); the end
-  of the play hands the session's mood back.
+  screen; `Adventure.moods: { allow, perPlay }` lets a home ask for its own light, `perPlay`
+  never the home's last); the briefing cuts into it under the card, the end of the play
+  crossfades back to the session's mood. A home never lights its own animals: every model
+  that goes through `spawnModel` is dressed and lit like the world's.
 
 **A home's recipe** (each game lane): (1) choose places by looking at the world and pin each
 variant in `<id>.places.ts` + its test: dry, clear (`World.playClear`), inside its home, the
@@ -276,6 +294,9 @@ A home reads `k.knobs(e)` (the beats do so by default: `searchBeat`'s `glimpse` 
 `hintAfter`, `routeBeat`/`callersBeat` rounds, `choice.still`'s hold) and never invents a
 number; the views' parity is pinned per engine in `render3d/engines/*.parity.test.ts`.
 
-**Dev and tests** (read-only): `?dev=1&seed=N` replays a session's plays; `__ranger.play()`,
-`history()`, `skills()`, `discoveries()`, `mood()`. Golden and `missions.spec` note each
-play's seed and end a hard failure with `replay: /?dev=1&seed=<n>`.
+**Dev and tests** (read-only): `?dev=1&seed=N` replays a session's plays; `?mood=<id>` forces
+the visit's mood (`&fade=<id>`: a crossfade into another a few seconds into play);
+`__ranger.play()`, `history()`, `skills()`, `discoveries()`, `mood()`, `sky().mood` (the fade,
+the sun, the fog range), `animals()` (every dressed animal in the picture with points of its
+own surface, for `e2e/moods.spec.ts`: readable at 20 and 40 m in every mood). Golden and
+`missions.spec` note each play's seed and end a hard failure with `replay: /?dev=1&seed=<n>`.
