@@ -410,6 +410,10 @@ export interface RangerDevHook {
    *  (CSS px) — sample a screenshot there to read how bright the animal is drawn — and how
    *  many of its cells a name tag covers (`covered`, not in `pts`). */
   animals(): AnimalSeenReadout[] | null;
+  /** Run 7 (veldgids): the open world's small surprises: the free-roam clock (s), when the
+   *  next may come, the one out there now (where, its state, met as 'seen' or 'heard', how
+   *  big in the picture), and the visit's list so far. Read-only: it never brings one. */
+  surprise(): unknown | null;
 }
 
 export type AnimalSeenReadout = { id: string; x: number; y: number; z: number; dist: number; box: [number, number, number, number]; onScreen: boolean; pts: [number, number][]; covered: number };
@@ -557,6 +561,7 @@ const state = {
   discoveries: null as null | (() => { found: string[]; rareCounts: Record<string, number> }),
   mood: null as null | (() => { session: string; now: string }),
   animals: null as null | (() => AnimalSeenReadout[]),
+  surprise: null as null | (() => unknown),
 };
 
 /** The THREE-side golden-path measurements, registered by `render3d/play/kit.ts`. */
@@ -652,6 +657,11 @@ export function provideGrowth(p: {
 /** Run 7: register the world's mood read. */
 export function provideMood(fn: (() => { session: string; now: string }) | null): void {
   state.mood = fn;
+}
+
+/** Run 7 (veldgids): register the surprises read (render3d/world/Surprises.ts). */
+export function provideSurprise(fn: (() => unknown) | null): void {
+  state.surprise = fn;
 }
 
 /** Run 7 (moods): register the dressed-animals read (render3d/AnimalDress.animalsSeen). */
@@ -985,6 +995,7 @@ export function installDevHook(): boolean {
     skills: () => (state.skills ? state.skills() : null),
     discoveries: () => (state.discoveries ? state.discoveries() : null),
     mood: () => (state.mood ? state.mood() : null),
+    surprise: () => (state.surprise ? state.surprise() : null),
     animals: () => (state.animals ? state.animals() : null),
   };
   (window as unknown as { __ranger: RangerDevHook }).__ranger = hook;

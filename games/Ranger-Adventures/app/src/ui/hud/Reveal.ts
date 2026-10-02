@@ -24,6 +24,9 @@ import { guideSnapshot } from './Lessons';
 import { icon, type IconName } from '../icons';
 import { prefersReducedMotion } from '../../core/reduced-motion';
 import { RevealQueue } from './reveal-queue';
+import { Sound } from '../../core/sound';
+import { portrait, portraitNow } from '../veldgids/portrait';
+import { revealSaysWhere } from '../veldgids/gids-math';
 
 /** The picture when a row has no drawn icon (the `veldgids` package renders the model). */
 const SOORT_ICON: Record<OntdekSoort, IconName> = { dier: 'paw', zeldzaam: 'paw', spoor: 'footprints', vondst: 'leaf', foto: 'photo' };
@@ -48,10 +51,15 @@ function quietNow(): boolean {
   return queue.current ? true : !voiceBusy(); // (its own voice keeps it up)
 }
 
-const queue = new RevealQueue<Ontdekking>({ now: () => performance.now(), quiet: quietNow });
+/** The reveal on screen is still saying its words (it stays until it has: §7.3). */
+let saying = false;
 
-/** A NEW discovery: its reveal waits for a quiet moment, then shows once. */
+const queue = new RevealQueue<Ontdekking>({ now: () => performance.now(), quiet: quietNow, holding: () => saying && voiceBusy() });
+
+/** A NEW discovery: its reveal waits for a quiet moment, then shows once. Its picture is
+ *  made now (the real model, ui/veldgids/portrait.ts), so it is ready when the moment comes. */
 export function revealDiscovery(o: Ontdekking): void {
+  if (o.model) void portrait(o.model);
   queue.push(o);
   if (!raf) raf = requestAnimationFrame(tick);
 }
@@ -81,21 +89,42 @@ function nameLine(o: Ontdekking): string {
 function show(o: Ontdekking): void {
   hide(true);
   const name = nameLine(o);
-  const line = `${REVEAL.nieuw} ${name}.`;
+  // the first reveals say where the veldgids is, until he has gone to look (§7.1)
+  const where = revealSaysWhere(store.get().ontdekt);
+  const line = `${REVEAL.nieuw} ${name}.${where ? ` ${REVEAL.waar}` : ''}`;
+  const pic = o.model ? portraitNow(o.model) : null;
   const card = document.createElement('div');
-  card.className = `reveal${o.soort === 'zeldzaam' ? ' reveal--rare' : ''}`;
+  card.className = `reveal${o.soort === 'zeldzaam' ? ' reveal--rare' : ''}${pic ? ' reveal--pic' : ''}`;
   card.setAttribute('role', 'status');
   card.dataset.id = o.id;
   card.innerHTML =
-    `<span class="rv-pic" aria-hidden="true">${icon(o.icon ?? SOORT_ICON[o.soort])}</span>` +
-    `<span class="rv-text"><span class="rv-kicker">${esc(REVEAL.nieuw)}</span><b class="rv-name">${esc(name)}</b></span>` +
+    `<span class="rv-pic" aria-hidden="true">${pic ? picHtml(pic.found) : icon(o.icon ?? SOORT_ICON[o.soort])}</span>` +
+    `<span class="rv-text"><span class="rv-kicker">${esc(REVEAL.nieuw)}</span><b class="rv-name">${esc(name)}</b>` +
+    (where ? `<span class="rv-where">${esc(REVEAL.waar)}</span>` : '') + `</span>` +
     `<button class="ra-speak rv-speak" type="button" aria-label="${esc(ALGEMEEN.leesVoor)}">${icon('speaker')}</button>`;
   card.querySelector('.rv-speak')?.addEventListener('click', () => narrator.speak(line));
   session.host.appendChild(card);
   el = card;
+  store.markRevealed(o.id);
+  // its picture, if it was not made yet: in as soon as it is (the card stays the same size)
+  if (!pic && o.model) {
+    void portrait(o.model).then((p) => {
+      if (!p || el !== card) return;
+      card.classList.add('reveal--pic');
+      const box = card.querySelector('.rv-pic');
+      if (box) box.innerHTML = picHtml(p.found);
+    });
+  }
   if (prefersReducedMotion()) card.classList.add('rv-in');
   else requestAnimationFrame(() => card.classList.add('rv-in'));
-  if (store.get().settings.voorlezen) narrator.speak(line);
+  if (store.get().settings.geluid) Sound.reveal();
+  saying = store.get().settings.voorlezen;
+  // (after the chime's first note: the voice never starts on top of it)
+  if (saying) window.setTimeout(() => { if (el === card) narrator.speak(line); }, 280);
+}
+
+function picHtml(src: string): string {
+  return `<img class="rv-img" alt="" draggable="false" src="${src}">`;
 }
 
 /** It goes (a soft fade; at once under reduced motion). Never stops the voice: a line said
@@ -103,6 +132,7 @@ function show(o: Ontdekking): void {
 function hide(now = false): void {
   const card = el;
   el = null;
+  saying = false;
   if (!card) return;
   if (now || prefersReducedMotion()) { card.remove(); return; }
   card.classList.remove('rv-in');

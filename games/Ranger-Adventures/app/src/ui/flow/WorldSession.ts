@@ -49,7 +49,9 @@ import {
   tryOpenBoard, onPorchApproach, tryOpenPorch, onSitSpotApproach, tryPlayRoep, renderVehiclePrompt, renderHeliPrompt,
   setHeliCockpit, setHeliVignette, showBoundaryHint, showDriveHint, setDriveStall, beginGuide,
 } from '../hud/ExploreHud';
-import { armMissiebordBeat } from '../hud/Lessons';
+import { armMissiebordBeat, guideSnapshot } from '../hud/Lessons';
+import { revealDiscovery } from '../hud/Reveal';
+import { ontdekking } from '../../content/ontdekkingen';
 
 // Light world-EF seasoning: count in-world mission completions this session so the
 // pure `pickWorldBeat` cadence (every Nth return) stays rare. `lastBeatTick` dedups
@@ -247,10 +249,36 @@ function buildWorld(): World {
     optIn: () => store.get().settings.helikopter,
   });
   stage.enterWorld(world);
+  wireSurprises(world);
   for (const m of area.missies) if (done[m.id]) void tellWorldMissionDone(m.id, false);
   if (store.get().arc.gemeld) world.setSeasonResolved(true);
   wireWorldDevhook(world);
   return world;
+}
+
+/**
+ * Run 7 (veldgids): the open world's small surprises (render3d/world/Surprises.ts). Free
+ * roam as the game sees it: he is in the world with its HUD up, the first minute's lesson
+ * slot is idle and no briefing waits (a mission is the world's own check). What he meets
+ * (seen or heard) goes into his veldgids at once (`wereld.<id>`); a new one gets its reveal
+ * at the next quiet moment; each one met moves the open world's rare counter.
+ */
+function wireSurprises(world: World): void {
+  world.setSurprises({
+    free: () => !!session.host.querySelector('.explore-hud') && !session.host.querySelector('.ra-overlay .briefing')
+      && guideSnapshot().active === null,
+    met: (id) => {
+      const row = ontdekking(`wereld.${id}`);
+      if (row && store.discover(row.id)) revealDiscovery(row);
+    },
+    done: (id, met) => {
+      if (met) store.rareEnd('wereld', ontdekking(`wereld.${id}`)?.soort === 'zeldzaam');
+    },
+    found: () => store.get().ontdekt,
+    sinceRare: () => store.get().zeldzaam.wereld ?? 0,
+    mood: () => world.mood().now,
+    sound: () => store.get().settings.geluid,
+  });
 }
 
 /**
