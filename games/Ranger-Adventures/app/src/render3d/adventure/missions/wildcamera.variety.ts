@@ -95,16 +95,51 @@ export function nightKey(n: readonly { id: string; slot: SlotId }[] | Record<str
   return pairs.sort().join(',');
 }
 
+/** A logged night (its `wn` note) read back as animal → spot (null when it is not ours). */
+function nightOf(wn: string): Record<string, SlotId> | null {
+  const v = parseVariant({ wa: 'a', wn });
+  return v ? Object.fromEntries(v.night.map((x) => [x.animal, x.slot])) : null;
+}
+
+/** How many of a night's animals stand on the very spot they had in `before` (an animal
+ *  that sat that night out, or no night before: none). */
+export function sameSpots(layout: Readonly<Record<string, SlotId>>, before: Readonly<Record<string, SlotId>> | null): number {
+  return before ? Object.keys(layout).filter((id) => before[id] === layout[id]).length : 0;
+}
+
+/** How many of a night's spots were taken in `before`, by any animal. */
+function samePlaces(layout: Readonly<Record<string, SlotId>>, before: Readonly<Record<string, SlotId>> | null): number {
+  if (!before) return 0;
+  const used = new Set(Object.values(before));
+  return Object.values(layout).filter((s) => used.has(s)).length;
+}
+
 /** Draw the night choir's layout and the order they walk in (a calm stagger, each 0.5-1.2 s
  *  after the one before). `cast` is the simon trial's animals; `recent` the last plays'
- *  nights (their `wn` notes, newest last): a night never stands as one of the last two did. */
+ *  nights (their `wn` notes, newest last). A night never stands as one of the last two did,
+ *  and of the layouts left only those with the FEWEST animals on the spot they had last
+ *  night are drawn from (then the fewest against the night before, then the fewest spots
+ *  taken last night by any animal: the same four spots with the walkers shuffled looks
+ *  like last night too): two nights in a row share at most one animal on its old spot (the
+ *  badger by its sett, when the night has no room for it on the other side). Only
+ *  `legalLayouts`, which the view test pins, so every night stays as readable. */
 export function drawCallers(play: Play, cast: readonly string[], recent: readonly string[] = []): NightCaller[] {
   const f = play.fork('wc-night');
   const all = legalLayouts(cast);
   if (!all.length) throw new Error(`[wildcamera] no night layout for ${cast.join(', ')}`);
-  const seen = new Set(recent.slice(-2).map((wn) => { const v = parseVariant({ wa: 'a', wn }); return v ? nightKey(v.night.map((x) => ({ id: x.animal, slot: x.slot }))) : ''; }));
-  const fresh = all.filter((l) => !seen.has(nightKey(l)));
-  const layout = f.pick(fresh.length ? fresh : all);
+  const nights = recent.slice(-2).map(nightOf);
+  const last = nights[nights.length - 1] ?? null, before = nights.length > 1 ? nights[0] : null;
+  const seen = new Set(nights.map((n) => (n ? nightKey(n) : '')));
+  let pool = all.filter((l) => !seen.has(nightKey(l)));
+  if (!pool.length) pool = all;
+  const fewest = (score: (l: Record<string, SlotId>) => number): void => {
+    const least = Math.min(...pool.map(score));
+    pool = pool.filter((l) => score(l) === least);
+  };
+  fewest((l) => sameSpots(l, last));
+  fewest((l) => sameSpots(l, before));
+  fewest((l) => samePlaces(l, last));
+  const layout = f.pick(pool);
   const order = f.shuffle(cast);
   let t = 0;
   return order.map((id, i) => {

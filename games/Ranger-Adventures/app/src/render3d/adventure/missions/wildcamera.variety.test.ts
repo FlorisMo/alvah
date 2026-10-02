@@ -22,9 +22,9 @@ import { buildWisselTrial, WisselRun } from '../../../engines/wisselen.ts';
 import { buildSimonTrial, simonCast } from '../../../engines/simon.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import type { Skin } from '../../../content/types.ts';
-import { CALLER_SLOTS, SIDE_OF, SLOT_CLASH, STOPS, STOPS_OF } from './wildcamera.places.ts';
+import { CALLER_SLOTS, SIDE_OF, SLOT_CLASH, STOPS, STOPS_OF, type SlotId } from './wildcamera.places.ts';
 import {
-  CameraClock, drawWildcameraPlay, hhmm, lastNights, legalLayouts, parseVariant, variantOf, type WildcameraPlay,
+  CameraClock, drawCallers, drawWildcameraPlay, hhmm, lastNights, legalLayouts, parseVariant, sameSpots, variantOf, type WildcameraPlay,
 } from './wildcamera.variety.ts';
 
 const MISSION = 'wildcamera';
@@ -216,4 +216,52 @@ test('the history hands the last nights over: one per play, newest last', () => 
     const key = (p: WildcameraPlay): string => p.callers.map((c) => `${c.id}@${c.slot}`).sort().join();
     assert.notEqual(key(b.p), key(a.p), `seed ${seed}: the next night stands differently`);
   }
+});
+
+test('two nights in a row never look alike: at most one animal on its spot of last night (1000 seed triples)', () => {
+  const spots = (p: WildcameraPlay): Record<string, string> => Object.fromEntries(p.callers.map((c) => [c.id, c.slot]));
+  const shared = { 0: 0, 1: 0 } as Record<number, number>;
+  for (let t = 0; t < 1000; t++) {
+    // the save's history as the beat log writes it (two beats a play, the play's variant on
+    // each), handed on through lastNights the way wildcamera.ts does
+    const history: { m: string; sd: number; va?: string }[] = [];
+    let prev: Record<string, string> | null = null;
+    for (let k = 0; k < 3; k++) {
+      const seed = 1 + t * 3 + k;
+      const { p } = draw(seed, 1 + k, lastNights(history));
+      const v = variantOf(p);
+      const va = compactVariant({ mood: 'gouden-uur', wn: v.wn, wa: v.wa });
+      history.push({ m: MISSION, sd: seed, va }, { m: MISSION, sd: seed, va });
+      const now = spots(p);
+      if (prev) {
+        const same = Object.keys(now).filter((id) => prev![id] === now[id]);
+        assert.ok(same.length <= 1, `seeds ${seed - 1} → ${seed}: ${same.join(', ')} on last night's spot`);
+        shared[same.length]++;
+        assert.notEqual(Object.values(now).sort().join(), Object.values(prev).sort().join(), `seed ${seed}: not the same four spots with the animals shuffled`);
+      }
+      prev = now;
+    }
+  }
+  // most nights share none (the badger keeps its side only when the night has no room for it on the other)
+  assert.ok(shared[0] > shared[1], `none ${shared[0]}, one ${shared[1]}`);
+});
+
+test('whatever the last two nights were, the next one keeps at most one animal on its spot', () => {
+  const others = ['wildzwijn', 'ree', 'nachtzwaluw', 'vos'];
+  const casts = others.map((leave) => ['das', ...others.filter((o) => o !== leave)]);
+  const wn = (lay: Record<string, SlotId>): string =>
+    variantOf({ seed: 0, arrivals: [], clockStart: 0, callers: Object.entries(lay).map(([id, slot]) => ({ id, slot, delay: 0 })) }).wn;
+  let n = 0;
+  for (const c0 of casts) for (const before of legalLayouts(c0)) for (const c1 of casts) for (const last of legalLayouts(c1)) for (const cast of casts) {
+    const night = drawCallers(newPlay(MISSION, ++n, 1), cast, [wn(before), wn(last)]);
+    const lay = Object.fromEntries(night.map((c) => [c.id, c.slot]));
+    assert.ok(sameSpots(lay, last) <= 1, `after ${wn(before)}, ${wn(last)}: ${night.map((c) => `${c.id}@${c.slot}`).join(', ')}`);
+    assert.notEqual(Object.values(lay).sort().join(), Object.values(last).sort().join(), 'not last night\'s four spots');
+    assert.ok(![wn(before), wn(last)].map((w) => parseVariant({ wa: 'a', wn: w })!.night.map((x) => `${x.animal}@${x.slot}`).sort().join()).includes(night.map((c) => `${c.id}@${c.slot}`).sort().join()), 'never one of the last two nights');
+  }
+  assert.ok(n > 10000, `${n} pairs of nights`);
+  // the first night (no history) is drawn from every layout, as before
+  const first = new Set<string>();
+  for (let seed = 1; seed <= 400; seed++) first.add(drawCallers(newPlay(MISSION, seed, 1), casts[0]).map((c) => c.slot).join());
+  assert.ok(first.size >= legalLayouts(casts[0]).length * 0.8, `${first.size} first nights`);
 });
