@@ -57,14 +57,30 @@ const NIGHTJAR = SVG(
   '<path d="M49.5 32.5 L53.5 33.6 L49.5 34.6 Z" fill="#3a2e22"/>' +
   '<circle cx="45.5" cy="30.6" r="1.7" fill="#1a130c"/>' +
   '<path d="M26 44 L25 48 M34 44 L35 48" stroke="#5e4c38" stroke-width="1.6" stroke-linecap="round"/>');
+/** Run 7: a fox side-on (the wildcamera's night visitor), in the badger's style: its
+ *  orange-red coat, the long bushy tail with a white tip, black stockings, a pointed
+ *  snout and two pointed ears. */
+const FOX = SVG(
+  '<g fill="#2b2420"><rect x="22" y="40" width="3.2" height="12" rx="1.4"/><rect x="27.5" y="41" width="3.2" height="11" rx="1.4"/>' +
+  '<rect x="38" y="41" width="3.2" height="11" rx="1.4"/><rect x="43.5" y="40" width="3.2" height="12" rx="1.4"/></g>' +
+  '<path d="M21 35 Q8 34 3 42 Q10 47 21 41 Z" fill="#cf6a2a"/>' +
+  '<path d="M6.5 40.2 Q3.2 41.4 3 42 Q5.4 44.6 8.6 44.2 Z" fill="#f6f1e6"/>' +
+  '<ellipse cx="34" cy="36" rx="14.5" ry="7.2" fill="#d9772f"/>' +
+  '<path d="M41 39 Q46 44 50 39 Z" fill="#f6f1e6"/>' +
+  '<path d="M44 31 Q50 25 56 29 L62 33.5 Q57 36.5 51 36 Q46 36.5 44 34 Z" fill="#d9772f"/>' +
+  '<path d="M55 33.2 L62 33.5 Q58 36.2 53 35.6 Z" fill="#f6f1e6"/>' +
+  '<path d="M48 27.5 L49.5 19.5 L53.5 26 Z M52.5 26.5 L55.5 19.5 L57 27.5 Z" fill="#c25d22"/>' +
+  '<path d="M49.5 22 L50.2 25.6 L51.8 25.8 Z" fill="#2b2420"/>' +
+  '<circle cx="62.2" cy="33.4" r="1.3" fill="#1c1714"/><circle cx="54.6" cy="30" r="1.2" fill="#1c1714"/>');
 /** A sun and a moon drawn like the game's line icons (24 grid, round 2 px stroke, currentColor). */
 const LINE = (paths: string): string => `<svg class="ic aim-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 const SUN = LINE('<circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity=".25"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/>');
 const MOON = LINE('<path d="M19.2 14.8A7.8 7.8 0 1 1 9.2 4.8a6.2 6.2 0 0 0 10 10z" fill="currentColor" fill-opacity=".25"/>');
 
-const PICS: Record<string, string> = { edelhert: STAG, das: BADGER, wildzwijn: BOAR, nachtzwaluw: NIGHTJAR };
+const PICS: Record<string, string> = { edelhert: STAG, das: BADGER, wildzwijn: BOAR, nachtzwaluw: NIGHTJAR, vos: FOX };
 
-/** The picture of an animal on the aim card (the roe keeps its 2D floor's drawing). */
+/** The picture of an animal on the aim card (the roe, the hind and the jay keep their 2D
+ *  floor's drawings). */
 export function aimPicture(id: string): string {
   return PICS[id] ?? animalIcon(id);
 }

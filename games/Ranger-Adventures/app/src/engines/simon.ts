@@ -27,11 +27,33 @@ export interface SimonTrial {
 }
 
 /** The animals that call, and the knobs this beat plays (a skin's `rondes` caps the rounds
- *  for its story; the 2D floor reads the same skin, so parity holds). */
-export function buildSimonTrial(skin: Skin, knobs: SpanKnobs): SimonTrial {
-  const dieren = skin.dieren?.length ? [...skin.dieren] : ['edelhert', 'ree', 'wildzwijn', 'raaf'];
+ *  for its story; the 2D floor reads the same skin, so parity holds). Run 7 (additive): with
+ *  `rng` (the play's `simon-cast` fork) a skin with a `roepPool` draws its row from it
+ *  (`simonCast`); without, the row is `dieren` as it stands. */
+export function buildSimonTrial(skin: Skin, knobs: SpanKnobs, rng?: () => number): SimonTrial {
+  const dieren = rng && skin.roepPool?.length ? simonCast(skin, rng) : skin.dieren?.length ? [...skin.dieren] : ['edelhert', 'ree', 'wildzwijn', 'raaf'];
   const rondes = typeof skin.rondes === 'number' && skin.rondes >= 1 ? Math.floor(skin.rondes) : Infinity;
   return { dieren, knobs: { ...knobs, rounds: Math.max(1, Math.min(knobs.rounds, rondes)) } };
+}
+
+/**
+ * Run 7: the row of callers for this play (pure, seeded): as many animals as the skin's
+ * `dieren` lists (the 2D floor's buttons: the same COUNT every play, so the echo is as hard
+ * whoever calls), the skin's own `dier` always among them (the wildcamera's badger by its
+ * sett), the others drawn from `roepPool`. Kept in the pool's order. No pool: `dieren`.
+ */
+export function simonCast(skin: Skin, rng: () => number): string[] {
+  const base = skin.dieren?.length ? skin.dieren : ['edelhert', 'ree', 'wildzwijn', 'raaf'];
+  const pool = skin.roepPool?.length ? skin.roepPool : null;
+  if (!pool) return [...base];
+  const vast = skin.dier && pool.includes(skin.dier) ? [skin.dier] : [];
+  const rest = pool.filter((d) => !vast.includes(d));
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
+  const chosen = new Set([...vast, ...rest.slice(0, Math.max(0, Math.min(base.length, pool.length) - vast.length))]);
+  return pool.filter((d) => chosen.has(d));
 }
 
 /** One caller of the row, drawn from `rng`. */

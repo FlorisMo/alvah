@@ -72,7 +72,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   k.check();
   k.beat = 'callers';
   const settings = store.get().settings;
-  const trial = buildSimonTrial(k.steps[step].skin, k.knobs('simon'));
+  // (run 7: a skin with a roepPool draws its row from the play, as its 2D floor does)
+  const trial = buildSimonTrial(k.steps[step].skin, k.knobs('simon'), k.play.fork('simon-cast').rng);
   // run 7: the play's callers (its 2D twin draws the same), in rounds from the knobs
   const run = new SimonRun(trial.knobs, trial.dieren, k.play.fork('simon').rng);
   const byId = new Map(o.callers.map((c) => [c.id, c]));

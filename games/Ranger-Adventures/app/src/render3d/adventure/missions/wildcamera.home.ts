@@ -26,7 +26,7 @@ import { SIZE } from '../../AnimalScale';
 import { crouchPose } from './wildcamera.pose';
 import {
   WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, JUNIPER, THICKET_BUSHES, TAG_AT, NIGHTJAR_AT, NIGHTJAR_STUMP,
-  SNARE_MARKS, trailA, trailB,
+  SNARE_MARKS, JAY_AT, trailA, trailB,
 } from './wildcamera.places';
 import type { Spot } from '../types';
 
@@ -294,6 +294,10 @@ function trailPrints(groundY: (x: number, z: number) => number, lines: readonly 
   return mesh;
 }
 
+/** Run 7: the birds the home flies: the nightjar, and the jay. */
+export type BirdId = 'nachtzwaluw' | 'gaai';
+type Flight = { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; yaw: number; done: () => void };
+
 /** The wildcamera's home, as the adventure uses it. */
 export class WildcameraHome implements HomeDressing {
   readonly group = new THREE.Group();
@@ -346,15 +350,22 @@ export class WildcameraHome implements HomeDressing {
    *  his crouch sinks him */
   private poacher: THREE.Object3D | null = null;
   private poacherDrop = 0;
-  /** the nightjar: it flies in and lands, so the home moves it */
-  readonly bird = new THREE.Group();
+  /** the birds that fly in and land (the home moves them): the nightjar, and (run 7) the
+   *  jay; each its own group, model and flight */
+  private readonly birds: Record<BirdId, { group: THREE.Group; body: THREE.Object3D | null; flight: Flight | null }> = {
+    nachtzwaluw: { group: new THREE.Group(), body: null, flight: null },
+    gaai: { group: new THREE.Group(), body: null, flight: null },
+  };
+  /** the nightjar (the night choir's bird and the aim round's): its group */
+  get bird(): THREE.Group { return this.birds.nachtzwaluw.group; }
   /** the log it sits on at night, and the bird: what a click on the nightjar finds (the
    *  bird on its log reads as one thing; a container at the origin) */
   readonly perch = new THREE.Group();
-  private birdBody: THREE.Object3D | null = null;
   /** how high the top of the thicket's stump stands where the nightjar lands on it (m) */
   private stumpTop: number = NIGHTJAR_AT.hol.lift;
-  private flight: { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; yaw: number; done: () => void } | null = null;
+  /** run 7: the animal standing on the crossing while he decides, as a click finds it (an
+   *  invisible box round it: a click on it is no choice of a place) */
+  readonly visitor: THREE.Mesh;
   private readonly spawned: { dispose(): void; update?(dt: number): void }[] = [];
   private readonly groundY: (x: number, z: number) => number;
   private clock = 0;
@@ -418,9 +429,12 @@ export class WildcameraHome implements HomeDressing {
     // (none on the sandy trail where the nightjar lands at night, nor between it and the
     // lens: a dark bird on the path must never stand behind a tuft)
     const perch = toLocal(CROSS, NIGHTJAR_AT.open);
+    // (run 7: nor round the jay's spot on the sunny patch, nor between it and the lens)
+    const jaySpot = toLocal(CROSS, JAY_AT.open);
     const clear = (x: number, z: number): boolean => {
       const q = toLocal(CROSS, { x, z });
-      return Math.hypot(q.u - perch.u, q.v - perch.v) < 0.6 || (Math.abs(q.u - perch.u) < 0.45 && q.v < perch.v && q.v > perch.v - 1.4);
+      return Math.hypot(q.u - perch.u, q.v - perch.v) < 0.6 || (Math.abs(q.u - perch.u) < 0.45 && q.v < perch.v && q.v > perch.v - 1.4)
+        || Math.hypot(q.u - jaySpot.u, q.v - jaySpot.v) < 0.55 || (Math.abs(q.u - jaySpot.u) < 0.4 && q.v < jaySpot.v && q.v > jaySpot.v - 1.2);
     };
     for (let i = 0; i < tufts.count; i++) {
       const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * GLADE_R * 0.95;
@@ -629,13 +643,26 @@ export class WildcameraHome implements HomeDressing {
     this.bird.name = 'nightjar';
     this.bird.visible = false;
     this.perch.add(this.bird);
-    // (shown ≈ 1.5× its size, like the camera: a 17 cm bird must read on its log at night)
-    void env.spawnModel('nachtzwaluw', { height: heightFor('nachtzwaluw') * 1.5, idle: false }).then((s) => {
-      if (!s) return;
-      this.birdBody = s.root as THREE.Object3D;
-      this.bird.add(this.birdBody);
-      this.spawned.push(s);
-    });
+    // (shown ≈ 1.5× its size, like the camera: a 17 cm bird must read on its log at night;
+    // run 7: the jay too, a day visitor of the aim round)
+    const jay = this.birds.gaai.group;
+    jay.name = 'jay';
+    jay.visible = false;
+    this.group.add(jay);
+    for (const id of ['nachtzwaluw', 'gaai'] as const) {
+      void env.spawnModel(id, { height: heightFor(id) * 1.5, idle: false }).then((s) => {
+        if (!s) return;
+        const b = this.birds[id];
+        b.body = s.root as THREE.Object3D;
+        b.group.add(b.body);
+        this.spawned.push(s);
+      });
+    }
+    // run 7: the visitor's box (a click on the animal on the crossing; never in a picture)
+    this.visitor = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new THREE.MeshBasicMaterial({ visible: false }));
+    this.visitor.name = 'visitor';
+    this.visitor.visible = false;
+    this.group.add(this.visitor);
 
     this.setState('before');
   }
@@ -814,33 +841,55 @@ export class WildcameraHome implements HomeDressing {
     return () => { r.visible = false; if (this.snare) this.snare.visible = wasSnare; if (grass) grass.visible = wasGrass; };
   }
 
-  /** The nightjar flies from `from` to `to` (landing there on the ground, or at `lift` m
-   *  on a log), facing `yaw` when it lands. At once under reduced motion. */
-  fly(from: Spot & { y?: number }, to: Spot & { lift?: number }, yaw: number, reduced: boolean, secs = 2.4): Promise<void> {
-    this.bird.visible = true;
+  /** A bird (the nightjar unless `id` says the jay) flies from `from` to `to` (landing
+   *  there on the ground, or at `lift` m on a log or a bush), facing `yaw` when it lands.
+   *  At once under reduced motion. */
+  fly(from: Spot & { y?: number }, to: Spot & { lift?: number }, yaw: number, reduced: boolean, secs = 2.4, id: BirdId = 'nachtzwaluw'): Promise<void> {
+    const b = this.birds[id];
+    b.group.visible = true;
     const a = new THREE.Vector3(from.x, this.groundY(from.x, from.z) + (from.y ?? 3.2), from.z);
-    const b = new THREE.Vector3(to.x, this.groundY(to.x, to.z) + (to.lift ?? 0), to.z);
-    this.bird.userData.perch = to.lift ?? 0; // (how high its log holds it: the play-hint probe)
-    this.flight?.done();
+    const c = new THREE.Vector3(to.x, this.groundY(to.x, to.z) + (to.lift ?? 0), to.z);
+    b.group.userData.perch = to.lift ?? 0; // (how high its log holds it: the play-hint probe)
+    b.flight?.done();
     return new Promise((done) => {
-      this.flight = { from: a, to: b, t: reduced ? 1 : 0, dur: secs, yaw, done };
-      if (reduced) this.stepFlight(0);
+      b.flight = { from: a, to: c, t: reduced ? 1 : 0, dur: secs, yaw, done };
+      if (reduced) this.stepFlight(id, 0);
     });
   }
 
-  /** The nightjar calls: it lifts a little on its log (and settles again). */
-  birdHop(on: boolean): void { if (this.birdBody) this.birdBody.position.y = on ? 0.05 : 0; }
+  /** Run 7: a bird waiting on the crossing while he decides: the jay hops now and then, the
+   *  nightjar shifts on its feet (a small bird draws the eye by moving). Off: still. */
+  birdFidget(id: BirdId | null): void {
+    for (const b of Object.values(this.birds)) if (b.body) { b.body.position.y = 0; b.body.rotation.y = 0; }
+    this.fidget = id;
+    this.fidgetT = 0;
+  }
+  private fidget: BirdId | null = null;
+  private fidgetT = 0;
 
-  /** The nightjar out of the picture (flown off). */
-  birdGone(): void {
-    this.flight?.done();
-    this.flight = null;
-    this.bird.visible = false;
+  /** A bird calls: it lifts a little on its perch (and settles again). */
+  birdHop(on: boolean, id: BirdId = 'nachtzwaluw'): void { const body = this.birds[id].body; if (body) body.position.y = on ? 0.05 : 0; }
+
+  /** A bird out of the picture (flown off); no id: both. */
+  birdGone(id?: BirdId): void {
+    for (const k of id ? [id] : (['nachtzwaluw', 'gaai'] as const)) {
+      const b = this.birds[k];
+      b.flight?.done();
+      b.flight = null;
+      b.group.visible = false;
+    }
   }
 
   /** How high the nightjar's perch in a place holds it (m): the thicket's stump top, as
    *  measured on the model; the sandy trail. */
   nightjarLift(bin: 'open' | 'hol'): number { return bin === 'hol' ? this.stumpTop : NIGHTJAR_AT.open.lift; }
+
+  /** Run 7: how high a bird's perch in a place holds it (m): the nightjar's stump or trail;
+   *  the jay hops on the ground. */
+  birdLift(id: BirdId, bin: 'open' | 'hol'): number { return id === 'gaai' ? JAY_AT[bin].lift : this.nightjarLift(bin); }
+
+  /** The nightjar's old stump's top (m; the night choir's second perch). */
+  get stumpLift(): number { return this.stumpTop; }
 
   /** Where the nightjar is now (its feet). */
   get birdAt(): THREE.Vector3 { return this.bird.position; }
@@ -848,17 +897,35 @@ export class WildcameraHome implements HomeDressing {
   /** The object a player clicks for the nightjar. */
   get birdObject(): THREE.Object3D { return this.bird; }
 
-  private stepFlight(dt: number): void {
-    const f = this.flight;
+  /** Run 7: where a bird is now (its feet), its group, and whether it is out. */
+  birdAtOf(id: BirdId): THREE.Vector3 { return this.birds[id].group.position; }
+  birdOf(id: BirdId): THREE.Group { return this.birds[id].group; }
+  birdOut(id: BirdId): boolean { return this.birds[id].group.visible; }
+
+  /** Run 7: the visitor's box round the animal standing at `at` (its length along `yaw`,
+   *  its height), or none. */
+  showVisitor(at: Spot | null, len = 1, h = 1, yaw = 0): void {
+    const v = this.visitor;
+    v.visible = !!at;
+    if (!at) return;
+    v.position.set(at.x, this.groundY(at.x, at.z), at.z);
+    v.rotation.set(0, yaw, 0);
+    v.scale.set(Math.max(0.5, len * 0.45), Math.max(0.45, h), Math.max(0.5, len));
+    v.updateMatrixWorld(true);
+  }
+
+  private stepFlight(id: BirdId, dt: number): void {
+    const b = this.birds[id];
+    const f = b.flight;
     if (!f) return;
     f.t = Math.min(1, f.t + dt / f.dur);
     const e = f.t * f.t * (3 - 2 * f.t);
     const p = f.from.clone().lerp(f.to, e);
     p.y += Math.sin(e * Math.PI) * 0.6 * (1 - e); // a soft glide down
-    this.bird.position.copy(p);
+    b.group.position.copy(p);
     const dir = f.to.clone().sub(f.from);
-    this.bird.rotation.set(0, f.t < 0.85 ? Math.atan2(dir.x, dir.z) : f.yaw, 0);
-    if (f.t >= 1) { const d = f.done; this.flight = null; d(); }
+    b.group.rotation.set(0, f.t < 0.85 ? Math.atan2(dir.x, dir.z) : f.yaw, 0);
+    if (f.t >= 1) { const d = f.done; b.flight = null; d(); }
   }
 
   /* ------------------------------------------------------------- the frame ---- */
@@ -884,6 +951,8 @@ export class WildcameraHome implements HomeDressing {
     this.showTags(false);
     this.showSnare(false);
     this.birdGone();
+    this.birdFidget(null);
+    this.showVisitor(null);
     if (this.poacher) this.poacher.visible = false;
   }
 
@@ -956,7 +1025,18 @@ export class WildcameraHome implements HomeDressing {
     const irGlowMat = this.irGlow.material as THREE.SpriteMaterial;
     irGlowMat.opacity = Math.min(1, irK * 1.3);
     this.irGlow.visible = irK > 0.01 && this.trap.visible;
-    this.stepFlight(dt);
+    this.stepFlight('nachtzwaluw', dt);
+    this.stepFlight('gaai', dt);
+    // a waiting bird: a little hop (the jay) or a small turn (the nightjar) every ~1.6 s
+    if (this.fidget && !reduced) {
+      const b = this.birds[this.fidget];
+      this.fidgetT += dt;
+      const ph = this.fidgetT % 1.6;
+      if (b.body && !b.flight) {
+        if (this.fidget === 'gaai') b.body.position.y = ph < 0.32 ? Math.sin((ph / 0.32) * Math.PI) * 0.06 : 0;
+        else b.body.rotation.y = Math.sin(this.fidgetT * 1.2) * 0.22;
+      }
+    }
     void this.state;
   }
 
@@ -986,7 +1066,7 @@ export class WildcameraHome implements HomeDressing {
     (this.fan.material as THREE.Material).dispose();
     this.strap.geometry.dispose();
     (this.strap.material as THREE.Material).dispose();
-    for (const o of [this.led, this.ir, ...this.zones]) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
+    for (const o of [this.led, this.ir, this.visitor, ...this.zones]) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }
     this.snareGrass?.geometry.dispose();
     this.snareGrass?.removeFromParent();
     (this.ledGlow.material as THREE.Material).dispose();

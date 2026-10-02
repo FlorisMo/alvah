@@ -31,6 +31,25 @@ function roeSvg(spots: boolean): string {
   );
 }
 
+/** Run 7: a red deer hind side-on — the stag's shape and red-brown coat, no antlers, the
+ *  big ears up — so the wildcamera's hind is never the stag's antlered 🦌, nor the small
+ *  roe (a longer neck, a darker coat, a pale rump). */
+function hindSvg(): string {
+  return (
+    '<svg class="ai-svg" viewBox="0 0 64 64" width="1.15em" height="1.15em" aria-hidden="true">' +
+    '<g fill="#6e4226"><rect x="17" y="38" width="3" height="19" rx="1.3"/><rect x="22.5" y="38" width="3" height="18" rx="1.3"/>' +
+    '<rect x="37" y="38" width="3" height="19" rx="1.3"/><rect x="42.5" y="38" width="3" height="18" rx="1.3"/></g>' +
+    '<ellipse cx="31" cy="33" rx="17" ry="9" fill="#a0653a"/>' +
+    '<path d="M40 31 L45 15 L52 16.5 L48 36 Z" fill="#a0653a"/>' +
+    '<path d="M41 32 L45 17 L48 18 L45 34 Z" fill="#6e4226" opacity=".45"/>' +
+    '<ellipse cx="52" cy="17.5" rx="6.8" ry="4.3" fill="#a0653a"/>' +
+    '<path d="M46.2 14.5 Q42.5 7.5 46.8 7.8 Q48.6 11 48.6 14.6 Z M49.6 13.8 Q49.6 6.4 53.4 8 Q52.8 11.4 51.4 14.4 Z" fill="#8a5430"/>' +
+    '<ellipse cx="14.5" cy="30.5" rx="3.4" ry="4.2" fill="#ecdcbc"/>' +
+    '<circle cx="52.4" cy="16.2" r="1.3" fill="#2a1a10"/><circle cx="58.2" cy="19" r="1.4" fill="#2a1a10"/>' +
+    '</svg>'
+  );
+}
+
 /** A jay side-on (pinkish brown, a black tail, the blue bar on its wing, its crest) and a
  *  green woodpecker clinging upright (green, a red cap, a black mask): the squirrel's
  *  tree neighbours, each its own picture beside the raven and the squirrel. */
@@ -63,14 +82,14 @@ function greenWoodpeckerSvg(): string {
 }
 
 const ICON: Record<string, string> = {
-  edelhert: '🦌', ree: roeSvg(false), reekalf: roeSvg(true), wildzwijn: '🐗', frisling: '🐗', das: '🦡', vos: '🦊',
+  edelhert: '🦌', hinde: hindSvg(), ree: roeSvg(false), reekalf: roeSvg(true), wildzwijn: '🐗', frisling: '🐗', das: '🦡', vos: '🦊',
   eekhoorn: '🐿️', wolf: '🐺', raaf: '🐦‍⬛', merel: '🐦‍⬛', nachtzwaluw: '🐦', koekoek: '🐦',
   roodborsttapuit: '🐦', 'groene-specht': greenWoodpeckerSvg(), gaai: jaySvg(), koolmees: '🐦', heikikker: '🐸', adder: '🐍',
   heideblauwtje: '🦋',
 };
 
 /** The plain name of a content animal id where the id is not a word a child reads. */
-const NAME: Record<string, string> = { wildzwijn: 'wild zwijn', edelhert: 'hert', heikikker: 'kikker' };
+const NAME: Record<string, string> = { wildzwijn: 'wild zwijn', edelhert: 'hert', hinde: 'hert', heikikker: 'kikker' };
 
 /** The picture for a content animal id (a small bird as the calm default). */
 export function animalIcon(id: string): string {
