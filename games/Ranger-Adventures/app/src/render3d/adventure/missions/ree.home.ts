@@ -53,19 +53,26 @@ const DROPS = 9;
 const JUNIPER_TALL = 1.25;
 const JUNIPER_SLIM = 0.82;
 
-/** Beyond this far (m) from the lens a juniper or a log draws its light copy. */
+/** Beyond this far (m) from the lens a juniper or a log draws a lighter copy, and beyond
+ *  `FAR_COPY_M` its lightest (a view across the heath holds the copse's, the thicket's and
+ *  the hides' eight junipers and three logs: drawn whole they were ~140k triangles, a
+ *  quarter of the home's share of the hide walks and the watch turn, review r1). */
+const MID_COPY_M = 7.5;
 const FAR_COPY_M = 16;
 /** The light copies are made this long (ms) after the home is built, one per idle moment. */
 const FAR_COPY_AFTER_MS = 4000;
-/** The light copies' triangles (the real juniper has ~12.4k, the log ~11k). */
+/** The copies' triangles, near and far (the real juniper has ~12.4k, the log ~11k). */
+const MID_JUNIPER_TRIS = 3600;
+const MID_LOG_TRIS = 2600;
 const FAR_JUNIPER_TRIS = 1800;
 const FAR_LOG_TRIS = 1200;
 /** The light copies lose the model's normal-map shading: this brings their colour back
  *  to the real one's apparent tone (as the forest's far trees, world/Forest LOD_TONE). */
 const FAR_TONE = 0.86;
 
-/** The leaves of a tussock in a stand that is not this play's (a whole one has 52). */
-const LIGHT_BLADES = 20;
+/** The leaves of a tussock in a stand that is not this play's (a whole one has 52; a
+ *  stand not played is only ever seen across the heath, 10-25 m off). */
+const LIGHT_BLADES = 8;
 
 /** The share of the calf's back the search's lens glimpses between the stems (run 7: P1's
  *  fixed value; the level's knob from ree-growth on). */
@@ -325,7 +332,7 @@ export class ReeHome implements HomeDressing {
       // a Veluwe juniper grows up more than out: the world's round bush, drawn slimmer
       void env.spawnPlant('prop-juniper-bush', h / JUNIPER_TALL).then((s) => {
         if (!s) return;
-        const r = this.withFarCopy(s.root as THREE.Object3D, 'prop-juniper-bush', h, FAR_JUNIPER_TRIS);
+        const r = this.withFarCopy(s.root as THREE.Object3D, 'prop-juniper-bush', h, MID_JUNIPER_TRIS, FAR_JUNIPER_TRIS);
         r.position.set(x, g(x, z) - 0.03, z);
         r.rotation.y = turn;
         r.scale.multiply(new THREE.Vector3(JUNIPER_SLIM, JUNIPER_TALL, JUNIPER_SLIM));
@@ -342,7 +349,7 @@ export class ReeHome implements HomeDressing {
       const log = l.hideLog;
       void env.spawnPlant('prop-fallen-log', SIZE.boomstam.h * 0.9).then((s) => {
         if (!s) return;
-        const r = this.withFarCopy(s.root as THREE.Object3D, 'prop-fallen-log', SIZE.boomstam.h * 0.9, FAR_LOG_TRIS);
+        const r = this.withFarCopy(s.root as THREE.Object3D, 'prop-fallen-log', SIZE.boomstam.h * 0.9, MID_LOG_TRIS, FAR_LOG_TRIS);
         r.position.set(log.x, g(log.x, log.z) - 0.04, log.z);
         r.rotation.y = log.turn;
         this.group.add(r);
@@ -451,13 +458,14 @@ export class ReeHome implements HomeDressing {
   }
 
   /**
-   * A solid piece (a juniper, a log) with a light copy for afar: the world's load-time
+   * A solid piece (a juniper, a log) with light copies for afar: the world's load-time
    * simplifier (Lod.ts, as the forest's far trees) bakes the model once per kind, and a
-   * THREE.LOD draws the real model within `FAR_COPY_M` of the lens and the copy beyond
-   * (eight junipers and three logs cost ~140k triangles in a view across the heath).
-   * `h`: this piece's height (the copy was baked at the first one's; it scales with it).
+   * THREE.LOD draws the real model within `MID_COPY_M` of the lens, the near copy out to
+   * `FAR_COPY_M` and the lightest beyond (eight junipers and three logs cost ~140k
+   * triangles in a view across the heath drawn whole). `h`: this piece's height (the
+   * copies were baked at the first one's; they scale with it).
    */
-  private withFarCopy(root: THREE.Object3D, kind: string, h: number, tris: number): THREE.Object3D {
+  private withFarCopy(root: THREE.Object3D, kind: string, h: number, mid: number, far: number): THREE.Object3D {
     const key = `ree:${kind}`;
     if (!this.farRef.has(key)) this.farRef.set(key, h);
     const lod = new THREE.LOD();
@@ -465,16 +473,17 @@ export class ReeHome implements HomeDressing {
     // (the copy is made a while after the world is built, at an idle moment: simplifying
     // a model costs ~0.1-0.2 s, and the title must not wait for it)
     this.farJobs.push(() => {
-      const [geo] = lodGeometries(key, root, [tris]);
-      if (!geo) return;
-      if (!geo.userData.toned) {
-        const col = geo.attributes.color as THREE.BufferAttribute;
-        for (let i = 0; i < col.array.length; i++) (col.array as Float32Array)[i] *= FAR_TONE;
-        geo.userData.toned = true;
-      }
-      const far = new THREE.Mesh(geo, this.farMat);
-      far.scale.setScalar(h / this.farRef.get(key)!);
-      lod.addLevel(far, FAR_COPY_M, 0.1);
+      const geos = lodGeometries(key, root, [mid, far]);
+      geos.forEach((geo, i) => {
+        if (!geo.userData.toned) {
+          const col = geo.attributes.color as THREE.BufferAttribute;
+          for (let k = 0; k < col.array.length; k++) (col.array as Float32Array)[k] *= FAR_TONE;
+          geo.userData.toned = true;
+        }
+        const copy = new THREE.Mesh(geo, this.farMat);
+        copy.scale.setScalar(h / this.farRef.get(key)!);
+        lod.addLevel(copy, i ? FAR_COPY_M : MID_COPY_M, 0.1);
+      });
     });
     this.nextFarJob(FAR_COPY_AFTER_MS);
     return lod;
