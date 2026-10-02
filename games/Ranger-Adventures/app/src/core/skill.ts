@@ -149,8 +149,11 @@ export const STEP_OF: Readonly<Record<Judgement, number>> = { easy: 1.0, fine: 0
 /**
  * Judge a beat by its own engine's rules, or null when the summary lacks that engine's own
  * fields (the hut's care game, an old caller: the accuracy staircase decides there).
- *  - simon, corsi: easy = round 1 clean AND a clean echo past the start; fine = round 1
- *    clean; hard = round 1 not clean.
+ *  - simon, corsi: judged by what he echoed CLEANLY (`span`), so a slip in round 1 (a click
+ *    while a call still plays, a mis-aim) never turns a beat he then grew in into a drop:
+ *    easy = round 1 clean AND a clean echo past the start; fine = round 1 clean, or a clean
+ *    echo past the start after a slip in round 1; steady = after a slip he came back to his
+ *    start but did not grow past it; hard = never a clean echo of his start length.
  *  - zoeken: easy = clean, no hint, ≤ 8 s; fine = clean; hard = ≥ 2 misses or a hint.
  *  - dagnacht: easy = every encounter right first time and ≤ 1 impulse; fine = ≥ 80 %
  *    right; hard = < 50 % right.
@@ -165,8 +168,9 @@ export function judgeBeat(engine: Engine, s: BeatSummary): Judgement | null {
     case 'simon':
     case 'corsi':
       if (s.span == null || s.start == null || s.firstClean == null) return null;
-      if (!s.firstClean) return 'hard';
-      return s.span >= s.start + 1 ? 'easy' : 'fine';
+      if (s.span < s.start) return 'hard';
+      if (s.firstClean) return s.span >= s.start + 1 ? 'easy' : 'fine';
+      return s.span >= s.start + 1 ? 'fine' : 'steady';
     case 'zoeken': {
       if (s.seconds == null || s.misses == null) return null;
       if (s.misses >= 2 || s.hinted) return 'hard';

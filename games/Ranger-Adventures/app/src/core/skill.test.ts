@@ -92,11 +92,20 @@ test('the manual settings (automatisch off): no growth inside a beat, fixed roun
   assert.deepEqual(knobsFromDifficulty('wisselen', manual), { sorts: 8, flipEvery: 4, flips: 1 });
 });
 
-test('judgement: the span engines (easy = round 1 clean and grew past the start)', () => {
+test('judgement: the span engines, by what he echoed cleanly (a slip in round 1 is not a drop)', () => {
   const span = (o: Partial<BeatSummary>): BeatSummary => ({ trials: 3, correct: 3, span: 4, start: 2, rounds: 3, eased: 0, firstClean: true, ...o });
+  // the owner's example: a first echo 2 → 3 → 4, all clean: easy (and the next starts at 3)
   assert.equal(judgeBeat('simon', span({})), 'easy');
+  assert.equal(knobsFor('simon', updateSkill(undefined, span({}), 'simon').level).start, 3);
   assert.equal(judgeBeat('simon', span({ span: 2, correct: 1 })), 'fine', 'round 1 clean, never past the start');
-  assert.equal(judgeBeat('corsi', span({ firstClean: false, span: 4 })), 'hard', 'round 1 not clean');
+  // a practised echo that starts at 4, with a slip in round 1
+  const slip = (sp: number): BeatSummary => ({ trials: 4, correct: 3, span: sp, start: 4, rounds: 4, eased: 1, firstClean: false });
+  for (const e of ['simon', 'corsi'] as const) {
+    assert.equal(judgeBeat(e, slip(5)), 'fine', `${e}: a slip, then a clean echo past his start`);
+    assert.equal(judgeBeat(e, slip(4)), 'steady', `${e}: a slip, back to his start, not past it`);
+    assert.equal(judgeBeat(e, slip(3)), 'hard', `${e}: never a clean echo of his start`);
+    assert.equal(judgeBeat(e, { ...slip(0), correct: 0 }), 'hard', `${e}: no clean echo at all`);
+  }
   assert.equal(judgeBeat('simon', { trials: 1, correct: 1 }), null, 'no span fields: the care game');
 });
 
@@ -124,7 +133,7 @@ test('a level steps: easy +1, fine +0.34, hard −0.5, never under best − 1, n
   const rec = (level: number, best = level): SkillRecord => ({ ...blankSkill(), level, best });
   const easy: BeatSummary = { trials: 3, correct: 3, span: 4, start: 2, rounds: 3, eased: 0, firstClean: true };
   const fine: BeatSummary = { ...easy, span: 2 };
-  const hard: BeatSummary = { ...easy, firstClean: false };
+  const hard: BeatSummary = { ...easy, correct: 0, span: 0, firstClean: false };
   assert.equal(updateSkill(rec(1), easy, 'simon').level, 2);
   assert.equal(updateSkill(rec(1), fine, 'simon').level, 1.34);
   assert.equal(updateSkill(rec(3), hard, 'simon').level, 2.5);

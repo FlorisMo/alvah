@@ -243,7 +243,11 @@ heard, show `k.rare()` when set; (5) add the home's rows to `content/ontdekkinge
 **Difficulty that grows** (package `adaptive`, design §5): the level (1-6) of each
 breinkracht picks a ROW of its knob table (`KNOB_TABLES`, `knobsFor(engine, level)`, band =
 `floor(level)`); a finished beat is judged by its own engine (`judgeBeat`: easy +1.0, fine
-+0.34, steady 0, hard −0.5 silently) and never drops under `best − 1`; a summary without
++0.34, steady 0, hard −0.5 silently) and never drops under `best − 1`. The span engines
+(simon, corsi) are judged by what he echoed CLEANLY: easy = round 1 clean and a clean echo
+past the start; fine = round 1 clean, or past the start after a slip in round 1; steady = a
+slip, then back to the start but not past it; hard = never a clean echo of the start length
+(a first-round slip is not a drop). A summary without
 the engine's own fields (the hut's care game) keeps the old ±0.34 staircase. A level that
 crosses a whole number marks the engine for the reward card's calm "Je … groeit." Inside a
 beat the pure cores adapt, identically on the 2D floor, the classic stage and the world:
@@ -253,7 +257,7 @@ engines/span.ts      SpanRun<T>(knobs, next): ROUNDS for simon and corsi (SimonR
                      wrap it): clean → one longer (the same calls plus one for simon, a fresh
                      route for corsi), rescued → as long, 1st wrong → replay, 2nd → a fresh one
                      one shorter (silent 'ease'); always ends on his own echo. skin.rondes caps
-                     the rounds for a story (the squirrel: 2)
+                     the rounds for a story
 engines/zoeken.ts    buildZoekenTrial(skin, knobs, rng): which look-alikes (count = lookAlikes),
                      the 2D layout (never within 15 % of the centre), haze = 1 − glimpse;
                      zoekSummary({ misses, seconds, hinted })

@@ -128,7 +128,7 @@ test('the store: a span beat is judged by its engine; a whole step marks the rew
   assert.deepEqual([log.e, log.lv, log.n, log.c, log.sp, log.st], ['simon', 1, 3, 3, 4, 2]);
   // a hard one: half a step down, silently, never under one step below his best
   store.clearGroei();
-  store.logBeat('simon', { trials: 3, correct: 1, span: 3, start: 3, rounds: 3, eased: 2, firstClean: false }, { missionId: 'eekhoorn', view: 'world', play: null });
+  store.logBeat('simon', { trials: 3, correct: 1, span: 2, start: 3, rounds: 3, eased: 2, firstClean: false }, { missionId: 'eekhoorn', view: 'world', play: null });
   s = store.get();
   assert.equal(s.skill.simon.level, 1.5);
   assert.equal(s.skill.simon.best, 2);

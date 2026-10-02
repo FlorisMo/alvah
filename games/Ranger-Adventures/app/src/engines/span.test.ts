@@ -7,9 +7,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SpanRun, type SpanResult } from './span.ts';
-import { simonNext } from './simon.ts';
+import { simonNext, SimonRun } from './simon.ts';
 import { corsiNext, PRINT_SPOTS } from './corsi.ts';
 import { newPlay } from '../core/play.ts';
+import { knobsFor, judgeBeat, updateSkill, blankSkill } from '../core/skill.ts';
 
 /** A supplier that numbers its items: round sequences are [len·10 + 0, len·10 + 1, …] with
  *  an appended item when the round grew (so a test can see which kind of round came). */
@@ -131,4 +132,26 @@ test('corsi: every route has no spot twice, and a new round is a new route', () 
     assert.notDeepEqual(b, a);
     assert.equal(new Set(next(6, b)).size, 6);
   }
+});
+
+test('a slip in round 1, then clean echoes past his start: he grows (the practised eekhoorn, seed 7200)', () => {
+  // the lead's play: simon 4.2 (start 4), two wrong clicks in round 1 (eased to 3), then
+  // clean echoes of 3, 4 and 5. The level goes UP a third (it went down half a step).
+  const run = new SimonRun(knobsFor('simon', 4.2), ['das', 'wildzwijn', 'ree', 'nachtzwaluw'], newPlay('eekhoorn', 7200, 1).fork('simon').rng);
+  assert.equal(run.begin().length, 4);
+  assert.equal(run.tap('nobody'), 'replay');
+  assert.equal(run.tap('nobody'), 'ease');
+  assert.equal(run.sequence.length, 3);
+  const lengths: number[] = [];
+  for (;;) {
+    lengths.push(run.sequence.length);
+    let r: SpanResult = 'advance';
+    for (const id of [...run.sequence]) r = run.tap(id);
+    if (r === 'complete') break;
+  }
+  assert.deepEqual(lengths, [3, 3, 4, 5], 'the rescued round, then 3, 4 and 5 clean');
+  const s = run.summary();
+  assert.deepEqual([s.start, s.span, s.firstClean], [4, 5, false]);
+  assert.equal(judgeBeat('simon', s), 'fine');
+  assert.equal(updateSkill({ ...blankSkill(), level: 4.2, best: 4.2 }, s, 'simon').level, 4.54);
 });
