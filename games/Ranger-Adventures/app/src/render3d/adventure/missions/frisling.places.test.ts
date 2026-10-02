@@ -448,6 +448,13 @@ for (const id of WAY_IDS) {
       const lens = lensOf(v as WayView);
       const c = project(stand, RANGER_STAND_HEIGHT * 0.5, lens);
       assert.ok(c.ahead && c.x > 0 && c.x < W && c.y > 0 && c.y < H, `${name}: he is in the picture (${c.x.toFixed(0)}, ${c.y.toFixed(0)})`);
+      // a helipad's big H never sits in the picture of a search or a route
+      if (name !== 'wallow') {
+        for (const pad of PADS) for (let i = 0; i < 8; i++) {
+          const q = project({ x: pad.x + PAD_RADIUS * Math.cos((i * Math.PI) / 4), z: pad.z + PAD_RADIUS * Math.sin((i * Math.PI) / 4) }, 0, lens);
+          assert.ok(!q.ahead || q.x < 0 || q.x > W || q.y < 0 || q.y > H, `${name}: the helipad at (${pad.x}, ${pad.z}) is out of the picture (${q.x.toFixed(0)}, ${q.y.toFixed(0)})`);
+        }
+      }
     }
   });
 }

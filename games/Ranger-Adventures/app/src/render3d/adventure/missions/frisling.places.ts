@@ -274,7 +274,8 @@ const STEEN = ((): Way => {
     ],
     searchView: searchViewOf(frame, coverApproach, -0.42),
     leadClumps: leadClumpsOf(coverApproach, fieldApproach, [[0.25, -2.0, 0.9], [0.17, 1.85, 0.85], [0.5, -1.75, 0.8], [0.35, 2.4, 0.9]]),
-    field: 'S', fieldApproach, fieldSide, fieldView: fieldViewOf('S', fieldApproach, fieldSide, 0.3),
+    // (turned a little right: the west helipad stays out of the route's picture)
+    field: 'S', fieldApproach, fieldSide, fieldView: fieldViewOf('S', fieldApproach, fieldSide, -0.15),
     toWallow: [{ x: -33.6, z: -23.1 }],
     wallowTalk, wallowGive: giveOf(wallowTalk, -1.9, 1.1), wallowView: wallowViewOf(wallowTalk),
     nest: atLocal(frame, 2.4, 1.2),
