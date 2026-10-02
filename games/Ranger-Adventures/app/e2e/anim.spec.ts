@@ -173,7 +173,9 @@ test('anim: running on sand kicks up a little dust at his heels — never walkin
     await walkTo(page, { x: from.x + ((to.x - from.x) * 2.5) / d, z: from.z + ((to.z - from.z) * 2.5) / d }, { stopDist: 0.6, timeout: 30_000 });
     await page.waitForTimeout(500);
   };
-  // from the spawn into the forest (−z): heather, then the forest floor — no sand
+  // into the forest (−z) past the yard's sand track (its edge brushes z ≈ −2 m): heather,
+  // then the forest floor — no sand
+  await face({ x: 0, z: -4 }, { x: 0, z: -20 });
   const offSand = await go(2_500, true);
   // the open drift sand east of the jeep: walking, then running
   const from = { x: 20, z: 6 }, to = { x: 50, z: 8 };
@@ -225,7 +227,9 @@ test('anim: the heel dust reads as dust in every mood — a puff is a touch ligh
     await page.keyboard.down('Shift');
     await page.keyboard.down('ArrowUp');
     const t0 = Date.now();
-    while (Date.now() - t0 < 2_600) {
+    // 2.6 s of running, longer (to 5 s, the sand runs on to x 60) while a busy machine has
+    // read fewer than ten puffs
+    while (Date.now() - t0 < 2_600 || (hearts.length < 10 && Date.now() - t0 < 5_000)) {
       const h = await R<DustHeart | null>(page, "r.dustHeart('heels')");
       if (h && !hearts.some((x) => x.x === h.x && x.y === h.y && x.alpha === h.alpha)) hearts.push(h);
       await page.waitForTimeout(40);
