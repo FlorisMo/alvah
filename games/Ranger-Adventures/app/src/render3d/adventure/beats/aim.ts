@@ -211,7 +211,9 @@ export async function aimBeat(k: AdventureKit, step: number, o: AimOpts): Promis
         return;
       }
       // (run 7: the next animal comes while this one is photographed; the world says when
-      // it sets off, and its card waits for it)
+      // it sets off, and its card waits for it. This card's question is answered: it goes,
+      // and he watches the animal walk to its place)
+      if (w.arrive) card?.remove();
       const next0 = s.done ? undefined : aim.current;
       const arriving = next0 && w.arrive ? w.arrive(next0, aim.run.index, s.turn ?? undefined) : Promise.resolve();
       arriving.catch(() => {});
