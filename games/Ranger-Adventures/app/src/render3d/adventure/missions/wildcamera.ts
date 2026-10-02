@@ -190,7 +190,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
         w.place(path[0].x, path[0].z, headingTo(path[0], path[1]));
         w.group.visible = true;
       }
-      const pace = (PACE[id] ?? 1.2) * 1.12;
+      const pace = (PACE[id] ?? 1.2) * 1.22; // (a brisk walk in: it has somewhere to be)
       // along its side's in-lane (still about from its last photo, walking off: it turns
       // back from where it is, straight to its stop)
       if (fresh) for (const via of path.slice(1, -1)) await walkTo(w, via, pace);
@@ -228,12 +228,12 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     leaving.set(id, t);
     walkingOff.set(id, { bin, until: k.now + 2.4 });
     // (it looks up at the camera a moment first: the click)
-    void k.wait(id === 'das' ? 0.4 : 0.9).then(async () => {
+    void k.wait(id === 'das' ? 0.4 : 0.6).then(async () => {
       if (leaving.get(id) !== t) return;
       if (a.lies) await a.lie(false);
       // the badger goes back into its sett; the others out of view on the place's side
       const out = exitPath(bin, a, id)[1];
-      const ok = await a.go(out.x, out.z, { speed: PACE[id] ?? 1.1 });
+      const ok = await a.go(out.x, out.z, { speed: (PACE[id] ?? 1.1) * 1.2 });
       if (leaving.get(id) === t) walkingOff.delete(id);
       if (ok && leaving.get(id) === t) { a.group.visible = false; a.idle(); }
     }).catch(() => {});
@@ -344,9 +344,14 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       shotAt.set(id, bin);
       home.showVisitor(null);
       standing.at = null;
-      // (a newcomer from this place's side waits until this one stands there)
+      // (a newcomer from this place's side waits until this one is nearly there: its way in
+      // passes the place, and this one walks off out the back of it after its photo)
       let there!: () => void;
       reached = { side: SIDE_OF[bin], at: new Promise<void>((r) => { there = r; }) };
+      const nearly = isBird(id) ? null : k.onTick(() => {
+        const a = A[id as Walker];
+        if (Math.hypot(a.x - s.at.x, a.z - s.at.z) < 1.8) { there(); nearly?.(); }
+      });
       // it sets off from its stop at once, while the camera still turns to the place; the
       // shutter waits for both
       const goThere = async (): Promise<void> => {
@@ -357,12 +362,13 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
         }
         const a = A[id as Walker];
         if (!a.group.visible) { a.place(s.from.x, s.from.z, headingTo(s.from, s.at)); a.group.visible = true; }
-        await walkTo(a, s.at, PACE[id] ?? 1.1, s.yaw);
+        await walkTo(a, s.at, (PACE[id] ?? 1.1) * 1.2, s.yaw);
       };
       try {
         await Promise.all([goThere(), looked]);
       } finally {
         there();
+        nearly?.();
       }
       // a deer (and the fox) rests in the thicket by night: it lies down
       if ((id === 'ree' || id === 'vos') && bin === 'hol') await k.guard(A[id].lie(true));
