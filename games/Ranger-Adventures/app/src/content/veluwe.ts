@@ -173,8 +173,15 @@ const MISSIE_FRISLING = {
       // run 7: the way south passes the family (unmeasured: never logged)
       boog: 'Loop met een boog om de groep.',
       teDichtbij: 'Niet zo dichtbij. De moeder kijkt.',
-      // run 7: the hungry one at his bag may be the piglet himself (the card in knap words)
-      voerenBig: 'Een jong zwijn snuffelt aan je tas.',
+      // run 7 (package body): the last three cards are played with the body. The tired
+      // piglet: walk slowly with him (a run: he hides); the hungry one at his bag: hands
+      // still; the free path at the mud: walk on (waiting too long: the group goes on)
+      moe: 'Hij is moe. Loop rustig mee.',
+      nietRennenMoe: 'Niet rennen. Hij is moe.',
+      eten: 'Hij wil eten. Hou je handen stil.',
+      padVrij: 'Het pad is vrij. Loop maar.',
+      teLang: 'Je wacht te lang.',
+      chipPad: 'Het pad',
     },
     knap: {
       kijk: 'Daar is zijn rotte.',
@@ -189,7 +196,7 @@ const MISSIE_FRISLING = {
       staStil: 'De zeug kijkt. Sta heel stil.',
       boog: 'Loop met een boog om de rotte.',
       teDichtbij: 'Niet zo dichtbij. De zeug kijkt.',
-      voerenBig: 'De frisling snuffelt aan je tas.',
+      moe: 'De frisling is moe. Loop rustig mee.',
     },
   },
   stappen: [

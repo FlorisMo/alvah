@@ -44,7 +44,7 @@ test('the same seed gives the same play; its choices are noted on the play', () 
 test('every way, nook, pose, family layout and look-alike spot can come', () => {
   const seen = { way: new Set<string>(), nook: new Map<WayId, Set<number>>(), pose: new Set<number>(), family: new Set<number>(), spot: new Map<WayId, Set<number>>(), leeuwerik: new Set<string>() };
   for (let seed = 0; seed < 600; seed++) {
-    const v = variant(seed);
+    const v = variant(seed, null, 2); // (a second play: the woodlark may come)
     seen.way.add(v.way);
     (seen.nook.get(v.way) ?? seen.nook.set(v.way, new Set()).get(v.way)!).add(v.nook);
     seen.pose.add(v.pose);
@@ -60,6 +60,27 @@ test('every way, nook, pose, family layout and look-alike spot can come', () => 
   assert.equal(seen.pose.size, 3);
   assert.equal(seen.family.size, FAMILY_LAYOUTS.length);
   assert.ok(seen.leeuwerik.has('null') && seen.leeuwerik.size >= 3, 'a woodlark sometimes, from either spot');
+});
+
+test('his first play here is the adventure itself; from the second on, a woodlark and the sow\'s nest each come in about half the plays', () => {
+  for (let seed = 0; seed < 200; seed++) {
+    const first = variant(seed, null, 1);
+    assert.equal(first.leeuwerik, null, `seed ${seed}: no woodlark on his first play`);
+    assert.equal(first.nest, false, `seed ${seed}: no nest on his first play`);
+  }
+  let lark = 0, nest = 0;
+  for (let seed = 0; seed < 400; seed++) {
+    const v = variant(seed, null, 2);
+    if (v.leeuwerik !== null) lark++;
+    if (v.nest) nest++;
+  }
+  assert.ok(lark > 160 && lark < 240, `a woodlark in about half the later plays (${lark}/400)`);
+  assert.ok(nest > 160 && nest < 240, `a nest in about half the later plays (${nest}/400)`);
+  // (the rest of the play is the same either way: the extras have their own forks)
+  for (let seed = 0; seed < 40; seed++) {
+    const a = variant(seed, null, 1), b = variant(seed, null, 2);
+    assert.deepEqual({ ...a, leeuwerik: 0, nest: 0 }, { ...b, leeuwerik: 0, nest: 0 });
+  }
 });
 
 test('the look-alikes each get their own spot; the nightjar lies at the stand\'s edge', () => {

@@ -16,8 +16,11 @@ import {
   FRISLING_PLACES as P, FRISLING_RESIDENTS, FRISLING_HOME, MARKER, STAND, STAND_FRAME, FIELD_FRAME, WALLOW, WALLOW_FRAME, LOST_SPOT,
   fieldSpots, fieldSpotsOf, hideClumps, frislingClearings, SEARCH_VIEW, FIELD_VIEW, WALLOW_VIEW, LEAD_CLUMP_COUNT,
   cluePosts, clueGap, bootPrints, CLUE_FRAME, WAYS, WAY_IDS, FAMILY_LAYOUTS, nookAt, decoyAt, placesFor, useWay, wallowLog,
-  wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, outSpotOf, besideView, sideBySideView, type WayId, type Way, type WayView,
+  wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, outSpotOf, bagView, sideBySideView, BAG_REACH, type WayId, type Way, type WayView,
+  zeugStare, zeugView, ZEUG_STARE_M, NEST_R, ZEUG_STEP_M, walkOnSpot, yearlingSideOf, yearlingWay, legGap, YEARLING_LOG_M,
+  larkLandings, LARK_LAND, LENS_BACK,
 } from './frisling.places.ts';
+import { WALK_ON_M } from '../beats/walk-math.ts';
 import { anchorInBiome, biomeAt, heightAt, VEN_CENTER } from '../../Biomes.ts';
 import { distanceToNetwork, LANE_HALF } from '../../Paths.ts';
 import { dist, headingTo, toLocal, atLocal, segDist, offCentre } from '../places.ts';
@@ -535,7 +538,13 @@ for (const id of WAY_IDS) {
     const pig = outSpotOf(w, r);
     // (the piglet comes out beside him, away from the way home or to the way's own side)
     assert.ok(Math.abs(dist(pig, r) - 1.16) < 0.05, `the piglet stands beside him (${dist(pig, r).toFixed(2)} m)`);
-    for (const [name, v] of [['voeren', besideView(r, pig)], ['dragen', sideBySideView(r, pig, w.stand)]] as const) {
+    // (run 7 body: the piglet at his bag shows beside him, never behind his legs)
+    const bag = lensOf(bagView(r, pig));
+    const at = { x: r.x + (pig.x - r.x) * (BAG_REACH / dist(r, pig)), z: r.z + (pig.z - r.z) * (BAG_REACH / dist(r, pig)) };
+    const pc = project(at, 0.15, bag), me = project(r, 0.5, bag);
+    assert.ok(Math.abs(pc.x - me.x) > 110, `voeren: the piglet stands beside him in the picture (${Math.abs(pc.x - me.x).toFixed(0)} px apart)`);
+    assert.ok(pc.x > 60 && pc.x < W - 60 && pc.y > 120 && pc.y < H - 60, 'voeren: the piglet is in the picture');
+    for (const [name, v] of [['voeren', bagView(r, pig)], ['dragen', sideBySideView(r, pig, w.stand)]] as const) {
       const lens = lensOf(v);
       for (const q of neighbours(r)) {
         const c = project(q, 0.6, lens);
@@ -545,3 +554,165 @@ for (const id of WAY_IDS) {
     }
   });
 }
+
+/* ------------------------- the calm moments with the body (package body) ---- */
+
+/** Where a child may stand when he arrives at the mud (the walk ends within 1.5 m of the
+ *  talk spot), and where he stands once he walked on ('pad' before the sow's stare). */
+const standsAtMud = (w: Way): { x: number; z: number }[] => [
+  w.wallowTalk,
+  ...Array.from({ length: 8 }, (_, i) => atLocal({ x: w.wallowTalk.x, z: w.wallowTalk.z, heading: (i * Math.PI) / 4 }, 0, 1.2)),
+  w.wallowGive,
+];
+
+/** A framed view's lens as the kit takes it (an include's `r`: both his shoulders). */
+function kitLens(v: Omit<WayView, 'include'> & { include: readonly { x: number; z: number; h: number; r?: number }[] }): { cam: THREE.Vector3; look: THREE.Vector3 } {
+  const right = { x: -Math.cos(v.heading), z: Math.sin(v.heading) };
+  const include = v.include.flatMap((q) => (q.r ? [-q.r, q.r].map((u) => ({ x: q.x + right.x * u, z: q.z + right.z * u, h: q.h })) : [q]));
+  return lensOf({ ...v, include });
+}
+
+test('the sow\'s stare: she comes to the rim toward him, big enough to read (≥ 110 px), him whole at the side', () => {
+  const log = wallowLog();
+  for (const id of WAY_IDS) {
+    for (const lay of FAMILY_LAYOUTS) {
+      for (const me of standsAtMud(WAYS[id])) {
+        const sow = zeugStare(lay.poses.sow, me);
+        assert.ok(dist(sow, lay.poses.sow) <= ZEUG_STEP_M + 1e-9, 'a step or two, never a charge');
+        assert.ok(dist(sow, me) >= ZEUG_STARE_M - 0.5 || dist(lay.poses.sow, me) < ZEUG_STARE_M, `${id}/${lay.id}: she stays ${dist(sow, me).toFixed(1)} m from him (a step clear of the log at most half a metre nearer)`);
+        assert.ok(obstacleGap(log, sow.x, sow.z) + log.box!.pad >= 0.5, `${id}/${lay.id}: she stands off the log`);
+        for (const q of cluePosts()) assert.ok(dist(sow, q) > 2, 'off the fence');
+        for (const s of [-1, 1]) {
+          const lens = kitLens(zeugView(me, sow, s));
+          const top = project(sow, SIZE.wildzwijn.h, lens), bot = project(sow, 0, lens);
+          assert.ok(bot.y - top.y >= 110, `${id}/${lay.id} from (${me.x.toFixed(1)}, ${me.z.toFixed(1)}) side ${s}: the sow is ${(bot.y - top.y).toFixed(0)} px tall (want ≥ 110)`);
+          assert.ok(top.x > 0 && top.x < W && top.y > 0 && bot.y < H, 'she is in the picture');
+          const head = project(me, RANGER_STAND_HEIGHT, lens), feet = project(me, 0, lens);
+          assert.ok(head.y > 0 && feet.y < H && head.x > 40 && head.x < W - 40, `${id}/${lay.id}: he is whole in the picture (${head.x.toFixed(0)}, ${head.y.toFixed(0)}-${feet.y.toFixed(0)})`);
+          assert.ok(Math.abs(head.x - top.x) > 300, 'they face each other across the picture, him at its side');
+        }
+      }
+    }
+  }
+});
+
+test('walking on when the path is free (pad): a way on from wherever he stands, past the family, off the log and the mud', () => {
+  const log = wallowLog();
+  for (const id of WAY_IDS) {
+    const w = WAYS[id];
+    for (const me of standsAtMud(w)) {
+      const on = walkOnSpot(w, me);
+      assert.ok(dist(me, on) >= WALK_ON_M + 0.3, `${id}: from (${me.x.toFixed(1)}, ${me.z.toFixed(1)}) there are ${dist(me, on).toFixed(1)} m to walk on`);
+      assert.ok(dist(on, WALLOW_FRAME) > Math.max(WALLOW.halfW, WALLOW.halfD) + 0.5, `${id}: the spot is beside the mud, not in it`);
+      assert.ok(obstacleGap(log, on.x, on.z) > 0.5, `${id}: off the log`);
+      for (const lay of FAMILY_LAYOUTS) {
+        for (const [key, p] of Object.entries(lay.poses)) {
+          assert.ok(segDist(p, me, on) > 0.8 + (p.roam ?? 0), `${id}/${lay.id}: walking on passes ${key} at ${segDist(p, me, on).toFixed(2)} m`);
+        }
+      }
+      for (const q of cluePosts()) assert.ok(dist(on, q) > 1.5, 'off the fence');
+    }
+  }
+});
+
+test('the yearling trots out to him at the field and back round the log (every leg ≥ 0.5 m from it), every way and layout', () => {
+  const log = wallowLog();
+  for (const id of WAY_IDS) {
+    const w = WAYS[id];
+    const at = [w.fieldApproach, ...Array.from({ length: 6 }, (_, i) => atLocal({ x: w.fieldApproach.x, z: w.fieldApproach.z, heading: (i * Math.PI) / 3 }, 0, 0.8))];
+    for (const lay of FAMILY_LAYOUTS) {
+      const home = lay.poses.yearling;
+      for (const me of at) {
+        const side = yearlingSideOf(me, home);
+        assert.ok(dist(side, me) >= 1.2, 'never nearer him than 1.2 m');
+        for (const [from, to] of [[home, side], [side, home]] as const) {
+          const legs = [from, ...yearlingWay(w, from, to), to];
+          for (let i = 1; i < legs.length; i++) {
+            const g = legGap(log, legs[i - 1], legs[i]);
+            assert.ok(g >= YEARLING_LOG_M, `${id}/${lay.id}: a leg of the yearling's way passes ${g.toFixed(2)} m from the log`);
+          }
+          for (const p of legs) for (const q of cluePosts()) assert.ok(dist(p, q) > 1, 'off the fence');
+        }
+      }
+    }
+  }
+});
+
+test('the sow\'s nest of bitten fronds at each stand\'s edge: never on a nook or a look-alike spot', () => {
+  for (const id of WAY_IDS) {
+    const w = WAYS[id];
+    for (let i = 0; i < w.nooks.length; i++) {
+      const n = nookAt(id, i, 0);
+      assert.ok(dist(n, w.nest) >= NEST_R + 0.8, `${id}: the nest is ${dist(n, w.nest).toFixed(2)} m from nook ${i}`);
+    }
+    for (let i = 0; i < w.decoySpots.length; i++) {
+      assert.ok(dist(decoyAt(id, i), w.nest) >= NEST_R + 0.3, `${id}: the nest is ${dist(decoyAt(id, i), w.nest).toFixed(2)} m from look-alike spot ${i}`);
+    }
+    assert.ok(dist(w.nest, w.coverApproach) > 2, `${id}: not where he stands to search`);
+    assert.ok(dist(w.nest, w.stand) < Math.hypot(STAND.halfW, STAND.halfD) + 1.2, `${id}: at the stand's edge`);
+  }
+});
+
+/**
+ * The woodlark (package body r2): it flies up where he walks and settles ACROSS his follow
+ * picture at its middle distance, keeping pace with it as he walks on — on open ground (dry
+ * heath, clear of the props, the trees, the other markers, the pads and every stand), in
+ * view whether he stops to watch or walks on until it drops in. Checked from every walk
+ * spot, him 4.5 m before it on his way there (the follow, 2.2 m/s) and on his way back (the
+ * lead home, 1.5 m/s), with the lens `LENS_BACK` behind him as the world's follow takes it.
+ */
+test('the woodlark settles across his picture, on open ground, in view whether he walks on or stops', () => {
+  const lensAt = (me: { x: number; z: number }, look: number) => {
+    const c = atLocal({ x: me.x, z: me.z, heading: look }, 0, -LENS_BACK);
+    return { lens: { x: c.x, y: heightAt(c.x, c.z) + 2.4, z: c.z }, aim: { x: me.x, y: heightAt(me.x, me.z) + 0.9, z: me.z } };
+  };
+  const inView = (q: { x: number; y: number; ahead: boolean }): boolean => q.ahead && q.x > W * 0.07 && q.x < W * 0.93 && q.y > H * 0.2 && q.y < H * 0.9;
+  for (const id of WAY_IDS) {
+    const w = WAYS[id];
+    w.walkSpots.forEach((spot, si) => {
+      for (const back of [false, true]) {
+        const way = back ? [...w.follow].reverse() : w.follow;
+        const pace = back ? 1.5 : 2.2;
+        const walked = pace * (2.75 + 1.55 / 2); // (his pace for the flight and half its sit)
+        // the leg of his way that passes the spot, and him 4.5 m before it along that leg
+        let leg = 1;
+        for (let i = 1; i < way.length; i++) if (segDist(spot, way[i - 1], way[i]) < segDist(spot, way[leg - 1], way[leg])) leg = i;
+        const look = headingTo(way[leg - 1], way[leg]);
+        const me = atLocal({ x: spot.x, z: spot.z, heading: look }, 0, -4.5);
+        const on = atLocal({ x: me.x, z: me.z, heading: look }, 0, walked);
+        const now = lensAt(me, look), then = lensAt(atLocal({ x: me.x, z: me.z, heading: look }, 0, pace * (2.75 + 1.55)), look);
+        const tag = `${id}.walk-${si}${back ? ' (home)' : ''}`;
+        const rose = screenOf({ x: spot.x, y: heightAt(spot.x, spot.z) + 0.2, z: spot.z }, now.lens, now.aim, FOV, W, H);
+        assert.ok(inView(rose), `${tag}: it rises in his picture (${rose.x.toFixed(0)}, ${rose.y.toFixed(0)})`);
+        const n = larkLandings(me, look, 1, walked).length + larkLandings(me, look, -1, walked).length;
+        assert.ok(n >= 6, `${tag}: somewhere to settle (${n})`);
+        for (const side of [1, -1] as const) {
+          for (const p of larkLandings(me, look, side, walked)) {
+            const l = toLocal({ x: on.x, z: on.z, heading: look }, p);
+            assert.ok(l.v + LENS_BACK >= LARK_LAND.depth[0] - 1e-6 && l.v + LENS_BACK <= LARK_LAND.depth[1] + 1e-6, `${tag}: ${(l.v + LENS_BACK).toFixed(1)} m from the lens as it sits`);
+            assert.ok(Math.abs(l.u) >= LARK_LAND.across[0] - 1e-6 && Math.abs(l.u) <= LARK_LAND.across[1] + 1e-6, `${tag}: ${l.u.toFixed(1)} m across`);
+            assert.ok(dist(on, p) >= 4.5, `${tag}: walking on, he is ${dist(on, p).toFixed(1)} m from it as it sits: never in his way`);
+            assert.ok(toLocal({ x: me.x, z: me.z, heading: look }, p).v > toLocal({ x: me.x, z: me.z, heading: look }, spot).v - 0.5, `${tag}: never back toward the lens`);
+            assert.ok(biomeAt(p.x, p.z) === 'heide' || (biomeAt(p.x, p.z) === 'ven' && Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) > 50), `${tag}: on the heath or the dry meadow (${biomeAt(p.x, p.z)})`);
+            assert.ok(Math.hypot(p.x, p.z) <= 60, `${tag}: well inside the world`);
+            for (const o of WAY_IDS) assert.ok(dist(p, WAYS[o].stand) > STAND.halfW + 4, `${tag}: never in the ${o} stand's bracken`);
+            assert.ok(dist(p, WALLOW_FRAME) > 6, `${tag}: off the mud and its family`);
+          }
+        }
+        // one side or the other carries it across the picture — from where it rose to the other
+        // side, in view whether he walked on or stood — to a spot the world finds free
+        // (World.playClear at runtime: off the props, the trees, the pads, the markers)
+        const free = (p: { x: number; z: number }): boolean => PROPS.every((q) => dist(p, q) > q.r + 1)
+          && TREES.every((q) => dist(p, q) > 2) && PADS.every((q) => dist(p, q) > PAD_RADIUS)
+          && Object.values(OTHER_MARKERS).every((q) => dist(p, q) > 1.6);
+        const across = ([1, -1] as const).some((side) => larkLandings(me, look, side, walked).filter(free).some((p) => {
+          const at = { x: p.x, y: heightAt(p.x, p.z) + 0.5, z: p.z };
+          const a = screenOf(at, then.lens, then.aim, FOV, W, H), b = screenOf(at, now.lens, now.aim, FOV, W, H);
+          return inView(a) && inView(b) && Math.abs(a.x - rose.x) >= 0.2 * W
+            && (Math.abs(rose.x - W / 2) < 0.04 * W || (a.x - W / 2) * (rose.x - W / 2) < 0); // (rose near the middle: either side)
+        }));
+        assert.ok(across, `${tag}: it flies across his picture (rose at x ${rose.x.toFixed(0)})`);
+      }
+    });
+  }
+});

@@ -24,13 +24,13 @@ import { backPoints, openWindow, visibleShare, type Clump, type V3 } from '../co
 import { PatchField } from '../patches';
 import { StandDecoys, type Decoy } from '../decoys';
 import { groundDecal } from '../decal';
-import { atLocal, headingTo } from '../places';
+import { atLocal, headingTo, stream } from '../places';
 import { heightFor } from '../../play/spawn';
 import { lyingHeight, LEG_SHARE } from '../../play/pose';
 import { CutFence } from './frisling.clue';
 import { SIZE } from '../../AnimalScale';
 import {
-  FRISLING_PLACES, WALLOW, WALLOW_FRAME, WALLOW_LOG, MARKER, WAYS, WAY_IDS, DEFAULT_WAY,
+  FRISLING_PLACES, WALLOW, WALLOW_FRAME, WALLOW_LOG, MARKER, WAYS, WAY_IDS, DEFAULT_WAY, NEST_R,
   fieldFrame, fieldSpotsOf, wallowClumps, wallowLog, standCover, standSeed, spotTag, nookAt, decoyAt,
   type FieldId, type WayId,
 } from './frisling.places';
@@ -52,6 +52,8 @@ class Stand {
   readonly decoys: StandDecoys;
   /** a look-alike spot's dead-bracken clump (its index in the cover) */
   readonly spotClump: number[];
+  /** run 7 (body): the nest of bitten fronds at its edge (a find for the veldgids) */
+  readonly nest: THREE.Mesh;
   private readonly env: DressingEnv;
   readonly id: WayId;
 
@@ -71,6 +73,9 @@ class Stand {
       return i >= 0 ? { ...c, decoy: distractors[i].id } : c;
     });
     this.decoys = new StandDecoys(env, this.group, at, this.cover, tagged, w.coverApproach, { perch: 'frond' });
+    // run 7 (body): a sow's nest of bitten fronds at the stand's edge (a find, never a look-alike)
+    this.nest = nestMesh(env.groundY, w.nest, w.cover.seed + 3);
+    this.group.add(this.nest);
     // no look-alike stands in a stand until a play (or free roam's default) lays them
     for (const ci of this.spotClump) this.cover.showClump(ci, false);
     this.decoys.useDecoys([]);
@@ -82,6 +87,9 @@ class Stand {
     this.decoys.relay(trial.map((d, i) => ({ id: d.id, ...decoyAt(this.id, spots[i]), clump: this.spotClump[spots[i]] })), WAYS[this.id].coverApproach);
     this.decoys.useDecoys(trial.map((d) => d.id));
   }
+
+  /** Run 7 (body): is the sow's nest at this stand this play? */
+  showNest(on: boolean): void { this.nest.visible = on; }
 
   /** No look-alikes, no window: the stand as it grows. */
   clear(): void {
@@ -113,7 +121,133 @@ class Stand {
   dispose(): void {
     this.cover.dispose();
     this.decoys.dispose();
+    this.nest.geometry.dispose();
+    (this.nest.material as THREE.Material).dispose();
   }
+}
+
+/**
+ * A sow's nest (a 'worpketel'): a low, soft bed of bitten bracken fronds she dragged into a
+ * heap and lay on, about 0.9 m across — fronds pressed flat every which way, overlapping
+ * (most in the middle, where she lay), their leaflets and ragged tips making the edge: no
+ * ring, no rim, nothing raised more than a few centimetres. Muted dry-bracken browns and a
+ * faded green, lit evenly (every normal up: matte, no facets), so it sits quietly in the
+ * heather and never pulls the eye in a held picture. One mesh, vertex-coloured, built in
+ * world coordinates on the ground at `at`. Plain dressing: never a look-alike, never clicked.
+ */
+function nestMesh(g: (x: number, z: number) => number, at: { x: number; z: number }, seed: number): THREE.Mesh {
+  const pos: number[] = [];
+  const col: number[] = [];
+  const rnd = stream(seed);
+  // dry, bitten bracken, muted: soft browns and a faded green, never dark, never bright
+  const tones = ['#8a7759', '#7e6e52', '#91805f', '#776a50', '#857a5a', '#7b7c58'].map((c) => new THREE.Color(c));
+  const put = (x: number, y: number, z: number, c: THREE.Color): void => {
+    pos.push(at.x + x, g(at.x + x, at.z + z) + y, at.z + z);
+    col.push(c.r, c.g, c.b);
+  };
+  const tri = (a: number[], b: number[], c: number[], k: THREE.Color): void => {
+    put(a[0], a[1], a[2], k); put(b[0], b[1], b[2], k); put(c[0], c[1], c[2], k);
+  };
+  const FRONDS = 26;
+  for (let i = 0; i < FRONDS; i++) {
+    // where it lies: more of them towards the middle (where she lay), any way round
+    const ra = rnd() * Math.PI * 2, rr = NEST_R * Math.sqrt(rnd()) * 0.75;
+    const bx = Math.cos(ra) * rr, bz = Math.sin(ra) * rr;
+    const dir = rnd() * Math.PI * 2;
+    // its length, cut short where its tip would reach past the bed (a ragged edge, no ring)
+    let len = 0.26 + rnd() * 0.22;
+    const reach = NEST_R * (1.05 + rnd() * 0.2);
+    while (len > 0.12 && Math.hypot(bx + Math.cos(dir) * len, bz + Math.sin(dir) * len) > reach) len -= 0.03;
+    const w = 0.035 + rnd() * 0.015;
+    const lift = 0.006 + (i / FRONDS) * 0.022; // (laid one over another: later ones on top)
+    const c = tones[Math.floor(rnd() * tones.length)].clone().multiplyScalar(0.94 + rnd() * 0.1);
+    const ux = Math.cos(dir), uz = Math.sin(dir), vx = -uz, vz = ux; // along it, across it
+    const at2 = (t: number, side: number, y: number): number[] => [bx + ux * len * t + vx * side, y, bz + uz * len * t + vz * side];
+    // its stalk-and-blade: a tapering strip, pressed flat
+    const STEPS = 3;
+    for (let k = 0; k < STEPS; k++) {
+      const t0 = k / STEPS, t1 = (k + 1) / STEPS;
+      const w0 = w * (1 - t0 * 0.7), w1 = w * (1 - t1 * 0.7);
+      const y0 = lift + 0.004 * Math.sin(Math.PI * t0), y1 = lift + 0.004 * Math.sin(Math.PI * t1);
+      const a = at2(t0, -w0, y0), b = at2(t0, w0, y0), d = at2(t1, w1, y1), e = at2(t1, -w1, y1);
+      tri(a, b, d, c); tri(a, d, e, c);
+    }
+    // its leaflets: small ragged points off both sides (the fern's outline, bitten short)
+    for (const t of [0.3, 0.55, 0.8]) {
+      for (const side of [-1, 1]) {
+        if (rnd() < 0.25) continue; // (bitten off)
+        const lw = w * (1.1 - t * 0.6), ll = 0.05 + rnd() * 0.04;
+        const base0 = at2(t - 0.07, side * lw * 0.5, lift + 0.002), base1 = at2(t + 0.07, side * lw * 0.5, lift + 0.002);
+        const tip = at2(t + 0.12, side * (lw * 0.5 + ll), lift + 0.001);
+        tri(base0, side > 0 ? tip : base1, side > 0 ? base1 : tip, c);
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  // (every normal straight up: the bed takes the light as the ground round it does, soft and
+  // even, never the hard facets a ring of raised strips showed)
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(pos.length / 3).fill([0, 1, 0]).flat(), 3));
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }));
+  m.name = 'frisling-nest';
+  m.castShadow = false;
+  m.receiveShadow = false;
+  return m;
+}
+
+/**
+ * The pigs' rubbing log (a 'malboom'): mud smeared along the side of the fallen log that
+ * faces the wallow, at a pig's flank height, and a few dark bristles caught in it — one
+ * mesh (the bristles thin blades in it), world coordinates, laid on the log at `at`
+ * turned `rot` (the log's own turn).
+ */
+function rubMarks(g: (x: number, z: number) => number, at: { x: number; z: number }, rot: number, side: number): THREE.Mesh {
+  const pos: number[] = [];
+  const col: number[] = [];
+  const c = Math.cos(rot), s = Math.sin(rot);
+  const R = 0.215, CY = 0.2; // (the lying log's radius and the height of its middle, m)
+  const base = g(at.x, at.z) - 0.04;
+  /** a point on the log's round surface, `lift` m out: along it (lx), round it (θ from the
+   *  top, toward the wallow's side) */
+  const on = (lx: number, th: number, lift: number): [number, number, number] => {
+    const lz = side * Math.sin(th) * (R + lift), ly = CY + Math.cos(th) * (R + lift);
+    return [at.x + lx * c + lz * s, base + ly, at.z - lx * s + lz * c];
+  };
+  const muds = ['#7a5838', '#6a4a2e', '#8a6644'].map((h) => new THREE.Color(h));
+  const rnd = stream(41);
+  // the smears: dried mud rubbed onto the top and the wallow's side of the log, where a
+  // pig's flank and back go along it
+  for (let k = 0; k < 4; k++) {
+    const cx = -0.55 + k * 0.36 + rnd() * 0.08, len = 0.17 + rnd() * 0.07;
+    const th0 = 0.25 + rnd() * 0.2, th1 = 1.15 + rnd() * 0.3;
+    const cm = muds[k % muds.length];
+    const NU = 5, NV = 4;
+    for (let i = 0; i < NU; i++) for (let j = 0; j < NV; j++) {
+      const u0 = -1 + (2 * i) / NU, u1 = -1 + (2 * (i + 1)) / NU;
+      const v0 = j / NV, v1 = (j + 1) / NV;
+      // (an oval: narrower at its ends round the log)
+      const half = (v: number): number => len * Math.sqrt(Math.max(0.05, 1 - (2 * v - 1) ** 2));
+      const P = (u: number, v: number): [number, number, number] => on(cx + u * half(v), th0 + (th1 - th0) * v, 0.008);
+      const q = [P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)];
+      for (const v of [q[0], q[1], q[2], q[0], q[2], q[3]]) { pos.push(...v); col.push(cm.r, cm.g, cm.b); }
+    }
+  }
+  // a few dark bristles caught in the mud, sticking out a little
+  const bristle = new THREE.Color('#2a2018');
+  for (let i = 0; i < 16; i++) {
+    const lx = -0.6 + rnd() * 1.2, th = 0.3 + rnd() * 1.0, len = 0.035 + rnd() * 0.035;
+    const a = on(lx, th, 0.01), b = on(lx + 0.006, th, 0.01), t = on(lx + (rnd() - 0.5) * 0.04, th + 0.05, 0.01 + len);
+    for (const v of [a, b, t]) { pos.push(...v); col.push(bristle.r, bristle.g, bristle.b); }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  m.name = 'frisling-rub';
+  m.castShadow = false;
+  return m;
 }
 
 /** A content distractor as the variant reads it. */
@@ -138,6 +272,8 @@ export class FrislingHome implements HomeDressing {
   /** while the adventure plays, the clue waits for its moment (`revealClue`), never
    *  appearing in the reunion's view */
   holdClue = false;
+  /** run 7 (body): the mud and bristles on the rubbing log (a find for the veldgids) */
+  readonly rub!: THREE.Mesh;
   private readonly spawned: { dispose(): void }[] = [];
   private readonly distractors: readonly Distractor[];
   private readonly env: DressingEnv;
@@ -167,6 +303,15 @@ export class FrislingHome implements HomeDressing {
       this.spawned.push(s);
     });
     env.obstacles.push(wallowLog());
+    // run 7 (body): the log is the pigs' rubbing post — mud and bristles on its wallow side
+    {
+      const rot = yaw + WALLOW_LOG.turn;
+      const c = Math.cos(rot), s = Math.sin(rot);
+      const dx = W.x - logAt.x, dz = W.z - logAt.z;
+      const side = Math.sign(dx * s + dz * c) || 1; // (the wallow's side of the log, in its own z)
+      this.rub = rubMarks(g, logAt, rot, side);
+      env.detail(logAt).add(this.rub);
+    }
 
     /* -- the wallow's cover: its rim and the clumps between the north field and it -- */
     this.wallowCover = new CoverField({
@@ -203,14 +348,20 @@ export class FrislingHome implements HomeDressing {
   get cover(): CoverField { return this.stands[this.way].cover; }
   get field(): PatchField { return this.fields[WAYS[this.way].field]; }
   get decoys(): readonly Decoy[] { return this.stands[this.way].decoys.decoys; }
+  /** run 7 (body): this play's stand's nest of bitten fronds */
+  get nest(): THREE.Mesh { return this.stands[this.way].nest; }
 
   /**
    * Lay a play in (under the briefing card): the stand of its way gets the trial's
    * look-alikes on this play's spots and a window over the nook he lies in; the other
    * stands stand empty; the ring's prints point the way.
    */
-  lay(way: WayId, o: { nook: number; pose: 0 | 1 | 2; trial: readonly Distractor[]; spots: readonly number[]; glimpse: number }): void {
+  lay(way: WayId, o: { nook: number; pose: 0 | 1 | 2; trial: readonly Distractor[]; spots: readonly number[]; glimpse: number; nest?: boolean }): void {
     this.way = way;
+    // (the sow's nest: at this play's stand when the play has one, never at the others —
+    // one draw call, not three, when the lens looks out over the far stands; free roam
+    // shows the default stand's)
+    for (const id of WAY_IDS) this.stands[id].showNest(id === way && (o.nest ?? true));
     for (const id of WAY_IDS) if (id !== way) this.stands[id].clear();
     const st = this.stands[way];
     st.layDecoys(o.trial, o.spots);
@@ -288,6 +439,9 @@ export class FrislingHome implements HomeDressing {
     this.fields.N.dispose();
     this.fields.S.dispose();
     this.clue.dispose();
+    this.rub.geometry.dispose();
+    (this.rub.material as THREE.Material).dispose();
+    this.rub.removeFromParent();
     for (const s of this.spawned) s.dispose();
     this.ringPrints.geometry.dispose();
     (this.ringPrints.material as THREE.Material).dispose();

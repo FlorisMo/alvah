@@ -29,10 +29,11 @@
 
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
-import { boxObstacle, type Obstacle } from '../../CharacterController.ts';
+import { boxObstacle, obstacleGap, type Obstacle } from '../../CharacterController.ts';
 import type { HomeSpec, Place, ResidentPose, ResidentSpec, Spot } from '../types.ts';
 import { approachOf, atLocal, dist, headingTo, stream, toLocal, toward, uniformLocal, type Frame } from '../places.ts';
 import { standClumps, type Clump } from '../cover-math.ts';
+import { biomeAt, VEN_CENTER } from '../../Biomes.ts';
 
 /** The frisling marker: the heide's first anchor (Biomes.anchorInBiome('heide', 22)).
  *  The marker stays where it always stood; the test checks the anchor still lands here. */
@@ -109,6 +110,10 @@ export const WAY_IDS: readonly WayId[] = ['wei', 'steen', 'berk'];
 /** A nook of a stand the lost piglet may lie in (stand frame: u across, v away from him),
  *  and which way he lies there: `side` (+1/−1) is the way his head points lying side-on. */
 export interface Nook { u: number; v: number; side: 1 | -1 }
+/** A sow's nest at a stand's edge (package body): its radius (m); never on a nook or a
+ *  look-alike spot (frisling.places.test.ts). */
+export const NEST_R = 0.4;
+
 /** A spot of a stand a look-alike may be laid on; `edge`: at the stand's rim (a nightjar
  *  pressed to a bare patch belongs there, never deep in the bracken). */
 export interface DecoySpot { u: number; v: number; edge?: boolean }
@@ -237,8 +242,8 @@ const WEI = ((): Way => {
     field: 'N', fieldApproach, fieldSide, fieldView: fieldViewOf('N', fieldApproach, fieldSide, -0.3),
     toWallow: [],
     wallowTalk, wallowGive: giveOf(wallowTalk, -1.9, 1.1), wallowView: wallowViewOf(wallowTalk),
-    nest: atLocal(frame, 2.4, 1.3),
-    walkSpots: [atLocal({ x: MARKER.x, z: MARKER.z, heading: headingTo(MARKER, coverApproach) }, 2.6, 14), atLocal({ x: MARKER.x, z: MARKER.z, heading: headingTo(MARKER, coverApproach) }, -2.7, 24)],
+    nest: atLocal(frame, 2.55, 1.25),
+    walkSpots: [atLocal({ x: MARKER.x, z: MARKER.z, heading: headingTo(MARKER, coverApproach) }, 1.6, 14), atLocal({ x: MARKER.x, z: MARKER.z, heading: headingTo(MARKER, coverApproach) }, -1.7, 24)],
     cover: { seed: 71, bracken: 0.2, grass: 0.25 },
     trees: [],
   };
@@ -283,7 +288,9 @@ const STEEN = ((): Way => {
     toWallow: [{ x: -33.6, z: -23.1 }],
     wallowTalk, wallowGive: giveOf(wallowTalk, -1.9, 1.1), wallowView: wallowViewOf(wallowTalk),
     nest: atLocal(frame, 2.4, 1.2),
-    walkSpots: [{ x: -32.7, z: -34.0 }, { x: -32.9, z: -41.0 }],
+    // (the woodlark's spots 12-14 m short of the stand, either side of his way: it settles on
+    // across the heath, never in the stand's bracken ahead)
+    walkSpots: [{ x: -32.7, z: -34.0 }, { x: -35.0, z: -32.1 }],
     cover: { seed: 115, bracken: 0.45, grass: 0.15 },
     trees: [{ ...atLocal(frame, -1.34, 3.4), h: 5.5, rotY: 2.3 }],
     // (the way home lies straight behind him: the piglet comes out on his west side, so
@@ -320,7 +327,9 @@ const BERK = ((): Way => {
     toWallow: [],
     wallowTalk, wallowGive: giveOf(wallowTalk, -1.9, 1.1), wallowView: wallowViewOf(wallowTalk),
     nest: atLocal(frame, 2.45, 1.2),
-    walkSpots: [{ x: -13.9, z: -8.5 }, { x: -6.2, z: 9.2 }],
+    // (the second woodlark spot on the meadow leg, past its bend and 13.5 m short of the
+    // stand: it settles on across the meadow, never in the stand's bracken ahead)
+    walkSpots: [{ x: -13.9, z: -8.5 }, { x: -10.7, z: 3.8 }],
     cover: { seed: 151, bracken: 0.15, grass: 0.4 },
     // (behind the stand, beyond the search picture's top edge: from the follow a white beacon
     // over the bracken, never a dark trunk across the picture's corner)
@@ -345,13 +354,20 @@ export function outSpotOf(way: Way, r: Spot): Spot & { side: 1 | -1 } {
   return { ...atLocal(facing, 1.15 * side, 0.15), side };
 }
 
-/** The close picture of him and a piglet beside him (his bag at its snout: 'voeren' at
- *  the stand), looking past the piglet. */
-export function besideView(r: Spot, pig: Spot): WayView {
+/** How close (m) the hungry piglet's snout comes to him at his bag ('voeren' at the stand). */
+export const BAG_REACH = 0.55;
+
+/** The close picture of him and the piglet nosing the bag on his hip ('voeren' at the
+ *  stand): from across the two of them, side by side in the picture (run 7 body: the old
+ *  view looked past him at the piglet, which stood behind his legs), the piglet whole and
+ *  big enough to see and to reach for (pinned: no neighbour's home in it either). `pig`:
+ *  where the piglet comes out beside him; it noses in to `BAG_REACH` of him. */
+export function bagView(r: Spot, pig: Spot): WayView {
+  const at = toward(r, pig, BAG_REACH);
   return {
-    at: { x: (r.x + pig.x) / 2, z: (r.z + pig.z) / 2 }, heading: headingTo(r, pig) - 0.35,
-    halfW: 1.1, halfD: 0.6, tall: 1.3, pitchDeg: 22, insetTop: 40, insetBottom: 300,
-    include: [{ x: r.x, z: r.z, h: 1.32 }, { x: pig.x, z: pig.z, h: 0.3 }],
+    at: { x: (r.x + at.x) / 2, z: (r.z + at.z) / 2 }, heading: headingTo(r, at) - Math.PI / 2,
+    halfW: 0.9, halfD: 0.6, tall: 1.3, pitchDeg: 20, insetTop: 120, insetBottom: 70,
+    include: [{ x: r.x, z: r.z, h: 1.32 }, { x: at.x, z: at.z, h: 0.3 }],
   };
 }
 
@@ -365,6 +381,86 @@ export function sideBySideView(r: Spot, pig: Spot, looked: Spot): WayView {
     halfW: 1.1, halfD: 0.6, tall: 1.3, pitchDeg: 22, insetTop: 40, insetBottom: 300,
     include: [{ x: r.x, z: r.z, h: 1.32 }, { x: pig.x, z: pig.z, h: 0.3 }],
   };
+}
+
+/* ------------------------------- the calm moments with the body (package body) ---- */
+
+/** The sow's stare ('zeug'): she comes out of the mud toward him, to the rim between her
+ *  piglets and him, until she stands this far (m) from him (never more than
+ *  `ZEUG_STEP_M` from where she was, never toward the lens: the side lens sees her come
+ *  across its picture) — big enough to read her look (≥ 110 px at 1280×800, pinned). */
+export const ZEUG_STARE_M = 3.6;
+export const ZEUG_STEP_M = 2.0;
+
+/** Where the sow stands to look at him (`me`) from her place `home` (from her scratching
+ *  post she steps clear of the log first). */
+export function zeugStare(home: Spot, me: Spot): Spot {
+  const log = wallowLog();
+  let step = Math.min(ZEUG_STEP_M, Math.max(0, dist(home, me) - ZEUG_STARE_M));
+  let p = toward(home, me, step);
+  while (obstacleGap(log, p.x, p.z) + log.box!.pad < 0.55 && step < ZEUG_STEP_M) {
+    step = Math.min(ZEUG_STEP_M, step + 0.1);
+    p = toward(home, me, step);
+  }
+  return p;
+}
+
+/** The side lens on the sow's stare: low, the two of them facing each other across the
+ *  picture, him whole at its side (`s`: which side the lens stands on, ±1). */
+export function zeugView(me: Spot, sow: Spot, s: number): Omit<WayView, 'include'> & { include: readonly { x: number; z: number; h: number; r?: number }[] } {
+  const zh = headingTo(me, sow), zd = dist(me, sow);
+  return {
+    at: toward(me, sow, zd * 0.55), heading: zh + 1.25 * s,
+    halfW: zd * 0.5 + 0.6, halfD: 0.8, tall: 1.0, pitchDeg: 12, insetTop: 110, insetBottom: 30,
+    include: [{ x: me.x, z: me.z, h: 1.32, r: 0.4 }, { x: sow.x, z: sow.z, h: 0.9 }], // (his shoulders both: never cut by the edge)
+  };
+}
+
+/** 'pad' (the flip, walked): from where he stands at the mud, the spot he walks on to past
+ *  the wallow — the way's `wallowGive`, or, when he stands almost on it already, the same
+ *  way on from where he is (`WALK_ON_GOAL_M` along it), so there is always a way to walk. */
+export const WALK_ON_GOAL_M = 2.4;
+export function walkOnSpot(w: Way, me: Spot): Place {
+  if (dist(me, w.wallowGive) >= WALK_ON_GOAL_M - 0.4) return w.wallowGive;
+  const on = dirOfWay(w.wallowTalk, w.wallowGive);
+  const p = { x: me.x + on.x * WALK_ON_GOAL_M, z: me.z + on.z * WALK_ON_GOAL_M };
+  return { ...p, r: 0.6, heading: headingTo(p, WALLOW_AT) };
+}
+const dirOfWay = (a: Spot, b: Spot): Spot => { const d = dist(a, b) || 1; return { x: (b.x - a.x) / d, z: (b.z - a.z) / d }; };
+
+/** 'voeren' at the field: where the yearling stops beside him at his bag (never at the
+ *  lens, never nearer him than 1.2 m: the picture looks past him at it). */
+export function yearlingSideOf(me: Spot, from: Spot): Spot {
+  return atLocal({ x: me.x, z: me.z, heading: headingTo(me, from) }, 1.3, 0.75);
+}
+
+/** The yearling's way between its place at the mud and a field station: to the SOUTH field
+ *  round the mud's west side and the fence's west end (these points from the wallow south;
+ *  reversed coming back); to the north field straight, unless the log is in the way — then
+ *  round its nearer end. Every leg keeps ≥ 0.5 m from the log (frisling.places.test.ts). */
+const YEARLING_SOUTH: readonly Spot[] = [{ x: -31.0, z: -25.6 }, { x: -33.0, z: -29.8 }];
+export const YEARLING_LOG_M = 0.5;
+export function yearlingWay(w: Way, from: Spot, to: Spot): Spot[] {
+  if (w.field === 'S') return from.z > to.z ? [...YEARLING_SOUTH] : [...YEARLING_SOUTH].reverse();
+  const log = wallowLog();
+  const clear = (a: Spot, b: Spot): boolean => legGap(log, a, b) >= YEARLING_LOG_M + 0.1;
+  if (clear(from, to)) return [];
+  // round the log's nearer end: a point past each end, out from the log by its half-width
+  // and a pig's width; the one that keeps both legs clear and walks least
+  const b = log.box!;
+  const ends = [-1, 1].flatMap((e) => [-1, 1].map((sd) => {
+    const c = Math.cos(b.rot), s = Math.sin(b.rot);
+    const lx = e * (b.hx + 0.9), lz = sd * (b.hz + 0.6);
+    return { x: log.x + lx * c + lz * s, z: log.z - lx * s + lz * c };
+  }));
+  const ok = ends.filter((p) => clear(from, p) && clear(p, to)).sort((p, q) => (dist(from, p) + dist(p, to)) - (dist(from, q) + dist(q, to)));
+  return ok.length ? [ok[0]] : [];
+}
+/** The least gap (m) between a straight leg and the log's box (not its pad). */
+export function legGap(log: Obstacle, a: Spot, b: Spot): number {
+  let g = Infinity;
+  for (let t = 0; t <= 1.0001; t += 0.02) g = Math.min(g, obstacleGap(log, a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t) + log.box!.pad);
+  return g;
 }
 
 /* ---------------------------------------------------- the places table ---- */
@@ -642,3 +738,48 @@ export const standSeed = (id: WayId): number => WAYS[id].cover.seed + 1000;
 
 /** (exported for the tests) the stand's centre of the default way */
 export const DEFAULT_STAND: Spot = STAND_AT;
+
+/* ---------------------------------------------------- the woodlark's flight ---- */
+
+/** The follow lens looks from this far behind him (m; world/CameraRig camOffset's boom). */
+export const LENS_BACK = 4.6;
+/** A woodlark flushed from the heather where he walks settles this far from the follow lens
+ *  once it has landed (m, along its line: his picture's middle distance, where a bird reads)
+ *  and this far across that line (m: well to one side of him, never in his way). */
+export const LARK_LAND = { depth: [8, 10], across: [3.6, 4.4] } as const;
+
+/**
+ * Where a woodlark that rose in front of him may settle (package body r2): ACROSS his
+ * picture, never along the lens away from it: it keeps pace with the picture as he walks on
+ * (`walked`: how far on he will be halfway through its sit, m), so it sits at the picture's
+ * middle distance (`LARK_LAND.depth` from the lens then) well to one side. `look` is the lens's
+ * heading (it looks along it from behind him), `side` the way across it (+1: u > 0 of that
+ * frame). In the order to try them (the real lens picks the first in view now and once he
+ * walked on, on the other side of the picture from where it rose, on the world's free
+ * ground): open ground of this home only, clear of every way's stand (it never settles in
+ * the search's bracken), the mud and its family, the rooting fields, the ring and the fence.
+ */
+export function larkLandings(me: Spot, look: number, side: 1 | -1, walked: number): Spot[] {
+  const frame: Frame = { x: me.x, z: me.z, heading: look };
+  const out: Spot[] = [];
+  for (const depth of [9, 8.5, 9.5, LARK_LAND.depth[0], LARK_LAND.depth[1]]) {
+    for (const u of [4, LARK_LAND.across[0], LARK_LAND.across[1]]) {
+      const p = atLocal(frame, side * u, walked + depth - LENS_BACK);
+      if (larkFree(p)) out.push(p);
+    }
+  }
+  return out;
+}
+
+/** Open ground of the home a woodlark may settle on: the heath (or the dry meadow, far from
+ *  the ven's water), the stands, the mud, the fields, the ring and the fence kept clear. */
+export function larkFree(p: Spot): boolean {
+  const b = biomeAt(p.x, p.z);
+  if (b !== 'heide' && !(b === 'ven' && Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) > 50)) return false;
+  if (Math.hypot(p.x, p.z) > 60) return false;
+  for (const id of WAY_IDS) if (dist(p, WAYS[id].stand) < STAND.halfW + 4.4) return false;
+  if (dist(p, WALLOW_AT) < 6.5) return false;
+  if (dist(p, FIELD_N_AT) < 5 || dist(p, FIELD_S_AT) < 5) return false;
+  if (dist(p, MARKER) < 2.5) return false;
+  return !cluePosts().some((q) => dist(p, q) < 1.5);
+}
