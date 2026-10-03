@@ -20,8 +20,9 @@ import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import {
   CROSS, CROSS_VIEW, CALLER_SLOTS, ENTRY, EXIT, JUNIPER, LOG, NIGHTJAR_STUMP, PINE, SETT_MOUND, SKY, STOPS, SLOT_CLASH, SLOT_IDS, TAG_AT, THICKET_BUSHES, TREE,
   WILDCAMERA_PLACES as P, arrivalPath, type SlotId, type StopId,
-  CAMERA, SNARE_IDS, SNARE_SPOTS, SEARCH_VIEW, TEST_SPOT, TEST_VIEW, walkBackView,
+  CAMERA, SNARE_IDS, SNARE_SPOTS, SEARCH_VIEW, TEST_SPOT, TEST_VIEW, walkBackView, PINE_PICK,
 } from './wildcamera.places.ts';
+import { trunkOutline, type Trunk } from '../squirrel-math.ts';
 import { legalLayouts } from './wildcamera.variety.ts';
 import { atLocal, segDist, toLocal } from '../places.ts';
 import type { Spot } from '../types.ts';
@@ -273,6 +274,53 @@ test('the strap beat: from the crossing\'s lens the camera\'s place on the trunk
   assert.ok(Math.hypot(him.x - sc.x, him.y - sc.y) > 60, `apart on the screen (${Math.hypot(him.x - sc.x, him.y - sc.y).toFixed(0)} px)`);
 });
 
+test('the strap beat: a click anywhere on the camera pine\'s trunk finds it, from its foot up to its crown, at its girth', () => {
+  // the lens of the beat (the crossing's view, him at the crossing's approach)
+  const cam = fitLens({ ...CROSS_VIEW, include: [{ x: P.crossApproach.x, z: P.crossApproach.z, h: RANGER_STAND_HEIGHT }] } as unknown as ViewSpec);
+  // the click's target as the home builds it (wildcamera.home: a lathe of PINE_PICK at the tree's foot)
+  const foot = groundY(TREE.x, TREE.z);
+  const proxy = new THREE.Mesh(
+    new THREE.LatheGeometry(PINE_PICK.profile.map(([y, r]) => new THREE.Vector2(r, y)), PINE_PICK.seg),
+    new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }),
+  );
+  proxy.position.set(TREE.x, foot, TREE.z);
+  proxy.updateMatrixWorld(true);
+  // the trunk the player sees: the pine's measured outline (squirrel-math TRUNK_OUTLINE, the
+  // furthest bark at each height) up to where its crown starts (world/Crowns.ts: 0.44 of a
+  // pine's height)
+  const trunk: Trunk = { x: TREE.x, z: TREE.z, H: SIZE.den.h * PINE.s, species: 'prop-pine-scots' };
+  const crown = 0.44 * trunk.H;
+  assert.ok(PINE_PICK.crown >= crown - 1e-6, `the target reaches the crown (${PINE_PICK.crown.toFixed(2)} m of ${crown.toFixed(2)} m)`);
+  // across the trunk as the lens sees it: its left edge, its middle, its right edge
+  const toLens = new THREE.Vector3(cam.position.x - TREE.x, 0, cam.position.z - TREE.z).normalize();
+  const across = new THREE.Vector3(-toLens.z, 0, toLens.x);
+  const ray = new THREE.Raycaster();
+  let shown = 0, top = Infinity, bottom = -Infinity;
+  for (let h = 0.02; h < crown; h += 0.1) {
+    const r = trunkOutline(trunk, h) * 0.98;
+    // (a little off its axis: a ray exactly along a seam of the lathe's facets is a
+    // floating-point coin toss, never a click)
+    for (const u of [-1, -0.45, 0.07, 0.55, 1]) {
+      const p = new THREE.Vector3(TREE.x + across.x * u * r, foot + h, TREE.z + across.z * u * r);
+      const s = px(cam, p.x, p.y, p.z);
+      if (!s.front || s.x < 0 || s.x > W || s.y < 0 || s.y > H) continue; // (off the picture)
+      shown++;
+      top = Math.min(top, s.y); bottom = Math.max(bottom, s.y);
+      ray.set(cam.position, p.clone().sub(cam.position).normalize());
+      assert.ok(ray.intersectObject(proxy).length > 0, `a click on the trunk ${h.toFixed(2)} m up, ${u === -1 ? 'its left edge' : u === 1 ? 'its right edge' : 'across it'} (${s.x.toFixed(0)}, ${s.y.toFixed(0)}) finds the pine`);
+    }
+  }
+  // the trunk stands tall in the picture (a band round it at his chest would not cover it)
+  assert.ok(shown > 100 && bottom - top > 300, `the trunk shows ${(bottom - top).toFixed(0)} px tall`);
+  // and the camera's place on it (the play hint) is on it too
+  const spot = new THREE.Vector3(CAMERA.x, foot + PINE.camY, CAMERA.z);
+  ray.set(cam.position, spot.clone().sub(cam.position).normalize());
+  assert.ok(ray.intersectObject(proxy).length > 0, 'the camera\'s place');
+  // (how big the trunk and the glow round the camera's place show: wildcamera.home GHOST_GLOW)
+  const mPx = (H / 2) / (cam.position.distanceTo(spot) * Math.tan((FOV * Math.PI) / 360));
+  console.log(`# strap view: trunk ${(bottom - top).toFixed(0)} px tall, ${(2 * trunkOutline(trunk, PINE.camY) * mPx).toFixed(0)} px wide at the camera; ${mPx.toFixed(0)} px per m there`);
+});
+
 test('each snare\'s close view: the wire in the grass off the middle, under the line and the pinned photo, its landmarks and him in the picture', () => {
   // the pinned photo (wildcamera.css .wc-pin): 220 × 138 px top-centre under the line
   const PIN = { x0: W / 2 - 114, x1: W / 2 + 114, y0: 100, y1: 250 };
@@ -284,7 +332,7 @@ test('each snare\'s close view: the wire in the grass off the middle, under the 
     assert.ok(!(wire.x > PIN.x0 && wire.x < PIN.x1 && wire.y > PIN.y0 && wire.y < PIN.y1), `${id}: the snare is not under the pinned photo`);
     assert.ok(Math.abs(wire.x - W / 2) >= 0.1 * W || Math.abs(wire.y - H / 2) >= 0.1 * H, `${id}: the snare is not dead centre (${wire.x.toFixed(0)}, ${wire.y.toFixed(0)})`);
     for (const m of sp.marks) {
-      const q = onGround(cam, m.at, m.tree ? 1.0 : m.h * 0.5);
+      const q = onGround(cam, m.at, m.h * 0.5);
       assert.ok(q.front && q.x > -40 && q.x < W + 40 && q.y > 0 && q.y < H, `${id}: its ${m.model} is in the picture (${q.x.toFixed(0)}, ${q.y.toFixed(0)})`);
     }
     const him = onGround(cam, sp.approach, RANGER_STAND_HEIGHT * 0.5);

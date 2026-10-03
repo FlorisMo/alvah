@@ -26,7 +26,7 @@ import { SIZE } from '../../AnimalScale';
 import { crouchPose } from './wildcamera.pose';
 import {
   WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, JUNIPER, THICKET_BUSHES, TAG_AT, NIGHTJAR_AT, NIGHTJAR_STUMP,
-  JAY_AT, SNARE_IDS, SNARE_SPOTS, snareTufts, trailA, trailB, trailC, type SnareId, type SnareSpot,
+  JAY_AT, SNARE_IDS, SNARE_SPOTS, PINE_PICK, snareTufts, trailA, trailB, trailC, type SnareId, type SnareSpot,
 } from './wildcamera.places';
 import type { Spot } from '../types';
 
@@ -42,6 +42,9 @@ const TAG_W = 1.9;
  *  strap — how long (s) and how far each way (rad). */
 const NOD_S = 0.46;
 const NOD_RAD = 0.24;
+/** The glow round the camera's place on the pine before he straps it on: its size (m),
+ *  ≈ 55 px across from the crossing (its bright middle; measured in the browser). */
+const GHOST_GLOW = 1.4;
 
 /** A soft round glow (white in the middle, fading out): the red light's halo, so a
  *  1 cm light on a camera reads from across the crossing. */
@@ -373,14 +376,12 @@ export class WildcameraHome implements HomeDressing {
   /** run 7: the animal standing on the crossing while he decides, as a click finds it (an
    *  invisible box round it: a click on it is no choice of a place) */
   readonly visitor: THREE.Mesh;
-  /** run 7: the camera's soft shape on the trunk before he straps it on, and the band round
-   *  the bark a click on the pine finds (`showStrapSpot`) */
+  /** run 7: the camera's soft shape on the trunk before he straps it on, and the pine's
+   *  whole trunk as a click on it finds it (`showStrapSpot`) */
   private readonly strapSpot = new THREE.Group();
-  private readonly strapProxy: THREE.Mesh;
-  private readonly ghostMat = new THREE.MeshBasicMaterial({ visible: false });
+  private readonly trunkProxy: THREE.Mesh;
   private readonly ghostMats: THREE.MeshStandardMaterial[] = [];
-  private ghostBand: THREE.MeshBasicMaterial | null = null;
-  private ghostHalo: THREE.SpriteMaterial | null = null;
+  private readonly ghostHalo: THREE.SpriteMaterial;
   private ghostT = 0;
   private readonly spawned: { dispose(): void; update?(dt: number): void }[] = [];
   private readonly groundY: (x: number, z: number) => number;
@@ -569,10 +570,9 @@ export class WildcameraHome implements HomeDressing {
     this.trapBody.add(this.led, this.ir);
     this.group.add(this.trap);
 
-    /* -- run 7: where the camera will hang, before he straps it on: its soft shape on the
-          trunk's face (the camera's own model, see-through and lit warm, breathing gently)
-          and an invisible band round the bark at his chest (a click anywhere on the trunk
-          there is "hang it here"; never in a picture: `material.visible` off) -- */
+    /* -- run 7: where the camera will hang, before he straps it on: its shape on the
+          trunk's face, light and warm and see-through, in a soft glow that breathes gently
+          ("the camera goes here"); and the pine's whole trunk as a click finds it -- */
     this.strapSpot.name = 'camera-spot';
     this.strapSpot.position.set(TREE.x, this.trap.position.y, TREE.z + PINE.trunkR + CAM_DEPTH * 0.5 - 0.01);
     this.strapSpot.visible = false;
@@ -583,17 +583,16 @@ export class WildcameraHome implements HomeDressing {
       if (!s) return;
       const r = s.root as THREE.Object3D;
       r.position.y = -CAM_H / 2;
+      // (cream, with none of the model's own dark textures, and lit from inside: it never
+      // reads as the dark camera already hanging there, in the bark's shade or at dusk)
       r.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh) return;
-        const own = mesh.material as THREE.MeshStandardMaterial;
-        const m = own.clone();
-        m.transparent = true;
-        m.depthWrite = true;
-        m.opacity = 0.55;
-        m.color.lerp(new THREE.Color('#fff6dc'), 0.75);
-        m.emissive = new THREE.Color('#ffd76a');
-        m.emissiveIntensity = 0.6;
+        const own = mesh.material as THREE.Material;
+        const m = new THREE.MeshStandardMaterial({
+          color: '#fff4dc', emissive: '#ffd98a', emissiveIntensity: 0.6, roughness: 0.85,
+          transparent: true, opacity: 0.7, depthWrite: true,
+        });
         mesh.material = m;
         own.dispose();
         this.ghostMats.push(m);
@@ -601,31 +600,25 @@ export class WildcameraHome implements HomeDressing {
       this.strapSpot.add(r);
       this.spawned.push(s);
     });
-    // the strap's place round the bark, glowing softly (the band he clicks), and a warm
-    // halo behind the camera's shape so the eye finds it from across the crossing
-    const band = new THREE.Mesh(
-      new THREE.CylinderGeometry(PINE.trunkR + 0.035, PINE.trunkR + 0.035, 0.17, 28, 1, true),
-      new THREE.MeshBasicMaterial({ color: '#ffd76a', transparent: true, opacity: 0.6, depthWrite: true, side: THREE.DoubleSide }),
-    );
-    band.name = 'camera-spot-band';
-    band.position.set(0, 0.02, -(PINE.trunkR + CAM_DEPTH * 0.5 - 0.01));
-    this.strapSpot.add(band);
-    this.ghostBand = band.material as THREE.MeshBasicMaterial;
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffcf6a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6 }));
-    halo.scale.setScalar(0.95);
-    halo.position.set(0, 0, 0.02);
+    // a warm glow round it: in front of the bark (the trunk never cuts it) and just behind
+    // the camera's front, so the light camera stands in it whole
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffd98a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6 }));
+    halo.scale.setScalar(GHOST_GLOW);
+    halo.position.set(0, 0, CAM_DEPTH * 0.5 - 0.02);
     halo.raycast = () => {};
     this.strapSpot.add(halo);
-    this.ghostHalo = halo.material as THREE.SpriteMaterial;
-    const bandH = 0.7;
-    this.strapProxy = new THREE.Mesh(
-      new THREE.CylinderGeometry(PINE.trunkR + 0.05, PINE.trunkR + 0.05, bandH, 16, 1),
-      this.ghostMat,
+    this.ghostHalo = halo.material;
+    // the pine as a click finds it: its whole trunk, from its foot up to where its crown
+    // starts, at the model's own girth (wildcamera.places PINE_PICK). Invisible
+    // (`material.visible` off: never in a picture, never in the play-hint probe's way)
+    this.trunkProxy = new THREE.Mesh(
+      new THREE.LatheGeometry(PINE_PICK.profile.map(([y, r]) => new THREE.Vector2(r, y)), PINE_PICK.seg),
+      new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }),
     );
-    this.strapProxy.name = 'pine-band';
-    this.strapProxy.position.set(TREE.x, this.trap.position.y, TREE.z);
-    this.strapProxy.visible = false;
-    this.group.add(this.strapProxy);
+    this.trunkProxy.name = 'pine-trunk';
+    this.trunkProxy.position.set(TREE.x, g(TREE.x, TREE.z), TREE.z);
+    this.trunkProxy.visible = false;
+    this.group.add(this.trunkProxy);
 
     /* -- the fan of ground the camera sees -- */
     const SEG = 16, RINGS = 6;
@@ -684,13 +677,12 @@ export class WildcameraHome implements HomeDressing {
 
     /* -- run 7: the snare's three spots (wildcamera.places SNARE_SPOTS), each with its two
           landmarks and the grass the wire lies half in: they ALWAYS stand there (only the
-          snare comes and goes), each a small thing that rests by its own spot. S2's birch
-          is a real forest tree (the places' wildcameraTrees) -- */
+          snare comes and goes), each a small thing that rests by its own spot (S2's young
+          birch too: a 3.6 m home plant, never a forest tree the forest would fade) -- */
     for (const id of SNARE_IDS) {
       const sp = SNARE_SPOTS[id];
       const spot = env.detail(sp.at);
       for (const mk of sp.marks) {
-        if (mk.tree) continue;
         void env.spawnPlant(mk.model, mk.h).then((s) => { const r = add(s, mk.at.x, mk.at.z, mk.yaw, mk.model === 'prop-fallen-log' || mk.model === 'prop-boulder' ? -0.04 : 0); if (r) spot.add(r); });
         if (mk.solid) env.obstacles.push(mk.model === 'prop-fallen-log' ? boxObstacle(mk.at.x, mk.at.z, mk.r, 0.18, mk.yaw, 0.2) : { x: mk.at.x, z: mk.at.z, r: mk.r });
       }
@@ -920,17 +912,16 @@ export class WildcameraHome implements HomeDressing {
   get stumpCameraBody(): THREE.Object3D | null { return this.stumpCamera ? this.stumpCamBody : null; }
   private stumpCamBody: THREE.Object3D | null = null;
 
-  /** Run 7: where the camera will hang on the pine, before he straps it on: its soft shape
-   *  on the trunk's face (a ghost of it, breathing gently: "here"), and the trunk at the
-   *  child's chest all round as a click finds it (an invisible band round the bark). Off:
-   *  gone. */
+  /** Run 7: where the camera will hang on the pine, before he straps it on: its shape on
+   *  the trunk's face (light and see-through in a soft glow, breathing gently: "here"),
+   *  and the pine's whole trunk as a click finds it. Off: gone. */
   showStrapSpot(on: boolean): void {
     this.strapSpot.visible = on;
-    this.strapProxy.visible = on;
+    this.trunkProxy.visible = on;
     this.ghostT = 0;
   }
-  /** what a click on the pine finds (the band round its trunk at chest height) */
-  get pineTarget(): THREE.Object3D { return this.strapProxy; }
+  /** what a click on the pine finds (its whole trunk, foot to crown, invisible) */
+  get pineTarget(): THREE.Object3D { return this.trunkProxy; }
   /** what a perfect player clicks (the camera's soft shape on the trunk's face) */
   get strapHint(): THREE.Object3D { return this.strapSpot; }
 
@@ -1143,14 +1134,14 @@ export class WildcameraHome implements HomeDressing {
       sc.scale.setScalar(l.scale * (1 - 0.35 * e));
       if (l.t >= 1) { sc.visible = false; this.restStumpCam(); sc.rotation.x = -Math.PI / 2 + 0.05; }
     }
-    // run 7: the camera's soft shape on the trunk breathes gently (still under reduced
-    // motion; never fainter than the probe's see-through limit)
+    // run 7: the camera's shape on the trunk breathes gently, once in ~3 s (still under
+    // reduced motion); its faintest is still plainly there, and never fainter than the
+    // probe's see-through limit (0.35)
     if (this.strapSpot.visible) {
       this.ghostT += dt;
-      const k = reduced ? 0.55 : 0.5 + 0.12 * Math.sin(this.ghostT * 2.4);
-      for (const m of this.ghostMats) { m.opacity = k; m.emissiveIntensity = 0.45 + (k - 0.38) * 0.9; }
-      if (this.ghostBand) this.ghostBand.opacity = k + 0.05;
-      if (this.ghostHalo) this.ghostHalo.opacity = 0.35 + (k - 0.38) * 1.6;
+      const k = reduced ? 0.6 : 0.5 - 0.5 * Math.cos(this.ghostT * 2.0);
+      for (const m of this.ghostMats) { m.opacity = 0.62 + 0.18 * k; m.emissiveIntensity = 0.5 + 0.3 * k; }
+      this.ghostHalo.opacity = 0.6 + 0.3 * k;
     }
     // run 7: the snare lifts out of the grass toward his hands, shrinks a little and is gone
     const sl = this.snareLift, sr = this.snare;
@@ -1262,12 +1253,9 @@ export class WildcameraHome implements HomeDressing {
     for (const g of Object.values(this.snareGrass)) { g.geometry.dispose(); g.removeFromParent(); }
     this.snarePeg.geometry.dispose();
     (this.snarePeg.material as THREE.Material).dispose();
-    this.strapProxy.geometry.dispose();
-    (this.strapProxy.material as THREE.Material).dispose();
-    this.ghostMat.dispose();
-    this.ghostBand?.dispose();
-    (this.strapSpot.children.find((o) => (o as THREE.Mesh).isMesh && o.name === 'camera-spot-band') as THREE.Mesh | undefined)?.geometry.dispose();
-    this.ghostHalo?.dispose();
+    this.trunkProxy.geometry.dispose();
+    (this.trunkProxy.material as THREE.Material).dispose();
+    this.ghostHalo.dispose(); // (the ghost's own materials go with its spawned model)
     (this.ledGlow.material as THREE.Material).dispose();
     (this.irGlow.material as THREE.Material).dispose();
     this.group.traverse((o) => {

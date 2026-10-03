@@ -23,6 +23,7 @@ import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import { anchorInBiome } from '../../Biomes.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import { atLocal, dist, headingTo, stream, toward, type Frame } from '../places.ts';
+import { TRUNK_OUTLINE } from '../squirrel-math.ts';
 
 /** The wildcamera marker: the bos's first anchor (Biomes.anchorInBiome('bos', 22)). */
 export const MARKER: Spot = anchorInBiome('bos', 22);
@@ -41,6 +42,27 @@ export const PINE = { s: 1.0, rotY: 0.6, trunkR: 0.26, camY: 0.7 } as const;
 /** The camera on the trunk: its north face, toward the lens (so its lens and its red
  *  light face the child), turning on its strap to look at the glade or the thicket. */
 export const CAMERA: Spot = { x: TREE.x, z: TREE.z + PINE.trunkR + 0.07 };
+
+/** The camera pine's trunk as a click finds it (run 7): the whole trunk he sees, from just
+ *  under its foot up to where its crown starts, at the model's own girth — its outline
+ *  (squirrel-math TRUNK_OUTLINE: the furthest bark at each height, root flare and ridges,
+ *  measured off the forest's pine) at this pine's height. A child told "Hang de camera
+ *  aan de dikke boom." clicks the tree where he sees it, not only at the camera's place.
+ *  `profile`: [m up from its foot, m out from its axis] for a lathe of `seg` sides, its
+ *  corners pushed out so the flat sides stand on the outline (never inside the bark). */
+export const PINE_PICK: { seg: number; crown: number; profile: readonly (readonly [number, number])[] } = (() => {
+  const H = SIZE.den.h * PINE.s, seg = 12, out = 1 / Math.cos(Math.PI / seg);
+  const rows = TRUNK_OUTLINE['prop-pine-scots'];
+  const profile: [number, number][] = [[-0.3, 0]];
+  for (let i = 0; i + 1 < rows.length; i++) {
+    // (between two rows the larger reach, as the outline is read: never less than the bark)
+    const r = Math.max(rows[i][1], rows[i + 1][1]) * H * out;
+    profile.push([i === 0 ? -0.3 : rows[i][0] * H, r], [rows[i + 1][0] * H, r]);
+  }
+  const crown = rows[rows.length - 1][0] * H;
+  profile.push([crown, 0]);
+  return { seg, crown, profile };
+})();
 
 /* ------------------------------------------------------------ the places ---- */
 
@@ -382,11 +404,11 @@ export type SnareId = 'S1' | 'S2' | 'S3';
 export const SNARE_IDS: readonly SnareId[] = ['S1', 'S2', 'S3'];
 
 /** A thing that always stands by a snare spot (the photo shows two): its model, where,
- *  how tall (m), its footprint's half-width (m), its turn; `tree` = planted as a real
- *  forest tree; `solid` = the ranger walks round it. */
+ *  how tall (m), its footprint's half-width (m), its turn; `solid` = the ranger walks
+ *  round it. (Each is a home plant, the birch too.) */
 export interface SnareMark {
   model: 'prop-juniper-bush' | 'prop-foxglove' | 'prop-birch-tree' | 'prop-boulder' | 'prop-fallen-log' | 'prop-fern';
-  at: Spot; h: number; r: number; yaw: number; tree?: boolean; solid?: boolean;
+  at: Spot; h: number; r: number; yaw: number; solid?: boolean;
 }
 
 /** A framed view of a world spot (the kit's FrameSpec, THREE-free). */
@@ -614,14 +636,10 @@ export function wildcameraClearings(): { x: number; z: number; r: number }[] {
   return out;
 }
 
-/** The camera pine, planted as a real forest tree; run 7: and the birch by the snare's
- *  second spot (a landmark of the morning photo: it always stands there). */
-export function wildcameraTrees(): { x: number; z: number; s: number; rotY: number; species: 'prop-pine-scots' | 'prop-birch-tree' }[] {
-  const out: { x: number; z: number; s: number; rotY: number; species: 'prop-pine-scots' | 'prop-birch-tree' }[] = [
-    { x: TREE.x, z: TREE.z, s: PINE.s, rotY: PINE.rotY, species: 'prop-pine-scots' },
-  ];
-  for (const id of SNARE_IDS) for (const m of SNARE_SPOTS[id].marks) if (m.tree) out.push({ x: m.at.x, z: m.at.z, s: 0.92, rotY: m.yaw, species: 'prop-birch-tree' });
-  return out;
+/** The camera pine, planted as a real forest tree (the snare spots' landmarks are home
+ *  plants: the forest would fade a tree of its own to a see-through ghost). */
+export function wildcameraTrees(): { x: number; z: number; s: number; rotY: number; species: 'prop-pine-scots' }[] {
+  return [{ x: TREE.x, z: TREE.z, s: PINE.s, rotY: PINE.rotY, species: 'prop-pine-scots' }];
 }
 
 /* ------------------------------------------------------------- the home ---- */

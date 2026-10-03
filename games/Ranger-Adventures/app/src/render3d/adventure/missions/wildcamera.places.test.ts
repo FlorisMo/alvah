@@ -596,7 +596,7 @@ test('the walk back from every snare spot to the camera: a clear straight way (t
   const solids = [
     ...THICKET_BUSHES.filter((b) => b.id === 'prop-juniper-bush').map((b) => ({ at: b.at, r: b.r })),
     { at: P.sett, r: SETT_MOUND.r }, { at: LOG, r: 0.7 }, { at: NIGHTJAR_STUMP, r: NIGHTJAR_STUMP.r }, { at: TREE, r: 0.6 },
-    ...SNARE_IDS.flatMap((o) => SNARE_SPOTS[o].marks.filter((m) => m.solid || m.tree).map((m) => ({ at: m.at, r: m.r }))),
+    ...SNARE_IDS.flatMap((o) => SNARE_SPOTS[o].marks.filter((m) => m.solid).map((m) => ({ at: m.at, r: m.r }))),
   ];
   for (const id of SNARE_IDS) {
     const from = SNARE_SPOTS[id].approach;

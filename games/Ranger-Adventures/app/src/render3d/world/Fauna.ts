@@ -462,14 +462,6 @@ export class Fauna {
     this.blobCount++;
   }
 
-  /**
-   * W3.3: place the two story-arc humans — the warden (BOA) near the case-board
-   * hub where the player reports, and the poacher as a distant, calm figure off
-   * in the bos edge. Each loads via `loadRig` and plays its single baked clip
-   * through a mixer (advanced in `update`, frozen under reduced-motion). Both sit
-   * to the +z side of spawn so the movement smoke's forward (−z) corridor stays
-   * clear; neither pushes a collision circle or joins `markers` (pure dressing).
-   */
   /** Run 7: the story's grown-ups (Bram, the distant figure) out of one picture (a camera
    *  trap's photo, World.snapshot `people: false`); returns how to put them back. */
   peopleOutOfPicture(): () => void {
@@ -478,6 +470,14 @@ export class Fauna {
     return () => { this.scenicActors.forEach((a, i) => { a.group.visible = was[i]; }); };
   }
 
+  /**
+   * W3.3: place the two story-arc humans — the warden (BOA) near the case-board
+   * hub where the player reports, and the poacher as a distant, calm figure off
+   * in the bos edge. Each loads via `loadRig` and plays its single baked clip
+   * through a mixer (advanced in `update`, frozen under reduced-motion). Both sit
+   * to the +z side of spawn so the movement smoke's forward (−z) corridor stays
+   * clear; neither pushes a collision circle or joins `markers` (pure dressing).
+   */
   placeScenicActors(): void {
     // grown men at their true heights (AnimalScale), a head and a half above the boy
     const ACTORS: { id: string; x: number; z: number; height: number }[] = [
