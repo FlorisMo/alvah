@@ -46,8 +46,8 @@ import { TREE_BASE_H } from '../../world/Forest';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale';
 import { EekhoornHome, type Neighbour } from './eekhoorn.home';
 import {
-  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, GLADE_VIEW, HEAP, HEAP_GRAB, AT_IT, HIDE, HOME_TREES, ROUTES, RUN_ON_WAIT, RUN_ON_X, SEAT_STOP, SEE_D, SEEN_X, STUMP,
-  VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundView, hideShift, hideStart, introView,
+  CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, FIND_R, GLADE_VIEW, HEAP, HEAP_GRAB, AT_IT, HIDE, HOME_TREES, ROUTES, RUN_ON_WAIT, RUN_ON_X, SEAT_STOP, SEE_D, SEEN_X, STUMP,
+  VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
 } from './eekhoorn.places';
 
@@ -56,9 +56,11 @@ import {
  *  in full detail out to the forest's 20 m took the picture past the 1M triangles (shadow
  *  pass included); within this the trunk the squirrel sits on is the full tree. */
 const TREE_NEAR = 6;
-/** The squirrel's size (m, sitting up with its tail): the upper end of a red squirrel,
- *  so a child reads it on a trunk a few metres off. */
-const SQUIRREL_H = 0.3;
+/** The squirrel's size (m, sitting up with its tail curled over its back): a little over
+ *  the upper end of a red squirrel (≈ 0.3), so a child reads it on a trunk a few metres
+ *  off — through the follow lens 4.6 m behind him, ≥ 40 px as it sets off from a stub he
+ *  stands 1.4 m from (measured 2026-10-03: at 0.3 m it was 35-38 px there). */
+const SQUIRREL_H = 0.33;
 /** At each stop of the follow it sits up on its stub at least this long (s) before it runs
  *  on — then a chatter and a flick (~1 s): a clear "it waits for me", even at a run. */
 const SIT = 1.2;
@@ -321,6 +323,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   const hop = async (name: string, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
     k.say(line);
     const there = k.guard(go());
+    // (a breath before the way on shows: he sees it set off from where he stands, before
+    // the chip and the keys turn him toward where it goes)
+    await k.wait(0.7);
     let arrived = false;
     let sitFrom = 0;
     let toldWait = false;
@@ -464,7 +469,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       // round the bark again; or, right up at the bark on its side of the tree — where a
       // child steering at its chatter ends up, his own back between it and the lens — as
       // soon as a bit of it shows beside him)
-      reached: () => hid && !hiding && !slipping && (measure().seen || (nearIt() && measure().glimpse)),
+      reached: () => hid && !hiding && !slipping && dist(k.ranger(), hideTree.trunk) <= FIND_R && (measure().seen || (nearIt() && measure().glimpse)),
     });
   } finally {
     hint.off();
@@ -476,6 +481,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   // "Gevonden!", with it big in the picture
   k.lockFollow();
   await k.until(() => k.ranger().speed < 0.1 && !slipping, 1.5);
+  // (found from further off: a few calm steps nearer it first, so the two of them fit close)
+  const near0 = foundStand(cT, foundFace(cT, sqAng, k.ranger()), k.ranger());
+  if (dist(near0, k.ranger()) > 0.2) await k.walkRanger(near0.x, near0.z, 0.05);
   const at0 = k.ranger();
   const face = foundFace(cT, sqAng, at0);
   const out = k.guard(sq.goRound(hideTree, { ang: face, h: HIDE.h }, 0.9));

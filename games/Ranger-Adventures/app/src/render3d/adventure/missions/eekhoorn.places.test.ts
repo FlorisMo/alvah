@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import {
   EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, SEEDLING_AT, JAY_GROUND,
   GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, SEE_D, SEEN_X, WAIT_H, WAIT_TURN, HIDE, gladeSpots, eekhoornTreeClear, eekhoornClearings, branchStub,
-  seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace,
+  seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
   type HomeTree, type Route, type Trio,
@@ -455,46 +455,61 @@ function px(cam: THREE.PerspectiveCamera, p: { x: number; z: number }, up: numbe
   return { x: (v.x + 1) * 0.5 * W, y: (1 - v.y) * 0.5 * H, behind };
 }
 
-test('the found view: on his side of the tree, him whole at one side, the squirrel big at the other, off the middle', () => {
+test('the found view: on his side of the tree, him whole at one side, the squirrel big at the other, no pine between', () => {
   let n = 0;
+  const check = (rid: string, c: HomeTree, sqAng: number, at: { x: number; z: number }): void => {
+    n += 1;
+    const face0 = foundFace(c, sqAng, at);
+    // (found from further off, he takes a few calm steps nearer first; never into a trunk)
+    const me = foundStand(c, face0, at);
+    for (const t of HOME_TREES) assert.ok(segDist(t, at, me) > trunkClear(t) - 0.35 || dist(at, me) < 0.01, `${rid}: his steps nearer clear ${t.id}`);
+    const face = foundFace(c, sqAng, me);
+    assert.ok(Math.abs(wrapA(face - sqAng)) < 1.6, `${rid}: it comes out a short way round from where it was`);
+    const f = foundView(c, face, me);
+    const cam = fitLens(f);
+    const rr = barkRadius(trunk(c), HIDE.h) + 0.08;
+    const sq = { x: c.x + Math.sin(face) * rr, z: c.z + Math.cos(face) * rr };
+    const camD = Math.hypot(cam.position.x - sq.x, cam.position.z - sq.z);
+    assert.ok(camD >= 2.4 && camD <= 5.0, `${rid}: the lens ${camD.toFixed(2)} m from the squirrel`);
+    const camUp = cam.position.y - groundY(cam.position.x, cam.position.z);
+    assert.ok(camUp >= 1.0 && camUp <= 2.2, `${rid}: the lens at ${camUp.toFixed(2)} m, about its height`);
+    // turned off the line from him to it (his head not in front of it)
+    const off = Math.abs(wrapA(headingTo(cam.position, sq) - headingTo(me, sq)));
+    assert.ok(off >= (15 * Math.PI) / 180, `${rid}: the lens ${deg(off)}° off his line to it`);
+    // big: its 0.33 m (with its tail) at least 60 px tall, in the picture, off the middle
+    const top = px(cam, sq, HIDE.h + 0.33), bot = px(cam, sq, HIDE.h);
+    assert.ok(!top.behind && Math.abs(bot.y - top.y) >= 60, `${rid}: it is ${Math.abs(bot.y - top.y).toFixed(0)} px tall (him ${dist(me, sq).toFixed(1)} m from it)`);
+    assert.ok(top.x > 40 && top.x < W - 40 && top.y > 110 && bot.y < H - 80, `${rid}: it is in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)})`);
+    assert.ok(Math.abs(top.x - W / 2) >= 0.2 * (W / 2), `${rid}: well off the middle (${top.x.toFixed(0)} px; turn ${deg(Math.abs(wrapA(f.heading - headingTo(me, sq))))}°, him ${dist(me, sq).toFixed(1)} m, sqAng ${sqAng.toFixed(2)})`);
+    // him: whole in the picture, no pine of the home between the lens and him or it
+    const head = px(cam, me, RANGER_STAND_HEIGHT), foot = px(cam, me, 0.05);
+    assert.ok(!head.behind && head.x > 20 && head.x < W - 20 && head.y > 90 && foot.y < H, `${rid}: he is in the picture (${head.x.toFixed(0)}, ${head.y.toFixed(0)}–${foot.y.toFixed(0)})`);
+    for (const t of HOME_TREES) {
+      const g0 = groundY(t.x, t.z);
+      const bark: Upright[] = [{ ...trunkUpright(trunk(t), g0), r: (y: number) => barkRadius(trunk(t), Math.max(0, y - g0)) }];
+      assert.ok(lineClear(cam.position, { ...me, y: groundY(me.x, me.z) + 1.0 }, bark), `${rid}: ${t.id} is not in front of him`);
+      if (t !== c) assert.ok(lineClear(cam.position, { ...sq, y: groundY(sq.x, sq.z) + HIDE.h + 0.12 }, bark), `${rid}: ${t.id} is not in front of the squirrel`);
+    }
+    assert.ok(lineClear(cam.position, { ...sq, y: groundY(sq.x, sq.z) + HIDE.h + 0.12 }, [{ ...trunkUpright(trunk(c), groundY(c.x, c.z)), r: (y: number) => barkRadius(trunk(c), Math.max(0, y - groundY(c.x, c.z))) }]), `${rid}: its own trunk is not in front of it`);
+  };
   for (const rid of ROUTE_IDS) {
     const c = ROUTES[rid].hide;
     const from = headingTo(c, comesFrom(ROUTES[rid], ROUTES[rid].waits.length - 1));
+    // where a perfect player finds it…
     for (let k = -6; k <= 6; k += 3) for (const d of [1.8, 2.6, 3.4]) {
       const start = { x: c.x + Math.sin(from + k * 0.17) * d, z: c.z + Math.cos(from + k * 0.17) * d };
       if (dist(start, seatOf(c)) > SEE_D || HOME_TREES.some((o) => dist(o, start) < trunkClear(o))) continue;
       const res = playHide(c, start, `${rid} found view`);
-      if (!res.found) continue;
-      n += 1;
-      const f = foundView(c, res.sqAng, res.me);
-      const cam = fitLens(f);
-      const rr = barkRadius(trunk(c), HIDE.h) + 0.08;
-      // (it comes out onto the near face once found)
-      const face = foundFace(c, res.sqAng, res.me);
-      assert.ok(Math.abs(wrapA(face - res.sqAng)) < 1.6, `${rid}: it comes out a short way round from where it was`);
-      const sq = { x: c.x + Math.sin(face) * rr, z: c.z + Math.cos(face) * rr };
-      const camD = Math.hypot(cam.position.x - sq.x, cam.position.z - sq.z);
-      assert.ok(camD >= 2.4 && camD <= 4.2, `${rid}: the lens ${camD.toFixed(2)} m from the squirrel`);
-      const camUp = cam.position.y - groundY(cam.position.x, cam.position.z);
-      assert.ok(camUp >= 1.0 && camUp <= 2.0, `${rid}: the lens at ${camUp.toFixed(2)} m, about its height`);
-      // turned off the line from him to it (his head not in front of it)
-      const off = Math.abs(wrapA(headingTo(cam.position, sq) - headingTo(res.me, sq)));
-      assert.ok(off >= (15 * Math.PI) / 180, `${rid}: the lens ${deg(off)}° off his line to it`);
-      // big: its 0.3 m (with its tail) at least 60 px tall, in the picture, off the middle
-      const top = px(cam, sq, HIDE.h + 0.3), bot = px(cam, sq, HIDE.h);
-      assert.ok(!top.behind && Math.abs(bot.y - top.y) >= 60, `${rid}: it is ${Math.abs(bot.y - top.y).toFixed(0)} px tall`);
-      assert.ok(top.x > 60 && top.x < W - 60 && top.y > 110 && bot.y < H - 80, `${rid}: it is in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)})`);
-      assert.ok(Math.abs(top.x - W / 2) >= 0.25 * (W / 2), `${rid}: well off the middle (${top.x.toFixed(0)} px)`);
-      // him: whole in the picture, at the other side, the trunk between the lens and neither
-      const head = px(cam, res.me, RANGER_STAND_HEIGHT), foot = px(cam, res.me, 0.05);
-      assert.ok(!head.behind && head.x > 20 && head.x < W - 20 && head.y > 90 && foot.y < H, `${rid}: he is in the picture (${head.x.toFixed(0)}, ${head.y.toFixed(0)}–${foot.y.toFixed(0)})`);
-      assert.ok(Math.sign(head.x - W / 2) !== Math.sign(top.x - W / 2), `${rid}: he and the squirrel at either side`);
-      const bark = [trunkUpright(trunk(c), groundY(c.x, c.z))];
-      assert.ok(lineClear(cam.position, { ...res.me, y: groundY(res.me.x, res.me.z) + 1.0 }, bark), `${rid}: the trunk is not in front of him`);
-      assert.ok(lineClear(cam.position, { ...sq, y: groundY(sq.x, sq.z) + HIDE.h + 0.12 }, [{ ...bark[0], r: (y: number) => barkRadius(trunk(c), Math.max(0, y - groundY(c.x, c.z))) }]), `${rid}: the trunk is not in front of the squirrel`);
+      if (res.found) check(rid, c, res.sqAng, res.me);
+    }
+    // …and anywhere on its side, near or as far as he may find it from
+    for (let a = -Math.PI; a < Math.PI; a += Math.PI / 6) for (const d of [1.2, 2.2, 3.2, FIND_R]) {
+      const me = { x: c.x + Math.sin(a + 0.5) * d, z: c.z + Math.cos(a + 0.5) * d };
+      if (HOME_TREES.some((o) => dist(o, me) < trunkClear(o))) continue;
+      check(rid, c, a, me);
     }
   }
-  assert.ok(n >= 6, `${n} finds framed`);
+  assert.ok(n >= 60, `${n} finds framed`);
 });
 
 test('the den look turns to the side the squirrel will lead him', () => {

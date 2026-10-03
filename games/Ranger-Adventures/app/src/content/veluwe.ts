@@ -870,6 +870,8 @@ const MISSIE_EEKHOORN = {
         dier: 'eekhoorn',
         // run 6: the squirrel's noisy tree neighbours (the jay is the nut thief)
         dieren: ['eekhoorn', 'gaai', 'groene-specht', 'raaf'],
+        // run 7: they all chase the jay: each is heard before any calls twice
+        roepAllen: true,
         copy: {
           instructie: 'Antwoord de buren van de eekhoorn.',
           luister: 'Luister wie er roept…',

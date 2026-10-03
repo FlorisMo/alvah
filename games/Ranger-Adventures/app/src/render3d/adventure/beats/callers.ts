@@ -88,7 +88,7 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   // run 7: the play's callers (its 2D twin draws the same), in rounds from the knobs
   // (run 7: the world's own row, slot for slot, when a home draws its callers per play)
   if (o.dieren && o.dieren.length === trial.dieren.length) trial.dieren = [...o.dieren];
-  const run = new SimonRun(trial.knobs, trial.dieren, k.play.fork('simon').rng);
+  const run = new SimonRun(trial.knobs, trial.dieren, k.play.fork('simon').rng, trial.spread);
   const byId = new Map(o.callers.map((c) => [c.id, c]));
   const missing = trial.dieren.filter((id) => !byId.has(id));
   if (missing.length) throw new Error(`[adventure] no caller for ${missing.join(', ')}`);

@@ -283,7 +283,7 @@ export const SEE_D = 2.2;
 /** Where golden's walk hint stops him short of its seat once he is at the spot to see it
  *  from and it sits there (m): walking on at it, the lens turns to it, it comes within
  *  SEE_D, and it is still over his shoulder, not behind his head. */
-export const SEAT_STOP = 1.7;
+export const SEAT_STOP = 1.4;
 /** Right at it (m): he walked up to the squirrel on its stub — under it, the trunk
  *  stopping him — and that counts as soon as a bit of it shows in the picture: his own
  *  head in front of it in the lens behind him hides nothing from HIM (hide-and-seek's
@@ -534,36 +534,72 @@ export function roundStep(t: HomeTree, me: Spot, sqAng: number): Spot & { r?: nu
 /* ------------------------------------------------------ the found view ---- */
 
 /** Where the lens holds him and the squirrel once he has found it (design §6.3): on HIS
- *  side of the tree, about level with it (~1.4 m up), turned `turn` off the line from him
- *  to it, so the two of them stand apart across the picture, face to face — him at one
- *  side, whole, the squirrel peeking round the bark at the other, big (≥ 60 px) and well
- *  off the middle. (Measured on the fit, eekhoorn.places.test.ts, and played 2026-10-03:
- *  at the design's 30° the squirrel sat within ~70 px of the middle with his body in line
- *  behind it, and the lens ~1.5 m from him faded him; at 75° they face each other across
- *  the picture, the lens ~2.9 m from him and ~3.2-3.6 m from the squirrel: him whole in it
- *  keeps it there.) `sqAng`: the side of the trunk it clings on. */
-export const FOUND = { turn: (75 * Math.PI) / 180, toward: 0.55 } as const;
+ *  side of the tree, about level with it (~1.4 m up), turned `turns[0]` off the line from
+ *  him to it, so the two of them stand apart across the picture, face to face — him at
+ *  one side, whole, the squirrel peeking round the bark at the other, big (≥ 60 px) and
+ *  well off the middle. (Measured on the fit, eekhoorn.places.test.ts, and played
+ *  2026-10-03: at the design's 30° the squirrel sat within ~70 px of the middle with his
+ *  body in line behind it, and the lens ~1.5 m from him faded him; at 75° they face each
+ *  other across the picture, the lens ~2.9 m from him and ~3.2-4 m from the squirrel: him
+ *  whole in it keeps it there.) When a pine of the home would stand between that lens and
+ *  either of them, the lens tries the other side, then a smaller turn (`turns`). */
+export const FOUND = { turns: [75, 60, 45, 30].map((d) => (d * Math.PI) / 180), toward: 0.55, back: 3.4 } as const;
+/** He has found it only from within this far of its trunk (m): from further off, a squirrel
+ *  that shows past the bark is still hiding from him (played 2026-10-03: a bot walked 20 m
+ *  round and "found" it from the glade, 11 m off, and the held view lost them both). */
+export const FIND_R = 4.2;
 export function foundView(tree: HomeTree, sqAng: number, me: Spot): {
   at: Spot; heading: number; halfW: number; halfD: number; tall: number; pitchDeg: number; insetTop: number; insetBottom: number;
   include: { x: number; z: number; h: number; r: number }[];
 } {
   const r = barkRadius({ x: tree.x, z: tree.z, H: tree.h, species: tree.species }, HIDE.h) + 0.08;
   const sq = { x: tree.x + Math.sin(sqAng) * r, z: tree.z + Math.cos(sqAng) * r };
-  // the lens turns round the line from him to it, to the side away from the trunk (it
-  // never looks past the bark at either of them)
-  const side = Math.sign(wrapA(headingTo(sq, me) - sqAng)) || 1;
-  const heading = headingTo(me, sq) - side * FOUND.turn;
-  // the picture's middle: between them, nearer the squirrel
-  const at = { x: sq.x + (me.x - sq.x) * FOUND.toward, z: sq.z + (me.z - sq.z) * FOUND.toward };
-  return { at, heading, halfW: 0.3, halfD: 0.25, tall: 1.3, pitchDeg: 4, insetTop: 100, insetBottom: 60,
+  // the picture's middle: between them, a little nearer the squirrel (at a smaller turn,
+  // nearer him: the squirrel stays well off the middle of the picture)
+  const middle = (turn: number): Spot => {
+    const k = FOUND.toward + Math.max(0, Math.min(1, (FOUND.turns[0] - turn) / (FOUND.turns[0] - FOUND.turns[FOUND.turns.length - 1]))) * 0.3;
+    return { x: sq.x + (me.x - sq.x) * k, z: sq.z + (me.z - sq.z) * k };
+  };
+  const toSq = headingTo(me, sq);
+  // (the side away from the trunk first: it never looks past the bark at either of them)
+  const pref = Math.sign(wrapA(headingTo(sq, me) - sqAng)) || 1;
+  const clear = (heading: number, at: Spot): boolean => {
+    const cam = { x: at.x - Math.sin(heading) * FOUND.back, z: at.z - Math.cos(heading) * FOUND.back };
+    // the squirrel's side of the trunk faces the lens
+    if (Math.abs(wrapA(headingTo(tree, cam) - sqAng)) > (80 * Math.PI) / 180) return false;
+    return HOME_TREES.every((t) => {
+      const rr = barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, 1) + 0.3;
+      if (dist(t, cam) < rr + 0.7) return false;
+      return segDist(t, cam, me) > rr && (t === tree || segDist(t, cam, sq) > rr);
+    });
+  };
+  let heading = toSq - pref * FOUND.turns[0];
+  let at = middle(FOUND.turns[0]);
+  find: for (const turn of FOUND.turns) for (const side of [pref, -pref]) {
+    if (clear(toSq - side * turn, middle(turn))) { heading = toSq - side * turn; at = middle(turn); break find; }
+  }
+  return { at, heading, halfW: 0.3, halfD: 0.25, tall: 1.3, pitchDeg: 4, insetTop: 96, insetBottom: 36,
     include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT, r: 0.25 }] };
+}
+
+/** Where he stands in the found view: where he is, or — found from further off than
+ *  `FOUND_NEAR` m — a few calm steps nearer it (the lens holding the two of them keeps the
+ *  squirrel ≥ 60 px only that near). */
+export const FOUND_NEAR = 2.1;
+export function foundStand(tree: HomeTree, sqAng: number, me: Spot): Spot {
+  const r = barkRadius({ x: tree.x, z: tree.z, H: tree.h, species: tree.species }, HIDE.h) + 0.08;
+  const sq = { x: tree.x + Math.sin(sqAng) * r, z: tree.z + Math.cos(sqAng) * r };
+  const d = dist(me, sq);
+  if (d <= FOUND_NEAR) return me;
+  const k = (FOUND_NEAR - 0.3) / d;
+  return { x: sq.x + (me.x - sq.x) * k, z: sq.z + (me.z - sq.z) * k };
 }
 
 /** The face of the trunk it comes out on once he found it (design §6.3): turned from his
  *  side toward the found view's lens, so it shows whole beside the bark. */
 export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
   const side = Math.sign(wrapA(headingTo(tree, me) - sqAng)) || 1;
-  return headingTo(tree, me) - side * FOUND.turn * 0.7;
+  return headingTo(tree, me) - side * FOUND.turns[0] * 0.7;
 }
 
 /* -------------------------------------------------------- the neighbours ---- */
