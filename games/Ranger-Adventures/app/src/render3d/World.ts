@@ -517,6 +517,16 @@ export class World {
     this.dip = fn;
   }
 
+  /** Run 7 (ree-growth, additive): the same soft dip for a cut inside a mission's framed
+   *  beat (`AdventureKit.frame` with `dip`: a view that would swing the lens more than 90°
+   *  round him). `move` runs under the veil, `then` once the new view is drawn; without the
+   *  UI's dip, under reduced motion and in the light mode a plain cut (both at once). */
+  dipCut(move: () => void, then: () => void): void {
+    const dip = this.dip;
+    if (!dip || livePolicy().reduced || lightMode()) { move(); then(); return; }
+    dip(move, then);
+  }
+
   /**
    * Run 7 (feel): climb into or out of a vehicle (`act`), the view ending up looking along
    * `view`. Today's glide (CameraRig.handover: eased, never faster than ~90°/s) when that

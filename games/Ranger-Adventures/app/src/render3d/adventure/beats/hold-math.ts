@@ -20,6 +20,9 @@
  * `RustTempo` adapts them: after a reach the next hold wants 0.5 s less (silently, never
  * under 2.5 s); after two clean holds in a row 0.5 s more (at most the band's + 1).
  * Temptations come at seeded moments of the hold, never in its first 1.1 s.
+ *
+ * Run 7 (ree-growth): `GoCore` is the same for a moment answered by WALKING AWAY (the
+ * flip "Nu mag het wél": the mother is back, he walks off himself): his feet, not a card.
  */
 
 import type { RustKnobs } from '../../../core/skill.ts';
@@ -151,5 +154,128 @@ export class RustTempo {
     const to = Math.max(from, seconds - 0.5);
     const span = (to - from) / this.tempts;
     return Array.from({ length: this.tempts }, (_, i) => Math.round((from + span * (i + 0.15 + this.rng() * 0.7)) * 100) / 100);
+  }
+}
+
+/* ------------------------------------------------------------------ go ---- */
+
+/** A spot on the ground (world x, z). */
+export interface GoSpot { x: number; z: number }
+
+/** How a "go" moment reads his feet (run 7, `GoCore`). */
+export interface GoRule {
+  /** he has walked this far (m) from where he stood when the line came: gone (default 4) */
+  away: number;
+  /** standing still this long (s) after the line was read is the old habit: "Blijf staan"
+   *  (the level's `goWaitS`) */
+  waitS: number;
+  /** this much (m) closer to the animals than he was is walking up to them (default 2.5:
+   *  a child turning round with ↑ held curves a metre or two their way first) */
+  closer: number;
+  /** within this (m) of where he stood counts as standing there, shuffling (default 1) */
+  stay: number;
+  /** gone means at least this much (m) farther from the animals than he stood (default
+   *  0.5: round them on a circle is not away) */
+  farther: number;
+}
+
+export const GO_AWAY_M = 4;
+export const GO_CLOSER_M = 2.5;
+export const GO_STAY_M = 1;
+export const GO_FARTHER_M = 0.5;
+/** Slower than this (m/s) is standing still (unless he is turning round). */
+export const GO_STILL_V = 0.3;
+
+export type GoPhase = 'read' | 'go' | 'react' | 'done';
+
+/**
+ * GoCore — the pure core of a rustkracht moment answered by WALKING AWAY (run 7, the
+ * flip: "Mama is terug. Loop stil weg."): THREE-free, DOM-free, the mirror of `HoldCore`.
+ * After the line is read the clock runs. Walking `away` m from where he stood when the
+ * line came, farther from the animals than he was, at a walk, is `choose(true)` (once).
+ * (`farther`: at least half a metre; round them on a circle is not away.)
+ * Standing (within `stay` m of his spot, or slower than a walk, but not turning round) for
+ * `waitS` s in all, or
+ * coming `closer` m (2.5) nearer the animals, is the old rule kept too long: `choose(false)`
+ * (the run marks the encounter once, however often), the animals react, and the same
+ * moment comes back from where he is then. Running counts as neither (the home says
+ * "Sst"): no step of it is judged, and no time of it is standing.
+ *
+ *   'read'  the line is up and being read: nothing is judged yet
+ *   'go'    the clock runs
+ *   'react' it went wrong: the animals react, the line follows (`again`)
+ *   'done'  he walked away: `choose(true)` was called, once
+ */
+export class GoCore {
+  phase: GoPhase = 'read';
+  /** times it went wrong (each answered by the animals) */
+  wrongs = 0;
+  /** seconds he has stood since this round's line was read */
+  idle = 0;
+  /** why it last went wrong: he stood too long, or he came closer */
+  why: 'stay' | 'closer' | null = null;
+  readonly rule: GoRule;
+  private from: GoSpot = { x: 0, z: 0 };
+  private near0 = 0;
+  private last = 0;
+  private readonly choose: (goed: boolean) => void;
+
+  constructor(rule: Partial<GoRule> & { waitS: number }, choose: (goed: boolean) => void) {
+    this.rule = { away: GO_AWAY_M, closer: GO_CLOSER_M, stay: GO_STAY_M, farther: GO_FARTHER_M, ...rule };
+    this.choose = choose;
+  }
+
+  /** The line has been read (mission time `now`): the clock runs. `at`: where he stood
+   *  when the line came (a step taken while it was read counts toward going away), or,
+   *  when the moment comes back, where he is now; `family`: where the animals are. "Away"
+   *  is always counted from where he stood the first time (the hide: a walk up to them and
+   *  back is no walk away), "closer" from the nearest he has stood to them since. */
+  begin(now: number, at: GoSpot, family: GoSpot): void {
+    if (this.phase !== 'read') return;
+    const near = Math.hypot(at.x - family.x, at.z - family.z);
+    if (!this.begun) { this.from = { x: at.x, z: at.z }; this.near0 = near; this.begun = true; }
+    else this.near0 = Math.min(this.near0, near);
+    this.phase = 'go';
+    this.idle = 0;
+    this.last = now;
+  }
+  private begun = false;
+
+  /** Per frame: where he is and how he moves, where the animals are. 'right' once he has
+   *  walked away (`choose(true)`), 'wrong' when he stood too long or came closer
+   *  (`choose(false)`; the home plays the animals' reaction, then `again`), else null. */
+  tick(now: number, me: GoSpot & { speed: number; running: boolean; turning?: boolean; trying?: boolean }, family: GoSpot): 'right' | 'wrong' | null {
+    if (this.phase !== 'go') return null;
+    const dt = Math.max(0, Math.min(0.5, now - this.last));
+    this.last = now;
+    if (me.running) return null; // (neither: "Sst. Loop stil.")
+    const near = Math.hypot(me.x - family.x, me.z - family.z);
+    if (near <= this.near0 - this.rule.closer) return this.wrong('closer');
+    const moved = Math.hypot(me.x - this.from.x, me.z - this.from.z);
+    if (moved >= this.rule.away && near >= this.near0 + this.rule.farther) {
+      this.phase = 'done';
+      this.choose(true);
+      return 'right';
+    }
+    // (turning round on the spot is no standing: he is about to walk away; nor is pushing
+    // on against a bush or a trunk in his way: `trying`, a walk key or the stick held)
+    if ((moved < this.rule.stay || me.speed < GO_STILL_V) && !me.turning && !me.trying) {
+      this.idle += dt;
+      if (this.idle >= this.rule.waitS) return this.wrong('stay');
+    }
+    return null;
+  }
+
+  /** The animals have reacted and the line said so: the same moment again (its line first). */
+  again(): void {
+    if (this.phase === 'react') this.phase = 'read';
+  }
+
+  private wrong(why: 'stay' | 'closer'): 'wrong' {
+    this.wrongs += 1;
+    this.why = why;
+    this.phase = 'react';
+    this.choose(false);
+    return 'wrong';
   }
 }

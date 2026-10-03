@@ -355,7 +355,7 @@ async function worldReacted(log: Log, mission: Mission, marker: P2, before: Seat
   const s = await snap(page);
   const home = (await R<Record<string, P2> | null>(page, `r.missionPlaces(${JSON.stringify(mission.id)})`))?.home;
   const near = (q: P2): boolean => !!s.p && Math.hypot(s.p.x - q.x, s.p.z - q.z) < 12;
-  log.soft(near(marker) || (!!home && near(home)), 'back in the world near the marker (or the mission\'s home)');
+  log.soft(near(marker) || (!!home && near(home)), `back in the world near the marker (or the mission's home): ${s.p ? Math.hypot(s.p.x - marker.x, s.p.z - marker.z).toFixed(1) : '?'} m / ${s.p && home ? Math.hypot(s.p.x - home.x, s.p.z - home.z).toFixed(1) : '?'} m`);
   // run 6: an adventure's family lives at its home, in its after state, together there
   let fam = await homeOf(page, mission.id);
   if (fam && home) {
@@ -382,10 +382,12 @@ async function worldReacted(log: Log, mission: Mission, marker: P2, before: Seat
  * how high the search's lens hangs, and that the walks to the grass and to the hide are
  * walks. Read while it plays (the stats are gone once it ends).
  */
-function reeWatch(log: Log): { observe: (adv: { beat: string; stats?: Record<string, number> } | null) => Promise<void>; report: () => void } {
+function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv: { beat: string; stats?: Record<string, number> } | null) => Promise<void>; report: () => void } {
   const page = log.page;
   let target: { x: number; y: number } | null = null;
   let lens: number | null = null;
+  /** the level's share of the calf's back (`knobs.glimpse`), read as the search shows it */
+  let share: number | null = null;
   let stats: Record<string, number> = {};
   let variant = '';
   return {
@@ -405,6 +407,7 @@ function reeWatch(log: Log): { observe: (adv: { beat: string; stats?: Record<str
       if (!target) return;
       const cam = await R<{ x: number; y: number; z: number } | null>(page, 'r.cam()');
       if (cam) lens = cam.y - (await R<number>(page, `r.groundAt(${cam.x}, ${cam.z})`));
+      share = (await R<Record<string, { knobs: { glimpse?: number } }> | null>(page, 'r.skills()'))?.zoeken?.knobs?.glimpse ?? null;
     },
     report() {
       log.note(`ree: morning ${variant || '?'}; calf hint at ${target ? `(${Math.round(target.x)}, ${Math.round(target.y)})` : '?'}; lens ${lens?.toFixed(2) ?? '?'} m over the ground; glimpse ${stats.glimpse}; walks ${stats.walk_meadow_m} m to the grass, ${stats.walk_hide_m} m to the hide`);
@@ -414,7 +417,25 @@ function reeWatch(log: Log): { observe: (adv: { beat: string; stats?: Record<str
         log.soft(dx >= 160 || dy >= 110, `ree: the calf lies in the middle of the search's picture (${Math.round(target.x)}, ${Math.round(target.y)})`);
         log.soft(target.y >= 120 && target.x >= 90 && target.x <= 1190 && target.y <= 710, `ree: the calf lies under the objective line or at an edge (${Math.round(target.x)}, ${Math.round(target.y)})`);
       }
-      log.soft(stats.glimpse >= 0.25 && stats.glimpse <= 0.6, `ree: the calf's glimpse is ${stats.glimpse} (0.25-0.6)`);
+      // run 7 (ree-growth): how much of the calf shows is the level's (`glimpse`): a fresh
+      // save sees ~0.4 of its back, a practised one (~4.5) clearly less; the holds, the
+      // mother's listening pauses and the wait before the flip counts are the level's too
+      if (opts.practised) {
+        log.soft(stats.glimpse >= 0.15 && stats.glimpse <= 0.32, `ree (practised): the calf's glimpse is ${stats.glimpse} (≤ 0.32)`);
+        log.soft(stats.hold_s >= 4, `ree (practised): a hold wants ${stats.hold_s} s (≥ 4)`);
+        log.soft(stats.watch_pauses >= 2 && stats.go_moeder_wait <= 6, `ree (practised): ${stats.watch_pauses} listening pauses, the flip waits ${stats.go_moeder_wait} s`);
+      } else {
+        log.soft(stats.glimpse >= 0.33 && stats.glimpse <= 0.6, `ree: the calf's glimpse is ${stats.glimpse} (0.33-0.6)`);
+        log.soft(stats.watch_pauses === 1 && stats.go_moeder_wait >= 8, `ree: a fresh save: ${stats.watch_pauses} listening pause, the flip waits ${stats.go_moeder_wait} s`);
+      }
+      // (review r1, ree-growth: the search shows the level's own share, never a level's off:
+      // in [glimpse, glimpse + 0.07] as the search's lens sees it)
+      if (share !== null) log.soft(stats.glimpse >= share - 1e-6 && stats.glimpse <= share + 0.07 + 1e-6, `ree: the calf's glimpse ${stats.glimpse} is the level's (${share}-${(share + 0.07).toFixed(2)})`);
+      // ("Daar is de moeder!" as she is first seen, out from behind her bushes: review r1
+      // heard it 5-8 s before she showed)
+      log.soft(stats.watch_out_lag !== undefined && stats.watch_out_lag >= 0 && stats.watch_out_lag <= 0.5, `ree: "Daar is de moeder!" ${stats.watch_out_lag} s after she is seen`);
+      log.note(`ree: look-alikes ${stats.look_alikes}, hold ${stats.hold_s} s, calf wobble ${stats.calf_wobble}, print gaps ${stats.print_gaps}, watch ${stats.watch_s} s (${stats.watch_listens} pauses, unseen ${stats.watch_hidden_s} s), walked away after ${stats.go_moeder ?? 0} wrong (stood ${stats.go_moeder_stay ?? 0}, closer ${stats.go_moeder_closer ?? 0})`);
+      log.soft(stats.watch_s >= 18 && stats.watch_s <= 45, `ree: the watch lasts ${stats.watch_s} s`);
       // (the frisling's search lens hangs 3.8 m over the ground; the ree's at that height
       // stands 4.2 m from his head, where the old one stood 3 m from it and looked down on it)
       log.soft(lens !== null && lens <= 4.1, `ree: the search's lens hangs ${lens?.toFixed(2)} m over the ground`);
@@ -457,6 +478,46 @@ for (const mission of missions) {
     }
   });
 }
+
+/** Run 7 (ree-growth): the reekalf on a PRACTISED save (zoeken and dagnacht at ~4.5, seeded in
+ *  the save before the page loads): the same exercise visibly harder — less of the calf among
+ *  more look-alikes, longer holds with more temptations, a more careful mother, a shorter
+ *  wait before the flip counts — and the same summaries. Played like the fresh one. */
+test('Het reekalf in het gras on a practised save: the same game, harder, with real input @missions', async ({ page, context }, info) => {
+  test.setTimeout(9 * 60_000);
+  const mission = missions.find((m) => m.id === 'ree-niet-aanraken')!;
+  const rec = (level: number) => ({ level, best: level, reversals: [], recent: [true, true, true], trials: 40, beats: 20 });
+  await context.addInitScript((seed) => {
+    if (!localStorage.getItem('alvah-ef-v1')) localStorage.setItem('alvah-ef-v1', JSON.stringify({ ranger: seed }));
+  }, { skill: { zoeken: rec(4.5), dagnacht: rec(4.5) }, voltooid: { frisling: true }, avatarGemaakt: true, settings: { wereldHintGezien: true, tikHintGezien: true } });
+  const log = new Log(page, outDir(info, 'ree-practised'));
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e).slice(0, 200)));
+  try {
+    await boot(log);
+    const marker = await goToMarker(log, mission);
+    await sleep(page, 800);
+    const before = await worldSamples(page, marker, SEAT_RADIUS, 3);
+    await start(log, mission);
+    const lv = await R<Record<string, { level: number }>>(page, 'r.skills()');
+    log.note(`levels: zoeken ${lv?.zoeken?.level}, dagnacht ${lv?.dagnacht?.level}`);
+    const watch = reeWatch(log, { practised: true });
+    await playSteps(log, mission, undefined, watch.observe);
+    watch.report();
+    // the same summaries as on a fresh save: zoeken one trial, dagnacht five
+    const hist = await R<{ e: string; m: string; n: number; lv: number }[]>(page, 'r.history()');
+    const ree = (hist ?? []).filter((b) => b.m === mission.id);
+    log.soft(ree.some((b) => b.e === 'zoeken' && b.n === 1 && b.lv >= 4) && ree.some((b) => b.e === 'dagnacht' && b.n === 5 && b.lv >= 4),
+      `the beats logged at the practised level, the same trials (${JSON.stringify(ree.map((b) => [b.e, b.n, b.lv]))})`);
+    await finish(log, mission);
+    await worldReacted(log, mission, marker, before);
+    log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
+  } finally {
+    const text = log.write();
+    await info.attach('notes', { body: text, contentType: 'text/plain' });
+    if (!process.env.MISSIONS_QUIET) console.log(`\n── ree-practised ──\n${text}`);
+  }
+});
 
 test('the season finale: the last mission ends the season, then the world is calm and free @missions', async ({ page, context }, info) => {
   test.setTimeout(9 * 60_000);

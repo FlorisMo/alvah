@@ -61,6 +61,9 @@ export interface MissionWorld {
   /** run 7 (§4.5): the session's mood and the one on screen; put the world in a mood */
   mood(): { session: MoodId; now: MoodId };
   setMood(id: MoodId, seconds?: number): void;
+  /** run 7 (ree-growth, optional): the UI's soft dip for a cut inside the world: `move`
+   *  runs under the warm veil, `then` once the new view is drawn (none: both at once) */
+  dipCut?(move: () => void, then: () => void): void;
 }
 
 /** The adventure's HUD (ui/flow/AdventureHud.ts implements it). */
@@ -463,9 +466,12 @@ export class AdventureKit {
   /**
    * Hold the lens on a framed view (one calm eased move there — a cut under reduced
    * motion) with the ranger's input locked: a framed beat. Resolves once the lens has
-   * settled. `face`: turn the ranger to look this way first (he stands).
+   * settled. `face`: turn the ranger to look this way first (he stands). Run 7 (additive):
+   * `dip` — a view that would turn the lens more than 90° (he walked away and the family is
+   * behind him) is one soft dip-cut instead of a swing round him (the world's warm veil, as
+   * climbing into the jeep from its front); up to 90° the glide stays.
    */
-  async frame(f: FrameSpec, opts: { face?: number } = {}): Promise<Stage> {
+  async frame(f: FrameSpec, opts: { face?: number; dip?: boolean } = {}): Promise<Stage> {
     this.check();
     const { cam, look, stage } = this.lensFor(f);
     if (opts.face !== undefined) this.world.faceRanger(opts.face);
@@ -476,7 +482,23 @@ export class AdventureKit {
     this.world.setMissionMode({ missionId: this.mission.id, input: 'locked', camera: 'held', focus });
     this.ui.walking(false);
     this.ui.setChip(null);
-    const move = makeReframe(this.world.camera, cam, look, this.reduced, f.seconds ?? 1.4, 0.3);
+    const camera = this.world.camera;
+    const now = camera.getWorldDirection(new THREE.Vector3()).setY(0);
+    const want = look.clone().sub(cam).setY(0);
+    const turn = now.lengthSq() > 1e-9 && want.lengthSq() > 1e-9 ? now.angleTo(want) : 0;
+    const dipCut = this.world.dipCut;
+    if (opts.dip && dipCut && !this.reduced && turn > Math.PI / 2) {
+      // (under the veil the lens cuts there and holds; the veil lifts on the new view)
+      this.held = { update: () => false, settled: false };
+      await this.guard(new Promise<void>((resolve) => dipCut.call(this.world, () => {
+        const cut = makeReframe(camera, cam, look, true);
+        cut.update(0);
+        this.held = { update: (dt) => cut.update(dt), settled: false };
+      }, resolve)));
+      await this.until(() => !!this.held?.settled);
+      return stage;
+    }
+    const move = makeReframe(camera, cam, look, this.reduced, f.seconds ?? 1.4, 0.3);
     this.held = { update: (dt) => move.update(dt), settled: false };
     await this.until(() => !!this.held?.settled);
     return stage;

@@ -17,8 +17,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { newPlay } from '../../../core/play.ts';
 import {
-  CALF_MOMENTS, CALF_SPOTS, REE_LAYOUT_IDS, drawReePlay, lastReeVariants, parseReeVariant, reeOrder, reeVariant, type ReePlay,
+  CALF_MOMENTS, CALF_SPOTS, REE_LAYOUT_IDS, PRINT_GAP_M, WATCH_LINES, drawReePlay, lastReeVariants, parseReeVariant, printRuns, reeGrowth, reeOrder,
+  reeVariant, watchScript, WATCH_OUT_S, WATCH_WALK_S, type ReePlay, type WatchEvent,
 } from './ree.variety.ts';
+import { knobsFor } from '../../../core/skill.ts';
+import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import { REE_LAYOUTS, poolSides } from './ree.places.ts';
 
 const MISSION = 'ree-niet-aanraken';
@@ -132,4 +135,105 @@ test('the pinned seeds reach every layout × pool side it has room for', () => {
     cells.add(`${p.layout}-${p.pool}`);
   }
   assert.equal(cells.size, Object.values(REE_LAYOUTS).reduce((n, l) => n + poolSides(l).length, 0));
+});
+
+/* ------------------------------------------------------- run 7: growth ---- */
+
+test('growth: the level\'s knobs, mapped onto the ree (fresh level 1, practised ~4.5, the top)', () => {
+  const at = (lv: number) => reeGrowth(knobsFor('zoeken', lv), knobsFor('dagnacht', lv));
+  assert.deepEqual(at(1), { gaps: 0, prints: 0.97, wobble: 1, pauses: 1, stillS: 2.2 }, 'a fresh save: unbroken dark prints, one wobbly step, one pause');
+  assert.deepEqual(at(4.5), { gaps: 2, prints: 0.76, wobble: 2, pauses: 2, stillS: 2.85 });
+  assert.deepEqual(at(6), { gaps: 3, prints: 0.64, wobble: 3, pauses: 3, stillS: 3.5 });
+  // never easier with a higher level
+  for (let lv = 1; lv < 6; lv += 0.5) {
+    const a = at(lv), b = at(lv + 0.5);
+    assert.ok(b.gaps >= a.gaps && b.prints <= a.prints && b.wobble >= a.wobble && b.pauses >= a.pauses && b.stillS >= a.stillS, `level ${lv} → ${lv + 0.5}`);
+  }
+});
+
+test('growth: her prints break into runs — no gap near the ring, a bend or the grass; the gaps are the level\'s', () => {
+  for (const legs of [[10.2, 9.8], [7.1, 16.3], [3.2, 14.0], [12, 4]]) {
+    assert.deepEqual(printRuns(legs, 0), legs.map((_, leg) => ({ leg, a: 0, b: 1 })), 'level 1: one unbroken run a leg');
+    for (const gaps of [1, 2, 3]) {
+      const runs = printRuns(legs, gaps);
+      const holes: { leg: number; from: number; to: number }[] = [];
+      legs.forEach((len, leg) => {
+        const rs = runs.filter((r) => r.leg === leg).sort((p, q) => p.a - q.a);
+        assert.ok(rs.length >= 1, 'every leg keeps prints');
+        assert.equal(rs[0].a, 0, 'a leg starts with prints (the ring, the bend)');
+        assert.equal(rs[rs.length - 1].b, 1, 'and ends with them (the bend, the grass)');
+        for (let i = 1; i < rs.length; i++) holes.push({ leg, from: rs[i - 1].b * len, to: rs[i].a * len });
+      });
+      assert.ok(holes.length <= gaps && holes.length >= Math.min(gaps, 1), `${legs}: ${holes.length} gaps for ${gaps}`);
+      for (const h of holes) {
+        assert.ok(Math.abs(h.to - h.from - PRINT_GAP_M) < 1e-6, 'a gap is ~1.2 m');
+        assert.ok(h.from >= (h.leg === 0 ? 2.5 : 1.5) - 1e-9 && h.to <= legs[h.leg] - 1.5 + 1e-9, `${legs} leg ${h.leg}: a gap at ${h.from.toFixed(1)}-${h.to.toFixed(1)} m`);
+      }
+    }
+  }
+});
+
+/* ------------------------------------------------------- run 7: the watch ---- */
+
+const REE = AREA_VELUWE.missies.find((m) => m.id === MISSION)!;
+const COPY = { ...REE.avontuur!.simpel };
+/** A watch's timeline (s) with her walks as they take in the world: out of her gap into the
+ *  open ~2 s (her walk out of her bed, unseen, is the rustle's), each walk ~2.5 s, the
+ *  calf's rising and coming ~3 s. */
+function timeline(w: readonly WatchEvent[]): { end: number; lines: { t: number; key: string }[] } {
+  let t = 0;
+  const lines: { t: number; key: string }[] = [];
+  for (const e of w) {
+    if (e.line) lines.push({ t, key: e.line });
+    t += e.act === 'out' ? WATCH_OUT_S : e.act === 'walk' ? WATCH_WALK_S : e.act === 'calf' ? 3 : e.s;
+  }
+  return { end: t, lines };
+}
+
+test('the watch: always her way out, the call and the calf; the level\'s pauses; 1-2 bites; a look at the hide', () => {
+  for (let seed = 1; seed <= 300; seed++) for (const pauses of [1, 2, 3]) for (const way of [1, 2] as const) {
+    const w = watchScript(play(seed), { pauses, way });
+    const acts = w.map((e) => e.act);
+    const tag = `seed ${seed} pauses ${pauses} way ${way}: ${acts.join(' ')}`;
+    assert.deepEqual(acts.slice(0, 3), ['rustle', 'out', 'listen'], `${tag}: the bracken stirs, she steps out and tests the air`);
+    assert.deepEqual(acts.slice(-3), ['call', 'calf', 'sniff'], `${tag}: her call, the calf, her nose`);
+    assert.equal(acts.filter((a) => a === 'listen').length, pauses, `${tag}: the level's pauses`);
+    const bites = acts.filter((a) => a === 'bite').length;
+    assert.ok(bites >= 1 && bites <= 2, `${tag}: 1-2 bites`);
+    assert.equal(w.filter((e) => e.cue === 'hut').length, 1, `${tag}: one look at the hide`);
+    assert.equal(w.filter((e) => e.cue === 'gras').length, 1, `${tag}: she calls toward the grass`);
+    const walks = w.filter((e) => e.act === 'walk' || e.act === 'out').map((e) => e.to);
+    assert.deepEqual(walks, way === 2 ? [1, 2] : [undefined, 2], `${tag}: her way: out (to the point of her way), on to the meeting place`);
+    // the meeting place: her call comes once she got there
+    const at2 = acts.lastIndexOf('walk');
+    assert.ok(w.findIndex((e) => e.cue === 'gras') > at2, `${tag}: her call from the meeting place`);
+    // every line is the content's, ≤ 7 words a sentence (readlevel lints them too)
+    for (const e of w) if (e.line) assert.ok(COPY[e.line], `${tag}: line "${e.line}" is in the copy`);
+    for (const e of w) if (e.act === 'listen' || e.cue === 'hut') assert.ok(e.line, `${tag}: a pause and a look at the hide always say so (stil!)`);
+    // ~25-30 s with her walks at the nominal 2.5 s (22-35; in the world her walks take a
+    // little longer: ~30 s); a new line every ~3.5-4 s, never one held ~8.5 s or more
+    const tl = timeline(w);
+    assert.ok(tl.end >= 22 && tl.end <= 35, `${tag}: ${tl.end.toFixed(1)} s`);
+    const gaps = tl.lines.slice(1).map((l, i) => l.t - tl.lines[i].t);
+    gaps.push(tl.end - tl.lines[tl.lines.length - 1].t);
+    assert.ok(Math.max(...gaps) <= 8.6, `${tag}: a line held ${Math.max(...gaps).toFixed(1)} s`);
+    const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    assert.ok(mean >= 2.8 && mean <= 5.0, `${tag}: a line every ${mean.toFixed(1)} s`);
+    assert.deepEqual(watchScript(play(seed), { pauses, way }), w, `${tag}: a replay is the same watch`);
+  }
+});
+
+test('the watch: the seed draws the order, the lines and the timing; the level only the pauses', () => {
+  const orders = new Set<string>(), lineSets = new Set<string>(), lengths = new Set<number>();
+  for (let seed = 1; seed <= 60; seed++) {
+    const w = watchScript(play(seed), { pauses: 2, way: 2 });
+    orders.add(w.map((e) => `${e.act}${e.cue ?? ''}`).join(' '));
+    lineSets.add(w.map((e) => e.line ?? '').join(' '));
+    lengths.add(Math.round(timeline(w).end));
+  }
+  assert.ok(orders.size >= 4, `${orders.size} orders of her acts`);
+  assert.ok(lineSets.size >= 10, `${lineSets.size} sets of lines`);
+  assert.ok(lengths.size >= 3, 'the timing varies');
+  // the pools: every key is a line of the content
+  for (const pool of Object.values(WATCH_LINES)) for (const key of pool) assert.ok(COPY[key], `${key} is in the copy`);
 });
