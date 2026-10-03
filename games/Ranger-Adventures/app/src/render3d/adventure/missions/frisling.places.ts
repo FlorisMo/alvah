@@ -751,8 +751,8 @@ export const LARK_LAND = { depth: [8, 10], across: [3.6, 4.4] } as const;
 /**
  * Where a woodlark that rose in front of him may settle (package body r2): ACROSS his
  * picture, never along the lens away from it: it keeps pace with the picture as he walks on
- * (`walked`: how far on he will be when it lands, m), so it settles at the picture's middle
- * distance (`LARK_LAND.depth` from the lens then) well to one side. `look` is the lens's
+ * (`walked`: how far on he will be halfway through its sit, m), so it sits at the picture's
+ * middle distance (`LARK_LAND.depth` from the lens then) well to one side. `look` is the lens's
  * heading (it looks along it from behind him), `side` the way across it (+1: u > 0 of that
  * frame). In the order to try them (the real lens picks the first in view now and once he
  * walked on, on the other side of the picture from where it rose, on the world's free

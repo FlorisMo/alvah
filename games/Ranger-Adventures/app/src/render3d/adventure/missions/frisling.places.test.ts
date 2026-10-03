@@ -657,9 +657,9 @@ test('the sow\'s nest of bitten fronds at each stand\'s edge: never on a nook or
  * The woodlark (package body r2): it flies up where he walks and settles ACROSS his follow
  * picture at its middle distance, keeping pace with it as he walks on — on open ground (dry
  * heath, clear of the props, the trees, the other markers, the pads and every stand), in
- * view whether he walks on or stops to watch. Checked from every walk spot, him 4.5 m
- * before it on his way there (the follow, 2.2 m/s) and on his way back (the lead home,
- * 1.5 m/s), with the lens `LENS_BACK` behind him as the world's follow takes it.
+ * view whether he stops to watch or walks on until it drops in. Checked from every walk
+ * spot, him 4.5 m before it on his way there (the follow, 2.2 m/s) and on his way back (the
+ * lead home, 1.5 m/s), with the lens `LENS_BACK` behind him as the world's follow takes it.
  */
 test('the woodlark settles across his picture, on open ground, in view whether he walks on or stops', () => {
   const lensAt = (me: { x: number; z: number }, look: number) => {
@@ -672,14 +672,15 @@ test('the woodlark settles across his picture, on open ground, in view whether h
     w.walkSpots.forEach((spot, si) => {
       for (const back of [false, true]) {
         const way = back ? [...w.follow].reverse() : w.follow;
-        const walked = (back ? 1.5 : 2.2) * 2.75; // (his pace for the flight)
+        const pace = back ? 1.5 : 2.2;
+        const walked = pace * (2.75 + 1.55 / 2); // (his pace for the flight and half its sit)
         // the leg of his way that passes the spot, and him 4.5 m before it along that leg
         let leg = 1;
         for (let i = 1; i < way.length; i++) if (segDist(spot, way[i - 1], way[i]) < segDist(spot, way[leg - 1], way[leg])) leg = i;
         const look = headingTo(way[leg - 1], way[leg]);
         const me = atLocal({ x: spot.x, z: spot.z, heading: look }, 0, -4.5);
         const on = atLocal({ x: me.x, z: me.z, heading: look }, 0, walked);
-        const now = lensAt(me, look), then = lensAt(on, look);
+        const now = lensAt(me, look), then = lensAt(atLocal({ x: me.x, z: me.z, heading: look }, 0, pace * (2.75 + 1.55)), look);
         const tag = `${id}.walk-${si}${back ? ' (home)' : ''}`;
         const rose = screenOf({ x: spot.x, y: heightAt(spot.x, spot.z) + 0.2, z: spot.z }, now.lens, now.aim, FOV, W, H);
         assert.ok(inView(rose), `${tag}: it rises in his picture (${rose.x.toFixed(0)}, ${rose.y.toFixed(0)})`);
@@ -688,9 +689,9 @@ test('the woodlark settles across his picture, on open ground, in view whether h
         for (const side of [1, -1] as const) {
           for (const p of larkLandings(me, look, side, walked)) {
             const l = toLocal({ x: on.x, z: on.z, heading: look }, p);
-            assert.ok(l.v + LENS_BACK >= LARK_LAND.depth[0] - 1e-6 && l.v + LENS_BACK <= LARK_LAND.depth[1] + 1e-6, `${tag}: ${(l.v + LENS_BACK).toFixed(1)} m from the lens when it lands`);
+            assert.ok(l.v + LENS_BACK >= LARK_LAND.depth[0] - 1e-6 && l.v + LENS_BACK <= LARK_LAND.depth[1] + 1e-6, `${tag}: ${(l.v + LENS_BACK).toFixed(1)} m from the lens as it sits`);
             assert.ok(Math.abs(l.u) >= LARK_LAND.across[0] - 1e-6 && Math.abs(l.u) <= LARK_LAND.across[1] + 1e-6, `${tag}: ${l.u.toFixed(1)} m across`);
-            assert.ok(dist(on, p) >= 4.5, `${tag}: walking on, he is ${dist(on, p).toFixed(1)} m from it when it lands: never in his way`);
+            assert.ok(dist(on, p) >= 4.5, `${tag}: walking on, he is ${dist(on, p).toFixed(1)} m from it as it sits: never in his way`);
             assert.ok(toLocal({ x: me.x, z: me.z, heading: look }, p).v > toLocal({ x: me.x, z: me.z, heading: look }, spot).v - 0.5, `${tag}: never back toward the lens`);
             assert.ok(biomeAt(p.x, p.z) === 'heide' || (biomeAt(p.x, p.z) === 'ven' && Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) > 50), `${tag}: on the heath or the dry meadow (${biomeAt(p.x, p.z)})`);
             assert.ok(Math.hypot(p.x, p.z) <= 60, `${tag}: well inside the world`);

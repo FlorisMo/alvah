@@ -657,34 +657,38 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
       finds.meet('frisling.leeuwerik');
     }
     /** Where it settles: of `larkLandings` (both sides, `first` side first; it keeps pace
-     *  with his picture as he walks on at his pace now), those in his picture once he walked
-     *  on AND if he stops to watch, on free ground and not behind a rise; of those the first
-     *  on the OTHER side of the picture from where it rose and clear of the veldgids's reveal
-     *  (top left), else the first across, else the first in view, else on along the lens. */
+     *  with his picture as he walks on at his pace now: at its middle distance halfway
+     *  through its sit), those in his picture if he stops to watch AND when it drops in
+     *  while he walked on, on free ground and not behind a rise; of those, on the OTHER side
+     *  of the picture from where it rose (as it lands), the one nearest the picture's middle
+     *  that is clear of the veldgids's reveal (top left), else the nearest across, else the
+     *  first in view, else on along the lens. */
     function larkSettle(from: Spot, sx: number): Spot {
       const me = k.ranger();
       const look = headingTo({ x: cam.position.x, z: cam.position.z }, me);
-      const walked = Math.min(WALK_SPEED, Math.max(0, k.ctx.rangerMotion().speed)) * flySecs;
-      const later = cam.clone();
-      later.position.x += Math.sin(look) * walked;
-      later.position.z += Math.cos(look) * walked;
-      later.updateMatrixWorld(true);
+      const pace = Math.min(WALK_SPEED, Math.max(0, k.ctx.rangerMotion().speed));
+      const lensOn = (m: number): THREE.PerspectiveCamera => {
+        const c = cam.clone();
+        c.position.x += Math.sin(look) * m;
+        c.position.z += Math.cos(look) * m;
+        c.updateMatrixWorld(true);
+        return c;
+      };
+      const lands = lensOn(pace * flySecs), drops = lensOn(pace * (flySecs + restS));
+      const walked = pace * (flySecs + restS / 2);
       const all = [...larkLandings(me, look, first, walked), ...larkLandings(me, look, first === 1 ? -1 : 1, walked)];
       const lift = LARK_PERCH + LARK_H * 0.5;
-      const seen = all.filter((p) => {
-        const y = k.ctx.groundY(p.x, p.z) + lift;
-        return inPicture(ndcOf(later, p.x, y, p.z), 0.88, -0.85, 0.62) && inPicture(ndcOf(cam, p.x, y, p.z), 0.88, -0.85, 0.62)
-          && k.ctx.isClear(p.x, p.z, 0.4) && !groundHides(cam.position, new THREE.Vector3(p.x, y, p.z), k.ctx.groundY);
-      });
+      const at = (c: THREE.Camera, p: Spot): THREE.Vector3 => ndcOf(c, p.x, k.ctx.groundY(p.x, p.z) + lift, p.z);
+      const seen = all.filter((p) => inPicture(at(cam, p), 0.8, -0.85, 0.62) && inPicture(at(drops, p), 0.82, -0.85, 0.62)
+        && k.ctx.isClear(p.x, p.z, 0.4) && !groundHides(cam.position, new THREE.Vector3(p.x, k.ctx.groundY(p.x, p.z) + lift, p.z), k.ctx.groundY));
       const crosses = (p: Spot): boolean => {
-        const q = ndcOf(later, p.x, k.ctx.groundY(p.x, p.z) + lift, p.z);
+        const q = at(lands, p);
         return Math.abs(q.x - sx) >= 0.4 && (Math.abs(sx) < 0.08 || Math.sign(q.x) !== Math.sign(sx));
       };
-      const clearOfReveal = (p: Spot): boolean => {
-        const q = ndcOf(later, p.x, k.ctx.groundY(p.x, p.z) + lift, p.z);
-        return !(q.x < -0.36 && q.y > 0.36);
-      };
-      const across = seen.filter(crosses);
+      const clearOfReveal = (p: Spot): boolean => { const q = at(lands, p); return !(q.x < -0.36 && q.y > 0.36); };
+      // (of those across, the one that stays nearest the picture's middle as he walks on: a
+      // lens that slides or turns a little with his walk still keeps it in view)
+      const across = seen.filter(crosses).sort((a, b) => Math.abs(at(drops, a).x) - Math.abs(at(drops, b).x));
       const pick = across.find(clearOfReveal) ?? across[0] ?? seen[0];
       // (the dev read: how many it could settle on, and whether it flew across)
       k.stats.leeuwerik_seen = seen.length;
