@@ -88,7 +88,7 @@ export interface FlowHooks {
   fact(i: number): Promise<void>;
   /** the mission is won: the flow marks it done and shows the reunion line while the
    *  world plays `play` (the family together again) */
-  reunion(play: () => Promise<void>): Promise<void>;
+  reunion(play: () => Promise<void>, holdS?: number): Promise<void>;
   /** the pause card is up (the mission clock stands still) */
   paused(): boolean;
   /** run 7 (§4.4): a NEW discovery's calm reveal (queued; it waits for a quiet moment);
@@ -417,15 +417,17 @@ export class AdventureKit {
     await this.guard(this.hooks.fact(i));
   }
 
-  /** The mission is won: the flow marks it done, and shows its line while `play` plays. */
-  async reunion(play: () => Promise<void>): Promise<void> {
+  /** The mission is won: the flow marks it done, and shows its line while `play` plays.
+   *  `holdS` (ree-discover, additive): how much longer than its usual most the line may
+   *  stay while `play` still plays (new finds' cards still to be seen there). */
+  async reunion(play: () => Promise<void>, opts: { holdS?: number } = {}): Promise<void> {
     // the EF contract: a mission is done only once every step was played and logged
     const missing = this.steps.map((_, i) => i).filter((i) => !this.logged.includes(i));
     if (missing.length) throw new Error(`[adventure] the reunion came before step(s) ${missing.join(', ')} were played`);
     this.beat = 'reunion';
     this.ui.say(null);
     this.ui.setChip(null);
-    await this.guard(this.hooks.reunion(play));
+    await this.guard(this.hooks.reunion(play, opts.holdS));
   }
 
   /** Borrow this mission's home animals (they stop idling on their own). */

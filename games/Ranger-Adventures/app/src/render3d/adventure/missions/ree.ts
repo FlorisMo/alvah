@@ -93,9 +93,10 @@ const BRISK = 1.25;
 /** ree-discover: her slip is done for the woodlark (on the walk to the grass) once its line
  *  has stood this long (s) and she has been out of his picture this long (s), or lies. */
 const SLIP_SEEN_S = 1.6;
-/** The longest (s) the reunion holds on for new finds' cards still waiting: two more
- *  cards, each with the rest after it (ui/hud/reveal-queue.ts). */
-const REUNION_CARDS_MAX_S = (2 * (REVEAL_SHOW_MS + REVEAL_GAP_MS)) / 1000;
+/** One new find's card at the reunion, and the rest after it (s; ui/hud/reveal-queue.ts). */
+const REUNION_CARD_S = (REVEAL_SHOW_MS + REVEAL_GAP_MS) / 1000;
+/** The longest (s) the reunion holds on for new finds' cards still waiting: two more. */
+const REUNION_CARDS_MAX_S = 2 * REUNION_CARD_S;
 const SLIP_GONE_S = 0.5;
 
 /** The watch's rustle stands at least this long (s) before "Daar is de moeder!" (its own
@@ -773,7 +774,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
     // it has been seen — the cuckoo he heard in the watch, the twin — one after the other,
     // never cut off by the raaf's card. Most plays wait for none)
     await k.until(() => k.revealsWaiting() === 0, REUNION_CARDS_MAX_S);
-  });
+  }, { holdS: Math.min(2, k.revealsWaiting()) * REUNION_CARD_S });
   k.stats.reunion_gap = Math.round(dist(calf, doe) * 100) / 100;
   // they set off home together across the heath, the calf at her pace (he sees them go
   // while the raaf talks; where they met lies up to ~14 m from their home)
