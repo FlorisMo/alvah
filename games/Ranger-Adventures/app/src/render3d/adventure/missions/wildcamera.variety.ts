@@ -15,7 +15,9 @@
  * - the night choir: the badger and three of the roe, the boar, the nightjar and the fox
  *   (the cast is the pure simon core's, `simonCast`, the same for the 2D floor), each in one
  *   of its allowed spots round the crossing (`CALLER_SLOTS`), in a drawn order;
- * - the camera's clock on the photos: a seeded start in the evening, running on.
+ * - the camera's clock on the photos: a seeded start in the evening, running on;
+ * - (wc-hands) where the man set his snare: one of three spots, each with its own two
+ *   landmarks (`SNARE_SPOTS`), never the spot of the play before.
  *
  * None of it changes how hard a breinkracht is (decision 1): the level's knobs alone say how
  * many photos, when the rule turns and how long the echo is; every stop and every spot is
@@ -24,7 +26,7 @@
 
 import type { Play } from '../../../core/play.ts';
 import {
-  CALLER_SLOTS, SLOT_CLASH, SLOT_IDS, STOPS_OF, type Side, type SlotId, type StopId,
+  CALLER_SLOTS, SLOT_CLASH, SLOT_IDS, SNARE_IDS, STOPS_OF, type Side, type SlotId, type SnareId, type StopId,
 } from './wildcamera.places.ts';
 
 /** How one visitor of the aim round comes onto the crossing. */
@@ -42,6 +44,8 @@ export interface WildcameraPlay {
   callers: NightCaller[];
   /** the camera's clock on the first photo (minutes after midnight) */
   clockStart: number;
+  /** where the man set his snare (wc-hands; always drawn by `drawWildcameraPlay`) */
+  snare?: SnareId;
 }
 
 const ANIMAL_CODE: Readonly<Record<string, string>> = {
@@ -148,24 +152,37 @@ export function drawCallers(play: Play, cast: readonly string[], recent: readonl
   });
 }
 
+/** Draw where the man set his snare: one of the three spots, never `last` (the spot of the
+ *  play before, when the history still says it), from its own fork. Every spot is equally
+ *  findable (the places test pins each: its landmarks in its photo and no other's, in view
+ *  of the camera, off the middle of its close view), so the draw changes no difficulty. */
+export function drawSnare(play: Play, last: SnareId | null = null): SnareId {
+  const pool = SNARE_IDS.filter((id) => id !== last);
+  return play.fork('wc-snare').pick(pool.length ? pool : SNARE_IDS);
+}
+
 /** Draw a play: `queueLength` visitors for the aim round, the night's `cast`; `recent`
- *  the last plays' night notes (`lastNights`). */
-export function drawWildcameraPlay(play: Play, opts: { queueLength: number; cast: readonly string[]; recent?: readonly string[] }): WildcameraPlay {
+ *  the last plays' night notes (`lastNights`); `lastSnare` the spot of the play before
+ *  (`lastSnare`). */
+export function drawWildcameraPlay(play: Play, opts: { queueLength: number; cast: readonly string[]; recent?: readonly string[]; lastSnare?: SnareId | null }): WildcameraPlay & { snare: SnareId } {
   return {
     seed: play.seed,
     arrivals: drawArrivals(play, opts.queueLength),
     callers: drawCallers(play, opts.cast, opts.recent ?? []),
     clockStart: Math.round(play.fork('wc-clock').between(17 * 60 + 20, 18 * 60 + 10)),
+    snare: drawSnare(play, opts.lastSnare ?? null),
   };
 }
 
-/** The compact variant the beat history keeps: two notes, each short enough that the
- *  history's 60 characters keep both beside the play's mood and rare (no ',' or ':').
+/** The compact variant the beat history keeps: three notes, each short enough that the
+ *  history's 60 characters keep them beside the play's mood and rare (no ',' or ':').
+ *  `ws`: the snare's spot (`1`, `2`, `3`: S1-S3), kept first (the next play reads it).
  *  `wa`: how the visitors came, one stop each (`a` l, `b` lf, `c` r, `d` rf; WHICH animals
  *  came is the wissel core's, rebuilt from the seed and the logged level); `wn`: the night,
  *  animal + spot in the order they came (`da` = the badger left of its sett). */
-export function variantOf(p: WildcameraPlay): { wa: string; wn: string } {
+export function variantOf(p: WildcameraPlay): { ws: string; wa: string; wn: string } {
   return {
+    ws: p.snare ? p.snare.slice(1) : '',
     wa: p.arrivals.map((a) => STOP_CODE[a.stop]).join(''),
     wn: p.callers.map((c) => `${ANIMAL_CODE[c.id] ?? c.id[0]}${SLOT_CODE[c.slot]}`).join(''),
   };
@@ -198,6 +215,18 @@ export function lastNights(history: readonly { m: string; sd: number; va?: strin
     out.push({ sd: b.sd, wn });
   }
   return out.map((x) => x.wn);
+}
+
+/** The snare's spot of the wildcamera's last play that logged one (its `ws` note), or null. */
+export function lastSnare(history: readonly { m: string; va?: string }[], missionId = 'wildcamera'): SnareId | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const b = history[i];
+    if (b.m !== missionId || !b.va) continue;
+    const ws = b.va.split(',').map((kv) => kv.split(':')).find(([k]) => k === 'ws')?.[1];
+    const id = ws ? (`S${ws}` as SnareId) : null;
+    if (id && SNARE_IDS.includes(id)) return id;
+  }
+  return null;
 }
 
 /* ------------------------------------------------------- the camera's clock ---- */

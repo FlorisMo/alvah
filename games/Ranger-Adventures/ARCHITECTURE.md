@@ -126,13 +126,16 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          trap photos in wildcamera.photos.ts; run 7: wildcamera.variety.ts
                          draws how each visitor comes (side + stop) and the night choir's
                          spots from the play, wildcamera.view.test.ts pins what the lens
-                         sees of every stop and every night) and eekhoorn (the pines, the
-                         moss glade, the neighbours; run 7: eekhoorn.places.ts draws each
-                         play's way through the pines (ROUTES: three, each its own hide tree),
-                         the moss pattern's mirror-image (gladeSpots(sym)) and the neighbour
-                         trio (NEIGHBOURS, one bird per perch), never the last two plays',
-                         read back from the beat history (`ek:<variant>`); the found view
-                         and the jay's way back are pure and pinned by its test): the four
+                         sees of every stop and every night; wc-hands: no buttons, he clicks
+                         the camera, the pine, the snare himself, flips the photos, and the
+                         snare lies at one of three SNARE_SPOTS, each with its own two
+                         landmarks, pinned with what its morning photo shows) and eekhoorn (the
+                         pines, the moss glade, the neighbours; run 7: eekhoorn.places.ts draws
+                         each play's way through the pines (ROUTES: three, each its own hide
+                         tree), the moss pattern's mirror-image (gladeSpots(sym)) and the
+                         neighbour trio (NEIGHBOURS, one bird per perch), never the last two
+                         plays', read back from the beat history (`ek:<variant>`); the found
+                         view and the jay's way back are pure and pinned by its test): the four
                          missions met first
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          a `shy` resident slips into cover when he comes near (per state);
@@ -178,8 +181,9 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
 - *the world*: `await k.act(label, line)` — one action button in the world (Space presses
   it); `k.daylight(k01, s)` turns the day (1 golden hour … 0 a readable blue night,
   world/Sky.ts + Daylight.ts; the end of the adventure hands the golden hour back);
-  `k.ui.veil(text)` — time passes; `k.world.snapshot(cam, w, h, prepare)` — a photograph
-  of the world through another camera (a camera trap's, taken inside a frame). A home may
+  `k.ui.veil(text)` — time passes; `k.world.snapshot(cam, w, h, prepare, { people })` — a
+  photograph of the world through another camera (a camera trap's, taken inside a frame;
+  never the jeep or the helicopter, and with `people: false` never Bram or the far figure). A home may
   plant real forest trees (`Adventure.trees`) and keep a glade clear of them
   (`treeClearings`); the trees between a held lens and what it frames fade.
 - *plumbing*: `k.say(line)`, `k.wait(s)`, `k.until(fn, s)`, `k.onTick(fn)`, `k.own(obj)`,
