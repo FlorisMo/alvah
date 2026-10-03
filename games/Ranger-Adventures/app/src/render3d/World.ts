@@ -199,7 +199,7 @@ export class World {
   private readonly frameFns = new Set<(dt: number, t: number) => void>();
   private walkGoal: { x: number; z: number; near: number; done: (ok: boolean) => void } | null = null;
   // run 6: photographs the world asked for (a camera trap's), taken inside the frame
-  private readonly shots: { cam: THREE.Camera; w: number; h: number; prepare?: () => (() => void) | void; done: (c: HTMLCanvasElement | null) => void }[] = [];
+  private readonly shots: { cam: THREE.Camera; w: number; h: number; prepare?: () => (() => void) | void; done: (c: HTMLCanvasElement | null) => void; people: boolean }[] = [];
   /** the animals that live at the missions' homes, and the homes (world/Residents.ts) */
   readonly residents: Residents;
   /** Run 7 (veldgids): the open world's small surprises (world/Surprises.ts) */
@@ -1043,10 +1043,13 @@ export class World {
    * canvas and it is copied out at once; the frame then draws over it. `prepare` may put
    * something in the picture for that one render (it returns how to take it out again).
    * A trap photographs the wild: the ranger's own jeep and helicopter are never in it
-   * (`Vehicles.outOfPicture`). Resolves null without a renderer.
+   * (`Vehicles.outOfPicture`). Run 7 (additive): `opts.people: false` leaves the story's
+   * grown-ups out too (Bram by his missiebord, the distant figure in the trees: a trap's
+   * photo of a man setting a snare must show that man only); by default they stay as
+   * before. Resolves null without a renderer.
    */
-  snapshot(cam: THREE.Camera, w: number, h: number, prepare?: () => (() => void) | void): Promise<HTMLCanvasElement | null> {
-    return new Promise((done) => this.shots.push({ cam, w, h, prepare, done }));
+  snapshot(cam: THREE.Camera, w: number, h: number, prepare?: () => (() => void) | void, opts: { people?: boolean } = {}): Promise<HTMLCanvasElement | null> {
+    return new Promise((done) => this.shots.push({ cam, w, h, prepare, done, people: opts.people ?? true }));
   }
 
   private takeShots(): void {
@@ -1056,6 +1059,7 @@ export class World {
       if (!r) { job.done(null); continue; }
       const undo = job.prepare?.();
       const machines = this.vehicles.outOfPicture();
+      const people = job.people ? null : this.fauna.peopleOutOfPicture();
       const out = document.createElement('canvas');
       out.width = job.w;
       out.height = job.h;
@@ -1080,6 +1084,7 @@ export class World {
         r.setScissorTest(scOn);
       } finally {
         machines();
+        people?.();
         if (typeof undo === 'function') undo();
       }
       job.done(out);

@@ -5,19 +5,26 @@
  * night, a thin strip along the bottom with a sun or a moon and the time. A new photo
  * joins the strip at the top of the screen with a soft flash; an empty one shows a
  * moment ("Leeg") and goes. In the morning the ranger looks through them all on a card:
- * the animals he aimed for, one by one, and at the end the one he did not expect.
+ * the animals he aimed for, one by one, and at the end the one he did not expect. Run 7
+ * (wc-hands): he flips through them himself (Verder, the arrow keys, a click on a small
+ * one), each named aloud as it shows, no timer; the man's photo stays pinned at the top
+ * of the screen while he looks for the place it shows (`pin`).
  */
 
 import './wildcamera.css';
 import { narrator } from '../../../core/narrator';
 import { store } from '../../../core/state';
+import { prefersReducedMotion } from '../../../core/reduced-motion';
 import { SPEAK_BTN } from '../../play/kit';
 
 export interface Photo {
   url: string;
-  /** what is on it (for the dev read and the words): an animal id, 'leeg', 'man' */
+  /** what is on it (for the dev read and the words): an animal id, 'leeg', 'man', 'jij' */
   what: string;
   time: 'dag' | 'nacht' | 'ochtend';
+  /** run 7: its short line in the morning's look through them, read aloud as it shows
+   *  ("Jij!", "Een hinde."); none: no words */
+  line?: string;
 }
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
@@ -185,59 +192,101 @@ export class PhotoStrip {
   }
 
   /**
-   * The morning: a card over the world shows the photos one by one, the strip under
-   * them lighting up the one shown, a calm ~1.5 s each; the last one waits with its
-   * words (`last`) and the button. Resolves when he presses it.
+   * The morning (run 7: a flip book): a card over the world shows one photo big, its
+   * short line under it (read aloud as it shows), the strip of all of them under that.
+   * He flips himself: "Verder" (Enter, Space) or → shows the next, ← the one before, a
+   * click on a small one that one; no timer. The last is the man's: its lines are `last`
+   * (said one after the other), and its "Verder" closes the card. Resolves then.
    */
-  review(title: string, last: string, button: string, signal: AbortSignal): Promise<void> {
+  review(title: string, last: readonly string[], button: string, signal: AbortSignal): Promise<void> {
     const voor = store.get().settings.voorlezen;
+    const n = this.photos.length;
     const card = document.createElement('div');
     card.className = 'ra-overlay ra-scrim wc-review-wrap';
     card.innerHTML =
       `<div class="wc-review" role="dialog" aria-label="${esc(title)}">` +
       `<p class="wc-review-title">${esc(title)}</p>` +
       `<div class="wc-big"><img alt=""></div>` +
-      `<div class="wc-review-row">${this.photos.map((p, i) => `<img class="wc-mini" data-i="${i}" src="${p.url}" alt="">`).join('')}</div>` +
-      `<div class="wc-review-foot"><p class="wc-review-line" aria-live="polite"></p>` +
+      `<div class="wc-review-row">${this.photos.map((p, i) => `<button class="wc-mini" type="button" data-i="${i}" aria-label="Foto ${i + 1}"><img src="${p.url}" alt=""></button>`).join('')}</div>` +
+      `<div class="wc-review-foot"><div class="wc-review-lines" aria-live="polite"></div>` +
       `${SPEAK_BTN}` +
-      `<button class="btn-start wc-verder" type="button" hidden>${esc(button)}</button></div>` +
+      `<button class="btn-start wc-verder" type="button">${esc(button)}</button></div>` +
       `</div>`;
     this.el.parentElement?.appendChild(card);
     const big = card.querySelector<HTMLImageElement>('.wc-big img')!;
-    const line = card.querySelector<HTMLParagraphElement>('.wc-review-line')!;
+    const lines = card.querySelector<HTMLDivElement>('.wc-review-lines')!;
     const btn = card.querySelector<HTMLButtonElement>('.wc-verder')!;
-    const minis = [...card.querySelectorAll<HTMLImageElement>('.wc-mini')];
-    card.querySelector('.p3-speak')?.addEventListener('click', () => narrator.speak(line.textContent || title));
-    if (voor) narrator.speak(title);
+    const minis = [...card.querySelectorAll<HTMLButtonElement>('.wc-mini')];
     let i = 0;
-    let timer = 0;
-    const showAt = (n: number): void => {
-      i = n;
-      big.src = this.photos[n].url;
-      big.parentElement!.classList.toggle('wc-last', n === this.photos.length - 1);
-      minis.forEach((m, j) => m.classList.toggle('on', j === n));
-      if (n === this.photos.length - 1) {
-        line.textContent = last;
-        btn.hidden = false;
-        if (voor) narrator.queue(last);
+    const wordsOf = (k: number): readonly string[] => (k === n - 1 ? last : this.photos[k].line ? [this.photos[k].line!] : []);
+    card.querySelector('.p3-speak')?.addEventListener('click', () => {
+      const w = wordsOf(i);
+      if (!w.length) { narrator.speak(title); return; }
+      narrator.speak(w[0]);
+      for (const x of w.slice(1)) narrator.queue(x);
+    });
+    const showAt = (k: number, speak = true): void => {
+      i = Math.max(0, Math.min(n - 1, k));
+      big.src = this.photos[i].url;
+      big.parentElement!.classList.toggle('wc-last', i === n - 1);
+      minis.forEach((m, j) => m.classList.toggle('on', j === i));
+      const w = wordsOf(i);
+      lines.innerHTML = w.map((x) => `<p class="wc-review-line">${esc(x)}</p>`).join('');
+      if (voor && speak && w.length) {
+        narrator.speak(w[0]);
+        for (const x of w.slice(1)) narrator.queue(x);
       }
+      this.reviewAt = i;
     };
     return new Promise<void>((resolve, reject) => {
-      const end = (): void => { window.clearTimeout(timer); card.remove(); };
-      const next = (): void => {
-        if (i >= this.photos.length - 1) return;
-        showAt(i + 1);
-        if (i < this.photos.length - 1) timer = window.setTimeout(next, i === this.photos.length - 2 ? 1900 : 1500);
+      if (!n) { card.remove(); resolve(); return; }
+      const onKey = (e: KeyboardEvent): void => {
+        if (e.code !== 'ArrowRight' && e.code !== 'ArrowLeft') return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.repeat) return;
+        showAt(i + (e.code === 'ArrowRight' ? 1 : -1));
       };
-      if (!this.photos.length) { end(); resolve(); return; }
-      showAt(0);
-      timer = window.setTimeout(next, 1800);
-      btn.addEventListener('click', () => { end(); resolve(); }, { once: true });
+      const end = (): void => { window.removeEventListener('keydown', onKey, true); card.remove(); this.reviewAt = -1; };
+      window.addEventListener('keydown', onKey, true);
+      if (voor) narrator.speak(title);
+      showAt(0, false);
+      if (voor) for (const x of wordsOf(0)) narrator.queue(x);
+      btn.addEventListener('click', () => {
+        if (i < n - 1) { showAt(i + 1); return; }
+        end();
+        resolve();
+      });
+      minis.forEach((m, j) => m.addEventListener('click', () => showAt(j)));
       signal.addEventListener('abort', () => { end(); reject(new Error('stopped')); }, { once: true });
     });
   }
 
+  /** Which photo the morning's look shows now (-1: none; the dev read). */
+  reviewAt = -1;
+
+  /**
+   * Run 7: one photo pinned at the top of the screen, under the objective line (the man's,
+   * while he looks for the place it shows; his own, a moment after the camera took it),
+   * nothing to click: the world stays clickable round it. `null` takes it away.
+   */
+  pin(p: Photo | null): void {
+    this.pinned?.remove();
+    this.pinned = null;
+    if (!p) return;
+    const el = document.createElement('div');
+    el.className = 'wc-pin';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = `<img src="${p.url}" alt="">`;
+    this.el.parentElement?.appendChild(el);
+    this.pinned = el;
+    if (prefersReducedMotion()) el.classList.add('wc-pin-in');
+    else requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('wc-pin-in')));
+  }
+  private pinned: HTMLDivElement | null = null;
+
   dispose(): void {
+    this.pin(null);
     this.el.remove();
   }
 }

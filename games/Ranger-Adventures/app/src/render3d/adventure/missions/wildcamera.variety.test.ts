@@ -10,6 +10,9 @@
  *   seed 102 → the night: the badger, the nightjar, the boar, the fox
  *   seed 103 → the night: the badger, the nightjar, the roe, the fox
  *
+ * The snare (wc-hands), on a save's first play: seed 101 → S2 (the birch and the stone),
+ * 102 → S1 (the juniper and the foxglove), 104 → S3 (the fallen log and the fern).
+ *
  * (pinned below by SEED_TABLE: which animals come in the evening is the wissel core's,
  * pinned there; here how they come and who calls at night.)
  */
@@ -24,8 +27,9 @@ import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import type { Skin } from '../../../content/types.ts';
 import { CALLER_SLOTS, SIDE_OF, SLOT_CLASH, STOPS, STOPS_OF, type SlotId } from './wildcamera.places.ts';
 import {
-  CameraClock, drawCallers, drawWildcameraPlay, hhmm, lastNights, legalLayouts, parseVariant, sameSpots, variantOf, type WildcameraPlay,
+  CameraClock, drawCallers, drawSnare, drawWildcameraPlay, hhmm, lastNights, lastSnare, legalLayouts, parseVariant, sameSpots, variantOf, type WildcameraPlay,
 } from './wildcamera.variety.ts';
+import { SNARE_IDS, type SnareId } from './wildcamera.places.ts';
 
 const MISSION = 'wildcamera';
 const m = AREA_VELUWE.missies.find((x) => x.id === MISSION)!;
@@ -264,4 +268,54 @@ test('whatever the last two nights were, the next one keeps at most one animal o
   const first = new Set<string>();
   for (let seed = 1; seed <= 400; seed++) first.add(drawCallers(newPlay(MISSION, seed, 1), casts[0]).map((c) => c.slot).join());
   assert.ok(first.size >= legalLayouts(casts[0]).length * 0.8, `${first.size} first nights`);
+});
+
+/* ---------------------------------------------------- wc-hands: the snare ---- */
+
+test('the snare: a save\'s first plays (the seeds a reviewer types)', () => {
+  const first = (seed: number): SnareId => drawSnare(newPlay(MISSION, seed, 1));
+  assert.deepEqual([first(101), first(102), first(104)], ['S2', 'S1', 'S3']);
+});
+
+test('the snare\'s spot: each of the three as often, never the spot of the play before', () => {
+  const count: Record<SnareId, number> = { S1: 0, S2: 0, S3: 0 };
+  for (let seed = 1; seed <= 3000; seed++) count[drawSnare(newPlay(MISSION, seed, 1))]++;
+  for (const id of SNARE_IDS) assert.ok(count[id] > 850 && count[id] < 1150, `${id}: ${count[id]} of 3000 first plays`);
+  for (const last of SNARE_IDS) {
+    const after: Record<SnareId, number> = { S1: 0, S2: 0, S3: 0 };
+    for (let seed = 1; seed <= 2000; seed++) after[drawSnare(newPlay(MISSION, seed, 1), last)]++;
+    assert.equal(after[last], 0, `never ${last} twice in a row`);
+    for (const id of SNARE_IDS.filter((x) => x !== last)) assert.ok(after[id] > 850, `after ${last}: ${id} ${after[id]} of 2000`);
+  }
+});
+
+test('the snare\'s spot travels in the play\'s variant and the next play reads it back from the history', () => {
+  const play = newPlay(MISSION, 4242, 3);
+  const cast = simonCast(callSkin, play.fork('simon-cast').rng);
+  const p = drawWildcameraPlay(play, { queueLength: 6, cast, lastSnare: 'S2' });
+  assert.notEqual(p.snare, 'S2');
+  const v = variantOf(p);
+  assert.equal(`S${v.ws}`, p.snare);
+  // as wildcamera.ts notes it (the flow's mood and rare first), the history keeps it
+  play.note('mood', 'ochtendnevel');
+  play.note('rare', 'witte-ree');
+  play.note('ws', v.ws);
+  play.note('wn', v.wn);
+  play.note('wa', 'abcdabcdab');
+  const va = compactVariant(play.variant)!;
+  assert.ok(va.includes(`ws:${v.ws}`) && va.includes(`wn:${v.wn}`), `kept in the 60 characters: ${va}`);
+  const history = [
+    { m: 'ree-niet-aanraken', sd: 1, va: 'mood:zonnig,ws:9' },
+    { m: MISSION, sd: 7, va: 'mood:gouden-uur,ws:3,wn:dancvgrf,wa:dcbabc' },
+    { m: MISSION, sd: 8, va: va },
+    { m: 'frisling', sd: 9, va: 'mood:zonnig' },
+  ];
+  assert.equal(lastSnare(history), p.snare);
+  assert.equal(lastSnare(history.slice(0, 2)), 'S3');
+  assert.equal(lastSnare([]), null);
+  assert.equal(lastSnare([{ m: MISSION, va: 'mood:x,wn:dancvgrf' }]), null, 'a play logged before wc-hands');
+  // a play's own draw never changes with the snare (its fork is its own)
+  const again = drawWildcameraPlay(newPlay(MISSION, 4242, 3), { queueLength: 6, cast, lastSnare: null });
+  assert.deepEqual(again.callers, p.callers);
+  assert.deepEqual(again.arrivals, p.arrivals);
 });
