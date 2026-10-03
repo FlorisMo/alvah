@@ -299,8 +299,11 @@ between, callCap })` (the world's own four callers slot for slot, the jay backin
 two rounds, every call held to 0.6-1.2 s); a skin's `roepAllen` (every caller heard once
 before any calls again: engines/simon `spread`, the 2D floor reads the same skin);
 `Adventure.moods.perPlay` as a number (never one of that many last plays' moods:
-`lastMoodsAt`); a home tree's `near` (its own full-detail range, world/Forest: fifteen pines
-round one spot keep the triangle budget); `Squirrel.reseed(seed)` and `goDash(x, z, full)`.
+`lastMoodsAt`); a home tree's `near` (its own full-detail range, world/Forest; a number, or
+a function read every frame: the squirrel's eleven pines are the real tree only while it
+plays round them, the rest the forest's simple copy, so the view over its wood keeps the
+triangle budget; a see-through home tree draws the detail the tree itself has there, one
+rule for both, `detailLevel`); `Squirrel.reseed(seed)` and `goDash(x, z, full)`.
 
 **A home's recipe** (each game lane): (1) choose places by looking at the world and pin each
 variant in `<id>.places.ts` + its test: dry, clear (`World.playClear`), inside its home, the
