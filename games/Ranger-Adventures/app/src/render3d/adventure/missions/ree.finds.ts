@@ -169,8 +169,10 @@ export class ReeFinds {
     if (s.small.includes('buizerd')) void this.spawn('bird-buizerd').then((b) => { this.buzz = b; });
     if (s.extra === 'tapuit') void this.spawn('bird-roodborsttapuit', TAPUIT_H).then((b) => { this.tapuit = b; });
     if (s.extra === 'vlinder') void this.spawn('heideblauwtje').then((b) => { this.butterfly = b; });
-    this.seen.watch({ id: findId('leeuwerik'), object: () => this.lark?.root ?? null, when: () => this.larkState === 'flying', ...LARK_SEEN });
-    this.seen.watch({ id: findId('buizerd'), object: () => this.buzz?.root ?? null, when: () => !!this.buzzStep, ...BUZZARD_SEEN });
+    // (each bird counts only on the walk it flies on, so its calm reveal comes on that walk:
+    // never held back by the reveal queue to land on the story's climax)
+    this.seen.watch({ id: findId('leeuwerik'), object: () => this.lark?.root ?? null, when: () => this.larkState === 'flying' && k.beat === `walk:${s.leeuwerik}`, ...LARK_SEEN });
+    this.seen.watch({ id: findId('buizerd'), object: () => this.buzz?.root ?? null, when: () => !!this.buzzStep && !this.buzzLeaving && k.beat === 'walk:hide', ...BUZZARD_SEEN });
     this.offs.push(k.onTick((dt) => { if (this.larkStep && this.larkStep(dt)) this.larkStep = null; this.buzzStep?.(dt); }));
   }
 
