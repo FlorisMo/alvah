@@ -99,13 +99,13 @@ export const wildcameraAdventure: Adventure = {
   },
 };
 
-/** Run 7 (wc-album): does the fox come this play — in the evening's round or in the night's
- *  choir? (The SAME draws the play makes: the wissel queue and the simon cast from their
- *  forks of the play.) */
+/** Run 7 (wc-album): does the fox come this play — in the evening's round, in the night's
+ *  choir, or with her cubs (this play's rare)? (The SAME draws the play makes: the wissel
+ *  queue and the simon cast from their forks of the play, the rare from its note.) */
 function foxComes(mission: Mission, play: Play): boolean {
   const queue = buildWisselTrial(mission.stappen[0].skin, store.knobs('wisselen'), play.fork('wisselen').rng).queue;
   const cast = simonCast(mission.stappen[1].skin, play.fork('simon-cast').rng);
-  return queue.some((q) => q.id === 'vos') || cast.includes('vos');
+  return queue.some((q) => q.id === 'vos') || cast.includes('vos') || /vosjes/.test(String(play.variant.rare ?? ''));
 }
 
 /** Run 7: every walking animal of the crossing (the stag, the hind, the roe, the badger,
@@ -327,6 +327,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       const p = await photograph(shot, 0.22, shot.frameH, 'vosjes', 'nacht');
       if (p) { photos.photos.push(p); photos.pin(p); }
       k.discover('wildcamera.vosjes');
+      k.discover('wildcamera.vos'); // (a fox he saw, if it came on no other way tonight)
       k.stats.family_photo = p ? 1 : 0;
       await k.guard(Promise.race([trot, k.wait(9)]));
     } finally {
