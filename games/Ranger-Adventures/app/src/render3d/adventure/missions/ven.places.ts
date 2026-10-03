@@ -303,13 +303,13 @@ export function stationsOf(id: BayId): readonly [Station, Station] {
 }
 
 /** How far before her (m along the route) his walk to the adder ends. */
-export const ADDER_BEFORE = 4.2;
+export const ADDER_BEFORE = 3.8;
 /** The adder's spot may lie this far (m) either way along the path from her station. */
 export const ADDER_SHIFT = 1.0;
 /** Within this (m) of her he has come too close: she lifts her head and hisses (the reach);
  *  within `ADDER_WARN` she only notices him (a cue, nothing more). */
-export const ADDER_NEAR = 2.4;
-export const ADDER_WARN = 3.5;
+export const ADDER_NEAR = 2.3;
+export const ADDER_WARN = 3.3;
 
 /** The adder at a station: on the path, coiled, turned `turn` off its line; `s` along the
  *  cove's route. */
@@ -330,20 +330,16 @@ export function adderHeather(a: Spot): Spot {
   return polar(p.th + 1.5, p.r + 2.6);
 }
 /** The one calm shot while her words are read, and held while he keeps his distance (his
- *  feet free): from the heather side behind him, looking across the path toward the water —
- *  him in one corner, her coiled on the warm sand ahead in the other, both whole (never at
- *  the lens: she lies beyond him). */
+ *  feet free): from the heather side, square across the path toward the water — him on
+ *  one side, her coiled on the warm sand on the other, both whole (never at the lens: the
+ *  lens is up the bank, she lies on the path). */
 export function adderView(a: Spot, me: Spot): ViewSpec {
   const d = Math.max(0.1, dist(a, me));
-  const t = { x: (a.x - me.x) / d, z: (a.z - me.z) / d };
-  const mid = { x: me.x + (a.x - me.x) * 0.55, z: me.z + (a.z - me.z) * 0.55 };
-  const pm = polarOf(mid);
-  const out = { x: Math.cos(pm.th * RAD), z: Math.sin(pm.th * RAD) }; // (away from the water)
-  const look = { x: t.x * 0.62 - out.x * 0.78, z: t.z * 0.62 - out.z * 0.78 };
+  const mid = { x: (a.x + me.x) / 2, z: (a.z + me.z) / 2 };
   return {
-    at: mid, heading: Math.atan2(look.x, look.z), halfW: d * 0.4 + 0.45, halfD: 0.7,
-    tall: 0.5, pitchDeg: 30, insetTop: 120, insetBottom: 40, seconds: 1.5,
-    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT, r: 0.25 }, { x: a.x, z: a.z, h: 0.25 }],
+    at: mid, heading: headingTo(mid, C), halfW: d / 2 + 0.8, halfD: 0.6,
+    tall: 0.5, pitchDeg: 28, insetTop: 120, insetBottom: 40, seconds: 1.5,
+    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT, r: 0.25 }],
   };
 }
 
@@ -649,7 +645,8 @@ export const VEN_RESIDENTS: readonly ResidentSpec[] = [
     after: id === 'B' ? { ...AFTER_FROG, idle: 'stand', roam: 0 } : null,
     voice: id === 'B'
       ? { call: 'heikikker', every: [6, 11], within: 20 }
-      : { call: 'heikikker', every: [5 + i * 1.5, 9 + i * 1.5], within: 20, state: 'before' },
+      // (the nearest cove's frog is heard faintly from the marker, 22 m off)
+      : { call: 'heikikker', every: [5 + i * 1.5, 9 + i * 1.5], within: id === 'A' ? 24 : 20, state: 'before' },
   })),
 ];
 

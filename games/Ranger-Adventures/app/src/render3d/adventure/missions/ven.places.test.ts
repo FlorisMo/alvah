@@ -26,7 +26,7 @@ import { reeClearings } from './ree.places.ts';
 import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import {
-  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, AFTER_FROG, APPROACH, BAYS, BAY_IDS, BENCH, BIRD_SLOTS, BUTTERFLY_SLOTS, CARPET_WET, CLOD_SLOTS,
+  ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, APPROACH, BAYS, BAY_IDS, BENCH, BIRD_SLOTS, BUTTERFLY_SLOTS, CARPET_WET, CLOD_SLOTS,
   CUSHION, FROG_H, FROG_LEN, FROG_SPOTS, GO_AWAY, HIDE, HIDE_R, MARKER, PATH, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
   above, adderAt, allStations, blocked, carpetAt, carpetPast, carpetRound, coveClumps, decoySlots, inCarpet, lastVenVariants,
   polar, polarOf, plopOf, pointAt, project, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type ViewSpec,
@@ -292,7 +292,7 @@ test('every order of the three moments fits on the way to every cove; the dry pa
         assert.ok(dist(pad.to, pad.from) > dist(pointAt(l, pad.s), pad.from) + 0.5, 'walking on is walking away from his way behind him');
       }
       const adder = way.find((w) => w.kind === 'adder');
-      if (adder?.kind === 'adder') assert.ok(dist(adder.approach, adder.adder) > 4, 'his walk to her ends well before her');
+      if (adder?.kind === 'adder') assert.ok(dist(adder.approach, adder.adder) > ADDER_WARN, 'his walk to her ends before she even lifts her head');
       if (listens === 1) assert.equal(way.filter((w) => w.kind === 'listen').length, 1, `cove ${id} ${order.join(',')}: one listening stop on the way (and the cove's own)`);
       for (const w of way) if (w.kind === 'listen') assert.ok(dist(w.at, MARKER) > 4, 'a listening stop on the way, not at the marker');
     }

@@ -240,6 +240,10 @@ interface AdderBody {
 /** The look of the soft moss. */
 const MOSS = { green: '#8fbf47', sheen: '#bfe07a', wet: '#55613a', mud: '#4a3b26' } as const;
 
+/** The adder is drawn this much over the scale table's coil (0.15 m high, 0.47 m long →
+ *  0.2 m, 0.6 m: a big adder, still a real one): a child sees her on the path. */
+const ADDER_SCALE = 1.3;
+
 /** The default look-alikes in a cove not played (or in free roam): a few moss clods. */
 const FREE_CLODS = [0, 3, 5];
 
@@ -325,11 +329,10 @@ export class VenHome implements HomeDressing {
     BAY_IDS.forEach((id, bi) => {
       const b = BAYS[id];
       const f = b.frame;
-      patch(atLocal(f, 0, -0.1), 0.85, 1.55, f.heading, '#596b33', 2, 5 + bi);                         // the cove's moss
-      patch(atLocal(f, CUSHION.u, CUSHION.v), CUSHION.r + 0.06, CUSHION.r, f.heading, '#7c9840', 3, 7 + bi); // the cushion
-      patch(atLocal(f, -0.95, -0.35), 0.3, 0.22, f.heading + 0.6, '#8a8048', 3, 9 + bi);               // ochre
-      patch(atLocal(f, 0.9, -0.42), 0.24, 0.18, f.heading - 0.4, '#77583f', 3, 11 + bi);               // a little red-brown
-      patch(atLocal(f, 0.45, 0.32), 0.28, 0.2, f.heading + 0.2, '#6e8a3c', 3, 13 + bi);
+      patch(atLocal(f, 0, -0.1), 0.85, 1.55, f.heading, '#56672f', 2, 5 + bi);                         // the cove's moss
+      patch(atLocal(f, CUSHION.u, CUSHION.v), CUSHION.r + 0.06, CUSHION.r, f.heading, '#6c8338', 3, 7 + bi); // the cushion
+      patch(atLocal(f, -0.95, -0.35), 0.26, 0.2, f.heading + 0.6, '#6f6d3c', 3, 9 + bi);               // a tuft of older, yellower moss
+      patch(atLocal(f, 0.45, 0.32), 0.26, 0.18, f.heading + 0.2, '#617a35', 3, 13 + bi);
     });
     const mossGeo = mergeGeometries(decals);
     for (const d of decals) d.dispose();
@@ -590,7 +593,7 @@ export class VenHome implements HomeDressing {
     const a = this.adder.at;
     r.position.set(a.x, this.g(a.x, a.z) - 0.01, a.z);
     r.rotation.set(0, a.yaw, 0);
-    r.scale.setScalar(1);
+    r.scale.setScalar(ADDER_SCALE);
   }
 
   /** Where she is (null: not laid this play, or slid away). */
@@ -692,7 +695,7 @@ export class VenHome implements HomeDressing {
     if (a.root && a.shown) {
       a.lift += (a.liftTo - a.lift) * Math.min(1, dt * (reduced ? 30 : 5));
       const r = a.root;
-      r.scale.set(1, 1 + 0.22 * a.lift, 1);
+      r.scale.set(ADDER_SCALE, ADDER_SCALE * (1 + 0.22 * a.lift), ADDER_SCALE);
       r.rotation.x = -0.12 * a.lift;
       const S = a.slide;
       if (S) {
@@ -701,7 +704,7 @@ export class VenHome implements HomeDressing {
         const x = S.from.x + (S.to.x - S.from.x) * e, z = S.from.z + (S.to.z - S.from.z) * e;
         r.position.set(x, this.g(x, z) - 0.01 - 0.12 * Math.max(0, (e - 0.7) / 0.3), z);
         r.rotation.y = headingTo(S.from, S.to) + Math.sin(this.clock * 9) * 0.12 * (reduced ? 0 : 1);
-        r.scale.set(1, 1, 1 + 0.25 * Math.sin(Math.PI * e));
+        r.scale.set(ADDER_SCALE, ADDER_SCALE, ADDER_SCALE * (1 + 0.25 * Math.sin(Math.PI * e)));
         if (S.t >= 1) { a.slide = null; a.shown = false; r.visible = false; S.done(); }
       }
     }

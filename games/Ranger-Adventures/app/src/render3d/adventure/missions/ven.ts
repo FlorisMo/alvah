@@ -66,6 +66,9 @@ const SING_STILL_S = 1.5;
 function speaking(): boolean {
   return typeof window !== 'undefined' && !!window.speechSynthesis?.speaking;
 }
+/** He waited for a line to end at most this long (s): a voice that never says it is done
+ *  never holds the frogs up. */
+const READ_MAX_S = 3.5;
 
 /** This play's bank, drawn and laid under the briefing card. */
 let drawn: { seed: number; laid: VenLaid } | null = null;
@@ -201,10 +204,13 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
     k.say(line);
     const unhint = k.hint(() => null); // (a perfect player keeps still)
     const still = new StillFor();
+    let dt = 0;
+    const offDt = k.onTick((d) => { dt = d; });
+    const t0 = k.now;
     try {
       await k.wait(0.6);
-      await k.until(() => still.tick(1 / 60, k.ranger().speed) && !speaking());
-    } finally { unhint(); }
+      await k.until(() => still.tick(dt, k.ranger().speed) && (!speaking() || k.now - t0 > READ_MAX_S));
+    } finally { unhint(); offDt(); }
     chorus();
     k.stats.listened = (k.stats.listened ?? 0) + 1;
     await k.wait(Math.max(0.9, calls * WOOG_S + 0.4));
@@ -299,7 +305,8 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   const unhint = k.hint(() => null);
   try {
     await k.wait(0.8);
-    await k.until(() => k.now - movedAt >= SING_STILL_S && !speaking());
+    const t1 = k.now;
+    await k.until(() => k.now - movedAt >= SING_STILL_S && (!speaking() || k.now - t1 > READ_MAX_S));
     // his throat swells, three soft calls
     for (let i = 0; i < 3; i++) {
       frog.sing(1);
