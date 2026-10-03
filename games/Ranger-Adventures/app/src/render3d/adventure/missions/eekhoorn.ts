@@ -702,29 +702,35 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   sq.flick();
   chatter();
   // run 7 (the rare young one): it was hiding with ours, round the back of the trunk; now
-  // it peeks round the bark beside ours ("Gevonden! En nog een kleintje!"), and once he
-  // has seen it, it runs up the trunk out of the picture
+  // a little head peeks round the wood, and out it comes onto the ground at the trunk's
+  // foot and sits up facing him ("Gevonden! En nog een kleintje!"); once he has seen it, it
+  // runs up the trunk and round the back, out of the picture
   let youngGone: Promise<boolean> | null = null;
   let youngSeen: { off(): void; readonly seen: boolean } | null = null;
   if (young && (await k.guard(young.ready.then(() => !!young.body)))) {
     const cam = k.world.camera.position;
-    const y = youngPeek(cT, face, { x: cam.x, z: cam.z });
-    young.placeOnTrunk(hideTree, y.start, true);
+    const y = youngPeek(cT, at0, { x: cam.x, z: cam.z });
+    young.placeOnTrunk(hideTree, y.start, false);
     young.group.visible = true;
     youngSeen = seenFor(k, home, 'eekhoorn.jonge-eekhoorn', squirrelSight(young), { px: 38, secs: 1, stat: 'jong' });
-    await k.guard(young.goRound(hideTree, y.peek, 0.9));
+    await k.guard(young.goRound(hideTree, y.edge, 0.8, 0, false));
     chatterOf(young);
-    await k.wait(0.3);
+    await k.wait(0.5);
+    await k.guard(young.run(young.dashTo(y.sit.x, y.sit.z, headingTo(y.sit, at0), y.edge.ang)));
+    young.flick();
     k.say(c.gevondenJong);
     const found = measure();
     k.stats.found_px = Math.round(found.px);
     k.stats.found_x = Math.round(found.x * 100) / 100;
     sq.called();
-    await k.wait(1.2);
-    await k.until(() => youngSeen!.seen, 1.6);
+    await k.wait(0.8);
     chatterOf(young);
-    youngGone = k.guard(young.goRound(hideTree, y.up, 2));
-    await k.wait(0.6);
+    await k.wait(1.4);
+    await k.until(() => youngSeen!.seen, 1.6);
+    young.flick();
+    await k.wait(0.4);
+    youngGone = k.guard((async () => (await young.goTrunk(hideTree, y.climb)) && young.goRound(hideTree, y.up, 2))());
+    await k.wait(0.8);
   } else {
     await k.wait(0.5);
     k.say(c.gevonden);

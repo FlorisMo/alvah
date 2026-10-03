@@ -741,20 +741,30 @@ export function denVisitor(lens: Spot): { start: { ang: number; h: number }; mee
 
 /**
  * The rare young squirrel in the found view (design §6.7): it hides on the far side of the
- * trunk from the found view's lens (`start`), comes round and peeks round the bark at the
- * trunk's other edge from ours (`peek`: `edge` rad round from the lens's side, about as
- * high as ours: the two of them flank the trunk) — seen side-on there, its head round the
- * bark, never its back and tail
- * flat to the lens — and once he has seen it runs up the trunk out of the picture (`up`).
- * `face`: where ours clings (foundFace); `lens`: the found view's lens.
+ * trunk from the found view's lens (`start`, low), comes round the bark head first to the
+ * trunk's outline (`edge`: a little head peeks round the wood), runs down and out onto the
+ * ground at the trunk's foot and sits up there facing him (`sit`): on the side of the trunk
+ * away from him in the picture, so the three of them read left to right — him, ours on the
+ * bark, the little one at the foot. Sitting up is a squirrel's own shape (played
+ * 2026-10-03: clinging to the bark beside ours a small one showed its back like ours, and
+ * at the trunk's outline it sat against the wood behind, a squirrel on a stump far off).
+ * Once he has seen it, it runs up its side of the trunk (`climb`) and on round the back and
+ * up, out of the picture (`up`). `me`: where he stands; `lens`: the found view's lens.
  */
-export const YOUNG = { scale: 0.7, peekUp: 0.05, edge: 1.15, upH: 6 } as const;
-export function youngPeek(tree: HomeTree, face: number, lens: Spot): { start: { ang: number; h: number }; peek: { ang: number; h: number }; up: { ang: number; h: number } } {
+export const YOUNG = { scale: 0.7, startH: 0.55, edgeAng: 1.5, edgeH: 0.4, sitAng: 0.8, sitOut: 0.34, climbH: 1.0, upH: 6 } as const;
+export function youngPeek(tree: HomeTree, me: Spot, lens: Spot): {
+  start: { ang: number; h: number }; edge: { ang: number; h: number }; sit: Spot; climb: { ang: number; h: number }; up: { ang: number; h: number };
+} {
   const camAng = headingTo(tree, lens);
-  const ours = Math.sign(wrapA(face - camAng)) || 1;
+  // (his side of the trunk, round from the lens; the little one comes out on the other)
+  const s = -(Math.sign(wrapA(headingTo(tree, me) - camAng)) || 1);
+  const sitAng = camAng + s * YOUNG.sitAng;
+  const r = barkRadius({ x: tree.x, z: tree.z, H: tree.h, species: tree.species }, 0) + YOUNG.sitOut;
   return {
-    start: { ang: camAng + Math.PI, h: HIDE.h + YOUNG.peekUp },
-    peek: { ang: camAng - ours * YOUNG.edge, h: HIDE.h + YOUNG.peekUp },
+    start: { ang: camAng + s * 2.5, h: YOUNG.startH },
+    edge: { ang: camAng + s * YOUNG.edgeAng, h: YOUNG.edgeH },
+    sit: { x: tree.x + Math.sin(sitAng) * r, z: tree.z + Math.cos(sitAng) * r },
+    climb: { ang: sitAng, h: YOUNG.climbH },
     up: { ang: camAng + Math.PI, h: YOUNG.upH },
   };
 }

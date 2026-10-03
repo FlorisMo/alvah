@@ -905,14 +905,15 @@ test('the dark visitor at the den: it comes down out of sight onto the bark abov
   assert.ok(n >= 18);
 });
 
-test('the young one in the found view: it hides behind the trunk, peeks round the bark beside ours, big enough, and runs up out of the picture', () => {
+test('the young one in the found view: it hides behind the trunk, peeks round its outline, sits up at its foot away from him — whole in the picture, big enough, clear of the bark and of him — and runs up out of the picture', () => {
   let n = 0;
   for (const rid of ROUTE_IDS) {
     const c = ROUTES[rid].hide;
     const gc = groundY(c.x, c.z);
-    const bark: Upright = { ...trunkUpright(trunk(c), gc), r: (y: number) => barkRadius(trunk(c), Math.max(0, y - gc)) };
+    const tr = trunk(c);
+    const bark: Upright = { ...trunkUpright(tr, gc), r: (y: number) => barkRadius(tr, Math.max(0, y - gc)) };
     const onBark = (a: { ang: number; h: number }, out = 0.1): { x: number; y: number; z: number } => {
-      const r = barkRadius(trunk(c), a.h) + out;
+      const r = barkRadius(tr, a.h) + out;
       return { x: c.x + Math.sin(a.ang) * r, y: gc + a.h, z: c.z + Math.cos(a.ang) * r };
     };
     for (let a = -Math.PI; a < Math.PI; a += Math.PI / 4) for (const d of [1.4, 2.4, 3.4]) {
@@ -923,21 +924,34 @@ test('the young one in the found view: it hides behind the trunk, peeks round th
       const face = foundFace(c, a, me);
       const cam = fitLens(foundView(c, face, me));
       const lens = { x: cam.position.x, z: cam.position.z };
-      const y = youngPeek(c, face, lens);
+      const y = youngPeek(c, me, lens);
       n += 1;
-      assert.ok(!lineClear(cam.position, onBark(y.start, 0.06), [bark]), `${rid}: it starts behind the trunk from the lens`);
-      const pk = onBark(y.peek, 0.08);
-      const top = px(cam, pk, y.peek.h + 0.33 * YOUNG.scale), bot = px(cam, pk, y.peek.h);
-      assert.ok(!top.behind && top.x > 30 && top.x < W - 30 && top.y > 100, `${rid}: it peeks out in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)})`);
-      assert.ok(lineClear(cam.position, { ...pk, y: pk.y + 0.1 }, [bark]), `${rid}: not behind the bark`);
-      assert.ok(Math.abs(bot.y - top.y) >= 40, `${rid}: ${Math.abs(bot.y - top.y).toFixed(0)} px tall`);
-      const ours = onBark({ ang: face, h: HIDE.h }, 0.08);
-      assert.ok(Math.hypot(ours.x - pk.x, ours.z - pk.z, (ours.y - pk.y) * 1) > 0.25, `${rid}: beside ours, not on it`);
-      // side-on to the lens (round the trunk's edge), never its back flat to it
-      const camAng = headingTo(c, cam.position);
-      assert.ok(Math.abs(wrapA(y.peek.ang - camAng)) >= 0.9, `${rid}: it peeks round the trunk's edge (${deg(Math.abs(wrapA(y.peek.ang - camAng)))}° from the lens)`);
+      const tag = `${rid} ${deg(a)}° ${d} m`;
+      assert.ok(!lineClear(cam.position, onBark(y.start, 0.06), [bark]), `${tag}: it starts behind the trunk from the lens`);
+      // sitting up at the trunk's foot: whole in the picture and big enough
+      const H0 = 0.33 * YOUNG.scale;
+      const top = px(cam, y.sit, H0), bot = px(cam, y.sit, 0);
+      assert.ok(!top.behind && top.x > 40 && top.x < W - 40 && top.y > 110 && bot.y < H - 30, `${tag}: it sits in the picture (${top.x.toFixed(0)}, ${top.y.toFixed(0)}-${bot.y.toFixed(0)})`);
+      assert.ok(bot.y - top.y >= 40, `${tag}: ${(bot.y - top.y).toFixed(0)} px tall`);
+      // clear of the bark, of the other pines and of him (the lens sees its middle and its head)
+      const g = groundY(y.sit.x, y.sit.z);
+      const others: Upright[] = HOME_TREES.filter((o) => o !== c).map((o) => trunkUpright(trunk(o), groundY(o.x, o.z)));
+      const boy: Upright = { x: me.x, z: me.z, y0: groundY(me.x, me.z), y1: groundY(me.x, me.z) + RANGER_STAND_HEIGHT * 1.1, r: () => 0.25 };
+      for (const k of [0.45, 0.85]) {
+        const pt = { x: y.sit.x, y: g + H0 * k, z: y.sit.z };
+        assert.ok(lineClear(cam.position, pt, [bark, boy, ...others]), `${tag}: it is seen (${k})`);
+      }
+      // on dry, clear ground at the foot: off his feet, off every other pine
+      assert.ok(dist(y.sit, me) > 1.0, `${tag}: not at his feet (${dist(y.sit, me).toFixed(2)} m)`);
+      assert.ok(HOME_TREES.every((o) => o === c || dist(o, y.sit) > barkRadius(trunk(o), 0) + 0.35), `${tag}: off the other pines`);
+      // away from him in the picture: him, ours on the bark, the little one at the foot
+      const tx = px(cam, c, 0.6).x, bx = px(cam, me, 0.9).x;
+      assert.ok(Math.sign(top.x - tx) === -Math.sign(bx - tx), `${tag}: on the far side of the trunk from him (${top.x.toFixed(0)} | trunk ${tx.toFixed(0)} | him ${bx.toFixed(0)})`);
+      const ours = px(cam, onBark({ ang: face, h: HIDE.h }, 0.08), HIDE.h);
+      assert.ok(Math.hypot(ours.x - top.x, ours.y - top.y) > 60, `${tag}: apart from ours in the picture`);
+      // its way up ends out of the picture
       const upTop = px(cam, onBark(y.up, 0.06), y.up.h);
-      assert.ok(upTop.y < 0 || upTop.behind || !lineClear(cam.position, onBark(y.up, 0.06), [bark]), `${rid}: it runs up out of the picture`);
+      assert.ok(upTop.y < 0 || upTop.behind || !lineClear(cam.position, onBark(y.up, 0.06), [bark]), `${tag}: it runs up out of the picture`);
     }
   }
   assert.ok(n >= 30, `${n} finds`);
