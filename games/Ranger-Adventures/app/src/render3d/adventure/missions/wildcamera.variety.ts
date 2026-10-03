@@ -347,33 +347,40 @@ export class CameraClock {
     this.now += 7 + Math.floor(this.rng() * 19);
     return t;
   }
-  /** the day turned: to the night, or back to the day */
+  /** the day turned: to the night (that day's late evening), or back to the day (the next
+   *  morning) — a round of several turns runs on through the days */
   turn(to: 'night' | 'day'): void {
     if (to === 'night') {
-      const late = 21 * 60 + 50 + Math.floor(this.rng() * 41);
+      const late = Math.floor(this.now / 1440) * 1440 + 21 * 60 + 50 + Math.floor(this.rng() * 41);
       this.now = Math.max(this.now + 60, late);
     } else {
-      const day = 24 * 60 + 5 * 60 + 10 + Math.floor(this.rng() * 31);
+      const day = this.midnight() + 5 * 60 + 10 + Math.floor(this.rng() * 31);
       this.now = Math.max(this.now + 60, day);
     }
+  }
+  /** wc-album: the midnight this night runs into (minutes on the clock): the evening the
+   *  clock stands in now (an evening, or a night: from noon to noon), its next midnight. A
+   *  round of several turns has more than one evening. */
+  private midnight(): number {
+    return (Math.floor((this.now - 12 * 60) / 1440) + 1) * 1440;
   }
   /** wc-album: the camera clicked on its own in the deep of the night, while everyone slept
    *  (00:40-03:30, at least half an hour on): its time */
   lateNight(): string {
-    const deep = 24 * 60 + 40 + Math.floor(this.rng() * 171);
+    const deep = this.midnight() + 40 + Math.floor(this.rng() * 171);
     this.now = Math.max(this.now + 30, deep);
     return this.photo();
   }
   /** wc-album: first light (05:15-05:40, at least ten minutes on): its time */
   firstLight(): string {
-    const light = 24 * 60 + 5 * 60 + 15 + Math.floor(this.rng() * 26);
+    const light = this.midnight() + 5 * 60 + 15 + Math.floor(this.rng() * 26);
     this.now = Math.max(this.now + 10, light);
     return this.photo();
   }
   /** wc-album: the man at his snare at dawn (05:52, or a little later when the clock has
    *  passed it): its time, never before a photo taken earlier */
   dawnMan(): string {
-    this.now = Math.max(this.now, 24 * 60 + 5 * 60 + 52);
+    this.now = Math.max(this.now, this.midnight() + 5 * 60 + 52);
     return this.photo();
   }
   /** minutes after the first midnight (tests) */

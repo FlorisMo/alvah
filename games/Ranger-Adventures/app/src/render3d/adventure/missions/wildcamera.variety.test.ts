@@ -473,3 +473,25 @@ test('the rare ones of the crossing: the fox family and the white roe, by luck o
     assert.equal(kinds.size, 2, `save ${t}: both rare ones within nine plays`);
   }
 });
+
+test('the night\'s own photos keep the clock: the nose in the deep of the night, the roe at first light, the man at dawn — after any number of turns', () => {
+  const inRange = (t: string, a: string, b: string): boolean => t >= a && t <= b;
+  for (const turns of [1, 2, 3, 4]) {
+    for (const r of [0, 0.5, 0.99]) {
+      const c = new CameraClock(17 * 60 + 40, () => r);
+      // the aim round: photos, with its turns (night, day, night ...)
+      let night = false;
+      for (let i = 0; i < 10; i++) { c.photo(); if (i % 3 === 2 && i / 3 < turns) { night = !night; c.turn(night ? 'night' : 'day'); } }
+      // the night beat: a round that ended in the day runs into a night again
+      if (!night) c.turn('night');
+      const family = c.photo();
+      const before = c.minutes;
+      const deep = c.lateNight();
+      assert.ok(inRange(deep, '00:40', '03:59') && c.minutes > before, `${turns} turns: the nose at ${deep} (the family at ${family})`);
+      const light = c.firstLight();
+      assert.ok(inRange(light, '05:15', '05:59'), `${turns} turns: first light at ${light}`);
+      const man = c.dawnMan();
+      assert.ok(inRange(man, '05:52', '06:59') && man > light, `${turns} turns: the man at ${man}`);
+    }
+  }
+});

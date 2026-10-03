@@ -1279,7 +1279,7 @@ export class WildcameraHome implements HomeDressing {
     this.birdFidget(null);
     this.showVisitor(null);
     if (this.poacher) this.poacher.visible = false;
-    if (after) this.showFoxPrints(false); // (wc-album: the fox's prints of a play are gone after it)
+    this.showFoxPrints(false); // (wc-album: a play's fox prints are gone after it, done or stopped; its briefing lays them anew)
   }
 
   update(dt: number, _t: number, reduced: boolean): void {

@@ -726,6 +726,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
          night, one after another */
   k.beat = 'night';
   if (k.world.daylight() > 0.2) {
+    clock.turn('night'); // (wc-album: a round that ended in the day: the camera's clock runs into a night again)
     k.say(c.donker);
     k.daylight(0, 2.4);
     await k.wait(2.6);
