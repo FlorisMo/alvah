@@ -12,8 +12,8 @@
  */
 
 import * as THREE from 'three';
-import { stream } from './places';
-import type { Spot } from './types';
+import { stream } from './places.ts';
+import type { Spot } from './types.ts';
 
 /** How a spot looks now. */
 export type PatchState = 'rest' | 'show' | 'ok' | 'wrong';
@@ -176,6 +176,10 @@ export interface PatchFieldOpts {
   seed: number;
   /** how they look (default 'earth') */
   look?: PatchLook;
+  /** run 7: at rest the mounds draw as ONE instanced mesh (a field seen from afar costs one
+   *  draw call, not one per spot); a beat `wake`s them (each its own mesh again: a pick, a
+   *  glow, a play hint) and lets them sleep after. Default false: as before. */
+  instancedRest?: boolean;
 }
 
 export class PatchField {
@@ -196,6 +200,10 @@ export class PatchField {
   private readonly per = 6;             // prints per spot
   private readonly geos: THREE.BufferGeometry[] = [];
   private readonly mats: THREE.Material[] = [];
+  /** (run 7 `instancedRest`) the mounds at rest, one draw; null: every mound draws itself */
+  private readonly rest: THREE.InstancedMesh | null = null;
+  /** a beat wants the mounds as their own meshes */
+  private wantAwake = false;
 
   constructor(o: PatchFieldOpts) {
     this.group.name = 'patch-field';
@@ -305,7 +313,35 @@ export class PatchField {
     this.prints.frustumCulled = false; // (its instances start at scale 0: no honest sphere)
     this.prints.visible = false;       // (drawn only while a spot shows its prints: an empty draw costs a call too)
     this.group.add(this.prints);
+    if (o.instancedRest) {
+      // the same mounds, at rest, in one draw (the same geometry, the same look)
+      const restMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+      this.mats.push(restMat);
+      const rest = new THREE.InstancedMesh(moundGeo, restMat, n);
+      rest.name = 'patch-rest';
+      rest.receiveShadow = true;
+      this.mounds.forEach((m, i) => { m.updateMatrix(); rest.setMatrixAt(i, m.matrix); });
+      rest.instanceMatrix.needsUpdate = true;
+      rest.computeBoundingSphere();
+      this.group.add(rest);
+      this.rest = rest;
+      this.setAwake(false);
+    }
     o.parent.add(this.group);
+  }
+
+  /** Run 7 (`instancedRest`): the mounds as their own meshes for a beat (a pick, a glow, a
+   *  play hint: `on`), or back to one draw once every spot is calm again (`off`). */
+  wake(on: boolean): void {
+    if (!this.rest) return;
+    this.wantAwake = on;
+    if (on) this.setAwake(true);
+  }
+
+  private setAwake(on: boolean): void {
+    if (!this.rest) return;
+    for (const m of this.mounds) m.visible = on;
+    this.rest.visible = !on;
   }
 
   /** The spot a mound mesh is (for a pick), or null. */
@@ -316,6 +352,7 @@ export class PatchField {
 
   /** Light a spot for the show (a warm glow + fresh prints), or put it back. */
   show(i: number, on: boolean): void {
+    if (on && this.rest && !this.mounds[i].visible) this.wake(true); // (a spot lights: never on the resting draw)
     this.state[i] = on ? 'show' : 'rest';
     this.colorDirty[i] = true;
     this.glowWant[i] = on ? 1 : 0;
@@ -329,6 +366,7 @@ export class PatchField {
 
   /** A calm mark on a spot the recall reached ('ok'), or a soft one for a wrong one. */
   mark(i: number, s: 'ok' | 'wrong' | 'rest'): void {
+    if (s !== 'rest' && this.rest && !this.mounds[i].visible) this.wake(true);
     this.state[i] = s;
     this.colorDirty[i] = true;
     this.glowWant[i] = s === 'rest' ? 0 : 1;
@@ -372,6 +410,9 @@ export class PatchField {
       this.prints.instanceMatrix.needsUpdate = true;
       this.prints.visible = this.printOn.some((p) => p > 1e-3);
     }
+    // (run 7) let go by its beat and calm again: back to the one resting draw
+    if (this.rest && !this.wantAwake && !this.rest.visible
+      && this.state.every((st) => st === 'rest') && this.glow.every((g) => g < 1e-3) && this.printOn.every((p) => p < 1e-3)) this.setAwake(false);
   }
 
   dispose(): void {
