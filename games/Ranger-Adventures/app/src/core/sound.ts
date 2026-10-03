@@ -150,6 +150,9 @@ const CALLS: Record<string, CallSpec> = {
   fiep:       { freq: 1320, dur: 0.11, type: 'sine', notes: [1320, 1240], sweep: 0.86, peak: 0.08 },
   raaf:       { freq: 280, dur: 0.34, type: 'sawtooth', rep: 2 },        // kroa — diep en laag
   das:        { freq: 240, dur: 0.28, type: 'triangle', rep: 2 },        // churr
+  // run 7 (the wildcamera's night choir): a fox's short rising yelp, "wiek-wiek" — high and
+  // rising where the roe's bark is a low flat square tone, so the two never sound alike
+  vos:        { freq: 640, dur: 0.22, type: 'triangle', notes: [640, 900], sweep: 1.4, peak: 0.18 },
   nachtzwaluw:{ freq: 600, dur: 0.6,  type: 'triangle', vibrato: 22 },   // ratel — churring trill
   eekhoorn:   { freq: 760, dur: 0.16, type: 'square',   rep: 3 },        // chatter
   wolf:       { freq: 330, dur: 0.8,  type: 'sine',     vibrato: 3 },     // howl

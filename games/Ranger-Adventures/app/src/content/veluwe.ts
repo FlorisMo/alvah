@@ -76,6 +76,11 @@ const ANIMALS = {
     feiten: ['Het gewei valt elk jaar af. En groeit dan weer aan.',
       'In de herfst burlt het hert hard. Zo roept hij andere herten.'],
   },
+  /* run 7: the red deer's hind (the wildcamera's evening visitors): no antlers */
+  hinde: {
+    id: 'hinde', naam: 'hinde', simpelWoord: 'hert', geluid: 'blaft zacht', toonVeilig: true,
+    feiten: ['Een hinde heeft geen gewei.'],
+  },
   raaf: {
     id: 'raaf', naam: 'raaf', simpelWoord: 'raaf',
     vaktermen: { jong: 'jong' }, geluid: 'roept kroa-kroa', toonVeilig: true,
@@ -585,11 +590,15 @@ const MISSIE_WILDCAMERA = {
       hangKnop: 'Hang de camera op',
       hangt: 'Het rode lampje knippert.',
       vraag: 'Waar kijkt de camera?',
-      komt_edelhert: 'Daar komt een hert.',
-      komt_ree: 'Daar komt een ree.',
-      komt_das: 'Daar komt een das.',
-      komt_nachtzwaluw: 'Daar komt een nachtzwaluw.',
-      komt_wildzwijn: 'Daar komt een wild zwijn.',
+      // run 7: the animal steps onto the crossing first; the card names what he SEES
+      kijk_edelhert: 'Kijk, een hert.',
+      kijk_hinde: 'Kijk, een hert.',
+      kijk_ree: 'Kijk, een ree.',
+      kijk_gaai: 'Kijk, een gaai.',
+      kijk_das: 'Kijk, een das.',
+      kijk_nachtzwaluw: 'Kijk, een nachtzwaluw.',
+      kijk_wildzwijn: 'Kijk, een wild zwijn.',
+      kijk_vos: 'Kijk, een vos.',
       foto: 'Klik! Een mooie foto.',
       leeg: 'Leeg. Het dier is daar nu niet.',
       nacht: 'Het wordt nacht.',
@@ -621,6 +630,8 @@ const MISSIE_WILDCAMERA = {
       volg: 'Volg de wildwissel.',
       chipPad: 'De wildwissel',
       hang: 'Hier kruisen twee wildwissels.',
+      kijk_edelhert: 'Kijk, een edelhert.',
+      kijk_hinde: 'Kijk, een hinde.',
       man: 'Kijk! Een stroper zet een strik.',
       zoekVal: 'Zoek de strik bij de wildwissel.',
       chipVal: 'De strik',
@@ -636,8 +647,10 @@ const MISSIE_WILDCAMERA = {
       ef: 'wisselen',
       skin: {
         dier: 'das',
-        dagDieren: ['edelhert', 'ree'],
-        nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn'],
+        // run 7: who may come this evening (the pure core draws the round from them with the
+        // play's seed: three of four of each at six photos, every one at eight)
+        dagDieren: ['edelhert', 'hinde', 'ree', 'gaai'],
+        nachtDieren: ['das', 'nachtzwaluw', 'wildzwijn', 'vos'],
         // run 6 polish: six photos (each night animal once, never one twice in a row):
         // a short, lively round with the flip to night as its peak. Run 7: the most a round
         // may have; the level's knobs say how many (6 at first, 8 from band 3 with a turn
@@ -661,6 +674,9 @@ const MISSIE_WILDCAMERA = {
         dier: 'das',
         // run 6: the night callers round the crossing
         dieren: ['das', 'wildzwijn', 'ree', 'nachtzwaluw'],
+        // run 7: who may call (engines/simon simonCast): the badger always, three of the
+        // others with the play's seed (four callers every night, on the 2D floor as well)
+        roepPool: ['das', 'wildzwijn', 'ree', 'nachtzwaluw', 'vos'],
         copy: {
           instructie: 'Luister wie er roept.',
           luister: 'Luister wie er roept…',

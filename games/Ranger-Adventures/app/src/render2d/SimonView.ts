@@ -27,7 +27,8 @@ export function playSimon(host: HTMLElement, step: Step, play?: Play): Promise<B
   return new Promise<BeatSummary>((resolve) => {
     const settings = store.get().settings;
     const copy = step.skin.copy ?? {};
-    const trial = buildSimonTrial(step.skin, store.knobs('simon'));
+    // (run 7: a skin with a roepPool draws its row from it, the same as the world does)
+    const trial = buildSimonTrial(step.skin, store.knobs('simon'), play ? play.fork('simon-cast').rng : looseRng('simon-cast'));
     const reduced = settings.reducedMotion;
 
     const instructie = copy.instructie ?? 'De dieren roepen. Doe ze na.';
