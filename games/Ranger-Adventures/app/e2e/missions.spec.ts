@@ -679,6 +679,7 @@ test('frisling: a mistake at each of the five body moments is a gentle reaction 
     /** One body moment played wrong once: acts as soon as it begins. */
     const mistake = async (beat: string): Promise<void> => {
       const want = MOMENT[beat];
+      // (its line is up with the beat: act at once — a held moment is over in a few seconds)
       await expect.poll(async () => (await adv())?.line ?? '', { timeout: 8_000, message: `${beat}: its line` }).toMatch(want);
       if (beat === 'still:aaien' || beat === 'still:voeren') {
         // a hand reaches: a real click on the animal (at his bag: the yearling at the
@@ -696,7 +697,6 @@ test('frisling: a mistake at each of the five body moments is a gentle reaction 
         const moved = await expect.poll(async () => { const l = await actor(key); return !!l && Math.hypot(l.x - a0!.x, l.z - a0!.z) > 0.08; }, { timeout: 5_000 }).toBe(true).then(() => true, () => false);
         log.soft(moved, `${beat}: the ${key} reacts (it ${key === 'lost' && beat === 'still:aaien' ? 'scoots aside' : 'wriggles closer for more'})`);
         if (beat === 'still:aaien') {
-          await sleep(page, 1_500);
           const shows = (await adv())?.stats.aaien_visible ?? 0;
           log.note(`after the reach ${Math.round(shows * 100)} % of his back shows from the close lens`);
           log.soft(shows >= 0.4, `after a reach the piglet stays clearly visible (${shows}; want ≥ 0.4)`);
@@ -732,10 +732,14 @@ test('frisling: a mistake at each of the five body moments is a gentle reaction 
       log.soft((await page.locator('button.p3-choice').filter({ visible: true }).count()) === 0, `${beat}: no answer buttons`);
       reached.push(beat);
       await log.shot(`${beat.replace(':', '-')}-wrong`);
-      // the same moment comes back
-      await expect.poll(async () => (await adv())?.line ?? '', { timeout: 20_000, message: `${beat}: the moment comes back` }).toMatch(want);
-      await log.shot(`${beat.replace(':', '-')}-again`);
+      // the same moment comes back (checked beside the play: the next moment may follow at once)
+      backs.push((async () => {
+        const back = await expect.poll(async () => (await adv())?.line ?? '', { timeout: 20_000 }).toMatch(want).then(() => true, () => false);
+        log.soft(back, `${beat}: the moment comes back`);
+        if (back) await log.shot(`${beat.replace(':', '-')}-again`);
+      })());
     };
+    const backs: Promise<void>[] = [];
     let playing = true;
     let failed: unknown = null;
     const watcher = (async () => {
@@ -758,6 +762,7 @@ test('frisling: a mistake at each of the five body moments is a gentle reaction 
       playing = false;
       await watcher;
     }
+    await Promise.all(backs);
     if (failed) throw failed;
     await finish(log, mission);
     log.hard(reached.length === 5, `all five moments were played wrong once (${reached.join(', ')})`);

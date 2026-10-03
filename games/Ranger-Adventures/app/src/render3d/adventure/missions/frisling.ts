@@ -239,7 +239,6 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     const side = Math.sign((P.wallow.x - log.x) * Math.sin(across) + (P.wallow.z - log.z) * Math.cos(across)) || 1;
     const spot = { x: log.x + Math.sin(across) * 0.62 * side, z: log.z + Math.cos(across) * 0.62 * side };
     rub(A.yearling, { x: spot.x, z: spot.z, yaw: logYaw, idle: 'stand' });
-    k.play.note('schuren', 1);
   }
   // the rare one: a magpie riding on the sow's back (FOUNDATION's roll, its pity rule)
   if (k.rare()?.id === 'frisling.ekster') await magpie();
