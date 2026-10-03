@@ -45,6 +45,18 @@ export function decoyClumps(at: readonly DecoyAt[], size = 1): Clump[] {
   return at.filter((q) => q.d.k === 'bush').map((q) => ({ x: q.x, z: q.z, kind: 'dead' as const, size, decoy: q.d.id }));
 }
 
+/** How the look-alikes of a stand are made (run 7, all optional: the defaults are run 6's). */
+export interface StandDecoyOpts {
+  /** where the stonechat sits: 'stalk' (default) on the tip of a 1 m dry stalk above the
+   *  fronds; 'frond' low on a short dry seed head among them (≤ 0.75 m, a light stalk): from
+   *  a lens looking down on the stand a bird, never a dark stick with a dot */
+  perch?: 'stalk' | 'frond';
+}
+
+/** The stonechat's perch heights (m): run 6's tall dry stalk, and run 7's seed head low
+ *  among the fronds. */
+const PERCH_H = { stalk: 1.05, frond: 0.68 } as const;
+
 /** The decoys of one stand: built with the home, alive while the lens is near. */
 export class StandDecoys {
   readonly decoys: Decoy[] = [];
@@ -52,14 +64,22 @@ export class StandDecoys {
   private readonly spawned: { dispose(): void }[] = [];
   private readonly made: { geometry: THREE.BufferGeometry; material: THREE.Material | THREE.Material[] }[] = [];
   private readonly birds: { o: THREE.Object3D; base: THREE.Vector3; kind: string; t: number }[] = [];
+  private readonly env: DressingEnv;
+  private readonly group: THREE.Object3D;
+  /** a nightjar's bare patch, per decoy id (laid again where it moves) */
+  private readonly bare = new Map<string, THREE.Mesh>();
+  /** the look-alikes were laid elsewhere (`relay`): a nightjar's patch goes with its bird */
+  private relaid = false;
 
   /**
    * `group`: where they hang (the home's group); `clumps`: the stand's clumps as its
    * CoverField was built from them (the 'bush' decoys among them); `face`: where the
    * searcher stands (a bird turns side-on to him).
    */
-  constructor(env: DressingEnv, group: THREE.Object3D, at: readonly DecoyAt[], cover: CoverField, clumps: readonly Clump[], face: Spot) {
+  constructor(env: DressingEnv, group: THREE.Object3D, at: readonly DecoyAt[], cover: CoverField, clumps: readonly Clump[], face: Spot, opts: StandDecoyOpts = {}) {
     this.cover = cover;
+    this.env = env;
+    this.group = group;
     const g = env.groundY;
     for (const q of at) {
       if (q.d.k === 'bush') {
@@ -95,23 +115,70 @@ export class StandDecoys {
         // on a little bare patch at the stand's edge, pressed to the ground
         const bare = groundDecal(g, q.x, q.z, 0.34, 0.28, 0.3, '#9a8358', { layer: 1, seed: 4, feather: true });
         group.add(bare);
-        this.made.push(bare);
+        this.bare.set(q.d.id, bare);
         void env.spawnModel('nachtzwaluw', { idle: false }).then((s) => {
           const r = add(s);
           if (r) this.birds.push({ o: r, base: r.position.clone(), kind: 'ground', t: 0 });
         });
       } else {
-        // a stonechat on the tip of a dry stalk above the fronds
-        const stalkH = 1.05;
-        const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.014, stalkH, 5).translate(0, stalkH / 2, 0),
-          new THREE.MeshStandardMaterial({ color: '#8c7a52', roughness: 1 }));
+        // a stonechat on the tip of a dry stalk above the fronds (run 7 'frond': on a short
+        // dry seed head among them, a light stalk with a pale tuft)
+        const low = opts.perch === 'frond';
+        const stalkH = PERCH_H[opts.perch ?? 'stalk'];
+        const stalk = new THREE.Mesh(new THREE.CylinderGeometry(low ? 0.006 : 0.008, low ? 0.01 : 0.014, stalkH, 5).translate(0, stalkH / 2, 0),
+          new THREE.MeshStandardMaterial({ color: low ? '#c9b27c' : '#8c7a52', roughness: 1 }));
         stalk.rotation.z = 0.06;
         holder.add(stalk);
         this.made.push(stalk);
+        // (the stalk leans a little: its tip, where the bird's feet are)
+        const tip = { x: -Math.sin(stalk.rotation.z) * stalkH, y: Math.cos(stalk.rotation.z) * stalkH };
+        if (low) {
+          // the seed head the bird sits on: a pale, rough tuft just under its feet
+          const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.035, 0).scale(1, 1.6, 1), new THREE.MeshStandardMaterial({ color: '#d8c58f', roughness: 1 }));
+          head.position.set(tip.x, tip.y - 0.045, 0);
+          holder.add(head);
+          this.made.push(head);
+        }
         void env.spawnModel(q.d.animal ?? 'roodborsttapuit', { idle: false }).then((s) => {
-          const r = add(s, stalkH - 0.01);
+          // (run 7 'frond': its feet on the seed head itself, never hovering beside it)
+          const r = add(s, low ? tip.y - 0.01 : stalkH - 0.01);
+          if (r && low) r.position.x = tip.x;
           if (r) this.birds.push({ o: r, base: r.position.clone(), kind: 'perch', t: 0 });
         });
+      }
+    }
+  }
+
+  /**
+   * Run 7: lay the look-alikes on other spots of the stand (a play draws where each sits,
+   * under the briefing card): a 'bush' decoy takes the dead clump given for it (its old
+   * clump is taken away; `useDecoys` shows the trial's), a bird or a butterfly moves its
+   * holder there, turned side-on to the searcher at `face`; a nightjar's bare patch is laid
+   * again under it. Decoys not named stay where they are.
+   */
+  relay(at: readonly { id: string; x: number; z: number; clump?: number }[], face: Spot): void {
+    const g = this.env.groundY;
+    this.relaid = true;
+    for (const q of at) {
+      const d = this.decoys.find((x) => x.id === q.id);
+      if (!d) continue;
+      d.x = q.x; d.z = q.z;
+      if (d.clump !== null) {
+        if (q.clump !== undefined && q.clump !== d.clump) { this.cover.showClump(d.clump, false); d.clump = q.clump; }
+        d.object.position.set(q.x, g(q.x, q.z) + 0.3, q.z);
+        continue;
+      }
+      d.object.position.set(q.x, g(q.x, q.z), q.z);
+      d.object.rotation.y = headingTo(q, face) + 0.9;
+      const old = this.bare.get(q.id);
+      if (old) {
+        old.removeFromParent();
+        old.geometry.dispose();
+        for (const m of [old.material].flat()) m.dispose();
+        const bare = groundDecal(g, q.x, q.z, 0.34, 0.28, 0.3, '#9a8358', { layer: 1, seed: 4, feather: true });
+        bare.visible = d.object.visible;
+        this.group.add(bare);
+        this.bare.set(q.id, bare);
       }
     }
   }
@@ -122,6 +189,8 @@ export class StandDecoys {
       const on = ids.includes(d.id);
       d.object.visible = on;
       if (d.clump !== null) this.cover.showClump(d.clump, on);
+      const bare = this.bare.get(d.id);
+      if (bare && this.relaid) bare.visible = on;
     }
   }
 
@@ -143,7 +212,7 @@ export class StandDecoys {
 
   dispose(): void {
     for (const s of this.spawned) s.dispose();
-    for (const m of this.made) {
+    for (const m of [...this.made, ...this.bare.values()]) {
       m.geometry.dispose();
       for (const mat of [m.material].flat()) mat.dispose();
     }

@@ -26,9 +26,9 @@ import * as THREE from 'three';
 import '../play/play3d.css';
 import type { BeatSummary } from '../../core/skill';
 import type { Step } from '../../content/types';
-import type { WorldCtx, Play3dEngine } from '../play/types';
-import { buildDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/dagnacht';
 import type { Play } from '../../core/play';
+import type { WorldCtx, Play3dEngine } from '../play/types';
+import { playDagnachtTrial, DagnachtRun, type Encounter } from '../../engines/dagnacht';
 import { looseRng } from '../../core/play';
 import { store } from '../../core/state';
 import { narrator } from '../../core/narrator';
@@ -102,8 +102,9 @@ export function playDagnacht3d(ctx: WorldCtx, step: Step, play?: Play): Promise<
     const settings = store.get().settings;
 
     // SAME engine logic as the 2D view (construct parity §1f); run 7: this play's order
-    const trial = buildDagnachtTrial(step.skin, { jargon: settings.jargon, reducedMotion: reduced, ...store.knobs('dagnacht') },
-      play ? play.fork('dagnacht').rng : looseRng('dagnacht'));
+    // (never the order of his last two plays of this mission, as its 2D twin)
+    const trial = playDagnachtTrial(step.skin, { jargon: settings.jargon, reducedMotion: reduced, ...store.knobs('dagnacht') },
+      play, store.get().geschiedenis, play ? undefined : looseRng('dagnacht'));
     const sides = play ? play.fork('knoppen').rng : looseRng('knoppen');
     const run = new DagnachtRun(trial.encounters.length);
     const instructie = step.skin.copy?.instructie ?? 'Blijf rustig. Maak de goede keuze.';

@@ -83,6 +83,7 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
   await k.walkRanger(o.stand.x, o.stand.z, 0.04);
   await k.frame(o.view, { face: o.stand.heading });
   const field = o.field;
+  field.wake(true); // (run 7: a field resting as one draw shows each spot as its own again)
   const camera = k.world.camera;
   const canvas = k.ctx.canvas;
   let phase: 'show' | 'recall' | 'done' = 'show';
@@ -217,6 +218,7 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
     unhint();
     // stopped mid-show ("Stop de missie"): no spot stays lit with its prints in the world
     if (!over) field.clear();
+    field.wake(false); // (it rests as one draw again once its glows have faded)
   }
   const summary = run.summary();
   k.log(step, summary);
