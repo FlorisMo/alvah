@@ -176,6 +176,13 @@ export function asTheKitFrames(v: ViewSpec): ViewSpec {
  *  height): her rump, back, chest, neck and head — what a child sees of a deer first. */
 const DOE_POINTS: readonly (readonly [number, number])[] = [[-0.32, 0.62], [0, 0.68], [0.28, 0.66], [0.4, 0.8], [0.48, 0.93]];
 
+/** The clear middle of the glasses' round picture (ndc half-axes): she counts as seen
+ *  there, not in its dim rim. */
+const SEEN_RIM = { x: 0.88, y: 0.84 } as const;
+/** A trunk hides what is behind it within this share of its collision radius (its bark is
+ *  a little narrower than the room the ranger keeps from it). */
+const TRUNK_SHARE = 0.8;
+
 /** A juniper as it is drawn: a round bush (an ellipsoid) `rw` m round, `h` tall. */
 interface Bush { x: number; y: number; z: number; h: number; rw: number }
 
@@ -711,13 +718,19 @@ export class ReeHome implements HomeDressing {
     const g = this.groundY(doe.x, doe.z);
     const fx = Math.sin(doe.yaw), fz = Math.cos(doe.yaw);
     const v = new THREE.Vector3();
+    // (ree-discover, carried from ree-growth's review: the trunks between, the copse's and
+    // the forest's — in B she showed first beside a trunk at the glasses' dim rim, the line
+    // up to a second before she was in the clear picture)
+    const reach = Math.hypot(doe.x - eye.x, doe.z - eye.z) + 1;
+    const trunks = this.env.obstacles.filter((o) => o.tree && Math.hypot(o.x - eye.x, o.z - eye.z) < reach);
     let n = 0;
     for (const [a, y] of DOE_POINTS) {
       const p = { x: doe.x + fx * a * SIZE.ree.len, y: g + y * SIZE.ree.h, z: doe.z + fz * a * SIZE.ree.len };
       v.set(p.x, p.y, p.z).project(cam);
-      // (inside the glasses' round picture, its dim rim counted: she is seen there first)
-      if (v.z > 1 || (v.x / 0.97) ** 2 + (v.y / 0.92) ** 2 > 1) continue;
+      // (inside the clear middle of the glasses' round picture, never its dim rim)
+      if (v.z > 1 || (v.x / SEEN_RIM.x) ** 2 + (v.y / SEEN_RIM.y) ** 2 > 1) continue;
       if (this.bushes.some((k) => throughBush(eye, p, k))) continue;
+      if (trunks.some((o) => segDist(o, eye, p) < o.r * TRUNK_SHARE)) continue;
       n += 1;
     }
     return n;
