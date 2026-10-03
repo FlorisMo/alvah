@@ -148,7 +148,7 @@ const NEUS_SOFT = 1.1;
 const FAMILY_IR = 0.13;
 const FAMILY_FILL = 0.55;
 /** …and a nose at the lens in the night: its face lit, the ground behind it a little dimmer. */
-const NEUS_IR = 0.06;
+const NEUS_IR = 0.03;
 const NEUS_FILL = 0.7;
 /** Run 7 (wc-album r2): how long a rare's reveal is up before its look ends (s): long enough
  *  to read and hear "Nieuw in je veldgids! …" (it shows ~4 s). */
