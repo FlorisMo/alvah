@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   MOOD_IDS, MOODS, DEFAULT_MOOD, isMood, playMood, sessionMood, parseMoodParam, mixMood, moodLightAt,
-  lightShare, groundShare, glowShare, keyAtElevation, keyElevation, lastMoodAt, shadeOn, type MoodId,
+  lightShare, groundShare, glowShare, keyAtElevation, keyElevation, lastMoodAt, lastMoodsAt, shadeOn, type MoodId,
 } from './Moods.ts';
 import { newPlay } from '../core/play.ts';
 import { EXPOSURE, SKY_STOPS, toneMappedHex } from './Atmosphere.ts';
@@ -171,4 +171,23 @@ test('a home\'s last mood is read from the history', () => {
   assert.equal(lastMoodAt(h, 'ree'), 'schemer');
   assert.equal(lastMoodAt(h, 'eekhoorn'), null);
   assert.equal(lastMoodAt([{ m: 'x', va: 'mood:storm' }], 'x'), null, 'not a mood');
+});
+
+test('run 7: perPlay as a number — never one of the home\'s last plays\' moods (the squirrel: 2), read back per play', () => {
+  const allow = ['gouden-uur', 'ochtendnevel', 'zonnig', 'bewolkt'] as const;
+  for (let s = 0; s < 60; s++) {
+    const m = playMood('gouden-uur', { allow, perPlay: 2 }, newPlay('m', s, 1), ['zonnig', 'bewolkt']);
+    assert.ok(m === 'gouden-uur' || m === 'ochtendnevel', `seed ${s}: ${m} is neither of the last two`);
+    // (true keeps today's rule: only the last one is out)
+    assert.notEqual(playMood('gouden-uur', { allow, perPlay: true }, newPlay('m', s, 1), ['zonnig', 'bewolkt']), 'zonnig');
+  }
+  // the last plays' moods, newest first, one per play (a play logs a beat per step)
+  const hist = [
+    { m: 'eekhoorn', sd: 1, va: 'mood:zonnig,ek:m-r-kgr' }, { m: 'eekhoorn', sd: 1, va: 'mood:zonnig,ek:m-r-kgr' },
+    { m: 'frisling', sd: 2, va: 'mood:schemer' },
+    { m: 'eekhoorn', sd: 3, va: 'mood:bewolkt,ek:n-u-mbk' }, { m: 'eekhoorn', sd: 3, va: 'mood:bewolkt,ek:n-u-mbk' },
+  ];
+  assert.deepEqual(lastMoodsAt(hist, 'eekhoorn', 2), ['bewolkt', 'zonnig']);
+  assert.deepEqual(lastMoodsAt(hist, 'eekhoorn', 1), ['bewolkt']);
+  assert.deepEqual(lastMoodsAt([], 'eekhoorn', 2), []);
 });

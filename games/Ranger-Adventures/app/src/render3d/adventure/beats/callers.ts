@@ -65,6 +65,17 @@ export interface CallersOpts {
   lines: { luister: string; echo: string; goed: string; groei: string; opnieuw: string; rondje?: string };
   /** each call (the camera's infrared blinks with it) */
   onCall?(id: string): void;
+  /** Run 7 (additive; the squirrel's neighbours, drawn per play): the animals that call in
+   *  the world, slot for slot in place of the trial's row (the 2D floor plays the content's
+   *  row: the same length, so the same seed and taps give the same summary) */
+  dieren?: readonly string[];
+  /** Run 7 (additive): between two rounds, after he echoed one and before the next is
+   *  called (the jay backs off a step): `round` = the round just echoed, `rounds` = how many
+   *  the beat plays. Never during listening or echoing. */
+  between?(round: number, rounds: number): Promise<void>;
+  /** Run 7 (additive): each call held to [min, max] s (its light-up at least min, its
+   *  sound cut softly at max), so the listening tempo is the same whoever calls */
+  callCap?: readonly [number, number];
 }
 
 /** Play the callers (simon, step `step`). Resolves once the sequence is echoed to its end. */
@@ -75,6 +86,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
   // (run 7: a skin with a roepPool draws its row from the play, as its 2D floor does)
   const trial = buildSimonTrial(k.steps[step].skin, k.knobs('simon'), k.play.fork('simon-cast').rng);
   // run 7: the play's callers (its 2D twin draws the same), in rounds from the knobs
+  // (run 7: the world's own row, slot for slot, when a home draws its callers per play)
+  if (o.dieren && o.dieren.length === trial.dieren.length) trial.dieren = [...o.dieren];
   const run = new SimonRun(trial.knobs, trial.dieren, k.play.fork('simon').rng);
   const byId = new Map(o.callers.map((c) => [c.id, c]));
   const missing = trial.dieren.filter((id) => !byId.has(id));
@@ -114,8 +127,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
     const c = byId.get(id)!;
     if (!settings.geluid) return 0;
     const p = c.at();
-    const d = Sound.callAt(id, p.x, p.z, listenerOf(k.world.camera));
-    return d || Sound.callDur(id);
+    const d = Sound.callAt(id, p.x, p.z, listenerOf(k.world.camera), 25, o.callCap?.[1]);
+    return d || Sound.callDur(id, o.callCap?.[1]);
   };
 
   /** The animals call the sequence, one at a time, each light-up with its call (after
@@ -129,7 +142,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
     if (line) speak(line);
     if (settings.voorlezen) await k.guard(narrator.quiet(6000));
     await k.wait(0.4);
-    const plan = listenPlan(run.sequence, (id) => Math.max(0.65, Sound.callDur(id)), k.reduced);
+    const cap = o.callCap;
+    const plan = listenPlan(run.sequence, (id) => (cap ? Math.min(cap[1], Math.max(cap[0], Sound.callDur(id, cap[1]))) : Math.max(0.65, Sound.callDur(id))), k.reduced);
     for (const beat of plan) {
       if (token !== listenToken) return;
       const c = byId.get(beat.id)!;
@@ -182,7 +196,8 @@ export async function callersBeat(k: AdventureKit, step: number, o: CallersOpts)
       k.stats.callers_len = run.sequence.length;
       banner(line, false);
       speak(line);
-      void k.wait(1.3).then(() => listen(null)).catch(() => {});
+      const echoed = run.round - 1;
+      void k.wait(1.3).then(() => (o.between ? k.guard(o.between(echoed, run.rounds)) : undefined)).then(() => listen(null)).catch(() => {});
       return;
     }
     // a wrong click: recoverable — the SAME sequence again ('replay'), or after a second one

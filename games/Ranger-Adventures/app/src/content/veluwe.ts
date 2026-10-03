@@ -817,11 +817,20 @@ const MISSIE_EEKHOORN = {
       vergeten: 'Oei, hij weet het niet meer!',
       routeWijs: 'Tik de plekjes op volgorde.',
       routeMis: 'Hier niet. Kijk nog een keer.',
+      // run 7: its second mouthful (a new round of the route)
+      nogMeer: 'Hij verstopt er nog meer.',
       stapel: 'Hij brengt ze naar zijn stronk.',
       wieWonen: 'Wie woont hier? Tik op elk dier.',
       isGaai: 'Dat is de gaai.',
       isSpecht: 'Dat is de groene specht.',
       isRaaf: 'Dat is de raaf.',
+      // run 7: the neighbours of the day (one per perch, drawn per play)
+      isKoolmees: 'Dat is de koolmees.',
+      isMerel: 'Dat is de merel.',
+      isRoodborst: 'Dat is de roodborst.',
+      isBonteSpecht: 'Dat is de bonte specht.',
+      isBoomklever: 'Dat is de boomklever.',
+      isKoekoek: 'Dat is de koekoek.',
       gaaiKomt: 'Kijk, de gaai wil de nootjes!',
       roepMee: 'Roep mee, dan gaat hij weg.',
       luisterBuren: 'Luister wie er roept.',
@@ -834,12 +843,15 @@ const MISSIE_EEKHOORN = {
     knap: {
       routeKijk: 'Kijk waar hij zijn voorraad verstopt.',
       stapel: 'Hij brengt ze naar zijn wintervoorraad.',
+      isBonteSpecht: 'Dat is de grote bonte specht.',
     },
   },
   stappen: [
     {
       ef: 'corsi',
       skin: {
+        // run 7: two mouthfuls of acorns (the story's length; the 2D floor reads the same)
+        rondes: 2,
         copy: {
           // (the adventure frames it as the squirrel forgetting where it buried them)
           instructie: 'Onthoud waar de nootjes liggen.',

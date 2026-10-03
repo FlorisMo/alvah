@@ -53,6 +53,11 @@ export interface RouteOpts {
   picked?: (spot: { id: number; x: number; z: number }, res: RoutePick) => Promise<void>;
   /** Run 6: a show just ended (recall is open): `first` = the animal's own visits */
   shown?: (first: boolean) => void;
+  /** Run 7 (additive; the squirrel): after a round's route was walked back, before the
+   *  next round's show: the animal's own feedback between two rounds (it digs up that
+   *  round's acorns and carries them to its store). `round` = the round just ended (1-based),
+   *  `spots` = its route. Feedback, never input: recall stays closed until the next show. */
+  between?: (round: number, spots: readonly { id: number; x: number; z: number }[]) => Promise<void>;
 }
 
 /** What a pick was, for the home's own feedback (`picked`). */
@@ -153,6 +158,9 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
     const i = pickAt(e);
     if (i === null) return;
     const id = field.spots[i].id;
+    // (the round's route as he walks it back: a `between` gets it once it is done)
+    const roundNo = run.round;
+    const roundSpots = run.sequence.map((sid) => field.spots.find((q) => q.id === sid)!);
     const res = run.tap(id);
     const s = field.spots[i];
     busy = true;
@@ -192,7 +200,8 @@ export async function routeBeat(k: AdventureKit, step: number, o: RouteOpts): Pr
       // stands in front of the new route)
       const back = (): Promise<unknown> => (o.picked || Math.hypot(k.ranger().x - o.stand.x, k.ranger().z - o.stand.z) < 0.8
         ? Promise.resolve() : k.walkRanger(o.stand.x, o.stand.z, 0.04).catch(() => false));
-      void walk.then(() => k.wait(0.5)).then(back).then(() => { busy = false; return show(o.lines.nogEen ?? GROEI.nogEenWeg); }).catch(() => {});
+      const between = (): Promise<unknown> => (o.between ? k.guard(o.between(roundNo, roundSpots)) : Promise.resolve());
+      void walk.then(() => k.wait(0.5)).then(back).then(between).then(() => { busy = false; return show(o.lines.nogEen ?? GROEI.nogEenWeg); }).catch(() => {});
       return;
     }
     void walk.then(() => { busy = false; });

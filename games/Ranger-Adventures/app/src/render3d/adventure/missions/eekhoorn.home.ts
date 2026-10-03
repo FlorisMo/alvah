@@ -1,32 +1,35 @@
 /**
  * eekhoorn.home.ts — the squirrel's home in the world, built with the world (the THREE
- * half of eekhoorn.places.ts): its GLADE — seven look-alike mossy cushions in the oak leaves where
- * it buries acorns, a stump with its store of acorns, a dead snag — and its neighbours:
- * the jay on a stub of the pine by the store (it glides down to the acorns when they are
- * piled), the green woodpecker clinging to the same pine, the raven on top of the snag.
- * The trees themselves are forest trees (the world draws them), and so are the dead
- * branch stubs it sits on (on its pine, on the pines of its way): each is part of its
- * tree (eekhoorn.places `branchStub`), so it fades with it when the lens looks through
- * the tree, never hanging solid in the air (review, 2026-09-29). Plus the acorn being
- * buried or dug up, and the little puffs of earth the squirrel throws as it digs.
+ * half of eekhoorn.places.ts): its GLADE — seven look-alike mossy cushions in the oak leaves
+ * where it buries acorns (laid anew each play, in that play's mirror-image of the pattern,
+ * each cushion its own look), a stump with its store of acorns, a dead snag — and its
+ * neighbours: one bird per perch round the stump (the store pine's dead stub, its bark, the
+ * snag's top), drawn per play (run 7, `setNeighbours`), and the jay, the nut thief, waiting
+ * on the glade oak's low stub (it glides down to the acorns, backs off a step at every echo
+ * he gets right, and flies off). The trees themselves are forest trees (the world draws
+ * them), and so are the dead branch stubs it sits on: each is part of its tree
+ * (eekhoorn.places `branchStub`), so it fades with it when the lens looks through the tree,
+ * never hanging solid in the air (review, 2026-09-29). Plus the acorn being buried or dug
+ * up, and the little puffs of earth the squirrel throws as it digs.
  *
  * It stands before the mission and after it. After, the store is a bigger heap, the jay
  * has flown, and on a later visit a tiny oak seedling stands where an acorn was forgotten.
+ * Nothing here draws from `Math.random`: a play hands its own stream (`layPlay`).
  */
 
 import * as THREE from 'three';
 import type { DressingEnv, HomeDressing } from '../../world/Residents';
-import type { HomeState } from '../types';
+import type { HomeState, Spot } from '../types';
 import { PatchField } from '../patches';
 import { boxObstacle } from '../../CharacterController';
-import { barkRadius, type Trunk } from '../squirrel-math';
-import type { SquirrelTree } from '../squirrel';
+import type { Trunk } from '../squirrel-math';
+import type { Squirrel, SquirrelTree } from '../squirrel';
 import { SIZE } from '../../AnimalScale';
 import {
-  GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, JAY_GROUND, SEEDLING_AT, SNAG, SPOT_SIZE, STUMP, TREE, WOODPECKER, EEKHOORN_PLACES,
-  gladeSpots, type HomeTree,
+  GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, JAY_GROUND, JAY_WAIT, NEIGHBOURS, PERCH, SEEDLING_AT, SLOTS, SNAG, SPOT_SIZE, STUMP, WOODPECKER,
+  EEKHOORN_PLACES, FIRST_TRIO, gladeSpots, type EekhoornPlay, type FieldSym, type HomeTree, type Slot, type Trio,
 } from './eekhoorn.places';
-import { headingTo } from '../places';
+import { headingTo, stream } from '../places';
 import { acornGeometry, acornMaterial } from '../acorn';
 
 /** The squirrel's view of a home tree: its trunk and its branch. */
@@ -36,9 +39,12 @@ export function squirrelTree(t: HomeTree): SquirrelTree {
   return { trunk, branch: { tree: trunk, ang: b.ang, h: b.h, out: b.out } };
 }
 
-/** A neighbour on its perch: the thing a child clicks in the call-back game. */
+/** A bird round the stump: the thing a child clicks in the call-back game. */
 export interface Neighbour {
-  id: 'gaai' | 'groene-specht' | 'raaf';
+  /** the content animal id ('koolmees', 'groene-specht', 'gaai' …) */
+  id: string;
+  /** its perch round the stump (the jay: 'gaai') */
+  slot: Slot | 'gaai';
   /** what a player clicks (the bird's holder) */
   object: THREE.Group;
   /** the bird itself (its own materials: it lights up), once loaded */
@@ -48,6 +54,25 @@ export interface Neighbour {
   /** where it sits (world) */
   at: THREE.Vector3;
 }
+
+/**
+ * How each bird sits on its perch (measured on its GLB, 2026-10-03, by looking at it on
+ * the perch): `clipBelow` cuts the modeller's perch block under its feet (in the model's
+ * own units: a twig, a lump); `down` turns it head-down, belly to the bark (a nuthatch
+ * walking down a trunk); `turn` a little more round on its perch (rad); `sink` how far the
+ * cut-away block lowers it (m).
+ */
+interface BirdPose { clipBelow?: number; down?: boolean; turn?: number; sink?: number; feet?: number }
+const BIRD_POSE: Readonly<Record<string, BirdPose>> = {
+  // a yellow lump under its feet; it clings to the bark (as run 6 had it)
+  'groene-specht': { clipBelow: -0.43, sink: 0.02 },
+  // the great tit stands on a twig of its own, its feet a third up the model
+  koolmees: { clipBelow: -0.22, feet: 0.37 },
+  // the nuthatch stands on a branch end; on the bark it walks down head-first
+  boomklever: { clipBelow: -0.26, feet: 0.29, down: true },
+  // the cuckoo holds a twig that runs down to the ground
+  koekoek: { clipBelow: -0.33, feet: 0.34 },
+};
 
 /** A neighbour bird as the home moves it: where it sits now (`base`), where it sits
  *  before the mission (`home`), a hop when it calls, a glide down, a flight away. */
@@ -62,20 +87,40 @@ interface Bird {
   seed: number;
   /** its flight away (s into it; −1 = not flying, 99 = gone) */
   fly: number;
-  /** a glide from one perch to another (the jay coming down to the store) */
-  glide: { from: THREE.Vector3; to: THREE.Vector3; yaw0: number; yaw1: number; t: number; dur: number } | null;
+  /** a glide from one perch to another (the jay coming down to the store, or a hop back) */
+  glide: { from: THREE.Vector3; to: THREE.Vector3; yaw0: number; yaw1: number; t: number; dur: number; arc: number } | null;
   n: Neighbour;
+  spawned: { dispose(): void } | null;
+  /** disposed while its model was still loading */
+  gone: boolean;
+  /** resting: he is far off (it is a speck there, and it costs the picture ~10k triangles) */
+  rest: boolean;
+  /** how much of it shows (0 resting … 1 there): it fades in and out */
+  show: number;
 }
 
 /** How far (m) the ranger must have been from the glade before the seedling grows (out
  *  of sight behind the trees: back at the squirrel's first pine is far enough). */
 const AWAY_M = 16;
+/** The free world's moss before any play: the pattern as drawn, its first look. */
+const FIRST_FIELD: { sym: FieldSym; seed: number } = { sym: 'recht', seed: 41 };
+/** A bird round the stump rests (fades out, then is not drawn) while he is further than
+ *  this from it (m; it fades back in a little nearer): from there, through the follow lens
+ *  behind him, a great tit is ~8 px and the raven ~19 px — and each bird costs the picture
+ *  10-15k triangles, which the view over the squirrel's wood toward the tower cannot spare
+ *  (it draws ~0.98M of the 1M before the home adds a pine; measured 2026-10-03). */
+const BIRD_REST_M = 13;
+const BIRD_WAKE_M = 12;
+/** How long a bird takes to fade in or out (s): a calm appearing, never a pop. */
+const BIRD_FADE_S = 0.6;
 
 export class EekhoornHome implements HomeDressing {
   readonly group = new THREE.Group();
-  readonly field: PatchField;
-  readonly neighbours: Neighbour[] = [];
+  private fieldNow: PatchField;
+  private fieldKey = '';
   readonly trees = HOME_TREES.map(squirrelTree);
+  /** the squirrel that lives here (set by the adventure's actor factory) */
+  squirrel: Squirrel | null = null;
   /** the acorn store by the stump (it grows when the squirrel piles its acorns there) */
   private readonly heap: (THREE.Object3D | undefined)[] = [];
   private heapShown = 1;
@@ -89,11 +134,17 @@ export class EekhoornHome implements HomeDressing {
   private readonly spawned: { dispose(): void }[] = [];
   private readonly birds: Bird[] = [];
   private readonly env: DressingEnv;
+  private readonly small: THREE.Object3D;
   private state: HomeState = 'before';
   /** the adventure finished just now: the seedling waits for a later visit */
   seedlingWaits = false;
   private away = 0;
   private clock = 0;
+  /** the small things' own stream (a nut's spin, the crumbs of a puff): a play's fork */
+  private cos: () => number = stream(0x5eed41);
+  /** the snag's top (once the snag is in): where the `top` bird sits */
+  private snagTop: THREE.Vector3 | null = null;
+  private trio: Trio = FIRST_TRIO;
 
   constructor(env: DressingEnv) {
     this.env = env;
@@ -104,8 +155,8 @@ export class EekhoornHome implements HomeDressing {
     /* -- the glade: seven look-alike mossy cushions in the oak leaves -- */
     // (the cushions, the acorn, the puffs and the seedling are small things: they rest
     // sooner than the home, Residents `detail`)
-    const small = env.detail(EEKHOORN_PLACES.glade);
-    this.field = new PatchField({ parent: small, groundY: g, spots: gladeSpots(), size: SPOT_SIZE, heading: GLADE_FRAME.heading, seed: 41, look: 'moss' });
+    this.small = env.detail(EEKHOORN_PLACES.glade);
+    this.fieldNow = this.makeField(FIRST_FIELD.sym, FIRST_FIELD.seed);
 
     /* -- the stump with the store, the dead snag -- */
     void env.spawnPlant('prop-tree-stump', STUMP.h).then((s) => {
@@ -138,27 +189,19 @@ export class EekhoornHome implements HomeDressing {
       r.rotation.y = SNAG.rotY;
       this.group.add(r);
       this.spawned.push(s);
-      // the raven sits on its top
+      // a bird sits on its top
       const box = new THREE.Box3().setFromObject(r);
-      const top = new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y - 0.12, (box.min.z + box.max.z) / 2);
-      this.bird('raaf', SIZE.raaf.h, top, headingTo(SNAG, EEKHOORN_PLACES.callers) + 0.9);
+      this.snagTop = new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y - 0.12, (box.min.z + box.max.z) / 2);
+      this.setNeighbours(this.trio);
     });
     env.obstacles.push({ x: SNAG.x, z: SNAG.z, r: 0.35 });
     // (a stump and a log a child walks round, never through)
     void boxObstacle;
 
-    /* -- the neighbours: the jay on its stub, the woodpecker on its pine -- */
-    const jay = TREE.storePine.branch!;
-    const jr = barkRadius(squirrelTree(TREE.storePine).trunk, jay.h) + jay.out * 0.75;
-    const jayAt = new THREE.Vector3(TREE.storePine.x + Math.sin(jay.ang) * jr, g(TREE.storePine.x, TREE.storePine.z) + jay.h - 0.1, TREE.storePine.z + Math.cos(jay.ang) * jr);
-    this.bird('gaai', 0.3, jayAt, headingTo({ x: jayAt.x, z: jayAt.z }, EEKHOORN_PLACES.callers) - 0.9);
-    const wp = WOODPECKER.tree;
-    // it clings round the side of the trunk (belly to the bark), so from the stand it is
-    // seen side-on: its red cap, its green back, its tail braced on the bark
-    const wAng = WOODPECKER.ang;
-    const wr = barkRadius(squirrelTree(wp).trunk, WOODPECKER.h) + 0.07;
-    const wpAt = new THREE.Vector3(wp.x + Math.sin(wAng) * wr, g(wp.x, wp.z) + WOODPECKER.h, wp.z + Math.cos(wAng) * wr);
-    this.bird('groene-specht', 0.42, wpAt, wAng + Math.PI, { clipBelow: -0.43 });
+    /* -- the jay on the glade oak's low stub, and the free world's neighbours -- */
+    const jayAt = new THREE.Vector3(JAY_WAIT.x, g(JAY_WAIT.x, JAY_WAIT.z) + JAY_WAIT.y, JAY_WAIT.z);
+    this.bird('gaai', 'gaai', SIZE.gaai.h, jayAt, headingTo(JAY_WAIT, HEAP));
+    this.setNeighbours(FIRST_TRIO);
 
     /* -- little puffs of earth when the squirrel digs (one mesh) -- */
     this.puffs = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: '#4a3525', roughness: 1, flatShading: true }), 18);
@@ -167,13 +210,13 @@ export class EekhoornHome implements HomeDressing {
     this.puffs.visible = false; // (drawn only while earth flies: an empty draw costs a call too)
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < 18; i++) this.puffs.setMatrixAt(i, zero);
-    small.add(this.puffs);
+    this.small.add(this.puffs);
 
     /* -- the acorn being buried or dug up (one at a time) -- */
     this.nut = new THREE.Mesh(acornGeometry(), acornMaterial());
     this.nut.name = 'acorn-in-the-moss';
     this.nut.visible = false;
-    small.add(this.nut);
+    this.small.add(this.nut);
 
     /* -- the seedling a forgotten acorn grows into (after, on a later visit) -- */
     const sp = SEEDLING_AT;
@@ -182,50 +225,116 @@ export class EekhoornHome implements HomeDressing {
     this.seedling.position.set(sp.x, g(sp.x, sp.z) + 0.01, sp.z);
     this.seedling.scale.setScalar(1.8); // (≈ 0.32 m: a young oak, big enough to spot from the glade's edge)
     this.seedling.visible = false;
-    small.add(this.seedling);
+    this.small.add(this.seedling);
   }
 
-  /** A neighbour bird on its perch (it looks round now and then; the call-back game
-   *  picks and lights it). `clipBelow`: the part of its model under its feet (a
-   *  modeller's perch block) is not drawn. */
-  private bird(id: Neighbour['id'], h: number, at: THREE.Vector3, yaw: number, opts: { clipBelow?: number } = {}): void {
+  /** The glade's caching spots now (this play's pattern). */
+  get field(): PatchField { return this.fieldNow; }
+
+  private makeField(sym: FieldSym, seed: number): PatchField {
+    this.fieldKey = `${sym}:${seed}`;
+    return new PatchField({ parent: this.small, groundY: this.env.groundY, spots: gladeSpots(sym), size: SPOT_SIZE, heading: GLADE_FRAME.heading, seed, look: 'moss' });
+  }
+
+  /**
+   * Run 7: lay this play in the home, under the briefing card (design §6.1): the caching
+   * pattern and its cushions' look, the three neighbours on their perches, the small
+   * things' stream; the squirrel's own day (`reseed`).
+   */
+  layPlay(p: EekhoornPlay, streams: { cosmetic: () => number; squirrel: number }): void {
+    if (this.fieldKey !== `${p.veld}:${p.veldSeed}`) {
+      this.fieldNow.dispose();
+      this.fieldNow = this.makeField(p.veld, p.veldSeed);
+    }
+    this.setNeighbours(p.buren);
+    this.cos = streams.cosmetic;
+    this.squirrel?.reseed(streams.squirrel);
+  }
+
+  /** The three neighbours round the stump, slot by slot (tak, stam, top) — once loaded. */
+  get neighbours(): Neighbour[] {
+    return SLOTS.map((s) => this.birds.find((b) => b.n.slot === s && !b.gone)?.n).filter((n): n is Neighbour => !!n);
+  }
+  /** The jay, the nut thief. */
+  get jay(): Neighbour | null { return this.birds.find((b) => b.kind === 'gaai')?.n ?? null; }
+
+  /** Run 7: these three on their perches (design §6.5); the others leave. At most the
+   *  three and the jay are alive at once. A play's trio stays after it. */
+  setNeighbours(trio: Trio): void {
+    this.trio = trio;
+    const g = this.env.groundY;
+    for (const slot of SLOTS) {
+      const want = trio[slot];
+      const have = this.birds.find((b) => b.n.slot === slot && !b.gone);
+      if (have && have.kind === want) continue;
+      if (have) this.dropBird(have);
+      const row = NEIGHBOURS.find((n) => n.id === want);
+      if (!row) continue;
+      if (slot === 'top') {
+        if (!this.snagTop) continue; // (the snag is still loading: it lays its bird)
+        this.bird(want, slot, row.h, this.snagTop.clone(), headingTo(SNAG, EEKHOORN_PLACES.callers) + 0.9);
+      } else if (slot === 'tak') {
+        const p = PERCH.tak;
+        this.bird(want, slot, row.h, new THREE.Vector3(p.x, g(p.x, p.z) + p.y, p.z), headingTo(p, EEKHOORN_PLACES.callers) - 0.9);
+      } else {
+        // it clings round the side of the trunk (belly to the bark), so from the stand it is
+        // seen side-on against the wood behind: the woodpecker's red cap and green back, the
+        // nuthatch walking down head-first
+        const p = PERCH.stam;
+        this.bird(want, slot, row.h, new THREE.Vector3(p.x, g(p.x, p.z) + p.y, p.z), WOODPECKER.ang + Math.PI);
+      }
+    }
+  }
+
+  private dropBird(b: Bird): void {
+    b.gone = true;
+    b.spawned?.dispose();
+    b.o.removeFromParent();
+    this.birds.splice(this.birds.indexOf(b), 1);
+  }
+
+  /** A bird on its perch (it looks round now and then; the call-back game picks and
+   *  lights it). */
+  private bird(id: string, slot: Neighbour['slot'], h: number, at: THREE.Vector3, yaw: number): void {
+    const pose = BIRD_POSE[id] ?? {};
     const holder = new THREE.Group();
     holder.name = `neighbour-${id}`;
     holder.position.copy(at);
-    holder.rotation.y = yaw;
+    holder.rotation.y = yaw + (pose.turn ?? 0);
     this.group.add(holder);
     const n: Neighbour = {
-      id, object: holder, body: null, at: at.clone(),
+      id, slot, object: holder, body: null, at: at.clone(),
       call: () => { entry.hop = 0.001; },
     };
-    const entry: Bird = { o: holder, base: at.clone(), baseYaw: yaw, home: at.clone(), homeYaw: yaw, kind: id, hop: 0, seed: this.birds.length * 2.1 + 0.4, fly: -1, glide: null, n };
+    const entry: Bird = { o: holder, base: at.clone(), baseYaw: holder.rotation.y, home: at.clone(), homeYaw: holder.rotation.y, kind: id, hop: 0, seed: this.birds.length * 2.1 + 0.4, fly: -1, glide: null, n, spawned: null, gone: false, rest: false, show: 1 };
     this.birds.push(entry);
-    this.neighbours.push(n);
     void this.env.spawnModel(id, { height: h, idle: false }).then((s) => {
       if (!s) return;
+      if (entry.gone) { s.dispose(); return; }
       const r = s.root as THREE.Object3D;
-      r.traverse((o) => {
+      // (its colours and its light are the world's: dressAnimal, as every animal's)
+      if (pose.clipBelow !== undefined) r.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
-        for (const mat of [m.material].flat() as THREE.MeshStandardMaterial[]) {
-          // a raven is black: the model's pale body is darkened to a raven's gloss, with a
-          // cool sheen so it reads as a bird, not a hole, against the dark wood
-          if (id === 'raaf') { mat.color.set('#35343a'); mat.roughness = 0.55; mat.emissive.set('#34405a'); mat.emissiveIntensity = 0.55; }
-          // the colourful birds keep their colours in the shade of the trees: their own
-          // feathers glow a little (the jay's pink and blue, the woodpecker's green and red)
-          else if (mat.map) { mat.emissive.set('#ffffff'); mat.emissiveMap = mat.map; mat.emissiveIntensity = id === 'gaai' ? 0.32 : 0.22; }
-          if (opts.clipBelow !== undefined) clipBelow(mat, opts.clipBelow);
-        }
+        for (const mat of [m.material].flat() as THREE.MeshStandardMaterial[]) clipBelow(mat, pose.clipBelow!);
       });
-      if (opts.clipBelow !== undefined) {
-        // stand it on what is left of it (its feet), not on the cut-away block
-        r.updateWorldMatrix(true, true);
-        r.position.y -= 0.02;
+      const feet = (pose.feet ?? 0) * h;
+      if (pose.down) {
+        // head-down on the bark: its feet to the trunk (the holder looks at it), its head
+        // down — a quarter turn about its side axis, then a half turn about the way to the
+        // trunk; its feet (what is left once the branch is cut) on the bark
+        const pivot = new THREE.Group();
+        pivot.rotation.set(-Math.PI / 2, 0, Math.PI, 'ZYX');
+        pivot.position.set(0, h * 0.35, feet - 0.02);
+        pivot.add(r);
+        holder.add(pivot);
+      } else {
+        holder.add(r);
+        r.position.y -= pose.sink ?? feet;
       }
-      holder.add(r);
       n.body = r;
+      entry.spawned = s;
       this.perchOf(entry);
-      this.spawned.push(s);
     });
   }
 
@@ -238,17 +347,32 @@ export class EekhoornHome implements HomeDressing {
     r.userData.perch = new THREE.Box3().setFromObject(r).min.y - this.env.groundY(b.base.x, b.base.z);
   }
 
-  /** The jay comes for the acorns: down off its stub, a short glide to a twig in the leaf
-   *  litter right by the store (`secs` long; at once under reduced motion). */
-  jayDown(secs = 1.1): void {
+  /** The jay comes for the acorns: off the glade oak's stub, a long low glide in from the
+   *  side to a twig in the leaf litter right by the store (`secs` long; at once under
+   *  reduced motion). */
+  jayDown(secs = 1.6): void {
     const b = this.birds.find((q) => q.kind === 'gaai');
     if (!b || b.fly >= 0) return;
     const g = this.env.groundY(JAY_GROUND.x, JAY_GROUND.z);
     const to = new THREE.Vector3(JAY_GROUND.x, g - 0.01, JAY_GROUND.z);
     // it lands side-on to the ranger, its beak toward the acorns
     const yaw1 = headingTo(JAY_GROUND, HEAP) - Math.PI / 2 + 0.35;
-    b.glide = { from: b.base.clone(), to, yaw0: b.baseYaw, yaw1, t: 0, dur: secs };
+    b.glide = { from: b.o.position.clone(), to, yaw0: b.o.rotation.y, yaw1, t: 0, dur: secs, arc: 0.25 };
   }
+
+  /** The jay backs off a step (after an echo he got right): a short hop back over the
+   *  leaf litter to `to`, still side-on, its eye on the acorns. */
+  jayBack(to: Spot, secs = 0.7): void {
+    const b = this.birds.find((q) => q.kind === 'gaai');
+    if (!b || b.fly >= 0) return;
+    const g = this.env.groundY(to.x, to.z);
+    const at = new THREE.Vector3(to.x, g - 0.01, to.z);
+    const yaw1 = headingTo(to, HEAP) - Math.PI / 2 + 0.35;
+    b.glide = { from: b.o.position.clone(), to: at, yaw0: b.o.rotation.y, yaw1, t: 0, dur: secs, arc: 0.08 };
+  }
+
+  /** Where the jay is now (its call comes from there). */
+  jayAt(): Spot { const b = this.birds.find((q) => q.kind === 'gaai'); return b ? { x: b.o.position.x, z: b.o.position.z } : JAY_GROUND; }
 
   /** An acorn laid at (x, z) sinks into the moss over `secs` (the squirrel buries it). */
   buryAcorn(x: number, z: number, secs: number): void { this.moveNut(x, z, 0.075, 0.01, secs); }
@@ -257,7 +381,7 @@ export class EekhoornHome implements HomeDressing {
 
   private moveNut(x: number, z: number, y0: number, y1: number, secs: number): void {
     this.nutMove = { x, z, y0, y1, t: 0, dur: Math.max(0.1, secs) };
-    this.nut.rotation.set(0.25, Math.random() * Math.PI * 2, 0);
+    this.nut.rotation.set(0.25, this.cos() * Math.PI * 2, 0);
     this.nut.visible = true;
   }
 
@@ -265,10 +389,11 @@ export class EekhoornHome implements HomeDressing {
   puffAt(x: number, z: number, reduced: boolean): void {
     if (reduced) return;
     const y = this.env.groundY(x, z) + 0.03;
+    const r = this.cos;
     for (let k = 0; k < 4; k++) {
-      const a = Math.random() * Math.PI * 2;
+      const a = r() * Math.PI * 2;
       const slot = this.puff.length < 18 ? this.puff.length : this.puff.findIndex((p) => p.t <= 0);
-      const p = { x, y, z, vx: Math.cos(a) * (0.25 + Math.random() * 0.35), vy: 0.7 + Math.random() * 0.5, vz: Math.sin(a) * (0.25 + Math.random() * 0.35), t: 0.55, s: 0.008 + Math.random() * 0.01 };
+      const p = { x, y, z, vx: Math.cos(a) * (0.25 + r() * 0.35), vy: 0.7 + r() * 0.5, vz: Math.sin(a) * (0.25 + r() * 0.35), t: 0.55, s: 0.008 + r() * 0.01 };
       if (slot < 0) return;
       this.puff[slot] = p;
     }
@@ -290,7 +415,7 @@ export class EekhoornHome implements HomeDressing {
   /** The jay flies off (after the call-back game): up and away over the trees. */
   jayFlies(): void {
     const b = this.birds.find((q) => q.kind === 'gaai');
-    if (b && b.fly < 0) b.fly = 0;
+    if (b && b.fly < 0) { b.glide = null; b.base.copy(b.o.position); b.fly = 0; }
   }
 
   setState(state: HomeState, fresh = false): void {
@@ -304,8 +429,8 @@ export class EekhoornHome implements HomeDressing {
     for (const b of this.birds) {
       if (b.kind !== 'gaai') continue;
       if (fresh && state === 'before') {
-        // back to its stub, if it left it: down from the ground by the store, or back
-        // in from its flight away (mid-flight, or from over the trees once it had gone)
+        // back to its stub, if it left it: up from the ground by the store, or back in
+        // from its flight away (mid-flight, or from over the trees once it had gone)
         if (b.fly >= 0) {
           if (b.fly >= 99) b.o.position.copy(this.flightAt(b, 1));
           b.fly = -1;
@@ -314,11 +439,11 @@ export class EekhoornHome implements HomeDressing {
         if (b.base.distanceTo(b.home) > 0.05 || b.glide || b.o.position.distanceTo(b.home) > 0.05) {
           const from = b.o.position.clone();
           const dur = Math.max(1.2, from.distanceTo(b.home) / 5); // (a jay glides ~5 m/s)
-          b.glide = { from, to: b.home.clone(), yaw0: b.o.rotation.y, yaw1: b.homeYaw, t: 0, dur };
+          b.glide = { from, to: b.home.clone(), yaw0: b.o.rotation.y, yaw1: b.homeYaw, t: 0, dur, arc: 0.25 };
         }
         continue;
       }
-      if (fresh && state === 'after') { if (b.fly < 0) b.fly = 0; continue; } // (it flies off, if it has not yet)
+      if (fresh && state === 'after') { if (b.fly < 0) this.jayFlies(); continue; } // (it flies off, if it has not yet)
       b.fly = state === 'after' ? 99 : -1;
       b.glide = null;
       b.o.visible = state !== 'after';
@@ -332,12 +457,12 @@ export class EekhoornHome implements HomeDressing {
     this.seedling.visible = state === 'after' && !this.seedlingWaits;
     this.nutMove = null;
     this.nut.visible = false;
-    this.field.clear();
+    this.fieldNow.clear();
   }
 
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void {
     this.clock += dt;
-    this.field.update(dt, reduced);
+    this.fieldNow.update(dt, reduced);
     // the store grows: each new cluster pops up in turn (a cut under reduced motion)
     let grew = false;
     for (let i = 0; i < HEAP_SPOTS.length; i++) {
@@ -348,9 +473,22 @@ export class EekhoornHome implements HomeDressing {
       grew = true;
     }
     if (grew) this.showHeap(false);
-    // the birds: a small look round now and then, a hop and a flick when they call
+    // the birds: a small look round now and then, a hop and a flick when they call; far
+    // from him they rest (a speck there)
+    const ranger = movers.find((q) => q.ranger);
     for (const b of this.birds) {
       if (b.fly >= 0 && b.fly < 99) { this.flyAway(b, dt, reduced); continue; }
+      if (b.fly >= 99) continue; // (flown off)
+      if (ranger) {
+        const d = Math.hypot(ranger.x - b.o.position.x, ranger.z - b.o.position.z);
+        b.rest = d > (b.rest ? BIRD_WAKE_M : BIRD_REST_M);
+      }
+      const want = b.rest ? 0 : 1;
+      if (b.show !== want) {
+        b.show = reduced ? want : Math.max(0, Math.min(1, b.show + Math.sign(want - b.show) * (dt / BIRD_FADE_S)));
+        fadeBird(b.n.body, b.show);
+      }
+      b.o.visible = b.show > 0;
       if (!b.o.visible) continue;
       if (b.glide) { this.glideOn(b, dt, reduced); continue; }
       const look = reduced ? 0 : 0.35 * Math.sin(t * 0.45 + b.seed) * (Math.sin(t * 0.23 + b.seed * 3) > 0.2 ? 1 : 0.2);
@@ -362,7 +500,7 @@ export class EekhoornHome implements HomeDressing {
         else if (!reduced) { lift = Math.sin(u * Math.PI) * 0.045; tilt = Math.sin(u * Math.PI) * 0.28; }
       }
       b.o.position.set(b.base.x, b.base.y + lift, b.base.z);
-      b.o.rotation.set(-tilt, b.baseYaw + look, 0, 'YXZ');
+      b.o.rotation.set(-tilt, b.baseYaw + (b.n.slot === 'stam' ? look * 0.25 : look), 0, 'YXZ');
     }
     // the acorn being buried or dug up
     if (this.nutMove) {
@@ -400,14 +538,15 @@ export class EekhoornHome implements HomeDressing {
     }
   }
 
-  /** A glide down to another perch: off the stub, a low swoop, a flutter to land. */
+  /** A glide to another perch: off the stub, a low swoop (or a short hop over the
+   *  litter), a flutter to land. */
   private glideOn(b: Bird, dt: number, reduced: boolean): void {
     const gl = b.glide!;
     gl.t += dt;
     const u = reduced ? 1 : Math.min(1, gl.t / gl.dur);
     const e = u * u * (3 - 2 * u);
-    const sag = Math.sin(u * Math.PI) * 0.25; // a swoop: a little lower than the straight line, then up to land
-    b.o.position.set(gl.from.x + (gl.to.x - gl.from.x) * e, gl.from.y + (gl.to.y - gl.from.y) * e - sag * (1 - u) + Math.sin(u * Math.PI) * 0.12, gl.from.z + (gl.to.z - gl.from.z) * e);
+    const sag = Math.sin(u * Math.PI) * gl.arc; // a swoop: a little lower than the straight line, then up to land
+    b.o.position.set(gl.from.x + (gl.to.x - gl.from.x) * e, gl.from.y + (gl.to.y - gl.from.y) * e - sag * (1 - u) + Math.sin(u * Math.PI) * gl.arc * 0.5, gl.from.z + (gl.to.z - gl.from.z) * e);
     const toward = Math.atan2(gl.to.x - gl.from.x, gl.to.z - gl.from.z);
     // it flies facing the way it goes, and turns to its landing pose as it lands
     const yaw = u < 0.75 ? gl.yaw0 + wrapA(toward - gl.yaw0) * Math.min(1, u * 5) : toward + wrapA(gl.yaw1 - toward) * ((u - 0.75) / 0.25);
@@ -445,8 +584,9 @@ export class EekhoornHome implements HomeDressing {
   }
 
   dispose(): void {
-    this.field.dispose();
+    this.fieldNow.dispose();
     for (const s of this.spawned) s.dispose();
+    for (const b of [...this.birds]) this.dropBird(b);
     this.puffs.dispose();
     this.puffs.geometry.dispose();
     (this.puffs.material as THREE.Material).dispose();
@@ -462,14 +602,30 @@ export class EekhoornHome implements HomeDressing {
 /** Wrap an angle to (−π, π]. */
 function wrapA(a: number): number { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
+/** A bird part-way in (0..1): see-through while it fades, solid again once it is there. */
+function fadeBird(body: THREE.Object3D | null, k: number): void {
+  body?.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    for (const mat of [m.material].flat() as THREE.Material[]) {
+      const fading = k < 0.999;
+      if (mat.transparent !== fading) { mat.transparent = fading; mat.depthWrite = !fading; mat.needsUpdate = true; }
+      mat.opacity = k;
+    }
+  });
+}
+
 /** Don't draw what of a model lies below `y` in its own (model) space. */
 function clipBelow(mat: THREE.MeshStandardMaterial, y: number): void {
-  mat.onBeforeCompile = (shader) => {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader, renderer) => {
+    prev?.call(mat, shader, renderer);
     shader.uniforms.uClipY = { value: y };
     shader.vertexShader = 'varying float vModelY;\n' + shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvModelY = position.y;');
     shader.fragmentShader = 'varying float vModelY;\nuniform float uClipY;\n' + shader.fragmentShader.replace('void main() {', 'void main() {\n  if (vModelY < uClipY) discard;');
   };
-  mat.customProgramCacheKey = () => `clip-below-${y}`;
+  const key = mat.customProgramCacheKey?.bind(mat);
+  mat.customProgramCacheKey = () => `${key ? key() : ''}|clip-below-${y}`;
   mat.needsUpdate = true;
 }
 

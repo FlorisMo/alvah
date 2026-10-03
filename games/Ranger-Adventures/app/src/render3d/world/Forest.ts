@@ -36,7 +36,13 @@ import { lodGeometries, lodMaterial } from '../Lod.ts';
 import { SIZE } from '../AnimalScale.ts';
 
 export type TreeSpecies = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
-export interface TreePlacement { x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub }
+export interface TreePlacement {
+  x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub;
+  /** run 7 (additive): this tree's own full-detail range (m, lens → tree), when shorter than
+   *  the forest's first (a home's many planted trees near one spot: the squirrel's pines).
+   *  Unset: the forest's ranges, as every scattered tree. */
+  near?: number;
+}
 
 /**
  * A short dead limb sticking out of a tree's trunk (a home tree's branch stub: where a
@@ -309,13 +315,15 @@ export class Forest {
         _sphere.radius = h * 0.62;
         if (!_frustum.intersectsSphere(_sphere)) { this.level[i] = -1; continue; }
         const d = Math.hypot(p.x - cx, p.y + h * 0.5 - cy, p.z - cz);
+        // (a home tree may keep full detail only nearer: its own first range)
+        const edge = (k: number): number => (k === 0 && p.near !== undefined ? Math.min(p.near, R[0]) : R[k]);
         let lv = 0;
-        while (lv < R.length && d > R[lv]) lv++;
+        while (lv < R.length && d > edge(lv)) lv++;
         const cur = this.level[i];
         if (cur >= 0 && cur !== lv) {
           // hysteresis: stay on the current level until clearly past its edge
-          const lo = cur > 0 ? R[cur - 1] - HYSTERESIS : -Infinity;
-          const hi = cur < R.length ? R[cur] + HYSTERESIS : Infinity;
+          const lo = cur > 0 ? edge(cur - 1) - HYSTERESIS : -Infinity;
+          const hi = cur < R.length ? edge(cur) + HYSTERESIS : Infinity;
           if (d > lo && d < hi) lv = cur;
         }
         this.level[i] = lv;

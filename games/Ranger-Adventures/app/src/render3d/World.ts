@@ -101,7 +101,12 @@ export interface WorldHome {
 
 /** A tree a mission's home plants (world/Forest.ts draws it with the rest), with the
  *  dead branch stub an animal sits on if it has one (drawn and faded with its tree). */
-export interface HomeTree { x: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub }
+export interface HomeTree {
+  x: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub;
+  /** run 7 (additive): its own full-detail range (m from the lens, below the forest's): a
+   *  home with many trees near one spot keeps the triangle budget (world/Forest `near`) */
+  near?: number;
+}
 
 
 export type { Shot, Focus } from './world/Presenter';
