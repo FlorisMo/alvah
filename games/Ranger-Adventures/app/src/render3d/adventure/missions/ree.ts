@@ -52,12 +52,14 @@ import { TREE_BASE_H } from '../../world/Forest';
 import { heightAt } from '../../Biomes';
 import { ReeHome } from './ree.home';
 import {
-  drawReePlay, lastReeVariants, printRuns, reeGrowth, watchScript, VARIANT_KEY, type CalfMoment, type ReePlay, type WatchCue,
+  drawReePlay, lastReeVariants, printRuns, reeGrowth, reeSurprises, watchScript, VARIANT_KEY, SURPRISE_KEY, type CalfMoment, type ReePlay,
+  type ReeSurprises, type WatchCue,
 } from './ree.variety';
 import {
-  REE_HOME, REE_LAYOUTS, REE_RESIDENTS, COPSE_TREES, CALF_DOELEN, POOL, reeClearings, slotTrail, calfAt, calfTalkOf, calfBolt, calfView,
-  drinkSpot, leaveView, poolSides, reunionPose, walkVia, type PoolSpot, type ReeLayout,
+  REE_HOME, REE_LAYOUTS, REE_RESIDENTS, COPSE_TREES, CALF_DOELEN, POOL, TWIN_AFTER, reeClearings, slotTrail, calfAt, calfTalkOf, calfBolt,
+  calfView, drinkSpot, leaveView, poolSides, reunionPose, twinAt, twinEnd, walkVia, type PoolSpot, type ReeLayout,
 } from './ree.places';
+import { ReeFinds, findId, inPicture } from './ree.finds';
 
 const MISSION = 'ree-niet-aanraken';
 
@@ -96,6 +98,11 @@ const RUSTLE_MIN_S = 1.4;
  *  it, the walk would hold up the first look: she is put there where nobody sees it). */
 const DOE_WALK_M = 6;
 
+/** ree-discover: the cuckoo's call carries this far (m: from the trees off to the side to
+ *  his hide), and its pause says its line this long (ms) after the call began. */
+const KOEKOEK_REACH = 40;
+const KOEKOEK_LINE_MS = 1500;
+
 /** Is (x, z) in the picture beside the briefing card (the card covers the middle of it)?
  *  (`heightAt`: the pure terrain height; only to aim the check, nothing stands on it) */
 function besideCard(cam: THREE.Camera, at: { x: number; z: number }): boolean {
@@ -104,13 +111,20 @@ function besideCard(cam: THREE.Camera, at: { x: number; z: number }): boolean {
   return !(Math.abs(v.x) < 0.42 && Math.abs(v.y) < 0.8); // under the card: hidden
 }
 
-/** This play's morning, drawn and laid under the briefing card (`prepare`). */
-let drawn: { seed: number; play: ReePlay } | null = null;
+/** This play's morning, drawn and laid under the briefing card (`prepare`): the layout and
+ *  the calm moments' order, and (ree-discover) its small things and whether the twins came. */
+let drawn: { seed: number; play: ReePlay; finds: ReeSurprises; twins: boolean } | null = null;
+
+/** Is this play's rare visitor the twins (rolled at the briefing: `k.rare()`, noted as
+ *  `rare:tweeling` in the play's variant)? */
+function twinsIn(play: Play): boolean {
+  return play.variant.rare === 'tweeling';
+}
 
 /** Draw this play's morning (from its seed and the ree's last plays) and lay it in the
  *  world: the calf in its spot (it lies hidden in the grass: put there at once), the doe
  *  walking to her graze spot, the stand's look-alikes, the pool, her path. */
-function lay(world: { residents: Residents }, mission: Mission, play: Play): ReePlay | null {
+function lay(world: { residents: Residents }, mission: Mission, play: Play): NonNullable<typeof drawn> | null {
   const home = world.residents.dressing(MISSION) as ReeHome | null;
   if (!home) return null;
   const p = drawReePlay(play, lastReeVariants(store.get().geschiedenis, MISSION), undefined, (id) => poolSides(REE_LAYOUTS[id]));
@@ -121,7 +135,18 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Ree
   // run 7: the trial as the 2D floor builds it (the level's knobs, this play's fork): how
   // many look-alikes and which, how much of the calf's back shows
   const trial = buildZoekenTrial(mission.stappen[0].skin, store.knobs('zoeken'), play.fork('zoeken').rng);
-  home.layPlay({ layout: l, calf, pool: p.pool, decoys: trial.decoys.map((d) => d.id), glimpse: trial.glimpse });
+  // ree-discover: this play's small things of the heath (the ones he has not found first)
+  const found = store.get().ontdekt;
+  const finds = reeSurprises(play, (id) => !!found[findId(id)], { birches: l.birches.length, larkOn: l.larkOn });
+  play.note(SURPRISE_KEY, finds.code);
+  const birch = finds.boompje !== null ? l.birches[finds.boompje] : null;
+  home.layPlay({ layout: l, calf, pool: p.pool, decoys: trial.decoys.map((d) => d.id), glimpse: trial.glimpse, birch });
+  // the rare twins: a second calf lies hidden apart from its sibling (laid in the grass
+  // behind where they will meet once he has left the calf: ree.ts `twinHides`), and lives
+  // with them at home after; any other play has none
+  const twins = twinsIn(play);
+  world.residents.repose(MISSION, 'twin', 'before', null);
+  world.residents.repose(MISSION, 'twin', 'after', twins ? { ...TWIN_AFTER, idle: 'graze', roam: 0.3 } : null);
   const g = l.graze[p.graze];
   world.residents.repose(MISSION, 'calf', 'before', { x: calf.x, z: calf.z, yaw: calf.yaw, idle: 'lie', roam: 0 });
   // the doe grazes by this morning's cover: she walks there, unless it lies across the
@@ -132,8 +157,8 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Ree
   const far = !!doe && Math.hypot(doe.x - g.x, doe.z - g.z) > DOE_WALK_M;
   const unseen = !!doe && !!cam && !besideCard(cam, doe) && !besideCard(cam, g);
   world.residents.repose(MISSION, 'doe', 'before', { x: g.x, z: g.z, yaw: g.yaw, idle: 'graze', roam: 0.5 }, { walk: !(far && unseen), cover: l.bed });
-  drawn = { seed: play.seed, play: p };
-  return p;
+  drawn = { seed: play.seed, play: p, finds, twins };
+  return drawn;
 }
 
 export const reeAdventure: Adventure = {
@@ -149,31 +174,53 @@ export const reeAdventure: Adventure = {
   bind(mission) { contentDecoys = distractorsOf(mission); },
   // a calf flat in the grass reads the same in each: misty mornings most of all, a bright
   // day, an overcast one, the golden hour; never dusk
-  moods: { allow: ['ochtendnevel', 'ochtendnevel', 'zonnig', 'bewolkt', 'gouden-uur'] },
+  // (ree-discover: once the ree was played, each play draws its own light from these,
+  // never the last play's: three mornings in a row in three lights; the first play stands
+  // in the visit's)
+  get moods() {
+    const allow = ['ochtendnevel', 'ochtendnevel', 'zonnig', 'bewolkt', 'gouden-uur'] as const;
+    return (store.get().gespeeld[MISSION] ?? 0) > 0 ? { allow, perPlay: true } : { allow };
+  },
 
   /** Under the briefing card: this play's morning is laid. */
   prepare(world, mission, play) { lay(world, mission, play); },
   unprepare(world) {
     const home = world.residents.dressing(MISSION) as ReeHome | null;
     home?.useDecoys(contentDecoys.map((d) => d.id));
+    // (a play he did not go on: no twin out of it)
+    world.residents.repose(MISSION, 'twin', 'before', null);
+    world.residents.repose(MISSION, 'twin', 'after', null);
   },
 
   async play(k: AdventureKit): Promise<void> {
     // the morning laid under the card (or, when there was none, laid now: the calf hidden
     // in the grass, the doe walking to her spot)
-    const p = drawn && drawn.seed === k.play.seed ? drawn.play : lay(k.world, k.mission, k.play);
-    if (!p) throw new Error('[ree] no home');
-    await story(k, REE_LAYOUTS[p.layout], p);
+    const d = drawn && drawn.seed === k.play.seed ? drawn : lay(k.world, k.mission, k.play);
+    if (!d) throw new Error('[ree] no home');
+    const l = REE_LAYOUTS[d.play.layout];
+    const home = k.world.residents.dressing(MISSION) as ReeHome;
+    // ree-discover: this play's small things in the world (freed at the end, a stop too)
+    const finds = new ReeFinds(k, l, d.finds, home.pool);
+    finds.birchAt = () => home.birchAt;
+    let done = false;
+    try {
+      await story(k, l, d.play, finds, d.twins);
+      done = true;
+    } finally {
+      finds.dispose();
+      // (a stopped play: no twin at home out of it)
+      if (!done) k.world.residents.repose(MISSION, 'twin', 'after', null);
+    }
   },
 };
 
 /** The adventure, beat by beat. */
-async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
+async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds, twins: boolean): Promise<void> {
   const c = k.copy;
   const fam = k.borrow();
   const home = fam.dressing as ReeHome;
-  const A = fam.actors as Record<'doe' | 'calf', Actor>;
-  const { doe, calf } = A;
+  const A = fam.actors as Record<'doe' | 'calf' | 'twin', Actor>;
+  const { doe, calf, twin } = A;
   const settings = store.get().settings;
   const g = k.ctx.groundY;
   const call = (id: string, x: number, z: number): void => {
@@ -188,6 +235,9 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   // them as cards): the pool may come first, on her path
   const rust = choiceRun(k, 1, { order: p.order });
   k.stats.look_alikes = home.laid.decoys.length;
+  // (ree-discover, the dev read: where this play's rubbed birch stands, if it has one)
+  const birch = home.birchAt;
+  if (birch) { k.stats.birch_x = Math.round(birch.x * 10) / 10; k.stats.birch_z = Math.round(birch.z * 10) / 10; }
 
   // 0 · she is at her graze spot (had she slipped into her cover, she steps out again; a
   // play laid her elsewhere: she walks there)
@@ -214,7 +264,8 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   k.stats.print_dark = Math.round((0.4 + 0.6 * spoor.helderheid) * 100) / 100;
 
   // 1 · one calm look at the mother, grazing by her cover (or, this morning's cover
-  // lying across the heath, still on her way there)
+  // lying across the heath, still on her way there): seen, she is in his veldgids
+  finds.seen.watch({ id: findId('moeder'), object: () => doe.body, within: 40, px: 40, secs: 1, when: () => k.beat === 'look' || k.beat === 'watch' });
   const walking = dist(doe, graze) > 2;
   await k.look({ x: doe.x, z: doe.z, y: g(doe.x, doe.z) + 0.6 }, walking ? c.kijkLoopt ?? c.kijk : c.kijk, 2.5, { turn: true });
 
@@ -233,6 +284,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   };
   const setOff = { ...k.ranger() };
   const poolIn = p.pool === 'in' ? feetAtPool(k, rust, home, pool, 'meadow') : null;
+  finds.walkStart('meadow');
   await k.walk({
     name: 'meadow', to: l.search, r: 1.4, line: c.volg, doel: c.chipGras, cue: c.sporen, glyph: 'footprints',
     via: walkVia(l, 'meadow', poolIn ? pool : null),
@@ -240,8 +292,10 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
       const m = k.ranger();
       if (!slipping && (dist(m, setOff) > 1.2 || dist(m, doe) < 9)) slipping = slipAway();
       poolIn?.tick();
+      finds.walkTick('meadow');
     },
   });
+  finds.walkEnd('meadow');
   poolIn?.done();
   slipping ??= slipAway();
   // he stops at the grass's edge while she slips in (he saw her go on his way here; the
@@ -391,6 +445,11 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
     await moments[id]();
   }
 
+  // ree-discover, the rare twins: its twin lies hidden apart from it, in the grass behind
+  // where mother and calves will meet — laid there now he has left the calf, the moment that
+  // spot is out of his picture (never in the search's, never a pop)
+  const twinHid = twins && twin ? twinHides(k, l, twin) : null;
+
   // 8-10 · he turns away from the calf and takes his first quiet steps out of the grass,
   // the lens swinging round behind him (then the way ahead is in view); then he sneaks on
   // himself, quietly, round the grass to the hide; the pool may lie across his way
@@ -406,16 +465,19 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   let lineBack = -1;
   // (from here on the grass is seen from afar: drawn lighter once it is out of the picture)
   let thinned = false;
+  finds.walkStart('hide');
   await k.walk({
     name: 'hide', to: l.hide, r: 1.0, line: c.stil, doel: c.chipHut, cue: c.zacht, glyph: 'boot', quiet: hush,
     // (a perfect player's way: round the grass, and round the pool when it lies here)
     via: walkVia(l, 'hide', poolOut ? pool : null),
     tick: () => {
       if (!thinned) thinned = home.thinWhenUnseen(k.world.camera);
+      finds.walkTick('hide');
       if (poolOut) { poolOut.tick(); return; }
       if (lineBack < 0 && dist(k.ranger(), l.hide) < 4) { lineBack = 1; k.say(c.verstop); }
     },
   });
+  finds.walkEnd('hide');
   poolOut?.done();
 
   // 11 · watch: the lens turns toward her cover and he watches through his binoculars; the
@@ -427,7 +489,8 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   await k.walkRanger(l.hide.x, l.hide.z, 0.05);
   k.beat = 'watch';
   const stillS = grow.stillS;
-  const script = watchScript(k.play, { pauses: grow.pauses, way: l.watchWay.length ? 2 : 1 });
+  // (ree-discover: a play with the cuckoo has it call in one of her listening pauses)
+  const script = watchScript(k.play, { pauses: grow.pauses, way: l.watchWay.length ? 2 : 1, koekoek: finds.surprises.small.includes('koekoek') });
   k.stats.watch_pauses = grow.pauses;
   k.stats.watch_still_s = stillS;
   const t0 = k.now;
@@ -492,6 +555,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   const cueAt = (cue: WatchCue | undefined): (() => { x: number; z: number; speed: number }) => {
     if (cue === 'hut') return () => hide;
     if (cue === 'gras') return () => ({ ...calfAtNow, speed: 0 });
+    if (cue === 'koekoek') return () => ({ ...l.koekoek, speed: 0 });
     if (cue === 'ritsel') {
       ritsel = (-ritsel) as 1 | -1;
       const p = atLocal(wv, toLocal(wv, doe).u + ritsel * 6, toLocal(wv, doe).v + 2.5);
@@ -531,7 +595,8 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
     await k.wait(1.6);
     for (const e of script) {
       await still();
-      if (e.line && e.act !== 'out') sayW(c[e.line] ?? lineNow);
+      // (the cuckoo's pause says its line after the call: never a voice over it)
+      if (e.line && e.act !== 'out' && e.cue !== 'koekoek') sayW(c[e.line] ?? lineNow);
       switch (e.act) {
         case 'rustle': {
           // the bracken at her gap stirs: she gets up in her bed and comes out between her
@@ -566,9 +631,17 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
           break;
         }
         case 'listen': {
-          // she stops dead, head up, turned toward what she heard (a rustle: its sound)
+          // she stops dead, head up, turned toward what she heard (a rustle: its sound; a
+          // cuckoo calling from the trees: heard, he has met it)
           const to = cueAt(e.cue);
           if (e.cue === 'ritsel' && settings.geluid) Sound.rustle();
+          if (e.cue === 'koekoek') {
+            const heard = settings.geluid ? Sound.callAt('koekoek', l.koekoek.x, l.koekoek.z, listenerOf(k.world.camera), KOEKOEK_REACH) : 0;
+            k.stats.koekoek = 1;
+            if (heard > 0) k.discover(findId('koekoek'), { heard: true });
+            const line = e.line ? c[e.line] ?? null : null;
+            if (line) later(KOEKOEK_LINE_MS, () => { if (k.beat === 'watch') sayW(line); });
+          }
           await act(e.s, (left) => { void doe.lookAt(to, left + 0.3); });
           k.stats.watch_listens = (k.stats.watch_listens ?? 0) + 1;
           break;
@@ -663,10 +736,19 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   await k.frame(l.views.reunion, { face: headingTo(k.ranger(), meet), dip: true });
   await doeBack;
   const drink = drinkSpot({ x: doe.x, z: doe.z, yaw: pose.yaw }, SIZE.ree.len, pose.side);
+  // ree-discover, the rare twins: the bracken by her gap stirs, and a second calf gets up
+  // and comes out to her ("Kijk! Een tweeling!" as it comes into his picture)
+  const both = !!twinHid && !!twin;
+  if (both) {
+    twinHid.now(); // (laid already, as a rule: at the latest now)
+    const her = { x: doe.x, z: doe.z, yaw: pose.yaw };
+    await twinComes(k, home, twin, twinAt(her, SIZE.ree.len, pose.side, twinEnd(her, l.twinBed)), finds, call);
+  }
   await k.reunion(async () => {
     call('fiep', calf.x, calf.z);
     await calf.go(drink.x, drink.z, { speed: 'walk', face: drink.yaw });
-    doe.idle();
+    if (both) void doe.lookAt(() => ({ x: twin.x, z: twin.z, speed: 0 }), 2.2).then(() => doe.idle());
+    else doe.idle();
     await k.wait(4.6);
   });
   k.stats.reunion_gap = Math.round(dist(calf, doe) * 100) / 100;
@@ -675,9 +757,82 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   const after = Object.fromEntries(REE_RESIDENTS.map((r) => [r.key, r.after!]));
   void doe.go(after.doe.x, after.doe.z, { speed: 'walk', face: after.doe.yaw });
   void calf.go(after.calf.x, after.calf.z, { speed: 0.8, face: after.calf.yaw });
+  if (both) void twin.go(TWIN_AFTER.x, TWIN_AFTER.z, { speed: 0.8, face: TWIN_AFTER.yaw });
   k.ui.watching(false);
   // 14 · the raaf: a mother leaves her calf alone for a while; that keeps it safe
   await k.fact(1);
+}
+
+/**
+ * ree-discover, the rare twins: a second calf lies hidden apart from its sibling (a roe doe
+ * hides her twins apart), in the tall grass behind where they meet: laid there once he has
+ * left the calf, the first moment that spot is out of his picture (never in the search's).
+ * `now` lays it at once if that moment never came (the reunion's lens is on its way).
+ */
+function twinHides(k: AdventureKit, l: ReeLayout, twin: Actor): { now(): void } {
+  let laid = false;
+  const bed = l.twinBed;
+  const v = new THREE.Vector3();
+  const lay = (late: boolean): void => {
+    if (laid) return;
+    laid = true;
+    off();
+    twin.place(bed.x, bed.z, bed.yaw);
+    twin.idle();
+    void twin.lie(true);
+    twin.group.visible = true;
+    k.stats.twin_laid = late ? 2 : 1;
+  };
+  const off = k.onTick(() => {
+    const cam = k.world.camera;
+    cam.updateMatrixWorld();
+    v.set(bed.x, k.ctx.groundY(bed.x, bed.z) + 0.3, bed.z);
+    const behind = v.clone().applyMatrix4(cam.matrixWorldInverse).z > -0.2;
+    v.project(cam);
+    if (behind || Math.abs(v.x) > 1.15 || Math.abs(v.y) > 1.15) lay(false);
+  });
+  return { now: () => lay(true) };
+}
+
+/**
+ * ree-discover, the rare twins at the reunion: the grass behind them stirs, the twin gets
+ * up, peeps, and comes round to stand at her chest on his side, its nose to her neck, while
+ * its sibling drinks at her flank. "Kijk! Een tweeling!" once it is in his picture; seen
+ * there a moment, it is in his veldgids.
+ */
+async function twinComes(k: AdventureKit, home: ReeHome, twin: Actor, to: Spot & { yaw: number; round: Spot }, finds: ReeFinds,
+  call: (id: string, x: number, z: number) => void): Promise<void> {
+  const c = k.copy;
+  k.beat = 'reunion:twin';
+  k.stats.tweeling = 1;
+  finds.seen.watch({ id: findId('tweeling'), object: () => twin.body, within: 30, px: 40, secs: 1, when: () => k.beat.startsWith('reunion') });
+  // the grass where it lies stirs
+  const clump = home.cover.nearestClump(twin.x, twin.z);
+  if (clump) home.cover.rustle(clump.i, 0.14);
+  if (store.get().settings.geluid) Sound.rustle();
+  await k.wait(0.6);
+  call('fiep', twin.x, twin.z);
+  await k.guard(twin.lie(false));
+  // its line as it comes into his picture (or once it stands by her, in any case)
+  let said = false;
+  const say = (): void => { if (!said) { said = true; k.say(c.tweeling ?? c.kalfKomt); } };
+  const w = k.ctx.canvas.clientWidth || 1280, h = k.ctx.canvas.clientHeight || 800;
+  const off = k.onTick(() => {
+    const b = twin.body;
+    if (said || !b) return;
+    const pic = inPicture(k.world.camera, b, w, h);
+    if (pic.on && pic.px >= 40) say();
+  });
+  try {
+    // out of the grass and round her end to her side (a calf called by its mother does not
+    // dawdle), never through her
+    await k.guard(twin.go(to.round.x, to.round.z, { speed: 'trot' }));
+    await k.guard(twin.go(to.x, to.z, { speed: 0.8, face: to.yaw }));
+  } finally {
+    off();
+  }
+  say();
+  await k.wait(1.8); // (its line read before the reunion's)
 }
 
 /**
