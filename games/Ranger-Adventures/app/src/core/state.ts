@@ -125,8 +125,8 @@ export interface GameState {
   sfeer: { laatste: MoodId | null; sessies: number }; // the last session's mood, sessions so far
 }
 
-/** One logged beat (design §4.3): what was played, at which level, from which play. ~150
- *  bytes; the history keeps the newest HISTORY_MAX. */
+/** One logged beat (design §4.3): what was played, at which level, from which play, and
+ *  how it went. ~150-180 bytes; the history keeps the newest HISTORY_MAX. */
 export interface BeatLog {
   /** Date.now() */
   t: number;
@@ -146,6 +146,16 @@ export interface BeatLog {
   ms?: number;
   s?: number;
   h?: number;
+  /** what the beat's judgement read beside its score (core/skill.judgeBeat), so a beat's
+   *  step can be read back from the history: the first round echoed clean, rounds eased
+   *  silently (corsi, simon, 1/0 and a count); a hint given (zoeken, 1/0); wrong choices
+   *  however often (dagnacht); rule turns and wrong first sorts after one (wisselen) */
+  f1?: 0 | 1;
+  ea?: number;
+  hi?: 0 | 1;
+  im?: number;
+  sw?: number;
+  se?: number;
   /** the play's seed (0 outside a mission) */
   sd: number;
   /** the play's variant, compact ('hide:b,order:2,mood:gouden-uur') */
@@ -157,7 +167,7 @@ export interface BeatLog {
  *  showed (the first reveals tell where the veldgids is). Both optional: an older save loads. */
 export interface Ontdekt { t: number; n: number; g?: 1; r?: 1 }
 
-/** The history keeps this many beats (~60 KB): months of play. */
+/** The history keeps this many beats (~70 KB): months of play. */
 export const HISTORY_MAX = 400;
 
 /** Where a beat was played and in which play (`store.logBeat`). */
@@ -179,6 +189,12 @@ export function beatLog(engine: Engine, summary: BeatSummary, meta: BeatMeta, le
   if (summary.misses != null) log.ms = summary.misses;
   if (summary.seconds != null) log.s = Math.round(summary.seconds * 10) / 10;
   if (summary.holdS != null) log.h = Math.round(summary.holdS * 10) / 10;
+  if (summary.firstClean != null) log.f1 = summary.firstClean ? 1 : 0;
+  if (summary.eased != null) log.ea = summary.eased;
+  if (summary.hinted != null) log.hi = summary.hinted ? 1 : 0;
+  if (summary.impulses != null) log.im = summary.impulses;
+  if (summary.switches != null) log.sw = summary.switches;
+  if (summary.switchErrors != null) log.se = summary.switchErrors;
   const va = meta.play ? compactVariant(meta.play.variant) : undefined;
   if (va) log.va = va;
   return log;
