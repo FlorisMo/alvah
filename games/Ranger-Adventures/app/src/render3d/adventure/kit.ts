@@ -94,6 +94,8 @@ export interface FlowHooks {
   /** run 7 (§4.4): a NEW discovery's calm reveal (queued; it waits for a quiet moment);
    *  `heard` (ree-discover, additive): he met it by its call alone ("Dat hoorde je!") */
   reveal?(o: Ontdekking, opts?: { heard?: boolean }): void;
+  /** ree-discover (additive): how many reveals wait or show now (none when not wired) */
+  revealsWaiting?(): number;
 }
 
 export interface KitOptions {
@@ -394,6 +396,10 @@ export class AdventureKit {
     if (fresh && !opts.quiet) this.hooks.reveal?.(row, opts.heard ? { heard: true } : undefined);
     return fresh;
   }
+
+  /** How many new finds' reveals still wait for a quiet moment, or show now (ree-discover,
+   *  additive): a home may hold a calm picture until they have all been seen. */
+  revealsWaiting(): number { return this.hooks.revealsWaiting?.() ?? 0; }
 
   /** THIS play's rare visitor for this home (rolled at the briefing, §4.4), or null. Show
    *  it in the world; call `discover(its id)` once he really saw or heard it. */

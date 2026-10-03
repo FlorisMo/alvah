@@ -50,7 +50,7 @@ import { rollRare } from '../../core/discover';
 import { ONTDEKKINGEN, ontdekkingenVan, type Ontdekking } from '../../content/ontdekkingen';
 import { lastMoodAt, lastMoodsAt, playMood, type MoodId } from '../../render3d/Moods';
 import { providePlay } from '../../core/devhook';
-import { revealDiscovery, setRevealGate } from '../hud/Reveal';
+import { revealDiscovery, revealsWaiting, setRevealGate } from '../hud/Reveal';
 
 type PlayFn = (host: HTMLElement, step: Step, play?: Play) => Promise<BeatSummary>;
 const ENGINE_VIEWS: Partial<Record<string, PlayFn>> = {
@@ -380,6 +380,7 @@ async function runAdventure(mission: Mission, adv: Adventure, drawn: Drawn): Pro
         played.push(ef);
       },
       reveal: (o, opts) => revealDiscovery(o, opts),
+      revealsWaiting: () => revealsWaiting(),
       fact: async (i) => {
         const st = mission.stappen[i];
         if (!st.skin.feit) return;
