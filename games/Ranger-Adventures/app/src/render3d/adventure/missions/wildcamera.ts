@@ -36,12 +36,11 @@ import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
 import { applyAmbient } from '../../../core/calls';
 import { clearPlayHint, pick3d } from '../../play/kit';
-import { RANGER_STAND_HEIGHT } from '../../AnimalScale';
 import { aimBeat, type AimWorld } from '../beats/aim';
 import { callersBeat, type Caller } from '../beats/callers';
 import { dist, headingTo } from '../places';
 import type { Spot } from '../types';
-import { SIZE } from '../../AnimalScale';
+import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale';
 import { WildcameraHome, type BirdId } from './wildcamera.home';
 import { CameraClock, drawWildcameraPlay, lastNights, lastSnare, variantOf } from './wildcamera.variety';
 import { PhotoStrip, develop, type Photo } from './wildcamera.photos';
@@ -126,7 +125,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       clearPlayHint();
     }
   };
-  /** The line after `first` if he has not done it yet after `s` s (the instruction). */
+  /** Say `line` (what to do) after `s` s, unless he has done it by then. */
   const thenSay = (s: number, line: string, done: () => boolean): void => {
     void k.wait(s).then(() => { if (!done()) k.say(line, { queue: true }); }).catch(() => {});
   };
