@@ -59,6 +59,15 @@ const SQUIRREL_H = 0.33;
 /** At each stop of the follow it sits up on its stub at least this long (s) before it runs
  *  on — then a chatter and a flick (~1 s): a clear "it waits for me", even at a run. */
 const SIT = 1.2;
+/** Within SEE_D of him and in his view, it waits until it reads at least this share of
+ *  his picture's height (42 px at 1280×800: the design's 40 with a little room) — he is
+ *  walking up to it, a step closer is enough — but never longer than SET_OFF_WAIT s more,
+ *  so it always runs on. Within SEE_D alone it could set off at 39 px (the lead's play,
+ *  2026-10-03: the middle way's first wait); waiting for the size alone held two of four
+ *  scripted sessions for minutes at the middle way's last pine, where it sits smaller on
+ *  arrival (31-35 px), on a heavily loaded laptop (2026-10-03). */
+const SET_OFF_H = 42 / 800;
+const SET_OFF_WAIT = 2;
 /** The squirrel's own visits to its caching spots (each round's first show): the dash
  *  (straight, at its full run), the dig, the breath before the next (design §6.4: ≤ 2 s a
  *  spot — the 2D floor shows one in 1.15 s; replays and eases are its timings). */
@@ -344,6 +353,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     let arrived = false;
     let sitFrom = 0;
     let toldWait = false;
+    /** since when he has been within SEE_D of it with it in his view (−1: not now) */
+    let closeFrom = -1;
     void there.then((ok) => {
       if (!ok) return;
       arrived = true; sitFrom = k.now; sq.glow(true); void sq.lookAt(me); chatter();
@@ -371,13 +382,19 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
           const far = dist(k.ranger(), sq) > 9;
           if (far && !toldWait) { toldWait = true; k.say(c.wacht); } else if (!far && toldWait && dist(k.ranger(), sq) < 6) { toldWait = false; k.say(line); }
         },
-        // (close: within SEE_D of it, and it well in his view — or right at it, under it, a
-        // bit of it showing past his own head — and it sits up on its stub a moment first,
-        // even when he is there before it: it waits for him, looking at him)
+        // (close: within SEE_D of it, it well in his view and big enough there (SET_OFF_H, or
+        // SET_OFF_WAIT s on) — or right at it, under it, a bit of it showing past his own
+        // head — and it sits up on its stub a moment first, even when he is there before
+        // it: it waits for him, looking at him)
         reached: () => {
           if (!arrived || k.now - sitFrom < SIT) return false;
           const d = dist(k.ranger(), sq);
-          return (d <= SEE_D && measure().seen) || (d <= AT_IT && sightOf(k, sq, home.trees, 'near').glimpse);
+          const s = measure();
+          const close = d <= SEE_D && s.seen;
+          if (!close) closeFrom = -1;
+          else if (closeFrom < 0) closeFrom = k.now;
+          const big = s.px >= SET_OFF_H * (k.ctx.canvas.clientHeight || 800);
+          return (close && (big || k.now - closeFrom >= SET_OFF_WAIT)) || (d <= AT_IT && sightOf(k, sq, home.trees, 'near').glimpse);
         },
       });
     } finally {
