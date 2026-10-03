@@ -70,6 +70,9 @@ const AAIEN_SHOWS = 0.45;
  *  dived into (within this, m) before it comes out: the stretch again starts there, so a run
  *  that carried him to the stretch's end still gets a real walk back (never 0.7 m). */
 const PACE_BACK_M = 2.2;
+/** The hungry piglet at his bag (voeren at the stand) shows at least this share of his body
+ *  from the bag's lens: the stand's fronds in between give way. */
+const VOEREN_SHOWS = 0.7;
 /** The walk on from the field to the mud is long enough to be the tired piglet's moment
  *  (dragen at s2) from this long (m); shorter, he tires on the lead's last stretch. */
 const PACE_HOME_M = 12;
@@ -701,12 +704,20 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
       const end: Place = whole ? last : { ...pointAlong(path, len + 0.9), r: 0.9 };
       k.stats.pace_len = Math.round(len * 10) / 10;
       const marks = paceTempts(len, knobs, fork.rng);
+      // where he drops flat when he runs: the heather beside this stretch, on his side of
+      // the way (every 2.5 m), so he dives where the boy sees him — never back into the
+      // stand's bracken behind the lens, 10 m off
+      const flat: Spot[] = [];
+      for (let d = 1.5; d <= Math.min(rest - 0.6, len + 3); d += 2.5) {
+        const p0 = pointAlong(path, d), p1 = pointAlong(path, d + 0.5);
+        flat.push(atLocal({ ...p0, heading: headingTo(p0, p1) }, -1.7, 0));
+      }
       let walked = 0, mi = 0, was = k.ranger(), out = false;
       const walk = k.walk({
         name: 'moe', to: end, r: end.r ?? 1.0, line: c.moe, doel, glyph: 'boot',
         via: path.slice(1).filter((p) => p !== last && pathLength([path[0], p]) < len),
         lead: {
-          ...lead, pace: TIRED_PACE, backM: PACE_BACK_M, runLine: c.nietRennenMoe, backLine: c.moe,
+          ...lead, pace: TIRED_PACE, backM: PACE_BACK_M, hide: [...lead.hide, ...flat], runLine: c.nietRennenMoe, backLine: c.moe,
           onHide: (sp: Spot): void => {
             lead.onHide(sp);
             if (core.run()) { k.stats.pace_dragen = core.impulses; if (settings.geluid) Sound.tryAgain(); }
@@ -744,8 +755,19 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
    *  on the bag and flops down at his feet. */
   async function voerenPiglet(): Promise<void> {
     const r = k.ranger();
+    const view = bagView(r, { x: lost.x, z: lost.z });
+    // the fronds of the stand between the lens and the piglet at his bag give way, calmly
+    // (as at aaien): he is seen whole at the bag, never behind a frond (berk's lens looks
+    // back at him from inside the stand)
+    const nosing = toward(r, lost, BAG_REACH);
+    const eye = k.lensFor(view).cam;
+    const body = backPoints(nosing.x, k.ctx.groundY(nosing.x, nosing.z), nosing.z, headingTo(lost, r), lying * 2.7, heightFor('frisling') * 0.8);
+    const drawn = home.cover.stems.map((st) => st.h);
+    const more = openWindow(home.cover.stems, eye, body, VOEREN_SHOWS);
+    if (more.length) home.cover.settle(more, 0.8, drawn);
+    k.stats.voeren_visible = Math.round(visibleShare(body, eye, home.cover.stems) * 100) / 100;
     k.beat = 'voeren:frame';
-    await k.frame(bagView(r, { x: lost.x, z: lost.z }));
+    await k.frame(view);
     let reach = BAG_REACH; // (his snout at the bag on his hip)
     const nose = (secs = 60): Promise<boolean> => { const rr = k.ranger(); return lost.sniff(rr.x, rr.z, secs, reach); };
     void nose();
