@@ -750,9 +750,18 @@ test('frisling: a mistake at each of the five body moments is a gentle reaction 
         const me = (await snap(page)).p!;
         const y = await actor('yearling');
         const key = beat === 'still:voeren' && y && Math.hypot(y.x - me.x, y.z - me.z) < 3 ? 'yearling' : 'lost';
-        const a0 = await actor(key);
+        // (at his bag the hungry one noses in as the moment begins: reach for it where it
+        // stands, once it stands still — a click where it was a moment ago hits the heather)
+        let a0 = await actor(key);
+        for (let i = 0; i < 16 && a0 && beat === 'still:voeren'; i++) {
+          await sleep(page, 250);
+          const a1 = await actor(key);
+          const still = !!a1 && Math.hypot(a1.x - a0.x, a1.z - a0.z) < 0.03;
+          a0 = a1;
+          if (still) break;
+        }
         log.hard(!!a0, `the ${key}`);
-        const p = await at(a0!, key === 'lost' ? 0.17 : 0.4);
+        const p = await at(a0!, key === 'lost' ? (beat === 'still:aaien' ? 0.17 : 0.24) : 0.4);
         log.hard(p.onScreen, `${beat}: the ${key} is on screen to reach for`);
         await page.mouse.click(p.x, p.y);
         const stat = beat === 'still:aaien' ? 'still_aaien' : 'still_voeren';
