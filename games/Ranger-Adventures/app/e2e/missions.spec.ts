@@ -355,7 +355,7 @@ async function worldReacted(log: Log, mission: Mission, marker: P2, before: Seat
   const s = await snap(page);
   const home = (await R<Record<string, P2> | null>(page, `r.missionPlaces(${JSON.stringify(mission.id)})`))?.home;
   const near = (q: P2): boolean => !!s.p && Math.hypot(s.p.x - q.x, s.p.z - q.z) < 12;
-  log.soft(near(marker) || (!!home && near(home)), 'back in the world near the marker (or the mission\'s home)');
+  log.soft(near(marker) || (!!home && near(home)), `back in the world near the marker (or the mission's home): ${s.p ? Math.hypot(s.p.x - marker.x, s.p.z - marker.z).toFixed(1) : '?'} m / ${s.p && home ? Math.hypot(s.p.x - home.x, s.p.z - home.z).toFixed(1) : '?'} m`);
   // run 6: an adventure's family lives at its home, in its after state, together there
   let fam = await homeOf(page, mission.id);
   if (fam && home) {

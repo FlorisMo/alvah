@@ -372,8 +372,9 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     way: [],
     hide: { x: -25.0, z: -37.5 }, leave: { u: 2.8, v: -1.8 }, hideJuniper: { u: -1.45, v: 0.25 }, hideLog: { u: -0.95, v: 1.1 },
     watchMid: 0.5, watchHalfW: 2.8, watchVia: { u: 0.5, v: 1.6 },
-    // (north-east, toward the family's home side of the heath)
-    out: { x: -19.2, z: -35.6 },
+    // (north-east, toward the marker ring, clear of the frisling's clue posts: where the
+    // moment is answered, 4 m on, lies ~10.7 m from it, the end 8.6 m)
+    out: { x: -19.2, z: -34.6 },
   }),
 };
 
