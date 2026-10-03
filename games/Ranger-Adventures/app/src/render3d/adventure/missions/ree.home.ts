@@ -38,8 +38,9 @@ import { Sound } from '../../../core/sound';
 import type { ReeLayoutId } from './ree.variety';
 import {
   juniperR, REE_LAYOUTS, LAYOUTS, FRINGE, COPSE, THICKET, COPSE_TREES, DOE_BED, CALF_BED, CALF_DOELEN, POOL, WISSEL_HALF,
-  REE_RESIDENTS, calfAt, calfTalkOf, onStand, wisselLine, type Cover, type PoolSpot, type ReeLayout, type ViewSpec,
+  REE_RESIDENTS, BIRCH, calfAt, calfTalkOf, onStand, wisselLine, type Cover, type PoolSpot, type ReeLayout, type ViewSpec,
 } from './ree.places';
+import type { Spot } from '../types';
 
 /** The sky overhead that a small pool mirrors when it is seen from above (the ven, seen
  *  across, mirrors the hazy horizon and the far trees instead). */
@@ -189,6 +190,80 @@ function throughBush(a: V3, b: V3, k: Bush): boolean {
   return Math.hypot(ax + dx * t, ay + dy * t, az + dz * t) < k.rw;
 }
 
+/** Where a roebuck rubbed the young birch (m over the ground): the bark scraped off and
+ *  hanging in strips, the pale wood under it (a roebuck frays at his head's height). */
+const FRAY = { from: 0.3, to: 0.8 } as const;
+/** The fresh wood under the bark, and the strips of bark hanging off it. */
+const FRAY_WOOD = '#c8955a';
+const FRAY_DARK = '#8e6236';
+const FRAY_STRIP = '#ece2cc';
+
+/**
+ * The marks a roebuck leaves (ree-discover): round the young birch's trunk between
+ * `FRAY.from` and `FRAY.to`, the bark rubbed off to the pale wood under it (a sleeve just
+ * over the trunk, streaked lengthwise) and a few strips of bark hanging from its top edge.
+ * One mesh, vertex colours: one draw call. The trunk's girth is read from the model itself
+ * (its vertices in that band, near the stem). Null when no stem shows there.
+ */
+function frayMarks(plant: THREE.Object3D): THREE.Mesh | null {
+  plant.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  let r = 0, n = 0;
+  plant.traverse((o) => {
+    const m = o as THREE.Mesh;
+    const pos = m.isMesh ? m.geometry.attributes.position : null;
+    if (!pos) return;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      if (v.y < FRAY.from || v.y > FRAY.to) continue;
+      const d = Math.hypot(v.x, v.z);
+      if (d > 0.12) continue; // (a low twig, not the stem)
+      r = Math.max(r, d); n += 1;
+    }
+  });
+  if (!n) return null;
+  const rr = Math.max(0.018, r) * 1.12 + 0.004;
+  const pos: number[] = [], col: number[] = [];
+  const c = new THREE.Color();
+  const tri = (a: number[], b: number[], d: number[], hex: string, k = 1): void => {
+    c.set(hex).multiplyScalar(k);
+    for (const q of [a, b, d]) { pos.push(q[0], q[1], q[2]); col.push(c.r, c.g, c.b); }
+  };
+  // the sleeve: 12 streaks round the stem, each a little lighter or darker, its top and
+  // bottom edges ragged (where the bark was torn)
+  const N = 12;
+  const rag = (i: number, top: boolean): number => (top ? FRAY.to : FRAY.from) + (top ? -1 : 1) * (((i * 37) % 11) / 11) * 0.06;
+  for (let i = 0; i < N; i++) {
+    const a0 = (i / N) * Math.PI * 2, a1 = ((i + 1) / N) * Math.PI * 2;
+    const p = (a: number, y: number): number[] => [Math.cos(a) * rr, y, Math.sin(a) * rr];
+    const y0 = rag(i, false), y1 = rag(i, true), y0b = rag(i + 1, false), y1b = rag(i + 1, true);
+    const hex = i % 3 === 0 ? FRAY_DARK : FRAY_WOOD;
+    const k = 0.9 + ((i * 7) % 5) * 0.05;
+    tri(p(a0, y0), p(a1, y0b), p(a1, y1b), hex, k);
+    tri(p(a0, y0), p(a1, y1b), p(a0, y1), hex, k);
+  }
+  // the strips of bark hanging from its top edge: thin, curling a little outward
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + (i % 2) * 0.35;
+    const w = 0.018 + (i % 3) * 0.006, L = 0.09 + ((i * 5) % 4) * 0.035;
+    const out = { x: Math.cos(a), z: Math.sin(a) }, side = { x: -out.z, z: out.x };
+    const top = FRAY.to - 0.02;
+    const r0 = rr + 0.002, r1 = rr + 0.02 + L * 0.25;
+    const A = [out.x * r0 + side.x * w, top, out.z * r0 + side.z * w];
+    const B = [out.x * r0 - side.x * w, top, out.z * r0 - side.z * w];
+    const C = [out.x * r1 - side.x * w * 0.7, top - L, out.z * r1 - side.z * w * 0.7];
+    const D = [out.x * r1 + side.x * w * 0.7, top - L, out.z * r1 + side.z * w * 0.7];
+    tri(A, B, C, FRAY_STRIP); tri(A, C, D, FRAY_STRIP);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  const mesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }));
+  mesh.name = 'ree-birch-fray';
+  return mesh;
+}
+
 /** What a play lays (ree.ts `prepare`). */
 export interface ReeLaid {
   layout: ReeLayout;
@@ -199,6 +274,8 @@ export interface ReeLaid {
   decoys: readonly string[];
   /** how much of the calf's back the search's lens glimpses */
   glimpse: number;
+  /** ree-discover: where the young birch a roebuck rubbed stands this play (none: null) */
+  birch?: Spot | null;
 }
 
 /** The reekalf home, as the adventure uses it. */
@@ -247,6 +324,10 @@ export class ReeHome implements HomeDressing {
   /** the ranger is wading in the pool (and how long since his last plash) */
   private wading = false;
   private wadeT = 0;
+  /** ree-discover: the young birch a roebuck rubbed (one: laid where this play has it) and
+   *  its solid (he walks round it; no birch this play: radius 0) */
+  private birch: THREE.Object3D | null = null;
+  private readonly birchSolid = { x: 0, z: 0, r: 0 };
 
   constructor(env: DressingEnv, distractors: readonly Distractor[]) {
     this.group.name = 'ree-home';
@@ -444,6 +525,25 @@ export class ReeHome implements HomeDressing {
     this.drops.renderOrder = 5;
     this.group.add(this.drops);
 
+    /* -- ree-discover: the young birch a roebuck rubbed his antlers on (laid where a play
+       has it; none in free roam until then) -- */
+    env.obstacles.push(this.birchSolid);
+    void env.spawnPlant('prop-birch-tree', BIRCH.h).then((s) => {
+      if (!s) return;
+      if (this.disposed) { s.dispose(); return; }
+      const root = s.root as THREE.Object3D;
+      const sapling = new THREE.Group();
+      sapling.name = 'ree-birch';
+      sapling.add(root);
+      const fray = frayMarks(root);
+      if (fray) { sapling.add(fray); this.made.push(fray); }
+      sapling.visible = false;
+      this.group.add(sapling);
+      this.spawned.push(s);
+      this.birch = sapling;
+      this.placeBirch(this.laid.birch ?? null);
+    });
+
     // in free roam, before any play: layout A's morning (where the calf lies in the spec)
     const a = REE_LAYOUTS.A;
     this.laid = { layout: a, calf: calfAt(a, CALF_DOELEN[0]), pool: 'in', decoys: distractors.map((d) => d.id), glimpse: SEARCH_GLIMPSE };
@@ -494,7 +594,23 @@ export class ReeHome implements HomeDressing {
       b.rushes.group.visible = k === on;
     }
     for (const [id, w] of this.wissels) w.visible = id === l.id;
+    this.placeBirch(p.birch ?? null);
   }
+
+  /** ree-discover: the rubbed young birch where this play has it (or nowhere). */
+  private placeBirch(at: Spot | null): void {
+    this.birchSolid.r = at ? BIRCH.r : 0;
+    if (at) { this.birchSolid.x = at.x; this.birchSolid.z = at.z; }
+    if (!this.birch) return;
+    this.birch.visible = !!at;
+    if (at) {
+      this.birch.position.set(at.x, this.groundY(at.x, at.z) - 0.02, at.z);
+      this.birch.rotation.y = (at.x * 1.7 + at.z * 0.9) % (Math.PI * 2); // (each spot its own turn)
+    }
+  }
+
+  /** ree-discover: the rubbed young birch this play (its spot), or null. */
+  get birchAt(): Spot | null { return this.laid.birch ?? null; }
 
   /**
    * A solid piece (a juniper, a log) with light copies for afar: the world's load-time

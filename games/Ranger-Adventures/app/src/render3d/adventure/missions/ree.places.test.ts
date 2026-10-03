@@ -16,6 +16,7 @@ import {
   REE_PLACES as P, REE_RESIDENTS, REE_HOME, REE_LAYOUTS, LAYOUTS, MARKER, STAND, FRINGE, SEARCH_RING, POOL, COPSE_FRAME, COPSE_SIZE,
   COPSE, THICKET, HOME_REACH, COPSE_TREES, CALF_DOELEN, DOE_BED, CALF_HOME, onStand, calfAt, calfTalkOf, calfBolt, calfView, leaveView, drinkSpot, reunionPose,
   inStand, reeClearings, slotTrail, wisselLine, juniperR, poolsOf, poolSides, walkVia, WISSEL_HALF, type ReeLayout, type PoolSpot,
+  BIRCH, BIRCH_CLEAR, BIRCH_NEAR, BUZZARD, LARK, LARK_TURNS, TWIN_AFTER, heathFor, larkFlight, larkRoom, larkWays, twinAt,
 } from './ree.places.ts';
 import { FRISLING_PLACES, hideClumps, fieldSpots, cluePosts, bootPrints } from './frisling.places.ts';
 import { WILDCAMERA_PLACES, WILDCAMERA_RESIDENTS, ROE_SHY_WITHIN, wildcameraClearings } from './wildcamera.places.ts';
@@ -589,5 +590,152 @@ test('run 7: the reunion looks at them from his side, away from the clearing and
     assert.ok(Math.abs(Math.cos(yaw - v.heading)) < 1e-9, `${l.id}: side-on`);
     assert.ok(Math.cos(yaw - headingTo(l.gap, l.meet)) >= -1e-9, `${l.id}: she faces on, not back into her cover`);
     assert.ok(side === 1 || side === -1);
+  }
+});
+
+/* ------------------------------------------------- ree-discover: something to notice ---- */
+
+/** Every way a layout's walks may take (golden's hint, with or without its pool), and his
+ *  way out of the hide: what a young birch keeps off. */
+const waysOf = (l: ReeLayout): Spot[][] => [
+  [P.marker, ...walkVia(l, 'meadow', l.pools.in), l.search], [P.marker, ...walkVia(l, 'meadow', null), l.search],
+  [...walkVia(l, 'hide', null), l.hide], ...(l.pools.out ? [[...walkVia(l, 'hide', l.pools.out), l.hide]] : []),
+  [l.hide, ...l.outWay, l.wayOut], wisselLine(l),
+];
+const polyDist = (p: Spot, w: readonly Spot[]): number => Math.min(...w.slice(1).map((q, i) => segDist(p, w[i], q)));
+
+test('ree-discover: the rubbed young birch stands beside his way, in his picture as he walks up, off every way of its layout', () => {
+  for (const l of LAYOUTS) {
+    assert.ok(l.birches.length >= 1 && l.birches.length <= 2, `${l.id}: ${l.birches.length} birch spot(s)`);
+    for (const [i, b] of l.birches.entries()) {
+      const tag = `${l.id}.birch${i}`;
+      assert.equal(biomeAt(b.x, b.z), 'heide', `${tag} on the heath`);
+      // off every way the layout's walks take (a detour he may take, never in his way)
+      for (const w of waysOf(l)) assert.ok(polyDist(b, w) >= 1.8, `${tag} is ${polyDist(b, w).toFixed(1)} m from a way of ${l.id}`);
+      // …and near one of them: seen ahead as he walks up (≤ 30° off his way, 6-10 m before it)
+      const near = waysOf(l).slice(0, -2).filter((w) => polyDist(b, w) <= 3.6);
+      assert.ok(near.length, `${tag} lies beside a walk`);
+      const seen = near.some((w) => w.slice(1).some((q, j) => {
+        const a = w[j], L = dist(a, q);
+        for (let t = 0; t <= L; t += 0.5) {
+          const at = toward(a, q, t);
+          if (dist(at, b) < 6 || dist(at, b) > 10) continue;
+          if (off(headingTo(at, b), headingTo(a, q)) < 0.5) return true;
+        }
+        return false;
+      }));
+      assert.ok(seen, `${tag} is ahead of him on a walk`);
+      // clear: out of every stand, cover and pool, a stride from every solid, not where she
+      // grazes, they meet or he walks away to
+      for (const m of LAYOUTS) assert.ok(inGrass(m, b) > 1.2, `${tag} out of ${m.id}'s grass`);
+      for (const c of COVERS) assert.ok(inCover(c, b) > 1.1, `${tag} out of the bracken`);
+      for (const m of LAYOUTS) for (const q of poolsOf(m)) assert.ok(wet(q, b) > 2.5, `${tag} out of a pool`);
+      for (const q of solids()) assert.ok(dist(b, q) > q.r + 0.9, `${tag} by a solid at (${q.x.toFixed(1)}, ${q.z.toFixed(1)})`);
+      for (const g of l.graze) assert.ok(dist(b, g) > 2, `${tag} where she grazes`);
+      assert.ok(dist(b, l.meet) > 3 && dist(b, l.wayOut) > 2.5 && dist(b, P.home) > 3, `${tag} where the family meets or lives`);
+      assert.ok(dist(b, MARKER) > 4, `${tag} off the marker ring`);
+      // the places table names it (the jeep is parked out of it) and its ground is bare
+      assert.ok(dist(P[tag], b) < 1e-9, `${tag} in the places table`);
+      assert.ok(reeClearings().some((c) => dist(c, b) < 1e-9 && c.r === BIRCH_CLEAR), `${tag} is the home's ground`);
+    }
+  }
+  assert.ok(BIRCH.h >= 1.2 && BIRCH.h <= 1.6, 'a young birch about his height');
+  assert.ok(BIRCH_NEAR >= 2 && BIRCH_NEAR <= 3, 'he sees its marks from close by');
+});
+
+test('ree-discover: the woodlark flies up ahead of him, on along his way and back down, never toward the lens; every walk has room for it', () => {
+  // its flight in his frame: ahead and further ahead, a little to one side, up and down again
+  const order = [LARK.rise.v, LARK.top.v, LARK.drift.v, LARK.land.v];
+  assert.ok(order.every((v, i) => i === 0 || v > order[i - 1]), 'always on, away from him (and the lens behind him)');
+  assert.ok(LARK.rise.v >= 6 && LARK.rise.v <= 10, 'it flies up 6-10 m ahead of him');
+  assert.ok(LARK.top.y >= 3 && LARK.drift.y <= 6, 'it hangs low enough for the walk\'s lens to see it');
+  assert.ok(LARK.hangS >= 3.5, 'it hangs singing ~4 s');
+  assert.ok(Math.max(...LARK_TURNS) <= 0.5, 'off his way at most ~30°: in the walk\'s picture');
+  for (const l of LAYOUTS) {
+    assert.ok(l.larkOn.length >= 1, `${l.id}: the woodlark comes on a walk`);
+    for (const [walk, pool] of ([['meadow', l.pools.in], ['meadow', null], ['hide', null], ['hide', l.pools.out ?? null]] as const).filter(([wk]) => l.larkOn.includes(wk))) {
+      const w = walk === 'meadow' ? [P.marker, ...walkVia(l, 'meadow', pool), l.search] : [...walkVia(l, 'hide', pool), l.hide];
+      // he walks along it: from 3 m in, the flight's room is checked where he is, facing along
+      let room = 0, tried = 0, left = 0;
+      const total = w.slice(1).reduce((sum, q, i) => sum + dist(w[i], q), 0);
+      let walked = 0;
+      for (let j = 1; j < w.length; j++) {
+        const a = w[j - 1], b = w[j];
+        for (let t = 0; t < dist(a, b); t += 0.5) {
+          const at = toward(a, b, t);
+          if (dist(at, w[0]) < 3) continue;
+          tried += 1;
+          const ahead = total - walked - t;
+          for (const way of larkWays(1)) {
+            const side = way.side, h = headingTo(a, b) + side * way.turn;
+            if (!larkRoom(at, h, side, pool)) continue;
+            room += 1;
+            left = Math.max(left, ahead);
+            const f = larkFlight(at, h, side);
+            // where it sits is open heath, never in the tall grass or the bracken or the water
+            for (const q of [f.rise, f.land]) assert.ok(heathFor(q, pool), `${l.id} ${walk}: it sits in the heather`);
+            // never toward the lens: every point further from where he stood than the last
+            const ds = [f.rise, f.top, f.drift, f.land].map((q) => dist(q, at));
+            assert.ok(ds.every((d, i) => i === 0 || d > ds[i - 1]), `${l.id} ${walk}: it flies away from him`);
+            break;
+          }
+        }
+        walked += dist(a, b);
+      }
+      // (it flies up where there is room as he walks on: somewhere on every walk, with a
+      // good stretch of it still ahead of him, so he sees it while he walks)
+      assert.ok(room >= 3, `${l.id} ${walk}${pool ? ' (pool)' : ''}: room for the woodlark at ${room} of ${tried} points`);
+      assert.ok(left >= 6, `${l.id} ${walk}${pool ? ' (pool)' : ''}: it flies with ${left.toFixed(1)} m of the walk ahead`);
+    }
+  }
+});
+
+test('ree-discover: the buzzard circles low over the heath ahead of him on his way to the hide, over the home', () => {
+  for (const l of LAYOUTS) {
+    const c = l.buzzard;
+    assert.ok(Math.hypot(c.x, c.z) + c.r < 56, `${l.id}: its circle is inside the world`);
+    assert.ok(dist(c, COPSE_FRAME) < 30, `${l.id}: over the home (${dist(c, COPSE_FRAME).toFixed(1)} m from the copse)`);
+    for (const [id, m] of Object.entries(OTHER_MARKERS)) assert.ok(dist(c, m) > c.r + 4, `${l.id}: it keeps off the ${id} marker`);
+    assert.ok(Math.hypot(c.x - VEN_CENTER.x, c.z - VEN_CENTER.z) > 25, `${l.id}: not over the ven`);
+    // ahead of him all the way from the grass to the hide (beyond the hide)
+    assert.ok(off(headingTo(l.search, c), headingTo(l.search, l.hide)) < 0.35, `${l.id}: it circles ahead of him`);
+    assert.ok(dist(l.search, c) > dist(l.search, l.hide), `${l.id}: beyond his hide`);
+  }
+  assert.ok(BUZZARD.y >= 4 && BUZZARD.y <= 7 && BUZZARD.high > 15, 'low over the heath, come down from high');
+});
+
+test('ree-discover: the cuckoo calls from off to one side of the watch, never from behind him; the twin lies in her cover by her gap', () => {
+  for (const l of LAYOUTS) {
+    const v = l.views.watch;
+    const a = off(headingTo(l.hide, l.koekoek), v.heading);
+    assert.ok(a >= (45 * Math.PI) / 180 && a <= (110 * Math.PI) / 180, `${l.id}: the cuckoo ${(a * 180 / Math.PI).toFixed(0)}° off the watch`);
+    const d = dist(l.hide, l.koekoek);
+    assert.ok(d >= 15 && d <= 32 && Math.hypot(l.koekoek.x, l.koekoek.z) < 56, `${l.id}: the cuckoo ${d.toFixed(1)} m off, inside the world`);
+    // the twin: in her cover's bracken, near her gap, clear of her bed, her way in and the bushes
+    const t = l.twinBed;
+    assert.ok(inCover(l.cover, t) < 0.9, `${l.id}: the twin lies in the bracken (${inCover(l.cover, t).toFixed(2)})`);
+    assert.ok(dist(t, l.gap) < 3, `${l.id}: by her gap`);
+    assert.ok(dist(t, l.bed) > 1.2, `${l.id}: apart from her bed`);
+    for (const w of [[l.gap, ...l.bedWay, l.bed]]) assert.ok(polyDist(t, w) > 0.9, `${l.id}: off her way in`);
+    for (const j of l.cover.junipers) assert.ok(dist(t, j) > juniperR(j.h), `${l.id}: not in a juniper`);
+    for (const q of COPSE_TREES) assert.ok(l.cover !== COPSE || dist(t, q) > 0.75, `${l.id}: not on a trunk`);
+  }
+  // after a play with twins, the twin grazes with them at home and has its own bed in the copse
+  const twin = REE_RESIDENTS.find((r) => r.key === 'twin')!;
+  assert.equal(twin.animal, 'reekalf');
+  assert.equal(twin.before, null, 'there only in a play that has it');
+  assert.equal(twin.reach, HOME_REACH);
+  assert.ok(dist(TWIN_AFTER, P.home) < 1.6, 'it lives at the home place');
+  const calf = REE_RESIDENTS.find((r) => r.key === 'calf')!;
+  assert.ok(dist(TWIN_AFTER, calf.after!) > 0.9, 'beside its sibling, never in it');
+  const bed = twin.shy![0].to;
+  assert.ok(inCover(COPSE, bed) < 0.85 && dist(bed, DOE_BED) > 1.4 && dist(bed, REE_RESIDENTS.find((r) => r.key === 'calf')!.shy![0].to) > 0.9, 'its own bed in the copse');
+  for (const j of COPSE.junipers) assert.ok(dist(bed, j) > juniperR(j.h), 'its bed is not in a juniper');
+  // at the reunion it stands at her chest on his side, apart from its sibling at her flank
+  const doe = { x: 0, z: 0, yaw: 0.3 };
+  for (const side of [1, -1] as const) {
+    const tw = twinAt(doe, SIZE.ree.len, side), dr = drinkSpot(doe, SIZE.ree.len, side);
+    assert.ok(dist(tw, dr) > 0.6, 'two calves, apart');
+    assert.ok(toLocal({ ...doe, heading: doe.yaw }, tw).u * side > 0.3, 'on the side he sees');
   }
 });

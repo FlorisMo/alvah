@@ -55,10 +55,28 @@ const FRISLING: Ontdekking[] = [
 ];
 
 /* --------------------------------------------- ree-niet-aanraken (the meadow) ---- */
+// (run 7 package ree-discover, render3d/adventure/missions/ree.finds.ts: the mother, seen in
+// the first look; each play one or two small things of the heath, drawn from its seed — a
+// woodlark singing up out of the heather on a walk, a buzzard circling over the heath on his
+// way to the hide, a cuckoo the mother turns her head to in the watch (heard), a young birch
+// a roebuck rubbed pale beside the path (he walks up to it); and, rarely, twins: a second
+// calf rises from the bracken and comes to its mother at the reunion. Each recorded only
+// once he really saw it, heard it or walked up to it.)
 const REE: Ontdekking[] = [
   { id: 'ree-niet-aanraken.reekalf', home: 'ree-niet-aanraken', soort: 'dier', naam: 'het reekalf',
     hint: 'Wie ligt heel stil in het gras?', model: 'animal-ree-roedeer', geholpen: true },
-  // the ree lane adds its rows here
+  { id: 'ree-niet-aanraken.moeder', home: 'ree-niet-aanraken', soort: 'dier', naam: 'de ree', naamKnap: 'de reegeit',
+    hint: 'Wie eet er bij het bosje?', model: 'animal-ree-roedeer' },
+  { id: 'ree-niet-aanraken.leeuwerik', home: 'ree-niet-aanraken', soort: 'dier', naam: 'de leeuwerik', naamKnap: 'de boomleeuwerik',
+    hint: 'Een vogel zingt hoog boven de hei.', model: 'bird-boomleeuwerik' },
+  { id: 'ree-niet-aanraken.buizerd', home: 'ree-niet-aanraken', soort: 'dier', naam: 'de buizerd',
+    hint: 'Kijk eens hoog in de lucht.', model: 'bird-buizerd' },
+  { id: 'ree-niet-aanraken.koekoek', home: 'ree-niet-aanraken', soort: 'dier', naam: 'de koekoek',
+    hint: 'Luister goed als je stil wacht.', model: 'bird-koekoek' },
+  { id: 'ree-niet-aanraken.veegsporen', home: 'ree-niet-aanraken', soort: 'spoor', naam: 'het geschuurde boompje', naamKnap: 'de veegsporen van de bok',
+    hint: 'Kijk goed naar de jonge boompjes.', model: 'prop-birch-tree' },
+  { id: 'ree-niet-aanraken.tweeling', home: 'ree-niet-aanraken', soort: 'zeldzaam', naam: 'de twee kalfjes', naamKnap: 'de tweeling',
+    hint: 'Soms heeft een ree twee kalfjes.', model: 'animal-ree-roedeer' },
 ];
 
 /* ------------------------------------------------ wildcamera (the crossing) ---- */

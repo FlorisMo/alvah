@@ -91,8 +91,9 @@ export interface FlowHooks {
   reunion(play: () => Promise<void>): Promise<void>;
   /** the pause card is up (the mission clock stands still) */
   paused(): boolean;
-  /** run 7 (§4.4): a NEW discovery's calm reveal (queued; it waits for a quiet moment) */
-  reveal?(o: Ontdekking): void;
+  /** run 7 (§4.4): a NEW discovery's calm reveal (queued; it waits for a quiet moment);
+   *  `heard` (ree-discover, additive): he met it by its call alone ("Dat hoorde je!") */
+  reveal?(o: Ontdekking, opts?: { heard?: boolean }): void;
 }
 
 export interface KitOptions {
@@ -381,15 +382,16 @@ export class AdventureKit {
    * save at once; a NEW one gets one calm reveal at a quiet moment (`quiet`: none).
    * Returns whether it was new. Once a play: a second call for the same id in this play
    * records nothing (safe to call from a tick). An id missing from content/ontdekkingen.ts
-   * is a bug: it warns and records nothing.
+   * is a bug: it warns and records nothing. `heard` (ree-discover, additive): he met it by
+   * its call alone (a cuckoo in the trees): its reveal says "Dat hoorde je!".
    */
-  discover(id: string, opts: { quiet?: boolean } = {}): boolean {
+  discover(id: string, opts: { quiet?: boolean; heard?: boolean } = {}): boolean {
     const row = ontdekking(id);
     if (!row) { console.warn(`[adventure] k.discover: no discovery "${id}" in content/ontdekkingen.ts`); return false; }
     if (this.found.has(id)) return false; // (once a play: "times seen" counts plays, not frames)
     this.found.add(id);
     const fresh = store.discover(id);
-    if (fresh && !opts.quiet) this.hooks.reveal?.(row);
+    if (fresh && !opts.quiet) this.hooks.reveal?.(row, opts.heard ? { heard: true } : undefined);
     return fresh;
   }
 

@@ -377,7 +377,7 @@ async function runAdventure(mission: Mission, adv: Adventure, drawn: Drawn): Pro
         store.logBeat(ef, summary, { missionId: mission.id, view: 'world', play: drawn.play });
         played.push(ef);
       },
-      reveal: (o) => revealDiscovery(o),
+      reveal: (o, opts) => revealDiscovery(o, opts),
       fact: async (i) => {
         const st = mission.stappen[i];
         if (!st.skin.feit) return;

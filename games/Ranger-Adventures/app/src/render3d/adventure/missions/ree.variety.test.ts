@@ -18,8 +18,11 @@ import test from 'node:test';
 import { newPlay } from '../../../core/play.ts';
 import {
   CALF_MOMENTS, CALF_SPOTS, REE_LAYOUT_IDS, PRINT_GAP_M, WATCH_LINES, drawReePlay, lastReeVariants, parseReeVariant, printRuns, reeGrowth, reeOrder,
-  reeVariant, watchScript, WATCH_OUT_S, WATCH_WALK_S, type ReePlay, type WatchEvent,
+  reeVariant, reeSurprises, watchScript, REE_SMALL, WATCH_OUT_S, WATCH_WALK_S, type ReePlay, type ReeSmall, type WatchEvent,
 } from './ree.variety.ts';
+import { rollRare, nextRareCount } from '../../../core/discover.ts';
+import { ONTDEKKINGEN, ontdekkingenVan } from '../../../content/ontdekkingen.ts';
+import { compactVariant } from '../../../core/play.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
 import { REE_LAYOUTS, poolSides } from './ree.places.ts';
@@ -236,4 +239,119 @@ test('the watch: the seed draws the order, the lines and the timing; the level o
   assert.ok(lengths.size >= 3, 'the timing varies');
   // the pools: every key is a line of the content
   for (const pool of Object.values(WATCH_LINES)) for (const key of pool) assert.ok(COPY[key], `${key} is in the copy`);
+});
+
+/* ------------------------------------------------- ree-discover: something to notice ---- */
+
+const none = (): boolean => false;
+
+test('ree-discover: each play holds one or two of the four small things, drawn from its seed', () => {
+  const seen = new Map<string, number>();
+  let two = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    const a = reeSurprises(play(seed), none, { birches: 2 });
+    const b = reeSurprises(play(seed), none, { birches: 2 });
+    assert.deepEqual(a, b, `seed ${seed}: the same seed, the same things`);
+    assert.ok(a.small.length === 1 || a.small.length === 2, `seed ${seed}: ${a.small.length} small things`);
+    assert.equal(new Set(a.small).size, a.small.length);
+    for (const s2 of a.small) { assert.ok(REE_SMALL.includes(s2)); seen.set(s2, (seen.get(s2) ?? 0) + 1); }
+    if (a.small.length === 2) two += 1;
+    // where each happens: the woodlark on one of his two walks, the rubbed birch among the layout's
+    assert.equal(a.leeuwerik !== null, a.small.includes('leeuwerik'));
+    if (a.leeuwerik) assert.ok(a.leeuwerik === 'meadow' || a.leeuwerik === 'hide');
+    assert.equal(a.boompje !== null, a.small.includes('veegsporen'));
+    if (a.boompje !== null) assert.ok(a.boompje === 0 || a.boompje === 1);
+    assert.ok(a.extra === null || a.extra === 'tapuit' || a.extra === 'vlinder');
+    // its note is short and never read as the morning's (`ree:`)
+    assert.ok(a.code.length <= 6 && !a.code.startsWith('ree'), a.code);
+    assert.equal(reeSurprises(play(seed), none, { birches: 1 }).boompje ?? 0, 0, 'one birch: the one');
+  }
+  for (const s2 of REE_SMALL) assert.ok((seen.get(s2) ?? 0) > 60, `${s2} comes (${seen.get(s2)} of 400)`);
+  assert.ok(two > 120 && two < 280, `two small things in ${two} of 400 plays`);
+});
+
+test('ree-discover: the ones he has not found come first; once he found them all, any of them', () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    for (const got of [['leeuwerik'], ['leeuwerik', 'buizerd'], ['leeuwerik', 'buizerd', 'koekoek']] as ReeSmall[][]) {
+      const s2 = reeSurprises(play(seed), (id) => got.includes(id), { birches: 2 });
+      const fresh = REE_SMALL.filter((x) => !got.includes(x));
+      assert.ok(fresh.includes(s2.small[0]), `seed ${seed}: one he has not found first (${s2.small})`);
+      if (s2.small.length === 2 && fresh.length >= 2) assert.ok(fresh.includes(s2.small[1]), `seed ${seed}: both new while two are left`);
+    }
+    const all = reeSurprises(play(seed), () => true, { birches: 2 });
+    assert.ok(all.small.length >= 1);
+  }
+  // a fresh save meets every one of the four within its first four plays when it finds what it meets
+  for (let base = 1; base <= 200; base++) {
+    const found = new Set<ReeSmall>();
+    for (let n = 0; n < 4; n++) for (const s2 of reeSurprises(play(base + n), (id) => found.has(id), { birches: 2 }).small) found.add(s2);
+    assert.equal(found.size, 4, `seed ${base}: four plays meet all four (${[...found]})`);
+  }
+});
+
+test('ree-discover: the morning stays the same with its small things drawn (each from its own fork)', () => {
+  for (let seed = 1; seed <= 100; seed++) {
+    const before = draw(seed);
+    reeSurprises(play(seed), none, { birches: 2 });
+    assert.deepEqual(draw(seed), before);
+    // a variant with the mood, the rare and the morning keeps the morning and the small things
+    const pl = play(seed);
+    pl.note('mood', 'ochtendnevel'); pl.note('rare', 'tweeling'); pl.note('ree', before.variant);
+    pl.note('vr', reeSurprises(pl, none, { birches: 2 }).code);
+    const va = compactVariant(pl.variant)!;
+    assert.ok(va.includes(`ree:${before.variant}`) && va.includes(',vr:'), va);
+  }
+});
+
+test('ree-discover: a cuckoo calls in one of her listening pauses, never the one at the hide; the rest of the watch is the same', () => {
+  let n = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    for (const pauses of [1, 2, 3]) {
+      const plain = watchScript(play(seed), { pauses, way: 2 });
+      const bird = watchScript(play(seed), { pauses, way: 2, koekoek: true });
+      assert.equal(bird.length, plain.length);
+      const k = bird.filter((e) => e.cue === 'koekoek');
+      assert.equal(k.length, 1, `seed ${seed}, ${pauses} pauses: one cuckoo`);
+      assert.equal(k[0].act, 'listen');
+      assert.equal(k[0].line, 'koekoek');
+      bird.forEach((e, i) => {
+        if (e.cue === 'koekoek') { assert.ok(plain[i].act === 'listen' && plain[i].cue !== 'hut', 'it takes a rustle\'s pause'); n += 1; return; }
+        assert.deepEqual(e, plain[i], `seed ${seed}: the watch is the same round it`);
+      });
+    }
+  }
+  assert.ok(n > 0);
+  for (const id of ['koekoek', 'tweeling']) assert.ok(id in COPY, `${id} is in the copy`);
+});
+
+test('ree-discover: the home\'s veldgids rows — the mother, four small things, the twins (rare); found by doing', () => {
+  const rows = ontdekkingenVan(MISSION);
+  const ids = rows.map((o) => o.id.split('.')[1]);
+  for (const id of ['reekalf', 'moeder', ...REE_SMALL, 'tweeling']) assert.ok(ids.includes(id), id);
+  assert.equal(rows.filter((o) => o.soort === 'zeldzaam').length, 1);
+  assert.equal(rows.find((o) => o.id.endsWith('.tweeling'))?.soort, 'zeldzaam');
+  assert.equal(rows.find((o) => o.id.endsWith('.veegsporen'))?.soort, 'spoor');
+  for (const o of rows) assert.ok(o.hint.split(/\s+/).length <= 7, `${o.id}: its hint is ≤ 7 words`);
+});
+
+test('ree-discover: the twins come within three won plays of a fresh save (the pity rule), by its seed', () => {
+  const twins = ONTDEKKINGEN.find((o) => o.id === `${MISSION}.tweeling`)!;
+  let lucky = 0;
+  for (let base = 1; base <= 300; base++) {
+    // a fresh save: plays base, base+1, base+2, each won, nothing rare found before
+    let count = 0, got = -1;
+    for (let n = 0; n < 3 && got < 0; n++) {
+      const pl = newPlay(MISSION, base + n, n + 1);
+      const r = rollRare({ home: MISSION, play: pl, table: ONTDEKKINGEN, found: {}, counts: { [MISSION]: count }, mood: 'ochtendnevel' });
+      if (r) { assert.equal(r.id, twins.id, 'the home\'s rare is the twins'); got = n; }
+      count = nextRareCount(count, { won: true, gotRare: !!r });
+    }
+    assert.ok(got >= 0, `seed ${base}: no twins in three plays`);
+    if (got === 0) lucky += 1;
+    // in every mood the ree plays in
+    for (const mood of ['ochtendnevel', 'zonnig', 'bewolkt', 'gouden-uur'] as const) {
+      assert.ok(rollRare({ home: MISSION, play: newPlay(MISSION, base, 3), table: ONTDEKKINGEN, found: {}, counts: { [MISSION]: 2 }, mood }), mood);
+    }
+  }
+  assert.ok(lucky > 60 && lucky < 160, `the twins came on the first play by luck ${lucky} of 300 times`);
 });
