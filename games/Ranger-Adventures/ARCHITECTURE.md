@@ -142,7 +142,15 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          neighbour trio (NEIGHBOURS, one bird per perch), never the last two
                          plays', read back from the beat history (`ek:<variant>`); the found
                          view and the jay's way back are pure and pinned by its test): the four
-                         missions met first
+                         missions met first; run 7: ven (the north bank of the ven: a shore
+                         path, three coves of sedge, cotton-grass and veenmos where the
+                         heikikkers live; ven.places.ts the coves, two stations a cove and
+                         `wayOf` — his way there with the adder, the soft moss and the dry
+                         path in the dagnacht trial's own order (`venOrder`), the listening
+                         stops; ven.listen.ts the chorus he follows by ear (a run hushes it);
+                         ven.home.ts the bank and `Frog`, an Actor whose throat swells, that
+                         floats, leaps and dives; ven.ts the beats: look, follow, the three
+                         moments with his feet, the search, the song, the plop)
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          a `shy` resident slips into cover when he comes near (per state);
                          a home rests beyond 40-46 m, its small things (`env.detail(at)`:
@@ -181,7 +189,9 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   the ranger, so the card makes way first and its line follows); `.still(id, { line, hands |
   feet, tempt, wrong, right })` plays an encounter with the BODY instead of a card (keep your
   hands off the animal, or your feet still: a reach is the wrong answer, the same moment comes
-  back; the pure core is `beats/hold-math.ts`); run 7: `.go(id, { line, family, to, via, doel,
+  back; the pure core is `beats/hold-math.ts`; run 7 `room: { at, r, warn }`: keep your
+  distance — his feet stay free, coming within `r` of `at()` is the reach, the ven's adder);
+  run 7: `.go(id, { line, family, to, via, doel,
   hush, wrong, right })` plays the flip with his FEET — he walks away himself (`GoCore`: 4 m off
   at a walk and farther from the animals; standing the level's `goWaitS` or 2.5 m closer is the
   old rule, the moment comes back; running is neither); `.answer(id, goed)` answers the next

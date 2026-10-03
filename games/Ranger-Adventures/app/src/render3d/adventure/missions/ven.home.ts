@@ -101,7 +101,7 @@ export class Frog extends Actor {
     self.frog = this;
     this.home = home;
     // its throat: a pale round swelling under its chin, there only while it calls
-    this.throat = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), new THREE.MeshStandardMaterial({ color: '#e9dfc0', roughness: 0.6 }));
+    this.throat = new THREE.Mesh(new THREE.SphereGeometry(0.028, 10, 8), new THREE.MeshStandardMaterial({ color: '#f1e8c8', roughness: 0.5, emissive: '#3a3628' }));
     this.throat.position.set(0, height * 0.3, FROG_LEN * 0.28);
     this.throat.scale.setScalar(0.001);
     this.throat.visible = false;

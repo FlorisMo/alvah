@@ -266,9 +266,10 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
         if (k.now < next) return;
         next = k.now + 3.2;
         frog.sing(1);
+        // (the rings on the water just in front of him: the water's edge lies a long step out)
         const out = toLocal(bay.frame, frog);
-        const p = atLocal(bay.frame, out.u, out.v + 0.42);
-        home.ring(p.x, p.z, 0.55);
+        const p = atLocal(bay.frame, out.u, out.v + 0.95);
+        home.ring(p.x, p.z, 0.6);
       });
     }
   });
