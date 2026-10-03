@@ -29,7 +29,7 @@ import { modelFor, heightFor } from '../../render3d/play/spawn';
 import { SIZE } from '../../render3d/AnimalScale';
 import { heroOf } from '../../render3d/world/Progress';
 import { adventureFor, allAdventures } from '../../render3d/adventure/registry';
-import { nextPatrolTarget } from '../../core/patrol';
+import { nextPatrolTarget, storyOrderOf } from '../../core/patrol';
 import { sessionSeed } from '../../core/play';
 import { isMood, parseMoodParam, sessionMood, type MoodId } from '../../render3d/Moods';
 import { Vector3 } from 'three';
@@ -108,11 +108,12 @@ function webglOk(): boolean {
 }
 
 /** The story order (run 6, decision 4): the missions played as adventures with his own
- *  body come first — the ones Alvah meets first (after the wildcamera the squirrel, not
- *  the ven's staged patch) — then the others in the area's order. The missiebord lists
- *  them so; the world's markers keep the area's layout. */
+ *  body come first — the ones Alvah meets first — then the others in the area's order.
+ *  Run 7: the adventures in the REGISTRY's order (the order the game meets them: after
+ *  the wildcamera the squirrel, then the frogs in the ven), `core/patrol.storyOrderOf`.
+ *  The missiebord lists them so; the world's markers keep the area's layout. */
 export function storyOrder<T extends { id: string }>(missies: readonly T[]): T[] {
-  return [...missies.filter((m) => adventureFor(m.id)), ...missies.filter((m) => !adventureFor(m.id))];
+  return storyOrderOf(missies, allAdventures().map((a) => a.id));
 }
 
 /** The mission the game recommends next: the first unfinished one in story order.
