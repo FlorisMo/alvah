@@ -209,6 +209,8 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
     if (calls !== null && calls >= MAX_DRAW_CALLS) bad.push(`draw calls ${calls} at "${adv?.beat ?? view}"`);
     if (adv && adv.beat !== lastBeat) {
       lastBeat = adv.beat;
+      lastProgress = Date.now(); // (run 7: a new beat is the play going on — two calm moments
+      // in a row, each with a reach and its words, take longer than 45 s without a click)
       await sleep(page, 1_000);
       await log.shot(`beat-${adv.beat.replace(/[^a-z0-9]+/gi, '-')}`);
     }
