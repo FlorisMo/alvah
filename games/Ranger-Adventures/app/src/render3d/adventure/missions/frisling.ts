@@ -376,6 +376,10 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // (dragen) he is on the lead's first stretch when that moment comes first; when it comes
   // second on a way whose walk on from the field to the mud is only a few steps (wei, berk:
   // 3-8 m, too short to be a moment), on the lead's last stretch instead
+  // (the whole lead home as he walks it, a tired stretch on it included: the bar for a
+  // real walk home reads this, not only the walk named 'field')
+  let ledM = 0, ledWas = k.ranger();
+  const offLed = k.onTick(() => { const r = k.ranger(); ledM += Math.min(1, dist(r, ledWas)); ledWas = r; });
   await setOff(way.fieldApproach);
   const homeLong = pathLength([way.fieldApproach, ...way.toWallow, way.wallowTalk]) >= PACE_HOME_M;
   let leadName = 'field';
@@ -392,6 +396,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     await dragen([way.fieldApproach], c.chipWroet);
   }
   await k.walk({ name: leadName, to: way.fieldApproach, r: 1.0, line: c.leid, doel: c.chipWroet, glyph: 'boot', lead });
+  offLed();
+  k.stats.lead_home_m = Math.round(ledM * 10) / 10;
   k.say(c.routeKijk); // (the route's own words from here, never the walk's)
 
   // 8 · the group's route over the field (corsi): the piglet comes to his left side, the
