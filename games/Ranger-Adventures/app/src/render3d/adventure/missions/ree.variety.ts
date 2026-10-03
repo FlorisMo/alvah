@@ -403,8 +403,8 @@ export const EXTRA_P = 0.5;
  * flies only on a walk with room for it this morning (`larkOn`: the layout's, by its pool's
  * side; none: no woodlark this morning), and on the one the buzzard (always on the walk to
  * the hide) and the rubbed birch (beside the walk `birchOn` names) leave free when it may
- * choose; the woodlark and the buzzard never share a walk (where they would, the play holds
- * the next thing instead). While he has not found the woodlark or the buzzard, a morning
+ * choose; the woodlark never shares a walk with the buzzard or the rubbed birch (where it
+ * would, the play holds the next thing instead). While he has not found the woodlark or the buzzard, a morning
  * with room for it holds it first (not every morning has). The pool is its walk's own moment (his feet answer
  * it): with the pool on his way to the hide (`hideFree` false) that walk holds no buzzard
  * and no little extra. The little extra (always on the walk to the hide) comes only while
@@ -423,18 +423,24 @@ export function reeSurprises(play: Pick<Play, 'fork'>, found: (id: ReeSmall) => 
   // mornings are fewest, before the buzzard)
   const rank = (x: ReeSmall): number => (x === 'leeuwerik' && walks.length > 0 ? 0 : x === 'buizerd' && hideFree ? 1 : 2);
   const first = [0, 1, 2].flatMap((r) => fresh.filter((x) => rank(x) === r));
+  // (which of the layout's young birches is rubbed, if this morning holds one: its own fork)
+  const birchIdx = o.birches > 0 ? play.fork('ree-boompje').int(0, o.birches - 1) : null;
+  const birchWalk = birchIdx !== null ? o.birchOn?.[birchIdx] ?? null : null;
   /** may `x` join the others? (no woodlark without a walk for it, no buzzard on a walk with
-   *  the pool; the two never on one walk) */
+   *  the pool; the woodlark never on one walk with the buzzard or the rubbed birch — two
+   *  cards on one short walk, the second cut off by its end) */
   const fits = (x: ReeSmall, others: readonly ReeSmall[]): boolean => {
     const all = [x, ...others];
     if (all.includes('leeuwerik') && !walks.length) return false;
     if (all.includes('buizerd') && !hideFree) return false;
-    return !(all.includes('leeuwerik') && all.includes('buizerd') && !walks.includes('meadow'));
+    if (!all.includes('leeuwerik')) return true;
+    if (all.includes('buizerd') && !walks.includes('meadow')) return false;
+    return !(all.includes('veegsporen') && birchWalk && walks.every((w) => w === birchWalk));
   };
   const small: ReeSmall[] = [];
   for (const s of [...first, ...known]) if (small.length < (two ? 2 : 1) && fits(s, small)) small.push(s);
-  const boompje = small.includes('veegsporen') && o.birches > 0 ? play.fork('ree-boompje').int(0, o.birches - 1) : null;
-  const birchOn = boompje !== null ? o.birchOn?.[boompje] ?? null : null;
+  const boompje = small.includes('veegsporen') ? birchIdx : null;
+  const birchOn = boompje !== null ? birchWalk : null;
   /** how many of the play's other things a walk holds */
   const holds = (w: 'meadow' | 'hide'): number => (w === 'hide' && small.includes('buizerd') ? 1 : 0) + (birchOn === w ? 1 : 0);
   const freest = walks.filter((w) => holds(w) === Math.min(...walks.map(holds)));

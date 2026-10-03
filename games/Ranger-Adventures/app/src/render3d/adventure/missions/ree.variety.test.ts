@@ -302,7 +302,7 @@ test('ree-discover: the ones he has not found come first; once he found them all
   }
 });
 
-test('ree-discover: one thing at a time on the walks — the woodlark and the buzzard never on one walk, the woodlark off the birch\'s when it may choose, no extra beside two things or a woodlark', () => {
+test('ree-discover: one thing at a time on the walks — the woodlark never on one walk with the buzzard or the rubbed birch, no buzzard or extra beside the pool, no extra beside two things or a woodlark', () => {
   let meadowLark = 0, hideLark = 0, extras = 0, n = 0;
   for (const m of MORNINGS) {
     const o = optsOf(m);
@@ -314,8 +314,8 @@ test('ree-discover: one thing at a time on the walks — the woodlark and the bu
         n += 1;
         // the buzzard is always on his way to the hide: a woodlark with it is on the walk to the grass
         if (s2.small.includes('buizerd') && s2.leeuwerik) assert.equal(s2.leeuwerik, 'meadow', `${tag}: the woodlark and the buzzard on one walk`);
-        // the rubbed birch beside one walk: the woodlark on the other, where it may choose
-        if (birch && s2.leeuwerik && o.larkOn.length === 2) assert.notEqual(s2.leeuwerik, birch, `${tag}: the woodlark and the birch on one walk`);
+        // the rubbed birch beside one walk: the woodlark on the other
+        if (birch && s2.leeuwerik) assert.notEqual(s2.leeuwerik, birch, `${tag}: the woodlark and the birch on one walk`);
         // the walk to the hide never holds three things; beside two, or a woodlark, no little extra
         const hide = (s2.small.includes('buizerd') ? 1 : 0) + (s2.leeuwerik === 'hide' ? 1 : 0) + (birch === 'hide' ? 1 : 0);
         assert.ok(hide + (s2.extra ? 1 : 0) <= 2, `${tag}: ${hide} thing(s) and ${s2.extra ?? 'no'} extra on the walk to the hide`);

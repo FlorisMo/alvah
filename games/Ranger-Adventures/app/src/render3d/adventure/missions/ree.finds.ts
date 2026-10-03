@@ -47,6 +47,9 @@ interface Watch {
   when?: () => boolean;
   /** recorded without its reveal (he will meet it again: the reveal waits for a quieter one) */
   quiet?: boolean;
+  /** its seconds add up while it shows (a bird flying across his picture: his way may turn
+   *  it out of the picture a moment), instead of on end */
+  total?: boolean;
   /** called once he saw it */
   then?: () => void;
 }
@@ -94,12 +97,12 @@ export class Sightings {
     for (const s of this.list) {
       if (s.done) continue;
       const o = s.w.object();
-      if (!o || !o.visible || (s.w.when && !s.w.when())) { s.run = 0; continue; }
+      if (!o || !o.visible || (s.w.when && !s.w.when())) { if (!s.w.total) s.run = 0; continue; }
       const pic = inPicture(cam, o, w, h);
       s.px = pic.px;
       const ok = pic.on && pic.px >= s.w.px && dist(me, { x: pic.centre.x, z: pic.centre.z }) <= s.w.within
         && !groundHides(cam.position, pic.centre, k.ctx.groundY);
-      s.run = ok ? s.run + dt : 0;
+      s.run = ok ? s.run + dt : s.w.total ? s.run : 0;
       // (the dev read: how big it showed at most while it counted)
       if (ok) { const key = `px_${s.w.id.slice(s.w.id.indexOf('.') + 1)}`; k.stats[key] = Math.max(k.stats[key] ?? 0, Math.round(pic.px)); }
       if (s.run >= s.w.secs) {
@@ -171,7 +174,7 @@ export class ReeFinds {
     if (s.extra === 'vlinder') void this.spawn('heideblauwtje').then((b) => { this.butterfly = b; });
     // (each bird counts only on the walk it flies on, so its calm reveal comes on that walk:
     // never held back by the reveal queue to land on the story's climax)
-    this.seen.watch({ id: findId('leeuwerik'), object: () => this.lark?.root ?? null, when: () => this.larkState === 'flying' && k.beat === `walk:${s.leeuwerik}`, ...LARK_SEEN });
+    this.seen.watch({ id: findId('leeuwerik'), object: () => this.lark?.root ?? null, when: () => this.larkState === 'flying' && k.beat === `walk:${s.leeuwerik}`, total: true, ...LARK_SEEN });
     this.seen.watch({ id: findId('buizerd'), object: () => this.buzz?.root ?? null, when: () => !!this.buzzStep && !this.buzzLeaving && k.beat === 'walk:hide', ...BUZZARD_SEEN });
     this.offs.push(k.onTick((dt) => { if (this.larkStep && this.larkStep(dt)) this.larkStep = null; this.buzzStep?.(dt); }));
   }
