@@ -462,6 +462,14 @@ export class Fauna {
     this.blobCount++;
   }
 
+  /** Run 7: the story's grown-ups (Bram, the distant figure) out of one picture (a camera
+   *  trap's photo, World.snapshot `people: false`); returns how to put them back. */
+  peopleOutOfPicture(): () => void {
+    const was = this.scenicActors.map((a) => a.group.visible);
+    for (const a of this.scenicActors) a.group.visible = false;
+    return () => { this.scenicActors.forEach((a, i) => { a.group.visible = was[i]; }); };
+  }
+
   /**
    * W3.3: place the two story-arc humans — the warden (BOA) near the case-board
    * hub where the player reports, and the poacher as a distant, calm figure off

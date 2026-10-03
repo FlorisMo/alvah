@@ -19,10 +19,11 @@
  * lens): `u` runs east (screen right), `v` south (away from the lens).
  */
 
-import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
+import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import { anchorInBiome } from '../../Biomes.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
-import { atLocal, headingTo, toward, type Frame } from '../places.ts';
+import { atLocal, dist, headingTo, stream, toward, type Frame } from '../places.ts';
+import { TRUNK_OUTLINE } from '../squirrel-math.ts';
 
 /** The wildcamera marker: the bos's first anchor (Biomes.anchorInBiome('bos', 22)). */
 export const MARKER: Spot = anchorInBiome('bos', 22);
@@ -41,6 +42,27 @@ export const PINE = { s: 1.0, rotY: 0.6, trunkR: 0.26, camY: 0.7 } as const;
 /** The camera on the trunk: its north face, toward the lens (so its lens and its red
  *  light face the child), turning on its strap to look at the glade or the thicket. */
 export const CAMERA: Spot = { x: TREE.x, z: TREE.z + PINE.trunkR + 0.07 };
+
+/** The camera pine's trunk as a click finds it (run 7): the whole trunk he sees, from just
+ *  under its foot up to where its crown starts, at the model's own girth — its outline
+ *  (squirrel-math TRUNK_OUTLINE: the furthest bark at each height, root flare and ridges,
+ *  measured off the forest's pine) at this pine's height. A child told "Hang de camera
+ *  aan de dikke boom." clicks the tree where he sees it, not only at the camera's place.
+ *  `profile`: [m up from its foot, m out from its axis] for a lathe of `seg` sides, its
+ *  corners pushed out so the flat sides stand on the outline (never inside the bark). */
+export const PINE_PICK: { seg: number; crown: number; profile: readonly (readonly [number, number])[] } = (() => {
+  const H = SIZE.den.h * PINE.s, seg = 12, out = 1 / Math.cos(Math.PI / seg);
+  const rows = TRUNK_OUTLINE['prop-pine-scots'];
+  const profile: [number, number][] = [[-0.3, 0]];
+  for (let i = 0; i + 1 < rows.length; i++) {
+    // (between two rows the larger reach, as the outline is read: never less than the bark)
+    const r = Math.max(rows[i][1], rows[i + 1][1]) * H * out;
+    profile.push([i === 0 ? -0.3 : rows[i][0] * H, r], [rows[i + 1][0] * H, r]);
+  }
+  const crown = rows[rows.length - 1][0] * H;
+  profile.push([crown, 0]);
+  return { seg, crown, profile };
+})();
 
 /* ------------------------------------------------------------ the places ---- */
 
@@ -360,18 +382,194 @@ export const REUNION_VIEW = {
 /** He has found the snare when he comes this near it (m): he sees it in the grass there. */
 export const SNARE_FOUND = 2.3;
 
-/** The snare: close by, from the side, the ranger at it (the action "Haal de val weg"):
- *  from the trail's east side, looking across it (the foxglove and the bush beside it). */
-export const SNARE_VIEW = (() => {
-  const sn = WILDCAMERA_PLACES.snare, me = WILDCAMERA_PLACES.snareApproach;
-  const mid = { x: (sn.x + me.x) / 2, z: (sn.z + me.z) / 2 };
-  const side = { x: mid.x + 2.4, z: mid.z - 1.1 };
+/* ------------------------------------------ run 7 (wc-hands): the snare's spots ---- */
+
+/**
+ * The deer trail C (run 7): a narrow trodden trail out of the glade's north edge, north
+ * under the trees, then east along the wood to join the wildwissel. Two of the snare's
+ * spots lie by it. North of the pine on purpose: the morning photo is taken by the camera
+ * on the pine's NORTH face (a spot south of it is behind its own trunk); west of the glade
+ * is the reekalf's ground, east of the thicket the ecoduct and nachtronde markers.
+ */
+export function trailC(): Spot[] {
+  return [
+    { x: 1.5, z: -27.6 }, { x: 1.15, z: -25.6 }, { x: 0.85, z: -23.6 }, { x: 0.75, z: -21.9 }, { x: 1.3, z: -20.65 },
+    { x: 2.7, z: -20.2 }, { x: 4.0, z: -20.75 }, { x: 3.9, z: -22.6 }, { x: 4.6, z: -23.7 }, { x: 6.3, z: -23.95 },
+    { x: 7.9, z: -24.0 }, { x: 9.9, z: -23.6 },
+  ];
+}
+
+/** Which of the three spots the man set his snare at this play. */
+export type SnareId = 'S1' | 'S2' | 'S3';
+export const SNARE_IDS: readonly SnareId[] = ['S1', 'S2', 'S3'];
+
+/** A thing that always stands by a snare spot (the photo shows two): its model, where,
+ *  how tall (m), its footprint's half-width (m), its turn; `solid` = the ranger walks
+ *  round it. (Each is a home plant, the birch too.) */
+export interface SnareMark {
+  model: 'prop-juniper-bush' | 'prop-foxglove' | 'prop-birch-tree' | 'prop-boulder' | 'prop-fallen-log' | 'prop-fern';
+  at: Spot; h: number; r: number; yaw: number; solid?: boolean;
+}
+
+/** A framed view of a world spot (the kit's FrameSpec, THREE-free). */
+export interface SnareView {
+  at: Spot; heading: number; halfW: number; halfD: number; tall: number; pitchDeg: number; insetTop: number; insetBottom: number;
+  include: readonly { x: number; z: number; h: number }[];
+}
+
+/** One spot the snare may lie at: the wire loop (and its turn), where he stands to take it
+ *  away (a step before it on the camera's side, facing it), its two landmarks, and the
+ *  close view of it there. */
+export interface SnareSpot { id: SnareId; at: Spot; yaw: number; approach: Place; marks: readonly [SnareMark, SnareMark]; view: SnareView }
+
+/** A spot `v` m beyond `s` as the camera on the pine sees it, `u` m to its right. */
+function past(s: Spot, u: number, v: number): Spot {
+  return atLocal({ x: s.x, z: s.z, heading: headingTo(CAMERA, s) }, u, v);
+}
+
+/** The close view of a snare: from his side, looking across his last step to it (the
+ *  wire loop a little off the picture's middle, him at the edge, the landmarks behind).
+ *  `turn`: how far round from his way the lens looks (rad, − from his right side). */
+function snareViewOf(at: Spot, me: Spot, turn: number, halfW = 1.5): SnareView {
+  // (centred a little nearer him than half way: the wire lies well off the picture's middle)
+  const mid = toward({ x: (at.x + me.x) / 2, z: (at.z + me.z) / 2 }, me, 0.4);
   return {
-    at: mid, heading: headingTo(side, mid),
-    halfW: 1.5, halfD: 1.2, tall: 1.4, pitchDeg: 26, insetTop: 120, insetBottom: 120,
+    at: mid, heading: headingTo(me, at) + turn,
+    halfW, halfD: 1.2, tall: 1.4, pitchDeg: 26, insetTop: 120, insetBottom: 120,
+    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT }],
+  };
+}
+
+const approachOfSnare = (at: Spot): Place => {
+  const p = toward(at, CAMERA, 0.9);
+  return { ...p, r: 1.2, heading: headingTo(p, at) };
+};
+
+/**
+ * The snare's three spots (run 7, wc-hands; design state/wildcamera §4): each the man's
+ * place on one play, each with its own two landmarks that ALWAYS stand there (only the
+ * snare comes and goes), on three different bearings from the camera (the morning photo
+ * of one never shows another's landmarks):
+ *   S1 up the wildwissel he walked in on, a juniper and a foxglove (run 6's spot);
+ *   S2 on deer trail C north of the glade, a birch and a big stone;
+ *   S3 on trail C just north of the crossing, a fallen log and a fern.
+ * Each lies half in the grass at its trail's edge; the landmarks stand just beyond it as
+ * the camera sees it, one each side. Pinned in the places test (by looking: 2026-10-03).
+ */
+export const SNARE_SPOTS: Readonly<Record<SnareId, SnareSpot>> = (() => {
+  const s2 = { x: 1.92, z: -20.67 }, s3 = { x: 6.32, z: -23.61 };
+  const fox = SIZE.vingerhoedskruid.h * 0.85;
+  const out: Record<SnareId, SnareSpot> = {
+    S1: {
+      id: 'S1', at: { ...SNARE }, yaw: 0.7, approach: { ...WILDCAMERA_PLACES.snareApproach },
+      marks: [
+        { model: 'prop-juniper-bush', at: { x: SNARE_MARKS.bush.x, z: SNARE_MARKS.bush.z }, h: SNARE_MARKS.bush.h, r: SNARE_MARKS.bush.r, yaw: SNARE_MARKS.bush.yaw, solid: true },
+        { model: 'prop-foxglove', at: { x: SNARE_MARKS.foxglove.x, z: SNARE_MARKS.foxglove.z }, h: fox, r: 0.15, yaw: SNARE_MARKS.foxglove.yaw },
+      ],
+      view: snareViewOf(SNARE, WILDCAMERA_PLACES.snareApproach, -1.54),
+    },
+    S2: {
+      id: 'S2', at: s2, yaw: 2.2, approach: approachOfSnare(s2),
+      marks: [
+        // (a young birch: its white trunk whole in the morning photo, never the dark foot of
+        // a grown one; a home plant, so the forest never fades it to a dark ghost)
+        { model: 'prop-birch-tree', at: past(s2, -0.85, 1.15), h: 3.6, r: 0.2, yaw: 1.3 },
+        { model: 'prop-boulder', at: past(s2, 0.95, 1.05), h: 0.62, r: 0.45, yaw: 0.4, solid: true },
+      ],
+      view: snareViewOf(s2, approachOfSnare(s2), -1.5, 1.7),
+    },
+    S3: {
+      id: 'S3', at: s3, yaw: -0.4, approach: approachOfSnare(s3),
+      marks: [
+        // (lying across the camera's line: its long side in the photo, never end-on)
+        { model: 'prop-fallen-log', at: past(s3, -0.95, 1.1), h: 0.44, r: 0.75, yaw: headingTo(CAMERA, s3) + 0.3, solid: true },
+        { model: 'prop-fern', at: past(s3, 1.0, 1.15), h: 1.1, r: 0.45, yaw: 2.6 },
+      ],
+      view: snareViewOf(s3, approachOfSnare(s3), -1.5, 1.7),
+    },
+  };
+  return out;
+})();
+
+/**
+ * Where he walks in front of the camera to test it (run 7, wc-hands): out on the crossing
+ * ~2.5 m in front of the lens, clear of the log, the stump and the sett. The camera on the
+ * pine takes his photo once he is inside its fan (`inFan`).
+ */
+export const TEST_SPOT: Place = { x: CAMERA.x, z: CAMERA.z + 2.5, r: 0.9 };
+
+/** He is inside the camera's fan of view (it looks along `heading`, the trunk's north face
+ *  by default): within FAN_HALF of its straight-ahead, 1.6-4 m from it (nearer, its photo
+ *  of him would be his jacket only). */
+export function inFan(p: Spot, heading = 0): boolean {
+  const d = dist(CAMERA, p);
+  if (d < 1.6 || d > 4) return false;
+  let a = headingTo(CAMERA, p) - heading;
+  while (a > Math.PI) a -= 2 * Math.PI;
+  while (a < -Math.PI) a += 2 * Math.PI;
+  return Math.abs(a) < FAN_HALF;
+}
+
+/** The test (run 7): from behind him as he stands at the trunk, turned to the crossing,
+ *  looking over the camera's fan of ground to the spot in front of it — the lens the
+ *  follow camera takes over from (so the Up key walks him into the fan, never back round
+ *  the trunk). */
+export const TEST_VIEW = (() => {
+  const me = at(0.62, -0.62);
+  return {
+    at: { x: (me.x + TEST_SPOT.x) / 2, z: (me.z + TEST_SPOT.z) / 2 }, heading: headingTo(me, TEST_SPOT),
+    halfW: 2.2, halfD: 1.6, tall: 1.5, pitchDeg: 20, insetTop: 110, insetBottom: 60,
     include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT }],
   } as const;
 })();
+
+/** The search's start (run 7): from behind him on the open crossing, turned to the wood
+ *  north of it where the man's three spots lie (up the wildwissel, the deer trail): the
+ *  lens the follow camera takes over from, so the place on the photo is in front of him and
+ *  the Up key walks him toward it (never one spot more than another: all three are ahead). */
+export const SEARCH_VIEW = (() => {
+  const me = at(1.6, -2.4);
+  const ahead = { x: me.x - 0.6, z: me.z + 3.2 };
+  return {
+    at: ahead, heading: headingTo(me, ahead),
+    halfW: 3.0, halfD: 2.4, tall: 1.6, pitchDeg: 14, insetTop: 260, insetBottom: 60,
+    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT }],
+  } as const;
+})();
+
+/** The way back (run 7): from behind him where he took the snare away, turned to his
+ *  camera on the pine: the lens the follow camera takes over from, so the Up key walks him
+ *  home (the snare's own close view looks at him from the side). */
+export function walkBackView(me: Spot): SnareView {
+  const home = WILDCAMERA_PLACES.handBack;
+  const ahead = toward(me, home, Math.min(2.4, dist(me, home) * 0.4));
+  return {
+    at: ahead, heading: headingTo(me, home),
+    halfW: 2.4, halfD: 1.8, tall: 1.6, pitchDeg: 16, insetTop: 120, insetBottom: 60,
+    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT }],
+  };
+}
+
+/** A tuft of grass round a snare (m: where, how tall, its turn). */
+export interface Tuft extends Spot { h: number; turn: number }
+
+/** The grass a snare lies half in (run 7: pure, so the places test pins it): 16 tufts
+ *  round the wire, never on it, thickest behind and beside it; the few on the side he
+ *  comes from (the camera's side) kept low, so the wire loop shows between them from
+ *  close by, never from far. (S1's are run 6's tufts.) */
+export function snareTufts(sp: SnareSpot): Tuft[] {
+  const rt = stream(53 + SNARE_IDS.indexOf(sp.id) * 11);
+  const toMe = headingTo(sp.at, sp.approach);
+  const out: Tuft[] = [];
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2 + rt() * 0.3;
+    const rr = 0.2 + rt() * 0.28;
+    const front = Math.cos(a - toMe); // 1: between the snare and the way he comes
+    const h = (front > 0.55 ? 0.16 : 0.3) + rt() * 0.12;
+    out.push({ x: sp.at.x + Math.sin(a) * rr, z: sp.at.z + Math.cos(a) * rr, h, turn: rt() * 6.28 });
+  }
+  return out;
+}
 
 /** Strapping the camera on: close, low, from the north-west — the camera on the trunk's
  *  face, the ranger at its side. */
@@ -405,10 +603,16 @@ export function wildcameraTreeClearings(): { x: number; z: number; r: number }[]
     { ...TREE, r: 3.6 },
     { ...at(0.4, -4.2), r: 3.4 },
     { ...at(0.5, -7.2), r: 2.6 },
-    // the snare's spot with its bush and foxglove
-    { ...SNARE, r: 2.4 },
   ];
-  for (const p of trailA()) out.push({ x: p.x, z: p.z, r: 1.4 });
+  // run 7: the snare's three spots with their landmarks, and the camera's line to each (no
+  // forest tree between the lens on the pine and the man in the morning photo)
+  for (const id of SNARE_IDS) {
+    const sp = SNARE_SPOTS[id];
+    out.push({ ...sp.at, r: 2.4 });
+    const d = dist(CAMERA, sp.at), n = Math.ceil(d / 0.9);
+    for (let i = 1; i < n; i++) out.push({ ...toward(CAMERA, sp.at, (i / n) * d), r: 1.3 });
+  }
+  for (const p of [...trailA(), ...trailC()]) out.push({ x: p.x, z: p.z, r: 1.4 });
   return out;
 }
 
@@ -419,16 +623,21 @@ export function wildcameraClearings(): { x: number; z: number; r: number }[] {
     { ...GLADE, r: GLADE_R + 0.4 },
     { ...THICKET, r: THICKET_R + 0.5 },
     { ...at(0.3, -0.9), r: 1.8 },
-    // the snare's spot (its own grass) and the camera's line up the trail to it (no
-    // bracken between the lens and the man in the morning photo)
-    { ...SNARE, r: 1.6 },
   ];
-  for (const p of [...trailA(), ...trailB()]) out.push({ x: p.x, z: p.z, r: 0.7 });
-  for (let i = 1; i < 8; i++) out.push({ ...toward(CAMERA, SNARE, (i / 8) * Math.hypot(SNARE.x - CAMERA.x, SNARE.z - CAMERA.z)), r: 0.6 });
+  for (const p of [...trailA(), ...trailB(), ...trailC()]) out.push({ x: p.x, z: p.z, r: 0.7 });
+  // each snare spot (its own grass) and the camera's line to it (no bracken between the
+  // lens and the man in the morning photo)
+  for (const id of SNARE_IDS) {
+    const sp = SNARE_SPOTS[id];
+    out.push({ ...sp.at, r: 1.6 });
+    const d = dist(CAMERA, sp.at), n = Math.ceil(d / 0.8);
+    for (let i = 1; i < n; i++) out.push({ ...toward(CAMERA, sp.at, (i / n) * d), r: 0.6 });
+  }
   return out;
 }
 
-/** The camera pine, planted as a real forest tree. */
+/** The camera pine, planted as a real forest tree (the snare spots' landmarks are home
+ *  plants: the forest would fade a tree of its own to a see-through ghost). */
 export function wildcameraTrees(): { x: number; z: number; s: number; rotY: number; species: 'prop-pine-scots' }[] {
   return [{ x: TREE.x, z: TREE.z, s: PINE.s, rotY: PINE.rotY, species: 'prop-pine-scots' }];
 }

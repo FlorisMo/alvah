@@ -100,11 +100,46 @@
 .wc-big img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .wc-big.wc-last { box-shadow: 0 0 0 4px var(--spel-sun); }
 .wc-review-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
-.wc-mini { width: 58px; height: 36px; object-fit: cover; border-radius: 4px; opacity: 0.55; border: 2px solid transparent; }
+/* run 7: each small photo is a button (a click shows it big) */
+.wc-mini {
+  display: block;
+  width: 64px;
+  height: 40px;
+  padding: 0;
+  border-radius: 5px;
+  border: 3px solid transparent;
+  background: #222;
+  opacity: 0.55;
+  cursor: pointer;
+  overflow: hidden;
+  transition: opacity var(--dur-base) var(--ease-soft);
+}
+.wc-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .wc-mini.on { opacity: 1; border-color: var(--spel-sun); }
 .wc-review-foot { display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--tap-min); }
-.wc-review-line { flex: 1; margin: 0; font: 600 24px/1.3 var(--font-read); color: var(--ink); }
-.wc-review-foot .btn-start[hidden] { display: none; }
+.wc-review-lines { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.wc-review-line { margin: 0; font: 600 24px/1.3 var(--font-read); color: var(--ink); }
+
+/* run 7: a photo pinned at the top, under the objective line (the man's while he looks for
+   the place; his own a moment after the camera took it): nothing to click */
+.wc-pin {
+  position: absolute;
+  top: calc(max(16px, env(safe-area-inset-top)) + 88px);
+  left: 50%;
+  width: 220px;
+  aspect-ratio: 16 / 10;
+  transform: translateX(-50%) scale(0.92);
+  opacity: 0;
+  border: 4px solid var(--paper);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  background: #222;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity var(--dur-slow) var(--ease-soft), transform var(--dur-slow) var(--ease-soft);
+}
+.wc-pin.wc-pin-in { opacity: 1; transform: translateX(-50%) scale(1); }
+.wc-pin img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 /* the clue card after the mission: the camera trap's own photograph of the man and his
    snare (MissionFlow.showWildcamCapture), taped into the card in place of the camera icon */
