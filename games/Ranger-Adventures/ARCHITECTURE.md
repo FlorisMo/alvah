@@ -123,7 +123,8 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          happens), <id>.home.ts (the home's dressing), <id>.ts (the beats);
                          frisling (the wallow), ree (the copse, the meadow, the hide; run 7:
                          ree.variety.ts its seeded mornings, growth and watch script,
-                         ree.window.ts the calf's glimpse fitted to the level both ways),
+                         ree.window.ts the calf's glimpse fitted to the level both ways,
+                         for the lens the search really frames: `searchBeat`'s `fit`),
                          wildcamera (the crossing, the glade, the thicket, the snare; its
                          trap photos in wildcamera.photos.ts; run 7: wildcamera.variety.ts
                          draws how each visitor comes (side + stop) and the night choir's
