@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { hydrate, beatLog, appendBeat, HISTORY_MAX, DEFAULT_STATE, store, type BeatLog, type GameState } from './state.ts';
 import { newPlay } from './play.ts';
-import { knobsFor } from './skill.ts';
+import { knobsFor, judgeBeat, type BeatSummary, type Engine } from './skill.ts';
 
 /** A save as run 6 wrote it: DEFAULT_STATE's shape before run 7, with progress in it. */
 function run6Save(): Partial<GameState> {
@@ -82,6 +82,39 @@ test('a beat log: what was played, at which level, from which play', () => {
   const span = beatLog('simon', { trials: 3, correct: 2, span: 4, start: 2 }, { missionId: 'm', view: 'world', play: null }, 1, 0);
   assert.equal(span.sp, 4);
   assert.equal(span.st, 2);
+});
+
+test('a beat\'s step can be read back from its history row: every field its judgement read is kept', () => {
+  const meta = { missionId: 'm', view: 'world' as const, play: null };
+  // the row back into the fields judgeBeat reads (what a grown-up's read of the history does)
+  const back = (l: BeatLog): BeatSummary => ({
+    trials: l.n, correct: l.c, span: l.sp, start: l.st, misses: l.ms, seconds: l.s, holdS: l.h,
+    firstClean: l.f1 == null ? undefined : l.f1 === 1, eased: l.ea, hinted: l.hi == null ? undefined : l.hi === 1,
+    impulses: l.im, switches: l.sw, switchErrors: l.se,
+  });
+  const cases: [Engine, BeatSummary][] = [
+    ['simon', { trials: 3, correct: 3, span: 4, start: 2, rounds: 3, eased: 0, firstClean: true }],      // easy
+    ['simon', { trials: 4, correct: 3, span: 5, start: 3, rounds: 4, eased: 0, firstClean: false }],     // fine (a slip in round 1)
+    ['corsi', { trials: 2, correct: 1, span: 3, start: 4, rounds: 2, eased: 1, firstClean: false }],     // hard (eased under his start)
+    ['zoeken', { trials: 1, correct: 1, misses: 0, seconds: 2.8, hinted: false }],                       // easy
+    ['zoeken', { trials: 1, correct: 0, misses: 1, seconds: 16, hinted: true }],                         // hard (a hint)
+    ['dagnacht', { trials: 5, correct: 5, impulses: 2, holdS: 4.5 }],                                    // fine (two reaches)
+    ['dagnacht', { trials: 5, correct: 5, impulses: 0 }],                                                // easy (the 2D cards)
+    ['wisselen', { trials: 8, correct: 7, switches: 2, switchErrors: 0 }],                               // easy
+    ['wisselen', { trials: 8, correct: 6, switches: 2, switchErrors: 2 }],                               // hard (two switch errors)
+  ];
+  for (const [e, s] of cases) {
+    const log = beatLog(e, s, meta, 3, 0);
+    assert.notEqual(judgeBeat(e, s), null, `${e}: the case is judged by its engine`);
+    assert.equal(judgeBeat(e, back(log)), judgeBeat(e, s), `${e} ${JSON.stringify(s)}: the same step from the history row`);
+  }
+  const w = beatLog('wisselen', cases[8][1], meta, 3, 0);
+  assert.deepEqual([w.sw, w.se], [2, 2], 'the turns and the switch errors');
+  const r = beatLog('corsi', cases[2][1], meta, 3, 0);
+  assert.deepEqual([r.f1, r.ea], [0, 1], 'a slip in round 1 and a silent ease');
+  // an old-style summary (the hut's care game) adds none of them
+  const hut = beatLog('corsi', { trials: 1, correct: 1 }, { missionId: '', view: '2d', play: null }, 1, 0);
+  for (const k of ['f1', 'ea', 'hi', 'im', 'sw', 'se']) assert.ok(!(k in hut), `no ${k} without its field`);
 });
 
 test('the history is bounded: the oldest beats go first', () => {
