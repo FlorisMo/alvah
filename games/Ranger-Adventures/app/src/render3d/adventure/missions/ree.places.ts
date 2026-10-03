@@ -360,8 +360,9 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     // (her way out of the copse's south gap to the meeting place runs 5 m across the watch:
     // she stops halfway)
     watchMid: 0.55, watchHalfW: 2.8, watchVia: { u: -0.3, v: 0.35 },
-    // (north along the forest's edge, past his hide's juniper on its forest side)
-    out: { x: -1.6, z: -39.0 }, outVia: [{ x: -0.95, z: -42.5 }],
+    // (north along the forest's edge, past his hide's juniper on its forest side, ending
+    // ~10.7 m from their home: where he stops stays near it)
+    out: { x: -2.6, z: -38.8 }, outVia: [{ x: -0.95, z: -42.5 }],
   }),
   C: build({
     id: 'C', stand: { x: -21.0, z: -49.0 }, look: deg(-90), corner: 1, bend: { x: -20.5, z: -38.8 },

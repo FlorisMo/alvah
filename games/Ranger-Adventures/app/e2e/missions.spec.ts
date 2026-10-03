@@ -434,7 +434,7 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
       // ("Daar is de moeder!" as she is first seen, out from behind her bushes: review r1
       // heard it 5-8 s before she showed)
       log.soft(stats.watch_out_lag !== undefined && stats.watch_out_lag >= 0 && stats.watch_out_lag <= 0.5, `ree: "Daar is de moeder!" ${stats.watch_out_lag} s after she is seen`);
-      log.note(`ree: look-alikes ${stats.look_alikes}, hold ${stats.hold_s} s, calf wobble ${stats.calf_wobble}, print gaps ${stats.print_gaps}, watch ${stats.watch_s} s (${stats.watch_listens} pauses, unseen ${stats.watch_hidden_s} s), walked away after ${stats.go_moeder ?? 0} wrong`);
+      log.note(`ree: look-alikes ${stats.look_alikes}, hold ${stats.hold_s} s, calf wobble ${stats.calf_wobble}, print gaps ${stats.print_gaps}, watch ${stats.watch_s} s (${stats.watch_listens} pauses, unseen ${stats.watch_hidden_s} s), walked away after ${stats.go_moeder ?? 0} wrong (stood ${stats.go_moeder_stay ?? 0}, closer ${stats.go_moeder_closer ?? 0})`);
       log.soft(stats.watch_s >= 18 && stats.watch_s <= 45, `ree: the watch lasts ${stats.watch_s} s`);
       // (the frisling's search lens hangs 3.8 m over the ground; the ree's at that height
       // stands 4.2 m from his head, where the old one stood 3 m from it and looked down on it)

@@ -538,8 +538,9 @@ test('run 7: "Loop stil weg" — his way out leads away from the family, free, t
       for (const s of LAYOUTS) for (const q of poolsOf(s)) assert.ok(wet(q, p) > 1.3, `${l.id}: his way out keeps out of a pool`);
       assert.equal(biomeAt(p.x, p.z), 'heide', `${l.id}: his way out is on the heath`);
     }
+    // (≤ 11 m: where he really stops, up to ~1 m off it, stays within missions.spec's 12)
     const end = Math.min(dist(w, P.home), dist(w, MARKER));
-    assert.ok(end <= 12, `${l.id}: he ends ${end.toFixed(1)} m from the marker or their home`);
+    assert.ok(end <= 11, `${l.id}: he ends ${end.toFixed(1)} m from the marker or their home`);
     assert.ok(P[`${l.id}.wayOut`] && dist(P[`${l.id}.wayOut`], w) < 1e-9, `${l.id}.wayOut is in the places table`);
     assert.ok(Math.abs(w.heading! - headingTo(w, l.meet)) < 1e-9, `${l.id}: at his way out he faces back toward them`);
   }
