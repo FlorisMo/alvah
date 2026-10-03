@@ -231,9 +231,11 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const flutter: { b: Bird; at: Spot; ph: number }[] = [];
   const surprise = k.play.fork('verrassing');
   // the pigs' rubbing log: in 'boom' the sow rubs her flank on it while he looks at them;
-  // otherwise, now and then, the yearling goes over and has a good scratch
-  if (FAMILY_LAYOUTS[v.family].id === 'boom') rub(A.sow, layout.sow);
-  else if (surprise.fork('schuren').chance(0.4)) {
+  // otherwise, now and then, the yearling goes over and has a good scratch (never on his
+  // first play here: that one is the adventure itself, the finds wait for coming back)
+  const extras = k.play.n > 1;
+  if (extras && FAMILY_LAYOUTS[v.family].id === 'boom') rub(A.sow, layout.sow);
+  else if (extras && surprise.fork('schuren').chance(0.4)) {
     // (beside the log on the wallow's side, flank to it)
     const across = logYaw - Math.PI / 2;
     const side = Math.sign((P.wallow.x - log.x) * Math.sin(across) + (P.wallow.z - log.z) * Math.cos(across)) || 1;
@@ -566,8 +568,9 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   }
 
   /** A woodlark sits in the heather at `spot` on his way; when he comes within 3 m it flies
-   *  up singing its soft falling "lu-lu-lu", ahead of him (never toward the lens), and
-   *  settles 15-20 m on. Seen in flight = discovered. */
+   *  up singing its soft falling "lu-lu-lu", ahead of him (never toward the lens), settles
+   *  15-20 m on and drops into the heather, gone (it never sits in the search's picture as
+   *  one more bird to click). Seen in flight = discovered. */
   async function woodlark(spot: Spot): Promise<void> {
     const b = await spawnBird(k, 'bird-boomleeuwerik', 0.3);
     if (!b) return;
@@ -579,6 +582,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     b.root.visible = true;
     let flying = false;
     let step: ((dt: number) => boolean) | null = null;
+    let sits = -1; // (s it sits on the heather after landing, before it drops in)
     finds.watch({ id: 'frisling.leeuwerik', object: () => (flying ? b.root : null), within: 30 });
     const off = k.onTick((dt) => {
       if (!flying) {
@@ -593,7 +597,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
         step = flight(k, b.root, { ...spot, y: 0 }, { ...to, y: 0 }, 3.4, 4.2);
         return;
       }
-      if (step && step(dt)) { step = null; off(); }
+      if (step && step(dt)) { step = null; sits = 0.8; }
+      else if (sits > 0 && (sits -= dt) <= 0) { b.root.visible = false; off(); }
     });
   }
 
