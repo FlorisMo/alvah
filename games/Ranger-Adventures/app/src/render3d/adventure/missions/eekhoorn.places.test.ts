@@ -665,6 +665,23 @@ test('each home tree\'s branch stub is part of its tree: rooted in the bark, out
   assert.equal(n, HOME_TREES.length, 'every home tree has a branch');
 });
 
+test('the walk hint never strands him: from right beside any pine of the home, the way to a watch spot is the spot itself or a step beyond the hint\'s radius', () => {
+  const goals = [...new Set(ROUTE_IDS.flatMap((id) => ROUTES[id].waits))].map((t) => watchSpot(t));
+  let n = 0;
+  // (as near as he can stand: the trunk's collider and his own 0.3 m, and a little further)
+  for (const t of HOME_TREES) for (const r of [(0.6 * t.h) / 12.5 + 0.32, trunkClear(t) - 0.2, trunkClear(t) + 0.05]) for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+    const me = { x: t.x + Math.sin(a) * r, z: t.z + Math.cos(a) * r };
+    if (HOME_TREES.some((o) => o !== t && dist(o, me) < (0.6 * o.h) / 12.5 + 0.32)) continue;
+    for (const g of goals) {
+      if (dist(me, g) < 2) continue;
+      const w = wayTo(me, g);
+      n += 1;
+      assert.ok(w === g || dist(me, w) > WATCH_R, `beside ${t.id} at ${deg(a)}°, ${r.toFixed(2)} m: a step of ${dist(me, w).toFixed(2)} m toward (${g.x.toFixed(1)}, ${g.z.toFixed(1)})`);
+    }
+  }
+  assert.ok(n > 500, `${n} ways`);
+});
+
 /* ---------------------------------------------------------- the draw ---- */
 
 test('a play\'s draw: from its own forks, replayed by its seed, never the last play\'s way or pattern, a new neighbour at least', () => {
@@ -815,7 +832,9 @@ test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1
         const solid = nestSolid(lens, at, { x: s.x, y: gs, z: s.z });
         const d = Math.hypot(lens.x - at.x, lens.y - at.y, lens.z - at.z);
         if (solid) {
-          assert.ok(d >= NEST.r + 1.2, `${id}/${t.id}: on the ${o} way the lens is ${d.toFixed(2)} m from it, and it stands solid`);
+          // (solid, it never looms: at most ~150 px of his picture — played 2026-10-03, the
+          // lens trailing him past the first pine had it 220 px wide at its right shoulder)
+          assert.ok(pxAt(NEST.r * 2, d) <= 150, `${id}/${t.id}: on the ${o} way the lens is ${d.toFixed(2)} m from it (${pxAt(NEST.r * 2, d).toFixed(0)} px), and it stands solid`);
           assert.ok(lineClear(lens, { x: s.x, y: gs + 1.0, z: s.z }, [{ x: at.x, z: at.z, y0: at.y - NEST.r, y1: at.y + NEST.r, r: () => NEST.r }]), `${id}/${t.id}: on the ${o} way it stands solid between the lens and him`);
         }
       }

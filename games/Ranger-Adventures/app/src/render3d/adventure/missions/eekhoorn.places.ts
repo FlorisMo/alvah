@@ -424,6 +424,10 @@ export function wayTo(me: Spot, goal: Spot): Spot {
   for (const t of HOME_TREES) {
     if (segDist(t, me, goal) >= trunkClear(t) - 0.15) continue;
     const along = (t.x - me.x) * (goal.x - me.x) + (t.z - me.z) * (goal.z - me.z);
+    // (a trunk behind him never stands in his way: standing right by one — where the
+    // squirrel's nest left him, played 2026-10-03 — the way off it is straight on, never a
+    // step round it that he already stands on)
+    if (along <= 0) continue;
     if (along < bt) { bt = along; block = t; }
   }
   if (!block) return goal;
@@ -629,9 +633,9 @@ export function nestOf(route: Route, i: number): NestSpot {
 /** How solid the nest stands (1) or how far it fades (0), as the follow lens trailing him
  *  sees it: like a home tree's crown, it never fills the lens nor stands between the lens
  *  and him — the lens passes within `NEST_FADE.near` m of it on some ways (it hangs at the
- *  lens's height), or it is on the line from the lens to his head. `lens`, `nest`: world
- *  x/y/z; `me`: his feet. */
-export const NEST_FADE = { near: 1.6, line: 0.5 } as const;
+ *  lens's height: nearer, it would loom over 150 px of his picture), or it is on the line
+ *  from the lens to his head. `lens`, `nest`: world x/y/z; `me`: his feet. */
+export const NEST_FADE = { near: 2.8, line: 0.5 } as const;
 export function nestSolid(lens: { x: number; y: number; z: number }, nest: { x: number; y: number; z: number }, me: { x: number; y: number; z: number }): number {
   const d = Math.hypot(lens.x - nest.x, lens.y - nest.y, lens.z - nest.z);
   if (d < NEST_FADE.near) return 0;
