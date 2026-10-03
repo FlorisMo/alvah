@@ -57,7 +57,7 @@ import {
 } from './ree.variety';
 import {
   REE_HOME, REE_LAYOUTS, REE_RESIDENTS, COPSE_TREES, CALF_DOELEN, POOL, TWIN_AFTER, reeClearings, slotTrail, calfAt, calfTalkOf, calfBolt,
-  calfView, drinkSpot, leaveView, poolSides, reunionPose, twinAt, twinEnd, walkVia, type PoolSpot, type ReeLayout,
+  birchWalk, calfView, drinkSpot, leaveView, poolSides, reunionPose, twinAt, twinEnd, walkVia, type PoolSpot, type ReeLayout,
 } from './ree.places';
 import { ReeFinds, findId, inPicture } from './ree.finds';
 
@@ -137,7 +137,7 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Non
   const trial = buildZoekenTrial(mission.stappen[0].skin, store.knobs('zoeken'), play.fork('zoeken').rng);
   // ree-discover: this play's small things of the heath (the ones he has not found first)
   const found = store.get().ontdekt;
-  const finds = reeSurprises(play, (id) => !!found[findId(id)], { birches: l.birches.length, larkOn: l.larkOn });
+  const finds = reeSurprises(play, (id) => !!found[findId(id)], { birches: l.birches.length, larkOn: l.larkOn, birchOn: l.birches.map((_, i) => birchWalk(l, i)) });
   play.note(SURPRISE_KEY, finds.code);
   const birch = finds.boompje !== null ? l.birches[finds.boompje] : null;
   home.layPlay({ layout: l, calf, pool: p.pool, decoys: trial.decoys.map((d) => d.id), glimpse: trial.glimpse, birch });
@@ -737,7 +737,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   await k.frame(l.views.reunion, { face: headingTo(k.ranger(), meet), dip: true });
   await doeBack;
   const drink = drinkSpot({ x: doe.x, z: doe.z, yaw: pose.yaw }, SIZE.ree.len, pose.side);
-  // ree-discover, the rare twins: the bracken by her gap stirs, and a second calf gets up
+  // ree-discover, the rare twins: the grass behind them stirs, and a second calf gets up
   // and comes out to her ("Kijk! Een tweeling!" as it comes into his picture)
   const both = !!twinHid && !!twin;
   if (both) {
@@ -804,9 +804,11 @@ function twinHides(k: AdventureKit, l: ReeLayout, twin: Actor): { now(): void } 
 async function twinComes(k: AdventureKit, home: ReeHome, twin: Actor, to: Spot & { yaw: number; round: Spot }, finds: ReeFinds,
   call: (id: string, x: number, z: number) => void): Promise<void> {
   const c = k.copy;
-  k.beat = 'reunion:twin';
+  // (its own beat, outside the reveal queue's quiet beats: no card waiting from earlier
+  // lands on the twin; its own reveal comes with the reunion's line after)
+  k.beat = 'twin:comes';
   k.stats.tweeling = 1;
-  finds.seen.watch({ id: findId('tweeling'), object: () => twin.body, within: 30, px: 40, secs: 1, when: () => k.beat.startsWith('reunion') });
+  finds.seen.watch({ id: findId('tweeling'), object: () => twin.body, within: 30, px: 40, secs: 1, when: () => k.beat === 'twin:comes' || k.beat.startsWith('reunion') });
   // the grass where it lies stirs
   const clump = home.cover.nearestClump(twin.x, twin.z);
   if (clump) home.cover.rustle(clump.i, 0.14);

@@ -16,7 +16,7 @@ import {
   REE_PLACES as P, REE_RESIDENTS, REE_HOME, REE_LAYOUTS, LAYOUTS, MARKER, STAND, FRINGE, SEARCH_RING, POOL, COPSE_FRAME, COPSE_SIZE,
   COPSE, THICKET, HOME_REACH, COPSE_TREES, CALF_DOELEN, DOE_BED, CALF_HOME, onStand, calfAt, calfTalkOf, calfBolt, calfView, leaveView, drinkSpot, reunionPose,
   inStand, reeClearings, slotTrail, wisselLine, juniperR, poolsOf, poolSides, walkVia, WISSEL_HALF, type ReeLayout, type PoolSpot,
-  BIRCH, BIRCH_CLEAR, BIRCH_NEAR, BUZZARD, LARK, LARK_TURNS, TWIN_AFTER, heathFor, larkFlight, larkRoom, larkWays, twinAt,
+  BIRCH, BIRCH_CLEAR, BIRCH_NEAR, BUZZARD, LARK, LARK_TURNS, TWIN_AFTER, birchWalk, heathFor, larkFlight, larkRoom, larkWays, twinAt,
 } from './ree.places.ts';
 import { FRISLING_PLACES, hideClumps, fieldSpots, cluePosts, bootPrints } from './frisling.places.ts';
 import { WILDCAMERA_PLACES, WILDCAMERA_RESIDENTS, ROE_SHY_WITHIN, wildcameraClearings } from './wildcamera.places.ts';
@@ -641,6 +641,22 @@ test('ree-discover: the rubbed young birch stands beside his way, in his picture
   }
   assert.ok(BIRCH.h >= 1.2 && BIRCH.h <= 1.6, 'a young birch about his height');
   assert.ok(BIRCH_NEAR >= 2 && BIRCH_NEAR <= 3, 'he sees its marks from close by');
+});
+
+test('ree-discover: each young birch stands beside one walk (the woodlark keeps to the other)', () => {
+  // A and B: one by her wissel (the walk to the grass), one by his way round the grass to the
+  // hide; C: the one by her wissel (its way to the hide passes the frisling's ground)
+  const want: Record<string, string[]> = { A: ['meadow', 'hide'], B: ['meadow', 'hide'], C: ['meadow'] };
+  for (const l of LAYOUTS) {
+    assert.deepEqual(l.birches.map((_, i) => birchWalk(l, i)), want[l.id], `${l.id}: the walks its birches stand by`);
+    for (const [i, b] of l.birches.entries()) {
+      const w = birchWalk(l, i);
+      const ways = w === 'meadow'
+        ? [[P.marker, ...walkVia(l, 'meadow', l.pools.in), l.search], [P.marker, ...walkVia(l, 'meadow', null), l.search]]
+        : [[...walkVia(l, 'hide', null), l.hide], ...(l.pools.out ? [[...walkVia(l, 'hide', l.pools.out), l.hide]] : [])];
+      assert.ok(Math.min(...ways.map((x) => polyDist(b, x))) <= 3.6, `${l.id}.birch${i} lies beside the walk to the ${w}`);
+    }
+  }
 });
 
 test('ree-discover: the woodlark flies up ahead of him, on along his way and back down, never toward the lens; every walk has room for it', () => {

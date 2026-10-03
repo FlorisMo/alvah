@@ -68,7 +68,7 @@ const REE: Ontdekking[] = [
   { id: 'ree-niet-aanraken.moeder', home: 'ree-niet-aanraken', soort: 'dier', naam: 'de ree', naamKnap: 'de reegeit',
     hint: 'Wie eet er bij het bosje?', model: 'animal-ree-roedeer' },
   { id: 'ree-niet-aanraken.leeuwerik', home: 'ree-niet-aanraken', soort: 'dier', naam: 'de leeuwerik', naamKnap: 'de boomleeuwerik',
-    hint: 'Een vogel zingt hoog boven de hei.', model: 'bird-boomleeuwerik' },
+    hint: 'Een vogeltje vliegt op uit de hei.', model: 'bird-boomleeuwerik' },
   { id: 'ree-niet-aanraken.buizerd', home: 'ree-niet-aanraken', soort: 'dier', naam: 'de buizerd',
     hint: 'Wie zweeft er boven de hei?', model: 'bird-buizerd' },
   { id: 'ree-niet-aanraken.koekoek', home: 'ree-niet-aanraken', soort: 'dier', naam: 'de koekoek',

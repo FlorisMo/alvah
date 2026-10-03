@@ -25,7 +25,7 @@ import { ONTDEKKINGEN, ontdekkingenVan } from '../../../content/ontdekkingen.ts'
 import { compactVariant } from '../../../core/play.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
-import { REE_LAYOUTS, poolSides } from './ree.places.ts';
+import { LAYOUTS, REE_LAYOUTS, birchWalk, poolSides } from './ree.places.ts';
 
 const MISSION = 'ree-niet-aanraken';
 const play = (seed: number) => newPlay(MISSION, seed, 1);
@@ -286,6 +286,44 @@ test('ree-discover: the ones he has not found come first; once he found them all
     const found = new Set<ReeSmall>();
     for (let n = 0; n < 4; n++) for (const s2 of reeSurprises(play(base + n), (id) => found.has(id), { birches: 2 }).small) found.add(s2);
     assert.equal(found.size, 4, `seed ${base}: four plays meet all four (${[...found]})`);
+  }
+});
+
+test('ree-discover: one thing at a time on the walks — the woodlark off the buzzard\'s walk and the birch\'s, no extra on a walk that holds two', () => {
+  let meadowLark = 0, hideLark = 0, extras = 0;
+  for (const l of LAYOUTS) {
+    const o = { birches: l.birches.length, larkOn: l.larkOn, birchOn: l.birches.map((_, i) => birchWalk(l, i)) };
+    for (let seed = 1; seed <= 400; seed++) {
+      for (const got of [[], ['koekoek'], ['koekoek', 'veegsporen']] as ReeSmall[][]) {
+        const s2 = reeSurprises(play(seed), (id) => got.includes(id), o);
+        const birch = s2.boompje !== null ? o.birchOn[s2.boompje] : null;
+        const tag = `${l.id} seed ${seed} (${s2.code})`;
+        // the buzzard is always on his way to the hide: the woodlark then on the walk to the grass
+        if (s2.small.includes('buizerd') && s2.leeuwerik) assert.equal(s2.leeuwerik, 'meadow', `${tag}: the woodlark and the buzzard on one walk`);
+        // the rubbed birch stands beside one walk: the woodlark on the other (where it may fly)
+        if (birch && s2.leeuwerik && l.larkOn.length === 2) assert.notEqual(s2.leeuwerik, birch, `${tag}: the woodlark and the birch on one walk`);
+        // the walk to the hide never holds three things; with two, no little extra
+        const hide = (s2.small.includes('buizerd') ? 1 : 0) + (s2.leeuwerik === 'hide' ? 1 : 0) + (birch === 'hide' ? 1 : 0);
+        assert.ok(hide + (s2.extra ? 1 : 0) <= 2, `${tag}: ${hide} thing(s) and ${s2.extra ?? 'no'} extra on the walk to the hide`);
+        if (s2.leeuwerik === 'meadow') meadowLark += 1;
+        if (s2.leeuwerik === 'hide') hideLark += 1;
+        if (s2.extra) extras += 1;
+      }
+    }
+  }
+  // (the woodlark still comes on both walks, and the little extra still comes often)
+  assert.ok(meadowLark > 300 && hideLark > 100, `the woodlark on the walk to the grass ${meadowLark}×, to the hide ${hideLark}×`);
+  assert.ok(extras > 1200, `a little extra in ${extras} of 3600 plays`);
+});
+
+test('ree-discover: a fresh save meets all four small things within four plays on every layout, spread over the walks', () => {
+  for (const l of LAYOUTS) {
+    const o = { birches: l.birches.length, larkOn: l.larkOn, birchOn: l.birches.map((_, i) => birchWalk(l, i)) };
+    for (let base = 1; base <= 200; base++) {
+      const found = new Set<ReeSmall>();
+      for (let n = 0; n < 4; n++) for (const s2 of reeSurprises(play(base + n), (id) => found.has(id), o).small) found.add(s2);
+      assert.equal(found.size, 4, `${l.id} seed ${base}: four plays meet all four (${[...found]})`);
+    }
   }
 });
 

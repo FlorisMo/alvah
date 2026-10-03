@@ -783,5 +783,27 @@ export function walkVia(l: ReeLayout, walk: 'meadow' | 'hide', pool: PoolSpot | 
   return out;
 }
 
+/** How far (m) a spot lies from a way (its points in order). */
+function wayDist(p: Spot, way: readonly Spot[]): number {
+  let best = Infinity;
+  for (let i = 1; i < way.length; i++) {
+    const a = way[i - 1], b = way[i];
+    const L2 = (b.x - a.x) ** 2 + (b.z - a.z) ** 2;
+    const t = L2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z)) / L2)) : 0;
+    best = Math.min(best, Math.hypot(p.x - (a.x + (b.x - a.x) * t), p.z - (a.z + (b.z - a.z) * t)));
+  }
+  return best;
+}
+
+/** ree-discover: the walk a layout's young birch `i` stands beside (the nearer of the walk
+ *  to the grass, along her wissel, and his way round the grass to the hide; with or without
+ *  its pool). reeSurprises keeps the woodlark off that walk: one thing at a time. */
+export function birchWalk(l: ReeLayout, i: number): 'meadow' | 'hide' {
+  const b = l.birches[i];
+  const meadow = Math.min(wayDist(b, [MARKER, ...walkVia(l, 'meadow', l.pools.in), l.search]), wayDist(b, [MARKER, ...walkVia(l, 'meadow', null), l.search]));
+  const hide = Math.min(wayDist(b, [...walkVia(l, 'hide', null), l.hide]), ...(l.pools.out ? [wayDist(b, [...walkVia(l, 'hide', l.pools.out), l.hide])] : []));
+  return meadow <= hide ? 'meadow' : 'hide';
+}
+
 /** Frame-local position of a spot in a layout's stand frame (for the tests). */
 export function inStand(l: ReeLayout, p: Spot): { u: number; v: number } { return toLocal(l.frame, p); }
