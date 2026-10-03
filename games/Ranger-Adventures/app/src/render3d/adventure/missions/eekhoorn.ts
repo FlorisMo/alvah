@@ -68,6 +68,9 @@ const SIT = 1.2;
  *  (straight, at its full run), the dig, the breath before the next (design §6.4: ≤ 2 s a
  *  spot — the 2D floor shows one in 1.15 s; replays and eases are its timings). */
 const VISIT = { dig: 0.65, gap: 0.12 } as const;
+/** On a pine it only passes, it waits at most this long (s) for him to turn to it before it
+ *  leaps on (the way on shows after RUN_ON_WAIT + 2 s, turning him toward it). */
+const PASS_WAIT = 9;
 /** Its sweep after a round: each acorn dug up in a quick bob (s). */
 const SWEEP_DIG = 0.25;
 /** Each neighbour's call in the echo game is held to this snippet (s): a blackbird's long
@@ -318,7 +321,17 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     const leaping = sq.now.act === 'leap';
     if (leaping && !wasLeap) { leapAt = k.now; leapOut = false; k.stats.leaps += 1; }
     wasLeap = leaping;
-    if (leaping && k.now - leapAt <= 0.3 && !leapOut && !inMiddle()) { leapOut = true; k.stats.leap_out += 1; }
+    // (a leap that STARTS outside the middle 80 % of his picture, or behind the lens: design
+    // §6.2; one passing behind his own head as it sets off is in his picture)
+    if (leaping && k.now - leapAt <= 0.3 && !leapOut) {
+      const s = sightOf(k, sq, home.trees, 'peek');
+      if (Math.abs(s.x) > RUN_ON_X) {
+        leapOut = true;
+        k.stats.leap_out += 1;
+        k.stats.leap_out_n = k.stats.leaps; // (which leap, and where: a dev read)
+        k.stats.leap_out_x = Math.round(s.x * 100) / 100;
+      }
+    }
   });
   /** set once the last move to the next wait has begun (a leap through a pine it only
    *  passes comes first) */
@@ -393,8 +406,10 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     const hops = route.hops.slice(from, to + 1);
     for (const [i, h] of hops.entries()) {
       const last = i === hops.length - 1;
-      // (on from a tree it only passes, too, only once it is where he sees it)
-      if (i > 0) await k.until(() => inMiddle(), RUN_ON_WAIT);
+      // (on from a tree it only passes, too, only once it is where he sees it: landed out of
+      // his picture, it chatters there and waits until he has turned to it — played
+      // 2026-10-03: from the middle way's A, its leap to B lands left of his picture)
+      if (i > 0 && !inMiddle()) { chatter(); await k.until(() => inMiddle(), PASS_WAIT); }
       if (last) lastMove = true;
       const ok = h.how === 'leap' ? await sq.goLeap(st(h.tree), last ? face : undefined) : await sq.goBranch(st(h.tree), last ? face : undefined);
       if (!ok) return false;
