@@ -441,6 +441,12 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
       log.soft(lens !== null && lens <= 4.1, `ree: the search's lens hangs ${lens?.toFixed(2)} m over the ground`);
       log.soft(stats.walk_meadow_m >= 9, `ree: the walk to the grass is ${stats.walk_meadow_m} m`);
       log.soft(stats.walk_hide_m >= 11, `ree: the walk to the hide is ${stats.walk_hide_m} m`);
+      // run 7 (ree-discover): what there was to notice this morning, and how big it showed
+      // (the play's `vr` note says which small things it held); a twin is laid out of his
+      // picture, never at the last moment in view
+      const finds = ['leeuwerik', 'buizerd', 'koekoek', 'tweeling', 'tapuit', 'vlinder'].filter((f) => stats[f]);
+      log.note(`ree: to notice ${finds.join(', ') || 'none'}${stats.birch_x !== undefined ? `, a rubbed birch at (${stats.birch_x}, ${stats.birch_z})` : ''}; seen ${Object.entries(stats).filter(([k2]) => k2.startsWith('px_')).map(([k2, v]) => `${k2.slice(3)} ${v} px`).join(', ')}`);
+      if (stats.tweeling) log.soft(stats.twin_laid === 1, `ree: the twin was laid out of his picture (${stats.twin_laid})`);
     },
   };
 }

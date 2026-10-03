@@ -648,7 +648,8 @@ test('ree-discover: the woodlark flies up ahead of him, on along his way and bac
   const order = [LARK.rise.v, LARK.top.v, LARK.drift.v, LARK.land.v];
   assert.ok(order.every((v, i) => i === 0 || v > order[i - 1]), 'always on, away from him (and the lens behind him)');
   assert.ok(LARK.rise.v >= 6 && LARK.rise.v <= 10, 'it flies up 6-10 m ahead of him');
-  assert.ok(LARK.top.y >= 3 && LARK.drift.y <= 6, 'it hangs low enough for the walk\'s lens to see it');
+  assert.ok(LARK.top.y >= 0.6 && LARK.drift.y <= 1.6 && LARK.drift.y > LARK.top.y, 'low over the heath, where the walk\'s lens sees it, rising as it sings');
+  assert.ok(LARK.land.u - LARK.rise.u >= 5 && LARK.rise.u < 0 && LARK.land.u > 0, 'it flies across his way, from one side to the other');
   assert.ok(LARK.hangS >= 3.5, 'it hangs singing ~4 s');
   assert.ok(Math.max(...LARK_TURNS) <= 0.5, 'off his way at most ~30°: in the walk\'s picture');
   for (const l of LAYOUTS) {
@@ -694,14 +695,16 @@ test('ree-discover: the buzzard circles low over the heath ahead of him on his w
   for (const l of LAYOUTS) {
     const c = l.buzzard;
     assert.ok(Math.hypot(c.x, c.z) + c.r < 56, `${l.id}: its circle is inside the world`);
-    assert.ok(dist(c, COPSE_FRAME) < 30, `${l.id}: over the home (${dist(c, COPSE_FRAME).toFixed(1)} m from the copse)`);
+    assert.ok(dist(c, COPSE_FRAME) < 32, `${l.id}: over the home (${dist(c, COPSE_FRAME).toFixed(1)} m from the copse)`);
+    // beyond his hide, never over it (he stops there; it never circles over his head)
+    assert.ok(dist(l.hide, c) - c.r >= 2.5, `${l.id}: its circle passes ${(dist(l.hide, c) - c.r).toFixed(1)} m beyond his hide`);
     for (const [id, m] of Object.entries(OTHER_MARKERS)) assert.ok(dist(c, m) > c.r + 4, `${l.id}: it keeps off the ${id} marker`);
     assert.ok(Math.hypot(c.x - VEN_CENTER.x, c.z - VEN_CENTER.z) > 25, `${l.id}: not over the ven`);
     // ahead of him all the way from the grass to the hide (beyond the hide)
     assert.ok(off(headingTo(l.search, c), headingTo(l.search, l.hide)) < 0.35, `${l.id}: it circles ahead of him`);
     assert.ok(dist(l.search, c) > dist(l.search, l.hide), `${l.id}: beyond his hide`);
   }
-  assert.ok(BUZZARD.y >= 4 && BUZZARD.y <= 7 && BUZZARD.high > 15, 'low over the heath, come down from high');
+  assert.ok(BUZZARD.y >= 1.8 && BUZZARD.y <= 3 && BUZZARD.high > 15, 'hunting low over the heath, come down from high');
 });
 
 test('ree-discover: the cuckoo calls from off to one side of the watch, never from behind him; the twin lies apart in the grass behind where they meet', () => {

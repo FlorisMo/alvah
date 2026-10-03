@@ -124,7 +124,12 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          frisling (the wallow), ree (the copse, the meadow, the hide; run 7:
                          ree.variety.ts its seeded mornings, growth and watch script,
                          ree.window.ts the calf's glimpse fitted to the level both ways,
-                         for the lens the search really frames: `searchBeat`'s `fit`),
+                         for the lens the search really frames: `searchBeat`'s `fit`;
+                         ree-discover: ree.finds.ts what there is to notice, one or two
+                         small things a play drawn by `reeSurprises` (a woodlark flushed
+                         on a walk, a buzzard hunting low beyond the hide, a cuckoo as a
+                         listening pause's cue, a young birch a roebuck rubbed) and the
+                         rare twins at the reunion, each `k.discover`ed once seen or heard),
                          wildcamera (the crossing, the glade, the thicket, the snare; its
                          trap photos in wildcamera.photos.ts; run 7: wildcamera.variety.ts
                          draws how each visitor comes (side + stop) and the night choir's

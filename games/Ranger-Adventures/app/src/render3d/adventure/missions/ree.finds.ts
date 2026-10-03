@@ -52,6 +52,7 @@ interface Watch {
 }
 
 const BOX = new THREE.Box3();
+const LOOK = new THREE.Vector3();
 const C = new THREE.Vector3();
 const P = new THREE.Vector3();
 
@@ -123,7 +124,7 @@ interface Bird { sp: Spawned; root: THREE.Object3D }
 /** How big (m, its standing height) the birds are drawn: the woodlark a little bigger than
  *  life (it is a small brown bird far off in the picture: at life size a speck), the
  *  stonechat as the stand's look-alike. */
-const LARK_H = 0.2;
+const LARK_H = 0.3;
 const TAPUIT_H = 0.17;
 /** The stonechat perches this high (m) over the ground: on a heather top. */
 const TAPUIT_UP = 0.3;
@@ -206,9 +207,14 @@ export class ReeFinds {
     if (birch && dist(me, birch) <= BIRCH_NEAR) k.discover(findId('veegsporen'));
     if (this.s.leeuwerik !== name || this.larkState !== 'waiting' || !this.lark || k.reduced) return;
     if (!this.walkFrom || dist(me, this.walkFrom) < 3 || me.speed < 0.6 || k.now < this.retryAt) return;
+    // (along the way the walk's lens looks, once it looks the way he walks: it flies up in
+    // his picture, never off to the side of it while the lens still swings round)
+    const look = k.world.camera.getWorldDirection(LOOK);
+    const lens = Math.atan2(look.x, look.z);
+    if (Math.abs(Math.atan2(Math.sin(lens - me.heading), Math.cos(lens - me.heading))) > 0.4) { this.retryAt = k.now + 0.25; return; }
     const side = k.play.fork('ree-leeuwerik-kant').pick([1, -1] as const);
     for (const w of larkWays(side)) {
-      const h = me.heading + w.side * w.turn;
+      const h = lens + w.side * w.turn;
       if (!larkRoom(me, h, w.side, this.pool)) continue;
       this.fly(me, h, w.side);
       return;
@@ -216,13 +222,17 @@ export class ReeFinds {
     this.retryAt = k.now + 0.5;
   }
 
-  /** A walk ends: the buzzard climbs away and the stonechat flits off (neither is ever
-   *  in the watch). */
+  /** A walk ends: the woodlark drops into the heather (never over the search or the
+   *  watch), the buzzard climbs away and the stonechat flits off. */
   walkEnd(name: 'meadow' | 'hide'): void {
+    if (this.larkState === 'flying') this.larkDown = true;
     if (name !== 'hide') return;
     this.buzzardGo();
     this.tapuitGo?.();
   }
+
+  /** The walk ended while the woodlark flew: it drops into the heather now. */
+  private larkDown = false;
 
   /** The stonechat flits off (set while it perches). */
   private tapuitGo: (() => void) | null = null;
@@ -231,6 +241,12 @@ export class ReeFinds {
   birchAt: () => Spot | null = () => null;
 
   /* ---------------------------------------------------------- the woodlark ---- */
+
+  /** (the dev read: where a bird is now, for a test that looks for it in the picture) */
+  private readonly at = (name: string, p: THREE.Vector3): void => {
+    const st = this.k.stats;
+    st[`${name}_x`] = Math.round(p.x * 10) / 10; st[`${name}_y`] = Math.round(p.y * 10) / 10; st[`${name}_z`] = Math.round(p.z * 10) / 10;
+  };
 
   /** Up out of the heather, singing, and back down. */
   private fly(at: Spot, heading: number, side: 1 | -1): void {
@@ -245,20 +261,35 @@ export class ReeFinds {
       const p = b.root.position;
       Sound.callAt('boomleeuwerik', p.x, p.z, listenerOf(k.world.camera), 34);
     };
-    const yaw = heading + side * 0.12; // (it flies on along his way, a little out to its side)
+    // (it faces the way it flies: across the picture, side-on to the lens)
+    const along = (a: Spot, c: Spot): number => headingTo(a, c);
+    const yaw = along(f.top, f.drift);
     let t = 0, sang = 0;
     const T1 = LARK.riseS, T2 = T1 + LARK.hangS, T3 = T2 + LARK.dropS;
     b.root.visible = true;
     if (store.get().settings.geluid) Sound.rustle(); // (a flutter in the heather)
+    let down: { t: number; x: number; y: number; z: number } | null = null;
     this.larkStep = (dt: number): boolean => {
       t += dt;
       let x: number, z: number, y: number, pitch: number;
+      // (the walk ended: it drops straight into the heather where it is, in a moment)
+      if (this.larkDown && !down && t < T2) { const p = b.root.position; down = { t, x: p.x, y: p.y, z: p.z }; }
+      if (down) {
+        const u = Math.min(1, (t - down.t) / 0.9);
+        const fx = Math.sin(yaw) * 1.2 * u, fz = Math.cos(yaw) * 1.2 * u;
+        b.root.position.set(down.x + fx, g(down.x + fx, down.z + fz) + 0.05 + (down.y - g(down.x, down.z) - 0.05) * (1 - u * u), down.z + fz);
+        b.root.rotation.set(0.35, yaw, 0, 'YXZ');
+        if (u < 1) return false;
+        b.root.visible = false;
+        this.larkState = 'done';
+        return true;
+      }
       if (t < T1) {
         // up out of the heather on its way: quick at first, slowing toward its top
         const e = 1 - (1 - t / T1) ** 2;
         x = f.rise.x + (f.top.x - f.rise.x) * e; z = f.rise.z + (f.top.z - f.rise.z) * e;
         y = g(x, z) + 0.05 + (f.top.y - 0.05) * e;
-        pitch = -0.45 * (1 - e) - 0.1;
+        pitch = -0.35 * (1 - e) - 0.08;
       } else if (t < T2) {
         // it hangs singing, drifting on, rising and falling a little as it flutters
         const u = (t - T1) / LARK.hangS;
@@ -278,7 +309,8 @@ export class ReeFinds {
         return true;
       }
       b.root.position.set(x, y, z);
-      b.root.rotation.set(pitch, yaw, 0, 'YXZ');
+      b.root.rotation.set(pitch, t < T1 ? along(f.rise, f.top) : t < T2 ? yaw : along(f.drift, f.land), 0, 'YXZ');
+      this.at('leeuwerik', b.root.position);
       return false;
     };
   }
@@ -303,7 +335,7 @@ export class ReeFinds {
     this.buzzStep = (dt: number): void => {
       t += dt;
       // down (w → 1) while it comes, up and away (w → 0) once he is at the hide
-      w = this.buzzLeaving ? Math.max(0, w - dt / BUZZARD.comeS) : Math.min(1, w + dt / BUZZARD.comeS);
+      w = this.buzzLeaving ? Math.max(0, w - dt / BUZZARD.goS) : Math.min(1, w + dt / BUZZARD.comeS);
       const e = w * w * (3 - 2 * w);
       ang += ((Math.PI * 2) / BUZZARD.period) * dt;
       const r = BUZZARD.r * (1.6 - 0.6 * e);
@@ -313,6 +345,7 @@ export class ReeFinds {
       const x = cx + Math.cos(ang) * r, z = cz + Math.sin(ang) * r;
       const y = g(c.x, c.z) + BUZZARD.high + (BUZZARD.y - BUZZARD.high) * e + Math.sin(ang * 2) * 0.3;
       b.root.position.set(x, y, z);
+      this.at('buizerd', b.root.position);
       // it faces the way it flies (round its circle), banked a little into the turn
       b.root.rotation.set(0, Math.atan2(-Math.sin(ang), Math.cos(ang)), 0.18, 'YXZ');
       if (t > nextMew) {

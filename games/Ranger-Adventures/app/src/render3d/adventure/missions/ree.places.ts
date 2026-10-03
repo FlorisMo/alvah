@@ -330,22 +330,24 @@ function build(d: LayoutDef): ReeLayout {
 }
 
 /** The buzzard's low circle (ree-discover): this far beyond his hide (m), its radius (m),
- *  its height over the ground (m), one turn (s); how high it comes down from and climbs
- *  back to (m), and how long that takes (s). As the open world's buzzard (world/Surprises
- *  LOW_*): low enough that the walk's lens sees it over the heath ahead. */
-export const BUZZARD = { beyond: 7, r: 4.5, y: 4.0, period: 14, high: 22, comeS: 6 } as const;
+ *  its height over the ground (m), one turn (s); how high it comes down from (m), how long
+ *  that takes (s), and how soon it is gone once he is at his hide (s). It comes down to
+ *  hunt low over the heath ahead of him, its wings wide: the walk's lens looks down at the
+ *  heath, and a buzzard at 3-5 m hung at the picture's top edge, behind the objective line. */
+export const BUZZARD = { beyond: 7, r: 4, y: 2.2, period: 15, high: 22, comeS: 6, goS: 3 } as const;
 
 /**
- * The woodlark's song flight (ree-discover): out of the heather `ahead` m in front of him (a
- * little to one side), up on its way, singing as it hangs and drifts on, and back down into
- * the heather further on — always ahead of him and away from the lens behind him, never
- * toward it. In his frame at the moment it flies up (u across, + right; v ahead; y over the
- * ground): the points it passes and the seconds between them. A child walking on at 2 m/s
- * keeps it ahead of him.
+ * The woodlark's flight (ree-discover): it flies up out of the heather a few metres ahead of
+ * him and low ACROSS his way, fluttering and singing as it goes, a little higher, and drops
+ * back into the heather on his other side — low against the heath, where the walk's lens
+ * sees it (a metre or two higher it was a speck against the trees on the horizon), and
+ * across the picture, side-on to the lens (flying away it showed only its tail) — always ahead of him and away from the lens behind him, never toward it. In
+ * his frame at the moment it flies up (u across, + right; v ahead; y over the ground): the
+ * points it passes and the seconds between them.
  */
 export const LARK = {
-  rise: { u: 1.2, v: 7.5 }, top: { u: 2.0, v: 11.5, y: 4.2 }, drift: { u: 2.6, v: 15.0, y: 4.6 }, land: { u: 3.2, v: 18.5 },
-  riseS: 2.6, hangS: 4.4, dropS: 2.4,
+  rise: { u: -1.6, v: 6.5 }, top: { u: 0.6, v: 8.0, y: 0.8 }, drift: { u: 3.8, v: 10.5, y: 1.2 }, land: { u: 4.8, v: 12.0 },
+  riseS: 1.2, hangS: 4.4, dropS: 1.6,
 } as const;
 
 /** How far off his way (rad) the woodlark may fly, to its side, when straight on there is
