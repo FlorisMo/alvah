@@ -23,7 +23,7 @@ import type { DressingEnv, HomeDressing } from '../../world/Residents';
 import type { HomeState } from '../types';
 import { CoverField, moorGrassGeometry } from '../cover';
 import { backPoints, standClumps, visibleShare, type Clump, type V3 } from '../cover-math';
-import { fitWindow } from './ree.window';
+import { fitWindow, refitWindow } from './ree.window';
 import { StandDecoys, decoyClumps, type Decoy, type DecoyAt } from '../decoys';
 import { groundDecal, groundStrip } from '../decal';
 import { atLocal, dist, segDist, stream, toLocal } from '../places';
@@ -38,7 +38,7 @@ import { Sound } from '../../../core/sound';
 import type { ReeLayoutId } from './ree.variety';
 import {
   juniperR, REE_LAYOUTS, LAYOUTS, FRINGE, COPSE, THICKET, COPSE_TREES, DOE_BED, CALF_BED, CALF_DOELEN, POOL, WISSEL_HALF,
-  REE_RESIDENTS, calfAt, calfTalkOf, onStand, wisselLine, type Cover, type PoolSpot, type ReeLayout,
+  REE_RESIDENTS, calfAt, calfTalkOf, onStand, wisselLine, type Cover, type PoolSpot, type ReeLayout, type ViewSpec,
 } from './ree.places';
 
 /** The sky overhead that a small pool mirrors when it is seen from above (the ven, seen
@@ -154,6 +154,22 @@ interface Ring { mesh: THREE.Mesh; t: number; delay: number; max: number }
 /** One pool spot: its meshes (the muddy rim, the mud, the water) and the rushes at its rim
  *  (a small field of their own). */
 interface PoolBuilt { spot: PoolSpot; meshes: THREE.Mesh[]; rushes: CoverField }
+
+/** A framed view as the kit's lens takes it (kit.ts `lensFor`): a spot to include with a
+ *  width `r` is two spots, `r` m either side of it across the view (the dressing's lens,
+ *  World.frameLens, takes each spot as one point). So the lens a play's window is fitted
+ *  for under the briefing card is the lens the search frames when he stands where planned
+ *  (review r1: the two differed by 5-60 cm, a back point or two of the calf's glimpse). */
+export function asTheKitFrames(v: ViewSpec): ViewSpec {
+  const right = { x: -Math.cos(v.heading), z: Math.sin(v.heading) };
+  return {
+    ...v,
+    include: v.include?.flatMap((q) => {
+      const r = q.r ?? 0;
+      return r > 0 ? [-r, r].map((u) => ({ x: q.x + right.x * u, z: q.z + right.z * u, h: q.h })) : [{ x: q.x, z: q.z, h: q.h }];
+    }),
+  };
+}
 
 /** What a play lays (ree.ts `prepare`). */
 export interface ReeLaid {
@@ -435,8 +451,9 @@ export class ReeHome implements HomeDressing {
       });
       field.refresh();
     }
-    // the glimpse window: from the search's lens, a little of the calf's back shows
-    const lens = this.env.lensFor(l.views.search);
+    // the glimpse window: from the search's lens, a little of the calf's back shows (the
+    // lens as the search frames it: the kit's, with him where he stands to search)
+    const lens = this.env.lensFor(asTheKitFrames(l.views.search));
     this.searchEye = lens.cam;
     const g = this.groundY;
     const lyH = lyingHeight(heightFor('reekalf'), LEG_SHARE.reekalf);
@@ -529,6 +546,17 @@ export class ReeHome implements HomeDressing {
 
   /** The played stand's tall grass (the search's cover: its glimpse, the calf's stems). */
   get cover(): CoverField { return this.standCovers.get(this.laid.layout.id)!; }
+
+  /** The search's check for the lens it really stands at (`eye`; the calf's back points
+   *  `back`): off the level's band (`glimpse`), the played stand is fitted again from its
+   *  built stems for it (ree.window.ts `refitWindow`). Returns the stems that grow to it. */
+  fitGlimpse(eye: V3, back: readonly V3[], glimpse: number): number[] {
+    const c = this.laid.calf;
+    const changed = refitWindow(this.cover.stems, this.built.get(this.laid.layout.id)!, eye, back, glimpse, { x: c.x, y: this.groundY(c.x, c.z), z: c.z });
+    this.searchEye = eye;
+    this.glimpse = { share: visibleShare(back, eye, this.cover.stems), changed: changed.length };
+    return changed;
+  }
 
   /** The bracken at a layout's gap stirs (she is about to step out, or heard him). */
   rustleGap(l: ReeLayout, amp: number): void { this.coverFields.get(l.cover)!.rustle(this.gapClumps.get(l.id) ?? 0, amp); }

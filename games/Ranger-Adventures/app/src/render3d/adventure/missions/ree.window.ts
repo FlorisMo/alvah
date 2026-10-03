@@ -11,6 +11,13 @@
  * shows too much, the tussocks between the lens and the calf grow a little taller and fuller
  * (at most 40 %) until it shows about the level's share. Every spot of every layout then
  * reads as hard as the level says (decision 1), and the knob is honoured both ways.
+ *
+ * A fitted window sits on its edge (each stem given back as far as the share allows), so a
+ * lens a few centimetres off the planned one can see a back point more or less. The search
+ * checks the share again for the lens it really stands at (he stops up to ~0.15 m from his
+ * planned spot; another screen frames otherwise) and, off the level's band, fits the stand
+ * again from its built stems for that lens (`refitWindow`): the share he searches with is
+ * always the level's.
  */
 
 import { blocks, openWindow, visibleShare, type Stem, type V3 } from '../cover-math.ts';
@@ -19,8 +26,6 @@ import { blocks, openWindow, visibleShare, type Stem, type V3 } from '../cover-m
 export const FIT_BAND = 0.07;
 /** A tussock grows at most this much taller (its looks: a little taller and fuller). */
 export const GROW_MAX = 1.4;
-/** …a step at a time. */
-const GROW_STEP = 1.1;
 
 /** A stem's built size (as the stand was made). */
 export interface Built { h: number; lx: number; lz: number; r: number }
@@ -34,46 +39,46 @@ function sizeAt(s: Stem, b: Built, k: number): void {
 }
 
 /**
- * Close the window: grow the tussocks that would hide most of what shows, one step at a
- * time, until at most `max` shows; never under `min` (the last step is eased back so the
- * share stays at least `min`). Only tussocks near the calf (`near` m of `at`) grow. Returns
- * the stems it grew.
+ * Close the window: grow tussocks near the calf (`near` m of `at`), at most 40 %, until at
+ * most `max` shows, never under `min`. Each round every tussock is tried at the least
+ * growth that hides one more of the points still seen (a tussock may hide two or three at
+ * once there); of those that keep at least `min`, the one that lands in [min, max] is grown
+ * (the least growth first), else the one that hides most. Returns the stems it grew.
  */
 export function closeWindow(stems: Stem[], built: readonly Built[], eye: V3, pts: readonly V3[], max: number, min: number, at: V3, near = 2.5,
   keep: ReadonlySet<number> = new Set()): number[] {
   const grown = new Map<number, number>();
   const k = (i: number): number => grown.get(i) ?? 1;
-  for (let guard = 0; guard < 60 && visibleShare(pts, eye, stems) > max; guard++) {
+  const share = (): number => visibleShare(pts, eye, stems);
+  for (let guard = 0; guard < 40 && share() > max + 1e-9; guard++) {
+    // (a tussock grown hides what it hid and more: only the points still seen are tried)
     const seen = pts.filter((p) => !stems.some((s) => blocks(s, eye, p)));
-    let best = -1, gain = 0;
+    let best = -1, bestK = 1, bestShare = Infinity, bestIn = false;
     stems.forEach((s, i) => {
       const b = built[i];
       if (!b || keep.has(i) || s.kind !== 'tussock' || k(i) >= GROW_MAX - 1e-9 || Math.hypot(s.x - at.x, s.z - at.z) > near) return;
       const was = { h: s.h, lx: s.lx, lz: s.lz, r: s.r, h0: s.h0 };
-      sizeAt(s, b, Math.min(GROW_MAX, k(i) * GROW_STEP));
-      const g = seen.filter((p) => blocks(s, eye, p)).length;
-      Object.assign(s, was); if (was.h0 === undefined) delete s.h0;
-      if (g > gain) { gain = g; best = i; }
-    });
-    if (best < 0) {
-      // (no single step hides a point: grow the tussock nearest the line to the calf's back)
-      break;
-    }
-    const k0 = k(best), k1 = Math.min(GROW_MAX, k0 * GROW_STEP);
-    sizeAt(stems[best], built[best], k1);
-    grown.set(best, k1);
-    if (visibleShare(pts, eye, stems) < min) {
-      // too far: ease that step back as far as the share stays at least `min`
-      let lo = k0, hi = k1;
-      for (let n = 0; n < 7; n++) {
+      const back = (): void => { Object.assign(s, was); if (was.h0 === undefined) delete s.h0; };
+      const hides = (): number => seen.filter((p) => blocks(s, eye, p)).length;
+      sizeAt(s, b, GROW_MAX);
+      if (!hides()) { back(); return; } // (grown all the way it hides nothing more)
+      let lo = k(i), hi = GROW_MAX;
+      for (let n = 0; n < 9; n++) {
         const mid = (lo + hi) / 2;
-        sizeAt(stems[best], built[best], mid);
-        if (visibleShare(pts, eye, stems) >= min) lo = mid; else hi = mid;
+        sizeAt(s, b, mid);
+        if (hides()) hi = mid; else lo = mid;
       }
-      sizeAt(stems[best], built[best], lo);
-      grown.set(best, lo);
-      break;
-    }
+      sizeAt(s, b, hi);
+      const sh = (seen.length - hides()) / pts.length;
+      back();
+      if (sh < min - 1e-9) return; // (it hides too much at once)
+      const inBand = sh <= max + 1e-9;
+      const better = best < 0 || (inBand && !bestIn) || (inBand === bestIn && (inBand ? hi - k(i) < bestK - k(best) : sh < bestShare - 1e-9));
+      if (better) { best = i; bestK = hi; bestShare = sh; bestIn = inBand; }
+    });
+    if (best < 0) break;
+    sizeAt(stems[best], built[best], bestK);
+    grown.set(best, bestK);
   }
   return [...grown.keys()].filter((i) => k(i) > 1 + 1e-6);
 }
@@ -109,4 +114,32 @@ export function fitWindow(stems: Stem[], built: readonly Built[], eye: V3, pts: 
   // round it close it a little, the opened ones kept as they are)
   if (visibleShare(pts, eye, stems) > min + FIT_BAND) return [...opened, ...closeWindow(stems, built, eye, pts, min + FIT_BAND, min, at, 2.5, new Set(opened))];
   return opened;
+}
+
+/**
+ * The search's check for the lens it really stands at (run 7, ree-growth r2): the share in
+ * the level's band [min, min + FIT_BAND] stays as laid; off it, the stand is fitted again
+ * from its built stems for this lens (the same `fitWindow`). Returns the stems now drawn
+ * otherwise than before (they grow to it calmly while the lens moves in); a stem changed
+ * by either fit keeps its built height as `h0`, so it is drawn as wide as it is tall.
+ */
+export function refitWindow(stems: Stem[], built: readonly Built[], eye: V3, pts: readonly V3[], min: number, at: V3): number[] {
+  const share = visibleShare(pts, eye, stems);
+  if (share >= min - 1e-9 && share <= min + FIT_BAND + 1e-9) return [];
+  const before = stems.map((s) => s.h);
+  stems.forEach((s, i) => {
+    const b = built[i];
+    if (!b) return;
+    s.h = b.h; s.lx = b.lx; s.lz = b.lz; s.r = b.r;
+    delete s.h0;
+  });
+  fitWindow(stems, built, eye, pts, min, at);
+  const changed: number[] = [];
+  stems.forEach((s, i) => {
+    const b = built[i];
+    if (!b) return;
+    if (Math.abs(s.h - before[i]) > 1e-6) changed.push(i);
+    if (s.h0 === undefined && (Math.abs(s.h - b.h) > 1e-6 || Math.abs(before[i] - b.h) > 1e-6)) s.h0 = b.h;
+  });
+  return changed;
 }

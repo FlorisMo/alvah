@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { backPoints, visibleShare, type Stem } from '../cover-math.ts';
-import { closeWindow, fitWindow, FIT_BAND, GROW_MAX, type Built } from './ree.window.ts';
+import { closeWindow, fitWindow, refitWindow, FIT_BAND, GROW_MAX, type Built } from './ree.window.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { stream } from '../places.ts';
 
@@ -67,4 +67,36 @@ test('closing only grows the tussocks near the calf, and never hides it below th
   for (const i of grown) assert.ok(Math.hypot(stems[i].x, stems[i].z) <= 2.0 + 1e-9);
   assert.ok(visibleShare(BACK, EYE, stems) >= 0.2 - 1e-9);
   stems.forEach((s, i) => { if (!grown.includes(i)) assert.equal(s.h, built[i].h); });
+});
+
+// (review r1: the lay fitted the window for its lens, the search measured from the lens it
+// really stood at — he stops up to ~0.15 m from his planned spot — and a fitted window sits
+// on its edge: 5-60 cm between the two lenses moved a back point or two, below the level's
+// band at level 2, and the old coarse re-open overshot to the level-1 share at level 3)
+test('the search\'s lens a little off the planned one: its share is fitted again into the level\'s band, never past it', () => {
+  let refits = 0, cases = 0;
+  for (const lv of [1, 2, 3, 4, 5, 6]) {
+    const min = knobsFor('zoeken', lv).glimpse;
+    for (const [gap, seed] of [[0.3, 1], [0.34, 2], [0.4, 3], [0.46, 4], [0.52, 5], [0.58, 6]] as const) {
+      for (const [dx, dy, dz] of [[0.06, 0, 0], [-0.15, 0.04, 0.1], [0.1, -0.05, -0.15], [0, 0.2, 0.3], [-0.4, 0.1, -0.3]]) {
+        const stems = stand(gap, seed);
+        const built = builtOf(stems);
+        fitWindow(stems, built, EYE, BACK, min, AT);
+        const eye = { x: EYE.x + dx, y: EYE.y + dy, z: EYE.z + dz };
+        const before = visibleShare(BACK, eye, stems);
+        const drawn = stems.map((q) => q.h);
+        const changed = refitWindow(stems, built, eye, BACK, min, AT);
+        const after = visibleShare(BACK, eye, stems);
+        const tag = `level ${lv} (glimpse ${min}), gap ${gap}, lens off by (${dx}, ${dy}, ${dz}): ${before.toFixed(2)} → ${after.toFixed(2)}`;
+        cases++;
+        assert.ok(after >= min - 1e-9 && after <= min + FIT_BAND + 1e-9, `${tag}: in the level's band`);
+        if (before >= min - 1e-9 && before <= min + FIT_BAND + 1e-9) assert.equal(changed.length, 0, `${tag}: on the band already: left as laid`);
+        else refits++;
+        // the stems that grow to it are named; every other one is drawn as it was
+        stems.forEach((q, i) => { if (!changed.includes(i)) assert.ok(Math.abs(q.h - drawn[i]) < 1e-6, `${tag}: stem ${i} changed unnamed`); });
+        stems.forEach((q, i) => assert.ok(q.h <= built[i].h * GROW_MAX + 1e-9, `${tag}: a tussock grew ${(q.h / built[i].h).toFixed(2)}×`));
+      }
+    }
+  }
+  assert.ok(refits > 0, `some lenses were fitted again (${refits} of ${cases})`);
 });

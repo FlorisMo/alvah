@@ -250,10 +250,11 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   // 3 · find the calf in the tall grass (zoeken)
   const lyH = lyingHeight(heightFor('reekalf'), LEG_SHARE.reekalf);
   await searchBeat(k, 0, {
-    // (the glimpse window was fitted under the card to the level's share for this lens:
-    // the search re-opens it only when his screen's lens sees clearly less of the calf)
+    // (the glimpse window was fitted under the card to the level's share for this lens;
+    // where he really stands, or on another screen, a share off the level's band is fitted
+    // again for the lens he searches with: always the level's)
     view: l.views.search, stand: l.search, cover: home.cover, target: calf, call: 'fiep', lyingH: lyH, len: SIZE.reekalf.len,
-    glimpse: Math.max(0.1, home.laid.glimpse - 0.06),
+    glimpse: home.laid.glimpse, fit: (eye, back, share) => home.fitGlimpse(eye, back, share),
     decoys: home.decoys.map((d) => ({ id: d.id, object: d.object, x: d.x, z: d.z, poke: (f) => home.poke(d, f) })),
     lines: { zoek: c.zoek, mis: c.mis, hint: c.hint, gevonden: k.steps[0].skin.copy?.goed ?? c.zoek },
   });
