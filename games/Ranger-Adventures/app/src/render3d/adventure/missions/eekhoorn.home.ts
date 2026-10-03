@@ -992,16 +992,21 @@ function conesGeometry(d: DiningSpot, g: (x: number, z: number) => number, rnd: 
   const seat = d.kind === 'stam' ? { x: d.x + along.x * STAM.len * 0.32, z: d.z + along.z * STAM.len * 0.32 } : { x: d.x, z: d.z };
   const seatY = d.kind === 'stam' ? g(d.x, d.z) + STAM.r * 1.8 : g(d.x, d.z) - 0.04 + STRONK.h + 0.01;
   const bodyR = d.kind === 'stam' ? STAM.r : STRONK.r;
-  const core = (x: number, y: number, z: number, yaw: number, lying: boolean): void => {
+  // (a core a child reads from a few metres off: a little stouter than life, its tuft of
+  // scales at the top; `half`: a cone it left half eaten — the scales still on its lower
+  // half, the bare core above: plainly a pine cone somebody ate)
+  const core = (x: number, y: number, z: number, yaw: number, lying: boolean, half = false): void => {
     const len = 0.08 + rnd() * 0.03;
     const parts = [
-      paintFaces(flat(new THREE.ConeGeometry(0.016, len * 0.55, 5, 1, true).translate(0, len * 0.275, 0)), '#b47c45', rnd, 0.1),
-      paintFaces(flat(new THREE.ConeGeometry(0.016, len * 0.45, 5, 1, true).rotateX(Math.PI).translate(0, -len * 0.225, 0)), '#a8723e', rnd, 0.1),
-      paintFaces(flat(new THREE.ConeGeometry(0.026, 0.03, 5, 1, true).translate(0, len * 0.55, 0)), '#6b472a', rnd, 0.1),
+      paintFaces(flat(new THREE.ConeGeometry(0.021, len * 0.55, 5, 1, true).translate(0, len * 0.275, 0)), '#b47c45', rnd, 0.1),
+      paintFaces(flat(new THREE.ConeGeometry(0.021, len * 0.45, 5, 1, true).rotateX(Math.PI).translate(0, -len * 0.225, 0)), '#a8723e', rnd, 0.1),
+      paintFaces(flat(new THREE.ConeGeometry(0.032, 0.035, 5, 1, true).translate(0, len * 0.55, 0)), '#6b472a', rnd, 0.1),
     ];
+    if (half) parts.push(paintFaces(flat(new THREE.SphereGeometry(0.034, 7, 5).scale(1, 1.35, 1).translate(0, -len * 0.28, 0)), '#73462a', rnd, 0.14));
+    const r = half ? 0.034 : 0.021;
     for (const p of parts) {
       if (lying) p.rotateZ(Math.PI / 2 - 0.15);
-      p.rotateY(yaw).translate(x, y + (lying ? 0.016 : len * 0.45), z);
+      p.rotateY(yaw).translate(x, y + (lying ? r : len * 0.45 + (half ? 0.02 : 0)), z);
       out.push(p);
     }
   };
@@ -1009,7 +1014,7 @@ function conesGeometry(d: DiningSpot, g: (x: number, z: number) => number, rnd: 
   for (let i = 0; i < n; i++) {
     if (i < 2) {
       // one or two on its seat
-      core(seat.x + (rnd() - 0.5) * bodyR * 0.8, seatY, seat.z + (rnd() - 0.5) * bodyR * 0.8, rnd() * Math.PI * 2, rnd() < 0.7);
+      core(seat.x + (rnd() - 0.5) * bodyR * 0.8, seatY, seat.z + (rnd() - 0.5) * bodyR * 0.8, rnd() * Math.PI * 2, rnd() < 0.7, i === 0);
     } else {
       const a = rnd() * Math.PI * 2, rr = bodyR + 0.08 + rnd() * 0.45;
       const x = seat.x + Math.sin(a) * rr, z = seat.z + Math.cos(a) * rr;
