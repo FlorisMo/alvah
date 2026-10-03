@@ -160,6 +160,7 @@ export function applyCoat(root: THREE.Object3D, id: string | null): number {
       if (tint.only && !tint.only.includes(src.name ?? '')) return m; // (only its coat)
       const clone = src.clone() as THREE.Material & { color: THREE.Color };
       clone.color.copy(src.color).lerp(target, tint.strength);
+      if (tint.ramp && (clone as THREE.MeshStandardMaterial).isMeshStandardMaterial) rampShader(clone as THREE.MeshStandardMaterial, tint.ramp);
       n++;
       return clone;
     }) as THREE.Material[] | THREE.Material;
@@ -167,6 +168,32 @@ export function applyCoat(root: THREE.Object3D, id: string | null): number {
     if (Array.isArray(mesh.material) && mesh.material.length === 1) mesh.material = mesh.material[0];
   });
   return n;
+}
+
+/**
+ * Run 7: a coat RAMP (Coat.ts `ramp`): each texel of the fur by its own lightness onto the
+ * ramp from `dark` to `light`, the fur's own shading kept — another coat on the same fur (a
+ * dark-brown squirrel on the red squirrel's model, its cream belly a pale fawn).
+ */
+function rampShader(mat: THREE.MeshStandardMaterial, r: NonNullable<ReturnType<typeof coatTintFor>>['ramp'] & object): void {
+  const col = (hex: string): THREE.Vector3 => { const c = new THREE.Color(hex); return new THREE.Vector3(c.r, c.g, c.b); };
+  const uniforms = { coatRampDark: { value: col(r.dark) }, coatRampLight: { value: col(r.light) }, coatRampSplit: { value: new THREE.Vector2(r.split[0], r.split[1]) } };
+  const prev = mat.onBeforeCompile;
+  const prevKey = mat.customProgramCacheKey();
+  mat.onBeforeCompile = (shader, renderer) => {
+    prev?.call(mat, shader, renderer);
+    Object.assign(shader.uniforms, uniforms);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 coatRampDark; uniform vec3 coatRampLight; uniform vec2 coatRampSplit;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+{
+  float lum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  vec3 c = mix(coatRampDark, coatRampLight, smoothstep(coatRampSplit.x, coatRampSplit.y, lum));
+  diffuseColor.rgb = c * (0.75 + 0.5 * lum);
+}`);
+  };
+  mat.customProgramCacheKey = () => `${prevKey}|coat-ramp-${r.dark}-${r.light}`;
+  mat.needsUpdate = true;
 }
 
 const _box = new THREE.Box3();

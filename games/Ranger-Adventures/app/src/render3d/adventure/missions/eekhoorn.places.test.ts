@@ -785,10 +785,13 @@ test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1
       ups.push({ x: w.x, z: w.z, y0: groundY(w.x, w.z), y1: groundY(w.x, w.z) + RANGER_STAND_HEIGHT * 1.1, r: () => 0.22 });
       assert.ok(lineClear(eye, at, ups, 0.05), `${id}/${t.id}: no trunk and not his head between the lens and the nest`);
       assert.ok(pxAt(NEST.r * 2, q.d) >= 40, `${id}/${t.id}: it reads ${pxAt(NEST.r * 2, q.d).toFixed(0)} px`);
-      // the squirrel peeking from its crown is in the picture too (it says "Kijk, zijn nest!")
-      const pk = nestPeek(nest);
-      const qp = followPx(w, h, { x: pk.x, y: g + pk.y + 0.15, z: pk.z });
-      assert.ok(qp.inside && qp.y > 100, `${id}/${t.id}: the squirrel on its nest is in the picture (${qp.x.toFixed(0)}, ${qp.y.toFixed(0)})`);
+      // the squirrel peeking out of it is in the picture too (it says "Kijk, zijn nest!"),
+      // its head under the line card, out of the ball on his side (not into the bark)
+      const pk = nestPeek(nest, w);
+      const qp = followPx(w, h, { x: pk.x, y: g + pk.y + 0.33, z: pk.z });
+      assert.ok(qp.inside && qp.y > 104, `${id}/${t.id}: the squirrel peeking out of its nest is in the picture (${qp.x.toFixed(0)}, ${qp.y.toFixed(0)})`);
+      assert.ok(dist(pk, t) > barkRadius(trunk(t), nest.y) + 0.12, `${id}/${t.id}: it peeks out of the ball, not out of the bark`);
+      assert.ok(dist(pk, w) < dist(nest, w), `${id}/${t.id}: on his side of the nest`);
       // where he waits for the squirrel it stands solid; the follow lens trailing him on any
       // way never runs into it or looks past it at him: there it fades (as a home tree's
       // crown does), and the lens passes 0.6-0.8 m from some nests at its own height

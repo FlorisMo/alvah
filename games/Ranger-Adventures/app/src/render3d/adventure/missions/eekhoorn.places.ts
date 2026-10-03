@@ -612,7 +612,7 @@ export function foundFace(tree: HomeTree, sqAng: number, me: Spot): number {
  * picture: never one in front of the other), `r` m round (≈ 0.45 m across), hugging the
  * bark. Never on the hide tree (it plays hide-and-seek there).
  */
-export const NEST = { h: 2.3, r: 0.23, turn: 0.35, hug: 0.72 } as const;
+export const NEST = { h: 2.15, r: 0.23, turn: 0.35, hug: 0.72 } as const;
 export interface NestSpot { tree: HomeTree; x: number; z: number; y: number; ang: number }
 /** The wait trees of a way that may carry its nest (every wait but the hide tree). */
 export function nestTrees(route: Route): readonly HomeTree[] { return route.waits.slice(0, -1); }
@@ -646,11 +646,17 @@ export function nestSolid(lens: { x: number; y: number; z: number }, nest: { x: 
   }
   return 1;
 }
-/** Where the squirrel sits on top of its nest to peek at him (world x/z, its feet `y` m up,
- *  facing out `yaw`): on the nest's crown, a little to the side he comes from. */
-export function nestPeek(n: NestSpot): { x: number; z: number; y: number; yaw: number } {
-  const out = NEST.r * 0.35;
-  return { x: n.x + Math.sin(n.ang) * out, z: n.z + Math.cos(n.ang) * out, y: n.y + NEST.r * 0.62, yaw: n.ang };
+/** Where the squirrel peeks out of its nest at him (world x/z, its feet `y` m up, facing
+ *  `yaw`: him): its head and shoulders out of the ball's side toward him, its back half still
+ *  in the twigs. `me`: where he stands. */
+export function nestPeek(n: NestSpot, me: Spot): { x: number; z: number; y: number; yaw: number } {
+  const t = n.tree;
+  // (out of the ball on his side, never into the bark behind it)
+  let a = headingTo(n, me);
+  const back = headingTo(n, t);
+  if (Math.abs(wrapA(a - back)) < 1.4) a = back + Math.sign(wrapA(a - back) || 1) * 1.4;
+  const out = NEST.r * 0.72;
+  return { x: n.x + Math.sin(a) * out, z: n.z + Math.cos(a) * out, y: n.y - 0.16, yaw: headingTo(n, me) };
 }
 
 /**
