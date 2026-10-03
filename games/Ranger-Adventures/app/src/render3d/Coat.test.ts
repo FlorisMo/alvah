@@ -26,9 +26,9 @@ function rgb(hex: string): { r: number; g: number; b: number } {
   return { r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16) };
 }
 
-test('coat tint is sparse: only the confirmed vos and red deer contradictions are corrected', () => {
+test('coat tint is sparse: only the confirmed vos, red deer and heikikker contradictions are corrected', () => {
   const tinted = ALL.filter((id) => coatTintFor(id) !== null);
-  assert.deepEqual(tinted, ['animal-vos-fox', 'animal-edelhert-reddeer'], 'no speculative retints beyond the vos and the red deer');
+  assert.deepEqual(tinted, ['animal-vos-fox', 'animal-edelhert-reddeer', 'animal-heikikker-frog'], 'no speculative retints beyond the vos, the red deer and the frog');
   assert.equal(coatTintFor(null), null);
   assert.equal(coatTintFor('animal-ree-roedeer'), null, 'the dossier-matching cast is untouched');
 });
@@ -47,6 +47,13 @@ test('the red deer is red-brown (dossier: zomer roestig/roodbruin) on its coat o
   assert.ok(t.strength > 0 && t.strength < 1, 'a partial lerp keeps the pack shading');
   assert.deepEqual(t.only, ['Material'], 'its body only: the antlers and the pale rump stay its own');
   assert.equal(coatTintFor('animal-vos-fox')!.only, undefined, 'the fox: every body material');
+});
+
+test('the heikikker is red-brown (dossier: normaal roodbruin), its green texture recoloured with its spots kept', () => {
+  const t = coatTintFor('animal-heikikker-frog')!;
+  const c = rgb(t.color);
+  assert.ok(c.r > c.g * 1.3 && c.g > c.b, `heikikker tint ${t.color} must read red-brown`);
+  assert.equal(t.pale, true, 'a hue fix: its own texture bleached to light and dark, then coloured');
 });
 
 test('posture: head-low species pitch forward, alert/level species stay upright', () => {

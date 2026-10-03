@@ -33,7 +33,8 @@ export interface CoatTint {
   /** run 7 (wc-album, additive): a PALE coat — the model's own texture bleached to its light
    *  and dark (its coat goes `color`, the eyes, the nose and the hooves stay dark), on the
    *  spawn's own copy. For a rare animal staged on a model's own species (a CONTENT id: the
-   *  white roe, 'witte-ree'), never a GLB's tint; `strength` is then ignored. */
+   *  white roe, 'witte-ree'); `strength` is then ignored. Run 7 (the ven, additive): also a
+   *  GLB whose whole coat has the wrong HUE (the frog's green), recoloured to the dossier's. */
   pale?: boolean;
 }
 
@@ -76,6 +77,12 @@ const COAT_TINT: Record<string, CoatTint> = {
   // dossier: "geheel zwart, met een blauwige glans" — a soft near-black, not a hole: the
   // world's animal fill still lights its shaded side
   'animal-raaf-raven': { color: '#2e2d34', strength: 0.82 },
+  // run 7 (the ven): the frog GLB is a bright green tree-frog green; dossier: "normaal
+  // roodbruin, rug vaak met donkere vlekken" (research/animal-visual-accuracy.md,
+  // Heikikker). A colour lerp over a green texture only darkens it to olive, so its own
+  // texture is bleached to its light and dark (its spots and shading kept) and coloured
+  // red-brown: the `pale` path, here for a whole GLB whose hue is wrong
+  'animal-heikikker-frog': { color: '#b0764a', strength: 1, pale: true },
 };
 
 /**

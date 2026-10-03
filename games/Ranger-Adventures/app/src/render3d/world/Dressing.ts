@@ -647,13 +647,20 @@ export class Dressing {
     const bx = VEN_CENTER.x, bz = VEN_CENTER.z;
     const budget = Math.round(90 * veg);
     const spots: PlantSpot[] = [];
-    for (let i = 0; i < budget * 12 && spots.length < budget; i++) {
+    // run 7 (the ven, additive): a mission home's own ground keeps the belt out (its coves:
+    // the home lays its own few cattails at the water line), as `gridSpots` keeps the heath
+    // scatter out; a reed left out still counts toward the budget, so every other reed of
+    // the belt stands exactly where it stood
+    let laid = 0;
+    for (let i = 0; i < budget * 12 && laid < budget; i++) {
       const ang = i * 2.39996;             // golden angle → even, non-repeating ring
       const rad = 9 + (i % 22) * ((VEN_REED_OUT - 9) / 22); // 9–20 m out — a TIGHT belt hugging the waterline
       const x = bx + Math.cos(ang) * rad;
       const z = bz + Math.sin(ang) * rad;
       const gy = this.groundY(x, z);
       if (gy < WATER_LEVEL - 0.3 || gy > WATER_LEVEL + 1.0) continue; // keep the reed belt right at the shore
+      laid += 1;
+      if (this.clearings.some((c) => Math.hypot(x - c.x, z - c.z) < c.r)) continue;
       spots.push({ x, y: gy - 0.03, z, s: spreadAt('lisdodde', (i % 4) / 3), rotY: ang * 3.1, phase: (i % 5) * 1.3 });
     }
     void thin;

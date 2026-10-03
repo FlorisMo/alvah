@@ -127,6 +127,43 @@ function knor(freq: number, start: number, dur: number, peak: number, dest: Audi
 }
 
 /**
+ * Run 7 (the ven): a moor frog's soft "woog" — a low round note bubbling (a quick flutter,
+ * as a bottle emptying under water), rising a little, through a soft lowpass. Calm and
+ * small: a frog, never a horn.
+ */
+function woog(freq: number, start: number, dur: number, peak: number, dest: AudioNode, sweep = 1.18): void {
+  const a = ac();
+  if (!a) return;
+  const t0 = a.currentTime + start;
+  const osc = a.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  osc.frequency.exponentialRampToValueAtTime(freq * sweep, t0 + dur);
+  const filt = a.createBiquadFilter();
+  filt.type = 'lowpass';
+  filt.frequency.value = 950;
+  filt.Q.value = 0.7;
+  const pulse = a.createGain(); // the bubbling flutter
+  pulse.gain.value = 0.55;
+  const lfo = a.createOscillator();
+  lfo.frequency.value = 38;
+  const lfoDepth = a.createGain();
+  lfoDepth.gain.value = 0.45;
+  lfo.connect(lfoDepth);
+  lfoDepth.connect(pulse.gain);
+  const env = a.createGain();
+  env.gain.setValueAtTime(0.0001, t0);
+  env.gain.exponentialRampToValueAtTime(peak, t0 + 0.035);
+  env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(filt);
+  filt.connect(pulse);
+  pulse.connect(env);
+  env.connect(dest);
+  osc.start(t0); lfo.start(t0);
+  osc.stop(t0 + dur + 0.03); lfo.stop(t0 + dur + 0.03);
+}
+
+/**
  * Per-animal call motifs — synthesized placeholders, distinct enough that the
  * simon (sound-echo) engine is learnable by ear. The audio pipeline
  * (scripts/audio-fetch.mjs → xeno-canto/Freesound) registers real recorded
@@ -136,7 +173,7 @@ function knor(freq: number, start: number, dur: number, peak: number, dest: Audi
 // `notes` (when present) plays that pitch SEQUENCE instead of `rep` copies of
 // `freq` — the way to synth a call with distinct successive pitches (koekoek's
 // hoog→laag, koolmees' ti-ta-ti-ta) so "Ken je roep" (W6.4) is learnable by ear.
-interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[]; knor?: boolean; sweep?: number; peak?: number; drum?: number }
+interface CallSpec { freq: number; dur: number; type: OscillatorType; vibrato?: number; rep?: number; notes?: number[]; knor?: boolean; sweep?: number; peak?: number; drum?: number; woog?: boolean; hiss?: boolean }
 const CALLS: Record<string, CallSpec> = {
   edelhert:   { freq: 150, dur: 0.7,  type: 'sawtooth', vibrato: 6 },   // burlen — deep bellow
   ree:        { freq: 420, dur: 0.22, type: 'square',   rep: 2 },        // blaf — short bark
@@ -173,6 +210,10 @@ const CALLS: Record<string, CallSpec> = {
   // of its own beside the great tit's "ti-ta" (the two never call together)
   'grote-bonte-specht': { freq: 1250, dur: 0.8, type: 'triangle', drum: 16, peak: 0.1 },
   boomklever:    { freq: 1250, dur: 0.15, type: 'sine', notes: [1250, 1250, 1250], sweep: 1.45, peak: 0.13 },
+  // run 7 (the ven): the moor frog's soft bubbling "woog woog woog", low and round, each a
+  // little higher; the adder's soft short hiss (band-passed air, quiet, never sharp)
+  heikikker:     { freq: 430, dur: 0.17, type: 'sine', notes: [430, 455, 440], sweep: 1.2, peak: 0.2, woog: true },
+  adder:         { freq: 3400, dur: 0.5, type: 'sine', peak: 0.045, hiss: true },
 };
 const DEFAULT_CALL: CallSpec = { freq: 440, dur: 0.3, type: 'sine', rep: 2 };
 
@@ -263,13 +304,20 @@ function playCallOn(a: AudioContext, bus: GainNode, id: string): number {
     currentCall = { bus, sources: [] };
     return spec.dur;
   }
+  if (spec.hiss) {
+    noiseBurst(spec.dur, 'bandpass', spec.freq, 1.3, spec.peak ?? 0.05, 0, bus);
+    currentCall = { bus, sources: [] };
+    return spec.dur;
+  }
   const gap = spec.dur * 0.45;
   // a pitch SEQUENCE (koekoek/koolmees/…) plays each note in turn; otherwise `rep`
   // copies of the one pitch (with a small warble when `vibrato` is set).
   const notes = spec.notes ?? Array.from({ length: spec.rep ?? 1 }, () => spec.freq);
   notes.forEach((freq, i) => {
     const start = i * (spec.dur + gap);
-    if (spec.knor) {
+    if (spec.woog) {
+      woog(freq, start, spec.dur, spec.peak ?? 0.2, bus, spec.sweep ?? 1.18);
+    } else if (spec.knor) {
       knor(freq * (i % 2 ? 0.92 : 1), start, spec.dur, spec.peak ?? 0.4, bus);
     } else if (spec.vibrato) {
       // a small warble for the trilling/bellowing/singing calls
@@ -424,6 +472,18 @@ export const Sound = {
     noiseBurst(0.34, 'lowpass', 900, 0.8, 0.12);
     noiseBurst(0.22, 'bandpass', 2100, 1.2, 0.05, 0.05);
     for (let i = 0; i < 3; i++) noiseBurst(0.05, 'bandpass', 2600 + i * 500, 3, 0.025, 0.32 + i * 0.17);
+  },
+  /** run 7 (the ven): a boot sinking into soft wet moss — a low soft suck and a slurp */
+  squelch(): void {
+    noiseBurst(0.3, 'lowpass', 360, 1.1, 0.13);
+    tone(170, 0.03, 0.2, 'sine', 0.05, undefined, 0.62);
+    noiseBurst(0.12, 'bandpass', 900, 2.2, 0.035, 0.16);
+  },
+  /** run 7 (the ven): a small frog into the water — a soft round "plop" and a few drips */
+  plop(): void {
+    tone(780, 0, 0.09, 'sine', 0.09, undefined, 0.42);
+    noiseBurst(0.16, 'lowpass', 1100, 0.9, 0.05, 0.02);
+    for (let i = 0; i < 2; i++) noiseBurst(0.04, 'bandpass', 2400 + i * 600, 3, 0.018, 0.22 + i * 0.15);
   },
   /** a snout at the ground: three quick, soft sniffs */
   sniff(): void {
