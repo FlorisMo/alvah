@@ -57,6 +57,7 @@ import {
 } from './frisling.places';
 import { groundHides } from '../../world/surprises-math';
 import { drawFrisling, frislingVariant, recentPlays, type FrislingVariant, type PastPlay } from './frisling.vary';
+import { CRISP_GAP, CRISP_PRINTS, followLook, pullOf, stepAcross, type Pull } from './frisling.grow';
 
 /** How far the lost piglet's squeak carries while he follows it (m): from the ring to
  *  any way's stand, ~35-38 m (softly at first, louder as he comes). */
@@ -64,8 +65,6 @@ const FOLLOW_REACH = 46;
 /** His careful walk while he leads the piglet home (m/s): the piglet's own calm trot,
  *  so they stay together (a brisk walk is 2.2 m/s; running is still his to choose). */
 const LEAD_PACE = 1.5;
-/** The first prints from the ring: crisp, so where the trail starts reads at once. */
-const CRISP_PRINTS = 4;
 /** After a reach at the lying piglet, at least this share of his back shows from the close
  *  lens (the stems over him give way): he stays clearly there, never a sliver. */
 const AAIEN_SHOWS = 0.45;
@@ -187,6 +186,13 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const listener = (): { x: number; z: number; yaw: number } => listenerOf(k.world.camera);
   const call = (id: string, a: Actor, reach?: number): void => { if (settings.geluid) Sound.callAt(id, a.x, a.z, listener(), reach); };
   const me = (): { x: number; z: number; speed: number } => { const m = k.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
+  /** A calm moment's `i`-th temptation in this hold: how hard it pulls (each one stronger
+   *  than the one before: frisling.grow.ts), the strongest he met noted (`pull_<id>`). */
+  const tempted = (id: string, i: number): Pull => {
+    const p = pullOf(i);
+    k.stats[`pull_${id}`] = Math.max(k.stats[`pull_${id}`] ?? -1, p);
+    return p;
+  };
   /** After a framed moment (he faced the animal at his side) he turns for `to` and takes a
    *  first calm step that way, and the lens comes round behind him facing the way he goes. */
   const setOff = async (to: { x: number; z: number }): Promise<void> => {
@@ -281,8 +287,17 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // does not look)
   const off = k.ranger();
   const trail = [atLocal({ x: off.x, z: off.z, heading: headingTo(off, way.follow[1]) }, -0.75, 0.9), ...way.follow.slice(1)];
-  k.own(spoorPath(trail, k.ctx.groundY, { opacity: 0.35 + 0.5 * knobs.trailClarity, size: 0.62, spacing: 0.95, crisp: CRISP_PRINTS }).group);
-  fam.voice('lost', true, FOLLOW_REACH);
+  // (the first prints crisp and close by the ring at every level: where it starts reads at
+  // once; from there his level's trail — further apart and fainter as he grows — and the
+  // squeak, heard less often: frisling.grow.ts)
+  const look = followLook(knobs);
+  const crispM = (CRISP_PRINTS - 1) * CRISP_GAP;
+  k.own(spoorPath(sliceAlong(trail, 0, crispM + 0.01), k.ctx.groundY, { opacity: 1, size: 0.62, spacing: CRISP_GAP, crisp: CRISP_PRINTS }).group);
+  k.own(spoorPath(sliceAlong(trail, crispM + look.gap, Infinity), k.ctx.groundY, { opacity: look.opacity, size: 0.62, spacing: look.gap }).group);
+  k.stats.print_gap = look.gap;
+  k.stats.print_opacity = look.opacity;
+  k.stats.squeak_every = look.squeakEvery[0];
+  fam.voice('lost', true, FOLLOW_REACH, look.squeakEvery);
   const round = v.way === 'steen' ? walkRound(k, A.sow, layout.sow, call) : undefined;
   // (on steen, now and then, a jay screeches from the forest edge past the stand)
   const jay = v.way === 'steen' && surprise.fork('gaai').chance(0.7) ? atLocal(way.frame, 2.5, 7) : null;
@@ -307,7 +322,10 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   stopRub();
   hideButterflies();
 
-  // 3 · find him (zoeken): the knobs' glimpse of his back, never more than 1.5× it
+  // 3 · find him (zoeken): the knobs' glimpse of his back, never more than 1.5× it, among
+  // the knobs' look-alikes (laid under the briefing card), the first hint after the knobs'
+  // seconds (searchBeat reads them)
+  k.stats.look_alikes = home.decoys.filter((d) => d.object.visible).length;
   await searchBeat(k, 0, {
     view: way.searchView, stand: way.coverApproach, cover: home.cover, target: lost, call: 'piep',
     lyingH: lyingHeight(heightFor('frisling'), LEG_SHARE.frisling), glimpse: knobs.glimpse, glimpseMax: knobs.glimpse * 1.5,
@@ -349,15 +367,30 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     k.beat = 'aaien:frame';
     await k.frame(aaienView);
     let reaches = 0;
+    /** this hold's temptations so far (a reach begins the hold again) */
+    let tempts = 0;
+    /** where he lies now (a wriggle closer moves him) */
+    let lies: Spot = { ...lay };
     await rust.still(e.id, {
       line: c.raakNiet, mis: c.schrok, hands: () => lost.body,
-      // he lies squeaking; a moment in, he peeks at him and squeaks again (the hand wants to go)
       show: () => call('piep', lost),
-      tempt: () => { call('piep', lost); void lost.lookAt(me, 1.6); },
+      // the hand wants to go, each time a little more (frisling.grow.ts): he squeaks where
+      // he lies and the fronds over him tremble; then he lifts his head and looks at him;
+      // then he gets up, wriggles half a step nearer his hand (across the picture, never
+      // at the lens) and flops down again, peeking up at him
+      tempt: () => {
+        const pull = tempted('aaien', tempts++);
+        call('piep', lost);
+        if (pull === 0) { const cl = home.cover.nearestClump(lost.x, lost.z); if (cl) home.cover.rustle(cl.i, 0.06); }
+        else if (pull === 1) void lost.lookAt(me, 1.6);
+        else void wriggle();
+      },
       // a hand reaches for him: he scoots aside through the bracken, lies flat, peeks out
       wrong: async () => {
+        tempts = 0;
         call('piep', lost);
         const to = aside(reaches++);
+        lies = to;
         await lost.go(to.x, to.z, { speed: 'trot', face: lost.yaw });
         await lost.lie(true);
         // he peeks out where he lies now: the fronds over him part (and stay parted)
@@ -366,6 +399,17 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
         await lost.lookAt(me, 1.2);
       },
     });
+    /** The strongest pull: he gets up, comes half a step nearer the hand across the picture
+     *  and lies down again where the fronds part over him, peeking up (a reach meanwhile
+     *  takes him over: the wriggle simply stops). */
+    async function wriggle(): Promise<void> {
+      const to = stepAcross(lies, k.ranger(), aaienView.heading, 0.24);
+      if (!(await lost.go(to.x, to.z, { speed: 0.7, face: lost.yaw }))) return;
+      lies = to;
+      await lost.lie(true);
+      showHim(to);
+      void lost.lookAt(me, 1.4);
+    }
   }
 
   // 6 · he gets up, tired, and comes out to him, to his side (away from the way home:
@@ -396,7 +440,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   else if (rust.nextIn('weg')?.id === 'dragen' && !homeLong) {
     const m0 = k.ranger();
     const lead0 = dist(m0, way.fieldApproach);
-    const len = paceStretch(k.knobs('dagnacht').holdS, lead0);
+    const len = paceStretch(rust.tempo.seconds, lead0);
     if (lead0 - len > 2) {
       const mid = pointAlong([m0, way.fieldApproach], lead0 - len);
       await k.walk({ name: 'field', to: { ...mid, r: 1.0 }, r: 1.0, line: c.leid, doel: c.chipWroet, glyph: 'boot', lead });
@@ -776,7 +820,6 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
    * from there. Walked calmly to its end: the good words. `pts`: the rest of the way.
    */
   async function dragen(pts: readonly Place[], doel: string): Promise<void> {
-    const knobs = k.knobs('dagnacht');
     const core = new PaceCore((g) => rust.answer('dragen', g));
     const fork = k.play.fork('pace');
     const last = pts[pts.length - 1];
@@ -787,11 +830,12 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
       const ahead = pts.filter((p, i) => i === pts.length - 1 || dist(p, last) < dist(m, last));
       const path: Spot[] = [{ x: m.x, z: m.z }, ...ahead];
       const rest = pathLength(path);
-      const len = paceStretch(knobs.holdS, rest);
+      // (as long as a hold wants now: the beat's tempo, a little shorter after a reach)
+      const len = paceStretch(rust.tempo.seconds, rest);
       const whole = len >= rest - 0.6; // (the rest of the way: it ends where the walk ends)
       const end: Place = whole ? last : { ...pointAlong(path, len + 0.9), r: 0.9 };
       k.stats.pace_len = Math.round(len * 10) / 10;
-      const marks = paceTempts(len, knobs, fork.rng);
+      const marks = paceTempts(len, rust.tempo, fork.rng);
       // where he drops flat when he runs: the heather beside this stretch, on his side of
       // the way (every 2.5 m), so he dives where the boy sees him — never back into the
       // stand's bracken behind the lens, 10 m off
@@ -808,7 +852,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
           ...lead, pace: TIRED_PACE, backM: PACE_BACK_M, hide: [...lead.hide, ...flat], runLine: c.nietRennenMoe, backLine: c.moe,
           onHide: (sp: Spot): void => {
             lead.onHide(sp);
-            if (core.run()) { k.stats.pace_dragen = core.impulses; if (settings.geluid) Sound.tryAgain(); }
+            // (a run is a reach: the beat's next hold, and this stretch again, a little shorter)
+            if (core.run()) { rust.tempo.reached(); k.stats.pace_dragen = core.impulses; if (settings.geluid) Sound.tryAgain(); }
           },
           onOut: (): void => { lead.onOut(); if (core.phase === 'react') out = true; },
         },
@@ -819,10 +864,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
           const r = k.ranger();
           if (core.phase === 'walk') walked += Math.min(1, dist(r, was));
           was = r;
-          // the family grunts ahead, a sibling squeaks: hurry? (never while he hides)
-          while (mi < marks.length && walked >= marks[mi]) {
-            if (mi++ % 2 === 0) call('wildzwijn', A.sow, 45); else call('piep', A.p2, 45);
-          }
+          // the way home tempts him to hurry, each time a little more (never while he hides)
+          while (mi < marks.length && walked >= marks[mi]) hurry(tempted('dragen', mi++));
         },
       });
       k.beat = 'pace:dragen'; // (a calm moment, not a walk: a discovery's reveal waits)
@@ -835,6 +878,16 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     k.lockFollow();
     k.world.stopRanger();
     await praise('dragen');
+  }
+
+  /** A temptation to hurry home on the tired piglet's walk: the sow grunts ahead; then a
+   *  sibling squeaks ahead and the tired piglet squeaks back; then the whole family calls. */
+  function hurry(pull: Pull): void {
+    const later = (s: number, f: () => void): void => { window.setTimeout(() => { if (!k.signal.aborted) f(); }, s * 1000); };
+    if (pull === 0) { call('wildzwijn', A.sow, 45); return; }
+    call('piep', A.p2, 45);
+    later(0.45, () => call('piep', lost));
+    if (pull === 2) { later(0.2, () => call('wildzwijn', A.sow, 45)); later(0.85, () => call('piep', A.p3, 45)); }
   }
 
   /** 'voeren' at the stand (s1, HANDS): the lost piglet himself noses the bag on his hip,
@@ -859,17 +912,23 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     let reach = BAG_REACH; // (his snout at the bag on his hip)
     const nose = (secs = 60): Promise<boolean> => { const rr = k.ranger(); return lost.sniff(rr.x, rr.z, secs, reach); };
     void nose();
+    let tempts = 0;
     await rust.still('voeren', {
       line: c.eten, hands: () => lost.body,
       show: () => call('piep', lost),
-      // he looks up at him, squeaks, and noses a little closer
+      // the hand wants to go, each time a little more: he squeaks and sniffs at the bag;
+      // then he looks up at him and squeaks; then he shuffles half a step nearer and
+      // nudges the bag with his snout (across the side lens's picture)
       tempt: () => {
+        const pull = tempted('voeren', tempts++);
         call('piep', lost);
-        reach = Math.max(0.42, reach - 0.05);
-        void lost.lookAt(me, 0.8).then((ok) => { if (ok) void nose(); });
+        if (pull === 0) { if (settings.geluid) Sound.sniff(); }
+        else if (pull === 1) void lost.lookAt(me, 0.8).then((ok) => { if (ok) void nose(); });
+        else { reach = Math.max(0.42, reach - 0.12); void nose(); }
       },
       // a hand with a crumb: he chews it, squeaks for more, wriggles closer, eager
       wrong: async () => {
+        tempts = 0;
         if (settings.geluid) Sound.sniff();
         call('piep', lost);
         reach = 0.42;
@@ -905,17 +964,22 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     let reach = 1.4;
     const nose = (secs = 60): Promise<boolean> => { const rr = k.ranger(); return yearling.sniff(rr.x, rr.z, secs, reach); };
     void nose();
+    let tempts = 0;
     await rust.still('voeren', {
       line: c.eten, hands: () => yearling.body,
       show: () => call('knor-blij', yearling),
-      // he grunts, looks up at him, and shuffles a little closer (never under 1.2 m)
+      // the hand wants to go, each time a little more: he grunts and sniffs at the bag; then
+      // he looks up at him; then he shuffles half a step nearer (never under 1.2 m)
       tempt: () => {
+        const pull = tempted('voeren', tempts++);
         call('knor-blij', yearling);
-        reach = Math.max(1.22, reach - 0.08);
-        void yearling.lookAt(me, 0.9).then((ok) => { if (ok) void nose(); });
+        if (pull === 0) { if (settings.geluid) Sound.sniff(); }
+        else if (pull === 1) void yearling.lookAt(me, 0.9).then((ok) => { if (ok) void nose(); });
+        else { reach = Math.max(1.22, reach - 0.12); void nose(); }
       },
       // a hand with a biscuit: he chews it, grunts for more, shuffles closer, eager
       wrong: async () => {
+        tempts = 0;
         if (settings.geluid) Sound.sniff();
         call('knor-blij', yearling);
         reach = 1.22;
@@ -947,17 +1011,31 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     k.beat = 'zeug:frame';
     call('wildzwijn', sow);
     const came = sow.go(stare.x, stare.z, { speed: 'walk', face: headingTo(stare, zt) });
-    await k.frame(zeugView(zt, stare, side));
+    const view = zeugView(zt, stare, side);
+    await k.frame(view);
     await k.until(() => sow.doing !== 'go', 4);
     void came;
     k.stats.zeug_px_m = Math.round(dist(stare, zt) * 10) / 10;
+    // the piglet by her side that tempts him (the nearest to where she stands)
+    const pig = [A.p1, A.p2, A.p3].sort((a, b) => dist(a, stare) - dist(b, stare))[0];
+    let tempts = 0;
     await rust.still(id, {
       line: c.staStil, feet: true,
       show: () => { void sow.lookAt(me); call('wildzwijn', sow); },
-      // a piglet squeaks by her side (the step toward them wants to go); she keeps watching
-      tempt: () => { call('piep', A.p2); void sow.lookAt(me); },
+      // the step toward them wants to go, each time a little more: a piglet squeaks by her
+      // side; then it lifts its head and looks at him; then it trots half a step out toward
+      // him (across the side lens's picture, never at it) and back to its mother. She
+      // keeps watching him all the while.
+      tempt: () => {
+        const pull = tempted('zeug', tempts++);
+        call('piep', pig);
+        void sow.lookAt(me);
+        if (pull === 1) void pig.lookAt(me, 1.6);
+        else if (pull === 2) void peek();
+      },
       // a step toward her piglets: a firm grunt, half a step nearer, a stamp
       wrong: async () => {
+        tempts = 0;
         call('wildzwijn', sow);
         const r = k.ranger();
         const nearer = toward(sow, r, Math.max(0, Math.min(0.5, dist(sow, r) - 2.8)));
@@ -968,6 +1046,16 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
       // he stood still: she lowers her head and goes back to what she was doing
       right: async () => { await sow.go(sowHome.x, sowHome.z, { speed: 'walk', face: layout.sow.yaw }); atHome(sow, { ...layout.sow, ...sowHome }); },
     });
+    /** The strongest pull: the piglet trots half a step out toward him, squeaks, looks at
+     *  him, and walks back to root at its place (anything else that takes it over ends it). */
+    async function peek(): Promise<void> {
+      const from = { x: pig.x, z: pig.z };
+      const to = stepAcross(from, zt, view.heading, 0.45);
+      if (!(await pig.go(to.x, to.z, { speed: 'trot', face: headingTo(to, zt) }))) return;
+      call('piep', pig);
+      if (!(await pig.lookAt(me, 1.2))) return;
+      if (await pig.go(from.x, from.z, { speed: 'walk' })) pig.root(from.x, from.z, 0.4);
+    }
   }
 
   /**
@@ -1056,6 +1144,19 @@ function pointAlong(pts: readonly Spot[], d: number): Spot {
   }
   const e = pts[pts.length - 1];
   return { x: e.x, z: e.z };
+}
+
+/** The part of a way through `pts` from `a` m along it to `b` m (its end, if shorter). */
+function sliceAlong(pts: readonly Spot[], a: number, b: number): Spot[] {
+  const out: Spot[] = [pointAlong(pts, a)];
+  let d = 0;
+  for (let i = 1; i < pts.length; i++) {
+    d += dist(pts[i - 1], pts[i]);
+    if (d > a + 1e-6 && d < b - 1e-6) out.push({ x: pts[i].x, z: pts[i].z });
+  }
+  const end = pointAlong(pts, Math.min(b, pathLength(pts)));
+  if (dist(out[out.length - 1], end) > 1e-6) out.push(end);
+  return out;
 }
 
 /**
