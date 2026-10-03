@@ -1072,11 +1072,12 @@ export class WildcameraHome implements HomeDressing {
     return () => { for (const d of done) { d.m.emissive.copy(d.c); d.m.emissiveIntensity = d.i; } };
   }
 
-  /** Run 7: for the morning photo's one render, the dawn mist in the wood: the fog closes
-   *  in to `near`..`far` m (from the camera on the pine), so the man and the two things
-   *  beside him stand clear and what lies far behind them (the hut, the missiebord, the
-   *  signpost by the clearing) fades into the morning grey. Returns how to lift it. */
-  dawnMist(near: number, far: number): () => void {
+  /** Run 7: for a photo's one render, the mist in the wood: the fog closes in to
+   *  `near`..`far` m (from the camera on the pine), so what it photographs stands clear and
+   *  what lies far behind (the hut, the missiebord, the signpost by the clearing) fades —
+   *  into the morning grey behind the man at his snare, into the night behind the fox
+   *  family (wc-album r2). Returns how to lift it. */
+  closeMist(near: number, far: number): () => void {
     let top: THREE.Object3D = this.group;
     while (top.parent) top = top.parent;
     const fog = (top as THREE.Scene).fog as THREE.Fog | null;
@@ -1128,7 +1129,8 @@ export class WildcameraHome implements HomeDressing {
    * Run 7 (wc-album): for the one render of the night's funny close-up, `a` (an animal of
    * the crossing) stands facing the camera on its pine with the tip of its nose `d` m from
    * the lens, and brings its nose toward the lens: a rigged one (the fox, the roe) lifts or
-   * lowers its head on its own neck (at most `neck` rad over its neck bones, r2: never its
+   * lowers its head on its own neck (at most `neck` rad over its neck bones, its head turning
+   * `keep` of that back, r2: never its
    * whole body stood up, never a tail over its head), then its body tips the rest (at most
    * `maxTilt` rad, nose up or down). The camera looks along `heading`. The tip of
    * the nose is found on the model as it stands level (on its middle line, the point
@@ -1136,7 +1138,7 @@ export class WildcameraHome implements HomeDressing {
    * forward when it tips) and followed as it bends and tips. Returns where the nose is and
    * how to put the animal back.
    */
-  closeUp(a: Actor, heading: number, d: number, maxTilt: number, neck = 0): { nose: Spot; y: number; undo: () => void } {
+  closeUp(a: Actor, heading: number, d: number, maxTilt: number, neck = 0, keep = 0): { nose: Spot; y: number; undo: () => void } {
     const dir = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
     const lens = this.photoLens(heading);
     const g = a.group;
@@ -1177,10 +1179,13 @@ export class WildcameraHome implements HomeDressing {
       return noseMesh ? noseMesh.getVertexPosition(noseI, new THREE.Vector3()).applyMatrix4(noseMesh.matrixWorld) : g.position.clone();
     };
     // (a rigged animal's neck: its head comes up, or down, toward the lens on its own neck
-    // bones, each turned a share about the line across its face)
+    // bones, each turned a share about the line across its face, and its head turns `keep` of
+    // that back: the roe's face still looks ahead at the lens as she lowers it, nose first —
+    // never the top of her head; the fox's tips up with its neck, its nose up at the lens)
     const bones: THREE.Object3D[] = [];
     if (neck > 0) g.traverse((o) => { if ((o as THREE.Bone).isBone && /^(Neck\d|Head)$/.test(o.name)) bones.push(o); });
     const rest = bones.map((b) => b.quaternion.clone());
+    const necks = bones.filter((b) => b.name !== 'Head').length || 1;
     const across = new THREE.Vector3(dir.z, 0, -dir.x);
     const pq = new THREE.Quaternion(), q = new THREE.Quaternion(), ax = new THREE.Vector3();
     const bend = (ang: number): void => {
@@ -1188,7 +1193,7 @@ export class WildcameraHome implements HomeDressing {
       for (const b of bones) {
         g.updateMatrixWorld(true);
         b.parent!.getWorldQuaternion(pq);
-        q.setFromAxisAngle(ax.copy(across).applyQuaternion(pq.invert()), ang / bones.length);
+        q.setFromAxisAngle(ax.copy(across).applyQuaternion(pq.invert()), b.name === 'Head' ? -ang * keep : ang / necks);
         b.quaternion.premultiply(q);
       }
     };
