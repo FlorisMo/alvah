@@ -436,6 +436,9 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
       const cards = await page.evaluate(() => (window as unknown as { __cards?: string[] }).__cards ?? []).catch(() => [] as string[]);
       log.note(`ree: new finds' cards ${cards.join(', ') || 'none'}`);
       log.soft(!cards.some((c2) => c2.endsWith('@twin:comes')), `ree: a card came while the twin came to its mother (${cards.join(', ')})`);
+      // (review r2: what he meets on a walk has its card on a walk, never held for the reunion)
+      const off = cards.filter((c2) => /^(De leeuwerik|De buizerd|Het geschuurde boompje)@/.test(c2) && !/@walk:/.test(c2));
+      log.soft(!off.length, `ree: a walk's find had its card away from the walks (${off.join(', ')})`);
     },
     report() {
       log.note(`ree: morning ${variant || '?'}; calf hint at ${target ? `(${Math.round(target.x)}, ${Math.round(target.y)})` : '?'}; lens ${lens?.toFixed(2) ?? '?'} m over the ground; glimpse ${stats.glimpse}; walks ${stats.walk_meadow_m} m to the grass, ${stats.walk_hide_m} m to the hide`);

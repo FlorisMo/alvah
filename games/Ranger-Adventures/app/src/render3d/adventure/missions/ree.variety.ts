@@ -403,8 +403,9 @@ export const EXTRA_P = 0.5;
  * flies only on a walk with room for it this morning (`larkOn`: the layout's, by its pool's
  * side; none: no woodlark this morning), and on the one the buzzard (always on the walk to
  * the hide) and the rubbed birch (beside the walk `birchOn` names) leave free when it may
- * choose; the woodlark never shares a walk with the buzzard or the rubbed birch (where it
- * would, the play holds the next thing instead). While he has not found the woodlark or the buzzard, a morning
+ * choose; the woodlark never shares a walk with the buzzard or the rubbed birch, nor the buzzard
+ * with a birch rubbed beside the walk to the hide (where one would, the play holds the next
+ * thing instead: one new card a walk, review r2). While he has not found the woodlark or the buzzard, a morning
  * with room for it holds it first (not every morning has). The pool is its walk's own moment (his feet answer
  * it): with the pool on his way to the hide (`hideFree` false) that walk holds no buzzard
  * and no little extra. The little extra (always on the walk to the hide) comes only while
@@ -427,12 +428,14 @@ export function reeSurprises(play: Pick<Play, 'fork'>, found: (id: ReeSmall) => 
   const birchIdx = o.birches > 0 ? play.fork('ree-boompje').int(0, o.birches - 1) : null;
   const birchWalk = birchIdx !== null ? o.birchOn?.[birchIdx] ?? null : null;
   /** may `x` join the others? (no woodlark without a walk for it, no buzzard on a walk with
-   *  the pool; the woodlark never on one walk with the buzzard or the rubbed birch — two
-   *  cards on one short walk, the second cut off by its end) */
+   *  the pool; the woodlark never on one walk with the buzzard or the rubbed birch, nor the
+   *  buzzard with a birch rubbed beside the walk to the hide — two cards on one short walk,
+   *  the second cut off by its end) */
   const fits = (x: ReeSmall, others: readonly ReeSmall[]): boolean => {
     const all = [x, ...others];
     if (all.includes('leeuwerik') && !walks.length) return false;
     if (all.includes('buizerd') && !hideFree) return false;
+    if (all.includes('buizerd') && all.includes('veegsporen') && birchWalk === 'hide') return false;
     if (!all.includes('leeuwerik')) return true;
     if (all.includes('buizerd') && !walks.includes('meadow')) return false;
     return !(all.includes('veegsporen') && birchWalk && walks.every((w) => w === birchWalk));

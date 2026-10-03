@@ -302,8 +302,8 @@ test('ree-discover: the ones he has not found come first; once he found them all
   }
 });
 
-test('ree-discover: one thing at a time on the walks — the woodlark never on one walk with the buzzard or the rubbed birch, no buzzard or extra beside the pool, no extra beside two things or a woodlark', () => {
-  let meadowLark = 0, hideLark = 0, extras = 0, n = 0;
+test('ree-discover: one thing at a time on the walks — the woodlark never on one walk with the buzzard or the rubbed birch, the buzzard never with a birch by the walk to the hide, no buzzard or extra beside the pool, no extra beside two things or a woodlark', () => {
+  let meadowLark = 0, hideLark = 0, extras = 0, n = 0, bothHide = 0, buzzBirch = 0;
   for (const m of MORNINGS) {
     const o = optsOf(m);
     for (let seed = 1; seed <= 400; seed++) {
@@ -316,12 +316,17 @@ test('ree-discover: one thing at a time on the walks — the woodlark never on o
         if (s2.small.includes('buizerd') && s2.leeuwerik) assert.equal(s2.leeuwerik, 'meadow', `${tag}: the woodlark and the buzzard on one walk`);
         // the rubbed birch beside one walk: the woodlark on the other
         if (birch && s2.leeuwerik) assert.notEqual(s2.leeuwerik, birch, `${tag}: the woodlark and the birch on one walk`);
+        // …and never beside the walk to the hide with the buzzard (review r2, seed 22's third
+        // play: the buzzard's card, behind the birch's, came only at the reunion)
+        if (birch === 'hide') assert.ok(!s2.small.includes('buizerd'), `${tag}: the buzzard and the birch on the walk to the hide`);
+        if (birch === 'hide' && s2.small.includes('buizerd')) bothHide += 1;
         // the walk to the hide never holds three things; beside two, or a woodlark, no little extra
         const hide = (s2.small.includes('buizerd') ? 1 : 0) + (s2.leeuwerik === 'hide' ? 1 : 0) + (birch === 'hide' ? 1 : 0);
         assert.ok(hide + (s2.extra ? 1 : 0) <= 2, `${tag}: ${hide} thing(s) and ${s2.extra ?? 'no'} extra on the walk to the hide`);
         if (s2.leeuwerik === 'hide') assert.equal(s2.extra, null, `${tag}: an extra beside the woodlark`);
         // the pool on his way to the hide is that walk's moment: no buzzard, no extra there
         if (m.pool === 'out') assert.ok(!s2.small.includes('buizerd') && !s2.extra, `${tag}: the buzzard or an extra beside the pool`);
+        if (s2.small.includes('buizerd') && birch === 'meadow') buzzBirch += 1;
         if (s2.leeuwerik === 'meadow') meadowLark += 1;
         if (s2.leeuwerik === 'hide') hideLark += 1;
         if (s2.extra) extras += 1;
@@ -331,6 +336,9 @@ test('ree-discover: one thing at a time on the walks — the woodlark never on o
   // (the woodlark still comes on both walks, and the little extra still comes often)
   assert.ok(meadowLark > n / 20 && hideLark > n / 20, `the woodlark on the walk to the grass ${meadowLark}×, to the hide ${hideLark}× (of ${n})`);
   assert.ok(extras > n / 8, `a little extra in ${extras} of ${n} plays`);
+  // (the buzzard and a rubbed birch still come in one play, the birch by the walk to the grass)
+  assert.equal(bothHide, 0);
+  assert.ok(buzzBirch > 0, `the buzzard with a birch by the walk to the grass ${buzzBirch}×`);
 });
 
 test('ree-discover: a fresh save meets all four small things as the mornings come: within four plays nearly always, five at most (the woodlark and the buzzard first where they have room)', () => {

@@ -99,6 +99,23 @@ const REUNION_CARD_S = (REVEAL_SHOW_MS + REVEAL_GAP_MS) / 1000;
 const REUNION_CARDS_MAX_S = 2 * REUNION_CARD_S;
 const SLIP_GONE_S = 0.5;
 
+/**
+ * ree-discover (review r2): a new find's card recorded on a walk shows on that walk. Where
+ * one still waits as he arrives (seen in its last steps, or behind another's card), he stops
+ * there, the beat still the walk's (a calm moment for the reveal gate), until it has been
+ * seen — at most two cards' time — never held back to land on the story's climax (seed 22's
+ * third play: the buzzard's card, behind the rubbed birch's, came only at the reunion).
+ * Most walks wait for none.
+ */
+async function walkCards(k: AdventureKit): Promise<void> {
+  if (!k.revealsWaiting()) return;
+  k.lockFollow();
+  k.world.stopRanger();
+  const t0 = k.now;
+  await k.until(() => k.revealsWaiting() === 0, REUNION_CARDS_MAX_S);
+  k.stats.walk_cards_s = Math.round(((k.stats.walk_cards_s ?? 0) + k.now - t0) * 10) / 10;
+}
+
 /** The watch's rustle stands at least this long (s) before "Daar is de moeder!" (its own
  *  line is heard first, however soon she shows). */
 const RUSTLE_MIN_S = 1.4;
@@ -315,6 +332,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   finds.walkEnd('meadow');
   poolIn?.done();
   slipping ??= slipAway();
+  await walkCards(k);
   // he stops at the grass's edge while she slips in (he saw her go on his way here; the
   // search's view holds still, so she is out of sight before it starts: in her cover by
   // her bed, behind its bracken, need not wait for her to lie down)
@@ -499,6 +517,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   });
   finds.walkEnd('hide');
   poolOut?.done();
+  await walkCards(k);
 
   // 11 · watch: the lens turns toward her cover and he watches through his binoculars; the
   // bracken at her gap stirs, and the mother steps out where she went in. Run 7: her small
