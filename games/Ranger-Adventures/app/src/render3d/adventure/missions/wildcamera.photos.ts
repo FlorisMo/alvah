@@ -65,8 +65,12 @@ function localContrast(d: Uint8ClampedArray, W: number, H: number, r: number): F
  * little green, the near ground bright, soft grain), by day warm colour, in the early
  * morning a cool grey light that leaves a face its skin tone; a gentle vignette; along the bottom a dark strip with the
  * sun or the moon and the clock. Returns a JPEG data URL.
+ * `flash` (wc-album r2: the fox family, a nose at the lens): a night photo of what the
+ * camera's infrared flash lit up close — the brightest part of the middle keeps its shading
+ * (the gain stops before it would burn out, the infrared curve lifts gently), so the lit
+ * animal stands pale and clear against the darker wood, never a flat white cut-out.
  */
-export function develop(src: HTMLCanvasElement, time: Photo['time'], clock: string, seed = 1, soft = 0): string {
+export function develop(src: HTMLCanvasElement, time: Photo['time'], clock: string, seed = 1, soft = 0, flash = false): string {
   const W = src.width, H = src.height;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -80,10 +84,11 @@ export function develop(src: HTMLCanvasElement, time: Photo['time'], clock: stri
   const d = img.data;
   const rnd = grainStream(seed);
   const dawn = time === 'ochtend';
+  const lit = flash && time === 'nacht';
   // the camera meters on the middle of the picture (where the animal is): a backlit
   // deer against a bright sky still comes out, never a black shape
   let sum = 0, cnt = 0;
-  const hist = dawn ? new Uint32Array(256) : null;
+  const hist = dawn || lit ? new Uint32Array(256) : null;
   for (let y = Math.floor(H * 0.25); y < H * 0.75; y += 2) {
     for (let x = Math.floor(W * 0.3); x < W * 0.7; x += 2) {
       const i = (y * W + x) * 4;
@@ -100,11 +105,14 @@ export function develop(src: HTMLCanvasElement, time: Photo['time'], clock: stri
   // the curve is softer, and the gain stops before the brightest 2 % of the middle would
   // pass 90 % of white
   const kBase = dawn ? 0.55 : 1.35;
+  /** the infrared look: brightness lifted (the flash's gentler) */
+  const ir = (l: number): number => (lit ? Math.pow(l, 0.75) * 1.05 : Math.pow(l, 0.55) * 1.35);
   if (hist) {
     let seen = 0, hi = 255;
     for (let v = 255; v >= 0; v--) { seen += hist[v]; if (seen >= cnt * 0.02) { hi = v; break; } }
     const curve = (v: number, k: number): number => (1 - Math.exp(-v * k)) / (1 - Math.exp(-k));
-    while (gain > 1 && curve(hi / 255, kBase * gain) > 0.9) gain = Math.max(1, gain - 0.05);
+    const top = (k: number): number => (lit ? ir(curve(hi / 255, k)) : curve(hi / 255, k));
+    while (gain > 1 && top(kBase * gain) > (lit ? 0.94 : 0.9)) gain = Math.max(1, gain - 0.05);
   }
   const K = kBase * gain, norm = 1 - Math.exp(-K);
   const expose = (v: number): number => (255 * (1 - Math.exp(-(v / 255) * K))) / norm;
@@ -121,7 +129,7 @@ export function develop(src: HTMLCanvasElement, time: Photo['time'], clock: stri
       if (time === 'nacht') {
         // infrared: brightness only, lifted (the camera lights the near scene), grainy
         const l = (0.3 * r + 0.59 * gg + 0.11 * b) / 255;
-        const k = Math.min(1, Math.pow(l, 0.55) * 1.35) * vig + (rnd() - 0.5) * 0.06;
+        const k = Math.min(1, ir(l)) * vig + (rnd() - 0.5) * 0.06;
         d[i] = Math.max(0, Math.min(255, k * 238));
         d[i + 1] = Math.max(0, Math.min(255, k * 246));
         d[i + 2] = Math.max(0, Math.min(255, k * 228));

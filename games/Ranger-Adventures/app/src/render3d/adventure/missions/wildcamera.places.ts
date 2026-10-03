@@ -365,14 +365,15 @@ export const SLOT_CLASH: readonly (readonly [SlotId, SlotId])[] = [
 
 /**
  * The fox family's way (wc-album: a rare night, after the echo): out of the trees on one
- * side, along the second trail across the crossing in front of the pine, into the trees on
- * the other side — side-on to the lens all the way, between the night choir's spots (clear
+ * side, across the crossing ~2 m out in front of the camera on its pine (a straight stretch
+ * there: `FAMILY_SHOT`), behind the sett into the trees on the other side — side-on to the
+ * lens all the way, between the night choir's spots (clear
  * of every one of them, of the sett, the log and the stumps, and of the ranger beside the
  * pine), so the callers watch them pass. Local points, west to east; the first and the
  * last lie out of the picture. Pinned in the view test.
  */
 const FAMILY_WAY: readonly Spot[] = [
-  at(-10.6, -1.5), at(-6.2, -1.9), at(-4.0, -2.2), at(-2.0, -1.65), at(0, -1.3), at(1.8, -1.4), at(3.4, -1.3),
+  at(-10.6, -1.5), at(-6.2, -1.95), at(-3.8, -2.15), at(1.4, -2.15), at(2.95, -1.35), at(3.4, -1.3),
   at(4.85, -1.85), at(6.6, -1.6), at(9.9, -1.25),
 ];
 
@@ -381,15 +382,18 @@ export function familyPath(from: Side): Spot[] {
   return from === 'left' ? [...FAMILY_WAY] : [...FAMILY_WAY].reverse();
 }
 
-/** Where the camera on the pine photographs the family: right in front of it, where their
- *  way crosses its view side-on (a trail camera's photo of animals passing close by: all
- *  three side by side, never one behind the other). The middle of the photo; the shutter
- *  clicks as the first cub passes it (its mother a step ahead, the second cub a step
- *  behind), and how much of the wood the photo frames there (m of height at 1 m). */
-export const FAMILY_SHOT: Spot & { frameH: number } = { ...at(0, -1.3), frameH: 1.1 };
+/** Where the camera on the pine photographs the family (r2): ~1.6 m out straight in front of
+ *  its lens, on the straight stretch of their way (5.2 m, from the glade's front to past the
+ *  pine) that runs square across its view — a trail camera's photo of animals passing: all three side by
+ *  side, whole, nose to tail, never one behind the other. The camera turns here; the
+ *  shutter clicks as the middle of the three passes it, and the photo frames them as they
+ *  really stand then (wildcamera.cubs `familyPhoto`). (At 1 m the photo was 1.8 m wide and
+ *  the three ~2 m long: the mother's head was cut off.) */
+export const FAMILY_SHOT: Spot = at(0, -2.15);
 
-/** The cubs trail their mother by this far along her way (m): close, a tumble behind. */
-export const CUB_LAG: readonly [number, number] = [0.62, 1.2];
+/** The cubs trail their mother by this far along her way (m): close at her tail, a tumble
+ *  behind (the three ~1.9 m nose to tail: a photo ~70° wide holds them at the shot). */
+export const CUB_LAG: readonly [number, number] = [0.55, 1.08];
 
 /** The white roe's way off after her photo (wc-album: a rare morning): back in under the
  *  trees beyond the glade, out of the picture (the ordinary roe of the glade comes back

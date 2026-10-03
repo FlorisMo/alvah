@@ -35,7 +35,7 @@ import type { Skin } from '../../../content/types.ts';
 import { CALLER_SLOTS, SIDE_OF, SLOT_CLASH, STOPS, STOPS_OF, type SlotId } from './wildcamera.places.ts';
 import {
   CameraClock, drawCallers, drawSnare, drawWildcameraPlay, hhmm, lastNights, lastSnare, legalLayouts, parseVariant, sameSpots, variantOf, type WildcameraPlay,
-  DAWNS, EVENINGS, NEUS_IDS, NEUS_P, NEUS_PITY, WILDCAMERA_MOODS, drawDawn, drawNeus, lastDawn, neusDrought, type Dawn,
+  DAWNS, EVENINGS, NEUS_IDS, NEUS_P, NEUS_PITY, WILDCAMERA_MOODS, drawDawn, drawNeus, lastLights, neusDrought, type Dawn,
 } from './wildcamera.variety.ts';
 import { playMood, type MoodId } from '../../Moods.ts';
 import { ONTDEKKINGEN } from '../../../content/ontdekkingen.ts';
@@ -363,17 +363,14 @@ test('the close-up travels in the variant (`wx`) and the history counts the play
     assert.equal(v.wx, d.p.neus ? v.wx : '0');
     assert.ok(/^[0wdvr]$/.test(v.wx));
   }
-  // as wildcamera.ts notes it, behind the longest mood and rare: the snare, the nose and the
-  // night still fit the history's 60 characters (the visitors' stops may fall off)
+  // as wildcamera.ts notes it, behind the longest mood and rare: the snare, the nose, the
+  // morning and the night still fit the history's 60 characters (the visitors' stops may
+  // fall off)
   for (let seed = 1; seed <= 200; seed++) {
     const d = draw(seed, 5);
     const v = variantOf(d.p);
-    const va = compactVariant({ mood: 'ochtendnevel', rare: 'witte-ree', ws: v.ws, wx: v.wx, wn: v.wn, wd: v.wd, wa: v.wa })!;
-    assert.ok(va.includes(`ws:${v.ws}`) && va.includes(`wx:${v.wx}`) && va.includes(`wn:${v.wn}`), va);
-    // (the morning too, behind any mood and rare, with four callers)
-    const four = variantOf(draw(seed, 1).p);
-    const va4 = compactVariant({ mood: 'ochtendnevel', rare: 'witte-ree', ws: four.ws, wx: four.wx, wn: four.wn, wd: four.wd, wa: four.wa })!;
-    assert.ok(va4.includes(`wd:${four.wd}`), va4);
+    const va = compactVariant({ mood: 'ochtendnevel', rare: 'witte-ree', ws: v.ws, wx: v.wx, wd: v.wd, wn: v.wn, wa: v.wa })!;
+    assert.ok(va.includes(`ws:${v.ws}`) && va.includes(`wx:${v.wx}`) && va.includes(`wd:${v.wd}`) && va.includes(`wn:${v.wn}`), va);
   }
 });
 
@@ -398,7 +395,7 @@ test('three plays in a row: never three without a nose, as the history hands it 
   assert.ok(withNose / plays > 0.4 && withNose / plays < 0.6, `${((withNose / plays) * 100).toFixed(0)} % of plays have one`);
 });
 
-test('the light: the evening is one of three (never dusk, never the bright day), the morning misty, clear or golden, never the evening\'s nor the last play\'s', () => {
+test('the light: the evening is one of three (never dusk, never the bright day), the morning misty, clear or golden, never the evening\'s, a new one while one is left', () => {
   assert.deepEqual([...EVENINGS], ['gouden-uur', 'bewolkt', 'ochtendnevel']);
   // the home's rule: a new evening every play, never the last one's (render3d/Moods playMood)
   const seen = new Set<string>();
@@ -417,38 +414,59 @@ test('the light: the evening is one of three (never dusk, never the bright day),
   const dawns = { ochtendnevel: 0, zonnig: 0, 'gouden-uur': 0 } as Record<Dawn, number>;
   for (let seed = 1; seed <= 1500; seed++) dawns[drawDawn(newPlay(MISSION, seed, 1))]++;
   for (const d of DAWNS) assert.ok(dawns[d] > 400, `${d}: ${dawns[d]} of 1500 mornings`);
-  // never the evening's light, never the last play's morning (both read back from the history)
-  for (let seed = 1; seed <= 600; seed++) {
+  // never the evening's light; never the last two plays' mornings while one is left (read
+  // back from the history), and never a morning that would give a whole play's light again
+  for (let seed = 1; seed <= 400; seed++) {
     for (const evening of EVENINGS) {
-      for (const last of [null, ...DAWNS]) {
-        const d = drawDawn(newPlay(MISSION, seed, 2), { evening, last });
+      for (const a of [null, ...DAWNS]) for (const b of [null, ...DAWNS]) {
+        const recent = [a, b].filter((x): x is Dawn => !!x).map((dawn, i) => ({ evening: EVENINGS[(seed + i) % 3] as string, dawn }));
+        const d = drawDawn(newPlay(MISSION, seed, 3), { evening, recent });
         assert.notEqual(d, evening, `seed ${seed}: the morning stands in the evening's light`);
-        assert.notEqual(d, last, `seed ${seed}: the morning of the play before`);
+        const left = DAWNS.filter((x) => x !== evening && !recent.some((r) => r.dawn === x));
+        if (left.length) assert.ok(left.includes(d), `seed ${seed}: ${d} after ${recent.map((r) => r.dawn).join(', ')} (${left.join(', ')} left)`);
+        assert.ok(!recent.some((r) => r.evening === evening && r.dawn === d), `seed ${seed}: the whole light of a recent play again (${evening} + ${d})`);
+        // (the morning of the play before only when the other one left would give a whole
+        // play's light again)
+        const other = DAWNS.filter((x) => x !== evening && x !== recent[0]?.dawn && !recent.some((r) => r.evening === evening && r.dawn === x));
+        if (recent.length && other.length) assert.notEqual(d, recent[0].dawn, `seed ${seed}: the morning of the play before`);
       }
     }
   }
-  // three plays in a row, as the history hands them over: three evenings, and no morning
-  // twice in a row
-  for (let t = 0; t < 300; t++) {
+  // plays in a row, as the history hands them over (the evening first in each play's line,
+  // a rare on some: the morning is noted before the night, so the 60 characters always keep
+  // it): every evening new, and no two of any three plays in a row stand in the same light,
+  // evening and morning both
+  let sessions = 0;
+  for (let t = 0; t < 600; t++) {
     const history: { m: string; sd: number; va?: string }[] = [];
     let lastMood: MoodId | null = null;
-    let prevDawn: Dawn | null = null;
-    for (let k = 0; k < 3; k++) {
-      const seed = 5 + t * 3 + k;
+    const lights: string[] = [];
+    for (let k = 0; k < 5; k++) {
+      const seed = 5 + t * 5 + k;
       const play = newPlay(MISSION, seed, k + 1);
       const evening = playMood('gouden-uur', WILDCAMERA_MOODS, play, lastMood);
-      const p = drawWildcameraPlay(play, { queueLength: 6, cast: ['das', 'ree', 'vos', 'wildzwijn'], evening, lastDawn: lastDawn(history) });
+      const recent = lastLights(history);
+      const cast = k % 2 ? ['das', 'ree', 'vos', 'nachtzwaluw'] : ['das', 'ree', 'vos', 'wildzwijn'];
+      const p = drawWildcameraPlay(play, { queueLength: 8, cast, evening, recentLights: recent });
       assert.notEqual(p.dawn, evening);
-      assert.notEqual(p.dawn, prevDawn, `session ${t}: the same morning twice in a row`);
+      const light = `${evening}+${p.dawn}`;
+      assert.ok(!lights.slice(-2).includes(light), `session ${t}, play ${k + 1}: the light of one of the last two plays again (${light}; ${lights.join(' | ')})`);
       const v = variantOf(p);
-      const va = compactVariant({ mood: evening, ws: v.ws, wx: v.wx, wn: v.wn, wd: v.wd, wa: v.wa });
+      const va = compactVariant({ mood: evening, ...(k % 3 === 1 ? { rare: 'witte-ree' } : {}), ws: v.ws, wx: v.wx, wd: v.wd, wn: v.wn, wa: v.wa });
+      assert.ok(va!.includes(`wd:${v.wd}`), `the morning's note is kept: ${va}`);
       history.push({ m: MISSION, sd: seed, va }, { m: MISSION, sd: seed, va });
       lastMood = evening;
-      prevDawn = p.dawn;
+      lights.push(light);
     }
+    sessions++;
   }
-  assert.equal(lastDawn([{ m: MISSION, va: 'mood:bewolkt,ws:1,wx:0,wn:dancvgrf,wd:g' }, { m: 'frisling', va: 'wd:n' }]), 'gouden-uur');
-  assert.equal(lastDawn([{ m: MISSION, va: 'mood:bewolkt,ws:1,wx:0,wn:dancvgrf' }]), null, 'a play from before the album');
+  assert.equal(sessions, 600);
+  assert.deepEqual(lastLights([
+    { m: MISSION, sd: 1, va: 'mood:bewolkt,ws:1,wx:0,wd:z,wn:dancvgrf' }, { m: MISSION, sd: 1, va: 'mood:bewolkt,ws:1,wx:0,wd:z,wn:dancvgrf' },
+    { m: 'frisling', sd: 2, va: 'mood:zonnig,wd:n' },
+    { m: MISSION, sd: 3, va: 'mood:ochtendnevel,rare:vosjes,ws:2,wx:v,wd:g,wn:rfvencda' },
+  ]), [{ evening: 'ochtendnevel', dawn: 'gouden-uur' }, { evening: 'bewolkt', dawn: 'zonnig' }], 'newest first, one per play');
+  assert.deepEqual(lastLights([{ m: MISSION, sd: 1, va: 'mood:bewolkt,ws:1,wx:0,wn:dancvgrf' }]), [], 'a play from before the album');
 });
 
 test('the rare ones of the crossing: the fox family and the white roe, by luck or surely by the third won play', () => {

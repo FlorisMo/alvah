@@ -20,11 +20,12 @@ import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import {
   CROSS, CROSS_VIEW, CALLER_SLOTS, ENTRY, EXIT, JUNIPER, LOG, NIGHTJAR_STUMP, PINE, SETT_MOUND, SKY, STOPS, SLOT_CLASH, SLOT_IDS, TAG_AT, THICKET_BUSHES, TREE,
   WILDCAMERA_PLACES as P, arrivalPath, type SlotId, type StopId,
-  CAMERA, SNARE_IDS, SNARE_SPOTS, SEARCH_VIEW, TEST_SPOT, TEST_VIEW, walkBackView, PINE_PICK,
+  CAMERA, SNARE_IDS, SNARE_SPOTS, SEARCH_VIEW, TEST_SPOT, TEST_VIEW, walkBackView, PINE_PICK, cameraAim,
   CUB_LAG, FAMILY_SHOT, WHITE_ROE_OUT, familyPath, aimSpot, FAN_HALF, TRAIL_VIEW, foxPrintLine,
 } from './wildcamera.places.ts';
 import { trunkOutline, type Trunk } from '../squirrel-math.ts';
 import { legalLayouts } from './wildcamera.variety.ts';
+import { familyPhoto, lineOf, pointAt, progressOf } from './wildcamera.cubs.ts';
 import { atLocal, segDist, toLocal } from '../places.ts';
 import type { Spot } from '../types.ts';
 
@@ -408,27 +409,75 @@ test('the fox family: out of the picture, across the crossing side-on, clear of 
   ] as [string, Spot, number][]) assert.ok(near(q) >= r, `${what}: their way passes ${near(q).toFixed(2)} m from it`);
 });
 
-test('the fox family\'s photo: right in front of the camera on its pine, where their way crosses its view side-on', () => {
+test('the fox family\'s photo: ~1.7 m out in front of the camera on its pine, where their way runs straight across its view', () => {
   const path = familyPath('left');
   const on = Math.min(...path.slice(1).map((b, i) => segDist(FAMILY_SHOT, path[i], b)));
   assert.ok(on < 0.05, `the photo's middle lies on their way (${on.toFixed(2)} m)`);
   const d = Math.hypot(FAMILY_SHOT.x - CAMERA.x, FAMILY_SHOT.z - CAMERA.z);
-  assert.ok(d > 0.7 && d < 1.4, `${d.toFixed(2)} m in front of the camera`);
-  // their way there runs across the camera's view (≥ 70° off its line), so the three stand
-  // side by side in the photo, and the mother and the second cub (a cub's lag either side)
-  // stay inside its widest view
-  for (let i = 1; i < path.length; i++) {
-    if (segDist(FAMILY_SHOT, path[i - 1], path[i]) > 0.05) continue;
-    const dx = path[i].x - path[i - 1].x, dz = path[i].z - path[i - 1].z;
-    const lx = FAMILY_SHOT.x - CAMERA.x, lz = FAMILY_SHOT.z - CAMERA.z;
-    const ang = Math.acos(Math.abs(dx * lx + dz * lz) / (Math.hypot(dx, dz) * Math.hypot(lx, lz)));
-    assert.ok(ang > (70 * Math.PI) / 180, `their way crosses the camera's view at ${Math.round((ang * 180) / Math.PI)}°`);
+  assert.ok(d > 1.5 && d < 2.4, `${d.toFixed(2)} m in front of the camera`);
+  // their way runs straight across the camera's view (≥ 75° off its line) for the whole
+  // family's length either side of the shot (her nose ~1 m ahead of their middle, the last
+  // cub's tail ~1 m behind, and a click a frame or two late): the three stand side by side
+  const line = lineOf(path), at = progressOf(line, FAMILY_SHOT);
+  for (let s = at - 1.4; s <= at + 1.4; s += 0.1) {
+    const q = pointAt(line, s);
+    const ang = Math.abs(Math.cos(q.yaw) * (FAMILY_SHOT.x - CAMERA.x) - Math.sin(q.yaw) * (FAMILY_SHOT.z - CAMERA.z)) / d; // sin of the angle
+    assert.ok(Math.asin(Math.min(1, ang)) > (75 * Math.PI) / 180, `${(s - at).toFixed(1)} m along: their way crosses the camera's view at ${Math.round((Math.asin(Math.min(1, ang)) * 180) / Math.PI)}°`);
   }
-  // the photo's widest view (58° high, 16:10): its half-width at the shot is ≥ the second cub's lag + half a fox
-  const half = Math.tan((29 * Math.PI) / 180) * 1.6 * d;
-  assert.ok(half >= CUB_LAG[1] - CUB_LAG[0] + 0.25, `the photo is ${(2 * half).toFixed(2)} m wide there`);
   // and the camera turns there within its swivel (its fan's half-angle twice over)
-  assert.ok(Math.abs(Math.atan2(FAMILY_SHOT.x - CAMERA.x, FAMILY_SHOT.z - CAMERA.z)) < FAN_HALF * 2, 'the camera looks out over the crossing');
+  assert.ok(Math.abs(cameraAim(FAMILY_SHOT)) < FAN_HALF * 2, 'the camera looks out over the crossing');
+});
+
+test('the fox family\'s photo: at the click all three are in it whole, nose to tail, side by side, she no nearer the lens than her cubs', () => {
+  // the lens as the home has it (home.photoLens), turned to the shot
+  const aim = cameraAim(FAMILY_SHOT);
+  const lensAt = new THREE.Vector3(TREE.x, groundY(CAMERA.x, CAMERA.z) + PINE.camY + 0.02, TREE.z)
+    .addScaledVector(new THREE.Vector3(Math.sin(aim), 0, Math.cos(aim)), PINE.trunkR + SIZE.wildcamera.h * (1.29 / 1.6) + 0.05);
+  /** a body's box (len × len/3 × h) standing at `p` along its way, its corners (world) */
+  const body = (p: Spot & { yaw: number }, len: number, h: number): THREE.Vector3[] => {
+    const f = { x: Math.sin(p.yaw), z: Math.cos(p.yaw) }, r = { x: f.z, z: -f.x }, out: THREE.Vector3[] = [];
+    for (const a of [-len / 2, len / 2]) for (const b of [-len / 6, len / 6]) for (const y of [0, h]) {
+      const x = p.x + f.x * a + r.x * b, z = p.z + f.z * a + r.z * b;
+      out.push(new THREE.Vector3(x, groundY(x, z) + y, z));
+    }
+    return out;
+  };
+  const vos = SIZE.vos, welp = (SIZE as Record<string, { h: number; len?: number }>)['vos-welp'];
+  for (const side of ['left', 'right'] as const) {
+    const line = lineOf(familyPath(side));
+    const at = progressOf(line, FAMILY_SHOT);
+    // the click: the middle of the three (her nose to the last cub's tail) at the shot — and a
+    // click a frame or two late on a loaded laptop (she 0.35 m on)
+    const mid = (vos.len! / 2 - CUB_LAG[1] - welp.len! / 2) / 2;
+    for (const late of [0, 0.35]) {
+      const s = at - mid + late;
+      for (const weave of [-0.14, 0.14]) {
+        const she = pointAt(line, s);
+        const cubs = [0, 1].map((k) => {
+          const c = pointAt(line, s - CUB_LAG[k]);
+          return { ...c, x: c.x + Math.cos(c.yaw) * weave * (k ? -1 : 1), z: c.z - Math.sin(c.yaw) * weave * (k ? -1 : 1) };
+        });
+        const pts = [...body(she, vos.len!, vos.h), ...cubs.flatMap((c) => body(c, welp.len!, welp.h))];
+        const { look, fov } = familyPhoto(lensAt, pts);
+        const what = `${side}, ${late ? 'late' : 'on time'}, weave ${weave}`;
+        assert.ok(fov >= 24 && fov <= 58, `${what}: a field of view of ${fov.toFixed(0)}°`);
+        const cam = new THREE.PerspectiveCamera(fov, 1.6, 0.1, 80);
+        cam.position.copy(lensAt); cam.lookAt(look); cam.updateMatrixWorld(true);
+        let x0 = 1, x1 = -1;
+        for (const q of pts) {
+          const n = q.clone().project(cam);
+          assert.ok(Math.abs(n.x) <= 0.95 && Math.abs(n.y) <= 0.95 && n.z < 1, `${what}: a corner at (${n.x.toFixed(2)}, ${n.y.toFixed(2)}) is out of the photo`);
+          x0 = Math.min(x0, n.x); x1 = Math.max(x1, n.x);
+        }
+        // the family fills the photo across (a family photo, not three dots in the wood)
+        assert.ok((x1 - x0) / 2 >= 0.75, `${what}: the three fill ${Math.round(((x1 - x0) / 2) * 100)}% of the photo's width`);
+        // she stands no nearer the lens than her cubs (a cub's weave at most)
+        const ahead = look.clone().sub(lensAt).setY(0).normalize();
+        const depth = (p: Spot): number => (p.x - lensAt.x) * ahead.x + (p.z - lensAt.z) * ahead.z;
+        for (const c of cubs) assert.ok(depth(she) >= depth(c) - 0.16, `${what}: she stands ${(depth(c) - depth(she)).toFixed(2)} m nearer the lens than a cub`);
+      }
+    }
+  }
 });
 
 test('the white roe: in from out of the picture like the glade\'s roe, and off again out of it under the trees', () => {

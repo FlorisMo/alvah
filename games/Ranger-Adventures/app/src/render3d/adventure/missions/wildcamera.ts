@@ -35,7 +35,7 @@
  * Steps (content, the EF contract): 0 wisselen · 1 simon, each logged once.
  */
 
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import type { Adventure } from '../registry';
 import type { Mission } from '../../../content/types';
 import type { Play } from '../../../core/play';
@@ -52,15 +52,15 @@ import { dist, headingTo, toLocal } from '../places';
 import type { Spot } from '../types';
 import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale';
 import { WildcameraHome, type BirdId } from './wildcamera.home';
-import { CameraClock, WILDCAMERA_MOODS, drawWildcameraPlay, lastDawn, lastNights, lastSnare, neusDrought, variantOf, type NeusId } from './wildcamera.variety';
+import { CameraClock, WILDCAMERA_MOODS, drawWildcameraPlay, lastLights, lastNights, lastSnare, neusDrought, variantOf, type NeusId } from './wildcamera.variety';
 import { PhotoStrip, develop, developedLuma, type Photo } from './wildcamera.photos';
-import { FoxCubs } from './wildcamera.cubs';
+import { FoxCubs, drawnCorners, familyPhoto } from './wildcamera.cubs';
 import { Actor } from '../actors';
 import {
   WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, STRAP_VIEW, SNARE_FOUND, SNARE_SPOTS, SEARCH_VIEW, TEST_SPOT, TEST_VIEW, inFan, walkBackView,
   AIM_AT, CAMERA, ROE_HIDEAWAY, ROE_SHY_WITHIN, aimSpot, cameraAim, wildcameraClearings, wildcameraTreeClearings, wildcameraTrees,
   CALLER_SLOTS, SIDE_OF, SKY, STOPS, STOPS_OF, arrivalPath, exitPath,
-  CROSS, CUB_LAG, FAMILY_SHOT, WHITE_ROE_OUT, familyPath,
+  CROSS, FAMILY_SHOT, WHITE_ROE_OUT, familyPath,
   type AimSpot, type Side, type SlotId, type StopId,
 } from './wildcamera.places';
 
@@ -122,17 +122,37 @@ const FLY_S = 1.6;
 const FAMILY_PACE = 2.0;
 /** Run 7 (wc-album): the night's close-up, per animal: where the camera looks (rad: out
  *  over the crossing, a little to one side), how near the tip of its nose comes to the
- *  lens (m), how far at most it tips its body to bring its nose up (or down) to the lens
- *  (rad), and how much of it the photo frames (m of height at 1 m: its face fills it). */
-const NEUS_POSE: Readonly<Record<NeusId, { heading: number; d: number; tilt: number; frame: number }>> = {
-  wildzwijn: { heading: 0.25, d: 0.55, tilt: 0.55, frame: 0.75 },
-  das: { heading: -0.2, d: 0.3, tilt: 0.6, frame: 0.56 },
-  vos: { heading: 0.3, d: 0.32, tilt: 0.65, frame: 0.6 },
-  ree: { heading: -0.25, d: 0.36, tilt: 0.4, frame: 0.64 },
+ *  lens (m, along the ground), how far at most it tips its body to bring its nose up (or
+ *  down) toward the lens (rad), how much of it the photo frames (m of height at 1 m: its
+ *  face fills it), where on its face the photo looks (`face`: m back from the tip of its
+ *  nose, and up), and how far a rigged one bends its neck to bring its head to the lens
+ *  (`neck`, rad over its neck bones). r2: nobody stands up on its hind legs or tips its
+ *  tail over its head any more: the fox lifts its head on its neck and the roe lowers hers
+ *  (their bodies tip a little at most), the badger (no neck to bend) tips a little and the
+ *  camera looks DOWN at its face from its tree — a trail camera sees an animal sniffing at
+ *  the foot of its tree from above; the boar, as tall as the lens, was right as it was. The
+ *  fox looks in from the side away from the wildwissel: its pale sandy trail running off
+ *  behind its head stood up between its ears like a horn. */
+const NEUS_POSE: Readonly<Record<NeusId, { heading: number; d: number; tilt: number; frame: number; face: readonly [number, number]; neck: number }>> = {
+  wildzwijn: { heading: 0.25, d: 0.55, tilt: 0.55, frame: 0.75, face: [0, 0], neck: 0 },
+  das: { heading: -0.2, d: 0.36, tilt: 0.18, frame: 0.56, face: [0.07, 0.05], neck: 0 },
+  vos: { heading: -0.35, d: 0.28, tilt: 0.15, frame: 0.72, face: [0.02, 0], neck: 0.85 },
+  ree: { heading: -0.25, d: 0.34, tilt: 0.1, frame: 0.64, face: [0.06, 0.03], neck: 0.8 },
 };
 /** The close-up is a little out of focus: the nose came nearer than the lens can sharpen
  *  (px of blur on the 320 px photo). */
 const NEUS_SOFT = 1.1;
+/** Run 7 (wc-album r2): the fox family's night photo — how brightly the camera's infrared
+ *  flash lights the three (their own glow, 0..1) and how dim the night sky's fill is around
+ *  them (×): they stand out pale and clear, never pale ghosts on pale ground. */
+const FAMILY_IR = 0.09;
+const FAMILY_FILL = 0.55;
+/** …and a nose at the lens in the night: its face lit, the ground behind it a little dimmer. */
+const NEUS_IR = 0.06;
+const NEUS_FILL = 0.7;
+/** Run 7 (wc-album r2): how long a rare's reveal is up before its look ends (s): long enough
+ *  to read and hear "Nieuw in je veldgids! …" (it shows ~4 s). */
+const REVEAL_READ = 3.4;
 
 async function story(k: AdventureKit, A: Record<Walker, Actor>, home: WildcameraHome, photos: PhotoStrip, own: (d: { dispose(): void }) => void): Promise<void> {
   const c = k.copy;
@@ -147,15 +167,15 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   const history = store.get().geschiedenis;
   const wp = drawWildcameraPlay(k.play, {
     queueLength: queue.length, cast, recent: lastNights(history), lastSnare: lastSnare(history), neusDrought: neusDrought(history),
-    evening: k.mood, lastDawn: lastDawn(history),
+    evening: k.mood, recentLights: lastLights(history),
   });
   const variant = variantOf(wp);
-  // (the snare's spot and the night's close-up first: the next plays read them back, and
-  // the history keeps 60 characters)
+  // (the snare's spot, the night's close-up and the morning first: the next plays read them
+  // back, and the history keeps 60 characters)
   k.play.note('ws', variant.ws);
   k.play.note('wx', variant.wx);
-  k.play.note('wn', variant.wn);
   k.play.note('wd', variant.wd);
+  k.play.note('wn', variant.wn);
   k.play.note('wa', variant.wa);
   const clock = new CameraClock(wp.clockStart, k.play.fork('wc-clock-run').rng);
   // run 7 (wc-album): this play's rare visitor (rolled at the briefing: k.rare), the dawn,
@@ -210,8 +230,8 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   let shots = 0;
   /** A photograph from the camera on the pine, looking at `p` (`y` m up, `frameH` m of
    *  height in the picture), developed (the camera's clock runs on with every one). */
-  const photograph = async (p: Spot, y: number, frameH: number, what: string, time: Photo['time'], prepare?: () => () => void, minFov?: number, fill?: number, more: { stamp?: string; soft?: number } = {}): Promise<Photo | null> => {
-    const cam = home.photoCamera(p, y, 1.6, frameH, minFov);
+  const photograph = async (p: Spot, y: number, frameH: number, what: string, time: Photo['time'], prepare?: () => () => void, minFov?: number, fill?: number, more: { stamp?: string; soft?: number; cam?: THREE.PerspectiveCamera; flash?: boolean } = {}): Promise<Photo | null> => {
+    const cam = more.cam ?? home.photoCamera(p, y, 1.6, frameH, minFov);
     const raw = await k.guard(k.world.snapshot(cam, 320, 200, () => {
       const a = home.photoPrep(fill ?? (time === 'nacht' ? 1 : time === 'ochtend' ? 1.35 : 1.9));
       const b = prepare?.();
@@ -222,7 +242,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     const line = what === 'jij' ? c.fotoJij : c[`foto_${what}`];
     // (the camera's own clock: the man at his snare at first light, every other photo as it
     // runs on; a photo it took on its own in the night carries its own time)
-    const url = develop(raw, time, more.stamp ?? (time === 'ochtend' ? clock.dawnMan() : clock.photo()), shots + 7, more.soft ?? 0);
+    const url = develop(raw, time, more.stamp ?? (time === 'ochtend' ? clock.dawnMan() : clock.photo()), shots + 7, more.soft ?? 0, more.flash);
     // (dev read: no photo in any light comes out black or white)
     const luma = developedLuma();
     k.stats.photo_luma_min = Math.min(k.stats.photo_luma_min ?? 255, luma);
@@ -269,6 +289,28 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     const far = Math.hypot(to.x - a.x, to.z - a.z);
     return k.guard(Promise.race([a.go(to.x, to.z, { speed: pace, face }), k.wait(far / pace + 4).then(() => false)]));
   };
+
+  /* -- run 7 (wc-album r2): this play's new discoveries and their reveals. A new one's reveal
+        waits for a calm beat (FOUNDATION's gate: a walk, a look, the reunion) and shows in
+        the order they were found; a rare one gets its own calm look while it is in the
+        picture (the family trotting off, the white roe grazing), held until its reveal has
+        been up a while. On a night the fox comes with her cubs, the fox herself is found
+        after them (she is in their reveal's picture: the family's reveal comes first) -- */
+  const fresh: string[] = [];
+  const shownAt = new Map<string, number>();
+  const found = (id: string): boolean => {
+    const n = k.discover(id);
+    if (n) fresh.push(id);
+    return n;
+  };
+  k.onTick(() => {
+    for (const id of fresh) if (!shownAt.has(id) && store.get().ontdekt[id]?.r) shownAt.set(id, k.now);
+  });
+  /** every reveal of this play has shown, and the last one has been up `secs` s */
+  const revealsShown = (secs = REVEAL_READ): boolean => fresh.every((id) => shownAt.has(id)) && k.now - Math.max(-Infinity, ...shownAt.values()) >= secs;
+  let foxLater = false;
+  const foxFound = (): void => { if (cubs && !familyDone) foxLater = true; else found('wildcamera.vos'); };
+  let familyDone = false;
 
   /* -- run 7 (wc-album): the fox with her cubs (a rare night, after the echo). The fox that
         called tonight trots off out of the picture on her side first (to fetch them); then
@@ -319,23 +361,51 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       // in the picture: the words
       await k.until(() => Math.abs(toLocal(CROSS, vixen).u) < 6.2, 8);
       k.say(c.vosjes, { good: true });
-      // right in front of the camera: click, in its infrared glow (her first cub passes the
-      // middle of its view, she a step ahead of it, the second a step behind)
-      const s0 = toLocal(CROSS, shot).u + (side === 'left' ? CUB_LAG[0] : -CUB_LAG[0]), dir = side === 'left' ? 1 : -1;
-      await k.until(() => (toLocal(CROSS, vixen).u - s0) * dir >= 0, 9);
+      // right in front of the camera, ~2 m out: click, in its infrared glow, as the middle of
+      // the three (her nose to the last cub's tail, as they really are) passes the middle of
+      // its view; the photo frames all three whole as they stand then (r2)
+      const bodies = (): THREE.Vector3[] => [...drawnCorners(vixen.body ?? vixen.group), ...drawnCorners(young.group)];
+      const middleU = (): number => {
+        const pts = bodies();
+        if (!pts.length) return toLocal(CROSS, vixen).u;
+        const lo = Math.min(...pts.map((q) => toLocal(CROSS, q).u)), hi = Math.max(...pts.map((q) => toLocal(CROSS, q).u));
+        return (lo + hi) / 2;
+      };
+      const shotU = toLocal(CROSS, shot).u, dir = side === 'left' ? 1 : -1;
+      await k.until(() => (middleU() - shotU) * dir >= 0, 9);
       shutter(true);
-      const p = await photograph(shot, 0.22, shot.frameH, 'vosjes', 'nacht');
+      const lens = home.photoLens();
+      const frame = familyPhoto(lens, bodies());
+      // (its infrared flash lights the three: pale and clear against the dark wood, where
+      // the far trees, the hut and the signpost fade into the night)
+      const near = lens.distanceTo(frame.look);
+      const p = await photograph(shot, 0, 1, 'vosjes', 'nacht', () => {
+        const a = home.irLit([vixen.body ?? vixen.group, young.group], FAMILY_IR), b = home.dawnMist(near + 1.5, near + 9);
+        return () => { b(); a(); };
+      }, undefined, FAMILY_FILL, { cam: home.photoCameraAt(frame.look, frame.fov, 1.6), flash: true });
       if (p) { photos.photos.push(p); photos.pin(p); }
-      k.discover('wildcamera.vosjes');
-      k.discover('wildcamera.vos'); // (a fox he saw, if it came on no other way tonight)
+      // (dev read: the photo's field of view, and how much nearer the lens she stands than
+      // her cubs (cm, along its look; never much: they walk on her own track))
+      const ahead = frame.look.clone().sub(lens).setY(0).normalize();
+      const depth = (o: THREE.Object3D): number => o.getWorldPosition(new THREE.Vector3()).sub(lens).dot(ahead);
+      const cubDepth = young.group.children.map(depth);
+      k.stats.family_fov = Math.round(frame.fov);
+      k.stats.family_nearer_cm = Math.round((Math.min(...cubDepth) - depth(vixen.group)) * 100);
       k.stats.family_photo = p ? 1 : 0;
+      // a calm look while they trot off: the family's reveal shows over them (a rare in its
+      // own moment), held until it has been up a while
+      k.beat = 'look:vosjes';
+      found('wildcamera.vosjes');
+      const t0 = k.now;
       await k.guard(Promise.race([trot, k.wait(9)]));
+      await k.until(() => revealsShown(), Math.max(0, 11 - (k.now - t0)));
     } finally {
       off();
       photos.pin(null);
       vixen.group.visible = false;
       vixen.idle();
       young.hide();
+      familyDone = true;
     }
     k.say(null);
   };
@@ -353,13 +423,18 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     home.aim(pose.heading, true);
     let undo: (() => void) | null = null;
     const stamp = time === 'nacht' ? clock.lateNight() : clock.firstLight();
-    const at = home.closeUp(a, pose.heading, pose.d, pose.tilt);
-    const nose = at.nose, y = at.y;
+    const at = home.closeUp(a, pose.heading, pose.d, pose.tilt, pose.neck);
+    // (the photo looks at its face: a little back from the tip of its nose, and up)
+    const back = { x: Math.sin(pose.heading) * pose.face[0], z: Math.cos(pose.heading) * pose.face[0] };
+    const nose = { x: at.nose.x + back.x, z: at.nose.z + back.z }, y = at.y + pose.face[1];
     at.undo();
+    // (at night its infrared flash lights the face right at the lens: clear against the
+    // ground behind it)
     const p = await photograph(nose, y, pose.frame, 'neus', time, () => {
-      undo = home.closeUp(a, pose.heading, pose.d, pose.tilt).undo;
-      return () => undo?.();
-    }, 8, time === 'nacht' ? 1 : 1.35, { stamp, soft: NEUS_SOFT });
+      undo = home.closeUp(a, pose.heading, pose.d, pose.tilt, pose.neck).undo;
+      const lit = time === 'nacht' ? home.irLit([a.body ?? a.group], NEUS_IR) : null;
+      return () => { lit?.(); undo?.(); };
+    }, 8, time === 'nacht' ? NEUS_FILL : 1.35, { stamp, soft: NEUS_SOFT, flash: true });
     if (p) photos.photos.push(p);
     k.stats.neus_photo = p ? 1 : 0;
     for (const [key, v] of Object.entries(home.closeUpRead ?? {})) k.stats[`neus_${key}`] = Math.round(v * 100) / 100;
@@ -581,7 +656,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   k.stats.selfie = selfie ? 1 : 0;
   // run 7 (wc-album): his own photo goes into his veldgids. The first time, he looks at it a
   // moment longer (a calm look: the veldgids's reveal shows beside it then, once)
-  const firstSelfie = !!selfie && k.discover('wildcamera.selfie');
+  const firstSelfie = !!selfie && found('wildcamera.selfie');
   if (firstSelfie) k.beat = 'look:selfie';
   await k.wait(firstSelfie ? 5.6 : 2.8);
   photos.pin(null);
@@ -665,7 +740,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
         : await photograph(where, h * 0.5, Math.max(1.1, h * (h > 1 ? 1.6 : 2.3)), id, night ? 'nacht' : 'dag');
       if (p) photos.add(p);
       // run 7 (wc-album): he saw the fox walk in and stand for its photo
-      if (id === 'vos') k.discover('wildcamera.vos');
+      if (id === 'vos') foxFound();
       // it heard the click: its head comes up, it looks at the camera a moment
       if (walker && !walker.lies) void walker.lookAt(() => ({ x: CAMERA.x, z: CAMERA.z, speed: 0 }), 0.9);
       k.stats.photos = photos.photos.length;
@@ -782,7 +857,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     },
     onCall: (id) => {
       home.glowIr(0.9);
-      if (id === 'vos') k.discover('wildcamera.vos'); // (wc-album: its call reached him)
+      if (id === 'vos') foxFound(); // (wc-album: its call reached him)
     },
   });
 
@@ -793,6 +868,8 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
 
   /* 8 · the night animals go; the night passes */
   k.beat = 'morning';
+  // (a fox with her cubs tonight: she is in his veldgids now too, revealed after them)
+  if (cubs || foxLater) found('wildcamera.vos');
   k.say(c.slapen);
   for (const n of wp.callers) {
     const slot = CALLER_SLOTS[n.slot];
@@ -849,7 +926,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   // is up, so the child finds it after the photo told him about it). Run 7: he flips
   // through them himself; the man's comes last: "Waar is dit?"
   // (wc-album: a nose at the lens is a find once he has flipped to it)
-  const review = photos.review(c.fotoTitel, [c.man, c.waar], 'Verder', k.signal, (p) => { if (p.what === 'neus') k.discover('wildcamera.neus'); });
+  const review = photos.review(c.fotoTitel, [c.man, c.waar], 'Verder', k.signal, (p) => { if (p.what === 'neus') found('wildcamera.neus'); });
   home.showSnare(true);
   await k.guard(review);
   /* 10 · the raaf: the camera tells the ranger who lives here */
@@ -910,8 +987,11 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
            mother stay brown), click, "Een witte ree! Heel bijzonder." She grazes a moment
            and goes back in under the trees; the glade's own roe comes back once he is done */
   if (whiteRoe) {
-    k.beat = 'witte-ree';
     k.say(null); // (he is back: he watches her step out, nothing to read)
+    // (a reveal of this play still to come shows first, while he looks over the glade: her
+    // moment is her own)
+    await k.until(() => revealsShown(), 7);
+    k.beat = 'witte-ree';
     await k.guard(Promise.race([whiteRoe.ready, k.wait(4)]));
     const from = aimSpot('ree', 'open').from;
     whiteRoe.place(from.x, from.z, headingTo(from, roe));
@@ -922,11 +1002,15 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     const p = await photograph({ x: whiteRoe.x, z: whiteRoe.z }, whiteRoe.height * 0.55, whiteRoe.height * 1.7, 'witte-ree', 'dag');
     if (p) photos.pin(p);
     k.say(c.witteRee, { good: true });
-    k.discover('wildcamera.witte-ree');
     k.stats.white_roe = 1;
     whiteRoe.root(roe.x, roe.z, 0.3);
+    // a calm look while she grazes: her reveal shows over her (a rare in its own moment)
+    k.beat = 'look:witte-ree';
+    found('wildcamera.witte-ree');
+    const t0 = k.now;
     await k.wait(3.4);
     photos.pin(null);
+    await k.until(() => revealsShown(), Math.max(0, 9 - (k.now - t0)));
   }
   await k.reunion(async () => {
     if (whiteRoe) {

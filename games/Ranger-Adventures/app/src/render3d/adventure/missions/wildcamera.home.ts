@@ -1009,13 +1009,26 @@ export class WildcameraHome implements HomeDressing {
    *  height there (so a badger fills the picture as a stag does; never narrower than
    *  `minFov`° — the nightjar's close-up zooms in further). */
   photoCamera(p: Spot, y: number, aspect: number, frameH = 1.6, minFov = 18): THREE.PerspectiveCamera {
-    const dir = new THREE.Vector3(Math.sin(this.aimNow), 0, Math.cos(this.aimNow));
-    const lens = new THREE.Vector3(TREE.x, this.trap.position.y + 0.02, TREE.z).addScaledVector(dir, PINE.trunkR + CAM_DEPTH + 0.05);
+    const lens = this.photoLens();
     const d = Math.max(1, Math.hypot(p.x - lens.x, p.z - lens.z));
     const fov = THREE.MathUtils.clamp((2 * Math.atan(frameH / 2 / d) * 180) / Math.PI, minFov, 58);
+    return this.photoCameraAt(new THREE.Vector3(p.x, this.groundY(p.x, p.z) + y, p.z), fov, aspect);
+  }
+
+  /** The camera trap's lens, as it is turned now (on its strap, `heading` rad: where it
+   *  looks; its turn now by default). */
+  photoLens(heading = this.aimNow): THREE.Vector3 {
+    const dir = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+    return new THREE.Vector3(TREE.x, this.trap.position.y + 0.02, TREE.z).addScaledVector(dir, PINE.trunkR + CAM_DEPTH + 0.05);
+  }
+
+  /** A camera from the trap's lens looking at `look` (world) with a field of view of `fov`°
+   *  (vertical) for a photograph `aspect` wide (r2: the fox family's photo frames all three
+   *  as they stand: wildcamera.cubs `familyPhoto`). */
+  photoCameraAt(look: THREE.Vector3, fov: number, aspect: number): THREE.PerspectiveCamera {
     const cam = new THREE.PerspectiveCamera(fov, aspect, 0.1, 80);
-    cam.position.copy(lens);
-    cam.lookAt(p.x, this.groundY(p.x, p.z) + y, p.z);
+    cam.position.copy(this.photoLens());
+    cam.lookAt(look);
     cam.updateMatrixWorld(true);
     return cam;
   }
@@ -1034,6 +1047,29 @@ export class WildcameraHome implements HomeDressing {
       [this.tags.open.visible, this.tags.hol.visible, this.fan.visible] = was;
       hemis.forEach((h, i) => { h.intensity = i0[i]; });
     };
+  }
+
+  /** Run 7 (wc-album r2): for a night photo's one render, what the camera's infrared flash
+   *  lights stands out bright against the dark wood behind it (a trail camera's night photo:
+   *  the near animal pale and clear, never a pale ghost on pale ground): the drawn bodies of
+   *  `subjects` glow by `k` (their materials' own light, put back after). Returns how. */
+  irLit(subjects: readonly THREE.Object3D[], k: number): () => void {
+    const done: { m: THREE.MeshStandardMaterial; c: THREE.Color; i: number }[] = [];
+    const seen = new Set<THREE.Material>();
+    for (const o of subjects) {
+      o.traverseVisible((x) => {
+        const mesh = x as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        for (const m of (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as THREE.MeshStandardMaterial[]) {
+          if (!m || seen.has(m) || !(m as { emissive?: THREE.Color }).emissive) continue;
+          seen.add(m);
+          done.push({ m, c: m.emissive.clone(), i: m.emissiveIntensity ?? 1 });
+          m.emissive.setRGB(k, k, k);
+          m.emissiveIntensity = 1;
+        }
+      });
+    }
+    return () => { for (const d of done) { d.m.emissive.copy(d.c); d.m.emissiveIntensity = d.i; } };
   }
 
   /** Run 7: for the morning photo's one render, the dawn mist in the wood: the fog closes
@@ -1091,16 +1127,18 @@ export class WildcameraHome implements HomeDressing {
   /**
    * Run 7 (wc-album): for the one render of the night's funny close-up, `a` (an animal of
    * the crossing) stands facing the camera on its pine with the tip of its nose `d` m from
-   * the lens, its body tipped (at most `maxTilt` rad, nose up or down) until its nose is as
-   * high as the lens: it sniffs right at it. The camera looks along `heading`. The tip of
+   * the lens, and brings its nose toward the lens: a rigged one (the fox, the roe) lifts or
+   * lowers its head on its own neck (at most `neck` rad over its neck bones, r2: never its
+   * whole body stood up, never a tail over its head), then its body tips the rest (at most
+   * `maxTilt` rad, nose up or down). The camera looks along `heading`. The tip of
    * the nose is found on the model as it stands level (on its middle line, the point
    * furthest toward the lens, its feet left out: never an ear, never a paw that swings
-   * forward when it tips) and followed as it tips. Returns where the nose is (the photo looks straight at it) and how to put the
-   * animal back.
+   * forward when it tips) and followed as it bends and tips. Returns where the nose is and
+   * how to put the animal back.
    */
-  closeUp(a: Actor, heading: number, d: number, maxTilt: number): { nose: Spot; y: number; undo: () => void } {
+  closeUp(a: Actor, heading: number, d: number, maxTilt: number, neck = 0): { nose: Spot; y: number; undo: () => void } {
     const dir = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-    const lens = new THREE.Vector3(TREE.x, this.trap.position.y + 0.02, TREE.z).addScaledVector(dir, PINE.trunkR + CAM_DEPTH + 0.05);
+    const lens = this.photoLens(heading);
     const g = a.group;
     const was = { vis: g.visible, x: a.x, z: a.z, yaw: a.yaw, order: g.rotation.order, rx: g.rotation.x };
     const yaw = Math.atan2(-dir.x, -dir.z); // (facing the lens)
@@ -1138,6 +1176,34 @@ export class WildcameraHome implements HomeDressing {
       g.updateMatrixWorld(true);
       return noseMesh ? noseMesh.getVertexPosition(noseI, new THREE.Vector3()).applyMatrix4(noseMesh.matrixWorld) : g.position.clone();
     };
+    // (a rigged animal's neck: its head comes up, or down, toward the lens on its own neck
+    // bones, each turned a share about the line across its face)
+    const bones: THREE.Object3D[] = [];
+    if (neck > 0) g.traverse((o) => { if ((o as THREE.Bone).isBone && /^(Neck\d|Head)$/.test(o.name)) bones.push(o); });
+    const rest = bones.map((b) => b.quaternion.clone());
+    const across = new THREE.Vector3(dir.z, 0, -dir.x);
+    const pq = new THREE.Quaternion(), q = new THREE.Quaternion(), ax = new THREE.Vector3();
+    const bend = (ang: number): void => {
+      bones.forEach((b, i) => b.quaternion.copy(rest[i]));
+      for (const b of bones) {
+        g.updateMatrixWorld(true);
+        b.parent!.getWorldQuaternion(pq);
+        q.setFromAxisAngle(ax.copy(across).applyQuaternion(pq.invert()), ang / bones.length);
+        b.quaternion.premultiply(q);
+      }
+    };
+    let ang = 0;
+    if (bones.length) {
+      for (let i = 0; i < 5; i++) {
+        bend(ang);
+        const n = tip();
+        bend(ang + 0.05);
+        const slope = (tip().y - n.y) / 0.05;
+        if (Math.abs(slope) < 1e-3) break;
+        ang = Math.max(-neck, Math.min(neck, ang + ((lens.y - n.y) / slope) * 0.9));
+      }
+      bend(ang);
+    }
     let tilt = 0;
     for (let i = 0; i < 4; i++) {
       g.rotation.x = -tilt;
@@ -1156,11 +1222,14 @@ export class WildcameraHome implements HomeDressing {
     this.closeUpRead = {
       ahead: (n.x - g.position.x) * fx + (n.z - g.position.z) * fz,
       side: (n.x - g.position.x) * -fz + (n.z - g.position.z) * fx,
-      up: n.y - g.position.y, tilt, lensUp: lens.y - g.position.y, meshes: meshes.length,
+      up: n.y - g.position.y, tilt, lensUp: lens.y - g.position.y, meshes: meshes.length, neck: ang,
     };
     return {
       nose: { x: n.x, z: n.z }, y: n.y - this.groundY(n.x, n.z),
-      undo: () => { g.rotation.x = was.rx; g.rotation.order = was.order; a.place(was.x, was.z, was.yaw); g.visible = was.vis; },
+      undo: () => {
+        bones.forEach((b, i) => b.quaternion.copy(rest[i]));
+        g.rotation.x = was.rx; g.rotation.order = was.order; a.place(was.x, was.z, was.yaw); g.visible = was.vis;
+      },
     };
   }
 

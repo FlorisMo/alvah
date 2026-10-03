@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cubPose, lineOf, pointAt, progressOf, TUMBLE_M } from './wildcamera.cubs.ts';
+import { Track, cubPose, lineOf, pointAt, progressOf, TUMBLE_M } from './wildcamera.cubs.ts';
 import { CUB_LAG, familyPath } from './wildcamera.places.ts';
 
 const line = lineOf(familyPath('left'));
@@ -63,4 +63,30 @@ test('under reduced motion they only walk behind her: no hop, no tip, no weave, 
       assert.ok(Math.hypot(p.x - on.x, p.z - on.z) < 1e-9, 'on her line');
     }
   }
+});
+
+test('her track (r2): the cubs walk the ground she really walked — a corner she cuts, they cut too, never her planned line', () => {
+  // she walks a wide arc (as a steering animal rounds a bend), not the planned corner
+  const way = familyPath('left');
+  const track = new Track(way[0], way[1]);
+  const walked: { x: number; z: number }[] = [];
+  for (let i = 0; i <= 400; i++) {
+    const a = (i / 400) * Math.PI;
+    const p = { x: way[0].x + 4 * (1 - Math.cos(a)), z: way[0].z + 1.5 * Math.sin(a) };
+    walked.push(p);
+    track.add(p);
+    // (a point of her own each 3 cm: never further behind her than that)
+    const last = track.pts[track.pts.length - 1];
+    assert.ok(Math.hypot(last.x - p.x, last.z - p.z) < 0.031);
+  }
+  const s = track.length;
+  for (const k of [0, 1] as const) {
+    const c = cubPose(track, s, k, 0, true, Infinity, true);
+    const off = Math.min(...walked.map((w) => Math.hypot(w.x - c.x, w.z - c.z)));
+    assert.ok(off < 0.03, `cub ${k} is ${off.toFixed(3)} m off the ground she walked`);
+  }
+  // before she has gone its lag, a cub waits back along her way in, out of the picture
+  const fresh = new Track(way[0], way[1]);
+  const c = cubPose(fresh, fresh.length, 1, 0, false, Infinity, true);
+  assert.ok(progressOf(lineOf(way), c) === 0 && Math.hypot(c.x - way[0].x, c.z - way[0].z) > 1, 'behind where she sets off');
 });
