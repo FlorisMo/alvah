@@ -612,7 +612,7 @@ export class WildcameraHome implements HomeDressing {
     this.strapSpot.add(band);
     this.ghostBand = band.material as THREE.MeshBasicMaterial;
     const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffcf6a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6 }));
-    halo.scale.setScalar(0.75);
+    halo.scale.setScalar(0.95);
     halo.position.set(0, 0, 0.02);
     halo.raycast = () => {};
     this.strapSpot.add(halo);
