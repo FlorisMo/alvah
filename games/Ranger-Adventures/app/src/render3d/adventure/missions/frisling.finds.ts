@@ -8,7 +8,8 @@
  * A discovery is WHAT HE SAW: `Sightings` records one (`k.discover`) only once the thing
  * was really in his picture — on screen, at least `SEEN_PX` big, not hidden behind the
  * ground or the bracken, for `SEEN_S` on end, near enough (FOUNDATION's `SeenMeter`) — or
- * he walked right up to it. Its calm reveal waits for a quiet beat (a walk, a look, the
+ * he walked right up to it, or he met it (`meet`: a woodlark flew up singing from the
+ * heather in front of him, in his picture). Its calm reveal waits for a quiet beat (a walk, a look, the
  * reunion): never during the search, the route, a hold or a card.
  *
  * The surprises have no row: they are there to be met, drawn from the play's own forks.
@@ -99,6 +100,14 @@ export class Sightings {
     }
   }
 
+  /** He MET it now, right in front of him (a woodlark flew up singing from the heather at
+   *  his feet, in his picture): recorded as seen and heard (once a play). */
+  meet(id: string): void {
+    if (this.met.includes(id)) return;
+    this.met.push(id);
+    this.k.discover(id);
+  }
+
   private seen(s: { w: Watch; done: boolean }): void {
     s.done = true;
     this.met.push(s.w.id);
@@ -133,21 +142,27 @@ export async function spawnBird(k: AdventureKit, model: string, height: number):
 /**
  * A low flight from `a` to `b` (world spots, heights above the ground at each end) over
  * `secs`: the bird rises on a gentle arc (`up` m over the straight line at its middle),
- * facing the way it flies, wings level (no roll). Returns a stepper: call each frame with
- * dt; true once it has landed. Under reduced motion it is simply there.
+ * facing the way it flies, wings level (no roll). `opts.bob`: a lark's soft undulating
+ * flight, `bob` m up and down in `opts.bumps` waves (the static model reads as flying, not
+ * standing in the air); `opts.pitch`: its nose up as it rises and down as it comes in (rad).
+ * Returns a stepper: call each frame with dt; true once it has landed. Under reduced motion
+ * it is simply there.
  */
-export function flight(k: AdventureKit, root: THREE.Object3D, a: Spot & { y: number }, b: Spot & { y: number }, secs: number, up: number): (dt: number) => boolean {
+export function flight(k: AdventureKit, root: THREE.Object3D, a: Spot & { y: number }, b: Spot & { y: number }, secs: number, up: number,
+  opts: { bob?: number; bumps?: number; pitch?: number } = {}): (dt: number) => boolean {
   let t = 0;
   const g = k.ctx.groundY;
   const yaw = headingTo(a, b);
+  const bob = opts.bob ?? 0, bumps = opts.bumps ?? 3, pitch = opts.pitch ?? 0;
+  if (pitch) root.rotation.order = 'YXZ'; // (its pitch about its own wings' line, after the yaw)
   return (dt: number): boolean => {
     t = k.reduced ? 1 : Math.min(1, t + dt / secs);
     const e = t * t * (3 - 2 * t);
     const x = a.x + (b.x - a.x) * e, z = a.z + (b.z - a.z) * e;
     const y0 = g(a.x, a.z) + a.y, y1 = g(b.x, b.z) + b.y;
-    const y = y0 + (y1 - y0) * e + up * Math.sin(Math.PI * e);
+    const y = y0 + (y1 - y0) * e + up * Math.sin(Math.PI * e) + bob * Math.sin(Math.PI * 2 * bumps * e) * Math.sin(Math.PI * e);
     root.position.set(x, Math.max(y, g(x, z) + 0.02), z);
-    root.rotation.set(0, yaw, 0);
+    root.rotation.set(t >= 1 ? 0 : -pitch * Math.cos(Math.PI * e), yaw, 0);
     return t >= 1;
   };
 }

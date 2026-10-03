@@ -29,6 +29,7 @@ import type { Adventure } from '../registry';
 import type { Actor } from '../actors';
 import type { ResidentPose } from '../types';
 import { store } from '../../../core/state';
+import { WALK_SPEED } from '../../../core/input';
 import { Sound } from '../../../core/sound';
 import { narrator } from '../../../core/narrator';
 import { buildZoekenTrial } from '../../../engines/zoeken';
@@ -52,7 +53,9 @@ import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
   frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, outSpotOf, bagView, BAG_REACH,
   zeugStare, zeugView, walkOnSpot, yearlingSideOf, yearlingWay, wallowLog, WALLOW_FRAME, WALLOW_LOG, NEST_R,
+  larkLandings,
 } from './frisling.places';
+import { groundHides } from '../../world/surprises-math';
 import { drawFrisling, frislingVariant, recentPlays, type FrislingVariant, type PastPlay } from './frisling.vary';
 
 /** How far the lost piglet's squeak carries while he follows it (m): from the ring to
@@ -73,6 +76,12 @@ const PACE_BACK_M = 2.2;
 /** The hungry piglet at his bag (voeren at the stand) shows at least this share of his body
  *  from the bag's lens: the stand's fronds in between give way. */
 const VOEREN_SHOWS = 0.7;
+/** The woodlark (a surprise on his walks): its size (m; ≈ 1.6× the 0.3 m it had, so it
+ *  reads as a bird in his picture's middle distance, as the magpie does), how near he comes before it flies up
+ *  (m), and the heather top it perches on when it settles (m above the ground). */
+const LARK_H = 0.5;
+const LARK_FLUSH_M = 4.5;
+const LARK_PERCH = 0.3;
 /** The walk on from the field to the mud is long enough to be the tired piglet's moment
  *  (dragen at s2) from this long (m); shorter, he tires on the lead's last stretch. */
 const PACE_HOME_M = 12;
@@ -580,39 +589,107 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     };
   }
 
-  /** A woodlark sits in the heather at `spot` on his way; when he comes within 3 m it flies
-   *  up singing its soft falling "lu-lu-lu", ahead of him (never toward the lens), settles
-   *  15-20 m on and drops into the heather, gone (it never sits in the search's picture as
-   *  one more bird to click). Seen in flight = discovered. */
+  /**
+   * A woodlark sits in the heather at `spot` on his way. When he comes within
+   * `LARK_FLUSH_M` of it on a walk, with it in his picture (never behind him), it flies up
+   * singing its soft falling "lu-lu-lu", low ACROSS his picture — never along the lens away
+   * from it, never toward it — in a lark's soft undulating flight, 2.5-3 s, settles on a
+   * heather top on the other side of the picture (`larkLandings`: it keeps pace with his
+   * picture as he walks on, and stays in it if he stops to watch), sits a moment and drops
+   * into the heather, gone. He MET it (seen and heard): recorded as it drops in (or when his
+   * walk or the play ends first), so its calm reveal names the bird he just watched and
+   * never covers it in flight. It never sits in the search's picture as one more bird to
+   * click: once his walk ends it is gone.
+   */
   async function woodlark(spot: Spot): Promise<void> {
-    const b = await spawnBird(k, 'bird-boomleeuwerik', 0.3);
+    const b = await spawnBird(k, 'bird-boomleeuwerik', LARK_H);
     if (!b) return;
-    birds.push(b);
-    scene.add(b.root);
+    const r = b.root;
+    let phase: 'sit' | 'fly' | 'rest' | 'drop' | 'gone' = 'sit';
+    // (a play that ends while it flies still records it: he met it)
+    birds.push({ root: r, dispose: () => { if (phase !== 'sit' && phase !== 'gone') finds.meet('frisling.leeuwerik'); b.dispose(); } });
+    scene.add(r);
     const f = k.play.fork('leeuwerik-vlucht');
-    b.root.position.set(spot.x, k.ctx.groundY(spot.x, spot.z), spot.z);
-    b.root.rotation.y = f.between(0, Math.PI * 2);
-    b.root.visible = true;
-    let flying = false;
+    r.position.set(spot.x, k.ctx.groundY(spot.x, spot.z), spot.z);
+    r.rotation.y = f.between(0, Math.PI * 2);
+    r.visible = true;
+    const cam = k.world.camera;
+    const flySecs = f.between(2.5, 3), arc = f.between(0.7, 1.0), restS = f.between(1.3, 1.8);
+    const first = f.chance(0.5) ? 1 : -1;
     let step: ((dt: number) => boolean) | null = null;
-    let sits = -1; // (s it sits on the heather after landing, before it drops in)
-    finds.watch({ id: 'frisling.leeuwerik', object: () => (flying ? b.root : null), within: 30 });
+    let t = 0;
+    let px = 0;
     const off = k.onTick((dt) => {
-      if (!flying) {
-        // (on his walks only: never in a calm moment or a picture held still)
-        if (dist(k.ranger(), spot) > 4 || !k.beat.startsWith('walk:')) return;
-        flying = true;
+      const walking = k.beat.startsWith('walk:');
+      if (phase === 'sit') {
+        if (!walking || dist(k.ranger(), spot) > LARK_FLUSH_M) return;
+        const s = ndcOf(cam, spot.x, k.ctx.groundY(spot.x, spot.z) + LARK_H * 0.5, spot.z);
+        if (!inPicture(s, 0.85, -0.85, 0.85)) return; // (in his picture: never behind him)
+        const to = larkSettle(spot, s.x);
+        phase = 'fly';
         k.stats.leeuwerik = 1;
         if (settings.geluid) Sound.callAt('boomleeuwerik', spot.x, spot.z, listener(), 30);
-        const m = k.ranger();
-        const h = m.heading + f.between(-0.6, 0.6);
-        const to = { x: spot.x + Math.sin(h) * f.between(15, 20), z: spot.z + Math.cos(h) * f.between(15, 20) };
-        step = flight(k, b.root, { ...spot, y: 0 }, { ...to, y: 0 }, 3.4, 4.2);
+        step = flight(k, r, { ...spot, y: 0 }, { ...to, y: LARK_PERCH }, flySecs, arc, { bob: 0.14, bumps: 3, pitch: 0.3 });
         return;
       }
-      if (step && step(dt)) { step = null; sits = 0.8; }
-      else if (sits > 0 && (sits -= dt) <= 0) { b.root.visible = false; off(); }
+      if (phase === 'fly') {
+        if (!walking) { gone(); return; } // (his walk ended: never in a framed picture)
+        px = Math.max(px, Sightings.px(cam, r, k.ctx.canvas.clientHeight || 800).px);
+        k.stats.leeuwerik_px = Math.round(px);
+        if (step?.(dt)) { phase = 'rest'; t = 0; }
+        return;
+      }
+      if (phase === 'rest') {
+        t += dt;
+        if (!walking || t >= restS) { phase = 'drop'; t = 0; }
+        return;
+      }
+      // it drops into the heather (under reduced motion: simply gone)
+      t += dt;
+      if (k.reduced || !walking || t >= 0.4) { gone(); return; }
+      r.position.y -= ((LARK_PERCH + LARK_H) * dt) / 0.4;
     });
+    function gone(): void {
+      r.visible = false;
+      off();
+      phase = 'gone';
+      finds.meet('frisling.leeuwerik');
+    }
+    /** Where it settles: of `larkLandings` (both sides, `first` side first; it keeps pace
+     *  with his picture as he walks on at his pace now), those in his picture once he walked
+     *  on AND if he stops to watch, on free ground and not behind a rise; of those the first
+     *  on the OTHER side of the picture from where it rose and clear of the veldgids's reveal
+     *  (top left), else the first across, else the first in view, else on along the lens. */
+    function larkSettle(from: Spot, sx: number): Spot {
+      const me = k.ranger();
+      const look = headingTo({ x: cam.position.x, z: cam.position.z }, me);
+      const walked = Math.min(WALK_SPEED, Math.max(0, k.ctx.rangerMotion().speed)) * flySecs;
+      const later = cam.clone();
+      later.position.x += Math.sin(look) * walked;
+      later.position.z += Math.cos(look) * walked;
+      later.updateMatrixWorld(true);
+      const all = [...larkLandings(me, look, first, walked), ...larkLandings(me, look, first === 1 ? -1 : 1, walked)];
+      const lift = LARK_PERCH + LARK_H * 0.5;
+      const seen = all.filter((p) => {
+        const y = k.ctx.groundY(p.x, p.z) + lift;
+        return inPicture(ndcOf(later, p.x, y, p.z), 0.88, -0.85, 0.62) && inPicture(ndcOf(cam, p.x, y, p.z), 0.88, -0.85, 0.62)
+          && k.ctx.isClear(p.x, p.z, 0.4) && !groundHides(cam.position, new THREE.Vector3(p.x, y, p.z), k.ctx.groundY);
+      });
+      const crosses = (p: Spot): boolean => {
+        const q = ndcOf(later, p.x, k.ctx.groundY(p.x, p.z) + lift, p.z);
+        return Math.abs(q.x - sx) >= 0.4 && (Math.abs(sx) < 0.08 || Math.sign(q.x) !== Math.sign(sx));
+      };
+      const clearOfReveal = (p: Spot): boolean => {
+        const q = ndcOf(later, p.x, k.ctx.groundY(p.x, p.z) + lift, p.z);
+        return !(q.x < -0.36 && q.y > 0.36);
+      };
+      const across = seen.filter(crosses);
+      const pick = across.find(clearOfReveal) ?? across[0] ?? seen[0];
+      // (the dev read: how many it could settle on, and whether it flew across)
+      k.stats.leeuwerik_seen = seen.length;
+      k.stats.leeuwerik_across = across.length ? 1 : 0;
+      return pick ?? atLocal({ x: from.x, z: from.z, heading: look }, 0, 6);
+    }
   }
 
   /** A few heath blues flutter over the meadow by the way north (this play's chance). */
@@ -1003,4 +1080,15 @@ function walkRound(k: AdventureKit, sow: Actor, home: ResidentPose, call: (id: s
     }
     if (!past && dist(m, P.wallow) > 10 && m.z < -31) { past = true; k.say(k.copy.volg); }
   };
+}
+
+const _ndc = new THREE.Vector3();
+/** A world point in the lens's picture (normalised: x, y in −1…1 on screen, z in −1…1 in
+ *  front of it). */
+function ndcOf(cam: THREE.Camera, x: number, y: number, z: number): THREE.Vector3 {
+  return _ndc.set(x, y, z).project(cam);
+}
+/** Is a projected point in the picture: in front of the lens, |x| ≤ `xr`, `y0` ≤ y ≤ `y1`? */
+function inPicture(q: THREE.Vector3, xr: number, y0: number, y1: number): boolean {
+  return q.z > -1 && q.z < 1 && Math.abs(q.x) <= xr && q.y >= y0 && q.y <= y1;
 }

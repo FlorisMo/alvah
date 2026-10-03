@@ -18,6 +18,7 @@ import {
   cluePosts, clueGap, bootPrints, CLUE_FRAME, WAYS, WAY_IDS, FAMILY_LAYOUTS, nookAt, decoyAt, placesFor, useWay, wallowLog,
   wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, outSpotOf, bagView, sideBySideView, BAG_REACH, type WayId, type Way, type WayView,
   zeugStare, zeugView, ZEUG_STARE_M, NEST_R, ZEUG_STEP_M, walkOnSpot, yearlingSideOf, yearlingWay, legGap, YEARLING_LOG_M,
+  larkLandings, LARK_LAND, LENS_BACK,
 } from './frisling.places.ts';
 import { WALK_ON_M } from '../beats/walk-math.ts';
 import { anchorInBiome, biomeAt, heightAt, VEN_CENTER } from '../../Biomes.ts';
@@ -649,5 +650,68 @@ test('the sow\'s nest of bitten fronds at each stand\'s edge: never on a nook or
     }
     assert.ok(dist(w.nest, w.coverApproach) > 2, `${id}: not where he stands to search`);
     assert.ok(dist(w.nest, w.stand) < Math.hypot(STAND.halfW, STAND.halfD) + 1.2, `${id}: at the stand's edge`);
+  }
+});
+
+/**
+ * The woodlark (package body r2): it flies up where he walks and settles ACROSS his follow
+ * picture at its middle distance, keeping pace with it as he walks on — on open ground (dry
+ * heath, clear of the props, the trees, the other markers, the pads and every stand), in
+ * view whether he walks on or stops to watch. Checked from every walk spot, him 4.5 m
+ * before it on his way there (the follow, 2.2 m/s) and on his way back (the lead home,
+ * 1.5 m/s), with the lens `LENS_BACK` behind him as the world's follow takes it.
+ */
+test('the woodlark settles across his picture, on open ground, in view whether he walks on or stops', () => {
+  const lensAt = (me: { x: number; z: number }, look: number) => {
+    const c = atLocal({ x: me.x, z: me.z, heading: look }, 0, -LENS_BACK);
+    return { lens: { x: c.x, y: heightAt(c.x, c.z) + 2.4, z: c.z }, aim: { x: me.x, y: heightAt(me.x, me.z) + 0.9, z: me.z } };
+  };
+  const inView = (q: { x: number; y: number; ahead: boolean }): boolean => q.ahead && q.x > W * 0.07 && q.x < W * 0.93 && q.y > H * 0.2 && q.y < H * 0.9;
+  for (const id of WAY_IDS) {
+    const w = WAYS[id];
+    w.walkSpots.forEach((spot, si) => {
+      for (const back of [false, true]) {
+        const way = back ? [...w.follow].reverse() : w.follow;
+        const walked = (back ? 1.5 : 2.2) * 2.75; // (his pace for the flight)
+        // the leg of his way that passes the spot, and him 4.5 m before it along that leg
+        let leg = 1;
+        for (let i = 1; i < way.length; i++) if (segDist(spot, way[i - 1], way[i]) < segDist(spot, way[leg - 1], way[leg])) leg = i;
+        const look = headingTo(way[leg - 1], way[leg]);
+        const me = atLocal({ x: spot.x, z: spot.z, heading: look }, 0, -4.5);
+        const on = atLocal({ x: me.x, z: me.z, heading: look }, 0, walked);
+        const now = lensAt(me, look), then = lensAt(on, look);
+        const tag = `${id}.walk-${si}${back ? ' (home)' : ''}`;
+        const rose = screenOf({ x: spot.x, y: heightAt(spot.x, spot.z) + 0.2, z: spot.z }, now.lens, now.aim, FOV, W, H);
+        assert.ok(inView(rose), `${tag}: it rises in his picture (${rose.x.toFixed(0)}, ${rose.y.toFixed(0)})`);
+        const n = larkLandings(me, look, 1, walked).length + larkLandings(me, look, -1, walked).length;
+        assert.ok(n >= 6, `${tag}: somewhere to settle (${n})`);
+        for (const side of [1, -1] as const) {
+          for (const p of larkLandings(me, look, side, walked)) {
+            const l = toLocal({ x: on.x, z: on.z, heading: look }, p);
+            assert.ok(l.v + LENS_BACK >= LARK_LAND.depth[0] - 1e-6 && l.v + LENS_BACK <= LARK_LAND.depth[1] + 1e-6, `${tag}: ${(l.v + LENS_BACK).toFixed(1)} m from the lens when it lands`);
+            assert.ok(Math.abs(l.u) >= LARK_LAND.across[0] - 1e-6 && Math.abs(l.u) <= LARK_LAND.across[1] + 1e-6, `${tag}: ${l.u.toFixed(1)} m across`);
+            assert.ok(dist(on, p) >= 4.5, `${tag}: walking on, he is ${dist(on, p).toFixed(1)} m from it when it lands: never in his way`);
+            assert.ok(toLocal({ x: me.x, z: me.z, heading: look }, p).v > toLocal({ x: me.x, z: me.z, heading: look }, spot).v - 0.5, `${tag}: never back toward the lens`);
+            assert.ok(biomeAt(p.x, p.z) === 'heide' || (biomeAt(p.x, p.z) === 'ven' && Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) > 50), `${tag}: on the heath or the dry meadow (${biomeAt(p.x, p.z)})`);
+            assert.ok(Math.hypot(p.x, p.z) <= 60, `${tag}: well inside the world`);
+            for (const o of WAY_IDS) assert.ok(dist(p, WAYS[o].stand) > STAND.halfW + 4, `${tag}: never in the ${o} stand's bracken`);
+            assert.ok(dist(p, WALLOW_FRAME) > 6, `${tag}: off the mud and its family`);
+          }
+        }
+        // one side or the other carries it across the picture — from where it rose to the other
+        // side, in view whether he walked on or stood — to a spot the world finds free
+        // (World.playClear at runtime: off the props, the trees, the pads, the markers)
+        const free = (p: { x: number; z: number }): boolean => PROPS.every((q) => dist(p, q) > q.r + 1)
+          && TREES.every((q) => dist(p, q) > 2) && PADS.every((q) => dist(p, q) > PAD_RADIUS)
+          && Object.values(OTHER_MARKERS).every((q) => dist(p, q) > 1.6);
+        const across = ([1, -1] as const).some((side) => larkLandings(me, look, side, walked).filter(free).some((p) => {
+          const at = { x: p.x, y: heightAt(p.x, p.z) + 0.5, z: p.z };
+          const a = screenOf(at, then.lens, then.aim, FOV, W, H), b = screenOf(at, now.lens, now.aim, FOV, W, H);
+          return inView(a) && inView(b) && Math.abs(a.x - rose.x) >= 0.2 * W
+            && (Math.abs(rose.x - W / 2) < 0.04 * W || (a.x - W / 2) * (rose.x - W / 2) < 0); // (rose near the middle: either side)
+        }));
+        assert.ok(across, `${tag}: it flies across his picture (rose at x ${rose.x.toFixed(0)})`);
+      }
+    });
   }
 });

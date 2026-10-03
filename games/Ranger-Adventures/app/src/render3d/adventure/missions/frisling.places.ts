@@ -33,6 +33,7 @@ import { boxObstacle, obstacleGap, type Obstacle } from '../../CharacterControll
 import type { HomeSpec, Place, ResidentPose, ResidentSpec, Spot } from '../types.ts';
 import { approachOf, atLocal, dist, headingTo, stream, toLocal, toward, uniformLocal, type Frame } from '../places.ts';
 import { standClumps, type Clump } from '../cover-math.ts';
+import { biomeAt, VEN_CENTER } from '../../Biomes.ts';
 
 /** The frisling marker: the heide's first anchor (Biomes.anchorInBiome('heide', 22)).
  *  The marker stays where it always stood; the test checks the anchor still lands here. */
@@ -287,7 +288,9 @@ const STEEN = ((): Way => {
     toWallow: [{ x: -33.6, z: -23.1 }],
     wallowTalk, wallowGive: giveOf(wallowTalk, -1.9, 1.1), wallowView: wallowViewOf(wallowTalk),
     nest: atLocal(frame, 2.4, 1.2),
-    walkSpots: [{ x: -32.7, z: -34.0 }, { x: -32.9, z: -41.0 }],
+    // (the woodlark's spots 12-14 m short of the stand, either side of his way: it settles on
+    // across the heath, never in the stand's bracken ahead)
+    walkSpots: [{ x: -32.7, z: -34.0 }, { x: -35.0, z: -32.1 }],
     cover: { seed: 115, bracken: 0.45, grass: 0.15 },
     trees: [{ ...atLocal(frame, -1.34, 3.4), h: 5.5, rotY: 2.3 }],
     // (the way home lies straight behind him: the piglet comes out on his west side, so
@@ -324,7 +327,9 @@ const BERK = ((): Way => {
     toWallow: [],
     wallowTalk, wallowGive: giveOf(wallowTalk, -1.9, 1.1), wallowView: wallowViewOf(wallowTalk),
     nest: atLocal(frame, 2.45, 1.2),
-    walkSpots: [{ x: -13.9, z: -8.5 }, { x: -6.2, z: 9.2 }],
+    // (the second woodlark spot on the meadow leg, past its bend and 13.5 m short of the
+    // stand: it settles on across the meadow, never in the stand's bracken ahead)
+    walkSpots: [{ x: -13.9, z: -8.5 }, { x: -10.7, z: 3.8 }],
     cover: { seed: 151, bracken: 0.15, grass: 0.4 },
     // (behind the stand, beyond the search picture's top edge: from the follow a white beacon
     // over the bracken, never a dark trunk across the picture's corner)
@@ -733,3 +738,48 @@ export const standSeed = (id: WayId): number => WAYS[id].cover.seed + 1000;
 
 /** (exported for the tests) the stand's centre of the default way */
 export const DEFAULT_STAND: Spot = STAND_AT;
+
+/* ---------------------------------------------------- the woodlark's flight ---- */
+
+/** The follow lens looks from this far behind him (m; world/CameraRig camOffset's boom). */
+export const LENS_BACK = 4.6;
+/** A woodlark flushed from the heather where he walks settles this far from the follow lens
+ *  once it has landed (m, along its line: his picture's middle distance, where a bird reads)
+ *  and this far across that line (m: well to one side of him, never in his way). */
+export const LARK_LAND = { depth: [8, 10], across: [3.6, 4.4] } as const;
+
+/**
+ * Where a woodlark that rose in front of him may settle (package body r2): ACROSS his
+ * picture, never along the lens away from it: it keeps pace with the picture as he walks on
+ * (`walked`: how far on he will be when it lands, m), so it settles at the picture's middle
+ * distance (`LARK_LAND.depth` from the lens then) well to one side. `look` is the lens's
+ * heading (it looks along it from behind him), `side` the way across it (+1: u > 0 of that
+ * frame). In the order to try them (the real lens picks the first in view now and once he
+ * walked on, on the other side of the picture from where it rose, on the world's free
+ * ground): open ground of this home only, clear of every way's stand (it never settles in
+ * the search's bracken), the mud and its family, the rooting fields, the ring and the fence.
+ */
+export function larkLandings(me: Spot, look: number, side: 1 | -1, walked: number): Spot[] {
+  const frame: Frame = { x: me.x, z: me.z, heading: look };
+  const out: Spot[] = [];
+  for (const depth of [9, 8.5, 9.5, LARK_LAND.depth[0], LARK_LAND.depth[1]]) {
+    for (const u of [4, LARK_LAND.across[0], LARK_LAND.across[1]]) {
+      const p = atLocal(frame, side * u, walked + depth - LENS_BACK);
+      if (larkFree(p)) out.push(p);
+    }
+  }
+  return out;
+}
+
+/** Open ground of the home a woodlark may settle on: the heath (or the dry meadow, far from
+ *  the ven's water), the stands, the mud, the fields, the ring and the fence kept clear. */
+export function larkFree(p: Spot): boolean {
+  const b = biomeAt(p.x, p.z);
+  if (b !== 'heide' && !(b === 'ven' && Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) > 50)) return false;
+  if (Math.hypot(p.x, p.z) > 60) return false;
+  for (const id of WAY_IDS) if (dist(p, WAYS[id].stand) < STAND.halfW + 4.4) return false;
+  if (dist(p, WALLOW_AT) < 6.5) return false;
+  if (dist(p, FIELD_N_AT) < 5 || dist(p, FIELD_S_AT) < 5) return false;
+  if (dist(p, MARKER) < 2.5) return false;
+  return !cluePosts().some((q) => dist(p, q) < 1.5);
+}
