@@ -31,8 +31,12 @@ export interface FrislingVariant {
   decoySpots: number[];
   /** FAMILY_LAYOUTS index: 0 'modder', 1 'rand', 2 'boom' */
   family: 0 | 1 | 2;
-  /** WAYS[way].walkSpots index a woodlark flies up from, or none (package 2) */
+  /** WAYS[way].walkSpots index a woodlark flies up from, or none (package 2; never on his
+   *  first play of this home) */
   leeuwerik: number | null;
+  /** run 7 (body): the sow's nest of bitten fronds lies at this play's stand (about half
+   *  the plays from his second on: a find for another day) */
+  nest: boolean;
 }
 
 /** A look-alike of the trial, as the variant needs it: a nightjar belongs at a stand's edge. */
@@ -99,11 +103,16 @@ export function frislingVariant(play: Play, past: readonly PastPlay[], decoys: r
   const famBefore = past.find((p) => p.way === way)?.fam;
   if (fams.length > 1 && famBefore) fams = fams.filter((f) => f !== famBefore);
   const family = ids.indexOf(play.fork('family').pick(fams)) as 0 | 1 | 2;
+  // the extras (a woodlark where he walks, the sow's nest at the stand): his first play
+  // here is the adventure itself; from his second on, each comes in about half the plays,
+  // so coming back has something new (their own forks: the rest of the play is the same)
+  const extras = play.n > 1;
   const lk = play.fork('leeuwerik');
-  const leeuwerik = lk.chance(0.5) ? lk.int(0, w.walkSpots.length - 1) : null;
+  const leeuwerik = extras && lk.chance(0.5) ? lk.int(0, w.walkSpots.length - 1) : null;
+  const nest = extras && play.fork('nest').chance(0.5);
   play.note('way', `${way}/${FAMILY_LAYOUTS[family].id}`);
   play.note('nook', `${nook}/${pose}`); // (the nook, and how he lies in it: last, it may be cut)
-  return { way, nook, pose, decoySpots, family, leeuwerik };
+  return { way, nook, pose, decoySpots, family, leeuwerik, nest };
 }
 
 /** The ids that may come after `recent` (newest first): in his first three plays (fewer
