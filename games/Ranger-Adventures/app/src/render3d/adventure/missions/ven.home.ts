@@ -438,8 +438,11 @@ export class VenHome implements HomeDressing {
     /* -- the soft moss at every station (one shows: this play's) -- */
     for (const { bay, st } of allStations()) {
       const c = carpetAt(st);
+      // (drawn from a little above its wet top, so its feathered end lies on dry heather)
+      const len = Math.hypot(c.low.x - c.top.x, c.low.z - c.top.z) || 1;
+      const up = { x: c.top.x - ((c.low.x - c.top.x) / len) * 0.35, z: c.top.z - ((c.low.z - c.top.z) / len) * 0.35 };
       const line: Spot[] = [];
-      for (let k = 0; k <= 12; k++) line.push({ x: c.top.x + (c.low.x - c.top.x) * (k / 12), z: c.top.z + (c.low.z - c.top.z) * (k / 12) });
+      for (let k = 0; k <= 12; k++) line.push({ x: up.x + (c.low.x - up.x) * (k / 12), z: up.z + (c.low.z - up.z) * (k / 12) });
       const moss = groundStrip(g, line, c.a * 1.08, MOSS.green, { layer: 4, wobble: 0.22, seed: 17 + st.i, ends: 0.7, roughness: 0.9 });
       mottle(moss.geometry, 0.3, 41 + st.i);
       moss.name = `ven-soft-moss-${bay}${st.i}`;

@@ -362,8 +362,13 @@ export function carpetAt(st: Station): Carpet {
   return { ...mid, heading: headingTo(mid, C), a: CARPET_A, b: (top - low) / 2, th: st.th, top: polar(st.th, top), low: polar(st.th, low) };
 }
 /** How deep in the carpet a spot is (< 1 inside its rim): its distance from the strip's
- *  middle line, over its half-width, squared. */
+ *  middle line, over its half-width, squared; beyond its top end (up the bank, where the
+ *  strip fades out) it is dry at once — a square end, as drawn. */
 export function inCarpet(c: Carpet, p: Spot): number {
+  const dx = c.low.x - c.top.x, dz = c.low.z - c.top.z;
+  const L2 = dx * dx + dz * dz || 1;
+  const t = ((p.x - c.top.x) * dx + (p.z - c.top.z) * dz) / L2;
+  if (t < 0) return 9; // (above its top, on the heather side: dry)
   return (segDist(p, c.top, c.low) / c.a) ** 2;
 }
 /** A boot in it: well inside its rim (its feathered edge is the dry bank's). */
@@ -372,8 +377,8 @@ export const CARPET_WET = 0.8;
  *  and back down to the path beyond it. */
 export function carpetRound(c: Carpet): Spot[] {
   const r0 = pathR(c.th);
-  const dth = (CARPET_A + 0.9) / (r0 * RAD);
-  return [polar(c.th + dth, r0 + 1.3), polar(c.th, r0 + CARPET_TOP + 1.15), polar(c.th - dth, r0 + 1.3)];
+  const dth = (CARPET_A + 1.1) / (r0 * RAD);
+  return [polar(c.th + dth, r0 + 1.1), polar(c.th + dth * 0.45, r0 + CARPET_TOP + 1.1), polar(c.th - dth * 0.45, r0 + CARPET_TOP + 1.1), polar(c.th - dth, r0 + 1.1)];
 }
 /** Where his walk past the carpet ends (beyond it on his way). */
 export function carpetPast(id: BayId, st: Station): Place {
