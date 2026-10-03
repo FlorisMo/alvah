@@ -704,21 +704,29 @@ test('ree-discover: the buzzard circles low over the heath ahead of him on his w
   assert.ok(BUZZARD.y >= 4 && BUZZARD.y <= 7 && BUZZARD.high > 15, 'low over the heath, come down from high');
 });
 
-test('ree-discover: the cuckoo calls from off to one side of the watch, never from behind him; the twin lies in her cover by her gap', () => {
+test('ree-discover: the cuckoo calls from off to one side of the watch, never from behind him; the twin lies apart in the grass behind where they meet', () => {
   for (const l of LAYOUTS) {
     const v = l.views.watch;
     const a = off(headingTo(l.hide, l.koekoek), v.heading);
     assert.ok(a >= (45 * Math.PI) / 180 && a <= (110 * Math.PI) / 180, `${l.id}: the cuckoo ${(a * 180 / Math.PI).toFixed(0)}° off the watch`);
     const d = dist(l.hide, l.koekoek);
     assert.ok(d >= 15 && d <= 32 && Math.hypot(l.koekoek.x, l.koekoek.z) < 56, `${l.id}: the cuckoo ${d.toFixed(1)} m off, inside the world`);
-    // the twin: in her cover's bracken, near her gap, clear of her bed, her way in and the bushes
+    // the twin: lying hidden in the tall grass's rim (or bracken) behind where they meet,
+    // apart from every spot its sibling may lie or bolt to and from the look-alikes, off his ways
     const t = l.twinBed;
-    assert.ok(inCover(l.cover, t) < 0.9, `${l.id}: the twin lies in the bracken (${inCover(l.cover, t).toFixed(2)})`);
-    assert.ok(dist(t, l.gap) < 3, `${l.id}: by her gap`);
-    assert.ok(dist(t, l.bed) > 1.2, `${l.id}: apart from her bed`);
-    for (const w of [[l.gap, ...l.bedWay, l.bed]]) assert.ok(polyDist(t, w) > 0.9, `${l.id}: off her way in`);
-    for (const j of l.cover.junipers) assert.ok(dist(t, j) > juniperR(j.h), `${l.id}: not in a juniper`);
-    for (const q of COPSE_TREES) assert.ok(l.cover !== COPSE || dist(t, q) > 0.75, `${l.id}: not on a trunk`);
+    assert.ok(Math.min(...LAYOUTS.map((m) => inGrass(m, t))) < 1 || COVERS.some((c) => inCover(c, t) < 0.95), `${l.id}: the twin lies in cover`);
+    assert.ok(dist(t, l.meet) >= 2.5 && dist(t, l.meet) <= 5, `${l.id}: ${dist(t, l.meet).toFixed(1)} m from where they meet`);
+    for (const c of calves(l)) {
+      assert.ok(dist(t, c) >= 1.4, `${l.id}: the twin lies apart from its sibling's spot (${dist(t, c).toFixed(1)})`);
+      const talk = calfTalkOf(l, c);
+      assert.ok(dist(t, calfBolt(l, c, talk)) >= 1.2, `${l.id}: …and from where it bolts to`);
+      assert.ok(dist(t, talk) >= 1.5, `${l.id}: …and from where he stands by it`);
+    }
+    for (const d of SKIN.distractors ?? []) assert.ok(dist(t, onStand(l, d.x, d.y)) >= 0.6, `${l.id}: the twin is not on look-alike ${d.id}`);
+    for (const w of waysOf(l)) assert.ok(polyDist(t, w) >= 1.5, `${l.id}: the twin is off his ways`);
+    for (const q of solids()) assert.ok(dist(t, q) > q.r + 0.3, `${l.id}: not in a bush or a log`);
+    assert.ok(polyDist(t, [l.gap, ...l.bedWay, l.bed]) > 1.2 && dist(t, DOE_BED) > 1.2, `${l.id}: apart from her bed and her way in`);
+    assert.ok(Math.abs(off(t.yaw, headingTo(t, l.meet))) < 1e-9, `${l.id}: it lies facing where they meet`);
   }
   // after a play with twins, the twin grazes with them at home and has its own bed in the copse
   const twin = REE_RESIDENTS.find((r) => r.key === 'twin')!;
@@ -733,9 +741,10 @@ test('ree-discover: the cuckoo calls from off to one side of the watch, never fr
   for (const j of COPSE.junipers) assert.ok(dist(bed, j) > juniperR(j.h), 'its bed is not in a juniper');
   // at the reunion it stands at her chest on his side, apart from its sibling at her flank
   const doe = { x: 0, z: 0, yaw: 0.3 };
-  for (const side of [1, -1] as const) {
-    const tw = twinAt(doe, SIZE.ree.len, side), dr = drinkSpot(doe, SIZE.ree.len, side);
+  for (const side of [1, -1] as const) for (const end of [1, -1] as const) {
+    const tw = twinAt(doe, SIZE.ree.len, side, end), dr = drinkSpot(doe, SIZE.ree.len, side);
     assert.ok(dist(tw, dr) > 0.6, 'two calves, apart');
     assert.ok(toLocal({ ...doe, heading: doe.yaw }, tw).u * side > 0.3, 'on the side he sees');
+    assert.ok(toLocal({ ...doe, heading: doe.yaw }, tw.round).v * end > SIZE.ree.len * 0.5, 'it comes round her end');
   }
 });

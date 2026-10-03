@@ -355,3 +355,12 @@ test('ree-discover: the twins come within three won plays of a fresh save (the p
   }
   assert.ok(lucky > 60 && lucky < 160, `the twins came on the first play by luck ${lucky} of 300 times`);
 });
+
+test('ree-discover: her listening pauses never say the same line twice in one watch', () => {
+  for (let seed = 1; seed <= 300; seed++) {
+    for (const koekoek of [false, true]) {
+      const lines = watchScript(play(seed), { pauses: 3, way: 2, koekoek }).filter((e) => e.act === 'listen').map((e) => e.line);
+      assert.equal(new Set(lines).size, lines.length, `seed ${seed}: ${lines.join(', ')}`);
+    }
+  }
+});

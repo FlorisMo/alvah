@@ -99,6 +99,8 @@ export class Sightings {
       const ok = pic.on && pic.px >= s.w.px && dist(me, { x: pic.centre.x, z: pic.centre.z }) <= s.w.within
         && !groundHides(cam.position, pic.centre, k.ctx.groundY);
       s.run = ok ? s.run + dt : 0;
+      // (the dev read: how big it showed at most while it counted)
+      if (ok) { const key = `px_${s.w.id.slice(s.w.id.indexOf('.') + 1)}`; k.stats[key] = Math.max(k.stats[key] ?? 0, Math.round(pic.px)); }
       if (s.run >= s.w.secs) {
         s.done = true;
         k.discover(s.w.id, { quiet: s.w.quiet });
@@ -123,6 +125,8 @@ interface Bird { sp: Spawned; root: THREE.Object3D }
  *  stonechat as the stand's look-alike. */
 const LARK_H = 0.2;
 const TAPUIT_H = 0.17;
+/** The stonechat perches this high (m) over the ground: on a heather top. */
+const TAPUIT_UP = 0.3;
 
 /** The woodlark is seen within this far (m) of him, at least this big (px), this long (s). */
 const LARK_SEEN = { within: 26, px: 9, secs: 1.5 } as const;
@@ -212,10 +216,16 @@ export class ReeFinds {
     this.retryAt = k.now + 0.5;
   }
 
-  /** A walk ends: the buzzard climbs away (it never circles over the watch). */
+  /** A walk ends: the buzzard climbs away and the stonechat flits off (neither is ever
+   *  in the watch). */
   walkEnd(name: 'meadow' | 'hide'): void {
-    if (name === 'hide') this.buzzardGo();
+    if (name !== 'hide') return;
+    this.buzzardGo();
+    this.tapuitGo?.();
   }
+
+  /** The stonechat flits off (set while it perches). */
+  private tapuitGo: (() => void) | null = null;
 
   /** The rubbed birch of this play (ree.home.ts lays it), or null. */
   birchAt: () => Spot | null = () => null;
@@ -328,10 +338,12 @@ export class ReeFinds {
     const spot = this.besideWay(5.5, 2.2);
     if (!spot) return;
     const g = k.ctx.groundY;
-    b.root.position.set(spot.x, g(spot.x, spot.z) + 0.42, spot.z); // (on a stalk over the heather)
+    b.root.position.set(spot.x, g(spot.x, spot.z) + TAPUIT_UP, spot.z); // (on a heather top)
     b.root.rotation.set(0, headingTo(spot, k.ranger()) + 0.9, 0);
     b.root.visible = true;
+    k.stats.tapuit = 1;
     let t = 0, tick = 1.2, flown = -1;
+    this.tapuitGo = () => { if (flown < 0) flown = t; };
     const from = { ...spot };
     const off = k.onTick((dt) => {
       t += dt;
@@ -346,9 +358,9 @@ export class ReeFinds {
         const u = Math.min(1, (t - flown) / 1.6);
         const a = headingTo(me, from);
         const x = from.x + Math.sin(a) * 6 * u, z = from.z + Math.cos(a) * 6 * u;
-        b.root.position.set(x, g(x, z) + 0.42 + Math.sin(u * Math.PI) * 0.7 - 0.4 * u, z);
+        b.root.position.set(x, g(x, z) + TAPUIT_UP + Math.sin(u * Math.PI) * 0.7 - TAPUIT_UP * u, z);
         b.root.rotation.set(0, a, 0);
-        if (u >= 1) { b.root.visible = false; off(); }
+        if (u >= 1) { b.root.visible = false; off(); this.tapuitGo = null; }
       }
     });
     this.offs.push(off);
@@ -369,6 +381,7 @@ export class ReeFinds {
     let t = 0;
     const T = 5.5;
     b.root.visible = true;
+    k.stats.vlinder = 1;
     const off = k.onTick((dt) => {
       t += dt;
       const u = Math.min(1, t / T);

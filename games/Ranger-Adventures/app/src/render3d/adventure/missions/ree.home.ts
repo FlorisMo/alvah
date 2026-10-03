@@ -191,8 +191,10 @@ function throughBush(a: V3, b: V3, k: Bush): boolean {
 }
 
 /** Where a roebuck rubbed the young birch (m over the ground): the bark scraped off and
- *  hanging in strips, the pale wood under it (a roebuck frays at his head's height). */
-const FRAY = { from: 0.3, to: 0.8 } as const;
+ *  hanging in strips, the pale wood under it — on its bare stem under the leaves, where a
+ *  roebuck's head reaches a sapling; and where its stem's girth is read (only stem there). */
+const FRAY = { from: 0.14, to: 0.5 } as const;
+const STEM_BAND = { from: 0.03, to: 0.2, near: 0.07 } as const;
 /** The fresh wood under the bark, and the strips of bark hanging off it. */
 const FRAY_WOOD = '#c8955a';
 const FRAY_DARK = '#8e6236';
@@ -215,14 +217,14 @@ function frayMarks(plant: THREE.Object3D): THREE.Mesh | null {
     if (!pos) return;
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
-      if (v.y < FRAY.from || v.y > FRAY.to) continue;
+      if (v.y < STEM_BAND.from || v.y > STEM_BAND.to) continue;
       const d = Math.hypot(v.x, v.z);
-      if (d > 0.12) continue; // (a low twig, not the stem)
+      if (d > STEM_BAND.near) continue; // (a low twig, not the stem)
       r = Math.max(r, d); n += 1;
     }
   });
   if (!n) return null;
-  const rr = Math.max(0.018, r) * 1.12 + 0.004;
+  const rr = Math.min(0.045, Math.max(0.014, r)) * 1.1 + 0.003;
   const pos: number[] = [], col: number[] = [];
   const c = new THREE.Color();
   const tri = (a: number[], b: number[], d: number[], hex: string, k = 1): void => {
@@ -232,7 +234,7 @@ function frayMarks(plant: THREE.Object3D): THREE.Mesh | null {
   // the sleeve: 12 streaks round the stem, each a little lighter or darker, its top and
   // bottom edges ragged (where the bark was torn)
   const N = 12;
-  const rag = (i: number, top: boolean): number => (top ? FRAY.to : FRAY.from) + (top ? -1 : 1) * (((i * 37) % 11) / 11) * 0.06;
+  const rag = (i: number, top: boolean): number => (top ? FRAY.to : FRAY.from) + (top ? -1 : 1) * (((i * 37) % 11) / 11) * 0.05;
   for (let i = 0; i < N; i++) {
     const a0 = (i / N) * Math.PI * 2, a1 = ((i + 1) / N) * Math.PI * 2;
     const p = (a: number, y: number): number[] => [Math.cos(a) * rr, y, Math.sin(a) * rr];
@@ -245,7 +247,7 @@ function frayMarks(plant: THREE.Object3D): THREE.Mesh | null {
   // the strips of bark hanging from its top edge: thin, curling a little outward
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 + (i % 2) * 0.35;
-    const w = 0.018 + (i % 3) * 0.006, L = 0.09 + ((i * 5) % 4) * 0.035;
+    const w = 0.012 + (i % 3) * 0.004, L = 0.07 + ((i * 5) % 4) * 0.03;
     const out = { x: Math.cos(a), z: Math.sin(a) }, side = { x: -out.z, z: out.x };
     const top = FRAY.to - 0.02;
     const r0 = rr + 0.002, r1 = rr + 0.02 + L * 0.25;

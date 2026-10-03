@@ -281,7 +281,15 @@ function watchEvents(play: Pick<Play, 'fork'>, o: { pauses: number; way: 1 | 2 }
   const pauses = Math.max(1, Math.min(3, Math.round(o.pauses)));
   const j = (s: number): number => Math.round(s * rnd.between(0.88, 1.12) * 100) / 100;
   const line = (pool: readonly string[]): string => rnd.pick(pool);
-  const listen = (cue: WatchCue): WatchEvent => ({ act: 'listen', s: j(WATCH_S.listen), cue, line: line(WATCH_LINES.listen) });
+  // (her listening pauses each say another line of the pool: at three pauses the same one
+  // came back, ~9 s on one line — ree-growth review r2; its own fork, the rest unchanged)
+  const heard = play.fork('ree-wacht-luister').shuffle(WATCH_LINES.listen);
+  let heardN = 0;
+  const listen = (cue: WatchCue): WatchEvent => {
+    const s = j(WATCH_S.listen);
+    rnd.pick(WATCH_LINES.listen); // (the watch's own stream draws as it did: its order and timing stay)
+    return { act: 'listen', s, cue, line: heard[heardN++ % heard.length] };
+  };
   const look = (cue: 'rond' | 'hut'): WatchEvent => ({ act: 'look', s: j(WATCH_S.look), cue, line: line(WATCH_LINES[cue]) });
   const out: WatchEvent[] = [
     // the bracken at her gap stirs while she gets up and comes out between her bushes,

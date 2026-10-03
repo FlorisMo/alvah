@@ -216,7 +216,10 @@ export interface ReeLayout {
   /** ree-discover: the walks the woodlark may sing up on (a walk with heath ahead of it:
    *  B's way to the hide runs at the forest's edge and the world's rim) */
   larkOn: readonly ('meadow' | 'hide')[];
-  /** ree-discover: where a twin lies in her cover's bracken by her gap (a rare play) */
+  /** ree-discover: where a twin lies (a rare play) — in the tall grass or her bracken behind
+   *  where they meet, on the side its sibling's twin spot is (it rises there in the
+   *  reunion's picture and comes round to her); laid once he has left the calf, out of his
+   *  picture (never in the search's) */
   twinBed: Spot & { yaw: number };
 }
 
@@ -258,8 +261,8 @@ interface LayoutDef {
   out: Spot; outVia?: readonly Spot[]; reunionTurn?: number;
   /** ree-discover: the young birches' spots (world: beside her wissel, beside his way to the
    *  hide), where the cuckoo calls from in the watch (world: off to one side of the watch's
-   *  view, never behind him), and the twin's bed in her cover (cover frame) */
-  birches: readonly Spot[]; koekoek: Spot; twinBed: { u: number; v: number; yaw: number };
+   *  view, never behind him), and the twin's bed (world; it lies facing where they meet) */
+  birches: readonly Spot[]; koekoek: Spot; twinBed: Spot;
   /** the walks the woodlark may sing up on (default both) */
   larkOn?: readonly ('meadow' | 'hide')[];
 }
@@ -322,7 +325,7 @@ function build(d: LayoutDef): ReeLayout {
     buzzard: { ...sky, r: BUZZARD.r, y: BUZZARD.y },
     koekoek: { ...d.koekoek },
     larkOn: d.larkOn ?? ['meadow', 'hide'],
-    twinBed: { ...atLocal(cover.frame, d.twinBed.u, d.twinBed.v), yaw: cover.frame.heading + d.twinBed.yaw },
+    twinBed: { ...d.twinBed, yaw: headingTo(d.twinBed, meet) },
   };
 }
 
@@ -330,7 +333,7 @@ function build(d: LayoutDef): ReeLayout {
  *  its height over the ground (m), one turn (s); how high it comes down from and climbs
  *  back to (m), and how long that takes (s). As the open world's buzzard (world/Surprises
  *  LOW_*): low enough that the walk's lens sees it over the heath ahead. */
-export const BUZZARD = { beyond: 3, r: 5, y: 5.5, period: 14, high: 22, comeS: 6 } as const;
+export const BUZZARD = { beyond: 7, r: 4.5, y: 4.0, period: 14, high: 22, comeS: 6 } as const;
 
 /**
  * The woodlark's song flight (ree-discover): out of the heather `ahead` m in front of him (a
@@ -455,8 +458,8 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     out: { x: -13.6, z: -24.1 }, reunionTurn: 10,
     // (a young birch outside her wissel's bend, ahead of him as he walks to it; one west of
     // his way back to the hide; the cuckoo in the forest's edge to the east; the twin in the
-    // copse's bracken north of her gap, away from her way in)
-    birches: [{ x: -23.0, z: -39.0 }, { x: -12.0, z: -30.5 }], koekoek: { x: 10.6, z: -35.0 }, twinBed: { u: -1.0, v: 0.9, yaw: 2.2 },
+    // copse's bracken behind where they meet)
+    birches: [{ x: -23.0, z: -39.0 }, { x: -12.0, z: -30.5 }], koekoek: { x: 10.6, z: -35.0 }, twinBed: { x: -7.6, z: -41.0 },
   }),
   B: build({
     id: 'B', stand: { x: -8.5, z: -51.0 }, look: deg(135), corner: 1, bend: { x: -21.0, z: -39.5 },
@@ -473,8 +476,8 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     out: { x: -2.6, z: -38.8 }, outVia: [{ x: -0.95, z: -42.5 }],
     // (a young birch west of the end of her wissel; one out on the heath south of the grass,
     // by his way round it; the cuckoo in the juniper of A's hide to the north; the twin in
-    // the copse's bracken east of her south gap)
-    birches: [{ x: -16.0, z: -51.0 }, { x: -6.5, z: -56.0 }], koekoek: { x: -6.4, z: -26.5 }, twinBed: { u: 2.6, v: 1.15, yaw: 0.8 },
+    // the tall grass behind where they meet)
+    birches: [{ x: -16.0, z: -51.0 }, { x: -6.5, z: -56.0 }], koekoek: { x: -6.4, z: -26.5 }, twinBed: { x: -10.6, z: -48.6 },
     larkOn: ['meadow'],
   }),
   C: build({
@@ -489,9 +492,9 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     // moment is answered, 4 m on, lies ~10.7 m from it, the end 8.6 m)
     out: { x: -19.2, z: -34.6 },
     // (a young birch east of his search spot, ahead of him as he comes up her wissel; the
-    // cuckoo in the copse's birches to the east; the twin in the thicket's bracken south of
-    // its gap)
-    birches: [{ x: -15.5, z: -48.5 }], koekoek: { x: -5.4, z: -45.0 }, twinBed: { u: 1.2, v: -0.4, yaw: 1.4 },
+    // cuckoo in the copse's birches to the east; the twin in the grass's rim behind where
+    // they meet)
+    birches: [{ x: -15.5, z: -48.5 }], koekoek: { x: -5.4, z: -45.0 }, twinBed: { x: -24.1, z: -50.4 },
   }),
 };
 
@@ -577,12 +580,23 @@ export function drinkSpot(doe: Spot & { yaw: number }, len: number, side: 1 | -1
   return { ...atLocal(f, 0.34 * side, -0.12 * len), yaw: doe.yaw + Math.PI - 0.25 * side };
 }
 
-/** Where a twin stands at the reunion (ree-discover): at its mother's chest on the side the
- *  watching eye is on (`side`, as `drinkSpot`), facing back along her, its nose to her neck
- *  while its sibling drinks at her flank — both in the picture, neither behind her. */
-export function twinAt(doe: Spot & { yaw: number }, len: number, side: 1 | -1 = 1): Spot & { yaw: number } {
+/** Where a twin stands at the reunion (ree-discover): on the side the watching eye is on
+ *  (`side`, as `drinkSpot`), at her head (`end` +1: its nose to hers) or at her rump (−1:
+ *  its nose at her flank), facing her — while its sibling drinks under her belly: both in
+ *  the picture, neither behind her. `round`: the point beyond that end of her it comes by,
+ *  so it walks round her, never through her. */
+export function twinAt(doe: Spot & { yaw: number }, len: number, side: 1 | -1, end: 1 | -1): Spot & { yaw: number; round: Spot } {
   const f = { x: doe.x, z: doe.z, heading: doe.yaw };
-  return { ...atLocal(f, 0.5 * side, 0.5 * len), yaw: doe.yaw + Math.PI + 0.55 * side };
+  return {
+    ...atLocal(f, 0.42 * side, end * 0.72 * len),
+    yaw: doe.yaw + (end > 0 ? Math.PI : 0) - 0.45 * side * end,
+    round: atLocal(f, 0.25 * side, end * 1.15 * len),
+  };
+}
+
+/** The end of her (+1 her head, −1 her rump) a twin lying at `bed` comes round to. */
+export function twinEnd(doe: Spot & { yaw: number }, bed: Spot): 1 | -1 {
+  return toLocal({ x: doe.x, z: doe.z, heading: doe.yaw }, bed).v >= 0 ? 1 : -1;
 }
 
 /* ---------------------------------------------------------- the places ---- */
@@ -654,8 +668,8 @@ export const REE_RESIDENTS: readonly ResidentSpec[] = [
     after: { ...atLocal({ ...HOME, heading: headingTo(HOME, COPSE_AT) + 1.2 }, -0.65, -0.45), yaw: headingTo(HOME, COPSE_AT) + 0.7, idle: 'graze', roam: 0.3 },
     shy: [{ within: 4, back: 7, to: CALF_BED, lie: true, state: 'after', after: 4 }] },
   // ree-discover: the calf's twin — there only in a play that has it (`k.rare()`, the
-  // rare twins: ree.ts lays it in her cover's bracken by her gap, and with the family at
-  // home after: `TWIN_AFTER`); a roe doe hides her twins apart
+  // rare twins: ree.ts lays it in the grass behind where they meet once he has left the
+  // calf, and with the family at home after: `TWIN_AFTER`); a roe doe hides her twins apart
   { key: 'twin', animal: 'reekalf', reach: HOME_REACH, before: null, after: null,
     shy: [{ within: 4, back: 7, to: TWIN_BED, lie: true, state: 'after', after: 4 }] },
 ];
