@@ -25,6 +25,7 @@
  */
 
 import type { Play } from '../../../core/play.ts';
+import type { MoodRule } from '../../Moods.ts';
 import {
   CALLER_SLOTS, SLOT_CLASH, SLOT_IDS, SNARE_IDS, STOPS_OF, type Side, type SlotId, type SnareId, type StopId,
 } from './wildcamera.places.ts';
@@ -46,6 +47,108 @@ export interface WildcameraPlay {
   clockStart: number;
   /** where the man set his snare (wc-hands; always drawn by `drawWildcameraPlay`) */
   snare?: SnareId;
+  /** wc-album: the morning after the night: misty, or clear (always drawn) */
+  dawn?: Dawn;
+  /** wc-album: whose nose the camera caught at its lens in the night, on its own (the
+   *  funny close-up in the morning's photos), or null (always drawn) */
+  neus?: NeusId | null;
+}
+
+/* ------------------------------------------------- wc-album: the light, the nose ---- */
+
+/** The morning after the night (wc-album): the wood in the dawn mist, a clear bright
+ *  morning, or a golden sunrise (render3d/Moods ids: the light the photos, the search and
+ *  the reunion stand in). */
+export type Dawn = 'ochtendnevel' | 'zonnig' | 'gouden-uur';
+export const DAWNS: readonly Dawn[] = ['ochtendnevel', 'zonnig', 'gouden-uur'];
+const DAWN_CODE: Readonly<Record<Dawn, string>> = { ochtendnevel: 'n', zonnig: 'z', 'gouden-uur': 'g' };
+
+/** The evening's light at the crossing (the Adventure's `moods.allow`, one per play, never
+ *  the last play's): the golden hour, an overcast evening, a misty one. Never the dusk or
+ *  the bright day: by day the aim round's day must read as day, and the night is the
+ *  wildcamera's own readable blue in every one of them. */
+export const EVENINGS = ['gouden-uur', 'bewolkt', 'ochtendnevel'] as const;
+/** The home's light rule (Adventure.moods): one of the `EVENINGS`, a new one each play. */
+export const WILDCAMERA_MOODS: MoodRule = { allow: EVENINGS, perPlay: true };
+
+/** Who may sniff at the camera in the night (wc-album): an animal of the crossing, its nose
+ *  right at the lens. Each one is a different joke in the morning's photos ("Wie is dat?"). */
+export type NeusId = 'wildzwijn' | 'das' | 'vos' | 'ree';
+export const NEUS_IDS: readonly NeusId[] = ['wildzwijn', 'das', 'vos', 'ree'];
+/** The chance of a nose at the lens on a play. */
+export const NEUS_P = 0.35;
+/** Plays in a row without one after which the next surely has one. */
+export const NEUS_PITY = 2;
+const NEUS_CODE: Readonly<Record<NeusId, string>> = { wildzwijn: 'w', das: 'd', vos: 'v', ree: 'r' };
+
+/** Draw the night's close-up: a seeded chance, sure after `NEUS_PITY` plays without one
+ *  (`drought`: plays in a row without one, `neusDrought`). Both draws are always made, so
+ *  the stream never moves. Construct-neutral: it is a photo in the morning, nothing more. */
+export function drawNeus(play: Play, drought = 0): NeusId | null {
+  const f = play.fork('wc-neus');
+  const lucky = f.chance(NEUS_P);
+  const who = f.pick(NEUS_IDS);
+  return lucky || drought >= NEUS_PITY ? who : null;
+}
+
+/** How many of the wildcamera's last plays in a row had no close-up (their `wx` note `0`),
+ *  newest first, from the save's beat history; a play whose note is missing (before this
+ *  package, or cut off) ends the count. */
+export function neusDrought(history: readonly { m: string; sd: number; va?: string }[], missionId = 'wildcamera'): number {
+  let n = 0;
+  let seed: number | null = null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const b = history[i];
+    if (b.m !== missionId || !b.va) continue;
+    if (b.sd === seed) continue; // (one play logs two beats)
+    seed = b.sd;
+    const wx = b.va.split(',').map((kv) => kv.split(':')).find(([k]) => k === 'wx')?.[1];
+    if (wx !== '0') break;
+    n++;
+  }
+  return n;
+}
+
+/** One play's light: the evening it stood in and the morning after (`lastLights`). */
+export interface PlayLight { evening: string | null; dawn: Dawn }
+
+/** The dawn after the night, from its own fork: never the light the evening stood in
+ *  (`evening`: the night comes between, the morning looks new); a morning neither of the
+ *  last two plays had while one is left (`recent`, newest first: `lastLights`); and never
+ *  one that gives a recent play's whole light again (its evening and its morning both:
+ *  r2 — two plays of a row of three stood in the same misty evening and golden sunrise).
+ *  One pick from the first of those that leaves any, so the fork's stream stays put. */
+export function drawDawn(play: Play, opts: { evening?: string | null; recent?: readonly PlayLight[] } = {}): Dawn {
+  const f = play.fork('wc-dawn');
+  const ev = opts.evening ?? null;
+  const recent = (opts.recent ?? []).slice(0, 2);
+  const notEve = DAWNS.filter((d) => d !== ev);
+  const whole = new Set(recent.filter((r) => r.evening === ev).map((r) => r.dawn));
+  const tiers = [
+    notEve.filter((d) => !recent.some((r) => r.dawn === d)),
+    notEve.filter((d) => !whole.has(d) && d !== recent[0]?.dawn),
+    notEve.filter((d) => !whole.has(d)),
+    notEve,
+  ];
+  return f.pick(tiers.find((t) => t.length) ?? DAWNS);
+}
+
+/** The light of the wildcamera's last plays that noted a morning (their `mood` and `wd`
+ *  notes), newest first, one per play (by its seed), at most `n`. */
+export function lastLights(history: readonly { m: string; sd?: number; va?: string }[], missionId = 'wildcamera', n = 2): PlayLight[] {
+  const out: PlayLight[] = [];
+  let seed: number | undefined;
+  for (let i = history.length - 1; i >= 0 && out.length < n; i--) {
+    const b = history[i];
+    if (b.m !== missionId || !b.va) continue;
+    if (b.sd !== undefined && b.sd === seed) continue; // (one play logs two beats)
+    const notes = new Map(b.va.split(',').map((kv) => kv.split(':') as [string, string]));
+    const d = DAWNS.find((x) => DAWN_CODE[x] === notes.get('wd'));
+    if (!d) continue;
+    seed = b.sd;
+    out.push({ evening: notes.get('mood') ?? null, dawn: d });
+  }
+  return out;
 }
 
 const ANIMAL_CODE: Readonly<Record<string, string>> = {
@@ -164,25 +267,34 @@ export function drawSnare(play: Play, last: SnareId | null = null): SnareId {
 /** Draw a play: `queueLength` visitors for the aim round, the night's `cast`; `recent`
  *  the last plays' night notes (`lastNights`); `lastSnare` the spot of the play before
  *  (`lastSnare`). */
-export function drawWildcameraPlay(play: Play, opts: { queueLength: number; cast: readonly string[]; recent?: readonly string[]; lastSnare?: SnareId | null }): WildcameraPlay & { snare: SnareId } {
+export function drawWildcameraPlay(play: Play, opts: { queueLength: number; cast: readonly string[]; recent?: readonly string[]; lastSnare?: SnareId | null; neusDrought?: number; evening?: string | null; recentLights?: readonly PlayLight[] }): WildcameraPlay & { snare: SnareId; dawn: Dawn; neus: NeusId | null } {
   return {
     seed: play.seed,
     arrivals: drawArrivals(play, opts.queueLength),
     callers: drawCallers(play, opts.cast, opts.recent ?? []),
     clockStart: Math.round(play.fork('wc-clock').between(17 * 60 + 20, 18 * 60 + 10)),
     snare: drawSnare(play, opts.lastSnare ?? null),
+    dawn: drawDawn(play, { evening: opts.evening ?? null, recent: opts.recentLights ?? [] }),
+    neus: drawNeus(play, opts.neusDrought ?? 0),
   };
 }
 
-/** The compact variant the beat history keeps: three notes, each short enough that the
- *  history's 60 characters keep them beside the play's mood and rare (no ',' or ':').
+/** The compact variant the beat history keeps: five notes, each short enough that the
+ *  history's 60 characters keep them beside the play's mood and rare (no ',' or ':'; noted
+ *  in the order ws, wx, wd, wn, wa: what overflows the 60 falls off from the end — the
+ *  morning before the night, r2: a five-caller night after a rare pushed it off).
  *  `ws`: the snare's spot (`1`, `2`, `3`: S1-S3), kept first (the next play reads it).
+ *  `wx` (wc-album): the night's close-up, `0` for none, else its animal (`w` the boar, `d`
+ *  the badger, `v` the fox, `r` the roe): the next plays read it (`neusDrought`).
+ *  `wd` (wc-album): the morning (`n` misty, `z` clear, `g` a golden sunrise; `lastLights`).
  *  `wa`: how the visitors came, one stop each (`a` l, `b` lf, `c` r, `d` rf; WHICH animals
  *  came is the wissel core's, rebuilt from the seed and the logged level); `wn`: the night,
  *  animal + spot in the order they came (`da` = the badger left of its sett). */
-export function variantOf(p: WildcameraPlay): { ws: string; wa: string; wn: string } {
+export function variantOf(p: WildcameraPlay): { ws: string; wx: string; wd: string; wa: string; wn: string } {
   return {
     ws: p.snare ? p.snare.slice(1) : '',
+    wx: p.neus ? NEUS_CODE[p.neus] : '0',
+    wd: p.dawn ? DAWN_CODE[p.dawn] : '',
     wa: p.arrivals.map((a) => STOP_CODE[a.stop]).join(''),
     wn: p.callers.map((c) => `${ANIMAL_CODE[c.id] ?? c.id[0]}${SLOT_CODE[c.slot]}`).join(''),
   };
@@ -256,15 +368,41 @@ export class CameraClock {
     this.now += 7 + Math.floor(this.rng() * 19);
     return t;
   }
-  /** the day turned: to the night, or back to the day */
+  /** the day turned: to the night (that day's late evening), or back to the day (the next
+   *  morning) — a round of several turns runs on through the days */
   turn(to: 'night' | 'day'): void {
     if (to === 'night') {
-      const late = 21 * 60 + 50 + Math.floor(this.rng() * 41);
+      const late = Math.floor(this.now / 1440) * 1440 + 21 * 60 + 50 + Math.floor(this.rng() * 41);
       this.now = Math.max(this.now + 60, late);
     } else {
-      const day = 24 * 60 + 5 * 60 + 10 + Math.floor(this.rng() * 31);
+      const day = this.midnight() + 5 * 60 + 10 + Math.floor(this.rng() * 31);
       this.now = Math.max(this.now + 60, day);
     }
+  }
+  /** wc-album: the midnight this night runs into (minutes on the clock): the evening the
+   *  clock stands in now (an evening, or a night: from noon to noon), its next midnight. A
+   *  round of several turns has more than one evening. */
+  private midnight(): number {
+    return (Math.floor((this.now - 12 * 60) / 1440) + 1) * 1440;
+  }
+  /** wc-album: the camera clicked on its own in the deep of the night, while everyone slept
+   *  (00:40-03:30, at least half an hour on): its time */
+  lateNight(): string {
+    const deep = this.midnight() + 40 + Math.floor(this.rng() * 171);
+    this.now = Math.max(this.now + 30, deep);
+    return this.photo();
+  }
+  /** wc-album: first light (05:15-05:40, at least ten minutes on): its time */
+  firstLight(): string {
+    const light = this.midnight() + 5 * 60 + 15 + Math.floor(this.rng() * 26);
+    this.now = Math.max(this.now + 10, light);
+    return this.photo();
+  }
+  /** wc-album: the man at his snare at dawn (05:52, or a little later when the clock has
+   *  passed it): its time, never before a photo taken earlier */
+  dawnMan(): string {
+    this.now = Math.max(this.now, this.midnight() + 5 * 60 + 52);
+    return this.photo();
   }
   /** minutes after the first midnight (tests) */
   get minutes(): number { return this.now; }

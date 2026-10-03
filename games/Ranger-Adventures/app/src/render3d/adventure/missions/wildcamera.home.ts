@@ -26,9 +26,10 @@ import { SIZE } from '../../AnimalScale';
 import { crouchPose } from './wildcamera.pose';
 import {
   WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, JUNIPER, THICKET_BUSHES, TAG_AT, NIGHTJAR_AT, NIGHTJAR_STUMP,
-  JAY_AT, SNARE_IDS, SNARE_SPOTS, PINE_PICK, snareTufts, trailA, trailB, trailC, type SnareId, type SnareSpot,
+  JAY_AT, SNARE_IDS, SNARE_SPOTS, PINE_PICK, snareTufts, trailA, trailB, trailC, foxPrintLine, type SnareId, type SnareSpot,
 } from './wildcamera.places';
 import type { Spot } from '../types';
+import type { Actor } from '../actors';
 
 /** The camera trap's size (m): shown ≈ 1.5× so a child sees it on its tree (AnimalScale). */
 const CAM_H = SIZE.wildcamera.h;
@@ -297,6 +298,77 @@ function trailPrints(groundY: (x: number, z: number) => number, lines: readonly 
   return mesh;
 }
 
+/** Run 7 (wc-album): a fox's print — four oval toes round a small pad, the claw tips just
+ *  showing — fresh and crisp (one 64 px cell). */
+let foxPrintTex: THREE.CanvasTexture | null = null;
+function foxPrintTexture(): THREE.CanvasTexture {
+  if (foxPrintTex) return foxPrintTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const ink = 'rgba(40,24,12,1)';
+  const rim = 'rgba(222,200,158,0.95)';
+  const blob = (cx: number, cy: number, rx: number, ry: number, rot = 0): void => {
+    g.beginPath();
+    g.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2);
+    g.fillStyle = ink;
+    g.fill();
+    g.lineWidth = 2;
+    g.strokeStyle = rim;
+    g.stroke();
+  };
+  // the pad (a rounded triangle), the two front toes close together, the two side toes
+  blob(32, 44, 9, 8);
+  blob(27, 21, 4.5, 6, -0.1); blob(37, 21, 4.5, 6, 0.1);
+  blob(18, 31, 4, 5.5, -0.5); blob(46, 31, 4, 5.5, 0.5);
+  g.fillStyle = ink;
+  for (const [x, y] of [[27, 12], [37, 12]]) g.fillRect(x - 0.8, y, 1.6, 3.5);
+  foxPrintTex = new THREE.CanvasTexture(c);
+  foxPrintTex.colorSpace = THREE.SRGBColorSpace;
+  return foxPrintTex;
+}
+
+/** Run 7 (wc-album): a fox's fresh prints along `line` — one neat file (a fox sets its
+ *  hind feet in its front prints), a hand's width beside the trail's middle, every quad
+ *  seated on the ground. One mesh, one draw call. */
+function foxPrints(groundY: (x: number, z: number) => number, line: readonly Spot[], seed: number): THREE.Mesh {
+  const pos: number[] = [], uv: number[] = [], idx: number[] = [];
+  const rnd = stream(seed);
+  let along = 0.3;
+  for (let i = 0; i < line.length - 1; i++) {
+    const a = line[i], b = line[i + 1];
+    const L = dist(a, b);
+    const dx = (b.x - a.x) / L, dz = (b.z - a.z) / L;
+    while (along < L) {
+      const side = 0.13 + (rnd() - 0.5) * 0.04;
+      const px = a.x + dx * along - dz * side, pz = a.z + dz * along + dx * side;
+      const sz = 0.23 * (0.92 + rnd() * 0.16);
+      const yaw = Math.atan2(dx, dz) + (rnd() - 0.5) * 0.12;
+      const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = -fz, rz = fx;
+      const base = pos.length / 3;
+      for (const [u, v] of [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]] as const) {
+        const x = px + rx * u * sz + fx * v * sz, z = pz + rz * u * sz + fz * v * sz;
+        pos.push(x, groundY(x, z) + 0.04, z);
+        uv.push(u + 0.5, v + 0.5);
+      }
+      idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+      along += 0.4 * (0.92 + rnd() * 0.16);
+    }
+    along -= L;
+  }
+  const geo = upFacing(pos, idx);
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    map: foxPrintTexture(), transparent: true, depthWrite: false, roughness: 1,
+    polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5,
+  }));
+  mesh.name = 'fox-prints';
+  mesh.renderOrder = 2;
+  mesh.raycast = () => {};
+  mesh.visible = false;
+  return mesh;
+}
+
 /** Run 7: the birds the home flies: the nightjar, and the jay. */
 export type BirdId = 'nachtzwaluw' | 'gaai';
 type Flight = { from: THREE.Vector3; to: THREE.Vector3; t: number; dur: number; yaw: number; done: () => void };
@@ -384,6 +456,10 @@ export class WildcameraHome implements HomeDressing {
   private readonly ghostHalo: THREE.SpriteMaterial;
   private ghostT = 0;
   private readonly spawned: { dispose(): void; update?(dt: number): void }[] = [];
+  /** run 7 (wc-album, dev read): the last close-up's nose on its animal */
+  closeUpRead: Record<string, number> | null = null;
+  /** run 7 (wc-album): the fox's fresh prints up the wildwissel (`showFoxPrints`) */
+  private readonly foxPrints: THREE.Mesh;
   private readonly groundY: (x: number, z: number) => number;
   private clock = 0;
   private state: HomeState = 'before';
@@ -437,6 +513,9 @@ export class WildcameraHome implements HomeDressing {
     const lines = [trailA(), trailB(), trailC()];
     this.group.add(trailRibbon(g, lines, 0.5, 11));
     this.group.add(trailPrints(g, lines, 29));
+    // (run 7, wc-album: a fox's fresh prints up the wildwissel, on plays the fox comes)
+    this.foxPrints = foxPrints(g, foxPrintLine(), 61);
+    this.group.add(this.foxPrints);
     // the crossing: a patch of trodden ground where the two trails meet
     this.group.add(groundDecal(g, TREE.x, TREE.z + 0.9, 1.25, 0.95, 0.4, '#9c8260', { layer: 1, wobble: 0.2, seed: 7, feather: true }));
 
@@ -930,13 +1009,26 @@ export class WildcameraHome implements HomeDressing {
    *  height there (so a badger fills the picture as a stag does; never narrower than
    *  `minFov`° — the nightjar's close-up zooms in further). */
   photoCamera(p: Spot, y: number, aspect: number, frameH = 1.6, minFov = 18): THREE.PerspectiveCamera {
-    const dir = new THREE.Vector3(Math.sin(this.aimNow), 0, Math.cos(this.aimNow));
-    const lens = new THREE.Vector3(TREE.x, this.trap.position.y + 0.02, TREE.z).addScaledVector(dir, PINE.trunkR + CAM_DEPTH + 0.05);
+    const lens = this.photoLens();
     const d = Math.max(1, Math.hypot(p.x - lens.x, p.z - lens.z));
     const fov = THREE.MathUtils.clamp((2 * Math.atan(frameH / 2 / d) * 180) / Math.PI, minFov, 58);
+    return this.photoCameraAt(new THREE.Vector3(p.x, this.groundY(p.x, p.z) + y, p.z), fov, aspect);
+  }
+
+  /** The camera trap's lens, as it is turned now (on its strap, `heading` rad: where it
+   *  looks; its turn now by default). */
+  photoLens(heading = this.aimNow): THREE.Vector3 {
+    const dir = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+    return new THREE.Vector3(TREE.x, this.trap.position.y + 0.02, TREE.z).addScaledVector(dir, PINE.trunkR + CAM_DEPTH + 0.05);
+  }
+
+  /** A camera from the trap's lens looking at `look` (world) with a field of view of `fov`°
+   *  (vertical) for a photograph `aspect` wide (r2: the fox family's photo frames all three
+   *  as they stand: wildcamera.cubs `familyPhoto`). */
+  photoCameraAt(look: THREE.Vector3, fov: number, aspect: number): THREE.PerspectiveCamera {
     const cam = new THREE.PerspectiveCamera(fov, aspect, 0.1, 80);
-    cam.position.copy(lens);
-    cam.lookAt(p.x, this.groundY(p.x, p.z) + y, p.z);
+    cam.position.copy(this.photoLens());
+    cam.lookAt(look);
     cam.updateMatrixWorld(true);
     return cam;
   }
@@ -957,11 +1049,35 @@ export class WildcameraHome implements HomeDressing {
     };
   }
 
-  /** Run 7: for the morning photo's one render, the dawn mist in the wood: the fog closes
-   *  in to `near`..`far` m (from the camera on the pine), so the man and the two things
-   *  beside him stand clear and what lies far behind them (the hut, the missiebord, the
-   *  signpost by the clearing) fades into the morning grey. Returns how to lift it. */
-  dawnMist(near: number, far: number): () => void {
+  /** Run 7 (wc-album r2): for a night photo's one render, what the camera's infrared flash
+   *  lights stands out bright against the dark wood behind it (a trail camera's night photo:
+   *  the near animal pale and clear, never a pale ghost on pale ground): the drawn bodies of
+   *  `subjects` glow by `k` (their materials' own light, put back after). Returns how. */
+  irLit(subjects: readonly THREE.Object3D[], k: number): () => void {
+    const done: { m: THREE.MeshStandardMaterial; c: THREE.Color; i: number }[] = [];
+    const seen = new Set<THREE.Material>();
+    for (const o of subjects) {
+      o.traverseVisible((x) => {
+        const mesh = x as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        for (const m of (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as THREE.MeshStandardMaterial[]) {
+          if (!m || seen.has(m) || !(m as { emissive?: THREE.Color }).emissive) continue;
+          seen.add(m);
+          done.push({ m, c: m.emissive.clone(), i: m.emissiveIntensity ?? 1 });
+          m.emissive.setRGB(k, k, k);
+          m.emissiveIntensity = 1;
+        }
+      });
+    }
+    return () => { for (const d of done) { d.m.emissive.copy(d.c); d.m.emissiveIntensity = d.i; } };
+  }
+
+  /** Run 7: for a photo's one render, the mist in the wood: the fog closes in to
+   *  `near`..`far` m (from the camera on the pine), so what it photographs stands clear and
+   *  what lies far behind (the hut, the missiebord, the signpost by the clearing) fades —
+   *  into the morning grey behind the man at his snare, into the night behind the fox
+   *  family (wc-album r2). Returns how to lift it. */
+  closeMist(near: number, far: number): () => void {
     let top: THREE.Object3D = this.group;
     while (top.parent) top = top.parent;
     const fog = (top as THREE.Scene).fog as THREE.Fog | null;
@@ -1002,6 +1118,124 @@ export class WildcameraHome implements HomeDressing {
     if (grass) grass.visible = false;
     r.visible = true;
     return () => { r.visible = false; if (this.snare) this.snare.visible = wasSnare; if (grass) grass.visible = wasGrass; };
+  }
+
+  /** Run 7 (wc-album): the fox's fresh prints up the wildwissel (laid under the briefing
+   *  card on plays the fox comes; gone again once the mission is done). */
+  showFoxPrints(on: boolean): void { this.foxPrints.visible = on; }
+  get foxPrintsShown(): boolean { return this.foxPrints.visible; }
+
+  /**
+   * Run 7 (wc-album): for the one render of the night's funny close-up, `a` (an animal of
+   * the crossing) stands facing the camera on its pine with the tip of its nose `d` m from
+   * the lens, and brings its nose toward the lens: a rigged one (the fox, the roe) lifts or
+   * lowers its head on its own neck (at most `neck` rad over its neck bones, its head turning
+   * `keep` of that back, r2: never its
+   * whole body stood up, never a tail over its head), then its body tips the rest (at most
+   * `maxTilt` rad, nose up or down). The camera looks along `heading`. The tip of
+   * the nose is found on the model as it stands level (on its middle line, the point
+   * furthest toward the lens, its feet left out: never an ear, never a paw that swings
+   * forward when it tips) and followed as it bends and tips. Returns where the nose is and
+   * how to put the animal back.
+   */
+  closeUp(a: Actor, heading: number, d: number, maxTilt: number, neck = 0, keep = 0): { nose: Spot; y: number; undo: () => void } {
+    const dir = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+    const lens = this.photoLens(heading);
+    const g = a.group;
+    const was = { vis: g.visible, x: a.x, z: a.z, yaw: a.yaw, order: g.rotation.order, rx: g.rotation.x };
+    const yaw = Math.atan2(-dir.x, -dir.z); // (facing the lens)
+    g.rotation.order = 'YXZ';
+    g.rotation.x = 0;
+    g.visible = true;
+    a.place(lens.x + dir.x * 3, lens.z + dir.z * 3, yaw);
+    g.updateMatrixWorld(true);
+    const meshes: THREE.Mesh[] = [];
+    (a.body ?? g).traverseVisible((o) => { const m = o as THREE.Mesh; if (m.isMesh) meshes.push(m); }); // (what is drawn: never its lying body, hidden)
+    const v = new THREE.Vector3();
+    // (level: how high and how wide it stands, then its nose: on its middle line (never an
+    // ear standing out to a side), the furthest toward the lens, its feet left out)
+    const sideOf = (p: THREE.Vector3): number => (p.x - g.position.x) * dir.z - (p.z - g.position.z) * dir.x;
+    let lo = Infinity, hi = -Infinity, wide = 0;
+    for (const m of meshes) {
+      const n = (m.geometry.attributes.position as THREE.BufferAttribute).count;
+      for (let i = 0; i < n; i++) {
+        m.getVertexPosition(i, v).applyMatrix4(m.matrixWorld);
+        lo = Math.min(lo, v.y); hi = Math.max(hi, v.y); wide = Math.max(wide, Math.abs(sideOf(v)));
+      }
+    }
+    let noseMesh: THREE.Mesh | null = null, noseI = 0, best = -Infinity;
+    const mid = lo + (hi - lo) * 0.2, line = Math.max(0.025, wide * 0.15);
+    for (const m of meshes) {
+      const n = (m.geometry.attributes.position as THREE.BufferAttribute).count;
+      for (let i = 0; i < n; i++) {
+        m.getVertexPosition(i, v).applyMatrix4(m.matrixWorld);
+        if (v.y < mid || Math.abs(sideOf(v)) > line) continue;
+        const along = -((v.x - g.position.x) * dir.x + (v.z - g.position.z) * dir.z);
+        if (along > best) { best = along; noseMesh = m; noseI = i; }
+      }
+    }
+    const tip = (): THREE.Vector3 => {
+      g.updateMatrixWorld(true);
+      return noseMesh ? noseMesh.getVertexPosition(noseI, new THREE.Vector3()).applyMatrix4(noseMesh.matrixWorld) : g.position.clone();
+    };
+    // (a rigged animal's neck: its head comes up, or down, toward the lens on its own neck
+    // bones, each turned a share about the line across its face, and its head turns `keep` of
+    // that back: the roe's face still looks ahead at the lens as she lowers it, nose first —
+    // never the top of her head; the fox's tips up with its neck, its nose up at the lens)
+    const bones: THREE.Object3D[] = [];
+    if (neck > 0) g.traverse((o) => { if ((o as THREE.Bone).isBone && /^(Neck\d|Head)$/.test(o.name)) bones.push(o); });
+    const rest = bones.map((b) => b.quaternion.clone());
+    const necks = bones.filter((b) => b.name !== 'Head').length || 1;
+    const across = new THREE.Vector3(dir.z, 0, -dir.x);
+    const pq = new THREE.Quaternion(), q = new THREE.Quaternion(), ax = new THREE.Vector3();
+    const bend = (ang: number): void => {
+      bones.forEach((b, i) => b.quaternion.copy(rest[i]));
+      for (const b of bones) {
+        g.updateMatrixWorld(true);
+        b.parent!.getWorldQuaternion(pq);
+        q.setFromAxisAngle(ax.copy(across).applyQuaternion(pq.invert()), b.name === 'Head' ? -ang * keep : ang / necks);
+        b.quaternion.premultiply(q);
+      }
+    };
+    let ang = 0;
+    if (bones.length) {
+      for (let i = 0; i < 5; i++) {
+        bend(ang);
+        const n = tip();
+        bend(ang + 0.05);
+        const slope = (tip().y - n.y) / 0.05;
+        if (Math.abs(slope) < 1e-3) break;
+        ang = Math.max(-neck, Math.min(neck, ang + ((lens.y - n.y) / slope) * 0.9));
+      }
+      bend(ang);
+    }
+    let tilt = 0;
+    for (let i = 0; i < 4; i++) {
+      g.rotation.x = -tilt;
+      const n = tip();
+      const reach = Math.max(0.15, Math.hypot(n.x - g.position.x, n.z - g.position.z));
+      tilt = Math.max(-maxTilt, Math.min(maxTilt, tilt + Math.atan((lens.y - n.y) / reach) * 0.9));
+    }
+    g.rotation.x = -tilt;
+    const n0 = tip();
+    const ahead = -((n0.x - g.position.x) * dir.x + (n0.z - g.position.z) * dir.z);
+    a.place(lens.x + dir.x * (d + ahead), lens.z + dir.z * (d + ahead), yaw);
+    const n = tip();
+    // (dev read: where the nose is on the animal — ahead of its middle, beside it, how high —
+    // and how far it tipped)
+    const fx = -dir.x, fz = -dir.z;
+    this.closeUpRead = {
+      ahead: (n.x - g.position.x) * fx + (n.z - g.position.z) * fz,
+      side: (n.x - g.position.x) * -fz + (n.z - g.position.z) * fx,
+      up: n.y - g.position.y, tilt, lensUp: lens.y - g.position.y, meshes: meshes.length, neck: ang,
+    };
+    return {
+      nose: { x: n.x, z: n.z }, y: n.y - this.groundY(n.x, n.z),
+      undo: () => {
+        bones.forEach((b, i) => b.quaternion.copy(rest[i]));
+        g.rotation.x = was.rx; g.rotation.order = was.order; a.place(was.x, was.z, was.yaw); g.visible = was.vis;
+      },
+    };
   }
 
   /** A bird (the nightjar unless `id` says the jay) flies from `from` to `to` (landing
@@ -1119,6 +1353,7 @@ export class WildcameraHome implements HomeDressing {
     this.birdFidget(null);
     this.showVisitor(null);
     if (this.poacher) this.poacher.visible = false;
+    this.showFoxPrints(false); // (wc-album: a play's fox prints are gone after it, done or stopped; its briefing lays them anew)
   }
 
   update(dt: number, _t: number, reduced: boolean): void {
@@ -1253,6 +1488,8 @@ export class WildcameraHome implements HomeDressing {
     for (const g of Object.values(this.snareGrass)) { g.geometry.dispose(); g.removeFromParent(); }
     this.snarePeg.geometry.dispose();
     (this.snarePeg.material as THREE.Material).dispose();
+    this.foxPrints.geometry.dispose();
+    (this.foxPrints.material as THREE.Material).dispose();
     this.trunkProxy.geometry.dispose();
     (this.trunkProxy.material as THREE.Material).dispose();
     this.ghostHalo.dispose(); // (the ghost's own materials go with its spawned model)

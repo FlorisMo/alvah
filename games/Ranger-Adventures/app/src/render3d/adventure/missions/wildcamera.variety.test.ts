@@ -15,6 +15,13 @@
  *
  * (pinned below by SEED_TABLE: which animals come in the evening is the wissel core's,
  * pinned there; here how they come and who calls at night.)
+ *
+ * The album (wc-album), on a save's first play (the visit's light the golden hour): seed 21
+ * → a misty evening, the fox with her cubs, a badger's nose at the lens, a golden sunrise;
+ * seed 16 → the golden hour, the white roe, a roe's nose at first light, a clear morning;
+ * seed 4 → no rare, a boar's snout, a misty morning; seed 33 → a fox's nose; seed 1 → a
+ * misty evening and nothing more (with two won plays without a rare behind it: the white
+ * roe, the pity rule).
  */
 
 import assert from 'node:assert/strict';
@@ -28,7 +35,11 @@ import type { Skin } from '../../../content/types.ts';
 import { CALLER_SLOTS, SIDE_OF, SLOT_CLASH, STOPS, STOPS_OF, type SlotId } from './wildcamera.places.ts';
 import {
   CameraClock, drawCallers, drawSnare, drawWildcameraPlay, hhmm, lastNights, lastSnare, legalLayouts, parseVariant, sameSpots, variantOf, type WildcameraPlay,
+  DAWNS, EVENINGS, NEUS_IDS, NEUS_P, NEUS_PITY, WILDCAMERA_MOODS, drawDawn, drawNeus, lastLights, neusDrought, type Dawn,
 } from './wildcamera.variety.ts';
+import { playMood, type MoodId } from '../../Moods.ts';
+import { ONTDEKKINGEN } from '../../../content/ontdekkingen.ts';
+import { nextRareCount, rollRare } from '../../../core/discover.ts';
 import { SNARE_IDS, type SnareId } from './wildcamera.places.ts';
 
 const MISSION = 'wildcamera';
@@ -318,4 +329,187 @@ test('the snare\'s spot travels in the play\'s variant and the next play reads i
   const again = drawWildcameraPlay(newPlay(MISSION, 4242, 3), { queueLength: 6, cast, lastSnare: null });
   assert.deepEqual(again.callers, p.callers);
   assert.deepEqual(again.arrivals, p.arrivals);
+});
+
+/* ------------------------------------------- wc-album: the light, the nose, the rare ---- */
+
+test('the night\'s close-up: about one play in three, every animal of the four, and surely by the third play', () => {
+  let got = 0;
+  const who = new Set<string>();
+  for (let seed = 1; seed <= 3000; seed++) {
+    const n = drawNeus(newPlay(MISSION, seed, 1), 0);
+    if (n) { got++; who.add(n); }
+    assert.equal(drawNeus(newPlay(MISSION, seed, 1), 0), n, 'the same seed, the same nose');
+    // after two plays without one, the next surely has one (the same animal its draw picks)
+    const sure = drawNeus(newPlay(MISSION, seed, 1), NEUS_PITY);
+    assert.ok(sure && NEUS_IDS.includes(sure));
+    if (n) assert.equal(sure, n);
+  }
+  assert.ok(got / 3000 > NEUS_P - 0.04 && got / 3000 < NEUS_P + 0.04, `${((got / 3000) * 100).toFixed(1)} % of plays`);
+  assert.deepEqual([...who].sort(), [...NEUS_IDS].sort());
+});
+
+test('the close-up travels in the variant (`wx`) and the history counts the plays without one', () => {
+  const play = (sd: number, wx: string): { m: string; sd: number; va: string } => ({ m: MISSION, sd, va: `mood:bewolkt,ws:1,wx:${wx},wn:dancvgrf` });
+  assert.equal(neusDrought([]), 0);
+  assert.equal(neusDrought([play(1, '0'), play(1, '0')]), 1, 'one play logs two beats');
+  assert.equal(neusDrought([play(1, '0'), play(2, '0'), play(2, '0')]), 2);
+  assert.equal(neusDrought([play(1, '0'), play(2, 'w'), play(3, '0')]), 1, 'counted back to the last nose');
+  assert.equal(neusDrought([{ m: MISSION, sd: 1, va: 'mood:x,ws:2,wn:dancvgrf' }, play(2, '0')]), 1, 'a play from before the album ends the count');
+  assert.equal(neusDrought([play(1, '0'), { m: 'frisling', sd: 9, va: 'mood:zonnig' }, play(2, '0')]), 2, 'other homes do not count');
+  for (let seed = 1; seed <= 300; seed++) {
+    const d = draw(seed);
+    const v = variantOf(d.p);
+    assert.equal(v.wx, d.p.neus ? v.wx : '0');
+    assert.ok(/^[0wdvr]$/.test(v.wx));
+  }
+  // as wildcamera.ts notes it, behind the longest mood and rare: the snare, the nose, the
+  // morning and the night still fit the history's 60 characters (the visitors' stops may
+  // fall off)
+  for (let seed = 1; seed <= 200; seed++) {
+    const d = draw(seed, 5);
+    const v = variantOf(d.p);
+    const va = compactVariant({ mood: 'ochtendnevel', rare: 'witte-ree', ws: v.ws, wx: v.wx, wd: v.wd, wn: v.wn, wa: v.wa })!;
+    assert.ok(va.includes(`ws:${v.ws}`) && va.includes(`wx:${v.wx}`) && va.includes(`wd:${v.wd}`) && va.includes(`wn:${v.wn}`), va);
+  }
+});
+
+test('three plays in a row: never three without a nose, as the history hands it over (1000 sessions)', () => {
+  let withNose = 0, plays = 0;
+  for (let t = 0; t < 1000; t++) {
+    const history: { m: string; sd: number; va?: string }[] = [];
+    let dry = 0;
+    for (let k = 0; k < 6; k++) {
+      const seed = 1 + t * 6 + k;
+      const play = newPlay(MISSION, seed, k + 1);
+      const p = drawWildcameraPlay(play, { queueLength: 6, cast: ['das', 'ree', 'vos', 'wildzwijn'], neusDrought: neusDrought(history) });
+      const v = variantOf(p);
+      const va = compactVariant({ mood: 'gouden-uur', ws: v.ws, wx: v.wx, wn: v.wn, wa: v.wa });
+      history.push({ m: MISSION, sd: seed, va }, { m: MISSION, sd: seed, va });
+      dry = p.neus ? 0 : dry + 1;
+      assert.ok(dry <= NEUS_PITY, `session ${t}: ${dry} plays in a row without a nose`);
+      if (p.neus) withNose++;
+      plays++;
+    }
+  }
+  assert.ok(withNose / plays > 0.4 && withNose / plays < 0.6, `${((withNose / plays) * 100).toFixed(0)} % of plays have one`);
+});
+
+test('the light: the evening is one of three (never dusk, never the bright day), the morning misty, clear or golden, never the evening\'s, a new one while one is left', () => {
+  assert.deepEqual([...EVENINGS], ['gouden-uur', 'bewolkt', 'ochtendnevel']);
+  // the home's rule: a new evening every play, never the last one's (render3d/Moods playMood)
+  const seen = new Set<string>();
+  for (let seed = 1; seed <= 300; seed++) {
+    let last: MoodId | null = null;
+    for (let k = 0; k < 3; k++) {
+      const m = playMood('gouden-uur', WILDCAMERA_MOODS, newPlay(MISSION, seed * 3 + k, k + 1), last);
+      assert.ok((EVENINGS as readonly string[]).includes(m), m);
+      assert.notEqual(m, last, 'never the last play\'s evening');
+      seen.add(m);
+      last = m;
+    }
+  }
+  assert.equal(seen.size, 3);
+  assert.deepEqual([...DAWNS], ['ochtendnevel', 'zonnig', 'gouden-uur']);
+  const dawns = { ochtendnevel: 0, zonnig: 0, 'gouden-uur': 0 } as Record<Dawn, number>;
+  for (let seed = 1; seed <= 1500; seed++) dawns[drawDawn(newPlay(MISSION, seed, 1))]++;
+  for (const d of DAWNS) assert.ok(dawns[d] > 400, `${d}: ${dawns[d]} of 1500 mornings`);
+  // never the evening's light; never the last two plays' mornings while one is left (read
+  // back from the history), and never a morning that would give a whole play's light again
+  for (let seed = 1; seed <= 400; seed++) {
+    for (const evening of EVENINGS) {
+      for (const a of [null, ...DAWNS]) for (const b of [null, ...DAWNS]) {
+        const recent = [a, b].filter((x): x is Dawn => !!x).map((dawn, i) => ({ evening: EVENINGS[(seed + i) % 3] as string, dawn }));
+        const d = drawDawn(newPlay(MISSION, seed, 3), { evening, recent });
+        assert.notEqual(d, evening, `seed ${seed}: the morning stands in the evening's light`);
+        const left = DAWNS.filter((x) => x !== evening && !recent.some((r) => r.dawn === x));
+        if (left.length) assert.ok(left.includes(d), `seed ${seed}: ${d} after ${recent.map((r) => r.dawn).join(', ')} (${left.join(', ')} left)`);
+        assert.ok(!recent.some((r) => r.evening === evening && r.dawn === d), `seed ${seed}: the whole light of a recent play again (${evening} + ${d})`);
+        // (the morning of the play before only when the other one left would give a whole
+        // play's light again)
+        const other = DAWNS.filter((x) => x !== evening && x !== recent[0]?.dawn && !recent.some((r) => r.evening === evening && r.dawn === x));
+        if (recent.length && other.length) assert.notEqual(d, recent[0].dawn, `seed ${seed}: the morning of the play before`);
+      }
+    }
+  }
+  // plays in a row, as the history hands them over (the evening first in each play's line,
+  // a rare on some: the morning is noted before the night, so the 60 characters always keep
+  // it): every evening new, and no two of any three plays in a row stand in the same light,
+  // evening and morning both
+  let sessions = 0;
+  for (let t = 0; t < 600; t++) {
+    const history: { m: string; sd: number; va?: string }[] = [];
+    let lastMood: MoodId | null = null;
+    const lights: string[] = [];
+    for (let k = 0; k < 5; k++) {
+      const seed = 5 + t * 5 + k;
+      const play = newPlay(MISSION, seed, k + 1);
+      const evening = playMood('gouden-uur', WILDCAMERA_MOODS, play, lastMood);
+      const recent = lastLights(history);
+      const cast = k % 2 ? ['das', 'ree', 'vos', 'nachtzwaluw'] : ['das', 'ree', 'vos', 'wildzwijn'];
+      const p = drawWildcameraPlay(play, { queueLength: 8, cast, evening, recentLights: recent });
+      assert.notEqual(p.dawn, evening);
+      const light = `${evening}+${p.dawn}`;
+      assert.ok(!lights.slice(-2).includes(light), `session ${t}, play ${k + 1}: the light of one of the last two plays again (${light}; ${lights.join(' | ')})`);
+      const v = variantOf(p);
+      const va = compactVariant({ mood: evening, ...(k % 3 === 1 ? { rare: 'witte-ree' } : {}), ws: v.ws, wx: v.wx, wd: v.wd, wn: v.wn, wa: v.wa });
+      assert.ok(va!.includes(`wd:${v.wd}`), `the morning's note is kept: ${va}`);
+      history.push({ m: MISSION, sd: seed, va }, { m: MISSION, sd: seed, va });
+      lastMood = evening;
+      lights.push(light);
+    }
+    sessions++;
+  }
+  assert.equal(sessions, 600);
+  assert.deepEqual(lastLights([
+    { m: MISSION, sd: 1, va: 'mood:bewolkt,ws:1,wx:0,wd:z,wn:dancvgrf' }, { m: MISSION, sd: 1, va: 'mood:bewolkt,ws:1,wx:0,wd:z,wn:dancvgrf' },
+    { m: 'frisling', sd: 2, va: 'mood:zonnig,wd:n' },
+    { m: MISSION, sd: 3, va: 'mood:ochtendnevel,rare:vosjes,ws:2,wx:v,wd:g,wn:rfvencda' },
+  ]), [{ evening: 'ochtendnevel', dawn: 'gouden-uur' }, { evening: 'bewolkt', dawn: 'zonnig' }], 'newest first, one per play');
+  assert.deepEqual(lastLights([{ m: MISSION, sd: 1, va: 'mood:bewolkt,ws:1,wx:0,wn:dancvgrf' }]), [], 'a play from before the album');
+});
+
+test('the rare ones of the crossing: the fox family and the white roe, by luck or surely by the third won play', () => {
+  const rares = ONTDEKKINGEN.filter((o) => o.home === MISSION && o.soort === 'zeldzaam').map((o) => o.id);
+  assert.deepEqual(rares.sort(), ['wildcamera.vosjes', 'wildcamera.witte-ree']);
+  const rows = ONTDEKKINGEN.filter((o) => o.home === MISSION);
+  assert.ok(rows.length >= 6, 'the badger, the fox, his own photo, the nose and two rare ones');
+  for (const o of rows) assert.ok(!/wolf/i.test(`${o.id} ${o.naam} ${o.naamKnap ?? ''} ${o.hint} ${o.model ?? ''}`), `${o.id}: no wolf`);
+  // a save's plays: won, the pity counter as the flow keeps it (core/discover nextRareCount)
+  for (let t = 0; t < 500; t++) {
+    let count = 0, dry = 0;
+    const found: Record<string, unknown> = {};
+    const kinds = new Set<string>();
+    for (let k = 0; k < 9; k++) {
+      const play = newPlay(MISSION, 7 + t * 9 + k, k + 1);
+      const r = rollRare({ home: MISSION, play, table: ONTDEKKINGEN, found, counts: { [MISSION]: count }, mood: 'bewolkt' });
+      if (r) { found[r.id] = {}; kinds.add(r.id); }
+      count = nextRareCount(count, { won: true, gotRare: !!r });
+      dry = r ? 0 : dry + 1;
+      if (Object.keys(found).length < 2) assert.ok(dry <= 2, `save ${t}: ${dry} won plays in a row without a rare`);
+    }
+    assert.equal(kinds.size, 2, `save ${t}: both rare ones within nine plays`);
+  }
+});
+
+test('the night\'s own photos keep the clock: the nose in the deep of the night, the roe at first light, the man at dawn — after any number of turns', () => {
+  const inRange = (t: string, a: string, b: string): boolean => t >= a && t <= b;
+  for (const turns of [1, 2, 3, 4]) {
+    for (const r of [0, 0.5, 0.99]) {
+      const c = new CameraClock(17 * 60 + 40, () => r);
+      // the aim round: photos, with its turns (night, day, night ...)
+      let night = false;
+      for (let i = 0; i < 10; i++) { c.photo(); if (i % 3 === 2 && i / 3 < turns) { night = !night; c.turn(night ? 'night' : 'day'); } }
+      // the night beat: a round that ended in the day runs into a night again
+      if (!night) c.turn('night');
+      const family = c.photo();
+      const before = c.minutes;
+      const deep = c.lateNight();
+      assert.ok(inRange(deep, '00:40', '03:59') && c.minutes > before, `${turns} turns: the nose at ${deep} (the family at ${family})`);
+      const light = c.firstLight();
+      assert.ok(inRange(light, '05:15', '05:59'), `${turns} turns: first light at ${light}`);
+      const man = c.dawnMan();
+      assert.ok(inRange(man, '05:52', '06:59') && man > light, `${turns} turns: the man at ${man}`);
+    }
+  }
 });
