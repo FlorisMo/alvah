@@ -795,6 +795,71 @@ export function spoorTrail(
   };
 }
 
+/**
+ * Run 7: a trail of the same prints along a WAY (a polyline round what lies between), a
+ * pair every `spacing` m, from `points[0]` to the last point. The first `crisp` prints are
+ * crisp (full opacity, 1.45× size: where the trail starts reads at once), the rest at
+ * `opacity` (the tracking knob's clarity), growing a little toward the end. Two draw calls.
+ */
+export function spoorPath(
+  points: readonly { x: number; z: number }[], groundY: (x: number, z: number) => number,
+  o: { opacity: number; size?: number; spacing?: number; crisp?: number },
+): { group: THREE.Group; count: number; dispose: () => void } {
+  const size = o.size ?? 1;
+  const spacing = Math.max(0.4, o.spacing ?? 1.1);
+  // the prints along the polyline, every `spacing` m (left, right, left …)
+  const at: { x: number; z: number; dx: number; dz: number; u: number }[] = [];
+  const cum = [0];
+  for (let i = 1; i < points.length; i++) cum.push(cum[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z));
+  const total = cum[cum.length - 1];
+  for (let d = 0, i = 1; total > 0 && d <= total + 1e-6; d += spacing) {
+    while (i < points.length - 1 && cum[i] < d) i += 1;
+    const a = points[i - 1], b = points[i];
+    const len = cum[i] - cum[i - 1] || 1;
+    const k = Math.min(1, Math.max(0, (d - cum[i - 1]) / len));
+    const dx = (b.x - a.x) / len, dz = (b.z - a.z) / len;
+    at.push({ x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, dx, dz, u: d / total });
+  }
+  const crisp = Math.min(at.length, o.crisp ?? 0);
+  const geo = new THREE.PlaneGeometry(0.17 * size, 0.2 * size);
+  geo.rotateX(-Math.PI / 2);
+  const make = (opacity: number): THREE.MeshStandardMaterial => new THREE.MeshStandardMaterial({
+    map: hoofTexture(), transparent: true, opacity, depthWrite: false, roughness: 1,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const mats = [make(1), make(o.opacity)];
+  const meshes = [new THREE.InstancedMesh(geo, mats[0], Math.max(1, crisp)), new THREE.InstancedMesh(geo, mats[1], Math.max(1, at.length - crisp))];
+  meshes[0].count = crisp;
+  meshes[1].count = at.length - crisp;
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+  const pos = new THREE.Vector3();
+  at.forEach((p, i) => {
+    const side = i % 2 === 0 ? 1 : -1;
+    const x = p.x + -p.dz * 0.1 * size * side, z = p.z + p.dx * 0.1 * size * side;
+    const ahead = groundY(x + p.dx * 0.12, z + p.dz * 0.12);
+    const behind = groundY(x - p.dx * 0.12, z - p.dz * 0.12);
+    e.set(Math.atan2(ahead - behind, 0.24), Math.atan2(-p.dx, -p.dz), 0, 'YXZ');
+    q.setFromEuler(e);
+    pos.set(x, groundY(x, z) + 0.035, z);
+    const s = i < crisp ? 1.45 : 0.85 + 0.15 * p.u;
+    m.compose(pos, q, new THREE.Vector3(s, 1, s));
+    if (i < crisp) meshes[0].setMatrixAt(i, m); else meshes[1].setMatrixAt(i - crisp, m);
+  });
+  const group = new THREE.Group();
+  for (const mesh of meshes) {
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.renderOrder = 2;
+    mesh.computeBoundingSphere();
+    group.add(mesh);
+  }
+  return {
+    group, count: at.length,
+    dispose: () => { geo.dispose(); for (const mat of mats) mat.dispose(); group.removeFromParent(); },
+  };
+}
+
 /* ----------------------------------------------------------------- reframe ---- */
 
 /**

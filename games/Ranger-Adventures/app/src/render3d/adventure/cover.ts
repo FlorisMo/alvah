@@ -17,7 +17,7 @@
 import * as THREE from 'three';
 import { heatherGeometry, plantMaterial } from '../world/Plants';
 import { stream } from './places';
-import type { Clump, Stem, PlantKind } from './cover-math';
+import { growStems, resetStems, type Clump, type Stem, type PlantKind } from './cover-math';
 
 /* --------------------------------------------------------------- geometry ---- */
 
@@ -193,6 +193,8 @@ export class CoverField {
   private readonly phase: number[] = [];
   private readonly hidden = new Set<number>();
   private readonly geos: THREE.BufferGeometry[] = [];
+  /** the stems as grown (a glimpse window opened for one spot is closed again: `reset`) */
+  private readonly built: readonly Stem[];
   private dirty = true;
   private idleFor = 0;
   private readonly _m = new THREE.Matrix4();
@@ -206,53 +208,18 @@ export class CoverField {
   constructor(o: CoverFieldOpts) {
     this.clumps = o.clumps;
     this.group.name = 'cover-field';
-    const rnd = stream(o.seed);
-    const add = (kind: PlantKind, clump: number, x: number, z: number, h: number, yaw: number, extra: { s?: number; pitch?: number; tint?: THREE.Color } = {}): void => {
-      const y = o.groundY(x, z) - 0.02;
-      const reach = kind === 'frond' ? 0.55 * h : kind === 'tussock' ? 0.0 : 0;
-      const stem: Stem = {
-        kind, x, y, z, h, clump, yaw,
-        lx: Math.sin(yaw) * reach, lz: Math.cos(yaw) * reach,
-        r: kind === 'frond' ? 0.2 * h : kind === 'tussock' ? 0.3 * h : 0.38 * (extra.s ?? 1),
-      };
-      const idx = this.stems.length;
+    // the plants, grown the one pure way (cover-math growStems: a places test measures the
+    // glimpse of this very stand)
+    const grown = growStems(o.clumps, o.seed, o.groundY);
+    this.built = grown.stems.map((s) => ({ ...s }));
+    grown.stems.forEach((stem, idx) => {
+      const look = grown.looks[idx];
       this.stems.push(stem);
-      this.where.push({ kind, i: -1, s: extra.s ?? h, sy: h, pitch: extra.pitch ?? 0 });
+      this.where.push({ kind: stem.kind, i: -1, s: look.s, sy: look.sy, pitch: look.pitch });
       this.motion.push({ sway: 0, swayT: 0, lean: 0, leanTo: 0, hold: 0, ax: 0, az: 0 });
-      this.phase.push(rnd() * Math.PI * 2);
-      (this.byClump[clump] ??= []).push(idx);
-      if (extra.tint) (this.where[idx] as { tint?: THREE.Color }).tint = extra.tint;
-    };
-    o.clumps.forEach((c, ci) => {
-      const s = c.size;
-      const turn = rnd() * Math.PI * 2;
-      if (c.kind === 'dead') {
-        // a low mound of rust-brown dead fronds, drooping
-        const brown = new THREE.Color(1.75, 0.72, 0.5);
-        for (let k = 0; k < 4; k++) {
-          const a = turn + k * 1.7;
-          add('frond', ci, c.x + Math.cos(a) * 0.08, c.z + Math.sin(a) * 0.08, (0.55 + rnd() * 0.12) * s, a + 0.4,
-            { pitch: 0.28 + rnd() * 0.12, tint: brown.clone().multiplyScalar(0.9 + rnd() * 0.2) });
-        }
-        return;
-      }
-      if (c.kind === 'mix' || c.kind === 'grass') {
-        add('tussock', ci, c.x, c.z, (0.58 + rnd() * 0.26) * s, turn, { s: (0.62 + rnd() * 0.22) * s });
-        if (c.kind === 'grass' && rnd() < 0.5) {
-          const a = turn + 2.2;
-          add('tussock', ci, c.x + Math.cos(a) * 0.3 * s, c.z + Math.sin(a) * 0.3 * s, (0.5 + rnd() * 0.2) * s, a, { s: 0.55 * s });
-        }
-      }
-      if (c.kind === 'mix' || c.kind === 'bracken') {
-        const n = c.kind === 'bracken' ? 5 : 3;
-        for (let k = 0; k < n; k++) {
-          const a = turn + (k / n) * Math.PI * 2 + rnd() * 0.6;
-          const off = 0.1 + rnd() * 0.14;
-          add('frond', ci, c.x + Math.cos(a) * off, c.z + Math.sin(a) * off, (0.88 + rnd() * 0.3) * s, a + (rnd() - 0.5) * 0.8,
-            { tint: new THREE.Color().setRGB(0.92 + rnd() * 0.16, 0.92 + rnd() * 0.16, 0.9 + rnd() * 0.1) });
-        }
-      }
-      if (rnd() < 0.12) add('heath', ci, c.x + 0.3, c.z - 0.2, 0.4 * s, turn, { s: 0.8 * s });
+      this.phase.push(look.phase);
+      (this.byClump[stem.clump] ??= []).push(idx);
+      if (look.tint) (this.where[idx] as { tint?: THREE.Color }).tint = new THREE.Color().setRGB(look.tint[0], look.tint[1], look.tint[2]);
     });
     // the meshes: one per kind of plant, every stem one instance
     const geoOf: Record<PlantKind, () => THREE.BufferGeometry> = {
@@ -340,6 +307,15 @@ export class CoverField {
 
   /** Stems edited by the maths (a glimpse window) are drawn as edited. */
   refresh(): void { this.dirty = true; }
+
+  /** Run 7: every stem back to its built height (a window opened for one hiding spot is
+   *  closed before another's opens), drawn at once; returns the stems it changed. */
+  reset(): number[] {
+    const changed = resetStems(this.stems, this.built);
+    for (const i of changed) { this.growing.delete(i); this.drawnH.delete(i); }
+    this.dirty = true;
+    return changed;
+  }
 
   /** Stems the maths made smaller since they were drawn grow down to it calmly over
    *  `secs` (a window opened for a lens that differs a little from the one planned). */

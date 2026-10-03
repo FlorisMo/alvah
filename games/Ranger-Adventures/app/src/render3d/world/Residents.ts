@@ -42,8 +42,11 @@ export interface DressingEnv {
    *  prints, puffs of earth): it rests sooner than the home (`DETAIL_NEAR`/`DETAIL_FAR`
    *  from `at`, so it never fades in right beside the ranger) and is drawn while the home
    *  is borrowed. Never a piece that fades its own materials (the rest fade writes their
-   *  opacity). */
-  detail(at: { x: number; z: number }): THREE.Object3D;
+   *  opacity). Run 7: `reach` (near, far m) rests it by its own distance instead (a stand
+   *  of bracken 1 m tall, out on its own: a home's reach, from its own spot), and with
+   *  `own` it keeps resting by that distance while the home is borrowed too (one of a
+   *  home's three stands, where this play does not go). */
+  detail(at: { x: number; z: number }, reach?: { near: number; far: number; own?: boolean }): THREE.Object3D;
   /** where the lens will stand for a framed view (a Stage fit with an anchor, on a
    *  1280×800 screen): a stand opens its glimpse window for the search's eye */
   lensFor(view: FrameView): { cam: { x: number; y: number; z: number }; look: { x: number; y: number; z: number } };
@@ -108,7 +111,7 @@ interface Home {
   group: THREE.Group;
   /** its small things (`DressingEnv.detail`), each group by its own spot: they rest
    *  sooner than `group` */
-  details: { group: THREE.Group; at: { x: number; z: number }; rest: FarRest }[];
+  details: { group: THREE.Group; at: { x: number; z: number }; rest: FarRest; own?: boolean }[];
   dressing: HomeDressing | null;
   actors: Map<string, Actor>;
   state: HomeState;
@@ -123,7 +126,9 @@ interface Home {
   gen: number;
   /** each resident's steady mover id (`<mission>:<key>`), made once */
   ids: Map<string, string>;
-  /** run 7: a play's own spots for its residents (`repose`), per state, over the spec's */
+  /** run 7: a play's own spots for its residents, per state, over the spec's — one
+   *  resident at a time (`repose`: the calf's stand, the doe's graze spot) or a home's
+   *  whole layout at once (`layout`: a family at its mud, the nook the lost one lies in) */
   poses: Map<string, Partial<Record<HomeState, ResidentPose>>>;
   /** run 7: a play's own cover for a shy resident (`repose` opts.cover), per state */
   covers: Map<string, Partial<Record<HomeState, Shy['to']>>>;
@@ -173,8 +178,8 @@ export class Residents {
     group.name = `home-${spec.missionId}`;
     this.env.scene.add(group);
     const details: Home['details'] = [];
-    const detail = (at: { x: number; z: number }): THREE.Object3D => {
-      const d = { group: new THREE.Group(), at: { x: at.x, z: at.z }, rest: new FarRest(DETAIL_NEAR, DETAIL_FAR) };
+    const detail = (at: { x: number; z: number }, reach?: { near: number; far: number; own?: boolean }): THREE.Object3D => {
+      const d = { group: new THREE.Group(), at: { x: at.x, z: at.z }, rest: new FarRest(reach?.near ?? DETAIL_NEAR, reach?.far ?? DETAIL_FAR), own: reach?.own };
       d.group.name = `home-${spec.missionId}-detail`;
       this.env.scene.add(d.group);
       details.push(d);
@@ -258,7 +263,24 @@ export class Residents {
     return shy && to ? { ...shy, to } : shy;
   }
 
-  /** A resident's pose in a state: this play's (`repose`), else its spec's. */
+  /**
+   * Run 7: THIS play's poses for some of a home's residents (a family's layout at its mud,
+   * the nook the lost one lies in), in place of the spec's, for the state(s) given — until
+   * cleared (`null`). A home nobody borrows is laid out again at once: a calm walk within
+   * reach (`walk`: per resident), a cut beyond (as `setState`). A borrowed home keeps them
+   * for its release.
+   */
+  layout(missionId: string, poses: Readonly<Record<string, Partial<Record<HomeState, ResidentPose>>>> | null, walk: boolean | ((key: string) => boolean) = true): void {
+    const home = this.homes.get(missionId);
+    if (!home) return;
+    home.poses.clear();
+    for (const [k, p] of Object.entries(poses ?? {})) home.poses.set(k, p);
+    if (home.borrowed) return;
+    const reduced = this.env.reduced();
+    this.lay(home, home.state, (key) => !reduced && (typeof walk === 'function' ? walk(key) : walk));
+  }
+
+  /** A resident's pose in a state: this play's (`repose`, `layout`), else its spec's. */
   private poseOf(home: Home, r: ResidentSpec, state: HomeState): ResidentPose | null {
     return home.poses.get(r.key)?.[state] ?? (state === 'before' ? r.before : r.after);
   }
@@ -273,7 +295,7 @@ export class Residents {
     // a borrowed home is where the mission plays: it is drawn, however far the lens
     home.rest.hold();
     restFar(home.group, 1);
-    for (const d of home.details) { d.rest.hold(); restFar(d.group, 1); }
+    for (const d of home.details) if (!d.own) { d.rest.hold(); restFar(d.group, 1); }
     return {
       missionId,
       actors: Object.fromEntries(home.actors),
@@ -291,13 +313,14 @@ export class Residents {
     this.lay(home, state, fresh && !this.env.reduced());
   }
 
-  /** Put every animal of a home at its spot in `state`: a calm walk, or at once. */
-  private lay(home: Home, state: HomeState, walk: boolean): void {
+  /** Put every animal of a home at its spot in `state`: a calm walk, or at once (`walk`
+   *  may say it per resident). */
+  private lay(home: Home, state: HomeState, walkAll: boolean | ((key: string) => boolean)): void {
     home.state = state;
     home.gen += 1;
     home.reacting.clear();
-    home.dressing?.setState(state, walk);
-    for (const r of home.spec.residents) this.layOne(home, r, state, walk);
+    home.dressing?.setState(state, typeof walkAll === 'function' ? true : walkAll);
+    for (const r of home.spec.residents) this.layOne(home, r, state, typeof walkAll === 'function' ? walkAll(r.key) : walkAll);
   }
 
   /** Put one animal of a home at its spot in `state`: a calm walk, or at once. */
@@ -369,7 +392,7 @@ export class Residents {
       const k = home.rest.step(d, dt, reduced);
       restFar(home.group, k);
       for (const q of home.details) {
-        const kd = q.rest.step(home.borrowed ? 0 : Math.hypot(q.at.x - lx, q.at.z - lz), dt, reduced);
+        const kd = q.rest.step(home.borrowed && !q.own ? 0 : Math.hypot(q.at.x - lx, q.at.z - lz), dt, reduced);
         restFar(q.group, Math.min(k, kd));
       }
       if (k <= 0) continue;
