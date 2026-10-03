@@ -71,6 +71,11 @@ const COAT_TINT: Record<string, CoatTint> = {
   // (play/spawn), a leucistic roe: creamy white, its eyes, nose and hooves still dark
   // (a real, if rare, Veluwe sight; spawned for one play, its own materials)
   'witte-ree': { color: '#f1ece2', strength: 1, pale: true },
+  // run 7 (the squirrel's neighbours): the raven GLB is a pale grey bird with black wings
+  // (it read as a white crow on the snag once its home's own darkening went, one root);
+  // dossier: "geheel zwart, met een blauwige glans" — a soft near-black, not a hole: the
+  // world's animal fill still lights its shaded side
+  'animal-raaf-raven': { color: '#2e2d34', strength: 0.82 },
 };
 
 /**

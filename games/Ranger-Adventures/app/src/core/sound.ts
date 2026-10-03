@@ -168,6 +168,11 @@ const CALLS: Record<string, CallSpec> = {
   // whistle twice; the great spotted woodpecker's drumming, a quick soft roll of knocks
   buizerd:       { freq: 1650, dur: 0.78, type: 'sine', rep: 2, sweep: 0.62, peak: 0.07 },
   specht:        { freq: 1300, dur: 0.75, type: 'triangle', drum: 15, peak: 0.09 },
+  // run 7 (the squirrel's neighbours): the great spotted woodpecker on its bark drums a
+  // roll; the nuthatch's "tuuit tuuit tuuit", three clear whistles each rising — a sound
+  // of its own beside the great tit's "ti-ta" (the two never call together)
+  'grote-bonte-specht': { freq: 1250, dur: 0.8, type: 'triangle', drum: 16, peak: 0.1 },
+  boomklever:    { freq: 1250, dur: 0.15, type: 'sine', notes: [1250, 1250, 1250], sweep: 1.45, peak: 0.13 },
 };
 const DEFAULT_CALL: CallSpec = { freq: 440, dur: 0.3, type: 'sine', rep: 2 };
 
@@ -217,12 +222,24 @@ function drumRoll(spec: CallSpec, bus: AudioNode): void {
   }
 }
 
-function playCall(id: string, out?: AudioNode): number {
+function playCall(id: string, out?: AudioNode, max?: number): number {
   const a = ac();
   if (!a) return 0.3;
   stopCurrentCall(a); // one animal at a time: a new call gently ends the last one
   const bus = a.createGain();
   bus.connect(out ?? a.destination);
+  const dur = playCallOn(a, bus, id);
+  // run 7 (additive): held to `max` s — the rest fades out softly, as a call cut short
+  if (max !== undefined && dur > max) {
+    const t0 = a.currentTime;
+    bus.gain.setValueAtTime(1, t0 + Math.max(0, max - CALL_CUT));
+    bus.gain.linearRampToValueAtTime(0, t0 + max);
+    return max;
+  }
+  return dur;
+}
+
+function playCallOn(a: AudioContext, bus: GainNode, id: string): number {
   const sample = sampleBuffers.get(id);
   if (sample) {
     const t0 = a.currentTime;
@@ -385,7 +402,7 @@ export const Sound = {
    * (past `reach` m: a call a story wants followed from far off carries further).
    * One call at a time, like `call`. Returns its duration (s), 0 when out of earshot.
    */
-  callAt(id: string, x: number, z: number, listener: { x: number; z: number; yaw: number }, reach = 25): number {
+  callAt(id: string, x: number, z: number, listener: { x: number; z: number; yaw: number }, reach = 25, max?: number): number {
     const a = ac();
     if (!a) return 0;
     const { pan, gain } = placeCall(x, z, listener, reach);
@@ -394,7 +411,7 @@ export const Sound = {
     g.gain.value = gain;
     const p = typeof a.createStereoPanner === 'function' ? a.createStereoPanner() : null;
     if (p) { p.pan.value = pan; g.connect(p); p.connect(a.destination); } else g.connect(a.destination);
-    return playCall(id, g);
+    return playCall(id, g, max);
   },
   /** leaves and stems moving: a short, soft, band-passed rustle */
   rustle(): void {
@@ -428,14 +445,13 @@ export const Sound = {
     noiseBurst(0.03, 'highpass', 3000, 0.7, 0.06);
     noiseBurst(0.04, 'bandpass', 2000, 0.9, 0.05, 0.07);
   },
-  /** the duration (s) of an animal's call — for scheduling the listen phase */
-  callDur(id: string): number {
+  /** the duration (s) of an animal's call — for scheduling the listen phase (run 7,
+   *  additive: held to `max` s, as `callAt` holds it) */
+  callDur(id: string, max?: number): number {
     const sample = sampleBuffers.get(id);
-    if (sample) return sample.dur;
     const spec = CALLS[id] ?? DEFAULT_CALL;
-    if (spec.drum) return spec.dur;
-    const count = spec.notes?.length ?? spec.rep ?? 1;
-    return count * (spec.dur + spec.dur * 0.45);
+    const d = sample ? sample.dur : spec.drum ? spec.dur : (spec.notes?.length ?? spec.rep ?? 1) * (spec.dur + spec.dur * 0.45);
+    return max !== undefined ? Math.min(d, max) : d;
   },
   /** the audio pipeline calls this to swap a synth motif for a real recording:
    *  it keeps only the calm snippet of the recording, levelled (child:B1) */
