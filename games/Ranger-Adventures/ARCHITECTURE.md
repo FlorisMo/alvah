@@ -121,7 +121,10 @@ adventure/squirrel.ts    Squirrel (an Actor): the static squirrel mesh brought t
 adventure/places.ts      frames, headings, local↔world (pure)
 adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: where it
                          happens), <id>.home.ts (the home's dressing), <id>.ts (the beats);
-                         frisling (the wallow), ree (the copse, the meadow, the hide),
+                         frisling (the wallow), ree (the copse, the meadow, the hide; run 7:
+                         ree.variety.ts its seeded mornings, growth and watch script,
+                         ree.window.ts the calf's glimpse fitted to the level both ways,
+                         for the lens the search really frames: `searchBeat`'s `fit`),
                          wildcamera (the crossing, the glade, the thicket, the snare; its
                          trap photos in wildcamera.photos.ts; run 7: wildcamera.variety.ts
                          draws how each visitor comes (side + stop) and the night choir's
@@ -148,7 +151,8 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   the reunion under its line; `k.dispose(state)` (the flow calls it) hands the home back.
 - *the lens*: `await k.frame({ at, heading, halfW, halfD, pitchDeg, include }, { face })`
   holds a framed view (a Stage fit at a world anchor, the ranger's spot among `include`),
-  eased, ≤ 90°/s, a cut under reduced motion; `k.free()` gives the follow camera back with a
+  eased, ≤ 90°/s, a cut under reduced motion (run 7: `{ dip: true }` — a view that would turn
+  more than 90° is one soft dip-cut, the jeep's warm veil, never a swing round him); `k.free()` gives the follow camera back with a
   blended hand-over; `await k.look(spot, line, hold, { turn })` is one calm look
   (binoculars) and back (`turn`: he ends facing it); `k.ui.watching(on)` draws a long
   watch through the glasses' two round lenses (the ree's hide; under the cards, no zoom).
@@ -168,7 +172,10 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   the ranger, so the card makes way first and its line follows); `.still(id, { line, hands |
   feet, tempt, wrong, right })` plays an encounter with the BODY instead of a card (keep your
   hands off the animal, or your feet still: a reach is the wrong answer, the same moment comes
-  back; the pure core is `beats/hold-math.ts`); `.answer(id, goed)` answers the next
+  back; the pure core is `beats/hold-math.ts`); run 7: `.go(id, { line, family, to, via, doel,
+  hush, wrong, right })` plays the flip with his FEET — he walks away himself (`GoCore`: 4 m off
+  at a walk and farther from the animals; standing the level's `goWaitS` or 2.5 m closer is the
+  old rule, the moment comes back; running is neither); `.answer(id, goed)` answers the next
   encounter from what his feet did on a walk (the ree's pool: a boot in the water, or round
   it dry), the same `DagnachtRun` trial; `await k.fact(i)` shows the raaf's card. The 2D
   floor plays every encounter as a card, in the same content order.

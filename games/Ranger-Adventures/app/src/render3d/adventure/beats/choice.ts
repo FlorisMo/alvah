@@ -27,6 +27,11 @@
  * home plays them with `next()` / `nextIn(slot)` instead of naming them in content order.
  * A body moment's hold and its temptations come from the level's knobs and grow or ease
  * inside the beat (`RustTempo`); the summary carries the longest hold (`holdS`).
+ *
+ * Run 7 (ree-growth, additive): an encounter can also be answered by WALKING AWAY (`go`:
+ * the flip "Nu mag het wél" played with his feet — the mother is back, he walks off
+ * himself; standing the level's `goWaitS` or walking up to them is the old rule). The pure
+ * core is `GoCore` (hold-math.ts); the 2D floor still asks it as a card.
  */
 
 import * as THREE from 'three';
@@ -39,7 +44,11 @@ import { zinnen } from '../../../core/readlevel';
 import { anchoredPrompt, clearPlayHint, SPEAK_BTN } from '../../play/kit';
 import { tapHitRadius } from '../../play/kit-math';
 import type { AdventureKit } from '../kit';
-import { HoldCore, RustTempo, readSeconds } from './hold-math';
+import type { RustKnobs } from '../../../core/skill';
+import type { IconName } from '../../../ui/icons';
+import type { Place, Spot } from '../types';
+import { isRunning } from '../actors-math';
+import { GoCore, HoldCore, RustTempo, readSeconds } from './hold-math';
 
 const ESC: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ESC[c] ?? c);
@@ -83,6 +92,37 @@ export interface StillOpts {
   right?: () => Promise<unknown> | void;
 }
 
+/** A rustkracht moment answered by WALKING AWAY (`ChoiceRun.go`, run 7). */
+export interface GoOpts {
+  /** the one objective line: what to do (≤ 7 words a sentence, read aloud; it comes back
+   *  after a wrong answer) */
+  line: string;
+  /** where the animals are now (each frame: the nearer of them) */
+  family: () => Spot;
+  /** where he walks to (golden's hint, the chip's goal) and the way there round what
+   *  stands in it; the moment is answered long before he is there (`away` m) */
+  to: Place | Spot;
+  via?: readonly Spot[];
+  /** the chip: where, in words; the cue under it; its sign */
+  doel: string;
+  cue?: string;
+  glyph?: IconName;
+  /** said when he runs (running counts as neither); `onRun`: the animals hear it */
+  hush: string;
+  onRun?: () => void;
+  /** GoCore's rule: metres away (default 4), seconds of standing (default the level's
+   *  `goWaitS`), metres closer (default 2.5) */
+  away?: number;
+  waitS?: number;
+  closer?: number;
+  /** what the old rule did, said after the animals' reaction (default the encounter's gevolg) */
+  mis?: string;
+  /** he stood too long or came closer: what the animals do (awaited before the line comes back) */
+  wrong?: (why: 'stay' | 'closer') => Promise<unknown> | void;
+  /** he walked away: what happens next (awaited before `go` resolves) */
+  right?: () => Promise<unknown> | void;
+}
+
 /** The keys that would take a step (as the ree's watch reads them). */
 const STEP_KEYS = /^(Arrow(Up|Down|Left|Right)|Key[WASD])$/;
 
@@ -106,6 +146,8 @@ export class ChoiceRun {
   private readonly k: AdventureKit;
   private readonly step: number;
   private readonly tempo: RustTempo;
+  /** the level's rustkracht knobs (a go moment's wait) */
+  private readonly knobs: RustKnobs;
   /** the two answers' places on a card (position never cues the answer; seeded) */
   private readonly sides: () => number;
   private logged = false;
@@ -115,6 +157,7 @@ export class ChoiceRun {
     this.step = step;
     const settings = store.get().settings;
     const knobs = k.knobs('dagnacht');
+    this.knobs = knobs;
     // run 7: this play's order of the calm moments, never his last two plays' (its 2D twin
     // and the classic stage draw the same)
     this.trial = playDagnachtTrial(k.steps[step].skin, { jargon: settings.jargon, reducedMotion: k.reduced, ...knobs }, k.play, store.get().geschiedenis);
@@ -287,6 +330,109 @@ export class ChoiceRun {
     if (!store.get().settings.voorlezen) { await calm; return; }
     const words = line.split(/\s+/).length;
     await Promise.all([calm, k.guard(narrator.quiet(words * 700 + 2000))]);
+  }
+
+  /**
+   * Run 7: play encounter `id` (next in this play's order) by WALKING AWAY — the flip, "Nu
+   * mag het wél" with his feet: the line says go (read aloud), his input is free, the chip
+   * names where and golden's hint walks there. Once the line is read, `GoCore` reads his
+   * feet: `away` m off at a walk and farther from the animals is the right answer (the good
+   * line, then `right`); standing the level's `goWaitS` (the old rule, "Blijf staan") or
+   * walking `closer` m up to them is the wrong one (`choose(false)`, marked once): the
+   * animals react, the encounter's words, and the same moment comes back from where he
+   * is. Running says `hush` and counts as neither. Never a fail.
+   */
+  async go(id: string, o: GoOpts): Promise<void> {
+    const enc = this.current;
+    if (!enc || enc.id !== id) throw new Error(`[adventure] choice "${id}" asked out of order (next: ${enc?.id ?? 'none'})`);
+    const k = this.k;
+    k.check();
+    clearPlayHint();
+    const settings = store.get().settings;
+    const core = new GoCore({ waitS: o.waitS ?? this.knobs.goWaitS, ...(o.away ? { away: o.away } : {}), ...(o.closer ? { closer: o.closer } : {}) },
+      (goed) => { this.run.choose(goed); });
+    k.stats[`go_${id}_wait`] = core.rule.waitS;
+    const here = (): Spot => { const m = k.ranger(); return { x: m.x, z: m.z }; };
+    let from = here();
+    let read = false, reacting = false;
+    const readLine = (): void => { read = false; void this.readOut(o.line).then(() => { read = true; }, () => {}); };
+    readLine();
+    const react = async (why: 'stay' | 'closer'): Promise<void> => {
+      k.stats[`go_${id}`] = core.wrongs;
+      k.stats[`go_${id}_${why}`] = (k.stats[`go_${id}_${why}`] ?? 0) + 1;
+      if (settings.geluid) Sound.tryAgain();
+      k.say(null);
+      await k.guard(Promise.resolve(o.wrong?.(why)));
+      const mis = o.mis ?? enc.gevolg ?? 'Wacht even. Probeer het anders.';
+      k.say(mis);
+      await this.readOut(mis, 1.6);
+      // the same moment again, from where he is now
+      core.again();
+      from = here();
+      k.say(o.line);
+      readLine();
+      reacting = false;
+    };
+    let heading = k.ranger().heading, turnedAt = -9;
+    // (a walk key or the stick held: he is trying to walk, even when a bush stops him)
+    const held = new Set<string>();
+    let pointers = 0;
+    const onKeyDown = (e: KeyboardEvent): void => { if (STEP_KEYS.test(e.code)) held.add(e.code); };
+    const onKeyUp = (e: KeyboardEvent): void => { held.delete(e.code); };
+    const onPtrDown = (): void => { pointers += 1; };
+    const onPtrUp = (): void => { pointers = Math.max(0, pointers - 1); };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('pointerdown', onPtrDown, true);
+    window.addEventListener('pointerup', onPtrUp, true);
+    window.addEventListener('pointercancel', onPtrUp, true);
+    const unlisten = (): void => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('pointerdown', onPtrDown, true);
+      window.removeEventListener('pointerup', onPtrUp, true);
+      window.removeEventListener('pointercancel', onPtrUp, true);
+    };
+    const tick = (): void => {
+      const m = k.ranger();
+      // (he is turning round: his heading moved within the last half second)
+      const dh = Math.abs(Math.atan2(Math.sin(m.heading - heading), Math.cos(m.heading - heading)));
+      heading = m.heading;
+      if (dh > 0.004) turnedAt = k.now;
+      if (reacting) return;
+      if (core.phase === 'read' && read) core.begin(k.now, from, o.family());
+      const trying = held.size > 0 || pointers > 0;
+      if (core.tick(k.now, { x: m.x, z: m.z, speed: m.speed, running: isRunning(m), turning: k.now - turnedAt < 0.5, trying }, o.family()) === 'wrong') {
+        reacting = true;
+        void react(core.why ?? 'stay').catch(() => {});
+      }
+    };
+    const walk = k.walk({
+      name: `go-${id}`, to: o.to, r: 0.6, line: o.line, doel: o.doel, cue: o.cue, glyph: o.glyph, via: o.via,
+      quiet: { line: o.hush, onRun: o.onRun }, reached: () => core.phase === 'done', tick,
+    });
+    k.beat = `go:${id}`; // (a moment, not a walk: a discovery's reveal waits)
+    try {
+      await walk;
+      // (there before his feet were judged — he walked on while the animals reacted or the
+      // line was read: it is judged where he stands, as soon as it may be)
+      if (core.phase !== 'done') {
+        const unhint = k.hint(() => ({ id: `walk:go-${id}:there`, walk: { x: o.to.x, z: o.to.z, r: 0.5 } }));
+        try { await k.until(() => { tick(); return core.phase === 'done'; }); } finally { unhint(); }
+      }
+    } finally {
+      unlisten();
+    }
+    // (answered: he stops where he is, the good words, then what follows)
+    k.lockFollow();
+    k.world.stopRanger();
+    k.stats[`go_${id}`] = core.wrongs;
+    k.stats[`go_${id}_s`] = Math.round(k.now);
+    if (settings.geluid) Sound.correct();
+    const good = enc.uitleg ?? 'Rustig zo.';
+    k.say(good, { good: true });
+    await this.readOut(good, 1.6);
+    await k.guard(Promise.resolve(o.right?.()));
   }
 
   /**

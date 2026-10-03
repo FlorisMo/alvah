@@ -10,10 +10,11 @@
  *
  * It stands before the mission and after it (a place, not a prop that vanishes). Run 7:
  * every play lays its own morning under the briefing card (`layPlay`): the grass of every
- * stand stands as built again, the calf's stand opens a small window over its back for
- * the search's lens (cover-math `openWindow`: its spotted back glimpsed between the stems,
- * never more), the trial's look-alikes stand in that stand, the pool lies on this play's
- * way and her path is worn where this play's prints run.
+ * stand stands as built again, the calf's stand is fitted to the level's share of its back
+ * for the search's lens (ree.window.ts `fitWindow`: a small window opened over it, or its
+ * tussocks a little fuller where the grass showed more), the trial's look-alikes stand in
+ * that stand, the pool lies on this play's way and her path is worn where this play's
+ * prints run.
  */
 
 import * as THREE from 'three';
@@ -21,7 +22,8 @@ import type { Distractor } from '../../../content/types';
 import type { DressingEnv, HomeDressing } from '../../world/Residents';
 import type { HomeState } from '../types';
 import { CoverField, moorGrassGeometry } from '../cover';
-import { backPoints, openWindow, standClumps, visibleShare, type Clump, type V3 } from '../cover-math';
+import { backPoints, standClumps, visibleShare, type Clump, type V3 } from '../cover-math';
+import { fitWindow, refitWindow } from './ree.window';
 import { StandDecoys, decoyClumps, type Decoy, type DecoyAt } from '../decoys';
 import { groundDecal, groundStrip } from '../decal';
 import { atLocal, dist, segDist, stream, toLocal } from '../places';
@@ -36,7 +38,7 @@ import { Sound } from '../../../core/sound';
 import type { ReeLayoutId } from './ree.variety';
 import {
   juniperR, REE_LAYOUTS, LAYOUTS, FRINGE, COPSE, THICKET, COPSE_TREES, DOE_BED, CALF_BED, CALF_DOELEN, POOL, WISSEL_HALF,
-  REE_RESIDENTS, calfAt, calfTalkOf, onStand, wisselLine, type Cover, type PoolSpot, type ReeLayout,
+  REE_RESIDENTS, calfAt, calfTalkOf, onStand, wisselLine, type Cover, type PoolSpot, type ReeLayout, type ViewSpec,
 } from './ree.places';
 
 /** The sky overhead that a small pool mirrors when it is seen from above (the ven, seen
@@ -77,8 +79,8 @@ const LIGHT_BLADES = 5;
  *  hide, 8-12 m off: the search and the calm moments always see it whole). */
 const LEFT_BLADES = 26;
 
-/** The share of the calf's back the search's lens glimpses between the stems (run 7: P1's
- *  fixed value; the level's knob from ree-growth on). */
+/** The share of the calf's back the search's lens glimpses between the stems in free roam,
+ *  before any play (a play lays the level's: `k.knobs('zoeken').glimpse`, fitted). */
 export const SEARCH_GLIMPSE = 0.35;
 
 /** The tussocks close round every spot a calf may lie in (u, v off the spot in its stand's
@@ -153,6 +155,40 @@ interface Ring { mesh: THREE.Mesh; t: number; delay: number; max: number }
  *  (a small field of their own). */
 interface PoolBuilt { spot: PoolSpot; meshes: THREE.Mesh[]; rushes: CoverField }
 
+/** A framed view as the kit's lens takes it (kit.ts `lensFor`): a spot to include with a
+ *  width `r` is two spots, `r` m either side of it across the view (the dressing's lens,
+ *  World.frameLens, takes each spot as one point). So the lens a play's window is fitted
+ *  for under the briefing card is the lens the search frames when he stands where planned
+ *  (review r1: the two differed by 5-60 cm, a back point or two of the calf's glimpse). */
+export function asTheKitFrames(v: ViewSpec): ViewSpec {
+  const right = { x: -Math.cos(v.heading), z: Math.sin(v.heading) };
+  return {
+    ...v,
+    include: v.include?.flatMap((q) => {
+      const r = q.r ?? 0;
+      return r > 0 ? [-r, r].map((u) => ({ x: q.x + right.x * u, z: q.z + right.z * u, h: q.h })) : [{ x: q.x, z: q.z, h: q.h }];
+    }),
+  };
+}
+
+/** Points over a standing doe (a share along her length from her middle, a share of her
+ *  height): her rump, back, chest, neck and head — what a child sees of a deer first. */
+const DOE_POINTS: readonly (readonly [number, number])[] = [[-0.32, 0.62], [0, 0.68], [0.28, 0.66], [0.4, 0.8], [0.48, 0.93]];
+
+/** A juniper as it is drawn: a round bush (an ellipsoid) `rw` m round, `h` tall. */
+interface Bush { x: number; y: number; z: number; h: number; rw: number }
+
+/** Does the line from `a` to `b` pass through the bush? */
+function throughBush(a: V3, b: V3, k: Bush): boolean {
+  const sy = k.rw / (k.h / 2); // (the bush squashed to a ball)
+  const cy = k.y + k.h / 2;
+  const ax = a.x - k.x, ay = (a.y - cy) * sy, az = a.z - k.z;
+  const dx = b.x - a.x, dy = (b.y - a.y) * sy, dz = b.z - a.z;
+  const L = dx * dx + dy * dy + dz * dz || 1;
+  const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy + az * dz) / L));
+  return Math.hypot(ax + dx * t, ay + dy * t, az + dz * t) < k.rw;
+}
+
 /** What a play lays (ree.ts `prepare`). */
 export interface ReeLaid {
   layout: ReeLayout;
@@ -190,6 +226,8 @@ export class ReeHome implements HomeDressing {
   /** every stand's stems as they were built (a play's glimpse window is opened from these) */
   private readonly built = new Map<ReeLayoutId, { h: number; lx: number; lz: number; r: number }[]>();
   private readonly spawned: { dispose(): void }[] = [];
+  /** every juniper as drawn (the copse's, the thicket's, the hides'): what may hide the doe */
+  private readonly bushes: Bush[] = [];
   /** the far copies' material (vertex colours, its own: a home's rest fades it) and the
    *  height each kind's copy was baked at */
   private readonly farMat = lodMaterial().clone();
@@ -338,6 +376,8 @@ export class ReeHome implements HomeDressing {
         this.spawned.push(s);
       });
       env.obstacles.push({ x, z, r: juniperR(h) });
+      // (its round bush as drawn: the model's width at this height, slimmed)
+      this.bushes.push({ x, y: g(x, z), z, h, rw: (SIZE.jeneverbes.w / 2) * (h / SIZE.jeneverbes.h) / JUNIPER_TALL * JUNIPER_SLIM });
     };
     for (const j of [...COPSE.junipers, ...THICKET.junipers]) bush(j.x, j.z, j.h, j.turn);
     LAYOUTS.forEach((l, i) => bush(l.hideJuniper.x, l.hideJuniper.z, l.hideJuniper.h, 1.3 + i * 1.7));
@@ -433,14 +473,15 @@ export class ReeHome implements HomeDressing {
       });
       field.refresh();
     }
-    // the glimpse window: from the search's lens, a little of the calf's back shows
-    const lens = this.env.lensFor(l.views.search);
+    // the glimpse window: from the search's lens, a little of the calf's back shows (the
+    // lens as the search frames it: the kit's, with him where he stands to search)
+    const lens = this.env.lensFor(asTheKitFrames(l.views.search));
     this.searchEye = lens.cam;
     const g = this.groundY;
     const lyH = lyingHeight(heightFor('reekalf'), LEG_SHARE.reekalf);
     const back = backPoints(p.calf.x, g(p.calf.x, p.calf.z), p.calf.z, p.calf.yaw, SIZE.reekalf.len, lyH);
     const cover = this.cover;
-    const changed = openWindow(cover.stems, lens.cam, back, p.glimpse);
+    const changed = fitWindow(cover.stems, this.built.get(l.id)!, lens.cam, back, p.glimpse, { x: p.calf.x, y: g(p.calf.x, p.calf.z), z: p.calf.z });
     cover.refresh();
     this.glimpse = { share: visibleShare(back, lens.cam, cover.stems), changed: changed.length };
     // the look-alikes: this trial's in the played stand; elsewhere only the dead bracken
@@ -527,6 +568,42 @@ export class ReeHome implements HomeDressing {
 
   /** The played stand's tall grass (the search's cover: its glimpse, the calf's stems). */
   get cover(): CoverField { return this.standCovers.get(this.laid.layout.id)!; }
+
+  /** The search's check for the lens it really stands at (`eye`; the calf's back points
+   *  `back`): off the level's band (`glimpse`), the played stand is fitted again from its
+   *  built stems for it (ree.window.ts `refitWindow`). Returns the stems that grow to it. */
+  fitGlimpse(eye: V3, back: readonly V3[], glimpse: number): number[] {
+    const c = this.laid.calf;
+    const changed = refitWindow(this.cover.stems, this.built.get(this.laid.layout.id)!, eye, back, glimpse, { x: c.x, y: this.groundY(c.x, c.z), z: c.z });
+    this.searchEye = eye;
+    this.glimpse = { share: visibleShare(back, eye, this.cover.stems), changed: changed.length };
+    return changed;
+  }
+
+  /**
+   * How many of five points over the doe (her rump, back, chest, neck, head) the lens `cam`
+   * sees: in the binoculars' picture, past every juniper. Two or more: she is there to see
+   * (the watch's "Daar is de moeder!" waits for it; review r1 heard it while she still
+   * stood behind the bushes of her gap). (Her cover's bracken is not asked: it bends aside
+   * where she walks, and the maths' stems stood stiff round her — a doe in plain view in B
+   * counted hidden a second too long.)
+   */
+  doeSeen(cam: THREE.Camera, doe: { x: number; z: number; yaw: number }): number {
+    const eye = cam.getWorldPosition(new THREE.Vector3());
+    const g = this.groundY(doe.x, doe.z);
+    const fx = Math.sin(doe.yaw), fz = Math.cos(doe.yaw);
+    const v = new THREE.Vector3();
+    let n = 0;
+    for (const [a, y] of DOE_POINTS) {
+      const p = { x: doe.x + fx * a * SIZE.ree.len, y: g + y * SIZE.ree.h, z: doe.z + fz * a * SIZE.ree.len };
+      v.set(p.x, p.y, p.z).project(cam);
+      // (inside the glasses' round picture, its dim rim counted: she is seen there first)
+      if (v.z > 1 || (v.x / 0.97) ** 2 + (v.y / 0.92) ** 2 > 1) continue;
+      if (this.bushes.some((k) => throughBush(eye, p, k))) continue;
+      n += 1;
+    }
+    return n;
+  }
 
   /** The bracken at a layout's gap stirs (she is about to step out, or heard him). */
   rustleGap(l: ReeLayout, amp: number): void { this.coverFields.get(l.cover)!.rustle(this.gapClumps.get(l.id) ?? 0, amp); }

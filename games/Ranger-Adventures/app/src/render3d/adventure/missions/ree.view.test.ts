@@ -24,7 +24,8 @@ import { toward } from '../places.ts';
 import { backPoints } from '../cover-math.ts';
 import { lyingHeight, LEG_SHARE } from '../../play/pose.ts';
 import {
-  LAYOUTS, CALF_DOELEN, COPSE, THICKET, COPSE_TREES, FRINGE, POOL, STAND, calfAt, calfTalkOf, calfView, juniperR, poolsOf, type ViewSpec,
+  LAYOUTS, CALF_DOELEN, COPSE, THICKET, COPSE_TREES, FRINGE, POOL, STAND, calfAt, calfBolt, calfTalkOf, calfView, drinkSpot, juniperR, poolsOf,
+  reunionPose, type ViewSpec,
 } from './ree.places.ts';
 
 const W = 1280, H = 800, FOV = 55;
@@ -241,5 +242,69 @@ test('by the calf: the calf big in the picture, the boy beside it, never over it
     const top = px(cam, talk.x, g + RANGER_STAND_HEIGHT, talk.z), chin = px(cam, talk.x, g + RANGER_STAND_HEIGHT - 0.3, talk.z), feet = px(cam, talk.x, g, talk.z);
     assert.ok((chin.y - top.y) / H <= 0.18, `${l.id}${i}: his head is ${(((chin.y - top.y) / H) * 100).toFixed(0)} % of the picture's height`);
     assert.ok(Math.abs((top.x + feet.x) / 2 - mid.x) > 200, `${l.id}${i}: he stands beside the calf, not in front of it`);
+  }
+});
+
+test('by the calf: a startled calf bolts across the picture or up it, never down toward the lens or out of it', () => {
+  // (review r2: the bolt ran down the picture and the calf's body was cut by its bottom edge)
+  for (const l of LAYOUTS) for (const [i, d] of CALF_DOELEN.entries()) {
+    const c = calfAt(l, d);
+    const talk = calfTalkOf(l, c);
+    const cam = fitLens(calfView(l, c, talk));
+    const b = calfBolt(l, c, talk);
+    const from = backOf(cam, c).mid;
+    // where it lies after the bolt: its whole body (both ends, any way it lies) in the picture
+    for (let k = 0; k < 8; k++) {
+      const yaw = (k / 8) * Math.PI * 2, h = SIZE.reekalf.len / 2, y = groundY(b.x, b.z) + LYING;
+      for (const e of [-h, h]) {
+        const q = px(cam, b.x + Math.sin(yaw) * e, y, b.z + Math.cos(yaw) * e);
+        assert.ok(q.x >= 30 && q.x <= W - 30 && q.y >= 120 && q.y <= H - 40, `${l.id}${i}: after its bolt it lies at the picture's edge (${q.x.toFixed(0)}, ${q.y.toFixed(0)})`);
+      }
+    }
+    const to = px(cam, b.x, groundY(b.x, b.z) + LYING, b.z);
+    assert.ok(to.y <= from.y + 25, `${l.id}${i}: it bolts down the picture, toward the lens (${from.y.toFixed(0)} → ${to.y.toFixed(0)})`);
+  }
+});
+
+test('the reunion: through his glasses, the doe big and side-on, her calf drinking at the flank he sees', () => {
+  for (const l of LAYOUTS) {
+    const v = l.views.reunion;
+    const cam = fitLens(v);
+    const { yaw, side } = reunionPose(l);
+    const m = l.meet, g = groundY(m.x, m.z);
+    // the doe: ≥ 280 px tall (her hooves to the top of her head), whole in the picture,
+    // under the reunion's line (its card reaches ~130 px down)
+    const head = { x: m.x + Math.sin(yaw) * SIZE.ree.len * 0.45, z: m.z + Math.cos(yaw) * SIZE.ree.len * 0.45 };
+    const hoof = px(cam, m.x, g, m.z), top = px(cam, head.x, groundY(head.x, head.z) + SIZE.ree.h, head.z);
+    const tall = hoof.y - top.y;
+    assert.ok(tall >= 280, `${l.id}: the doe is ${tall.toFixed(0)} px tall`);
+    assert.ok(top.y >= 135 && hoof.y <= H - 30, `${l.id}: she stands under the line, whole (${top.y.toFixed(0)}-${hoof.y.toFixed(0)})`);
+    // side-on: her length across the picture
+    const ends = [1, -1].map((k) => px(cam, m.x + Math.sin(yaw) * k * SIZE.ree.len / 2, g + 0.6, m.z + Math.cos(yaw) * k * SIZE.ree.len / 2));
+    const across = Math.abs(ends[0].x - ends[1].x);
+    assert.ok(across >= 220, `${l.id}: side-on, her length is ${across.toFixed(0)} px across`);
+    for (const e of ends) assert.ok(e.x >= 60 && e.x <= W - 60, `${l.id}: her head and tail in the picture (${e.x.toFixed(0)})`);
+    // the calf at her flank toward the lens: nearer the lens than she is, in the picture
+    const dr = drinkSpot({ ...m, yaw }, SIZE.ree.len, side);
+    const camAt = { x: cam.position.x, z: cam.position.z };
+    assert.ok(Math.hypot(dr.x - camAt.x, dr.z - camAt.z) < Math.hypot(m.x - camAt.x, m.z - camAt.z), `${l.id}: the calf drinks on the side he sees`);
+    const cp = px(cam, dr.x, groundY(dr.x, dr.z) + 0.4, dr.z);
+    assert.ok(cp.x >= 150 && cp.x <= W - 150 && cp.y <= H - 60, `${l.id}: the calf in the picture (${cp.x.toFixed(0)}, ${cp.y.toFixed(0)})`);
+    // nothing between the lens and them: no juniper, no trunk
+    const solids = [...COPSE.junipers, ...THICKET.junipers, ...LAYOUTS.map((q) => q.hideJuniper)].map((j) => ({ x: j.x, z: j.z, r: juniperR(j.h), top: j.h }))
+      .concat(COPSE_TREES.map((t) => ({ x: t.x, z: t.z, r: 0.3, top: t.h })));
+    for (const target of [new THREE.Vector3(m.x, g + 0.7, m.z), new THREE.Vector3(dr.x, g + 0.35, dr.z)]) {
+      for (const q of solids) {
+        const gy = groundY(q.x, q.z);
+        const hit = [0.2, 0.5, 0.8].some((k) => segDist3(new THREE.Vector3(q.x, gy + q.top * k, q.z), cam.position, target) < q.r);
+        assert.ok(!hit, `${l.id}: a bush or a trunk stands between the lens and the family`);
+      }
+    }
+    // the lens stands on open heath, out of the tall grass (no stems across the picture)
+    for (const s of LAYOUTS) {
+      const q = { x: cam.position.x - s.frame.x, z: cam.position.z - s.frame.z };
+      const u = -Math.cos(s.frame.heading) * q.x + Math.sin(s.frame.heading) * q.z, w = Math.sin(s.frame.heading) * q.x + Math.cos(s.frame.heading) * q.z;
+      assert.ok(Math.hypot(u / (FRINGE.a * FRINGE.kMax), w / (FRINGE.b * FRINGE.kMax)) > 1.05, `${l.id}: the reunion's lens stands in ${s.id}'s grass`);
+    }
   }
 });

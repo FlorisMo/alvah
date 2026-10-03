@@ -373,6 +373,22 @@ const MISSIE_REE = {
       staStil: 'Sta stil. Anders schrikt ze.',
       daar: 'Daar is de moeder!',
       ruikt: 'Ze ruikt aan haar kalf.',
+      // run 7 (ree-growth): the watch, a line every few seconds from small pools
+      // (missions/ree.variety.ts WATCH_LINES), each read aloud once
+      hoor: 'Hoor je dat?',
+      ritselt: 'Er ritselt iets.',
+      luistert: 'Ze luistert. Sta heel stil.',
+      hoortIets: 'Ze hoort iets. Sta stil.',
+      stilLuister: 'Stil. Ze luistert goed.',
+      hapje: 'Ze eet een hapje gras.',
+      knabbelt: 'Ze knabbelt aan het gras.',
+      omZich: 'Ze kijkt om zich heen.',
+      hierheen: 'Ze kijkt hierheen. Sta stil.',
+      roept: 'Ze roept zacht.',
+      kalfKomt: 'Daar komt het kalf!',
+      // the flip played with his feet: he walks away himself
+      loopWeg: 'Mama is terug. Loop stil weg.',
+      chipWeg: 'Een eindje weg',
     },
     knap: {
       kijk: 'Kijk. Daar graast de reegeit.',
@@ -381,6 +397,7 @@ const MISSIE_REE = {
       sporen: 'kijk naar de prenten',
       weg: 'De reegeit loopt de struiken in.',
       daar: 'Daar is de reegeit!',
+      loopWeg: 'De reegeit is terug. Loop stil weg.',
     },
   },
   stappen: [

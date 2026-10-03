@@ -28,7 +28,7 @@ import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
 import { zoekSummary } from '../../../engines/zoeken';
 import { tapHitRadius } from '../../play/kit-math';
-import { backPoints, openWindow, visibleShare } from '../cover-math';
+import { backPoints, openWindow, visibleShare, type V3 } from '../cover-math';
 import { backTop } from '../../play/pose';
 import type { AdventureKit, FrameSpec } from '../kit';
 import type { Actor } from '../actors';
@@ -64,9 +64,18 @@ export interface SearchOpts {
   /** how much of its back the stems let the lens see (run 7 default: the level's
    *  `glimpse`); less is a harder find */
   glimpse?: number;
+  /** run 7 (ree-growth, additive): the animal's length (m) the glimpse is measured along
+   *  (default 2.7 × its lying height, the piglet's) */
+  len?: number;
   /** run 7: the most of its back the window may show (default: no limit, as before): every
    *  hiding spot shows the same glimpse for the same knob */
   glimpseMax?: number;
+  /** run 7 (ree-growth r2, additive): the home's own window for the lens the search really
+   *  stands at (`eye`, the animal's back points, the share wanted): it edits the cover's
+   *  stems and returns the ones changed (they grow to it calmly while the lens moves in).
+   *  Default: `openWindow` (stems over his back made smaller until `glimpse` shows, at most
+   *  `glimpseMax`). */
+  fit?: (eye: V3, back: readonly V3[], glimpse: number) => number[];
 }
 
 export interface SearchResult { summary: BeatSummary; misses: number; seconds: number }
@@ -88,9 +97,9 @@ export async function searchBeat(k: AdventureKit, step: number, o: SearchOpts): 
   if (o.lyingH) {
     const lens = k.lensFor(o.view).cam;
     const g = k.ctx.groundY(o.target.x, o.target.z);
-    const back = backPoints(o.target.x, g, o.target.z, o.target.yaw, o.lyingH * 2.7, o.lyingH);
+    const back = backPoints(o.target.x, g, o.target.z, o.target.yaw, o.len ?? o.lyingH * 2.7, o.lyingH);
     const drawn = o.cover.stems.map((s) => s.h);
-    const more = openWindow(o.cover.stems, lens, back, glimpse, o.glimpseMax);
+    const more = o.fit ? o.fit(lens, back, glimpse) : openWindow(o.cover.stems, lens, back, glimpse, o.glimpseMax);
     if (more.length) o.cover.settle(more, 1.1, drawn);
     k.stats.glimpse = Math.round(visibleShare(back, lens, o.cover.stems) * 100) / 100;
   }
