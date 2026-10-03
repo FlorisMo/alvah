@@ -368,6 +368,8 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
   const page = log.page;
   let target: { x: number; y: number } | null = null;
   let lens: number | null = null;
+  /** the level's share of the calf's back (`knobs.glimpse`), read as the search shows it */
+  let share: number | null = null;
   let stats: Record<string, number> = {};
   let variant = '';
   return {
@@ -387,6 +389,7 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
       if (!target) return;
       const cam = await R<{ x: number; y: number; z: number } | null>(page, 'r.cam()');
       if (cam) lens = cam.y - (await R<number>(page, `r.groundAt(${cam.x}, ${cam.z})`));
+      share = (await R<Record<string, { knobs: { glimpse?: number } }> | null>(page, 'r.skills()'))?.zoeken?.knobs?.glimpse ?? null;
     },
     report() {
       log.note(`ree: morning ${variant || '?'}; calf hint at ${target ? `(${Math.round(target.x)}, ${Math.round(target.y)})` : '?'}; lens ${lens?.toFixed(2) ?? '?'} m over the ground; glimpse ${stats.glimpse}; walks ${stats.walk_meadow_m} m to the grass, ${stats.walk_hide_m} m to the hide`);
@@ -407,7 +410,13 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
         log.soft(stats.glimpse >= 0.33 && stats.glimpse <= 0.6, `ree: the calf's glimpse is ${stats.glimpse} (0.33-0.6)`);
         log.soft(stats.watch_pauses === 1 && stats.go_moeder_wait >= 8, `ree: a fresh save: ${stats.watch_pauses} listening pause, the flip waits ${stats.go_moeder_wait} s`);
       }
-      log.note(`ree: look-alikes ${stats.look_alikes}, hold ${stats.hold_s} s, calf wobble ${stats.calf_wobble}, print gaps ${stats.print_gaps}, watch ${stats.watch_s} s (${stats.watch_listens} pauses), walked away after ${stats.go_moeder ?? 0} wrong`);
+      // (review r1, ree-growth: the search shows the level's own share, never a level's off:
+      // in [glimpse, glimpse + 0.07] as the search's lens sees it)
+      if (share !== null) log.soft(stats.glimpse >= share - 1e-6 && stats.glimpse <= share + 0.07 + 1e-6, `ree: the calf's glimpse ${stats.glimpse} is the level's (${share}-${(share + 0.07).toFixed(2)})`);
+      // ("Daar is de moeder!" as she is first seen, out from behind her bushes: review r1
+      // heard it 5-8 s before she showed)
+      log.soft(stats.watch_out_lag !== undefined && stats.watch_out_lag >= 0 && stats.watch_out_lag <= 0.5, `ree: "Daar is de moeder!" ${stats.watch_out_lag} s after she is seen`);
+      log.note(`ree: look-alikes ${stats.look_alikes}, hold ${stats.hold_s} s, calf wobble ${stats.calf_wobble}, print gaps ${stats.print_gaps}, watch ${stats.watch_s} s (${stats.watch_listens} pauses, unseen ${stats.watch_hidden_s} s), walked away after ${stats.go_moeder ?? 0} wrong`);
       log.soft(stats.watch_s >= 18 && stats.watch_s <= 45, `ree: the watch lasts ${stats.watch_s} s`);
       // (the frisling's search lens hangs 3.8 m over the ground; the ree's at that height
       // stands 4.2 m from his head, where the old one stood 3 m from it and looked down on it)

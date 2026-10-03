@@ -84,8 +84,13 @@ function doelenOf(m: Mission): readonly { x: number; y: number }[] {
 
 let contentDecoys: readonly Distractor[] = [];
 
-/** The doe's brisk walk (m/s: her walk is 0.8) when her cover lies far across the heath. */
+/** The doe's brisk walk (m/s: her walk is 0.8) when her cover lies far across the heath,
+ *  and out of her bed to her gap in the watch, unseen. */
 const BRISK = 1.25;
+
+/** The watch's rustle stands at least this long (s) before "Daar is de moeder!" (its own
+ *  line is heard first, however soon she shows). */
+const RUSTLE_MIN_S = 1.4;
 
 /** How far (m) the doe walks to this morning's graze spot under the briefing card (beyond
  *  it, the walk would hold up the first look: she is put there where nobody sees it). */
@@ -494,6 +499,25 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
     }
     return () => hide;
   };
+  // she is first seen (in the glasses' picture, out from behind her bushes): the moment
+  // "Daar is de moeder!" is said (review r1 heard it 5-8 s before she showed)
+  let seenAt = -1, sinceLook = 0, lookOut = false;
+  let daar: string | null = null; // (the line waits for her)
+  const offSeen = k.onTick((dt) => {
+    if (!lookOut || seenAt >= 0 || doe.lies) return;
+    sinceLook += dt;
+    if (sinceLook < 0.08) return;
+    sinceLook = 0;
+    if (home.doeSeen(k.world.camera, doe) >= 2) {
+      seenAt = k.now;
+      if (daar) { sayW(daar); daar = null; k.stats.watch_out_lag = 0; }
+    }
+  });
+  // her walk out of her bed to her gap, begun as the bracken stirs: brisk while unseen
+  let outWalk: Promise<void> | null = null;
+  const walkOut = async (): Promise<void> => {
+    for (const q of [...[...l.bedWay].reverse(), l.gap]) await walkOn(q.x, q.z, seenAt < 0 ? { speed: BRISK } : {});
+  };
   try {
     // he turns to her cover first and only then lifts his glasses (the turn never sweeps
     // the wildcamera's glade next door: every hide looks away from it)
@@ -507,20 +531,33 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
     await k.wait(1.6);
     for (const e of script) {
       await still();
-      if (e.line) sayW(c[e.line] ?? lineNow);
+      if (e.line && e.act !== 'out') sayW(c[e.line] ?? lineNow);
       switch (e.act) {
-        case 'rustle':
-          // the bracken at her gap stirs
+        case 'rustle': {
+          // the bracken at her gap stirs: she gets up in her bed and comes out between her
+          // bushes, unseen; the rustle lasts until she is seen (and its line was heard) or
+          // she stands in her gap
           home.rustleGap(l, 0.16);
           if (settings.geluid) Sound.rustle();
-          await act(e.s, () => {});
+          const from = k.now;
+          let atGap = false;
+          lookOut = true;
+          outWalk ??= walkOut().then(() => { atGap = true; });
+          await k.until(() => (seenAt >= 0 && k.now - from >= RUSTLE_MIN_S) || (atGap && k.now - from >= e.s), 15);
+          k.stats.watch_hidden_s = Math.round((k.now - from) * 10) / 10;
           break;
+        }
         case 'out': {
-          for (const q of [...[...l.bedWay].reverse(), l.gap]) await walkOn(q.x, q.z); // (out between her bushes)
+          // "Daar is de moeder!" as she is seen (now, or the moment she is)
+          const line = e.line ? c[e.line] ?? lineNow : null;
+          if (line && seenAt >= 0) { sayW(line); k.stats.watch_out_lag = Math.round((k.now - seenAt) * 10) / 10; } else daar = line;
+          lookOut = true;
+          await (outWalk ??= walkOut()); // (out between her bushes)
           // …and on out into the open, clear of her cover's bushes, before she stops: to the
           // point of her way (or a few steps toward the meeting place)
           const q = e.to === 1 ? way[1] : toward(l.gap, meet, Math.min(1.3, dist(l.gap, meet) * 0.5));
           await walkOn(q.x, q.z);
+          if (daar) { sayW(daar); daar = null; k.stats.watch_out_lag = -1; } // (out in the open in any case)
           break;
         }
         case 'walk': {
@@ -578,6 +615,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
       }
     }
   } finally {
+    offSeen();
     window.removeEventListener('keydown', onKey);
     window.removeEventListener('pointerdown', onTap);
   }

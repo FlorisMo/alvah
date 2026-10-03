@@ -29,10 +29,12 @@ const BACK = backPoints(0, 0, 0, Math.PI / 2 + 0.2, 0.63, 0.36);
 const AT = { x: 0, y: 0, z: 0 };
 const builtOf = (s: readonly Stem[]): Built[] => s.map((q) => ({ h: q.h, lx: q.lx, lz: q.lz, r: q.r }));
 
-// (the live stands, probed in the browser on 2026-10-03 with every layout's lens: all 12
-// spots land on the level's share exactly — 0.38 → 0.40, 0.32 → 0.33, 0.27 → 0.33, 0.23 →
-// 0.27, 0.20 → 0.20, 0.16 → 0.20, a share of 15 back points — opening 1-11 stems or growing
-// some where the built grass showed more, e.g. C1 0.47 → 0.27 at level 4)
+// (the live stands, read in the browser on 2026-10-03 in the search itself — its
+// `stats.glimpse`, from the lens the search really stands at, with real keys up to it —
+// for all 12 (layout, spot) on seeded saves at levels 1-4, 24 plays: level 1 (0.38) → 0.40
+// in 5 of 5, level 2 (0.32) → 0.33 in 7 of 7, level 3 (0.27) → 0.33 in 6 of 6, level 4
+// (0.23) → 0.27 in 6 of 6, a share of 15 back points; review r1's repros B10, B20, A01 at
+// level 2 and C0 at level 3, which the lay's lens had put off the band, among them)
 test('the glimpse is fitted to the level\'s share: opened where the grass hides too much, closed where it shows too much', () => {
   let opened = 0, closed = 0;
   for (const lv of [1, 2, 3, 4, 5, 6]) {

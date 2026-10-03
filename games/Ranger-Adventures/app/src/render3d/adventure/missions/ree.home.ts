@@ -171,6 +171,24 @@ export function asTheKitFrames(v: ViewSpec): ViewSpec {
   };
 }
 
+/** Points over a standing doe (a share along her length from her middle, a share of her
+ *  height): her rump, back, chest, neck and head — what a child sees of a deer first. */
+const DOE_POINTS: readonly (readonly [number, number])[] = [[-0.32, 0.62], [0, 0.68], [0.28, 0.66], [0.4, 0.8], [0.48, 0.93]];
+
+/** A juniper as it is drawn: a round bush (an ellipsoid) `rw` m round, `h` tall. */
+interface Bush { x: number; y: number; z: number; h: number; rw: number }
+
+/** Does the line from `a` to `b` pass through the bush? */
+function throughBush(a: V3, b: V3, k: Bush): boolean {
+  const sy = k.rw / (k.h / 2); // (the bush squashed to a ball)
+  const cy = k.y + k.h / 2;
+  const ax = a.x - k.x, ay = (a.y - cy) * sy, az = a.z - k.z;
+  const dx = b.x - a.x, dy = (b.y - a.y) * sy, dz = b.z - a.z;
+  const L = dx * dx + dy * dy + dz * dz || 1;
+  const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy + az * dz) / L));
+  return Math.hypot(ax + dx * t, ay + dy * t, az + dz * t) < k.rw;
+}
+
 /** What a play lays (ree.ts `prepare`). */
 export interface ReeLaid {
   layout: ReeLayout;
@@ -208,6 +226,8 @@ export class ReeHome implements HomeDressing {
   /** every stand's stems as they were built (a play's glimpse window is opened from these) */
   private readonly built = new Map<ReeLayoutId, { h: number; lx: number; lz: number; r: number }[]>();
   private readonly spawned: { dispose(): void }[] = [];
+  /** every juniper as drawn (the copse's, the thicket's, the hides'): what may hide the doe */
+  private readonly bushes: Bush[] = [];
   /** the far copies' material (vertex colours, its own: a home's rest fades it) and the
    *  height each kind's copy was baked at */
   private readonly farMat = lodMaterial().clone();
@@ -356,6 +376,8 @@ export class ReeHome implements HomeDressing {
         this.spawned.push(s);
       });
       env.obstacles.push({ x, z, r: juniperR(h) });
+      // (its round bush as drawn: the model's width at this height, slimmed)
+      this.bushes.push({ x, y: g(x, z), z, h, rw: (SIZE.jeneverbes.w / 2) * (h / SIZE.jeneverbes.h) / JUNIPER_TALL * JUNIPER_SLIM });
     };
     for (const j of [...COPSE.junipers, ...THICKET.junipers]) bush(j.x, j.z, j.h, j.turn);
     LAYOUTS.forEach((l, i) => bush(l.hideJuniper.x, l.hideJuniper.z, l.hideJuniper.h, 1.3 + i * 1.7));
@@ -556,6 +578,31 @@ export class ReeHome implements HomeDressing {
     this.searchEye = eye;
     this.glimpse = { share: visibleShare(back, eye, this.cover.stems), changed: changed.length };
     return changed;
+  }
+
+  /**
+   * How many of five points over the doe (her rump, back, chest, neck, head) the lens `cam`
+   * sees: in the binoculars' picture, past every juniper. Two or more: she is there to see
+   * (the watch's "Daar is de moeder!" waits for it; review r1 heard it while she still
+   * stood behind the bushes of her gap). (Her cover's bracken is not asked: it bends aside
+   * where she walks, and the maths' stems stood stiff round her — a doe in plain view in B
+   * counted hidden a second too long.)
+   */
+  doeSeen(cam: THREE.Camera, doe: { x: number; z: number; yaw: number }): number {
+    const eye = cam.getWorldPosition(new THREE.Vector3());
+    const g = this.groundY(doe.x, doe.z);
+    const fx = Math.sin(doe.yaw), fz = Math.cos(doe.yaw);
+    const v = new THREE.Vector3();
+    let n = 0;
+    for (const [a, y] of DOE_POINTS) {
+      const p = { x: doe.x + fx * a * SIZE.ree.len, y: g + y * SIZE.ree.h, z: doe.z + fz * a * SIZE.ree.len };
+      v.set(p.x, p.y, p.z).project(cam);
+      // (inside the glasses' round picture, its dim rim counted: she is seen there first)
+      if (v.z > 1 || (v.x / 0.97) ** 2 + (v.y / 0.92) ** 2 > 1) continue;
+      if (this.bushes.some((k) => throughBush(eye, p, k))) continue;
+      n += 1;
+    }
+    return n;
   }
 
   /** The bracken at a layout's gap stirs (she is about to step out, or heard him). */

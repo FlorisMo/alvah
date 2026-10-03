@@ -264,6 +264,8 @@ export function watchScript(play: Pick<Play, 'fork'>, o: { pauses: number; way: 
   const listen = (cue: WatchCue): WatchEvent => ({ act: 'listen', s: j(WATCH_S.listen), cue, line: line(WATCH_LINES.listen) });
   const look = (cue: 'rond' | 'hut'): WatchEvent => ({ act: 'look', s: j(WATCH_S.look), cue, line: line(WATCH_LINES[cue]) });
   const out: WatchEvent[] = [
+    // the bracken at her gap stirs while she gets up and comes out between her bushes,
+    // unseen (the rustle is all he hears of it); "Daar is de moeder!" as she is first seen
     { act: 'rustle', s: j(WATCH_S.rustle), line: line(WATCH_LINES.rustle) },
     // out of her gap and a few steps on, out in the open (by the point of her way when the
     // layout has one), where she stops and tests the air: the first pause, toward a rustle
@@ -308,7 +310,7 @@ export function watchScript(play: Pick<Play, 'fork'>, o: { pauses: number; way: 
     const small = e.act === 'look' && e.cue === 'rond';
     if (small && e.line && t - said < WATCH_QUIET_S) delete e.line;
     if (e.line) said = t;
-    t += e.act === 'out' || e.act === 'walk' ? WATCH_WALK_S : e.act === 'calf' ? 3 : e.s;
+    t += e.act === 'out' ? WATCH_OUT_S : e.act === 'walk' ? WATCH_WALK_S : e.act === 'calf' ? 3 : e.s;
   }
   return out;
 }
@@ -316,4 +318,7 @@ export function watchScript(play: Pick<Play, 'fork'>, o: { pauses: number; way: 
 /** A small act says its line only when the line up has stood this long (s). */
 const WATCH_QUIET_S = 4.2;
 /** How long (s) one of her walks in the watch takes, give or take (for the lines' rhythm). */
-const WATCH_WALK_S = 2.5;
+export const WATCH_WALK_S = 2.5;
+/** …and her walk out of her gap into the open (her walk out of her bed, unseen, is the
+ *  rustle's: she is seen as "Daar is de moeder!" is said). */
+export const WATCH_OUT_S = 2.0;

@@ -18,7 +18,7 @@ import test from 'node:test';
 import { newPlay } from '../../../core/play.ts';
 import {
   CALF_MOMENTS, CALF_SPOTS, REE_LAYOUT_IDS, PRINT_GAP_M, WATCH_LINES, drawReePlay, lastReeVariants, parseReeVariant, printRuns, reeGrowth, reeOrder,
-  reeVariant, watchScript, type ReePlay, type WatchEvent,
+  reeVariant, watchScript, WATCH_OUT_S, WATCH_WALK_S, type ReePlay, type WatchEvent,
 } from './ree.variety.ts';
 import { knobsFor } from '../../../core/skill.ts';
 import { AREA_VELUWE } from '../../../content/veluwe.ts';
@@ -177,14 +177,15 @@ test('growth: her prints break into runs — no gap near the ring, a bend or the
 
 const REE = AREA_VELUWE.missies.find((m) => m.id === MISSION)!;
 const COPY = { ...REE.avontuur!.simpel };
-/** A watch's timeline (s) with her walks as they take in the world: out of her bed ~2.5 s,
- *  each walk ~2.5 s, the calf's rising and coming ~3 s. */
+/** A watch's timeline (s) with her walks as they take in the world: out of her gap into the
+ *  open ~2 s (her walk out of her bed, unseen, is the rustle's), each walk ~2.5 s, the
+ *  calf's rising and coming ~3 s. */
 function timeline(w: readonly WatchEvent[]): { end: number; lines: { t: number; key: string }[] } {
   let t = 0;
   const lines: { t: number; key: string }[] = [];
   for (const e of w) {
     if (e.line) lines.push({ t, key: e.line });
-    t += e.act === 'out' || e.act === 'walk' ? 2.5 : e.act === 'calf' ? 3 : e.s;
+    t += e.act === 'out' ? WATCH_OUT_S : e.act === 'walk' ? WATCH_WALK_S : e.act === 'calf' ? 3 : e.s;
   }
   return { end: t, lines };
 }
