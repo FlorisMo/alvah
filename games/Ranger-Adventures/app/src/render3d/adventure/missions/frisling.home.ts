@@ -88,6 +88,9 @@ class Stand {
     this.decoys.useDecoys(trial.map((d) => d.id));
   }
 
+  /** Run 7 (body): is the sow's nest at this stand this play? */
+  showNest(on: boolean): void { this.nest.visible = on; }
+
   /** No look-alikes, no window: the stand as it grows. */
   clear(): void {
     for (const ci of this.spotClump) this.cover.showClump(ci, false);
@@ -133,13 +136,13 @@ function nestMesh(g: (x: number, z: number) => number, at: { x: number; z: numbe
   const col: number[] = [];
   const rnd = stream(seed);
   // dry, bitten bracken: tan to rust, never dark (a soft bed, nothing that looks like an animal)
-  const tans = ['#b98a52', '#a8763f', '#c79a5e', '#9c6a3a', '#b07d47'].map((c) => new THREE.Color(c));
+  const tans = ['#9a7a54', '#8e6e48', '#a6865c', '#856743', '#98764d'].map((c) => new THREE.Color(c));
   const put = (x: number, y: number, z: number, c: THREE.Color): void => {
     pos.push(at.x + x, g(at.x + x, at.z + z) + y, at.z + z);
     col.push(c.r, c.g, c.b);
   };
   // the pressed bed: a flat, slightly darker round of crushed fronds
-  const bed = new THREE.Color('#8a6a45');
+  const bed = new THREE.Color('#6e5a40');
   const SEG = 16;
   for (let i = 0; i < SEG; i++) {
     const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
@@ -341,8 +344,10 @@ export class FrislingHome implements HomeDressing {
    * look-alikes on this play's spots and a window over the nook he lies in; the other
    * stands stand empty; the ring's prints point the way.
    */
-  lay(way: WayId, o: { nook: number; pose: 0 | 1 | 2; trial: readonly Distractor[]; spots: readonly number[]; glimpse: number }): void {
+  lay(way: WayId, o: { nook: number; pose: 0 | 1 | 2; trial: readonly Distractor[]; spots: readonly number[]; glimpse: number; nest?: boolean }): void {
     this.way = way;
+    // (the sow's nest: at this play's stand when the play has one; free roam shows them all)
+    for (const id of WAY_IDS) this.stands[id].showNest(o.nest ?? true);
     for (const id of WAY_IDS) if (id !== way) this.stands[id].clear();
     const st = this.stands[way];
     st.layDecoys(o.trial, o.spots);

@@ -115,7 +115,7 @@ export const frislingAdventure: Adventure = {
     const v = drawFrisling(play, store.get().geschiedenis, started,
       { skin: mission.stappen[2].skin, diff: { ...store.knobs('dagnacht') } }, trial.decoys.map((d) => ({ k: d.k, animal: d.animal })));
     current = v;
-    home.lay(v.way, { nook: v.nook, pose: v.pose, trial: trial.decoys, spots: v.decoySpots, glimpse: store.knobs('zoeken').glimpse });
+    home.lay(v.way, { nook: v.nook, pose: v.pose, trial: trial.decoys, spots: v.decoySpots, glimpse: store.knobs('zoeken').glimpse, nest: v.nest });
     useWay(v.way);
     const lie = nookAt(v.way, v.nook, v.pose);
     const fam = FAMILY_LAYOUTS[v.family].poses;
@@ -233,7 +233,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // the pigs' rubbing log: in 'boom' the sow rubs her flank on it while he looks at them;
   // otherwise, now and then, the yearling goes over and has a good scratch
   if (FAMILY_LAYOUTS[v.family].id === 'boom') rub(A.sow, layout.sow);
-  else if (surprise.fork('schuren').chance(0.5)) {
+  else if (surprise.fork('schuren').chance(0.4)) {
     // (beside the log on the wallow's side, flank to it)
     const across = logYaw - Math.PI / 2;
     const side = Math.sign((P.wallow.x - log.x) * Math.sin(across) + (P.wallow.z - log.z) * Math.cos(across)) || 1;

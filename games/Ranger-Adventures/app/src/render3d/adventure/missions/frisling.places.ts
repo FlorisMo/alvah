@@ -111,7 +111,7 @@ export const WAY_IDS: readonly WayId[] = ['wei', 'steen', 'berk'];
 export interface Nook { u: number; v: number; side: 1 | -1 }
 /** A sow's nest at a stand's edge (package body): its radius (m); never on a nook or a
  *  look-alike spot (frisling.places.test.ts). */
-export const NEST_R = 0.45;
+export const NEST_R = 0.4;
 
 /** A spot of a stand a look-alike may be laid on; `edge`: at the stand's rim (a nightjar
  *  pressed to a bare patch belongs there, never deep in the bracken). */
