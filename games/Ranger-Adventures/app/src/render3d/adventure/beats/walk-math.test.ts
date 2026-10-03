@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  PaceCore, WalkOnCore, paceStretch, paceTempts, TIRED_PACE, PACE_MIN_M, WALK_ON_M,
+  PaceCore, WalkOnCore, paceStretch, paceTempts, TIRED_PACE, PACE_MIN_M, WALK_ON_M, ONSET_S, ONSET_M,
   PACE_TEMPT_FROM_M, PACE_TEMPT_END_M,
 } from './walk-math.ts';
 import { HoldCore, HOLD_S } from './hold-math.ts';
@@ -94,10 +94,11 @@ test('walk on: waiting past the window is the habit kept too long — marked, th
   const run = new DagnachtRun(5);
   const calls: boolean[] = [];
   const core = new WalkOnCore(6, (g) => { calls.push(g); run.choose(g); });
-  assert.equal(core.tick(100, 0), null, 'no window while the line is read');
+  assert.equal(core.tick(9, 0), null, 'no window while the line is read');
   core.begin(10);
-  assert.equal(core.tick(15.9, 0.6), null);
-  assert.equal(core.tick(16, 0.6), 'late');
+  assert.equal(core.tick(12, 0.6), null, 'a step on…');
+  assert.equal(core.tick(15.9, 0.6), null, '…and then he stands');
+  assert.equal(core.tick(16, 0.6), 'late', 'standing when the window closes');
   assert.equal(core.phase, 'react');
   assert.equal(core.tick(17, 3), null, 'nothing is judged while the group reacts');
   core.again();
@@ -112,6 +113,61 @@ test('walk on: waiting past the window is the habit kept too long — marked, th
   assert.equal(core.impulses, 2);
   while (!run.finished) run.choose(true);
   assert.deepEqual(run.summary(), { trials: 5, correct: 4, impulses: 2 });
+});
+
+/** A child's walk along the way, sampled at 60 fps: standing at `m0` until `t0`, then
+ *  walking on at `v` m/s (the core's tick each frame). */
+function walkFrom(core: WalkOnCore, t0: number, tEnd: number, v: number, m0 = 0): ('went' | 'late' | null)[] {
+  const out: ('went' | 'late' | null)[] = [];
+  for (let t = t0 - 2; t <= tEnd + 1e-9; t += 1 / 60) out.push(core.tick(t, m0 + Math.max(0, t - t0) * v));
+  return out;
+}
+
+test('walk on: set off in the window\'s last moments (window − 0.3 s) is never late: choose(true), once', () => {
+  for (const waitS of [5, 6, 9]) {
+    for (const v of [1.1, 1.6, 3]) { // (tired pace, a calm walk, a brisk one)
+      const calls: boolean[] = [];
+      const core = new WalkOnCore(waitS, (g) => calls.push(g));
+      core.begin(10);
+      const start = 10 + waitS - 0.3;
+      const res = walkFrom(core, start, start + 2, v);
+      assert.ok(!res.includes('late'), `wait ${waitS} s, ${v} m/s: never late`);
+      assert.deepEqual(calls, [true], `wait ${waitS} s, ${v} m/s: choose(true), once`);
+      assert.equal(core.impulses, 0);
+      assert.equal(core.phase, 'went');
+    }
+  }
+});
+
+test('walk on: only STANDING at the window\'s end is late — a sway, a turn on the spot or a step taken and stopped is standing', () => {
+  // a sway: ±3 cm on the spot (the frames run a little past the window's end)
+  const sway = new WalkOnCore(5, () => {});
+  sway.begin(0);
+  let res: 'went' | 'late' | null = null;
+  for (let t = 0; t <= 5.2 && res === null; t += 1 / 60) res = sway.tick(t, 0.03 * Math.sin(t * 6));
+  assert.equal(res, 'late', 'a sway is standing');
+  // a step on (0.8 m) early in the window, then standing
+  const stop = new WalkOnCore(5, () => {});
+  stop.begin(0);
+  res = null;
+  for (let t = 0; t <= 5.2 && res === null; t += 1 / 60) res = stop.tick(t, Math.min(0.8, t * 1.6));
+  assert.equal(res, 'late', 'he set off and stopped: standing when it closed');
+  // just under the onset: ONSET_M less a hair over the last ONSET_S
+  const slow = new WalkOnCore(5, () => {});
+  slow.begin(0);
+  const v = (ONSET_M * 0.9) / ONSET_S;
+  res = null;
+  for (let t = 0; t <= 5.2 && res === null; t += 1 / 60) res = slow.tick(t, t < 4 ? 0 : (t - 4) * v);
+  assert.equal(res, 'late', 'a creep slower than a walk is not walking on');
+  // after a 'late', the trail starts fresh: a step taken while the group reacted is no onset
+  const again = new WalkOnCore(5, () => {});
+  again.begin(0);
+  for (let t = 0; t <= 5.2; t += 1 / 60) again.tick(t, 0);
+  assert.equal(again.phase, 'react');
+  again.again();
+  again.begin(8);
+  assert.equal(again.tick(12.9, 0.2), null);
+  assert.equal(again.tick(13, 0.2), 'late', 'standing again (a step during the reaction is not walking now)');
 });
 
 test('the go window shrinks as he grows: goWaitS from the knobs, never under 5 s', () => {

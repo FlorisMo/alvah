@@ -891,9 +891,10 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   /**
    * 'pad' (the flip, WALK ON): the path is free. He turns the way on past the mud (the lens
    * comes round behind him) and "Het pad is vrij. Loop maar.": walking on `WALK_ON_M` along
-   * it within the level's `goWaitS` (from the end of the line's read) is right; standing
-   * past it is the stay-habit kept too long (`WalkOnCore`): the group shuffles on, "Je
-   * wacht te lang.", and the moment comes back (his steps before still count). The piglet
+   * it within the level's `goWaitS` (from the end of the line's read), or having set off
+   * along it when that closes, is right; still STANDING when it closes is the stay-habit
+   * kept too long (`WalkOnCore`): the group shuffles on, "Je wacht te lang.", and the
+   * moment comes back (his steps before still count). The piglet
    * trots at his side; the chip names the way, its arrow soon.
    */
   async function pad(id: string): Promise<void> {

@@ -15,9 +15,11 @@
  *         stretch starts again from there. Walked to its end calmly: done.
  *   WALK ON ('pad', the flip: "Het pad is vrij. Loop maar.") — the stay-habit built by
  *         the other moments must now give way: walking on along the way `WALK_ON_M` within
- *         the level's `goWaitS` (counted from the end of the line's read) is right;
- *         standing past it is the habit kept too long (the group shuffles on, "Je wacht te
- *         lang."), and the moment comes back.
+ *         the level's `goWaitS` (counted from the end of the line's read) is right, and so
+ *         is having SET OFF along it when the window closes (the habit kept too long is
+ *         STANDING, not a short distance); still standing at the window's end is the habit
+ *         kept too long (the group shuffles on, "Je wacht te lang."), and the moment comes
+ *         back.
  *
  * (The ree lane's `GoCore`, hold-math.ts on its own branch, is another rule: walking AWAY
  * from the animals, where coming closer is wrong. Walking ON along a way past them is this
@@ -111,6 +113,11 @@ export class PaceCore {
 
 /** How far (m) he walks on along the way: then he went. */
 export const WALK_ON_M = 1.5;
+/** He is walking on (set off) when, over the last `ONSET_S` s… */
+export const ONSET_S = 0.5;
+/** …he came at least this much (m) further along the way (0.2 m/s: the first step of a walk
+ *  from standing, about 0.15 s in; never a turn on the spot). */
+export const ONSET_M = 0.1;
 
 export type WalkOnPhase = 'read' | 'wait' | 'react' | 'went';
 
@@ -122,7 +129,9 @@ export type WalkOnPhase = 'read' | 'wait' | 'react' | 'went';
  *
  *   'read'  the line is up and being read: walking on counts already, the window has not begun
  *   'wait'  the window runs: `waitS` s to walk on
- *   'react' he waited too long: the group shuffles on, the words for it (`again` after)
+ *   'react' he was still STANDING when the window closed: the group shuffles on, the words
+ *           for it (`again` after). A child who set off along the way in its last moments
+ *           (he is walking on when it closes, `walking`) is never late: he went.
  *   'went'  he walked on: `choose(true)` was called, once
  */
 export class WalkOnCore {
@@ -134,6 +143,8 @@ export class WalkOnCore {
   /** metres along the way that are going on */
   readonly needM: number;
   private since = 0;
+  /** his progress over the last moments (mission time, m): is he walking on now? */
+  private trail: { t: number; m: number }[] = [];
   private readonly choose: (goed: boolean) => void;
 
   constructor(waitS: number, choose: (goed: boolean) => void, needM = WALK_ON_M) {
@@ -150,24 +161,43 @@ export class WalkOnCore {
   }
 
   /** Per frame (mission time, s; `progress` m along the way): 'went' once he walked on
-   *  (`choose(true)`, once), 'late' the frame the window closed on him (`choose(false)`; the
-   *  home plays the group's reaction, then `again`), else null. While the group reacts,
-   *  nothing is judged: a step then counts once the line is back. */
+   *  (`choose(true)`, once) — `needM` along the way, or set off along it when the window
+   *  closes; 'late' the frame the window closed on him STANDING (`choose(false)`; the home
+   *  plays the group's reaction, then `again`), else null. While the group reacts, nothing
+   *  is judged: a step then counts once the line is back. */
   tick(now: number, progress: number): 'went' | 'late' | null {
     if (this.phase === 'went') return 'went';
-    if (this.phase === 'react') return null;
-    if (progress >= this.needM) {
-      this.phase = 'went';
-      this.choose(true);
-      return 'went';
-    }
+    if (this.phase === 'react') { this.trail = []; return null; }
+    this.trail.push({ t: now, m: progress });
+    // (keep one sample at or before ONSET_S ago, and the ones since)
+    while (this.trail.length > 2 && this.trail[1].t <= now - ONSET_S) this.trail.shift();
+    if (progress >= this.needM) return this.went();
     if (this.phase === 'wait' && now - this.since >= this.waitS) {
+      // he set off in the window's last moments: he is walking on, never late
+      if (this.walking(now)) return this.went();
       this.phase = 'react';
       this.impulses += 1;
       this.choose(false);
       return 'late';
     }
     return null;
+  }
+
+  /** Is he walking on along the way now: `ONSET_M` further along it than `ONSET_S` s ago
+   *  (the oldest sample when the trail is younger)? */
+  walking(now: number): boolean {
+    const tr = this.trail;
+    if (tr.length < 2) return false;
+    const last = tr[tr.length - 1];
+    let from = tr[0];
+    for (const s of tr) { if (s.t <= now - ONSET_S) from = s; else break; }
+    return last.m - from.m >= ONSET_M;
+  }
+
+  private went(): 'went' {
+    this.phase = 'went';
+    this.choose(true);
+    return 'went';
   }
 
   /** The group has shuffled on and the line said so: the same moment again (its line
