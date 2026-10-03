@@ -545,9 +545,11 @@ export class AdventureKit {
    * sight), and the lens glides back to behind him facing it — he ends up looking where
    * the story goes on, instead of the way he came. Run 7 `face`: he turns to THIS heading
    * instead (the way a squeak comes from), and the lens comes round behind him on an arc
-   * about him (never a straight line through him), at most 90° a second.
+   * about him (never a straight line through him), at most 90° a second. Run 7 (additive)
+   * `seconds`: each glide takes this long (default 2.2 there, 2.0 back) — a look across the
+   * ven's water travels 20-28 m and glides slower, never faster than a calm walk's lens.
    */
-  async look(at: Spot & { y?: number }, line: string, hold = 2.5, opts: { turn?: boolean; face?: number } = {}): Promise<void> {
+  async look(at: Spot & { y?: number }, line: string, hold = 2.5, opts: { turn?: boolean; face?: number; seconds?: number } = {}): Promise<void> {
     this.check();
     this.beat = 'look';
     this.ui.say(line);
@@ -565,7 +567,7 @@ export class AdventureKit {
     // little higher to see over the heather, never nearer than it started
     const pos = from.clone().addScaledVector(toward.normalize(), Math.max(0, d - 6.2));
     pos.y = Math.max(from.y + 0.3, this.ctx.groundY(pos.x, pos.z) + 2.4);
-    let move = makeReframe(cam, pos, target, this.reduced, 2.2, 0);
+    let move = makeReframe(cam, pos, target, this.reduced, opts.seconds ?? 2.2, 0);
     this.held = { update: (dt) => move.update(dt), settled: false };
     this.ui.binoculars(true);
     await this.until(() => !!this.held?.settled);
@@ -592,7 +594,8 @@ export class AdventureKit {
       backLook = turnAbout(fromLook);
       this.world.faceRanger(h);
     }
-    move = opts.face !== undefined ? orbitReframe(cam, me, back, backLook, this.reduced, 2.0) : makeReframe(cam, back, backLook, this.reduced, 2.0, 0);
+    const backS = opts.seconds ?? 2.0;
+    move = opts.face !== undefined ? orbitReframe(cam, me, back, backLook, this.reduced, backS) : makeReframe(cam, back, backLook, this.reduced, backS, 0);
     this.held = { update: (dt) => move.update(dt), settled: false };
     await this.until(() => !!this.held?.settled);
     this.free();

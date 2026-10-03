@@ -170,10 +170,12 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   let looked = 0;
   const offLook = k.onTick(() => {
     const t = k.now - t0;
-    if ((looked === 0 && t > 1.2) || (looked === 1 && t > 3.6)) { looked += 1; chorus(Math.max(2, calls)); }
+    if ((looked === 0 && t > 1.2) || (looked === 1 && t > 4.4)) { looked += 1; chorus(Math.max(2, calls)); }
   });
   try {
-    await k.look(lookAt, c.kijk, 2.6, { face: headingTo(k.ranger(), APPROACH[0]) });
+    // (across the water to the cove: 16-28 m of glide, at most ~7 m a second)
+    const glide = Math.max(2.2, Math.min(4.2, (dist(k.ranger(), lookAt) - 6.2) / 7));
+    await k.look(lookAt, c.kijk, 2.6, { face: headingTo(k.ranger(), APPROACH[0]), seconds: glide });
   } finally { offLook(); }
 
   /* 2-5 · he follows the chorus along the bank; the moments on the way */
