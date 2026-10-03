@@ -29,7 +29,7 @@
 
 import { PRINT_SPOTS } from '../../../engines/corsi.ts';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale.ts';
-import { boxObstacle, type Obstacle } from '../../CharacterController.ts';
+import { boxObstacle, obstacleGap, type Obstacle } from '../../CharacterController.ts';
 import type { HomeSpec, Place, ResidentPose, ResidentSpec, Spot } from '../types.ts';
 import { approachOf, atLocal, dist, headingTo, stream, toLocal, toward, uniformLocal, type Frame } from '../places.ts';
 import { standClumps, type Clump } from '../cover-math.ts';
@@ -345,13 +345,20 @@ export function outSpotOf(way: Way, r: Spot): Spot & { side: 1 | -1 } {
   return { ...atLocal(facing, 1.15 * side, 0.15), side };
 }
 
-/** The close picture of him and a piglet beside him (his bag at its snout: 'voeren' at
- *  the stand), looking past the piglet. */
-export function besideView(r: Spot, pig: Spot): WayView {
+/** How close (m) the hungry piglet's snout comes to him at his bag ('voeren' at the stand). */
+export const BAG_REACH = 0.55;
+
+/** The close picture of him and the piglet nosing the bag on his hip ('voeren' at the
+ *  stand): from across the two of them, side by side in the picture (run 7 body: the old
+ *  view looked past him at the piglet, which stood behind his legs), the piglet whole and
+ *  big enough to see and to reach for (pinned: no neighbour's home in it either). `pig`:
+ *  where the piglet comes out beside him; it noses in to `BAG_REACH` of him. */
+export function bagView(r: Spot, pig: Spot): WayView {
+  const at = toward(r, pig, BAG_REACH);
   return {
-    at: { x: (r.x + pig.x) / 2, z: (r.z + pig.z) / 2 }, heading: headingTo(r, pig) - 0.35,
-    halfW: 1.1, halfD: 0.6, tall: 1.3, pitchDeg: 22, insetTop: 40, insetBottom: 300,
-    include: [{ x: r.x, z: r.z, h: 1.32 }, { x: pig.x, z: pig.z, h: 0.3 }],
+    at: { x: (r.x + at.x) / 2, z: (r.z + at.z) / 2 }, heading: headingTo(r, at) - Math.PI / 2,
+    halfW: 0.9, halfD: 0.6, tall: 1.3, pitchDeg: 20, insetTop: 120, insetBottom: 70,
+    include: [{ x: r.x, z: r.z, h: 1.32 }, { x: at.x, z: at.z, h: 0.3 }],
   };
 }
 
@@ -365,6 +372,86 @@ export function sideBySideView(r: Spot, pig: Spot, looked: Spot): WayView {
     halfW: 1.1, halfD: 0.6, tall: 1.3, pitchDeg: 22, insetTop: 40, insetBottom: 300,
     include: [{ x: r.x, z: r.z, h: 1.32 }, { x: pig.x, z: pig.z, h: 0.3 }],
   };
+}
+
+/* ------------------------------- the calm moments with the body (package body) ---- */
+
+/** The sow's stare ('zeug'): she comes out of the mud toward him, to the rim between her
+ *  piglets and him, until she stands this far (m) from him (never more than
+ *  `ZEUG_STEP_M` from where she was, never toward the lens: the side lens sees her come
+ *  across its picture) — big enough to read her look (≥ 110 px at 1280×800, pinned). */
+export const ZEUG_STARE_M = 3.6;
+export const ZEUG_STEP_M = 2.0;
+
+/** Where the sow stands to look at him (`me`) from her place `home` (from her scratching
+ *  post she steps clear of the log first). */
+export function zeugStare(home: Spot, me: Spot): Spot {
+  const log = wallowLog();
+  let step = Math.min(ZEUG_STEP_M, Math.max(0, dist(home, me) - ZEUG_STARE_M));
+  let p = toward(home, me, step);
+  while (obstacleGap(log, p.x, p.z) + log.box!.pad < 0.55 && step < ZEUG_STEP_M) {
+    step = Math.min(ZEUG_STEP_M, step + 0.1);
+    p = toward(home, me, step);
+  }
+  return p;
+}
+
+/** The side lens on the sow's stare: low, the two of them facing each other across the
+ *  picture, him whole at its side (`s`: which side the lens stands on, ±1). */
+export function zeugView(me: Spot, sow: Spot, s: number): Omit<WayView, 'include'> & { include: readonly { x: number; z: number; h: number; r?: number }[] } {
+  const zh = headingTo(me, sow), zd = dist(me, sow);
+  return {
+    at: toward(me, sow, zd * 0.55), heading: zh + 1.25 * s,
+    halfW: zd * 0.5 + 0.6, halfD: 0.8, tall: 1.0, pitchDeg: 12, insetTop: 110, insetBottom: 30,
+    include: [{ x: me.x, z: me.z, h: 1.32, r: 0.4 }, { x: sow.x, z: sow.z, h: 0.9 }], // (his shoulders both: never cut by the edge)
+  };
+}
+
+/** 'pad' (the flip, walked): from where he stands at the mud, the spot he walks on to past
+ *  the wallow — the way's `wallowGive`, or, when he stands almost on it already, the same
+ *  way on from where he is (`WALK_ON_GOAL_M` along it), so there is always a way to walk. */
+export const WALK_ON_GOAL_M = 2.4;
+export function walkOnSpot(w: Way, me: Spot): Place {
+  if (dist(me, w.wallowGive) >= WALK_ON_GOAL_M - 0.4) return w.wallowGive;
+  const on = dirOfWay(w.wallowTalk, w.wallowGive);
+  const p = { x: me.x + on.x * WALK_ON_GOAL_M, z: me.z + on.z * WALK_ON_GOAL_M };
+  return { ...p, r: 0.6, heading: headingTo(p, WALLOW_AT) };
+}
+const dirOfWay = (a: Spot, b: Spot): Spot => { const d = dist(a, b) || 1; return { x: (b.x - a.x) / d, z: (b.z - a.z) / d }; };
+
+/** 'voeren' at the field: where the yearling stops beside him at his bag (never at the
+ *  lens, never nearer him than 1.2 m: the picture looks past him at it). */
+export function yearlingSideOf(me: Spot, from: Spot): Spot {
+  return atLocal({ x: me.x, z: me.z, heading: headingTo(me, from) }, 1.3, 0.75);
+}
+
+/** The yearling's way between its place at the mud and a field station: to the SOUTH field
+ *  round the mud's west side and the fence's west end (these points from the wallow south;
+ *  reversed coming back); to the north field straight, unless the log is in the way — then
+ *  round its nearer end. Every leg keeps ≥ 0.5 m from the log (frisling.places.test.ts). */
+const YEARLING_SOUTH: readonly Spot[] = [{ x: -31.0, z: -25.6 }, { x: -33.0, z: -29.8 }];
+export const YEARLING_LOG_M = 0.5;
+export function yearlingWay(w: Way, from: Spot, to: Spot): Spot[] {
+  if (w.field === 'S') return from.z > to.z ? [...YEARLING_SOUTH] : [...YEARLING_SOUTH].reverse();
+  const log = wallowLog();
+  const clear = (a: Spot, b: Spot): boolean => legGap(log, a, b) >= YEARLING_LOG_M + 0.1;
+  if (clear(from, to)) return [];
+  // round the log's nearer end: a point past each end, out from the log by its half-width
+  // and a pig's width; the one that keeps both legs clear and walks least
+  const b = log.box!;
+  const ends = [-1, 1].flatMap((e) => [-1, 1].map((sd) => {
+    const c = Math.cos(b.rot), s = Math.sin(b.rot);
+    const lx = e * (b.hx + 0.9), lz = sd * (b.hz + 0.6);
+    return { x: log.x + lx * c + lz * s, z: log.z - lx * s + lz * c };
+  }));
+  const ok = ends.filter((p) => clear(from, p) && clear(p, to)).sort((p, q) => (dist(from, p) + dist(p, to)) - (dist(from, q) + dist(q, to)));
+  return ok.length ? [ok[0]] : [];
+}
+/** The least gap (m) between a straight leg and the log's box (not its pad). */
+export function legGap(log: Obstacle, a: Spot, b: Spot): number {
+  let g = Infinity;
+  for (let t = 0; t <= 1.0001; t += 0.02) g = Math.min(g, obstacleGap(log, a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t) + log.box!.pad);
+  return g;
 }
 
 /* ---------------------------------------------------- the places table ---- */

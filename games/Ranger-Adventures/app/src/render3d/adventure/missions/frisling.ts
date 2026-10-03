@@ -27,10 +27,10 @@ import type { Mission, Distractor } from '../../../content/types';
 import type { AdventureKit, FrameSpec } from '../kit';
 import type { Adventure } from '../registry';
 import type { Actor } from '../actors';
-import type { Encounter } from '../../../engines/dagnacht';
 import type { ResidentPose } from '../types';
 import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
+import { narrator } from '../../../core/narrator';
 import { buildZoekenTrial } from '../../../engines/zoeken';
 import { spoorPath } from '../../play/kit';
 import { heightFor } from '../../play/spawn';
@@ -38,13 +38,18 @@ import { lyingHeight, LEG_SHARE } from '../../play/pose';
 import { TREE_BASE_H } from '../../world/Forest';
 import { searchBeat } from '../beats/search';
 import { routeBeat } from '../beats/route';
-import { choiceRun, type ChoiceRun } from '../beats/choice';
+import { choiceRun } from '../beats/choice';
+import { readSeconds } from '../beats/hold-math';
+import { PaceCore, WalkOnCore, paceStretch, paceTempts, TIRED_PACE, WALK_ON_M } from '../beats/walk-math';
+import { backPoints, openWindow, visibleShare } from '../cover-math';
 import { listenerOf } from '../../world/Residents';
 import { atLocal, dist, headingTo, toward, dirOf } from '../places';
+import type { Place, Spot } from '../types';
 import { FrislingHome } from './frisling.home';
 import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
-  frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, outSpotOf, besideView, sideBySideView, type Way,
+  frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, outSpotOf, bagView, BAG_REACH,
+  zeugStare, zeugView, walkOnSpot, yearlingSideOf, yearlingWay,
 } from './frisling.places';
 import { drawFrisling, frislingVariant, recentPlays, type FrislingVariant, type PastPlay } from './frisling.vary';
 
@@ -56,6 +61,12 @@ const FOLLOW_REACH = 46;
 const LEAD_PACE = 1.5;
 /** The first prints from the ring: crisp, so where the trail starts reads at once. */
 const CRISP_PRINTS = 4;
+/** After a reach at the lying piglet, at least this share of his back shows from the close
+ *  lens (the stems over him give way): he stays clearly there, never a sliver. */
+const AAIEN_SHOWS = 0.45;
+/** The walk on from the field to the mud is long enough to be the tired piglet's moment
+ *  (dragen at s2) from this long (m); shorter, he tires on the lead's last stretch. */
+const PACE_HOME_M = 12;
 
 /** The content's zoeken decoys of this mission (the stands show them in free roam). */
 function distractorsOf(m: Mission | undefined): readonly Distractor[] {
@@ -154,7 +165,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const layout = FAMILY_LAYOUTS[v.family].poses;
   const settings = store.get().settings;
   const listener = (): { x: number; z: number; yaw: number } => listenerOf(k.world.camera);
-  const call = (id: string, a: Actor): void => { if (settings.geluid) Sound.callAt(id, a.x, a.z, listener()); };
+  const call = (id: string, a: Actor, reach?: number): void => { if (settings.geluid) Sound.callAt(id, a.x, a.z, listener(), reach); };
   const me = (): { x: number; z: number; speed: number } => { const m = k.ranger(); return { x: m.x, z: m.z, speed: m.speed }; };
   /** After a framed moment (he faced the animal at his side) he turns for `to` and takes a
    *  first calm step that way, and the lens comes round behind him facing the way he goes. */
@@ -225,33 +236,49 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // 5 · where he lies, pressed flat in the parted bracken, squeaking right in front of
   // him: HANDS STILL (rustkracht 'big', played with the body — a click on him is a hand reaching)
   const rust = choiceRun(k, 2);
-  home.cover.partAt(lost.x, lost.z, 0.95, 0.72, 40);
   const lay = { x: lost.x, z: lost.z };
-  const deeper = (n: number): { x: number; z: number } => // (never further than one scoot)
-    atLocal({ ...lay, heading: headingTo(k.ranger(), lay) }, n % 2 ? -0.15 : 0.15, 0.5);
+  const lying = lyingHeight(heightFor('frisling'), LEG_SHARE.frisling);
+  /** The close picture of him lying in the bracken (centred on where he was found). */
+  const aaienView: FrameSpec = {
+    at: { ...lay }, heading: way.searchView.heading, halfW: 1.0, halfD: 0.95, tall: 0.55, pitchDeg: 46,
+    insetTop: 130, insetBottom: 70,
+  };
+  /** A reach scoots him SIDEWAYS across that picture (never deeper, away from the lens):
+   *  to the one side, then back past where he was to the other. */
+  const aside = (n: number): Spot => atLocal({ ...lay, heading: aaienView.heading }, n % 2 ? -0.42 : 0.42, 0);
+  /** The fronds over him part — and the stems between the close lens and his back give
+   *  way (a young frond, a stooping tussock: they grow down calmly) — so at least
+   *  `AAIEN_SHOWS` of his back is seen: he never shrinks to a sliver in the bracken. */
+  const showHim = (at: Spot): void => {
+    home.cover.partAt(at.x, at.z, 0.9, 0.72, 90);
+    const eye = k.lensFor(aaienView).cam;
+    const back = backPoints(at.x, k.ctx.groundY(at.x, at.z), at.z, lost.yaw, lying * 2.7, lying);
+    const drawn = home.cover.stems.map((st) => st.h);
+    const more = openWindow(home.cover.stems, eye, back, AAIEN_SHOWS);
+    if (more.length) home.cover.settle(more, 0.8, drawn);
+    k.stats.aaien_visible = Math.round(visibleShare(back, eye, home.cover.stems) * 100) / 100;
+  };
   if (!lost.body) throw new Error('[frisling] the lost piglet has no body');
   if (!lost.lies) void lost.lie(true); // (pressed flat where he was found: he gets up only once calm)
+  showHim(lay);
   for (let e = rust.nextIn('big'); e; e = rust.nextIn('big')) {
     k.beat = 'aaien:frame';
-    await k.frame({
-      at: toward(lay, deeper(0), 0.25), heading: way.searchView.heading, halfW: 1.0, halfD: 0.95, tall: 0.55, pitchDeg: 46,
-      insetTop: 130, insetBottom: 70,
-    });
+    await k.frame(aaienView);
     let reaches = 0;
     await rust.still(e.id, {
       line: c.raakNiet, mis: c.schrok, hands: () => lost.body,
       // he lies squeaking; a moment in, he peeks at him and squeaks again (the hand wants to go)
       show: () => call('piep', lost),
       tempt: () => { call('piep', lost); void lost.lookAt(me, 1.6); },
-      // a hand reaches for him: he scoots deeper into the bracken, lies flat, peeks out
+      // a hand reaches for him: he scoots aside through the bracken, lies flat, peeks out
       wrong: async () => {
         call('piep', lost);
-        const to = deeper(reaches++);
-        await lost.go(to.x, to.z, { speed: 'trot' });
+        const to = aside(reaches++);
+        await lost.go(to.x, to.z, { speed: 'trot', face: lost.yaw });
         await lost.lie(true);
+        // he peeks out where he lies now: the fronds over him part (and stay parted)
+        showHim(to);
         await k.wait(0.9);
-        // he peeks out: the fronds over his head part again (the moment comes back, he in it)
-        home.cover.partAt(to.x, to.z, 0.8, 0.7, 40);
         await lost.lookAt(me, 1.2);
       },
     });
@@ -265,13 +292,31 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const edge = outSpotOf(way, r1);
   await lost.go(edge.x, edge.z, { speed: 'walk', face: headingTo(edge, r1) });
   void lost.lookAt(me, 3);
-  // the first calm moment on the way home, here at the stand (s1)
+  // the first calm moment on the way home (s1): the piglet begs at his bag here, or he is
+  // tired on the lead's first stretch
   const s1 = rust.nextIn('weg');
-  if (s1) await weg(s1, 'stand');
+  if (s1?.id === 'voeren') await voerenPiglet();
 
-  // 7 · lead him home to the rooting field, calmly, his family ahead all the way
+  // 7 · lead him home to the rooting field, calmly, his family ahead all the way. Tired
+  // (dragen) he is on the lead's first stretch when that moment comes first; when it comes
+  // second on a way whose walk on from the field to the mud is only a few steps (wei, berk:
+  // 3-8 m, too short to be a moment), on the lead's last stretch instead
   await setOff(way.fieldApproach);
-  await k.walk({ name: 'field', to: way.fieldApproach, r: 1.0, line: c.leid, doel: c.chipWroet, glyph: 'boot', lead });
+  const homeLong = pathLength([way.fieldApproach, ...way.toWallow, way.wallowTalk]) >= PACE_HOME_M;
+  let leadName = 'field';
+  if (s1?.id === 'dragen') await dragen([way.fieldApproach], c.chipWroet);
+  else if (rust.nextIn('weg')?.id === 'dragen' && !homeLong) {
+    const m0 = k.ranger();
+    const lead0 = dist(m0, way.fieldApproach);
+    const len = paceStretch(k.knobs('dagnacht').holdS, lead0);
+    if (lead0 - len > 2) {
+      const mid = pointAlong([m0, way.fieldApproach], lead0 - len);
+      await k.walk({ name: 'field', to: { ...mid, r: 1.0 }, r: 1.0, line: c.leid, doel: c.chipWroet, glyph: 'boot', lead });
+      leadName = 'field-end';
+    }
+    await dragen([way.fieldApproach], c.chipWroet);
+  }
+  await k.walk({ name: leadName, to: way.fieldApproach, r: 1.0, line: c.leid, doel: c.chipWroet, glyph: 'boot', lead });
   k.say(c.routeKijk); // (the route's own words from here, never the walk's)
 
   // 8 · the group's route over the field (corsi): the piglet comes to his left side, the
@@ -283,12 +328,14 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   });
   // 9 · the raaf: a nose that finds the way
   await k.fact(1);
-  // the second calm moment on the way home, at the field (s2)
+  // the second calm moment on the way home (s2): the yearling trots out to his bag here,
+  // or the piglet is tired on the way to the mud
   const s2 = rust.nextIn('weg');
-  if (s2) await weg(s2, 'field');
+  if (s2?.id === 'voeren') await voerenYearling();
 
-  // 10 · on to the wallow, the piglet at his heels
+  // 10 · on to the wallow, the piglet at his heels (tired, on a way where that walk is long)
   await setOff(way.toWallow[0] ?? way.wallowTalk);
+  if (s2?.id === 'dragen') await dragen([...way.toWallow, way.wallowTalk], c.chipModder);
   await k.walk({ name: 'wallow', to: way.wallowTalk, r: 1.5, line: c.breng, doel: c.chipModder, glyph: 'boot', lead, via: way.toWallow });
 
   // 11 · at the mud (s3): the sow's stare and the free path, in the drawn order
@@ -300,8 +347,8 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   k.beat = 'wallow:frame';
   await k.frame({ ...way.wallowView, include: [{ x: talk.x, z: talk.z, h: 1.32 }, { x: left.x, z: left.z, h: 0.45 }] }, { face: toWallow });
   for (let e = rust.nextIn('thuis'); e; e = rust.nextIn('thuis')) {
-    if (e.id === 'zeug') await zeug(e);
-    else await pad(e);
+    if (e.id === 'zeug') await zeug(e.id);
+    else await pad(e.id);
   }
   rust.done();
 
@@ -348,61 +395,136 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
 
   /* ---------------------------------------------------- the calm moments ---- */
 
-  /** A calm moment on the way home ('weg'): at the stand (s1) or at the field (s2). */
-  async function weg(e: Encounter, at: 'stand' | 'field'): Promise<void> {
-    if (e.id === 'dragen') await dragen(rust, at === 'stand' ? P.cover : P.field);
-    else if (e.id === 'voeren') await (at === 'stand' ? voerenPiglet(rust) : voerenYearling(rust));
-    else throw new Error(`[frisling] no station for "${e.id}" on the way`);
+  /** A line's read: the voice done with it (when voorlezen is on), never quicker than a
+   *  calm read (280 ms a word, at least `min` s); mission time, stopped by a stop. */
+  async function readOut(line: string, min = 0): Promise<void> {
+    const calm = k.wait(Math.max(min, readSeconds(line)));
+    if (!settings.voorlezen) { await calm; return; }
+    await Promise.all([calm, k.guard(narrator.quiet(line.split(/\s+/).length * 700 + 2000))]);
   }
 
-  /** 'dragen': he is tired — carry him, or walk with him? (a card) The two of them side by
-   *  side, what he looked at (the stand, the field) behind; he turns to the piglet. */
-  async function dragen(run: ChoiceRun, looked: { x: number; z: number }): Promise<void> {
-    const r = k.ranger();
-    const pig = { x: lost.x, z: lost.z };
-    k.beat = 'dragen:frame';
-    await k.frame(sideBySideView(r, pig, looked), { face: headingTo(r, pig) });
-    await run.ask('dragen', {
-      // picked up: a squeal, he trots off, stops, and comes back to him
-      wrong: async () => {
-        call('piep', lost);
-        const away = toward(k.ranger(), lost, dist(k.ranger(), lost) + 2.2);
-        await lost.go(away.x, away.z, { speed: 'trot' });
-        await k.wait(0.7);
-        const near = toward(k.ranger(), lost, 1.5);
-        await lost.go(near.x, near.z, { speed: 'walk', face: headingTo(near, k.ranger()) });
-      },
-    });
+  /** A calm moment's good words (the content's uitleg, as its card says them). */
+  function uitlegOf(id: string): string {
+    return rust.trial.encounters.find((x) => x.id === id)?.uitleg ?? 'Rustig zo.';
   }
 
-  /** 'voeren' at the stand: the lost piglet himself sniffs his bag, hungry (a card). */
-  async function voerenPiglet(run: ChoiceRun): Promise<void> {
+  /** A calm moment done with the body: the soft "right" tone and its good words, read
+   *  before what follows. */
+  async function praise(id: string): Promise<void> {
+    if (settings.geluid) Sound.correct();
+    const good = uitlegOf(id);
+    k.say(good, { good: true });
+    await readOut(good, 1.6);
+  }
+
+  /**
+   * 'dragen' (PACE): he is tired — walk slowly with him. A stretch of the way home
+   * (`paceStretch`: the level's hold walked twice at his tired pace, at least 8 m, or the
+   * rest of the way) with the piglet trotting at his side, his walk at its pace; the
+   * family grunts ahead and a sibling squeaks (`tempts`: he wants to hurry). A RUN is the
+   * impulse (`PaceCore`): the piglet squeals and dives into a clump in his picture, "Niet
+   * rennen. Hij is moe.", and once he walked calmly back to it the stretch starts again
+   * from there. Walked calmly to its end: the good words. `pts`: the rest of the way.
+   */
+  async function dragen(pts: readonly Place[], doel: string): Promise<void> {
+    const knobs = k.knobs('dagnacht');
+    const core = new PaceCore((g) => rust.answer('dragen', g));
+    const fork = k.play.fork('pace');
+    const last = pts[pts.length - 1];
+    k.stats.pace_dragen = 0;
+    for (;;) {
+      const m = k.ranger();
+      // the way still ahead of him (the points he has passed dropped)
+      const ahead = pts.filter((p, i) => i === pts.length - 1 || dist(p, last) < dist(m, last));
+      const path: Spot[] = [{ x: m.x, z: m.z }, ...ahead];
+      const rest = pathLength(path);
+      const len = paceStretch(knobs.holdS, rest);
+      const whole = len >= rest - 0.6; // (the rest of the way: it ends where the walk ends)
+      const end: Place = whole ? last : { ...pointAlong(path, len + 0.9), r: 0.9 };
+      k.stats.pace_len = Math.round(len * 10) / 10;
+      const marks = paceTempts(len, knobs, fork.rng);
+      let walked = 0, mi = 0, was = k.ranger(), out = false;
+      const walk = k.walk({
+        name: 'moe', to: end, r: end.r ?? 1.0, line: c.moe, doel, glyph: 'boot',
+        via: path.slice(1).filter((p) => p !== last && pathLength([path[0], p]) < len),
+        lead: {
+          ...lead, pace: TIRED_PACE, runLine: c.nietRennenMoe, backLine: c.moe,
+          onHide: (sp: Spot): void => {
+            lead.onHide(sp);
+            if (core.run()) { k.stats.pace_dragen = core.impulses; if (settings.geluid) Sound.tryAgain(); }
+          },
+          onOut: (): void => { lead.onOut(); if (core.phase === 'react') out = true; },
+        },
+        // (once he walked calmly back and the piglet is out again, this stretch is over:
+        // a new one begins from where they stand)
+        reached: () => out,
+        tick: () => {
+          const r = k.ranger();
+          if (core.phase === 'walk') walked += Math.min(1, dist(r, was));
+          was = r;
+          // the family grunts ahead, a sibling squeaks: hurry? (never while he hides)
+          while (mi < marks.length && walked >= marks[mi]) {
+            if (mi++ % 2 === 0) call('wildzwijn', A.sow, 45); else call('piep', A.p2, 45);
+          }
+        },
+      });
+      k.beat = 'pace:dragen'; // (a calm moment, not a walk: a discovery's reveal waits)
+      await walk;
+      if (out) { core.again(); continue; }
+      core.arrived();
+      break;
+    }
+    // walked calmly with him: they stop a moment, the good words
+    k.lockFollow();
+    k.world.stopRanger();
+    await praise('dragen');
+  }
+
+  /** 'voeren' at the stand (s1, HANDS): the lost piglet himself noses the bag on his hip,
+   *  hungry, squeaks, looks up: hands still. A click on him is a hand with a crumb: he
+   *  chews it and wriggles closer for more, and the moment comes back. Held: he gives up
+   *  on the bag and flops down at his feet. */
+  async function voerenPiglet(): Promise<void> {
     const r = k.ranger();
     k.beat = 'voeren:frame';
-    await k.frame(besideView(r, { x: lost.x, z: lost.z }));
-    void lost.sniff(r.x, r.z, 30, 0.5); // (his snout at the bag on his hip)
-    call('piep', lost);
-    await run.ask('voeren', {
-      vraag: settings.jargon ? c.voerenBig : undefined,
-      // a crumb: he wants more — he wriggles closer still, eager, and squeaks for it
-      wrong: async () => {
+    await k.frame(bagView(r, { x: lost.x, z: lost.z }));
+    let reach = BAG_REACH; // (his snout at the bag on his hip)
+    const nose = (secs = 60): Promise<boolean> => { const rr = k.ranger(); return lost.sniff(rr.x, rr.z, secs, reach); };
+    void nose();
+    await rust.still('voeren', {
+      line: c.eten, hands: () => lost.body,
+      show: () => call('piep', lost),
+      // he looks up at him, squeaks, and noses a little closer
+      tempt: () => {
         call('piep', lost);
-        const rr = k.ranger();
-        await lost.sniff(rr.x, rr.z, 1.4, 0.35);
+        reach = Math.max(0.42, reach - 0.05);
+        void lost.lookAt(me, 0.8).then((ok) => { if (ok) void nose(); });
       },
-      // no food: he gives up on the bag and stands by him, ready to go
-      right: async () => { lost.idle(); void lost.lookAt(me, 1.5); },
+      // a hand with a crumb: he chews it, squeaks for more, wriggles closer, eager
+      wrong: async () => {
+        if (settings.geluid) Sound.sniff();
+        call('piep', lost);
+        reach = 0.42;
+        await nose(1.6);
+        call('piep', lost);
+        void nose();
+      },
+      // no food: he gives up on the bag and flops down at his feet
+      right: async () => { lost.idle(); await lost.lie(true); await k.wait(0.8); },
     });
   }
 
-  /** 'voeren' at the field: the yearling trots out from the wallow and noses his bag (a card). */
-  async function voerenYearling(run: ChoiceRun): Promise<void> {
+  /** 'voeren' at the field (s2, HANDS): the yearling trots out from the wallow (round the
+   *  log) and noses his bag, grunting, never nearer than 1.2 m: hands still. A click is a
+   *  hand with a biscuit: it chews, grunts for more and shuffles closer; the moment comes
+   *  back. Held: it loses interest and trots back to its family. */
+  async function voerenYearling(): Promise<void> {
     const yearling = A.yearling;
     const yHome = layout.yearling;
     const r = k.ranger();
     const from = { x: yearling.x, z: yearling.z };
     const toY = headingTo(r, from);
-    const side = atLocal({ x: r.x, z: r.z, heading: toY }, 1.3, 0.75); // beside him, never at the lens
+    const side = yearlingSideOf(r, from); // beside him, never at the lens
     k.beat = 'voeren:frame';
     await k.frame({
       at: toward(r, from, 2.4), heading: toY - 0.32, halfW: 2.6, halfD: 2.3, tall: 0.95, pitchDeg: 28, insetTop: 96, insetBottom: 290,
@@ -410,55 +532,68 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     }, { face: toY });
     k.say(c.komt);
     k.beat = 'field:yearling';
-    // (round the family's west side and the fence's west end when the field lies south)
     for (const p of yearlingWay(way, from, side)) await yearling.go(p.x, p.z, { speed: 1.1 });
     await yearling.go(side.x, side.z, { speed: 1.1, face: headingTo(side, r) });
-    void yearling.sniff(r.x, r.z, 30, 1.25); // at his bag, never closer than 1.2 m
-    await run.ask('voeren', {
-      // a biscuit: he wants more — he wriggles a little closer (never under 1.2 m), eager
-      wrong: async () => {
+    let reach = 1.4;
+    const nose = (secs = 60): Promise<boolean> => { const rr = k.ranger(); return yearling.sniff(rr.x, rr.z, secs, reach); };
+    void nose();
+    await rust.still('voeren', {
+      line: c.eten, hands: () => yearling.body,
+      show: () => call('knor-blij', yearling),
+      // he grunts, looks up at him, and shuffles a little closer (never under 1.2 m)
+      tempt: () => {
         call('knor-blij', yearling);
-        const rr = k.ranger();
-        const closer = toward(rr, yearling, Math.max(1.22, dist(rr, yearling) - 0.15));
-        await yearling.go(closer.x, closer.z, { speed: 'walk', face: headingTo(closer, rr) });
-        await yearling.sniff(rr.x, rr.z, 1.4, 1.22);
+        reach = Math.max(1.22, reach - 0.08);
+        void yearling.lookAt(me, 0.9).then((ok) => { if (ok) void nose(); });
       },
-      // no food: he trots back to his family and roots again
+      // a hand with a biscuit: he chews it, grunts for more, shuffles closer, eager
+      wrong: async () => {
+        if (settings.geluid) Sound.sniff();
+        call('knor-blij', yearling);
+        reach = 1.22;
+        await nose(1.6);
+        call('knor-blij', yearling);
+        void nose();
+      },
+      // no food: he loses interest and trots back to his family (round the log), and roots
       right: async () => {
-        for (const p of yearlingWay(way, side, from)) await yearling.go(p.x, p.z, { speed: 'trot' });
+        const now = { x: yearling.x, z: yearling.z };
+        for (const p of yearlingWay(way, now, yHome)) await yearling.go(p.x, p.z, { speed: 'trot' });
         await yearling.go(yHome.x, yHome.z, { speed: 'trot' });
         atHome(yearling, yHome);
       },
     });
   }
 
-  /** 'zeug': the sow lifts her head and looks at him: FEET STILL (with the body). */
-  async function zeug(e: Encounter): Promise<void> {
+  /** 'zeug' (FEET still): the sow lifts her head and comes out of the mud to its rim, between
+   *  her piglets and him (a step or two, across the side lens's picture, never at it), and
+   *  looks at him — big enough to read. A step toward them: a firm grunt, she stamps half a
+   *  step nearer (never within 2.8 m), and the moment comes back. Held: she lowers her head
+   *  and goes back to her place. */
+  async function zeug(id: string): Promise<void> {
     const sow = A.sow;
     const sowHome = { x: sow.x, z: sow.z };
-    k.beat = 'zeug:frame';
     const zt = k.ranger();
-    const zh = headingTo(zt, sowHome);
-    const zd = dist(zt, sowHome);
-    // the lens comes round to their side, low, the two of them facing each other across the
-    // picture — her head coming up and her stare at him read, him whole at the side
-    const zeugView = (s: number): FrameSpec => ({
-      at: toward(zt, sowHome, zd * 0.55), heading: zh + 1.25 * s,
-      halfW: zd * 0.5 + 0.6, halfD: 0.8, tall: 1.0, pitchDeg: 12, insetTop: 110, insetBottom: 30,
-      include: [{ x: zt.x, z: zt.z, h: 1.32, r: 0.4 }, { x: sowHome.x, z: sowHome.z, h: 0.9 }], // (his shoulders both: never cut by the edge)
-    });
-    await k.frame(zeugView(fieldClutter(zeugView(-1)) <= fieldClutter(zeugView(1)) ? -1 : 1));
-    await rust.still(e.id, {
+    const stare = zeugStare(sowHome, zt);
+    const side = fieldClutter(zeugView(zt, stare, -1)) <= fieldClutter(zeugView(zt, stare, 1)) ? -1 : 1;
+    k.beat = 'zeug:frame';
+    call('wildzwijn', sow);
+    const came = sow.go(stare.x, stare.z, { speed: 'walk', face: headingTo(stare, zt) });
+    await k.frame(zeugView(zt, stare, side));
+    await k.until(() => sow.doing !== 'go', 4);
+    void came;
+    k.stats.zeug_px_m = Math.round(dist(stare, zt) * 10) / 10;
+    await rust.still(id, {
       line: c.staStil, feet: true,
       show: () => { void sow.lookAt(me); call('wildzwijn', sow); },
       // a piglet squeaks by her side (the step toward them wants to go); she keeps watching
       tempt: () => { call('piep', A.p2); void sow.lookAt(me); },
-      // a step toward her piglets: a firm grunt, she steps between (sideways, never at the lens)
+      // a step toward her piglets: a firm grunt, half a step nearer, a stamp
       wrong: async () => {
         call('wildzwijn', sow);
         const r = k.ranger();
-        const mid = toward(sowHome, { x: (r.x + P.wallow.x) / 2, z: (r.z + P.wallow.z) / 2 }, 0.7);
-        await sow.go(mid.x, mid.z, { speed: 'walk', face: headingTo(mid, r) });
+        const nearer = toward(sow, r, Math.max(0, Math.min(0.5, dist(sow, r) - 2.8)));
+        await sow.go(nearer.x, nearer.z, { speed: 'walk', face: headingTo(nearer, r) });
         await k.wait(0.6);
         void sow.lookAt(me);
       },
@@ -467,28 +602,90 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     });
   }
 
-  /** 'pad': the path is free (the flip: now GO) — a card. */
-  async function pad(e: Encounter): Promise<void> {
+  /**
+   * 'pad' (the flip, WALK ON): the path is free. He turns the way on past the mud (the lens
+   * comes round behind him) and "Het pad is vrij. Loop maar.": walking on `WALK_ON_M` along
+   * it within the level's `goWaitS` (from the end of the line's read) is right; standing
+   * past it is the stay-habit kept too long (`WalkOnCore`): the group shuffles on, "Je
+   * wacht te lang.", and the moment comes back (his steps before still count). The piglet
+   * trots at his side; the chip names the way, its arrow soon.
+   */
+  async function pad(id: string): Promise<void> {
+    const on = walkOnSpot(way, k.ranger());
+    // he turns that way with a small step (never a snap), the lens comes round behind him
+    const step = toward(k.ranger(), on, 0.3);
+    await k.walkRanger(step.x, step.z, 0.05);
+    await k.behind();
+    const knobs = k.knobs('dagnacht');
+    const d0 = dist(k.ranger(), on);
+    const core = new WalkOnCore(knobs.goWaitS, (g) => rust.answer(id, g), Math.min(WALK_ON_M, d0 - 0.7));
+    k.stats.pad_wait_s = knobs.goWaitS;
+    k.stats.pad_late = 0;
     const family = [A.sow, A.p1, A.p2, A.p3, A.yearling];
-    k.beat = 'pad:frame';
-    const t = k.ranger();
-    await k.frame({ ...way.wallowView, include: [{ x: t.x, z: t.z, h: 1.32 }] }, { face: headingTo(t, P.wallow) });
-    await rust.ask(e.id, {
-      // he waits too long: the group shuffles on a little, then roots again
-      wrong: async () => {
-        const away = dirOf(headingTo(k.ranger(), P.wallow));
-        await Promise.all(family.map((a) => a.go(a.x + away.x * 1.1, a.z + away.z * 1.1, { speed: 'walk' })));
-        for (const a of family) a.root(a.x, a.z, 0.4);
-      },
-      // he walks on a few calm steps along the way, past the wallow: room for the family
-      right: async () => {
-        const left2 = atLocal({ x: way.wallowGive.x, z: way.wallowGive.z, heading: way.wallowGive.heading! }, -1.1, 0.35);
-        void lost.go(left2.x, left2.z, { speed: 'walk', face: headingTo(left2, P.wallow) });
-        await k.walkRanger(way.wallowGive.x, way.wallowGive.z, 0.1);
-        k.world.faceRanger(headingTo(k.ranger(), P.wallow));
-      },
+    let read = false, reacting = false, praised = false, shuffles = 0;
+    const readLine = (): void => { read = false; void readOut(c.padVrij).then(() => { read = true; }, () => {}); };
+    // he waited too long: the group shuffles on a little (away from him, then back) and
+    // roots again, the words for it, and the same moment
+    const late = async (): Promise<void> => {
+      k.stats.pad_late = core.impulses;
+      if (settings.geluid) Sound.tryAgain();
+      const away = dirOf(headingTo(k.ranger(), P.wallow));
+      const sgn = shuffles++ % 2 ? -1 : 1;
+      await Promise.all(family.map((a) => a.go(a.x + away.x * 0.9 * sgn, a.z + away.z * 0.9 * sgn, { speed: 'walk' })));
+      for (const a of family) a.root(a.x, a.z, 0.4);
+      k.say(c.teLang);
+      await readOut(c.teLang, 1.6);
+      core.again();
+      k.say(c.padVrij);
+      readLine();
+      reacting = false;
+    };
+    const judge = (): void => {
+      if (reacting) return;
+      if (core.phase === 'read' && read) core.begin(k.now);
+      const res = core.tick(k.now, d0 - dist(k.ranger(), on));
+      if (res === 'late') { reacting = true; void late().catch(() => {}); }
+      else if (res === 'went' && !praised) {
+        praised = true;
+        if (settings.geluid) Sound.correct();
+        k.say(uitlegOf(id), { good: true });
+      }
+    };
+    readLine();
+    const walk = k.walk({
+      name: 'pad', to: on, r: 0.6, line: c.padVrij, doel: c.chipPad, glyph: 'boot', lead,
+      arrowAfter: knobs.goWaitS / 2, tick: judge,
     });
+    k.beat = 'go:pad'; // (a calm moment, not a walk: a discovery's reveal waits)
+    await walk;
+    // (there while the group reacted: judged as soon as the line is back)
+    if (core.phase !== 'went') await k.until(() => { judge(); return core.phase === 'went'; });
+    k.lockFollow();
+    k.world.stopRanger();
+    await readOut(uitlegOf(id), 1.2);
+    // room for the family: the piglet beside him, watching them; he turns to the mud
+    const left2 = atLocal({ x: on.x, z: on.z, heading: headingTo(on, P.wallow) }, -1.1, 0.35);
+    void lost.go(left2.x, left2.z, { speed: 'walk', face: headingTo(left2, P.wallow) });
+    k.world.faceRanger(headingTo(k.ranger(), P.wallow));
   }
+}
+
+/** The length of a way through `pts` (m). */
+function pathLength(pts: readonly Spot[]): number {
+  let n = 0;
+  for (let i = 1; i < pts.length; i++) n += dist(pts[i - 1], pts[i]);
+  return n;
+}
+
+/** The spot `d` m along a way through `pts` (its end, if the way is shorter). */
+function pointAlong(pts: readonly Spot[], d: number): Spot {
+  for (let i = 1; i < pts.length; i++) {
+    const l = dist(pts[i - 1], pts[i]);
+    if (d <= l) return toward(pts[i - 1], pts[i], d);
+    d -= l;
+  }
+  const e = pts[pts.length - 1];
+  return { x: e.x, z: e.z };
 }
 
 /**
@@ -518,13 +715,4 @@ function walkRound(k: AdventureKit, sow: Actor, home: ResidentPose, call: (id: s
     }
     if (!past && dist(m, P.wallow) > 10 && m.z < -31) { past = true; k.say(k.copy.volg); }
   };
-}
-
-/** The yearling's way between the wallow and a field station: to the south field round
- *  the mud's west side and the fence's west end (the points from the wallow south;
- *  reversed coming back). */
-const YEARLING_SOUTH: readonly { x: number; z: number }[] = [{ x: -31.0, z: -25.6 }, { x: -33.0, z: -29.8 }];
-function yearlingWay(way: Way, from: { x: number; z: number }, to: { x: number; z: number }): { x: number; z: number }[] {
-  if (way.field !== 'S') return [];
-  return from.z > to.z ? [...YEARLING_SOUTH] : [...YEARLING_SOUTH].reverse();
 }
