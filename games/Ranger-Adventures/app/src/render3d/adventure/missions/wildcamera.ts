@@ -145,7 +145,7 @@ const NEUS_SOFT = 1.1;
 /** Run 7 (wc-album r2): the fox family's night photo — how brightly the camera's infrared
  *  flash lights the three (their own glow, 0..1) and how dim the night sky's fill is around
  *  them (×): they stand out pale and clear, never pale ghosts on pale ground. */
-const FAMILY_IR = 0.09;
+const FAMILY_IR = 0.13;
 const FAMILY_FILL = 0.55;
 /** …and a nose at the lens in the night: its face lit, the ground behind it a little dimmer. */
 const NEUS_IR = 0.06;
@@ -374,14 +374,20 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
       await k.until(() => (middleU() - shotU) * dir >= 0, 9);
       shutter(true);
       const lens = home.photoLens();
-      const frame = familyPhoto(lens, bodies());
+      let frame = familyPhoto(lens, bodies());
+      const cam = home.photoCameraAt(frame.look, frame.fov, 1.6);
       // (its infrared flash lights the three: pale and clear against the dark wood, where
-      // the far trees, the hut and the signpost fade into the night)
-      const near = lens.distanceTo(frame.look);
+      // the far trees, the hut and the signpost fade into the night; framed as they stand at
+      // the render itself — a frame or two after the click on a loaded laptop, they have
+      // trotted on half a metre)
       const p = await photograph(shot, 0, 1, 'vosjes', 'nacht', () => {
+        frame = familyPhoto(lens, bodies());
+        cam.copy(home.photoCameraAt(frame.look, frame.fov, 1.6), false);
+        cam.updateMatrixWorld(true);
+        const near = lens.distanceTo(frame.look);
         const a = home.irLit([vixen.body ?? vixen.group, young.group], FAMILY_IR), b = home.closeMist(near + 1.5, near + 9);
         return () => { b(); a(); };
-      }, undefined, FAMILY_FILL, { cam: home.photoCameraAt(frame.look, frame.fov, 1.6), flash: true });
+      }, undefined, FAMILY_FILL, { cam, flash: true });
       if (p) { photos.photos.push(p); photos.pin(p); }
       // (dev read: the photo's field of view, and how much nearer the lens she stands than
       // her cubs (cm, along its look; never much: they walk on her own track))
