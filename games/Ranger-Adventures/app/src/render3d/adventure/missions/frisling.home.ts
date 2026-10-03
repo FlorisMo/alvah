@@ -127,56 +127,68 @@ class Stand {
 }
 
 /**
- * A sow's nest (a 'worpketel'): a low ring of bitten, rust-brown fronds round a pressed,
- * dark hollow, about 0.9 m across — one mesh, vertex-coloured, built in world coordinates
- * on the ground at `at`. Plain dressing: never a look-alike, never clicked.
+ * A sow's nest (a 'worpketel'): a low, soft bed of bitten bracken fronds she dragged into a
+ * heap and lay on, about 0.9 m across — fronds pressed flat every which way, overlapping
+ * (most in the middle, where she lay), their leaflets and ragged tips making the edge: no
+ * ring, no rim, nothing raised more than a few centimetres. Muted dry-bracken browns and a
+ * faded green, lit evenly (every normal up: matte, no facets), so it sits quietly in the
+ * heather and never pulls the eye in a held picture. One mesh, vertex-coloured, built in
+ * world coordinates on the ground at `at`. Plain dressing: never a look-alike, never clicked.
  */
 function nestMesh(g: (x: number, z: number) => number, at: { x: number; z: number }, seed: number): THREE.Mesh {
   const pos: number[] = [];
   const col: number[] = [];
   const rnd = stream(seed);
-  // dry, bitten bracken: tan to rust, never dark (a soft bed, nothing that looks like an animal)
-  const tans = ['#9a7a54', '#8e6e48', '#a6865c', '#856743', '#98764d'].map((c) => new THREE.Color(c));
+  // dry, bitten bracken, muted: soft browns and a faded green, never dark, never bright
+  const tones = ['#8a7759', '#7e6e52', '#91805f', '#776a50', '#857a5a', '#7b7c58'].map((c) => new THREE.Color(c));
   const put = (x: number, y: number, z: number, c: THREE.Color): void => {
     pos.push(at.x + x, g(at.x + x, at.z + z) + y, at.z + z);
     col.push(c.r, c.g, c.b);
   };
-  // the pressed bed: a flat, slightly darker round of crushed fronds
-  const bed = new THREE.Color('#6e5a40');
-  const SEG = 16;
-  for (let i = 0; i < SEG; i++) {
-    const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
-    const r = NEST_R * 0.7;
-    put(0, 0.012, 0, bed);
-    put(Math.cos(a1) * r, 0.012, Math.sin(a1) * r, bed);
-    put(Math.cos(a0) * r, 0.012, Math.sin(a0) * r, bed);
-  }
-  // the rim: bitten fronds laid round it, curving with the ring, lying low (two layers)
-  for (const layer of [0, 1]) {
-    const n = layer ? 12 : 16;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + rnd() * 0.3 + layer * 0.19;
-      const span = 0.75 + rnd() * 0.35; // (how far round the ring one frond reaches)
-      const r = NEST_R * (0.72 + layer * 0.14 + rnd() * 0.1);
-      const w = 0.045 + rnd() * 0.02;
-      const h = 0.035 + rnd() * 0.035 + layer * 0.03;
-      const c = tans[Math.floor(rnd() * tans.length)].clone().multiplyScalar(0.9 + rnd() * 0.2);
-      const STEPS = 4;
-      for (let k = 0; k < STEPS; k++) {
-        const t0 = k / STEPS, t1 = (k + 1) / STEPS;
-        const b0 = a + span * t0, b1 = a + span * t1;
-        const w0 = w * (1 - t0 * 0.6), w1 = w * (1 - t1 * 0.6);
-        const y0 = 0.02 + h * Math.sin(Math.PI * t0), y1 = 0.02 + h * Math.sin(Math.PI * t1);
-        const p = (b: number, rr: number, y: number): [number, number, number] => [Math.cos(b) * rr, y, Math.sin(b) * rr];
-        const q = [p(b0, r - w0, y0), p(b0, r + w0, y0), p(b1, r + w1, y1), p(b1, r - w1, y1)];
-        for (const v of [q[0], q[1], q[2], q[0], q[2], q[3]]) put(v[0], v[1], v[2], c);
+  const tri = (a: number[], b: number[], c: number[], k: THREE.Color): void => {
+    put(a[0], a[1], a[2], k); put(b[0], b[1], b[2], k); put(c[0], c[1], c[2], k);
+  };
+  const FRONDS = 26;
+  for (let i = 0; i < FRONDS; i++) {
+    // where it lies: more of them towards the middle (where she lay), any way round
+    const ra = rnd() * Math.PI * 2, rr = NEST_R * Math.sqrt(rnd()) * 0.75;
+    const bx = Math.cos(ra) * rr, bz = Math.sin(ra) * rr;
+    const dir = rnd() * Math.PI * 2;
+    // its length, cut short where its tip would reach past the bed (a ragged edge, no ring)
+    let len = 0.26 + rnd() * 0.22;
+    const reach = NEST_R * (1.05 + rnd() * 0.2);
+    while (len > 0.12 && Math.hypot(bx + Math.cos(dir) * len, bz + Math.sin(dir) * len) > reach) len -= 0.03;
+    const w = 0.035 + rnd() * 0.015;
+    const lift = 0.006 + (i / FRONDS) * 0.022; // (laid one over another: later ones on top)
+    const c = tones[Math.floor(rnd() * tones.length)].clone().multiplyScalar(0.94 + rnd() * 0.1);
+    const ux = Math.cos(dir), uz = Math.sin(dir), vx = -uz, vz = ux; // along it, across it
+    const at2 = (t: number, side: number, y: number): number[] => [bx + ux * len * t + vx * side, y, bz + uz * len * t + vz * side];
+    // its stalk-and-blade: a tapering strip, pressed flat
+    const STEPS = 3;
+    for (let k = 0; k < STEPS; k++) {
+      const t0 = k / STEPS, t1 = (k + 1) / STEPS;
+      const w0 = w * (1 - t0 * 0.7), w1 = w * (1 - t1 * 0.7);
+      const y0 = lift + 0.004 * Math.sin(Math.PI * t0), y1 = lift + 0.004 * Math.sin(Math.PI * t1);
+      const a = at2(t0, -w0, y0), b = at2(t0, w0, y0), d = at2(t1, w1, y1), e = at2(t1, -w1, y1);
+      tri(a, b, d, c); tri(a, d, e, c);
+    }
+    // its leaflets: small ragged points off both sides (the fern's outline, bitten short)
+    for (const t of [0.3, 0.55, 0.8]) {
+      for (const side of [-1, 1]) {
+        if (rnd() < 0.25) continue; // (bitten off)
+        const lw = w * (1.1 - t * 0.6), ll = 0.05 + rnd() * 0.04;
+        const base0 = at2(t - 0.07, side * lw * 0.5, lift + 0.002), base1 = at2(t + 0.07, side * lw * 0.5, lift + 0.002);
+        const tip = at2(t + 0.12, side * (lw * 0.5 + ll), lift + 0.001);
+        tri(base0, side > 0 ? tip : base1, side > 0 ? base1 : tip, c);
       }
     }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.computeVertexNormals();
+  // (every normal straight up: the bed takes the light as the ground round it does, soft and
+  // even, never the hard facets a ring of raised strips showed)
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(pos.length / 3).fill([0, 1, 0]).flat(), 3));
   const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }));
   m.name = 'frisling-nest';
   m.castShadow = false;
