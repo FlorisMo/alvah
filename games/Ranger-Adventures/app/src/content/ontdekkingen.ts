@@ -65,7 +65,23 @@ const REE: Ontdekking[] = [
 const WILDCAMERA: Ontdekking[] = [
   { id: 'wildcamera.das', home: 'wildcamera', soort: 'dier', naam: 'de das',
     hint: 'Wie snuffelt er in de nacht?', model: 'animal-das-badger', geholpen: true },
-  // the wildcamera lane adds its rows here (the trap's photos: soort 'foto' ...)
+  // run 7 (wc-album): the camera's album. His own photo when he walks past the camera to
+  // test it (every play; new the first time); the fox, the first time it walks in for a
+  // photo or calls at night (it comes in about three plays of four); a nose pressed to the
+  // lens on a photo the camera took on its own in the night (some plays, surely within
+  // three); and two rare ones (k.rare: a seeded chance and the pity rule): a fox with her
+  // cubs crossing in the night, and a white roe stepping into the glade in the morning.
+  // No wolf: next to the man and his snare it would read as a threat.
+  { id: 'wildcamera.selfie', home: 'wildcamera', soort: 'foto', naam: 'de foto van jou', naamKnap: 'de foto van jou op de wildcamera',
+    hint: 'Loop eens langs de camera.', model: 'ranger-alvah' },
+  { id: 'wildcamera.vos', home: 'wildcamera', soort: 'dier', naam: 'de vos',
+    hint: 'Wie sluipt er ’s nachts langs?', model: 'animal-vos-fox' },
+  { id: 'wildcamera.neus', home: 'wildcamera', soort: 'foto', naam: 'de neus op de foto', naamKnap: 'de snuit op de foto',
+    hint: 'Wie komt héél dichtbij?', model: 'animal-wildzwijn-boar' },
+  { id: 'wildcamera.vosjes', home: 'wildcamera', soort: 'zeldzaam', naam: 'de vos met jongen', naamKnap: 'de vos met welpen',
+    hint: 'Soms komt er een hele familie.', model: 'vos-welp' },
+  { id: 'wildcamera.witte-ree', home: 'wildcamera', soort: 'zeldzaam', naam: 'de witte ree',
+    hint: 'Een heel bijzondere ree…', model: 'witte-ree' },
 ];
 
 /* ------------------------------------------------------ eekhoorn (the pines) ---- */

@@ -584,6 +584,7 @@ const MISSIE_WILDCAMERA = {
       // run 7 (wc-hands): no buttons; he does it himself ("Tik" becomes "Klik" with a mouse)
       pakKlik: 'Tik op de camera.',
       kijkPad: 'Kijk. Daar gaat het paadje.',
+      vosSporen: 'Verse sporen! Wie liep hier?', // (run 7, wc-album: the fox's prints)
       volg: 'Volg het paadje van de dieren.',
       chipPad: 'Het dierenpaadje',
       sporen: 'kijk naar de sporen',
@@ -627,6 +628,11 @@ const MISSIE_WILDCAMERA = {
       foto_nachtzwaluw: 'Een nachtzwaluw.',
       foto_wildzwijn: 'Een wild zwijn.',
       foto_vos: 'Een vos.',
+      // run 7 (wc-album): the night's surprises and the rare ones
+      foto_neus: 'Wie is dat? Een neus!',
+      foto_vosjes: 'Een vos met jongen.',
+      vosjes: 'Kijk! Een vos met jongen.',
+      witteRee: 'Een witte ree! Heel bijzonder.',
       man: 'Kijk! Een man zet een val.',
       waar: 'Waar is dit?',
       zoekVal: 'Zoek de val bij het paadje.',
@@ -641,6 +647,7 @@ const MISSIE_WILDCAMERA = {
     knap: {
       pak: 'Hier ligt de wildcamera.',
       kijkPad: 'Kijk. Daar gaat de wildwissel.',
+      vosSporen: 'Verse prenten! Wie liep hier?',
       volg: 'Volg de wildwissel.',
       chipPad: 'De wildwissel',
       hang: 'Hier kruisen twee wildwissels.',
@@ -651,6 +658,9 @@ const MISSIE_WILDCAMERA = {
       test: 'Loop eens langs de wildcamera.',
       foto_edelhert: 'Een edelhert.',
       foto_hinde: 'Een hinde.',
+      foto_neus: 'Wie is dat? Een snuit!',
+      foto_vosjes: 'Een vos met welpen.',
+      vosjes: 'Kijk! Een vos met welpen.',
       man: 'Kijk! Een stroper zet een strik.',
       zoekVal: 'Zoek de strik bij de wildwissel.',
       chipVal: 'De strik',

@@ -361,6 +361,41 @@ export const SLOT_CLASH: readonly (readonly [SlotId, SlotId])[] = [
   ['sett-r', 'bushes'], ['sett-r', 'stump'], ['bushes', 'stump'], ['stump', 'juniper'], ['bushes', 'juniper'], ['sett-r', 'juniper'],
 ];
 
+/* ------------------------------------- run 7 (wc-album): the fox with her cubs ---- */
+
+/**
+ * The fox family's way (wc-album: a rare night, after the echo): out of the trees on one
+ * side, along the second trail across the crossing in front of the pine, into the trees on
+ * the other side — side-on to the lens all the way, between the night choir's spots (clear
+ * of every one of them, of the sett, the log and the stumps, and of the ranger beside the
+ * pine), so the callers watch them pass. Local points, west to east; the first and the
+ * last lie out of the picture. Pinned in the view test.
+ */
+const FAMILY_WAY: readonly Spot[] = [
+  at(-10.6, -1.5), at(-6.2, -1.9), at(-4.0, -2.2), at(-2.0, -1.65), at(0, -1.3), at(1.8, -1.4), at(3.4, -1.3),
+  at(4.85, -1.85), at(6.6, -1.6), at(9.9, -1.25),
+];
+
+/** The family's way from side `from` (world points, out of view to out of view). */
+export function familyPath(from: Side): Spot[] {
+  return from === 'left' ? [...FAMILY_WAY] : [...FAMILY_WAY].reverse();
+}
+
+/** Where the camera on the pine photographs the family: right in front of it, where their
+ *  way crosses its view side-on (a trail camera's photo of animals passing close by: all
+ *  three side by side, never one behind the other). The middle of the photo; the shutter
+ *  clicks as the first cub passes it (its mother a step ahead, the second cub a step
+ *  behind), and how much of the wood the photo frames there (m of height at 1 m). */
+export const FAMILY_SHOT: Spot & { frameH: number } = { ...at(0, -1.3), frameH: 1.1 };
+
+/** The cubs trail their mother by this far along her way (m): close, a tumble behind. */
+export const CUB_LAG: readonly [number, number] = [0.62, 1.2];
+
+/** The white roe's way off after her photo (wc-album: a rare morning): back in under the
+ *  trees beyond the glade, out of the picture (the ordinary roe of the glade comes back
+ *  from there once the mission is done). */
+export const WHITE_ROE_OUT: Spot = at(-10.8, 0.2);
+
 /* ------------------------------------------------------------ the views ---- */
 
 /** The camera's view over the crossing (the aim, the night callers): the glade left,
