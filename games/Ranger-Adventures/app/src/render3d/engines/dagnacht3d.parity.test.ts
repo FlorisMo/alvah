@@ -72,10 +72,15 @@ test('each view builds the order from the knobs and the play, and seats the answ
     ['world choice', src('../adventure/beats/choice.ts')],
   ] as const) {
     assert.match(s, /knobs\('dagnacht'\)/, `${name}: the level's knobs`);
-    assert.match(s, /buildDagnachtTrial\([^;]*fork\('dagnacht'\)\.rng/s, `${name}: the trial from the play's fork`);
+    // (run 7 frisling ways: or through playDagnachtTrial, which draws from the same fork and
+    // only redraws from it while the order is one of his last two plays')
+    assert.match(s, /buildDagnachtTrial\([^;]*fork\('dagnacht'\)\.rng|playDagnachtTrial\([^;]*play, store\.get\(\)\.geschiedenis/s, `${name}: the trial from the play's fork`);
     assert.match(s, /fork\('knoppen'\)/, `${name}: the answers' sides from the play`);
     assert.doesNotMatch(s, /Math\.random/, `${name}: no Math.random`);
   }
+  const engine = src('../../engines/dagnacht.ts');
+  const wrap = engine.slice(engine.indexOf('export function playDagnachtTrial'));
+  assert.match(wrap, /play\.fork\('dagnacht'\)[^]*buildDagnachtTrial\(skin, diff, rng\)/, 'playDagnachtTrial builds from the play\'s dagnacht fork');
 });
 
 test('seeds 1..20 × scripts: the 2D-built and the world-built trial play the same order and score the same', () => {

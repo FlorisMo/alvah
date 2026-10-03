@@ -21,7 +21,8 @@
 import * as THREE from 'three';
 import type { Spawned, SpawnOpts, WorldCtx } from './types';
 import { activityScopeSignal, makeReframe } from './kit';
-import { safeCamHeight, stageHeadings } from './kit-math';
+import { stageHeadings } from './kit-math';
+import { fitFrame } from './frame-fit';
 import { grassMaterial, grassTuftGeometry, heightFor } from './spawn';
 
 export interface StageSpec {
@@ -170,74 +171,15 @@ export class Stage {
     return out;
   }
 
-  /** Back the lens off along a fixed pitch until the patch box fits the free band. */
+  /** Back the lens off along a fixed pitch until the patch box fits the free band (the
+   *  pure fit, play/frame-fit.ts: a home's places test computes the same lens). */
   private fitAt(P0: THREE.Vector3, f: THREE.Vector3): { P: THREE.Vector3; cam: THREE.Vector3; look: THREE.Vector3 } {
     const ctx = this.ctx;
-    const { halfW, halfD, tall, pitchDeg, insetTop, insetBottom } = this.spec;
     const camera = ctx.camera as THREE.PerspectiveCamera;
     const rect = ctx.canvas.getBoundingClientRect();
     const H = this.spec.viewport?.h || rect.height || 800;
     const W = this.spec.viewport?.w || rect.width || 1280;
-    const yTop = 1 - (2 * (insetTop + 12)) / H;
-    const yBot = -1 + (2 * (insetBottom + 12)) / H;
-    const xLim = 1 - 24 / W * 2;
-    const P = P0.clone();
-    P.y = ctx.groundY(P.x, P.z);
-    const right = V(-f.z, 0, f.x);
-    // the patch box: its ground corners + the tallest form over the front/back rows
-    const pts: THREE.Vector3[] = [];
-    for (const u of [-halfW, 0, halfW]) {
-      for (const v of [-halfD, halfD]) {
-        const g = P.clone().addScaledVector(right, u).addScaledVector(f, v);
-        g.y = ctx.groundY(g.x, g.z);
-        pts.push(g, g.clone().setY(g.y + tall));
-      }
-    }
-    const include: THREE.Vector3[] = [];
-    for (const t of this.spec.anchor?.include ?? []) { // (run 6) what must be in the picture too
-      const g = V(t.x, ctx.groundY(t.x, t.z), t.z);
-      pts.push(g, g.clone().setY(g.y + t.h));
-      include.push(g.clone().setY(g.y + t.h * 0.5));
-    }
-    const tmp = new THREE.PerspectiveCamera(camera.fov, W / H, 0.1, 400);
-    const pitch = (pitchDeg * Math.PI) / 180;
-    const dir = f.clone().multiplyScalar(Math.cos(pitch)).setY(-Math.sin(pitch)); // lens → aim
-    const ndc = V();
-    let bestFit: { cam: THREE.Vector3; look: THREE.Vector3 } | null = null;
-    for (let dist = 3; dist <= 16 && !bestFit; dist += 0.2) {
-      // slide the aim point up/down so the box sits centred in the free band
-      let lift = tall * 0.35;
-      for (let k = 0; k < 4; k++) {
-        const look = P.clone().setY(P.y + lift);
-        tmp.position.copy(look).addScaledVector(dir, -dist);
-        // (run 6) the ranger it must show stands well in FRONT of the lens, never under it
-        if (include.some((q) => q.clone().sub(tmp.position).dot(dir) < 1.6)) break;
-        tmp.up.set(0, 1, 0);
-        tmp.lookAt(look);
-        tmp.updateMatrixWorld(true);
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        for (const p of pts) {
-          ndc.copy(p).project(tmp);
-          minX = Math.min(minX, ndc.x); maxX = Math.max(maxX, ndc.x);
-          minY = Math.min(minY, ndc.y); maxY = Math.max(maxY, ndc.y);
-        }
-        if (minX >= -xLim && maxX <= xLim && minY >= yBot && maxY <= yTop) {
-          bestFit = { cam: tmp.position.clone(), look };
-          break;
-        }
-        // re-centre vertically: shift the aim by the band-centre error (in metres at the patch)
-        const err = (minY + maxY) / 2 - (yTop + yBot) / 2;
-        const mPerNdc = dist * Math.tan((camera.fov * Math.PI) / 360);
-        lift += err * mPerNdc;
-      }
-    }
-    if (!bestFit) {
-      const look = P.clone().setY(P.y + tall * 0.35);
-      bestFit = { cam: look.clone().addScaledVector(dir, -16), look };
-    }
-    // never under (or skimming) the rendered ground at the lens's own spot
-    bestFit.cam.y = safeCamHeight(bestFit.cam.y, ctx.groundY(bestFit.cam.x, bestFit.cam.z), 1.4);
-    return { P, cam: bestFit.cam, look: bestFit.look };
+    return fitFrame(P0, f, { ...this.spec, include: this.spec.anchor?.include }, ctx.groundY, camera.fov, W, H);
   }
 
   /** How many clearance rules a candidate breaks (`bad`, 0 = a good stage), and how much
