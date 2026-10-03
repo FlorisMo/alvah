@@ -158,7 +158,10 @@ async function start(log: Log, mission: Mission): Promise<void> {
  *  input (a body moment: keep still) is simply waited out. */
 async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<boolean>,
   /** run 7 (additive): looks on at every turn of the loop (a mission's own soft checks) */
-  observe?: (adv: { beat: string; stats?: Record<string, number> } | null) => Promise<void>): Promise<void> {
+  observe?: (adv: { beat: string; stats?: Record<string, number> } | null) => Promise<void>,
+  /** run 7 (additive): while true the player keeps his hands off the keys (a test makes a
+   *  child's mistake at that moment: waits too long, runs) — a walk under way stops too */
+  paused?: () => boolean): Promise<void> {
   const page = log.page;
   const plan = mission.stappen.map((s) => s.ef as string);
   log.note(`steps: ${plan.join(' → ')}`);
@@ -189,6 +192,7 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
     }
     if (won.size >= Object.keys(need).length && !await playingOn()) break;
     if (stopWhen && await stopWhen()) return; // (a test that stops the mission part way)
+    if (paused?.()) { await sleep(page, 150); lastProgress = Date.now(); continue; }
     const view = await R<string | null>(page, 'r.missionView');
     if ((await R<string>(page, 'r.screen')) === 'world' && view === null) {
       ended ??= Date.now();
@@ -212,7 +216,7 @@ async function playSteps(log: Log, mission: Mission, stopWhen?: () => Promise<bo
     const h0 = await R<Hint | null>(page, 'r.playHint()');
     if (h0?.walk) {
       const w = await walkTo(page, { x: h0.walk.x, z: h0.walk.z }, {
-        stopDist: h0.walk.r, timeout: 90_000, stopWhen: async () => (await R<Hint | null>(page, 'r.playHint()'))?.id !== h0.id,
+        stopDist: h0.walk.r, timeout: 90_000, stopWhen: async () => !!paused?.() || (await R<Hint | null>(page, 'r.playHint()'))?.id !== h0.id,
       });
       walks += 1;
       log.hard(w.res === 'arrived' || w.res === 'until', `walking to "${h0.id}" got ${w.res}`);
@@ -637,14 +641,17 @@ test('reduced motion: mission 1 on the 2D floors with real clicks, and its reuni
   }
 });
 
-/** Run 6 polish · De verdwaalde frisling's two body moments (no card): he keeps his HANDS
- *  still while the piglet squeaks in front of him (a click on the piglet is a hand
- *  reaching: he scoots deeper and peeks out, the moment comes back) and his FEET still
- *  while the sow looks up (a step key is a step toward her piglets: she grunts and steps
- *  between, the moment comes back). Never a fail; the rustkracht step is logged once, as
- *  five trials, with the two reaches as its two wrong ones — what the cards would log. */
-test('frisling: a hand at the piglet and a step toward the sow are gentle reaches that come back; rustkracht logs 5 trials, 3 right @missions', async ({ page }, info) => {
-  test.setTimeout(9 * 60_000);
+/** De verdwaalde frisling's five calm moments, every one played with the body (run 6
+ *  polish: aaien, zeug; run 7 package body: dragen, voeren, pad — no card is left in the
+ *  world), each with a child's mistake: a hand at the lying piglet (he scoots aside, the
+ *  fronds over him give way), a hand with food at the one begging at his bag (it chews and
+ *  wants more), a run with the tired piglet (he dives into a clump: "Niet rennen. Hij is
+ *  moe."), a step toward the sow (she grunts and stamps nearer), waiting at the free path
+ *  (the group shuffles on: "Je wacht te lang."). Each gets a calm reaction and the same
+ *  moment back; never a fail. The rustkracht step is logged once, five trials, each
+ *  marked once: 0 right — what five cards answered wrong once each would log. */
+test('frisling: a mistake at each of the five body moments is a gentle reaction and the same moment back; rustkracht logs 5 trials, 0 right @missions', async ({ page }, info) => {
+  test.setTimeout(12 * 60_000);
   const mission = missions.find((m) => m.id === 'frisling')!;
   const log = new Log(page, outDir(info, 'frisling-body'));
   const errors: string[] = [];
@@ -654,44 +661,79 @@ test('frisling: a hand at the piglet and a step toward the sow are gentle reache
   const adv = (): Promise<{ beat: string; line: string | null; stats: Record<string, number> } | null> => R(page, 'r.adventure()');
   const actor = async (key: string): Promise<{ x: number; z: number; doing: string } | null> =>
     (await homeOf(page, 'frisling'))?.actors.find((a) => a.key === key) as { x: number; z: number; doing: string } | undefined ?? null;
+  const at = async (a: { x: number; z: number }, h: number): Promise<{ x: number; y: number; onScreen: boolean }> => {
+    const g = await R<number>(page, `r.groundAt(${a.x}, ${a.z})`);
+    return R(page, `r.screenOf(${a.x}, ${g + h}, ${a.z})`);
+  };
+  let hands = false; // (the player keeps off the keys while a mistake is made)
   try {
     await boot(log);
     await goToMarker(log, mission);
     const before = await dagnacht();
     await start(log, mission);
     const reached: string[] = [];
-    /** One body moment played wrong once, then kept still: acts as soon as it begins (the
-     *  line is up with the beat; the hold is over ~6 s later, so a player loop busy with
-     *  a screenshot under load could miss it). */
-    const reach = async (beat: string, line: string | null): Promise<void> => {
-      const want = beat === 'still:aaien' ? /Raak hem niet aan/ : /Sta heel stil/;
-      log.soft(want.test(line ?? ''), `${beat}: its line is up ("${line}")`);
-      if (beat === 'still:aaien') {
-        // a hand reaches for him: a real click on the piglet
-        const lost = await actor('lost');
-        log.hard(!!lost, 'the lost piglet');
-        const g = await R<number>(page, `r.groundAt(${lost!.x}, ${lost!.z})`);
-        const at = await R<{ x: number; y: number; onScreen: boolean }>(page, `r.screenOf(${lost!.x}, ${g + 0.16}, ${lost!.z})`);
-        log.hard(at.onScreen, 'the piglet is on screen to reach for');
-        await page.mouse.click(at.x, at.y);
-        await expect.poll(async () => (await adv())?.stats.still_aaien ?? 0, { timeout: 5_000, message: 'the reach counted' }).toBe(1);
-        const moved = await expect.poll(async () => { const l = await actor('lost'); return !!l && Math.hypot(l.x - lost!.x, l.z - lost!.z) > 0.2; }, { timeout: 5_000 }).toBe(true).then(() => true, () => false);
-        log.soft(moved, 'the piglet scoots deeper into the bracken');
-      } else {
+    const MOMENT: Record<string, RegExp> = {
+      'still:aaien': /Raak hem niet aan/, 'still:voeren': /Hou je handen stil/, 'still:zeug': /Sta heel stil/,
+      'pace:dragen': /Hij is moe/, 'go:pad': /Het pad is vrij/,
+    };
+    /** One body moment played wrong once: acts as soon as it begins. */
+    const mistake = async (beat: string): Promise<void> => {
+      const want = MOMENT[beat];
+      await expect.poll(async () => (await adv())?.line ?? '', { timeout: 8_000, message: `${beat}: its line` }).toMatch(want);
+      if (beat === 'still:aaien' || beat === 'still:voeren') {
+        // a hand reaches: a real click on the animal (at his bag: the yearling at the
+        // field, the lost piglet at the stand)
+        const me = (await snap(page)).p!;
+        const y = await actor('yearling');
+        const key = beat === 'still:voeren' && y && Math.hypot(y.x - me.x, y.z - me.z) < 3 ? 'yearling' : 'lost';
+        const a0 = await actor(key);
+        log.hard(!!a0, `the ${key}`);
+        const p = await at(a0!, key === 'lost' ? 0.17 : 0.4);
+        log.hard(p.onScreen, `${beat}: the ${key} is on screen to reach for`);
+        await page.mouse.click(p.x, p.y);
+        const stat = beat === 'still:aaien' ? 'still_aaien' : 'still_voeren';
+        await expect.poll(async () => (await adv())?.stats[stat] ?? 0, { timeout: 5_000, message: `${beat}: the reach counted` }).toBe(1);
+        const moved = await expect.poll(async () => { const l = await actor(key); return !!l && Math.hypot(l.x - a0!.x, l.z - a0!.z) > 0.08; }, { timeout: 5_000 }).toBe(true).then(() => true, () => false);
+        log.soft(moved, `${beat}: the ${key} reacts (it ${key === 'lost' && beat === 'still:aaien' ? 'scoots aside' : 'wriggles closer for more'})`);
+        if (beat === 'still:aaien') {
+          await sleep(page, 1_500);
+          const shows = (await adv())?.stats.aaien_visible ?? 0;
+          log.note(`after the reach ${Math.round(shows * 100)} % of his back shows from the close lens`);
+          log.soft(shows >= 0.4, `after a reach the piglet stays clearly visible (${shows}; want ≥ 0.4)`);
+        }
+      } else if (beat === 'still:zeug') {
         // a step toward her piglets: a real key
         const sow = await actor('sow');
         await page.keyboard.press('ArrowUp');
         await expect.poll(async () => (await adv())?.stats.still_zeug ?? 0, { timeout: 5_000, message: 'the step counted' }).toBe(1);
-        const between = await expect.poll(async () => { const s = await actor('sow'); return !!s && !!sow && Math.hypot(s.x - sow.x, s.z - sow.z) > 0.2; }, { timeout: 6_000 }).toBe(true).then(() => true, () => false);
-        log.soft(between, 'the sow steps between');
+        const stamped = await expect.poll(async () => { const s = await actor('sow'); return !!s && !!sow && Math.hypot(s.x - sow.x, s.z - sow.z) > 0.1; }, { timeout: 6_000 }).toBe(true).then(() => true, () => false);
+        log.soft(stamped, 'the sow stamps nearer');
+      } else if (beat === 'pace:dragen') {
+        // he runs with the tired piglet: Shift held with the walk key
+        hands = true;
+        await sleep(page, 400);
+        await page.keyboard.down('Shift'); await page.keyboard.down('ArrowUp');
+        await expect.poll(async () => (await adv())?.stats.pace_dragen ?? 0, { timeout: 6_000, message: 'the run counted' }).toBe(1).catch(() => {});
+        await page.keyboard.up('ArrowUp'); await page.keyboard.up('Shift');
+        log.soft(((await adv())?.stats.pace_dragen ?? 0) === 1, 'a run with the tired piglet is the impulse');
+        log.soft(/Niet rennen/.test((await adv())?.line ?? ''), `the run is told calmly ("${(await adv())?.line}")`);
+        hands = false;
+      } else if (beat === 'go:pad') {
+        // he waits at the free path, past the window
+        hands = true;
+        const t0 = Date.now();
+        const late = await expect.poll(async () => (await adv())?.stats.pad_late ?? 0, { timeout: 30_000 }).toBe(1).then(() => true, () => false);
+        log.hard(late, 'waiting at the free path: the group shuffles on');
+        log.note(`waited ${((Date.now() - t0) / 1000).toFixed(1)} s at the free path (window ${(await adv())?.stats.pad_wait_s} s after its line)`);
+        await expect.poll(async () => (await adv())?.line ?? '', { timeout: 6_000 }).toMatch(/Je wacht te lang/).catch(() => {});
+        hands = false;
       }
-      // no card, no buttons, nothing to click (a perfect player keeps still)
+      // no card, no buttons, nothing to click (a perfect player keeps still or walks)
       log.soft((await page.locator('button.p3-choice').filter({ visible: true }).count()) === 0, `${beat}: no answer buttons`);
-      log.soft((await R<unknown>(page, 'r.playHint()')) === null, `${beat}: no play hint`);
       reached.push(beat);
-      await log.shot(`${beat.replace(':', '-')}-reached`);
-      // a gentle line says what happened, and the same moment comes back
-      await expect.poll(async () => (await adv())?.line ?? '', { timeout: 15_000, message: `${beat}: the moment comes back` }).toMatch(want);
+      await log.shot(`${beat.replace(':', '-')}-wrong`);
+      // the same moment comes back
+      await expect.poll(async () => (await adv())?.line ?? '', { timeout: 20_000, message: `${beat}: the moment comes back` }).toMatch(want);
       await log.shot(`${beat.replace(':', '-')}-again`);
     };
     let playing = true;
@@ -700,28 +742,31 @@ test('frisling: a hand at the piglet and a step toward the sow are gentle reache
       const done = new Set<string>();
       while (playing) {
         const a = await adv().catch(() => null);
-        if (a && (a.beat === 'still:aaien' || a.beat === 'still:zeug') && !done.has(a.beat)) {
+        if (a && MOMENT[a.beat] && !done.has(a.beat)) {
           done.add(a.beat);
-          await reach(a.beat, a.line).catch((e) => { failed ??= e; });
+          if (a.beat === 'pace:dragen' || a.beat === 'go:pad') hands = true;
+          await mistake(a.beat).catch((e) => { failed ??= e; hands = false; });
         }
+        // a card in the world would be an answer card left over
+        if (await page.locator('button.p3-choice').filter({ visible: true }).count()) failed ??= new Error(`an answer card is up at "${a?.beat}"`);
         await sleep(page, 100);
       }
     })();
     try {
-      await playSteps(log, mission);
+      await playSteps(log, mission, undefined, undefined, () => hands);
     } finally {
       playing = false;
       await watcher;
     }
     if (failed) throw failed;
     await finish(log, mission);
-    log.hard(reached.length === 2, `both moments were played wrong once (${reached.join(', ')})`);
+    log.hard(reached.length === 5, `all five moments were played wrong once (${reached.join(', ')})`);
     const after = await dagnacht();
     const trials = (after?.trials ?? 0) - (before?.trials ?? 0);
     const last = (after?.recent ?? []).slice(-trials);
     log.note(`dagnacht: ${trials} trials, ${last.filter(Boolean).length} right (${JSON.stringify(last)})`);
     log.soft(trials === 5, `the rustkracht step logged 5 trials (${trials})`);
-    log.soft(last.filter(Boolean).length === 3, `with the two reaches as its two wrong ones: 3 right (${last.filter(Boolean).length})`);
+    log.soft(last.filter(Boolean).length === 0, `each moment marked once by its mistake: 0 right (${last.filter(Boolean).length})`);
     log.soft(errors.length === 0, `page errors: ${errors.slice(0, 3).join(' / ')}`);
   } finally {
     const text = log.write();

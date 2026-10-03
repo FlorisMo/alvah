@@ -45,11 +45,13 @@ import { backPoints, openWindow, visibleShare } from '../cover-math';
 import { listenerOf } from '../../world/Residents';
 import { atLocal, dist, headingTo, toward, dirOf } from '../places';
 import type { Place, Spot } from '../types';
+import * as THREE from 'three';
 import { FrislingHome } from './frisling.home';
+import { Sightings, spawnBird, flight, type Bird } from './frisling.finds';
 import {
   FRISLING_HOME, FRISLING_PLACES as P, WAYS, WAY_IDS, DEFAULT_WAY, FAMILY_LAYOUTS,
   frislingClearings, clueGap, fieldSpotsOf, nookAt, useWay, SOW_NOTICE_M, outSpotOf, bagView, BAG_REACH,
-  zeugStare, zeugView, walkOnSpot, yearlingSideOf, yearlingWay,
+  zeugStare, zeugView, walkOnSpot, yearlingSideOf, yearlingWay, wallowLog, WALLOW_FRAME, WALLOW_LOG, NEST_R,
 } from './frisling.places';
 import { drawFrisling, frislingVariant, recentPlays, type FrislingVariant, type PastPlay } from './frisling.vary';
 
@@ -135,9 +137,11 @@ export const frislingAdventure: Adventure = {
     const v = current ?? fallbackVariant(k);
     started.push({ sd: k.play.seed, way: v.way, fam: FAMILY_LAYOUTS[v.family].id, nook: v.nook });
     home.holdClue = true; // the clue waits for its moment: after the reunion, under the raaf's card
+    const birds: Bird[] = [];
     try {
-      await story(k, fam, home, v);
+      await story(k, fam, home, v, birds);
     } finally {
+      for (const b of birds) b.dispose(); // (the woodlark, the magpie, the butterflies: this play's)
       home.holdClue = false; // (stopped: the home shows what its state says)
       current = null;
       // the family and the lost one go back to their own places on release (a calm walk;
@@ -157,7 +161,7 @@ function fallbackVariant(k: AdventureKit): FrislingVariant {
 }
 
 /** The adventure, beat by beat. */
-async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, home: FrislingHome, v: FrislingVariant): Promise<void> {
+async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, home: FrislingHome, v: FrislingVariant, birds: Bird[]): Promise<void> {
   const c = k.copy;
   const way = WAYS[v.way];
   const A = fam.actors as Record<'sow' | 'yearling' | 'p1' | 'p2' | 'p3' | 'lost', Actor>;
@@ -199,6 +203,51 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     return spots.filter((q) => (q.x - cam.x) * fx + (q.z - cam.z) * fz > 0 && Math.hypot(q.x - cam.x, q.z - cam.z) < 5).length;
   };
 
+  // 0 · what he can discover here (recorded only once he really saw it, its reveal at a
+  // quiet beat) and this play's small surprises (frisling.finds.ts)
+  const finds = new Sightings(k);
+  const scene = k.ctx.scene as THREE.Scene;
+  const log = wallowLog();
+  const logYaw = WALLOW_FRAME.heading + WALLOW_LOG.turn + Math.PI / 2; // (along the log)
+  /** the animal rubbing its flank on the log now (the sow in 'boom', the yearling) */
+  let rubbing: Actor | null = null;
+  const nestPts = Array.from({ length: 8 }, (_, i) => {
+    const a = (i / 8) * Math.PI * 2;
+    const x = way.nest.x + Math.cos(a) * NEST_R * 0.8, z = way.nest.z + Math.sin(a) * NEST_R * 0.8;
+    return { x, y: k.ctx.groundY(x, z) + 0.08, z };
+  });
+  finds.watch({ id: 'frisling.zeug', object: () => A.sow.body });
+  finds.watch({ id: 'frisling.overloper', object: () => A.yearling.body, within: 15 });
+  finds.watch({ id: 'frisling.schuurboom', object: () => home.rub, when: () => rubbing !== null, within: 25, near: { x: log.x, z: log.z, r: 2.5 } });
+  finds.watch({
+    id: 'frisling.nest', object: () => home.nest, when: () => dist(k.ranger(), way.stand) < 7, near: { ...way.nest, r: 2 },
+    hidden: (eye) => visibleShare(nestPts, eye, home.cover.stems) < 0.25,
+  });
+  // (this play's birds: the magpie on the sow, the butterflies over the meadow)
+  let ekster: Bird | null = null;
+  let eksterOn = false;
+  let eksterStep: ((dt: number) => boolean) | null = null;
+  const EKSTER_BACK = { y: 0.74, z: -0.12 };
+  const flutter: { b: Bird; at: Spot; ph: number }[] = [];
+  const surprise = k.play.fork('verrassing');
+  // the pigs' rubbing log: in 'boom' the sow rubs her flank on it while he looks at them;
+  // otherwise, now and then, the yearling goes over and has a good scratch
+  if (FAMILY_LAYOUTS[v.family].id === 'boom') rub(A.sow, layout.sow);
+  else if (surprise.fork('schuren').chance(0.5)) {
+    // (beside the log on the wallow's side, flank to it)
+    const across = logYaw - Math.PI / 2;
+    const side = Math.sign((P.wallow.x - log.x) * Math.sin(across) + (P.wallow.z - log.z) * Math.cos(across)) || 1;
+    const spot = { x: log.x + Math.sin(across) * 0.62 * side, z: log.z + Math.cos(across) * 0.62 * side };
+    rub(A.yearling, { x: spot.x, z: spot.z, yaw: logYaw, idle: 'stand' });
+    k.play.note('schuren', 1);
+  }
+  // the rare one: a magpie riding on the sow's back (FOUNDATION's roll, its pity rule)
+  if (k.rare()?.id === 'frisling.ekster') await magpie();
+  // a woodlark in the heather where he walks (about half the plays: the variant's)
+  if (v.leeuwerik !== null) void woodlark(way.walkSpots[v.leeuwerik]);
+  // butterflies over the meadow on the way north (wei, berk), now and then
+  if (v.way !== 'steen' && surprise.fork('vlinders').chance(0.6)) void butterflies();
+
   // 1 · one calm look at the family at its wallow; he ends facing the way the squeak
   // comes from (the lens comes round behind him that way)
   const r0 = k.ranger();
@@ -217,11 +266,29 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   const trail = [atLocal({ x: off.x, z: off.z, heading: headingTo(off, way.follow[1]) }, -0.75, 0.9), ...way.follow.slice(1)];
   k.own(spoorPath(trail, k.ctx.groundY, { opacity: 0.35 + 0.5 * knobs.trailClarity, size: 0.62, spacing: 0.95, crisp: CRISP_PRINTS }).group);
   fam.voice('lost', true, FOLLOW_REACH);
+  const round = v.way === 'steen' ? walkRound(k, A.sow, layout.sow, call) : undefined;
+  // (on steen, now and then, a jay screeches from the forest edge past the stand)
+  const jay = v.way === 'steen' && surprise.fork('gaai').chance(0.7) ? atLocal(way.frame, 2.5, 7) : null;
+  let followT = 0, jaySaid = false;
   await k.walk({
     name: 'cover', to: way.coverApproach, r: 1.5, line: v.way === 'steen' ? c.boog : c.volg, doel: c.chipPiep, cue: c.luister,
-    via: way.follow.slice(1, -1), tick: v.way === 'steen' ? walkRound(k, A.sow, layout.sow, call) : undefined,
+    via: way.follow.slice(1, -1),
+    tick: (dt) => {
+      round?.(dt);
+      followT += dt;
+      // well on his way: the family goes back to what it does, the magpie takes off
+      if (followT > 5 && rubbing && dist(k.ranger(), log) > 12) stopRub();
+      if (followT > 4) magpieOff();
+      if (jay && !jaySaid && dist(k.ranger(), way.stand) < 16) {
+        jaySaid = true;
+        k.stats.gaai = 1;
+        if (settings.geluid) Sound.callAt('gaai', jay.x, jay.z, listener(), 30);
+      }
+    },
   });
   fam.voice('lost', false);
+  stopRub();
+  hideButterflies();
 
   // 3 · find him (zoeken): the knobs' glimpse of his back, never more than 1.5× it
   await searchBeat(k, 0, {
@@ -368,6 +435,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // 14 · the reunion at the wallow: he trots to his mother, she sniffs him, happy grunts
   const after = FRISLING_HOME.residents.find((r) => r.key === 'lost')!.after!;
   await k.reunion(async () => {
+    magpieBack();
     call('piep', lost);
     void sow.lookAt(() => ({ x: lost.x, z: lost.z, speed: 0 }));
     await lost.go(after.x, after.z, { speed: 'trot', face: headingTo(after, sow) });
@@ -383,8 +451,10 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     await k.wait(1.4);
   });
   k.stats.reunion_gap = Math.round(dist(lost, sow) * 100) / 100;
-  // a calm beat with the family together before the raaf's card comes over them
-  await k.wait(1.4);
+  // a calm beat with the family together before the raaf's card comes over them (now and
+  // then two of the piglets chase each other round the mud)
+  if (surprise.fork('jagen').chance(0.5)) await chase(A.p2, A.p3);
+  else await k.wait(1.4);
   // 15 · the raaf: a group of pigs (after the reunion, before the reward); under its
   // card the clue drops: the cut fence past the wallow fades in
   home.revealClue();
@@ -392,6 +462,186 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // 16 · one calm look at it (the clue card names it next, with the reward)
   const gap = clueGap();
   await k.look({ x: gap.x, z: gap.z, y: k.ctx.groundY(gap.x, gap.z) + 0.1 }, c.hek);
+
+  /* ------------------------------------------- finds and small surprises ---- */
+
+  /** An animal rubs its flank on the log: it leans this way and that against it (a
+   *  gentle wiggle, never a turn round), grunting now and then — until `stopRub`. */
+  function rub(a: Actor, at?: ResidentPose): void {
+    rubbing = a;
+    k.stats.rub = a === A.sow ? 1 : 2;
+    let i = 0;
+    const loop = async (): Promise<void> => {
+      // (first at its place by the log: she may still be on her calm walk there)
+      if (at && dist(a, at) > 0.15 && !(await a.go(at.x, at.z, { speed: 'walk', face: at.yaw ?? a.yaw }))) { if (rubbing === a) rubbing = null; return; }
+      while (rubbing === a) {
+        const t = logYaw + (i++ % 2 ? 0.2 : -0.2) + (Math.cos(a.yaw - logYaw) < 0 ? Math.PI : 0);
+        const ok = await a.lookAt(() => ({ x: a.x + Math.sin(t) * 3, z: a.z + Math.cos(t) * 3, speed: 0 }), 0.85);
+        if (!ok) break; // (something else took the animal over)
+        if (i % 5 === 0) call('wildzwijn', a, 20);
+      }
+      if (rubbing === a) rubbing = null;
+    };
+    void loop();
+  }
+  /** The rubbing is over: the animal back to its own place in this play's layout. */
+  function stopRub(): void {
+    const a = rubbing;
+    if (!a) return;
+    rubbing = null;
+    const pose = a === A.sow ? layout.sow : layout.yearling;
+    if (dist(a, pose) > 0.3) void a.go(pose.x, pose.z, { speed: 'walk' }).then((ok) => { if (ok) atHome(a, pose); });
+    else atHome(a, pose);
+  }
+
+  /** The magpie (rare): rides on the sow's back, hops about and pecks at her bristles; it
+   *  takes off when he walks away (never there during a calm moment's hold), and lands on
+   *  her again at the reunion. Two draw calls at most; seen = discovered. */
+  async function magpie(): Promise<void> {
+    const b = await spawnBird(k, 'bird-ekster', 0.42); // (≈ 1.5× a magpie: it reads on her back from the look)
+    if (!b) return;
+    birds.push(b);
+    ekster = b;
+    A.sow.group.add(b.root);
+    b.root.position.set(0, EKSTER_BACK.y, EKSTER_BACK.z);
+    b.root.visible = true;
+    eksterOn = true;
+    finds.watch({ id: 'frisling.ekster', object: () => (ekster && ekster.root.visible ? ekster.root : null) });
+    const hop = k.play.fork('ekster');
+    let next = 0.8, t = 0, hopT = -1, from = 0, to = 0;
+    k.onTick((dt) => {
+      if (!ekster) return;
+      if (eksterStep) { if (eksterStep(dt)) eksterStep = null; return; }
+      if (!eksterOn) return;
+      t += dt;
+      const r = ekster.root;
+      if (hopT >= 0) {
+        hopT += dt / 0.32;
+        const e = Math.min(1, hopT);
+        r.position.z = from + (to - from) * e;
+        r.position.y = EKSTER_BACK.y + Math.sin(Math.PI * e) * 0.07;
+        if (hopT >= 1) hopT = -1;
+      } else if (t >= next) {
+        // a hop along her back, a turn; or a peck at her bristles
+        if (hop.chance(0.6)) { from = r.position.z; to = hop.between(-0.3, 0.12); hopT = 0; r.rotation.y = hop.between(-1.2, 1.2); }
+        else r.rotation.x = 0.45;
+        next = t + hop.between(0.7, 1.8);
+      } else if (r.rotation.x > 0 && t > next - 0.4) r.rotation.x = 0;
+    });
+  }
+  /** It takes off from her back and flies away from him, low, and is gone. */
+  function magpieOff(): void {
+    if (!ekster || !eksterOn) return;
+    eksterOn = false;
+    const r = ekster.root;
+    scene.attach(r);
+    r.rotation.set(0, 0, 0);
+    const p = r.position.clone();
+    const away = headingTo(k.ranger(), A.sow) + (k.play.fork('ekster-off').chance(0.5) ? 0.6 : -0.6);
+    const g = k.ctx.groundY(p.x, p.z);
+    eksterStep = flight(k, r, { x: p.x, z: p.z, y: p.y - g }, { ...toward(p, { x: p.x + Math.sin(away), z: p.z + Math.cos(away) }, 16), y: 2.5 }, 2.6, 1.8);
+    const done = eksterStep;
+    eksterStep = (dt) => { const end = done(dt); if (end && ekster) ekster.root.visible = false; return end; };
+  }
+  /** At the reunion it flies back in from beyond the family and lands on her back again. */
+  function magpieBack(): void {
+    if (!ekster) return;
+    const r = ekster.root;
+    // (in from the side, across the picture: never toward the lens)
+    const sowAt = { x: A.sow.x, z: A.sow.z };
+    const side = headingTo(k.ranger(), sowAt) + (k.play.fork('ekster-back').chance(0.5) ? Math.PI / 2 : -Math.PI / 2);
+    const from = { x: sowAt.x + Math.sin(side) * 12, z: sowAt.z + Math.cos(side) * 12 };
+    r.visible = true;
+    scene.attach(r);
+    const back = new THREE.Vector3(0, EKSTER_BACK.y, EKSTER_BACK.z);
+    A.sow.group.localToWorld(back);
+    const land = flight(k, r, { ...from, y: 3 }, { x: back.x, z: back.z, y: back.y - k.ctx.groundY(back.x, back.z) }, 2.4, 1.2);
+    eksterStep = (dt) => {
+      if (!land(dt)) return false;
+      A.sow.group.attach(r);
+      r.position.set(0, EKSTER_BACK.y, EKSTER_BACK.z);
+      r.rotation.set(0, 0, 0);
+      eksterOn = true;
+      return true;
+    };
+  }
+
+  /** A woodlark sits in the heather at `spot` on his way; when he comes within 3 m it flies
+   *  up singing its soft falling "lu-lu-lu", ahead of him (never toward the lens), and
+   *  settles 15-20 m on. Seen in flight = discovered. */
+  async function woodlark(spot: Spot): Promise<void> {
+    const b = await spawnBird(k, 'bird-boomleeuwerik', 0.3);
+    if (!b) return;
+    birds.push(b);
+    scene.add(b.root);
+    const f = k.play.fork('leeuwerik-vlucht');
+    b.root.position.set(spot.x, k.ctx.groundY(spot.x, spot.z), spot.z);
+    b.root.rotation.y = f.between(0, Math.PI * 2);
+    b.root.visible = true;
+    let flying = false;
+    let step: ((dt: number) => boolean) | null = null;
+    finds.watch({ id: 'frisling.leeuwerik', object: () => (flying ? b.root : null), within: 30 });
+    const off = k.onTick((dt) => {
+      if (!flying) {
+        // (on his walks only: never in a calm moment or a picture held still)
+        if (dist(k.ranger(), spot) > 4 || !k.beat.startsWith('walk:')) return;
+        flying = true;
+        k.stats.leeuwerik = 1;
+        if (settings.geluid) Sound.callAt('boomleeuwerik', spot.x, spot.z, listener(), 30);
+        const m = k.ranger();
+        const h = m.heading + f.between(-0.6, 0.6);
+        const to = { x: spot.x + Math.sin(h) * f.between(15, 20), z: spot.z + Math.cos(h) * f.between(15, 20) };
+        step = flight(k, b.root, { ...spot, y: 0 }, { ...to, y: 0 }, 3.4, 4.2);
+        return;
+      }
+      if (step && step(dt)) { step = null; off(); }
+    });
+  }
+
+  /** A few heath blues flutter over the meadow by the way north (this play's chance). */
+  async function butterflies(): Promise<void> {
+    const f = k.play.fork('vlinders');
+    const along = way.follow;
+    for (let i = 0; i < 2; i++) {
+      const b = await spawnBird(k, 'heideblauwtje', 0.05);
+      if (!b) return;
+      birds.push(b);
+      scene.add(b.root);
+      const t = f.between(0.25, 0.6);
+      const base = toward(along[0], along[along.length - 1], dist(along[0], along[along.length - 1]) * t);
+      flutter.push({ b, at: atLocal({ ...base, heading: headingTo(along[0], along[along.length - 1]) }, (i ? 1 : -1) * f.between(1.8, 3.2), f.between(-1, 1)), ph: f.between(0, 6) });
+      b.root.visible = true;
+    }
+    let t = 0;
+    k.onTick((dt) => {
+      t += dt;
+      for (const q of flutter) {
+        if (!q.b.root.visible) continue;
+        const x = q.at.x + Math.sin(t * 0.8 + q.ph) * 0.9, z = q.at.z + Math.cos(t * 0.6 + q.ph * 1.3) * 0.9;
+        const y = k.ctx.groundY(x, z) + 0.55 + Math.sin(t * 2.6 + q.ph) * 0.18;
+        const r = q.b.root;
+        r.rotation.y = Math.atan2(x - r.position.x, z - r.position.z);
+        r.position.set(x, y, z);
+      }
+    });
+  }
+  function hideButterflies(): void { for (const q of flutter) q.b.root.visible = false; }
+
+  /** Two piglets chase each other round the mud, then root on (after the reunion). */
+  async function chase(a: Actor, b: Actor): Promise<void> {
+    // (an arc round the far side of the mud and back: across the picture, never at the lens)
+    const far = headingTo(P.wallow, k.ranger()) + Math.PI;
+    const arc = [-1.5, -0.75, 0, 0.75, 1.5].map((d) => ({ x: P.wallow.x + Math.sin(far + d) * 2.2, z: P.wallow.z + Math.cos(far + d) * 2.2 }));
+    const ring = [...arc, ...arc.slice(0, -1).reverse()];
+    k.stats.jagen = 1;
+    call('piep', a);
+    const run = async (x: Actor, lag: number): Promise<void> => {
+      await k.wait(lag);
+      for (const p of ring) await x.go(p.x, p.z, { speed: 'trot' });
+    };
+    await Promise.race([Promise.all([run(a, 0), run(b, 0.5)]), k.wait(6)]);
+    for (const x of [a, b]) x.root(x.x, x.z, 0.4);
+  }
 
   /* ---------------------------------------------------- the calm moments ---- */
 
@@ -611,6 +861,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
    * trots at his side; the chip names the way, its arrow soon.
    */
   async function pad(id: string): Promise<void> {
+    k.beat = 'go:pad';
     const on = walkOnSpot(way, k.ranger());
     // he turns that way with a small step (never a snap), the lens comes round behind him
     const step = toward(k.ranger(), on, 0.3);

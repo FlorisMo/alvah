@@ -17,7 +17,7 @@ import {
   fieldSpots, fieldSpotsOf, hideClumps, frislingClearings, SEARCH_VIEW, FIELD_VIEW, WALLOW_VIEW, LEAD_CLUMP_COUNT,
   cluePosts, clueGap, bootPrints, CLUE_FRAME, WAYS, WAY_IDS, FAMILY_LAYOUTS, nookAt, decoyAt, placesFor, useWay, wallowLog,
   wallowClumps, standCover, standSeed, spotTag, SOW_NOTICE_M, outSpotOf, bagView, sideBySideView, BAG_REACH, type WayId, type Way, type WayView,
-  zeugStare, zeugView, ZEUG_STARE_M, ZEUG_STEP_M, walkOnSpot, yearlingSideOf, yearlingWay, legGap, YEARLING_LOG_M,
+  zeugStare, zeugView, ZEUG_STARE_M, NEST_R, ZEUG_STEP_M, walkOnSpot, yearlingSideOf, yearlingWay, legGap, YEARLING_LOG_M,
 } from './frisling.places.ts';
 import { WALK_ON_M } from '../beats/walk-math.ts';
 import { anchorInBiome, biomeAt, heightAt, VEN_CENTER } from '../../Biomes.ts';
@@ -634,5 +634,20 @@ test('the yearling trots out to him at the field and back round the log (every l
         }
       }
     }
+  }
+});
+
+test('the sow\'s nest of bitten fronds at each stand\'s edge: never on a nook or a look-alike spot', () => {
+  for (const id of WAY_IDS) {
+    const w = WAYS[id];
+    for (let i = 0; i < w.nooks.length; i++) {
+      const n = nookAt(id, i, 0);
+      assert.ok(dist(n, w.nest) >= NEST_R + 0.8, `${id}: the nest is ${dist(n, w.nest).toFixed(2)} m from nook ${i}`);
+    }
+    for (let i = 0; i < w.decoySpots.length; i++) {
+      assert.ok(dist(decoyAt(id, i), w.nest) >= NEST_R + 0.3, `${id}: the nest is ${dist(decoyAt(id, i), w.nest).toFixed(2)} m from look-alike spot ${i}`);
+    }
+    assert.ok(dist(w.nest, w.coverApproach) > 2, `${id}: not where he stands to search`);
+    assert.ok(dist(w.nest, w.stand) < Math.hypot(STAND.halfW, STAND.halfD) + 1.2, `${id}: at the stand's edge`);
   }
 });

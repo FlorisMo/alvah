@@ -109,6 +109,10 @@ export const WAY_IDS: readonly WayId[] = ['wei', 'steen', 'berk'];
 /** A nook of a stand the lost piglet may lie in (stand frame: u across, v away from him),
  *  and which way he lies there: `side` (+1/−1) is the way his head points lying side-on. */
 export interface Nook { u: number; v: number; side: 1 | -1 }
+/** A sow's nest at a stand's edge (package body): its radius (m); never on a nook or a
+ *  look-alike spot (frisling.places.test.ts). */
+export const NEST_R = 0.45;
+
 /** A spot of a stand a look-alike may be laid on; `edge`: at the stand's rim (a nightjar
  *  pressed to a bare patch belongs there, never deep in the bracken). */
 export interface DecoySpot { u: number; v: number; edge?: boolean }
@@ -237,8 +241,8 @@ const WEI = ((): Way => {
     field: 'N', fieldApproach, fieldSide, fieldView: fieldViewOf('N', fieldApproach, fieldSide, -0.3),
     toWallow: [],
     wallowTalk, wallowGive: giveOf(wallowTalk, -1.9, 1.1), wallowView: wallowViewOf(wallowTalk),
-    nest: atLocal(frame, 2.4, 1.3),
-    walkSpots: [atLocal({ x: MARKER.x, z: MARKER.z, heading: headingTo(MARKER, coverApproach) }, 2.6, 14), atLocal({ x: MARKER.x, z: MARKER.z, heading: headingTo(MARKER, coverApproach) }, -2.7, 24)],
+    nest: atLocal(frame, 2.55, 1.25),
+    walkSpots: [atLocal({ x: MARKER.x, z: MARKER.z, heading: headingTo(MARKER, coverApproach) }, 1.6, 14), atLocal({ x: MARKER.x, z: MARKER.z, heading: headingTo(MARKER, coverApproach) }, -1.7, 24)],
     cover: { seed: 71, bracken: 0.2, grass: 0.25 },
     trees: [],
   };
