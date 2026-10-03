@@ -205,6 +205,8 @@ const CALLS: Record<string, CallSpec> = {
   // whistle twice; the great spotted woodpecker's drumming, a quick soft roll of knocks
   buizerd:       { freq: 1650, dur: 0.78, type: 'sine', rep: 2, sweep: 0.62, peak: 0.07 },
   specht:        { freq: 1300, dur: 0.75, type: 'triangle', drum: 15, peak: 0.09 },
+  // run 7 (frisling body): a woodlark flushed from the heather, its soft falling "lu-lu-lu"
+  boomleeuwerik: { freq: 2350, dur: 0.09, type: 'sine', notes: [2350, 2260, 2170, 2080, 1990, 1900, 1820], sweep: 0.97, peak: 0.06 },
   // run 7 (the squirrel's neighbours): the great spotted woodpecker on its bark drums a
   // roll; the nuthatch's "tuuit tuuit tuuit", three clear whistles each rising — a sound
   // of its own beside the great tit's "ti-ta" (the two never call together)
