@@ -104,3 +104,11 @@ test('run 6: the frisling wears its pyjama — golden lengthwise stripes on an o
   const t = coatTintFor('overloper');
   assert.ok(t && t.strength < 1 && rgb(t.color).r > rgb(t.color).b);
 });
+
+test('run 7: the raven is black (its GLB is a pale grey bird): a soft near-black, its shading kept', () => {
+  const t = coatTintFor('animal-raaf-raven')!;
+  assert.ok(t, 'the raven has its tint');
+  const c = rgb(t.color);
+  assert.ok(Math.max(c.r, c.g, c.b) < 70, `near-black (${t.color})`);
+  assert.ok(t.strength > 0.6 && t.strength < 1, 'its own shading stays (strength < 1)');
+});

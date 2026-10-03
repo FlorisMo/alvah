@@ -39,7 +39,7 @@ export function playSimon(host: HTMLElement, step: Step, play?: Play): Promise<B
     // Shared pure core (parity with the 3D twin, §1f): it owns the rounds, the
     // sequence, the echo index + the final BeatSummary; this view only renders +
     // plays the calls + paces the listen/echo loop. Run 7: the play's callers.
-    const run = new SimonRun(trial.knobs, trial.dieren, play ? play.fork('simon').rng : looseRng('simon'));
+    const run = new SimonRun(trial.knobs, trial.dieren, play ? play.fork('simon').rng : looseRng('simon'), trial.spread);
     let phase: 'intro' | 'listen' | 'echo' | 'pause' | 'done' = 'intro';
     const timers: number[] = [];
     const after = (ms: number, fn: () => void): void => { timers.push(window.setTimeout(() => { if (panel.isConnected) fn(); }, ms)); }; // a stopped step's panel is gone: its timers stand down

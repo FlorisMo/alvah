@@ -56,6 +56,9 @@ export interface Skin {
    *  from this pool with the play's seed, the same on the 2D floor and in the world. No pool:
    *  `dieren` as it stands. */
   roepPool?: string[];
+  /** run 7 (additive, simon): every animal of the row is heard once before any calls again
+   *  (engines/simon `spread`; the 2D floor reads the same skin) */
+  roepAllen?: boolean;
   dagDieren?: string[];
   nachtDieren?: string[];
   regels?: string[];

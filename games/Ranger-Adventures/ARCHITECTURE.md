@@ -132,8 +132,14 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          sees of every stop and every night; wc-hands: no buttons, he clicks
                          the camera, the pine, the snare himself, flips the photos, and the
                          snare lies at one of three SNARE_SPOTS, each with its own two
-                         landmarks, pinned with what its morning photo shows) and eekhoorn (the pines, the
-                         moss glade, the neighbours): the four missions met first
+                         landmarks, pinned with what its morning photo shows) and eekhoorn (the
+                         pines, the moss glade, the neighbours; run 7: eekhoorn.places.ts draws
+                         each play's way through the pines (ROUTES: three, each its own hide
+                         tree), the moss pattern's mirror-image (gladeSpots(sym)) and the
+                         neighbour trio (NEIGHBOURS, one bird per perch), never the last two
+                         plays', read back from the beat history (`ek:<variant>`); the found
+                         view and the jay's way back are pure and pinned by its test): the four
+                         missions met first
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          a `shy` resident slips into cover when he comes near (per state);
                          a home rests beyond 40-46 m, its small things (`env.detail(at)`:
@@ -293,6 +299,18 @@ mission records its helped animal (`geholpen`) quietly, and the home's rare coun
   never the home's last); the briefing cuts into it under the card, the end of the play
   crossfades back to the session's mood. A home never lights its own animals: every model
   that goes through `spawnModel` is dressed and lit like the world's.
+
+**Options a home may pass** (all additive, the default as before): `routeBeat({ between })`
+(the squirrel sweeps up a round's acorns before the next round shows); `callersBeat({ dieren,
+between, callCap })` (the world's own four callers slot for slot, the jay backing off between
+two rounds, every call held to 0.6-1.2 s); a skin's `roepAllen` (every caller heard once
+before any calls again: engines/simon `spread`, the 2D floor reads the same skin);
+`Adventure.moods.perPlay` as a number (never one of that many last plays' moods:
+`lastMoodsAt`); a home tree's `near` (its own full-detail range, world/Forest; a number, or
+a function read every frame: the squirrel's eleven pines are the real tree only while it
+plays round them, the rest the forest's simple copy, so the view over its wood keeps the
+triangle budget; a see-through home tree draws the detail the tree itself has there, one
+rule for both, `detailLevel`); `Squirrel.reseed(seed)` and `goDash(x, z, full)`.
 
 **A home's recipe** (each game lane): (1) choose places by looking at the world and pin each
 variant in `<id>.places.ts` + its test: dry, clear (`World.playClear`), inside its home, the

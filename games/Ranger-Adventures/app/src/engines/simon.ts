@@ -22,6 +22,10 @@ export type { SpanResult } from './span.ts';
 export interface SimonTrial {
   /** the animals on the row (the "buttons") */
   dieren: string[];
+  /** run 7 (additive; a story's `roepAllen`): every animal of the row is heard once before
+   *  any calls again (the squirrel's neighbours all chase the jay) — the length, and so the
+   *  span, as without */
+  spread?: boolean;
   /** the beat's span knobs, with the story's own cap on rounds (`skin.rondes`) */
   knobs: SpanKnobs;
 }
@@ -33,7 +37,7 @@ export interface SimonTrial {
 export function buildSimonTrial(skin: Skin, knobs: SpanKnobs, rng?: () => number): SimonTrial {
   const dieren = rng && skin.roepPool?.length ? simonCast(skin, rng) : skin.dieren?.length ? [...skin.dieren] : ['edelhert', 'ree', 'wildzwijn', 'raaf'];
   const rondes = typeof skin.rondes === 'number' && skin.rondes >= 1 ? Math.floor(skin.rondes) : Infinity;
-  return { dieren, knobs: { ...knobs, rounds: Math.max(1, Math.min(knobs.rounds, rondes)) } };
+  return { dieren, knobs: { ...knobs, rounds: Math.max(1, Math.min(knobs.rounds, rondes)) }, ...(skin.roepAllen ? { spread: true } : {}) };
 }
 
 /**
@@ -67,12 +71,14 @@ export function randomCaller(dieren: readonly string[], rng: () => number = loos
  * same as the last. A caller never calls twice in a row while the sequence is short (≤ 3:
  * "nachtzwaluw, nachtzwaluw" is no echo to a beginner), and never three times in a row.
  */
-export function simonNext(dieren: readonly string[], rng: () => number): SpanSupplier<string> {
+export function simonNext(dieren: readonly string[], rng: () => number, spread = false): SpanSupplier<string> {
   const add = (seq: string[]): void => {
     const n = seq.length;
     const avoid = n >= 1 && (n < 3 || seq[n - 1] === seq[n - 2]) ? seq[n - 1] : null;
     const pool = dieren.filter((d) => d !== avoid);
-    seq.push(randomCaller(pool.length ? pool : dieren, rng));
+    // (run 7, `spread`: one not heard yet in this sequence, while there is one)
+    const unheard = spread ? pool.filter((d) => !seq.includes(d)) : [];
+    seq.push(randomCaller(unheard.length ? unheard : pool.length ? pool : dieren, rng));
   };
   return (len, prev) => {
     if (prev && len === prev.length + 1) {
@@ -98,7 +104,7 @@ export function simonNext(dieren: readonly string[], rng: () => number): SpanSup
  * rounds, eased, firstClean }`).
  */
 export class SimonRun extends SpanRun<string> {
-  constructor(knobs: SpanKnobs, dieren: readonly string[], rng: () => number) {
-    super(knobs, simonNext(dieren, rng));
+  constructor(knobs: SpanKnobs, dieren: readonly string[], rng: () => number, spread = false) {
+    super(knobs, simonNext(dieren, rng, spread));
   }
 }
