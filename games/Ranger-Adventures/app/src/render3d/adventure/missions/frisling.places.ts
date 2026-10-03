@@ -269,7 +269,7 @@ const STEEN = ((): Way => {
     follow: [toward(MARKER, follow0[0], 0.9), ...follow0, toward(coverApproach, stand, 0.6)],
     nooks: [
       { u: 1.3, v: 0.5, side: -1 }, { u: -1.35, v: 0.35, side: 1 }, { u: 1.05, v: -0.35, side: 1 },
-      { u: -1.15, v: -0.4, side: -1 }, { u: 0.6, v: 1.15, side: -1 },
+      { u: -1.15, v: -0.4, side: -1 }, { u: -1.05, v: 1.15, side: -1 },
     ],
     decoySpots: [
       { u: 1.9, v: -0.2, edge: true }, { u: 0.55, v: 0.35 }, { u: -0.45, v: 0.6 }, { u: -0.5, v: -0.55 },
