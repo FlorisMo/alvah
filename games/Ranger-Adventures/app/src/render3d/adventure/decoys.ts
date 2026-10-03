@@ -194,6 +194,13 @@ export class StandDecoys {
     }
   }
 
+  /** Run 7 (frisling growth, additive): the animal of a look-alike — the stonechat, the
+   *  nightjar, the butterfly; never its stalk, its bare patch or its flower — or null (dead
+   *  fronds, or its model not loaded yet). A home may send it off once the search is over. */
+  animalOf(d: Decoy): THREE.Object3D | null {
+    return this.birds.find((b) => b.o.parent === d.object)?.o ?? null;
+  }
+
   /** A decoy clicked: it does what it would (the dead fronds rustle and part, the bird flits). */
   poke(d: Decoy, from: Spot): void {
     if (d.clump !== null) { this.cover.rustle(d.clump, 0.16); this.cover.part(d.clump, from, 0.55, 1.4); return; }

@@ -492,7 +492,9 @@ function frislingWatch(log: Log, opts: { practised?: boolean } = {}): { observe:
       // (each hold's temptations pull harder one after another: as many kinds as the level's)
       log.soft(stats.pull_zeug === Math.min(2, d.tempts - 1), `frisling: the sow's stare tempts up to pull ${stats.pull_zeug} (the level's ${d.tempts} temptation(s))`);
       if (opts.practised) {
-        log.soft(z.lookAlikes >= 6 && stats.glimpse <= 0.32 && stats.print_gap >= 1.3, `frisling (practised): a harder search than a first play's (${stats.look_alikes} look-alikes, glimpse ${stats.glimpse}, prints ${stats.print_gap} m apart)`);
+        // (less of him shows than a first play's knob, 0.38: how much exactly is the nook's,
+        // within the level's [0.6, 1.6]× checked above)
+        log.soft(z.lookAlikes >= 6 && z.glimpse <= 0.25 && stats.glimpse < 0.38 && stats.print_gap >= 1.3, `frisling (practised): a harder search than a first play's (${stats.look_alikes} look-alikes, glimpse ${stats.glimpse} of the level's ${z.glimpse}, prints ${stats.print_gap} m apart)`);
         log.soft(stats.route_rounds >= 3 && d.goWaitS <= 6 && d.holdS >= 4.5, `frisling (practised): ${stats.route_rounds} routes, holds of ${d.holdS} s, the path waits ${d.goWaitS} s`);
       } else {
         log.soft(stats.look_alikes === 4 && stats.print_gap === 0.95 && stats.pad_wait_s === 9, `frisling (a first play): 4 look-alikes, prints 0.95 m apart, the path waits 9 s (${stats.look_alikes}, ${stats.print_gap}, ${stats.pad_wait_s})`);

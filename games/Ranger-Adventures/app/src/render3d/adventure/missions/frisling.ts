@@ -292,8 +292,11 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // squeak, heard less often: frisling.grow.ts)
   const look = followLook(knobs);
   const crispM = (CRISP_PRINTS - 1) * CRISP_GAP;
-  k.own(spoorPath(sliceAlong(trail, 0, crispM + 0.01), k.ctx.groundY, { opacity: 1, size: 0.62, spacing: CRISP_GAP, crisp: CRISP_PRINTS }).group);
-  k.own(spoorPath(sliceAlong(trail, crispM + look.gap, Infinity), k.ctx.groundY, { opacity: look.opacity, size: 0.62, spacing: look.gap }).group);
+  const prints = [
+    spoorPath(sliceAlong(trail, 0, crispM + 0.01), k.ctx.groundY, { opacity: 1, size: 0.62, spacing: CRISP_GAP, crisp: CRISP_PRINTS }).group,
+    spoorPath(sliceAlong(trail, crispM + look.gap, Infinity), k.ctx.groundY, { opacity: look.opacity, size: 0.62, spacing: look.gap }).group,
+  ];
+  for (const p of prints) k.own(p);
   k.stats.print_gap = look.gap;
   k.stats.print_opacity = look.opacity;
   k.stats.squeak_every = look.squeakEvery[0];
@@ -326,12 +329,20 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   // the knobs' look-alikes (laid under the briefing card), the first hint after the knobs'
   // seconds (searchBeat reads them)
   k.stats.look_alikes = home.decoys.filter((d) => d.object.visible).length;
+  // (the moment he finds him, the look-alikes' birds and butterfly startle and fly off)
+  let flewOff = false;
+  const offFly = k.onTick(() => { if (!flewOff && k.stats.search_seconds !== undefined) { flewOff = true; flyOff(); } });
   await searchBeat(k, 0, {
     view: way.searchView, stand: way.coverApproach, cover: home.cover, target: lost, call: 'piep',
     lyingH: lyingHeight(heightFor('frisling'), LEG_SHARE.frisling), glimpse: knobs.glimpse, glimpseMax: knobs.glimpse * 1.5,
     decoys: home.decoys.map((d) => ({ id: d.id, object: d.object, x: d.x, z: d.z, poke: (f) => home.poke(d, f) })),
     lines: { zoek: c.zoek, mis: c.mis, hint: c.hint, gevonden: k.steps[0].skin.copy?.goed ?? c.zoek },
   });
+  offFly();
+  if (!flewOff) { flewOff = true; flyOff(); }
+  // the trail has done its work: under the raaf's card its prints fade into the ground
+  // (calmly, 1.5 s; no more draw calls for it in the pictures over the heath that follow)
+  fadeAway(prints, 1.5);
   // 4 · the raaf: stripes
   await k.fact(0);
 
@@ -739,6 +750,52 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
       k.stats.leeuwerik_across = across.length ? 1 : 0;
       return pick ?? atLocal({ x: from.x, z: from.z, heading: look }, 0, 6);
     }
+  }
+
+  /**
+   * The search is over: the look-alikes' animals — the stonechat, the nightjar, the heath
+   * blue — startle as the piglet lifts his head and squeaks, and fly off low out of the
+   * stand, away from him (never toward the lens), and are gone; their stalks, patches and
+   * flowers stay. So no look-alike waits in the close pictures at the stand that follow (and
+   * a level with more of them costs no draw calls after the search: run 7 growth). Each
+   * comes back to its perch when the play ends.
+   */
+  function flyOff(): void {
+    const me = k.ranger();
+    const f = k.play.fork('wegvliegen');
+    let n = 0;
+    for (const d of home.decoys) {
+      if (!d.object.visible || d.kind === 'bush') continue;
+      const o = home.stand.decoys.animalOf(d);
+      if (!o || !o.parent) continue;
+      const parent = o.parent, pos = o.position.clone(), rot = o.rotation.clone(), order = o.rotation.order;
+      birds.push({ root: o, dispose: () => { parent.add(o); o.position.copy(pos); o.rotation.copy(rot); o.rotation.order = order; o.visible = true; } });
+      const w = o.getWorldPosition(new THREE.Vector3());
+      scene.attach(o);
+      n += 1;
+      const away = headingTo(me, d) + f.between(-0.7, 0.7);
+      const to = { x: d.x + Math.sin(away) * f.between(12, 16), z: d.z + Math.cos(away) * f.between(12, 16), y: f.between(1.8, 2.6) };
+      const step = flight(k, o, { x: w.x, z: w.z, y: w.y - k.ctx.groundY(w.x, w.z) }, to, f.between(1.8, 2.4), 0.6,
+        d.kind === 'butterfly' ? { bob: 0.18, bumps: 4 } : { bob: 0.08, bumps: 2, pitch: 0.2 });
+      window.setTimeout(() => {
+        if (k.signal.aborted) return;
+        const off = k.onTick((dt) => { if (step(dt)) { o.visible = false; off(); } });
+      }, f.between(0.1, 0.5) * 1000); // (not all at once: one, then another)
+    }
+    k.stats.flew_off = n;
+  }
+
+  /** Things of this play fade out over `secs` (under reduced motion: at once), then go. */
+  function fadeAway(groups: readonly THREE.Object3D[], secs: number): void {
+    const mats: { m: THREE.Material; o: number }[] = [];
+    for (const g of groups) g.traverse((x) => { const m = (x as THREE.Mesh).material as THREE.Material | undefined; if (m && !Array.isArray(m)) mats.push({ m, o: m.opacity }); });
+    let t = 0;
+    const off = k.onTick((dt) => {
+      t = k.reduced ? secs : t + dt;
+      const e = Math.min(1, t / secs);
+      for (const q of mats) q.m.opacity = q.o * (1 - e);
+      if (e >= 1) { for (const g of groups) g.visible = false; off(); }
+    });
   }
 
   /** A few heath blues flutter over the meadow by the way north (this play's chance). */
