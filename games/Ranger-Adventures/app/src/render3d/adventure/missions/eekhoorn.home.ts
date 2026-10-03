@@ -325,7 +325,8 @@ export class EekhoornHome implements HomeDressing {
         // trunk; its feet (what is left once the branch is cut) on the bark
         const pivot = new THREE.Group();
         pivot.rotation.set(-Math.PI / 2, 0, Math.PI, 'ZYX');
-        pivot.position.set(0, h * 0.35, feet - 0.02);
+        // (its belly against the bark, measured on the GLB by looking at it on a trunk)
+        pivot.position.set(0, h * 0.35, feet + 0.08);
         pivot.add(r);
         holder.add(pivot);
       } else {
