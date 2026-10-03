@@ -590,7 +590,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
   }
 
   /**
-   * A woodlark sits in the heather at `spot` on his way. When he comes within
+   * A woodlark sits hidden in the heather at `spot` on his way. When he comes within
    * `LARK_FLUSH_M` of it on a walk, with it in his picture (never behind him), it flies up
    * singing its soft falling "lu-lu-lu", low ACROSS his picture — never along the lens away
    * from it, never toward it — in a lark's soft undulating flight, 2.5-3 s, settles on a
@@ -612,7 +612,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
     const f = k.play.fork('leeuwerik-vlucht');
     r.position.set(spot.x, k.ctx.groundY(spot.x, spot.z), spot.z);
     r.rotation.y = f.between(0, Math.PI * 2);
-    r.visible = true;
+    r.visible = false; // (hidden in the heather until it flies up: no bird to click in a picture, no draw call)
     const cam = k.world.camera;
     const flySecs = f.between(2.5, 3), arc = f.between(0.7, 1.0), restS = f.between(1.3, 1.8);
     const first = f.chance(0.5) ? 1 : -1;
@@ -627,6 +627,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
         if (!inPicture(s, 0.85, -0.85, 0.85)) return; // (in his picture: never behind him)
         const to = larkSettle(spot, s.x);
         phase = 'fly';
+        r.visible = true;
         k.stats.leeuwerik = 1;
         if (settings.geluid) Sound.callAt('boomleeuwerik', spot.x, spot.z, listener(), 30);
         step = flight(k, r, { ...spot, y: 0 }, { ...to, y: LARK_PERCH }, flySecs, arc, { bob: 0.14, bumps: 3, pitch: 0.3 });
