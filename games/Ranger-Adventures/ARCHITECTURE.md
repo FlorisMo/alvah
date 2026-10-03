@@ -132,7 +132,11 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          rare twins at the reunion, each `k.discover`ed once seen or heard;
                          one thing at a time: the woodlark and the buzzard only on a walk
                          with room for them (`larkOn` by the pool's side, never beside the
-                         pool or the doe slipping in), never together),
+                         pool or the doe slipping in), never together, the buzzard never
+                         beside a birch rubbed by the walk to the hide; the woodlark flies
+                         only where his way runs on straight 7 m (`straightAhead`); a find's
+                         card still waiting as he arrives shows while he stands at the
+                         walk's end (`walkCards`), never held for the reunion),
                          wildcamera (the crossing, the glade, the thicket, the snare; its
                          trap photos in wildcamera.photos.ts; run 7: wildcamera.variety.ts
                          draws how each visitor comes (side + stop) and the night choir's
