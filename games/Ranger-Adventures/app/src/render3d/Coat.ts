@@ -62,6 +62,11 @@ const COAT_TINT: Record<string, CoatTint> = {
   // (research/animal-visual-accuracy.md, Edelhert). Its near-black antlers ('Material.001')
   // and its pale neck and rump stay its own.
   'animal-edelhert-reddeer': { color: '#8a4b2c', strength: 0.55, only: ['Material'] },
+  // run 7 (the squirrel's neighbours): the raven GLB is a pale grey bird with black wings
+  // (it read as a white crow on the snag once its home's own darkening went, one root);
+  // dossier: "geheel zwart, met een blauwige glans" — a soft near-black, not a hole: the
+  // world's animal fill still lights its shaded side
+  'animal-raaf-raven': { color: '#2e2d34', strength: 0.82 },
 };
 
 /**

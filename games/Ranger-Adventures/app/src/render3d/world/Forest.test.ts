@@ -10,12 +10,17 @@
  *
  * And where a tree's branch stub stands (2026-09-29): the forest draws it as part of its
  * tree (so it fades with it), from one unit stub placed per tree by `stubMatrix`.
+ *
+ * And the one detail rule (run 7, `detailLevel`): a home tree's own `near` (a number, or a
+ * function read every frame) caps where it is the real GLB; the forest's ranges hold
+ * otherwise; a tree only changes once it is HYSTERESIS past a line. Its see-through copy
+ * is drawn by the same rule (Forest `update`).
  */
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
-import { fillLevel, stubGeometry, stubMatrix, STUB_TAPER, STUB_TILT, type TreeStub } from './Forest.ts';
+import { detailLevel, fillLevel, LOD_RANGES, nearOf, stubGeometry, stubMatrix, STUB_TAPER, STUB_TILT, type TreeStub } from './Forest.ts';
 
 /** Two trees 50 m apart, each a 1 × 4 × 1 m trunk-and-crown box standing on y = 0. */
 function forestOfTwo(): { inst: THREE.InstancedMesh; world: Float32Array; tint: Float32Array } {
@@ -100,4 +105,41 @@ test('a branch stub stands out of its trunk along its heading, a little upward, 
   }
   near(rootR, 0.05, 'root radius');
   near(tipR, 0.05 * STUB_TAPER, 'tip radius');
+});
+
+test('the detail rule: the forest\'s ranges, a home tree\'s own near, and the hysteresis', () => {
+  const R = LOD_RANGES.hoog; // [20, 36, 60]
+  // a scattered tree (no near): the real GLB to 20 m, then the three simple copies
+  assert.deepEqual([5, 19, 21, 35, 37, 59, 61].map((d) => detailLevel(d, R, undefined, -1)), [0, 0, 1, 1, 2, 2, 3]);
+  // a home tree with its own near: the real GLB only inside it, then the forest's levels
+  assert.equal(detailLevel(5, R, 6, -1), 0);
+  assert.equal(detailLevel(7, R, 6, -1), 1);
+  assert.equal(detailLevel(25, R, 6, -1), 1, 'past its near it is the forest\'s first simple copy, to 36 m');
+  assert.equal(detailLevel(40, R, 6, -1), 2);
+  // near 0: never the real GLB (however close); Infinity: the forest's own range
+  assert.equal(detailLevel(0.5, R, 0, -1), 1);
+  assert.equal(detailLevel(0.5, R, 0, 1), 1);
+  assert.equal(detailLevel(19, R, Infinity, -1), 0);
+  assert.equal(detailLevel(21, R, Infinity, -1), 1);
+  // hysteresis: it stays on its level until 1.5 m past the line, either way
+  assert.equal(detailLevel(7, R, 6, 0), 0, 'real at 7 m (near 6): it stays real');
+  assert.equal(detailLevel(7.6, R, 6, 0), 1, 'and turns simple past 7.5 m');
+  assert.equal(detailLevel(5, R, 6, 1), 1, 'simple at 5 m: it stays simple');
+  assert.equal(detailLevel(4.4, R, 6, 1), 0, 'and turns real inside 4.5 m');
+  assert.equal(detailLevel(21, R, undefined, 0), 0);
+  assert.equal(detailLevel(21.6, R, undefined, 0), 1);
+  // a near that shrinks while the tree is real: it turns simple (a home that no longer plays round it)
+  assert.equal(detailLevel(5, R, 0, 0), 1);
+  // the laag tier's ranges cap a home tree's near too
+  assert.equal(detailLevel(13, LOD_RANGES.laag, Infinity, -1), 1);
+});
+
+test('a tree\'s own near: a number, a function read now, or unset', () => {
+  let n = 0;
+  const live = { near: () => n };
+  assert.equal(nearOf(live), 0);
+  n = Infinity;
+  assert.equal(nearOf(live), Infinity, 'read again every time');
+  assert.equal(nearOf({ near: 6 }), 6);
+  assert.equal(nearOf({}), undefined);
 });
