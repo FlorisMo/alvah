@@ -25,7 +25,7 @@ import { backPoints } from '../cover-math.ts';
 import { lyingHeight, LEG_SHARE } from '../../play/pose.ts';
 import {
   LAYOUTS, CALF_DOELEN, COPSE, THICKET, COPSE_TREES, FRINGE, POOL, STAND, calfAt, calfBolt, calfTalkOf, calfView, drinkSpot, juniperR, poolsOf,
-  reunionPose, type ViewSpec,
+  reunionPose, twinAt, twinEnd, type ViewSpec,
 } from './ree.places.ts';
 
 const W = 1280, H = 800, FOV = 55;
@@ -306,5 +306,31 @@ test('the reunion: through his glasses, the doe big and side-on, her calf drinki
       const u = -Math.cos(s.frame.heading) * q.x + Math.sin(s.frame.heading) * q.z, w = Math.sin(s.frame.heading) * q.x + Math.cos(s.frame.heading) * q.z;
       assert.ok(Math.hypot(u / (FRINGE.a * FRINGE.kMax), w / (FRINGE.b * FRINGE.kMax)) > 1.05, `${l.id}: the reunion's lens stands in ${s.id}'s grass`);
     }
+  }
+});
+
+test('ree-discover: the rare twins at the reunion — the second calf in the picture at her chest, never behind her', () => {
+  for (const l of LAYOUTS) {
+    const cam = fitLens(l.views.reunion);
+    const { yaw, side } = reunionPose(l);
+    const m = l.meet, g = groundY(m.x, m.z);
+    const tw = twinAt({ ...m, yaw }, SIZE.ree.len, side, twinEnd({ ...m, yaw }, l.twinBed));
+    const dr = drinkSpot({ ...m, yaw }, SIZE.ree.len, side);
+    const tp = px(cam, tw.x, groundY(tw.x, tw.z) + 0.4, tw.z);
+    const cp = px(cam, dr.x, groundY(dr.x, dr.z) + 0.4, dr.z);
+    assert.ok(tp.front && tp.x >= 110 && tp.x <= W - 110 && tp.y >= 160 && tp.y <= H - 50, `${l.id}: the twin in the picture (${tp.x.toFixed(0)}, ${tp.y.toFixed(0)})`);
+    assert.ok(Math.abs(tp.x - cp.x) > 90, `${l.id}: the two calves apart in the picture (${Math.abs(tp.x - cp.x).toFixed(0)} px)`);
+    // on his side of her: nearer the lens than her middle (nothing of her in front of it)
+    const camAt = { x: cam.position.x, z: cam.position.z };
+    assert.ok(Math.hypot(tw.x - camAt.x, tw.z - camAt.z) < Math.hypot(m.x - camAt.x, m.z - camAt.z), `${l.id}: the twin on the side he sees`);
+    // it lies in the picture behind them (it rises there), on the side it comes round to
+    const bed = l.twinBed;
+    const bp = px(cam, bed.x, groundY(bed.x, bed.z) + 0.3, bed.z);
+    const mp = px(cam, m.x, g + 0.6, m.z);
+    assert.ok(bp.front && bp.x >= 120 && bp.x <= W - 120 && bp.y >= 180 && bp.y <= H - 100, `${l.id}: where the twin lies is in the picture (${bp.x.toFixed(0)}, ${bp.y.toFixed(0)})`);
+    assert.ok(Math.hypot(bed.x - camAt.x, bed.z - camAt.z) > Math.hypot(m.x - camAt.x, m.z - camAt.z) + 2, `${l.id}: it lies behind them`);
+    assert.ok(Math.sign(bp.x - mp.x) === Math.sign(tp.x - mp.x), `${l.id}: it comes round to her on its own side, never past her`);
+    // it comes round her end, never through her: its way passes beyond her (m from her middle)
+    assert.ok(Math.hypot(tw.round.x - m.x, tw.round.z - m.z) >= SIZE.ree.len * 0.6, `${l.id}: round her end`);
   }
 });

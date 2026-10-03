@@ -30,9 +30,10 @@
  */
 
 import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
+import { VEN_CENTER, biomeAt } from '../../Biomes.ts';
 import { patchLocal } from '../../play/kit-math.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
-import { atLocal, dist, headingTo, toLocal, toward, type Frame } from '../places.ts';
+import { atLocal, dist, headingTo, segDist, toLocal, toward, type Frame } from '../places.ts';
 import { REE_LAYOUT_IDS, type ReeLayoutId } from './ree.variety.ts';
 
 /** The ree marker: the heide's second anchor (Markers.placeMarkers: `anchorInBiome
@@ -202,6 +203,29 @@ export interface ReeLayout {
   /** the views: the search over the stand (him in a lower corner), the watch from the hide,
    *  the reunion through his glasses (run 7: mother and calf big, side-on) */
   views: { search: ViewSpec; watch: ViewSpec; reunion: ViewSpec };
+  /** ree-discover: where a young birch a roebuck rubbed may stand this play — beside her
+   *  wissel, or beside his way to the hide (in his picture as he walks up, off every way of
+   *  the layout: a detour he may take); C's way to the hide runs by the frisling's ground,
+   *  so C has the one by its wissel only */
+  birches: readonly Spot[];
+  /** ree-discover: the buzzard's low circle over the heath on his way to the hide (its
+   *  middle, radius m, height m over the ground) */
+  buzzard: { x: number; z: number; r: number; y: number };
+  /** ree-discover: where the cuckoo calls from in the watch (the trees off to one side) */
+  koekoek: Spot;
+  /** ree-discover: the walks the woodlark may fly up on, by where the play's pool lies (a
+   *  walk with heath ahead of it and nothing else going on: no pool to answer on it, and on
+   *  the walk to the grass no doe slipping into her cover in his picture — review r2, by
+   *  playing: A's walk to the grass holds its pool and her slip, B's way to the hide runs at
+   *  the forest's edge and the world's rim, C's doe slips in straight ahead of him the whole
+   *  walk to the grass and its way to the hide is short, its pool or its "hide" line on it:
+   *  a woodlark there, or its card, came on top of the walk's own moment) */
+  larkOn: Readonly<Record<'in' | 'out', readonly ('meadow' | 'hide')[]>>;
+  /** ree-discover: where a twin lies (a rare play) — in the tall grass or her bracken behind
+   *  where they meet, on the side its sibling's twin spot is (it rises there in the
+   *  reunion's picture and comes round to her); laid once he has left the calf, out of his
+   *  picture (never in the search's) */
+  twinBed: Spot & { yaw: number };
 }
 
 /** What a layout is made from (the rest follows). */
@@ -240,6 +264,12 @@ interface LayoutDef {
   /** run 7: where he walks away to (world), the way there round his hide's bush, and the
    *  reunion lens's turn (deg) off the line from there to the meeting place */
   out: Spot; outVia?: readonly Spot[]; reunionTurn?: number;
+  /** ree-discover: the young birches' spots (world: beside her wissel, beside his way to the
+   *  hide), where the cuckoo calls from in the watch (world: off to one side of the watch's
+   *  view, never behind him), and the twin's bed (world; it lies facing where they meet) */
+  birches: readonly Spot[]; koekoek: Spot; twinBed: Spot;
+  /** the walks the woodlark may fly up on, by the pool's side (default: none) */
+  larkOn?: Partial<Record<'in' | 'out', readonly ('meadow' | 'hide')[]>>;
 }
 
 /** The search view (the owner's fix: the old lens looked steeply down on the top of his
@@ -270,6 +300,9 @@ function build(d: LayoutDef): ReeLayout {
   const wl = d.poolIn.leg === 0 ? [MARKER, d.bend] : [d.bend, search];
   const ol = d.poolOut ? way.slice(d.poolOut.leg, d.poolOut.leg + 2) : [];
   const log = { ...atLocal(hf, d.hideLog.u, d.hideLog.v), turn: hf.heading, half: 0.85 };
+  // ree-discover: the buzzard circles low over the heath a little beyond his hide (in his
+  // picture all the way there: ahead of him, over the horizon)
+  const sky = toward(hide, search, -BUZZARD.beyond);
   return {
     id: d.id, frame, search, wissel, cover, gap, bed, slip: d.slipVia ? [gap, ...bedWay, bed] : [bed], bedWay, graze, meet,
     pools: {
@@ -293,7 +326,119 @@ function build(d: LayoutDef): ReeLayout {
       watch: { at: mid, heading: hf.heading, halfW: d.watchHalfW, halfD: 1.4, tall: SIZE.ree.h + 0.3, pitchDeg: 12, insetTop: 110, insetBottom: 220 },
       reunion: reunionView(meet, headingTo(d.out, meet) + ((d.reunionTurn ?? 0) * Math.PI) / 180),
     },
+    birches: [...d.birches],
+    buzzard: { ...sky, r: BUZZARD.r, y: BUZZARD.y },
+    koekoek: { ...d.koekoek },
+    larkOn: { in: d.larkOn?.in ?? [], out: d.larkOn?.out ?? [] },
+    twinBed: { ...d.twinBed, yaw: headingTo(d.twinBed, meet) },
   };
+}
+
+/** The buzzard's low circle (ree-discover): this far beyond his hide (m), its radius (m),
+ *  its height over the ground (m), one turn (s); how high it comes down from (m), how long
+ *  that takes (s), and how soon it is gone once he is at his hide (s). It comes down to
+ *  hunt low over the heath ahead of him, its wings wide: the walk's lens looks down at the
+ *  heath, and a buzzard at 3-5 m hung at the picture's top edge, behind the objective line.
+ *  It begins to come down as he turns away from the calf (review r2: begun on his walk it
+ *  was low only near its end, and its card waited for the reunion): low from the first
+ *  steps of his walk to the hide. */
+export const BUZZARD = { beyond: 7, r: 4, y: 2.2, period: 15, high: 16, comeS: 5, goS: 3 } as const;
+
+/**
+ * The woodlark's flight (ree-discover): it flies up out of the heather a few metres ahead of
+ * him and low ACROSS his way, fluttering and singing as it goes, a little higher, and drops
+ * back into the heather on his other side — low against the heath, where the walk's lens
+ * sees it (a metre or two higher it was a speck against the trees on the horizon), and
+ * across the picture, side-on to the lens (flying away it showed only its tail) — always ahead of him and away from the lens behind him, never toward it. In
+ * his frame at the moment it flies up (u across, + right; v ahead; y over the ground): the
+ * points it passes and the seconds between them.
+ */
+export const LARK = {
+  rise: { u: -1.6, v: 6.5 }, top: { u: 0.6, v: 8.0, y: 0.8 }, drift: { u: 3.8, v: 10.5, y: 1.2 }, land: { u: 4.8, v: 12.0 },
+  riseS: 1.2, hangS: 4.4, dropS: 1.6,
+  /** it flies up only where his way runs on at least this far (m) without a bend of more
+   *  than `bend` (rad): its first seconds in his picture, its card before he arrives */
+  ahead: 7, bend: 0.5,
+} as const;
+
+/**
+ * How far (m) his way runs on from `me` without a real bend (pure): along `route` (its
+ * points in order, the walk's start first, its goal last), from the leg he is on to the
+ * first point where it turns more than LARK.bend off that leg, or to its end. The woodlark
+ * flies up only where this is at least LARK.ahead (review r2, by playing: on A's walk to the
+ * hide it flew up 1.4 m before a 68° bend, and the turn took it out of his picture a second
+ * later, too soon for him to have seen it).
+ */
+export function straightAhead(me: Spot, route: readonly Spot[]): number {
+  if (route.length < 2) return 0;
+  let leg = 1, best = Infinity;
+  for (let i = 1; i < route.length; i++) {
+    const d = segDist(me, route[i - 1], route[i]);
+    if (d < best - 1e-6) { best = d; leg = i; }
+  }
+  const h0 = headingTo(route[leg - 1], route[leg]);
+  let ahead = dist(me, route[leg]);
+  for (let j = leg + 1; j < route.length; j++) {
+    const h = headingTo(route[j - 1], route[j]);
+    if (Math.abs(Math.atan2(Math.sin(h - h0), Math.cos(h - h0))) > LARK.bend) break;
+    ahead += dist(route[j - 1], route[j]);
+  }
+  return ahead;
+}
+
+/** How far off his way (rad) the woodlark may fly, to its side, when straight on there is
+ *  no heath for it: still well inside the walk lens's picture (it is ~80° wide). */
+export const LARK_TURNS = [0, 0.45] as const;
+
+/** The woodlark's ways from where he walks: along his way first, then a little off it to
+ *  one side and the other (`side`, `turn`: the heading it flies along is his + side·turn). */
+export function larkWays(side: 1 | -1): { side: 1 | -1; turn: number }[] {
+  return LARK_TURNS.flatMap((turn) => [{ side, turn }, { side: -side as 1 | -1, turn }]);
+}
+
+/** A spot in his frame (`at`, facing `heading`). */
+function inHisFrame(at: Spot, heading: number, side: 1 | -1, q: { u: number; v: number }): Spot {
+  return atLocal({ x: at.x, z: at.z, heading }, side * q.u, q.v);
+}
+
+/** The woodlark's flight from where he walks (`at`, along `heading`): where it flies up,
+ *  its top, where it has drifted to while it sings, where it drops back in. `side`: +1 to
+ *  his right, −1 to his left. */
+export function larkFlight(at: Spot, heading: number, side: 1 | -1): { rise: Spot; top: Spot & { y: number }; drift: Spot & { y: number }; land: Spot } {
+  return {
+    rise: inHisFrame(at, heading, side, LARK.rise),
+    top: { ...inHisFrame(at, heading, side, LARK.top), y: LARK.top.y },
+    drift: { ...inHisFrame(at, heading, side, LARK.drift), y: LARK.drift.y },
+    land: inHisFrame(at, heading, side, LARK.land),
+  };
+}
+
+/** The other missions' markers (World.markers): no bird of this home flies over them. */
+const OTHER_MARKERS: readonly Spot[] = [
+  { x: -15.556349186104043, z: -15.556349186104043 }, { x: -34.999270825785885, z: -19.36623457627458 },
+  { x: 15.556349186104047, z: -15.556349186104043 }, { x: 20.8, z: -34.2 },
+];
+
+/** Room for the woodlark's flight from `at` along `heading` on `side` (pure: open heath
+ *  where it flies up and drops in, inside the world, off the ven and the other markers). */
+export function larkRoom(at: Spot, heading: number, side: 1 | -1, pool: PoolSpot | null): boolean {
+  const f = larkFlight(at, heading, side);
+  // (where it flies, along his way or a little off it to its side: never out of his picture)
+  for (const p of [f.rise, f.top, f.drift, f.land]) {
+    if (Math.hypot(p.x, p.z) > 57 || Math.hypot(p.x - VEN_CENTER.x, p.z - VEN_CENTER.z) < 26) return false;
+    if (OTHER_MARKERS.some((m) => dist(p, m) < 9)) return false;
+  }
+  return [f.rise, f.land].every((p) => biomeAt(p.x, p.z) === 'heide' && heathFor(p, pool));
+}
+
+/** Open heath a woodlark sits in: not in a stand of tall grass, a cover's bracken, the
+ *  play's pool or a hide's bush (`pool`: this play's, if any). Pure (the places test pins
+ *  that every layout's walks have room for its flight). */
+export function heathFor(p: Spot, pool: PoolSpot | null): boolean {
+  if (LAYOUTS.some((l) => { const q = toLocal(l.frame, p); return Math.hypot(q.u / (FRINGE.a * FRINGE.kMax), q.v / (FRINGE.b * FRINGE.kMax)) < 1.1; })) return false;
+  if ([COPSE, THICKET].some((c) => { const q = toLocal(c.frame, p); return Math.hypot(q.u / c.a, q.v / c.b) < 1.1; })) return false;
+  if (pool) { const q = toLocal(pool, p); if ((q.u / (POOL.halfW + 0.6)) ** 2 + (q.v / (POOL.halfD + 0.6)) ** 2 < 1) return false; }
+  return !LAYOUTS.some((l) => dist(p, l.hideJuniper) < 1.4 || dist(p, l.hideLog) < 1.4);
 }
 
 /** The reunion's lens (run 7, design §6.7): through his glasses, mother and calf big in the
@@ -349,6 +494,12 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     watchMid: 0.5, watchHalfW: 2.8, watchVia: { u: -0.9, v: 1.5 },
     // (back toward the marker ring, the way he came that morning)
     out: { x: -13.6, z: -24.1 }, reunionTurn: 10,
+    // (a young birch outside her wissel's bend, ahead of him as he walks to it; one west of
+    // his way back to the hide; the cuckoo in the forest's edge to the east; the twin in the
+    // copse's bracken behind where they meet)
+    birches: [{ x: -23.0, z: -39.0 }, { x: -12.0, z: -30.5 }], koekoek: { x: 10.6, z: -35.0 }, twinBed: { x: -7.6, z: -41.0 },
+    // (the woodlark on his way back round to the hide: open heath, no pool on it)
+    larkOn: { in: ['hide'] },
   }),
   B: build({
     id: 'B', stand: { x: -8.5, z: -51.0 }, look: deg(135), corner: 1, bend: { x: -21.0, z: -39.5 },
@@ -363,6 +514,13 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     // (north along the forest's edge, past his hide's juniper on its forest side, ending
     // ~10.7 m from their home: where he stops stays near it)
     out: { x: -2.6, z: -38.8 }, outVia: [{ x: -0.95, z: -42.5 }],
+    // (a young birch west of the end of her wissel; one out on the heath south of the grass,
+    // by his way round it; the cuckoo in the juniper of A's hide to the north; the twin in
+    // the tall grass behind where they meet)
+    birches: [{ x: -16.0, z: -51.0 }, { x: -6.5, z: -56.0 }], koekoek: { x: -6.4, z: -26.5 }, twinBed: { x: -10.6, z: -48.6 },
+    // (the woodlark on the walk to the grass when the pool lies on his way to the hide:
+    // her copse is behind him from his first steps, the walk is long and open)
+    larkOn: { out: ['meadow'] },
   }),
   C: build({
     id: 'C', stand: { x: -21.0, z: -49.0 }, look: deg(-90), corner: 1, bend: { x: -20.5, z: -38.8 },
@@ -375,6 +533,10 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     // (north-east, toward the marker ring, clear of the frisling's clue posts: where the
     // moment is answered, 4 m on, lies ~10.7 m from it, the end 8.6 m)
     out: { x: -19.2, z: -34.6 },
+    // (a young birch east of his search spot, ahead of him as he comes up her wissel; the
+    // cuckoo in the copse's birches to the east; the twin in the grass's rim behind where
+    // they meet)
+    birches: [{ x: -15.5, z: -48.5 }], koekoek: { x: -5.4, z: -45.0 }, twinBed: { x: -24.1, z: -50.4 },
   }),
 };
 
@@ -460,6 +622,25 @@ export function drinkSpot(doe: Spot & { yaw: number }, len: number, side: 1 | -1
   return { ...atLocal(f, 0.34 * side, -0.12 * len), yaw: doe.yaw + Math.PI - 0.25 * side };
 }
 
+/** Where a twin stands at the reunion (ree-discover): on the side the watching eye is on
+ *  (`side`, as `drinkSpot`), at her head (`end` +1: its nose to hers) or at her rump (−1:
+ *  its nose at her flank), facing her — while its sibling drinks under her belly: both in
+ *  the picture, neither behind her. `round`: the point beyond that end of her it comes by,
+ *  so it walks round her, never through her. */
+export function twinAt(doe: Spot & { yaw: number }, len: number, side: 1 | -1, end: 1 | -1): Spot & { yaw: number; round: Spot } {
+  const f = { x: doe.x, z: doe.z, heading: doe.yaw };
+  return {
+    ...atLocal(f, 0.42 * side, end * 0.72 * len),
+    yaw: doe.yaw + (end > 0 ? Math.PI : 0) - 0.45 * side * end,
+    round: atLocal(f, 0.25 * side, end * 1.15 * len),
+  };
+}
+
+/** The end of her (+1 her head, −1 her rump) a twin lying at `bed` comes round to. */
+export function twinEnd(doe: Spot & { yaw: number }, bed: Spot): 1 | -1 {
+  return toLocal({ x: doe.x, z: doe.z, heading: doe.yaw }, bed).v >= 0 ? 1 : -1;
+}
+
 /* ---------------------------------------------------------- the places ---- */
 
 /** Where the family lives after (mother and calf graze together out on the heath between
@@ -484,6 +665,7 @@ export const REE_PLACES: Readonly<Record<string, Place>> = (() => {
     t[`${l.id}.hide`] = l.hide;
     t[`${l.id}.hideLeave`] = l.hideLeave;
     t[`${l.id}.wayOut`] = l.wayOut;
+    l.birches.forEach((b, i) => { t[`${l.id}.birch${i}`] = { ...b }; });
   }
   const a = REE_LAYOUTS.A;
   t.hide = a.hide;
@@ -497,6 +679,13 @@ export const REE_PLACES: Readonly<Record<string, Place>> = (() => {
 /** How far (m) mother and calf walk home calmly (a reunion at layout C's thicket is ~13 m
  *  from home; a stop leaves them up to ~25 m from the spots a play laid them at). */
 export const HOME_REACH = 30;
+
+/** ree-discover: after a play with twins, the twin grazes with them at home (its
+ *  sibling's other side), and steps into the copse with them to its own bed. */
+export const TWIN_AFTER: Spot & { yaw: number } = {
+  ...atLocal({ ...HOME, heading: headingTo(HOME, COPSE_AT) + 1.2 }, 0.75, -0.35), yaw: headingTo(HOME, COPSE_AT) + 1.6,
+};
+const TWIN_BED: Spot & { yaw: number } = { ...inCopse(-0.2, -1.0), yaw: COPSE_FRAME.heading + Math.PI * 0.2 };
 
 /** The calf's spot in free roam before any play laid it elsewhere: layout A's first spot. */
 export const CALF_HOME: Spot & { yaw: number } = calfAt(REE_LAYOUTS.A, CALF_DOELEN[0]);
@@ -520,6 +709,11 @@ export const REE_RESIDENTS: readonly ResidentSpec[] = [
     before: { ...CALF_HOME, yaw: CALF_HOME.yaw, idle: 'lie', roam: 0 },
     after: { ...atLocal({ ...HOME, heading: headingTo(HOME, COPSE_AT) + 1.2 }, -0.65, -0.45), yaw: headingTo(HOME, COPSE_AT) + 0.7, idle: 'graze', roam: 0.3 },
     shy: [{ within: 4, back: 7, to: CALF_BED, lie: true, state: 'after', after: 4 }] },
+  // ree-discover: the calf's twin — there only in a play that has it (`k.rare()`, the
+  // rare twins: ree.ts lays it in the grass behind where they meet once he has left the
+  // calf, and with the family at home after: `TWIN_AFTER`); a roe doe hides her twins apart
+  { key: 'twin', animal: 'reekalf', reach: HOME_REACH, before: null, after: null,
+    shy: [{ within: 4, back: 7, to: TWIN_BED, lie: true, state: 'after', after: 4 }] },
 ];
 
 /** The reekalf's home in the world. */
@@ -585,9 +779,18 @@ export function reeClearings(): { x: number; z: number; r: number }[] {
     out.push({ x: l.frame.x, z: l.frame.z, r: STAND.halfW + 0.3 });
     for (const p of poolsOf(l)) out.push({ x: p.x, z: p.z, r: POOL.halfW + 0.5 });
     for (const p of wisselLine(l)) out.push({ ...p, r: WISSEL_HALF + 0.45 });
+    for (const b of l.birches) out.push({ ...b, r: BIRCH_CLEAR });
   }
   return out;
 }
+
+/** The ground kept bare round a young birch's spot (m): no heather cushion in its foot, no
+ *  other mission's staged patch on it. */
+export const BIRCH_CLEAR = 0.7;
+/** How near (m) he walks up to the rubbed birch to see its marks (it is discovered). */
+export const BIRCH_NEAR = 2.5;
+/** The young birch: its height (m) and its solid radius (he walks round it). */
+export const BIRCH = { h: 1.35, r: 0.22 } as const;
 
 /** A layout's pool spots (on her path, and on his way to the hide when it has one). */
 export function poolsOf(l: ReeLayout): PoolSpot[] {
@@ -618,6 +821,28 @@ export function walkVia(l: ReeLayout, walk: 'meadow' | 'hide', pool: PoolSpot | 
   });
   if (pool && pool.leg === all.length - 2) out.push(...pool.round);
   return out;
+}
+
+/** How far (m) a spot lies from a way (its points in order). */
+function wayDist(p: Spot, way: readonly Spot[]): number {
+  let best = Infinity;
+  for (let i = 1; i < way.length; i++) {
+    const a = way[i - 1], b = way[i];
+    const L2 = (b.x - a.x) ** 2 + (b.z - a.z) ** 2;
+    const t = L2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z)) / L2)) : 0;
+    best = Math.min(best, Math.hypot(p.x - (a.x + (b.x - a.x) * t), p.z - (a.z + (b.z - a.z) * t)));
+  }
+  return best;
+}
+
+/** ree-discover: the walk a layout's young birch `i` stands beside (the nearer of the walk
+ *  to the grass, along her wissel, and his way round the grass to the hide; with or without
+ *  its pool). reeSurprises keeps the woodlark off that walk: one thing at a time. */
+export function birchWalk(l: ReeLayout, i: number): 'meadow' | 'hide' {
+  const b = l.birches[i];
+  const meadow = Math.min(wayDist(b, [MARKER, ...walkVia(l, 'meadow', l.pools.in), l.search]), wayDist(b, [MARKER, ...walkVia(l, 'meadow', null), l.search]));
+  const hide = Math.min(wayDist(b, [...walkVia(l, 'hide', null), l.hide]), ...(l.pools.out ? [wayDist(b, [...walkVia(l, 'hide', l.pools.out), l.hide])] : []));
+  return meadow <= hide ? 'meadow' : 'hide';
 }
 
 /** Frame-local position of a spot in a layout's stand frame (for the tests). */

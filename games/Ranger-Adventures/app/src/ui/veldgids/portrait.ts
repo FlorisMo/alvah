@@ -14,6 +14,7 @@
 
 import * as THREE from 'three';
 import { spawnModel } from '../../render3d/play/spawn';
+import { fawnSpots } from '../../render3d/play/pose';
 import { renderedBox } from '../../render3d/Models';
 import { session } from '../flow/session';
 
@@ -73,6 +74,11 @@ const VIEW_ELEVATION = THREE.MathUtils.degToRad(11);
 /** Room round the shape in the picture (share of its size). */
 const MARGIN = 0.07;
 
+/** A young one's own coat on its parent's model, as the world dresses it (adventure/actors
+ *  DRESS): a row whose picture is a content animal id gets it ('reekalf': the roe calf's
+ *  white spots; ree-discover, additive). */
+const YOUNG: Readonly<Record<string, (root: THREE.Object3D) => () => void>> = { reekalf: fawnSpots };
+
 async function make(model: string): Promise<Portrait | null> {
   const world = session.world;
   const renderer = session.stage?.renderer;
@@ -81,6 +87,7 @@ async function make(model: string): Promise<Portrait | null> {
   if (!sp) return null;
   const { scene, cam, flat } = studio();
   const root = sp.root as THREE.Object3D;
+  const undress = YOUNG[model]?.(root);
   scene.add(root);
   try {
     frame(root, cam, scene);
@@ -89,6 +96,7 @@ async function make(model: string): Promise<Portrait | null> {
     return await inWorldFrame(() => shoot(renderer, scene, cam, flat));
   } finally {
     scene.remove(root);
+    undress?.();
     sp.dispose();
   }
 }
