@@ -21,7 +21,7 @@ import type { DressingEnv, HomeDressing } from '../../world/Residents';
 import type { HomeState, ResidentSpec, Spot } from '../types';
 import { Actor, type ActorEnv } from '../actors';
 import { CoverField } from '../cover';
-import { backPoints, type Clump, type V3 } from '../cover-math';
+import { backPoints, openWindow, type Clump, type V3 } from '../cover-math';
 import { fitWindow, refitWindow, type Built } from './ree.window';
 import { groundDecal, groundStrip } from '../decal';
 import { atLocal, dist, headingTo, stream } from '../places';
@@ -397,7 +397,7 @@ export class VenHome implements HomeDressing {
         clodAt.push(new THREE.Matrix4().compose(new THREE.Vector3(p.x, g(p.x, p.z) - 0.015, p.z), new THREE.Quaternion().setFromAxisAngle(UP, i * 1.9 + 0.4), new THREE.Vector3(s, s, s)));
         const a = new THREE.Object3D();
         a.name = `ven-clod-${id}-${i}`;
-        a.position.set(p.x, g(p.x, p.z) + 0.06, p.z);
+        a.position.set(p.x, g(p.x, p.z) + 0.08, p.z);
         detail.add(a);
         anchors.push(a);
       });
@@ -537,6 +537,15 @@ export class VenHome implements HomeDressing {
     const f = this.laid?.frog;
     const changed = refitWindow(this.cover.stems, this.built, eye, back, share, { x: f?.x ?? 0, y: 0, z: f?.z ?? 0 });
     return changed;
+  }
+
+  /** The song's picture (the lens looks back from over the water): the sedge between it and
+   *  the frog gives way calmly until most of him shows. */
+  openForSong(eye: V3, frog: Spot & { yaw: number }, share = 0.8): void {
+    const back = backPoints(frog.x, this.g(frog.x, frog.z), frog.z, frog.yaw, FROG_LEN, FROG_H);
+    const drawn = this.cover.stems.map((s) => s.h);
+    const changed = openWindow(this.cover.stems, eye, back, share);
+    if (changed.length) this.cover.settle(changed, 1.2, drawn);
   }
 
   /** The look-alikes of the play's cove (as the search takes them). */
@@ -792,21 +801,23 @@ function cottonGeometry(): THREE.BufferGeometry {
   return out;
 }
 
-/** A frog-sized moss clod (1 = ~0.22 × 0.1 m): a low lumpy mound of peat and moss, brown
- *  below, mossy and a little red-brown on top — the frog's own colours. Vertex colours. */
+/** A frog-sized moss clod (~0.22 × 0.12 m, as high as the frog sits): a lumpy mound of peat
+ *  and moss, dark below, red-brown and mossy on top with darker flecks — the frog's own
+ *  colours, a look-alike between the sedge. Vertex colours. */
 function clodGeometry(): THREE.BufferGeometry {
-  const geo = new THREE.IcosahedronGeometry(1, 1);
+  const geo = new THREE.IcosahedronGeometry(1, 2);
   const pos = geo.attributes.position as THREE.BufferAttribute;
   const col = new Float32Array(pos.count * 3);
-  const low = new THREE.Color('#4e3a28'), mid = new THREE.Color('#8a5a3a'), top = new THREE.Color('#6f7a3a');
+  const low = new THREE.Color('#3f2f22'), mid = new THREE.Color('#8b5e3e'), top = new THREE.Color('#6d7438'), fleck = new THREE.Color('#4a3424');
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const lump = 1 + 0.16 * Math.sin(x * 5.1 + z * 3.3) * Math.cos(y * 4.2 - x * 2.1);
-    pos.setXYZ(i, x * 0.11 * lump, Math.max(-0.2, y) * 0.065 * lump + 0.012, z * 0.09 * lump);
+    const lump = 1 + 0.14 * Math.sin(x * 5.1 + z * 3.3) * Math.cos(y * 4.2 - x * 2.1);
+    pos.setXYZ(i, x * 0.11 * lump, (Math.max(-0.25, y) + 0.25) * 0.1 * lump, z * 0.085 * lump);
     const k = (y + 1) / 2;
-    c.copy(low).lerp(mid, Math.min(1, k * 1.6));
-    if (k > 0.72) c.lerp(top, ((k - 0.72) / 0.28) * (0.5 + 0.5 * Math.sin(x * 9 + z * 7)));
+    c.copy(low).lerp(mid, Math.min(1, k * 1.5));
+    if (k > 0.75) c.lerp(top, ((k - 0.75) / 0.25) * (0.35 + 0.35 * Math.sin(x * 9 + z * 7)));
+    if (Math.sin(x * 23 + z * 17) * Math.cos(z * 19 - x * 11) > 0.55) c.lerp(fleck, 0.7); // (flecks, like the frog's spots)
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));

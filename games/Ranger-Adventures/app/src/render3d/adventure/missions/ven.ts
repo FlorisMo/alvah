@@ -293,7 +293,7 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
   const sing = singOf(bay, at);
   // (the lens looks back from over the water: one soft dip-cut, never a swing round him;
   // the sedge on the water's side of him leans aside, so he sits in plain view)
-  home.cover.partAt(at.x, at.z, 0.7, 0.75, 30);
+  home.openForSong(k.lensFor(sing.view).cam, { x: frog.x, z: frog.z, yaw: frog.yaw });
   await k.frame(sing.view, { dip: true });
   void frog.lookAt(() => ({ ...k.ranger() }), 1.2);
   k.say(c.zingen);
