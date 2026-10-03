@@ -48,10 +48,24 @@ export interface Ontdekking {
 }
 
 /* ------------------------------------------------------- frisling (the wallow) ---- */
+// (run 7 package body: the family he meets, a bird that flies up where he walks, the pigs'
+// rubbing log, a nest of bitten bracken at a stand's edge, and rarely a magpie riding the
+// sow; each recorded only once he really saw it, render3d/adventure/missions/frisling.finds.ts)
 const FRISLING: Ontdekking[] = [
   { id: 'frisling.frisling', home: 'frisling', soort: 'dier', naam: 'de big', naamKnap: 'de frisling',
-    hint: 'Wie verstopt zich in de varens?', model: 'animal-frisling-piglet', geholpen: true },
-  // the frisling lane adds its rows here (the sow, the group's prints, a rare visitor ...)
+    hint: 'Wie heeft een pyjama met strepen?', model: 'animal-frisling-piglet', geholpen: true },
+  { id: 'frisling.zeug', home: 'frisling', soort: 'dier', naam: 'het moederzwijn', naamKnap: 'de zeug',
+    hint: 'Wie past op de biggen?', model: 'animal-wildzwijn-boar' },
+  { id: 'frisling.overloper', home: 'frisling', soort: 'dier', naam: 'het jonge zwijn', naamKnap: 'de overloper',
+    hint: 'Wie is de grote broer?', model: 'animal-wildzwijn-boar' },
+  { id: 'frisling.leeuwerik', home: 'frisling', soort: 'dier', naam: 'de leeuwerik', naamKnap: 'de boomleeuwerik',
+    hint: 'Soms vliegt er een vogel op.', model: 'bird-boomleeuwerik' },
+  { id: 'frisling.schuurboom', home: 'frisling', soort: 'spoor', naam: 'de schuurboom', naamKnap: 'de malboom',
+    hint: 'Waar schuren de zwijnen hun rug?', icon: 'paw' },
+  { id: 'frisling.nest', home: 'frisling', soort: 'vondst', naam: 'het bedje van varens', naamKnap: 'de worpketel',
+    hint: 'Een moeder maakt een bedje. Waar?', icon: 'leaf' },
+  { id: 'frisling.ekster', home: 'frisling', soort: 'zeldzaam', naam: 'de ekster op het zwijn',
+    hint: 'Wie rijdt er mee op een zwijn?', model: 'bird-ekster' },
 ];
 
 /* --------------------------------------------- ree-niet-aanraken (the meadow) ---- */
@@ -65,7 +79,23 @@ const REE: Ontdekking[] = [
 const WILDCAMERA: Ontdekking[] = [
   { id: 'wildcamera.das', home: 'wildcamera', soort: 'dier', naam: 'de das',
     hint: 'Wie snuffelt er in de nacht?', model: 'animal-das-badger', geholpen: true },
-  // the wildcamera lane adds its rows here (the trap's photos: soort 'foto' ...)
+  // run 7 (wc-album): the camera's album. His own photo when he walks past the camera to
+  // test it (every play; new the first time); the fox, the first time it walks in for a
+  // photo or calls at night (it comes in about three plays of four); a nose pressed to the
+  // lens on a photo the camera took on its own in the night (some plays, surely within
+  // three); and two rare ones (k.rare: a seeded chance and the pity rule): a fox with her
+  // cubs crossing in the night, and a white roe stepping into the glade in the morning.
+  // No wolf: next to the man and his snare it would read as a threat.
+  { id: 'wildcamera.selfie', home: 'wildcamera', soort: 'foto', naam: 'de foto van jou', naamKnap: 'de foto van jou op de wildcamera',
+    hint: 'Loop eens langs de camera.', model: 'ranger-alvah' },
+  { id: 'wildcamera.vos', home: 'wildcamera', soort: 'dier', naam: 'de vos',
+    hint: 'Wie sluipt er ’s nachts langs?', model: 'animal-vos-fox' },
+  { id: 'wildcamera.neus', home: 'wildcamera', soort: 'foto', naam: 'de neus op de foto', naamKnap: 'de snuit op de foto',
+    hint: 'Wie komt héél dichtbij?', model: 'animal-wildzwijn-boar' },
+  { id: 'wildcamera.vosjes', home: 'wildcamera', soort: 'zeldzaam', naam: 'de vos met jongen', naamKnap: 'de vos met welpen',
+    hint: 'Soms komt er een hele familie.', model: 'vos-welp' },
+  { id: 'wildcamera.witte-ree', home: 'wildcamera', soort: 'zeldzaam', naam: 'de witte ree',
+    hint: 'Een heel bijzondere ree…', model: 'witte-ree' },
 ];
 
 /* ------------------------------------------------------ eekhoorn (the pines) ---- */

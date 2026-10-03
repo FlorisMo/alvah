@@ -158,8 +158,12 @@ export function applyCoat(root: THREE.Object3D, id: string | null): number {
       const src = m as THREE.Material & { color?: THREE.Color; name?: string };
       if (!src.color || EYE_NAME.test(src.name ?? '')) return m;
       if (tint.only && !tint.only.includes(src.name ?? '')) return m; // (only its coat)
-      const clone = src.clone() as THREE.Material & { color: THREE.Color };
-      clone.color.copy(src.color).lerp(target, tint.strength);
+      const clone = src.clone() as THREE.Material & { color: THREE.Color; map?: THREE.Texture | null };
+      if (tint.pale) {
+        // (run 7: a pale coat — its own texture bleached, on this copy only)
+        clone.map = paleMap(clone.map ?? null);
+        clone.color.copy(target);
+      } else clone.color.copy(src.color).lerp(target, tint.strength);
       if (tint.ramp && (clone as THREE.MeshStandardMaterial).isMeshStandardMaterial) rampShader(clone as THREE.MeshStandardMaterial, tint.ramp);
       n++;
       return clone;
@@ -194,6 +198,41 @@ function rampShader(mat: THREE.MeshStandardMaterial, r: NonNullable<ReturnType<t
   };
   mat.customProgramCacheKey = () => `${prevKey}|coat-ramp-${r.dark}-${r.light}`;
   mat.needsUpdate = true;
+}
+
+/** A coat texture bleached to its light and dark (run 7, wc-album: the white roe): every
+ *  texel's brightness through a soft step, so the coat (mid-brown and lighter) goes white
+ *  and the darkest parts (the eyes, the nose, the hooves) stay a dark grey. Made once per
+ *  source texture (a page load), never written back to it; null when it cannot be read
+ *  (the coat is then its colour alone). */
+const PALE = new WeakMap<THREE.Texture, THREE.Texture>();
+function paleMap(src: THREE.Texture | null): THREE.Texture | null {
+  if (!src) return null;
+  const had = PALE.get(src);
+  if (had) return had;
+  const img = src.image as (CanvasImageSource & { width: number; height: number }) | undefined;
+  if (!img?.width || typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  if (!g) return null;
+  g.drawImage(img, 0, 0);
+  const px = g.getImageData(0, 0, c.width, c.height);
+  const d = px.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const l = (0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]) / 255;
+    const t = Math.min(1, Math.max(0, (l - 0.06) / 0.34));
+    const v = Math.round(255 * (0.24 + 0.74 * t * t * (3 - 2 * t)));
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
+  g.putImageData(px, 0, 0);
+  // (a clone shares its source's pixels: the bleached copy gets a source of its own, so the
+  // roe's own texture, and every other roe, keep their coat)
+  const out = src.clone();
+  out.source = new THREE.Source(c);
+  out.needsUpdate = true;
+  PALE.set(src, out);
+  return out;
 }
 
 const _box = new THREE.Box3();

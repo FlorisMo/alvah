@@ -173,8 +173,15 @@ const MISSIE_FRISLING = {
       // run 7: the way south passes the family (unmeasured: never logged)
       boog: 'Loop met een boog om de groep.',
       teDichtbij: 'Niet zo dichtbij. De moeder kijkt.',
-      // run 7: the hungry one at his bag may be the piglet himself (the card in knap words)
-      voerenBig: 'Een jong zwijn snuffelt aan je tas.',
+      // run 7 (package body): the last three cards are played with the body. The tired
+      // piglet: walk slowly with him (a run: he hides); the hungry one at his bag: hands
+      // still; the free path at the mud: walk on (waiting too long: the group goes on)
+      moe: 'Hij is moe. Loop rustig mee.',
+      nietRennenMoe: 'Niet rennen. Hij is moe.',
+      eten: 'Hij wil eten. Hou je handen stil.',
+      padVrij: 'Het pad is vrij. Loop maar.',
+      teLang: 'Je wacht te lang.',
+      chipPad: 'Het pad',
     },
     knap: {
       kijk: 'Daar is zijn rotte.',
@@ -189,7 +196,7 @@ const MISSIE_FRISLING = {
       staStil: 'De zeug kijkt. Sta heel stil.',
       boog: 'Loop met een boog om de rotte.',
       teDichtbij: 'Niet zo dichtbij. De zeug kijkt.',
-      voerenBig: 'De frisling snuffelt aan je tas.',
+      moe: 'De frisling is moe. Loop rustig mee.',
     },
   },
   stappen: [
@@ -601,6 +608,7 @@ const MISSIE_WILDCAMERA = {
       // run 7 (wc-hands): no buttons; he does it himself ("Tik" becomes "Klik" with a mouse)
       pakKlik: 'Tik op de camera.',
       kijkPad: 'Kijk. Daar gaat het paadje.',
+      vosSporen: 'Verse sporen! Wie liep hier?', // (run 7, wc-album: the fox's prints)
       volg: 'Volg het paadje van de dieren.',
       chipPad: 'Het dierenpaadje',
       sporen: 'kijk naar de sporen',
@@ -644,6 +652,11 @@ const MISSIE_WILDCAMERA = {
       foto_nachtzwaluw: 'Een nachtzwaluw.',
       foto_wildzwijn: 'Een wild zwijn.',
       foto_vos: 'Een vos.',
+      // run 7 (wc-album): the night's surprises and the rare ones
+      foto_neus: 'Wie is dat? Een neus!',
+      foto_vosjes: 'Een vos met jongen.',
+      vosjes: 'Kijk! Een vos met jongen.',
+      witteRee: 'Een witte ree! Heel bijzonder.',
       man: 'Kijk! Een man zet een val.',
       waar: 'Waar is dit?',
       zoekVal: 'Zoek de val bij het paadje.',
@@ -658,6 +671,7 @@ const MISSIE_WILDCAMERA = {
     knap: {
       pak: 'Hier ligt de wildcamera.',
       kijkPad: 'Kijk. Daar gaat de wildwissel.',
+      vosSporen: 'Verse prenten! Wie liep hier?',
       volg: 'Volg de wildwissel.',
       chipPad: 'De wildwissel',
       hang: 'Hier kruisen twee wildwissels.',
@@ -668,6 +682,9 @@ const MISSIE_WILDCAMERA = {
       test: 'Loop eens langs de wildcamera.',
       foto_edelhert: 'Een edelhert.',
       foto_hinde: 'Een hinde.',
+      foto_neus: 'Wie is dat? Een snuit!',
+      foto_vosjes: 'Een vos met welpen.',
+      vosjes: 'Kijk! Een vos met welpen.',
       man: 'Kijk! Een stroper zet een strik.',
       zoekVal: 'Zoek de strik bij de wildwissel.',
       chipVal: 'De strik',

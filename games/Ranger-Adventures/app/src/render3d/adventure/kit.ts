@@ -144,6 +144,10 @@ export interface FrameSpec {
 export interface WalkOpts {
   /** a name for the beat ('cover', 'field' ...) */
   name: string;
+  /** run 7 (additive): the beat while he walks, when it is not a plain walk (default
+   *  `walk:<name>`, a calm beat a veldgids reveal may show in; a walk that is a search
+   *  of his own, e.g. 'seek:val', keeps the reveals for later) */
+  beat?: string;
   to: Place | Spot;
   /** arrive within this (m); default the place's r, else 1.2 */
   r?: number;
@@ -177,6 +181,10 @@ export interface WalkOpts {
     /** his walk at the animal's pace while he leads it (m/s): a careful walk, so they stay
      *  together; running is his own choice, and the animal hides */
     pace?: number;
+    /** run 7 (additive): how near (m) he must walk back to it, calm, before it comes out of
+     *  its clump after a run (default `LEAD_BACK_M`; the frisling's tired piglet: right up
+     *  to it, so the walk back is part of walking calmly with it again) */
+    backM?: number;
     /** it trots at his SIDE (m, + right, − left) instead of trailing `gap` m behind him:
      *  the follow lens behind him sees it beside his legs, never at its own feet at the
      *  bottom edge of the picture (`gap` is then how close it keeps to that spot) */
@@ -627,7 +635,7 @@ export class AdventureKit {
    */
   async walk(o: WalkOpts): Promise<void> {
     this.check();
-    this.beat = `walk:${o.name}`;
+    this.beat = o.beat ?? `walk:${o.name}`;
     this.free();
     this.ui.say(o.line);
     const r = o.r ?? (o.to as Place).r ?? 1.2;
@@ -660,7 +668,7 @@ export class AdventureKit {
     // leads waits for him, back to it)
     let viaI = 0;
     const unhint = this.hint(() => {
-      if (lead && (waiting || hiding)) return { id: `walk:${o.name}:back`, walk: { x: lead.actor.x, z: lead.actor.z, r: LEAD_BACK_M * 0.7 } };
+      if (lead && (waiting || hiding)) return { id: `walk:${o.name}:back`, walk: { x: lead.actor.x, z: lead.actor.z, r: (hiding ? lead.backM ?? LEAD_BACK_M : LEAD_BACK_M) * 0.7 } };
       const v = o.via?.[viaI];
       if (v) return { id: `walk:${o.name}:via${viaI}`, walk: { x: v.x, z: v.z, r: 0.7 } };
       return { id: `walk:${o.name}`, walk: { x: to.x, z: to.z, r: r * WALK_HINT_R } };
@@ -720,7 +728,7 @@ export class AdventureKit {
         calmFor = 0;
       } else if (hiding) {
         calmFor = run ? 0 : calmFor + dt;
-        if (calmFor > LEAD_CALM_S && dist(a, m) < LEAD_BACK_M) {
+        if (calmFor > LEAD_CALM_S && dist(a, m) < (lead.backM ?? LEAD_BACK_M)) {
           hiding = null;
           a.follow(rangerLead, gap);
           lead.onOut?.();

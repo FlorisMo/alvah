@@ -35,6 +35,11 @@ export interface CoatTint {
    *  between `split` (linear lightness), keeping the fur's own shading. A multiply cannot
    *  do it: an orange back made brown by a tint turns a cream belly grey. */
   ramp?: { dark: string; light: string; split: readonly [number, number] };
+  /** run 7 (wc-album, additive): a PALE coat — the model's own texture bleached to its light
+   *  and dark (its coat goes `color`, the eyes, the nose and the hooves stay dark), on the
+   *  spawn's own copy. For a rare animal staged on a model's own species (a CONTENT id: the
+   *  white roe, 'witte-ree'), never a GLB's tint; `strength` is then ignored. */
+  pale?: boolean;
 }
 
 /** Posture stance cue for a species: a forward (nose-down) pitch in radians. */
@@ -67,6 +72,10 @@ const COAT_TINT: Record<string, CoatTint> = {
   // (research/animal-visual-accuracy.md, Edelhert). Its near-black antlers ('Material.001')
   // and its pale neck and rump stay its own.
   'animal-edelhert-reddeer': { color: '#8a4b2c', strength: 0.55, only: ['Material'] },
+  // run 7 (wc-album): the wildcamera's rare white roe — a CONTENT id on the roe's model
+  // (play/spawn), a leucistic roe: creamy white, its eyes, nose and hooves still dark
+  // (a real, if rare, Veluwe sight; spawned for one play, its own materials)
+  'witte-ree': { color: '#f1ece2', strength: 1, pale: true },
   // run 7 (the squirrel's neighbours): the raven GLB is a pale grey bird with black wings
   // (it read as a white crow on the snag once its home's own darkening went, one root);
   // dossier: "geheel zwart, met een blauwige glans" — a soft near-black, not a hole: the
@@ -168,7 +177,7 @@ export function coatTintFor(id: string | null | undefined): CoatTint | null {
   if (!id) return null;
   const t = COAT_TINT[id];
   if (!t) return null;
-  return { color: t.color, strength: clamp(t.strength, 0, 1), ...(t.only ? { only: [...t.only] } : {}),
+  return { color: t.color, strength: clamp(t.strength, 0, 1), ...(t.only ? { only: [...t.only] } : {}), ...(t.pale ? { pale: true } : {}),
     ...(t.ramp ? { ramp: { dark: t.ramp.dark, light: t.ramp.light, split: [t.ramp.split[0], t.ramp.split[1]] as const } } : {}) };
 }
 
