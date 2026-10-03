@@ -1030,7 +1030,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
         const pull = tempted('zeug', tempts++);
         call('piep', pig);
         void sow.lookAt(me);
-        if (pull === 1) void pig.lookAt(me, 1.6);
+        if (pull === 1) void pig.lookAt(me, 1.6).then((ok) => { if (ok) pig.root(pig.x, pig.z, 0.4); });
         else if (pull === 2) void peek();
       },
       // a step toward her piglets: a firm grunt, half a step nearer, a stamp

@@ -118,6 +118,10 @@ export const NEST_R = 0.4;
  *  pressed to a bare patch belongs there, never deep in the bracken). */
 export interface DecoySpot { u: number; v: number; edge?: boolean }
 
+/** How far (px, 1280×800) a look-alike stands at least from the piglet's nook in the
+ *  search's picture (run 7 growth): nearer, it sits over him or right beside him. */
+export const NOOK_CLEAR_PX = 50;
+
 /** A framed view as the script takes it (adventure/kit FrameSpec, THREE-free). */
 export interface WayView {
   at: Spot; heading: number; halfW: number; halfD: number; tall: number; pitchDeg: number;
@@ -136,6 +140,12 @@ export interface Way {
   follow: readonly Spot[];
   nooks: readonly Nook[];
   decoySpots: readonly DecoySpot[];
+  /** run 7 (growth): per nook, the look-alike spots that stand right over or beside it in
+   *  the search's picture (< `NOOK_CLEAR_PX` on a 1280×800 screen): never laid while he lies
+   *  there — a stonechat on his back would point at him (or hide him), and with more
+   *  look-alikes at a higher level such a spot would come more often (pinned by
+   *  frisling.places.test.ts) */
+  nearNook?: Readonly<Record<number, readonly number[]>>;
   /** the search's framed view (the ranger in a lower corner) */
   searchView: WayView;
   /** the clumps beside the lead home a frightened piglet dives into */
@@ -237,6 +247,7 @@ const WEI = ((): Way => {
       { u: 1.0, v: 1.3 }, { u: 0.3, v: 1.25 }, { u: 1.95, v: 0.35, edge: true }, { u: 0.0, v: -0.9, edge: true },
       { u: -1.6, v: -1.0, edge: true }, { u: -0.35, v: 1.45, edge: true },
     ],
+    nearNook: { 4: [1] },
     searchView: searchViewOf(frame, coverApproach, 0.42),
     leadClumps: leadClumpsOf(coverApproach, fieldApproach, [[0.16, 2.2, 0.9], [0.34, -2.3, 0.85], [0.5, 2.1, 0.9], [0.64, -2.2, 0.8], [0.71, 2.2, 0.85], [0.94, 2.1, 0.8]]),
     field: 'N', fieldApproach, fieldSide, fieldView: fieldViewOf('N', fieldApproach, fieldSide, -0.3),
@@ -321,6 +332,7 @@ const BERK = ((): Way => {
       { u: 0.65, v: 1.3 }, { u: 1.95, v: 0.3, edge: true }, { u: -1.7, v: 1.0, edge: true },
       { u: -0.3, v: -0.95, edge: true }, { u: 1.5, v: 1.15, edge: true }, { u: -0.9, v: 1.5, edge: true },
     ],
+    nearNook: { 0: [6], 2: [7], 4: [1, 9] },
     searchView: searchViewOf(frame, coverApproach, 0.42),
     leadClumps: leadClumpsOf(coverApproach, fieldApproach, [[0.12, -2.2, 0.9], [0.22, 2.3, 0.85], [0.64, -2.2, 0.9], [0.75, 2.2, 0.8], [0.86, -2.3, 0.9], [0.94, -2.1, 0.8]]),
     field: 'N', fieldApproach, fieldSide, fieldView: fieldViewOf('N', fieldApproach, fieldSide, 0.3),

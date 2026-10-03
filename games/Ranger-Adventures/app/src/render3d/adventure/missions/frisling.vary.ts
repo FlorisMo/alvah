@@ -96,8 +96,9 @@ export function frislingVariant(play: Play, past: readonly PastPlay[], decoys: r
   const before = past.find((p) => p.way === way)?.nook;
   const nook = play.fork('nook').pick(w.nooks.map((_, i) => i).filter((i) => i !== before));
   const pose = play.fork('pose').int(0, 2) as 0 | 1 | 2;
-  // the look-alikes: a shuffled order of the stand's spots (assignSpots)
-  const decoySpots = assignSpots(play.fork('decoys').shuffle(w.decoySpots.map((_, i) => i)), w.decoySpots, decoys);
+  // the look-alikes: a shuffled order of the stand's spots (assignSpots), never one that
+  // stands over or right beside his nook in the search's picture (`nearNook`)
+  const decoySpots = assignSpots(play.fork('decoys').shuffle(w.decoySpots.map((_, i) => i)), w.decoySpots, decoys, w.nearNook?.[nook]);
   // the family's layout, from its own fork: never his last play's (in his first three,
   // never one of his last two: three different mornings at the mud), and never the one it
   // had the last time this way came (a way he knows finds the family otherwise again)
@@ -139,9 +140,10 @@ function drawWay(fork: Play, recent: readonly string[]): WayId {
 }
 
 /** Which spot each look-alike takes, from an `order` of the stand's spots: the nightjar
- *  first takes the first edge spot in it, then every other decoy the next spot left. */
-export function assignSpots(order: readonly number[], spots: readonly DecoySpot[], decoys: readonly DecoyKind[]): number[] {
-  const used = new Set<number>();
+ *  first takes the first edge spot in it, then every other decoy the next spot left.
+ *  `skip`: spots none may take (they stand over the nook he lies in: `Way.nearNook`). */
+export function assignSpots(order: readonly number[], spots: readonly DecoySpot[], decoys: readonly DecoyKind[], skip: readonly number[] = []): number[] {
+  const used = new Set<number>(skip);
   const take = (ok: (s: number) => boolean): number | undefined => {
     const i = order.find((s) => !used.has(s) && ok(s));
     if (i !== undefined) used.add(i);

@@ -167,6 +167,19 @@ test('a way that comes again hides him in another nook than the last time that w
   }
 });
 
+test('no look-alike is laid over the nook he lies in (run 7 growth: nearNook), at any level', () => {
+  for (const count of [4, 5, 6, 7, 8]) {
+    const decoys = DECOYS.slice(0, count);
+    for (let seed = 0; seed < 300; seed++) {
+      const v = frislingVariant(newPlay('frisling', seed, 2), [], decoys);
+      const near = WAYS[v.way].nearNook?.[v.nook] ?? [];
+      for (const s of v.decoySpots) assert.ok(!near.includes(s), `seed ${seed}: ${v.way} nook ${v.nook} gets look-alike spot ${s}`);
+      assert.equal(new Set(v.decoySpots).size, count, 'one spot each');
+      decoys.forEach((d, i) => { if (wantsEdge(d)) assert.ok(WAYS[v.way].decoySpots[v.decoySpots[i]].edge, 'the nightjar at an edge spot'); });
+    }
+  }
+});
+
 test('the seed table: a fresh save\'s first play draws each way', () => {
   for (const id of WAY_IDS) assert.equal(variant(SEED_TABLE[id]).way, id, `seed ${SEED_TABLE[id]} draws ${id}`);
 });
