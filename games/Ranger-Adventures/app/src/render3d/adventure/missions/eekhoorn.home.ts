@@ -26,7 +26,7 @@ import type { Trunk } from '../squirrel-math';
 import type { Squirrel, SquirrelTree } from '../squirrel';
 import { SIZE } from '../../AnimalScale';
 import {
-  GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, JAY_GROUND, JAY_WAIT, NEIGHBOURS, PERCH, SEEDLING_AT, SLOTS, SNAG, SPOT_SIZE, STUMP, WOODPECKER,
+  GLADE_FRAME, HEAP, HEAP_SPOTS, HOME_TREES, JAY_GROUND, JAY_WAIT, NEIGHBOURS, PERCH, ROUTES, SEEDLING_AT, SLOTS, SNAG, SPOT_SIZE, STUMP, WOODPECKER,
   EEKHOORN_PLACES, FIRST_TRIO, gladeSpots, type EekhoornPlay, type FieldSym, type HomeTree, type Slot, type Trio,
 } from './eekhoorn.places';
 import { headingTo, stream } from '../places';
@@ -114,6 +114,24 @@ const BIRD_WAKE_M = 12;
 /** How long a bird takes to fade in or out (s): a calm appearing, never a pop. */
 const BIRD_FADE_S = 0.6;
 
+/**
+ * Which of its trees the forest draws as the real tree (run 7, `homeTreeNear`): the
+ * squirrel's pines stand close round the marker and along its ways, and turning round at
+ * the ring or at a wait the lens looks through half a dozen of them over the wood toward
+ * the tower, which already draws ~0.95M of the 1M triangles there (measured 2026-10-03:
+ * each real pine is 12k, its simple copy 3k; see-through, the real one cost 12k wherever
+ * it stood). So only the trees it plays round now keep the forest's full detail: the tree
+ * it sits on, the one it just left and the next one of its way (that one before he gets
+ * there: it never changes as he walks up to it), its den before a play, and the store pine
+ * and the glade oak (the neighbours' perches) from its last pine on. Every other one is
+ * the forest's simple copy (the darker, plainer pine of the wood further off), also while
+ * the lens looks through it.
+ */
+const FOCUS = new Set<string>(['den']);
+/** A home tree's full-detail range (world/Forest `near`): the forest's own for a tree the
+ *  squirrel plays round now, none for the rest. */
+export function homeTreeNear(id: string): number { return FOCUS.has(id) ? Infinity : 0; }
+
 export class EekhoornHome implements HomeDressing {
   readonly group = new THREE.Group();
   private fieldNow: PatchField;
@@ -145,9 +163,15 @@ export class EekhoornHome implements HomeDressing {
   /** the snag's top (once the snag is in): where the `top` bird sits */
   private snagTop: THREE.Vector3 | null = null;
   private trio: Trio = FIRST_TRIO;
+  /** this play's way, its den first (`focus`); the den alone before any play */
+  private way: string[] = ['den'];
+  /** the tree of its way it sat on last */
+  private wayAt = 0;
 
   constructor(env: DressingEnv) {
     this.env = env;
+    FOCUS.clear();
+    FOCUS.add('den'); // (a new world: the squirrel at home in its den, no play yet)
     this.group.name = 'eekhoorn-home';
     env.parent.add(this.group);
     const g = env.groundY;
@@ -249,6 +273,23 @@ export class EekhoornHome implements HomeDressing {
     this.setNeighbours(p.buren);
     this.cos = streams.cosmetic;
     this.squirrel?.reseed(streams.squirrel);
+    // (under the briefing card: the den and its first pine turn real before he sees them)
+    this.way = ['den', ...ROUTES[p.route].hops.map((h) => h.tree.id)];
+    this.wayAt = 0;
+    this.focus();
+  }
+
+  /** Which home trees are drawn real now (`homeTreeNear`): see FOCUS. */
+  private focus(): void {
+    const on = this.squirrel?.onTree;
+    const k = on ? this.way.indexOf(HOME_TREES[this.trees.indexOf(on)]?.id ?? '') : -1;
+    if (k >= 0) this.wayAt = k;
+    FOCUS.clear();
+    for (let j = Math.max(0, this.wayAt - 1); j <= Math.min(this.way.length - 1, this.wayAt + 1); j++) FOCUS.add(this.way[j]);
+    if (this.state === 'after' || (this.way.length > 1 && this.wayAt >= this.way.length - 1)) {
+      FOCUS.add('storePine');
+      FOCUS.add('gladeOak');
+    }
   }
 
   /** The three neighbours round the stump, slot by slot (tak, stam, top) — once loaded. */
@@ -463,6 +504,7 @@ export class EekhoornHome implements HomeDressing {
 
   update(dt: number, t: number, reduced: boolean, movers: readonly { x: number; z: number; moving: boolean; ranger?: boolean }[]): void {
     this.clock += dt;
+    this.focus();
     this.fieldNow.update(dt, reduced);
     // the store grows: each new cluster pops up in turn (a cut under reduced motion)
     let grew = false;

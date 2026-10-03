@@ -44,18 +44,13 @@ import { dist, headingTo } from '../places';
 import type { Spot } from '../types';
 import { TREE_BASE_H } from '../../world/Forest';
 import { RANGER_STAND_HEIGHT } from '../../AnimalScale';
-import { EekhoornHome, type Neighbour } from './eekhoorn.home';
+import { EekhoornHome, homeTreeNear, type Neighbour } from './eekhoorn.home';
 import {
   CALLERS_VIEW, EEKHOORN_HOME, EEKHOORN_PLACES as P, FIND_R, GLADE_VIEW, HEAP, HEAP_GRAB, AT_IT, HIDE, HOME_TREES, ROUTES, RUN_ON_WAIT, RUN_ON_X, SEAT_STOP, SEE_D, SEEN_X, STUMP,
   VARIANT_KEY, WATCH_R, branchStub, comesFrom, drawEekhoornPlay, eekhoornClearings, eekhoornTreeClear, foundFace, foundStand, foundView, hideShift, hideStart, introView,
   jayStep, lastVariants, roundStep, seatOf, slipSecs, variantOf, watchSpot, wayTo, type EekhoornPlay, type HomeTree, type Route,
 } from './eekhoorn.places';
 
-/** How near the lens (m) a home tree keeps its full detail (world/Forest `near`): measured
- *  2026-10-03, turning round at the marker and along the ways, the squirrel's fifteen pines
- *  in full detail out to the forest's 20 m took the picture past the 1M triangles (shadow
- *  pass included); within this the trunk the squirrel sits on is the full tree. */
-const TREE_NEAR = 6;
 /** The squirrel's size (m, sitting up with its tail curled over its back): a little over
  *  the upper end of a red squirrel (≈ 0.3), so a child reads it on a trunk a few metres
  *  off — through the follow lens 4.6 m behind him, ≥ 40 px as it sets off from a stub he
@@ -96,10 +91,10 @@ export const eekhoornAdventure: Adventure = {
   id: 'eekhoorn',
   home: EEKHOORN_HOME,
   clearings: eekhoornClearings(),
-  // the forest draws them, each with its branch stub (it fades with its tree)
-  // (full detail only within TREE_NEAR m of the lens: fifteen pines round one spot keep the
-  // triangle budget; past it they are the forest's simpler copy, as any tree past 20 m)
-  trees: HOME_TREES.map((t) => ({ x: t.x, z: t.z, s: t.h / TREE_BASE_H[t.species], rotY: t.rotY, species: t.species, stub: branchStub(t), near: TREE_NEAR })),
+  // the forest draws them, each with its branch stub (it fades with its tree); only the
+  // trees it plays round now in full detail, the rest as the forest's simple copy, also
+  // see-through (eekhoorn.home `homeTreeNear`: eleven pines round one spot keep the budget)
+  trees: HOME_TREES.map((t) => ({ x: t.x, z: t.z, s: t.h / TREE_BASE_H[t.species], rotY: t.rotY, species: t.species, stub: branchStub(t), near: () => homeTreeNear(t.id) })),
   treeClearings: eekhoornTreeClear(),
   dressing: (env) => new EekhoornHome(env),
   // a new light each play (design §6.6): a misty morning, a bright day, an overcast one,

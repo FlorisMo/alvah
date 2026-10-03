@@ -104,8 +104,9 @@ export interface WorldHome {
 export interface HomeTree {
   x: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub;
   /** run 7 (additive): its own full-detail range (m from the lens, below the forest's): a
-   *  home with many trees near one spot keeps the triangle budget (world/Forest `near`) */
-  near?: number;
+   *  home with many trees near one spot keeps the triangle budget (world/Forest `near`); a
+   *  function is read every frame (the tree an animal sits on now may keep more) */
+  near?: number | (() => number);
 }
 
 

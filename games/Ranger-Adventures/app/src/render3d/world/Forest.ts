@@ -23,6 +23,13 @@
  * a pool that lives as long as the forest, and their shader is compiled once when the
  * forest is built, so a tree fading in never stalls a frame on a shader compile.
  *
+ * A mission's home tree may keep full detail only nearer than the forest does (its own
+ * `near`, run 7: a home with many trees round one spot keeps the triangle budget), and
+ * its see-through copy then draws the detail the tree itself has there: the simple copy
+ * past its `near`, the real GLB inside it (`detailLevel`, one rule for both), so a home
+ * tree the lens looks through never costs the full tree where it would be drawn simple,
+ * and never changes its detail as it turns solid again.
+ *
  * A tree may carry a dead branch stub (a mission's home tree: a squirrel's perch, a
  * jay's). The stub is part of its tree: drawn with it while it is solid (one instanced
  * mesh for every stub in view) and inside its see-through copy while it fades, at the
@@ -38,10 +45,17 @@ import { SIZE } from '../AnimalScale.ts';
 export type TreeSpecies = 'prop-pine-scots' | 'prop-oak-tree' | 'prop-birch-tree';
 export interface TreePlacement {
   x: number; y: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub;
-  /** run 7 (additive): this tree's own full-detail range (m, lens → tree), when shorter than
-   *  the forest's first (a home's many planted trees near one spot: the squirrel's pines).
-   *  Unset: the forest's ranges, as every scattered tree. */
-  near?: number;
+  /** run 7 (additive): this tree's own full-detail range (m, lens → the middle of its
+   *  height), when shorter than the forest's first (a home's many planted trees near one
+   *  spot: the squirrel's pines); read every frame, so a home may widen it for the tree an
+   *  animal sits on now (a function). Its see-through copy follows it too. Unset: the
+   *  forest's ranges, as every scattered tree (its see-through copy always the real GLB). */
+  near?: number | (() => number);
+}
+
+/** A tree's own full-detail range now (m), or undefined: the forest's. */
+export function nearOf(t: Pick<TreePlacement, 'near'>): number | undefined {
+  return typeof t.near === 'function' ? t.near() : t.near;
 }
 
 /**
@@ -110,6 +124,25 @@ export const LOD_RANGES: Record<'hoog' | 'laag', readonly number[]> = {
 };
 const HYSTERESIS = 1.5; // m: a tree only changes level once it is this far past the line
 
+/**
+ * The detail level a tree is drawn at `d` m from the lens (0 = the real GLB, then the
+ * simpler copies; `ranges` the forest's upper distances), `near` its own full-detail
+ * range if it has one, `cur` the level it has now (−1: not drawn last frame), so it only
+ * changes once it is HYSTERESIS past a line. The one rule for a solid tree and for its
+ * see-through copy.
+ */
+export function detailLevel(d: number, ranges: readonly number[], near: number | undefined, cur: number): number {
+  const edge = (k: number): number => (k === 0 && near !== undefined ? Math.min(near, ranges[0]) : ranges[k]);
+  let lv = 0;
+  while (lv < ranges.length && d > edge(lv)) lv++;
+  if (cur >= 0 && cur !== lv) {
+    const lo = cur > 0 ? edge(cur - 1) - HYSTERESIS : -Infinity;
+    const hi = cur < ranges.length ? edge(cur) + HYSTERESIS : Infinity;
+    if (d > lo && d < hi) lv = cur;
+  }
+  return lv;
+}
+
 interface Part { geometry: THREE.BufferGeometry; material: THREE.Material; local: THREE.Matrix4 }
 interface SpeciesSet {
   species: TreeSpecies;
@@ -122,8 +155,16 @@ interface SpeciesSet {
   spare: Ghost[];                        // see-through copies not in use (kept, never disposed)
 }
 /** A see-through copy of one tree: one mesh per GLB part, each with its own material,
- *  and its branch stub (shown when the tree it stands in for has one). */
-interface Ghost { group: THREE.Group; mats: THREE.MeshStandardMaterial[]; set: SpeciesSet; stub: THREE.Mesh | null; stubMat: THREE.MeshStandardMaterial | null }
+ *  and its branch stub (shown when the tree it stands in for has one). Run 7: for a tree
+ *  with its own `near`, also a see-through copy of its first simple level (`lod`, made
+ *  when first needed), drawn instead of the parts while the tree is past its `near`
+ *  (`full` false). */
+interface Ghost {
+  group: THREE.Group; mats: THREE.MeshStandardMaterial[]; set: SpeciesSet; stub: THREE.Mesh | null; stubMat: THREE.MeshStandardMaterial | null;
+  parts: THREE.Mesh[]; lod: THREE.Mesh | null; lodMat: THREE.MeshStandardMaterial | null; full: boolean;
+  /** the tree it stands in for now (−1: in the pool) */
+  at: number;
+}
 
 const _frustum = new THREE.Frustum();
 const _pv = new THREE.Matrix4();
@@ -286,6 +327,11 @@ export class Forest {
       };
       set.parts.forEach((pt, k) => warm(pt.geometry, g.mats[k]));
       if (g.stubMat && this.stubGeo) warm(this.stubGeo, g.stubMat); // (the see-through stub's shader too)
+      // (and the see-through simple copy's, when a tree of this species has its own `near`)
+      if (set.trees.some((i) => this.placements[i].near !== undefined)) {
+        const lod = this.ghostLod(g);
+        warm(lod.geometry, lod.material as THREE.Material);
+      }
     }
   }
 
@@ -303,6 +349,14 @@ export class Forest {
     const e = camera.matrixWorld.elements;
     const cx = e[12], cy = e[13], cz = e[14];
     const R = this.ranges;
+    // a see-through home tree draws the detail the tree itself has where it stands
+    for (const [i, g] of this.ghosts) {
+      const p = this.placements[i];
+      if (p.near === undefined) continue;
+      const h = TREE_BASE_H[p.species] * p.s;
+      const d = Math.hypot(p.x - cx, p.y + h * 0.5 - cy, p.z - cz);
+      this.showGhost(g, detailLevel(d, R, nearOf(p), g.full ? 0 : 1) === 0);
+    }
     for (const set of this.sets) {
       const H = TREE_BASE_H[set.species];
       const lists = set.lists;
@@ -316,16 +370,7 @@ export class Forest {
         if (!_frustum.intersectsSphere(_sphere)) { this.level[i] = -1; continue; }
         const d = Math.hypot(p.x - cx, p.y + h * 0.5 - cy, p.z - cz);
         // (a home tree may keep full detail only nearer: its own first range)
-        const edge = (k: number): number => (k === 0 && p.near !== undefined ? Math.min(p.near, R[0]) : R[k]);
-        let lv = 0;
-        while (lv < R.length && d > edge(lv)) lv++;
-        const cur = this.level[i];
-        if (cur >= 0 && cur !== lv) {
-          // hysteresis: stay on the current level until clearly past its edge
-          const lo = cur > 0 ? edge(cur - 1) - HYSTERESIS : -Infinity;
-          const hi = cur < R.length ? edge(cur) + HYSTERESIS : Infinity;
-          if (d > lo && d < hi) lv = cur;
-        }
+        const lv = detailLevel(d, R, nearOf(p), this.level[i]);
         this.level[i] = lv;
         lists[lv].push(i);
       }
@@ -395,7 +440,10 @@ export class Forest {
       if (g) {
         this.scene.remove(g.group);
         g.set.spare.push(g); // back to its pool: its materials (and so the shader) stay alive
+        g.at = -1;
         this.ghosts.delete(i);
+        // a home tree turns solid at the detail its copy had (no change as it turns solid)
+        if (this.placements[i].near !== undefined) this.level[i] = g.full ? 0 : 1;
       }
       return;
     }
@@ -403,13 +451,18 @@ export class Forest {
       const set = this.sets.find((s) => s.species === this.placements[i].species);
       if (!set) return; // stand-ins still up: nothing of its own to fade
       g = set.spare.pop() ?? this.makeGhost(set);
+      g.at = i;
       g.group.matrix.fromArray(this.world, i * 16);
+      // its detail: the real GLB, or (a home tree past its own `near`) its simple copy —
+      // what it was drawn at a moment ago (`update` keeps it to the rule from here on)
+      this.showGhost(g, this.placements[i].near === undefined || this.level[i] <= 0);
       // the same per-tree tint the instanced copy wore
       _c.setRGB(this.tint[i * 3], this.tint[i * 3 + 1], this.tint[i * 3 + 2]);
       g.mats.forEach((m, k) => {
         const base = (set.parts[k].material as THREE.MeshStandardMaterial).color;
         if (base && m.color) m.color.copy(base).multiply(_c);
       });
+      g.lodMat?.color.copy(_c); // (the simple copy: its vertex colours × the tree's tint)
       // its branch stub, if it has one: in the tree's own frame (the group carries the tree)
       if (g.stub && g.stubMat) {
         g.stub.visible = !!this.placements[i].stub;
@@ -422,6 +475,7 @@ export class Forest {
       this.scene.add(g.group);
     }
     for (const m of g.mats) m.opacity = o;
+    if (g.lodMat) g.lodMat.opacity = o;
     if (g.stubMat) g.stubMat.opacity = o; // the stub fades exactly with its tree
     g.group.visible = o > 0.005; // fully faded (the lens inside it): not drawn at all
   }
@@ -432,6 +486,7 @@ export class Forest {
     group.name = `${set.species.replace('prop-', '')}-tree-faded`;
     group.matrixAutoUpdate = false;
     const mats: THREE.MeshStandardMaterial[] = [];
+    const parts: THREE.Mesh[] = [];
     for (const pt of set.parts) {
       const mat = pt.material.clone() as THREE.MeshStandardMaterial;
       mat.transparent = true;
@@ -442,6 +497,7 @@ export class Forest {
       mesh.matrix.copy(pt.local);
       mesh.castShadow = false;
       group.add(mesh);
+      parts.push(mesh);
     }
     // a species with a stubbed tree: its copies carry a see-through stub (hidden unless
     // the tree it stands in for has one)
@@ -455,7 +511,38 @@ export class Forest {
       stub.visible = false;
       group.add(stub);
     }
-    return { group, mats, set, stub, stubMat };
+    return { group, mats, set, stub, stubMat, parts, lod: null, lodMat: null, full: true, at: -1 };
+  }
+
+  /** A see-through copy's simple level (its first simplified copy, see-through), made
+   *  the first time it is needed and kept with the copy (the pool keeps its shader). */
+  private ghostLod(g: Ghost): THREE.Mesh {
+    if (g.lod) return g.lod;
+    const mat = lodMaterial().clone();
+    mat.transparent = true;
+    mat.depthWrite = false;
+    const mesh = new THREE.Mesh(g.set.levels[1][0].geometry, mat);
+    mesh.name = 'tree-faded-lod1';
+    mesh.matrixAutoUpdate = false; // (the simple copies stand in the tree's own frame)
+    mesh.castShadow = false;
+    mesh.visible = false;
+    g.group.add(mesh);
+    g.lod = mesh;
+    g.lodMat = mat;
+    if (g.at >= 0) mat.color.setRGB(this.tint[g.at * 3], this.tint[g.at * 3 + 1], this.tint[g.at * 3 + 2]); // its tree's tint
+    return mesh;
+  }
+
+  /** Draw a see-through copy as the real GLB (`full`) or as its simple level. */
+  private showGhost(g: Ghost, full: boolean): void {
+    if (full === g.full && (full || g.lod)) return;
+    if (!full) {
+      const lod = this.ghostLod(g);
+      if (g.lodMat && g.mats[0]) g.lodMat.opacity = g.mats[0].opacity;
+      lod.visible = true;
+    } else if (g.lod) g.lod.visible = false;
+    for (const m of g.parts) m.visible = full;
+    g.full = full;
   }
 }
 

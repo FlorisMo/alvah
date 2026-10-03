@@ -141,7 +141,7 @@ export class Dressing {
   treeClearings: readonly { x: number; z: number; r: number }[] = [];
   /** run 6: trees a mission's home plants itself (a camera tree), drawn with the forest,
    *  each with its branch stub if it has one (a squirrel's perch: it fades with its tree) */
-  homeTrees: readonly { x: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub; near?: number }[] = [];
+  homeTrees: readonly { x: number; z: number; s: number; rotY: number; species: TreeSpecies; stub?: TreeStub; near?: number | (() => number) }[] = [];
   // P1.3 tree canopy: the instant cone/cylinder stand-ins (dropped once the Forest is
   // ready) and every tree placement: the bos scatter, the rim tree-line and the grove
   // trees of the nature dressing. The camera rig tests its crowns against these.
