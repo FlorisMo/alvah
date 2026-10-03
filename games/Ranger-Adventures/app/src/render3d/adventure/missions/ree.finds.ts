@@ -126,8 +126,8 @@ interface Bird { sp: Spawned; root: THREE.Object3D }
  *  stonechat as the stand's look-alike. */
 const LARK_H = 0.3;
 const TAPUIT_H = 0.17;
-/** The stonechat perches this high (m) over the ground: on a heather top. */
-const TAPUIT_UP = 0.3;
+/** The stonechat perches this high (m) over the ground: on a dry stalk over the heather. */
+const TAPUIT_UP = 0.42;
 
 /** The woodlark is seen within this far (m) of him, at least this big (px), this long (s). */
 const LARK_SEEN = { within: 26, px: 9, secs: 1.5 } as const;
@@ -371,7 +371,10 @@ export class ReeFinds {
     const spot = this.besideWay(5.5, 2.2);
     if (!spot) return;
     const g = k.ctx.groundY;
-    b.root.position.set(spot.x, g(spot.x, spot.z) + TAPUIT_UP, spot.z); // (on a heather top)
+    // (it sits on a dry stalk sticking out of the heather, as the stand's own does)
+    const stalk = k.own(new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.009, TAPUIT_UP, 5), new THREE.MeshStandardMaterial({ color: '#c9b07a', roughness: 1 })));
+    stalk.position.set(spot.x, g(spot.x, spot.z) + TAPUIT_UP / 2, spot.z);
+    b.root.position.set(spot.x, g(spot.x, spot.z) + TAPUIT_UP, spot.z);
     b.root.rotation.set(0, headingTo(spot, k.ranger()) + 0.9, 0);
     b.root.visible = true;
     k.stats.tapuit = 1;
