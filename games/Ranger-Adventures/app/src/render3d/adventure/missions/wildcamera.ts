@@ -12,15 +12,21 @@
  * night the badger comes out of its sett, a wild boar out of the bushes, a roe to the
  * glade's edge, a nightjar onto a log; they call, and he calls them back in order
  * (SIMON). The night passes. In the morning he looks through the photos: the animals
- * he aimed for, and on the last one a man setting a snare by a foxglove and a bush. He
- * looks for it himself, up the game trail the way he came, finds the empty snare half in
- * the grass by that foxglove and that bush, takes it away and walks back to his camera.
+ * he aimed for, and on the last one a man setting a snare by two things of the wood. He
+ * looks for that place himself (the photo pinned at the top of his screen), finds the
+ * empty snare half in the grass there, takes it away and walks back to his camera.
  * A roe steps into the glade; the camera clicks: it guards the wood. He is handed back
  * on the open crossing. The camera stays on its pine.
+ *
+ * Run 7 (wc-hands): no buttons. He clicks the camera on its stump to take it, clicks the
+ * pine's trunk to hang it there, walks past it to test it (it takes his photo), flips the
+ * morning's photos himself, and finds the snare at this play's spot (one of three, each
+ * with its own two landmarks) by comparing the photo with the wood, then clicks it.
  *
  * Steps (content, the EF contract): 0 wisselen · 1 simon, each logged once.
  */
 
+import type * as THREE from 'three';
 import type { Adventure } from '../registry';
 import type { AdventureKit } from '../kit';
 import type { Actor } from '../actors';
@@ -29,16 +35,18 @@ import { simonCast } from '../../../engines/simon';
 import { store } from '../../../core/state';
 import { Sound } from '../../../core/sound';
 import { applyAmbient } from '../../../core/calls';
+import { clearPlayHint, pick3d } from '../../play/kit';
+import { RANGER_STAND_HEIGHT } from '../../AnimalScale';
 import { aimBeat, type AimWorld } from '../beats/aim';
 import { callersBeat, type Caller } from '../beats/callers';
 import { dist, headingTo } from '../places';
 import type { Spot } from '../types';
 import { SIZE } from '../../AnimalScale';
 import { WildcameraHome, type BirdId } from './wildcamera.home';
-import { CameraClock, drawWildcameraPlay, lastNights, variantOf } from './wildcamera.variety';
+import { CameraClock, drawWildcameraPlay, lastNights, lastSnare, variantOf } from './wildcamera.variety';
 import { PhotoStrip, develop, type Photo } from './wildcamera.photos';
 import {
-  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, SNARE_VIEW, STRAP_VIEW, SNARE_FOUND,
+  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, STRAP_VIEW, SNARE_FOUND, SNARE_SPOTS, TEST_SPOT, TEST_VIEW, inFan,
   AIM_AT, CAMERA, ROE_HIDEAWAY, ROE_SHY_WITHIN, aimSpot, cameraAim, wildcameraClearings, wildcameraTreeClearings, wildcameraTrees,
   CALLER_SLOTS, SIDE_OF, SKY, STOPS, STOPS_OF, arrivalPath, exitPath,
   type AimSpot, type SlotId, type StopId,
@@ -86,25 +94,57 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   // fork each, replayed from its start)
   const queue = buildWisselTrial(k.steps[0].skin, k.knobs('wisselen'), k.play.fork('wisselen').rng).queue;
   const cast = simonCast(k.steps[1].skin, k.play.fork('simon-cast').rng);
-  const wp = drawWildcameraPlay(k.play, { queueLength: queue.length, cast, recent: lastNights(store.get().geschiedenis) });
+  const history = store.get().geschiedenis;
+  const wp = drawWildcameraPlay(k.play, { queueLength: queue.length, cast, recent: lastNights(history), lastSnare: lastSnare(history) });
   const variant = variantOf(wp);
+  // (the snare's spot first: the next play reads it back, and the history keeps 60 characters)
+  k.play.note('ws', variant.ws);
   k.play.note('wn', variant.wn);
   k.play.note('wa', variant.wa);
   const clock = new CameraClock(wp.clockStart, k.play.fork('wc-clock-run').rng);
+  // (the man sets his snare at this play's spot: its grass and landmarks always stand there)
+  const snareSpot = SNARE_SPOTS[wp.snare];
+  home.setSnareSpot(wp.snare);
+  k.stats.snare_spot = Number(variant.ws);
+
+  /** He clicks one of `targets` in the world (a 3D pick: ≥ 56 px round each, whatever its
+   *  size); golden's play hint is `hint()` (null: nothing yet). Resolves with what he
+   *  clicked. The pick is made once the lens is where it will stay. */
+  const clickOn = async (id: string, targets: { id: string; object: THREE.Object3D }[], hint: () => THREE.Object3D | null): Promise<string> => {
+    let picked!: (what: string) => void;
+    const got = new Promise<string>((r) => { picked = r; });
+    const unhint = k.hint(() => { const t = hint(); return t ? { id, target: t } : null; });
+    const teardown = pick3d({
+      canvas: k.ctx.canvas, camera: k.world.camera, raycaster: k.ctx.raycaster as THREE.Raycaster,
+      targets, onPick: (what) => picked(what), signal: k.signal,
+    });
+    try {
+      return await k.guard(got);
+    } finally {
+      teardown();
+      unhint();
+      clearPlayHint();
+    }
+  };
+  /** The line after `first` if he has not done it yet after `s` s (the instruction). */
+  const thenSay = (s: number, line: string, done: () => boolean): void => {
+    void k.wait(s).then(() => { if (!done()) k.say(line, { queue: true }); }).catch(() => {});
+  };
 
   let shots = 0;
   /** A photograph from the camera on the pine, looking at `p` (`y` m up, `frameH` m of
    *  height in the picture), developed (the camera's clock runs on with every one). */
-  const photograph = async (p: Spot, y: number, frameH: number, what: string, time: Photo['time'], prepare?: () => () => void, minFov?: number): Promise<Photo | null> => {
+  const photograph = async (p: Spot, y: number, frameH: number, what: string, time: Photo['time'], prepare?: () => () => void, minFov?: number, fill?: number): Promise<Photo | null> => {
     const cam = home.photoCamera(p, y, 1.6, frameH, minFov);
     const raw = await k.guard(k.world.snapshot(cam, 320, 200, () => {
-      const a = home.photoPrep(time === 'nacht' ? 1 : time === 'ochtend' ? 1.35 : 1.9);
+      const a = home.photoPrep(fill ?? (time === 'nacht' ? 1 : time === 'ochtend' ? 1.35 : 1.9));
       const b = prepare?.();
       return () => { b?.(); a(); };
-    }));
+    }, { people: false })); // (a trap in the wood: never Bram, never the far figure in the trees)
     if (!raw) return null;
     shots++;
-    return { url: develop(raw, time, time === 'ochtend' ? '05:52' : clock.photo(), shots + 7), what, time };
+    const line = what === 'jij' ? c.fotoJij : c[`foto_${what}`];
+    return { url: develop(raw, time, time === 'ochtend' ? '05:52' : clock.photo(), shots + 7), what, time, ...(line ? { line } : {}) };
   };
   const shutter = (night: boolean): void => {
     home.flash(night);
@@ -279,7 +319,14 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     await k.walkRanger(beside.x, beside.z, 0.05);
     k.world.faceRanger(headingTo(beside, st));
   }
-  await k.act(c.pakKnop, c.pak);
+  // run 7: he takes it himself: a click on the camera lying there
+  k.say(c.pak);
+  await k.until(() => !!home.stumpCamera, 8);
+  let took = false;
+  thenSay(1.8, c.pakKlik, () => took);
+  const lying = home.stumpCamera;
+  if (lying) await clickOn('camera', [{ id: 'camera', object: lying }], () => home.stumpCamera);
+  took = true;
   home.pickUp(k.ranger(), k.reduced);
   if (settings.geluid) Sound.step();
   // he steps onto the wildwissel where it leaves the ring while the view glides round
@@ -299,19 +346,57 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   /* 2 · follow the wildwissel into the wood, to the crossing */
   await k.walk({ name: 'wissel', to: P.crossApproach, r: P.crossApproach.r, line: c.volg, doel: c.chipPad, cue: c.sporen });
 
-  /* 3 · strap the camera to the pine */
+  /* 3 · strap the camera to the pine. Run 7: he steps onto the crossing and sees it whole
+         (the lens of the camera's own view: the glade, the pine, the thicket); on the
+         pine's trunk, at his chest, the camera's soft shape says where; he clicks the trunk,
+         walks the last steps and straps it on */
   k.beat = 'hang';
-  await k.act(c.hangKnop, c.hang);
+  k.say(c.hang);
+  await k.walkRanger(P.crossApproach.x, P.crossApproach.z, 0.05);
+  home.showStrapSpot(true);
+  await k.frame({ ...CROSS_VIEW, include: [{ x: P.crossApproach.x, z: P.crossApproach.z, h: RANGER_STAND_HEIGHT }] }, { face: headingTo(P.crossApproach, CAMERA) });
+  let hung = false;
+  thenSay(0.8, c.hangBoom, () => hung);
+  await clickOn('pine', [{ id: 'pine', object: home.pineTarget }, { id: 'pine', object: home.strapHint }], () => home.strapHint);
+  hung = true;
+  k.say(null);
   k.beat = 'hang:strap';
   await k.walkRanger(P.strap.x, P.strap.z, 0.05);
   await k.frame(STRAP_VIEW, { face: P.strap.heading });
   await k.wait(0.3);
+  home.showStrapSpot(false);
   home.strapOn(k.reduced);
   k.beat = 'hang:on';
   if (settings.geluid) Sound.strap();
   k.say(c.hangt, { good: true });
   k.stats.camera_strapped = 1;
   await k.wait(1.6);
+
+  /* 3b · run 7: he tests it: he walks out in front of it, into the ground it sees (its fan
+          shows there); once he is in it the camera flashes and takes his photo: "Klik! Daar
+          sta jij." (the photo shows a moment under the line, then joins the strip) */
+  // (he turns from the trunk to the crossing, and the lens comes round behind him: the
+  // follow camera takes over from there, so the Up key walks him into the fan)
+  home.showFan(true);
+  await k.frame(TEST_VIEW, { face: headingTo(P.strap, TEST_SPOT) });
+  await k.walk({
+    name: 'test', to: TEST_SPOT, r: TEST_SPOT.r, reached: () => inFan(k.ranger()),
+    line: c.test, doel: c.chipTest, cue: c.cueTest, glyph: 'camera',
+  });
+  k.beat = 'test';
+  // (he stops in its fan and turns to the camera's red light: it sees his face)
+  k.lockFollow();
+  k.world.faceRanger(headingTo(k.ranger(), CAMERA));
+  await k.wait(0.35);
+  shutter(false);
+  const me = k.ranger();
+  const selfie = await photograph({ x: me.x, z: me.z }, 0.7, 1.45, 'jij', 'dag', undefined, undefined, 1.0);
+  if (selfie) { photos.add(selfie); photos.pin(selfie); }
+  k.say(c.selfie, { good: true });
+  k.stats.selfie = selfie ? 1 : 0;
+  await k.wait(2.8);
+  photos.pin(null);
+  home.showFan(false);
 
   /* 4 · aim the camera for each animal, as the day turns to night (wisselen). Run 7: each
          animal steps onto the crossing first and stands there; then he aims */
@@ -529,11 +614,17 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   for (const id of ['edelhert', 'hinde', 'ree', 'das', 'wildzwijn', 'vos'] as Walker[]) { A[id].group.visible = false; A[id].idle(); if (A[id].lies) void A[id].lie(false); }
   home.birdGone();
   k.daylight(0.3, 0);
-  home.aim(cameraAim(P.snare), true);
+  home.aim(cameraAim(snareSpot.at), true);
   await k.wait(0.2);
-  // (framed on the man crouched at the wire up the trail: his height, a little more, with
-  // the foxglove and the bush beside him: the camera zooms in on him as on the nightjar)
-  const man = await photograph(P.snare, 0.62, 2.1, 'man', 'ochtend', () => home.poacherIn(), 11);
+  // (framed on the man crouched at the wire at this play's spot: his height, a little more,
+  // with its two landmarks beside him: the camera zooms in on him as on the nightjar)
+  // (in the dawn mist: what lies far behind him fades, so the photo shows the man and the
+  // two things beside him, and nothing that is not there)
+  const toMan = dist(CAMERA, snareSpot.at);
+  const man = await photograph(snareSpot.at, 0.62, 2.1, 'man', 'ochtend', () => {
+    const a = home.poacherIn(), b = home.dawnMist(toMan - 1.5, toMan + 11);
+    return () => { b(); a(); };
+  }, 11);
   if (man) photos.photos.push(man);
   k.cluePhoto = man?.url ?? null;
   await k.wait(1.4);
@@ -543,36 +634,44 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
 
   /* 9 · what did the camera see? the photos, and the man on the last one */
   k.beat = 'photos';
-  await k.act(c.fotoKnop, c.fotos);
+  k.say(c.fotos);
+  await k.wait(1.6);
   k.say(null);
   k.stats.photos = photos.photos.length;
-  // (the snare he set lies by the trail: it is in the world from here on, while the
-  // photos' card is up, so the child finds it after the photo told him about it)
-  const review = photos.review(c.fotoTitel, c.man, 'Verder', k.signal);
+  // (the snare he set lies there: it is in the world from here on, while the photos' card
+  // is up, so the child finds it after the photo told him about it). Run 7: he flips
+  // through them himself; the man's comes last: "Waar is dit?"
+  const review = photos.review(c.fotoTitel, [c.man, c.waar], 'Verder', k.signal);
   home.showSnare(true);
   await k.guard(review);
   /* 10 · the raaf: the camera tells the ranger who lives here */
   await k.fact(1);
 
-  /* 11 · the snare: the photo showed the man at it by a foxglove and a bush on the game
-          trail. He looks for it himself, from where he stands by his camera: up the
-          wildwissel the way he came in (the camera on the pine still looks that way), to
-          that foxglove and that bush, where it lies half in the grass. The chip names it;
-          the arrow comes only after ~20 s without getting nearer. (He steps out from beside
-          the pine onto the open crossing first, turned to the glade: the lens stays behind
-          him there, looking over the crossing, and the snare is out of sight behind it) */
+  /* 11 · the snare: the photo showed the man at it by two things of the wood. He looks
+          for that place himself, from where he stands by his camera, with the photo pinned
+          at the top of his screen: up the wildwissel, or on the deer trail north of the
+          glade (this play's spot). The chip names it; the arrow comes only after ~20 s
+          without getting nearer. (He steps out from beside the pine onto the open crossing
+          first, turned to the glade: the lens stays behind him there, looking over the
+          crossing.) Near it he takes the last step to it, sees it in the grass ("Zie je de
+          val?") and clicks the wire loop: it is gone */
   await k.walkRanger(P.handBack.x, P.handBack.z, 0.05);
   k.world.faceRanger(P.handBack.heading);
+  if (man) photos.pin(man);
   await k.walk({
-    name: 'val', to: P.snareApproach, r: P.snareApproach.r, reached: () => dist(k.ranger(), P.snare) < SNARE_FOUND,
+    name: 'val', to: snareSpot.approach, r: snareSpot.approach.r, reached: () => dist(k.ranger(), snareSpot.at) < SNARE_FOUND,
     line: c.zoekVal, doel: c.chipVal, cue: c.bijPad, glyph: 'photo',
   });
   k.beat = 'val';
-  await k.walkRanger(P.snareApproach.x, P.snareApproach.z, 0.05);
-  await k.frame(SNARE_VIEW, { face: P.snareApproach.heading });
-  await k.act(c.valKnop, c.valHier);
-  home.showSnare(false);
-  if (settings.geluid) { Sound.rustle(); Sound.found(); }
+  k.say(c.zieVal);
+  await k.walkRanger(snareSpot.approach.x, snareSpot.approach.z, 0.05);
+  await k.frame(snareSpot.view, { face: snareSpot.approach.heading });
+  const wire = home.snareObject;
+  if (wire) await clickOn('snare', [{ id: 'snare', object: wire }], () => (home.snareObject?.visible ? home.snareHint : null));
+  if (settings.geluid) Sound.rustle();
+  await k.guard(home.liftSnare(k.ranger(), k.reduced));
+  photos.pin(null);
+  if (settings.geluid) Sound.found();
   k.say(c.valWeg, { good: true });
   k.stats.snare_gone = 1;
   await k.wait(1.8);

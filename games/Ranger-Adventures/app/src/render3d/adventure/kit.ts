@@ -55,8 +55,9 @@ export interface MissionWorld {
   /** the time of day (1 = the golden hour, 0 = a readable blue night), turned calmly */
   setDaylight(k: number, seconds?: number): void;
   daylight(): number;
-  /** a photograph of the world through `cam` (taken inside the next frame, never shown) */
-  snapshot(cam: THREE.Camera, w: number, h: number, prepare?: () => (() => void) | void): Promise<HTMLCanvasElement | null>;
+  /** a photograph of the world through `cam` (taken inside the next frame, never shown);
+   *  run 7 (additive): `opts.people: false` leaves the story's grown-ups out of it */
+  snapshot(cam: THREE.Camera, w: number, h: number, prepare?: () => (() => void) | void, opts?: { people?: boolean }): Promise<HTMLCanvasElement | null>;
   /** run 7 (§4.5): the session's mood and the one on screen; put the world in a mood */
   mood(): { session: MoodId; now: MoodId };
   setMood(id: MoodId, seconds?: number): void;

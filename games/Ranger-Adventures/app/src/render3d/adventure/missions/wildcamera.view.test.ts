@@ -20,6 +20,7 @@ import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import {
   CROSS, CROSS_VIEW, CALLER_SLOTS, ENTRY, EXIT, JUNIPER, LOG, NIGHTJAR_STUMP, PINE, SETT_MOUND, SKY, STOPS, SLOT_CLASH, SLOT_IDS, TAG_AT, THICKET_BUSHES, TREE,
   WILDCAMERA_PLACES as P, arrivalPath, type SlotId, type StopId,
+  CAMERA, SNARE_IDS, SNARE_SPOTS,
 } from './wildcamera.places.ts';
 import { legalLayouts } from './wildcamera.variety.ts';
 import { atLocal, segDist, toLocal } from '../places.ts';
@@ -252,4 +253,44 @@ test('every night: the four callers in the picture, unhidden, well apart on the 
     assert.ok(near < 120 || dw < 1.6 || hid > 0.12, `${a} and ${b} are a real clash (${near.toFixed(0)} px, ${dw.toFixed(2)} m, ${Math.round(hid * 100)} % hidden)`);
   }
   void SLOT_IDS; void THICKET_BUSHES;
+});
+
+/* --------------------------------------------- run 7 (wc-hands): the hands ---- */
+
+test('the strap beat: from the crossing\'s lens the camera\'s place on the trunk shows past him', () => {
+  // he stands where the walk in ends (the crossing's approach); the lens is the crossing's
+  const me = P.crossApproach;
+  const spotY = groundY(CAMERA.x, CAMERA.z) + PINE.camY;
+  const sc = px(lens, CAMERA.x, spotY, CAMERA.z);
+  assert.ok(sc.front && sc.x > 120 && sc.x < W - 120 && sc.y > TOP && sc.y < CARD_TOP, `on screen at (${sc.x.toFixed(0)}, ${sc.y.toFixed(0)})`);
+  // the line from the lens to it passes him (beside him, or over his head)
+  const d = segDist(me, { x: lens.position.x, z: lens.position.z }, CAMERA);
+  const tAt = Math.hypot(me.x - lens.position.x, me.z - lens.position.z) / Math.hypot(CAMERA.x - lens.position.x, CAMERA.z - lens.position.z);
+  const yAt = lens.position.y + (spotY - lens.position.y) * tAt;
+  assert.ok(d > 0.35 || yAt > groundY(me.x, me.z) + RANGER_STAND_HEIGHT + 0.1, `he is not in front of it (${d.toFixed(2)} m beside the line, the line ${(yAt - groundY(me.x, me.z)).toFixed(2)} m up there)`);
+  // and he stands in the picture, apart from it on the screen
+  const him = onGround(lens, me, RANGER_STAND_HEIGHT * 0.6);
+  assert.ok(Math.hypot(him.x - sc.x, him.y - sc.y) > 60, `apart on the screen (${Math.hypot(him.x - sc.x, him.y - sc.y).toFixed(0)} px)`);
+});
+
+test('each snare\'s close view: the wire in the grass off the middle, under the line and the pinned photo, its landmarks and him in the picture', () => {
+  // the pinned photo (wildcamera.css .wc-pin): 220 × 138 px top-centre under the line
+  const PIN = { x0: W / 2 - 114, x1: W / 2 + 114, y0: 100, y1: 250 };
+  for (const id of SNARE_IDS) {
+    const sp = SNARE_SPOTS[id];
+    const cam = fitLens(sp.view as unknown as ViewSpec);
+    const wire = onGround(cam, sp.at, 0.06);
+    assert.ok(wire.front && wire.x > 60 && wire.x < W - 60 && wire.y > TOP && wire.y < H - 60, `${id}: the snare at (${wire.x.toFixed(0)}, ${wire.y.toFixed(0)})`);
+    assert.ok(!(wire.x > PIN.x0 && wire.x < PIN.x1 && wire.y > PIN.y0 && wire.y < PIN.y1), `${id}: the snare is not under the pinned photo`);
+    assert.ok(Math.abs(wire.x - W / 2) >= 0.1 * W || Math.abs(wire.y - H / 2) >= 0.1 * H, `${id}: the snare is not dead centre (${wire.x.toFixed(0)}, ${wire.y.toFixed(0)})`);
+    for (const m of sp.marks) {
+      const q = onGround(cam, m.at, m.tree ? 1.0 : m.h * 0.5);
+      assert.ok(q.front && q.x > -40 && q.x < W + 40 && q.y > 0 && q.y < H, `${id}: its ${m.model} is in the picture (${q.x.toFixed(0)}, ${q.y.toFixed(0)})`);
+    }
+    const him = onGround(cam, sp.approach, RANGER_STAND_HEIGHT * 0.5);
+    assert.ok(him.front && him.x > 40 && him.x < W - 40 && him.y > TOP && him.y < H, `${id}: he is in the picture (${him.x.toFixed(0)}, ${him.y.toFixed(0)})`);
+    // he never stands between the lens and the wire
+    const d = segDist(sp.approach, { x: cam.position.x, z: cam.position.z }, sp.at);
+    assert.ok(d > 0.3, `${id}: he is not in front of the snare (${d.toFixed(2)} m)`);
+  }
 });

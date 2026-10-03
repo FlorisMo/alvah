@@ -470,6 +470,14 @@ export class Fauna {
    * to the +z side of spawn so the movement smoke's forward (−z) corridor stays
    * clear; neither pushes a collision circle or joins `markers` (pure dressing).
    */
+  /** Run 7: the story's grown-ups (Bram, the distant figure) out of one picture (a camera
+   *  trap's photo, World.snapshot `people: false`); returns how to put them back. */
+  peopleOutOfPicture(): () => void {
+    const was = this.scenicActors.map((a) => a.group.visible);
+    for (const a of this.scenicActors) a.group.visible = false;
+    return () => { this.scenicActors.forEach((a, i) => { a.group.visible = was[i]; }); };
+  }
+
   placeScenicActors(): void {
     // grown men at their true heights (AnimalScale), a head and a half above the boy
     const ACTORS: { id: string; x: number; z: number; height: number }[] = [
