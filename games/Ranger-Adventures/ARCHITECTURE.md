@@ -170,7 +170,7 @@ ui/flow/AdventureHud.ts  the one objective line (read aloud once), the 👂 chip
   hands off the animal, or your feet still: a reach is the wrong answer, the same moment comes
   back; the pure core is `beats/hold-math.ts`); run 7: `.go(id, { line, family, to, via, doel,
   hush, wrong, right })` plays the flip with his FEET — he walks away himself (`GoCore`: 4 m off
-  at a walk and farther from the animals; standing the level's `goWaitS` or 1.5 m closer is the
+  at a walk and farther from the animals; standing the level's `goWaitS` or 2.5 m closer is the
   old rule, the moment comes back; running is neither); `.answer(id, goed)` answers the next
   encounter from what his feet did on a walk (the ree's pool: a boot in the water, or round
   it dry), the same `DagnachtRun` trial; `await k.fact(i)` shows the raaf's card. The 2D

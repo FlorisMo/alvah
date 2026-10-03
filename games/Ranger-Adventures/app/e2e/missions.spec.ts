@@ -407,7 +407,7 @@ function reeWatch(log: Log, opts: { practised?: boolean } = {}): { observe: (adv
         log.soft(stats.glimpse >= 0.33 && stats.glimpse <= 0.6, `ree: the calf's glimpse is ${stats.glimpse} (0.33-0.6)`);
         log.soft(stats.watch_pauses === 1 && stats.go_moeder_wait >= 8, `ree: a fresh save: ${stats.watch_pauses} listening pause, the flip waits ${stats.go_moeder_wait} s`);
       }
-      log.note(`ree: look-alikes ${stats.look_alikes}, hold ${stats.hold_s} s, calf wobble ${stats.calf_wobble}, print gaps ${stats.print_gaps}, watch ${stats.watch_s} s (${stats.watch_listens} pauses), walked away after ${stats.go_moeder ?? 0} wrong, reunion gap ${stats.reunion_gap} m`);
+      log.note(`ree: look-alikes ${stats.look_alikes}, hold ${stats.hold_s} s, calf wobble ${stats.calf_wobble}, print gaps ${stats.print_gaps}, watch ${stats.watch_s} s (${stats.watch_listens} pauses), walked away after ${stats.go_moeder ?? 0} wrong`);
       log.soft(stats.watch_s >= 18 && stats.watch_s <= 45, `ree: the watch lasts ${stats.watch_s} s`);
       // (the frisling's search lens hangs 3.8 m over the ground; the ree's at that height
       // stands 4.2 m from his head, where the old one stood 3 m from it and looked down on it)

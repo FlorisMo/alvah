@@ -104,10 +104,11 @@ export interface GoOpts {
   doel: string;
   cue?: string;
   glyph?: IconName;
-  /** said when he runs (running counts as neither) */
+  /** said when he runs (running counts as neither); `onRun`: the animals hear it */
   hush: string;
+  onRun?: () => void;
   /** GoCore's rule: metres away (default 4), seconds of standing (default the level's
-   *  `goWaitS`), metres closer (default 1.5) */
+   *  `goWaitS`), metres closer (default 2.5) */
   away?: number;
   waitS?: number;
   closer?: number;
@@ -368,26 +369,55 @@ export class ChoiceRun {
       readLine();
       reacting = false;
     };
+    let heading = k.ranger().heading, turnedAt = -9;
+    // (a walk key or the stick held: he is trying to walk, even when a bush stops him)
+    const held = new Set<string>();
+    let pointers = 0;
+    const onKeyDown = (e: KeyboardEvent): void => { if (STEP_KEYS.test(e.code)) held.add(e.code); };
+    const onKeyUp = (e: KeyboardEvent): void => { held.delete(e.code); };
+    const onPtrDown = (): void => { pointers += 1; };
+    const onPtrUp = (): void => { pointers = Math.max(0, pointers - 1); };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('pointerdown', onPtrDown, true);
+    window.addEventListener('pointerup', onPtrUp, true);
+    window.addEventListener('pointercancel', onPtrUp, true);
+    const unlisten = (): void => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('pointerdown', onPtrDown, true);
+      window.removeEventListener('pointerup', onPtrUp, true);
+      window.removeEventListener('pointercancel', onPtrUp, true);
+    };
     const tick = (): void => {
+      const m = k.ranger();
+      // (he is turning round: his heading moved within the last half second)
+      const dh = Math.abs(Math.atan2(Math.sin(m.heading - heading), Math.cos(m.heading - heading)));
+      heading = m.heading;
+      if (dh > 0.004) turnedAt = k.now;
       if (reacting) return;
       if (core.phase === 'read' && read) core.begin(k.now, from, o.family());
-      const m = k.ranger();
-      if (core.tick(k.now, { x: m.x, z: m.z, speed: m.speed, running: isRunning(m) }, o.family()) === 'wrong') {
+      const trying = held.size > 0 || pointers > 0;
+      if (core.tick(k.now, { x: m.x, z: m.z, speed: m.speed, running: isRunning(m), turning: k.now - turnedAt < 0.5, trying }, o.family()) === 'wrong') {
         reacting = true;
         void react(core.why ?? 'stay').catch(() => {});
       }
     };
     const walk = k.walk({
       name: `go-${id}`, to: o.to, r: 0.6, line: o.line, doel: o.doel, cue: o.cue, glyph: o.glyph, via: o.via,
-      quiet: { line: o.hush }, reached: () => core.phase === 'done', tick,
+      quiet: { line: o.hush, onRun: o.onRun }, reached: () => core.phase === 'done', tick,
     });
     k.beat = `go:${id}`; // (a moment, not a walk: a discovery's reveal waits)
-    await walk;
-    // (there before his feet were judged — he walked on while the animals reacted or the
-    // line was read: it is judged where he stands, as soon as it may be)
-    if (core.phase !== 'done') {
-      const unhint = k.hint(() => ({ id: `walk:go-${id}:there`, walk: { x: o.to.x, z: o.to.z, r: 0.5 } }));
-      try { await k.until(() => { tick(); return core.phase === 'done'; }); } finally { unhint(); }
+    try {
+      await walk;
+      // (there before his feet were judged — he walked on while the animals reacted or the
+      // line was read: it is judged where he stands, as soon as it may be)
+      if (core.phase !== 'done') {
+        const unhint = k.hint(() => ({ id: `walk:go-${id}:there`, walk: { x: o.to.x, z: o.to.z, r: 0.5 } }));
+        try { await k.until(() => { tick(); return core.phase === 'done'; }); } finally { unhint(); }
+      }
+    } finally {
+      unlisten();
     }
     // (answered: he stops where he is, the good words, then what follows)
     k.lockFollow();

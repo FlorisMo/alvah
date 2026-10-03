@@ -169,10 +169,10 @@ export interface GoRule {
   /** standing still this long (s) after the line was read is the old habit: "Blijf staan"
    *  (the level's `goWaitS`) */
   waitS: number;
-  /** this much (m) closer to the animals than he was is walking up to them (default 1.5) */
+  /** this much (m) closer to the animals than he was is walking up to them (default 2.5:
+   *  a child turning round with ↑ held curves a metre or two their way first) */
   closer: number;
-  /** within this (m) of where he stood counts as standing there, shuffling or turning
-   *  (default 1) */
+  /** within this (m) of where he stood counts as standing there, shuffling (default 1) */
   stay: number;
   /** gone means at least this much (m) farther from the animals than he stood (default
    *  0.5: round them on a circle is not away) */
@@ -180,10 +180,10 @@ export interface GoRule {
 }
 
 export const GO_AWAY_M = 4;
-export const GO_CLOSER_M = 1.5;
+export const GO_CLOSER_M = 2.5;
 export const GO_STAY_M = 1;
 export const GO_FARTHER_M = 0.5;
-/** Slower than this (m/s) is standing still (a child turning on the spot included). */
+/** Slower than this (m/s) is standing still (unless he is turning round). */
 export const GO_STILL_V = 0.3;
 
 export type GoPhase = 'read' | 'go' | 'react' | 'done';
@@ -194,8 +194,9 @@ export type GoPhase = 'read' | 'go' | 'react' | 'done';
  * After the line is read the clock runs. Walking `away` m from where he stood when the
  * line came, farther from the animals than he was, at a walk, is `choose(true)` (once).
  * (`farther`: at least half a metre; round them on a circle is not away.)
- * Standing (within `stay` m of his spot, or slower than a walk) for `waitS` s in all, or
- * coming `closer` m nearer the animals, is the old rule kept too long: `choose(false)`
+ * Standing (within `stay` m of his spot, or slower than a walk, but not turning round) for
+ * `waitS` s in all, or
+ * coming `closer` m (2.5) nearer the animals, is the old rule kept too long: `choose(false)`
  * (the run marks the encounter once, however often), the animals react, and the same
  * moment comes back from where he is then. Running counts as neither (the home says
  * "Sst"): no step of it is judged, and no time of it is standing.
@@ -243,7 +244,7 @@ export class GoCore {
   /** Per frame: where he is and how he moves, where the animals are. 'right' once he has
    *  walked away (`choose(true)`), 'wrong' when he stood too long or came closer
    *  (`choose(false)`; the home plays the animals' reaction, then `again`), else null. */
-  tick(now: number, me: GoSpot & { speed: number; running: boolean }, family: GoSpot): 'right' | 'wrong' | null {
+  tick(now: number, me: GoSpot & { speed: number; running: boolean; turning?: boolean; trying?: boolean }, family: GoSpot): 'right' | 'wrong' | null {
     if (this.phase !== 'go') return null;
     const dt = Math.max(0, Math.min(0.5, now - this.last));
     this.last = now;
@@ -256,7 +257,9 @@ export class GoCore {
       this.choose(true);
       return 'right';
     }
-    if (moved < this.rule.stay || me.speed < GO_STILL_V) {
+    // (turning round on the spot is no standing: he is about to walk away; nor is pushing
+    // on against a bush or a trunk in his way: `trying`, a walk key or the stick held)
+    if ((moved < this.rule.stay || me.speed < GO_STILL_V) && !me.turning && !me.trying) {
       this.idle += dt;
       if (this.idle >= this.rule.waitS) return this.wrong('stay');
     }

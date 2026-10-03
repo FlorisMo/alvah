@@ -178,7 +178,7 @@ test('go: standing still for the wait is the old rule ("Blijf staan"): choose(fa
   assert.deepEqual(run.summary(), { trials: 5, correct: 4, impulses: 1 }, 'marked once: the encounter is not never-wronged');
 });
 
-test('go: turning on the spot and shuffling count as standing; a walk that stops halfway runs the clock on', () => {
+test('go: shuffling on the spot counts as standing, turning round does not; a walk that stops halfway runs the clock on', () => {
   const { core } = goRig(5);
   core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
   // 3 s shuffling within his spot at a walking pace, then 2 m away, then he stops
@@ -193,12 +193,12 @@ test('go: turning on the spot and shuffling count as standing; a walk that stops
   assert.ok(s - w.at < 1.6 && s - w.at > 1.1, `the 3 s on the spot counted: wrong ~1.3 s after he stopped (${(s - w.at).toFixed(2)})`);
 });
 
-test('go: walking 1.5 m toward the animals is wrong at once; sideways is neither', () => {
+test('go: walking 2.5 m toward the animals is wrong at once; sideways is neither', () => {
   const a = goRig();
   a.core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
   const w = walk(a.core, 0, 3, 1.4, -1);
   assert.equal(w.verdict, 'wrong');
-  assert.ok(Math.abs(w.x + 1.5) < 0.05, `1.5 m closer (${w.x.toFixed(2)})`);
+  assert.ok(Math.abs(w.x + 2.5) < 0.05, `2.5 m closer (${w.x.toFixed(2)})`);
   const b = goRig(30);
   b.core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
   let r: string | null = null;
@@ -248,7 +248,7 @@ test('go: away is counted from where he first stood — after walking up to them
   const { core, calls } = goRig(30);
   core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
   const w = walk(core, 0, 3, 1.4, -1);
-  assert.equal(w.verdict, 'wrong', 'he walked 1.5 m up to them');
+  assert.equal(w.verdict, 'wrong', 'he walked 2.5 m up to them');
   core.again();
   core.begin(w.at + 3, { x: w.x, z: 0 }, { x: -8, z: 0 });
   assert.equal(core.tick(w.at + 3.1, { x: w.x, z: 0, speed: 0, running: false }, { x: -8, z: 0 }), null, 'no second wrong at once where he stands');
@@ -256,4 +256,22 @@ test('go: away is counted from where he first stood — after walking up to them
   assert.equal(back.verdict, 'right');
   assert.ok(Math.abs(back.x - GO_AWAY_M) < 0.05, `right 4 m from the hide, not 4 m from where he turned (${back.x.toFixed(2)})`);
   assert.deepEqual(calls, [false, true]);
+});
+
+test('go: turning round on the spot (to walk away) is no standing — however long it takes him', () => {
+  const { core } = goRig(5);
+  core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  for (let t = 1 / 60; t < 9; t += 1 / 60) assert.equal(core.tick(t, { x: 0, z: 0, speed: 0, running: false, turning: true }, { x: -8, z: 0 }), null);
+  assert.equal(core.idle, 0);
+  assert.equal(walk(core, 9, 4, 1.4).verdict, 'right');
+});
+
+test('go: pushing on against a bush (a walk key held, going nowhere) is no standing either', () => {
+  const { core } = goRig(5);
+  core.begin(0, { x: 0, z: 0 }, { x: -8, z: 0 });
+  for (let t = 1 / 60; t < 9; t += 1 / 60) assert.equal(core.tick(t, { x: 2, z: 0, speed: 0, running: false, trying: true }, { x: -8, z: 0 }), null);
+  let r: string | null = null, t = 9;
+  while (!r && t < 20) { t += 1 / 60; r = core.tick(t, { x: 2, z: 0, speed: 0, running: false }, { x: -8, z: 0 }); }
+  assert.equal(r, 'wrong', 'let go and stood: the wait counts again');
+  assert.ok(t - 9 > 4.9, `only the standing counted (${(t - 9).toFixed(2)} s)`);
 });

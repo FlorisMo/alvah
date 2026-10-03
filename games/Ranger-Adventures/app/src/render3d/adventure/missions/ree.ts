@@ -594,6 +594,8 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay): Promise<void> {
   let backs = 0;
   await rust.go('moeder', {
     line: c.loopWeg ?? c.stil, family, to: l.wayOut, via: l.outWay, doel: c.chipWeg ?? c.chipHut, cue: c.zacht, glyph: 'boot', hush: c.sst,
+    // (running: she lifts her head to him, her calf pressed to her)
+    onRun: () => { void doe.lookAt(() => ({ ...me(), speed: 0 }), 1.6); },
     wrong: async () => {
       // she lifts her head to him; the first times she steps back toward her cover, her
       // calf waiting where it stands (he walked right up: it goes to its mother)
