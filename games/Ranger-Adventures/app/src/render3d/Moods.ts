@@ -199,7 +199,10 @@ export function glowShare(id: MoodId): number {
 
 /** What a home asks of the light (Adventure.moods): only these moods, and/or a new one
  *  each play. */
-export interface MoodRule { allow?: readonly MoodId[]; perPlay?: boolean }
+/** `perPlay`: a new mood each play, never the home's last (`true`); run 7 (additive): a
+ *  number = never one of the home's last that many plays (when the allowed moods leave
+ *  another to draw), so plays in a row each stand in their own light */
+export interface MoodRule { allow?: readonly MoodId[]; perPlay?: boolean | number }
 
 /**
  * This play's mood: the session's, unless the home restricts it (`allow` without the
@@ -207,12 +210,18 @@ export interface MoodRule { allow?: readonly MoodId[]; perPlay?: boolean }
  * `allow`, else every mood, never the home's `last` when there is another to draw).
  * Drawn from the play's own fork ('mood'), so it never moves another decision.
  */
-export function playMood(session: MoodId, rule: MoodRule | undefined, play: Play, last?: MoodId | null): MoodId {
+export function playMood(session: MoodId, rule: MoodRule | undefined, play: Play, last?: MoodId | readonly MoodId[] | null): MoodId {
   const allow = rule?.allow?.length ? rule.allow : null;
   if (rule?.perPlay) {
     const from = allow ?? MOOD_IDS;
-    const fresh = last ? from.filter((m) => m !== last) : from;
-    return play.fork('mood').pick(fresh.length ? fresh : from);
+    // (the home's last plays' moods, newest first; `true` avoids the last one only)
+    const lasts = (last === null || last === undefined ? [] : typeof last === 'string' ? [last] : [...last])
+      .slice(0, typeof rule.perPlay === 'number' ? Math.max(1, Math.floor(rule.perPlay)) : 1);
+    for (let k = lasts.length; k >= 0; k--) {
+      const fresh = from.filter((m) => !lasts.slice(0, k).includes(m));
+      if (fresh.length) return play.fork('mood').pick(fresh);
+    }
+    return play.fork('mood').pick(from);
   }
   if (allow && !allow.includes(session)) return play.fork('mood').pick(allow);
   return session;
@@ -238,6 +247,22 @@ export function sessionMood(o: { sessions: number; last: MoodId | null; seed: nu
 
 /** The mood a home's last play stood in, read from the beat history (each logged beat carries
  *  its play's variant, 'mood:<id>' among it), or null. Pure. */
+/** Run 7 (additive): the moods of a mission's last `n` plays, newest first (a play logs a
+ *  beat per step, all with its seed: one play). Pure. */
+export function lastMoodsAt(history: readonly { m: string; sd?: number; va?: string }[], missionId: string, n: number): MoodId[] {
+  const out: MoodId[] = [];
+  let seed: number | undefined;
+  for (let i = history.length - 1; i >= 0 && out.length < n; i--) {
+    const b = history[i];
+    if (b.m !== missionId || !b.va) continue;
+    const hit = /(?:^|,)mood:([a-z-]+)/.exec(b.va);
+    if (!hit || !isMood(hit[1]) || (b.sd !== undefined && b.sd === seed)) continue;
+    seed = b.sd;
+    out.push(hit[1]);
+  }
+  return out;
+}
+
 export function lastMoodAt(history: readonly { m: string; va?: string }[], missionId: string): MoodId | null {
   for (let i = history.length - 1; i >= 0; i--) {
     const b = history[i];

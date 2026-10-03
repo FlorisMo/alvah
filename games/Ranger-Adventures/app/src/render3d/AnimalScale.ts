@@ -130,6 +130,10 @@ export const SIZE = {
   roodborst: { group: 'birds', h: 0.26, real: [0.09, 0.12], model: 'bird-roodborst', len: 0.36,
     readable: 'a 14 cm robin hopping beside him (≈ 5.5 m from the walk lens) is ~20 px: shown ≈ 2.3× so he sees it hop and its red breast reads (its hint promises a bird he sees)',
     why: 'a robin standing: ≈ 0.14 long, about 0.1 high' },
+  // run 7 (the squirrel's neighbours, adventure/missions/eekhoorn): the nuthatch that walks
+  // head-first down the store pine's bark — a small, big-headed, short-tailed bird
+  boomklever: { group: 'birds', h: 0.14, real: [0.12, 0.15], model: 'bird-boomklever', len: 0.2,
+    why: 'a nuthatch: 0.12-0.14 long, a short tail; the model stands on its own twig' },
 
   // ── vehicles ─────────────────────────────────────────────────────────────
   jeep: { group: 'vehicles', h: 1.9, real: [1.8, 2.05], model: 'vehicle-ranger-jeep', len: 3.65,

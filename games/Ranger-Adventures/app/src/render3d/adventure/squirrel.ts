@@ -64,7 +64,7 @@ export class Squirrel extends Actor {
   private lifeStep = 0;
   private watching: Lead | null = null;
   private watchUntil = 0;
-  private readonly rnd: () => number;
+  private rnd: () => number;
   private t = 0;
   private flickAt = -9;
   private chatterAt = -9;
@@ -152,6 +152,14 @@ export class Squirrel extends Actor {
       this.nut.position.copy(this.mouth);
       this.nut.rotation.set(0, Math.PI / 2, 0);
     }
+  }
+
+  /** Run 7 (additive): THIS play's squirrel — its dash bursts, its stops, its life round
+   *  its tree and its breath drawn from `seed` (a play's own fork) instead of the one
+   *  squirrel every load (`opts.seed`): another play, another squirrel's day. */
+  reseed(seed: number): void {
+    this.rnd = sqStream(seed >>> 0);
+    this.breathPhase = ((seed >>> 0) % 997) * 1.3;
   }
 
   /** It carries an acorn in its mouth (on) or not (off). */
@@ -268,9 +276,13 @@ export class Squirrel extends Actor {
   goStump(x: number, z: number, top: number, r: number, face: number): Promise<boolean> {
     return this.run(this.toStumpPlan(x, z, top, r, face), { kind: 'stump', top, x, z });
   }
-  /** One quick dash to (x, z) on the ground. */
-  goDash(x: number, z: number): Promise<boolean> {
-    return this.run(this.dashDirect(x, z), { kind: 'ground' });
+  /** One quick dash to (x, z) on the ground. Run 7 (additive): `full` — at its full run
+   *  (`SQ.run`, never faster), for a show that keeps a child's pace (the squirrel's visits
+   *  to its caching spots, its sweep between two mouthfuls). */
+  goDash(x: number, z: number, full = false): Promise<boolean> {
+    const plan = this.dashDirect(x, z);
+    if (full) for (const g of plan) if (g.act === 'run' && g.len > 0) g.dur = Math.max(SQ.minBurst, g.len / SQ.run);
+    return this.run(plan, { kind: 'ground' });
   }
   /** Up a trunk to `at`, clinging there. */
   goTrunk(tree: SquirrelTree, at: OnTrunk): Promise<boolean> {

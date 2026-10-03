@@ -48,7 +48,7 @@ import { AdventureHud } from './AdventureHud';
 import { newPlay, nextPlaySeed, type Play } from '../../core/play';
 import { rollRare } from '../../core/discover';
 import { ONTDEKKINGEN, ontdekkingenVan, type Ontdekking } from '../../content/ontdekkingen';
-import { lastMoodAt, playMood, type MoodId } from '../../render3d/Moods';
+import { lastMoodAt, lastMoodsAt, playMood, type MoodId } from '../../render3d/Moods';
 import { providePlay } from '../../core/devhook';
 import { revealDiscovery, setRevealGate } from '../hud/Reveal';
 
@@ -119,7 +119,9 @@ function drawPlay(mission: Mission, adv: Adventure | null): Drawn {
   const s = store.get();
   const play = newPlay(mission.id, nextPlaySeed(), (s.gespeeld[mission.id] ?? 0) + 1);
   const session_ = session.world?.mood().session ?? 'gouden-uur';
-  const mood = playMood(session_, adv?.moods, play, lastMoodAt(s.geschiedenis, mission.id));
+  // (run 7: a home that asks for a new light each play may count back more than one play)
+  const back = typeof adv?.moods?.perPlay === 'number' ? adv.moods.perPlay : 1;
+  const mood = playMood(session_, adv?.moods, play, back > 1 ? lastMoodsAt(s.geschiedenis, mission.id, back) : lastMoodAt(s.geschiedenis, mission.id));
   // first in the play's variant, so the history's short line always keeps it (a home's
   // `perPlay` reads the home's last mood back from there)
   play.note('mood', mood);

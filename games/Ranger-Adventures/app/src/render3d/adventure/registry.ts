@@ -43,8 +43,9 @@ export interface Adventure {
   play(k: AdventureKit): Promise<void>;
   /** run 7 (design §4.5): the light this home plays in — only these moods (`allow`; the
    *  session's mood when it is one of them, else one drawn from them), and/or a new one
-   *  each play (`perPlay`). Default: the session's mood. */
-  moods?: { allow?: readonly MoodId[]; perPlay?: boolean };
+   *  each play (`perPlay`; run 7, additive: a number = never one of the home's last that
+   *  many plays' moods). Default: the session's mood. */
+  moods?: { allow?: readonly MoodId[]; perPlay?: boolean | number };
 }
 
 const ADVENTURES: Readonly<Record<string, Adventure>> = {
