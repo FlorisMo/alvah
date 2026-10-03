@@ -191,6 +191,14 @@ export class ReeFinds {
 
   /* ---------------------------------------------------------------- walks ---- */
 
+  /** He turns away from the calf to leave the grass (calf:leave): the buzzard begins to come
+   *  down now, so it hunts low over the heath ahead of him from the first steps of his walk
+   *  to the hide — seen there, its card comes on that walk (review r1: it came down late in
+   *  the walk, and its card waited for the reunion). */
+  leaving(): void {
+    if (this.s.small.includes('buizerd')) this.buzzardCome();
+  }
+
   /** A walk begins (`name`: 'meadow' to the grass, 'hide' to the hide; `route`: the way a
    *  perfect player walks it, its goal last: the little extras sit along it). */
   walkStart(name: 'meadow' | 'hide', route: readonly Spot[] = []): void {
@@ -202,14 +210,15 @@ export class ReeFinds {
   }
 
   /** Each frame of a walk: the woodlark may fly up (on its walk, once he is well under way
-   *  and walking the way the flight has room for), the rubbed birch is seen once he walks
-   *  up to it. */
-  walkTick(name: 'meadow' | 'hide'): void {
+   *  and walking the way the flight has room for, and once the walk's own moment is done:
+   *  `ready`, e.g. on the walk to the grass her slip into her cover), the rubbed birch is
+   *  seen once he walks up to it. */
+  walkTick(name: 'meadow' | 'hide', ready = true): void {
     const k = this.k;
     const me = k.ranger();
     const birch = this.birchAt();
     if (birch && dist(me, birch) <= BIRCH_NEAR) k.discover(findId('veegsporen'));
-    if (this.s.leeuwerik !== name || this.larkState !== 'waiting' || !this.lark || k.reduced) return;
+    if (this.s.leeuwerik !== name || this.larkState !== 'waiting' || !this.lark || k.reduced || !ready) return;
     if (!this.walkFrom || dist(me, this.walkFrom) < 3 || me.speed < 0.6 || k.now < this.retryAt) return;
     // (along the way the walk's lens looks, once it looks the way he walks: it flies up in
     // his picture, never off to the side of it while the lens still swings round)
@@ -237,6 +246,7 @@ export class ReeFinds {
 
   /** The walk ended while the woodlark flew: it drops into the heather now. */
   private larkDown = false;
+
 
   /** The stonechat flits off (set while it perches). */
   private tapuitGo: (() => void) | null = null;

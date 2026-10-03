@@ -399,28 +399,49 @@ export const EXTRA_P = 0.5;
  * the walks and in the watch's pause it calls in.
  *
  * One thing at a time on the walks (review r1: the woodlark, the buzzard and the stonechat
- * all came on one walk to the hide while the walk to the grass had nothing): the woodlark
- * takes the walk the play's other things leave free — the buzzard is always on the walk to
- * the hide, the rubbed birch beside the walk `birchOn` names — and the little extra (always
- * on the walk to the hide) comes only while that walk holds less than two things.
+ * all came on one walk to the hide while the walk to the grass had nothing). The woodlark
+ * flies only on a walk with room for it this morning (`larkOn`: the layout's, by its pool's
+ * side; none: no woodlark this morning), and on the one the buzzard (always on the walk to
+ * the hide) and the rubbed birch (beside the walk `birchOn` names) leave free when it may
+ * choose; the woodlark and the buzzard never share a walk (where they would, the play holds
+ * the next thing instead). While he has not found the woodlark or the buzzard, a morning
+ * with room for it holds it first (not every morning has). The pool is its walk's own moment (his feet answer
+ * it): with the pool on his way to the hide (`hideFree` false) that walk holds no buzzard
+ * and no little extra. The little extra (always on the walk to the hide) comes only while
+ * that walk holds less than two things and no woodlark.
  */
 export function reeSurprises(play: Pick<Play, 'fork'>, found: (id: ReeSmall) => boolean,
-  o: { birches: number; larkOn?: readonly ('meadow' | 'hide')[]; birchOn?: readonly ('meadow' | 'hide')[] }): ReeSurprises {
+  o: { birches: number; larkOn?: readonly ('meadow' | 'hide')[]; birchOn?: readonly ('meadow' | 'hide')[]; hideFree?: boolean }): ReeSurprises {
   const f = play.fork('ree-zien');
+  const walks = o.larkOn ?? (['meadow', 'hide'] as const);
   const fresh = f.shuffle(REE_SMALL.filter((s) => !found(s)));
   const known = f.shuffle(REE_SMALL.filter((s) => found(s)));
   const two = f.chance(TWO_SMALL_P);
-  const small = [...fresh, ...known].slice(0, two ? 2 : 1);
+  const hideFree = o.hideFree ?? true;
+  // (the woodlark and the buzzard need a walk with room, which not every morning has: while
+  // he has not found one, a morning with room for it holds it first — the woodlark, whose
+  // mornings are fewest, before the buzzard)
+  const rank = (x: ReeSmall): number => (x === 'leeuwerik' && walks.length > 0 ? 0 : x === 'buizerd' && hideFree ? 1 : 2);
+  const first = [0, 1, 2].flatMap((r) => fresh.filter((x) => rank(x) === r));
+  /** may `x` join the others? (no woodlark without a walk for it, no buzzard on a walk with
+   *  the pool; the two never on one walk) */
+  const fits = (x: ReeSmall, others: readonly ReeSmall[]): boolean => {
+    const all = [x, ...others];
+    if (all.includes('leeuwerik') && !walks.length) return false;
+    if (all.includes('buizerd') && !hideFree) return false;
+    return !(all.includes('leeuwerik') && all.includes('buizerd') && !walks.includes('meadow'));
+  };
+  const small: ReeSmall[] = [];
+  for (const s of [...first, ...known]) if (small.length < (two ? 2 : 1) && fits(s, small)) small.push(s);
   const boompje = small.includes('veegsporen') && o.birches > 0 ? play.fork('ree-boompje').int(0, o.birches - 1) : null;
   const birchOn = boompje !== null ? o.birchOn?.[boompje] ?? null : null;
   /** how many of the play's other things a walk holds */
   const holds = (w: 'meadow' | 'hide'): number => (w === 'hide' && small.includes('buizerd') ? 1 : 0) + (birchOn === w ? 1 : 0);
-  const walks = o.larkOn?.length ? o.larkOn : (['meadow', 'hide'] as const);
   const freest = walks.filter((w) => holds(w) === Math.min(...walks.map(holds)));
   const leeuwerik = small.includes('leeuwerik') ? play.fork('ree-leeuwerik').pick(freest) : null;
   const xf = play.fork('ree-extra');
   const want = xf.chance(EXTRA_P) ? xf.pick(['tapuit', 'vlinder'] as const) : null;
-  const extra = holds('hide') + (leeuwerik === 'hide' ? 1 : 0) >= 2 ? null : want;
+  const extra = !hideFree || leeuwerik === 'hide' || holds('hide') >= 2 ? null : want;
   const order = REE_SMALL.filter((s) => small.includes(s)).map((s) => s[0]).join('');
   return { small, leeuwerik, boompje, extra, code: `${order}${extra ? `.${extra[0]}` : ''}` };
 }

@@ -245,29 +245,42 @@ test('the watch: the seed draws the order, the lines and the timing; the level o
 
 const none = (): boolean => false;
 
+/** The small things' options for a morning, as ree.ts draws them (its layout, its pool's side). */
+const optsOf = (p: Pick<ReePlay, 'layout' | 'pool'>) => {
+  const l = REE_LAYOUTS[p.layout];
+  return { birches: l.birches.length, larkOn: l.larkOn[p.pool], birchOn: l.birches.map((_, i) => birchWalk(l, i)), hideFree: p.pool === 'in' };
+};
+/** Every morning kind: each layout with each side its pool may lie on. */
+const MORNINGS = LAYOUTS.flatMap((l) => poolSides(l).map((pool) => ({ layout: l.id, pool })));
+
 test('ree-discover: each play holds one or two of the four small things, drawn from its seed', () => {
   const seen = new Map<string, number>();
-  let two = 0;
-  for (let seed = 1; seed <= 400; seed++) {
-    const a = reeSurprises(play(seed), none, { birches: 2 });
-    const b = reeSurprises(play(seed), none, { birches: 2 });
-    assert.deepEqual(a, b, `seed ${seed}: the same seed, the same things`);
-    assert.ok(a.small.length === 1 || a.small.length === 2, `seed ${seed}: ${a.small.length} small things`);
-    assert.equal(new Set(a.small).size, a.small.length);
-    for (const s2 of a.small) { assert.ok(REE_SMALL.includes(s2)); seen.set(s2, (seen.get(s2) ?? 0) + 1); }
-    if (a.small.length === 2) two += 1;
-    // where each happens: the woodlark on one of his two walks, the rubbed birch among the layout's
-    assert.equal(a.leeuwerik !== null, a.small.includes('leeuwerik'));
-    if (a.leeuwerik) assert.ok(a.leeuwerik === 'meadow' || a.leeuwerik === 'hide');
-    assert.equal(a.boompje !== null, a.small.includes('veegsporen'));
-    if (a.boompje !== null) assert.ok(a.boompje === 0 || a.boompje === 1);
-    assert.ok(a.extra === null || a.extra === 'tapuit' || a.extra === 'vlinder');
-    // its note is short and never read as the morning's (`ree:`)
-    assert.ok(a.code.length <= 6 && !a.code.startsWith('ree'), a.code);
-    assert.equal(reeSurprises(play(seed), none, { birches: 1 }).boompje ?? 0, 0, 'one birch: the one');
+  let two = 0, n = 0;
+  for (const m of MORNINGS) {
+    const o = optsOf(m);
+    for (let seed = 1; seed <= 400; seed++) {
+      const a = reeSurprises(play(seed), none, o);
+      const b = reeSurprises(play(seed), none, o);
+      assert.deepEqual(a, b, `seed ${seed}: the same seed, the same things`);
+      assert.ok(a.small.length === 1 || a.small.length === 2, `seed ${seed}: ${a.small.length} small things`);
+      assert.equal(new Set(a.small).size, a.small.length);
+      for (const s2 of a.small) { assert.ok(REE_SMALL.includes(s2)); seen.set(s2, (seen.get(s2) ?? 0) + 1); }
+      if (a.small.length === 2) two += 1;
+      n += 1;
+      // where each happens: the woodlark on a walk with room for it this morning (none: no
+      // woodlark), the rubbed birch among the layout's
+      assert.equal(a.leeuwerik !== null, a.small.includes('leeuwerik'));
+      if (a.leeuwerik) assert.ok(o.larkOn.includes(a.leeuwerik), `${m.layout}-${m.pool} seed ${seed}: the woodlark on ${a.leeuwerik}`);
+      if (!o.larkOn.length) assert.ok(!a.small.includes('leeuwerik'), `${m.layout}-${m.pool}: no woodlark where no walk has room`);
+      assert.equal(a.boompje !== null, a.small.includes('veegsporen'));
+      if (a.boompje !== null) assert.ok(a.boompje >= 0 && a.boompje < o.birches);
+      assert.ok(a.extra === null || a.extra === 'tapuit' || a.extra === 'vlinder');
+      // its note is short and never read as the morning's (`ree:`)
+      assert.ok(a.code.length <= 6 && !a.code.startsWith('ree'), a.code);
+    }
   }
-  for (const s2 of REE_SMALL) assert.ok((seen.get(s2) ?? 0) > 60, `${s2} comes (${seen.get(s2)} of 400)`);
-  assert.ok(two > 120 && two < 280, `two small things in ${two} of 400 plays`);
+  for (const s2 of REE_SMALL) assert.ok((seen.get(s2) ?? 0) > n / 8, `${s2} comes (${seen.get(s2)} of ${n})`);
+  assert.ok(two > n * 0.3 && two < n * 0.7, `two small things in ${two} of ${n} plays`);
 });
 
 test('ree-discover: the ones he has not found come first; once he found them all, any of them', () => {
@@ -289,22 +302,26 @@ test('ree-discover: the ones he has not found come first; once he found them all
   }
 });
 
-test('ree-discover: one thing at a time on the walks — the woodlark off the buzzard\'s walk and the birch\'s, no extra on a walk that holds two', () => {
-  let meadowLark = 0, hideLark = 0, extras = 0;
-  for (const l of LAYOUTS) {
-    const o = { birches: l.birches.length, larkOn: l.larkOn, birchOn: l.birches.map((_, i) => birchWalk(l, i)) };
+test('ree-discover: one thing at a time on the walks — the woodlark and the buzzard never on one walk, the woodlark off the birch\'s when it may choose, no extra beside two things or a woodlark', () => {
+  let meadowLark = 0, hideLark = 0, extras = 0, n = 0;
+  for (const m of MORNINGS) {
+    const o = optsOf(m);
     for (let seed = 1; seed <= 400; seed++) {
-      for (const got of [[], ['koekoek'], ['koekoek', 'veegsporen']] as ReeSmall[][]) {
+      for (const got of [[], ['koekoek'], ['leeuwerik'], ['koekoek', 'veegsporen']] as ReeSmall[][]) {
         const s2 = reeSurprises(play(seed), (id) => got.includes(id), o);
         const birch = s2.boompje !== null ? o.birchOn[s2.boompje] : null;
-        const tag = `${l.id} seed ${seed} (${s2.code})`;
-        // the buzzard is always on his way to the hide: the woodlark then on the walk to the grass
+        const tag = `${m.layout}-${m.pool} seed ${seed} (${s2.code})`;
+        n += 1;
+        // the buzzard is always on his way to the hide: a woodlark with it is on the walk to the grass
         if (s2.small.includes('buizerd') && s2.leeuwerik) assert.equal(s2.leeuwerik, 'meadow', `${tag}: the woodlark and the buzzard on one walk`);
-        // the rubbed birch stands beside one walk: the woodlark on the other (where it may fly)
-        if (birch && s2.leeuwerik && l.larkOn.length === 2) assert.notEqual(s2.leeuwerik, birch, `${tag}: the woodlark and the birch on one walk`);
-        // the walk to the hide never holds three things; with two, no little extra
+        // the rubbed birch beside one walk: the woodlark on the other, where it may choose
+        if (birch && s2.leeuwerik && o.larkOn.length === 2) assert.notEqual(s2.leeuwerik, birch, `${tag}: the woodlark and the birch on one walk`);
+        // the walk to the hide never holds three things; beside two, or a woodlark, no little extra
         const hide = (s2.small.includes('buizerd') ? 1 : 0) + (s2.leeuwerik === 'hide' ? 1 : 0) + (birch === 'hide' ? 1 : 0);
         assert.ok(hide + (s2.extra ? 1 : 0) <= 2, `${tag}: ${hide} thing(s) and ${s2.extra ?? 'no'} extra on the walk to the hide`);
+        if (s2.leeuwerik === 'hide') assert.equal(s2.extra, null, `${tag}: an extra beside the woodlark`);
+        // the pool on his way to the hide is that walk's moment: no buzzard, no extra there
+        if (m.pool === 'out') assert.ok(!s2.small.includes('buizerd') && !s2.extra, `${tag}: the buzzard or an extra beside the pool`);
         if (s2.leeuwerik === 'meadow') meadowLark += 1;
         if (s2.leeuwerik === 'hide') hideLark += 1;
         if (s2.extra) extras += 1;
@@ -312,19 +329,27 @@ test('ree-discover: one thing at a time on the walks — the woodlark off the bu
     }
   }
   // (the woodlark still comes on both walks, and the little extra still comes often)
-  assert.ok(meadowLark > 300 && hideLark > 100, `the woodlark on the walk to the grass ${meadowLark}×, to the hide ${hideLark}×`);
-  assert.ok(extras > 1200, `a little extra in ${extras} of 3600 plays`);
+  assert.ok(meadowLark > n / 20 && hideLark > n / 20, `the woodlark on the walk to the grass ${meadowLark}×, to the hide ${hideLark}× (of ${n})`);
+  assert.ok(extras > n / 8, `a little extra in ${extras} of ${n} plays`);
 });
 
-test('ree-discover: a fresh save meets all four small things within four plays on every layout, spread over the walks', () => {
-  for (const l of LAYOUTS) {
-    const o = { birches: l.birches.length, larkOn: l.larkOn, birchOn: l.birches.map((_, i) => birchWalk(l, i)) };
-    for (let base = 1; base <= 200; base++) {
-      const found = new Set<ReeSmall>();
-      for (let n = 0; n < 4; n++) for (const s2 of reeSurprises(play(base + n), (id) => found.has(id), o).small) found.add(s2);
-      assert.equal(found.size, 4, `${l.id} seed ${base}: four plays meet all four (${[...found]})`);
+test('ree-discover: a fresh save meets all four small things as the mornings come: within four plays nearly always, five at most (the woodlark and the buzzard first where they have room)', () => {
+  let inFour = 0;
+  const N = 400;
+  for (let base = 1; base <= N; base++) {
+    const found = new Set<ReeSmall>();
+    const last: string[] = [];
+    let at = 0;
+    for (let n = 0; n < 5 && !at; n++) {
+      const p = draw(base * 10 + n, last);
+      last.push(p.variant);
+      for (const s2 of reeSurprises(play(base * 10 + n), (id) => found.has(id), optsOf(p)).small) found.add(s2);
+      if (found.size === 4) at = n + 1;
     }
+    assert.ok(at > 0, `seed ${base}: five plays meet all four (${[...found]})`);
+    if (at <= 4) inFour += 1;
   }
+  assert.ok(inFour >= N * 0.95, `all four within four plays in ${inFour} of ${N} fresh saves`);
 });
 
 test('ree-discover: the morning stays the same with its small things drawn (each from its own fork)', () => {

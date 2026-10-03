@@ -668,9 +668,19 @@ test('ree-discover: the woodlark flies up ahead of him, on along his way and bac
   assert.ok(LARK.land.u - LARK.rise.u >= 5 && LARK.rise.u < 0 && LARK.land.u > 0, 'it flies across his way, from one side to the other');
   assert.ok(LARK.hangS >= 3.5, 'it hangs singing ~4 s');
   assert.ok(Math.max(...LARK_TURNS) <= 0.5, 'off his way at most ~30°: in the walk\'s picture');
+  // (review r2, by playing: only a walk with nothing else going on — no pool to answer on
+  // it; on the walk to the grass, her slip out of his picture early: B, whose copse is
+  // behind him from his first steps. A's walk to the grass holds its pool and her slip, C's
+  // doe slips in straight ahead the whole walk and its way to the hide is short)
+  assert.deepEqual(Object.fromEntries(LAYOUTS.map((l) => [l.id, l.larkOn])),
+    { A: { in: ['hide'], out: [] }, B: { in: [], out: ['meadow'] }, C: { in: [], out: [] } });
   for (const l of LAYOUTS) {
-    assert.ok(l.larkOn.length >= 1, `${l.id}: the woodlark comes on a walk`);
-    for (const [walk, pool] of ([['meadow', l.pools.in], ['meadow', null], ['hide', null], ['hide', l.pools.out ?? null]] as const).filter(([wk]) => l.larkOn.includes(wk))) {
+    for (const side of poolSides(l)) {
+      // never on the walk the play's pool lies on
+      assert.ok(!l.larkOn[side].includes(side === 'in' ? 'meadow' : 'hide'), `${l.id} (${side}): the woodlark on the pool's walk`);
+    }
+    const walks = poolSides(l).flatMap((side) => l.larkOn[side].map((wk) => [wk, null] as const));
+    for (const [walk, pool] of walks) {
       const w = walk === 'meadow' ? [P.marker, ...walkVia(l, 'meadow', pool), l.search] : [...walkVia(l, 'hide', pool), l.hide];
       // he walks along it: from 3 m in, the flight's room is checked where he is, facing along
       let room = 0, tried = 0, left = 0;
@@ -720,7 +730,7 @@ test('ree-discover: the buzzard circles low over the heath ahead of him on his w
     assert.ok(off(headingTo(l.search, c), headingTo(l.search, l.hide)) < 0.35, `${l.id}: it circles ahead of him`);
     assert.ok(dist(l.search, c) > dist(l.search, l.hide), `${l.id}: beyond his hide`);
   }
-  assert.ok(BUZZARD.y >= 1.8 && BUZZARD.y <= 3 && BUZZARD.high > 15, 'hunting low over the heath, come down from high');
+  assert.ok(BUZZARD.y >= 1.8 && BUZZARD.y <= 3 && BUZZARD.high >= 12, 'hunting low over the heath, come down from high');
 });
 
 test('ree-discover: the cuckoo calls from off to one side of the watch, never from behind him; the twin lies apart in the grass behind where they meet', () => {

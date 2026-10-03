@@ -60,6 +60,7 @@ import {
   birchWalk, calfView, drinkSpot, leaveView, poolSides, reunionPose, twinAt, twinEnd, walkVia, type PoolSpot, type ReeLayout,
 } from './ree.places';
 import { ReeFinds, findId, inPicture } from './ree.finds';
+import { REVEAL_GAP_MS, REVEAL_SHOW_MS } from '../../../ui/hud/reveal-queue';
 
 const MISSION = 'ree-niet-aanraken';
 
@@ -89,6 +90,13 @@ let contentDecoys: readonly Distractor[] = [];
 /** The doe's brisk walk (m/s: her walk is 0.8) when her cover lies far across the heath,
  *  and out of her bed to her gap in the watch, unseen. */
 const BRISK = 1.25;
+/** ree-discover: her slip is done for the woodlark (on the walk to the grass) once its line
+ *  has stood this long (s) and she has been out of his picture this long (s), or lies. */
+const SLIP_SEEN_S = 1.6;
+/** The longest (s) the reunion holds on for new finds' cards still waiting: two more
+ *  cards, each with the rest after it (ui/hud/reveal-queue.ts). */
+const REUNION_CARDS_MAX_S = (2 * (REVEAL_SHOW_MS + REVEAL_GAP_MS)) / 1000;
+const SLIP_GONE_S = 0.5;
 
 /** The watch's rustle stands at least this long (s) before "Daar is de moeder!" (its own
  *  line is heard first, however soon she shows). */
@@ -137,7 +145,7 @@ function lay(world: { residents: Residents }, mission: Mission, play: Play): Non
   const trial = buildZoekenTrial(mission.stappen[0].skin, store.knobs('zoeken'), play.fork('zoeken').rng);
   // ree-discover: this play's small things of the heath (the ones he has not found first)
   const found = store.get().ontdekt;
-  const finds = reeSurprises(play, (id) => !!found[findId(id)], { birches: l.birches.length, larkOn: l.larkOn, birchOn: l.birches.map((_, i) => birchWalk(l, i)) });
+  const finds = reeSurprises(play, (id) => !!found[findId(id)], { birches: l.birches.length, larkOn: l.larkOn[p.pool], birchOn: l.birches.map((_, i) => birchWalk(l, i)), hideFree: p.pool === 'in' });
   play.note(SURPRISE_KEY, finds.code);
   const birch = finds.boompje !== null ? l.birches[finds.boompje] : null;
   home.layPlay({ layout: l, calf, pool: p.pool, decoys: trial.decoys.map((d) => d.id), glimpse: trial.glimpse, birch });
@@ -272,9 +280,11 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   // 2 · her slots lead along her path to the grass; walking up, he sees her slip into her
   // cover (the pool may lie across her path: round it, not through it)
   let slipping: Promise<void> | null = null;
+  // (when "Ze loopt de struiken in." was said, and how long she has been out of his picture since)
+  let wegAt = -1, doeAway = 0;
   const slipAway = async (): Promise<void> => {
     await doe.lookAt(me, 1.4);                   // she lifts her head and looks at him
-    if (k.beat === 'walk:meadow' || k.beat === 'meadow:watch') k.say(c.weg);
+    if (k.beat === 'walk:meadow' || k.beat === 'meadow:watch') { k.say(c.weg); wegAt = k.now; }
     // (from far off — her thicket lies across the heath — she walks briskly to her gap)
     for (const s of l.slip) {
       const speed = s === l.slip[0] && dist(doe, s) > 8 ? BRISK : 'walk';
@@ -288,11 +298,17 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   await k.walk({
     name: 'meadow', to: l.search, r: 1.4, line: c.volg, doel: c.chipGras, cue: c.sporen, glyph: 'footprints',
     via: walkVia(l, 'meadow', poolIn ? pool : null),
-    tick: () => {
+    tick: (dt) => {
       const m = k.ranger();
       if (!slipping && (dist(m, setOff) > 1.2 || dist(m, doe) < 9)) slipping = slipAway();
       poolIn?.tick();
-      finds.walkTick('meadow');
+      // (ree-discover, review r1: the woodlark flies only once her slip is done — she was
+      // seen going and is out of his picture, or lies in her bed: the one cue for where she went)
+      if (slipping && wegAt >= 0 && k.now - wegAt >= SLIP_SEEN_S) {
+        const pic = doe.body ? inPicture(k.world.camera, doe.body, k.ctx.canvas.clientWidth || 1280, k.ctx.canvas.clientHeight || 800) : null;
+        doeAway = pic && pic.on && pic.px >= 6 ? 0 : doeAway + dt;
+      }
+      finds.walkTick('meadow', doe.lies || doeAway >= SLIP_GONE_S);
     },
   });
   finds.walkEnd('meadow');
@@ -454,6 +470,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   // the lens swinging round behind him (then the way ahead is in view); then he sneaks on
   // himself, quietly, round the grass to the hide; the pool may lie across his way
   k.beat = 'calf:leave';
+  finds.leaving(); // (the buzzard begins to come down over the heath ahead)
   const r8 = k.ranger();
   const first = toward(r8, l.way[0], 1.4);
   const swing = k.frame(leaveView(first, l.way[0]));
@@ -475,7 +492,8 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
       if (!thinned) thinned = home.thinWhenUnseen(k.world.camera);
       finds.walkTick('hide');
       if (poolOut) { poolOut.tick(); return; }
-      if (lineBack < 0 && dist(k.ranger(), l.hide) < 4) { lineBack = 1; k.say(c.verstop); }
+      // ("Verstop je" near the hide: after a card that shows now, the last stride at the latest)
+      if (lineBack < 0 && dist(k.ranger(), l.hide) < 4 && (k.revealsWaiting() === 0 || dist(k.ranger(), l.hide) < 2)) { lineBack = 1; k.say(c.verstop); }
     },
   });
   finds.walkEnd('hide');
@@ -751,6 +769,10 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
     if (both) void doe.lookAt(() => ({ x: twin.x, z: twin.z, speed: 0 }), 2.2).then(() => doe.idle());
     else doe.idle();
     await k.wait(4.6);
+    // (ree-discover: the reunion holds its picture until every new find's card waiting for
+    // it has been seen — the cuckoo he heard in the watch, the twin — one after the other,
+    // never cut off by the raaf's card. Most plays wait for none)
+    await k.until(() => k.revealsWaiting() === 0, REUNION_CARDS_MAX_S);
   });
   k.stats.reunion_gap = Math.round(dist(calf, doe) * 100) / 100;
   // they set off home together across the heath, the calf at her pace (he sees them go

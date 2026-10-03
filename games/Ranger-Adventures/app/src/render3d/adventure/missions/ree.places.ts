@@ -213,9 +213,14 @@ export interface ReeLayout {
   buzzard: { x: number; z: number; r: number; y: number };
   /** ree-discover: where the cuckoo calls from in the watch (the trees off to one side) */
   koekoek: Spot;
-  /** ree-discover: the walks the woodlark may sing up on (a walk with heath ahead of it:
-   *  B's way to the hide runs at the forest's edge and the world's rim) */
-  larkOn: readonly ('meadow' | 'hide')[];
+  /** ree-discover: the walks the woodlark may fly up on, by where the play's pool lies (a
+   *  walk with heath ahead of it and nothing else going on: no pool to answer on it, and on
+   *  the walk to the grass no doe slipping into her cover in his picture — review r2, by
+   *  playing: A's walk to the grass holds its pool and her slip, B's way to the hide runs at
+   *  the forest's edge and the world's rim, C's doe slips in straight ahead of him the whole
+   *  walk to the grass and its way to the hide is short, its pool or its "hide" line on it:
+   *  a woodlark there, or its card, came on top of the walk's own moment) */
+  larkOn: Readonly<Record<'in' | 'out', readonly ('meadow' | 'hide')[]>>;
   /** ree-discover: where a twin lies (a rare play) — in the tall grass or her bracken behind
    *  where they meet, on the side its sibling's twin spot is (it rises there in the
    *  reunion's picture and comes round to her); laid once he has left the calf, out of his
@@ -263,8 +268,8 @@ interface LayoutDef {
    *  hide), where the cuckoo calls from in the watch (world: off to one side of the watch's
    *  view, never behind him), and the twin's bed (world; it lies facing where they meet) */
   birches: readonly Spot[]; koekoek: Spot; twinBed: Spot;
-  /** the walks the woodlark may sing up on (default both) */
-  larkOn?: readonly ('meadow' | 'hide')[];
+  /** the walks the woodlark may fly up on, by the pool's side (default: none) */
+  larkOn?: Partial<Record<'in' | 'out', readonly ('meadow' | 'hide')[]>>;
 }
 
 /** The search view (the owner's fix: the old lens looked steeply down on the top of his
@@ -324,7 +329,7 @@ function build(d: LayoutDef): ReeLayout {
     birches: [...d.birches],
     buzzard: { ...sky, r: BUZZARD.r, y: BUZZARD.y },
     koekoek: { ...d.koekoek },
-    larkOn: d.larkOn ?? ['meadow', 'hide'],
+    larkOn: { in: d.larkOn?.in ?? [], out: d.larkOn?.out ?? [] },
     twinBed: { ...d.twinBed, yaw: headingTo(d.twinBed, meet) },
   };
 }
@@ -333,8 +338,11 @@ function build(d: LayoutDef): ReeLayout {
  *  its height over the ground (m), one turn (s); how high it comes down from (m), how long
  *  that takes (s), and how soon it is gone once he is at his hide (s). It comes down to
  *  hunt low over the heath ahead of him, its wings wide: the walk's lens looks down at the
- *  heath, and a buzzard at 3-5 m hung at the picture's top edge, behind the objective line. */
-export const BUZZARD = { beyond: 7, r: 4, y: 2.2, period: 15, high: 22, comeS: 6, goS: 3 } as const;
+ *  heath, and a buzzard at 3-5 m hung at the picture's top edge, behind the objective line.
+ *  It begins to come down as he turns away from the calf (review r2: begun on his walk it
+ *  was low only near its end, and its card waited for the reunion): low from the first
+ *  steps of his walk to the hide. */
+export const BUZZARD = { beyond: 7, r: 4, y: 2.2, period: 15, high: 16, comeS: 5, goS: 3 } as const;
 
 /**
  * The woodlark's flight (ree-discover): it flies up out of the heather a few metres ahead of
@@ -462,6 +470,8 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     // his way back to the hide; the cuckoo in the forest's edge to the east; the twin in the
     // copse's bracken behind where they meet)
     birches: [{ x: -23.0, z: -39.0 }, { x: -12.0, z: -30.5 }], koekoek: { x: 10.6, z: -35.0 }, twinBed: { x: -7.6, z: -41.0 },
+    // (the woodlark on his way back round to the hide: open heath, no pool on it)
+    larkOn: { in: ['hide'] },
   }),
   B: build({
     id: 'B', stand: { x: -8.5, z: -51.0 }, look: deg(135), corner: 1, bend: { x: -21.0, z: -39.5 },
@@ -480,7 +490,9 @@ export const REE_LAYOUTS: Readonly<Record<ReeLayoutId, ReeLayout>> = {
     // by his way round it; the cuckoo in the juniper of A's hide to the north; the twin in
     // the tall grass behind where they meet)
     birches: [{ x: -16.0, z: -51.0 }, { x: -6.5, z: -56.0 }], koekoek: { x: -6.4, z: -26.5 }, twinBed: { x: -10.6, z: -48.6 },
-    larkOn: ['meadow'],
+    // (the woodlark on the walk to the grass when the pool lies on his way to the hide:
+    // her copse is behind him from his first steps, the walk is long and open)
+    larkOn: { out: ['meadow'] },
   }),
   C: build({
     id: 'C', stand: { x: -21.0, z: -49.0 }, look: deg(-90), corner: 1, bend: { x: -20.5, z: -38.8 },
