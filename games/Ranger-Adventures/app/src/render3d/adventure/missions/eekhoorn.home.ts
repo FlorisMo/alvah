@@ -336,6 +336,11 @@ export class EekhoornHome implements HomeDressing {
     this.nest.position.set(at.x, this.env.groundY(at.x, at.z) + at.y, at.z);
     this.nest.rotation.set(0, at.ang, 0);
     this.nest.updateMatrixWorld(true);
+    // (it sits up its tree: how high its underside is held above the ground, for the world's
+    // seating probe — a nest is not a thing floating off the ground)
+    this.nest.geometry.computeBoundingBox();
+    const box = this.nest.geometry.boundingBox!.clone().applyMatrix4(this.nest.matrixWorld);
+    this.nest.userData.perch = box.min.y - this.env.groundY((box.min.x + box.max.x) / 2, (box.min.z + box.max.z) / 2);
   }
 
   /** Where its nest is now (world; its middle), or null. */

@@ -387,7 +387,10 @@ function probeSeating(x: number, z: number, r: number): SeatProbe[] | null {
     box.getCenter(c);
     const g = groundUnder(v.scene, c.x, c.z);
     if (g === null || box.min.y - g > 3) continue; // flying (a bird, a cloud): not a prop
-    const seat: SeatProbe = { id: describeObject(o, v.scene), x: r2(c.x), y: r2(box.min.y), z: r2(c.z), gap: r2(box.min.y - g), sig: lookSig(o) };
+    // (run 7, additive: a thing up a tree — a squirrel's nest — says how high above the
+    // ground its tree holds it, `userData.perch`, as a hint's target does: it must sit on that)
+    const perch = (o.userData.perch as number | undefined) ?? 0;
+    const seat: SeatProbe = { id: describeObject(o, v.scene), x: r2(c.x), y: r2(box.min.y), z: r2(c.z), gap: r2(box.min.y - g - perch), sig: lookSig(o) };
     out.push(moves ? { ...seat, moves } : seat);
   }
   return out.sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap));
