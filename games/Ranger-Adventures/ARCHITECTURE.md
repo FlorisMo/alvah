@@ -208,7 +208,9 @@ core/play.ts         Play { seed, missionId, n, rng(), pick, shuffle, chance, be
 core/skill.ts        knobsFor(engine, level) / knobsFromDifficulty: ZoekKnobs · SpanKnobs (corsi,
                      simon) · RustKnobs (dagnacht) · WisselKnobs; BeatSummary's optional span,
                      start, rounds, eased, misses, seconds, hinted, impulses, holdS, switches …
-core/state.ts        save fields geschiedenis (BeatLog[], newest 400), ontdekt, zeldzaam,
+core/state.ts        save fields geschiedenis (BeatLog[], newest 400: the level, the score, every
+                     field the beat's judgement read, the seed and the variant, so a beat's step
+                     reads back from its row), ontdekt, zeldzaam,
                      gespeeld, sfeer; store.logBeat(e, summary, { missionId, view, play }),
                      level(e), knobs(e), discover(id), notePlay, rareEnd, noteSession;
                      hydrate(parsed): any older save loads, new fields defaulted
