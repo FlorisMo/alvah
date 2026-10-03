@@ -66,6 +66,10 @@ const CRISP_PRINTS = 4;
 /** After a reach at the lying piglet, at least this share of his back shows from the close
  *  lens (the stems over him give way): he stays clearly there, never a sliver. */
 const AAIEN_SHOWS = 0.45;
+/** After a run on the tired piglet's stretch he walks calmly right back to the clump it
+ *  dived into (within this, m) before it comes out: the stretch again starts there, so a run
+ *  that carried him to the stretch's end still gets a real walk back (never 0.7 m). */
+const PACE_BACK_M = 2.2;
 /** The walk on from the field to the mud is long enough to be the tired piglet's moment
  *  (dragen at s2) from this long (m); shorter, he tires on the lead's last stretch. */
 const PACE_HOME_M = 12;
@@ -702,7 +706,7 @@ async function story(k: AdventureKit, fam: ReturnType<AdventureKit['borrow']>, h
         name: 'moe', to: end, r: end.r ?? 1.0, line: c.moe, doel, glyph: 'boot',
         via: path.slice(1).filter((p) => p !== last && pathLength([path[0], p]) < len),
         lead: {
-          ...lead, pace: TIRED_PACE, runLine: c.nietRennenMoe, backLine: c.moe,
+          ...lead, pace: TIRED_PACE, backM: PACE_BACK_M, runLine: c.nietRennenMoe, backLine: c.moe,
           onHide: (sp: Spot): void => {
             lead.onHide(sp);
             if (core.run()) { k.stats.pace_dragen = core.impulses; if (settings.geluid) Sound.tryAgain(); }

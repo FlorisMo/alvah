@@ -346,8 +346,10 @@ export class FrislingHome implements HomeDressing {
    */
   lay(way: WayId, o: { nook: number; pose: 0 | 1 | 2; trial: readonly Distractor[]; spots: readonly number[]; glimpse: number; nest?: boolean }): void {
     this.way = way;
-    // (the sow's nest: at this play's stand when the play has one; free roam shows them all)
-    for (const id of WAY_IDS) this.stands[id].showNest(o.nest ?? true);
+    // (the sow's nest: at this play's stand when the play has one, never at the others —
+    // one draw call, not three, when the lens looks out over the far stands; free roam
+    // shows the default stand's)
+    for (const id of WAY_IDS) this.stands[id].showNest(id === way && (o.nest ?? true));
     for (const id of WAY_IDS) if (id !== way) this.stands[id].clear();
     const st = this.stands[way];
     st.layDecoys(o.trial, o.spots);
