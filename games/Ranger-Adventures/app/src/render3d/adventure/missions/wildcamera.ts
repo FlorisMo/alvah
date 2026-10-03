@@ -45,7 +45,7 @@ import { WildcameraHome, type BirdId } from './wildcamera.home';
 import { CameraClock, drawWildcameraPlay, lastNights, lastSnare, variantOf } from './wildcamera.variety';
 import { PhotoStrip, develop, type Photo } from './wildcamera.photos';
 import {
-  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, STRAP_VIEW, SNARE_FOUND, SNARE_SPOTS, TEST_SPOT, TEST_VIEW, inFan,
+  WILDCAMERA_HOME, WILDCAMERA_PLACES as P, CROSS_VIEW, REUNION_VIEW, TRAIL_VIEW, STRAP_VIEW, SNARE_FOUND, SNARE_SPOTS, SEARCH_VIEW, TEST_SPOT, TEST_VIEW, inFan, walkBackView,
   AIM_AT, CAMERA, ROE_HIDEAWAY, ROE_SHY_WITHIN, aimSpot, cameraAim, wildcameraClearings, wildcameraTreeClearings, wildcameraTrees,
   CALLER_SLOTS, SIDE_OF, SKY, STOPS, STOPS_OF, arrivalPath, exitPath,
   type AimSpot, type SlotId, type StopId,
@@ -655,8 +655,10 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
           crossing.) Near it he takes the last step to it, sees it in the grass ("Zie je de
           val?") and clicks the wire loop: it is gone */
   await k.walkRanger(P.handBack.x, P.handBack.z, 0.05);
-  k.world.faceRanger(P.handBack.heading);
   if (man) photos.pin(man);
+  // (he turns from the glade to the wood where the man was: the lens comes round behind
+  // him, so the place on the photo lies ahead of him, whichever of the three it is)
+  await k.frame(SEARCH_VIEW, { face: SEARCH_VIEW.heading });
   await k.walk({
     name: 'val', to: snareSpot.approach, r: snareSpot.approach.r, reached: () => dist(k.ranger(), snareSpot.at) < SNARE_FOUND,
     line: c.zoekVal, doel: c.chipVal, cue: c.bijPad, glyph: 'photo',
@@ -675,9 +677,10 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   k.stats.snare_gone = 1;
   await k.wait(1.8);
 
-  /* 12 · back to his camera on the pine (he walks it himself, turned the way back): he is
-          there once he is by the pine, whichever side he comes to it */
-  k.world.faceRanger(headingTo(k.ranger(), P.handBack));
+  /* 12 · back to his camera on the pine (he walks it himself, turned the way back, the lens
+          behind him: the Up key walks him home): he is there once he is by the pine,
+          whichever side he comes to it */
+  await k.frame(walkBackView(k.ranger()), { face: headingTo(k.ranger(), P.handBack) });
   await k.walk({
     name: 'terug', to: P.handBack, r: P.handBack.r, reached: () => dist(k.ranger(), CAMERA) < 3.2,
     line: c.terug, doel: c.chipCamera, cue: c.bijBoom, glyph: 'camera',

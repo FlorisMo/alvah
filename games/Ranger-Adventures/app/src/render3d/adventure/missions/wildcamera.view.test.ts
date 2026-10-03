@@ -20,7 +20,7 @@ import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import {
   CROSS, CROSS_VIEW, CALLER_SLOTS, ENTRY, EXIT, JUNIPER, LOG, NIGHTJAR_STUMP, PINE, SETT_MOUND, SKY, STOPS, SLOT_CLASH, SLOT_IDS, TAG_AT, THICKET_BUSHES, TREE,
   WILDCAMERA_PLACES as P, arrivalPath, type SlotId, type StopId,
-  CAMERA, SNARE_IDS, SNARE_SPOTS,
+  CAMERA, SNARE_IDS, SNARE_SPOTS, SEARCH_VIEW, TEST_SPOT, TEST_VIEW, walkBackView,
 } from './wildcamera.places.ts';
 import { legalLayouts } from './wildcamera.variety.ts';
 import { atLocal, segDist, toLocal } from '../places.ts';
@@ -293,4 +293,26 @@ test('each snare\'s close view: the wire in the grass off the middle, under the 
     const d = segDist(sp.approach, { x: cam.position.x, z: cam.position.z }, sp.at);
     assert.ok(d > 0.3, `${id}: he is not in front of the snare (${d.toFixed(2)} m)`);
   }
+});
+
+test('the hand-overs: before each walk of his own the lens stands behind him, turned the way he goes (the Up key walks him there)', () => {
+  /** the lens's ground spot is behind him, and the goal lies ahead in the picture's middle half */
+  const behind = (name: string, v: ViewSpec, me: Spot, goal: Spot): void => {
+    const cam = fitLens(v);
+    const back = { x: cam.position.x - me.x, z: cam.position.z - me.z };
+    const fwd = { x: goal.x - me.x, z: goal.z - me.z };
+    const cos = (back.x * fwd.x + back.z * fwd.z) / (Math.hypot(back.x, back.z) * Math.hypot(fwd.x, fwd.z));
+    assert.ok(cos < -0.9, `${name}: the lens stands behind him (${cos.toFixed(2)})`);
+    const him = onGround(cam, me, RANGER_STAND_HEIGHT * 0.5);
+    assert.ok(him.front && him.x > 200 && him.x < W - 200 && him.y > TOP && him.y < H - 40, `${name}: he is in the picture (${him.x.toFixed(0)}, ${him.y.toFixed(0)})`);
+  };
+  behind('the test', TEST_VIEW as unknown as ViewSpec, P.strap, TEST_SPOT);
+  for (const id of SNARE_IDS) {
+    const sp = SNARE_SPOTS[id];
+    behind(`back from ${id}`, walkBackView(sp.approach) as unknown as ViewSpec, sp.approach, P.handBack);
+    // the search: every spot lies ahead of him (within 60° of the way the lens looks)
+    const ahead = Math.abs(Math.atan2(Math.sin(Math.atan2(sp.at.x - P.handBack.x, sp.at.z - P.handBack.z) - SEARCH_VIEW.heading), Math.cos(Math.atan2(sp.at.x - P.handBack.x, sp.at.z - P.handBack.z) - SEARCH_VIEW.heading)));
+    assert.ok(ahead < Math.PI / 3, `the search: ${id} lies ahead of him (${((ahead * 180) / Math.PI).toFixed(0)}°)`);
+  }
+  behind('the search', SEARCH_VIEW as unknown as ViewSpec, P.handBack, SEARCH_VIEW.at);
 });

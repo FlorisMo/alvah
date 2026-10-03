@@ -501,6 +501,33 @@ export const TEST_VIEW = (() => {
   } as const;
 })();
 
+/** The search's start (run 7): from behind him on the open crossing, turned to the wood
+ *  north of it where the man's three spots lie (up the wildwissel, the deer trail): the
+ *  lens the follow camera takes over from, so the place on the photo is in front of him and
+ *  the Up key walks him toward it (never one spot more than another: all three are ahead). */
+export const SEARCH_VIEW = (() => {
+  const me = at(1.6, -2.4);
+  const ahead = { x: me.x - 0.6, z: me.z + 3.2 };
+  return {
+    at: ahead, heading: headingTo(me, ahead),
+    halfW: 3.0, halfD: 2.4, tall: 1.6, pitchDeg: 14, insetTop: 260, insetBottom: 60,
+    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT }],
+  } as const;
+})();
+
+/** The way back (run 7): from behind him where he took the snare away, turned to his
+ *  camera on the pine: the lens the follow camera takes over from, so the Up key walks him
+ *  home (the snare's own close view looks at him from the side). */
+export function walkBackView(me: Spot): SnareView {
+  const home = WILDCAMERA_PLACES.handBack;
+  const ahead = toward(me, home, Math.min(2.4, dist(me, home) * 0.4));
+  return {
+    at: ahead, heading: headingTo(me, home),
+    halfW: 2.4, halfD: 1.8, tall: 1.6, pitchDeg: 16, insetTop: 120, insetBottom: 60,
+    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT }],
+  };
+}
+
 /** A tuft of grass round a snare (m: where, how tall, its turn). */
 export interface Tuft extends Spot { h: number; turn: number }
 
