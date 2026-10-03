@@ -17,7 +17,7 @@ import test from 'node:test';
 import * as THREE from 'three';
 import {
   EEKHOORN_PLACES as P, EEKHOORN_RESIDENTS, HOME_TREES, TREE, MARKER, STUMP, HEAP, HEAP_SPOTS, SNAG, SEEDLING_AT, JAY_GROUND,
-  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, SEE_D, SEEN_X, WAIT_H, WAIT_TURN, HIDE, gladeSpots, eekhoornTreeClear, eekhoornClearings, branchStub,
+  GLADE_VIEW, CALLERS_VIEW, SPOT_SCALE, SPOT_SIZE, SEE_D, SEEN_X, WAIT_H, WAIT_TURN, HIDE, gladeSpots, eekhoornTreeClear, eekhoornClearings, branchStub, SCATTER_TAKEN,
   seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
@@ -40,8 +40,9 @@ const OTHER_MARKERS = {
 /** The watchtower (world/Dressing LANDMARKS): its footprint ≈ 3 m round its middle. */
 const TOWER = { x: 37, z: -37, r: 3.2 };
 /** The forest's scattered trees nearest the ways (`__ranger.treeSpots()`, 2026-10-03): a
- *  home tree's clear ring must not take them away (the wood round the other homes stays). */
-const SCATTER = [{ x: 14.4, z: -39.3 }, { x: 6.9, z: -41.9 }, { x: 29.8, z: -47.7 }, { x: 31.9, z: -48.7 }];
+ *  home tree's clear ring must not take them away (the wood round the other homes stays).
+ *  The one at (29.75, -47.72) is taken on purpose (SCATTER_TAKEN, the triangle budget). */
+const SCATTER = [{ x: 14.4, z: -39.3 }, { x: 6.9, z: -41.9 }, { x: 31.9, z: -48.7 }];
 /** The glade's tree clearing and the lens room behind the stands (design §6.2). */
 const GLADE_RING = { x: 12.0, z: -60.1, r: 7 };
 const LENS_ROOM = { x: 16.97, z: -55.34, r: 4.2 };
@@ -630,6 +631,10 @@ test('the scattered trees keep out of the glade, the lens and the room round eac
   for (const sym of FIELD_SYMS) for (const p of gladeSpots(sym)) assert.ok(inside(p), 'the glade is open');
   assert.ok(inside(P.stand) && inside(P.callers));
   for (const c of HIDE_TREES) assert.ok(clear.some((q) => dist(q, c) < 1e-9 && q.r >= 4.6), `a wide ring round ${c.id}`);
+  // the one scattered pine it takes (the budget), and none of the wood round the other homes
+  assert.ok(inside(SCATTER_TAKEN), 'the small pine east of the den is taken');
+  for (const s of SCATTER) assert.ok(!inside(s), `the scattered tree at (${s.x}, ${s.z}) stays`);
+  for (const s of [{ x: 31.5, z: -41.5 }, { x: 25.71, z: -35.48 }]) assert.ok(!inside(s), `the tree at (${s.x}, ${s.z}) stays`);
 });
 
 test('the squirrel lives on its tree by the marker before, at its glade after', () => {

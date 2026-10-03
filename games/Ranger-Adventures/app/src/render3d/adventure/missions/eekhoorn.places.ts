@@ -815,6 +815,17 @@ export const EEKHOORN_HOME: HomeSpec = {
 /** The trees it hides round (one per way). */
 export const HIDE_TREES: readonly HomeTree[] = ROUTE_IDS.map((id) => ROUTES[id].hide);
 
+/**
+ * The one scattered pine the squirrel's wood takes out (run 7, the triangle budget): the
+ * small bos pine 4 m east of its den, between the den and the zuid way's first pine.
+ * Turning round at the marker, at the noord way's first watch and at pine A, the lens
+ * looks back over the whole world toward the tower (~0.95M triangles before this home
+ * adds a pine), and this pine stood within 6 m of the lens in each of those turns, in
+ * full detail (12k); at the zuid way's first watch the lens stood inside it. The wood
+ * round the other homes stays (the birch by the vos and the watchtower's grove pine).
+ */
+export const SCATTER_TAKEN: Spot = { x: 29.75, z: -47.72 };
+
 /** Ground the forest's own scattered trees keep clear of: the glade, and room round each
  *  home tree (so no stray pine stands in the squirrel's way or in a framed view). */
 export function eekhoornTreeClear(): { x: number; z: number; r: number }[] {
@@ -825,6 +836,7 @@ export function eekhoornTreeClear(): { x: number; z: number; r: number }[] {
     ...HOME_TREES.map((t) => ({ x: t.x, z: t.z, r: 3.2 })),
     // round each hide tree, where he walks round it (hide-and-seek), a wider ring
     ...HIDE_TREES.map((t) => ({ x: t.x, z: t.z, r: 4.6 })),
+    { ...SCATTER_TAKEN, r: 0.6 },
   ];
 }
 
