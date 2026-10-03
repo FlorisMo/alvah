@@ -67,6 +67,12 @@ const COAT_TINT: Record<string, CoatTint> = {
   // dossier: "geheel zwart, met een blauwige glans" — a soft near-black, not a hole: the
   // world's animal fill still lights its shaded side
   'animal-raaf-raven': { color: '#2e2d34', strength: 0.82 },
+  // run 7 (the eekhoorn's rare visitor): a CONTENT id on the squirrel's model — the dark
+  // form of the red squirrel (dark brown to nearly black, its belly stays light; not rare
+  // on the Veluwe, a rare sight in this game). The model's fur (orange, tan, cream) is darkened
+  // toward a chocolate brown: the orange back goes dark, the cream belly stays lighter, and
+  // it still reads brown (never a black hole) in the world's light with the animal fill.
+  'eekhoorn-donker': { color: '#4a2c1c', strength: 0.8 },
 };
 
 /**

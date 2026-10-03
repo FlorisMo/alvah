@@ -69,10 +69,34 @@ const WILDCAMERA: Ontdekking[] = [
 ];
 
 /* ------------------------------------------------------ eekhoorn (the pines) ---- */
+// (run 7, the eekhoorn lane: what he can find in the squirrel's wood. Its neighbours of
+// the day are met with a click and recorded quietly (the meet is their moment); the
+// nest, the gnawed cones and the seedling only once he saw them; the two rare visitors
+// are staged where a squirrel is big in the picture. The great tit, the blackbird, the
+// robin, the raven and the cuckoo are birds of the whole wood: their rows are 'wereld'.)
 const EEKHOORN: Ontdekking[] = [
-  { id: 'eekhoorn.eekhoorn', home: 'eekhoorn', soort: 'dier', naam: 'de eekhoorn',
+  { id: 'eekhoorn.eekhoorn', home: 'eekhoorn', soort: 'dier', naam: 'de eekhoorn', naamKnap: 'de rode eekhoorn',
     hint: 'Wie verstopt nootjes onder het mos?', model: 'animal-eekhoorn-squirrel', geholpen: true },
-  // the eekhoorn lane adds its rows here
+  // (its full name, 'de Vlaamse gaai', reads as a surname to the copy lint: the plain name)
+  { id: 'eekhoorn.gaai', home: 'eekhoorn', soort: 'dier', naam: 'de gaai',
+    hint: 'Wie wil de nootjes pikken?', model: 'bird-gaai' },
+  { id: 'eekhoorn.groene-specht', home: 'eekhoorn', soort: 'dier', naam: 'de groene specht',
+    hint: 'Wie lacht er in het bos?', model: 'bird-groene-specht' },
+  { id: 'eekhoorn.grote-bonte-specht', home: 'eekhoorn', soort: 'dier', naam: 'de bonte specht', naamKnap: 'de grote bonte specht',
+    hint: 'Wie roffelt op een boom?', model: 'bird-grote-bonte-specht' },
+  { id: 'eekhoorn.boomklever', home: 'eekhoorn', soort: 'dier', naam: 'de boomklever',
+    hint: 'Wie loopt ondersteboven langs de boom?', model: 'bird-boomklever' },
+  { id: 'eekhoorn.nest', home: 'eekhoorn', soort: 'vondst', naam: 'het eekhoornnest', naamKnap: 'de kobel',
+    hint: 'Waar slaapt de eekhoorn?', icon: 'home' },
+  { id: 'eekhoorn.kale-kegels', home: 'eekhoorn', soort: 'spoor', naam: 'de kale dennenappels',
+    hint: 'Wie heeft hier zitten smullen?', icon: 'cone' },
+  { id: 'eekhoorn.eikje', home: 'eekhoorn', soort: 'vondst', naam: 'het eikenboompje',
+    hint: 'Groeit er iets uit een nootje?', icon: 'leaf' },
+  // (its picture is the squirrel in its dark coat: a content id with its own coat, Coat.ts)
+  { id: 'eekhoorn.donkere-eekhoorn', home: 'eekhoorn', soort: 'zeldzaam', naam: 'de donkere eekhoorn',
+    hint: 'Is elke eekhoorn rood?', model: 'eekhoorn-donker' },
+  { id: 'eekhoorn.jonge-eekhoorn', home: 'eekhoorn', soort: 'zeldzaam', naam: 'de jonge eekhoorn',
+    hint: 'Wie verstopt zich nog meer?', model: 'animal-eekhoorn-squirrel' },
 ];
 
 /* ------------------------------------------------------------- the new homes ---- */

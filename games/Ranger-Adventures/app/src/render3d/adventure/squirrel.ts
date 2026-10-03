@@ -88,8 +88,19 @@ export class Squirrel extends Actor {
   private eatFrom = -9;
   private eatFor = 1;
 
-  constructor(key: string, env: ActorEnv, opts: { height: number; trees: readonly SquirrelTree[]; seed?: number }) {
-    super(key, 'eekhoorn', env, { height: opts.height, len: opts.height * 1.1 });
+  /** how much warm light its fur catches (the emissive's strength): see `dress` */
+  private readonly warmth: number;
+
+  /**
+   * Run 7 (additive): `animal` — a content id with a coat of its own on the squirrel's model
+   * (the eekhoorn's rare visitor, 'eekhoorn-donker': its dark coat comes from the world's
+   * one dressing, Coat.ts), default 'eekhoorn'; `warmth` — how much of the low sun's warm
+   * light its fur catches (default 0.16; a dark coat less, so it reads brown, not orange).
+   * Its size is `height` (a young one: smaller).
+   */
+  constructor(key: string, env: ActorEnv, opts: { height: number; trees: readonly SquirrelTree[]; seed?: number; animal?: string; warmth?: number }) {
+    super(key, opts.animal ?? 'eekhoorn', env, { height: opts.height, len: opts.height * 1.1 });
+    this.warmth = opts.warmth ?? 0.16;
     this.homeReach = 45; // (it runs home from anywhere round its glade, never a cut in view)
     this.trees = [...opts.trees];
     this.rnd = sqStream(opts.seed ?? 7);
@@ -136,7 +147,7 @@ export class Squirrel extends Actor {
       for (const mat of [m.material].flat() as THREE.MeshStandardMaterial[]) {
         if (!mat.isMeshStandardMaterial) continue;
         mat.emissive.set('#ff9a4a');
-        mat.emissiveIntensity = 0.16;
+        mat.emissiveIntensity = this.warmth;
       }
     });
     // the acorn goes in its mouth: just under its nose (the most forward point of its
@@ -181,7 +192,13 @@ export class Squirrel extends Actor {
     const hingeY = box.min.y + size.y * 0.22;
     const span = size.z * 0.3;
     for (const mat of [m.material].flat() as THREE.MeshStandardMaterial[]) {
-      mat.onBeforeCompile = (shader) => {
+      // (the world's own animal light comes first: AnimalDress gave every animal material
+      // its hooks — the mood's animal fill on the side away from the sun — and the tail's
+      // bend and the rim go on top of them, never instead of them)
+      const prev = mat.onBeforeCompile;
+      const prevKey = mat.customProgramCacheKey();
+      mat.onBeforeCompile = (shader, renderer) => {
+        prev.call(mat, shader, renderer);
         shader.uniforms.uTail = this.tail;
         shader.uniforms.uHinge = { value: new THREE.Vector3(0, hingeY, hingeZ) };
         shader.uniforms.uSpan = { value: span };
@@ -203,7 +220,7 @@ export class Squirrel extends Actor {
           '#include <emissivemap_fragment>\n{ float sqEdge = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0);\n' +
           '  totalEmissiveRadiance += vec3(1.0, 0.72, 0.38) * (uRim * 0.9 * pow(sqEdge, 2.0)); }');
       };
-      mat.customProgramCacheKey = () => 'squirrel-tail-rim';
+      mat.customProgramCacheKey = () => `${prevKey}|squirrel-tail-rim`;
       mat.needsUpdate = true;
     }
   }
