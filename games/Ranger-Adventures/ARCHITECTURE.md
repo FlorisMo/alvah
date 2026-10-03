@@ -146,7 +146,8 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          of it), gnawed cones at one of five dining stumps and logs, the oak
                          seedling seen in free roam (DressingEnv.discover), and two rare
                          visitors staged where a squirrel is big (a dark-brown one at the
-                         den, a young one in the found view), each recorded only once he saw
+                         den, a young one sitting up at the hide pine's foot in the found
+                         view), each recorded only once he saw
                          it (`seenFor`: big enough in his picture, for a moment)): the four
                          missions met first
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;

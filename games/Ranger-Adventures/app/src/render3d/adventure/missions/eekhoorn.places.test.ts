@@ -687,6 +687,11 @@ test('a play\'s draw: from its own forks, replayed by its seed, never the last p
       assert.notEqual(trioCode(p.buren), trioCode(q.buren), `play ${s}: another trio than ${i + 1} play(s) ago`);
     }
     if (recent[0]) assert.ok(SLOTS.filter((k) => p.buren[k] !== recent[0].buren[k]).length >= 2, `play ${s}: two other neighbours`);
+    // its finds somewhere new: never the last play's nest tree nor its dining spot
+    if (recent[0]) {
+      assert.notEqual(nestTrees(ROUTES[p.route])[p.nest].id, nestTrees(ROUTES[recent[0].route])[recent[0].nest].id, `play ${s}: its nest on another tree`);
+      assert.notEqual(p.kegels, recent[0].kegels, `play ${s}: its cones somewhere new`);
+    }
     routes.add(p.route); syms.add(p.veld); trios.add(trioCode(p.buren));
     seen.push(p);
   }
@@ -707,6 +712,14 @@ test('a play\'s draw: from its own forks, replayed by its seed, never the last p
     { m: 'eekhoorn', sd: 8, va: `mood:bewolkt,${VARIANT_KEY}:z-o-kgk` }, { m: 'eekhoorn', sd: 8, va: `mood:bewolkt,${VARIANT_KEY}:z-o-kgk` },
   ];
   assert.deepEqual(lastVariants(two).map((v) => v.route), ['zuid', 'noord']);
+  // the last play's nest tree, read back (the draw keeps the next nest off it)
+  const withNest = [{ m: 'eekhoorn', sd: 9, va: `mood:ochtendnevel,rare:donkere-eekhoorn,${VARIANT_KEY}:m-v-rnr,nest:z1` }];
+  assert.equal(lastVariants(withNest)[0].nest, nestTrees(ROUTES.midden).findIndex((t) => t.id === 'z1'));
+  assert.ok(withNest[0].va.length <= 60, 'the nest note survives the history\'s 60 characters');
+  for (let s = 1; s <= 60; s++) {
+    const p = drawEekhoornPlay(newPlay('eekhoorn', 5000 + s, 1), [{ ...lastVariants(withNest)[0], route: 'midden' }]);
+    if (p.route === 'zuid') assert.notEqual(nestTrees(ROUTES.zuid)[p.nest].id, 'z1', `seed ${5000 + s}: not on z1 again`);
+  }
   assert.equal(lastVariant([{ m: 'eekhoorn', va: 'mood:zonnig' }]), null, 'an old play without a variant: a free draw');
   // the history keeps it whole after the mood and a rare (≤ 60 characters)
   const va = `mood:ochtendnevel,rare:donkere-eekhoorn,${VARIANT_KEY}:${variantOf({ route: 'midden', veld: 'spiegel-v', buren: { tak: 'roodborst', stam: 'grote-bonte-specht', top: 'koekoek' } })}`;
@@ -831,6 +844,11 @@ test('the dining spots: in the wood, off every way, out of the hide-and-seek rin
     assert.ok(lineMin > reach + 0.55, `${d.id}: ${lineMin.toFixed(2)} m off every way he walks`);
     assert.ok(clear.some((c) => dist(c, d) < c.r - reach * 0.6) && treeClear.some((c) => dist(c, d) < c.r - 0.5), `${d.id}: open ground round it (no fern, no stray pine)`);
   }
+  // no way shares a dining spot with another: the way is never the last two plays', so the
+  // gnawed cones lie somewhere new every play
+  const used = ROUTE_IDS.flatMap((id) => [...ROUTE_DINING[id]]);
+  assert.equal(new Set(used).size, used.length, 'every way its own two dining spots');
+  for (const a of DINING) for (const b of DINING) if (a !== b) assert.ok(dist(a, b) >= 3, `${a.id} and ${b.id} stand apart`);
   for (const id of ROUTE_IDS) {
     const two = ROUTE_DINING[id];
     assert.equal(new Set(two).size, 2, `${id}: two spots`);

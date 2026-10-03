@@ -662,12 +662,12 @@ export function nestPeek(n: NestSpot, me: Spot): { x: number; z: number; y: numb
 /**
  * Its DINING spots (design §6.7): a low stump or the end of a fallen trunk by the way,
  * where it sits to strip pine cones (the scales fall, the bare cores stay: the gnawed
- * cones a ranger learns to read). Each way passes two; a play lays its cones at one of
+ * cones a ranger learns to read). Each way passes two of its own; a play lays its cones at one of
  * them (`kegels`). Chosen by walking each way as golden does (eekhoorn.places.test): dry,
  * in the wood, off every way's line (he walks past, never into it), out of the hide
  * trees' rings and the glade, and seen for a while as he walks or waits.
  */
-export type DiningId = 'z1-oost' | 'z1-a' | 'z2-west' | 'n1-noord' | 'n4-noord';
+export type DiningId = 'z1-oost' | 'z1-a' | 'z2-west' | 'z3-zuid' | 'n1-noord' | 'n4-noord';
 export interface DiningSpot extends Spot { id: DiningId; kind: 'stronk' | 'stam'; turn: number }
 export const DINING: readonly DiningSpot[] = [
   // behind the first pine of the middle and the right way: seen while he waits for it there
@@ -676,16 +676,19 @@ export const DINING: readonly DiningSpot[] = [
   { id: 'z1-a', x: 22.95, z: -47.85, kind: 'stam', turn: 1.9 },
   // west of the right way's second pine, on the way down to its hide tree
   { id: 'z2-west', x: 20.75, z: -51.0, kind: 'stronk', turn: 2.6 },
+  // past the right way's hide tree, on his walk down to the glade
+  { id: 'z3-zuid', x: 23.75, z: -53.25, kind: 'stronk', turn: 1.2 },
   // on the left way, past its first pine toward the old line's middle pine
   { id: 'n1-noord', x: 19.25, z: -43.3, kind: 'stam', turn: 0.3 },
   // on the left way, before its hide tree
   { id: 'n4-noord', x: 13.3, z: -46.1, kind: 'stronk', turn: 5.1 },
 ];
-/** The two dining spots each way passes. */
+/** The two dining spots each way passes — no way shares one with another, so the gnawed
+ *  cones lie somewhere new every play (the way is never the last two plays'). */
 export const ROUTE_DINING: Readonly<Record<RouteId, readonly [DiningId, DiningId]>> = {
   midden: ['z1-oost', 'z1-a'],
   noord: ['n1-noord', 'n4-noord'],
-  zuid: ['z1-oost', 'z2-west'],
+  zuid: ['z2-west', 'z3-zuid'],
 };
 export const diningById = (id: DiningId): DiningSpot => DINING.find((d) => d.id === id)!;
 /** A stump's size (m: how high its cut top is, how wide round) and a log end's (how long
@@ -908,7 +911,9 @@ export function parseVariant(v: string): Pick<EekhoornPlay, 'route' | 'veld' | '
   return buren ? { route, veld, buren } : null;
 }
 
-type Drawn = Pick<EekhoornPlay, 'route' | 'veld' | 'buren'>;
+/** A last play as the draw reads it: its way, pattern and trio, and (when the history kept
+ *  it) the tree its nest was on (`nest`: its index in that way's nest trees). */
+type Drawn = Pick<EekhoornPlay, 'route' | 'veld' | 'buren'> & Partial<Pick<EekhoornPlay, 'nest'>>;
 
 /** The squirrel's game's last plays' variants, newest first (at most `n`), from the save's
  *  beat history (each play logs it with every beat as `ek:<variant>`; a play's two beats
@@ -923,7 +928,10 @@ export function lastVariants(history: readonly { m: string; sd?: number; va?: st
     const v = pair ? parseVariant(pair.slice(VARIANT_KEY.length + 1)) : null;
     if (!v || (b.sd !== undefined && b.sd === lastSeed)) continue;
     lastSeed = b.sd;
-    out.push(v);
+    // (its nest's tree, noted after the variant: `nest:<tree id>`)
+    const tree = b.va.split(',').find((p) => p.startsWith('nest:'))?.slice(5);
+    const nest = tree ? nestTrees(ROUTES[v.route]).findIndex((t) => t.id === tree) : -1;
+    out.push(nest >= 0 ? { ...v, nest } : v);
   }
   return out;
 }
@@ -960,7 +968,12 @@ export function drawEekhoornPlay(play: { fork(label: string): { pick<T>(l: reado
   const buren = freshPick(play.fork('buren'), wide.length ? wide : all, lasts.map((l) => l.buren), same);
   // (its finds: each from a fork of its own, so they never move a draw above)
   const nestFork = play.fork('nest');
-  const nest = nestFork.int(0, nestTrees(ROUTES[route]).length - 1);
+  const trees = nestTrees(ROUTES[route]);
+  let nest = nestFork.int(0, trees.length - 1);
+  // (never on the tree the last play's nest was on: two ways share their first pine)
+  const last = lasts[0];
+  const lastTree = last?.nest !== undefined ? nestTrees(ROUTES[last.route])[last.nest]?.id : undefined;
+  if (trees[nest].id === lastTree && trees.length > 1) nest = (nest + 1) % trees.length;
   const nestSeed = nestFork.int(1, 9999);
   const kegelFork = play.fork('kegels');
   const kegels = ROUTE_DINING[route][kegelFork.int(0, 1)];
