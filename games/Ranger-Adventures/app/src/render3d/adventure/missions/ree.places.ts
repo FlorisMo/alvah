@@ -33,7 +33,7 @@ import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import { VEN_CENTER, biomeAt } from '../../Biomes.ts';
 import { patchLocal } from '../../play/kit-math.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
-import { atLocal, dist, headingTo, toLocal, toward, type Frame } from '../places.ts';
+import { atLocal, dist, headingTo, segDist, toLocal, toward, type Frame } from '../places.ts';
 import { REE_LAYOUT_IDS, type ReeLayoutId } from './ree.variety.ts';
 
 /** The ree marker: the heide's second anchor (Markers.placeMarkers: `anchorInBiome
@@ -356,7 +356,35 @@ export const BUZZARD = { beyond: 7, r: 4, y: 2.2, period: 15, high: 16, comeS: 5
 export const LARK = {
   rise: { u: -1.6, v: 6.5 }, top: { u: 0.6, v: 8.0, y: 0.8 }, drift: { u: 3.8, v: 10.5, y: 1.2 }, land: { u: 4.8, v: 12.0 },
   riseS: 1.2, hangS: 4.4, dropS: 1.6,
+  /** it flies up only where his way runs on at least this far (m) without a bend of more
+   *  than `bend` (rad): its first seconds in his picture, its card before he arrives */
+  ahead: 7, bend: 0.5,
 } as const;
+
+/**
+ * How far (m) his way runs on from `me` without a real bend (pure): along `route` (its
+ * points in order, the walk's start first, its goal last), from the leg he is on to the
+ * first point where it turns more than LARK.bend off that leg, or to its end. The woodlark
+ * flies up only where this is at least LARK.ahead (review r2, by playing: on A's walk to the
+ * hide it flew up 1.4 m before a 68° bend, and the turn took it out of his picture a second
+ * later, too soon for him to have seen it).
+ */
+export function straightAhead(me: Spot, route: readonly Spot[]): number {
+  if (route.length < 2) return 0;
+  let leg = 1, best = Infinity;
+  for (let i = 1; i < route.length; i++) {
+    const d = segDist(me, route[i - 1], route[i]);
+    if (d < best - 1e-6) { best = d; leg = i; }
+  }
+  const h0 = headingTo(route[leg - 1], route[leg]);
+  let ahead = dist(me, route[leg]);
+  for (let j = leg + 1; j < route.length; j++) {
+    const h = headingTo(route[j - 1], route[j]);
+    if (Math.abs(Math.atan2(Math.sin(h - h0), Math.cos(h - h0))) > LARK.bend) break;
+    ahead += dist(route[j - 1], route[j]);
+  }
+  return ahead;
+}
 
 /** How far off his way (rad) the woodlark may fly, to its side, when straight on there is
  *  no heath for it: still well inside the walk lens's picture (it is ~80° wide). */

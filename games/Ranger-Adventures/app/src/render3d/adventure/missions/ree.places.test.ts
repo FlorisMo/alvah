@@ -16,7 +16,7 @@ import {
   REE_PLACES as P, REE_RESIDENTS, REE_HOME, REE_LAYOUTS, LAYOUTS, MARKER, STAND, FRINGE, SEARCH_RING, POOL, COPSE_FRAME, COPSE_SIZE,
   COPSE, THICKET, HOME_REACH, COPSE_TREES, CALF_DOELEN, DOE_BED, CALF_HOME, onStand, calfAt, calfTalkOf, calfBolt, calfView, leaveView, drinkSpot, reunionPose,
   inStand, reeClearings, slotTrail, wisselLine, juniperR, poolsOf, poolSides, walkVia, WISSEL_HALF, type ReeLayout, type PoolSpot,
-  BIRCH, BIRCH_CLEAR, BIRCH_NEAR, BUZZARD, LARK, LARK_TURNS, TWIN_AFTER, birchWalk, heathFor, larkFlight, larkRoom, larkWays, twinAt,
+  BIRCH, BIRCH_CLEAR, BIRCH_NEAR, BUZZARD, LARK, LARK_TURNS, TWIN_AFTER, birchWalk, heathFor, larkFlight, larkRoom, larkWays, straightAhead, twinAt,
 } from './ree.places.ts';
 import { FRISLING_PLACES, hideClumps, fieldSpots, cluePosts, bootPrints } from './frisling.places.ts';
 import { WILDCAMERA_PLACES, WILDCAMERA_RESIDENTS, ROE_SHY_WITHIN, wildcameraClearings } from './wildcamera.places.ts';
@@ -693,6 +693,8 @@ test('ree-discover: the woodlark flies up ahead of him, on along his way and bac
           if (dist(at, w[0]) < 3) continue;
           tried += 1;
           const ahead = total - walked - t;
+          // (only where his way runs on straight a good while: no bend turns it out of his picture)
+          if (straightAhead(at, w) < LARK.ahead) continue;
           for (const way of larkWays(1)) {
             const side = way.side, h = headingTo(a, b) + side * way.turn;
             if (!larkRoom(at, h, side, pool)) continue;
@@ -715,6 +717,24 @@ test('ree-discover: the woodlark flies up ahead of him, on along his way and bac
       assert.ok(left >= 6, `${l.id} ${walk}${pool ? ' (pool)' : ''}: it flies with ${left.toFixed(1)} m of the walk ahead`);
     }
   }
+});
+
+test('ree-discover: how far his way runs on without a bend — to the next real bend or the goal, a gentle bend counts as straight', () => {
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+  // a straight way: what is left of it
+  assert.ok(near(straightAhead({ x: 0, z: 3 }, [{ x: 0, z: 0 }, { x: 0, z: 10 }]), 7));
+  // a sharp bend 2 m ahead (90°): only those 2 m
+  assert.ok(near(straightAhead({ x: 0, z: 3 }, [{ x: 0, z: 0 }, { x: 0, z: 5 }, { x: 8, z: 5 }]), 2));
+  // a gentle bend (~17°) runs on to the goal
+  const g = straightAhead({ x: 0, z: 1 }, [{ x: 0, z: 0 }, { x: 0, z: 5 }, { x: 1.5, z: 10 }]);
+  assert.ok(near(g, 4 + Math.hypot(1.5, 5)), String(g));
+  // past the bend, on the next leg: from there
+  assert.ok(near(straightAhead({ x: 3, z: 5 }, [{ x: 0, z: 0 }, { x: 0, z: 5 }, { x: 8, z: 5 }]), 5));
+  // A's walk to the hide (review r2): its first leg ends in a 68° bend, the woodlark waits for the way round to the hide
+  const A = LAYOUTS.find((l) => l.id === 'A')!;
+  const w = [...walkVia(A, 'hide', null), A.hide];
+  assert.ok(straightAhead(toward(w[0], w[1], 3), w) < LARK.ahead, 'not on the short first leg');
+  assert.ok(straightAhead(toward(w[1], w[2], 0.5), w) >= LARK.ahead, 'on the way round to the hide');
 });
 
 test('ree-discover: the buzzard circles low over the heath ahead of him on his way to the hide, over the home', () => {

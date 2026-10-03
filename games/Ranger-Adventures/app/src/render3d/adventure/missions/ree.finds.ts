@@ -26,7 +26,7 @@ import { listenerOf } from '../../world/Residents';
 import { Sound } from '../../../core/sound';
 import { store } from '../../../core/state';
 import { dist, headingTo, toLocal } from '../places';
-import { BIRCH_NEAR, BUZZARD, LARK, heathFor, larkFlight, larkRoom, larkWays, type PoolSpot, type ReeLayout } from './ree.places';
+import { BIRCH_NEAR, BUZZARD, LARK, heathFor, larkFlight, larkRoom, larkWays, straightAhead, type PoolSpot, type ReeLayout } from './ree.places';
 import type { ReeSurprises } from './ree.variety';
 
 const MISSION = 'ree-niet-aanraken';
@@ -136,9 +136,6 @@ const TAPUIT_UP = 0.42;
 const LARK_SEEN = { within: 26, px: 9, secs: 1.5 } as const;
 /** …the buzzard. */
 const BUZZARD_SEEN = { within: 36, px: 18, secs: 1.5 } as const;
-/** The woodlark flies up only while at least this much (m) of his walk lies ahead: it is
- *  seen, and its card shows, on the way (never in a flight cut off as he arrives). */
-const LARK_END_M = 6;
 
 /**
  * This play's small things in the world (the woodlark, the buzzard, the rubbed birch's
@@ -226,8 +223,9 @@ export class ReeFinds {
     if (birch && dist(me, birch) <= BIRCH_NEAR) k.discover(findId('veegsporen'));
     if (this.s.leeuwerik !== name || this.larkState !== 'waiting' || !this.lark || k.reduced || !ready) return;
     if (!this.walkFrom || dist(me, this.walkFrom) < 3 || me.speed < 0.6 || k.now < this.retryAt) return;
-    const goal = this.route[this.route.length - 1];
-    if (goal && dist(me, goal) < LARK_END_M) return;
+    // (only where his way runs on straight ahead a good while: no bend turns his picture
+    // away from it before he has seen it, and its card comes before he arrives)
+    if (straightAhead(me, [this.walkFrom, ...this.route]) < LARK.ahead) { this.retryAt = k.now + 0.25; return; }
     // (along the way the walk's lens looks, once it looks the way he walks: it flies up in
     // his picture, never off to the side of it while the lens still swings round)
     const look = k.world.camera.getWorldDirection(LOOK);
