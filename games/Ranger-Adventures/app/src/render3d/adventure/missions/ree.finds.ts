@@ -189,9 +189,11 @@ export class ReeFinds {
 
   /* ---------------------------------------------------------------- walks ---- */
 
-  /** A walk begins (`name`: 'meadow' to the grass, 'hide' to the hide). */
-  walkStart(name: 'meadow' | 'hide'): void {
+  /** A walk begins (`name`: 'meadow' to the grass, 'hide' to the hide; `route`: the way a
+   *  perfect player walks it, its goal last: the little extras sit along it). */
+  walkStart(name: 'meadow' | 'hide', route: readonly Spot[] = []): void {
     this.walkFrom = { ...this.k.ranger() };
+    this.route = [...route];
     if (name === 'hide' && this.s.small.includes('buizerd')) this.buzzardCome();
     if (name === 'hide' && this.s.extra === 'tapuit') this.tapuitPerch();
     if (name === 'hide' && this.s.extra === 'vlinder') this.butterflyCross();
@@ -429,15 +431,26 @@ export class ReeFinds {
     this.offs.push(off);
   }
 
-  /** A spot `ahead` m along his way to the hide from where he is, `aside` m to its side, on
-   *  open heath (or null). */
+  /** The walk's way (from where he is: its points, its goal last). */
+  private route: Spot[] = [];
+
+  /** A spot `ahead` m along the walk's way from where he is (round the grass, by the pool:
+   *  where he will walk, so it is in his picture as he comes), `aside` m to its side, on open
+   *  heath (or null). */
   private besideWay(ahead: number, aside: number): Spot | null {
     const me = this.k.ranger();
-    const to = this.l.hide;
-    const h = headingTo(me, to);
-    for (const s of [1, -1]) {
-      const p = { x: me.x + Math.sin(h) * ahead - Math.cos(h) * aside * s, z: me.z + Math.cos(h) * ahead + Math.sin(h) * aside * s };
-      if (dist(p, to) > 2.5 && heathFor(p, this.pool) && toLocal({ ...me, heading: h }, p).v > 2) return p;
+    const way = [{ x: me.x, z: me.z }, ...(this.route.length ? this.route : [this.l.hide])];
+    let left = ahead;
+    for (let i = 1; i < way.length; i++) {
+      const a = way[i - 1], b = way[i], L = dist(a, b);
+      if (L < left && i < way.length - 1) { left -= L; continue; }
+      const at = { x: a.x + ((b.x - a.x) / (L || 1)) * Math.min(left, L), z: a.z + ((b.z - a.z) / (L || 1)) * Math.min(left, L) };
+      const h = headingTo(a, b);
+      for (const s of [1, -1]) {
+        const p = { x: at.x - Math.cos(h) * aside * s, z: at.z + Math.sin(h) * aside * s };
+        if (dist(p, this.l.hide) > 2.5 && heathFor(p, this.pool) && toLocal({ ...me, heading: headingTo(me, at) }, p).v > 2) return p;
+      }
+      return null;
     }
     return null;
   }

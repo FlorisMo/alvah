@@ -284,7 +284,7 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   };
   const setOff = { ...k.ranger() };
   const poolIn = p.pool === 'in' ? feetAtPool(k, rust, home, pool, 'meadow') : null;
-  finds.walkStart('meadow');
+  finds.walkStart('meadow', [...walkVia(l, 'meadow', poolIn ? pool : null), l.search]);
   await k.walk({
     name: 'meadow', to: l.search, r: 1.4, line: c.volg, doel: c.chipGras, cue: c.sporen, glyph: 'footprints',
     via: walkVia(l, 'meadow', poolIn ? pool : null),
@@ -465,11 +465,12 @@ async function story(k: AdventureKit, l: ReeLayout, p: ReePlay, finds: ReeFinds,
   let lineBack = -1;
   // (from here on the grass is seen from afar: drawn lighter once it is out of the picture)
   let thinned = false;
-  finds.walkStart('hide');
+  const hideVia = walkVia(l, 'hide', poolOut ? pool : null);
+  finds.walkStart('hide', [...hideVia, l.hide]);
   await k.walk({
     name: 'hide', to: l.hide, r: 1.0, line: c.stil, doel: c.chipHut, cue: c.zacht, glyph: 'boot', quiet: hush,
     // (a perfect player's way: round the grass, and round the pool when it lies here)
-    via: walkVia(l, 'hide', poolOut ? pool : null),
+    via: hideVia,
     tick: () => {
       if (!thinned) thinned = home.thinWhenUnseen(k.world.camera);
       finds.walkTick('hide');
