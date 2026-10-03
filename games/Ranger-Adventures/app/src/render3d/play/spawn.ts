@@ -41,6 +41,8 @@ const ANIMAL_MODEL: Record<string, string> = {
   hinde: 'animal-edelhert-reddeer',
   hertenkalf: 'animal-edelhert-reddeer',
   'vos-welp': 'animal-vos-fox',
+  // run 7 (wc-album): the wildcamera's rare white roe, on the roe's model (Coat: its pale coat)
+  'witte-ree': 'animal-ree-roedeer',
 };
 
 /** The antler meshes of the red-deer model (`Stag_Horns`), and the red deer that

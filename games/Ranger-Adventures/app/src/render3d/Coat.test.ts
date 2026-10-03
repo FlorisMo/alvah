@@ -104,3 +104,12 @@ test('run 6: the frisling wears its pyjama — golden lengthwise stripes on an o
   const t = coatTintFor('overloper');
   assert.ok(t && t.strength < 1 && rgb(t.color).r > rgb(t.color).b);
 });
+
+test('run 7 (wc-album): the white roe is a pale coat on a content id; the roe\'s own model keeps its coat', () => {
+  const t = coatTintFor('witte-ree')!;
+  assert.equal(t.pale, true, 'a pale (leucistic) coat');
+  const c = rgb(t.color);
+  assert.ok(c.r > 225 && c.g > 225 && c.b > 210, `a creamy white (${t.color})`);
+  assert.equal(coatTintFor('animal-ree-roedeer'), null, 'every other roe stays brown');
+  assert.equal(coatTintFor('animal-vos-fox')!.pale, undefined, 'the other tints are lerps, as before');
+});
