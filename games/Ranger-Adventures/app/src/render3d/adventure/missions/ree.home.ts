@@ -537,7 +537,9 @@ export class ReeHome implements HomeDressing {
     /* -- ree-discover: the young birch a roebuck rubbed his antlers on (laid where a play
        has it; none in free roam until then) -- */
     env.obstacles.push(this.birchSolid);
-    void env.spawnPlant('prop-birch-tree', BIRCH.h).then((s) => {
+    // (loaded a while after the world is built, as the far copies are: the title never
+    // waits for it; a play that has it lays it the moment it is there)
+    setTimeout(() => { if (!this.disposed) void env.spawnPlant('prop-birch-tree', BIRCH.h).then((s) => {
       if (!s) return;
       if (this.disposed) { s.dispose(); return; }
       const root = s.root as THREE.Object3D;
@@ -551,7 +553,7 @@ export class ReeHome implements HomeDressing {
       this.spawned.push(s);
       this.birch = sapling;
       this.placeBirch(this.laid.birch ?? null);
-    });
+    }); }, FAR_COPY_AFTER_MS);
 
     // in free roam, before any play: layout A's morning (where the calf lies in the spec)
     const a = REE_LAYOUTS.A;
