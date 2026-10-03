@@ -13,7 +13,7 @@ import {
   provideActors, provideAmbient, provideLandmarks, provideDressing, provideTreeSpots, provideObstacles, providePaths,
   provideGroundDetail, provideLighting, provideSky, provideFootsteps, provideWater, provideVehicle,
   provideHeli, provideQuality, provideBoundary, provideTags, provideMissionPlaces, provideResidents,
-  provideGrowth, provideMood, provideAnimals, renderView,
+  provideGrowth, provideMood, provideAnimals, provideSurprise, renderView,
 } from '../../core/devhook';
 import { animalsSeen } from '../../render3d/AnimalDress';
 import { store } from '../../core/state';
@@ -59,6 +59,7 @@ export function wireWorldDevhook(world: World): void {
   provideMissionPlaces((id) => { const p = adventureFor(id)?.home.places; return p ? { ...p } : null; }); // run 6
   provideResidents(() => world.residents.read(), () => world.residents.moverSpots()); // run 6: the homes
   provideMood(() => world.mood());                    // run 7: the session's mood, the one on screen
+  provideSurprise(() => world.surpriseState());       // run 7 (veldgids): the open world's small surprises
   provideAnimals(() => {                              // run 7: the animals in the picture (read-only)
     const v = renderView() as { scene?: THREE.Scene; camera?: THREE.Camera } | null;
     const canvas = document.getElementById('scene') as HTMLCanvasElement | null;

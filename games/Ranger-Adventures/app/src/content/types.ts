@@ -51,6 +51,11 @@ export interface Skin {
   feit?: string;
   feitDier?: string;
   dieren?: string[];
+  /** run 7 (simon, additive): the animals that MAY call (`engines/simon.ts simonCast`): the
+   *  skin's own `dier` always calls, the rest of the row (as many as `dieren` has) is drawn
+   *  from this pool with the play's seed, the same on the 2D floor and in the world. No pool:
+   *  `dieren` as it stands. */
+  roepPool?: string[];
   dagDieren?: string[];
   nachtDieren?: string[];
   regels?: string[];

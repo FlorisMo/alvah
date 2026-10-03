@@ -67,7 +67,7 @@ export function playSimon3d(ctx: WorldCtx, step: Step, play?: Play): Promise<Bea
     const copy = step.skin.copy ?? {};
 
     // SAME engine logic as the 2D view (construct parity §1f); run 7: the play's callers
-    const trial = buildSimonTrial(step.skin, store.knobs('simon'));
+    const trial = buildSimonTrial(step.skin, store.knobs('simon'), play ? play.fork('simon-cast').rng : looseRng('simon-cast'));
     const run = new SimonRun(trial.knobs, trial.dieren, play ? play.fork('simon').rng : looseRng('simon'));
 
     const instructie = copy.instructie ?? 'De dieren roepen. Doe ze na.';

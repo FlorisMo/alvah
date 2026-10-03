@@ -62,6 +62,11 @@ const PATHS = {
   bulb: '<path d="M9 17.2h6M9.8 20.2h4.4"/><path d="M8.2 14.2A6 6 0 1 1 15.8 14.2c-.7.6-.8 1.2-.8 2V17H9v-.8c0-.8-.1-1.4-.8-2z"/>',
   heart: '<path d="M12 19.6s-7.6-4.4-7.6-9.8A4.2 4.2 0 0 1 12 7.4a4.2 4.2 0 0 1 7.6 2.4c0 5.4-7.6 9.8-7.6 9.8z"/>',
   photo: '<rect x="3.8" y="4.8" width="16.4" height="14.4" rx="2"/><path d="M3.8 16.2l4.6-4.4 3.4 3.2 2.6-2.4 5.8 5"/><circle cx="15.6" cy="9.2" r="1.6"/>',
+  // run 7: the veldgids, a closed field guide with a leaf on its cover (the sporenboek is
+  // the open book)
+  veldgids:
+    '<rect x="4.6" y="3.4" width="14.8" height="17.2" rx="1.8"/><path d="M8.2 3.4v17.2"/>' +
+    '<path d="M11 15.6c0-3.7 2.3-6.2 6.1-6.2 0 3.9-2.5 6.2-6.1 6.2z" fill="currentColor" fill-opacity=".16"/><path d="M11 15.6l3.3-3.3"/>',
   // the five breinkrachten (drawn light on the badge's tier disc)
   magnifier: '<circle cx="10.4" cy="10.4" r="5.8"/><path d="M14.8 14.8 20 20"/>',
   route:

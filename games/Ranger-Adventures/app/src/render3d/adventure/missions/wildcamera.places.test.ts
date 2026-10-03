@@ -10,7 +10,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  WILDCAMERA_PLACES as P, MARKER, TREE, CAMERA, CROSS, CROSS_VIEW, CALLER_SPOTS, LOG, PINE,
+  WILDCAMERA_PLACES as P, MARKER, TREE, CAMERA, CROSS, CROSS_VIEW, CALLER_SLOTS, LOG, PINE, STOPS, ENTRY, EXIT, JAY_AT, SIDE_OF, SLOT_IDS,
+  arrivalPath, exitPath,
   WILDCAMERA_HOME, WILDCAMERA_RESIDENTS, AIM_AT, FAN_HALF, JUNIPER, aimSpot, cameraAim, swivel, trailA, trailB,
   NIGHTJAR_AT, NIGHTJAR_STUMP, TAG_AT, THICKET_BUSHES, SETT_MOUND, ROE_HIDEAWAY, ROE_SHY_WITHIN,
   wildcameraTreeClearings, wildcameraClearings, wildcameraTrees, TRAIL_VIEW, SNARE_VIEW, REUNION_VIEW, STRAP_VIEW, SETT_FACE,
@@ -165,15 +166,16 @@ test('one view: the glade left, the thicket right, the camera pine between, the 
 
 test('the animals the camera photographs walk in from out of view, and the thicket\'s never stand behind the sett', () => {
   const v = { x: CROSS_VIEW.at.x, z: CROSS_VIEW.at.z, heading: CROSS_VIEW.heading };
-  for (const animal of ['edelhert', 'ree', 'das', 'wildzwijn', 'nachtzwaluw']) {
+  for (const animal of ['edelhert', 'hinde', 'ree', 'das', 'wildzwijn', 'vos', 'nachtzwaluw', 'gaai']) {
     for (const bin of ['open', 'hol'] as const) {
       const s = aimSpot(animal, bin);
       const place = bin === 'open' ? P.glade : P.thicket;
-      // (the nightjar by day perches on the stump at the thicket's front, before the sett)
-      const reach = bin === 'open' ? P.glade.r : P.thicket.r + (animal === 'nachtzwaluw' ? 1.0 : 0.6);
+      // (the nightjar by day perches on the stump at the thicket's front, before the sett;
+      // the jay on its bramble at the thicket's far side)
+      const reach = bin === 'open' ? P.glade.r : P.thicket.r + (animal === 'nachtzwaluw' || animal === 'gaai' ? 1.0 : 0.6);
       if (!(animal === 'das' && bin === 'hol')) assert.ok(dist(s.at, place) < reach, `${animal} in the ${bin} place`);
       if (animal !== 'das') assert.ok(Math.abs(toLocal(v, s.from).u) > CROSS_VIEW.halfW - 0.2 || toLocal(v, s.from).v > 2.5, `${animal} comes in from out of view`);
-      if (bin === 'hol' && animal !== 'das' && animal !== 'nachtzwaluw') {
+      if (bin === 'hol' && animal !== 'das' && animal !== 'nachtzwaluw' && animal !== 'gaai') {
         // as the camera sees it: well clear of the sett's mound (the nightjar sits on top of it)
         const off = Math.abs(wrap(cameraAim(s.at) - cameraAim(P.sett)));
         assert.ok(off > (12 * Math.PI) / 180, `${animal} is ${deg(off)}° off the sett`);
@@ -182,14 +184,16 @@ test('the animals the camera photographs walk in from out of view, and the thick
   }
   // every walk into the thicket keeps clear of its solid juniper (a walk round it could
   // stall behind it), and of the sett's mound (the badger's own comes out of it)
-  for (const animal of ['edelhert', 'ree', 'wildzwijn']) {
+  for (const animal of ['edelhert', 'hinde', 'ree', 'wildzwijn', 'vos']) {
     const s = aimSpot(animal, 'hol');
     assert.ok(segDist(JUNIPER, s.from, s.at) > JUNIPER.r + 0.45, `${animal} walks in clear of the juniper (${segDist(JUNIPER, s.from, s.at).toFixed(2)} m)`);
     assert.ok(segDist(P.sett, s.from, s.at) > 0.9, `${animal} walks in clear of the sett`);
   }
-  for (const id of ['wildzwijn', 'ree']) {
-    const c = CALLER_SPOTS[id];
-    assert.ok(segDist(JUNIPER, c.from, c.at) > JUNIPER.r + 0.45, `the ${id} comes in at night clear of the juniper`);
+  for (const id of SLOT_IDS) {
+    const c = CALLER_SLOTS[id];
+    if (c.animals.includes('nachtzwaluw') || c.animals.includes('das')) continue;
+    assert.ok(segDist(JUNIPER, c.from, c.at) > JUNIPER.r + 0.4, `a walker comes in to ${id} at night clear of the juniper (${segDist(JUNIPER, c.from, c.at).toFixed(2)} m)`);
+    assert.ok(segDist(P.sett, c.from, c.at) > SETT_MOUND.r + 0.3 && segDist(NIGHTJAR_STUMP, c.from, c.at) > NIGHTJAR_STUMP.r + 0.3, `…and of the sett and the stump`);
   }
   // the badger by day: out of its sett onto the open ground at its side — clear of the
   // mound for the camera on the pine, and in front of it for the lens
@@ -199,7 +203,7 @@ test('the animals the camera photographs walk in from out of view, and the thick
   assert.ok(dasOff > (16 * Math.PI) / 180, `the badger is ${deg(dasOff)}° off its sett for the camera`);
   assert.ok(toLocal(v, das.at).v < toLocal(v, P.sett).v, 'nearer the lens than its sett');
   // every animal the camera photographs stands where its fan of view lies
-  for (const animal of ['edelhert', 'ree', 'das', 'wildzwijn', 'nachtzwaluw']) {
+  for (const animal of ['edelhert', 'hinde', 'ree', 'das', 'wildzwijn', 'vos', 'nachtzwaluw', 'gaai']) {
     for (const bin of ['open', 'hol'] as const) {
       const off = Math.abs(wrap(cameraAim(aimSpot(animal, bin).at) - cameraAim(AIM_AT[bin])));
       assert.ok(off < FAN_HALF, `${animal} (${bin}) is ${deg(off)}° off where the camera looks`);
@@ -245,11 +249,11 @@ test('the nightjar lands where the child sees it land: on a perch in the view, a
   // the stump stands in nobody's way: clear of every animal's walk in and out of the
   // thicket, of the badger's, and of the night callers' spots
   const ways: [Spot, Spot][] = [];
-  for (const animal of ['edelhert', 'ree', 'wildzwijn', 'das']) { const a = aimSpot(animal, 'hol'); ways.push([a.from, a.at]); }
-  for (const id of ['das', 'wildzwijn']) ways.push([CALLER_SPOTS[id].from, CALLER_SPOTS[id].at]);
+  for (const animal of ['edelhert', 'hinde', 'ree', 'wildzwijn', 'vos', 'das']) { const a = aimSpot(animal, 'hol'); ways.push([a.from, a.at]); }
+  for (const id of ['sett-l', 'sett-r', 'bushes', 'juniper'] as const) ways.push([CALLER_SLOTS[id].from, CALLER_SLOTS[id].at]);
   for (const [a, b2] of ways) assert.ok(segDist(NIGHTJAR_STUMP, a, b2) > NIGHTJAR_STUMP.r + 0.9, `clear of a walk (${segDist(NIGHTJAR_STUMP, a, b2).toFixed(2)} m)`);
   // and the camera on the pine photographs the thicket's animals past it, never over it
-  for (const animal of ['edelhert', 'ree', 'wildzwijn', 'das']) {
+  for (const animal of ['edelhert', 'hinde', 'ree', 'wildzwijn', 'vos', 'das']) {
     const a = aimSpot(animal, 'hol').at;
     const off = Math.abs(wrap(cameraAim(a) - cameraAim(NIGHTJAR_STUMP)));
     assert.ok(dist(CAMERA, NIGHTJAR_STUMP) > dist(CAMERA, a) || off > (14 * Math.PI) / 180, `the stump is not in front of the ${animal}`);
@@ -261,23 +265,92 @@ test('the nightjar lands where the child sees it land: on a perch in the view, a
   assert.ok(onTrail < 0.15 && open.lift === 0, `on the sandy trail (${onTrail.toFixed(2)} m)`);
   assert.ok(dist(open, P.glade) < P.glade.r, 'in the glade');
   // clear of the snare's spot and of the animals of the glade
-  for (const animal of ['edelhert', 'ree', 'wildzwijn', 'das']) assert.ok(dist(open, aimSpot(animal, 'open').at) > 1.0, `apart from the ${animal}`);
+  for (const animal of ['edelhert', 'hinde', 'ree', 'wildzwijn', 'das', 'vos', 'gaai']) assert.ok(dist(open, aimSpot(animal, 'open').at) > 0.9, `apart from the ${animal}`);
 });
 
-test('the four night callers: at their own spots round the crossing, all in the one view, well apart', () => {
+test('the night choir\'s spots: round the crossing, each for its own animals, every one in the view', () => {
   const v = { x: CROSS_VIEW.at.x, z: CROSS_VIEW.at.z, heading: CROSS_VIEW.heading };
-  const ids = Object.keys(CALLER_SPOTS);
   const m = AREA_VELUWE.missies.find((x) => x.id === 'wildcamera')!;
-  assert.deepEqual(ids.slice().sort(), [...(m.stappen.find((s) => s.ef === 'simon')!.skin.dieren ?? [])].sort(), 'one spot per caller of the content');
-  for (const id of ids) {
-    const l = toLocal(v, CALLER_SPOTS[id].at);
-    assert.ok(Math.abs(l.u) < CROSS_VIEW.halfW && l.v > -CROSS_VIEW.halfD - 2 && l.v < CROSS_VIEW.halfD + 1, `${id} is in the view`);
-    for (const o of ids) if (o !== id) assert.ok(dist(CALLER_SPOTS[id].at, CALLER_SPOTS[o].at) > 1.6, `${id} and ${o} stand apart`);
+  const pool = m.stappen.find((s) => s.ef === 'simon')!.skin.roepPool ?? [];
+  for (const id of pool) assert.ok(SLOT_IDS.some((s) => CALLER_SLOTS[s].animals.includes(id)), `${id} has a spot to call from`);
+  for (const id of SLOT_IDS) {
+    const s = CALLER_SLOTS[id];
+    const l = toLocal(v, s.at);
+    assert.ok(Math.abs(l.u) < CROSS_VIEW.halfW + 1 && l.v > -CROSS_VIEW.halfD - 3.2 && l.v < CROSS_VIEW.halfD + 1, `${id} is in the view (${l.u.toFixed(1)}, ${l.v.toFixed(1)})`);
+    assert.ok(dist(s.at, P.watch) > 1.6, `${id} keeps from the ranger`);
+    assert.ok(dist(s.at, TREE) > 1.2, `${id} keeps from the pine`);
   }
-  assert.ok(dist(CALLER_SPOTS.das.at, P.sett) < 1.5, 'the badger at its sett');
-  assert.ok(toLocal(v, CALLER_SPOTS.das.at).u < toLocal(v, P.sett).u - 0.8, 'beside its mound (not in front of it: grey on grey)');
-  assert.ok(dist(CALLER_SPOTS.nachtzwaluw.at, LOG) < 0.01, 'the nightjar on its log');
-  assert.ok(dist(CALLER_SPOTS.ree.at, P.glade) < 1.6, 'the roe at the glade');
+  // the badger beside its sett (never in front of it: grey on grey), the nightjar on the
+  // log or the old stump, the walkers at the glade's back edge or in front of it, by the
+  // bushes or in front of the juniper
+  for (const id of ['sett-l', 'sett-r'] as const) assert.ok(dist(CALLER_SLOTS[id].at, P.sett) < 1.5 && Math.abs(toLocal(v, CALLER_SLOTS[id].at).u - toLocal(v, P.sett).u) > 0.8, `${id} beside the sett`);
+  assert.ok(dist(CALLER_SLOTS.log.at, LOG) < 0.01 && dist(CALLER_SLOTS.stump.at, NIGHTJAR_STUMP) < 0.01, 'the nightjar on the log or the stump');
+  assert.ok(dist(CALLER_SLOTS['glade-edge'].at, P.glade) < 1.6, 'the glade\'s edge');
+  // where the walkers come in from: the glade's side or the thicket's
+  for (const id of ['glade-edge', 'glade-front'] as const) assert.ok(toLocal(v, CALLER_SLOTS[id].from).u < -CROSS_VIEW.halfW, `${id} from the left`);
+  for (const id of ['bushes', 'juniper'] as const) assert.ok(toLocal(v, CALLER_SLOTS[id].from).u > CROSS_VIEW.halfW, `${id} from the right`);
+});
+
+test('the evening\'s visitors: two stops each side, an in-lane and an out-lane that never meet', () => {
+  const v = { x: CROSS_VIEW.at.x, z: CROSS_VIEW.at.z, heading: CROSS_VIEW.heading };
+  const VISITORS = ['edelhert', 'hinde', 'ree', 'wildzwijn', 'vos', 'das', 'nachtzwaluw', 'gaai'];
+  const spots = (bin: 'open' | 'hol'): Spot[] => VISITORS.map((a) => aimSpot(a, bin).at);
+  for (const [id, s] of Object.entries(STOPS)) {
+    assert.equal(biomeAt(s.x, s.z), 'bos');
+    assert.ok(dist(s, P.watch) >= 1.6, `${id}: ${dist(s, P.watch).toFixed(2)} m from the ranger`);
+    assert.ok(dist(s, TREE) > 1.6, `${id}: clear of the pine`);
+    // not in a place (a visitor there would already say where it goes)
+    assert.ok(dist(s, P.glade) > P.glade.r && dist(s, P.thicket) > P.thicket.r, `${id}: outside both places`);
+    // not on the log, the sett, the stumps, nor where an animal is photographed
+    assert.ok(dist(s, LOG) > 0.95 && dist(s, P.sett) > SETT_MOUND.r + 0.7 && dist(s, NIGHTJAR_STUMP) > 1.3, `${id}: clear of the log, the sett and the stump`);
+    for (const p of [...spots('open'), ...spots('hol')]) assert.ok(dist(s, p) > 1.0, `${id}: ${dist(s, p).toFixed(2)} m from a photo spot`);
+    assert.ok((toLocal(v, s).u < 0) === (s.side === 'left'), `${id} on its side`);
+  }
+  for (const side of ['left', 'right'] as const) {
+    assert.ok(Math.abs(toLocal(v, ENTRY[side]).u) > CROSS_VIEW.halfW && Math.abs(toLocal(v, EXIT[side]).u) > CROSS_VIEW.halfW, `${side}: in and out beyond the view`);
+  }
+  // each side's way in and the walk off from its place never meet (≥ 1 m apart), so a
+  // newcomer and an animal walking off on one side pass each other calmly
+  for (const id of Object.keys(STOPS) as (keyof typeof STOPS)[]) {
+    const path = arrivalPath(id);
+    const side = STOPS[id].side;
+    const bin = side === 'left' ? 'open' : 'hol';
+    for (const animal of VISITORS.filter((a) => a !== 'nachtzwaluw' && a !== 'gaai')) {
+      const from = aimSpot(animal, bin).at;
+      const out = exitPath(bin, from, animal);
+      for (let i = 1; i < path.length; i++) {
+        // the closest the out-lane's line comes to the in-lane's (sampled)
+        let near = Infinity;
+        for (let t = 0; t <= 1.0001; t += 0.05) {
+          const q = { x: out[0].x + (out[1].x - out[0].x) * t, z: out[0].z + (out[1].z - out[0].z) * t };
+          if (dist(q, from) < 1.2) continue; // (where it stands at first, as the newcomer comes)
+          near = Math.min(near, segDist(q, path[i - 1], path[i]));
+        }
+        // (the badger is back in its sett within ~1.5 s of its photo, long before a newcomer
+        // from its side is half way in: it only must not brush the lane)
+        assert.ok(near >= (animal === 'das' ? 0.6 : 1.0), `${id}: the in-lane and the ${animal}'s walk off come ${near.toFixed(2)} m apart`);
+      }
+    }
+    // and the in-lane keeps clear of the solid things
+    for (let i = 1; i < path.length; i++) {
+      assert.ok(segDist(JUNIPER, path[i - 1], path[i]) > JUNIPER.r + 0.3, `${id}: clear of the juniper`);
+      assert.ok(segDist(P.sett, path[i - 1], path[i]) > SETT_MOUND.r + 0.25, `${id}: clear of the sett (${segDist(P.sett, path[i - 1], path[i]).toFixed(2)} m)`);
+      assert.ok(segDist(NIGHTJAR_STUMP, path[i - 1], path[i]) > NIGHTJAR_STUMP.r + 0.3, `${id}: clear of the stump`);
+      assert.ok(segDist(LOG, path[i - 1], path[i]) > 0.7, `${id}: clear of the log`);
+      assert.ok(segDist(TREE, path[i - 1], path[i]) > PINE.trunkR + 0.6 && segDist(P.watch, path[i - 1], path[i]) > 0.9, `${id}: clear of the pine and the ranger`);
+    }
+  }
+  void SIDE_OF;
+});
+
+test('the jay: on the glade\'s sunny patch by day, at the thicket\'s foot with the rule turned', () => {
+  assert.ok(dist(JAY_AT.open, P.glade) < 1.0 && JAY_AT.open.lift === 0, 'in the glade');
+  assert.ok(dist(JAY_AT.hol, P.thicket) < P.thicket.r && JAY_AT.hol.lift === 0, 'on the ground at the thicket');
+  // in front of the bushes (between them and the camera on the pine), never behind one
+  for (const b of THICKET_BUSHES) assert.ok(segDist(b.at, CAMERA, JAY_AT.hol) > b.r * 0.6, `the ${b.id} is not between it and the camera`);
+  assert.ok(segDist(P.sett, CAMERA, JAY_AT.hol) > SETT_MOUND.r, 'nor the sett');
+  assert.ok(dist(JAY_AT.hol, NIGHTJAR_STUMP) > 2, 'never the nightjar\'s stump');
+  for (const bin of ['open', 'hol'] as const) assert.ok(Math.abs(wrap(cameraAim(JAY_AT[bin]) - cameraAim(AIM_AT[bin]))) < FAN_HALF - 0.05, `${bin}: in the camera's fan`);
 });
 
 test('the ground: the glade, the thicket and the trail keep clear of trees; the pine is planted', () => {

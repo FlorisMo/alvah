@@ -58,6 +58,7 @@ import type { HomeSpec } from './adventure/types';
 import { DEFAULT_MOOD, type MoodId } from './Moods';
 import { MOOD_FADE_S } from './world/Sky';
 import type { TreeSpecies, TreeStub } from './world/Forest';
+import { Surprises, type SurpriseHooks, type SurpriseReadout } from './world/Surprises';
 
 export type { WorldMarker } from './world/Markers';
 
@@ -201,6 +202,12 @@ export class World {
   private readonly shots: { cam: THREE.Camera; w: number; h: number; prepare?: () => (() => void) | void; done: (c: HTMLCanvasElement | null) => void }[] = [];
   /** the animals that live at the missions' homes, and the homes (world/Residents.ts) */
   readonly residents: Residents;
+  /** Run 7 (veldgids): the open world's small surprises (world/Surprises.ts) */
+  private readonly surprises: Surprises;
+  /** …and when the game says free roam is on (WorldSession: no lesson, no briefing) */
+  private surpriseFree: () => boolean = () => false;
+  private surpriseFreeNow = false;
+  private surpriseAsk = 0;
   // run 6 (FLOW): how far (px) the player has dragged the view round (the look lesson),
   // and whether the parked jeep glows (Bram suggested it)
   private lookPx = 0;
@@ -335,6 +342,8 @@ export class World {
           for (const a of this.fauna.ambient) if (a.wander) visit(a.id, a.group.position.x, a.group.position.z);
           // the homes' animals too: the jeep gives way to them, sized by their scale-table row
           this.residents?.movers((x, z, _h, id, animal) => visit(id, x, z, animal));
+          // run 7: and to a stag or a badger out there as a surprise
+          this.surprises?.movers((id, x, z) => visit(id, x, z));
         },
         markers: () => this.pois.list,
       },
@@ -404,6 +413,15 @@ export class World {
       obstacles: this.obstacles, limits: this.limits, reduced: () => livePolicy().reduced,
     });
     for (const h of opts.homes ?? []) this.residents.add(h.spec, h.build, h.actor);
+    // run 7 (veldgids): now and then a little of the Veluwe happens near him in free roam
+    this.surprises = new Surprises({
+      scene: this.scene, camera: this.camera, terrain: this.terrain, fauna: this.fauna,
+      trees: () => this.dressing.treePlacements,
+      ground: (x, z, r) => this.playClear(x, z, r, null),
+      homeNear: (x, z, r) => this.homeNear(x, z, r),
+      perches: () => this.obstacles.filter((o) => !o.tree && !o.box && o.h !== undefined && o.r <= 1.1 && o.h <= 4) as { x: number; z: number; r: number; h: number }[],
+      viewH: () => this.canvas.clientHeight || 800,
+    });
 
     this.readback = new DevReadback(
       {
@@ -1144,6 +1162,19 @@ export class World {
     // see the ranger on foot and a driven jeep coming
     this.fauna.update(t, dt, reduced, this.camera, this.threats(dt));
     this.residents.update(t, dt, this.camera, rp);  // run 6: the missions' homes and their animals
+    // run 7 (veldgids): the open world's small surprises, in free roam only (on foot or in the
+    // jeep; never in a mission, a game, the helicopter or before the world is up); a menu
+    // card holds them still
+    // (the game's own word on free roam is asked a few times a second, not every frame)
+    this.surpriseAsk -= dt;
+    if (this.surpriseAsk <= 0) { this.surpriseAsk = 0.25; this.surpriseFreeNow = this.surpriseFree(); }
+    this.surprises.update(dt, {
+      free: this.readyAt !== null && !this.mode && !this.frozen && !this.vehicles.inHeli && this.surpriseFreeNow,
+      paused: this.menuOpen(),
+      ranger: { x: rp.x, z: rp.z, running: this.player.rig.running },
+      onFoot: !this.vehicles.inVehicle && !this.vehicles.inHeli,
+      reduced,
+    });
     this.fauna.tendWarden(dt, rp, reduced); // run 6: Bram turns to the ranger while he speaks
 
     // W3.2: the ranger's own locomotion animation (and his footsteps, on his feet).
@@ -1327,6 +1358,28 @@ export class World {
       if (Math.hypot(a.group.position.x - x, a.group.position.z - z) < 0.8 + r) return false;
     }
     return true;
+  }
+
+  /** Run 7 (veldgids): a mission's home ground or a marker lies within `r` of (x, z). */
+  private homeNear(x: number, z: number, r: number): boolean {
+    for (const c of this.homeGround) if (Math.hypot(c.x - x, c.z - z) < c.r + HOME_MARGIN + r) return true;
+    for (const m of this.markers) if (Math.hypot(m.pos.x - x, m.pos.z - z) < 1.2 + r) return true;
+    return false;
+  }
+
+  /**
+   * Run 7 (veldgids): the open world's small surprises talk to the game through these:
+   * `free` says when free roam is on as the game sees it (no first-minute lesson, no
+   * briefing), the rest is what he met (the save, the reveal). null: no surprises.
+   */
+  setSurprises(hooks: (SurpriseHooks & { free(): boolean }) | null): void {
+    this.surpriseFree = hooks ? () => hooks.free() : () => false;
+    this.surprises.setHooks(hooks);
+  }
+
+  /** Run 7: the surprises read (`__ranger.surprise()`). */
+  surpriseState(): SurpriseReadout {
+    return this.surprises.state();
   }
 
   /** Felt progress (ui/flow calls this on completion, and on world build for every
