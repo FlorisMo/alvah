@@ -82,7 +82,7 @@ const COAT_TINT: Record<string, CoatTint> = {
   // Heikikker). A colour lerp over a green texture only darkens it to olive, so its own
   // texture is bleached to its light and dark (its spots and shading kept) and coloured
   // red-brown: the `pale` path, here for a whole GLB whose hue is wrong
-  'animal-heikikker-frog': { color: '#b0764a', strength: 1, pale: true },
+  'animal-heikikker-frog': { color: '#8f6a4e', strength: 1, pale: true },
 };
 
 /**

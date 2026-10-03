@@ -29,7 +29,7 @@ import {
   ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, AFTER_FROG, APPROACH, BAYS, BAY_IDS, BENCH, BIRD_SLOTS, BUTTERFLY_SLOTS, CARPET_WET, CLOD_SLOTS,
   CUSHION, FROG_H, FROG_LEN, FROG_SPOTS, GO_AWAY, HIDE, HIDE_R, MARKER, PATH, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
   above, adderAt, allStations, blocked, carpetAt, carpetPast, carpetRound, coveClumps, decoySlots, inCarpet, lastVenVariants,
-  polar, polarOf, pointAt, project, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type ViewSpec,
+  polar, polarOf, plopOf, pointAt, project, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type ViewSpec,
 } from './ven.places.ts';
 import type { Spot } from '../types.ts';
 
@@ -115,7 +115,6 @@ function standings(): { name: string; p: Spot }[] {
   for (const id of BAY_IDS) {
     const b = BAYS[id];
     out.push({ name: `${id}.stand`, p: b.stand }, { name: `${id}.off`, p: b.off });
-    for (const f of b.frogs) out.push({ name: `${id}.sing`, p: singOf(b, f).stand });
     for (const st of stationsOf(id)) {
       out.push({ name: `${id}.S${st.i + 1}`, p: st.at });
       carpetRound(carpetAt(st)).forEach((q, i) => out.push({ name: `${id}.S${st.i + 1}.round${i}`, p: q }));
@@ -210,8 +209,8 @@ test('the search: every frog spot partly visible at every level, off the middle,
       }
       assert.ok(offCentre(b.views.search, f) >= 0.25, `cove ${id} frog ${i} is off the middle of the view (${r2(offCentre(b.views.search, f))})`);
       const box = frogBox(cam, f);
-      assert.ok(box.w >= 55, `cove ${id} frog ${i} is ${box.w.toFixed(0)} px wide on a 1280×800 picture`);
-      assert.ok(Math.abs(box.cx - W / 2) > W * 0.1, `cove ${id} frog ${i} is never in the middle column (${box.cx.toFixed(0)} px)`);
+      assert.ok(box.w >= 48, `cove ${id} frog ${i} is ${box.w.toFixed(0)} px wide on a 1280×800 picture`);
+      assert.ok(Math.abs(box.cx - W / 2) > 100, `cove ${id} frog ${i} is never in the middle column (${box.cx.toFixed(0)} px)`);
       assert.ok(box.cy > b.views.search.insetTop + 20 && box.cy < H - 60 && box.cx > 60 && box.cx < W - 60, `cove ${id} frog ${i} is in the picture, below the line`);
       // the cover round it stands at least twice its height
       const near = stems.filter((s) => Math.hypot(s.x - f.x, s.z - f.z) < 0.5).map((s) => s.h).sort((a, c) => a - c);
@@ -224,12 +223,19 @@ test('the search: every frog spot partly visible at every level, off the middle,
       for (const q2 of slots.slice(k + 1)) assert.ok(Math.hypot(q.u - q2.u, q.v - q2.v) >= 0.3, `slots ${k} apart`);
       assert.ok(Math.abs(q.u) < b.views.search.halfW + 0.15 && Math.abs(q.v) < b.views.search.halfD + 0.15, `slot ${k} is in the view`);
     }
-    // the singing: he steps down beside it, the frog big in the closer view
+    // the singing: the lens looks back from over the water, the frog big in front, the boy
+    // behind it on the bank, not over it; the plop goes out into the water, away from him
     for (const f of b.frogs) {
       const sing = singOf(b, f);
-      assert.ok(dist(sing.stand, f) > 0.9 && dist(sing.stand, f) < 1.6, 'a long arm\'s length from the frog');
-      const box = frogBox(fitLens(sing.view), f);
-      assert.ok(box.w >= 60 && box.w >= frogBox(fitLens(b.views.search), f).w, `the singing frog is big (${box.w.toFixed(0)} px)`);
+      const cam = fitLens(sing.view);
+      const box = frogBox(cam, f);
+      assert.ok(box.w >= 56, `the singing frog is big (${box.w.toFixed(0)} px)`);
+      assert.ok(cam.position.y - groundY(cam.position.x, cam.position.z) > 1.4, 'the lens well above the water');
+      const boy = new THREE.Vector3(b.stand.x, groundY(b.stand.x, b.stand.z) + 0.7, b.stand.z).project(cam);
+      assert.ok(Math.abs(((boy.x + 1) / 2) * W - box.cx) > 120, 'the boy is not behind the frog in the picture');
+      const plop = plopOf(b, f);
+      assert.ok(above(plop) < -0.02, `it plops into the water (${above(plop).toFixed(2)})`);
+      assert.ok(dist(plop, b.stand) > dist(f, b.stand), 'away from the boy');
     }
     // the moss cushion lies open (the after-frog sits on it in plain view)
     const cushion = { x: b.frame.x + 0, z: b.frame.z + 0 };

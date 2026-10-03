@@ -16,6 +16,7 @@ import { frislingAdventure } from './missions/frisling';
 import { reeAdventure } from './missions/ree';
 import { wildcameraAdventure } from './missions/wildcamera';
 import { eekhoornAdventure } from './missions/eekhoorn';
+import { venAdventure } from './missions/ven';
 
 export interface Adventure {
   /** the mission id */
@@ -53,6 +54,9 @@ const ADVENTURES: Readonly<Record<string, Adventure>> = {
   'ree-niet-aanraken': reeAdventure,
   wildcamera: wildcameraAdventure,
   eekhoorn: eekhoornAdventure,
+  // run 7 (the adventures lane): the ven after the four met first — the story order
+  // follows this registry's order (WorldSession.storyOrder)
+  ven: venAdventure,
 };
 
 /** The adventure a mission is played as, or null (the classic path). */

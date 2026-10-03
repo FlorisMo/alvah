@@ -166,10 +166,12 @@ export interface ViewSpec {
   seconds?: number;
 }
 
-/** The search lens over a cove: the same in every cove (decision 1), low over his
- *  shoulder, looking well down on the cove (its water line across the picture), and he
- *  stands at its top edge so the lens is close enough that a frog reads at ~60 px. */
-export const COVE_LENS = { halfW: 0.95, halfD: 0.55, tall: 0.4, pitchDeg: 60, insetTop: 112, insetBottom: 28, r: 0.22, back: 1.5, side: 0.5 } as const;
+/** The search lens over a cove: the same in every cove (decision 1), looking down on the
+ *  cove from the bank (its water line across the picture). He stands at the cove's side
+ *  (`side` m along the bank, `back` m up from its middle), in a lower corner of the
+ *  picture, never between the lens and a frog; the lens close enough that a frog reads at
+ *  ~55 px (≈ 0.23 m seen from ~3.8 m). */
+export const COVE_LENS = { halfW: 0.95, halfD: 0.55, tall: 0.4, pitchDeg: 56, insetTop: 112, insetBottom: 28, r: 0.22, side: 1.4, back: 0.7 } as const;
 
 /** The frog's spots in a cove's frame (u across, v toward the water from the cove's middle):
  *  two a cove, at the water line among the sedge, never in the middle of the picture. */
@@ -212,7 +214,7 @@ const BAY_TH: Readonly<Record<BayId, number>> = { A: 90, B: 68, C: 46 };
 /** Where each cove's calling frog floats (θ): beside its cove, never in another's. */
 const CHORUS_TH: Readonly<Record<BayId, number>> = { A: 101, B: 78, C: 36 };
 /** The side of the picture he stands in (+1: lower right). */
-const BAY_SIDE: Readonly<Record<BayId, 1 | -1>> = { A: 1, B: -1, C: 1 };
+const BAY_SIDE: Readonly<Record<BayId, 1 | -1>> = { A: 1, B: -1, C: -1 };
 
 function bay(id: BayId): Bay {
   const th = BAY_TH[id], side = BAY_SIDE[id];
@@ -221,7 +223,7 @@ function bay(id: BayId): Bay {
   const frame: Frame = { ...mid, heading: headingTo(mid, C) };
   const frogs = FROG_SPOTS.map((f, i) => ({ ...atLocal(frame, f.u, f.v), yaw: frame.heading + (i ? -0.75 : 0.75) }));
   const stand0 = atLocal(frame, side * COVE_LENS.side, -COVE_LENS.back);
-  const stand: Place = { ...stand0, r: 0.9, heading: headingTo(stand0, atLocal(frame, -side * 0.12, 0.2)) };
+  const stand: Place = { ...stand0, r: 0.7, heading: headingTo(stand0, atLocal(frame, -side * 0.3, 0.25)) };
   const off = pointAt(PATH, project(PATH, stand).s);
   // (on the water ~2.5 m along the bank from the cove, where it is a hand deep: floating)
   const cth = CHORUS_TH[id];
@@ -240,21 +242,24 @@ export const BAYS: Readonly<Record<BayId, Bay>> = { A: bay('A'), B: bay('B'), C:
 /** A spot in a cove's frame (world). */
 export function inCove(b: Bay, u: number, v: number): Spot { return atLocal(b.frame, u, v); }
 
-/** The song (after the find): he steps down the bank to a long arm's length from the frog
- *  (dry ground, beside it, never over it) and the lens comes closer and lower — the frog
- *  big on the moss with the water behind him, off the middle; the boy small in a lower
- *  corner. */
+/** The song (after the find): he stays where he searched; the lens turns round to look
+ *  back from over the water — the frog big on the moss in front, singing toward him, the
+ *  boy behind it on the bank (one soft dip-cut: a turn that big is never a swing). */
 export function singOf(b: Bay, frog: Spot): { stand: Place; view: ViewSpec } {
   const fl = toLocal(b.frame, frog);
-  const side = fl.u < 0 ? 1 : -1; // (he stands on the cove's middle side of it)
-  const s0 = atLocal(b.frame, fl.u + side * 0.55, fl.v - 0.95);
-  const stand: Place = { ...s0, r: 0.35, heading: headingTo(s0, frog) };
   const view: ViewSpec = {
-    at: atLocal(b.frame, fl.u + side * 0.15, fl.v + 0.04), heading: b.frame.heading, halfW: 0.6, halfD: 0.36, tall: 0.3, pitchDeg: 38,
-    insetTop: 120, insetBottom: 40, seconds: 1.6,
-    include: [{ x: stand.x, z: stand.z, h: RANGER_STAND_HEIGHT, r: 0.12 }],
+    at: atLocal(b.frame, fl.u, fl.v + 0.0), heading: b.frame.heading + Math.PI, halfW: 0.6, halfD: 0.4, tall: 0.25, pitchDeg: 26,
+    insetTop: 120, insetBottom: 60, seconds: 1.6,
+    include: [{ x: b.stand.x, z: b.stand.z, h: RANGER_STAND_HEIGHT, r: 0.1 }],
   };
-  return { stand, view };
+  return { stand: b.stand, view };
+}
+
+/** Where the frog plops into the ven: along the water's edge and out into it, away from
+ *  the boy (sideways in the song's picture, never toward the lens). */
+export function plopOf(b: Bay, frog: Spot): Spot {
+  const fl = toLocal(b.frame, frog);
+  return atLocal(b.frame, fl.u - b.side * 0.9, fl.v + 1.25);
 }
 
 /* ---------------------------------------------------------- the route ---- */
@@ -298,13 +303,13 @@ export function stationsOf(id: BayId): readonly [Station, Station] {
 }
 
 /** How far before her (m along the route) his walk to the adder ends. */
-export const ADDER_BEFORE = 5;
+export const ADDER_BEFORE = 4.2;
 /** The adder's spot may lie this far (m) either way along the path from her station. */
 export const ADDER_SHIFT = 1.0;
 /** Within this (m) of her he has come too close: she lifts her head and hisses (the reach);
  *  within `ADDER_WARN` she only notices him (a cue, nothing more). */
-export const ADDER_NEAR = 2.6;
-export const ADDER_WARN = 4;
+export const ADDER_NEAR = 2.4;
+export const ADDER_WARN = 3.5;
 
 /** The adder at a station: on the path, coiled, turned `turn` off its line; `s` along the
  *  cove's route. */
@@ -324,21 +329,28 @@ export function adderHeather(a: Spot): Spot {
   const p = polarOf(a);
   return polar(p.th + 1.5, p.r + 2.6);
 }
-/** The one calm side shot while her line is read: him and her on the warm sand, seen
- *  from the heather above the path, the water behind them. */
+/** The one calm shot while her words are read, and held while he keeps his distance (his
+ *  feet free): from the heather side behind him, looking across the path toward the water —
+ *  him in one corner, her coiled on the warm sand ahead in the other, both whole (never at
+ *  the lens: she lies beyond him). */
 export function adderView(a: Spot, me: Spot): ViewSpec {
-  const mid = { x: (a.x + me.x) / 2, z: (a.z + me.z) / 2 };
+  const d = Math.max(0.1, dist(a, me));
+  const t = { x: (a.x - me.x) / d, z: (a.z - me.z) / d };
+  const mid = { x: me.x + (a.x - me.x) * 0.55, z: me.z + (a.z - me.z) * 0.55 };
   const pm = polarOf(mid);
+  const out = { x: Math.cos(pm.th * RAD), z: Math.sin(pm.th * RAD) }; // (away from the water)
+  const look = { x: t.x * 0.62 - out.x * 0.78, z: t.z * 0.62 - out.z * 0.78 };
   return {
-    at: mid, heading: headingTo(polar(pm.th, pm.r + 6), C), halfW: Math.max(2.2, dist(a, me) / 2 + 0.7), halfD: 0.9,
-    tall: 0.9, pitchDeg: 24, insetTop: 120, insetBottom: 40, seconds: 1.6,
-    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT, r: 0.25 }],
+    at: mid, heading: Math.atan2(look.x, look.z), halfW: d * 0.4 + 0.45, halfD: 0.7,
+    tall: 0.5, pitchDeg: 30, insetTop: 120, insetBottom: 40, seconds: 1.5,
+    include: [{ x: me.x, z: me.z, h: RANGER_STAND_HEIGHT, r: 0.25 }, { x: a.x, z: a.z, h: 0.25 }],
   };
 }
 
-/** The soft moss across the path and down to the water at a station (an ellipse: `u`
- *  along the path, `v` down the bank toward the water). */
-export interface Carpet extends Frame { a: number; b: number; th: number }
+/** The soft moss across the path and down to the water at a station: a strip `2a` wide from
+ *  `top` (above the path, on the heather side) down to `low` (the water's edge); its frame
+ *  (`u` along the path, `v` down the bank toward the water) at its middle, `b` half long. */
+export interface Carpet extends Frame { a: number; b: number; th: number; top: Spot; low: Spot }
 /** Its half-width along the path (m); it runs from `CARPET_TOP` m above the path's line
  *  down to the water. */
 export const CARPET_A = 0.95;
@@ -351,12 +363,12 @@ export const CARPET_PAST = 1.8;
 export function carpetAt(st: Station): Carpet {
   const top = pathR(st.th) + CARPET_TOP, low = shoreR(st.th, 0.02);
   const mid = polar(st.th, (top + low) / 2);
-  return { ...mid, heading: headingTo(mid, C), a: CARPET_A, b: (top - low) / 2, th: st.th };
+  return { ...mid, heading: headingTo(mid, C), a: CARPET_A, b: (top - low) / 2, th: st.th, top: polar(st.th, top), low: polar(st.th, low) };
 }
-/** How deep in the carpet a spot is (< 1 inside its rim). */
+/** How deep in the carpet a spot is (< 1 inside its rim): its distance from the strip's
+ *  middle line, over its half-width, squared. */
 export function inCarpet(c: Carpet, p: Spot): number {
-  const l = toLocal(c, p);
-  return (l.u / c.a) ** 2 + (l.v / c.b) ** 2;
+  return (segDist(p, c.top, c.low) / c.a) ** 2;
 }
 /** A boot in it: well inside its rim (its feathered edge is the dry bank's). */
 export const CARPET_WET = 0.8;
@@ -432,8 +444,11 @@ export function wayOf(laid: Pick<VenLaid, 'bay' | 'order' | 'stations' | 'adderS
       steps.push({ kind: 'modder', s: st.s - CARPET_A - CARPET_SEEN, station: st.i, carpet, past, round: carpetRound(carpet) });
       lastEnd = st.s + CARPET_A + CARPET_PAST;
     } else if (enc === 'pad-ven') {
-      // (he walks on along his way: away from where he came from, past where she lay)
-      const s1 = Math.min(l.length, lastEnd + GO_ON);
+      // (he walks on along his way: away from where he came from, past where she lay; where
+      // his way turns down to the cove, a little further, so the walk is really GO_ON long)
+      const from = pointAt(l, lastEnd);
+      let s1 = Math.min(l.length, lastEnd + GO_ON);
+      while (s1 < l.length && dist(pointAt(l, s1), from) < GO_AWAY + 0.6) s1 = Math.min(l.length, s1 + 0.25);
       steps.push({ kind: 'pad', s: lastEnd, to: { ...pointAt(l, s1), r: 0.7, heading: headingAt(l, s1) }, from: pointAt(l, lastEnd - 6) });
     }
   }
@@ -471,7 +486,7 @@ export function listenStops(n: number, from: number, to: number, busy: readonly 
 
 /** The sedge tussocks close round every frog spot (u, v off the spot, size): every spot gets
  *  the same ring, so the cover never marks the real one. */
-const RING: readonly (readonly [number, number, number])[] = [[-0.28, -0.1, 0.8], [0.3, -0.07, 0.84], [0.04, -0.33, 0.88], [-0.22, 0.24, 0.72], [0.25, 0.22, 0.74]];
+const RING: readonly (readonly [number, number, number])[] = [[-0.28, -0.1, 0.8], [0.3, -0.07, 0.84], [0.04, -0.33, 0.88], [-0.22, 0.24, 0.72], [0.25, 0.22, 0.74], [-0.12, -0.24, 0.66], [0.17, -0.22, 0.68]];
 
 /**
  * A cove's sedge (the CoverField's clumps: 'grass' tussocks), the same way for the home

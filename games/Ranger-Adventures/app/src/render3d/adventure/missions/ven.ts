@@ -1,0 +1,490 @@
+/**
+ * ven.ts — "De kikker in het ven" as an adventure in the world (run 7, design
+ * `state/adventures/design.md` §3).
+ *
+ * The heikikkers call from the far north bank of the ven; little rings spread on the water
+ * where they sit. After one calm look across the water, the ranger follows the sound round
+ * the bird hide and along the shore path, by ear: when he runs they fall silent ("Sst. Nu
+ * zijn ze stil."), and only once he has stood still do they call again; at a few listening
+ * stops they fall silent by themselves ("Sta stil. Luister."). On the way this play's three
+ * calm moments wait for him, in this play's order, played with his FEET: an adder basking
+ * on the warm sand of the path (keep your distance until she slides off into the heather),
+ * a carpet of soft wet veenmos across the path and down to the water (walk round it above,
+ * or a boot sinks in), and right after one of them the dry path is free (walk on; standing
+ * there is the old rule). At the cove the frogs call once more; then he searches the water's
+ * edge for the brown frog, dead still between the sedge and the moss among look-alike moss
+ * clods (ZOEKEN). He keeps still and it sings for him; the other coves answer; it plops back
+ * into the ven.
+ *
+ * Every play draws its own bank under the briefing card (ven.places `venLayout`): the cove
+ * (never one of his last two plays'), the frog's spot in it, the order of the three moments
+ * (the dagnacht trial's own, the 2D floor's too) and so which station holds the adder and
+ * which the moss, the adder's exact spot and turn, the look-alikes' slots. How clear the
+ * chorus is, how often he stops to listen, how many look-alikes, how much of the frog shows,
+ * when the hint comes, how long the adder wants him to wait and how long the dry path lets
+ * him stand are the level's knobs, never this file's.
+ *
+ * Steps (content, the EF contract): 0 zoeken · 1 dagnacht, each logged once.
+ */
+
+import type { AdventureKit } from '../kit';
+import type { Adventure } from '../registry';
+import type { Mission } from '../../../content/types';
+import type { Play } from '../../../core/play';
+import type { Residents } from '../../world/Residents';
+import type { Spot } from '../types';
+import { store } from '../../../core/state';
+import { Sound } from '../../../core/sound';
+import { buildZoekenTrial } from '../../../engines/zoeken';
+import { searchBeat } from '../beats/search';
+import { choiceRun, type ChoiceRun } from '../beats/choice';
+import { listenerOf } from '../../world/Residents';
+import { isRunning } from '../actors-math';
+import { atLocal, dist, headingTo, toLocal } from '../places';
+import { ARRIVE_RADIUS, bearing, cue as cueAt } from '../../Wayfinding';
+import { WATER_LEVEL } from '../../Biomes';
+import { VenHome, venBody, type Frog } from './ven.home';
+import { ListenCore, StillFor, chorusCalls, listensOf, ringSize } from './ven.listen';
+import {
+  ADDER_NEAR, ADDER_WARN, APPROACH, BAYS, BAY_IDS, CARPET_A, CARPET_SEEN, CARPET_WET, CHORUS_KEYS, FROG_H, FROG_LEN, GO_AWAY, MISSION, VARIANT_KEY,
+  VEN_HOME, AFTER_FROG, adderAt, plopOf, adderHeather, adderView, between, carpetAt, frogOf, decoySlots, lastVenVariants, pointAt, project, route, singOf,
+  stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type VenLaid, type WayStep,
+} from './ven.places';
+
+/** The keys that would take a step (the song asks him to keep still). */
+const STEP_KEYS = /^(Arrow(Up|Down|Left|Right)|Key[WASD])$/;
+
+/** How far (m) the chorus of this play's cove carries while he follows it (the bank is
+ *  ~40 m round from the marker: he hears it from the start). */
+const CHORUS_REACH = 48;
+/** One "woog" (s): a call is held to as many of them as the level's chorus has. */
+const WOOG_S = 0.25;
+/** He keeps still this long (s) and the frog he found sings. */
+const SING_STILL_S = 1.5;
+
+/** Is something being said now (a call never sounds over a spoken line)? */
+function speaking(): boolean {
+  return typeof window !== 'undefined' && !!window.speechSynthesis?.speaking;
+}
+
+/** This play's bank, drawn and laid under the briefing card. */
+let drawn: { seed: number; laid: VenLaid } | null = null;
+
+/** Draw this play's bank (from its seed and the ven's last plays) and lay it in the world:
+ *  the frog hidden in its cove, the look-alikes, the adder on the path, the soft moss. */
+function lay(world: { residents: Residents }, mission: Mission, play: Play): VenLaid | null {
+  const home = world.residents.dressing(MISSION) as VenHome | null;
+  if (!home) return null;
+  const s = store.get();
+  // the three moments' order: the very trial the run (and the 2D floor) plays this play
+  const order = venOrder(mission.stappen[1].skin, store.knobs('dagnacht'), play, s.geschiedenis, s.settings.jargon);
+  const laid = venLayout(play, order, lastVenVariants(s.geschiedenis));
+  play.note(VARIANT_KEY, laid.variant);
+  // the look-alikes: the trial the 2D floor builds (the level's knobs, this play's fork),
+  // laid on the cove's own slots
+  const trial = buildZoekenTrial(mission.stappen[0].skin, store.knobs('zoeken'), play.fork('zoeken').rng);
+  const bay = BAYS[laid.bay];
+  const slots = decoySlots(bay, trial.decoys.map((d) => ({ id: d.id, k: d.k })), play.fork('ven-slots').rng);
+  const frog = frogOf(laid);
+  const sts = stationsOf(laid.bay);
+  const adder = laid.order.includes('adder-ven') ? adderAt(laid.bay, sts[laid.stations['adder-ven']], laid.adderShift, laid.adderTurn) : null;
+  const carpet = laid.order.includes('modder-ven') ? carpetAt(sts[laid.stations['modder-ven']]) : null;
+  home.lay({ laid, frog, decoys: slots, glimpse: trial.glimpse, adder, carpet });
+  // the frog sits hidden in its cove (put there at once: nobody sees it under the sedge)
+  world.residents.repose(MISSION, 'kikker', 'before', { x: frog.x, z: frog.z, yaw: frog.yaw, idle: 'stand', roam: 0 });
+  drawn = { seed: play.seed, laid };
+  return laid;
+}
+
+export const venAdventure: Adventure = {
+  id: MISSION,
+  home: VEN_HOME,
+  clearings: venClearings(),
+  dressing: (env) => new VenHome(env),
+  actor: venBody,
+  /** Under the briefing card: this play's bank is laid. */
+  prepare(world, mission, play) { lay(world, mission, play); },
+  unprepare(world) { (world.residents.dressing(MISSION) as VenHome | null)?.lay(null); drawn = null; },
+
+  async play(k: AdventureKit): Promise<void> {
+    const laid = drawn && drawn.seed === k.play.seed ? drawn.laid : lay(k.world, k.mission, k.play);
+    if (!laid) throw new Error('[ven] no home');
+    await story(k, laid);
+  },
+};
+
+/** The adventure, beat by beat. */
+async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
+  const c = k.copy;
+  const fam = k.borrow();
+  const home = fam.dressing as VenHome;
+  const A = fam.actors as Record<string, Frog>;
+  const frog = A.kikker;
+  const id = laid.bay;
+  const bay = BAYS[id];
+  const l = route(id);
+  const singer = A[CHORUS_KEYS[id]];
+  const settings = store.get().settings;
+  const zk = k.knobs('zoeken');
+  const calls = chorusCalls(zk.trailClarity);
+  const rings = ringSize(zk.trailClarity);
+  k.stats.chorus_calls = calls;
+  k.stats.listen_stops = listensOf(zk.trailLegs) + 1;
+  k.stats.look_alikes = home.laid?.decoys.length ?? 0;
+  // the frogs are this script's now: their free-roam calls rest
+  for (const key of Object.keys(A)) fam.voice(key, false);
+  // the three moments in this play's order (the same DagnachtRun the 2D floor plays)
+  const rust = choiceRun(k, 1);
+  const trialOrder = rust.trial.encounters.map((e) => e.id);
+  if (trialOrder.join() !== laid.order.join()) console.warn(`[ven] the bank was laid for ${laid.order.join()} but the run plays ${trialOrder.join()}`);
+
+  /** The cove's chorus calls: `n` soft woogs from its frog in the water, rings round it. */
+  const chorus = (n = calls, from: Frog = singer, reach = CHORUS_REACH): void => {
+    // (a frog gone under the water still calls: the rings show where)
+    if (from.group.visible) from.sing(n);
+    home.ring(from.x, from.z, rings);
+    if (settings.geluid && !speaking()) Sound.callAt('heikikker', from.x, from.z, listenerOf(k.world.camera), reach, n * WOOG_S + 0.08);
+  };
+  /** A call from a spot on land (the frogs just beyond the adder: no rings there). */
+  const callFrom = (p: Spot, n = 1): void => {
+    if (settings.geluid && !speaking()) Sound.callAt('heikikker', p.x, p.z, listenerOf(k.world.camera), CHORUS_REACH, n * WOOG_S + 0.08);
+  };
+
+  // the frog sits hidden in its cove (on a replay it may still be under the water)
+  const spot = frogOf(laid);
+  frog.place(spot.x, spot.z, spot.yaw);
+  frog.group.visible = true;
+  frog.idle();
+  // the chorus frogs float in their coves
+  for (const b of BAY_IDS) {
+    const f = A[CHORUS_KEYS[b]];
+    if (!f.group.visible || f.lift < -0.05) { f.group.visible = true; void f.dive(true, 0.6); }
+  }
+
+  /* 1 · one calm look across the water at this play's cove: rings where they call */
+  const lookAt = { x: singer.x, z: singer.z, y: WATER_LEVEL };
+  const t0 = k.now;
+  let looked = 0;
+  const offLook = k.onTick(() => {
+    const t = k.now - t0;
+    if ((looked === 0 && t > 1.2) || (looked === 1 && t > 3.6)) { looked += 1; chorus(Math.max(2, calls)); }
+  });
+  try {
+    await k.look(lookAt, c.kijk, 2.6, { face: headingTo(k.ranger(), APPROACH[0]) });
+  } finally { offLook(); }
+
+  /* 2-5 · he follows the chorus along the bank; the moments on the way */
+  const listen = new ListenCore(zk.trailClarity, k.play.fork('ven-koor').rng);
+  let curS = Math.min(project(l, k.ranger()).s, 6);
+  /** The chorus while he walks: running hushes it, standing still brings it back. */
+  const tickChorus = (dt: number): void => {
+    const m = k.ranger();
+    const e = listen.tick(dt, { running: isRunning(m), speed: m.speed });
+    if (e === 'hush') { k.say(c.sst); k.stats.hushes = listen.hushes; }
+    else if (e === 'back') { k.say(c.weer); chorus(); }
+    else if (e === 'call') chorus();
+  };
+  /** A walk along his way to `s` (m along the route), the chorus calling. */
+  const walkTo = async (name: string, s: number, opts: { r?: number; tick?: (dt: number) => void; via?: Spot[]; doel?: string } = {}): Promise<void> => {
+    const to = pointAt(l, s);
+    await k.walk({
+      name, to, r: opts.r ?? 1.1, line: listen.hushed ? c.sst : c.volg, doel: opts.doel ?? c.chipKikkers, cue: c.luister, glyph: 'ear',
+      via: opts.via ?? between(l, curS, s),
+      tick: (dt) => { tickChorus(dt); opts.tick?.(dt); },
+    });
+    curS = Math.max(curS, s);
+  };
+  /** A listening stop: the frogs fall silent; he stands still; they call (and rings). */
+  const listenStop = async (line = c.staStil): Promise<void> => {
+    k.beat = 'listen';
+    listen.pause();
+    k.say(line);
+    const unhint = k.hint(() => null); // (a perfect player keeps still)
+    const still = new StillFor();
+    try {
+      await k.wait(0.6);
+      await k.until(() => still.tick(1 / 60, k.ranger().speed) && !speaking());
+    } finally { unhint(); }
+    chorus();
+    k.stats.listened = (k.stats.listened ?? 0) + 1;
+    await k.wait(Math.max(0.9, calls * WOOG_S + 0.4));
+    listen.resume(2.4);
+  };
+
+  const way = wayOf(laid, listensOf(zk.trailLegs));
+  for (const step of way) {
+    k.check();
+    if (step.kind === 'listen') {
+      await walkTo('kikkers', step.s);
+      await listenStop();
+      k.say(c.volg);
+    } else if (step.kind === 'adder') {
+      await adderMoment(k, rust, home, laid, step, { walkTo, listen, callFrom, curS: () => curS });
+    } else if (step.kind === 'modder') {
+      await mossMoment(k, rust, home, laid, step, { walkTo, listen, tickChorus, setS: (s) => { curS = Math.max(curS, s); } });
+    } else if (step.kind === 'pad') {
+      listen.pause();
+      const enc = rust.current!;
+      await rust.go('pad-ven', {
+        line: `${enc.vraag} ${c.loopDoor}`, family: () => step.from, to: step.to, doel: c.chipPad, cue: c.luister, glyph: 'footprints',
+        hush: c.sst, away: GO_AWAY,
+        // (standing there: the frogs ahead stay silent, then the words, the moment again)
+        wrong: async () => { await k.wait(0.6); },
+      });
+      curS = Math.max(curS, project(l, k.ranger()).s);
+      listen.resume(1.6);
+      k.free();
+    } else if (step.kind === 'bay') {
+      if (!rust.next()) rust.done();
+      // down the bank to the cove
+      await walkTo('cove', l.length, { r: 0.7, doel: c.chipWater });
+    }
+  }
+  if (!rust.next()) rust.done();
+
+  /* 6 · at the cove: he stands still and listens; the frogs call from its water */
+  k.world.faceRanger(bay.stand.heading!);
+  await listenStop();
+  // (the calling frogs go under: the picture of the cove is the hidden frog's alone)
+  await Promise.all(BAY_IDS.map((b) => A[CHORUS_KEYS[b]].dive(false, 0.8)));
+
+  /* 7 · find the frog at the water's edge (zoeken) */
+  let hinted = false;
+  const offHint = k.onTick(() => {
+    // the late hint (searchBeat's own line): he calls — his throat swells — and rings by him
+    if (!hinted && k.beat === 'search' && k.ui.current === c.hint) {
+      hinted = true;
+      let next = k.now;
+      const off = k.onTick(() => {
+        if (k.beat !== 'search') { off(); return; }
+        if (k.now < next) return;
+        next = k.now + 3.2;
+        frog.sing(1);
+        const out = toLocal(bay.frame, frog);
+        const p = atLocal(bay.frame, out.u, out.v + 0.42);
+        home.ring(p.x, p.z, 0.55);
+      });
+    }
+  });
+  try {
+    await searchBeat(k, 0, {
+      view: bay.views.search, stand: bay.stand, cover: home.cover, target: frog, call: 'heikikker', lyingH: FROG_H, len: FROG_LEN,
+      glimpse: home.laid?.glimpse, fit: (eye, back, share) => home.fitGlimpse(eye, back, share),
+      decoys: home.decoys.map((d) => ({ id: d.id, object: d.object, x: d.x, z: d.z, poke: d.poke })),
+      lines: { zoek: c.zoek, mis: c.mis, hint: c.hint, gevonden: k.steps[0].skin.copy?.goed ?? c.zoek },
+    });
+  } finally { offHint(); }
+
+  /* 8 · the raaf: he sits still, so the birds don't see him */
+  await k.fact(0);
+
+  /* 9 · he keeps still, and the frog sings for him; the other coves answer */
+  k.beat = 'sing';
+  const at = { x: frog.x, z: frog.z };
+  const sing = singOf(bay, at);
+  // (the lens looks back from over the water: one soft dip-cut, never a swing round him;
+  // the sedge on the water's side of him leans aside, so he sits in plain view)
+  home.cover.partAt(at.x, at.z, 0.7, 0.75, 30);
+  await k.frame(sing.view, { dip: true });
+  void frog.lookAt(() => ({ ...k.ranger() }), 1.2);
+  k.say(c.zingen);
+  let movedAt = k.now;
+  let told = -9;
+  const onKey = (e: KeyboardEvent): void => {
+    if (!STEP_KEYS.test(e.code) || k.world.menuShown()) return;
+    movedAt = k.now;
+    if (k.now - told > 1.6) { told = k.now; k.say(c.wacht); k.stats.sing_moves = (k.stats.sing_moves ?? 0) + 1; }
+  };
+  window.addEventListener('keydown', onKey);
+  const unhint = k.hint(() => null);
+  try {
+    await k.wait(0.8);
+    await k.until(() => k.now - movedAt >= SING_STILL_S && !speaking());
+    // his throat swells, three soft calls
+    for (let i = 0; i < 3; i++) {
+      frog.sing(1);
+      if (settings.geluid) Sound.callAt('heikikker', frog.x, frog.z, listenerOf(k.world.camera), 25, WOOG_S + 0.05);
+      await k.wait(0.62);
+    }
+    await k.wait(0.5);
+    // the other coves answer, one after the other (rings over there)
+    k.say(c.terug);
+    for (const b of BAY_IDS.filter((x) => x !== id)) {
+      await k.wait(0.7);
+      chorus(2, A[CHORUS_KEYS[b]], 60);
+    }
+    await k.wait(1.2);
+  } finally {
+    window.removeEventListener('keydown', onKey);
+    unhint();
+  }
+
+  /* 10 · the frog plops back into the ven; one frog climbs out onto bay B's moss */
+  const into = plopOf(bay, frog);
+  const keeper = A[CHORUS_KEYS.B];
+  await k.reunion(async () => {
+    await k.wait(0.6);
+    await frog.leap(into, 0.65);
+    if (settings.geluid) Sound.plop();
+    // (the other coves' frogs go under; one of the ven's frogs comes up and climbs onto
+    // bay B's moss cushion, where it lives after)
+    for (const b of BAY_IDS) if (b !== 'B' && b !== id) void A[CHORUS_KEYS[b]].dive(false, 1.2);
+    if (!keeper.group.visible || keeper.lift < -0.05) { keeper.group.visible = true; await keeper.dive(true, 0.8); }
+    void keeper.go(AFTER_FROG.x, AFTER_FROG.z, { speed: 0.35, face: AFTER_FROG.yaw });
+    await k.wait(3.4);
+  });
+  /* 11 · the raaf: what a ven is */
+  await k.fact(1);
+}
+
+/** What a moment on the way needs of the follow. */
+interface Follow {
+  walkTo(name: string, s: number, opts?: { r?: number; tick?: (dt: number) => void; via?: Spot[]; doel?: string }): Promise<void>;
+  listen: ListenCore;
+}
+
+/**
+ * The adder on the path (rustkracht `adder-ven`, keep your distance, his FEET): his walk
+ * ends a few metres before her; one calm side shot while her words are read; then the
+ * follow camera back and his feet free. He may wait, or walk round on the heather side, so
+ * long as he keeps his distance: within `ADDER_WARN` she lifts her head (a cue), within
+ * `ADDER_NEAR` she rears and hisses softly, he takes two calm steps back, and the same
+ * moment comes back. Held: she slides off the path into the heather.
+ */
+async function adderMoment(k: AdventureKit, rust: ChoiceRun, home: VenHome, laid: VenLaid, step: Extract<WayStep, { kind: 'adder' }>,
+  f: Follow & { callFrom(p: Spot, n?: number): void; curS(): number }): Promise<void> {
+  const c = k.copy;
+  const settings = store.get().settings;
+  const l = route(laid.bay);
+  await f.walkTo('adder', step.s, { r: 0.9 });
+  f.listen.pause();
+  k.beat = 'adder';
+  k.lockFollow();
+  k.world.stopRanger();
+  const a = home.adderSpot() ?? step.adder;
+  const enc = rust.current!;
+  // one calm shot from the heather behind him: her coiled on the warm sand of the path ahead
+  k.world.faceRanger(headingTo(k.ranger(), a));
+  await k.frame(adderView(a, k.ranger()), { face: headingTo(k.ranger(), a) });
+  home.adderLift(0.35);
+  k.say(enc.vraag);
+  await k.wait(Math.max(1.8, enc.vraag.split(/\s+/).length * 0.42));
+  home.adderLift(0);
+  // the shot stays (both of them in it) and his feet are free: he may wait, or walk round
+  const feetFree = (): void => { k.world.setMissionMode({ missionId: k.mission.id, input: 'free', camera: 'held' }); };
+  feetFree();
+  const me = (): Spot => { const m = k.ranger(); return { x: m.x, z: m.z }; };
+  // what tempts him on: the frogs call from just beyond her; she lifts her head and looks
+  const beyond = pointAt(l, step.adder.s + 3.5);
+  let pull = 0;
+  await rust.still('adder-ven', {
+    line: c.afstand,
+    room: { at: () => home.adderSpot() ?? a, r: ADDER_NEAR, warn: ADDER_WARN, onWarn: () => home.adderLift(0.55) },
+    tempt: () => {
+      if (pull++ % 2 === 0) f.callFrom(beyond, 2);
+      else { home.adderLift(0.5); window.setTimeout(() => { if (!k.signal.aborted) home.adderLift(0); }, 1100); }
+    },
+    // too near: she rears and hisses softly (never strikes); he takes two calm steps back
+    wrong: async () => {
+      home.adderLift(1);
+      if (settings.geluid) Sound.callAt('adder', a.x, a.z, listenerOf(k.world.camera), 20);
+      const m = me();
+      const away = Math.max(dist(m, a), 0.1);
+      const back = { x: a.x + ((m.x - a.x) / away) * (ADDER_NEAR + 1.6), z: a.z + ((m.z - a.z) / away) * (ADDER_NEAR + 1.6) };
+      await k.wait(0.5);
+      await k.walkRanger(back.x, back.z, 0.1);
+      k.world.faceRanger(headingTo(k.ranger(), a));
+      await k.wait(0.4);
+      home.adderLift(0.3);
+      feetFree();
+    },
+    // held: she slides off the path into the heather
+    right: async () => {
+      home.adderLift(0);
+      await k.guard(home.adderSlide(adderHeather(a)));
+    },
+  });
+  // the walk camera back behind him (he walks on along the path), his feet free
+  k.world.faceRanger(headingTo(k.ranger(), pointAt(l, step.adder.s + 3)));
+  await k.behind();
+  f.listen.resume(2);
+  k.free();
+  k.say(c.volg);
+}
+
+/**
+ * The soft moss across the path (rustkracht `modder-ven`, walk round it, his FEET): his walk
+ * goes on past it with the follow camera; coming near it is named (its own words); it
+ * quivers when he is close (it is soft). A boot in it: a squelch, brown water wells up
+ * round his boots, the moss quakes, the words, he steps back out and walks on himself (from
+ * the second boot the chip shows the way round). Past it dry on the heather side: the good
+ * words. Answered once (the run marks a boot once, however often).
+ */
+async function mossMoment(k: AdventureKit, rust: ChoiceRun, home: VenHome, laid: VenLaid, step: Extract<WayStep, { kind: 'modder' }>,
+  f: Follow & { tickChorus(dt: number): void; setS(s: number): void }): Promise<void> {
+  const c = k.copy;
+  const settings = store.get().settings;
+  const l = route(laid.bay);
+  const enc = rust.current!;
+  const st = stationsOf(laid.bay)[step.station];
+  const nearRim = st.s - CARPET_A, farRim = st.s + CARPET_A;
+  // (up to where it can be seen: the follow, the chorus calling)
+  await f.walkTo('kikkers', step.s);
+  k.beat = 'moss';
+  let warned = false, past = false, wading = false, boots = 0, nextRound = 0, lineBack = -1;
+  const out = pointAt(l, nearRim - 1.3);
+  const plash = async (): Promise<void> => {
+    boots += 1;
+    k.stats.moss_boots = boots;
+    if (boots === 1) rust.answer('modder-ven', false);
+    if (settings.geluid) { Sound.squelch(); Sound.tryAgain(); }
+    const m = k.ranger();
+    home.sinkAt(m.x, m.z);
+    k.lockFollow();
+    k.world.stopRanger();
+    k.say(enc.gevolg ?? c.sst);
+    await k.wait(1.5);
+    await k.walkRanger(out.x, out.z, 0.1);
+    k.world.faceRanger(headingTo(out, pointAt(l, st.s)));
+    await k.wait(0.4);
+    k.free();
+    k.say(boots >= 2 ? c.eromheen : c.volg);
+    wading = false;
+  };
+  await k.walk({
+    name: 'moss', to: step.past, r: 0.9, line: c.volg, doel: c.chipKikkers, cue: c.luister, glyph: 'ear',
+    via: [...between(l, project(l, k.ranger()).s, nearRim - 1.6), ...step.round],
+    tick: (dt) => {
+      if (wading) return;
+      const m = k.ranger();
+      const s = project(l, m).s;
+      if (!past) f.tickChorus(dt);
+      if (past) { if (lineBack > 0 && k.now > lineBack) { lineBack = -1; k.say(c.volg); } return; }
+      // coming up to it, it is named (once): the choice is his feet's
+      if (!warned && s > nearRim - CARPET_SEEN) { warned = true; f.listen.pause(); k.say(enc.vraag); }
+      if (home.inMoss(m.x, m.z, CARPET_WET)) { wading = true; void plash().catch(() => {}); return; }
+      if (boots >= 2) {
+        // (after the second boot the chip names the way round and points along it)
+        while (nextRound < step.round.length - 1 && dist(step.round[nextRound], m) < 1.2) nextRound += 1;
+        const v = step.round[nextRound], end = step.round[step.round.length - 1];
+        const at = cueAt(bearing(m.x, m.z, m.heading, v.x, v.z), Math.max(ARRIVE_RADIUS, dist(m, end)));
+        k.ui.setChip({ doel: c.chipRond, cue: `${at.richting} · ${at.afstand}`, angle: at.angle, glyph: 'boot' });
+      }
+      // past its far rim, dry: round it — the good words, then the walk's own
+      if (s > farRim + 0.4 && !home.inMoss(m.x, m.z, 1.05)) {
+        past = true;
+        rust.answer('modder-ven', true);
+        if (settings.geluid) Sound.correct();
+        k.say(enc.uitleg ?? c.volg, { good: true });
+        lineBack = k.now + 2.8;
+        f.listen.resume(3);
+      }
+    },
+  });
+  if (!past && rust.current?.id === 'modder-ven') rust.answer('modder-ven', true); // (he came by some other way round: dry)
+  f.listen.resume(2);
+  f.setS(project(l, k.ranger()).s);
+}
+
+/** (The ids every cove's stations and frogs carry: for the dev read.) */
+export const VEN_BAYS: readonly BayId[] = BAY_IDS;
