@@ -679,6 +679,8 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     hint.off();
   }
   k.stats.hide_round = Math.round((walked * 180) / Math.PI);
+  // (found: a held view now, no walk — a new find's reveal waits for the walk to its glade)
+  k.beat = 'gevonden';
   // found: he stops (a moment with the keys resting) and the lens eases round to hold the
   // two of them, on his side of the tree; the squirrel peeks its head round the bark at
   // him and comes out onto the bark's near face, flicks its tail and chatters — and THEN

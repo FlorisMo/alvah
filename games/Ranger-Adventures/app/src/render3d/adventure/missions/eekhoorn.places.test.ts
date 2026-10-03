@@ -933,6 +933,9 @@ test('the young one in the found view: it hides behind the trunk, peeks round th
       assert.ok(Math.abs(bot.y - top.y) >= 40, `${rid}: ${Math.abs(bot.y - top.y).toFixed(0)} px tall`);
       const ours = onBark({ ang: face, h: HIDE.h }, 0.08);
       assert.ok(Math.hypot(ours.x - pk.x, ours.z - pk.z, (ours.y - pk.y) * 1) > 0.25, `${rid}: beside ours, not on it`);
+      // side-on to the lens (round the trunk's edge), never its back flat to it
+      const camAng = headingTo(c, cam.position);
+      assert.ok(Math.abs(wrapA(y.peek.ang - camAng)) >= 0.9, `${rid}: it peeks round the trunk's edge (${deg(Math.abs(wrapA(y.peek.ang - camAng)))}° from the lens)`);
       const upTop = px(cam, onBark(y.up, 0.06), y.up.h);
       assert.ok(upTop.y < 0 || upTop.behind || !lineClear(cam.position, onBark(y.up, 0.06), [bark]), `${rid}: it runs up out of the picture`);
     }

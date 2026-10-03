@@ -741,19 +741,20 @@ export function denVisitor(lens: Spot): { start: { ang: number; h: number }; mee
 
 /**
  * The rare young squirrel in the found view (design §6.7): it hides on the far side of the
- * trunk from the found view's lens (`start`), peeks round the bark beside ours (`peek`: a
- * little above it, on the lens's side), and once he has seen it runs up the trunk out of
- * the picture (`up`). `face`: where ours clings (foundFace); `lens`: the found view's lens.
+ * trunk from the found view's lens (`start`), comes round and peeks round the bark at the
+ * trunk's other edge from ours (`peek`: `edge` rad round from the lens's side, about as
+ * high as ours: the two of them flank the trunk) — seen side-on there, its head round the
+ * bark, never its back and tail
+ * flat to the lens — and once he has seen it runs up the trunk out of the picture (`up`).
+ * `face`: where ours clings (foundFace); `lens`: the found view's lens.
  */
-export const YOUNG = { scale: 0.7, peekUp: -0.3, peekTurn: 0.55, upH: 6 } as const;
+export const YOUNG = { scale: 0.7, peekUp: 0.05, edge: 1.15, upH: 6 } as const;
 export function youngPeek(tree: HomeTree, face: number, lens: Spot): { start: { ang: number; h: number }; peek: { ang: number; h: number }; up: { ang: number; h: number } } {
   const camAng = headingTo(tree, lens);
-  const toCam = Math.sign(wrapA(camAng - face)) || 1;
-  // (toward the lens's middle of the bark: never past it, where ours would hide it)
-  const turn = Math.min(YOUNG.peekTurn, Math.abs(wrapA(camAng - face)));
+  const ours = Math.sign(wrapA(face - camAng)) || 1;
   return {
     start: { ang: camAng + Math.PI, h: HIDE.h + YOUNG.peekUp },
-    peek: { ang: face + toCam * turn, h: HIDE.h + YOUNG.peekUp },
+    peek: { ang: camAng - ours * YOUNG.edge, h: HIDE.h + YOUNG.peekUp },
     up: { ang: camAng + Math.PI, h: YOUNG.upH },
   };
 }
