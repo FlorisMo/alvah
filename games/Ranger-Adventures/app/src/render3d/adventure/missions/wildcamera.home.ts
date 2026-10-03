@@ -26,7 +26,7 @@ import { SIZE } from '../../AnimalScale';
 import { crouchPose } from './wildcamera.pose';
 import {
   WILDCAMERA_PLACES as P, CROSS, TREE, PINE, CAMERA, LOG, GLADE_R, FAN_HALF, SETT_FACE, JUNIPER, THICKET_BUSHES, TAG_AT, NIGHTJAR_AT, NIGHTJAR_STUMP,
-  JAY_AT, SNARE_IDS, SNARE_SPOTS, PINE_PICK, snareTufts, trailA, trailB, trailC, type SnareId, type SnareSpot,
+  JAY_AT, SNARE_IDS, SNARE_SPOTS, PINE_PICK, snareTufts, trailA, trailB, trailC, foxPrintLine, type SnareId, type SnareSpot,
 } from './wildcamera.places';
 import type { Spot } from '../types';
 import type { Actor } from '../actors';
@@ -306,7 +306,7 @@ function foxPrintTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = c.height = 64;
   const g = c.getContext('2d')!;
-  const ink = 'rgba(58,38,20,0.95)';
+  const ink = 'rgba(40,24,12,1)';
   const rim = 'rgba(222,200,158,0.95)';
   const blob = (cx: number, cy: number, rx: number, ry: number, rot = 0): void => {
     g.beginPath();
@@ -342,7 +342,7 @@ function foxPrints(groundY: (x: number, z: number) => number, line: readonly Spo
     while (along < L) {
       const side = 0.13 + (rnd() - 0.5) * 0.04;
       const px = a.x + dx * along - dz * side, pz = a.z + dz * along + dx * side;
-      const sz = 0.14 * (0.92 + rnd() * 0.16);
+      const sz = 0.23 * (0.92 + rnd() * 0.16);
       const yaw = Math.atan2(dx, dz) + (rnd() - 0.5) * 0.12;
       const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = -fz, rz = fx;
       const base = pos.length / 3;
@@ -352,7 +352,7 @@ function foxPrints(groundY: (x: number, z: number) => number, line: readonly Spo
         uv.push(u + 0.5, v + 0.5);
       }
       idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
-      along += 0.34 * (0.92 + rnd() * 0.16);
+      along += 0.4 * (0.92 + rnd() * 0.16);
     }
     along -= L;
   }
@@ -456,6 +456,8 @@ export class WildcameraHome implements HomeDressing {
   private readonly ghostHalo: THREE.SpriteMaterial;
   private ghostT = 0;
   private readonly spawned: { dispose(): void; update?(dt: number): void }[] = [];
+  /** run 7 (wc-album, dev read): the last close-up's nose on its animal */
+  closeUpRead: Record<string, number> | null = null;
   /** run 7 (wc-album): the fox's fresh prints up the wildwissel (`showFoxPrints`) */
   private readonly foxPrints: THREE.Mesh;
   private readonly groundY: (x: number, z: number) => number;
@@ -512,7 +514,7 @@ export class WildcameraHome implements HomeDressing {
     this.group.add(trailRibbon(g, lines, 0.5, 11));
     this.group.add(trailPrints(g, lines, 29));
     // (run 7, wc-album: a fox's fresh prints up the wildwissel, on plays the fox comes)
-    this.foxPrints = foxPrints(g, trailA().slice(1, 6), 61);
+    this.foxPrints = foxPrints(g, foxPrintLine(), 61);
     this.group.add(this.foxPrints);
     // the crossing: a patch of trodden ground where the two trails meet
     this.group.add(groundDecal(g, TREE.x, TREE.z + 0.9, 1.25, 0.95, 0.4, '#9c8260', { layer: 1, wobble: 0.2, seed: 7, feather: true }));
@@ -1090,9 +1092,11 @@ export class WildcameraHome implements HomeDressing {
    * Run 7 (wc-album): for the one render of the night's funny close-up, `a` (an animal of
    * the crossing) stands facing the camera on its pine with the tip of its nose `d` m from
    * the lens, its body tipped (at most `maxTilt` rad, nose up or down) until its nose is as
-   * high as the lens: it sniffs right at it. The camera looks along `heading`. The tip is
-   * measured on the model as it stands (its own vertices). Returns where the nose is (the
-   * photo looks straight at it) and how to put the animal back.
+   * high as the lens: it sniffs right at it. The camera looks along `heading`. The tip of
+   * the nose is found on the model as it stands level (on its middle line, the point
+   * furthest toward the lens, its feet left out: never an ear, never a paw that swings
+   * forward when it tips) and followed as it tips. Returns where the nose is (the photo looks straight at it) and how to put the
+   * animal back.
    */
   closeUp(a: Actor, heading: number, d: number, maxTilt: number): { nose: Spot; y: number; undo: () => void } {
     const dir = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
@@ -1101,27 +1105,39 @@ export class WildcameraHome implements HomeDressing {
     const was = { vis: g.visible, x: a.x, z: a.z, yaw: a.yaw, order: g.rotation.order, rx: g.rotation.x };
     const yaw = Math.atan2(-dir.x, -dir.z); // (facing the lens)
     g.rotation.order = 'YXZ';
+    g.rotation.x = 0;
     g.visible = true;
+    a.place(lens.x + dir.x * 3, lens.z + dir.z * 3, yaw);
+    g.updateMatrixWorld(true);
     const meshes: THREE.Mesh[] = [];
-    (a.body ?? g).traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && m.visible) meshes.push(m); });
+    (a.body ?? g).traverseVisible((o) => { const m = o as THREE.Mesh; if (m.isMesh) meshes.push(m); }); // (what is drawn: never its lying body, hidden)
     const v = new THREE.Vector3();
-    /** the tip of its nose: the point of its body furthest toward the lens */
+    // (level: how high and how wide it stands, then its nose: on its middle line (never an
+    // ear standing out to a side), the furthest toward the lens, its feet left out)
+    const sideOf = (p: THREE.Vector3): number => (p.x - g.position.x) * dir.z - (p.z - g.position.z) * dir.x;
+    let lo = Infinity, hi = -Infinity, wide = 0;
+    for (const m of meshes) {
+      const n = (m.geometry.attributes.position as THREE.BufferAttribute).count;
+      for (let i = 0; i < n; i++) {
+        m.getVertexPosition(i, v).applyMatrix4(m.matrixWorld);
+        lo = Math.min(lo, v.y); hi = Math.max(hi, v.y); wide = Math.max(wide, Math.abs(sideOf(v)));
+      }
+    }
+    let noseMesh: THREE.Mesh | null = null, noseI = 0, best = -Infinity;
+    const mid = lo + (hi - lo) * 0.2, line = Math.max(0.025, wide * 0.15);
+    for (const m of meshes) {
+      const n = (m.geometry.attributes.position as THREE.BufferAttribute).count;
+      for (let i = 0; i < n; i++) {
+        m.getVertexPosition(i, v).applyMatrix4(m.matrixWorld);
+        if (v.y < mid || Math.abs(sideOf(v)) > line) continue;
+        const along = -((v.x - g.position.x) * dir.x + (v.z - g.position.z) * dir.z);
+        if (along > best) { best = along; noseMesh = m; noseI = i; }
+      }
+    }
     const tip = (): THREE.Vector3 => {
       g.updateMatrixWorld(true);
-      let best = -Infinity;
-      const out = new THREE.Vector3();
-      for (const m of meshes) {
-        const n = (m.geometry.attributes.position as THREE.BufferAttribute).count;
-        for (let i = 0; i < n; i++) {
-          m.getVertexPosition(i, v);
-          v.applyMatrix4(m.matrixWorld);
-          const along = -((v.x - g.position.x) * dir.x + (v.z - g.position.z) * dir.z);
-          if (along > best) { best = along; out.copy(v); }
-        }
-      }
-      return out;
+      return noseMesh ? noseMesh.getVertexPosition(noseI, new THREE.Vector3()).applyMatrix4(noseMesh.matrixWorld) : g.position.clone();
     };
-    a.place(lens.x + dir.x * 3, lens.z + dir.z * 3, yaw);
     let tilt = 0;
     for (let i = 0; i < 4; i++) {
       g.rotation.x = -tilt;
@@ -1134,9 +1150,16 @@ export class WildcameraHome implements HomeDressing {
     const ahead = -((n0.x - g.position.x) * dir.x + (n0.z - g.position.z) * dir.z);
     a.place(lens.x + dir.x * (d + ahead), lens.z + dir.z * (d + ahead), yaw);
     const n = tip();
-    const nose = { x: n.x, z: n.z };
+    // (dev read: where the nose is on the animal — ahead of its middle, beside it, how high —
+    // and how far it tipped)
+    const fx = -dir.x, fz = -dir.z;
+    this.closeUpRead = {
+      ahead: (n.x - g.position.x) * fx + (n.z - g.position.z) * fz,
+      side: (n.x - g.position.x) * -fz + (n.z - g.position.z) * fx,
+      up: n.y - g.position.y, tilt, lensUp: lens.y - g.position.y, meshes: meshes.length,
+    };
     return {
-      nose, y: n.y - this.groundY(n.x, n.z),
+      nose: { x: n.x, z: n.z }, y: n.y - this.groundY(n.x, n.z),
       undo: () => { g.rotation.x = was.rx; g.rotation.order = was.order; a.place(was.x, was.z, was.yaw); g.visible = was.vis; },
     };
   }

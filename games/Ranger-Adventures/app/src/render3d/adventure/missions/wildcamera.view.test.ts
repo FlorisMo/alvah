@@ -21,7 +21,7 @@ import {
   CROSS, CROSS_VIEW, CALLER_SLOTS, ENTRY, EXIT, JUNIPER, LOG, NIGHTJAR_STUMP, PINE, SETT_MOUND, SKY, STOPS, SLOT_CLASH, SLOT_IDS, TAG_AT, THICKET_BUSHES, TREE,
   WILDCAMERA_PLACES as P, arrivalPath, type SlotId, type StopId,
   CAMERA, SNARE_IDS, SNARE_SPOTS, SEARCH_VIEW, TEST_SPOT, TEST_VIEW, walkBackView, PINE_PICK,
-  CUB_LAG, FAMILY_SHOT, WHITE_ROE_OUT, familyPath, aimSpot, FAN_HALF,
+  CUB_LAG, FAMILY_SHOT, WHITE_ROE_OUT, familyPath, aimSpot, FAN_HALF, TRAIL_VIEW, foxPrintLine,
 } from './wildcamera.places.ts';
 import { trunkOutline, type Trunk } from '../squirrel-math.ts';
 import { legalLayouts } from './wildcamera.variety.ts';
@@ -439,4 +439,30 @@ test('the white roe: in from out of the picture like the glade\'s roe, and off a
       assert.ok(s2.x < -10 || s2.x > W + 10 || !s2.front, `she walks ${what} at (${s2.x.toFixed(0)}, ${s2.y.toFixed(0)}): in the picture`);
     }
   }
+});
+
+test('the fox\'s fresh prints: from where he stands at the path\'s start they cross the near ground beside him, big enough to read', () => {
+  const cam = fitLens(TRAIL_VIEW as unknown as ViewSpec);
+  const line = foxPrintLine();
+  const me = onGround(cam, P.trailStart);
+  // the stretch where it crosses to the path, sampled every 0.2 m: on screen, in the near
+  // ground (the lower part of the picture, under the line and above the bottom edge)
+  let seen = 0, beside = 0;
+  for (let i = 1; i <= 3; i++) {
+    const a = line[i - 1], b = line[i];
+    const L = Math.hypot(b.x - a.x, b.z - a.z);
+    for (let t = 0; t <= L; t += 0.2) {
+      const q = { x: a.x + ((b.x - a.x) * t) / L, z: a.z + ((b.z - a.z) * t) / L };
+      const s = onGround(cam, q);
+      assert.ok(s.front && s.x > 24 && s.x < W - 24 && s.y > H * 0.55 && s.y < H - 20, `a print at (${s.x.toFixed(0)}, ${s.y.toFixed(0)}) px is out of the near ground`);
+      seen += 0.2;
+      if (Math.abs(s.x - me.x) > 60) beside += 0.2;
+      // a print (0.21 m) seen from there is at least ~12 px across
+      const s2 = onGround(cam, { x: q.x + 0.21, z: q.z });
+      assert.ok(Math.hypot(s2.x - s.x, s2.y - s.y) > 12, `a print ${Math.hypot(s2.x - s.x, s2.y - s.y).toFixed(0)} px across`);
+    }
+  }
+  assert.ok(seen > 2.5 && beside > 1.5, `${seen.toFixed(1)} m of prints in view, ${beside.toFixed(1)} m of it beside him`);
+  // and then they run on up the wildwissel itself, toward the crossing
+  assert.ok(line.length >= 7 && Math.hypot(line[line.length - 1].x - CAMERA.x, line[line.length - 1].z - CAMERA.z) < Math.hypot(line[0].x - CAMERA.x, line[0].z - CAMERA.z));
 });

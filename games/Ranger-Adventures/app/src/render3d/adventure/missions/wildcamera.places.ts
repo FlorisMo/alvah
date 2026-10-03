@@ -614,6 +614,21 @@ export const STRAP_VIEW = {
   include: [{ x: at(0.62, -0.62).x, z: at(0.62, -0.62).z, h: RANGER_STAND_HEIGHT }],
 } as const;
 
+/** Run 7 (wc-album): the fox's fresh prints on plays it comes: out of the wood beside the
+ *  path, across it right where he stands at its start (in the near ground of the picture
+ *  as the lens stands behind him there: prints further up a path seen along it are too
+ *  flat to read), and on up the wildwissel toward the crossing, where the follow camera
+ *  passes over them as he walks. World points, in the order the fox walked. */
+export function foxPrintLine(side = 1): Spot[] {
+  const t = trailA();
+  const from = WILDCAMERA_PLACES.trailStart;
+  const f = { x: from.x, z: from.z, heading: headingTo(from, t[2]) };
+  return [
+    atLocal(f, side * 2.7, -1.5), atLocal(f, side * 1.7, -1.05), atLocal(f, side * 0.8, -0.55), atLocal(f, side * 0.12, 0.2),
+    t[2], t[3], t[4], t[5],
+  ];
+}
+
 /** The start: from behind the ranger at the ring's edge, along the wildwissel into the
  *  wood (the follow camera takes over from there, looking the way he goes). */
 export const TRAIL_VIEW = (() => {

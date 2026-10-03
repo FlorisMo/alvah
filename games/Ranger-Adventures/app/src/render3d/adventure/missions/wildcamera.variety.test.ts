@@ -17,9 +17,11 @@
  * pinned there; here how they come and who calls at night.)
  *
  * The album (wc-album), on a save's first play (the visit's light the golden hour): seed 21
- * → a misty evening, the fox with her cubs, a badger's nose at the lens, a clear morning;
- * seed 16 → the golden hour, the white roe, a roe's nose at first light; seed 4 → no rare,
- * a boar's snout; seed 1 → a misty evening and nothing more.
+ * → a misty evening, the fox with her cubs, a badger's nose at the lens, a golden sunrise;
+ * seed 16 → the golden hour, the white roe, a roe's nose at first light, a clear morning;
+ * seed 4 → no rare, a boar's snout, a misty morning; seed 33 → a fox's nose; seed 1 → a
+ * misty evening and nothing more (with two won plays without a rare behind it: the white
+ * roe, the pity rule).
  */
 
 import assert from 'node:assert/strict';

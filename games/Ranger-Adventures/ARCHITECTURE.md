@@ -129,7 +129,10 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          sees of every stop and every night; wc-hands: no buttons, he clicks
                          the camera, the pine, the snare himself, flips the photos, and the
                          snare lies at one of three SNARE_SPOTS, each with its own two
-                         landmarks, pinned with what its morning photo shows) and eekhoorn (the pines, the
+                         landmarks, pinned with what its morning photo shows; wc-album: the
+                         evening's light from the home's moods, the dawn, a nose at the lens
+                         and k.rare()'s fox family (wildcamera.cubs.ts: the two cubs, spawned
+                         for the play) or white roe, each found into the veldgids) and eekhoorn (the pines, the
                          moss glade, the neighbours): the four missions met first
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          a `shy` resident slips into cover when he comes near (per state);

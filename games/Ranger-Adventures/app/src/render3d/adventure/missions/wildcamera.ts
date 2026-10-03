@@ -125,8 +125,8 @@ const FAMILY_PACE = 2.0;
  *  lens (m), how far at most it tips its body to bring its nose up (or down) to the lens
  *  (rad), and how much of it the photo frames (m of height at 1 m: its face fills it). */
 const NEUS_POSE: Readonly<Record<NeusId, { heading: number; d: number; tilt: number; frame: number }>> = {
-  wildzwijn: { heading: 0.25, d: 0.34, tilt: 0.55, frame: 0.62 },
-  das: { heading: -0.2, d: 0.3, tilt: 0.75, frame: 0.56 },
+  wildzwijn: { heading: 0.25, d: 0.55, tilt: 0.55, frame: 0.75 },
+  das: { heading: -0.2, d: 0.3, tilt: 0.6, frame: 0.56 },
   vos: { heading: 0.3, d: 0.32, tilt: 0.65, frame: 0.6 },
   ree: { heading: -0.25, d: 0.36, tilt: 0.4, frame: 0.64 },
 };
@@ -361,6 +361,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
     }, 8, time === 'nacht' ? 1 : 1.35, { stamp, soft: NEUS_SOFT });
     if (p) photos.photos.push(p);
     k.stats.neus_photo = p ? 1 : 0;
+    for (const [key, v] of Object.entries(home.closeUpRead ?? {})) k.stats[`neus_${key}`] = Math.round(v * 100) / 100;
   };
 
   /* -- run 7: the animal comes first. Each visitor walks (or flies) in from out of view on
@@ -520,6 +521,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   await k.wait(2.2);
   // run 7 (wc-album): on plays the fox comes, its fresh prints run up the path ahead of
   // him (laid under the briefing card): a small question the evening or the night answers
+  k.stats.fox_prints = home.foxPrintsShown ? 1 : 0;
   if (home.foxPrintsShown) {
     k.say(c.vosSporen);
     await k.wait(2.4);
@@ -864,8 +866,10 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   // (he turns from the glade to the wood where the man was: the lens comes round behind
   // him, so the place on the photo lies ahead of him, whichever of the three it is)
   await k.frame(SEARCH_VIEW, { face: SEARCH_VIEW.heading });
+  // (a search of his own, the photo in his hand: the veldgids's reveals wait for the walk
+  // back, never over the wood he compares with the photo)
   await k.walk({
-    name: 'val', to: snareSpot.approach, r: snareSpot.approach.r, reached: () => dist(k.ranger(), snareSpot.at) < SNARE_FOUND,
+    name: 'val', beat: 'seek:val', to: snareSpot.approach, r: snareSpot.approach.r, reached: () => dist(k.ranger(), snareSpot.at) < SNARE_FOUND,
     line: c.zoekVal, doel: c.chipVal, cue: c.bijPad, glyph: 'photo',
   });
   k.beat = 'val';

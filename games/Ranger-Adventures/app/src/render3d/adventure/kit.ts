@@ -141,6 +141,10 @@ export interface FrameSpec {
 export interface WalkOpts {
   /** a name for the beat ('cover', 'field' ...) */
   name: string;
+  /** run 7 (additive): the beat while he walks, when it is not a plain walk (default
+   *  `walk:<name>`, a calm beat a veldgids reveal may show in; a walk that is a search
+   *  of his own, e.g. 'seek:val', keeps the reveals for later) */
+  beat?: string;
   to: Place | Spot;
   /** arrive within this (m); default the place's r, else 1.2 */
   r?: number;
@@ -605,7 +609,7 @@ export class AdventureKit {
    */
   async walk(o: WalkOpts): Promise<void> {
     this.check();
-    this.beat = `walk:${o.name}`;
+    this.beat = o.beat ?? `walk:${o.name}`;
     this.free();
     this.ui.say(o.line);
     const r = o.r ?? (o.to as Place).r ?? 1.2;
