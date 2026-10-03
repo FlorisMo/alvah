@@ -14,7 +14,7 @@
  *
  * It stands before the mission and after it. After, the store is a bigger heap, the jay
  * has flown, and on a later visit a tiny oak seedling stands where an acorn was forgotten.
- * Nothing here draws from `Math.random`: a play hands its own stream (`layPlay`).
+ * Nothing here draws from the page's own random: a play hands its own stream (`layPlay`).
  */
 
 import * as THREE from 'three';

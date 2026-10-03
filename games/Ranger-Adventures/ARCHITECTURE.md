@@ -127,7 +127,13 @@ adventure/missions/      one mission each: <id>.places.ts (pure, unit-tested: wh
                          draws how each visitor comes (side + stop) and the night choir's
                          spots from the play, wildcamera.view.test.ts pins what the lens
                          sees of every stop and every night) and eekhoorn (the pines, the
-                         moss glade, the neighbours): the four missions met first
+                         moss glade, the neighbours; run 7: eekhoorn.places.ts draws each
+                         play's way through the pines (ROUTES: three, each its own hide tree),
+                         the moss pattern's mirror-image (gladeSpots(sym)) and the neighbour
+                         trio (NEIGHBOURS, one bird per perch), never the last two plays',
+                         read back from the beat history (`ek:<variant>`); the found view
+                         and the jay's way back are pure and pinned by its test): the four
+                         missions met first
 world/Residents.ts       a home's animals: before/after state, spatial calls, borrow/release;
                          a `shy` resident slips into cover when he comes near (per state);
                          a home rests beyond 40-46 m, its small things (`env.detail(at)`:
@@ -282,6 +288,15 @@ mission records its helped animal (`geholpen`) quietly, and the home's rare coun
   never the home's last); the briefing cuts into it under the card, the end of the play
   crossfades back to the session's mood. A home never lights its own animals: every model
   that goes through `spawnModel` is dressed and lit like the world's.
+
+**Options a home may pass** (all additive, the default as before): `routeBeat({ between })`
+(the squirrel sweeps up a round's acorns before the next round shows); `callersBeat({ dieren,
+between, callCap })` (the world's own four callers slot for slot, the jay backing off between
+two rounds, every call held to 0.6-1.2 s); a skin's `roepAllen` (every caller heard once
+before any calls again: engines/simon `spread`, the 2D floor reads the same skin);
+`Adventure.moods.perPlay` as a number (never one of that many last plays' moods:
+`lastMoodsAt`); a home tree's `near` (its own full-detail range, world/Forest: fifteen pines
+round one spot keep the triangle budget); `Squirrel.reseed(seed)` and `goDash(x, z, full)`.
 
 **A home's recipe** (each game lane): (1) choose places by looking at the world and pin each
 variant in `<id>.places.ts` + its test: dry, clear (`World.playClear`), inside its home, the

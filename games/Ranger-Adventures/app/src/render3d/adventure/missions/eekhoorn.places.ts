@@ -664,10 +664,12 @@ export function trioOf(code: string): Trio | null {
 /** Where each slot's bird is (world x/z; its feet `y` m up), the jay's perches, and the
  *  steps it backs off by. */
 export const PERCH = {
+  // (its feet ON the stub's top: lower, the stub ran in front of a blackbird's belly and
+  // hid its middle from the lens — missions.spec, 2026-10-03)
   tak: (() => {
     const t = TREE.storePine, b = t.branch!;
     const r = barkRadius({ x: t.x, z: t.z, H: t.h, species: t.species }, b.h) + b.out * 0.75;
-    return { x: t.x + Math.sin(b.ang) * r, z: t.z + Math.cos(b.ang) * r, y: b.h - 0.1 };
+    return { x: t.x + Math.sin(b.ang) * r, z: t.z + Math.cos(b.ang) * r, y: b.h - 0.01 };
   })(),
   stam: (() => {
     const t = WOODPECKER.tree;

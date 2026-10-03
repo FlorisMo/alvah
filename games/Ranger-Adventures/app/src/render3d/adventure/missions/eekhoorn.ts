@@ -23,7 +23,7 @@
  * forgotten acorn grew.
  *
  * Steps (content, the EF contract): 0 corsi · 1 simon, each logged once. Every choice of
- * a play comes from its own fork of `k.play` (never `Math.random`).
+ * a play comes from its own fork of `k.play` (never the page's own random).
  */
 
 import * as THREE from 'three';
@@ -320,12 +320,19 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
     wasLeap = leaping;
     if (leaping && k.now - leapAt <= 0.3 && !leapOut && !inMiddle()) { leapOut = true; k.stats.leap_out += 1; }
   });
+  /** set once the last move to the next wait has begun (a leap through a pine it only
+   *  passes comes first) */
+  let lastMove = false;
   const hop = async (name: string, go: () => Promise<boolean>, t: HomeTree, line: string): Promise<void> => {
     k.say(line);
+    lastMove = false;
     const there = k.guard(go());
-    // (a breath before the way on shows: he sees it set off from where he stands, before
-    // the chip and the keys turn him toward where it goes)
+    // (a breath before the way on shows: he sees it set off from where he stands — and
+    // leap on through a pine it only passes — before the chip and the keys turn him
+    // toward where it goes)
     await k.wait(0.7);
+    await k.until(() => lastMove, RUN_ON_WAIT + 2);
+    await k.wait(0.3);
     let arrived = false;
     let sitFrom = 0;
     let toldWait = false;
@@ -388,6 +395,7 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       const last = i === hops.length - 1;
       // (on from a tree it only passes, too, only once it is where he sees it)
       if (i > 0) await k.until(() => inMiddle(), RUN_ON_WAIT);
+      if (last) lastMove = true;
       const ok = h.how === 'leap' ? await sq.goLeap(st(h.tree), last ? face : undefined) : await sq.goBranch(st(h.tree), last ? face : undefined);
       if (!ok) return false;
       if (!last) await k.wait(0.25);
