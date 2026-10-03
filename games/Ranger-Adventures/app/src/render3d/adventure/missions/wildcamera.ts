@@ -325,7 +325,7 @@ async function story(k: AdventureKit, A: Record<Walker, Actor>, home: Wildcamera
   let took = false;
   thenSay(1.8, c.pakKlik, () => took);
   const lying = home.stumpCamera;
-  if (lying) await clickOn('camera', [{ id: 'camera', object: lying }], () => home.stumpCamera);
+  if (lying) await clickOn('camera', [{ id: 'camera', object: lying }], () => home.stumpCameraBody);
   took = true;
   home.pickUp(k.ranger(), k.reduced);
   if (settings.geluid) Sound.step();

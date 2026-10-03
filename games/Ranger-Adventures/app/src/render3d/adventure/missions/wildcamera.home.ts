@@ -405,21 +405,7 @@ export class WildcameraHome implements HomeDressing {
     /* -- the marker: a stump, the camera trap lying on it -- */
     const st = P.stump;
     const STUMP_H = 0.42;
-    // (run 7: the camera lies ON the stump's top, measured on the model where it lies: he
-    // clicks it there, and the play-hint probe checks it is not sunk into the wood)
-    let stumpRoot: THREE.Object3D | null = null;
-    const seatCamera = (): void => {
-      const cam = this.stumpCam;
-      if (!cam || !stumpRoot) return;
-      stumpRoot.updateMatrixWorld(true);
-      const hit = new THREE.Raycaster(new THREE.Vector3(st.x, g(st.x, st.z) + 3, st.z), new THREE.Vector3(0, -1, 0)).intersectObject(stumpRoot, true)[0];
-      if (!hit) return;
-      cam.updateMatrixWorld(true);
-      const box = new THREE.Box3().setFromObject(cam);
-      cam.position.y += hit.point.y - box.min.y - 0.005;
-      cam.userData.perch = hit.point.y - g(st.x, st.z);
-    };
-    void env.spawnPlant('prop-tree-stump', STUMP_H).then((s) => { stumpRoot = add(s, st.x, st.z, 0.4, -0.05); seatCamera(); });
+    void env.spawnPlant('prop-tree-stump', STUMP_H).then((s) => add(s, st.x, st.z, 0.4, -0.05));
     env.obstacles.push({ x: st.x, z: st.z, r: 0.34 });
     void env.spawnPlant('prop-wildlife-camera', CAM_H).then((s) => {
       const r = add(s, st.x, st.z, headingTo(st, { x: 0, z: 0 }) + 0.5, STUMP_H - 0.08);
@@ -427,10 +413,22 @@ export class WildcameraHome implements HomeDressing {
       r.name = 'camera-on-stump';
       r.rotation.x = -Math.PI / 2 + 0.05; // lying on its back on the stump, lens up
       r.position.y += CAM_DEPTH * 0.5 - 0.02;
-      r.userData.perch = STUMP_H - 0.05;
       r.visible = this.stumpCamWanted;
       this.stumpCam = r;
-      seatCamera();
+      // (run 7: he clicks it there. What a perfect player clicks is the middle of its body as
+      // it lies on the stump's top (an anchor there: the strap hanging over the stump's edge,
+      // ~6 cm down its side, is not the place), for the play-hint probe, whose perch is
+      // where the strap's end hangs)
+      r.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(r);
+      const mid = box.getCenter(new THREE.Vector3());
+      mid.y = box.max.y - 0.05;
+      const anchor = new THREE.Object3D();
+      anchor.name = 'camera-on-stump-hint';
+      r.add(anchor);
+      anchor.position.copy(r.worldToLocal(mid));
+      anchor.userData.perch = STUMP_H - 0.05 - 0.06;
+      this.stumpCamBody = anchor;
     });
 
     /* -- the trails: the wildwissel from the ring, the glade↔thicket trail, and (run 7) deer
@@ -917,6 +915,10 @@ export class WildcameraHome implements HomeDressing {
   /** Run 7: the camera lying on the stump at the marker, as a click finds it (null until
    *  it has loaded, or once he took it). `userData.perch`: the stump's top it lies on. */
   get stumpCamera(): THREE.Object3D | null { return this.stumpCam && this.stumpCamWanted ? this.stumpCam : null; }
+  /** the middle of its body (the play hint: the strap hanging over the stump's edge is not
+   *  where to click) */
+  get stumpCameraBody(): THREE.Object3D | null { return this.stumpCamera ? this.stumpCamBody : null; }
+  private stumpCamBody: THREE.Object3D | null = null;
 
   /** Run 7: where the camera will hang on the pine, before he straps it on: its soft shape
    *  on the trunk's face (a ghost of it, breathing gently: "here"), and the trunk at the
