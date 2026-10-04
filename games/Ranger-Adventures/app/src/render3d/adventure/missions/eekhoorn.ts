@@ -93,13 +93,13 @@ const SWEEP_DIG = 0.25;
  *  song and a great tit's short pump give the same listening tempo, whoever came today. */
 const CALL_CAP: readonly [number, number] = [0.6, 1.2];
 /** The jay's own cache (run 7, ek-day): it acts once he is within `near` m of it (and not
- *  nearer than `close`) and it is in his picture (played 2026-10-04: from 7.5 m it was a
- *  speck some 20 px tall, its acorn unseen). The drum roll comes once he is within
+ *  nearer than `close`), it ahead of him (`ahead` rad off his way at most) and well inside
+ *  his picture (not below `low`): he walks up to it as it buries its acorn (played
+ *  2026-10-04: from 7.5 m it was a speck some 20 px tall; acting by distance alone it
+ *  played at the picture's bottom edge as he passed it). The drum roll comes once he is within
  *  DRUM_NEAR m of the bird on the store pine's bark (it is awake and in sight from there). */
-const JAY_SEE = { near: 5.0, close: 2.2 } as const;
+const JAY_SEE = { near: 6.0, close: 2.5, ahead: (45 * Math.PI) / 180, low: -0.55, after: 1.2 } as const;
 const DRUM_NEAR = 11;
-/** The cone drops where he will be this many seconds on (about its fall: he walks on). */
-const CONE_LEAD_S = 1.2;
 /** The second hide (run 7, ek-day): a short one — it slips round at most `most` times, and
  *  stays once he has walked `round` rad round its pine. */
 const HIDE2 = { most: 1, round: HIDE.round * 0.6 } as const;
@@ -534,22 +534,22 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   let verrDone = verr === 'geen';
   k.stats.verr = ['geen', 'denappel', 'gaai', 'roffel'].indexOf(verr);
   /** in his picture now, well inside it (the follow lens): a spot `up` m above the ground */
-  const inPicture = (q: Spot, up: number, xMax = 0.7): boolean => {
+  const inPicture = (q: Spot, up: number, xMax = 0.7, yMin = -0.8): boolean => {
     const cam = k.world.camera;
     cam.updateMatrixWorld();
     V1.set(q.x, k.ctx.groundY(q.x, q.z) + up, q.z);
     if (V1.clone().applyMatrix4(cam.matrixWorldInverse).z > -0.5) return false;
     V1.project(cam);
-    return Math.abs(V1.x) <= xMax && V1.y >= -0.8 && V1.y <= 0.5;
+    return Math.abs(V1.x) <= xMax && V1.y >= yMin && V1.y <= 0.5;
   };
-  /** the cone: once he walks along under a pine, a spot beside his way in his picture */
-  const coneTick = (walkFrom: number): void => {
+  /** the cone: as he walks up to the pine the squirrel waits on, one drops from its crown
+   *  in front of its trunk, beside his way, in the middle of his picture */
+  const coneTick = (walkFrom: number, t: HomeTree): void => {
     if (verrDone || verr !== 'denappel') return;
     const m = k.ranger();
-    if (m.speed < 0.8 || k.now - walkFrom < 1.5) return;
-    // (it lands ahead of where he will be by then: he sees it fall and lie beside his way)
-    const spot = coneDrop(m, m.heading, Math.min(3, m.speed * CONE_LEAD_S));
-    if (!spot || !inPicture(spot, 0.1, 0.65)) return;
+    if (k.now - walkFrom < 1.5) return;
+    const spot = coneDrop(m, t);
+    if (!spot || !inPicture(spot, 0.1, 0.5, -0.5)) return;
     verrDone = true;
     k.stats.verr_go = 1;
     home.dropCone(spot, lens(), () => { k.stats.verr_land = 1; if (settings.geluid) Sound.dig(); });
@@ -658,7 +658,9 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
         // the ranger wanders off, the line says so once
         tick: () => {
           hint.tick();
-          if (wi !== p.nest) coneTick(walkFrom); // (never with its nest's own moment)
+          // (as he walks up to the pine it is off to — where he looks — a cone drops in front
+          // of it; never with its nest's own moment)
+          if (wi !== p.nest) coneTick(walkFrom, t);
           if (!arrived) return;
           anticTick();
           if (k.now - lastChatter > 3.2 && !anticOn) chatter();
@@ -1073,19 +1075,20 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
   const gladeFrom = k.now;
   let walkingIn = true;
   /** the jay's own cache: it pushes its acorn into the needles, looks at him, flies up */
+  // (it plays while he comes up to it — he walks on meanwhile: short, the line at once)
   const jayMoment = async (): Promise<void> => {
     k.stats.verr_go = 1;
     home.jayBury();
     if (settings.geluid) Sound.dig();
-    await k.wait(0.9);
-    home.jayLook(k.ranger());
     k.say(c.gaaiVerstopt);
     k.discover('eekhoorn.gaai', { quiet: true });
-    await k.wait(0.7);
+    await k.wait(0.8);
+    home.jayLook(k.ranger());
+    await k.wait(0.4);
     if (settings.geluid) { const j = home.jayAt(); Sound.callAt('gaai', j.x, j.z, listenerOf(k.world.camera), 25, CALL_CAP[1]); }
-    await k.wait(1.2);
+    await k.wait(0.6);
     home.jayUp(1.8);
-    await k.wait(1.6);
+    await k.wait(1.8);
     if (walkingIn) k.say(c.weer);
   };
   await k.walk({
@@ -1094,11 +1097,22 @@ async function story(k: AdventureKit, fam: ResidentGroup, home: EekhoornHome, sq
       if (onStump && k.now - lastChatter > 3.2) chatter();
       if (onStump) measure();
       if (verrDone) return;
-      coneTick(gladeFrom); // (a cone that found no pine on the way tree to tree: the glade's)
       const m = k.ranger();
       if (verr === 'gaai') {
         const j = home.jayAt(), d = dist(m, j);
-        if (d <= JAY_SEE.near && d >= JAY_SEE.close && jayFliesAway(m, j) && inPicture(j, 0.15, 0.75)) { verrDone = true; void jayMoment().catch(() => {}); }
+        k.stats.gaai_d = Math.round(Math.min(k.stats.gaai_d ?? 99, d) * 10) / 10; // (dev read: how near he came)
+        // (ahead of him, well up in his picture: he walks up to it as it buries its acorn)
+        // (not at the walk's first moment, while the squirrel pops up in front of him)
+        if (k.now - gladeFrom < JAY_SEE.after) { /* wait */ } else if (d <= JAY_SEE.near && d >= JAY_SEE.close && Math.abs(wrap(headingTo(m, j) - m.heading)) <= JAY_SEE.ahead) {
+          if (!jayFliesAway(m, j)) k.stats.gaai_back = 1;
+          else if (!inPicture(j, 0.15, 0.75, JAY_SEE.low)) k.stats.gaai_out = 1;
+          else { verrDone = true; void jayMoment().catch(() => {}); }
+        } else if (d < JAY_SEE.close) {
+          // (he came on it from the side or straight at it: it simply flies up to its oak)
+          verrDone = true;
+          k.stats.gaai_up = 1;
+          home.jayUp(1.8);
+        }
       } else if (verr === 'roffel' && k.now - gladeFrom >= 1.2 && dist(m, home.stamAt()) <= DRUM_NEAR) {
         // a drum roll from the glade, and a second one a moment later
         verrDone = true;

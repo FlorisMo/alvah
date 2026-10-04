@@ -634,41 +634,50 @@ test('the surprises (ek-day): the jay\'s cache lies ahead of him and beside his 
     for (const q of [STUMP, SNAG, ...HEAP_SPOTS, ...JAY_RETREAT]) assert.ok(dist(q, J) >= 1.0, `${rid}: off the store, the snag and the jay's own way back`);
     for (const d of DINING) assert.ok(dist(d, J) >= 1.5, `${rid}: off the dining spot ${d.id}`);
     assert.ok(dist(J, P.stand) >= 2.4, `${rid}: before the glade's stand`);
-    // (from where he may have found the squirrel: round its hide pine — twice the weight —
-    // or round the second one)
-    let ok = 0, n = 0;
-    for (const [t, w] of [[ROUTES[rid].hide, 2], [SECOND_HIDE[rid], 1]] as const) for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) for (const d of [1.6, 2.1, 2.6]) {
-      const st = { x: t.x + Math.sin(a) * d, z: t.z + Math.cos(a) * d };
-      if (HOME_TREES.some((o) => dist(o, st) < trunkClear(o))) continue;
-      n += w;
-      const dd = dist(st, J), off = Math.abs(wrapA(headingTo(st, J) - headingTo(st, P.stand)));
-      // (where it acts its flight up to the glade oak goes off across his picture or away
-      // from him, never back at him: the runtime asks the same, jayFliesAway)
-      // (and he passes it near enough that it acts — within 5 m, the runtime's JAY_SEE)
-      const pass = segDist(J, st, P.stand);
-      if (dd >= 3.5 && dd <= 8.5 && off <= (55 * Math.PI) / 180 && pass >= 1.1 && pass <= 3.5 && jayFliesAway(st, J)) ok += w;
+    // (from where he may have found the squirrel: round its hide pine, and round the second
+    // one — but the south way's, whose plays never bring the jay's cache: drawDay)
+    for (const t of rid === 'zuid' ? [ROUTES[rid].hide] : [ROUTES[rid].hide, SECOND_HIDE[rid]]) {
+      let ok = 0, n = 0;
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) for (const d of [1.6, 2.1, 2.6]) {
+        const st = { x: t.x + Math.sin(a) * d, z: t.z + Math.cos(a) * d };
+        if (HOME_TREES.some((o) => dist(o, st) < trunkClear(o))) continue;
+        n += 1;
+        const dd = dist(st, J), off = Math.abs(wrapA(headingTo(st, J) - headingTo(st, P.stand)));
+        // (ahead of him as he sets off, beside his way and near enough that it acts — the
+        // runtime's JAY_SEE: within 6 m, within 45° of his way; its flight up to the glade oak
+        // across his picture or away from him, never back at him: jayFliesAway)
+        const pass = segDist(J, st, P.stand);
+        if (dd >= 3.5 && dd <= 8.5 && off <= (45 * Math.PI) / 180 && pass >= 1.1 && pass <= 3.0 && jayFliesAway(st, J)) ok += 1;
+      }
+      assert.ok(ok / n >= 0.7, `${rid}: ahead of him and beside his way from ${ok} of ${n} places round ${t.id}`);
     }
-    assert.ok(ok / n >= 0.65, `${rid}: ahead of him and beside his way from ${ok} of ${n} places he may have found it`);
   }
 });
 
-test('the surprises (ek-day): a pine cone drops beside his path under a pine, never on him, never on a trunk', () => {
+test('the surprises (ek-day): a pine cone drops from the pine he walks up to, in front of its trunk beside his way, never on him, never on a trunk', () => {
   let n = 0;
-  for (let x = 10; x <= 27; x += 0.5) for (let z = -62; z <= -42; z += 0.5) for (let h = 0; h < Math.PI * 2; h += Math.PI / 4) {
-    const me = { x, z };
-    // (`lead`: where he will be as it lands, walking)
-    for (const lead of [0, 1.6, 2.6]) {
-    const c = coneDrop(me, h, lead);
-    if (!c) continue;
-    n += 1;
-    const ahead = (c.x - me.x) * Math.sin(h) + (c.z - me.z) * Math.cos(h) - lead;
-    const side = Math.abs((c.x - me.x) * Math.cos(h) - (c.z - me.z) * Math.sin(h));
-    assert.ok(ahead >= 2.5 && ahead <= 4.1 && side >= 1.35, `beside his way (${ahead.toFixed(2)} ahead, ${side.toFixed(2)} aside)`);
-    assert.ok(dist(c, c.tree) <= CONE_DROP.under, 'under a pine');
-    for (const t of HOME_TREES) assert.ok(dist(t, c) >= CONE_DROP.clear, `not on ${t.id}`);
+  for (const rid of ROUTE_IDS) for (const t of ROUTES[rid].waits) {
+    let fits = 0, tries = 0;
+    // (from wherever he walks up to it: all round it, 4-7.5 m off)
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 12) for (const d of [4.2, 5.5, 7.0]) {
+      const me = { x: t.x + Math.sin(a) * d, z: t.z + Math.cos(a) * d };
+      if (HOME_TREES.some((o) => dist(o, me) < trunkClear(o))) continue;
+      tries += 1;
+      const c = coneDrop(me, t);
+      if (!c) continue;
+      fits += 1; n += 1;
+      const r = dist(c, t);
+      assert.ok(r >= 1.45 && r <= 1.95, `${t.id}: in front of its trunk (${r.toFixed(2)} m)`);
+      assert.ok(dist(c, me) < dist(t, me), `${t.id}: on his side of the trunk`);
+      assert.ok(segDist(c, me, t) >= CONE_DROP.beside, `${t.id}: beside his way, never on it`);
+      assert.ok(dist(c, me) >= 2.0, `${t.id}: never on him`);
+      for (const o of HOME_TREES) assert.ok(dist(o, c) >= CONE_DROP.clear, `${t.id}: not on ${o.id}'s root spurs`);
+      assert.equal(biomeAt(c.x, c.z), 'bos');
     }
+    assert.ok(fits / tries >= 0.8, `${rid}/${t.id}: a cone fits from ${fits} of ${tries} ways up to it`);
   }
-  assert.ok(n > 600, `${n} drops`);
+  assert.equal(coneDrop({ x: ROUTES.midden.waits[0].x + 9, z: ROUTES.midden.waits[0].z }, ROUTES.midden.waits[0]), null, 'not from far off');
+  assert.ok(n > 100, `${n} drops`);
 });
 
 test('the den look turns to the side the squirrel will lead him', () => {
@@ -941,6 +950,7 @@ test('the squirrel\'s day (ek-day): from its own forks, replayed by its seed; th
     // a surprise: never the last play's; the drum only with the great spotted woodpecker
     if (d.verrassing !== 'geen') { surprises += 1; if (recent[0]?.verrassing && recent[0].verrassing !== 'geen') assert.notEqual(d.verrassing, recent[0].verrassing, `play ${s}: another surprise`); }
     if (d.verrassing === 'roffel') assert.equal(p.buren.stam, 'grote-bonte-specht');
+    if (d.verrassing === 'gaai') assert.ok(!(d.verstop2 && p.route === 'zuid'), `play ${s}: the jay's cache is on his way`);
     // a second hide about 1 in 3, and never three plays without one
     if (d.verstop2) { second += 1; dry = 0; } else { dry += 1; assert.ok(dry <= 2 || s <= 2, `play ${s}: three plays without a second hide`); }
     kinds.add(d.verrassing); dens.add(d.den); ends.add(d.einde); d.antics.forEach((x) => antics.add(x));

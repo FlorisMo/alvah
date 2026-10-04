@@ -285,7 +285,7 @@ export class EekhoornHome implements HomeDressing {
     /* -- run 7 (ek-day): a pine cone that may drop beside his path (one mesh) -- */
     this.cone.name = 'dropped-pine-cone';
     this.cone.visible = false;
-    this.cone.scale.setScalar(1.8); // (generous, like the acorn: a child sees it drop a few metres off)
+    this.cone.scale.setScalar(2.6); // (generous, like the acorn: a child sees it drop some 5 m off)
     this.group.add(this.cone);
 
     /* -- run 7 (ek-day): the scales of a cone it nibbles (one mesh) -- */
@@ -853,7 +853,7 @@ export class EekhoornHome implements HomeDressing {
     // a dropped pine cone: it falls through the crown, lands with a soft thud, bounces once
     if (this.coneFall) {
       const f = this.coneFall, c = this.cone.position;
-      const floor = this.env.groundY(c.x, c.z) + 0.035;
+      const floor = this.env.groundY(c.x, c.z) + 0.028 * this.cone.scale.x; // (lying on its side)
       if (reduced) { c.y = floor; this.coneFall = null; f.landed?.(); }
       else {
         f.vy -= CONE_FALL.g * dt;
@@ -861,7 +861,7 @@ export class EekhoornHome implements HomeDressing {
         if (f.bounced) { c.x += f.vx * dt; c.z += f.vz * dt; this.cone.rotation.x += dt * 4; }
         if (c.y <= floor) {
           c.y = floor;
-          if (!f.bounced) { f.bounced = true; f.vy = -f.vy * CONE_FALL.bounce; f.landed?.(); f.landed = null; }
+          if (!f.bounced) { f.bounced = true; f.vy = -f.vy * CONE_FALL.bounce; f.landed?.(); f.landed = null; this.puffAt(c.x, c.z, reduced); }
           else { this.coneFall = null; this.cone.rotation.set(Math.PI / 2, this.cone.rotation.y, 1.2); }
         }
       }

@@ -284,14 +284,16 @@ export const BURY_AT: Spot = g(-2.0, 0.75);
  * Run 7 (ek-day, the surprise `gaai`): where the jay buries an acorn of its own on a play
  * with that surprise — on the needles at the glade's edge, ahead of him and beside his
  * way as he walks from the pine he found the squirrel round to the glade (3.5-8.5 m on,
- * off his straight line, 1.1-3.5 m: he walks past it, near enough that it acts), off the
- * caching spots, the store and the
+ * within 45° of his way there and 1.1-3 m off his straight line: he walks up past it, near
+ * enough that it acts — from the second hide pine too, but for the south way's, which stands
+ * too near the glade for it: `drawDay` gives that play another surprise), off the caching
+ * spots, the store and the
  * trunks (the places test, from wherever he may have found it). It waits there from the
  * briefing (a jay foraging on the ground), and when he comes it pushes its acorn into the
  * needles, looks at him and flies up to the glade oak — where it waits for the store.
  */
 export const JAY_CACHE: Readonly<Record<RouteId, Spot>> = {
-  midden: { x: 15.0, z: -56.5 }, noord: { x: 15.0, z: -56.5 }, zuid: { x: 16.75, z: -59.75 },
+  midden: { x: 15.0, z: -56.75 }, noord: { x: 15.0, z: -56.75 }, zuid: { x: 16.25, z: -59.25 },
 };
 /** It acts only while its flight up to the glade oak goes off across his picture or away
  *  from him, never back at him: the flight's heading within `fly` rad of his way to it. */
@@ -301,22 +303,25 @@ export function jayFliesAway(me: Spot, at: Spot = JAY_CACHE.midden): boolean {
 }
 
 /**
- * Run 7 (ek-day, the surprise `denappel`): where a pine cone drops beside his path as he
- * walks under a pine of the squirrel's wood: `ahead` m in front of him, `side` m to one
- * side (never on him), under a home pine's crown (`under`: within that of its trunk, but
- * out past its root spurs `clear`) — the first that fits, or null. `heading`: his way;
- * `lead`: m further on (where he will be as it lands: played 2026-10-04, a cone dropped
- * where he was going landed beside him or behind, and he walked past it unseen).
+ * Run 7 (ek-day, the surprise `denappel`): where a pine cone from the crown of the pine he
+ * walks up to (where the squirrel waits for him) lands — in front of its trunk on his side,
+ * `r` m out from it and turned `turn` rad off his line to it (the first that fits: beside
+ * his way, never on it — `beside` m off it at least — never on a trunk's root spurs
+ * `clear`, nor a dining spot), while he is `from` m off the pine; else null. Walking up to
+ * the squirrel he looks there: it falls in the middle of his picture (played 2026-10-04: a
+ * cone dropped beside his own path, from a pine he passed under, fell at the picture's edge
+ * or behind him as he walked on and turned, a speck nobody saw).
  */
-export const CONE_DROP = { ahead: [2.6, 3.3, 4.0], side: [1.4, 1.8], under: 2.8, clear: 1.25, from: 6.5 } as const;
-export function coneDrop(me: Spot, heading: number, lead = 0): (Spot & { tree: HomeTree }) | null {
-  for (const a0 of CONE_DROP.ahead) for (const sd of CONE_DROP.side) for (const s of [1, -1]) {
-    const a = a0 + lead;
-    const p = { x: me.x + Math.sin(heading) * a + Math.cos(heading) * sd * s, z: me.z + Math.cos(heading) * a - Math.sin(heading) * sd * s };
-    const tree = HOME_TREES.find((t) => t.species === 'prop-pine-scots' && dist(t, p) <= CONE_DROP.under && dist(t, p) >= CONE_DROP.clear);
-    if (!tree || HOME_TREES.some((t) => dist(t, p) < CONE_DROP.clear)) continue;
-    if (DINING.some((d) => dist(d, p) < 1.0)) continue;
-    return { ...p, tree };
+export const CONE_DROP = { r: [1.5, 1.9], turn: [0.75, 1.0], from: [4.0, 7.5], beside: 0.9, clear: 1.25 } as const;
+export function coneDrop(me: Spot, t: HomeTree): Spot | null {
+  const d = dist(me, t);
+  if (d < CONE_DROP.from[0] || d > CONE_DROP.from[1]) return null;
+  const toMe = headingTo(t, me);
+  for (const r of CONE_DROP.r) for (const a of CONE_DROP.turn) for (const s of [1, -1]) {
+    const p = { x: t.x + Math.sin(toMe + s * a) * r, z: t.z + Math.cos(toMe + s * a) * r };
+    if (HOME_TREES.some((o) => dist(o, p) < CONE_DROP.clear) || segDist(p, me, t) < CONE_DROP.beside) continue;
+    if (DINING.some((q) => dist(q, p) < 1.0)) continue;
+    return p;
   }
   return null;
 }
@@ -1245,12 +1250,16 @@ export function drawDay(play: Forks, o: { route: RouteId; buren: Trio; mood?: st
     const free = order.filter((a) => !antics.includes(a));
     antics.push(free.find((a) => a !== lastAntics[w]) ?? free[0]);
   }
-  const vf = play.fork('verrassing');
-  const can = SURPRISES.filter((s) => s !== 'roffel' || o.buren.stam === 'grote-bonte-specht');
-  const lastSurprise = known('verrassing')[0]?.verrassing;
-  const verrassing: Verrassing = vf.chance(DAY_ODDS.verrassing) ? freshPick(vf, can, lastSurprise && lastSurprise !== 'geen' ? [lastSurprise] : []) : 'geen';
   const twice = known('verstop2');
   const verstop2 = play.fork('verstop2').chance(DAY_ODDS.verstop2) || (twice.length >= 2 && !twice[0].verstop2 && !twice[1].verstop2);
+  const vf = play.fork('verrassing');
+  // (the jay's own cache waits on his way from the hide pine to the glade: not after the south
+  // way's second hide, whose pine stands too near the glade — JAY_CACHE)
+  const can = SURPRISES.filter((s) => (s !== 'roffel' || o.buren.stam === 'grote-bonte-specht') && (s !== 'gaai' || !(verstop2 && o.route === 'zuid')));
+  const lastSurprise = known('verrassing')[0]?.verrassing;
+  // (never the last play's: where today's way leaves none other, no surprise this play)
+  const fresh = can.filter((x) => x !== lastSurprise);
+  const verrassing: Verrassing = vf.chance(DAY_ODDS.verrassing) && fresh.length ? vf.pick(fresh) : 'geen';
   const einde = freshPick(play.fork('einde'), EINDES, known('einde').map((r) => r.einde!));
   return { den, antics, verrassing, verstop2, einde };
 }
