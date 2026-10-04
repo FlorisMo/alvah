@@ -177,9 +177,13 @@ export interface ViewSpec {
 /** The search lens over a cove: looking down on it from the bank (its water line across
  *  the picture), from over his shoulder — he stands at the cove's side (`side` m along the
  *  bank, `back` m up from its middle), in a lower corner of the picture, never between the
- *  lens and a frog — turned `turn` (rad) across the cove from his side, so the water line
- *  runs aslant. The lens is the same at every cove and either side (decision 1: the frog
- *  reads at 52-68 px wherever it sits); WHICH side is the nook's. */
+ *  lens and a frog — turned across the cove from his side, so the water line runs aslant:
+ *  from his right `turn` (rad) off the cove's middle line, from his left the mirror of that
+ *  about the cove's own water line (each cove's water line lies a little askew to its middle
+ *  line: from either side the lens looks across it at the same angle, and the water's edge,
+ *  where the frog sits, runs corner to corner through the picture). The lens is the same at
+ *  every cove and either side (decision 1: the frog reads at 50-65 px wherever it sits);
+ *  WHICH side is the nook's. */
 export const COVE_LENS = { halfW: 0.95, halfD: 0.55, tall: 0.4, pitchDeg: 56, insetTop: 112, insetBottom: 28, r: 0.22, side: 1.4, back: 0.7, turn: 0.3 } as const;
 
 /** A spot in a cove's frame: `u` across (+: his right as he faces the water), `v` toward
@@ -187,57 +191,61 @@ export const COVE_LENS = { halfW: 0.95, halfD: 0.55, tall: 0.4, pitchDeg: 56, in
 export interface UV { u: number; v: number }
 
 /**
- * A nook the frog may sit in: at the water's edge or a step up among the sedge and the
- * veenmos (cove frame), the side he searches it from (so the picture's framing changes with
- * the nook: the boy in the lower left or the lower right), how the frog sits there (`turn`
- * rad off the lens's line of sight to it: a three-quarter back view, its brown back and a
- * flank, the same at every nook), and where it lands in the search's 1280×800 picture
- * (`px`: its middle, pinned by
- * ven.places.test.ts against the very lens the kit fits — a play's frog keeps well away
- * from where it sat in the last play's picture, `venLayout`).
+ * A nook the frog may sit in: at the water's edge, among the sedge and the veenmos (cove
+ * frame), never more than a long step up from it — a heikikker calls from the water, and his
+ * late hint (`hintRingOf`) rings on the water just in front of him, at the same distance at
+ * every nook — the side he searches it from (so the picture's framing changes with the nook:
+ * the boy in the lower left or the lower right, the water's edge running corner to corner the
+ * one way or the other), how the frog sits there (`turn` rad off the lens's line of sight to
+ * it: a three-quarter back view, its brown back and a flank, the same at every nook), and
+ * where it lands in the search's 1280×800 picture (`px`: its middle, pinned by
+ * ven.places.test.ts against the very lens the kit fits — a play's frog keeps well away from
+ * where it sat in the last play's picture, `venLayout`).
  */
 export interface Nook extends UV { side: Side; turn: number; px: readonly [number, number] }
 
 /** What lies in one cove: its own nooks (six: three searched from either side, spread over
- *  the picture), its own look-alike slots (frog-sized moss clods, a heath blue on a
- *  cotton-grass head, a stonechat on a dry stalk). A nook the frog does not use this play
- *  may hold a clod too: every nook has the same sedge round it, and an empty one is never
- *  a giveaway. */
+ *  the picture along the water's edge), its own look-alike slots (frog-sized moss clods up the
+ *  bank, a heath blue on a cotton-grass head, a stonechat on a dry stalk). A nook the frog does
+ *  not use this play may hold a clod too: every nook has the same sedge round it, and an empty
+ *  one is never a giveaway. */
 export interface CoveSpec { nooks: readonly Nook[]; clods: readonly UV[]; butterflies: readonly UV[]; birds: readonly UV[] }
 
-/** The three coves' own nooks and slots (chosen over the search's picture: the eighteen
- *  nooks fall at eighteen places over it, never its middle, never at the boy, each cove's
- *  six spread so that whatever the plays before, the next one has a nook far from them). */
+/** The three coves' own nooks and slots (chosen over the search's picture: along each cove's
+ *  water's edge, which runs corner to corner through the picture the one way from his right
+ *  and the other from his left, the eighteen nooks fall at many places over it, never its
+ *  middle, never at the boy; each cove's six spread so that whatever the plays before, the
+ *  next one has a nook far from them). */
 export const COVES: Readonly<Record<BayId, CoveSpec>> = {
   A: {
     nooks: [
-      { u: -0.55, v: 0.65, side: 1, turn: -0.9, px: [571, 301] }, { u: 0.35, v: 0.65, side: 1, turn: -0.9, px: [743, 345] },
-      { u: -1.3, v: -0.15, side: 1, turn: -0.9, px: [353, 366] }, { u: 1.4, v: -0.05, side: -1, turn: -0.9, px: [914, 359] },
-      { u: -0.7, v: -0.35, side: -1, turn: 0.9, px: [510, 515] }, { u: 0.65, v: -0.25, side: -1, turn: -0.9, px: [794, 424] },
+      { u: -1.85, v: 0.83, side: 1, turn: -0.9, px: [360, 221] }, { u: -1.25, v: 0.57, side: 1, turn: 0.9, px: [438, 276] },
+      { u: 0.6, v: 0.21, side: 1, turn: -0.9, px: [777, 421] }, { u: -0.65, v: 0.53, side: -1, turn: 0.9, px: [464, 420] },
+      { u: 1.2, v: 0.24, side: -1, turn: -0.9, px: [804, 277] }, { u: 1.8, v: 0.19, side: -1, turn: 0.9, px: [890, 234] },
     ],
-    clods: [{ u: -0.1, v: 0.7 }, { u: 0.6, v: 0.3 }, { u: 0.1, v: 0.2 }, { u: -1.3, v: 0.7 }, { u: -0.7, v: 0.1 }],
-    butterflies: [{ u: 0.2, v: -0.5 }, { u: -0.3, v: -0.1 }],
-    birds: [{ u: -1.1, v: 0.3 }, { u: 1.3, v: 0.7 }],
+    clods: [{ u: 0.8, v: -0.2 }, { u: 0.8, v: 0.7 }, { u: -0.6, v: -0.7 }, { u: 0.6, v: -0.7 }, { u: -0.4, v: 0.1 }],
+    butterflies: [{ u: -1.0, v: 0.9 }, { u: -0.8, v: -0.2 }],
+    birds: [{ u: 0.0, v: -0.7 }, { u: 0.0, v: 0.4 }],
   },
   B: {
     nooks: [
-      { u: -1.15, v: -0.35, side: 1, turn: -0.9, px: [359, 406] }, { u: 0.5, v: 0.55, side: 1, turn: 0.9, px: [769, 366] },
-      { u: -1.3, v: 0.65, side: 1, turn: 0.9, px: [436, 262] }, { u: 1.4, v: -0.45, side: -1, turn: 0.9, px: [959, 418] },
-      { u: 0.65, v: -0.45, side: -1, turn: 0.9, px: [813, 457] }, { u: -0.4, v: 0.65, side: -1, turn: 0.9, px: [532, 346] },
+      { u: -1.6, v: 0.93, side: 1, turn: -0.9, px: [410, 219] }, { u: -0.95, v: 0.62, side: 1, turn: 0.9, px: [496, 283] },
+      { u: 0.75, v: 0.31, side: 1, turn: 0.9, px: [813, 415] }, { u: -0.4, v: 0.56, side: -1, turn: 0.9, px: [491, 355] },
+      { u: 0.2, v: 0.42, side: -1, turn: -0.9, px: [617, 301] }, { u: 1.25, v: 0.36, side: -1, turn: 0.9, px: [782, 202] },
     ],
-    clods: [{ u: 0.1, v: 0.7 }, { u: 0.4, v: 0.1 }, { u: -0.9, v: 0.5 }, { u: -0.2, v: 0 }, { u: -0.5, v: -0.5 }],
-    butterflies: [{ u: -0.8, v: -0.1 }, { u: 0.1, v: -0.5 }],
-    birds: [{ u: 1.3, v: 0.7 }, { u: 1.0, v: -0.2 }],
+    clods: [{ u: -0.6, v: -0.7 }, { u: -0.4, v: 0.1 }, { u: 0.5, v: -0.7 }, { u: -0.3, v: -0.4 }, { u: 0.5, v: -0.1 }],
+    butterflies: [{ u: -0.8, v: -0.2 }, { u: 0.8, v: -0.3 }],
+    birds: [{ u: 0.0, v: -0.7 }, { u: 0.0, v: 0.8 }],
   },
   C: {
     nooks: [
-      { u: -0.7, v: 0.55, side: 1, turn: -0.9, px: [536, 303] }, { u: 0.5, v: -0.45, side: 1, turn: 0.9, px: [723, 536] },
-      { u: -1.45, v: -0.45, side: 1, turn: 0.9, px: [284, 405] }, { u: -0.7, v: -0.25, side: -1, turn: -0.9, px: [506, 498] },
-      { u: 1.25, v: 0.55, side: -1, turn: -0.9, px: [832, 292] }, { u: 0.5, v: 0.55, side: -1, turn: -0.9, px: [703, 321] },
+      { u: -1.6, v: 1.06, side: 1, turn: -0.9, px: [420, 205] }, { u: -1.0, v: 0.76, side: 1, turn: 0.9, px: [498, 263] },
+      { u: 0.65, v: 0.34, side: 1, turn: 0.9, px: [793, 403] }, { u: -0.4, v: 0.68, side: -1, turn: -0.9, px: [474, 341] },
+      { u: 0.15, v: 0.55, side: -1, turn: 0.9, px: [589, 292] }, { u: 1.2, v: 0.36, side: -1, turn: -0.9, px: [774, 203] },
     ],
-    clods: [{ u: -1.25, v: 0.6 }, { u: 0.6, v: 0.1 }, { u: -0.4, v: 0.1 }, { u: 0.1, v: 0.7 }, { u: -0.3, v: 0.7 }],
-    butterflies: [{ u: 1.0, v: -0.3 }, { u: 0.1, v: -0.1 }],
-    birds: [{ u: -0.1, v: 0.4 }, { u: -0.3, v: -0.5 }],
+    clods: [{ u: -1.2, v: 0.4 }, { u: -0.4, v: 0.2 }, { u: -0.6, v: -0.7 }, { u: 0.5, v: -0.7 }, { u: -0.3, v: -0.4 }],
+    butterflies: [{ u: 0.9, v: 0.7 }, { u: 0.8, v: -0.3 }],
+    birds: [{ u: 0.0, v: -0.7 }, { u: -0.8, v: -0.2 }],
   },
 };
 
@@ -270,9 +278,22 @@ export interface Bay {
   /** where the cove's calling frog floats, out on the water to one side */
   chorus: Spot;
   views: { search: Readonly<Record<Side, ViewSpec>> };
+  /** how far (rad) the search's lens is turned off the cove's middle line from either side
+   *  (from his left: the mirror of his right about the cove's own water line) */
+  turns: Readonly<Record<Side, number>>;
   /** the cove's own look-alike slots (world) */
   slots: { clods: readonly Spot[]; butterflies: readonly Spot[]; birds: readonly Spot[] };
 }
+
+/**
+ * The frog's rings in front of him (the search's late hint, his song): on open water —
+ * where it is `depth` deep, past the sedge (it grows to 4 cm deep) — straight out from him
+ * toward the ven, at least `near` m from him. Every nook lies so that this water is `near`
+ * to `far` m in front of it (ven.places.test pins all eighteen), and every hint ring spreads
+ * to `size` m: at whichever nook he sits, a struggling or muted child sees the same rings at
+ * the same distance from him (decision 1).
+ */
+export const HINT_RING = { depth: -0.05, near: 0.9, far: 1.0, size: 0.6 } as const;
 
 /** The coves' angles: A nearest the hide, C furthest east. */
 const BAY_TH: Readonly<Record<BayId, number>> = { A: 84, B: 68, C: 46 };
@@ -284,9 +305,14 @@ function bay(id: BayId): Bay {
   const rw = shoreR(th, 0.1);
   const mid = polar(th, rw + 0.42);
   const frame: Frame = { ...mid, heading: headingTo(mid, C) };
+  // (the cove's water line lies askew to its middle line by `skew`: from his left the lens
+  // turns the mirror of his right's turn about it, so both pictures look across the water's
+  // edge at the same angle)
+  const skew = Math.atan2(waterV(frame, 1) - waterV(frame, -1), 2);
+  const turns = { 1: COVE_LENS.turn, [-1]: 2 * skew - COVE_LENS.turn } as Record<Side, number>;
   // (the frog sits turned `turn` off the search lens's line of sight to him: the same
   // three-quarter back view at every nook, whichever side the lens looks from)
-  const lensNear = (side: Side): Spot => searchLensNear(frame, side);
+  const lensNear = (side: Side): Spot => searchLensNear(frame, turns[side]);
   const nooks = spec.nooks.map((n, i): FrogSpot => {
     const p = atLocal(frame, n.u, n.v);
     return { ...p, yaw: headingTo(lensNear(n.side), p) + n.turn, side: n.side, nook: i };
@@ -301,23 +327,39 @@ function bay(id: BayId): Bay {
   const cth = CHORUS_TH[id];
   const chorus = polar(cth, shoreR(cth, -0.07));
   const searchOf = (side: Side): ViewSpec => ({
-    at: atLocal(frame, 0, 0.06), heading: frame.heading + side * COVE_LENS.turn,
+    at: atLocal(frame, 0, 0.06), heading: frame.heading + turns[side],
     halfW: COVE_LENS.halfW, halfD: COVE_LENS.halfD, tall: COVE_LENS.tall, pitchDeg: COVE_LENS.pitchDeg,
     insetTop: COVE_LENS.insetTop, insetBottom: COVE_LENS.insetBottom,
     include: [{ x: stands[side].x, z: stands[side].z, h: RANGER_STAND_HEIGHT, r: COVE_LENS.r }],
   });
   const world = (q: readonly UV[]): Spot[] => q.map((x) => atLocal(frame, x.u, x.v));
   return {
-    id, th, frame, nooks, stands, offs, chorus,
+    id, th, frame, nooks, stands, offs, chorus, turns,
     views: { search: { 1: searchOf(1), [-1]: searchOf(-1) } as Record<Side, ViewSpec> },
     slots: { clods: world(spec.clods), butterflies: world(spec.butterflies), birds: world(spec.birds) },
   };
 }
 
-/** About where the search's lens stands over a cove searched from `side` (its ground spot:
- *  ~1.9 m back from the view's middle along its heading; the fit puts it within a few cm). */
-function searchLensNear(frame: Frame, side: Side): Spot {
-  return atLocal({ ...atLocal(frame, 0, 0.06), heading: frame.heading + side * COVE_LENS.turn }, 0, -1.9);
+/** About where the search's lens stands over a cove, turned `turn` off its middle line (its
+ *  ground spot: ~1.9 m back from the view's middle along its heading; the fit puts it within
+ *  a few cm). */
+function searchLensNear(frame: Frame, turn: number): Spot {
+  return atLocal({ ...atLocal(frame, 0, 0.06), heading: frame.heading + turn }, 0, -1.9);
+}
+
+/** How far out (v, in a cove's frame) at `u` across it the water is `HINT_RING.depth` deep. */
+function waterV(frame: Frame, u: number): number {
+  let v = -1;
+  while (v < 4 && above(atLocal(frame, u, v)) > HINT_RING.depth) v += 0.01;
+  return v;
+}
+
+/** The frog's rings in front of him (`HINT_RING`): see there. */
+export function hintRingOf(b: Bay, at: Spot, near: number = HINT_RING.near, depth: number = HINT_RING.depth): Spot {
+  const p = toLocal(b.frame, at);
+  let d = near;
+  while (d < 4 && above(atLocal(b.frame, p.u, p.v + d)) > depth) d += 0.01;
+  return atLocal(b.frame, p.u, p.v + d);
 }
 
 export const BAYS: Readonly<Record<BayId, Bay>> = { A: bay('A'), B: bay('B'), C: bay('C') };
@@ -325,7 +367,7 @@ export const BAYS: Readonly<Record<BayId, Bay>> = { A: bay('A'), B: bay('B'), C:
 /** Is `q` hidden behind the boy in the search's picture from `side` (seen from above his big
  *  hair shades the ground beyond him, away from the lens)? A look-alike is never laid there. */
 export function underBoy(b: Bay, side: Side, q: Spot): boolean {
-  const L = searchLensNear(b.frame, side), B = b.stands[side];
+  const L = searchLensNear(b.frame, b.turns[side]), B = b.stands[side];
   const ex = B.x - L.x, ez = B.z - L.z, e2 = ex * ex + ez * ez || 1;
   const dx = q.x - L.x, dz = q.z - L.z;
   const t = (dx * ex + dz * ez) / e2;
@@ -341,13 +383,23 @@ export function inCove(b: Bay, u: number, v: number): Spot { return atLocal(b.fr
  *  it a little further, so the boy is whole): near enough that the frog reads ~90-110 px. */
 export const SING_NEAR = 1.4;
 
-/** Where the found frog sings: at the water's edge — a frog sitting a step up the bank
- *  hops down to it first (a hop or two), one at the edge sings where he sits. */
+/** How high (m) over the water the bank is where the found frog sings: its very edge. */
+export const EDGE_H = 0.035;
+/** Where the found frog sings: at the water's very edge, straight down the bank from his
+ *  nook (a hop or two: every nook lies within a long step of it) and a little away from the
+ *  boy's side; a frog already at the edge sings where he sits. */
 export function edgeOf(b: Bay, frog: FrogSpot): FrogSpot {
   const fl = toLocal(b.frame, frog);
-  if (fl.v >= 0.45) return frog;
-  return { ...atLocal(b.frame, fl.u - frog.side * 0.15, 0.72), yaw: frog.yaw, side: frog.side, nook: frog.nook };
+  const u = fl.u - frog.side * 0.15;
+  let v = fl.v;
+  while (v < fl.v + 1.5 && above(atLocal(b.frame, u, v)) > EDGE_H) v += 0.01;
+  if (v - fl.v < 0.1) return frog;
+  return { ...atLocal(b.frame, u, v), yaw: frog.yaw, side: frog.side, nook: frog.nook };
 }
+
+/** The singing frog's rings spread from under him over the water at his feet (the same at
+ *  every nook: he always sings at the very edge, `EDGE_H` over the water, the water a short
+ *  step out — the low lens over the water sees them either side of him and in front). */
 
 /**
  * The song (after the find): he stays where he searched; the frog sings at the water's edge
@@ -700,7 +752,7 @@ export function coveClumps(b: Bay): Clump[] {
     const fl = toLocal(b.frame, f);
     for (const [u, v, k] of RING) out.push({ ...atLocal(b.frame, fl.u + u, fl.v + v), kind: 'grass', size: k });
   }
-  const A = 1.6, B = 0.95, V0 = -0.15, SP = 0.4;
+  const A = 1.7, B = 1.1, V0 = -0.3, SP = 0.4;
   for (let v = -B; v <= B + 1e-6; v += SP * 0.87) {
     for (let u = -A; u <= A + 1e-6; u += SP) {
       const uu = u + (rnd() - 0.5) * SP * 0.5 + (Math.round(v / SP) % 2 ? SP / 2 : 0), vv = v + (rnd() - 0.5) * SP * 0.4;
@@ -710,7 +762,7 @@ export function coveClumps(b: Bay): Clump[] {
       if (frogs.some((f) => dist(p, f) < 0.4)) continue;
       if (slots.some((s) => dist(p, s) < 0.26)) continue;
       if (dist(p, cushion) < CUSHION.r + 0.1) continue; // (the moss cushion lies open)
-      if (SIDES.some((sd) => dist(p, b.stands[sd]) < 1.0)) continue;
+      if (SIDES.some((sd) => dist(p, b.stands[sd]) < 0.65)) continue; // (where he stands, either side)
       if (above(p) < -0.04) continue; // (out on open water nothing grows this thick)
       out.push({ ...p, kind: 'grass', size: 0.62 + rnd() * 0.3 });
     }

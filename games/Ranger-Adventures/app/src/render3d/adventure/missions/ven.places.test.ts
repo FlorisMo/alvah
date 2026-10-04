@@ -31,9 +31,10 @@ import { wildcameraClearings } from './wildcamera.places.ts';
 import { eekhoornClearings } from './eekhoorn.places.ts';
 import {
   ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY, GO_CLEAR,
+  EDGE_H, HINT_RING,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
   above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet, underBoy,
-  lastVenVariants, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
+  hintRingOf, lastVenVariants, padGoal, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
   type BayId, type FrogSpot, type Side, type ViewSpec,
 } from './ven.places.ts';
 import type { Spot } from '../types.ts';
@@ -232,7 +233,8 @@ test('the search: every nook partly visible at every level, off the middle, big 
       assert.equal(xs.length, 3, `cove ${id}: three nooks searched from side ${side}`);
       assert.ok(xs.some((x) => x < 600) && xs.some((x) => x > 680), `cove ${id}: from side ${side} the frog may sit left or right in the picture`);
     }
-    spec.nooks.forEach((n, i) => spec.nooks.slice(i + 1).forEach((m) => assert.ok(Math.hypot(n.u - m.u, n.v - m.v) >= 0.6, `cove ${id}: its nooks lie apart`)));
+    // (along the water's edge, each with its own ring of sedge: at least a frog's two lengths apart)
+    spec.nooks.forEach((n, i) => spec.nooks.slice(i + 1).forEach((m) => assert.ok(Math.hypot(n.u - m.u, n.v - m.v) >= 0.5, `cove ${id}: its nooks lie apart`)));
     const slots = [...spec.clods, ...spec.butterflies, ...spec.birds];
     for (const [k, q] of slots.entries()) {
       for (const n of spec.nooks) assert.ok(Math.hypot(q.u - n.u, q.v - n.v) >= 0.35, `cove ${id}: slot ${k} keeps 0.35 m off nook (${n.u}, ${n.v})`);
@@ -263,6 +265,32 @@ test('the search: every nook partly visible at every level, off the middle, big 
   }
   const xs = places.map((p) => p.x), ys = places.map((p) => p.y);
   assert.ok(Math.max(...xs) - Math.min(...xs) > 450 && Math.max(...ys) - Math.min(...ys) > 180, 'the nooks spread over the picture, across and up and down');
+});
+
+test('the late hint rings the same at every nook: on open water straight out in front of him, one narrow band of distance, in the picture', () => {
+  const gaps: number[] = [];
+  for (const id of BAY_IDS) {
+    const b = BAYS[id];
+    for (const f of b.nooks) {
+      const view = b.views.search[f.side];
+      const cam = lensOf(view);
+      const r = hintRingOf(b, f);
+      const d = dist(f, r);
+      assert.ok(above(r) <= HINT_RING.depth + 1e-9, `cove ${id} nook ${f.nook}: the ring is on open water (${r2(above(r))} m)`);
+      assert.ok(d >= HINT_RING.near - 1e-6 && d <= HINT_RING.far + 0.01, `cove ${id} nook ${f.nook}: the ring lies ${r2(d)} m in front of him (want ${HINT_RING.near}-${HINT_RING.far})`);
+      // straight out toward the water: the water's edge between him and it
+      const fl = toLocal(b.frame, f), rl = toLocal(b.frame, r);
+      assert.ok(Math.abs(rl.u - fl.u) < 1e-6 && rl.v > fl.v, 'straight out in front of him, toward the ven');
+      // in the search's picture, inside its free band, and as far from him there at every nook
+      const q = screenAt(cam, r, above(r) < 0 ? WATER_LEVEL - groundY(r.x, r.z) : 0);
+      assert.ok(q.x > 60 && q.x < W - 60 && q.y > view.insetTop + 12 && q.y < H - view.insetBottom - 12, `cove ${id} nook ${f.nook}: the ring (${q.x.toFixed(0)}, ${q.y.toFixed(0)}) is in the picture's free band`);
+      const box = boxOf(cam, f);
+      const gap = Math.hypot(q.x - box.cx, q.y - box.cy);
+      gaps.push(gap);
+      assert.ok(gap >= 95 && gap <= 150, `cove ${id} nook ${f.nook}: in the picture the ring is ${gap.toFixed(0)} px from him (want 95-150)`);
+    }
+  }
+  assert.ok(Math.max(...gaps) / Math.min(...gaps) < 1.5, `the ring's distance from him in the picture differs at most half again over the nooks (${Math.min(...gaps).toFixed(0)}-${Math.max(...gaps).toFixed(0)} px)`);
 });
 
 test('every moss clod (in an empty nook or on the open moss) is seen — at least half the frog\'s share — and the frog still shows the level\'s share', () => {
@@ -318,6 +346,11 @@ test('the song: the frog big and three-quarters toward the lens (his throat to i
       assert.ok(boy.y0 > sing.view.insetTop - 30 && boy.y1 < H - sing.view.insetBottom + 30 && boy.x0 > 0 && boy.x1 < W, `cove ${id} nook ${f.nook}: the boy is whole in the picture (${boy.x0.toFixed(0)}-${boy.x1.toFixed(0)}, ${boy.y0.toFixed(0)}-${boy.y1.toFixed(0)})`);
       assert.ok(Math.abs(boy.cx - box.cx) >= 150, `cove ${id} nook ${f.nook}: the boy stands ${Math.abs(boy.cx - box.cx).toFixed(0)} px beside the frog`);
       assert.ok(box.cy > boy.cy, 'the frog in front, the boy behind on the bank');
+      // his rings as he sings spread from under him over the water at his feet: he sings at
+      // the very edge, the water a short step in front of him (the same at every nook)
+      assert.ok(Math.abs(above(at) - EDGE_H) < 0.01, `cove ${id} nook ${f.nook}: he sings at the very edge (${r2(above(at))} m over the water)`);
+      const wet = hintRingOf(b, at, 0, -0.01);
+      assert.ok(dist(wet, at) <= 0.35, `cove ${id} nook ${f.nook}: the water lies ${r2(dist(wet, at))} m in front of where he sings`);
       // the answer: the singing frog, the boy and the nearest answering cove's frog all in
       // the pulled-back picture
       const ans = lensOf(answerView(b, f));

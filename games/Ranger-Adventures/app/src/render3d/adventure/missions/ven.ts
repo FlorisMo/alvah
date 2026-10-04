@@ -40,14 +40,14 @@ import { searchBeat } from '../beats/search';
 import { choiceRun, type ChoiceRun } from '../beats/choice';
 import { listenerOf } from '../../world/Residents';
 import { isRunning } from '../actors-math';
-import { atLocal, dist, headingTo, toLocal } from '../places';
+import { dist, headingTo } from '../places';
 import { ARRIVE_RADIUS, bearing, cue as cueAt } from '../../Wayfinding';
 import { WATER_LEVEL } from '../../Biomes';
 import { VenHome, venBody, type Frog } from './ven.home';
 import { ListenCore, StillFor, chorusCalls, listensOf, ringSize } from './ven.listen';
 import {
-  ADDER_NEAR, ADDER_WARN, APPROACH, BAYS, BAY_IDS, CARPET_A, CARPET_SEEN, CARPET_WET, CHORUS_KEYS, FROG_H, FROG_LEN, GO_AWAY, MISSION, VARIANT_KEY,
-  VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderView, between, carpetAt, frogOf, decoySlots, lastVenVariants, pointAt,
+  ADDER_NEAR, ADDER_WARN, APPROACH, BAYS, BAY_IDS, CARPET_A, CARPET_SEEN, CARPET_WET, CHORUS_KEYS, FROG_H, FROG_LEN, GO_AWAY, HINT_RING, MISSION, VARIANT_KEY,
+  VEN_HOME, AFTER_FROG, adderAt, answerOrder, answerView, plopOf, adderHeather, adderView, between, carpetAt, frogOf, decoySlots, hintRingOf, lastVenVariants, pointAt,
   padGoal, project, route, singOf, stationsOf, venClearings, venLayout, venOrder, wayOf, type BayId, type VenLaid, type WayStep,
 } from './ven.places';
 
@@ -268,15 +268,15 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
     if (!hinted && k.beat === 'search' && k.ui.current === c.hint) {
       hinted = true;
       let next = k.now;
+      // (the rings on the open water just in front of him: the same distance from him and
+      // the same size at every nook, ven.places `hintRingOf`)
+      const ringAt = hintRingOf(bay, frog);
       const off = k.onTick(() => {
         if (k.beat !== 'search') { off(); return; }
         if (k.now < next) return;
         next = k.now + 3.2;
         frog.sing(1);
-        // (the rings on the water just in front of him: the water's edge lies a long step out)
-        const out = toLocal(bay.frame, frog);
-        const p = atLocal(bay.frame, out.u, out.v + 0.95);
-        home.ring(p.x, p.z, 0.6);
+        home.ring(ringAt.x, ringAt.z, HINT_RING.size);
       });
     }
   });
@@ -338,9 +338,11 @@ async function story(k: AdventureKit, laid: VenLaid): Promise<void> {
       // (he sings now: a step no longer asks him to wait — the frogs' answer is next)
       window.removeEventListener('keydown', onKey);
     }
-    // his throat swells, three soft calls
+    // his throat swells, three soft calls; the first and the last send rings over the water
+    // at his feet (he sings at the very edge: they spread from under him)
     for (let i = 0; i < 3; i++) {
       frog.sing(1);
+      if (i !== 1) home.ring(edge.x, edge.z, HINT_RING.size);
       if (settings.geluid) Sound.callAt('heikikker', frog.x, frog.z, listenerOf(k.world.camera), 25, WOOG_S + 0.05);
       await k.wait(0.62);
     }
