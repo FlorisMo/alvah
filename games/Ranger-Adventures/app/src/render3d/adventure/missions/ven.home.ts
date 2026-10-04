@@ -30,7 +30,7 @@ import { heatherGeometry, plantMaterial } from '../../world/Plants';
 import { WATER_LEVEL } from '../../Biomes';
 import {
   BAYS, BAY_IDS, CUSHION, FLOAT_SINK, FROG_H, FROG_LEN, PATH, PATH_HALF, HIDE, BENCH, MARKER,
-  allStations, carpetAt, clodSpots, coveClumps, fitCove, inCarpet, nookClods, pathR, polar, type BayId, type Carpet, type FrogSpot, type VenLaid, type ViewSpec,
+  allStations, carpetAt, clodSpots, coveClumps, clodsOf, fitCove, inCarpet, pathR, polar, type BayId, type Carpet, type FrogSpot, type VenLaid, type ViewSpec,
 } from './ven.places';
 
 /** A look-alike laid in the play's cove, as the search takes it. */
@@ -590,8 +590,8 @@ export class VenHome implements HomeDressing {
     if (p) {
       const view = BAYS[p.laid.bay].views.search[p.laid.side];
       const lens = this.env.lensFor(asTheKitFrames(view));
-      // (a moss clod in an empty nook gets a window as the frog has: it shows as much as he does)
-      fitCove(this.cover.stems, this.built, lens.cam, p.frog, nookClods(BAYS[p.laid.bay], p.laid.nook, p.decoys), p.glimpse, this.g);
+      // (every moss clod gets a window as the frog has: it shows about as much as he does)
+      fitCove(this.cover.stems, this.built, lens.cam, p.frog, clodsOf(p.decoys), p.glimpse, this.g);
       // (a stem changed by the fit keeps its built height as h0: drawn as wide as it was)
       this.cover.stems.forEach((s, i) => { if (Math.abs(s.h - this.built[i].h) > 1e-6) s.h0 = this.built[i].h; });
     }
@@ -622,8 +622,8 @@ export class VenHome implements HomeDressing {
     const changed = refitWindow(this.cover.stems, this.built, eye, back, share, { x: f?.x ?? 0, y: 0, z: f?.z ?? 0 });
     const p = this.laid;
     if (!changed.length || !p) return changed;
-    // (the refit started from the stems as built: the nook clods' windows, then his again)
-    fitCove(this.cover.stems, this.built, eye, p.frog, nookClods(BAYS[p.laid.bay], p.laid.nook, p.decoys), share, this.g);
+    // (the refit started from the stems as built: the clods' windows, then his again)
+    fitCove(this.cover.stems, this.built, eye, p.frog, clodsOf(p.decoys), share, this.g);
     const out: number[] = [];
     this.cover.stems.forEach((s, i) => {
       if (Math.abs(s.h - this.built[i].h) > 1e-6) s.h0 = this.built[i].h;

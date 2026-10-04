@@ -32,7 +32,7 @@ import { eekhoornClearings } from './eekhoorn.places.ts';
 import {
   ADDER_BEFORE, ADDER_NEAR, ADDER_SHIFT, ADDER_WARN, AFTER_FROG, BAYS, BAY_IDS, BENCH, CARPET_A, CARPET_WET, CLOD_H, CLOD_LEN, COVES, CUSHION, FROG_H, FROG_LEN, GO_AWAY,
   HIDE, HIDE_R, MARKER, NOOK_GAP_PX, SIDES, VEN_HOME, VEN_PLACES, VEN_RESIDENTS,
-  above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, decoySlots, fitCove, inCarpet, nookClods,
+  above, adderAt, allStations, answerOrder, answerView, blocked, carpetAt, carpetPast, carpetRound, clodSpots, coveClumps, clodsOf, decoySlots, fitCove, inCarpet,
   lastVenVariants, polar, polarOf, plopOf, pointAt, project, readVariant, route, singOf, spanOf, stationsOf, venClearings, venLayout, venOrder, wayOf,
   type BayId, type FrogSpot, type Side, type ViewSpec,
 } from './ven.places.ts';
@@ -252,7 +252,7 @@ test('the search: every nook partly visible at every level, off the middle, big 
   assert.ok(Math.max(...xs) - Math.min(...xs) > 450 && Math.max(...ys) - Math.min(...ys) > 180, 'the nooks spread over the picture, across and up and down');
 });
 
-test('a moss clod in an empty nook shows as much as the frog does, and the frog still the level\'s share', () => {
+test('every moss clod (in an empty nook or on the open moss) is seen — at least half the frog\'s share — and the frog still shows the level\'s share', () => {
   for (const id of BAY_IDS) {
     const b = BAYS[id];
     const { stems } = growStems(coveClumps(b), 61, groundY);
@@ -260,9 +260,9 @@ test('a moss clod in an empty nook shows as much as the frog does, and the frog 
     for (const f of b.nooks) {
       const cam = lensOf(b.views.search[f.side]);
       const eye = { x: cam.position.x, y: cam.position.y, z: cam.position.z };
-      // (the worst case: a clod in every other nook)
-      const clods = nookClods(b, f.nook, b.nooks.map((n) => ({ k: 'bush', x: n.x, z: n.z })));
-      assert.equal(clods.length, 5);
+      // (the worst case: a clod in every other nook and on every slot)
+      const clods = clodsOf([...b.nooks.filter((n) => n.nook !== f.nook), ...b.slots.clods].map((q) => ({ k: 'bush', x: q.x, z: q.z })));
+      assert.equal(clods.length, 10);
       for (const band of [1, 4, 6]) {
         const g = knobsFor('zoeken', band).glimpse;
         const st = stems.map((q) => ({ ...q }));
@@ -272,7 +272,7 @@ test('a moss clod in an empty nook shows as much as the frog does, and the frog 
         for (const d of clods) {
           const yaw = headingTo({ x: eye.x, z: eye.z }, d) + 0.9;
           const sh = visibleShare(backPoints(d.x, groundY(d.x, d.z), d.z, yaw, CLOD_LEN, CLOD_H), eye, st);
-          assert.ok(sh >= g * 0.5 - 1e-9 && sh <= Math.max(g * 2, g + 0.25) + 1e-9, `cove ${id}, the frog in nook ${f.nook}, band ${band}: a clod at ${at(d)} shows ${r2(sh)} (glimpse ${g})`);
+          assert.ok(sh >= g * 0.5 - 1e-9, `cove ${id}, the frog in nook ${f.nook}, band ${band}: a clod at ${at(d)} shows ${r2(sh)} (glimpse ${g})`);
         }
       }
     }

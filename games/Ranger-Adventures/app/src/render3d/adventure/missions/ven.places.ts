@@ -33,8 +33,8 @@
 import { anchorInBiome, heightAt, VEN_CENTER, WATER_LEVEL } from '../../Biomes.ts';
 import { RANGER_STAND_HEIGHT, SIZE } from '../../AnimalScale.ts';
 import { atLocal, dist, headingTo, segDist, stream, toLocal, type Frame } from '../places.ts';
-import { backPoints, type Clump, type Stem, type V3 } from '../cover-math.ts';
-import { fitWindow, type Built } from './ree.window.ts';
+import { backPoints, openWindow, visibleShare, type Clump, type Stem, type V3 } from '../cover-math.ts';
+import { FIT_BAND, closeWindow, fitWindow, type Built } from './ree.window.ts';
 import type { HomeSpec, Place, ResidentSpec, Spot } from '../types.ts';
 import type { Play } from '../../../core/play.ts';
 import type { Skin } from '../../../content/types.ts';
@@ -810,25 +810,34 @@ export function decoySlots(b: Bay, nook: number, decoys: readonly { id: string; 
 export const CLOD_LEN = 0.2;
 export const CLOD_H = 0.11;
 
-/** The play's moss clods that lie in an empty nook of its cove (its sedge ring round them). */
-export function nookClods(b: Bay, nook: number, decoys: readonly { k: string; x: number; z: number }[]): Spot[] {
-  return decoys.filter((d) => d.k === 'bush' && b.nooks.some((n) => n.nook !== nook && dist(n, d) < 0.05)).map((d) => ({ x: d.x, z: d.z }));
+/** The play's moss clods (its trial's 'bush' look-alikes), wherever they lie. */
+export function clodsOf(decoys: readonly { k: string; x: number; z: number }[]): Spot[] {
+  return decoys.filter((d) => d.k === 'bush').map((d) => ({ x: d.x, z: d.z }));
 }
 
 /**
  * The search's windows in a cove for the lens at `eye` (the home lays them; the places
- * test measures them): each moss clod in an empty nook first gets a window fitted to the
- * level's glimpse — the same ring, the same share showing as the frog — then the frog's
- * own window last (so it is exactly the level's, whatever a clod's window did to a stem
- * they share). Pure; changes `stems`.
+ * test measures them): each moss clod first gets a window fitted to the level's glimpse —
+ * one in an empty nook's sedge ring or one on the open moss, it is seen at least about as
+ * much as the frog (a clod the sedge hid wholly is no look-alike) — then the frog's own
+ * window last, so his share is exactly the level's whatever a clod's window did to a stem
+ * they share; a clod his fit hid again opens once more. Pure; changes `stems`.
  */
 export function fitCove(stems: Stem[], built: readonly Built[], eye: V3, frog: Spot & { yaw: number }, clods: readonly Spot[], glimpse: number,
   groundY: (x: number, z: number) => number): void {
-  for (const d of clods) {
-    const yaw = headingTo({ x: eye.x, z: eye.z }, d) + 0.9;
-    fitWindow(stems, built, eye, backPoints(d.x, groundY(d.x, d.z), d.z, yaw, CLOD_LEN, CLOD_H), glimpse, { x: d.x, y: 0, z: d.z });
+  const pts = clods.map((d) => backPoints(d.x, groundY(d.x, d.z), d.z, headingTo({ x: eye.x, z: eye.z }, d) + 0.9, CLOD_LEN, CLOD_H));
+  const mine = backPoints(frog.x, groundY(frog.x, frog.z), frog.z, frog.yaw, FROG_LEN, FROG_H);
+  const at = { x: frog.x, y: 0, z: frog.z };
+  clods.forEach((d, i) => fitWindow(stems, built, eye, pts[i], glimpse, { x: d.x, y: 0, z: d.z }));
+  fitWindow(stems, built, eye, mine, glimpse, at);
+  // (a clod's window the frog's fit closed again opens once more, only opening; if that
+  // showed more of the frog, his own ring closes it again, never a stem a clod needs)
+  pts.forEach((q) => { if (visibleShare(q, eye, stems) < glimpse * 0.6) openWindow(stems, eye, q, glimpse); });
+  if (visibleShare(mine, eye, stems) > glimpse + FIT_BAND + 1e-9) {
+    const keep = new Set<number>();
+    stems.forEach((s, i) => { if (s.h < built[i].h - 1e-6) keep.add(i); });
+    closeWindow(stems, built, eye, mine, glimpse + FIT_BAND, glimpse, at, 0.45, keep);
   }
-  fitWindow(stems, built, eye, backPoints(frog.x, groundY(frog.x, frog.z), frog.z, frog.yaw, FROG_LEN, FROG_H), glimpse, { x: frog.x, y: 0, z: frog.z });
 }
 
 /** Every spot of a cove a moss clod may lie on: its clod slots, then its nooks. */
