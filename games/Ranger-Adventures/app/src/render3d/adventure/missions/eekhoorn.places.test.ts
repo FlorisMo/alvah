@@ -21,7 +21,7 @@ import {
   seatOf, watchSpot, WATCH_R, SEAT_STOP, AT_IT, hideStart, hideShift, slipSecs, roundStep, trunkClear, wayTo, comesFrom, introView, foundView, foundFace, foundStand, FIND_R,
   ROUTES, ROUTE_IDS, HIDE_TREES, FIELD_SYMS, NEIGHBOURS, NOT_TOGETHER, SQUIRREL_FAMILY, SLOTS, PERCH, JAY_WAIT, JAY_RETREAT, FIRST_TRIO,
   legalTrios, trioCode, trioOf, jayStep, variantOf, parseVariant, lastVariant, lastVariants, drawEekhoornPlay, VARIANT_KEY,
-  NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, nestFace, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
+  NEST, NEST_SEE, NEST_WATCH, nestTrees, nestOf, nestPeek, nestSolid, nestWatch, nestAim, NEST_FADE, DINING, ROUTE_DINING, diningById, STRONK, STAM, DINING_SEE, SeenClock, denVisitor, DEN_VISITOR, youngPeek, YOUNG,
   type HomeTree, type Route, type Trio,
 } from './eekhoorn.places.ts';
 import { STUB_TILT } from '../../world/Forest.ts';
@@ -905,18 +905,6 @@ test('the nest, every way: on a wait tree he comes to (never its hide tree), 2.1
     });
   }
   assert.ok(n >= 6, `${n} nests`);
-});
-
-test('the nest seen on his way: the short step turns him a little toward it, the nest kept on the side of his picture it was on', () => {
-  const n = { x: 0, z: 0 };
-  for (let a = -Math.PI; a < Math.PI; a += Math.PI / 8) for (const d of [1.5, 2.5, 4, 5.5]) for (const side of [-1, 1]) {
-    const me = { x: Math.sin(a) * d, z: Math.cos(a) * d };
-    const f = nestFace(n, me, side);
-    const off = wrapA(headingTo(me, f) - headingTo(me, n));
-    assert.ok(Math.abs(off) > 0.1 && Math.abs(off) < 0.6, `${deg(a)}° ${d} m: ${deg(off)}° off his line to it`);
-    // (a heading turned up looks further left: he looks right of a nest on the left, −1)
-    assert.equal(Math.sign(off), side, `${deg(a)}° ${d} m side ${side}: the nest stays on its side of his picture`);
-  }
 });
 
 test('the dining spots: in the wood, off every way, out of the hide-and-seek rings and the glade; each way passes two, and he sees each for a moment as he goes', () => {
